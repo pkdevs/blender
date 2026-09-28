@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "draw_gsplat_lib.bsl.hh"
 #include "draw_intersect.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
@@ -978,27 +979,6 @@ float4 attr_load_color_post(KernelGlobals &kg, float4 attr)
     attr.a = 1.0f;
   }
   return attr;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name GSplat Attributes
- *
- * GSplats amend their own alpha on top of existing transmittance.
- *
- * \{ */
-
-float3 gsplat_amend_transmittance(float3 transmittance)
-{
-#ifdef MAT_GEOM_GSPLAT
-  float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.billboard_co,
-                                                gsplat_interp_flat.opacity);
-  alpha = saturate(alpha * (256.0f / 255.0f));
-  return float3(1.0f) - alpha * saturate(float3(1.0f) - transmittance);
-#else
-  return transmittance;
-#endif
 }
 
 /** \} */
