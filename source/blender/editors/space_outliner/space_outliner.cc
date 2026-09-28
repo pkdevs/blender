@@ -400,7 +400,7 @@ static SpaceLink *outliner_create(const ScrArea * /*area*/, const Scene * /*scen
   space_outliner->outlinevis = SO_VIEW_LAYER;
   space_outliner->sync_select_dirty |= WM_OUTLINER_SYNC_SELECT_FROM_ALL;
   space_outliner->flag = SO_SYNC_SELECT | SO_MODE_COLUMN | SO_SCROLL_TO_ACTIVE;
-  space_outliner->filter = SO_FILTER_NO_VIEW_LAYERS;
+  space_outliner->filter = SO_FILTER_NO_VIEW_LAYERS | SO_FILTER_NO_INDIRECT_OBJECT_CHILDREN;
 
   /* header */
   region = BKE_area_region_new();
