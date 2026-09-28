@@ -55,6 +55,9 @@ list(POP_BACK ndk_toolchain_dirs ndk_toolchain_dir)
 # `libc++_shared.so` must be bundled as we used the shared STL due to the use of multiple shared libraries.
 set(libcxx_shared "${ndk_toolchain_dir}/sysroot/usr/lib/${ANDROID_ARCH_TRIPLE}/libc++_shared.so")
 set(strip_command "${ndk_toolchain_dir}/bin/llvm-strip")
+if(CMAKE_HOST_WIN32)
+  string(APPEND strip_command ".exe")
+endif()
 
 # TODO: Could add more patterns, see the source/creator install_dir macro.
 set(copy_excludes
