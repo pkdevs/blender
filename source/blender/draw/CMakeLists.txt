@@ -552,7 +552,7 @@ set(GLSL_SRC
   intern/shaders/draw_curves_length_intercept.bsl.hh
   intern/shaders/draw_curves.bsl.hh
   intern/shaders/draw_curves_lib.glsl
-  intern/shaders/draw_curves_topology_comp.glsl
+  intern/shaders/draw_curves_topology.bsl.hh
   intern/shaders/draw_shape_lib.glsl
   intern/shaders/draw_command_generate.bsl.hh
   intern/shaders/draw_debug_draw_display_frag.glsl
