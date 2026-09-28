@@ -4731,6 +4731,10 @@ static void rna_def_sequencer_tool_settings(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_MARKERS);
   RNA_def_property_ui_text(prop, "Markers", "Ripple markers along with strips");
 
+  prop = RNA_def_property(srna, "ripple_playhead", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_PLAYHEAD);
+  RNA_def_property_ui_text(prop, "Playhead", "Ripple the current frame along with strips");
+
   prop = RNA_def_property(srna, "ripple_non_destructive", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_NON_DESTRUCTIVE);
   RNA_def_property_ui_text(prop,

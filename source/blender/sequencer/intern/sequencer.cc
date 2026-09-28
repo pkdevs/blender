@@ -381,7 +381,7 @@ SequencerToolSettings *tool_settings_init()
   tool_settings->snap_distance = 15;
   tool_settings->overlap_mode = SEQ_OVERLAP_SHUFFLE;
   tool_settings->ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS |
-                               SEQ_RIPPLE_NON_DESTRUCTIVE;
+                               SEQ_RIPPLE_NON_DESTRUCTIVE | SEQ_RIPPLE_PLAYHEAD;
   tool_settings->pivot_point = V3D_AROUND_CENTER_MEDIAN;
 
   return tool_settings;

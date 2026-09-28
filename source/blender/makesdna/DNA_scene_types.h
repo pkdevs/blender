@@ -1821,6 +1821,7 @@ enum eSeqRippleFlag : int {
   SEQ_RIPPLE_MARKERS = 1 << 1,
   SEQ_RIPPLE_INSERT = 1 << 2,
   SEQ_RIPPLE_NON_DESTRUCTIVE = 1 << 3,
+  SEQ_RIPPLE_PLAYHEAD = 1 << 4,
 };
 ENUM_OPERATORS(eSeqRippleFlag)
 
@@ -1857,7 +1858,7 @@ struct SequencerToolSettings {
   eSequencerSnapFlag snap_flag = {};
   eSeqOverlapMode overlap_mode = SEQ_OVERLAP_RIPPLE;
   eSeqRippleFlag ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS |
-                               SEQ_RIPPLE_NON_DESTRUCTIVE;
+                               SEQ_RIPPLE_NON_DESTRUCTIVE | SEQ_RIPPLE_PLAYHEAD;
   /**
    * When there are many snap points,
    * 0-1 range corresponds to resolution from bound-box to all possible snap points.

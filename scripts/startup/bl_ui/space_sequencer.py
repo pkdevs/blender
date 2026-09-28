@@ -2047,6 +2047,7 @@ class SEQUENCER_PT_edit_mode(Panel):
         col.prop(sequencer_tool_settings, "ripple_non_destructive")
         col.prop(sequencer_tool_settings, "ripple_all_channels")
         col.prop(sequencer_tool_settings, "ripple_markers")
+        col.prop(sequencer_tool_settings, "ripple_playhead")
 
 
 class SEQUENCER_PT_snapping(Panel):
