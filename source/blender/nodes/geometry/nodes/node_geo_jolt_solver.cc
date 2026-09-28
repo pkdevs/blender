@@ -657,6 +657,13 @@ class JoltSolverStep {
 
         /* Update mass properties. */
         if (*motion_type == JPH::EMotionType::Dynamic) {
+          /* Apply initial velocity when body becomes dynamic. */
+          body_interface.SetLinearAndAngularVelocity(
+              rigid_body->body->GetID(),
+              geometry::jolt::convert_vec3(linear_velocity),
+              geometry::jolt::convert_vec3(angular_velocity));
+
+          /* Mass attributes are needed to calculcate gravity forces outside of the solver node. */
           rigid_body->body->GetMotionPropertiesUnchecked()->SetMassProperties(
               JPH::EAllowedDOFs::All, rigid_body->body->GetShape()->GetMassProperties());
           this->write_mass_attributes(*rigid_body->body, geo_data, instance_i);
