@@ -226,6 +226,60 @@ static void snode_bg_viewmove_cursor_restore(bContext *C, const NodeViewMove *nv
   WM_cursor_modal_restore(CTX_wm_window(C));
 }
 
+// todo(habib): Ensure same behavior for all gizmos (e.g. single click & undo).
+static wmOperatorStatus snode_bg_viewmove_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  if (!ISMOUSE_BUTTON(event->type) || !ELEM(event->val, KM_PRESS, KM_DBL_CLICK)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  Main *bmain = CTX_data_main(C);
+  SpaceNode *snode = CTX_wm_space_node(C);
+  ARegion *region = CTX_wm_region(C);
+  NodeViewMove *nvm;
+  Image *ima;
+  ImBuf *ibuf;
+  const float pad = 32.0f; /* Better be bigger than scroll-bars. */
+
+  void *lock;
+
+  ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
+  ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
+
+  if (ibuf == nullptr) {
+    BKE_image_release_ibuf(ima, ibuf, lock);
+    return OPERATOR_CANCELLED;
+  }
+
+  nvm = MEM_new_zeroed<NodeViewMove>(__func__);
+  op->customdata = nvm;
+  nvm->mvalo.x = event->mval[0];
+  nvm->mvalo.y = event->mval[1];
+
+  nvm->xmin = -(region->winx / 2) - (ibuf->x * (0.5f * snode->zoom)) + pad;
+  nvm->xmax = (region->winx / 2) + (ibuf->x * (0.5f * snode->zoom)) - pad;
+  nvm->ymin = -(region->winy / 2) - (ibuf->y * (0.5f * snode->zoom)) + pad;
+  nvm->ymax = (region->winy / 2) + (ibuf->y * (0.5f * snode->zoom)) - pad;
+
+  nvm->xof_orig = snode->xof;
+  nvm->yof_orig = snode->yof;
+
+  BKE_image_release_ibuf(ima, ibuf, lock);
+
+  /* Hide the mouse cursor while dragging, the backdrop follows it. */
+  nvm->own_cursor = WM_cursor_modal_is_set_ok(CTX_wm_window(C));
+  if (nvm->own_cursor) {
+    WM_cursor_modal_set(CTX_wm_window(C), WM_CURSOR_NONE);
+  }
+  nvm->xy_orig[0] = event->xy[0];
+  nvm->xy_orig[1] = event->xy[1];
+
+  /* add modal handler */
+  WM_event_add_modal_handler(C, op);
+
+  return OPERATOR_RUNNING_MODAL;
+}
+
 static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
@@ -278,63 +332,6 @@ static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, con
       break;
     }
   }
-
-  return OPERATOR_RUNNING_MODAL;
-}
-
-static wmOperatorStatus snode_bg_viewmove_invoke(bContext *C, wmOperator *op, const wmEvent *event)
-{
-  /* The interactive pan needs the mouse button to be held down, which is only the case when
-   * invoked with a mouse press (a gizmo or a mouse key-map); a menu or panel button applies its
-   * operator on release, in which case the drag can't be started. */
-  if (!ISMOUSE_BUTTON(event->type) || !ELEM(event->val, KM_PRESS, KM_DBL_CLICK)) {
-    return OPERATOR_CANCELLED;
-  }
-
-  Main *bmain = CTX_data_main(C);
-  SpaceNode *snode = CTX_wm_space_node(C);
-  ARegion *region = CTX_wm_region(C);
-  NodeViewMove *nvm;
-  Image *ima;
-  ImBuf *ibuf;
-  const float pad = 32.0f; /* Better be bigger than scroll-bars. */
-
-  void *lock;
-
-  ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
-  ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
-
-  if (ibuf == nullptr) {
-    BKE_image_release_ibuf(ima, ibuf, lock);
-    return OPERATOR_CANCELLED;
-  }
-
-  nvm = MEM_new_zeroed<NodeViewMove>(__func__);
-  op->customdata = nvm;
-  nvm->mvalo.x = event->mval[0];
-  nvm->mvalo.y = event->mval[1];
-
-  nvm->xmin = -(region->winx / 2) - (ibuf->x * (0.5f * snode->zoom)) + pad;
-  nvm->xmax = (region->winx / 2) + (ibuf->x * (0.5f * snode->zoom)) - pad;
-  nvm->ymin = -(region->winy / 2) - (ibuf->y * (0.5f * snode->zoom)) + pad;
-  nvm->ymax = (region->winy / 2) + (ibuf->y * (0.5f * snode->zoom)) - pad;
-
-  nvm->xof_orig = snode->xof;
-  nvm->yof_orig = snode->yof;
-
-  BKE_image_release_ibuf(ima, ibuf, lock);
-
-  /* Hide the mouse cursor while dragging, the backdrop follows it. Grab is set when running from
-   * a gizmo which handles the cursor itself. */
-  nvm->own_cursor = WM_cursor_modal_is_set_ok(CTX_wm_window(C));
-  if (nvm->own_cursor) {
-    WM_cursor_modal_set(CTX_wm_window(C), WM_CURSOR_NONE);
-  }
-  nvm->xy_orig[0] = event->xy[0];
-  nvm->xy_orig[1] = event->xy[1];
-
-  /* add modal handler */
-  WM_event_add_modal_handler(C, op);
 
   return OPERATOR_RUNNING_MODAL;
 }
