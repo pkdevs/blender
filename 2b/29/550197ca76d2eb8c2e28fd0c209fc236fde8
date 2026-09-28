@@ -1,1 +1,2 @@
 Referenced by issue #151442, GPU: Port shader codebase to BSL
+Referenced by pull request #164422, Fix: stereo 3D viewport display compositing the wrong buffers
