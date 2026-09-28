@@ -164,6 +164,7 @@ static EvaluationResult evaluate_keyframe_data(PointerRNA &animated_id_ptr,
   Array<float> results(fcurves.size());
   Array<PathResolvedRNA> resolved_rna(fcurves.size());
 
+  /* RNA path resolution may access data for writing and is not safe to parallelize here. */
   for (const int i : fcurves.index_range()) {
     FCurve *fcu = fcurves[i];
     if (!is_fcurve_evaluatable(fcu)) {
