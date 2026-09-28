@@ -254,36 +254,33 @@ rcti strip_int_bounds_get(const Scene *scene, const Strip *strip)
   return bounds;
 }
 
-Vector<rcti> transform_ripple_ranges_get(const Scene *scene, Span<Strip *> strips)
+Vector<RippleRange> transform_ripple_ranges_get(const Scene *scene, Span<Strip *> strips)
 {
-  Vector<rcti> bounds;
-  for (Strip *strip : strips) {
-    bounds.append(strip_int_bounds_get(scene, strip));
-  }
-  std::ranges::sort(bounds, [](const rcti &a, const rcti &b) { return a.xmin < b.xmin; });
+  Vector<Strip *> sorted_strips(strips);
+  std::ranges::sort(sorted_strips, [](const Strip *a, const Strip *b) {
+    return a->left_handle() < b->left_handle();
+  });
 
-  Vector<rcti> ranges;
-  for (const rcti &strip_bounds : bounds) {
-    if (!ranges.is_empty() && strip_bounds.xmin <= ranges.last().xmax) {
-      BLI_rcti_union(&ranges.last(), &strip_bounds);
+  Vector<RippleRange> ranges;
+  for (const Strip *strip : sorted_strips) {
+    if (!ranges.is_empty() && strip->left_handle() <= ranges.last().end) {
+      /* Attempt to extend an existing range. */
+      ranges.last().end = math::max(ranges.last().end, strip->right_handle(scene));
+      ranges.last().channels.add(strip->channel);
     }
     else {
-      ranges.append(strip_bounds);
+      /* Start a new range. */
+      ranges.append({strip->left_handle(), strip->right_handle(scene), {strip->channel}});
     }
   }
   return ranges;
 }
 
-bool transform_should_ripple_strip(const Scene *scene,
-                                   const rcti &range,
+bool transform_should_ripple_strip(const RippleRange &range,
                                    const Strip *strip,
                                    const bool all_channels)
 {
-  if (all_channels) {
-    return true;
-  }
-  const rcti strip_bounds = strip_int_bounds_get(scene, strip);
-  return BLI_rcti_isect_rect_y(&range, &strip_bounds, nullptr);
+  return all_channels || range.channels.contains(strip->channel);
 }
 
 /* Determine whether we insert #source_strips into others, splitting them at #insert_frame.
@@ -351,11 +348,11 @@ static bool sources_overlap_target(const Scene *scene, Span<Strip *> source_stri
 
 static Vector<Strip *> range_sources_get(const Scene *scene,
                                          Span<Strip *> source_strips,
-                                         const rcti &range)
+                                         const RippleRange &range)
 {
   Vector<Strip *> range_sources;
   for (Strip *source : source_strips) {
-    if (source->left_handle() < range.xmax && source->right_handle(scene) > range.xmin) {
+    if (source->left_handle() < range.end && source->right_handle(scene) > range.start) {
       range_sources.append(source);
     }
   }
@@ -365,14 +362,14 @@ static Vector<Strip *> range_sources_get(const Scene *scene,
 static void strip_transform_ripple_range(Scene *scene,
                                          ListBaseT<Strip> *seqbasep,
                                          Span<Strip *> source_strips,
-                                         const rcti &range,
+                                         const RippleRange &range,
                                          const eSeqRippleFlag ripple_flag)
 {
   const bool all_channels = (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0;
   const Vector<Strip *> range_sources = range_sources_get(scene, source_strips, range);
 
-  int start_frame = range.xmin;
-  int end_frame = range.xmax;
+  int start_frame = range.start;
+  int end_frame = range.end;
 
   std::optional<int> shuffle_delta;
   const bool do_insert = should_ripple_insert(
@@ -402,7 +399,7 @@ static void strip_transform_ripple_range(Scene *scene,
       if (target.left_handle() >= start_frame || target.right_handle(scene) <= start_frame) {
         continue;
       }
-      if (!transform_should_ripple_strip(scene, range, &target, all_channels)) {
+      if (!transform_should_ripple_strip(range, &target, all_channels)) {
         continue;
       }
       strips_to_split.append(&target);
@@ -440,7 +437,7 @@ static void strip_transform_ripple_range(Scene *scene,
     if (target.left_handle() < ripple_frame) {
       continue;
     }
-    if (!transform_should_ripple_strip(scene, range, &target, all_channels)) {
+    if (!transform_should_ripple_strip(range, &target, all_channels)) {
       continue;
     }
     transform_translate_strip(scene, &target, delta);
@@ -460,7 +457,7 @@ static void strip_transform_handle_ripple(Scene *scene,
                                           Span<Strip *> source_strips,
                                           const eSeqRippleFlag ripple_flag)
 {
-  for (const rcti &range : transform_ripple_ranges_get(scene, source_strips)) {
+  for (const RippleRange &range : transform_ripple_ranges_get(scene, source_strips)) {
     strip_transform_ripple_range(scene, seqbasep, source_strips, range, ripple_flag);
   }
 }

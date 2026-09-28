@@ -2700,7 +2700,7 @@ static void ripple_properties_from_tool_settings(bContext *C, wmOperator *op)
 static void ripple_range_clear(Scene *scene,
                                ListBaseT<Strip> *seqbasep,
                                const ListBaseT<SeqTimelineChannel> *channels,
-                               const rcti &range,
+                               const seq::RippleRange &range,
                                const bool all_channels)
 {
   Vector<Strip *> to_edit;
@@ -2708,10 +2708,10 @@ static void ripple_range_clear(Scene *scene,
     if (seq::transform_is_locked(channels, &strip) || strip.is_effect_with_inputs()) {
       continue;
     }
-    if (strip.left_handle() >= range.xmax || strip.right_handle(scene) <= range.xmin) {
+    if (strip.left_handle() >= range.end || strip.right_handle(scene) <= range.start) {
       continue;
     }
-    if (!seq::transform_should_ripple_strip(scene, range, &strip, all_channels)) {
+    if (!seq::transform_should_ripple_strip(range, &strip, all_channels)) {
       continue;
     }
     to_edit.append(&strip);
@@ -2719,26 +2719,26 @@ static void ripple_range_clear(Scene *scene,
 
   Vector<Strip *> to_remove;
   for (Strip *strip : to_edit) {
-    const bool covers_left = range.xmin <= strip->left_handle();
-    const bool covers_right = range.xmax >= strip->right_handle(scene);
+    const bool covers_left = range.start <= strip->left_handle();
+    const bool covers_right = range.end >= strip->right_handle(scene);
 
     if (covers_left && covers_right) {
       to_remove.append(strip);
     }
     else if (covers_left) {
-      strip->left_handle_set(scene, range.xmax);
+      strip->left_handle_set(scene, range.end);
     }
     else if (covers_right) {
-      strip->right_handle_set(scene, range.xmin);
+      strip->right_handle_set(scene, range.start);
     }
     else {
       /* Ripple range is smaller than the strip and entirely contained within it,
        * must split and trim to simulate deleting just that portion. */
       const char *error_msg = nullptr;
       Strip *right_strip = seq::edit_strip_split(
-          nullptr, scene, seqbasep, strip, range.xmin, seq::SPLIT_SOFT, true, &error_msg);
+          nullptr, scene, seqbasep, strip, range.start, seq::SPLIT_SOFT, true, &error_msg);
       if (right_strip != nullptr) {
-        right_strip->left_handle_set(scene, range.xmax);
+        right_strip->left_handle_set(scene, range.end);
       }
     }
     seq::relations_invalidate_cache(scene, strip);
@@ -2753,7 +2753,7 @@ static void ripple_range_clear(Scene *scene,
 static int ripple_offset_get(const Scene *scene,
                              ListBaseT<Strip> *seqbasep,
                              const ListBaseT<SeqTimelineChannel> *channels,
-                             const rcti &range,
+                             const seq::RippleRange &range,
                              const bool all_channels,
                              Vector<Strip *> &r_to_ripple)
 {
@@ -2762,8 +2762,8 @@ static int ripple_offset_get(const Scene *scene,
    * where they weren't already cleared, or if they are locked or exist on non-rippled channels. */
   Vector<Strip *> to_block;
   for (Strip &strip : *seqbasep) {
-    if (!seq::transform_is_locked(channels, &strip) && strip.left_handle() >= range.xmax &&
-        seq::transform_should_ripple_strip(scene, range, &strip, all_channels))
+    if (!seq::transform_is_locked(channels, &strip) && strip.left_handle() >= range.end &&
+        seq::transform_should_ripple_strip(range, &strip, all_channels))
     {
       r_to_ripple.append(&strip);
     }
@@ -2772,7 +2772,7 @@ static int ripple_offset_get(const Scene *scene,
     }
   }
 
-  int offset = range.xmax - range.xmin;
+  int offset = range.end - range.start;
   for (Strip *strip : r_to_ripple) {
     for (Strip *blocking : to_block) {
       if (blocking->channel != strip->channel ||
@@ -2789,7 +2789,7 @@ static int ripple_offset_get(const Scene *scene,
 static int ripple_delete_range(Scene *scene,
                                ListBaseT<Strip> *seqbasep,
                                const ListBaseT<SeqTimelineChannel> *channels,
-                               const rcti &range,
+                               const seq::RippleRange &range,
                                const bool all_channels,
                                const bool non_destructive,
                                const bool ripple_markers)
@@ -2811,7 +2811,7 @@ static int ripple_delete_range(Scene *scene,
 
   if (ripple_markers && !scene->toolsettings->lock_markers) {
     for (TimeMarker &marker : scene->markers) {
-      if (marker.frame >= range.xmax) {
+      if (marker.frame >= range.end) {
         marker.frame -= offset;
       }
     }
@@ -2842,7 +2842,7 @@ static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op
 
   seq::prefetch_stop(scene);
 
-  const Vector<rcti> ranges = seq::transform_ripple_ranges_get(scene, selected);
+  const Vector<seq::RippleRange> ranges = seq::transform_ripple_ranges_get(scene, selected);
 
   for (Strip *strip : selected) {
     seq::edit_flag_for_removal(scene, strip);
@@ -2851,7 +2851,7 @@ static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op
 
   /* Every ripple delete changes the frames of later strips, so we must delete in reverse to avoid
    * invalidating range coordinates of later ranges. */
-  for (const rcti &range : ranges | std::views::reverse) {
+  for (const seq::RippleRange &range : ranges | std::views::reverse) {
     ripple_delete_range(
         scene, seqbasep, channels, range, all_channels, non_destructive, ripple_markers);
   }
@@ -2932,6 +2932,7 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  /* Step 1: Get strips to trim from selection. */
   VectorSet<Strip *> to_trim = selected_strips_from_context(C);
   if (to_trim.is_empty()) {
     /* Fall back to active strip. */
@@ -2953,45 +2954,47 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
 
   seq::prefetch_stop(scene);
 
-  /* Step 1: Find the range of the timeline that the trim empties out. */
-  rcti range;
-  BLI_rcti_init_minmax(&range);
+  /* Step 2: Calculate a single range to delete; we will ripple later strips by its duration. */
+  seq::RippleRange range{timeline_frame, timeline_frame, {}};
   for (Strip *strip : to_trim) {
-    const rcti strip_bounds = seq::strip_int_bounds_get(scene, strip);
-    BLI_rcti_union(&range, &strip_bounds);
-  }
-  if (trim_left) {
-    range.xmax = timeline_frame;
-  }
-  else {
-    range.xmin = timeline_frame;
+    if (trim_left) {
+      range.start = min_ii(range.start, strip->left_handle());
+    }
+    else {
+      range.end = max_ii(range.end, strip->right_handle(scene));
+    }
+    range.channels.add(strip->channel);
   }
 
-  /* Step 2: Trim strips. */
-  bool has_removed_strips = false;
+  /* Step 3: Trim and delete strips. */
+  Vector<Strip *> to_delete;
   for (Strip *strip : to_trim) {
     const bool trimmed_away = trim_left ? strip->right_handle(scene) <= timeline_frame :
                                           strip->left_handle() >= timeline_frame;
     if (trimmed_away) {
-      has_removed_strips = true;
-      seq::edit_flag_for_removal(scene, strip);
-      continue;
+      /* Entire strip is trimmed away, mark for deletion. */
+      to_delete.append(strip);
     }
-    if (trim_left) {
+    else if (trim_left) {
       strip->left_handle_set(scene, timeline_frame);
+      seq::relations_invalidate_cache(scene, strip);
     }
     else {
       strip->right_handle_set(scene, timeline_frame);
+      seq::relations_invalidate_cache(scene, strip);
     }
-    seq::relations_invalidate_cache(scene, strip);
   }
-  if (has_removed_strips) {
+
+  if (!to_delete.is_empty()) {
+    for (Strip *strip : to_delete) {
+      seq::edit_flag_for_removal(scene, strip);
+    }
     seq::edit_remove_flagged_strips(scene, seqbasep);
     DEG_relations_tag_update(CTX_data_main(C));
     WM_event_add_notifier(C, NC_SCENE | ND_ANIMCHAN, scene);
   }
 
-  /* Step 3: Close the gap left behind. */
+  /* Step 4: Close the gap left behind. */
   const int offset = ripple_delete_range(
       scene, seqbasep, channels, range, all_channels, non_destructive, ripple_markers);
 
