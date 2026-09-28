@@ -113,4 +113,10 @@ bool ED_space_node_get_position(
 bool ED_space_node_color_sample(
     Main *bmain, SpaceNode *snode, ARegion *region, const int mval[2], float r_col[3]);
 
+/**
+ * Returns the size of the compositor backdrop image, zero when there is no backdrop.
+ */
+// todo(habib): make static?
+void ED_space_node_get_backdrop_size(Main *bmain, int *r_width, int *r_height);
+
 }  // namespace blender

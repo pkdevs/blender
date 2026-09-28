@@ -198,13 +198,41 @@ struct NodeViewMove {
   int xmin, ymin, xmax, ymax;
   /** Original Offset for cancel. */
   float xof_orig, yof_orig;
+  /** Window space mouse position when the operator was invoked, to restore the cursor. */
+  int xy_orig[2];
+  /** Whether this operator hid the mouse cursor, and is responsible for restoring it. */
+  bool own_cursor;
+  /** Whether the cursor grab was set (lazily, from the modal). */
+  bool cursor_grabbed;
 };
+
+static void snode_bg_viewmove_cursor_grab(bContext *C, NodeViewMove *nvm)
+{
+  if (!nvm->own_cursor || nvm->cursor_grabbed) {
+    return;
+  }
+  WM_cursor_grab_enable(CTX_wm_window(C), WM_CURSOR_WRAP_NONE, nullptr, true);
+  nvm->cursor_grabbed = true;
+}
+
+static void snode_bg_viewmove_cursor_restore(bContext *C, const NodeViewMove *nvm)
+{
+  if (!nvm->own_cursor) {
+    return;
+  }
+  if (nvm->cursor_grabbed) {
+    WM_cursor_grab_disable(CTX_wm_window(C), nvm->xy_orig);
+  }
+  WM_cursor_modal_restore(CTX_wm_window(C));
+}
 
 static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
   ARegion *region = CTX_wm_region(C);
   NodeViewMove *nvm = static_cast<NodeViewMove *>(op->customdata);
+
+  snode_bg_viewmove_cursor_grab(C, nvm);
 
   switch (event->type) {
     case MOUSEMOVE:
@@ -227,6 +255,7 @@ static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, con
     case LEFTMOUSE:
     case MIDDLEMOUSE:
       if (event->val == KM_RELEASE) {
+        snode_bg_viewmove_cursor_restore(C, nvm);
         MEM_delete(nvm);
         op->customdata = nullptr;
         return OPERATOR_FINISHED;
@@ -240,6 +269,7 @@ static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, con
       WM_main_add_notifier(NC_NODE | ND_DISPLAY, nullptr);
       WM_main_add_notifier(NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
 
+      snode_bg_viewmove_cursor_restore(C, nvm);
       MEM_delete(nvm);
       op->customdata = nullptr;
 
@@ -254,6 +284,13 @@ static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, con
 
 static wmOperatorStatus snode_bg_viewmove_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  /* The interactive pan needs the mouse button to be held down, which is only the case when
+   * invoked with a mouse press (a gizmo or a mouse key-map); a menu or panel button applies its
+   * operator on release, in which case the drag can't be started. */
+  if (!ISMOUSE_BUTTON(event->type) || !ELEM(event->val, KM_PRESS, KM_DBL_CLICK)) {
+    return OPERATOR_CANCELLED;
+  }
+
   Main *bmain = CTX_data_main(C);
   SpaceNode *snode = CTX_wm_space_node(C);
   ARegion *region = CTX_wm_region(C);
@@ -287,15 +324,25 @@ static wmOperatorStatus snode_bg_viewmove_invoke(bContext *C, wmOperator *op, co
 
   BKE_image_release_ibuf(ima, ibuf, lock);
 
+  /* Hide the mouse cursor while dragging, the backdrop follows it. Grab is set when running from
+   * a gizmo which handles the cursor itself. */
+  nvm->own_cursor = WM_cursor_modal_is_set_ok(CTX_wm_window(C));
+  if (nvm->own_cursor) {
+    WM_cursor_modal_set(CTX_wm_window(C), WM_CURSOR_NONE);
+  }
+  nvm->xy_orig[0] = event->xy[0];
+  nvm->xy_orig[1] = event->xy[1];
+
   /* add modal handler */
   WM_event_add_modal_handler(C, op);
 
   return OPERATOR_RUNNING_MODAL;
 }
 
-static void snode_bg_viewmove_cancel(bContext * /*C*/, wmOperator *op)
+static void snode_bg_viewmove_cancel(bContext *C, wmOperator *op)
 {
   NodeViewMove *nvm = static_cast<NodeViewMove *>(op->customdata);
+  snode_bg_viewmove_cursor_restore(C, nvm);
   MEM_delete(nvm);
   op->customdata = nullptr;
 }
@@ -323,93 +370,241 @@ void NODE_OT_backimage_move(wmOperatorType *ot)
 /** \name Background Image Zoom
  * \{ */
 
-/* Simple struct for background image zoom data */
-struct backImageZoomData {
-  float factor;
-  float2 offset;
+namespace {
+
+// todo(habib): doc
+struct BackdropZoomData {
+  int2 mval_orig;
+  int xy_orig[2];
+  float zoom_orig;
+  int2 size;
+  int launch_event;
+  bool own_cursor;
+  bool cursor_grabbed;
+
+  SpaceNode *snode;
+  ARegion *region;
 };
 
-static void backimage_zoom_init(bContext *C, wmOperator *op)
+}  // namespace
+
+/** Size of the backdrop image, in pixels. */
+static int2 backdrop_image_size_get(Main *bmain)
 {
-  BLI_assert(space_node_composite_active_view_poll(C));
-
-  SpaceNode *snode = CTX_wm_space_node(C);
-
-  backImageZoomData *zdata = MEM_new_zeroed<backImageZoomData>(__func__);
-  op->customdata = zdata;
-
-  zdata->factor = RNA_float_get(op->ptr, "factor");
-  zdata->offset = {snode->xof, snode->yof}; /* Current img offset for execute. */
+  int width, height;
+  ED_space_node_get_backdrop_size(bmain, &width, &height);
+  return int2(width, height);
 }
 
-static wmOperatorStatus backimage_zoom_exec(bContext *C, wmOperator *op)
+static void snode_zoom_set(SpaceNode *snode,
+                           const ARegion *region,
+                           const float zoom,
+                           const int2 size)
 {
-  ARegion *region = CTX_wm_region(C);
-  SpaceNode *snode = CTX_wm_space_node(C);
+  const float zoom_prev = snode->zoom;
+  snode->zoom = zoom;
 
-  /* If executed without invoking, initialize the customdata here. */
-  if (op->customdata == nullptr) {
-    backimage_zoom_init(C, op);
+  if (snode->zoom < 0.1f || snode->zoom > 4.0f) {
+    /* Stop zooming out when the backdrop gets too small. */
+    const float2 scaled_size = float2(size.x, size.y) * snode->zoom;
+    if ((scaled_size.x < 4.0f) && (scaled_size.y < 4.0f) && snode->zoom < zoom_prev) {
+      snode->zoom = zoom_prev;
+    }
+    /* Stop zooming in when the backdrop is bigger than the region. */
+    else if (BLI_rcti_size_x(&region->winrct) <= snode->zoom) {
+      snode->zoom = zoom_prev;
+    }
+    else if (BLI_rcti_size_y(&region->winrct) <= snode->zoom) {
+      snode->zoom = zoom_prev;
+    }
   }
+}
 
-  backImageZoomData *zdata = static_cast<backImageZoomData *>(op->customdata);
+static void snode_zoom_step(SpaceNode *snode,
+                            ARegion *region,
+                            const float factor,
+                            const int2 size,
+                            const std::optional<int2> mval_orig)
+{
+  const float2 center = {snode->xof + region->winx / 2.0f, snode->yof + region->winy / 2.0f};
 
-  snode->zoom *= zdata->factor;
-  snode->xof = zdata->offset.x;
-  snode->yof = zdata->offset.y;
+  snode_zoom_set(snode, region, snode->zoom * factor, size);
+
+  /* Zoom towards the mouse position, the point below the cursor stays in place. */
+  if (mval_orig.has_value()) {
+    snode->xof += (mval_orig->x - center.x) * (1.0f - factor);
+    snode->yof += (mval_orig->y - center.y) * (1.0f - factor);
+  }
 
   ED_region_tag_redraw(region);
   WM_main_add_notifier(NC_NODE | ND_DISPLAY, nullptr);
   WM_main_add_notifier(NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+}
 
-  MEM_SAFE_DELETE(zdata);
-  op->customdata = nullptr;
+static wmOperatorStatus backimage_zoom_exec(bContext *C, wmOperator *op)
+{
+  /* Executing (e.g. from a script) has no mouse position to zoom towards. */
+  snode_zoom_step(CTX_wm_space_node(C),
+                  CTX_wm_region(C),
+                  RNA_float_get(op->ptr, "factor"),
+                  backdrop_image_size_get(CTX_data_main(C)),
+                  std::nullopt);
 
   return OPERATOR_FINISHED;
 }
 
-static wmOperatorStatus backimage_zoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static void snode_bg_viewzoom_init(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  ARegion *region = CTX_wm_region(C);
+  wmWindow *win = CTX_wm_window(C);
   SpaceNode *snode = CTX_wm_space_node(C);
 
-  backimage_zoom_init(C, op);
-  backImageZoomData *zdata = static_cast<backImageZoomData *>(op->customdata);
+  BackdropZoomData *vpd = MEM_new_zeroed<BackdropZoomData>(__func__);
+  op->customdata = vpd;
 
-  /* If the not set in the preference, no need to do all the checks below. */
-  if ((U.uiflag & USER_ZOOM_TO_MOUSEPOS) == 0) {
+  /* Hide the mouse cursor while dragging, the backdrop follows it. */
+  vpd->own_cursor = WM_cursor_modal_is_set_ok(win);
+  if (vpd->own_cursor) {
+    WM_cursor_modal_set(win, WM_CURSOR_NONE);
+  }
+
+  vpd->mval_orig = int2(event->mval[0], event->mval[1]);
+  vpd->xy_orig[0] = event->xy[0];
+  vpd->xy_orig[1] = event->xy[1];
+  vpd->zoom_orig = snode->zoom;
+  vpd->size = backdrop_image_size_get(CTX_data_main(C));
+  vpd->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
+  vpd->snode = snode;
+  vpd->region = CTX_wm_region(C);
+
+  WM_event_add_modal_handler(C, op);
+}
+
+static void snode_bg_viewzoom_cursor_grab(bContext *C, BackdropZoomData *vpd)
+{
+  if (!vpd->own_cursor || vpd->cursor_grabbed) {
+    return;
+  }
+  WM_cursor_grab_enable(CTX_wm_window(C), WM_CURSOR_WRAP_NONE, nullptr, true);
+  vpd->cursor_grabbed = true;
+}
+
+static void snode_bg_viewzoom_apply(BackdropZoomData *vpd,
+                                    wmOperator *op,
+                                    const int x,
+                                    const int y)
+{
+  float delta = (x - vpd->mval_orig.x) + (y - vpd->mval_orig.y);
+  delta /= U.pixelsize;
+
+  const float factor = 1.0f + delta / 300.0f;
+
+  RNA_float_set(op->ptr, "factor", factor);
+  snode_zoom_set(vpd->snode, vpd->region, vpd->zoom_orig * factor, vpd->size);
+
+  ED_region_tag_redraw(vpd->region);
+  WM_main_add_notifier(NC_NODE | ND_DISPLAY, nullptr);
+  WM_main_add_notifier(NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+}
+
+static void snode_bg_viewzoom_exit(bContext *C, wmOperator *op, const bool cancel)
+{
+  BackdropZoomData *vpd = static_cast<BackdropZoomData *>(op->customdata);
+
+  if (cancel) {
+    vpd->snode->zoom = vpd->zoom_orig;
+    ED_region_tag_redraw(vpd->region);
+  }
+
+  if (vpd->cursor_grabbed) {
+    /* Move the cursor back to where the drag started. */
+    WM_cursor_grab_disable(CTX_wm_window(C), vpd->xy_orig);
+  }
+  if (vpd->own_cursor) {
+    WM_cursor_modal_restore(CTX_wm_window(C));
+  }
+
+  MEM_delete(vpd);
+  op->customdata = nullptr;
+}
+
+enum {
+  VIEW_PASS = 0,
+  VIEW_APPLY,
+  VIEW_CONFIRM,
+};
+
+static wmOperatorStatus snode_bg_viewzoom_modal(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  BackdropZoomData *vpd = static_cast<BackdropZoomData *>(op->customdata);
+  short event_code = VIEW_PASS;
+  wmOperatorStatus ret = OPERATOR_RUNNING_MODAL;
+
+  snode_bg_viewzoom_cursor_grab(C, vpd);
+
+  /* Execute the events. */
+  if (event->type == MOUSEMOVE) {
+    event_code = VIEW_APPLY;
+  }
+  else if (event->type == vpd->launch_event) {
+    if (event->val == KM_RELEASE) {
+      event_code = VIEW_CONFIRM;
+    }
+  }
+
+  switch (event_code) {
+    case VIEW_APPLY: {
+      /* Same space as #BackdropZoomData.mval_orig (region relative). */
+      snode_bg_viewzoom_apply(vpd, op, event->mval[0], event->mval[1]);
+      break;
+    }
+    case VIEW_CONFIRM: {
+      ret = OPERATOR_FINISHED;
+      break;
+    }
+    case VIEW_PASS: {
+      break;
+    }
+  }
+
+  if ((ret & OPERATOR_RUNNING_MODAL) == 0) {
+    snode_bg_viewzoom_exit(C, op, false);
+  }
+
+  return ret;
+}
+
+static void snode_bg_viewzoom_cancel(bContext *C, wmOperator *op)
+{
+  snode_bg_viewzoom_exit(C, op, true);
+}
+
+static wmOperatorStatus backimage_zoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  // todo(habib): gizmo like checks are not working. Generalize check.
+  if (!ISMOUSE_BUTTON(event->type) || !ELEM(event->val, KM_PRESS, KM_DBL_CLICK)) {
     return backimage_zoom_exec(C, op);
   }
 
-  if (RNA_boolean_get(op->ptr, "use_mouse_pos")) {
-    float fac = RNA_float_get(op->ptr, "factor");
-
-    float2 img_center = {snode->xof + region->winx / 2.0f, snode->yof + region->winy / 2.0f};
-
-    float2 img_offset = {snode->xof + (event->mval[0] - img_center.x) * (1 - fac),
-                         snode->yof + (event->mval[1] - img_center.y) * (1 - fac)};
-
-    zdata->offset = {img_offset.x, img_offset.y};
-  }
-
-  return backimage_zoom_exec(C, op);
+  snode_bg_viewzoom_init(C, op, event);
+  return OPERATOR_RUNNING_MODAL;
 }
 
 void NODE_OT_backimage_zoom(wmOperatorType *ot)
 {
-
   /* identifiers */
   ot->name = "Background Image Zoom";
   ot->idname = "NODE_OT_backimage_zoom";
   ot->description = "Zoom in/out the background image";
 
   /* API callbacks. */
-  ot->invoke = backimage_zoom_invoke;
   ot->exec = backimage_zoom_exec;
+  ot->invoke = backimage_zoom_invoke;
+  ot->modal = snode_bg_viewzoom_modal;
+  ot->cancel = snode_bg_viewzoom_cancel;
   ot->poll = space_node_composite_active_view_poll;
 
   /* flags */
-  ot->flag = OPTYPE_BLOCKING;
+  ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_XY | OPTYPE_LOCK_BYPASS;
 
   /* internal */
   RNA_def_float(ot->srna, "factor", 1.2f, 0.0f, 10.0f, "Factor", "", 0.0f, 10.0f);
@@ -598,6 +793,21 @@ bool ED_space_node_color_sample(
   BKE_image_release_ibuf(ima, ibuf, lock);
 
   return ret;
+}
+
+void ED_space_node_get_backdrop_size(Main *bmain, int *r_width, int *r_height)
+{
+  *r_width = 0;
+  *r_height = 0;
+
+  void *lock;
+  Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
+  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
+  if (ibuf != nullptr) {
+    *r_width = ibuf->x;
+    *r_height = ibuf->y;
+  }
+  BKE_image_release_ibuf(ima, ibuf, lock);
 }
 
 namespace ed::space_node {

@@ -293,6 +293,11 @@ class NODE_PT_gizmo_display(Panel):
         colsub.active = snode.node_tree is not None and col.active
         colsub.prop(snode, "show_gizmo_active_node", text="Active Node")
 
+        if snode.show_backdrop:
+            colsub = col.column()
+            colsub.active = snode.node_tree is not None and col.active
+            colsub.prop(snode, "show_gizmo_backdrop_navigate", text="Backdrop Navigation")
+
 
 class NODE_MT_editor_menus(Menu):
     bl_idname = "NODE_MT_editor_menus"
