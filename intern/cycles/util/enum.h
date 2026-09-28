@@ -12,7 +12,17 @@
  * Operators with other types are deleted, so mixing flags of different enums is a
  * compile error. */
 
+#ifndef __KERNEL_GPU__
+#  include <type_traits>
+#  define CCL_ENUM_CHECK_INT_TYPE(_type, _int_type) \
+    static_assert(std::is_same_v<std::underlying_type_t<_type>, _int_type>, \
+                  "Integer type does not match enum underlying type");
+#else
+#  define CCL_ENUM_CHECK_INT_TYPE(_type, _int_type)
+#endif
+
 #define CCL_ENUM_OPERATORS(_type, _int_type) \
+  CCL_ENUM_CHECK_INT_TYPE(_type, _int_type) \
   ccl_device_inline constexpr _type operator|(const _type a, const _type b) \
   { \
     return _type(_int_type(a) | _int_type(b)); \
