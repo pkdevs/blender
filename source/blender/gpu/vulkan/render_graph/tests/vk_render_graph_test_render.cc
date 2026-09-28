@@ -470,7 +470,7 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
     render_graph->add_node(end_rendering);
   }
 
-    submit(render_graph, command_buffer);
+  submit(render_graph, command_buffer);
 
   if (use_dynamic_rendering_local_read) {
     for (const int64_t index : log.index_range()) {
