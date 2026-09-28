@@ -6,6 +6,20 @@
 
 COMPUTE_SHADER_CREATE_INFO(compositor_smol_gaussian_downsample)
 
+/* Each area footprint covers at most three texels per axis. Pair the first two weights
+ * into one linear sample; the third texel forms the second group. Return two normalized
+ * coordinates and the second group's normalized weight. */
+float3 area_axis(float lo, float hi, float physical_size)
+{
+  float first = floor(lo);
+  float w0 = min(hi, first + 1.0f) - lo;
+  float w1 = max(0.0f, min(hi, first + 2.0f) - (first + 1.0f));
+  float w2 = max(0.0f, hi - (first + 2.0f));
+  return float3((first + 0.5f + w1 / (w0 + w1)) / physical_size,
+                (first + 2.5f) / physical_size,
+                w2 / (hi - lo));
+}
+
 void main()
 {
   int2 texel = int2(gl_GlobalInvocationID.xy);
@@ -39,13 +53,25 @@ void main()
     imageStore(output_img, texel, textureLod(input_tx, uv, 0.0f));
     return;
   }
-  float4 color = float4(0.0f);
-  /* Integrate pixel areas, including fractional edges on odd-sized images. */
-  for (int y = int(floor(lo.y)); y < int(ceil(hi.y)); y++) {
-    for (int x = int(floor(lo.x)); x < int(ceil(hi.x)); x++) {
-      float2 overlap = max(float2(0.0f), min(hi, float2(x + 1, y + 1)) - max(lo, float2(x, y)));
-      color += texelFetch(input_tx, int2(x, y), 0) * overlap.x * overlap.y;
-    }
+  float3 x = area_axis(lo.x, hi.x, float(physical_size.x));
+  float3 y = area_axis(lo.y, hi.y, float(physical_size.y));
+  /* Uniform decisions: exact halves and unchanged axes need only the first group,
+   * including their preserved borders. Pairing preserves area weights apart from
+   * hardware filtering precision. */
+  bool second_x = input_size.x != logical_output_size.x &&
+                  input_size.x != 2 * logical_output_size.x;
+  bool second_y = input_size.y != logical_output_size.y &&
+                  input_size.y != 2 * logical_output_size.y;
+  float4 a = textureLod(input_tx, float2(x.x, y.x), 0.0f);
+  if (second_x) {
+    a = mix(a, textureLod(input_tx, float2(x.y, y.x), 0.0f), x.z);
   }
-  imageStore(output_img, texel, color / ((hi.x - lo.x) * (hi.y - lo.y)));
+  if (second_y) {
+    float4 b = textureLod(input_tx, float2(x.x, y.y), 0.0f);
+    if (second_x) {
+      b = mix(b, textureLod(input_tx, float2(x.y, y.y), 0.0f), x.z);
+    }
+    a = mix(a, b, y.z);
+  }
+  imageStore(output_img, texel, a);
 }

@@ -6,10 +6,14 @@
 
 COMPUTE_SHADER_CREATE_INFO(compositor_smol_gaussian_reconstruct)
 
-float3 cubic_axis(float uv, int size, int output_size)
+/* Return coordinates in the padded texture directly, avoiding a logical-UV round trip
+ * and repeated padding transforms for each sample. */
+float3 cubic_axis(float uv, int size, int output_size, int padding)
 {
+  float inverse_physical_size = 1.0f / float(size + 2 * padding);
   if (2 * size >= output_size) {
-    return float3(uv, uv, 0.0f);
+    float p = (uv * float(size) + float(padding)) * inverse_physical_size;
+    return float3(p, p, 0.0f);
   }
   float p = uv * float(size) - 0.5f;
   float base = floor(p);
@@ -18,30 +22,24 @@ float3 cubic_axis(float uv, int size, int output_size)
   float w1 = (3.0f * f * f * f - 6.0f * f * f + 4.0f) / 6.0f;
   float w2 = (-3.0f * f * f * f + 3.0f * f * f + 3.0f * f + 1.0f) / 6.0f;
   float w3 = f * f * f / 6.0f;
-  return float3((base - 0.5f + w1 / (w0 + w1)) / float(size),
-                (base + 1.5f + w3 / (w2 + w3)) / float(size),
+  return float3((base - 0.5f + w1 / (w0 + w1) + float(padding)) * inverse_physical_size,
+                (base + 1.5f + w3 / (w2 + w3) + float(padding)) * inverse_physical_size,
                 w2 + w3);
-}
-
-/* Map logical coordinates into the texture, including its preserved border. */
-float2 padded_uv(float2 uv, int4 bounds)
-{
-  return (uv * float2(bounds.xy) + float2(bounds.zw)) / float2(bounds.xy + 2 * bounds.zw);
 }
 
 float4 reconstruct(sampler2D image, float2 uv, int2 output_size, int4 bounds)
 {
   int2 size = bounds.xy;
-  float3 x = cubic_axis(uv.x, size.x, output_size.x);
-  float3 y = cubic_axis(uv.y, size.y, output_size.y);
-  float4 a = textureLod(image, padded_uv(float2(x.x, y.x), bounds), 0.0f);
+  float3 x = cubic_axis(uv.x, size.x, output_size.x, bounds.z);
+  float3 y = cubic_axis(uv.y, size.y, output_size.y, bounds.w);
+  float4 a = textureLod(image, float2(x.x, y.x), 0.0f);
   if (2 * size.x < output_size.x) {
-    a = mix(a, textureLod(image, padded_uv(float2(x.y, y.x), bounds), 0.0f), x.z);
+    a = mix(a, textureLod(image, float2(x.y, y.x), 0.0f), x.z);
   }
   if (2 * size.y < output_size.y) {
-    float4 b = textureLod(image, padded_uv(float2(x.x, y.y), bounds), 0.0f);
+    float4 b = textureLod(image, float2(x.x, y.y), 0.0f);
     if (2 * size.x < output_size.x) {
-      b = mix(b, textureLod(image, padded_uv(float2(x.y, y.y), bounds), 0.0f), x.z);
+      b = mix(b, textureLod(image, float2(x.y, y.y), 0.0f), x.z);
     }
     a = mix(a, b, y.z);
   }
