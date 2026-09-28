@@ -440,21 +440,22 @@ static bool applyFaceProject(TransInfo *t,
   snap_object_params.occlusion_test = SNAP_OCCLUSION_ALWAYS;
   snap_object_params.use_backface_culling = (t->tsnap.flag & SCE_SNAP_BACKFACE_CULLING) != 0;
 
-  eSnapMode hit = ed::transform::snap_object_project_view3d(t->tsnap.object_context,
-                                                            t->depsgraph,
-                                                            t->region,
-                                                            static_cast<const View3D *>(t->view),
-                                                            SCE_SNAP_TO_FACE,
-                                                            &snap_object_params,
-                                                            nullptr,
-                                                            mval_fl,
-                                                            nullptr,
-                                                            nullptr,
-                                                            loc,
-                                                            no);
-  if (hit != SCE_SNAP_TO_FACE) {
+  auto hit_result = ed::transform::snap_object_project_view3d(t->tsnap.object_context,
+                                                              t->depsgraph,
+                                                              t->region,
+                                                              static_cast<const View3D *>(t->view),
+                                                              SCE_SNAP_TO_FACE,
+                                                              &snap_object_params,
+                                                              nullptr,
+                                                              mval_fl,
+                                                              nullptr,
+                                                              nullptr);
+  if (!hit_result.has_value()) {
     return false;
   }
+
+  copy_v3_v3(loc, hit_result->loc);
+  copy_v3_v3(no, hit_result->no);
 
   float tvec[3];
   sub_v3_v3v3(tvec, loc, iloc);
@@ -506,22 +507,23 @@ static void applyFaceNearest(TransInfo *t, TransDataContainer *tc, TransData *td
   snap_object_params.face_nearest_steps = t->tsnap.face_nearest_steps;
   snap_object_params.keep_on_same_target = t->tsnap.flag & SCE_SNAP_KEEP_ON_SAME_OBJECT;
 
-  eSnapMode hit = ed::transform::snap_object_project_view3d(t->tsnap.object_context,
-                                                            t->depsgraph,
-                                                            t->region,
-                                                            static_cast<const View3D *>(t->view),
-                                                            SCE_SNAP_INDIVIDUAL_NEAREST,
-                                                            &snap_object_params,
-                                                            init_loc,
-                                                            nullptr,
-                                                            prev_loc,
-                                                            nullptr,
-                                                            snap_loc,
-                                                            snap_no);
+  auto hit_result = ed::transform::snap_object_project_view3d(t->tsnap.object_context,
+                                                              t->depsgraph,
+                                                              t->region,
+                                                              static_cast<const View3D *>(t->view),
+                                                              SCE_SNAP_INDIVIDUAL_NEAREST,
+                                                              &snap_object_params,
+                                                              init_loc,
+                                                              nullptr,
+                                                              prev_loc,
+                                                              nullptr);
 
-  if (hit != SCE_SNAP_INDIVIDUAL_NEAREST) {
+  if (!hit_result.has_value()) {
     return;
   }
+
+  copy_v3_v3(snap_loc, hit_result->loc);
+  copy_v3_v3(snap_no, hit_result->no);
 
   float tvec[3];
   sub_v3_v3v3(tvec, snap_loc, prev_loc);
@@ -1654,18 +1656,22 @@ static eSnapMode snapObjectsTransform(
     add_v3_v3(grid_co, t->center_global);
   }
 
-  return ed::transform::snap_object_project_view3d(t->tsnap.object_context,
-                                                   t->depsgraph,
-                                                   t->region,
-                                                   static_cast<const View3D *>(t->view),
-                                                   t->tsnap.mode,
-                                                   &snap_object_params,
-                                                   grid_co,
-                                                   mval,
-                                                   prev_co,
-                                                   dist_px,
-                                                   r_loc,
-                                                   r_no);
+  auto hit_result = ed::transform::snap_object_project_view3d(t->tsnap.object_context,
+                                                              t->depsgraph,
+                                                              t->region,
+                                                              static_cast<const View3D *>(t->view),
+                                                              t->tsnap.mode,
+                                                              &snap_object_params,
+                                                              grid_co,
+                                                              mval,
+                                                              prev_co,
+                                                              dist_px);
+  if (hit_result.has_value()) {
+    copy_v3_v3(r_loc, hit_result->loc);
+    copy_v3_v3(r_no, hit_result->no);
+    return hit_result->mode;
+  }
+  return SCE_SNAP_TO_NONE;
 }
 
 /** \} */

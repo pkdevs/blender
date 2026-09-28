@@ -1364,22 +1364,16 @@ bool snap_object_project_ray(SnapObjectContext *sctx,
                                     nullptr);
 }
 
-eSnapMode snap_object_project_view3d_ex(SnapObjectContext *sctx,
-                                        Depsgraph *depsgraph,
-                                        const ARegion *region,
-                                        const View3D *v3d,
-                                        eSnapMode snap_to_flag,
-                                        const SnapObjectParams *params,
-                                        const float init_co[3],
-                                        const float mval[2],
-                                        const float prev_co[3],
-                                        float *dist_px,
-                                        float r_loc[3],
-                                        float r_no[3],
-                                        int *r_index,
-                                        const Object **r_ob,
-                                        float r_obmat[4][4],
-                                        float r_face_nor[3])
+std::optional<SnapResult> snap_object_project_view3d(SnapObjectContext *sctx,
+                                                     Depsgraph *depsgraph,
+                                                     const ARegion *region,
+                                                     const View3D *v3d,
+                                                     eSnapMode snap_to_flag,
+                                                     const SnapObjectParams *params,
+                                                     const float init_co[3],
+                                                     const float mval[2],
+                                                     const float prev_co[3],
+                                                     float *dist_px)
 {
   eSnapMode retval = SCE_SNAP_TO_NONE;
   float ray_depth_max = BVH_RAYCAST_DIST_MAX;
@@ -1445,8 +1439,10 @@ eSnapMode snap_object_project_view3d_ex(SnapObjectContext *sctx,
                                         dist_px ? square_f(*dist_px) : FLT_MAX,
                                         nullptr))
   {
-    return retval;
+    return std::nullopt;
   }
+
+  SnapResult res{};
 
 #ifdef DEBUG_SNAP_TIME
   const timeit::TimePoint start_ = timeit::Clock::now();
@@ -1472,9 +1468,7 @@ eSnapMode snap_object_project_view3d_ex(SnapObjectContext *sctx,
     has_hit = raycastObjects(sctx);
 
     if (has_hit) {
-      if (r_face_nor) {
-        copy_v3_v3(r_face_nor, sctx->ret.no);
-      }
+      copy_v3_v3(res.face_nor, sctx->ret.no);
 
       if (snap_to_flag & SCE_SNAP_TO_FACE) {
         retval |= SCE_SNAP_TO_FACE;
@@ -1553,24 +1547,21 @@ eSnapMode snap_object_project_view3d_ex(SnapObjectContext *sctx,
     }
   }
 
+  std::optional<SnapResult> result = std::nullopt;
+
   if (retval != SCE_SNAP_TO_NONE) {
-    copy_v3_v3(r_loc, sctx->ret.loc);
-    if (r_no) {
-      copy_v3_v3(r_no, sctx->ret.no);
-    }
-    if (r_ob) {
-      *r_ob = sctx->ret.ob;
-    }
-    if (r_obmat) {
-      copy_m4_m4(r_obmat, sctx->ret.obmat.ptr());
-    }
-    if (r_index) {
-      *r_index = sctx->ret.index;
-    }
+    res.mode = retval;
+    copy_v3_v3(res.loc, sctx->ret.loc);
+    copy_v3_v3(res.no, sctx->ret.no);
+    res.ob = sctx->ret.ob;
+    copy_m4_m4(res.obmat, sctx->ret.obmat.ptr());
+    res.index = sctx->ret.index;
 
     if (dist_px) {
       *dist_px = math::sqrt(sctx->ret.dist_px_sq);
     }
+
+    result = res;
   }
 
 #ifdef DEBUG_SNAP_TIME
@@ -1578,38 +1569,7 @@ eSnapMode snap_object_project_view3d_ex(SnapObjectContext *sctx,
   total_count_++;
 #endif
 
-  return retval;
-}
-
-eSnapMode snap_object_project_view3d(SnapObjectContext *sctx,
-                                     Depsgraph *depsgraph,
-                                     const ARegion *region,
-                                     const View3D *v3d,
-                                     const eSnapMode snap_to,
-                                     const SnapObjectParams *params,
-                                     const float init_co[3],
-                                     const float mval[2],
-                                     const float prev_co[3],
-                                     float *dist_px,
-                                     float r_loc[3],
-                                     float r_no[3])
-{
-  return snap_object_project_view3d_ex(sctx,
-                                       depsgraph,
-                                       region,
-                                       v3d,
-                                       snap_to,
-                                       params,
-                                       init_co,
-                                       mval,
-                                       prev_co,
-                                       dist_px,
-                                       r_loc,
-                                       r_no,
-                                       nullptr,
-                                       nullptr,
-                                       nullptr,
-                                       nullptr);
+  return result;
 }
 
 bool object_project_all_view3d_ex(SnapObjectContext *sctx,

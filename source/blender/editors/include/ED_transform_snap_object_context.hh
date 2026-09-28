@@ -10,6 +10,7 @@
 
 #include "DNA_listBase.h"
 #include "DNA_scene_types.h"
+#include <optional>
 
 namespace blender {
 
@@ -140,6 +141,23 @@ bool snap_object_project_ray_all(SnapObjectContext *sctx,
                                  bool sort,
                                  ListBaseT<SnapObjectHitDepth> *r_hit_list);
 
+struct SnapResult {
+  /** Snapped-to element type. */
+  eSnapMode mode;
+  /** Snapped world-space coordinate. */
+  float loc[3];
+  /** Snapped world-space normal. */
+  float no[3];
+  /** Index of snapped-to target element. */
+  int index;
+  /** Snapped-to target object. */
+  const Object *ob;
+  /** Matrix of snapped-to target object. */
+  float obmat[4][4];
+  /** World-space normal of snapped-to target face. */
+  float face_nor[3];
+};
+
 /**
  * Perform snapping.
  *
@@ -152,59 +170,19 @@ bool snap_object_project_ray_all(SnapObjectContext *sctx,
  * \param mval: Current transformed screen-space coordinate or mouse position (optional).
  * \param prev_co: Current transformed world-space coordinate of source (optional).
  * \param dist_px: Maximum distance to snap (in pixels).
- * \param r_loc: Snapped world-space coordinate.
- * \param r_no: Snapped world-space normal (optional).
- * \param r_index: Index of snapped-to target element (optional).
- * \param r_ob: Snapped-to target object (optional).
- * \param r_obmat: Matrix of snapped-to target object (optional).
- * \param r_face_nor: World-space normal of snapped-to target face (optional).
- * \return Snapped-to element, #eSnapMode.
+ * \return Snapped-to element result, or std::nullopt.
  */
-eSnapMode snap_object_project_view3d_ex(SnapObjectContext *sctx,
-                                        Depsgraph *depsgraph,
-                                        const ARegion *region,
-                                        const View3D *v3d,
-                                        const eSnapMode snap_to,
-                                        const SnapObjectParams *params,
-                                        const float init_co[3],
-                                        const float mval[2],
-                                        const float prev_co[3],
-                                        float *dist_px,
-                                        float r_loc[3],
-                                        float r_no[3],
-                                        int *r_index,
-                                        const Object **r_ob,
-                                        float r_obmat[4][4],
-                                        float r_face_nor[3]);
-/**
- * Convenience function for performing snapping.
- *
- * Given a 2D region value, snap to vert/edge/face.
- *
- * \param sctx: Snap context.
- * \param snap_to: Target elements to snap source to.
- * \param params: Addition snapping options.
- * \param init_co: Initial world-space coordinate of source (optional).
- * \param mval: Current transformed screen-space coordinate or mouse position (optional).
- * \param prev_co: Current transformed world-space coordinate of source (optional).
- * \param dist_px: Maximum distance to snap (in pixels).
- * \param r_loc: Snapped world-space coordinate.
- * \param r_no: Snapped world-space normal (optional).
- * \return Snapped-to element, #eSnapMode.
- */
-eSnapMode snap_object_project_view3d(SnapObjectContext *sctx,
-                                     Depsgraph *depsgraph,
-                                     const ARegion *region,
-                                     const View3D *v3d,
-                                     const eSnapMode snap_to,
-                                     const SnapObjectParams *params,
-                                     const float init_co[3],
-                                     const float mval[2],
-                                     const float prev_co[3],
-                                     float *dist_px,
-                                     /* return args */
-                                     float r_loc[3],
-                                     float r_no[3]);
+
+std::optional<SnapResult> snap_object_project_view3d(SnapObjectContext *sctx,
+                                                     Depsgraph *depsgraph,
+                                                     const ARegion *region,
+                                                     const View3D *v3d,
+                                                     const eSnapMode snap_to,
+                                                     const SnapObjectParams *params,
+                                                     const float init_co[3],
+                                                     const float mval[2],
+                                                     const float prev_co[3],
+                                                     float *dist_px);
 
 /**
  * see: #snap_object_project_ray_all

@@ -2098,19 +2098,18 @@ void EDBM_project_snap_verts(bContext *C, Depsgraph *depsgraph, ARegion *region,
         params.snap_target_select = target_op;
         params.edit_mode_type = transform ::SNAP_GEOM_FINAL;
         params.occlusion_test = transform ::SNAP_OCCLUSION_AS_SEEM;
-        if (transform::snap_object_project_view3d(snap_context,
-                                                  depsgraph,
-                                                  region,
-                                                  CTX_wm_view3d(C),
-                                                  SCE_SNAP_TO_FACE,
-                                                  &params,
-                                                  nullptr,
-                                                  mval,
-                                                  nullptr,
-                                                  nullptr,
-                                                  co_proj,
-                                                  nullptr))
-        {
+        auto hit_result = transform::snap_object_project_view3d(snap_context,
+                                                                depsgraph,
+                                                                region,
+                                                                CTX_wm_view3d(C),
+                                                                SCE_SNAP_TO_FACE,
+                                                                &params,
+                                                                nullptr,
+                                                                mval,
+                                                                nullptr,
+                                                                nullptr);
+        if (hit_result.has_value()) {
+          copy_v3_v3(co_proj, hit_result->loc);
           mul_v3_m4v3(eve->co, obedit->world_to_object().ptr(), co_proj);
         }
       }

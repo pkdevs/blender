@@ -678,37 +678,43 @@ static void v3d_cursor_snap_update(V3DSnapCursorState *state,
       params.occlusion_test = (state->flag & V3D_SNAPCURSOR_OCCLUSION_ALWAYS_TRUE) ?
                                   ed::transform::SNAP_OCCLUSION_ALWAYS :
                                   ed::transform::SNAP_OCCLUSION_AS_SEEM;
-      snap_elem = ed::transform::snap_object_project_view3d_ex(data_intern->snap_context_v3d,
-                                                               depsgraph,
-                                                               region,
-                                                               v3d,
-                                                               snap_elements,
-                                                               &params,
-                                                               nullptr,
-                                                               mval_fl,
-                                                               prev_co,
-                                                               &dist_px,
-                                                               co,
-                                                               no,
-                                                               &index,
-                                                               nullptr,
-                                                               obmat,
-                                                               face_nor);
+      auto hit_result = ed::transform::snap_object_project_view3d(data_intern->snap_context_v3d,
+                                                                  depsgraph,
+                                                                  region,
+                                                                  v3d,
+                                                                  snap_elements,
+                                                                  &params,
+                                                                  nullptr,
+                                                                  mval_fl,
+                                                                  prev_co,
+                                                                  &dist_px);
+      if (hit_result.has_value()) {
+        snap_elem = hit_result->mode;
+        copy_v3_v3(co, hit_result->loc);
+        copy_v3_v3(no, hit_result->no);
+        index = hit_result->index;
+        copy_m4_m4(obmat, hit_result->obmat);
+        copy_v3_v3(face_nor, hit_result->face_nor);
+      }
       if ((snap_elem & data_intern->snap_elem_hidden) && (snap_elements & SCE_SNAP_TO_GRID)) {
         BLI_assert(snap_elem != SCE_SNAP_TO_GRID);
         params.occlusion_test = ed::transform::SNAP_OCCLUSION_NEVER;
-        snap_elem = ed::transform::snap_object_project_view3d(data_intern->snap_context_v3d,
-                                                              depsgraph,
-                                                              region,
-                                                              v3d,
-                                                              SCE_SNAP_TO_GRID,
-                                                              &params,
-                                                              co,
-                                                              mval_fl,
-                                                              prev_co,
-                                                              &dist_px,
-                                                              co,
-                                                              no);
+        auto grid_hit_result = ed::transform::snap_object_project_view3d(
+            data_intern->snap_context_v3d,
+            depsgraph,
+            region,
+            v3d,
+            SCE_SNAP_TO_GRID,
+            &params,
+            co,
+            mval_fl,
+            prev_co,
+            &dist_px);
+        if (grid_hit_result.has_value()) {
+          snap_elem = grid_hit_result->mode;
+          copy_v3_v3(co, grid_hit_result->loc);
+          copy_v3_v3(no, grid_hit_result->no);
+        }
       }
     }
   }

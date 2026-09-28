@@ -5723,18 +5723,19 @@ static wmOperatorStatus add_vertex_invoke(bContext *C, wmOperator *op, const wmE
       params.snap_target_select = (vc.obedit != nullptr) ? SCE_SNAP_TARGET_NOT_ACTIVE :
                                                            SCE_SNAP_TARGET_ALL;
       params.edit_mode_type = ed::transform::SNAP_GEOM_FINAL;
-      ed::transform::snap_object_project_view3d(snap_context,
-                                                vc.depsgraph,
-                                                vc.region,
-                                                vc.v3d,
-                                                SCE_SNAP_TO_FACE,
-                                                &params,
-                                                nullptr,
-                                                mval,
-                                                nullptr,
-                                                nullptr,
-                                                location,
-                                                nullptr);
+      auto hit_result = ed::transform::snap_object_project_view3d(snap_context,
+                                                                  vc.depsgraph,
+                                                                  vc.region,
+                                                                  vc.v3d,
+                                                                  SCE_SNAP_TO_FACE,
+                                                                  &params,
+                                                                  nullptr,
+                                                                  mval,
+                                                                  nullptr,
+                                                                  nullptr);
+      if (hit_result.has_value()) {
+        copy_v3_v3(location, hit_result->loc);
+      }
 
       ed::transform::snap_object_context_destroy(snap_context);
     }

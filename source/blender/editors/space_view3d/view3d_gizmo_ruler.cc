@@ -359,19 +359,20 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
       snap_object_params.snap_target_select = SCE_SNAP_TARGET_ALL;
       snap_object_params.edit_mode_type = ed::transform::SNAP_GEOM_CAGE;
 
-      eSnapMode hit = ed::transform::snap_object_project_view3d(snap_context,
-                                                                depsgraph,
-                                                                ruler_info->region,
-                                                                v3d,
-                                                                SCE_SNAP_TO_FACE,
-                                                                &snap_object_params,
-                                                                nullptr,
-                                                                mval_fl,
-                                                                nullptr,
-                                                                &dist_px,
-                                                                co,
-                                                                ray_normal);
-      if (hit) {
+      auto hit_result = ed::transform::snap_object_project_view3d(snap_context,
+                                                                  depsgraph,
+                                                                  ruler_info->region,
+                                                                  v3d,
+                                                                  SCE_SNAP_TO_FACE,
+                                                                  &snap_object_params,
+                                                                  nullptr,
+                                                                  mval_fl,
+                                                                  nullptr,
+                                                                  &dist_px);
+      if (hit_result.has_value()) {
+        copy_v3_v3(co, hit_result->loc);
+        copy_v3_v3(ray_normal, hit_result->no);
+
         /* add some bias */
         ray_start = co - ray_normal * eps_bias;
         ed::transform::snap_object_project_ray(snap_context,

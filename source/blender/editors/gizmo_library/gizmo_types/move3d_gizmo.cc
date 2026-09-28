@@ -282,20 +282,19 @@ static wmOperatorStatus gizmo_move_modal(bContext *C,
       params.snap_target_select = SCE_SNAP_TARGET_ALL;
       params.edit_mode_type = transform::SNAP_GEOM_EDIT;
       params.occlusion_test = transform::SNAP_OCCLUSION_AS_SEEM;
-      if (transform::snap_object_project_view3d(
-              inter->snap_context_v3d,
-              CTX_data_ensure_evaluated_depsgraph(C),
-              region,
-              CTX_wm_view3d(C),
-              (SCE_SNAP_TO_VERTEX | SCE_SNAP_TO_EDGE | SCE_SNAP_TO_FACE),
-              &params,
-              nullptr,
-              mval_fl,
-              nullptr,
-              &dist_px,
-              co,
-              nullptr))
-      {
+      auto hit_result = transform::snap_object_project_view3d(
+          inter->snap_context_v3d,
+          CTX_data_ensure_evaluated_depsgraph(C),
+          region,
+          CTX_wm_view3d(C),
+          (SCE_SNAP_TO_VERTEX | SCE_SNAP_TO_EDGE | SCE_SNAP_TO_FACE),
+          &params,
+          nullptr,
+          mval_fl,
+          nullptr,
+          &dist_px);
+      if (hit_result.has_value()) {
+        copy_v3_v3(co, hit_result->loc);
         float matrix_space_inv[4][4];
         invert_m4_m4(matrix_space_inv, gz->matrix_space);
         mul_v3_m4v3(move->prop_co, matrix_space_inv, co);

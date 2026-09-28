@@ -1085,29 +1085,27 @@ void ED_view3d_cursor3d_position_rotation(bContext *C,
     ed::transform::SnapObjectContext *snap_context = ed::transform::snap_object_context_create();
 
     float obmat[4][4];
-    const Object *ob_dummy = nullptr;
     float dist_px = 0;
     ed::transform::SnapObjectParams params{};
     params.snap_target_select = SCE_SNAP_TARGET_ALL;
     params.edit_mode_type = ed::transform::SNAP_GEOM_FINAL;
     params.occlusion_test = ed::transform::SNAP_OCCLUSION_AS_SEEM;
-    if (ed::transform::snap_object_project_view3d_ex(snap_context,
-                                                     CTX_data_ensure_evaluated_depsgraph(C),
-                                                     region,
-                                                     v3d,
-                                                     SCE_SNAP_TO_FACE,
-                                                     &params,
-                                                     nullptr,
-                                                     mval_fl,
-                                                     nullptr,
-                                                     &dist_px,
-                                                     ray_co,
-                                                     ray_no,
-                                                     nullptr,
-                                                     &ob_dummy,
-                                                     obmat,
-                                                     nullptr) != 0)
-    {
+    auto hit_result = ed::transform::snap_object_project_view3d(
+        snap_context,
+        CTX_data_ensure_evaluated_depsgraph(C),
+        region,
+        v3d,
+        SCE_SNAP_TO_FACE,
+        &params,
+        nullptr,
+        mval_fl,
+        nullptr,
+        &dist_px);
+    if (hit_result.has_value()) {
+      copy_v3_v3(ray_co, hit_result->loc);
+      copy_v3_v3(ray_no, hit_result->no);
+      copy_m4_m4(obmat, hit_result->obmat);
+
       if (use_depth) {
         copy_v3_v3(r_cursor_co, ray_co);
       }
