@@ -43,7 +43,16 @@ PROMOTED_FEATURE_SETS = [
         "description": "Collection of original legacy Rigify rigs minimally ported to the modern Rigify",
         "warning": "This feature set is maintained at the bare minimal level",
         "link": "https://github.com/cessen/cessen_rigify_ext",
-    }
+    },
+    {
+        "name": "GameRig",
+        "author": "Armin Halac",
+        "description":
+            "Feature set made for game rigs.\n"
+            "Single deform hierarchy, no scaling on deform bones, no bendy bones; "
+            "converts Rigify types to game.* equivalents",
+        "link": "https://github.com/Arminando/GameRig",
+    },
 ]
 
 
