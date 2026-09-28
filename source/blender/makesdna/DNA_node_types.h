@@ -1070,6 +1070,7 @@ enum CMPNodeBlurType {
   CMP_NODE_BLUR_TYPE_MITCH = 6,
   CMP_NODE_BLUR_TYPE_FAST_GAUSS = 7,
   CMP_NODE_BLUR_TYPE_DUAL_KAWASE = 8,
+  CMP_NODE_BLUR_TYPE_SMOL_GAUSS = 9,
 };
 
 /** #NodeDenoise.prefilter */

@@ -106,6 +106,9 @@ set(SRC_GLSL_COMP
   compositor_premultiply_alpha.glsl
   compositor_radial_lens_distortion.glsl
   compositor_realize_on_domain.glsl
+  compositor_smol_gaussian_downsample.glsl
+  compositor_smol_gaussian_filter.glsl
+  compositor_smol_gaussian_reconstruct.glsl
   compositor_relative_to_pixel_float.glsl
   compositor_relative_to_pixel_float_per_dimension.glsl
   compositor_relative_to_pixel_vector.glsl

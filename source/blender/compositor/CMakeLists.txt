@@ -93,6 +93,7 @@ set(SRC
   algorithms/intern/pad.cc
   algorithms/intern/parallel_reduction.cc
   algorithms/intern/recursive_gaussian_blur.cc
+  algorithms/intern/smol_gaussian_blur.cc
   algorithms/intern/sample_pixel.cc
   algorithms/intern/smaa.cc
   algorithms/intern/summed_area_table.cc
@@ -112,6 +113,7 @@ set(SRC
   algorithms/COM_algorithm_pad.hh
   algorithms/COM_algorithm_parallel_reduction.hh
   algorithms/COM_algorithm_recursive_gaussian_blur.hh
+  algorithms/COM_algorithm_smol_gaussian_blur.hh
   algorithms/COM_algorithm_sample_pixel.hh
   algorithms/COM_algorithm_smaa.hh
   algorithms/COM_algorithm_summed_area_table.hh
@@ -233,6 +235,7 @@ set(GLSL_SRC
   shaders/infos/compositor_plane_deform_infos.hh
   shaders/infos/compositor_premultiply_alpha_infos.hh
   shaders/infos/compositor_realize_on_domain_infos.hh
+  shaders/infos/compositor_smol_gaussian_infos.hh
   shaders/infos/compositor_relative_to_pixel_infos.hh
   shaders/infos/compositor_sample_pixel_infos.hh
   shaders/infos/compositor_scale_variable_infos.hh
@@ -340,6 +343,9 @@ set(GLSL_SRC
   shaders/compositor_premultiply_alpha.glsl
   shaders/compositor_radial_lens_distortion.glsl
   shaders/compositor_realize_on_domain.glsl
+  shaders/compositor_smol_gaussian_downsample.glsl
+  shaders/compositor_smol_gaussian_filter.glsl
+  shaders/compositor_smol_gaussian_reconstruct.glsl
   shaders/compositor_relative_to_pixel_float.glsl
   shaders/compositor_relative_to_pixel_float_per_dimension.glsl
   shaders/compositor_relative_to_pixel_vector.glsl

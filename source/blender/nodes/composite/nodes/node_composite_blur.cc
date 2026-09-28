@@ -16,6 +16,7 @@
 #include "COM_algorithm_pad.hh"
 #include "COM_algorithm_parallel_reduction.hh"
 #include "COM_algorithm_recursive_gaussian_blur.hh"
+#include "COM_algorithm_smol_gaussian_blur.hh"
 #include "COM_algorithm_symmetric_separable_blur.hh"
 #include "COM_node_operation.hh"
 #include "COM_symmetric_blur_weights.hh"
@@ -37,6 +38,11 @@ static const EnumPropertyItem type_items[] = {
      N_("Fast Gaussian"),
      N_("Applies a recursive Gaussian blur that can be faster and more accurate in some cases, "
         "but less accurate in other cases")},
+    {CMP_NODE_BLUR_TYPE_SMOL_GAUSS,
+     "SMOL_GAUSS",
+     0,
+     N_("Smol Gaussian"),
+     N_("Applies a Gaussian blur at reduced resolution with smooth reconstruction")},
     {CMP_NODE_BLUR_TYPE_DUAL_KAWASE, "DUAL_KAWASE", 0, N_("Dual Kawase"), ""},
     {CMP_NODE_BLUR_TYPE_CATROM,
      "CATROM",
@@ -105,6 +111,7 @@ static math::FilterKernel blur_type_to_kernel(CMPNodeBlurType type)
       return math::FilterKernel::Gauss;
     case CMP_NODE_BLUR_TYPE_MITCH:
       return math::FilterKernel::Mitch;
+    case CMP_NODE_BLUR_TYPE_SMOL_GAUSS:
     case CMP_NODE_BLUR_TYPE_DUAL_KAWASE:
     case CMP_NODE_BLUR_TYPE_FAST_GAUSS:
       return math::FilterKernel::Gauss;
@@ -135,16 +142,19 @@ class BlurOperation : public NodeOperation {
       return;
     }
 
-    if (this->get_type() == CMP_NODE_BLUR_TYPE_DUAL_KAWASE) {
+    if (ELEM(this->get_type(), CMP_NODE_BLUR_TYPE_DUAL_KAWASE, CMP_NODE_BLUR_TYPE_SMOL_GAUSS)) {
+      const auto blur = this->get_type() == CMP_NODE_BLUR_TYPE_DUAL_KAWASE ? dual_kawase_blur :
+                                                                             smol_gaussian_blur;
+      const float2 radius = this->get_blur_size();
       if (this->get_extend_bounds()) {
         Result padded_input = this->context().create_result(input.type());
-        const int2 padding_size = int2(math::ceil(this->get_blur_size()));
+        const int2 padding_size = int2(math::ceil(radius));
         pad(this->context(), input, padded_input, padding_size, PaddingMethod::Zero);
-        dual_kawase_blur(this->context(), padded_input, output, this->get_blur_size());
+        blur(this->context(), padded_input, output, radius);
         padded_input.release();
       }
       else {
-        dual_kawase_blur(this->context(), input, output, this->get_blur_size());
+        blur(this->context(), input, output, radius);
       }
     }
     else if (this->get_type() == CMP_NODE_BLUR_TYPE_FAST_GAUSS) {
@@ -451,6 +461,7 @@ class BlurOperation : public NodeOperation {
     switch (this->get_type()) {
       case CMP_NODE_BLUR_TYPE_GAUSS:
       case CMP_NODE_BLUR_TYPE_FAST_GAUSS:
+      case CMP_NODE_BLUR_TYPE_SMOL_GAUSS:
       case CMP_NODE_BLUR_TYPE_DUAL_KAWASE:
         return true;
       default:
