@@ -561,10 +561,8 @@ void ShaderOperation::populate_results_for_node(const bNode &node)
   const bool node_needs_preview = is_node_preview_needed(node);
   const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
                                                SideEffectOutputTypes::NodePreviews);
-  const bool is_active_context = compute_context_.hash() ==
-                                 this->context().get_active_compute_context_hash();
   const bNodeSocket *preview_output = nullptr;
-  if (node_needs_preview && needs_node_previews && is_active_context) {
+  if (node_needs_preview && needs_node_previews) {
     preview_output = find_preview_output_socket(node);
   }
 
@@ -573,14 +571,12 @@ void ShaderOperation::populate_results_for_node(const bNode &node)
       continue;
     }
 
-    /* If any of the nodes linked to the output are not part of the shader operation but are part
-     * of the execution schedule, then an output result needs to be populated for it. */
-    const bool is_operation_output = is_output_linked_to_input_conditioned(
-        *output, [&](const bNodeSocket &input) {
-          return node_tree_evaluator_.schedule().nodes.contains(&input.owner_node()) &&
-                 !node_tree_evaluator_.schedule().unneeded_inputs.contains(&input) &&
-                 !node_tree_evaluator_.pixel_compile_unit().contains(&input.owner_node());
-        });
+    /* If the output is referenced by the schedule outside of the pixel compile unit, then an
+     * output result needs to be populated for it. */
+    const bool is_operation_output = compute_output_reference_count(
+                                         *output,
+                                         node_tree_evaluator_.schedule(),
+                                         &node_tree_evaluator_.pixel_compile_unit()) != 0;
 
     /* If the output is used as the node preview, then an output result needs to be populated for
      * it, and we additionally keep track of that output to later compute the previews from. */
