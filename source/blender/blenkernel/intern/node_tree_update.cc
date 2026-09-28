@@ -1558,6 +1558,13 @@ class NodeTreeMainUpdater {
           break;
         }
         ATTR_FALLTHROUGH;
+      case SH_NODE_VECT_TRANSFORM: {
+        NodeShaderVectTransform *nodeprop = static_cast<NodeShaderVectTransform *>(node.storage);
+        if (!ELEM(SHD_VECT_TRANSFORM_SPACE_LIGHT, nodeprop->convert_from, nodeprop->convert_to)) {
+          break;
+        }
+      }
+        ATTR_FALLTHROUGH;
       case SH_NODE_LIGHT_INFO:
       case SH_NODE_LIGHT_EVALUATION:
       case SH_NODE_SHADOW_RAYCAST:
@@ -2224,7 +2231,7 @@ class NodeTreeMainUpdater {
       if (bNodeTreeInterfaceSocket *toggle_socket = panel->header_toggle_socket()) {
         if (!STREQ(panel->name_, toggle_socket->name_)) {
           MEM_SAFE_DELETE(toggle_socket->name_);
-          toggle_socket->name() = BLI_strdup_null(panel->name_);
+          toggle_socket->name_ = BLI_strdup_null(panel->name_);
           changed = true;
         }
       }
