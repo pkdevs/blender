@@ -167,24 +167,28 @@ ccl_device_inline bool point_light_sample_from_intersection(KernelGlobals kg,
     const float d_sq = len_squared(ray_P - klight->co);
     ls->pdf = sphere_light_pdf(d_sq, r_sq, N, ray_D, path_flag);
     ls->Ng = normalize(ls->P - klight->co);
+
+    /* Same encoding as point_light_reference_from_sample(): raw map_to_sphere of the local normal. */
+    const Transform itfm = lamp_get_inverse_transform(kg, klight);
+    ref->param = map_to_sphere(normalize(transform_direction(&itfm, ls->Ng)));
   }
   else {
     if (ls->t != FLT_MAX) {
       const float3 lightN = normalize(ray_P - klight->co);
       const float invarea = (r_sq > 0.0f) ? 1.0f / (r_sq * M_PI_F) : 1.0f;
       ls->pdf = invarea * light_pdf_area_to_solid_angle(lightN, -ray_D, ls->t);
+
+      if (r_sq > 0.0f) {
+        /* ray_disk_intersect() uses this same billboard normal. */
+        const float3 hit_P = ray_P + ray_D * ls->t;
+        ref->param = disk_light_offset_to_uv(lightN, hit_P - klight->co, klight->spot.radius);
+      }
     }
     else {
       ls->pdf = 0.0f;
     }
     ls->Ng = -ray_D;
   }
-
-  /* Texture coordinates saved to reference param. */
-  const Transform itfm = lamp_get_inverse_transform(kg, klight);
-  const float2 uv = map_to_sphere(transform_direction(&itfm, ls->Ng));
-  ref->param.x = uv.y;
-  ref->param.y = 1.0f - uv.x - uv.y;
 
   return true;
 }
@@ -235,6 +239,7 @@ ccl_device_inline bool point_light_reference_from_sample(
       const float3 lightN = normalize(to_source);
 
       reference->param = disk_light_offset_to_uv(lightN, ls->P - klight->co, radius);
+      /* Redundant (as set in light_sample_from_intersection()), but harmless. */
       reference->flags |= RESTIR_LIGHT_REFERENCE_HAS_PARAM;
     }
     /* radius == 0: true delta light, identity alone is the sample. */

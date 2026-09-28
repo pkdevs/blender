@@ -388,8 +388,7 @@ ccl_device_inline bool sample_copy_direction(KernelGlobals kg, // !!!: lamp
   // }
 
   if (reservoir.reference.type == LIGHT_AREA) {
-    const ccl_global KernelLight *klight = &kernel_data_fetch(
-        lights, reservoir.reference.prim);
+    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reservoir.reference.prim);
     if (klight->area.tan_half_spread == 0.0f) {
       return true;
     }
@@ -398,7 +397,9 @@ ccl_device_inline bool sample_copy_direction(KernelGlobals kg, // !!!: lamp
   if (reservoir.reference.type == LIGHT_POINT) {
     const ccl_global KernelLight *klight = &kernel_data_fetch(
         lights, reservoir.reference.prim);
-    if (!klight->spot.is_sphere) {
+    /* Radius > 0 disks are reused through their unit-disk (u, v); that shift map is
+     * area-preserving, so no direction-copy Jacobian applies. */
+    if (!klight->spot.is_sphere && !(klight->spot.radius > 0.0f)) {
       return true;
     }
   }
