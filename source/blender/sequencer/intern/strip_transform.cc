@@ -288,9 +288,9 @@ Vector<RippleRange> transform_ripple_ranges_get(const Scene *scene, Span<Strip *
   return ranges;
 }
 
-bool transform_should_ripple_strip(const RippleRange &range,
-                                   const Strip *strip,
-                                   const bool all_channels)
+bool transform_strip_is_on_rippled_channel(const RippleRange &range,
+                                           const Strip *strip,
+                                           const bool all_channels)
 {
   return all_channels || range.channels.contains(strip->channel);
 }
@@ -411,7 +411,7 @@ static void strip_transform_ripple_range(Scene *scene,
       if (target.left_handle() >= start_frame || target.right_handle(scene) <= start_frame) {
         continue;
       }
-      if (!transform_should_ripple_strip(range, &target, all_channels)) {
+      if (!transform_strip_is_on_rippled_channel(range, &target, all_channels)) {
         continue;
       }
       strips_to_split.append(&target);
@@ -449,7 +449,7 @@ static void strip_transform_ripple_range(Scene *scene,
     if (target.left_handle() < ripple_frame) {
       continue;
     }
-    if (!transform_should_ripple_strip(range, &target, all_channels)) {
+    if (!transform_strip_is_on_rippled_channel(range, &target, all_channels)) {
       continue;
     }
     transform_translate_strip(scene, &target, delta);

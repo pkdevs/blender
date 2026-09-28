@@ -94,9 +94,9 @@ Vector<RippleRange> transform_ripple_ranges_get(const Scene *scene, Span<Strip *
 /**
  * Whether \a strip should be rippled by some transformation on a channel in \a range.
  */
-bool transform_should_ripple_strip(const RippleRange &range,
-                                   const Strip *strip,
-                                   bool all_channels);
+bool transform_strip_is_on_rippled_channel(const RippleRange &range,
+                                           const Strip *strip,
+                                           bool all_channels);
 
 /* Image transformation. */
 

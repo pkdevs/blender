@@ -2731,7 +2731,7 @@ static void ripple_range_clear(Scene *scene,
     if (strip.left_handle() >= range.end || strip.right_handle(scene) <= range.start) {
       continue;
     }
-    if (!seq::transform_should_ripple_strip(range, &strip, all_channels)) {
+    if (!seq::transform_strip_is_on_rippled_channel(range, &strip, all_channels)) {
       continue;
     }
     to_edit.append(&strip);
@@ -2770,40 +2770,55 @@ static void ripple_range_clear(Scene *scene,
   seq::edit_remove_flagged_strips(scene, seqbasep);
 }
 
-static int ripple_offset_get(const Scene *scene,
-                             ListBaseT<Strip> *seqbasep,
-                             const ListBaseT<SeqTimelineChannel> *channels,
-                             const seq::RippleRange &range,
-                             const bool all_channels,
-                             Vector<Strip *> &r_to_ripple)
+static bool should_ripple_strip(const ListBaseT<SeqTimelineChannel> *channels,
+                                const seq::RippleRange &range,
+                                const Strip *strip,
+                                const bool all_channels)
 {
-  /* For a given range, all strips may be classified into those that will ripple back, and those
-   * that will remain still, blocking ripples. Blocking strips remain if they weren't cleared, or
-   * if they are locked or exist on non-rippled channels. */
-  Vector<Strip *> to_block;
-  for (Strip &strip : *seqbasep) {
-    if (!seq::transform_is_locked(channels, &strip) && strip.left_handle() >= range.end &&
-        seq::transform_should_ripple_strip(range, &strip, all_channels))
-    {
-      r_to_ripple.append(&strip);
-    }
-    else {
-      to_block.append(&strip);
-    }
-  }
+  const SeqTimelineChannel *channel = seq::channel_get_by_index(channels, strip->channel);
+  return !channel->is_locked() &&
+         seq::transform_strip_is_on_rippled_channel(range, strip, all_channels);
+}
 
-  int offset = range.end - range.start;
-  for (Strip *strip : r_to_ripple) {
-    for (Strip *blocking : to_block) {
-      if (blocking->channel != strip->channel ||
-          blocking->right_handle(scene) > strip->left_handle())
-      {
-        continue;
-      }
-      offset = min_ii(offset, strip->left_handle() - blocking->right_handle(scene));
+static Vector<Bounds<int>> ripple_gaps_get(const Scene *scene,
+                                           ListBaseT<Strip> *seqbasep,
+                                           const ListBaseT<SeqTimelineChannel> *channels,
+                                           const seq::RippleRange &range,
+                                           const bool all_channels)
+{
+  Vector<Bounds<int>> occupied_ranges;
+  /* First, figure out which parts of the deleted range have something in them. The gaps will be
+   * calculated by walking through these occupied ranges. */
+  for (Strip &strip : *seqbasep) {
+    if (!should_ripple_strip(channels, range, &strip, all_channels)) {
+      continue;
+    }
+    /* Locked strips are a special case. Since they can't move, they pretend like they start at
+     * #range.start to prevent finding gaps before them. */
+    const int start = (strip.flag & SEQ_LOCK) ? range.start :
+                                                math::max(strip.left_handle(), range.start);
+    const int end = math::min(strip.right_handle(scene), range.end);
+    if (start < end) {
+      occupied_ranges.append({start, end});
     }
   }
-  return offset;
+  std::ranges::sort(occupied_ranges,
+                    [](const Bounds<int> &a, const Bounds<int> &b) { return a.min < b.min; });
+
+  /* Calculate the gaps by walking left to right, jumping to the end of each occupied range. */
+  Vector<Bounds<int>> gaps;
+  int frame = range.start;
+  for (const Bounds<int> &occupied_range : occupied_ranges) {
+    if (occupied_range.min > frame) {
+      gaps.append({frame, occupied_range.min});
+    }
+    frame = math::max(frame, occupied_range.max);
+  }
+  /* There may be a gap at the end, even if nothing later is occupied, tally it. */
+  if (frame < range.end) {
+    gaps.append({frame, range.end});
+  }
+  return gaps;
 }
 
 static void ripple_delete_range(Scene *scene,
@@ -2821,31 +2836,37 @@ static void ripple_delete_range(Scene *scene,
     ripple_range_clear(scene, seqbasep, channels, range, all_channels);
   }
 
-  Vector<Strip *> to_ripple;
-  const int offset = ripple_offset_get(scene, seqbasep, channels, range, all_channels, to_ripple);
-  if (offset == 0) {
-    return;
-  }
+  const Vector<Bounds<int>> gaps = ripple_gaps_get(scene, seqbasep, channels, range, all_channels);
+  for (const Bounds<int> &gap : gaps | std::views::reverse) {
+    const int offset = gap.max - gap.min;
 
-  for (Strip *strip : to_ripple) {
-    seq::transform_translate_strip(scene, strip, -offset);
-    seq::relations_invalidate_cache(scene, strip);
-  }
-
-  if (ripple_markers && !scene->toolsettings->lock_markers) {
-    for (TimeMarker &marker : scene->markers) {
-      if (marker.frame >= range.end) {
-        marker.frame -= offset;
+    for (Strip &strip : *seqbasep) {
+      if (strip.left_handle() >= gap.max &&
+          should_ripple_strip(channels, range, &strip, all_channels))
+      {
+        seq::transform_translate_strip(scene, &strip, -offset);
+        seq::relations_invalidate_cache(scene, &strip);
       }
     }
-  }
 
-  if (ripple_playhead) {
-    if (scene->r.cfra >= range.end) {
-      scene->r.cfra -= offset;
+    auto ripple_frame = [&](int &frame) {
+      if (frame >= gap.max) {
+        frame -= offset;
+      }
+      /* Markers and the playhead can exist inside a gap, we must handle this here. */
+      else if (frame > gap.min) {
+        frame = gap.min;
+      }
+    };
+
+    if (ripple_markers && !scene->toolsettings->lock_markers) {
+      for (TimeMarker &marker : scene->markers) {
+        ripple_frame(marker.frame);
+      }
     }
-    else if (scene->r.cfra > range.start) {
-      scene->r.cfra = range.start;
+
+    if (ripple_playhead) {
+      ripple_frame(scene->r.cfra);
     }
   }
 }
