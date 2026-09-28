@@ -2755,27 +2755,32 @@ static int ripple_offset_get(const Scene *scene,
                              const ListBaseT<SeqTimelineChannel> *channels,
                              const rcti &range,
                              const bool all_channels,
-                             Vector<Strip *> &r_rippled)
+                             Vector<Strip *> &r_to_ripple)
 {
-  Vector<Strip *> blocking;
+  /* For a given range, all strips may be classified into those that will ripple back, and those
+   * that will remain still, blocking ripples. Blocking strips remain in non-destructive cases
+   * where they weren't already cleared, or if they are locked or exist on non-rippled channels. */
+  Vector<Strip *> to_block;
   for (Strip &strip : *seqbasep) {
     if (!seq::transform_is_locked(channels, &strip) && strip.left_handle() >= range.xmax &&
         seq::transform_should_ripple_strip(scene, range, &strip, all_channels))
     {
-      r_rippled.append(&strip);
+      r_to_ripple.append(&strip);
     }
     else {
-      blocking.append(&strip);
+      to_block.append(&strip);
     }
   }
 
   int offset = range.xmax - range.xmin;
-  for (Strip *strip : r_rippled) {
-    for (Strip *other : blocking) {
-      if (other->channel != strip->channel || other->right_handle(scene) > strip->left_handle()) {
+  for (Strip *strip : r_to_ripple) {
+    for (Strip *blocking : to_block) {
+      if (blocking->channel != strip->channel ||
+          blocking->right_handle(scene) > strip->left_handle())
+      {
         continue;
       }
-      offset = min_ii(offset, strip->left_handle() - other->right_handle(scene));
+      offset = min_ii(offset, strip->left_handle() - blocking->right_handle(scene));
     }
   }
   return offset;
@@ -2844,6 +2849,8 @@ static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op
   }
   seq::edit_remove_flagged_strips(scene, seqbasep);
 
+  /* Every ripple delete changes the frames of later strips, so we must delete in reverse to avoid
+   * invalidating range coordinates of later ranges. */
   for (const rcti &range : ranges | std::views::reverse) {
     ripple_delete_range(
         scene, seqbasep, channels, range, all_channels, non_destructive, ripple_markers);
