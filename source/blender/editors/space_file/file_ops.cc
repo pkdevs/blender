@@ -2440,32 +2440,54 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
                                                  wmOperator * /*op*/,
                                                  const wmEvent *event)
 {
-  ScrArea *area = CTX_wm_area(C);
   SpaceFile *sfile = CTX_wm_space_file(C);
-  ARegion *region, *region_ctx = CTX_wm_region(C);
-  const bool is_horizontal = (sfile->layout->flag & FILE_LAYOUT_HOR) != 0;
-  int i;
 
-  /* escape if not our timer */
-  if (sfile->smoothscroll_timer == nullptr || sfile->smoothscroll_timer != event->customdata) {
+  if (sfile == nullptr || sfile->runtime == nullptr) {
     return OPERATOR_PASS_THROUGH;
   }
 
-  const int numfiles = filelist_files_ensure(sfile->files);
+  FileRenameState &rename = sfile->runtime->rename;
 
-  /* Due to asynchronous nature of file listing, we may execute this code before `file_refresh()`
-   * editing entry is available in our listing,
-   * so we also have to handle switching to rename mode here. */
-  FileSelectParams *params = ED_fileselect_get_active_params(sfile);
-  if ((params->rename_flag &
-       (FILE_PARAMS_RENAME_PENDING | FILE_PARAMS_RENAME_POSTSCROLL_PENDING)) != 0)
-  {
-    file_params_renamefile_activate(sfile, params);
+  /* Escape before accessing any state belonging to the smooth-scroll operation. */
+  if (rename.smoothscroll_timer == nullptr || rename.smoothscroll_timer != event->customdata) {
+    return OPERATOR_PASS_THROUGH;
   }
 
-  /* check if we are editing a name */
+  wmWindowManager *wm = CTX_wm_manager(C);
+  wmWindow *win = CTX_wm_window(C);
+
+  /* The timer belongs to the browser mode in which the operation was started. */
+  if (rename.browse_mode != sfile->browse_mode) {
+    file_rename_cancel(wm, win, sfile);
+    return OPERATOR_PASS_THROUGH;
+  }
+
+  /*
+   * Only touch layout and file-list state after proving that this timer belongs
+   * to the current rename operation.
+   */
+  if (sfile->files == nullptr || sfile->layout == nullptr) {
+    file_rename_cancel(wm, win, sfile);
+    return OPERATOR_PASS_THROUGH;
+  }
+
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *region, *region_ctx = CTX_wm_region(C);
+  const bool is_horizontal = (sfile->layout->flag & FILE_LAYOUT_HOR) != 0;
+
+  const int numfiles = filelist_files_ensure(sfile->files);
+
+  /*
+   * Due to asynchronous file listing, the timer may run before file_refresh()
+   * has found the rename target in the refreshed listing.
+   */
+  if (ELEM(rename.phase, FileRenamePhase::Pending, FileRenamePhase::PostScrollPending)) {
+    file_rename_reconcile(sfile);
+  }
+
+  /* Check if we are editing or highlighting a name. */
   int edit_idx = -1;
-  for (i = 0; i < numfiles; i++) {
+  for (int i = 0; i < numfiles; i++) {
     if (filelist_entry_select_index_get(sfile->files, i, CHECK_ALL) &
         (FILE_SEL_EDITING | FILE_SEL_HIGHLIGHTED))
     {
@@ -2474,23 +2496,18 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
     }
   }
 
-  wmWindowManager *wm = CTX_wm_manager(C);
-  wmWindow *win = CTX_wm_window(C);
-
-  /* if we are not editing, we are done */
+  /* If we are not editing, we may be waiting for asynchronous listing to find the target. */
   if (edit_idx == -1) {
-    /* Do not invalidate timer if file-rename is still pending,
-     * we might still be building the filelist and yet have to find edited entry. */
-    if (params->rename_flag == 0) {
-      file_params_smoothscroll_timer_clear(wm, win, sfile);
+    if (rename.phase == FileRenamePhase::None) {
+      file_rename_smoothscroll_timer_clear(wm, win, sfile);
     }
     return OPERATOR_PASS_THROUGH;
   }
 
-  /* we need the correct area for scrolling */
+  /* We need the correct area for scrolling. */
   region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
   if (!region || region->regiontype != RGN_TYPE_WINDOW) {
-    file_params_smoothscroll_timer_clear(wm, win, sfile);
+    file_rename_smoothscroll_timer_clear(wm, win, sfile);
     return OPERATOR_PASS_THROUGH;
   }
 
@@ -2500,8 +2517,8 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
   const int items_block_size = is_horizontal ? sfile->layout->rows : sfile->layout->flow_columns;
 
   /* Scroll offset is the first file in the row/column we are editing in. */
-  if (sfile->scroll_offset == 0) {
-    sfile->scroll_offset = (edit_idx / items_block_size) * items_block_size;
+  if (rename.scroll_offset == 0) {
+    rename.scroll_offset = (edit_idx / items_block_size) * items_block_size;
   }
 
   const int numfiles_layout = ED_fileselect_layout_numfiles(sfile->layout, region);
@@ -2519,6 +2536,7 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
   const int max_middle_offset = ((numfiles / items_block_size) * items_block_size +
                                  ((numfiles % items_block_size) != 0 ? items_block_size : 0)) -
                                 (numfiles_layout / 2);
+
   /* Actual (physical) scrolling info, in pixels, used to detect whether we are fully at the
    * beginning/end of the view. */
   /* Note that there is a weird glitch, that sometimes tot rctf is smaller than cur rctf...
@@ -2531,27 +2549,30 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
   /* Check if we have reached our final scroll position. */
   /* File-list has to be ready, otherwise it makes no sense to stop scrolling yet. */
   const bool is_ready = filelist_is_ready(sfile->files);
+
   /* Edited item must be in the 'middle' of shown area (kind of approximated).
    * Note that we have to do the check in 'block space', not in 'item space' here. */
   const bool is_centered = (abs(middle_offset / items_block_size -
-                                sfile->scroll_offset / items_block_size) == 0);
+                                rename.scroll_offset / items_block_size) == 0);
+
   /* OR edited item must be towards the beginning, and we are scrolled fully to the start. */
-  const bool is_full_start = ((sfile->scroll_offset < min_middle_offset) &&
+  const bool is_full_start = ((rename.scroll_offset < min_middle_offset) &&
                               (min_curr_scroll - min_tot_scroll < 1.0f) &&
                               (middle_offset - min_middle_offset < items_block_size));
+
   /* OR edited item must be towards the end, and we are scrolled fully to the end.
    * This one is crucial (unlike the one for the beginning), because without it scrolling
    * fully to the end, and last column or row will end up only partially drawn. */
-  const bool is_full_end = ((sfile->scroll_offset > max_middle_offset) &&
+  const bool is_full_end = ((rename.scroll_offset > max_middle_offset) &&
                             (max_tot_scroll - max_curr_scroll < 1.0f) &&
                             (max_middle_offset - middle_offset < items_block_size));
 
   if (is_ready && (is_centered || is_full_start || is_full_end)) {
-    file_params_smoothscroll_timer_clear(wm, win, sfile);
-    /* Post-scroll (after rename has been validated by user) is done,
-     * rename process is totally finished, cleanup. */
-    if ((params->rename_flag & FILE_PARAMS_RENAME_POSTSCROLL_ACTIVE) != 0) {
-      file_params_renamefile_clear(params);
+    if (rename.phase == FileRenamePhase::PostScrollActive) {
+      file_rename_finish(wm, win, sfile);
+    }
+    else {
+      file_rename_smoothscroll_timer_clear(wm, win, sfile);
     }
     return OPERATOR_FINISHED;
   }
@@ -2560,7 +2581,7 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
    * so that the pan operator works. */
   CTX_wm_region_set(C, region);
 
-  /* scroll one step in the desired direction */
+  /* Scroll one step in the desired direction. */
   int deltax = 0;
   int deltay = 0;
 
@@ -2571,9 +2592,10 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
 
   /* Number of blocks (columns in horizontal layout, rows otherwise) between current middle of
    * screen, and final goal position. */
-  const int diff_offset = sfile->scroll_offset / items_block_size -
+  const int diff_offset = rename.scroll_offset / items_block_size -
                           middle_offset / items_block_size;
-  /* convert diff_offset into pixels. */
+
+  /* Convert diff_offset into pixels. */
   const int diff_offset_delta = abs(diff_offset) *
                                 (is_horizontal ?
                                      sfile->layout->tile_w + 2 * sfile->layout->tile_border_x :
@@ -2596,6 +2618,7 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
       deltay = -scroll_delta;
     }
   }
+
   PointerRNA op_ptr = WM_operator_properties_create("VIEW2D_OT_pan");
   RNA_int_set(&op_ptr, "deltax", deltax);
   RNA_int_set(&op_ptr, "deltay", deltay);
@@ -2605,7 +2628,7 @@ static wmOperatorStatus file_smoothscroll_invoke(bContext *C,
 
   ED_region_tag_redraw(region);
 
-  /* and restore context */
+  /* And restore context. */
   CTX_wm_region_set(C, region_ctx);
 
   return OPERATOR_FINISHED;
@@ -2763,19 +2786,20 @@ static wmOperatorStatus file_directory_new_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  eFileSel_Params_RenameFlag rename_flag = eFileSel_Params_RenameFlag(params->rename_flag);
-
   /* If we don't enter the directory directly, remember file to jump into editing. */
+  FileRenameState &rename = sfile->runtime->rename;
+  const FileRenamePhase rename_phase = rename.phase;
+
   if (do_diropen == false) {
-    BLI_assert_msg(params->rename_id == nullptr,
-                   "File rename handling should immediately clear rename_id when done, "
-                   "because otherwise it will keep taking precedence over renamefile.");
-    STRNCPY(params->renamefile, dirname);
-    rename_flag = FILE_PARAMS_RENAME_PENDING;
+    BLI_assert_msg(rename.id == nullptr,
+                   "File rename handling should immediately clear the rename ID when done, "
+                   "because otherwise it will keep taking precedence over the filename.");
+    STRNCPY(rename.filename, dirname);
+    rename.browse_mode = sfile->browse_mode;
   }
 
-  file_params_invoke_rename_postscroll(wm, CTX_wm_window(C), sfile);
-  params->rename_flag = rename_flag;
+  file_rename_postscroll_begin(wm, CTX_wm_window(C), sfile);
+  rename.phase = do_diropen ? rename_phase : FileRenamePhase::Pending;
 
   /* reload dir to make sure we're seeing what's in the directory */
   ED_fileselect_clear(wm, sfile);
@@ -3224,14 +3248,17 @@ static void file_rename_state_activate(SpaceFile *sfile, int file_idx, bool requ
     if ((require_selected == false) ||
         (filelist_entry_select_get(sfile->files, file, CHECK_ALL) & FILE_SEL_SELECTED))
     {
-      FileSelectParams *params = ED_fileselect_get_active_params(sfile);
+      FileRenameState &rename = sfile->runtime->rename;
 
       filelist_entry_select_index_set(
           sfile->files, file_idx, FILE_SEL_ADD, FILE_SEL_EDITING, CHECK_ALL);
-      STRNCPY(params->renamefile, file->relpath);
-      /* We can skip the pending state,
-       * as we can directly set FILE_SEL_EDITING on the expected entry here. */
-      params->rename_flag = FILE_PARAMS_RENAME_ACTIVE;
+
+      STRNCPY(rename.filename, file->relpath);
+      rename.id = nullptr;
+      rename.browse_mode = sfile->browse_mode;
+
+      /* We can skip the pending state, as FILE_SEL_EDITING is set directly on the entry here. */
+      rename.phase = FileRenamePhase::Active;
     }
   }
 }

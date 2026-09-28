@@ -1376,97 +1376,174 @@ void ED_fileselect_exit(wmWindowManager *wm, SpaceFile *sfile)
   }
 }
 
-void file_params_smoothscroll_timer_clear(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile)
+bool file_rename_operation_is_live(const SpaceFile *sfile)
 {
-  WM_event_timer_remove(wm, win, sfile->smoothscroll_timer);
-  sfile->smoothscroll_timer = nullptr;
-}
-
-void file_params_invoke_rename_postscroll(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile)
-{
-  FileSelectParams *params = ED_fileselect_get_active_params(sfile);
-
-  params->rename_flag = FILE_PARAMS_RENAME_POSTSCROLL_PENDING;
-
-  if (sfile->smoothscroll_timer != nullptr) {
-    file_params_smoothscroll_timer_clear(wm, win, sfile);
+  if (sfile->runtime == nullptr) {
+    return false;
   }
-  sfile->smoothscroll_timer = WM_event_timer_add(wm, win, TIMER1, 1.0 / 1000.0);
-  sfile->scroll_offset = 0;
+
+  const FileRenameState &rename = sfile->runtime->rename;
+  return rename.phase != FileRenamePhase::None || rename.smoothscroll_timer != nullptr;
 }
 
-void file_params_rename_end(wmWindowManager *wm,
-                            wmWindow *win,
-                            SpaceFile *sfile,
-                            const FileDirEntry *rename_file)
+bool file_rename_operation_is_current(const SpaceFile *sfile)
 {
-  FileSelectParams *params = ED_fileselect_get_active_params(sfile);
-
-  filelist_entry_select_set(
-      sfile->files, rename_file, FILE_SEL_REMOVE, FILE_SEL_EDITING, CHECK_ALL);
-
-  /* Ensure smooth-scroll timer is active, even if not needed, because that way rename state is
-   * handled properly. */
-  file_params_invoke_rename_postscroll(wm, win, sfile);
-  /* Also always activate the rename file, even if renaming was canceled. */
-  file_params_renamefile_activate(sfile, params);
+  return file_rename_operation_is_live(sfile) &&
+         sfile->runtime->rename.browse_mode == sfile->browse_mode;
 }
 
-void file_params_renamefile_clear(FileSelectParams *params)
+void file_rename_smoothscroll_timer_clear(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile)
 {
-  params->renamefile[0] = '\0';
-  params->rename_id = nullptr;
-  params->rename_flag = eFileSel_Params_RenameFlag{};
+  FileRenameState &rename = sfile->runtime->rename;
+
+  if (rename.smoothscroll_timer != nullptr) {
+    WM_event_timer_remove(wm, win, rename.smoothscroll_timer);
+    rename.smoothscroll_timer = nullptr;
+  }
 }
 
-static int file_params_find_renamed(const FileSelectParams *params, FileList *filelist)
+void file_rename_target_clear(FileRenameState &rename)
 {
-  /* Find the file either through the local ID/asset it represents or its relative path. */
-  return (params->rename_id != nullptr) ? filelist_file_find_id(filelist, params->rename_id) :
-                                          filelist_file_find_path(filelist, params->renamefile);
+  rename.filename[0] = '\0';
+  rename.id = nullptr;
 }
 
-void file_params_renamefile_activate(SpaceFile *sfile, FileSelectParams *params)
+void file_rename_finish(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile)
 {
-  BLI_assert(params->rename_flag != 0);
+  FileRenameState &rename = sfile->runtime->rename;
 
-  if ((params->rename_flag & (FILE_PARAMS_RENAME_ACTIVE | FILE_PARAMS_RENAME_POSTSCROLL_ACTIVE)) !=
-      0)
-  {
+  file_rename_smoothscroll_timer_clear(wm, win, sfile);
+  file_rename_target_clear(rename);
+  rename.phase = FileRenamePhase::None;
+  rename.scroll_offset = 0;
+}
+
+void file_rename_cancel(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile)
+{
+  if (sfile->runtime == nullptr) {
     return;
   }
 
-  BLI_assert(params->renamefile[0] != '\0' || params->rename_id != nullptr);
+  FileRenameState &rename = sfile->runtime->rename;
 
-  int idx = file_params_find_renamed(params, sfile->files);
+  /*
+   * Only alter the current file-list projection if it still belongs to the
+   * browser mode that owns this operation. A stale operation may be observed
+   * after the file-list has already started being reconfigured for another
+   * browse mode.
+   */
+  if (rename.browse_mode == sfile->browse_mode && sfile->files != nullptr) {
+    const int numfiles = filelist_files_ensure(sfile->files);
+    for (int i = 0; i < numfiles; i++) {
+      if (filelist_entry_select_index_get(sfile->files, i, CHECK_ALL) & FILE_SEL_EDITING) {
+        FileDirEntry *file = filelist_file(sfile->files, i);
+        if (file != nullptr) {
+          filelist_entry_select_set(
+              sfile->files, file, FILE_SEL_REMOVE, FILE_SEL_EDITING, CHECK_ALL);
+        }
+        break;
+      }
+    }
+  }
+
+  file_rename_finish(wm, win, sfile);
+}
+
+void file_rename_postscroll_begin(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile)
+{
+  FileRenameState &rename = sfile->runtime->rename;
+
+  rename.browse_mode = sfile->browse_mode;
+  rename.phase = FileRenamePhase::PostScrollPending;
+
+  file_rename_smoothscroll_timer_clear(wm, win, sfile);
+  rename.smoothscroll_timer = WM_event_timer_add(wm, win, TIMER1, 1.0 / 1000.0);
+  rename.scroll_offset = 0;
+}
+
+static int file_rename_target_find(const FileRenameState &rename, FileList *filelist)
+{
+  /* Find the file either through the local ID/asset it represents or its relative path. */
+  return (rename.id != nullptr) ? filelist_file_find_id(filelist, rename.id) :
+                                  filelist_file_find_path(filelist, rename.filename);
+}
+
+void file_rename_reconcile(SpaceFile *sfile)
+{
+  if (!file_rename_operation_is_current(sfile) || sfile->files == nullptr) {
+    return;
+  }
+
+  FileRenameState &rename = sfile->runtime->rename;
+
+  if (ELEM(rename.phase, FileRenamePhase::Active, FileRenamePhase::PostScrollActive)) {
+    return;
+  }
+
+  BLI_assert(rename.filename[0] != '\0' || rename.id != nullptr);
+
+  const int idx = file_rename_target_find(rename, sfile->files);
   if (idx >= 0) {
     FileDirEntry *file = filelist_file(sfile->files, idx);
     BLI_assert(file != nullptr);
 
+    FileSelectParams *params = ED_fileselect_get_active_params(sfile);
     params->active_file = idx;
     filelist_entry_select_set(sfile->files, file, FILE_SEL_ADD, FILE_SEL_SELECTED, CHECK_ALL);
 
-    if ((params->rename_flag & FILE_PARAMS_RENAME_PENDING) != 0) {
+    if (rename.phase == FileRenamePhase::Pending) {
       filelist_entry_select_set(sfile->files, file, FILE_SEL_ADD, FILE_SEL_EDITING, CHECK_ALL);
-      params->rename_flag = FILE_PARAMS_RENAME_ACTIVE;
+      rename.phase = FileRenamePhase::Active;
     }
-    else if ((params->rename_flag & FILE_PARAMS_RENAME_POSTSCROLL_PENDING) != 0) {
-      /* file_select_deselect_all() will resort and re-filter, so `idx` will probably have changed.
-       * Need to get the correct #FileDirEntry again. */
+    else if (rename.phase == FileRenamePhase::PostScrollPending) {
+      /*
+       * Re-acquire the entry pointer. FileList's entry cache may have
+       * released the previous FileDirEntry* while selection flags were updated.
+       */
       file_select_deselect_all(sfile, FILE_SEL_SELECTED);
-      idx = file_params_find_renamed(params, sfile->files);
       file = filelist_file(sfile->files, idx);
       filelist_entry_select_set(sfile->files, file, FILE_SEL_ADD, FILE_SEL_SELECTED, CHECK_ALL);
       params->active_file = idx;
-      file_params_renamefile_clear(params);
-      params->rename_flag = FILE_PARAMS_RENAME_POSTSCROLL_ACTIVE;
+
+      /*
+       * Target identity is no longer needed once post-scroll is active.
+       * In particular, don't retain the ID pointer across later handlers.
+       */
+      file_rename_target_clear(rename);
+      rename.phase = FileRenamePhase::PostScrollActive;
     }
   }
-  /* File listing is now asynchronous, only reset renaming if matching entry is not found
-   * when file listing is not done. */
+  /*
+   * File listing is asynchronous. Only abandon a target that wasn't found once listing has
+   * completed.
+   */
   else if (filelist_is_ready(sfile->files)) {
-    file_params_renamefile_clear(params);
+    file_rename_target_clear(rename);
+    rename.phase = FileRenamePhase::None;
   }
+}
+
+void file_rename_edit_end(wmWindowManager *wm,
+                          wmWindow *win,
+                          SpaceFile *sfile,
+                          const FileDirEntry *rename_file)
+{
+  if (!file_rename_operation_is_current(sfile)) {
+    file_rename_cancel(wm, win, sfile);
+    return;
+  }
+
+  filelist_entry_select_set(
+      sfile->files, rename_file, FILE_SEL_REMOVE, FILE_SEL_EDITING, CHECK_ALL);
+
+  /*
+   * Ensure the smooth-scroll timer is active even if scrolling isn't needed, so completion of the
+   * rename operation is handled consistently.
+   */
+  file_rename_postscroll_begin(wm, win, sfile);
+
+  /* Always reselect the rename target, including when inline editing was cancelled. */
+  file_rename_reconcile(sfile);
 }
 
 ScrArea *ED_fileselect_handler_area_find(const wmWindow *win, const wmOperator *file_operator)

@@ -406,13 +406,11 @@ struct FileSelectParams {
   char dir[/*FILE_MAX_LIBEXTRA*/ 1282] = "";
   char file[/*FILE_MAXFILE*/ 256] = "";
 
-  char renamefile[/*FILE_MAXFILE*/ 256] = "";
-  eFileSel_Params_RenameFlag rename_flag = {};
+  /** Deprecated: transient rename state is stored in #SpaceFile_Runtime. */
+  DNA_DEPRECATED char renamefile[/*FILE_MAXFILE*/ 256] = "";
+  DNA_DEPRECATED eFileSel_Params_RenameFlag rename_flag = {};
   char _pad[4] = {};
-  /** An ID that was just renamed. Used to identify a renamed asset file over re-reads, similar to
-   * `renamefile` but for local IDs (takes precedence). Don't keep this stored across handlers!
-   * Would break on undo. */
-  const ID *rename_id = nullptr;
+  DNA_DEPRECATED const ID *rename_id = nullptr;
   void *_pad3 = nullptr;
 
   /** List of file-types to filter. */
@@ -509,7 +507,8 @@ struct SpaceFile {
 
   eFileTags tags = {};
 
-  int scroll_offset = 0;
+  /** Deprecated: transient rename scroll state is stored in #SpaceFile_Runtime. */
+  DNA_DEPRECATED int scroll_offset = 0;
 
   /** Config and input for file select. One for each browse-mode, to keep them independent. */
   FileSelectParams *params = nullptr;
@@ -518,8 +517,8 @@ struct SpaceFile {
   void *_pad2 = nullptr;
 
   /**
-   * Holds the list of files to show.
-   * Currently recreated when browse-mode changes. Could be per browse-mode to avoid refreshes.
+   * Holds the shared file list for the active browse mode.
+   * Reconfigured by file refresh when the browse mode or its parameters change.
    */
   struct FileList *files = nullptr;
 
@@ -545,7 +544,8 @@ struct SpaceFile {
    */
   struct wmOperator *op = nullptr;
 
-  struct wmTimer *smoothscroll_timer = nullptr;
+  /** Deprecated: the rename smooth-scroll timer is stored in #SpaceFile_Runtime. */
+  DNA_DEPRECATED struct wmTimer *smoothscroll_timer = nullptr;
   struct wmTimer *previews_timer = nullptr;
 
   struct FileLayout *layout = nullptr;

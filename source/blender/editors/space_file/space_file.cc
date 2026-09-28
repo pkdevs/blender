@@ -119,6 +119,9 @@ static void file_free(SpaceLink *sl)
   SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
 
   BLI_assert(sfile->previews_timer == nullptr);
+  if (sfile->runtime != nullptr) {
+    BLI_assert(sfile->runtime->rename.smoothscroll_timer == nullptr);
+  }
 
   if (sfile->files) {
     /* XXX would need to do thumbnails_stop here, but no context available */
@@ -149,7 +152,7 @@ static void file_init(wmWindowManager * /*wm*/, ScrArea *area)
   }
 
   if (sfile->runtime == nullptr) {
-    sfile->runtime = MEM_new_zeroed<SpaceFile_Runtime>(__func__);
+    sfile->runtime = MEM_new<SpaceFile_Runtime>(__func__);
     BKE_reports_init(&sfile->runtime->is_blendfile_readable_reports, RPT_STORE);
   }
   /* Validate the params right after file read. */
@@ -165,6 +168,9 @@ static void file_exit(wmWindowManager *wm, ScrArea *area)
     sfile->previews_timer = nullptr;
   }
 
+  /* Runtime rename state must not survive the File Browser itself. */
+  file_rename_cancel(wm, nullptr, sfile);
+
   ED_fileselect_exit(wm, sfile);
 }
 
@@ -178,7 +184,6 @@ static SpaceLink *file_duplicate(SpaceLink *sl)
   sfilen->runtime = nullptr;
 
   sfilen->previews_timer = nullptr;
-  sfilen->smoothscroll_timer = nullptr;
 
   FileSelectParams *active_params_old = ED_fileselect_get_active_params(sfileo);
   if (active_params_old) {
@@ -208,6 +213,17 @@ static void file_refresh(const bContext *C, ScrArea *area)
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = CTX_wm_window(C);
   SpaceFile *sfile = CTX_wm_space_file(C);
+
+  /*
+   * A rename may survive re-reading its FileList, but not a change of browse mode. Cancel stale
+   * state before obtaining mode-specific parameters or reconfiguring the shared FileList.
+   */
+  if (file_rename_operation_is_live(sfile) &&
+      sfile->runtime->rename.browse_mode != sfile->browse_mode)
+  {
+    file_rename_cancel(wm, win, sfile);
+  }
+
   FileSelectParams *params = ED_fileselect_ensure_active_params(sfile);
   FileAssetSelectParams *asset_params = ED_fileselect_get_asset_params(sfile);
   FSMenu *fsmenu = ED_fsmenu_get();
@@ -321,8 +337,8 @@ static void file_refresh(const bContext *C, ScrArea *area)
     }
   }
 
-  if (params->rename_flag != 0) {
-    file_params_renamefile_activate(sfile, params);
+  if (file_rename_operation_is_current(sfile)) {
+    file_rename_reconcile(sfile);
   }
 
   if (sfile->layout) {
@@ -430,11 +446,12 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
         case NA_RENAME: {
           const ID *active_file_id = ED_fileselect_active_asset_get(sfile);
           /* If a renamed ID is active in the file browser, update scrolling to keep it in view. */
-          if (active_file_id && (wmn->reference == active_file_id)) {
-            FileSelectParams *params = ED_fileselect_get_active_params(sfile);
-            params->rename_id = active_file_id;
-            file_params_invoke_rename_postscroll(
-                G_MAIN->wm.first(), listener_params->window, sfile);
+          if (sfile->runtime != nullptr && active_file_id && (wmn->reference == active_file_id)) {
+            FileRenameState &rename = sfile->runtime->rename;
+            rename.id = active_file_id;
+            rename.filename[0] = '\0';
+            rename.browse_mode = sfile->browse_mode;
+            file_rename_postscroll_begin(G_MAIN->wm.first(), listener_params->window, sfile);
           }
 
           /* Force list to update sorting (with a full reset for now). */
@@ -976,11 +993,7 @@ static void file_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
   sfile->runtime = nullptr;
   BLO_read_struct(reader, FileSelectParams, &sfile->params);
   BLO_read_struct(reader, FileAssetSelectParams, &sfile->asset_params);
-  if (sfile->params) {
-    sfile->params->rename_id = nullptr;
-  }
   if (sfile->asset_params) {
-    sfile->asset_params->base_params.rename_id = nullptr;
     /* Code (file-browser etc.) asserts that this setting is one of the currently known values.
      * So fall back to #FILE_ASSET_IMPORT_FOLLOW_PREFS if it is not
      * (e.g. because of forward-compatibility while reading a blend-file from the future). */

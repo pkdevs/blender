@@ -172,33 +172,53 @@ int file_select_match(SpaceFile *sfile, const char *pattern, char *matched_file)
 int autocomplete_directory(bContext *C, char *str, void *arg_v);
 int autocomplete_file(bContext *C, char *str, void *arg_v);
 
-void file_params_smoothscroll_timer_clear(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile);
-void file_params_renamefile_clear(FileSelectParams *params);
-/**
- * Set the renaming-state to #FILE_PARAMS_RENAME_POSTSCROLL_PENDING and trigger the smooth-scroll
- * timer. To be used right after a file was renamed.
- * Note that the caller is responsible for setting the correct rename-file info
- * (#FileSelectParams.renamefile or #FileSelectParams.rename_id).
- */
-void file_params_invoke_rename_postscroll(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile);
-/**
- * To be executed whenever renaming ends (successfully or not).
- */
-void file_params_rename_end(wmWindowManager *wm,
-                            wmWindow *win,
-                            SpaceFile *sfile,
-                            const FileDirEntry *rename_file);
-/**
- * Helper used by both main update code, and smooth-scroll timer,
- * to try to enable rename editing from #FileSelectParams.renamefile name.
- */
-void file_params_renamefile_activate(SpaceFile *sfile, FileSelectParams *params);
+struct FileRenameState;
+
+bool file_rename_operation_is_live(const SpaceFile *sfile);
+bool file_rename_operation_is_current(const SpaceFile *sfile);
+
+void file_rename_smoothscroll_timer_clear(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile);
+void file_rename_target_clear(FileRenameState &rename);
+void file_rename_finish(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile);
+void file_rename_cancel(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile);
+
+void file_rename_postscroll_begin(wmWindowManager *wm, wmWindow *win, SpaceFile *sfile);
+void file_rename_reconcile(SpaceFile *sfile);
+void file_rename_edit_end(wmWindowManager *wm,
+                          wmWindow *win,
+                          SpaceFile *sfile,
+                          const FileDirEntry *rename_file);
 
 /**
  * Information about the current state of banners that needs preserving over redraws.
  */
 struct BannersState {
   bool any_visible;
+};
+
+enum class FileRenamePhase : uint8_t {
+  None,
+  Pending,
+  Active,
+  PostScrollPending,
+  PostScrollActive,
+};
+
+/**
+ * Runtime state for the current rename and its smooth-scroll operation.
+ *
+ * The operation may survive re-reading the file list, but belongs to the browse mode in which it
+ * was started. A browse-mode change invalidates the operation.
+ */
+struct FileRenameState {
+  char filename[FILE_MAXFILE] = "";
+  /** Temporary identity for a renamed local ID, cleared once the target is resolved. */
+  const ID *id = nullptr;
+  FileRenamePhase phase = FileRenamePhase::None;
+  eFileBrowse_Mode browse_mode = FILE_BROWSE_MODE_FILES;
+
+  wmTimer *smoothscroll_timer = nullptr;
+  int scroll_offset = 0;
 };
 
 using onReloadFnData = void *;
@@ -216,6 +236,8 @@ struct SpaceFile_Runtime {
   ReportList is_blendfile_readable_reports;
 
   BannersState banners_state;
+
+  FileRenameState rename;
 };
 
 /**

@@ -676,8 +676,8 @@ enum eFileSel_Params_AssetCatalogVisibility : short {
 };
 
 /**
- * #FileSelectParams.rename_flag / `sfile->params->rename_flag`.
- * \note short flag. Defined as bit-flags, but currently only used as exclusive status markers.
+ * Deprecated File Browser rename state values, retained for DNA compatibility.
+ * Runtime rename state is stored in #SpaceFile_Runtime.
  */
 enum eFileSel_Params_RenameFlag : short {
   /** Used when we only have the name of the entry we want to rename,

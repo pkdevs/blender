@@ -1101,10 +1101,21 @@ static void renamebutton_cb(bContext &C, StringRefNull oldname)
   wmWindow *win = CTX_wm_window(&C);
   SpaceFile *sfile = reinterpret_cast<SpaceFile *>(CTX_wm_space_data(&C));
   ARegion *region = CTX_wm_region(&C);
+
+  /*
+   * The rename button may outlive the browse mode that created it. Never let a stale UI callback
+   * rename a file in the newly active browser context.
+   */
+  if (!file_rename_operation_is_current(sfile)) {
+    file_rename_cancel(wm, win, sfile);
+    return;
+  }
+
   FileSelectParams *params = ED_fileselect_get_active_params(sfile);
+  FileRenameState &rename = sfile->runtime->rename;
 
   BLI_path_join(orgname, sizeof(orgname), params->dir, oldname.c_str());
-  STRNCPY(filename, params->renamefile);
+  STRNCPY(filename, rename.filename);
   BLI_path_make_safe_filename(filename);
   BLI_path_join(newname, sizeof(newname), params->dir, filename);
 
@@ -1115,22 +1126,23 @@ static void renamebutton_cb(bContext &C, StringRefNull oldname)
           RPT_ERROR, "Could not rename: %s", errno ? strerror(errno) : "unknown error");
       WM_report_banner_show(wm, win);
       /* Renaming failed, reset the name for further renaming handling. */
-      STRNCPY(params->renamefile, oldname.c_str());
+      STRNCPY(rename.filename, oldname.c_str());
     }
     else {
-      /* If rename is successful, set renamefile to newly renamed entry.
-       * This is used later to select and scroll to the file.
+      /*
+       * Keep the newly renamed entry as the target so it can be reselected and scrolled into view
+       * after the file list is re-read.
        */
-      STRNCPY(params->renamefile, filename);
+      STRNCPY(rename.filename, filename);
     }
 
-    /* Ensure we select and scroll to the renamed file.
-     * This is done even if the rename fails as we want to make sure that the file we tried to
-     * rename is still selected and in view. (it can move if something added files/folders to the
-     * directory while we were renaming).
+    /*
+     * Reselect and scroll to the target even if renaming failed. It may have moved if the directory
+     * changed while inline editing was active.
      */
-    file_params_invoke_rename_postscroll(wm, win, sfile);
-    /* to make sure we show what is on disk */
+    file_rename_postscroll_begin(wm, win, sfile);
+
+    /* Re-read the directory so the listing reflects what is on disk. */
     ED_fileselect_clear(wm, sfile);
     ED_region_tag_redraw(region);
   }
@@ -1669,6 +1681,12 @@ void file_draw_list(const bContext *C, ARegion *region)
         v2d, eFileDisplayType(params->display), layout, i, icon_ofs);
 
     if (file_selflag & FILE_SEL_EDITING) {
+      if (!file_rename_operation_is_current(sfile)) {
+        file_rename_cancel(wm, win, sfile);
+      }
+      else {
+        FileRenameState &rename = sfile->runtime->rename;
+
       const int but_height =
           (params->display == FILE_IMGDISPLAY) ?
               layout->text_line_height * 1.4f :
@@ -1682,9 +1700,9 @@ void file_draw_list(const bContext *C, ARegion *region)
                                  text_rect.ymax - but_height,
                                  BLI_rcti_size_x(&text_rect),
                                  but_height,
-                                 params->renamefile,
+                                 rename.filename,
                                  1.0f,
-                                 float(sizeof(params->renamefile)),
+                                 float(sizeof(rename.filename)),
                                  "");
       text_button_func_rename_set(but, renamebutton_cb);
       button_flag_enable(but, ui::BUT_NO_UTF8); /* Allow non UTF8 names. */
@@ -1692,7 +1710,7 @@ void file_draw_list(const bContext *C, ARegion *region)
       if (false == button_active_only(C, region, block, but)) {
         /* Note that this is the only place where we can also handle a cancelled renaming. */
 
-        file_params_rename_end(wm, win, sfile, file);
+        file_rename_edit_end(wm, win, sfile, file);
 
         /* After the rename button is removed, we need to make sure the view is redrawn once more,
          * in case selection changed. Usually UI code would trigger that redraw, but the rename
@@ -1705,6 +1723,7 @@ void file_draw_list(const bContext *C, ARegion *region)
         file_selflag = filelist_entry_select_get(sfile->files, file, CHECK_ALL);
       }
     }
+  }
 
     /* file_selflag might have been modified by branch above. */
     if ((file_selflag & FILE_SEL_EDITING) == 0) {
