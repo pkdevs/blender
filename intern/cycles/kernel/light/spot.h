@@ -20,14 +20,7 @@ ccl_device float3 spot_light_to_local(KernelGlobals kg,
 {
   const Transform itfm = lamp_get_inverse_transform(kg, klight);
   float3 transformed_ray = safe_normalize(transform_direction(&itfm, ray));
-  transformed_ray.z = -transformed_ray.z; // !!!: So in spot-local space, the spot axis is the negative Z direction.
-  /*
-  Therefore the natural stable emitter parameterization is: spot-local XY plane
-  with coordinates: x = local_P.x / radius; y = local_P.y / radius
-
-  But that is only a valid replacement if the non-spherical spot's disk 
-  is actually intended to be perpendicular to the spot axis. (Which isn't the case in this file)
-  */
+  transformed_ray.z = -transformed_ray.z;
 
   return transformed_ray;
 }
@@ -46,177 +39,6 @@ ccl_device float2 spot_light_uv(const float3 ray, const float half_cot_half_spot
   /* NOTE: Return barycentric coordinates in the same notation as Embree and OptiX. */
   return make_float2(ray.y * factor + 0.5f, -(ray.x + ray.y) * factor);
 }
-
-ccl_device_inline float3 restir_spot_disk_sample(const float radius,
-                                                 const float2 rand)
-{
-  const float2 uv = sample_uniform_disk(rand);
-
-  return make_float3(uv.x * radius, uv.y * radius, 0.0f); // local_P
-}
-
-// template<bool in_volume_segment>
-// ccl_device_inline bool spot_light_sample(KernelGlobals kg,
-//                                          const ccl_global KernelLight *klight,
-//                                          const float2 rand,
-//                                          const float3 P,
-//                                          const float3 N,
-//                                          const int shader_flags,
-//                                          ccl_private LightSample *ls)
-// {
-//   const float r_sq = sqr(klight->spot.radius);
-
-//   float3 lightN = P - klight->co; // !!!: the disk's plane is perpendicular to P - co, not perpendicular to the spot direction.
-//   // !!!: That gives the disk its target-dependent orientation. Consequently, there isn't actually a single global plane corresponding to the current implementation.
-//   const float d_sq = len_squared(lightN);
-//   const float d = sqrtf(d_sq);
-//   lightN /= d;
-
-//   ls->eval_fac = klight->spot.eval_fac;
-
-//   if (klight->spot.is_sphere) { // !!!: 
-//     ccl_debug_printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Sphere) ===\n");
-//     /* Spherical light geometry. */
-//     float cos_theta;
-//     ls->t = FLT_MAX;
-//     if (d_sq > r_sq) {
-//       /* Outside sphere. */
-//       const float one_minus_cos_half_spot_spread = 1.0f - klight->spot.cos_half_larger_spread;
-//       const float one_minus_cos_half_angle = sin_sqr_to_one_minus_cos(r_sq / d_sq);
-
-//       if (in_volume_segment || one_minus_cos_half_angle < one_minus_cos_half_spot_spread) {
-//         /* Sample visible part of the sphere. */
-//         ls->D = sample_uniform_cone(-lightN, one_minus_cos_half_angle, rand, &cos_theta, &ls->pdf);
-//       }
-//       else {
-//         /* Sample spread cone. */
-//         ls->D = sample_uniform_cone(
-//             -klight->spot.dir, one_minus_cos_half_spot_spread, rand, &cos_theta, &ls->pdf);
-
-//         if (!ray_sphere_intersect(
-//                 P, ls->D, 0.0f, FLT_MAX, klight->co, klight->spot.radius, &ls->P, &ls->t))
-//         {
-//           /* Sampled direction does not intersect with the light. */
-//           return false;
-//         }
-//       }
-//     }
-//     else {
-//       /* Inside sphere. */
-//       const bool has_transmission = (shader_flags & SD_BSDF_HAS_TRANSMISSION);
-//       if (has_transmission) {
-//         ls->D = sample_uniform_sphere(rand);
-//         ls->pdf = M_1_2PI_F * 0.5f;
-//       }
-//       else {
-//         sample_cos_hemisphere(N, rand, &ls->D, &ls->pdf);
-//       }
-//       cos_theta = -dot(ls->D, lightN);
-//     }
-
-//     /* Attenuation. */
-//     const float3 local_ray = spot_light_to_local(kg, klight, -ls->D);
-//     if (d_sq > r_sq) {
-//       ls->eval_fac *= spot_light_attenuation(&klight->spot, local_ray);
-//     }
-//     if (!in_volume_segment && ls->eval_fac == 0.0f) {
-//       return false;
-//     }
-
-//     if (ls->t == FLT_MAX) {
-//       /* Law of cosines. */
-//       ls->t = d * cos_theta -
-//               copysignf(safe_sqrtf(r_sq - d_sq + d_sq * sqr(cos_theta)), d_sq - r_sq);
-//       ls->P = P + ls->D * ls->t; // !!!
-//     }
-//     else {
-//       /* Already computed when sampling the spread cone. */
-//     }
-
-//     /* Remap sampled point onto the sphere to prevent precision issues with small radius. */
-//     ls->Ng = normalize(ls->P - klight->co); // !!!: wrong! // TODO: Replace this model with the canonical disk
-//     ls->P = ls->Ng * klight->spot.radius + klight->co;
-//   }
-//   else { // !!!: This Block is not even entering! Blender no longer has disk spots? 
-//     /* Point light with ad-hoc radius based on oriented disk. */
-//     // ls->P = klight->co; // !!!: the disk's plane is perpendicular to P - co, not perpendicular to the spot direction.
-//     // if (r_sq > 0.0f) {
-//     //   ls->P += disk_light_sample(lightN, rand) * klight->spot.radius;
-//     // }
-
-//     // !!!: Non-spherical branch:= canonical disk normal = transformed local -Z
-//     const Transform itfm = lamp_get_inverse_transform(kg, klight);
-//     const Transform tfm = transform_inverse(itfm);
-
-// // >>> DEBUG ONLY
-// // #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-// const float3 debug_local_P =
-//     restir_spot_disk_sample(klight->spot.radius, rand);
-
-// const float3 debug_world_P = transform_point(&tfm, debug_local_P);
-
-// const float3 debug_roundtrip_P = transform_point(&itfm, debug_world_P);
-
-// ccl_debug_printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Disk) ===\n");
-
-// ccl_debug_printf("local sample      = %f %f %f\n",
-//        (double)debug_local_P.x,
-//        (double)debug_local_P.y,
-//        (double)debug_local_P.z);
-
-// ccl_debug_printf("world transformed = %f %f %f\n",
-//        (double)debug_world_P.x,
-//        (double)debug_world_P.y,
-//        (double)debug_world_P.z);
-
-// ccl_debug_printf("roundtrip local   = %f %f %f\n",
-//        (double)debug_roundtrip_P.x,
-//        (double)debug_roundtrip_P.y,
-//        (double)debug_roundtrip_P.z);
-
-// ccl_debug_printf("roundtrip error   = %g\n",
-//        (double)len(debug_roundtrip_P - debug_local_P));
-
-// ccl_debug_printf("klight->co        = %f %f %f\n",
-//        (double)klight->co.x,
-//        (double)klight->co.y,
-//        (double)klight->co.z);
-
-// ccl_debug_printf("=================================\n");
-
-// ls->P = debug_world_P;
-// // #endif
-// // <<<
-
-//     // ls->P = transform_point( // TODO: Remove debug and uncomment
-//     //     &tfm,
-//     //     restir_spot_disk_sample(klight->spot.radius, rand));
-
-
-
-//     ls->D = safe_normalize_len(ls->P - P, &ls->t);
-//     ls->Ng = -ls->D;
-
-//     /* Attenuation. */
-//     const float3 local_ray = spot_light_to_local(kg, klight, -ls->D);
-//     ls->eval_fac *= spot_light_attenuation(&klight->spot, local_ray);
-//     if (!in_volume_segment && ls->eval_fac == 0.0f) {
-//       return false;
-//     }
-
-//     /* PDF. */
-//     const float invarea = (r_sq > 0.0f) ? 1.0f / (r_sq * M_PI_F) : 1.0f;
-//     // ls->pdf = invarea * light_pdf_area_to_solid_angle(lightN, -ls->D, ls->t); // !!!: Replace with:
-//     const float3 disk_N = normalize(transform_direction(&itfm,
-//                                                         make_float3(0.0f, 0.0f, -1.0f)));
-//     ls->pdf = invarea * light_pdf_area_to_solid_angle(disk_N, -ls->D, ls->t);
-//   }
-
-//   return true;
-// }
-
-// TODO: canonical disk must become the actual non-spherical spot geometry in spot_light_sample_from_intersection and spot_light_eval_from_intersection
-
 
 template<bool in_volume_segment>
 ccl_device_inline bool spot_light_sample(KernelGlobals kg,
@@ -432,19 +254,9 @@ ccl_device_inline LightEval spot_light_eval_from_intersection(KernelGlobals kg,
   else {
     if (t != FLT_MAX) {
       const float3 lightN = normalize(ray_P - klight->co);
-      // const Transform itfm = lamp_get_inverse_transform(kg, klight);
 
-      // const float3 disk_N = normalize(transform_direction(
-      //     &itfm,
-      //     make_float3(0.0f, 0.0f, -1.0f)));
-
-      // // light_eval.Ng = disk_N;
-    
       const float invarea = (r_sq > 0.0f) ? 1.0f / (r_sq * M_PI_F) : 1.0f;
       light_eval.pdf = invarea * light_pdf_area_to_solid_angle(lightN, -ray_D, t);
-      // light_eval.pdf =
-      //     invarea *
-      //     light_pdf_area_to_solid_angle(disk_N, -ray_D, t);
     }
   }
 
@@ -474,23 +286,20 @@ ccl_device_inline bool spot_light_sample_from_intersection(KernelGlobals kg,
   if (klight->spot.is_sphere) {
     ls->pdf = spot_light_pdf(&klight->spot, d_sq, r_sq, N, ray_D, path_flag);
     ls->Ng = normalize(ls->P - klight->co);
+
+    const Transform itfm = lamp_get_inverse_transform(kg, klight);
+    ref->param = map_to_sphere(normalize(transform_direction(&itfm, ls->Ng)));
   }
   else {
     if (ls->t != FLT_MAX) {
-      // const float3 lightN = normalize(ray_P - klight->co); // !!!: old target-dependent geometry.
-      const Transform itfm = lamp_get_inverse_transform(kg, klight);
-
-      const float3 disk_N = normalize(transform_direction(
-          &itfm,
-          make_float3(0.0f, 0.0f, -1.0f)));
-
-      ls->Ng = disk_N;
-
+      const float3 lightN = normalize(ray_P - klight->co);
       const float invarea = (r_sq > 0.0f) ? 1.0f / (r_sq * M_PI_F) : 1.0f;
-      // ls->pdf = invarea * light_pdf_area_to_solid_angle(lightN, -ray_D, ls->t);
-      ls->pdf =
-          invarea *
-          light_pdf_area_to_solid_angle(disk_N, -ls->D, ls->t);
+      ls->pdf = invarea * light_pdf_area_to_solid_angle(lightN, -ray_D, ls->t);
+
+      if (r_sq > 0.0f) {
+        const float3 hit_P = ray_P + ray_D * ls->t;
+        ref->param = disk_light_offset_to_uv(lightN, hit_P - klight->co, klight->spot.radius);
+      }
     }
     else {
       ls->pdf = 0.0f;
@@ -506,38 +315,6 @@ ccl_device_inline bool spot_light_sample_from_intersection(KernelGlobals kg,
   if (ls->eval_fac == 0) {
     return false;
   }
-
-  /* Texture coordinates stored in reference parameterization */
-  // !!!: ref->param must now mean disk coordinates!!!
-  // !!!: not a disk-position parameterization. It's a directional/spot-cone parameterization.
-  ref->param = spot_light_uv(local_ray, klight->spot.half_cot_half_spot_angle); // !!!: no reconstruction of ls->P onto the canonical disk here
-  /* !!!: This parameterization stores the direction, but a 
-   * non-spherical spot with: klight->spot.radius > 0 samples an actual disk:
-    ls->P = klight->co;
-    ls->P += disk_light_sample(lightN, rand) * klight->spot.radius;
-  */
-
-
-// >>> DEBUG ONLy
-const Transform itfm = lamp_get_inverse_transform(kg, klight);
-
-const float3 local_P = transform_point(&itfm, ls->P); // !!!: Does not come from the disk (z=0)
-
-// !!!: Take whatever point Cycles happened to give me and pretend its XY coordinates came from the canonical disk.
-const float2 param = make_float2( // !!!: Not Final fix!
-    local_P.x / klight->spot.radius,
-    local_P.y / klight->spot.radius);
-
-ccl_debug_printf("parameter = (%f, %f)\n\n\n", (double)param.x, (double)param.y);
-
-// ref->param = param;
-// <<<
-
-
-  // ref->param = restir_spot_position_encode(kg, klight, ls->P); // !!!: Decide what ls->P means for a light intersection
-
-
-
 
   return true;
 }
@@ -560,6 +337,8 @@ ccl_device_inline bool spot_light_valid_ray_segment(KernelGlobals kg,
   return ray_cone_intersect(
       axis, local_P, local_D, sqr(klight->spot.cos_half_spot_angle), t_range);
 }
+
+/* Resampling. */
 
 ccl_device_inline bool spot_light_reference_from_sample(
     KernelGlobals kg,
@@ -631,15 +410,23 @@ ccl_device_inline bool spot_light_reference_from_sample(
     return true;
   }
   else {
-    /* Non-spherical (zero-radius) Spot:
-     * The persistent identity is simply the Spot emitter itself,
-     * with no additional geometric parameter.
-     */
     reference->type = LIGHT_SPOT;
     reference->object = ls->object;
     reference->prim = ls->prim;
     reference->flags = RESTIR_LIGHT_REFERENCE_VALID;
 
+    const float radius = klight->spot.radius;
+    if (radius > 0.0f) {
+      /* Receiver that produced this sample: ls->D | ls->t point from it to ls->P. */
+      const float3 source_P = ls->P - ls->D * ls->t;
+      const float3 to_source = source_P - klight->co;
+      if (!(len_squared(to_source) > 0.0f)) {
+        return false;
+      }
+      reference->param = disk_light_offset_to_uv(
+          normalize(to_source), ls->P - klight->co, radius);
+      reference->flags |= RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+    }
     return true;
   }
 }
@@ -753,63 +540,52 @@ ccl_device_inline bool spot_light_sample_from_reference(
           ls->eval_fac >= 0.0f;
   }
   else {
-    /*
-     * Non-spherical (zero-radius) Spot:
-     *
-     * The emitter degenerates to a single point at klight->co.
-     * There is no persistent geometric parameter to decode.
-     * Therefore: ls->P = klight->co
-     *
-     * and all remaining quantities are reconstructed relative
-     * to the current target P.
-     */
+    const float radius = klight->spot.radius;
+    const float r_sq = sqr(radius);
+
+    /* Same billboard normal spot_light_sample() uses, from the NEW receiver. */
+    float3 lightN = P - klight->co;
+    const float d_sq = len_squared(lightN);
+    if (!(d_sq > 0.0f)) {
+      return false;
+    }
+    lightN /= sqrtf(d_sq);
 
     ls->P = klight->co;
+    if (r_sq > 0.0f) {
+      if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
+        return false;
+      }
+      ls->P += disk_light_uv_to_offset(lightN, reference->param, radius);
+    }
 
-    /* Target-dependent direction and distance. */
     ls->D = safe_normalize_len(ls->P - P, &ls->t);
-
     if (!isfinite(ls->t) || ls->t < 0.0f) {
       return false;
     }
-
-    /* Based on sampler. */
     ls->Ng = -ls->D;
 
-    /* Restore the metadata. */
     ls->type = LIGHT_SPOT;
     ls->shader = klight->shader_id;
     ls->object = klight->object_id;
     ls->prim = reference->prim;
     ls->group = object_lightgroup(kg, ls->object);
-
     ls->pdf_selection = 0.0f;
     ls->emitter_id = EMITTER_NONE;
 
-    /* Attenuation is evaluated against the new target (target-dependent).
-     * Exactly analogous to the sphere reconstruction. */
+    /* Attenuation is target-dependent. */
     ls->eval_fac = klight->spot.eval_fac;
-
     const float3 local_ray = spot_light_to_local(kg, klight, -ls->D);
-
     ls->eval_fac *= spot_light_attenuation(&klight->spot, local_ray);
-
-    if (!isfinite(ls->eval_fac)) {
+    if (!isfinite(ls->eval_fac) || ls->eval_fac == 0.0f) {
       return false;
     }
 
-    if (ls->eval_fac == 0.0f) {
-      return false;
-    }
+    /* Identical to spot_light_sample(). */
+    const float invarea = (r_sq > 0.0f) ? 1.0f / (r_sq * M_PI_F) : 1.0f;
+    ls->pdf = invarea * light_pdf_area_to_solid_angle(lightN, -ls->D, ls->t);
 
-    const float3 lightN = safe_normalize(P - klight->co);
-
-    ls->pdf = light_pdf_area_to_solid_angle(lightN, -ls->D, ls->t);
-
-    return isfinite(ls->pdf) &&
-          ls->pdf > 0.0f &&
-          isfinite(ls->eval_fac) &&
-          ls->eval_fac >= 0.0f;
+    return isfinite(ls->pdf) && ls->pdf > 0.0f;
   }
 }
 
