@@ -950,66 +950,63 @@ static Mesh *cdts_to_mesh(const Span<TriangulationResult> results,
   });
 
   MutableAttributeAccessor dst_attributes = dst_mesh->attributes_for_write();
-  threading::parallel_for(results.index_range(), 1024, [&](const IndexRange range) {
-    for (const int result_i : range) {
-      const IndexRange verts_range = vert_groups[result_i];
+  for (const int result_i : results.index_range()) {
+    const IndexRange verts_range = vert_groups[result_i];
 
-      const TriangulationResult &result = results[result_i];
-      const OffsetIndices dst_points_range_by_component = result.dst_points_range_by_component();
-      const Span<int> src_point_by_dst_point = result.src_point_by_dst_point.as_span();
-      for (const int component_i : result.point_source_domains.index_range()) {
-        /* There might be more source components than components in the result, because overlapping
-         * points are merged and duplicates get discarded. */
-        if (component_i >= dst_points_range_by_component.size()) {
-          break;
-        }
-        const SourceComponent domain = result.point_source_domains[component_i];
-        const IndexRange dst_range = dst_points_range_by_component[component_i];
-
-        const AttributeAccessor src_attributes = src_attributes_for_domain(
-            mesh, curves, pointcloud, domain);
-        gather_attributes_for_result_for_component(
-            src_attributes,
-            bke::AttrDomain::Point,
-            verts_range,
-            dst_range,
-            src_point_by_dst_point.slice(dst_range),
-            bke::attribute_filter_with_skip_ref(attribute_filter, {"position"}),
-            dst_attributes);
+    const TriangulationResult &result = results[result_i];
+    const OffsetIndices dst_points_range_by_component = result.dst_points_range_by_component();
+    const Span<int> src_point_by_dst_point = result.src_point_by_dst_point.as_span();
+    for (const int component_i : result.point_source_domains.index_range()) {
+      /* There might be more source components than components in the result, because overlapping
+       * points are merged and duplicates get discarded. */
+      if (component_i >= dst_points_range_by_component.size()) {
+        break;
       }
-    }
-  });
-  threading::parallel_for(results.index_range(), 1024, [&](const IndexRange range) {
-    for (const int result_i : range) {
-      const TriangulationResult &result = results[result_i];
-      const IndexRange intersection_points = result.intersection_points;
-      const GroupedSpan<int> intersection_src_component_by_dst =
-          result.intersection_src_component_by_dst();
-      const GroupedSpan<int> intersection_src_by_dst = result.intersection_src_by_dst();
-      const GroupedSpan<float> intersection_src_weight_by_dst =
-          result.intersection_src_weight_by_dst();
+      const SourceComponent domain = result.point_source_domains[component_i];
+      const IndexRange dst_range = dst_points_range_by_component[component_i];
 
-      Vector<AttributeAccessor> src_accessors;
-      for (const SourceComponent component : result.point_source_domains) {
-        src_accessors.append(src_attributes_for_domain(mesh, curves, pointcloud, component));
-      }
-
-      mix_intersection_attributes_for_result(src_accessors.as_span(),
-                                             intersection_points,
-                                             intersection_src_component_by_dst,
-                                             intersection_src_by_dst,
-                                             intersection_src_weight_by_dst,
-                                             bke::attribute_filter_with_skip_ref(attribute_filter,
-                                                                                 {"position",
-                                                                                  ".edge_verts",
-                                                                                  ".corner_vert",
-                                                                                  ".corner_edge",
-                                                                                  ".select_vert",
-                                                                                  ".select_edge",
-                                                                                  ".select_poly"}),
-                                             dst_attributes);
+      const AttributeAccessor src_attributes = src_attributes_for_domain(
+          mesh, curves, pointcloud, domain);
+      gather_attributes_for_result_for_component(
+          src_attributes,
+          bke::AttrDomain::Point,
+          verts_range,
+          dst_range,
+          src_point_by_dst_point.slice(dst_range),
+          bke::attribute_filter_with_skip_ref(attribute_filter, {"position"}),
+          dst_attributes);
     }
-  });
+  }
+
+  for (const int result_i : results.index_range()) {
+    const TriangulationResult &result = results[result_i];
+    const IndexRange intersection_points = result.intersection_points;
+    const GroupedSpan<int> intersection_src_component_by_dst =
+        result.intersection_src_component_by_dst();
+    const GroupedSpan<int> intersection_src_by_dst = result.intersection_src_by_dst();
+    const GroupedSpan<float> intersection_src_weight_by_dst =
+        result.intersection_src_weight_by_dst();
+
+    Vector<AttributeAccessor> src_accessors;
+    for (const SourceComponent component : result.point_source_domains) {
+      src_accessors.append(src_attributes_for_domain(mesh, curves, pointcloud, component));
+    }
+
+    mix_intersection_attributes_for_result(src_accessors.as_span(),
+                                           intersection_points,
+                                           intersection_src_component_by_dst,
+                                           intersection_src_by_dst,
+                                           intersection_src_weight_by_dst,
+                                           bke::attribute_filter_with_skip_ref(attribute_filter,
+                                                                               {"position",
+                                                                                ".edge_verts",
+                                                                                ".corner_vert",
+                                                                                ".corner_edge",
+                                                                                ".select_vert",
+                                                                                ".select_edge",
+                                                                                ".select_poly"}),
+                                           dst_attributes);
+  }
 
   if (dst_intersection_points_attribute_id) {
     if (SpanAttributeWriter dst_intersection_points =
