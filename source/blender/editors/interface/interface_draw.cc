@@ -1592,8 +1592,18 @@ static void draw_but_curve_grid(const uint pos,
   const float start_x = (ceilf(offset_x / step) * step - offset_x) * zoom_x + rect->xmin;
   const float start_y = (ceilf(offset_y / step) * step - offset_y) * zoom_y + rect->ymin;
 
-  const int line_count_x = ceilf((rect->xmax - start_x) / (step * zoom_x));
-  const int line_count_y = ceilf((rect->ymax - start_y) / (step * zoom_y));
+  int line_count_x = ceilf((rect->xmax - start_x) / (step * zoom_x));
+  int line_count_y = ceilf((rect->ymax - start_y) / (step * zoom_y));
+
+  const float MIN_MAJOR_LINE_DISTANCE = (U.v2d_min_gridsize * UI_SCALE_FAC); // in
+                                                                             // /source/blender/editors/interface/view2d/view2d_draw.cc
+
+  if(step * zoom_x < MIN_MAJOR_LINE_DISTANCE) {
+    line_count_x = 0;
+  }
+  if(step * zoom_y < MIN_MAJOR_LINE_DISTANCE) {
+    line_count_y = 0;
+  }
 
   if (line_count_x + line_count_y == 0) {
     return;
