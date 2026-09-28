@@ -6,7 +6,6 @@
  * \ingroup spoutliner
  */
 
-#include "DNA_grease_pencil_modifier_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_outliner_types.h"
@@ -56,10 +55,8 @@ TreeElementModifier::TreeElementModifier(TreeElement &legacy_te,
                                          ModifierDataStoreElem &md)
     : AbstractTreeElement(legacy_te), object_(object), md_(md)
 {
-  if (md_.type == MODIFIER_TYPE) {
-    legacy_te.name = md_.md->name;
-    legacy_te.directdata = md_.md;
-  }
+  legacy_te.name = md_.md->name;
+  legacy_te.directdata = md_.md;
 }
 
 ID *TreeElementModifier::owner_id(Object &object, ModifierDataStoreElem & /*md*/)
@@ -78,32 +75,30 @@ void TreeElementModifier::add_linked_object(Object *object) const
 
 void TreeElementModifier::expand(SpaceOutliner & /*space_outliner*/) const
 {
-  if (md_.type == MODIFIER_TYPE) {
-    ModifierData *md = md_.md;
-    PointerRNA ptr_mod = RNA_pointer_create_discrete(&object_.id, RNA_Modifier, md);
-    PropertyRNA *iterprop = RNA_struct_iterator_property(ptr_mod.type);
-    RNA_PROP_BEGIN (&ptr_mod, itemptr, iterprop) {
-      PropertyRNA *prop = static_cast<PropertyRNA *>(itemptr.data);
-      if (RNA_property_type(prop) != PROP_POINTER) {
-        continue;
-      }
-      const PointerRNA idptr = RNA_property_pointer_get(&ptr_mod, prop);
-      if (!idptr.has_data()) {
-        continue;
-      }
-
-      if (RNA_struct_is_a(idptr.type, RNA_Object)) {
-        add_linked_object(idptr.data_as<Object>());
-      }
-      else if (RNA_struct_is_a(idptr.type, RNA_ParticleSystem)) {
-        add_element<TreeElementParticleSystem>({}, object_, *idptr.data_as<ParticleSystem>());
-      }
-      else if (RNA_struct_is_a(idptr.type, RNA_NodeTree)) {
-        add_element<TreeElementLinkedNodeTree>({}, *idptr.data_as<ID>());
-      }
+  ModifierData *md = md_.md;
+  PointerRNA ptr_mod = RNA_pointer_create_discrete(&object_.id, RNA_Modifier, md);
+  PropertyRNA *iterprop = RNA_struct_iterator_property(ptr_mod.type);
+  RNA_PROP_BEGIN (&ptr_mod, itemptr, iterprop) {
+    PropertyRNA *prop = static_cast<PropertyRNA *>(itemptr.data);
+    if (RNA_property_type(prop) != PROP_POINTER) {
+      continue;
     }
-    RNA_PROP_END;
+    const PointerRNA idptr = RNA_property_pointer_get(&ptr_mod, prop);
+    if (!idptr.has_data()) {
+      continue;
+    }
+
+    if (RNA_struct_is_a(idptr.type, RNA_Object)) {
+      add_linked_object(idptr.data_as<Object>());
+    }
+    else if (RNA_struct_is_a(idptr.type, RNA_ParticleSystem)) {
+      add_element<TreeElementParticleSystem>({}, object_, *idptr.data_as<ParticleSystem>());
+    }
+    else if (RNA_struct_is_a(idptr.type, RNA_NodeTree)) {
+      add_element<TreeElementLinkedNodeTree>({}, *idptr.data_as<ID>());
+    }
   }
+  RNA_PROP_END;
 }
 
 std::optional<BIFIconID> TreeElementModifier::get_icon() const

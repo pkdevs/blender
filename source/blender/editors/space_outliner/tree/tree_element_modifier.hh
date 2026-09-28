@@ -18,13 +18,10 @@ struct GpencilModifierData;
 struct ModifierData;
 struct Object;
 
-enum ModifierDataStoreType { MODIFIER_TYPE, GPENCIL_MODIFIER_TYPE };
-
 struct ModifierDataStoreElem {
   ModifierData *md;
-  ModifierDataStoreType type;
 
-  ModifierDataStoreElem(ModifierData *md_) : md(md_), type(MODIFIER_TYPE) {}
+  ModifierDataStoreElem(ModifierData *md_) : md(md_) {}
 };
 
 namespace ed::outliner {
