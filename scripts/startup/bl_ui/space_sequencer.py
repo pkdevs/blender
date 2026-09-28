@@ -1511,6 +1511,7 @@ class SEQUENCER_MT_preview_view_pie(Menu):
 class SEQUENCER_MT_modifier_add(Menu):
     bl_label = "Add Modifier"
     bl_options = {'SEARCH_ON_KEY_PRESS'}
+    bl_description = "Add a compositor or sound effect to the active strip"
 
     MODIFIER_TYPES_TO_ICONS = {
         enum_it.identifier: enum_it.icon
@@ -1670,19 +1671,19 @@ class SEQUENCER_PT_cache_view_settings(SequencerButtonsPanel, Panel):
             col = layout.box()
             col = col.column(align=True)
 
-            split = col.split(factor=0.4, align=True)
+            split = col.split(factor=col.property_split_factor, align=True)
             split.alignment = 'RIGHT'
             split.label(text="Current Cache Size")
             split.alignment = 'LEFT'
             split.label(text=iface_("{:d} MB").format(cache_raw_size + cache_final_size), translate=False)
 
-            split = col.split(factor=0.4, align=True)
+            split = col.split(factor=col.property_split_factor, align=True)
             split.alignment = 'RIGHT'
             split.label(text="Raw")
             split.alignment = 'LEFT'
             split.label(text=iface_("{:d} MB").format(cache_raw_size), translate=False)
 
-            split = col.split(factor=0.4, align=True)
+            split = col.split(factor=col.property_split_factor, align=True)
             split.alignment = 'RIGHT'
             split.label(text="Final")
             split.alignment = 'LEFT'
@@ -1806,7 +1807,7 @@ class SEQUENCER_PT_view(SequencerButtonsPanel_Output, Panel):
         layout.use_property_decorate = False
 
         st = context.space_data
-        ed = context.scene.sequence_editor
+        ed = context.sequencer_scene.sequence_editor
 
         col = layout.column()
         col.prop(st, "proxy_render_size")

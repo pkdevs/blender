@@ -1478,15 +1478,6 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
         if capabilities.has_color and popover:
             draw_color_jitter_panel(container, context, brush)
 
-    elif mode == 'SCULPT_GREASE_PENCIL':
-        gp_settings = brush.gpencil_settings
-
-        col = container.column(heading="Affect", align=True)
-        col.prop(gp_settings, "use_edit_position", text="Position")
-        col.prop(gp_settings, "use_edit_strength", text="Strength", text_ctxt=i18n_contexts.id_gpencil)
-        col.prop(gp_settings, "use_edit_thickness", text="Thickness")
-        col.prop(gp_settings, "use_edit_uv", text="UV")
-
     # 3D and 2D Texture Paint.
     elif mode in {'PAINT_TEXTURE', 'PAINT_2D'}:
         container.prop(brush, "image_brush_type")
@@ -1598,7 +1589,7 @@ def draw_mesh_automasking_settings(layout, settings, *, topbar=False, use_face_s
         else:
             col = parent.column()
             col.use_property_split = False
-            split = col.split(factor=0.4)
+            split = col.split(factor=col.property_split_factor)
             col = split.column()
             split.prop(settings, "boundary_edges_propagation_steps")
 
@@ -1862,7 +1853,9 @@ def brush_basic__draw_color_selector(context, layout, brush, gp_settings):
             sub_row = row.row(align=True)
             sub_row.enabled = show_vertex_color
             sub_row.scale_x = 0.8
-            sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+            ups = settings.unified_paint_settings
+            prop_owner = ups if brush.use_unified_color else brush
+            sub_row.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
         row.prop(gp_settings, "pin_draw_mode", text="")
 
 
@@ -1888,37 +1881,27 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         size = "size"
         if brush.use_locked_size == 'SCENE' and (grease_pencil_brush_type == 'DRAW' or is_primitive_tool):
             size = "unprojected_size"
-        row = layout.row(align=True)
-        row.prop(brush, size, slider=True, text="Size")
-        row.prop(brush, "use_pressure_size", text="")
-        if not compact:
-            row.prop(
-                paint,
-                "show_size_curve",
-                text="",
-                icon='DOWNARROW_HLT' if paint.show_size_curve else 'RIGHTARROW',
-                emboss=False,
-            )
-            if paint.show_size_curve:
-                col = layout.column()
-                col.active = brush.use_pressure_size
-                col.template_curve_mapping(gp_settings, "curve_sensitivity", brush=True, show_presets=True)
-
-        row = layout.row(align=True)
-        row.prop(brush, "strength", slider=True, text="Strength")
-        row.prop(brush, "use_pressure_strength", text="")
-        if not compact:
-            row.prop(
-                paint,
-                "show_strength_curve",
-                text="",
-                icon='DOWNARROW_HLT' if paint.show_strength_curve else 'RIGHTARROW',
-                emboss=False,
-            )
-            if paint.show_strength_curve:
-                col = layout.column()
-                col.active = brush.use_pressure_strength
-                col.template_curve_mapping(gp_settings, "curve_strength", brush=True, show_presets=True)
+        UnifiedPaintPanel.prop_unified(
+            layout,
+            context,
+            brush,
+            size,
+            pressure_name="use_pressure_size",
+            unified_name="use_unified_size",
+            text="Size",
+            slider=True,
+            header=compact,
+        )
+        UnifiedPaintPanel.prop_unified(
+            layout,
+            context,
+            brush,
+            "strength",
+            pressure_name="use_pressure_strength",
+            unified_name="use_unified_strength",
+            text="Strength",
+            header=compact,
+        )
 
     if props:
         layout.prop(props, "subdivision")
@@ -1963,6 +1946,12 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
             row.prop_enum(brush.gpencil_settings, "stroke_type", 'BOTH', text="", icon='GP_DRAW_BOTH')
         else:
             row.prop(brush.gpencil_settings, "stroke_type")
+
+        row = layout.row(align=True)
+        if compact:
+            row.prop(gp_settings, "use_cyclic_stroke", text="")
+        else:
+            row.prop(gp_settings, "use_cyclic_stroke", text="Cyclic")
 
         row = layout.row(align=True)
         if compact:
@@ -2012,6 +2001,31 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         layout.prop(gp_settings, "use_active_layer_only")
 
 
+def brush_basic_grease_pencil_sculpt_settings(layout, context, brush, *, compact=False):
+    UnifiedPaintPanel.prop_unified(
+        layout,
+        context,
+        brush,
+        "size",
+        pressure_name="use_pressure_size",
+        unified_name="use_unified_size",
+        text="Size",
+        slider=True,
+        header=compact,
+    )
+
+    UnifiedPaintPanel.prop_unified(
+        layout,
+        context,
+        brush,
+        "strength",
+        pressure_name="use_pressure_strength",
+        unified_name="use_unified_strength",
+        text="Strength",
+        header=compact,
+    )
+
+
 def brush_basic_grease_pencil_weight_settings(layout, context, brush, *, compact=False):
     UnifiedPaintPanel.prop_unified(
         layout,
@@ -2025,14 +2039,12 @@ def brush_basic_grease_pencil_weight_settings(layout, context, brush, *, compact
         header=compact,
     )
 
-    capabilities = brush.sculpt_capabilities
-    pressure_name = "use_pressure_strength" if capabilities.has_strength_pressure else None
     UnifiedPaintPanel.prop_unified(
         layout,
         context,
         brush,
         "strength",
-        pressure_name=pressure_name,
+        pressure_name="use_pressure_strength",
         unified_name="use_unified_strength",
         text="Strength",
         header=compact,

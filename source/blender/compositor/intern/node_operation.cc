@@ -96,12 +96,7 @@ void NodeOperation::compute_results_reference_counts(const Schedule &schedule)
       continue;
     }
 
-    const int reference_count = number_of_inputs_linked_to_output_conditioned(
-        *output, [&](const bNodeSocket &input) {
-          return schedule.nodes.contains(&input.owner_node()) &&
-                 !schedule.unneeded_inputs.contains(&input);
-        });
-
+    const int reference_count = compute_output_reference_count(*output, schedule);
     this->get_result(output->identifier).set_reference_count(reference_count);
   }
 }
@@ -228,9 +223,7 @@ void NodeOperation::log_data()
   const bool node_needs_preview = is_node_preview_needed(this->node());
   const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
                                                SideEffectOutputTypes::NodePreviews);
-  const bool is_active_context = compute_context_->hash() ==
-                                 this->context().get_active_compute_context_hash();
-  if (node_needs_preview && needs_node_previews && is_active_context) {
+  if (node_needs_preview && needs_node_previews) {
     const Result *result = this->get_preview_result();
     if (result && !result->is_single_value()) {
       ImBuf *preview = compositor::compute_preview(this->context(), *result);
