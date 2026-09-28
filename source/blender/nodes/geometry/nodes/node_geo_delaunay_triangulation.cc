@@ -16,6 +16,7 @@
 
 #include "GEO_foreach_geometry.hh"
 #include "GEO_join_geometries.hh"
+#include "GEO_mesh_selection.hh"
 
 #include "NOD_socket_usage_inference.hh"
 
@@ -714,19 +715,16 @@ static Array<TriangulationResult> calc_triangulations(const Mesh *mesh,
             if (index != -1) {
               group.mesh_verts = mesh_masks[index];
               /* A loose edge or face belongs to the group only if all of its vertices do. */
-              BitVector<> vert_in_group(mesh->verts_num);
-              group.mesh_verts.to_bits(vert_in_group);
+              Array<bool> vert_in_group(mesh->verts_num, false);
+              group.mesh_verts.to_bools(vert_in_group);
               group.mesh_loose_edges = IndexMask::from_predicate(
                   mesh->loose_edges(), memory, [&](const int64_t edge) {
                     return vert_in_group[mesh_edges[edge][0]] &&
                            vert_in_group[mesh_edges[edge][1]];
                   });
-              group.mesh_faces = IndexMask::from_predicate(
-                  mesh_faces.index_range(), memory, [&](const int64_t face) {
-                    return std::ranges::all_of(
-                        mesh_corner_verts.slice(mesh_faces[face]),
-                        [&](const int vert) { return vert_in_group[vert]; });
-                  });
+              /* Note: This should be optimized further. */
+              group.mesh_faces = geometry::face_selection_from_vert(
+                  mesh_faces, mesh_corner_verts, vert_in_group, memory);
             }
           }
           if (curves) {
