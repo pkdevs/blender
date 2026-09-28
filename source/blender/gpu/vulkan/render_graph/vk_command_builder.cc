@@ -572,15 +572,9 @@ void VKCommandBuilder::build_pipeline_barriers(VKRenderGraph &render_graph,
   reset_barriers(r_barrier);
   add_image_barriers(
     render_graph, node_handle, pipeline_stage, image_tracker, r_barrier, within_rendering);
-
-/* Regression test experiment: restore the old behavior where buffer barriers
- * were also extracted during the local-read barrier pass. */
-/*
 if (!within_rendering) {
   add_buffer_barriers(render_graph, node_handle, pipeline_stage, r_barrier);
 }
-*/
-add_buffer_barriers(render_graph, node_handle, pipeline_stage, r_barrier);
 }
 
 /** \} */
