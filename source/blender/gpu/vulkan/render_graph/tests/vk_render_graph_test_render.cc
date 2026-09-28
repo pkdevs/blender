@@ -508,24 +508,24 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
   EXPECT_NE(-1, last_draw_index);
 
   if (use_dynamic_rendering_local_read && first_draw_index != -1 && last_draw_index != -1) {
-    int64_t node_pre_barrier_index = -1;
-    bool node_pre_barrier_has_buffer = false;
-    for (const int64_t index : IndexRange::from_begin_end(first_draw_index + 1, last_draw_index))
-    {
-      if (log[index].find(expected_access) != std::string::npos) {
-        node_pre_barrier_index = index;
-        node_pre_barrier_has_buffer =
-            log[index].find("buffer_barrier(") != std::string::npos;
-        break;
-      }
+  int64_t node_pre_barrier_index = -1;
+  bool has_buffer_barrier = false;
+  for (const int64_t index : IndexRange::from_begin_end(first_draw_index + 1, last_draw_index))
+  {
+    if (log[index].find(expected_access) != std::string::npos) {
+      node_pre_barrier_index = index;
     }
-
-    EXPECT_NE(-1, node_pre_barrier_index)
-        << "Synchronization barrier must be recorded after the producing draw and before the "
-           "consuming draw.";
-    EXPECT_FALSE(node_pre_barrier_has_buffer)
-        << "The local-read node barrier must not include unrelated buffer barriers.";
+    if (log[index].find("buffer_barrier(") != std::string::npos) {
+      has_buffer_barrier = true;
+    }
   }
+
+  EXPECT_NE(-1, node_pre_barrier_index)
+      << "Synchronization barrier must be recorded after the producing draw and before the "
+         "consuming draw.";
+  EXPECT_FALSE(has_buffer_barrier)
+      << "The local-read barrier pass must not generate unrelated buffer barriers.";
+}
 }
 
 TEST_P(VKRenderGraphTestRender, begin_draw_end__layered_depth)
