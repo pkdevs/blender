@@ -656,23 +656,32 @@ static Array<TriangulationResult> calc_triangulations(const Mesh *mesh,
     mesh_evaluator.emplace(context, mesh->verts_num);
     mesh_evaluator->add(group_index);
     mesh_evaluator->evaluate();
-    mesh_masks = IndexMask::from_group_ids(
-        mesh_evaluator->get_evaluated<int>(0), memory, mesh_ids);
+    const VArray<int> groups = mesh_evaluator->get_evaluated<int>(0);
+    mesh_masks = IndexMask::from_group_ids(groups, memory);
+    for (const IndexMask &mask : mesh_masks) {
+      mask.foreach_index([&](const int64_t i) { mesh_ids.add(groups[i]); });
+    }
   }
   if (curves && !curves->is_empty()) {
     curve_evaluator.emplace(*curves_field_context, curves->curves_num());
     curve_evaluator->add(group_index);
     curve_evaluator->evaluate();
-    curve_masks = IndexMask::from_group_ids(
-        curve_evaluator->get_evaluated<int>(0), memory, curve_ids);
+    const VArray<int> groups = curve_evaluator->get_evaluated<int>(0);
+    curve_masks = IndexMask::from_group_ids(groups, memory);
+    for (const IndexMask &mask : curve_masks) {
+      mask.foreach_index([&](const int64_t i) { curve_ids.add(groups[i]); });
+    }
   }
   if (pointcloud && pointcloud->totpoint > 0) {
     const bke::GeometryFieldContext context{*pointcloud};
     point_evaluator.emplace(context, pointcloud->totpoint);
     point_evaluator->add(group_index);
     point_evaluator->evaluate();
-    point_masks = IndexMask::from_group_ids(
-        point_evaluator->get_evaluated<int>(0), memory, point_ids);
+    const VArray<int> groups = point_evaluator->get_evaluated<int>(0);
+    point_masks = IndexMask::from_group_ids(groups, memory);
+    for (const IndexMask &mask : curve_masks) {
+      mask.foreach_index([&](const int64_t i) { point_ids.add(groups[i]); });
+    }
   }
 
   VectorSet<int> all_group_ids = mesh_ids;
