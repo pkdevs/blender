@@ -128,9 +128,9 @@ class OptiXDevice : public CUDADevice {
   OptiXDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);
   ~OptiXDevice() override;
 
-  BVHLayoutMask get_bvh_layout_mask(const KernelFeatures & /*kernel_features*/) const override;
+  BVHLayoutMask get_bvh_layout_mask(const KernelFeatureMask & /*kernel_features*/) const override;
 
-  string compile_kernel_get_common_cflags(const KernelFeatures &kernel_features);
+  string compile_kernel_get_common_cflags(const KernelFeatureMask &kernel_features);
 
   void create_optix_module(TaskPool &pool,
                            OptixModuleCompileOptions &module_options,
@@ -138,7 +138,7 @@ class OptiXDevice : public CUDADevice {
                            OptixModule &module,
                            OptixResult &failure_reason);
 
-  bool load_kernels(const KernelFeatures &kernel_features) override;
+  bool load_kernels(const KernelFeatureMask &kernel_features) override;
 
   bool load_osl_kernels() override;
 

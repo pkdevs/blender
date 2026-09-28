@@ -78,7 +78,7 @@ class Film : public Node {
   /* Update passes so that they contain all passes required for the configured functionality. */
   void update_passes(Scene *scene);
 
-  KernelFeature get_kernel_features(const Scene *scene) const;
+  KernelIntegratorFeatureMask get_kernel_features(const Scene *scene) const;
 
  private:
   void add_auto_pass(Scene *scene, PassType type, const char *name = nullptr);

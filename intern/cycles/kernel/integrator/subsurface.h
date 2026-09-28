@@ -130,7 +130,7 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, visibility) = path_visibility;
   INTEGRATOR_STATE_WRITE(state, path, flag) = path_flag;
 
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_PASSES) {
     if (INTEGRATOR_STATE(state, path, bounce) == 0) {
       INTEGRATOR_STATE_WRITE(state, path, pass_diffuse_weight) = one_spectrum();
       INTEGRATOR_STATE_WRITE(state, path, pass_glossy_weight) = zero_spectrum();

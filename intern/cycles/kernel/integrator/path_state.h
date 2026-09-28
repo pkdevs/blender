@@ -66,7 +66,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
   INTEGRATOR_STATE_WRITE(state, path, optical_depth) = 0.0f;
 #if defined(__PATH_GUIDING__)
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
     INTEGRATOR_STATE_WRITE(state, path, unguided_throughput) = 1.0f;
     INTEGRATOR_STATE_WRITE(state, guiding, path_segment) = nullptr;
     INTEGRATOR_STATE_WRITE(state, guiding, use_surface_guiding) = false;
@@ -86,7 +86,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, isect, prim) = PRIM_NONE;
   INTEGRATOR_STATE_WRITE(state, isect, type) = PRIMITIVE_NONE;
 
-  if (kernel_data.kernel_features & KERNEL_FEATURE_VOLUME) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_VOLUME) {
     INTEGRATOR_STATE_ARRAY_WRITE(
         state, volume_stack, 0, object) = kernel_data.background.object_index;
     INTEGRATOR_STATE_ARRAY_WRITE(
@@ -96,14 +96,14 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   }
 
 #ifdef __DENOISING_FEATURES__
-  if (kernel_data.kernel_features & KERNEL_FEATURE_DENOISING) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_DENOISING) {
     INTEGRATOR_STATE_WRITE(state, path, flag) |= PATH_RAY_DENOISING_FEATURES;
     INTEGRATOR_STATE_WRITE(state, path, denoising_feature_throughput) = one_spectrum();
   }
 #endif
 
 #ifdef __LIGHT_LINKING__
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_LINKING) {
     INTEGRATOR_STATE_WRITE(state, path, mis_ray_object) = kernel_data.background.object_index;
   }
 #endif
@@ -299,7 +299,7 @@ ccl_device_inline float path_state_continuation_probability(KernelGlobals kg,
    * transform and do path termination a bit later on average. */
   Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
     throughput *= INTEGRATOR_STATE(state, path, unguided_throughput);
   }
 #endif

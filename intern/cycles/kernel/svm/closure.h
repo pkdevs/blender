@@ -156,7 +156,7 @@ principled_bsdf_emission(KernelGlobals kg,
   return weight;
 }
 
-template<KernelNodeFeature node_feature_mask, ShaderType shader_type>
+template<KernelNodeFeatureMask node_feature_mask, ShaderType shader_type>
 #ifndef __KERNEL_ONEAPI__
 ccl_device_noinline
 #else

@@ -42,7 +42,7 @@ class OneapiDevice : public GPUDevice {
   size_t max_memory_on_device_ = 0;
   std::string oneapi_error_string_;
   bool use_hardware_raytracing = false;
-  KernelFeatures kernel_features;
+  KernelFeatureMask kernel_features;
   int scene_max_shaders_ = 0;
   /* On some driver versions, usage of Intel oneAPI extension for host->GPU copy optimization
    * is causing crashes and failures. As a result, to ensure functionality, we disable
@@ -55,7 +55,7 @@ class OneapiDevice : public GPUDevice {
   size_t get_free_mem() const;
 
  public:
-  BVHLayoutMask get_bvh_layout_mask(const KernelFeatures &requested_features) const override;
+  BVHLayoutMask get_bvh_layout_mask(const KernelFeatureMask &requested_features) const override;
 
   OneapiDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);
 
@@ -65,9 +65,9 @@ class OneapiDevice : public GPUDevice {
 #  endif
   bool check_peer_access(Device *peer_device) override;
 
-  bool load_kernels(const KernelFeatures &requested_features) override;
+  bool load_kernels(const KernelFeatureMask &requested_features) override;
 
-  void reserve_private_memory(const KernelFeatures &kernel_features);
+  void reserve_private_memory(const KernelFeatureMask &kernel_features);
 
   string oneapi_error_message();
 
@@ -157,7 +157,7 @@ class OneapiDevice : public GPUDevice {
   SyclQueue *sycl_queue();
 
  protected:
-  bool can_use_hardware_raytracing_for_features(const KernelFeatures &requested_features) const;
+  bool can_use_hardware_raytracing_for_features(const KernelFeatureMask &requested_features) const;
   void check_usm(SyclQueue *queue, const void *usm_ptr, bool allow_host);
   bool create_queue(SyclQueue *&external_queue,
                     const int device_index,

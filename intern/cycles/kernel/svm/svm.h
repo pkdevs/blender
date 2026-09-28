@@ -100,7 +100,7 @@ CCL_NAMESPACE_BEGIN
 #endif
 
 /* Main Interpreter Loop */
-template<KernelNodeFeature node_feature_mask,
+template<KernelNodeFeatureMask node_feature_mask,
          ShaderType type,
          typename ConstIntegratorGenericState>
 ccl_device void svm_eval_nodes(KernelGlobals kg,

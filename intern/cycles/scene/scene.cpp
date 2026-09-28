@@ -233,7 +233,7 @@ void Scene::device_update(Device *device_, Progress &progress)
      *
      * This does mean the scene might have gotten updated in the meantime, in which case
      * we have to redo the first part of the scene update. */
-    const KernelFeatures kernel_features = dscene.get_kernel_features();
+    const KernelFeatureMask kernel_features = dscene.get_kernel_features();
     scene_updated_while_loading_kernels = false;
     if (!kernels_loaded || loaded_kernel_features != kernel_features) {
       mutex.unlock();
@@ -547,7 +547,7 @@ void Scene::update_kernel_features()
 
   /* These features are not being tweaked as often as shaders,
    * so could be done selective magic for the viewport as well. */
-  KernelFeatures kernel_features = shader_manager->get_kernel_features(this);
+  KernelFeatureMask kernel_features = shader_manager->get_kernel_features(this);
 
   const bool use_motion = need_motion() == Scene::MotionType::MOTION_BLUR;
   kernel_features |= KERNEL_FEATURE_PATH_TRACING;
@@ -631,7 +631,7 @@ void Scene::update_kernel_features()
   kernel_features |= integrator->get_kernel_features();
   kernel_features |= camera->get_kernel_features();
 
-  dscene.data.kernel_features = kernel_features.kernel;
+  dscene.data.integrator_features = kernel_features.integrator;
   dscene.data.node_features = kernel_features.nodes;
 
   /* Currently viewport render is faster with higher max_closures, needs
@@ -687,7 +687,7 @@ bool Scene::update_camera_resolution(Progress &progress, int width, int height)
   return update_data;
 }
 
-static void log_kernel_features(const KernelFeatures &features)
+static void log_kernel_features(const KernelFeatureMask &features)
 {
   LOG_INFO << "Requested features:";
   LOG_INFO << "Use BSDF " << string_from_bool(features & KERNEL_FEATURE_NODE_BSDF);
@@ -719,7 +719,7 @@ bool Scene::load_kernels(Progress &progress)
 
   const scoped_timer timer;
 
-  const KernelFeatures kernel_features = dscene.get_kernel_features();
+  const KernelFeatureMask kernel_features = dscene.get_kernel_features();
   log_kernel_features(kernel_features);
   if (!device->load_kernels(kernel_features)) {
     string message = device->error_message();

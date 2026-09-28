@@ -74,7 +74,7 @@ ccl_device void volume_stack_enter_exit(KernelGlobals kg,
   /* If we're using data constants, this fetch disappears.
    * On Apple GPUs, scenes without volumetric features can render 1 or 2% faster by dead-stripping
    * this function. */
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_VOLUME)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_VOLUME)) {
     return;
   }
 #  endif

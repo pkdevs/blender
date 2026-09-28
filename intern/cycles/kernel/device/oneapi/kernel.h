@@ -54,11 +54,11 @@ CYCLES_KERNEL_ONEAPI_EXPORT bool oneapi_enqueue_kernel(KernelContext *context,
                                                        const int kernel,
                                                        const size_t global_size,
                                                        const size_t local_size,
-                                                       const unsigned int kernel_features,
+                                                       const unsigned int integrator_features,
                                                        bool use_hardware_raytracing,
                                                        void **args);
 CYCLES_KERNEL_ONEAPI_EXPORT bool oneapi_load_kernels(SyclQueue *queue,
-                                                     const unsigned int kernel_features,
+                                                     const unsigned int integrator_features,
                                                      const unsigned int node_features,
                                                      bool use_hardware_raytracing);
 #  ifdef __cplusplus

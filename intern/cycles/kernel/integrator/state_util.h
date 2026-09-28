@@ -211,7 +211,7 @@ ccl_device_forceinline void integrator_state_write_volume_stack(IntegratorState 
 ccl_device_forceinline bool integrator_state_volume_stack_is_empty(KernelGlobals kg,
                                                                    ConstIntegratorState state)
 {
-  return (kernel_data.kernel_features & KERNEL_FEATURE_VOLUME) ?
+  return (kernel_data.integrator_features & KERNEL_FEATURE_VOLUME) ?
              INTEGRATOR_STATE_ARRAY(state, volume_stack, 0, shader) == SHADER_NONE :
              true;
 }
@@ -219,7 +219,7 @@ ccl_device_forceinline bool integrator_state_volume_stack_is_empty(KernelGlobals
 ccl_device_forceinline void integrator_state_copy_volume_stack_to_shadow(
     KernelGlobals kg, IntegratorShadowState shadow_state, ConstIntegratorState state)
 {
-  if (kernel_data.kernel_features & KERNEL_FEATURE_VOLUME) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_VOLUME) {
     int index = 0;
     int shader;
     do {
@@ -238,7 +238,7 @@ ccl_device_forceinline void integrator_state_copy_volume_stack(KernelGlobals kg,
                                                                IntegratorState to_state,
                                                                ConstIntegratorState state)
 {
-  if (kernel_data.kernel_features & KERNEL_FEATURE_VOLUME) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_VOLUME) {
     int index = 0;
     int shader;
     do {
@@ -264,7 +264,7 @@ integrator_state_read_shadow_volume_stack(ConstIntegratorShadowState state, cons
 ccl_device_forceinline bool integrator_state_shadow_volume_stack_is_empty(
     KernelGlobals kg, ConstIntegratorShadowState state)
 {
-  return (kernel_data.kernel_features & KERNEL_FEATURE_VOLUME) ?
+  return (kernel_data.integrator_features & KERNEL_FEATURE_VOLUME) ?
              INTEGRATOR_STATE_ARRAY(state, shadow_volume_stack, 0, shader) == SHADER_NONE :
              true;
 }

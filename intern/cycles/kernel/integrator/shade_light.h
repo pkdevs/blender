@@ -204,7 +204,7 @@ ccl_device ShaderEvalResult integrate_light_nee(KernelGlobals kg, IntegratorShad
 
   /* Probabilistic light termination.
    * Light threshold is only used without light tree. */
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_TREE)) {
     RNGState rng_state;
     shadow_path_state_rng_load(state, &rng_state);
     const float rand_terminate = path_state_rng_light_termination(kg, &rng_state);

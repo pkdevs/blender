@@ -198,7 +198,7 @@ ccl_device void shadow_linking_shade(KernelGlobals kg, IntegratorState state)
 
   const uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
 
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_PASSES) {
     /* The diffuse and glossy pass weights are written into the main path as part of the path
      * configuration at a surface bounce. */
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pass_diffuse_weight) = INTEGRATOR_STATE(

@@ -14,7 +14,7 @@ CCL_NAMESPACE_BEGIN
  * configuration. */
 ccl_device_forceinline bool shadow_linking_scene_need_shadow_ray(KernelGlobals kg)
 {
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_SHADOW_LINKING)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_SHADOW_LINKING)) {
     /* No shadow linking in the scene, so no need to trace any extra rays. */
     return false;
   }

@@ -726,7 +726,7 @@ ccl_device bool get_left_probability(KernelGlobals kg,
 
 ccl_device int light_tree_root_node_index(KernelGlobals kg, const int object_receiver)
 {
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_LINKING) {
     const uint receiver_light_set =
         (object_receiver != OBJECT_NONE) ?
             kernel_data_fetch(objects, object_receiver).receiver_light_set :

@@ -268,7 +268,7 @@ class Scene : public NodeOwner {
   void free_memory(bool final);
 
   bool kernels_loaded;
-  KernelFeatures loaded_kernel_features;
+  KernelFeatureMask loaded_kernel_features;
 
   void update_kernel_features();
 

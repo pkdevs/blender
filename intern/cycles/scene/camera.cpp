@@ -1074,9 +1074,9 @@ void Camera::clear_osl_camera(Scene *scene)
 #endif
 }
 
-KernelFeature Camera::get_kernel_features() const
+KernelIntegratorFeatureMask Camera::get_kernel_features() const
 {
-  KernelFeature kernel_features = KERNEL_FEATURE_NONE;
+  KernelIntegratorFeatureMask kernel_features = KERNEL_FEATURE_INTEGRATOR_NONE;
 
   if (!script_name.empty()) {
     kernel_features |= KERNEL_FEATURE_OSL_CAMERA;

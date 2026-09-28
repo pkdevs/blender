@@ -34,7 +34,7 @@ ccl_device_inline bool light_select_reached_max_bounces(KernelGlobals kg,
 ccl_device_inline int light_link_receiver_nee(KernelGlobals kg, const ccl_private ShaderData *sd)
 {
 #ifdef __LIGHT_LINKING__
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_LINKING)) {
     return OBJECT_NONE;
   }
 
@@ -47,7 +47,7 @@ ccl_device_inline int light_link_receiver_nee(KernelGlobals kg, const ccl_privat
 ccl_device_inline int light_link_receiver_forward(KernelGlobals kg, IntegratorState state)
 {
 #ifdef __LIGHT_LINKING__
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_LINKING)) {
     return OBJECT_NONE;
   }
 
@@ -62,7 +62,7 @@ ccl_device_inline bool light_link_object_match(KernelGlobals kg,
                                                const int emitter)
 {
 #ifdef __LIGHT_LINKING__
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_LINKING)) {
     return true;
   }
 
@@ -281,7 +281,7 @@ ccl_device_forceinline int lights_intersect_impl(KernelGlobals kg,
      * Those lights are handled via dedicated light intersect and shade kernels.
      * For the shadow path used for the dedicated light shading ignore all non-shadow-linked
      * lights. */
-    if (kernel_data.kernel_features & KERNEL_FEATURE_SHADOW_LINKING) {
+    if (kernel_data.integrator_features & KERNEL_FEATURE_SHADOW_LINKING) {
       if (is_main_path) {
         if (is_indirect_ray &&
             kernel_data_fetch(objects, object).shadow_set_membership != LIGHT_LINK_MASK_ALL)
@@ -345,7 +345,7 @@ ccl_device_forceinline int lights_intersect_impl(KernelGlobals kg,
     if (!is_main_path) {
       /* The non-main rays are only raced by the dedicated light kernel, after the shadow linking
        * feature check. */
-      kernel_assert(kernel_data.kernel_features & KERNEL_FEATURE_SHADOW_LINKING);
+      kernel_assert(kernel_data.integrator_features & KERNEL_FEATURE_SHADOW_LINKING);
 
       if ((isect->prim != PRIM_NONE) && (lcg_step_float(lcg_state) > 1.0f / num_hits)) {
         continue;

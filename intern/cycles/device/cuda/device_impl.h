@@ -39,7 +39,7 @@ class CUDADevice : public GPUDevice {
 
   static bool have_precompiled_kernels();
 
-  BVHLayoutMask get_bvh_layout_mask(const KernelFeatures & /*kernel_features*/) const override;
+  BVHLayoutMask get_bvh_layout_mask(const KernelFeatureMask & /*kernel_features*/) const override;
 
   void set_error(const string &error) override;
 
@@ -47,18 +47,18 @@ class CUDADevice : public GPUDevice {
 
   ~CUDADevice() override;
 
-  bool support_device(const KernelFeatures & /*kernel_features*/);
+  bool support_device(const KernelFeatureMask & /*kernel_features*/);
 
   bool check_peer_access(Device *peer_device) override;
 
   bool use_adaptive_compilation();
 
-  string compile_kernel_get_common_cflags(const KernelFeatures &kernel_features);
+  string compile_kernel_get_common_cflags(const KernelFeatureMask &kernel_features);
 
   string compile_kernel(const string &cflags, const char *name, bool optix = false);
 
-  bool load_kernels(const KernelFeatures &kernel_features) override;
-  void reserve_local_memory(const KernelFeatures &kernel_features);
+  bool load_kernels(const KernelFeatureMask &kernel_features) override;
+  void reserve_local_memory(const KernelFeatureMask &kernel_features);
 
   /* All memory types. */
   void mem_alloc(device_memory &mem) override;

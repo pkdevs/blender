@@ -2503,7 +2503,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
   bsdf_eval_mul(&phase_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight);
 
   /* Path termination for constant light shader. */
-  if (is_constant_light_shader && !(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
+  if (is_constant_light_shader && !(kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_TREE)) {
     const float terminate = path_state_rng_light_termination(kg, rng_state);
     if (light_sample_terminate(kg, &phase_eval, terminate)) {
       return;
@@ -2539,11 +2539,11 @@ ccl_device_forceinline void integrate_volume_direct_light(
   const Spectrum phase_sum = bsdf_eval_sum(&phase_eval);
   const Spectrum throughput_phase = throughput * phase_sum;
 
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_TREE)) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, bsdf_eval_average) = average(phase_sum);
   }
 
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_PASSES) {
     PackedSpectrum pass_diffuse_weight;
     PackedSpectrum pass_glossy_weight;
 
@@ -2594,7 +2594,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, lightgroup) = ls.group + 1;
 
 #  if defined(__PATH_GUIDING__)
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, unlit_throughput) = unlit_throughput;
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = INTEGRATOR_STATE(
         state, guiding, path_segment);
@@ -2630,7 +2630,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (kernel_data.integrator.use_guiding &&
-      (kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING))
+      (kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING))
   {
     label = volume_shader_phase_guided_sample(kg,
                                               state,
@@ -2693,7 +2693,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   const Spectrum throughput_phase = throughput * phase_weight;
   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput_phase;
 
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_PASSES) {
     if (INTEGRATOR_STATE(state, path, bounce) == 0) {
       INTEGRATOR_STATE_WRITE(state, path, pass_diffuse_weight) = one_spectrum();
       INTEGRATOR_STATE_WRITE(state, path, pass_glossy_weight) = zero_spectrum();
@@ -2708,7 +2708,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
       unguided_phase_pdf, INTEGRATOR_STATE(state, path, min_ray_pdf));
 
 #  ifdef __LIGHT_LINKING__
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_LINKING) {
     INTEGRATOR_STATE_WRITE(state, path, mis_ray_object) = sd->object;
   }
 #  endif
@@ -2786,7 +2786,7 @@ volume_integrate_event(KernelGlobals kg,
       }
 #    endif
 #    if PATH_GUIDING_LEVEL >= 4
-      if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+      if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
         volume_shader_prepare_guiding(
             kg, state, rand_phase_guiding, direct_P, ray->D, &result.direct_phases);
       }
@@ -2828,7 +2828,7 @@ volume_integrate_event(KernelGlobals kg,
     sd->P = ray->P + result.indirect_t * ray->D;
 
 #  if defined(__PATH_GUIDING__)
-    if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+    if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
 #    if PATH_GUIDING_LEVEL >= 1
       if (!guiding_generated_new_segment) {
         guiding_record_volume_segment(kg, state, sd->P, sd->wi);
@@ -2853,7 +2853,7 @@ volume_integrate_event(KernelGlobals kg,
   }
 #  if defined(__PATH_GUIDING__)
   /* No guiding if we don't scatter. */
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
     INTEGRATOR_STATE_WRITE(state, guiding, use_volume_guiding) = false;
   }
 #  endif

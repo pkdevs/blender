@@ -47,7 +47,7 @@ bool MetalDevice::is_device_cancelled(const int ID)
   return get_device_by_ID(ID, lock) == nullptr;
 }
 
-BVHLayoutMask MetalDevice::get_bvh_layout_mask(const KernelFeatures & /*kernel_features*/) const
+BVHLayoutMask MetalDevice::get_bvh_layout_mask(const KernelFeatureMask & /*kernel_features*/) const
 {
   return use_metalrt ? BVH_LAYOUT_METAL : BVH_LAYOUT_BVH2;
 }
@@ -313,7 +313,7 @@ void MetalDevice::prepare_residency()
 #  endif
 }
 
-bool MetalDevice::support_device(const KernelFeatures & /*kernel_features*/)
+bool MetalDevice::support_device(const KernelFeatureMask & /*kernel_features*/)
 {
   return true;
 }
@@ -336,13 +336,13 @@ bool MetalDevice::use_local_atomic_sort() const
 }
 
 string MetalDevice::preprocess_source(MetalPipelineType pso_type,
-                                      const KernelFeatures &kernel_features,
+                                      const KernelFeatureMask &kernel_features,
                                       string *source)
 {
   string global_defines;
   if (use_adaptive_compilation()) {
-    global_defines += "#define __KERNEL_FEATURES__ " + to_string(uint(kernel_features.kernel)) +
-                      "\n";
+    global_defines += "#define __KERNEL_INTEGRATOR_FEATURES__ " +
+                      to_string(uint(kernel_features.integrator)) + "\n";
     global_defines += "#define __KERNEL_NODE_FEATURES__ " +
                       to_string(uint(kernel_features.nodes)) + "\n";
   }
@@ -408,7 +408,7 @@ string MetalDevice::preprocess_source(MetalPipelineType pso_type,
 
       /* Replace feature memory fetches with function constants. */
       string_replace_same_length(
-          *source, "kernel_data.kernel_features", "kernel_data_kernel_features");
+          *source, "kernel_data.integrator_features", "kernel_data_integrator_features");
       string_replace_same_length(
           *source, "kernel_data.node_features", "kernel_data_node_features");
 
@@ -432,7 +432,7 @@ string MetalDevice::preprocess_source(MetalPipelineType pso_type,
   return md5.get_hex();
 }
 
-void MetalDevice::make_source(MetalPipelineType pso_type, const KernelFeatures &kernel_features)
+void MetalDevice::make_source(MetalPipelineType pso_type, const KernelFeatureMask &kernel_features)
 {
   string &source = this->source[pso_type];
   source = "\n#include \"kernel/device/metal/kernel.metal\"\n";
@@ -445,7 +445,7 @@ void MetalDevice::make_source(MetalPipelineType pso_type, const KernelFeatures &
   global_defines_md5[pso_type] = preprocess_source(pso_type, kernel_features, &source);
 }
 
-bool MetalDevice::load_kernels(const KernelFeatures &_kernel_features)
+bool MetalDevice::load_kernels(const KernelFeatureMask &_kernel_features)
 {
   @autoreleasepool {
     kernel_features |= _kernel_features;
@@ -518,8 +518,8 @@ void MetalDevice::refresh_source_and_kernels_md5(MetalPipelineType pso_type)
   }
   if (pso_type != PSO_GENERIC) {
     /* Include features since they are specialized but missed by the constant_values loop. */
-    md5.append(string_printf("kernel_features=%u,node_features=%u",
-                             uint(launch_params->data.kernel_features),
+    md5.append(string_printf("integrator_features=%u,node_features=%u",
+                             uint(launch_params->data.integrator_features),
                              uint(launch_params->data.node_features)));
   }
   kernels_md5[pso_type] = md5.get_hex();

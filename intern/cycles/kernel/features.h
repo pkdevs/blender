@@ -15,7 +15,7 @@ CCL_NAMESPACE_BEGIN
  * either for runtime checks or specialization.
  *
  * Shader node features and other kernel features are separate 32 bit types. Mixing them in
- * bitwise operations is a compile error. On the host they are combined in #KernelFeatures. */
+ * bitwise operations is a compile error. On the host they are combined in #KernelFeatureMask. */
 
 /* Bit positions, also used by the preprocessor for adaptive compilation. */
 #define KERNEL_FEATURE_NODE_BIT_BSDF 0
@@ -54,7 +54,7 @@ CCL_NAMESPACE_BEGIN
 #define KERNEL_FEATURE_BIT_GSPLATS 21
 
 /* Shader nodes, also used to specialize shader evaluation for kernels. */
-enum KernelNodeFeature : uint32_t {
+enum KernelNodeFeatureMask : uint32_t {
   KERNEL_FEATURE_NODE_NONE = 0U,
   KERNEL_FEATURE_NODE_BSDF = (1U << KERNEL_FEATURE_NODE_BIT_BSDF),
   KERNEL_FEATURE_NODE_EMISSION = (1U << KERNEL_FEATURE_NODE_BIT_EMISSION),
@@ -93,8 +93,8 @@ enum KernelNodeFeature : uint32_t {
   KERNEL_FEATURE_NODE_MASK_BUMP = KERNEL_FEATURE_NODE_MASK_DISPLACEMENT,
 };
 
-enum KernelFeature : uint32_t {
-  KERNEL_FEATURE_NONE = 0U,
+enum KernelIntegratorFeatureMask : uint32_t {
+  KERNEL_FEATURE_INTEGRATOR_NONE = 0U,
 
   /* Use path tracing kernels. */
   KERNEL_FEATURE_PATH_TRACING = (1U << KERNEL_FEATURE_BIT_PATH_TRACING),
@@ -153,8 +153,8 @@ enum KernelFeature : uint32_t {
   KERNEL_FEATURE_GSPLATS = (1U << KERNEL_FEATURE_BIT_GSPLATS),
 };
 
-CCL_ENUM_OPERATORS(KernelNodeFeature, uint32_t)
-CCL_ENUM_OPERATORS(KernelFeature, uint32_t)
+CCL_ENUM_OPERATORS(KernelNodeFeatureMask, uint32_t)
+CCL_ENUM_OPERATORS(KernelIntegratorFeatureMask, uint32_t)
 
 #define IF_KERNEL_NODES_FEATURE(feature) \
   if constexpr ((node_feature_mask & (KERNEL_FEATURE_NODE_##feature)) != 0U)
@@ -214,55 +214,55 @@ CCL_ENUM_OPERATORS(KernelFeature, uint32_t)
 
 /* Scene-based adaptive features compilation.
  *
- * __KERNEL_FEATURES__ and __KERNEL_NODE_FEATURES__ are then defined as
+ * __KERNEL_INTEGRATOR_FEATURES__ and __KERNEL_NODE_FEATURES__ are then defined as
  * integers to indicate the features used. */
 
-#ifdef __KERNEL_FEATURES__
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_OBJECT_MOTION))
+#ifdef __KERNEL_INTEGRATOR_FEATURES__
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_OBJECT_MOTION))
 #    undef __OBJECT_MOTION__
 #  endif
-#  if !(__KERNEL_FEATURES__ & \
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & \
         ((1U << KERNEL_FEATURE_BIT_HAIR_RIBBON) | (1U << KERNEL_FEATURE_BIT_HAIR_THICK)))
 #    undef __HAIR__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_POINTCLOUD))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_POINTCLOUD))
 #    undef __POINTCLOUD__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_VOLUME))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_VOLUME))
 #    undef __VOLUME__
-#    if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_TRANSPARENT))
+#    if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_TRANSPARENT))
 #      undef __TRANSPARENT_SHADOWS__
 #    endif
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SUBSURFACE))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SUBSURFACE))
 #    undef __SUBSURFACE__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SHADOW_CATCHER))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SHADOW_CATCHER))
 #    undef __SHADOW_CATCHER__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_DENOISING))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_DENOISING))
 #    undef __DENOISING_FEATURES__
 #  endif
-#  if !(__KERNEL_FEATURES__ & \
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & \
         ((1U << KERNEL_FEATURE_BIT_AO_PASS) | (1U << KERNEL_FEATURE_BIT_AO_ADDITIVE)))
 #    undef __AO__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_MNEE))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_MNEE))
 #    undef __MNEE__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_PATH_GUIDING))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_PATH_GUIDING))
 #    undef __PATH_GUIDING__
 #  endif
 #  if !(__KERNEL_NODE_FEATURES__ & (1U << KERNEL_FEATURE_NODE_BIT_PRINCIPLED_HAIR))
 #    undef __PRINCIPLED_HAIR__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_LIGHT_LINKING))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_LIGHT_LINKING))
 #    undef __LIGHT_LINKING__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SHADOW_LINKING))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SHADOW_LINKING))
 #    undef __SHADOW_LINKING__
 #  endif
-#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_GSPLATS))
+#  if !(__KERNEL_INTEGRATOR_FEATURES__ & (1U << KERNEL_FEATURE_BIT_GSPLATS))
 #    undef __GSPLATS__
 #  endif
 #endif
@@ -281,50 +281,51 @@ CCL_ENUM_OPERATORS(KernelFeature, uint32_t)
 
 /* Kernel and shader node features combined, for host side code. */
 
-struct KernelFeatures {
-  KernelFeature kernel = KERNEL_FEATURE_NONE;
-  KernelNodeFeature nodes = KERNEL_FEATURE_NODE_NONE;
+struct KernelFeatureMask {
+  KernelIntegratorFeatureMask integrator = KERNEL_FEATURE_INTEGRATOR_NONE;
+  KernelNodeFeatureMask nodes = KERNEL_FEATURE_NODE_NONE;
 
-  KernelFeatures() = default;
-  KernelFeatures(const KernelFeature kernel) : kernel(kernel) {}
-  KernelFeatures(const KernelNodeFeature nodes) : nodes(nodes) {}
-  KernelFeatures(const KernelFeature kernel, const KernelNodeFeature nodes)
-      : kernel(kernel), nodes(nodes)
+  KernelFeatureMask() = default;
+  KernelFeatureMask(const KernelIntegratorFeatureMask integrator) : integrator(integrator) {}
+  KernelFeatureMask(const KernelNodeFeatureMask nodes) : nodes(nodes) {}
+  KernelFeatureMask(const KernelIntegratorFeatureMask integrator,
+                    const KernelNodeFeatureMask nodes)
+      : integrator(integrator), nodes(nodes)
   {
   }
 
-  KernelFeature operator&(const KernelFeature mask) const
+  KernelIntegratorFeatureMask operator&(const KernelIntegratorFeatureMask mask) const
   {
-    return kernel & mask;
+    return integrator & mask;
   }
-  KernelNodeFeature operator&(const KernelNodeFeature mask) const
+  KernelNodeFeatureMask operator&(const KernelNodeFeatureMask mask) const
   {
     return nodes & mask;
   }
-  KernelFeatures operator&(const KernelFeatures &mask) const
+  KernelFeatureMask operator&(const KernelFeatureMask &mask) const
   {
-    return {kernel & mask.kernel, nodes & mask.nodes};
+    return {integrator & mask.integrator, nodes & mask.nodes};
   }
-  KernelFeatures operator|(const KernelFeatures &other) const
+  KernelFeatureMask operator|(const KernelFeatureMask &other) const
   {
-    return {kernel | other.kernel, nodes | other.nodes};
+    return {integrator | other.integrator, nodes | other.nodes};
   }
-  KernelFeatures &operator|=(const KernelFeatures &other)
+  KernelFeatureMask &operator|=(const KernelFeatureMask &other)
   {
     return *this = *this | other;
   }
 
-  bool operator==(const KernelFeatures &other) const
+  bool operator==(const KernelFeatureMask &other) const
   {
-    return kernel == other.kernel && nodes == other.nodes;
+    return integrator == other.integrator && nodes == other.nodes;
   }
-  bool operator!=(const KernelFeatures &other) const
+  bool operator!=(const KernelFeatureMask &other) const
   {
     return !(*this == other);
   }
   explicit operator bool() const
   {
-    return kernel != KERNEL_FEATURE_NONE || nodes != KERNEL_FEATURE_NODE_NONE;
+    return integrator != KERNEL_FEATURE_INTEGRATOR_NONE || nodes != KERNEL_FEATURE_NODE_NONE;
   }
 };
 
@@ -332,13 +333,16 @@ struct KernelFeatures {
  * certain features are on or off. */
 
 struct KernelFeatureRequest {
-  KernelFeatures on;
-  KernelFeatures off;
+  KernelFeatureMask on;
+  KernelFeatureMask off;
 
-  explicit KernelFeatureRequest(const KernelFeatures &on) : on(on) {}
-  KernelFeatureRequest(const KernelFeatures &on, const KernelFeatures &off) : on(on), off(off) {}
+  explicit KernelFeatureRequest(const KernelFeatureMask &on) : on(on) {}
+  KernelFeatureRequest(const KernelFeatureMask &on, const KernelFeatureMask &off)
+      : on(on), off(off)
+  {
+  }
 
-  bool test(const KernelFeatures &features) const
+  bool test(const KernelFeatureMask &features) const
   {
     return (features & on) && !(features & off);
   }

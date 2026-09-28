@@ -279,7 +279,7 @@ ccl_device_inline bool intersection_skip_shadow_link(KernelGlobals kg,
                                                      const int isect_object)
 {
 #ifdef __SHADOW_LINKING__
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_SHADOW_LINKING)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_SHADOW_LINKING)) {
     return false;
   }
 

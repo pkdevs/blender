@@ -435,7 +435,7 @@ ccl_device_inline void film_write_emission_or_background_pass(
      * compositing back together of the combined pass. */
     return;
   }
-  else if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+  else if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_PASSES) {
     if (path_flag & PATH_RAY_SURFACE_PASS) {
       /* Indirectly visible through reflection. */
       const Spectrum diffuse_weight = INTEGRATOR_STATE(state, path, pass_diffuse_weight);
@@ -502,12 +502,12 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
 
   /* Ambient occlusion. */
   if (path_flag & PATH_RAY_SHADOW_FOR_AO) {
-    if ((kernel_data.kernel_features & KERNEL_FEATURE_AO_PASS) &&
+    if ((kernel_data.integrator_features & KERNEL_FEATURE_AO_PASS) &&
         (path_visibility & PATH_RAY_VISIBILITY_CAMERA))
     {
       film_write_pass_spectrum(buffer + kernel_data.film.pass_ao, contribution);
     }
-    if (kernel_data.kernel_features & KERNEL_FEATURE_AO_ADDITIVE) {
+    if (kernel_data.integrator_features & KERNEL_FEATURE_AO_ADDITIVE) {
       const Spectrum ao_weight = INTEGRATOR_STATE(state, shadow_path, unshadowed_throughput);
       film_write_combined_pass(
           kg, path_visibility, path_flag, sample, contribution * ao_weight, buffer);
@@ -535,7 +535,7 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
                                contribution);
     }
 
-    if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+    if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_PASSES) {
       int pass_offset = PASS_UNUSED;
 
       if (path_flag & PATH_RAY_SURFACE_PASS) {

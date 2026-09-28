@@ -811,9 +811,9 @@ void Film::finalize_passes(Scene *scene, const bool use_denoise)
   scene->passes = std::move(new_passes);
 }
 
-KernelFeature Film::get_kernel_features(const Scene *scene) const
+KernelIntegratorFeatureMask Film::get_kernel_features(const Scene *scene) const
 {
-  KernelFeature kernel_features = KERNEL_FEATURE_NONE;
+  KernelIntegratorFeatureMask kernel_features = KERNEL_FEATURE_INTEGRATOR_NONE;
 
   for (const Pass *pass : scene->passes) {
     if (!pass->is_written()) {

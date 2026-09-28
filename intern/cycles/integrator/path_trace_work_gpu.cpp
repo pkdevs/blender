@@ -20,7 +20,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-static size_t estimate_single_state_size(const KernelFeatures &kernel_features)
+static size_t estimate_single_state_size(const KernelFeatureMask &kernel_features)
 {
   size_t state_size = 0;
 
@@ -117,7 +117,7 @@ void PathTraceWorkGPU::alloc_integrator_soa()
    * Note that both disabling and enabling features may require memory
    * allocations, so we check for equality. */
   const int requested_volume_stack_size = device_scene_->data.volume_stack_size;
-  const KernelFeatures kernel_features = device_scene_->get_kernel_features();
+  const KernelFeatureMask kernel_features = device_scene_->get_kernel_features();
   if (integrator_state_soa_kernel_features_ == kernel_features &&
       integrator_state_soa_volume_stack_size_ >= requested_volume_stack_size)
   {
@@ -209,6 +209,7 @@ void PathTraceWorkGPU::alloc_integrator_soa()
 
   bool shadow = false;
 #include "kernel/integrator/state_template.h"
+
   shadow = true;
 #include "kernel/integrator/shadow_state_template.h"
 
@@ -1362,7 +1363,7 @@ bool PathTraceWorkGPU::kernel_creates_shadow_paths(DeviceKernel kernel)
 
 bool PathTraceWorkGPU::kernel_creates_ao_paths(DeviceKernel kernel)
 {
-  return (device_scene_->data.kernel_features & KERNEL_FEATURE_AO) &&
+  return (device_scene_->data.integrator_features & KERNEL_FEATURE_AO) &&
          (kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE);
 }

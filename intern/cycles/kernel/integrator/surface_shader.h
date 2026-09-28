@@ -415,7 +415,7 @@ ccl_device_inline
   }
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
     if (pdf > 0.0f && INTEGRATOR_STATE(state, guiding, use_surface_guiding)) {
       const float guiding_sampling_prob = INTEGRATOR_STATE(
           state, guiding, surface_guiding_sampling_prob);
@@ -1251,7 +1251,7 @@ ccl_device Spectrum surface_shader_apply_holdout(ccl_private ShaderData *sd)
 
 /* Surface Evaluation */
 
-template<KernelNodeFeature node_feature_mask, typename ConstIntegratorGenericState>
+template<KernelNodeFeatureMask node_feature_mask, typename ConstIntegratorGenericState>
 ccl_device void surface_shader_eval(KernelGlobals kg,
                                     ConstIntegratorGenericState state,
                                     ccl_private ShaderData *ccl_restrict sd,
@@ -1281,7 +1281,7 @@ ccl_device void surface_shader_eval(KernelGlobals kg,
   sd->closure_transparent_extinction = zero_spectrum();
 
 #ifdef __OSL__
-  if (kernel_data.kernel_features & KERNEL_FEATURE_OSL_SHADING) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_OSL_SHADING) {
     osl_eval_nodes<SHADER_TYPE_SURFACE>(kg, state, sd, path_visibility, path_flag);
   }
   else

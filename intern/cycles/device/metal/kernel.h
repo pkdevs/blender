@@ -72,7 +72,7 @@ class MetalKernelPipeline {
 
   KernelData kernel_data_;
   bool use_metalrt;
-  KernelFeatures kernel_features;
+  KernelFeatureMask kernel_features;
 
   int threads_per_threadgroup;
 

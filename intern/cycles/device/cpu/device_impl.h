@@ -61,7 +61,7 @@ class CPUDevice : public Device {
   CPUDevice(const DeviceInfo &info_, Stats &stats_, Profiler &profiler_, bool headless_);
   ~CPUDevice() override;
 
-  BVHLayoutMask get_bvh_layout_mask(const KernelFeatures & /*kernel_features*/) const override;
+  BVHLayoutMask get_bvh_layout_mask(const KernelFeatureMask & /*kernel_features*/) const override;
 
   void mem_alloc(device_memory &mem) override;
   void mem_copy_to(device_memory &mem) override;
@@ -95,7 +95,7 @@ class CPUDevice : public Device {
                             KernelImageLoadRequestedGPU image_load_requested_gpu) override;
 
  protected:
-  bool load_kernels(const KernelFeatures & /*kernel_features*/) override;
+  bool load_kernels(const KernelFeatureMask & /*kernel_features*/) override;
 };
 
 CCL_NAMESPACE_END

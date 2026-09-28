@@ -7,7 +7,7 @@ enum {
 #define KERNEL_STRUCT_MEMBER(parent, type, name) KernelData_##parent##_##name,
 #include "kernel/data_template.h"
 
-  KernelData_kernel_features,
+  KernelData_integrator_features,
   KernelData_node_features,
 };
 
@@ -17,8 +17,10 @@ enum {
         [[function_constant(KernelData_##parent##_##name)]];
 #  include "kernel/data_template.h"
 
-constant uint kernel_data_kernel_features_value [[function_constant(KernelData_kernel_features)]];
+constant uint kernel_data_integrator_features_value
+    [[function_constant(KernelData_integrator_features)]];
 constant uint kernel_data_node_features_value [[function_constant(KernelData_node_features)]];
-#  define kernel_data_kernel_features KernelFeature(kernel_data_kernel_features_value)
-#  define kernel_data_node_features KernelNodeFeature(kernel_data_node_features_value)
+#  define kernel_data_integrator_features \
+    KernelIntegratorFeatureMask(kernel_data_integrator_features_value)
+#  define kernel_data_node_features KernelNodeFeatureMask(kernel_data_node_features_value)
 #endif

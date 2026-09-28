@@ -30,7 +30,7 @@ class Progress;
 class CPUKernels;
 class Scene;
 
-struct KernelFeatures;
+struct KernelFeatureMask;
 struct OSLGlobals;
 struct ThreadKernelGlobalsCPU;
 
@@ -187,7 +187,7 @@ class Device {
     return !error_message().empty();
   }
   virtual void set_error(const string &error);
-  virtual BVHLayoutMask get_bvh_layout_mask(const KernelFeatures &kernel_features) const = 0;
+  virtual BVHLayoutMask get_bvh_layout_mask(const KernelFeatureMask &kernel_features) const = 0;
 
   /* statistics */
   Stats &stats;
@@ -198,7 +198,7 @@ class Device {
   virtual void const_copy_to(const char *name, void *host, const size_t size) = 0;
 
   /* load/compile kernels, must be called before adding tasks */
-  virtual bool load_kernels(const KernelFeatures & /*kernel_features*/)
+  virtual bool load_kernels(const KernelFeatureMask & /*kernel_features*/)
   {
     return true;
   }

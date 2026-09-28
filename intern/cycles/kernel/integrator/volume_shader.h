@@ -231,7 +231,7 @@ ccl_device float volume_shader_phase_eval(ccl_attr_maybe_unused KernelGlobals kg
   float pdf = _volume_shader_phase_eval_mis(sd, phases, wo, nullptr, phase_eval, 0.0f, 0.0f);
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
     if (INTEGRATOR_STATE(state, guiding, use_volume_guiding)) {
       const float guiding_sampling_prob = INTEGRATOR_STATE(
           state, guiding, volume_guiding_sampling_prob);
@@ -439,7 +439,7 @@ ccl_device_inline void volume_shader_motion_blur(KernelGlobals kg,
 /* Volume Evaluation */
 
 template<const bool shadow,
-         const KernelNodeFeature node_feature_mask,
+         const KernelNodeFeatureMask node_feature_mask,
          typename ConstIntegratorGenericState>
 ccl_device_inline bool volume_shader_eval_entry(KernelGlobals kg,
                                                 ConstIntegratorGenericState state,
@@ -482,7 +482,7 @@ ccl_device_inline bool volume_shader_eval_entry(KernelGlobals kg,
 
   /* Evaluate shader. */
 #  ifdef __OSL__
-  if (kernel_data.kernel_features & KERNEL_FEATURE_OSL_SHADING) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_OSL_SHADING) {
     osl_eval_nodes<SHADER_TYPE_VOLUME>(kg, state, sd, path_visibility, path_flag);
   }
   else

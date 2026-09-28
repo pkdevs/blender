@@ -139,7 +139,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
 #ifdef __SHADOW_LINKING__
   /* Indirect emission of shadow-linked emissive surfaces is done via shadow rays to dedicated
    * light sources. */
-  if (kernel_data.kernel_features & KERNEL_FEATURE_SHADOW_LINKING) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_SHADOW_LINKING) {
     if (!(path_visibility & PATH_RAY_VISIBILITY_CAMERA) &&
         kernel_data_fetch(objects, sd->object).shadow_set_membership != LIGHT_LINK_MASK_ALL)
     {
@@ -247,7 +247,7 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
   const Spectrum unlit_throughput = INTEGRATOR_STATE(state, path, throughput);
   const Spectrum throughput = unlit_throughput * bsdf_spectrum;
 
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_TREE)) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, bsdf_eval_average) = average(bsdf_spectrum);
   }
 
@@ -299,7 +299,7 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, lightgroup) = light_group + 1;
 
 #if defined(__PATH_GUIDING__)
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING)) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, unlit_throughput) = unlit_throughput;
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = INTEGRATOR_STATE(
         state, guiding, path_segment);
@@ -312,7 +312,7 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
 
 /* Path tracing: sample point on light and evaluate light shader, then
  * queue shadow ray to be traced. */
-template<KernelNodeFeature node_feature_mask>
+template<KernelNodeFeatureMask node_feature_mask>
 #if defined(__KERNEL_HIP__)
 /* Inlining the function makes gfx1102 crash rendering principled_bsdf_bevel_emission_137420.blend
  * using SDK 7.2.1. */
@@ -338,7 +338,7 @@ ccl_device
   int mnee_vertex_count = 0;  // NOLINT
 
 #ifdef __MNEE__
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_MNEE) &&
       (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
   {
     /* MNEE already sampled a light and caustics casters. */
@@ -382,7 +382,7 @@ ccl_device
 #ifdef __MNEE__
   /* On a caustic caster, a caustic light's contribution is delivered to receivers by
    * MNEE and does not need to be computed again here. */
-  if (kernel_data.kernel_features & KERNEL_FEATURE_MNEE) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_MNEE) {
     if (mnee_vertex_count == 0 && is_transmission &&
         (sd->object_flag & SD_OBJECT_CAUSTICS_CASTER) && ls.type != LIGHT_TRIANGLE &&
         kernel_data_fetch(lights, ls.prim).use_caustics)
@@ -423,7 +423,8 @@ ccl_device
     bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight);
 
     /* Path termination for constant light shader. */
-    if (is_constant_light_shader && !(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
+    if (is_constant_light_shader && !(kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_TREE))
+    {
       const float terminate = path_state_rng_light_termination(kg, rng_state);
       if (light_sample_terminate(kg, &bsdf_eval, terminate)) {
         return SHADER_EVAL_EMPTY;
@@ -467,7 +468,7 @@ ccl_device
 
   uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
 
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_PASSES) {
     PackedSpectrum pass_diffuse_weight;
     PackedSpectrum pass_glossy_weight;
 
@@ -534,7 +535,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (kernel_data.integrator.use_surface_guiding &&
-      (kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING))
+      (kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING))
   {
     label = surface_shader_bsdf_guided_sample_closure(kg,
                                                       state,
@@ -604,7 +605,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   const Spectrum bsdf_weight = bsdf_eval_sum(&bsdf_eval) / bsdf_pdf;
   INTEGRATOR_STATE_WRITE(state, path, throughput) *= bsdf_weight;
 
-  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_PASSES) {
     if (INTEGRATOR_STATE(state, path, bounce) == 0) {
       INTEGRATOR_STATE_WRITE(state, path, pass_diffuse_weight) = bsdf_eval_pass_diffuse_weight(
           &bsdf_eval);
@@ -621,7 +622,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
     INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = fminf(unguided_bsdf_pdf, min_ray_pdf);
 
 #ifdef __LIGHT_LINKING__
-    if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING) {
+    if (kernel_data.integrator_features & KERNEL_FEATURE_LIGHT_LINKING) {
       INTEGRATOR_STATE_WRITE(state, path, mis_ray_object) = sd->object;
     }
 #endif
@@ -683,7 +684,7 @@ ccl_device_forceinline void integrate_surface_ao(KernelGlobals kg,
   const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
 
-  if (!(kernel_data.kernel_features & KERNEL_FEATURE_AO_ADDITIVE) &&
+  if (!(kernel_data.integrator_features & KERNEL_FEATURE_AO_ADDITIVE) &&
       !(path_visibility & PATH_RAY_VISIBILITY_CAMERA))
   {
     return;
@@ -758,13 +759,13 @@ ccl_device_forceinline void integrate_surface_ao(KernelGlobals kg,
       state, path, volume_bounds_bounce);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, throughput) = throughput;
 
-  if (kernel_data.kernel_features & KERNEL_FEATURE_AO_ADDITIVE) {
+  if (kernel_data.integrator_features & KERNEL_FEATURE_AO_ADDITIVE) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, unshadowed_throughput) = ao_weight;
   }
 }
 #endif /* defined(__AO__) */
 
-template<KernelNodeFeature node_feature_mask>
+template<KernelNodeFeatureMask node_feature_mask>
 ccl_device int integrate_surface(KernelGlobals kg,
                                  IntegratorState state,
                                  ccl_global float *ccl_restrict render_buffer)
@@ -858,7 +859,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
     path_state_rng_load(state, &rng_state);
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-    if (kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING) {
+    if (kernel_data.integrator_features & KERNEL_FEATURE_PATH_GUIDING) {
       surface_shader_prepare_guiding(kg, state, &sd, &rng_state);
       guiding_write_debug_passes(kg, state, &sd, render_buffer);
     }
@@ -873,7 +874,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
 
 #if defined(__AO__)
     /* Ambient occlusion pass. */
-    if (kernel_data.kernel_features & KERNEL_FEATURE_AO) {
+    if (kernel_data.integrator_features & KERNEL_FEATURE_AO) {
       PROFILING_EVENT(PROFILING_SHADE_SURFACE_AO);
       integrate_surface_ao(kg, state, &sd, &rng_state);
     }
@@ -917,8 +918,8 @@ ccl_device_forceinline void integrator_shade_surface_next_kernel(IntegratorState
   }
 }
 
-template<KernelNodeFeature node_feature_mask = KERNEL_FEATURE_NODE_MASK_SURFACE &
-                                               ~KERNEL_FEATURE_NODE_RAYTRACE,
+template<KernelNodeFeatureMask node_feature_mask = KERNEL_FEATURE_NODE_MASK_SURFACE &
+                                                   ~KERNEL_FEATURE_NODE_RAYTRACE,
          DeviceKernel current_kernel = DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE>
 ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
                                                      IntegratorState state,
@@ -932,7 +933,7 @@ ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
 
 #ifdef __MNEE__
   /* Cleanup MNEE flag and shadow path if it was not reused for shadow trace. */
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
+  if ((kernel_data.integrator_features & KERNEL_FEATURE_MNEE) &&
       (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
   {
     INTEGRATOR_STATE_WRITE(state, path, mnee) &= ~PATH_MNEE_SAMPLED;
