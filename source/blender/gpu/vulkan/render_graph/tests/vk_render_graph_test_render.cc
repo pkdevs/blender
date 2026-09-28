@@ -6,6 +6,8 @@
 
 #include "vk_render_graph_test_types.hh"
 
+#include <iostream>
+
 namespace blender::gpu::render_graph {
 
 class VKRenderGraphTestRender : public VKRenderGraphTest_P {};
@@ -466,6 +468,12 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
   {
     VKEndRenderingNode::CreateInfo end_rendering = {};
     render_graph->add_node(end_rendering);
+  }
+
+  if (use_dynamic_rendering_local_read) {
+  for (const int64_t index : log.index_range()) {
+    std::cout << index << ": " << log[index] << '\n';
+  }
   }
 
   submit(render_graph, command_buffer);
