@@ -49,11 +49,6 @@ void TreeElementModifierBase::expand(SpaceOutliner & /*space_outliner*/) const
 
     add_element<TreeElementModifier>({.index = index}, object_, md_store);
   }
-  for (const auto [index, md] : object_.greasepencil_modifiers.enumerate()) {
-    ModifierDataStoreElem md_store(&md);
-
-    add_element<TreeElementModifier>({.index = index}, object_, md_store);
-  }
 }
 
 TreeElementModifier::TreeElementModifier(TreeElement &legacy_te,
@@ -64,10 +59,6 @@ TreeElementModifier::TreeElementModifier(TreeElement &legacy_te,
   if (md_.type == MODIFIER_TYPE) {
     legacy_te.name = md_.md->name;
     legacy_te.directdata = md_.md;
-  }
-  if (md_.type == GPENCIL_MODIFIER_TYPE) {
-    legacy_te.name = md_.gp_md->name;
-    legacy_te.directdata = md_.gp_md;
   }
 }
 
@@ -112,18 +103,6 @@ void TreeElementModifier::expand(SpaceOutliner & /*space_outliner*/) const
       }
     }
     RNA_PROP_END;
-  }
-  if (md_.type == GPENCIL_MODIFIER_TYPE) {
-    GpencilModifierData *md = md_.gp_md;
-    if (md->type == eGpencilModifierType_Armature) {
-      add_linked_object((reinterpret_cast<ArmatureGpencilModifierData *>(md))->object);
-    }
-    else if (md->type == eGpencilModifierType_Hook) {
-      add_linked_object((reinterpret_cast<HookGpencilModifierData *>(md))->object);
-    }
-    else if (md->type == eGpencilModifierType_Lattice) {
-      add_linked_object((reinterpret_cast<LatticeGpencilModifierData *>(md))->object);
-    }
   }
 }
 
