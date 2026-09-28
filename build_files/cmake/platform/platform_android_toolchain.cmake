@@ -8,11 +8,6 @@
 # ----------------------------------------------------------------------------
 # Android NDK discovery
 
-# Buildling for Android is only supported on macOS and Linux.
-if(NOT (CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"))
-  message(FATAL_ERROR "Building for Android isn't supported on host ${CMAKE_HOST_SYSTEM_NAME}.")
-endif()
-
 # May be set explicitly by setting ANDROID_NDK_ROOT. Otherwise we try to infer the most
 # recent NDK version installed on the host from default paths.
 if(NOT DEFINED ANDROID_NDK_ROOT)
@@ -21,6 +16,8 @@ if(NOT DEFINED ANDROID_NDK_ROOT)
     set(_android_sdk_dir "$ENV{ANDROID_HOME}")
   elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
     set(_android_sdk_dir "$ENV{HOME}/Library/Android/sdk")
+  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+    set(_android_sdk_dir "$ENV{LOCALAPPDATA}/Android/Sdk")
   else()
     set(_android_sdk_dir "$ENV{HOME}/Android/Sdk")
   endif()
