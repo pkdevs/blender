@@ -5062,12 +5062,10 @@ static void uv_select_flush_from_loop_edge_flag(const Scene *scene, BMesh *bm)
       BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
         bool select_all = true;
         BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
-          if (uvedit_edge_select_get_no_sync(ts, bm, l)) {
-            uvedit_vert_select_set_no_sync(ts, bm, l, true);
-            uvedit_vert_select_set_no_sync(ts, bm, l->next, true);
-          }
-          else if (!uvedit_edge_select_get_no_sync(ts, bm, l->prev)) {
-            uvedit_vert_select_set_no_sync(ts, bm, l->next, false);
+          const bool edge_select = uvedit_edge_select_get_no_sync(ts, bm, l);
+          uvedit_vert_select_set_no_sync(
+              ts, bm, l, edge_select || uvedit_edge_select_get_no_sync(ts, bm, l->prev));
+          if (!edge_select) {
             select_all = false;
           }
         }
@@ -7494,51 +7492,18 @@ void ED_uvedit_selectmode_clean(const Scene *scene, Object *obedit)
   const ToolSettings *ts = scene->toolsettings;
   BLI_assert((ts->uv_flag & UV_FLAG_SELECT_SYNC) == 0);
   BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
-  char sticky = ts->uv_sticky;
 
   uvedit_select_prepare_custom_data(scene, bm);
-  const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
-  BMFace *efa;
-  BMLoop *l;
-  BMIter iter, liter;
 
   if (ts->uv_selectmode == UV_SELECT_VERT) {
-    /* Vertex mode. */
-    if (sticky != UV_STICKY_DISABLE) {
-      bm_loop_tags_clear(bm);
-      BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
-        if (!uvedit_face_visible_test(scene, efa)) {
-          continue;
-        }
-        BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
-          if (uvedit_uv_select_test(scene, bm, l, offsets)) {
-            BM_elem_flag_enable(l, BM_ELEM_TAG);
-          }
-        }
-      }
-      uv_select_flush_from_tag_loop(scene, obedit, true);
-    }
   }
-
   else if (ts->uv_selectmode == UV_SELECT_EDGE) {
-    /* Edge mode. */
-    if (sticky != UV_STICKY_DISABLE) {
-      BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
-        if (!uvedit_face_visible_test(scene, efa)) {
-          continue;
-        }
-        BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
-          if (uvedit_edge_select_test(scene, bm, l, offsets)) {
-            uvedit_edge_select_set_noflush(scene, bm, l, true, sticky, offsets);
-          }
-        }
-      }
-    }
     uv_select_flush_from_loop_edge_flag(scene, bm);
   }
-
   else if (ts->uv_selectmode == UV_SELECT_FACE) {
-    /* Face mode. */
+    /* Face mode: keep the UV face selection, edges & UV's are derived from the faces. */
+    BMFace *efa;
+    BMIter iter;
     BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
       BM_elem_flag_disable(efa, BM_ELEM_TAG);
       if (uvedit_face_visible_test(scene, efa)) {

@@ -306,6 +306,41 @@ static bool uvselect_face_check_edges_all(BMFace *f, const bool mirrored)
                     BM_face_uvselect_check_edges_all(f);
 }
 
+/**
+ * Accumulate the regular & mirrored selection of the elements an edge (verts)
+ * or a face (edges) is made up of, to calculate its selection when flushing.
+ *
+ * Matches the rules used when flushing the mesh selection
+ * (see `bm_mesh_select_mode_flush_vert_to_edge_iter_fn` & `..._edge_to_face_iter_fn`),
+ * where an element made up of a mix of regular & mirror selected elements is regular selected.
+ */
+struct UVSelectFlushMix {
+  bool covered = true;
+  bool all_select = true;
+  bool all_mirrored = true;
+  bool any_pure_select = false;
+  bool any_pure_mirror = false;
+
+  void add(const bool select, const bool mirrored)
+  {
+    covered &= (select || mirrored);
+    all_select &= select;
+    all_mirrored &= mirrored;
+    any_pure_select |= (select && !mirrored);
+    any_pure_mirror |= (mirrored && !select);
+  }
+
+  bool face_select() const
+  {
+    return any_pure_select && (all_select || (covered && any_pure_mirror));
+  }
+
+  bool edge_select() const
+  {
+    return (all_select && all_mirrored) || face_select();
+  }
+};
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1386,27 +1421,28 @@ void BM_mesh_uvselect_flush_from_loop_verts(BMesh *bm)
       continue;
     }
 
-    bool select_all = true;
-    bool mirrored_all = true;
+    UVSelectFlushMix face_mix;
+    bool all_verts_mirrored = true;
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      const bool select = (BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV) &&
-                           BM_elem_flag_test(l_iter->next, BM_ELEM_SELECT_UV));
-      BM_loop_edge_uvselect_set_noflush(bm, l_iter, select);
-      if (select == false) {
-        select_all = false;
+      UVSelectFlushMix edge_mix;
+      for (const BMLoop *l_edge_vert : {l_iter, l_iter->next}) {
+        edge_mix.add(BM_elem_flag_test(l_edge_vert, BM_ELEM_SELECT_UV),
+                     BM_elem_flag_test(l_edge_vert, BM_ELEM_MIRRORED_SELECT_UV));
       }
-
-      const bool mirrored = (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV) &&
-                             BM_elem_flag_test(l_iter->next, BM_ELEM_MIRRORED_SELECT_UV));
+      const bool select = edge_mix.edge_select();
+      const bool mirrored = edge_mix.all_mirrored;
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, select);
       BM_loop_edge_uvselect_set_noflush(bm, l_iter, mirrored, true);
-      if (mirrored == false) {
-        mirrored_all = false;
+      face_mix.add(select, mirrored);
+
+      if (!BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV)) {
+        all_verts_mirrored = false;
       }
     } while ((l_iter = l_iter->next) != l_first);
-    BM_face_uvselect_set_noflush(bm, f, select_all);
-    BM_face_uvselect_set_noflush(bm, f, mirrored_all, true);
+    BM_face_uvselect_set_noflush(bm, f, face_mix.face_select());
+    BM_face_uvselect_set_noflush(bm, f, face_mix.all_mirrored || all_verts_mirrored, true);
   }
 }
 
@@ -1438,8 +1474,7 @@ void BM_mesh_uvselect_flush_from_loop_edges(BMesh *bm, bool flush_down)
       continue;
     }
 
-    bool select_all = true;
-    bool mirrored_all = true;
+    UVSelectFlushMix face_mix;
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
@@ -1450,9 +1485,6 @@ void BM_mesh_uvselect_flush_from_loop_edges(BMesh *bm, bool flush_down)
           BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true, false);
         }
       }
-      else {
-        select_all = false;
-      }
 
       const bool mirrored_edge = BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
       if (mirrored_edge) {
@@ -1461,14 +1493,22 @@ void BM_mesh_uvselect_flush_from_loop_edges(BMesh *bm, bool flush_down)
           BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true, true);
         }
       }
-      else {
-        mirrored_all = false;
+      face_mix.add(select_edge, mirrored_edge);
+    } while ((l_iter = l_iter->next) != l_first);
+
+    bool all_verts_mirrored = true;
+    l_iter = l_first;
+    do {
+      if (!BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV)) {
+        all_verts_mirrored = false;
+        break;
       }
     } while ((l_iter = l_iter->next) != l_first);
-    if (select_all) {
+
+    if (face_mix.face_select()) {
       BM_face_uvselect_set_noflush(bm, f, true);
     }
-    if (mirrored_all) {
+    if (face_mix.all_mirrored || all_verts_mirrored) {
       BM_face_uvselect_set_noflush(bm, f, true, true);
     }
   }
@@ -1607,22 +1647,24 @@ void BM_mesh_uvselect_mode_flush_update(BMesh *bm,
 
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
-    bool select_face = true;
-    bool mirrored_face = true;
+    UVSelectFlushMix face_mix;
+    bool all_verts_mirrored = true;
     do {
       if (BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV)) {
         if (!BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT)) {
           BM_elem_flag_disable(l_iter, BM_ELEM_SELECT_UV);
+          if (BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT)) {
+            BM_elem_flag_enable(l_iter, BM_ELEM_MIRRORED_SELECT_UV);
+          }
         }
       }
       if (BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV_EDGE)) {
         if (!BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT)) {
           BM_elem_flag_disable(l_iter, BM_ELEM_SELECT_UV_EDGE);
-          select_face = false;
+          if (BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT)) {
+            BM_elem_flag_enable(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
+          }
         }
-      }
-      else {
-        select_face = false;
       }
 
       if (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV)) {
@@ -1633,23 +1675,25 @@ void BM_mesh_uvselect_mode_flush_update(BMesh *bm,
       if (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE)) {
         if (!BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT)) {
           BM_elem_flag_disable(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
-          mirrored_face = false;
         }
       }
-      else {
-        mirrored_face = false;
-      }
+
+      face_mix.add(BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV_EDGE),
+                   BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE));
 
       if (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV)) {
         any_mirrored_vert_sel = true;
+      }
+      else {
+        all_verts_mirrored = false;
       }
       if (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE)) {
         any_mirrored_edge_sel = true;
       }
     } while ((l_iter = l_iter->next) != l_first);
 
-    BM_elem_flag_set(f, BM_ELEM_SELECT_UV, select_face);
-    BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT_UV, mirrored_face);
+    BM_elem_flag_set(f, BM_ELEM_SELECT_UV, face_mix.face_select());
+    BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT_UV, face_mix.all_mirrored || all_verts_mirrored);
   }
 
   /* Second Pass: Ensure isolated elements are not selected. */
