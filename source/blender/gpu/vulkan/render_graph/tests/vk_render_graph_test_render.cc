@@ -6,7 +6,6 @@
 
 #include "vk_render_graph_test_types.hh"
 
-#include <iostream>
 
 namespace blender::gpu::render_graph {
 
@@ -472,45 +471,38 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
 
   submit(render_graph, command_buffer);
 
-  if (use_dynamic_rendering_local_read) {
-    for (const int64_t index : log.index_range()) {
-      std::cout << index << ": " << log[index] << '\n';
-    }
-  }
-
   /* Verify that the synchronization barrier for the input attachment read is generated.
-   * When using dynamic rendering local read, it must be recorded inside the rendering scope
-   * before the draw that consumes the attachment. */
+   * When using dynamic rendering local read, it must be recorded after the producing draw
+   * and before the draw that consumes the attachment. */
   const char *expected_access = use_dynamic_rendering_local_read ?
                                   "VK_ACCESS_INPUT_ATTACHMENT_READ_BIT" :
                                   "VK_ACCESS_SHADER_READ_BIT";
   int64_t sync_barrier_index = -1;
-  int64_t begin_rendering_index = -1;
-  int64_t draw_index = -1;
+  int64_t first_draw_index = -1;
+  int64_t last_draw_index = -1;
 
   for (const int64_t index : log.index_range()) {
-    if (log[index].find("begin_rendering(") != std::string::npos) {
-      begin_rendering_index = index;
-    }
     if (log[index].find("draw(") != std::string::npos) {
-      draw_index = index;
+      if (first_draw_index == -1) {
+        first_draw_index = index;
+      }
+      last_draw_index = index;
     }
     if (log[index].find(expected_access) != std::string::npos) {
       sync_barrier_index = index;
     }
   }
 
-  EXPECT_NE(-1, begin_rendering_index);
   EXPECT_NE(-1, sync_barrier_index)
       << "Missing synchronization barrier for input attachment read after color attachment write. "
          "See #158501.";
-  EXPECT_NE(-1, draw_index);
+  EXPECT_NE(-1, first_draw_index);
+  EXPECT_NE(-1, last_draw_index);
 
-  if (use_dynamic_rendering_local_read && begin_rendering_index != -1 && draw_index != -1) {
+  if (use_dynamic_rendering_local_read && first_draw_index != -1 && last_draw_index != -1) {
     int64_t node_pre_barrier_index = -1;
     bool node_pre_barrier_has_buffer = false;
-    for (const int64_t index :
-         IndexRange::from_begin_end(begin_rendering_index + 1, draw_index))
+    for (const int64_t index : IndexRange::from_begin_end(first_draw_index + 1, last_draw_index))
     {
       if (log[index].find(expected_access) != std::string::npos) {
         node_pre_barrier_index = index;
@@ -521,7 +513,8 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
     }
 
     EXPECT_NE(-1, node_pre_barrier_index)
-        << "Synchronization barrier must be recorded inside the rendering scope before the draw.";
+        << "Synchronization barrier must be recorded after the producing draw and before the "
+           "consuming draw.";
     EXPECT_FALSE(node_pre_barrier_has_buffer)
         << "The local-read node barrier must not include unrelated buffer barriers.";
   }
