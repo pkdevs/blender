@@ -61,6 +61,7 @@ set(SRC
   intern/draw_cache_impl_curve.cc
   intern/draw_cache_impl_curves.cc
   intern/draw_cache_impl_grease_pencil.cc
+  intern/draw_cache_impl_gsplat.cc
   intern/draw_cache_impl_lattice.cc
   intern/draw_cache_impl_mesh.cc
   intern/draw_cache_impl_particles.cc
@@ -74,6 +75,7 @@ set(SRC
   intern/draw_debug.cc
   intern/draw_fluid.cc
   intern/draw_gpu_context.cc
+  intern/draw_gsplat.cc
   intern/draw_hair.cc
   intern/draw_manager.cc
   intern/draw_manager_text.cc
@@ -169,6 +171,7 @@ set(SRC
   intern/draw_context_private.hh
   intern/draw_curves_private.hh
   intern/draw_debug.hh
+  intern/draw_gsplat_private.hh
   intern/draw_hair_private.hh
   intern/draw_handle.hh
   intern/draw_manager.hh
@@ -206,6 +209,7 @@ set(SRC
   engines/eevee/eevee_lookdev.hh
   engines/eevee/eevee_lut.hh
   engines/eevee/eevee_material.hh
+  engines/eevee/eevee_material_shared.hh
   engines/eevee/eevee_motion_blur.hh
   engines/eevee/eevee_pipeline.hh
   engines/eevee/eevee_precompute.hh
@@ -259,6 +263,7 @@ set(SRC
   engines/overlay/overlay_force_field.hh
   engines/overlay/overlay_grease_pencil.hh
   engines/overlay/overlay_grid.hh
+  engines/overlay/overlay_gsplat.hh
   engines/overlay/overlay_image.hh
   engines/overlay/overlay_instance.hh
   engines/overlay/overlay_lattice.hh
@@ -322,10 +327,6 @@ set(GLSL_SRC
   intern/shaders/subdiv_infos.hh
   intern/shaders/subdiv_patch_eval_infos.hh
 
-  engines/eevee/shaders/infos/eevee_common_infos.hh
-  engines/eevee/shaders/infos/eevee_geom_infos.hh
-  engines/eevee/shaders/infos/eevee_nodetree_infos.hh
-
   engines/image/shaders/infos/engine_image_infos.hh
 
   engines/gpencil/shaders/infos/gpencil_infos.hh
@@ -349,24 +350,19 @@ set(GLSL_SRC
 
   engines/select/shaders/infos/select_id_infos.hh
 
-  engines/workbench/shaders/infos/workbench_depth_infos.hh
   engines/workbench/shaders/infos/workbench_effect_antialiasing_infos.hh
-  # engines/workbench/shaders/infos/workbench_effect_dof_info.hh  # Excluded (shared).
-  engines/workbench/shaders/infos/workbench_effect_dof_infos.hh
-  engines/workbench/shaders/infos/workbench_effect_outline_infos.hh
-  engines/workbench/shaders/infos/workbench_prepass_infos.hh
-  engines/workbench/shaders/infos/workbench_transparent_resolve_infos.hh
 
-  engines/eevee/shaders/eevee_attributes_curves_lib.glsl
-  engines/eevee/shaders/eevee_attributes_mesh_lib.glsl
-  engines/eevee/shaders/eevee_attributes_pointcloud_lib.glsl
-  engines/eevee/shaders/eevee_attributes_volume_lib.glsl
-  engines/eevee/shaders/eevee_attributes_world_lib.glsl
+  engines/eevee/shaders/eevee_attributes_curves_lib.bsl.hh
+  engines/eevee/shaders/eevee_attributes_mesh_lib.bsl.hh
+  engines/eevee/shaders/eevee_attributes_pointcloud_lib.bsl.hh
+  engines/eevee/shaders/eevee_attributes_volume_lib.bsl.hh
+  engines/eevee/shaders/eevee_attributes_world_lib.bsl.hh
   engines/eevee/shaders/eevee_bxdf.bsl.hh
   engines/eevee/shaders/eevee_bxdf_diffuse.bsl.hh
   engines/eevee/shaders/eevee_bxdf_lut.bsl.hh
   engines/eevee/shaders/eevee_bxdf_lut_lib.bsl.hh
   engines/eevee/shaders/eevee_bxdf_microfacet.bsl.hh
+  engines/eevee/shaders/eevee_bxdf_oren_nayar.bsl.hh
   engines/eevee/shaders/eevee_bxdf_types.bsl.hh
   engines/eevee/shaders/eevee_camera_lib.bsl.hh
   engines/eevee/shaders/eevee_closure.bsl.hh
@@ -396,6 +392,7 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_gbuffer_types.bsl.hh
   engines/eevee/shaders/eevee_gbuffer_write.bsl.hh
   engines/eevee/shaders/eevee_geom_curves.bsl.hh
+  engines/eevee/shaders/eevee_geom_gsplat.bsl.hh
   engines/eevee/shaders/eevee_geom_mesh.bsl.hh
   engines/eevee/shaders/eevee_geom_pointcloud.bsl.hh
   engines/eevee/shaders/eevee_geom_types_lib.bsl.hh
@@ -425,11 +422,12 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_ltc_lut_lib.bsl.hh
   engines/eevee/shaders/eevee_material_variants.bsl.hh
   engines/eevee/shaders/eevee_motion_blur.bsl.hh
-  engines/eevee/shaders/eevee_nodetree_closures_lib.glsl
-  engines/eevee/shaders/eevee_nodetree_frag_lib.glsl
+  engines/eevee/shaders/eevee_nodetree.bsl.hh
+  engines/eevee/shaders/eevee_nodetree_closures_lib.bsl.hh
+  engines/eevee/shaders/eevee_nodetree_frag_lib.bsl.hh
   engines/eevee/shaders/eevee_nodetree_lib.bsl.hh
-  engines/eevee/shaders/eevee_nodetree_type_lib.glsl
-  engines/eevee/shaders/eevee_nodetree_vert_lib.glsl
+  engines/eevee/shaders/eevee_nodetree_type.bsl.hh
+  engines/eevee/shaders/eevee_nodetree_vert_lib.bsl.hh
   engines/eevee/shaders/eevee_occupancy_convert.bsl.hh
   engines/eevee/shaders/eevee_occupancy_lib.bsl.hh
   engines/eevee/shaders/eevee_octahedron_lib.bsl.hh
@@ -461,7 +459,6 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_shadow_tilemap_lib.bsl.hh
   engines/eevee/shaders/eevee_shadow_tracing.bsl.hh
   engines/eevee/shaders/eevee_shadow_visibility.bsl.hh
-  engines/eevee/shaders/eevee_spherical_harmonics.bsl.hh
   engines/eevee/shaders/eevee_subsurface.bsl.hh
   engines/eevee/shaders/eevee_subsurface_lib.bsl.hh
   engines/eevee/shaders/eevee_surf_capture.bsl.hh
@@ -510,35 +507,23 @@ set(GLSL_SRC
 
   engines/workbench/shaders/workbench_cavity.bsl.hh
   engines/workbench/shaders/workbench_common.bsl.hh
-  engines/workbench/shaders/workbench_common_lib.glsl
   engines/workbench/shaders/workbench_composite.bsl.hh
   engines/workbench/shaders/workbench_curvature.bsl.hh
-  engines/workbench/shaders/workbench_effect_dof_prepare_frag.glsl
-  engines/workbench/shaders/workbench_effect_dof_downsample_frag.glsl
-  engines/workbench/shaders/workbench_effect_dof_blur1_frag.glsl
-  engines/workbench/shaders/workbench_effect_dof_blur2_frag.glsl
-  engines/workbench/shaders/workbench_effect_dof_resolve_frag.glsl
-  engines/workbench/shaders/workbench_effect_dof_lib.glsl
-  engines/workbench/shaders/workbench_effect_outline_frag.glsl
+  engines/workbench/shaders/workbench_fx_dof.bsl.hh
+  engines/workbench/shaders/workbench_fx_outline.bsl.hh
   engines/workbench/shaders/workbench_effect_smaa_frag.glsl
   engines/workbench/shaders/workbench_effect_smaa_vert.glsl
-  engines/workbench/shaders/workbench_effect_taa_frag.glsl
-  engines/workbench/shaders/workbench_fullscreen_vert.glsl
-  engines/workbench/shaders/workbench_image_lib.glsl
+  engines/workbench/shaders/workbench_fx_taa.bsl.hh
   engines/workbench/shaders/workbench_image.bsl.hh
-  engines/workbench/shaders/workbench_matcap_lib.glsl
   engines/workbench/shaders/workbench_matcap.bsl.hh
   engines/workbench/shaders/workbench_material.bsl.hh
-  engines/workbench/shaders/workbench_merge_depth_frag.glsl
-  engines/workbench/shaders/workbench_overlay_depth_frag.glsl
+  engines/workbench/shaders/workbench_depth.bsl.hh
   engines/workbench/shaders/workbench_prepass.bsl.hh
   engines/workbench/shaders/workbench_shadow.bsl.hh
   engines/workbench/shaders/workbench_shadow_raytrace.bsl.hh
   engines/workbench/shaders/workbench_shadow_visibility.bsl.hh
-  engines/workbench/shaders/workbench_transparent_accum_frag.glsl
-  engines/workbench/shaders/workbench_transparent_resolve_frag.glsl
+  engines/workbench/shaders/workbench_transparent_resolve.bsl.hh
   engines/workbench/shaders/workbench_volume.bsl.hh
-  engines/workbench/shaders/workbench_world_light_lib.glsl
   engines/workbench/shaders/workbench_world_light.bsl.hh
 
   engines/workbench/workbench_defines.hh
@@ -565,26 +550,33 @@ set(GLSL_SRC
   intern/shaders/draw_fxaa_lib.glsl
   intern/shaders/draw_curves_interpolation_comp.glsl
   intern/shaders/draw_curves_length_intercept_comp.glsl
+  intern/shaders/draw_curves.bsl.hh
   intern/shaders/draw_curves_lib.glsl
   intern/shaders/draw_curves_topology_comp.glsl
   intern/shaders/draw_shape_lib.glsl
-  intern/shaders/draw_command_generate_comp.glsl
+  intern/shaders/draw_command_generate.bsl.hh
   intern/shaders/draw_debug_draw_display_frag.glsl
   intern/shaders/draw_debug_draw_display_vert.glsl
   intern/shaders/draw_grease_pencil_lib.glsl
+  intern/shaders/draw_gsplat.bsl.hh
+  intern/shaders/draw_gsplat_lib.bsl.hh
   intern/shaders/draw_intersect_lib.glsl
+  intern/shaders/draw_intersect.bsl.hh
   intern/shaders/draw_math_geom_lib.glsl
   intern/shaders/draw_model_lib.glsl
   intern/shaders/draw_model.bsl.hh
   intern/shaders/draw_object_infos_lib.glsl
   intern/shaders/draw_pointcloud_lib.glsl
+  intern/shaders/draw_pointcloud.bsl.hh
   intern/shaders/draw_resource_finalize_comp.glsl
   intern/shaders/draw_view_clipping_lib.glsl
   intern/shaders/draw_view_finalize_comp.glsl
   intern/shaders/draw_view_lib.glsl
   intern/shaders/draw_view.bsl.hh
   intern/shaders/draw_view_reconstruction_lib.glsl
-  intern/shaders/draw_visibility_comp.glsl
+  intern/shaders/draw_viewlayer.bsl.hh
+  intern/shaders/draw_visibility.bsl.hh
+  intern/shaders/draw_volume.bsl.hh
 
   intern/draw_attribute_shader_shared.hh
   intern/draw_command_shared.hh
@@ -614,6 +606,7 @@ set(GLSL_SRC
   engines/select/shaders/select_id_vert.glsl
   engines/select/shaders/select_id_frag.glsl
   engines/select/shaders/select_lib.glsl
+  engines/select/shaders/select_lib.bsl.hh
   engines/select/shaders/select_debug_frag.glsl
 
   engines/select/select_defines.hh
@@ -694,6 +687,7 @@ set(GLSL_SRC
   engines/overlay/shaders/overlay_grid_frag.glsl
   engines/overlay/shaders/overlay_grid_vert.glsl
   engines/overlay/shaders/overlay_grid_common_lib.glsl
+  engines/overlay/shaders/overlay_gsplat.bsl.hh
   engines/overlay/shaders/overlay_image_frag.glsl
   engines/overlay/shaders/overlay_image_vert.glsl
   engines/overlay/shaders/overlay_motion_path_line_frag.glsl
@@ -755,8 +749,9 @@ set(GLSL_SRC
   intern/shaders/draw_curves_test.glsl
 )
 
-# These tests depend on gpu_shader_test, so they're only included when WITH_GPU_BACKEND_TESTS is enabled.
-set(GLSL_SRC_TEST
+# These tests depend on gpu_shader_test, so they're only included when
+# WITH_GPU_BACKEND_TESTS is enabled.
+set(GLSL_TEST_SRC
   engines/eevee/shaders/eevee_test_fast_gi.bsl.hh
   engines/eevee/shaders/eevee_test_gbuffer_closure.bsl.hh
   engines/eevee/shaders/eevee_test_gbuffer_normal.bsl.hh
@@ -766,7 +761,7 @@ set(GLSL_SRC_TEST
 
 if(WITH_GTESTS)
   if(WITH_GPU_BACKEND_TESTS)
-    list(APPEND GLSL_SRC ${GLSL_SRC_TEST})
+    list(APPEND GLSL_SRC ${GLSL_TEST_SRC})
   endif()
 endif()
 
@@ -775,7 +770,9 @@ set(GLSL_INC
   ../gpu/intern
   ../gpu/shaders
   ../gpu/shaders/common
+  ../gpu/shaders/compat
   ../gpu/shaders/infos
+  ../gpu/shaders/nodes
 
   engines/gpencil
   engines/gpencil/shaders
@@ -785,7 +782,6 @@ set(GLSL_INC
   engines/workbench/shaders/infos
   engines/eevee
   engines/eevee/shaders
-  engines/eevee/shaders/infos
   engines/overlay
   engines/overlay/shaders
   engines/overlay/shaders/infos
