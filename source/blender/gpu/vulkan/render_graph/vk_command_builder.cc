@@ -87,6 +87,7 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
   /* Extract barriers. */
   group_pre_barriers_.clear();
   group_post_barriers_.clear();
+  node_pre_barriers_.clear();
   node_pre_barriers_.resize(node_handles.size());
 
   /* Keep track of the post barriers that needs to be added. The pre barriers will be stored
@@ -250,6 +251,8 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
         build_pipeline_barriers(
             render_graph, node_handle, node.pipeline_stage_get(), image_tracker, barrier, true);
         if (!barrier.is_empty()) {
+          node_pre_barriers_[node_handle] =
+              IndexRange::from_begin_size(node_pre_barriers.size(), 1);
           node_pre_barriers.append(barrier);
         }
       }
@@ -568,8 +571,10 @@ void VKCommandBuilder::build_pipeline_barriers(VKRenderGraph &render_graph,
 {
   reset_barriers(r_barrier);
   add_image_barriers(
-      render_graph, node_handle, pipeline_stage, image_tracker, r_barrier, within_rendering);
+    render_graph, node_handle, pipeline_stage, image_tracker, r_barrier, within_rendering);
+if (!within_rendering) {
   add_buffer_barriers(render_graph, node_handle, pipeline_stage, r_barrier);
+  }
 }
 
 /** \} */
@@ -594,8 +599,6 @@ void VKCommandBuilder::send_pipeline_barriers(VKCommandBufferInterface &command_
   /* When no resources have been used, we can start the barrier at the top of the pipeline.
    * It is not allowed to set it to None. */
   /* TODO: VK_KHR_synchronization2 allows setting src_stage_mask to NONE. */
-  /* When no resources have been used, we can start the barrier at the top of the pipeline.
-   * It is not allowed to set it to None. */
   VkPipelineStageFlags src_stage_mask = (barrier.src_stage_mask == VK_PIPELINE_STAGE_NONE) ?
                                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT :
                                             VkPipelineStageFlagBits(barrier.src_stage_mask);

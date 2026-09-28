@@ -362,8 +362,10 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
   VkHandle<VkImageView> image_view(2u);
   VkHandle<VkPipelineLayout> pipeline_layout(4u);
   VkHandle<VkPipeline> pipeline(3u);
+  VKTrackedHandle<VkBuffer> buffer(5u);
 
   resources.add_image(image, true);
+  buffer.set_resource_handle(resources.add_buffer(buffer));
 
   /* First rendering scope: write to image as color attachment. */
   {
@@ -442,6 +444,9 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
                                input_access,
                                VK_IMAGE_ASPECT_COLOR_BIT,
                                {0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS}});
+    access_info.buffers.append(
+        {buffer.get_resource_handle(), VK_ACCESS_SHADER_WRITE_BIT});
+
     VKNodeData<VKDrawNode> node = render_graph->alloc_node<VKDrawNode>();
     node.data.first_instance = 0;
     node.data.first_vertex = 0;
@@ -465,23 +470,53 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
 
   submit(render_graph, command_buffer);
 
-  /* Verify that a barrier with the read access flag is generated.
-   * Without the fix for #158501, this barrier would be missing because
-   * the image tracker skipped access flag synchronization for tracked
-   * layered color attachments. */
+  /* Verify that the synchronization barrier for the input attachment read is generated.
+   * When using dynamic rendering local read, it must be recorded after the producing draw
+   * and before the draw that consumes the attachment. */
   const char *expected_access = use_dynamic_rendering_local_read ?
-                                    "VK_ACCESS_INPUT_ATTACHMENT_READ_BIT" :
-                                    "VK_ACCESS_SHADER_READ_BIT";
-  bool has_sync_barrier = false;
-  for (const std::string &entry : log) {
-    if (entry.find(expected_access) != std::string::npos) {
-      has_sync_barrier = true;
-      break;
+                                  "VK_ACCESS_INPUT_ATTACHMENT_READ_BIT" :
+                                  "VK_ACCESS_SHADER_READ_BIT";
+  int64_t sync_barrier_index = -1;
+  int64_t first_draw_index = -1;
+  int64_t last_draw_index = -1;
+
+  for (const int64_t index : log.index_range()) {
+    if (log[index].find("draw(") != std::string::npos) {
+      if (first_draw_index == -1) {
+        first_draw_index = index;
+      }
+      last_draw_index = index;
+    }
+    if (log[index].find(expected_access) != std::string::npos) {
+      sync_barrier_index = index;
     }
   }
-  EXPECT_TRUE(has_sync_barrier)
+
+  EXPECT_NE(-1, sync_barrier_index)
       << "Missing synchronization barrier for input attachment read after color attachment write. "
          "See #158501.";
+  EXPECT_NE(-1, first_draw_index);
+  EXPECT_NE(-1, last_draw_index);
+
+  if (use_dynamic_rendering_local_read && first_draw_index != -1 && last_draw_index != -1) {
+  int64_t node_pre_barrier_index = -1;
+  bool has_buffer_barrier = false;
+  for (const int64_t index : IndexRange::from_begin_end(first_draw_index + 1, last_draw_index))
+  {
+    if (log[index].find(expected_access) != std::string::npos) {
+      node_pre_barrier_index = index;
+    }
+    if (log[index].find("buffer_barrier(") != std::string::npos) {
+      has_buffer_barrier = true;
+    }
+  }
+
+  EXPECT_NE(-1, node_pre_barrier_index)
+      << "Synchronization barrier must be recorded after the producing draw and before the "
+         "consuming draw.";
+  EXPECT_FALSE(has_buffer_barrier)
+      << "The local-read barrier pass must not generate unrelated buffer barriers.";
+}
 }
 
 TEST_P(VKRenderGraphTestRender, begin_draw_end__layered_depth)
