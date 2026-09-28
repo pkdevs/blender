@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include "draw_gsplat_lib.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
-
 #include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
@@ -16,7 +14,7 @@
 #include "eevee_utility_tx.bsl.hh"
 #include "eevee_velocity.bsl.hh"
 
-float4 closure_to_rgba_depth([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure /*cl*/)
+float4 closure_to_rgba_depth(KernelGlobals &kg, ShadingData &sd, Closure /*cl*/)
 {
   float4 out_color;
   out_color.rgb = sd.emission;
@@ -108,8 +106,7 @@ void surf_depth([[resource_table]] KernelGlobals &kg,
 
   if constexpr (with_velocity) {
     if (pipe.use_velocity) [[static_branch]] {
-      [[resource_table]] const CameraVelocity &cam_vel = geo_vel.camera;
-      frag_out.velocity = cam_vel.surface_velocity(
+      frag_out.velocity = geo_vel.camera.surface_velocity(
           interp.P + motion.prev, interp.P, interp.P + motion.next);
       frag_out.velocity = velocity::pack(frag_out.velocity);
     }

@@ -13,17 +13,13 @@
 
 #pragma once
 
-#include "draw_gsplat_lib.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
-
 #include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_shadow_shared.hh"
 #include "eevee_shadow_tilemap_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_shadow([[resource_table]] KernelGlobals &kg,
-                              ShadingData &sd,
-                              Closure /*cl*/)
+float4 closure_to_rgba_shadow(KernelGlobals &kg, ShadingData &sd, Closure /*cl*/)
 {
   float3 transmittance = sd.transmittance;
   closure_weights_reset(kg, sd, 0.0f);
