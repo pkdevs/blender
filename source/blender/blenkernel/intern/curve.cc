@@ -14,19 +14,19 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
+#include "BLI_ghash.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_solvers.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_solvers.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLT_translation.hh"
 
 /* Allow using deprecated functionality for .blend file I/O. */
@@ -233,7 +233,7 @@ static void curve_blend_read_data(BlendDataReader *reader, ID *id)
     BLO_read_struct_list(reader, Nurb, &(cu->nurb));
   }
   else {
-    cu->nurb.first = cu->nurb.last = nullptr;
+    cu->nurb.first_ = cu->nurb.last_ = nullptr;
 
     if (cu->str == nullptr) [[unlikely]] {
       cu->len_char32 = 0;
@@ -317,6 +317,7 @@ IDTypeInfo IDType_ID_CU_LEGACY = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = curve_blend_write,
@@ -3110,6 +3111,11 @@ static void calchandleNurb_intern(BezTriple *bezt,
   bezt->auto_handle_type = HD_AUTOTYPE_NORMAL;
 
   if (bezt->h1 == 0 && bezt->h2 == 0) {
+    return;
+  }
+
+  if (prev == nullptr && next == nullptr) {
+    /* Single point, no need to calculate handles. */
     return;
   }
 

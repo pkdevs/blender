@@ -8,11 +8,11 @@
 
 #include <fmt/format.h>
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLO_readfile.hh"
 
@@ -84,9 +84,9 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
 
   BLI_stat_t status;
   if (BLI_stat(path, &status) != -1) {
-    const tm mod_time = *localtime(&status.st_mtime);
+    const tm mod_time = date_string::localtime_safe(status.st_mtime);
     const time_t ts_now = time(nullptr);
-    const tm now = *localtime(&ts_now);
+    const tm now = date_string::localtime_safe(ts_now);
     const char *lang = BLT_lang_get();
     std::string modified_s = date_string::datetime(mod_time,
                                                    lang,

@@ -10,12 +10,15 @@
 
 #include <atomic>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_utility_mixins.hh"
 
 #include "MEM_guardedalloc.h"
 
 namespace blender {
+
+class ImplicitSharingInfo;
+using ImplicitSharingInfoHandle = ImplicitSharingInfo;
 
 /**
  * #ImplicitSharingInfo is the core data structure for implicit sharing in Blender. Implicit
@@ -178,8 +181,10 @@ class ImplicitSharingInfo : NonCopyable, NonMovable {
   }
 
  private:
-  /** Has to free the #ImplicitSharingInfo and the referenced data. The data might have been freed
-   * before by #delete_data_only already. This case should be handled here. */
+  /**
+   * Has to free the #ImplicitSharingInfo and the referenced data. The data might have been freed
+   * before by #delete_data_only already. This case should be handled here.
+   */
   virtual void delete_self_with_data() = 0;
   /** Can free the referenced data but the #ImplicitSharingInfo still has to be kept alive. */
   virtual void delete_data_only() {}

@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "FN_multi_function_registry.hh"
 
@@ -212,7 +212,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_cmp_node_type_base(&ntype, "FunctionNodeBooleanMath"_ustr, FN_NODE_BOOLEAN_MATH);
+  common_node_type_base(&ntype, "FunctionNodeBooleanMath"_ustr, FN_NODE_BOOLEAN_MATH);
   ntype.ui_name = "Boolean Math";
   ntype.ui_description = "Perform a logical operation on the given boolean inputs";
   ntype.enum_name_legacy = "BOOLEAN_MATH";

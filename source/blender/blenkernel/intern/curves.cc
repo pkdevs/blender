@@ -20,8 +20,8 @@
 #include "BLI_rand.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_anim_data.hh"
@@ -33,6 +33,7 @@
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
+#include "BKE_material.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
@@ -114,10 +115,12 @@ static void curves_blend_write(BlendWriter *writer, ID *id, const void *id_addre
 
   ResourceScope scope;
   bke::CurvesGeometry::BlendWriteData write_data(writer, scope);
-  curves->geometry.wrap().blend_write_prepare(write_data, !BLO_write_is_undo(writer));
+  curves->geometry.wrap().blend_write_prepare(write_data, !writer->is_undo());
 
   /* Write LibData */
-  writer->write_id_struct(id_address, curves);
+  writer->write_id_struct(id_address, curves, [](BlendStructWriter<Curves> &struct_writer) {
+    struct_writer.generated_ptr(offsetof(Curves, geometry.attribute_storage.dna_attributes));
+  });
   BKE_id_blend_write(writer, &curves->id);
 
   /* Direct data */
@@ -161,6 +164,7 @@ IDTypeInfo IDType_ID_CV = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = curves_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = curves_blend_write,
@@ -182,6 +186,12 @@ Curves *BKE_curves_add(Main *bmain, const char *name)
 bool BKE_curves_attribute_required(const Curves * /*curves*/, const StringRef name)
 {
   return name == ATTR_POSITION;
+}
+
+void BKE_curves_material_remap(Curves *curves_id, const uint *remap, const int remap_num)
+{
+  BKE_material_attr_indices_remap(
+      curves_id->geometry.wrap().attributes_for_write(), remap, remap_num);
 }
 
 Curves *BKE_curves_copy_for_eval(const Curves *curves_src)

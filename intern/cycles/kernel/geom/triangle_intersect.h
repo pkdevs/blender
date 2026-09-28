@@ -34,18 +34,18 @@ ccl_device_inline bool triangle_intersect(KernelGlobals kg,
 {
   const int position_offset = kernel_data_fetch(objects, object).position_offset;
   const uint3 tri_vindex = kernel_data_fetch(tri_vindex, prim);
-  const float3 tri_a = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.x);
-  const float3 tri_b = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.y);
-  const float3 tri_c = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.z);
+  const float3 tri_a = kernel_data_fetch(tri_verts, position_offset + tri_vindex.x);
+  const float3 tri_b = kernel_data_fetch(tri_verts, position_offset + tri_vindex.y);
+  const float3 tri_c = kernel_data_fetch(tri_verts, position_offset + tri_vindex.z);
 
   float t;
   float u;
   float v;
   if (ray_triangle_intersect(P, dir, tmin, tmax, tri_a, tri_b, tri_c, &u, &v, &t)) {
-#ifdef __VISIBILITY_FLAG__
-    /* Visibility flag test. we do it here under the assumption
-     * that most triangles are culled by node flags.
-     */
+#if defined(__VISIBILITY_FLAG__) && !defined(__KERNEL_HIPRT__)
+    /* Visibility flag test. we do it here under the assumption that most triangles are culled by
+     * node flags.
+     * Note that HIP-RT performs visibility check on the instance level. */
     if (kernel_data_fetch(prim_visibility, prim_addr) & visibility)
 #endif
     {
@@ -81,9 +81,9 @@ ccl_device_inline bool triangle_intersect_local(KernelGlobals kg,
 {
   const int position_offset = kernel_data_fetch(objects, object).position_offset;
   const uint3 tri_vindex = kernel_data_fetch(tri_vindex, prim);
-  const float3 tri_a = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.x);
-  const float3 tri_b = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.y);
-  const float3 tri_c = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.z);
+  const float3 tri_a = kernel_data_fetch(tri_verts, position_offset + tri_vindex.x);
+  const float3 tri_b = kernel_data_fetch(tri_verts, position_offset + tri_vindex.y);
+  const float3 tri_c = kernel_data_fetch(tri_verts, position_offset + tri_vindex.z);
 
   float t;
   float u;
@@ -129,9 +129,9 @@ ccl_device_inline float3 triangle_point_from_uv(KernelGlobals kg,
 {
   const int position_offset = kernel_data_fetch(objects, sd->object).position_offset;
   const uint3 tri_vindex = kernel_data_fetch(tri_vindex, isect_prim);
-  const float3 tri_a = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.x);
-  const float3 tri_b = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.y);
-  const float3 tri_c = kernel_data_fetch(attributes_float3, position_offset + tri_vindex.z);
+  const float3 tri_a = kernel_data_fetch(tri_verts, position_offset + tri_vindex.x);
+  const float3 tri_b = kernel_data_fetch(tri_verts, position_offset + tri_vindex.y);
+  const float3 tri_c = kernel_data_fetch(tri_verts, position_offset + tri_vindex.z);
 
   /* This appears to give slightly better precision than interpolating with w = (1 - u - v). */
   float3 P = tri_a + u * (tri_b - tri_a) + v * (tri_c - tri_a);

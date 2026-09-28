@@ -13,8 +13,8 @@
 
 #include <Python.h>
 
-#include "BLI_math_base.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_image_types.h"
 
@@ -22,6 +22,7 @@
 #include "GPU_texture.hh"
 
 #include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 
 #include "../generic/py_capi_utils.hh"
 #include "../generic/python_compat.hh" /* IWYU pragma: keep. */
@@ -193,7 +194,7 @@ static PyObject *pygpu_texture__tp_new(PyTypeObject * /*self*/, PyObject *args, 
   static const char *_keywords[] = {"size", "layers", "is_cubemap", "format", "data", nullptr};
   static _PyArg_Parser _parser = {
       "O"  /* `size` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "i"  /* `layers` */
       "p"  /* `is_cubemap` */
       "O&" /* `format` */
@@ -513,7 +514,7 @@ static PyObject *pygpu_texture_mipmap_mode(BPyGPUTexture *self, PyObject *args, 
   bool use_filter = true;
   static const char *_keywords[] = {"use_mipmap", "use_filter"};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "b"  /* `use_mipmap` */
       "b"  /* `use_filter` */
       ":mipmap_mode",
@@ -915,9 +916,13 @@ static PyObject *pygpu_texture_from_image(PyObject * /*self*/, PyObject *arg)
 
   ImageUser iuser;
   BKE_imageuser_default(&iuser);
-  gpu::Texture *tex = BKE_image_get_gpu_texture(ima, &iuser);
+  gpu::Texture *tex = BKE_image_acquire_gpu_texture(ima, &iuser);
 
-  return BPyGPUTexture_CreatePyObject(tex, true);
+  PyObject *result = BPyGPUTexture_CreatePyObject(tex, true);
+  if (tex) {
+    GPU_texture_free(tex);
+  }
+  return result;
 }
 
 static PyMethodDef pygpu_texture__m_methods[] = {

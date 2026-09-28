@@ -19,13 +19,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "gpu_select_private.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -562,10 +562,10 @@ uint gpu_select_pick_end()
   if (ps->use_cache && !ps->is_cached) {
     BLI_addtail(&ps->cache.bufs, ps->gpu.rect_depth);
     ps->gpu.rect_depth = nullptr;
-    rect_depth_final = static_cast<DepthBufCache *>(ps->cache.bufs.last);
+    rect_depth_final = ps->cache.bufs.last();
   }
   else if (ps->is_cached) {
-    rect_depth_final = static_cast<DepthBufCache *>(ps->cache.bufs.last);
+    rect_depth_final = ps->cache.bufs.last();
   }
   else {
     /* Common case, no cache. */

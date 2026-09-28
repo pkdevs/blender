@@ -9,8 +9,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_kdopbvh.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_editmesh.hh"
 
@@ -31,12 +31,10 @@ struct BMBVHTree {
   int flag = 0;
 };
 
-BMBVHTree *BKE_bmbvh_new_from_editmesh(BMEditMesh *em,
-                                       int flag,
-                                       const float3 *cos_cage,
-                                       const bool cos_cage_free)
+BMBVHTree *BKE_bmbvh_new_from_editmesh(
+    BMEditMesh *em, BMesh *bm, int flag, const float3 *cos_cage, const bool cos_cage_free)
 {
-  return BKE_bmbvh_new(em->bm, em->looptris, flag, cos_cage, cos_cage_free);
+  return BKE_bmbvh_new(bm, em->looptris, flag, cos_cage, cos_cage_free);
 }
 
 BMBVHTree *BKE_bmbvh_new_ex(BMesh *bm,

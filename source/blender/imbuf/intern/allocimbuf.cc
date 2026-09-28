@@ -14,6 +14,7 @@
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "IMB_colormanagement_intern.hh"
 #include "IMB_metadata.hh"
@@ -98,7 +99,9 @@ void IMB_free_float_pixels(ImBuf *ibuf)
   if (ibuf == nullptr) {
     return;
   }
-  ibuf->float_buffer = {};
+  /* Keep the colorspace, it's used when new pixels are assigned. */
+  ibuf->float_buffer.data = nullptr;
+  ibuf->float_buffer.sharing_info.reset();
 }
 
 void IMB_free_byte_pixels(ImBuf *ibuf)
@@ -106,23 +109,15 @@ void IMB_free_byte_pixels(ImBuf *ibuf)
   if (ibuf == nullptr) {
     return;
   }
-  ibuf->byte_buffer = {};
+  /* Keep the colorspace, it's used when new pixels are assigned. */
+  ibuf->byte_buffer.data = nullptr;
+  ibuf->byte_buffer.sharing_info.reset();
 }
 
 void IMB_free_all_data(ImBuf *ibuf)
 {
   IMB_free_byte_pixels(ibuf);
   IMB_free_float_pixels(ibuf);
-}
-
-void IMB_free_gpu_textures(ImBuf *ibuf)
-{
-  if (!ibuf || !ibuf->gpu.texture) {
-    return;
-  }
-
-  GPU_texture_free(ibuf->gpu.texture);
-  ibuf->gpu.texture = nullptr;
 }
 
 void IMB_freeImBuf(ImBuf *ibuf)
@@ -139,6 +134,7 @@ void IMB_freeImBuf(ImBuf *ibuf)
 
     IMB_free_all_data(ibuf);
     IMB_free_gpu_textures(ibuf);
+    IMB_partial_update_free(ibuf);
     MEM_delete(ibuf);
   }
 }
@@ -186,9 +182,7 @@ bool IMB_alloc_float_pixels(ImBuf *ibuf, const uint channels, bool initialize_pi
     return false;
   }
 
-  if (ibuf->float_data()) {
-    IMB_free_float_pixels(ibuf);
-  }
+  IMB_free_float_pixels(ibuf);
 
   if (!imb_alloc_buffer(
           ibuf->float_buffer, ibuf->x, ibuf->y, channels, sizeof(float), initialize_pixels))
@@ -209,7 +203,7 @@ bool IMB_alloc_byte_pixels(ImBuf *ibuf, bool initialize_pixels)
     return false;
   }
 
-  ibuf->byte_buffer = {};
+  IMB_free_byte_pixels(ibuf);
 
   if (!imb_alloc_buffer(
           ibuf->byte_buffer, ibuf->x, ibuf->y, 4, sizeof(uint8_t), initialize_pixels))
@@ -222,7 +216,7 @@ bool IMB_alloc_byte_pixels(ImBuf *ibuf, bool initialize_pixels)
 
 void ImBuf::assign_byte_data(uint8_t *data)
 {
-  this->byte_buffer = {};
+  IMB_free_byte_pixels(this);
   if (data) {
     this->byte_buffer.data = data;
     this->byte_buffer.sharing_info = ImplicitSharingPtr<>(
@@ -232,7 +226,7 @@ void ImBuf::assign_byte_data(uint8_t *data)
 
 void ImBuf::assign_float_data(float *data)
 {
-  this->float_buffer = {};
+  IMB_free_float_pixels(this);
   if (data) {
     this->float_buffer.data = data;
     this->float_buffer.sharing_info = ImplicitSharingPtr<>(
@@ -264,12 +258,6 @@ void ImBuf::assign_float_data(const float *data, ImplicitSharingPtr<> sharing_pt
   this->float_buffer.sharing_info = std::move(sharing_ptr);
 }
 
-void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture)
-{
-  IMB_free_gpu_textures(ibuf);
-  ibuf->gpu.texture = texture;
-}
-
 void IMB_ensure_host_buffer(ImBuf *ibuf)
 {
   if (!ibuf || !ibuf->gpu.texture) {
@@ -290,9 +278,7 @@ void IMB_ensure_host_buffer(ImBuf *ibuf)
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
   float *output_buffer = static_cast<float *>(
       GPU_texture_read(ibuf->gpu.texture, GPU_DATA_FLOAT, 0));
-  const ColorSpace *float_colorspace = ibuf->float_buffer.colorspace;
   ibuf->assign_float_data(output_buffer);
-  ibuf->float_buffer.colorspace = float_colorspace;
 
   if (need_secondary_context) {
     IMB_deactivate_gpu_context();
@@ -373,7 +359,8 @@ ImBuf *IMB_allocImBuf(uint x, uint y, ImBufFlags flags)
 
 bool IMB_initImBuf(ImBuf *ibuf, uint x, uint y, ImBufFlags flags)
 {
-  *ibuf = ImBuf{};
+  ibuf->~ImBuf();
+  new (ibuf) ImBuf();
 
   ibuf->x = x;
   ibuf->y = y;
@@ -433,7 +420,6 @@ ImBuf *IMB_dupImBuf(const ImBuf *ibuf1)
   ibuf2->ppm[0] = ibuf1->ppm[0];
   ibuf2->ppm[1] = ibuf1->ppm[1];
   ibuf2->dither = ibuf1->dither;
-  ibuf2->index = ibuf1->index;
   ibuf2->userflags = ibuf1->userflags;
   ibuf2->userflags = ibuf1->userflags;
   ibuf2->metadata_ptr = ibuf1->metadata_ptr;

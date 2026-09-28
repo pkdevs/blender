@@ -13,7 +13,7 @@
 #include <numbers>  // IWYU pragma: export
 #include <type_traits>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 namespace blender::math {
 
@@ -219,6 +219,11 @@ template<typename T> inline T cube(const T &a)
 template<typename T> inline T exp(const T &x)
 {
   return std::exp(x);
+}
+
+template<typename T> inline T log(const T &x)
+{
+  return std::log(x);
 }
 
 template<typename T> inline T safe_acos(const T &a)

@@ -23,16 +23,16 @@
  * No globals - keep threadsafe.
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_heap.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_memarena.h"
+#include "BLI_heap.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_memarena.hh"
 
-#include "BLI_polyfill_2d_beautify.h" /* own include */
+#include "BLI_polyfill_2d_beautify.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -319,7 +319,8 @@ static void polyedge_beauty_cost_update(
 
 static void polyedge_rotate(HalfEdge *edges, const HalfEdge *e)
 {
-  /** CCW winding, rotate internal edge to new vertical state.
+  /**
+   * CCW winding, rotate internal edge to new vertical state.
    *
    * \code{.unparsed}
    *   Before         After

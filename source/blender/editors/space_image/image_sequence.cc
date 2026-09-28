@@ -10,10 +10,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_windowmanager_types.h"
 
@@ -40,7 +40,7 @@ static void image_sequence_get_frame_ranges(StringRefNull blendfile_path,
                                             ListBaseT<ImageFrameRange> *ranges,
                                             bool *r_was_relative)
 {
-  char dir[FILE_MAXDIR];
+  char dir[FILE_MAX];
   const bool do_frame_range = RNA_boolean_get(op->ptr, "use_sequence_detection");
   ImageFrameRange *range = nullptr;
   int range_first_frame = 0;
@@ -135,7 +135,7 @@ static void image_detect_frame_range(ImageFrameRange *range, const bool detect_u
   /* Image Sequence */
   BLI_listbase_sort(&range->frames, image_cmp_frame);
 
-  ImageFrame *frame = static_cast<ImageFrame *>(range->frames.first);
+  ImageFrame *frame = range->frames.first();
   if (frame != nullptr) {
     int frame_curr = frame->framenr;
     range->offset = frame_curr;
@@ -152,7 +152,7 @@ static void image_detect_frame_range(ImageFrameRange *range, const bool detect_u
     range->offset = 0;
   }
 
-  ImageFrame *frame_last = static_cast<ImageFrame *>(range->frames.last);
+  ImageFrame *frame_last = range->frames.last();
   if (frame_last != nullptr) {
     range->max_framenr = frame_last->framenr;
   }

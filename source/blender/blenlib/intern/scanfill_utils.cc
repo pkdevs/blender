@@ -12,15 +12,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_scanfill.h" /* own include */
+#include "BLI_scanfill.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -80,11 +80,11 @@ void BLI_scanfill_obj_dump(ScanFillContext *sf_ctx)
   ScanFillVert *eve;
   ScanFillEdge *eed;
 
-  for (eve = sf_ctx->fillvertbase.first; eve; eve = eve->next, i++) {
+  for (eve = sf_ctx->fillvertbase.first_; eve; eve = eve->next, i++) {
     fprintf(f, "v %f %f %f\n", UNPACK3(eve->co));
     eve->keyindex = i;
   }
-  for (eed = sf_ctx->filledgebase.first; eed; eed = eed->next) {
+  for (eed = sf_ctx->filledgebase.first_; eed; eed = eed->next) {
     fprintf(f, "f %d %d\n", eed->v1->keyindex, eed->v2->keyindex);
   }
   fclose(f);
@@ -373,8 +373,8 @@ bool BLI_scanfill_calc_self_isect(ScanFillContext *sf_ctx,
 
   /* get the polygon span */
   if (sf_ctx->poly_nr == 0) {
-    poly_info->edge_first = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.first);
-    poly_info->edge_last = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.last);
+    poly_info->edge_first = sf_ctx->filledgebase.first();
+    poly_info->edge_last = sf_ctx->filledgebase.last();
   }
   else {
     ushort poly_nr = 0;

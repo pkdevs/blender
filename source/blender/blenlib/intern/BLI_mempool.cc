@@ -20,15 +20,15 @@
 
 #include "atomic_ops.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_asan.h"
-#include "BLI_math_base.h"
-#include "BLI_mempool.h"         /* own include */
+#include "BLI_asan.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_mempool.hh"        /* own include */
 #include "BLI_mempool_private.h" /* own include */
 
 #ifdef WITH_ASAN
-#  include "BLI_threads.h"
+#  include "BLI_threads.hh"
 #endif
 
 #include "MEM_guardedalloc.h"
@@ -37,7 +37,7 @@
 #  include "valgrind/memcheck.h"
 #endif
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -106,8 +106,10 @@ struct BLI_mempool {
 #endif
   /** Single linked list of allocated chunks. */
   BLI_mempool_chunk *chunks;
-  /** Keep a pointer to the last, so we can append new chunks there
-   * this is needed for iteration so we can loop over chunks in the order added. */
+  /**
+   * Keep a pointer to the last, so we can append new chunks there
+   * this is needed for iteration so we can loop over chunks in the order added.
+   */
   BLI_mempool_chunk *chunk_tail;
 
   /** Element size in bytes. */

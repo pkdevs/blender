@@ -23,11 +23,11 @@
 #include <cstring>
 
 #include "BLI_array.hh"
-#include "BLI_ghash.h"
-#include "BLI_linklist.h"
-#include "BLI_linklist_stack.h"
-#include "BLI_listbase.h"
-#include "BLI_mempool.h"
+#include "BLI_ghash.hh"
+#include "BLI_linklist.hh"
+#include "BLI_linklist_stack.hh"
+#include "BLI_listbase.hh"
+#include "BLI_mempool.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -50,11 +50,11 @@
 // #define DEBUG_PRINT
 
 #ifdef DEBUG_TIME
-#  include "BLI_time.h"
-#  include "BLI_time_utildefines.h"
+#  include "BLI_time.hh"
+#  include "BLI_time_utildefines.hh"
 #endif
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -742,8 +742,8 @@ static BMFace **bm_mesh_region_match_pair(
   while (true) {
     bool ok = false;
 
-    UIDFaceStep *fstep_src = static_cast<UIDFaceStep *>(w_src->faces_step.first);
-    UIDFaceStep *fstep_dst = static_cast<UIDFaceStep *>(w_dst->faces_step.first);
+    UIDFaceStep *fstep_src = w_src->faces_step.first();
+    UIDFaceStep *fstep_dst = w_dst->faces_step.first();
 
     BLI_assert(w_src->faces_step.count() == w_dst->faces_step.count());
 
@@ -769,8 +769,7 @@ static BMFace **bm_mesh_region_match_pair(
          * The data is created on 'begin' and cleared on 'end' */
         UIDFaceStepItem *fstep_item_src;
         UIDFaceStepItem *fstep_item_dst;
-        for (fstep_item_src = static_cast<UIDFaceStepItem *>(fstep_src->items.first),
-            fstep_item_dst = static_cast<UIDFaceStepItem *>(fstep_dst->items.first);
+        for (fstep_item_src = fstep_src->items.first(), fstep_item_dst = fstep_dst->items.first();
              fstep_item_src && fstep_item_dst;
              fstep_item_src = fstep_item_src->next, fstep_item_dst = fstep_item_dst->next)
         {

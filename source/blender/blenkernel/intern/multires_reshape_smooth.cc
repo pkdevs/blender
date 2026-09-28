@@ -13,11 +13,11 @@
 #include "DNA_mesh_types.h"
 
 #include "BLI_function_ref.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
@@ -544,7 +544,7 @@ static void foreach_vert(const bke::subdiv::ForeachContext *foreach_context,
                                                              grid_coord.grid_index);
 
   const int num_corners = reshape_context->base_faces[face_index].size();
-  const int start_grid_index = reshape_context->face_start_grid_index[face_index];
+  const int start_grid_index = reshape_context->base_faces[face_index].start();
   const int corner = grid_coord.grid_index - start_grid_index;
 
   if (grid_coord.u == 0.0f && grid_coord.v == 0.0f) {
@@ -649,7 +649,7 @@ static void foreach_loop(const bke::subdiv::ForeachContext *foreach_context,
   Corner *corner = &reshape_smooth_context->geometry.corners[subdiv_loop_index];
   corner->vert_index = subdiv_vert_index;
 
-  const int first_grid_index = reshape_context->face_start_grid_index[coarse_face_index];
+  const int first_grid_index = reshape_context->base_faces[coarse_face_index].start();
   corner->grid_index = first_grid_index + coarse_corner;
 }
 

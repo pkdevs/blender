@@ -8,8 +8,8 @@
 
 #include "BKE_context.hh"
 
-#include "BLI_fnmatch.h"
-#include "BLI_listbase.h"
+#include "BLI_fnmatch.hh"
+#include "BLI_listbase.hh"
 
 #include "WM_api.hh"
 
@@ -130,7 +130,7 @@ void AbstractViewItem::change_state_delayed()
     }
     else if (is_active_) {
       is_active_ = false;
-      this->set_selected(false);
+      is_selected_ = false;
     }
   }
   if (std::optional<bool> is_selected = should_be_selected()) {

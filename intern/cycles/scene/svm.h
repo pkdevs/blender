@@ -235,7 +235,7 @@ class SVMCompiler {
     vector<bool> nodes_done_flag;
 
     /* Node features that can be compiled. */
-    uint node_feature_mask;
+    uint64_t node_feature_mask;
   };
 
   ShaderNodeType node_type(const ShaderNode *shader_node,
@@ -249,7 +249,11 @@ class SVMCompiler {
   int stack_size(SocketType::Type type);
   int stack_size(const ShaderIO *io);
   void stack_clear_users(ShaderNode *node, ShaderNodeSet &done);
+  bool is_sole_user(const ShaderNode *node, const ShaderOutput *output, const ShaderNodeSet &done);
   void stack_zero_incomplete_derivatives(const ShaderNode *node);
+
+  /* Stack size that will be allocated for the outputs of this node. */
+  int stack_node_output_size(const ShaderNode *node);
 
   /* single closure */
   void find_dependencies(ShaderNodeSet &dependencies,

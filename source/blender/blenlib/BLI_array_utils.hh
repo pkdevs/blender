@@ -14,7 +14,7 @@
 #include "BLI_generic_span.hh"
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_task.hh"
 #include "BLI_virtual_array.hh"
@@ -286,6 +286,20 @@ inline void gather_group_to_group(const OffsetIndices<int> src_offsets,
         dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[src_i]));
       },
       exec_mode::grain_size(512));
+}
+
+template<typename T>
+inline void gather_group_to_group(const OffsetIndices<int> src_offsets,
+                                  const OffsetIndices<int> dst_offsets,
+                                  const Span<int> selection,
+                                  const Span<T> src,
+                                  MutableSpan<T> dst)
+{
+  threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
+    for (const int dst_i : range) {
+      dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[selection[dst_i]]));
+    }
+  });
 }
 
 template<typename T>

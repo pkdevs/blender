@@ -6,8 +6,8 @@
 
 #include "draw_math_geom_lib.glsl"
 #include "draw_shader_shared.hh"
-#include "gpu_shader_math_safe_lib.glsl"
-#include "gpu_shader_ray_lib.glsl"
+#include "gpu_shader_math_safe.bsl.hh"
+#include "gpu_shader_ray.bsl.hh"
 
 #if 0
 /* Screen-space ray ([0..1] "uv" range) where direction is normalize to be as small as one
@@ -35,10 +35,12 @@ struct ScreenSpaceRay {
 
   static ScreenSpaceRay from_start_end(float4 hs_start, float4 hs_end, float2 pixel_size)
   {
-    /* Constant bias (due to depth buffer precision). Helps with self intersection. */
-    /* Magic numbers for 24bits of precision.
-     * From http://terathon.com/gdc07_lengyel.pdf (slide 26) */
-    constexpr float bias = -2.4e-7f * 2.0f;
+    /* Constant bias (due to depth buffer precision). Helps with self intersection.
+     * Magic numbers for 24bits of precision from
+     * http://terathon.com/gdc07_lengyel.pdf (slide 26)
+     * Increased factor from 2 to 7 to work around
+     * https://projects.blender.org/blender/blender/issues/159634. */
+    constexpr float bias = -2.4e-7f * 7.0f;
     hs_start.z += bias;
     hs_end.z += bias;
 

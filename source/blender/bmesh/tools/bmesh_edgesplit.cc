@@ -10,8 +10,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "bmesh.hh"
 
@@ -30,7 +30,7 @@ void BM_mesh_edgesplit(BMesh *bm,
   bool use_ese = false;
   Map<BMElem *, BMEditSelection *> ese_gh;
 
-  if (copy_select && bm->selected.first) {
+  if (copy_select && bm->selected.first()) {
     for (BMEditSelection &ese : bm->selected) {
       if (ese.htype != BM_FACE) {
         ese_gh.add(ese.ele, &ese);

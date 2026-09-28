@@ -20,7 +20,7 @@
 #include <sys/stat.h>
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include "utfconv.hh"
 #  include <direct.h>
 #  include <io.h>
@@ -35,11 +35,11 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_fileops.h"
-#include "BLI_fileops_types.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_fileops_types.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
 namespace blender {
@@ -195,7 +195,7 @@ static void bli_builddir(BuildDirCtx *dir_ctx, const char *dirname)
       dir_ctx->files_num = 0;
     }
     else {
-      dirlink *dlink = static_cast<dirlink *>(dirbase.first);
+      dirlink *dlink = dirbase.first();
       direntry *file = &dir_ctx->files[dir_ctx->files_num];
 
       while (dlink) {
