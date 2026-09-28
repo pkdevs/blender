@@ -976,8 +976,8 @@ static wmOperatorStatus uv_rip_exec(bContext *C, wmOperator *op)
   }
 
   if (!changed_multi) {
-    if (!uvedit_select_is_any_selected_multi(scene, objects)) {
-      BKE_report(op->reports, RPT_ERROR, "No UVs selected");
+    if (!BKE_reports_contain(op->reports, RPT_ERROR)) {
+      BKE_report(op->reports, RPT_ERROR, "No UVs to rip");
     }
     return OPERATOR_CANCELLED;
   }
