@@ -7,13 +7,16 @@
  * \ingroup bke
  */
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
@@ -25,18 +28,19 @@
 
 #include "BKE_context.hh"
 
-namespace blender::bke::id {
+namespace blender {
+namespace bke::id {
 class IDRemapper;
 }
 
-namespace blender::asset_system {
+namespace asset_system {
 class AssetRepresentation;
 }
 
-namespace blender::ui {
+namespace ui {
 struct Layout;
 struct Block;
-}  // namespace blender::ui
+}  // namespace ui
 
 struct ARegion;
 struct ARegionType;
@@ -93,6 +97,7 @@ struct wmSpaceTypeListenerParams {
   ScrArea *area;
   const wmNotifier *notifier;
   const Scene *scene;
+  const Main *bmain;
 };
 
 struct SpaceType {
@@ -124,6 +129,12 @@ struct SpaceType {
   /** Refresh context, called after file-reads, #ED_area_tag_refresh(). */
   void (*refresh)(const bContext *C, ScrArea *area);
 
+  /** Called before the regions of this area are redrawn. */
+  void (*draw_pre)(const bContext *C, ScrArea *area);
+
+  /** Called after the regions of this area are redrawn. */
+  void (*draw_post)(const bContext *C, ScrArea *area);
+
   /** After a spacedata copy, an init should result in exact same situation. */
   SpaceLink *(*duplicate)(SpaceLink *sl);
 
@@ -141,7 +152,7 @@ struct SpaceType {
   bContextDataCallback context;
 
   /** Used when we want to replace an ID by another (or NULL). */
-  void (*id_remap)(ScrArea *area, SpaceLink *sl, const blender::bke::id::IDRemapper &mappings);
+  void (*id_remap)(ScrArea *area, SpaceLink *sl, const bke::id::IDRemapper &mappings);
 
   /**
    * foreach_id callback to process all ID pointers of the editor. Used indirectly by lib_query's
@@ -155,7 +166,7 @@ struct SpaceType {
   void (*space_subtype_item_extend)(bContext *C, EnumPropertyItem **item, int *totitem);
 
   /** Return a custom name, based on subtype or other reason. */
-  blender::StringRefNull (*space_name_get)(const ScrArea *area);
+  StringRefNull (*space_name_get)(const ScrArea *area);
   /** Return a custom icon, based on subtype or other reason. */
   int (*space_icon_get)(const ScrArea *area);
 
@@ -227,6 +238,16 @@ enum class ARegionTypeFlag {
    * region.
    */
   UsePanelCategoryTabs = (1 << 1),
+  /**
+   * When using panel categories, this hides the sidebar tab where there is only one category
+   * active.
+   */
+  HideSinglePanelCategories = (1 << 2),
+  /**
+   * Use panel categories region search, adds a button on top of the region which allows
+   * searching.
+   */
+  UsePanelCategoriesSearch = (1 << 3),
 };
 ENUM_OPERATORS(ARegionTypeFlag)
 
@@ -236,6 +257,40 @@ enum ARegionDrawLockFlags {
   REGION_DRAW_LOCK_RENDER = (1 << 0),
   REGION_DRAW_LOCK_BAKING = (1 << 1),
   REGION_DRAW_LOCK_ALL = (REGION_DRAW_LOCK_RENDER | REGION_DRAW_LOCK_BAKING)
+};
+
+/**
+ * Result of #ARegionType::cursor_ime, describing what should happen to the region's IME session.
+ * Ending a session cancels composition, discarding text the user has entered but not committed,
+ * so a temporary lack of position must *not* end it.
+ *
+ * A `std::nullopt` result means the region isn't editing text, end the session.
+ */
+enum class ARegionIMECursorState : int8_t {
+  /**
+   * The callback filled in its #ARegionIMECursor, (re)position the IME popup.
+   */
+  PositionSet,
+  /**
+   * No usable position right now, e.g. scrolling or the current-frame off a text strip:
+   * keep the session until it returns.
+   */
+  PositionPending,
+};
+
+/**
+ * The cursor position & size to display.
+ * See #ARegionType::cursor_ime for details.
+ */
+struct ARegionIMECursor {
+  /**
+   * Region relative, positions the candidate window & the composition preview.
+   *
+   * The width may be zero but the height should match the cursor size.
+   */
+  rcti rect = {0, 0, 0, 0};
+  /** The size the editor draws text at, so the preview matches it. */
+  int font_size = 0;
 };
 
 struct ARegionType {
@@ -278,10 +333,6 @@ struct ARegionType {
   /** Split region, copy data optionally. */
   void *(*duplicate)(void *poin);
 
-  /** Register operator types on startup. */
-  void (*operatortypes)();
-  /** Add items to keymap. */
-  void (*keymap)(wmKeyConfig *keyconf);
   /** Allows default cursor per region. */
   void (*cursor)(wmWindow *win, ScrArea *area, ARegion *region);
 
@@ -311,6 +362,21 @@ struct ARegionType {
    */
   void (*on_view2d_changed)(const bContext *C, ARegion *region);
 
+  /**
+   * Report the IME cursor so the candidate window can be positioned,
+   * see #ARegionIMECursorState for the results.
+   *
+   * On #ARegionIMECursorState::PositionSet, `r_cursor->rect` is the region-relative cursor:
+   * used to position the IME popup. Otherwise `r_cursor` is left untouched.
+   *
+   * Called on region activation and after each draw (when `ARegionRuntime::do_ime` is set)
+   * to position the IME candidate window.
+   */
+  std::optional<ARegionIMECursorState> (*cursor_ime)(wmWindow *win,
+                                                     const ScrArea *area,
+                                                     const ARegion *region,
+                                                     ARegionIMECursor *r_cursor);
+
   ARegionTypeFlag flag;
 
   /** Custom drawing callbacks. */
@@ -324,7 +390,7 @@ struct ARegionType {
 
   /** Hardcoded constraints, smaller than these values region is not visible. */
   int minsizex, minsizey;
-  /** When new region opens (region prefsizex/y are zero then. */
+  /** When new region opens (region prefsizex/y are zero then). */
   int prefsizex, prefsizey;
   /** Default keymaps to add. */
   int keymapflag;
@@ -351,6 +417,7 @@ struct PanelType {
   char label[BKE_ST_MAXNAME];
   /** For panel tooltip. */
   const char *description;
+  int icon;
   char translation_context[BKE_ST_MAXNAME];
   /** For buttons window. */
   char context[BKE_ST_MAXNAME];
@@ -371,7 +438,7 @@ struct PanelType {
    * For popovers, position the popover at the given offset (multiplied by #UI_UNIT_X/#UI_UNIT_Y)
    * relative to the top left corner, if it's not attached to a button.
    */
-  blender::float2 offset_units_xy;
+  float2 offset_units_xy;
   int order;
 
   int flag;
@@ -412,7 +479,6 @@ struct PanelType {
   /** Sub panels. */
   PanelType *parent;
   ListBaseT<LinkData> children;
-
   /** RNA integration. */
   ExtensionRNA rna_ext;
 };
@@ -443,7 +509,7 @@ struct LayoutPanelBody {
 };
 
 /**
- * "Layout Panels" are panels which are defined as part of the #blender::ui::Layout. As such they
+ * "Layout Panels" are panels which are defined as part of the #ui::Layout. As such they
  * have a specific place in the layout and can not be freely dragged around like top level panels.
  *
  * This struct gathers information about the layout panels created by layout code. This is then
@@ -451,8 +517,8 @@ struct LayoutPanelBody {
  * multiple panels with a single mouse gesture.
  */
 struct LayoutPanels {
-  blender::Vector<LayoutPanelHeader> headers;
-  blender::Vector<LayoutPanelBody> bodies;
+  Vector<LayoutPanelHeader> headers;
+  Vector<LayoutPanelBody> bodies;
 
   void clear()
   {
@@ -478,16 +544,23 @@ struct Panel_Runtime {
    * Pointer to the panel's block. Useful when changes to panel #ui::Blocks
    * need some context from traversal of the panel "tree".
    */
-  blender::ui::Block *block = nullptr;
+  ui::Block *block = nullptr;
 
   /** Non-owning pointer. The context is stored in the block. */
   bContextStore *context = nullptr;
 
   /** Information about nested layout panels generated in layout code. */
   LayoutPanels layout_panels;
+
+  /**
+   * Custom storage for saving the open-close-state of layout panels created with
+   * `layout.panel(...)`. This precedes #Panel::layout_panel_states when storing layout panel
+   * state.
+   */
+  ListBaseT<LayoutPanelState> *layout_panel_states_storage = nullptr;
 };
 
-namespace blender::bke {
+namespace bke {
 
 /** #ARegionRuntime.quadview_index */
 enum class ARegionQuadviewIndex : uint8_t {
@@ -497,6 +570,12 @@ enum class ARegionQuadviewIndex : uint8_t {
   BottomRight = 3,
   TopRight = 4,
 };
+
+enum ARegionRuntimeFlag : uint8_t {
+  /** Move redo panel in +Y direction to avoid overlapping with other UI elements, see: #62258 */
+  HUD_PADDING = (1 << 0),
+};
+ENUM_OPERATORS(ARegionRuntimeFlag)
 
 struct ARegionRuntime {
   /** Callbacks for this region type. */
@@ -524,7 +603,7 @@ struct ARegionRuntime {
   const char *category = nullptr;
 
   /** Maps #ui::Block::name to ui::Block for faster lookups. */
-  Map<std::string, blender::ui::Block *> block_name_map;
+  Map<std::string, ui::Block *> block_name_map;
   ListBaseT<ui::Block> uiblocks = {};
 
   ListBaseT<wmEventHandler> handlers = {};
@@ -537,6 +616,9 @@ struct ARegionRuntime {
 
   /** Blend in/out. */
   wmTimer *regiontimer = nullptr;
+
+  /** For calling after building a blocks. */
+  Vector<std::function<void(const bContext &C, ui::Block &Block)>> post_block_layout_fns;
 
   wmDrawBuffer *draw_buffer = nullptr;
 
@@ -552,20 +634,27 @@ struct ARegionRuntime {
   /** Private, cached notifier events. */
   short do_draw_paintcursor;
 
+  /** Tag for IME cursor position refresh on next draw. */
+  bool do_ime = false;
+
   ARegionQuadviewIndex quadview_index = ARegionQuadviewIndex::None;
 
   /** Dummy panel used in popups so they can support layout panels. */
   Panel *popup_block_panel = nullptr;
+  ARegionRuntimeFlag flag = {};
+
+  std::string search_filter;
+  Set<std::string> categories_search_match;
 };
 
-}  // namespace blender::bke
+}  // namespace bke
 
 /* #uiList types. */
 
 /** Draw an item in the `ui_list`. */
 using uiListDrawItemFunc = void (*)(uiList *ui_list,
                                     const bContext *C,
-                                    blender::ui::Layout &layout,
+                                    ui::Layout &layout,
                                     PointerRNA *dataptr,
                                     PointerRNA *itemptr,
                                     int icon,
@@ -575,9 +664,7 @@ using uiListDrawItemFunc = void (*)(uiList *ui_list,
                                     int flt_flag);
 
 /** Draw the filtering part of an uiList. */
-using uiListDrawFilterFunc = void (*)(uiList *ui_list,
-                                      const bContext *C,
-                                      blender::ui::Layout &layout);
+using uiListDrawFilterFunc = void (*)(uiList *ui_list, const bContext *C, ui::Layout &layout);
 
 /** Filter items of an uiList. */
 using uiListFilterItemsFunc = void (*)(uiList *ui_list,
@@ -626,7 +713,7 @@ struct Header {
   /** Runtime. */
   HeaderType *type;
   /** Runtime for drawing. */
-  blender::ui::Layout *layout;
+  ui::Layout *layout;
 };
 
 /* Menu types. */
@@ -672,7 +759,7 @@ struct Menu {
   /** Runtime. */
   MenuType *type;
   /** Runtime for drawing. */
-  blender::ui::Layout *layout;
+  ui::Layout *layout;
 };
 
 /* Asset shelf types. */
@@ -728,17 +815,17 @@ struct AssetShelfType {
 
   /**
    * Determine if an individual asset should be visible or not.
-   * Don't use directly, use #blender::ed::asset::shelf::type_asset_poll() (does additional
+   * Don't use directly, use #ed::asset::shelf::type_asset_poll() (does additional
    * pre-filtering based on the ID-type).
    */
   bool (*asset_poll)(const AssetShelfType *shelf_type,
-                     const blender::asset_system::AssetRepresentation *asset);
+                     const asset_system::AssetRepresentation *asset);
 
   /** Asset shelves can define their own context menu via this layout definition callback. */
   void (*draw_context_menu)(const bContext *C,
                             const AssetShelfType *shelf_type,
-                            const blender::asset_system::AssetRepresentation *asset,
-                            blender::ui::Layout &layout);
+                            const asset_system::AssetRepresentation *asset,
+                            ui::Layout &layout);
 
   const AssetWeakReference *(*get_active_asset)(const AssetShelfType *shelf_type);
 
@@ -750,7 +837,7 @@ struct AssetShelfType {
 
 SpaceType *BKE_spacetype_from_id(int spaceid);
 ARegionType *BKE_regiontype_from_id(const SpaceType *st, int regionid);
-blender::Span<std::unique_ptr<SpaceType>> BKE_spacetypes_list();
+Span<std::unique_ptr<SpaceType>> BKE_spacetypes_list();
 void BKE_spacetype_register(std::unique_ptr<SpaceType> st);
 bool BKE_spacetype_exists(int spaceid);
 /** Only for quitting blender. */
@@ -758,6 +845,8 @@ void BKE_spacetypes_free();
 
 bool BKE_regiontype_uses_categories(const ARegionType *region_type);
 bool BKE_regiontype_uses_category_tabs(const ARegionType *region_type);
+bool BKE_regiontype_uses_panel_categories_search(const ARegionType *region_type);
+bool BKE_region_panel_categories_search_filter_visible(const ARegion *region);
 
 /* Space-data. */
 
@@ -823,7 +912,7 @@ void BKE_region_callback_refresh_tag_gizmomap_set(void (*callback)(wmGizmoMap *)
  * panel state with the given default value.
  */
 LayoutPanelState *BKE_panel_layout_panel_state_ensure(Panel *panel,
-                                                      blender::StringRef idname,
+                                                      StringRef idname,
                                                       bool default_closed);
 
 /**
@@ -874,8 +963,13 @@ ARegion *BKE_screen_find_region_in_space(const bScreen *screen,
     ATTR_NONNULL(1, 2);
 /**
  * \note used to get proper RNA paths for spaces (editors).
+ * \note This handles both normal screen areas, and global areas that are owned by the window.
  */
-std::optional<std::string> BKE_screen_path_from_screen_to_space(const PointerRNA *ptr);
+std::optional<std::string> BKE_screen_path_to_space(const PointerRNA *ptr);
+/**
+ * \note This handles both normal screen areas, and global areas that are owned by the window.
+ */
+std::optional<std::string> BKE_screen_path_to_area(const PointerRNA *ptr);
 /**
  * \note Using this function is generally a last resort, you really want to be
  * using the context when you can - campbell
@@ -926,8 +1020,12 @@ void BKE_screen_area_map_free(ScrAreaMap *area_map) ATTR_NONNULL();
  */
 void BKE_screen_copy_data(bScreen *screen_dst, const bScreen *screen_src);
 
+/** \return True if the edge defined by a1 and a2 is equal to the edge defined by b1 and b2. */
+bool BKE_screen_scredge_equals(const ScrVert *a1,
+                               const ScrVert *a2,
+                               const ScrVert *b1,
+                               const ScrVert *b2);
 ScrEdge *BKE_screen_find_edge(const bScreen *screen, ScrVert *v1, ScrVert *v2);
-void BKE_screen_sort_scrvert(ScrVert **v1, ScrVert **v2);
 void BKE_screen_remove_double_scrverts(bScreen *screen);
 void BKE_screen_remove_double_scredges(bScreen *screen);
 void BKE_screen_remove_unused_scredges(bScreen *screen);
@@ -963,3 +1061,5 @@ void BKE_screen_area_blend_read_after_liblink(BlendLibReader *reader,
  * Cannot use #IDTypeInfo callback yet, because of the return value.
  */
 bool BKE_screen_blend_read_data(BlendDataReader *reader, bScreen *screen);
+
+}  // namespace blender

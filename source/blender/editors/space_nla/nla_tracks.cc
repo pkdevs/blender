@@ -14,7 +14,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_context.hh"
@@ -42,6 +42,8 @@
 #include "UI_view2d.hh"
 
 #include "nla_intern.hh" /* own include */
+
+namespace blender {
 
 /* *********************************************** */
 /* Operators for NLA track-list which need to be different
@@ -115,7 +117,7 @@ static int mouse_nla_tracks(bContext *C, bAnimContext *ac, int track_index, shor
         /* set selection status */
         if (selectmode == SELECT_INVERT) {
           /* swap select */
-          blender::ed::object::base_select(base, blender::ed::object::BA_INVERT);
+          ed::object::base_select(base, ed::object::BA_INVERT);
 
           if (adt) {
             adt->flag ^= ADT_UI_SELECTED;
@@ -124,23 +126,23 @@ static int mouse_nla_tracks(bContext *C, bAnimContext *ac, int track_index, shor
         else {
           /* deselect all */
           /* TODO: should this deselect all other types of tracks too? */
-          BKE_view_layer_synced_ensure(ac->scene, view_layer);
+          BKE_view_layer_synced_ensure(*ac->bmain, ac->scene, view_layer);
           for (Base &b : *BKE_view_layer_object_bases_get(view_layer)) {
-            blender::ed::object::base_select(&b, blender::ed::object::BA_DESELECT);
+            ed::object::base_select(&b, ed::object::BA_DESELECT);
             if (b.object->adt) {
               b.object->adt->flag &= ~(ADT_UI_SELECTED | ADT_UI_ACTIVE);
             }
           }
 
           /* select object now */
-          blender::ed::object::base_select(base, blender::ed::object::BA_SELECT);
+          ed::object::base_select(base, ed::object::BA_SELECT);
           if (adt) {
             adt->flag |= ADT_UI_SELECTED;
           }
         }
 
         /* change active object - regardless of whether it is now selected [#37883] */
-        blender::ed::object::base_activate_with_mode_exit_if_needed(C, base); /* adds notifier */
+        ed::object::base_activate_with_mode_exit_if_needed(C, base); /* adds notifier */
 
         if ((adt) && (adt->flag & ADT_UI_SELECTED)) {
           adt->flag |= ADT_UI_ACTIVE;
@@ -316,15 +318,15 @@ static wmOperatorStatus nlatracks_mouseclick_invoke(bContext *C,
   }
 
   /* Figure out which track user clicked in. */
-  blender::ui::view2d_region_to_view(v2d, event->mval[0], event->mval[1], &x, &y);
-  blender::ui::view2d_listview_view_to_cell(NLATRACK_NAMEWIDTH,
-                                            NLATRACK_STEP(snla),
-                                            0,
-                                            NLATRACK_FIRST_TOP(&ac),
-                                            x,
-                                            y,
-                                            nullptr,
-                                            &track_index);
+  ui::view2d_region_to_view(v2d, event->mval[0], event->mval[1], &x, &y);
+  ui::view2d_listview_view_to_cell(NLATRACK_NAMEWIDTH,
+                                   NLATRACK_STEP(snla),
+                                   0,
+                                   NLATRACK_FIRST_TOP(&ac),
+                                   x,
+                                   y,
+                                   nullptr,
+                                   &track_index);
 
   /* handle mouse-click in the relevant track then */
   notifierFlags = mouse_nla_tracks(C, &ac, track_index, selectmode);
@@ -378,7 +380,7 @@ static wmOperatorStatus nlatracks_pushdown_exec(bContext *C, wmOperator *op)
     PointerRNA adt_ptr = {};
 
     /* active animdata block */
-    if (nla_panel_context(C, &adt_ptr, nullptr, nullptr) == 0 || (adt_ptr.data == nullptr)) {
+    if (nla_panel_context(C, &adt_ptr, nullptr, nullptr) == 0 || !adt_ptr) {
       BKE_report(op->reports,
                  RPT_ERROR,
                  "No active AnimData block to use "
@@ -489,7 +491,7 @@ static bool nla_action_unlink_poll(bContext *C)
 {
   if (ED_operator_nla_active(C)) {
     PointerRNA adt_ptr;
-    return (nla_panel_context(C, &adt_ptr, nullptr, nullptr) && (adt_ptr.data != nullptr));
+    return (nla_panel_context(C, &adt_ptr, nullptr, nullptr) && adt_ptr);
   }
 
   /* something failed... */
@@ -624,7 +626,7 @@ bool nlaedit_add_tracks_empty(bAnimContext *ac)
     BLI_assert(adt->flag & ADT_UI_SELECTED);
 
     /* ensure it is empty */
-    if (BLI_listbase_is_empty(&adt->nla_tracks)) {
+    if (adt->nla_tracks.is_empty()) {
       /* add new track to this AnimData block then */
       new_track = BKE_nlatrack_new_tail(&adt->nla_tracks, ID_IS_OVERRIDE_LIBRARY(ale.id));
       BKE_nlatrack_set_active(&adt->nla_tracks, new_track);
@@ -825,3 +827,5 @@ void NLA_OT_selected_objects_add(wmOperatorType *ot)
 }
 
 /* *********************************************** */
+
+}  // namespace blender

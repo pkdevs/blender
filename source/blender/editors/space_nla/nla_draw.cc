@@ -12,14 +12,15 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "DNA_anim_enums.h"
 #include "DNA_anim_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
 #include "BLI_bounds_types.hh"
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -43,7 +44,7 @@
 #include "nla_intern.hh" /* own include */
 #include "nla_private.h"
 
-using namespace blender;
+namespace blender {
 
 /* *********************************************** */
 /* Strips */
@@ -100,7 +101,7 @@ static void nla_action_draw_keyframes(
   color[3] = min_ff(0.7f, color[3] * 2.5f);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos_id = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos_id = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -117,21 +118,18 @@ static void nla_action_draw_keyframes(
 
   /* Count keys before drawing. */
   const ListBaseT<ActKeyColumn> *keys = ED_keylist_listbase(keylist);
-  uint key_len = BLI_listbase_count(keys);
+  uint key_len = keys->count();
 
   if (key_len > 0) {
     format = immVertexFormat();
     KeyframeShaderBindings sh_bindings;
-    sh_bindings.pos_id = GPU_vertformat_attr_add(
-        format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
-    sh_bindings.size_id = GPU_vertformat_attr_add(
-        format, "size", blender::gpu::VertAttrType::SFLOAT_32);
+    sh_bindings.pos_id = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+    sh_bindings.size_id = GPU_vertformat_attr_add(format, "size", gpu::VertAttrType::SFLOAT_32);
     sh_bindings.color_id = GPU_vertformat_attr_add(
-        format, "color", blender::gpu::VertAttrType::UNORM_8_8_8_8);
+        format, "color", gpu::VertAttrType::UNORM_8_8_8_8);
     sh_bindings.outline_color_id = GPU_vertformat_attr_add(
-        format, "outlineColor", blender::gpu::VertAttrType::UNORM_8_8_8_8);
-    sh_bindings.flags_id = GPU_vertformat_attr_add(
-        format, "flags", blender::gpu::VertAttrType::UINT_32);
+        format, "outlineColor", gpu::VertAttrType::UNORM_8_8_8_8);
+    sh_bindings.flags_id = GPU_vertformat_attr_add(format, "flags", gpu::VertAttrType::UINT_32);
 
     GPU_program_point_size(true);
     immBindBuiltinProgram(GPU_SHADER_KEYFRAME_SHAPE);
@@ -172,12 +170,12 @@ static void nla_actionclip_draw_markers(
 {
   const bAction *act = strip->act;
 
-  if (ELEM(nullptr, act, act->markers.first)) {
+  if (ELEM(nullptr, act, act->markers.first_)) {
     return;
   }
 
   const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   if (dashed) {
     immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
@@ -195,7 +193,7 @@ static void nla_actionclip_draw_markers(
   }
   immUniformThemeColorShade(TH_STRIP_SELECT, shade);
 
-  immBeginAtMost(GPU_PRIM_LINES, BLI_listbase_count(&act->markers) * 2);
+  immBeginAtMost(GPU_PRIM_LINES, act->markers.count() * 2);
   for (TimeMarker &marker : act->markers) {
     if ((marker.frame > strip->actstart) && (marker.frame < strip->actend)) {
       float frame = nlastrip_get_frame(strip, marker.frame, NLATIME_CONVERT_MAP);
@@ -367,7 +365,7 @@ static uint nla_draw_use_dashed_outlines(const float color[4], bool muted)
 {
   /* Note that we use dashed shader here, and make it draw solid lines if not muted... */
   uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
   float viewport_size[4];
@@ -439,8 +437,7 @@ static void nla_draw_strip(SpaceNla *snla,
   /* get color of strip */
   nla_strip_get_color_inside(adt, strip, color);
 
-  shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* draw extrapolation info first (as backdrop)
@@ -478,6 +475,8 @@ static void nla_draw_strip(SpaceNla *snla,
           immRectf(shdr_pos, strip->end, yminc, x2, ymaxc);
         }
         break;
+      case NLASTRIP_EXTEND_NOTHING:
+        break;
     }
 
     GPU_blend(GPU_BLEND_NONE);
@@ -489,17 +488,16 @@ static void nla_draw_strip(SpaceNla *snla,
     immUnbindProgram();
 
     /* strip is in normal track */
-    blender::ui::draw_roundbox_corner_set(blender::ui::CNR_ALL); /* all corners rounded */
+    ui::draw_roundbox_corner_set(ui::CNR_ALL); /* all corners rounded */
     rctf rect;
     rect.xmin = strip->start;
     rect.xmax = strip->end;
     rect.ymin = yminc;
     rect.ymax = ymaxc;
-    blender::ui::draw_roundbox_4fv(&rect, true, 0.0f, color);
+    ui::draw_roundbox_4fv(&rect, true, 0.0f, color);
 
     /* restore current vertex format & program (roundbox trashes it) */
-    shdr_pos = GPU_vertformat_attr_add(
-        immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+    shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   }
   else {
@@ -557,7 +555,7 @@ static void nla_draw_strip(SpaceNla *snla,
     rect.xmax = strip->end;
     rect.ymin = yminc;
     rect.ymax = ymaxc;
-    blender::ui::draw_roundbox_4fv(&rect, false, 0.0f, color);
+    ui::draw_roundbox_4fv(&rect, false, 0.0f, color);
 
     /* restore current vertex format & program (roundbox trashes it) */
     shdr_pos = nla_draw_use_dashed_outlines(color, muted);
@@ -584,11 +582,12 @@ static void nla_draw_strip(SpaceNla *snla,
   }
   /* or if meta-strip, draw lines delimiting extents of sub-strips
    * (in same color as outline, if more than 1 exists) */
-  else if ((strip->type == NLASTRIP_TYPE_META) && (strip->strips.first != strip->strips.last)) {
+  else if ((strip->type == NLASTRIP_TYPE_META) && (strip->strips.first() != strip->strips.last()))
+  {
     const float y = (ymaxc - yminc) * 0.5f + yminc;
 
     /* up to 2 lines per strip */
-    immBeginAtMost(GPU_PRIM_LINES, 4 * BLI_listbase_count(&strip->strips));
+    immBeginAtMost(GPU_PRIM_LINES, 4 * strip->strips.count());
 
     /* only draw first-level of child-strips, but don't draw any lines on the endpoints */
     for (NlaStrip &cs : strip->strips) {
@@ -667,7 +666,7 @@ static void nla_draw_strip_text(AnimData *adt,
   rect.ymax = ymaxc;
 
   /* add this string to the cache of texts to draw */
-  blender::ui::view2d_text_cache_add_rectf(v2d, &rect, str, str_len, col);
+  ui::view2d_text_cache_add_rectf(v2d, &rect, str, str_len, col);
 }
 
 /**
@@ -690,12 +689,11 @@ static void nla_draw_strip_frames_text(
 
   /* start frame */
   numstr_len = SNPRINTF_UTF8_RLEN(numstr, "%.1f", strip->start);
-  blender::ui::view2d_text_cache_add(
-      v2d, strip->start - 1.0f, ymaxc + ytol, numstr, numstr_len, col);
+  ui::view2d_text_cache_add(v2d, strip->start - 1.0f, ymaxc + ytol, numstr, numstr_len, col);
 
   /* end frame */
   numstr_len = SNPRINTF_UTF8_RLEN(numstr, "%.1f", strip->end);
-  blender::ui::view2d_text_cache_add(v2d, strip->end, ymaxc + ytol, numstr, numstr_len, col);
+  ui::view2d_text_cache_add(v2d, strip->end, ymaxc + ytol, numstr, numstr_len, col);
 }
 
 /* ---------------------- */
@@ -707,7 +705,7 @@ static void nla_draw_strip_frames_text(
  */
 static ListBaseT<NlaStrip> get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
 {
-  if (BLI_listbase_is_empty(&nlt->strips)) {
+  if (nlt->strips.is_empty()) {
     ListBaseT<NlaStrip> empty = {nullptr, nullptr};
     return empty;
   }
@@ -748,8 +746,8 @@ static ListBaseT<NlaStrip> get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
      * if the view is adjacent to a strip that should have its extendmode
      * rendered.
      */
-    NlaStrip *first_strip = static_cast<NlaStrip *>(nlt->strips.first);
-    NlaStrip *last_strip = static_cast<NlaStrip *>(nlt->strips.last);
+    NlaStrip *first_strip = nlt->strips.first();
+    NlaStrip *last_strip = nlt->strips.last();
     if (first_strip && v2d->cur.xmax < first_strip->start &&
         first_strip->extendmode == NLASTRIP_EXTEND_HOLD)
     {
@@ -810,9 +808,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
   /* Loop through tracks, and set up drawing depending on their type. */
   float ymax = NLATRACK_FIRST_TOP(ac);
 
-  for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-       ale = ale->next, ymax -= NLATRACK_STEP(snla))
-  {
+  for (bAnimListElem *ale = anim_data.first(); ale; ale = ale->next, ymax -= NLATRACK_STEP(snla)) {
     float ymin = ymax - NLATRACK_HEIGHT(snla);
     float ycenter = (ymax + ymin + 2 * NLATRACK_SKIP - 1) / 2.0f;
 
@@ -858,7 +854,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
           }
 
           uint pos = GPU_vertformat_attr_add(
-              immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+              immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
           immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
           /* just draw a semi-shaded rect spanning the width of the viewable area, based on if
@@ -983,14 +979,14 @@ void draw_nla_track_list(const bContext *C,
 
   /* need to do a view-sync here, so that the keys area doesn't jump around
    * (it must copy this) */
-  blender::ui::view2d_sync(nullptr, ac->area, v2d, V2D_LOCK_COPY);
+  ui::view2d_sync(nullptr, ac->area, v2d, V2D_LOCK_COPY);
 
   /* draw tracks */
   { /* first pass: just the standard GL-drawing for backdrop + text */
     size_t track_index = 0;
     float ymax = NLATRACK_FIRST_TOP(ac);
 
-    for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first); ale;
+    for (bAnimListElem *ale = anim_data.first(); ale;
          ale = ale->next, ymax -= NLATRACK_STEP(snla), track_index++)
     {
       float ymin = ymax - NLATRACK_HEIGHT(snla);
@@ -1005,7 +1001,7 @@ void draw_nla_track_list(const bContext *C,
     }
   }
   { /* second pass: UI widgets */
-    blender::ui::Block *block = block_begin(C, region, __func__, blender::ui::EmbossType::Emboss);
+    ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
     size_t track_index = 0;
     float ymax = NLATRACK_FIRST_TOP(ac);
 
@@ -1013,7 +1009,7 @@ void draw_nla_track_list(const bContext *C,
     GPU_blend(GPU_BLEND_ALPHA);
 
     /* Loop through tracks, and set up drawing depending on their type. */
-    for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first); ale;
+    for (bAnimListElem *ale = anim_data.first(); ale;
          ale = ale->next, ymax -= NLATRACK_STEP(snla), track_index++)
     {
       float ymin = ymax - NLATRACK_HEIGHT(snla);
@@ -1037,3 +1033,5 @@ void draw_nla_track_list(const bContext *C,
 }
 
 /* *********************************************** */
+
+}  // namespace blender

@@ -8,9 +8,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_time.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -32,6 +32,8 @@
 
 #include "clip_intern.hh" /* own include */
 #include "tracking_ops_intern.hh"
+
+namespace blender {
 
 /********************** Track operator *********************/
 
@@ -203,7 +205,7 @@ static bool track_markers_initjob(bContext *C, TrackMarkersJob *tmj, bool backwa
 
 static void track_markers_startjob(void *tmv, wmJobWorkerStatus *worker_status)
 {
-  TrackMarkersJob *tmj = (TrackMarkersJob *)tmv;
+  TrackMarkersJob *tmj = static_cast<TrackMarkersJob *>(tmv);
   int framenr = tmj->sfra;
 
   BKE_autotrack_context_start(tmj->context);
@@ -252,14 +254,14 @@ static void track_markers_startjob(void *tmv, wmJobWorkerStatus *worker_status)
 
 static void track_markers_updatejob(void *tmv)
 {
-  TrackMarkersJob *tmj = (TrackMarkersJob *)tmv;
+  TrackMarkersJob *tmj = static_cast<TrackMarkersJob *>(tmv);
   BKE_autotrack_context_sync(tmj->context);
 }
 
 static void track_markers_endjob(void *tmv)
 {
-  TrackMarkersJob *tmj = (TrackMarkersJob *)tmv;
-  wmWindowManager *wm = static_cast<wmWindowManager *>(tmj->main->wm.first);
+  TrackMarkersJob *tmj = static_cast<TrackMarkersJob *>(tmv);
+  wmWindowManager *wm = tmj->main->wm.first();
 
   tmj->clip->tracking_context = nullptr;
   tmj->scene->r.cfra = BKE_movieclip_remap_clip_to_scene_frame(tmj->clip, tmj->lastfra);
@@ -277,11 +279,11 @@ static void track_markers_endjob(void *tmv)
 
 static void track_markers_freejob(void *tmv)
 {
-  TrackMarkersJob *tmj = (TrackMarkersJob *)tmv;
+  TrackMarkersJob *tmj = static_cast<TrackMarkersJob *>(tmv);
   tmj->clip->tracking_context = nullptr;
   WM_locked_interface_set(tmj->wm, false);
   BKE_autotrack_context_free(tmj->context);
-  MEM_freeN(tmj);
+  MEM_delete(tmj);
 }
 
 static wmOperatorStatus track_markers(bContext *C, wmOperator *op, bool use_job)
@@ -294,7 +296,7 @@ static wmOperatorStatus track_markers(bContext *C, wmOperator *op, bool use_job)
   bool sequence = RNA_boolean_get(op->ptr, "sequence");
   int framenr = ED_space_clip_get_clip_frame_number(sc);
 
-  if (WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_ANY)) {
+  if (WM_jobs_has_running(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_CLIP_TRACK_MARKERS)) {
     /* Only one tracking is allowed at a time. */
     return OPERATOR_CANCELLED;
   }
@@ -307,7 +309,7 @@ static wmOperatorStatus track_markers(bContext *C, wmOperator *op, bool use_job)
     return OPERATOR_CANCELLED;
   }
 
-  tmj = MEM_callocN<TrackMarkersJob>("TrackMarkersJob data");
+  tmj = MEM_new_zeroed<TrackMarkersJob>("TrackMarkersJob data");
   if (!track_markers_initjob(C, tmj, backwards, sequence)) {
     track_markers_freejob(tmj);
     return OPERATOR_CANCELLED;
@@ -370,7 +372,7 @@ static wmOperatorStatus track_markers_invoke(bContext *C,
 static wmOperatorStatus track_markers_modal(bContext *C, wmOperator * /*op*/, const wmEvent *event)
 {
   /* No running tracking, remove handler and pass through. */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_ANY)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_CLIP_TRACK_MARKERS)) {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
 
@@ -480,3 +482,5 @@ void CLIP_OT_refine_markers(wmOperatorType *ot)
   /* properties */
   RNA_def_boolean(ot->srna, "backwards", false, "Backwards", "Do backwards tracking");
 }
+
+}  // namespace blender

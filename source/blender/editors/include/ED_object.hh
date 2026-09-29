@@ -10,7 +10,7 @@
 
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_map.hh"
 #include "BLI_math_matrix_types.hh"
@@ -20,6 +20,8 @@
 #include "DNA_listBase.h"
 #include "DNA_object_enums.h"
 #include "DNA_userdef_enums.h"
+
+namespace blender {
 
 struct Base;
 struct Depsgraph;
@@ -44,11 +46,13 @@ struct wmOperator;
 struct wmOperatorType;
 enum eReportType : uint16_t;
 
-namespace blender::ui {
+namespace ui {
 struct Layout;
-}  // namespace blender::ui
+}  // namespace ui
 
-namespace blender::ed::object {
+enum eObject_Partype : short;
+
+namespace ed::object {
 
 struct XFormObjectData;
 
@@ -157,6 +161,7 @@ enum {
 struct XFormObjectSkipChild_Container;
 XFormObjectSkipChild_Container *xform_skip_child_container_create();
 void xform_skip_child_container_item_ensure_from_array(XFormObjectSkipChild_Container *xcs,
+                                                       const Main &bmain,
                                                        const Scene *scene,
                                                        ViewLayer *view_layer,
                                                        Object **objects,
@@ -227,7 +232,7 @@ bool parent_set(ReportList *reports,
                 bool xmirror,
                 bool keep_transform,
                 const int vert_par[3]);
-void parent_clear(Object *ob, int type);
+void parent_clear(Main *bmain, Object *ob, int type);
 
 /**
  * Simple API for object selection, rather than just using the flag
@@ -257,9 +262,14 @@ void base_free_and_unlink(Main *bmain, Scene *scene, Object *ob);
  * `ob` must not be indirectly used.
  */
 void base_free_and_unlink_no_indirect_check(Main *bmain, Scene *scene, Object *ob);
-bool base_deselect_all_ex(
-    const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action, bool *r_any_visible);
-bool base_deselect_all(const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action);
+bool base_deselect_all_ex(const Main &bmain,
+                          const Scene *scene,
+                          ViewLayer *view_layer,
+                          View3D *v3d,
+                          int action,
+                          bool *r_any_visible);
+bool base_deselect_all(
+    const Main &bmain, const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action);
 
 /**
  * Single object duplicate, if `dupflag == 0`, fully linked, else it uses the flags given.
@@ -271,8 +281,8 @@ bool base_deselect_all(const Scene *scene, ViewLayer *view_layer, View3D *v3d, i
 Base *add_duplicate(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base, eDupli_ID_Flags dupflag);
 
-void parent_set(Object *ob, Object *parent, int type, const char *substr);
-std::string drop_named_material_tooltip(bContext *C, const char *name, const int mval[2]);
+void parent_set(Object *ob, Object *parent, eObject_Partype type, const char *substr);
+std::string drop_named_material_tooltip(bContext *C, StringRef name, const int mval[2]);
 std::string drop_geometry_nodes_tooltip(bContext *C, PointerRNA *properties, const int mval[2]);
 
 /** Bit-flags for enter/exit edit-mode. */
@@ -321,7 +331,7 @@ float new_primitive_matrix(bContext *C,
  */
 #define OBJECT_ADD_SIZE_MAXF 1.0e12f
 
-void add_unit_props_size(wmOperatorType *ot);
+void add_unit_props_size(wmOperatorType *ot, float default_value = 2.0f);
 void add_unit_props_radius_ex(wmOperatorType *ot, float default_value);
 void add_unit_props_radius(wmOperatorType *ot);
 void add_generic_props(wmOperatorType *ot, bool do_editmode);
@@ -372,27 +382,11 @@ void single_obdata_user_make(Main *bmain, Scene *scene, Object *ob);
  */
 void motion_paths_clear(bContext *C, bool only_selected);
 
-/* Corresponds to eAnimvizCalcRange. */
-enum eObjectPathCalcRange {
-  OBJECT_PATH_CALC_RANGE_CURRENT_FRAME,
-  OBJECT_PATH_CALC_RANGE_CHANGED,
-  OBJECT_PATH_CALC_RANGE_FULL,
-};
-
 /**
- * For the objects with animation: update paths for those that have got them
- * This should selectively update paths that exist.
- *
- * To be called from various tools that do incremental updates
+ * Recalculate the motion paths on the given objects. This includes bones when recalculating
+ * armature objects.
  */
-void motion_paths_recalc(bContext *C,
-                         Scene *scene,
-                         eObjectPathCalcRange range,
-                         ListBaseT<LinkData> *ld_objects);
-
-void motion_paths_recalc_selected(bContext *C, Scene *scene, eObjectPathCalcRange range);
-
-void motion_paths_recalc_visible(bContext *C, Scene *scene, eObjectPathCalcRange range);
+void motion_paths_recalc(bContext *C, Scene *scene, const Span<Object *> objects);
 
 /* constraints */
 /**
@@ -471,7 +465,8 @@ void posemode_set_for_weight_paint(bContext *C, Main *bmain, Object *ob, bool is
  *
  * \note The active object is always index 0.
  */
-int object_in_mode_to_index(const Scene *scene,
+int object_in_mode_to_index(const Main &bmain,
+                            const Scene *scene,
                             ViewLayer *view_layer,
                             eObjectMode mode,
                             const Object *ob);
@@ -479,10 +474,8 @@ int object_in_mode_to_index(const Scene *scene,
 /**
  * Access the object from the index returned by #object_in_mode_to_index.
  */
-Object *object_in_mode_from_index(const Scene *scene,
-                                  ViewLayer *view_layer,
-                                  eObjectMode mode,
-                                  int index);
+Object *object_in_mode_from_index(
+    const Main &bmain, const Scene *scene, ViewLayer *view_layer, eObjectMode mode, int index);
 
 /**
  * Retrieve the alpha factors of the currently active mode transfer overlay animations. The key is
@@ -535,12 +528,12 @@ bool modifier_apply(Main *bmain,
                     bool do_all_keyframes);
 bool modifier_copy(ReportList *reports, Main *bmain, Scene *scene, Object *ob, ModifierData *md);
 void modifier_link(bContext *C, Object *ob_dst, Object *ob_src);
-bool modifier_copy_to_object(Main *bmain,
-                             const Scene *scene,
-                             const Object *ob_src,
-                             const ModifierData *md,
-                             Object *ob_dst,
-                             ReportList *reports);
+ModifierData *modifier_copy_to_object(Main *bmain,
+                                      const Scene *scene,
+                                      const Object *ob_src,
+                                      const ModifierData *md,
+                                      Object *ob_dst,
+                                      ReportList *reports);
 /**
  * If the object data of 'orig_ob' has other users, run 'callback' on
  * each of them.
@@ -584,7 +577,7 @@ void check_force_modifiers(Main *bmain, Scene *scene, Object *object);
  * If id is not already an Object, try to find an object that uses it as data.
  * Prefers active, then selected, then visible/selectable.
  */
-Base *find_first_by_data_id(const Scene *scene, ViewLayer *view_layer, ID *id);
+Base *find_first_by_data_id(const Main &bmain, const Scene *scene, ViewLayer *view_layer, ID *id);
 
 /**
  * Select and make the target object active in the view layer.
@@ -618,8 +611,10 @@ void data_xform_by_mat4(XFormObjectData &xod, const float4x4 &transform);
 void data_xform_restore(XFormObjectData &xod);
 void data_xform_tag_update(XFormObjectData &xod);
 
-void ui_template_modifier_asset_menu_items(ui::Layout &layout,
+void ui_template_modifier_asset_menu_items(const bContext &C,
+                                           ui::Layout &layout,
                                            StringRef catalog_path,
                                            bool skip_essentials);
 
-}  // namespace blender::ed::object
+}  // namespace ed::object
+}  // namespace blender

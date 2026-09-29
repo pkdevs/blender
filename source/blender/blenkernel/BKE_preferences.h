@@ -8,27 +8,34 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_sys_types.h"
+#include <optional>
+
+#include "BLI_compiler_attrs.hh"
+#include "BLI_sys_types.hh"
+#include "BLI_uuid.hh"
+
+namespace blender {
 
 struct BlendWriter;
 struct UserDef;
 struct bUserExtensionRepo;
 struct bUserAssetLibrary;
 struct bUserAssetShelfSettings;
+class StringRef;
+struct EnumPropertyItem;
 
 /* -------------------------------------------------------------------- */
 /** \name Preferences File
  * \{ */
 
-namespace blender::bke::preferences {
+namespace bke::preferences {
 
 /**
  * Return true if a preferences file exists for this Blender version.
  */
 bool exists();
 
-}  // namespace blender::bke::preferences
+}  // namespace bke::preferences
 
 /** \} */
 
@@ -39,9 +46,46 @@ bool exists();
 /** Name of the asset library added by default. Needs translation with `DATA_()` still. */
 #define BKE_PREFS_ASSET_LIBRARY_DEFAULT_NAME N_("User Library")
 
+/**
+ * \note For remote asset libraries, use #BKE_preferences_remote_asset_library_add().
+ */
 struct bUserAssetLibrary *BKE_preferences_asset_library_add(struct UserDef *userdef,
                                                             const char *name,
                                                             const char *dirpath) ATTR_NONNULL(1);
+struct bUserAssetLibrary *BKE_preferences_project_asset_library_add(
+    struct UserDef *userdef,
+    const char *name,
+    const char *dirpath,
+    std::optional<UUID> uuid = std::nullopt);
+struct bUserAssetLibrary *BKE_preferences_remote_asset_library_add(struct UserDef *userdef,
+                                                                   const char *name,
+                                                                   const char *remote_url,
+                                                                   const char *auth_token)
+    ATTR_NONNULL(1, 3);
+
+/**
+ * \brief Update the remote URL and the cache directory derived from the URL.
+ *
+ * - Copies \a remote_url into #bUserAssetLibrary.remote_url, shortening to #FILE_MAX bytes if
+ *   necessary.
+ * - Adds a trailing slash if not present, and if the URL doesn't point directly to the
+ *   `/_asset-library-meta.json` already.
+ * - Updates #bUserAssetLibrary.dirpath to the cache path derived from the new URL. See
+ *   #asset_system::remote_library_cache_directory_path_from_url() (or
+ *   #asset_system::online_essentials_cache_directory_path() in case of the online essentials URL).
+ */
+void BKE_preferences_remote_asset_library_url_set(bUserAssetLibrary *library,
+                                                  StringRef remote_url);
+
+/**
+ * \brief Update the remote URL authentication token.
+ *
+ * - Copies \a auth_token into #bUserAssetLibrary.auth_token, trimming any trailing and leading
+ *   white-space.
+ */
+void BKE_preferences_remote_asset_library_auth_token_set(bUserAssetLibrary *library,
+                                                         StringRef auth_token);
+
 /**
  * Unlink and free a library preference member.
  * \note Free's \a library itself.
@@ -85,7 +129,22 @@ int BKE_preferences_asset_library_get_index(const struct UserDef *userdef,
                                             const struct bUserAssetLibrary *library)
     ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
+/**
+ * Check if the asset library defined in \a library has enough data to be loadable.
+ * \param check_directory_exists: When true, a library is required to point to a valid path on disk
+ * as its root, otherwise the library is considered invalid.
+ */
+bool BKE_preferences_asset_library_is_valid(const UserDef *userdef,
+                                            const struct bUserAssetLibrary *library,
+                                            const bool check_directory_exists) ATTR_NONNULL();
+
 void BKE_preferences_asset_library_default_add(struct UserDef *userdef) ATTR_NONNULL();
+
+void BKE_preferences_asset_library_read_data(struct BlendDataReader *reader,
+                                             struct bUserAssetLibrary *library);
+
+void BKE_preferences_asset_library_write_data(struct BlendWriter *writer,
+                                              const struct bUserAssetLibrary *library);
 
 /** \} */
 
@@ -139,15 +198,6 @@ bUserExtensionRepo *BKE_preferences_extension_repo_find_by_module(const UserDef 
  */
 bUserExtensionRepo *BKE_preferences_extension_repo_find_by_remote_url_prefix(
     const UserDef *userdef, const char *remote_url_full, const bool only_enabled);
-/**
- * Skip the `https` or `http` part of a URL `https://`, return zero if none is found.
- */
-int BKE_preferences_extension_repo_remote_scheme_end(const char *url);
-/**
- * Set a name based on a URL, e.g. `https://www.example.com/path` -> `example.com`.
- */
-void BKE_preferences_extension_remote_to_name(const char *remote_url, char name[64]);
-
 int BKE_preferences_extension_repo_get_index(const UserDef *userdef,
                                              const bUserExtensionRepo *repo);
 
@@ -155,6 +205,23 @@ void BKE_preferences_extension_repo_read_data(struct BlendDataReader *reader,
                                               bUserExtensionRepo *repo);
 void BKE_preferences_extension_repo_write_data(struct BlendWriter *writer,
                                                const bUserExtensionRepo *repo);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Web/remote utilities
+ *
+ *  For extension and online asset library remotes.
+ * \{ */
+
+/**
+ * Skip the `https` or `http` part of a URL `https://`, return zero if none is found.
+ */
+int BKE_preferences_remote_scheme_end(const char *url);
+/**
+ * Set a name based on a URL, e.g. `https://www.example.com/path` -> `example.com`.
+ */
+void BKE_preferences_remote_to_name(const char *remote_url, char name[64 /*MAX_NAME*/]);
 
 /** \} */
 
@@ -175,5 +242,17 @@ bool BKE_preferences_asset_shelf_settings_is_catalog_path_enabled(const UserDef 
 bool BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(UserDef *userdef,
                                                                       const char *shelf_idname,
                                                                       const char *catalog_path);
+/**
+ * Disable a catalog path for an asset shelf identified by \a shelf_idname, by removing it from the
+ * list of enabled catalog paths.
+ * \return true if the catalog was enabled and got disabled. The Preferences should be tagged as
+ * dirty then.
+ */
+bool BKE_preferences_asset_shelf_settings_disable_catalog_path(UserDef *userdef,
+                                                               const char *shelf_idname,
+                                                               const char *catalog_path);
 
+const EnumPropertyItem *BKE_preferences_active_section_itemf(const UserDef *userdef, bool *r_free);
 /** \} */
+
+}  // namespace blender

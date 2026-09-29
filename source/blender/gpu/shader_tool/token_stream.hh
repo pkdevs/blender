@@ -9,53 +9,157 @@
 
 #pragma once
 
+#include "ast.hh"
+#include "enums.hh"
 #include "utils.hh"
+
+#include <array>
 
 namespace blender::gpu::shader::parser {
 
-/* Used to select at which stage to stop.
- *  */
-enum ParserStage {
-  Tokenize,
-  MergeTokens,
-  IdentifyKeywords,
-  BuildScopeTree,
+struct Token;
+struct Scope;
+
+/**
+ * Turns string into token.
+ */
+struct LexerBase : lexit::TokenBuffer {
+  static const std::array<CharClass, 128> bsl_char_class_table;
+  static const std::array<CharClass, 128> default_char_class_table;
+
+  /** Compact visualization of token_types.  */
+  std::string_view token_types_str() const
+  {
+    return std::string_view((const char *)types_.get(), size_);
+  }
+
+  /* Change words into keyword (ex: `if`, `struct`, `template`). */
+  void identify_keywords();
+  /* Change angle bracket tokens into template tokens if they match template condition. */
+  void identify_template_tokens();
+  /* Undo the changes from identify_template_tokens. */
+  void reset_template_tokens();
 };
 
 /**
- * This a tiny bit more than a token stream as it contains ranges or tokens (called scopes) from
- * syntax. The scopes and tokens have bi-directional mapping.
+ * Only support rough tokenization.
  */
-struct TokenStream {
-  /** The lexer's input string. */
-  std::string str;
+struct SimpleLexer {
+  static void lexical_analysis(LexerBase &lex, std::string_view input)
+  {
+    lex.process(input, LexerBase::bsl_char_class_table.data());
+  }
+};
 
-  /** Actually contains a sequence of #TokenType. */
-  std::string token_types;
-  /** Actually contains a sequence of #ScopeType. */
-  std::string scope_types;
-  /** Ranges of characters per token. */
-  OffsetIndices token_offsets;
-  /** Index of bottom most scope per token. */
-  std::vector<int> token_scope;
+/**
+ * Identify BSL keywords, and correctly identify float literals.
+ */
+struct FullLexer {
+  static void lexical_analysis(LexerBase &lex, std::string_view input)
+  {
+    lex.process(input, LexerBase::bsl_char_class_table.data());
+    lex.merge_complex_literals(true);
+    lex.identify_keywords();
+  }
+};
+
+struct ParserBase;
+
+struct ScopeLinks {
+  /* All in scope indices. */
+  int parent_ = -1;
+  int prev_ = -1;
+  int next_ = -1;
+  int child_first_ = -1;
+  int child_last_ = -1;
+};
+
+/**
+ * Create semantic scopes from token stream.
+ * Also creates mapping table from token to scope to have bi-directional mapping.
+ */
+struct ParserBase : LexerBase {
+  /* A monotonically increasing ID for each file included inside the compilation unit.
+   * A file is only assigned an ID before parsing symbols (after parsing includes).
+   * Used to order tokens from different included file. */
+  int include_id = 0;
+
+  /** Compact visualization of scope_types.  */
+  std::string_view scope_types_str;
+
+  /* --- Structure of Array style data for scopes. --- */
+
+  /** Range of token per scope. */
+  std::vector<ScopeType> scope_types;
   /** Range of token per scope. */
   std::vector<IndexRange> scope_ranges;
+  /** Index of adjacent scopes. */
+  std::vector<ScopeLinks> scope_links;
+  /** Index of bottom most scope per token. */
+  std::vector<int> token_scope;
 
-  void lexical_analysis(ParserStage stop_after);
+  /* --- Abstract Syntax Tree. --- */
 
-  void semantic_analysis(ParserStage stop_after, report_callback &report_error);
+  /**
+   * Flat array of nodes (nodes pointers are indices to this array).
+   *
+   * Nodes are stored in source order (not in logical execution order).
+   * This allow to have range based iterators follow the source order.
+   * Expressions need to use a parser to use logical execution order with operator precedence.
+   */
+  std::vector<ast::NodeData> ast_nodes;
+
+  /* Return the i'th token. */
+  Token operator[](int i) const;
+
+  void build_scope_tree(ErrorHandler &err_handler);
+  void build_token_to_scope_map();
+  void parse_bsl(ErrorHandler &err_handler);
+
+  ast::LocalScope root() const;
+  void print_ast() const;
 
  private:
-  /* Create tokens based on character stream. */
-  void tokenize(struct TokenData &tokens);
-  /* Merge tokens (ex: '2','.','e','-','3` into '2.e-3`). */
-  void merge_tokens(struct TokenData &tokens);
+  void update_string_view();
+};
 
-  void identify_keywords(struct TokenData &tokens);
+/* Don't do anything. No access to scopes is allowed. */
+struct NullParser {
+  static void semantic_analysis(ParserBase &parser, ErrorHandler & /*err_handler*/)
+  {
+    parser.scope_types = {};
+    parser.scope_ranges = {};
+  }
+};
 
-  void build_scope_tree(report_callback &report_error);
+/* Do not parse. Creates a single global scope containing all tokens. */
+struct DummyParser {
+  static void semantic_analysis(ParserBase &parser, ErrorHandler & /*err_handler*/)
+  {
+    parser.scope_types = {ScopeType::Global};
+    parser.scope_ranges = {IndexRange(0, parser.size())};
+    parser.build_token_to_scope_map();
+  }
+};
 
-  void build_token_to_scope_map();
+struct FullParser {
+  static void semantic_analysis(ParserBase &parser, ErrorHandler &err_handler)
+  {
+    parser.build_scope_tree(err_handler);
+    parser.build_token_to_scope_map();
+  }
+};
+
+template<typename LexerFn, typename ParserFn> struct Parser : ParserBase {
+  void lexical_analysis(std::string_view input)
+  {
+    LexerFn::lexical_analysis(*this, input);
+  }
+
+  void semantic_analysis(ErrorHandler &err_handler)
+  {
+    ParserFn::semantic_analysis(*this, err_handler);
+  }
 };
 
 }  // namespace blender::gpu::shader::parser

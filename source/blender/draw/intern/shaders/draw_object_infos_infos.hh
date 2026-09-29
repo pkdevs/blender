@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #ifdef GPU_SHADER
 #  pragma once
 #  include "gpu_shader_compat.hh"
@@ -23,7 +27,7 @@
 GPU_SHADER_CREATE_INFO(draw_volume_infos)
 TYPEDEF_SOURCE("draw_shader_shared.hh")
 DEFINE("VOLUME_INFO_LIB")
-UNIFORM_BUF_FREQ(DRW_OBJ_DATA_INFO_UBO_SLOT, VolumeInfos, drw_volume, BATCH)
+UNIFORM_BUF_FREQ(DRW_VOLUME_UBO_SLOT, VolumeInfos, drw_volume, BATCH)
 GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(draw_curves_infos)
@@ -69,6 +73,7 @@ SAMPLER_FREQ(1, isamplerBuffer, curves_indirection_buf, BATCH)
 GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(draw_pointcloud)
+ADDITIONAL_INFO(draw_object_infos)
 SAMPLER_FREQ(0, samplerBuffer, ptcloud_pos_rad_tx, BATCH)
 DEFINE("POINTCLOUD_SHADER")
 DEFINE("DRW_POINTCLOUD_INFO")

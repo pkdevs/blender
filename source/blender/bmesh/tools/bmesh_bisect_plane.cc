@@ -20,17 +20,20 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_linklist_stack.h"
-#include "BLI_math_geom.h"
+#include "BLI_linklist_stack.hh"
+#include "BLI_math_geom_c.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_set.hh"
+#include "BLI_utildefines.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "bmesh.hh"
 #include "bmesh_bisect_plane.hh" /* Own include. */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Math Functions
@@ -138,7 +141,7 @@ static void bm_face_bisect_verts(
 {
   /* Unlikely more than 2 verts are needed. */
   const uint f_len_orig = uint(f->len);
-  blender::Array<BMVert *, BM_DEFAULT_NGON_STACK_SIZE> vert_split_arr_buf(f_len_orig);
+  Array<BMVert *, BM_DEFAULT_NGON_STACK_SIZE> vert_split_arr_buf(f_len_orig);
   BMVert **vert_split_arr = vert_split_arr_buf.data();
   STACK_DECLARE(vert_split_arr);
   BMLoop *l_iter, *l_first;
@@ -175,7 +178,7 @@ static void bm_face_bisect_verts(
   } while ((l_iter = l_iter->next) != l_first);
 
   if ((STACK_SIZE(vert_split_arr) > 1) && (use_dirs[0] && use_dirs[2])) {
-    if (LIKELY(STACK_SIZE(vert_split_arr) == 2)) {
+    if (STACK_SIZE(vert_split_arr) == 2) [[likely]] {
       BMLoop *l_new;
       BMLoop *l_a, *l_b;
 
@@ -251,8 +254,7 @@ static void bm_face_bisect_verts(
         } while ((l_iter = l_iter->next) != l_first_non_center);
       }
 
-      blender::Array<BMFace *, BM_DEFAULT_NGON_STACK_SIZE> face_split_arr_buf(
-          STACK_SIZE(vert_split_arr));
+      Array<BMFace *, BM_DEFAULT_NGON_STACK_SIZE> face_split_arr_buf(STACK_SIZE(vert_split_arr));
       BMFace **face_split_arr = face_split_arr_buf.data();
       STACK_DECLARE(face_split_arr);
 
@@ -265,7 +267,7 @@ static void bm_face_bisect_verts(
        * (`sort_dir` could be flipped either way). */
       BLI_assert(BM_face_is_normal_valid(f));
       cross_v3_v3v3(sort_dir, f->no, plane);
-      if (UNLIKELY(normalize_v3(sort_dir) == 0.0f)) {
+      if (normalize_v3(sort_dir) == 0.0f) [[unlikely]] {
         /* find any 2 verts and get their direction */
         for (i = 0; i < STACK_SIZE(vert_split_arr); i++) {
           if (!equals_v3v3(vert_split_arr[0]->co, vert_split_arr[i]->co)) {
@@ -273,7 +275,7 @@ static void bm_face_bisect_verts(
             normalize_v3(sort_dir);
           }
         }
-        if (UNLIKELY(i == STACK_SIZE(vert_split_arr))) {
+        if (i == STACK_SIZE(vert_split_arr)) [[unlikely]] {
           /* Ok, we can't do anything useful here,
            * face has no area or so, bail out, this is highly unlikely but not impossible. */
           goto finally;
@@ -386,7 +388,7 @@ void BM_mesh_bisect_plane(BMesh *bm,
 {
   uint einput_len;
   uint i;
-  BMEdge **edges_arr = MEM_malloc_arrayN<BMEdge *>(size_t(bm->totedge), __func__);
+  BMEdge **edges_arr = MEM_new_array_uninitialized<BMEdge *>(size_t(bm->totedge), __func__);
 
   BLI_LINKSTACK_DECLARE(face_stack, BMFace *);
 
@@ -394,6 +396,9 @@ void BM_mesh_bisect_plane(BMesh *bm,
   BMFace *f;
 
   BMIter iter;
+
+  /* Needed when `use_snap_center` moves vertices. */
+  Set<BMFace *> faces_deferred_normal_update;
 
   if (use_tag) {
     /* Build tagged edge array. */
@@ -449,9 +454,21 @@ void BM_mesh_bisect_plane(BMesh *bm,
         BMO_vert_flag_enable(bm, v, oflag_center);
       }
       if (use_snap_center) {
-        closest_to_plane_v3(v->co, plane, v->co);
+        float co_center[3];
+        closest_to_plane_v3(co_center, plane, v->co);
+        if (!equals_v3v3(co_center, v->co)) {
+          copy_v3_v3(v->co, co_center);
+          BMIter itersub;
+          BM_ITER_ELEM (f, &itersub, v, BM_FACES_OF_VERT) {
+            faces_deferred_normal_update.add(f);
+          }
+        }
       }
     }
+  }
+
+  for (BMFace *f_iter : faces_deferred_normal_update) {
+    BM_face_normal_update(f_iter);
   }
 
   /* Store a stack of faces to be evaluated for splitting. */
@@ -525,7 +542,7 @@ void BM_mesh_bisect_plane(BMesh *bm,
     }
   }
 
-  MEM_freeN(edges_arr);
+  MEM_delete(edges_arr);
 
   while ((f = BLI_LINKSTACK_POP(face_stack))) {
     bm_face_bisect_verts(bm, f, plane, oflag_center, oflag_new);
@@ -539,3 +556,5 @@ void BM_mesh_bisect_plane(BMesh *bm,
 }
 
 /** \} */
+
+}  // namespace blender

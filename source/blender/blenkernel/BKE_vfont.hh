@@ -6,7 +6,9 @@
 #include "DNA_listBase.h"
 
 #include "BLI_math_vector_types.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 /** \file
  * \ingroup bke
@@ -16,13 +18,14 @@ struct CharInfo;
 struct Curve;
 struct Main;
 struct Object;
+struct ReportList;
 struct VFont;
 struct Nurb;
 
 struct CharTrans {
-  blender::float2 offset;
+  float2 offset;
   float rotate;
-  short linenr, charnr;
+  short linenr, charnr, wordnr;
 
   uint do_break : 1;
   uint is_overflow : 1;
@@ -48,7 +51,7 @@ struct EditFont {
   float font_size_eval;
 
   /** Array of rectangles & rotation. */
-  blender::float2 textcurs[4];
+  float2 textcurs[4];
   EditFontSelBox *selboxes;
   int selboxes_len;
 
@@ -107,6 +110,14 @@ void BKE_vfont_builtin_register(const void *mem, int size);
  */
 VFont *BKE_vfont_builtin_ensure();
 
+/**
+ * High-level pack function.
+ *
+ * Packs font data from its filepath.
+ * Does nothing if font is already packed.
+ */
+void BKE_vfont_packfile_ensure(Main *bmain, VFont *vfont, ReportList *reports);
+
 void BKE_vfont_data_ensure(VFont *vfont);
 void BKE_vfont_data_free(VFont *vfont);
 
@@ -132,7 +143,7 @@ void BKE_vfont_clipboard_get(char32_t **r_text_buf,
  * See `vfont_curve.c`.
  * \{ */
 
-int BKE_vfont_cursor_to_text_index(Object *ob, const blender::float2 &cursor_location);
+int BKE_vfont_cursor_to_text_index(Object *ob, const float2 &cursor_location);
 
 /**
  * \warning Expects to have access to evaluated data (i.e. passed object should be evaluated one).
@@ -143,7 +154,7 @@ void BKE_vfont_char_build(const Curve &cu,
                           unsigned int charcode,
                           const CharInfo *info,
                           bool is_smallcaps,
-                          const blender::float2 &offset,
+                          const float2 &offset,
                           float rotate,
                           int charidx,
                           float fsize);
@@ -160,3 +171,5 @@ bool BKE_vfont_to_curve_ex(Object *ob,
 bool BKE_vfont_to_curve_nubase(Object *ob, eEditFontMode mode, ListBaseT<Nurb> *r_nubase);
 
 /** \} */
+
+}  // namespace blender

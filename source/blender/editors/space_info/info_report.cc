@@ -12,9 +12,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_dynstr.h"
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_dynstr.hh"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 
@@ -28,6 +28,8 @@
 #include "RNA_define.hh"
 
 #include "info_intern.hh"
+
+namespace blender {
 
 static void reports_select_all(ReportList *reports, int report_mask, int action)
 {
@@ -104,7 +106,7 @@ static wmOperatorStatus report_replay_exec(bContext *C, wmOperator * /*op*/)
         (report->flag & SELECT))
     {
       console_history_add_str(sc, report->message, 0);
-      WM_operator_name_call(C, "CONSOLE_OT_execute", blender::wm::OpCallContext::ExecDefault, nullptr, nullptr);
+      WM_operator_name_call(C, "CONSOLE_OT_execute", wm::OpCallContext::ExecDefault, nullptr, nullptr);
 
       ED_area_tag_redraw(CTX_wm_area(C));
     }
@@ -182,7 +184,7 @@ void INFO_OT_select_pick(wmOperatorType *ot)
   ot->idname = "INFO_OT_select_pick";
 
   /* API callbacks. */
-  ot->poll = ED_operator_info_active;
+  ot->poll = ED_operator_region_info_active;
   ot->invoke = select_report_pick_invoke;
   ot->exec = select_report_pick_exec;
 
@@ -304,7 +306,7 @@ void INFO_OT_select_box(wmOperatorType *ot)
   ot->modal = WM_gesture_box_modal;
   ot->cancel = WM_gesture_box_cancel;
 
-  ot->poll = ED_operator_info_active;
+  ot->poll = ED_operator_region_info_active;
 
   /* flags */
   // ot->flag = OPTYPE_REGISTER;
@@ -322,13 +324,13 @@ static wmOperatorStatus report_delete_exec(bContext *C, wmOperator * /*op*/)
 
   Report *report, *report_next;
 
-  for (report = static_cast<Report *>(reports->list.first); report;) {
+  for (report = reports->list.first(); report;) {
     report_next = report->next;
 
     if ((report->type & report_mask) && (report->flag & SELECT)) {
       BLI_remlink(&reports->list, report);
-      MEM_freeN(report->message);
-      MEM_freeN(report);
+      MEM_delete(report->message);
+      MEM_delete(report);
     }
 
     report = report_next;
@@ -377,7 +379,7 @@ static wmOperatorStatus report_copy_exec(bContext *C, wmOperator * /*op*/)
 
   WM_clipboard_text_set(buf_str, false);
 
-  MEM_freeN(buf_str);
+  MEM_delete(buf_str);
   return OPERATOR_FINISHED;
 }
 
@@ -397,3 +399,5 @@ void INFO_OT_report_copy(wmOperatorType *ot)
 
   /* properties */
 }
+
+}  // namespace blender

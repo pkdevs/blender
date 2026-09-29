@@ -14,13 +14,15 @@
 
 #include <string>
 
+namespace blender {
+
 struct Main;
 struct Material;
 struct bNode;
 struct bNodeTree;
 struct ReportList;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 using ShaderToNodeMap = Map<std::string, bNode *>;
 
@@ -59,7 +61,8 @@ struct NodePlacementContext {
   /**
    * Generate a key for caching a Blender node created for a given USD shader by returning the
    * shader prim path with an optional tag suffix. The tag can be specified in order to generate a
-   * unique key when more than one Blender node is created for the USD shader. */
+   * unique key when more than one Blender node is created for the USD shader.
+   */
   std::string get_key(const pxr::UsdShadeShader &usd_shader, const StringRef tag) const;
 
   /* Returns the Blender node previously cached for the given USD shader. Returns null if no cached
@@ -76,6 +79,10 @@ struct NodePlacementContext {
 struct ExtraLinkInfo {
   bool is_color_corrected = false;
 
+  /* Is the value inverted with respect to Blender.
+   * For example: Opacity 0.85 <-> Transmission Weight 0.15 */
+  bool is_inverted = false;
+
   float opacity_threshold = 0.0f;
 };
 
@@ -86,7 +93,7 @@ struct ExtraLinkInfo {
  * the same name as the USD material.  If the USD material has a
  * #UsdPreviewSurface source, the Blender material's viewport display
  * color, roughness and metallic properties are set to the corresponding
- * #UsdPreoviewSurface inputs.
+ * #UsdPreviewSurface inputs.
  *
  * If the Import USD Preview option is enabled, the current implementation
  * converts #UsdPreviewSurface to Blender nodes as follows:
@@ -227,4 +234,5 @@ Material *find_existing_material(const pxr::SdfPath &usd_mat_path,
                                  const Map<std::string, Material *> &mat_map,
                                  const Map<pxr::SdfPath, Material *> &usd_path_to_mat);
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

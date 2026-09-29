@@ -32,7 +32,7 @@
 
 #include <optional>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_set.hh"
 #include "BLI_string_ref.hh"
@@ -41,6 +41,8 @@
 #include "DNA_ID.h"
 #include "DNA_listBase.h"
 #include "DNA_userdef_enums.h"
+
+namespace blender {
 
 struct BlendWriter;
 struct Depsgraph;
@@ -53,7 +55,7 @@ struct PointerRNA;
 struct PropertyRNA;
 struct bContext;
 
-namespace blender::bke::id {
+namespace bke::id {
 
 /** Status used and counters created during id-remapping. */
 struct ID_Runtime_Remap {
@@ -91,7 +93,7 @@ struct ID_Runtime {
   ID_Readfile_Data *readfile_data = nullptr;
 };
 
-}  // namespace blender::bke::id
+}  // namespace bke::id
 
 /**
  * Get allocation size of a given data-block type and optionally allocation `r_name`.
@@ -293,7 +295,8 @@ enum {
   LIB_ID_COPY_SHAPEKEY = 1 << 26,
   /**
    * EXCEPTION! Deep-copy screen used by copied workspace ID.
-   * WARNING: Should always be used, except in `NO_MAIN` cases of copying. */
+   * WARNING: Should always be used, except in `NO_MAIN` cases of copying.
+   */
   LIB_ID_COPY_SCREEN = 1 << 27,
   /** EXCEPTION! Specific deep-copy of node trees used e.g. for rendering purposes. */
   LIB_ID_COPY_NODETREE_LOCALIZE = 1 << 28,
@@ -420,7 +423,7 @@ struct IDNewNameResult {
  */
 IDNewNameResult BKE_libblock_rename(Main &bmain,
                                     ID &id,
-                                    blender::StringRefNull name,
+                                    StringRefNull name,
                                     const IDNewNameMode mode = IDNewNameMode::RenameExistingNever);
 
 /**
@@ -431,7 +434,7 @@ IDNewNameResult BKE_libblock_rename(Main &bmain,
  */
 IDNewNameResult BKE_id_rename(Main &bmain,
                               ID &id,
-                              blender::StringRefNull name,
+                              StringRefNull name,
                               const IDNewNameMode mode = IDNewNameMode::RenameExistingNever);
 
 /**
@@ -584,27 +587,50 @@ void BKE_id_free(Main *bmain, void *idv);
 void BKE_id_free_us(Main *bmain, void *idv) ATTR_NONNULL();
 
 /**
- * Properly delete a single ID from given \a bmain database.
+ * Helper struct to pass advanced control options to #BKE_id_delete and related APIs.
  */
-void BKE_id_delete(Main *bmain, void *idv) ATTR_NONNULL();
+struct BKEIDDeleteOptions {
+  /**
+   * Additional `ID_REMAP_` flags to pass to remapping code when ensuring that deleted IDs are not
+   * used by any other ID in given `bmain`. Typical example would be e.g.
+   * `ID_REMAP_FORCE_UI_POINTERS`, required when default UI-handling callbacks of remapping code
+   * won't be working (e.g. from readfile code).
+   */
+  int extra_remapping_flags = 0;
+
+  /**
+   * If `true`, do not validate and update liboverride hierarchy root pointers after deleting some
+   * IDs. Useful e.g. for ID deletion within liboverride resync process and the like.
+   */
+  bool prevent_liboverride_hierarchy_root_ensure = false;
+
+  /**
+   * Do not update invariants after deletion.
+   *
+   * This is required when deleting data in cases where there is no fully valid Main available
+   * (e.g. from readfile code).
+   */
+  bool prevent_invariants_update = false;
+};
+
 /**
- * Like BKE_id_delete, but with extra corner-case options.
+ * Properly delete a single ID from given \a bmain database.
  *
- * \param extra_remapping_flags: Additional `ID_REMAP_` flags to pass to remapping code when
- * ensuring that deleted IDs are not used by any other ID in given `bmain`. Typical example would
- * be e.g. `ID_REMAP_FORCE_UI_POINTERS`, required when default UI-handling callbacks of remapping
- * code won't be working (e.g. from readfile code).
+ * \param options: A set of more advanced options for when complex/unusual behaviors are necessary.
  */
-void BKE_id_delete_ex(Main *bmain, void *idv, const int extra_remapping_flags) ATTR_NONNULL(1, 2);
+void BKE_id_delete(Main *bmain, void *idv, const BKEIDDeleteOptions &options = {}) ATTR_NONNULL();
 /**
  * Properly delete all IDs tagged with \a ID_TAG_DOIT, in given \a bmain database.
  *
  * This is more efficient than calling #BKE_id_delete repetitively on a large set of IDs
  * (several times faster when deleting most of the IDs at once).
  *
+ * \param options: A set of more advanced options for when complex/unusual behaviors are necessary.
+ *
  * \return Number of deleted data-blocks.
  */
-size_t BKE_id_multi_tagged_delete(Main *bmain) ATTR_NONNULL();
+size_t BKE_id_multi_tagged_delete(Main *bmain, const BKEIDDeleteOptions &options = {})
+    ATTR_NONNULL();
 /**
  * Properly delete all IDs from \a ids_to_delete, from given \a bmain database.
  *
@@ -616,9 +642,13 @@ size_t BKE_id_multi_tagged_delete(Main *bmain) ATTR_NONNULL();
  * of IDs). They are all freed though, so these pointers are all invalid after calling this
  * function.
  *
+ * \param options: A set of more advanced options for when complex/unusual behaviors are necessary.
+ *
  * \return Number of deleted data-blocks.
  */
-size_t BKE_id_multi_delete(Main *bmain, blender::Set<ID *> &ids_to_delete);
+size_t BKE_id_multi_delete(Main *bmain,
+                           Set<ID *> &ids_to_delete,
+                           const BKEIDDeleteOptions &options = {});
 
 /**
  * Add a 'NO_MAIN' data-block to given main (also sets user-counts of its IDs if needed).
@@ -648,11 +678,19 @@ void BKE_libblock_management_usercounts_clear(Main *bmain, void *idv);
  *
  * This is a no-op when `id` is `nullptr` or not linked.
  *
+ * \param enforce_fix: if true, unconditionally set the linked data as extern (even if it was
+ * already defined as such, or if it was in a broken state with e.g. no direct/indirect status
+ * defined).
+ *
  * This status is rechecked for the whole Main data-base as a step of pre-blend-file writing
  * (see #write_id_direct_linked_data_process_cb() and its usage in #write_file_handle).
  * This ensures that no reference to indirectly used IDs are kept in the written blend-file.
  */
-void id_lib_extern(ID *id);
+void id_lib_extern(ID *id, bool enforce_fix = false);
+/**
+ * Same as #id_lib_extern, but defines the ID as indirectly linked instead.
+ */
+void id_lib_indirect(ID *id, bool enforce_fix = false);
 void id_lib_indirect_weak_link(ID *id);
 /**
  * Ensure we have a real user
@@ -907,6 +945,15 @@ void BKE_main_id_newptr_and_tag_clear(Main *bmain);
 
 void BKE_main_id_refcount_recompute(Main *bmain, bool do_linked_only);
 
+/**
+ * Update the ID_TAG_INDIRECT flag for all non-local IDs.
+ *
+ * \param local_ids: Optionally, provide a list of IDs that are considered local. If not provided,
+ * all local IDs from the given main are used.
+ */
+void BKE_main_id_indirect_linked_update(Main &bmain,
+                                        std::optional<Span<ID *>> local_ids = std::nullopt);
+
 void BKE_main_lib_objects_recalc_all(Main *bmain);
 
 /**
@@ -1028,7 +1075,7 @@ bool BKE_id_can_use_id(const ID &id_from, const ID &id_to);
 /**
  * Returns ordered list of data-blocks for display in the UI.
  */
-blender::Vector<ID *> BKE_id_ordered_list(const ListBaseT<ID> *lb);
+Vector<ID *> BKE_id_ordered_list(const ListBaseT<ID> *lb);
 /**
  * Reorder ID in the list, before or after the "relative" ID.
  */
@@ -1046,3 +1093,5 @@ void BKE_id_blend_write(BlendWriter *writer, ID *id);
  * \note Keep in sync with #ID_TYPE_SUPPORTS_PARAMS_WITHOUT_COW.
  */
 void BKE_id_eval_properties_copy(ID *id_cow, ID *id);
+
+}  // namespace blender

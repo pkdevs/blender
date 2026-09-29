@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup editors
+ */
+
 #pragma once
 
 #include <optional>
@@ -14,13 +18,15 @@
 
 #include "DNA_viewer_path_types.h"
 
+namespace blender {
+
 struct Main;
 struct SpaceNode;
 struct bNode;
 struct bContext;
 struct Object;
 
-namespace blender::ed::viewer_path {
+namespace ed::viewer_path {
 
 /**
  * Activates the given node in the context provided by the editor. This indirectly updates all
@@ -101,4 +107,6 @@ UpdateActiveGeometryNodesViewerResult update_active_geometry_nodes_viewer(const 
 [[nodiscard]] ViewerPathElem *viewer_path_elem_for_compute_context(
     const ComputeContext &compute_context);
 
-}  // namespace blender::ed::viewer_path
+}  // namespace ed::viewer_path
+
+}  // namespace blender

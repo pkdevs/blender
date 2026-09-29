@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
@@ -24,6 +24,8 @@
 #include "ED_clip.hh"
 
 #include "clip_intern.hh"
+
+namespace blender {
 
 /********************* add 2d stabilization tracks operator ********************/
 
@@ -138,7 +140,7 @@ static wmOperatorStatus stabilize_2d_select_exec(bContext *C, wmOperator * /*op*
 
   for (MovieTrackingTrack &track : tracking_object->tracks) {
     if (track.flag & TRACK_USE_2D_STAB) {
-      BKE_tracking_track_flag_set(&track, TRACK_AREA_ALL, SELECT);
+      BKE_tracking_track_flag_set(&track, TRACK_AREA_ALL, TRACK_SELECT);
       update = true;
     }
   }
@@ -267,7 +269,7 @@ static wmOperatorStatus stabilize_2d_rotation_select_exec(bContext *C, wmOperato
 
   for (MovieTrackingTrack &track : tracking_object->tracks) {
     if (track.flag & TRACK_USE_2D_STAB_ROT) {
-      BKE_tracking_track_flag_set(&track, TRACK_AREA_ALL, SELECT);
+      BKE_tracking_track_flag_set(&track, TRACK_AREA_ALL, TRACK_SELECT);
       update = true;
     }
   }
@@ -293,3 +295,5 @@ void CLIP_OT_stabilize_2d_rotation_select(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+}  // namespace blender

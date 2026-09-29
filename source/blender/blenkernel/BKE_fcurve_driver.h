@@ -10,6 +10,8 @@
 
 #include "DNA_listBase.h"
 
+namespace blender {
+
 struct AnimationEvalContext;
 struct ChannelDriver;
 struct DriverTarget;
@@ -21,6 +23,8 @@ struct PointerRNA;
 struct PropertyRNA;
 struct Scene;
 struct ViewLayer;
+
+enum eDriverVar_Types : char;
 
 /* ************** F-Curve Drivers ***************** */
 
@@ -108,7 +112,7 @@ void driver_free_variable_ex(struct ChannelDriver *driver, struct DriverVar *dva
 /**
  * Change the type of driver variable.
  */
-void driver_change_variable_type(struct DriverVar *dvar, int type);
+void driver_change_variable_type(struct DriverVar *dvar, eDriverVar_Types type);
 /**
  * Validate driver variable name (after being renamed).
  */
@@ -154,7 +158,6 @@ eDriverVariablePropertyResult driver_get_variable_property(
     struct ChannelDriver *driver,
     struct DriverVar *dvar,
     struct DriverTarget *dtar,
-    bool allow_no_index,
     struct PointerRNA *r_ptr,
     struct PropertyRNA **r_prop,
     int *r_index);
@@ -186,3 +189,5 @@ float evaluate_driver(struct PathResolvedRNA *anim_rna,
                       struct ChannelDriver *driver,
                       struct ChannelDriver *driver_orig,
                       const struct AnimationEvalContext *anim_eval_context);
+
+}  // namespace blender

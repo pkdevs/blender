@@ -8,11 +8,14 @@
  */
 
 #include "BLI_enum_flags.hh"
+#include "BLI_function_ref.hh"
 #include "BLI_path_utils.hh"
 
 #include "DNA_ID.h"
 #include "DNA_listBase.h"
 #include "DNA_userdef_types.h"
+
+namespace blender {
 
 struct Main;
 struct UndoStep;
@@ -26,6 +29,32 @@ struct Mesh;
 struct Object;
 struct Scene;
 struct Text;
+
+/**
+ * A per-undo push flag that determines extra behavior when pushing a non `memfile` undo step.
+ *
+ * The default is None (0), no special hints.
+ */
+enum class UndoEncodeHints {
+  /** No hints. */
+  None = 0,
+  /**
+   * When using undo systems that store data outside of edit-mode,
+   * enable this when they should also store edit-mode data before their own data.
+   *
+   * Needed for example when tracking changes outside of edit-mode,
+   * so it's possible to encode/decode changes to modifiers for e.g.
+   */
+  PreMemFileChanges = 1 << 1,
+  /**
+   * The non `memfile` undo step doesn't have any changes.
+   *
+   * This may be used to ensure mode-switching, for example:
+   * entering the associated mode when loading the undo step.
+   */
+  HasMemFileChangesOnly = 1 << 2,
+};
+ENUM_OPERATORS(UndoEncodeHints);
 
 struct UndoRefID {
   ID *ptr;
@@ -108,8 +137,11 @@ using UndoTypeForEachIDRefFn = void (*)(void *user_data, UndoRefID *id_ref);
 
 struct UndoType {
   UndoType *next, *prev;
-  /** Only for debugging. */
-  const char *name;
+  /**
+   * Identifier for the undo type, also exposed as the RNA enum identifier.
+   * Use upper-case with underscore separated words (e.g. "EDIT_ARMATURE").
+   */
+  const char *identifier;
 
   /**
    * When undefined, we don't consider this undo type for context checks.
@@ -128,6 +160,10 @@ struct UndoType {
   void (*step_encode_init)(bContext *C, UndoStep *us);
 
   bool (*step_encode)(bContext *C, Main *bmain, UndoStep *us);
+
+  /**
+   * \param is_final: whether the step being decoded is the target undo step being restored.
+   */
   void (*step_decode)(bContext *C, Main *bmain, UndoStep *us, eUndoStepDir dir, bool is_final);
 
   /**
@@ -137,6 +173,18 @@ struct UndoType {
    */
   void (*step_free)(UndoStep *us);
 
+  /**
+   * This callback ensures data-block (ID) references are valid before use.
+   *
+   * Some undo systems need to reference data-blocks, however these pointers are not stable and
+   * may have changed when restoring the undo-step (when the data-block creation was undone, then
+   * redone, for example)
+   *
+   * To support this use case, this callback supports a generic method of ensuring data-block
+   * pointers are valid before use.
+   *
+   * \see #UndoRefID for implementation details.
+   */
   void (*step_foreach_ID_ref)(UndoStep *us,
                               UndoTypeForEachIDRefFn foreach_ID_ref_fn,
                               void *user_data);
@@ -146,7 +194,8 @@ struct UndoType {
 
   /**
    * The size of the undo struct 'inherited' from #UndoStep for that specific type. Used for
-   * generic allocation in BKE's `undo_system.cc`. */
+   * generic allocation in BKE's `undo_system.cc`.
+   */
   size_t step_size;
 };
 
@@ -164,6 +213,12 @@ enum eUndoTypeFlags {
    * This is typically used for undo systems that store both before/after states.
    */
   UNDOTYPE_FLAG_DECODE_ACTIVE_STEP = 1 << 1,
+
+  /**
+   * This undo system is compatible with an initial `memfile` step
+   * (it can co-exist with global undo). See: #UndoEncodeHints::PreMemFileChanges.
+   */
+  UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED = 1 << 2,
 };
 
 /* -------------------------------------------------------------------- */
@@ -189,6 +244,10 @@ void BKE_undosys_stack_clear(UndoStack *ustack);
 void BKE_undosys_stack_clear_active(UndoStack *ustack);
 /* name optional */
 bool BKE_undosys_stack_has_undo(const UndoStack *ustack, const char *name);
+/**
+ * Returns true if there is a redo step from the stack's active step.
+ */
+bool BKE_undosys_stack_has_redo(const UndoStack *ustack);
 void BKE_undosys_stack_init_from_main(UndoStack *ustack, Main *bmain);
 /* Called after #BKE_undosys_stack_init_from_main. */
 void BKE_undosys_stack_init_from_context(UndoStack *ustack, bContext *C);
@@ -200,7 +259,7 @@ UndoStep *BKE_undosys_stack_init_or_active_with_type(UndoStack *ustack, const Un
  */
 void BKE_undosys_stack_limit_steps_and_memory(UndoStack *ustack, int steps, size_t memory_limit);
 #define BKE_undosys_stack_limit_steps_and_memory_defaults(ustack) \
-  BKE_undosys_stack_limit_steps_and_memory(ustack, U.undosteps, (size_t)U.undomemory * 1024 * 1024)
+  BKE_undosys_stack_limit_steps_and_memory(ustack, U.undosteps, size_t(U.undomemory) * 1024 * 1024)
 
 void BKE_undosys_stack_group_begin(UndoStack *ustack);
 void BKE_undosys_stack_group_end(UndoStack *ustack);
@@ -217,11 +276,12 @@ UndoStep *BKE_undosys_step_push_init(UndoStack *ustack, bContext *C, const char 
 /**
  * \param C: Can be nullptr from some callers if their encoding function doesn't need it
  */
-eUndoPushReturn BKE_undosys_step_push_with_type(UndoStack *ustack,
-                                                bContext *C,
-                                                const char *name,
-                                                const UndoType *ut);
-eUndoPushReturn BKE_undosys_step_push(UndoStack *ustack, bContext *C, const char *name);
+eUndoPushReturn BKE_undosys_step_push_with_type(
+    UndoStack *ustack, bContext *C, const char *name, UndoEncodeHints hints, const UndoType *ut);
+eUndoPushReturn BKE_undosys_step_push(UndoStack *ustack,
+                                      bContext *C,
+                                      const char *name,
+                                      UndoEncodeHints hints);
 
 UndoStep *BKE_undosys_step_find_by_name_with_type(UndoStack *ustack,
                                                   const char *name,
@@ -330,10 +390,25 @@ UndoStep *BKE_undosys_step_same_type_prev(UndoStep *us);
 /* Type System. */
 
 /**
+ * Run `fn` for each registered undo type, in registration order.
+ *
+ * `fn` returns `true` to keep looping, `false` to break.
+ *
+ * \return `false` if `fn` broke the loop, otherwise `true`.
+ */
+bool BKE_undosys_type_foreach(FunctionRef<bool(const UndoType *ut)> fn);
+
+/**
  * Similar to #WM_operatortype_append
  */
 UndoType *BKE_undosys_type_append(void (*undosys_fn)(UndoType *));
 void BKE_undosys_type_free_all();
+
+/**
+ * The undo type used for an undo push with this context,
+ * #BKE_UNDOSYS_TYPE_MEMFILE is the catch-all when no mode specific type matches.
+ */
+const UndoType *BKE_undosys_type_from_context(bContext *C);
 
 /* ID Accessor. */
 
@@ -344,3 +419,5 @@ void BKE_undosys_foreach_ID_ref(UndoStack *ustack,
 #endif
 
 void BKE_undosys_print(UndoStack *ustack);
+
+}  // namespace blender

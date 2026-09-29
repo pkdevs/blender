@@ -6,13 +6,15 @@
  * \ingroup edtransform
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
 
 #include "BKE_object.hh"
 #include "BKE_tracking.hh"
 
 #include "DNA_movieclip_types.h"
+
+#include "DEG_depsgraph_query.hh"
 
 #include "transform_snap_object.hh"
 
@@ -29,7 +31,7 @@ eSnapMode snapCamera(SnapObjectContext *sctx,
     return retval;
   }
 
-  Scene *scene = sctx->scene;
+  Scene *scene = DEG_get_evaluated_scene(sctx->runtime.depsgraph);
 
   MovieClip *clip = BKE_object_movieclip_get(scene, object, false);
   if (clip == nullptr) {

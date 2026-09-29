@@ -9,7 +9,7 @@
 #include <fmt/format.h>
 
 #include "BKE_colortools.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLO_read_write.hh"
 #include "BLT_translation.hh"
 
@@ -30,7 +30,7 @@ namespace blender::seq {
 static void sound_equalizermodifier_draw(const bContext * /*C*/, Panel *panel)
 {
   ui::Layout &layout = *panel->layout;
-  PointerRNA *ptr = blender::ui::panel_custom_data_get(panel);
+  PointerRNA *ptr = ui::panel_custom_data_get(panel);
 
   layout.use_property_split_set(true);
 
@@ -41,7 +41,7 @@ static void sound_equalizermodifier_draw(const bContext * /*C*/, Panel *panel)
     const float clip_max_x = RNA_float_get(&curve_mapping, "clip_max_x");
 
     ui::Layout &col = flow.column(false);
-    ui::Layout &split = col.split(0.4f, false);
+    ui::Layout &split = col.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
     split.label(fmt::format("{:.2f}", clip_min_x), ICON_NONE);
     split.label("Hz", ICON_NONE);
     split.alignment_set(ui::LayoutAlign::Right);

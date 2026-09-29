@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup draw
+ *
  * GPU generated interpolated position and radius. Updated on attribute change.
  * One thread processes one curve.
  *
@@ -12,8 +14,8 @@
 #include "draw_curves_infos.hh"
 
 #include "gpu_shader_attribute_load_lib.glsl"
-#include "gpu_shader_math_matrix_transform_lib.glsl"
-#include "gpu_shader_math_safe_lib.glsl"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
+#include "gpu_shader_math_safe.bsl.hh"
 #include "gpu_shader_offset_indices_lib.glsl"
 
 /* We workaround the lack of function pointers by using different type to overload the attribute
@@ -26,7 +28,7 @@ struct InterpPosition {
 /** Input Load. */
 
 /* Template this function to be able to call it with only no extra argument. */
-template<typename T> T input_load(int point_index)
+template<typename T> T input_load(int /*point_index*/)
 {
   return T(0);
 }
@@ -69,7 +71,7 @@ template<> float input_load<float>(int point_index)
 /** Output Load. */
 
 /* Template this function to be able to call it with only no extra argument. */
-template<typename T> T output_load(int evaluated_point_index)
+template<typename T> T output_load(int /*evaluated_point_index*/)
 {
   return T(0);
 }

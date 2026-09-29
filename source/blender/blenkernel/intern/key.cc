@@ -14,13 +14,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_task.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -36,11 +37,13 @@
 #include "DNA_object_types.h"
 
 #include "BKE_anim_data.hh"
+#include "BKE_animsys.hh"
 #include "BKE_attribute.hh"
 #include "BKE_curve.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_global.hh"
 #include "BKE_idtype.hh"
 #include "BKE_key.hh"
 #include "BKE_lattice.hh"
@@ -56,10 +59,7 @@
 
 #include "BLO_read_write.hh"
 
-using blender::float3;
-using blender::float4x4;
-using blender::MutableSpan;
-using blender::Span;
+namespace blender {
 
 static void shapekey_copy_data(Main * /*bmain*/,
                                std::optional<Library *> /*owner_library*/,
@@ -67,18 +67,16 @@ static void shapekey_copy_data(Main * /*bmain*/,
                                const ID *id_src,
                                const int /*flag*/)
 {
-  Key *key_dst = (Key *)id_dst;
-  const Key *key_src = (const Key *)id_src;
+  Key *key_dst = id_cast<Key *>(id_dst);
+  const Key *key_src = id_cast<const Key *>(id_src);
   BLI_duplicatelist(&key_dst->block, &key_src->block);
 
   KeyBlock *kb_dst, *kb_src;
-  for (kb_src = static_cast<KeyBlock *>(key_src->block.first),
-      kb_dst = static_cast<KeyBlock *>(key_dst->block.first);
-       kb_dst;
+  for (kb_src = key_src->block.first(), kb_dst = key_dst->block.first(); kb_dst;
        kb_src = kb_src->next, kb_dst = kb_dst->next)
   {
     if (kb_dst->data) {
-      kb_dst->data = MEM_dupallocN(kb_dst->data);
+      kb_dst->data = MEM_dupalloc_void(kb_dst->data);
     }
     if (kb_src == key_src->refkey) {
       key_dst->refkey = kb_dst;
@@ -88,12 +86,12 @@ static void shapekey_copy_data(Main * /*bmain*/,
 
 static void shapekey_free_data(ID *id)
 {
-  Key *key = (Key *)id;
+  Key *key = id_cast<Key *>(id);
   while (KeyBlock *kb = static_cast<KeyBlock *>(BLI_pophead(&key->block))) {
     if (kb->data) {
-      MEM_freeN(kb->data);
+      MEM_delete_void(kb->data);
     }
-    MEM_freeN(kb);
+    MEM_delete(kb);
   }
 }
 
@@ -105,7 +103,7 @@ static void shapekey_foreach_id(ID *id, LibraryForeachIDData *data)
 
 static ID **shapekey_owner_pointer_get(ID *id, const bool debug_relationship_assert)
 {
-  Key *key = (Key *)id;
+  Key *key = id_cast<Key *>(id);
 
   if (debug_relationship_assert) {
     BLI_assert(key->from != nullptr);
@@ -117,24 +115,27 @@ static ID **shapekey_owner_pointer_get(ID *id, const bool debug_relationship_ass
 
 static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
-  Key *key = (Key *)id;
-  const bool is_undo = BLO_write_is_undo(writer);
+  Key *key = id_cast<Key *>(id);
+  const bool is_undo = writer->is_undo();
 
   /* Write LibData. */
-  BLO_write_id_struct(writer, Key, id_address, &key->id);
+  writer->write_id_struct(id_address, key);
   BKE_id_blend_write(writer, &key->id);
 
   /* Direct data. */
   for (KeyBlock &kb : key->block) {
-    KeyBlock tmp_kb = kb;
     /* Do not store actual geometry data in case this is a library override ID. */
     if (ID_IS_OVERRIDE_LIBRARY(key) && !is_undo) {
-      tmp_kb.totelem = 0;
-      tmp_kb.data = nullptr;
+      writer->write_struct(&kb, [](BlendStructWriter<KeyBlock> &struct_writer) {
+        struct_writer.shallow_data.totelem = 0;
+        struct_writer.shallow_data.data = nullptr;
+      });
     }
-    BLO_write_struct_at_address(writer, KeyBlock, &kb, &tmp_kb);
-    if (tmp_kb.data != nullptr) {
-      BLO_write_raw(writer, tmp_kb.totelem * key->elemsize, tmp_kb.data);
+    else {
+      writer->write_struct(&kb);
+      if (kb.data != nullptr) {
+        writer->write_raw(kb.totelem * key->elemsize, kb.data);
+      }
     }
   }
 }
@@ -146,13 +147,14 @@ static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_add
 
 static void shapekey_blend_read_data(BlendDataReader *reader, ID *id)
 {
-  Key *key = (Key *)id;
+  Key *key = id_cast<Key *>(id);
   BLO_read_struct_list(reader, KeyBlock, &(key->block));
 
   BLO_read_struct(reader, KeyBlock, &key->refkey);
 
   for (KeyBlock &kb : key->block) {
-    BLO_read_data_address(reader, &kb.data);
+    BLO_read_array_and_validate_size(
+        reader, reinterpret_cast<std::byte **>(&kb.data), &kb.totelem, key->elemsize);
 
     /* NOTE: This is endianness-sensitive. */
     /* Keyblock data would need specific endian switching depending of the exact type of data it
@@ -163,43 +165,44 @@ static void shapekey_blend_read_data(BlendDataReader *reader, ID *id)
 static void shapekey_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *id)
 {
   /* ShapeKeys should always only be linked indirectly through their user ID (mesh, Curve etc.), or
-   * be fully local data. */
-  BLI_assert((id->tag & ID_TAG_EXTERN) == 0);
+   * be fully local data, or part of linked packed data. */
+  BLI_assert((id->tag & ID_TAG_EXTERN) == 0 || ID_IS_PACKED(id));
   UNUSED_VARS_NDEBUG(id);
 }
 
 IDTypeInfo IDType_ID_KE = {
-    /*id_code*/ Key::id_type,
-    /*id_filter*/ FILTER_ID_KE,
+    .id_code = Key::id_type,
+    .id_filter = FILTER_ID_KE,
     /* Warning! key->from, could be more types in future? */
-    /*dependencies_id_types*/ FILTER_ID_ME | FILTER_ID_CU_LEGACY | FILTER_ID_LT,
-    /*main_listbase_index*/ INDEX_ID_KE,
-    /*struct_size*/ sizeof(Key),
-    /*name*/ "Key",
-    /*name_plural*/ N_("shape_keys"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_SHAPEKEY,
-    /*flags*/ IDTYPE_FLAGS_NO_LIBLINKING,
-    /*asset_type_info*/ nullptr,
+    .dependencies_id_types = FILTER_ID_ME | FILTER_ID_CU_LEGACY | FILTER_ID_LT,
+    .main_listbase_index = INDEX_ID_KE,
+    .struct_size = sizeof(Key),
+    .name = "Key",
+    .name_plural = N_("shape_keys"),
+    .translation_context = BLT_I18NCONTEXT_ID_SHAPEKEY,
+    .flags = IDTYPE_FLAGS_NO_LIBLINKING,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ nullptr,
-    /*copy_data*/ shapekey_copy_data,
-    /*free_data*/ shapekey_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ shapekey_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
+    .init_data = nullptr,
+    .copy_data = shapekey_copy_data,
+    .free_data = shapekey_free_data,
+    .make_local = nullptr,
+    .foreach_id = shapekey_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     /* A bit weird, due to shape-keys not being strictly speaking embedded data... But they also
      * share a lot with those (non linkable, only ever used by one owner ID, etc.). */
-    /*owner_pointer_get*/ shapekey_owner_pointer_get,
+    .owner_pointer_get = shapekey_owner_pointer_get,
 
-    /*blend_write*/ shapekey_blend_write,
-    /*blend_read_data*/ shapekey_blend_read_data,
-    /*blend_read_after_liblink*/ shapekey_blend_read_after_liblink,
+    .blend_write = shapekey_blend_write,
+    .blend_read_data = shapekey_blend_read_data,
+    .blend_read_after_liblink = shapekey_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 #define KEY_MODE_DUMMY 0 /* Use where mode isn't checked for. */
@@ -216,9 +219,9 @@ void BKE_key_free_nolib(Key *key)
 {
   while (KeyBlock *kb = static_cast<KeyBlock *>(BLI_pophead(&key->block))) {
     if (kb->data) {
-      MEM_freeN(kb->data);
+      MEM_delete_void(kb->data);
     }
-    MEM_freeN(kb);
+    MEM_delete(kb);
   }
 }
 
@@ -278,7 +281,7 @@ void BKE_key_sort(Key *key)
   KeyBlock *kb;
 
   /* Locate the key which is out of position. */
-  for (kb = static_cast<KeyBlock *>(key->block.first); kb; kb = kb->next) {
+  for (kb = key->block.first(); kb; kb = kb->next) {
     if ((kb->next) && (kb->pos > kb->next->pos)) {
       break;
     }
@@ -299,7 +302,7 @@ void BKE_key_sort(Key *key)
   }
 
   /* New rule; first key is refkey, this to match drawing channels... */
-  key->refkey = static_cast<KeyBlock *>(key->block.first);
+  key->refkey = key->block.first();
 }
 
 /**************** do the key ****************/
@@ -438,8 +441,8 @@ static bool get_keys_for_absolute_eval(float eval_time,
                                        KeyBlock *r_target_keys[4],
                                        float r_weights[4])
 {
-  KeyBlock *firstkey = static_cast<KeyBlock *>(keyblocks->first);
-  KeyBlock *lastkey = static_cast<KeyBlock *>(keyblocks->last);
+  KeyBlock *firstkey = keyblocks->first();
+  KeyBlock *lastkey = keyblocks->last();
   eval_time = clamp_f(eval_time, firstkey->pos, lastkey->pos);
 
   r_target_keys[0] = r_target_keys[1] = r_target_keys[2] = r_target_keys[3] = firstkey;
@@ -525,19 +528,6 @@ static bool get_keys_for_absolute_eval(float eval_time,
   return false;
 }
 
-static void flerp(const int tot,
-                  float *in,
-                  const float *f0,
-                  const float *f1,
-                  const float *f2,
-                  const float *f3,
-                  const float t[4])
-{
-  for (int a = 0; a < tot; a++) {
-    in[a] = t[0] * f0[a] + t[1] * f1[a] + t[2] * f2[a] + t[3] * f3[a];
-  }
-}
-
 static char *key_block_get_data(Key *key, KeyBlock *actkb, KeyBlock *kb, char **freedata)
 {
   if (kb == actkb) {
@@ -545,23 +535,23 @@ static char *key_block_get_data(Key *key, KeyBlock *actkb, KeyBlock *kb, char **
      * edit mode with shape keys blending applied. */
     if (GS(key->from->name) == ID_ME) {
 
-      Mesh *mesh = (Mesh *)key->from;
+      Mesh *mesh = id_cast<Mesh *>(key->from);
+      const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
 
-      if (mesh->runtime->edit_mesh && mesh->runtime->edit_mesh->bm->totvert == kb->totelem) {
+      if (mesh->runtime->edit_mesh && bm->totvert == kb->totelem) {
         int a = 0;
         float (*co)[3];
-        co = MEM_malloc_arrayN<float[3]>(size_t(mesh->runtime->edit_mesh->bm->totvert),
-                                         "key_block_get_data");
+        co = MEM_new_array_uninitialized<float[3]>(size_t(bm->totvert), "key_block_get_data");
 
         BMVert *eve;
         BMIter iter;
-        BM_ITER_MESH (eve, &iter, mesh->runtime->edit_mesh->bm, BM_VERTS_OF_MESH) {
+        BM_ITER_MESH (eve, &iter, const_cast<BMesh *>(bm), BM_VERTS_OF_MESH) {
           copy_v3_v3(co[a], eve->co);
           a++;
         }
 
-        *freedata = (char *)co;
-        return (char *)co;
+        *freedata = reinterpret_cast<char *>(co);
+        return reinterpret_cast<char *>(co);
       }
     }
   }
@@ -570,49 +560,11 @@ static char *key_block_get_data(Key *key, KeyBlock *actkb, KeyBlock *kb, char **
   return static_cast<char *>(kb->data);
 }
 
-/* Currently only the first value of 'r_ofs' may be set. */
-static bool key_pointer_size(
-    const Key *key, const int mode, int *r_poinsize, int *r_ofs, int *r_step)
-{
-  if (key->from == nullptr) {
-    return false;
-  }
-
-  *r_step = 1;
-
-  switch (GS(key->from->name)) {
-    case ID_ME:
-      *r_ofs = sizeof(float[KEYELEM_FLOAT_LEN_COORD]);
-      *r_poinsize = *r_ofs;
-      break;
-    case ID_LT:
-      *r_ofs = sizeof(float[KEYELEM_FLOAT_LEN_COORD]);
-      *r_poinsize = *r_ofs;
-      break;
-    case ID_CU_LEGACY:
-      if (mode == KEY_MODE_BPOINT) {
-        *r_ofs = sizeof(float[KEYELEM_FLOAT_LEN_BPOINT]);
-        *r_step = KEYELEM_ELEM_LEN_BPOINT;
-      }
-      else {
-        *r_ofs = sizeof(float[KEYELEM_FLOAT_LEN_BEZTRIPLE]);
-        *r_step = KEYELEM_ELEM_LEN_BEZTRIPLE;
-      }
-      *r_poinsize = sizeof(float[KEYELEM_ELEM_SIZE_CURVE]);
-      break;
-    default:
-      BLI_assert_msg(0, "invalid 'key->from' ID type");
-      return false;
-  }
-
-  return true;
-}
-
 /**
  * Move the point in `r_targets` along the vector of ab by a factor of `weight`.
  *
- * \param start_index points to the x value in the flat float array. Indices of +1 and +2 from this
- * are accessed.
+ * \param start_index: points to the x value in the flat float array.
+ * Indices of +1 and +2 from this are accessed.
  */
 static void add_weighted_vector(
     const int start_index, const float weight, const float *a, const float *b, float *r_target)
@@ -623,27 +575,59 @@ static void add_weighted_vector(
 }
 
 /**
+ * Blend the given float3 arrays f1-3 into `r_out` with the given weights.
+ */
+static void flerp(const float f0[3],
+                  const float f1[3],
+                  const float f2[3],
+                  const float f3[3],
+                  const float weights[4],
+                  float r_out[3])
+{
+  r_out[0] = weights[0] * f0[0] + weights[1] * f1[0] + weights[2] * f2[0] + weights[3] * f3[0];
+  r_out[1] = weights[0] * f0[1] + weights[1] * f1[1] + weights[2] * f2[1] + weights[3] * f3[1];
+  r_out[2] = weights[0] * f0[2] + weights[1] * f1[2] + weights[2] * f2[2] + weights[3] * f3[2];
+}
+
+/**
  * Copy the shapekey data of `source` into the output array of `r_target`.
  */
 static void copy_key_float3(
     const int vertex_count, Key *key, KeyBlock *active_keyblock, KeyBlock *source, float *r_target)
 {
+  if (vertex_count == 0 || source->totelem == 0) {
+    return;
+  }
   char *free_keyblock_data;
   float *keyblock_data = reinterpret_cast<float *>(
       key_block_get_data(key, active_keyblock, source, &free_keyblock_data));
 
-  memcpy(r_target, keyblock_data, vertex_count * 3 * sizeof(float));
+  if (vertex_count == source->totelem) {
+    memcpy(r_target, keyblock_data, vertex_count * 3 * sizeof(float));
+  }
+  else {
+    /* In case of KeyBlocks that have a different number of elements than the original data.
+     * Maintained for backwards compatibility even though this state should not be reachable
+     * through normal interactions with Blender. */
+    const float step_rate = source->totelem / float(vertex_count);
+    for (int i = 0; i < vertex_count; i++) {
+      /* Rounding down to avoid exceeding the bounds. */
+      const int source_index = int(step_rate * i);
+      memcpy(&r_target[i * 3], &keyblock_data[source_index * 3], 3 * sizeof(float));
+    }
+  }
 
   if (free_keyblock_data) {
-    MEM_freeN(free_keyblock_data);
+    MEM_delete(free_keyblock_data);
   }
 }
 
 /**
  * Copy the shapekey data of `source` into the output array of `r_target`.
  *
- * \param weights is a float array of size `vertex_count`. It determines how much of `source` is
- * blended into the result. The base for it is the reference key. If this is passed as a nullptr,
+ * \param weights: is a float array of size `vertex_count`.
+ * It determines how much of `source` is blended into the result.
+ * The base for it is the reference key. If this is passed as a nullptr,
  * `source` is copied at full weight.
  */
 static void copy_key_float3_weighted(const int vertex_count,
@@ -680,22 +664,23 @@ static void copy_key_float3_weighted(const int vertex_count,
   }
 
   if (free_source_data) {
-    MEM_freeN(free_source_data);
+    MEM_delete(free_source_data);
   }
   if (free_refkey_data) {
-    MEM_freeN(free_refkey_data);
+    MEM_delete(free_refkey_data);
   }
 }
 
 /**
  * Shapekey evaluation for data of 3 floats (Vector3).
  *
- * \param target_data is the float array into which the result of the evaluation is written.
- * \param per_keyblock_weights is a 2d array which gives a per KeyBlock per Vertex weight. Can be a
- * nullptr.
+ * \param per_keyblock_weights: is a 2d array which gives a per KeyBlock per Vertex weight. Can be
+ * \param target_data: is the float array into which the result of the evaluation is written.
+ * a nullptr.
  */
 static void key_evaluate_relative_float3(Key *key,
                                          KeyBlock *active_keyblock,
+                                         const std::optional<Span<bool>> keys_to_process,
                                          const int vertex_count,
                                          float **per_keyblock_weights,
                                          float *target_data)
@@ -703,8 +688,14 @@ static void key_evaluate_relative_float3(Key *key,
   /* Creates the basis values of the reference key in target_data. */
   copy_key_float3(vertex_count, key, active_keyblock, key->refkey, target_data);
 
-  for (const auto [keyblock_index, kb] : key->block.enumerate()) {
+  /* Cannot use auto [keyblock_index, kb] here because that would throw a warning at the
+   * parallel_for. */
+  for (std::pair<int, KeyBlock &> enumerator : key->block.enumerate()) {
+    KeyBlock &kb = enumerator.second;
     if (&kb == key->refkey) {
+      continue;
+    }
+    if (keys_to_process && !(*keys_to_process)[enumerator.first]) {
       continue;
     }
     /* No difference in vertex count allowed. */
@@ -721,7 +712,7 @@ static void key_evaluate_relative_float3(Key *key,
       continue;
     }
 
-    const float *weights = per_keyblock_weights ? per_keyblock_weights[keyblock_index] : nullptr;
+    const float *weights = per_keyblock_weights ? per_keyblock_weights[enumerator.first] : nullptr;
 
     char *freefrom = nullptr;
     const float *from = reinterpret_cast<float *>(
@@ -730,16 +721,17 @@ static void key_evaluate_relative_float3(Key *key,
     /* For meshes, use the original values instead of the bmesh values to
      * maintain a constant offset. */
     const float *reffrom = static_cast<float *>(reference_kb->data);
-
-    for (int i = 0; i < vertex_count; i++) {
-      const float weight = weights ? (weights[i] * kb.curval) : kb.curval;
-      /* Each vertex has 3 floats. */
-      const int vector_index = i * 3;
-      add_weighted_vector(vector_index, weight, reffrom, from, target_data);
-    }
+    threading::parallel_for(IndexRange(vertex_count), 1024, [&](const IndexRange range) {
+      for (const int i : range) {
+        const float weight = weights ? (weights[i] * kb.curval) : kb.curval;
+        /* Each vertex has 3 floats. */
+        const int vector_index = i * 3;
+        add_weighted_vector(vector_index, weight, reffrom, from, target_data);
+      }
+    });
 
     if (freefrom) {
-      MEM_freeN(freefrom);
+      MEM_delete(freefrom);
     }
   }
 }
@@ -747,279 +739,52 @@ static void key_evaluate_relative_float3(Key *key,
 /**
  * Absolute interpolation between up to 4 shapekeys. The resulting data is stored in `r_target`.
  */
-static void key_evaluate_absolute(const int start,
-                                  int end,
-                                  const int vertex_count,
-                                  char *r_target,
+static void key_evaluate_absolute(const int vertex_count,
                                   Key *key,
                                   KeyBlock *active_keyblock,
                                   KeyBlock *shapekeys[4],
                                   const float weights[4],
-                                  const int mode)
+                                  float *r_target)
 {
-  int a, ofs[32];
-
-  /* Those flags are written into `flagdo` and `flagflo` and define how those keys are treated. */
-  enum KeyActionFlags {
-    K1_FLAG = (1 << 0),
-    K2_FLAG = (1 << 1),
-    K3_FLAG = (1 << 2),
-    K4_FLAG = (1 << 3),
-  };
-  int flagdo = K1_FLAG | K2_FLAG | K3_FLAG | K4_FLAG;
-  int flagflo = 0;
-
-  /* Currently always 0, in future key_pointer_size may assign. */
-  ofs[1] = 0;
-
-  int pointer_size;
-  int step;
-  if (!key_pointer_size(key, mode, &pointer_size, &ofs[0], &step)) {
-    return;
-  }
-
-  end = std::min(end, vertex_count);
-
   char *freek1, *freek2, *freek3, *freek4;
-  char *k1 = key_block_get_data(key, active_keyblock, shapekeys[0], &freek1);
-  char *k2 = key_block_get_data(key, active_keyblock, shapekeys[1], &freek2);
-  char *k3 = key_block_get_data(key, active_keyblock, shapekeys[2], &freek3);
-  char *k4 = key_block_get_data(key, active_keyblock, shapekeys[3], &freek4);
+  float *k1 = reinterpret_cast<float *>(
+      key_block_get_data(key, active_keyblock, shapekeys[0], &freek1));
+  float *k2 = reinterpret_cast<float *>(
+      key_block_get_data(key, active_keyblock, shapekeys[1], &freek2));
+  float *k3 = reinterpret_cast<float *>(
+      key_block_get_data(key, active_keyblock, shapekeys[2], &freek3));
+  float *k4 = reinterpret_cast<float *>(
+      key_block_get_data(key, active_keyblock, shapekeys[3], &freek4));
 
-  float k1tot = 0.0, k2tot = 0.0, k3tot = 0.0, k4tot = 0.0;
-  float k1d = 0.0, k2d = 0.0, k3d = 0.0, k4d = 0.0;
-  /* Test for more or less points (per key!) */
-  if (vertex_count != shapekeys[0]->totelem) {
-    k1tot = 0.0;
-    flagflo |= K1_FLAG;
-    if (shapekeys[0]->totelem) {
-      k1d = shapekeys[0]->totelem / float(vertex_count);
-    }
-    else {
-      flagdo &= ~K1_FLAG;
-    }
-  }
-  if (vertex_count != shapekeys[1]->totelem) {
-    k2tot = 0.0;
-    flagflo |= K2_FLAG;
-    if (shapekeys[0]->totelem) {
-      k2d = shapekeys[1]->totelem / float(vertex_count);
-    }
-    else {
-      flagdo &= ~K2_FLAG;
-    }
-  }
-  if (vertex_count != shapekeys[2]->totelem) {
-    k3tot = 0.0;
-    flagflo |= K3_FLAG;
-    if (shapekeys[0]->totelem) {
-      k3d = shapekeys[2]->totelem / float(vertex_count);
-    }
-    else {
-      flagdo &= ~K3_FLAG;
-    }
-  }
-  if (vertex_count != shapekeys[3]->totelem) {
-    k4tot = 0.0;
-    flagflo |= K4_FLAG;
-    if (shapekeys[0]->totelem) {
-      k4d = shapekeys[3]->totelem / float(vertex_count);
-    }
-    else {
-      flagdo &= ~K4_FLAG;
-    }
-  }
+  /* The step rate will be 1 in normal cases. We have to account for shapekeys with different
+   * element counts though since that case used to be supported. */
+  const float step_k1 = shapekeys[0]->totelem / float(vertex_count);
+  const float step_k2 = shapekeys[1]->totelem / float(vertex_count);
+  const float step_k3 = shapekeys[2]->totelem / float(vertex_count);
+  const float step_k4 = shapekeys[3]->totelem / float(vertex_count);
 
-  /* This exception is needed for curves with multiple splines. */
-  if (start != 0) {
-
-    r_target += pointer_size * start;
-
-    if (flagdo & K1_FLAG) {
-      if (flagflo & K1_FLAG) {
-        k1tot += start * k1d;
-        a = int(floor(k1tot));
-        if (a) {
-          k1tot -= a;
-          k1 += a * key->elemsize;
-        }
-      }
-      else {
-        k1 += start * key->elemsize;
-      }
+  threading::parallel_for(IndexRange(vertex_count), 1024, [&](const IndexRange range) {
+    for (const int i : range) {
+      flerp(&k1[int(i * step_k1) * 3],
+            &k2[int(i * step_k2) * 3],
+            &k3[int(i * step_k3) * 3],
+            &k4[int(i * step_k4) * 3],
+            weights,
+            &r_target[i * 3]);
     }
-    if (flagdo & K2_FLAG) {
-      if (flagflo & K2_FLAG) {
-        k2tot += start * k2d;
-        a = int(floor(k2tot));
-        if (a) {
-          k2tot -= a;
-          k2 += a * key->elemsize;
-        }
-      }
-      else {
-        k2 += start * key->elemsize;
-      }
-    }
-    if (flagdo & K3_FLAG) {
-      if (flagflo & K3_FLAG) {
-        k3tot += start * k3d;
-        a = int(floor(k3tot));
-        if (a) {
-          k3tot -= a;
-          k3 += a * key->elemsize;
-        }
-      }
-      else {
-        k3 += start * key->elemsize;
-      }
-    }
-    if (flagdo & K4_FLAG) {
-      if (flagflo & K4_FLAG) {
-        k4tot += start * k4d;
-        a = int(floor(k4tot));
-        if (a) {
-          k4tot -= a;
-          k4 += a * key->elemsize;
-        }
-      }
-      else {
-        k4 += start * key->elemsize;
-      }
-    }
-  }
-
-  /* In case of bezier-triples. */
-  char elemstr[8];
-  elemstr[0] = 1; /* Number of IPO-floats. */
-  elemstr[1] = IPO_BEZTRIPLE;
-  elemstr[2] = 0;
-
-  /* Only here, not above! */
-  const int elemsize = key->elemsize * step;
-  char *cp;
-  for (a = start; a < end; a += step) {
-    cp = key->elemstr;
-    if (mode == KEY_MODE_BEZTRIPLE) {
-      cp = elemstr;
-    }
-
-    int *ofsp = ofs;
-
-    while (cp[0]) { /* (cp[0] == amount) */
-
-      switch (cp[1]) {
-        case IPO_FLOAT:
-          flerp(KEYELEM_FLOAT_LEN_COORD,
-                (float *)r_target,
-                (float *)k1,
-                (float *)k2,
-                (float *)k3,
-                (float *)k4,
-                weights);
-          break;
-        case IPO_BPOINT:
-          flerp(KEYELEM_FLOAT_LEN_BPOINT,
-                (float *)r_target,
-                (float *)k1,
-                (float *)k2,
-                (float *)k3,
-                (float *)k4,
-                weights);
-          break;
-        case IPO_BEZTRIPLE:
-          flerp(KEYELEM_FLOAT_LEN_BEZTRIPLE,
-                (float *)r_target,
-                (float *)k1,
-                (float *)k2,
-                (float *)k3,
-                (float *)k4,
-                weights);
-          break;
-        default:
-          BLI_assert_unreachable();
-          if (freek1) {
-            MEM_freeN(freek1);
-          }
-          if (freek2) {
-            MEM_freeN(freek2);
-          }
-          if (freek3) {
-            MEM_freeN(freek3);
-          }
-          if (freek4) {
-            MEM_freeN(freek4);
-          }
-          BLI_assert_msg(0, "invalid 'cp[1]'");
-          return;
-      }
-
-      r_target += *ofsp;
-      cp += 2;
-      ofsp++;
-    }
-    /* Lets do it the difficult way: when keys have a different size. */
-    if (flagdo & K1_FLAG) {
-      if (flagflo & K1_FLAG) {
-        k1tot += k1d;
-        while (k1tot >= 1.0f) {
-          k1tot -= 1.0f;
-          k1 += elemsize;
-        }
-      }
-      else {
-        k1 += elemsize;
-      }
-    }
-    if (flagdo & K2_FLAG) {
-      if (flagflo & K2_FLAG) {
-        k2tot += k2d;
-        while (k2tot >= 1.0f) {
-          k2tot -= 1.0f;
-          k2 += elemsize;
-        }
-      }
-      else {
-        k2 += elemsize;
-      }
-    }
-    if (flagdo & K3_FLAG) {
-      if (flagflo & K3_FLAG) {
-        k3tot += k3d;
-        while (k3tot >= 1.0f) {
-          k3tot -= 1.0f;
-          k3 += elemsize;
-        }
-      }
-      else {
-        k3 += elemsize;
-      }
-    }
-    if (flagdo & K4_FLAG) {
-      if (flagflo & K4_FLAG) {
-        k4tot += k4d;
-        while (k4tot >= 1.0f) {
-          k4tot -= 1.0f;
-          k4 += elemsize;
-        }
-      }
-      else {
-        k4 += elemsize;
-      }
-    }
-  }
+  });
 
   if (freek1) {
-    MEM_freeN(freek1);
+    MEM_delete(freek1);
   }
   if (freek2) {
-    MEM_freeN(freek2);
+    MEM_delete(freek2);
   }
   if (freek3) {
-    MEM_freeN(freek3);
+    MEM_delete(freek3);
   }
   if (freek4) {
-    MEM_freeN(freek4);
+    MEM_delete(freek4);
   }
 }
 
@@ -1034,18 +799,19 @@ static float *get_weights_array(Object *ob, const char *vgroup, WeightsArrayCach
   int totvert = 0;
 
   /* Gather dvert and totvert. */
-  BMEditMesh *em = nullptr;
+  const BMesh *bm = nullptr;
   if (ob->type == OB_MESH) {
-    Mesh *mesh = static_cast<Mesh *>(ob->data);
+    Mesh *mesh = id_cast<Mesh *>(ob->data);
     dvert = mesh->deform_verts().data();
     totvert = mesh->verts_num;
 
-    if (mesh->runtime->edit_mesh && mesh->runtime->edit_mesh->bm->totvert == totvert) {
-      em = mesh->runtime->edit_mesh.get();
+    const BMesh *bm_test = BKE_editmesh_bmesh_get(mesh);
+    if (bm_test && bm_test->totvert == totvert) {
+      bm = bm_test;
     }
   }
   else if (ob->type == OB_LATTICE) {
-    Lattice *lt = static_cast<Lattice *>(ob->data);
+    Lattice *lt = id_cast<Lattice *>(ob->data);
     dvert = lt->dvert;
     totvert = lt->pntsu * lt->pntsv * lt->pntsw;
   }
@@ -1062,8 +828,8 @@ static float *get_weights_array(Object *ob, const char *vgroup, WeightsArrayCach
     if (cache) {
       if (cache->defgroup_weights == nullptr) {
         int num_defgroup = BKE_object_defgroup_count(ob);
-        cache->defgroup_weights = MEM_calloc_arrayN<float *>(num_defgroup,
-                                                             "cached defgroup weights");
+        cache->defgroup_weights = MEM_new_array_zeroed<float *>(num_defgroup,
+                                                                "cached defgroup weights");
         cache->num_defgroup_weights = num_defgroup;
       }
 
@@ -1072,14 +838,14 @@ static float *get_weights_array(Object *ob, const char *vgroup, WeightsArrayCach
       }
     }
 
-    weights = MEM_malloc_arrayN<float>(size_t(totvert), "weights");
+    weights = MEM_new_array_uninitialized<float>(size_t(totvert), "weights");
 
-    if (em) {
+    if (bm) {
       int i;
-      const int cd_dvert_offset = CustomData_get_offset(&em->bm->vdata, CD_MDEFORMVERT);
+      const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
       BMIter iter;
       BMVert *eve;
-      BM_ITER_MESH_INDEX (eve, &iter, em->bm, BM_VERTS_OF_MESH, i) {
+      BM_ITER_MESH_INDEX (eve, &iter, const_cast<BMesh *>(bm), BM_VERTS_OF_MESH, i) {
         dvert = static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(eve, cd_dvert_offset));
         weights[i] = BKE_defvert_find_weight(dvert, defgrp_index);
       }
@@ -1101,8 +867,8 @@ static float *get_weights_array(Object *ob, const char *vgroup, WeightsArrayCach
 
 static float **keyblock_get_per_block_weights(Object *ob, Key *key, WeightsArrayCache *cache)
 {
-  float **per_keyblock_weights = MEM_malloc_arrayN<float *>(size_t(key->totkey),
-                                                            "per keyblock weights");
+  float **per_keyblock_weights = MEM_new_array_uninitialized<float *>(size_t(key->totkey),
+                                                                      "per keyblock weights");
 
   for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
     per_keyblock_weights[keyblock_index] = get_weights_array(ob, keyblock.vgroup, cache);
@@ -1119,25 +885,29 @@ static void keyblock_free_per_block_weights(Key *key,
     if (cache->num_defgroup_weights) {
       for (int a = 0; a < cache->num_defgroup_weights; a++) {
         if (cache->defgroup_weights[a]) {
-          MEM_freeN(cache->defgroup_weights[a]);
+          MEM_delete(cache->defgroup_weights[a]);
         }
       }
-      MEM_freeN(cache->defgroup_weights);
+      MEM_delete(cache->defgroup_weights);
     }
     cache->defgroup_weights = nullptr;
   }
   else {
     for (int a = 0; a < key->totkey; a++) {
       if (per_keyblock_weights[a]) {
-        MEM_freeN(per_keyblock_weights[a]);
+        MEM_delete(per_keyblock_weights[a]);
       }
     }
   }
 
-  MEM_freeN(per_keyblock_weights);
+  MEM_delete(per_keyblock_weights);
 }
 
-static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
+static void do_mesh_key(Object *ob,
+                        Key *key,
+                        const std::optional<Span<bool>> keys_to_process,
+                        char *out,
+                        const int tot)
 {
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
@@ -1146,7 +916,7 @@ static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
     float **per_keyblock_weights;
     per_keyblock_weights = keyblock_get_per_block_weights(ob, key, &cache);
     key_evaluate_relative_float3(
-        key, actkb, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
+        key, actkb, keys_to_process, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
     keyblock_free_per_block_weights(key, per_keyblock_weights, &cache);
   }
   else {
@@ -1157,7 +927,7 @@ static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
         ctime_scaled, &key->block, shapekeys, weights);
 
     if (simple_copy == false) {
-      key_evaluate_absolute(0, tot, tot, out, key, actkb, shapekeys, weights, KEY_MODE_DUMMY);
+      key_evaluate_absolute(tot, key, actkb, shapekeys, weights, reinterpret_cast<float *>(out));
     }
     else {
       copy_key_float3(tot, key, actkb, shapekeys[2], reinterpret_cast<float *>(out));
@@ -1165,41 +935,17 @@ static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
   }
 }
 
-static void do_cu_key(Curve *cu,
-                      Key *key,
-                      KeyBlock *actkb,
-                      KeyBlock *shapekeys[4],
-                      float weights[4],
-                      char *out,
-                      const int tot)
+static void do_curve_key(Object *ob,
+                         Key *key,
+                         const std::optional<Span<bool>> keys_to_process,
+                         char *out,
+                         const int tot)
 {
-  Nurb *nu;
-  int a, step;
-
-  for (a = 0, nu = static_cast<Nurb *>(cu->nurb.first); nu; nu = nu->next, a += step) {
-    if (nu->bp) {
-      step = KEYELEM_ELEM_LEN_BPOINT * nu->pntsu * nu->pntsv;
-      key_evaluate_absolute(
-          a, a + step, tot, out, key, actkb, shapekeys, weights, KEY_MODE_BPOINT);
-    }
-    else if (nu->bezt) {
-      step = KEYELEM_ELEM_LEN_BEZTRIPLE * nu->pntsu;
-      key_evaluate_absolute(
-          a, a + step, tot, out, key, actkb, shapekeys, weights, KEY_MODE_BEZTRIPLE);
-    }
-    else {
-      step = 0;
-    }
-  }
-}
-
-static void do_curve_key(Object *ob, Key *key, char *out, const int tot)
-{
-  Curve *cu = static_cast<Curve *>(ob->data);
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
   if (key->type == KEY_RELATIVE) {
-    key_evaluate_relative_float3(key, actkb, tot, nullptr, (float *)out);
+    key_evaluate_relative_float3(
+        key, actkb, keys_to_process, tot, nullptr, reinterpret_cast<float *>(out));
   }
   else {
     const float ctime_scaled = key->ctime / 100.0f;
@@ -1209,7 +955,7 @@ static void do_curve_key(Object *ob, Key *key, char *out, const int tot)
         ctime_scaled, &key->block, shapekeys, weights);
 
     if (simple_copy == false) {
-      do_cu_key(cu, key, actkb, shapekeys, weights, out, tot);
+      key_evaluate_absolute(tot, key, actkb, shapekeys, weights, reinterpret_cast<float *>(out));
     }
     else {
       copy_key_float3(tot, key, actkb, shapekeys[2], reinterpret_cast<float *>(out));
@@ -1217,16 +963,20 @@ static void do_curve_key(Object *ob, Key *key, char *out, const int tot)
   }
 }
 
-static void do_latt_key(Object *ob, Key *key, char *out, const int tot)
+static void do_latt_key(Object *ob,
+                        Key *key,
+                        const std::optional<Span<bool>> keys_to_process,
+                        char *out,
+                        const int tot)
 {
-  Lattice *lt = static_cast<Lattice *>(ob->data);
+  Lattice *lt = id_cast<Lattice *>(ob->data);
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
   if (key->type == KEY_RELATIVE) {
     float **per_keyblock_weights;
     per_keyblock_weights = keyblock_get_per_block_weights(ob, key, nullptr);
     key_evaluate_relative_float3(
-        key, actkb, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
+        key, actkb, keys_to_process, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
     keyblock_free_per_block_weights(key, per_keyblock_weights, nullptr);
   }
   else {
@@ -1237,7 +987,7 @@ static void do_latt_key(Object *ob, Key *key, char *out, const int tot)
         ctime_scaled, &key->block, shapekeys, weights);
 
     if (simple_copy == false) {
-      key_evaluate_absolute(0, tot, tot, out, key, actkb, shapekeys, weights, KEY_MODE_DUMMY);
+      key_evaluate_absolute(tot, key, actkb, shapekeys, weights, reinterpret_cast<float *>(out));
     }
     else {
       copy_key_float3(tot, key, actkb, shapekeys[2], reinterpret_cast<float *>(out));
@@ -1256,32 +1006,36 @@ static void keyblock_data_convert_to_curve(const float *fp,
                                            ListBaseT<Nurb> *nurb,
                                            const int totpoint);
 
-float *BKE_key_evaluate_object_ex(
-    Object *ob, int *r_totelem, float *arr, size_t arr_size, ID *obdata)
+float *BKE_key_evaluate_object_ex(Object *ob,
+                                  int *r_totelem,
+                                  float *arr,
+                                  size_t arr_size,
+                                  const std::optional<Span<bool>> keys_to_process,
+                                  ID *obdata)
 {
   Key *key = BKE_key_from_object(ob);
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
-  if (key == nullptr || BLI_listbase_is_empty(&key->block)) {
+  if (key == nullptr || key->block.is_empty()) {
     return nullptr;
   }
 
   /* Compute size of output array. */
   int tot = 0, size = 0;
   if (ob->type == OB_MESH) {
-    Mesh *mesh = static_cast<Mesh *>(ob->data);
+    Mesh *mesh = id_cast<Mesh *>(ob->data);
 
     tot = mesh->verts_num;
     size = tot * sizeof(float[KEYELEM_FLOAT_LEN_COORD]);
   }
   else if (ob->type == OB_LATTICE) {
-    Lattice *lt = static_cast<Lattice *>(ob->data);
+    Lattice *lt = id_cast<Lattice *>(ob->data);
 
     tot = lt->pntsu * lt->pntsv * lt->pntsw;
     size = tot * sizeof(float[KEYELEM_FLOAT_LEN_COORD]);
   }
   else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
-    Curve *cu = static_cast<Curve *>(ob->data);
+    Curve *cu = id_cast<Curve *>(ob->data);
 
     tot = BKE_keyblock_curve_element_count(&cu->nurb);
     size = tot * sizeof(float[KEYELEM_ELEM_SIZE_CURVE]);
@@ -1295,14 +1049,14 @@ float *BKE_key_evaluate_object_ex(
   /* Allocate array. */
   char *out;
   if (arr == nullptr) {
-    out = MEM_calloc_arrayN<char>(size, "BKE_key_evaluate_object out");
+    out = MEM_new_array_zeroed<char>(size, "BKE_key_evaluate_object out");
   }
   else {
     if (arr_size != size) {
       return nullptr;
     }
 
-    out = (char *)arr;
+    out = reinterpret_cast<char *>(arr);
   }
 
   if (ob->shapeflag & OB_SHAPE_LOCK) {
@@ -1314,7 +1068,7 @@ float *BKE_key_evaluate_object_ex(
     }
 
     if (kb == nullptr) {
-      kb = static_cast<KeyBlock *>(key->block.first);
+      kb = key->block.first();
       ob->shapenr = 1;
     }
 
@@ -1323,7 +1077,7 @@ float *BKE_key_evaluate_object_ex(
       copy_key_float3_weighted(tot, key, actkb, kb, weights, reinterpret_cast<float *>(out));
 
       if (weights) {
-        MEM_freeN(weights);
+        MEM_delete(weights);
       }
     }
     else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
@@ -1332,39 +1086,41 @@ float *BKE_key_evaluate_object_ex(
   }
   else {
     if (ob->type == OB_MESH) {
-      do_mesh_key(ob, key, out, tot);
+      do_mesh_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_LATTICE) {
-      do_latt_key(ob, key, out, tot);
+      do_latt_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_CURVES_LEGACY) {
-      do_curve_key(ob, key, out, tot);
+      do_curve_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_SURF) {
-      do_curve_key(ob, key, out, tot);
+      do_curve_key(ob, key, keys_to_process, out, tot);
     }
   }
 
   if (obdata != nullptr) {
     switch (GS(obdata->name)) {
       case ID_ME: {
-        Mesh *mesh = (Mesh *)obdata;
+        Mesh *mesh = id_cast<Mesh *>(obdata);
         const int totvert = min_ii(tot, mesh->verts_num);
         mesh->vert_positions_for_write().take_front(totvert).copy_from(
-            {reinterpret_cast<const blender::float3 *>(out), totvert});
+            {reinterpret_cast<const float3 *>(out), totvert});
         mesh->tag_positions_changed();
         break;
       }
       case ID_LT: {
-        Lattice *lattice = (Lattice *)obdata;
+        Lattice *lattice = id_cast<Lattice *>(obdata);
         const int totpoint = min_ii(tot, lattice->pntsu * lattice->pntsv * lattice->pntsw);
-        keyblock_data_convert_to_lattice((const float (*)[3])out, lattice->def, totpoint);
+        keyblock_data_convert_to_lattice(
+            reinterpret_cast<const float (*)[3]>(out), lattice->def, totpoint);
         break;
       }
       case ID_CU_LEGACY: {
-        Curve *curve = (Curve *)obdata;
+        Curve *curve = id_cast<Curve *>(obdata);
         const int totpoint = min_ii(tot, BKE_keyblock_curve_element_count(&curve->nurb));
-        keyblock_data_convert_to_curve((const float *)out, &curve->nurb, totpoint);
+        keyblock_data_convert_to_curve(
+            reinterpret_cast<const float *>(out), &curve->nurb, totpoint);
         break;
       }
       default:
@@ -1375,12 +1131,12 @@ float *BKE_key_evaluate_object_ex(
   if (r_totelem) {
     *r_totelem = tot;
   }
-  return (float *)out;
+  return reinterpret_cast<float *>(out);
 }
 
 float *BKE_key_evaluate_object(Object *ob, int *r_totelem)
 {
-  return BKE_key_evaluate_object_ex(ob, r_totelem, nullptr, 0, nullptr);
+  return BKE_key_evaluate_object_ex(ob, r_totelem, nullptr, 0, std::nullopt, nullptr);
 }
 
 int BKE_keyblock_element_count_from_shape(const Key *key, const int shape_index)
@@ -1421,7 +1177,7 @@ void BKE_keyblock_data_get_from_shape(const Key *key,
                                       MutableSpan<float3> arr,
                                       const int shape_index)
 {
-  uint8_t *elements = (uint8_t *)arr.data();
+  uint8_t *elements = reinterpret_cast<uint8_t *>(arr.data());
 
   for (const auto [index, kb] : key->block.enumerate()) {
     if (ELEM(shape_index, -1, index)) {
@@ -1452,10 +1208,10 @@ void BKE_keyblock_data_set_with_mat4(Key *key,
   for (const auto [index, kb] : key->block.enumerate()) {
     if (ELEM(shape_index, -1, index)) {
       const int block_elem_len = kb.totelem;
-      float (*block_data)[3] = (float (*)[3])kb.data;
+      float (*block_data)[3] = static_cast<float (*)[3]>(kb.data);
       for (int data_offset = 0; data_offset < block_elem_len; ++data_offset) {
-        const float *src_data = (const float *)(elements + data_offset);
-        float *dst_data = (float *)(block_data + data_offset);
+        const float *src_data = reinterpret_cast<const float *>(elements + data_offset);
+        float *dst_data = reinterpret_cast<float *>(block_data + data_offset);
         mul_v3_m4v3(dst_data, transform.ptr(), src_data);
       }
       elements += block_elem_len;
@@ -1511,18 +1267,18 @@ Key **BKE_key_from_id_p(ID *id)
 {
   switch (GS(id->name)) {
     case ID_ME: {
-      Mesh *mesh = (Mesh *)id;
+      Mesh *mesh = id_cast<Mesh *>(id);
       return &mesh->key;
     }
     case ID_CU_LEGACY: {
-      Curve *cu = (Curve *)id;
+      Curve *cu = id_cast<Curve *>(id);
       if (cu->ob_type != OB_FONT) {
         return &cu->key;
       }
       break;
     }
     case ID_LT: {
-      Lattice *lt = (Lattice *)id;
+      Lattice *lt = id_cast<Lattice *>(id);
       return &lt->key;
     }
     default:
@@ -1549,7 +1305,7 @@ Key **BKE_key_from_object_p(Object *ob)
     return nullptr;
   }
 
-  return BKE_key_from_id_p(static_cast<ID *>(ob->data));
+  return BKE_key_from_id_p(ob->data);
 }
 
 Key *BKE_key_from_object(Object *ob)
@@ -1567,16 +1323,16 @@ KeyBlock *BKE_keyblock_add(Key *key, const char *name)
 {
   float curpos = -0.1;
 
-  KeyBlock *kb = static_cast<KeyBlock *>(key->block.last);
+  KeyBlock *kb = key->block.last();
   if (kb) {
     curpos = kb->pos;
   }
 
-  kb = MEM_new_for_free<KeyBlock>("Keyblock");
+  kb = MEM_new<KeyBlock>("Keyblock");
   BLI_addtail(&key->block, kb);
   kb->type = KEY_LINEAR;
 
-  const int tot = BLI_listbase_count(&key->block);
+  const int tot = key->block.count();
   if (name) {
     STRNCPY_UTF8(kb->name, name);
   }
@@ -1613,7 +1369,7 @@ KeyBlock *BKE_keyblock_duplicate(Key *key, KeyBlock *kb_src)
   BLI_assert(BLI_findindex(&key->block, kb_src) != -1);
   KeyBlock *kb_dst = BKE_keyblock_add(key, kb_src->name);
   kb_dst->totelem = kb_src->totelem;
-  kb_dst->data = MEM_dupallocN(kb_src->data);
+  kb_dst->data = MEM_dupalloc_void(kb_src->data);
   BLI_remlink(&key->block, kb_dst);
   BLI_insertlinkafter(&key->block, kb_src, kb_dst);
   BKE_keyblock_copy_settings(kb_dst, kb_src);
@@ -1706,7 +1462,8 @@ std::optional<std::string> BKE_keyblock_curval_rnapath_get(const Key *key, const
   if (ELEM(nullptr, key, kb)) {
     return std::nullopt;
   }
-  PointerRNA ptr = RNA_pointer_create_discrete((ID *)&key->id, &RNA_ShapeKey, (KeyBlock *)kb);
+  PointerRNA ptr = RNA_pointer_create_discrete(
+      const_cast<ID *>(&key->id), RNA_ShapeKey, (KeyBlock *)kb);
   PropertyRNA *prop = RNA_struct_find_property(&ptr, "value");
   return RNA_path_from_ID_to_property(&ptr, prop);
 }
@@ -1740,9 +1497,9 @@ void BKE_keyblock_convert_from_lattice(const Lattice *lt, KeyBlock *kb)
     return;
   }
 
-  MEM_SAFE_FREE(kb->data);
+  MEM_SAFE_DELETE_VOID(kb->data);
 
-  kb->data = MEM_malloc_arrayN(size_t(tot), size_t(lt->key->elemsize), __func__);
+  kb->data = MEM_new_array_uninitialized(size_t(tot), size_t(lt->key->elemsize), __func__);
   kb->totelem = tot;
 
   BKE_keyblock_update_from_lattice(lt, kb);
@@ -1773,7 +1530,7 @@ int BKE_keyblock_curve_element_count(const ListBaseT<Nurb> *nurb)
   const Nurb *nu;
   int tot = 0;
 
-  nu = static_cast<const Nurb *>(nurb->first);
+  nu = nurb->first();
   while (nu) {
     if (nu->bezt) {
       tot += KEYELEM_ELEM_LEN_BEZTRIPLE * nu->pntsu;
@@ -1862,9 +1619,9 @@ void BKE_keyblock_convert_from_curve(const Curve *cu, KeyBlock *kb, const ListBa
     return;
   }
 
-  MEM_SAFE_FREE(kb->data);
+  MEM_SAFE_DELETE_VOID(kb->data);
 
-  kb->data = MEM_malloc_arrayN(size_t(tot), size_t(cu->key->elemsize), __func__);
+  kb->data = MEM_new_array_uninitialized(size_t(tot), size_t(cu->key->elemsize), __func__);
   kb->totelem = tot;
 
   BKE_keyblock_update_from_curve(cu, kb, nurb);
@@ -1872,7 +1629,7 @@ void BKE_keyblock_convert_from_curve(const Curve *cu, KeyBlock *kb, const ListBa
 
 static void keyblock_data_convert_to_curve(const float *fp, ListBaseT<Nurb> *nurb, int totpoint)
 {
-  for (Nurb *nu = static_cast<Nurb *>(nurb->first); nu && totpoint > 0; nu = nu->next) {
+  for (Nurb *nu = nurb->first(); nu && totpoint > 0; nu = nu->next) {
     if (nu->bezt != nullptr) {
       BezTriple *bezt = nu->bezt;
       for (int i = nu->pntsu; i && (totpoint -= KEYELEM_ELEM_LEN_BEZTRIPLE) >= 0;
@@ -1917,7 +1674,7 @@ void BKE_keyblock_update_from_mesh(const Mesh *mesh, KeyBlock *kb)
     return;
   }
 
-  const blender::Span<blender::float3> positions = mesh->vert_positions();
+  const Span<float3> positions = mesh->vert_positions();
   memcpy(kb->data, positions.data(), sizeof(float[3]) * tot);
 }
 
@@ -1929,19 +1686,17 @@ void BKE_keyblock_convert_from_mesh(const Mesh *mesh, const Key *key, KeyBlock *
     return;
   }
 
-  MEM_SAFE_FREE(kb->data);
+  MEM_SAFE_DELETE_VOID(kb->data);
 
-  kb->data = MEM_malloc_arrayN(size_t(len), size_t(key->elemsize), __func__);
+  kb->data = MEM_new_array_uninitialized(size_t(len), size_t(key->elemsize), __func__);
   kb->totelem = len;
 
   BKE_keyblock_update_from_mesh(mesh, kb);
 }
 
-void BKE_keyblock_convert_to_mesh(const KeyBlock *kb,
-                                  blender::MutableSpan<blender::float3> vert_positions)
+void BKE_keyblock_convert_to_mesh(const KeyBlock *kb, MutableSpan<float3> vert_positions)
 {
-  vert_positions.take_front(kb->totelem)
-      .copy_from({static_cast<blender::float3 *>(kb->data), kb->totelem});
+  vert_positions.take_front(kb->totelem).copy_from({static_cast<float3 *>(kb->data), kb->totelem});
 }
 
 void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
@@ -1950,13 +1705,12 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
                                     float (*r_face_normals)[3],
                                     float (*r_loop_normals)[3])
 {
-  using namespace blender;
   using namespace blender::bke;
   if (r_vert_normals == nullptr && r_face_normals == nullptr && r_loop_normals == nullptr) {
     return;
   }
 
-  blender::Array<blender::float3> positions(mesh->vert_positions());
+  Array<float3> positions(mesh->vert_positions());
   BKE_keyblock_convert_to_mesh(kb, positions);
   const OffsetIndices faces = mesh->faces();
   const Span<int> corner_verts = mesh->corner_verts();
@@ -1972,28 +1726,25 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
   bool free_vert_normals = false;
   bool free_face_normals = false;
   if (vert_normals_needed && r_vert_normals == nullptr) {
-    vert_normals = MEM_malloc_arrayN<float[3]>(size_t(mesh->verts_num), __func__);
+    vert_normals = MEM_new_array_uninitialized<float[3]>(size_t(mesh->verts_num), __func__);
     free_vert_normals = true;
   }
   if (face_normals_needed && r_face_normals == nullptr) {
-    face_normals = MEM_malloc_arrayN<float[3]>(size_t(mesh->faces_num), __func__);
+    face_normals = MEM_new_array_uninitialized<float[3]>(size_t(mesh->faces_num), __func__);
     free_face_normals = true;
   }
 
   if (face_normals_needed) {
-    mesh::normals_calc_faces(positions,
-                             faces,
-                             corner_verts,
-                             {reinterpret_cast<blender::float3 *>(face_normals), faces.size()});
+    mesh::normals_calc_faces(
+        positions, faces, corner_verts, {reinterpret_cast<float3 *>(face_normals), faces.size()});
   }
   if (vert_normals_needed) {
-    mesh::normals_calc_verts(
-        positions,
-        faces,
-        corner_verts,
-        mesh->vert_to_face_map(),
-        {reinterpret_cast<const blender::float3 *>(face_normals), faces.size()},
-        {reinterpret_cast<blender::float3 *>(vert_normals), mesh->verts_num});
+    mesh::normals_calc_verts(positions,
+                             faces,
+                             corner_verts,
+                             mesh->vert_to_face_map(),
+                             {reinterpret_cast<const float3 *>(face_normals), faces.size()},
+                             {reinterpret_cast<float3 *>(vert_normals), mesh->verts_num});
   }
   if (loop_normals_needed) {
     const AttributeAccessor attributes = mesh->attributes();
@@ -2001,25 +1752,24 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
     const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
     const VArraySpan custom_normals = *attributes.lookup<short2>("custom_normal",
                                                                  AttrDomain::Corner);
-    mesh::normals_calc_corners(
-        positions,
-        faces,
-        corner_verts,
-        corner_edges,
-        mesh->vert_to_face_map(),
-        {reinterpret_cast<blender::float3 *>(face_normals), faces.size()},
-        sharp_edges,
-        sharp_faces,
-        custom_normals,
-        nullptr,
-        {reinterpret_cast<blender::float3 *>(r_loop_normals), corner_verts.size()});
+    mesh::normals_calc_corners(positions,
+                               faces,
+                               corner_verts,
+                               corner_edges,
+                               mesh->vert_to_face_map(),
+                               {reinterpret_cast<float3 *>(face_normals), faces.size()},
+                               sharp_edges,
+                               sharp_faces,
+                               custom_normals,
+                               nullptr,
+                               {reinterpret_cast<float3 *>(r_loop_normals), corner_verts.size()});
   }
 
   if (free_vert_normals) {
-    MEM_freeN(vert_normals);
+    MEM_delete(vert_normals);
   }
   if (free_face_normals) {
-    MEM_freeN(face_normals);
+    MEM_delete(face_normals);
   }
 }
 
@@ -2050,7 +1800,7 @@ bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
   /* We swap 'org' element with its previous/next neighbor (depending on direction of the move)
    * repeatedly, until we reach final position.
    * This allows us to only loop on the list once! */
-  for (kb = static_cast<KeyBlock *>(rev ? key->block.last : key->block.first),
+  for (kb = static_cast<KeyBlock *>(rev ? key->block.last() : key->block.first()),
       i = (rev ? totkey - 1 : 0);
        kb;
        kb = (rev ? kb->prev : kb->next), rev ? i-- : i++)
@@ -2101,7 +1851,7 @@ bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
   }
 
   /* First key is always refkey, matches interface and BKE_key_sort. */
-  key->refkey = static_cast<KeyBlock *>(key->block.first);
+  key->refkey = key->block.first();
 
   return true;
 }
@@ -2112,7 +1862,7 @@ bool BKE_keyblock_is_basis(const Key *key, const int index)
   int i;
 
   if (key->type == KEY_RELATIVE) {
-    for (i = 0, kb = static_cast<const KeyBlock *>(key->block.first); kb; i++, kb = kb->next) {
+    for (i = 0, kb = key->block.first(); kb; i++, kb = kb->next) {
       if ((i != index) && (kb->relative == index)) {
         return true;
       }
@@ -2122,21 +1872,20 @@ bool BKE_keyblock_is_basis(const Key *key, const int index)
   return false;
 }
 
-std::optional<blender::Array<bool>> BKE_keyblock_get_dependent_keys(const Key *key,
-                                                                    const int index)
+std::optional<Array<bool>> BKE_keyblock_get_dependent_keys(const Key *key, const int index)
 {
   if (key->type != KEY_RELATIVE) {
     return std::nullopt;
   }
 
-  const int count = BLI_listbase_count(&key->block);
+  const int count = key->block.count();
 
   if (index < 0 || index >= count) {
     return std::nullopt;
   }
 
   /* Seed the table with the specified key. */
-  blender::Array<bool> marked(count, false);
+  Array<bool> marked(count, false);
 
   marked[index] = true;
 
@@ -2163,3 +1912,30 @@ std::optional<blender::Array<bool>> BKE_keyblock_get_dependent_keys(const Key *k
   marked[index] = false;
   return marked;
 }
+
+void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newname)
+{
+  char oldname[sizeof(kb->name)];
+
+  /* Make a copy of the old name first. */
+  STRNCPY(oldname, kb->name);
+  /* Copy the new name into the name slot. */
+  STRNCPY_UTF8(kb->name, newname);
+
+  /* Make sure the name is truly unique. */
+  BLI_uniquename(&key->block,
+                 kb,
+                 CTX_DATA_(BLT_I18NCONTEXT_ID_SHAPEKEY, "Key"),
+                 '.',
+                 offsetof(KeyBlock, name),
+                 sizeof(kb->name));
+
+  /* Fix all the animation data which may link to this. */
+  BKE_animdata_fix_paths(key->id,
+                         "key_blocks",
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(kb->name),
+                         /*verify_paths=*/true,
+                         bmain);
+}
+}  // namespace blender

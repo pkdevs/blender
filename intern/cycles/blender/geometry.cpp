@@ -16,25 +16,41 @@
 #include "util/task.h"
 
 #include "BKE_material.hh"
+#include "DNA_light_types.h"
 #include "DNA_material_types.h"
+#include "DNA_pointcloud_types.h"
 
 CCL_NAMESPACE_BEGIN
 
 static Geometry::Type determine_geom_type(BObjectInfo &b_ob_info, bool use_particle_hair)
 {
-  if (GS(b_ob_info.object_data->name) == ID_LA) {
-    return Geometry::LIGHT;
+  if (b_ob_info.object_data->id_type() == blender::ID_LA) {
+    blender::Light &b_light = *blender::id_cast<blender::Light *>(b_ob_info.object_data);
+    switch (b_light.type) {
+      case blender::LA_LOCAL:
+        return Geometry::POINT_LIGHT;
+      case blender::LA_SPOT:
+        return Geometry::SPOT_LIGHT;
+      case blender::LA_SUN:
+        return Geometry::SUN_LIGHT;
+      case blender::LA_AREA:
+        return Geometry::AREA_LIGHT;
+      default:
+        /* Should be handled in `sync_background_light()`. */
+        assert(false);
+        return Geometry::BACKGROUND_LIGHT;
+    }
   }
 
-  if (GS(b_ob_info.object_data->name) == ID_CV || use_particle_hair) {
+  if (b_ob_info.object_data->id_type() == blender::ID_CV || use_particle_hair) {
     return Geometry::HAIR;
   }
 
-  if (GS(b_ob_info.object_data->name) == ID_PT) {
+  if (b_ob_info.object_data->id_type() == blender::ID_PT) {
     return Geometry::POINTCLOUD;
   }
 
-  if (GS(b_ob_info.object_data->name) == ID_VO ||
+  if (b_ob_info.object_data->id_type() == blender::ID_VO ||
       (b_ob_info.object_data ==
            object_get_data(*b_ob_info.real_object, b_ob_info.use_adaptive_subdivision) &&
        object_fluid_gas_domain_find(*b_ob_info.real_object)))
@@ -45,26 +61,41 @@ static Geometry::Type determine_geom_type(BObjectInfo &b_ob_info, bool use_parti
   return Geometry::MESH;
 }
 
-array<Node *> BlenderSync::find_used_shaders(::Object &b_ob)
+static Shader *get_default_shader(const Scene *scene, const blender::Object &b_ob)
+{
+  if (b_ob.type == blender::OB_VOLUME) {
+    return scene->default_volume;
+  }
+
+  if (b_ob.type == blender::OB_POINTCLOUD &&
+      blender::id_cast<const blender::PointCloud *>(b_ob.data)->type ==
+          blender::PointCloudType::GSplat)
+  {
+    return scene->default_gsplat;
+  }
+
+  return scene->default_surface;
+}
+
+array<Node *> BlenderSync::find_used_shaders(blender::Object &b_ob)
 {
   array<Node *> used_shaders;
 
-  if (b_ob.type == OB_LAMP) {
-    find_shader(static_cast<::ID *>(b_ob.data), used_shaders, scene->default_light);
+  if (b_ob.type == blender::OB_LAMP) {
+    find_shader(static_cast<blender::ID *>(b_ob.data), used_shaders, scene->default_light);
     return used_shaders;
   }
 
-  ::Material *material_override = view_layer.material_override;
-  Shader *default_shader = (b_ob.type == OB_VOLUME) ? scene->default_volume :
-                                                      scene->default_surface;
+  blender::Material *material_override = view_layer.material_override;
+  Shader *default_shader = get_default_shader(scene, b_ob);
 
   for (const int i : blender::IndexRange(BKE_object_material_count_eval(&b_ob))) {
     if (material_override) {
       find_shader(&material_override->id, used_shaders, default_shader);
     }
     else {
-      ::Material *b_material = BKE_object_material_get(&b_ob, i + 1);
-      find_shader(reinterpret_cast<::ID *>(b_material), used_shaders, default_shader);
+      blender::Material *b_material = BKE_object_material_get(&b_ob, i + 1);
+      find_shader(reinterpret_cast<blender::ID *>(b_material), used_shaders, default_shader);
     }
   }
 
@@ -87,10 +118,10 @@ Geometry *BlenderSync::sync_geometry(BObjectInfo &b_ob_info,
 {
   /* Test if we can instance or if the object is modified. */
   const Geometry::Type geom_type = determine_geom_type(b_ob_info, use_particle_hair);
-  ::ID *const b_key_id = (b_ob_info.is_real_object_data() &&
-                          BKE_object_is_modified(*b_ob_info.real_object)) ?
-                             &b_ob_info.real_object->id :
-                             b_ob_info.object_data;
+  blender::ID *const b_key_id = (b_ob_info.is_real_object_data() &&
+                                 BKE_object_is_modified(*b_ob_info.real_object)) ?
+                                    &b_ob_info.real_object->id :
+                                    b_ob_info.object_data;
   const GeometryKey key(b_key_id, geom_type);
 
   /* Find shader indices. */
@@ -99,7 +130,7 @@ Geometry *BlenderSync::sync_geometry(BObjectInfo &b_ob_info,
   /* Ensure we only sync instanced geometry once. */
   Geometry *geom = geometry_map.find(key);
   if (geom) {
-    if (geometry_synced.find(geom) != geometry_synced.end()) {
+    if (geometry_synced.contains(geom)) {
       return geom;
     }
   }
@@ -108,8 +139,17 @@ Geometry *BlenderSync::sync_geometry(BObjectInfo &b_ob_info,
   bool sync = true;
   if (geom == nullptr) {
     /* Add new geometry if it did not exist yet. */
-    if (geom_type == Geometry::LIGHT) {
-      geom = scene->create_node<Light>();
+    if (geom_type == Geometry::POINT_LIGHT) {
+      geom = scene->create_light_node<PointLight>();
+    }
+    else if (geom_type == Geometry::SPOT_LIGHT) {
+      geom = scene->create_light_node<SpotLight>();
+    }
+    else if (geom_type == Geometry::SUN_LIGHT) {
+      geom = scene->create_light_node<SunLight>();
+    }
+    else if (geom_type == Geometry::AREA_LIGHT) {
+      geom = scene->create_light_node<AreaLight>();
     }
     else if (geom_type == Geometry::HAIR) {
       geom = scene->create_node<Hair>();
@@ -121,6 +161,7 @@ Geometry *BlenderSync::sync_geometry(BObjectInfo &b_ob_info,
       geom = scene->create_node<PointCloud>();
     }
     else {
+      assert(geom_type == Geometry::MESH);
       geom = scene->create_node<Mesh>();
     }
     geometry_map.add(key, geom);
@@ -172,7 +213,7 @@ Geometry *BlenderSync::sync_geometry(BObjectInfo &b_ob_info,
 
     progress.set_sync_status("Synchronizing object", BKE_id_name(b_ob_info.real_object->id));
 
-    if (geom_type == Geometry::LIGHT) {
+    if (geom->is_light()) {
       Light *light = static_cast<Light *>(geom);
       sync_light(b_ob_info, light);
     }
@@ -214,9 +255,7 @@ void BlenderSync::sync_geometry_motion(BObjectInfo &b_ob_info,
   /* Ensure we only sync instanced geometry once. */
   Geometry *geom = object->get_geometry();
 
-  if (geometry_motion_synced.find(geom) != geometry_motion_synced.end() ||
-      geometry_motion_attribute_synced.find(geom) != geometry_motion_attribute_synced.end())
-  {
+  if (geometry_motion_synced.contains(geom) || geometry_motion_attribute_synced.contains(geom)) {
     return;
   }
 
@@ -224,7 +263,7 @@ void BlenderSync::sync_geometry_motion(BObjectInfo &b_ob_info,
 
   /* Ensure we only motion sync geometry that also had geometry synced, to avoid
    * unnecessary work and to ensure that its attributes were clear. */
-  if (geometry_synced.find(geom) == geometry_synced.end()) {
+  if (!geometry_synced.contains(geom)) {
     return;
   }
 
@@ -258,16 +297,16 @@ void BlenderSync::sync_geometry_motion(BObjectInfo &b_ob_info,
       return;
     }
 
-    if (GS(b_ob_info.object_data->name) == ID_CV || use_particle_hair) {
+    if (b_ob_info.object_data->id_type() == blender::ID_CV || use_particle_hair) {
       Hair *hair = static_cast<Hair *>(geom);
       sync_hair_motion(b_ob_info, hair, motion_step);
     }
-    else if (GS(b_ob_info.object_data->name) == ID_VO ||
+    else if (b_ob_info.object_data->id_type() == blender::ID_VO ||
              object_fluid_gas_domain_find(*b_ob_info.real_object))
     {
       /* No volume motion blur support yet. */
     }
-    else if (GS(b_ob_info.object_data->name) == ID_PT) {
+    else if (b_ob_info.object_data->id_type() == blender::ID_PT) {
       PointCloud *pointcloud = static_cast<PointCloud *>(geom);
       sync_pointcloud_motion(pointcloud, b_ob_info, motion_step);
     }

@@ -31,9 +31,11 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
     ${SRC_KERNEL_DEVICE_HIP_HEADERS}
     $<TARGET_PROPERTY:cycles_kernel,INTERFACE_SOURCES>
   )
-  set(hip_fatbins)
+  set(hip_fatbins "")
 
-  macro(CYCLES_HIP_KERNEL_ADD arch name flags sources experimental)
+  # Modifies in parent scope:
+  # - `hip_fatbins`: appended with compressed `fatbin` output.
+  function(CYCLES_HIP_KERNEL_ADD arch name flags sources experimental)
     set(format "fatbin")
     set(hip_file ${name}_${arch}.${format})
     set(hip_file_compressed ${hip_file}.zst)
@@ -48,7 +50,7 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
         ${HIP_HIPCC_EXECUTABLE})
     else()
       set(hip_command ${HIP_HIPCC_EXECUTABLE})
-      set(hip_flags)
+      set(hip_flags "")
     endif()
 
     # There's a few bugs in the HIP compiler causing some scenes to fail to render,
@@ -60,7 +62,7 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
     if(WIN32 AND ((${arch} MATCHES "gfx90[a-z0-9]+") OR (${HIP_VERSION} STREQUAL "6.1.40252")))
       set(hip_opt_flags "-O1")
     else()
-      set(hip_opt_flags)
+      set(hip_opt_flags "")
     endif()
 
     set(hip_flags
@@ -100,7 +102,8 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
       DEPENDS ${hip_file})
     delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${hip_file_compressed}" ${CYCLES_INSTALL_PATH}/lib)
     list(APPEND hip_fatbins ${hip_file_compressed})
-  endmacro()
+    set(hip_fatbins "${hip_fatbins}" PARENT_SCOPE)
+  endfunction()
 
   foreach(arch ${CYCLES_HIP_BINARIES_ARCH})
     # Compile regular kernel

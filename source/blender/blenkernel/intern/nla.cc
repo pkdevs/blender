@@ -17,12 +17,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -49,9 +49,9 @@
 
 #include "nla_private.h"
 
-static CLG_LogRef LOG = {"anim.nla"};
+namespace blender {
 
-using namespace blender;
+static CLG_LogRef LOG = {"anim.nla"};
 
 /**
  * Find the active track and strip.
@@ -65,6 +65,14 @@ static void nla_tweakmode_find_active(ListBaseT<NlaTrack> *nla_tracks,
 /* *************************************************** */
 /* Data Management */
 
+bke::NlaStripRuntime &NlaStrip::runtime_get()
+{
+  if (this->runtime == nullptr) {
+    this->runtime = MEM_new<bke::NlaStripRuntime>(__func__);
+  }
+  return *this->runtime;
+}
+
 /* Freeing ------------------------------------------- */
 
 void BKE_nlastrip_free(NlaStrip *strip, const bool do_id_user)
@@ -77,7 +85,7 @@ void BKE_nlastrip_free(NlaStrip *strip, const bool do_id_user)
   }
 
   /* free child-strips */
-  for (cs = static_cast<NlaStrip *>(strip->strips.first); cs; cs = csn) {
+  for (cs = strip->strips.first(); cs; cs = csn) {
     csn = cs->next;
     BKE_nlastrip_remove_and_free(&strip->strips, cs, do_id_user);
   }
@@ -93,8 +101,9 @@ void BKE_nlastrip_free(NlaStrip *strip, const bool do_id_user)
   /* free own F-Modifiers */
   free_fmodifiers(&strip->modifiers);
 
-  /* free the strip itself */
-  MEM_freeN(strip);
+  /* free the strip runtime and itself */
+  MEM_delete(strip->runtime);
+  MEM_delete(strip);
 }
 
 void BKE_nlatrack_free(NlaTrack *nlt, const bool do_id_user)
@@ -107,13 +116,13 @@ void BKE_nlatrack_free(NlaTrack *nlt, const bool do_id_user)
   }
 
   /* free strips */
-  for (strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = stripn) {
+  for (strip = nlt->strips.first(); strip; strip = stripn) {
     stripn = strip->next;
     BKE_nlastrip_remove_and_free(&nlt->strips, strip, do_id_user);
   }
 
   /* free NLA track itself now */
-  MEM_freeN(nlt);
+  MEM_delete(nlt);
 }
 
 void BKE_nla_tracks_free(ListBaseT<NlaTrack> *tracks, bool do_id_user)
@@ -121,18 +130,18 @@ void BKE_nla_tracks_free(ListBaseT<NlaTrack> *tracks, bool do_id_user)
   NlaTrack *nlt, *nltn;
 
   /* sanity checks */
-  if (ELEM(nullptr, tracks, tracks->first)) {
+  if (ELEM(nullptr, tracks, tracks->first())) {
     return;
   }
 
   /* free tracks one by one */
-  for (nlt = static_cast<NlaTrack *>(tracks->first); nlt; nlt = nltn) {
+  for (nlt = tracks->first(); nlt; nlt = nltn) {
     nltn = nlt->next;
     BKE_nlatrack_remove_and_free(tracks, nlt, do_id_user);
   }
 
   /* clear the list's pointers to be safe */
-  BLI_listbase_clear(tracks);
+  tracks->clear_no_delete();
 }
 
 /* Copying ------------------------------------------- */
@@ -153,8 +162,9 @@ NlaStrip *BKE_nlastrip_copy(Main *bmain,
   }
 
   /* make a copy */
-  strip_d = static_cast<NlaStrip *>(MEM_dupallocN(strip));
+  strip_d = MEM_dupalloc(strip);
   strip_d->next = strip_d->prev = nullptr;
+  strip_d->runtime = nullptr;
 
   /* handle action */
   if (strip_d->act) {
@@ -166,7 +176,7 @@ NlaStrip *BKE_nlastrip_copy(Main *bmain,
     }
     else {
       /* use a copy of the action instead (user count shouldn't have changed yet) */
-      BKE_id_copy_ex(bmain, &strip_d->act->id, (ID **)&strip_d->act, flag);
+      BKE_id_copy_ex(bmain, &strip_d->act->id, reinterpret_cast<ID **>(&strip_d->act), flag);
     }
   }
 
@@ -175,7 +185,7 @@ NlaStrip *BKE_nlastrip_copy(Main *bmain,
   copy_fmodifiers(&strip_d->modifiers, &strip->modifiers);
 
   /* make a copy of all the child-strips, one at a time */
-  BLI_listbase_clear(&strip_d->strips);
+  strip_d->strips.clear_no_delete();
 
   for (NlaStrip &cs : strip->strips) {
     cs_d = BKE_nlastrip_copy(bmain, &cs, use_same_action, flag);
@@ -200,11 +210,11 @@ NlaTrack *BKE_nlatrack_copy(Main *bmain,
   }
 
   /* make a copy */
-  nlt_d = static_cast<NlaTrack *>(MEM_dupallocN(nlt));
+  nlt_d = MEM_dupalloc(nlt);
   nlt_d->next = nlt_d->prev = nullptr;
 
   /* make a copy of all the strips, one at a time */
-  BLI_listbase_clear(&nlt_d->strips);
+  nlt_d->strips.clear_no_delete();
 
   for (NlaStrip &strip : nlt->strips) {
     strip_d = BKE_nlastrip_copy(bmain, &strip, use_same_actions, flag);
@@ -228,7 +238,7 @@ void BKE_nla_tracks_copy(Main *bmain,
   }
 
   /* clear out the destination list first for precautions... */
-  BLI_listbase_clear(dst);
+  dst->clear_no_delete();
 
   /* copy each NLA-track, one at a time */
   for (NlaTrack &nlt : *src) {
@@ -247,10 +257,10 @@ static NlaStrip *find_active_strip_from_listbase(const NlaStrip *active_strip,
                                                  const ListBaseT<NlaStrip> *strips_source,
                                                  const ListBaseT<NlaStrip> *strips_dest)
 {
-  BLI_assert_msg(BLI_listbase_count(strips_source) == BLI_listbase_count(strips_dest),
+  BLI_assert_msg(strips_source->count() == strips_dest->count(),
                  "Expecting the same number of source and destination strips");
 
-  NlaStrip *strip_dest = static_cast<NlaStrip *>(strips_dest->first);
+  NlaStrip *strip_dest = strips_dest->first();
   for (const NlaStrip &strip_source : *strips_source) {
     if (strip_dest == nullptr) {
       /* The tracks are assumed to have an equal number of strips, but this is
@@ -288,7 +298,7 @@ static void update_active_strip(AnimData *adt_dest,
                                 const AnimData *adt_source,
                                 const NlaTrack *track_source)
 {
-  BLI_assert(BLI_listbase_count(&track_source->strips) == BLI_listbase_count(&track_dest->strips));
+  BLI_assert(track_source->strips.count() == track_dest->strips.count());
 
   NlaStrip *active_strip = find_active_strip_from_listbase(
       adt_source->actstrip, &track_source->strips, &track_dest->strips);
@@ -304,10 +314,9 @@ static void update_active_track(AnimData *adt_dest, const AnimData *adt_source)
     return;
   }
 
-  BLI_assert(BLI_listbase_count(&adt_source->nla_tracks) ==
-             BLI_listbase_count(&adt_dest->nla_tracks));
+  BLI_assert(adt_source->nla_tracks.count() == adt_dest->nla_tracks.count());
 
-  NlaTrack *track_dest = static_cast<NlaTrack *>(adt_dest->nla_tracks.first);
+  NlaTrack *track_dest = adt_dest->nla_tracks.first();
   for (NlaTrack &track_source : adt_source->nla_tracks) {
     if (&track_source == adt_source->act_track) {
       adt_dest->act_track = track_dest;
@@ -348,7 +357,7 @@ void BKE_nla_tracks_copy_from_adt(Main *bmain,
 NlaTrack *BKE_nlatrack_new()
 {
   /* allocate new track */
-  NlaTrack *nlt = MEM_new_for_free<NlaTrack>("NlaTrack");
+  NlaTrack *nlt = MEM_new<NlaTrack>("NlaTrack");
 
   /* set settings requiring the track to not be part of the stack yet */
   nlt->flag = NLATRACK_SELECTED | NLATRACK_OVERRIDELIBRARY_LOCAL;
@@ -396,7 +405,7 @@ void BKE_nlatrack_insert_after(ListBaseT<NlaTrack> *nla_tracks,
   /* If nullptr, then caller intends to insert a new head. But, tracks are not allowed to be
    * placed before library overrides. So it must inserted after the last override. */
   if (prev == nullptr) {
-    NlaTrack *first_track = (NlaTrack *)nla_tracks->first;
+    NlaTrack *first_track = nla_tracks->first();
     if (first_track != nullptr && (first_track->flag & NLATRACK_OVERRIDELIBRARY_LOCAL) == 0) {
       prev = first_track;
     }
@@ -450,12 +459,12 @@ NlaTrack *BKE_nlatrack_new_after(ListBaseT<NlaTrack> *nla_tracks,
 
 NlaTrack *BKE_nlatrack_new_head(ListBaseT<NlaTrack> *nla_tracks, bool is_liboverride)
 {
-  return BKE_nlatrack_new_before(nla_tracks, (NlaTrack *)nla_tracks->first, is_liboverride);
+  return BKE_nlatrack_new_before(nla_tracks, nla_tracks->first(), is_liboverride);
 }
 
 NlaTrack *BKE_nlatrack_new_tail(ListBaseT<NlaTrack> *nla_tracks, const bool is_liboverride)
 {
-  return BKE_nlatrack_new_after(nla_tracks, (NlaTrack *)nla_tracks->last, is_liboverride);
+  return BKE_nlatrack_new_after(nla_tracks, nla_tracks->last(), is_liboverride);
 }
 
 float BKE_nla_clip_length_get_nonzero(const NlaStrip *strip)
@@ -491,7 +500,7 @@ static NlaStrip *nlastrip_new(bAction *act, ID &animated_id)
   }
 
   /* allocate new strip */
-  strip = MEM_new_for_free<NlaStrip>("NlaStrip");
+  strip = MEM_new<NlaStrip>("NlaStrip");
 
   /* generic settings
    * - selected flag to highlight this to the user
@@ -546,7 +555,7 @@ NlaStrip *BKE_nlastrip_new(bAction *act, ID &animated_id)
 }
 
 NlaStrip *BKE_nlastrip_new_for_slot(bAction *act,
-                                    blender::animrig::slot_handle_t slot_handle,
+                                    animrig::slot_handle_t slot_handle,
                                     ID &animated_id)
 {
   using namespace blender::animrig;
@@ -593,9 +602,7 @@ NlaStrip *BKE_nlastack_add_strip(const OwnedAnimData owned_adt, const bool is_li
   }
 
   /* firstly try adding strip to last track, but if that fails, add to a new track */
-  if (BKE_nlatrack_add_strip(
-          static_cast<NlaTrack *>(adt->nla_tracks.last), strip, is_liboverride) == 0)
-  {
+  if (BKE_nlatrack_add_strip(adt->nla_tracks.last(), strip, is_liboverride) == 0) {
     /* trying to add to the last track failed (no track or no space),
      * so add a new track to the stack, and add to that...
      */
@@ -614,7 +621,7 @@ NlaStrip *BKE_nlastack_add_strip(const OwnedAnimData owned_adt, const bool is_li
 
 NlaStrip *BKE_nla_add_soundstrip(Main *bmain, Scene *scene, Speaker *speaker)
 {
-  NlaStrip *strip = MEM_new_for_free<NlaStrip>("NlaSoundStrip");
+  NlaStrip *strip = MEM_new<NlaStrip>("NlaSoundStrip");
 
 /* if speaker has a sound, set the strip length to the length of the sound,
  * otherwise default to length of 10 frames
@@ -883,14 +890,14 @@ void BKE_nlastrips_sort_strips(ListBaseT<NlaStrip> *strips)
   NlaStrip *strip, *stripn;
 
   /* sanity checks */
-  if (ELEM(nullptr, strips, strips->first)) {
+  if (ELEM(nullptr, strips, strips->first())) {
     return;
   }
 
   /* we simply perform insertion sort on this list, since it is assumed that per track,
    * there are only likely to be at most 5-10 strips
    */
-  for (strip = static_cast<NlaStrip *>(strips->first); strip; strip = stripn) {
+  for (strip = strips->first(); strip; strip = stripn) {
     short not_added = 1;
 
     stripn = strip->next;
@@ -916,8 +923,8 @@ void BKE_nlastrips_sort_strips(ListBaseT<NlaStrip> *strips)
   }
 
   /* reassign the start and end points of the strips */
-  strips->first = tmp.first;
-  strips->last = tmp.last;
+  strips->first_ = tmp.first();
+  strips->last_ = tmp.last();
 }
 
 void BKE_nlastrips_add_strip_unsafe(ListBaseT<NlaStrip> *strips, NlaStrip *strip)
@@ -964,19 +971,19 @@ void BKE_nlastrips_make_metas(ListBaseT<NlaStrip> *strips, bool is_temp)
   NlaStrip *strip, *stripn;
 
   /* sanity checks */
-  if (ELEM(nullptr, strips, strips->first)) {
+  if (ELEM(nullptr, strips, strips->first())) {
     return;
   }
 
   /* group all continuous chains of selected strips into meta-strips */
-  for (strip = static_cast<NlaStrip *>(strips->first); strip; strip = stripn) {
+  for (strip = strips->first(); strip; strip = stripn) {
     stripn = strip->next;
 
     if (strip->flag & NLASTRIP_FLAG_SELECT) {
       /* if there is an existing meta-strip, add this strip to it, otherwise, create a new one */
       if (mstrip == nullptr) {
         /* add a new meta-strip, and add it before the current strip that it will replace... */
-        mstrip = MEM_new_for_free<NlaStrip>("Meta-NlaStrip");
+        mstrip = MEM_new<NlaStrip>("Meta-NlaStrip");
         mstrip->type = NLASTRIP_TYPE_META;
         BLI_insertlinkbefore(strips, strip, mstrip);
 
@@ -1023,7 +1030,7 @@ void BKE_nlastrips_clear_metastrip(ListBaseT<NlaStrip> *strips, NlaStrip *strip)
   /* move each one of the meta-strip's children before the meta-strip
    * in the list of strips after unlinking them from the meta-strip
    */
-  for (cs = static_cast<NlaStrip *>(strip->strips.first); cs; cs = csn) {
+  for (cs = strip->strips.first(); cs; cs = csn) {
     csn = cs->next;
     BLI_remlink(&strip->strips, cs);
     BLI_insertlinkbefore(strips, strip, cs);
@@ -1038,12 +1045,12 @@ void BKE_nlastrips_clear_metas(ListBaseT<NlaStrip> *strips, bool only_sel, bool 
   NlaStrip *strip, *stripn;
 
   /* sanity checks */
-  if (ELEM(nullptr, strips, strips->first)) {
+  if (ELEM(nullptr, strips, strips->first())) {
     return;
   }
 
   /* remove meta-strips fitting the criteria of the arguments */
-  for (strip = static_cast<NlaStrip *>(strips->first); strip; strip = stripn) {
+  for (strip = strips->first(); strip; strip = stripn) {
     stripn = strip->next;
 
     /* check if strip is a meta-strip */
@@ -1116,7 +1123,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
    * - strip must exist
    * - strip must be a meta-strip with some contents
    */
-  if (ELEM(nullptr, mstrip, mstrip->strips.first)) {
+  if (ELEM(nullptr, mstrip, mstrip->strips.first())) {
     return;
   }
   if (mstrip->type != NLASTRIP_TYPE_META) {
@@ -1127,8 +1134,8 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
    * - these are simply the start/end frames of the child strips,
    *   since we assume they weren't transformed yet
    */
-  oStart = ((NlaStrip *)mstrip->strips.first)->start;
-  oEnd = ((NlaStrip *)mstrip->strips.last)->end;
+  oStart = (mstrip->strips.first())->start;
+  oEnd = (mstrip->strips.last())->end;
   offset = mstrip->start - oStart;
 
   /* check if scale changed */
@@ -1187,7 +1194,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
     /* only if scale changed, need to perform RNA updates */
     if (scaleChanged) {
       /* use RNA updates to compute scale properly */
-      PointerRNA ptr = RNA_pointer_create_discrete(nullptr, &RNA_NlaStrip, &strip);
+      PointerRNA ptr = RNA_pointer_create_discrete(nullptr, RNA_NlaStrip, &strip);
 
       RNA_float_set(&ptr, "frame_start", strip.start);
       RNA_float_set(&ptr, "frame_end", strip.end);
@@ -1203,7 +1210,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
 NlaTrack *BKE_nlatrack_find_active(ListBaseT<NlaTrack> *tracks)
 {
   /* sanity check */
-  if (ELEM(nullptr, tracks, tracks->first)) {
+  if (ELEM(nullptr, tracks, tracks->first())) {
     return nullptr;
   }
 
@@ -1250,7 +1257,7 @@ NlaTrack *BKE_nlatrack_find_tweaked(AnimData *adt)
 void BKE_nlatrack_solo_toggle(AnimData *adt, NlaTrack *nlt)
 {
   /* sanity check */
-  if (ELEM(nullptr, adt, adt->nla_tracks.first)) {
+  if (ELEM(nullptr, adt, adt->nla_tracks.first())) {
     return;
   }
 
@@ -1282,7 +1289,7 @@ void BKE_nlatrack_solo_toggle(AnimData *adt, NlaTrack *nlt)
 void BKE_nlatrack_set_active(ListBaseT<NlaTrack> *tracks, NlaTrack *nlt_a)
 {
   /* sanity check */
-  if (ELEM(nullptr, tracks, tracks->first)) {
+  if (ELEM(nullptr, tracks, tracks->first())) {
     return;
   }
 
@@ -1320,13 +1327,13 @@ bool BKE_nlatrack_has_space(NlaTrack *nlt, float start, float end)
 bool BKE_nlatrack_has_strips(ListBaseT<NlaTrack> *tracks)
 {
   /* sanity checks */
-  if (BLI_listbase_is_empty(tracks)) {
+  if (tracks->is_empty()) {
     return false;
   }
 
   /* Check each track for NLA strips. */
   for (NlaTrack &track : *tracks) {
-    if (BLI_listbase_count(&track.strips) > 0) {
+    if (track.strips.count() > 0) {
       return true;
     }
   }
@@ -1338,7 +1345,7 @@ bool BKE_nlatrack_has_strips(ListBaseT<NlaTrack> *tracks)
 void BKE_nlatrack_sort_strips(NlaTrack *nlt)
 {
   /* sanity checks */
-  if (ELEM(nullptr, nlt, nlt->strips.first)) {
+  if (ELEM(nullptr, nlt, nlt->strips.first())) {
     return;
   }
 
@@ -1385,16 +1392,16 @@ bool BKE_nlatrack_get_bounds(NlaTrack *nlt, float bounds[2])
   }
 
   /* sanity checks */
-  if (ELEM(nullptr, nlt, nlt->strips.first)) {
+  if (ELEM(nullptr, nlt, nlt->strips.first())) {
     return false;
   }
 
   /* lower bound is first strip's start frame */
-  strip = static_cast<NlaStrip *>(nlt->strips.first);
+  strip = nlt->strips.first();
   bounds[0] = strip->start;
 
   /* upper bound is last strip's end frame */
-  strip = static_cast<NlaStrip *>(nlt->strips.last);
+  strip = nlt->strips.last();
   bounds[1] = strip->end;
 
   /* done */
@@ -1775,13 +1782,13 @@ void BKE_nlastrip_recalculate_blend(NlaStrip *strip)
 bool BKE_nlatrack_has_animated_strips(NlaTrack *nlt)
 {
   /* sanity checks */
-  if (ELEM(nullptr, nlt, nlt->strips.first)) {
+  if (ELEM(nullptr, nlt, nlt->strips.first())) {
     return false;
   }
 
   /* check each strip for F-Curves only (don't care about whether the flags are set) */
   for (NlaStrip &strip : nlt->strips) {
-    if (strip.fcurves.first) {
+    if (strip.fcurves.first()) {
       return true;
     }
   }
@@ -1793,7 +1800,7 @@ bool BKE_nlatrack_has_animated_strips(NlaTrack *nlt)
 bool BKE_nlatracks_have_animated_strips(ListBaseT<NlaTrack> *tracks)
 {
   /* sanity checks */
-  if (ELEM(nullptr, tracks, tracks->first)) {
+  if (ELEM(nullptr, tracks, tracks->first())) {
     return false;
   }
 
@@ -1833,10 +1840,10 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
       fcu->auto_smoothing = U.auto_smoothing_new;
 
       /* store path - make copy, and store that */
-      fcu->rna_path = BLI_strdupn("influence", 9);
+      fcu->rna_path_set("influence");
 
       /* insert keyframe to ensure current value stays on first refresh */
-      fcu->bezt = MEM_callocN<BezTriple>("nlastrip influence bezt");
+      fcu->bezt = MEM_new_zeroed<BezTriple>("nlastrip influence bezt");
       fcu->totvert = 1;
 
       fcu->bezt->vec[1][0] = strip->start;
@@ -1864,7 +1871,7 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
       fcu->auto_smoothing = U.auto_smoothing_new;
 
       /* store path - make copy, and store that */
-      fcu->rna_path = BLI_strdupn("strip_time", 10);
+      fcu->rna_path_set("strip_time");
 
       /* TODO: insert a few keyframes to ensure default behavior? */
     }
@@ -1873,10 +1880,11 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
 
 bool BKE_nlastrip_controlcurve_remove(NlaStrip *strip, FCurve *fcurve)
 {
-  if (STREQ(fcurve->rna_path, "strip_time")) {
+  const StringRefNull rna_path = fcurve->rna_path();
+  if (rna_path == "strip_time") {
     strip->flag &= ~NLASTRIP_FLAG_USR_TIME;
   }
-  else if (STREQ(fcurve->rna_path, "influence")) {
+  else if (rna_path == "influence") {
     strip->flag &= ~NLASTRIP_FLAG_USR_INFLUENCE;
   }
   else {
@@ -1896,7 +1904,7 @@ bool BKE_nlastrip_has_curves_for_property(const PointerRNA *ptr, const PropertyR
   }
 
   /* 1) Must be NLA strip */
-  if (ptr->type == &RNA_NlaStrip) {
+  if (ptr->type == RNA_NlaStrip) {
     /* 2) Must be one of the predefined properties */
     static PropertyRNA *prop_influence = nullptr;
     static PropertyRNA *prop_time = nullptr;
@@ -1904,8 +1912,8 @@ bool BKE_nlastrip_has_curves_for_property(const PointerRNA *ptr, const PropertyR
 
     /* Init the properties on first use */
     if (needs_init) {
-      prop_influence = RNA_struct_type_find_property(&RNA_NlaStrip, "influence");
-      prop_time = RNA_struct_type_find_property(&RNA_NlaStrip, "strip_time");
+      prop_influence = RNA_struct_type_find_property(RNA_NlaStrip, "influence");
+      prop_time = RNA_struct_type_find_property(RNA_NlaStrip, "strip_time");
 
       needs_init = false;
     }
@@ -2116,7 +2124,7 @@ static bool nlastrip_validate_transition_start_end(ListBaseT<NlaStrip> *strips, 
 void BKE_nla_validate_state(AnimData *adt)
 {
   /* sanity checks */
-  if (ELEM(nullptr, adt, adt->nla_tracks.first)) {
+  if (ELEM(nullptr, adt, adt->nla_tracks.first())) {
     return;
   }
 
@@ -2146,7 +2154,7 @@ void BKE_nla_validate_state(AnimData *adt)
 
 bool BKE_nla_action_slot_is_stashed(AnimData *adt,
                                     bAction *act,
-                                    const blender::animrig::slot_handle_t slot_handle)
+                                    const animrig::slot_handle_t slot_handle)
 {
   for (NlaTrack &nlt : adt->nla_tracks) {
     if (strstr(nlt.name, STASH_TRACK_NAME)) {
@@ -2180,9 +2188,7 @@ bool BKE_nla_action_stash(const OwnedAnimData owned_adt, const bool is_liboverri
   }
 
   /* create a new track, and add this immediately above the previous stashing track */
-  for (prev_track = static_cast<NlaTrack *>(adt->nla_tracks.last); prev_track;
-       prev_track = prev_track->prev)
-  {
+  for (prev_track = adt->nla_tracks.last(); prev_track; prev_track = prev_track->prev) {
     if (strstr(prev_track->name, STASH_TRACK_NAME)) {
       break;
     }
@@ -2344,7 +2350,7 @@ bool BKE_nla_tweakmode_enter(const OwnedAnimData owned_adt)
   AnimData &adt = owned_adt.adt;
 
   /* verify that data is valid */
-  if (ELEM(nullptr, adt.nla_tracks.first)) {
+  if (ELEM(nullptr, adt.nla_tracks.first())) {
     return false;
   }
 
@@ -2359,7 +2365,9 @@ bool BKE_nla_tweakmode_enter(const OwnedAnimData owned_adt)
   if (ELEM(nullptr, activeTrack, activeStrip, activeStrip->act)) {
     if (G.debug & G_DEBUG) {
       printf("NLA tweak-mode enter - neither active requirement found\n");
-      printf("\tactiveTrack = %p, activeStrip = %p\n", (void *)activeTrack, (void *)activeStrip);
+      printf("\tactiveTrack = %p, activeStrip = %p\n",
+             static_cast<void *>(activeTrack),
+             static_cast<void *>(activeStrip));
     }
     return false;
   }
@@ -2402,25 +2410,19 @@ bool BKE_nla_tweakmode_enter(const OwnedAnimData owned_adt)
 
   if (activeStrip->act) {
     animrig::Action &strip_action = activeStrip->act->wrap();
-    if (strip_action.is_action_layered()) {
-      animrig::Slot *strip_slot = strip_action.slot_for_handle(activeStrip->action_slot_handle);
-      if (animrig::assign_action_and_slot(&strip_action, strip_slot, owned_adt.owner_id) !=
-          animrig::ActionSlotAssignmentResult::OK)
-      {
-        printf("NLA tweak-mode enter - could not assign slot %s\n",
-               strip_slot ? strip_slot->identifier : "-unassigned-");
-        /* There is one other reason this could fail: when already in NLA tweak mode. But since
-         * we're here in the code, the ADT_NLA_EDIT_ON flag is not yet set, and thus that shouldn't
-         * be the case.
-         *
-         * Because this ADT is not in tweak mode, it means that the Action assignment will have
-         * succeeded (I know, too much coupling here, would be better to have another
-         * SlotAssignmentResult value for this). */
-      }
-    }
-    else {
-      adt.action = activeStrip->act;
-      id_us_plus(&adt.action->id);
+    animrig::Slot *strip_slot = strip_action.slot_for_handle(activeStrip->action_slot_handle);
+    if (animrig::assign_action_and_slot(&strip_action, strip_slot, owned_adt.owner_id) !=
+        animrig::ActionSlotAssignmentResult::OK)
+    {
+      printf("NLA tweak-mode enter - could not assign slot %s\n",
+             strip_slot ? strip_slot->identifier : "-unassigned-");
+      /* There is one other reason this could fail: when already in NLA tweak mode. But since
+       * we're here in the code, the ADT_NLA_EDIT_ON flag is not yet set, and thus that shouldn't
+       * be the case.
+       *
+       * Because this ADT is not in tweak mode, it means that the Action assignment will have
+       * succeeded (I know, too much coupling here, would be better to have another
+       * SlotAssignmentResult value for this). */
     }
   }
   else {
@@ -2549,8 +2551,6 @@ void BKE_nla_tweakmode_exit(const OwnedAnimData owned_adt)
    * gracefully handles duplicates. */
   if (owned_adt.adt.action && owned_adt.adt.slot_handle != animrig::Slot::unassigned) {
     animrig::Action &action = owned_adt.adt.action->wrap();
-    BLI_assert_msg(action.is_action_layered(),
-                   "when a slot is assigned, the action should layered");
     animrig::Slot *slot = action.slot_for_handle(owned_adt.adt.slot_handle);
     if (slot) {
       slot->users_add(owned_adt.owner_id);
@@ -2612,7 +2612,7 @@ void BKE_nla_debug_print_flags(AnimData *adt, ID *owner_id)
   }
   printf("\n");
 
-  if (BLI_listbase_is_empty(&adt->nla_tracks)) {
+  if (adt->nla_tracks.is_empty()) {
     printf("  - No tracks\n");
     return;
   }
@@ -2700,7 +2700,7 @@ void BKE_nla_debug_print_flags(AnimData *adt, ID *owner_id)
 
 static void blend_write_nla_strips(BlendWriter *writer, ListBaseT<NlaStrip> *strips)
 {
-  BLO_write_struct_list(writer, NlaStrip, strips);
+  writer->write_struct_list(strips);
   for (NlaStrip &strip : *strips) {
     /* write the strip's F-Curves and modifiers */
     BKE_fcurve_blend_write_listbase(writer, &strip.fcurves);
@@ -2767,7 +2767,7 @@ void BKE_nla_liboverride_post_process(ID *id, AnimData *adt)
   UNUSED_VARS_NDEBUG(id);
 
   const bool is_tweak_mode = (adt->flag & ADT_NLA_EDIT_ON);
-  const bool has_tracks = !BLI_listbase_is_empty(&adt->nla_tracks);
+  const bool has_tracks = !adt->nla_tracks.is_empty();
 
   if (!has_tracks) {
     if (is_tweak_mode) {
@@ -2809,7 +2809,7 @@ static bool visit_strip(NlaStrip *strip, FunctionRef<bool(NlaStrip *)> callback)
   return true;
 }
 
-namespace blender::bke::nla {
+namespace bke::nla {
 
 bool foreach_strip(ID *id, FunctionRef<bool(NlaStrip *)> callback)
 {
@@ -2833,4 +2833,5 @@ bool foreach_strip_adt(const AnimData &adt, FunctionRef<bool(NlaStrip *)> callba
   return true;
 }
 
-}  // namespace blender::bke::nla
+}  // namespace bke::nla
+}  // namespace blender

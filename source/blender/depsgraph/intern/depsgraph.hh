@@ -24,7 +24,7 @@
 #include "BLI_linear_allocator.hh"
 #include "BLI_mutex.hh"
 #include "BLI_set.hh"
-#include "BLI_threads.h" /* for SpinLock */
+#include "BLI_threads.hh" /* for SpinLock */
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_physics.hh"
@@ -32,11 +32,13 @@
 #include "intern/debug/deg_debug.h"
 #include "intern/depsgraph_light_linking.hh"
 
+namespace blender {
+
 struct ID;
 struct Scene;
 struct ViewLayer;
 
-namespace blender::deg {
+namespace deg {
 
 struct IDNode;
 struct Node;
@@ -200,4 +202,5 @@ struct Depsgraph {
   MEM_CXX_CLASS_ALLOC_FUNCS("Depsgraph");
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

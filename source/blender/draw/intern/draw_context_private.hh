@@ -13,8 +13,8 @@
 #include "DRW_engine.hh"
 #include "DRW_render.hh"
 
-#include "BLI_task.h"
-#include "BLI_threads.h"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
 #include "BLI_vector_set.hh"
 
 #include "GPU_batch.hh"
@@ -24,19 +24,23 @@
 
 struct DRWDebugModule;
 struct DRWUniformChunk;
+
+namespace blender {
+
 struct DRWViewData;
 struct DRWTextStore;
 struct DupliObject;
 struct Object;
 struct Mesh;
-namespace blender::draw {
+namespace draw {
 struct CurvesModule;
 struct VolumeModule;
 struct PointCloudModule;
+struct GSplatModule;
 struct DRW_MeshCDMask;
 class CurveRefinePass;
 class View;
-}  // namespace blender::draw
+}  // namespace draw
 struct GPUMaterial;
 
 /* -------------------------------------------------------------------- */
@@ -52,11 +56,12 @@ struct DRWData {
   /** Per stereo view data. Contains engine data and default frame-buffers. */
   DRWViewData *view_data[2];
   /** Module storage. */
-  blender::draw::CurvesModule *curves_module;
-  blender::draw::VolumeModule *volume_module;
-  blender::draw::PointCloudModule *pointcloud_module;
+  draw::CurvesModule *curves_module;
+  draw::VolumeModule *volume_module;
+  draw::PointCloudModule *pointcloud_module;
+  draw::GSplatModule *gsplat_module;
   /** Default view that feeds every engine. */
-  blender::draw::View *default_view;
+  draw::View *default_view;
 
   /* Ensure modules are created. */
   void modules_init();
@@ -78,7 +83,7 @@ inline DRWContext &drw_get()
   return DRWContext::get_active();
 }
 
-namespace blender::draw {
+namespace draw {
 
 void drw_batch_cache_validate(Object *ob);
 void drw_batch_cache_generate_requested(Object *ob, TaskGraph &task_graph);
@@ -95,6 +100,8 @@ void DRW_mesh_get_attributes(const Object &object,
                              VectorSet<std::string> *r_attrs,
                              DRW_MeshCDMask *r_cd_needed);
 
-}  // namespace blender::draw
+}  // namespace draw
 
 /** \} */
+
+}  // namespace blender

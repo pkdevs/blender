@@ -13,14 +13,16 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_linklist.h"
-#include "BLI_mempool.h"
-#include "BLI_utildefines.h"
+#include "BLI_linklist.hh"
+#include "BLI_mempool.hh"
+#include "BLI_utildefines.hh"
 
 #include "bmesh.hh"
 #include "bmesh_edgenet.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* Struct for storing a path of verts walked over */
 struct VertNetInfo {
@@ -123,7 +125,7 @@ static bool bm_edgenet_path_check_overlap(BMVert *v1, BMVert *v2, VertNetInfo *v
   }
 
   if (v_ls_tot) {
-    blender::Array<BMVert *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> vert_arr(v_ls_tot);
+    Array<BMVert *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> vert_arr(v_ls_tot);
     LinkNode *v_lnk;
     for (i = 0, v_lnk = v_ls; i < v_ls_tot; v_lnk = v_lnk->next, i++) {
       vert_arr[i] = static_cast<BMVert *>(v_lnk->link);
@@ -144,8 +146,8 @@ static BMFace *bm_edgenet_face_from_path(BMesh *bm, LinkNode *path, const uint p
   int i;
   bool ok;
 
-  blender::Array<BMVert *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> vert_arr(path_len);
-  blender::Array<BMEdge *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> edge_arr(path_len);
+  Array<BMVert *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> vert_arr(path_len);
+  Array<BMEdge *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> edge_arr(path_len);
 
   for (v_lnk = path, i = 0; v_lnk; v_lnk = v_lnk->next, i++) {
     vert_arr[i] = static_cast<BMVert *>(v_lnk->link);
@@ -376,7 +378,7 @@ static LinkNode *bm_edgenet_path_calc_best(BMEdge *e,
 
   const uint path_len = *r_path_len;
   uint i, i_prev;
-  blender::Array<BMVert *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> vert_arr(path_len);
+  Array<BMVert *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> vert_arr(path_len);
   LinkNode *v_lnk;
 
   for (v_lnk = path, i = 0; v_lnk; v_lnk = v_lnk->next, i++) {
@@ -414,7 +416,7 @@ static LinkNode *bm_edgenet_path_calc_best(BMEdge *e,
 
 void BM_mesh_edgenet(BMesh *bm, const bool use_edge_tag, const bool use_new_face_tag)
 {
-  VertNetInfo *vnet_info = MEM_calloc_arrayN<VertNetInfo>(size_t(bm->totvert), __func__);
+  VertNetInfo *vnet_info = MEM_new_array_zeroed<VertNetInfo>(size_t(bm->totvert), __func__);
   BLI_mempool *edge_queue_pool = BLI_mempool_create(sizeof(LinkNode), 0, 512, BLI_MEMPOOL_NOP);
   BLI_mempool *path_pool = BLI_mempool_create(sizeof(LinkNode), 0, 512, BLI_MEMPOOL_NOP);
   LinkNode *edge_queue = nullptr;
@@ -474,5 +476,7 @@ void BM_mesh_edgenet(BMesh *bm, const bool use_edge_tag, const bool use_new_face
 
   BLI_mempool_destroy(edge_queue_pool);
   BLI_mempool_destroy(path_pool);
-  MEM_freeN(vnet_info);
+  MEM_delete(vnet_info);
 }
+
+}  // namespace blender

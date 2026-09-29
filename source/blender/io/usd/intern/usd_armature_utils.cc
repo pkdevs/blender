@@ -12,7 +12,7 @@
 #include "BKE_fcurve.hh"
 #include "BKE_modifier.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase_iterator.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
@@ -24,13 +24,15 @@
 namespace blender::io::usd {
 
 /* Utility: create new fcurve and add it as a channel to a group. */
-FCurve *create_fcurve(blender::animrig::Channelbag &channelbag,
-                      const blender::animrig::FCurveDescriptor &fcurve_descriptor,
+FCurve *create_fcurve(animrig::Channelbag &channelbag,
+                      const animrig::FCurveDescriptor &fcurve_descriptor,
                       const int sample_count)
 {
   FCurve *fcurve = channelbag.fcurve_create_unique(nullptr, fcurve_descriptor);
   BLI_assert_msg(fcurve, "The same F-Curve is being created twice, this is unexpected.");
-  BKE_fcurve_bezt_resize(fcurve, sample_count);
+  if (fcurve) {
+    BKE_fcurve_bezt_resize(*fcurve, sample_count);
+  }
   return fcurve;
 }
 
@@ -42,7 +44,7 @@ void set_fcurve_sample(FCurve *fcu, int64_t sample_index, const float frame, con
   bez.vec[1][0] = frame;
   bez.vec[1][1] = value;
   bez.ipo = BEZT_IPO_LIN;
-  bez.f1 = bez.f2 = bez.f3 = SELECT;
+  bez.f1 = bez.f2 = bez.f3 = BEZT_FLAG_SELECT;
   bez.h1 = bez.h2 = HD_AUTO;
 }
 
@@ -99,7 +101,7 @@ void visit_bones(const Object *ob_arm, FunctionRef<void(const Bone *)> visitor)
     return;
   }
 
-  const bArmature *armature = (bArmature *)ob_arm->data;
+  const bArmature *armature = id_cast<bArmature *>(ob_arm->data);
   for (const Bone &bone : armature->bonebase) {
     visit_bones(&bone, visitor);
   }
@@ -149,16 +151,19 @@ void create_pose_joints(pxr::UsdSkelAnimation &skel_anim,
   pxr::VtTokenArray joints;
 
   const bPose *pose = obj.pose;
+  const bArmature &arm = *id_cast<bArmature *>(obj.data);
+  BKE_pose_ensure_bone_indices(obj);
 
   for (const bPoseChannel &pchan : pose->chanbase) {
-    if (pchan.bone) {
-      if (deform_map && !deform_map->contains(pchan.bone->name)) {
+    const Bone *pchan_bone = pchan.bone_get(arm);
+    if (pchan_bone) {
+      if (deform_map && !deform_map->contains(pchan.name)) {
         /* If deform_map is passed in, assume we're going deform-only.
          * Bones not found in the map should be skipped. */
         continue;
       }
 
-      joints.push_back(build_usd_joint_path(pchan.bone, allow_unicode));
+      joints.push_back(build_usd_joint_path(pchan_bone, allow_unicode));
     }
   }
 
@@ -181,7 +186,7 @@ bool is_armature_modifier_bone_name(const Object &obj,
     return false;
   }
 
-  bArmature *arm = static_cast<bArmature *>(arm_mod->object->data);
+  bArmature *arm = id_cast<bArmature *>(arm_mod->object->data);
 
   return BKE_armature_find_bone_name(arm, name.c_str());
 }

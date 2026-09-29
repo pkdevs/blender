@@ -8,11 +8,13 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_array.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
@@ -37,10 +39,7 @@
 
 #include "mesh_intern.hh" /* own include */
 
-using blender::float2;
-using blender::float3;
-using blender::Span;
-using blender::Vector;
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Local Utilities
@@ -55,7 +54,7 @@ using blender::Vector;
  */
 #define INSET_DEFAULT 0.00001f
 static float edbm_rip_edgedist_squared(ARegion *region,
-                                       const blender::float4x4 &mat,
+                                       const float4x4 &mat,
                                        const float co1[3],
                                        const float co2[3],
                                        const float mvalf[2],
@@ -108,11 +107,8 @@ static void edbm_calc_loop_co(BMLoop *l, float l_mid_co[3])
   add_v3_v3(l_mid_co, l->v->co);
 }
 
-static float edbm_rip_edge_side_measure(BMEdge *e,
-                                        BMLoop *e_l,
-                                        ARegion *region,
-                                        const blender::float4x4 &projectMat,
-                                        const float fmval[2])
+static float edbm_rip_edge_side_measure(
+    BMEdge *e, BMLoop *e_l, ARegion *region, const float4x4 &projectMat, const float fmval[2])
 {
   float vec[2];
   float fmval_tweak[2];
@@ -135,9 +131,9 @@ static float edbm_rip_edge_side_measure(BMEdge *e,
   v2_other = BM_face_other_vert_loop(e_l->f, e->v1, e->v2)->v;
 
   float2 cent = ED_view3d_project_float_v2_m4(
-      region, blender::math::midpoint(float3(v1_other->co), float3(v2_other->co)), projectMat);
+      region, math::midpoint(float3(v1_other->co), float3(v2_other->co)), projectMat);
   float2 mid = ED_view3d_project_float_v2_m4(
-      region, blender::math::midpoint(float3(e->v1->co), float3(e->v2->co)), projectMat);
+      region, math::midpoint(float3(e->v1->co), float3(e->v2->co)), projectMat);
 
   float2 e_v1_co = ED_view3d_project_float_v2_m4(region, e->v1->co, projectMat);
   float2 e_v2_co = ED_view3d_project_float_v2_m4(region, e->v2->co, projectMat);
@@ -350,7 +346,7 @@ static BMVert *edbm_ripsel_edloop_pair_start_vert(BMEdge *e)
 static void edbm_ripsel_deselect_helper(BMesh *bm,
                                         const Span<EdgeLoopPair> eloop_pairs,
                                         ARegion *region,
-                                        const blender::float4x4 &projectMat,
+                                        const float4x4 &projectMat,
                                         const float fmval[2])
 {
   for (const EdgeLoopPair &lp : eloop_pairs) {
@@ -404,7 +400,7 @@ enum {
   ULP_FLIP_1 = (1 << 1),
 };
 
-static UnorderedLoopPair *edbm_tagged_loop_pairs_to_fill(BMesh *bm)
+static Array<UnorderedLoopPair> edbm_tagged_loop_pairs_to_fill(BMesh *bm)
 {
   BMIter iter;
   BMEdge *e;
@@ -417,69 +413,63 @@ static UnorderedLoopPair *edbm_tagged_loop_pairs_to_fill(BMesh *bm)
     }
   }
 
-  if (total_tag) {
-    UnorderedLoopPair *uloop_pairs = MEM_malloc_arrayN<UnorderedLoopPair>(total_tag, __func__);
-    UnorderedLoopPair *ulp = uloop_pairs;
+  Array<UnorderedLoopPair> uloop_pairs(total_tag);
+  UnorderedLoopPair *ulp = uloop_pairs.data();
 
-    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-      if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
-        BMLoop *l1, *l2;
-        if (BM_edge_loop_pair(e, &l1, &l2)) {
-          BMVert *v_cmp = l1->e->v1;
-          ulp->flag = (((l1->v != v_cmp) ? ULP_FLIP_0 : 0) | ((l2->v == v_cmp) ? ULP_FLIP_1 : 0));
-        }
-        else {
-          ulp->flag = 0;
-        }
-        ulp->l_pair[0] = l1;
-        ulp->l_pair[1] = l2;
-
-        ulp++;
+  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+    if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
+      BMLoop *l1, *l2;
+      if (BM_edge_loop_pair(e, &l1, &l2)) {
+        BMVert *v_cmp = l1->e->v1;
+        ulp->flag = (((l1->v != v_cmp) ? ULP_FLIP_0 : 0) | ((l2->v == v_cmp) ? ULP_FLIP_1 : 0));
       }
-    }
+      else {
+        ulp->flag = 0;
+      }
+      ulp->l_pair[0] = l1;
+      ulp->l_pair[1] = l2;
 
-    return uloop_pairs;
+      ulp++;
+    }
   }
-  return nullptr;
+
+  return uloop_pairs;
 }
 
-static void edbm_tagged_loop_pairs_do_fill_faces(BMesh *bm, UnorderedLoopPair *uloop_pairs)
+static void edbm_tagged_loop_pairs_do_fill_faces(BMesh *bm,
+                                                 const Span<UnorderedLoopPair> uloop_pairs)
 {
-  UnorderedLoopPair *ulp;
-  uint total_tag = MEM_allocN_len(uloop_pairs) / sizeof(UnorderedLoopPair);
-  uint i;
-
-  for (i = 0, ulp = uloop_pairs; i < total_tag; i++, ulp++) {
-    if ((ulp->l_pair[0] && ulp->l_pair[1]) && (ulp->l_pair[0]->e != ulp->l_pair[1]->e)) {
+  for (const UnorderedLoopPair &ulp : uloop_pairs) {
+    if ((ulp.l_pair[0] && ulp.l_pair[1]) && (ulp.l_pair[0]->e != ulp.l_pair[1]->e)) {
       /* time has come to make a face! */
-      BMVert *v_shared = BM_edge_share_vert(ulp->l_pair[0]->e, ulp->l_pair[1]->e);
-      BMFace *f, *f_example = ulp->l_pair[0]->f;
+      BMVert *v_shared = BM_edge_share_vert(ulp.l_pair[0]->e, ulp.l_pair[1]->e);
+      BMFace *f, *f_example = ulp.l_pair[0]->f;
       BMLoop *l_iter;
       BMVert *f_verts[4];
 
       if (v_shared == nullptr) {
         /* quad */
-        f_verts[0] = ulp->l_pair[0]->e->v1;
-        f_verts[1] = ulp->l_pair[1]->e->v1;
-        f_verts[2] = ulp->l_pair[1]->e->v2;
-        f_verts[3] = ulp->l_pair[0]->e->v2;
+        f_verts[0] = ulp.l_pair[0]->e->v1;
+        f_verts[1] = ulp.l_pair[1]->e->v1;
+        f_verts[2] = ulp.l_pair[1]->e->v2;
+        f_verts[3] = ulp.l_pair[0]->e->v2;
 
-        if (ulp->flag & ULP_FLIP_0) {
+        if (ulp.flag & ULP_FLIP_0) {
           std::swap(f_verts[0], f_verts[3]);
         }
-        if (ulp->flag & ULP_FLIP_1) {
+        if (ulp.flag & ULP_FLIP_1) {
           std::swap(f_verts[1], f_verts[2]);
         }
       }
       else {
         /* tri */
         f_verts[0] = v_shared;
-        f_verts[1] = BM_edge_other_vert(ulp->l_pair[0]->e, v_shared);
-        f_verts[2] = BM_edge_other_vert(ulp->l_pair[1]->e, v_shared);
+        f_verts[1] = BM_edge_other_vert(ulp.l_pair[0]->e, v_shared);
+        f_verts[2] = BM_edge_other_vert(ulp.l_pair[1]->e, v_shared);
         f_verts[3] = nullptr;
 
         /* don't use the flip flags */
-        if (v_shared == ulp->l_pair[0]->v) {
+        if (v_shared == ulp.l_pair[0]->v) {
           std::swap(f_verts[0], f_verts[1]);
         }
       }
@@ -492,20 +482,20 @@ static void edbm_tagged_loop_pairs_do_fill_faces(BMesh *bm, UnorderedLoopPair *u
       l_iter = BM_FACE_FIRST_LOOP(f);
 
       if (f_verts[3]) {
-        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp->l_pair[0]->e, l_iter), l_iter);
+        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp.l_pair[0]->e, l_iter), l_iter);
         l_iter = l_iter->next;
-        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp->l_pair[1]->e, l_iter), l_iter);
+        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp.l_pair[1]->e, l_iter), l_iter);
         l_iter = l_iter->next;
-        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp->l_pair[1]->e, l_iter), l_iter);
+        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp.l_pair[1]->e, l_iter), l_iter);
         l_iter = l_iter->next;
-        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp->l_pair[0]->e, l_iter), l_iter);
+        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp.l_pair[0]->e, l_iter), l_iter);
       }
       else {
-        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp->l_pair[0]->e, l_iter), l_iter);
+        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp.l_pair[0]->e, l_iter), l_iter);
         l_iter = l_iter->next;
-        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp->l_pair[0]->e, l_iter), l_iter);
+        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp.l_pair[0]->e, l_iter), l_iter);
         l_iter = l_iter->next;
-        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp->l_pair[1]->e, l_iter), l_iter);
+        BM_elem_attrs_copy(bm, BM_edge_other_loop(ulp.l_pair[1]->e, l_iter), l_iter);
       }
     }
   }
@@ -522,11 +512,10 @@ static void edbm_tagged_loop_pairs_do_fill_faces(BMesh *bm, UnorderedLoopPair *u
  */
 static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obedit, bool do_fill)
 {
-  UnorderedLoopPair *fill_uloop_pairs = nullptr;
+  Array<UnorderedLoopPair> fill_uloop_pairs;
   ARegion *region = CTX_wm_region(C);
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   BMIter iter, liter;
   BMLoop *l;
   BMEdge *e_best;
@@ -541,11 +530,11 @@ static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obed
   BMEditSelection ese;
   int totboundary_edge = 0;
 
-  const blender::float4x4 projectMat = ED_view3d_ob_project_mat_get(rv3d, obedit);
+  const float4x4 projectMat = ED_view3d_ob_project_mat_get(rv3d, obedit);
 
   /* find selected vert - same some time and check history first */
   if (BM_select_history_active_get(bm, &ese) && ese.htype == BM_VERT) {
-    v = (BMVert *)ese.ele;
+    v = reinterpret_cast<BMVert *>(ese.ele);
   }
   else {
     ese.ele = nullptr;
@@ -618,8 +607,8 @@ static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obed
     BMLoop *l_all[3];
     int i1, i2;
 
-    BM_iter_as_array(bm, BM_EDGES_OF_VERT, v, (void **)e_all, 3);
-    BM_iter_as_array(bm, BM_LOOPS_OF_VERT, v, (void **)l_all, 3);
+    BM_iter_as_array(bm, BM_EDGES_OF_VERT, v, reinterpret_cast<void **>(e_all), 3);
+    BM_iter_as_array(bm, BM_LOOPS_OF_VERT, v, reinterpret_cast<void **>(l_all), 3);
 
     /* not do a loop similar to the one above, but test against loops */
     for (i1 = 0; i1 < 3; i1++) {
@@ -661,7 +650,7 @@ static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obed
     bmesh_kernel_vert_separate(bm, v, &vout, &vout_len, true);
 
     if (vout_len < 2) {
-      MEM_freeN(vout);
+      MEM_delete(vout);
       /* set selection back to avoid active-unselected vertex */
       BM_vert_select_set(bm, v, true);
       /* should never happen */
@@ -746,7 +735,7 @@ static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obed
       BM_edge_create(bm, vout[1], vout[0], nullptr, BM_CREATE_NOP);
     }
 
-    MEM_freeN(vout);
+    MEM_delete(vout);
 
     return OPERATOR_FINISHED;
   }
@@ -824,9 +813,6 @@ static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obed
       BM_vert_select_set(bm, v_rip, true);
     }
     else {
-      if (fill_uloop_pairs) {
-        MEM_freeN(fill_uloop_pairs);
-      }
       return OPERATOR_CANCELLED;
     }
   }
@@ -865,9 +851,8 @@ static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obed
     }
   }
 
-  if (do_fill && fill_uloop_pairs) {
+  if (do_fill && !fill_uloop_pairs.is_empty()) {
     edbm_tagged_loop_pairs_do_fill_faces(bm, fill_uloop_pairs);
-    MEM_freeN(fill_uloop_pairs);
   }
 
   if (totvert_orig == bm->totvert) {
@@ -888,11 +873,10 @@ static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obed
  */
 static int edbm_rip_invoke__edge(bContext *C, const wmEvent *event, Object *obedit, bool do_fill)
 {
-  UnorderedLoopPair *fill_uloop_pairs = nullptr;
+  Array<UnorderedLoopPair> fill_uloop_pairs;
   ARegion *region = CTX_wm_region(C);
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   BMIter iter, eiter;
   BMLoop *l;
   BMEdge *e_best;
@@ -901,7 +885,7 @@ static int edbm_rip_invoke__edge(bContext *C, const wmEvent *event, Object *obed
   const int totedge_orig = bm->totedge;
   float fmval[3] = {float(event->mval[0]), float(event->mval[1])};
 
-  const blender::float4x4 projectMat = ED_view3d_ob_project_mat_get(rv3d, obedit);
+  const float4x4 projectMat = ED_view3d_ob_project_mat_get(rv3d, obedit);
 
   /* important this runs on the original selection, before tampering with tagging */
   Vector<EdgeLoopPair> eloop_pairs = edbm_ripsel_looptag_helper(bm);
@@ -986,7 +970,7 @@ static int edbm_rip_invoke__edge(bContext *C, const wmEvent *event, Object *obed
     fill_uloop_pairs = edbm_tagged_loop_pairs_to_fill(bm);
   }
 
-  BM_mesh_edgesplit(em->bm, true, true, true);
+  BM_mesh_edgesplit(bm, true, true, true);
 
   /* NOTE: the output of the bmesh operator is ignored, since we built
    * the contiguous loop pairs to split already, its possible that some
@@ -998,9 +982,8 @@ static int edbm_rip_invoke__edge(bContext *C, const wmEvent *event, Object *obed
   /* deselect loose verts */
   BM_mesh_select_mode_clean_ex(bm, SCE_SELECT_EDGE);
 
-  if (do_fill && fill_uloop_pairs) {
+  if (do_fill && !fill_uloop_pairs.is_empty()) {
     edbm_tagged_loop_pairs_do_fill_faces(bm, fill_uloop_pairs);
-    MEM_freeN(fill_uloop_pairs);
   }
 
   if ((totvert_orig == bm->totvert) && (totedge_orig == bm->totedge)) {
@@ -1021,10 +1004,11 @@ static int edbm_rip_invoke__edge(bContext *C, const wmEvent *event, Object *obed
 /* based on mouse cursor position, it defines how is being ripped */
 static wmOperatorStatus edbm_rip_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   const bool do_fill = RNA_boolean_get(op->ptr, "use_fill");
 
   bool no_vertex_selected = true;
@@ -1033,15 +1017,13 @@ static wmOperatorStatus edbm_rip_invoke(bContext *C, wmOperator *op, const wmEve
   bool error_rip_failed = true;
 
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     BMIter iter;
     BMEdge *e;
     const bool singlesel = (bm->totvertsel == 1 && bm->totedgesel == 0 && bm->totfacesel == 0);
     int ret;
 
-    if (em->bm->totvertsel == 0) {
+    if (bm->totvertsel == 0) {
       continue;
     }
     no_vertex_selected = false;
@@ -1051,7 +1033,7 @@ static wmOperatorStatus edbm_rip_invoke(bContext *C, wmOperator *op, const wmEve
       /* highly nifty but hard to support since the operator can fail and we're left
        * with modified selection */
       // WM_operator_name_call(C, "MESH_OT_region_to_loop",
-      // blender::wm::OpCallContext::InvokeDefault, nullptr, event);
+      // wm::OpCallContext::InvokeDefault, nullptr, event);
       continue;
     }
     error_face_selected = false;
@@ -1104,7 +1086,7 @@ static wmOperatorStatus edbm_rip_invoke(bContext *C, wmOperator *op, const wmEve
     params.calc_looptris = true;
     params.calc_normals = true;
     params.is_destructive = true;
-    EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+    EDBM_update(id_cast<Mesh *>(obedit->data), &params);
   }
 
   if (no_vertex_selected) {
@@ -1134,7 +1116,7 @@ void MESH_OT_rip(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Rip";
   ot->idname = "MESH_OT_rip";
-  ot->description = "Disconnect vertex or edges from connected geometry";
+  ot->description = "Disconnect vertices or edges from connected geometry";
 
   /* API callbacks. */
   ot->invoke = edbm_rip_invoke;
@@ -1144,9 +1126,11 @@ void MESH_OT_rip(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* to give to transform */
-  blender::ed::transform::properties_register(ot, P_PROPORTIONAL | P_MIRROR_DUMMY);
+  ed::transform::properties_register(ot, P_PROPORTIONAL | P_MIRROR_DUMMY);
   prop = RNA_def_boolean(ot->srna, "use_fill", false, "Fill", "Fill the ripped region");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MESH);
 }
 
 /** \} */
+
+}  // namespace blender

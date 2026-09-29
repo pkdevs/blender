@@ -12,9 +12,10 @@
 
 #include "gpu_context_private.hh"
 
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 
 #include "render_graph/vk_render_graph.hh"
+#include "vk_buffer_pool.hh"
 #include "vk_common.hh"
 #include "vk_debug.hh"
 #include "vk_descriptor_pools.hh"
@@ -23,7 +24,6 @@
 
 namespace blender::gpu {
 class VKFrameBuffer;
-class VKVertexAttributeObject;
 class VKBatch;
 class VKStateManager;
 class VKShader;
@@ -34,7 +34,8 @@ enum RenderGraphFlushFlags {
   NONE = 0,
   RENEW_RENDER_GRAPH = 1 << 0,
   SUBMIT = 1 << 1,
-  WAIT_FOR_COMPLETION = 1 << 2,
+  WAIT_FOR_SUBMISSION = 1 << 2,
+  WAIT_FOR_COMPLETION = 1 << 3,
 };
 ENUM_OPERATORS(RenderGraphFlushFlags);
 
@@ -45,7 +46,7 @@ class VKContext : public Context, NonCopyable {
   VkExtent2D vk_extent_ = {};
   VkSurfaceFormatKHR swap_chain_format_ = {};
   gpu::Texture *surface_texture_ = nullptr;
-  void *ghost_context_;
+  GHOST_IContext *ghost_context_;
 
   Vector<std::unique_ptr<VKStreamingBuffer>> streaming_buffers_;
 
@@ -75,6 +76,7 @@ class VKContext : public Context, NonCopyable {
 
  public:
   VKDiscardPool discard_pool;
+  VKBufferPool push_constants_pool;
 
   const render_graph::VKRenderGraph &render_graph() const
   {
@@ -85,7 +87,7 @@ class VKContext : public Context, NonCopyable {
     return render_graph_.value().get();
   }
 
-  VKContext(void *ghost_window, void *ghost_context);
+  VKContext(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context);
   virtual ~VKContext();
 
   void activate() override;
@@ -105,7 +107,7 @@ class VKContext : public Context, NonCopyable {
 
   void memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb) override;
 
-  void debug_group_begin(const char *, int) override;
+  void debug_group_begin(const char *name, int index) override;
   void debug_group_end() override;
   bool debug_capture_begin(const char *title) override;
   void debug_capture_end() override;
@@ -138,7 +140,7 @@ class VKContext : public Context, NonCopyable {
   void update_pipeline_data(render_graph::VKPipelineData &r_pipeline_data);
   void update_pipeline_data(const VKFrameBuffer &framebuffer,
                             GPUPrimType primitive,
-                            VKVertexAttributeObject &vao,
+                            VKVertexInputDescriptionPool::Key vertex_input_key,
                             render_graph::VKPipelineDataGraphics &r_pipeline_data);
 
   void sync_backbuffer();
@@ -152,7 +154,8 @@ class VKContext : public Context, NonCopyable {
   VKDescriptorSetTracker &descriptor_set_get();
   VKStateManager &state_manager_get() const;
 
-  static void swap_buffer_draw_callback(const GHOST_VulkanSwapChainData *data);
+  static void swap_buffer_draw_callback(const GHOST_VulkanSwapChainData *data,
+                                        bool wait_for_submission);
   static void swap_buffer_acquired_callback();
   static void openxr_acquire_framebuffer_image_callback(GHOST_VulkanOpenXRData *data);
   static void openxr_release_framebuffer_image_callback(GHOST_VulkanOpenXRData *data);
@@ -163,7 +166,7 @@ class VKContext : public Context, NonCopyable {
       VKBuffer &buffer, VkDeviceSize min_offset_alignment);
 
  private:
-  void swap_buffer_draw_handler(const GHOST_VulkanSwapChainData &data);
+  void swap_buffer_draw_handler(const GHOST_VulkanSwapChainData &data, bool wait_for_submission);
   void swap_buffer_acquired_handler();
 
   void openxr_acquire_framebuffer_image_handler(GHOST_VulkanOpenXRData &data);

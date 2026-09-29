@@ -14,6 +14,8 @@
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 
+#include "DEG_depsgraph_query.hh"
+
 #include "ED_transform_snap_object_context.hh"
 
 #include "transform_snap_object.hh"
@@ -34,7 +36,7 @@ static const Mesh *get_mesh_ref(const Object *ob_eval)
     return me;
   }
 
-  return static_cast<const Mesh *>(ob_eval->data);
+  return id_cast<const Mesh *>(ob_eval->data);
 }
 
 /**
@@ -96,8 +98,8 @@ static Mesh *create_mesh(SnapObjectContext *sctx,
                          eSnapEditType /*edit_mode_type*/)
 {
   Mesh *mesh = BKE_id_new_nomain<Mesh>(nullptr);
-  const BMEditMesh *em = BKE_editmesh_from_object(const_cast<Object *>(ob_eval));
-  BMesh *bm = em->bm;
+  Object *ob_orig = const_cast<Object *>(DEG_get_original(ob_eval));
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob_orig);
   BM_mesh_bm_to_me_compact(*bm, *mesh, nullptr, false);
 
   bke::MutableAttributeAccessor attrs = mesh->attributes_for_write();
@@ -239,8 +241,9 @@ static SnapCache_EditMesh *editmesh_snapdata_init(SnapObjectContext *sctx,
     }
   }
 
-  const BMEditMesh *em = BKE_editmesh_from_object(const_cast<Object *>(ob_eval));
-  if (em == nullptr) {
+  Object *ob_orig = const_cast<Object *>(DEG_get_original(ob_eval));
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob_orig);
+  if (bm == nullptr) {
     return nullptr;
   }
 
@@ -249,7 +252,7 @@ static SnapCache_EditMesh *editmesh_snapdata_init(SnapObjectContext *sctx,
     return em_cache;
   }
 
-  eSnapMode snap_mode_used = snap_to_flag & editmesh_snap_mode_supported(em->bm);
+  eSnapMode snap_mode_used = snap_to_flag & editmesh_snap_mode_supported(bm);
   if (snap_mode_used == SCE_SNAP_TO_NONE) {
     return nullptr;
   }

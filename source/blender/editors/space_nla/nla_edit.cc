@@ -13,12 +13,13 @@
 #include "DNA_anim_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_speaker_types.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -55,6 +56,8 @@
 
 #include "nla_intern.hh"
 #include "nla_private.h"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Public Utilities
@@ -120,7 +123,7 @@ static wmOperatorStatus nlaedit_enable_tweakmode_exec(bContext *C, wmOperator *o
   ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
 
   /* if no blocks, popup error? */
-  if (BLI_listbase_is_empty(&anim_data)) {
+  if (anim_data.is_empty()) {
     BKE_report(op->reports, RPT_ERROR, "No AnimData blocks to enter tweak mode for");
     return OPERATOR_CANCELLED;
   }
@@ -227,7 +230,7 @@ bool nlaedit_disable_tweakmode(bAnimContext *ac, bool do_solo)
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, eAnimCont_Types(ac->datatype));
 
   /* if no blocks, popup error? */
-  if (BLI_listbase_is_empty(&anim_data)) {
+  if (anim_data.is_empty()) {
     BKE_report(ac->reports, RPT_ERROR, "No AnimData blocks in tweak mode to exit from");
     return false;
   }
@@ -337,7 +340,7 @@ static void get_nlastrip_extents(bAnimContext *ac, float *min, float *max, const
   *max = -999999999.0f;
 
   /* check if any tracks to set range with */
-  if (anim_data.first) {
+  if (anim_data.first_) {
     /* go through tracks, finding max extents */
     for (bAnimListElem &ale : anim_data) {
       NlaTrack *nlt = static_cast<NlaTrack *>(ale.data);
@@ -412,7 +415,7 @@ void NLA_OT_previewrange_set(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Set Preview Range to Selected";
   ot->idname = "NLA_OT_previewrange_set";
-  ot->description = "Set Preview Range based on extends of selected strips";
+  ot->description = "Set Preview Range based on extents of selected strips";
 
   /* API callbacks. */
   ot->exec = nlaedit_previewrange_exec;
@@ -451,9 +454,7 @@ static bool nla_tracks_get_selected_extents(bAnimContext *ac, float *r_min, floa
   /* loop through all tracks, finding the first one that's selected */
   float ymax = NLATRACK_FIRST_TOP(ac);
 
-  for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-       ale = ale->next, ymax -= NLATRACK_STEP(snla))
-  {
+  for (bAnimListElem *ale = anim_data.first(); ale; ale = ale->next, ymax -= NLATRACK_STEP(snla)) {
     const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 
     /* must be selected... */
@@ -518,13 +519,13 @@ static wmOperatorStatus nlaedit_viewall(bContext *C, const bool only_sel)
       float ymid = (ymax - ymin) / 2.0f + ymin;
       float x_center;
 
-      blender::ui::view2d_center_get(v2d, &x_center, nullptr);
-      blender::ui::view2d_center_set(v2d, x_center, ymid);
+      ui::view2d_center_get(v2d, &x_center, nullptr);
+      ui::view2d_center_set(v2d, x_center, ymid);
     }
   }
 
   /* do View2D syncing */
-  blender::ui::view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
+  ui::view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
 
   /* just redraw this view */
   ED_area_tag_redraw(CTX_wm_area(C));
@@ -555,7 +556,7 @@ void NLA_OT_view_all(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = nlaedit_viewall_exec;
-  ot->poll = ED_operator_nla_active;
+  ot->poll = ED_operator_region_nla_active;
 
   /* flags */
   ot->flag = 0;
@@ -570,7 +571,7 @@ void NLA_OT_view_selected(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = nlaedit_viewsel_exec;
-  ot->poll = ED_operator_nla_active;
+  ot->poll = ED_operator_region_nla_active;
 
   /* flags */
   ot->flag = 0;
@@ -598,7 +599,7 @@ void NLA_OT_view_frame(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = nlaedit_viewframe_exec;
-  ot->poll = ED_operator_nla_active;
+  ot->poll = ED_operator_region_nla_active;
 
   /* flags */
   ot->flag = 0;
@@ -801,10 +802,10 @@ static wmOperatorStatus nlaedit_add_transition_exec(bContext *C, wmOperator *op)
     NlaStrip *s1, *s2;
 
     /* get initial pair of strips */
-    if (ELEM(nlt->strips.first, nullptr, nlt->strips.last)) {
+    if (ELEM(nlt->strips.first(), nullptr, nlt->strips.last())) {
       continue;
     }
-    s1 = static_cast<NlaStrip *>(nlt->strips.first);
+    s1 = nlt->strips.first();
     s2 = s1->next;
 
     /* loop over strips */
@@ -832,7 +833,7 @@ static wmOperatorStatus nlaedit_add_transition_exec(bContext *C, wmOperator *op)
       }
 
       /* allocate new strip */
-      strip = MEM_new_for_free<NlaStrip>("NlaStrip");
+      strip = MEM_new<NlaStrip>("NlaStrip");
       BLI_insertlinkafter(&nlt->strips, s1, strip);
 
       /* set the type */
@@ -940,7 +941,7 @@ static wmOperatorStatus nlaedit_add_sound_exec(bContext *C, wmOperator * /*op*/)
     }
 
     /* create a new strip, and offset it to start on the current frame */
-    NlaStrip *strip = BKE_nla_add_soundstrip(bmain, ac.scene, static_cast<Speaker *>(ob->data));
+    NlaStrip *strip = BKE_nla_add_soundstrip(bmain, ac.scene, id_cast<Speaker *>(ob->data));
 
     strip->start += cfra;
     strip->end += cfra;
@@ -1169,7 +1170,7 @@ static wmOperatorStatus nlaedit_duplicate_exec(bContext *C, wmOperator *op)
      * strip ends up in a valid (local) track. */
 
     const bool is_liboverride = ID_IS_OVERRIDE_LIBRARY(ale.id);
-    for (strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = next) {
+    for (strip = nlt->strips.first(); strip; strip = next) {
       next = strip->next;
 
       /* if selected, split the strip at its midpoint */
@@ -1283,7 +1284,7 @@ static wmOperatorStatus nlaedit_delete_exec(bContext *C, wmOperator * /*op*/)
       continue;
     }
 
-    for (strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = nstrip) {
+    for (strip = nlt->strips.first(); strip; strip = nstrip) {
       nstrip = strip->next;
 
       /* if selected, delete */
@@ -1452,7 +1453,7 @@ static wmOperatorStatus nlaedit_split_exec(bContext *C, wmOperator * /*op*/)
       continue;
     }
 
-    for (strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = next) {
+    for (strip = nlt->strips.first(); strip; strip = next) {
       next = strip->next;
 
       /* if selected, split the strip at its midpoint */
@@ -1615,8 +1616,8 @@ static wmOperatorStatus nlaedit_swap_exec(bContext *C, wmOperator *op)
      * (i.e. temp meta BUT NOT unselected/normal/normal-meta strips) left after this,
      * and this island has two strips inside it, then we should be able to just swap these still...
      */
-    if (BLI_listbase_is_empty(&nlt->strips) == false) {
-      NlaStrip *mstrip = static_cast<NlaStrip *>(nlt->strips.first);
+    if (nlt->strips.is_empty() == false) {
+      NlaStrip *mstrip = nlt->strips.first();
 
       if ((mstrip->flag & NLASTRIP_FLAG_TEMP_META) &&
           BLI_listbase_count_is_equal_to(&mstrip->strips, 2))
@@ -1629,7 +1630,7 @@ static wmOperatorStatus nlaedit_swap_exec(bContext *C, wmOperator *op)
     /* get two selected strips only (these will be metas due to prev step) to operate on
      * - only allow swapping 2, as with more the context becomes unclear
      */
-    for (strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = stripN) {
+    for (strip = nlt->strips.first(); strip; strip = stripN) {
       stripN = strip->next;
 
       if (strip->flag & NLASTRIP_FLAG_SELECT) {
@@ -1807,7 +1808,7 @@ static wmOperatorStatus nlaedit_move_up_exec(bContext *C, wmOperator * /*op*/)
     }
 
     /* for every selected strip, try to move */
-    for (NlaStrip *strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = stripn) {
+    for (NlaStrip *strip = nlt->strips.first(); strip; strip = stripn) {
       stripn = strip->next;
 
       if (strip->flag & NLASTRIP_FLAG_SELECT) {
@@ -1898,7 +1899,7 @@ static wmOperatorStatus nlaedit_move_down_exec(bContext *C, wmOperator * /*op*/)
     }
 
     /* for every selected strip, try to move */
-    for (NlaStrip *strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = stripn) {
+    for (NlaStrip *strip = nlt->strips.first(); strip; strip = stripn) {
       stripn = strip->next;
 
       if (strip->flag & NLASTRIP_FLAG_SELECT) {
@@ -2118,7 +2119,7 @@ static wmOperatorStatus nlaedit_make_single_user_invoke(bContext *C,
         IFACE_("Make Selected Strips Single-User"),
         IFACE_("Linked actions will be duplicated for each selected strip."),
         IFACE_("Make Single"),
-        blender::ui::AlertIcon::Warning,
+        ui::AlertIcon::Warning,
         false);
   }
   return nlaedit_make_single_user_exec(C, op);
@@ -2213,9 +2214,9 @@ static wmOperatorStatus nlaedit_apply_scale_exec(bContext *C, wmOperator * /*op*
 
         /* setup iterator, and iterate over all the keyframes in the action,
          * applying this scaling */
-        blender::animrig::Action &action = strip.act->wrap();
-        blender::Span<FCurve *> fcurves = blender::animrig::fcurves_for_action_slot(
-            action, strip.action_slot_handle);
+        animrig::Action &action = strip.act->wrap();
+        Span<FCurve *> fcurves = animrig::fcurves_for_action_slot(action,
+                                                                  strip.action_slot_handle);
         ked.data = &strip;
         for (FCurve *fcurve : fcurves) {
           ANIM_fcurve_keyframes_loop(
@@ -2312,7 +2313,7 @@ static wmOperatorStatus nlaedit_clear_scale_exec(bContext *C, wmOperator * /*op*
       /* strip must be selected, and must be action-clip only
        * (transitions don't have scale) */
       if ((strip.flag & NLASTRIP_FLAG_SELECT) && (strip.type == NLASTRIP_TYPE_CLIP)) {
-        PointerRNA strip_ptr = RNA_pointer_create_discrete(nullptr, &RNA_NlaStrip, &strip);
+        PointerRNA strip_ptr = RNA_pointer_create_discrete(nullptr, RNA_NlaStrip, &strip);
         RNA_float_set(&strip_ptr, "scale", 1.0f);
       }
     }
@@ -2407,7 +2408,7 @@ static wmOperatorStatus nlaedit_snap_exec(bContext *C, wmOperator *op)
     /* apply the snapping to all the temp meta-strips, then put them in a separate list to be added
      * back to the original only if they still fit
      */
-    for (NlaStrip *strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = stripn) {
+    for (NlaStrip *strip = nlt->strips.first(); strip; strip = stripn) {
       stripn = strip->next;
 
       if (strip->flag & NLASTRIP_FLAG_TEMP_META) {
@@ -2449,7 +2450,7 @@ static wmOperatorStatus nlaedit_snap_exec(bContext *C, wmOperator *op)
     }
 
     /* try adding each meta-strip back to the track one at a time, to make sure they'll fit */
-    for (NlaStrip *strip = static_cast<NlaStrip *>(tmp_strips.first); strip; strip = stripn) {
+    for (NlaStrip *strip = tmp_strips.first(); strip; strip = stripn) {
       stripn = strip->next;
 
       /* remove from temp-strips list */
@@ -2840,3 +2841,5 @@ void NLA_OT_fmodifier_paste(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

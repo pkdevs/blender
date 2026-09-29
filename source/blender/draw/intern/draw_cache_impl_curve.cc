@@ -10,12 +10,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_color.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
+#include "BLI_color_types.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -117,8 +117,7 @@ static int curve_render_normal_len_get(const ListBaseT<Nurb> *lb, const CurveCac
   int normal_len = 0;
   const BevList *bl;
   const Nurb *nu;
-  for (bl = (const BevList *)ob_curve_cache->bev.first, nu = (const Nurb *)lb->first; nu && bl;
-       bl = bl->next, nu = nu->next)
+  for (bl = ob_curve_cache->bev.first(), nu = lb->first(); nu && bl; bl = bl->next, nu = nu->next)
   {
     int nr = bl->nr;
     int skip = nu->resolu / 16;
@@ -198,7 +197,7 @@ static CurveRenderData *curve_render_data_create(Curve *cu,
                                                  CurveCache *ob_curve_cache,
                                                  const int types)
 {
-  CurveRenderData *rdata = MEM_callocN<CurveRenderData>(__func__);
+  CurveRenderData *rdata = MEM_new_zeroed<CurveRenderData>(__func__);
   rdata->types = types;
   ListBaseT<Nurb> *nurbs;
 
@@ -248,10 +247,10 @@ static void curve_render_data_free(CurveRenderData *rdata)
 {
 #if 0
   if (rdata->loose_verts) {
-    MEM_freeN(rdata->loose_verts);
+    MEM_delete(rdata->loose_verts);
   }
 #endif
-  MEM_freeN(rdata);
+  MEM_delete(rdata);
 }
 
 static int curve_render_data_overlay_verts_len_get(const CurveRenderData *rdata)
@@ -331,7 +330,7 @@ struct CurveBatchCache {
 
 static bool curve_batch_cache_valid(Curve *cu)
 {
-  CurveBatchCache *cache = (CurveBatchCache *)cu->batch_cache;
+  CurveBatchCache *cache = cu->batch_cache;
 
   if (cache == nullptr) {
     return false;
@@ -356,10 +355,10 @@ static bool curve_batch_cache_valid(Curve *cu)
 
 static void curve_batch_cache_init(Curve *cu)
 {
-  CurveBatchCache *cache = (CurveBatchCache *)cu->batch_cache;
+  CurveBatchCache *cache = cu->batch_cache;
 
   if (!cache) {
-    cache = MEM_callocN<CurveBatchCache>(__func__);
+    cache = MEM_new_zeroed<CurveBatchCache>(__func__);
     cu->batch_cache = cache;
   }
   else {
@@ -392,12 +391,12 @@ void DRW_curve_batch_cache_validate(Curve *cu)
 
 static CurveBatchCache *curve_batch_cache_get(Curve *cu)
 {
-  return (CurveBatchCache *)cu->batch_cache;
+  return cu->batch_cache;
 }
 
 void DRW_curve_batch_cache_dirty_tag(Curve *cu, int mode)
 {
-  CurveBatchCache *cache = (CurveBatchCache *)cu->batch_cache;
+  CurveBatchCache *cache = cu->batch_cache;
   if (cache == nullptr) {
     return;
   }
@@ -418,25 +417,25 @@ void DRW_curve_batch_cache_dirty_tag(Curve *cu, int mode)
 
 static void curve_batch_cache_clear(Curve *cu)
 {
-  CurveBatchCache *cache = (CurveBatchCache *)cu->batch_cache;
+  CurveBatchCache *cache = cu->batch_cache;
   if (!cache) {
     return;
   }
 
   for (int i = 0; i < sizeof(cache->ordered) / sizeof(void *); i++) {
-    gpu::VertBuf **vbo = (gpu::VertBuf **)&cache->ordered;
+    gpu::VertBuf **vbo = reinterpret_cast<gpu::VertBuf **>(&cache->ordered);
     GPU_VERTBUF_DISCARD_SAFE(vbo[i]);
   }
   for (int i = 0; i < sizeof(cache->edit) / sizeof(void *); i++) {
-    gpu::VertBuf **vbo = (gpu::VertBuf **)&cache->edit;
+    gpu::VertBuf **vbo = reinterpret_cast<gpu::VertBuf **>(&cache->edit);
     GPU_VERTBUF_DISCARD_SAFE(vbo[i]);
   }
   for (int i = 0; i < sizeof(cache->ibo) / sizeof(void *); i++) {
-    gpu::IndexBuf **ibo = (gpu::IndexBuf **)&cache->ibo;
+    gpu::IndexBuf **ibo = reinterpret_cast<gpu::IndexBuf **>(&cache->ibo);
     GPU_INDEXBUF_DISCARD_SAFE(ibo[i]);
   }
   for (int i = 0; i < sizeof(cache->batch) / sizeof(void *); i++) {
-    gpu::Batch **batch = (gpu::Batch **)&cache->batch;
+    gpu::Batch **batch = reinterpret_cast<gpu::Batch **>(&cache->batch);
     GPU_BATCH_DISCARD_SAFE(batch[i]);
   }
 }
@@ -444,7 +443,7 @@ static void curve_batch_cache_clear(Curve *cu)
 void DRW_curve_batch_cache_free(Curve *cu)
 {
   curve_batch_cache_clear(cu);
-  MEM_SAFE_FREE(cu->batch_cache);
+  MEM_SAFE_DELETE(cu->batch_cache);
 }
 
 /* -------------------------------------------------------------------- */
@@ -549,10 +548,8 @@ static void curve_create_edit_curves_nor(CurveRenderData *rdata,
     GPUVertFormat format{};
     attr_id.pos = GPU_vertformat_attr_add(&format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
     attr_id.rad = GPU_vertformat_attr_add(&format, "rad", gpu::VertAttrType::SFLOAT_32);
-    attr_id.nor = GPU_vertformat_attr_add(
-        &format, "nor", blender::gpu::VertAttrType::SNORM_10_10_10_2);
-    attr_id.tan = GPU_vertformat_attr_add(
-        &format, "tangent", blender::gpu::VertAttrType::SNORM_10_10_10_2);
+    attr_id.nor = GPU_vertformat_attr_add(&format, "nor", gpu::VertAttrType::SNORM_10_10_10_2);
+    attr_id.tan = GPU_vertformat_attr_add(&format, "tangent", gpu::VertAttrType::SNORM_10_10_10_2);
     return format;
   }();
 
@@ -582,9 +579,7 @@ static void curve_create_edit_curves_nor(CurveRenderData *rdata,
   const uint tan_id = do_hq_normals ? attr_id.tan_hq : attr_id.tan;
   const uint rad_id = do_hq_normals ? attr_id.rad_hq : attr_id.rad;
 
-  for (bl = (const BevList *)rdata->ob_curve_cache->bev.first,
-      nu = (const Nurb *)rdata->nurbs->first;
-       nu && bl;
+  for (bl = rdata->ob_curve_cache->bev.first(), nu = rdata->nurbs->first(); nu && bl;
        bl = bl->next, nu = nu->next)
   {
     const BevPoint *bevp = bl->bevpoints;
@@ -605,14 +600,14 @@ static void curve_create_edit_curves_nor(CurveRenderData *rdata,
         GPU_vertbuf_attr_set(&vbo_curves_nor, tan_id, vbo_len_used, &ptan);
       }
       else {
-        const gpu::PackedNormal pnor = gpu::convert_normal<gpu::PackedNormal>(nor);
-        const gpu::PackedNormal ptan = gpu::convert_normal<gpu::PackedNormal>(bevp->dir);
+        const int1010102_norm pnor = gpu::convert_normal<int1010102_norm>(nor);
+        const int1010102_norm ptan = gpu::convert_normal<int1010102_norm>(bevp->dir);
         GPU_vertbuf_attr_set(&vbo_curves_nor, nor_id, vbo_len_used, &pnor);
         GPU_vertbuf_attr_set(&vbo_curves_nor, tan_id, vbo_len_used, &ptan);
       }
       vbo_len_used++;
 
-      /* Skip the other vertex (it does not need to be offsetted). */
+      /* Skip the other vertex (it does not need to be offset). */
       GPU_vertbuf_attr_set(&vbo_curves_nor, attr_id.pos, vbo_len_used, bevp->vec);
       vbo_len_used++;
 
@@ -710,7 +705,7 @@ static void curve_create_edit_data_and_handles(CurveRenderData *rdata,
 #undef DRW_TEST_ASSIGN_IBO
 
   int nu_id = 0;
-  for (Nurb *nu = (Nurb *)rdata->nurbs->first; nu; nu = nu->next, nu_id++) {
+  for (Nurb *nu = rdata->nurbs->first(); nu; nu = nu->next, nu_id++) {
     const BezTriple *bezt = nu->bezt;
     const BPoint *bp = nu->bp;
 
@@ -845,7 +840,7 @@ void DRW_curve_batch_cache_create_requested(Object *ob, const Scene *scene)
 {
   BLI_assert(ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF, OB_FONT));
 
-  Curve *cu = (Curve *)ob->data;
+  Curve *cu = id_cast<Curve *>(ob->data);
   CurveBatchCache *cache = curve_batch_cache_get(cu);
 
   /* Init batches and request VBOs & IBOs */

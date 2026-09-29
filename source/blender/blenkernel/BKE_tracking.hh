@@ -11,7 +11,9 @@
 #include "DNA_listBase.h"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 struct Camera;
 struct ImBuf;
@@ -30,6 +32,8 @@ struct Object;
 struct Scene;
 struct bGPDlayer;
 struct rcti;
+
+enum TrackingTrackFlag : int;
 
 /* --------------------------------------------------------------------
  * Common types and constants.
@@ -194,14 +198,18 @@ MovieTrackingTrack **BKE_tracking_selected_tracks_in_active_object(MovieTracking
  * \param area: which part of marker should be selected.
  * \param flag: flag to be set for areas.
  */
-void BKE_tracking_track_flag_set(MovieTrackingTrack *track, eTrackArea area, int flag);
+void BKE_tracking_track_flag_set(MovieTrackingTrack *track,
+                                 eTrackArea area,
+                                 TrackingTrackFlag flag);
 /**
  * Clear flag from all specified track's areas.
  *
  * \param area: which part of marker should be selected.
  * \param flag: flag to be cleared for areas.
  */
-void BKE_tracking_track_flag_clear(MovieTrackingTrack *track, eTrackArea area, int flag);
+void BKE_tracking_track_flag_clear(MovieTrackingTrack *track,
+                                   eTrackArea area,
+                                   TrackingTrackFlag flag);
 
 /**
  * Check whether track has got marker at specified frame.
@@ -513,19 +521,6 @@ ImBuf *BKE_tracking_distort_frame(MovieTracking *tracking,
                                   int calibration_height,
                                   float overscan);
 
-/* Given the size of an image that will be distorted/undistorted by the given tracking, compute the
- * number of pixels that the image will grow/shrink by in each of the four bounds of the image as a
- * result of the distortion/undistortion. The deltas for the bounds are positive for expansion and
- * negative for shrinking. */
-void BKE_tracking_distortion_bounds_deltas(MovieDistortion *distortion,
-                                           const int size[2],
-                                           const int calibration_size[2],
-                                           const bool undistort,
-                                           int *r_right,
-                                           int *r_left,
-                                           int *r_bottom,
-                                           int *r_top);
-
 /* --------------------------------------------------------------------
  * Image sampling.
  */
@@ -617,7 +612,7 @@ void BKE_tracking_homography_between_two_quads(/*const*/ float reference_corners
 bool BKE_tracking_reconstruction_check(MovieTracking *tracking,
                                        MovieTrackingObject *tracking_object,
                                        char *error_msg,
-                                       int error_size);
+                                       int error_msg_maxncpy);
 
 /**
  * Create context for camera/object motion reconstruction.
@@ -784,7 +779,7 @@ void BKE_tracking_get_rna_path_prefix_for_track(const MovieTracking *tracking,
 void BKE_tracking_get_rna_path_for_plane_track(const MovieTracking *tracking,
                                                const MovieTrackingPlaneTrack *plane_track,
                                                char *rna_path,
-                                               size_t rna_path_len);
+                                               size_t rna_path_maxncpy);
 void BKE_tracking_get_rna_path_prefix_for_plane_track(const MovieTracking *tracking,
                                                       const MovieTrackingPlaneTrack *plane_track,
                                                       char *rna_path,
@@ -810,3 +805,5 @@ void BKE_tracking_get_rna_path_prefix_for_plane_track(const MovieTracking *track
 
 #define PLANE_TRACK_VIEW_SELECTED(plane_track) \
   ((((plane_track)->flag & PLANE_TRACK_HIDDEN) == 0) && ((plane_track)->flag & SELECT))
+
+}  // namespace blender

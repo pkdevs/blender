@@ -9,17 +9,20 @@
 #pragma once
 
 #include "BLI_enum_flags.hh"
-#include "BLI_linklist.h"
+#include "BLI_linklist.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 #include "ED_grease_pencil.hh"
 
 #include <algorithm>
 #include <cmath>
 
+namespace blender {
+
+struct Depsgraph;
 struct LineartBoundingArea;
 struct LineartEdge;
 struct LineartEdgeChain;
@@ -37,7 +40,7 @@ struct LineartModifierRuntime {
   /* This list is constructed during `update_depsgraph()` call, and stays valid until the next
    * update. This way line art can load objects from this list instead of iterating over all
    * objects that may or may not have finished evaluating. */
-  blender::Set<const Object *> object_dependencies;
+  Set<const Object *> object_dependencies;
 };
 
 struct LineartStaticMemPoolNode {
@@ -119,18 +122,22 @@ struct LineartElementLinkNode {
 
 struct LineartEdgeSegment {
   LineartEdgeSegment *next, *prev;
-  /** The point after which a property of the segment is changed, e.g. occlusion/material mask etc.
-   * ratio==0: v1  ratio==1: v2 (this is in 2D projected space), */
+  /**
+   * The point after which a property of the segment is changed, e.g. occlusion/material mask etc.
+   * ratio==0: v1  ratio==1: v2 (this is in 2D projected space),
+   */
   double ratio;
   /** Occlusion level after "ratio" point */
   uint8_t occlusion;
 
-  /* Used to filter line art occlusion edges */
+  /** Used to filter line art occlusion edges. */
   uint8_t material_mask_bits;
 
-  /* Lit/shaded flag for shadow is stored here.
+  /**
+   * Lit/shaded flag for shadow is stored here.
    * TODO(Yiming): Transfer material masks from shadow results
-   * onto here so then we can even filter transparent shadows. */
+   * onto here so then we can even filter transparent shadows.
+   */
   uint32_t shadow_mask_bits;
 };
 
@@ -180,8 +187,10 @@ struct LineartVert {
 struct LineartEdge {
   LineartVert *v1, *v2;
 
-  /** These two variables are also used to specify original edge and segment during 3rd stage
-   * reprojection, So we can easily find out the line which results come from. */
+  /**
+   * These two variables are also used to specify original edge and segment during 3rd stage
+   * reprojection, So we can easily find out the line which results come from.
+   */
   LineartTriangle *t1, *t2;
 
   ListBaseT<LineartEdgeSegment> segments;
@@ -441,17 +450,21 @@ struct LineartData {
 };
 
 struct LineartCache {
-  blender::ed::greasepencil::LineartLimitInfo LimitInfo;
-  /** Separate memory pool for chain data and shadow, this goes to the cache, so when we free the
-   * main pool, chains and shadows will still be available. */
+  ed::greasepencil::LineartLimitInfo LimitInfo;
+  /**
+   * Separate memory pool for chain data and shadow, this goes to the cache, so when we free the
+   * main pool, chains and shadows will still be available.
+   */
   LineartStaticMemPool chain_data_pool;
   LineartStaticMemPool shadow_data_pool;
 
   /** A copy of ld->chains so we have that data available after ld has been destroyed. */
   ListBaseT<LineartEdgeChain> chains;
 
-  /** Shadow-computed feature lines from original meshes to be matched with the second load of
-   * meshes thus providing lit/shade info in the second run of line art. */
+  /**
+   * Shadow-computed feature lines from original meshes to be matched with the second load of
+   * meshes thus providing lit/shade info in the second run of line art.
+   */
   ListBaseT<LineartElementLinkNode> shadow_elns;
 
   /** Cache only contains edge types specified in this variable. */
@@ -878,7 +891,6 @@ BLI_INLINE int lineart_line_isec_2d_ignore_line2pos(const double a1[2],
 
 struct bGPDframe;
 struct bGPDlayer;
-struct Depsgraph;
 struct LineartGpencilModifierData;
 struct GreasePencilLineartModifierData;
 struct LineartData;
@@ -929,13 +941,13 @@ LineartBoundingArea *MOD_lineart_get_parent_bounding_area(LineartData *ld, doubl
  */
 LineartBoundingArea *MOD_lineart_get_bounding_area(LineartData *ld, double x, double y);
 
-namespace blender::bke::greasepencil {
+namespace bke::greasepencil {
 class Drawing;
 }
 void MOD_lineart_gpencil_generate_v3(const LineartCache *cache,
-                                     const blender::float4x4 &mat,
+                                     const float4x4 &mat,
                                      Depsgraph *depsgraph,
-                                     blender::bke::greasepencil::Drawing &drawing,
+                                     bke::greasepencil::Drawing &drawing,
                                      int8_t source_type,
                                      Object *source_object,
                                      Collection *source_collection,
@@ -948,6 +960,7 @@ void MOD_lineart_gpencil_generate_v3(const LineartCache *cache,
                                      uchar intersection_mask,
                                      float thickness,
                                      float opacity,
+                                     const bool fill_strokes,
                                      uchar shadow_selection,
                                      uchar silhouette_mode,
                                      const char *source_vgname,
@@ -962,3 +975,5 @@ float MOD_lineart_chain_compute_length(LineartEdgeChain *ec);
 
 LineartCache *MOD_lineart_init_cache();
 void MOD_lineart_clear_cache(LineartCache **lc);
+
+}  // namespace blender

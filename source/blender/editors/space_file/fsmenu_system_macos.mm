@@ -9,14 +9,16 @@
 
 #import "Foundation/Foundation.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 #include "UI_resources.hh"
 
 #include "fsmenu.hh"
+
+namespace blender {
 
 struct FSMenu;
 
@@ -157,3 +159,5 @@ void fsmenu_read_system(FSMenu *fsmenu, int read_bookmarks)
 #pragma GCC diagnostic pop
   }
 }
+
+}  // namespace blender

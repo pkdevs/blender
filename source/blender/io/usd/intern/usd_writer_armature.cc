@@ -9,7 +9,7 @@
 
 #include "ANIM_action.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase_iterator.hh"
 
 #include "BKE_action.hh"
 
@@ -25,6 +25,9 @@
 #include <pxr/usd/usdSkel/utils.h>
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
 /**
@@ -53,7 +56,7 @@ static pxr::GfMatrix4d parent_relative_pose_mat(const bPoseChannel *pchan)
 static void initialize(const Object *obj,
                        pxr::UsdSkelSkeleton &skel,
                        pxr::UsdSkelAnimation &skel_anim,
-                       const blender::Map<blender::StringRef, const Bone *> *deform_bones,
+                       const Map<StringRef, const Bone *> *deform_bones,
                        bool allow_unicode)
 {
   using namespace blender::io::usd;
@@ -119,7 +122,7 @@ static void initialize(const Object *obj,
   }
 }
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /* Add skeleton transform samples from the armature pose channels. */
 static void add_anim_sample(pxr::UsdSkelAnimation &skel_anim,
@@ -137,10 +140,7 @@ static void add_anim_sample(pxr::UsdSkelAnimation &skel_anim,
   const bPose *pose = obj->pose;
 
   for (const bPoseChannel &pchan : pose->chanbase) {
-
-    BLI_assert(pchan.bone);
-
-    if (deform_map && !deform_map->contains(pchan.bone->name)) {
+    if (deform_map && !deform_map->contains(pchan.name)) {
       /* If deform_map is passed in, assume we're going deform-only.
        * Bones not found in the map should be skipped. */
       continue;
@@ -229,4 +229,5 @@ bool USDArmatureWriter::check_is_animated(const HierarchyContext &context) const
   return obj->adt != nullptr;
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

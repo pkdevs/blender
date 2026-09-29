@@ -19,7 +19,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -87,7 +87,7 @@ void DepsgraphNodeBuilder::build_view_layer(Scene *scene,
    * but object is expected to be an original one. Hence we go into some
    * tricks here iterating over the view layer. */
   int base_index = 0;
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain_, scene, view_layer);
   for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     /* object itself */
     if (!need_pull_base_into_graph(&base)) {
@@ -150,12 +150,13 @@ void DepsgraphNodeBuilder::build_view_layer(Scene *scene,
     build_scene_sequencer(scene);
   }
   /* Collections. */
-  add_operation_node(&scene->id,
-                     NodeType::LAYER_COLLECTIONS,
-                     OperationCode::VIEW_LAYER_EVAL,
-                     [view_layer_index = view_layer_index_, scene_cow](::Depsgraph *depsgraph) {
-                       BKE_layer_eval_view_layer_indexed(depsgraph, scene_cow, view_layer_index);
-                     });
+  add_operation_node(
+      &scene->id,
+      NodeType::LAYER_COLLECTIONS,
+      OperationCode::VIEW_LAYER_EVAL,
+      [view_layer_index = view_layer_index_, scene_cow](blender::Depsgraph *depsgraph) {
+        BKE_layer_eval_view_layer_indexed(depsgraph, scene_cow, view_layer_index);
+      });
   /* Parameters evaluation for scene relations mainly. */
   build_scene_compositor(scene);
   build_scene_parameters(scene);

@@ -13,10 +13,10 @@
 
 #include "DNA_text_types.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
@@ -33,13 +33,15 @@
 #include "text_format.hh"
 #include "text_intern.hh" /* Own include. */
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Public API
  * \{ */
 
 bool space_text_do_suggest_select(SpaceText *st, const ARegion *region, const int mval[2])
 {
-  const int lheight = TXT_LINE_HEIGHT(st);
+  const int line_height = TXT_LINE_HEIGHT(st);
   SuggItem *item, *first, *last /* , *sel */ /* UNUSED. */;
   TextLine *tmp;
   int l, x, y, w, h, i;
@@ -71,11 +73,11 @@ bool space_text_do_suggest_select(SpaceText *st, const ARegion *region, const in
 
   space_text_update_character_width(st);
 
-  x = TXT_BODY_LEFT(st) + (st->runtime->cwidth_px * (st->text->curc - st->left));
-  y = region->winy - lheight * l - 2;
+  x = TXT_BODY_LEFT(st) + (st->runtime->char_width_px * (st->text->curc - st->left));
+  y = region->winy - line_height * l - 2;
 
-  w = SUGG_LIST_WIDTH * st->runtime->cwidth_px + U.widget_unit;
-  h = SUGG_LIST_SIZE * lheight + 0.4f * U.widget_unit;
+  w = SUGG_LIST_WIDTH * st->runtime->char_width_px + U.widget_unit;
+  h = SUGG_LIST_SIZE * line_height + 0.4f * U.widget_unit;
 
   if (mval[0] < x || x + w < mval[0] || mval[1] < y - h || y < mval[1]) {
     return false;
@@ -87,7 +89,7 @@ bool space_text_do_suggest_select(SpaceText *st, const ARegion *region, const in
   }
 
   /* Work out the target item index in the visible list. */
-  tgti = (y - mval[1] - 4) / lheight;
+  tgti = (y - mval[1] - 4) / line_height;
   if (tgti < 0 || tgti > SUGG_LIST_SIZE) {
     return true;
   }
@@ -545,7 +547,7 @@ static void text_autocomplete_free(bContext *C, wmOperator *op)
 {
   GHash *gh = static_cast<GHash *>(op->customdata);
   if (gh) {
-    BLI_ghash_free(gh, nullptr, MEM_freeN);
+    BLI_ghash_free(gh, nullptr, MEM_delete_void);
     op->customdata = nullptr;
   }
 
@@ -581,3 +583,5 @@ void TEXT_OT_autocomplete(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

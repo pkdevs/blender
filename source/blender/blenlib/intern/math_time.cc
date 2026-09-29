@@ -6,8 +6,10 @@
  * \ingroup bli
  */
 
-#include "BLI_math_base.h"
-#include "BLI_math_time.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_time.hh"
+
+namespace blender {
 
 void BLI_math_time_seconds_decompose(double seconds,
                                      double *r_days,
@@ -47,3 +49,5 @@ void BLI_math_time_seconds_decompose(double seconds,
     *r_days = seconds / SECONDS_IN_DAY;
   }
 }
+
+}  // namespace blender

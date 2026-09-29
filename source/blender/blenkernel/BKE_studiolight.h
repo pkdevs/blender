@@ -10,13 +10,17 @@
  * Studio lighting for the 3dview
  */
 
+#include <string>
+
 #include "DNA_listBase.h"
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "BLI_path_utils.hh"
 
 #include "DNA_userdef_types.h" /* for #SolidLight */
+
+namespace blender {
 
 struct ImBuf;
 
@@ -29,9 +33,9 @@ struct ImBuf;
 
 #define STUDIOLIGHT_ICON_SIZE 96
 
-namespace blender::gpu {
+namespace gpu {
 class Texture;
-}  // namespace blender::gpu
+}  // namespace gpu
 struct StudioLight;
 
 /** #StudioLight.flag */
@@ -62,7 +66,7 @@ typedef void StudioLightFreeFunction(struct StudioLight *, void *data);
 
 struct StudioLightImage {
   struct ImBuf *ibuf;
-  blender::gpu::Texture *gputexture;
+  gpu::Texture *gputexture;
 };
 
 struct StudioLight {
@@ -79,7 +83,8 @@ struct StudioLight {
   StudioLightImage matcap_diffuse;
   StudioLightImage matcap_specular;
   struct ImBuf *equirect_radiance_buffer;
-  blender::gpu::Texture *equirect_radiance_gputexture;
+  gpu::Texture *equirect_radiance_gputexture;
+  std::string equirect_working_space;
   SolidLight light[STUDIOLIGHT_MAX_LIGHT];
   float light_ambient[3];
 
@@ -94,19 +99,19 @@ struct StudioLight {
 
 /* API */
 
-void BKE_studiolight_init(void);
-void BKE_studiolight_free(void);
+void BKE_studiolight_init();
+void BKE_studiolight_free();
 void BKE_studiolight_default(SolidLight lights[4], float light_ambient[3]);
 struct StudioLight *BKE_studiolight_find(const char *name, int flag);
 struct StudioLight *BKE_studiolight_findindex(int index, int flag);
 struct StudioLight *BKE_studiolight_find_default(int flag);
 void BKE_studiolight_preview(uint *icon_buffer, StudioLight *sl, int icon_id_type);
-ListBaseT<StudioLight> &BKE_studiolight_listbase(void);
+ListBaseT<StudioLight> &BKE_studiolight_listbase();
 /**
  * Ensure state of studio-lights.
  */
 void BKE_studiolight_ensure_flag(StudioLight *sl, int flag);
-void BKE_studiolight_refresh(void);
+void BKE_studiolight_refresh();
 StudioLight *BKE_studiolight_load(const char *filepath, int type);
 StudioLight *BKE_studiolight_create(const char *filepath,
                                     const SolidLight light[4],
@@ -114,9 +119,11 @@ StudioLight *BKE_studiolight_create(const char *filepath,
 /**
  * Only useful for workbench while editing the user-preferences.
  */
-StudioLight *BKE_studiolight_studio_edit_get(void);
+StudioLight *BKE_studiolight_studio_edit_get();
 void BKE_studiolight_remove(StudioLight *sl);
 void BKE_studiolight_set_free_function(StudioLight *sl,
                                        StudioLightFreeFunction *free_function,
                                        void *data);
 void BKE_studiolight_unset_icon_id(StudioLight *sl, int icon_id);
+
+}  // namespace blender

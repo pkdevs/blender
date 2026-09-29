@@ -14,7 +14,9 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 struct GizmoGeomInfo {
   int nverts;
@@ -32,3 +34,5 @@ extern GizmoGeomInfo wm_gizmo_geom_data_cube;
 
 /* dial gizmo */
 extern GizmoGeomInfo wm_gizmo_geom_data_dial;
+
+}  // namespace blender

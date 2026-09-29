@@ -12,6 +12,8 @@
 
 #include "BLI_set.hh"
 
+namespace blender {
+
 /*
  * NOTE: do NOT modify topology while walking a mesh!
  */
@@ -28,6 +30,18 @@ enum BMWFlag {
   BMW_FLAG_TEST_HIDDEN = (1 << 0),
 };
 
+enum BMWDelimitFlag {
+  BMW_DELIMIT_NONE = 0,
+  BMW_DELIMIT_EDGE_LOOP_INNER_CORNERS = 1 << 0,
+  BMW_DELIMIT_EDGE_LOOP_OUTER_CORNERS = 1 << 1,
+  BMW_DELIMIT_EDGE_LOOP_NGONS = 1 << 2,
+  BMW_DELIMIT_EDGE_RING_NGONS = 1 << 3,
+  BMW_DELIMIT_EDGE_MARK_SEAM = 1 << 4,
+  BMW_DELIMIT_EDGE_MARK_SHARP = 1 << 5,
+  BMW_DELIMIT_FACE_MARK_MATERIAL = 1 << 6,
+};
+ENUM_OPERATORS(BMWDelimitFlag)
+
 /*Walkers*/
 struct BMWalker {
   char begin_htype; /* only for validating input */
@@ -37,6 +51,7 @@ struct BMWalker {
   int structsize;
   BMWOrder order;
   int valid_mask;
+  BMWDelimitFlag delimit_supported;
 
   /* runtime */
   int layer;
@@ -52,9 +67,10 @@ struct BMWalker {
   short mask_face;
 
   BMWFlag flag;
+  BMWDelimitFlag delimit;
 
-  blender::Set<const void *> *visit_set;
-  blender::Set<const void *> *visit_set_alt;
+  Set<const void *> *visit_set;
+  Set<const void *> *visit_set_alt;
   int depth;
 };
 
@@ -74,7 +90,8 @@ void BMW_init(struct BMWalker *walker,
               short mask_edge,
               short mask_face,
               BMWFlag flag,
-              int layer);
+              int layer,
+              BMWDelimitFlag delimit);
 void *BMW_begin(BMWalker *walker, void *start);
 /**
  * \brief Step Walker
@@ -176,3 +193,5 @@ enum {
 
 /* use with BMW_init, so as not to confuse with restrict flags */
 #define BMW_NIL_LAY 0
+
+}  // namespace blender

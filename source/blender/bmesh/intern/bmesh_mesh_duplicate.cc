@@ -14,6 +14,8 @@
 
 #include "bmesh.hh"
 
+namespace blender {
+
 static BMVert *bm_vert_copy(BMesh *bm_dst,
                             const std::optional<BMCustomDataCopyMap> &cd_vert_map,
                             BMVert *v_src)
@@ -53,8 +55,8 @@ static BMFace *bm_face_copy_with_arrays(BMesh *bm_dst,
                                         BMEdge **edges_dst)
 {
   BMFace *f_dst;
-  blender::Array<BMVert *, BM_DEFAULT_NGON_STACK_SIZE> vtar(f_src->len);
-  blender::Array<BMEdge *, BM_DEFAULT_NGON_STACK_SIZE> edar(f_src->len);
+  Array<BMVert *, BM_DEFAULT_NGON_STACK_SIZE> vtar(f_src->len);
+  Array<BMEdge *, BM_DEFAULT_NGON_STACK_SIZE> edar(f_src->len);
   BMLoop *l_iter_src, *l_iter_dst, *l_first_src;
   int i;
 
@@ -122,7 +124,7 @@ void BM_mesh_copy_arrays(BMesh *bm_src,
                                CustomData_bmesh_copy_map_calc(bm_src->ldata, bm_dst->ldata)};
 
   /* Vertices. */
-  BMVert **verts_dst = MEM_malloc_arrayN<BMVert *>(verts_src_len, __func__);
+  BMVert **verts_dst = MEM_new_array_uninitialized<BMVert *>(verts_src_len, __func__);
   for (uint i = 0; i < verts_src_len; i++) {
     BMVert *v_src = verts_src[i];
     BM_elem_index_set(v_src, i); /* set_dirty! */
@@ -135,7 +137,7 @@ void BM_mesh_copy_arrays(BMesh *bm_src,
   bm_dst->elem_index_dirty &= ~BM_VERT;
 
   /* Edges. */
-  BMEdge **edges_dst = MEM_malloc_arrayN<BMEdge *>(edges_src_len, __func__);
+  BMEdge **edges_dst = MEM_new_array_uninitialized<BMEdge *>(edges_src_len, __func__);
   for (uint i = 0; i < edges_src_len; i++) {
     BMEdge *e_src = edges_src[i];
     BM_elem_index_set(e_src, i); /* set_dirty! */
@@ -157,6 +159,8 @@ void BM_mesh_copy_arrays(BMesh *bm_src,
   bm_dst->elem_index_dirty &= ~BM_FACE;
 
   /* Cleanup. */
-  MEM_freeN(verts_dst);
-  MEM_freeN(edges_dst);
+  MEM_delete(verts_dst);
+  MEM_delete(edges_dst);
 }
+
+}  // namespace blender

@@ -14,12 +14,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
 
 #include "MOD_lineart.hh"
 
 #include "lineart_intern.hh"
+
+namespace blender {
 
 /* Line art memory and list helper */
 
@@ -87,7 +89,7 @@ void *lineart_list_pop_pointer_no_free(ListBase *h)
 }
 void lineart_list_remove_pointer_item_no_free(ListBase *h, LinkData *lip)
 {
-  BLI_remlink(h, (void *)lip);
+  BLI_remlink(h, static_cast<void *>(lip));
 }
 
 LineartStaticMemPoolNode *lineart_mem_new_static_pool(LineartStaticMemPool *smp, size_t size)
@@ -98,7 +100,7 @@ LineartStaticMemPoolNode *lineart_mem_new_static_pool(LineartStaticMemPool *smp,
   }
   size_t total_size = set_size + sizeof(LineartStaticMemPoolNode);
   LineartStaticMemPoolNode *smpn = static_cast<LineartStaticMemPoolNode *>(
-      MEM_callocN(total_size, "mempool"));
+      MEM_new_zeroed(total_size, "mempool"));
   smpn->size = total_size;
   smpn->used_byte = sizeof(LineartStaticMemPoolNode);
   BLI_addhead(&smp->pools, smpn);
@@ -106,14 +108,14 @@ LineartStaticMemPoolNode *lineart_mem_new_static_pool(LineartStaticMemPool *smp,
 }
 void *lineart_mem_acquire(LineartStaticMemPool *smp, size_t size)
 {
-  LineartStaticMemPoolNode *smpn = static_cast<LineartStaticMemPoolNode *>(smp->pools.first);
+  LineartStaticMemPoolNode *smpn = smp->pools.first();
   void *ret;
 
   if (!smpn || (smpn->used_byte + size) > smpn->size) {
     smpn = lineart_mem_new_static_pool(smp, size);
   }
 
-  ret = ((uchar *)smpn) + smpn->used_byte;
+  ret = (reinterpret_cast<uchar *>(smpn)) + smpn->used_byte;
 
   smpn->used_byte += size;
 
@@ -125,13 +127,13 @@ void *lineart_mem_acquire_thread(LineartStaticMemPool *smp, size_t size)
 
   BLI_spin_lock(&smp->lock_mem);
 
-  LineartStaticMemPoolNode *smpn = static_cast<LineartStaticMemPoolNode *>(smp->pools.first);
+  LineartStaticMemPoolNode *smpn = smp->pools.first();
 
   if (!smpn || (smpn->used_byte + size) > smpn->size) {
     smpn = lineart_mem_new_static_pool(smp, size);
   }
 
-  ret = ((uchar *)smpn) + smpn->used_byte;
+  ret = (reinterpret_cast<uchar *>(smpn)) + smpn->used_byte;
 
   smpn->used_byte += size;
 
@@ -144,7 +146,7 @@ void lineart_mem_destroy(LineartStaticMemPool *smp)
   while (LineartStaticMemPoolNode *smpn = static_cast<LineartStaticMemPoolNode *>(
              BLI_pophead(&smp->pools)))
   {
-    MEM_freeN(smpn);
+    MEM_delete(smpn);
   }
 }
 
@@ -212,7 +214,7 @@ void lineart_matrix_ortho_44d(double (*mProjection)[4],
 void lineart_count_and_print_render_buffer_memory(LineartData *ld)
 {
   size_t total = 0;
-  size_t count_this = BLI_listbase_count(&ld->render_data_pool.pools);
+  size_t count_this = ld->render_data_pool.pools.count();
   size_t sum_this = LRT_MEMORY_POOL_1MB * count_this;
 
   printf("LANPR Memory allocated %zu Standalone nodes, total %zu Bytes.\n", count_this, sum_this);
@@ -240,3 +242,5 @@ void lineart_count_and_print_render_buffer_memory(LineartData *ld)
 
   (void)total; /* Ignored. */
 }
+
+}  // namespace blender

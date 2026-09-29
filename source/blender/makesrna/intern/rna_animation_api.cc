@@ -17,7 +17,7 @@
 
 #ifdef RNA_RUNTIME
 
-#  include "BKE_animsys.h"
+#  include "BKE_animsys.hh"
 #  include "BKE_context.hh"
 #  include "BKE_nla.hh"
 #  include "BKE_report.hh"
@@ -25,9 +25,11 @@
 #  include "ANIM_keyingsets.hh"
 #  include "ED_keyframing.hh"
 
+namespace blender {
+
 static void rna_KeyingSet_context_refresh(KeyingSet *ks, bContext *C, ReportList *reports)
 {
-  using namespace blender::animrig;
+  using namespace animrig;
   /* TODO: enable access to providing a list of overrides (dsources)? */
   const ModifyKeyReturn error = validate_keyingset(C, nullptr, ks);
 
@@ -62,10 +64,19 @@ void rna_id_animdata_fix_paths_rename_all(ID *id,
                                           const char *oldName,
                                           const char *newName)
 {
-  BKE_animdata_fix_paths_rename_all_ex(bmain, id, prefix, oldName, newName, 0, 0, true);
+  BKE_animdata_fix_paths(*id,
+                         prefix,
+                         RNA_path_name_to_infix(oldName),
+                         RNA_path_name_to_infix(newName),
+                         /*verify_paths=*/true,
+                         *bmain);
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_api_keyingset(StructRNA *srna)
 {
@@ -111,5 +122,7 @@ void RNA_api_animdata(StructRNA *srna)
       "string paths, it's needed to keep them valid after properties has been renamed");
   RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_SELF_ID);
 }
+
+}  // namespace blender
 
 #endif

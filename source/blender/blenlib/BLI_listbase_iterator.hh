@@ -2,11 +2,19 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #pragma once
 
 #include "DNA_listBase.h"
 
 #include <iterator>
+
+namespace blender {
+
+struct Link;
 
 /** An iterator for use with #ListBase.  */
 template<typename T> struct ListBaseTIterator {
@@ -25,7 +33,7 @@ template<typename T> struct ListBaseTIterator {
 
   ListBaseTIterator &operator++()
   {
-    data_ = reinterpret_cast<T *>(((Link *)data_)->next);
+    data_ = reinterpret_cast<T *>((reinterpret_cast<const Link *>(data_))->next);
     return *this;
   }
 
@@ -38,7 +46,7 @@ template<typename T> struct ListBaseTIterator {
 
   ListBaseTIterator &operator--()
   {
-    data_ = reinterpret_cast<T *>(((Link *)data_)->prev);
+    data_ = reinterpret_cast<T *>((reinterpret_cast<const Link *>(data_))->prev);
     return *this;
   }
 
@@ -83,7 +91,7 @@ template<typename T> struct ListBaseEnumerateIterator {
 
   ListBaseEnumerateIterator &operator++()
   {
-    data_ = reinterpret_cast<T *>(((Link *)data_)->next);
+    data_ = reinterpret_cast<T *>(reinterpret_cast<const Link *>(data_)->next);
     index_++;
     return *this;
   }
@@ -116,7 +124,7 @@ template<typename T> struct ListBaseEnumerateWrapper {
 
   ListBaseEnumerateIterator<T> begin() const
   {
-    return ListBaseEnumerateIterator<T>((T *)first, 0);
+    return ListBaseEnumerateIterator<T>(static_cast<T *>(first), 0);
   }
 
   ListBaseEnumerateIterator<T> end() const
@@ -142,7 +150,7 @@ template<typename T> struct ListBaseMutableIterator {
   ListBaseMutableIterator(T *data) : current_(data)
   {
     if (current_) {
-      next_ = reinterpret_cast<T *>(((Link *)current_)->next);
+      next_ = reinterpret_cast<T *>((reinterpret_cast<const Link *>(current_))->next);
     }
   }
 
@@ -150,7 +158,7 @@ template<typename T> struct ListBaseMutableIterator {
   {
     current_ = next_;
     if (current_) {
-      next_ = reinterpret_cast<T *>(((Link *)current_)->next);
+      next_ = reinterpret_cast<T *>((reinterpret_cast<const Link *>(current_))->next);
     }
     return *this;
   }
@@ -183,7 +191,7 @@ template<typename T> struct ListBaseMutableWrapper {
 
   ListBaseMutableIterator<T> begin() const
   {
-    return ListBaseMutableIterator<T>((T *)first);
+    return ListBaseMutableIterator<T>(static_cast<T *>(first));
   }
 
   ListBaseMutableIterator<T> end() const
@@ -209,7 +217,7 @@ template<typename T> struct ListBaseBackwardIterator {
 
   ListBaseBackwardIterator &operator++()
   {
-    data_ = reinterpret_cast<T *>(((Link *)data_)->prev);
+    data_ = reinterpret_cast<T *>((reinterpret_cast<const Link *>(data_))->prev);
     return *this;
   }
 
@@ -241,7 +249,7 @@ template<typename T> struct ListBaseBackwardWrapper {
 
   ListBaseBackwardIterator<T> begin() const
   {
-    return ListBaseBackwardIterator<T>((T *)last);
+    return ListBaseBackwardIterator<T>(static_cast<T *>(last));
   }
 
   ListBaseBackwardIterator<T> end() const
@@ -267,7 +275,7 @@ template<typename T> struct ListBaseMutableBackwardIterator {
   ListBaseMutableBackwardIterator(T *data) : current_(data)
   {
     if (current_) {
-      prev_ = reinterpret_cast<T *>(((Link *)current_)->prev);
+      prev_ = reinterpret_cast<T *>((reinterpret_cast<const Link *>(current_))->prev);
     }
   }
 
@@ -275,7 +283,7 @@ template<typename T> struct ListBaseMutableBackwardIterator {
   {
     current_ = prev_;
     if (current_) {
-      prev_ = reinterpret_cast<T *>(((Link *)current_)->prev);
+      prev_ = reinterpret_cast<T *>((reinterpret_cast<const Link *>(current_))->prev);
     }
     return *this;
   }
@@ -310,7 +318,7 @@ template<typename T> struct ListBaseMutableBackwardWrapper {
 
   ListBaseMutableBackwardIterator<T> begin() const
   {
-    return ListBaseMutableBackwardIterator<T>((T *)last);
+    return ListBaseMutableBackwardIterator<T>(static_cast<T *>(last));
   }
 
   ListBaseMutableBackwardIterator<T> end() const
@@ -318,3 +326,5 @@ template<typename T> struct ListBaseMutableBackwardWrapper {
     return ListBaseMutableBackwardIterator<T>(nullptr);
   }
 };
+
+}  // namespace blender

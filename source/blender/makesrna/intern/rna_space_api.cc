@@ -14,7 +14,7 @@
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_listbase.h"
+#  include "BLI_listbase.hh"
 
 #  include "BKE_context.hh"
 #  include "BKE_global.hh"
@@ -27,6 +27,8 @@
 #  include "ED_view3d.hh"
 
 #  include "WM_api.hh"
+
+namespace blender {
 
 int rna_object_type_visibility_icon_get_common(int object_type_exclude_viewport,
                                                const int *object_type_exclude_select)
@@ -45,7 +47,7 @@ int rna_object_type_visibility_icon_get_common(int object_type_exclude_viewport,
 
 static void rna_RegionView3D_update(ID *id, RegionView3D *rv3d, bContext *C)
 {
-  bScreen *screen = (bScreen *)id;
+  bScreen *screen = id_cast<bScreen *>(id);
 
   ScrArea *area;
   ARegion *region;
@@ -54,7 +56,7 @@ static void rna_RegionView3D_update(ID *id, RegionView3D *rv3d, bContext *C)
 
   if (area && region && area->spacetype == SPACE_VIEW3D) {
     Main *bmain = CTX_data_main(C);
-    View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+    View3D *v3d = area->spacedata.first_as<View3D>();
     wmWindowManager *wm = CTX_wm_manager(C);
 
     for (wmWindow &win : wm->windows) {
@@ -73,8 +75,8 @@ static void rna_RegionView3D_update(ID *id, RegionView3D *rv3d, bContext *C)
 static void rna_SpaceTextEditor_region_location_from_cursor(
     ID *id, SpaceText *st, int line, int column, int r_pixel_pos[2])
 {
-  bScreen *screen = (bScreen *)id;
-  ScrArea *area = BKE_screen_find_area_from_space(screen, (SpaceLink *)st);
+  bScreen *screen = id_cast<bScreen *>(id);
+  ScrArea *area = BKE_screen_find_area_from_space(screen, reinterpret_cast<SpaceLink *>(st));
   if (area) {
     ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
     const int cursor_co[2] = {line, column};
@@ -95,7 +97,11 @@ static void rna_FileBrowser_deselect_all(SpaceFile *sfile, ReportList *reports)
   ED_fileselect_deselect_all(sfile);
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_api_region_view3d(StructRNA *srna)
 {
@@ -268,5 +274,7 @@ void RNA_api_space_filebrowser(StructRNA *srna)
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func, "Deselect all files");
 }
+
+}  // namespace blender
 
 #endif

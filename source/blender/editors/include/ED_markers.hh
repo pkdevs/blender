@@ -10,6 +10,10 @@
 
 #include "DNA_listBase.h"
 
+namespace blender {
+
+struct ID;
+struct Main;
 struct Scene;
 struct ScrArea;
 struct TimeMarker;
@@ -48,13 +52,20 @@ void ED_markers_draw(const bContext *C, int flag);
 ListBaseT<TimeMarker> *ED_scene_markers_get(const bContext *C, Scene *scene);
 
 /**
+ * Retrieves the ID that owns the markers list in the given context and scene.
+ * This can either be the scene itself, or an action (if pose markers are shown).
+ */
+ID *ED_markers_get_owner_id(const bContext *C, Scene *scene);
+
+/**
  * Public API for getting markers from context.
  *
  * \return A #TimeMarker list.
  */
 ListBaseT<TimeMarker> *ED_context_get_markers(const bContext *C);
 ListBaseT<TimeMarker> *ED_sequencer_context_get_markers(const bContext *C);
-ListBaseT<TimeMarker> *ED_scene_markers_get_from_area(Scene *scene,
+ListBaseT<TimeMarker> *ED_scene_markers_get_from_area(const Main &bmain,
+                                                      Scene *scene,
                                                       ViewLayer *view_layer,
                                                       const ScrArea *area);
 
@@ -98,7 +109,7 @@ void ED_markers_make_cfra_list(ListBaseT<TimeMarker> *markers,
                                ListBaseT<CfraElem> *lb,
                                bool only_selected);
 
-void ED_markers_deselect_all(ListBaseT<TimeMarker> *markers, int action);
+void ED_markers_select_all(ListBaseT<TimeMarker> *markers, int action);
 
 /**
  * Get the first selected marker.
@@ -131,3 +142,5 @@ void ED_keymap_marker(wmKeyConfig *keyconf);
 void debug_markers_print_list(ListBaseT<TimeMarker> *markers);
 
 /** \} */
+
+}  // namespace blender

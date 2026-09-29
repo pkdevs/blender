@@ -10,11 +10,13 @@
 
 #include "BLI_offset_indices.hh"
 #include "BLI_span.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 struct Mesh;
 
-namespace blender::bke::subdiv {
+namespace bke::subdiv {
 
 struct ToMeshSettings;
 struct ForeachContext;
@@ -178,4 +180,5 @@ bool foreach_subdiv_geometry(Subdiv *subdiv,
                              const ToMeshSettings *mesh_settings,
                              const Mesh *coarse_mesh);
 
-}  // namespace blender::bke::subdiv
+}  // namespace bke::subdiv
+}  // namespace blender

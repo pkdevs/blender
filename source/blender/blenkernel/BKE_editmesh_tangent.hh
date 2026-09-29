@@ -8,24 +8,31 @@
  * \ingroup bke
  */
 
+#include <array>
+
 #include "BLI_array.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 
-struct BMEditMesh;
+namespace blender {
+
+struct BMesh;
+struct BMLoop;
 
 /**
  * \see #BKE_mesh_calc_loop_tangent, same logic but used arrays instead of #BMesh data.
  */
-blender::Array<blender::Array<blender::float4>> BKE_editmesh_uv_tangents_calc(
-    BMEditMesh *em,
-    blender::Span<blender::float3> face_normals,
-    blender::Span<blender::float3> corner_normals,
-    blender::Span<blender::StringRef> uv_names);
+Array<Array<float4>> BKE_editmesh_uv_tangents_calc(BMesh *bm,
+                                                   Span<std::array<BMLoop *, 3>> looptris,
+                                                   Span<float3> face_normals,
+                                                   Span<float3> corner_normals,
+                                                   Span<StringRef> uv_names);
 
-blender::Array<blender::float4> BKE_editmesh_orco_tangents_calc(
-    BMEditMesh *em,
-    blender::Span<blender::float3> face_normals,
-    blender::Span<blender::float3> corner_normals,
-    blender::Span<blender::float3> vert_orco);
+Array<float4> BKE_editmesh_orco_tangents_calc(BMesh *bm,
+                                              Span<std::array<BMLoop *, 3>> looptris,
+                                              Span<float3> face_normals,
+                                              Span<float3> corner_normals,
+                                              Span<float3> vert_orco);
+
+}  // namespace blender

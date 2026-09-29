@@ -7,6 +7,8 @@
  * \ingroup bke
  */
 
+namespace blender {
+
 struct Depsgraph;
 struct Object;
 struct Scene;
@@ -30,12 +32,17 @@ struct BodyPoint {
 /**
  * Allocates and initializes general main data.
  */
-extern struct SoftBody *sbNew(void);
+extern struct SoftBody *sbNew();
 
 /**
  * Frees internal data and soft-body itself.
  */
 extern void sbFree(struct Object *ob);
+
+/*
+ * Copy soft-body data.
+ */
+extern SoftBody *sbCopy(struct SoftBody *sb, int flag);
 
 /**
  * Frees simulation data to reset simulation.
@@ -61,7 +68,7 @@ extern void sbObjectToSoftbody(struct Object *ob);
  * Soft-body global visible functions.
  * Links the soft-body module to a 'test for Interrupt' function, pass NULL to clear the callback.
  */
-extern void sbSetInterruptCallBack(int (*f)(void));
+extern void sbSetInterruptCallBack(int (*f)());
 
 /**
  * A precise position vector denoting the motion of the center of mass give a rotation/scale matrix
@@ -77,3 +84,5 @@ extern void sbSetInterruptCallBack(int (*f)(void));
  * For velocity & 2nd order stuff see: #vcloud_estimate_transform_v3.
  */
 extern void SB_estimate_transform(Object *ob, float lloc[3], float lrot[3][3], float lscale[3][3]);
+
+}  // namespace blender

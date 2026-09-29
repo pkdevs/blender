@@ -8,7 +8,7 @@
 
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_context.hh"
 #include "BKE_report.hh"
@@ -29,6 +29,8 @@
 #ifdef WITH_PYTHON
 #  include "BPY_extern_run.hh"
 #endif
+
+namespace blender {
 
 static wmOperatorStatus run_pyfile_exec(bContext *C, wmOperator *op)
 {
@@ -74,7 +76,7 @@ static bool script_test_modal_operators(bContext *C)
   for (wmWindow &win : wm->windows) {
     for (wmEventHandler &handler_base : win.runtime->modalhandlers) {
       if (handler_base.type == WM_HANDLER_TYPE_OP) {
-        wmEventHandler_Op *handler = (wmEventHandler_Op *)&handler_base;
+        wmEventHandler_Op *handler = reinterpret_cast<wmEventHandler_Op *>(&handler_base);
         if (handler->op != nullptr) {
           wmOperatorType *ot = handler->op->type;
           if (ot->rna_ext.srna) {
@@ -144,3 +146,5 @@ void SCRIPT_OT_reload(wmOperatorType *ot)
   /* API callbacks. */
   ot->exec = script_reload_exec;
 }
+
+}  // namespace blender

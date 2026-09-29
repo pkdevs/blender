@@ -6,7 +6,7 @@
  * \ingroup edasset
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BLO_read_write.hh"
 
@@ -14,6 +14,8 @@
 #include "DNA_screen_types.h"
 
 #include "asset_shelf.hh"
+
+namespace blender {
 
 RegionAssetShelf *RegionAssetShelf::get_from_asset_shelf_region(const ARegion &region)
 {
@@ -33,25 +35,24 @@ RegionAssetShelf *RegionAssetShelf::ensure_from_asset_shelf_region(ARegion &regi
     return nullptr;
   }
   if (!region.regiondata) {
-    region.regiondata = MEM_new_for_free<RegionAssetShelf>("RegionAssetShelf");
+    region.regiondata = MEM_new<RegionAssetShelf>("RegionAssetShelf");
   }
   return static_cast<RegionAssetShelf *>(region.regiondata);
 }
 
-namespace blender::ed::asset::shelf {
+namespace ed::asset::shelf {
 
 RegionAssetShelf *regiondata_duplicate(const RegionAssetShelf *shelf_regiondata)
 {
   static_assert(
       std::is_trivially_copyable_v<RegionAssetShelf>,
-      "RegionAssetShelf needs to be trivially copyable to allow freeing with MEM_freeN()");
-  RegionAssetShelf *new_shelf_regiondata = MEM_new_for_free<RegionAssetShelf>(__func__);
+      "RegionAssetShelf needs to be trivially copyable to allow freeing with MEM_delete()");
+  RegionAssetShelf *new_shelf_regiondata = MEM_new<RegionAssetShelf>(__func__);
   *new_shelf_regiondata = *shelf_regiondata;
 
-  BLI_listbase_clear(&new_shelf_regiondata->shelves);
+  new_shelf_regiondata->shelves.clear_no_delete();
   for (const AssetShelf &shelf : shelf_regiondata->shelves) {
-    AssetShelf *new_shelf = MEM_new<AssetShelf>("duplicate asset shelf",
-                                                blender::dna::shallow_copy(shelf));
+    AssetShelf *new_shelf = MEM_new<AssetShelf>("duplicate asset shelf", dna::shallow_copy(shelf));
     new_shelf->settings = shelf.settings;
     BLI_addtail(&new_shelf_regiondata->shelves, new_shelf);
     if (shelf_regiondata->active_shelf == &shelf) {
@@ -67,7 +68,7 @@ void regiondata_free(RegionAssetShelf *shelf_regiondata)
   for (AssetShelf &shelf : shelf_regiondata->shelves.items_mutable()) {
     MEM_delete(&shelf);
   }
-  MEM_freeN(shelf_regiondata);
+  MEM_delete(shelf_regiondata);
 }
 
 void regiondata_blend_write(BlendWriter *writer, const RegionAssetShelf *shelf_regiondata)
@@ -81,13 +82,11 @@ void regiondata_blend_write(BlendWriter *writer, const RegionAssetShelf *shelf_r
 
 void regiondata_blend_read_data(BlendDataReader *reader, RegionAssetShelf **shelf_regiondata)
 {
-  if (!*shelf_regiondata) {
+  if (!BLO_read_struct_nonnull(reader, RegionAssetShelf, shelf_regiondata)) {
     return;
   }
-
-  BLO_read_struct(reader, RegionAssetShelf, shelf_regiondata);
   if ((*shelf_regiondata)->active_shelf) {
-    BLO_read_struct(reader, AssetShelf, &(*shelf_regiondata)->active_shelf);
+    BLO_read_struct_nonnull(reader, AssetShelf, &(*shelf_regiondata)->active_shelf);
   }
 
   BLO_read_struct_list(reader, AssetShelf, &(*shelf_regiondata)->shelves);
@@ -97,4 +96,5 @@ void regiondata_blend_read_data(BlendDataReader *reader, RegionAssetShelf **shel
   }
 }
 
-}  // namespace blender::ed::asset::shelf
+}  // namespace ed::asset::shelf
+}  // namespace blender

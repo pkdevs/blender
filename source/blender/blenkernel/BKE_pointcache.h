@@ -17,6 +17,8 @@
 
 #include <stdio.h> /* for #FILE */
 
+namespace blender {
+
 /* Point cache clearing option, for BKE_ptcache_id_clear, before
  * and after are non-inclusive (they won't remove the cfra) */
 #define PTCACHE_CLEAR_ALL 0
@@ -221,7 +223,7 @@ struct PTCacheUndo {
   struct ParticleData *particles;
   KDTree3d *emitter_field;
   float *emitter_cosnos;
-  int psys_flag;
+  eParticleSystem_Flag psys_flag;
 
   /* cache stuff */
   ListBaseT<PTCacheMem> mem_cache;
@@ -289,7 +291,7 @@ void BKE_ptcache_ids_from_object(ListBaseT<PTCacheID> *lb,
                                  struct Scene *scene,
                                  int duplis);
 
-using PointCacheIdFn = blender::FunctionRef<bool(PTCacheID &pid, ModifierData *md)>;
+using PointCacheIdFn = FunctionRef<bool(PTCacheID &pid, ModifierData *md)>;
 void BKE_ptcache_foreach_object_cache(struct Object &ob,
                                       struct Scene &scene,
                                       bool duplis,
@@ -316,6 +318,15 @@ void BKE_ptcache_id_time(PTCacheID *pid,
 int BKE_ptcache_object_reset(struct Scene *scene, struct Object *ob, int mode);
 
 void BKE_ptcache_update_info(PTCacheID *pid);
+
+/**
+ * Obtain the file path for this ptcache.
+ *
+ * \param dirname: pointer to write the cache path to, should be at least MAX_PTCACHE_PATH bytes
+ * (see pointcache.cc, at the moment of writing this is equal to FILE_MAX).
+ * \returns: `strlen(dirname)`.
+ */
+int BKE_ptcache_path(PTCacheID *pid, char *dirname);
 
 /*********** General cache reading/writing ******************/
 
@@ -415,3 +426,5 @@ void BKE_ptcache_blend_read_data(struct BlendDataReader *reader,
                                  ListBaseT<PointCache> *ptcaches,
                                  struct PointCache **ocache,
                                  int force_disk);
+
+}  // namespace blender

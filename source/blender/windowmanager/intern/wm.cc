@@ -15,15 +15,16 @@
 
 #include <cstring>
 
+#include "DNA_ID_enums.h"
 #include "DNA_layer_types.h"
 #include "DNA_windowmanager_types.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -37,6 +38,8 @@
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 #include "BKE_workspace.hh"
+
+#include "PRF_profile.hh"
 
 #include "WM_api.hh"
 #include "WM_keymap.hh"
@@ -60,13 +63,13 @@
 
 #include "BLO_read_write.hh"
 
-using blender::Set;
+namespace blender {
 
 /* ****************************************************** */
 
 static void window_manager_free_data(ID *id)
 {
-  wm_close_and_free(nullptr, (wmWindowManager *)id);
+  wm_close_and_free(nullptr, id_cast<wmWindowManager *>(id));
 }
 
 static void window_manager_foreach_id(ID *id, LibraryForeachIDData *data)
@@ -79,10 +82,10 @@ static void window_manager_foreach_id(ID *id, LibraryForeachIDData *data)
 
     /* This pointer can be nullptr during old files reading. */
     if (win.workspace_hook != nullptr) {
-      ID *workspace = (ID *)BKE_workspace_active_get(win.workspace_hook);
+      ID *workspace = id_cast<ID *>(BKE_workspace_active_get(win.workspace_hook));
       BKE_lib_query_foreachid_process(data, &workspace, IDWALK_CB_USER);
       /* Allow callback to set a different workspace. */
-      BKE_workspace_active_set(win.workspace_hook, (WorkSpace *)workspace);
+      BKE_workspace_active_set(win.workspace_hook, id_cast<WorkSpace *>(workspace));
       if (BKE_lib_query_foreachid_iter_stop(data)) {
         return;
       }
@@ -113,11 +116,19 @@ static void write_wm_xr_data(BlendWriter *writer, wmXrData *xr_data)
 
 static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
-  wmWindowManager *wm = (wmWindowManager *)id;
+  wmWindowManager *wm = id_cast<wmWindowManager *>(id);
 
   wm->runtime = nullptr;
 
-  BLO_write_id_struct(writer, wmWindowManager, id_address, &wm->id);
+  writer->write_id_struct(id_address, wm, [](BlendStructWriter<wmWindowManager> &struct_writer) {
+    wmWindowManager &shallow_wm = struct_writer.shallow_data;
+    shallow_wm.init_flag = {};
+    shallow_wm.op_undo_depth = 0;
+    shallow_wm.outliner_sync_select_dirty = {};
+    shallow_wm.extensions_updates = {};
+    shallow_wm.extensions_blocked = 0;
+    shallow_wm.autosave_scheduled = 0;
+  });
   BKE_id_blend_write(writer, &wm->id);
   write_wm_xr_data(writer, &wm->xr);
 
@@ -125,7 +136,19 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
     /* Update deprecated screen member (for so loading in 2.7x uses the correct screen). */
     win.screen = BKE_workspace_active_screen_get(win.workspace_hook);
 
-    writer->write_struct(&win);
+    writer->write_struct(&win, [](BlendStructWriter<wmWindow> &struct_writer) {
+      wmWindow &shallow_win = struct_writer.shallow_data;
+      shallow_win.active = 0;
+      shallow_win.grabcursor = 0;
+      shallow_win.addmousemove = 0;
+      shallow_win.event_queue_check_click = 0;
+      shallow_win.event_queue_check_drag = 0;
+      shallow_win.event_queue_check_drag_handled = 0;
+      shallow_win.event_queue_consecutive_gesture_type = 0;
+      shallow_win.event_queue_consecutive_gesture_xy[0] = 0;
+      shallow_win.event_queue_consecutive_gesture_xy[1] = 0;
+      shallow_win.event_queue_consecutive_gesture_data = nullptr;
+    });
     writer->write_struct(win.workspace_hook);
     writer->write_struct(win.stereo3d_format);
 
@@ -143,7 +166,7 @@ static void direct_link_wm_xr_data(BlendDataReader *reader, wmXrData *xr_data)
 
 static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
 {
-  wmWindowManager *wm = (wmWindowManager *)id;
+  wmWindowManager *wm = id_cast<wmWindowManager *>(id);
 
   id_us_ensure_real(&wm->id);
   BLO_read_struct_list(reader, wmWindow, &wm->windows);
@@ -184,23 +207,23 @@ static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
 
     /* Multi-view always falls back to anaglyph at file opening
      * otherwise quad-buffer saved files can break Blender. */
-    if (win.stereo3d_format) {
+    if (win.stereo3d_format && win.stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
       win.stereo3d_format->display_mode = S3D_DISPLAY_ANAGLYPH;
     }
-    win.runtime = MEM_new<blender::bke::WindowRuntime>(__func__);
+    win.runtime = MEM_new<bke::WindowRuntime>(__func__);
   }
 
   direct_link_wm_xr_data(reader, &wm->xr);
 
   wm->xr.runtime = nullptr;
 
-  wm->init_flag = 0;
+  wm->init_flag = eWM_InitFlag{};
   wm->op_undo_depth = 0;
   wm->extensions_updates = WM_EXTENSIONS_UPDATE_UNSET;
   wm->extensions_blocked = 0;
 
   BLI_assert(wm->runtime == nullptr);
-  wm->runtime = MEM_new<blender::bke::WindowManagerRuntime>(__func__);
+  wm->runtime = MEM_new<bke::WindowManagerRuntime>(__func__);
 }
 
 static void window_manager_blend_read_after_liblink(BlendLibReader *reader, ID *id)
@@ -215,35 +238,36 @@ static void window_manager_blend_read_after_liblink(BlendLibReader *reader, ID *
 }
 
 IDTypeInfo IDType_ID_WM = {
-    /*id_code*/ wmWindowManager::id_type,
-    /*id_filter*/ FILTER_ID_WM,
-    /*dependencies_id_types*/ FILTER_ID_SCE | FILTER_ID_WS,
-    /*main_listbase_index*/ INDEX_ID_WM,
-    /*struct_size*/ sizeof(wmWindowManager),
-    /*name*/ "WindowManager",
-    /*name_plural*/ N_("window_managers"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_WINDOWMANAGER,
-    /*flags*/ IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_ANIMDATA |
-        IDTYPE_FLAGS_NO_MEMFILE_UNDO | IDTYPE_FLAGS_NEVER_UNUSED,
-    /*asset_type_info*/ nullptr,
+    .id_code = wmWindowManager::id_type,
+    .id_filter = FILTER_ID_WM,
+    .dependencies_id_types = FILTER_ID_SCE | FILTER_ID_WS,
+    .main_listbase_index = INDEX_ID_WM,
+    .struct_size = sizeof(wmWindowManager),
+    .name = "WindowManager",
+    .name_plural = N_("window_managers"),
+    .translation_context = BLT_I18NCONTEXT_ID_WINDOWMANAGER,
+    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_ANIMDATA |
+             IDTYPE_FLAGS_NO_MEMFILE_UNDO | IDTYPE_FLAGS_NEVER_UNUSED,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ nullptr,
-    /*copy_data*/ nullptr,
-    /*free_data*/ window_manager_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ window_manager_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = nullptr,
+    .copy_data = nullptr,
+    .free_data = window_manager_free_data,
+    .make_local = nullptr,
+    .foreach_id = window_manager_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ window_manager_blend_write,
-    /*blend_read_data*/ window_manager_blend_read_data,
-    /*blend_read_after_liblink*/ window_manager_blend_read_after_liblink,
+    .blend_write = window_manager_blend_write,
+    .blend_read_data = window_manager_blend_read_data,
+    .blend_read_after_liblink = window_manager_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 #define MAX_OP_REGISTERED 32
@@ -269,18 +293,18 @@ void WM_operator_free(wmOperator *op)
 
   if (op->reports && (op->reports->flag & RPT_FREE)) {
     BKE_reports_free(op->reports);
-    MEM_freeN(op->reports);
+    MEM_delete(op->reports);
   }
 
-  if (op->macro.first) {
+  if (op->macro.first()) {
     wmOperator *opm, *opmnext;
-    for (opm = static_cast<wmOperator *>(op->macro.first); opm; opm = opmnext) {
+    for (opm = op->macro.first(); opm; opm = opmnext) {
       opmnext = opm->next;
       WM_operator_free(opm);
     }
   }
 
-  MEM_freeN(op);
+  MEM_delete(op);
 }
 
 void WM_operator_free_all_after(wmWindowManager *wm, wmOperator *op)
@@ -308,7 +332,7 @@ void WM_operator_type_set(wmOperator *op, wmOperatorType *ot)
 
     WM_operator_properties_default(&ptr, false);
 
-    if (ptr.data) {
+    if (ptr) {
       IDP_SyncGroupTypes(op->properties, static_cast<const IDProperty *>(ptr.data), true);
     }
 
@@ -360,8 +384,8 @@ void WM_operator_stack_clear(wmWindowManager *wm, const Set<wmOperatorType *> &t
   bool any_removed = false;
   for (wmOperator &op : wm->runtime->operators.items_mutable()) {
     if (types.contains(op.type)) {
-      WM_operator_free(&op);
       BLI_remlink(&wm->runtime->operators, &op);
+      WM_operator_free(&op);
       any_removed = true;
     }
   }
@@ -378,7 +402,7 @@ void WM_operator_handlers_clear(wmWindowManager *wm, const Set<wmOperatorType *>
     for (ScrArea &area : screen->areabase) {
       switch (area.spacetype) {
         case SPACE_FILE: {
-          SpaceFile *sfile = static_cast<SpaceFile *>(area.spacedata.first);
+          SpaceFile *sfile = area.spacedata.first_as<SpaceFile>();
           if (sfile->op && types.contains(sfile->op->type)) {
             /* Freed as part of the handler. */
             sfile->op = nullptr;
@@ -394,7 +418,7 @@ void WM_operator_handlers_clear(wmWindowManager *wm, const Set<wmOperatorType *>
     for (int i = 0; i < ARRAY_SIZE(lb); i++) {
       for (wmEventHandler &handler_base : *lb[i]) {
         if (handler_base.type == WM_HANDLER_TYPE_OP) {
-          wmEventHandler_Op *handler = (wmEventHandler_Op *)&handler_base;
+          wmEventHandler_Op *handler = reinterpret_cast<wmEventHandler_Op *>(&handler_base);
           if (handler->op && types.contains(handler->op->type)) {
             /* Don't run op->cancel because it needs the context,
              * assume whoever unregisters the operator will cleanup. */
@@ -471,11 +495,11 @@ void WM_check(bContext *C)
 
   /* WM context. */
   if (wm == nullptr) {
-    wm = static_cast<wmWindowManager *>(bmain->wm.first);
+    wm = bmain->wm.first();
     CTX_wm_manager_set(C, wm);
   }
 
-  if (wm == nullptr || BLI_listbase_is_empty(&wm->windows)) {
+  if (wm == nullptr || wm->windows.is_empty()) {
     return;
   }
 
@@ -490,6 +514,9 @@ void WM_check(bContext *C)
       WM_keyconfig_init(C);
       WM_file_autosave_init(wm);
     }
+
+    /* Initialize GPU backend for GHOST before opening windows. */
+    WM_init_gpu_backend();
 
     /* Case: no open windows at all, for old file reads. */
     wm_window_ghostwindows_ensure(wm);
@@ -509,11 +536,11 @@ void wm_clear_default_size(bContext *C)
 
   /* WM context. */
   if (wm == nullptr) {
-    wm = static_cast<wmWindowManager *>(CTX_data_main(C)->wm.first);
+    wm = CTX_data_main(C)->wm.first();
     CTX_wm_manager_set(C, wm);
   }
 
-  if (wm == nullptr || BLI_listbase_is_empty(&wm->windows)) {
+  if (wm == nullptr || wm->windows.is_empty()) {
     return;
   }
 
@@ -542,7 +569,7 @@ void wm_add_default(Main *bmain, bContext *C)
   BKE_workspace_active_layout_set(win->workspace_hook, win->winid, workspace, layout);
   screen->winid = win->winid;
 
-  wm->runtime = MEM_new<blender::bke::WindowManagerRuntime>(__func__);
+  wm->runtime = MEM_new<bke::WindowManagerRuntime>(__func__);
   wm->runtime->winactive = win;
   wm->file_saved = 1;
   wm_window_make_drawable(wm, win);
@@ -574,8 +601,11 @@ void wm_close_and_free(bContext *C, wmWindowManager *wm)
   wm_xr_data_free(wm);
 
   while (wmWindow *win = static_cast<wmWindow *>(BLI_pophead(&wm->windows))) {
-    /* Prevent draw clear to use screen. */
-    BKE_workspace_active_set(win->workspace_hook, nullptr);
+    /* Prevent draw clear to use screen. `workspace_hook` may be null for a window that was not
+     * completely read from an invalid file. */
+    if (win->workspace_hook != nullptr) {
+      BKE_workspace_active_set(win->workspace_hook, nullptr);
+    }
     wm_window_free(C, wm, win);
   }
 
@@ -594,6 +624,7 @@ void wm_close_and_free(bContext *C, wmWindowManager *wm)
 
 void WM_main(bContext *C)
 {
+  PRF_scope(ProfileCategory::Core);
   /* Single refresh before handling events.
    * This ensures we don't run operators before the depsgraph has been evaluated. */
   wm_event_do_refresh_wm_and_depsgraph(C);
@@ -611,5 +642,9 @@ void WM_main(bContext *C)
 
     /* Execute cached changes draw. */
     wm_draw_update(C);
+
+    PRF_frame_mark;
   }
 }
+
+}  // namespace blender

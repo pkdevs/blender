@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_dot_export.hh"
 
@@ -33,7 +37,7 @@ void bNodeTreeToDotOptions::add_edge_attributes(const bNodeLink &link,
 
 std::string node_tree_to_dot(const bNodeTree &tree, const bNodeTreeToDotOptions &options)
 {
-  namespace dot = blender::dot_export;
+  namespace dot = dot_export;
   tree.ensure_topology_cache();
 
   dot_export::DirectedGraph digraph;

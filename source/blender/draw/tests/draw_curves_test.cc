@@ -57,8 +57,7 @@ static void test_draw_curves_lib()
                                          float4{2.0f}});
 
   UniformBuffer<CurvesInfos> curves_info_buf;
-  curves_info_buf.is_point_attribute[0].x = 0;
-  curves_info_buf.is_point_attribute[1].x = 1;
+  curves_info_buf.is_point_attribute = 0b10;
   /* Ribbon. */
   curves_info_buf.vertex_per_segment = 2;
   curves_info_buf.half_cylinder_face_count = 1;
@@ -486,8 +485,8 @@ static void test_draw_curves_interpolate_position()
     /* Ensure the rest of the buffer is untouched. */
     EXPECT_EQ(evaluated_positions_radii_buf[8], float4(0.0));
 
-    EXPECT_FLOAT_EQ(curves_length_buf[0], numbers::sqrt3);
-    EXPECT_FLOAT_EQ(curves_length_buf[1], 2.0f * numbers::sqrt3);
+    EXPECT_FLOAT_EQ(curves_length_buf[0], std::numbers::sqrt3);
+    EXPECT_FLOAT_EQ(curves_length_buf[1], 2.0f * std::numbers::sqrt3);
 
     EXPECT_FLOAT_EQ(evaluated_time_buf[0], 0.0f);
     EXPECT_FLOAT_EQ(evaluated_time_buf[1], 0.218749985f);

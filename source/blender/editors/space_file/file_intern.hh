@@ -14,6 +14,8 @@
 
 #include "ED_fileselect.hh"
 
+namespace blender {
+
 /* internal exports only */
 
 struct ARegion;
@@ -25,12 +27,12 @@ struct FolderList;
 struct Main;
 struct SpaceFile;
 struct View2D;
-namespace blender::asset_system {
+namespace asset_system {
 class AssetLibrary;
 }
-namespace blender::ui {
+namespace ui {
 struct Layout;
-}  // namespace blender::ui
+}  // namespace ui
 
 bool file_main_region_needs_refresh_before_draw(SpaceFile *sfile);
 
@@ -51,8 +53,9 @@ int /*eContextResult*/ file_context(const bContext *C,
 #define FILE_LAYOUT_HIDE_SIZE(_layout) \
   (_layout->flag & FILE_LAYOUT_VER && (_layout->width / UI_SCALE_FAC) < 350)
 
-void file_calc_previews(const bContext *C, ARegion *region);
 void file_draw_list(const bContext *C, ARegion *region);
+bool file_banner_poll(const SpaceFile *sfile);
+void file_draw_banner(const bContext *C, const SpaceFile *sfile, ARegion *region);
 /**
  * Draw a string hint if the file list is invalid.
  * \return true if the list is invalid and a hint was drawn.
@@ -191,6 +194,13 @@ void file_params_rename_end(wmWindowManager *wm,
  */
 void file_params_renamefile_activate(SpaceFile *sfile, FileSelectParams *params);
 
+/**
+ * Information about the current state of banners that needs preserving over redraws.
+ */
+struct BannersState {
+  bool any_visible;
+};
+
 using onReloadFnData = void *;
 using onReloadFn = void (*)(SpaceFile *space_data, onReloadFnData custom_data);
 struct SpaceFile_Runtime {
@@ -204,6 +214,8 @@ struct SpaceFile_Runtime {
   bool is_blendfile_status_set;
   bool is_blendfile_readable;
   ReportList is_blendfile_readable_reports;
+
+  BannersState banners_state;
 };
 
 /**
@@ -244,7 +256,7 @@ void file_path_to_ui_path(const char *path, char *r_path, int r_path_maxncpy);
 
 /* asset_catalog_tree_view.cc */
 
-namespace blender::ed::asset_browser {
+namespace ed::asset_browser {
 
 void file_create_asset_catalog_tree_view_in_layout(const bContext *C,
                                                    asset_system::AssetLibrary *asset_library,
@@ -263,10 +275,12 @@ void file_delete_asset_catalog_filter_settings(AssetCatalogFilterSettings **filt
 bool file_set_asset_catalog_filter_settings(
     AssetCatalogFilterSettings *filter_settings,
     eFileSel_Params_AssetCatalogVisibility catalog_visibility,
-    const ::bUUID &catalog_id);
+    const bUUID &catalog_id);
 void file_ensure_updated_catalog_filter_data(AssetCatalogFilterSettings *filter_settings,
                                              const asset_system::AssetLibrary *asset_library);
 bool file_is_asset_visible_in_catalog_filter_settings(
     const AssetCatalogFilterSettings *filter_settings, const AssetMetaData *asset_data);
 
-}  // namespace blender::ed::asset_browser
+}  // namespace ed::asset_browser
+
+}  // namespace blender

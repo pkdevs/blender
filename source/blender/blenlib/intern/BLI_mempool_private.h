@@ -11,10 +11,12 @@
  * without exposing these functions publicly.
  */
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 
-#include "BLI_mempool.h"
-#include "BLI_task.h"
+#include "BLI_mempool.hh"
+#include "BLI_task_c.hh"
+
+namespace blender {
 
 struct BLI_mempool_threadsafe_iter {
   BLI_mempool_iter iter;
@@ -50,3 +52,5 @@ void mempool_iter_threadsafe_destroy(ParallelMempoolTaskData *iter_arr) ATTR_NON
  * (threaded section noted in comments).
  */
 void *mempool_iter_threadsafe_step(BLI_mempool_threadsafe_iter *ts_iter);
+
+}  // namespace blender

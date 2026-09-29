@@ -15,10 +15,12 @@
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_listBase.h"
+
+namespace blender {
 
 struct BezTriple;
 struct BevList;
@@ -27,13 +29,14 @@ struct BPoint;
 struct Curve;
 struct Depsgraph;
 struct DispList;
-struct GHash;
 struct Main;
 struct MDeformVert;
 struct Nurb;
 struct Object;
 struct rctf;
 struct TextBox;
+
+enum ObjectType : short;
 
 using eBezTriple_Flag__Alias = int;
 
@@ -97,8 +100,8 @@ enum eNurbHandleTest_Mode {
  * Frees edit-curve entirely.
  */
 void BKE_curve_editfont_free(Curve *cu);
-void BKE_curve_init(Curve *cu, short curve_type);
-Curve *BKE_curve_add(Main *bmain, const char *name, int type);
+void BKE_curve_init(Curve *cu, ObjectType curve_type);
+Curve *BKE_curve_add(Main *bmain, const char *name, ObjectType type);
 void BKE_curve_type_test(Object *ob, bool dimension_update);
 void BKE_curve_dimension_update(Curve *cu);
 
@@ -107,7 +110,7 @@ void BKE_curve_texspace_ensure(Curve *cu);
 
 /* Basic vertex data functions. */
 
-std::optional<blender::Bounds<blender::float3>> BKE_curve_minmax(const Curve *cu, bool use_radius);
+std::optional<Bounds<float3>> BKE_curve_minmax(const Curve *cu, bool use_radius);
 bool BKE_curve_center_median(Curve *cu, float cent[3]);
 void BKE_curve_transform_ex(
     Curve *cu, const float mat[4][4], bool do_keys, bool do_props, float unit_scale);
@@ -144,21 +147,19 @@ void BKE_curve_nurb_vert_active_set(Curve *cu, const Nurb *nu, const void *vert)
 bool BKE_curve_nurb_vert_active_get(Curve *cu, Nurb **r_nu, void **r_vert);
 void BKE_curve_nurb_vert_active_validate(Curve *cu);
 
-blender::Array<blender::float3> BKE_curve_nurbs_vert_coords_alloc(const ListBaseT<Nurb> *lb);
-void BKE_curve_nurbs_vert_coords_get(const ListBaseT<Nurb> *lb,
-                                     blender::MutableSpan<blender::float3> vert_coords);
+Array<float3> BKE_curve_nurbs_vert_coords_alloc(const ListBaseT<Nurb> *lb);
+void BKE_curve_nurbs_vert_coords_get(const ListBaseT<Nurb> *lb, MutableSpan<float3> vert_coords);
 
 void BKE_curve_nurbs_vert_coords_apply_with_mat4(ListBaseT<Nurb> *lb,
-                                                 const blender::Span<blender::float3>,
-                                                 const blender::float4x4 &transform,
+                                                 const Span<float3>,
+                                                 const float4x4 &transform,
                                                  bool constrain_2d);
 
 void BKE_curve_nurbs_vert_coords_apply(ListBaseT<Nurb> *lb,
-                                       const blender::Span<blender::float3> vert_coords,
+                                       const Span<float3> vert_coords,
                                        bool constrain_2d);
 
-blender::Array<blender::float3> BKE_curve_nurbs_key_vert_coords_alloc(const ListBaseT<Nurb> *lb,
-                                                                      const float *key);
+Array<float3> BKE_curve_nurbs_key_vert_coords_alloc(const ListBaseT<Nurb> *lb, const float *key);
 void BKE_curve_nurbs_key_vert_tilts_apply(ListBaseT<Nurb> *lb, const float *key);
 
 void BKE_curve_editNurb_keyIndex_delCV(CVKeyIndexMap *keyindex, const void *cv);
@@ -213,15 +214,19 @@ void BKE_nurbList_duplicate(ListBaseT<Nurb> *lb1, const ListBaseT<Nurb> *lb2);
  */
 void BKE_nurbList_handles_set(ListBaseT<Nurb> *editnurb,
                               eNurbHandleTest_Mode handle_mode,
-                              char code);
-void BKE_nurbList_handles_recalculate(ListBaseT<Nurb> *editnurb, bool calc_length, uint8_t flag);
+                              eBezTriple_Handle code);
+void BKE_nurbList_handles_recalculate(ListBaseT<Nurb> *editnurb,
+                                      bool calc_length,
+                                      eBezTriple_Flag flag);
 
-void BKE_nurbList_handles_autocalc(ListBaseT<Nurb> *editnurb, uint8_t flag);
-void BKE_nurbList_flag_set(ListBaseT<Nurb> *editnurb, uint8_t flag, bool set);
+void BKE_nurbList_handles_autocalc(ListBaseT<Nurb> *editnurb, eBezTriple_Flag flag);
+void BKE_nurbList_flag_set(ListBaseT<Nurb> *editnurb, eBezTriple_Flag flag, bool set);
 /**
  * Set \a flag for every point that already has \a from_flag set.
  */
-bool BKE_nurbList_flag_set_from_flag(ListBaseT<Nurb> *editnurb, uint8_t from_flag, uint8_t flag);
+bool BKE_nurbList_flag_set_from_flag(ListBaseT<Nurb> *editnurb,
+                                     eBezTriple_Flag from_flag,
+                                     eBezTriple_Flag flag);
 
 void BKE_nurb_free(Nurb *nu);
 Nurb *BKE_nurb_duplicate(const Nurb *nu);
@@ -296,7 +301,7 @@ void BKE_nurb_direction_switch(Nurb *nu);
 /**
  * \note caller must ensure active vertex remains valid.
  */
-bool BKE_nurb_type_convert(Nurb *nu, short type, bool use_handles, const char **r_err_msg);
+bool BKE_nurb_type_convert(Nurb *nu, eNurbType type, bool use_handles, const char **r_err_msg);
 
 /**
  * Be sure to call #BKE_nurb_knot_calc_u / #BKE_nurb_knot_calc_v after this.
@@ -346,7 +351,7 @@ void BKE_nurb_handle_calc_simple_auto(Nurb *nu, BezTriple *bezt);
 void BKE_nurb_handle_smooth_fcurve(BezTriple *bezt, int total, bool cyclic);
 
 void BKE_nurb_handles_calc(Nurb *nu);
-void BKE_nurb_handles_autocalc(Nurb *nu, uint8_t flag);
+void BKE_nurb_handles_autocalc(Nurb *nu, eBezTriple_Flag flag);
 
 /**
  * Return a flag for the handles to treat as "selected":
@@ -398,8 +403,8 @@ unsigned int BKE_curve_decimate_bezt_array(BezTriple *bezt_array,
                                            unsigned int bezt_array_len,
                                            unsigned int resolu,
                                            bool is_cyclic,
-                                           char flag_test,
-                                           char flag_set,
+                                           eBezTriple_Flag flag_test,
+                                           eBezTriple_Flag flag_set,
                                            float error_sq_max,
                                            unsigned int error_target_len);
 
@@ -456,3 +461,5 @@ void BKE_curve_deform_co(const Object *ob_curve,
  * applied on the control points of the splines.
  */
 Curve *BKE_curve_new_from_object(Object *object, Depsgraph *depsgraph, bool apply_modifiers);
+
+}  // namespace blender

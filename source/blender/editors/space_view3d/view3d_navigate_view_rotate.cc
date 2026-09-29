@@ -8,9 +8,9 @@
 
 #include "BKE_context.hh"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "WM_api.hh"
 
@@ -18,6 +18,8 @@
 
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Rotate Operator
@@ -398,3 +400,5 @@ const ViewOpsType ViewOpsType_rotate = {
     /*init_fn*/ viewrotate_invoke_impl,
     /*apply_fn*/ viewrotate_modal_impl,
 };
+
+}  // namespace blender

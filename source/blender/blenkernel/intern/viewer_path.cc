@@ -2,25 +2,28 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_viewer_path.hh"
 
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 
 #include "MEM_guardedalloc.h"
 
 #include "BLO_read_write.hh"
 
-using blender::IndexRange;
-using blender::StringRef;
+namespace blender {
 
 void BKE_viewer_path_init(ViewerPath *viewer_path)
 {
-  BLI_listbase_clear(&viewer_path->path);
+  viewer_path->path.clear_no_delete();
 }
 
 void BKE_viewer_path_clear(ViewerPath *viewer_path)
@@ -28,7 +31,7 @@ void BKE_viewer_path_clear(ViewerPath *viewer_path)
   for (ViewerPathElem &elem : viewer_path->path.items_mutable()) {
     BKE_viewer_path_elem_free(&elem);
   }
-  BLI_listbase_clear(&viewer_path->path);
+  viewer_path->path.clear_no_delete();
 }
 
 void BKE_viewer_path_copy(ViewerPath *dst, const ViewerPath *src)
@@ -44,8 +47,8 @@ bool BKE_viewer_path_equal(const ViewerPath *a,
                            const ViewerPath *b,
                            const ViewerPathEqualFlag flag)
 {
-  const ViewerPathElem *elem_a = static_cast<const ViewerPathElem *>(a->path.first);
-  const ViewerPathElem *elem_b = static_cast<const ViewerPathElem *>(b->path.first);
+  const ViewerPathElem *elem_a = a->path.first();
+  const ViewerPathElem *elem_b = b->path.first();
 
   while (elem_a != nullptr && elem_b != nullptr) {
     if (!BKE_viewer_path_elem_equal(elem_a, elem_b, flag)) {
@@ -65,7 +68,7 @@ uint64_t BKE_viewer_path_hash(const ViewerPath &viewer_path)
   uint64_t hash = 0;
   for (ViewerPathElem &elem : viewer_path.path) {
     const uint64_t elem_hash = BKE_viewer_path_elem_hash(elem);
-    hash = blender::get_default_hash(hash, elem_hash);
+    hash = get_default_hash(hash, elem_hash);
   }
   return hash;
 }
@@ -116,7 +119,7 @@ void BKE_viewer_path_blend_write(BlendWriter *writer, const ViewerPath *viewer_p
         break;
       }
     }
-    BLO_write_string(writer, elem.ui_name);
+    writer->write_string(elem.ui_name);
   }
 }
 
@@ -167,8 +170,7 @@ void BKE_viewer_path_foreach_id(LibraryForeachIDData *data, ViewerPath *viewer_p
   }
 }
 
-void BKE_viewer_path_id_remap(ViewerPath *viewer_path,
-                              const blender::bke::id::IDRemapper &mappings)
+void BKE_viewer_path_id_remap(ViewerPath *viewer_path, const bke::id::IDRemapper &mappings)
 {
   for (ViewerPathElem &elem : viewer_path->path) {
     switch (ViewerPathElemType(elem.type)) {
@@ -192,7 +194,7 @@ void BKE_viewer_path_id_remap(ViewerPath *viewer_path,
 
 template<typename T> static T *make_elem(const ViewerPathElemType type)
 {
-  T *elem = MEM_new_for_free<T>(__func__);
+  T *elem = MEM_new<T>(__func__);
   elem->base.type = type;
   return elem;
 }
@@ -405,7 +407,6 @@ bool BKE_viewer_path_elem_equal(const ViewerPathElem *a,
 
 uint64_t BKE_viewer_path_elem_hash(const ViewerPathElem &elem)
 {
-  using blender::get_default_hash;
   switch (ViewerPathElemType(elem.type)) {
     case VIEWER_PATH_ELEM_TYPE_ID: {
       const auto &typed_elem = reinterpret_cast<const IDViewerPathElem &>(elem);
@@ -465,7 +466,9 @@ void BKE_viewer_path_elem_free(ViewerPathElem *elem)
     }
   }
   if (elem->ui_name) {
-    MEM_freeN(elem->ui_name);
+    MEM_delete(elem->ui_name);
   }
-  MEM_freeN(elem);
+  MEM_delete(elem);
 }
+
+}  // namespace blender

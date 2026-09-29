@@ -13,11 +13,11 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_object_types.h" /* SELECT */
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_movieclip.hh"
 #include "BKE_tracking.hh"
@@ -27,6 +27,8 @@
 
 #include "libmv-capi.h"
 #include "tracking_private.hh"
+
+namespace blender {
 
 struct AutoTrackClip {
   MovieClip *clip;
@@ -259,7 +261,7 @@ static MovieTrackingMarker libmv_marker_to_dna_marker(const libmv_Marker &libmv_
   libmv_frame_to_normalized_relative(
       libmv_marker.search_region_max, libmv_marker.center, frame_dimensions, marker.search_max);
 
-  marker.flag = 0;
+  marker.flag = TrackingMarkerFlag{};
   if (libmv_marker.source == LIBMV_MARKER_SOURCE_TRACKED) {
     marker.flag |= MARKER_TRACKED;
   }
@@ -364,14 +366,14 @@ static void autotrack_context_init_tracks_for_clip(AutoTrackContext *context, in
   MovieClip *clip = autotrack_clip->clip;
   const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
 
-  const int num_clip_tracks = BLI_listbase_count(&tracking_object->tracks);
+  const int num_clip_tracks = tracking_object->tracks.count();
   if (num_clip_tracks == 0) {
     return;
   }
 
-  context->all_autotrack_tracks = static_cast<AutoTrackTrack *>(
-      MEM_reallocN(context->all_autotrack_tracks,
-                   (context->num_all_tracks + num_clip_tracks) * sizeof(AutoTrackTrack)));
+  context->all_autotrack_tracks = static_cast<AutoTrackTrack *>(MEM_realloc_uninitialized(
+      context->all_autotrack_tracks,
+      (context->num_all_tracks + num_clip_tracks) * sizeof(AutoTrackTrack)));
 
   for (MovieTrackingTrack &track : tracking_object->tracks) {
     AutoTrackTrack *autotrack_track = &context->all_autotrack_tracks[context->num_all_tracks++];
@@ -411,7 +413,7 @@ static void autotrack_context_init_image_accessor(AutoTrackContext *context)
     clips[i] = context->autotrack_clips[i].clip;
   }
 
-  MovieTrackingTrack **tracks = MEM_calloc_arrayN<MovieTrackingTrack *>(
+  MovieTrackingTrack **tracks = MEM_new_array_zeroed<MovieTrackingTrack *>(
       context->num_all_tracks, "image accessor init tracks");
   for (int i = 0; i < context->num_all_tracks; ++i) {
     tracks[i] = context->all_autotrack_tracks[i].track;
@@ -419,7 +421,7 @@ static void autotrack_context_init_image_accessor(AutoTrackContext *context)
 
   context->image_accessor = tracking_image_accessor_new(clips, 1, tracks, context->num_all_tracks);
 
-  MEM_freeN(tracks);
+  MEM_delete(tracks);
 }
 
 /* Count markers which are usable to be passed to the AutoTrack context. */
@@ -467,8 +469,8 @@ static void autotrack_context_init_autotrack(AutoTrackContext *context)
   }
 
   /* Allocate memory for all the markers. */
-  libmv_Marker *libmv_markers = MEM_calloc_arrayN<libmv_Marker>(num_trackable_markers,
-                                                                "libmv markers array");
+  libmv_Marker *libmv_markers = MEM_new_array_zeroed<libmv_Marker>(num_trackable_markers,
+                                                                   "libmv markers array");
 
   /* Fill in markers array. */
   int num_filled_libmv_markers = 0;
@@ -496,7 +498,7 @@ static void autotrack_context_init_autotrack(AutoTrackContext *context)
   libmv_autoTrackSetMarkers(context->autotrack, libmv_markers, num_trackable_markers);
 
   /* Free temporary memory. */
-  MEM_freeN(libmv_markers);
+  MEM_delete(libmv_markers);
 }
 
 static void autotrack_context_init_markers(AutoTrackContext *context)
@@ -508,8 +510,8 @@ static void autotrack_context_init_markers(AutoTrackContext *context)
   }
 
   /* Allocate required memory. */
-  context->autotrack_markers = MEM_calloc_arrayN<AutoTrackMarker>(context->num_autotrack_markers,
-                                                                  "auto track options");
+  context->autotrack_markers = MEM_new_array_zeroed<AutoTrackMarker>(
+      context->num_autotrack_markers, "auto track options");
 
   /* Fill in all the markers. */
   int autotrack_marker_index = 0;
@@ -542,7 +544,7 @@ AutoTrackContext *BKE_autotrack_context_new(MovieClip *clip,
                                             MovieClipUser *user,
                                             const bool is_backwards)
 {
-  AutoTrackContext *context = MEM_callocN<AutoTrackContext>("autotrack context");
+  AutoTrackContext *context = MEM_new_zeroed<AutoTrackContext>("autotrack context");
 
   context->start_scene_frame = user->framenr;
   context->is_backwards = is_backwards;
@@ -572,8 +574,8 @@ static void reference_keyframed_image_buffers(AutoTrackContext *context)
   /* NOTE: This is potentially over-allocating, but it simplifies memory manipulation.
    * In practice this is unlikely to be noticed in the profiler as the memory footprint of this
    * data is way less of what the tracking process will use. */
-  context->referenced_image_buffers = MEM_calloc_arrayN<ImBuf *>(context->num_autotrack_markers,
-                                                                 __func__);
+  context->referenced_image_buffers = MEM_new_array_zeroed<ImBuf *>(context->num_autotrack_markers,
+                                                                    __func__);
 
   context->num_referenced_image_buffers = 0;
 
@@ -596,7 +598,7 @@ static void reference_keyframed_image_buffers(AutoTrackContext *context)
     MovieClipUser user_at_keyframe;
     BKE_movieclip_user_set_frame(&user_at_keyframe, scene_frame);
     user_at_keyframe.render_size = MCLIP_PROXY_RENDER_SIZE_FULL;
-    user_at_keyframe.render_flag = 0;
+    user_at_keyframe.render_flag = eMovieClipProxy_RenderFlag{};
 
     /* Keep reference to the image buffer so that we can manipulate its flags later on.
      * Also request the movie cache to not remove the image buffer from the cache. */
@@ -629,7 +631,7 @@ static void autotrack_context_step_cb(void *__restrict userdata,
                                       const TaskParallelTLS *__restrict tls)
 {
   AutoTrackContext *context = static_cast<AutoTrackContext *>(userdata);
-  AutoTrackTLS *autotrack_tls = (AutoTrackTLS *)tls->userdata_chunk;
+  AutoTrackTLS *autotrack_tls = static_cast<AutoTrackTLS *>(tls->userdata_chunk);
 
   const AutoTrackMarker &autotrack_marker = context->autotrack_markers[marker_index];
   const libmv_Marker &libmv_current_marker = autotrack_marker.libmv_marker;
@@ -651,7 +653,7 @@ static void autotrack_context_step_cb(void *__restrict userdata,
 
   const int new_marker_frame = libmv_current_marker.frame + frame_delta;
 
-  AutoTrackTrackingResult *autotrack_result = MEM_callocN<AutoTrackTrackingResult>(
+  AutoTrackTrackingResult *autotrack_result = MEM_new_zeroed<AutoTrackTrackingResult>(
       "autotrack result");
   autotrack_result->libmv_marker = libmv_current_marker;
   autotrack_result->libmv_marker.frame = new_marker_frame;
@@ -693,13 +695,13 @@ static void autotrack_context_reduce(const void *__restrict /*userdata*/,
                                      void *__restrict chunk_join,
                                      void *__restrict chunk)
 {
-  AutoTrackTLS *autotrack_tls = (AutoTrackTLS *)chunk;
-  if (BLI_listbase_is_empty(&autotrack_tls->results)) {
+  AutoTrackTLS *autotrack_tls = static_cast<AutoTrackTLS *>(chunk);
+  if (autotrack_tls->results.is_empty()) {
     /* Nothing to be joined from. */
     return;
   }
 
-  AutoTrackTLS *autotrack_tls_join = (AutoTrackTLS *)chunk_join;
+  AutoTrackTLS *autotrack_tls_join = static_cast<AutoTrackTLS *>(chunk_join);
   BLI_movelisttolist(&autotrack_tls_join->results, &autotrack_tls->results);
 }
 
@@ -710,7 +712,7 @@ bool BKE_autotrack_context_step(AutoTrackContext *context)
   }
 
   AutoTrackTLS tls;
-  BLI_listbase_clear(&tls.results);
+  tls.results.clear_no_delete();
 
   TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
@@ -762,7 +764,7 @@ void BKE_autotrack_context_sync(AutoTrackContext *context)
 
   BLI_spin_lock(&context->spin_lock);
   ListBaseT<AutoTrackTrackingResult> results_to_sync = context->results_to_sync;
-  BLI_listbase_clear(&context->results_to_sync);
+  context->results_to_sync.clear_no_delete();
   BLI_spin_unlock(&context->spin_lock);
 
   for (AutoTrackTrackingResult &autotrack_result : results_to_sync.items_mutable()) {
@@ -810,7 +812,7 @@ void BKE_autotrack_context_sync(AutoTrackContext *context)
                                                  marker_scene_frame);
     }
 
-    MEM_freeN(&autotrack_result);
+    MEM_delete(&autotrack_result);
   }
 
   for (int clip_index = 0; clip_index < context->num_clips; clip_index++) {
@@ -872,7 +874,7 @@ static void release_keyframed_image_buffers(AutoTrackContext *context)
     IMB_freeImBuf(ibuf);
   }
 
-  MEM_freeN(context->referenced_image_buffers);
+  MEM_delete(context->referenced_image_buffers);
 }
 
 void BKE_autotrack_context_free(AutoTrackContext *context)
@@ -887,14 +889,16 @@ void BKE_autotrack_context_free(AutoTrackContext *context)
 
   release_keyframed_image_buffers(context);
 
-  MEM_SAFE_FREE(context->all_autotrack_tracks);
-  MEM_SAFE_FREE(context->autotrack_markers);
+  MEM_SAFE_DELETE(context->all_autotrack_tracks);
+  MEM_SAFE_DELETE(context->autotrack_markers);
 
-  BLI_freelistN(&context->results_to_sync);
+  context->results_to_sync.free_no_destruct();
 
   BLI_spin_end(&context->spin_lock);
 
-  MEM_freeN(context);
+  MEM_delete(context);
 }
 
 /** \} */
+
+}  // namespace blender

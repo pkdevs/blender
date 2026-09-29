@@ -15,8 +15,8 @@
 
 #include "BKE_idprop.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -24,6 +24,8 @@
 #include "WM_types.hh"
 
 #include "wm_xr_intern.hh"
+
+namespace blender {
 
 #define WM_XR_ACTIONMAP_STR_DEFAULT "actionmap"
 #define WM_XR_ACTIONMAP_ITEM_STR_DEFAULT "action"
@@ -44,7 +46,7 @@ XrActionMapBinding *WM_xr_actionmap_binding_new(XrActionMapItem *ami,
     return amb_prev;
   }
 
-  XrActionMapBinding *amb = MEM_new_for_free<XrActionMapBinding>(__func__);
+  XrActionMapBinding *amb = MEM_new<XrActionMapBinding>(__func__);
   STRNCPY_UTF8(amb->name, name);
   if (amb_prev) {
     WM_xr_actionmap_binding_ensure_unique(ami, amb);
@@ -97,12 +99,12 @@ void WM_xr_actionmap_binding_ensure_unique(XrActionMapItem *ami, XrActionMapBind
 
 static XrActionMapBinding *wm_xr_actionmap_binding_copy(XrActionMapBinding *amb_src)
 {
-  XrActionMapBinding *amb_dst = static_cast<XrActionMapBinding *>(MEM_dupallocN(amb_src));
+  XrActionMapBinding *amb_dst = MEM_dupalloc(amb_src);
   amb_dst->prev = amb_dst->next = nullptr;
 
-  BLI_listbase_clear(&amb_dst->component_paths);
+  amb_dst->component_paths.clear_no_delete();
   for (XrComponentPath &path : amb_src->component_paths) {
-    XrComponentPath *path_new = static_cast<XrComponentPath *>(MEM_dupallocN(&path));
+    XrComponentPath *path_new = MEM_dupalloc(&path);
     BLI_addtail(&amb_dst->component_paths, path_new);
   }
 
@@ -123,7 +125,7 @@ XrActionMapBinding *WM_xr_actionmap_binding_add_copy(XrActionMapItem *ami,
 
 static void wm_xr_actionmap_binding_clear(XrActionMapBinding *amb)
 {
-  BLI_freelistN(&amb->component_paths);
+  amb->component_paths.free_no_destruct();
 }
 
 bool WM_xr_actionmap_binding_remove(XrActionMapItem *ami, XrActionMapBinding *amb)
@@ -188,12 +190,12 @@ static void wm_xr_actionmap_item_clear(XrActionMapItem *ami)
   for (XrActionMapBinding &amb : ami->bindings) {
     wm_xr_actionmap_binding_clear(&amb);
   }
-  BLI_freelistN(&ami->bindings);
+  ami->bindings.free_no_destruct();
   ami->selbinding = 0;
 
   wm_xr_actionmap_item_properties_free(ami);
 
-  BLI_freelistN(&ami->user_paths);
+  ami->user_paths.free_no_destruct();
 }
 
 void WM_xr_actionmap_item_properties_update_ot(XrActionMapItem *ami)
@@ -246,7 +248,7 @@ XrActionMapItem *WM_xr_actionmap_item_new(XrActionMap *actionmap,
     return ami_prev;
   }
 
-  XrActionMapItem *ami = MEM_new_for_free<XrActionMapItem>(__func__);
+  XrActionMapItem *ami = MEM_new<XrActionMapItem>(__func__);
   STRNCPY_UTF8(ami->name, name);
   if (ami_prev) {
     WM_xr_actionmap_item_ensure_unique(actionmap, ami);
@@ -299,10 +301,10 @@ void WM_xr_actionmap_item_ensure_unique(XrActionMap *actionmap, XrActionMapItem 
 
 static XrActionMapItem *wm_xr_actionmap_item_copy(XrActionMapItem *ami_src)
 {
-  XrActionMapItem *ami_dst = static_cast<XrActionMapItem *>(MEM_dupallocN(ami_src));
+  XrActionMapItem *ami_dst = MEM_dupalloc(ami_src);
   ami_dst->prev = ami_dst->next = nullptr;
 
-  BLI_listbase_clear(&ami_dst->bindings);
+  ami_dst->bindings.clear_no_delete();
   for (XrActionMapBinding &amb : ami_src->bindings) {
     XrActionMapBinding *amb_new = wm_xr_actionmap_binding_copy(&amb);
     BLI_addtail(&ami_dst->bindings, amb_new);
@@ -319,9 +321,9 @@ static XrActionMapItem *wm_xr_actionmap_item_copy(XrActionMapItem *ami_src)
     ami_dst->op_properties_ptr = nullptr;
   }
 
-  BLI_listbase_clear(&ami_dst->user_paths);
+  ami_dst->user_paths.clear_no_delete();
   for (XrUserPath &path : ami_src->user_paths) {
-    XrUserPath *path_new = static_cast<XrUserPath *>(MEM_dupallocN(&path));
+    XrUserPath *path_new = MEM_dupalloc(&path);
     BLI_addtail(&ami_dst->user_paths, path_new);
   }
 
@@ -385,7 +387,7 @@ XrActionMap *WM_xr_actionmap_new(wmXrRuntimeData *runtime, const char *name, boo
     return am_prev;
   }
 
-  XrActionMap *am = MEM_new_for_free<XrActionMap>(__func__);
+  XrActionMap *am = MEM_new<XrActionMap>(__func__);
   STRNCPY_UTF8(am->name, name);
   if (am_prev) {
     WM_xr_actionmap_ensure_unique(runtime, am);
@@ -436,10 +438,10 @@ void WM_xr_actionmap_ensure_unique(wmXrRuntimeData *runtime, XrActionMap *action
 
 static XrActionMap *wm_xr_actionmap_copy(XrActionMap *am_src)
 {
-  XrActionMap *am_dst = static_cast<XrActionMap *>(MEM_dupallocN(am_src));
+  XrActionMap *am_dst = MEM_dupalloc(am_src);
   am_dst->prev = am_dst->next = nullptr;
 
-  BLI_listbase_clear(&am_dst->items);
+  am_dst->items.clear_no_delete();
   for (XrActionMapItem &ami : am_src->items) {
     XrActionMapItem *ami_new = wm_xr_actionmap_item_copy(&ami);
     BLI_addtail(&am_dst->items, ami_new);
@@ -499,7 +501,7 @@ void WM_xr_actionmap_clear(XrActionMap *actionmap)
   for (XrActionMapItem &ami : actionmap->items) {
     wm_xr_actionmap_item_clear(&ami);
   }
-  BLI_freelistN(&actionmap->items);
+  actionmap->items.free_no_destruct();
   actionmap->selitem = 0;
 }
 
@@ -508,7 +510,7 @@ void WM_xr_actionmaps_clear(wmXrRuntimeData *runtime)
   for (XrActionMap &am : runtime->actionmaps) {
     WM_xr_actionmap_clear(&am);
   }
-  BLI_freelistN(&runtime->actionmaps);
+  runtime->actionmaps.free_no_destruct();
   runtime->actactionmap = runtime->selactionmap = 0;
 }
 
@@ -538,3 +540,5 @@ void WM_xr_actionmap_selected_index_set(wmXrRuntimeData *runtime, short idx)
 }
 
 /** \} */
+
+}  // namespace blender

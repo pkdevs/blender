@@ -10,8 +10,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
@@ -28,6 +28,8 @@
 #include "FX_shader_types.hh"
 
 #include "BLO_read_write.hh"
+
+namespace blender {
 
 static ShaderFxTypeInfo *shader_fx_types[NUM_SHADER_FX_TYPES] = {nullptr};
 
@@ -51,10 +53,11 @@ void BKE_shaderfx_init()
   shaderfx_type_init(shader_fx_types); /* `FX_shader_util.cc`. */
 }
 
-ShaderFxData *BKE_shaderfx_new(int type)
+ShaderFxData *BKE_shaderfx_new(ShaderFxType type)
 {
-  const ShaderFxTypeInfo *fxi = BKE_shaderfx_get_info(ShaderFxType(type));
-  ShaderFxData *fx = static_cast<ShaderFxData *>(MEM_callocN(fxi->struct_size, fxi->struct_name));
+  const ShaderFxTypeInfo *fxi = BKE_shaderfx_get_info(type);
+  ShaderFxData *fx = static_cast<ShaderFxData *>(
+      MEM_new_zeroed(fxi->struct_size, fxi->struct_name));
 
   /* NOTE: this name must be made unique later. */
   STRNCPY_UTF8(fx->name, DATA_(fxi->name));
@@ -101,10 +104,10 @@ void BKE_shaderfx_free_ex(ShaderFxData *fx, const int flag)
     fxi->free_data(fx);
   }
   if (fx->error) {
-    MEM_freeN(fx->error);
+    MEM_delete(fx->error);
   }
 
-  MEM_freeN(fx);
+  MEM_delete(fx);
 }
 
 void BKE_shaderfx_free(ShaderFxData *fx)
@@ -166,8 +169,8 @@ void BKE_shaderfx_copydata_generic(const ShaderFxData *fx_src, ShaderFxData *fx_
   }
 
   const size_t data_size = sizeof(ShaderFxData);
-  const char *fx_src_data = ((const char *)fx_src) + data_size;
-  char *fx_dst_data = ((char *)fx_dst) + data_size;
+  const char *fx_src_data = (reinterpret_cast<const char *>(fx_src)) + data_size;
+  char *fx_dst_data = (reinterpret_cast<char *>(fx_dst)) + data_size;
   BLI_assert(data_size <= size_t(fxi->struct_size));
   memcpy(fx_dst_data, fx_src_data, size_t(fxi->struct_size) - data_size);
 }
@@ -212,21 +215,17 @@ void BKE_shaderfx_copy(ListBaseT<ShaderFxData> *dst, const ListBaseT<ShaderFxDat
   ShaderFxData *fx;
   ShaderFxData *srcfx;
 
-  BLI_listbase_clear(dst);
+  dst->clear_no_delete();
   BLI_duplicatelist(dst, src);
 
-  for (srcfx = static_cast<ShaderFxData *>(src->first),
-      fx = static_cast<ShaderFxData *>(dst->first);
-       srcfx && fx;
-       srcfx = srcfx->next, fx = fx->next)
-  {
+  for (srcfx = src->first(), fx = dst->first(); srcfx && fx; srcfx = srcfx->next, fx = fx->next) {
     BKE_shaderfx_copydata(srcfx, fx);
   }
 }
 
 ShaderFxData *BKE_shaderfx_findby_type(Object *ob, ShaderFxType type)
 {
-  ShaderFxData *fx = static_cast<ShaderFxData *>(ob->shader_fx.first);
+  ShaderFxData *fx = ob->shader_fx.first();
 
   for (; fx; fx = fx->next) {
     if (fx->type == type) {
@@ -239,7 +238,7 @@ ShaderFxData *BKE_shaderfx_findby_type(Object *ob, ShaderFxType type)
 
 void BKE_shaderfx_foreach_ID_link(Object *ob, ShaderFxIDWalkFunc walk, void *user_data)
 {
-  ShaderFxData *fx = static_cast<ShaderFxData *>(ob->shader_fx.first);
+  ShaderFxData *fx = ob->shader_fx.first();
 
   for (; fx; fx = fx->next) {
     const ShaderFxTypeInfo *fxi = BKE_shaderfx_get_info(ShaderFxType(fx->type));
@@ -290,3 +289,5 @@ void BKE_shaderfx_blend_read_data(BlendDataReader *reader, ListBaseT<ShaderFxDat
     }
   }
 }
+
+}  // namespace blender

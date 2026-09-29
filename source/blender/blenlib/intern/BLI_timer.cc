@@ -6,11 +6,13 @@
  * \ingroup bli
  */
 
-#include "BLI_timer.h"
-#include "BLI_listbase.h"
-#include "BLI_time.h"
+#include "BLI_timer.hh"
+#include "BLI_listbase.hh"
+#include "BLI_time.hh"
 
 #include "MEM_guardedalloc.h"
+
+namespace blender {
 
 #define GET_TIME() BLI_time_now_seconds()
 
@@ -38,7 +40,7 @@ void BLI_timer_register(uintptr_t uuid,
                         double first_interval,
                         bool persistent)
 {
-  TimedFunction *timed_func = MEM_callocN<TimedFunction>(__func__);
+  TimedFunction *timed_func = MEM_new_zeroed<TimedFunction>(__func__);
   timed_func->func = func;
   timed_func->user_data_free = user_data_free;
   timed_func->user_data = user_data;
@@ -105,9 +107,7 @@ static void execute_functions_if_necessary()
 
 static void remove_tagged_functions()
 {
-  for (TimedFunction *timed_func = static_cast<TimedFunction *>(GlobalTimer.funcs.first);
-       timed_func;)
-  {
+  for (TimedFunction *timed_func = GlobalTimer.funcs.first(); timed_func;) {
     TimedFunction *next = timed_func->next;
     if (timed_func->tag_removal) {
       clear_user_data(timed_func);
@@ -145,3 +145,5 @@ void BLI_timer_on_file_load()
 {
   remove_non_persistent_functions();
 }
+
+}  // namespace blender

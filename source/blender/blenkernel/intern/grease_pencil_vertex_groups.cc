@@ -9,7 +9,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_set.hh"
 
 #include "BKE_curves.hh"
@@ -55,10 +55,10 @@ int ensure_vertex_group(const StringRef name, ListBaseT<bDeformGroup> &vertex_gr
 {
   int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
   if (def_nr < 0) {
-    bDeformGroup *defgroup = MEM_new_for_free<bDeformGroup>(__func__);
+    bDeformGroup *defgroup = MEM_new<bDeformGroup>(__func__);
     name.copy_utf8_truncated(defgroup->name);
     BLI_addtail(&vertex_group_names, defgroup);
-    def_nr = BLI_listbase_count(&vertex_group_names) - 1;
+    def_nr = vertex_group_names.count() - 1;
     BLI_assert(def_nr >= 0);
   }
   return def_nr;
@@ -79,10 +79,10 @@ void assign_to_vertex_group_from_mask(bke::CurvesGeometry &curves,
 
   /* Lazily add the vertex group if any vertex is selected. */
   if (def_nr < 0) {
-    bDeformGroup *defgroup = MEM_new_for_free<bDeformGroup>(__func__);
+    bDeformGroup *defgroup = MEM_new<bDeformGroup>(__func__);
     name.copy_utf8_truncated(defgroup->name);
     BLI_addtail(&vertex_group_names, defgroup);
-    def_nr = BLI_listbase_count(&vertex_group_names) - 1;
+    def_nr = vertex_group_names.count() - 1;
     BLI_assert(def_nr >= 0);
   }
 
@@ -112,11 +112,11 @@ void assign_to_vertex_group(Drawing &drawing, const StringRef name, const float 
     if (selection[i]) {
       /* Lazily add the vertex group if any vertex is selected. */
       if (def_nr < 0) {
-        bDeformGroup *defgroup = MEM_new_for_free<bDeformGroup>(__func__);
+        bDeformGroup *defgroup = MEM_new<bDeformGroup>(__func__);
         name.copy_utf8_truncated(defgroup->name);
 
         BLI_addtail(&vertex_group_names, defgroup);
-        def_nr = BLI_listbase_count(&vertex_group_names) - 1;
+        def_nr = vertex_group_names.count() - 1;
         BLI_assert(def_nr >= 0);
       }
 

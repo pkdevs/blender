@@ -9,6 +9,8 @@
 
 #include "BLI_string_ref.hh"
 
+namespace blender {
+
 struct ImBuf;
 struct Mesh;
 
@@ -20,10 +22,14 @@ struct Mesh;
  * \param margin: the size of the margin in pixels.
  * \param me: the mesh to use the polygons of.
  * \param uv_layer: The UV layer to use.
+ * \param conservative: if conservative rasterization should be used.
  */
 void RE_generate_texturemargin_adjacentfaces(struct ImBuf *ibuf,
                                              char *mask,
                                              int margin,
                                              struct Mesh const *me,
-                                             blender::StringRef uv_layer,
-                                             const float uv_offset[2]);
+                                             StringRef uv_layer,
+                                             const float uv_offset[2],
+                                             bool conservative);
+
+}  // namespace blender

@@ -877,7 +877,7 @@ class ConstraintButtonsPanel:
         self.draw_influence(layout, con)
 
         if not con.targets:
-            layout.label(text="No target bones added", icon='ERROR')
+            layout.label(text="No target bones added", icon='STATUS_WARNING')
 
     def draw_kinematic(self, context):
         layout = self.layout
@@ -1175,7 +1175,7 @@ class ConstraintButtonsSubPanel:
 
         col = layout.column(align=True)
         col.prop(con, "action")
-        if con.action and con.action.is_action_layered:
+        if con.action:
             col.context_pointer_set("animated_id", con.id_data)
             col.template_search(
                 con, "action_slot",

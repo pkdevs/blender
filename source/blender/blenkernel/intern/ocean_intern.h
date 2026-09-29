@@ -9,8 +9,13 @@
  */
 
 #ifdef WITH_OCEANSIM
-#  include "BLI_threads.h"
+#  include "BLI_threads.hh"
 #  include "fftw3.h"
+#endif
+
+namespace blender {
+
+#ifdef WITH_OCEANSIM
 #  define GRAVITY 9.81f
 
 struct Ocean {
@@ -113,3 +118,5 @@ struct Ocean {
   int stub;
 };
 #endif
+
+}  // namespace blender

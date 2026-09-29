@@ -15,10 +15,10 @@
 #include "DNA_screen_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
@@ -123,12 +123,12 @@ static bool last_redo_poll(const bContext *C, short region_type, int region_inde
                                                    area, region_type, region_index_hint) :
                                                nullptr;
     ARegion *region_prev = CTX_wm_region(C);
-    CTX_wm_region_set((bContext *)C, region_op);
+    CTX_wm_region_set(const_cast<bContext *>(C), region_op);
 
     if (WM_operator_repeat_check(C, op) && WM_operator_ui_poll(op->type, op->ptr)) {
-      success = WM_operator_poll((bContext *)C, op->type);
+      success = WM_operator_poll(const_cast<bContext *>(C), op->type);
     }
-    CTX_wm_region_set((bContext *)C, region_prev);
+    CTX_wm_region_set(const_cast<bContext *>(C), region_prev);
   }
   return success;
 }
@@ -177,12 +177,15 @@ static void hud_panel_operator_redo_draw(const bContext *C, Panel *panel)
     panel->layout->enabled_set(false);
   }
   Layout &col = panel->layout->column(false);
+  /* Redo HUD is a kind of popup, use persistent layout panel states for the redo operator. */
+  panel->runtime->layout_panel_states_storage = &popup_persistent_layout_panel_states(
+      op->type->idname);
   template_operator_redo_properties(&col, C);
 }
 
 static void hud_panels_register(ARegionType *art, int space_type, int region_type)
 {
-  PanelType *pt = MEM_callocN<PanelType>(__func__);
+  PanelType *pt = MEM_new_zeroed<PanelType>(__func__);
   STRNCPY_UTF8(pt->idname, "OPERATOR_PT_redo");
   STRNCPY_UTF8(pt->label, N_("Redo"));
   STRNCPY_UTF8(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
@@ -215,7 +218,10 @@ static void hud_region_init(wmWindowManager *wm, ARegion *region)
 
 static void hud_region_free(ARegion *region)
 {
-  MEM_SAFE_FREE(region->regiondata);
+  if (region->regiondata) {
+    MEM_delete(static_cast<HudRegionData *>(region->regiondata));
+    region->regiondata = nullptr;
+  }
 }
 
 static void hud_region_layout(const bContext *C, ARegion *region)
@@ -232,7 +238,7 @@ static void hud_region_layout(const bContext *C, ARegion *region)
 
   ED_region_panels_layout(C, region);
 
-  if (region->panels.first &&
+  if (region->panels.first() &&
       ((area->flag & AREA_FLAG_REGION_SIZE_UPDATE) || (region->sizey != size_y)))
   {
     int winx_new = UI_SCALE_FAC * (region->sizex + 0.5f);
@@ -295,7 +301,7 @@ static void hud_region_listener(const wmRegionListenerParams *params)
 
 ARegionType *ED_area_type_hud(int space_type)
 {
-  ARegionType *art = MEM_callocN<ARegionType>(__func__);
+  ARegionType *art = MEM_new_zeroed<ARegionType>(__func__);
   art->regionid = RGN_TYPE_HUD;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D;
   art->listener = hud_region_listener;
@@ -406,7 +412,7 @@ void ED_area_type_hud_ensure(bContext *C, ScrArea *area)
   {
     HudRegionData *hrd = static_cast<HudRegionData *>(region->regiondata);
     if (hrd == nullptr) {
-      hrd = MEM_callocN<HudRegionData>(__func__);
+      hrd = MEM_new_zeroed<HudRegionData>(__func__);
       region->regiondata = hrd;
     }
     if (region_op) {

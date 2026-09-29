@@ -23,12 +23,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
@@ -36,7 +36,10 @@
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 
-#include "GHOST_C-api.h"
+#include "GHOST_ISystem.hh"
+#include "GHOST_IWindow.hh"
+#include "GHOST_Rect.hh"
+#include "GHOST_Types.hh"
 
 #include "ED_node.hh"
 #include "ED_screen.hh"
@@ -52,6 +55,8 @@
 #include "GPU_state.hh"
 #include "GPU_texture.hh"
 #include "GPU_viewport.hh"
+
+#include "PRF_profile.hh"
 
 #include "RE_engine.h"
 
@@ -69,6 +74,8 @@
 
 #include "IMB_colormanagement.hh"
 
+namespace blender {
+
 #ifdef WITH_OPENSUBDIV
 #  include "BKE_subsurf.hh"
 #endif
@@ -85,14 +92,14 @@ static bool wm_window_grab_warp_region_is_set(const wmWindow *win)
   if (ELEM(win->grabcursor, GHOST_kGrabWrap, GHOST_kGrabHide)) {
     GHOST_TGrabCursorMode mode_dummy;
     GHOST_TAxisFlag wrap_axis_dummy;
-    int bounds[4] = {0};
+    GHOST_Rect bounds = {0};
     bool use_software_cursor_dummy = false;
-    GHOST_GetCursorGrabState(static_cast<GHOST_WindowHandle>(win->runtime->ghostwin),
-                             &mode_dummy,
-                             &wrap_axis_dummy,
-                             bounds,
-                             &use_software_cursor_dummy);
-    if ((bounds[0] != bounds[2]) || (bounds[1] != bounds[3])) {
+
+    GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
+    ghost_window->getCursorGrabState(
+        mode_dummy, wrap_axis_dummy, bounds, use_software_cursor_dummy);
+
+    if (bounds.getWidth() != 0 || bounds.getHeight() != 0) {
       return true;
     }
   }
@@ -132,7 +139,7 @@ static void wm_paintcursor_draw(bContext *C, ScrArea *area, ARegion *region)
     }
 
     if (pc.poll == nullptr || pc.poll(C)) {
-      blender::ui::theme::theme_set(area->spacetype, region->regiontype);
+      ui::theme::theme_set(area->spacetype, region->regiontype);
 
       /* Prevent drawing outside region. */
       GPU_scissor_test(true);
@@ -182,16 +189,16 @@ static struct {
     /*winid*/ -1,
 };
 
-/** Reuse the result from #GHOST_GetCursorGrabState. */
+/** Reuse the result from #GHOST_IWindow::getCursorGrabState. */
 struct GrabState {
   GHOST_TGrabCursorMode mode;
   GHOST_TAxisFlag wrap_axis;
-  int bounds[4];
+  GHOST_Rect bounds;
 };
 
 static bool wm_software_cursor_needed()
 {
-  if (UNLIKELY(g_software_cursor.enabled == -1)) {
+  if (g_software_cursor.enabled == -1) [[unlikely]] {
     g_software_cursor.enabled = !(WM_capabilities_flag() & WM_CAPABILITY_CURSOR_WARP);
   }
   return g_software_cursor.enabled;
@@ -200,15 +207,15 @@ static bool wm_software_cursor_needed()
 static bool wm_software_cursor_needed_for_window(const wmWindow *win, GrabState *grab_state)
 {
   BLI_assert(wm_software_cursor_needed());
-  if (GHOST_GetCursorVisibility(static_cast<GHOST_WindowHandle>(win->runtime->ghostwin))) {
+
+  GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
+  if (ghost_window->getCursorVisibility()) {
     /* NOTE: The value in `win->grabcursor` can't be used as it
      * doesn't always match GHOST's value in the case of tablet events. */
     bool use_software_cursor;
-    GHOST_GetCursorGrabState(static_cast<GHOST_WindowHandle>(win->runtime->ghostwin),
-                             &grab_state->mode,
-                             &grab_state->wrap_axis,
-                             grab_state->bounds,
-                             &use_software_cursor);
+    ghost_window->getCursorGrabState(
+        grab_state->mode, grab_state->wrap_axis, grab_state->bounds, use_software_cursor);
+
     if (use_software_cursor) {
       return true;
     }
@@ -253,14 +260,13 @@ static void wm_software_cursor_draw_bitmap(const float system_scale,
 
   float gl_matrix[4][4];
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL;
-  blender::gpu::Texture *texture = GPU_texture_create_2d(
-      "software_cursor",
-      bitmap->data_size[0],
-      bitmap->data_size[1],
-      1,
-      blender::gpu::TextureFormat::UNORM_8_8_8_8,
-      usage,
-      nullptr);
+  gpu::Texture *texture = GPU_texture_create_2d("software_cursor",
+                                                bitmap->data_size[0],
+                                                bitmap->data_size[1],
+                                                1,
+                                                gpu::TextureFormat::UNORM_8_8_8_8,
+                                                usage,
+                                                nullptr);
   GPU_texture_update(texture, GPU_DATA_UBYTE, bitmap->data);
   GPU_texture_filter_mode(texture, false);
 
@@ -286,10 +292,8 @@ static void wm_software_cursor_draw_bitmap(const float system_scale,
   GPU_matrix_mul(gl_matrix);
 
   GPUVertFormat *imm_format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(
-      imm_format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
-  uint texCoord = GPU_vertformat_attr_add(
-      imm_format, "texCoord", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(imm_format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
+  uint texCoord = GPU_vertformat_attr_add(imm_format, "texCoord", gpu::VertAttrType::SFLOAT_32_32);
 
   /* Use 3D image for correct display of planar tracked images. */
   immBindBuiltinProgram(GPU_SHADER_3D_IMAGE);
@@ -328,11 +332,10 @@ static void wm_software_cursor_draw_crosshair(const float system_scale, const in
    * are set by the operating-system, where the pixel information isn't easily available. */
 
   /* The cursor scaled by the "default" size. */
-  const float cursor_scale = float(WM_cursor_preferred_logical_size()) /
+  const float cursor_scale = float(WM_cursor_preferred_logical_size(false)) /
                              float(WM_CURSOR_DEFAULT_LOGICAL_SIZE);
   const float unit = max_ff(system_scale * cursor_scale, 1.0f);
-  uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   immUniformColor4f(1, 1, 1, 1);
@@ -373,16 +376,16 @@ static void wm_software_cursor_draw(wmWindow *win, const GrabState *grab_state)
   int event_xy[2] = {UNPACK2(win->runtime->eventstate->xy)};
 
   if (grab_state->wrap_axis & GHOST_kAxisX) {
-    const int min = grab_state->bounds[0];
-    const int max = grab_state->bounds[2];
+    const int min = grab_state->bounds.l_;
+    const int max = grab_state->bounds.r_;
     if (min != max) {
       event_xy[0] = mod_i(event_xy[0] - min, max - min) + min;
     }
   }
   if (grab_state->wrap_axis & GHOST_kAxisY) {
     const int height = WM_window_native_pixel_y(win);
-    const int min = height - grab_state->bounds[1];
-    const int max = height - grab_state->bounds[3];
+    const int min = height - grab_state->bounds.t_;
+    const int max = height - grab_state->bounds.b_;
     if (min != max) {
       event_xy[1] = mod_i(event_xy[1] - max, min - max) + max;
     }
@@ -391,9 +394,8 @@ static void wm_software_cursor_draw(wmWindow *win, const GrabState *grab_state)
   const float system_scale = WM_window_dpi_get_scale(win);
 
   GHOST_CursorBitmapRef bitmap = {nullptr};
-  if (GHOST_GetCursorBitmap(static_cast<GHOST_WindowHandle>(win->runtime->ghostwin), &bitmap) ==
-      GHOST_kSuccess)
-  {
+  GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
+  if (ghost_window->getCursorBitmap(&bitmap) == GHOST_kSuccess) {
     wm_software_cursor_draw_bitmap(system_scale, event_xy, &bitmap);
   }
   else {
@@ -412,7 +414,7 @@ static void wm_region_draw_overlay(bContext *C, const ScrArea *area, ARegion *re
   const wmWindow *win = CTX_wm_window(C);
 
   wmViewport(&region->winrct);
-  blender::ui::theme::theme_set(area->spacetype, region->regiontype);
+  ui::theme::theme_set(area->spacetype, region->regiontype);
   region->runtime->type->draw_overlay(C, region);
   wmWindowViewport(win);
 }
@@ -437,7 +439,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
   switch (area->spacetype) {
     case SPACE_IMAGE: {
       if (region->regiontype == RGN_TYPE_WINDOW) {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         sima->iuser.multiview_eye = sview;
         return true;
       }
@@ -445,7 +447,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
     }
     case SPACE_VIEW3D: {
       if (region->regiontype == RGN_TYPE_WINDOW) {
-        View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+        View3D *v3d = area->spacedata.first_as<View3D>();
         if (v3d->camera && v3d->camera->type == OB_CAMERA) {
           RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
           RenderEngine *engine = rv3d->view_render ? RE_view_engine_get(rv3d->view_render) :
@@ -454,8 +456,8 @@ static bool wm_draw_region_stereo_set(Main *bmain,
             return false;
           }
 
-          Camera *cam = static_cast<Camera *>(v3d->camera->data);
-          CameraBGImage *bgpic = static_cast<CameraBGImage *>(cam->bg_images.first);
+          Camera *cam = id_cast<Camera *>(v3d->camera->data);
+          CameraBGImage *bgpic = cam->bg_images.first();
           v3d->multiview_eye = sview;
           if (bgpic) {
             bgpic->iuser.multiview_eye = sview;
@@ -467,7 +469,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
     }
     case SPACE_NODE: {
       if (region->regiontype == RGN_TYPE_WINDOW) {
-        SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+        SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
         if ((snode->flag & SNODE_BACKDRAW) && ED_node_is_compositor(snode)) {
           Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
           ima->eye = sview;
@@ -477,7 +479,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
       break;
     }
     case SPACE_SEQ: {
-      SpaceSeq *sseq = static_cast<SpaceSeq *>(area->spacedata.first);
+      SpaceSeq *sseq = area->spacedata.first_as<SpaceSeq>();
       sseq->multiview_eye = sview;
 
       if (region->regiontype == RGN_TYPE_PREVIEW) {
@@ -539,7 +541,7 @@ static void wm_region_test_render_do_draw(const Scene *scene,
     GPUViewport *viewport = WM_draw_region_get_viewport(region);
 
     if (engine && (engine->flag & RE_ENGINE_DO_DRAW)) {
-      View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+      View3D *v3d = area->spacedata.first_as<View3D>();
       rcti border_rect;
 
       /* Do partial redraw when possible. */
@@ -565,7 +567,7 @@ static void wm_region_test_xr_do_draw(const wmWindowManager *wm,
 {
   if ((area->spacetype == SPACE_VIEW3D) && (region->regiontype == RGN_TYPE_WINDOW)) {
     if (ED_view3d_is_region_xr_mirror_active(
-            wm, static_cast<const View3D *>(area->spacedata.first), region))
+            wm, static_cast<const View3D *>(area->spacedata.first_), region))
     {
       ED_region_tag_redraw_no_rebuild(region);
     }
@@ -608,6 +610,7 @@ static const char *wm_area_name(const ScrArea *area)
     SPACE_NAME(SPACE_NODE);
     SPACE_NAME(SPACE_CONSOLE);
     SPACE_NAME(SPACE_USERPREF);
+    SPACE_NAME(SPACE_PROJECT);
     SPACE_NAME(SPACE_CLIP);
     SPACE_NAME(SPACE_TOPBAR);
     SPACE_NAME(SPACE_STATUSBAR);
@@ -637,7 +640,7 @@ void *WM_draw_cb_activate(wmWindow *win,
                           void (*draw)(const wmWindow *win, void *customdata),
                           void *customdata)
 {
-  WindowDrawCB *wdc = MEM_callocN<WindowDrawCB>("WindowDrawCB");
+  WindowDrawCB *wdc = MEM_new_zeroed<WindowDrawCB>("WindowDrawCB");
 
   BLI_addtail(&win->runtime->drawcalls, wdc);
   wdc->draw = draw;
@@ -649,9 +652,9 @@ void *WM_draw_cb_activate(wmWindow *win,
 void WM_draw_cb_exit(wmWindow *win, void *handle)
 {
   for (WindowDrawCB &wdc : win->runtime->drawcalls) {
-    if (&wdc == (WindowDrawCB *)handle) {
+    if (&wdc == static_cast<WindowDrawCB *>(handle)) {
       BLI_remlink(&win->runtime->drawcalls, &wdc);
-      MEM_freeN(&wdc);
+      MEM_delete(&wdc);
       return;
     }
   }
@@ -686,7 +689,7 @@ static void wm_draw_region_buffer_free(ARegion *region)
       GPU_offscreen_free(region->runtime->draw_buffer->offscreen);
     }
 
-    MEM_freeN(region->runtime->draw_buffer);
+    MEM_delete(region->runtime->draw_buffer);
     region->runtime->draw_buffer = nullptr;
   }
 }
@@ -694,13 +697,13 @@ static void wm_draw_region_buffer_free(ARegion *region)
 static void wm_draw_offscreen_texture_parameters(GPUOffScreen *offscreen)
 {
   /* Setup offscreen color texture for drawing. */
-  blender::gpu::Texture *texture = GPU_offscreen_color_texture(offscreen);
+  gpu::Texture *texture = GPU_offscreen_color_texture(offscreen);
 
   /* No mipmaps or filtering. */
   GPU_texture_mipmap_mode(texture, false, false);
 }
 
-static blender::gpu::TextureFormat get_hdr_framebuffer_format(const Scene *scene)
+static gpu::TextureFormat get_hdr_framebuffer_format(const Scene *scene)
 {
   bool use_float = false;
 
@@ -711,9 +714,8 @@ static blender::gpu::TextureFormat get_hdr_framebuffer_format(const Scene *scene
   {
     use_float = GPU_hdr_support();
   }
-  blender::gpu::TextureFormat desired_format =
-      (use_float) ? blender::gpu::TextureFormat::SFLOAT_16_16_16_16 :
-                    blender::gpu::TextureFormat::UNORM_8_8_8_8;
+  gpu::TextureFormat desired_format = (use_float) ? gpu::TextureFormat::SFLOAT_16_16_16_16 :
+                                                    gpu::TextureFormat::UNORM_8_8_8_8;
   return desired_format;
 }
 
@@ -724,7 +726,7 @@ static void wm_draw_region_buffer_create(Scene *scene,
 {
 
   /* Determine desired offscreen format depending on HDR availability. */
-  blender::gpu::TextureFormat desired_format = get_hdr_framebuffer_format(scene);
+  gpu::TextureFormat desired_format = get_hdr_framebuffer_format(scene);
 
   if (region->runtime->draw_buffer) {
     if (region->runtime->draw_buffer->stereo != stereo) {
@@ -746,7 +748,7 @@ static void wm_draw_region_buffer_create(Scene *scene,
   if (!region->runtime->draw_buffer) {
     if (use_viewport) {
       /* Allocate viewport which includes an off-screen buffer with depth multi-sample, etc. */
-      region->runtime->draw_buffer = MEM_callocN<wmDrawBuffer>("wmDrawBuffer");
+      region->runtime->draw_buffer = MEM_new_zeroed<wmDrawBuffer>("wmDrawBuffer");
       region->runtime->draw_buffer->viewport = stereo ? GPU_viewport_stereo_create() :
                                                         GPU_viewport_create();
     }
@@ -768,7 +770,7 @@ static void wm_draw_region_buffer_create(Scene *scene,
 
       wm_draw_offscreen_texture_parameters(offscreen);
 
-      region->runtime->draw_buffer = MEM_callocN<wmDrawBuffer>("wmDrawBuffer");
+      region->runtime->draw_buffer = MEM_new_zeroed<wmDrawBuffer>("wmDrawBuffer");
       region->runtime->draw_buffer->offscreen = offscreen;
     }
 
@@ -832,6 +834,15 @@ static void wm_draw_region_blit(ARegion *region, int view)
     }
   }
 
+  /* Regions are copied in without blending, so without this, the region's own alpha would land in
+   * the window's frame-buffer. That matters for client-side-decorated windows for rounded corners:
+   * viewports are transparent where nothing was rendered, leading to un-wanted transparency.
+   *
+   * Everything else drawn into the window blends with #GPU_BLEND_ALPHA which leaves an opaque
+   * destination opaque, so masking here is enough to keep the window opaque for the whole frame,
+   * see #WM_window_csd_draw_corner_mask. */
+  GPU_color_mask(true, true, true, false);
+
   if (region->runtime->draw_buffer->viewport) {
     GPU_viewport_draw_to_screen(region->runtime->draw_buffer->viewport, view, &region->winrct);
   }
@@ -839,9 +850,11 @@ static void wm_draw_region_blit(ARegion *region, int view)
     GPU_offscreen_draw_to_screen(
         region->runtime->draw_buffer->offscreen, region->winrct.xmin, region->winrct.ymin);
   }
+
+  GPU_color_mask(true, true, true, true);
 }
 
-blender::gpu::Texture *wm_draw_region_texture(ARegion *region, int view)
+gpu::Texture *wm_draw_region_texture(ARegion *region, int view)
 {
   if (!region->runtime->draw_buffer) {
     return nullptr;
@@ -875,6 +888,9 @@ void wm_draw_region_blend(ARegion *region, int view, bool blend)
   const float halfy = GLA_PIXEL_OFS / (BLI_rcti_size_y(&region->winrct) + 1);
 
   rcti rect_geo = region->winrct;
+  if (blend) {
+    ED_region_blend_rect(region, &rect_geo);
+  }
   rect_geo.xmax += 1;
   rect_geo.ymax += 1;
 
@@ -884,20 +900,17 @@ void wm_draw_region_blend(ARegion *region, int view, bool blend)
   rect_tex.xmax = 1.0f + halfx;
   rect_tex.ymax = 1.0f + halfy;
 
-  float alpha_easing = 1.0f - alpha;
-  alpha_easing = 1.0f - alpha_easing * alpha_easing;
-
-  /* Slide vertical panels. */
-  float ofs_x = BLI_rcti_size_x(&region->winrct) * (1.0f - alpha_easing);
   if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_RIGHT) {
-    rect_geo.xmin += ofs_x;
-    rect_tex.xmax *= alpha_easing;
-    alpha = 1.0f;
+    rect_tex.xmax *= alpha;
   }
   else if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_LEFT) {
-    rect_geo.xmax -= ofs_x;
-    rect_tex.xmin += 1.0f - alpha_easing;
-    alpha = 1.0f;
+    rect_tex.xmin += 1.0f - alpha;
+  }
+  else if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_TOP) {
+    rect_tex.ymax *= alpha;
+  }
+  else if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_BOTTOM) {
+    rect_tex.ymin += 1.0f - alpha;
   }
 
   /* Not the same layout as #rctf/#rcti. */
@@ -911,9 +924,9 @@ void wm_draw_region_blend(ARegion *region, int view, bool blend)
   }
 
   /* Setup actual texture. */
-  blender::gpu::Texture *texture = wm_draw_region_texture(region, view);
+  gpu::Texture *texture = wm_draw_region_texture(region, view);
 
-  blender::gpu::Shader *shader = GPU_shader_get_builtin_shader(GPU_SHADER_2D_IMAGE_RECT_COLOR);
+  gpu::Shader *shader = GPU_shader_get_builtin_shader(GPU_SHADER_2D_IMAGE_RECT_COLOR);
   GPU_shader_bind(shader);
 
   int color_loc = GPU_shader_get_builtin_uniform(shader, GPU_UNIFORM_COLOR);
@@ -925,9 +938,9 @@ void wm_draw_region_blend(ARegion *region, int view, bool blend)
 
   GPU_shader_uniform_float_ex(shader, rect_tex_loc, 4, 1, rectt);
   GPU_shader_uniform_float_ex(shader, rect_geo_loc, 4, 1, rectg);
-  GPU_shader_uniform_float_ex(shader, color_loc, 4, 1, blender::float4{1, 1, 1, 1});
+  GPU_shader_uniform_float_ex(shader, color_loc, 4, 1, float4{alpha, alpha, alpha, alpha});
 
-  blender::gpu::Batch *quad = GPU_batch_preset_quad();
+  gpu::Batch *quad = GPU_batch_preset_quad();
   GPU_batch_set_shader(quad, shader);
   GPU_batch_draw(quad);
 
@@ -966,6 +979,8 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
   CTX_wm_area_set(C, area);
   GPU_debug_group_begin(wm_area_name(area));
 
+  bool is_any_region_drawn = false;
+
   /* Compute UI layouts for dynamically size regions. */
   for (ARegion &region : area->regionbase) {
     if (region.flag & RGN_FLAG_POLL_FAILED) {
@@ -981,6 +996,14 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
     if ((region.runtime->visible || ignore_visibility) && region.runtime->do_draw &&
         region.runtime->type && region.runtime->type->layout)
     {
+      /* Call space-level pre-draw callback if this is the first region to be laid out. */
+      if (!is_any_region_drawn) {
+        if (area->type->draw_pre) {
+          area->type->draw_pre(C, area);
+        }
+        is_any_region_drawn = true;
+      }
+
       CTX_wm_region_set(C, &region);
       ED_region_do_layout(C, &region);
       CTX_wm_region_set(C, nullptr);
@@ -1001,6 +1024,15 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
   for (ARegion &region : area->regionbase) {
     if (!region.runtime->visible || !region.runtime->do_draw) {
       continue;
+    }
+
+    /* Call space-level pre-draw callback if it wasn't called yet, which can happen when none of
+     * the regions had a layout callback. */
+    if (!is_any_region_drawn) {
+      if (area->type->draw_pre) {
+        area->type->draw_pre(C, area);
+      }
+      is_any_region_drawn = true;
     }
 
     CTX_wm_region_set(C, &region);
@@ -1043,7 +1075,18 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
     GPU_debug_group_end();
 
     region.runtime->do_draw = 0;
+
+    region.runtime->post_block_layout_fns.clear();
+
+    /* Clear temporary update flag. */
+    region.flag &= ~RGN_FLAG_SEARCH_FILTER_UPDATE;
+
     CTX_wm_region_set(C, nullptr);
+  }
+
+  /* Call space-level post-draw callback, but only if there was at least one region drawn. */
+  if (is_any_region_drawn && area->type->draw_post) {
+    area->type->draw_post(C, area);
   }
 
   CTX_wm_area_set(C, nullptr);
@@ -1104,6 +1147,16 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
   wmWindowManager *wm = CTX_wm_manager(C);
   bScreen *screen = WM_window_get_active_screen(win);
 
+  /* Restore screen context after drawing. Especially important for when this is called for drawing
+   * to an offscreen buffer (see #WM_window_pixels_read_from_offscreen()) from operators or other
+   * handlers. */
+  ScrArea *restore_area = CTX_wm_area(C);
+  ARegion *restore_region = CTX_wm_region(C);
+  BLI_SCOPED_DEFER([&] {
+    CTX_wm_area_set(C, restore_area);
+    CTX_wm_region_set(C, restore_region);
+  });
+
   GPU_debug_group_begin("Window Redraw");
 
   /* Draw into the window frame-buffer, in full window coordinates. */
@@ -1136,7 +1189,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
       if (!region.runtime->visible) {
         continue;
       }
-      const bool do_paint_cursor = (wm->runtime->paintcursors.first &&
+      const bool do_paint_cursor = (wm->runtime->paintcursors.first() &&
                                     &region == screen->active_region);
       const bool do_draw_overlay = (region.runtime->type && region.runtime->type->draw_overlay);
       if (!(do_paint_cursor || do_draw_overlay)) {
@@ -1170,7 +1223,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
   }
 
   /* After area regions so we can do area 'overlay' drawing. */
-  blender::ui::theme::theme_set(0, 0);
+  ui::theme::theme_set(0, 0);
   ED_screen_draw_edges(win);
 
   /* Needs zero offset here or it looks blurry. #128112. */
@@ -1188,13 +1241,13 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
   }
 
   /* Always draw, not only when screen tagged. */
-  if (win->runtime->gesture.first) {
+  if (win->runtime->gesture.first_) {
     wm_gesture_draw(win);
     wmWindowViewport(win);
   }
 
   /* Needs pixel coords in screen. */
-  if (wm->runtime->drags.first) {
+  if (wm->runtime->drags.first_) {
     wm_drags_draw(C, win);
     wmWindowViewport(win);
   }
@@ -1216,15 +1269,23 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
 
 static void wm_draw_window(bContext *C, wmWindow *win)
 {
+  PRF_scope(ProfileCategory::Draw);
   GPU_context_begin_frame(static_cast<GPUContext *>(win->runtime->gpuctx));
 
   bScreen *screen = WM_window_get_active_screen(win);
   bool stereo = WM_stereo3d_enabled(win, false);
 
 #ifdef WITH_GHOST_CSD
-  /* Title bar. */
-  if (WM_window_is_csd(win)) {
-    WM_window_csd_draw_titlebar(win);
+  if (WM_window_csd_is_active()) {
+    /* Title bar. */
+    if (WM_window_is_csd(win)) {
+      WM_window_csd_draw_titlebar(win);
+    }
+    else {
+      /* Full-screen windows draw no decorations, so nothing above clears the frame-buffer.
+       * Their alpha channel still has to be made opaque, see #WM_window_csd_clear_alpha. */
+      WM_window_csd_clear_alpha(win);
+    }
   }
 #endif
 
@@ -1252,13 +1313,13 @@ static void wm_draw_window(bContext *C, wmWindow *win)
   }
   else {
     /* Determine desired offscreen format depending on HDR availability. */
-    blender::gpu::TextureFormat desired_format = get_hdr_framebuffer_format(
+    gpu::TextureFormat desired_format = get_hdr_framebuffer_format(
         WM_window_get_active_scene(win));
 
     /* For side-by-side and top-bottom, we need to render each view to an
      * an off-screen texture and then draw it. This used to happen for all
      * stereo methods, but it's less efficient than drawing directly. */
-    const blender::int2 win_size = WM_window_native_pixel_size(win);
+    const int2 win_size = WM_window_native_pixel_size(win);
     GPUOffScreen *offscreen = GPU_offscreen_create(win_size[0],
                                                    win_size[1],
                                                    false,
@@ -1268,7 +1329,7 @@ static void wm_draw_window(bContext *C, wmWindow *win)
                                                    nullptr);
 
     if (offscreen) {
-      blender::gpu::Texture *texture = GPU_offscreen_color_texture(offscreen);
+      gpu::Texture *texture = GPU_offscreen_color_texture(offscreen);
       wm_draw_offscreen_texture_parameters(offscreen);
 
       for (int view = 0; view < 2; view++) {
@@ -1298,6 +1359,14 @@ static void wm_draw_window(bContext *C, wmWindow *win)
       wm_draw_window_onscreen(C, win, 0);
     }
   }
+
+#ifdef WITH_GHOST_CSD
+  /* Rounded corners, run last so the corners are cut away no matter what covered them
+   * (the title bar at the top, editor areas & the status bar at the bottom). */
+  if (WM_window_is_csd(win)) {
+    WM_window_csd_draw_corner_mask(win);
+  }
+#endif
 
   screen->do_draw = false;
 
@@ -1346,26 +1415,26 @@ uint8_t *WM_window_pixels_read_from_frontbuffer(const wmWindowManager *wm,
   bool setup_context = wm->runtime->windrawable != win;
 
   if (setup_context) {
-    GHOST_ActivateWindowDrawingContext(static_cast<GHOST_WindowHandle>(win->runtime->ghostwin));
+    static_cast<GHOST_IWindow *>(win->runtime->ghostwin)->activateDrawingContext();
     GPU_context_active_set(static_cast<GPUContext *>(win->runtime->gpuctx));
   }
 
-  const blender::int2 win_size = WM_window_native_pixel_size(win);
+  const int2 win_size = WM_window_native_pixel_size(win);
   const uint rect_len = win_size[0] * win_size[1];
-  uint8_t *rect = MEM_malloc_arrayN<uint8_t>(4 * rect_len, __func__);
+  uint8_t *rect = MEM_new_array_uninitialized<uint8_t>(4 * rect_len, __func__);
 
   GPU_frontbuffer_read_color(0, 0, win_size[0], win_size[1], 4, GPU_DATA_UBYTE, rect);
 
   if (setup_context) {
     if (wm->runtime->windrawable) {
-      GHOST_ActivateWindowDrawingContext(
-          static_cast<GHOST_WindowHandle>(wm->runtime->windrawable->runtime->ghostwin));
+      static_cast<GHOST_IWindow *>(wm->runtime->windrawable->runtime->ghostwin)
+          ->activateDrawingContext();
       GPU_context_active_set(static_cast<GPUContext *>(wm->runtime->windrawable->runtime->gpuctx));
     }
   }
 
   /* Clear alpha, it is not set to a meaningful value in OpenGL. */
-  uchar *cp = (uchar *)rect;
+  uchar *cp = static_cast<uchar *>(rect);
   uint i;
   for (i = 0, cp += 3; i < rect_len; i++, cp += 4) {
     *cp = 0xff;
@@ -1385,7 +1454,7 @@ void WM_window_pixels_read_sample_from_frontbuffer(const wmWindowManager *wm,
   bool setup_context = wm->runtime->windrawable != win;
 
   if (setup_context) {
-    GHOST_ActivateWindowDrawingContext(static_cast<GHOST_WindowHandle>(win->runtime->ghostwin));
+    static_cast<GHOST_IWindow *>(win->runtime->ghostwin)->activateDrawingContext();
     GPU_context_active_set(static_cast<GPUContext *>(win->runtime->gpuctx));
   }
 
@@ -1395,14 +1464,14 @@ void WM_window_pixels_read_sample_from_frontbuffer(const wmWindowManager *wm,
    * requires testing so a quick fix has been added to the place where this was used. The solution
    * is to implement all the cases in 'VKFramebuffer::read'.
    */
-  blender::float4 color_with_alpha;
+  float4 color_with_alpha;
   GPU_frontbuffer_read_color(pos[0], pos[1], 1, 1, 4, GPU_DATA_FLOAT, color_with_alpha);
   copy_v3_v3(r_col, color_with_alpha.xyz());
 
   if (setup_context) {
     if (wm->runtime->windrawable) {
-      GHOST_ActivateWindowDrawingContext(
-          static_cast<GHOST_WindowHandle>(wm->runtime->windrawable->runtime->ghostwin));
+      static_cast<GHOST_IWindow *>(wm->runtime->windrawable->runtime->ghostwin)
+          ->activateDrawingContext();
       GPU_context_active_set(static_cast<GPUContext *>(wm->runtime->windrawable->runtime->gpuctx));
     }
   }
@@ -1423,11 +1492,10 @@ uint8_t *WM_window_pixels_read_from_offscreen(bContext *C, wmWindow *win, int r_
    * So provide an alternative to #WM_window_pixels_read that avoids using the front-buffer. */
 
   /* Draw into an off-screen buffer and read its contents. */
-  const blender::int2 win_size = WM_window_native_pixel_size(win);
+  const int2 win_size = WM_window_native_pixel_size(win);
 
   /* Determine desired offscreen format depending on HDR availability. */
-  blender::gpu::TextureFormat desired_format = get_hdr_framebuffer_format(
-      WM_window_get_active_scene(win));
+  gpu::TextureFormat desired_format = get_hdr_framebuffer_format(WM_window_get_active_scene(win));
 
   GPUOffScreen *offscreen = GPU_offscreen_create(win_size[0],
                                                  win_size[1],
@@ -1436,12 +1504,12 @@ uint8_t *WM_window_pixels_read_from_offscreen(bContext *C, wmWindow *win, int r_
                                                  GPU_TEXTURE_USAGE_SHADER_READ,
                                                  false,
                                                  nullptr);
-  if (UNLIKELY(!offscreen)) {
+  if (!offscreen) [[unlikely]] {
     return nullptr;
   }
 
   const uint rect_len = win_size[0] * win_size[1];
-  uint8_t *rect = MEM_malloc_arrayN<uint8_t>(4 * rect_len, __func__);
+  uint8_t *rect = MEM_new_array_uninitialized<uint8_t>(4 * rect_len, __func__);
   GPU_offscreen_bind(offscreen, false);
   wm_draw_window_onscreen(C, win, -1);
   GPU_offscreen_unbind(offscreen, false);
@@ -1459,7 +1527,7 @@ bool WM_window_pixels_read_sample_from_offscreen(bContext *C,
                                                  float r_col[3])
 {
   /* A version of #WM_window_pixels_read_from_offscreen that reads a single sample. */
-  const blender::int2 win_size = WM_window_native_pixel_size(win);
+  const int2 win_size = WM_window_native_pixel_size(win);
   zero_v3(r_col);
 
   /* While this shouldn't happen, return in the case it does. */
@@ -1471,11 +1539,11 @@ bool WM_window_pixels_read_sample_from_offscreen(bContext *C,
   GPUOffScreen *offscreen = GPU_offscreen_create(win_size[0],
                                                  win_size[1],
                                                  false,
-                                                 blender::gpu::TextureFormat::UNORM_8_8_8_8,
+                                                 gpu::TextureFormat::UNORM_8_8_8_8,
                                                  GPU_TEXTURE_USAGE_SHADER_READ,
                                                  false,
                                                  nullptr);
-  if (UNLIKELY(!offscreen)) {
+  if (!offscreen) [[unlikely]] {
     return false;
   }
 
@@ -1508,7 +1576,8 @@ bool WM_window_pixels_read_sample(bContext *C, wmWindow *win, const int pos[2], 
 
 bool WM_desktop_cursor_sample_read(float r_col[3])
 {
-  return GHOST_GetPixelAtCursor(r_col);
+  const GHOST_ISystem *ghost_system = GHOST_ISystem::getSystem();
+  return ghost_system->getPixelAtCursor(r_col);
 }
 
 /** \} */
@@ -1621,6 +1690,8 @@ void WM_paint_cursor_tag_redraw(wmWindow *win, ARegion * /*region*/)
 
 void wm_draw_update(bContext *C)
 {
+  PRF_scope(ProfileCategory::Draw);
+
   Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   const bool rna_disallow_writes = true;
@@ -1632,8 +1703,6 @@ void wm_draw_update(bContext *C)
   GPU_render_begin();
   GPU_render_step();
 
-  BKE_image_free_unused_gpu_textures();
-
 #ifdef WITH_METAL_BACKEND
   /* Reset drawable to ensure GPU context activation happens at least once per frame if only a
    * single context exists. This is required to ensure the default framebuffer is updated
@@ -1643,8 +1712,8 @@ void wm_draw_update(bContext *C)
 
   for (wmWindow &win : wm->windows) {
 #ifdef WIN32
-    GHOST_TWindowState state = GHOST_GetWindowState(
-        static_cast<GHOST_WindowHandle>(win.runtime->ghostwin));
+    const GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win.runtime->ghostwin);
+    const GHOST_TWindowState state = ghost_window->getState();
 
     if (state == GHOST_kWindowStateMinimized) {
       /* Do not update minimized windows, gives issues on Intel (see #33223)
@@ -1656,6 +1725,7 @@ void wm_draw_update(bContext *C)
     CTX_wm_window_set(C, &win);
 
     if (wm_draw_update_test_window(bmain, C, &win)) {
+      PRF_frame_mark_start("Window Drawing"_ustr);
       /* Sets context window+screen. */
       wm_window_make_drawable(wm, &win);
       wm_window_swap_buffer_acquire(&win);
@@ -1667,13 +1737,26 @@ void wm_draw_update(bContext *C)
       wm_draw_update_clear_window(C, &win);
 
       wm_window_swap_buffer_release(&win);
+      PRF_frame_mark_end("Window Drawing"_ustr);
     }
   }
 
   CTX_wm_window_set(C, nullptr);
 
-  /* Draw non-windows (surfaces). */
+  /* Draw surfaces (non-windows, currently only used for XR). */
   wm_surfaces_iter(C, wm_draw_surface);
+
+  /* Restore GPU context to the last valid window if surface drawing cleared it, also restore DPI.
+   * This is required for GPU rendering code called before the next window redraw. Such as by
+   * events, handlers and notifiers (see #WM_main). */
+  if (wm->runtime->windrawable == nullptr && GPU_context_active_get() == nullptr) {
+    for (wmWindow &win : wm->windows.items_reversed()) {
+      if (win.runtime->ghostwin) {
+        wm_window_make_drawable(wm, &win);
+        break;
+      }
+    }
+  }
 
   GPU_render_end();
   GPU_context_main_unlock();
@@ -1747,3 +1830,5 @@ void WM_draw_region_viewport_unbind(ARegion *region)
 }
 
 /** \} */
+
+}  // namespace blender

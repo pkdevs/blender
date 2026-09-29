@@ -6,12 +6,14 @@
  * \ingroup gpu
  */
 
+#include <fmt/ranges.h>
+
 #include "BKE_global.hh"
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_string.h"
-#include "BLI_time.h"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
 
 #include <algorithm>
 #include <fmt/format.h>
@@ -40,13 +42,12 @@
 #include "mtl_texture.hh"
 #include "mtl_vertex_buffer.hh"
 
-#include "GHOST_C-api.h"
-
-using namespace blender;
 using namespace blender::gpu;
 using namespace blender::gpu::shader;
 
 namespace blender::gpu {
+
+static CLG_LogRef LOG = {"gpu.metal"};
 
 const char *to_string(ShaderStage stage)
 {
@@ -61,6 +62,25 @@ const char *to_string(ShaderStage stage)
       break;
   }
   return "Unknown Shader Stage";
+}
+
+std::string shader_stage_define(const ShaderStage stage)
+{
+  std::string define = "#define ";
+  switch (stage) {
+    case ShaderStage::VERTEX:
+      define += "GPU_VERTEX_SHADER";
+      break;
+    case ShaderStage::FRAGMENT:
+      define += "GPU_FRAGMENT_SHADER";
+      break;
+    case ShaderStage::COMPUTE:
+      define += "GPU_COMPUTE_SHADER";
+      break;
+    default:
+      BLI_assert_unreachable();
+  }
+  return define;
 }
 
 /* -------------------------------------------------------------------- */
@@ -150,11 +170,11 @@ const shader::ShaderCreateInfo &MTLShader::patch_create_info(
     patch_create_info_atomic_workaround(patched_info_, original_info);
   }
 
-  if (original_info.max_sampler_slot() > 16) {
+  if (original_info.max_sampler_slot() >= 16) {
     if (patched_info_ == nullptr) {
       patched_info_ = std::make_unique<PatchedShaderCreateInfo>(original_info);
     }
-    patched_info_->info.builtins_ |= BuiltinBits::USE_SAMPLER_ARG_BUFFER;
+    patched_info_->info.builtins(BuiltinBits::USE_SAMPLER_ARG_BUFFER);
   }
 
   return patched_info_ != nullptr ? patched_info_->info : original_info;
@@ -191,7 +211,8 @@ std::string MTLShader::entry_point_name_get(const ShaderStage stage)
 
 /* Note: returns a retained object. */
 static ::MTLCompileOptions *get_compile_options(const bool use_subpass_input,
-                                                const bool use_texture_atomic)
+                                                const bool use_texture_atomic,
+                                                const bool use_ray_query)
 {
   ::MTLCompileOptions *options = [[MTLCompileOptions alloc] init];
   options.languageVersion = MTLLanguageVersion2_2;
@@ -204,9 +225,13 @@ static ::MTLCompileOptions *get_compile_options(const bool use_subpass_input,
   if (use_subpass_input) {
     options.languageVersion = MTLLanguageVersion2_3;
   }
+  /* Inline ray queries requires Metal 3.0. */
+  if (use_ray_query) {
+    options.languageVersion = MTLLanguageVersion3_0;
+  }
 #if defined(MAC_OS_VERSION_14_0)
-  if (@available(macOS 14.00, *)) {
-    /* Texture atomics require Metal 3.1. */
+  if (@available(macOS 14.0, *)) {
+    /* Texture atomics requires Metal 3.1. */
     if (use_texture_atomic) {
       options.languageVersion = MTLLanguageVersion3_1;
     }
@@ -225,17 +250,24 @@ id<MTLLibrary> MTLShader::create_shader_library(const shader::ShaderCreateInfo &
   std::string shader_compat;
   {
     std::stringstream ss;
+    /* Shader stage needs to be defined before the compat part. */
+    ss << shader_stage_define(stage) << "\n";
     ss << "#define MTL_WORKGROUP_SIZE_X " << info.compute_layout_.local_size_x << "\n";
     ss << "#define MTL_WORKGROUP_SIZE_Y " << info.compute_layout_.local_size_y << "\n";
     ss << "#define MTL_WORKGROUP_SIZE_Z " << info.compute_layout_.local_size_z << "\n";
-    if (flag_is_set(info.builtins_, BuiltinBits::USE_SAMPLER_ARG_BUFFER)) {
+    ss << "#define GPU_PROVOKING_VERTEX_LAST\n";
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::USE_SAMPLER_ARG_BUFFER)) {
       ss << "#define MTL_USE_SAMPLER_ARGUMENT_BUFFER\n";
     }
 
-    if (flag_is_set(info.builtins_, BuiltinBits::TEXTURE_ATOMIC) &&
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::TEXTURE_ATOMIC) &&
         MTLBackend::get_capabilities().supports_texture_atomics)
     {
       ss << "#define MTL_SUPPORTS_TEXTURE_ATOMICS 1\n";
+    }
+
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::RAY_QUERY)) {
+      ss << "#define MTL_USE_RAY_QUERY\n";
     }
 
     shader::GeneratedSource defines_src{"gpu_shader_msl_defines.msl", {}, ss.str()};
@@ -251,17 +283,39 @@ id<MTLLibrary> MTLShader::create_shader_library(const shader::ShaderCreateInfo &
 
   sources[SOURCES_INDEX_VERSION] = shader_compat;
 
-  std::string concat_source = fmt::to_string(fmt::join(sources, "")) + wrapper.second;
+  const std::string original_source = fmt::to_string(fmt::join(sources, "")) + wrapper.second;
 
-  dump_source_to_disk(this->name_get(), this->entry_point_name_get(stage), ".msl", concat_source);
+  dump_source_to_disk(
+      this->name_get(), this->entry_point_name_get(stage), ".msl", original_source);
+
+  std::string processed_source;
+  if (!this->skip_preprocessor) {
+    processed_source = run_preprocessor(original_source, G.debug & G_DEBUG_GPU_SHADER_NO_DCE);
+
+    dump_source_to_disk(this->name_get(),
+                        this->entry_point_name_get(stage) + ".expanded",
+                        ".msl",
+                        processed_source);
+  }
+  else {
+    processed_source = original_source;
+  }
+
+  /* Ray-query shaders need the Metal raytracing header prepended to the final source. */
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::RAY_QUERY)) {
+    processed_source = "#include <metal_raytracing>\nusing namespace metal::raytracing;\n" +
+                       processed_source;
+  }
 
   {
     ::MTLCompileOptions *options = get_compile_options(
-        !info.subpass_inputs_.is_empty(), bool(info.builtins_ & BuiltinBits::TEXTURE_ATOMIC));
+        !info.subpass_inputs_.is_empty(),
+        flag_is_set(info.builtins_combined(), BuiltinBits::TEXTURE_ATOMIC),
+        flag_is_set(info.builtins_combined(), BuiltinBits::RAY_QUERY));
 
     NSError *error = nullptr;
     id<MTLLibrary> library = [context_->device
-        newLibraryWithSource:[NSString stringWithUTF8String:concat_source.c_str()]
+        newLibraryWithSource:[NSString stringWithUTF8String:processed_source.c_str()]
                      options:options
                        error:&error];
     library.label = [NSString stringWithUTF8String:this->name];
@@ -283,7 +337,7 @@ id<MTLLibrary> MTLShader::create_shader_library(const shader::ShaderCreateInfo &
     [library release];
 
     MTLLogParser parser;
-    print_log({concat_source}, [error_localized UTF8String], to_string(stage), true, &parser);
+    print_log({original_source}, [error_localized UTF8String], to_string(stage), true, &parser);
   }
   return nil;
 }
@@ -320,16 +374,16 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
     return false;
   }
 
-  if (this->shader_library_frag_ == nil && this->shader_library_frag_ == nil &&
+  if (this->shader_library_vert_ == nil && this->shader_library_frag_ == nil &&
       this->shader_library_comp_ == nil)
   {
     /* All compilations failed. */
     return false;
   }
 
-  const bool is_compute = (this->shader_library_frag_ == nil && this->shader_library_frag_ == nil);
+  const bool is_compute = (this->shader_library_vert_ == nil && this->shader_library_frag_ == nil);
 
-  if (!is_compute && (this->shader_library_frag_ == nil || this->shader_library_frag_ == nil)) {
+  if (!is_compute && (this->shader_library_vert_ == nil || this->shader_library_frag_ == nil)) {
     /* One stage failed to compile. */
     return false;
   }
@@ -631,6 +685,7 @@ MTLRenderPipelineStateInstance *MTLShader::bake_current_pipeline_state(
   MTLRenderPipelineStateDescriptor &pipeline_descriptor = state_manager->get_pipeline_descriptor();
 
   pipeline_descriptor.num_color_attachments = 0;
+  pipeline_descriptor.color_attachment_mask = 0xFFu;
   for (int attachment = 0; attachment < GPU_FB_MAX_COLOR_ATTACHMENT; attachment++) {
     MTLAttachment color_attachment = framebuffer->get_color_attachment(attachment);
 
@@ -649,6 +704,10 @@ MTLRenderPipelineStateInstance *MTLShader::bake_current_pipeline_state(
     }
 
     pipeline_descriptor.num_color_attachments += (color_attachment.used) ? 1 : 0;
+
+    if (color_attachment.ignored) {
+      pipeline_descriptor.color_attachment_mask &= ~(1 << attachment);
+    }
   }
   MTLAttachment depth_attachment = framebuffer->get_depth_attachment();
   MTLAttachment stencil_attachment = framebuffer->get_stencil_attachment();
@@ -871,7 +930,13 @@ MTLRenderPipelineStateInstance *MTLShader::bake_graphic_pipeline_state(
     if (pixel_format != MTLPixelFormatInvalid) {
       bool format_supports_blending = mtl_format_supports_blending(pixel_format);
 
-      col_attachment.writeMask = pipeline_descriptor.color_write_mask;
+      if ((pipeline_descriptor.color_attachment_mask >> color_attachment) & 1) {
+        col_attachment.writeMask = pipeline_descriptor.color_write_mask;
+      }
+      else {
+        /* Attachment was transitioned to ignored. */
+        col_attachment.writeMask = MTLColorWriteMaskNone;
+      }
       col_attachment.blendingEnabled = pipeline_descriptor.blending_enabled &&
                                        format_supports_blending;
       if (format_supports_blending && pipeline_descriptor.blending_enabled) {
@@ -884,10 +949,9 @@ MTLRenderPipelineStateInstance *MTLShader::bake_graphic_pipeline_state(
       }
       else {
         if (pipeline_descriptor.blending_enabled && !format_supports_blending) {
-          shader_debug_printf(
-              "[Warning] Attempting to Bake PSO, but MTLPixelFormat %d does not support "
-              "blending\n",
-              *((int *)&pixel_format));
+          CLOG_WARN(&LOG,
+                    "Attempting to Bake PSO, but MTLPixelFormat %d does not support blending",
+                    (int)pixel_format);
         }
       }
     }
@@ -916,12 +980,16 @@ MTLRenderPipelineStateInstance *MTLShader::bake_graphic_pipeline_state(
                                   reflection:&reflection_data
                                        error:&error];
     if (error) {
-      NSLog(@"Failed to create PSO for shader: %s error %@\n", this->name, error);
+      CLOG_ERROR(&LOG,
+                 "Failed to create PSO for shader: %s error %s",
+                 this->name,
+                 [[error localizedDescription] UTF8String]);
       BLI_assert(false);
       return nullptr;
     }
     if (!pso) {
-      NSLog(@"Failed to create PSO for shader: %s, but no error was provided!\n", this->name);
+      CLOG_ERROR(
+          &LOG, "Failed to create PSO for shader: %s, but no error was provided!", this->name);
       BLI_assert(false);
       return nullptr;
     }
@@ -943,10 +1011,10 @@ MTLRenderPipelineStateInstance *MTLShader::bake_graphic_pipeline_state(
     pso_inst->shader_pso_index = pso_cache_.size();
     pso_cache_.add(pipeline_descriptor, pso_inst);
     pso_cache_lock_.unlock();
-    shader_debug_printf(
-        "PSO CACHE: Stored new variant in PSO cache for shader '%s' Hash: '%llu'\n",
-        this->name,
-        pipeline_descriptor.hash());
+    CLOG_DEBUG(&LOG,
+               "PSO CACHE: Stored new variant in PSO cache for shader '%s' Hash: '%llu'",
+               this->name,
+               (unsigned long long)pipeline_descriptor.hash());
     return pso_inst;
   }
 }
@@ -991,7 +1059,9 @@ MTLComputePipelineStateInstance *MTLShader::bake_compute_pipeline_state(
   [values release];
 
   if (error) {
-    NSLog(@"Compile Error - Metal Shader compute function, error %@", error);
+    CLOG_WARN(&LOG,
+              "Metal Shader compute function, error %s",
+              [[error localizedDescription] UTF8String]);
 
     /* Only exit out if genuine error and not warning */
     if ([[error localizedDescription] rangeOfString:@"Compilation succeeded"].location ==
@@ -1042,12 +1112,16 @@ MTLComputePipelineStateInstance *MTLShader::bake_compute_pipeline_state(
   [desc release];
 
   if (error) {
-    NSLog(@"Failed to create PSO for compute shader: %s error %@\n", this->name, error);
+    CLOG_ERROR(&LOG,
+               "Failed to create PSO for compute shader: %s error %s",
+               this->name,
+               [[error localizedDescription] UTF8String]);
     return nullptr;
   }
   if (!pso) {
-    NSLog(@"Failed to create PSO for compute shader: %s, but no error was provided!\n",
-          this->name);
+    CLOG_ERROR(&LOG,
+               "Failed to create PSO for compute shader: %s, but no error was provided!",
+               this->name);
     return nullptr;
   }
 

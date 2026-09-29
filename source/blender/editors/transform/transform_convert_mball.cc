@@ -10,10 +10,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 
@@ -31,7 +31,7 @@ namespace blender::ed::transform {
 static void createTransMBallVerts(bContext * /*C*/, TransInfo *t)
 {
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    MetaBall *mb = (MetaBall *)tc->obedit->data;
+    MetaBall *mb = id_cast<MetaBall *>(tc->obedit->data);
     TransData *td;
     TransDataExtension *tx;
     float mtx[3][3], smtx[3][3];
@@ -63,9 +63,9 @@ static void createTransMBallVerts(bContext * /*C*/, TransInfo *t)
       tc->data_len = countsel;
     }
 
-    td = tc->data = MEM_calloc_arrayN<TransData>(tc->data_len, "TransObData(MBall EditMode)");
-    tx = tc->data_ext = MEM_calloc_arrayN<TransDataExtension>(tc->data_len,
-                                                              "MetaElement_TransExtension");
+    td = tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransObData(MBall EditMode)");
+    tx = tc->data_ext = MEM_new_array_zeroed<TransDataExtension>(tc->data_len,
+                                                                 "MetaElement_TransExtension");
 
     copy_m3_m4(mtx, tc->obedit->object_to_world().ptr());
     pseudoinverse_m3_m3(smtx, mtx, PSEUDOINVERSE_EPSILON);
@@ -130,7 +130,7 @@ static void recalcData_mball(TransInfo *t)
   }
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     if (tc->data_len) {
-      DEG_id_tag_update(static_cast<ID *>(tc->obedit->data), ID_RECALC_GEOMETRY);
+      DEG_id_tag_update(tc->obedit->data, ID_RECALC_GEOMETRY);
     }
   }
 }

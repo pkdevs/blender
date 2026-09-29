@@ -57,8 +57,10 @@ class PathTrace {
    * The progress is reported to the currently configure progress object (via `set_progress`). */
   void load_kernels();
 
-  /* Allocate working memory. This runs before allocating scene memory so that we can estimate
-   * more accurately which scene device memory may need to allocated on the host. */
+  /* Allocate working memory. This runs after scene memory allocation, so that the number of
+   * path states can take the updated scene into account. Scene memory can be moved back to
+   * the host as part of this allocation, as work memory is not host mapped and allocating
+   * it may request more space to be freed on the GPU. */
   void alloc_work_memory();
 
   /* Check whether now it is a good time to reset rendering.
@@ -195,6 +197,9 @@ class PathTrace {
   /* Initialize kernel execution on all integrator queues. */
   void render_init_kernel_execution();
 
+  /* Release kernel execution resources on all integrator queues. */
+  void render_deinit_kernel_execution();
+
   /* Make sure both allocated and effective buffer parameters of path tracer works are up to date
    * with the current big tile parameters, performance-dependent slicing, and resolution divider.
    */
@@ -319,10 +324,11 @@ class PathTrace {
      * Allows to re-use same render buffer, but have less pixels rendered into in it. The way to
      * think of render buffer in this case is as an over-allocated array: the resolution divider
      * affects both resolution and stride as visible by the integrator kernels. */
-    int resolution_divider = 0;
+    float resolution_divider = 0;
 
     /* Parameters of the big tile with the current resolution divider applied. */
     BufferParams effective_big_tile_params;
+    BufferParams effective_denoised_big_tile_params;
 
     /* Denoiser was run and there are denoised versions of the passes in the render buffers. */
     bool has_denoised_result = false;

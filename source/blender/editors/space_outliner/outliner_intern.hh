@@ -19,6 +19,8 @@
 /* Needed for `tree_element_cast()`. */
 #include "tree/tree_element.hh"
 
+namespace blender {
+
 /* internal exports only */
 
 struct ARegion;
@@ -39,16 +41,18 @@ struct wmKeyConfig;
 struct wmOperatorType;
 struct WorkSpace;
 
-namespace blender::bke::outliner::treehash {
+namespace bke::outliner::treehash {
 class TreeHash;
 }
 
-namespace blender::ed::outliner {
+enum eTreeStoreElem_Flag : short;
+
+namespace ed::outliner {
 
 class AbstractTreeDisplay;
 class AbstractTreeElement;
 
-namespace treehash = blender::bke::outliner::treehash;
+namespace treehash = bke::outliner::treehash;
 
 struct TreeElement;
 
@@ -59,6 +63,8 @@ struct SpaceOutliner_Runtime {
 
   /* Hash table for tree-store elements, using `(id, type, index)` as key. */
   std::unique_ptr<treehash::TreeHash> tree_hash;
+
+  ListBaseT<ed::outliner::TreeElement> tree = {nullptr, nullptr};
 
   SpaceOutliner_Runtime() = default;
   /** Used for copying runtime data to a duplicated space. */
@@ -173,9 +179,6 @@ struct TreeElementIcon {
         ID_MSK, \
         ID_PC))
 
-/* button events */
-#define OL_NAMEBUTTON 1
-
 enum eOLDrawState {
   OL_DRAWSEL_NONE = 0,   /* inactive (regular black text) */
   OL_DRAWSEL_NORMAL = 1, /* active object (draws white text) */
@@ -239,6 +242,8 @@ struct TreeViewContext {
   /* Workspace. */
   WorkSpace *workspace;
 
+  Main *bmain;
+
   /* Scene level. */
   Scene *scene;
   ViewLayer *view_layer;
@@ -285,7 +290,8 @@ void outliner_build_tree(Main *mainvar,
                          SpaceOutliner *space_outliner,
                          ARegion *region);
 
-TreeElement *outliner_add_collection_recursive(SpaceOutliner *space_outliner,
+TreeElement *outliner_add_collection_recursive(AbstractTreeDisplay &tree_display,
+                                               SpaceOutliner *space_outliner,
                                                Collection *collection,
                                                TreeElement *ten);
 
@@ -298,6 +304,11 @@ struct IDsSelectedData {
 TreeTraversalAction outliner_collect_selected_collections(TreeElement *te, void *customdata);
 TreeTraversalAction outliner_collect_selected_objects(TreeElement *te, void *customdata);
 
+bool outliner_treesort_tiebreak(bool a_is_object,
+                                const char *a_name,
+                                bool b_is_object,
+                                const char *b_name);
+
 /* `outliner_draw.cc` */
 
 /**
@@ -309,7 +320,8 @@ void outliner_tree_dimensions(SpaceOutliner *space_outliner, int *r_width, int *
 
 TreeElementIcon tree_element_get_icon(TreeStoreElem *tselem, TreeElement *te);
 
-void outliner_collection_isolate_flag(Scene *scene,
+void outliner_collection_isolate_flag(const Main &bmain,
+                                      Scene *scene,
                                       ViewLayer *view_layer,
                                       LayerCollection *layer_collection,
                                       Collection *collection,
@@ -412,15 +424,15 @@ void outliner_do_object_operation(bContext *C,
                                   ListBaseT<TreeElement> *lb,
                                   outliner_operation_fn operation_fn);
 
-int outliner_flag_is_any_test(ListBaseT<TreeElement> *lb, short flag, int curlevel);
+int outliner_flag_is_any_test(ListBaseT<TreeElement> *lb, eTreeStoreElem_Flag flag, int curlevel);
 /**
  * Set or unset \a flag for all outliner elements in \a lb and sub-trees.
  * \return if any flag was modified.
  */
-bool outliner_flag_set(SpaceOutliner &space_outliner, short flag, short set);
-bool outliner_flag_set(ListBaseT<TreeElement> &lb, short flag, short set);
-bool outliner_flag_flip(SpaceOutliner &space_outliner, short flag);
-bool outliner_flag_flip(ListBaseT<TreeElement> &lb, short flag);
+bool outliner_flag_set(SpaceOutliner &space_outliner, eTreeStoreElem_Flag flag, short set);
+bool outliner_flag_set(ListBaseT<TreeElement> &lb, eTreeStoreElem_Flag flag, short set);
+bool outliner_flag_flip(SpaceOutliner &space_outliner, eTreeStoreElem_Flag flag);
+bool outliner_flag_flip(ListBaseT<TreeElement> &lb, eTreeStoreElem_Flag flag);
 
 void item_rename_fn(bContext *C,
                     ReportList *reports,
@@ -447,12 +459,7 @@ void id_delete_tag_fn(bContext *C,
                       TreeElement *te,
                       TreeStoreElem *tsep,
                       TreeStoreElem *tselem);
-void id_remap_fn(bContext *C,
-                 ReportList *reports,
-                 Scene *scene,
-                 TreeElement *te,
-                 TreeStoreElem *tsep,
-                 TreeStoreElem *tselem);
+void id_remap_fn(bContext *C, TreeStoreElem *tselem);
 
 /**
  * To retrieve coordinates with redrawing the entire tree.
@@ -463,6 +470,8 @@ void outliner_set_coordinates(const ARegion *region, SpaceOutliner *space_outlin
  * Open or close a tree element, optionally toggling all children recursively.
  */
 void outliner_item_openclose(TreeElement *te, bool open, bool toggle_all);
+
+void outliner_scroll_to_active(SpaceOutliner *space_outliner, ARegion *region, short idcode);
 
 /* `outliner_dragdrop.cc` */
 
@@ -538,7 +547,9 @@ void OUTLINER_OT_object_operation(wmOperatorType *ot);
 void OUTLINER_OT_lib_operation(wmOperatorType *ot);
 void OUTLINER_OT_liboverride_operation(wmOperatorType *ot);
 void OUTLINER_OT_liboverride_troubleshoot_operation(wmOperatorType *ot);
+void OUTLINER_OT_liboverride_property_remove(wmOperatorType *ot);
 void OUTLINER_OT_id_operation(wmOperatorType *ot);
+void OUTLINER_OT_pack_data(wmOperatorType *ot);
 void OUTLINER_OT_id_remap(wmOperatorType *ot);
 void OUTLINER_OT_id_copy(wmOperatorType *ot);
 void OUTLINER_OT_id_paste(wmOperatorType *ot);
@@ -679,10 +690,12 @@ void outliner_tag_redraw_avoid_rebuild_on_open_change(const SpaceOutliner *space
 
 /**
  * If outliner is dirty sync selection from view layer and sequencer.
+ * \return true if active is changed.
  */
-void outliner_sync_selection(const bContext *C,
+bool outliner_sync_selection(const bContext *C,
                              const TreeViewContext &tvc,
-                             SpaceOutliner *space_outliner);
+                             SpaceOutliner *space_outliner,
+                             short &idcode);
 
 /* `outliner_context.cc` */
 
@@ -702,4 +715,5 @@ template<typename TreeElementT> TreeElementT *tree_element_cast(const TreeElemen
   return dynamic_cast<TreeElementT *>(te->abstract_element.get());
 }
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

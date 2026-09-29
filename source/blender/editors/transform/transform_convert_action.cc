@@ -14,14 +14,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 #include "BLI_set.hh"
 
+#include "BKE_annotations.h"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
-#include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
@@ -459,8 +459,9 @@ static TransData *ActionFCurveToTransData(TransData *td,
 
   for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
     /* Only add selected keyframes (for now, proportional edit is not enabled). */
-    if (is_prop_edit || (bezt->f2 & SELECT))
-    { /* Note this MUST match #count_fcurve_keys(), so can't use #BEZT_ISSEL_ANY() macro. */
+
+    /* Note this check MUST match #count_fcurve_keys(), so can't use #BEZT_ISSEL_ANY() macro. */
+    if (is_prop_edit || (bezt->f2 & SELECT)) {
       /* Only add if on the right 'side' of the current frame. */
       if (FrameOnMouseSide(side, bezt->vec[1][0], cfra)) {
         TimeToTransData(td, td2d, bezt, ale, ypos);
@@ -653,13 +654,22 @@ static void createTransActionData(bContext *C, TransInfo *t)
    * and they are the ones that are being transformed. */
   const bool use_duplicated = (t->flag & T_DUPLICATED_KEYFRAMES) != 0;
 
-  const rcti *mask = &t->region->v2d.mask;
-  const rctf *datamask = &t->region->v2d.cur;
+  float xsize, ysize, xmask, ymask;
+  float view_center_y;
 
-  float xsize = BLI_rctf_size_x(datamask);
-  float ysize = BLI_rctf_size_y(datamask);
-  float xmask = BLI_rcti_size_x(mask);
-  float ymask = BLI_rcti_size_y(mask);
+  if (t->region) {
+    const rcti *mask = &t->region->v2d.mask;
+    const rctf *datamask = &t->region->v2d.cur;
+    xsize = BLI_rctf_size_x(datamask);
+    ysize = BLI_rctf_size_y(datamask);
+    xmask = BLI_rcti_size_x(mask);
+    ymask = BLI_rcti_size_y(mask);
+    view_center_y = BLI_rctf_cent_y(datamask);
+  }
+  else {
+    xsize = ysize = xmask = ymask = 1.0f;
+    view_center_y = 0.0f;
+  }
 
   bAnimContext ac;
   ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
@@ -668,7 +678,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
 
   int count = 0;
   int gpf_count = 0;
-  float ypos = 1.0f / ((ysize / xsize) * (xmask / ymask)) * BLI_rctf_cent_y(&t->region->v2d.cur);
+  const float ypos = 1.0f / ((ysize / xsize) * (xmask / ymask)) * view_center_y;
 
   /* Determine what type of data we are operating on. */
   if (ANIM_animdata_get_context(C, &ac) == 0) {
@@ -783,8 +793,8 @@ static void createTransActionData(bContext *C, TransInfo *t)
   /* Allocate memory for data. */
   tc->data_len = count;
 
-  tc->data = MEM_calloc_arrayN<TransData>(tc->data_len, "TransData(Action Editor)");
-  tc->data_2d = MEM_calloc_arrayN<TransData2D>(tc->data_len, "transdata2d");
+  tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransData(Action Editor)");
+  tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len, "transdata2d");
   td = tc->data;
   td2d = tc->data_2d;
 
@@ -798,7 +808,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
     const float cfra = ANIM_nla_tweakedit_remap(&ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
 
     if (ale.type == ANIMTYPE_GPLAYER) {
-      bGPDlayer *gpl = (bGPDlayer *)ale.data;
+      bGPDlayer *gpl = static_cast<bGPDlayer *>(ale.data);
       int i;
 
       i = GPLayerToTransData(td, td2d, gpl, t->frame_side, cfra, is_prop_edit, ypos);
@@ -817,7 +827,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
       td2d += i;
     }
     else if (ale.type == ANIMTYPE_MASKLAYER) {
-      MaskLayer *masklay = (MaskLayer *)ale.data;
+      MaskLayer *masklay = static_cast<MaskLayer *>(ale.data);
       int i;
 
       i = MaskLayerToTransData(td, td2d, masklay, t->frame_side, cfra, is_prop_edit, ypos);
@@ -825,7 +835,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
       td2d += i;
     }
     else {
-      FCurve *fcu = (FCurve *)ale.key_data;
+      FCurve *fcu = static_cast<FCurve *>(ale.key_data);
       td = ActionFCurveToTransData(td, &td2d, fcu, &ale, t->frame_side, cfra, is_prop_edit, ypos);
     }
   }
@@ -844,7 +854,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
           &ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
 
       if (ale.type == ANIMTYPE_GPLAYER) {
-        bGPDlayer *gpl = (bGPDlayer *)ale.data;
+        bGPDlayer *gpl = static_cast<bGPDlayer *>(ale.data);
 
         for (bGPDframe &gpf : gpl->frames) {
           if (gpf.flag & GP_FRAME_SELECT) {
@@ -906,7 +916,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
         }
       }
       else if (ale.type == ANIMTYPE_MASKLAYER) {
-        MaskLayer *masklay = (MaskLayer *)ale.data;
+        MaskLayer *masklay = static_cast<MaskLayer *>(ale.data);
 
         for (MaskLayerShape &masklay_shape : masklay->splines_shapes) {
           if (FrameOnMouseSide(t->frame_side, float(masklay_shape.frame), cfra)) {
@@ -930,7 +940,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
         }
       }
       else {
-        FCurve *fcu = (FCurve *)ale.key_data;
+        FCurve *fcu = static_cast<FCurve *>(ale.key_data);
         BezTriple *bezt;
         int i;
 
@@ -987,13 +997,13 @@ static void invert_snap(eSnapMode &snap_mode)
 static void recalcData_actedit(TransInfo *t)
 {
   ViewLayer *view_layer = t->view_layer;
-  SpaceAction *saction = (SpaceAction *)t->area->spacedata.first;
+  SpaceAction *saction = t->area->spacedata.first_as<SpaceAction>();
 
   bAnimContext ac = {nullptr};
   ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   int filter;
 
-  BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+  BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
 
   /* Initialize relevant anim-context `context` data from #TransInfo data. */
   /* NOTE: sync this with the code in #ANIM_animdata_get_context(). */
@@ -1003,7 +1013,7 @@ static void recalcData_actedit(TransInfo *t)
   ac.obact = BKE_view_layer_active_object_get(view_layer);
   ac.area = t->area;
   ac.region = t->region;
-  ac.sl = static_cast<SpaceLink *>((t->area) ? t->area->spacedata.first : nullptr);
+  ac.sl = t->area ? t->area->spacedata.first_as<SpaceLink>() : nullptr;
   ac.spacetype = eSpace_Type((t->area) ? t->area->spacetype : 0);
   ac.regiontype = eRegion_Type((t->region) ? t->region->regiontype : 0);
 
@@ -1094,7 +1104,7 @@ static int masklay_shape_cmp_frame(void *thunk, const void *a, const void *b)
   if (frame_a->frame > frame_b->frame) {
     return 1;
   }
-  *((bool *)thunk) = true;
+  *(static_cast<bool *>(thunk)) = true;
   /* Selected last. */
   if ((frame_a->flag & MASK_SHAPE_SELECT) && ((frame_b->flag & MASK_SHAPE_SELECT) == 0)) {
     return 1;
@@ -1111,8 +1121,7 @@ static void posttrans_mask_clean(Mask *mask)
     BLI_listbase_sort_r(&masklay.splines_shapes, masklay_shape_cmp_frame, &is_double);
 
     if (is_double) {
-      for (masklay_shape = static_cast<MaskLayerShape *>(masklay.splines_shapes.first);
-           masklay_shape;
+      for (masklay_shape = masklay.splines_shapes.first(); masklay_shape;
            masklay_shape = masklay_shape_next)
       {
         masklay_shape_next = masklay_shape->next;
@@ -1123,8 +1132,7 @@ static void posttrans_mask_clean(Mask *mask)
     }
 
 #ifndef NDEBUG
-    for (masklay_shape = static_cast<MaskLayerShape *>(masklay.splines_shapes.first);
-         masklay_shape;
+    for (masklay_shape = masklay.splines_shapes.first(); masklay_shape;
          masklay_shape = masklay_shape->next)
     {
       BLI_assert(!masklay_shape->next || masklay_shape->frame < masklay_shape->next->frame);
@@ -1146,19 +1154,19 @@ static void posttrans_gpd_clean(bGPdata *gpd)
     bGPDframe *gpf, *gpfn;
     bool is_double = false;
 
-    BKE_gpencil_layer_frames_sort(&gpl, &is_double);
+    BKE_annotations_layer_frames_sort(&gpl, &is_double);
 
     if (is_double) {
-      for (gpf = static_cast<bGPDframe *>(gpl.frames.first); gpf; gpf = gpfn) {
+      for (gpf = gpl.frames.first(); gpf; gpf = gpfn) {
         gpfn = gpf->next;
         if (gpfn && gpf->framenum == gpfn->framenum) {
-          BKE_gpencil_layer_frame_delete(&gpl, gpf);
+          BKE_annotations_layer_frame_delete(&gpl, gpf);
         }
       }
     }
 
 #ifndef NDEBUG
-    for (gpf = static_cast<bGPDframe *>(gpl.frames.first); gpf; gpf = gpf->next) {
+    for (gpf = gpl.frames.first(); gpf; gpf = gpf->next) {
       BLI_assert(!gpf->next || gpf->framenum < gpf->next->framenum);
     }
 #endif
@@ -1202,7 +1210,7 @@ static void posttrans_action_clean(bAnimContext *ac, bAction *act)
 
 static void special_aftertrans_update__actedit(bContext *C, TransInfo *t)
 {
-  SpaceAction *saction = (SpaceAction *)t->area->spacedata.first;
+  SpaceAction *saction = t->area->spacedata.first_as<SpaceAction>();
   bAnimContext ac;
 
   const bool canceled = (t->state == TRANS_CANCEL);
@@ -1232,11 +1240,11 @@ static void special_aftertrans_update__actedit(bContext *C, TransInfo *t)
       switch (ale.datatype) {
         case ALE_GPFRAME:
           ale.id->tag &= ~ID_TAG_DOIT;
-          posttrans_gpd_clean((bGPdata *)ale.id);
+          posttrans_gpd_clean(id_cast<bGPdata *>(ale.id));
           break;
 
         case ALE_FCURVE: {
-          FCurve *fcu = (FCurve *)ale.key_data;
+          FCurve *fcu = static_cast<FCurve *>(ale.key_data);
 
           /* 3 cases here for curve cleanups:
            * 1) NOTRANSKEYCULL on    -> cleanup of duplicates shouldn't be done.
@@ -1290,7 +1298,7 @@ static void special_aftertrans_update__actedit(bContext *C, TransInfo *t)
      *                            but we made duplicates, so get rid of these.
      */
     if ((saction->flag & SACTION_NOTRANSKEYCULL) == 0 && ((canceled == 0) || (duplicate))) {
-      posttrans_action_clean(&ac, (bAction *)ac.data);
+      posttrans_action_clean(&ac, static_cast<bAction *>(ac.data));
     }
   }
   else if (ac.datatype == ANIMCONT_GPENCIL) {
@@ -1313,7 +1321,7 @@ static void special_aftertrans_update__actedit(bContext *C, TransInfo *t)
           /* Grease Pencil legacy. */
           if ((saction->flag & SACTION_NOTRANSKEYCULL) == 0 && ((canceled == 0) || (duplicate))) {
             ale.id->tag &= ~ID_TAG_DOIT;
-            posttrans_gpd_clean((bGPdata *)ale.id);
+            posttrans_gpd_clean(id_cast<bGPdata *>(ale.id));
           }
           break;
 
@@ -1352,7 +1360,7 @@ static void special_aftertrans_update__actedit(bContext *C, TransInfo *t)
       for (bAnimListElem &ale : anim_data) {
         if (ale.datatype == ALE_MASKLAY) {
           ale.id->tag &= ~ID_TAG_DOIT;
-          posttrans_mask_clean((Mask *)ale.id);
+          posttrans_mask_clean(id_cast<Mask *>(ale.id));
         }
       }
       ANIM_animdata_freelist(&anim_data);

@@ -22,6 +22,7 @@ class VKStorageBuffer;
 class VKIndexBuffer;
 class VKContext;
 class VKDescriptorSetTracker;
+class VKTopLevelAS;
 
 /**
  * Offset when searching for bindings.
@@ -214,6 +215,38 @@ class BindSpaceTextures {
   }
 };
 
+class BindSpaceTopLevelAS {
+ public:
+  Vector<VKTopLevelAS *> bound_resources;
+
+  void bind(VKTopLevelAS *resource, int binding)
+  {
+    if (bound_resources.size() <= binding) {
+      bound_resources.resize(binding + 1);
+    }
+    bound_resources[binding] = resource;
+  }
+
+  VKTopLevelAS *get(int binding) const
+  {
+    return bound_resources[binding];
+  }
+
+  void unbind(void *resource)
+  {
+    for (int index : IndexRange(bound_resources.size())) {
+      if (bound_resources[index] == resource) {
+        bound_resources[index] = nullptr;
+      }
+    }
+  }
+
+  void unbind_all()
+  {
+    bound_resources.clear();
+  }
+};
+
 class VKStateManager : public StateManager {
   friend class VKDescriptorSetUpdator;
   friend class VKDescriptorSetTracker;
@@ -222,6 +255,7 @@ class VKStateManager : public StateManager {
   BindSpaceImages<BIND_SPACE_IMAGE_OFFSET> images_;
   BindSpaceUniformBuffers uniform_buffers_;
   BindSpaceStorageBuffers storage_buffers_;
+  BindSpaceTopLevelAS acceleration_structures_;
 
  public:
   bool is_dirty = false;
@@ -231,19 +265,19 @@ class VKStateManager : public StateManager {
 
   void issue_barrier(GPUBarrier barrier_bits) override;
 
-  void texture_bind(Texture *tex, GPUSamplerState sampler, int unit) override;
-  void texture_unbind(Texture *tex) override;
+  void texture_bind(Texture *texture, GPUSamplerState sampler, int binding) override;
+  void texture_unbind(Texture *texture) override;
   void texture_unbind_all() override;
 
-  void image_bind(Texture *tex, int unit) override;
-  void image_unbind(Texture *tex) override;
+  void image_bind(Texture *texture, int binding) override;
+  void image_unbind(Texture *texture) override;
   void image_unbind_all() override;
 
-  void uniform_buffer_bind(VKUniformBuffer *uniform_buffer, int slot);
+  void uniform_buffer_bind(VKUniformBuffer *uniform_buffer, int binding);
   void uniform_buffer_unbind(VKUniformBuffer *uniform_buffer);
   void uniform_buffer_unbind_all();
 
-  void texel_buffer_bind(VKVertexBuffer &vertex_buffer, int slot);
+  void texel_buffer_bind(VKVertexBuffer &vertex_buffer, int binding);
   void texel_buffer_unbind(VKVertexBuffer &vertex_buffer);
 
   void storage_buffer_bind(BindSpaceStorageBuffers::Type resource_type,
@@ -258,5 +292,8 @@ class VKStateManager : public StateManager {
                            VkDeviceSize offset);
   void storage_buffer_unbind(void *resource);
   void storage_buffer_unbind_all();
+
+  void toplevelas_bind(VKTopLevelAS &tlas, int slot);
+  void toplevelas_unbind(void *resource);
 };
 }  // namespace blender::gpu

@@ -7,9 +7,9 @@
  */
 
 #include "BLI_array.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
@@ -26,6 +26,8 @@
 #include "bmesh_tools.hh"
 
 #include "MEM_guardedalloc.h"
+
+namespace blender {
 
 Mesh *BKE_mesh_mirror_bisect_on_mirror_plane_for_modifier(MirrorModifierData *mmd,
                                                           const Mesh *mesh,
@@ -121,7 +123,6 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
                                                         int **r_vert_merge_map,
                                                         int *r_vert_merge_map_len)
 {
-  using namespace blender;
   using namespace blender::bke;
   const float tolerance_sq = mmd->tolerance * mmd->tolerance;
   const bool do_vtargetmap = (mmd->flag & MOD_MIR_NO_MERGE) == 0 && r_vert_merge_map != nullptr;
@@ -168,8 +169,8 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
           len_squared_v3(ob->object_to_world().ptr()[2]),
       };
       /* Scale to avoid precision loss with extreme values. */
-      const float ob_scale_max = max_fff(UNPACK3(ob_scale));
-      if (LIKELY(ob_scale_max != 0.0f)) {
+      const float ob_scale_max = std::max({UNPACK3(ob_scale)});
+      if (ob_scale_max != 0.0f) [[likely]] {
         mul_v3_fl(ob_scale, 1.0f / ob_scale_max);
         mul_v3_v3(plane_no, ob_scale);
       }
@@ -216,7 +217,8 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
 
   if (do_vtargetmap) {
     /* second half is filled with -1 */
-    *r_vert_merge_map = MEM_malloc_arrayN<int>(2 * size_t(src_verts_num), "MOD_mirror tarmap");
+    *r_vert_merge_map = MEM_new_array_uninitialized<int>(2 * size_t(src_verts_num),
+                                                         "MOD_mirror tarmap");
 
     vtmap_a = *r_vert_merge_map;
     vtmap_b = *r_vert_merge_map + src_verts_num;
@@ -225,7 +227,7 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
   }
 
   /* mirror vertex coordinates */
-  MutableSpan<blender::float3> positions = result->vert_positions_for_write();
+  MutableSpan<float3> positions = result->vert_positions_for_write();
   for (int i = 0; i < src_verts_num; i++) {
     const int vert_index_prev = i;
     const int vert_index = src_verts_num + i;
@@ -245,41 +247,24 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
        * we cannot enforce that behavior on existing modifiers, in which case we keep using the
        * old, incorrect behavior of merging the source vertex into its copy.
        */
-      if (use_correct_order_on_merge) {
-        if (UNLIKELY(len_squared_v3v3(positions[vert_index_prev], positions[vert_index]) <
-                     tolerance_sq))
-        {
-          *vtmap_b = i;
-          (*r_vert_merge_map_len)++;
+      const bool merge = len_squared_v3v3(positions[vert_index_prev], positions[vert_index]) <
+                         tolerance_sq;
+      if (merge) [[unlikely]] {
+        (*r_vert_merge_map_len)++;
 
-          /* average location */
-          mid_v3_v3v3(positions[vert_index], positions[vert_index_prev], positions[vert_index]);
-          copy_v3_v3(positions[vert_index_prev], positions[vert_index]);
-        }
-        else {
-          *vtmap_b = -1;
-        }
+        /* average location */
+        mid_v3_v3v3(positions[vert_index], positions[vert_index_prev], positions[vert_index]);
+        copy_v3_v3(positions[vert_index_prev], positions[vert_index]);
 
+        const int target = use_correct_order_on_merge ? vert_index_prev : vert_index;
+        *vtmap_a = target;
         /* Fill here to avoid 2x loops. */
-        *vtmap_a = -1;
+        *vtmap_b = target;
       }
       else {
-        if (UNLIKELY(len_squared_v3v3(positions[vert_index_prev], positions[vert_index]) <
-                     tolerance_sq))
-        {
-          *vtmap_a = src_verts_num + i;
-          (*r_vert_merge_map_len)++;
-
-          /* average location */
-          mid_v3_v3v3(positions[vert_index], positions[vert_index_prev], positions[vert_index]);
-          copy_v3_v3(positions[vert_index_prev], positions[vert_index]);
-        }
-        else {
-          *vtmap_a = -1;
-        }
-
-        /* Fill here to avoid 2x loops. */
-        *vtmap_b = -1;
+        /* Vertices that aren't merged point at themselves. */
+        *vtmap_a = vert_index_prev;
+        *vtmap_b = vert_index;
       }
 
       vtmap_a++;
@@ -297,7 +282,7 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
     }
   }
 
-  MutableSpan<blender::int2> result_edges = result->edges_for_write();
+  MutableSpan<int2> result_edges = result->edges_for_write();
   MutableSpan<int> result_face_offsets = result->face_offsets_for_write();
   MutableSpan<int> result_corner_verts = result->corner_verts_for_write();
   MutableSpan<int> result_corner_edges = result->corner_edges_for_write();
@@ -326,7 +311,7 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
   if (!mesh->runtime->subsurf_optimal_display_edges.is_empty()) {
     const BoundedBitSpan src = mesh->runtime->subsurf_optimal_display_edges;
     result->runtime->subsurf_optimal_display_edges.resize(result->edges_num);
-    blender::MutableBoundedBitSpan dst = result->runtime->subsurf_optimal_display_edges;
+    MutableBoundedBitSpan dst = result->runtime->subsurf_optimal_display_edges;
     dst.take_front(src.size()).copy_from(src);
     dst.take_back(src.size()).copy_from(src);
   }
@@ -379,9 +364,9 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
   if (ob->type == OB_MESH && custom_normals && custom_normals.domain == bke::AttrDomain::Corner &&
       custom_normals.varray.type().is<short2>() && result->faces_num > 0)
   {
-    blender::Array<blender::float3> corner_normals(result_corner_verts.size());
+    Array<float3> corner_normals(result_corner_verts.size());
     MutableVArraySpan clnors(custom_normals.varray.typed<short2>());
-    blender::bke::mesh::CornerNormalSpaceArray lnors_spacearr;
+    bke::mesh::CornerNormalSpaceArray lnors_spacearr;
 
     /* The transform matrix of a normal must be
      * the transpose of inverse of transform matrix of the geometry... */
@@ -392,17 +377,17 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
     /* calculate custom normals into corner_normals, then mirror first half into second half */
     const VArraySpan sharp_edges = *attributes.lookup<bool>("sharp_edge", AttrDomain::Edge);
     const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
-    blender::bke::mesh::normals_calc_corners(result->vert_positions(),
-                                             result_faces,
-                                             result_corner_verts,
-                                             result_corner_edges,
-                                             result->vert_to_face_map(),
-                                             result->face_normals_true(),
-                                             sharp_edges,
-                                             sharp_faces,
-                                             clnors,
-                                             &lnors_spacearr,
-                                             corner_normals);
+    bke::mesh::normals_calc_corners(result->vert_positions(),
+                                    result_faces,
+                                    result_corner_verts,
+                                    result_corner_edges,
+                                    result->vert_to_face_map(),
+                                    result->face_normals_true(),
+                                    sharp_edges,
+                                    sharp_faces,
+                                    clnors,
+                                    &lnors_spacearr,
+                                    corner_normals);
 
     /* mirroring has to account for loops being reversed in faces in second half */
     for (const int i : src_faces.index_range()) {
@@ -419,7 +404,7 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
         mul_m4_v3(mtx_nor, corner_normals[mirrorj]);
 
         const int space_index = lnors_spacearr.corner_space_indices[mirrorj];
-        clnors[mirrorj] = blender::bke::mesh::corner_space_custom_normal_to_data(
+        clnors[mirrorj] = bke::mesh::corner_space_custom_normal_to_data(
             lnors_spacearr.spaces[space_index], corner_normals[mirrorj]);
       }
     }
@@ -437,13 +422,13 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
       if (flip_map) {
         for (int i = 0; i < src_verts_num; dvert++, i++) {
           /* merged vertices get both groups, others get flipped */
+          /* A vertex that isn't merged points at itself. */
           if (use_correct_order_on_merge && do_vtargetmap &&
-              ((*r_vert_merge_map)[i + src_verts_num] != -1))
+              ((*r_vert_merge_map)[i + src_verts_num] != i + src_verts_num))
           {
             BKE_defvert_flip_merged(dvert - src_verts_num, flip_map, flip_map_len);
           }
-          else if (!use_correct_order_on_merge && do_vtargetmap && ((*r_vert_merge_map)[i] != -1))
-          {
+          else if (!use_correct_order_on_merge && do_vtargetmap && ((*r_vert_merge_map)[i] != i)) {
             BKE_defvert_flip_merged(dvert, flip_map, flip_map_len);
           }
           else {
@@ -451,7 +436,7 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
           }
         }
 
-        MEM_freeN(flip_map);
+        MEM_delete(flip_map);
       }
     }
   }
@@ -461,3 +446,5 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
   }
   return result;
 }
+
+}  // namespace blender

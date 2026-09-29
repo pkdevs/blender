@@ -9,7 +9,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
 
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_bvhutils.hh"
@@ -17,7 +17,9 @@
 #include "BKE_mesh.hh"
 #include "BKE_pointcloud.hh"
 
-namespace blender::bke {
+namespace blender {
+
+namespace bke {
 
 /* -------------------------------------------------------------------- */
 /** \name Local Callbacks
@@ -81,7 +83,7 @@ static void mesh_faces_nearest_point(void *userdata,
                                      const float co[3],
                                      BVHTreeNearest *nearest)
 {
-  const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+  const BVHTreeFromMesh *data = static_cast<BVHTreeFromMesh *>(userdata);
   const MFace *face = data->face + index;
 
   const float *t0, *t1, *t2, *t3;
@@ -115,7 +117,7 @@ static void mesh_corner_tris_nearest_point(void *userdata,
                                            const float co[3],
                                            BVHTreeNearest *nearest)
 {
-  const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+  const BVHTreeFromMesh *data = static_cast<BVHTreeFromMesh *>(userdata);
   const int3 &tri = data->corner_tris[index];
   const float *vtri_co[3] = {
       data->vert_positions[data->corner_verts[tri[0]]],
@@ -146,7 +148,7 @@ static void mesh_faces_spherecast(void *userdata,
                                   const BVHTreeRay *ray,
                                   BVHTreeRayHit *hit)
 {
-  const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+  const BVHTreeFromMesh *data = static_cast<BVHTreeFromMesh *>(userdata);
   const MFace *face = &data->face[index];
 
   const float *t0, *t1, *t2, *t3;
@@ -184,7 +186,7 @@ static void mesh_corner_tris_spherecast(void *userdata,
                                         const BVHTreeRay *ray,
                                         BVHTreeRayHit *hit)
 {
-  const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+  const BVHTreeFromMesh *data = static_cast<BVHTreeFromMesh *>(userdata);
   const Span<float3> positions = data->vert_positions;
   const int3 &tri = data->corner_tris[index];
   const float *vtri_co[3] = {
@@ -221,7 +223,7 @@ static void mesh_edges_nearest_point(void *userdata,
                                      const float co[3],
                                      BVHTreeNearest *nearest)
 {
-  const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+  const BVHTreeFromMesh *data = static_cast<BVHTreeFromMesh *>(userdata);
   const Span<float3> positions = data->vert_positions;
   const int2 edge = data->edges[index];
   float nearest_tmp[3], dist_sq;
@@ -277,7 +279,7 @@ static void mesh_verts_spherecast(void *userdata,
                                   const BVHTreeRay *ray,
                                   BVHTreeRayHit *hit)
 {
-  const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+  const BVHTreeFromMesh *data = static_cast<BVHTreeFromMesh *>(userdata);
   const float *v = data->vert_positions[index];
 
   mesh_verts_spherecast_do(index, v, ray, hit);
@@ -294,7 +296,7 @@ static void mesh_edges_spherecast(void *userdata,
                                   const BVHTreeRay *ray,
                                   BVHTreeRayHit *hit)
 {
-  const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+  const BVHTreeFromMesh *data = static_cast<BVHTreeFromMesh *>(userdata);
   const Span<float3> positions = data->vert_positions;
   const int2 edge = data->edges[index];
 
@@ -525,7 +527,8 @@ static std::unique_ptr<BVHTree, BVHTreeDeleter> create_tree_from_tris(
     const OffsetIndices<int> faces,
     const Span<int> corner_verts,
     const Span<int3> corner_tris,
-    const IndexMask &faces_mask)
+    const IndexMask &faces_mask,
+    const bool map_global_indices)
 {
   if (faces_mask.size() == faces.size()) {
     /* Avoid accessing face offsets if the selection is full. */
@@ -540,13 +543,16 @@ static std::unique_ptr<BVHTree, BVHTreeDeleter> create_tree_from_tris(
   if (!tree) {
     return {};
   }
+  int i = 0;
   faces_mask.foreach_index([&](const int face) {
     for (const int tri : mesh::face_triangles_range(faces, face)) {
       float co[3][3];
       copy_v3_v3(co[0], positions[corner_verts[corner_tris[tri][0]]]);
       copy_v3_v3(co[1], positions[corner_verts[corner_tris[tri][1]]]);
       copy_v3_v3(co[2], positions[corner_verts[corner_tris[tri][2]]]);
-      BLI_bvhtree_insert(tree.get(), tri, co[0], 3);
+      const int index = map_global_indices ? tri : i;
+      BLI_bvhtree_insert(tree.get(), index, co[0], 3);
+      i++;
     }
   });
   BLI_bvhtree_balance(tree.get());
@@ -557,10 +563,12 @@ BVHTreeFromMesh bvhtree_from_mesh_corner_tris_ex(const Span<float3> vert_positio
                                                  const OffsetIndices<int> faces,
                                                  const Span<int> corner_verts,
                                                  const Span<int3> corner_tris,
-                                                 const IndexMask &faces_mask)
+                                                 const IndexMask &faces_mask,
+                                                 const bool map_global_indices)
 {
   return create_tris_tree_data(
-      create_tree_from_tris(vert_positions, faces, corner_verts, corner_tris, faces_mask),
+      create_tree_from_tris(
+          vert_positions, faces, corner_verts, corner_tris, faces_mask, map_global_indices),
       vert_positions,
       corner_verts,
       corner_tris);
@@ -637,25 +645,20 @@ static BitVector<> loose_edges_no_hidden_mask_get(const Mesh &mesh)
   return edge_mask;
 }
 
-}  // namespace blender::bke
+}  // namespace bke
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_loose_verts() const
+bke::BVHTreeFromMesh Mesh::bvh_loose_verts() const
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> positions = this->vert_positions();
   this->runtime->bvh_cache_loose_verts.ensure([&](std::unique_ptr<BVHTree, BVHTreeDeleter> &data) {
-    const LooseVertCache &loose_verts = this->loose_verts();
-    IndexMaskMemory memory;
-    const IndexMask mask = IndexMask::from_bits(loose_verts.is_loose_bits, memory);
-    data = create_tree_from_verts(positions, mask);
+    data = create_tree_from_verts(positions, this->loose_verts());
   });
   return create_verts_tree_data(this->runtime->bvh_cache_loose_verts.data().get(), positions);
 }
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_loose_no_hidden_verts() const
+bke::BVHTreeFromMesh Mesh::bvh_loose_no_hidden_verts() const
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> positions = this->vert_positions();
   this->runtime->bvh_cache_loose_verts_no_hidden.ensure(
@@ -668,36 +671,30 @@ blender::bke::BVHTreeFromMesh Mesh::bvh_loose_no_hidden_verts() const
                                 positions);
 }
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_verts() const
+const bke::bvh::Tree &Mesh::bvh_verts() const
 {
-  using namespace blender;
   using namespace blender::bke;
-  const Span<float3> positions = this->vert_positions();
-  this->runtime->bvh_cache_verts.ensure([&](std::unique_ptr<BVHTree, BVHTreeDeleter> &data) {
-    data = create_tree_from_verts(positions, positions.index_range());
+  this->runtime->bvh_embree_verts_cache.ensure([&](bvh::Tree &data) {
+    const Span<float3> positions = this->vert_positions();
+    data = bvh::Tree::from_points(positions, positions.index_range());
   });
-  return create_verts_tree_data(this->runtime->bvh_cache_verts.data().get(), positions);
+  return this->runtime->bvh_embree_verts_cache.data();
 }
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_loose_edges() const
+bke::BVHTreeFromMesh Mesh::bvh_loose_edges() const
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> positions = this->vert_positions();
   const Span<int2> edges = this->edges();
   this->runtime->bvh_cache_loose_edges.ensure([&](std::unique_ptr<BVHTree, BVHTreeDeleter> &data) {
-    const LooseEdgeCache &loose_edges = this->loose_edges();
-    IndexMaskMemory memory;
-    const IndexMask mask = IndexMask::from_bits(loose_edges.is_loose_bits, memory);
-    data = create_tree_from_edges(positions, edges, mask);
+    data = create_tree_from_edges(positions, edges, this->loose_edges());
   });
   return create_edges_tree_data(
       this->runtime->bvh_cache_loose_edges.data().get(), positions, edges);
 }
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_loose_no_hidden_edges() const
+bke::BVHTreeFromMesh Mesh::bvh_loose_no_hidden_edges() const
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> positions = this->vert_positions();
   const Span<int2> edges = this->edges();
@@ -711,9 +708,18 @@ blender::bke::BVHTreeFromMesh Mesh::bvh_loose_no_hidden_edges() const
       this->runtime->bvh_cache_loose_edges_no_hidden.data().get(), positions, edges);
 }
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_edges() const
+const bke::bvh::Tree &Mesh::bvh_edges() const
 {
-  using namespace blender;
+  using namespace blender::bke;
+  this->runtime->bvh_embree_edges_cache.ensure([&](bvh::Tree &data) {
+    const Span<int2> edges = this->edges();
+    data = bvh::Tree::from_edges(this->vert_positions(), edges, edges.index_range());
+  });
+  return this->runtime->bvh_embree_edges_cache.data();
+}
+
+bke::BVHTreeFromMesh Mesh::bvh_edges_legacy() const
+{
   using namespace blender::bke;
   const Span<float3> positions = this->vert_positions();
   const Span<int2> edges = this->edges();
@@ -723,9 +729,8 @@ blender::bke::BVHTreeFromMesh Mesh::bvh_edges() const
   return create_edges_tree_data(this->runtime->bvh_cache_edges.data().get(), positions, edges);
 }
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_legacy_faces() const
+bke::BVHTreeFromMesh Mesh::bvh_legacy_faces() const
 {
-  using namespace blender;
   using namespace blender::bke;
   BLI_assert(!(this->totface_legacy == 0 && this->faces_num != 0));
   Span legacy_faces{
@@ -739,9 +744,8 @@ blender::bke::BVHTreeFromMesh Mesh::bvh_legacy_faces() const
       this->runtime->bvh_cache_faces.data().get(), positions, legacy_faces.data());
 }
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_corner_tris_no_hidden() const
+bke::BVHTreeFromMesh Mesh::bvh_corner_tris_no_hidden() const
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> positions = this->vert_positions();
   const Span<int> corner_verts = this->corner_verts();
@@ -757,7 +761,8 @@ blender::bke::BVHTreeFromMesh Mesh::bvh_corner_tris_no_hidden() const
         IndexMaskMemory memory;
         const IndexMask visible_faces = IndexMask::from_bools_inverse(
             faces.index_range(), VArraySpan(hide_poly), memory);
-        data = create_tree_from_tris(positions, faces, corner_verts, corner_tris, visible_faces);
+        data = create_tree_from_tris(
+            positions, faces, corner_verts, corner_tris, visible_faces, true);
       });
   return create_tris_tree_data(this->runtime->bvh_cache_corner_tris_no_hidden.data().get(),
                                positions,
@@ -765,9 +770,8 @@ blender::bke::BVHTreeFromMesh Mesh::bvh_corner_tris_no_hidden() const
                                corner_tris);
 }
 
-blender::bke::BVHTreeFromMesh Mesh::bvh_corner_tris() const
+bke::BVHTreeFromMesh Mesh::bvh_corner_tris() const
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> positions = this->vert_positions();
   const Span<int> corner_verts = this->corner_verts();
@@ -779,31 +783,12 @@ blender::bke::BVHTreeFromMesh Mesh::bvh_corner_tris() const
       this->runtime->bvh_cache_corner_tris.data().get(), positions, corner_verts, corner_tris);
 }
 
-namespace blender::bke {
-
-BVHTreeFromMesh bvhtree_from_mesh_tris_init(const Mesh &mesh, const IndexMask &faces_mask)
+const bke::bvh::Tree &Mesh::bvh_tris() const
 {
-  if (faces_mask.size() == mesh.faces_num) {
-    return mesh.bvh_corner_tris();
-  }
-  return bvhtree_from_mesh_corner_tris_ex(
-      mesh.vert_positions(), mesh.faces(), mesh.corner_verts(), mesh.corner_tris(), faces_mask);
-}
-
-BVHTreeFromMesh bvhtree_from_mesh_edges_init(const Mesh &mesh, const IndexMask &edges_mask)
-{
-  if (edges_mask.size() == mesh.edges_num) {
-    return mesh.bvh_edges();
-  }
-  return bvhtree_from_mesh_edges_ex(mesh.vert_positions(), mesh.edges(), edges_mask);
-}
-
-BVHTreeFromMesh bvhtree_from_mesh_verts_init(const Mesh &mesh, const IndexMask &verts_mask)
-{
-  if (verts_mask.size() == mesh.verts_num) {
-    return mesh.bvh_verts();
-  }
-  return bvhtree_from_mesh_verts_ex(mesh.vert_positions(), verts_mask);
+  using namespace blender::bke::bvh;
+  this->runtime->bvh_embree_tris_cache.ensure(
+      [&](bke::bvh::Tree &data) { data = bke::bvh::Tree::from_single_mesh(*this); });
+  return this->runtime->bvh_embree_tris_cache.data();
 }
 
 /** \} */
@@ -812,54 +797,16 @@ BVHTreeFromMesh bvhtree_from_mesh_verts_init(const Mesh &mesh, const IndexMask &
 /** \name Point Cloud BVH Building
  * \{ */
 
-static BVHTreeFromPointCloud create_points_tree_data(const BVHTree *tree,
-                                                     const Span<float3> positions)
+const bke::bvh::Tree &PointCloud::bvh_tree() const
 {
-  BVHTreeFromPointCloud data{};
-  data.tree = tree;
-  data.positions = positions;
-  data.nearest_callback = nullptr;
-  return data;
-}
-
-static BVHTreeFromPointCloud create_pointcloud_tree_data(const BVHTree *tree,
-                                                         const Span<float3> positions)
-{
-  BVHTreeFromPointCloud data{};
-  data.tree = tree;
-  data.positions = positions;
-  return data;
-}
-
-static BVHTreeFromPointCloud create_pointcloud_tree_data(
-    std::unique_ptr<BVHTree, BVHTreeDeleter> tree, const Span<float3> positions)
-{
-  BVHTreeFromPointCloud data = create_points_tree_data(tree.get(), positions);
-  data.owned_tree = std::move(tree);
-  return data;
-}
-
-BVHTreeFromPointCloud bvhtree_from_pointcloud_get(const PointCloud &pointcloud,
-                                                  const IndexMask &points_mask)
-{
-  if (points_mask.size() == pointcloud.totpoint) {
-    return pointcloud.bvh_tree();
-  }
-  const Span<float3> positions = pointcloud.positions();
-  return create_pointcloud_tree_data(create_tree_from_verts(positions, points_mask), positions);
-}
-
-}  // namespace blender::bke
-
-blender::bke::BVHTreeFromPointCloud PointCloud::bvh_tree() const
-{
-  using namespace blender;
   using namespace blender::bke;
-  const Span<float3> positions = this->positions();
-  this->runtime->bvh_cache.ensure([&](std::unique_ptr<BVHTree, BVHTreeDeleter> &data) {
-    data = create_tree_from_verts(positions, positions.index_range());
+  this->runtime->bvh_cache.ensure([&](bvh::Tree &data) {
+    const Span<float3> positions = this->positions();
+    data = bvh::Tree::from_points(positions, positions.index_range());
   });
-  return create_pointcloud_tree_data(this->runtime->bvh_cache.data().get(), positions);
+  return this->runtime->bvh_cache.data();
 }
 
 /** \} */
+
+}  // namespace blender

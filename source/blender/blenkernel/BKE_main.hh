@@ -21,27 +21,30 @@
  */
 
 #include <array>
+#include <atomic>
 
 #include "DNA_listBase.h"
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_map.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_set.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector_set.hh"
 
+#include "BKE_blender_project.hh"
 #include "BKE_lib_query.hh" /* For LibraryForeachIDCallbackFlag. */
+
+struct MainLock;
+namespace blender {
 
 struct BLI_mempool;
 struct BlendThumbnail;
-struct GHash;
 struct ID;
 struct IDNameLib_Map;
 struct ImBuf;
 struct Library;
-struct MainLock;
 struct ReportList;
 struct UniqueName_Map;
 struct Scene;
@@ -139,7 +142,7 @@ struct MainIDRelationsEntryItem {
     /** For `from_ids` list, a user of the hashed ID. */
     ID *from;
     /** For `to_ids` list, an ID used by the hashed ID. */
-    ID **to;
+    ID *to;
   } id_pointer;
   /** Session uid of the `id_pointer`. */
   uint session_uid;
@@ -205,7 +208,7 @@ struct MainIDRelations {
    * Mapping from an ID pointer to all of its parents (IDs using it) and children (IDs it uses).
    * Values are `MainIDRelationsEntry` pointers.
    */
-  blender::Map<const ID *, MainIDRelationsEntry *> *relations_from_pointers;
+  Map<const ID *, MainIDRelationsEntry *> *relations_from_pointers;
   /* NOTE: we could add more mappings when needed (e.g. from session uid?). */
 
   short flag;
@@ -224,9 +227,9 @@ struct MainColorspace {
    * File working color-space for all scene linear colors.
    * The name is only for the user interface and is not a unique identifier, the matrix is
    * the XYZ color-space is the source of truth.
-   * */
+   */
   char scene_linear_name[64 /*MAX_COLORSPACE_NAME*/] = "";
-  blender::float3x3 scene_linear_to_xyz = blender::float3x3::zero();
+  float3x3 scene_linear_to_xyz = float3x3::zero();
 
   /**
    * A color-space, view or display was not found, which likely means the OpenColorIO config
@@ -235,7 +238,7 @@ struct MainColorspace {
   bool is_missing_opencolorio_config = false;
 };
 
-struct Main : blender::NonCopyable, blender::NonMovable {
+struct Main : NonCopyable, NonMovable {
   /**
    * Runtime vector storing all split Mains (one Main for each library data), during readfile or
    * linking process.
@@ -246,7 +249,7 @@ struct Main : blender::NonCopyable, blender::NonMovable {
    * item, even once library ones are moved between the old and new Mains (see also
    * #read_undo_move_libmain_data).
    */
-  std::shared_ptr<blender::VectorSet<Main *>> split_mains = {};
+  std::shared_ptr<VectorSet<Main *>> split_mains = {};
   /**
    * The file-path of this blend file, an empty string indicates an unsaved file.
    *
@@ -271,7 +274,8 @@ struct Main : blender::NonCopyable, blender::NonMovable {
    * compatibility issues (data loss).
    *
    * \note In practice currently this is only based on the version numbers, in the future it
-   * could try to use more refined detection on load. */
+   * could try to use more refined detection on load.
+   */
   bool has_forward_compatibility_issues = false;
 
   /**
@@ -331,9 +335,14 @@ struct Main : blender::NonCopyable, blender::NonMovable {
    * \note This flag should not be set directly. Use #animrig::Slot::users_invalidate() instead.
    * That way the handling of this flag is limited to the code in #animrig::Slot.
    *
-   * \see `blender::animrig::Slot::users_invalidate(Main &bmain)`
+   * \see `animrig::Slot::users_invalidate(Main &bmain)`
    */
   bool is_action_slot_to_id_map_dirty = false;
+
+  /**
+   * Set when reading a file from undo with incomplete preview, to trigger restart of preview jobs.
+   */
+  bool need_preview_render_restart = false;
 
   /**
    * The blend-file thumbnail. If set, it will show as image preview of the blend-file in the
@@ -355,6 +364,17 @@ struct Main : blender::NonCopyable, blender::NonMovable {
    * Color-space information for this file.
    */
   MainColorspace colorspace;
+
+  /**
+   * Whether this bmain belongs to the global Blender Project or not.
+   *
+   * NOTE: this is currently always true, as we haven't yet determined which
+   * cases it should be false for, and at the moment it's unlikely to hurt much
+   * of anything to be erroneously true. However, in principle this can be false
+   * and likely will be false in some cases of temp mains in the future, so code
+   * should never assume that it's true.
+   */
+  bool is_part_of_project = true;
 
   /* List bases for all ID types, containing all IDs for the current #Main. */
 
@@ -425,6 +445,19 @@ struct Main : blender::NonCopyable, blender::NonMovable {
 
   MainLock *lock = nullptr;
 
+  /**
+   * Simple re-entrant 'lock' to prevent view-layers re-synchronize during heavy
+   * operations that could lead to needlessly re-synchronize the view-layers *many* times.
+   *
+   * Stored in Main to avoid a global lock, which can cause issues with asynchronous jobs using
+   * their own local temp Main to manage their data, e.g. the preview rending tasks. See also
+   * #156117.
+   *
+   * NOTE: This can also be modified from several threads (e.g. during depsgraph evaluation),
+   * leading to transitional big numbers.
+   */
+  std::atomic<int32_t> no_resync = 0;
+
   /* Constructors and destructors. */
   Main();
   ~Main();
@@ -437,6 +470,11 @@ struct Main : blender::NonCopyable, blender::NonMovable {
  * created one in `G_MAIN`.
  */
 Main *BKE_main_new();
+/**
+ * Initialize a new Main data-base, based on a reference for relative path and colorspace
+ * conversions.
+ */
+void BKE_main_init_from_reference(Main &bmain, const Main &reference);
 /**
  * Make given \a bmain empty again, and free all runtime mappings.
  *
@@ -493,8 +531,33 @@ struct MainMergeReport {
  *
  * Since `bmain_src` is either empty or contains left-over IDs with (likely) invalid ID
  * relationships and other potential issues after the merge, it is always freed.
+ *
+ * \param force_merge_src_ids: If not null, a set of source IDs that should always be merged, even
+ * if a matching destination ID could be found. Typically used to ensure that 'container IDs' for
+ * complex copy/paste of ID sub-data (nodes, sequencer strips...) are always merged in destination
+ * main, even if another ID with the same exact name already exists there.
  */
+void BKE_main_merge(Main *bmain_dst,
+                    Set<ID *> *force_merge_src_ids,
+                    Main **r_bmain_src,
+                    MainMergeReport &reports);
+/** Simpler overload of the other #BKE_main_merge. */
 void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &reports);
+
+/**
+ * Simplified merge that moves all non-Library IDs from `bmain_src` into `bmain_dst`, assigning
+ * them all to `dst_external_library` as their owning library namespace.
+ *
+ * Unlike the general #BKE_main_merge, this overload skips deduplication and filepath rebasing.
+ * It is intended for merging data imported from an external (non-blend) source that has already
+ * been given a dedicated archive library in `bmain_dst`.
+ *
+ * The source Main is always freed and `*r_bmain_src` is set to nullptr on return.
+ */
+void BKE_main_merge_as_archive_library(Main &bmain_dst,
+                                       Main *&r_bmain_src,
+                                       Library &dst_external_library,
+                                       MainMergeReport &reports);
 
 /**
  * Check whether given `bmain` is empty or contains some IDs.
@@ -527,7 +590,7 @@ void BKE_main_relations_tag_set(Main *bmain, eMainIDRelationsEntryTags tag, bool
  * \param set: If not NULL, given Set will be extended with IDs from given \a bmain,
  * instead of creating a new one.
  */
-blender::Set<const ID *> *BKE_main_set_create(Main *bmain, blender::Set<const ID *> *set);
+Set<const ID *> *BKE_main_set_create(Main *bmain, Set<const ID *> *set);
 
 /* Temporary runtime API to allow re-using local (already appended)
  * IDs instead of appending a new copy again. */
@@ -628,7 +691,7 @@ void BKE_main_library_weak_reference_add(ID *local_id,
 
 #define FOREACH_MAIN_LISTBASE_ID_BEGIN(_lb, _id) \
   { \
-    ID *_id_next = static_cast<ID *>((_lb)->first); \
+    ID *_id_next = static_cast<ID *>((_lb)->first_); \
     for ((_id) = _id_next; (_id) != nullptr; (_id) = _id_next) { \
       _id_next = static_cast<ID *>((_id)->next);
 
@@ -656,7 +719,8 @@ void BKE_main_library_weak_reference_add(ID *local_id,
  * before objects, which will be processed before obdata types, etc.).
  *
  * WARNING: DO NOT use break statement with that macro, use #FOREACH_MAIN_LISTBASE and
- * #FOREACH_MAIN_LISTBASE_ID instead if you need that kind of control flow. */
+ * #FOREACH_MAIN_LISTBASE_ID instead if you need that kind of control flow.
+ */
 #define FOREACH_MAIN_ID_BEGIN(_bmain, _id) \
   { \
     ListBaseT<ID> *_lb; \
@@ -738,6 +802,145 @@ using MainListsArray = std::array<ListBaseT<ID> *, INDEX_ID_MAX - 1>;
  */
 MainListsArray BKE_main_lists_get(Main &bmain);
 
+/**
+ * An iterator over all IDs in the given Main.
+ *
+ * As with the historic C-based APIs, order is defined by these rules:
+ *   - ID types are iterated based on their #eID_Index, by default from higher index to lower one
+ *     (for historical reasons). This can be inverted by using the #reverse_id_type_order option.
+ *   - Within a same type, IDs are iterated based on their libraries (local IDs always iterated
+ *     first) and names (alphanumeric sorting).
+ *
+ * This iterator will remain stable if the underlying Main is modified, as long as the current ID
+ * pointed at by the iterator is not modified.
+ *   - Renaming the current ID may shift its position in the underlying main, making the iterator
+ *     unstable (some items may be skipped, or iterated over several times).
+ *   - Deleting the current ID will fully invalidate the iterator, attempt to use it in any way
+ *     afterwards will result in invalid memory accesses.
+ */
+class MainAllIDsIterator {
+ public:
+  using iterator_category = std::bidirectional_iterator_tag;
+  using value_type = ID;
+  using difference_type = std::ptrdiff_t;
+  using pointer = ID *;
+  using reference = ID &;
+
+ private:
+  MainListsArray lbarray_;
+  bool reverse_id_type_order_ = false;
+  int64_t curr_lbarray_index_;
+  ID *curr_id_ = nullptr;
+
+ public:
+  /* Note: default constructor is a requirement to make the iterator usable with std::ranges. */
+  MainAllIDsIterator() : lbarray_{}
+  {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
+    ++(*this);
+  }
+
+  explicit MainAllIDsIterator(MainListsArray &lbarray, const bool reverse_id_type_order = false)
+      : lbarray_(lbarray), reverse_id_type_order_(reverse_id_type_order)
+  {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
+    ++(*this);
+  }
+
+  explicit MainAllIDsIterator(Main &bmain, const bool reverse_id_type_order = false)
+      : lbarray_(BKE_main_lists_get(bmain)), reverse_id_type_order_(reverse_id_type_order)
+  {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
+    ++(*this);
+  }
+
+ private:
+  /** Exclusive: Return the invalid index 'just before' the first valid one. */
+  int64_t lbarray_index_lower_bound() const
+  {
+    return reverse_id_type_order_ ? -1 : int64_t(lbarray_.size());
+  }
+
+  /** Exclusive: Return the invalid index 'just after' the last valid one. */
+  int64_t lbarray_index_upper_bound() const
+  {
+    return reverse_id_type_order_ ? int64_t(lbarray_.size()) : -1;
+  }
+
+  bool lbarray_index_is_valid() const
+  {
+    return (curr_lbarray_index_ >= -1 && curr_lbarray_index_ <= int64_t(lbarray_.size()));
+  }
+
+  void lbarray_index_step_next()
+  {
+    if (reverse_id_type_order_) {
+      curr_lbarray_index_++;
+    }
+    else {
+      curr_lbarray_index_--;
+    }
+  }
+
+  void lbarray_index_step_prev()
+  {
+    if (reverse_id_type_order_) {
+      curr_lbarray_index_--;
+    }
+    else {
+      curr_lbarray_index_++;
+    }
+  }
+
+ public:
+  MainAllIDsIterator begin() const
+  {
+    MainAllIDsIterator tmp = *this;
+    tmp.curr_lbarray_index_ = tmp.lbarray_index_lower_bound();
+    tmp.curr_id_ = nullptr;
+    return ++tmp;
+  }
+
+  MainAllIDsIterator end() const
+  {
+    MainAllIDsIterator tmp = *this;
+    tmp.curr_lbarray_index_ = tmp.lbarray_index_upper_bound();
+    tmp.curr_id_ = nullptr;
+    return tmp;
+  }
+
+  MainAllIDsIterator &operator++();
+
+  MainAllIDsIterator operator++(int)
+  {
+    MainAllIDsIterator tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+
+  MainAllIDsIterator &operator--();
+
+  MainAllIDsIterator operator--(int)
+  {
+    MainAllIDsIterator tmp = *this;
+    --(*this);
+    return tmp;
+  }
+
+  friend bool operator==(const MainAllIDsIterator &a, const MainAllIDsIterator &b)
+  {
+    return a.curr_id_ == b.curr_id_ && a.curr_lbarray_index_ == b.curr_lbarray_index_;
+  }
+
+  ID &operator*() const
+  {
+    return *curr_id_;
+  }
+
+  /** Return the total number of IDs in the Main database that this iterator is iterating over. */
+  int64_t size() const;
+};
+
 #define MAIN_VERSION_FILE_ATLEAST(main, ver, subver) \
   ((main)->versionfile > (ver) || \
    ((main)->versionfile == (ver) && (main)->subversionfile >= (subver)))
@@ -769,7 +972,9 @@ MainListsArray BKE_main_lists_get(Main &bmain);
 #define BLEN_THUMB_SIZE 128
 
 #define BLEN_THUMB_MEMSIZE(_x, _y) \
-  (sizeof(BlendThumbnail) + ((size_t)(_x) * (size_t)(_y)) * sizeof(int))
+  (sizeof(BlendThumbnail) + (size_t(_x) * size_t(_y)) * sizeof(int))
 /** Protect against buffer overflow vulnerability & negative sizes. */
 #define BLEN_THUMB_MEMSIZE_IS_VALID(_x, _y) \
   (((_x) > 0 && (_y) > 0) && ((uint64_t)(_x) * (uint64_t)(_y) < (SIZE_MAX / (sizeof(int) * 4))))
+
+}  // namespace blender

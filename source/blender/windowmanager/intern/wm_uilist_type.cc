@@ -11,15 +11,15 @@
 #include <cstdio>
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 
 #include "BKE_main.hh"
@@ -30,7 +30,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-using blender::StringRef;
+namespace blender {
 
 static auto &get_list_type_map()
 {
@@ -40,7 +40,7 @@ static auto &get_list_type_map()
       return StringRef(value->idname);
     }
   };
-  static blender::CustomIDVectorSet<uiListType *, IDNameGetter> map;
+  static CustomIDVectorSet<uiListType *, IDNameGetter> map;
   return map;
 }
 
@@ -79,7 +79,7 @@ static void wm_uilisttype_unlink_from_region(const uiListType *ult, ARegion *reg
 static void wm_uilisttype_unlink_from_area(const uiListType *ult, ScrArea *area)
 {
   for (SpaceLink &space_link : area->spacedata) {
-    ListBaseT<ARegion> *regionbase = (&space_link == area->spacedata.first) ?
+    ListBaseT<ARegion> *regionbase = (&space_link == area->spacedata.first_) ?
                                          &area->regionbase :
                                          &space_link.regionbase;
     for (ARegion &region : *regionbase) {
@@ -100,7 +100,7 @@ static void wm_uilisttype_unlink_from_area(const uiListType *ult, ScrArea *area)
  */
 static void wm_uilisttype_unlink(Main *bmain, const uiListType *ult)
 {
-  for (wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first); wm != nullptr;
+  for (wmWindowManager *wm = bmain->wm.first(); wm != nullptr;
        wm = static_cast<wmWindowManager *>(wm->id.next))
   {
     for (wmWindow &win : wm->windows) {
@@ -110,7 +110,7 @@ static void wm_uilisttype_unlink(Main *bmain, const uiListType *ult)
     }
   }
 
-  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen != nullptr;
+  for (bScreen *screen = bmain->screens.first(); screen != nullptr;
        screen = static_cast<bScreen *>(screen->id.next))
   {
     for (ScrArea &area : screen->areabase) {
@@ -128,7 +128,7 @@ void WM_uilisttype_remove_ptr(Main *bmain, uiListType *ult)
   wm_uilisttype_unlink(bmain, ult);
 
   bool ok = get_list_type_map().remove(ult);
-  MEM_freeN(ult);
+  MEM_delete(ult);
 
   BLI_assert(ok);
   UNUSED_VARS_NDEBUG(ok);
@@ -145,7 +145,7 @@ void WM_uilisttype_free()
     if (ult->rna_ext.free) {
       ult->rna_ext.free(ult->rna_ext.data);
     }
-    MEM_freeN(ult);
+    MEM_delete(ult);
   }
 
   get_list_type_map().clear();
@@ -166,3 +166,5 @@ const char *WM_uilisttype_list_id_get(const uiListType *ult, uiList *list)
   /* +1 to skip the '_'. */
   return list->list_id + strlen(ult->idname) + 1;
 }
+
+}  // namespace blender

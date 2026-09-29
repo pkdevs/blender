@@ -11,9 +11,9 @@
 
 #include "RNA_types.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "BKE_addon.h" /* own include */
 #include "BKE_idprop.hh"
@@ -25,6 +25,8 @@
 
 #include "CLG_log.h"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"addon"};
 
 /* -------------------------------------------------------------------- */
@@ -33,7 +35,7 @@ static CLG_LogRef LOG = {"addon"};
 
 bAddon *BKE_addon_new()
 {
-  bAddon *addon = MEM_new_for_free<bAddon>("bAddon");
+  bAddon *addon = MEM_new<bAddon>("bAddon");
   return addon;
 }
 
@@ -70,7 +72,7 @@ void BKE_addon_free(bAddon *addon)
   if (addon->prop) {
     IDP_FreeProperty(addon->prop);
   }
-  MEM_freeN(addon);
+  MEM_delete(addon);
 }
 
 /** \} */
@@ -111,7 +113,7 @@ void BKE_addon_pref_type_add(bAddonPrefType *apt)
 
 void BKE_addon_pref_type_remove(const bAddonPrefType *apt)
 {
-  BLI_ghash_remove(global_addonpreftype_hash, apt->idname, nullptr, MEM_freeN);
+  BLI_ghash_remove(global_addonpreftype_hash, apt->idname, nullptr, MEM_delete_void);
 }
 
 void BKE_addon_pref_type_init()
@@ -122,8 +124,10 @@ void BKE_addon_pref_type_init()
 
 void BKE_addon_pref_type_free()
 {
-  BLI_ghash_free(global_addonpreftype_hash, nullptr, MEM_freeN);
+  BLI_ghash_free(global_addonpreftype_hash, nullptr, MEM_delete_void);
   global_addonpreftype_hash = nullptr;
 }
 
 /** \} */
+
+}  // namespace blender

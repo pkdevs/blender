@@ -8,7 +8,11 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
+
 #include "DNA_listBase.h"
+
+namespace blender {
 
 /**
  * Point cache file data types:
@@ -17,7 +21,8 @@
  *   - #BKE_ptcache_data_size()
  *   - #ptcache_file_pointers_init()
  */
-enum {
+/** #PTCacheMem::data_types */
+enum ePointCache_DataType : short {
   BPHYS_DATA_INDEX = 0,
   BPHYS_DATA_LOCATION = 1,
   BPHYS_DATA_SMOKE_LOW = 1,
@@ -31,16 +36,17 @@ enum {
   BPHYS_DATA_TIMES = 6,
   BPHYS_DATA_BOIDS = 7,
 
-#define BPHYS_TOT_DATA 8
+  BPHYS_TOT_DATA = 8,
 };
 
-enum {
+/** #PTCacheExtra::type */
+enum ePointCache_ExtraDataType : short {
   BPHYS_EXTRA_FLUID_SPRINGS = 1,
   BPHYS_EXTRA_CLOTH_ACCELERATION = 2,
 };
 
 /** #PointCache.flag */
-enum {
+enum ePointCache_Flag : int {
   PTCACHE_BAKED = 1 << 0,
   PTCACHE_OUTDATED = 1 << 1,
   PTCACHE_SIMULATION_VALID = 1 << 2,
@@ -67,13 +73,14 @@ enum {
   PTCACHE_REDO_NEEDED = PTCACHE_OUTDATED | PTCACHE_FRAMES_SKIPPED,
   PTCACHE_FLAGS_COPY = PTCACHE_DISK_CACHE | PTCACHE_EXTERNAL | PTCACHE_IGNORE_LIBPATH,
 };
+ENUM_OPERATORS(ePointCache_Flag)
 
 /**
  * Cache files baked before 5.0 could have used LZO or LZMA.
  * During 5.0 alpha ZSTD compression had two settings.
  * Now only the ZSTD+filtering option is used.
  */
-enum PointCacheCompression {
+enum PointCacheCompression : short {
   PTCACHE_COMPRESS_NO = 0,
   PTCACHE_COMPRESS_LZO_DEPRECATED = 1,  /* Removed in 5.0. */
   PTCACHE_COMPRESS_LZMA_DEPRECATED = 2, /* Removed in 5.0. */
@@ -84,7 +91,9 @@ enum PointCacheCompression {
 
 struct PTCacheExtra {
   struct PTCacheExtra *next = nullptr, *prev = nullptr;
-  unsigned int type = 0, totdata = 0;
+  ePointCache_ExtraDataType type = {};
+  char _pad[2] = {};
+  unsigned int totdata = 0;
   void *data = nullptr;
 };
 
@@ -94,7 +103,7 @@ struct PTCacheMem {
   unsigned int data_types = 0, flag = 0;
 
   /** BPHYS_TOT_DATA. */
-  void *data[8] = {};
+  void *data[/*BPHYS_TOT_DATA*/ 8] = {};
 
   ListBaseT<PTCacheExtra> extradata = {nullptr, nullptr};
 };
@@ -102,7 +111,7 @@ struct PTCacheMem {
 struct PointCache {
   struct PointCache *next = nullptr, *prev = nullptr;
   /** Generic flag. */
-  int flag = 0;
+  ePointCache_Flag flag = {};
 
   /**
    * The number of frames between cached frames.
@@ -138,8 +147,8 @@ struct PointCache {
   int totpoint = 0;
   /** Modifier stack index. */
   int index = 0;
-  /** #PointCacheCompression. Used for versioning only; now cache is always compressed. */
-  short compression = 0;
+  /** Used for versioning only; now cache is always compressed. */
+  PointCacheCompression compression = PTCACHE_COMPRESS_NO;
   char _pad0[2] = {};
 
   char name[64] = "";
@@ -162,3 +171,5 @@ struct PointCache {
   /** Free callback. */
   void (*free_edit)(struct PTCacheEdit *edit) = nullptr;
 };
+
+}  // namespace blender

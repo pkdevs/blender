@@ -13,8 +13,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -40,7 +40,7 @@
 
 #include "nla_intern.hh" /* own include */
 
-using namespace blender;
+namespace blender {
 
 /* ******************* nla editor space & buttons ************** */
 
@@ -94,16 +94,16 @@ bool nla_panel_context(const bContext *C,
         /* found it, now set the pointers */
         if (adt_ptr) {
           /* AnimData pointer */
-          *adt_ptr = RNA_pointer_create_discrete(ale.id, &RNA_AnimData, adt);
+          *adt_ptr = RNA_pointer_create_discrete(ale.id, RNA_AnimData, adt);
         }
         if (nlt_ptr) {
           /* NLA-Track pointer */
-          *nlt_ptr = RNA_pointer_create_discrete(ale.id, &RNA_NlaTrack, nlt);
+          *nlt_ptr = RNA_pointer_create_discrete(ale.id, RNA_NlaTrack, nlt);
         }
         if (strip_ptr) {
           /* NLA-Strip pointer */
           NlaStrip *strip = BKE_nlastrip_find_active(nlt);
-          *strip_ptr = RNA_pointer_create_discrete(ale.id, &RNA_NlaStrip, strip);
+          *strip_ptr = RNA_pointer_create_discrete(ale.id, RNA_NlaStrip, strip);
         }
 
         found = 1;
@@ -149,7 +149,7 @@ bool nla_panel_context(const bContext *C,
 
           /* AnimData pointer */
           if (adt_ptr) {
-            *adt_ptr = RNA_pointer_create_discrete(id, &RNA_AnimData, ale.adt);
+            *adt_ptr = RNA_pointer_create_discrete(id, RNA_AnimData, ale.adt);
           }
 
           /* set found status to -1, since setting to 1 would break the loop
@@ -239,14 +239,14 @@ static bool nla_animdata_panel_poll(const bContext *C, PanelType * /*pt*/)
 {
   PointerRNA ptr;
   PointerRNA strip_ptr;
-  return (nla_panel_context(C, &ptr, nullptr, &strip_ptr) && (ptr.data != nullptr) &&
+  return (nla_panel_context(C, &ptr, nullptr, &strip_ptr) && ptr &&
           (ptr.owner_id != strip_ptr.owner_id));
 }
 
 static bool nla_strip_panel_poll(const bContext *C, PanelType * /*pt*/)
 {
   PointerRNA ptr;
-  return (nla_panel_context(C, nullptr, nullptr, &ptr) && (ptr.data != nullptr));
+  return (nla_panel_context(C, nullptr, nullptr, &ptr) && ptr);
 }
 
 static bool nla_strip_actclip_panel_poll(const bContext *C, PanelType * /*pt*/)
@@ -256,7 +256,7 @@ static bool nla_strip_actclip_panel_poll(const bContext *C, PanelType * /*pt*/)
   if (!nla_panel_context(C, nullptr, nullptr, &ptr)) {
     return false;
   }
-  if (ptr.data == nullptr) {
+  if (!ptr) {
     return false;
   }
 
@@ -271,7 +271,7 @@ static bool nla_strip_eval_panel_poll(const bContext *C, PanelType * /*pt*/)
   if (!nla_panel_context(C, nullptr, nullptr, &ptr)) {
     return false;
   }
-  if (ptr.data == nullptr) {
+  if (!ptr) {
     return false;
   }
 
@@ -305,7 +305,7 @@ static void nla_panel_animdata(const bContext *C, Panel *panel)
 
   // adt = adt_ptr.data;
 
-  blender::ui::Block *block = layout.block();
+  ui::Block *block = layout.block();
   block_func_handle_set(block, do_nla_region_buttons, nullptr);
   layout.use_property_split_set(true);
   layout.use_property_decorate_set(false);
@@ -403,7 +403,7 @@ static void nla_panel_properties(const bContext *C, Panel *panel)
     return;
   }
   ui::Layout &layout = *panel->layout;
-  blender::ui::Block *block = layout.block();
+  ui::Block *block = layout.block();
   block_func_handle_set(block, do_nla_region_buttons, nullptr);
 
   /* Strip Properties ------------------------------------- */
@@ -468,10 +468,10 @@ static void nla_panel_actclip(const bContext *C, Panel *panel)
   }
   ui::Layout &layout = *panel->layout;
 
-  blender::ui::Block *block = layout.block();
+  ui::Block *block = layout.block();
   block_func_handle_set(block, do_nla_region_buttons, nullptr);
   layout.use_property_split_set(true);
-  layout.use_property_decorate_set(true);
+  layout.use_property_decorate_set(false);
 
   /* Strip Properties ------------------------------------- */
   /* action pointer */
@@ -525,7 +525,7 @@ static void nla_panel_animated_influence_header(const bContext *C, Panel *panel)
   }
   ui::Layout &layout = *panel->layout;
 
-  blender::ui::Block *block = layout.block();
+  ui::Block *block = layout.block();
   block_func_handle_set(block, do_nla_region_buttons, nullptr);
 
   ui::Layout &col = layout.column(true);
@@ -543,7 +543,7 @@ static void nla_panel_evaluation(const bContext *C, Panel *panel)
 
   ui::Layout &layout = *panel->layout;
 
-  blender::ui::Block *block = layout.block();
+  ui::Block *block = layout.block();
   block_func_handle_set(block, do_nla_region_buttons, nullptr);
   layout.use_property_split_set(true);
 
@@ -560,7 +560,7 @@ static void nla_panel_animated_strip_time_header(const bContext *C, Panel *panel
   }
   ui::Layout &layout = *panel->layout;
 
-  blender::ui::Block *block = layout.block();
+  ui::Block *block = layout.block();
   block_func_handle_set(block, do_nla_region_buttons, nullptr);
 
   ui::Layout &col = layout.column(true);
@@ -576,7 +576,7 @@ static void nla_panel_animated_strip_time(const bContext *C, Panel *panel)
   }
   ui::Layout &layout = *panel->layout;
 
-  blender::ui::Block *block = layout.block();
+  ui::Block *block = layout.block();
   block_func_handle_set(block, do_nla_region_buttons, nullptr);
   layout.use_property_split_set(true);
 
@@ -605,7 +605,7 @@ static void nla_panel_modifiers(const bContext *C, Panel *panel)
   }
   NlaStrip *strip = static_cast<NlaStrip *>(strip_ptr.data);
 
-  blender::ui::Block *block = panel->layout->block();
+  ui::Block *block = panel->layout->block();
   block_func_handle_set(block, do_nla_region_buttons, nullptr);
 
   /* 'add modifier' button at top of panel */
@@ -631,7 +631,7 @@ void nla_buttons_register(ARegionType *art)
 {
   PanelType *pt;
 
-  pt = MEM_callocN<PanelType>("spacetype nla panel animdata");
+  pt = MEM_new_zeroed<PanelType>("spacetype nla panel animdata");
   STRNCPY_UTF8(pt->idname, "NLA_PT_animdata");
   STRNCPY_UTF8(pt->label, N_("Animation Data"));
   STRNCPY_UTF8(pt->category, "Edited Action");
@@ -641,7 +641,7 @@ void nla_buttons_register(ARegionType *art)
   pt->poll = nla_animdata_panel_poll;
   BLI_addtail(&art->paneltypes, pt);
 
-  pt = MEM_callocN<PanelType>("spacetype nla panel properties");
+  pt = MEM_new_zeroed<PanelType>("spacetype nla panel properties");
   STRNCPY_UTF8(pt->idname, "NLA_PT_stripname");
   STRNCPY_UTF8(pt->label, N_("Active Strip Name"));
   STRNCPY_UTF8(pt->category, "Strip");
@@ -651,7 +651,7 @@ void nla_buttons_register(ARegionType *art)
   pt->poll = nla_strip_panel_poll;
   BLI_addtail(&art->paneltypes, pt);
 
-  PanelType *pt_properties = pt = MEM_callocN<PanelType>("spacetype nla panel properties");
+  PanelType *pt_properties = pt = MEM_new_zeroed<PanelType>("spacetype nla panel properties");
   STRNCPY_UTF8(pt->idname, "NLA_PT_properties");
   STRNCPY_UTF8(pt->label, N_("Active Strip"));
   STRNCPY_UTF8(pt->category, "Strip");
@@ -660,7 +660,7 @@ void nla_buttons_register(ARegionType *art)
   pt->poll = nla_strip_panel_poll;
   BLI_addtail(&art->paneltypes, pt);
 
-  pt = MEM_callocN<PanelType>("spacetype nla panel properties");
+  pt = MEM_new_zeroed<PanelType>("spacetype nla panel properties");
   STRNCPY_UTF8(pt->idname, "NLA_PT_actionclip");
   STRNCPY_UTF8(pt->label, N_("Action Clip"));
   STRNCPY_UTF8(pt->category, "Strip");
@@ -670,7 +670,7 @@ void nla_buttons_register(ARegionType *art)
   pt->poll = nla_strip_actclip_panel_poll;
   BLI_addtail(&art->paneltypes, pt);
 
-  pt = MEM_callocN<PanelType>("spacetype nla panel evaluation");
+  pt = MEM_new_zeroed<PanelType>("spacetype nla panel evaluation");
   STRNCPY_UTF8(pt->idname, "NLA_PT_evaluation");
   STRNCPY_UTF8(pt->parent_id, "NLA_PT_properties");
   STRNCPY_UTF8(pt->label, N_("Animated Influence"));
@@ -684,7 +684,7 @@ void nla_buttons_register(ARegionType *art)
   BLI_addtail(&pt_properties->children, BLI_genericNodeN(pt));
   BLI_addtail(&art->paneltypes, pt);
 
-  pt = MEM_callocN<PanelType>("spacetype nla panel animated strip time");
+  pt = MEM_new_zeroed<PanelType>("spacetype nla panel animated strip time");
   STRNCPY_UTF8(pt->idname, "NLA_PT_animated_strip_time");
   STRNCPY_UTF8(pt->parent_id, "NLA_PT_properties");
   STRNCPY_UTF8(pt->label, N_("Animated Strip Time"));
@@ -698,7 +698,7 @@ void nla_buttons_register(ARegionType *art)
   BLI_addtail(&pt_properties->children, BLI_genericNodeN(pt));
   BLI_addtail(&art->paneltypes, pt);
 
-  pt = MEM_callocN<PanelType>("spacetype nla panel modifiers");
+  pt = MEM_new_zeroed<PanelType>("spacetype nla panel modifiers");
   STRNCPY_UTF8(pt->idname, "NLA_PT_modifiers");
   STRNCPY_UTF8(pt->label, N_("Modifiers"));
   STRNCPY_UTF8(pt->category, "Modifiers");
@@ -711,3 +711,5 @@ void nla_buttons_register(ARegionType *art)
   ANIM_modifier_panels_register_graph_and_NLA(
       art, NLA_FMODIFIER_PANEL_PREFIX, nla_strip_eval_panel_poll);
 }
+
+}  // namespace blender

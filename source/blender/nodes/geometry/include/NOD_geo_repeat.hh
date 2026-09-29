@@ -16,7 +16,7 @@ namespace blender::nodes {
  */
 struct RepeatItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = NodeRepeatItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static int node_type;
   static constexpr StringRefNull node_idname = "GeometryNodeRepeatOutput";
   static constexpr bool has_type = true;
@@ -48,7 +48,7 @@ struct RepeatItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
 
   static void destruct_item(NodeRepeatItem *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -56,7 +56,7 @@ struct RepeatItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
 
   static eNodeSocketDatatype get_socket_type(const NodeRepeatItem &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(NodeRepeatItem &item)

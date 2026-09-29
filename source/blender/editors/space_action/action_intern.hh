@@ -10,6 +10,8 @@
 
 #include "DNA_listBase.h"
 
+namespace blender {
+
 struct bAnimListElem;
 struct ARegion;
 struct ARegionType;
@@ -61,6 +63,7 @@ void ACTION_OT_select_more(wmOperatorType *ot);
 void ACTION_OT_select_less(wmOperatorType *ot);
 void ACTION_OT_select_leftright(wmOperatorType *ot);
 void ACTION_OT_clickselect(wmOperatorType *ot);
+void ACTION_OT_select_by_type(wmOperatorType *ot);
 
 /* defines for left-right select tool */
 enum eActKeys_LeftRightSelect_Mode {
@@ -142,3 +145,5 @@ enum eActKeys_Mirror_Mode {
 
 void action_operatortypes();
 void action_keymap(wmKeyConfig *keyconf);
+
+}  // namespace blender

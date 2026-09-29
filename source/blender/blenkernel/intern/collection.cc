@@ -11,15 +11,17 @@
 
 #include "CLG_log.h"
 
+#include <fmt/format.h>
+
 #include <cstring>
 #include <optional>
 
-#include "BLI_iterator.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_iterator.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_mutex.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
@@ -54,6 +56,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLO_read_write.hh"
+
+namespace blender {
 
 static CLG_LogRef LOG = {"object.collection"};
 
@@ -111,6 +115,7 @@ static void collection_gobject_hash_ensure(Collection *collection);
 static void collection_gobject_hash_update_object(Collection *collection,
                                                   Object *ob_old,
                                                   CollectionObject *cob);
+static void collection_importer_copy(Collection *collection, const CollectionImport *data);
 static void collection_exporter_copy(Collection *collection, CollectionExport *data);
 
 /** \} */
@@ -121,9 +126,9 @@ static void collection_exporter_copy(Collection *collection, CollectionExport *d
 
 static void collection_init_data(ID *id)
 {
-  Collection *collection = (Collection *)id;
+  Collection *collection = id_cast<Collection *>(id);
   INIT_DEFAULT_STRUCT_AFTER(collection, id);
-  collection->runtime = MEM_new<blender::bke::CollectionRuntime>(__func__);
+  collection->runtime = MEM_new<bke::CollectionRuntime>(__func__);
 }
 
 /**
@@ -142,16 +147,15 @@ static void collection_copy_data(Main *bmain,
                                  const ID *id_src,
                                  const int flag)
 {
-  Collection *collection_dst = (Collection *)id_dst;
-  const Collection *collection_src = (const Collection *)id_src;
+  Collection *collection_dst = id_cast<Collection *>(id_dst);
+  const Collection *collection_src = id_cast<const Collection *>(id_src);
 
-  collection_dst->runtime = MEM_new<blender::bke::CollectionRuntime>(__func__);
+  collection_dst->runtime = MEM_new<bke::CollectionRuntime>(__func__);
 
   BLI_assert(((collection_src->flag & COLLECTION_IS_MASTER) != 0) ==
              ((collection_src->id.flag & ID_FLAG_EMBEDDED_DATA) != 0));
 
-  /* Do not copy collection's preview (same behavior as for objects). */
-  if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0 && false) { /* XXX TODO: temp hack. */
+  if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0) {
     BKE_previewimg_id_copy(&collection_dst->id, &collection_src->id);
   }
   else {
@@ -160,9 +164,10 @@ static void collection_copy_data(Main *bmain,
 
   collection_dst->flag &= ~(COLLECTION_HAS_OBJECT_CACHE | COLLECTION_HAS_OBJECT_CACHE_INSTANCED);
 
-  BLI_listbase_clear(&collection_dst->gobject);
-  BLI_listbase_clear(&collection_dst->children);
-  BLI_listbase_clear(&collection_dst->exporters);
+  collection_dst->gobject.clear_no_delete();
+  collection_dst->children.clear_no_delete();
+  collection_dst->exporters.clear_no_delete();
+  collection_dst->importer = nullptr;
 
   for (CollectionChild &child : collection_src->children) {
     collection_child_add(
@@ -174,28 +179,37 @@ static void collection_copy_data(Main *bmain,
   for (CollectionExport &data : collection_src->exporters) {
     collection_exporter_copy(collection_dst, &data);
   }
+  if (collection_src->importer) {
+    collection_importer_copy(collection_dst, collection_src->importer);
+  }
 }
 
 static void collection_free_data(ID *id)
 {
-  Collection *collection = (Collection *)id;
+  Collection *collection = id_cast<Collection *>(id);
 
   /* No animation-data here. */
-  BKE_previewimg_free(&collection->preview);
+  BKE_previewimg_id_free(&collection->id);
 
-  BLI_freelistN(&collection->gobject);
+  collection->gobject.free_no_destruct();
   if (collection->runtime->gobject_hash) {
     MEM_delete(collection->runtime->gobject_hash);
     collection->runtime->gobject_hash = nullptr;
   }
 
-  BLI_freelistN(&collection->children);
-  BLI_freelistN(&collection->runtime->parents);
+  collection->children.free_no_destruct();
+  collection->runtime->parents.free_no_destruct();
 
   for (CollectionExport &data : collection->exporters) {
     BKE_collection_exporter_free_data(&data);
   }
-  BLI_freelistN(&collection->exporters);
+  collection->exporters.free_no_destruct();
+
+  if (collection->importer) {
+    BKE_collection_importer_free_data(collection->importer);
+    MEM_delete(collection->importer);
+    collection->importer = nullptr;
+  }
 
   /* No need for depsgraph tagging here, since the data is being deleted. */
   collection_object_cache_free(nullptr, collection, LIB_ID_CREATE_NO_DEG_TAG, 0);
@@ -205,7 +219,7 @@ static void collection_free_data(ID *id)
 
 static void collection_foreach_id(ID *id, LibraryForeachIDData *data)
 {
-  Collection *collection = (Collection *)id;
+  Collection *collection = id_cast<Collection *>(id);
   const int data_flags = BKE_lib_query_foreachid_process_flags_get(data);
 
   BKE_LIB_FOREACHID_PROCESS_ID(
@@ -256,7 +270,7 @@ static ID **collection_owner_pointer_get(ID *id, const bool debug_relationship_a
     return nullptr;
   }
 
-  Collection *master_collection = (Collection *)id;
+  Collection *master_collection = id_cast<Collection *>(id);
   BLI_assert((master_collection->flag & COLLECTION_IS_MASTER) != 0);
   if (debug_relationship_assert) {
     BLI_assert(master_collection->owner_id != nullptr);
@@ -289,22 +303,31 @@ void BKE_collection_blend_write_nolib(BlendWriter *writer, Collection *collectio
     writer->write_struct(&child);
   }
 
+  writer->write_struct(collection->importer);
+  if (collection->importer && collection->importer->import_properties) {
+    IDP_BlendWrite(writer, collection->importer->import_properties);
+  }
+
   for (CollectionExport &data : collection->exporters) {
     writer->write_struct(&data);
     if (data.export_properties) {
       IDP_BlendWrite(writer, data.export_properties);
+    }
+    writer->write_struct_list(&data.layout_panel_states);
+    for (const LayoutPanelState &state : data.layout_panel_states) {
+      writer->write_string(state.idname);
     }
   }
 }
 
 static void collection_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
-  Collection *collection = (Collection *)id;
+  Collection *collection = id_cast<Collection *>(id);
 
   BKE_collection_blend_write_prepare_nolib(writer, collection);
 
   /* write LibData */
-  BLO_write_id_struct(writer, Collection, id_address, &collection->id);
+  writer->write_id_struct(id_address, collection);
 
   BKE_collection_blend_write_nolib(writer, collection);
 }
@@ -337,7 +360,7 @@ void BKE_collection_blend_read_data(BlendDataReader *reader, Collection *collect
     collection->id.flag |= ID_FLAG_EMBEDDED_DATA;
   }
 
-  collection->runtime = MEM_new<blender::bke::CollectionRuntime>(__func__);
+  collection->runtime = MEM_new<bke::CollectionRuntime>(__func__);
   collection->flag &= ~COLLECTION_FLAG_ALL_RUNTIME;
 
   collection->owner_id = owner_id;
@@ -345,10 +368,20 @@ void BKE_collection_blend_read_data(BlendDataReader *reader, Collection *collect
   BLO_read_struct_list(reader, CollectionObject, &collection->gobject);
   BLO_read_struct_list(reader, CollectionChild, &collection->children);
 
+  BLO_read_struct(reader, CollectionImport, &collection->importer);
+  if (collection->importer) {
+    BLO_read_struct(reader, IDProperty, &collection->importer->import_properties);
+    IDP_BlendDataRead(reader, &collection->importer->import_properties);
+  }
+
   BLO_read_struct_list(reader, CollectionExport, &collection->exporters);
   for (CollectionExport &data : collection->exporters) {
     BLO_read_struct(reader, IDProperty, &data.export_properties);
     IDP_BlendDataRead(reader, &data.export_properties);
+    BLO_read_struct_list(reader, LayoutPanelState, &data.layout_panel_states);
+    for (LayoutPanelState &state : data.layout_panel_states) {
+      BLO_read_string(reader, &state.idname);
+    }
   }
 
   BLO_read_struct(reader, PreviewImage, &collection->preview);
@@ -357,7 +390,7 @@ void BKE_collection_blend_read_data(BlendDataReader *reader, Collection *collect
 
 static void collection_blend_read_data(BlendDataReader *reader, ID *id)
 {
-  Collection *collection = (Collection *)id;
+  Collection *collection = id_cast<Collection *>(id);
   BKE_collection_blend_read_data(reader, collection, nullptr);
 }
 
@@ -381,34 +414,35 @@ static void collection_blend_read_after_liblink(BlendLibReader * /*reader*/, ID 
 }
 
 IDTypeInfo IDType_ID_GR = {
-    /*id_code*/ Collection::id_type,
-    /*id_filter*/ FILTER_ID_GR,
-    /*dependencies_id_types*/ FILTER_ID_OB | FILTER_ID_GR,
-    /*main_listbase_index*/ INDEX_ID_GR,
-    /*struct_size*/ sizeof(Collection),
-    /*name*/ "Collection",
-    /*name_plural*/ N_("collections"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_COLLECTION,
-    /*flags*/ IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = Collection::id_type,
+    .id_filter = FILTER_ID_GR,
+    .dependencies_id_types = FILTER_ID_OB | FILTER_ID_GR,
+    .main_listbase_index = INDEX_ID_GR,
+    .struct_size = sizeof(Collection),
+    .name = "Collection",
+    .name_plural = N_("collections"),
+    .translation_context = BLT_I18NCONTEXT_ID_COLLECTION,
+    .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ collection_init_data,
-    /*copy_data*/ collection_copy_data,
-    /*free_data*/ collection_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ collection_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ collection_owner_pointer_get,
+    .init_data = collection_init_data,
+    .copy_data = collection_copy_data,
+    .free_data = collection_free_data,
+    .make_local = nullptr,
+    .foreach_id = collection_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
+    .owner_pointer_get = collection_owner_pointer_get,
 
-    /*blend_write*/ collection_blend_write,
-    /*blend_read_data*/ collection_blend_read_data,
-    /*blend_read_after_liblink*/ collection_blend_read_after_liblink,
+    .blend_write = collection_blend_write,
+    .blend_read_data = collection_blend_read_data,
+    .blend_read_after_liblink = collection_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 /** \} */
@@ -441,6 +475,7 @@ static Collection *collection_add(Main *bmain,
   /* Optionally add to parent collection. */
   if (collection_parent) {
     collection_child_add(bmain, collection_parent, collection, nullptr, 0, true);
+    collection->color_tag = collection_parent->color_tag;
   }
 
   return collection;
@@ -485,7 +520,7 @@ void BKE_collection_add_from_collection(Main *bmain,
   bool is_instantiated = false;
 
   FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
-    if (ID_IS_EDITABLE(collection) && !ID_IS_OVERRIDE_LIBRARY(collection) &&
+    if (BKE_collection_is_content_editable(collection) &&
         BKE_collection_child_find(collection, collection_src))
     {
       collection_child_add(bmain, collection, collection_dst, nullptr, 0, true);
@@ -524,8 +559,7 @@ void BKE_collection_exporter_name_set(const ListBaseT<CollectionExport> *exporte
 {
   /* Only use the new name if it's not empty. */
   if (newname && newname[0] != '\0') {
-    ListBaseT<CollectionExport> list = exporters ? *exporters :
-                                                   ListBaseT<CollectionExport>{data, data};
+    ListBaseT<CollectionExport> list = exporters ? *exporters : BLI_listbase_from_link(data);
 
     STRNCPY(data->name, newname);
     BLI_uniquename(
@@ -533,10 +567,21 @@ void BKE_collection_exporter_name_set(const ListBaseT<CollectionExport> *exporte
   }
 }
 
+void BKE_collection_importer_free_data(CollectionImport *data)
+{
+  if (data->import_properties) {
+    IDP_FreeProperty(data->import_properties);
+  }
+}
+
 void BKE_collection_exporter_free_data(CollectionExport *data)
 {
   if (data->export_properties) {
     IDP_FreeProperty(data->export_properties);
+  }
+  for (const LayoutPanelState &state : data->layout_panel_states.items_mutable()) {
+    MEM_delete(state.idname);
+    MEM_delete(&state);
   }
 }
 
@@ -559,18 +604,18 @@ bool BKE_collection_delete(Main *bmain, Collection *collection, bool hierarchy)
 
   if (hierarchy) {
     /* Remove child objects. */
-    CollectionObject *cob = static_cast<CollectionObject *>(collection->gobject.first);
+    CollectionObject *cob = collection->gobject.first();
     while (cob != nullptr) {
       collection_object_remove_no_gobject_hash(
           bmain, collection, cob, LIB_ID_CREATE_NO_DEG_TAG, true);
-      cob = static_cast<CollectionObject *>(collection->gobject.first);
+      cob = collection->gobject.first();
     }
 
     /* Delete all child collections recursively. */
-    CollectionChild *child = static_cast<CollectionChild *>(collection->children.first);
+    CollectionChild *child = collection->children.first();
     while (child != nullptr) {
       BKE_collection_delete(bmain, child->collection, hierarchy);
-      child = static_cast<CollectionChild *>(collection->children.first);
+      child = collection->children.first();
     }
   }
   else {
@@ -582,7 +627,7 @@ bool BKE_collection_delete(Main *bmain, Collection *collection, bool hierarchy)
       }
     }
 
-    CollectionObject *cob = static_cast<CollectionObject *>(collection->gobject.first);
+    CollectionObject *cob = collection->gobject.first();
     while (cob != nullptr) {
       /* Link child object into parent collections. */
       for (CollectionParent &cparent : collection->runtime->parents) {
@@ -593,7 +638,7 @@ bool BKE_collection_delete(Main *bmain, Collection *collection, bool hierarchy)
       /* Remove child object. */
       collection_object_remove_no_gobject_hash(
           bmain, collection, cob, LIB_ID_CREATE_NO_DEG_TAG, true);
-      cob = static_cast<CollectionObject *>(collection->gobject.first);
+      cob = collection->gobject.first();
     }
   }
 
@@ -632,8 +677,8 @@ static Collection *collection_duplicate_recursive(Main *bmain,
     do_full_process = true;
   }
   else if (collection_old->id.newid == nullptr) {
-    collection_new = (Collection *)BKE_id_copy_for_duplicate(
-        bmain, (ID *)collection_old, duplicate_flags, id_create_flag);
+    collection_new = id_cast<Collection *>(BKE_id_copy_for_duplicate(
+        bmain, id_cast<ID *>(collection_old), duplicate_flags, id_create_flag));
 
     if (collection_new == collection_old) {
       return collection_new;
@@ -642,7 +687,7 @@ static Collection *collection_duplicate_recursive(Main *bmain,
     do_full_process = true;
   }
   else {
-    collection_new = (Collection *)collection_old->id.newid;
+    collection_new = id_cast<Collection *>(collection_old->id.newid);
   }
 
   /* Optionally add to parent (we always want to do that,
@@ -693,7 +738,7 @@ static Collection *collection_duplicate_recursive(Main *bmain,
      * collections collection_old and collection_new are the same data here. */
     for (CollectionObject &cob : collection_old->gobject.items_mutable()) {
       Object *ob_old = cob.ob;
-      Object *ob_new = (Object *)ob_old->id.newid;
+      Object *ob_new = id_cast<Object *>(ob_old->id.newid);
 
       /* New object can be nullptr in master collection case, since new and old objects are in same
        * collection. */
@@ -807,13 +852,11 @@ void BKE_collection_new_name_get(Collection *collection_parent, char r_name[MAX_
     BLI_strncpy_utf8(r_name, DATA_("Collection"), name_maxncpy);
   }
   else if (collection_parent->flag & COLLECTION_IS_MASTER) {
-    BLI_snprintf_utf8(r_name,
-                      name_maxncpy,
-                      DATA_("Collection %d"),
-                      BLI_listbase_count(&collection_parent->children) + 1);
+    BLI_snprintf_utf8(
+        r_name, name_maxncpy, DATA_("Collection %d"), collection_parent->children.count() + 1);
   }
   else {
-    const int number = BLI_listbase_count(&collection_parent->children) + 1;
+    const int number = collection_parent->children.count() + 1;
     const int digits = integer_digits_i(number);
     const size_t name_part_maxncpy = name_maxncpy - (1 + digits);
     const size_t name_part_len = BLI_strncpy_utf8_rlen(
@@ -848,7 +891,7 @@ static void collection_object_cache_fill(ListBaseT<Base> *lb,
     Base *base = static_cast<Base *>(BLI_findptr(lb, cob.ob, offsetof(Base, object)));
 
     if (base == nullptr) {
-      base = MEM_new_for_free<Base>("Object Base");
+      base = MEM_new<Base>("Object Base");
       base->object = cob.ob;
       BLI_addtail(lb, base);
       if (with_instances && cob.ob->instance_collection) {
@@ -876,7 +919,7 @@ static void collection_object_cache_fill(ListBaseT<Base> *lb,
 ListBaseT<Base> BKE_collection_object_cache_get(Collection *collection)
 {
   if (!(collection->flag & COLLECTION_HAS_OBJECT_CACHE)) {
-    static blender::Mutex cache_lock;
+    static Mutex cache_lock;
 
     std::scoped_lock lock(cache_lock);
     if (!(collection->flag & COLLECTION_HAS_OBJECT_CACHE)) {
@@ -891,7 +934,7 @@ ListBaseT<Base> BKE_collection_object_cache_get(Collection *collection)
 ListBaseT<Base> BKE_collection_object_cache_instanced_get(Collection *collection)
 {
   if (!(collection->flag & COLLECTION_HAS_OBJECT_CACHE_INSTANCED)) {
-    static blender::Mutex cache_lock;
+    static Mutex cache_lock;
 
     std::scoped_lock lock(cache_lock);
     if (!(collection->flag & COLLECTION_HAS_OBJECT_CACHE_INSTANCED)) {
@@ -910,8 +953,8 @@ static void collection_object_cache_free(const Main *bmain,
                                          const uint id_recalc_flag)
 {
   collection->flag &= ~(COLLECTION_HAS_OBJECT_CACHE | COLLECTION_HAS_OBJECT_CACHE_INSTANCED);
-  BLI_freelistN(&collection->runtime->object_cache);
-  BLI_freelistN(&collection->runtime->object_cache_instanced);
+  collection->runtime->object_cache.free_no_destruct();
+  collection->runtime->object_cache_instanced.free_no_destruct();
 
   /* Although it may seem abusive to call depsgraph updates from this utility function,
    * it is called from any code-path modifying the collections hierarchy and/or their objects.
@@ -961,30 +1004,30 @@ void BKE_collection_object_cache_free(const Main *bmain,
 
 void BKE_main_collections_object_cache_free(const Main *bmain)
 {
-  for (Scene *scene = static_cast<Scene *>(bmain->scenes.first); scene != nullptr;
+  for (Scene *scene = bmain->scenes.first(); scene != nullptr;
        scene = static_cast<Scene *>(scene->id.next))
   {
     collection_object_cache_free(
         bmain, scene->master_collection, 0, ID_RECALC_HIERARCHY | ID_RECALC_GEOMETRY);
   }
 
-  for (Collection *collection = static_cast<Collection *>(bmain->collections.first);
-       collection != nullptr;
+  for (Collection *collection = bmain->collections.first(); collection != nullptr;
        collection = static_cast<Collection *>(collection->id.next))
   {
     collection_object_cache_free(bmain, collection, 0, ID_RECALC_HIERARCHY | ID_RECALC_GEOMETRY);
   }
 }
 
-Base *BKE_collection_or_layer_objects(const Scene *scene,
+Base *BKE_collection_or_layer_objects(const Main &bmain,
+                                      const Scene *scene,
                                       ViewLayer *view_layer,
                                       Collection *collection)
 {
   if (collection) {
-    return static_cast<Base *>(BKE_collection_object_cache_get(collection).first);
+    return BKE_collection_object_cache_get(collection).first();
   }
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  return static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first);
+  BKE_view_layer_synced_ensure(bmain, scene, view_layer);
+  return BKE_view_layer_object_bases_get(view_layer)->first();
 }
 
 /** \} */
@@ -1006,7 +1049,7 @@ Collection *BKE_collection_master_add(Scene *scene)
   master_collection->color_tag = COLLECTION_COLOR_NONE;
 
   BLI_assert(scene->id.lib == master_collection->id.lib);
-  master_collection->runtime = MEM_new<blender::bke::CollectionRuntime>(__func__);
+  master_collection->runtime = MEM_new<bke::CollectionRuntime>(__func__);
 
   return master_collection;
 }
@@ -1109,7 +1152,7 @@ bool BKE_collection_contains_geometry_recursive(const Collection *collection)
     if (col_ob.ob->visibility_flag & OB_HIDE_RENDER) {
       continue;
     }
-    if (OB_TYPE_IS_GEOMETRY(col_ob.ob->type)) {
+    if (DEG_object_has_geometry_component(col_ob.ob)) {
       return true;
     }
   }
@@ -1129,7 +1172,7 @@ bool BKE_collection_contains_geometry_recursive(const Collection *collection)
 static Collection *collection_next_find(Main *bmain, Scene *scene, Collection *collection)
 {
   if (scene && collection == scene->master_collection) {
-    return static_cast<Collection *>(bmain->collections.first);
+    return bmain->collections.first();
   }
 
   return static_cast<Collection *>(collection->id.next);
@@ -1147,7 +1190,7 @@ Collection *BKE_collection_object_find(Main *bmain,
     collection = scene->master_collection;
   }
   else {
-    collection = static_cast<Collection *>(bmain->collections.first);
+    collection = bmain->collections.first();
   }
 
   while (collection) {
@@ -1161,8 +1204,7 @@ Collection *BKE_collection_object_find(Main *bmain,
 
 bool BKE_collection_is_empty(const Collection *collection)
 {
-  return BLI_listbase_is_empty(&collection->gobject) &&
-         BLI_listbase_is_empty(&collection->children);
+  return collection->gobject.is_empty() && collection->children.is_empty();
 }
 
 /** \} */
@@ -1177,7 +1219,7 @@ static void collection_gobject_assert_internal_consistency(Collection *collectio
 static CollectionObjectMap *collection_gobject_hash_alloc(const Collection *collection)
 {
   auto *gobject_hash = MEM_new<CollectionObjectMap>(__func__);
-  gobject_hash->reserve(BLI_listbase_count(&collection->gobject));
+  gobject_hash->reserve(collection->gobject.count());
   return gobject_hash;
 }
 
@@ -1185,7 +1227,7 @@ static void collection_gobject_hash_create(Collection *collection)
 {
   CollectionObjectMap *gobject_hash = collection_gobject_hash_alloc(collection);
   for (CollectionObject &cob : collection->gobject) {
-    if (UNLIKELY(cob.ob == nullptr)) {
+    if (cob.ob == nullptr) [[unlikely]] {
       BLI_assert(collection->runtime->tag & COLLECTION_TAG_COLLECTION_OBJECT_DIRTY);
       continue;
     }
@@ -1353,7 +1395,7 @@ static bool collection_is_editable_in_viewlayer(const ViewLayer *view_layer,
                                           nullptr;
   r_is_in_viewlayer = layer_collection != nullptr;
 
-  if (!ID_IS_EDITABLE(collection) || ID_IS_OVERRIDE_LIBRARY(collection)) {
+  if (!BKE_collection_is_content_editable(collection)) {
     return false;
   }
   if (!view_layer) {
@@ -1397,6 +1439,44 @@ Collection *BKE_collection_parent_editable_find_recursive(const ViewLayer *view_
   return nullptr;
 }
 
+CollectionObject *BKE_collection_object_find_in(const Collection &collection, const Object &ob)
+{
+  collection_gobject_hash_ensure(const_cast<Collection *>(&collection));
+  return collection.runtime->gobject_hash->lookup_default(&ob, nullptr);
+}
+
+void BKE_collection_object_parented_sort_index_reset(Main &bmain, Object &ob)
+{
+  Collection *collection = nullptr;
+  while ((collection = BKE_collection_object_find(&bmain, nullptr, collection, &ob))) {
+    CollectionObject *cob = BKE_collection_object_find_in(*collection, ob);
+    if (cob != nullptr) {
+      cob->parented_sort_index = -1;
+    }
+  }
+}
+
+void BKE_collection_object_parent_clear_sort_index_reset(Main &bmain, Object &ob)
+{
+  Collection *collection = nullptr;
+  while ((collection = BKE_collection_object_find(&bmain, nullptr, collection, &ob))) {
+    CollectionObject *cob = BKE_collection_object_find_in(*collection, ob);
+    if (cob != nullptr) {
+      cob->parented_sort_index = -1;
+      if (ob.parent != nullptr) {
+        for (Object *parent_iter = ob.parent; parent_iter != nullptr;
+             parent_iter = parent_iter->parent)
+        {
+          if (BKE_collection_object_find_in(*collection, *parent_iter) != nullptr) {
+            cob->sort_index = -1;
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
 static bool collection_object_add(Main *bmain,
                                   Collection *collection,
                                   Object *ob,
@@ -1418,7 +1498,7 @@ static bool collection_object_add(Main *bmain,
   bool newly_added = false;
   CollectionObject *cob = collection->runtime->gobject_hash->lookup_or_add_cb(ob, [&]() {
     newly_added = true;
-    return MEM_new_for_free<CollectionObject>(__func__);
+    return MEM_new<CollectionObject>("collection_object_add");
   });
   if (!newly_added) {
     return false;
@@ -1476,11 +1556,57 @@ static bool collection_object_remove(
   return true;
 }
 
+bool BKE_collection_is_content_editable(const Collection *collection, std::string *r_reason)
+{
+  if (ID_IS_OVERRIDE_LIBRARY(collection)) {
+    if (r_reason) {
+      *r_reason = fmt::format(fmt::runtime(RPT_("Collection '{}' is overridden.")),
+                              collection->id.name + 2);
+    }
+    return false;
+  }
+
+  if (!ID_IS_EDITABLE(collection)) {
+    if (r_reason) {
+      *r_reason = fmt::format(fmt::runtime(RPT_("Collection '{}' is linked.")),
+                              collection->id.name + 2);
+    }
+    return false;
+  }
+
+  if (collection->importer != nullptr) {
+    if (r_reason) {
+      *r_reason = fmt::format(
+          fmt::runtime(RPT_("Collection '{}' belongs to a collection importer.")),
+          collection->id.name + 2);
+    }
+    return false;
+  }
+
+  return true;
+}
+
+CollectionImport *BKE_collection_importer_add(Collection *collection, const char *idname)
+{
+  /* Add a new #CollectionExport item to our handler list and fill it with #FileHandlerType
+   * information. Also load in the operator's properties now as well. */
+  CollectionImport *data = MEM_new<CollectionImport>("CollectionImport");
+  STRNCPY(data->fh_idname, idname);
+
+  IDPropertyTemplate val{};
+  data->import_properties = IDP_New(IDP_GROUP, &val, "import_properties");
+  data->flag |= IO_HANDLER_PANEL_OPEN;
+
+  collection->importer = data;
+
+  return data;
+}
+
 CollectionExport *BKE_collection_exporter_add(Collection *collection, char *idname, char *label)
 {
   /* Add a new #CollectionExport item to our handler list and fill it with #FileHandlerType
    * information. Also load in the operator's properties now as well. */
-  CollectionExport *data = MEM_new_for_free<CollectionExport>("CollectionExport");
+  CollectionExport *data = MEM_new<CollectionExport>("CollectionExport");
   STRNCPY(data->fh_idname, idname);
 
   BKE_collection_exporter_name_set(&collection->exporters, data, label);
@@ -1490,7 +1616,7 @@ CollectionExport *BKE_collection_exporter_add(Collection *collection, char *idna
   data->flag |= IO_HANDLER_PANEL_OPEN;
 
   BLI_addtail(&collection->exporters, data);
-  collection->active_exporter_index = BLI_listbase_count(&collection->exporters) - 1;
+  collection->active_exporter_index = collection->exporters.count() - 1;
 
   return data;
 }
@@ -1501,9 +1627,9 @@ void BKE_collection_exporter_remove(Collection *collection, CollectionExport *da
   BLI_remlink(exporters, data);
   BKE_collection_exporter_free_data(data);
 
-  MEM_freeN(data);
+  MEM_delete(data);
 
-  const int count = BLI_listbase_count(exporters);
+  const int count = exporters->count();
   const int new_index = count == 0 ? 0 : std::min(collection->active_exporter_index, count - 1);
   collection->active_exporter_index = new_index;
 }
@@ -1517,9 +1643,19 @@ bool BKE_collection_exporter_move(Collection *collection, const int from, const 
   return BLI_listbase_move_index(&collection->exporters, from, to);
 }
 
+static void collection_importer_copy(Collection *collection, const CollectionImport *data)
+{
+  CollectionImport *new_data = MEM_new<CollectionImport>("CollectionImport");
+  STRNCPY(new_data->fh_idname, data->fh_idname);
+  new_data->import_properties = IDP_CopyProperty(data->import_properties);
+  new_data->flag = data->flag;
+
+  collection->importer = new_data;
+}
+
 static void collection_exporter_copy(Collection *collection, CollectionExport *data)
 {
-  CollectionExport *new_data = MEM_new_for_free<CollectionExport>("CollectionExport");
+  CollectionExport *new_data = MEM_new<CollectionExport>("CollectionExport");
   STRNCPY(new_data->fh_idname, data->fh_idname);
   new_data->export_properties = IDP_CopyProperty(data->export_properties);
   new_data->flag = data->flag;
@@ -1529,7 +1665,11 @@ static void collection_exporter_copy(Collection *collection, CollectionExport *d
   if (filepath) {
     IDP_AssignString(filepath, "");
   }
-
+  for (LayoutPanelState &state : data->layout_panel_states) {
+    LayoutPanelState *new_state = MEM_new<LayoutPanelState>(__func__, state);
+    new_state->idname = BLI_strdup(state.idname);
+    BLI_addtail(&new_data->layout_panel_states, new_state);
+  }
   BLI_addtail(&collection->exporters, new_data);
 }
 
@@ -1586,7 +1726,7 @@ void BKE_collection_object_add_from(Main *bmain, Scene *scene, Object *ob_src, O
   bool is_instantiated = false;
 
   FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
-    if (ID_IS_EDITABLE(collection) && !ID_IS_OVERRIDE_LIBRARY(collection) &&
+    if (BKE_collection_is_content_editable(collection) &&
         BKE_collection_has_object(collection, ob_src))
     {
       collection_object_add(bmain, collection, ob_dst, nullptr, 0, true);
@@ -1672,7 +1812,7 @@ static bool scene_collections_object_remove(
   }
 
   FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
-    if (!ID_IS_EDITABLE(collection) || ID_IS_OVERRIDE_LIBRARY(collection)) {
+    if (!BKE_collection_is_content_editable(collection)) {
       continue;
     }
     if (collection == collection_skip) {
@@ -1955,7 +2095,7 @@ static bool collection_child_add(Main *bmain,
     return false;
   }
 
-  child = MEM_new_for_free<CollectionChild>("CollectionChild");
+  child = MEM_new<CollectionChild>("CollectionChild");
   child->collection = collection;
   if (light_linking) {
     child->light_linking = *light_linking;
@@ -1964,7 +2104,7 @@ static bool collection_child_add(Main *bmain,
 
   /* Don't add parent links for depsgraph datablocks, these are not kept in sync. */
   if ((id_create_flag & LIB_ID_CREATE_NO_MAIN) == 0) {
-    CollectionParent *cparent = MEM_callocN<CollectionParent>("CollectionParent");
+    CollectionParent *cparent = MEM_new_zeroed<CollectionParent>("CollectionParent");
     cparent->collection = parent;
     BLI_addtail(&collection->runtime->parents, cparent);
   }
@@ -2047,7 +2187,7 @@ void BKE_collection_parent_relations_rebuild(Collection *collection)
     }
 
     BLI_assert(collection_find_parent(child.collection, collection) == nullptr);
-    CollectionParent *cparent = MEM_callocN<CollectionParent>(__func__);
+    CollectionParent *cparent = MEM_new_zeroed<CollectionParent>(__func__);
     cparent->collection = collection;
     BLI_addtail(&child.collection->runtime->parents, cparent);
   }
@@ -2076,7 +2216,7 @@ void BKE_main_collections_parent_relations_rebuild(Main *bmain)
 {
   /* Only collections not in bmain (master ones in scenes) have no parent... */
   for (Collection &collection : bmain->collections) {
-    BLI_freelistN(&collection.runtime->parents);
+    collection.runtime->parents.free_no_destruct();
 
     collection.runtime->tag |= COLLECTION_TAG_RELATION_REBUILD;
   }
@@ -2088,7 +2228,7 @@ void BKE_main_collections_parent_relations_rebuild(Main *bmain)
      * nullptr.
      */
     if (scene.master_collection != nullptr) {
-      BLI_assert(BLI_listbase_is_empty(&scene.master_collection->runtime->parents));
+      BLI_assert(scene.master_collection->runtime->parents.is_empty());
       scene.master_collection->runtime->tag |= COLLECTION_TAG_RELATION_REBUILD;
       collection_parents_rebuild_recursive(scene.master_collection);
     }
@@ -2121,7 +2261,7 @@ bool BKE_collection_validate(Collection *collection)
   bool is_ok = true;
 
   /* Check that children have each collection used/referenced only once. */
-  blender::Set<Collection *> processed_collections;
+  Set<Collection *> processed_collections;
   for (CollectionChild &child : collection->children) {
     if (!processed_collections.add(child.collection)) {
       is_ok = false;
@@ -2291,8 +2431,8 @@ static void scene_collections_array(Scene *scene,
 
   BLI_assert(*r_collections_array_len > 0);
 
-  Collection **array = MEM_malloc_arrayN<Collection *>(size_t(*r_collections_array_len),
-                                                       "CollectionArray");
+  Collection **array = MEM_new_array_uninitialized<Collection *>(size_t(*r_collections_array_len),
+                                                                 "CollectionArray");
   *r_collections_array = array;
   scene_collection_callback(collection, scene_collections_build_array, &array);
 }
@@ -2300,14 +2440,14 @@ static void scene_collections_array(Scene *scene,
 void BKE_scene_collections_iterator_begin(BLI_Iterator *iter, void *data_in)
 {
   Scene *scene = static_cast<Scene *>(data_in);
-  CollectionsIteratorData *data = MEM_callocN<CollectionsIteratorData>(__func__);
+  CollectionsIteratorData *data = MEM_new_zeroed<CollectionsIteratorData>(__func__);
 
   data->scene = scene;
 
   BLI_ITERATOR_INIT(iter);
   iter->data = data;
 
-  scene_collections_array(scene, (Collection ***)&data->array, &data->tot);
+  scene_collections_array(scene, reinterpret_cast<Collection ***>(&data->array), &data->tot);
   BLI_assert(data->tot != 0);
 
   data->cur = 0;
@@ -2332,9 +2472,9 @@ void BKE_scene_collections_iterator_end(BLI_Iterator *iter)
 
   if (data) {
     if (data->array) {
-      MEM_freeN(data->array);
+      MEM_delete(data->array);
     }
-    MEM_freeN(data);
+    MEM_delete(data);
   }
   iter->valid = false;
 }
@@ -2342,16 +2482,16 @@ void BKE_scene_collections_iterator_end(BLI_Iterator *iter)
 /* scene objects iterator */
 
 struct SceneObjectsIteratorData {
-  blender::Set<Object *> *visited;
+  Set<Object *> *visited;
   CollectionObject *cob_next;
   BLI_Iterator scene_collection_iter;
 };
 
 static void scene_objects_iterator_begin(BLI_Iterator *iter,
                                          Scene *scene,
-                                         blender::Set<Object *> *visited_objects)
+                                         Set<Object *> *visited_objects)
 {
-  SceneObjectsIteratorData *data = MEM_callocN<SceneObjectsIteratorData>(__func__);
+  SceneObjectsIteratorData *data = MEM_new_zeroed<SceneObjectsIteratorData>(__func__);
 
   BLI_ITERATOR_INIT(iter);
   iter->data = data;
@@ -2361,14 +2501,14 @@ static void scene_objects_iterator_begin(BLI_Iterator *iter,
     data->visited = visited_objects;
   }
   else {
-    data->visited = MEM_new<blender::Set<Object *>>(__func__);
+    data->visited = MEM_new<Set<Object *>>(__func__);
   }
 
   /* We wrap the scene-collection iterator here to go over the scene collections. */
   BKE_scene_collections_iterator_begin(&data->scene_collection_iter, scene);
 
   Collection *collection = static_cast<Collection *>(data->scene_collection_iter.current);
-  data->cob_next = static_cast<CollectionObject *>(collection->gobject.first);
+  data->cob_next = collection->gobject.first();
 
   BKE_scene_objects_iterator_next(iter);
 }
@@ -2444,7 +2584,7 @@ void BKE_scene_objects_iterator_end_ex(BLI_Iterator *iter)
 /**
  * Ensures we only get each object once, even when included in several collections.
  */
-static CollectionObject *object_base_unique(blender::Set<Object *> &gs, CollectionObject *cob)
+static CollectionObject *object_base_unique(Set<Object *> &gs, CollectionObject *cob)
 {
   for (; cob != nullptr; cob = cob->next) {
     if (gs.add(cob->ob)) {
@@ -2471,8 +2611,7 @@ void BKE_scene_objects_iterator_next(BLI_Iterator *iter)
     do {
       collection = static_cast<Collection *>(data->scene_collection_iter.current);
       /* get the first unique object of this collection */
-      CollectionObject *new_cob = object_base_unique(
-          *data->visited, static_cast<CollectionObject *>(collection->gobject.first));
+      CollectionObject *new_cob = object_base_unique(*data->visited, collection->gobject.first());
       if (new_cob) {
         data->cob_next = new_cob->next;
         iter->current = new_cob->ob;
@@ -2495,11 +2634,11 @@ void BKE_scene_objects_iterator_end(BLI_Iterator *iter)
     if (data->visited != nullptr) {
       MEM_delete(data->visited);
     }
-    MEM_freeN(data);
+    MEM_delete(data);
   }
 }
 
-blender::Set<Object *> *BKE_scene_objects_as_set(Scene *scene, blender::Set<Object *> *objects_set)
+Set<Object *> *BKE_scene_objects_as_set(Scene *scene, Set<Object *> *objects_set)
 {
   BLI_Iterator iter;
   scene_objects_iterator_begin(&iter, scene, objects_set);
@@ -2510,11 +2649,13 @@ blender::Set<Object *> *BKE_scene_objects_as_set(Scene *scene, blender::Set<Obje
   /* `return_set` is either given `objects_set` (if non-nullptr), or the Set allocated by the
    * iterator. Either way, we want to get it back, and prevent `BKE_scene_objects_iterator_end`
    * from freeing it. */
-  blender::Set<Object *> *return_set = ((SceneObjectsIteratorData *)iter.data)->visited;
-  ((SceneObjectsIteratorData *)iter.data)->visited = nullptr;
+  Set<Object *> *return_set = (static_cast<SceneObjectsIteratorData *>(iter.data))->visited;
+  (static_cast<SceneObjectsIteratorData *>(iter.data))->visited = nullptr;
   BKE_scene_objects_iterator_end(&iter);
 
   return return_set;
 }
 
 /** \} */
+
+}  // namespace blender

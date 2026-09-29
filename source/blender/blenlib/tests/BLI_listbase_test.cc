@@ -6,11 +6,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_array_utils.h"
-#include "BLI_listbase.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_ressource_strings.h"
-#include "BLI_string.h"
+#include "BLI_resource_strings.h"
+#include "BLI_string.hh"
+
+namespace blender {
 
 /* local validation function */
 static bool listbase_is_valid(const ListBase *listbase)
@@ -21,30 +23,30 @@ static bool listbase_is_valid(const ListBase *listbase)
   } \
   ((void)0)
 
-  if (listbase->first) {
+  if (listbase->first_) {
     const Link *prev, *link;
-    link = (Link *)listbase->first;
+    link = static_cast<Link *>(listbase->first_);
     TESTFAIL(link->prev == nullptr);
 
-    link = (Link *)listbase->last;
+    link = static_cast<Link *>(listbase->last_);
     TESTFAIL(link->next == nullptr);
 
     prev = nullptr;
-    link = (Link *)listbase->first;
+    link = static_cast<Link *>(listbase->first_);
     do {
       TESTFAIL(link->prev == prev);
     } while ((void)(prev = link), (link = link->next));
-    TESTFAIL(prev == listbase->last);
+    TESTFAIL(prev == listbase->last_);
 
     prev = nullptr;
-    link = (Link *)listbase->last;
+    link = static_cast<Link *>(listbase->last_);
     do {
       TESTFAIL(link->next == prev);
     } while ((void)(prev = link), (link = link->prev));
-    TESTFAIL(prev == listbase->first);
+    TESTFAIL(prev == listbase->first_);
   }
   else {
-    TESTFAIL(listbase->last == nullptr);
+    TESTFAIL(listbase->last_ == nullptr);
   }
 #undef TESTFAIL
 
@@ -70,40 +72,40 @@ static int char_switch(char *string, char ch_src, char ch_dst)
 TEST(listbase, FindLinkOrIndex)
 {
   ListBaseT<Link> lb;
-  void *link1 = MEM_callocN<Link>("link1");
-  void *link2 = MEM_callocN<Link>("link2");
+  void *link1 = MEM_new_zeroed<Link>("link1");
+  void *link2 = MEM_new_zeroed<Link>("link2");
 
   /* Empty list */
-  BLI_listbase_clear(&lb);
-  EXPECT_EQ(BLI_findlink(&lb, -1), (void *)nullptr);
-  EXPECT_EQ(BLI_findlink(&lb, 0), (void *)nullptr);
-  EXPECT_EQ(BLI_findlink(&lb, 1), (void *)nullptr);
-  EXPECT_EQ(BLI_rfindlink(&lb, -1), (void *)nullptr);
-  EXPECT_EQ(BLI_rfindlink(&lb, 0), (void *)nullptr);
-  EXPECT_EQ(BLI_rfindlink(&lb, 1), (void *)nullptr);
+  lb.clear_no_delete();
+  EXPECT_EQ(BLI_findlink(&lb, -1), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_findlink(&lb, 0), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_findlink(&lb, 1), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_rfindlink(&lb, -1), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_rfindlink(&lb, 0), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_rfindlink(&lb, 1), static_cast<void *>(nullptr));
   EXPECT_EQ(BLI_findindex(&lb, link1), -1);
-  EXPECT_EQ(BLI_findlinkfrom((Link *)lb.first, -1), (void *)nullptr);
-  EXPECT_EQ(BLI_findlinkfrom((Link *)lb.first, 0), (void *)nullptr);
-  EXPECT_EQ(BLI_findlinkfrom((Link *)lb.first, 1), (void *)nullptr);
+  EXPECT_EQ(BLI_findlinkfrom(static_cast<Link *>(lb.first_), -1), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_findlinkfrom(static_cast<Link *>(lb.first_), 0), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_findlinkfrom(static_cast<Link *>(lb.first_), 1), static_cast<void *>(nullptr));
 
   /* One link */
   BLI_addtail(&lb, link1);
   EXPECT_EQ(BLI_findlink(&lb, 0), link1);
   EXPECT_EQ(BLI_rfindlink(&lb, 0), link1);
   EXPECT_EQ(BLI_findindex(&lb, link1), 0);
-  EXPECT_EQ(BLI_findlinkfrom((Link *)lb.first, 0), link1);
+  EXPECT_EQ(BLI_findlinkfrom(static_cast<Link *>(lb.first_), 0), link1);
 
   /* Two links */
   BLI_addtail(&lb, link2);
   EXPECT_EQ(BLI_findlink(&lb, 1), link2);
   EXPECT_EQ(BLI_rfindlink(&lb, 0), link2);
   EXPECT_EQ(BLI_findindex(&lb, link2), 1);
-  EXPECT_EQ(BLI_findlinkfrom((Link *)lb.first, 1), link2);
+  EXPECT_EQ(BLI_findlinkfrom(static_cast<Link *>(lb.first_), 1), link2);
 
   /* After end of list */
-  EXPECT_EQ(BLI_findlinkfrom((Link *)lb.first, 2), (void *)nullptr);
+  EXPECT_EQ(BLI_findlinkfrom(static_cast<Link *>(lb.first_), 2), static_cast<void *>(nullptr));
 
-  BLI_freelistN(&lb);
+  lb.free_no_destruct();
 }
 
 TEST(listbase, FindLinkFromStringOrPointer)
@@ -123,53 +125,63 @@ TEST(listbase, FindLinkFromStringOrPointer)
   const size_t ptr_offset = offsetof(TestLink, ptr);
 
   ListBaseT<TestLink> lb;
-  TestLink *link1 = MEM_callocN<TestLink>("link1");
+  TestLink *link1 = MEM_new_zeroed<TestLink>("link1");
   STRNCPY(link1->name, link1_name);
   link1->ptr = link1_ptr;
-  TestLink *link2 = MEM_callocN<TestLink>("link2");
+  TestLink *link2 = MEM_new_zeroed<TestLink>("link2");
   STRNCPY(link2->name, link2_name);
   link2->ptr = link2_ptr;
 
   /* Empty list */
-  BLI_listbase_clear(&lb);
-  EXPECT_EQ(BLI_findptr(&lb, link1_ptr, ptr_offset), (void *)nullptr);
-  EXPECT_EQ(BLI_findstring(&lb, link1_name, name_offset), (void *)nullptr);
-  EXPECT_EQ(BLI_rfindptr(&lb, link1_ptr, ptr_offset), (void *)nullptr);
-  EXPECT_EQ(BLI_rfindstring(&lb, link1_name, name_offset), (void *)nullptr);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, link1_name, name_offset, 0), (void *)nullptr);
+  lb.clear_no_delete();
+  EXPECT_EQ(BLI_findptr(&lb, link1_ptr, ptr_offset), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_findstring(&lb, link1_name, name_offset), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_rfindptr(&lb, link1_ptr, ptr_offset), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_rfindstring(&lb, link1_name, name_offset), static_cast<void *>(nullptr));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, link1_name, name_offset, 0),
+            static_cast<void *>(nullptr));
 
   /* One link */
   BLI_addtail(&lb, link1);
-  EXPECT_EQ(BLI_findptr(&lb, link1_ptr, ptr_offset), (void *)link1);
-  EXPECT_EQ(BLI_findstring(&lb, link1_name, name_offset), (void *)link1);
-  EXPECT_EQ(BLI_rfindptr(&lb, link1_ptr, ptr_offset), (void *)link1);
-  EXPECT_EQ(BLI_rfindstring(&lb, link1_name, name_offset), (void *)link1);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, link1_name, name_offset, 0), (void *)link1);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, "", name_offset, 0), (void *)link1);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, 0), (void *)link1);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, 1), (void *)nullptr);
+  EXPECT_EQ(BLI_findptr(&lb, link1_ptr, ptr_offset), static_cast<void *>(link1));
+  EXPECT_EQ(BLI_findstring(&lb, link1_name, name_offset), static_cast<void *>(link1));
+  EXPECT_EQ(BLI_rfindptr(&lb, link1_ptr, ptr_offset), static_cast<void *>(link1));
+  EXPECT_EQ(BLI_rfindstring(&lb, link1_name, name_offset), static_cast<void *>(link1));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, link1_name, name_offset, 0),
+            static_cast<void *>(link1));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, "", name_offset, 0),
+            static_cast<void *>(link1));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, 0),
+            static_cast<void *>(link1));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, 1),
+            static_cast<void *>(nullptr));
 
   /* Two links */
   BLI_addtail(&lb, link2);
-  EXPECT_EQ(BLI_findptr(&lb, link1_ptr, ptr_offset), (void *)link1);
-  EXPECT_EQ(BLI_findstring(&lb, link1_name, name_offset), (void *)link1);
-  EXPECT_EQ(BLI_rfindptr(&lb, link1_ptr, ptr_offset), (void *)link1);
-  EXPECT_EQ(BLI_rfindstring(&lb, link1_name, name_offset), (void *)link1);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, link1_name, name_offset, 0), (void *)link1);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, link2_name, name_offset, 0), (void *)link2);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, 0), (void *)link1);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, 1), (void *)link2);
-  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, -1), (void *)nullptr);
+  EXPECT_EQ(BLI_findptr(&lb, link1_ptr, ptr_offset), static_cast<void *>(link1));
+  EXPECT_EQ(BLI_findstring(&lb, link1_name, name_offset), static_cast<void *>(link1));
+  EXPECT_EQ(BLI_rfindptr(&lb, link1_ptr, ptr_offset), static_cast<void *>(link1));
+  EXPECT_EQ(BLI_rfindstring(&lb, link1_name, name_offset), static_cast<void *>(link1));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, link1_name, name_offset, 0),
+            static_cast<void *>(link1));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, link2_name, name_offset, 0),
+            static_cast<void *>(link2));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, 0),
+            static_cast<void *>(link1));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, 1),
+            static_cast<void *>(link2));
+  EXPECT_EQ(BLI_listbase_string_or_index_find(&lb, nullptr, name_offset, -1),
+            static_cast<void *>(nullptr));
 
-  BLI_freelistN(&lb);
+  lb.free_no_destruct();
 }
 
 TEST(listbase, FromLink)
 {
   ListBaseT<Link> lb = {nullptr, nullptr};
-  Link *link1 = MEM_callocN<Link>("link1");
-  Link *link2 = MEM_callocN<Link>("link2");
-  Link *link3 = MEM_callocN<Link>("link3");
+  Link *link1 = MEM_new_zeroed<Link>("link1");
+  Link *link2 = MEM_new_zeroed<Link>("link2");
+  Link *link3 = MEM_new_zeroed<Link>("link3");
 
   /* Null safety. */
   EXPECT_EQ(lb, BLI_listbase_from_link(nullptr));
@@ -186,77 +198,77 @@ TEST(listbase, FromLink)
   BLI_addtail(&lb, link3);
   EXPECT_EQ(lb, BLI_listbase_from_link(link2));
 
-  BLI_freelistN(&lb);
+  lb.free_no_destruct();
 }
 
 TEST(listbase, SplitAfter)
 {
   ListBaseT<Link> lb;
   ListBaseT<Link> split_after_lb;
-  void *link1 = MEM_callocN<Link>("link1");
-  void *link2 = MEM_callocN<Link>("link2");
+  void *link1 = MEM_new_zeroed<Link>("link1");
+  void *link2 = MEM_new_zeroed<Link>("link2");
 
   /* Empty list */
-  BLI_listbase_clear(&lb);
-  BLI_listbase_clear(&split_after_lb);
+  lb.clear_no_delete();
+  split_after_lb.clear_no_delete();
 
   BLI_listbase_split_after(&lb, &split_after_lb, nullptr);
-  EXPECT_EQ(BLI_listbase_is_empty(&split_after_lb), true);
+  EXPECT_EQ(split_after_lb.is_empty(), true);
 
   /* One link */
-  BLI_listbase_clear(&lb);
-  BLI_listbase_clear(&split_after_lb);
+  lb.clear_no_delete();
+  split_after_lb.clear_no_delete();
   BLI_addtail(&lb, link1);
 
   BLI_listbase_split_after(&lb, &split_after_lb, nullptr);
-  EXPECT_EQ(BLI_listbase_is_empty(&lb), true);
-  EXPECT_EQ(BLI_listbase_count(&split_after_lb), 1);
+  EXPECT_EQ(lb.is_empty(), true);
+  EXPECT_EQ(split_after_lb.count(), 1);
   EXPECT_EQ(BLI_findindex(&split_after_lb, link1), 0);
-  EXPECT_EQ(split_after_lb.first, link1);
-  EXPECT_EQ(split_after_lb.last, link1);
+  EXPECT_EQ(split_after_lb.first_, link1);
+  EXPECT_EQ(split_after_lb.last(), link1);
 
-  BLI_listbase_clear(&lb);
-  BLI_listbase_clear(&split_after_lb);
+  lb.clear_no_delete();
+  split_after_lb.clear_no_delete();
   BLI_addtail(&lb, link1);
 
   BLI_listbase_split_after(&lb, &split_after_lb, link1);
-  EXPECT_EQ(BLI_listbase_count(&lb), 1);
+  EXPECT_EQ(lb.count(), 1);
   EXPECT_EQ(BLI_findindex(&lb, link1), 0);
-  EXPECT_EQ(lb.first, link1);
-  EXPECT_EQ(lb.last, link1);
-  EXPECT_EQ(BLI_listbase_is_empty(&split_after_lb), true);
+  EXPECT_EQ(lb.first_, link1);
+  EXPECT_EQ(lb.last(), link1);
+  EXPECT_EQ(split_after_lb.is_empty(), true);
 
   /* Two links */
-  BLI_listbase_clear(&lb);
-  BLI_listbase_clear(&split_after_lb);
+  lb.clear_no_delete();
+  split_after_lb.clear_no_delete();
   BLI_addtail(&lb, link1);
   BLI_addtail(&lb, link2);
 
   BLI_listbase_split_after(&lb, &split_after_lb, nullptr);
-  EXPECT_EQ(BLI_listbase_is_empty(&lb), true);
-  EXPECT_EQ(BLI_listbase_count(&split_after_lb), 2);
+  EXPECT_EQ(lb.is_empty(), true);
+  EXPECT_EQ(split_after_lb.count(), 2);
   EXPECT_EQ(BLI_findindex(&split_after_lb, link1), 0);
   EXPECT_EQ(BLI_findindex(&split_after_lb, link2), 1);
-  EXPECT_EQ(split_after_lb.first, link1);
-  EXPECT_EQ(split_after_lb.last, link2);
+  EXPECT_EQ(split_after_lb.first_, link1);
+  EXPECT_EQ(split_after_lb.last(), link2);
 
-  BLI_listbase_clear(&lb);
-  BLI_listbase_clear(&split_after_lb);
+  lb.clear_no_delete();
+  split_after_lb.clear_no_delete();
   BLI_addtail(&lb, link1);
   BLI_addtail(&lb, link2);
 
   BLI_listbase_split_after(&lb, &split_after_lb, link1);
-  EXPECT_EQ(BLI_listbase_count(&lb), 1);
+  EXPECT_EQ(lb.count(), 1);
   EXPECT_EQ(BLI_findindex(&lb, link1), 0);
-  EXPECT_EQ(lb.first, link1);
-  EXPECT_EQ(lb.last, link1);
-  EXPECT_EQ(BLI_listbase_count(&split_after_lb), 1);
+  EXPECT_EQ(lb.first_, link1);
+  EXPECT_EQ(lb.last(), link1);
+  EXPECT_EQ(split_after_lb.count(), 1);
   EXPECT_EQ(BLI_findindex(&split_after_lb, link2), 0);
-  EXPECT_EQ(split_after_lb.first, link2);
-  EXPECT_EQ(split_after_lb.last, link2);
+  EXPECT_EQ(split_after_lb.first_, link2);
+  EXPECT_EQ(split_after_lb.last(), link2);
 
-  BLI_freelistN(&lb);
-  BLI_freelistN(&split_after_lb);
+  lb.free_no_destruct();
+  split_after_lb.free_no_destruct();
 }
 
 TEST(listbase, EnumerateIterator)
@@ -267,13 +279,13 @@ TEST(listbase, EnumerateIterator)
   };
 
   ListBaseT<TestLink> lb;
-  BLI_listbase_clear(&lb);
+  lb.clear_no_delete();
 
-  TestLink *link1 = MEM_callocN<TestLink>("link1");
+  TestLink *link1 = MEM_new_zeroed<TestLink>("link1");
   link1->value = 10;
   BLI_addtail(&lb, link1);
 
-  TestLink *link2 = MEM_callocN<TestLink>("link2");
+  TestLink *link2 = MEM_new_zeroed<TestLink>("link2");
   link2->value = 20;
   BLI_addtail(&lb, link2);
 
@@ -292,7 +304,7 @@ TEST(listbase, EnumerateIterator)
   }
   EXPECT_EQ(count, 2);
 
-  BLI_freelistN(&lb);
+  lb.free_no_destruct();
 }
 
 TEST(listbase, ReversedIterator)
@@ -303,13 +315,13 @@ TEST(listbase, ReversedIterator)
   };
 
   ListBaseT<TestLink> lb;
-  BLI_listbase_clear(&lb);
+  lb.clear_no_delete();
 
-  TestLink *link1 = MEM_callocN<TestLink>("link1");
+  TestLink *link1 = MEM_new_zeroed<TestLink>("link1");
   link1->value = 10;
   BLI_addtail(&lb, link1);
 
-  TestLink *link2 = MEM_callocN<TestLink>("link2");
+  TestLink *link2 = MEM_new_zeroed<TestLink>("link2");
   link2->value = 20;
   BLI_addtail(&lb, link2);
 
@@ -325,7 +337,7 @@ TEST(listbase, ReversedIterator)
   }
   EXPECT_EQ(count, 2);
 
-  BLI_freelistN(&lb);
+  lb.free_no_destruct();
 }
 
 TEST(listbase, MutableIterator)
@@ -336,15 +348,15 @@ TEST(listbase, MutableIterator)
   };
 
   ListBaseT<TestLink> lb;
-  BLI_listbase_clear(&lb);
+  lb.clear_no_delete();
 
-  TestLink *link1 = MEM_callocN<TestLink>("link1");
+  TestLink *link1 = MEM_new_zeroed<TestLink>("link1");
   BLI_addtail(&lb, link1);
 
-  TestLink *link2 = MEM_callocN<TestLink>("link2");
+  TestLink *link2 = MEM_new_zeroed<TestLink>("link2");
   BLI_addtail(&lb, link2);
 
-  TestLink *link3 = MEM_callocN<TestLink>("link3");
+  TestLink *link3 = MEM_new_zeroed<TestLink>("link3");
   BLI_addtail(&lb, link3);
 
   int count = 0;
@@ -355,11 +367,11 @@ TEST(listbase, MutableIterator)
     }
   }
   EXPECT_EQ(count, 3);
-  EXPECT_EQ(BLI_listbase_count(&lb), 2);
-  EXPECT_EQ(lb.first, link1);
-  EXPECT_EQ(lb.last, link3);
+  EXPECT_EQ(lb.count(), 2);
+  EXPECT_EQ(lb.first_, link1);
+  EXPECT_EQ(lb.last(), link3);
 
-  BLI_freelistN(&lb);
+  lb.free_no_destruct();
 }
 
 TEST(listbase, MutableReversedIterator)
@@ -370,15 +382,15 @@ TEST(listbase, MutableReversedIterator)
   };
 
   ListBaseT<TestLink> lb;
-  BLI_listbase_clear(&lb);
+  lb.clear_no_delete();
 
-  TestLink *link1 = MEM_callocN<TestLink>("link1");
+  TestLink *link1 = MEM_new_zeroed<TestLink>("link1");
   BLI_addtail(&lb, link1);
 
-  TestLink *link2 = MEM_callocN<TestLink>("link2");
+  TestLink *link2 = MEM_new_zeroed<TestLink>("link2");
   BLI_addtail(&lb, link2);
 
-  TestLink *link3 = MEM_callocN<TestLink>("link3");
+  TestLink *link3 = MEM_new_zeroed<TestLink>("link3");
   BLI_addtail(&lb, link3);
 
   int count = 0;
@@ -389,11 +401,11 @@ TEST(listbase, MutableReversedIterator)
     }
   }
   EXPECT_EQ(count, 3);
-  EXPECT_EQ(BLI_listbase_count(&lb), 2);
-  EXPECT_EQ(lb.first, link1);
-  EXPECT_EQ(lb.last, link3);
+  EXPECT_EQ(lb.count(), 2);
+  EXPECT_EQ(lb.first_, link1);
+  EXPECT_EQ(lb.last(), link3);
 
-  BLI_freelistN(&lb);
+  lb.free_no_destruct();
 }
 
 /* -------------------------------------------------------------------- */
@@ -401,15 +413,16 @@ TEST(listbase, MutableReversedIterator)
 
 static int testsort_array_str_cmp(const void *a, const void *b)
 {
-  int i = strcmp(*(const char **)a, *(const char **)b);
+  int i = strcmp(*static_cast<const char **>(const_cast<void *>(a)),
+                 *static_cast<const char **>(const_cast<void *>(b)));
   return (i > 0) ? 1 : (i < 0) ? -1 : 0;
 }
 
 static int testsort_listbase_str_cmp(const void *a, const void *b)
 {
-  const LinkData *link_a = (LinkData *)a;
-  const LinkData *link_b = (LinkData *)b;
-  int i = strcmp((const char *)link_a->data, (const char *)link_b->data);
+  const LinkData *link_a = static_cast<LinkData *>(const_cast<void *>(a));
+  const LinkData *link_b = static_cast<LinkData *>(const_cast<void *>(b));
+  int i = strcmp(static_cast<const char *>(link_a->data), static_cast<const char *>(link_b->data));
   return (i > 0) ? 1 : (i < 0) ? -1 : 0;
 }
 
@@ -429,7 +442,7 @@ static bool testsort_listbase_array_str_cmp(ListBaseT<LinkData> *lb, char **arr,
   LinkData *link_step;
   int i;
 
-  link_step = (LinkData *)lb->first;
+  link_step = static_cast<LinkData *>(lb->first_);
   for (i = 0; i < arr_num; i++) {
     if (!STREQ(arr[i], (char *)link_step->data)) {
       return false;
@@ -448,7 +461,7 @@ static bool testsort_listbase_sort_is_stable(ListBaseT<LinkData> *lb, bool forwa
 {
   LinkData *link_step;
 
-  link_step = (LinkData *)lb->first;
+  link_step = static_cast<LinkData *>(lb->first_);
   while (link_step && link_step->next) {
     if (STREQ((const char *)link_step->data, (const char *)link_step->next->data)) {
       if ((link_step < link_step->next) != forward) {
@@ -474,9 +487,9 @@ TEST(listbase, Sort)
   /* delimit words */
   words_num = 1 + char_switch(words, ' ', '\0');
 
-  words_arr = MEM_malloc_arrayN<char *>(size_t(words_num), __func__);
+  words_arr = MEM_new_array_uninitialized<char *>(size_t(words_num), __func__);
 
-  words_linkdata_arr = MEM_malloc_arrayN<LinkData>(size_t(words_num), __func__);
+  words_linkdata_arr = MEM_new_array_uninitialized<LinkData>(size_t(words_num), __func__);
 
   /* create array */
   w_step = words;
@@ -487,7 +500,7 @@ TEST(listbase, Sort)
 
   /* sort empty list */
   {
-    BLI_listbase_clear(&words_lb);
+    words_lb.clear_no_delete();
     BLI_listbase_sort(&words_lb, testsort_listbase_str_cmp);
     EXPECT_TRUE(listbase_is_valid(&words_lb));
   }
@@ -499,11 +512,11 @@ TEST(listbase, Sort)
     BLI_addtail(&words_lb, &link);
     BLI_listbase_sort(&words_lb, testsort_listbase_str_cmp);
     EXPECT_TRUE(listbase_is_valid(&words_lb));
-    BLI_listbase_clear(&words_lb);
+    words_lb.clear_no_delete();
   }
 
   /* create listbase */
-  BLI_listbase_clear(&words_lb);
+  words_lb.clear_no_delete();
   w_step = words;
   for (i = 0; i < words_num; i++) {
     LinkData *link = &words_linkdata_arr[i];
@@ -549,7 +562,9 @@ TEST(listbase, Sort)
     EXPECT_TRUE(testsort_listbase_sort_is_stable(&words_lb, false));
   }
 
-  MEM_freeN(words);
-  MEM_freeN(words_arr);
-  MEM_freeN(words_linkdata_arr);
+  MEM_delete(words);
+  MEM_delete(words_arr);
+  MEM_delete(words_linkdata_arr);
 }
+
+}  // namespace blender

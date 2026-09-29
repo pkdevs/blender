@@ -8,8 +8,8 @@
 
 #include <cstdlib>
 
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_unit.hh"
 
@@ -98,7 +98,7 @@ static void applyTimeTranslateValue(TransInfo *t, const float deltax)
 
 static void applyTimeTranslate(TransInfo *t)
 {
-  View2D *v2d = (View2D *)t->view;
+  View2D *v2d = static_cast<View2D *>(t->view);
   char str[UI_MAX_DRAW_STR];
 
   /* Calculate translation amount from mouse movement - in 'time-grid space'. */
@@ -159,6 +159,7 @@ TransModeInfo TransMode_timetranslate = {
     /*snap_distance_fn*/ nullptr,
     /*snap_apply_fn*/ nullptr,
     /*draw_fn*/ nullptr,
+    /*status_fn*/ nullptr,
 };
 
 }  // namespace blender::ed::transform

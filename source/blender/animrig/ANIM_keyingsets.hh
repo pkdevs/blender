@@ -12,6 +12,8 @@
 
 #include "RNA_types.hh"
 
+namespace blender {
+
 struct KeyingSet;
 struct ExtensionRNA;
 /* Forward declaration for this struct which is declared a bit later. */
@@ -20,6 +22,8 @@ struct bContext;
 struct ID;
 struct Scene;
 struct PointerRNA;
+
+enum eInsertKeyFlags : short;
 
 /* Names for builtin keying sets so we don't confuse these with labels/text,
  * defined in python script: `keyingsets_builtins.py`. */
@@ -55,7 +59,7 @@ struct KeyingSetInfo {
   /** Short help/description. */
   char description[/*RNA_DYN_DESCR_MAX*/ 1024];
   /** Keying settings. */
-  short keyingflag;
+  eInsertKeyFlags keyingflag;
 
   /* polling callbacks */
   /** callback for polling the context for whether the right data is available. */
@@ -75,7 +79,7 @@ struct KeyingSetInfo {
   ExtensionRNA rna_ext;
 };
 
-namespace blender::animrig {
+namespace animrig {
 
 /** Mode for modify_keyframes. */
 enum class ModifyKeyMode {
@@ -186,4 +190,5 @@ void relative_keyingset_add_source(Vector<PointerRNA> &sources, ID *id);
 
 /** \} */
 
-}  // namespace blender::animrig
+}  // namespace animrig
+}  // namespace blender

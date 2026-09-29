@@ -8,8 +8,8 @@
 
 #include "CLG_log.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
 
 /* Required for proxy to liboverrides conversion code. */
 #define DNA_DEPRECATED_ALLOW
@@ -28,6 +28,8 @@
 #include "BKE_main.hh"
 
 #include "BLO_readfile.hh"
+
+namespace blender {
 
 static CLG_LogRef LOG = {"lib.override.proxy_conversion"};
 
@@ -51,7 +53,7 @@ bool BKE_lib_override_library_proxy_convert(Main *bmain,
     if (ob_proxy->proxy != nullptr) {
       ob_proxy->proxy->proxy_from = nullptr;
     }
-    id_us_min((ID *)ob_proxy->proxy);
+    id_us_min(id_cast<ID *>(ob_proxy->proxy));
     ob_proxy->proxy = ob_proxy->proxy_group = nullptr;
     return false;
   }
@@ -161,8 +163,10 @@ void BKE_lib_override_library_main_proxy_convert(Main *bmain, BlendFileReadRepor
       if (object.proxy != nullptr) {
         object.proxy->proxy_from = nullptr;
       }
-      id_us_min((ID *)object.proxy);
+      id_us_min(id_cast<ID *>(object.proxy));
       object.proxy = object.proxy_group = nullptr;
     }
   }
 }
+
+}  // namespace blender

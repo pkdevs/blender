@@ -13,19 +13,18 @@
 
 #include "DNA_material_types.h"
 
-#include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
 #include "BKE_material.hh"
 #include "BKE_object.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_hash.h"
-#include "BLI_link_utils.h"
-#include "BLI_math_color.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_ghash.hh"
+#include "BLI_hash_c.hh"
+#include "BLI_link_utils.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_memblock.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memblock.hh"
 
 #include "IMB_colormanagement.hh"
 
@@ -133,8 +132,8 @@ tObject *gpencil_object_cache_add(Instance *inst,
 
 static int gpencil_tobject_dist_sort(const void *a, const void *b)
 {
-  const tObject *ob_a = (const tObject *)a;
-  const tObject *ob_b = (const tObject *)b;
+  const tObject *ob_a = static_cast<const tObject *>(a);
+  const tObject *ob_b = static_cast<const tObject *>(b);
   /* Reminder, camera_z is negative in front of the camera. */
   if (ob_a->camera_z > ob_b->camera_z) {
     return 1;
@@ -242,7 +241,7 @@ static float4 grease_pencil_layer_final_tint_and_alpha_get(const Instance *inst,
     const float4 onion_col_custom = use_next_col ? float4(color_next, 1.0f) :
                                                    float4(color_prev, 1.0f);
 
-    *r_alpha = use_onion_fade ? (1.0f / abs(onion_id)) : 0.5f;
+    *r_alpha = use_onion_fade ? (1.0f / abs(onion_id)) : 1.0f;
     *r_alpha *= onion_factor;
     *r_alpha = (onion_factor > 0.0f) ? clamp_f(*r_alpha, 0.1f, 1.0f) :
                                        clamp_f(*r_alpha, 0.01f, 1.0f);
@@ -317,8 +316,7 @@ tLayer *grease_pencil_layer_cache_add(Instance *inst,
   const bool disable_masks_render = is_viewlayer_render &&
                                     (layer.base.flag &
                                      GP_LAYER_TREE_NODE_DISABLE_MASKS_IN_VIEWLAYER) != 0;
-  bool is_masked = !disable_masks_render && layer.use_masks() &&
-                   !BLI_listbase_is_empty(&layer.masks);
+  bool is_masked = !disable_masks_render && layer.use_masks() && !layer.masks.is_empty();
 
   const float vert_col_opacity = (override_vertcol) ?
                                      (is_vert_col_mode ? inst->vertex_paint_opacity : 0.0f) :

@@ -15,10 +15,10 @@
 
 #include "BLI_function_ref.hh"
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_layer_types.h"
@@ -34,7 +34,7 @@
 
 #include "ANIM_action.hh"
 
-using namespace blender;
+namespace blender {
 
 /* This file defines an API and set of callback-operators for
  * non-destructive editing of keyframe data.
@@ -135,7 +135,7 @@ short ANIM_fcurve_keyframes_loop(KeyframeEditData *ked,
 
   /* if fcu_cb (F-Curve post-editing callback) has been specified then execute it */
   if (fcu_cb) {
-    fcu_cb(fcu);
+    fcu_cb(*fcu);
   }
 
   /* done */
@@ -153,18 +153,6 @@ static short agrp_keyframes_loop(KeyframeEditData *ked,
 {
   /* sanity check */
   if (agrp == nullptr) {
-    return 0;
-  }
-
-  /* Legacy actions. */
-  if (agrp->wrap().is_legacy()) {
-    for (FCurve &fcu : agrp->channels) {
-      if (fcu.grp == agrp) {
-        if (ANIM_fcurve_keyframes_loop(ked, &fcu, key_ok, key_cb, fcu_cb)) {
-          return 1;
-        }
-      }
-    }
     return 0;
   }
 
@@ -346,7 +334,7 @@ static short summary_keyframes_loop(KeyframeEditData *ked,
   }
 
   /* get F-Curves to take keyframes from */
-  filter = ANIMFILTER_DATA_VISIBLE;
+  filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_NODUPLIS;
   ANIM_animdata_filter(
       ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
 
@@ -828,7 +816,7 @@ short bezt_to_cfraelem(KeyframeEditData *ked, BezTriple *bezt)
     return 0;
   }
 
-  CfraElem *ce = MEM_callocN<CfraElem>("cfraElem");
+  CfraElem *ce = MEM_new_zeroed<CfraElem>("cfraElem");
   BLI_addtail(&ked->cfra_elem_list, ce);
 
   /* bAnimListElem so we can do NLA mapping, we want the cfra to be in "global" time */
@@ -1538,13 +1526,13 @@ static short select_bezier_add(KeyframeEditData *ked, BezTriple *bezt)
   /* if we've got info on what to select, use it, otherwise select all */
   if ((ked) && (ked->iterflags & KEYFRAME_ITER_INCL_HANDLES) && handles_visible(ked, bezt)) {
     if (ked->curflags & KEYFRAME_OK_KEY) {
-      bezt->f2 |= SELECT;
+      bezt->f2 |= BEZT_FLAG_SELECT;
     }
     if (ked->curflags & KEYFRAME_OK_H1) {
-      bezt->f1 |= SELECT;
+      bezt->f1 |= BEZT_FLAG_SELECT;
     }
     if (ked->curflags & KEYFRAME_OK_H2) {
-      bezt->f3 |= SELECT;
+      bezt->f3 |= BEZT_FLAG_SELECT;
     }
   }
   else {
@@ -1560,13 +1548,13 @@ static short select_bezier_subtract(KeyframeEditData *ked, BezTriple *bezt)
   /* if we've got info on what to deselect, use it, otherwise deselect all */
   if ((ked) && (ked->iterflags & KEYFRAME_ITER_INCL_HANDLES) && handles_visible(ked, bezt)) {
     if (ked->curflags & KEYFRAME_OK_KEY) {
-      bezt->f2 &= ~SELECT;
+      bezt->f2 &= ~BEZT_FLAG_SELECT;
     }
     if (ked->curflags & KEYFRAME_OK_H1) {
-      bezt->f1 &= ~SELECT;
+      bezt->f1 &= ~BEZT_FLAG_SELECT;
     }
     if (ked->curflags & KEYFRAME_OK_H2) {
-      bezt->f3 &= ~SELECT;
+      bezt->f3 &= ~BEZT_FLAG_SELECT;
     }
   }
   else {
@@ -1579,14 +1567,14 @@ static short select_bezier_subtract(KeyframeEditData *ked, BezTriple *bezt)
 static short select_bezier_invert(KeyframeEditData * /*ked*/, BezTriple *bezt)
 {
   /* Invert the selection for the whole bezier triple */
-  bezt->f2 ^= SELECT;
+  bezt->f2 ^= BEZT_FLAG_SELECT;
   if (bezt->f2 & SELECT) {
-    bezt->f1 |= SELECT;
-    bezt->f3 |= SELECT;
+    bezt->f1 |= BEZT_FLAG_SELECT;
+    bezt->f3 |= BEZT_FLAG_SELECT;
   }
   else {
-    bezt->f1 &= ~SELECT;
-    bezt->f3 &= ~SELECT;
+    bezt->f1 &= ~BEZT_FLAG_SELECT;
+    bezt->f3 &= ~BEZT_FLAG_SELECT;
   }
   return 0;
 }
@@ -1723,3 +1711,5 @@ short bezt_selmap_flush(KeyframeEditData *ked, BezTriple *bezt)
 
   return 0;
 }
+
+}  // namespace blender

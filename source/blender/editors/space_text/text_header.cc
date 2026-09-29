@@ -8,10 +8,11 @@
 
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_screen.hh"
 
 #include "DNA_text_types.h"
@@ -23,6 +24,8 @@
 #include "UI_interface.hh"
 
 #include "text_intern.hh"
+
+namespace blender {
 
 /* ************************ header area region *********************** */
 
@@ -80,28 +83,12 @@ static wmOperatorStatus text_text_search_exec(bContext *C, wmOperator * /*op*/)
       }
     }
 
-    bool draw = false;
-
-    if (region->flag & RGN_FLAG_HIDDEN) {
-      ED_region_toggle_hidden(C, region);
-      draw = true;
-    }
-
-    const char *active_category = blender::ui::panel_category_active_get(region, false);
+    const char *active_category = ui::panel_category_active_get(region, false);
     if (active_category && !STREQ(active_category, "Text")) {
-      blender::ui::panel_category_active_set(region, "Text");
-      draw = true;
+      ui::panel_category_active_set(region, "Text");
     }
 
-    /* Build the layout and draw so `find_text` text button can be activated. */
-    if (draw) {
-      ED_region_do_layout(C, region);
-      ED_region_do_draw(C, region);
-    }
-
-    blender::ui::textbutton_activate_rna(C, region, st, "find_text");
-
-    ED_region_tag_redraw(region);
+    ED_region_activate_rna_prop(C, region, st, "find_text");
   }
   return OPERATOR_FINISHED;
 }
@@ -117,3 +104,5 @@ void TEXT_OT_start_find(wmOperatorType *ot)
   ot->exec = text_text_search_exec;
   ot->poll = text_properties_poll;
 }
+
+}  // namespace blender

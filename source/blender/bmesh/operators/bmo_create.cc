@@ -10,11 +10,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 #define ELE_NEW 1
 #define ELE_OUT 2
@@ -55,7 +57,8 @@ void bmo_contextual_create_exec(BMesh *bm, BMOperator *op)
     BMVert *verts[2];
     BMEdge *e;
 
-    if (BMO_iter_as_array(op->slots_in, "geom", BM_VERT, (void **)verts, 2) == 2) {
+    if (BMO_iter_as_array(op->slots_in, "geom", BM_VERT, reinterpret_cast<void **>(verts), 2) == 2)
+    {
       /* create edge */
       e = BM_edge_create(bm, verts[0], verts[1], nullptr, BM_CREATE_NO_DOUBLE);
       BMO_edge_flag_enable(bm, e, ELE_OUT);
@@ -243,7 +246,7 @@ void bmo_contextual_create_exec(BMesh *bm, BMOperator *op)
 
       for (BMEditSelection &ese : bm->selected) {
         if (ese.htype == BM_VERT) {
-          BMVert *v = (BMVert *)ese.ele;
+          BMVert *v = reinterpret_cast<BMVert *>(ese.ele);
           if (v_prev) {
             BMEdge *e = BM_edge_create(bm, v, v_prev, nullptr, BM_CREATE_NO_DOUBLE);
             BMO_edge_flag_enable(bm, e, ELE_OUT);
@@ -268,10 +271,11 @@ void bmo_contextual_create_exec(BMesh *bm, BMOperator *op)
      * this connectivity could be used rather than treating
      * them as a bunch of isolated verts. */
 
-    BMVert **vert_arr = MEM_malloc_arrayN<BMVert *>(totv, __func__);
+    BMVert **vert_arr = MEM_new_array_uninitialized<BMVert *>(totv, __func__);
     BMFace *f;
 
-    totv = BMO_iter_as_array(op->slots_in, "geom", BM_VERT, (void **)vert_arr, totv);
+    totv = BMO_iter_as_array(
+        op->slots_in, "geom", BM_VERT, reinterpret_cast<void **>(vert_arr), totv);
 
     BM_verts_sort_radial_plane(vert_arr, totv);
 
@@ -288,6 +292,8 @@ void bmo_contextual_create_exec(BMesh *bm, BMOperator *op)
       BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "faces.out", BM_FACE, ELE_OUT);
     }
 
-    MEM_freeN(vert_arr);
+    MEM_delete(vert_arr);
   }
 }
+
+}  // namespace blender

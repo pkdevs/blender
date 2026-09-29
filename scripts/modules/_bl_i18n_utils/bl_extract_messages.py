@@ -4,7 +4,7 @@
 
 # Populate a template file (POT format currently) from Blender RNA/py/C data.
 # XXX: This script is meant to be used from inside Blender!
-#      You should not directly use this script, rather use update_msg.py!
+#      You should not directly use this script, rather use ui_translate core add-on!
 
 __all__ = (
     "dump_addon_messages",
@@ -218,7 +218,7 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
         )
         }
 
-        # More builtin classes we don't need to parse.
+        # More built-in classes we don't need to parse.
         blacklist_rna_class |= {cls for cls in bpy.types.Property.__subclasses__()}
 
         return blacklist_rna_class
@@ -671,12 +671,6 @@ def dump_py_messages_from_files(msgs, reports, files, settings):
             func_translate_args[sub_func_id] = pgettext_variants_args
     # Manually add functions from node_add_menu.py.
     for func_id, arg_pos in (
-            ("add_node_type", 3),
-            ("add_node_type_with_outputs", 5),
-            ("add_simulation_zone", 1),
-            ("add_repeat_zone", 1),
-            ("add_foreach_geometry_element_zone", 1),
-            ("add_closure_zone", 1),
             ("node_operator", 4),
             ("node_operator_with_outputs", 6),
             ("simulation_zone", 2),
@@ -972,27 +966,39 @@ def dump_ocio_config(msgs, reports, settings):
     # This assumes the default Blender config is used when we extract messages.
     import PyOpenColorIO as OCIO
     config = OCIO.GetCurrentConfig()
+    translation_context = bpy.app.translations.contexts.color_management
 
     for display in config.getDisplays():
         msgsrc = "Display name from OCIO config"
         process_msg(
-            msgs, settings.DEFAULT_CONTEXT, display, msgsrc,
+            msgs, translation_context, display, msgsrc,
             reports, None, settings,
         )
-
         for view in config.getViews(display):
             msgsrc = "View name from OCIO display " + display
             process_msg(
-                msgs, settings.DEFAULT_CONTEXT, view, msgsrc,
+                msgs, translation_context, view, msgsrc,
                 reports, None, settings,
             )
-
             description = config.getDisplayViewDescription(display, view)
             msgsrc = "View description from OCIO display " + display
             process_msg(
                 msgs, settings.DEFAULT_CONTEXT, description, msgsrc,
                 reports, None, settings,
             )
+
+    for view_transform in config.getViewTransforms():
+        msgsrc = "View transform name from OCIO config"
+        process_msg(
+            msgs, translation_context, view_transform.getName(), msgsrc,
+            reports, None, settings,
+        )
+        description = config.getDisplayViewDescription(display, view)
+        msgsrc = "View transform description from OCIO config"
+        process_msg(
+            msgs, settings.DEFAULT_CONTEXT, view_transform.getDescription(), msgsrc,
+            reports, None, settings,
+        )
 
     for look in config.getLookNames():
         # Some looks include their view's name to have unique names,
@@ -1005,7 +1011,7 @@ def dump_ocio_config(msgs, reports, settings):
             source = "OCIO config"
         msgsrc = "Look name from " + source
         process_msg(
-            msgs, settings.DEFAULT_CONTEXT, name, msgsrc,
+            msgs, translation_context, name, msgsrc,
             reports, None, settings,
         )
         msgsrc = "Look description from " + source
@@ -1019,7 +1025,7 @@ def dump_ocio_config(msgs, reports, settings):
         name = colorspace.getName()
         msgsrc = "Colorspace name from OCIO config"
         process_msg(
-            msgs, settings.DEFAULT_CONTEXT, name, msgsrc,
+            msgs, translation_context, name, msgsrc,
             reports, None, settings,
         )
         description = colorspace.getDescription()
@@ -1028,6 +1034,14 @@ def dump_ocio_config(msgs, reports, settings):
             msgs, settings.DEFAULT_CONTEXT, description, msgsrc,
             reports, None, settings,
         )
+        family = colorspace.getFamily()
+        family_separator = config.getFamilySeparator()
+        for family_part in family.split(family_separator):
+            msgsrc = "Colorspace family from OCIO config"
+            process_msg(
+                msgs, translation_context, family_part, msgsrc,
+                reports, None, settings,
+            )
 
 
 def dump_asset_messages(msgs, reports, settings):
@@ -1088,6 +1102,10 @@ def dump_asset_messages(msgs, reports, settings):
                     if node.bl_idname == "GeometryNodeWarning" and node.inputs['Message'].default_value:
                         warning_data = asset_data.setdefault("warnings", [])
                         warning_data.append(node.inputs['Message'].default_value)
+                    if node.bl_idname == "GeometryNodeMenuSwitch" and node.enum_items:
+                        enum_data = asset_data.setdefault("menu_items", [])
+                        for enum_item in node.enum_items:
+                            enum_data.append((enum_item.name, enum_item.description))
 
     for asset_file in sorted(asset_files):
         for asset in sorted(asset_files[asset_file], key=lambda a: a["name"]):
@@ -1120,6 +1138,18 @@ def dump_asset_messages(msgs, reports, settings):
                     msgsrc = f"Warning from node group {name}, file {asset_file}"
                     process_msg(
                         msgs, settings.DEFAULT_CONTEXT, warning, msgsrc,
+                        reports, None, settings,
+                    )
+            if "menu_items" in asset:
+                for item_name, item_description in sorted(asset["menu_items"]):
+                    msgsrc = f"Menu item name from node group {name}, file {asset_file}"
+                    process_msg(
+                        msgs, settings.DEFAULT_CONTEXT, item_name, msgsrc,
+                        reports, None, settings,
+                    )
+                    msgsrc = f"Menu item description from node group {name}, file {asset_file}"
+                    process_msg(
+                        msgs, settings.DEFAULT_CONTEXT, item_description, msgsrc,
                         reports, None, settings,
                     )
 
@@ -1178,7 +1208,7 @@ def dump_messages(do_messages, do_checks, settings):
     #     (could not even reproduce it from regular py console in Blender with UI...).
     #     For some reasons, cleanup does not happen properly, *and* we have no way to tell which class is valid
     #     and which has been unregistered. So for now, just go for the dirty, easy way: do not disable add-ons. :(
-    # ~ utils.enable_addons(support={"COMMUNITY", "TESTING"}, disable=True)
+    # ~ utils.enable_addons(support={"COMMUNITY"}, disable=True)
 
     reports = _gen_reports(_gen_check_ctxt(settings) if do_checks else None)
 

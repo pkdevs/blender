@@ -24,19 +24,21 @@
 #include "DNA_scene_types.h"
 #include "DNA_texture_types.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_noise.h"
-#include "BLI_rand.h"
-#include "BLI_string.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_noise_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_anim_path.h" /* needed for where_on_path */
+#include "BKE_bvh.hh"
 #include "BKE_bvhutils.hh"
 #include "BKE_collection.hh"
 #include "BKE_collision.h"
@@ -56,9 +58,11 @@
 
 #include "RE_texture.h"
 
+namespace blender {
+
 EffectorWeights *BKE_effector_add_weights(Collection *collection)
 {
-  EffectorWeights *weights = MEM_new_for_free<EffectorWeights>("EffectorWeights");
+  EffectorWeights *weights = MEM_new<EffectorWeights>("EffectorWeights");
   for (int i = 0; i < NUM_PFIELD_TYPES; i++) {
     weights->weight[i] = 1.0f;
   }
@@ -69,11 +73,11 @@ EffectorWeights *BKE_effector_add_weights(Collection *collection)
 
   return weights;
 }
-PartDeflect *BKE_partdeflect_new(int type)
+PartDeflect *BKE_partdeflect_new(ePFieldType type)
 {
   PartDeflect *pd;
 
-  pd = MEM_new_for_free<PartDeflect>("PartDeflect");
+  pd = MEM_new<PartDeflect>("PartDeflect");
 
   pd->forcefield = type;
   pd->pdef_sbdamp = 0.1f;
@@ -100,6 +104,8 @@ PartDeflect *BKE_partdeflect_new(int type)
     case PFIELD_FLUIDFLOW:
       pd->f_flow = 1.0f;
       break;
+    default:
+      break;
   }
   pd->flag = PFIELD_DO_LOCATION | PFIELD_DO_ROTATION | PFIELD_CLOTH_USE_CULLING;
 
@@ -113,7 +119,7 @@ PartDeflect *BKE_partdeflect_copy(const PartDeflect *pd_src)
   if (pd_src == nullptr) {
     return nullptr;
   }
-  PartDeflect *pd_dst = static_cast<PartDeflect *>(MEM_dupallocN(pd_src));
+  PartDeflect *pd_dst = MEM_dupalloc(pd_src);
   return pd_dst;
 }
 
@@ -122,7 +128,7 @@ void BKE_partdeflect_free(PartDeflect *pd)
   if (!pd) {
     return;
   }
-  MEM_freeN(pd);
+  MEM_delete(pd);
 }
 
 /******************** EFFECTOR RELATIONS ***********************/
@@ -135,7 +141,7 @@ static void precalculate_effector(Depsgraph *depsgraph, EffectorCache *eff)
   eff->rng = BLI_rng_new(eff->pd->seed + cfra);
 
   if (eff->pd->forcefield == PFIELD_GUIDE && eff->ob->type == OB_CURVES_LEGACY) {
-    Curve *cu = static_cast<Curve *>(eff->ob->data);
+    Curve *cu = id_cast<Curve *>(eff->ob->data);
     if (cu->flag & CU_PATH) {
       if (eff->ob->runtime->curve_cache == nullptr ||
           eff->ob->runtime->curve_cache->anim_path_accum_length == nullptr)
@@ -152,7 +158,8 @@ static void precalculate_effector(Depsgraph *depsgraph, EffectorCache *eff)
     }
   }
   else if (eff->pd->shape == PFIELD_SHAPE_SURFACE) {
-    eff->surmd = (SurfaceModifierData *)BKE_modifiers_findby_type(eff->ob, eModifierType_Surface);
+    eff->surmd = reinterpret_cast<SurfaceModifierData *>(
+        BKE_modifiers_findby_type(eff->ob, eModifierType_Surface));
     if (eff->ob->type == OB_CURVES_LEGACY) {
       eff->flag |= PE_USE_NORMAL_DATA;
     }
@@ -167,7 +174,7 @@ static void add_effector_relation(ListBaseT<EffectorRelation> *relations,
                                   ParticleSystem *psys,
                                   PartDeflect *pd)
 {
-  EffectorRelation *relation = MEM_callocN<EffectorRelation>("EffectorRelation");
+  EffectorRelation *relation = MEM_new_zeroed<EffectorRelation>("EffectorRelation");
   relation->ob = ob;
   relation->psys = psys;
   relation->pd = pd;
@@ -183,10 +190,10 @@ static void add_effector_evaluation(ListBaseT<EffectorCache> **effectors,
                                     PartDeflect *pd)
 {
   if (*effectors == nullptr) {
-    *effectors = MEM_callocN<ListBaseT<EffectorCache>>("effector effectors");
+    *effectors = MEM_new_zeroed<ListBaseT<EffectorCache>>("effector effectors");
   }
 
-  EffectorCache *eff = MEM_callocN<EffectorCache>("EffectorCache");
+  EffectorCache *eff = MEM_new_zeroed<EffectorCache>("EffectorCache");
   eff->depsgraph = depsgraph;
   eff->scene = scene;
   eff->ob = ob;
@@ -203,11 +210,12 @@ ListBaseT<EffectorRelation> *BKE_effector_relations_create(Depsgraph *depsgraph,
                                                            ViewLayer *view_layer,
                                                            Collection *collection)
 {
-  Base *base = BKE_collection_or_layer_objects(scene, view_layer, collection);
+  Base *base = BKE_collection_or_layer_objects(
+      *DEG_get_bmain(depsgraph), scene, view_layer, collection);
   const bool for_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
   const int base_flag = (for_render) ? BASE_ENABLED_RENDER : BASE_ENABLED_VIEWPORT;
 
-  ListBaseT<EffectorRelation> *relations = MEM_callocN<ListBaseT<EffectorRelation>>(
+  ListBaseT<EffectorRelation> *relations = MEM_new_zeroed<ListBaseT<EffectorRelation>>(
       "effector relations");
 
   for (; base; base = base->next) {
@@ -241,8 +249,8 @@ ListBaseT<EffectorRelation> *BKE_effector_relations_create(Depsgraph *depsgraph,
 void BKE_effector_relations_free(ListBaseT<EffectorRelation> *lb)
 {
   if (lb) {
-    BLI_freelistN(lb);
-    MEM_freeN(lb);
+    lb->free_no_destruct();
+    MEM_delete(lb);
   }
 }
 
@@ -368,12 +376,12 @@ void BKE_effectors_free(ListBaseT<EffectorCache> *lb)
         BLI_rng_free(eff.rng);
       }
       if (eff.guide_data) {
-        MEM_freeN(eff.guide_data);
+        MEM_delete(eff.guide_data);
       }
     }
 
-    BLI_freelistN(lb);
-    MEM_freeN(lb);
+    lb->free_no_destruct();
+    MEM_delete(lb);
   }
 }
 
@@ -640,35 +648,51 @@ bool closest_point_on_surface(SurfaceModifierData *surmd,
                               float surface_nor[3],
                               float surface_vel[3])
 {
-  blender::bke::BVHTreeFromMesh *bvhtree = surmd->runtime.bvhtree;
-  BVHTreeNearest nearest;
-
-  nearest.index = -1;
-  nearest.dist_sq = FLT_MAX;
-
-  BLI_bvhtree_find_nearest(bvhtree->tree, co, &nearest, bvhtree->nearest_callback, bvhtree);
-
-  if (nearest.index != -1) {
-    copy_v3_v3(surface_co, nearest.co);
-
-    if (surface_nor) {
-      copy_v3_v3(surface_nor, nearest.no);
-    }
-
-    if (surface_vel) {
-      const int *corner_verts = bvhtree->corner_verts.data();
-      const blender::int3 &tri = bvhtree->corner_tris[nearest.index];
-
-      copy_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[tri[0]]]);
-      add_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[tri[1]]]);
-      add_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[tri[2]]]);
-
-      mul_v3_fl(surface_vel, (1.0f / 3.0f));
-    }
-    return true;
+  if (surmd == nullptr || surmd->runtime.bvhtree == nullptr) {
+    return false;
+  }
+  const std::optional<bke::bvh::ClosestPointResult> nearest =
+      surmd->runtime.bvhtree->closest_point(float3(co));
+  if (!nearest) {
+    return false;
   }
 
-  return false;
+  copy_v3_v3(surface_co, nearest->position);
+
+  const Mesh &mesh = *surmd->runtime.mesh;
+  const Span<float3> positions = mesh.vert_positions();
+  const float (*velocities)[3] = surmd->runtime.vert_velocities;
+
+  if (mesh.faces_num > 0) {
+    const int3 &tri = mesh.corner_tris()[nearest->index];
+    const Span<int> corner_verts = mesh.corner_verts();
+    const int verts[3] = {corner_verts[tri[0]], corner_verts[tri[1]], corner_verts[tri[2]]};
+
+    if (surface_nor) {
+      normal_tri_v3(surface_nor, positions[verts[0]], positions[verts[1]], positions[verts[2]]);
+    }
+    if (surface_vel) {
+      copy_v3_v3(surface_vel, velocities[verts[0]]);
+      add_v3_v3(surface_vel, velocities[verts[1]]);
+      add_v3_v3(surface_vel, velocities[verts[2]]);
+      mul_v3_fl(surface_vel, (1.0f / 3.0f));
+    }
+  }
+  else {
+    /* The tree contains the mesh edges. Match old behavior which returned the edge direction. */
+    const int2 edge = mesh.edges()[nearest->index];
+
+    if (surface_nor) {
+      sub_v3_v3v3(surface_nor, positions[edge[0]], positions[edge[1]]);
+      normalize_v3(surface_nor);
+    }
+    if (surface_vel) {
+      copy_v3_v3(surface_vel, velocities[edge[0]]);
+      add_v3_v3(surface_vel, velocities[edge[1]]);
+      mul_v3_fl(surface_vel, 0.5f);
+    }
+  }
+  return true;
 }
 bool get_effector_data(EffectorCache *eff,
                        EffectorData *efd,
@@ -700,8 +724,8 @@ bool get_effector_data(EffectorCache *eff,
     /* TODO: hair and points object support */
     const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(eff->ob);
     if (mesh_eval != nullptr) {
-      const blender::Span<blender::float3> positions = mesh_eval->vert_positions();
-      const blender::Span<blender::float3> vert_normals = mesh_eval->vert_normals();
+      const Span<float3> positions = mesh_eval->vert_positions();
+      const Span<float3> vert_normals = mesh_eval->vert_normals();
       copy_v3_v3(efd->loc, positions[*efd->index]);
       copy_v3_v3(efd->nor, vert_normals[*efd->index]);
 
@@ -1083,6 +1107,8 @@ static void do_physical_effector(EffectorCache *eff,
       }
 #endif
       break;
+    default:
+      break;
   }
 
   if (pd->flag & PFIELD_DO_LOCATION) {
@@ -1253,14 +1279,14 @@ static bool debug_element_compare(const void *a, const void *b)
 static void debug_element_free(void *val)
 {
   SimDebugElement *elem = static_cast<SimDebugElement *>(val);
-  MEM_freeN(elem);
+  MEM_delete(elem);
 }
 
 void BKE_sim_debug_data_set_enabled(bool enable)
 {
   if (enable) {
     if (!_sim_debug_data) {
-      _sim_debug_data = MEM_callocN<SimDebugData>("sim debug data");
+      _sim_debug_data = MEM_new_zeroed<SimDebugData>("sim debug data");
       _sim_debug_data->gh = BLI_ghash_new(
           debug_element_hash, debug_element_compare, "sim debug element hash");
     }
@@ -1281,7 +1307,7 @@ void BKE_sim_debug_data_free()
     if (_sim_debug_data->gh) {
       BLI_ghash_free(_sim_debug_data->gh, nullptr, debug_element_free);
     }
-    MEM_freeN(_sim_debug_data);
+    MEM_delete(_sim_debug_data);
   }
 }
 
@@ -1291,7 +1317,7 @@ static void debug_data_insert(SimDebugData *debug_data, SimDebugElement *elem)
       BLI_ghash_lookup(debug_data->gh, elem));
   if (old_elem) {
     *old_elem = *elem;
-    MEM_freeN(elem);
+    MEM_delete(elem);
   }
   else {
     BLI_ghash_insert(debug_data->gh, elem, elem);
@@ -1320,7 +1346,7 @@ void BKE_sim_debug_data_add_element(int type,
     }
   }
 
-  elem = MEM_callocN<SimDebugElement>("sim debug data element");
+  elem = MEM_new_zeroed<SimDebugElement>("sim debug data element");
   elem->type = type;
   elem->category_hash = category_hash;
   elem->hash = hash;
@@ -1393,3 +1419,5 @@ void BKE_sim_debug_data_clear_category(const char *category)
     }
   }
 }
+
+}  // namespace blender

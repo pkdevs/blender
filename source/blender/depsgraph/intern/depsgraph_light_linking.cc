@@ -5,14 +5,15 @@
 /** \file
  * \ingroup depsgraph
  *
- * Light linking utilities. */
+ * Light linking utilities.
+ */
 
 #include "intern/depsgraph_light_linking.hh"
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_hash.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 
 #include "DNA_collection_types.h"
@@ -24,21 +25,21 @@
 
 #include "intern/depsgraph.hh"
 
-namespace deg = blender::deg;
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Public C++ API
  * \{ */
 
-namespace blender::deg::light_linking {
+namespace deg::light_linking {
 
-void eval_runtime_data(const ::Depsgraph *depsgraph, Object &object_eval)
+void eval_runtime_data(const ::blender::Depsgraph *depsgraph, Object &object_eval)
 {
   const deg::Depsgraph *deg_graph = reinterpret_cast<const deg::Depsgraph *>(depsgraph);
   deg_graph->light_linking_cache.eval_runtime_data(object_eval);
 }
 
-}  // namespace blender::deg::light_linking
+}  // namespace deg::light_linking
 
 /** \} */
 
@@ -59,7 +60,7 @@ bool is_valid_input_id(const ID &id)
 
 }  // namespace
 
-namespace blender::deg::light_linking {
+namespace deg::light_linking {
 
 using LightSet = internal::LightSet;
 using EmitterData = internal::EmitterData;
@@ -486,6 +487,8 @@ void Cache::eval_runtime_data(Object &object_eval) const
   }
 }
 
-}  // namespace blender::deg::light_linking
+}  // namespace deg::light_linking
 
 /** \} */
+
+}  // namespace blender

@@ -11,13 +11,17 @@
 
 #include "MEM_guardedalloc.h"
 
+#include <algorithm>
+
 #include "BLI_array.hh"
-#include "BLI_linklist.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_linklist.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "bmesh.hh"
 #include "bmesh_path_region.hh" /* own include */
+
+namespace blender {
 
 /**
  * Special handling of vertices with 2 edges
@@ -117,7 +121,7 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
                                             const char path_htype)
 {
   int ele_verts_len[2];
-  blender::Vector<BMVert *, BM_DEFAULT_NGON_STACK_SIZE> ele_verts_buf[2];
+  Vector<BMVert *, BM_DEFAULT_NGON_STACK_SIZE> ele_verts_buf[2];
   BMVert **ele_verts[2];
 
   /* Get vertices from any `ele_src/ele_dst` elements. */
@@ -126,7 +130,7 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
     int j = 0;
 
     if (ele->head.htype == BM_FACE) {
-      BMFace *f = (BMFace *)ele;
+      BMFace *f = reinterpret_cast<BMFace *>(ele);
       ele_verts_buf[side].resize(f->len);
       ele_verts[side] = ele_verts_buf[side].data();
 
@@ -137,7 +141,7 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
       } while ((l_iter = l_iter->next) != l_first);
     }
     else if (ele->head.htype == BM_EDGE) {
-      BMEdge *e = (BMEdge *)ele;
+      BMEdge *e = reinterpret_cast<BMEdge *>(ele);
       ele_verts_buf[side].resize(2);
       ele_verts[side] = ele_verts_buf[side].data();
 
@@ -145,7 +149,7 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
       ele_verts[side][j++] = e->v2;
     }
     else if (ele->head.htype == BM_VERT) {
-      BMVert *v = (BMVert *)ele;
+      BMVert *v = reinterpret_cast<BMVert *>(ele);
       ele_verts_buf[side].resize(1);
       ele_verts[side] = ele_verts_buf[side].data();
 
@@ -160,8 +164,8 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
   int *depths[2] = {nullptr};
   int pass = 0;
 
-  BMVert **stack = MEM_malloc_arrayN<BMVert *>(bm->totvert, __func__);
-  BMVert **stack_other = MEM_malloc_arrayN<BMVert *>(bm->totvert, __func__);
+  BMVert **stack = MEM_new_array_uninitialized<BMVert *>(bm->totvert, __func__);
+  BMVert **stack_other = MEM_new_array_uninitialized<BMVert *>(bm->totvert, __func__);
 
   STACK_DECLARE(stack);
   STACK_INIT(stack, bm->totvert);
@@ -179,8 +183,8 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
     const int side_other = !side;
 
     /* initialize depths to -1 (un-touched), fill in with the depth as we walk over the edges. */
-    depths[side] = MEM_malloc_arrayN<int>(bm->totvert, __func__);
-    copy_vn_i(depths[side], bm->totvert, -1);
+    depths[side] = MEM_new_array_uninitialized<int>(bm->totvert, __func__);
+    std::fill_n(depths[side], bm->totvert, -1);
 
     /* needed for second side */
     STACK_CLEAR(stack);
@@ -288,8 +292,8 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
     }
   }
 
-  MEM_freeN(stack);
-  MEM_freeN(stack_other);
+  MEM_delete(stack);
+  MEM_delete(stack_other);
 
   /* Now we have depths recorded from both sides,
    * select elements that use tagged verts. */
@@ -371,7 +375,7 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
 
   for (int side = 0; side < 2; side++) {
     if (depths[side]) {
-      MEM_freeN(depths[side]);
+      MEM_delete(depths[side]);
     }
   }
 
@@ -474,3 +478,5 @@ LinkNode *BM_mesh_calc_path_region_face(BMesh *bm,
 }
 
 /** \} */
+
+}  // namespace blender

@@ -2,14 +2,28 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup fn
+ */
+
 #include "FN_multi_function.hh"
 
 #include "BLI_task.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 namespace blender::fn::multi_function {
 
 using ExecutionHints = MultiFunction::ExecutionHints;
+
+void MultiFunction::hash_unique(UniqueHashBytes &hash) const
+{
+  hash.add(this);
+}
+
+bool MultiFunction::equals(const MultiFunction &other) const
+{
+  return this == &other;
+}
 
 ExecutionHints MultiFunction::execution_hints() const
 {

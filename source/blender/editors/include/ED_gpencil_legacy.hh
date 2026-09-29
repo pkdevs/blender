@@ -9,6 +9,9 @@
 #pragma once
 
 #include "DNA_listBase.h"
+struct Depsgraph;
+struct SnapObjectContext;
+namespace blender {
 
 struct ID;
 struct PointerRNA;
@@ -24,13 +27,11 @@ struct bGPdata;
 struct tGPspoint;
 
 struct ARegion;
-struct Depsgraph;
 struct Main;
 struct RegionView3D;
 struct ReportList;
 struct Scene;
 struct ScrArea;
-struct SnapObjectContext;
 struct ToolSettings;
 struct View3D;
 struct bContext;
@@ -210,7 +211,7 @@ void ED_gpencil_layer_snap_frames(bGPDlayer *gpl, Scene *scene, short mode);
 void ED_gpencil_layer_mirror_frames(bGPDlayer *gpl, Scene *scene, short mode);
 
 /**
- * This function frees any MEM_calloc'ed copy/paste buffer data.
+ * This function frees any allocated copy/paste buffer data.
  */
 void ED_gpencil_anim_copybuf_free();
 /**
@@ -237,3 +238,5 @@ tGPspoint *ED_gpencil_sbuffer_ensure(tGPspoint *buffer_array,
                                      int *buffer_size,
                                      int *buffer_used,
                                      bool clear);
+
+}  // namespace blender

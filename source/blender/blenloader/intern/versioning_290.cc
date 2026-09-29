@@ -10,13 +10,13 @@
 
 #include <algorithm>
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 /* Define macros in `DNA_genfile.h`. */
 #define DNA_GENFILE_VERSIONING_MACROS
@@ -30,7 +30,7 @@
 #include "DNA_fluid_types.h"
 #include "DNA_genfile.h"
 #include "DNA_gpencil_legacy_types.h"
-#include "DNA_gpencil_modifier_types.h"
+#include "DNA_grease_pencil_modifier_types.h"
 #include "DNA_light_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -51,6 +51,7 @@
 
 #undef DNA_GENFILE_VERSIONING_MACROS
 
+#include "BKE_annotations.h"
 #include "BKE_armature.hh"
 #include "BKE_collection.hh"
 #include "BKE_colortools.hh"
@@ -58,7 +59,6 @@
 #include "BKE_curve.hh"
 #include "BKE_customdata.hh"
 #include "BKE_fcurve.hh"
-#include "BKE_gpencil_legacy.h"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh.hh"
@@ -83,6 +83,8 @@
 
 #include <fmt/format.h>
 
+namespace blender {
+
 /* Make preferences read-only, use `versioning_userdef.cc`. */
 #define U (*((const UserDef *)&U))
 
@@ -95,7 +97,7 @@ static eSpaceSeq_Proxy_RenderSize get_sequencer_render_size(Main *bmain)
       for (SpaceLink &sl : area.spacedata) {
         switch (sl.spacetype) {
           case SPACE_SEQ: {
-            SpaceSeq *sseq = (SpaceSeq *)&sl;
+            SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(&sl);
             if (sseq->mainb == SEQ_DRAW_IMG_IMBUF) {
               render_size = eSpaceSeq_Proxy_RenderSize(sseq->render_size);
               break;
@@ -131,8 +133,8 @@ static void strip_convert_transform_animation(const Strip *strip,
   }
 
   /* Hardcoded legacy bit-flags which has been removed. */
-  const uint32_t use_transform_flag = (1 << 16);
-  const uint32_t use_crop_flag = (1 << 17);
+  const eStripFlag use_transform_flag = eStripFlag(1 << 16);
+  const eStripFlag use_crop_flag = eStripFlag(1 << 17);
 
   /* Convert offset animation, but only if crop is not used. */
   if ((strip->flag & use_transform_flag) != 0 && (strip->flag & use_crop_flag) == 0) {
@@ -159,10 +161,10 @@ static void strip_convert_transform_crop(const Scene *scene,
                                          const eSpaceSeq_Proxy_RenderSize render_size)
 {
   if (strip->data->transform == nullptr) {
-    strip->data->transform = MEM_new_for_free<StripTransform>(__func__);
+    strip->data->transform = MEM_new<StripTransform>(__func__);
   }
   if (strip->data->crop == nullptr) {
-    strip->data->crop = MEM_new_for_free<StripCrop>(__func__);
+    strip->data->crop = MEM_new<StripCrop>(__func__);
   }
 
   StripCrop *c = strip->data->crop;
@@ -172,18 +174,18 @@ static void strip_convert_transform_crop(const Scene *scene,
   int image_size_x = scene->r.xsch;
   int image_size_y = scene->r.ysch;
 
-  /* Hard-coded legacy bit-flags which has been removed. */
-  const uint32_t use_transform_flag = (1 << 16);
-  const uint32_t use_crop_flag = (1 << 17);
+  /* Hard-coded legacy bit-flags which have been removed. */
+  const eStripFlag use_transform_flag = eStripFlag(1 << 16);
+  const eStripFlag use_crop_flag = eStripFlag(1 << 17);
 
   const StripElem *s_elem = strip->data->stripdata;
   if (s_elem != nullptr) {
     image_size_x = s_elem->orig_width;
     image_size_y = s_elem->orig_height;
 
-    if (can_use_proxy(strip, blender::seq::rendersize_to_proxysize(render_size))) {
-      image_size_x /= blender::seq::rendersize_to_scale_factor(render_size);
-      image_size_y /= blender::seq::rendersize_to_scale_factor(render_size);
+    if (can_use_proxy(strip, seq::rendersize_to_proxysize(render_size))) {
+      image_size_x /= seq::rendersize_to_scale_factor(render_size);
+      image_size_y /= seq::rendersize_to_scale_factor(render_size);
     }
   }
 
@@ -253,10 +255,10 @@ static void strip_convert_transform_crop(const Scene *scene,
 
   path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].transform.offset_x", name_esc);
   strip_convert_transform_animation(strip, scene, path, image_size_x, scene->r.xsch);
-  MEM_freeN(path);
+  MEM_delete(path);
   path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].transform.offset_y", name_esc);
   strip_convert_transform_animation(strip, scene, path, image_size_y, scene->r.ysch);
-  MEM_freeN(path);
+  MEM_delete(path);
 
   strip->flag &= ~use_transform_flag;
   strip->flag &= ~use_crop_flag;
@@ -311,9 +313,9 @@ static void strip_convert_transform_crop_2(const Scene *scene,
   int image_size_x = s_elem->orig_width;
   int image_size_y = s_elem->orig_height;
 
-  if (can_use_proxy(strip, blender::seq::rendersize_to_proxysize(render_size))) {
-    image_size_x /= blender::seq::rendersize_to_scale_factor(render_size);
-    image_size_y /= blender::seq::rendersize_to_scale_factor(render_size);
+  if (can_use_proxy(strip, seq::rendersize_to_proxysize(render_size))) {
+    image_size_x /= seq::rendersize_to_scale_factor(render_size);
+    image_size_y /= seq::rendersize_to_scale_factor(render_size);
   }
 
   /* Calculate scale factor, so image fits in preview area with original aspect ratio. */
@@ -330,22 +332,22 @@ static void strip_convert_transform_crop_2(const Scene *scene,
   BLI_str_escape(name_esc, strip->name + 2, sizeof(name_esc));
   path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].transform.scale_x", name_esc);
   strip_convert_transform_animation_2(scene, path, scale_to_fit_factor);
-  MEM_freeN(path);
+  MEM_delete(path);
   path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].transform.scale_y", name_esc);
   strip_convert_transform_animation_2(scene, path, scale_to_fit_factor);
-  MEM_freeN(path);
+  MEM_delete(path);
   path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].crop.min_x", name_esc);
   strip_convert_transform_animation_2(scene, path, 1 / scale_to_fit_factor);
-  MEM_freeN(path);
+  MEM_delete(path);
   path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].crop.max_x", name_esc);
   strip_convert_transform_animation_2(scene, path, 1 / scale_to_fit_factor);
-  MEM_freeN(path);
+  MEM_delete(path);
   path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].crop.min_y", name_esc);
   strip_convert_transform_animation_2(scene, path, 1 / scale_to_fit_factor);
-  MEM_freeN(path);
+  MEM_delete(path);
   path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].crop.max_x", name_esc);
   strip_convert_transform_animation_2(scene, path, 1 / scale_to_fit_factor);
-  MEM_freeN(path);
+  MEM_delete(path);
 }
 
 static void strip_convert_transform_crop_lb_2(const Scene *scene,
@@ -365,7 +367,7 @@ static void strip_convert_transform_crop_lb_2(const Scene *scene,
 
 static void seq_update_meta_disp_range(Scene *scene)
 {
-  Editing *ed = blender::seq::editing_get(scene);
+  Editing *ed = seq::editing_get(scene);
 
   if (ed == nullptr) {
     return;
@@ -391,7 +393,7 @@ static void seq_update_meta_disp_range(Scene *scene)
       }
     }
 
-    MetaStack *active_ms = blender::seq::meta_stack_active_get(ed);
+    MetaStack *active_ms = seq::meta_stack_active_get(ed);
     active_ms->old_strip = ms.parent_strip;
   }
 }
@@ -405,10 +407,10 @@ static void version_node_socket_duplicate(bNodeTree *ntree,
   for (bNodeLink &link : ntree->links.items_mutable()) {
     if (link.tonode->type_legacy == node_type) {
       bNode *node = link.tonode;
-      bNodeSocket *dest_socket = blender::bke::node_find_socket(*node, SOCK_IN, new_name);
+      bNodeSocket *dest_socket = bke::node_find_socket(*node, SOCK_IN, UString(new_name));
       BLI_assert(dest_socket);
       if (STREQ(link.tosock->name, old_name)) {
-        blender::bke::node_add_link(*ntree, *link.fromnode, *link.fromsock, *node, *dest_socket);
+        bke::node_add_link(*ntree, *link.fromnode, *link.fromsock, *node, *dest_socket);
       }
     }
   }
@@ -416,13 +418,13 @@ static void version_node_socket_duplicate(bNodeTree *ntree,
   /* Duplicate the default value from the old socket and assign it to the new socket. */
   for (bNode &node : ntree->nodes) {
     if (node.type_legacy == node_type) {
-      bNodeSocket *source_socket = blender::bke::node_find_socket(node, SOCK_IN, old_name);
-      bNodeSocket *dest_socket = blender::bke::node_find_socket(node, SOCK_IN, new_name);
+      bNodeSocket *source_socket = bke::node_find_socket(node, SOCK_IN, UString(old_name));
+      bNodeSocket *dest_socket = bke::node_find_socket(node, SOCK_IN, UString(new_name));
       BLI_assert(source_socket && dest_socket);
       if (dest_socket->default_value) {
-        MEM_freeN(dest_socket->default_value);
+        MEM_delete_void(dest_socket->default_value);
       }
-      dest_socket->default_value = MEM_dupallocN(source_socket->default_value);
+      dest_socket->default_value = MEM_dupalloc_void(source_socket->default_value);
     }
   }
 }
@@ -435,7 +437,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
       for (GpencilModifierData &md : ob.greasepencil_modifiers) {
         switch (md.type) {
           case eGpencilModifierType_Array: {
-            ArrayGpencilModifierData *gpmd = (ArrayGpencilModifierData *)&md;
+            ArrayGpencilModifierData *gpmd = reinterpret_cast<ArrayGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -444,7 +446,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Color: {
-            ColorGpencilModifierData *gpmd = (ColorGpencilModifierData *)&md;
+            ColorGpencilModifierData *gpmd = reinterpret_cast<ColorGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -453,7 +455,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Hook: {
-            HookGpencilModifierData *gpmd = (HookGpencilModifierData *)&md;
+            HookGpencilModifierData *gpmd = reinterpret_cast<HookGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -462,7 +464,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Lattice: {
-            LatticeGpencilModifierData *gpmd = (LatticeGpencilModifierData *)&md;
+            LatticeGpencilModifierData *gpmd = reinterpret_cast<LatticeGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -471,7 +473,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Mirror: {
-            MirrorGpencilModifierData *gpmd = (MirrorGpencilModifierData *)&md;
+            MirrorGpencilModifierData *gpmd = reinterpret_cast<MirrorGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -480,7 +482,8 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Multiply: {
-            MultiplyGpencilModifierData *gpmd = (MultiplyGpencilModifierData *)&md;
+            MultiplyGpencilModifierData *gpmd = reinterpret_cast<MultiplyGpencilModifierData *>(
+                &md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -489,7 +492,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Noise: {
-            NoiseGpencilModifierData *gpmd = (NoiseGpencilModifierData *)&md;
+            NoiseGpencilModifierData *gpmd = reinterpret_cast<NoiseGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -498,7 +501,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Offset: {
-            OffsetGpencilModifierData *gpmd = (OffsetGpencilModifierData *)&md;
+            OffsetGpencilModifierData *gpmd = reinterpret_cast<OffsetGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -507,7 +510,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Opacity: {
-            OpacityGpencilModifierData *gpmd = (OpacityGpencilModifierData *)&md;
+            OpacityGpencilModifierData *gpmd = reinterpret_cast<OpacityGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -516,7 +519,8 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Simplify: {
-            SimplifyGpencilModifierData *gpmd = (SimplifyGpencilModifierData *)&md;
+            SimplifyGpencilModifierData *gpmd = reinterpret_cast<SimplifyGpencilModifierData *>(
+                &md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -525,7 +529,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Smooth: {
-            SmoothGpencilModifierData *gpmd = (SmoothGpencilModifierData *)&md;
+            SmoothGpencilModifierData *gpmd = reinterpret_cast<SmoothGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -534,7 +538,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Subdiv: {
-            SubdivGpencilModifierData *gpmd = (SubdivGpencilModifierData *)&md;
+            SubdivGpencilModifierData *gpmd = reinterpret_cast<SubdivGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -543,7 +547,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Texture: {
-            TextureGpencilModifierData *gpmd = (TextureGpencilModifierData *)&md;
+            TextureGpencilModifierData *gpmd = reinterpret_cast<TextureGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -552,7 +556,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
             break;
           }
           case eGpencilModifierType_Thick: {
-            ThickGpencilModifierData *gpmd = (ThickGpencilModifierData *)&md;
+            ThickGpencilModifierData *gpmd = reinterpret_cast<ThickGpencilModifierData *>(&md);
             if (gpmd->materialname[0] != '\0') {
               gpmd->material = static_cast<Material *>(
                   BLI_findstring(&bmain->materials, gpmd->materialname, offsetof(ID, name) + 2));
@@ -567,17 +571,17 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
     }
 
     /* Patch first frame for old files. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
+    Scene *scene = bmain->scenes.first();
     if (scene != nullptr) {
       for (Object &ob : bmain->objects) {
         if (ob.type != OB_GPENCIL_LEGACY) {
           continue;
         }
-        bGPdata *gpd = static_cast<bGPdata *>(ob.data);
+        bGPdata *gpd = id_cast<bGPdata *>(ob.data);
         for (bGPDlayer &gpl : gpd->layers) {
-          bGPDframe *gpf = static_cast<bGPDframe *>(gpl.frames.first);
+          bGPDframe *gpf = gpl.frames.first();
           if (gpf && gpf->framenum > scene->r.sfra) {
-            bGPDframe *gpf_dup = BKE_gpencil_frame_duplicate(gpf, true);
+            bGPDframe *gpf_dup = BKE_annotations_frame_duplicate(gpf, true);
             gpf_dup->framenum = scene->r.sfra;
             BLI_addhead(&gpl.frames, gpf_dup);
           }
@@ -618,7 +622,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       for (ModifierData &md : ob.modifiers) {
         if (md.type == eModifierType_Multires) {
-          MultiresModifierData *mmd = (MultiresModifierData *)&md;
+          MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(&md);
           if (mmd->simple) {
             multires_do_versions_simple_to_catmull_clark(&ob, mmd);
           }
@@ -643,7 +647,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
      * Armature obdata. */
     for (Object &ob : bmain->objects) {
       if (ob.type == OB_ARMATURE) {
-        BKE_pose_rebuild(bmain, &ob, static_cast<bArmature *>(ob.data), true);
+        BKE_pose_rebuild(bmain, &ob, id_cast<bArmature *>(ob.data), true);
       }
     }
 
@@ -711,10 +715,8 @@ static void panels_remove_x_closed_flag_recursive(Panel *panel)
 static void do_versions_point_attributes(CustomData *pdata)
 {
   /* Change to generic named float/float3 attributes. */
-  enum {
-    CD_LOCATION = 43,
-    CD_RADIUS = 44,
-  };
+  constexpr eCustomDataType CD_LOCATION = eCustomDataType(43);
+  constexpr eCustomDataType CD_RADIUS = eCustomDataType(44);
 
   for (int i = 0; i < pdata->totlayer; i++) {
     CustomDataLayer *layer = &pdata->layers[i];
@@ -797,15 +799,15 @@ static void version_node_join_geometry_for_multi_input_socket(bNodeTree *ntree)
     if (link.tonode->type_legacy == GEO_NODE_JOIN_GEOMETRY &&
         !(link.tosock->flag & SOCK_MULTI_INPUT))
     {
-      link.tosock = static_cast<bNodeSocket *>(link.tonode->inputs.first);
+      link.tosock = link.tonode->inputs.first();
     }
   }
   for (bNode &node : ntree->nodes) {
     if (node.type_legacy == GEO_NODE_JOIN_GEOMETRY) {
-      bNodeSocket *socket = static_cast<bNodeSocket *>(node.inputs.first);
+      bNodeSocket *socket = node.inputs.first();
       socket->flag |= SOCK_MULTI_INPUT;
       socket->limit = 4095;
-      blender::bke::node_remove_socket(*ntree, node, *socket->next);
+      bke::node_remove_socket(*ntree, node, *socket->next);
     }
   }
 }
@@ -820,14 +822,14 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Mesh &me : bmain->meshes) {
       const MPoly *polys = static_cast<const MPoly *>(
           CustomData_get_layer(&me.face_data, CD_MPOLY));
-      for (const int i : blender::IndexRange(me.faces_num)) {
+      for (const int i : IndexRange(me.faces_num)) {
         if (polys[i].totloop == 2) {
           std::string message = fmt::format(
               fmt::runtime(RPT_("Mesh %s has invalid faces, likely caused by the manifold extrude "
                                 "tool in version 2.90.0. Opening and saving the file in a version "
                                 "prior to 5.1 should resolve the issue\n")),
               me.id.name + 2);
-          BLO_read_invalidate_message((BlendHandle *)fd, bmain, message.c_str());
+          BLO_read_invalidate_message(reinterpret_cast<BlendHandle *>(fd), bmain, message.c_str());
           break;
         }
       }
@@ -849,7 +851,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         for (ScrArea &area : screen.areabase) {
           for (SpaceLink &sl : area.spacedata) {
             if (sl.spacetype == SPACE_IMAGE) {
-              SpaceImage *sima = (SpaceImage *)&sl;
+              SpaceImage *sima = reinterpret_cast<SpaceImage *>(&sl);
               sima->uv_opacity = 1.0f;
             }
           }
@@ -882,7 +884,8 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       for (ModifierData &md : ob.modifiers) {
         if (md.type == eModifierType_WeightVGEdit) {
-          ((WeightVGEditModifierData *)&md)->edit_flags &= ~MOD_WVG_EDIT_WEIGHTS_NORMALIZE;
+          (reinterpret_cast<WeightVGEditModifierData *>(&md))->edit_flags &=
+              ~MOD_WVG_EDIT_WEIGHTS_NORMALIZE;
         }
       }
     }
@@ -893,7 +896,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         if (ntree->type == NTREE_SHADER) {
           for (bNode &node : ntree->nodes) {
             if (node.type_legacy == SH_NODE_TEX_SKY && node.storage) {
-              NodeTexSky *tex = (NodeTexSky *)node.storage;
+              NodeTexSky *tex = static_cast<NodeTexSky *>(node.storage);
               tex->sun_disc = true;
               tex->sun_size = DEG2RADF(0.545);
               tex->sun_elevation = M_PI_2;
@@ -1054,7 +1057,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &object : bmain->objects) {
         for (ModifierData &md : object.modifiers) {
           if (md.type == eModifierType_Bevel) {
-            BevelModifierData *bmd = (BevelModifierData *)&md;
+            BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(&md);
             bool use_custom_profile = bmd->flags & MOD_BEVEL_CUSTOM_PROFILE_DEPRECATED;
             bmd->profile_type = use_custom_profile ? MOD_BEVEL_PROFILE_CUSTOM :
                                                      MOD_BEVEL_PROFILE_SUPERELLIPSE;
@@ -1067,7 +1070,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &object : bmain->objects) {
       for (ModifierData &md : object.modifiers) {
         if (md.type == eModifierType_Ocean) {
-          OceanModifierData *omd = (OceanModifierData *)&md;
+          OceanModifierData *omd = reinterpret_cast<OceanModifierData *>(&md);
           omd->wave_alignment *= 0.1f;
           omd->sharpen_peak_jonswap *= 0.1f;
         }
@@ -1083,7 +1086,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         if (ntree->type == NTREE_SHADER) {
           for (bNode &node : ntree->nodes) {
             if (node.type_legacy == SH_NODE_TEX_SKY && node.storage) {
-              NodeTexSky *tex = (NodeTexSky *)node.storage;
+              NodeTexSky *tex = static_cast<NodeTexSky *>(node.storage);
               tex->sun_intensity = 1.0f;
               tex->altitude *= 0.001f;
             }
@@ -1098,7 +1101,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &object : bmain->objects) {
         for (ModifierData &md : object.modifiers) {
           if (md.type == eModifierType_Bevel) {
-            BevelModifierData *bmd = (BevelModifierData *)&md;
+            BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(&md);
             const bool use_vertex_bevel = bmd->flags & MOD_BEVEL_VERT_DEPRECATED;
             bmd->affect_type = use_vertex_bevel ? MOD_BEVEL_AFFECT_VERTICES :
                                                   MOD_BEVEL_AFFECT_EDGES;
@@ -1114,7 +1117,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &object : bmain->objects) {
         for (ModifierData &md : object.modifiers) {
           if (md.type == eModifierType_MeshSequenceCache) {
-            MeshSeqCacheModifierData *mcmd = (MeshSeqCacheModifierData *)&md;
+            MeshSeqCacheModifierData *mcmd = reinterpret_cast<MeshSeqCacheModifierData *>(&md);
             mcmd->velocity_scale = 1.0f;
           }
         }
@@ -1133,7 +1136,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &object : bmain->objects) {
         for (ModifierData &md : object.modifiers) {
           if (md.type == eModifierType_Ocean) {
-            OceanModifierData *omd = (OceanModifierData *)&md;
+            OceanModifierData *omd = reinterpret_cast<OceanModifierData *>(&md);
             omd->viewport_resolution = omd->resolution;
           }
         }
@@ -1179,7 +1182,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &space : area.spacedata) {
           if (space.spacetype == SPACE_OUTLINER) {
-            SpaceOutliner *space_outliner = (SpaceOutliner *)&space;
+            SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
 
             space_outliner->flag |= SO_MODE_COLUMN;
           }
@@ -1191,29 +1194,11 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &object : bmain->objects) {
       for (ModifierData &md : object.modifiers) {
         if (md.type == eModifierType_Boolean) {
-          BooleanModifierData *bmd = (BooleanModifierData *)&md;
+          BooleanModifierData *bmd = reinterpret_cast<BooleanModifierData *>(&md);
           bmd->solver = eBooleanModifierSolver_Float;
           bmd->flag = eBooleanModifierFlag_Object;
         }
       }
-    }
-  }
-
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 291, 4) && MAIN_VERSION_FILE_ATLEAST(bmain, 291, 1)) {
-    /* Due to a48d78ce07f4f, CustomData.totlayer and CustomData.maxlayer has been written
-     * incorrectly. Fortunately, the size of the layers array has been written to the .blend file
-     * as well, so we can reconstruct totlayer and maxlayer from that. */
-    for (Mesh &mesh : bmain->meshes) {
-      mesh.vert_data.totlayer = mesh.vert_data.maxlayer = MEM_allocN_len(mesh.vert_data.layers) /
-                                                          sizeof(CustomDataLayer);
-      mesh.edge_data.totlayer = mesh.edge_data.maxlayer = MEM_allocN_len(mesh.edge_data.layers) /
-                                                          sizeof(CustomDataLayer);
-      /* We can be sure that mesh->fdata is empty for files written by 2.90. */
-      mesh.corner_data.totlayer = mesh.corner_data.maxlayer = MEM_allocN_len(
-                                                                  mesh.corner_data.layers) /
-                                                              sizeof(CustomDataLayer);
-      mesh.face_data.totlayer = mesh.face_data.maxlayer = MEM_allocN_len(mesh.face_data.layers) /
-                                                          sizeof(CustomDataLayer);
     }
   }
 
@@ -1256,7 +1241,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       for (ModifierData &md : ob.modifiers) {
         if (md.type == eModifierType_Fluid) {
-          FluidModifierData *fmd = (FluidModifierData *)&md;
+          FluidModifierData *fmd = reinterpret_cast<FluidModifierData *>(&md);
           if (fmd->domain != nullptr) {
             if (!fmd->domain->coba_field && fmd->domain->type == FLUID_DOMAIN_TYPE_LIQUID) {
               fmd->domain->coba_field = FLUID_DOMAIN_FIELD_PHI;
@@ -1279,7 +1264,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         for (ScrArea &area : screen.areabase) {
           for (SpaceLink &sl : area.spacedata) {
             if (sl.spacetype == SPACE_VIEW3D) {
-              View3D *v3d = (View3D *)&sl;
+              View3D *v3d = reinterpret_cast<View3D *>(&sl);
               v3d->overlay.fade_alpha = 0.40f;
               v3d->overlay.flag |= V3D_OVERLAY_FADE_INACTIVE;
             }
@@ -1293,7 +1278,8 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Mesh &mesh : bmain->meshes) {
         /* The previous flags used to store mesh symmetry in edit-mode match the new ones that are
          * used in #Mesh.symmetry. */
-        mesh.symmetry = mesh.editflag & (ME_SYMMETRY_X | ME_SYMMETRY_Y | ME_SYMMETRY_Z);
+        mesh.symmetry = eMeshSymmetryType(int(mesh.editflag) &
+                                          (ME_SYMMETRY_X | ME_SYMMETRY_Y | ME_SYMMETRY_Z));
       }
     }
 
@@ -1304,7 +1290,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
           continue;
         }
 
-        MeshSeqCacheModifierData *data = (MeshSeqCacheModifierData *)&md;
+        MeshSeqCacheModifierData *data = reinterpret_cast<MeshSeqCacheModifierData *>(&md);
         data->read_flag |= MOD_MESHSEQ_INTERPOLATE_VERTICES;
       }
     }
@@ -1350,7 +1336,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         for (ScrArea &area : screen.areabase) {
           for (SpaceLink &space : area.spacedata) {
             if (space.spacetype == SPACE_IMAGE) {
-              SpaceImage *sima = (SpaceImage *)&space;
+              SpaceImage *sima = reinterpret_cast<SpaceImage *>(&space);
               sima->overlay.flag = SI_OVERLAY_SHOW_OVERLAYS;
             }
           }
@@ -1373,7 +1359,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &sl : area.spacedata) {
           switch (sl.spacetype) {
             case SPACE_IMAGE: {
-              SpaceImage *sima = (SpaceImage *)&sl;
+              SpaceImage *sima = reinterpret_cast<SpaceImage *>(&sl);
               sima->flag &= ~SI_FLAG_UNUSED_20;
               break;
             }
@@ -1388,7 +1374,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Fluid) {
-            FluidModifierData *fmd = (FluidModifierData *)&md;
+            FluidModifierData *fmd = reinterpret_cast<FluidModifierData *>(&md);
             if (fmd->domain) {
               fmd->domain->fractions_distance = 0.5;
             }
@@ -1434,7 +1420,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         for (ScrArea &area : screen.areabase) {
           for (SpaceLink &sl : area.spacedata) {
             if (sl.spacetype == SPACE_VIEW3D) {
-              View3D *v3d = (View3D *)&sl;
+              View3D *v3d = reinterpret_cast<View3D *>(&sl);
               v3d->overlay.wireframe_opacity = 1.0f;
             }
           }
@@ -1447,7 +1433,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &space : area.spacedata) {
           if (space.spacetype == SPACE_OUTLINER) {
-            SpaceOutliner *space_outliner = (SpaceOutliner *)&space;
+            SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
             if (space_outliner->filter_state == SO_FILTER_OB_HIDDEN) {
               space_outliner->filter_state = SO_FILTER_OB_VISIBLE;
               space_outliner->filter |= SO_FILTER_OB_STATE_INVERSE;
@@ -1460,7 +1446,8 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       for (ModifierData &md : ob.modifiers) {
         if (md.type == eModifierType_WeightVGProximity) {
-          WeightVGProximityModifierData *wmd = (WeightVGProximityModifierData *)&md;
+          WeightVGProximityModifierData *wmd = reinterpret_cast<WeightVGProximityModifierData *>(
+              &md);
           if (wmd->cmap_curve == nullptr) {
             wmd->cmap_curve = BKE_curvemapping_add(1, 0.0, 0.0, 1.0, 1.0);
             BKE_curvemapping_init(wmd->cmap_curve);
@@ -1490,8 +1477,8 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       for (ModifierData &md : ob.modifiers) {
         if (md.type == eModifierType_Nodes) {
-          NodesModifierData *nmd = (NodesModifierData *)&md;
-          IDProperty *nmd_properties = nmd->settings.properties;
+          NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
+          IDProperty *nmd_properties = nmd->settings_legacy.properties;
 
           BLI_assert(nmd_properties->type == IDP_GROUP);
           for (IDProperty &nmd_socket_idprop : nmd_properties->data.group) {
@@ -1529,12 +1516,14 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         if (scene.nodetree) {
           for (bNode &node : scene.nodetree->nodes) {
             if (node.type_legacy == CMP_NODE_CRYPTOMATTE_LEGACY) {
-              NodeCryptomatte *storage = (NodeCryptomatte *)node.storage;
-              char *matte_id = storage->matte_id;
-              if ((matte_id == nullptr) || (storage->matte_id[0] == '\0')) {
-                continue;
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodeCryptomatte *storage = static_cast<NodeCryptomatte *>(node.storage);
+                char *matte_id = storage->matte_id;
+                if ((matte_id == nullptr) || (storage->matte_id[0] == '\0')) {
+                  continue;
+                }
+                BKE_cryptomatte_matte_id_to_entries(storage, storage->matte_id);
               }
-              BKE_cryptomatte_matte_id_to_entries(storage, storage->matte_id);
             }
           }
         }
@@ -1546,9 +1535,11 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_SEQ) {
-            SpaceSeq *sseq = (SpaceSeq *)&sl;
-            sseq->flag |= (SEQ_SHOW_OVERLAY | SEQ_TIMELINE_SHOW_STRIP_NAME |
-                           SEQ_TIMELINE_SHOW_STRIP_SOURCE | SEQ_TIMELINE_SHOW_STRIP_DURATION);
+            SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(&sl);
+            sseq->flag |= SEQ_SHOW_OVERLAY;
+            sseq->timeline_overlay.flag |= SEQ_TIMELINE_SHOW_STRIP_NAME |
+                                           SEQ_TIMELINE_SHOW_STRIP_SOURCE |
+                                           SEQ_TIMELINE_SHOW_STRIP_DURATION;
           }
         }
       }
@@ -1566,7 +1557,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
 
     for (Scene &scene : bmain->scenes) {
       if (scene.toolsettings->sequencer_tool_settings == nullptr) {
-        scene.toolsettings->sequencer_tool_settings = blender::seq::tool_settings_init();
+        scene.toolsettings->sequencer_tool_settings = seq::tool_settings_init();
       }
     }
   }
@@ -1577,7 +1568,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &space : area.spacedata) {
           if (space.spacetype == SPACE_PROPERTIES) {
-            SpaceProperties *space_properties = (SpaceProperties *)&space;
+            SpaceProperties *space_properties = reinterpret_cast<SpaceProperties *>(&space);
             space_properties->outliner_sync = PROPERTIES_SYNC_AUTO;
           }
         }
@@ -1589,7 +1580,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Fluid) {
-            FluidModifierData *fmd = (FluidModifierData *)&md;
+            FluidModifierData *fmd = reinterpret_cast<FluidModifierData *>(&md);
             if (fmd->domain != nullptr) {
               fmd->domain->viscosity_value = 0.05;
             }
@@ -1609,7 +1600,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
           if (node.type_legacy != CMP_NODE_SETALPHA) {
             continue;
           }
-          NodeSetAlpha *storage = MEM_new_for_free<NodeSetAlpha>("NodeSetAlpha");
+          NodeSetAlpha *storage = MEM_new<NodeSetAlpha>("NodeSetAlpha");
           storage->mode = CMP_NODE_SETALPHA_MODE_REPLACE_ALPHA;
           node.storage = storage;
         }
@@ -1618,7 +1609,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     }
 
     for (Scene &scene : bmain->scenes) {
-      Editing *ed = blender::seq::editing_get(&scene);
+      Editing *ed = seq::editing_get(&scene);
       if (ed == nullptr) {
         continue;
       }
@@ -1679,7 +1670,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       }
       for (bNode &node : ntree->nodes) {
         if (node.type_legacy == GEO_NODE_OBJECT_INFO && node.storage == nullptr) {
-          NodeGeometryObjectInfo *data = MEM_new_for_free<NodeGeometryObjectInfo>(__func__);
+          NodeGeometryObjectInfo *data = MEM_new<NodeGeometryObjectInfo>(__func__);
           data->transform_space = GEO_NODE_TRANSFORM_SPACE_RELATIVE;
           node.storage = data;
         }
@@ -1715,8 +1706,10 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       if (ntree->type == NTREE_SHADER) {
         for (bNode &node : ntree->nodes) {
           if (node.type_legacy == SH_NODE_TEX_SKY && node.storage) {
-            NodeTexSky *tex = (NodeTexSky *)node.storage;
-            tex->altitude *= 1000.0f;
+            if (version_node_ensure_storage_or_invalidate(node)) {
+              NodeTexSky *tex = static_cast<NodeTexSky *>(node.storage);
+              tex->altitude *= 1000.0f;
+            }
           }
         }
       }
@@ -1730,7 +1723,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &space : area.spacedata) {
           /* Enable Outliner render visibility column. */
           if (space.spacetype == SPACE_OUTLINER) {
-            SpaceOutliner *space_outliner = (SpaceOutliner *)&space;
+            SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
             space_outliner->show_restrict_flags |= SO_RESTRICT_RENDER;
           }
         }
@@ -1798,7 +1791,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &sl : area.spacedata) {
           switch (sl.spacetype) {
             case SPACE_SEQ: {
-              SpaceSeq *sseq = (SpaceSeq *)&sl;
+              SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(&sl);
               if (ELEM(sseq->render_size,
                        SEQ_RENDER_SIZE_PROXY_100,
                        SEQ_RENDER_SIZE_PROXY_75,
@@ -1820,8 +1813,8 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_SPREADSHEET) {
-            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                             &sl.regionbase;
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                              &sl.regionbase;
             ARegion *new_footer = do_versions_add_region_if_not_found(
                 regionbase, RGN_TYPE_FOOTER, "footer for spreadsheet", RGN_TYPE_HEADER);
             if (new_footer != nullptr) {
@@ -1883,7 +1876,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
 
       for (Nurb &nu : *nurbs) {
         if (nu.flag & CU_2D) {
-          nu.flag &= ~CU_2D;
+          nu.flag &= ~eNurbFlag(CU_2D);
         }
         else {
           is_2d = false;
@@ -1915,7 +1908,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_NODE) {
-            SpaceNode *snode = (SpaceNode *)&sl;
+            SpaceNode *snode = reinterpret_cast<SpaceNode *>(&sl);
             for (bNodeTreePath &path : snode->treepath) {
               STRNCPY_UTF8(path.display_name, path.node_name);
             }
@@ -1930,7 +1923,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       for (ModifierData &md : ob.modifiers) {
         if (md.type == eModifierType_Mirror) {
-          MirrorModifierData *mmd = (MirrorModifierData *)&md;
+          MirrorModifierData *mmd = reinterpret_cast<MirrorModifierData *>(&md);
           /* This was the previous hard-coded value. */
           mmd->bisect_threshold = 0.001f;
         }
@@ -1950,3 +1943,5 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
    * \note Keep this message at the bottom of the function.
    */
 }
+
+}  // namespace blender

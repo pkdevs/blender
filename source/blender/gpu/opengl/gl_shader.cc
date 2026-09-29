@@ -11,13 +11,13 @@
 #include "BKE_appdir.hh"
 #include "BKE_global.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_time.h"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_system.h"
+#include "BLI_system.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "GPU_capabilities.hh"
@@ -37,6 +37,7 @@
 #include <stdio.h>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <chrono>
 #include <filesystem>
@@ -46,12 +47,13 @@
 #include <stdio.h>
 #include <string>
 
+namespace blender {
+
 #ifdef WIN32
 #  define popen _popen
 #  define pclose _pclose
 #endif
 
-using namespace blender;
 using namespace blender::gpu;
 using namespace blender::gpu::shader;
 
@@ -491,16 +493,9 @@ static std::ostream &print_qualifier(std::ostream &os, const Qualifier &qualifie
 
 static void print_resource(std::ostream &os,
                            const ShaderCreateInfo::Resource &res,
-                           const ShaderCreateInfo &info)
+                           const ShaderCreateInfo & /*info*/)
 {
-  if (info.auto_resource_location_ &&
-      res.bind_type == ShaderCreateInfo::Resource::BindType::SAMPLER)
   {
-    /* Skip explicit binding location for samplers when not needed, since drivers can usually
-     * handle more sampler declarations this way (as long as they're not actually used by the
-     * shader). See #105661. */
-  }
-  else if (GLContext::explicit_location_support) {
     os << "layout(binding = " << res.slot;
     if (res.bind_type == ShaderCreateInfo::Resource::BindType::IMAGE) {
       os << ", " << to_string(res.image.format);
@@ -512,9 +507,6 @@ static void print_resource(std::ostream &os,
       os << ", std430";
     }
     os << ") ";
-  }
-  else if (res.bind_type == ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER) {
-    os << "layout(std140) ";
   }
 
   switch (res.bind_type) {
@@ -531,14 +523,16 @@ static void print_resource(std::ostream &os,
       break;
     case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
       os << "uniform _" << res.uniformbuf.name.str_no_array() << " { ";
-      os << info.buffer_typename(res.uniformbuf.type_name, true) << " " << res.uniformbuf.name
-         << "; };";
+      os << res.uniformbuf.type_name << " " << res.uniformbuf.name << "; };";
       break;
     case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
       print_qualifier(os, res.storagebuf.qualifiers);
       os << "buffer _";
       os << res.storagebuf.name.str_no_array() << " { ";
-      os << info.buffer_typename(res.storagebuf.type_name) << " " << res.storagebuf.name << "; };";
+      os << res.storagebuf.type_name << " " << res.storagebuf.name << "; };";
+      break;
+    case ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
+      BLI_assert_unreachable();
       break;
   }
 }
@@ -561,12 +555,6 @@ static void print_interface(std::ostream &os,
                             const StageInterfaceInfo &iface,
                             const StringRefNull &suffix = "")
 {
-  /* TODO(@fclem): Move that to interface check. */
-  // if (iface.instance_name.is_empty()) {
-  //   BLI_assert_msg(0, "Interfaces require an instance name for geometry shader.");
-  //   std::cout << iface.name << ": Interfaces require an instance name for geometry shader.\n";
-  //   continue;
-  // }
   os << prefix << " " << iface.name << "{" << std::endl;
   for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
     os << "  " << to_string(inout.interp) << " " << to_string(inout.type) << " " << inout.name
@@ -582,7 +570,7 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
 
   ss << "\n#line " << __LINE__ << " \"" << __FILE__ << "\"\n";
 
-  ss << "\n/* Compilation Constants (pass-through). */\n";
+  /* Compilation Constants (pass-through). */
   for (const CompilationConstant &sc : info.compilation_constants_) {
     ss << "const ";
     switch (sc.type) {
@@ -632,7 +620,7 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
     }
     ss << "\n";
   }
-  ss << "\n/* Push Constants. */\n";
+  /* Push Constants. */
   int location = 0;
   for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
     /* See #131227: Work around legacy Intel bug when using layout locations. */
@@ -655,7 +643,6 @@ std::string GLShader::constants_declare(
 {
   std::stringstream ss;
 
-  ss << "/* Specialization Constants. */\n";
   for (int constant_index : IndexRange(constants_state.types.size())) {
     const StringRefNull name = specialization_constant_names_[constant_index];
     gpu::shader::Type constant_type = constants_state.types[constant_index];
@@ -706,24 +693,20 @@ std::string GLShader::vertex_interface_declare(const ShaderCreateInfo &info) con
   std::stringstream ss;
   std::string post_main;
 
-  ss << "\n/* Inputs. */\n";
+  /* Inputs. */
   for (const ShaderCreateInfo::VertIn &attr : info.vertex_inputs_) {
-    if (GLContext::explicit_location_support &&
-        /* Fix issue with AMDGPU-PRO + workbench_prepass_mesh_vert.glsl being quantized. */
-        GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL) == false)
-    {
-      ss << "layout(location = " << attr.index << ") ";
-    }
+    ss << "layout(location = " << attr.index << ") ";
     ss << "in " << to_string(attr.type) << " " << attr.name << ";\n";
   }
-  ss << "\n/* Interfaces. */\n";
+  /* Interfaces. */
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
     print_interface(ss, "out", *iface);
   }
   const bool has_geometry_stage = do_geometry_shader_injection(&info) ||
                                   !info.geometry_source_.is_empty();
-  const bool do_layer_output = flag_is_set(info.builtins_, BuiltinBits::LAYER);
-  const bool do_viewport_output = flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
+  const bool do_viewport_output = flag_is_set(info.builtins_combined(),
+                                              BuiltinBits::VIEWPORT_INDEX);
   if (has_geometry_stage) {
     if (do_layer_output) {
       ss << "out int gpu_Layer;\n";
@@ -740,14 +723,14 @@ std::string GLShader::vertex_interface_declare(const ShaderCreateInfo &info) con
       ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
     }
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::CLIP_CONTROL)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::CLIP_CONTROL)) {
     if (!has_geometry_stage) {
       /* Assume clip range is set to 0..1 and remap the range just like Vulkan and Metal.
        * If geometry stage is needed, do that remapping inside the geometry shader stage. */
       post_main += "gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;\n";
     }
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::BARYCENTRIC_COORD)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::BARYCENTRIC_COORD)) {
     if (!GLContext::native_barycentric_support) {
       /* Disabled or unsupported. */
     }
@@ -773,20 +756,21 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
   std::stringstream ss;
   std::string pre_main, post_main;
 
-  ss << "\n/* Interfaces. */\n";
-  const Span<StageInterfaceInfo *> in_interfaces = info.geometry_source_.is_empty() ?
-                                                       info.vertex_out_interfaces_ :
-                                                       info.geometry_out_interfaces_;
+  /* Interfaces. */
+  const Span<ShaderCreateInfo::StageInterfaceInfoHandle> in_interfaces =
+      info.geometry_source_.is_empty() ? info.vertex_out_interfaces_.as_span() :
+                                         info.geometry_out_interfaces_.as_span();
+
   for (const StageInterfaceInfo *iface : in_interfaces) {
     print_interface(ss, "in", *iface);
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::LAYER)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::LAYER)) {
     ss << "#define gpu_Layer gl_Layer\n";
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::VIEWPORT_INDEX)) {
     ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::BARYCENTRIC_COORD)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::BARYCENTRIC_COORD)) {
     if (!GLContext::native_barycentric_support) {
       ss << "flat in vec4 gpu_pos[3];\n";
       ss << "smooth in vec3 gpu_BaryCoord;\n";
@@ -795,7 +779,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
     else if (epoxy_has_gl_extension("GL_AMD_shader_explicit_vertex_parameter")) {
       /* NOTE(fclem): This won't work with geometry shader. Hopefully, we don't need geometry
        * shader workaround if this extension/feature is detected. */
-      ss << "\n/* Stable Barycentric Coordinates. */\n";
+      /* Stable Barycentric Coordinates. */
       ss << "flat in vec4 gpu_pos_flat;\n";
       ss << "__explicitInterpAMD in vec4 gpu_pos;\n";
       /* Globals. */
@@ -819,7 +803,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
   }
   ss << "layout(" << to_string(info.depth_write_) << ") out float gl_FragDepth;\n";
 
-  ss << "\n/* Sub-pass Inputs. */\n";
+  /* Sub-pass Inputs. */
   for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
     if (GLContext::framebuffer_fetch_support) {
       /* Declare as inout but do not write to it. */
@@ -835,7 +819,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
 
       /* IMPORTANT: We assume that the frame-buffer will be layered or not based on the layer
        * built-in flag. */
-      bool is_layered_fb = flag_is_set(info.builtins_, BuiltinBits::LAYER);
+      bool is_layered_fb = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
       bool is_layered_input = ELEM(
           input.img_type, ImageType::Uint2DArray, ImageType::Int2DArray, ImageType::Float2DArray);
 
@@ -868,7 +852,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
       pre_main += ss_pre.str();
     }
   }
-  ss << "\n/* Outputs. */\n";
+  /* Outputs. */
   for (const ShaderCreateInfo::FragOut &output : info.fragment_outputs_) {
     ss << "layout(location = " << output.index;
     switch (output.blend) {
@@ -898,7 +882,7 @@ std::string GLShader::geometry_layout_declare(const ShaderCreateInfo &info) cons
   int invocations = info.geometry_layout_.invocations;
 
   std::stringstream ss;
-  ss << "\n/* Geometry Layout. */\n";
+  /* Geometry Layout. */
   ss << "layout(" << to_string(info.geometry_layout_.primitive_in);
   if (invocations != -1) {
     ss << ", invocations = " << invocations;
@@ -911,10 +895,10 @@ std::string GLShader::geometry_layout_declare(const ShaderCreateInfo &info) cons
   return ss.str();
 }
 
-static StageInterfaceInfo *find_interface_by_name(const Span<StageInterfaceInfo *> ifaces,
-                                                  const StringRefNull &name)
+static StageInterfaceInfo *find_interface_by_name(
+    const Span<ShaderCreateInfo::StageInterfaceInfoHandle> ifaces, const StringRefNull &name)
 {
-  for (auto *iface : ifaces) {
+  for (auto [iface, cond] : ifaces) {
     if (iface->instance_name == name) {
       return iface;
     }
@@ -926,18 +910,20 @@ std::string GLShader::geometry_interface_declare(const ShaderCreateInfo &info) c
 {
   std::stringstream ss;
 
-  ss << "\n/* Interfaces. */\n";
+  /* Interfaces. */
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
-    bool has_matching_output_iface = find_interface_by_name(info.geometry_out_interfaces_,
-                                                            iface->instance_name) != nullptr;
-    const char *suffix = (has_matching_output_iface) ? "_in[]" : "[]";
+    std::string suffix = "_in[]";
+    if (iface->instance_name.is_empty()) {
+      suffix = iface->name + suffix;
+    }
     print_interface(ss, "in", *iface, suffix);
   }
   ss << "\n";
   for (const StageInterfaceInfo *iface : info.geometry_out_interfaces_) {
-    bool has_matching_input_iface = find_interface_by_name(info.vertex_out_interfaces_,
-                                                           iface->instance_name) != nullptr;
-    const char *suffix = (has_matching_input_iface) ? "_out" : "";
+    std::string suffix = "_out";
+    if (iface->instance_name.is_empty()) {
+      suffix = iface->name + suffix;
+    }
     print_interface(ss, "out", *iface, suffix);
   }
   ss << "\n";
@@ -947,7 +933,7 @@ std::string GLShader::geometry_interface_declare(const ShaderCreateInfo &info) c
 std::string GLShader::compute_layout_declare(const ShaderCreateInfo &info) const
 {
   std::stringstream ss;
-  ss << "\n/* Compute Layout. */\n";
+  /* Compute Layout. */
   ss << "layout(";
   ss << "  local_size_x = " << info.compute_layout_.local_size_x;
   ss << ", local_size_y = " << info.compute_layout_.local_size_y;
@@ -968,10 +954,11 @@ std::string GLShader::workaround_geometry_shader_source_create(
 {
   std::stringstream ss;
 
-  const bool do_layer_output = flag_is_set(info.builtins_, BuiltinBits::LAYER);
-  const bool do_viewport_output = flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
+  const bool do_viewport_output = flag_is_set(info.builtins_combined(),
+                                              BuiltinBits::VIEWPORT_INDEX);
   const bool do_barycentric_workaround = !GLContext::native_barycentric_support &&
-                                         flag_is_set(info.builtins_,
+                                         flag_is_set(info.builtins_combined(),
                                                      BuiltinBits::BARYCENTRIC_COORD);
 
   shader::ShaderCreateInfo info_modified = info;
@@ -1007,9 +994,15 @@ std::string GLShader::workaround_geometry_shader_source_create(
   }
   for (auto i : IndexRange(3)) {
     for (const StageInterfaceInfo *iface : info_modified.vertex_out_interfaces_) {
+      std::string instance_in = (iface->instance_name.is_empty() ? iface->name :
+                                                                   iface->instance_name) +
+                                "_in";
+      std::string instance_out = (iface->instance_name.is_empty() ? iface->name :
+                                                                    iface->instance_name) +
+                                 "_out";
       for (auto &inout : iface->inouts) {
-        ss << "  " << iface->instance_name << "_out." << inout.name;
-        ss << " = " << iface->instance_name << "_in[" << i << "]." << inout.name << ";\n";
+        ss << "  " << instance_out << "." << inout.name;
+        ss << " = " << instance_in << "[" << i << "]." << inout.name << ";\n";
       }
     }
     if (do_barycentric_workaround) {
@@ -1017,7 +1010,7 @@ std::string GLShader::workaround_geometry_shader_source_create(
       ss << " vec3(" << int(i == 0) << ", " << int(i == 1) << ", " << int(i == 2) << ");\n";
     }
     ss << "  gl_Position = gl_in[" << i << "].gl_Position;\n";
-    if (flag_is_set(info.builtins_, BuiltinBits::CLIP_CONTROL)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::CLIP_CONTROL)) {
       /* Assume clip range is set to 0..1 and remap the range just like Vulkan and Metal. */
       ss << "gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;\n";
     }
@@ -1035,16 +1028,19 @@ std::string GLShader::workaround_geometry_shader_source_create(
 
 bool GLShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info) const
 {
-  BuiltinBits builtins = info->builtins_;
+  BuiltinBits builtins = info->builtins_combined();
   if (!GLContext::native_barycentric_support &&
       flag_is_set(builtins, BuiltinBits::BARYCENTRIC_COORD))
   {
     return true;
   }
-  if (!GLContext::layered_rendering_support && flag_is_set(builtins, BuiltinBits::LAYER)) {
+  if (!GLContext::layered_rendering_support && !GLContext::vertex_shader_layer_support &&
+      flag_is_set(builtins, BuiltinBits::LAYER))
+  {
     return true;
   }
-  if (!GLContext::layered_rendering_support && flag_is_set(builtins, BuiltinBits::VIEWPORT_INDEX))
+  if (!GLContext::layered_rendering_support && !GLContext::vertex_shader_viewport_index_support &&
+      flag_is_set(builtins, BuiltinBits::VIEWPORT_INDEX))
   {
     return true;
   }
@@ -1077,6 +1073,12 @@ static StringRefNull glsl_patch_vertex_get()
     if (GLContext::layered_rendering_support) {
       ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
     }
+    if (!GLContext::layered_rendering_support && GLContext::vertex_shader_layer_support) {
+      ss << "#extension GL_AMD_vertex_shader_layer: enable\n";
+    }
+    if (!GLContext::layered_rendering_support && GLContext::vertex_shader_viewport_index_support) {
+      ss << "#extension GL_AMD_vertex_shader_viewport_index: enable\n";
+    }
     if (GLContext::native_barycentric_support) {
       ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
     }
@@ -1106,9 +1108,6 @@ static StringRefNull glsl_patch_geometry_get()
     /* Version need to go first. */
     ss << "#version 430\n";
 
-    if (GLContext::layered_rendering_support) {
-      ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
-    }
     if (GLContext::native_barycentric_support) {
       ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
     }
@@ -1136,14 +1135,15 @@ static StringRefNull glsl_patch_fragment_get()
     /* Version need to go first. */
     ss << "#version 430\n";
 
-    if (GLContext::layered_rendering_support) {
-      ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
-    }
     if (GLContext::native_barycentric_support) {
       ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
     }
     if (GLContext::framebuffer_fetch_support) {
       ss << "#extension GL_EXT_shader_framebuffer_fetch: enable\n";
+    }
+    if (GLContext::derivative_control_support) {
+      ss << "#extension GL_ARB_derivative_control: enable\n";
+      ss << "#define GPU_ARB_derivative_control\n";
     }
     if (GPU_stencil_export_support()) {
       ss << "#extension GL_ARB_shader_stencil_export: enable\n";
@@ -1274,6 +1274,10 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
   std::string full_name = this->name_get() + "_" + stage_name_get(gl_stage);
 
   dump_source_to_disk(this->name_get(), full_name, ".glsl", concat_source);
+  if (!this->skip_preprocessor) {
+    concat_source = run_preprocessor(concat_source, G.debug & G_DEBUG_GPU_SHADER_NO_DCE);
+    dump_source_to_disk(this->name_get(), full_name + ".expanded", ".glsl", concat_source);
+  }
 
   /* Patch line directives so that we can make error reporting consistent. */
   size_t start_pos = 0;
@@ -1370,7 +1374,7 @@ bool GLShader::finalize(const shader::ShaderCreateInfo *info)
     std::string source = workaround_geometry_shader_source_create(*info);
     Vector<StringRefNull> sources;
     sources.append("version");
-    sources.append("/* Specialization Constants. */\n");
+    sources.append("");
     sources.append(source);
     geometry_shader_from_glsl(*info, sources);
   }
@@ -1811,7 +1815,7 @@ bool GLCompilerWorker::load_program_binary(GLint program)
     return false;
   }
 
-  ShaderBinaryHeader *binary = (ShaderBinaryHeader *)shared_mem_->get_data();
+  ShaderBinaryHeader *binary = static_cast<ShaderBinaryHeader *>(shared_mem_->get_data());
 
   state_ = COMPILATION_FINISHED;
 
@@ -1975,3 +1979,5 @@ void GLSubprocessShaderCompiler::specialize_shader(const ShaderSpecialization &s
 /** \} */
 
 #endif
+
+}  // namespace blender

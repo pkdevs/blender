@@ -13,13 +13,17 @@
 #include "DNA_customdata_types.h"
 #include "DNA_defs.h"
 
+#include "BLI_enum_flags.hh"
+
 #include <optional>
 
+#include "BLI_index_mask_fwd.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_memory_counter_fwd.hh"
 #include "BLI_vector_set.hh"
 
 namespace blender {
+
 template<typename T> struct Bounds;
 namespace offset_indices {
 template<typename T> struct GroupedSpan;
@@ -34,29 +38,30 @@ struct BVHTreeFromMesh;
 struct MeshRuntime;
 class AttributeAccessor;
 class MutableAttributeAccessor;
-struct LooseVertCache;
-struct LooseEdgeCache;
 enum class MeshNormalDomain : int8_t;
+namespace bvh {
+class Tree;
+}
 }  // namespace bke
-}  // namespace blender
 
 struct AnimData;
 struct bDeformGroup;
 struct Ipo;
 struct Key;
+struct Material;
 struct MCol;
 struct MEdge;
 struct MFace;
-struct Material;
 
 /** #Mesh.texspace_flag */
-enum {
+enum eMesh_TexSpaceFlag : char {
   ME_TEXSPACE_FLAG_AUTO = 1 << 0,
   ME_TEXSPACE_FLAG_AUTO_EVALUATED = 1 << 1,
 };
+ENUM_OPERATORS(eMesh_TexSpaceFlag)
 
 /** #Mesh.editflag */
-enum {
+enum eMesh_EditFlag : char {
   ME_EDIT_MIRROR_VERTEX_GROUPS = 1 << 0,
   ME_EDIT_MIRROR_Y = 1 << 1, /* unused so far */
   ME_EDIT_MIRROR_Z = 1 << 2, /* unused so far */
@@ -65,6 +70,7 @@ enum {
   ME_EDIT_MIRROR_TOPO = 1 << 4,
   ME_EDIT_PAINT_VERT_SEL = 1 << 5,
 };
+ENUM_OPERATORS(eMesh_EditFlag)
 
 /* Helper macro to see if vertex group X mirror is on. */
 #define ME_USING_MIRROR_X_VERTEX_GROUPS(_me) \
@@ -78,7 +84,7 @@ enum {
                                                 0)
 
 /** #Mesh.flag */
-enum {
+enum eMesh_Flag : uint16_t {
   ME_FLAG_UNUSED_0 = 1 << 0,     /* cleared */
   ME_FLAG_UNUSED_1 = 1 << 1,     /* cleared */
   ME_FLAG_DEPRECATED_2 = 1 << 2, /* deprecated */
@@ -105,35 +111,38 @@ enum {
   ME_REMESH_REPROJECT_VOLUME = 1 << 14,
   ME_FLAG_UNUSED_9 = 1 << 15, /* deprecated */
 };
+ENUM_OPERATORS(eMesh_Flag)
 
 #ifdef DNA_DEPRECATED_ALLOW
 /** #Mesh.cd_flag */
-enum {
+enum eMesh_CDFlag : char {
   ME_CDFLAG_VERT_BWEIGHT = 1 << 0,
   ME_CDFLAG_EDGE_BWEIGHT = 1 << 1,
   ME_CDFLAG_EDGE_CREASE = 1 << 2,
   ME_CDFLAG_VERT_CREASE = 1 << 3,
 };
+ENUM_OPERATORS(eMesh_CDFlag)
 #endif
 
 /** #Mesh.remesh_mode */
-enum {
+enum eMesh_RemeshMode : char {
   REMESH_VOXEL = 0,
   REMESH_QUAD = 1,
 };
 
 /** #SubsurfModifierData.subdivType */
-enum MeshSubdivType {
+enum MeshSubdivType : int {
   ME_CC_SUBSURF = 0,
   ME_SIMPLE_SUBSURF = 1,
 };
 
 /** #Mesh.symmetry */
-enum eMeshSymmetryType {
+enum eMeshSymmetryType : char {
   ME_SYMMETRY_X = 1 << 0,
   ME_SYMMETRY_Y = 1 << 1,
   ME_SYMMETRY_Z = 1 << 2,
 };
+ENUM_OPERATORS(eMeshSymmetryType)
 
 struct Mesh {
 #ifdef __cplusplus
@@ -173,11 +182,11 @@ struct Mesh {
   int *face_offset_indices = nullptr;
 
   /**
-   * Vertex, edge, face, and corner generic attributes. Currently unused at runtime, but used for
-   * forward compatibility when reading files (see #122398).
+   * Vertex, edge, face, and corner generic attributes.
    */
   struct AttributeStorage attribute_storage;
 
+  /** Store for non-generic layer data on each domain. */
   CustomData vert_data;
   CustomData edge_data;
   CustomData face_data;
@@ -197,7 +206,7 @@ struct Mesh {
    *
    * Set to -1 when none is active.
    */
-  int attributes_active_index = 0;
+  int attributes_active_index = -1;
 
   /**
    * This array represents the selection order when the user manually picks elements in edit-mode,
@@ -235,9 +244,9 @@ struct Mesh {
   char texspace_flag = ME_TEXSPACE_FLAG_AUTO;
 
   /** Various flags used when editing the mesh. */
-  char editflag = ME_EDIT_MIRROR_VERTEX_GROUPS;
+  eMesh_EditFlag editflag = ME_EDIT_MIRROR_VERTEX_GROUPS;
   /** Mostly more flags used when editing or displaying the mesh. */
-  uint16_t flag = ME_REMESH_REPROJECT_VOLUME | ME_REMESH_REPROJECT_ATTRIBUTES;
+  eMesh_Flag flag = ME_REMESH_REPROJECT_VOLUME | ME_REMESH_REPROJECT_ATTRIBUTES;
 
   DNA_DEPRECATED float smoothresh_legacy = 0;
 
@@ -273,13 +282,13 @@ struct Mesh {
   char *clone_uv_map_attribute = nullptr;
 
   /**
-   * User-defined symmetry flag (#eMeshSymmetryType) that causes editing operations to maintain
+   * User-defined symmetry flag that causes editing operations to maintain
    * symmetrical geometry. Supported by operations such as transform and weight-painting.
    */
-  char symmetry = 0;
+  eMeshSymmetryType symmetry = {};
 
   /** Choice between different remesh methods in the UI. */
-  char remesh_mode = 0;
+  eMesh_RemeshMode remesh_mode = REMESH_VOXEL;
 
   /** The length of the #mat array. */
   short totcol = 0;
@@ -333,37 +342,37 @@ struct Mesh {
    * without null checks, with the exception of some temporary meshes which should allocate and
    * free the data if they are passed to functions that expect run-time data.
    */
-  blender::bke::MeshRuntime *runtime = nullptr;
+  bke::MeshRuntime *runtime = nullptr;
 #ifdef __cplusplus
   /**
    * Array of vertex positions. Edges and face corners are defined by indices into this array.
    */
-  blender::Span<blender::float3> vert_positions() const;
+  Span<float3> vert_positions() const;
   /** Write access to vertex data. */
-  blender::MutableSpan<blender::float3> vert_positions_for_write();
+  MutableSpan<float3> vert_positions_for_write();
   /**
    * Array of edges, containing vertex indices, stored in the ".edge_verts" attribute. For simple
    * triangle or quad meshes, edges could be calculated from the face and #corner_edge arrays.
    * However, edges need to be stored explicitly for edge domain attributes and to support loose
    * edges that aren't connected to faces.
    */
-  blender::Span<blender::int2> edges() const;
+  Span<int2> edges() const;
   /** Write access to edge data. */
-  blender::MutableSpan<blender::int2> edges_for_write();
+  MutableSpan<int2> edges_for_write();
   /**
    * Face topology information (using the same internal data as #face_offsets()). Each face is a
    * contiguous chunk of face corners represented as an #IndexRange. Each face can be used to slice
    * the #corner_verts or #corner_edges arrays to find the vertices or edges that each face uses.
    */
-  blender::OffsetIndices<int> faces() const;
+  OffsetIndices<int> faces() const;
   /**
    * Return an array containing the first corner of each face. and the size of the face encoded as
    * the next offset. The total number of corners is the final value, and the first value is always
    * zero. May be empty if there are no faces.
    */
-  blender::Span<int> face_offsets() const;
+  Span<int> face_offsets() const;
   /** Write access to #face_offsets data. */
-  blender::MutableSpan<int> face_offsets_for_write();
+  MutableSpan<int> face_offsets_for_write();
 
   /**
    * Array of vertices for every face corner, stored in the ".corner_vert" integer attribute.
@@ -374,21 +383,21 @@ struct Mesh {
    * This span can often be passed as an argument in lieu of a face and the entire corner verts
    * array.
    */
-  blender::Span<int> corner_verts() const;
+  Span<int> corner_verts() const;
   /** Write access to the #corner_verts data. */
-  blender::MutableSpan<int> corner_verts_for_write();
+  MutableSpan<int> corner_verts_for_write();
 
   /**
    * Array of edges following every face corner traveling around each face, stored in the
    * ".corner_edge" attribute. The array sliced the same way as the #corner_verts data. The edge
    * previous to a corner must be accessed with the index of the previous face corner.
    */
-  blender::Span<int> corner_edges() const;
+  Span<int> corner_edges() const;
   /** Write access to the #corner_edges data. */
-  blender::MutableSpan<int> corner_edges_for_write();
+  MutableSpan<int> corner_edges_for_write();
 
-  blender::bke::AttributeAccessor attributes() const;
-  blender::bke::MutableAttributeAccessor attributes_for_write();
+  bke::AttributeAccessor attributes() const;
+  bke::MutableAttributeAccessor attributes_for_write();
 
   /**
    * The names of all UV map attributes, in the order of the internal storage.
@@ -396,77 +405,83 @@ struct Mesh {
    *
    * \warning Adding or removing attributes will invalidate the referenced memory.
    */
-  blender::VectorSet<blender::StringRefNull> uv_map_names() const;
+  VectorSet<StringRefNull> uv_map_names() const;
 
   /** The name of the active UV map attribute, if any. */
-  blender::StringRefNull active_uv_map_name() const;
+  StringRefNull active_uv_map_name() const;
   /** The name of the default UV map (e.g. for rendering) attribute, if any. */
-  blender::StringRefNull default_uv_map_name() const;
+  StringRefNull default_uv_map_name() const;
+  /** The active UV map name, falling back to the default if no active map is set. */
+  StringRefNull active_or_default_uv_map_name() const;
 
-  void uv_maps_active_set(blender::StringRef name);
-  void uv_maps_default_set(blender::StringRef name);
+  void uv_maps_active_set(StringRef name);
+  void uv_maps_default_set(StringRef name);
 
   /**
    * Vertex group data, encoded as an array of indices and weights for every vertex.
    * \warning: May be empty.
    */
-  blender::Span<MDeformVert> deform_verts() const;
+  Span<MDeformVert> deform_verts() const;
   /** Write access to vertex group data. */
-  blender::MutableSpan<MDeformVert> deform_verts_for_write();
+  MutableSpan<MDeformVert> deform_verts_for_write();
 
   /**
    * Cached triangulation of mesh faces, depending on the face topology and the vertex positions.
    */
-  blender::Span<blender::int3> corner_tris() const;
+  Span<int3> corner_tris() const;
 
   /**
    * A map containing the face index that each cached triangle from #Mesh::corner_tris() came from.
    */
-  blender::Span<int> corner_tri_faces() const;
+  Span<int> corner_tri_faces() const;
 
   /**
    * Calculate the largest and smallest position values of vertices.
    */
-  std::optional<blender::Bounds<blender::float3>> bounds_min_max() const;
+  std::optional<Bounds<float3>> bounds_min_max() const;
 
   /** Set cached mesh bounds to a known-correct value to avoid their lazy calculation later on. */
-  void bounds_set_eager(const blender::Bounds<blender::float3> &bounds);
+  void bounds_set_eager(const Bounds<float3> &bounds);
 
   /** Get the largest material index used by the mesh or `nullopt` if it has no faces. */
   std::optional<int> material_index_max() const;
 
   /** Get all the material indices actually used by the mesh. */
-  const blender::VectorSet<int> &material_indices_used() const;
+  const VectorSet<int> &material_indices_used() const;
 
   /**
    * Cached map containing the index of the face using each face corner.
    */
-  blender::Span<int> corner_to_face_map() const;
+  Span<int> corner_to_face_map() const;
   /**
    * Offsets per vertex used to slice arrays containing data for connected faces or face corners.
    */
-  blender::OffsetIndices<int> vert_to_face_map_offsets() const;
+  OffsetIndices<int> vert_to_face_map_offsets() const;
   /**
    * Cached map from each vertex to the corners using it.
    */
-  blender::GroupedSpan<int> vert_to_corner_map() const;
+  GroupedSpan<int> vert_to_corner_map() const;
   /**
    * Cached map from each vertex to the faces using it.
    */
-  blender::GroupedSpan<int> vert_to_face_map() const;
+  GroupedSpan<int> vert_to_face_map() const;
+  /**
+   * Cached map from each edge to the face corners using it.
+   */
+  GroupedSpan<int> edge_to_corner_map() const;
 
   /**
    * Cached information about loose edges, calculated lazily when necessary.
    */
-  const blender::bke::LooseEdgeCache &loose_edges() const;
+  const IndexMask &loose_edges() const;
   /**
    * Cached information about vertices that aren't used by any edges.
    */
-  const blender::bke::LooseVertCache &loose_verts() const;
+  const IndexMask &loose_verts() const;
   /**
    * Cached information about vertices that aren't used by faces (but may be used by loose edges).
    */
-  const blender::bke::LooseVertCache &verts_no_face() const;
+  const IndexMask &verts_no_face() const;
   /**
    * True if the mesh has no faces or edges "inside" of other faces. Those edges or faces would
    * reuse a subset of the vertices of a face. Knowing the mesh is "clean" or "good" can mean
@@ -505,22 +520,19 @@ struct Mesh {
    * When possible, it's preferred to use face normals over vertex normals and vertex normals over
    * face corner normals, since there is a 2-4x performance cost increase for each more complex
    * domain.
-   *
-   * Optionally the consumer of the mesh can indicate that they support the sharp_face attribute
-   * natively, to avoid using corner normals in some cases.
    */
-  blender::bke::MeshNormalDomain normals_domain(const bool support_sharp_face = false) const;
+  bke::MeshNormalDomain normals_domain() const;
   /**
    * Normal direction of faces, defined by positions and the winding direction of face corners.
    */
-  blender::Span<blender::float3> face_normals() const;
-  blender::Span<blender::float3> face_normals_true() const;
+  Span<float3> face_normals() const;
+  Span<float3> face_normals_true() const;
   /**
    * Normal direction of vertices, defined as the weighted average of face normals
    * surrounding each vertex and the normalized position for loose vertices.
    */
-  blender::Span<blender::float3> vert_normals() const;
-  blender::Span<blender::float3> vert_normals_true() const;
+  Span<float3> vert_normals() const;
+  Span<float3> vert_normals_true() const;
   /**
    * Normal direction at each face corner. Defined by a combination of face normals, vertex
    * normals, the `sharp_edge` and `sharp_face` attributes, and potentially by custom normals.
@@ -530,19 +542,26 @@ struct Mesh {
    * reason, the "true" face corner normals aren't cached, since they're just the same as the
    * corresponding face normals.
    */
-  blender::Span<blender::float3> corner_normals() const;
+  Span<float3> corner_normals() const;
 
-  blender::bke::BVHTreeFromMesh bvh_verts() const;
-  blender::bke::BVHTreeFromMesh bvh_edges() const;
-  blender::bke::BVHTreeFromMesh bvh_legacy_faces() const;
-  blender::bke::BVHTreeFromMesh bvh_corner_tris() const;
-  blender::bke::BVHTreeFromMesh bvh_corner_tris_no_hidden() const;
-  blender::bke::BVHTreeFromMesh bvh_loose_verts() const;
-  blender::bke::BVHTreeFromMesh bvh_loose_edges() const;
-  blender::bke::BVHTreeFromMesh bvh_loose_no_hidden_verts() const;
-  blender::bke::BVHTreeFromMesh bvh_loose_no_hidden_edges() const;
+  const blender::bke::bvh::Tree &bvh_verts() const;
+  const blender::bke::bvh::Tree &bvh_edges() const;
+  const blender::bke::bvh::Tree &bvh_tris() const;
+  /**
+   * NOTE: Legacy, to be replaced. Prefer #Mesh::bvh_edges(), which currently only supports
+   * closest point queries.
+   */
+  bke::BVHTreeFromMesh bvh_edges_legacy() const;
+  /** NOTE: Legacy, to be replaced. Prefer #Mesh::bvh_tris(). */
+  bke::BVHTreeFromMesh bvh_corner_tris() const;
+  bke::BVHTreeFromMesh bvh_corner_tris_no_hidden() const;
+  bke::BVHTreeFromMesh bvh_loose_verts() const;
+  bke::BVHTreeFromMesh bvh_loose_edges() const;
+  bke::BVHTreeFromMesh bvh_loose_no_hidden_verts() const;
+  bke::BVHTreeFromMesh bvh_loose_no_hidden_edges() const;
+  bke::BVHTreeFromMesh bvh_legacy_faces() const;
 
-  void count_memory(blender::MemoryCounter &memory) const;
+  void count_memory(MemoryCounter &memory) const;
 
   /** Call after changing vertex positions to tag lazily calculated caches for recomputation. */
   void tag_positions_changed();
@@ -583,3 +602,5 @@ struct TFace {
 #endif
 
 #define MESH_MAX_VERTS 2000000000L
+
+}  // namespace blender

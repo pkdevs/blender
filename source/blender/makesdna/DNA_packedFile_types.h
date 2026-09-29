@@ -8,7 +8,9 @@
 
 #pragma once
 
-#include "BLI_implicit_sharing.h"
+#include "BLI_implicit_sharing.hh"
+
+namespace blender {
 
 struct PackedFile {
   int size = 0;
@@ -21,3 +23,5 @@ struct PackedFile {
   /** Sharing info corresponding to the data above. This is run-time data. */
   const ImplicitSharingInfoHandle *sharing_info = nullptr;
 };
+
+}  // namespace blender

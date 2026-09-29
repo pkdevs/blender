@@ -9,7 +9,7 @@
 #include "BKE_context.hh"
 #include "BKE_report.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "WM_api.hh"
 
@@ -19,6 +19,8 @@
 
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Dolly Operator
@@ -124,12 +126,12 @@ static wmOperatorStatus viewdolly_modal(bContext *C, wmOperator *op, const wmEve
         break;
       case VIEWROT_MODAL_SWITCH_MOVE:
         WM_operator_name_call(
-            C, "VIEW3D_OT_move", blender::wm::OpCallContext::InvokeDefault, nullptr, event);
+            C, "VIEW3D_OT_move", wm::OpCallContext::InvokeDefault, nullptr, event);
         event_code = VIEW_CONFIRM;
         break;
       case VIEWROT_MODAL_SWITCH_ROTATE:
         WM_operator_name_call(
-            C, "VIEW3D_OT_rotate", blender::wm::OpCallContext::InvokeDefault, nullptr, event);
+            C, "VIEW3D_OT_rotate", wm::OpCallContext::InvokeDefault, nullptr, event);
         event_code = VIEW_CONFIRM;
         break;
     }
@@ -209,7 +211,7 @@ static wmOperatorStatus viewdolly_exec(bContext *C, wmOperator *op)
     normalize_v3(mousevec);
   }
 
-  v3d = static_cast<View3D *>(area->spacedata.first);
+  v3d = area->spacedata.first_as<View3D>();
   rv3d = static_cast<RegionView3D *>(region->regiondata);
 
   const bool use_cursor_init = RNA_boolean_get(op->ptr, "use_cursor_init");
@@ -358,3 +360,5 @@ ViewOpsType ViewOpsType_dolly = {
     /*init_fn*/ nullptr,
     /*apply_fn*/ nullptr,
 };
+
+}  // namespace blender

@@ -14,6 +14,29 @@
 #include "DNA_listBase.h"
 
 #include <type_traits>
+#include <variant>
+
+namespace blender {
+
+#ifdef __cplusplus
+namespace bke {
+struct FCurveRuntime;
+struct NlaStripRuntime;
+}  // namespace bke
+using FCurveRuntime = bke::FCurveRuntime;
+using NlaStripRuntime = bke::NlaStripRuntime;
+template<typename T> class Span;
+namespace rna_path {
+struct Member;
+struct LookupIndex;
+struct LookupKey;
+using Item = std::variant<Member, LookupIndex, LookupKey>;
+}  // namespace rna_path
+using ParsedRNAPathRef = Span<rna_path::Item>;
+#else
+typedef struct FCurveRuntime FCurveRuntime;
+typedef struct NlaStripRuntime NlaStripRuntime;
+#endif
 
 /* ************************************************ */
 /* F-Curve DataTypes */
@@ -37,9 +60,9 @@ struct FModifier {
   /** User-defined description for the modifier. */
   char name[/*MAX_NAME*/ 64] = "";
   /** Type of f-curve modifier. */
-  short type = 0;
+  eFModifier_Types type = {};
   /** Settings for the modifier. */
-  short flag = 0;
+  eFModifier_Flags flag = {};
   /**
    * Expansion state for the modifier panel and its sub-panels, stored as a bit-field
    * in depth-first order. (Maximum of `sizeof(short)` total panels).
@@ -73,11 +96,11 @@ struct FMod_Generator {
 
   /** Order of polynomial generated (i.e. 1 for linear, 2 for quadratic). */
   int poly_order = 0;
-  /** Which 'generator' to use eFMod_Generator_Modes. */
-  int mode = 0;
+  /** Which 'generator' to use. */
+  eFMod_Generator_Modes mode = {};
 
   /** Settings. */
-  int flag = 0;
+  eFMod_Generator_Flags flag = {};
 };
 
 /**
@@ -96,11 +119,8 @@ struct FMod_FunctionGenerator {
   float phase_offset = 0;
   float value_offset = 0;
 
-  /* flags */
-  /** #eFMod_Generator_Functions. */
-  int type = 0;
-  /** #eFMod_Generator_flags. */
-  int flag = 0;
+  eFMod_Generator_Functions type = {};
+  eFMod_Generator_Flags flag = {};
 };
 
 /* envelope modifier - envelope data */
@@ -133,9 +153,9 @@ struct FMod_Envelope {
 /* TODO: we can only do complete cycles. */
 struct FMod_Cycles {
   /** Extrapolation mode to use before first keyframe. */
-  short before_mode = 0;
+  eFMod_Cycling_Modes before_mode = {};
   /** Extrapolation mode to use after last keyframe. */
-  short after_mode = 0;
+  eFMod_Cycling_Modes after_mode = {};
   /** Number of 'cycles' before first keyframe to do. */
   short before_cycles = 0;
   /** Number of 'cycles' after last keyframe to do. */
@@ -147,7 +167,7 @@ struct FMod_Limits {
   /** Rect defining the min/max values. */
   rctf rect = {};
   /** Settings for limiting. */
-  int flag = 0;
+  eFMod_Limit_Flags flag = {};
   char _pad[4] = {};
 };
 
@@ -161,7 +181,7 @@ struct FMod_Noise {
   float lacunarity = 0;
 
   short depth = 0;
-  short modification = 0;
+  eFMod_Noise_Modifications modification = {};
   char legacy_noise = 0;
   char _pad[3] = {};
 };
@@ -179,8 +199,20 @@ struct FMod_Stepped {
   float end_frame = 0;
 
   /** Various settings. */
-  int flag = 0;
+  eFMod_Stepped_Flags flag = {};
 };
+
+/* stepped modifier data */
+typedef struct FMod_Smooth {
+  /**
+   * The shape of the Gaussian distribution in frames. Lower values will make it sharper.
+   * This can be any value > 0.
+   */
+  float sigma;
+
+  /** The number of frames to average around each keyframe. */
+  int filter_width;
+} FMod_Smooth;
 
 /* Drivers -------------------------------------- */
 
@@ -202,26 +234,25 @@ struct DriverTarget {
    */
   char pchan_name[/*MAX_NAME*/ 64] = "";
   /** Transform channel index (for #DVAR_TYPE_TRANSFORM_CHAN). */
-  short transChan = 0;
+  eDriverTarget_TransformChannels transChan = {};
 
   /** Rotation channel calculation type. */
-  char rotation_mode = 0;
+  eDriverTarget_RotationMode rotation_mode = {};
   char _pad[5] = {};
 
   /**
    * Flags for the validity of the target
    * (NOTE: these get reset every time the types change).
    */
-  short flag = 0;
-  /** Single-bit user-visible toggles (not reset on type change) from eDriverTarget_Options. */
-  short options = 0;
+  eDriverTarget_Flag flag = {};
+  /** Single-bit user-visible toggles (not reset on type change). */
+  eDriverTarget_Options options = {};
   /** Type of ID-block that this target can use. */
   int idtype = 0;
 
   /* Context-dependent property of a "Context Property" type target.
-   * The `rna_path` of this property is used as a target.
-   * This is a value of enumerator #eDriverTarget_ContextProperty. */
-  int context_property = 0;
+   * The `rna_path` of this property is used as a target. */
+  eDriverTarget_ContextProperty context_property = {};
 
   /* Fall back value to use with DTAR_OPTION_USE_FALLBACK. */
   float fallback_value = 0;
@@ -251,11 +282,11 @@ struct DriverVar {
 
   /** Number of targets actually used by this variable. */
   char num_targets = 0;
-  /** Type of driver variable (eDriverVar_Types). */
-  char type = 0;
+  /** Type of driver variable. */
+  eDriverVar_Types type = {};
 
-  /** Validation tags, etc. (eDriverVar_Flags). */
-  short flag = 0;
+  /** Validation tags, etc. */
+  eDriverVar_Flags flag = {};
   /** Result of previous evaluation. */
   float curval = 0;
 };
@@ -297,9 +328,9 @@ struct ChannelDriver {
 
   /* general settings */
   /** Type of driver. */
-  int type = 0;
+  eDriver_Types type = {};
   /** Settings of driver. */
-  int flag = 0;
+  eDriver_Flags flag = {};
 };
 
 /* F-Curves -------------------------------------- */
@@ -350,17 +381,16 @@ struct FCurve {
    */
   int active_keyframe_index = 0;
 
-  /* value cache + settings */
-  /** Value stored from last time curve was evaluated (not threadsafe, debug display only!). */
-  float curval = 0;
   /** User-editable settings for this curve. */
-  short flag = 0;
+  eFCurve_Flags flag = {};
   /** Value-extending mode for this curve (does not cover). */
-  short extend = 0;
+  eFCurve_Extend extend = {};
   /** Auto-handle smoothing mode. */
-  char auto_smoothing = 0;
+  eFCurve_Smoothing auto_smoothing = {};
 
-  char _pad[3] = {};
+  char _pad[5] = {};
+
+  uint16_t local_view_bits = 0;
 
   /* RNA - data link */
   /**
@@ -371,19 +401,50 @@ struct FCurve {
    */
   int array_index = 0;
   /**
-   * RNA-path to resolve data-access, see: #RNA_path_resolve_property.
-   *
-   * \note String look-ups for collection and custom-properties are escaped using #BLI_str_escape.
+   * Storage for #FCurve::rna_path(), which should be used to access this value instead, even via
+   * `rna_path().c_str()`, except for very specific cases where the overhead of StringRefNull
+   * construction must be avoided. Value should be set via #rna_path_set() or rna_path_set_move()
    */
-  char *rna_path = nullptr;
+  char *rna_path_ptr = nullptr;
 
   /* curve coloring (for editor) */
-  /** Coloring method to use (eFCurve_Coloring). */
-  int color_mode = 0;
+  /** Coloring method to use. */
+  eFCurve_Coloring color_mode = {};
   /** The last-color this curve took. */
   float color[3] = {};
 
   float prev_norm_factor = 0, prev_offset = 0;
+
+  bke::FCurveRuntime *runtime = nullptr;
+
+#ifdef __cplusplus
+  /**
+   * RNA-path to resolve data-access, see: #RNA_path_resolve_property.
+   *
+   * \note String look-ups for collection and custom-properties are escaped using #BLI_str_escape.
+   */
+  StringRefNull rna_path() const;
+
+  /**
+   * Retrieve a pre-parsed version of the FCurve's RNA path, owned by the FCurve itself. The
+   * referenced memory is only valid as long as the FCurve's path is not changed. Due to its use of
+   * specialized RNA path storage types, this can be much more efficient to work with than the
+   * string representation.
+   * \note This path does not include FCurve::array_index.
+   * \note This may return empty when an invalid RNA path that cannot be parsed is set, or when the
+   * `rna_path_set` API is skipped.
+   */
+  ParsedRNAPathRef rna_path_parsed() const;
+
+  /** Set the RNA path for this F-Curve, copying the given string. */
+  void rna_path_set(StringRef path);
+
+  /**
+   * Set the RNA path for this F-Curve, taking ownership of the C-string, which must be allocated
+   * by the guarded allocator.
+   */
+  void rna_path_set_move(char *path);
+#endif
 };
 
 /* ************************************************ */
@@ -412,7 +473,7 @@ struct NlaStrip {
    * Action that is referenced by this strip (strip is 'user' of the action).
    *
    * \note Most code should not write to this field directly, but use functions from
-   * `blender::animrig::nla` instead, see ANIM_nla.hh.
+   * `animrig::nla` instead, see ANIM_nla.hh.
    */
   bAction *act = nullptr;
 
@@ -422,7 +483,7 @@ struct NlaStrip {
    * An NLA strip is limited to using a single slot in the Action.
    *
    * \note Most code should not write to this field directly, but use functions from
-   * `blender::animrig::nla` instead, see ANIM_nla.hh.
+   * `animrig::nla` instead, see ANIM_nla.hh.
    */
   int32_t action_slot_handle = 0;
   /**
@@ -432,7 +493,7 @@ struct NlaStrip {
    * \see #ActionSlot::name
    *
    * \note Most code should not write to this field directly, but use functions from
-   * `blender::animrig::nla` instead, see ANIM_nla.hh.
+   * `animrig::nla` instead, see ANIM_nla.hh.
    */
   char last_slot_identifier[/*MAX_ID_NAME*/ 258] = "";
   char _pad0[2] = {};
@@ -463,26 +524,27 @@ struct NlaStrip {
   /** Strip blending length (only used when there are no F-Curves). */
   float blendin = 0, blendout = 0;
   /** Strip blending mode (layer-based mixing). */
-  short blendmode = 0;
+  eNlaStrip_Blend_Mode blendmode = {};
 
   /** Strip extrapolation mode (time-based mixing). */
-  short extendmode = 0;
+  eNlaStrip_Extrapolate_Mode extendmode = {};
   char _pad1[2] = {};
 
   /** Type of NLA strip. */
-  short type = 0;
-
-  /** Handle for speaker objects. */
-  void *speaker_handle = nullptr;
+  eNlaStrip_Type type = {};
 
   /** Settings. */
-  int flag = 0;
+  eNlaStrip_Flag flag = {};
   char _pad2[4] = {};
 
   /* Pointer to an original NLA strip. */
   struct NlaStrip *orig_strip = nullptr;
 
-  void *_pad3 = nullptr;
+  NlaStripRuntime *runtime = nullptr;
+
+#ifdef __cplusplus
+  NlaStripRuntime &runtime_get();
+#endif
 };
 
 #ifdef __cplusplus
@@ -508,7 +570,7 @@ struct NlaTrack {
   ListBaseT<NlaStrip> strips = {nullptr, nullptr};
 
   /** Settings for this track. */
-  int flag = 0;
+  eNlaTrack_Flag flag = {};
   /** Index of the track in the stack
    * \note not really useful, but we need a '_pad' var anyways! */
   int index = 0;
@@ -540,20 +602,20 @@ struct KS_Path {
   /** ID-type that path can be used on. */
   int idtype = 0;
 
-  /** Group naming (eKSP_Grouping). */
-  short groupmode = 0;
+  /** Group naming. */
+  eKSP_Grouping groupmode = {};
   /** Various settings, etc. */
-  short flag = 0;
+  eKSP_Settings flag = {};
 
   /** Dynamically (or statically in the case of predefined sets) path. */
   char *rna_path = nullptr;
   /** Index that path affects. */
   int array_index = 0;
 
-  /** (#eInsertKeyFlags) settings to supply insert-key() with. */
-  short keyingflag = 0;
-  /** (#eInsertKeyFlags) for each flag set, the relevant keying-flag bit overrides the default. */
-  short keyingoverride = 0;
+  /** Settings to supply insert-key() with. */
+  eInsertKeyFlags keyingflag = {};
+  /** For each flag set, the relevant keying-flag bit overrides the default. */
+  eInsertKeyFlags keyingoverride = {};
 };
 
 /* ---------------- */
@@ -588,12 +650,12 @@ struct KeyingSet {
   int active_path = 0;
 
   /** Settings for KeyingSet. */
-  short flag = 0;
+  eKS_Settings flag = {};
 
-  /** (eInsertKeyFlags) settings to supply insertkey() with. */
-  short keyingflag = 0;
-  /** (eInsertKeyFlags) for each flag set, the relevant keyingflag bit overrides the default. */
-  short keyingoverride = 0;
+  /** Settings to supply insertkey() with. */
+  eInsertKeyFlags keyingflag = {};
+  /** For each flag set, the relevant keyingflag bit overrides the default. */
+  eInsertKeyFlags keyingoverride = {};
 
   char _pad[6] = {};
 };
@@ -645,10 +707,7 @@ struct AnimData {
   /**
    * Active action - acts as the 'tweaking track' for the NLA.
    *
-   * Legacy Actions: Either use BKE_animdata_set_action() to set this, or call
-   * #BKE_animdata_action_ensure_idroot() after setting.
-   *
-   * Layered Actions: never set this directly, use one of the assignment
+   * Never set this directly, use one of the assignment
    * functions in ANIM_action.hh instead.
    */
   bAction *action = nullptr;
@@ -659,7 +718,7 @@ struct AnimData {
    *
    * Do not set this directly, use one of the assignment functions in ANIM_action.hh instead.
    *
-   * This can be set to `blender::animrig::Slot::unassigned` when no slot is assigned. Note that
+   * This can be set to `animrig::Slot::unassigned` when no slot is assigned. Note that
    * this field being set to any other value does NOT guarantee that there is a slot with that
    * handle, as it might have been deleted from the Action.
    */
@@ -709,13 +768,13 @@ struct AnimData {
 
   /* settings for animation evaluation */
   /** User-defined settings. */
-  int flag = 0;
+  eAnimData_Flag flag = {};
 
   /* settings for active action evaluation (based on NLA strip settings) */
   /** Accumulation mode for active action. */
-  short act_blendmode = 0;
+  eNlaStrip_Blend_Mode act_blendmode = {};
   /** Extrapolation mode for active action. */
-  short act_extendmode = 0;
+  eNlaStrip_Extrapolate_Mode act_extendmode = {};
   /** Influence for active action. */
   float act_influence = 0;
 
@@ -740,3 +799,5 @@ struct IdAdtTemplate {
   ID id;
   AnimData *adt = nullptr;
 };
+
+}  // namespace blender

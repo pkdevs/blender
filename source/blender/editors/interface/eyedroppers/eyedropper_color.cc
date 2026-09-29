@@ -18,14 +18,15 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 
 #include "BKE_context.hh"
 #include "BKE_cryptomatte.h"
 #include "BKE_image.hh"
+#include "BKE_layer.hh"
 #include "BKE_material.hh"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
@@ -101,7 +102,7 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
       MEM_delete(eye);
       return false;
     }
-    PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, &RNA_Context, C);
+    PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, RNA_Context, C);
     if (!RNA_path_resolve(&ctx_ptr, prop_data_path.c_str(), &eye->ptr, &eye->prop)) {
       BKE_reportf(op->reports, RPT_ERROR, "Could not resolve path '%s'", prop_data_path.c_str());
       MEM_delete(eye);
@@ -119,7 +120,7 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
   const enum PropertySubType prop_subtype = eye->prop ? RNA_property_subtype(eye->prop) :
                                                         PropertySubType(0);
 
-  if ((eye->ptr.data == nullptr) || (eye->prop == nullptr) ||
+  if (!eye->ptr || (eye->prop == nullptr) ||
       (RNA_property_editable(&eye->ptr, eye->prop) == false) ||
       (RNA_property_array_length(&eye->ptr, eye->prop) < 3) ||
       (RNA_property_type(eye->prop) != PROP_FLOAT) ||
@@ -132,8 +133,9 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
 
   float col[4];
   RNA_property_float_get_array_at_most(&eye->ptr, eye->prop, col, ARRAY_SIZE(col));
-  if (eye->ptr.type == &RNA_CompositorNodeCryptomatteV2) {
-    eye->crypto_node = (bNode *)eye->ptr.data;
+  if (eye->ptr.type == RNA_CompositorNodeCryptomatteV2) {
+    BKE_main_view_layers_synced_ensure(CTX_data_main(C));
+    eye->crypto_node = static_cast<bNode *>(eye->ptr.data);
     eye->cryptomatte_session = ntreeCompositCryptomatteSession(eye->crypto_node);
     eye->cb_win = CTX_wm_window(C);
     eye->draw_handle_sample_text = WM_draw_cb_activate(eye->cb_win, eyedropper_draw_cb, eye);
@@ -258,7 +260,7 @@ static bool eyedropper_cryptomatte_sample_renderlayer_fl(RenderLayer *render_lay
       const int y = int(fpos[1] * render_pass.recty);
       const int offset = 4 * (y * render_pass.rectx + x);
       zero_v3(r_col);
-      r_col[0] = render_pass.ibuf->float_buffer.data[offset];
+      r_col[0] = render_pass.ibuf->float_data()[offset];
       return true;
     }
   }
@@ -272,7 +274,7 @@ static bool eyedropper_cryptomatte_sample_render_fl(const bNode *node,
                                                     float r_col[3])
 {
   bool success = false;
-  Scene *scene = (Scene *)node->id;
+  Scene *scene = id_cast<Scene *>(node->id);
   BLI_assert(GS(scene->id.name) == ID_SCE);
   Render *re = RE_GetSceneRender(scene);
 
@@ -300,7 +302,7 @@ static bool eyedropper_cryptomatte_sample_image_fl(bContext *C,
                                                    float r_col[3])
 {
   bool success = false;
-  Image *image = (Image *)node->id;
+  Image *image = id_cast<Image *>(node->id);
   BLI_assert((image == nullptr) || (GS(image->id.name) == ID_IM));
 
   /* Compute the effective frame number of the image if it was animated. */
@@ -329,7 +331,7 @@ static bool eyedropper_cryptomatte_sample_fl(bContext *C,
                                              float r_col[3])
 {
   bNode *node = eye->crypto_node;
-  NodeCryptomatte *crypto = node ? ((NodeCryptomatte *)node->storage) : nullptr;
+  NodeCryptomatte *crypto = node ? (static_cast<NodeCryptomatte *>(node->storage)) : nullptr;
 
   if (!crypto) {
     return false;
@@ -371,18 +373,18 @@ static bool eyedropper_cryptomatte_sample_fl(bContext *C,
   float fpos[2] = {-1.0f, -1.0};
   switch (area->spacetype) {
     case SPACE_IMAGE: {
-      SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+      SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
       ED_space_image_get_position(sima, region, mval, fpos);
       break;
     }
     case SPACE_NODE: {
       Main *bmain = CTX_data_main(C);
-      SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+      SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
       ED_space_node_get_position(bmain, snode, region, mval, fpos);
       break;
     }
     case SPACE_CLIP: {
-      SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+      SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
       ED_space_clip_get_position(sc, region, mval, fpos);
       break;
     }
@@ -458,20 +460,20 @@ bool eyedropper_color_sample_fl(bContext *C,
           event_xy_win[1] - region->winrct.ymin,
       };
       if (area->spacetype == SPACE_IMAGE) {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         if (ED_space_image_color_sample(sima, region, mval, r_col, nullptr)) {
           return true;
         }
       }
       else if (area->spacetype == SPACE_NODE) {
-        SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+        SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
         Main *bmain = CTX_data_main(C);
         if (ED_space_node_color_sample(bmain, snode, region, mval, r_col)) {
           return true;
         }
       }
       else if (area->spacetype == SPACE_CLIP) {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         if (ED_space_clip_color_sample(sc, region, mval, r_col)) {
           return true;
         }
@@ -600,7 +602,7 @@ static void eyedropper_cancel(bContext *C, wmOperator *op)
 /* main modal status check */
 static wmOperatorStatus eyedropper_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  Eyedropper *eye = (Eyedropper *)op->customdata;
+  Eyedropper *eye = static_cast<Eyedropper *>(op->customdata);
 
   /* handle modal keymap */
   if (event->type == EVT_MODAL_MAP) {
@@ -641,7 +643,7 @@ static wmOperatorStatus eyedropper_modal(bContext *C, wmOperator *op, const wmEv
       status.opmodal(IFACE_("Confirm"), op->type, EYE_MODAL_SAMPLE_CONFIRM);
       status.opmodal(IFACE_("Cancel"), op->type, EYE_MODAL_CANCEL);
 #ifdef __APPLE__
-      status.item(TIP_("Press 'Enter' to sample outside of a Blender window"), ICON_INFO);
+      status.item(TIP_("Press 'Enter' to sample outside of a Blender window"), ICON_STATUS_INFO);
 #endif
     }
 

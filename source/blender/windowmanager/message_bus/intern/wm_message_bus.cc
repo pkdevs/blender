@@ -12,15 +12,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_ghash.h"
+#include "BLI_ghash.hh"
 
 #include "WM_types.hh"
 
 #include "message_bus/intern/wm_message_bus_intern.hh"
 #include "message_bus/wm_message_bus.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------------- */
 /** \name Public API
@@ -45,7 +47,7 @@ void WM_msgbus_types_init()
 
 wmMsgBus *WM_msgbus_create()
 {
-  wmMsgBus *mbus = MEM_callocN<wmMsgBus>(__func__);
+  wmMsgBus *mbus = MEM_new_zeroed<wmMsgBus>(__func__);
   const uint gset_reserve = 512;
   for (uint i = 0; i < WM_MSG_TYPE_NUM; i++) {
     wmMsgTypeInfo *info = &wm_msg_types[i];
@@ -61,21 +63,17 @@ void WM_msgbus_destroy(wmMsgBus *mbus)
     wmMsgTypeInfo *info = &wm_msg_types[i];
     BLI_gset_free(mbus->messages_gset[i], info->gset.key_free_fn);
   }
-  MEM_freeN(mbus);
+  MEM_delete(mbus);
 }
 
 void WM_msgbus_clear_by_owner(wmMsgBus *mbus, void *owner)
 {
   wmMsgSubscribeKey *msg_key, *msg_key_next;
-  for (msg_key = static_cast<wmMsgSubscribeKey *>(mbus->messages.first); msg_key;
-       msg_key = msg_key_next)
-  {
+  for (msg_key = mbus->messages.first(); msg_key; msg_key = msg_key_next) {
     msg_key_next = msg_key->next;
 
     wmMsgSubscribeValueLink *msg_lnk_next;
-    for (wmMsgSubscribeValueLink *msg_lnk =
-             static_cast<wmMsgSubscribeValueLink *>(msg_key->values.first);
-         msg_lnk;
+    for (wmMsgSubscribeValueLink *msg_lnk = msg_key->values.first(); msg_lnk;
          msg_lnk = msg_lnk_next)
     {
       msg_lnk_next = msg_lnk->next;
@@ -87,11 +85,11 @@ void WM_msgbus_clear_by_owner(wmMsgBus *mbus, void *owner)
           msg_lnk->params.free_data(msg_key, &msg_lnk->params);
         }
         BLI_remlink(&msg_key->values, msg_lnk);
-        MEM_freeN(msg_lnk);
+        MEM_delete(msg_lnk);
       }
     }
 
-    if (BLI_listbase_is_empty(&msg_key->values)) {
+    if (msg_key->values.is_empty()) {
       const wmMsg *msg = wm_msg_subscribe_value_msg_cast(msg_key);
       wmMsgTypeInfo *info = &wm_msg_types[msg->type];
       BLI_remlink(&mbus->messages, msg_key);
@@ -169,7 +167,7 @@ wmMsgSubscribeKey *WM_msg_subscribe_with_key(wmMsgBus *mbus,
     }
   }
 
-  wmMsgSubscribeValueLink *msg_lnk = MEM_mallocN<wmMsgSubscribeValueLink>(__func__);
+  wmMsgSubscribeValueLink *msg_lnk = MEM_new_uninitialized<wmMsgSubscribeValueLink>(__func__);
   msg_lnk->params = *msg_val_params;
   BLI_addtail(&key->values, msg_lnk);
   return key;
@@ -180,7 +178,7 @@ void WM_msg_publish_with_key(wmMsgBus *mbus, wmMsgSubscribeKey *msg_key)
   CLOG_DEBUG(WM_LOG_MSGBUS_SUB,
              "tagging subscribers: (ptr=%p, len=%d)",
              msg_key,
-             BLI_listbase_count(&msg_key->values));
+             msg_key->values.count());
 
   for (wmMsgSubscribeValueLink &msg_lnk : msg_key->values) {
     if (false) { /* Make an option? */
@@ -229,7 +227,9 @@ void wm_msg_subscribe_value_free(wmMsgSubscribeKey *msg_key, wmMsgSubscribeValue
     msg_lnk->params.free_data(msg_key, &msg_lnk->params);
   }
   BLI_remlink(&msg_key->values, msg_lnk);
-  MEM_freeN(msg_lnk);
+  MEM_delete(msg_lnk);
 }
 
 /** \} */
+
+}  // namespace blender

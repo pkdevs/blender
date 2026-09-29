@@ -15,127 +15,24 @@ namespace blender::gpu::shader::parser {
 
 struct Scope;
 
-enum TokenType : char {
-  Invalid = 0,
-  /* Use ascii chars to store them in string, and for easy debugging / testing. */
-  Word = 'w',
-  NewLine = '\n',
-  Space = ' ',
-  Dot = '.',
-  Hash = '#',
-  Ampersand = '&',
-  Number = '0',
-  String = '_',
-  ParOpen = '(',
-  ParClose = ')',
-  BracketOpen = '{',
-  BracketClose = '}',
-  SquareOpen = '[',
-  SquareClose = ']',
-  AngleOpen = '<',
-  AngleClose = '>',
-  Assign = '=',
-  SemiColon = ';',
-  Question = '?',
-  Not = '!',
-  Colon = ':',
-  Comma = ',',
-  Star = '*',
-  Plus = '+',
-  Minus = '-',
-  Divide = '/',
-  Tilde = '~',
-  Caret = '^',
-  Pipe = '|',
-  Percent = '%',
-  Backslash = '\\',
-  /* Keywords */
-  Break = 'b',
-  Const = 'c',
-  Constexpr = 'C',
-  Decrement = 'D',
-  Deref = 'D',
-  Do = 'd',
-  Equal = 'E',
-  NotEqual = 'e',
-  For = 'f',
-  While = 'F',
-  GEqual = 'G',
-  Case = 'H',
-  Switch = 'h',
-  Else = 'I',
-  If = 'i',
-  LEqual = 'L',
-  Enum = 'M',
-  Static = 'm',
-  Namespace = 'n',
-  PreprocessorNewline = 'N',
-  Continue = 'O',
-  Increment = 'P',
-  Return = 'r',
-  Class = 'S',
-  Struct = 's',
-  Template = 't',
-  This = 'T',
-  Using = 'u',
-  Private = 'v',
-  Public = 'V',
-  Inline = 'l',
-  Union = 'o',
-};
+/**
+ * Semantic token adding access to ParserBase data.
+ * It is also safer than lexit::Token as invalid token will not result invalid behavior.
+ */
+struct Token : lexit::Token {
+  Token(const lexit::Token &tok) : lexit::Token(tok) {}
 
-struct Token {
-#ifdef NDEBUG
-  /* String view for nicer debugging experience. Isn't actually used. */
-  std::string_view str_view_debug;
-#endif
+  Token(const ParserBase &data, int64_t index) : lexit::Token(&data, index) {}
+  /* Create an invalid token. */
+  Token(const ParserBase &data) : lexit::Token(&data, -1) {}
 
-  const TokenStream *data = nullptr;
-  int64_t index = 0;
-
-  static Token invalid()
+  Token prev(int i = 1) const
   {
-    return {};
+    return static_cast<const lexit::Token *>(this)->prev(i);
   }
-
-  static Token from_position(const TokenStream *data, int64_t index)
+  Token next(int i = 1) const
   {
-    if (data == nullptr || index < 0 || index > (data->token_offsets.offsets.size() - 2)) {
-      return invalid();
-    }
-#ifdef NDEBUG
-    IndexRange index_range = data->token_offsets[index];
-    return {std::string_view(data->str).substr(index_range.start, index_range.size), data, index};
-#else
-    return {data, index};
-#endif
-  }
-
-  bool is_valid() const
-  {
-    return data != nullptr && index >= 0;
-  }
-  bool is_invalid() const
-  {
-    return !is_valid();
-  }
-
-  /* String index range. */
-  IndexRange index_range() const
-  {
-    if (is_invalid()) {
-      return {0, 0};
-    }
-    return data->token_offsets[index];
-  }
-
-  Token prev() const
-  {
-    return from_position(data, index - 1);
-  }
-  Token next() const
-  {
-    return from_position(data, index + 1);
+    return static_cast<const lexit::Token *>(this)->next(i);
   }
 
   Token find_next(TokenType type) const
@@ -156,8 +53,8 @@ struct Token {
     /* Scan back identifier that could contain namespaces. */
     Token tok = *this;
     while (tok.is_valid()) {
-      if (tok.prev() == ':') {
-        tok = tok.prev().prev().prev();
+      if (tok.prev() == ':' && tok.prev(2) == ':') {
+        tok = tok.prev(3);
       }
       else {
         return tok;
@@ -169,19 +66,9 @@ struct Token {
   /* For a word, return the name containing the prefix namespaces if present. */
   std::string full_symbol_name() const
   {
-    size_t start = this->namespace_start().str_index_start();
-    size_t end = this->str_index_last_no_whitespace();
-    return data->str.substr(start, end - start + 1);
-  }
-
-  /* Only usable when building with whitespace. */
-  Token next_not_whitespace() const
-  {
-    Token next = this->next();
-    while (next == ' ' || next == '\n') {
-      next = next.next();
-    }
-    return next;
+    size_t start = namespace_start().str_index_start();
+    size_t end = str_index_last_no_whitespace();
+    return std::string(buf_->str_.substr(start, end - start + 1));
   }
 
   /* Returns the scope that contains this token. */
@@ -189,71 +76,47 @@ struct Token {
 
   size_t str_index_start() const
   {
-    return index_range().start;
+    return buf_->offsets_[index_];
   }
 
   size_t str_index_last() const
   {
-    return index_range().last();
+    return buf_->offsets_[index_ + 1] - 1;
   }
 
   size_t str_index_last_no_whitespace() const
   {
-    return data->str.find_last_not_of(" \n", str_index_last());
+    return buf_->offsets_end_[index_] - 1;
   }
 
   /* Index of the first character of the line this token is. */
   size_t line_start() const
   {
-    size_t pos = data->str.rfind('\n', str_index_start());
+    size_t pos = buf_->str_.rfind('\n', str_index_start());
     return (pos == std::string::npos) ? 0 : (pos + 1);
   }
 
   /* Index of the last character of the line this token is, excluding `\n`. */
   size_t line_end() const
   {
-    size_t pos = data->str.find('\n', str_index_start());
-    return (pos == std::string::npos) ? (data->str.size() - 1) : (pos - 1);
+    size_t pos = buf_->str_.find('\n', str_index_start());
+    return (pos == std::string::npos) ? (buf_->str_.size() - 1) : (pos - 1);
   }
 
-  std::string_view str_view_with_whitespace() const
-  {
-    return std::string_view(data->str).substr(index_range().start, index_range().size);
-  }
-
-  std::string str_with_whitespace() const
-  {
-    return std::string(str_view_with_whitespace());
-  }
-
-  std::string_view str_view() const
+  std::string_view str_with_whitespace() const
   {
     if (is_invalid()) {
       return "";
     }
-    std::string_view str = this->str_view_with_whitespace();
-    return str.substr(0, str.find_last_not_of(" \n") + 1);
+    return static_cast<const lexit::Token *>(this)->str_with_whitespace();
   }
 
-  std::string str() const
+  std::string_view str() const
   {
-    return std::string(str_view());
-  }
-
-  /* Return the content without the first and last characters. */
-  std::string_view str_view_exclusive() const
-  {
-    std::string_view str = this->str_view();
-    if (str.length() < 2) {
+    if (is_invalid()) {
       return "";
     }
-    return str.substr(1, str.length() - 2);
-  }
-
-  /* Return the content without the first and last characters. */
-  std::string str_exclusive() const
-  {
-    return std::string(str_view_exclusive());
+    return static_cast<const lexit::Token *>(this)->str();
   }
 
   /* Return the line number this token is found at. Take into account the #line directives.
@@ -263,11 +126,10 @@ struct Token {
     if (is_invalid()) {
       return 0;
     }
-    if (at_end) {
-      return parser::line_number(data->str, str_index_last()) +
-             int(data->str[str_index_last()] == '\n');
-    }
-    return parser::line_number(data->str, str_index_start());
+    int index = at_end ? str_index_last() : str_index_last_no_whitespace();
+    int line_num = parser::line_number(buf_->str_, index);
+    /* Add the last char (not counted by line_number). */
+    return line_num + int(at_end && buf_->str_[index] == '\n');
   }
 
   /* Return the offset to the start of the line. */
@@ -276,13 +138,22 @@ struct Token {
     if (is_invalid()) {
       return 0;
     }
-    return parser::char_number(data->str, str_index_start());
+    return parser::char_number(buf_->str_, str_index_start());
+  }
+
+  /* Return the name of the file containing the token. */
+  std::string filename() const
+  {
+    if (is_invalid()) {
+      return "";
+    }
+    return parser::filename(buf_->str_, str_index_start());
   }
 
   /* Return the line the token is at. */
   std::string line_str() const
   {
-    return parser::line_str(data->str, str_index_start());
+    return parser::line_str(buf_->str_, str_index_start());
   }
 
   TokenType type() const
@@ -290,7 +161,7 @@ struct Token {
     if (is_invalid()) {
       return Invalid;
     }
-    return TokenType(data->token_types[index]);
+    return TokenType(buf_->types_[index_]);
   }
 
   /* Return the attribute scope before this token if it exists. */
@@ -314,15 +185,120 @@ struct Token {
   {
     return *this != TokenType(type);
   }
-
-  bool operator==(const Token &other) const
-  {
-    return this->index == other.index && this->data == other.data;
-  }
-  bool operator!=(const Token &other) const
-  {
-    return !(*this == other);
-  }
 };
 
 }  // namespace blender::gpu::shader::parser
+
+namespace lexit {
+
+static inline std::string to_str(TokenType type)
+{
+  switch (type) {
+    case Word:
+      return "Word";
+    case Number:
+      return "Number";
+    case Default:
+      return "default";
+    case TemplateOpen:
+      return "<";
+    case TemplateClose:
+      return ">";
+    case NewLine:
+      return "NewLine";
+    case LogicalAnd:
+      return "&&";
+    case Break:
+      return "break";
+    case Const:
+      return "const";
+    case Constexpr:
+      return "constexpr";
+    case Do:
+      return "do";
+    case Decrement:
+      return "decrement";
+    case NotEqual:
+      return "!=";
+    case Equal:
+      return "==";
+    case LShift:
+      return "<<";
+    case RShift:
+      return ">>";
+    case For:
+      return "for";
+    case While:
+      return "while";
+    case LogicalOr:
+      return "||";
+    case GEqual:
+      return ">=";
+    case Switch:
+      return "switch";
+    case Case:
+      return "case";
+    case If:
+      return "if";
+    case Else:
+      return "else";
+    case Elif:
+      return "elif";
+    case Endif:
+      return "endif";
+    case Ifdef:
+      return "ifdef";
+    case Ifndef:
+      return "ifndef";
+    case Inline:
+      return "inline";
+    case LEqual:
+      return "<=";
+    case Static:
+      return "static";
+    case Enum:
+      return "enum";
+    case Namespace:
+      return "namespace";
+    case Define:
+      return "define";
+    case Union:
+      return "union";
+    case Continue:
+      return "continue";
+    case Line:
+      return "line";
+    case Increment:
+      return "++";
+    case Pragma:
+      return "pragma";
+    case DoubleHash:
+      return "##";
+    case Return:
+      return "return";
+    case Struct:
+      return "struct";
+    case Class:
+      return "class";
+    case Template:
+      return "template";
+    case Typename:
+      return "typename";
+    case This:
+      return "this";
+    case Using:
+      return "using";
+    case Undef:
+      return "undef";
+    case Private:
+      return "private";
+    case Public:
+      return "public";
+    case Invalid:
+      return "EOF";
+    default:
+      return std::string(1, char(type));
+  }
+}
+
+}  // namespace lexit

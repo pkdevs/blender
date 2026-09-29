@@ -12,6 +12,7 @@
 
 #include "GHOST_Window.hh"
 
+#include <span>
 #include <vector>
 
 #include <wayland-util.h> /* For #wl_fixed_t */
@@ -87,6 +88,20 @@ struct GHOST_CSD_EventState {
   GHOST_CSD_EventState_Button buttons[/*GHOST_kButtonMaskLeft + 1*/ 1];
 };
 
+/**
+ * Icon buffer kept alive per the `xdg_toplevel_icon_v1` spec.
+ * Freed on window destroy.
+ */
+struct GWL_XDG_WindowIcon {
+  struct wl_buffer *buffer = nullptr;
+  void *buffer_data = nullptr;
+  size_t buffer_size = 0;
+  /** The icon dimensions in physical pixels (width == height, always square). */
+  int icon_pixel_size = 0;
+};
+
+void gwl_xdg_window_icon_free(GWL_XDG_WindowIcon &icon);
+
 class GHOST_WindowWayland : public GHOST_Window {
  public:
   GHOST_TSuccess hasCursorShape(GHOST_TStandardCursor cursor_shape) override;
@@ -114,6 +129,9 @@ class GHOST_WindowWayland : public GHOST_Window {
 #endif
 
   uint16_t getDPIHint() override;
+
+  /** \copydoc #GHOST_IWindow::getTiledEdges */
+  GHOST_TWindowTiledFlag getTiledEdges() const override;
 
   GHOST_TSuccess setWindowCursorGrab(GHOST_TGrabCursorMode mode) override;
 
@@ -173,10 +191,12 @@ class GHOST_WindowWayland : public GHOST_Window {
   const struct GWL_WindowScaleParams &scale_params_get() const;
 
   struct wl_surface *wl_surface_get() const;
-  const std::vector<GWL_Output *> &outputs_get();
+  const std::span<GWL_Output *const> outputs_get() const;
 
   wl_fixed_t wl_fixed_from_window(wl_fixed_t value) const;
   wl_fixed_t wl_fixed_to_window(wl_fixed_t value) const;
+
+  GWL_XDG_WindowIcon &gwl_xdg_icon_get();
 
   /* WAYLAND window-level functions. */
 
@@ -232,6 +252,12 @@ class GHOST_WindowWayland : public GHOST_Window {
 
   GHOST_TCSD_Type csd_elem_active_type_get() const;
   void csd_elem_active_type_set(GHOST_TCSD_Type type);
+
+  /**
+   * The margin & window size in surface local coordinates,
+   * as last applied to the margin surface (see #GWL_WindowCSD).
+   */
+  void csd_margin_geometry_get(int32_t &r_margin_size, int32_t r_window_size[2]) const;
 #endif
 
  private:

@@ -6,7 +6,7 @@
  * \ingroup sequencer
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DNA_sequence_types.h"
 
@@ -23,21 +23,21 @@ static void strip_connections_free(Strip *strip)
   for (StripConnection &con : connections->items_mutable()) {
     MEM_delete(&con);
   }
-  BLI_listbase_clear(connections);
+  connections->clear_no_delete();
 }
 
 void connections_duplicate(ListBaseT<StripConnection> *connections_dst,
                            ListBaseT<StripConnection> *connections_src)
 {
   for (StripConnection &con : *connections_src) {
-    StripConnection *con_duplicate = MEM_new_for_free<StripConnection>(__func__, con);
+    StripConnection *con_duplicate = MEM_new<StripConnection>(__func__, con);
     BLI_addtail(connections_dst, con_duplicate);
   }
 }
 
 bool disconnect(Strip *strip)
 {
-  if (strip == nullptr || BLI_listbase_is_empty(&strip->connections)) {
+  if (strip == nullptr || strip->connections.is_empty()) {
     return false;
   }
   /* Remove `StripConnections` from other strips' `connections` list that point to `strip`. */
@@ -110,7 +110,7 @@ void connect(VectorSet<Strip *> &strip_list)
       if (strip1 == strip2) {
         continue;
       }
-      StripConnection *con = MEM_new_for_free<StripConnection>("stripconnection");
+      StripConnection *con = MEM_new<StripConnection>("stripconnection");
       con->strip_ref = strip2;
       BLI_addtail(&strip1->connections, con);
     }
@@ -133,7 +133,7 @@ bool is_strip_connected(const Strip *strip)
   if (strip == nullptr) {
     return false;
   }
-  return !BLI_listbase_is_empty(&strip->connections);
+  return !strip->connections.is_empty();
 }
 
 bool are_strips_connected_together(VectorSet<Strip *> &strip_list)

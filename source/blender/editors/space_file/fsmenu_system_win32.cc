@@ -8,13 +8,17 @@
  */
 
 /* Need to include windows.h so _WIN32_IE is defined. */
+#ifdef WIN32_LEAN_AND_MEAN
+#  undef WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 /* For SHGetSpecialFolderPath, has to be done before BLI_winstuff
  * because 'near' is disabled through BLI_windstuff. */
-#include "BLI_winstuff.h"
+#include "BLI_winstuff.hh"
 #include <comdef.h>
 #include <shlobj.h>
 #include <shlwapi.h>
+#include <winnetwk.h>
 #include <wrl.h>
 
 #include "utfconv.hh"
@@ -22,13 +26,15 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
 #include "UI_resources.hh"
 
 #include "fsmenu.hh"
+
+namespace blender {
 
 struct FSMenu;
 
@@ -227,12 +233,30 @@ void fsmenu_read_system(FSMenu *fsmenu, int read_bookmarks)
         case DRIVE_CDROM:
           icon = ICON_DISC;
           break;
-        case DRIVE_FIXED:
+        case DRIVE_FIXED: {
+          DWORD fileSystemFlags;
+          const bool is_cloud =
+              (GetVolumeInformation(
+                   tmps, nullptr, 0, nullptr, nullptr, &fileSystemFlags, nullptr, 0) &&
+               (fileSystemFlags & FILE_SUPPORTS_REMOTE_STORAGE));
+          icon = is_cloud ? ICON_INTERNET : ICON_DISK_DRIVE;
+          break;
+        }
         case DRIVE_RAMDISK:
           icon = ICON_DISK_DRIVE;
           break;
-        case DRIVE_REMOTE:
-          icon = ICON_NETWORK_DRIVE;
+        case DRIVE_REMOTE: {
+          char lpLocalName[] = {static_cast<char>('A' + i), ':', 0};
+          char lpRemoteName[MAX_PATH];
+          DWORD lpnLength = sizeof(lpRemoteName);
+          const bool is_cloud = (WNetGetConnection(lpLocalName, lpRemoteName, &lpnLength) ==
+                                     NO_ERROR &&
+                                 STRPREFIX(lpRemoteName, "https:"));
+          icon = is_cloud ? ICON_INTERNET : ICON_NETWORK_DRIVE;
+          break;
+        }
+        default:
+          icon = ICON_DISK_DRIVE;
           break;
       }
 
@@ -308,3 +332,5 @@ void fsmenu_read_system(FSMenu *fsmenu, int read_bookmarks)
     fsmenu_add_windows_quick_access(fsmenu, FS_CATEGORY_SYSTEM_BOOKMARKS, FS_INSERT_LAST);
   }
 }
+
+}  // namespace blender

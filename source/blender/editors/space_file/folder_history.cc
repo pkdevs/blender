@@ -10,9 +10,9 @@
 
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DNA_space_types.h"
 
@@ -21,6 +21,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "file_intern.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name FOLDERLIST (previous/next)
@@ -35,14 +37,14 @@ void folderlist_popdir(ListBaseT<FolderList> *folderlist, char *dir)
 {
   const char *prev_dir;
   FolderList *folder;
-  folder = static_cast<FolderList *>(folderlist->last);
+  folder = folderlist->last();
 
   if (folder) {
     /* remove the current directory */
-    MEM_freeN(folder->foldername);
+    MEM_delete(folder->foldername);
     BLI_freelinkN(folderlist, folder);
 
-    folder = static_cast<FolderList *>(folderlist->last);
+    folder = folderlist->last();
     if (folder) {
       prev_dir = folder->foldername;
       BLI_strncpy(dir, prev_dir, FILE_MAXDIR);
@@ -58,7 +60,7 @@ void folderlist_pushdir(ListBaseT<FolderList> *folderlist, const char *dir)
   }
 
   FolderList *folder, *previous_folder;
-  previous_folder = static_cast<FolderList *>(folderlist->last);
+  previous_folder = folderlist->last();
 
   /* check if already exists */
   if (previous_folder && previous_folder->foldername) {
@@ -68,7 +70,7 @@ void folderlist_pushdir(ListBaseT<FolderList> *folderlist, const char *dir)
   }
 
   /* create next folder element */
-  folder = MEM_callocN<FolderList>(__func__);
+  folder = MEM_new_zeroed<FolderList>(__func__);
   folder->foldername = BLI_strdup(dir);
 
   /* add it to the end of the list */
@@ -79,11 +81,11 @@ const char *folderlist_peeklastdir(ListBaseT<FolderList> *folderlist)
 {
   FolderList *folder;
 
-  if (!folderlist->last) {
+  if (!folderlist->last()) {
     return nullptr;
   }
 
-  folder = static_cast<FolderList *>(folderlist->last);
+  folder = folderlist->last();
   return folder->foldername;
 }
 
@@ -93,13 +95,13 @@ bool folderlist_clear_next(SpaceFile *sfile)
   FolderList *folder;
 
   /* if there is no folder_next there is nothing we can clear */
-  if (BLI_listbase_is_empty(sfile->folders_next)) {
+  if (sfile->folders_next->is_empty()) {
     return false;
   }
 
   /* if previous_folder, next_folder or refresh_folder operators are executed
    * it doesn't clear folder_next */
-  folder = static_cast<FolderList *>(sfile->folders_prev->last);
+  folder = sfile->folders_prev->last();
   if ((!folder) || (BLI_path_cmp(folder->foldername, params->dir) == 0)) {
     return false;
   }
@@ -112,10 +114,10 @@ void folderlist_free(ListBaseT<FolderList> *folderlist)
 {
   if (folderlist) {
     for (FolderList &folder : folderlist->items_mutable()) {
-      MEM_freeN(folder.foldername);
+      MEM_delete(folder.foldername);
       MEM_delete(&folder);
     }
-    BLI_listbase_clear(folderlist);
+    folderlist->clear_no_delete();
   }
 }
 
@@ -126,7 +128,7 @@ static ListBaseT<FolderList> folderlist_duplicate(ListBaseT<FolderList> *folderl
   BLI_duplicatelist(&folderlistn, folderlist);
 
   for (FolderList &folder : folderlistn) {
-    folder.foldername = (char *)MEM_dupallocN(folder.foldername);
+    folder.foldername = MEM_dupalloc(folder.foldername);
   }
   return folderlistn;
 }
@@ -150,10 +152,10 @@ static FileFolderHistory *folder_history_find(const SpaceFile *sfile, eFileBrows
 
 void folder_history_list_ensure_for_active_browse_mode(SpaceFile *sfile)
 {
-  FileFolderHistory *history = folder_history_find(sfile, (eFileBrowse_Mode)sfile->browse_mode);
+  FileFolderHistory *history = folder_history_find(sfile, eFileBrowse_Mode(sfile->browse_mode));
 
   if (!history) {
-    history = MEM_new_for_free<FileFolderHistory>(__func__);
+    history = MEM_new<FileFolderHistory>(__func__);
     history->browse_mode = sfile->browse_mode;
     BLI_addtail(&sfile->folder_histories, history);
   }
@@ -187,7 +189,7 @@ ListBaseT<FileFolderHistory> folder_history_list_duplicate(ListBaseT<FileFolderH
   ListBaseT<FileFolderHistory> histories = {nullptr};
 
   for (FileFolderHistory &history : *listbase) {
-    FileFolderHistory *history_new = static_cast<FileFolderHistory *>(MEM_dupallocN(&history));
+    FileFolderHistory *history_new = MEM_dupalloc(&history);
     history_new->folders_prev = folderlist_duplicate(&history.folders_prev);
     history_new->folders_next = folderlist_duplicate(&history.folders_next);
     BLI_addtail(&histories, history_new);
@@ -197,3 +199,5 @@ ListBaseT<FileFolderHistory> folder_history_list_duplicate(ListBaseT<FileFolderH
 }
 
 /** \} */
+
+}  // namespace blender

@@ -6,7 +6,7 @@
  * \ingroup depsgraph
  */
 
-#include "BLI_session_uid.h"
+#include "BLI_session_uid.hh"
 
 #include "intern/eval/deg_eval_runtime_backup_object.h"
 
@@ -14,7 +14,7 @@
 
 #include "DNA_mesh_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_action.hh"
 #include "BKE_light_linking.h"
@@ -72,7 +72,7 @@ void ObjectRuntimeBackup::backup_pose_channel_runtime_data(Object *object)
   if (object->pose != nullptr) {
     for (bPoseChannel &pchan : object->pose->chanbase) {
       const SessionUID &session_uid = pchan.runtime.session_uid;
-      BLI_assert(BLI_session_uid_is_generated(&session_uid));
+      BLI_assert(session_uid.is_generated());
 
       pose_channel_runtime_data.add(session_uid, pchan.runtime);
       BKE_pose_channel_runtime_reset(&pchan.runtime);
@@ -85,9 +85,11 @@ void ObjectRuntimeBackup::restore_to_object(Object *object)
   ID *data_orig = object->runtime->data_orig;
   ID *data_eval = runtime.data_eval;
   std::optional<Bounds<float3>> bounds = object->runtime->bounds_eval;
+  SculptSession *sculpt_session = object->runtime->sculpt_session;
   *object->runtime = runtime;
   object->runtime->data_orig = data_orig;
   object->runtime->bounds_eval = bounds;
+  object->runtime->sculpt_session = sculpt_session;
   if (ELEM(object->type, OB_MESH, OB_LATTICE, OB_CURVES_LEGACY, OB_FONT) && data_eval != nullptr) {
     if (object->id.recalc & ID_RECALC_GEOMETRY) {
       /* If geometry is tagged for update it means, that part of
@@ -112,8 +114,8 @@ void ObjectRuntimeBackup::restore_to_object(Object *object)
        * original mesh during update, need to make sure no dead
        * pointers are left behind. */
       if (object->type == OB_MESH) {
-        Mesh *mesh_eval = (Mesh *)data_eval;
-        Mesh *mesh_orig = (Mesh *)data_orig;
+        Mesh *mesh_eval = id_cast<Mesh *>(data_eval);
+        Mesh *mesh_orig = id_cast<Mesh *>(data_orig);
         mesh_eval->runtime->edit_mesh = mesh_orig->runtime->edit_mesh;
       }
     }
@@ -162,7 +164,7 @@ void ObjectRuntimeBackup::restore_modifier_runtime_data(Object *object)
 
     if (backup.type == eModifierType_Subsurf) {
       if (object->type == OB_MESH) {
-        Mesh *mesh = (Mesh *)object->data;
+        Mesh *mesh = id_cast<Mesh *>(object->data);
         if (mesh->runtime->subsurf_runtime_data == backup.runtime) {
           mesh->runtime->subsurf_runtime_data = nullptr;
         }

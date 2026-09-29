@@ -30,6 +30,8 @@
 #include "intern/node/deg_node_id.hh"
 #include "intern/node/deg_node_operation.hh"
 
+namespace blender {
+
 struct CacheFile;
 struct Camera;
 struct Collection;
@@ -66,7 +68,7 @@ struct bNodeTree;
 struct bPoseChannel;
 struct bSound;
 
-namespace blender::deg {
+namespace deg {
 
 struct ComponentNode;
 struct DepsNodeHandle;
@@ -98,7 +100,13 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
                          int flags = 0);
 
   template<typename KeyType>
+    requires(!std::is_same_v<KeyType, TimeSourceKey>)
   Relation *add_node_handle_relation(const KeyType &key_from,
+                                     const DepsNodeHandle *handle,
+                                     const char *description,
+                                     int flags = 0);
+
+  Relation *add_node_handle_relation(const TimeSourceKey &key_from,
                                      const DepsNodeHandle *handle,
                                      const char *description,
                                      int flags = 0);
@@ -129,7 +137,10 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_scene_parameters(Scene *scene);
   virtual void build_scene_compositor(Scene *scene);
 
-  virtual bool build_layer_collection(LayerCollection *layer_collection);
+  /* Excluded layer collections are not built themselves, but their children are, attached to
+   * `parent_hierarchy_key`: the nearest non-excluded ancestor (or the scene). */
+  virtual void build_layer_collections(LayerCollection *layer_collection,
+                                       const ComponentKey &parent_hierarchy_key);
   virtual void build_view_layer_collections(ViewLayer *view_layer);
 
   virtual void build_view_layer(Scene *scene,
@@ -144,6 +155,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_object_data_camera(Object *object);
   virtual void build_object_data_geometry(Object *object);
   virtual void build_object_data_geometry_datablock(ID *obdata);
+  virtual void build_object_data_empty(Object *object);
   virtual void build_object_data_light(Object *object);
   virtual void build_object_data_lightprobe(Object *object);
   virtual void build_object_data_speaker(Object *object);
@@ -168,10 +180,6 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
                                             ComponentKey &adt_key,
                                             OperationNode *operation_from,
                                             FCurve *fcu);
-  virtual void build_animdata_curves_targets(ID *id,
-                                             ComponentKey &adt_key,
-                                             OperationNode *operation_from,
-                                             ListBaseT<FCurve> *curves);
   virtual void build_animdata_action_targets(ID *id,
                                              int32_t slot_handle,
                                              ComponentKey &adt_key,
@@ -362,6 +370,7 @@ struct DepsNodeHandle {
   const char *default_name;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender
 
 #include "intern/builder/deg_builder_relations_impl.h"  // IWYU pragma: export

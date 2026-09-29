@@ -4,7 +4,9 @@
 
 #include "testing/testing.h"
 
-#include "BLI_math_base_safe.h"
+#include "BLI_math_base_safe.hh"
+
+namespace blender {
 
 TEST(math_base, SafePowf)
 {
@@ -37,3 +39,5 @@ TEST(math_base, SafeLogf)
   EXPECT_FLOAT_EQ(safe_logf(2.0f, -4.3f), 0.0f);
   EXPECT_FLOAT_EQ(safe_logf(-2.0f, -4.3f), 0.0f);
 }
+
+}  // namespace blender

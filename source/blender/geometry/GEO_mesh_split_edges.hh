@@ -2,18 +2,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #pragma once
 
 #include "BLI_index_mask.hh"
 
 #include "BKE_attribute_filter.hh"
 
+namespace blender {
+
 struct Mesh;
 
-namespace blender::geometry {
+namespace geometry {
 
 void split_edges(Mesh &mesh,
                  const IndexMask &selected_edges,
                  const bke::AttributeFilter &attribute_filter = {});
 
-}  // namespace blender::geometry
+}  // namespace geometry
+}  // namespace blender

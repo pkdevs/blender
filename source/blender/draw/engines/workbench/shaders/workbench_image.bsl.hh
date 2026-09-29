@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
-#pragma create_info
 
 #include "gpu_shader_compat.hh"
 
@@ -61,7 +60,7 @@ float3 image_color([[resource_table]] Texture &srt, float2 uvs)
     color = texture(srt.imageTexture, uvs);
   }
 
-  /* Unpremultiply if stored multiplied, since straight alpha is expected by shaders. */
+  /* Un-pre-multiply if stored multiplied, since straight alpha is expected by shaders. */
   if (srt.image_premult && !(color.a == 0.0f || color.a == 1.0f)) {
     color.rgb /= color.a;
   }

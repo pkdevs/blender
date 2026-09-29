@@ -8,11 +8,13 @@
 
 #pragma once
 
-#include "BLI_compiler_compat.h"
+#include "BLI_compiler_compat.hh"
 
 #include "DNA_listBase.h"
 
 #include "BKE_tracking.hh"
+
+namespace blender {
 
 struct MovieClip;
 struct SpaceClip;
@@ -22,7 +24,7 @@ struct MovieTrackingMarker;
 struct MovieTrackingPlaneTrack;
 struct MovieTrackingPlaneMarker;
 
-/* tracking_utils.c */
+/* tracking_ops_utils.cc */
 
 void clip_tracking_clear_invisible_track_selection(SpaceClip *sc, MovieClip *clip);
 
@@ -156,3 +158,5 @@ BLI_INLINE bool ed_tracking_pick_can_slide(const SpaceClip *space_clip, const Tr
   return ed_tracking_point_track_pick_can_slide(space_clip, &pick->point_track_pick) ||
          ed_tracking_plane_track_pick_can_slide(&pick->plane_track_pick);
 }
+
+}  // namespace blender

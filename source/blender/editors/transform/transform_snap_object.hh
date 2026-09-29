@@ -13,11 +13,13 @@
 
 #include "BLI_kdopbvh.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "ED_transform_snap_object_context.hh"
+
+namespace blender {
 
 #define MAX_CLIPPLANE_LEN 6
 
@@ -35,11 +37,9 @@ struct RegionView3D;
 struct Scene;
 struct View3D;
 
-namespace blender::ed::transform {
+namespace ed::transform {
 
 struct SnapObjectContext {
-  Scene *scene;
-
   struct SnapCache {
     virtual ~SnapCache() = default;
   };
@@ -226,6 +226,10 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
                        const float4x4 &obmat,
                        bool is_object_active);
 
+/* `transform_snap_object_lattice.cc` */
+
+eSnapMode snapLattice(SnapObjectContext *sctx, const Object *ob_eval, const float4x4 &obmat);
+
 /* `transform_snap_object_camera.cc` */
 
 eSnapMode snapCamera(SnapObjectContext *sctx,
@@ -270,4 +274,5 @@ eSnapMode snap_edge_points_mesh(SnapObjectContext *sctx,
                                 float dist_px_sq_orig,
                                 int edge_index);
 
-}  // namespace blender::ed::transform
+}  // namespace ed::transform
+}  // namespace blender

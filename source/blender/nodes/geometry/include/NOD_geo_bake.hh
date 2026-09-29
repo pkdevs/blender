@@ -16,20 +16,22 @@
 
 #include "BLI_index_range.hh"
 
+namespace blender {
+
 struct NodesModifierData;
 struct NodesModifierBake;
 struct SpaceNode;
 struct Object;
 
-namespace blender::nodes {
+namespace nodes {
 
 /**
- * Makes it possible to use various functions (e.g. the ones in `NOD_socket_items.hh`) for index
- * bake node items.
+ * Makes it possible to use various functions (e.g. the ones in `NOD_socket_items.hh`) for bake
+ * node items.
  */
 struct BakeItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = NodeGeometryBakeItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static int node_type;
   static constexpr StringRefNull node_idname = "GeometryNodeBake";
   static constexpr bool has_type = true;
@@ -61,7 +63,7 @@ struct BakeItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
 
   static void destruct_item(NodeGeometryBakeItem *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -69,7 +71,7 @@ struct BakeItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
 
   static eNodeSocketDatatype get_socket_type(const NodeGeometryBakeItem &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(NodeGeometryBakeItem &item)
@@ -126,4 +128,5 @@ void draw_bake_button_row(const BakeDrawContext &ctx,
                           ui::Layout &layout,
                           bool is_in_sidebar = false);
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

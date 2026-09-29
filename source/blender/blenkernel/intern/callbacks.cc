@@ -6,7 +6,7 @@
  * \ingroup bke
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_callbacks.hh"
 
@@ -14,6 +14,8 @@
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
+
+namespace blender {
 
 static ListBaseT<bCallbackFuncStore> callback_slots[BKE_CB_EVT_TOT] = {{nullptr}};
 
@@ -24,14 +26,14 @@ static bool callbacks_initialized = false;
                  "Callbacks should be initialized with BKE_callback_global_init() before using " \
                  "the callback system.")
 
-void BKE_callback_exec(Main *bmain, PointerRNA **pointers, const int num_pointers, eCbEvent evt)
+void BKE_callback_exec(Main *bmain, PointerRNA **pointers, const int pointers_num, eCbEvent evt)
 {
   ASSERT_CALLBACKS_INITIALIZED();
 
   /* Use mutable iteration so handlers are able to remove themselves. */
   ListBaseT<bCallbackFuncStore> *lb = &callback_slots[evt];
   for (bCallbackFuncStore &funcstore : lb->items_mutable()) {
-    funcstore.func(bmain, pointers, num_pointers, funcstore.arg);
+    funcstore.func(bmain, pointers, pointers_num, funcstore.arg);
   }
 }
 
@@ -46,29 +48,40 @@ void BKE_callback_exec_id(Main *bmain, ID *id, eCbEvent evt)
 
   PointerRNA *pointers[1] = {&id_ptr};
 
-  BKE_callback_exec(bmain, pointers, 1, evt);
+  BKE_callback_exec(bmain, pointers, ARRAY_SIZE(pointers), evt);
 }
 
 void BKE_callback_exec_id_depsgraph(Main *bmain, ID *id, Depsgraph *depsgraph, eCbEvent evt)
 {
   PointerRNA id_ptr = RNA_id_pointer_create(id);
 
-  PointerRNA depsgraph_ptr = RNA_pointer_create_discrete(nullptr, &RNA_Depsgraph, depsgraph);
+  PointerRNA depsgraph_ptr = RNA_pointer_create_discrete(nullptr, RNA_Depsgraph, depsgraph);
 
   PointerRNA *pointers[2] = {&id_ptr, &depsgraph_ptr};
 
-  BKE_callback_exec(bmain, pointers, 2, evt);
+  BKE_callback_exec(bmain, pointers, ARRAY_SIZE(pointers), evt);
 }
 
-void BKE_callback_exec_string(Main *bmain, eCbEvent evt, const char *str)
+void BKE_callback_exec_boolean(Main *bmain, bool value, eCbEvent evt)
+{
+  PrimitiveBooleanRNA data = {};
+  data.value = value;
+  PointerRNA boolean_ptr = RNA_pointer_create_discrete(nullptr, RNA_PrimitiveBoolean, &data);
+
+  PointerRNA *pointers[1] = {&boolean_ptr};
+
+  BKE_callback_exec(bmain, pointers, ARRAY_SIZE(pointers), evt);
+}
+
+void BKE_callback_exec_string(Main *bmain, const char *str, eCbEvent evt)
 {
   PrimitiveStringRNA data = {nullptr};
   data.value = str;
-  PointerRNA str_ptr = RNA_pointer_create_discrete(nullptr, &RNA_PrimitiveString, &data);
+  PointerRNA str_ptr = RNA_pointer_create_discrete(nullptr, RNA_PrimitiveString, &data);
 
   PointerRNA *pointers[1] = {&str_ptr};
 
-  BKE_callback_exec(bmain, pointers, 1, evt);
+  BKE_callback_exec(bmain, pointers, ARRAY_SIZE(pointers), evt);
 }
 
 void BKE_callback_add(bCallbackFuncStore *funcstore, eCbEvent evt)
@@ -95,7 +108,7 @@ void BKE_callback_remove(bCallbackFuncStore *funcstore, eCbEvent evt)
   BLI_remlink(lb, funcstore);
 
   if (funcstore->alloc) {
-    MEM_freeN(funcstore);
+    MEM_delete(funcstore);
   }
 }
 
@@ -111,9 +124,7 @@ void BKE_callback_global_finalize()
     ListBaseT<bCallbackFuncStore> *lb = &callback_slots[evt];
     bCallbackFuncStore *funcstore;
     bCallbackFuncStore *funcstore_next;
-    for (funcstore = static_cast<bCallbackFuncStore *>(lb->first); funcstore;
-         funcstore = funcstore_next)
-    {
+    for (funcstore = lb->first(); funcstore; funcstore = funcstore_next) {
       funcstore_next = funcstore->next;
       BKE_callback_remove(funcstore, evt);
     }
@@ -121,3 +132,5 @@ void BKE_callback_global_finalize()
 
   callbacks_initialized = false;
 }
+
+}  // namespace blender

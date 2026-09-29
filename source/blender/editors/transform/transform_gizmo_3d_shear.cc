@@ -10,9 +10,9 @@
  * Used for 3D View
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_scene.hh"
@@ -62,7 +62,7 @@ static bool WIDGETGROUP_xform_shear_poll(const bContext *C, wmGizmoGroupType *gz
 
 static void WIDGETGROUP_xform_shear_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
-  XFormShearWidgetGroup *xgzgroup = MEM_mallocN<XFormShearWidgetGroup>(__func__);
+  XFormShearWidgetGroup *xgzgroup = MEM_new_uninitialized<XFormShearWidgetGroup>(__func__);
   const wmGizmoType *gzt_arrow = WM_gizmotype_find("GIZMO_GT_arrow_3d", true);
   wmOperatorType *ot_shear = WM_operatortype_find("TRANSFORM_OT_shear", true);
 

@@ -11,7 +11,7 @@
 #include "BLT_translation.hh"
 #include "DNA_curves_types.h"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_curves.hh"
@@ -300,17 +300,17 @@ static int attribute_index_in_material(const GPUMaterial *gpu_material,
 
   ListBaseT<GPUMaterialAttribute> gpu_attrs = GPU_material_attributes(gpu_material);
   for (GPUMaterialAttribute &gpu_attr : gpu_attrs) {
-    if (gpu_attr.is_hair_length == true) {
-      if (gpu_attr.is_hair_length == is_curve_length) {
+    if (is_curve_length) {
+      if (gpu_attr.is_hair_length) {
         return index;
       }
     }
-    else if (gpu_attr.is_hair_intercept == true) {
-      if (gpu_attr.is_hair_intercept == is_curve_intercept) {
+    else if (is_curve_intercept) {
+      if (gpu_attr.is_hair_intercept) {
         return index;
       }
     }
-    else if (gpu_attr.name == name) {
+    else if (!gpu_attr.is_hair_intercept && !gpu_attr.is_hair_length && gpu_attr.name == name) {
       return index;
     }
     index++;
@@ -377,7 +377,7 @@ static bool set_attribute_type(const GPUMaterial *gpu_material,
   if (index == -1) {
     return false;
   }
-  curves_infos.is_point_attribute[index][0] = is_point_domain;
+  SET_FLAG_FROM_TEST(curves_infos.is_point_attribute, is_point_domain, 1 << index);
   return true;
 }
 
@@ -415,7 +415,7 @@ void curves_bind_resources_implementation(PassT &sub_ps,
     const int index = attribute_index_in_material(gpu_material, "", true, false);
     if (index != -1) {
       sub_ps.bind_texture("l", cache.curves_length_buf);
-      curves_infos.is_point_attribute[index][0] = false;
+      SET_FLAG_FROM_TEST(curves_infos.is_point_attribute, false, 1 << index);
     }
   }
   {
@@ -423,7 +423,7 @@ void curves_bind_resources_implementation(PassT &sub_ps,
     const int index = attribute_index_in_material(gpu_material, "", false, true);
     if (index != -1) {
       sub_ps.bind_texture("i", cache.evaluated_time_buf);
-      curves_infos.is_point_attribute[index][0] = true;
+      SET_FLAG_FROM_TEST(curves_infos.is_point_attribute, true, 1 << index);
     }
   }
 

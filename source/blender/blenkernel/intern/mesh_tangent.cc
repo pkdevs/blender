@@ -10,8 +10,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_mesh_tangent.hh"
@@ -19,7 +19,7 @@
 
 #include "mikktspace.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 /* -------------------------------------------------------------------- */
 /** \name Mesh Tangent Calculations (Single Layer)
@@ -275,7 +275,7 @@ static void calc_face_as_quad_map(const OffsetIndices<int> faces,
     /* Over allocate, since we don't know how many ngon or quads we have. */
 
     /* Map fake face index to corner_tris. */
-    face_as_quad_map = MEM_malloc_arrayN<int>(size_t(corner_tris.size()), __func__);
+    face_as_quad_map = MEM_new_array_uninitialized<int>(size_t(corner_tris.size()), __func__);
     int k, j;
     for (k = 0, j = 0; j < int(corner_tris.size()); k++, j++) {
       face_as_quad_map[k] = j;
@@ -342,7 +342,7 @@ Array<Array<float4>> calc_uv_tangents(const Span<float3> vert_positions,
     }
   });
 
-  MEM_SAFE_FREE(face_as_quad_map);
+  MEM_SAFE_DELETE(face_as_quad_map);
 
   return results;
 }
@@ -388,7 +388,7 @@ Array<float4> calc_orco_tangents(const Span<float3> vert_positions,
   mikk::Mikktspace<SGLSLMeshToTangent> mikk(mesh2tangent);
   mikk.genTangSpace();
 
-  MEM_SAFE_FREE(face_as_quad_map);
+  MEM_SAFE_DELETE(face_as_quad_map);
 
   return results;
 }

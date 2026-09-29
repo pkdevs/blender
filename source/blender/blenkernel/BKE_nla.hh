@@ -18,6 +18,8 @@
 
 #include "BLI_function_ref.hh"
 
+namespace blender {
+
 struct AnimData;
 struct ID;
 struct LibraryForeachIDData;
@@ -205,7 +207,7 @@ NlaStrip *BKE_nlastrip_new(bAction *act, ID &animated_id);
  * does not match the given animated ID.
  */
 NlaStrip *BKE_nlastrip_new_for_slot(bAction *act,
-                                    blender::animrig::slot_handle_t slot_handle,
+                                    animrig::slot_handle_t slot_handle,
                                     ID &animated_id);
 
 /*
@@ -390,7 +392,7 @@ float BKE_nlastrip_compute_frame_to_next_strip(NlaStrip *strip);
  * Returns the next strip in this strip's NLA track, or a null pointer.
  *
  * \param strip: The strip to find the next trip from.
- * \param check_transitions: Whether or not to skip transitions.
+ * \param skip_transitions: Whether or not to skip transitions.
  * \return The next strip in the track, or NULL if none are present.
  */
 NlaStrip *BKE_nlastrip_next_in_track(NlaStrip *strip, bool skip_transitions);
@@ -399,7 +401,7 @@ NlaStrip *BKE_nlastrip_next_in_track(NlaStrip *strip, bool skip_transitions);
  * Returns the previous strip in this strip's NLA track, or a null pointer.
  *
  * \param strip: The strip to find the previous trip from.
- * \param check_transitions: Whether or not to skip transitions.
+ * \param skip_transitions: Whether or not to skip transitions.
  * \return The previous strip in the track, or NULL if none are present.
  */
 NlaStrip *BKE_nlastrip_prev_in_track(NlaStrip *strip, bool skip_transitions);
@@ -500,7 +502,7 @@ void BKE_nla_validate_state(AnimData *adt);
  */
 bool BKE_nla_action_slot_is_stashed(AnimData *adt,
                                     bAction *act,
-                                    blender::animrig::slot_handle_t slot_handle);
+                                    animrig::slot_handle_t slot_handle);
 /**
  * "Stash" an action (i.e. store it as a track/layer in the NLA, but non-contributing)
  * to retain it in the file for future uses.
@@ -600,7 +602,7 @@ void BKE_nla_liboverride_post_process(ID *id, AnimData *adt);
  */
 void BKE_nla_debug_print_flags(AnimData *adt, ID *owner_id);
 
-namespace blender::bke::nla {
+namespace bke::nla {
 
 /**
  * Call the callback for every strip of this ID's NLA.
@@ -632,4 +634,5 @@ bool foreach_strip(ID *id, FunctionRef<bool(NlaStrip *)> callback);
  */
 bool foreach_strip_adt(const AnimData &adt, FunctionRef<bool(NlaStrip *)> callback);
 
-}  // namespace blender::bke::nla
+}  // namespace bke::nla
+}  // namespace blender

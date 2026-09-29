@@ -15,6 +15,8 @@
 
 #include <cstdint>
 
+namespace blender {
+
 /** #wmEvent.customdata type. */
 enum {
   EVT_DATA_TIMER = 2,
@@ -440,6 +442,14 @@ enum wmEventType : int16_t {
 #define ISNDOF_BUTTON(event_type) \
   ((event_type) >= _NDOF_BUTTON_MIN && (event_type) <= _NDOF_BUTTON_MAX)
 
+/** Test whether the event is an IME input event. */
+#define IS_EVENT_IME_ANY(event_type) \
+  ((event_type) >= WM_IME_COMPOSITE_START && (event_type) <= WM_IME_COMPOSITE_END)
+
+/** Test whether the event is a keyboard or IME text input event. */
+#define ISTEXTINPUT_OR_IME(event_type) \
+  ((event_type) == KM_TEXTINPUT || IS_EVENT_IME_ANY(event_type))
+
 #define IS_EVENT_ACTIONZONE(event_type) \
   ELEM(event_type, \
        EVT_ACTIONZONE_AREA, \
@@ -543,3 +553,5 @@ enum {
 };
 
 /** \} */
+
+}  // namespace blender

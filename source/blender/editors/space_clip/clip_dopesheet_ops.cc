@@ -6,9 +6,9 @@
  * \ingroup spclip
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 #include "BKE_tracking.hh"
@@ -25,6 +25,8 @@
 #include "UI_view2d.hh"
 
 #include "clip_intern.hh" /* own include */
+
+namespace blender {
 
 static bool space_clip_dopesheet_poll(bContext *C)
 {
@@ -107,7 +109,7 @@ static wmOperatorStatus dopesheet_select_channel_invoke(bContext *C,
   ARegion *region = CTX_wm_region(C);
   float location[2];
 
-  blender::ui::view2d_region_to_view(
+  ui::view2d_region_to_view(
       &region->v2d, event->mval[0], event->mval[1], &location[0], &location[1]);
   RNA_float_set_array(op->ptr, "location", location);
 
@@ -197,3 +199,5 @@ void CLIP_OT_dopesheet_view_all(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+}  // namespace blender

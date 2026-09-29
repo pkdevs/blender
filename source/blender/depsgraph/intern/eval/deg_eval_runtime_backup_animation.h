@@ -8,20 +8,22 @@
 
 #pragma once
 
-#include <string>
+#include "RNA_path.hh"
 
 #include "BLI_vector.hh"
 
+namespace blender {
+
 struct ID;
 
-namespace blender::deg {
+namespace deg {
 
 struct Depsgraph;
 
 class AnimationValueBackup {
  public:
   AnimationValueBackup() = default;
-  AnimationValueBackup(const std::string &rna_path, int array_index, float value);
+  AnimationValueBackup(ParsedRNAPath<> rna_path, int array_index, float value);
 
   AnimationValueBackup(const AnimationValueBackup &other) = default;
   AnimationValueBackup(AnimationValueBackup &&other) noexcept = default;
@@ -29,7 +31,7 @@ class AnimationValueBackup {
   AnimationValueBackup &operator=(const AnimationValueBackup &other) = default;
   AnimationValueBackup &operator=(AnimationValueBackup &&other) = default;
 
-  std::string rna_path;
+  ParsedRNAPath<> rna_path;
   int array_index;
   float value;
 };
@@ -48,4 +50,5 @@ class AnimationBackup {
   Vector<AnimationValueBackup> values_backup;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

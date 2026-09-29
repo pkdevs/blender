@@ -7,27 +7,31 @@
  */
 
 #include "BLI_bounds.hh"
-#include "BLI_heap_simple.h"
+#include "BLI_heap_simple.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_memarena.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
 #include "BLI_span.hh"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 #include "BKE_paint_bvh.hh"
+
+#include "PRF_profile.hh"
 
 #include "bmesh.hh"
 #include "pbvh_intern.hh"
 
 #include "CLG_log.h"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"sculpt.bmesh"};
 
-namespace blender::bke::pbvh {
+namespace bke::pbvh {
 
 /* TODO: choose leaf limit better. */
 constexpr int leaf_limit = 400;
@@ -628,7 +632,7 @@ static Array<BMLoop *> pbvh_bmesh_edge_loops(BMEdge *e)
 {
   /* Fast-path for most common case where an edge has 2 faces no need to iterate twice. */
   std::array<BMLoop *, 2> manifold_loops;
-  if (LIKELY(BM_edge_loop_pair(e, manifold_loops.data(), manifold_loops.data() + 1))) {
+  if (BM_edge_loop_pair(e, manifold_loops.data(), manifold_loops.data() + 1)) [[likely]] {
     return Array<BMLoop *>(Span(manifold_loops));
   }
   Array<BMLoop *> loops(BM_edge_face_count(e));
@@ -847,7 +851,7 @@ static void long_edge_queue_edge_add_recursive(const EdgeQueueContext *eq_ctx,
   }
 
   /* temp support previous behavior! */
-  if (UNLIKELY(G.debug_value == 1234)) {
+  if (G.debug_value == 1234) [[unlikely]] {
     return;
   }
 
@@ -1852,7 +1856,7 @@ bool raycast_node_detail_bmesh(const BMeshNode &node,
     const float len3 = len_squared_v3v3(v_tri[2]->co, v_tri[0]->co);
 
     /* Detail returned will be set to the maximum allowed size, so take max here. */
-    *r_edge_length = sqrtf(max_fff(len1, len2, len3));
+    *r_edge_length = sqrtf(std::max({len1, len2, len3}));
   }
 
   return hit;
@@ -2103,6 +2107,7 @@ static void pbvh_bmesh_create_nodes_fast_recursive(Vector<BMeshNode> &nodes,
 
 Tree Tree::from_bmesh(BMesh &bm)
 {
+  PRF_scope(ProfileCategory::Core);
   Tree pbvh(Type::BMesh);
   if (bm.totface == 0) {
     return pbvh;
@@ -2304,14 +2309,13 @@ static void copy_original_vert(BMLog *log, BMeshNode *node, BMVert *v, int i, bo
   node->orig_verts_[i] = v;
 }
 
-}  // namespace blender::bke::pbvh
+}  // namespace bke::pbvh
 
 void BKE_pbvh_bmesh_node_save_orig(BMesh *bm,
                                    BMLog *log,
-                                   blender::bke::pbvh::BMeshNode *node,
+                                   bke::pbvh::BMeshNode *node,
                                    bool use_original)
 {
-  using namespace blender;
   /* Skip if original coords/triangles are already saved. */
   if (!node->orig_tris_.is_empty()) {
     return;
@@ -2358,9 +2362,8 @@ void BKE_pbvh_bmesh_node_save_orig(BMesh *bm,
   }
 }
 
-void BKE_pbvh_bmesh_after_stroke(BMesh &bm, blender::bke::pbvh::Tree &pbvh)
+void BKE_pbvh_bmesh_after_stroke(BMesh &bm, bke::pbvh::Tree &pbvh)
 {
-  using namespace blender;
   const int cd_vert_node_offset = CustomData_get_offset_named(
       &bm.vdata, CD_PROP_INT32, ".sculpt_dyntopo_node_id_vertex");
   const int cd_face_node_offset = CustomData_get_offset_named(
@@ -2388,24 +2391,24 @@ void BKE_pbvh_bmesh_after_stroke(BMesh &bm, blender::bke::pbvh::Tree &pbvh)
   update_mask_bmesh(bm, node_mask, pbvh);
 }
 
-void BKE_pbvh_node_mark_topology_update(blender::bke::pbvh::Node &node)
+void BKE_pbvh_node_mark_topology_update(bke::pbvh::Node &node)
 {
-  node.flag_ |= blender::bke::pbvh::Node::UpdateTopology;
+  node.flag_ |= bke::pbvh::Node::UpdateTopology;
 }
 
-const blender::Set<BMVert *, 0> &BKE_pbvh_bmesh_node_unique_verts(
-    blender::bke::pbvh::BMeshNode *node)
+const Set<BMVert *, 0> &BKE_pbvh_bmesh_node_unique_verts(bke::pbvh::BMeshNode *node)
 {
   return node->bm_unique_verts_;
 }
 
-const blender::Set<BMVert *, 0> &BKE_pbvh_bmesh_node_other_verts(
-    blender::bke::pbvh::BMeshNode *node)
+const Set<BMVert *, 0> &BKE_pbvh_bmesh_node_other_verts(bke::pbvh::BMeshNode *node)
 {
   return node->bm_other_verts_;
 }
 
-const blender::Set<BMFace *, 0> &BKE_pbvh_bmesh_node_faces(blender::bke::pbvh::BMeshNode *node)
+const Set<BMFace *, 0> &BKE_pbvh_bmesh_node_faces(bke::pbvh::BMeshNode *node)
 {
   return node->bm_faces_;
 }
+
+}  // namespace blender

@@ -7,10 +7,10 @@
 
 #include <pxr/imaging/hio/imageRegistry.h>
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase_iterator.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_image.hh"
 #include "BKE_image_format.hh"
@@ -18,7 +18,7 @@
 #include "BKE_main.hh"
 #include "BKE_packedFile.hh"
 
-#include "hydra_scene_delegate.hh"
+#include "scene_index.hh"
 
 namespace blender::io::hydra {
 
@@ -38,7 +38,7 @@ static std::string cache_image_file(
     char file_name[FILE_MAX];
     SNPRINTF(file_name, "img_%p%s", image, file_ext[0]);
 
-    file_path = blender::io::usd::get_image_cache_file(file_name);
+    file_path = io::usd::get_image_cache_file(file_name);
     if (check_exist && BLI_exists(file_path.c_str())) {
       BKE_image_save_options_free(&opts);
       return file_path;
@@ -47,10 +47,10 @@ static std::string cache_image_file(
     opts.save_copy = true;
     STRNCPY(opts.filepath, file_path.c_str());
     if (BKE_image_save(nullptr, bmain, image, iuser, &opts)) {
-      CLOG_DEBUG(LOG_HYDRA_SCENE, "%s -> %s", image->id.name, file_path.c_str());
+      CLOG_DEBUG(LOG_HYDRA_SCENE_INDEX, "%s -> %s", image->id.name, file_path.c_str());
     }
     else {
-      CLOG_ERROR(LOG_HYDRA_SCENE, "Can't save %s", file_path.c_str());
+      CLOG_ERROR(LOG_HYDRA_SCENE_INDEX, "Can't save %s", file_path.c_str());
       file_path = "";
     }
   }
@@ -68,7 +68,7 @@ std::string cache_or_get_image_file(Main *bmain, Scene *scene, Image *image, Ima
   }
   else if (BKE_image_has_packedfile(image)) {
     do_check_extension = true;
-    std::string dir_path = blender::io::usd::image_cache_file_path();
+    std::string dir_path = io::usd::image_cache_file_path();
     char *cached_path;
     char subfolder[FILE_MAXDIR];
     SNPRINTF(subfolder, "unpack_%p", image);
@@ -88,7 +88,7 @@ std::string cache_or_get_image_file(Main *bmain, Scene *scene, Image *image, Ima
         if (file_path.empty()) {
           file_path = cached_path;
         }
-        MEM_freeN(cached_path);
+        MEM_delete(cached_path);
       }
     }
   }
@@ -103,7 +103,7 @@ std::string cache_or_get_image_file(Main *bmain, Scene *scene, Image *image, Ima
     file_path = cache_image_file(bmain, scene, image, iuser, true);
   }
 
-  CLOG_DEBUG(LOG_HYDRA_SCENE, "%s -> %s", image->id.name, file_path.c_str());
+  CLOG_DEBUG(LOG_HYDRA_SCENE_INDEX, "%s -> %s", image->id.name, file_path.c_str());
   return file_path;
 }
 

@@ -12,6 +12,7 @@
 #include "util/unique_ptr.h"
 #include "util/vector.h"
 
+namespace blender {
 struct bScreen;
 struct Depsgraph;
 struct Main;
@@ -23,6 +24,7 @@ struct Scene;
 struct SpaceImage;
 struct UserDef;
 struct View3D;
+}  // namespace blender
 
 CCL_NAMESPACE_BEGIN
 
@@ -34,17 +36,17 @@ class Session;
 
 class BlenderSession {
  public:
-  BlenderSession(::RenderEngine &b_engine,
-                 ::UserDef &b_userpref,
-                 ::Main &b_data,
+  BlenderSession(blender::RenderEngine &b_engine,
+                 blender::UserDef &b_userpref,
+                 blender::Main &b_data,
                  bool preview_osl);
 
-  BlenderSession(::RenderEngine &b_engine,
-                 ::UserDef &b_userpref,
-                 ::Main &b_data,
-                 ::bScreen *b_screen,
-                 ::View3D *b_v3d,
-                 ::RegionView3D *b_rv3d,
+  BlenderSession(blender::RenderEngine &b_engine,
+                 blender::UserDef &b_userpref,
+                 blender::Main &b_data,
+                 blender::bScreen *b_screen,
+                 blender::View3D *b_v3d,
+                 blender::RegionView3D *b_rv3d,
                  const int width,
                  int height);
 
@@ -54,15 +56,15 @@ class BlenderSession {
   void create_session();
   void free_session();
 
-  void reset_session(::Main &b_data, ::Depsgraph &b_depsgraph);
+  void reset_session(blender::Main &b_data, blender::Depsgraph &b_depsgraph);
 
   /* offline render */
-  void render(::Depsgraph &b_depsgraph);
+  void render(blender::Depsgraph &b_depsgraph);
 
   void render_frame_finish();
 
-  void bake(::Depsgraph &b_depsgraph_,
-            ::Object &b_object,
+  void bake(blender::Depsgraph &b_depsgraph_,
+            blender::Object &b_object,
             const string &bake_type,
             const int bake_filter,
             const int bake_width,
@@ -70,11 +72,12 @@ class BlenderSession {
 
   void full_buffer_written(string_view filename);
   /* interactive updates */
-  void synchronize(::Depsgraph &b_depsgraph);
+  void synchronize(blender::Depsgraph &b_depsgraph);
 
   /* drawing */
-  void draw(bScreen &b_screen, ::SpaceImage &space_image);
+  void draw(blender::bScreen &b_screen, blender::SpaceImage &space_image);
   void view_draw(const int w, const int h);
+  void view_pause(const bool pause);
   void tag_redraw();
   void tag_update();
   void get_status(string &status, string &substatus);
@@ -84,22 +87,23 @@ class BlenderSession {
   void update_bake_progress();
 
   bool background;
+  bool view_paused = false;
   unique_ptr<Session> session;
   Scene *scene;
   unique_ptr<BlenderSync> sync;
   double last_redraw_time;
 
-  ::RenderEngine &b_engine;
-  ::UserDef &b_userpref;
-  ::Main *b_data;
-  ::RenderData *b_render;
-  ::Depsgraph *b_depsgraph;
+  blender::RenderEngine &b_engine;
+  blender::UserDef &b_userpref;
+  blender::Main *b_data;
+  blender::RenderData *b_render;
+  blender::Depsgraph *b_depsgraph;
   /* NOTE: Blender's scene might become invalid after call
    * #free_blender_memory_if_possible(). */
-  ::Scene *b_scene;
-  ::bScreen *b_screen;
-  ::View3D *b_v3d;
-  ::RegionView3D *b_rv3d;
+  blender::Scene *b_scene;
+  blender::bScreen *b_screen;
+  blender::View3D *b_v3d;
+  blender::RegionView3D *b_rv3d;
   string b_rlay_name;
   string b_rview_name;
 
@@ -109,10 +113,9 @@ class BlenderSession {
   double last_status_time;
 
   int width, height;
+  float pixelsize;
   bool preview_osl;
   double start_resize_time;
-
-  void *python_thread_state;
 
   bool use_developer_ui;
 

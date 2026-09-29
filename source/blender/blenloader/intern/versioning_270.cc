@@ -6,7 +6,7 @@
  * \ingroup blenloader
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include <string>
 
@@ -45,7 +45,7 @@
 #undef DNA_GENFILE_VERSIONING_MACROS
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_colortools.hh"
 #include "BKE_customdata.hh"
 #include "BKE_fcurve_driver.h"
@@ -61,12 +61,12 @@
 #include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
@@ -76,9 +76,15 @@
 #include "NOD_composite.hh"
 #include "NOD_socket.hh"
 
+#include "ANIM_versioning.hh"
+
 #include "readfile.hh"
 
 #include "MEM_guardedalloc.h"
+
+#include "versioning_common.hh"
+
+namespace blender {
 
 /* Make preferences read-only, use `versioning_userdef.cc`. */
 #define U (*((const UserDef *)&U))
@@ -97,7 +103,7 @@ static bGPDpalette *BKE_gpencil_palette_addnew(bGPdata *gpd, const char *name)
   }
 
   /* allocate memory and add to end of list */
-  palette = MEM_new_for_free<bGPDpalette>("bGPDpalette");
+  palette = MEM_new<bGPDpalette>("bGPDpalette");
 
   /* add to datablock */
   BLI_addtail(&gpd->palettes, palette);
@@ -127,7 +133,7 @@ static bGPDpalettecolor *BKE_gpencil_palettecolor_addnew(bGPDpalette *palette, c
   }
 
   /* allocate memory and add to end of list */
-  palcolor = MEM_new_for_free<bGPDpalettecolor>("bGPDpalettecolor");
+  palcolor = MEM_new<bGPDpalettecolor>("bGPDpalettecolor");
 
   /* add to datablock */
   BLI_addtail(&palette->colors, palcolor);
@@ -170,7 +176,7 @@ static void do_version_constraints_radians_degrees_270_1(ListBaseT<bConstraint> 
 {
   for (bConstraint &con : *lb) {
     if (con.type == CONSTRAINT_TYPE_TRANSFORM) {
-      bTransformConstraint *data = (bTransformConstraint *)con.data;
+      bTransformConstraint *data = static_cast<bTransformConstraint *>(con.data);
       const float deg_to_rad_f = DEG2RADF(1.0f);
 
       if (data->from == TRANS_ROTATION) {
@@ -190,7 +196,7 @@ static void do_version_constraints_radians_degrees_270_5(ListBaseT<bConstraint> 
 {
   for (bConstraint &con : *lb) {
     if (con.type == CONSTRAINT_TYPE_TRANSFORM) {
-      bTransformConstraint *data = (bTransformConstraint *)con.data;
+      bTransformConstraint *data = static_cast<bTransformConstraint *>(con.data);
 
       if (data->from == TRANS_ROTATION) {
         copy_v3_v3(data->from_min_rot, data->from_min);
@@ -217,7 +223,7 @@ static void do_version_constraints_stretch_to_limits(ListBaseT<bConstraint> *lb)
 {
   for (bConstraint &con : *lb) {
     if (con.type == CONSTRAINT_TYPE_STRETCHTO) {
-      bStretchToConstraint *data = (bStretchToConstraint *)con.data;
+      bStretchToConstraint *data = static_cast<bStretchToConstraint *>(con.data);
       data->bulge_min = 1.0f;
       data->bulge_max = 1.0f;
     }
@@ -263,11 +269,10 @@ static void anim_change_prop_name(FCurve *fcu,
                                   const char *new_prop_name)
 {
   const char *old_path = BLI_sprintfN("%s.%s", prefix, old_prop_name);
-  if (STREQ(fcu->rna_path, old_path)) {
-    MEM_freeN(fcu->rna_path);
-    fcu->rna_path = BLI_sprintfN("%s.%s", prefix, new_prop_name);
+  if (fcu->rna_path() == old_path) {
+    fcu->rna_path_set_move(BLI_sprintfN("%s.%s", prefix, new_prop_name));
   }
-  MEM_freeN((char *)old_path);
+  MEM_delete(const_cast<char *>(old_path));
 }
 
 static void do_version_hue_sat_node(bNodeTree *ntree, bNode *node)
@@ -278,25 +283,25 @@ static void do_version_hue_sat_node(bNodeTree *ntree, bNode *node)
 
   /* Convert value from old storage to new sockets. */
   NodeHueSat *nhs = static_cast<NodeHueSat *>(node->storage);
-  bNodeSocket *hue = blender::bke::node_find_socket(*node, SOCK_IN, "Hue");
-  bNodeSocket *saturation = blender::bke::node_find_socket(*node, SOCK_IN, "Saturation");
-  bNodeSocket *value = blender::bke::node_find_socket(*node, SOCK_IN, "Value");
+  bNodeSocket *hue = bke::node_find_socket(*node, SOCK_IN, "Hue"_ustr);
+  bNodeSocket *saturation = bke::node_find_socket(*node, SOCK_IN, "Saturation"_ustr);
+  bNodeSocket *value = bke::node_find_socket(*node, SOCK_IN, "Value"_ustr);
   if (hue == nullptr) {
-    hue = blender::bke::node_add_static_socket(
+    hue = bke::node_add_static_socket(
         *ntree, *node, SOCK_IN, SOCK_FLOAT, PROP_FACTOR, "Hue", "Hue");
   }
   if (saturation == nullptr) {
-    saturation = blender::bke::node_add_static_socket(
+    saturation = bke::node_add_static_socket(
         *ntree, *node, SOCK_IN, SOCK_FLOAT, PROP_FACTOR, "Saturation", "Saturation");
   }
   if (value == nullptr) {
-    value = blender::bke::node_add_static_socket(
+    value = bke::node_add_static_socket(
         *ntree, *node, SOCK_IN, SOCK_FLOAT, PROP_FACTOR, "Value", "Value");
   }
 
-  ((bNodeSocketValueFloat *)hue->default_value)->value = nhs->hue;
-  ((bNodeSocketValueFloat *)saturation->default_value)->value = nhs->sat;
-  ((bNodeSocketValueFloat *)value->default_value)->value = nhs->val;
+  (static_cast<bNodeSocketValueFloat *>(hue->default_value))->value = nhs->hue;
+  (static_cast<bNodeSocketValueFloat *>(saturation->default_value))->value = nhs->sat;
+  (static_cast<bNodeSocketValueFloat *>(value->default_value))->value = nhs->val;
   /* Take care of possible animation. */
   AnimData *adt = BKE_animdata_from_id(&ntree->id);
   if (adt != nullptr && adt->action != nullptr) {
@@ -304,20 +309,20 @@ static void do_version_hue_sat_node(bNodeTree *ntree, bNode *node)
     BLI_str_escape(node_name_esc, node->name, sizeof(node_name_esc));
     const char *prefix = BLI_sprintfN("nodes[\"%s\"]", node_name_esc);
     for (FCurve &fcu : adt->action->curves) {
-      if (STRPREFIX(fcu.rna_path, prefix)) {
+      if (fcu.rna_path().startswith(prefix)) {
         anim_change_prop_name(&fcu, prefix, "color_hue", "inputs[1].default_value");
         anim_change_prop_name(&fcu, prefix, "color_saturation", "inputs[2].default_value");
         anim_change_prop_name(&fcu, prefix, "color_value", "inputs[3].default_value");
       }
     }
-    MEM_freeN((char *)prefix);
+    MEM_delete(const_cast<char *>(prefix));
   }
   /* Free storage, it is no longer used. */
-  MEM_freeN(node->storage);
+  MEM_delete(nhs);
   node->storage = nullptr;
 }
 
-static blender::bke::bNodeSocketTemplate legacy_render_layers_outputs[] = {
+static bke::bNodeSocketTemplate legacy_render_layers_outputs[] = {
     {SOCK_RGBA, N_("Image"), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f},
     {SOCK_FLOAT, N_("Alpha"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f},
     {SOCK_FLOAT, RE_PASSNAME_DEPTH, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f},
@@ -367,12 +372,11 @@ static void do_versions_compositor_render_passes_storage(bNode *node)
 {
   int pass_index = 0;
   const char *sockname;
-  for (bNodeSocket *sock = static_cast<bNodeSocket *>(node->outputs.first);
-       sock && pass_index < 31;
+  for (bNodeSocket *sock = node->outputs.first(); sock && pass_index < 31;
        sock = static_cast<bNodeSocket *>(sock->next), pass_index++)
   {
     if (sock->storage == nullptr) {
-      NodeImageLayer *sockdata = MEM_new_for_free<NodeImageLayer>("node image layer");
+      NodeImageLayer *sockdata = MEM_new<NodeImageLayer>("node image layer");
       sock->storage = sockdata;
       STRNCPY_UTF8(sockdata->pass_name, legacy_socket_index_to_pass_name(pass_index));
 
@@ -403,33 +407,29 @@ static void do_versions_compositor_render_passes(bNodeTree *ntree)
   }
 }
 
-static char *replace_bbone_easing_rnapath(char *old_path)
+/**
+ * \return a newly allocated replacement path, or nullptr if `old_path` doesn't need replacing.
+ */
+static char *replace_bbone_easing_rnapath(const char *old_path)
 {
-  char *new_path = nullptr;
-
   /* NOTE: This will break paths for any bones/custom-properties
    * which happen be named after the bbone property id's
    */
   if (strstr(old_path, "bbone_in")) {
-    new_path = BLI_string_replaceN(old_path, "bbone_in", "bbone_easein");
+    return BLI_string_replaceN(old_path, "bbone_in", "bbone_easein");
   }
-  else if (strstr(old_path, "bbone_out")) {
-    new_path = BLI_string_replaceN(old_path, "bbone_out", "bbone_easeout");
-  }
-
-  if (new_path) {
-    MEM_freeN(old_path);
-    return new_path;
+  if (strstr(old_path, "bbone_out")) {
+    return BLI_string_replaceN(old_path, "bbone_out", "bbone_easeout");
   }
 
-  return old_path;
+  return nullptr;
 }
 
 static void do_version_bbone_easing_fcurve_fix(ID * /*id*/, FCurve *fcu)
 {
   /* F-Curve's path (for bbone_in/out) */
-  if (fcu->rna_path) {
-    fcu->rna_path = replace_bbone_easing_rnapath(fcu->rna_path);
+  if (char *new_path = replace_bbone_easing_rnapath(fcu->rna_path().c_str())) {
+    fcu->rna_path_set_move(new_path);
   }
 
   /* Driver -> Driver Vars (for bbone_in/out) */
@@ -437,7 +437,10 @@ static void do_version_bbone_easing_fcurve_fix(ID * /*id*/, FCurve *fcu)
     for (DriverVar &dvar : fcu->driver->variables) {
       DRIVER_TARGETS_LOOPER_BEGIN (&dvar) {
         if (dtar->rna_path) {
-          dtar->rna_path = replace_bbone_easing_rnapath(dtar->rna_path);
+          if (char *new_path = replace_bbone_easing_rnapath(dtar->rna_path)) {
+            MEM_delete(dtar->rna_path);
+            dtar->rna_path = new_path;
+          }
         }
       }
       DRIVER_TARGETS_LOOPER_END;
@@ -445,7 +448,7 @@ static void do_version_bbone_easing_fcurve_fix(ID * /*id*/, FCurve *fcu)
   }
 
   /* FModifiers -> Stepped (for frame_start/end) */
-  if (fcu->modifiers.first) {
+  if (fcu->modifiers.first()) {
     for (FModifier &fcm : fcu->modifiers) {
       if (fcm.type == FMODIFIER_TYPE_STEPPED) {
         FMod_Stepped *data = static_cast<FMod_Stepped *>(fcm.data);
@@ -464,7 +467,7 @@ static void do_version_bbone_easing_fcurve_fix(ID * /*id*/, FCurve *fcu)
 
 static bool strip_update_proxy_cb(Strip *strip, void * /*user_data*/)
 {
-  strip->stereo3d_format = MEM_new_for_free<Stereo3dFormat>("Stereo Display 3d Format");
+  strip->stereo3d_format = MEM_new<Stereo3dFormat>("Stereo Display 3d Format");
 
 #define STRIP_USE_PROXY_CUSTOM_DIR (1 << 19)
 #define STRIP_USE_PROXY_CUSTOM_FILE (1 << 21)
@@ -487,7 +490,7 @@ static bool strip_init_text_effect_data(Strip *strip, void * /*user_data*/)
     return true;
   }
 
-  blender::seq::effect_ensure_initialized(strip);
+  seq::effect_ensure_initialized(strip);
   TextVars *data = static_cast<TextVars *>(strip->effectdata);
   if (data->color[3] == 0.0f) {
     copy_v4_fl(data->color, 1.0f);
@@ -505,7 +508,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Bevel) {
-            BevelModifierData *bmd = (BevelModifierData *)&md;
+            BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(&md);
             bmd->profile = 0.5f;
             bmd->val_flags = MOD_BEVEL_AMT_OFFSET;
           }
@@ -529,7 +532,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &space_link : area.spacedata) {
           if (space_link.spacetype == SPACE_CLIP) {
-            SpaceClip *space_clip = (SpaceClip *)&space_link;
+            SpaceClip *space_clip = reinterpret_cast<SpaceClip *>(&space_link);
             if (space_clip->mode != SC_MODE_MASKEDIT) {
               space_clip->mode = SC_MODE_TRACKING;
             }
@@ -584,10 +587,10 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          ListBaseT<ARegion> *lb = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                   &sl.regionbase;
+          ListBaseT<ARegion> *lb = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                    &sl.regionbase;
           for (ARegion &region : *lb) {
-            BLI_listbase_clear(&region.ui_previews);
+            region.ui_previews.clear_no_delete();
           }
         }
       }
@@ -621,7 +624,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
         sce.r.bake.normal_swizzle[2] = R_BAKE_POSZ;
         STRNCPY(sce.r.bake.filepath, U.renderdir);
 
-        sce.r.bake.im_format.planes = R_IMF_PLANES_RGBA;
+        sce.r.bake.im_format.color_mode = ImColorMode::RGBA;
         sce.r.bake.im_format.imtype = R_IMF_IMTYPE_PNG;
         sce.r.bake.im_format.depth = R_IMF_CHAN_DEPTH_8;
         sce.r.bake.im_format.quality = 90;
@@ -638,7 +641,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
 
     {
       for (Scene &scene : bmain->scenes) {
-        int num_layers = BLI_listbase_count(&scene.r.layers);
+        int num_layers = scene.r.layers.count();
         scene.r.actlay = min_ff(scene.r.actlay, num_layers - 1);
       }
     }
@@ -662,7 +665,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Bevel) {
-            BevelModifierData *bmd = (BevelModifierData *)&md;
+            BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(&md);
             bmd->mat = -1;
           }
         }
@@ -674,7 +677,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       for (ModifierData &md : ob.modifiers) {
         if (md.type == eModifierType_ParticleSystem) {
-          ParticleSystemModifierData *pmd = (ParticleSystemModifierData *)&md;
+          ParticleSystemModifierData *pmd = reinterpret_cast<ParticleSystemModifierData *>(&md);
           if (pmd->psys && pmd->psys->clmd) {
             pmd->psys->clmd->sim_parms->vel_damping = 1.0f;
           }
@@ -764,11 +767,11 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Cloth) {
-            ClothModifierData *clmd = (ClothModifierData *)&md;
+            ClothModifierData *clmd = reinterpret_cast<ClothModifierData *>(&md);
             clmd->sim_parms->bending_damping = 0.5f;
           }
           else if (md.type == eModifierType_ParticleSystem) {
-            ParticleSystemModifierData *pmd = (ParticleSystemModifierData *)&md;
+            ParticleSystemModifierData *pmd = reinterpret_cast<ParticleSystemModifierData *>(&md);
             if (pmd->psys->clmd) {
               pmd->psys->clmd->sim_parms->bending_damping = 0.5f;
             }
@@ -804,7 +807,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Hook) {
-            HookModifierData *hmd = (HookModifierData *)&md;
+            HookModifierData *hmd = reinterpret_cast<HookModifierData *>(&md);
             hmd->falloff_type = eHook_Falloff_InvSquare;
           }
         }
@@ -816,11 +819,13 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
         if (ntree->type == NTREE_COMPOSIT) {
           for (bNode &node : ntree->nodes) {
             if (ELEM(node.type_legacy, CMP_NODE_PLANETRACKDEFORM)) {
-              NodePlaneTrackDeformData *data = static_cast<NodePlaneTrackDeformData *>(
-                  node.storage);
-              data->flag = 0;
-              data->motion_blur_samples = 16;
-              data->motion_blur_shutter = 0.5f;
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodePlaneTrackDeformData *data = static_cast<NodePlaneTrackDeformData *>(
+                    node.storage);
+                data->flag = 0;
+                data->motion_blur_samples = 16;
+                data->motion_blur_shutter = 0.5f;
+              }
             }
           }
         }
@@ -890,15 +895,15 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 274, 4)) {
     for (Scene &scene : bmain->scenes) {
       BKE_scene_add_render_view(&scene, STEREO_LEFT_NAME);
-      SceneRenderView *srv = static_cast<SceneRenderView *>(scene.r.views.first);
+      SceneRenderView *srv = scene.r.views.first();
       STRNCPY_UTF8(srv->suffix, STEREO_LEFT_SUFFIX);
 
       BKE_scene_add_render_view(&scene, STEREO_RIGHT_NAME);
-      srv = static_cast<SceneRenderView *>(scene.r.views.last);
+      srv = scene.r.views.last();
       STRNCPY_UTF8(srv->suffix, STEREO_RIGHT_SUFFIX);
 
       if (scene.ed) {
-        blender::seq::foreach_strip(&scene.ed->seqbase, strip_update_proxy_cb, nullptr);
+        seq::foreach_strip(&scene.ed->seqbase, strip_update_proxy_cb, nullptr);
       }
     }
 
@@ -907,7 +912,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &sl : area.spacedata) {
           switch (sl.spacetype) {
             case SPACE_VIEW3D: {
-              View3D *v3d = (View3D *)&sl;
+              View3D *v3d = reinterpret_cast<View3D *>(&sl);
               v3d->stereo3d_camera = STEREO_3D_ID;
               v3d->stereo3d_flag |= V3D_S3D_DISPPLANE;
               v3d->stereo3d_convergence_alpha = 0.15f;
@@ -915,7 +920,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
               break;
             }
             case SPACE_IMAGE: {
-              SpaceImage *sima = (SpaceImage *)&sl;
+              SpaceImage *sima = reinterpret_cast<SpaceImage *>(&sl);
               sima->iuser.flag |= IMA_SHOW_STEREO;
               break;
             }
@@ -930,10 +935,10 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
     }
 
     for (Image &ima : bmain->images) {
-      ima.stereo3d_format = MEM_new_for_free<Stereo3dFormat>("Image Stereo 3d Format");
+      ima.stereo3d_format = MEM_new<Stereo3dFormat>("Image Stereo 3d Format");
 
       if (ima.packedfile) {
-        ImagePackedFile *imapf = MEM_new_for_free<ImagePackedFile>("Image Packed File");
+        ImagePackedFile *imapf = MEM_new<ImagePackedFile>("Image Packed File");
         BLI_addtail(&ima.packedfiles, imapf);
 
         imapf->packedfile = ima.packedfile;
@@ -944,7 +949,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
 
     for (wmWindowManager &wm : bmain->wm) {
       for (wmWindow &win : wm.windows) {
-        win.stereo3d_format = MEM_new_for_free<Stereo3dFormat>("Stereo Display 3d Format");
+        win.stereo3d_format = MEM_new<Stereo3dFormat>("Stereo Display 3d Format");
       }
     }
   }
@@ -955,7 +960,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
         for (ScrArea &area : screen.areabase) {
           for (SpaceLink &sl : area.spacedata) {
             if (sl.spacetype == SPACE_FILE) {
-              SpaceFile *sfile = (SpaceFile *)&sl;
+              SpaceFile *sfile = reinterpret_cast<SpaceFile *>(&sl);
 
               if (sfile->params) {
                 sfile->params->thumbnail_size = 128;
@@ -979,7 +984,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Decimate) {
-            DecimateModifierData *dmd = (DecimateModifierData *)&md;
+            DecimateModifierData *dmd = reinterpret_cast<DecimateModifierData *>(&md);
             dmd->defgrp_factor = 1.0f;
           }
         }
@@ -988,7 +993,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 275, 3)) {
-#define BRUSH_TORUS (1 << 1)
+    constexpr eBrushFlags BRUSH_TORUS = eBrushFlags(1 << 1);
     for (Brush &br : bmain->brushes) {
       br.flag &= ~BRUSH_TORUS;
     }
@@ -1011,8 +1016,8 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_VIEW3D) {
-            ListBaseT<ARegion> *lb = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                     &sl.regionbase;
+            ListBaseT<ARegion> *lb = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                      &sl.regionbase;
             for (ARegion &region : *lb) {
               if (region.regiontype == RGN_TYPE_WINDOW) {
                 if (region.regiondata) {
@@ -1070,7 +1075,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       /* Ensure that the data-block's onion-skinning toggle flag
        * stays in sync with the status of the actual layers. */
       for (bGPDlayer &gpl : gpd.layers) {
-        if (gpl.flag & GP_LAYER_ONIONSKIN) {
+        if (gpl.flag & eGPDlayer_Flag(GP_LAYER_ONIONSKIN)) {
           enabled = true;
         }
       }
@@ -1097,7 +1102,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
          * Original commit (3fcf535d2e) forgot to handle embedded IDs. Fortunately, back then, the
          * only embedded IDs that existed were the NodeTree ones, and the current API to access
          * them should still be valid on code from 9 years ago. */
-        bNodeTree *node_tree = blender::bke::node_tree_from_id(&id);
+        bNodeTree *node_tree = bke::node_tree_from_id(&id);
         if (node_tree) {
           node_tree->id.flag &= ID_FLAG_FAKEUSER;
         }
@@ -1124,11 +1129,11 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
           /* Bug: Was possible to add preview region to sequencer view by using AZones. */
           if (sl.spacetype == SPACE_SEQ) {
-            SpaceSeq *sseq = (SpaceSeq *)&sl;
+            SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(&sl);
             if (sseq->view == SEQ_VIEW_SEQUENCE) {
               for (ARegion &region : *regionbase) {
                 /* remove preview region for sequencer-only view! */
@@ -1168,7 +1173,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
 
     for (Scene &scene : bmain->scenes) {
       if (scene.ed) {
-        blender::seq::foreach_strip(&scene.ed->seqbase, strip_init_text_effect_data, nullptr);
+        seq::foreach_strip(&scene.ed->seqbase, strip_init_text_effect_data, nullptr);
       }
     }
 
@@ -1178,7 +1183,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
         /* handle pushed-back space data first */
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_ACTION) {
-            SpaceAction *saction = (SpaceAction *)&sl;
+            SpaceAction *saction = reinterpret_cast<SpaceAction *>(&sl);
             do_version_action_editor_properties_region(&saction->regionbase);
           }
         }
@@ -1212,7 +1217,8 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
              * These seem to have been runtime flags used by the IK solver, but that stuff
              * should be able to be recalculated automatically anyway, so it should be fine.
              */
-            pchan.flag &= ~((1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8));
+            pchan.flag &= ~ePchan_Flag((1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) |
+                                       (1 << 8));
           }
         }
       }
@@ -1230,7 +1236,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_NormalEdit) {
-            NormalEditModifierData *nemd = (NormalEditModifierData *)&md;
+            NormalEditModifierData *nemd = reinterpret_cast<NormalEditModifierData *>(&md);
             nemd->mix_limit = DEG2RADF(180.0f);
           }
         }
@@ -1243,7 +1249,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Boolean) {
-            BooleanModifierData *bmd = (BooleanModifierData *)&md;
+            BooleanModifierData *bmd = reinterpret_cast<BooleanModifierData *>(&md);
             bmd->double_threshold = 1e-6f;
           }
         }
@@ -1260,11 +1266,11 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Cloth) {
-            ClothModifierData *clmd = (ClothModifierData *)&md;
+            ClothModifierData *clmd = reinterpret_cast<ClothModifierData *>(&md);
             clmd->sim_parms->time_scale = 1.0f;
           }
           else if (md.type == eModifierType_ParticleSystem) {
-            ParticleSystemModifierData *pmd = (ParticleSystemModifierData *)&md;
+            ParticleSystemModifierData *pmd = reinterpret_cast<ParticleSystemModifierData *>(&md);
             if (pmd->psys->clmd) {
               pmd->psys->clmd->sim_parms->time_scale = 1.0f;
             }
@@ -1281,7 +1287,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
        * Loop all strokes and create the palette and all colors
        */
       for (bGPdata &gpd : bmain->gpencils) {
-        if (BLI_listbase_is_empty(&gpd.palettes)) {
+        if (gpd.palettes.is_empty()) {
           /* create palette */
           bGPDpalette *palette = BKE_gpencil_palette_addnew(&gpd, "GP_Palette");
           for (bGPDlayer &gpl : gpd.layers) {
@@ -1298,7 +1304,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
               if (gpl.flag & GP_LAYER_LOCKED) {
                 palcolor->flag |= PC_COLOR_LOCKED;
               }
-              if (gpl.flag & GP_LAYER_ONIONSKIN) {
+              if (gpl.flag & eGPDlayer_Flag(GP_LAYER_ONIONSKIN)) {
                 palcolor->flag |= PC_COLOR_ONIONSKIN;
               }
               if (gpl.flag & GP_LAYER_VOLUMETRIC) {
@@ -1388,7 +1394,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Fluid) {
-            FluidModifierData *fmd = (FluidModifierData *)&md;
+            FluidModifierData *fmd = reinterpret_cast<FluidModifierData *>(&md);
             if (fmd->domain) {
               fmd->domain->slice_per_voxel = 5.0f;
               fmd->domain->slice_depth = 0.5f;
@@ -1491,19 +1497,21 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
     if (!DNA_struct_member_exists(fd->filesdna, "NodeGlare", "char", "star_45")) {
       FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
         if (ntree->type == NTREE_COMPOSIT) {
-          blender::bke::node_tree_set_type(*ntree);
+          bke::node_tree_set_type(*ntree);
           for (bNode &node : ntree->nodes) {
             if (node.type_legacy == CMP_NODE_GLARE) {
-              NodeGlare *ndg = static_cast<NodeGlare *>(node.storage);
-              switch (ndg->type) {
-                case CMP_NODE_GLARE_STREAKS:
-                  ndg->streaks = ndg->angle;
-                  break;
-                case CMP_NODE_GLARE_SIMPLE_STAR:
-                  ndg->star_45 = ndg->angle != 0;
-                  break;
-                default:
-                  break;
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodeGlare *ndg = static_cast<NodeGlare *>(node.storage);
+                switch (ndg->type) {
+                  case CMP_NODE_GLARE_STREAKS:
+                    ndg->streaks = ndg->angle;
+                    break;
+                  case CMP_NODE_GLARE_SIMPLE_STAR:
+                    ndg->star_45 = ndg->angle != 0;
+                    break;
+                  default:
+                    break;
+                }
               }
             }
           }
@@ -1517,7 +1525,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_SurfaceDeform) {
-            SurfaceDeformModifierData *smd = (SurfaceDeformModifierData *)&md;
+            SurfaceDeformModifierData *smd = reinterpret_cast<SurfaceDeformModifierData *>(&md);
             unit_m4(smd->mat);
           }
         }
@@ -1550,7 +1558,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_Fluid) {
-            FluidModifierData *fmd = (FluidModifierData *)&md;
+            FluidModifierData *fmd = reinterpret_cast<FluidModifierData *>(&md);
             if (fmd->domain) {
               fmd->domain->clipping = 1e-3f;
             }
@@ -1570,12 +1578,12 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       }
     }
 
-    if (!DNA_struct_member_exists(fd->filesdna, "Brush", "float", "falloff_angle")) {
+    if (!DNA_struct_member_exists(fd->filesdna, "Brush", "float", "falloff_angle_legacy")) {
       for (Brush &br : bmain->brushes) {
-        br.falloff_angle = DEG2RADF(80);
+        br.falloff_angle_legacy = DEG2RADF(80);
         /* These flags are used for new features. They are not related to `falloff_angle`. */
         br.flag &= ~(BRUSH_INVERT_TO_SCRAPE_FILL | BRUSH_ORIGINAL_PLANE |
-                     BRUSH_GRAB_ACTIVE_VERTEX | BRUSH_SCENE_SPACING | BRUSH_FRONTFACE_FALLOFF);
+                     BRUSH_GRAB_ACTIVE_VERTEX | BRUSH_SCENE_SPACING | BRUSH_UNUSED_7);
       }
 
       for (Scene &scene : bmain->scenes) {
@@ -1597,8 +1605,8 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_SimpleDeform) {
-            SimpleDeformModifierData *smd = (SimpleDeformModifierData *)&md;
-            smd->deform_axis = 2;
+            SimpleDeformModifierData *smd = reinterpret_cast<SimpleDeformModifierData *>(&md);
+            smd->deform_axis = SimpleDeformModifierLockAxis(2);
           }
         }
       }
@@ -1618,7 +1626,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       else {
         preset = FFM_PRESET_GOOD;
       }
-      scene.r.ffcodecdata.ffmpeg_preset = preset;
+      scene.r.ffcodecdata.ffmpeg_preset = eFFMpegPreset(preset);
     }
 
     if (!DNA_struct_member_exists(
@@ -1627,7 +1635,8 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
           if (md.type == eModifierType_ParticleInstance) {
-            ParticleInstanceModifierData *pimd = (ParticleInstanceModifierData *)&md;
+            ParticleInstanceModifierData *pimd = reinterpret_cast<ParticleInstanceModifierData *>(
+                &md);
             pimd->space = eParticleInstanceSpace_World;
             pimd->particle_amount = 1.0f;
           }
@@ -1643,7 +1652,7 @@ void do_versions_after_linking_270(Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 279, 0)) {
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       if (ntree->type == NTREE_COMPOSIT) {
-        blender::bke::node_tree_set_type(*ntree);
+        bke::node_tree_set_type(*ntree);
         for (bNode &node : ntree->nodes) {
           if (node.type_legacy == CMP_NODE_HUE_SAT) {
             do_version_hue_sat_node(ntree, &node);
@@ -1656,6 +1665,8 @@ void do_versions_after_linking_270(Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 279, 2)) {
     /* B-Bones (bbone_in/out -> bbone_easein/out) + Stepped FMod Frame Start/End fix */
-    BKE_fcurves_main_cb(bmain, do_version_bbone_easing_fcurve_fix);
+    animrig::versioning::fcurves_main_cb(bmain, do_version_bbone_easing_fcurve_fix);
   }
 }
+
+}  // namespace blender

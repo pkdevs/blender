@@ -21,16 +21,16 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
+#include "BKE_annotations.h"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
-#include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
 #include "BKE_screen.hh"
 #include "BKE_workspace.hh"
@@ -46,6 +46,8 @@
 #include "ED_anim_api.hh"
 
 #include "ANIM_action.hh"
+
+namespace blender {
 
 /* **************************** depsgraph tagging ******************************** */
 
@@ -79,7 +81,7 @@ void ANIM_list_elem_update(Main *bmain, Scene *scene, bAnimListElem *ale)
   /* update data */
   fcu = static_cast<FCurve *>((ale->datatype == ALE_FCURVE) ? ale->key_data : nullptr);
 
-  if (fcu && fcu->rna_path) {
+  if (fcu && !fcu->rna_path().is_empty()) {
     /* If we have an fcurve, call the update for the property we
      * are editing, this is then expected to do the proper redraws
      * and depsgraph updates. */
@@ -88,7 +90,7 @@ void ANIM_list_elem_update(Main *bmain, Scene *scene, bAnimListElem *ale)
 
     PointerRNA id_ptr = RNA_id_pointer_create(id);
 
-    if (RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
+    if (RNA_path_resolve_property(&id_ptr, fcu->rna_path_parsed(), &ptr, &prop)) {
       RNA_property_update_main(bmain, scene, &ptr, prop);
     }
   }
@@ -142,11 +144,11 @@ static void animchan_sync_group(bAnimContext *ac, bAnimListElem *ale, bActionGro
      */
     if (ob->pose) {
       bPoseChannel *pchan = BKE_pose_channel_find_name(ob->pose, agrp->name);
-      bArmature *arm = static_cast<bArmature *>(ob->data);
 
       if (pchan) {
+        Bone *bone = pchan->bone_get(*ob);
         /* if one matches, sync the selection status */
-        if ((pchan->bone) && (pchan->flag & POSE_SELECTED)) {
+        if (bone && (pchan->flag & POSE_SELECTED)) {
           agrp->flag |= AGRP_SELECTED;
         }
         else {
@@ -154,7 +156,8 @@ static void animchan_sync_group(bAnimContext *ac, bAnimListElem *ale, bActionGro
         }
 
         /* also sync active group status */
-        if ((ob == ac->obact) && (pchan->bone == arm->act_bone)) {
+        bArmature *arm = id_cast<bArmature *>(ob->data);
+        if ((ob == ac->obact) && (bone == arm->act_bone)) {
           /* if no previous F-Curve has active flag, then we're the first and only one to get it */
           if (*active_agrp == nullptr) {
             agrp->flag |= AGRP_ACTIVE;
@@ -171,7 +174,7 @@ static void animchan_sync_group(bAnimContext *ac, bAnimListElem *ale, bActionGro
         }
 
         /* sync bone color */
-        action_group_colors_set_from_posebone(agrp, pchan);
+        action_group_colors_set_from_posebone(agrp, {pchan, bone});
       }
     }
   }
@@ -187,18 +190,20 @@ static void animchan_sync_fcurve_scene(bAnimListElem *ale)
 
   /* Only affect if F-Curve involves sequence_editor.strips. */
   char strip_name[sizeof(strip->name)];
-  if (!BLI_str_quoted_substr(fcu->rna_path, "strips_all[", strip_name, sizeof(strip_name))) {
+  if (!BLI_str_quoted_substr(
+          fcu->rna_path().c_str(), "strips_all[", strip_name, sizeof(strip_name)))
+  {
     return;
   }
 
   /* Check if this strip is selected. */
-  Editing *ed = blender::seq::editing_get(scene);
+  Editing *ed = seq::editing_get(scene);
   if (ed == nullptr) {
     /* The existence of the F-Curve doesn't imply the existence of the sequencer
      * strip, or even the sequencer itself. */
     return;
   }
-  strip = blender::seq::get_strip_by_name(ed->current_strips(), strip_name, false);
+  strip = seq::get_strip_by_name(ed->current_strips(), strip_name, false);
   if (strip == nullptr) {
     return;
   }
@@ -221,7 +226,11 @@ static void animchan_sync_fcurve(bAnimListElem *ale)
   /* major priority is selection status, so refer to the checks done in `anim_filter.cc`
    * #skip_fcurve_selected_data() for reference about what's going on here.
    */
-  if (ELEM(nullptr, fcu, fcu->rna_path, owner_id)) {
+  if (ELEM(nullptr, fcu, owner_id)) {
+    return;
+  }
+
+  if (fcu->rna_path().is_empty()) {
     return;
   }
 
@@ -362,7 +371,7 @@ void ANIM_animdata_update(bAnimContext *ac, ListBaseT<bAnimListElem> *anim_data)
       if (ale.update & ANIM_UPDATE_ORDER) {
         ale.update &= ~ANIM_UPDATE_ORDER;
         if (gpl) {
-          BKE_gpencil_layer_frames_sort(gpl, nullptr);
+          BKE_annotations_layer_frames_sort(gpl, nullptr);
         }
       }
 
@@ -402,14 +411,14 @@ void ANIM_animdata_update(bAnimContext *ac, ListBaseT<bAnimListElem> *anim_data)
       if (ale.update & ANIM_UPDATE_ORDER) {
         ale.update &= ~ANIM_UPDATE_ORDER;
         if (fcu) {
-          sort_time_fcurve(fcu);
+          sort_time_fcurve(*fcu);
         }
       }
 
       if (ale.update & ANIM_UPDATE_HANDLES) {
         ale.update &= ~ANIM_UPDATE_HANDLES;
         if (fcu) {
-          BKE_fcurve_handles_recalc(fcu);
+          BKE_fcurve_handles_recalc(*fcu);
         }
       }
 
@@ -464,21 +473,19 @@ void ANIM_animdata_freelist(ListBaseT<bAnimListElem> *anim_data)
 {
 #ifndef NDEBUG
   bAnimListElem *ale, *ale_next;
-  for (ale = static_cast<bAnimListElem *>(anim_data->first); ale; ale = ale_next) {
+  for (ale = anim_data->first(); ale; ale = ale_next) {
     ale_next = ale->next;
     BLI_assert(ale->update == 0);
-    MEM_freeN(ale);
+    MEM_delete(ale);
   }
-  BLI_listbase_clear(anim_data);
+  anim_data->clear_no_delete();
 #else
-  BLI_freelistN(anim_data);
+  anim_data->free_no_destruct();
 #endif
 }
 
 void ANIM_deselect_keys_in_animation_editors(bContext *C)
 {
-  using namespace blender;
-
   wmWindow *ctx_window = CTX_wm_window(C);
   ScrArea *ctx_area = CTX_wm_area(C);
   ARegion *ctx_region = CTX_wm_region(C);
@@ -525,3 +532,5 @@ void ANIM_deselect_keys_in_animation_editors(bContext *C)
     animrig::action_deselect_keys(dna_action->wrap());
   }
 }
+
+}  // namespace blender

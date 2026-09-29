@@ -21,18 +21,20 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_heap.h"
+#include "BLI_heap.hh"
 
-#include "BLI_linklist.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_memarena.h"
-#include "BLI_polyfill_2d.h"
-#include "BLI_polyfill_2d_beautify.h"
+#include "BLI_linklist.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_polyfill_2d_beautify.hh"
 
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 #define EDGE_OUT (1 << 0)
 #define FACE_OUT (1 << 1)
@@ -47,8 +49,8 @@ static bool bm_face_split_by_concave(BMesh *bm,
   const int f_base_len = f_base->len;
   int faces_array_tot = f_base_len - 3;
   int edges_array_tot = f_base_len - 3;
-  blender::Array<BMFace *, BM_DEFAULT_NGON_STACK_SIZE> faces_array(faces_array_tot);
-  blender::Array<BMEdge *, BM_DEFAULT_NGON_STACK_SIZE> edges_array(edges_array_tot);
+  Array<BMFace *, BM_DEFAULT_NGON_STACK_SIZE> faces_array(faces_array_tot);
+  Array<BMEdge *, BM_DEFAULT_NGON_STACK_SIZE> edges_array(edges_array_tot);
   const int quad_method = 0, ngon_method = 0; /* beauty */
   LinkNode *faces_double = nullptr;
 
@@ -132,9 +134,13 @@ static bool bm_face_split_by_concave(BMesh *bm,
           BMFace *f_double;
           BMFace *f_new, *f_pair[2] = {l_pair[0]->f, l_pair[1]->f};
           f_new = BM_faces_join(bm, f_pair, 2, true, &f_double);
-          /* See #BM_faces_join note on callers asserting when `r_double` is non-null. */
-          BLI_assert_msg(f_double == nullptr,
-                         "Doubled face detected at " AT ". Resulting mesh may be corrupt.");
+
+          /* If a double is found - queue the new face to be removed
+           * since it's not expected that this would remove other existing geometry. */
+          if (f_double) [[unlikely]] {
+            BLI_linklist_prepend(&faces_double, f_new);
+            f_new = nullptr;
+          }
 
           if (f_new) {
             BMO_face_flag_enable(bm, f_new, FACE_OUT);
@@ -149,7 +155,7 @@ static bool bm_face_split_by_concave(BMesh *bm,
   while (faces_double) {
     LinkNode *next = faces_double->next;
     BM_face_kill(bm, static_cast<BMFace *>(faces_double->link));
-    MEM_freeN(faces_double);
+    MEM_delete(faces_double);
     faces_double = next;
   }
 
@@ -204,3 +210,5 @@ void bmo_connect_verts_concave_exec(BMesh *bm, BMOperator *op)
   BLI_memarena_free(pf_arena);
   BLI_heap_free(pf_heap, nullptr);
 }
+
+}  // namespace blender

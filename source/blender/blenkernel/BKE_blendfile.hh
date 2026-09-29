@@ -16,11 +16,14 @@
 
 #include <string>
 
+namespace blender {
+
 struct bContext;
 struct BlendFileData;
 struct BlendFileReadParams;
 struct BlendFileReadReport;
 struct BlendFileReadWMSetupData;
+struct BlendFileWriteParams;
 struct ID;
 struct IDNameLib_Map;
 struct Library;
@@ -157,7 +160,7 @@ WorkspaceConfigFileData *BKE_blendfile_workspace_config_read(const char *filepat
                                                              ReportList *reports);
 void BKE_blendfile_workspace_config_data_free(WorkspaceConfigFileData *workspace_config);
 
-namespace blender::bke::blendfile {
+namespace bke::blendfile {
 
 /**
  * Partial blendfile writing.
@@ -382,6 +385,12 @@ class PartialWriteContext : NonCopyable, NonMovable {
    */
   bool write(const char *write_filepath, int write_flags, int remap_mode, ReportList &reports);
   bool write(const char *write_filepath, ReportList &reports);
+  /**
+   * Write the content of the current context as a copy/paste buffer blendfile on disk.
+   *
+   * \return `true` on success.
+   */
+  bool write_as_copypaste_buffer(const char *write_filepath, ReportList &reports);
 
   /* TODO: To allow editing an existing external blendfile:
    *   - API to load a context from a blendfile.
@@ -427,8 +436,15 @@ class PartialWriteContext : NonCopyable, NonMovable {
    * one if needed.
    */
   Library *ensure_library(StringRefNull library_absolute_path);
+
+  /** Actual writing code, hidden behind the public simpler APIs. */
+  bool write_impl(const char *write_filepath,
+                  int write_flags,
+                  const BlendFileWriteParams &blend_file_write_params,
+                  ReportList &reports);
 };
 
 ENUM_OPERATORS(PartialWriteContext::IDAddOperations);
 
-}  // namespace blender::bke::blendfile
+}  // namespace bke::blendfile
+}  // namespace blender
