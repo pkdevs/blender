@@ -13,3 +13,4 @@ Referenced by commit a8be4992c7a350454ddf77838f7cb25b00e5e3a2, Fix: Images: Mult
 Referenced by commit 38b093e6a15eb19f9289e344949d892fc8992347, Fix: Images: Multilayer EXR re-attempts failed image loads
 Referenced by issue #164448, Blender DELETES unsaved texture work on a texture timeout.
 Referenced by pull request #164483, Fix #164448: Unsaved image edits lost on texture garbage collection
+Referenced by pull request #164484, Fix #164448: Unsaved image edits lost on texture garbage collection
