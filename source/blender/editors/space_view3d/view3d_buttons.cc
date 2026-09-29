@@ -988,7 +988,7 @@ static CurvesSelectionStatus init_grease_pencil_selection_status(
  * \{ */
 
 static void calc_median_bmesh(BMesh &bm,
-                              const float bounds_matrix[4][4],
+                              const float4x4 *bounds_matrix,
                               TransformMedian_Mesh &median,
                               Bounds<float3> &r_select_bounds,
                               int &tot,
