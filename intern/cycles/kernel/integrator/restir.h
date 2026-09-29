@@ -9,6 +9,8 @@
 
 CCL_NAMESPACE_BEGIN
 
+// TODO(Tri): InitialResampling's own M-handling!
+
 struct SpatialResampling {
   ccl_global const KernelWorkTile *tile;
   int radius;
@@ -525,13 +527,15 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
   return reservoir_finalize(&current->reservoir);
 }
 
-/* Temporal counterpart of streaming_di_samples()'s per-neighbor step. */
-ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
-                                                 IntegratorState state,
-                                                 ccl_private SpatialReservoir *current,
-                                                 const ccl_private RNGState *rng_state,
-                                                 const bool visibility,
-                                                 ccl_global float *ccl_restrict render_buffer)
+/* Temporal counterpart of streaming_di_samples()'s per-neighbor step.
+ * Reuse this pixel's own reservoir from previous sample (RIS/WRS), essentially an
+ * RIS accumulation across a pixel's own progressive samples at a fixed shading point. */
+ccl_device_inline bool streaming_progressive_resample(KernelGlobals kg, // Maybe rename to streaming_intra_frame_resample()?
+                                                      IntegratorState state,
+                                                      ccl_private SpatialReservoir *current,
+                                                      const ccl_private RNGState *rng_state,
+                                                      const bool visibility,
+                                                      ccl_global float *ccl_restrict render_buffer)
 {
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
 
@@ -542,7 +546,7 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
                                    kernel_data.film.pass_restir_temporal_history_reservoir;
 
   if (!restir_unpack_reservoir(kg, &history, buffer)) {
-ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
+ccl_debug_printf("streaming_progressive_resample() RETURNED EARLY! can't unpack history\n\n\n");
 
     return false; /* No valid history yet (first sample, or history invalidated). */
   }
@@ -579,7 +583,7 @@ ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack histo
 
   current->reservoir.M += history.M;
 
-ccl_debug_printf("\n--- streaming_temporal_sample(): true! current total_weight=%f M=%d---\n"
+ccl_debug_printf("\n--- streaming_progressive_resample(): true! current total_weight=%f M=%d---\n"
                   "history.total_weight=%f\n\n",
     (double)current->reservoir.total_weight, current->reservoir.M,
     (double)history.total_weight); // !!!(Tri): Still some occasional zero weights!
@@ -704,14 +708,14 @@ ccl_debug_printf("TEMPORAL_FRAME min function: history.M=%f current->reservoir.M
                nullptr, visibility);
   const float current_at_history = compute_luminance(kg, current_at_history_radiance);
 
-// TODO(Tri): Mergin' both streaming_temporal_sample()s should fix this?
+// TODO(Tri): Mergin' streaming_progressive_resample() & streaming_temporal_sample() should fix this?
   /* Capture current's own state BEFORE either side is reweighted. matches
    * spatial's canonical/neighbor treatment where both weight computations use
    * the pre-combine luminance/M of each side, not values already mutated by
    * this or an earlier combine step.
    *
    !!!(Tri): current->reservoir.total_weight may already include an additive
-   * contribution from same-pixel streaming_temporal_sample() if both
+   * contribution from same-pixel streaming_progressive_resample() if both
    * t-samples & t-frames are enabled together. the *= below retroactively 
    * scales that contribution too, unlike spatial's canonical, which is a fresh 
    * local never touched before its one multiply. */
@@ -728,6 +732,8 @@ const float history_M = history.M;
       /*N0=*/(float)history.M, /*N1=*/current_M_before);
 
   current->reservoir.total_weight *= (1.0f + (1.0f - canonical_pairwise));
+
+// TODO(Tri): Disable pairwise MIS in the temporal resampling pass. It seems to lead to a lot of variance under camera movement.
 
   /* History's own reweight, symmetric to spatial's neighbor term. */
   const float history_mis_weight = reservoir_pairwise_mis_weight(
@@ -803,7 +809,7 @@ ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_tem
                  use_temporal_samples, use_temporal_frames, visibility);
 
   if (use_temporal_samples) {
-    streaming_temporal_sample(kg, state, &current, &rng_state, visibility, render_buffer);
+    streaming_progressive_resample(kg, state, &current, &rng_state, visibility, render_buffer);
   }
 
   if (use_temporal_frames) {
@@ -897,7 +903,8 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
                        DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
 }
 
-ccl_device_inline void streaming_pt_samples(KernelGlobals kg, // !!!: GI
+/* GI/PT spatial neighbor-combine step. */
+ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
                                             IntegratorState state,
                                             const ccl_private SpatialResampling *resampling,
                                             ccl_private GlobalReservoir *reservoir,
@@ -967,6 +974,7 @@ ccl_debug_printf(
 
     valid_neighbors++;
     if (global_reservoir_finalize(&neighbor)) {
+
 ccl_debug_printf(
     "streaming_pt_samples: canonical AFTER finalize: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n",
     (double)canonical.total_weight,
@@ -976,7 +984,7 @@ ccl_debug_printf(
     (double)canonical.radiance.y,
     (double)canonical.radiance.z);
 
-      global_reservoir_add_reservoir(reservoir, neighbor, rand_pick);
+      global_reservoir_add_reservoir(reservoir, neighbor, rand_pick); // RIS
 
 ccl_debug_printf(
     "streaming_pt_samples: current_pt AFTER CANONICAL: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n",
