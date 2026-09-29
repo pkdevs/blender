@@ -1475,6 +1475,7 @@ struct wmOpPopUp {
   int width;
   int free_op;
   std::string title;
+  std::string alert_message;
   std::string message;
   std::string confirm_text;
   ui::AlertIcon icon;
@@ -1522,6 +1523,23 @@ static void dialog_cancel_cb(bContext *C, wmOpPopUp *data, ui::Block *block)
   popup_block_close(C, win, block);
 }
 
+static int multiline_string_widest_line_width(StringRef message)
+{
+  const uiStyle *style = ui::style_get_dpi();
+  /* Break Message into multiple lines. */
+  Vector<std::string> message_lines;
+  StringRef messaged_trimmed = StringRef(message).trim();
+  std::istringstream message_stream(messaged_trimmed);
+  std::string line;
+  int text_width = 0;
+  while (std::getline(message_stream, line)) {
+    message_lines.append(line);
+    text_width = std::max(
+        text_width, int(BLF_width(style->widget.uifont_id, line.c_str(), BLF_DRAW_STR_DUMMY_MAX)));
+  }
+  return text_width;
+}
+
 /**
  * Dialogs are popups that require user verification (click OK) before exec.
  */
@@ -1553,19 +1571,12 @@ static ui::Block *wm_block_dialog_create(bContext *C, ARegion *region, void *use
       120 * UI_SCALE_FAC,
       BLF_width(style->widget.uifont_id, data->title.c_str(), BLF_DRAW_STR_DUMMY_MAX));
 
-  /* Break Message into multiple lines. */
-  Vector<std::string> message_lines;
-  StringRef messaged_trimmed = StringRef(data->message).trim();
-  std::istringstream message_stream(messaged_trimmed);
-  std::string line;
-  while (std::getline(message_stream, line)) {
-    message_lines.append(line);
-    text_width = std::max(
-        text_width, int(BLF_width(style->widget.uifont_id, line.c_str(), BLF_DRAW_STR_DUMMY_MAX)));
-  }
+  text_width = std::max(text_width, multiline_string_widest_line_width(data->message));
+  text_width = std::max(text_width, multiline_string_widest_line_width(data->alert_message));
 
   int dialog_width = std::max(text_width + int(style->columnspace * 2.5), data->width);
-
+  dialog_width = std::min(dialog_width,
+                          WM_window_native_pixel_x(CTX_wm_window(C)) - UI_UNIT_X * 8);
   /* Adjust width if the button text is long. */
   const int longest_button_text = std::max(
       BLF_width(style->widget.uifont_id, data->confirm_text.c_str(), BLF_DRAW_STR_DUMMY_MAX),
@@ -1586,25 +1597,33 @@ static ui::Block *wm_block_dialog_create(bContext *C, ARegion *region, void *use
                             0,
                             style);
   }();
-
+  ui::Layout *info_layout = (!data->title.empty() || !data->alert_message.empty() ||
+                             !data->message.empty()) ?
+                                &layout.column(true) :
+                                nullptr;
   /* Title. */
   if (!data->title.empty()) {
-    uiItemL_ex(&layout, data->title, ICON_NONE, true, false);
+    uiItemL_ex(info_layout, data->title, ICON_NONE, true, false);
 
     /* Line under the title if there are properties but no message body. */
-    if (data->include_properties && message_lines.size() == 0) {
-      layout.separator(0.2f, ui::LayoutSeparatorType::Line);
+    if (data->include_properties && StringRef(data->message).trim().size() == 0 &&
+        StringRef(data->alert_message).trim().size() == 0)
+    {
+      info_layout->separator(0.2f, ui::LayoutSeparatorType::Line);
     };
   }
 
-  /* Message lines. */
-  if (message_lines.size() > 0) {
-    ui::Layout &lines = layout.column(false);
-    lines.scale_y_set(0.65f);
-    lines.separator(0.1f);
-    for (auto &st : message_lines) {
-      lines.label(st, ICON_NONE);
-    }
+  /* Multi-line alert message label. */
+  if (StringRef(data->alert_message).trim().size() != 0) {
+    ui::Layout &sub = info_layout->column(false);
+    sub.red_alert_set(true);
+    sub.label_multiline(data->alert_message, ICON_NONE);
+  }
+
+  /* Multi-line message  label. */
+  if (StringRef(data->message).trim().size() != 0) {
+    ui::Layout &sub = info_layout->column(false);
+    sub.label_multiline(data->message, ICON_NONE);
   }
 
   if (data->include_properties) {
@@ -1756,7 +1775,8 @@ wmOperatorStatus WM_operator_confirm_ex(bContext *C,
                                         const char *message,
                                         const char *confirm_text,
                                         ui::AlertIcon icon,
-                                        bool cancel_default)
+                                        bool cancel_default,
+                                        const char *alert_message)
 {
   wmOpPopUp *data = MEM_new<wmOpPopUp>(__func__);
   data->op = op;
@@ -1769,6 +1789,7 @@ wmOperatorStatus WM_operator_confirm_ex(bContext *C,
   data->free_op = true;
   data->title = (title == nullptr) ? WM_operatortype_name(op->type, op->ptr) : title;
   data->message = (message == nullptr) ? std::string() : message;
+  data->alert_message = (alert_message == nullptr) ? std::string() : alert_message;
   data->confirm_text = (confirm_text == nullptr) ? IFACE_("OK") : confirm_text;
   data->icon = icon;
   data->size = (message == nullptr) ? WM_POPUP_SIZE_SMALL : WM_POPUP_SIZE_LARGE;

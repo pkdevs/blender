@@ -244,6 +244,7 @@ static int rna_Operator_confirm(bContext *C,
                                 wmOperator *op,
                                 wmEvent * /*event*/,
                                 const char *title,
+                                const char *alert_message,
                                 const char *message,
                                 const char *confirm_text,
                                 const int icon,
@@ -252,6 +253,8 @@ static int rna_Operator_confirm(bContext *C,
 {
   std::optional<StringRefNull> title_str = RNA_translate_ui_text(
       title, text_ctxt, nullptr, nullptr, translate);
+  std::optional<StringRefNull> alert_str = RNA_translate_ui_text(
+      alert_message, text_ctxt, nullptr, nullptr, translate);
   std::optional<StringRefNull> message_str = RNA_translate_ui_text(
       message, text_ctxt, nullptr, nullptr, translate);
   std::optional<StringRefNull> confirm_text_str = RNA_translate_ui_text(
@@ -261,7 +264,9 @@ static int rna_Operator_confirm(bContext *C,
                                 title_str ? title_str->c_str() : nullptr,
                                 message_str ? message_str->c_str() : nullptr,
                                 confirm_text_str ? confirm_text_str->c_str() : nullptr,
-                                ui::AlertIcon(icon));
+                                ui::AlertIcon(icon),
+                                false,
+                                alert_str ? alert_str->c_str() : nullptr);
 }
 
 static void rna_WM_try_activate_rna_button(blender::wmWindowManager * /*wm*/,
@@ -1176,6 +1181,12 @@ void RNA_api_wm(StructRNA *srna)
 
   parm = RNA_def_property(func, "title", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(parm, "Title", "Optional text to show as title of the popup");
+
+  parm = RNA_def_property(func, "alert_message", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(
+      parm,
+      "Alert Message",
+      "Optional alert message to show tinted with the error state color preference");
 
   parm = RNA_def_property(func, "message", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(parm, "Message", "Optional first line of content text");

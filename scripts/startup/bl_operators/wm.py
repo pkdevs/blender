@@ -1095,8 +1095,11 @@ class WM_OT_url_open(Operator):
             return context.window_manager.invoke_confirm(
                 self,
                 event,
-                title="You are about to access an external website, are you sure?",
-                confirm_text="Go to Website")
+                title="Open External Website",
+                alert_message=self.url,
+                message="The website's content cannot be verified, be cautious when downloading files.\nOnly continue if yout trust this website",
+                confirm_text="Open External Website",
+                icon='WARNING')
 
         return self.execute(context)
 
