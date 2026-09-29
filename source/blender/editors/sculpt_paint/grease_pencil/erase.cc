@@ -957,6 +957,7 @@ struct EraseOperationExecutor {
                                              project_fn,
                                              shapes,
                                              normal_planes,
+                                             shapes.index_range(),
                                              clipping_shapes,
                                              layer_to_world,
                                              region);

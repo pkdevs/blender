@@ -437,15 +437,18 @@ static bke::CurvesGeometry test_curve_boolean(const Operation opt,
   using namespace bke::greasepencil;
   CurveBooleanOpParameters op_params;
   op_params.boolean_mode = opt;
+  op_params.fill_rule = FillRule::OddEven;
   op_params.keep_caps = true;
   op_params.skip_clipping_attributes = false;
   op_params.separate_islands = false;
+  op_params.self_intersect = false;
 
   const ShapeData shapes_data = shapes_from_fill_ids(VArray<int>::from_span(fill_ids),
                                                      src_curves.curves_num());
   const GroupedSpan<int> shapes = shapes_data.shapes();
 
-  return curve_boolean(op_params, src_curves, project_fn, shapes, clipping_shapes);
+  return curve_boolean(
+      op_params, src_curves, project_fn, shapes, shapes.index_range(), clipping_shapes);
 }
 
 class GreasePencilBooleanTest : public bke::BlenderGTestBase {};
