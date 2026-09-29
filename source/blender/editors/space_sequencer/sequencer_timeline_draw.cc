@@ -80,7 +80,7 @@ namespace blender::ed::vse {
 constexpr int MUTE_ALPHA = 120;
 
 constexpr float ICON_SIZE = 12.0f;
-constexpr float ICON_SIZE_THUMBNAIL = 18.0f;
+constexpr float ICON_SIZE_THUMBNAIL = 20.0f;
 
 Vector<Strip *> sequencer_visible_strips_get(const bContext *C)
 {
@@ -1038,18 +1038,26 @@ static void draw_strip_icons(const TimelineDrawContext &ctx,
       rctf rect;
       rect.xmin = strip.left_handle + strip.handle_width;
       rect.xmax = strip.right_handle - strip.handle_width;
-      rect.ymin = strip.bottom;
-      rect.ymax = strip.strip_content_top;
+
+      const float pad_y = 5.0f * UI_SCALE_FAC * ctx.pixely;
+      rect.ymin = strip.bottom + pad_y;
+      rect.ymax = strip.strip_content_top - pad_y;
+
       const int icon_id = get_icon_id_from_strip_type(strip.strip);
+
+      const float avail_size = BLI_rctf_size_y(&rect) / ctx.pixely * UI_INV_SCALE_FAC;
+      const float icon_size = min_ff(ICON_SIZE_THUMBNAIL, avail_size);
 
       uchar col[4];
       ui::theme::get_color_4ubv(TH_REDALERT, col);
 
-      if (missing_data) {
-        draw_icon_centered(ctx, rect, icon_id, col, ICON_SIZE_THUMBNAIL);
-      }
-      if (missing_media) {
-        draw_icon_centered(ctx, rect, icon_id, col, ICON_SIZE_THUMBNAIL);
+      if (icon_size >= ICON_SIZE) {
+        if (missing_data) {
+          draw_icon_centered(ctx, rect, icon_id, col, icon_size);
+        }
+        if (missing_media) {
+          draw_icon_centered(ctx, rect, icon_id, col, icon_size);
+        }
       }
     }
   }
