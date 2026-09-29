@@ -8,7 +8,9 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <cmath>
 #include <cstring>
+#include <optional>
 
 #include "DNA_armature_types.h"
 #include "DNA_curve_types.h"
@@ -23,12 +25,15 @@
 
 #include "BLT_translation.hh"
 
+#include "BLI_array.hh"
 #include "BLI_array_utils_c.hh"
 #include "BLI_bit_vector.hh"
+#include "BLI_bounds.hh"
 #include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_utildefines.hh"
@@ -66,6 +71,7 @@
 #include "ED_object.hh"
 #include "ED_object_vgroup.hh"
 #include "ED_screen.hh"
+#include "ED_transform.hh"
 
 #include "ANIM_bone_collections.hh"
 
@@ -130,6 +136,45 @@ struct CurvesDataPanelState {
   float aspect_ratio;
 };
 
+/**
+ * Coordinates of the selected elements when a dimensions drag began.
+ *
+ * Scaling in place would seem simpler, however a dimension set to zero loses the size with no
+ * way to scale back up. Only allocated once a dimension is edited.
+ */
+struct TransformCoordsOrig {
+  /* For the drag as a whole. */
+
+  /** Selected coordinates, in apply-loop visit order. */
+  Array<float3> coords;
+  /** Size & pivot when the drag began, every scale is relative to these. */
+  float3 dims;
+  float3 pivot;
+  /**
+   * Median edits accumulated since the drag began, in object space.
+   *
+   * A drag can cover the median buttons too (see #multibut_states_tag) and restoring the
+   * coordinates would undo those edits, so fold them into the scale matrix as a translation.
+   * Moving the stored coordinates instead needs the inverse of the scale, which doesn't
+   * exist once a dimension reaches zero.
+   */
+  float3 location_offset = float3(0.0f);
+
+  /* For the update in progress. */
+
+  /** Advanced by #apply, reset at the start of every update. */
+  int coords_index = 0;
+  /** False until the first update has filled `coords`. */
+  bool is_stored = false;
+
+  /**
+   * Scale `co`, storing the original on the first update, restoring it after.
+   *
+   * Callers must visit coordinates in the same order every update.
+   */
+  void apply(const float4x4 &mat, float co[3]);
+};
+
 /* temporary struct for storing transform properties */
 
 struct TransformProperties {
@@ -143,6 +188,21 @@ struct TransformProperties {
 
   /* Floats only (treated as an array). */
   TransformMedian ve_median, median;
+
+  /* Selection size, in the same space as `ve_median`. */
+  float3 ve_dims;
+  /**
+   * The size the panel last drew, editing a dimension button is the only way `ve_dims` differs.
+   *
+   * Comparing the button against a freshly measured size would seem simpler, however the
+   * measurement isn't stable: the panel may not redraw between two updates of a median drag
+   * and translating coordinates shifts the size by rounding, which would read as a dimension
+   * edit and scale the selection about the pivot instead of moving it.
+   */
+  float3 ve_dims_prev;
+  /* Only set while dragging a dimension. */
+  std::optional<TransformCoordsOrig> coords_orig;
+
   bool tag_for_update;
 };
 
@@ -153,12 +213,22 @@ struct TransformProperties {
 static TransformProperties *v3d_transform_props_ensure(View3D *v3d);
 
 /* -------------------------------------------------------------------- */
-/** \name Edit Mesh Partial Updates
+/** \name Panel Interaction
+ *
+ * Bracket a drag to free the original coordinates and limit edit-mesh updates to the selection.
  * \{ */
 
-static void *editmesh_partial_update_begin_fn(bContext * /*C*/,
-                                              const ui::BlockInteraction_Params *params,
-                                              void *arg1)
+/** The view may be gone when the interaction ends, hence the null check. */
+static void coords_orig_free(const bContext *C)
+{
+  if (View3D *v3d = CTX_wm_view3d(C)) {
+    v3d_transform_props_ensure(v3d)->coords_orig.reset();
+  }
+}
+
+static void *transform_panel_interaction_begin_fn(bContext *C,
+                                                  const ui::BlockInteraction_Params *params,
+                                                  void *arg1)
 {
   const int retval_test = B_TRANSFORM_PANEL_MEDIAN;
   if (BLI_array_findindex(
@@ -167,8 +237,17 @@ static void *editmesh_partial_update_begin_fn(bContext * /*C*/,
     return nullptr;
   }
 
+  /* Paranoid, an unfinished drag would scale from stale coordinates. */
+  coords_orig_free(C);
+
   Object *ob = static_cast<Object *>(arg1);
+  if (ob->type != OB_MESH) {
+    return nullptr;
+  }
   BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+  if (bm == nullptr) {
+    return nullptr;
+  }
 
   int verts_mask_count = 0;
   BMIter iter;
@@ -193,11 +272,13 @@ static void *editmesh_partial_update_begin_fn(bContext * /*C*/,
   return bmpinfo;
 }
 
-static void editmesh_partial_update_end_fn(bContext * /*C*/,
-                                           const ui::BlockInteraction_Params * /*params*/,
-                                           void * /*arg1*/,
-                                           void *user_data)
+static void transform_panel_interaction_end_fn(bContext *C,
+                                               const ui::BlockInteraction_Params * /*params*/,
+                                               void * /*arg1*/,
+                                               void *user_data)
 {
+  coords_orig_free(C);
+
   BMPartialUpdate *bmpinfo = static_cast<BMPartialUpdate *>(user_data);
   if (bmpinfo == nullptr) {
     return;
@@ -205,10 +286,10 @@ static void editmesh_partial_update_end_fn(bContext * /*C*/,
   BM_mesh_partial_destroy(bmpinfo);
 }
 
-static void editmesh_partial_update_update_fn(bContext *C,
-                                              const ui::BlockInteraction_Params * /*params*/,
-                                              void *arg1,
-                                              void *user_data)
+static void transform_panel_interaction_update_fn(bContext *C,
+                                                  const ui::BlockInteraction_Params * /*params*/,
+                                                  void *arg1,
+                                                  void *user_data)
 {
   BMPartialUpdate *bmpinfo = static_cast<BMPartialUpdate *>(user_data);
   if (bmpinfo == nullptr) {
@@ -234,6 +315,119 @@ static void editmesh_partial_update_update_fn(bContext *C,
 /* -------------------------------------------------------------------- */
 /** \name Median Utilities
  * \{ */
+
+/** Bounds before any point has been added, see #median_bounds_add. */
+static Bounds<float3> median_bounds_init()
+{
+  return {
+      float3(FLT_MAX),
+      float3(-FLT_MAX),
+  };
+}
+
+/**
+ * Return true once a point has been added, an inverted range never had one.
+ *
+ * Unlike #Bounds::is_empty which is also true for a single point.
+ */
+static bool median_bounds_is_set(const Bounds<float3> &bounds)
+{
+  return bounds.min.x <= bounds.max.x;
+}
+
+/**
+ * Accumulate `co` into `r_location` and expand `r_bounds` to include it.
+ *
+ * A naive approach would be to accumulate the bounds in local space then transform them,
+ * however transforming a bounding box grows it when the object is rotated,
+ * so transform each point as it's added.
+ *
+ * \param matrix: The object to world matrix, null to keep the bounds in object space.
+ * \param co: The point in object space (grease pencil layers must convert first).
+ */
+static void median_bounds_add(float r_location[3],
+                              Bounds<float3> &r_bounds,
+                              const float matrix[4][4],
+                              const float co[3])
+{
+  add_v3_v3(r_location, co);
+
+  float3 co_test(co);
+  if (matrix) {
+    mul_m4_v3(matrix, co_test);
+  }
+  math::min_max(co_test, r_bounds.min, r_bounds.max);
+}
+
+/** First update, `co` hasn't been scaled yet so store it. */
+static void dims_apply_store(TransformCoordsOrig &coords_orig, const float4x4 &mat, float co[3])
+{
+  coords_orig.coords[coords_orig.coords_index++] = float3(co);
+  mul_m4_v3(mat.ptr(), co);
+}
+
+/** Later updates, `co` is what the last update scaled it to, so replace it. */
+static void dims_apply_restore(TransformCoordsOrig &coords_orig, const float4x4 &mat, float co[3])
+{
+  copy_v3_v3(co, math::transform_point(mat, coords_orig.coords[coords_orig.coords_index++]));
+}
+
+void TransformCoordsOrig::apply(const float4x4 &mat, float co[3])
+{
+  this->is_stored ? dims_apply_restore(*this, mat, co) : dims_apply_store(*this, mat, co);
+}
+
+/**
+ * Calculate the matrix which scales the selection from `dims_orig` to `dims_new`.
+ *
+ * The scale is about the transform pivot (see #calc_pivot_pos) to match an interactive scale.
+ * A size only says how big the selection becomes, the pivot decides where it grows from.
+ *
+ * \param matrix: The object to world matrix when the dimensions are in global space, otherwise
+ * null. Must match the matrix passed to #median_bounds_add.
+ * \return the scale in local space, ready to apply to element coordinates.
+ * None when the dimensions are in global space and the object matrix can't be inverted.
+ */
+static std::optional<float4x4> median_dims_scale_matrix_calc(const Object *ob,
+                                                             const float matrix[4][4],
+                                                             const float3 &pivot_world,
+                                                             const float3 &dims_orig,
+                                                             const float3 &dims_new)
+{
+  float3 scale(1.0f);
+  for (const int axis : IndexRange(3)) {
+    const float scale_axis = dims_new[axis] / dims_orig[axis];
+    if (!std::isfinite(scale_axis)) {
+      /* Flat on this axis, no scale can give it a size.
+       * #BKE_object_dimensions_set_ex discards a non-finite scale for the same reason. */
+      continue;
+    }
+    scale[axis] = scale_axis;
+  }
+
+  float3 pivot = pivot_world;
+  if (matrix == nullptr) {
+    /* The pivot is always in global space, the dimensions are not.
+     * A pseudo inverse maps the pivot even when the object has a zero scaled axis,
+     * the scale never leaves local space so a true inverse isn't needed. */
+    pivot = math::transform_point(math::pseudo_invert(ob->object_to_world()), pivot);
+  }
+
+  const float4x4 mat = math::from_loc_scale<float4x4>(pivot - (scale * pivot), scale);
+  if (matrix == nullptr) {
+    return mat;
+  }
+
+  bool is_invertible;
+  const float4x4 world_to_object = math::invert(ob->object_to_world(), is_invertible);
+  if (!is_invertible) {
+    /* A zero scale on any axis, the zero matrix #math::invert returns would collapse
+     * the selection onto the object origin. */
+    return std::nullopt;
+  }
+  /* The scale is in global space, wrap it to apply to local coordinates. */
+  return world_to_object * mat * ob->object_to_world();
+}
 
 /* Helper function to compute a median changed value,
  * when the value should be clamped in [0.0, 1.0].
@@ -348,6 +542,7 @@ static TransformProperties *v3d_transform_props_ensure(View3D *v3d)
 
 struct CurvesPointSelectionStatus {
   TransformMedian_Curves median = {};
+  Bounds<float3> select_bounds = median_bounds_init();
   int total = 0;
   int total_curve_points = 0;
   int total_nurbs_weights = 0;
@@ -357,6 +552,7 @@ struct CurvesPointSelectionStatus {
   {
     CurvesPointSelectionStatus result;
     add_v3_v3v3(result.median.location, a.median.location, b.median.location);
+    result.select_bounds = bounds::merge(a.select_bounds, b.select_bounds);
     result.median.nurbs_weight = a.median.nurbs_weight + b.median.nurbs_weight;
     result.median.radius = a.median.radius + b.median.radius;
     result.median.tilt = a.median.tilt + b.median.tilt;
@@ -368,11 +564,13 @@ struct CurvesPointSelectionStatus {
 };
 
 /**
- * \param grease_pencil_layer_to_object: Grease pencil strokes are in layer space, the median in
- * object space. Null when the points are already in object space.
+ * \param grease_pencil_layer_to_object: Grease pencil strokes are in layer space, the median &
+ * bounds in object space. Null when the points are already in object space.
  */
 static CurvesPointSelectionStatus init_curves_point_selection_status(
-    const bke::CurvesGeometry &curves, const float4x4 *grease_pencil_layer_to_object)
+    const bke::CurvesGeometry &curves,
+    const float4x4 *grease_pencil_layer_to_object,
+    const float bounds_matrix[4][4])
 {
   using namespace ed::curves;
 
@@ -411,7 +609,10 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
           value.total_curve_points += curve_selection.size();
 
           curve_selection.foreach_index([&](const int point) {
-            add_v3_v3(value.median.location, to_object_space(positions[point]));
+            median_bounds_add(value.median.location,
+                              value.select_bounds,
+                              bounds_matrix,
+                              to_object_space(positions[point]));
             value.total_nurbs_weights += is_nurbs;
             value.median.nurbs_weight += is_nurbs ?
                                              (nurbs_weights ? (*nurbs_weights)[point] : 1.0f) :
@@ -444,7 +645,10 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
     status.total += selection.size();
 
     selection.foreach_index_optimized<int>([&](const int point) {
-      add_v3_v3(status.median.location, to_object_space((*positions)[point]));
+      median_bounds_add(status.median.location,
+                        status.select_bounds,
+                        bounds_matrix,
+                        to_object_space((*positions)[point]));
     });
   };
 
@@ -468,13 +672,15 @@ static float4x4 object_to_grease_pencil_layer_calc(const float4x4 &grease_pencil
 }
 
 /**
- * \param grease_pencil_layer_to_object: See #init_curves_point_selection_status. The median is
- * converted into layer space, cheaper than converting every point.
+ * \param grease_pencil_layer_to_object: See #init_curves_point_selection_status. The median &
+ * bounds are converted into layer space, cheaper than converting every point.
  */
 static bool apply_to_curves_point_selection(const int tot,
                                             const TransformMedian_Curves &median,
                                             const TransformMedian_Curves &ve_median,
+                                            const std::optional<float4x4> &dims_mat_object,
                                             const float4x4 *grease_pencil_layer_to_object,
+                                            TransformCoordsOrig *coords_orig,
                                             bke::CurvesGeometry &curves)
 {
   using namespace ed::curves;
@@ -485,11 +691,15 @@ static bool apply_to_curves_point_selection(const int tot,
   /* The median is a delta, with a single point selected it's absolute, see #apply_raw_diff_v3. */
   float3 median_location = median.location;
   float3 ve_median_location = ve_median.location;
+  std::optional<float4x4> dims_mat = dims_mat_object;
   if (grease_pencil_layer_to_object) {
     const float4x4 object_to_grease_pencil_layer = object_to_grease_pencil_layer_calc(
         *grease_pencil_layer_to_object);
     median_location = math::transform_direction(object_to_grease_pencil_layer, median_location);
     ve_median_location = math::transform_point(object_to_grease_pencil_layer, ve_median_location);
+    if (dims_mat) {
+      dims_mat = object_to_grease_pencil_layer * (*dims_mat) * (*grease_pencil_layer_to_object);
+    }
   }
 
   bool changed = false;
@@ -504,8 +714,9 @@ static bool apply_to_curves_point_selection(const int tot,
 
   IndexMaskMemory memory;
   const IndexMask selection = retrieve_selected_points(curves, memory);
-  const bool update_location = math::length_manhattan(median_location) > 0;
-  MutableSpan<float3> positions = update_location && !selection.is_empty() ?
+  const bool update_dims = dims_mat.has_value();
+  const bool update_location = !update_dims && (math::length_manhattan(median_location) > 0);
+  MutableSpan<float3> positions = (update_location || update_dims) && !selection.is_empty() ?
                                       curves.positions_for_write() :
                                       MutableSpan<float3>();
 
@@ -538,8 +749,14 @@ static bool apply_to_curves_point_selection(const int tot,
     }
   });
 
+  /* Serial, coordinates are stored & restored in visit order. */
+  if (update_dims) {
+    selection.foreach_index(
+        [&](const int point) { coords_orig->apply(*dims_mat, positions[point]); });
+  }
+
   /* Only location can be changed for Bezier handles. */
-  if (!update_location || !curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+  if ((!update_location && !update_dims) || !curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
     return changed;
   }
 
@@ -555,11 +772,17 @@ static bool apply_to_curves_point_selection(const int tot,
 
     bke::SpanAttributeWriter<float3> handles =
         curves.attributes_for_write().lookup_for_write_span<float3>(handles_attribute);
-    selection.foreach_index(
-        [&](const int point) {
-          apply_raw_diff_v3(handles.span[point], tot, ve_median_location, median_location);
-        },
-        exec_mode::grain_size(2048));
+    if (update_location) {
+      selection.foreach_index(
+          [&](const int point) {
+            apply_raw_diff_v3(handles.span[point], tot, ve_median_location, median_location);
+          },
+          exec_mode::grain_size(2048));
+    }
+    if (update_dims) {
+      selection.foreach_index(
+          [&](const int point) { coords_orig->apply(*dims_mat, handles.span[point]); });
+    }
     handles.finish();
 
     changed = true;
@@ -762,7 +985,12 @@ static CurvesSelectionStatus init_grease_pencil_selection_status(
 /** \name Edit Vertex Buttons
  * \{ */
 
-static void calc_median_bmesh(BMesh &bm, TransformMedian_Mesh &median, int &tot, int &totedgedata)
+static void calc_median_bmesh(BMesh &bm,
+                              const float bounds_matrix[4][4],
+                              TransformMedian_Mesh &median,
+                              Bounds<float3> &r_select_bounds,
+                              int &tot,
+                              int &totedgedata)
 {
   BMVert *eve;
   BMEdge *eed;
@@ -783,7 +1011,7 @@ static void calc_median_bmesh(BMesh &bm, TransformMedian_Mesh &median, int &tot,
     BM_ITER_MESH (eve, &iter, &bm, BM_VERTS_OF_MESH) {
       if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
         tot++;
-        add_v3_v3(median.location, eve->co);
+        median_bounds_add(median.location, r_select_bounds, bounds_matrix, eve->co);
 
         if (cd_vert_bweight_offset != -1) {
           median.bv_weight += BM_ELEM_CD_GET_FLOAT(eve, cd_vert_bweight_offset);
@@ -828,7 +1056,8 @@ static void apply_median_to_bmesh(BMesh &bm,
                                   const TransformMedian_Mesh &median,
                                   const TransformMedian_Mesh &ve_median,
                                   const int tot,
-                                  const bool apply_vcos)
+                                  const bool apply_vcos,
+                                  const FunctionRef<void(float co[3])> apply_coord_fn)
 {
   BMIter iter;
   BMVert *eve;
@@ -884,9 +1113,7 @@ static void apply_median_to_bmesh(BMesh &bm,
 
     BM_ITER_MESH (eve, &iter, &bm, BM_VERTS_OF_MESH) {
       if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-        if (apply_vcos) {
-          apply_raw_diff_v3(eve->co, tot, ve_median.location, median.location);
-        }
+        apply_coord_fn(eve->co);
 
         if (cd_vert_bweight_offset != -1) {
           float *b_weight = static_cast<float *>(
@@ -962,6 +1189,8 @@ static void v3d_editvertex_buts(
   TransformProperties *tfp = v3d_transform_props_ensure(v3d);
   TransformMedian median_basis, ve_median_basis;
   int tot, totedgedata, totcurvedata, totlattdata, totcurvebweight;
+  /* Knots whose handles move with them, storing three coordinates not one. */
+  int totcurvebezt = 0;
   int total_curve_points_data = 0;
   bool has_meshdata = false;
   bool has_skinradius = false;
@@ -970,11 +1199,16 @@ static void v3d_editvertex_buts(
   std::fill_n(reinterpret_cast<float *>(&median_basis), TRANSFORM_MEDIAN_ARRAY_LEN, 0.0f);
   tot = totedgedata = totcurvedata = totlattdata = totcurvebweight = 0;
 
+  /* Measure the bounds in the space the dimensions are shown in, null for local. */
+  const float (*bounds_matrix)[4] = (v3d->flag & V3D_GLOBAL_STATS) ? ob->object_to_world().ptr() :
+                                                                     nullptr;
+  Bounds<float3> select_bounds = median_bounds_init();
+
   if (ob->type == OB_MESH) {
     TransformMedian_Mesh &median = median_basis.mesh;
     Mesh *mesh = id_cast<Mesh *>(ob->data);
     BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
-    calc_median_bmesh(*bm, median, tot, totedgedata);
+    calc_median_bmesh(*bm, bounds_matrix, median, select_bounds, tot, totedgedata);
 
     has_meshdata = (tot || totedgedata);
     has_skinradius = CustomData_has_layer_named(
@@ -996,8 +1230,9 @@ static void v3d_editvertex_buts(
         a = nu.pntsu;
         while (a--) {
           if (bezt->f2 & SELECT) {
-            add_v3_v3(median->location, bezt->vec[1]);
+            median_bounds_add(median->location, select_bounds, bounds_matrix, bezt->vec[1]);
             tot++;
+            totcurvebezt++;
             median->weight += bezt->weight;
             median->radius += bezt->radius;
             median->tilt += bezt->tilt;
@@ -1009,11 +1244,11 @@ static void v3d_editvertex_buts(
           }
           else {
             if (bezt->f1 & SELECT) {
-              add_v3_v3(median->location, bezt->vec[0]);
+              median_bounds_add(median->location, select_bounds, bounds_matrix, bezt->vec[0]);
               tot++;
             }
             if (bezt->f3 & SELECT) {
-              add_v3_v3(median->location, bezt->vec[2]);
+              median_bounds_add(median->location, select_bounds, bounds_matrix, bezt->vec[2]);
               tot++;
             }
           }
@@ -1025,7 +1260,7 @@ static void v3d_editvertex_buts(
         a = nu.pntsu * nu.pntsv;
         while (a--) {
           if (bp->f1 & SELECT) {
-            add_v3_v3(median->location, bp->vec);
+            median_bounds_add(median->location, select_bounds, bounds_matrix, bp->vec);
             median->b_weight += bp->vec[3];
             totcurvebweight++;
             tot++;
@@ -1059,7 +1294,7 @@ static void v3d_editvertex_buts(
     bp = lt->editlatt->latt->def;
     while (a--) {
       if (bp->f1 & SELECT) {
-        add_v3_v3(median->location, bp->vec);
+        median_bounds_add(median->location, select_bounds, bounds_matrix, bp->vec);
         tot++;
         median->weight += bp->weight;
         if (!totlattdata) { /* I.e. first time... */
@@ -1097,8 +1332,8 @@ static void v3d_editvertex_buts(
                   grease_pencil.layer(info.layer_index).to_object_space(*ob);
               value = CurvesPointSelectionStatus::sum(
                   value,
-                  init_curves_point_selection_status(info.drawing.strokes(),
-                                                     &grease_pencil_layer_to_object));
+                  init_curves_point_selection_status(
+                      info.drawing.strokes(), &grease_pencil_layer_to_object, bounds_matrix));
             }
             return value;
           },
@@ -1107,11 +1342,13 @@ static void v3d_editvertex_buts(
     else {
       using namespace ed::curves;
       const Curves &curves_id = *id_cast<Curves *>(ob->data);
-      status = init_curves_point_selection_status(curves_id.geometry.wrap(), nullptr);
+      status = init_curves_point_selection_status(
+          curves_id.geometry.wrap(), nullptr, bounds_matrix);
     }
 
     TransformMedian_Curves &median = median_basis.curves;
     median = status.median;
+    select_bounds = status.select_bounds;
     tot = status.total;
     total_curve_points_data = status.total_curve_points;
     totcurvebweight = status.total_nurbs_weights;
@@ -1185,6 +1422,10 @@ static void v3d_editvertex_buts(
     const char *c;
 
     memcpy(&tfp->ve_median, &median_basis, sizeof(tfp->ve_median));
+    /* Refresh both even when the buttons below are hidden,
+     * any difference between them reads as an edit, see `ve_dims_prev`. */
+    tfp->ve_dims = select_bounds.size();
+    tfp->ve_dims_prev = tfp->ve_dims;
 
     block_align_begin(block);
     if (tot == 1) {
@@ -1272,6 +1513,45 @@ static void v3d_editvertex_buts(
       button_retval_set(but, B_TRANSFORM_PANEL_MEDIAN);
       button_number_step_size_set(but, 1);
       button_number_precision_set(but, 3);
+    }
+    block_align_end(block);
+
+    /* A single point has no size, the buttons would repeat the location above. */
+    if (tot > 1) {
+      const char *dims_tip = N_(
+          "Size of the selection, editing scales it about the transform pivot point");
+      uiDefBut(block,
+               ui::ButtonType::Label,
+               IFACE_("Dimensions:"),
+               0,
+               yi -= buth + but_margin,
+               butw,
+               buth,
+               nullptr,
+               0,
+               0,
+               "");
+
+      block_align_begin(block);
+      for (int i = 0; i < 3; i++) {
+        const char text[3] = {char('X' + i), ':', '\0'};
+        but = uiDefButV(block,
+                        ui::ButtonType::Num,
+                        text,
+                        0,
+                        yi -= buth,
+                        butw,
+                        buth,
+                        &tfp->ve_dims[i],
+                        0.0f,
+                        lim,
+                        TIP_(dims_tip));
+        button_retval_set(but, B_TRANSFORM_PANEL_MEDIAN);
+        button_number_step_size_set(but, 10);
+        button_number_precision_set(but, 3);
+        button_unit_type_set(but, PROP_UNIT_LENGTH);
+      }
+      block_align_end(block);
     }
 
     block_align_begin(block);
@@ -1599,17 +1879,14 @@ static void v3d_editvertex_buts(
 
     block_align_end(block);
 
-    if (ob->type == OB_MESH) {
-      Mesh *mesh = id_cast<Mesh *>(ob->data);
-      if (mesh->runtime->edit_mesh) {
-        ui::BlockInteraction_CallbackData callback_data{};
-        callback_data.begin_fn = editmesh_partial_update_begin_fn;
-        callback_data.end_fn = editmesh_partial_update_end_fn;
-        callback_data.update_fn = editmesh_partial_update_update_fn;
-        callback_data.arg1 = ob;
-        block_interaction_set(block, &callback_data);
-      }
-    }
+    /* Set for every type, the callbacks bracket the original coordinates too,
+     * only meshes have a partial update. */
+    ui::BlockInteraction_CallbackData callback_data{};
+    callback_data.begin_fn = transform_panel_interaction_begin_fn;
+    callback_data.end_fn = transform_panel_interaction_end_fn;
+    callback_data.update_fn = transform_panel_interaction_update_fn;
+    callback_data.arg1 = ob;
+    block_interaction_set(block, &callback_data);
   }
   else {
     /* Getting here (via #do_view3d_region_buttons()) if the above buttons return
@@ -1632,8 +1909,49 @@ static void v3d_editvertex_buts(
                 reinterpret_cast<float *>(&median_basis),
                 TRANSFORM_MEDIAN_ARRAY_LEN);
 
+    /* None unless a dimension button was edited. The bounds check is paranoid, a non-zero `tot`
+     * implies they're set, however an unset range reads as a huge size. */
+    std::optional<float4x4> dims_mat;
+    TransformCoordsOrig *coords_orig = tfp->coords_orig ? &*tfp->coords_orig : nullptr;
+    if (median_bounds_is_set(select_bounds)) {
+      const float3 dims_new = tfp->ve_dims;
+      if ((coords_orig == nullptr) && (dims_new != tfp->ve_dims_prev)) {
+        /* The first update runs before anything is scaled, so this size is the original. */
+        const Scene *scene = CTX_data_scene(C);
+        float3 pivot;
+        if (ed::transform::calc_pivot_pos(C, scene->toolsettings->transform_pivot_point, pivot)) {
+          coords_orig = &tfp->coords_orig.emplace();
+          coords_orig->dims = select_bounds.size();
+          coords_orig->pivot = pivot;
+          coords_orig->coords.reinitialize(tot + (totcurvebezt * 2));
+        }
+      }
+      if (coords_orig) {
+        dims_mat = median_dims_scale_matrix_calc(
+            ob, bounds_matrix, coords_orig->pivot, coords_orig->dims, dims_new);
+        if (dims_mat) {
+          /* Keep median edits made in the same drag, see #TransformCoordsOrig::location_offset. */
+          coords_orig->location_offset += float3(median_basis.generic.location);
+          dims_mat->location() += coords_orig->location_offset;
+          coords_orig->coords_index = 0;
+        }
+      }
+    }
+
     /* Note with a single element selected, we always do. */
-    const bool apply_vcos = (tot == 1) || (len_squared_v3(median_basis.generic.location) != 0.0f);
+    const bool apply_vcos = (tot == 1) || dims_mat.has_value() ||
+                            (len_squared_v3(median_basis.generic.location) != 0.0f);
+
+    /* Scaling takes the coordinate from the drag start, the median is folded into `dims_mat`. */
+    auto apply_coord_fn = [&](float co[3]) {
+      if (dims_mat) {
+        coords_orig->apply(*dims_mat, co);
+      }
+      else if (apply_vcos) {
+        apply_raw_diff_v3(
+            co, tot, ve_median_basis.generic.location, median_basis.generic.location);
+      }
+    };
 
     if ((ob->type == OB_MESH) &&
         (apply_vcos || median_basis.mesh.bv_weight || median_basis.mesh.v_crease ||
@@ -1644,7 +1962,7 @@ static void v3d_editvertex_buts(
       const TransformMedian_Mesh &ve_median = ve_median_basis.mesh;
       Mesh *mesh = id_cast<Mesh *>(ob->data);
       BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
-      apply_median_to_bmesh(*bm, median, ve_median, tot, apply_vcos);
+      apply_median_to_bmesh(*bm, median, ve_median, tot, apply_vcos, apply_coord_fn);
 
       if (apply_vcos) {
         /* Tell the update callback to run. */
@@ -1671,7 +1989,12 @@ static void v3d_editvertex_buts(
         if (nu.type == CU_BEZIER) {
           for (a = nu.pntsu, bezt = nu.bezt; a--; bezt++) {
             if (bezt->f2 & SELECT) {
-              if (apply_vcos) {
+              if (dims_mat) {
+                for (const int i : IndexRange(3)) {
+                  coords_orig->apply(*dims_mat, bezt->vec[i]);
+                }
+              }
+              else if (apply_vcos) {
                 /* Here we always have to use the diff... :/
                  * Cannot avoid some glitches when going e.g. from 3 to 0.0001 (see #37327),
                  * unless we use doubles.
@@ -1693,10 +2016,10 @@ static void v3d_editvertex_buts(
             else if (apply_vcos) {
               /* Handles can only have their coordinates changed here. */
               if (bezt->f1 & SELECT) {
-                apply_raw_diff_v3(bezt->vec[0], tot, ve_median->location, median->location);
+                apply_coord_fn(bezt->vec[0]);
               }
               if (bezt->f3 & SELECT) {
-                apply_raw_diff_v3(bezt->vec[2], tot, ve_median->location, median->location);
+                apply_coord_fn(bezt->vec[2]);
               }
             }
           }
@@ -1704,9 +2027,7 @@ static void v3d_editvertex_buts(
         else {
           for (a = nu.pntsu * nu.pntsv, bp = nu.bp; a--; bp++) {
             if (bp->f1 & SELECT) {
-              if (apply_vcos) {
-                apply_raw_diff_v3(bp->vec, tot, ve_median->location, median->location);
-              }
+              apply_coord_fn(bp->vec);
               if (median->b_weight) {
                 apply_raw_diff(&bp->vec[3], tot, ve_median->b_weight, median->b_weight);
               }
@@ -1746,9 +2067,7 @@ static void v3d_editvertex_buts(
       bp = lt->editlatt->latt->def;
       while (a--) {
         if (bp->f1 & SELECT) {
-          if (apply_vcos) {
-            apply_raw_diff_v3(bp->vec, tot, ve_median->location, median->location);
-          }
+          apply_coord_fn(bp->vec);
           if (median->weight) {
             apply_scale_factor_clamp(&bp->weight, tot, ve_median->weight, scale_w);
           }
@@ -1768,19 +2087,30 @@ static void v3d_editvertex_buts(
       GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
       Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
 
-      threading::parallel_for_each(drawings, [&](const MutableDrawingInfo &info) {
+      auto apply_drawing = [&](const MutableDrawingInfo &info) {
         bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
         const float4x4 grease_pencil_layer_to_object =
             grease_pencil.layer(info.layer_index).to_object_space(*ob);
         if (apply_to_curves_point_selection(tot,
                                             median_basis.curves,
                                             ve_median_basis.curves,
+                                            dims_mat,
                                             &grease_pencil_layer_to_object,
+                                            coords_orig,
                                             curves))
         {
           info.drawing.tag_positions_changed();
         }
-      });
+      };
+      if (dims_mat) {
+        /* The coordinate cursor runs across drawings, keep the order stable. */
+        for (const MutableDrawingInfo &info : drawings) {
+          apply_drawing(info);
+        }
+      }
+      else {
+        threading::parallel_for_each(drawings, apply_drawing);
+      }
       /* We basically want the same update as in #rna_grease_pencil_update(), so keep in sync. */
       WM_main_add_notifier(NC_GPENCIL | NA_EDITED, &grease_pencil.id);
     }
@@ -1790,13 +2120,24 @@ static void v3d_editvertex_buts(
       using namespace ed::curves;
       Curves &curves_id = *id_cast<Curves *>(ob->data);
       bke::CurvesGeometry &curves = curves_id.geometry.wrap();
-      if (apply_to_curves_point_selection(
-              tot, median_basis.curves, ve_median_basis.curves, nullptr, curves))
+      if (apply_to_curves_point_selection(tot,
+                                          median_basis.curves,
+                                          ve_median_basis.curves,
+                                          dims_mat,
+                                          nullptr,
+                                          coords_orig,
+                                          curves))
       {
         curves.tag_positions_changed();
       }
       /* We basically want the same update as in #rna_Curves_update_data(), so keep in sync. */
       WM_main_add_notifier(NC_GEOM | ND_DATA, &curves_id.id);
+    }
+
+    if (dims_mat) {
+      /* A shortfall means an element type is measured but never scaled. */
+      BLI_assert(coords_orig->coords_index == coords_orig->coords.size());
+      coords_orig->is_stored = true;
     }
 
     DEG_id_tag_update(ob->data, ID_RECALC_GEOMETRY);
