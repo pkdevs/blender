@@ -272,12 +272,11 @@ struct MeshBufferCache {
 
   SortedFaceData face_sorted;
 
-  /**
-   * Topology on the GPU, shared by all buffers copied to face corners on the GPU.
-   * See #gather_vert_to_corner_gpu, etc.
-   */
+  /** #Mesh::corner_verts(), for gathering vertex data to corners. */
   gpu::VertBufPtr corner_verts;
+  /** #Mesh::corner_edges(), for gathering edge data to corners. */
   gpu::VertBufPtr corner_edges;
+  /** #Mesh::faces(), for gathering face data to corners. */
   gpu::VertBufPtr face_offsets;
 };
 
