@@ -36,7 +36,7 @@ struct Mesh {
   GPUPrimType batch_prim_ = GPU_PRIM_NONE;
   // TODO: Vector<MeshLet> meshlets;
  public:
-  MEM_CXX_CLASS_ALLOC_FUNCS("draw::Mesh")
+  MEM_CXX_CLASS_ALLOC_FUNCS("Mesh")
 
   /** Takes ownership of \a batch. The batch is discarded when the #Mesh is destroyed. */
   Mesh(gpu::Batch *batch);
@@ -79,11 +79,11 @@ struct Mesh {
    */
   gpu::Batch *batch_get() const;
 
-  static inline void clear(Mesh *draw_mesh)
+  static inline void clear(Mesh *mesh)
   {
     /* Never clear procedural draw-meshes: they reference the context-owned singleton batch. */
-    if (draw_mesh && draw_mesh->batch_) {
-      GPU_batch_clear(draw_mesh->batch_);
+    if (mesh && mesh->batch_) {
+      GPU_batch_clear(mesh->batch_);
     }
   }
 };

@@ -72,7 +72,7 @@ struct [[host_shared]] DrawGroup {
     uint32_t vertex_len : 25;
 
     /** Needed to create the correct draw call. */
-    draw::Mesh *draw_mesh;
+    Mesh *mesh;
     uint64_t _cpu_pad0;
   } desc;
 #else

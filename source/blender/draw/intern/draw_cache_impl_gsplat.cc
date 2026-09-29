@@ -454,20 +454,20 @@ gpu::UniformBuf *GSplatEvalCache::infos_buf_get()
   return infos_buf;
 }
 
-draw::Mesh *GSplatEvalCache::dots_get()
+Mesh *GSplatEvalCache::dots_get()
 {
   return DRW_batch_request(&dots);
 }
 
-draw::Mesh *GSplatEvalCache::edit_dots_get()
+Mesh *GSplatEvalCache::edit_dots_get()
 {
   return DRW_batch_request(&edit_dots);
 }
 
-draw::Mesh *GSplatEvalCache::surface_get(const PointCloud &pointcloud)
+Mesh *GSplatEvalCache::surface_get(const PointCloud &pointcloud)
 {
   if (surface == nullptr) {
-    surface = MEM_new<draw::Mesh>(
+    surface = MEM_new<Mesh>(
         __func__,
         GPU_batch_create_procedural(GPU_PRIM_TRI_STRIP,
                                     DRW_GSPLAT_STRIP_TILE_SIZE * pointcloud.totpoint));
@@ -529,8 +529,8 @@ struct GSplatBatchCache {
     }
 
     ptr->eval_cache.mat_len = BKE_id_material_used_with_fallback_eval(pointcloud.id);
-    ptr->eval_cache.surface_per_mat = MEM_new_array_zeroed<draw::Mesh *>(ptr->eval_cache.mat_len,
-                                                                         __func__);
+    ptr->eval_cache.surface_per_mat = MEM_new_array_zeroed<Mesh *>(ptr->eval_cache.mat_len,
+                                                                   __func__);
     ptr->is_dirty = false;
   }
 
@@ -581,14 +581,14 @@ gpu::VertBuf **DRW_gsplat_evaluated_attribute(PointCloud *pointcloud, const Stri
   return nullptr;
 }
 
-draw::Mesh *DRW_gsplat_batch_cache_get_dots(Object *ob)
+Mesh *DRW_gsplat_batch_cache_get_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
   return pointcloud.type == PointCloudType::GSplat ? GSplatEvalCache::get(pointcloud).dots_get() :
                                                      nullptr;
 }
 
-draw::Mesh *DRW_gsplat_batch_cache_get_edit_dots(Object *ob)
+Mesh *DRW_gsplat_batch_cache_get_edit_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
   return pointcloud.type == PointCloudType::GSplat ?

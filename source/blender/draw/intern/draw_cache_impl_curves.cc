@@ -63,10 +63,10 @@ namespace blender::draw {
 struct CurvesBatchCache {
   CurvesEvalCache eval_cache;
 
-  draw::Mesh *edit_points;
-  draw::Mesh *edit_handles;
+  Mesh *edit_points;
+  Mesh *edit_handles;
 
-  draw::Mesh *sculpt_cage;
+  Mesh *sculpt_cage;
   gpu::IndexBuf *sculpt_cage_ibo;
 
   /* Crazy-space point positions for original points. */
@@ -91,7 +91,7 @@ struct CurvesBatchCache {
 
   gpu::IndexBuf *edit_handles_ibo;
 
-  draw::Mesh *edit_curves_lines;
+  Mesh *edit_curves_lines;
   gpu::VertBuf *edit_curves_lines_pos;
   gpu::IndexBuf *edit_curves_lines_ibo;
 
@@ -176,8 +176,8 @@ void CurvesEvalCache::clear()
   this->indirection_cylinder_buf.reset();
   this->indirection_ribbon_buf.reset();
 
-  for (MeshPtr &draw_mesh : this->batch) {
-    draw_mesh.reset();
+  for (MeshPtr &mesh : this->batch) {
+    mesh.reset();
   }
 
   this->discard_attributes();
@@ -882,9 +882,9 @@ Mesh *CurvesEvalCache::batch_get(const int evaluated_point_count,
                                  const bool use_cyclic,
                                  bool &r_over_limit)
 {
-  MeshPtr &draw_mesh = this->batch[face_per_segment];
-  if (draw_mesh) {
-    return draw_mesh.get();
+  MeshPtr &mesh = this->batch[face_per_segment];
+  if (mesh) {
+    return mesh.get();
   }
 
   int64_t segment_count = 0;
@@ -938,8 +938,8 @@ Mesh *CurvesEvalCache::batch_get(const int evaluated_point_count,
   r_over_limit = false;
 
   uint32_t vertex_count = segment_count * vert_per_segment;
-  draw_mesh = make_mesh(GPU_batch_create_procedural(prim_type, vertex_count));
-  return draw_mesh.get();
+  mesh = make_mesh(GPU_batch_create_procedural(prim_type, vertex_count));
+  return mesh.get();
 }
 
 CurvesEvalCache &curves_get_eval_cache(Curves &curves_id)
@@ -1004,25 +1004,25 @@ void DRW_curves_batch_cache_free_old(Curves *curves, int ctime)
   }
 }
 
-draw::Mesh *DRW_curves_batch_cache_get_edit_points(Curves *curves)
+Mesh *DRW_curves_batch_cache_get_edit_points(Curves *curves)
 {
   CurvesBatchCache &cache = get_batch_cache(*curves);
   return DRW_batch_request(&cache.edit_points);
 }
 
-draw::Mesh *DRW_curves_batch_cache_get_sculpt_curves_cage(Curves *curves)
+Mesh *DRW_curves_batch_cache_get_sculpt_curves_cage(Curves *curves)
 {
   CurvesBatchCache &cache = get_batch_cache(*curves);
   return DRW_batch_request(&cache.sculpt_cage);
 }
 
-draw::Mesh *DRW_curves_batch_cache_get_edit_curves_handles(Curves *curves)
+Mesh *DRW_curves_batch_cache_get_edit_curves_handles(Curves *curves)
 {
   CurvesBatchCache &cache = get_batch_cache(*curves);
   return DRW_batch_request(&cache.edit_handles);
 }
 
-draw::Mesh *DRW_curves_batch_cache_get_edit_curves_lines(Curves *curves)
+Mesh *DRW_curves_batch_cache_get_edit_curves_lines(Curves *curves)
 {
   CurvesBatchCache &cache = get_batch_cache(*curves);
   return DRW_batch_request(&cache.edit_curves_lines);

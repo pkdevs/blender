@@ -49,7 +49,7 @@ class GSplats : Overlay {
     ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
     {
       draw::gsplat_sub_pass_setup(ps_, ob_ref, res_handle, nullptr);
-      draw::Mesh *geom = DRW_cache_gsplat_vert_overlay_get(ob_ref.object);
+      Mesh *geom = DRW_cache_gsplat_vert_overlay_get(ob_ref.object);
       ps_.draw(geom, res_handle, res.select_id(ob_ref).get());
     }
   }

@@ -93,9 +93,9 @@ static void discard_buffers(MeshBatchCache &cache,
   };
 
   for (const int i : IndexRange(MBC_BATCH_LEN)) {
-    draw::Mesh *draw_mesh = (reinterpret_cast<draw::Mesh **>(&cache.batch))[i];
-    if (draw_mesh && batch_contains_data(*draw_mesh->batch_get())) {
-      MEM_SAFE_DELETE(((draw::Mesh **)&cache.batch)[i]);
+    Mesh *mesh = (reinterpret_cast<Mesh **>(&cache.batch))[i];
+    if (mesh && batch_contains_data(*mesh->batch_get())) {
+      MEM_SAFE_DELETE(((Mesh **)&cache.batch)[i]);
       cache.batch_ready &= ~DRWBatchFlag(uint64_t(1u) << i);
     }
   }
@@ -437,7 +437,7 @@ static void mesh_batch_cache_init(blender::Mesh &mesh)
   }
 
   cache->mat_len = BKE_id_material_used_with_fallback_eval(mesh.id);
-  cache->surface_per_mat = Array<draw::Mesh *>(cache->mat_len, nullptr);
+  cache->surface_per_mat = Array<Mesh *>(cache->mat_len, nullptr);
   cache->tris_per_mat.reinitialize(cache->mat_len);
 
   cache->is_dirty = false;
@@ -615,8 +615,8 @@ static void mesh_batch_cache_clear(MeshBatchCache &cache)
   cache.tris_per_mat = {};
 
   for (int i = 0; i < sizeof(cache.batch) / sizeof(void *); i++) {
-    draw::Mesh **draw_mesh = reinterpret_cast<draw::Mesh **>(&cache.batch);
-    MEM_SAFE_DELETE(draw_mesh[i]);
+    Mesh **mesh = reinterpret_cast<Mesh **>(&cache.batch);
+    MEM_SAFE_DELETE(mesh[i]);
   }
   for (const int i : cache.surface_per_mat.index_range()) {
     MEM_SAFE_DELETE(cache.surface_per_mat[i]);
@@ -679,28 +679,28 @@ static void request_active_and_default_color_attributes(const Object &object,
   request_color_attribute(me_final.default_color_attribute);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_all_verts(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_all_verts(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_ALL_VERTS;
   return DRW_batch_request(&cache.batch.all_verts);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_paint_overlay_verts(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_paint_overlay_verts(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_PAINT_OVERLAY_VERTS;
   return DRW_batch_request(&cache.batch.paint_overlay_verts);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_all_edges(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_all_edges(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_ALL_EDGES;
   return DRW_batch_request(&cache.batch.all_edges);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_surface(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_surface(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   mesh_batch_cache_request_surface_batches(mesh, cache);
@@ -716,14 +716,14 @@ gpu::BottomLevelAS *DRW_mesh_batch_cache_get_surface_blas(blender::Mesh &mesh)
   return cache.surface_blas;
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_paint_overlay_surface(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_paint_overlay_surface(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_PAINT_OVERLAY_SURFACE;
   return DRW_batch_request(&cache.batch.paint_overlay_surface);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_loose_edges(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_loose_edges(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   if (cache.no_loose_wire) {
@@ -733,14 +733,14 @@ draw::Mesh *DRW_mesh_batch_cache_get_loose_edges(blender::Mesh &mesh)
   return DRW_batch_request(&cache.batch.loose_edges);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_surface_weights(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_surface_weights(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_SURFACE_WEIGHTS;
   return DRW_batch_request(&cache.batch.surface_weights);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edge_detection(blender::Mesh &mesh, bool *r_is_manifold)
+Mesh *DRW_mesh_batch_cache_get_edge_detection(blender::Mesh &mesh, bool *r_is_manifold)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDGE_DETECTION;
@@ -752,14 +752,14 @@ draw::Mesh *DRW_mesh_batch_cache_get_edge_detection(blender::Mesh &mesh, bool *r
   return DRW_batch_request(&cache.batch.edge_detection);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_wireframes_face(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_wireframes_face(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= (MBC_WIRE_EDGES);
   return DRW_batch_request(&cache.batch.wire_edges);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edit_mesh_analysis(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edit_mesh_analysis(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_MESH_ANALYSIS;
@@ -775,8 +775,9 @@ void DRW_mesh_get_attributes(const Object &object,
   mesh_cd_calc_used_gpu_layers(object, mesh, materials, r_attrs, r_cd_needed);
 }
 
-Span<draw::Mesh *> DRW_mesh_batch_cache_get_surface_shaded(
-    Object &object, blender::Mesh &mesh, const Span<const GPUMaterial *> materials)
+Span<Mesh *> DRW_mesh_batch_cache_get_surface_shaded(Object &object,
+                                                     blender::Mesh &mesh,
+                                                     const Span<const GPUMaterial *> materials)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   mesh_cd_calc_used_gpu_layers(object, mesh, materials, &cache.attr_needed, &cache.cd_needed);
@@ -787,7 +788,7 @@ Span<draw::Mesh *> DRW_mesh_batch_cache_get_surface_shaded(
   return cache.surface_per_mat;
 }
 
-Span<draw::Mesh *> DRW_mesh_batch_cache_get_surface_texpaint(Object &object, blender::Mesh &mesh)
+Span<Mesh *> DRW_mesh_batch_cache_get_surface_texpaint(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   texpaint_request_active_uv(cache, object, mesh);
@@ -795,7 +796,7 @@ Span<draw::Mesh *> DRW_mesh_batch_cache_get_surface_texpaint(Object &object, ble
   return cache.surface_per_mat;
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_surface_texpaint_single(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_surface_texpaint_single(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   texpaint_request_active_uv(cache, object, mesh);
@@ -803,7 +804,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_surface_texpaint_single(Object &object, ble
   return cache.batch.surface;
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_surface_vertpaint(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_surface_vertpaint(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
 
@@ -816,7 +817,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_surface_vertpaint(Object &object, blender::
   return cache.batch.surface;
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_surface_sculpt(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_surface_sculpt(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
 
@@ -829,7 +830,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_surface_sculpt(Object &object, blender::Mes
   return cache.batch.surface;
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_sculpt_overlays(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_sculpt_overlays(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
 
@@ -840,7 +841,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_sculpt_overlays(blender::Mesh &mesh)
   return cache.batch.sculpt_overlays;
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_surface_viewer_attribute(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_surface_viewer_attribute(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
 
@@ -856,49 +857,49 @@ draw::Mesh *DRW_mesh_batch_cache_get_surface_viewer_attribute(blender::Mesh &mes
 /** \name Edit Mode API
  * \{ */
 
-draw::Mesh *DRW_mesh_batch_cache_get_edit_triangles(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edit_triangles(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_TRIANGLES;
   return DRW_batch_request(&cache.batch.edit_triangles);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edit_edges(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edit_edges(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_EDGES;
   return DRW_batch_request(&cache.batch.edit_edges);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edit_vertices(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edit_vertices(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_VERTICES;
   return DRW_batch_request(&cache.batch.edit_vertices);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edit_vert_normals(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edit_vert_normals(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_VNOR;
   return DRW_batch_request(&cache.batch.edit_vnor);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edit_loop_normals(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edit_loop_normals(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_LNOR;
   return DRW_batch_request(&cache.batch.edit_lnor);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edit_facedots(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edit_facedots(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_FACEDOTS;
   return DRW_batch_request(&cache.batch.edit_fdots);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edit_skin_roots(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edit_skin_roots(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_SKIN_ROOTS;
@@ -911,28 +912,28 @@ draw::Mesh *DRW_mesh_batch_cache_get_edit_skin_roots(blender::Mesh &mesh)
 /** \name Edit Mode selection API
  * \{ */
 
-draw::Mesh *DRW_mesh_batch_cache_get_triangles_with_select_id(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_triangles_with_select_id(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_SELECTION_FACES;
   return DRW_batch_request(&cache.batch.edit_selection_faces);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_facedots_with_select_id(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_facedots_with_select_id(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_SELECTION_FACEDOTS;
   return DRW_batch_request(&cache.batch.edit_selection_fdots);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edges_with_select_id(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edges_with_select_id(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_SELECTION_EDGES;
   return DRW_batch_request(&cache.batch.edit_selection_edges);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_verts_with_select_id(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_verts_with_select_id(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_EDIT_SELECTION_VERTS;
@@ -953,10 +954,10 @@ static void edituv_request_active_uv(MeshBatchCache &cache, Object &object, blen
   mesh_cd_calc_active_mask_uv_layer(object, mesh, cache.cd_needed);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edituv_faces_stretch_area(Object &object,
-                                                               blender::Mesh &mesh,
-                                                               float **tot_area,
-                                                               float **tot_uv_area)
+Mesh *DRW_mesh_batch_cache_get_edituv_faces_stretch_area(Object &object,
+                                                         blender::Mesh &mesh,
+                                                         float **tot_area,
+                                                         float **tot_uv_area)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -971,8 +972,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_edituv_faces_stretch_area(Object &object,
   return DRW_batch_request(&cache.batch.edituv_faces_stretch_area);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edituv_faces_stretch_angle(Object &object,
-                                                                blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edituv_faces_stretch_angle(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -980,7 +980,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_edituv_faces_stretch_angle(Object &object,
   return DRW_batch_request(&cache.batch.edituv_faces_stretch_angle);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edituv_faces(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edituv_faces(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -988,7 +988,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_edituv_faces(Object &object, blender::Mesh 
   return DRW_batch_request(&cache.batch.edituv_faces);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edituv_edges(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edituv_edges(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -996,7 +996,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_edituv_edges(Object &object, blender::Mesh 
   return DRW_batch_request(&cache.batch.edituv_edges);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edituv_verts(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edituv_verts(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -1004,7 +1004,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_edituv_verts(Object &object, blender::Mesh 
   return DRW_batch_request(&cache.batch.edituv_verts);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edituv_facedots(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edituv_facedots(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -1012,7 +1012,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_edituv_facedots(Object &object, blender::Me
   return DRW_batch_request(&cache.batch.edituv_fdots);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_uv_faces(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_uv_faces(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -1020,7 +1020,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_uv_faces(Object &object, blender::Mesh &mes
   return DRW_batch_request(&cache.batch.uv_faces);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_all_uv_wireframe(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_all_uv_wireframe(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -1028,7 +1028,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_all_uv_wireframe(Object &object, blender::M
   return DRW_batch_request(&cache.batch.wire_loops_all_uvs);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_uv_wireframe(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_uv_wireframe(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -1036,7 +1036,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_uv_wireframe(Object &object, blender::Mesh 
   return DRW_batch_request(&cache.batch.wire_loops_uvs);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_edituv_wireframe(Object &object, blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_edituv_wireframe(Object &object, blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   edituv_request_active_uv(cache, object, mesh);
@@ -1044,7 +1044,7 @@ draw::Mesh *DRW_mesh_batch_cache_get_edituv_wireframe(Object &object, blender::M
   return DRW_batch_request(&cache.batch.wire_loops_edituvs);
 }
 
-draw::Mesh *DRW_mesh_batch_cache_get_paint_overlay_edges(blender::Mesh &mesh)
+Mesh *DRW_mesh_batch_cache_get_paint_overlay_edges(blender::Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   cache.batch_requested |= MBC_PAINT_OVERLAY_WIRE_LOOPS;
@@ -1779,7 +1779,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     gpu::IndexBuf &tris_ibo = *buffers.ibos.lookup(IBOType::Tris);
     create_material_subranges(cache.final.face_sorted, tris_ibo, cache.tris_per_mat);
     for (const int material : IndexRange(cache.mat_len)) {
-      draw::Mesh *draw_mesh = cache.surface_per_mat[material];
+      Mesh *draw_mesh = cache.surface_per_mat[material];
       if (!draw_mesh) {
         continue;
       }

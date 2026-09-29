@@ -21,12 +21,12 @@
 
 namespace blender::draw::command {
 
-draw::Mesh *procedural_draw_mesh_get(GPUPrimType primitive)
+Mesh *procedural_draw_mesh_get(GPUPrimType primitive)
 {
-  static draw::Mesh mesh_pts(GPU_PRIM_POINTS);
-  static draw::Mesh mesh_lines(GPU_PRIM_LINES);
-  static draw::Mesh mesh_tris(GPU_PRIM_TRIS);
-  static draw::Mesh mesh_tri_strips(GPU_PRIM_TRI_STRIP);
+  static Mesh mesh_pts(GPU_PRIM_POINTS);
+  static Mesh mesh_lines(GPU_PRIM_LINES);
+  static Mesh mesh_tris(GPU_PRIM_TRIS);
+  static Mesh mesh_tri_strips(GPU_PRIM_TRI_STRIP);
 
   switch (primitive) {
     case GPU_PRIM_POINTS:
@@ -192,7 +192,7 @@ void Draw::execute(RecordingState &state) const
 
   GPU_shader_get_default_constant_state(state.shader).is_empty();
 
-  gpu::Batch *batch = draw_mesh->batch_get();
+  gpu::Batch *batch = mesh->batch_get();
 
   if (is_primitive_expansion()) {
     /* Expanded draw-call. */
@@ -232,7 +232,7 @@ void DrawMulti::execute(RecordingState &state) const
     const DrawGroup &group = groups[group_index];
 
     if (group.vertex_len > 0) {
-      gpu::Batch *batch = group.desc.draw_mesh->batch_get();
+      gpu::Batch *batch = group.desc.mesh->batch_get();
 
       if (GPUPrimType(group.desc.expand_prim_type) != GPU_PRIM_NONE) {
         /* Bind original batch as resource and use a procedural batch to issue the draw-call. */
@@ -266,7 +266,7 @@ void DrawIndirect::execute(RecordingState &state) const
 {
   state.front_facing_set(res_id.has_inverted_handedness());
 
-  gpu::Batch *batch = draw_mesh->batch_get();
+  gpu::Batch *batch = mesh->batch_get();
   GPU_batch_draw_indirect(batch, *indirect_buf, 0);
 }
 
@@ -755,7 +755,7 @@ void DrawCommandBuf::finalize_commands(Vector<Header, 0> &headers,
 
     int batch_vert_len, batch_vert_first, batch_base_index, batch_inst_len;
     /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
-    GPU_batch_draw_parameter_get(cmd.draw_mesh->batch_get(),
+    GPU_batch_draw_parameter_get(cmd.mesh->batch_get(),
                                  &batch_vert_len,
                                  &batch_vert_first,
                                  &batch_base_index,
@@ -823,7 +823,7 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
 
     int batch_vert_len, batch_vert_first, batch_base_index, batch_inst_len;
     /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
-    gpu::Batch *batch = group.desc.draw_mesh->batch_get();
+    gpu::Batch *batch = group.desc.mesh->batch_get();
     GPU_batch_draw_parameter_get(
         batch, &batch_vert_len, &batch_vert_first, &batch_base_index, &batch_inst_len);
 

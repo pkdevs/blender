@@ -199,7 +199,7 @@ class Paints : Overlay {
 
     switch (state.ctx_mode) {
       case CTX_MODE_PAINT_WEIGHT: {
-        draw::Mesh *geom = DRW_cache_mesh_surface_weights_get(ob_ref.object);
+        Mesh *geom = DRW_cache_mesh_surface_weights_get(ob_ref.object);
         if (masked_transparency_support_ && ob_ref.object->dt >= OB_SOLID) {
           weight_masked_transparency_ps_->draw(geom, manager.unique_handle(ob_ref));
         }
@@ -214,7 +214,7 @@ class Paints : Overlay {
       }
       case CTX_MODE_PAINT_TEXTURE: {
         if (show_paint_mask_) {
-          draw::Mesh *geom = DRW_cache_mesh_surface_texpaint_single_get(ob_ref.object);
+          Mesh *geom = DRW_cache_mesh_surface_texpaint_single_get(ob_ref.object);
           paint_mask_ps_.draw(geom, manager.unique_handle(ob_ref));
         }
         break;
@@ -236,16 +236,16 @@ class Paints : Overlay {
       const bool in_texture_paint_mode = state.ctx_mode == CTX_MODE_PAINT_TEXTURE;
 
       if ((use_face_selection || show_wires_) && !in_texture_paint_mode) {
-        draw::Mesh *geom = DRW_cache_mesh_paint_overlay_edges_get(ob_ref.object);
+        Mesh *geom = DRW_cache_mesh_paint_overlay_edges_get(ob_ref.object);
         paint_region_edge_ps_->push_constant("use_select", use_face_selection);
         paint_region_edge_ps_->draw(geom, manager.unique_handle(ob_ref));
       }
       if (use_face_selection) {
-        draw::Mesh *geom = DRW_cache_mesh_paint_overlay_surface_get(ob_ref.object);
+        Mesh *geom = DRW_cache_mesh_paint_overlay_surface_get(ob_ref.object);
         paint_region_face_ps_->draw(geom, manager.unique_handle(ob_ref));
       }
       if (use_vert_selection && !in_texture_paint_mode) {
-        draw::Mesh *geom = DRW_cache_mesh_paint_overlay_verts_get(ob_ref.object);
+        Mesh *geom = DRW_cache_mesh_paint_overlay_verts_get(ob_ref.object);
         paint_region_vert_ps_->draw(geom, manager.unique_handle(ob_ref));
       }
     }

@@ -22,7 +22,7 @@ namespace draw {
 struct Mesh;
 
 struct SculptBatch {
-  draw::Mesh *batch;
+  Mesh *batch;
   int material_slot;
   int debug_index;
   float3 debug_color();

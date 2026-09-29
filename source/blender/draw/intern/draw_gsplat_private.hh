@@ -58,11 +58,11 @@ struct GSplatEvalCache {
   /* --- Batches. --- */
 
   /* Triangle primitive types. */
-  draw::Mesh *surface;
-  draw::Mesh **surface_per_mat;
+  Mesh *surface;
+  Mesh **surface_per_mat;
   /* Dot primitive types. */
-  draw::Mesh *dots;
-  draw::Mesh *edit_dots;
+  Mesh *dots;
+  Mesh *edit_dots;
 
   /* --- Builtin attribute buffers. --- */
 
@@ -132,9 +132,9 @@ struct GSplatEvalCache {
   gpu::VertBuf **attributes_get(uint request_i);
 
   /* Request pointers to batches that may not be filled yet, see `ensure_requested()`. */
-  draw::Mesh *dots_get();
-  draw::Mesh *edit_dots_get();
-  draw::Mesh *surface_get(const PointCloud &pointcloud);
+  Mesh *dots_get();
+  Mesh *edit_dots_get();
+  Mesh *surface_get(const PointCloud &pointcloud);
 
   /** Fill and build all requested buffers/batches. */
   void ensure_requested(PointCloud &pointcloud);

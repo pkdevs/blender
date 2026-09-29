@@ -61,7 +61,7 @@ struct ParticleHairFinalCache {
   gpu::VertBuf *proc_buf;
 
   /* Just contains a huge index buffer used to draw the final hair. */
-  draw::Mesh *proc_hairs[MAX_THICKRES];
+  Mesh *proc_hairs[MAX_THICKRES];
 
   int strands_res; /* points per hair, at least 2 */
 };
@@ -69,7 +69,7 @@ struct ParticleHairFinalCache {
 struct ParticleHairCache {
   gpu::VertBuf *pos;
   gpu::IndexBuf *indices;
-  draw::Mesh *hairs;
+  Mesh *hairs;
   int strands_len;
   int elems_len;
   int point_len;
@@ -84,7 +84,7 @@ struct ParticleHairCache {
 
 struct ParticlePointCache {
   gpu::VertBuf *pos;
-  draw::Mesh *points;
+  Mesh *points;
   int elems_len;
   int point_len;
 };
@@ -100,14 +100,14 @@ struct ParticleBatchCache {
   ParticleHairCache edit_hair;
 
   gpu::VertBuf *edit_pos;
-  draw::Mesh *edit_strands;
+  Mesh *edit_strands;
 
   gpu::VertBuf *edit_inner_pos;
-  draw::Mesh *edit_inner_points;
+  Mesh *edit_inner_points;
   int edit_inner_point_len;
 
   gpu::VertBuf *edit_tip_pos;
-  draw::Mesh *edit_tip_points;
+  Mesh *edit_tip_points;
   int edit_tip_point_len;
 
   /* Settings to determine if cache is invalid. */
@@ -1086,9 +1086,7 @@ ParticleDrawSource drw_particle_get_hair_source(Object *object,
   return src;
 }
 
-draw::Mesh *DRW_particles_batch_cache_get_hair(Object *object,
-                                               ParticleSystem *psys,
-                                               ModifierData *md)
+Mesh *DRW_particles_batch_cache_get_hair(Object *object, ParticleSystem *psys, ModifierData *md)
 {
   ParticleBatchCache *cache = particle_batch_cache_get(psys);
   if (cache->hair.hairs == nullptr) {
@@ -1096,19 +1094,19 @@ draw::Mesh *DRW_particles_batch_cache_get_hair(Object *object,
     ParticleDrawSource source = drw_particle_get_hair_source(object, psys, md, nullptr, 0);
     ensure_seg_pt_count(source.edit, source.psys, &cache->hair);
     particle_batch_cache_ensure_pos_and_seg(source.edit, source.psys, source.md, &cache->hair);
-    cache->hair.hairs = MEM_new<draw::Mesh>(
+    cache->hair.hairs = MEM_new<Mesh>(
         __func__, GPU_batch_create(GPU_PRIM_LINE_STRIP, cache->hair.pos, cache->hair.indices));
   }
   return cache->hair.hairs;
 }
 
-draw::Mesh *DRW_particles_batch_cache_get_dots(Object *object, ParticleSystem *psys)
+Mesh *DRW_particles_batch_cache_get_dots(Object *object, ParticleSystem *psys)
 {
   ParticleBatchCache *cache = particle_batch_cache_get(psys);
 
   if (cache->point.points == nullptr) {
     particle_batch_cache_ensure_pos(object, psys, &cache->point);
-    cache->point.points = MEM_new<draw::Mesh>(
+    cache->point.points = MEM_new<Mesh>(
         __func__, GPU_batch_create(GPU_PRIM_POINTS, cache->point.pos, nullptr));
   }
 
@@ -1148,10 +1146,10 @@ static void particle_batch_cache_ensure_edit_pos_and_seg(PTCacheEdit *edit,
   hair_cache->indices = GPU_indexbuf_build(&elb);
 }
 
-draw::Mesh *DRW_particles_batch_cache_get_edit_strands(Object *object,
-                                                       ParticleSystem *psys,
-                                                       PTCacheEdit *edit,
-                                                       bool use_weight)
+Mesh *DRW_particles_batch_cache_get_edit_strands(Object *object,
+                                                 ParticleSystem *psys,
+                                                 PTCacheEdit *edit,
+                                                 bool use_weight)
 {
   ParticleBatchCache *cache = particle_batch_cache_get(psys);
   if (cache->edit_is_weight != use_weight) {
@@ -1164,7 +1162,7 @@ draw::Mesh *DRW_particles_batch_cache_get_edit_strands(Object *object,
   drw_particle_update_ptcache_edit(object, psys, edit);
   ensure_seg_pt_count(edit, psys, &cache->edit_hair);
   particle_batch_cache_ensure_edit_pos_and_seg(edit, psys, nullptr, &cache->edit_hair, use_weight);
-  cache->edit_hair.hairs = MEM_new<draw::Mesh>(
+  cache->edit_hair.hairs = MEM_new<Mesh>(
       __func__,
       GPU_batch_create(GPU_PRIM_LINE_STRIP, cache->edit_hair.pos, cache->edit_hair.indices));
   cache->edit_is_weight = use_weight;
@@ -1216,9 +1214,9 @@ static void particle_batch_cache_ensure_edit_inner_pos(PTCacheEdit *edit,
   }
 }
 
-draw::Mesh *DRW_particles_batch_cache_get_edit_inner_points(Object *object,
-                                                            ParticleSystem *psys,
-                                                            PTCacheEdit *edit)
+Mesh *DRW_particles_batch_cache_get_edit_inner_points(Object *object,
+                                                      ParticleSystem *psys,
+                                                      PTCacheEdit *edit)
 {
   ParticleBatchCache *cache = particle_batch_cache_get(psys);
   if (cache->edit_inner_points != nullptr) {
@@ -1227,7 +1225,7 @@ draw::Mesh *DRW_particles_batch_cache_get_edit_inner_points(Object *object,
   drw_particle_update_ptcache_edit(object, psys, edit);
   ensure_edit_inner_points_count(edit, cache);
   particle_batch_cache_ensure_edit_inner_pos(edit, cache);
-  cache->edit_inner_points = MEM_new<draw::Mesh>(
+  cache->edit_inner_points = MEM_new<Mesh>(
       __func__, GPU_batch_create(GPU_PRIM_POINTS, cache->edit_inner_pos, nullptr));
   return cache->edit_inner_points;
 }
@@ -1274,9 +1272,9 @@ static void particle_batch_cache_ensure_edit_tip_pos(PTCacheEdit *edit, Particle
   }
 }
 
-draw::Mesh *DRW_particles_batch_cache_get_edit_tip_points(Object *object,
-                                                          ParticleSystem *psys,
-                                                          PTCacheEdit *edit)
+Mesh *DRW_particles_batch_cache_get_edit_tip_points(Object *object,
+                                                    ParticleSystem *psys,
+                                                    PTCacheEdit *edit)
 {
   ParticleBatchCache *cache = particle_batch_cache_get(psys);
   if (cache->edit_tip_points != nullptr) {
@@ -1285,7 +1283,7 @@ draw::Mesh *DRW_particles_batch_cache_get_edit_tip_points(Object *object,
   drw_particle_update_ptcache_edit(object, psys, edit);
   ensure_edit_tip_points_count(edit, cache);
   particle_batch_cache_ensure_edit_tip_pos(edit, cache);
-  cache->edit_tip_points = MEM_new<draw::Mesh>(
+  cache->edit_tip_points = MEM_new<Mesh>(
       __func__, GPU_batch_create(GPU_PRIM_POINTS, cache->edit_tip_pos, nullptr));
   return cache->edit_tip_points;
 }

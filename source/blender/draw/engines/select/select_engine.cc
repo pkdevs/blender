@@ -254,22 +254,22 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_FACE) {
       ranges.face = alloc_range(ranges.total, bm->totface);
 
-      draw::Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
+      Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
       PassSimple::Sub *face_sub = select_face_flat;
       face_sub->push_constant("offset", int(ranges.face.start()));
       face_sub->draw(geom_faces, res_handle);
 
       if (draw_facedot) {
-        draw::Mesh *geom_facedots = DRW_mesh_batch_cache_get_facedots_with_select_id(mesh);
+        Mesh *geom_facedots = DRW_mesh_batch_cache_get_facedots_with_select_id(mesh);
         face_sub->draw(geom_facedots, res_handle);
       }
     }
     else {
       if (ob->dt >= OB_SOLID) {
 #ifdef USE_CAGE_OCCLUSION
-        draw::Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
+        Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
 #else
-        draw::Mesh *geom_faces = DRW_mesh_batch_cache_get_surface(mesh);
+        Mesh *geom_faces = DRW_mesh_batch_cache_get_surface(mesh);
 #endif
         select_face_uniform->draw(geom_faces, res_handle);
       }
@@ -279,7 +279,7 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_EDGE) {
       ranges.edge = alloc_range(ranges.total, bm->totedge);
 
-      draw::Mesh *geom_edges = DRW_mesh_batch_cache_get_edges_with_select_id(mesh);
+      Mesh *geom_edges = DRW_mesh_batch_cache_get_edges_with_select_id(mesh);
       select_edge->push_constant("offset", int(ranges.edge.start()));
       select_edge->draw(geom_edges, res_handle);
     }
@@ -288,7 +288,7 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_VERTEX) {
       ranges.vert = alloc_range(ranges.total, bm->totvert);
 
-      draw::Mesh *geom_verts = DRW_mesh_batch_cache_get_verts_with_select_id(mesh);
+      Mesh *geom_verts = DRW_mesh_batch_cache_get_verts_with_select_id(mesh);
       select_vert->push_constant("offset", int(ranges.vert.start()));
       select_vert->draw(geom_verts, res_handle);
     }
@@ -306,7 +306,7 @@ struct Instance : public DrawEngine {
     ElemIndexRanges ranges{};
     ranges.total = IndexRange::from_begin_size(initial_index, 0);
 
-    draw::Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
+    Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
     if (select_mode & SCE_SELECT_FACE) {
       ranges.face = alloc_range(ranges.total, mesh.faces_num);
 
@@ -321,7 +321,7 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_EDGE) {
       ranges.edge = alloc_range(ranges.total, mesh.edges_num);
 
-      draw::Mesh *geom_edges = DRW_mesh_batch_cache_get_edges_with_select_id(mesh);
+      Mesh *geom_edges = DRW_mesh_batch_cache_get_edges_with_select_id(mesh);
       select_edge->push_constant("offset", int(ranges.edge.start()));
       select_edge->draw(geom_edges, res_handle);
     }
@@ -329,7 +329,7 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_VERTEX) {
       ranges.vert = alloc_range(ranges.total, mesh.verts_num);
 
-      draw::Mesh *geom_verts = DRW_mesh_batch_cache_get_verts_with_select_id(mesh);
+      Mesh *geom_verts = DRW_mesh_batch_cache_get_verts_with_select_id(mesh);
       select_vert->push_constant("offset", int(ranges.vert.start()));
       select_vert->draw(geom_verts, res_handle);
     }
@@ -378,7 +378,7 @@ struct Instance : public DrawEngine {
       if (ob->dt >= OB_SOLID) {
         /* This object is not selectable. It is here to participate in occlusion.
          * This is the case in retopology mode. */
-        draw::Mesh *geom_faces = DRW_mesh_batch_cache_get_surface(
+        Mesh *geom_faces = DRW_mesh_batch_cache_get_surface(
             DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 
         depth_occlude->draw(geom_faces, manager.unique_handle(ob_ref));

@@ -138,19 +138,19 @@ class Wireframe : Overlay {
     ColoringPass &coloring = in_edit_paint_mode ? non_colored : colored;
     switch (ob_ref.object->type) {
       case OB_CURVES_LEGACY: {
-        draw::Mesh *geom = DRW_cache_curve_edge_wire_get(ob_ref.object);
+        Mesh *geom = DRW_cache_curve_edge_wire_get(ob_ref.object);
         coloring.curves_ps_->draw(
             geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
         break;
       }
       case OB_FONT: {
-        draw::Mesh *geom = DRW_cache_text_edge_wire_get(ob_ref.object);
+        Mesh *geom = DRW_cache_text_edge_wire_get(ob_ref.object);
         coloring.curves_ps_->draw(
             geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
         break;
       }
       case OB_SURF: {
-        draw::Mesh *geom = DRW_cache_surf_edge_wire_get(ob_ref.object);
+        Mesh *geom = DRW_cache_surf_edge_wire_get(ob_ref.object);
         coloring.curves_ps_->draw(
             geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
         break;
@@ -160,8 +160,7 @@ class Wireframe : Overlay {
         break;
       case OB_GREASE_PENCIL: {
         if (show_surface_wire) {
-          draw::Mesh *geom = DRW_cache_grease_pencil_face_wireframe_get(state.scene,
-                                                                        ob_ref.object);
+          Mesh *geom = DRW_cache_grease_pencil_face_wireframe_get(state.scene, ob_ref.object);
           coloring.curves_ps_->draw(
               geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
         }
@@ -192,7 +191,7 @@ class Wireframe : Overlay {
             /* Only draw the wireframe in edit mode if object has edit cage.
              * Otherwise the wireframe will conflict with the edit cage drawing and produce
              * unpleasant aliasing. */
-            draw::Mesh *geom = DRW_cache_mesh_face_wireframe_get(ob_ref.object);
+            Mesh *geom = DRW_cache_mesh_face_wireframe_get(ob_ref.object);
             (all_edges ? coloring.mesh_all_edges_ps_ : coloring.mesh_ps_)
                 ->draw(geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
           }
@@ -202,7 +201,7 @@ class Wireframe : Overlay {
         if (!in_edit_paint_mode || bypass_mode_check) {
           const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(
               *ob_ref.object);
-          draw::Mesh *geom;
+          Mesh *geom;
           if ((mesh.edges_num == 0) && (mesh.verts_num > 0)) {
             geom = DRW_cache_mesh_all_verts_get(ob_ref.object);
             coloring.points_ps_->draw(
@@ -218,8 +217,8 @@ class Wireframe : Overlay {
       case OB_POINTCLOUD: {
         if (show_surface_wire) {
           ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
-          draw::Mesh *draw_mesh_pointcloud = DRW_pointcloud_batch_cache_get_dots(ob_ref.object);
-          draw::Mesh *draw_mesh_gsplat = DRW_gsplat_batch_cache_get_dots(ob_ref.object);
+          Mesh *draw_mesh_pointcloud = DRW_pointcloud_batch_cache_get_dots(ob_ref.object);
+          Mesh *draw_mesh_gsplat = DRW_gsplat_batch_cache_get_dots(ob_ref.object);
           if (draw_mesh_pointcloud) {
             coloring.pointcloud_ps_->draw(
                 draw_mesh_pointcloud, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
@@ -234,7 +233,7 @@ class Wireframe : Overlay {
       }
       case OB_VOLUME: {
         if (show_surface_wire) {
-          draw::Mesh *geom = DRW_cache_volume_face_wireframe_get(ob_ref.object);
+          Mesh *geom = DRW_cache_volume_face_wireframe_get(ob_ref.object);
           if (geom == nullptr) {
             break;
           }

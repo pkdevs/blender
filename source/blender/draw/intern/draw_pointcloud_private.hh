@@ -22,10 +22,10 @@ namespace draw {
 struct Mesh;
 
 gpu::VertBuf *pointcloud_position_and_radius_get(PointCloud *pointcloud);
-draw::Mesh **pointcloud_surface_shaded_get(PointCloud *pointcloud,
-                                           GPUMaterial **gpu_materials,
-                                           int mat_len);
-draw::Mesh *pointcloud_surface_get(PointCloud *pointcloud);
+Mesh **pointcloud_surface_shaded_get(PointCloud *pointcloud,
+                                     GPUMaterial **gpu_materials,
+                                     int mat_len);
+Mesh *pointcloud_surface_get(PointCloud *pointcloud);
 
 }  // namespace draw
 }  // namespace blender

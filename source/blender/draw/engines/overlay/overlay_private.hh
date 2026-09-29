@@ -992,7 +992,7 @@ struct Resources : public select::SelectMap {
 /* Reference to a flat object.
  * Allow deferred rendering condition of flat object for special purpose. */
 struct FlatObjectRef {
-  draw::Mesh *geom;
+  Mesh *geom;
   ResourceHandleRange handle;
   int flattened_axis_id;
 
@@ -1039,7 +1039,7 @@ struct FlatObjectRef {
     return -1;
   }
 
-  using Callback = FunctionRef<void(draw::Mesh *geom, ResourceID handle)>;
+  using Callback = FunctionRef<void(Mesh *geom, ResourceID handle)>;
 
   /* Execute callback for every handles that is orthogonal to the view.
    * Note: Only works in orthogonal view. */
@@ -1085,7 +1085,7 @@ template<typename InstanceDataT> struct ShapeInstanceBuf : private select::Selec
     data_buf.append(data);
   }
 
-  void end_sync(PassSimple::Sub &pass, draw::Mesh *shape)
+  void end_sync(PassSimple::Sub &pass, Mesh *shape)
   {
     if (data_buf.is_empty()) {
       return;
@@ -1096,10 +1096,7 @@ template<typename InstanceDataT> struct ShapeInstanceBuf : private select::Selec
     pass.draw(shape, data_buf.size());
   }
 
-  void end_sync(PassSimple::Sub &pass,
-                draw::Mesh *shape,
-                GPUPrimType primitive_type,
-                uint primitive_len)
+  void end_sync(PassSimple::Sub &pass, Mesh *shape, GPUPrimType primitive_type, uint primitive_len)
   {
     if (data_buf.is_empty()) {
       return;

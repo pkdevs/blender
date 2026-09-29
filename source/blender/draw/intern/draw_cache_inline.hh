@@ -38,13 +38,13 @@ inline gpu::Batch *DRW_batch_request(gpu::Batch **batch)
   }
   return *batch;
 }
-inline draw::Mesh *DRW_batch_request(draw::Mesh **draw_mesh)
+inline draw::Mesh *DRW_batch_request(draw::Mesh **mesh)
 {
   /* XXX TODO(fclem): We are writing to batch cache here. Need to make this thread safe. */
-  if (*draw_mesh == nullptr) {
-    *draw_mesh = MEM_new<draw::Mesh>(__func__, GPU_batch_calloc());
+  if (*mesh == nullptr) {
+    *mesh = MEM_new<draw::Mesh>(__func__, GPU_batch_calloc());
   }
-  return *draw_mesh;
+  return *mesh;
 }
 
 inline bool DRW_batch_requested(gpu::Batch *batch, GPUPrimType prim_type)

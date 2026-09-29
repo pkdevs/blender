@@ -259,7 +259,7 @@ class PassBase {
    * \note Setting the count or first to -1 will use the values from the batch.
    * \note An instance or vertex count of 0 will discard the draw call. It will not be recorded.
    */
-  void draw(draw::Mesh *draw_mesh,
+  void draw(Mesh *mesh,
             uint instance_len = -1,
             uint vertex_len = -1,
             uint vertex_first = -1,
@@ -270,7 +270,7 @@ class PassBase {
    * Shorter version for the common case.
    * \note Implemented in derived class. Not a virtual function to avoid indirection.
    */
-  void draw(draw::Mesh *draw_mesh, ResourceIDRange res_id, uint custom_id = 0);
+  void draw(Mesh *mesh, ResourceIDRange res_id, uint custom_id = 0);
 
   /**
    * Record a procedural draw call. Geometry is **NOT** source from a gpu::Batch.
@@ -296,7 +296,7 @@ class PassBase {
    * \note Only works for GPU_PRIM_POINTS, GPU_PRIM_LINES, GPU_PRIM_TRIS, GPU_PRIM_LINES_ADJ and
    * GPU_PRIM_TRIS_ADJ original primitive types.
    */
-  void draw_expand(draw::Mesh *draw_mesh,
+  void draw_expand(Mesh *mesh,
                    GPUPrimType primitive_type,
                    uint primitive_len,
                    uint instance_len,
@@ -309,7 +309,7 @@ class PassBase {
    * Shorter version for the common case.
    * \note Implemented in derived class. Not a virtual function to avoid indirection.
    */
-  void draw_expand(draw::Mesh *draw_mesh,
+  void draw_expand(Mesh *mesh,
                    GPUPrimType primitive_type,
                    uint primitive_len,
                    uint instance_len,
@@ -320,7 +320,7 @@ class PassBase {
    * Indirect variants.
    * \note If needed, the resource id need to also be set accordingly in the DrawCommand.
    */
-  void draw_indirect(draw::Mesh *draw_mesh,
+  void draw_indirect(Mesh *mesh,
                      StorageBuffer<DrawCommand, true> &indirect_buffer,
                      ResourceID res_id = {0});
   void draw_procedural_indirect(GPUPrimType primitive,
@@ -884,7 +884,7 @@ template<class T> std::string PassBase<T>::serialize(std::string line_prefix) co
  * \{ */
 
 template<class T>
-inline void PassBase<T>::draw(draw::Mesh *draw_mesh,
+inline void PassBase<T>::draw(Mesh *mesh,
                               uint instance_len,
                               uint vertex_len,
                               uint vertex_first,
@@ -894,11 +894,11 @@ inline void PassBase<T>::draw(draw::Mesh *draw_mesh,
   if (instance_len == 0 || vertex_len == 0) {
     return;
   }
-  BLI_assert(draw_mesh);
+  BLI_assert(mesh);
   BLI_assert(shader_);
   draw_commands_buf_.append_draw(headers_,
                                  commands_,
-                                 draw_mesh,
+                                 mesh,
                                  instance_len,
                                  vertex_len,
                                  vertex_first,
@@ -909,14 +909,13 @@ inline void PassBase<T>::draw(draw::Mesh *draw_mesh,
   is_empty_ = false;
 }
 
-template<class T>
-inline void PassBase<T>::draw(draw::Mesh *draw_mesh, ResourceIDRange res_id, uint custom_id)
+template<class T> inline void PassBase<T>::draw(Mesh *mesh, ResourceIDRange res_id, uint custom_id)
 {
-  this->draw(draw_mesh, -1, -1, -1, res_id, custom_id);
+  this->draw(mesh, -1, -1, -1, res_id, custom_id);
 }
 
 template<class T>
-inline void PassBase<T>::draw_expand(draw::Mesh *draw_mesh,
+inline void PassBase<T>::draw_expand(Mesh *mesh,
                                      GPUPrimType primitive_type,
                                      uint primitive_len,
                                      uint instance_len,
@@ -931,7 +930,7 @@ inline void PassBase<T>::draw_expand(draw::Mesh *draw_mesh,
   BLI_assert(shader_);
   draw_commands_buf_.append_draw(headers_,
                                  commands_,
-                                 draw_mesh,
+                                 mesh,
                                  instance_len,
                                  vertex_len,
                                  vertex_first,
@@ -943,15 +942,14 @@ inline void PassBase<T>::draw_expand(draw::Mesh *draw_mesh,
 }
 
 template<class T>
-inline void PassBase<T>::draw_expand(draw::Mesh *draw_mesh,
+inline void PassBase<T>::draw_expand(Mesh *mesh,
                                      GPUPrimType primitive_type,
                                      uint primitive_len,
                                      uint instance_len,
                                      ResourceIDRange res_id,
                                      uint custom_id)
 {
-  this->draw_expand(
-      draw_mesh, primitive_type, primitive_len, instance_len, -1, -1, res_id, custom_id);
+  this->draw_expand(mesh, primitive_type, primitive_len, instance_len, -1, -1, res_id, custom_id);
 }
 
 template<class T>
@@ -979,12 +977,12 @@ inline void PassBase<T>::draw_procedural(GPUPrimType primitive,
  * \{ */
 
 template<class T>
-inline void PassBase<T>::draw_indirect(draw::Mesh *draw_mesh,
+inline void PassBase<T>::draw_indirect(Mesh *mesh,
                                        StorageBuffer<DrawCommand, true> &indirect_buffer,
                                        ResourceID res_id)
 {
   BLI_assert(shader_);
-  create_command(Type::DrawIndirect).draw_indirect = {draw_mesh, &indirect_buffer, res_id};
+  create_command(Type::DrawIndirect).draw_indirect = {mesh, &indirect_buffer, res_id};
 }
 
 template<class T>

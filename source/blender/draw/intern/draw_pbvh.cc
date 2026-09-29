@@ -132,15 +132,15 @@ class DrawCacheImpl : public DrawCache {
   Map<AttributeRequest, AttributeData> attribute_vbos_;
 
   /** Batches for drawing wireframe geometry. */
-  Vector<draw::Mesh *> lines_batches_;
+  Vector<Mesh *> lines_batches_;
   /** Batches for drawing coarse "fast navigate" wireframe geometry. */
-  Vector<draw::Mesh *> lines_batches_coarse_;
+  Vector<Mesh *> lines_batches_coarse_;
   /**
    * Batches for drawing triangles, stored separately for each combination of attributes and
    * coarse-ness. Different viewports might request different sets of attributes, and we don't want
    * to recreate the batches on every redraw.
    */
-  Map<ViewportRequest, Vector<draw::Mesh *>> tris_batches_;
+  Map<ViewportRequest, Vector<Mesh *>> tris_batches_;
 
   /**
    * Which nodes (might) have a different number of visible faces.
@@ -162,13 +162,13 @@ class DrawCacheImpl : public DrawCache {
   void tag_masks_changed(const IndexMask &node_mask) override;
   void tag_attribute_changed(const IndexMask &node_mask, StringRef attribute_name) override;
 
-  Span<draw::Mesh *> ensure_tris_batches(const Object &object,
-                                         const ViewportRequest &request,
-                                         const IndexMask &nodes_to_update) override;
+  Span<Mesh *> ensure_tris_batches(const Object &object,
+                                   const ViewportRequest &request,
+                                   const IndexMask &nodes_to_update) override;
 
-  Span<draw::Mesh *> ensure_lines_batches(const Object &object,
-                                          const ViewportRequest &request,
-                                          const IndexMask &nodes_to_update) override;
+  Span<Mesh *> ensure_lines_batches(const Object &object,
+                                    const ViewportRequest &request,
+                                    const IndexMask &nodes_to_update) override;
 
   Span<int> ensure_material_indices(const Object &object) override;
 
@@ -275,7 +275,7 @@ BLI_NOINLINE static void free_vbos(const MutableSpan<gpu::VertBufPtr> vbos,
   mask.foreach_index([&](const int i) { vbos[i].reset(); });
 }
 
-BLI_NOINLINE static void free_batches(const MutableSpan<draw::Mesh *> batches,
+BLI_NOINLINE static void free_batches(const MutableSpan<Mesh *> batches,
                                       const IndexMask &node_mask)
 {
   IndexMaskMemory memory;
@@ -487,7 +487,7 @@ DrawCacheImpl::~DrawCacheImpl()
 {
   free_batches(lines_batches_, lines_batches_.index_range());
   free_batches(lines_batches_coarse_, lines_batches_coarse_.index_range());
-  for (MutableSpan<draw::Mesh *> batches : tris_batches_.values()) {
+  for (MutableSpan<Mesh *> batches : tris_batches_.values()) {
     free_batches(batches, batches.index_range());
   }
 }
@@ -522,7 +522,7 @@ void DrawCacheImpl::free_nodes_with_changed_topology(const bke::pbvh::Tree &pbvh
 
   free_batches(lines_batches_, nodes_to_free);
   free_batches(lines_batches_coarse_, nodes_to_free);
-  for (MutableSpan<draw::Mesh *> batches : tris_batches_.values()) {
+  for (MutableSpan<Mesh *> batches : tris_batches_.values()) {
     free_batches(batches, nodes_to_free);
   }
 }
@@ -2656,9 +2656,9 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
   return {};
 }
 
-Span<draw::Mesh *> DrawCacheImpl::ensure_tris_batches(const Object &object,
-                                                      const ViewportRequest &request,
-                                                      const IndexMask &nodes_to_update)
+Span<Mesh *> DrawCacheImpl::ensure_tris_batches(const Object &object,
+                                                const ViewportRequest &request,
+                                                const IndexMask &nodes_to_update)
 {
   PRF_scope(ProfileCategory::Draw);
   const Object &object_orig = *DEG_get_original(&object);
@@ -2686,12 +2686,12 @@ Span<draw::Mesh *> DrawCacheImpl::ensure_tris_batches(const Object &object,
 
   /* Except for the first iteration of the draw loop, we only need to rebuild batches for nodes
    * with changed topology (visible triangle count). */
-  Vector<draw::Mesh *> &batches = tris_batches_.lookup_or_add_default(request);
+  Vector<Mesh *> &batches = tris_batches_.lookup_or_add_default(request);
   batches.resize(pbvh.nodes_num(), nullptr);
   nodes_to_update.foreach_index(
       [&](const int i) {
         if (!batches[i]) {
-          batches[i] = MEM_new<draw::Mesh>(
+          batches[i] = MEM_new<Mesh>(
               __func__,
               GPU_batch_create(GPU_PRIM_TRIS, nullptr, ibos.is_empty() ? nullptr : ibos[i].get()));
           for (const Span<gpu::VertBufPtr> vbos : attr_vbos) {
@@ -2704,9 +2704,9 @@ Span<draw::Mesh *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   return batches;
 }
 
-Span<draw::Mesh *> DrawCacheImpl::ensure_lines_batches(const Object &object,
-                                                       const ViewportRequest &request,
-                                                       const IndexMask &nodes_to_update)
+Span<Mesh *> DrawCacheImpl::ensure_lines_batches(const Object &object,
+                                                 const ViewportRequest &request,
+                                                 const IndexMask &nodes_to_update)
 {
   PRF_scope(ProfileCategory::Draw);
   const Object &object_orig = *DEG_get_original(&object);
@@ -2723,14 +2723,13 @@ Span<draw::Mesh *> DrawCacheImpl::ensure_lines_batches(const Object &object,
 
   /* Except for the first iteration of the draw loop, we only need to rebuild batches for nodes
    * with changed topology (visible triangle count). */
-  Vector<draw::Mesh *> &batches = request.use_coarse_grids ? lines_batches_coarse_ :
-                                                             lines_batches_;
+  Vector<Mesh *> &batches = request.use_coarse_grids ? lines_batches_coarse_ : lines_batches_;
   batches.resize(pbvh.nodes_num(), nullptr);
   nodes_to_update.foreach_index(
       [&](const int i) {
         if (!batches[i]) {
-          batches[i] = MEM_new<draw::Mesh>(
-              __func__, GPU_batch_create(GPU_PRIM_LINES, nullptr, lines[i].get()));
+          batches[i] = MEM_new<Mesh>(__func__,
+                                     GPU_batch_create(GPU_PRIM_LINES, nullptr, lines[i].get()));
           GPU_batch_vertbuf_add(batches[i]->batch_get(), position[i].get(), false);
         }
       },

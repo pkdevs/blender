@@ -46,10 +46,10 @@ namespace blender::draw {
 
 struct PointCloudEvalCache {
   /* Dot primitive types. */
-  draw::Mesh *dots;
+  Mesh *dots;
   /* Triangle primitive types. */
-  draw::Mesh *surface;
-  draw::Mesh **surface_per_mat;
+  Mesh *surface;
+  Mesh **surface_per_mat;
 
   /* Position and radius. */
   gpu::VertBuf *pos_rad;
@@ -80,7 +80,7 @@ struct PointCloudBatchCache {
   PointCloudEvalCache eval_cache;
 
   gpu::IndexBuf *edit_selection_indices = nullptr;
-  draw::Mesh *edit_selection = nullptr;
+  Mesh *edit_selection = nullptr;
 
   /* settings to determine if cache is invalid */
   bool is_dirty;
@@ -119,8 +119,8 @@ static void pointcloud_batch_cache_init(PointCloud &pointcloud)
   }
 
   cache->eval_cache.mat_len = BKE_id_material_used_with_fallback_eval(pointcloud.id);
-  cache->eval_cache.surface_per_mat = MEM_new_array_zeroed<draw::Mesh *>(cache->eval_cache.mat_len,
-                                                                         __func__);
+  cache->eval_cache.surface_per_mat = MEM_new_array_zeroed<Mesh *>(cache->eval_cache.mat_len,
+                                                                   __func__);
 
   cache->is_dirty = false;
 }
@@ -303,9 +303,9 @@ gpu::VertBuf *pointcloud_position_and_radius_get(PointCloud *pointcloud)
   return cache->eval_cache.pos_rad;
 }
 
-draw::Mesh **pointcloud_surface_shaded_get(PointCloud *pointcloud,
-                                           GPUMaterial **gpu_materials,
-                                           int mat_len)
+Mesh **pointcloud_surface_shaded_get(PointCloud *pointcloud,
+                                     GPUMaterial **gpu_materials,
+                                     int mat_len)
 {
   const bke::AttributeAccessor attributes = pointcloud->attributes();
   PointCloudBatchCache *cache = pointcloud_batch_cache_get(*pointcloud);
@@ -335,14 +335,14 @@ draw::Mesh **pointcloud_surface_shaded_get(PointCloud *pointcloud,
   return cache->eval_cache.surface_per_mat;
 }
 
-draw::Mesh *pointcloud_surface_get(PointCloud *pointcloud)
+Mesh *pointcloud_surface_get(PointCloud *pointcloud)
 {
   PointCloudBatchCache &cache = *pointcloud_batch_cache_get(*pointcloud);
   if (cache.eval_cache.surface != nullptr) {
     return cache.eval_cache.surface;
   }
 
-  cache.eval_cache.surface = MEM_new<draw::Mesh>(
+  cache.eval_cache.surface = MEM_new<Mesh>(
       __func__,
       GPU_batch_create_procedural(GPU_PRIM_TRI_STRIP,
                                   DRW_POINTCLOUD_STRIP_TILE_SIZE * pointcloud->totpoint));
@@ -356,7 +356,7 @@ draw::Mesh *pointcloud_surface_get(PointCloud *pointcloud)
 /** \name API
  * \{ */
 
-draw::Mesh *DRW_pointcloud_batch_cache_get_dots(Object *ob)
+Mesh *DRW_pointcloud_batch_cache_get_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
   if (pointcloud.type == PointCloudType::Points) {
@@ -463,7 +463,7 @@ void DRW_pointcloud_batch_cache_create_requested(Object *ob)
   }
 }
 
-draw::Mesh *DRW_pointcloud_batch_cache_get_edit_dots(Object *ob)
+Mesh *DRW_pointcloud_batch_cache_get_edit_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
   if (pointcloud.type == PointCloudType::Points) {

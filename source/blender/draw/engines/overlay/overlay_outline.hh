@@ -146,7 +146,7 @@ class Outline : Overlay {
       return;
     }
 
-    draw::Mesh *geom;
+    Mesh *geom;
     switch (ob_ref.object->type) {
       case OB_CURVES: {
         const char *error = nullptr;
@@ -190,7 +190,7 @@ class Outline : Overlay {
         }
         break;
       case OB_VOLUME: {
-        draw::Mesh *volume_surface = DRW_cache_volume_selection_surface_get(ob_ref.object);
+        Mesh *volume_surface = DRW_cache_volume_selection_surface_get(ob_ref.object);
         geom = volume_surface;
         /* TODO(fclem): Get rid of these check and enforce correct API on the batch cache. */
         if (geom) {
@@ -226,7 +226,7 @@ class Outline : Overlay {
 
       for (FlatObjectRef flag_ob_ref : flat_objects_) {
         flag_ob_ref.if_flat_axis_orthogonal_to_view(
-            manager, view, [&](draw::Mesh *geom, ResourceID resource_id) {
+            manager, view, [&](Mesh *geom, ResourceID resource_id) {
               pass.draw_expand(geom, GPU_PRIM_LINES, 1, 1, resource_id);
             });
       }
