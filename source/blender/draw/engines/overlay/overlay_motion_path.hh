@@ -192,8 +192,6 @@ class MotionPath : Overlay {
       sub.push_constant("custom_color_post", color_post);
       sub.push_constant("camera_object_persinv", camera_matrix);
 
-      /* The motion path batch is owned by the motion path data and not by the draw system.
-       * Store a non-owning #Mesh wrapper that lives until the pass is submitted. */
       motion_path_draw_meshes_.append(make_mesh_borrowed(mpath_batch_points_get(mpath)));
       /* Only draw the required range. */
       sub.draw_expand(motion_path_draw_meshes_.last().get(),
@@ -216,8 +214,6 @@ class MotionPath : Overlay {
       sub.push_constant("custom_color_post", color_post);
       sub.push_constant("camera_object_persinv", camera_matrix);
 
-      /* The motion path batch is owned by the motion path data and not by the draw system.
-       * Store a non-owning #Mesh wrapper that lives until the pass is submitted. */
       motion_path_draw_meshes_.append(make_mesh_borrowed(mpath_batch_points_get(mpath)));
       /* Only draw the required range. */
       sub.draw(motion_path_draw_meshes_.last().get(), 1, frame_range.size(), start_index);
