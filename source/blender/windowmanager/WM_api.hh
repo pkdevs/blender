@@ -1068,7 +1068,8 @@ wmOperatorStatus WM_operator_confirm_ex(bContext *C,
                                         const char *confirm_text,
                                         ui::AlertIcon icon,
                                         bool cancel_default = false,
-                                        const char *alert_message = nullptr);
+                                        const char *alert_message = nullptr,
+                                        int alert_message_max_lines = 0);
 
 /**
  * Invoke callback, file selector "filepath" unset + exec.

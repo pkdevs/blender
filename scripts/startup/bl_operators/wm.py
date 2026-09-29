@@ -1097,7 +1097,8 @@ class WM_OT_url_open(Operator):
                 event,
                 title="Open External Website",
                 alert_message=self.url,
-                message="The website's content cannot be verified, be cautious when downloading files.\nOnly continue if yout trust this website",
+                alert_message_max_lines=3,
+                message="The website's content cannot be verified, be cautious when downloading files. Only continue if yout trust this website",
                 confirm_text="Open External Website",
                 icon='WARNING')
 

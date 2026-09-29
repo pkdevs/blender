@@ -1476,6 +1476,7 @@ struct wmOpPopUp {
   int free_op;
   std::string title;
   std::string alert_message;
+  int alert_message_max_lines;
   std::string message;
   std::string confirm_text;
   ui::AlertIcon icon;
@@ -1583,6 +1584,11 @@ static ui::Block *wm_block_dialog_create(bContext *C, ARegion *region, void *use
       BLF_width(style->widget.uifont_id, IFACE_("Cancel"), BLF_DRAW_STR_DUMMY_MAX));
   dialog_width = std::max(dialog_width, 3 * longest_button_text);
 
+  const int max_width = int(450.0f * UI_SCALE_FAC * ui::style_get()->widget.points /
+                            UI_DEFAULT_TEXT_POINTS);
+
+  dialog_width = std::min(max_width, dialog_width);
+
   ui::Layout &layout = [&]() -> ui::Layout & {
     if (data->icon != ui::AlertIcon::None) {
       return *uiItemsAlertBox(block, style, dialog_width + icon_size, data->icon, icon_size);
@@ -1617,7 +1623,8 @@ static ui::Block *wm_block_dialog_create(bContext *C, ARegion *region, void *use
   if (StringRef(data->alert_message).trim().size() != 0) {
     ui::Layout &sub = info_layout->column(false);
     sub.red_alert_set(true);
-    sub.label_multiline(data->alert_message, ICON_NONE);
+    sub.label_multiline(
+        data->alert_message, ICON_NONE, ui::UI_STYLE_TEXT_LEFT, data->alert_message_max_lines);
   }
 
   /* Multi-line message  label. */
@@ -1776,13 +1783,15 @@ wmOperatorStatus WM_operator_confirm_ex(bContext *C,
                                         const char *confirm_text,
                                         ui::AlertIcon icon,
                                         bool cancel_default,
-                                        const char *alert_message)
+                                        const char *alert_message,
+                                        int alert_message_max_lines)
 {
   wmOpPopUp *data = MEM_new<wmOpPopUp>(__func__);
   data->op = op;
 
   /* Larger dialog needs a wider minimum width to balance with the big icon. */
   const float min_width = (message == nullptr) ? 180.0f : 230.0f;
+
   data->width = int(min_width * UI_SCALE_FAC * ui::style_get()->widget.points /
                     UI_DEFAULT_TEXT_POINTS);
 
@@ -1790,6 +1799,7 @@ wmOperatorStatus WM_operator_confirm_ex(bContext *C,
   data->title = (title == nullptr) ? WM_operatortype_name(op->type, op->ptr) : title;
   data->message = (message == nullptr) ? std::string() : message;
   data->alert_message = (alert_message == nullptr) ? std::string() : alert_message;
+  data->alert_message_max_lines = alert_message_max_lines;
   data->confirm_text = (confirm_text == nullptr) ? IFACE_("OK") : confirm_text;
   data->icon = icon;
   data->size = (message == nullptr) ? WM_POPUP_SIZE_SMALL : WM_POPUP_SIZE_LARGE;

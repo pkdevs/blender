@@ -245,6 +245,7 @@ static int rna_Operator_confirm(bContext *C,
                                 wmEvent * /*event*/,
                                 const char *title,
                                 const char *alert_message,
+                                const int alert_message_max_lines,
                                 const char *message,
                                 const char *confirm_text,
                                 const int icon,
@@ -266,7 +267,8 @@ static int rna_Operator_confirm(bContext *C,
                                 confirm_text_str ? confirm_text_str->c_str() : nullptr,
                                 ui::AlertIcon(icon),
                                 false,
-                                alert_str ? alert_str->c_str() : nullptr);
+                                alert_str ? alert_str->c_str() : nullptr,
+                                alert_message_max_lines);
 }
 
 static void rna_WM_try_activate_rna_button(blender::wmWindowManager * /*wm*/,
@@ -1187,6 +1189,7 @@ void RNA_api_wm(StructRNA *srna)
       parm,
       "Alert Message",
       "Optional alert message to show tinted with the error state color preference");
+  parm = RNA_def_int(func, "alert_message_max_lines", 0, 0, INT_MAX, "", "", 0, INT_MAX);
 
   parm = RNA_def_property(func, "message", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(parm, "Message", "Optional first line of content text");
