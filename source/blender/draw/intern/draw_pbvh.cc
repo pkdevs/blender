@@ -280,7 +280,7 @@ BLI_NOINLINE static void free_batches(const MutableSpan<draw::Mesh *> batches,
 {
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_intersection(node_mask, batches.index_range(), memory);
-  mask.foreach_index([&](const int i) { Mesh::discard(batches[i]); });
+  mask.foreach_index([&](const int i) { MEM_SAFE_DELETE(batches[i]); });
 }
 
 static const GPUVertFormat &position_format()

@@ -95,7 +95,7 @@ static void discard_buffers(MeshBatchCache &cache,
   for (const int i : IndexRange(MBC_BATCH_LEN)) {
     draw::Mesh *draw_mesh = (reinterpret_cast<draw::Mesh **>(&cache.batch))[i];
     if (draw_mesh && batch_contains_data(*draw_mesh->batch_get())) {
-      Mesh::discard(((draw::Mesh **)&cache.batch)[i]);
+      MEM_SAFE_DELETE(((draw::Mesh **)&cache.batch)[i]);
       cache.batch_ready &= ~DRWBatchFlag(uint64_t(1u) << i);
     }
   }
@@ -106,7 +106,7 @@ static void discard_buffers(MeshBatchCache &cache,
     {
       /* The format for all `surface_per_mat` batches is the same, discard them all. */
       for (const int i : cache.surface_per_mat.index_range()) {
-        Mesh::discard(cache.surface_per_mat[i]);
+        MEM_SAFE_DELETE(cache.surface_per_mat[i]);
       }
       cache.batch_ready &= ~(MBC_SURFACE | MBC_SURFACE_PER_MAT);
     }
@@ -616,10 +616,10 @@ static void mesh_batch_cache_clear(MeshBatchCache &cache)
 
   for (int i = 0; i < sizeof(cache.batch) / sizeof(void *); i++) {
     draw::Mesh **draw_mesh = reinterpret_cast<draw::Mesh **>(&cache.batch);
-    Mesh::discard(draw_mesh[i]);
+    MEM_SAFE_DELETE(draw_mesh[i]);
   }
   for (const int i : cache.surface_per_mat.index_range()) {
-    Mesh::discard(cache.surface_per_mat[i]);
+    MEM_SAFE_DELETE(cache.surface_per_mat[i]);
   }
 
   mesh_batch_cache_discard_shaded_tri(cache);

@@ -129,15 +129,15 @@ static void clear_edit_data(CurvesBatchCache *cache)
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_selection);
   GPU_INDEXBUF_DISCARD_SAFE(cache->edit_handles_ibo);
 
-  Mesh::discard(cache->edit_points);
-  Mesh::discard(cache->edit_handles);
+  MEM_SAFE_DELETE(cache->edit_points);
+  MEM_SAFE_DELETE(cache->edit_handles);
 
   GPU_INDEXBUF_DISCARD_SAFE(cache->sculpt_cage_ibo);
-  Mesh::discard(cache->sculpt_cage);
+  MEM_SAFE_DELETE(cache->sculpt_cage);
 
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_curves_lines_pos);
   GPU_INDEXBUF_DISCARD_SAFE(cache->edit_curves_lines_ibo);
-  Mesh::discard(cache->edit_curves_lines);
+  MEM_SAFE_DELETE(cache->edit_curves_lines);
 }
 
 void CurvesEvalCache::discard_attributes()

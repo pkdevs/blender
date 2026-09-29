@@ -287,7 +287,7 @@ void DRW_lattice_batch_cache_dirty_tag(Lattice *lt, int mode)
       break;
     case BKE_LATTICE_BATCH_DIRTY_SELECT:
       /* TODO: Separate Flag VBO. */
-      Mesh::discard(cache->overlay_verts);
+      MEM_SAFE_DELETE(cache->overlay_verts);
       break;
     default:
       BLI_assert(0);
@@ -301,9 +301,9 @@ static void lattice_batch_cache_clear(Lattice *lt)
     return;
   }
 
-  Mesh::discard(cache->all_verts);
-  Mesh::discard(cache->all_edges);
-  Mesh::discard(cache->overlay_verts);
+  MEM_SAFE_DELETE(cache->all_verts);
+  MEM_SAFE_DELETE(cache->all_edges);
+  MEM_SAFE_DELETE(cache->overlay_verts);
 
   GPU_VERTBUF_DISCARD_SAFE(cache->pos);
   GPU_INDEXBUF_DISCARD_SAFE(cache->edges);

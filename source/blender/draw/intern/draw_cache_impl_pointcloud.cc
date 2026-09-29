@@ -156,17 +156,17 @@ static void pointcloud_batch_cache_clear(PointCloud &pointcloud)
     return;
   }
 
-  Mesh::discard(cache->eval_cache.dots);
-  Mesh::discard(cache->eval_cache.surface);
+  MEM_SAFE_DELETE(cache->eval_cache.dots);
+  MEM_SAFE_DELETE(cache->eval_cache.surface);
   GPU_VERTBUF_DISCARD_SAFE(cache->eval_cache.pos_rad);
   GPU_VERTBUF_DISCARD_SAFE(cache->eval_cache.attr_viewer);
 
   GPU_INDEXBUF_DISCARD_SAFE(cache->edit_selection_indices);
-  Mesh::discard(cache->edit_selection);
+  MEM_SAFE_DELETE(cache->edit_selection);
 
   if (cache->eval_cache.surface_per_mat) {
     for (int i = 0; i < cache->eval_cache.mat_len; i++) {
-      Mesh::discard(cache->eval_cache.surface_per_mat[i]);
+      MEM_SAFE_DELETE(cache->eval_cache.surface_per_mat[i]);
     }
   }
   MEM_SAFE_DELETE(cache->eval_cache.surface_per_mat);

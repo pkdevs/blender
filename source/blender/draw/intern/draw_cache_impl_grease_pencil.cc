@@ -183,15 +183,15 @@ static void grease_pencil_batch_cache_clear(GreasePencil &grease_pencil)
     return;
   }
 
-  Mesh::discard(cache->geom_batch);
+  MEM_SAFE_DELETE(cache->geom_batch);
   GPU_VERTBUF_DISCARD_SAFE(cache->vbo);
   GPU_VERTBUF_DISCARD_SAFE(cache->vbo_col);
   GPU_INDEXBUF_DISCARD_SAFE(cache->ibo);
 
-  Mesh::discard(cache->lines_batch);
-  Mesh::discard(cache->edit_points);
-  Mesh::discard(cache->edit_lines);
-  Mesh::discard(cache->edit_handles);
+  MEM_SAFE_DELETE(cache->lines_batch);
+  MEM_SAFE_DELETE(cache->edit_points);
+  MEM_SAFE_DELETE(cache->edit_lines);
+  MEM_SAFE_DELETE(cache->edit_handles);
 
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_pos);
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_rad);

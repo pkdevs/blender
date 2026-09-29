@@ -124,8 +124,8 @@ static void volume_batch_cache_clear(Volume *volume)
   cache->grids.free_no_destruct();
 
   GPU_VERTBUF_DISCARD_SAFE(cache->face_wire.pos_nor_in_order);
-  Mesh::discard(cache->face_wire.batch);
-  Mesh::discard(cache->selection_surface);
+  MEM_SAFE_DELETE(cache->face_wire.batch);
+  MEM_SAFE_DELETE(cache->selection_surface);
 }
 
 void DRW_volume_batch_cache_free(Volume *volume)

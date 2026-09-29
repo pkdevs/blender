@@ -386,9 +386,9 @@ void GSplatEvalCache::ensure_requested(PointCloud &pointcloud)
 
 void GSplatEvalCache::discard_buffers()
 {
-  Mesh::discard(surface);
-  Mesh::discard(dots);
-  Mesh::discard(edit_dots);
+  MEM_SAFE_DELETE(surface);
+  MEM_SAFE_DELETE(dots);
+  MEM_SAFE_DELETE(edit_dots);
 
   GPU_VERTBUF_DISCARD_SAFE(shape_data_buf);
   GPU_VERTBUF_DISCARD_SAFE(radiance_data_buf);
@@ -401,7 +401,7 @@ void GSplatEvalCache::discard_buffers()
 
   if (surface_per_mat) {
     for (int i = 0; i < mat_len; ++i) {
-      Mesh::discard(surface_per_mat[i]);
+      MEM_SAFE_DELETE(surface_per_mat[i]);
     }
   }
   MEM_SAFE_DELETE(surface_per_mat);

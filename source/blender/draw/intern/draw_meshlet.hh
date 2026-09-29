@@ -86,13 +86,6 @@ struct Mesh {
       GPU_batch_clear(draw_mesh->batch_);
     }
   }
-  static inline void discard(Mesh *&draw_mesh)
-  {
-    if (draw_mesh) {
-      delete draw_mesh;
-      draw_mesh = nullptr;
-    }
-  }
 };
 
 using MeshPtr = std::unique_ptr<Mesh>;

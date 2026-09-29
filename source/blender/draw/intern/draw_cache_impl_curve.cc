@@ -407,8 +407,8 @@ void DRW_curve_batch_cache_dirty_tag(Curve *cu, int mode)
     case BKE_CURVE_BATCH_DIRTY_SELECT:
       GPU_VERTBUF_DISCARD_SAFE(cache->edit.data);
 
-      Mesh::discard(cache->batch.edit_edges);
-      Mesh::discard(cache->batch.edit_verts);
+      MEM_SAFE_DELETE(cache->batch.edit_edges);
+      MEM_SAFE_DELETE(cache->batch.edit_verts);
       break;
     default:
       BLI_assert(0);
@@ -436,7 +436,7 @@ static void curve_batch_cache_clear(Curve *cu)
   }
   for (int i = 0; i < sizeof(cache->batch) / sizeof(void *); i++) {
     draw::Mesh **draw_mesh = reinterpret_cast<draw::Mesh **>(&cache->batch);
-    Mesh::discard(draw_mesh[i]);
+    MEM_SAFE_DELETE(draw_mesh[i]);
   }
 }
 

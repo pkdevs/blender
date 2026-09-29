@@ -201,7 +201,7 @@ void DRW_particle_batch_cache_dirty_tag(ParticleSystem *psys, int mode)
 
 static void particle_batch_cache_clear_point(ParticlePointCache *point_cache)
 {
-  Mesh::discard(point_cache->points);
+  MEM_SAFE_DELETE(point_cache->points);
   GPU_VERTBUF_DISCARD_SAFE(point_cache->pos);
 }
 
@@ -210,7 +210,7 @@ static void particle_batch_cache_clear_hair(ParticleHairCache *hair_cache)
   /* TODO: more granular update tagging. */
 
   /* "Normal" legacy hairs */
-  Mesh::discard(hair_cache->hairs);
+  MEM_SAFE_DELETE(hair_cache->hairs);
   GPU_VERTBUF_DISCARD_SAFE(hair_cache->pos);
   GPU_INDEXBUF_DISCARD_SAFE(hair_cache->indices);
 
@@ -234,9 +234,9 @@ static void particle_batch_cache_clear(ParticleSystem *psys)
   particle_batch_cache_clear_hair(&cache->hair);
   particle_batch_cache_clear_hair(&cache->edit_hair);
 
-  Mesh::discard(cache->edit_inner_points);
+  MEM_SAFE_DELETE(cache->edit_inner_points);
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_inner_pos);
-  Mesh::discard(cache->edit_tip_points);
+  MEM_SAFE_DELETE(cache->edit_tip_points);
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_tip_pos);
 }
 
@@ -1156,7 +1156,7 @@ draw::Mesh *DRW_particles_batch_cache_get_edit_strands(Object *object,
   ParticleBatchCache *cache = particle_batch_cache_get(psys);
   if (cache->edit_is_weight != use_weight) {
     GPU_VERTBUF_DISCARD_SAFE(cache->edit_hair.pos);
-    Mesh::discard(cache->edit_hair.hairs);
+    MEM_SAFE_DELETE(cache->edit_hair.hairs);
   }
   if (cache->edit_hair.hairs != nullptr) {
     return cache->edit_hair.hairs;
