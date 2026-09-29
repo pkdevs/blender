@@ -437,7 +437,8 @@ static bke::CurvesGeometry test_curve_boolean(const Operation opt,
   using namespace bke::greasepencil;
   CurveBooleanOpParameters op_params;
   op_params.boolean_mode = opt;
-  op_params.fill_rule = FillRule::OddEven;
+  op_params.subj_fill_rule = FillRule::OddEven;
+  op_params.clip_fill_rule = FillRule::OddEven;
   op_params.keep_caps = true;
   op_params.skip_clipping_attributes = false;
   op_params.separate_islands = false;

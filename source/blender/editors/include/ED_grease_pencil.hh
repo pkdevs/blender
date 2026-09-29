@@ -1002,7 +1002,8 @@ enum class Operation : int8_t {
 
 struct CurveBooleanOpParameters {
   Operation boolean_mode;
-  FillRule fill_rule;
+  FillRule subj_fill_rule;
+  FillRule clip_fill_rule;
   bool keep_caps;
   bool skip_clipping_attributes;
   bool separate_islands;

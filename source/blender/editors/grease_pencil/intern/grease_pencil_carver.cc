@@ -153,7 +153,8 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
 
   boolean::CurveBooleanOpParameters op_params;
   op_params.boolean_mode = boolean::Operation::Difference;
-  op_params.fill_rule = boolean::FillRule::OddEven;
+  op_params.subj_fill_rule = boolean::FillRule::OddEven;
+  op_params.clip_fill_rule = boolean::FillRule::OddEven;
   op_params.keep_caps = keep_caps;
   op_params.skip_clipping_attributes = true;
   op_params.separate_islands = true;

@@ -945,9 +945,12 @@ struct EraseOperationExecutor {
 
     boolean::CurveBooleanOpParameters op_params;
     op_params.boolean_mode = boolean::Operation::Difference;
+    op_params.subj_fill_rule = boolean::FillRule::OddEven;
+    op_params.clip_fill_rule = boolean::FillRule::NonZero;
     op_params.keep_caps = keep_caps;
     op_params.skip_clipping_attributes = true;
     op_params.separate_islands = true;
+    op_params.self_intersect = true;
 
     const GroupedSpan<int> shapes = shapes_data.shapes();
     const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
