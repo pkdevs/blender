@@ -29,6 +29,9 @@ def update_factory_startup_scenes():
 
         if scene.name == "Edit":
             scene.tool_settings.use_keyframe_insert_auto = False
+    for obj in bpy.data.objects:
+        if obj.type in {'GREASEPENCIL'}:
+            obj.use_lights = False
 
 
 def update_factory_startup_grease_pencils():

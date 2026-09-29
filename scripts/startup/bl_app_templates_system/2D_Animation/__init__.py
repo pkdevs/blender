@@ -35,6 +35,10 @@ def update_factory_startup_scenes():
         scene.tool_settings.use_keyframe_insert_auto = True
         scene.tool_settings.gpencil_sculpt.use_scale_thickness = True
 
+    for obj in bpy.data.objects:
+        if obj.type in {'GREASEPENCIL'}:
+            obj.use_lights = False
+
 
 def update_factory_startup_grease_pencils():
     for grease_pencil in bpy.data.grease_pencils:
