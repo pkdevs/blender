@@ -89,7 +89,12 @@ namespace blender {
 
 enum {
   B_TRANSFORM_PANEL_MEDIAN = 1008,
-  B_TRANSFORM_PANEL_DIMS = 1009,
+  B_TRANSFORM_PANEL_OBJECT_DIMS = 1009,
+  /**
+   * Dimensions of selected elements.
+   * Needed because scaling geometry requires normals to be re-calculated.
+   */
+  B_TRANSFORM_PANEL_ELEM_DIMS = 1010,
 };
 
 /* All must start w/ location */
@@ -230,10 +235,15 @@ static void *transform_panel_interaction_begin_fn(bContext *C,
                                                   const ui::BlockInteraction_Params *params,
                                                   void *arg1)
 {
-  const int retval_test = B_TRANSFORM_PANEL_MEDIAN;
-  if (BLI_array_findindex(
-          params->unique_retval_ids, params->unique_retval_ids_len, &retval_test) == -1)
-  {
+  const int retval_median = B_TRANSFORM_PANEL_MEDIAN;
+  const int retval_elem_dims = B_TRANSFORM_PANEL_ELEM_DIMS;
+  const bool is_median = BLI_array_findindex(params->unique_retval_ids,
+                                             params->unique_retval_ids_len,
+                                             &retval_median) != -1;
+  const bool is_elem_dims = BLI_array_findindex(params->unique_retval_ids,
+                                                params->unique_retval_ids_len,
+                                                &retval_elem_dims) != -1;
+  if (!(is_median || is_elem_dims)) {
     return nullptr;
   }
 
@@ -266,8 +276,18 @@ static void *transform_panel_interaction_begin_fn(bContext *C,
   BMPartialUpdate_Params update_params{};
   update_params.do_tessellate = true;
   update_params.do_normals = true;
-  BMPartialUpdate *bmpinfo = BM_mesh_partial_create_from_verts_group_single(
-      *bm, update_params, verts_mask, verts_mask_count);
+  /* Translation keeps the normals of faces inside the selection,
+   * a non-uniform scale doesn't, so every face touching the selection is needed. */
+  BMPartialUpdate *bmpinfo;
+  if (is_elem_dims) {
+    bmpinfo = BM_mesh_partial_create_from_verts(*bm, update_params, verts_mask, verts_mask_count);
+  }
+  else {
+    /* The mask is looked up by vertex index. */
+    BM_mesh_elem_index_ensure(bm, BM_VERT);
+    bmpinfo = BM_mesh_partial_create_from_verts_group_single(
+        *bm, update_params, verts_mask, verts_mask_count);
+  }
 
   return bmpinfo;
 }
@@ -1548,7 +1568,7 @@ static void v3d_editvertex_buts(
                         0.0f,
                         lim,
                         dims_tip);
-        button_retval_set(but, B_TRANSFORM_PANEL_MEDIAN);
+        button_retval_set(but, B_TRANSFORM_PANEL_ELEM_DIMS);
         button_number_step_size_set(but, 10);
         button_number_precision_set(but, 3);
         button_unit_type_set(but, PROP_UNIT_LENGTH);
@@ -2206,7 +2226,7 @@ static void v3d_object_dimension_buts(bContext *C, ui::Layout *layout, View3D *v
                       0.0f,
                       lim,
                       "");
-      button_retval_set(but, B_TRANSFORM_PANEL_DIMS);
+      button_retval_set(but, B_TRANSFORM_PANEL_OBJECT_DIMS);
       button_number_step_size_set(but, 10);
       button_number_precision_set(but, 3);
       button_unit_type_set(but, PROP_UNIT_LENGTH);
@@ -2668,11 +2688,12 @@ static void do_view3d_region_buttons(bContext *C, void * /*index*/, int event)
 
   switch (event) {
     case B_TRANSFORM_PANEL_MEDIAN:
+    case B_TRANSFORM_PANEL_ELEM_DIMS:
       if (ob) {
         v3d_editvertex_buts(C, nullptr, v3d, ob, 1.0);
       }
       break;
-    case B_TRANSFORM_PANEL_DIMS:
+    case B_TRANSFORM_PANEL_OBJECT_DIMS:
       if (ob) {
         v3d_object_dimension_buts(C, nullptr, v3d, ob);
       }
