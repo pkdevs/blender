@@ -2157,8 +2157,6 @@ static void GREASE_PENCIL_OT_fill(wmOperatorType *ot)
 }
 
 static bool remove_points_and_split_from_drawings(
-    const Scene &scene,
-    GreasePencil &grease_pencil,
     const Span<ed::greasepencil::MutableDrawingInfo> drawings,
     const Span<IndexMask> points_to_remove_per_drawing)
 {
@@ -2314,8 +2312,8 @@ static wmOperatorStatus grease_pencil_erase_lasso_exec(bContext *C, wmOperator *
     }
   });
 
-  const bool changed = remove_points_and_split_from_drawings(
-      *scene, grease_pencil, drawings.as_span(), points_to_remove_per_drawing);
+  const bool changed = remove_points_and_split_from_drawings(drawings.as_span(),
+                                                             points_to_remove_per_drawing);
   if (changed) {
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
@@ -2411,8 +2409,8 @@ static wmOperatorStatus grease_pencil_erase_box_exec(bContext *C, wmOperator *op
     }
   });
 
-  const bool changed = remove_points_and_split_from_drawings(
-      *scene, grease_pencil, drawings.as_span(), points_to_remove_per_drawing);
+  const bool changed = remove_points_and_split_from_drawings(drawings.as_span(),
+                                                             points_to_remove_per_drawing);
   if (changed) {
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
