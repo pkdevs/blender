@@ -52,12 +52,12 @@ gpu::VertBuf *hair_pos_buffer_get(Scene *scene,
 }
 
 template<typename PassT>
-draw::DrawMesh *hair_sub_pass_setup_implementation(PassT &sub_ps,
-                                                   const Scene *scene,
-                                                   const ObjectRef &ob_ref,
-                                                   ParticleSystem *psys,
-                                                   ModifierData *md,
-                                                   GPUMaterial *gpu_material)
+draw::Mesh *hair_sub_pass_setup_implementation(PassT &sub_ps,
+                                               const Scene *scene,
+                                               const ObjectRef &ob_ref,
+                                               ParticleSystem *psys,
+                                               ModifierData *md,
+                                               GPUMaterial *gpu_material)
 {
   /** NOTE: This still relies on the old DRW_hair implementation. */
   Object *object = ob_ref.object;
@@ -89,7 +89,7 @@ draw::DrawMesh *hair_sub_pass_setup_implementation(PassT &sub_ps,
 
   {
     ParticleSystemModifierData *psmd = reinterpret_cast<ParticleSystemModifierData *>(source.md);
-    Mesh &mesh = *psmd->mesh_final;
+    blender::Mesh &mesh = *psmd->mesh_final;
     const StringRef active_uv = mesh.active_uv_map_name();
     curves_bind_resources(
         sub_ps, module, cache, face_per_segment, gpu_material, indirection_buf, active_uv);
@@ -100,22 +100,22 @@ draw::DrawMesh *hair_sub_pass_setup_implementation(PassT &sub_ps,
       source.evaluated_points_num(), source.curves_num(), face_per_segment, false, unused_error);
 }
 
-draw::DrawMesh *hair_sub_pass_setup(PassMain::Sub &sub_ps,
-                                    const Scene *scene,
-                                    const ObjectRef &ob_ref,
-                                    ParticleSystem *psys,
-                                    ModifierData *md,
-                                    GPUMaterial *gpu_material)
+draw::Mesh *hair_sub_pass_setup(PassMain::Sub &sub_ps,
+                                const Scene *scene,
+                                const ObjectRef &ob_ref,
+                                ParticleSystem *psys,
+                                ModifierData *md,
+                                GPUMaterial *gpu_material)
 {
   return hair_sub_pass_setup_implementation(sub_ps, scene, ob_ref, psys, md, gpu_material);
 }
 
-draw::DrawMesh *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
-                                    const Scene *scene,
-                                    const ObjectRef &ob_ref,
-                                    ParticleSystem *psys,
-                                    ModifierData *md,
-                                    GPUMaterial *gpu_material)
+draw::Mesh *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
+                                const Scene *scene,
+                                const ObjectRef &ob_ref,
+                                ParticleSystem *psys,
+                                ModifierData *md,
+                                GPUMaterial *gpu_material)
 {
   return hair_sub_pass_setup_implementation(sub_ps, scene, ob_ref, psys, md, gpu_material);
 }

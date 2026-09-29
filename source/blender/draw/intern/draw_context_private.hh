@@ -95,7 +95,7 @@ void drw_batch_cache_generate_requested_delayed(Object *ob);
 void drw_batch_cache_generate_requested_evaluated_mesh_or_curve(Object *ob, TaskGraph &task_graph);
 
 void DRW_mesh_get_attributes(const Object &object,
-                             const Mesh &mesh,
+                             const blender::Mesh &mesh,
                              Span<const GPUMaterial *> materials,
                              VectorSet<std::string> *r_attrs,
                              DRW_MeshCDMask *r_cd_needed);

@@ -166,7 +166,7 @@ class Prepass : Overlay {
                                        res.select_id(ob_ref, part->omat << 16) :
                                        res.select_id(ob_ref);
 
-            draw::DrawMesh *geom = DRW_cache_particles_get_hair(ob, &psys, nullptr);
+            draw::Mesh *geom = DRW_cache_particles_get_hair(ob, &psys, nullptr);
             if (res.is_selection()) {
               /* Conservative shader needs expanded draw-call. */
               mesh_ps_->draw_expand(geom, GPU_PRIM_TRIS, 1, 1, handle, select_id.get());
@@ -226,8 +226,8 @@ class Prepass : Overlay {
       return;
     }
 
-    draw::DrawMesh *geom_single = nullptr;
-    Span<draw::DrawMesh *> geom_list;
+    draw::Mesh *geom_single = nullptr;
+    Span<draw::Mesh *> geom_list;
 
     ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
 
@@ -261,7 +261,7 @@ class Prepass : Overlay {
           return;
         }
         {
-          draw::DrawMesh *volume_surface = DRW_cache_volume_selection_surface_get(ob_ref.object);
+          draw::Mesh *volume_surface = DRW_cache_volume_selection_surface_get(ob_ref.object);
           geom_single = volume_surface;
         }
         pass = mesh_ps_;

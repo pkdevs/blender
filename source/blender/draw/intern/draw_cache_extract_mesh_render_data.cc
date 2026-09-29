@@ -387,27 +387,27 @@ void mesh_render_data_update_face_normals(MeshRenderData &mr)
 
 static void retrieve_active_attribute_names(MeshRenderData &mr,
                                             const Object &object,
-                                            const Mesh &mesh)
+                                            const blender::Mesh &mesh)
 {
-  const Mesh &mesh_final = editmesh_final_or_this(object, mesh);
+  const blender::Mesh &mesh_final = editmesh_final_or_this(object, mesh);
   mr.active_color_name = mesh_final.active_color_attribute ? mesh_final.active_color_attribute :
                                                              mesh_final.default_color_attribute;
   mr.default_color_name = mesh_final.default_color_attribute;
 }
 
-static const Mesh *mesh_get_original_mesh(const Object &object)
+static const blender::Mesh *mesh_get_original_mesh(const Object &object)
 {
   BLI_assert(object.type == OB_MESH);
   if (const ID *data_orig = object.runtime->data_orig) {
     if (data_orig->id_type() == ID_ME) {
-      return id_cast<const Mesh *>(data_orig);
+      return id_cast<const blender::Mesh *>(data_orig);
     }
   }
   return nullptr;
 }
 
 MeshRenderData mesh_render_data_create(Object &object,
-                                       Mesh &mesh,
+                                       blender::Mesh &mesh,
                                        const bool is_editmode,
                                        const bool is_paint_mode,
                                        const bool do_final,
@@ -421,9 +421,9 @@ MeshRenderData mesh_render_data_create(Object &object,
 
   mr.use_hide = use_hide;
 
-  const Mesh *orig_mesh = mesh_get_original_mesh(object);
+  const blender::Mesh *orig_mesh = mesh_get_original_mesh(object);
   if (BMEditMesh *edit_mesh = orig_mesh ? orig_mesh->runtime->edit_mesh.get() : nullptr) {
-    const Mesh *eval_cage = DRW_object_get_editmesh_cage_for_drawing(object);
+    const blender::Mesh *eval_cage = DRW_object_get_editmesh_cage_for_drawing(object);
 
     mr.bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(orig_mesh));
     mr.edit_bmesh = edit_mesh;
@@ -457,7 +457,7 @@ MeshRenderData mesh_render_data_create(Object &object,
     BM_mesh_elem_index_ensure(mr.bm, bm_ensure_types);
     BM_mesh_elem_table_ensure(mr.bm, bm_ensure_types & ~BM_LOOP);
 
-    mr.efa_act_uv = EDBM_uv_active_face_get(const_cast<Mesh *>(mr.mesh), false, false);
+    mr.efa_act_uv = EDBM_uv_active_face_get(const_cast<blender::Mesh *>(mr.mesh), false, false);
     mr.efa_act = BM_mesh_active_face_get(mr.bm, false, true);
     mr.eed_act = BM_mesh_active_edge_get(mr.bm);
     mr.eve_act = BM_mesh_active_vert_get(mr.bm);

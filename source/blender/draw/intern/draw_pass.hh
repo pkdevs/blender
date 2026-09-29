@@ -259,7 +259,7 @@ class PassBase {
    * \note Setting the count or first to -1 will use the values from the batch.
    * \note An instance or vertex count of 0 will discard the draw call. It will not be recorded.
    */
-  void draw(draw::DrawMesh *draw_mesh,
+  void draw(draw::Mesh *draw_mesh,
             uint instance_len = -1,
             uint vertex_len = -1,
             uint vertex_first = -1,
@@ -270,7 +270,7 @@ class PassBase {
    * Shorter version for the common case.
    * \note Implemented in derived class. Not a virtual function to avoid indirection.
    */
-  void draw(draw::DrawMesh *draw_mesh, ResourceIDRange res_id, uint custom_id = 0);
+  void draw(draw::Mesh *draw_mesh, ResourceIDRange res_id, uint custom_id = 0);
 
   /**
    * Record a procedural draw call. Geometry is **NOT** source from a gpu::Batch.
@@ -296,7 +296,7 @@ class PassBase {
    * \note Only works for GPU_PRIM_POINTS, GPU_PRIM_LINES, GPU_PRIM_TRIS, GPU_PRIM_LINES_ADJ and
    * GPU_PRIM_TRIS_ADJ original primitive types.
    */
-  void draw_expand(draw::DrawMesh *draw_mesh,
+  void draw_expand(draw::Mesh *draw_mesh,
                    GPUPrimType primitive_type,
                    uint primitive_len,
                    uint instance_len,
@@ -309,7 +309,7 @@ class PassBase {
    * Shorter version for the common case.
    * \note Implemented in derived class. Not a virtual function to avoid indirection.
    */
-  void draw_expand(draw::DrawMesh *draw_mesh,
+  void draw_expand(draw::Mesh *draw_mesh,
                    GPUPrimType primitive_type,
                    uint primitive_len,
                    uint instance_len,
@@ -320,7 +320,7 @@ class PassBase {
    * Indirect variants.
    * \note If needed, the resource id need to also be set accordingly in the DrawCommand.
    */
-  void draw_indirect(draw::DrawMesh *draw_mesh,
+  void draw_indirect(draw::Mesh *draw_mesh,
                      StorageBuffer<DrawCommand, true> &indirect_buffer,
                      ResourceID res_id = {0});
   void draw_procedural_indirect(GPUPrimType primitive,
@@ -884,7 +884,7 @@ template<class T> std::string PassBase<T>::serialize(std::string line_prefix) co
  * \{ */
 
 template<class T>
-inline void PassBase<T>::draw(draw::DrawMesh *draw_mesh,
+inline void PassBase<T>::draw(draw::Mesh *draw_mesh,
                               uint instance_len,
                               uint vertex_len,
                               uint vertex_first,
@@ -910,13 +910,13 @@ inline void PassBase<T>::draw(draw::DrawMesh *draw_mesh,
 }
 
 template<class T>
-inline void PassBase<T>::draw(draw::DrawMesh *draw_mesh, ResourceIDRange res_id, uint custom_id)
+inline void PassBase<T>::draw(draw::Mesh *draw_mesh, ResourceIDRange res_id, uint custom_id)
 {
   this->draw(draw_mesh, -1, -1, -1, res_id, custom_id);
 }
 
 template<class T>
-inline void PassBase<T>::draw_expand(draw::DrawMesh *draw_mesh,
+inline void PassBase<T>::draw_expand(draw::Mesh *draw_mesh,
                                      GPUPrimType primitive_type,
                                      uint primitive_len,
                                      uint instance_len,
@@ -943,7 +943,7 @@ inline void PassBase<T>::draw_expand(draw::DrawMesh *draw_mesh,
 }
 
 template<class T>
-inline void PassBase<T>::draw_expand(draw::DrawMesh *draw_mesh,
+inline void PassBase<T>::draw_expand(draw::Mesh *draw_mesh,
                                      GPUPrimType primitive_type,
                                      uint primitive_len,
                                      uint instance_len,
@@ -963,7 +963,7 @@ inline void PassBase<T>::draw_procedural(GPUPrimType primitive,
                                          uint custom_id)
 {
   /* Geometry is not sourced from a #gpu::Batch. The procedural batches are GPU module singletons
-   * owned by the active context, wrapped into persistent #DrawMesh that resolve them on access. */
+   * owned by the active context, wrapped into persistent #Mesh that resolve them on access. */
   this->draw(command::procedural_draw_mesh_get(primitive),
              instance_len,
              vertex_len,
@@ -979,7 +979,7 @@ inline void PassBase<T>::draw_procedural(GPUPrimType primitive,
  * \{ */
 
 template<class T>
-inline void PassBase<T>::draw_indirect(draw::DrawMesh *draw_mesh,
+inline void PassBase<T>::draw_indirect(draw::Mesh *draw_mesh,
                                        StorageBuffer<DrawCommand, true> &indirect_buffer,
                                        ResourceID res_id)
 {

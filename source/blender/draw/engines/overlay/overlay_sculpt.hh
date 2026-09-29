@@ -138,7 +138,7 @@ class Sculpts : Overlay {
         const char *error = nullptr;
         /* The error string will always have been printed by the engine already.
          * No need to display it twice. */
-        draw::DrawMesh *geometry = curves_sub_pass_setup(
+        draw::Mesh *geometry = curves_sub_pass_setup(
             *curves_ps_, state.scene, ob_ref.object, error);
         if (select_attr_buf.get()) {
           ResourceHandleRange handle = manager.unique_handle(ob_ref);
@@ -153,7 +153,7 @@ class Sculpts : Overlay {
     if (show_curves_cage_) {
       ResourceHandleRange handle = manager.unique_handle(ob_ref);
 
-      draw::DrawMesh *geometry = DRW_curves_batch_cache_get_sculpt_curves_cage(&curves);
+      draw::Mesh *geometry = DRW_curves_batch_cache_get_sculpt_curves_cage(&curves);
       sculpt_curve_cage_.draw(geometry, handle);
     }
   }
@@ -188,7 +188,7 @@ class Sculpts : Overlay {
 
     switch (pbvh->type()) {
       case bke::pbvh::Type::Mesh: {
-        const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
+        const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*object_orig);
         if (!mesh.attributes().contains(".sculpt_face_set") &&
             !mesh.attributes().contains(".sculpt_mask"))
         {
@@ -198,7 +198,8 @@ class Sculpts : Overlay {
       }
       case bke::pbvh::Type::Grids: {
         const SubdivCCG &subdiv_ccg = *sculpt_session->subdiv_ccg;
-        const Mesh &base_mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
+        const blender::Mesh &base_mesh = DRW_object_get_data_for_drawing<blender::Mesh>(
+            *object_orig);
         if (subdiv_ccg.masks.is_empty() && !base_mesh.attributes().contains(".sculpt_face_set")) {
           return;
         }
@@ -231,8 +232,8 @@ class Sculpts : Overlay {
     else {
       ResourceHandleRange handle = manager.unique_handle(ob_ref);
 
-      Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
-      draw::DrawMesh *sculpt_overlays = DRW_mesh_batch_cache_get_sculpt_overlays(mesh);
+      blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob_ref.object);
+      draw::Mesh *sculpt_overlays = DRW_mesh_batch_cache_get_sculpt_overlays(mesh);
       mesh_ps_->draw(sculpt_overlays, handle);
     }
   }

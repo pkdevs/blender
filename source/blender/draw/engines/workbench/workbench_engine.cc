@@ -267,7 +267,7 @@ class Instance : public DrawEngine {
 
   void draw_mesh(ObjectRef &ob_ref,
                  Material &material,
-                 draw::DrawMesh *batch,
+                 draw::Mesh *batch,
                  ResourceHandleRange handle,
                  const MaterialTexture *texture = nullptr,
                  bool show_missing_texture = false)
@@ -294,7 +294,7 @@ class Instance : public DrawEngine {
     if (object_state.use_per_material_batches) {
       const int material_count = BKE_object_material_used_with_fallback_eval(*ob_ref.object);
 
-      Span<draw::DrawMesh *> batches;
+      Span<draw::Mesh *> batches;
       if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
         batches = DRW_cache_mesh_surface_texpaint_get(ob_ref.object);
       }
@@ -324,7 +324,7 @@ class Instance : public DrawEngine {
       }
     }
     else {
-      draw::DrawMesh *batch;
+      draw::Mesh *batch;
       if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
         batch = DRW_cache_mesh_surface_texpaint_single_get(ob_ref.object);
       }
@@ -409,7 +409,7 @@ class Instance : public DrawEngine {
       PassMain::Sub &pass =
           is_gsplat ? mesh_pass.get_subpass(eGeometryType::GSPLAT).sub("GSplatSubPass") :
                       mesh_pass.get_subpass(eGeometryType::POINTCLOUD).sub("PointCloudSubPass");
-      draw::DrawMesh *batch = pointcloud_sub_pass_setup(pass, ob_ref, handle);
+      draw::Mesh *batch = pointcloud_sub_pass_setup(pass, ob_ref, handle);
       pass.draw(batch, handle, material_index);
     });
   }
@@ -436,7 +436,7 @@ class Instance : public DrawEngine {
       PassMain::Sub &pass =
           mesh_pass.get_subpass(eGeometryType::CURVES, &texture).sub("Hair SubPass");
       pass.push_constant("emitter_object_id", int(emitter_handle.raw()));
-      draw::DrawMesh *batch = hair_sub_pass_setup(pass, scene_state_.scene, ob_ref, psys, md);
+      draw::Mesh *batch = hair_sub_pass_setup(pass, scene_state_.scene, ob_ref, psys, md);
       pass.draw(batch, {ResourceID(handle)}, material_index);
     });
   }
@@ -453,8 +453,7 @@ class Instance : public DrawEngine {
       PassMain::Sub &pass = mesh_pass.get_subpass(eGeometryType::CURVES).sub("Curves SubPass");
 
       const char *error = nullptr;
-      draw::DrawMesh *batch = curves_sub_pass_setup(
-          pass, scene_state_.scene, ob_ref.object, error);
+      draw::Mesh *batch = curves_sub_pass_setup(pass, scene_state_.scene, ob_ref.object, error);
       if (error) {
         hair_buffer_overflow_error_ = error;
       }

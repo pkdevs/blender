@@ -15,7 +15,15 @@
 
 namespace blender::draw {
 
-struct DrawMesh {
+/**
+ * Wrapper around a #gpu::Batch, owning or borrowing it.
+ *
+ * \warning This type is named `Mesh`, which shadows the DNA `Mesh` struct for unqualified lookup
+ * inside `namespace blender::draw`. Always refer to the DNA type as `blender::Mesh` within this
+ * namespace: a bare `Mesh` silently means *this* type, so a missing qualifier compiles as a
+ * different type rather than an error.
+ */
+struct Mesh {
  private:
   /** GPU batch wrapped by this draw-mesh. */
   gpu::Batch *batch_ = nullptr;
@@ -28,15 +36,17 @@ struct DrawMesh {
   GPUPrimType batch_prim_ = GPU_PRIM_NONE;
   // TODO: Vector<MeshLet> meshlets;
  public:
-  /** Takes ownership of \a batch. The batch is discarded when the #DrawMesh is destroyed. */
-  DrawMesh(gpu::Batch *batch);
+  MEM_CXX_CLASS_ALLOC_FUNCS("draw::Mesh")
+
+  /** Takes ownership of \a batch. The batch is discarded when the #Mesh is destroyed. */
+  Mesh(gpu::Batch *batch);
   /**
-   * Wraps \a batch without taking ownership.
+   * Wraps \a batch, taking ownership only when \a owns_batch is true.
    *
-   * Use this for batches that are not owned by the draw system, e.g. batches owned by other data
-   * (motion paths). The batch must outlive every command that references it.
+   * Use `owns_batch = false` for batches that are not owned by the draw system, e.g. batches owned
+   * by other data (motion paths). The batch must outlive every command that references it.
    */
-  DrawMesh(gpu::Batch *batch, bool owns_batch);
+  Mesh(gpu::Batch *batch, bool owns_batch);
   /**
    * Creates a procedural draw-mesh that stores no batch.
    *
@@ -46,9 +56,9 @@ struct DrawMesh {
    * \a batch_prim must not be #GPU_PRIM_NONE, which is reserved as the sentinel for regular
    * (non-procedural) draw-meshes.
    */
-  explicit DrawMesh(GPUPrimType batch_prim);
+  explicit Mesh(GPUPrimType batch_prim);
 
-  ~DrawMesh()
+  ~Mesh()
   {
     if (owns_batch_) {
       GPU_BATCH_DISCARD_SAFE(batch_);
@@ -56,10 +66,10 @@ struct DrawMesh {
     batch_ = nullptr;
   }
 
-  DrawMesh(const DrawMesh &) = delete;
-  DrawMesh &operator=(const DrawMesh &) = delete;
-  DrawMesh(DrawMesh &&) = delete;
-  DrawMesh &operator=(DrawMesh &&) = delete;
+  Mesh(const Mesh &) = delete;
+  Mesh &operator=(const Mesh &) = delete;
+  Mesh(Mesh &&) = delete;
+  Mesh &operator=(Mesh &&) = delete;
 
   /**
    * Resolve the underlying #gpu::Batch.
@@ -69,56 +79,45 @@ struct DrawMesh {
    */
   gpu::Batch *batch_get() const;
 
-  static inline void clear(DrawMesh *draw_mesh)
+  static inline void clear(Mesh *draw_mesh)
   {
     /* Never clear procedural draw-meshes: they reference the context-owned singleton batch. */
     if (draw_mesh && draw_mesh->batch_) {
       GPU_batch_clear(draw_mesh->batch_);
     }
   }
-  static inline void discard(DrawMesh *&draw_mesh)
+  static inline void discard(Mesh *&draw_mesh)
   {
     if (draw_mesh) {
-      MEM_delete(draw_mesh);
+      delete draw_mesh;
       draw_mesh = nullptr;
     }
   }
 };
 
-/**
- * Deleter for #DrawMeshPtr. Frees the #DrawMesh; its destructor discards the GPU batch it owns.
- */
-class DrawMeshDeleter {
- public:
-  void operator()(DrawMesh *draw_mesh)
-  {
-    MEM_delete(draw_mesh);
-  }
-};
-
-/** Owning pointer to a #DrawMesh. */
-using DrawMeshPtr = std::unique_ptr<DrawMesh, DrawMeshDeleter>;
+using MeshPtr = std::unique_ptr<Mesh>;
 
 /**
- * Create a #DrawMeshPtr that takes ownership of \a batch.
+ * Create a #MeshPtr that takes ownership of \a batch.
  *
- * \note The #DrawMesh owns \a batch and discards it on destruction. Only wrap batches that are
+ * \note The #Mesh owns \a batch and discards it on destruction. Only wrap batches that are
  * owned and not referenced by other code.
  */
-inline DrawMeshPtr make_draw_mesh(gpu::Batch *batch)
+inline MeshPtr make_mesh(gpu::Batch *batch)
 {
-  return DrawMeshPtr(MEM_new<DrawMesh>(__func__, batch));
+  return std::make_unique<Mesh>(batch);
 }
 
 /**
- * Create a #DrawMeshPtr wrapping \a batch without taking ownership.
+ * Create a #MeshPtr that borrows \a batch, without taking ownership of it.
  *
- * Use this for batches that are not owned by the draw system but that need a #DrawMesh to outlive
- * the command recording, e.g. motion path batches.
+ * Use this for batches that are not owned by the draw system but that need a #Mesh to outlive
+ * the command recording, e.g. motion path batches. The batch must outlive every command that
+ * references it.
  */
-inline DrawMeshPtr make_draw_mesh(gpu::Batch *batch, bool owns_batch)
+inline MeshPtr make_mesh_borrowed(gpu::Batch *batch)
 {
-  return DrawMeshPtr(MEM_new<DrawMesh>(__func__, batch, owns_batch));
+  return std::make_unique<Mesh>(batch, /*owns_batch=*/false);
 }
 
 }  // namespace blender::draw

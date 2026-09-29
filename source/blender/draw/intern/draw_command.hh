@@ -39,9 +39,9 @@ class DrawCommandBuf;
 class DrawMultiBuf;
 
 /**
- * Return a persistent #DrawMesh for procedural \a primitive draws.
+ * Return a persistent #Mesh for procedural \a primitive draws.
  */
-draw::DrawMesh *procedural_draw_mesh_get(GPUPrimType primitive);
+draw::Mesh *procedural_draw_mesh_get(GPUPrimType primitive);
 
 /* -------------------------------------------------------------------- */
 /** \name Recording State
@@ -377,7 +377,7 @@ struct SpecializeConstant {
 };
 
 struct Draw {
-  draw::DrawMesh *draw_mesh;
+  draw::Mesh *draw_mesh;
   uint32_t instance_len : 24;
   uint32_t expand_prim_type : 4; /* #GPUPrimType */
   uint32_t expand_prim_len : 4;
@@ -387,7 +387,7 @@ struct Draw {
 
   Draw() = default;
 
-  Draw(draw::DrawMesh *draw_mesh,
+  Draw(draw::Mesh *draw_mesh,
        uint instance_len,
        uint vertex_len,
        uint vertex_first,
@@ -417,7 +417,7 @@ struct Draw {
 };
 
 struct DrawMulti {
-  draw::DrawMesh *draw_mesh;
+  draw::Mesh *draw_mesh;
   DrawMultiBuf *multi_draw_buf;
   uint group_first;
   uint uuid;
@@ -427,7 +427,7 @@ struct DrawMulti {
 };
 
 struct DrawIndirect {
-  draw::DrawMesh *draw_mesh;
+  draw::Mesh *draw_mesh;
   gpu::StorageBuf **indirect_buf;
   ResourceID res_id;
 
@@ -576,7 +576,7 @@ class DrawCommandBuf {
 
   void append_draw(Vector<Header, 0> &headers,
                    Vector<Undetermined, 0> &commands,
-                   draw::DrawMesh *draw_mesh,
+                   draw::Mesh *draw_mesh,
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,
@@ -629,10 +629,10 @@ class DrawCommandBuf {
  * `DrawGroup` as a container. This is done automatically for any successive commands with the
  * same state.
  *
- * A `DrawGroup` is the combination of a `draw::DrawMesh` (VBO state) and a `command::DrawMulti`
+ * A `DrawGroup` is the combination of a `draw::Mesh` (VBO state) and a `command::DrawMulti`
  * (Pipeline State).
  *
- * Inside each `DrawGroup` all instances of a same `draw::DrawMesh` is merged into a single
+ * Inside each `DrawGroup` all instances of a same `draw::Mesh` is merged into a single
  * indirect command.
  *
  * To support this arbitrary reordering, we only need to know the offset of all the commands for a
@@ -659,7 +659,7 @@ class DrawMultiBuf {
   using DrawCommandBuf = StorageArrayBuffer<DrawCommand, 16, true>;
   using ResourceIdBuf = StorageArrayBuffer<uint, 128, true>;
 
-  using DrawGroupKey = std::pair<uint, draw::DrawMesh *>;
+  using DrawGroupKey = std::pair<uint, draw::Mesh *>;
   using DrawGroupMap = Map<DrawGroupKey, uint>;
   /** Maps a DrawMulti command and a draw mesh to their unique DrawGroup command. */
   DrawGroupMap group_ids_;
@@ -697,7 +697,7 @@ class DrawMultiBuf {
 
   void append_draw(Vector<Header, 0> &headers,
                    Vector<Undetermined, 0> &commands,
-                   draw::DrawMesh *draw_mesh,
+                   draw::Mesh *draw_mesh,
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,

@@ -221,7 +221,7 @@ class ShadowModule {
   PassSimple tilemap_update_ps_ = {"TilemapUpdate"};
 
   PassMain::Sub *tilemap_usage_transparent_ps_ = nullptr;
-  DrawMeshPtr box_batch_;
+  MeshPtr box_batch_;
   /* Source texture for depth buffer analysis. */
   gpu::Texture *src_depth_tx_ = nullptr;
 

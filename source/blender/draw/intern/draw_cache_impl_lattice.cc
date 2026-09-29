@@ -197,10 +197,10 @@ struct LatticeBatchCache {
   gpu::VertBuf *pos;
   gpu::IndexBuf *edges;
 
-  draw::DrawMesh *all_verts;
-  draw::DrawMesh *all_edges;
+  draw::Mesh *all_verts;
+  draw::Mesh *all_edges;
 
-  draw::DrawMesh *overlay_verts;
+  draw::Mesh *overlay_verts;
 
   /* settings to determine if cache is invalid */
   bool is_dirty;
@@ -287,7 +287,7 @@ void DRW_lattice_batch_cache_dirty_tag(Lattice *lt, int mode)
       break;
     case BKE_LATTICE_BATCH_DIRTY_SELECT:
       /* TODO: Separate Flag VBO. */
-      DrawMesh::discard(cache->overlay_verts);
+      Mesh::discard(cache->overlay_verts);
       break;
     default:
       BLI_assert(0);
@@ -301,9 +301,9 @@ static void lattice_batch_cache_clear(Lattice *lt)
     return;
   }
 
-  DrawMesh::discard(cache->all_verts);
-  DrawMesh::discard(cache->all_edges);
-  DrawMesh::discard(cache->overlay_verts);
+  Mesh::discard(cache->all_verts);
+  Mesh::discard(cache->all_edges);
+  Mesh::discard(cache->overlay_verts);
 
   GPU_VERTBUF_DISCARD_SAFE(cache->pos);
   GPU_INDEXBUF_DISCARD_SAFE(cache->edges);
@@ -449,16 +449,14 @@ static void lattice_batch_cache_create_overlay_batches(Lattice *lt)
       GPU_vertbuf_attr_set(vbo, attr_id.data, i, &vflag);
     }
 
-    cache->overlay_verts = MEM_new<draw::DrawMesh>(
+    cache->overlay_verts = MEM_new<draw::Mesh>(
         __func__, GPU_batch_create_ex(GPU_PRIM_POINTS, vbo, nullptr, GPU_BATCH_OWNS_VBO));
   }
 
   lattice_render_data_free(rdata);
 }
 
-draw::DrawMesh *DRW_lattice_batch_cache_get_all_edges(Lattice *lt,
-                                                      bool use_weight,
-                                                      const int actdef)
+draw::Mesh *DRW_lattice_batch_cache_get_all_edges(Lattice *lt, bool use_weight, const int actdef)
 {
   LatticeBatchCache *cache = lattice_batch_cache_get(lt);
 
@@ -466,7 +464,7 @@ draw::DrawMesh *DRW_lattice_batch_cache_get_all_edges(Lattice *lt,
     /* create batch from Lattice */
     LatticeRenderData *rdata = lattice_render_data_create(lt, LR_DATATYPE_VERT | LR_DATATYPE_EDGE);
 
-    cache->all_edges = MEM_new<draw::DrawMesh>(
+    cache->all_edges = MEM_new<draw::Mesh>(
         __func__,
         GPU_batch_create(GPU_PRIM_LINES,
                          lattice_batch_cache_get_pos(rdata, cache, use_weight, actdef),
@@ -478,14 +476,14 @@ draw::DrawMesh *DRW_lattice_batch_cache_get_all_edges(Lattice *lt,
   return cache->all_edges;
 }
 
-draw::DrawMesh *DRW_lattice_batch_cache_get_all_verts(Lattice *lt)
+draw::Mesh *DRW_lattice_batch_cache_get_all_verts(Lattice *lt)
 {
   LatticeBatchCache *cache = lattice_batch_cache_get(lt);
 
   if (cache->all_verts == nullptr) {
     LatticeRenderData *rdata = lattice_render_data_create(lt, LR_DATATYPE_VERT);
 
-    cache->all_verts = MEM_new<draw::DrawMesh>(
+    cache->all_verts = MEM_new<draw::Mesh>(
         __func__,
         GPU_batch_create(
             GPU_PRIM_POINTS, lattice_batch_cache_get_pos(rdata, cache, false, -1), nullptr));
@@ -496,7 +494,7 @@ draw::DrawMesh *DRW_lattice_batch_cache_get_all_verts(Lattice *lt)
   return cache->all_verts;
 }
 
-draw::DrawMesh *DRW_lattice_batch_cache_get_edit_verts(Lattice *lt)
+draw::Mesh *DRW_lattice_batch_cache_get_edit_verts(Lattice *lt)
 {
   LatticeBatchCache *cache = lattice_batch_cache_get(lt);
 

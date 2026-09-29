@@ -82,7 +82,7 @@ class Facing : Overlay {
       }
     }
     else {
-      draw::DrawMesh *geom = DRW_cache_object_surface_get(ob_ref.object);
+      draw::Mesh *geom = DRW_cache_object_surface_get(ob_ref.object);
       if (geom) {
         ps_.draw(geom, manager.unique_handle(ob_ref));
       }

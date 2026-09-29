@@ -27,7 +27,7 @@ class VertBuf;
 }  // namespace gpu
 
 namespace draw {
-struct DrawMesh;
+struct Mesh;
 }  // namespace draw
 struct Object;
 namespace bke {
@@ -66,16 +66,16 @@ class DrawCache : public bke::pbvh::DrawCache {
    * Recalculate and copy data as necessary to prepare batches for drawing triangles for a
    * specific combination of attributes.
    */
-  virtual Span<draw::DrawMesh *> ensure_tris_batches(const Object &object,
-                                                     const ViewportRequest &request,
-                                                     const IndexMask &nodes_to_update) = 0;
+  virtual Span<draw::Mesh *> ensure_tris_batches(const Object &object,
+                                                 const ViewportRequest &request,
+                                                 const IndexMask &nodes_to_update) = 0;
   /**
    * Recalculate and copy data as necessary to prepare batches for drawing wireframe geometry for a
    * specific combination of attributes.
    */
-  virtual Span<draw::DrawMesh *> ensure_lines_batches(const Object &object,
-                                                      const ViewportRequest &request,
-                                                      const IndexMask &nodes_to_update) = 0;
+  virtual Span<draw::Mesh *> ensure_lines_batches(const Object &object,
+                                                  const ViewportRequest &request,
+                                                  const IndexMask &nodes_to_update) = 0;
 
   /**
    * Return the material index for each node (all faces in a node should have the same material

@@ -21,12 +21,12 @@
 
 namespace blender::draw::command {
 
-draw::DrawMesh *procedural_draw_mesh_get(GPUPrimType primitive)
+draw::Mesh *procedural_draw_mesh_get(GPUPrimType primitive)
 {
-  static draw::DrawMesh mesh_pts(GPU_PRIM_POINTS);
-  static draw::DrawMesh mesh_lines(GPU_PRIM_LINES);
-  static draw::DrawMesh mesh_tris(GPU_PRIM_TRIS);
-  static draw::DrawMesh mesh_tri_strips(GPU_PRIM_TRI_STRIP);
+  static draw::Mesh mesh_pts(GPU_PRIM_POINTS);
+  static draw::Mesh mesh_lines(GPU_PRIM_LINES);
+  static draw::Mesh mesh_tris(GPU_PRIM_TRIS);
+  static draw::Mesh mesh_tri_strips(GPU_PRIM_TRI_STRIP);
 
   switch (primitive) {
     case GPU_PRIM_POINTS:

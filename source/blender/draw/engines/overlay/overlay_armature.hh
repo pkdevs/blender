@@ -102,26 +102,26 @@ class Armatures : Overlay {
 
     LinePrimitiveBuf relations_buf = {SelectionType::DISABLED, "relations_buf"};
 
-    Map<draw::DrawMesh *, std::unique_ptr<BoneInstanceBuf>> custom_shape_fill;
-    Map<draw::DrawMesh *, std::unique_ptr<BoneInstanceBuf>> custom_shape_outline;
-    Map<draw::DrawMesh *, std::unique_ptr<BoneInstanceBuf>> custom_shape_wire;
-    Map<draw::DrawMesh *, std::unique_ptr<BoneInstanceBuf>> custom_shape_wire_strip;
+    Map<draw::Mesh *, std::unique_ptr<BoneInstanceBuf>> custom_shape_fill;
+    Map<draw::Mesh *, std::unique_ptr<BoneInstanceBuf>> custom_shape_outline;
+    Map<draw::Mesh *, std::unique_ptr<BoneInstanceBuf>> custom_shape_wire;
+    Map<draw::Mesh *, std::unique_ptr<BoneInstanceBuf>> custom_shape_wire_strip;
 
-    BoneInstanceBuf &custom_shape_fill_get_buffer(draw::DrawMesh *geom)
+    BoneInstanceBuf &custom_shape_fill_get_buffer(draw::Mesh *geom)
     {
       return *custom_shape_fill.lookup_or_add_cb(geom, [this]() {
         return std::make_unique<BoneInstanceBuf>(this->selection_type_, "CustomBoneSolid");
       });
     }
 
-    BoneInstanceBuf &custom_shape_outline_get_buffer(draw::DrawMesh *geom)
+    BoneInstanceBuf &custom_shape_outline_get_buffer(draw::Mesh *geom)
     {
       return *custom_shape_outline.lookup_or_add_cb(geom, [this]() {
         return std::make_unique<BoneInstanceBuf>(this->selection_type_, "CustomBoneOutline");
       });
     }
 
-    BoneInstanceBuf &custom_shape_wire_get_buffer(draw::DrawMesh *geom)
+    BoneInstanceBuf &custom_shape_wire_get_buffer(draw::Mesh *geom)
     {
       if (geom->batch_get()->prim_type == GPU_PRIM_LINE_STRIP) {
         return *custom_shape_wire_strip.lookup_or_add_cb(geom, [this]() {
@@ -604,9 +604,9 @@ class Armatures : Overlay {
 
       bb.relations_buf.end_sync(*bb.relations);
 
-      using CustomShapeBuf = MutableMapItem<draw::DrawMesh *, std::unique_ptr<BoneInstanceBuf>>;
+      using CustomShapeBuf = MutableMapItem<draw::Mesh *, std::unique_ptr<BoneInstanceBuf>>;
 
-      draw::DrawMesh *arrow_batch = res.shapes.arrows.get();
+      draw::Mesh *arrow_batch = res.shapes.arrows.get();
       for (CustomShapeBuf item : bb.custom_shape_fill.items()) {
         item.value->end_sync(*bb.shape_fill, item.key);
       }

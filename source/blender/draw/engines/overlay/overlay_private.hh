@@ -331,77 +331,77 @@ struct VertexTriple {
  */
 class ShapeCache {
  public:
-  DrawMeshPtr bone_box;
-  DrawMeshPtr bone_box_wire;
-  DrawMeshPtr bone_envelope;
-  DrawMeshPtr bone_envelope_wire;
-  DrawMeshPtr bone_octahedron;
-  DrawMeshPtr bone_octahedron_wire;
-  DrawMeshPtr bone_sphere;
-  DrawMeshPtr bone_sphere_wire;
-  DrawMeshPtr bone_stick;
+  MeshPtr bone_box;
+  MeshPtr bone_box_wire;
+  MeshPtr bone_envelope;
+  MeshPtr bone_envelope_wire;
+  MeshPtr bone_octahedron;
+  MeshPtr bone_octahedron_wire;
+  MeshPtr bone_sphere;
+  MeshPtr bone_sphere_wire;
+  MeshPtr bone_stick;
 
-  DrawMeshPtr bone_degrees_of_freedom;
-  DrawMeshPtr bone_degrees_of_freedom_wire;
+  MeshPtr bone_degrees_of_freedom;
+  MeshPtr bone_degrees_of_freedom_wire;
 
-  DrawMeshPtr grid;
-  DrawMeshPtr cube_solid;
+  MeshPtr grid;
+  MeshPtr cube_solid;
 
-  DrawMeshPtr cursor_circle;
-  DrawMeshPtr cursor_lines;
+  MeshPtr cursor_circle;
+  MeshPtr cursor_lines;
 
-  DrawMeshPtr quad_wire;
-  DrawMeshPtr quad_solid;
-  DrawMeshPtr plain_axes;
-  DrawMeshPtr single_arrow;
-  DrawMeshPtr cube;
-  DrawMeshPtr circle;
-  DrawMeshPtr empty_sphere;
-  DrawMeshPtr empty_cone;
-  DrawMeshPtr cylinder;
-  DrawMeshPtr capsule_body;
-  DrawMeshPtr capsule_cap;
-  DrawMeshPtr arrows;
-  DrawMeshPtr metaball_wire_circle;
+  MeshPtr quad_wire;
+  MeshPtr quad_solid;
+  MeshPtr plain_axes;
+  MeshPtr single_arrow;
+  MeshPtr cube;
+  MeshPtr circle;
+  MeshPtr empty_sphere;
+  MeshPtr empty_cone;
+  MeshPtr cylinder;
+  MeshPtr capsule_body;
+  MeshPtr capsule_cap;
+  MeshPtr arrows;
+  MeshPtr metaball_wire_circle;
 
-  DrawMeshPtr speaker;
+  MeshPtr speaker;
 
-  DrawMeshPtr camera_distances;
-  DrawMeshPtr camera_frame;
-  DrawMeshPtr camera_tria_wire;
-  DrawMeshPtr camera_tria;
+  MeshPtr camera_distances;
+  MeshPtr camera_frame;
+  MeshPtr camera_tria_wire;
+  MeshPtr camera_tria;
 
-  DrawMeshPtr camera_volume;
-  DrawMeshPtr camera_volume_wire;
+  MeshPtr camera_volume;
+  MeshPtr camera_volume_wire;
 
-  DrawMeshPtr sphere_low_detail;
+  MeshPtr sphere_low_detail;
 
-  DrawMeshPtr ground_line;
+  MeshPtr ground_line;
 
   /* Batch drawing a quad with coordinate [0..1] at 0.75 depth. */
-  DrawMeshPtr image_quad;
+  MeshPtr image_quad;
 
-  DrawMeshPtr light_icon_outer_lines;
-  DrawMeshPtr light_icon_inner_lines;
-  DrawMeshPtr light_icon_sun_rays;
-  DrawMeshPtr light_point_lines;
-  DrawMeshPtr light_sun_lines;
-  DrawMeshPtr light_spot_lines;
-  DrawMeshPtr light_area_disk_lines;
-  DrawMeshPtr light_area_square_lines;
-  DrawMeshPtr light_spot_volume;
+  MeshPtr light_icon_outer_lines;
+  MeshPtr light_icon_inner_lines;
+  MeshPtr light_icon_sun_rays;
+  MeshPtr light_point_lines;
+  MeshPtr light_sun_lines;
+  MeshPtr light_spot_lines;
+  MeshPtr light_area_disk_lines;
+  MeshPtr light_area_square_lines;
+  MeshPtr light_spot_volume;
 
-  DrawMeshPtr field_force;
-  DrawMeshPtr field_wind;
-  DrawMeshPtr field_vortex;
-  DrawMeshPtr field_curve;
-  DrawMeshPtr field_sphere_limit;
-  DrawMeshPtr field_tube_limit;
-  DrawMeshPtr field_cone_limit;
+  MeshPtr field_force;
+  MeshPtr field_wind;
+  MeshPtr field_vortex;
+  MeshPtr field_curve;
+  MeshPtr field_sphere_limit;
+  MeshPtr field_tube_limit;
+  MeshPtr field_cone_limit;
 
-  DrawMeshPtr lightprobe_cube;
-  DrawMeshPtr lightprobe_planar;
-  DrawMeshPtr lightprobe_grid;
+  MeshPtr lightprobe_cube;
+  MeshPtr lightprobe_planar;
+  MeshPtr lightprobe_grid;
 
   ShapeCache();
 
@@ -992,7 +992,7 @@ struct Resources : public select::SelectMap {
 /* Reference to a flat object.
  * Allow deferred rendering condition of flat object for special purpose. */
 struct FlatObjectRef {
-  draw::DrawMesh *geom;
+  draw::Mesh *geom;
   ResourceHandleRange handle;
   int flattened_axis_id;
 
@@ -1039,7 +1039,7 @@ struct FlatObjectRef {
     return -1;
   }
 
-  using Callback = FunctionRef<void(draw::DrawMesh *geom, ResourceID handle)>;
+  using Callback = FunctionRef<void(draw::Mesh *geom, ResourceID handle)>;
 
   /* Execute callback for every handles that is orthogonal to the view.
    * Note: Only works in orthogonal view. */
@@ -1085,7 +1085,7 @@ template<typename InstanceDataT> struct ShapeInstanceBuf : private select::Selec
     data_buf.append(data);
   }
 
-  void end_sync(PassSimple::Sub &pass, draw::DrawMesh *shape)
+  void end_sync(PassSimple::Sub &pass, draw::Mesh *shape)
   {
     if (data_buf.is_empty()) {
       return;
@@ -1097,7 +1097,7 @@ template<typename InstanceDataT> struct ShapeInstanceBuf : private select::Selec
   }
 
   void end_sync(PassSimple::Sub &pass,
-                draw::DrawMesh *shape,
+                draw::Mesh *shape,
                 GPUPrimType primitive_type,
                 uint primitive_len)
   {

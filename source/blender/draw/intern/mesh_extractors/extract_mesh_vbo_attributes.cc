@@ -222,6 +222,7 @@ gpu::VertBufPtr extract_attribute_subdiv(const MeshRenderData &mr,
   /* Extract the attribute on the coarse face corners, to be interpolated to the subdivided face
    * corners. The compute shader only expects floats. */
   gpu::VertBufPtr coarse_vbo;
+  const blender::Mesh *coarse_mesh = subdiv_cache.mesh;
   bke::AttrType type;
   if (mr.extract_type == MeshExtractType::BMesh) {
     const BMDataLayerLookup attr = BM_data_layer_lookup(*mr.bm, name);

@@ -108,7 +108,7 @@ static Vector<SculptBatch> sculpt_batches_get_ex(const Object *ob,
   const IndexMask nodes_to_update = update_only_visible ? visible_nodes :
                                                           bke::pbvh::all_leaf_nodes(*pbvh, memory);
 
-  Span<draw::DrawMesh *> batches;
+  Span<draw::Mesh *> batches;
   if (use_wire) {
     batches = draw_data.ensure_lines_batches(*ob, {{}, fast_mode}, nodes_to_update);
   }
@@ -145,7 +145,7 @@ Vector<SculptBatch> sculpt_batches_get(const Object *ob, SculptBatchFeature feat
     attrs.append(pbvh::CustomRequest::FaceSet);
   }
 
-  const Mesh *mesh = BKE_object_get_original_mesh(ob);
+  const blender::Mesh *mesh = BKE_object_get_original_mesh(ob);
   if (features & SCULPT_BATCH_VERTEX_COLOR) {
     if (const char *name = mesh->active_color_attribute) {
       attrs.append(pbvh::GenericRequest(name));
@@ -166,7 +166,7 @@ Vector<SculptBatch> sculpt_batches_per_material_get(const Object *ob,
                                                     Span<const GPUMaterial *> materials)
 {
   BLI_assert(ob->type == OB_MESH);
-  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
+  const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
 
   VectorSet<std::string> draw_attrs;
   DRW_MeshCDMask cd_needed;

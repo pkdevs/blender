@@ -313,12 +313,12 @@ struct CurveBatchCache {
   } ibo;
 
   struct {
-    draw::DrawMesh *curves;
-    draw::DrawMesh *curves_viewer_attribute;
+    draw::Mesh *curves;
+    draw::Mesh *curves_viewer_attribute;
     /* control handles and vertices */
-    draw::DrawMesh *edit_edges;
-    draw::DrawMesh *edit_verts;
-    draw::DrawMesh *edit_normals;
+    draw::Mesh *edit_edges;
+    draw::Mesh *edit_verts;
+    draw::Mesh *edit_normals;
   } batch;
 
   /* settings to determine if cache is invalid */
@@ -407,8 +407,8 @@ void DRW_curve_batch_cache_dirty_tag(Curve *cu, int mode)
     case BKE_CURVE_BATCH_DIRTY_SELECT:
       GPU_VERTBUF_DISCARD_SAFE(cache->edit.data);
 
-      DrawMesh::discard(cache->batch.edit_edges);
-      DrawMesh::discard(cache->batch.edit_verts);
+      Mesh::discard(cache->batch.edit_edges);
+      Mesh::discard(cache->batch.edit_verts);
       break;
     default:
       BLI_assert(0);
@@ -435,8 +435,8 @@ static void curve_batch_cache_clear(Curve *cu)
     GPU_INDEXBUF_DISCARD_SAFE(ibo[i]);
   }
   for (int i = 0; i < sizeof(cache->batch) / sizeof(void *); i++) {
-    draw::DrawMesh **draw_mesh = reinterpret_cast<draw::DrawMesh **>(&cache->batch);
-    DrawMesh::discard(draw_mesh[i]);
+    draw::Mesh **draw_mesh = reinterpret_cast<draw::Mesh **>(&cache->batch);
+    Mesh::discard(draw_mesh[i]);
   }
 }
 
@@ -800,31 +800,31 @@ static void curve_create_edit_data_and_handles(CurveRenderData *rdata,
 /** \name Public Object/Curve API
  * \{ */
 
-draw::DrawMesh *DRW_curve_batch_cache_get_wire_edge(Curve *cu)
+draw::Mesh *DRW_curve_batch_cache_get_wire_edge(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.curves);
 }
 
-draw::DrawMesh *DRW_curve_batch_cache_get_wire_edge_viewer_attribute(Curve *cu)
+draw::Mesh *DRW_curve_batch_cache_get_wire_edge_viewer_attribute(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.curves_viewer_attribute);
 }
 
-draw::DrawMesh *DRW_curve_batch_cache_get_normal_edge(Curve *cu)
+draw::Mesh *DRW_curve_batch_cache_get_normal_edge(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.edit_normals);
 }
 
-draw::DrawMesh *DRW_curve_batch_cache_get_edit_edges(Curve *cu)
+draw::Mesh *DRW_curve_batch_cache_get_edit_edges(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.edit_edges);
 }
 
-draw::DrawMesh *DRW_curve_batch_cache_get_edit_verts(Curve *cu)
+draw::Mesh *DRW_curve_batch_cache_get_edit_verts(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.edit_verts);
@@ -928,7 +928,7 @@ void DRW_curve_batch_cache_create_requested(Object *ob, const Scene *scene)
 #ifndef NDEBUG
   /* Make sure all requested batches have been setup. */
   for (int i = 0; i < sizeof(cache->batch) / sizeof(void *); i++) {
-    draw::DrawMesh *draw_mesh = reinterpret_cast<draw::DrawMesh **>(&cache->batch)[i];
+    draw::Mesh *draw_mesh = reinterpret_cast<draw::Mesh **>(&cache->batch)[i];
     BLI_assert(draw_mesh == nullptr ||
                !DRW_batch_requested(draw_mesh->batch_get(), (GPUPrimType)0));
   }

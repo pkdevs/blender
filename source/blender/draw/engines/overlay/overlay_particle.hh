@@ -167,15 +167,15 @@ class Particles : Overlay {
                                                                   ob_ref.particles_matrix());
 
     {
-      draw::DrawMesh *geom = DRW_cache_particles_get_edit_strands(ob, psys, edit, show_weight_);
+      draw::Mesh *geom = DRW_cache_particles_get_edit_strands(ob, psys, edit, show_weight_);
       edit_edge_ps_->draw(geom, handle);
     }
     if (show_point_inner_) {
-      draw::DrawMesh *geom = DRW_cache_particles_get_edit_inner_points(ob, psys, edit);
+      draw::Mesh *geom = DRW_cache_particles_get_edit_inner_points(ob, psys, edit);
       edit_vert_ps_->draw(geom, handle);
     }
     if (show_point_tip_) {
-      draw::DrawMesh *geom = DRW_cache_particles_get_edit_tip_points(ob, psys, edit);
+      draw::Mesh *geom = DRW_cache_particles_get_edit_tip_points(ob, psys, edit);
       edit_vert_ps_->draw(geom, handle);
     }
   }
@@ -218,7 +218,7 @@ class Particles : Overlay {
         sub.push_constant("ucolor", float4(ma ? float3(&ma->r) : float3(0.6f), part->draw_size));
       };
 
-      draw::DrawMesh *geom = nullptr;
+      draw::Mesh *geom = nullptr;
       switch (draw_as) {
         case PART_DRAW_PATH:
           if ((state.is_wireframe_mode == false) && (part->draw_as == PART_DRAW_REND)) {

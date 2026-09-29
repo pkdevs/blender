@@ -33,9 +33,9 @@ class BatchUpdater {
  private:
   void ensure_clear_batch()
   {
-    DrawMesh::clear(info.batch.get());
+    draw::Mesh::clear(info.batch.get());
     if (info.batch == nullptr) {
-      info.batch = make_draw_mesh(GPU_batch_calloc());
+      info.batch = make_mesh(GPU_batch_calloc());
     }
   }
 

@@ -27,19 +27,19 @@ gpu::VertBuf *hair_pos_buffer_get(Scene *scene,
                                   ParticleSystem *psys,
                                   ModifierData *md);
 
-draw::DrawMesh *hair_sub_pass_setup(PassMain::Sub &sub_ps,
-                                    const Scene *scene,
-                                    const ObjectRef &ob_ref,
-                                    ParticleSystem *psys,
-                                    ModifierData *md,
-                                    GPUMaterial *gpu_material = nullptr);
+draw::Mesh *hair_sub_pass_setup(PassMain::Sub &sub_ps,
+                                const Scene *scene,
+                                const ObjectRef &ob_ref,
+                                ParticleSystem *psys,
+                                ModifierData *md,
+                                GPUMaterial *gpu_material = nullptr);
 
-draw::DrawMesh *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
-                                    const Scene *scene,
-                                    const ObjectRef &ob_ref,
-                                    ParticleSystem *psys,
-                                    ModifierData *md,
-                                    GPUMaterial *gpu_material = nullptr);
+draw::Mesh *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
+                                const Scene *scene,
+                                const ObjectRef &ob_ref,
+                                ParticleSystem *psys,
+                                ModifierData *md,
+                                GPUMaterial *gpu_material = nullptr);
 
 /** Curves. */
 
@@ -48,41 +48,41 @@ draw::DrawMesh *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
  */
 gpu::VertBuf *curves_pos_buffer_get(Object *object);
 
-draw::DrawMesh *curves_sub_pass_setup(PassMain::Sub &ps,
-                                      const Scene *scene,
-                                      Object *ob,
-                                      const char *&r_error,
-                                      GPUMaterial *gpu_material = nullptr);
+draw::Mesh *curves_sub_pass_setup(PassMain::Sub &ps,
+                                  const Scene *scene,
+                                  Object *ob,
+                                  const char *&r_error,
+                                  GPUMaterial *gpu_material = nullptr);
 
-draw::DrawMesh *curves_sub_pass_setup(PassSimple::Sub &ps,
-                                      const Scene *scene,
-                                      Object *ob,
-                                      const char *&r_error,
-                                      GPUMaterial *gpu_material = nullptr);
+draw::Mesh *curves_sub_pass_setup(PassSimple::Sub &ps,
+                                  const Scene *scene,
+                                  Object *ob,
+                                  const char *&r_error,
+                                  GPUMaterial *gpu_material = nullptr);
 
 /* Point cloud. */
 
-draw::DrawMesh *pointcloud_sub_pass_setup(PassMain::Sub &sub_ps,
-                                          const ObjectRef &ob_ref,
-                                          const ResourceHandleRange &res_handle,
-                                          GPUMaterial *gpu_material = nullptr);
+draw::Mesh *pointcloud_sub_pass_setup(PassMain::Sub &sub_ps,
+                                      const ObjectRef &ob_ref,
+                                      const ResourceHandleRange &res_handle,
+                                      GPUMaterial *gpu_material = nullptr);
 
-draw::DrawMesh *pointcloud_sub_pass_setup(PassSimple::Sub &sub_ps,
-                                          const ObjectRef &ob_ref,
-                                          const ResourceHandleRange &res_handle,
-                                          GPUMaterial *gpu_material = nullptr);
+draw::Mesh *pointcloud_sub_pass_setup(PassSimple::Sub &sub_ps,
+                                      const ObjectRef &ob_ref,
+                                      const ResourceHandleRange &res_handle,
+                                      GPUMaterial *gpu_material = nullptr);
 
 /* GSplats. */
 
-draw::DrawMesh *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
-                                      const ObjectRef &ob_ref,
-                                      const ResourceHandleRange &res_handle,
-                                      GPUMaterial *gpu_material = nullptr);
+draw::Mesh *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
+                                  const ObjectRef &ob_ref,
+                                  const ResourceHandleRange &res_handle,
+                                  GPUMaterial *gpu_material = nullptr);
 
-draw::DrawMesh *gsplat_sub_pass_setup(PassSimple::Sub &sub_ps,
-                                      const ObjectRef &ob_ref,
-                                      const ResourceHandleRange &res_handle,
-                                      GPUMaterial *gpu_material = nullptr);
+draw::Mesh *gsplat_sub_pass_setup(PassSimple::Sub &sub_ps,
+                                  const ObjectRef &ob_ref,
+                                  const ResourceHandleRange &res_handle,
+                                  GPUMaterial *gpu_material = nullptr);
 
 /** Volume. */
 

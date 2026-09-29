@@ -201,23 +201,22 @@ class GreasePencil : Overlay {
     Object *ob = ob_ref.object;
 
     if (show_lines_) {
-      draw::DrawMesh *geom = show_weight_ ?
-                                 DRW_cache_grease_pencil_weight_lines_get(state.scene, ob) :
-                                 DRW_cache_grease_pencil_edit_lines_get(state.scene, ob);
+      draw::Mesh *geom = show_weight_ ? DRW_cache_grease_pencil_weight_lines_get(state.scene, ob) :
+                                        DRW_cache_grease_pencil_edit_lines_get(state.scene, ob);
       if (geom) {
         edit_lines_->draw(geom, manager.unique_handle(ob_ref));
       }
     }
     if (show_handles_) {
-      draw::DrawMesh *geom = DRW_cache_grease_pencil_edit_handles_get(state.scene, ob);
+      draw::Mesh *geom = DRW_cache_grease_pencil_edit_handles_get(state.scene, ob);
       if (geom) {
         edit_handles_->draw_expand(geom, GPU_PRIM_TRIS, 8, 1, manager.unique_handle(ob_ref));
       }
     }
     if (show_points_) {
-      draw::DrawMesh *geom = show_weight_ ?
-                                 DRW_cache_grease_pencil_weight_points_get(state.scene, ob) :
-                                 DRW_cache_grease_pencil_edit_points_get(state.scene, ob);
+      draw::Mesh *geom = show_weight_ ?
+                             DRW_cache_grease_pencil_weight_points_get(state.scene, ob) :
+                             DRW_cache_grease_pencil_edit_points_get(state.scene, ob);
       if (geom) {
         edit_points_->draw(geom, manager.unique_handle(ob_ref));
       }
@@ -422,7 +421,7 @@ class GreasePencil : Overlay {
           return;
         }
 
-        draw::DrawMesh *geom = draw::DRW_cache_grease_pencil_get(scene, ob);
+        draw::Mesh *geom = draw::DRW_cache_grease_pencil_get(scene, ob);
 
         const bool show_stroke = !hide_stroke[curve_i];
         const bool show_fill = (num_stroke_triangles != 0) && active_filled;

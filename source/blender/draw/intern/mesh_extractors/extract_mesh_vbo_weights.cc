@@ -71,7 +71,7 @@ static void extract_weights_mesh(const MeshRenderData &mr,
                                  const DRW_MeshWeightState &weight_state,
                                  MutableSpan<float> vbo_data)
 {
-  const Mesh &mesh = *mr.mesh;
+  const blender::Mesh &mesh = *mr.mesh;
   const Span<MDeformVert> dverts = mesh.deform_verts();
   if (dverts.is_empty()) {
     vbo_data.fill(weight_state.alert_mode == OB_DRAW_GROUPUSER_NONE ? 0.0f : -1.0f);

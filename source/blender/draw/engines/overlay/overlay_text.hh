@@ -34,9 +34,9 @@ class Text : Overlay {
   LinePrimitiveBuf box_line_buf_;
 
   /** A solid quad. */
-  draw::DrawMesh *quad = nullptr;
+  draw::Mesh *quad = nullptr;
   /** A wire quad. */
-  draw::DrawMesh *quad_wire = nullptr;
+  draw::Mesh *quad_wire = nullptr;
 
  public:
   Text(SelectionType selection_type) : box_line_buf_(selection_type, "box_line_buf_") {}

@@ -153,7 +153,7 @@ class LookdevModule {
     MAX, /* Max number of level of detail */
   };
 
-  std::array<DrawMeshPtr, MAX> sphere_lod_ = {};
+  std::array<MeshPtr, MAX> sphere_lod_ = {};
 
   /* Size and position of the look-dev spheres in world space. */
   float sphere_radius_;
@@ -210,14 +210,14 @@ class LookdevModule {
 
  private:
   void sync_pass(PassSimple &pass,
-                 DrawMesh *geom,
+                 draw::Mesh *geom,
                  blender::Material *mat,
                  ResourceHandleRange res_handle);
   void sync_display();
 
   float calc_viewport_scale();
   SphereLOD calc_level_of_detail(const float viewport_scale);
-  DrawMesh *sphere_get(const SphereLOD level_of_detail);
+  draw::Mesh *sphere_get(const SphereLOD level_of_detail);
 
   friend class LookdevView;
 };

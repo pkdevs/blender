@@ -71,10 +71,10 @@ void compute_pass_setup(PassT &ps, const ObjectRef &ob_ref, const ResourceHandle
 }
 
 template<typename PassT>
-draw::DrawMesh *draw_subpass_setup(PassT &sub_ps,
-                                   const ObjectRef &ob_ref,
-                                   const ResourceHandleRange &res_handle,
-                                   GPUMaterial *gpu_material)
+draw::Mesh *draw_subpass_setup(PassT &sub_ps,
+                               const ObjectRef &ob_ref,
+                               const ResourceHandleRange &res_handle,
+                               GPUMaterial *gpu_material)
 {
   const Object *object = ob_ref.object;
   BLI_assert(ob_ref.object->type == OB_POINTCLOUD);
@@ -219,18 +219,18 @@ bool pointcloud_is_gsplat(Object *object)
   return false;
 }
 
-draw::DrawMesh *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
-                                      const ObjectRef &ob_ref,
-                                      const ResourceHandleRange &res_handle,
-                                      GPUMaterial *gpu_material)
+draw::Mesh *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
+                                  const ObjectRef &ob_ref,
+                                  const ResourceHandleRange &res_handle,
+                                  GPUMaterial *gpu_material)
 {
   return detail::draw_subpass_setup(sub_ps, ob_ref, res_handle, gpu_material);
 }
 
-draw::DrawMesh *gsplat_sub_pass_setup(PassSimple::Sub &sub_ps,
-                                      const ObjectRef &ob_ref,
-                                      const ResourceHandleRange &res_handle,
-                                      GPUMaterial *gpu_material)
+draw::Mesh *gsplat_sub_pass_setup(PassSimple::Sub &sub_ps,
+                                  const ObjectRef &ob_ref,
+                                  const ResourceHandleRange &res_handle,
+                                  GPUMaterial *gpu_material)
 {
   return detail::draw_subpass_setup(sub_ps, ob_ref, res_handle, gpu_material);
 }

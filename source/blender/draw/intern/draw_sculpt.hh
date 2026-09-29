@@ -19,10 +19,10 @@ struct Object;
 
 namespace draw {
 
-struct DrawMesh;
+struct Mesh;
 
 struct SculptBatch {
-  DrawMesh *batch;
+  draw::Mesh *batch;
   int material_slot;
   int debug_index;
   float3 debug_color();

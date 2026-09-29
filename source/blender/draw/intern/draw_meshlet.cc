@@ -32,16 +32,16 @@ gpu::Batch *procedural_batch_get(GPUPrimType primitive)
 }
 }  // namespace
 
-DrawMesh::DrawMesh(gpu::Batch *batch) : batch_(batch), owns_batch_(true) {}
+Mesh::Mesh(gpu::Batch *batch) : batch_(batch), owns_batch_(true) {}
 
-DrawMesh::DrawMesh(gpu::Batch *batch, bool owns_batch) : batch_(batch), owns_batch_(owns_batch) {}
+Mesh::Mesh(gpu::Batch *batch, bool owns_batch) : batch_(batch), owns_batch_(owns_batch) {}
 
-DrawMesh::DrawMesh(GPUPrimType batch_prim) : batch_prim_(batch_prim)
+Mesh::Mesh(GPUPrimType batch_prim) : batch_prim_(batch_prim)
 {
   BLI_assert(batch_prim != GPU_PRIM_NONE);
 }
 
-gpu::Batch *DrawMesh::batch_get() const
+gpu::Batch *Mesh::batch_get() const
 {
   if (batch_prim_ != GPU_PRIM_NONE) {
     return procedural_batch_get(batch_prim_);

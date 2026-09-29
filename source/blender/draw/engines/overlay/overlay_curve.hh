@@ -205,15 +205,15 @@ class Curves : Overlay {
     const bool show_points = bke::AttrDomain(curves.selection_domain) == bke::AttrDomain::Point;
 
     if (show_points) {
-      draw::DrawMesh *geom = DRW_curves_batch_cache_get_edit_points(&curves);
+      draw::Mesh *geom = DRW_curves_batch_cache_get_edit_points(&curves);
       edit_curves_points_->draw(geom, manager.unique_handle(ob_ref));
     }
     {
-      draw::DrawMesh *geom = DRW_curves_batch_cache_get_edit_curves_handles(&curves);
+      draw::Mesh *geom = DRW_curves_batch_cache_get_edit_curves_handles(&curves);
       edit_curves_handles_->draw_expand(geom, GPU_PRIM_TRIS, 8, 1, manager.unique_handle(ob_ref));
     }
     {
-      draw::DrawMesh *geom = DRW_curves_batch_cache_get_edit_curves_lines(&curves);
+      draw::Mesh *geom = DRW_curves_batch_cache_get_edit_curves_lines(&curves);
       edit_curves_lines_->draw(geom, manager.unique_handle(ob_ref));
     }
   }
@@ -231,15 +231,15 @@ class Curves : Overlay {
     blender::Curve &curve = DRW_object_get_data_for_drawing<blender::Curve>(*ob);
 
     if (ob->type == OB_CURVES_LEGACY) {
-      draw::DrawMesh *geom = DRW_cache_curve_edge_wire_get(ob);
+      draw::Mesh *geom = DRW_cache_curve_edge_wire_get(ob);
       edit_legacy_curve_wires_->draw(geom, res_handle);
     }
     if (edit_legacy_curve_normals_ && (curve.flag & CU_3D)) {
-      draw::DrawMesh *geom = DRW_cache_curve_edge_normal_get(ob);
+      draw::Mesh *geom = DRW_cache_curve_edge_normal_get(ob);
       edit_legacy_curve_normals_->draw_expand(geom, GPU_PRIM_LINES, 2, 1, res_handle);
     }
     {
-      draw::DrawMesh *geom = DRW_cache_curve_edge_overlay_get(ob);
+      draw::Mesh *geom = DRW_cache_curve_edge_overlay_get(ob);
       if (ob->type == OB_CURVES_LEGACY) {
         edit_legacy_curve_handles_->draw_expand(geom, GPU_PRIM_TRIS, 8, 1, res_handle);
       }
@@ -249,7 +249,7 @@ class Curves : Overlay {
       }
     }
     {
-      draw::DrawMesh *geom = DRW_cache_curve_vert_overlay_get(ob);
+      draw::Mesh *geom = DRW_cache_curve_vert_overlay_get(ob);
       edit_legacy_curve_points_->draw(geom, res_handle);
     }
   }
