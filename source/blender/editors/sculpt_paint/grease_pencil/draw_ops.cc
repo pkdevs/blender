@@ -2156,6 +2156,32 @@ static void GREASE_PENCIL_OT_fill(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
+/* Ensure a drawing at the current frame up front. For erasing, we don't want the auto-key to
+ * create an empty keyframe, so we duplicate the previous key. */
+static void ensure_drawing_for_autokey(bContext *C, GreasePencil &grease_pencil)
+{
+  const Scene *scene = CTX_data_scene(C);
+
+  if (bke::greasepencil::Layer *active_layer = grease_pencil.get_active_layer()) {
+    bool inserted_keyframe = false;
+    const bool use_duplicate_previous_key = true;
+    if (active_layer->is_editable()) {
+      ed::greasepencil::ensure_active_keyframe(
+          *scene, grease_pencil, *active_layer, use_duplicate_previous_key, inserted_keyframe);
+    }
+    if (inserted_keyframe) {
+      /* Select new keyframe (deselect others). */
+      for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
+        for (auto [frame_number, frame] : layer->frames_for_write().items()) {
+          const bool select_keyframe = (frame_number == scene->r.cfra) && (layer == active_layer);
+          SET_FLAG_FROM_TEST(frame.flag, select_keyframe, GP_FRAME_SELECTED);
+        }
+      }
+      WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
+    }
+  }
+}
+
 static bool remove_points_and_split_from_drawings(
     const Span<ed::greasepencil::MutableDrawingInfo> drawings,
     const Span<IndexMask> points_to_remove_per_drawing)
@@ -2222,26 +2248,7 @@ static wmOperatorStatus grease_pencil_erase_lasso_exec(bContext *C, wmOperator *
   const Bounds<int2> lasso_bounds_int = *bounds::min_max(lasso.as_span());
   const Bounds<float2> lasso_bounds(float2(lasso_bounds_int.min), float2(lasso_bounds_int.max));
 
-  /* Ensure a drawing at the current frame up front. For erasing, we don't want the auto-key to
-   * create an empty keyframe, so we duplicate the previous key. */
-  if (Layer *active_layer = grease_pencil.get_active_layer()) {
-    bool inserted_keyframe = false;
-    const bool use_duplicate_previous_key = true;
-    if (active_layer->is_editable()) {
-      ed::greasepencil::ensure_active_keyframe(
-          *scene, grease_pencil, *active_layer, use_duplicate_previous_key, inserted_keyframe);
-    }
-    if (inserted_keyframe) {
-      /* Select new keyframe (deselect others). */
-      for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
-        for (auto [frame_number, frame] : layer->frames_for_write().items()) {
-          const bool select_keyframe = (frame_number == scene->r.cfra) && (layer == active_layer);
-          SET_FLAG_FROM_TEST(frame.flag, select_keyframe, GP_FRAME_SELECTED);
-        }
-      }
-      WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
-    }
-  }
+  ensure_drawing_for_autokey(C, grease_pencil);
 
   const Vector<MutableDrawingInfo> drawings = ed::greasepencil::retrieve_editable_drawings(
       *scene, grease_pencil);
@@ -2355,26 +2362,7 @@ static wmOperatorStatus grease_pencil_erase_box_exec(bContext *C, wmOperator *op
     return OPERATOR_FINISHED;
   }
 
-  /* Ensure a drawing at the current frame up front. For erasing, we don't want the auto-key to
-   * create an empty keyframe, so we duplicate the previous key. */
-  if (Layer *active_layer = grease_pencil.get_active_layer()) {
-    bool inserted_keyframe = false;
-    const bool use_duplicate_previous_key = true;
-    if (active_layer->is_editable()) {
-      ed::greasepencil::ensure_active_keyframe(
-          *scene, grease_pencil, *active_layer, use_duplicate_previous_key, inserted_keyframe);
-    }
-    if (inserted_keyframe) {
-      /* Select new keyframe (deselect others). */
-      for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
-        for (auto [frame_number, frame] : layer->frames_for_write().items()) {
-          const bool select_keyframe = (frame_number == scene->r.cfra) && (layer == active_layer);
-          SET_FLAG_FROM_TEST(frame.flag, select_keyframe, GP_FRAME_SELECTED);
-        }
-      }
-      WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
-    }
-  }
+  ensure_drawing_for_autokey(C, grease_pencil);
 
   const Vector<MutableDrawingInfo> drawings = ed::greasepencil::retrieve_editable_drawings(
       *scene, grease_pencil);
