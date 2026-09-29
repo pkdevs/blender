@@ -1003,8 +1003,7 @@ struct UserDef {
                              USER_SAVE_PROMPT;
   eUserpref_UI_Flag2 uiflag2 = USER_REGION_OVERLAP;
   eUserpref_GPU_Flag gpu_flag = USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE |
-                                USER_GPU_FLAG_SUBDIVISION_EVALUATION |
-                                USER_GPU_FLAG_VIDEO_DECODING;
+                                USER_GPU_FLAG_SUBDIVISION_EVALUATION;
 
   /** #date_string::DateFormat */
   char date_format = 0;
