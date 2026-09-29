@@ -353,8 +353,9 @@ LookdevModule::SphereLOD LookdevModule::calc_level_of_detail(const float viewpor
 static int calc_sphere_extent(const float viewport_scale)
 {
   const int sphere_radius = U.lookdev_sphere_size * UI_SCALE_FAC * viewport_scale;
-  return sphere_radius * 2;
+  return max_ii(sphere_radius * 2, 4);
 }
+
 void LookdevModule::sync()
 {
   if (!use_reference_spheres_) {
