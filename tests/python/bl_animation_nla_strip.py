@@ -61,9 +61,9 @@ class AbstractNlaStripTest(unittest.TestCase):
         for frame in range(1, 5):
             x_location_fcurve.keyframe_points.insert(frame, value=frame).interpolation = "CONSTANT"
 
-    def add_strip_clip(self, nla_track: bpy.types.NlaTrack, start: int) -> bpy.types.NlaStrip:
+    def add_strip_sound(self, nla_track: bpy.types.NlaTrack, start: int) -> bpy.types.NlaStrip:
         """ Places a new 'SOUND' strip with the Speaker data. """
-        strip = nla_track.strips.new("ObjectClip", start, self.speaker_data, "SOUND")
+        strip = nla_track.strips.new_sound("ObjectClip", start, self.speaker_data)
         return strip
 
     def add_strip_no_extrapolation(self, nla_track: bpy.types.NlaTrack, start: int) -> bpy.types.NlaStrip:
@@ -181,7 +181,7 @@ class NlaStripSoundTest(AbstractNlaStripTest):
     """ Tests the ability to create functional 'SOUND' NLA strips. """
 
     def test_sound_strip(self):
-        strip = self.add_strip_clip(self.speaker_nla_tracks.new(), 1)
+        strip = self.add_strip_sound(self.speaker_nla_tracks.new(), 1)
 
         self.assertEqual(strip.type, "SOUND")
 
