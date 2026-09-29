@@ -32,7 +32,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         names.append(grid->name());
       }
     }
-    std::sort(names.begin(), names.end());
+    std::ranges::sort(names);
   }
   params.set_output("Names"_ustr, GList::from_container(std::move(names)));
 #else
