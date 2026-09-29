@@ -126,11 +126,14 @@ static void ptcache_file_compressed_write(PTCacheFile *pf,
                                           const void *data,
                                           size_t items_num,
                                           size_t item_size);
-static bool ptcache_file_write(PTCacheFile *pf,
-                               const void *data,
-                               size_t items_num,
-                               size_t item_size);
-static bool ptcache_file_read(PTCacheFile *pf, void *f, size_t items_num, size_t item_size);
+[[nodiscard]] static bool ptcache_file_write(PTCacheFile *pf,
+                                             const void *data,
+                                             size_t items_num,
+                                             size_t item_size);
+[[nodiscard]] static bool ptcache_file_read(PTCacheFile *pf,
+                                            void *f,
+                                            size_t items_num,
+                                            size_t item_size);
 
 /* Common functions */
 static int ptcache_basic_header_read(PTCacheFile *pf)
