@@ -772,16 +772,26 @@ static Array<TriangulationResult> calc_triangulations(const Mesh *mesh,
   return results;
 }
 
-static void gather_attributes_for_result_for_component(const AttributeAccessor &src_attributes,
-                                                       const bke::AttrDomain domain,
-                                                       const IndexRange result_range,
-                                                       const IndexRange component_range,
-                                                       const Span<int> dst_to_src_map,
-                                                       const AttributeFilter &attribute_filter,
-                                                       MutableAttributeAccessor &dst_attributes)
+struct AttributesForTransfer {
+  int src_component_i;
+  Vector<GVArraySpan> src;
+  Vector<bke::GSpanAttributeWriter> dst;
+
+  Vector<StringRefNull> names;
+  Vector<bke::AttrDomain> domains;
+  Vector<bke::AttrType> data_types;
+};
+
+static AttributesForTransfer attributes_for_transfer_for_component(
+    const AttributeAccessor src_attributes,
+    const int component_i,
+    const AttributeFilter &attribute_filter,
+    MutableAttributeAccessor dst_attributes)
 {
+  AttributesForTransfer attributes;
+  attributes.src_component_i = component_i;
   src_attributes.foreach_attribute([&](const AttributeIter &iter) {
-    if (iter.domain != domain) {
+    if (iter.domain != bke::AttrDomain::Point) {
       return;
     }
     if (iter.data_type == bke::AttrType::String) {
@@ -793,78 +803,21 @@ static void gather_attributes_for_result_for_component(const AttributeAccessor &
     if (iter.is_builtin && !dst_attributes.is_builtin(iter.name)) {
       return;
     }
-    const GVArray src = *iter.get(domain);
-    const CommonVArrayInfo info = src.common_info();
-    if (info.type == CommonVArrayInfo::Type::Single) {
-      const bke::AttributeInitValue init(GPointer(src.type(), info.data));
-      /* NOTE: Important to fail when another component has added the attribute already, in case
-       * the single values are different. */
-      if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
-        return;
-      }
-    }
-
-    /* We might not write to the full range, so ensure that we default initialize the attribute. */
+    const GVArray src = *iter.get(bke::AttrDomain::Point);
+    /* We might not write to the full range, so ensure that we default initialize the
+     * attribute. */
     GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_span(
-        iter.name, domain, iter.data_type, bke::AttributeInitDefaultValue());
+        iter.name, bke::AttrDomain::Point, iter.data_type, bke::AttributeInitDefaultValue());
     if (!dst) {
       return;
     }
-    bke::attribute_math::gather(
-        src, dst_to_src_map, dst.span.slice(result_range).slice(component_range));
-    dst.finish();
+    attributes.src.append(src);
+    attributes.dst.append(std::move(dst));
+    attributes.names.append(iter.name);
+    attributes.domains.append(iter.domain);
+    attributes.data_types.append(iter.data_type);
   });
-}
-
-static void mix_intersection_attributes_for_result(
-    const Span<AttributeAccessor> src_accessors,
-    const IndexRange intersection_points,
-    const GroupedSpan<int> intersection_src_component_by_dst,
-    const GroupedSpan<int> intersection_src_by_dst,
-    const GroupedSpan<float> intersection_src_weight_by_dst,
-    const AttributeFilter &attribute_filter,
-    MutableAttributeAccessor &dst_attributes)
-{
-  dst_attributes.foreach_attribute([&](const AttributeIter &iter) {
-    if (iter.data_type == bke::AttrType::String) {
-      return;
-    }
-    if (attribute_filter.allow_skip(iter.name)) {
-      return;
-    }
-
-    GSpanAttributeWriter dst_generic = dst_attributes.lookup_for_write_span(iter.name);
-    BLI_assert(dst_generic);
-
-    Vector<GAttributeReader> src_attributes;
-    for (const AttributeAccessor &accessor : src_accessors) {
-      src_attributes.append(accessor.lookup_or_default(iter.name, iter.domain, iter.data_type));
-    }
-
-    bke::attribute_math::to_static_type(dst_generic.span.type(), [&]<typename T>() {
-      MutableSpan<T> dst = dst_generic.span.slice(intersection_points).typed<T>();
-      bke::attribute_math::DefaultMixer<T> mixer{dst};
-      threading::parallel_for(dst.index_range(), 1024, [&](const IndexRange range) {
-        for (const int64_t dst_point : range) {
-          /* All these spans should have 4 elements (two end points of two segments that
-           * intersect in the destination point). */
-          const Span<int> src_components = intersection_src_component_by_dst[dst_point];
-          const Span<int> src_indices = intersection_src_by_dst[dst_point];
-          const Span<float> src_weights = intersection_src_weight_by_dst[dst_point];
-          BLI_assert(src_components.size() == 4 && src_indices.size() == 4 &&
-                     src_weights.size() == 4);
-          for (const int i : IndexRange(4)) {
-            const int component_i = src_components[i];
-            const AttributeReader<T> src_attribute = src_attributes[component_i].typed<T>();
-            const int src_point = src_indices[i];
-            mixer.mix_in(dst_point, src_attribute.varray[src_point], src_weights[i]);
-          }
-        }
-        mixer.finalize(range);
-      });
-    });
-    dst_generic.finish();
-  });
+  return attributes;
 }
 
 static AttributeAccessor src_attributes_for_domain(const Mesh *mesh,
@@ -881,6 +834,64 @@ static AttributeAccessor src_attributes_for_domain(const Mesh *mesh,
       return pointcloud->attributes();
   }
   return mesh->attributes();
+}
+
+static void gather_and_mix_attributes_for_result(
+    const OffsetIndices<int> dst_points_range_by_component,
+    const Span<int> src_point_by_dst_point,
+    const IndexRange verts_range,
+    const IndexRange intersection_points,
+    const Span<AttributeAccessor> src_accessors,
+    const GroupedSpan<int> intersection_src_component_by_dst,
+    const GroupedSpan<int> intersection_src_by_dst,
+    const GroupedSpan<float> intersection_src_weight_by_dst,
+    MutableSpan<AttributesForTransfer> attributes_for_transfer)
+{
+  for (AttributesForTransfer &attributes : attributes_for_transfer) {
+    const IndexRange dst_range = dst_points_range_by_component[attributes.src_component_i];
+    const Span<int> dst_to_src_map = src_point_by_dst_point.slice(dst_range);
+
+    for (const int attr : attributes.src.index_range()) {
+      bke::GSpanAttributeWriter &dst = attributes.dst[attr];
+      bke::attribute_math::gather(
+          attributes.src[attr], dst_to_src_map, dst.span.slice(verts_range).slice(dst_range));
+
+      if (!intersection_points.is_empty()) {
+        Vector<GAttributeReader> src_attributes;
+        for (const AttributeAccessor &accessor : src_accessors) {
+          src_attributes.append(accessor.lookup_or_default(
+              attributes.names[attr], attributes.domains[attr], attributes.data_types[attr]));
+        }
+
+        bke::attribute_math::to_static_type(dst.span.type(), [&]<typename T>() {
+          MutableSpan<T> dst_typed = dst.span.slice(intersection_points).typed<T>();
+          bke::attribute_math::DefaultMixer<T> mixer{dst_typed};
+          threading::parallel_for(dst_typed.index_range(), 1024, [&](const IndexRange range) {
+            for (const int64_t dst_point : range) {
+              /* All these spans should have 4 elements (two end points of two segments that
+               * intersect in the destination point). */
+              const Span<int> src_components = intersection_src_component_by_dst[dst_point];
+              const Span<int> src_indices = intersection_src_by_dst[dst_point];
+              const Span<float> src_weights = intersection_src_weight_by_dst[dst_point];
+              BLI_assert(src_components.size() == 4 && src_indices.size() == 4 &&
+                         src_weights.size() == 4);
+              for (const int i : IndexRange(4)) {
+                const int component_i = src_components[i];
+                const AttributeReader<T> src_attribute = src_attributes[component_i].typed<T>();
+                const int src_point = src_indices[i];
+                mixer.mix_in(dst_point, src_attribute.varray[src_point], src_weights[i]);
+              }
+            }
+            mixer.finalize(range);
+          });
+        });
+      }
+    }
+
+    for (bke::GSpanAttributeWriter &dst : attributes.dst) {
+      dst.finish();
+    }
+  }
 }
 
 static Mesh *cdts_to_mesh(const Span<TriangulationResult> results,
@@ -957,12 +968,12 @@ static Mesh *cdts_to_mesh(const Span<TriangulationResult> results,
   });
 
   MutableAttributeAccessor dst_attributes = dst_mesh->attributes_for_write();
+  Array<Vector<AttributesForTransfer>> attributes_for_transfer_per_result(results.size());
+  /* Create all the destination attributes first. */
   for (const int result_i : results.index_range()) {
-    const IndexRange verts_range = vert_groups[result_i];
-
     const TriangulationResult &result = results[result_i];
     const OffsetIndices dst_points_range_by_component = result.dst_points_range_by_component();
-    const Span<int> src_point_by_dst_point = result.src_point_by_dst_point.as_span();
+    Vector<AttributesForTransfer> attributes_for_transfer;
     for (const int component_i : result.point_source_domains.index_range()) {
       /* There might be more source components than components in the result, because overlapping
        * points are merged and duplicates get discarded. */
@@ -970,50 +981,52 @@ static Mesh *cdts_to_mesh(const Span<TriangulationResult> results,
         break;
       }
       const SourceComponent domain = result.point_source_domains[component_i];
-      const IndexRange dst_range = dst_points_range_by_component[component_i];
-
       const AttributeAccessor src_attributes = src_attributes_for_domain(
           mesh, curves, pointcloud, domain);
-      gather_attributes_for_result_for_component(
+      AttributesForTransfer attributes = attributes_for_transfer_for_component(
           src_attributes,
-          bke::AttrDomain::Point,
-          verts_range,
-          dst_range,
-          src_point_by_dst_point.slice(dst_range),
+          component_i,
           bke::attribute_filter_with_skip_ref(attribute_filter, {"position"}),
           dst_attributes);
+      attributes_for_transfer.append(std::move(attributes));
     }
+    attributes_for_transfer_per_result[result_i] = std::move(attributes_for_transfer);
   }
 
-  for (const int result_i : results.index_range()) {
-    const TriangulationResult &result = results[result_i];
-    const IndexRange intersection_points = result.intersection_points;
-    const GroupedSpan<int> intersection_src_component_by_dst =
-        result.intersection_src_component_by_dst();
-    const GroupedSpan<int> intersection_src_by_dst = result.intersection_src_by_dst();
-    const GroupedSpan<float> intersection_src_weight_by_dst =
-        result.intersection_src_weight_by_dst();
+  /* Then write all the attributes. This does attribute propagation and also attribute mixing for
+   * intersection points. */
+  threading::parallel_for(results.index_range(), 1024, [&](const IndexRange results_range) {
+    for (const int result_i : results_range) {
+      const IndexRange verts_range = vert_groups[result_i];
+      const TriangulationResult &result = results[result_i];
+      const OffsetIndices dst_points_range_by_component = result.dst_points_range_by_component();
+      const Span<int> src_point_by_dst_point = result.src_point_by_dst_point.as_span();
 
-    Vector<AttributeAccessor> src_accessors;
-    for (const SourceComponent component : result.point_source_domains) {
-      src_accessors.append(src_attributes_for_domain(mesh, curves, pointcloud, component));
-    }
+      const IndexRange intersection_points = result.intersection_points;
+      const GroupedSpan<int> intersection_src_component_by_dst =
+          result.intersection_src_component_by_dst();
+      const GroupedSpan<int> intersection_src_by_dst = result.intersection_src_by_dst();
+      const GroupedSpan<float> intersection_src_weight_by_dst =
+          result.intersection_src_weight_by_dst();
 
-    mix_intersection_attributes_for_result(src_accessors.as_span(),
+      Vector<AttributeAccessor> src_accessors;
+      for (const SourceComponent component : result.point_source_domains) {
+        src_accessors.append(src_attributes_for_domain(mesh, curves, pointcloud, component));
+      }
+
+      MutableSpan<AttributesForTransfer> attributes_for_transfer =
+          attributes_for_transfer_per_result[result_i];
+      gather_and_mix_attributes_for_result(dst_points_range_by_component,
+                                           src_point_by_dst_point,
+                                           verts_range,
                                            intersection_points,
+                                           src_accessors.as_span(),
                                            intersection_src_component_by_dst,
                                            intersection_src_by_dst,
                                            intersection_src_weight_by_dst,
-                                           bke::attribute_filter_with_skip_ref(attribute_filter,
-                                                                               {"position",
-                                                                                ".edge_verts",
-                                                                                ".corner_vert",
-                                                                                ".corner_edge",
-                                                                                ".select_vert",
-                                                                                ".select_edge",
-                                                                                ".select_poly"}),
-                                           dst_attributes);
-  }
+                                           attributes_for_transfer);
+    }
+  });
 
   if (dst_intersection_points_attribute_id) {
     if (SpanAttributeWriter dst_intersection_points =
