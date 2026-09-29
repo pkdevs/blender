@@ -12,6 +12,7 @@
 
 #include "GPU_shader.hh"
 
+#include "COM_algorithm_downsampled_gaussian_blur.hh"
 #include "COM_algorithm_pad.hh"
 #include "COM_algorithm_parallel_reduction.hh"
 #include "COM_algorithm_recursive_gaussian_blur.hh"
@@ -36,6 +37,11 @@ static const EnumPropertyItem type_items[] = {
      N_("Fast Gaussian"),
      N_("Applies a recursive Gaussian blur that can be faster and more accurate in some cases, "
         "but less accurate in other cases")},
+    {CMP_NODE_BLUR_TYPE_DOWNSAMPLED_GAUSS,
+     "DOWNSAMPLED_GAUSS",
+     0,
+     N_("Downsampled Gaussian"),
+     N_("Approximates a Gaussian blur using downsampling for faster filtering at large radii")},
     {CMP_NODE_BLUR_TYPE_CATROM,
      "CATROM",
      0,
@@ -104,6 +110,7 @@ static math::FilterKernel blur_type_to_kernel(CMPNodeBlurType type)
     case CMP_NODE_BLUR_TYPE_MITCH:
       return math::FilterKernel::Mitch;
     case CMP_NODE_BLUR_TYPE_FAST_GAUSS:
+    case CMP_NODE_BLUR_TYPE_DOWNSAMPLED_GAUSS:
       return math::FilterKernel::Gauss;
   }
 
@@ -134,6 +141,10 @@ class BlurOperation : public NodeOperation {
 
     if (this->get_type() == CMP_NODE_BLUR_TYPE_FAST_GAUSS) {
       recursive_gaussian_blur(
+          this->context(), input, output, this->get_blur_size(), this->get_extend_bounds());
+    }
+    else if (this->get_type() == CMP_NODE_BLUR_TYPE_DOWNSAMPLED_GAUSS) {
+      downsampled_gaussian_blur(
           this->context(), input, output, this->get_blur_size(), this->get_extend_bounds());
     }
     else if (use_separable_filter()) {
@@ -436,6 +447,7 @@ class BlurOperation : public NodeOperation {
     switch (this->get_type()) {
       case CMP_NODE_BLUR_TYPE_GAUSS:
       case CMP_NODE_BLUR_TYPE_FAST_GAUSS:
+      case CMP_NODE_BLUR_TYPE_DOWNSAMPLED_GAUSS:
         return true;
       default:
         return false;
