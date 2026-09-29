@@ -32,21 +32,16 @@ class MotionPath : Overlay {
   PassSimple::Sub *vert_ps_ = nullptr;
 
   /**
-   * Persistent non-owning #Mesh wrappers around the motion path batches.
+   * Non-owning #Mesh wrappers around the motion path batches.
    *
-   * The motion path batches are owned by the motion path data and not by the draw system. The
-   * commands recorded this frame reference these wrappers until the pass is submitted, so the
-   * wrappers must outlive the command recording. They are released at the start of the next
-   * sync, once the previous frame has been submitted.
+   * The motion path batches are owned by the motion path data. The commands recorded this frame
+   * reference these wrappers until the pass is submitted, so they
    */
   Vector<MeshPtr> motion_path_draw_meshes_;
 
  public:
   void begin_sync(Resources &res, const State &state) final
   {
-    /* Commands of the previous frame have been submitted, the recorded #Mesh wrappers can be
-     * released. */
-    motion_path_draw_meshes_.clear();
     enabled_ = state.v3d && state.show_motion_paths() && !res.is_selection();
     if (!enabled_) {
       /* Not used. But release the data. */
@@ -106,6 +101,7 @@ class MotionPath : Overlay {
     }
     GPU_framebuffer_bind(framebuffer);
     manager.submit(motion_path_ps_, view);
+    motion_path_draw_meshes_.clear();
   }
 
  private:
