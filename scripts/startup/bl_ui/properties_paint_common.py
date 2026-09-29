@@ -321,7 +321,10 @@ class UnifiedPaintPanel:
         if unified_paint_settings_override:
             ups = unified_paint_settings_override
         else:
-            ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
+            paint = UnifiedPaintPanel.paint_settings_from_active_tool(context)
+            if paint is None:
+                return
+            ups = paint.unified_paint_settings
         prop_owner = brush
         if unified_name and getattr(brush, unified_name):
             prop_owner = ups
@@ -350,6 +353,9 @@ class UnifiedPaintPanel:
     ):
         paint = UnifiedPaintPanel.paint_settings_from_active_tool(context)
 
+        if paint is None:
+            return
+
         is_active = getattr(paint, curve_visibility_name)
         parent_row.prop(
             paint,
@@ -365,14 +371,20 @@ class UnifiedPaintPanel:
 
     @staticmethod
     def prop_unified_color(parent, context, brush, prop_name, *, text=None):
-        ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
+        paint = UnifiedPaintPanel.paint_settings_from_active_tool(context)
+        if paint is None:
+            return
+        ups = paint.unified_paint_settings
         prop_owner = ups if brush.use_unified_color else brush
 
         parent.prop(prop_owner, prop_name, text=text)
 
     @staticmethod
     def prop_unified_color_picker(parent, context, brush, prop_name, value_slider=True):
-        ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
+        paint = UnifiedPaintPanel.paint_settings_from_active_tool(context)
+        if paint is None:
+            return
+        ups = paint.unified_paint_settings
         prop_owner = ups if brush.use_unified_color else brush
         parent.template_color_picker(prop_owner, prop_name, value_slider=value_slider)
 
@@ -1881,7 +1893,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         size = "size"
         if brush.use_locked_size == 'SCENE' and (grease_pencil_brush_type == 'DRAW' or is_primitive_tool):
             size = "unprojected_size"
-        UnifiedPaintPanel.prop_unified(
+        unified_row = UnifiedPaintPanel.prop_unified(
             layout,
             context,
             brush,
@@ -1892,7 +1904,18 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
             slider=True,
             header=compact,
         )
-        UnifiedPaintPanel.prop_unified(
+        if not compact:
+            UnifiedPaintPanel.prop_custom_pressure(
+                layout,
+                context,
+                unified_row,
+                brush,
+                pressure_name="use_pressure_size",
+                curve_visibility_name="show_size_curve",
+                custom_curve_name="curve_size",
+            )
+
+        unified_row = UnifiedPaintPanel.prop_unified(
             layout,
             context,
             brush,
@@ -1902,6 +1925,16 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
             text="Strength",
             header=compact,
         )
+        if not compact:
+            UnifiedPaintPanel.prop_custom_pressure(
+                layout,
+                context,
+                unified_row,
+                brush,
+                pressure_name="use_pressure_strength",
+                curve_visibility_name="show_strength_curve",
+                custom_curve_name="curve_strength",
+            )
 
     if props:
         layout.prop(props, "subdivision")
