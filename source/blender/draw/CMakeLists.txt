@@ -746,7 +746,7 @@ set(GLSL_SRC
   engines/image/image_shader_shared.hh
 
   # This test doesn't depend on gpu_shader_test, so it's always included.
-  intern/shaders/draw_curves_test.glsl
+  intern/shaders/draw_curves_test.bsl.hh
 )
 
 # These tests depend on gpu_shader_test, so they're only included when

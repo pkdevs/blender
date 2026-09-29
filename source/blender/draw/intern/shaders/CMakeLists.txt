@@ -22,8 +22,6 @@ set(INC_GLSL
 
 set(SRC_GLSL_VERT
   draw_debug_draw_display_vert.glsl
-
-  draw_curves_test.glsl
 )
 
 set(SRC_GLSL_FRAG

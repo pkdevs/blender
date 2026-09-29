@@ -21,13 +21,3 @@
 #include "draw_curves_defines.hh"
 
 #include "gpu_shader_create_info.hh"
-
-GPU_SHADER_CREATE_INFO(draw_curves_test)
-STORAGE_BUF(0, write, float, result_pos_buf[])
-STORAGE_BUF(1, write, int4, result_indices_buf[])
-VERTEX_SOURCE("draw_curves_test.glsl")
-FRAGMENT_SOURCE("draw_curves_test.glsl")
-ADDITIONAL_INFO(draw_curves_infos)
-ADDITIONAL_INFO(draw_curves)
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
