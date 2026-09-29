@@ -1,3 +1,4 @@
 Referenced by issue #151442, GPU: Port shader codebase to BSL
 Referenced by pull request #164422, Fix: stereo 3D viewport display compositing the wrong buffers
 Referenced by commit d6ae48a6b1296de46e2987839a11ccd36ae23d32, Fix: stereo 3D viewport display compositing the wrong buffers
+Referenced by issue #164452, Assert in stereo viewport composite with Stereoscopy enabled (Metal)
