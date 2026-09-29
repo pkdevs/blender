@@ -19,30 +19,36 @@
 
 namespace draw::mesh {
 
+/**
+ * Both shaders process a batch of `count` elements starting at `start`, to stay within the
+ * potentially limited GPU work group count.
+ */
+
 struct GatherResources {
   [[storage(0, read)]] const uint (&src)[];
   /** The source element for each face corner, e.g. #Mesh::corner_verts(). */
   [[storage(1, read)]] const int (&indices)[];
   [[storage(2, write)]] uint (&dst)[];
 
-  [[push_constant]] const int indices_num;
+  [[push_constant]] const int start;
+  [[push_constant]] const int count;
   [[push_constant]] const int words_per_element;
 };
 
-/** `dst[i] = src[indices[i]]`. */
+/** `dst[i] = src[indices[i]]`. One thread processes one face corner. */
 [[compute, local_size(DRW_MESH_TO_CORNER_GROUP_SIZE)]]
 void gather_main([[resource_table]] GatherResources &srt,
-                 [[global_invocation_id]] const uint3 global_id,
-                 [[num_work_groups]] const uint3 num_work_groups)
+                 [[global_invocation_id]] const uint3 global_id)
 {
+  if (global_id.x >= uint(srt.count)) {
+    return;
+  }
+  const uint i = uint(srt.start) + global_id.x;
   const uint words_num = uint(srt.words_per_element);
-  const uint stride = num_work_groups.x * DRW_MESH_TO_CORNER_GROUP_SIZE;
-  for (uint i = global_id.x; i < uint(srt.indices_num); i += stride) {
-    const uint src_start = uint(srt.indices[i]) * words_num;
-    const uint dst_start = i * words_num;
-    for (uint word = 0u; word < words_num; word++) {
-      srt.dst[dst_start + word] = srt.src[src_start + word];
-    }
+  const uint src_start = uint(srt.indices[i]) * words_num;
+  const uint dst_start = i * words_num;
+  for (uint word = 0u; word < words_num; word++) {
+    srt.dst[dst_start + word] = srt.src[src_start + word];
   }
 }
 
@@ -52,27 +58,26 @@ struct ScatterFacesResources {
   [[storage(1, read)]] const uint (&face_offsets)[];
   [[storage(2, write)]] uint (&dst)[];
 
-  [[push_constant]] const int faces_num;
+  [[push_constant]] const int start;
+  [[push_constant]] const int count;
   [[push_constant]] const int words_per_element;
 };
 
 /** Copy each face's value to all of its corners. One thread processes one face. */
 [[compute, local_size(DRW_MESH_TO_CORNER_GROUP_SIZE)]]
 void scatter_faces_main([[resource_table]] ScatterFacesResources &srt,
-                        [[global_invocation_id]] const uint3 global_id,
-                        [[num_work_groups]] const uint3 num_work_groups)
+                        [[global_invocation_id]] const uint3 global_id)
 {
+  if (global_id.x >= uint(srt.count)) {
+    return;
+  }
+  const uint face = uint(srt.start) + global_id.x;
   const uint words_num = uint(srt.words_per_element);
-  const uint stride = num_work_groups.x * DRW_MESH_TO_CORNER_GROUP_SIZE;
-  for (uint face = global_id.x; face < uint(srt.faces_num); face += stride) {
-    const uint src_start = face * words_num;
-    const uint corner_start = uint(srt.face_offsets[face]);
-    const uint corner_end = uint(srt.face_offsets[face + 1]);
-    for (uint corner = corner_start; corner < corner_end; corner++) {
-      const uint dst_start = corner * words_num;
-      for (uint word = 0u; word < words_num; word++) {
-        srt.dst[dst_start + word] = srt.src[src_start + word];
-      }
+  const uint src_start = face * words_num;
+  for (uint corner = srt.face_offsets[face]; corner < srt.face_offsets[face + 1]; corner++) {
+    const uint dst_start = corner * words_num;
+    for (uint word = 0u; word < words_num; word++) {
+      srt.dst[dst_start + word] = srt.src[src_start + word];
     }
   }
 }

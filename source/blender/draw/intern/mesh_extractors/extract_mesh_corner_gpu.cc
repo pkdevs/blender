@@ -88,11 +88,18 @@ static gpu::VertBuf &face_offsets_ensure(const MeshRenderData &mr, MeshBufferCac
   return *cache.face_offsets;
 }
 
-static void dispatch_1d(gpu::Shader *shader, const int size)
+static void dispatch_batched(gpu::Shader *shader, const int size)
 {
-  const uint groups_num = std::min(divide_ceil_u(size, DRW_MESH_TO_CORNER_GROUP_SIZE),
-                                   uint(GPU_max_work_group_count(0)));
-  GPU_compute_dispatch(shader, groups_num, 1, 1);
+  const int64_t max_batch_size = int64_t(GPU_max_work_group_count(0)) *
+                                 DRW_MESH_TO_CORNER_GROUP_SIZE;
+  int start = 0;
+  while (start < size) {
+    const int batch_size = std::min(int64_t(size - start), max_batch_size);
+    GPU_shader_uniform_1i(shader, "start", start);
+    GPU_shader_uniform_1i(shader, "count", batch_size);
+    GPU_compute_dispatch(shader, divide_ceil_u(batch_size, DRW_MESH_TO_CORNER_GROUP_SIZE), 1, 1);
+    start += batch_size;
+  }
 }
 
 static int words_per_element(const gpu::VertBuf &src, const gpu::VertBuf &dst)
@@ -115,9 +122,8 @@ static void gather_to_corner_gpu(const MeshRenderData &mr,
   GPU_vertbuf_bind_as_ssbo(&src, 0);
   GPU_vertbuf_bind_as_ssbo(&indices, 1);
   GPU_vertbuf_bind_as_ssbo(&dst, 2);
-  GPU_shader_uniform_1i(shader, "indices_num", mr.corners_num);
   GPU_shader_uniform_1i(shader, "words_per_element", words_per_element(src, dst));
-  dispatch_1d(shader, mr.corners_num);
+  dispatch_batched(shader, mr.corners_num);
   GPU_memory_barrier(GPU_BARRIER_VERTEX_ATTRIB_ARRAY | GPU_BARRIER_SHADER_STORAGE);
   GPU_shader_unbind();
 }
@@ -161,9 +167,8 @@ void scatter_face_to_corner_gpu(const MeshRenderData &mr,
   GPU_vertbuf_bind_as_ssbo(&src, 0);
   GPU_vertbuf_bind_as_ssbo(&face_offsets_ensure(mr, cache), 1);
   GPU_vertbuf_bind_as_ssbo(&dst, 2);
-  GPU_shader_uniform_1i(shader, "faces_num", mr.faces_num);
   GPU_shader_uniform_1i(shader, "words_per_element", words_per_element(src, dst));
-  dispatch_1d(shader, mr.faces_num);
+  dispatch_batched(shader, mr.faces_num);
   GPU_memory_barrier(GPU_BARRIER_VERTEX_ATTRIB_ARRAY | GPU_BARRIER_SHADER_STORAGE);
   GPU_shader_unbind();
 }
