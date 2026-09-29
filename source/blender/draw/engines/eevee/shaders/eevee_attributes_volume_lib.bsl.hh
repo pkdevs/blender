@@ -5,7 +5,6 @@
 #pragma once
 
 #include "eevee_geom_types_lib.bsl.hh"
-#include "gpu_shader_codegen_lib.glsl"
 
 /* -------------------------------------------------------------------- */
 /** \name Volume
@@ -13,12 +12,6 @@
  * Volume objects loads attributes from "grids" in the form of 3D textures.
  * Per grid transform order is following loading order.
  * \{ */
-
-float3 grid_coordinates(float3 lP, int index)
-{
-  const auto &drw_volume = buffer_get(draw_volume_infos, drw_volume);
-  return (drw_volume.grids_xform[index] * float4(lP, 1.0f)).xyz;
-}
 
 float3 attr_load_orco(VolumePoint point, sampler3D /*tex*/, int /*index*/)
 {
@@ -31,23 +24,23 @@ float4 attr_load_tangent(VolumePoint /*point*/, sampler3D /*tex*/, int /*index*/
 }
 float4 attr_load_float4(VolumePoint point, sampler3D tex, int index)
 {
-  return texture(tex, grid_coordinates(point.lP, index));
+  return texture(tex, point.grid_co[index]);
 }
 float3 attr_load_float3(VolumePoint point, sampler3D tex, int index)
 {
-  return texture(tex, grid_coordinates(point.lP, index)).rgb;
+  return texture(tex, point.grid_co[index]).rgb;
 }
 float2 attr_load_float2(VolumePoint point, sampler3D tex, int index)
 {
-  return texture(tex, grid_coordinates(point.lP, index)).rg;
+  return texture(tex, point.grid_co[index]).rg;
 }
 float attr_load_float(VolumePoint point, sampler3D tex, int index)
 {
-  return texture(tex, grid_coordinates(point.lP, index)).r;
+  return texture(tex, point.grid_co[index]).r;
 }
 float4 attr_load_color(VolumePoint point, sampler3D tex, int index)
 {
-  return texture(tex, grid_coordinates(point.lP, index));
+  return texture(tex, point.grid_co[index]);
 }
 float3 attr_load_uv(VolumePoint /*point*/, sampler3D /*attr*/, int /*index*/)
 {
