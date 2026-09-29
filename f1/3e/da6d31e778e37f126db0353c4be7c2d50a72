@@ -3,3 +3,4 @@ Referenced by issue #163605, Clicking a motion tracking reconstruction bundle in
 Referenced by pull request #163607, Fix #163605: Viewport pick selection of motion tracks fails
 Referenced by commit af8e35b83435027aaf61de934ef2b82fb0990a1b, Fix #163605: Viewport pick selection of motion tracks fails
 Referenced by issue #164168, Crash selecting bone in Armature Edit Mode when Mesh selectability is disabled
+Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
