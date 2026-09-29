@@ -643,7 +643,7 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     for (Scene &scene : bmain->scenes) {
       SequencerToolSettings *sequencer_tool_settings = seq::tool_settings_ensure(&scene);
       sequencer_tool_settings->ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS |
-                                             SEQ_RIPPLE_NON_DESTRUCTIVE | SEQ_RIPPLE_PLAYHEAD;
+                                             SEQ_RIPPLE_PLAYHEAD;
     }
   }
 

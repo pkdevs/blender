@@ -2663,17 +2663,18 @@ void operator_properties_ripple(wmOperatorType *ot, const eSeqRippleFlag options
 
   if ((options & SEQ_RIPPLE_PLAYHEAD) != 0) {
     prop = RNA_def_boolean(
-        ot->srna, "playhead", true, "Playhead", "Ripple the current frame along with strips");
+        ot->srna, "playhead", true, "Move Playhead", "Ripple the current frame along with strips");
     RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   }
 
-  if ((options & SEQ_RIPPLE_NON_DESTRUCTIVE) != 0) {
-    prop = RNA_def_boolean(ot->srna,
-                           "non_destructive",
-                           true,
-                           "Non-Destructive",
-                           "Never overwrite strips that overlap the edited range, and ripple "
-                           "later strips only as far as they can to close gaps on the timeline");
+  if ((options & SEQ_RIPPLE_CLEAR_RANGES) != 0) {
+    prop = RNA_def_boolean(
+        ot->srna,
+        "clear_ranges",
+        false,
+        "Clear Ranges",
+        "Delete strip contents inside the removed ranges on rippled channels so later strips "
+        "close the full gap, else ripple later strips only as far as they can");
     RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   }
 
@@ -2699,7 +2700,7 @@ static void ripple_properties_from_tool_settings(bContext *C, wmOperator *op)
   RNA_boolean_set(op->ptr, "all_channels", (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0);
   RNA_boolean_set(op->ptr, "markers", (ripple_flag & SEQ_RIPPLE_MARKERS) != 0);
   RNA_boolean_set(op->ptr, "playhead", (ripple_flag & SEQ_RIPPLE_PLAYHEAD) != 0);
-  RNA_boolean_set(op->ptr, "non_destructive", (ripple_flag & SEQ_RIPPLE_NON_DESTRUCTIVE) != 0);
+  RNA_boolean_set(op->ptr, "clear_ranges", (ripple_flag & SEQ_RIPPLE_CLEAR_RANGES) != 0);
 }
 
 static eSeqRippleFlag ripple_flag_from_properties(wmOperator *op)
@@ -2710,7 +2711,7 @@ static eSeqRippleFlag ripple_flag_from_properties(wmOperator *op)
   SET_FLAG_FROM_TEST(ripple_flag, RNA_boolean_get(op->ptr, "markers"), SEQ_RIPPLE_MARKERS);
   SET_FLAG_FROM_TEST(ripple_flag, RNA_boolean_get(op->ptr, "playhead"), SEQ_RIPPLE_PLAYHEAD);
   SET_FLAG_FROM_TEST(
-      ripple_flag, RNA_boolean_get(op->ptr, "non_destructive"), SEQ_RIPPLE_NON_DESTRUCTIVE);
+      ripple_flag, RNA_boolean_get(op->ptr, "clear_ranges"), SEQ_RIPPLE_CLEAR_RANGES);
   return ripple_flag;
 }
 
@@ -2777,8 +2778,8 @@ static int ripple_offset_get(const Scene *scene,
                              Vector<Strip *> &r_to_ripple)
 {
   /* For a given range, all strips may be classified into those that will ripple back, and those
-   * that will remain still, blocking ripples. Blocking strips remain in non-destructive cases
-   * where they weren't already cleared, or if they are locked or exist on non-rippled channels. */
+   * that will remain still, blocking ripples. Blocking strips remain if they weren't cleared, or
+   * if they are locked or exist on non-rippled channels. */
   Vector<Strip *> to_block;
   for (Strip &strip : *seqbasep) {
     if (!seq::transform_is_locked(channels, &strip) && strip.left_handle() >= range.end &&
@@ -2812,11 +2813,11 @@ static void ripple_delete_range(Scene *scene,
                                 const eSeqRippleFlag ripple_flag)
 {
   const bool all_channels = (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0;
-  const bool non_destructive = (ripple_flag & SEQ_RIPPLE_NON_DESTRUCTIVE) != 0;
+  const bool clear_ranges = (ripple_flag & SEQ_RIPPLE_CLEAR_RANGES) != 0;
   const bool ripple_markers = (ripple_flag & SEQ_RIPPLE_MARKERS) != 0;
   const bool ripple_playhead = (ripple_flag & SEQ_RIPPLE_PLAYHEAD) != 0;
 
-  if (!non_destructive) {
+  if (clear_ranges) {
     ripple_range_clear(scene, seqbasep, channels, range, all_channels);
   }
 
@@ -2901,19 +2902,6 @@ static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op
   return OPERATOR_FINISHED;
 }
 
-static bool sequencer_ripple_edit_poll_property(const bContext * /*C*/,
-                                                wmOperator *op,
-                                                const PropertyRNA *prop)
-{
-  const char *prop_id = RNA_property_identifier(prop);
-
-  if (STREQ(prop_id, "non_destructive")) {
-    return RNA_boolean_get(op->ptr, "all_channels");
-  }
-
-  return true;
-}
-
 static wmOperatorStatus sequencer_ripple_delete_invoke(bContext *C,
                                                        wmOperator *op,
                                                        const wmEvent * /*event*/)
@@ -2933,7 +2921,6 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
   ot->invoke = sequencer_ripple_delete_invoke;
   ot->exec = sequencer_ripple_delete_exec;
   ot->poll = sequencer_edit_poll;
-  ot->poll_property = sequencer_ripple_edit_poll_property;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -2941,7 +2928,7 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
   /* Properties. */
   operator_properties_ripple(ot,
                              SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_PLAYHEAD |
-                                 SEQ_RIPPLE_NON_DESTRUCTIVE);
+                                 SEQ_RIPPLE_CLEAR_RANGES);
 }
 
 /** \} */
@@ -3060,7 +3047,6 @@ void SEQUENCER_OT_ripple_trim(wmOperatorType *ot)
   ot->invoke = sequencer_ripple_trim_invoke;
   ot->exec = sequencer_ripple_trim_exec;
   ot->poll = sequencer_edit_poll;
-  ot->poll_property = sequencer_ripple_edit_poll_property;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -3074,7 +3060,7 @@ void SEQUENCER_OT_ripple_trim(wmOperatorType *ot)
                "The side of the strips to trim to the current frame");
   operator_properties_ripple(ot,
                              SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_PLAYHEAD |
-                                 SEQ_RIPPLE_NON_DESTRUCTIVE);
+                                 SEQ_RIPPLE_CLEAR_RANGES);
 }
 
 /** \} */

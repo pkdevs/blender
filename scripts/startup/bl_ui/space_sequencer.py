@@ -106,9 +106,7 @@ class SEQUENCER_HT_header(Header):
         if sequencer_tool_settings and st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
             row.prop(sequencer_tool_settings, "overlap_mode", expand=True, icon_only=True)
-            sub = row.row(align=True)
-            sub.active = sequencer_tool_settings.overlap_mode == 'RIPPLE'
-            sub.popover(
+            row.popover(
                 text="",
                 panel="SEQUENCER_PT_edit_mode",
             )
@@ -2029,7 +2027,7 @@ class SEQUENCER_PT_edit_mode(Panel):
     bl_space_type = 'SEQUENCE_EDITOR'
     bl_region_type = 'HEADER'
     bl_label = "Edit Mode"
-    bl_ui_units_x = 11
+    bl_ui_units_x = 12
 
     @classmethod
     def poll(cls, context):
@@ -2041,13 +2039,20 @@ class SEQUENCER_PT_edit_mode(Panel):
 
         col = layout.column(heading="Ripple")
         col.use_property_split = True
-        col.active = sequencer_tool_settings.overlap_mode == 'RIPPLE'
 
-        col.prop(sequencer_tool_settings, "ripple_insert")
-        col.prop(sequencer_tool_settings, "ripple_non_destructive")
         col.prop(sequencer_tool_settings, "ripple_all_channels")
         col.prop(sequencer_tool_settings, "ripple_markers")
+
+        col = layout.column(heading="Ripple Add")
+        col.use_property_split = True
+
+        col.prop(sequencer_tool_settings, "ripple_insert")
+
+        col = layout.column(heading="Ripple Remove")
+        col.use_property_split = True
+
         col.prop(sequencer_tool_settings, "ripple_playhead")
+        col.prop(sequencer_tool_settings, "ripple_clear_ranges")
 
 
 class SEQUENCER_PT_snapping(Panel):

@@ -4733,14 +4733,15 @@ static void rna_def_sequencer_tool_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "ripple_playhead", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_PLAYHEAD);
-  RNA_def_property_ui_text(prop, "Playhead", "Ripple the current frame along with strips");
+  RNA_def_property_ui_text(prop, "Move Playhead", "Ripple the current frame along with strips");
 
-  prop = RNA_def_property(srna, "ripple_non_destructive", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_NON_DESTRUCTIVE);
-  RNA_def_property_ui_text(prop,
-                           "Non-Destructive",
-                           "Never overwrite strips that overlap the edited range, and ripple "
-                           "later strips only as far as they can to close gaps on the timeline");
+  prop = RNA_def_property(srna, "ripple_clear_ranges", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_CLEAR_RANGES);
+  RNA_def_property_ui_text(
+      prop,
+      "Clear Ranges",
+      "Delete strip contents inside the removed ranges on rippled channels so later strips "
+      "close the full gap, else ripple later strips only as far as they can");
 
   prop = RNA_def_property(srna, "ripple_insert", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_INSERT);
