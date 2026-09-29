@@ -10,11 +10,12 @@
 
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
-#include "BLI_sys_types.h"
+
+namespace blender {
 
 struct Mesh;
 
-namespace blender::bke::subdiv {
+namespace bke::subdiv {
 
 struct Subdiv;
 
@@ -26,9 +27,9 @@ struct ToMeshSettings {
    * created for a corner of non-quad face) will have resolution of
    * `resolution - 1`.
    */
-  int resolution;
+  int resolution = -1;
   /** When true, only edges emitted from coarse ones will be displayed. */
-  bool use_optimal_display;
+  bool use_optimal_display = false;
 };
 
 /** Create real hi-res mesh from subdivision, all geometry is "real". */
@@ -46,4 +47,12 @@ float3 mesh_interpolate_position_on_edge(Span<float3> coarse_positions,
                                          bool is_simple,
                                          float u);
 
-}  // namespace blender::bke::subdiv
+/**
+ * Calculate positions position of the given mesh vertices at the limit surface of the mesh.
+ *
+ * The limit_positions is to be sized at exactly the number of the base mesh vertices.
+ */
+void calculate_limit_positions(Mesh *mesh, MutableSpan<float3> limit_positions);
+
+}  // namespace bke::subdiv
+}  // namespace blender

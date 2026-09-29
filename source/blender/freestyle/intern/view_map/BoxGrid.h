@@ -31,9 +31,7 @@
 
 #include "BKE_global.hh"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 namespace Freestyle {
 
@@ -50,9 +48,7 @@ class BoxGrid {
     // temptation to save 4 or 8 bytes.
     WFace *face;
 
-#ifdef WITH_CXX_GUARDEDALLOC
     MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:BoxGrid:OccluderData")
-#endif
   };
 
  private:
@@ -113,9 +109,7 @@ class BoxGrid {
     // deque<OccluderData*>::iterator _current, _occludeeCandidate;
     vector<OccluderData *>::iterator _current, _occludeeCandidate;
 
-#ifdef WITH_CXX_GUARDEDALLOC
     MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:BoxGrid:Iterator")
-#endif
   };
 
   class Transform : public GridHelpers::Transform {
@@ -169,9 +163,7 @@ class BoxGrid {
   Vec3r _viewpoint;
   bool _enableQI;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:BoxGrid")
-#endif
 };
 
 inline void BoxGrid::Iterator::initBeforeTarget()
@@ -186,7 +178,7 @@ inline void BoxGrid::Iterator::initAfterTarget()
 {
   if (_foundOccludee) {
 #if BOX_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << "\tStarting occludee search from occludeeCandidate at depth " << _occludeeDepth
                 << std::endl;
     }
@@ -196,7 +188,7 @@ inline void BoxGrid::Iterator::initAfterTarget()
   }
 
 #if BOX_GRID_LOGGING
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     std::cout << "\tStarting occludee search from current position" << std::endl;
   }
 #endif
@@ -215,7 +207,7 @@ inline bool BoxGrid::Iterator::testOccluder(bool wantOccludee)
     return true;
   }
 #if BOX_GRID_LOGGING
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     std::cout << "\tTesting occluder " << (*_current)->poly.getVertices()[0];
     for (uint i = 1; i < (*_current)->poly.getVertices().size(); ++i) {
       std::cout << ", " << (*_current)->poly.getVertices()[i];
@@ -227,7 +219,7 @@ inline bool BoxGrid::Iterator::testOccluder(bool wantOccludee)
   // If we have an occluder candidate and we are unambiguously after it, abort
   if (_foundOccludee && (*_current)->shallowest > _occludeeDepth) {
 #if BOX_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << "\t\tAborting: shallowest > occludeeCandidate->deepest" << std::endl;
     }
 #endif
@@ -241,7 +233,7 @@ inline bool BoxGrid::Iterator::testOccluder(bool wantOccludee)
   if (wantOccludee) {
     if ((*_current)->deepest < _target[2]) {
 #if BOX_GRID_LOGGING
-      if (G.debug & G_DEBUG_FREESTYLE) {
+      if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
         std::cout << "\t\tSkipping: shallower than target while looking for occludee" << std::endl;
       }
 #endif
@@ -251,7 +243,7 @@ inline bool BoxGrid::Iterator::testOccluder(bool wantOccludee)
   else {
     if ((*_current)->shallowest > _target[2]) {
 #if BOX_GRID_LOGGING
-      if (G.debug & G_DEBUG_FREESTYLE) {
+      if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
         std::cout << "\t\tStopping: deeper than target while looking for occluder" << std::endl;
       }
 #endif
@@ -268,7 +260,7 @@ inline bool BoxGrid::Iterator::testOccluder(bool wantOccludee)
       _target[1] > bbMax[1])
   {
 #if BOX_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << "\t\tSkipping: bounding box violation" << std::endl;
     }
 #endif
@@ -286,13 +278,13 @@ inline void BoxGrid::Iterator::reportDepth(Vec3r origin, Vec3r u, real t)
   // We need to convert it into a Z-value in grid space
   real depth = -(origin + (u * t))[2];
 #if BOX_GRID_LOGGING
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     std::cout << "\t\tReporting depth of occluder/ee: " << depth;
   }
 #endif
   if (depth > _target[2]) {
 #if BOX_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << " is deeper than target" << std::endl;
     }
 #endif
@@ -303,7 +295,7 @@ inline void BoxGrid::Iterator::reportDepth(Vec3r origin, Vec3r u, real t)
   }
   else {
 #if BOX_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << std::endl;
     }
 #endif
@@ -341,7 +333,7 @@ inline bool BoxGrid::Iterator::validAfterTarget()
 inline void BoxGrid::Iterator::markCurrentOccludeeCandidate(real depth)
 {
 #if BOX_GRID_LOGGING
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     std::cout << "\t\tFound occludeeCandidate at depth " << depth << std::endl;
   }
 #endif

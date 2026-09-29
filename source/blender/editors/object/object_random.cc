@@ -6,19 +6,20 @@
  * \ingroup edobj
  */
 
-#include "MEM_guardedalloc.h"
-
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_rand.h"
+#include "BLI_ghash.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rand.hh"
 
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
+
+#include "DEG_depsgraph_query.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -41,7 +42,6 @@ static bool object_rand_transverts(TransVertStore *tvs,
                                    const uint seed)
 {
   bool use_normal = (normal_factor != 0.0f);
-  RNG *rng;
   TransVert *tv;
   int a;
 
@@ -49,13 +49,12 @@ static bool object_rand_transverts(TransVertStore *tvs,
     return false;
   }
 
-  rng = BLI_rng_new(seed);
+  RandomNumberGenerator rng(seed);
 
   tv = tvs->transverts;
   for (a = 0; a < tvs->transverts_tot; a++, tv++) {
-    const float t = max_ff(0.0f, uniform + ((1.0f - uniform) * BLI_rng_get_float(rng)));
-    float vec[3];
-    BLI_rng_get_float_unit_v3(rng, vec);
+    const float t = max_ff(0.0f, uniform + ((1.0f - uniform) * rng.get_float()));
+    float3 vec = rng.get_unit_float3();
 
     if (use_normal && (tv->flag & TX_VERT_USE_NORMAL)) {
       float no[3];
@@ -74,13 +73,12 @@ static bool object_rand_transverts(TransVertStore *tvs,
     madd_v3_v3fl(tv->loc, vec, offset * t);
   }
 
-  BLI_rng_free(rng);
-
   return true;
 }
 
-static int object_rand_verts_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus object_rand_verts_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Object *ob_active = CTX_data_edit_object(C);
@@ -92,8 +90,9 @@ static int object_rand_verts_exec(bContext *C, wmOperator *op)
   const uint seed = RNA_int_get(op->ptr, "seed");
 
   bool changed_multi = false;
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C), eObjectMode(ob_mode));
+      *bmain, scene, view_layer, CTX_wm_view3d(C), eObjectMode(ob_mode));
   for (const int ob_index : objects.index_range()) {
     Object *ob_iter = objects[ob_index];
 
@@ -110,7 +109,8 @@ static int object_rand_verts_exec(bContext *C, wmOperator *op)
         continue;
       }
 
-      ED_transverts_create_from_obedit(&tvs, ob_iter, mode);
+      const Object *ob_iter_eval = DEG_get_evaluated(depsgraph, ob_iter);
+      ED_transverts_create_from_obedit(&tvs, ob_iter_eval, mode);
       if (tvs.transverts_tot == 0) {
         continue;
       }
@@ -126,7 +126,7 @@ static int object_rand_verts_exec(bContext *C, wmOperator *op)
       ED_transverts_update_obedit(&tvs, ob_iter);
       ED_transverts_free(&tvs);
 
-      WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob_iter);
+      WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, ob_iter);
       changed_multi = true;
     }
   }
@@ -141,7 +141,7 @@ void TRANSFORM_OT_vertex_random(wmOperatorType *ot)
   ot->description = "Randomize vertices";
   ot->idname = "TRANSFORM_OT_vertex_random";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = object_rand_verts_exec;
   ot->poll = ED_transverts_poll;
 

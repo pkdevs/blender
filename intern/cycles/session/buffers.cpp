@@ -2,16 +2,13 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "device/device.h"
+
 #include "session/buffers.h"
 
-#include "util/foreach.h"
-#include "util/hash.h"
-#include "util/math.h"
-#include "util/time.h"
-#include "util/types.h"
+#include "util/log.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -71,11 +68,11 @@ BufferPass::BufferPass(const Pass *scene_pass)
 
 PassInfo BufferPass::get_info() const
 {
-  return Pass::get_info(type, include_albedo, !lightgroup.empty());
+  return Pass::get_info(type, mode, include_albedo, !lightgroup.empty());
 }
 
 /* --------------------------------------------------------------------
- * Buffer Params.
+ * Buffer Parameters.
  */
 
 NODE_DEFINE(BufferParams)
@@ -135,7 +132,7 @@ void BufferParams::update_passes()
   }
 }
 
-void BufferParams::update_passes(const vector<Pass *> &scene_passes)
+void BufferParams::update_passes(const unique_ptr_vector<Pass> &scene_passes)
 {
   passes.clear();
 
@@ -320,6 +317,7 @@ void render_buffers_host_copy_denoised(RenderBuffers *dst,
   struct {
     int dst_offset;
     int src_offset;
+    int num_components;
   } pass_offsets[PASS_NUM];
 
   int num_passes = 0;
@@ -339,6 +337,8 @@ void render_buffers_host_copy_denoised(RenderBuffers *dst,
 
     pass_offsets[num_passes].dst_offset = dst_pass_offset;
     pass_offsets[num_passes].src_offset = src_pass_offset;
+    pass_offsets[num_passes].num_components =
+        Pass::get_info(pass_type, PassMode::DENOISED).num_components;
     ++num_passes;
   }
 
@@ -362,12 +362,11 @@ void render_buffers_host_copy_denoised(RenderBuffers *dst,
     for (int pass_offset_idx = 0; pass_offset_idx < num_passes; ++pass_offset_idx) {
       const int dst_pass_offset = pass_offsets[pass_offset_idx].dst_offset;
       const int src_pass_offset = pass_offsets[pass_offset_idx].src_offset;
+      const int num_components = pass_offsets[pass_offset_idx].num_components;
 
-      /* TODO(sergey): Support non-RGBA passes. */
-      dst_pixel[dst_pass_offset + 0] = src_pixel[src_pass_offset + 0];
-      dst_pixel[dst_pass_offset + 1] = src_pixel[src_pass_offset + 1];
-      dst_pixel[dst_pass_offset + 2] = src_pixel[src_pass_offset + 2];
-      dst_pixel[dst_pass_offset + 3] = src_pixel[src_pass_offset + 3];
+      for (int c = 0; c < num_components; ++c) {
+        dst_pixel[dst_pass_offset + c] = src_pixel[src_pass_offset + c];
+      }
     }
   }
 }

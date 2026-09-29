@@ -10,10 +10,6 @@
 
 #include "../BPy_UnaryFunction0DMaterial.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject MaterialF0D_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject MaterialF0D_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&MaterialF0D_Type))
 
 /*---------------------------Python BPy_MaterialF0D structure definition----------*/
-typedef struct {
+struct BPy_MaterialF0D {
   BPy_UnaryFunction0DMaterial py_uf0D_material;
-} BPy_MaterialF0D;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

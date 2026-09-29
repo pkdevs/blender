@@ -7,6 +7,7 @@
 
 from bpy.types import Menu, UIList
 from bpy.app.translations import contexts as i18n_contexts
+from bl_ui import anim
 
 
 # Use by both image & clip context menus.
@@ -39,15 +40,11 @@ class MASK_UL_layers(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index):
         # assert(isinstance(item, bpy.types.MaskLayer)
         mask = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.prop(mask, "name", text="", emboss=False, icon_value=icon)
-            row = layout.row(align=True)
-            row.prop(mask, "hide", text="", emboss=False)
-            row.prop(mask, "hide_select", text="", emboss=False)
-            row.prop(mask, "hide_render", text="", emboss=False)
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            layout.label(text="", icon_value=icon)
+        layout.prop(mask, "name", text="", emboss=False, icon_value=icon)
+        row = layout.row(align=True)
+        row.prop(mask, "hide", text="", emboss=False)
+        row.prop(mask, "hide_select", text="", emboss=False)
+        row.prop(mask, "hide_render", text="", emboss=False)
 
 
 class MASK_PT_mask:
@@ -123,7 +120,13 @@ class MASK_PT_layers:
             layout.prop(active_layer, "falloff")
 
             col = layout.column()
-            col.prop(active_layer, "use_fill_overlap", text="Overlap")
+            col.prop(active_layer, "fill_solver")
+            if active_layer.fill_solver != 'SWEEP_LINE':
+                sub = col.column()
+                sub.active = False
+            else:
+                sub = col
+            sub.prop(active_layer, "use_fill_overlap", text="Overlap")
             col.prop(active_layer, "use_fill_holes", text="Holes")
 
 
@@ -175,8 +178,10 @@ class MASK_PT_point:
 
         if mask and sc.mode == 'MASK':
             mask_layer_active = mask.layers.active
-            return (mask_layer_active and
-                    mask_layer_active.splines.active_point)
+            return (
+                mask_layer_active and
+                mask_layer_active.splines.active_point
+            )
 
         return False
 
@@ -211,11 +216,40 @@ class MASK_PT_point:
 
             if parent.parent in tracking.objects:
                 ob = tracking.objects[parent.parent]
-                col.prop_search(parent, "sub_parent", ob,
-                                tracks_list, icon='ANIM_DATA', text="Track", text_ctxt=i18n_contexts.id_movieclip)
+                col.prop_search(
+                    parent, "sub_parent", ob,
+                    tracks_list, icon='ANIM_DATA', text="Track", text_ctxt=i18n_contexts.id_movieclip,
+                )
             else:
-                col.prop_search(parent, "sub_parent", tracking,
-                                tracks_list, icon='ANIM_DATA', text="Track", text_ctxt=i18n_contexts.id_movieclip)
+                col.prop_search(
+                    parent, "sub_parent", tracking,
+                    tracks_list, icon='ANIM_DATA', text="Track", text_ctxt=i18n_contexts.id_movieclip,
+                )
+
+
+class MASK_PT_animation:
+    # subclasses must define...
+    # ~ bl_space_type = 'CLIP_EDITOR'
+    # ~ bl_region_type = 'UI'
+    bl_label = "Animation"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        space_data = context.space_data
+        return space_data.mask and space_data.mode == 'MASK'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        # poll() ensures this is not None.
+        sc = context.space_data
+        mask = sc.mask
+
+        col = layout.column(align=True)
+        anim.draw_action_and_slot_selector_for_id(col, mask)
 
 
 class MASK_PT_display:
@@ -245,7 +279,7 @@ class MASK_PT_display:
         sub.active = space_data.show_mask_overlay
         sub.prop(space_data, "mask_overlay_mode", text="")
         row = layout.row()
-        row.active = (space_data.mask_overlay_mode in ['COMBINED'] and space_data.show_mask_overlay)
+        row.active = space_data.show_mask_overlay and (space_data.mask_overlay_mode == 'COMBINED')
         row.prop(space_data, "blend_factor", text="Blending Factor")
 
 
@@ -351,6 +385,26 @@ class MASK_MT_add(Menu):
         layout.operator("mask.primitive_square_add", text="Square", icon='MESH_PLANE')
 
 
+class MASK_MT_move_to_layer(Menu):
+    bl_label = "Move to Layer"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator_context = 'INVOKE_REGION_WIN'
+        mask = context.space_data.mask
+
+        layout.operator("mask.move_to_layer", text="New Layer", icon='ADD').add_new_layer = True
+
+        if not mask.layers:
+            return
+
+        layout.separator()
+
+        for layer in mask.layers:
+            icon = 'NONE'
+            layout.operator("mask.move_to_layer", text=layer.name, icon=icon).target_layer_name = layer.name
+
+
 class MASK_MT_visibility(Menu):
     bl_label = "Show/Hide"
 
@@ -423,6 +477,7 @@ classes = (
     MASK_UL_layers,
     MASK_MT_mask,
     MASK_MT_add,
+    MASK_MT_move_to_layer,
     MASK_MT_visibility,
     MASK_MT_transform,
     MASK_MT_animation,

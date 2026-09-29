@@ -40,7 +40,6 @@ class PHYSICS_PT_cloth(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -70,7 +69,6 @@ class PHYSICS_PT_cloth_physical_properties(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -99,7 +97,6 @@ class PHYSICS_PT_cloth_stiffness(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -135,7 +132,6 @@ class PHYSICS_PT_cloth_damping(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -171,7 +167,6 @@ class PHYSICS_PT_cloth_internal_springs(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -218,7 +213,6 @@ class PHYSICS_PT_cloth_pressure(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -267,7 +261,6 @@ class PHYSICS_PT_cloth_cache(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -283,7 +276,6 @@ class PHYSICS_PT_cloth_shape(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -338,7 +330,6 @@ class PHYSICS_PT_cloth_collision(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -363,7 +354,6 @@ class PHYSICS_PT_cloth_object_collision(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -404,7 +394,6 @@ class PHYSICS_PT_cloth_self_collision(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -446,7 +435,6 @@ class PHYSICS_PT_cloth_property_weights(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -505,7 +493,6 @@ class PHYSICS_PT_cloth_field_weights(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 

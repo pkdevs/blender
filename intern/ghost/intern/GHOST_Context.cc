@@ -11,7 +11,6 @@
 #include "GHOST_Context.hh"
 
 #ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 
 #  include <epoxy/wgl.h>
@@ -28,6 +27,11 @@
 
 #include <cstdio>
 #include <cstring>
+
+GHOST_IContext *GHOST_IContext::getActiveDrawingContext()
+{
+  return GHOST_Context::getActiveDrawingContext();
+}
 
 #ifdef _WIN32
 

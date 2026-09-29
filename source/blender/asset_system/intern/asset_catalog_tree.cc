@@ -63,7 +63,7 @@ bool AssetCatalogTreeItem::has_children() const
 void AssetCatalogTreeItem::foreach_item_recursive(const AssetCatalogTreeItem::ChildMap &children,
                                                   const ItemIterFn callback)
 {
-  for (auto &[key, item] : children) {
+  for (const auto &[key, item] : children) {
     callback(item);
     foreach_item_recursive(item.children_, callback);
   }
@@ -71,14 +71,20 @@ void AssetCatalogTreeItem::foreach_item_recursive(const AssetCatalogTreeItem::Ch
 
 void AssetCatalogTreeItem::foreach_child(const ItemIterFn callback) const
 {
-  for (auto &[key, item] : children_) {
+  for (const auto &[key, item] : children_) {
     callback(item);
   }
 }
 
+void AssetCatalogTreeItem::foreach_item(const ItemIterFn callback) const
+{
+  AssetCatalogTreeItem::foreach_item_recursive(children_, callback);
+}
+
 /* ---------------------------------------------------------------------- */
 
-void AssetCatalogTree::insert_item(const AssetCatalog &catalog)
+void AssetCatalogTree::insert_item(const AssetCatalog &catalog,
+                                   const std::optional<StringRef> skip_prefix)
 {
   const AssetCatalogTreeItem *parent = nullptr;
   /* The children for the currently iterated component, where the following component should be
@@ -90,7 +96,18 @@ void AssetCatalogTree::insert_item(const AssetCatalog &catalog)
 
   const CatalogID nil_id{};
 
+  std::optional<StringRef> skip_prefix_tmp = skip_prefix;
+
   catalog.path.iterate_components([&](StringRef component_name, const bool is_last_component) {
+    if (skip_prefix_tmp && skip_prefix_tmp->startswith(component_name)) {
+      if (skip_prefix_tmp->size() == component_name.size() ||
+          (*skip_prefix)[component_name.size()] == AssetCatalogPath::SEPARATOR)
+      {
+        skip_prefix_tmp = skip_prefix_tmp->drop_prefix(component_name.size() + 1);
+        return;
+      }
+    }
+
     /* Insert new tree element - if no matching one is there yet! */
     auto [key_and_item, was_inserted] = current_item_children->emplace(
         component_name,
@@ -122,7 +139,7 @@ void AssetCatalogTree::foreach_item(AssetCatalogTreeItem::ItemIterFn callback) c
 
 void AssetCatalogTree::foreach_root_item(const ItemIterFn callback) const
 {
-  for (auto &[key, item] : root_items_) {
+  for (const auto &[key, item] : root_items_) {
     callback(item);
   }
 }

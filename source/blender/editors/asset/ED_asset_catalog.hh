@@ -23,9 +23,20 @@
 
 #include "BLI_string_ref.hh"
 
-namespace blender::ed::asset {
+namespace blender {
+
+struct AssetWeakReference;
+struct Main;
+
+namespace asset_system {
+class AssetLibrary;
+}
+
+namespace ed::asset {
 
 void catalogs_save_from_main_path(asset_system::AssetLibrary *library, const Main *bmain);
+void catalogs_save_from_asset_reference(asset_system::AssetLibrary &library,
+                                        const AssetWeakReference &reference);
 
 /**
  * Saving catalog edits when the file is saved is a global option shared for each asset library,
@@ -64,4 +75,5 @@ void catalog_move(asset_system::AssetLibrary *library,
                   asset_system::CatalogID src_catalog_id,
                   std::optional<asset_system::CatalogID> dst_parent_catalog_id = std::nullopt);
 
-}  // namespace blender::ed::asset
+}  // namespace ed::asset
+}  // namespace blender

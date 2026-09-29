@@ -6,16 +6,12 @@
  * \ingroup RNA
  */
 
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 
-#include "BLI_utildefines.h"
-
 #include "RNA_define.hh"
 
-#include "DNA_object_types.h"
 #include "DNA_windowmanager_types.h"
 #include "DNA_workspace_types.h"
 
@@ -25,9 +21,17 @@
 
 #ifdef RNA_RUNTIME
 
+#  include "BLI_string.hh"
+
 #  include "BKE_paint.hh"
+#  include "BKE_report.hh"
 
 #  include "ED_screen.hh"
+
+#  include "WM_api.hh"
+#  include "WM_toolsystem.hh"
+
+namespace blender {
 
 static void rna_WorkSpaceTool_setup(ID *id,
                                     bToolRef *tref,
@@ -37,6 +41,7 @@ static void rna_WorkSpaceTool_setup(ID *id,
                                     int cursor,
                                     const char *keymap,
                                     const char *gizmo_group,
+                                    int brush_type,
                                     const char *data_block,
                                     const char *op_idname,
                                     int index,
@@ -51,20 +56,21 @@ static void rna_WorkSpaceTool_setup(ID *id,
   STRNCPY(tref_rt.gizmo_group, gizmo_group);
   STRNCPY(tref_rt.data_block, data_block);
   STRNCPY(tref_rt.op, op_idname);
+  tref_rt.brush_type = brush_type;
   tref_rt.index = index;
-  tref_rt.flag = options;
+  tref_rt.flag = ebToolRef_Runtime_Flag(options);
 
   /* While it's logical to assign both these values from setup,
    * it's useful to stored this in DNA for re-use, exceptional case: write to the 'tref'. */
   STRNCPY(tref->idname_fallback, idname_fallback);
   STRNCPY(tref_rt.keymap_fallback, keymap_fallback);
 
-  WM_toolsystem_ref_set_from_runtime(C, (WorkSpace *)id, tref, &tref_rt, idname);
+  WM_toolsystem_ref_set_from_runtime(C, id_cast<WorkSpace *>(id), tref, &tref_rt, idname);
 }
 
 static void rna_WorkSpaceTool_refresh_from_context(ID *id, bToolRef *tref, Main *bmain)
 {
-  WM_toolsystem_ref_sync_from_context(bmain, (WorkSpace *)id, tref);
+  WM_toolsystem_ref_sync_from_context(bmain, id_cast<WorkSpace *>(id), tref);
 }
 
 static PointerRNA rna_WorkSpaceTool_operator_properties(bToolRef *tref,
@@ -78,10 +84,9 @@ static PointerRNA rna_WorkSpaceTool_operator_properties(bToolRef *tref,
     WM_toolsystem_ref_properties_ensure_from_operator(tref, ot, &ptr);
     return ptr;
   }
-  else {
-    BKE_reportf(reports, RPT_ERROR, "Operator '%s' not found!", idname);
-  }
-  return PointerRNA_NULL;
+
+  BKE_reportf(reports, RPT_ERROR, "Operator '%s' not found!", idname);
+  return {};
 }
 
 static PointerRNA rna_WorkSpaceTool_gizmo_group_properties(bToolRef *tref,
@@ -94,13 +99,16 @@ static PointerRNA rna_WorkSpaceTool_gizmo_group_properties(bToolRef *tref,
     WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgt, &ptr);
     return ptr;
   }
-  else {
-    BKE_reportf(reports, RPT_ERROR, "Gizmo group '%s' not found!", idname);
-  }
-  return PointerRNA_NULL;
+  BKE_reportf(reports, RPT_ERROR, "Gizmo group '%s' not found!", idname);
+
+  return {};
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_api_workspace(StructRNA *srna)
 {
@@ -144,6 +152,11 @@ void RNA_api_workspace_tool(StructRNA *srna)
   RNA_def_property_enum_items(parm, rna_enum_window_cursor_items);
   RNA_def_string(func, "keymap", nullptr, KMAP_MAX_NAME, "Key Map", "");
   RNA_def_string(func, "gizmo_group", nullptr, MAX_NAME, "Gizmo Group", "");
+  parm = RNA_def_property(func, "brush_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(parm, rna_enum_dummy_NULL_items);
+  RNA_def_property_enum_funcs(parm, nullptr, nullptr, "rna_WorkSpaceTool_brush_type_itemf");
+  RNA_def_property_enum_default(parm, -1);
+  RNA_def_property_ui_text(parm, "Brush Type", "Limit this tool to a specific type of brush");
   RNA_def_string(func, "data_block", nullptr, MAX_NAME, "Data Block", "");
   RNA_def_string(func, "operator", nullptr, MAX_NAME, "Operator", "");
   RNA_def_int(func, "index", 0, INT_MIN, INT_MAX, "Index", "", INT_MIN, INT_MAX);
@@ -176,5 +189,7 @@ void RNA_api_workspace_tool(StructRNA *srna)
   func = RNA_def_function(srna, "refresh_from_context", "rna_WorkSpaceTool_refresh_from_context");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN);
 }
+
+}  // namespace blender
 
 #endif

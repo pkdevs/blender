@@ -23,9 +23,7 @@
 #include "../system/Exception.h"
 #include "../system/Precision.h"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 namespace Freestyle {
 
@@ -91,9 +89,7 @@ template<class T> class UnaryFunction0D {
     return Director_BPy_UnaryFunction0D___call__(this, py_uf0D, iter);
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:UnaryFunction0D")
-#endif
 };
 
 #ifdef SWIG
@@ -355,9 +351,10 @@ class Normal2DF0D : public UnaryFunction0D<Vec2f> {
 };
 
 // MaterialF0D
-/** Returns the material of the object evaluated at the Interface0D.
- *  This evaluation can be ambiguous (in the case of a TVertex for example.
- *  This functor tries to remove this ambiguity using the context offered by the 1D element to
+/**
+ * Returns the material of the object evaluated at the Interface0D.
+ * This evaluation can be ambiguous (in the case of a TVertex for example).
+ * This functor tries to remove this ambiguity using the context offered by the 1D element to
  * which the Interface0DIterator& belongs to and by arbitrary choosing the material of the face
  * that lies on its left when following the 1D element if there are two different materials on each
  * side of the point. However, there still can be problematic cases, and the user willing to deal

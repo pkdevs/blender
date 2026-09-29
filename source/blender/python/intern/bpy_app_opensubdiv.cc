@@ -6,16 +6,20 @@
  * \ingroup pythonintern
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include <Python.h>
 
-#include "bpy_app_opensubdiv.h"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
-#include "../generic/py_capi_utils.h"
+#include "bpy_app_opensubdiv.hh"
+
+#include "../generic/py_capi_utils.hh"
 
 #ifdef WITH_OPENSUBDIV
 #  include "opensubdiv_capi.hh"
 #endif
+
+namespace blender {
 
 static PyTypeObject BlenderAppOpenSubdivType;
 
@@ -62,7 +66,7 @@ static PyObject *make_opensubdiv_info()
   SetStrItem("Unknown");
 #endif
 
-  if (UNLIKELY(PyErr_Occurred())) {
+  if (PyErr_Occurred()) [[unlikely]] {
     Py_DECREF(opensubdiv_info);
     return nullptr;
   }
@@ -85,7 +89,9 @@ PyObject *BPY_app_opensubdiv_struct()
   BlenderAppOpenSubdivType.tp_init = nullptr;
   BlenderAppOpenSubdivType.tp_new = nullptr;
   /* Without this we can't do `set(sys.modules)` #29635. */
-  BlenderAppOpenSubdivType.tp_hash = (hashfunc)_Py_HashPointer;
+  BlenderAppOpenSubdivType.tp_hash = reinterpret_cast<hashfunc>(Py_HashPointer);
 
   return ret;
 }
+
+}  // namespace blender

@@ -4,14 +4,14 @@
 
 #pragma once
 
-#include "BLI_heap.h"
-#include "BLI_math_matrix.hh"
-#include "BLI_memarena.h"
+#include "BLI_heap.hh"
+#include "BLI_memarena.hh"
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_space_types.h"
-#include "DNA_vec_types.h"
+
+namespace blender {
 
 /** \file
  * \ingroup geo
@@ -67,7 +67,7 @@ enum eUVPackIsland_PinMethod {
   ED_UVPACK_PIN_LOCK_ALL,
 };
 
-namespace blender::geometry {
+namespace geometry {
 
 /** See also #UnwrapOptions. */
 class UVPackIsland_Params {
@@ -136,8 +136,8 @@ class PackIsland {
   void add_triangle(float2 uv0, float2 uv1, float2 uv2);
   void add_polygon(Span<float2> uvs, MemArena *arena, Heap *heap);
 
-  void build_transformation(float scale, double rotation, float r_matrix[2][2]) const;
-  void build_inverse_transformation(float scale, double rotation, float r_matrix[2][2]) const;
+  void build_transformation(float scale, double angle, float r_matrix[2][2]) const;
+  void build_inverse_transformation(float scale, double angle, float r_matrix[2][2]) const;
 
   float2 get_diagonal_support(float scale, float rotation, float margin) const;
   float2 get_diagonal_support_d4(float scale, float rotation, float margin) const;
@@ -175,4 +175,5 @@ float pack_islands(Span<PackIsland *> islands, const UVPackIsland_Params &params
 /** Compute `r = mat * (a + b)` with high precision. */
 void mul_v2_m2_add_v2v2(float r[2], const float mat[2][2], const float a[2], const float b[2]);
 
-}  // namespace blender::geometry
+}  // namespace geometry
+}  // namespace blender

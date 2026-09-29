@@ -10,49 +10,22 @@
 
 #ifdef WITH_TBB
 /* Quiet top level deprecation message, unrelated to API usage here. */
-#  if defined(WIN32) && !defined(NOMINMAX)
-/* TBB includes Windows.h which will define min/max macros causing issues
- * when we try to use std::min and std::max later on. */
-#    define NOMINMAX
-#    define TBB_MIN_MAX_CLEANUP
-#  endif
 #  include <tbb/blocked_range.h>
 #  include <tbb/parallel_for.h>
 #  include <tbb/parallel_for_each.h>
 #  include <tbb/parallel_invoke.h>
 #  include <tbb/parallel_reduce.h>
 #  include <tbb/task_arena.h>
-#  ifdef WIN32
-/* We cannot keep this defined, since other parts of the code deal with this on their own, leading
- * to multiple define warnings unless we un-define this, however we can only undefine this if we
- * were the ones that made the definition earlier. */
-#    ifdef TBB_MIN_MAX_CLEANUP
-#      undef NOMINMAX
-#    endif
-#  endif
 #endif
 
 #include "BLI_function_ref.hh"
 #include "BLI_index_range.hh"
 #include "BLI_lazy_threading.hh"
-#include "BLI_span.hh"
 #include "BLI_task_size_hints.hh"
-#include "BLI_utildefines.h"
 
 namespace blender {
 
-/**
- * Wrapper type around an integer to differentiate it from other parameters in a function call.
- */
-struct GrainSize {
-  int64_t value;
-
-  explicit constexpr GrainSize(const int64_t grain_size) : value(grain_size) {}
-};
-
-}  // namespace blender
-
-namespace blender::threading {
+namespace threading {
 
 template<typename Range, typename Function>
 inline void parallel_for_each(Range &&range, const Function &function)
@@ -72,6 +45,7 @@ void parallel_for_impl(IndexRange range,
                        FunctionRef<void(IndexRange)> function,
                        const TaskSizeHints &size_hints);
 void memory_bandwidth_bound_task_impl(FunctionRef<void()> function);
+void max_threads_task_impl(int max_threads, FunctionRef<void()> function);
 }  // namespace detail
 
 /**
@@ -192,6 +166,30 @@ inline Value parallel_reduce_aligned(const IndexRange range,
       reduction);
 }
 
+template<typename Value, typename Function, typename Reduction>
+inline Value parallel_deterministic_reduce(IndexRange range,
+                                           int64_t grain_size,
+                                           const Value &identity,
+                                           const Function &function,
+                                           const Reduction &reduction)
+{
+#ifdef WITH_TBB
+  if (range.size() >= grain_size) {
+    lazy_threading::send_hint();
+    return tbb::parallel_deterministic_reduce(
+        tbb::blocked_range<int64_t>(range.first(), range.one_after_last(), grain_size),
+        identity,
+        [&](const tbb::blocked_range<int64_t> &subrange, const Value &ident) {
+          return function(IndexRange(subrange.begin(), subrange.size()), ident);
+        },
+        reduction);
+  }
+#else
+  UNUSED_VARS(grain_size, reduction);
+#endif
+  return function(range, identity);
+}
+
 /**
  * Execute all of the provided functions. The functions might be executed in parallel or in serial
  * or some combination of both.
@@ -223,14 +221,24 @@ inline void parallel_invoke(const bool use_threading, Functions &&...functions)
 }
 
 /** See #BLI_task_isolate for a description of what isolating a task means. */
-template<typename Function> inline void isolate_task(const Function &function)
+template<typename Function> inline auto isolate_task(const Function &function)
 {
 #ifdef WITH_TBB
   lazy_threading::ReceiverIsolation isolation;
-  tbb::this_task_arena::isolate(function);
+  return tbb::this_task_arena::isolate(function);
 #else
-  function();
+  return function();
 #endif
+}
+
+/**
+ * Runs the function with at most #max_threads threads participating in parallel work,
+ * including the calling thread.
+ */
+template<typename Function>
+inline void max_threads_task(const int max_threads, const Function &function)
+{
+  detail::max_threads_task_impl(max_threads, function);
 }
 
 /**
@@ -255,4 +263,5 @@ inline void memory_bandwidth_bound_task(const int64_t approximate_bytes_touched,
   detail::memory_bandwidth_bound_task_impl(function);
 }
 
-}  // namespace blender::threading
+}  // namespace threading
+}  // namespace blender

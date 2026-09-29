@@ -10,23 +10,23 @@
 
 #include "pipeline.h"
 
+namespace blender {
+
 struct bNodeTree;
 
-namespace blender::deg {
+namespace deg {
 
 class CompositorBuilderPipeline : public AbstractBuilderPipeline {
  public:
-  CompositorBuilderPipeline(::Depsgraph *graph, bNodeTree *nodetree);
+  CompositorBuilderPipeline(blender::Depsgraph *graph);
 
  protected:
-  unique_ptr<DepsgraphNodeBuilder> construct_node_builder() override;
-  unique_ptr<DepsgraphRelationBuilder> construct_relation_builder() override;
+  std::unique_ptr<DepsgraphNodeBuilder> construct_node_builder() override;
+  std::unique_ptr<DepsgraphRelationBuilder> construct_relation_builder() override;
 
-  virtual void build_nodes(DepsgraphNodeBuilder &node_builder) override;
-  virtual void build_relations(DepsgraphRelationBuilder &relation_builder) override;
-
- private:
-  bNodeTree *nodetree_;
+  void build_nodes(DepsgraphNodeBuilder &node_builder) override;
+  void build_relations(DepsgraphRelationBuilder &relation_builder) override;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

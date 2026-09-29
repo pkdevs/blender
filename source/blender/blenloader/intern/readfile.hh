@@ -9,24 +9,33 @@
 
 #pragma once
 
-#include <cstdio> /* Include header using off_t before poisoning it below. */
+#include <cstdio> /* IWYU pragma: keep. Include header using off_t before poisoning it below. */
+#include <optional>
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
-#include "BLI_filereader.h"
+#include "BLI_enum_flags.hh"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
+#include "BLI_map.hh"
+
 #include "DNA_sdna_types.h"
 #include "DNA_space_types.h"
-#include "DNA_windowmanager_types.h" /* for eReportType */
 
+#include "BLO_core_bhead.hh"
+#include "BLO_core_blend_header.hh"
 #include "BLO_readfile.hh"
+
+namespace blender {
 
 struct BlendFileData;
 struct BlendfileLinkAppendContext;
 struct BlendFileReadParams;
 struct BlendFileReadReport;
 struct BLOCacheStorage;
+struct BHeadN;
 struct BHeadSort;
 struct DNA_ReconstructInfo;
 struct IDNameLib_Map;
@@ -37,14 +46,27 @@ struct Object;
 struct OldNewMap;
 struct UserDef;
 
+/**
+ * Store some critical information about the read blend-file.
+ */
 enum eFileDataFlag {
   FD_FLAGS_SWITCH_ENDIAN = 1 << 0,
   FD_FLAGS_FILE_POINTSIZE_IS_4 = 1 << 1,
   FD_FLAGS_POINTSIZE_DIFFERS = 1 << 2,
   FD_FLAGS_FILE_OK = 1 << 3,
   FD_FLAGS_IS_MEMFILE = 1 << 4,
+  /**
+   * The Blender file is not compatible with current code, but is still likely a blender file
+   * 'from the future'. Improves report to the user.
+   */
+  FD_FLAGS_FILE_FUTURE = 1 << 5,
+  /**
+   * The blend-file has IDs with invalid names (either using the 5.0+ new 'long names', or
+   * corrupted). I.e. their names have no null char in their first 66 bytes.
+   */
+  FD_FLAGS_HAS_INVALID_ID_NAMES = 1 << 6,
 };
-ENUM_OPERATORS(eFileDataFlag, FD_FLAGS_IS_MEMFILE)
+ENUM_OPERATORS(eFileDataFlag)
 
 /* Disallow since it's 32bit on ms-windows. */
 #ifdef __GNUC__
@@ -59,43 +81,67 @@ ENUM_OPERATORS(eFileDataFlag, FD_FLAGS_IS_MEMFILE)
  */
 struct FileData {
   /** Linked list of BHeadN's. */
-  ListBase bhead_list;
-  enum eFileDataFlag flags;
-  bool is_eof;
+  ListBaseT<BHeadN> bhead_list = {};
+  enum eFileDataFlag flags = eFileDataFlag(0);
+  bool is_eof = false;
+  BlenderHeader blender_header = {};
 
-  FileReader *file;
+  FileReader *file = nullptr;
+  std::optional<BLI_stat_t> file_stat;
 
-  /** Whether we are undoing (< 0) or redoing (> 0), used to choose which 'unchanged' flag to use
-   * to detect unchanged data from memfile. */
-  int undo_direction; /* eUndoStepDir */
+  /**
+   * Whether we are undoing (< 0) or redoing (> 0), used to choose which 'unchanged' flag to use
+   * to detect unchanged data from memfile.
+   * #eUndoStepDir.
+   */
+  int undo_direction = 0;
 
-  /** Used for relative paths handling.
+  /**
+   * Used for relative paths handling.
    *
    * Typically the actual filepath of the read blend-file, except when recovering
    * save-on-exit/autosave files. In the latter case, it will be the path of the file that
    * generated the auto-saved one being recovered.
    *
-   * NOTE: Currently expected to be the same path as #BlendFileData.filepath. */
-  char relabase[FILE_MAX];
+   * NOTE: Currently expected to be the same path as #BlendFileData.filepath.
+   */
+  char relabase[FILE_MAX] = {};
 
   /** General reading variables. */
-  SDNA *filesdna;
-  const SDNA *memsdna;
+  std::unique_ptr<SDNA> filesdna;
+  const SDNA *memsdna = nullptr;
   /** Array of #eSDNA_StructCompare. */
-  const char *compflags;
-  DNA_ReconstructInfo *reconstruct_info;
+  const char *compflags = nullptr;
+  DNA_ReconstructInfo *reconstruct_info = nullptr;
 
-  int fileversion;
+  int fileversion = 0;
+  /**
+   * Unlike the `fileversion` which is read from the header,
+   * this is initialized from #read_file_dna.
+   */
+  int filesubversion = 0;
+
   /** Used to retrieve ID names from (bhead+1). */
-  int id_name_offset;
-  /** Used to retrieve asset data from (bhead+1). NOTE: This may not be available in old files,
-   * will be -1 then! */
-  int id_asset_data_offset;
+  int id_name_offset = 0;
+  /**
+   * Used to retrieve asset data from (bhead+1). NOTE: This may not be available in old files,
+   * will be -1 then!
+   */
+  int id_asset_data_offset = 0;
+  int id_flag_offset = 0;
+  int id_deep_hash_offset = 0;
+  /**
+   * Gives access to libraries' filepath and flag, useful for introspection of blendfiles'
+   * dependencies _without_ having to fully read them.
+   */
+  int library_filepath_offset = 0;
+  int library_flag_offset = 0;
   /** For do_versions patching. */
-  int globalf, fileflags;
+  int globalf = 0;
+  int fileflags = 0;
 
   /** Optionally skip some data-blocks when they're not needed. */
-  eBLOReadSkip skip_flags;
+  eBLOReadSkip skip_flags = BLO_READ_SKIP_NONE;
 
   /**
    * Tag to apply to all loaded ID data-blocks.
@@ -103,33 +149,50 @@ struct FileData {
    * \note This is initialized from #LibraryLink_Params.id_tag_extra since passing it as an
    * argument would need an additional argument to be passed around when expanding library data.
    */
-  int id_tag_extra;
+  eID_Tag id_tag_extra = {};
 
-  OldNewMap *datamap;
-  OldNewMap *globmap;
+  OldNewMap *datamap = nullptr;
+  OldNewMap *globmap = nullptr;
+  /** Used to keep track of already loaded packed IDs to avoid loading them multiple times. */
+  std::shared_ptr<Map<IDHash, ID *>> id_by_deep_hash;
 
   /**
    * Store mapping from old ID pointers (the values they have in the .blend file) to new ones,
    * typically from value in `bhead->old` to address in memory where the ID was read.
    * Used during library-linking process (see #lib_link_all).
    */
-  OldNewMap *libmap;
+  OldNewMap *libmap = nullptr;
 
-  BLOCacheStorage *cache_storage;
+  BLOCacheStorage *cache_storage = nullptr;
 
-  BHeadSort *bheadmap;
-  int tot_bheadmap;
+  BHeadSort *bheadmap = nullptr;
+  int tot_bheadmap = 0;
 
-  /** See: #USE_GHASH_BHEAD. */
-  GHash *bhead_idname_hash;
+  std::optional<Map<StringRefNull, BHead *>> bhead_idname_map;
 
-  ListBase *mainlist;
-  /** Used for undo. */
-  ListBase *old_mainlist;
+  /**
+   * The root (main, local) Main.
+   * The Main that will own Library IDs.
+   *
+   * When reading libraries, this is typically _not_ the same Main as the one being populated from
+   * the content of this filedata, see #fd_bmain.
+   */
+  Main *bmain = nullptr;
+  /** The existing root (main, local) Main, used for undo. */
+  Main *old_bmain = nullptr;
+  /**
+   * The main for the (local) data loaded from this filedata.
+   *
+   * This is the same as #bmain when opening a blend-file, but not when reading/loading from
+   * libraries blend-files.
+   */
+  Main *fd_bmain = nullptr;
+
   /**
    * IDMap using UID's as keys of all the old IDs in the old bmain. Used during undo to find a
-   * matching old data when reading a new ID. */
-  IDNameLib_Map *old_idmap_uid;
+   * matching old data when reading a new ID.
+   */
+  IDNameLib_Map *old_idmap_uid = nullptr;
   /**
    * IDMap using uids as keys of the IDs read (or moved) in the new main(s).
    *
@@ -138,20 +201,37 @@ struct FileData {
    * step, so they could point e.g. to an ID that does not exist in the newly read undo step).
    *
    * Also used to find current valid pointers (or none) of these 'no undo' IDs existing in
-   * read memfile. */
-  IDNameLib_Map *new_idmap_uid;
+   * read memfile.
+   */
+  IDNameLib_Map *new_idmap_uid = nullptr;
 
-  BlendFileReadReport *reports;
+  BlendFileReadReport *reports = nullptr;
 
   /** Opaque handle to the storage system used for non-static allocation strings. */
-  void *storage_handle;
+  void *storage_handle = nullptr;
+
+  /**
+   * Set when reading a file from undo with incomplete preview, to trigger restart of preview jobs.
+   */
+  bool need_preview_render_restart = false;
 };
 
-#define SIZEOFBLENDERHEADER 12
-
-/***/
-void blo_join_main(ListBase *mainlist);
-void blo_split_main(ListBase *mainlist, Main *main);
+/**
+ * Split a single main into a vector of Mains, each containing only IDs from a given library.
+ *
+ * The vector is accessible in all of the split mains through the shared pointer
+ * #Main::split_mains.
+ *
+ * The first Main of the vector is the same as the given `main`, and contains local IDs.
+ *
+ * If `do_split_packed_ids` is `false`, packed linked IDs remain in the local (first) main as well.
+ */
+void blo_split_main(Main *bmain, bool do_split_packed_ids = true);
+/**
+ * Join the set of split mains (found in given `main` #Main::split_mains vector shared pointer)
+ * back into that 'main' main.
+ */
+void blo_join_main(Main *bmain);
 
 BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath) ATTR_NONNULL(1, 2);
 
@@ -167,8 +247,8 @@ FileData *blo_filedata_from_memfile(MemFile *memfile,
                                     BlendFileReadReport *reports);
 
 /**
- * Build a #GSet of old main (we only care about local data here,
- * so we can do that after #blo_split_main() call.
+ * Build a #IDNameLib_Map of old main (we only care about local data here,
+ * so we can do that after #blo_split_main() call).
  */
 void blo_make_old_idmap_from_main(FileData *fd, Main *bmain) ATTR_NONNULL(1, 2);
 
@@ -187,12 +267,35 @@ BHead *blo_bhead_prev(FileData *fd, BHead *thisblock) ATTR_NONNULL(1, 2);
 
 /**
  * Warning! Caller's responsibility to ensure given bhead **is** an ID one!
+ *
+ * Will return `nullptr` if the name is not valid (e.g. because it has no null-char terminator, if
+ * it was saved in a version of Blender with higher MAX_ID_NAME value).
  */
-const char *blo_bhead_id_name(const FileData *fd, const BHead *bhead);
+const char *blo_bhead_id_name(FileData *fd, const BHead *bhead);
+/**
+ * Warning! It's the caller's responsibility to ensure that the given bhead **is** an ID one!
+ *
+ * Returns the ID flag value (or `0` if the blendfile is too old and the offset of the ID::flag
+ * member could not be computed).
+ */
+short blo_bhead_id_flag(const FileData *fd, const BHead *bhead);
 /**
  * Warning! Caller's responsibility to ensure given bhead **is** an ID one!
  */
 AssetMetaData *blo_bhead_id_asset_data_address(const FileData *fd, const BHead *bhead);
+
+/**
+ * Return the stored filepath (may be relative) of a library ID.
+ *
+ * Warning! Caller's responsibility to ensure that the given bhead **is** a Library ID one!
+ */
+const char *blo_bhead_library_filepath(const FileData *fd, const BHead *bhead);
+/**
+ * Return the stored flags of a library ID.
+ *
+ * Warning! Caller's responsibility to ensure that the given bhead **is** a Library ID one!
+ */
+LibraryFlag blo_bhead_library_flag(const FileData *fd, const BHead *bhead);
 
 /* do versions stuff */
 
@@ -236,7 +339,15 @@ void blo_do_versions_280(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_290(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_300(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_400(FileData *fd, Library *lib, Main *bmain);
-void blo_do_versions_cycles(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_401(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_402(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_403(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_404(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_405(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_500(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_501(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_502(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_503(FileData *fd, Library *lib, Main *bmain);
 
 void do_versions_after_linking_250(Main *bmain);
 void do_versions_after_linking_260(Main *bmain);
@@ -245,7 +356,15 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain);
 void do_versions_after_linking_290(FileData *fd, Main *bmain);
 void do_versions_after_linking_300(FileData *fd, Main *bmain);
 void do_versions_after_linking_400(FileData *fd, Main *bmain);
-void do_versions_after_linking_cycles(Main *bmain);
+void do_versions_after_linking_401(FileData *fd, Main *bmain);
+void do_versions_after_linking_402(FileData *fd, Main *bmain);
+void do_versions_after_linking_403(FileData *fd, Main *bmain);
+void do_versions_after_linking_404(FileData *fd, Main *bmain);
+void do_versions_after_linking_405(FileData *fd, Main *bmain);
+void do_versions_after_linking_500(FileData *fd, Main *bmain);
+void do_versions_after_linking_501(FileData *fd, Main *bmain);
+void do_versions_after_linking_502(FileData *fd, Main *bmain);
+void do_versions_after_linking_503(FileData *fd, Main *bmain);
 
 void do_versions_after_setup(Main *new_bmain,
                              BlendfileLinkAppendContext *lapp_context,
@@ -259,6 +378,10 @@ void do_versions_after_setup(Main *new_bmain,
  */
 void *blo_read_get_new_globaldata_address(FileData *fd, const void *adr) ATTR_NONNULL(1);
 
-/* Mark the Main data as invalid (.blend file reading should be aborted ASAP, and the already read
- * data should be discarded). Also add an error report to `fd` including given `message`. */
+/**
+ * Mark the Main data as invalid (.blend file reading should be aborted ASAP, and the already read
+ * data should be discarded). Also add an error report to `fd` including given `message`.
+ */
 void blo_readfile_invalidate(FileData *fd, Main *bmain, const char *message) ATTR_NONNULL(1, 2, 3);
+
+}  // namespace blender

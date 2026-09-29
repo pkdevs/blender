@@ -12,10 +12,6 @@
 
 #include "../../view_map/ViewMap.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject ViewVertex_Type;
@@ -23,13 +19,9 @@ extern PyTypeObject ViewVertex_Type;
 #define BPy_ViewVertex_Check(v) (PyObject_IsInstance((PyObject *)v, (PyObject *)&ViewVertex_Type))
 
 /*---------------------------Python BPy_ViewVertex structure definition----------*/
-typedef struct {
+struct BPy_ViewVertex {
   BPy_Interface0D py_if0D;
   Freestyle::ViewVertex *vv;
-} BPy_ViewVertex;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

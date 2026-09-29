@@ -10,10 +10,6 @@
 
 #include "../BPy_UnaryPredicate0D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject FalseUP0D_Type;
@@ -21,12 +17,8 @@ extern PyTypeObject FalseUP0D_Type;
 #define BPy_FalseUP0D_Check(v) (PyObject_IsInstance((PyObject *)v, (PyObject *)&FalseUP0D_Type))
 
 /*---------------------------Python BPy_FalseUP0D structure definition----------*/
-typedef struct {
+struct BPy_FalseUP0D {
   BPy_UnaryPredicate0D py_up0D;
-} BPy_FalseUP0D;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

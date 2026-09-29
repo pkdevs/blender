@@ -13,7 +13,6 @@
 
 #include "rna_internal.hh"
 
-#include "DNA_sound_types.h"
 #include "DNA_speaker_types.h"
 
 #include "BLT_translation.hh"
@@ -28,6 +27,8 @@
 #  include "WM_types.hh"
 
 #else
+
+namespace blender {
 
 static void rna_def_speaker(BlenderRNA *brna)
 {
@@ -170,5 +171,7 @@ void RNA_def_speaker(BlenderRNA *brna)
 {
   rna_def_speaker(brna);
 }
+
+}  // namespace blender
 
 #endif

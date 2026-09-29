@@ -3,8 +3,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(BLOSC_EXTRA_ARGS
-  -DZLIB_INCLUDE_DIR=${LIBDIR}/zlib/include/
-  -DZLIB_LIBRARY=${LIBDIR}/zlib/lib/${ZLIB_LIBRARY}
   -DBUILD_TESTS=OFF
   -DBUILD_BENCHMARKS=OFF
   -DCMAKE_DEBUG_POSTFIX=_d
@@ -12,13 +10,12 @@ set(BLOSC_EXTRA_ARGS
   -DPTHREAD_LIBS=${LIBDIR}/pthreads/lib/pthreadVC3.lib
   -DPTHREAD_INCLUDE_DIR=${LIBDIR}/pthreads/inc
   -DDEACTIVATE_SNAPPY=ON
+  -DDEACTIVATE_ZLIB=ON
+  -DDEACTIVATE_ZSTD=ON
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-)
-
-# Prevent blosc from including its own local copy of zlib in the object file
-# and cause linker errors with everybody else.
-set(BLOSC_EXTRA_ARGS ${BLOSC_EXTRA_ARGS}
-  -DPREFER_EXTERNAL_ZLIB=ON
+  # Fix for building with GCC 15, which defaults to C23. Fixed in main in the c-blosc repo, remove on upgrade.
+  # See commit: https://github.com/Blosc/c-blosc/commit/774f6a0ebaa0c617f7f13ccf6bc89d17eba04654
+  -DCMAKE_C_STANDARD=17
 )
 
 ExternalProject_Add(external_blosc
@@ -26,6 +23,7 @@ ExternalProject_Add(external_blosc
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
   URL_HASH ${BLOSC_HASH_TYPE}=${BLOSC_HASH}
   PREFIX ${BUILD_DIR}/blosc
+  CMAKE_GENERATOR ${PLATFORM_ALT_GENERATOR}
 
   CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${LIBDIR}/blosc
@@ -33,11 +31,6 @@ ExternalProject_Add(external_blosc
     ${BLOSC_EXTRA_ARGS}
 
   INSTALL_DIR ${LIBDIR}/blosc
-)
-
-add_dependencies(
-  external_blosc
-  external_zlib
 )
 
 if(WIN32)

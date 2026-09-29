@@ -6,39 +6,36 @@
  * \ingroup spview3d
  */
 
-#include <iostream>
-
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
 
-#include "BKE_compute_contexts.hh"
+#include "BKE_compute_context_cache.hh"
 #include "BKE_context.hh"
 #include "BKE_geometry_nodes_gizmos_transforms.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_geometry_set_instances.hh"
-#include "BKE_idprop.hh"
 #include "BKE_instances.hh"
+#include "BKE_main_invariants.hh"
 #include "BKE_modifier.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_object.hh"
 
-#include "BLI_math_base_safe.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_base_safe.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.hh"
-
-#include "NOD_geometry_nodes_gizmos.hh"
-#include "NOD_geometry_nodes_log.hh"
 
 #include "MOD_nodes.hh"
+
+#include "NOD_eval_log.hh"
+#include "NOD_geometry_nodes_gizmos.hh"
 
 #include "UI_resources.hh"
 
@@ -50,9 +47,11 @@
 
 #include "view3d_intern.hh"
 
-namespace blender::ed::view3d::geometry_nodes_gizmos {
-namespace geo_eval_log = nodes::geo_eval_log;
-using geo_eval_log::GeoTreeLog;
+namespace blender {
+
+namespace ed::view3d::geometry_nodes_gizmos {
+namespace eval_log = nodes::eval_log;
+using eval_log::NodeTreeLog;
 
 static bool gizmo_is_interacting(const wmGizmo &gizmo)
 {
@@ -84,8 +83,8 @@ static ThemeColorID get_axis_theme_color_id(const int axis)
 static void get_axis_gizmo_colors(const int axis, float *r_color, float *r_color_hi)
 {
   const ThemeColorID theme_id = get_axis_theme_color_id(axis);
-  UI_GetThemeColor3fv(theme_id, r_color);
-  UI_GetThemeColor3fv(theme_id, r_color_hi);
+  ui::theme::get_color_3fv(theme_id, r_color);
+  ui::theme::get_color_3fv(theme_id, r_color_hi);
   r_color[3] = 0.6f;
   r_color_hi[3] = 1.0f;
 }
@@ -118,20 +117,20 @@ struct UpdateReport {
 };
 
 using ApplyChangeFn = std::function<void(
-    StringRef socket_identifier, FunctionRef<void(bke::SocketValueVariant &value)> modify_value)>;
+    UString socket_identifier, FunctionRef<void(bke::SocketValueVariant &value)> modify_value)>;
 
 struct GizmosUpdateParams {
   const bContext &C;
   /* Transform of the object and geometry that the gizmo belongs to. */
   float4x4 parent_transform;
   const bNode &gizmo_node;
-  GeoTreeLog &tree_log;
+  NodeTreeLog &tree_log;
   UpdateReport &r_report;
   nodes::inverse_eval::ElemVariant elem;
 
-  template<typename T> [[nodiscard]] bool get_input_value(const StringRef identifier, T &r_value)
+  template<typename T> [[nodiscard]] bool get_input_value(const UString identifier, T &r_value)
   {
-    const bNodeSocket &socket = this->gizmo_node.input_by_identifier(identifier);
+    const bNodeSocket &socket = *this->gizmo_node.input_by_identifier(identifier);
     const std::optional<T> value_opt = this->tree_log.find_primitive_socket_value<T>(socket);
     if (!value_opt) {
       return false;
@@ -236,18 +235,22 @@ class LinearGizmo : public NodeGizmos {
 
     WM_gizmo_set_line_width(gizmo_, 1.0f);
 
+    const float length = (storage.draw_style == GEO_NODE_LINEAR_GIZMO_DRAW_STYLE_BOX) ? 0.8f :
+                                                                                        1.0f;
+    RNA_float_set(gizmo_->ptr, "length", length);
+
     const ThemeColorID color_theme_id = get_gizmo_theme_color_id(
         GeometryNodeGizmoColor(storage.color_id));
-    UI_GetThemeColor3fv(color_theme_id, gizmo_->color);
-    UI_GetThemeColor3fv(TH_GIZMO_HI, gizmo_->color_hi);
+    ui::theme::get_color_3fv(color_theme_id, gizmo_->color);
+    ui::theme::get_color_3fv(TH_GIZMO_HI, gizmo_->color_hi);
   }
 
   bool update_transform(GizmosUpdateParams &params)
   {
     float3 position;
     float3 direction;
-    if (!params.get_input_value("Position", position) ||
-        !params.get_input_value("Direction", direction))
+    if (!params.get_input_value("Position"_ustr, position) ||
+        !params.get_input_value("Direction"_ustr, direction))
     {
       params.r_report.missing_socket_logs = true;
       return false;
@@ -281,8 +284,8 @@ class LinearGizmo : public NodeGizmos {
           const float new_gizmo_value = *static_cast<const float *>(value_ptr);
           self.edit_data_.current_value = new_gizmo_value;
           const float offset = new_gizmo_value * self.edit_data_.factor_from_transform;
-          self.apply_change("Value", [&](bke::SocketValueVariant &value_variant) {
-            value_variant.set(value_variant.get<float>() + offset);
+          self.apply_change("Value"_ustr, [&](bke::SocketValueVariant &value_variant) {
+            value_variant.ensure_type<float>() += offset;
           });
         };
     fn_params.value_get_fn =
@@ -342,8 +345,8 @@ class DialGizmo : public NodeGizmos {
 
     const ThemeColorID color_theme_id = get_gizmo_theme_color_id(
         GeometryNodeGizmoColor(storage.color_id));
-    UI_GetThemeColor3fv(color_theme_id, gizmo_->color);
-    UI_GetThemeColor3fv(TH_GIZMO_HI, gizmo_->color_hi);
+    ui::theme::get_color_3fv(color_theme_id, gizmo_->color);
+    ui::theme::get_color_3fv(TH_GIZMO_HI, gizmo_->color_hi);
   }
 
   bool update_transform(GizmosUpdateParams &params)
@@ -352,9 +355,10 @@ class DialGizmo : public NodeGizmos {
     float3 up;
     bool screen_space;
     float radius;
-    if (!params.get_input_value("Position", position) || !params.get_input_value("Up", up) ||
-        !params.get_input_value("Screen Space", screen_space) ||
-        !params.get_input_value("Radius", radius))
+    if (!params.get_input_value("Position"_ustr, position) ||
+        !params.get_input_value("Up"_ustr, up) ||
+        !params.get_input_value("Screen Space"_ustr, screen_space) ||
+        !params.get_input_value("Radius"_ustr, radius))
     {
       params.r_report.missing_socket_logs = true;
       return false;
@@ -374,7 +378,14 @@ class DialGizmo : public NodeGizmos {
     copy_m4_m4(gizmo_->matrix_basis, gizmo_transform.ptr());
 
     WM_gizmo_set_flag(gizmo_, WM_GIZMO_DRAW_NO_SCALE, !screen_space);
-    copy_m4_m4(gizmo_->matrix_offset, math::from_scale<float4x4>(float3(radius)).ptr());
+    float transform_scale = 1.0f;
+    if (!screen_space) {
+      /* We can't scale the dial gizmo non-uniformly, so just take the average of the scale in each
+       * axis for now. */
+      transform_scale = math::average(math::to_scale(params.parent_transform));
+    }
+    copy_m4_m4(gizmo_->matrix_offset,
+               math::from_scale<float4x4>(float3(radius * transform_scale)).ptr());
 
     return true;
   }
@@ -394,8 +405,8 @@ class DialGizmo : public NodeGizmos {
           if (self.edit_data_.is_negative_transform) {
             offset = -offset;
           }
-          self.apply_change("Value", [&](bke::SocketValueVariant &value_variant) {
-            value_variant.set(value_variant.get<float>() + offset);
+          self.apply_change("Value"_ustr, [&](bke::SocketValueVariant &value_variant) {
+            value_variant.ensure_type<float>() += offset;
           });
         };
     params.value_get_fn = [](const wmGizmo * /*gz*/, wmGizmoProperty *gz_prop, void *value_ptr) {
@@ -470,8 +481,8 @@ class TransformGizmos : public NodeGizmos {
 
     float3 position;
     math::Quaternion rotation;
-    if (!params.get_input_value("Position", position) ||
-        !params.get_input_value("Rotation", rotation))
+    if (!params.get_input_value("Position"_ustr, position) ||
+        !params.get_input_value("Rotation"_ustr, rotation))
     {
       params.r_report.missing_socket_logs = true;
       return;
@@ -605,8 +616,8 @@ class TransformGizmos : public NodeGizmos {
         self.edit_data_.current_translation[axis_i] = new_gizmo_value;
         float3 translation{};
         translation[axis_i] = new_gizmo_value;
-        self.apply_change("Value", [&](bke::SocketValueVariant &value_variant) {
-          float4x4 value = value_variant.get<float4x4>();
+        self.apply_change("Value"_ustr, [&](bke::SocketValueVariant &value_variant) {
+          float4x4 &value = value_variant.ensure_type<float4x4>();
           const float3x3 orientation = float3x3(value);
           float3 offset{};
           if (self.transform_orientation_ == V3D_ORIENT_GLOBAL) {
@@ -618,7 +629,6 @@ class TransformGizmos : public NodeGizmos {
             offset = math::transform_direction(orientation, translation) * factor;
           }
           value.location() += offset;
-          value_variant.set(value);
         });
       };
       params.value_get_fn = [](const wmGizmo *gz, wmGizmoProperty *gz_prop, void *value_ptr) {
@@ -656,8 +666,8 @@ class TransformGizmos : public NodeGizmos {
         const math::Axis axis = math::Axis::from_int(axis_i);
         const float new_gizmo_value = *static_cast<const float *>(value_ptr);
         self.edit_data_.current_rotation[axis_i] = new_gizmo_value;
-        self.apply_change("Value", [&](bke::SocketValueVariant &value_variant) {
-          float4x4 value = value_variant.get<float4x4>();
+        self.apply_change("Value"_ustr, [&](bke::SocketValueVariant &value_variant) {
+          float4x4 &value = value_variant.ensure_type<float4x4>();
           float3 local_rotation_axis;
           if (self.transform_orientation_ == V3D_ORIENT_GLOBAL) {
             local_rotation_axis = math::normalize(math::transform_direction(
@@ -670,7 +680,6 @@ class TransformGizmos : public NodeGizmos {
           rotation_matrix = math::from_rotation<float3x3>(
               math::AxisAngle(local_rotation_axis, -new_gizmo_value));
           value.view<3, 3>() = rotation_matrix * value.view<3, 3>();
-          value_variant.set(value);
         });
       };
       params.value_get_fn = [](const wmGizmo *gz, wmGizmoProperty *gz_prop, void *value_ptr) {
@@ -710,8 +719,8 @@ class TransformGizmos : public NodeGizmos {
         self.edit_data_.current_scale[axis_i] = new_gizmo_value;
         float3 scale{1.0f, 1.0f, 1.0f};
         scale[axis_i] += new_gizmo_value;
-        self.apply_change("Value", [&](bke::SocketValueVariant &value_variant) {
-          float4x4 value = value_variant.get<float4x4>();
+        self.apply_change("Value"_ustr, [&](bke::SocketValueVariant &value_variant) {
+          float4x4 &value = value_variant.ensure_type<float4x4>();
           float3 local_scale_axis;
           if (self.transform_orientation_ == V3D_ORIENT_GLOBAL) {
             local_scale_axis = math::normalize(math::transform_direction(
@@ -722,10 +731,20 @@ class TransformGizmos : public NodeGizmos {
           }
           const float3x3 rotation_matrix = math::from_rotation<float3x3>(
               math::AxisAngle(local_scale_axis, math::to_vector<float3>(axis)));
-          const float3x3 scale_matrix = math::invert(rotation_matrix) *
-                                        math::from_scale<float3x3>(scale) * rotation_matrix;
-          value.view<3, 3>() = scale_matrix * value.view<3, 3>();
-          value_variant.set(value);
+          const float3x3 scaled = math::invert(rotation_matrix) *
+                                  math::from_scale<float3x3>(scale) * rotation_matrix *
+                                  value.view<3, 3>();
+
+          /* Apply only the new column lengths to the original directions to avoid
+           * rotation drift when repeatedly applying the scale transform, see #155866. */
+          for (int i = 0; i < 3; i++) {
+            const float3 col = float3(value[i]);
+            const float len_sq = math::length_squared(col);
+            if (len_sq > math::square(1e-6f)) {
+              const float len = math::sqrt(len_sq);
+              value[i] = float4(col * (math::length(float3(scaled[i])) / len), 0.0f);
+            }
+          }
         });
       };
       params.value_get_fn = [](const wmGizmo *gz, wmGizmoProperty *gz_prop, void *value_ptr) {
@@ -766,7 +785,7 @@ struct GeoNodesObjectGizmoID {
   const Object *object_orig;
   bke::NodeGizmoID gizmo_id;
 
-  BLI_STRUCT_EQUALITY_OPERATORS_2(GeoNodesObjectGizmoID, object_orig, gizmo_id)
+  friend bool operator==(const GeoNodesObjectGizmoID &a, const GeoNodesObjectGizmoID &b) = default;
 
   uint64_t hash() const
   {
@@ -781,7 +800,7 @@ struct GeometryNodesGizmoGroup {
 
 static std::unique_ptr<NodeGizmos> create_gizmo_node_gizmos(const bNode &gizmo_node)
 {
-  switch (gizmo_node.type) {
+  switch (gizmo_node.type_legacy) {
     case GEO_NODE_GIZMO_LINEAR:
       return std::make_unique<LinearGizmo>();
     case GEO_NODE_GIZMO_DIAL:
@@ -859,7 +878,7 @@ static std::optional<float4x4> find_gizmo_geometry_transform_recursive(
         if (const std::optional<float4x4> m = find_gizmo_geometry_transform_recursive(
                 reference_geometry, gizmo_id, sub_transform))
         {
-          return *m;
+          return m;
         }
       }
     }
@@ -877,10 +896,12 @@ static bke::GeometrySet find_geometry_for_gizmo(const Object &object_eval,
 {
   if (v3d.flag2 & V3D_SHOW_VIEWER) {
     const ViewerPath &viewer_path = v3d.viewer_path;
-    if (const geo_eval_log::ViewerNodeLog *viewer_log =
+    if (const eval_log::ViewerNodeLog *viewer_log =
             nmd_orig.runtime->eval_log->find_viewer_node_log_for_path(viewer_path))
     {
-      return viewer_log->geometry;
+      if (const bke::GeometrySet *viewer_geometry = viewer_log->main_geometry()) {
+        return *viewer_geometry;
+      }
     }
   }
   return bke::object_get_evaluated_geometry_set(object_eval);
@@ -899,8 +920,8 @@ static std::optional<float4x4> find_gizmo_geometry_transform(const bke::Geometry
 static bool WIDGETGROUP_geometry_nodes_poll(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
-  if (v3d->gizmo_flag & V3D_GIZMO_HIDE_MODIFIER) {
+  View3D *v3d = area->spacedata.first_as<View3D>();
+  if (v3d->gizmo_flag & (V3D_GIZMO_HIDE | V3D_GIZMO_HIDE_MODIFIER)) {
     return false;
   }
   return true;
@@ -937,12 +958,11 @@ static void WIDGETGROUP_geometry_nodes_refresh(const bContext *C, wmGizmoGroup *
 
   /* This needs to stay around for a bit longer because the compute contexts are required when
    * applying the gizmo changes. */
-  auto compute_context_builder = std::make_shared<ComputeContextBuilder>();
-  compute_context_builder->keep_old_contexts();
+  auto compute_context_cache = std::make_shared<bke::ComputeContextCache>();
 
   nodes::gizmos::foreach_active_gizmo(
       *C,
-      *compute_context_builder,
+      *compute_context_cache,
       [&](const Object &object_orig,
           const NodesModifierData &nmd_orig,
           const ComputeContext &compute_context,
@@ -958,8 +978,7 @@ static void WIDGETGROUP_geometry_nodes_refresh(const bContext *C, wmGizmoGroup *
           /* Can't create gizmos without any logged data. */
           return;
         }
-        Object *object_eval = DEG_get_evaluated_object(depsgraph,
-                                                       const_cast<Object *>(&object_orig));
+        Object *object_eval = DEG_get_evaluated(depsgraph, const_cast<Object *>(&object_orig));
         if (!object_eval) {
           return;
         }
@@ -996,7 +1015,7 @@ static void WIDGETGROUP_geometry_nodes_refresh(const bContext *C, wmGizmoGroup *
         /* Initially show all gizmos. They may be hidden as part of the update again. */
         node_gizmos->show_all();
 
-        GeoTreeLog &tree_log = nmd_orig.runtime->eval_log->get_tree_log(compute_context.hash());
+        NodeTreeLog &tree_log = nmd_orig.runtime->eval_log->get_tree_log(compute_context.hash());
         tree_log.ensure_socket_values();
         tree_log.ensure_evaluated_gizmo_nodes();
 
@@ -1040,17 +1059,17 @@ static void WIDGETGROUP_geometry_nodes_refresh(const bContext *C, wmGizmoGroup *
           /* Update the callback to apply gizmo changes based on the new context. */
           node_gizmos->apply_change =
               [C = C,
-               compute_context_builder,
+               compute_context_cache,
                compute_context = &compute_context,
                gizmo_node_tree = &gizmo_node.owner_tree(),
                gizmo_node = &gizmo_node,
                object_orig = &object_orig,
                nmd = &nmd_orig,
                eval_log = nmd_orig.runtime->eval_log](
-                  const StringRef socket_identifier,
+                  const UString socket_identifier,
                   const FunctionRef<void(bke::SocketValueVariant &)> modify_value) {
                 gizmo_node_tree->ensure_topology_cache();
-                const bNodeSocket &socket = gizmo_node->input_by_identifier(socket_identifier);
+                const bNodeSocket &socket = *gizmo_node->input_by_identifier(socket_identifier);
 
                 nodes::gizmos::apply_gizmo_change(*const_cast<bContext *>(C),
                                                   const_cast<Object &>(*object_orig),
@@ -1061,7 +1080,7 @@ static void WIDGETGROUP_geometry_nodes_refresh(const bContext *C, wmGizmoGroup *
                                                   modify_value);
 
                 Main *main = CTX_data_main(C);
-                ED_node_tree_propagate_change(const_cast<bContext *>(C), main, nullptr);
+                BKE_main_ensure_invariants(*main);
                 WM_main_add_notifier(NC_GEOM | ND_DATA, nullptr);
               };
         }
@@ -1098,7 +1117,7 @@ static void WIDGETGROUP_geometry_nodes_draw_prepare(const bContext * /*C*/,
 {
 }
 
-}  // namespace blender::ed::view3d::geometry_nodes_gizmos
+}  // namespace ed::view3d::geometry_nodes_gizmos
 
 void VIEW3D_GGT_geometry_nodes(wmGizmoGroupType *gzgt)
 {
@@ -1115,3 +1134,5 @@ void VIEW3D_GGT_geometry_nodes(wmGizmoGroupType *gzgt)
   gzgt->refresh = WIDGETGROUP_geometry_nodes_refresh;
   gzgt->draw_prepare = WIDGETGROUP_geometry_nodes_draw_prepare;
 }
+
+}  // namespace blender

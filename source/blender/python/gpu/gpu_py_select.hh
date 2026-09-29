@@ -8,4 +8,10 @@
 
 #pragma once
 
-PyObject *bpygpu_select_init();
+#include <Python.h>
+
+namespace blender {
+
+[[nodiscard]] PyObject *bpygpu_select_init();
+
+}  // namespace blender

@@ -2,24 +2,36 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup gpu
+ */
+
 #include "BKE_global.hh"
 
 #include "DNA_userdef_types.h"
 
+#include "BLI_math_base_c.hh"
+
 #include "mtl_context.hh"
 #include "mtl_debug.hh"
 #include "mtl_memory.hh"
+#include "mtl_storage_buffer.hh"
 
-using namespace blender;
 using namespace blender::gpu;
 
+/* Allows a scratch buffer to temporarily grow beyond its maximum, which allows submission
+ * of one-time-use data packets which are too large. */
+#define MTL_SCRATCH_BUFFER_ALLOW_TEMPORARY_EXPANSION
+
 /* Memory size in bytes macros, used as pool flushing frequency thresholds. */
-#define MEMORY_SIZE_2GB 2147483648LL
-#define MEMORY_SIZE_1GB 1073741824LL
-#define MEMORY_SIZE_512MB 536870912LL
-#define MEMORY_SIZE_256MB 268435456LL
+constexpr static size_t MEMORY_SIZE_256MB = 256LL * (1024LL * 1024LL);
+constexpr static size_t MEMORY_SIZE_512MB = 512LL * (1024LL * 1024LL);
+constexpr static size_t MEMORY_SIZE_1GB = 1LL * (1024LL * 1024LL * 1024LL);
+constexpr static size_t MEMORY_SIZE_2GB = 2LL * (1024LL * 1024LL * 1024LL);
 
 namespace blender::gpu {
+
+static CLG_LogRef LOG = {"gpu.metal"};
 
 /* -------------------------------------------------------------------- */
 /** \name Memory Management - MTLBufferPool and MTLSafeFreeList implementations
@@ -152,7 +164,7 @@ gpu::MTLBuffer *MTLBufferPool::allocate_aligned(uint64_t size,
       if (found_size >= aligned_alloc_size &&
           found_size <= (aligned_alloc_size * mtl_buffer_size_threshold_factor_))
       {
-        MTL_LOG_INFO(
+        MTL_LOG_DEBUG(
             "[MemoryAllocator] Suitable Buffer of size %lld found, for requested size: %lld",
             found_size,
             aligned_alloc_size);
@@ -164,7 +176,7 @@ gpu::MTLBuffer *MTLBufferPool::allocate_aligned(uint64_t size,
         pool->erase(result);
       }
       else {
-        MTL_LOG_INFO(
+        MTL_LOG_DEBUG(
             "[MemoryAllocator] Buffer of size %lld found, but was incompatible with requested "
             "size: %lld",
             found_size,
@@ -360,21 +372,22 @@ void MTLBufferPool::update_memory_pools()
   }
 
 #if MTL_DEBUG_MEMORY_STATISTICS == 1
-  printf("--- Allocation Stats ---\n");
-  printf("  Num buffers processed in pool (this frame): %u\n", num_buffers_added);
+  CLOG_DEBUG(&LOG, "--- Allocation Stats ---");
+  CLOG_DEBUG(&LOG, "  Num buffers processed in pool (this frame): %u", num_buffers_added);
 
   uint framealloc = (uint)per_frame_allocation_count_;
-  printf("  Allocations in frame: %u\n", framealloc);
-  printf("  Total Buffers allocated: %u\n", allocations_list_size_);
-  printf("  Total Memory allocated: %u MB\n", (uint)total_allocation_bytes_ / (1024 * 1024));
+  CLOG_DEBUG(&LOG, "  Allocations in frame: %u", framealloc);
+  CLOG_DEBUG(&LOG, "  Total Buffers allocated: %u", allocations_list_size_);
+  CLOG_DEBUG(
+      &LOG, "  Total Memory allocated: %u MB", (uint)total_allocation_bytes_ / (1024 * 1024));
 
   uint allocs = (uint)(allocations_in_pool_) / 1024 / 2024;
-  printf("  Free memory in pools: %u MB\n", allocs);
+  CLOG_DEBUG(&LOG, "  Free memory in pools: %u MB", allocs);
 
   uint buffs = (uint)buffers_in_pool_;
-  printf("  Buffers in pools: %u\n", buffs);
+  CLOG_DEBUG(&LOG, "  Buffers in pools: %u", buffs);
 
-  printf("  Pools %u:\n", (uint)buffer_pools_.size());
+  CLOG_DEBUG(&LOG, "  Pools %u:", (uint)buffer_pools_.size());
   auto key_iterator = buffer_pools_.keys().begin();
   auto value_iterator = buffer_pools_.values().begin();
   while (key_iterator != buffer_pools_.keys().end()) {
@@ -385,11 +398,12 @@ void MTLBufferPool::update_memory_pools()
       iters++;
     }
 
-    printf("    Buffers in pool (%u)(%llu): %u (%u MB)\n",
-           (uint)*key_iterator,
-           iters,
-           (uint)((*value_iterator)->size()),
-           (uint)mem_in_pool / 1024 / 1024);
+    CLOG_DEBUG(&LOG,
+               "    Buffers in pool (%u)(%llu): %u (%u MB)",
+               (uint)*key_iterator,
+               iters,
+               (uint)((*value_iterator)->size()),
+               (uint)mem_in_pool / 1024 / 1024);
     ++key_iterator;
     ++value_iterator;
   }
@@ -564,6 +578,7 @@ MTLSafeFreeList::MTLSafeFreeList()
   in_free_queue_ = false;
   current_list_index_ = 0;
   next_ = nullptr;
+  referenced_by_workload_ = false;
 }
 
 void MTLSafeFreeList::insert_buffer(gpu::MTLBuffer *buffer)
@@ -642,7 +657,6 @@ bool MTLSafeFreeList::should_flush()
 /** \name MTLBuffer wrapper class implementation.
  * \{ */
 
-/* Construct a gpu::MTLBuffer wrapper around a newly created metal::MTLBuffer. */
 MTLBuffer::MTLBuffer(id<MTLDevice> mtl_device,
                      uint64_t size,
                      MTLResourceOptions options,
@@ -897,10 +911,10 @@ void MTLScratchBufferManager::ensure_increment_scratch_buffer()
     active_scratch_buf = scratch_buffers_[current_scratch_buffer_];
     active_scratch_buf->reset();
     BLI_assert(&active_scratch_buf->own_context_ == &context_);
-    MTL_LOG_INFO("Scratch buffer %d reset - (ctx %p)(Frame index: %d)",
-                 current_scratch_buffer_,
-                 &context_,
-                 context_.get_current_frame_index());
+    MTL_LOG_DEBUG("Scratch buffer %d reset - (ctx %p)(Frame index: %d)",
+                  current_scratch_buffer_,
+                  &context_,
+                  context_.get_current_frame_index());
   }
 }
 
@@ -912,15 +926,29 @@ void MTLScratchBufferManager::flush_active_scratch_buffer()
   active_scratch_buf->flush();
 }
 
+void MTLScratchBufferManager::bind_as_ssbo(int slot)
+{
+  /* Fetch active scratch buffer and verify context. */
+  MTLCircularBuffer *active_scratch_buf = scratch_buffers_[current_scratch_buffer_];
+  BLI_assert(&active_scratch_buf->own_context_ == &context_);
+  active_scratch_buf->ssbo_source_->bind(slot);
+}
+
+void MTLScratchBufferManager::unbind_as_ssbo()
+{
+  /* Fetch active scratch buffer and verify context. */
+  MTLCircularBuffer *active_scratch_buf = scratch_buffers_[current_scratch_buffer_];
+  BLI_assert(&active_scratch_buf->own_context_ == &context_);
+  active_scratch_buf->ssbo_source_->unbind();
+}
+
 /* MTLCircularBuffer implementation. */
 MTLCircularBuffer::MTLCircularBuffer(MTLContext &ctx, uint64_t initial_size, bool allow_grow)
     : own_context_(ctx)
 {
   BLI_assert(this);
-  MTLResourceOptions options = ([own_context_.device hasUnifiedMemory]) ?
-                                   MTLResourceStorageModeShared :
-                                   MTLResourceStorageModeManaged;
-  cbuffer_ = new gpu::MTLBuffer(own_context_.device, initial_size, options, 256);
+  ssbo_source_ = new gpu::MTLStorageBuf(initial_size);
+  cbuffer_ = ssbo_source_->metal_buffer_;
   current_offset_ = 0;
   can_resize_ = allow_grow;
   cbuffer_->flag_in_use(true);
@@ -936,7 +964,7 @@ MTLCircularBuffer::MTLCircularBuffer(MTLContext &ctx, uint64_t initial_size, boo
 
 MTLCircularBuffer::~MTLCircularBuffer()
 {
-  delete cbuffer_;
+  delete ssbo_source_;
 }
 
 MTLTemporaryBuffer MTLCircularBuffer::allocate_range(uint64_t alloc_size)
@@ -970,11 +998,11 @@ MTLTemporaryBuffer MTLCircularBuffer::allocate_range_aligned(uint64_t alloc_size
       /* Resize to the maximum of basic resize heuristic OR the size of the current offset +
        * requested allocation -- we want the buffer to grow to a large enough size such that it
        * does not need to resize mid-frame. */
-      new_size = max_ulul(
-          min_ulul(MTLScratchBufferManager::mtl_scratch_buffer_max_size_, new_size * 1.2),
-          aligned_current_offset + aligned_alloc_size);
+      new_size = max_ulul(min_ulul(MTLScratchBufferManager::mtl_scratch_buffer_max_size_,
+                                   ceil_to_multiple_ul(new_size * 1.2f, 256)),
+                          aligned_current_offset + aligned_alloc_size);
 
-#if MTL_SCRATCH_BUFFER_ALLOW_TEMPORARY_EXPANSION == 1
+#ifdef MTL_SCRATCH_BUFFER_ALLOW_TEMPORARY_EXPANSION
       /* IF a requested allocation EXCEEDS the maximum supported size, temporarily allocate up to
        * this, but shrink down ASAP. */
       if (new_size > MTLScratchBufferManager::mtl_scratch_buffer_max_size_) {
@@ -984,11 +1012,12 @@ MTLTemporaryBuffer MTLCircularBuffer::allocate_range_aligned(uint64_t alloc_size
          * maximum */
         if (aligned_alloc_size > MTLScratchBufferManager::mtl_scratch_buffer_max_size_) {
           new_size = aligned_alloc_size;
-          MTL_LOG_INFO("Temporarily growing Scratch buffer to %d MB", (int)new_size / 1024 / 1024);
+          MTL_LOG_DEBUG("Temporarily growing Scratch buffer to %d MB",
+                        (int)new_size / 1024 / 1024);
         }
         else {
           new_size = MTLScratchBufferManager::mtl_scratch_buffer_max_size_;
-          MTL_LOG_INFO("Shrinking Scratch buffer back to %d MB", (int)new_size / 1024 / 1024);
+          MTL_LOG_DEBUG("Shrinking Scratch buffer back to %d MB", (int)new_size / 1024 / 1024);
         }
       }
       BLI_assert(aligned_alloc_size <= new_size);
@@ -1029,10 +1058,9 @@ MTLTemporaryBuffer MTLCircularBuffer::allocate_range_aligned(uint64_t alloc_size
 
     /* Discard old buffer and create a new one - Relying on Metal reference counting to track
      * in-use buffers */
-    MTLResourceOptions prev_options = cbuffer_->get_resource_options();
-    uint prev_alignment = cbuffer_->get_alignment();
-    delete cbuffer_;
-    cbuffer_ = new gpu::MTLBuffer(own_context_.device, new_size, prev_options, prev_alignment);
+    delete ssbo_source_;
+    ssbo_source_ = new gpu::MTLStorageBuf(new_size);
+    cbuffer_ = ssbo_source_->metal_buffer_;
     cbuffer_->flag_in_use(true);
     current_offset_ = 0;
     last_flush_base_offset_ = 0;
@@ -1041,7 +1069,7 @@ MTLTemporaryBuffer MTLCircularBuffer::allocate_range_aligned(uint64_t alloc_size
     if (G.debug & G_DEBUG_GPU) {
       cbuffer_->set_label(@"Circular Scratch Buffer");
     }
-    MTL_LOG_INFO("Resized Metal circular buffer to %llu bytes", new_size);
+    MTL_LOG_DEBUG("Resized Metal circular buffer to %llu bytes", new_size);
 
     /* Reset allocation Status. */
     aligned_current_offset = 0;

@@ -6,8 +6,6 @@
  * \ingroup edmeta
  */
 
-#include "DNA_scene_types.h"
-
 #include "RNA_access.hh"
 
 #include "WM_api.hh"
@@ -17,6 +15,8 @@
 #include "ED_screen.hh"
 
 #include "mball_intern.hh"
+
+namespace blender {
 
 void ED_operatortypes_metaball()
 {
@@ -50,3 +50,5 @@ void ED_keymap_metaball(wmKeyConfig *keyconf)
   wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Metaball", SPACE_EMPTY, RGN_TYPE_WINDOW);
   keymap->poll = ED_operator_editmball;
 }
+
+}  // namespace blender

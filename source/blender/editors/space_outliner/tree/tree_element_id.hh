@@ -12,10 +12,12 @@
 
 #include "tree_element.hh"
 
+namespace blender {
+
 struct AnimData;
 struct ID;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementID : public AbstractTreeElement {
  protected:
@@ -26,9 +28,9 @@ class TreeElementID : public AbstractTreeElement {
 
   static std::unique_ptr<TreeElementID> create_from_id(TreeElement &legacy_te, ID &id);
 
-  bool expand_poll(const SpaceOutliner &) const override;
+  bool expand_poll(const SpaceOutliner & /*soops*/) const override;
 
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
 
   ID &get_ID()
   {
@@ -40,4 +42,5 @@ class TreeElementID : public AbstractTreeElement {
   void expand_animation_data(AnimData *) const;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

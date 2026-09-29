@@ -47,9 +47,11 @@ find_path(_ffmpeg_INCLUDE_DIR
     ${_ffmpeg_SEARCH_DIRS}
   PATH_SUFFIXES
     include
+    # Used by `ffmpeg-devel` on Fedora (see #147952).
+    include/ffmpeg
 )
 
-set(_ffmpeg_LIBRARIES)
+set(_ffmpeg_LIBRARIES "")
 foreach(_component ${FFMPEG_FIND_COMPONENTS})
   string(TOUPPER ${_component} _upper_COMPONENT)
   find_library(FFMPEG_${_upper_COMPONENT}_LIBRARY
@@ -73,7 +75,7 @@ unset(_upper_COMPONENT)
 # all listed variables are TRUE
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(FFmpeg DEFAULT_MSG
-    _ffmpeg_LIBRARIES _ffmpeg_INCLUDE_DIR)
+  _ffmpeg_LIBRARIES _ffmpeg_INCLUDE_DIR)
 
 if(FFMPEG_FOUND)
   set(FFMPEG_LIBRARIES ${_ffmpeg_LIBRARIES})

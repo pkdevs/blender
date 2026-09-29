@@ -8,20 +8,28 @@
 
 #pragma once
 
-struct ListBase;
+#include "DNA_listBase.h"
+
+namespace blender {
+
+struct wmOperatorType;
 
 /* size of string buffers used for animation channel displayed names */
 #define ANIM_CHAN_NAME_SIZE 256
 
-/* KeyingSets/Keyframing Interface ------------- */
-
-/** List of builtin KeyingSets (defined in `keyingsets.cc`). */
-extern ListBase builtin_keyingsets;
-
-/* Operator Define Prototypes ------------------- */
+struct KeyingSet;
 
 /* -------------------------------------------------------------------- */
-/** \name Main Keyframe Management operators
+/** \name KeyingSets/Keyframing Interface
+ * \{ */
+
+/** List of builtin KeyingSets (defined in `blender/animrig/keyingsets.cc`). */
+extern ListBaseT<KeyingSet> builtin_keyingsets;
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Main Keyframe Management Operators
  *
  * These handle keyframes management from various spaces.
  * They only make use of Keying Sets.
@@ -35,7 +43,7 @@ void ANIM_OT_keyframe_delete_by_name(wmOperatorType *ot);
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Main Keyframe Management operators
+/** \name Keyframe Management Operators (Per-Space Menus)
  *
  * These handle keyframes management from various spaces.
  * They will handle the menus required for each space.
@@ -44,12 +52,14 @@ void ANIM_OT_keyframe_delete_by_name(wmOperatorType *ot);
 void ANIM_OT_keyframe_insert_menu(wmOperatorType *ot);
 
 void ANIM_OT_keyframe_delete_v3d(wmOperatorType *ot);
+void ANIM_OT_keyframe_delete_vse(wmOperatorType *ot);
 void ANIM_OT_keyframe_clear_v3d(wmOperatorType *ot);
+void ANIM_OT_keyframe_clear_vse(wmOperatorType *ot);
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Keyframe management operators for UI buttons (RMB menu)
+/** \name Keyframe Management Operators for UI Buttons (RMB Menu)
  * \{ */
 
 void ANIM_OT_keyframe_insert_button(wmOperatorType *ot);
@@ -59,7 +69,7 @@ void ANIM_OT_keyframe_clear_button(wmOperatorType *ot);
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name KeyingSet management operators for UI buttons (RMB menu)
+/** \name KeyingSet Management Operators for UI Buttons (RMB Menu)
  * \{ */
 
 void ANIM_OT_keyingset_button_add(wmOperatorType *ot);
@@ -68,7 +78,7 @@ void ANIM_OT_keyingset_button_remove(wmOperatorType *ot);
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name KeyingSet management operators for RNA collections/UI buttons
+/** \name KeyingSet Management Operators for RNA Collections/UI Buttons
  * \{ */
 
 void ANIM_OT_keying_set_add(wmOperatorType *ot);
@@ -79,7 +89,7 @@ void ANIM_OT_keying_set_path_remove(wmOperatorType *ot);
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name KeyingSet general operators
+/** \name KeyingSet General Operators
  * \{ */
 
 void ANIM_OT_keying_set_active_set(wmOperatorType *ot);
@@ -87,7 +97,7 @@ void ANIM_OT_keying_set_active_set(wmOperatorType *ot);
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Driver management operators for UI buttons (RMB menu)
+/** \name Driver Management Operators for UI Buttons (RMB Menu)
  * \{ */
 
 void ANIM_OT_driver_button_add(wmOperatorType *ot);
@@ -97,3 +107,29 @@ void ANIM_OT_copy_driver_button(wmOperatorType *ot);
 void ANIM_OT_paste_driver_button(wmOperatorType *ot);
 
 /** \} */
+
+namespace ed::animrig {
+
+/* -------------------------------------------------------------------- */
+/** \name Pose Asset Operators
+ * \{ */
+
+void POSELIB_OT_create_pose_asset(wmOperatorType *ot);
+void POSELIB_OT_asset_modify(wmOperatorType *ot);
+void POSELIB_OT_asset_delete(wmOperatorType *ot);
+void POSELIB_OT_screenshot_preview(wmOperatorType *ot);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name World Space Copy Paste
+ * \{ */
+
+void ANIM_OT_world_space_copy(wmOperatorType *ot);
+void ANIM_OT_world_space_paste(wmOperatorType *ot);
+
+/** \} */
+
+}  // namespace ed::animrig
+
+}  // namespace blender

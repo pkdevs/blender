@@ -47,7 +47,7 @@ def kmi_args_as_data(kmi):
     if kmi.any:
         s.append("\"any\": True")
     else:
-        for attr in ("shift", "ctrl", "alt", "oskey"):
+        for attr in ("shift", "ctrl", "alt", "oskey", "hyper"):
             if mod := getattr(kmi, attr):
                 s.append(f"\"{attr:s}\": " + ("-1" if mod == -1 else "True"))
     if (mod := kmi.key_modifier) and (mod != 'NONE'):
@@ -75,7 +75,7 @@ def _kmi_properties_to_lines_recursive(level, properties, lines):
             return repr_f32(value)
         elif getattr(value, '__len__', False):
             return repr(tuple(value))
-        raise Exception(f"Export key configuration: can't write {value!r}")
+        raise Exception(f"Export key configuration: cannot write {value!r}")
 
     for pname in properties.bl_rna.properties.keys():
         if pname != "rna_type":
@@ -242,7 +242,7 @@ def _init_properties_from_data(base_props, base_value):
                 setattr(base_props, attr, value)
             except AttributeError:
                 print(f"Warning: property '{attr}' not found in item '{base_props.__class__.__name__}'")
-            except BaseException as ex:
+            except Exception as ex:
                 print(f"Warning: {ex!r}")
 
 

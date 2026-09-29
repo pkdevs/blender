@@ -8,9 +8,9 @@
  * BM remove functions.
  */
 
-#include "BLI_utildefines.h"
-
 #include "bmesh.hh"
+
+namespace blender {
 
 /* BMO functions */
 
@@ -83,7 +83,10 @@ void BMO_mesh_delete_oflag_tagged(BMesh *bm, const short oflag, const char htype
   }
 }
 
-void BMO_mesh_delete_oflag_context(BMesh *bm, const short oflag, const int type)
+void BMO_mesh_delete_oflag_context(BMesh *bm,
+                                   const short oflag,
+                                   const int type,
+                                   FunctionRef<void()> prepare_fn)
 {
   BMEdge *e;
 
@@ -92,8 +95,10 @@ void BMO_mesh_delete_oflag_context(BMesh *bm, const short oflag, const int type)
 
   switch (type) {
     case DEL_VERTS: {
+      if (prepare_fn) {
+        prepare_fn();
+      }
       bmo_remove_tagged_verts(bm, oflag);
-
       break;
     }
     case DEL_EDGES: {
@@ -104,24 +109,32 @@ void BMO_mesh_delete_oflag_context(BMesh *bm, const short oflag, const int type)
           BMO_vert_flag_enable(bm, e->v2, oflag);
         }
       }
+      if (prepare_fn) {
+        prepare_fn();
+      }
       bmo_remove_tagged_edges(bm, oflag);
       bmo_remove_tagged_verts_loose(bm, oflag);
-
       break;
     }
     case DEL_EDGESFACES: {
+      if (prepare_fn) {
+        prepare_fn();
+      }
       bmo_remove_tagged_edges(bm, oflag);
-
       break;
     }
     case DEL_ONLYFACES: {
+      if (prepare_fn) {
+        prepare_fn();
+      }
       bmo_remove_tagged_faces(bm, oflag);
-
       break;
     }
     case DEL_ONLYTAGGED: {
+      if (prepare_fn) {
+        prepare_fn();
+      }
       BMO_mesh_delete_oflag_tagged(bm, oflag, BM_ALL_NOLOOP);
-
       break;
     }
     case DEL_FACES:
@@ -167,6 +180,9 @@ void BMO_mesh_delete_oflag_context(BMesh *bm, const short oflag, const int type)
           BMO_vert_flag_disable(bm, e->v1, oflag);
           BMO_vert_flag_disable(bm, e->v2, oflag);
         }
+      }
+      if (prepare_fn) {
+        prepare_fn();
       }
 
       /* now delete marked face */
@@ -345,3 +361,5 @@ void BM_mesh_delete_hflag_context(BMesh *bm, const char hflag, const int type)
 }
 
 /** \} */
+
+}  // namespace blender

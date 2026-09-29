@@ -10,10 +10,6 @@
 
 #include "../BPy_UnaryFunction1DVoid.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject ChainingTimeStampF1D_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject ChainingTimeStampF1D_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&ChainingTimeStampF1D_Type))
 
 /*---------------------------Python BPy_ChainingTimeStampF1D structure definition----------*/
-typedef struct {
+struct BPy_ChainingTimeStampF1D {
   BPy_UnaryFunction1DVoid py_uf1D_void;
-} BPy_ChainingTimeStampF1D;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

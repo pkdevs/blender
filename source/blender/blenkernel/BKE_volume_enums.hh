@@ -8,6 +8,10 @@
  * \ingroup bli
  */
 
+#include <cstdint>
+
+namespace blender {
+
 enum VolumeGridType : int8_t {
   VOLUME_GRID_UNKNOWN = 0,
   VOLUME_GRID_BOOLEAN,
@@ -21,3 +25,5 @@ enum VolumeGridType : int8_t {
   VOLUME_GRID_VECTOR_INT,
   VOLUME_GRID_POINTS,
 };
+
+}  // namespace blender

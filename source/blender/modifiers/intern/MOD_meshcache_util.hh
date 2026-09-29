@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <cstdio>
+
+namespace blender {
+
 /* `MOD_meshcache_mdd.cc` */
 
 bool MOD_meshcache_read_mdd_index(FILE *fp,
@@ -60,3 +64,5 @@ void MOD_meshcache_calc_range(
     float frame, char interp, int frame_tot, int r_index_range[2], float *r_factor);
 
 #define FRAME_SNAP_EPS 0.0001f
+
+}  // namespace blender

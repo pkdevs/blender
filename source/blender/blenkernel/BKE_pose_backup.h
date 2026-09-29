@@ -14,13 +14,14 @@
 
 #include <stdbool.h>
 
-#include "BLI_listbase.h"
+#include "BKE_action.hh"
+#include "BLI_listbase.hh"
+#include "BLI_span.hh"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 struct PoseBackup;
+struct Object;
 
 /**
  * Create a backup of those bones that are selected AND animated in the given action.
@@ -28,7 +29,7 @@ struct PoseBackup;
  * The backup is owned by the caller, and should be freed with `BKE_pose_backup_free()`.
  */
 struct PoseBackup *BKE_pose_backup_create_selected_bones(
-    const struct Object *ob, const struct bAction *action) ATTR_WARN_UNUSED_RESULT;
+    Span<Object *> objects, const struct bAction *action) ATTR_WARN_UNUSED_RESULT;
 
 /**
  * Create a backup of those bones that are animated in the given action.
@@ -36,7 +37,8 @@ struct PoseBackup *BKE_pose_backup_create_selected_bones(
  * The backup is owned by the caller, and should be freed with `BKE_pose_backup_free()`.
  */
 struct PoseBackup *BKE_pose_backup_create_all_bones(
-    const struct Object *ob, const struct bAction *action) ATTR_WARN_UNUSED_RESULT;
+    Span<Object *> objects, const struct bAction *action) ATTR_WARN_UNUSED_RESULT;
+
 bool BKE_pose_backup_is_selection_relevant(const struct PoseBackup *pose_backup);
 void BKE_pose_backup_restore(const struct PoseBackup *pbd);
 void BKE_pose_backup_free(struct PoseBackup *pbd);
@@ -63,6 +65,4 @@ bool BKE_pose_backup_restore_on_object(struct Object *ob);
  */
 void BKE_pose_backup_clear(struct Object *ob);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

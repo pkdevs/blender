@@ -7,7 +7,9 @@
 #include "BLI_cpp_type.hh"
 #include "BLI_cpp_type_make.hh"
 
-namespace blender::tests {
+namespace blender {
+
+namespace tests {
 
 static const int default_constructed_value = 1;
 static const int copy_constructed_value = 2;
@@ -76,43 +78,58 @@ struct TestType {
   }
 };
 
-}  // namespace blender::tests
+}  // namespace tests
 
-BLI_CPP_TYPE_MAKE(blender::tests::TestType, CPPTypeFlags::BasicType)
-
-namespace blender::tests {
-
-static const CPPType &CPPType_TestType = CPPType::get<TestType>();
-
-TEST(cpp_type, Size)
+template<> void hash_unique_default(const tests::TestType &value, UniqueHashBytes &hash)
 {
-  EXPECT_EQ(CPPType_TestType.size(), sizeof(TestType));
+  const int int_value = value.value;
+  hash.add(int_value);
 }
 
-TEST(cpp_type, Alignment)
+namespace tests {
+
+class CPPTypeTest : public testing::Test {
+ public:
+  const CPPType &CPPType_TestType;
+
+  CPPTypeTest() : CPPType_TestType(CPPType::get<TestType>()) {}
+
+  static void SetUpTestSuite()
+  {
+    register_cpp_types();
+    BLI_CPP_TYPE_REGISTER(tests::TestType, CPPTypeFlags::BasicType);
+  }
+};
+
+TEST_F(CPPTypeTest, Size)
 {
-  EXPECT_EQ(CPPType_TestType.alignment(), alignof(TestType));
+  EXPECT_EQ(CPPType_TestType.size, sizeof(TestType));
 }
 
-TEST(cpp_type, Is)
+TEST_F(CPPTypeTest, Alignment)
+{
+  EXPECT_EQ(CPPType_TestType.alignment, alignof(TestType));
+}
+
+TEST_F(CPPTypeTest, Is)
 {
   EXPECT_TRUE(CPPType_TestType.is<TestType>());
   EXPECT_FALSE(CPPType_TestType.is<int>());
 }
 
-TEST(cpp_type, DefaultConstruction)
+TEST_F(CPPTypeTest, DefaultConstruction)
 {
   int buffer[10] = {0};
-  CPPType_TestType.default_construct((void *)buffer);
+  CPPType_TestType.default_construct(static_cast<void *>(buffer));
   EXPECT_EQ(buffer[0], default_constructed_value);
   EXPECT_EQ(buffer[1], 0);
-  CPPType_TestType.default_construct_n((void *)buffer, 3);
+  CPPType_TestType.default_construct_n(static_cast<void *>(buffer), 3);
   EXPECT_EQ(buffer[0], default_constructed_value);
   EXPECT_EQ(buffer[1], default_constructed_value);
   EXPECT_EQ(buffer[2], default_constructed_value);
   EXPECT_EQ(buffer[3], 0);
   IndexMaskMemory memory;
-  CPPType_TestType.default_construct_indices((void *)buffer,
+  CPPType_TestType.default_construct_indices(static_cast<void *>(buffer),
                                              IndexMask::from_indices<int>({2, 5, 7}, memory));
   EXPECT_EQ(buffer[2], default_constructed_value);
   EXPECT_EQ(buffer[4], 0);
@@ -122,26 +139,26 @@ TEST(cpp_type, DefaultConstruction)
   EXPECT_EQ(buffer[8], 0);
 }
 
-TEST(cpp_type, DefaultConstructTrivial)
+TEST_F(CPPTypeTest, DefaultConstructTrivial)
 {
   int value = 5;
   CPPType::get<int>().default_construct(&value);
   EXPECT_EQ(value, 5);
 }
 
-TEST(cpp_type, ValueInitialize)
+TEST_F(CPPTypeTest, ValueInitialize)
 {
   int buffer[10] = {0};
-  CPPType_TestType.value_initialize((void *)buffer);
+  CPPType_TestType.value_initialize(static_cast<void *>(buffer));
   EXPECT_EQ(buffer[0], default_constructed_value);
   EXPECT_EQ(buffer[1], 0);
-  CPPType_TestType.value_initialize_n((void *)buffer, 3);
+  CPPType_TestType.value_initialize_n(static_cast<void *>(buffer), 3);
   EXPECT_EQ(buffer[0], default_constructed_value);
   EXPECT_EQ(buffer[1], default_constructed_value);
   EXPECT_EQ(buffer[2], default_constructed_value);
   EXPECT_EQ(buffer[3], 0);
   IndexMaskMemory memory;
-  CPPType_TestType.value_initialize_indices((void *)buffer,
+  CPPType_TestType.value_initialize_indices(static_cast<void *>(buffer),
                                             IndexMask::from_indices<int>({2, 5, 7}, memory));
   EXPECT_EQ(buffer[2], default_constructed_value);
   EXPECT_EQ(buffer[4], 0);
@@ -151,26 +168,26 @@ TEST(cpp_type, ValueInitialize)
   EXPECT_EQ(buffer[8], 0);
 }
 
-TEST(cpp_type, ValueInitializeTrivial)
+TEST_F(CPPTypeTest, ValueInitializeTrivial)
 {
   int value = 5;
   CPPType::get<int>().value_initialize(&value);
   EXPECT_EQ(value, 0);
 }
 
-TEST(cpp_type, Destruct)
+TEST_F(CPPTypeTest, Destruct)
 {
   int buffer[10] = {0};
-  CPPType_TestType.destruct((void *)buffer);
+  CPPType_TestType.destruct(static_cast<void *>(buffer));
   EXPECT_EQ(buffer[0], destructed_value);
   EXPECT_EQ(buffer[1], 0);
-  CPPType_TestType.destruct_n((void *)buffer, 3);
+  CPPType_TestType.destruct_n(static_cast<void *>(buffer), 3);
   EXPECT_EQ(buffer[0], destructed_value);
   EXPECT_EQ(buffer[1], destructed_value);
   EXPECT_EQ(buffer[2], destructed_value);
   EXPECT_EQ(buffer[3], 0);
   IndexMaskMemory memory;
-  CPPType_TestType.destruct_indices((void *)buffer,
+  CPPType_TestType.destruct_indices(static_cast<void *>(buffer),
                                     IndexMask::from_indices<int>({2, 5, 7}, memory));
   EXPECT_EQ(buffer[2], destructed_value);
   EXPECT_EQ(buffer[4], 0);
@@ -180,14 +197,14 @@ TEST(cpp_type, Destruct)
   EXPECT_EQ(buffer[8], 0);
 }
 
-TEST(cpp_type, CopyToUninitialized)
+TEST_F(CPPTypeTest, CopyToUninitialized)
 {
   int buffer1[10] = {0};
   int buffer2[10] = {0};
-  CPPType_TestType.copy_construct((void *)buffer1, (void *)buffer2);
+  CPPType_TestType.copy_construct(static_cast<void *>(buffer1), static_cast<void *>(buffer2));
   EXPECT_EQ(buffer1[0], copy_constructed_from_value);
   EXPECT_EQ(buffer2[0], copy_constructed_value);
-  CPPType_TestType.copy_construct_n((void *)buffer1, (void *)buffer2, 3);
+  CPPType_TestType.copy_construct_n(static_cast<void *>(buffer1), static_cast<void *>(buffer2), 3);
   EXPECT_EQ(buffer1[0], copy_constructed_from_value);
   EXPECT_EQ(buffer2[0], copy_constructed_value);
   EXPECT_EQ(buffer1[1], copy_constructed_from_value);
@@ -197,8 +214,9 @@ TEST(cpp_type, CopyToUninitialized)
   EXPECT_EQ(buffer1[3], 0);
   EXPECT_EQ(buffer2[3], 0);
   IndexMaskMemory memory;
-  CPPType_TestType.copy_construct_indices(
-      (void *)buffer1, (void *)buffer2, IndexMask::from_indices<int>({2, 5, 7}, memory));
+  CPPType_TestType.copy_construct_indices(static_cast<void *>(buffer1),
+                                          static_cast<void *>(buffer2),
+                                          IndexMask::from_indices<int>({2, 5, 7}, memory));
   EXPECT_EQ(buffer1[2], copy_constructed_from_value);
   EXPECT_EQ(buffer2[2], copy_constructed_value);
   EXPECT_EQ(buffer1[4], 0);
@@ -213,14 +231,14 @@ TEST(cpp_type, CopyToUninitialized)
   EXPECT_EQ(buffer2[8], 0);
 }
 
-TEST(cpp_type, CopyToInitialized)
+TEST_F(CPPTypeTest, CopyToInitialized)
 {
   int buffer1[10] = {0};
   int buffer2[10] = {0};
-  CPPType_TestType.copy_assign((void *)buffer1, (void *)buffer2);
+  CPPType_TestType.copy_assign(static_cast<void *>(buffer1), static_cast<void *>(buffer2));
   EXPECT_EQ(buffer1[0], copy_assigned_from_value);
   EXPECT_EQ(buffer2[0], copy_assigned_value);
-  CPPType_TestType.copy_assign_n((void *)buffer1, (void *)buffer2, 3);
+  CPPType_TestType.copy_assign_n(static_cast<void *>(buffer1), static_cast<void *>(buffer2), 3);
   EXPECT_EQ(buffer1[0], copy_assigned_from_value);
   EXPECT_EQ(buffer2[0], copy_assigned_value);
   EXPECT_EQ(buffer1[1], copy_assigned_from_value);
@@ -230,8 +248,9 @@ TEST(cpp_type, CopyToInitialized)
   EXPECT_EQ(buffer1[3], 0);
   EXPECT_EQ(buffer2[3], 0);
   IndexMaskMemory memory;
-  CPPType_TestType.copy_assign_indices(
-      (void *)buffer1, (void *)buffer2, IndexMask::from_indices<int>({2, 5, 7}, memory));
+  CPPType_TestType.copy_assign_indices(static_cast<void *>(buffer1),
+                                       static_cast<void *>(buffer2),
+                                       IndexMask::from_indices<int>({2, 5, 7}, memory));
   EXPECT_EQ(buffer1[2], copy_assigned_from_value);
   EXPECT_EQ(buffer2[2], copy_assigned_value);
   EXPECT_EQ(buffer1[4], 0);
@@ -246,14 +265,15 @@ TEST(cpp_type, CopyToInitialized)
   EXPECT_EQ(buffer2[8], 0);
 }
 
-TEST(cpp_type, RelocateToUninitialized)
+TEST_F(CPPTypeTest, RelocateToUninitialized)
 {
   int buffer1[10] = {0};
   int buffer2[10] = {0};
-  CPPType_TestType.relocate_construct((void *)buffer1, (void *)buffer2);
+  CPPType_TestType.relocate_construct(static_cast<void *>(buffer1), static_cast<void *>(buffer2));
   EXPECT_EQ(buffer1[0], destructed_value);
   EXPECT_EQ(buffer2[0], move_constructed_value);
-  CPPType_TestType.relocate_construct_n((void *)buffer1, (void *)buffer2, 3);
+  CPPType_TestType.relocate_construct_n(
+      static_cast<void *>(buffer1), static_cast<void *>(buffer2), 3);
   EXPECT_EQ(buffer1[0], destructed_value);
   EXPECT_EQ(buffer2[0], move_constructed_value);
   EXPECT_EQ(buffer1[1], destructed_value);
@@ -263,8 +283,9 @@ TEST(cpp_type, RelocateToUninitialized)
   EXPECT_EQ(buffer1[3], 0);
   EXPECT_EQ(buffer2[3], 0);
   IndexMaskMemory memory;
-  CPPType_TestType.relocate_construct_indices(
-      (void *)buffer1, (void *)buffer2, IndexMask::from_indices<int>({2, 5, 7}, memory));
+  CPPType_TestType.relocate_construct_indices(static_cast<void *>(buffer1),
+                                              static_cast<void *>(buffer2),
+                                              IndexMask::from_indices<int>({2, 5, 7}, memory));
   EXPECT_EQ(buffer1[2], destructed_value);
   EXPECT_EQ(buffer2[2], move_constructed_value);
   EXPECT_EQ(buffer1[4], 0);
@@ -279,14 +300,15 @@ TEST(cpp_type, RelocateToUninitialized)
   EXPECT_EQ(buffer2[8], 0);
 }
 
-TEST(cpp_type, RelocateToInitialized)
+TEST_F(CPPTypeTest, RelocateToInitialized)
 {
   int buffer1[10] = {0};
   int buffer2[10] = {0};
-  CPPType_TestType.relocate_assign((void *)buffer1, (void *)buffer2);
+  CPPType_TestType.relocate_assign(static_cast<void *>(buffer1), static_cast<void *>(buffer2));
   EXPECT_EQ(buffer1[0], destructed_value);
   EXPECT_EQ(buffer2[0], move_assigned_value);
-  CPPType_TestType.relocate_assign_n((void *)buffer1, (void *)buffer2, 3);
+  CPPType_TestType.relocate_assign_n(
+      static_cast<void *>(buffer1), static_cast<void *>(buffer2), 3);
   EXPECT_EQ(buffer1[0], destructed_value);
   EXPECT_EQ(buffer2[0], move_assigned_value);
   EXPECT_EQ(buffer1[1], destructed_value);
@@ -296,8 +318,9 @@ TEST(cpp_type, RelocateToInitialized)
   EXPECT_EQ(buffer1[3], 0);
   EXPECT_EQ(buffer2[3], 0);
   IndexMaskMemory memory;
-  CPPType_TestType.relocate_assign_indices(
-      (void *)buffer1, (void *)buffer2, IndexMask::from_indices<int>({2, 5, 7}, memory));
+  CPPType_TestType.relocate_assign_indices(static_cast<void *>(buffer1),
+                                           static_cast<void *>(buffer2),
+                                           IndexMask::from_indices<int>({2, 5, 7}, memory));
   EXPECT_EQ(buffer1[2], destructed_value);
   EXPECT_EQ(buffer2[2], move_assigned_value);
   EXPECT_EQ(buffer1[4], 0);
@@ -312,11 +335,11 @@ TEST(cpp_type, RelocateToInitialized)
   EXPECT_EQ(buffer2[8], 0);
 }
 
-TEST(cpp_type, FillInitialized)
+TEST_F(CPPTypeTest, FillInitialized)
 {
   int buffer1 = 0;
   int buffer2[10] = {0};
-  CPPType_TestType.fill_assign_n((void *)&buffer1, (void *)buffer2, 3);
+  CPPType_TestType.fill_assign_n(static_cast<void *>(&buffer1), static_cast<void *>(buffer2), 3);
   EXPECT_EQ(buffer1, copy_assigned_from_value);
   EXPECT_EQ(buffer2[0], copy_assigned_value);
   EXPECT_EQ(buffer2[1], copy_assigned_value);
@@ -325,8 +348,9 @@ TEST(cpp_type, FillInitialized)
 
   buffer1 = 0;
   IndexMaskMemory memory;
-  CPPType_TestType.fill_assign_indices(
-      (void *)&buffer1, (void *)buffer2, IndexMask::from_indices<int>({1, 6, 8}, memory));
+  CPPType_TestType.fill_assign_indices(static_cast<void *>(&buffer1),
+                                       static_cast<void *>(buffer2),
+                                       IndexMask::from_indices<int>({1, 6, 8}, memory));
   EXPECT_EQ(buffer1, copy_assigned_from_value);
   EXPECT_EQ(buffer2[0], copy_assigned_value);
   EXPECT_EQ(buffer2[1], copy_assigned_value);
@@ -340,11 +364,12 @@ TEST(cpp_type, FillInitialized)
   EXPECT_EQ(buffer2[9], 0);
 }
 
-TEST(cpp_type, FillUninitialized)
+TEST_F(CPPTypeTest, FillUninitialized)
 {
   int buffer1 = 0;
   int buffer2[10] = {0};
-  CPPType_TestType.fill_construct_n((void *)&buffer1, (void *)buffer2, 3);
+  CPPType_TestType.fill_construct_n(
+      static_cast<void *>(&buffer1), static_cast<void *>(buffer2), 3);
   EXPECT_EQ(buffer1, copy_constructed_from_value);
   EXPECT_EQ(buffer2[0], copy_constructed_value);
   EXPECT_EQ(buffer2[1], copy_constructed_value);
@@ -353,8 +378,9 @@ TEST(cpp_type, FillUninitialized)
 
   buffer1 = 0;
   IndexMaskMemory memory;
-  CPPType_TestType.fill_construct_indices(
-      (void *)&buffer1, (void *)buffer2, IndexMask::from_indices<int>({1, 6, 8}, memory));
+  CPPType_TestType.fill_construct_indices(static_cast<void *>(&buffer1),
+                                          static_cast<void *>(buffer2),
+                                          IndexMask::from_indices<int>({1, 6, 8}, memory));
   EXPECT_EQ(buffer1, copy_constructed_from_value);
   EXPECT_EQ(buffer2[0], copy_constructed_value);
   EXPECT_EQ(buffer2[1], copy_constructed_value);
@@ -368,40 +394,29 @@ TEST(cpp_type, FillUninitialized)
   EXPECT_EQ(buffer2[9], 0);
 }
 
-TEST(cpp_type, DebugPrint)
+TEST_F(CPPTypeTest, DebugPrint)
 {
   int value = 42;
   std::stringstream ss;
-  CPPType::get<int32_t>().print((void *)&value, ss);
+  CPPType::get<int32_t>().print(static_cast<void *>(&value), ss);
   std::string text = ss.str();
   EXPECT_EQ(text, "42");
 }
 
-TEST(cpp_type, ToStaticType)
+TEST_F(CPPTypeTest, ToStaticType)
 {
   Vector<const CPPType *> types;
-  bool found_unsupported_type = false;
-  auto fn = [&](auto type_tag) {
-    using T = typename decltype(type_tag)::type;
-    if constexpr (!std::is_same_v<T, void>) {
-      types.append(&CPPType::get<T>());
-    }
-    else {
-      found_unsupported_type = true;
-    }
-  };
-  CPPType::get<std::string>().to_static_type_tag<int, float, std::string>(fn);
-  CPPType::get<float>().to_static_type_tag<int, float, std::string>(fn);
-  EXPECT_FALSE(found_unsupported_type);
-  CPPType::get<int64_t>().to_static_type_tag<int, float, std::string>(fn);
-  EXPECT_TRUE(found_unsupported_type);
+  auto fn = [&]<typename T>() { types.append(&CPPType::get<T>()); };
+  EXPECT_TRUE((CPPType::get<std::string>().to_static_type_try<int, float, std::string>(fn)));
+  EXPECT_TRUE((CPPType::get<float>().to_static_type_try<int, float, std::string>(fn)));
+  EXPECT_FALSE((CPPType::get<int64_t>().to_static_type_try<int, float, std::string>(fn)));
 
   EXPECT_EQ(types.size(), 2);
   EXPECT_EQ(types[0], &CPPType::get<std::string>());
   EXPECT_EQ(types[1], &CPPType::get<float>());
 }
 
-TEST(cpp_type, CopyAssignCompressed)
+TEST_F(CPPTypeTest, CopyAssignCompressed)
 {
   std::array<std::string, 5> array = {"a", "b", "c", "d", "e"};
   std::array<std::string, 3> array_compressed;
@@ -413,4 +428,5 @@ TEST(cpp_type, CopyAssignCompressed)
   EXPECT_EQ(array_compressed[2], "d");
 }
 
-}  // namespace blender::tests
+}  // namespace tests
+}  // namespace blender

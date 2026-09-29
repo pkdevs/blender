@@ -6,7 +6,6 @@
  * \ingroup spoutliner
  */
 
-#include "DNA_listBase.h"
 #include "DNA_outliner_types.h"
 #include "DNA_scene_types.h"
 
@@ -25,9 +24,15 @@ TreeElementCollectionBase::TreeElementCollectionBase(TreeElement &legacy_te, Sce
   legacy_te.name = IFACE_("Scene Collection");
 }
 
+ID *TreeElementCollectionBase::owner_id(Scene &scene)
+{
+  return &scene.id;
+}
+
 void TreeElementCollectionBase::expand(SpaceOutliner &space_outliner) const
 {
-  outliner_add_collection_recursive(&space_outliner, scene_.master_collection, &legacy_te_);
+  outliner_add_collection_recursive(
+      *display_, &space_outliner, scene_.master_collection, &legacy_te_);
 }
 
 }  // namespace blender::ed::outliner

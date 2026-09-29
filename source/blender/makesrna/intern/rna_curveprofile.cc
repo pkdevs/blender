@@ -6,7 +6,6 @@
  * \ingroup RNA
  */
 
-#include <cstdio>
 #include <cstdlib>
 
 #include "DNA_curve_types.h"
@@ -26,6 +25,8 @@
 
 #  include "BKE_curveprofile.h"
 
+namespace blender {
+
 /**
  * Set both handle types for all selected points in the profile-- faster than changing types
  * for many points individually. Also set both handles for the points.
@@ -44,7 +45,7 @@ static void rna_CurveProfilePoint_handle_type_set(PointerRNA *ptr, int value)
 
 static void rna_CurveProfile_clip_set(PointerRNA *ptr, bool value)
 {
-  CurveProfile *profile = (CurveProfile *)ptr->data;
+  CurveProfile *profile = static_cast<CurveProfile *>(ptr->data);
 
   if (value) {
     profile->flag |= PROF_USE_CLIP;
@@ -58,7 +59,7 @@ static void rna_CurveProfile_clip_set(PointerRNA *ptr, bool value)
 
 static void rna_CurveProfile_sample_straight_set(PointerRNA *ptr, bool value)
 {
-  CurveProfile *profile = (CurveProfile *)ptr->data;
+  CurveProfile *profile = static_cast<CurveProfile *>(ptr->data);
 
   if (value) {
     profile->flag |= PROF_SAMPLE_STRAIGHT_EDGES;
@@ -72,7 +73,7 @@ static void rna_CurveProfile_sample_straight_set(PointerRNA *ptr, bool value)
 
 static void rna_CurveProfile_sample_even_set(PointerRNA *ptr, bool value)
 {
-  CurveProfile *profile = (CurveProfile *)ptr->data;
+  CurveProfile *profile = static_cast<CurveProfile *>(ptr->data);
 
   if (value) {
     profile->flag |= PROF_SAMPLE_EVEN_LENGTHS;
@@ -94,7 +95,7 @@ static void rna_CurveProfile_remove_point(CurveProfile *profile,
     return;
   }
 
-  RNA_POINTER_INVALIDATE(point_ptr);
+  point_ptr->invalidate();
 }
 
 static void rna_CurveProfile_evaluate(CurveProfile *profile,
@@ -118,7 +119,11 @@ static void rna_CurveProfile_update(CurveProfile *profile)
   BKE_curveprofile_update(profile, PROF_UPDATE_REMOVE_DOUBLES | PROF_UPDATE_CLIP);
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static const EnumPropertyItem prop_handle_type_items[] = {
     {HD_AUTO, "AUTO", ICON_HANDLE_AUTO, "Auto Handle", ""},
@@ -304,5 +309,7 @@ void RNA_def_profile(BlenderRNA *brna)
   rna_def_curveprofilepoint(brna);
   rna_def_curveprofile(brna);
 }
+
+}  // namespace blender
 
 #endif

@@ -9,7 +9,7 @@
 if(NOT DEFINED HARVEST_TARGET)
   set(HARVEST_TARGET ${CMAKE_CURRENT_SOURCE_DIR}/Harvest)
 endif()
-message("HARVEST_TARGET = ${HARVEST_TARGET}")
+message(STATUS "HARVEST_TARGET = ${HARVEST_TARGET}")
 
 if(WIN32)
 
@@ -73,7 +73,7 @@ else()
   #
   # Also removes versioned symlinks, which give errors with macOS notarization.
   if(APPLE)
-    set(set_rpath_cmd python3 ${CMAKE_CURRENT_SOURCE_DIR}/darwin/set_rpath.py @loader_path)
+    set(set_rpath_cmd python3 ${CMAKE_CURRENT_SOURCE_DIR}/utils/set_rpath.py @loader_path)
   else()
     set(set_rpath_cmd patchelf --set-rpath $ORIGIN)
   endif()
@@ -86,7 +86,7 @@ else()
       file(GLOB_RECURSE shared_libs ${HARVEST_TARGET}/${to}/${pattern}) \n
       foreach(f \${shared_libs}) \n
         if((NOT IS_SYMLINK \${f}) OR APPLE)\n
-          execute_process(COMMAND ${set_rpath_cmd} \${f}) \n
+          execute_process(COMMAND ${set_rpath_cmd} \${f} COMMAND_ERROR_IS_FATAL ANY) \n
         endif()\n
       endforeach()")
   endfunction()
@@ -98,7 +98,7 @@ else()
     install(CODE "\
       file(GLOB_RECURSE shared_libs ${HARVEST_TARGET}/${to}/${pattern}) \n
       foreach(f \${shared_libs}) \n
-        execute_process(COMMAND ${set_rpath_cmd}/../lib; \${f}) \n
+        execute_process(COMMAND ${set_rpath_cmd}/../lib \${f} COMMAND_ERROR_IS_FATAL ANY) \n
       endforeach()")
   endfunction()
 
@@ -117,8 +117,14 @@ else()
         else()\n
           get_filename_component(f_dir \${f} DIRECTORY) \n
           file(RELATIVE_PATH relative_dir \${f_dir} ${HARVEST_TARGET}) \n
-          execute_process(COMMAND ${set_rpath_cmd}/\${relative_dir}../lib \${f}) \n
+          execute_process(COMMAND ${set_rpath_cmd}/\${relative_dir}../lib \${f} COMMAND_ERROR_IS_FATAL ANY) \n
         endif()\n
       endforeach()")
+  endfunction()
+
+  # Strip all shared/static libraries in the HARVEST_TARGET location.
+  function(harvest_strip_all_libraries)
+    install(CODE "execute_process(COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/utils/strip_libraries.py ${HARVEST_TARGET} \n
+                  COMMAND_ERROR_IS_FATAL ANY)")
   endfunction()
 endif()

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "FN_multi_function.hh"
@@ -21,11 +25,18 @@ class NodeMultiFunctionBuilder : NonCopyable, NonMovable {
   const bNodeTree &tree_;
   std::shared_ptr<mf::MultiFunction> owned_built_fn_;
   const mf::MultiFunction *built_fn_ = nullptr;
+  /**
+   * If set, the created multi-function can take shared ownership of the tree. This allows it to
+   * safely reference data owned by the node tree without making additional copies.
+   */
+  std::shared_ptr<const bNodeTree> shared_tree_;
 
   friend NodeMultiFunctions;
 
  public:
-  NodeMultiFunctionBuilder(const bNode &node, const bNodeTree &tree);
+  NodeMultiFunctionBuilder(const bNode &node,
+                           const bNodeTree &tree,
+                           std::shared_ptr<const bNodeTree> shared_tree = nullptr);
 
   /**
    * Assign a multi-function for the current node. The input and output parameters of the function
@@ -40,8 +51,24 @@ class NodeMultiFunctionBuilder : NonCopyable, NonMovable {
    */
   template<typename T, typename... Args> void construct_and_set_matching_fn(Args &&...args);
 
+  /**
+   * Similar to #construct_and_set_matching_fn, but can be used when the type name of the
+   * multi-function is not known (e.g. when using `mf::build::SI1_SO`).
+   *
+   * \param create_multi_function: A function that returns the multi-function by value.
+   */
+  template<typename Fn> void construct_and_set_matching_fn_cb(Fn &&create_multi_function);
+
   const bNode &node();
   const bNodeTree &tree();
+  const mf::MultiFunction &function();
+
+  /**
+   * If the created multi-function references data from the node it was created for, it should also
+   * take shared ownership of the tree if provided. This makes sure that the tree is not freed
+   * while multi-functions referencing it are still in use.
+   */
+  const std::shared_ptr<const bNodeTree> &shared_tree();
 };
 
 /**
@@ -58,7 +85,8 @@ class NodeMultiFunctions {
   Map<const bNode *, Item> map_;
 
  public:
-  NodeMultiFunctions(const bNodeTree &tree);
+  NodeMultiFunctions(const bNodeTree &tree,
+                     const std::shared_ptr<const bNodeTree> &shared_tree = nullptr);
 
   const Item &try_get(const bNode &node) const;
 };
@@ -67,8 +95,9 @@ class NodeMultiFunctions {
 /** \name #NodeMultiFunctionBuilder Inline Methods
  * \{ */
 
-inline NodeMultiFunctionBuilder::NodeMultiFunctionBuilder(const bNode &node, const bNodeTree &tree)
-    : node_(node), tree_(tree)
+inline NodeMultiFunctionBuilder::NodeMultiFunctionBuilder(
+    const bNode &node, const bNodeTree &tree, std::shared_ptr<const bNodeTree> shared_tree)
+    : node_(node), tree_(tree), shared_tree_(std::move(shared_tree))
 {
 }
 
@@ -80,6 +109,16 @@ inline const bNode &NodeMultiFunctionBuilder::node()
 inline const bNodeTree &NodeMultiFunctionBuilder::tree()
 {
   return tree_;
+}
+
+inline const std::shared_ptr<const bNodeTree> &NodeMultiFunctionBuilder::shared_tree()
+{
+  return shared_tree_;
+}
+
+inline const mf::MultiFunction &NodeMultiFunctionBuilder::function()
+{
+  return *built_fn_;
 }
 
 inline void NodeMultiFunctionBuilder::set_matching_fn(const mf::MultiFunction *fn)
@@ -96,6 +135,15 @@ template<typename T, typename... Args>
 inline void NodeMultiFunctionBuilder::construct_and_set_matching_fn(Args &&...args)
 {
   owned_built_fn_ = std::make_shared<T>(std::forward<Args>(args)...);
+  built_fn_ = &*owned_built_fn_;
+}
+
+template<typename Fn>
+inline void NodeMultiFunctionBuilder::construct_and_set_matching_fn_cb(Fn &&create_multi_function)
+{
+  using T = decltype(create_multi_function());
+  T *allocated_function = new T(create_multi_function());
+  owned_built_fn_ = std::shared_ptr<T>(allocated_function);
   built_fn_ = &*owned_built_fn_;
 }
 

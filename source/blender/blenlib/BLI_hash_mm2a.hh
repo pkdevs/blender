@@ -8,7 +8,9 @@
  * \ingroup bli
  */
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 struct BLI_HashMurmur2A {
   uint32_t hash;
@@ -29,3 +31,5 @@ uint32_t BLI_hash_mm2a_end(BLI_HashMurmur2A *mm2);
  * Non-incremental version, quicker for small keys.
  */
 uint32_t BLI_hash_mm2(const unsigned char *data, size_t len, uint32_t seed);
+
+}  // namespace blender

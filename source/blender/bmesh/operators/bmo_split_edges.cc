@@ -8,12 +8,12 @@
  * Just a wrapper around #BM_mesh_edgesplit
  */
 
-#include "BLI_utildefines.h"
-
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 void bmo_split_edges_exec(BMesh *bm, BMOperator *op)
 {
@@ -32,3 +32,5 @@ void bmo_split_edges_exec(BMesh *bm, BMOperator *op)
 
   BMO_slot_buffer_from_enabled_hflag(bm, op, op->slots_out, "edges.out", BM_EDGE, BM_ELEM_TAG);
 }
+
+}  // namespace blender

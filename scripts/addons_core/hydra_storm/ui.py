@@ -167,9 +167,22 @@ class STORM_HYDRA_LIGHT_PT_light(Panel):
         layout.use_property_decorate = False
 
         main_col = layout.column()
+        heading = main_col.column(align=True, heading="Temperature")
+        row = heading.column(align=True).row(align=True)
+        row.prop(light, "use_temperature", text="")
+        sub = row.row()
+        sub.active = light.use_temperature
+        sub.prop(light, "temperature", text="")
 
-        main_col.prop(light, "color")
+        if light.use_temperature:
+            main_col.prop(light, "color", text="Tint")
+        else:
+            main_col.prop(light, "color", text="Color")
+
+        main_col = layout.column()
         main_col.prop(light, "energy")
+        main_col.prop(light, "exposure")
+        main_col.prop(light, "normalize")
         main_col.separator()
 
         if light.type == 'POINT':
@@ -178,7 +191,7 @@ class STORM_HYDRA_LIGHT_PT_light(Panel):
 
         elif light.type == 'SPOT':
             col = main_col.column(align=True)
-            col.prop(light, 'spot_size', slider=True)
+            col.prop(light, 'spot_size', text="Angle", slider=True)
             col.prop(light, 'spot_blend', slider=True)
 
             main_col.prop(light, 'show_cone')
@@ -237,9 +250,17 @@ def get_panels():
     }
 
     for panel_cls in bpy.types.Panel.__subclasses__():
-        if hasattr(panel_cls, 'COMPAT_ENGINES') and (
-            ('BLENDER_RENDER' in panel_cls.COMPAT_ENGINES and panel_cls.__name__ not in exclude_panels) or
-            ('BLENDER_EEVEE' in panel_cls.COMPAT_ENGINES and panel_cls.__name__ in include_eevee_panels)
+        if (compat_engines := getattr(panel_cls, 'COMPAT_ENGINES', None)) is None:
+            continue
+
+        if (
+            (
+                'BLENDER_RENDER' in compat_engines and
+                panel_cls.__name__ not in exclude_panels
+            ) or (
+                'BLENDER_EEVEE' in compat_engines and
+                panel_cls.__name__ in include_eevee_panels
+            )
         ):
             yield panel_cls
 

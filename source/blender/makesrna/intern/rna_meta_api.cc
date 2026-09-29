@@ -6,23 +6,25 @@
  * \ingroup RNA
  */
 
-#include <cstdio>
 #include <cstdlib>
 
 #include "RNA_define.hh"
 
-#include "BLI_sys_types.h"
-
-#include "BLI_utildefines.h"
-
-#include "BKE_mball.hh"
-
 #include "rna_internal.hh" /* own include */
 
 #ifdef RNA_RUNTIME
+
+#  include "DNA_meta_types.h"
+
+#  include "BKE_mball.hh"
+
+#  include "DEG_depsgraph.hh"
+
+namespace blender {
+
 static void rna_Meta_transform(MetaBall *mb, const float mat[16])
 {
-  BKE_mball_transform(mb, (const float(*)[4])mat, true);
+  BKE_mball_transform(mb, reinterpret_cast<const float (*)[4]>(mat), true);
 
   DEG_id_tag_update(&mb->id, 0);
 }
@@ -31,7 +33,12 @@ static void rna_Mball_update_gpu_tag(MetaBall *mb)
 {
   DEG_id_tag_update(&mb->id, ID_RECALC_SHADING);
 }
+
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_api_meta(StructRNA *srna)
 {
@@ -45,5 +52,7 @@ void RNA_api_meta(StructRNA *srna)
 
   RNA_def_function(srna, "update_gpu_tag", "rna_Mball_update_gpu_tag");
 }
+
+}  // namespace blender
 
 #endif

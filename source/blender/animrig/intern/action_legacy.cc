@@ -2,57 +2,162 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup animrig
+ */
+
 #include "ANIM_action.hh"
 #include "ANIM_action_legacy.hh"
 
+#include "BLI_listbase_wrapper.hh"
+
+#include "BKE_fcurve.hh"
+
+#include "BLT_translation.hh"
+
 namespace blender::animrig::legacy {
 
-static KeyframeStrip *first_keyframe_strip(Action &action)
+/* Lots of template args to support transparent non-const and const versions. */
+template<typename ActionType,
+         typename FCurveType,
+         typename LayerType,
+         typename StripType,
+         typename StripKeyframeDataType,
+         typename ChannelbagType>
+static Vector<FCurveType *> fcurves_all_templated(ActionType &action)
 {
-  for (Layer *layer : action.layers()) {
-    for (Strip *strip : layer->strips()) {
-      if (strip->is<KeyframeStrip>()) {
-        return &strip->as<KeyframeStrip>();
+  Vector<FCurveType *> all_fcurves;
+  for (LayerType *layer : action.layers()) {
+    for (StripType *strip : layer->strips()) {
+      switch (strip->type()) {
+        case Strip::Type::Keyframe: {
+          StripKeyframeDataType &strip_data = strip->template data<StripKeyframeData>(action);
+          for (ChannelbagType *bag : strip_data.channelbags()) {
+            for (FCurveType *fcurve : bag->fcurves()) {
+              all_fcurves.append(fcurve);
+            }
+          }
+        }
       }
     }
   }
-
-  return nullptr;
+  return all_fcurves;
 }
 
-ChannelBag *channelbag_get(Action &action)
+Vector<FCurve *> fcurves_all(bAction *action)
 {
-  if (action.slots().is_empty()) {
-    return nullptr;
+  if (!action) {
+    return {};
   }
-
-  KeyframeStrip *keystrip = first_keyframe_strip(action);
-  if (!keystrip) {
-    return nullptr;
-  }
-
-  return keystrip->channelbag_for_slot(*action.slot(0));
+  return fcurves_all_templated<Action, FCurve, Layer, Strip, StripKeyframeData, Channelbag>(
+      action->wrap());
 }
 
-ChannelBag &channelbag_ensure(Action &action)
+Vector<const FCurve *> fcurves_all(const bAction *action)
 {
-  assert_baklava_phase_1_invariants(action);
-
-  /* Ensure a Slot. */
-  Slot *slot;
-  if (action.slots().is_empty()) {
-    slot = &action.slot_add();
+  if (!action) {
+    return {};
   }
-  else {
-    slot = action.slot(0);
+  return fcurves_all_templated<const Action,
+                               const FCurve,
+                               const Layer,
+                               const Strip,
+                               const StripKeyframeData,
+                               const Channelbag>(action->wrap());
+}
+
+/* Lots of template args to support transparent non-const and const versions. */
+template<typename ActionType,
+         typename FCurveType,
+         typename LayerType,
+         typename StripType,
+         typename StripKeyframeDataType,
+         typename ChannelbagType>
+static Vector<FCurveType *> fcurves_for_action_slot_templated(ActionType &action,
+                                                              const slot_handle_t slot_handle)
+{
+  Vector<FCurveType *> as_vector(animrig::fcurves_for_action_slot(action, slot_handle));
+  return as_vector;
+}
+
+bool assigned_action_has_keyframes(AnimData *adt)
+{
+  if (adt == nullptr || adt->action == nullptr) {
+    return false;
   }
 
-  /* Ensure a Layer + KeyframeStrip. */
-  action.layer_keystrip_ensure();
-  KeyframeStrip &keystrip = action.layer(0)->strip(0)->as<KeyframeStrip>();
+  Action &action = adt->action->wrap();
+  return action.has_keyframes(adt->slot_handle);
+}
 
-  /* Ensure a ChannelBag. */
-  return keystrip.channelbag_for_slot_ensure(*slot);
+Vector<bActionGroup *> channel_groups_all(bAction *action)
+{
+  if (!action) {
+    return {};
+  }
+
+  Action &action_wrap = action->wrap();
+  Vector<bActionGroup *> all_groups;
+  for (Layer *layer : action_wrap.layers()) {
+    for (Strip *strip : layer->strips()) {
+      switch (strip->type()) {
+        case Strip::Type::Keyframe: {
+          StripKeyframeData &strip_data = strip->template data<StripKeyframeData>(action_wrap);
+          for (Channelbag *bag : strip_data.channelbags()) {
+            all_groups.extend(bag->channel_groups());
+          }
+        }
+      }
+    }
+  }
+  return all_groups;
+}
+
+Vector<bActionGroup *> channel_groups_for_assigned_slot(AnimData *adt)
+{
+  if (!adt || !adt->action) {
+    return {};
+  }
+
+  Action &action = adt->action->wrap();
+  Channelbag *bag = channelbag_for_action_slot(action, adt->slot_handle);
+  if (!bag) {
+    return {};
+  }
+
+  Vector<bActionGroup *> slot_groups(bag->channel_groups());
+  return slot_groups;
+}
+
+bool action_fcurves_remove(bAction &action,
+                           const slot_handle_t slot_handle,
+                           const StringRefNull rna_path_prefix)
+{
+  BLI_assert(!rna_path_prefix.is_empty());
+  if (rna_path_prefix.is_empty()) {
+    return false;
+  }
+
+  Channelbag *bag = channelbag_for_action_slot(action.wrap(), slot_handle);
+  if (!bag) {
+    return false;
+  }
+
+  bool any_removed = false;
+  for (int64_t fcurve_index = 0; fcurve_index < bag->fcurve_array_num; fcurve_index++) {
+    FCurve *fcurve = bag->fcurve(fcurve_index);
+    const StringRefNull rna_path = fcurve->rna_path();
+    if (rna_path.is_empty()) {
+      continue;
+    }
+
+    if (rna_path.startswith(rna_path_prefix)) {
+      bag->fcurve_remove_by_index(fcurve_index);
+      fcurve_index--;
+      any_removed = true;
+    }
+  }
+  return any_removed;
 }
 
 }  // namespace blender::animrig::legacy

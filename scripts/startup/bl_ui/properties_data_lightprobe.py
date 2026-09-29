@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from bpy.types import Panel
-from .space_properties import PropertiesAnimationMixin
+from bpy.app.translations import contexts as i18n_contexts
+from bl_ui.space_properties import PropertiesAnimationMixin
 
 
 class DataButtonsPanel:
@@ -20,7 +21,10 @@ class DataButtonsPanel:
 class DATA_PT_context_lightprobe(DataButtonsPanel, Panel):
     bl_label = ""
     bl_options = {'HIDE_HEADER'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER', 'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE'
+    }
 
     def draw(self, context):
         layout = self.layout
@@ -37,7 +41,7 @@ class DATA_PT_context_lightprobe(DataButtonsPanel, Panel):
 
 class DATA_PT_lightprobe(DataButtonsPanel, Panel):
     bl_label = "Probe"
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER'}
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw(self, context):
         layout = self.layout
@@ -75,18 +79,16 @@ class DATA_PT_lightprobe(DataButtonsPanel, Panel):
             col.prop(probe, "intensity")
 
         sub = col.column(align=True)
-        if probe.type != 'PLANE':
-            sub.prop(probe, "clip_start", text="Clipping Start")
-        else:
+        if probe.type == 'PLANE':
             sub.prop(probe, "clip_start", text="Clipping Offset")
+        else:
+            sub.prop(probe, "clip_start", text="Clipping Start")
+            sub.prop(probe, "clip_end", text="End", text_ctxt=i18n_contexts.id_camera)
 
-        if probe.type != 'PLANE':
-            sub.prop(probe, "clip_end", text="End")
 
-
-class DATA_PT_lightprobe_eevee_next(DataButtonsPanel, Panel):
+class DATA_PT_lightprobe_eevee(DataButtonsPanel, Panel):
     bl_label = "Probe"
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw(self, context):
         layout = self.layout
@@ -130,6 +132,7 @@ class DATA_PT_lightprobe_eevee_next(DataButtonsPanel, Panel):
         elif probe.type == 'PLANE':
             col = layout.column()
             col.prop(probe, "influence_distance", text="Distance")
+            col.prop(probe, "parallax_distance", text="Parallax")
             pass
         else:
             # Currently unsupported
@@ -139,7 +142,7 @@ class DATA_PT_lightprobe_eevee_next(DataButtonsPanel, Panel):
 class DATA_PT_lightprobe_visibility(DataButtonsPanel, Panel):
     bl_label = "Visibility"
     bl_parent_id = "DATA_PT_lightprobe"
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER'}
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw(self, context):
         layout = self.layout
@@ -161,7 +164,7 @@ class DATA_PT_lightprobe_visibility(DataButtonsPanel, Panel):
 
 class DATA_PT_lightprobe_capture(DataButtonsPanel, Panel):
     bl_label = "Capture"
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     @classmethod
     def poll(cls, context):
@@ -179,14 +182,14 @@ class DATA_PT_lightprobe_capture(DataButtonsPanel, Panel):
         if probe.type == 'SPHERE':
             sub = col.column(align=True)
             sub.prop(probe, "clip_start", text="Clipping Start")
-            sub.prop(probe, "clip_end", text="End")
+            sub.prop(probe, "clip_end", text="End", text_ctxt=i18n_contexts.id_camera)
         elif probe.type == 'PLANE':
             col.prop(probe, "clip_start", text="Clipping Offset")
 
 
 class DATA_PT_lightprobe_bake(DataButtonsPanel, Panel):
     bl_label = "Bake"
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     @classmethod
     def poll(cls, context):
@@ -198,8 +201,6 @@ class DATA_PT_lightprobe_bake(DataButtonsPanel, Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        probe = context.lightprobe
-
         col = layout.column()
         row = col.row(align=True)
         row.operator("object.lightprobe_cache_bake").subset = 'ACTIVE'
@@ -209,7 +210,7 @@ class DATA_PT_lightprobe_bake(DataButtonsPanel, Panel):
 class DATA_PT_lightprobe_bake_resolution(DataButtonsPanel, Panel):
     bl_label = "Resolution"
     bl_parent_id = "DATA_PT_lightprobe_bake"
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw(self, context):
         layout = self.layout
@@ -232,7 +233,7 @@ class DATA_PT_lightprobe_bake_resolution(DataButtonsPanel, Panel):
 class DATA_PT_lightprobe_bake_capture(DataButtonsPanel, Panel):
     bl_label = "Capture"
     bl_parent_id = "DATA_PT_lightprobe_bake"
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw(self, context):
         layout = self.layout
@@ -255,7 +256,7 @@ class DATA_PT_lightprobe_bake_offset(DataButtonsPanel, Panel):
     bl_label = "Offset"
     bl_parent_id = "DATA_PT_lightprobe_bake_capture"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw(self, context):
         layout = self.layout
@@ -273,7 +274,7 @@ class DATA_PT_lightprobe_bake_clamping(DataButtonsPanel, Panel):
     bl_label = "Clamping"
     bl_parent_id = "DATA_PT_lightprobe_bake_capture"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw(self, context):
         layout = self.layout
@@ -290,7 +291,10 @@ class DATA_PT_lightprobe_bake_clamping(DataButtonsPanel, Panel):
 class DATA_PT_lightprobe_parallax(DataButtonsPanel, Panel):
     bl_label = "Custom Parallax"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER', 'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+    }
 
     @classmethod
     def poll(cls, context):
@@ -321,7 +325,7 @@ class DATA_PT_lightprobe_parallax(DataButtonsPanel, Panel):
 class DATA_PT_lightprobe_display(DataButtonsPanel, Panel):
     bl_label = "Viewport Display"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER'}
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw(self, context):
         layout = self.layout
@@ -347,10 +351,10 @@ class DATA_PT_lightprobe_display(DataButtonsPanel, Panel):
             sub.prop(probe, "show_parallax")
 
 
-class DATA_PT_lightprobe_display_eevee_next(DataButtonsPanel, Panel):
+class DATA_PT_lightprobe_display_eevee(DataButtonsPanel, Panel):
     bl_label = "Viewport Display"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw(self, context):
         layout = self.layout
@@ -383,17 +387,14 @@ class DATA_PT_lightprobe_display_eevee_next(DataButtonsPanel, Panel):
 
 
 class DATA_PT_lightprobe_animation(DataButtonsPanel, PropertiesAnimationMixin, Panel):
-    COMPAT_ENGINES = {
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_EEVEE',
-    }
-    _animated_id_context_property = 'lightprobe'
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+    _animated_id_context_property = "lightprobe"
 
 
 classes = (
     DATA_PT_context_lightprobe,
     DATA_PT_lightprobe,
-    DATA_PT_lightprobe_eevee_next,
+    DATA_PT_lightprobe_eevee,
     DATA_PT_lightprobe_capture,
     DATA_PT_lightprobe_bake,
     DATA_PT_lightprobe_bake_resolution,
@@ -403,7 +404,7 @@ classes = (
     DATA_PT_lightprobe_visibility,
     DATA_PT_lightprobe_parallax,
     DATA_PT_lightprobe_display,
-    DATA_PT_lightprobe_display_eevee_next,
+    DATA_PT_lightprobe_display_eevee,
     DATA_PT_lightprobe_animation,
 )
 

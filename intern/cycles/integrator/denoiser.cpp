@@ -6,11 +6,15 @@
 
 #include "device/device.h"
 
+#include "integrator/denoiser_dlss.h"
 #include "integrator/denoiser_oidn.h"
+#include "session/display_driver.h"
 #ifdef WITH_OPENIMAGEDENOISE
 #  include "integrator/denoiser_oidn_gpu.h"
 #endif
-#include "integrator/denoiser_optix.h"
+#ifdef WITH_OPTIX
+#  include "integrator/denoiser_optix.h"
+#endif
 #include "session/buffers.h"
 
 #include "util/log.h"
@@ -40,7 +44,9 @@ static bool is_single_device(const Device *device)
 
 /* Find best suitable device to perform denoiser on. Will iterate over possible sub-devices of
  * multi-device. */
-static Device *find_best_device(Device *device, const DenoiserType type)
+static Device *find_best_device(Device *device,
+                                const DenoiserType type,
+                                const GraphicsInteropDevice &interop_device)
 {
   Device *best_device = nullptr;
 
@@ -59,7 +65,8 @@ static Device *find_best_device(Device *device, const DenoiserType type)
       }
 
       /* Prefer a device that can use graphics interop for faster display update. */
-      if (sub_device->should_use_graphics_interop() && !best_device->should_use_graphics_interop())
+      if (sub_device->should_use_graphics_interop(interop_device) &&
+          !best_device->should_use_graphics_interop(interop_device))
       {
         best_device = sub_device;
       }
@@ -96,9 +103,22 @@ bool use_gpu_oidn_denoiser(Device *denoiser_device, const DenoiseParams &params)
 #endif
 }
 
+bool use_dlss_denoiser(Device *denoiser_device, const DenoiseParams &params)
+{
+#ifdef WITH_DLSS
+  return (params.type == DENOISER_DLSS &&
+          DLSSDenoiser::is_device_supported(denoiser_device->info));
+#else
+  (void)denoiser_device;
+  (void)params;
+  return false;
+#endif
+}
+
 DenoiseParams get_effective_denoise_params(Device *denoiser_device,
                                            Device *cpu_fallback_device,
                                            const DenoiseParams &params,
+                                           const GraphicsInteropDevice &interop_device,
                                            Device *&single_denoiser_device)
 {
   DCHECK(params.use);
@@ -114,17 +134,18 @@ DenoiseParams get_effective_denoise_params(Device *denoiser_device,
     /* Find best device from the ones which are proposed for denoising.
      * The choice is expected to be between a few GPUs, or between a GPU and a CPU
      * or between a few GPUs and a CPU. */
-    single_denoiser_device = find_best_device(denoiser_device, params.type);
+    single_denoiser_device = find_best_device(denoiser_device, params.type, interop_device);
   }
   /* Ensure that we have a device to be used later in the code below. */
   if (single_denoiser_device == nullptr) {
     single_denoiser_device = cpu_fallback_device;
   }
 
-  bool is_cpu_denoiser_device = single_denoiser_device->info.type == DEVICE_CPU;
+  const bool is_cpu_denoiser_device = single_denoiser_device->info.type == DEVICE_CPU;
   if (is_cpu_denoiser_device == false) {
     if (use_optix_denoiser(single_denoiser_device, effective_denoise_params) ||
-        use_gpu_oidn_denoiser(single_denoiser_device, effective_denoise_params))
+        use_gpu_oidn_denoiser(single_denoiser_device, effective_denoise_params) ||
+        use_dlss_denoiser(single_denoiser_device, effective_denoise_params))
     {
       /* Denoising parameters are correct and there is no need to fall back to CPU OIDN. */
       return effective_denoise_params;
@@ -134,20 +155,22 @@ DenoiseParams get_effective_denoise_params(Device *denoiser_device,
   /* Always fallback to OIDN on CPU. */
   effective_denoise_params.type = DENOISER_OPENIMAGEDENOISE;
   effective_denoise_params.use_gpu = false;
+  effective_denoise_params.upscale_factor = 1.0f;
 
   return effective_denoise_params;
 }
 
 unique_ptr<Denoiser> Denoiser::create(Device *denoiser_device,
                                       Device *cpu_fallback_device,
-                                      const DenoiseParams &params)
+                                      const DenoiseParams &params,
+                                      const GraphicsInteropDevice &interop_device)
 {
 
   Device *single_denoiser_device;
   const DenoiseParams effective_denoiser_params = get_effective_denoise_params(
-      denoiser_device, cpu_fallback_device, params, single_denoiser_device);
+      denoiser_device, cpu_fallback_device, params, interop_device, single_denoiser_device);
 
-  bool is_cpu_denoiser_device = single_denoiser_device->info.type == DEVICE_CPU;
+  const bool is_cpu_denoiser_device = single_denoiser_device->info.type == DEVICE_CPU;
   if (is_cpu_denoiser_device == false) {
 #ifdef WITH_OPTIX
     if (use_optix_denoiser(single_denoiser_device, effective_denoiser_params)) {
@@ -161,12 +184,42 @@ unique_ptr<Denoiser> Denoiser::create(Device *denoiser_device,
       return make_unique<OIDNDenoiserGPU>(single_denoiser_device, effective_denoiser_params);
     }
 #endif
+
+#ifdef WITH_DLSS
+    if (use_dlss_denoiser(single_denoiser_device, effective_denoiser_params)) {
+      return make_unique<DLSSDenoiser>(single_denoiser_device, effective_denoiser_params);
+    }
+#endif
+  }
+
+  if (!openimagedenoise_supported()) {
+    return nullptr;
   }
 
   /* Used preference CPU when possible, and fallback on CPU fallback device otherwise. */
   return make_unique<OIDNDenoiser>(is_cpu_denoiser_device ? single_denoiser_device :
                                                             cpu_fallback_device,
                                    effective_denoiser_params);
+}
+
+bool Denoiser::is_device_supported(DenoiserType type, const DeviceInfo &denoise_device_info)
+{
+  switch (type) {
+#ifdef WITH_OPTIX
+    case DENOISER_OPTIX:
+      return OptiXDenoiser::is_device_supported(denoise_device_info);
+#endif
+#ifdef WITH_OPENIMAGEDENOISE
+    case DENOISER_OPENIMAGEDENOISE:
+      return OIDNDenoiserGPU::is_device_supported(denoise_device_info);
+#endif
+#ifdef WITH_DLSS
+    case DENOISER_DLSS:
+      return DLSSDenoiser::is_device_supported(denoise_device_info);
+#endif
+    default:
+      return false;
+  }
 }
 
 DenoiserType Denoiser::automatic_viewport_denoiser_type(const DeviceInfo &denoise_device_info)
@@ -211,7 +264,7 @@ void Denoiser::set_params(const DenoiseParams &params)
     params_ = params;
   }
   else {
-    LOG(ERROR) << "Attempt to change denoiser type.";
+    LOG_ERROR << "Attempt to change denoiser type.";
   }
 }
 
@@ -246,7 +299,7 @@ bool Denoiser::load_kernels(Progress *progress)
     return false;
   }
 
-  VLOG_WORK << "Will denoise on " << denoiser_device_->info.description << " ("
+  LOG_DEBUG << "Will denoise on " << denoiser_device_->info.description << " ("
             << denoiser_device_->info.id << ")";
 
   denoise_kernels_are_loaded_ = true;

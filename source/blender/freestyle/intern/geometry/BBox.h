@@ -12,11 +12,9 @@
 #include <algorithm>
 #include <stdlib.h>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 namespace Freestyle {
 
@@ -124,9 +122,7 @@ template<class Point> class BBox {
   Point _max;
   bool _empty;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:BBox")
-#endif
 };
 
 template<class Point> BBox<Point> &operator+(const BBox<Point> &b1, const BBox<Point> &b2)

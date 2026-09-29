@@ -6,18 +6,26 @@
  * \ingroup edtransform
  */
 
-#include "BLI_math_matrix.h"
-#include "BLI_string.h"
+#include <algorithm>
 
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_string_utf8.hh"
+
+#include "BKE_editmesh.hh"
+#include "BKE_editmesh_bvh.hh"
+#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
 #include "GPU_matrix.hh"
+#include "GPU_state.hh"
 
+#include "DEG_depsgraph_query.hh"
+
+#include "ED_mesh.hh"
 #include "ED_screen.hh"
-#include "ED_transform_snap_object_context.hh"
-
-#include "WM_api.hh"
 
 #include "RNA_access.hh"
 
@@ -32,7 +40,7 @@
 #include "transform_mode.hh"
 #include "transform_snap.hh"
 
-using namespace blender;
+namespace blender::ed::transform {
 
 /* -------------------------------------------------------------------- */
 /** \name Transform (Edge Slide)
@@ -52,6 +60,12 @@ struct EdgeSlideData {
   void update_proj_mat(TransInfo *t, const TransDataContainer *tc)
   {
     ARegion *region = t->region;
+    if (region == nullptr) [[unlikely]] {
+      this->win_half = {1.0f, 1.0f};
+      this->proj_mat = float4x4::identity();
+      return;
+    }
+
     this->win_half = {region->winx / 2.0f, region->winy / 2.0f};
 
     if (t->spacetype == SPACE_VIEW3D) {
@@ -65,7 +79,7 @@ struct EdgeSlideData {
     }
     else {
       const View2D *v2d = static_cast<View2D *>(t->view);
-      UI_view2d_view_to_region_m4(v2d, this->proj_mat.ptr());
+      ui::view2d_view_to_region_m4(v2d, this->proj_mat.ptr());
       this->proj_mat.location()[0] -= this->win_half[0];
       this->proj_mat.location()[1] -= this->win_half[1];
     }
@@ -80,7 +94,6 @@ struct EdgeSlideData {
 };
 
 struct EdgeSlideParams {
-  wmOperator *op = nullptr;
   float perc;
 
   /** When un-clamped - use this index: #TransDataEdgeSlideVert.dir_side. */
@@ -88,6 +101,7 @@ struct EdgeSlideParams {
 
   bool use_even;
   bool flipped;
+  bool update_status_bar;
 };
 
 /**
@@ -136,7 +150,7 @@ static void interp_line_v3_v3v3v3(
 
   t_delta = t - t_mid;
   if (t_delta < 0.0f) {
-    if (UNLIKELY(fabsf(t_mid) < FLT_EPSILON)) {
+    if (fabsf(t_mid) < FLT_EPSILON) [[unlikely]] {
       copy_v3_v3(p, v2);
     }
     else {
@@ -147,7 +161,7 @@ static void interp_line_v3_v3v3v3(
     t = t - t_mid;
     t_mid = 1.0f - t_mid;
 
-    if (UNLIKELY(fabsf(t_mid) < FLT_EPSILON)) {
+    if (fabsf(t_mid) < FLT_EPSILON) [[unlikely]] {
       copy_v3_v3(p, v3);
     }
     else {
@@ -159,7 +173,7 @@ static void interp_line_v3_v3v3v3(
 static void edge_slide_data_init_mval(MouseInput *mi, EdgeSlideData *sld, float *mval_dir)
 {
   /* Possible all of the edge loops are pointing directly at the view. */
-  if (UNLIKELY(len_squared_v2(mval_dir) < 0.1f)) {
+  if (len_squared_v2(mval_dir) < 0.1f) [[unlikely]] {
     mval_dir[0] = 0.0f;
     mval_dir[1] = 100.0f;
   }
@@ -180,59 +194,23 @@ static void edge_slide_data_init_mval(MouseInput *mi, EdgeSlideData *sld, float 
   sld->mval_end[1] = mi->imval[1] + mval_end[1];
 }
 
-static bool is_vert_slide_visible(TransInfo *t,
-                                  SnapObjectContext *sctx,
-                                  TransDataEdgeSlideVert *sv,
-                                  const float4x4 &obmat,
-                                  const float4 &plane_near)
+static bool is_vert_slide_visible_bmesh(TransInfo *t,
+                                        TransDataContainer *tc,
+                                        const View3D *v3d,
+                                        const BMBVHTree *bmbvh,
+                                        TransDataEdgeSlideVert *sv)
 {
-  const float3 &v_co_orig = sv->v_co_orig();
-  float3 points[3] = {
-      v_co_orig,
-      v_co_orig + sv->dir_side[0] * 0.9f,
-      v_co_orig + sv->dir_side[1] * 0.9f,
-  };
+  /* NOTE: */
+  BMIter iter_other;
+  BMEdge *e;
 
-  float3 hit_loc;
-  for (float3 &p : points) {
-    p = math::transform_point(obmat, p);
-    float3 view_vec;
-    float lambda, ray_depth = FLT_MAX;
-
-    transform_view_vector_calc(t, p, view_vec);
-
-    if (dot_v3v3(view_vec, plane_near) > 0.0f) {
-      /* Behind the view origin. */
-      return false;
+  BMVert *v = static_cast<BMVert *>(sv->td->extra);
+  BM_ITER_ELEM (e, &iter_other, v, BM_EDGES_OF_VERT) {
+    if (BM_elem_flag_test(e, BM_ELEM_SELECT | BM_ELEM_HIDDEN)) {
+      continue;
     }
 
-    if (!isect_ray_plane_v3(p, view_vec, plane_near, &lambda, false)) {
-      return false;
-    }
-
-    float3 view_orig = p + view_vec * lambda;
-
-    SnapObjectParams snap_object_params{};
-    snap_object_params.snap_target_select = t->tsnap.target_operation;
-    snap_object_params.edit_mode_type = (t->flag & T_EDIT) != 0 ? SNAP_GEOM_EDIT : SNAP_GEOM_FINAL;
-    snap_object_params.use_occlusion_test = false;
-    snap_object_params.use_backface_culling = (t->tsnap.flag & SCE_SNAP_BACKFACE_CULLING) != 0;
-
-    bool has_hit = ED_transform_snap_object_project_ray_ex(sctx,
-                                                           t->depsgraph,
-                                                           static_cast<const View3D *>(t->view),
-                                                           &snap_object_params,
-                                                           view_orig,
-                                                           -view_vec,
-                                                           &ray_depth,
-                                                           hit_loc,
-                                                           nullptr,
-                                                           nullptr,
-                                                           nullptr,
-                                                           nullptr);
-
-    const bool is_occluded = has_hit && lambda > (ray_depth + 0.0001f);
-    if (!is_occluded) {
+    if (BMBVH_EdgeVisible(bmbvh, e, t->depsgraph, t->region, v3d, tc->obedit)) {
       return true;
     }
   }
@@ -243,25 +221,59 @@ static bool is_vert_slide_visible(TransInfo *t,
  * Calculate screen-space `mval_start` / `mval_end`, optionally slide direction.
  */
 static void calcEdgeSlide_mval_range(TransInfo *t,
+                                     TransDataContainer *tc,
                                      EdgeSlideData *sld,
                                      const int loop_nr,
                                      const float2 &mval,
                                      const bool use_calc_direction)
 {
+  View3D *v3d = nullptr;
+
   /* Use for visibility checks. */
-  SnapObjectContext *snap_context = nullptr;
   bool use_occlude_geometry = false;
-  const float4x4 *obmat = nullptr;
-  float4 plane_near;
   if (t->spacetype == SPACE_VIEW3D) {
-    View3D *v3d = static_cast<View3D *>(t->area ? t->area->spacedata.first : nullptr);
-    Object *obedit = TRANS_DATA_CONTAINER_FIRST_OK(t)->obedit;
-    use_occlude_geometry = (v3d && obedit->dt > OB_WIRE && !XRAY_ENABLED(v3d));
-    if (use_occlude_geometry) {
-      obmat = &obedit->object_to_world();
-      planes_from_projmat(t->persmat, nullptr, nullptr, nullptr, nullptr, plane_near, nullptr);
-      snap_context = ED_transform_snap_object_context_create(t->scene, 0);
+    v3d = static_cast<View3D *>(t->area ? t->area->spacedata.first_ : nullptr);
+    if (v3d) {
+      if (tc->obedit->type == OB_MESH) {
+        use_occlude_geometry = (tc->obedit->dt > OB_WIRE && !XRAY_ENABLED(v3d));
+      }
     }
+  }
+
+  /* NOTE(@ideasman42): At the moment this is only needed for meshes.
+   * In principle we could use a generic ray-cast test.
+   *
+   * Prefer #BMBVHTree over generic snap: #SnapObjectContext
+   * or any method that considers all other objects in the scene.
+   *
+   * While generic snapping is technically "correct" there are multiple reasons not to use this.
+   *
+   * - Performance, where generic snapping would consider all other objects for every-vertex.
+   *   This can cause lockups when #DupliObject have to be created multiple times for each vertex.
+   * - In practice it's acceptable (even preferable) to skip back-facing vertices
+   *   based on each meshes own faces that doesn't take other scene objects into account,
+   *   especially since this includes instances objects from particles or nodes.
+   * - The #BMBVH_EdgeVisible check skips faces that the edge is connected to,
+   *   unlike generic ray-casts where an edge can (under some conditions) overlap it self.
+   *
+   * See: #125646 for details.
+   */
+  BMBVHTree *bmbvh = nullptr;
+  Array<float3> bmbvh_coord_storage;
+  if (use_occlude_geometry) {
+    Scene *scene_eval = DEG_get_evaluated(t->depsgraph, t->scene);
+    Object *obedit_eval = DEG_get_evaluated(t->depsgraph, tc->obedit);
+    BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
+
+    const Span<float3> vert_positions = BKE_editmesh_vert_coords_when_deformed(
+        t->depsgraph, scene_eval, obedit_eval, bmbvh_coord_storage);
+
+    bmbvh = BKE_bmbvh_new_from_editmesh(em,
+                                        BKE_editmesh_bmesh_get_for_write(tc->obedit),
+                                        BMBVH_RESPECT_HIDDEN,
+                                        vert_positions.is_empty() ? nullptr :
+                                                                    vert_positions.data(),
+                                        false);
   }
 
   /* Find mouse vectors, the global one, and one per loop in case we have
@@ -274,15 +286,14 @@ static void calcEdgeSlide_mval_range(TransInfo *t,
   float *loop_maxdist = nullptr;
 
   if (use_calc_direction) {
-    loop_dir = static_cast<float2 *>(MEM_callocN(sizeof(float2) * loop_nr, "sv loop_dir"));
-    loop_maxdist = static_cast<float *>(MEM_mallocN(sizeof(float) * loop_nr, "sv loop_maxdist"));
-    copy_vn_fl(loop_maxdist, loop_nr, FLT_MAX);
+    loop_dir = MEM_new_array_zeroed<float2>(loop_nr, "sv loop_dir");
+    loop_maxdist = MEM_new_array_uninitialized<float>(loop_nr, "sv loop_maxdist");
+    std::fill_n(loop_maxdist, loop_nr, FLT_MAX);
   }
 
   for (int i : sld->sv.index_range()) {
     TransDataEdgeSlideVert *sv = &sld->sv[i];
-    bool is_visible = !use_occlude_geometry ||
-                      is_vert_slide_visible(t, snap_context, sv, *obmat, plane_near);
+    bool is_visible = !use_occlude_geometry || is_vert_slide_visible_bmesh(t, tc, v3d, bmbvh, sv);
 
     /* This test is only relevant if object is not wire-drawn! See #32068. */
     if (!is_visible && !use_calc_direction) {
@@ -324,14 +335,14 @@ static void calcEdgeSlide_mval_range(TransInfo *t,
       }
     }
 
-    MEM_freeN(loop_dir);
-    MEM_freeN(loop_maxdist);
+    MEM_delete(loop_dir);
+    MEM_delete(loop_maxdist);
   }
 
   edge_slide_data_init_mval(&t->mouse, sld, mval_dir);
 
-  if (snap_context) {
-    ED_transform_snap_object_context_destroy(snap_context);
+  if (bmbvh) {
+    BKE_bmbvh_free(bmbvh);
   }
 }
 
@@ -385,7 +396,7 @@ static EdgeSlideData *createEdgeSlideVerts(TransInfo *t,
   sld->curr_sv_index = 0;
   sld->update_proj_mat(t, tc);
 
-  calcEdgeSlide_mval_range(t, sld, group_len, t->mval, use_double_side);
+  calcEdgeSlide_mval_range(t, tc, sld, group_len, t->mval, use_double_side);
 
   return sld;
 }
@@ -410,11 +421,14 @@ static eRedrawFlag handleEventEdgeSlide(TransInfo *t, const wmEvent *event)
   EdgeSlideParams *slp = static_cast<EdgeSlideParams *>(t->custom.mode.data);
 
   if (slp) {
+    bool is_event_handled = t->redraw && (event->type != MOUSEMOVE);
+    slp->update_status_bar |= is_event_handled;
     switch (event->type) {
       case EVT_EKEY:
         if (event->val == KM_PRESS) {
           slp->use_even = !slp->use_even;
           calcEdgeSlideCustomPoints(t);
+          slp->update_status_bar = true;
           return TREDRAW_HARD;
         }
         break;
@@ -422,6 +436,7 @@ static eRedrawFlag handleEventEdgeSlide(TransInfo *t, const wmEvent *event)
         if (event->val == KM_PRESS) {
           slp->flipped = !slp->flipped;
           calcEdgeSlideCustomPoints(t);
+          slp->update_status_bar = true;
           return TREDRAW_HARD;
         }
         break;
@@ -430,6 +445,7 @@ static eRedrawFlag handleEventEdgeSlide(TransInfo *t, const wmEvent *event)
         if (event->val == KM_PRESS) {
           t->flag ^= T_ALT_TRANSFORM;
           calcEdgeSlideCustomPoints(t);
+          slp->update_status_bar = true;
           return TREDRAW_HARD;
         }
         break;
@@ -453,7 +469,7 @@ static void drawEdgeSlide(TransInfo *t)
   const EdgeSlideParams *slp = static_cast<const EdgeSlideParams *>(t->custom.mode.data);
   const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
 
-  const float line_size = UI_GetThemeValuef(TH_OUTLINE_WIDTH) + 0.5f;
+  const float line_size = ui::theme::get_value_f(TH_OUTLINE_WIDTH) + 0.5f;
 
   GPU_depth_test(GPU_DEPTH_NONE);
 
@@ -464,18 +480,18 @@ static void drawEdgeSlide(TransInfo *t)
     GPU_matrix_mul(TRANS_DATA_CONTAINER_FIRST_OK(t)->obedit->object_to_world().ptr());
   }
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   TransDataEdgeSlideVert *curr_sv = &sld->sv[sld->curr_sv_index];
-  const float3 &curr_sv_co_orig = curr_sv->v_co_orig();
+  const float3 curr_sv_co_orig = curr_sv->v_co_orig();
 
   if (slp->use_even == true) {
     /* Even mode. */
     float co_a[3], co_b[3], co_mark[3];
     const float fac = (slp->perc + 1.0f) / 2.0f;
-    const float ctrl_size = UI_GetThemeValuef(TH_FACEDOT_SIZE) + 1.5f;
+    const float ctrl_size = ui::theme::get_value_f(TH_FACEDOT_SIZE) + 1.5f;
     const float guide_size = ctrl_size - 0.5f;
     const int alpha_shade = -30;
 
@@ -494,7 +510,9 @@ static void drawEdgeSlide(TransInfo *t)
       immVertex3fv(pos, curr_sv_co_orig);
     }
     immEnd();
+    immUnbindProgram();
 
+    immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
     {
       float *co_test = nullptr;
       if (slp->flipped) {
@@ -546,7 +564,7 @@ static void drawEdgeSlide(TransInfo *t)
       mul_v3_fl(a, 100.0f);
       negate_v3_v3(b, a);
 
-      const float3 &sv_co_orig = sv.v_co_orig();
+      const float3 sv_co_orig = sv.v_co_orig();
       add_v3_v3(a, sv_co_orig);
       add_v3_v3(b, sv_co_orig);
 
@@ -618,8 +636,7 @@ static void edge_slide_snap_apply(TransInfo *t, float *value)
   }
   else {
     /* Could be pre-calculated. */
-    t_mid = line_point_factor_v3(
-        blender::float3{0.0f, 0.0f, 0.0f}, sv->dir_side[0], sv->dir_side[1]);
+    t_mid = line_point_factor_v3(float3{0.0f, 0.0f, 0.0f}, sv->dir_side[0], sv->dir_side[1]);
 
     float t_snap = line_point_factor_v3(snap_point, co_dest[0], co_dest[1]);
     side_index = t_snap >= t_mid;
@@ -760,14 +777,8 @@ static void applyEdgeSlide(TransInfo *t)
   char str[UI_MAX_DRAW_STR];
   size_t ofs = 0;
   float final;
-  EdgeSlideParams *slp = static_cast<EdgeSlideParams *>(t->custom.mode.data);
-  bool flipped = slp->flipped;
-  bool use_even = slp->use_even;
   const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
   const bool is_constrained = !(is_clamp == false || hasNumInput(&t->num));
-  const bool is_precision = t->modifiers & MOD_PRECISION;
-  const bool is_snap = t->modifiers & MOD_SNAP;
-  const bool is_snap_invert = t->modifiers & MOD_SNAP_INVERT;
 
   final = t->values[0] + t->values_modal_offset[0];
 
@@ -786,14 +797,14 @@ static void applyEdgeSlide(TransInfo *t)
   t->values_final[0] = final;
 
   /* Header string. */
-  ofs += BLI_strncpy_rlen(str + ofs, RPT_("Edge Slide: "), sizeof(str) - ofs);
+  ofs += BLI_strncpy_utf8_rlen(str + ofs, RPT_("Edge Slide: "), sizeof(str) - ofs);
   if (hasNumInput(&t->num)) {
     char c[NUM_STR_REP_LEN];
-    outputNumInput(&(t->num), c, &t->scene->unit);
-    ofs += BLI_strncpy_rlen(str + ofs, &c[0], sizeof(str) - ofs);
+    outputNumInput(&(t->num), c, t->scene->unit);
+    ofs += BLI_strncpy_utf8_rlen(str + ofs, &c[0], sizeof(str) - ofs);
   }
   else {
-    ofs += BLI_snprintf_rlen(str + ofs, sizeof(str) - ofs, "%.4f ", final);
+    ofs += BLI_snprintf_utf8_rlen(str + ofs, sizeof(str) - ofs, "%.4f ", final);
   }
   /* Done with header string. */
 
@@ -803,22 +814,38 @@ static void applyEdgeSlide(TransInfo *t)
   recalc_data(t);
 
   ED_area_status_text(t->area, str);
+}
 
-  wmOperator *op = slp->op;
-  if (!op) {
+static void edge_slide_status(TransInfo *t)
+{
+  if (t->keymap == nullptr) {
     return;
   }
+  const wmKeyMap &keymap = *t->keymap;
+
+  EdgeSlideParams *slp = static_cast<EdgeSlideParams *>(t->custom.mode.data);
+  if (!slp->update_status_bar) {
+    return;
+  }
+  slp->update_status_bar = false;
+
+  const bool flipped = slp->flipped;
+  const bool use_even = slp->use_even;
+  const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
+  const bool is_precision = t->modifiers & MOD_PRECISION;
+  const bool is_snap = t->modifiers & MOD_SNAP;
+  const bool is_snap_invert = t->modifiers & MOD_SNAP_INVERT;
 
   WorkspaceStatus status(t->context);
-  status.opmodal(IFACE_("Confirm"), op->type, TFM_MODAL_CONFIRM);
-  status.opmodal(IFACE_("Cancel"), op->type, TFM_MODAL_CONFIRM);
-  status.opmodal(IFACE_("Snap"), op->type, TFM_MODAL_SNAP_TOGGLE, is_snap);
-  status.opmodal(IFACE_("Snap Invert"), op->type, TFM_MODAL_SNAP_INV_ON, is_snap_invert);
-  status.opmodal(IFACE_("Set Snap Base"), op->type, TFM_MODAL_EDIT_SNAP_SOURCE_ON);
-  status.opmodal(IFACE_("Move"), op->type, TFM_MODAL_TRANSLATE);
-  status.opmodal(IFACE_("Rotate"), op->type, TFM_MODAL_ROTATE);
-  status.opmodal(IFACE_("Resize"), op->type, TFM_MODAL_RESIZE);
-  status.opmodal(IFACE_("Precision Mode"), op->type, TFM_MODAL_PRECISION, is_precision);
+  status.modal_keymap(IFACE_("Confirm"), keymap, TFM_MODAL_CONFIRM);
+  status.modal_keymap(IFACE_("Cancel"), keymap, TFM_MODAL_CANCEL);
+  status.modal_keymap(IFACE_("Snap"), keymap, TFM_MODAL_SNAP_TOGGLE, is_snap);
+  status.modal_keymap(IFACE_("Snap Invert"), keymap, TFM_MODAL_SNAP_INV_ON, is_snap_invert);
+  status.modal_keymap(IFACE_("Set Snap Base"), keymap, TFM_MODAL_EDIT_SNAP_SOURCE_ON);
+  status.modal_keymap(IFACE_("Move"), keymap, TFM_MODAL_TRANSLATE);
+  status.modal_keymap(IFACE_("Rotate"), keymap, TFM_MODAL_ROTATE);
+  status.modal_keymap(IFACE_("Resize"), keymap, TFM_MODAL_RESIZE);
+  status.modal_keymap(IFACE_("Precision Mode"), keymap, TFM_MODAL_PRECISION, is_precision);
   status.item_bool(IFACE_("Clamp"), is_clamp, ICON_EVENT_C, ICON_EVENT_ALT);
   status.item_bool(IFACE_("Even"), use_even, ICON_EVENT_E);
   if (use_even) {
@@ -861,21 +888,22 @@ static void edge_slide_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
   add_v3_v3(mat_xform[3], delta);
 }
 
-static void initEdgeSlide_ex(TransInfo *t,
-                             wmOperator *op,
-                             bool use_double_side,
-                             bool use_even,
-                             bool flipped,
-                             bool use_clamp)
+static void initEdgeSlide_ex(
+    TransInfo *t, bool use_double_side, bool use_even, bool flipped, bool use_clamp)
 {
   EdgeSlideData *sld;
   bool ok = false;
 
+  if ((t->flag & T_EDIT) == 0 || (t->obedit_type != OB_MESH)) {
+    BKE_report(t->reports, RPT_ERROR, "'Edge Slide' is only supported in mesh edit mode");
+    t->state = TRANS_CANCEL;
+    return;
+  }
+
   t->mode = TFM_EDGE_SLIDE;
 
   {
-    EdgeSlideParams *slp = static_cast<EdgeSlideParams *>(MEM_callocN(sizeof(*slp), __func__));
-    slp->op = op;
+    EdgeSlideParams *slp = MEM_new_zeroed<EdgeSlideParams>(__func__);
     slp->use_even = use_even;
     slp->flipped = flipped;
     /* Happens to be best for single-sided. */
@@ -883,6 +911,7 @@ static void initEdgeSlide_ex(TransInfo *t,
       slp->flipped = !flipped;
     }
     slp->perc = 0.0f;
+    slp->update_status_bar = true;
 
     if (!use_clamp) {
       t->flag |= T_ALT_TRANSFORM;
@@ -912,10 +941,10 @@ static void initEdgeSlide_ex(TransInfo *t,
 
   t->idx_max = 0;
   t->num.idx_max = 0;
-  t->snap[0] = 0.1f;
-  t->snap[1] = t->snap[0] * 0.1f;
+  t->increment[0] = 0.1f;
+  t->increment_precision = 0.1f;
 
-  copy_v3_fl(t->num.val_inc, t->snap[0]);
+  copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_type[0] = B_UNIT_NONE;
 }
@@ -940,7 +969,7 @@ static void initEdgeSlide(TransInfo *t, wmOperator *op)
     prop = RNA_struct_find_property(op->ptr, "use_clamp");
     use_clamp = (prop) ? RNA_property_boolean_get(op->ptr, prop) : true;
   }
-  initEdgeSlide_ex(t, op, use_double_side, use_even, flipped, use_clamp);
+  initEdgeSlide_ex(t, use_double_side, use_even, flipped, use_clamp);
 }
 
 /** \} */
@@ -979,4 +1008,7 @@ TransModeInfo TransMode_edgeslide = {
     /*snap_distance_fn*/ transform_snap_distance_len_squared_fn,
     /*snap_apply_fn*/ edge_slide_snap_apply,
     /*draw_fn*/ drawEdgeSlide,
+    /*status_fn*/ edge_slide_status,
 };
+
+}  // namespace blender::ed::transform

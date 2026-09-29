@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BLI_vector.hh"
@@ -13,15 +17,19 @@ namespace blender::nodes {
 struct NodeExtraInfoRow {
   std::string text;
   int icon = 0;
-  const char *tooltip = nullptr;
+  StringRef tooltip;
 
-  uiButToolTipFunc tooltip_fn = nullptr;
+  ui::ButtonToolTipFunc tooltip_fn = nullptr;
   void *tooltip_fn_arg = nullptr;
   void (*tooltip_fn_free_arg)(void *) = nullptr;
+  void *(*tooltip_fn_copy_arg)(void *) = nullptr;
+
+  std::function<void(ui::Button &)> set_execute_fn;
 };
 
 struct NodeExtraInfoParams {
   Vector<NodeExtraInfoRow> &rows;
+  const bNodeTree &tree;
   const bNode &node;
   const bContext &C;
 };

@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import datetime
 import string
 import bpy
 event_types = tuple(
@@ -145,6 +146,7 @@ class _EventBuilder:
                 shift = 'LEFT_SHIFT' in keys_held or 'RIGHT_SHIFT' in keys_held
                 alt = 'LEFT_ALT' in keys_held or 'RIGHT_ALT' in keys_held
                 oskey = 'OSKEY' in keys_held
+                hyper = 'HYPER' in keys_held
 
                 unicode = None
                 if value == 'PRESS':
@@ -165,6 +167,7 @@ class _EventBuilder:
                     ctrl=ctrl,
                     alt=alt,
                     oskey=oskey,
+                    hyper=hyper,
                     x=self._shared_event_gen._mouse_co[0],
                     y=self._shared_event_gen._mouse_co[1],
                 )
@@ -191,6 +194,7 @@ class _EventBuilder:
         shift = event.shift
         alt = event.alt
         oskey = event.oskey
+        hyper = event.hyper
         yield
 
         for x, y in coords:
@@ -202,6 +206,7 @@ class _EventBuilder:
                 ctrl=ctrl,
                 alt=alt,
                 oskey=oskey,
+                hyper=hyper,
                 x=x,
                 y=y
             )
@@ -258,7 +263,7 @@ class EventGenerate:
 
     def text_unicode(self, text):
         # Since the only purpose of this key-press is to enter text
-        # the key can be almost anything, use a key which isn't likely to be assigned ot any other action.
+        # the key can be almost anything, use a key which isn't likely to be assigned to any other action.
         #
         # If it were possible `EVT_UNKNOWNKEY` would be most correct
         # as dead keys map to this and still enter text.
@@ -290,12 +295,35 @@ def run(
 
     TICKS = 4  # 3 works, 4  to be on the safe side.
 
+    # If we try to handle events this many times
+    TICKS_HANDLING_BREAK_MAX = 256
+
     def event_step():
+
+        # Handle `is_event_handling_break` here so we don't incorrectly detect
+        # consecutive `is_event_handling_break` based on other functions exiting early.
+        is_event_handling_break = bpy.context.window_manager.is_event_handling_break
+        if is_event_handling_break:
+            if event_step._ticks_handling_break_consecutive > TICKS_HANDLING_BREAK_MAX:
+                raise RuntimeError(
+                    "window_manager.is_event_handling_break set {:d} times, may be an event handling bug!".format(
+                        TICKS_HANDLING_BREAK_MAX,
+                    )
+                )
+            event_step._ticks_handling_break_consecutive += 1
+        else:
+            event_step._ticks_handling_break_consecutive = 0
+
         # Run once 'TICKS' is reached.
         if event_step._ticks < TICKS:
             event_step._ticks += 1
             return 0.0
         event_step._ticks = 0
+
+        # Wait for any pending event queue break to be cleared before advancing,
+        # otherwise events injected by the next step may be deferred unexpectedly.
+        if is_event_handling_break:
+            return 0.0
 
         if on_step_command_pre:
             if event_step.run_events.gi_frame is not None:
@@ -337,6 +365,8 @@ def run(
 
         if isinstance(val, EventGenerate) or val is None:
             return 0.0
+        elif isinstance(val, datetime.timedelta):
+            return val.total_seconds()
         elif val is Ellipsis:
             if on_exit is not None:
                 on_exit()
@@ -346,8 +376,10 @@ def run(
 
     event_step.run_events = iter(event_iter)
     event_step._ticks = 0
+    event_step._ticks_handling_break_consecutive = 0
 
-    bpy.app.timers.register(event_step, first_interval=0.0)
+    # Persistent so this keeps working when tests load a blend file.
+    bpy.app.timers.register(event_step, first_interval=0.0, persistent=True)
 
 
 def setup_default_preferences(preferences):

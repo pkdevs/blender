@@ -9,9 +9,9 @@
  * \brief General operations for probes.
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 struct LightProbe;
 struct Main;
@@ -21,8 +21,10 @@ struct LightProbeObjectCache;
 struct LightProbeGridCacheFrame;
 struct Object;
 
-void BKE_lightprobe_type_set(struct LightProbe *probe, short lightprobe_type);
-void *BKE_lightprobe_add(struct Main *bmain, const char *name);
+enum eLightProbeType : char;
+
+void BKE_lightprobe_type_set(struct LightProbe *probe, eLightProbeType lightprobe_type);
+struct LightProbe *BKE_lightprobe_add(struct Main *bmain, const char *name);
 
 void BKE_lightprobe_cache_blend_write(struct BlendWriter *writer,
                                       struct LightProbeObjectCache *cache);
@@ -33,7 +35,7 @@ void BKE_lightprobe_cache_blend_read(struct BlendDataReader *reader,
 /**
  * Create a single empty irradiance grid cache.
  */
-struct LightProbeGridCacheFrame *BKE_lightprobe_grid_cache_frame_create(void);
+struct LightProbeGridCacheFrame *BKE_lightprobe_grid_cache_frame_create();
 
 /**
  * Create a copy of a cache frame.
@@ -69,6 +71,4 @@ void BKE_lightprobe_cache_free(struct Object *object);
  */
 int64_t BKE_lightprobe_grid_cache_frame_sample_count(const struct LightProbeGridCacheFrame *cache);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

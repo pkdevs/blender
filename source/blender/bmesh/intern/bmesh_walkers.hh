@@ -8,22 +8,42 @@
  * \ingroup bmesh
  */
 
+#include "bmesh_class.hh"
+
+#include "BLI_set.hh"
+
+namespace blender {
+
 /*
  * NOTE: do NOT modify topology while walking a mesh!
  */
 
-typedef enum {
+struct BMwGenericWalker;
+
+enum BMWOrder {
   BMW_DEPTH_FIRST,
   BMW_BREADTH_FIRST,
-} BMWOrder;
+};
 
-typedef enum {
+enum BMWFlag {
   BMW_FLAG_NOP = 0,
   BMW_FLAG_TEST_HIDDEN = (1 << 0),
-} BMWFlag;
+};
+
+enum BMWDelimitFlag {
+  BMW_DELIMIT_NONE = 0,
+  BMW_DELIMIT_EDGE_LOOP_INNER_CORNERS = 1 << 0,
+  BMW_DELIMIT_EDGE_LOOP_OUTER_CORNERS = 1 << 1,
+  BMW_DELIMIT_EDGE_LOOP_NGONS = 1 << 2,
+  BMW_DELIMIT_EDGE_RING_NGONS = 1 << 3,
+  BMW_DELIMIT_EDGE_MARK_SEAM = 1 << 4,
+  BMW_DELIMIT_EDGE_MARK_SHARP = 1 << 5,
+  BMW_DELIMIT_FACE_MARK_MATERIAL = 1 << 6,
+};
+ENUM_OPERATORS(BMWDelimitFlag)
 
 /*Walkers*/
-typedef struct BMWalker {
+struct BMWalker {
   char begin_htype; /* only for validating input */
   void (*begin)(struct BMWalker *walker, void *start);
   void *(*step)(struct BMWalker *walker);
@@ -31,13 +51,14 @@ typedef struct BMWalker {
   int structsize;
   BMWOrder order;
   int valid_mask;
+  BMWDelimitFlag delimit_supported;
 
   /* runtime */
   int layer;
 
   BMesh *bm;
   BLI_mempool *worklist;
-  ListBase states;
+  ListBaseT<BMwGenericWalker> states;
 
   /* these masks are to be tested against elements BMO_elem_flag_test(),
    * should never be accessed directly only through BMW_init() and bmw_mask_check_*() functions */
@@ -46,20 +67,21 @@ typedef struct BMWalker {
   short mask_face;
 
   BMWFlag flag;
+  BMWDelimitFlag delimit;
 
-  struct GSet *visit_set;
-  struct GSet *visit_set_alt;
+  Set<const void *> *visit_set;
+  Set<const void *> *visit_set_alt;
   int depth;
-} BMWalker;
+};
 
 /* define to make BMW_init more clear */
 #define BMW_MASK_NOP 0
 
 /**
- * \brief Init Walker
+ * \brief Initialize Walker
  *
  * Allocates and returns a new mesh walker of a given type.
- * The elements visited are filtered by the bitmask 'searchmask'.
+ * The elements visited are filtered by the bit-mask `searchmask`.
  */
 void BMW_init(struct BMWalker *walker,
               BMesh *bm,
@@ -68,7 +90,8 @@ void BMW_init(struct BMWalker *walker,
               short mask_edge,
               short mask_face,
               BMWFlag flag,
-              int layer);
+              int layer,
+              BMWDelimitFlag delimit);
 void *BMW_begin(BMWalker *walker, void *start);
 /**
  * \brief Step Walker
@@ -170,3 +193,5 @@ enum {
 
 /* use with BMW_init, so as not to confuse with restrict flags */
 #define BMW_NIL_LAY 0
+
+}  // namespace blender

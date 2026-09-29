@@ -12,10 +12,6 @@
 
 #include "../../stroke/ChainingIterators.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject AdjacencyIterator_Type;
@@ -24,14 +20,10 @@ extern PyTypeObject AdjacencyIterator_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&AdjacencyIterator_Type))
 
 /*---------------------------Python BPy_AdjacencyIterator structure definition----------*/
-typedef struct {
+struct BPy_AdjacencyIterator {
   BPy_Iterator py_it;
   Freestyle::AdjacencyIterator *a_it;
   bool at_start;
-} BPy_AdjacencyIterator;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

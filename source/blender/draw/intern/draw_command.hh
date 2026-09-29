@@ -15,20 +15,25 @@
 
 #include "BKE_global.hh"
 #include "BLI_map.hh"
+#include "BLI_math_base_c.hh"
 #include "DRW_gpu_wrapper.hh"
 
+#include "GPU_index_buffer.hh"
+#include "GPU_ray_tracing.hh"
 #include "draw_command_shared.hh"
 #include "draw_handle.hh"
 #include "draw_state.hh"
 #include "draw_view.hh"
 
+namespace blender {
+
 /* Forward declarations. */
-namespace blender::draw::detail {
+namespace draw::detail {
 template<typename T, int64_t block_size> class SubPassVector;
 template<typename DrawCommandBufType> class PassBase;
-}  // namespace blender::draw::detail
+}  // namespace draw::detail
 
-namespace blender::draw::command {
+namespace draw::command {
 
 class DrawCommandBuf;
 class DrawMultiBuf;
@@ -42,13 +47,18 @@ class DrawMultiBuf;
  * Keep track of several states and avoid redundant state changes.
  */
 struct RecordingState {
-  GPUShader *shader = nullptr;
+  gpu::shader::SpecializationConstants specialization_constants;
+  /* True if specialization_constants was set. */
+  bool specialization_constants_in_use = false;
+  /* True if the bound shader uses specialization. */
+  bool shader_use_specialization = false;
+  gpu::Shader *shader = nullptr;
   bool front_facing = true;
   bool inverted_view = false;
   DRWState pipeline_state = DRW_STATE_NO_DRAW;
   int clip_plane_count = 0;
-  /** Used for gl_BaseInstance workaround. */
-  GPUStorageBuf *resource_id_buf = nullptr;
+  /** Used for pass simple resource ID. Starts at 1 as 0 is the identity handle. */
+  int instance_offset = 1;
 
   void front_facing_set(bool facing)
   {
@@ -72,6 +82,11 @@ struct RecordingState {
       GPU_texture_unbind_all();
       GPU_uniformbuf_debug_unbind_all();
     }
+  }
+
+  const gpu::shader::SpecializationConstants *specialization_constants_get()
+  {
+    return shader_use_specialization ? &specialization_constants : nullptr;
   }
 };
 
@@ -104,6 +119,7 @@ enum class Type : uint8_t {
   SubPassTransition,
   StateSet,
   StencilSet,
+  TextureCopy,
 
   /** Special commands stored in separate buffers. */
   SubPass,
@@ -123,14 +139,14 @@ struct Header {
 };
 
 struct ShaderBind {
-  GPUShader *shader;
+  gpu::Shader *shader;
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
 };
 
 struct FramebufferBind {
-  GPUFrameBuffer **framebuffer;
+  gpu::FrameBuffer **framebuffer;
 
   void execute() const;
   std::string serialize() const;
@@ -160,58 +176,64 @@ struct ResourceBind {
     UniformAsStorageBuf,
     VertexAsStorageBuf,
     IndexAsStorageBuf,
+    TopLevelAS,
   } type;
 
   union {
-    /** TODO: Use draw::Texture|StorageBuffer|UniformBuffer as resources as they will give more
-     * debug info. */
-    GPUUniformBuf *uniform_buf;
-    GPUUniformBuf **uniform_buf_ref;
-    GPUStorageBuf *storage_buf;
-    GPUStorageBuf **storage_buf_ref;
+    /**
+     * TODO: Use draw::Texture|StorageBuffer|UniformBuffer as resources as they will give more
+     * debug info.
+     */
+    gpu::UniformBuf *uniform_buf;
+    gpu::UniformBuf **uniform_buf_ref;
+    gpu::StorageBuf *storage_buf;
+    gpu::StorageBuf **storage_buf_ref;
     /** NOTE: Texture is used for both Sampler and Image binds. */
-    GPUTexture *texture;
-    GPUTexture **texture_ref;
+    gpu::Texture *texture;
+    gpu::Texture **texture_ref;
     gpu::VertBuf *vertex_buf;
     gpu::VertBuf **vertex_buf_ref;
     gpu::IndexBuf *index_buf;
     gpu::IndexBuf **index_buf_ref;
+    gpu::TopLevelAS *tlas;
   };
 
   ResourceBind() = default;
 
-  ResourceBind(int slot_, GPUUniformBuf *res)
-      : slot(slot_), is_reference(false), type(Type::UniformBuf), uniform_buf(res){};
-  ResourceBind(int slot_, GPUUniformBuf **res)
-      : slot(slot_), is_reference(true), type(Type::UniformBuf), uniform_buf_ref(res){};
-  ResourceBind(int slot_, GPUStorageBuf *res)
-      : slot(slot_), is_reference(false), type(Type::StorageBuf), storage_buf(res){};
-  ResourceBind(int slot_, GPUStorageBuf **res)
-      : slot(slot_), is_reference(true), type(Type::StorageBuf), storage_buf_ref(res){};
-  ResourceBind(int slot_, GPUUniformBuf *res, Type /*type*/)
-      : slot(slot_), is_reference(false), type(Type::UniformAsStorageBuf), uniform_buf(res){};
-  ResourceBind(int slot_, GPUUniformBuf **res, Type /*type*/)
-      : slot(slot_), is_reference(true), type(Type::UniformAsStorageBuf), uniform_buf_ref(res){};
+  ResourceBind(int slot_, gpu::UniformBuf *res)
+      : slot(slot_), is_reference(false), type(Type::UniformBuf), uniform_buf(res) {};
+  ResourceBind(int slot_, gpu::UniformBuf **res)
+      : slot(slot_), is_reference(true), type(Type::UniformBuf), uniform_buf_ref(res) {};
+  ResourceBind(int slot_, gpu::StorageBuf *res)
+      : slot(slot_), is_reference(false), type(Type::StorageBuf), storage_buf(res) {};
+  ResourceBind(int slot_, gpu::StorageBuf **res)
+      : slot(slot_), is_reference(true), type(Type::StorageBuf), storage_buf_ref(res) {};
+  ResourceBind(int slot_, gpu::TopLevelAS *res)
+      : slot(slot_), is_reference(false), type(Type::TopLevelAS), tlas(res) {};
+  ResourceBind(int slot_, gpu::UniformBuf *res, Type /*type*/)
+      : slot(slot_), is_reference(false), type(Type::UniformAsStorageBuf), uniform_buf(res) {};
+  ResourceBind(int slot_, gpu::UniformBuf **res, Type /*type*/)
+      : slot(slot_), is_reference(true), type(Type::UniformAsStorageBuf), uniform_buf_ref(res) {};
   ResourceBind(int slot_, gpu::VertBuf *res, Type /*type*/)
-      : slot(slot_), is_reference(false), type(Type::VertexAsStorageBuf), vertex_buf(res){};
+      : slot(slot_), is_reference(false), type(Type::VertexAsStorageBuf), vertex_buf(res) {};
   ResourceBind(int slot_, gpu::VertBuf **res, Type /*type*/)
-      : slot(slot_), is_reference(true), type(Type::VertexAsStorageBuf), vertex_buf_ref(res){};
+      : slot(slot_), is_reference(true), type(Type::VertexAsStorageBuf), vertex_buf_ref(res) {};
   ResourceBind(int slot_, gpu::IndexBuf *res, Type /*type*/)
-      : slot(slot_), is_reference(false), type(Type::IndexAsStorageBuf), index_buf(res){};
+      : slot(slot_), is_reference(false), type(Type::IndexAsStorageBuf), index_buf(res) {};
   ResourceBind(int slot_, gpu::IndexBuf **res, Type /*type*/)
-      : slot(slot_), is_reference(true), type(Type::IndexAsStorageBuf), index_buf_ref(res){};
+      : slot(slot_), is_reference(true), type(Type::IndexAsStorageBuf), index_buf_ref(res) {};
   ResourceBind(int slot_, draw::Image *res)
-      : slot(slot_), is_reference(false), type(Type::Image), texture(draw::as_texture(res)){};
+      : slot(slot_), is_reference(false), type(Type::Image), texture(draw::as_texture(res)) {};
   ResourceBind(int slot_, draw::Image **res)
-      : slot(slot_), is_reference(true), type(Type::Image), texture_ref(draw::as_texture(res)){};
-  ResourceBind(int slot_, GPUTexture *res, GPUSamplerState state)
-      : sampler(state), slot(slot_), is_reference(false), type(Type::Sampler), texture(res){};
-  ResourceBind(int slot_, GPUTexture **res, GPUSamplerState state)
-      : sampler(state), slot(slot_), is_reference(true), type(Type::Sampler), texture_ref(res){};
+      : slot(slot_), is_reference(true), type(Type::Image), texture_ref(draw::as_texture(res)) {};
+  ResourceBind(int slot_, gpu::Texture *res, GPUSamplerState state)
+      : sampler(state), slot(slot_), is_reference(false), type(Type::Sampler), texture(res) {};
+  ResourceBind(int slot_, gpu::Texture **res, GPUSamplerState state)
+      : sampler(state), slot(slot_), is_reference(true), type(Type::Sampler), texture_ref(res) {};
   ResourceBind(int slot_, gpu::VertBuf *res)
-      : slot(slot_), is_reference(false), type(Type::BufferSampler), vertex_buf(res){};
+      : slot(slot_), is_reference(false), type(Type::BufferSampler), vertex_buf(res) {};
   ResourceBind(int slot_, gpu::VertBuf **res)
-      : slot(slot_), is_reference(true), type(Type::BufferSampler), vertex_buf_ref(res){};
+      : slot(slot_), is_reference(true), type(Type::BufferSampler), vertex_buf_ref(res) {};
 
   void execute() const;
   std::string serialize() const;
@@ -256,42 +278,43 @@ struct PushConstant {
   PushConstant() = default;
 
   PushConstant(int loc, const float &val)
-      : location(loc), array_len(1), comp_len(1), type(Type::FloatValue), float1_value(val){};
+      : location(loc), array_len(1), comp_len(1), type(Type::FloatValue), float1_value(val) {};
   PushConstant(int loc, const float2 &val)
-      : location(loc), array_len(1), comp_len(2), type(Type::FloatValue), float2_value(val){};
+      : location(loc), array_len(1), comp_len(2), type(Type::FloatValue), float2_value(val) {};
   PushConstant(int loc, const float3 &val)
-      : location(loc), array_len(1), comp_len(3), type(Type::FloatValue), float3_value(val){};
+      : location(loc), array_len(1), comp_len(3), type(Type::FloatValue), float3_value(val) {};
   PushConstant(int loc, const float4 &val)
-      : location(loc), array_len(1), comp_len(4), type(Type::FloatValue), float4_value(val){};
+      : location(loc), array_len(1), comp_len(4), type(Type::FloatValue), float4_value(val) {};
 
   PushConstant(int loc, const int &val)
-      : location(loc), array_len(1), comp_len(1), type(Type::IntValue), int1_value(val){};
+      : location(loc), array_len(1), comp_len(1), type(Type::IntValue), int1_value(val) {};
   PushConstant(int loc, const int2 &val)
-      : location(loc), array_len(1), comp_len(2), type(Type::IntValue), int2_value(val){};
+      : location(loc), array_len(1), comp_len(2), type(Type::IntValue), int2_value(val) {};
   PushConstant(int loc, const int3 &val)
-      : location(loc), array_len(1), comp_len(3), type(Type::IntValue), int3_value(val){};
+      : location(loc), array_len(1), comp_len(3), type(Type::IntValue), int3_value(val) {};
   PushConstant(int loc, const int4 &val)
-      : location(loc), array_len(1), comp_len(4), type(Type::IntValue), int4_value(val){};
+      : location(loc), array_len(1), comp_len(4), type(Type::IntValue), int4_value(val) {};
 
   PushConstant(int loc, const float *val, int arr)
-      : location(loc), array_len(arr), comp_len(1), type(Type::FloatReference), float_ref(val){};
+      : location(loc), array_len(arr), comp_len(1), type(Type::FloatReference), float_ref(val) {};
   PushConstant(int loc, const float2 *val, int arr)
-      : location(loc), array_len(arr), comp_len(2), type(Type::FloatReference), float2_ref(val){};
+      : location(loc), array_len(arr), comp_len(2), type(Type::FloatReference), float2_ref(val) {};
   PushConstant(int loc, const float3 *val, int arr)
-      : location(loc), array_len(arr), comp_len(3), type(Type::FloatReference), float3_ref(val){};
+      : location(loc), array_len(arr), comp_len(3), type(Type::FloatReference), float3_ref(val) {};
   PushConstant(int loc, const float4 *val, int arr)
-      : location(loc), array_len(arr), comp_len(4), type(Type::FloatReference), float4_ref(val){};
+      : location(loc), array_len(arr), comp_len(4), type(Type::FloatReference), float4_ref(val) {};
   PushConstant(int loc, const float4x4 *val)
-      : location(loc), array_len(1), comp_len(16), type(Type::FloatReference), float4x4_ref(val){};
+      : location(loc), array_len(1), comp_len(16), type(Type::FloatReference), float4x4_ref(val) {
+        };
 
   PushConstant(int loc, const int *val, int arr)
-      : location(loc), array_len(arr), comp_len(1), type(Type::IntReference), int_ref(val){};
+      : location(loc), array_len(arr), comp_len(1), type(Type::IntReference), int_ref(val) {};
   PushConstant(int loc, const int2 *val, int arr)
-      : location(loc), array_len(arr), comp_len(2), type(Type::IntReference), int2_ref(val){};
+      : location(loc), array_len(arr), comp_len(2), type(Type::IntReference), int2_ref(val) {};
   PushConstant(int loc, const int3 *val, int arr)
-      : location(loc), array_len(arr), comp_len(3), type(Type::IntReference), int3_ref(val){};
+      : location(loc), array_len(arr), comp_len(3), type(Type::IntReference), int3_ref(val) {};
   PushConstant(int loc, const int4 *val, int arr)
-      : location(loc), array_len(arr), comp_len(4), type(Type::IntReference), int4_ref(val){};
+      : location(loc), array_len(arr), comp_len(4), type(Type::IntReference), int4_ref(val) {};
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
@@ -299,7 +322,7 @@ struct PushConstant {
 
 struct SpecializeConstant {
   /* Shader to set the constant in. */
-  GPUShader *shader;
+  gpu::Shader *shader;
   /* Value of the constant or a reference to it. */
   union {
     int int_value;
@@ -327,40 +350,35 @@ struct SpecializeConstant {
 
   SpecializeConstant() = default;
 
-  SpecializeConstant(GPUShader *sh, int loc, const float &val)
-      : shader(sh), float_value(val), location(loc), type(Type::FloatValue){};
-  SpecializeConstant(GPUShader *sh, int loc, const int &val)
-      : shader(sh), int_value(val), location(loc), type(Type::IntValue){};
-  SpecializeConstant(GPUShader *sh, int loc, const uint &val)
-      : shader(sh), uint_value(val), location(loc), type(Type::UintValue){};
-  SpecializeConstant(GPUShader *sh, int loc, const bool &val)
-      : shader(sh), bool_value(val), location(loc), type(Type::BoolValue){};
-  SpecializeConstant(GPUShader *sh, int loc, const float *val)
-      : shader(sh), float_ref(val), location(loc), type(Type::FloatReference){};
-  SpecializeConstant(GPUShader *sh, int loc, const int *val)
-      : shader(sh), int_ref(val), location(loc), type(Type::IntReference){};
-  SpecializeConstant(GPUShader *sh, int loc, const uint *val)
-      : shader(sh), uint_ref(val), location(loc), type(Type::UintReference){};
-  SpecializeConstant(GPUShader *sh, int loc, const bool *val)
-      : shader(sh), bool_ref(val), location(loc), type(Type::BoolReference){};
+  SpecializeConstant(gpu::Shader *sh, int loc, const float &val)
+      : shader(sh), float_value(val), location(loc), type(Type::FloatValue) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const int &val)
+      : shader(sh), int_value(val), location(loc), type(Type::IntValue) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const uint &val)
+      : shader(sh), uint_value(val), location(loc), type(Type::UintValue) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const bool &val)
+      : shader(sh), bool_value(val), location(loc), type(Type::BoolValue) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const float *val)
+      : shader(sh), float_ref(val), location(loc), type(Type::FloatReference) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const int *val)
+      : shader(sh), int_ref(val), location(loc), type(Type::IntReference) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const uint *val)
+      : shader(sh), uint_ref(val), location(loc), type(Type::UintReference) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const bool *val)
+      : shader(sh), bool_ref(val), location(loc), type(Type::BoolReference) {};
 
-  void execute() const;
+  void execute(RecordingState &state) const;
   std::string serialize() const;
 };
 
 struct Draw {
   gpu::Batch *batch;
-  uint16_t instance_len;
-  uint8_t expand_prim_type; /* #GPUPrimType */
-  uint8_t expand_prim_len;
+  uint32_t instance_len : 24;
+  uint32_t expand_prim_type : 4; /* #GPUPrimType */
+  uint32_t expand_prim_len : 4;
   uint32_t vertex_first;
   uint32_t vertex_len;
-  ResourceHandle handle;
-#ifdef WITH_METAL_BACKEND
-  /* Shader is required for extracting SSBO vertex fetch expansion parameters during draw command
-   * generation. */
-  GPUShader *shader;
-#endif
+  ResourceID res_id;
 
   Draw() = default;
 
@@ -368,20 +386,16 @@ struct Draw {
        uint instance_len,
        uint vertex_len,
        uint vertex_first,
-#ifdef WITH_METAL_BACKEND
-       GPUShader *shader,
-#endif
        GPUPrimType expanded_prim_type,
        uint expanded_prim_len,
-       ResourceHandle handle)
+       ResourceID res_id)
   {
+    BLI_assert(batch != nullptr);
+    BLI_assert(expanded_prim_type <= 15);
+    BLI_assert(expanded_prim_len <= 15);
     this->batch = batch;
-    this->handle = handle;
-#ifdef WITH_METAL_BACKEND
-    this->shader = shader;
-#endif
-    BLI_assert(instance_len < SHRT_MAX);
-    this->instance_len = uint16_t(instance_len);
+    this->res_id = res_id;
+    this->instance_len = min_uu(instance_len, (1 << 24) - 1);
     this->vertex_len = vertex_len;
     this->vertex_first = vertex_first;
     this->expand_prim_type = expanded_prim_type;
@@ -409,8 +423,8 @@ struct DrawMulti {
 
 struct DrawIndirect {
   gpu::Batch *batch;
-  GPUStorageBuf **indirect_buf;
-  ResourceHandle handle;
+  gpu::StorageBuf **indirect_buf;
+  ResourceID res_id;
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
@@ -425,29 +439,29 @@ struct Dispatch {
 
   Dispatch() = default;
 
-  Dispatch(int3 group_len) : is_reference(false), size(group_len){};
-  Dispatch(int3 *group_len) : is_reference(true), size_ref(group_len){};
+  Dispatch(int3 group_len) : is_reference(false), size(group_len) {};
+  Dispatch(int3 *group_len) : is_reference(true), size_ref(group_len) {};
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
 };
 
 struct DispatchIndirect {
-  GPUStorageBuf **indirect_buf;
+  gpu::StorageBuf **indirect_buf;
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
 };
 
 struct Barrier {
-  eGPUBarrier type;
+  GPUBarrier type;
 
   void execute() const;
   std::string serialize() const;
 };
 
 struct Clear {
-  uint8_t clear_channels; /* #eGPUFrameBufferBits. But want to save some bits. */
+  uint8_t clear_channels; /* #GPUFrameBufferBits. But want to save some bits. */
   uint8_t stencil;
   float depth;
   float4 color;
@@ -458,7 +472,7 @@ struct Clear {
 
 struct ClearMulti {
   /** \note This should be a Span<float4> but we need have to only have trivial types here. */
-  const float4 *colors;
+  const double4 *colors;
   int colors_len;
 
   void execute() const;
@@ -471,12 +485,31 @@ struct StateSet {
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
+
+  /* Set state of the GPU module manually. */
+  static void set(DRWState state = DRW_STATE_DEFAULT);
 };
 
 struct StencilSet {
   uint write_mask;
   uint compare_mask;
   uint reference;
+
+  void execute() const;
+  std::string serialize() const;
+};
+
+struct TextureCopy {
+  union {
+    gpu::Texture *src;
+    gpu::Texture **src_ref;
+  };
+  union {
+    gpu::Texture *dst;
+    gpu::Texture **dst_ref;
+  };
+  bool src_is_ref;
+  bool dst_is_ref;
 
   void execute() const;
   std::string serialize() const;
@@ -499,16 +532,12 @@ union Undetermined {
   ClearMulti clear_multi;
   StateSet state_set;
   StencilSet stencil_set;
+  TextureCopy texture_copy;
 };
 
 /** Try to keep the command size as low as possible for performance. */
 
-#ifdef WITH_METAL_BACKEND
-/* TODO(fclem): Remove. */
-BLI_STATIC_ASSERT(sizeof(Undetermined) <= 32, "One of the command type is too large.")
-#else
 BLI_STATIC_ASSERT(sizeof(Undetermined) <= 24, "One of the command type is too large.")
-#endif
 
 /** \} */
 
@@ -546,38 +575,36 @@ class DrawCommandBuf {
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,
-                   ResourceHandle handle,
+                   ResourceIDRange id_range,
                    uint custom_id,
-#ifdef WITH_METAL_BACKEND
-                   GPUShader *shader,
-#endif
                    GPUPrimType expanded_prim_type,
                    uint16_t expanded_prim_len)
   {
+    BLI_assert(batch != nullptr);
     vertex_first = vertex_first != -1 ? vertex_first : 0;
     instance_len = instance_len != -1 ? instance_len : 1;
 
     BLI_assert_msg(custom_id == 0, "Custom ID is not supported in PassSimple");
     UNUSED_VARS_NDEBUG(custom_id);
 
-    int64_t index = commands.append_and_get_index({});
-    headers.append({Type::Draw, uint(index)});
-    commands[index].draw = {batch,
-                            instance_len,
-                            vertex_len,
-                            vertex_first,
-#ifdef WITH_METAL_BACKEND
-                            shader,
-#endif
-                            expanded_prim_type,
-                            expanded_prim_len,
-                            handle};
+    for (auto res_id : id_range.id_range()) {
+      int64_t index = commands.append_and_get_index({});
+      headers.append({Type::Draw, uint(index)});
+      commands[index].draw = {batch,
+                              instance_len,
+                              vertex_len,
+                              vertex_first,
+                              expanded_prim_type,
+                              expanded_prim_len,
+                              ResourceID(res_id)};
+    }
   }
 
-  void bind(RecordingState &state,
-            Vector<Header, 0> &headers,
-            Vector<Undetermined, 0> &commands,
-            SubPassVector &sub_passes);
+  void generate_commands(Vector<Header, 0> &headers,
+                         Vector<Undetermined, 0> &commands,
+                         SubPassVector &sub_passes);
+
+  void bind(RecordingState &state);
 
  private:
   static void finalize_commands(Vector<Header, 0> &headers,
@@ -669,14 +696,12 @@ class DrawMultiBuf {
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,
-                   ResourceHandle handle,
+                   ResourceIDRange id_range,
                    uint custom_id,
-#ifdef WITH_METAL_BACKEND
-                   GPUShader *shader,
-#endif
                    GPUPrimType expanded_prim_type,
                    uint16_t expanded_prim_len)
   {
+    BLI_assert(batch != nullptr);
     /* Custom draw-calls cannot be batched and will produce one group per draw. */
     const bool custom_group = ((vertex_first != 0 && vertex_first != -1) || vertex_len != -1);
 
@@ -688,78 +713,78 @@ class DrawMultiBuf {
     if (headers.is_empty() || headers.last().type != Type::DrawMulti) {
       uint index = commands.append_and_get_index({});
       headers.append({Type::DrawMulti, index});
-      commands[index].draw_multi = {batch, this, (uint)-1, header_id_counter_++};
+      commands[index].draw_multi = {batch, this, uint(-1), header_id_counter_++};
     }
 
     DrawMulti &cmd = commands.last().draw_multi;
 
     uint &group_id = group_ids_.lookup_or_add(DrawGroupKey(cmd.uuid, batch), uint(-1));
 
-    bool inverted = handle.has_inverted_handedness();
+    bool inverted = id_range.has_inverted_handedness();
 
-    DrawPrototype &draw = prototype_buf_.get_or_resize(prototype_count_++);
-    draw.resource_handle = handle.raw;
-    draw.custom_id = custom_id;
-    draw.instance_len = instance_len;
-    draw.group_id = group_id;
+    for (auto res_id : id_range.id_range()) {
+      DrawPrototype &draw = prototype_buf_.get_or_resize(prototype_count_++);
+      draw.res_id = uint32_t(res_id);
+      draw.custom_id = custom_id;
+      draw.instance_len = instance_len;
+      draw.group_id = group_id;
 
-    if (group_id == uint(-1) || custom_group) {
-      uint new_group_id = group_count_++;
-      draw.group_id = new_group_id;
+      if (group_id == uint(-1) || custom_group) {
+        uint new_group_id = group_count_++;
+        draw.group_id = new_group_id;
 
-      DrawGroup &group = group_buf_.get_or_resize(new_group_id);
-      group.next = cmd.group_first;
-      group.len = instance_len;
-      group.front_facing_len = inverted ? 0 : instance_len;
-      group.front_facing_counter = 0;
-      group.back_facing_counter = 0;
-      group.desc.vertex_len = vertex_len;
-      group.desc.vertex_first = vertex_first;
-      group.desc.gpu_batch = batch;
-      group.desc.expand_prim_type = expanded_prim_type;
-      group.desc.expand_prim_len = expanded_prim_len;
-      BLI_assert_msg(expanded_prim_len < (1 << 3), "Not enough bits to store primitive expansion");
-#ifdef WITH_METAL_BACKEND
-      group.desc.gpu_shader = shader;
-#endif
-      /* Custom group are not to be registered in the group_ids_. */
-      if (!custom_group) {
-        group_id = new_group_id;
+        DrawGroup &group = group_buf_.get_or_resize(new_group_id);
+        group.next = cmd.group_first;
+        group.len = instance_len;
+        group.front_facing_len = inverted ? 0 : instance_len;
+        group.front_facing_counter = 0;
+        group.back_facing_counter = 0;
+        group.desc.vertex_len = vertex_len;
+        group.desc.vertex_first = vertex_first;
+        group.desc.gpu_batch = batch;
+        group.desc.expand_prim_type = expanded_prim_type;
+        group.desc.expand_prim_len = expanded_prim_len;
+        BLI_assert_msg(expanded_prim_len < (1 << 3),
+                       "Not enough bits to store primitive expansion");
+        /* Custom group are not to be registered in the group_ids_. */
+        if (!custom_group) {
+          group_id = new_group_id;
+        }
+        /* For serialization only. Reset before use on GPU. */
+        (inverted ? group.back_facing_counter : group.front_facing_counter)++;
+        /* Append to list. */
+        cmd.group_first = new_group_id;
       }
-      /* For serialization only. Reset before use on GPU. */
-      (inverted ? group.back_facing_counter : group.front_facing_counter)++;
-      /* Append to list. */
-      cmd.group_first = new_group_id;
-    }
-    else {
-      DrawGroup &group = group_buf_[group_id];
-      group.len += instance_len;
-      group.front_facing_len += inverted ? 0 : instance_len;
-      /* For serialization only. Reset before use on GPU. */
-      (inverted ? group.back_facing_counter : group.front_facing_counter)++;
-      /* NOTE: We assume that primitive expansion is coupled to the shader itself. Meaning we rely
-       * on shader bind to isolate the expanded draws into their own group (as there could be
-       * regular draws and extended draws using the same batch mixed inside the same pass). This
-       * will cause issues if this assumption is broken. Also it is very hard to detect this case
-       * for error checking. At least we can check that expansion settings don't change inside a
-       * group. */
-      BLI_assert(group.desc.expand_prim_type == expanded_prim_type);
-      BLI_assert(group.desc.expand_prim_len == expanded_prim_len);
-#ifdef WITH_METAL_BACKEND
-      BLI_assert(group.desc.gpu_shader == shader);
-#endif
+      else {
+        DrawGroup &group = group_buf_[group_id];
+        group.len += instance_len;
+        group.front_facing_len += inverted ? 0 : instance_len;
+        /* For serialization only. Reset before use on GPU. */
+        (inverted ? group.back_facing_counter : group.front_facing_counter)++;
+        /* NOTE: We assume that primitive expansion is coupled to the shader itself. Meaning we
+         * rely on shader bind to isolate the expanded draws into their own group (as there could
+         * be regular draws and extended draws using the same batch mixed inside the same pass).
+         * This will cause issues if this assumption is broken. Also it is very hard to detect this
+         * case for error checking. At least we can check that expansion settings don't change
+         * inside a group. */
+        BLI_assert(group.desc.expand_prim_type == expanded_prim_type);
+        BLI_assert(group.desc.expand_prim_len == expanded_prim_len);
+      }
     }
   }
 
-  void bind(RecordingState &state,
-            Vector<Header, 0> &headers,
-            Vector<Undetermined, 0> &commands,
-            VisibilityBuf &visibility_buf,
-            int visibility_word_per_draw,
-            int view_len,
-            bool use_custom_ids);
+  void generate_commands(Vector<Header, 0> &headers,
+                         Vector<Undetermined, 0> &commands,
+                         VisibilityBuf &visibility_buf,
+                         int visibility_word_per_draw,
+                         int view_len,
+                         bool use_custom_ids);
+
+  void bind(RecordingState &state);
 };
 
 /** \} */
 
-};  // namespace blender::draw::command
+};  // namespace draw::command
+
+}  // namespace blender

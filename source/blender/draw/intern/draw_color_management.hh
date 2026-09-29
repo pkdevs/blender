@@ -8,11 +8,18 @@
 
 #pragma once
 
-struct GPUTexture;
-struct GPUViewport;
+namespace blender {
 
-/**
- * Draw texture to frame-buffer without any color transforms.
- */
-void DRW_transform_none(GPUTexture *tex);
-void DRW_viewport_colormanagement_set(GPUViewport *viewport);
+namespace gpu {
+class Texture;
+}
+struct GPUViewport;
+struct DRWContext;
+
+namespace draw::color_management {
+
+void viewport_color_management_set(GPUViewport &viewport, DRWContext &draw_ctx);
+
+}  // namespace draw::color_management
+
+}  // namespace blender

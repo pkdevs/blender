@@ -8,9 +8,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_dynstr.h"
-#include "BLI_string.h"
-#include "BLI_string_utils.hh"
+#include "BLI_dynstr.hh"
 #include "BLI_vector.hh"
 
 #include "GPU_storage_buffer.hh"
@@ -21,9 +19,14 @@
 
 #include "CLG_log.h"
 
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
+namespace blender {
+
 static CLG_LogRef LOG = {"gpu.shader"};
 
-namespace blender::gpu {
+namespace gpu {
 
 /* -------------------------------------------------------------------- */
 /** \name Debug functions
@@ -37,7 +40,7 @@ namespace blender::gpu {
  */
 #define DEBUG_DEPENDENCIES 0
 
-void Shader::print_log(Span<const char *> sources,
+void Shader::print_log(Span<StringRefNull> sources,
                        const char *log,
                        const char *stage,
                        const bool error,
@@ -48,7 +51,7 @@ void Shader::print_log(Span<const char *> sources,
   char warn_col[] = "\033[33;1m";
   char info_col[] = "\033[0;2m";
   char reset_col[] = "\033[0;0m";
-  char *sources_combined = BLI_string_join_arrayN((const char **)sources.data(), sources.size());
+  std::string sources_combined = fmt::to_string(fmt::join(sources, ""));
   DynStr *dynstr = BLI_dynstr_new();
 
   if (!CLG_color_support_get(&LOG)) {
@@ -63,7 +66,7 @@ void Shader::print_log(Span<const char *> sources,
 #endif
 
   Vector<int64_t> sources_end_line;
-  for (StringRefNull src : sources) {
+  for (StringRef src : sources) {
     int64_t cursor = 0, line_count = 0;
     while ((cursor = src.find('\n', cursor) + 1)) {
       line_count++;
@@ -106,7 +109,7 @@ void Shader::print_log(Span<const char *> sources,
     }
 
     GPULogItem log_item;
-    log_line = parser->parse_line(sources_combined, log_line, log_item);
+    log_line = parser->parse_line(sources_combined.c_str(), log_line, log_item);
 
     /* Empty line, skip. */
     if ((log_item.cursor.row == -1) && ELEM(log_line[0], '\n', '\0')) {
@@ -125,11 +128,16 @@ void Shader::print_log(Span<const char *> sources,
     if (log_item.cursor.row == -1) {
       found_line_id = false;
     }
-    else if (log_item.source_base_row && log_item.cursor.source > 0) {
-      log_item.cursor.row += sources_end_line[log_item.cursor.source - 1];
-    }
 
-    const char *src_line = sources_combined;
+    const char *src_line = sources_combined.c_str();
+
+    std::string log_line_str(log_line, (line_end + 1) - log_line);
+    if (log_line_str.ends_with(" used uninitialized\n")) {
+      /* Mesa GLSL compiler warns about uninitialized variables are mostly false positive.
+       * Avoid noise. */
+      log_line = line_end + 1;
+      continue;
+    }
 
     /* Separate from previous block. */
     if (previous_location.source != log_item.cursor.source ||
@@ -146,7 +154,7 @@ void Shader::print_log(Span<const char *> sources,
     {
       const char *src_line_end;
       found_line_id = false;
-      /* error_line is 1 based in this case. */
+      /* Lines are 1 based. */
       int src_line_index = 1;
       while ((src_line_end = strchr(src_line, '\n'))) {
         if (src_line_index >= log_item.cursor.row) {
@@ -212,9 +220,11 @@ void Shader::print_log(Span<const char *> sources,
       row_in_file -= sources_end_line[source_index - 1];
     }
     /* Print the filename the error line is coming from. */
-    if (!log_item.cursor.file_name_and_error_line.is_empty()) {
+    if (!log_item.cursor.file_name_and_error_line.empty()) {
       char name_buf[256];
-      log_item.cursor.file_name_and_error_line.substr(0, sizeof(name_buf) - 1).copy(name_buf);
+      std::string string = log_item.cursor.file_name_and_error_line.substr(0,
+                                                                           sizeof(name_buf) - 1);
+      StringRefNull(string).copy_utf8_truncated(name_buf);
       BLI_dynstr_appendf(dynstr, "%s%s: %s", info_col, name_buf, reset_col);
     }
     else if (source_index > 0) {
@@ -249,20 +259,17 @@ void Shader::print_log(Span<const char *> sources,
     previous_location = log_item.cursor;
   }
 
-  CLG_Severity severity = error ? CLG_SEVERITY_ERROR : CLG_SEVERITY_WARN;
+  CLG_Level level = error ? CLG_LEVEL_ERROR : CLG_LEVEL_WARN;
 
-  if (((LOG.type->flag & CLG_FLAG_USE) && (LOG.type->level >= 0)) ||
-      (severity >= CLG_SEVERITY_WARN))
-  {
+  if (CLOG_CHECK(&LOG, level)) {
     if (DEBUG_LOG_SHADER_SRC_ON_ERROR && error) {
-      CLG_log_str(LOG.type, severity, this->name, stage, sources_combined);
+      CLG_log_raw(LOG.type, sources_combined.c_str());
     }
     const char *_str = BLI_dynstr_get_cstring(dynstr);
-    CLG_log_str(LOG.type, severity, this->name, stage, _str);
-    MEM_freeN((void *)_str);
+    CLOG_AT_LEVEL(&LOG, level, "%s %s: %s", this->name, stage, _str);
+    MEM_delete(_str);
   }
 
-  MEM_freeN(sources_combined);
   BLI_dynstr_free(dynstr);
 }
 
@@ -322,6 +329,50 @@ int GPULogParser::parse_number(const char *log_line, const char **r_new_position
   return int(strtol(log_line, const_cast<char **>(r_new_position), 10));
 }
 
+size_t GPULogParser::line_start_get(StringRefNull source_combined, size_t target_line)
+{
+  size_t cursor = 0;
+  size_t current_line = 1;
+  for (char c : source_combined) {
+    if (current_line >= target_line) {
+      return cursor + 1;
+    }
+    if (c == '\n') {
+      current_line++;
+    }
+    cursor++;
+  }
+  return -1;
+}
+
+StringRef GPULogParser::filename_get(StringRefNull source_combined, size_t pos)
+{
+  StringRef sub_str = source_combined.substr(0, pos);
+  StringRefNull directive = "#line 1 \"";
+  size_t nearest_line_directive = sub_str.rfind(directive);
+  if (nearest_line_directive != std::string::npos) {
+    size_t start_of_file_name = nearest_line_directive + directive.size();
+    size_t end_of_file_name = sub_str.find('\"', start_of_file_name);
+    if (end_of_file_name != std::string::npos) {
+      return sub_str.substr(start_of_file_name, end_of_file_name - start_of_file_name);
+    }
+  }
+  return {};
+}
+
+/* Original source file line. Found by looking up #line directives. */
+size_t GPULogParser::source_line_get(StringRefNull source_combined, size_t pos)
+{
+  StringRef sub_str = source_combined.substr(0, pos);
+  StringRefNull directive = "#line ";
+  size_t nearest_line_directive = sub_str.rfind(directive);
+  size_t line_count = 1;
+  if (nearest_line_directive != std::string::npos) {
+    sub_str = sub_str.substr(nearest_line_directive + directive.size());
+    line_count = std::stoll(sub_str) - 1;
+  }
+  return line_count + std::count(sub_str.begin(), sub_str.end(), '\n');
+}
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -330,41 +381,44 @@ int GPULogParser::parse_number(const char *log_line, const char **r_new_position
 
 void printf_begin(Context *ctx)
 {
+#if GPU_SHADER_PRINTF_ENABLE == 0
+  return;
+#endif
   if (ctx == nullptr) {
     return;
   }
   if (!shader::gpu_shader_dependency_has_printf()) {
     return;
   }
-  BLI_assert(ctx->printf_buf == nullptr);
-  ctx->printf_buf = GPU_storagebuf_create(GPU_SHADER_PRINTF_MAX_CAPACITY * sizeof(uint32_t));
-  GPU_storagebuf_clear_to_zero(ctx->printf_buf);
+  StorageBuf *printf_buf = GPU_storagebuf_create(GPU_SHADER_PRINTF_MAX_CAPACITY *
+                                                 sizeof(uint32_t));
+  GPU_storagebuf_clear_to_zero(printf_buf);
+  ctx->printf_buf.append(printf_buf);
 }
 
 void printf_end(Context *ctx)
 {
+#if GPU_SHADER_PRINTF_ENABLE == 0
+  return;
+#endif
   if (ctx == nullptr) {
     return;
   }
-  if (ctx->printf_buf == nullptr) {
+  if (ctx->printf_buf.is_empty()) {
     return;
   }
+  StorageBuf *printf_buf = ctx->printf_buf.pop_last();
 
   Vector<uint32_t> data(GPU_SHADER_PRINTF_MAX_CAPACITY);
-  GPU_storagebuf_read(ctx->printf_buf, data.data());
-  GPU_storagebuf_free(ctx->printf_buf);
-  ctx->printf_buf = nullptr;
+  GPU_storagebuf_read(printf_buf, data.data());
+  GPU_storagebuf_free(printf_buf);
 
   uint32_t data_len = data[0];
   if (data_len == 0) {
     return;
   }
-  if (data_len >= GPU_SHADER_PRINTF_MAX_CAPACITY) {
-    printf("Printf buffer overflow.\n");
-    /* TODO(fclem): We can still read the uncorrupted part. */
-    return;
-  }
 
+  /* data[0] contains the length of the data. */
   int cursor = 1;
   while (cursor < data_len + 1) {
     uint32_t format_hash = data[cursor++];
@@ -372,11 +426,23 @@ void printf_end(Context *ctx)
     const shader::PrintfFormat &format = shader::gpu_shader_dependency_get_printf_format(
         format_hash);
 
+    if (cursor + format.format_blocks.size() >= GPU_SHADER_PRINTF_MAX_CAPACITY) {
+      printf("Printf buffer overflow.\n");
+      break;
+    }
+
     for (const shader::PrintfFormat::Block &block : format.format_blocks) {
       switch (block.type) {
         case shader::PrintfFormat::Block::NONE:
           printf("%s", block.fmt.c_str());
           break;
+        case shader::PrintfFormat::Block::STRING: {
+          /* This is actually just the string that is referenced, not a format. */
+          const shader::PrintfFormat &str = shader::gpu_shader_dependency_get_printf_format(
+              *reinterpret_cast<uint32_t *>(&data[cursor++]));
+          printf(block.fmt.c_str(), str.format_str.c_str());
+          break;
+        }
         case shader::PrintfFormat::Block::UINT:
           printf(block.fmt.c_str(), *reinterpret_cast<uint32_t *>(&data[cursor++]));
           break;
@@ -396,4 +462,5 @@ void printf_end(Context *ctx)
 
 /** \} */
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

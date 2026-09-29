@@ -10,10 +10,6 @@
 
 #include "../BPy_UnaryPredicate1D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject WithinImageBoundaryUP1D_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject WithinImageBoundaryUP1D_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&WithinImageBoundaryUP1D_Type))
 
 /*---------------------------Python BPy_WithinImageBoundaryUP1D structure definition----------*/
-typedef struct {
+struct BPy_WithinImageBoundaryUP1D {
   BPy_UnaryPredicate1D py_up1D;
-} BPy_WithinImageBoundaryUP1D;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

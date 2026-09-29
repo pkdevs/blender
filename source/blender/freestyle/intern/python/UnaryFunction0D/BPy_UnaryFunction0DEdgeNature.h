@@ -12,10 +12,6 @@
 
 #include "../../winged_edge/Nature.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject UnaryFunction0DEdgeNature_Type;
@@ -24,16 +20,12 @@ extern PyTypeObject UnaryFunction0DEdgeNature_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&UnaryFunction0DEdgeNature_Type))
 
 /*---------------------------Python BPy_UnaryFunction0DEdgeNature structure definition----------*/
-typedef struct {
+struct BPy_UnaryFunction0DEdgeNature {
   BPy_UnaryFunction0D py_uf0D;
   Freestyle::UnaryFunction0D<Freestyle::Nature::EdgeNature> *uf0D_edgenature;
-} BPy_UnaryFunction0DEdgeNature;
+};
 
 /*---------------------------Python BPy_UnaryFunction0DEdgeNature visible prototypes-----------*/
 int UnaryFunction0DEdgeNature_Init(PyObject *module);
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

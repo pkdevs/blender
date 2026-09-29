@@ -10,10 +10,6 @@
 
 #include "../BPy_UnaryFunction1DDouble.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject GetSteerableViewMapDensityF1D_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject GetSteerableViewMapDensityF1D_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&GetSteerableViewMapDensityF1D_Type))
 /*---------------------------Python BPy_GetSteerableViewMapDensityF1D structure
  * definition----------*/
-typedef struct {
+struct BPy_GetSteerableViewMapDensityF1D {
   BPy_UnaryFunction1DDouble py_uf1D_double;
-} BPy_GetSteerableViewMapDensityF1D;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

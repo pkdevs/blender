@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_sys_types.h"
+namespace blender {
 
 struct ARegion;
 struct bContext;
@@ -20,7 +19,9 @@ struct wmOperator;
 
 void ED_imbuf_sample_draw(const bContext *C, ARegion *region, void *arg_info);
 void ED_imbuf_sample_exit(bContext *C, wmOperator *op);
-int ED_imbuf_sample_invoke(bContext *C, wmOperator *op, const wmEvent *event);
-int ED_imbuf_sample_modal(bContext *C, wmOperator *op, const wmEvent *event);
+wmOperatorStatus ED_imbuf_sample_invoke(bContext *C, wmOperator *op, const wmEvent *event);
+wmOperatorStatus ED_imbuf_sample_modal(bContext *C, wmOperator *op, const wmEvent *event);
 void ED_imbuf_sample_cancel(bContext *C, wmOperator *op);
 bool ED_imbuf_sample_poll(bContext *C);
+
+}  // namespace blender

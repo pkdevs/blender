@@ -129,8 +129,10 @@ def write(output):
     output.write("OpenColorIO: ")
     if ocio.supported:
         if ocio.version_string == "fallback":
-            output.write("Blender was built with OpenColorIO, "
-                         "but it currently uses fallback color management.\n")
+            output.write(
+                "Blender was built with OpenColorIO, "
+                "but it currently uses fallback color management.\n"
+            )
         else:
             output.write("{:s}\n".format(ocio.version_string))
     else:
@@ -197,8 +199,8 @@ def write(output):
 
         glext = sorted(gpu.capabilities.extensions_get())
 
-        for l in glext:
-            output.write("\t{:s}\n".format(l))
+        for line in glext:
+            output.write("\t{:s}\n".format(line))
 
         output.write(title("Implementation Dependent GPU Limits"))
         output.write("Maximum Batch Vertices:\t{:d}\n".format(

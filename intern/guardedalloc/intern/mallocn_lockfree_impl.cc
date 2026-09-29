@@ -14,7 +14,10 @@
 #include <string.h> /* memcpy */
 #include <sys/types.h>
 
+#include "PRF_profile.hh"
+
 #include "MEM_guardedalloc.h"
+#include "MEM_safe_multiply.h"
 
 /* Quiet warnings when dealing with allocated data written into the blend file.
  * This also rounds up and causes warnings which we don't consider bugs in practice. */
@@ -23,13 +26,15 @@
 #endif
 
 /* to ensure strict conversions */
-#include "../../source/blender/blenlib/BLI_strict_flags.h"
+#include "../../source/blender/blenlib/BLI_strict_flags.hh"
 
 #include "atomic_ops.h"
 #include "mallocn_intern.hh"
 #include "mallocn_intern_function_pointers.hh"
 
 using namespace mem_guarded::internal;
+
+namespace {
 
 typedef struct MemHead {
   /* Length of allocated memory block. */
@@ -45,6 +50,8 @@ typedef struct MemHeadAligned {
 static_assert(MEM_MIN_CPP_ALIGNMENT <= alignof(MemHeadAligned), "Bad alignment of MemHeadAligned");
 static_assert(MEM_MIN_CPP_ALIGNMENT <= sizeof(MemHeadAligned), "Bad size of MemHeadAligned");
 
+}  // namespace
+
 static bool malloc_debug_memset = false;
 
 static void (*error_callback)(const char *) = nullptr;
@@ -57,12 +64,10 @@ enum {
   /** This block used aligned allocation, and its 'head' is of #MemHeadAligned type. */
   MEMHEAD_FLAG_ALIGN = 1 << 0,
   /**
-   * This block of memory has been allocated from CPP `new` (e.g. #MEM_new, or some
-   * guardedalloc-overloaded `new` operator). It mainly checks that #MEM_freeN is not directly
-   * called on it (#MEM_delete or some guardedalloc-overloaded `delete` operator should always be
-   * used instead).
+   * This block of memory has been allocated for a type with a non-trivial destructor.
+   * This checks that #MEM_delete is used to free the memory, and not #MEM_delete_void.
    */
-  MEMHEAD_FLAG_FROM_CPP_NEW = 1 << 1,
+  MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR = 1 << 1,
 
   MEMHEAD_FLAG_MASK = (1 << 2) - 1
 };
@@ -71,7 +76,8 @@ enum {
 #define PTR_FROM_MEMHEAD(memhead) (memhead + 1)
 #define MEMHEAD_ALIGNED_FROM_PTR(ptr) (((MemHeadAligned *)ptr) - 1)
 #define MEMHEAD_IS_ALIGNED(memhead) ((memhead)->len & size_t(MEMHEAD_FLAG_ALIGN))
-#define MEMHEAD_IS_FROM_CPP_NEW(memhead) ((memhead)->len & size_t(MEMHEAD_FLAG_FROM_CPP_NEW))
+#define MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memhead) \
+  ((memhead)->len & size_t(MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR))
 #define MEMHEAD_LEN(memhead) ((memhead)->len & ~size_t(MEMHEAD_FLAG_MASK))
 
 #ifdef __GNUC__
@@ -123,7 +129,7 @@ report_error_on_address(const void *vmemh, const char *message, ...)
 
   const void *address = memh;
   size_t size = len + sizeof(*memh);
-  if (UNLIKELY(MEMHEAD_IS_ALIGNED(memh))) {
+  if (MEMHEAD_IS_ALIGNED(memh)) [[unlikely]] {
     const MemHeadAligned *memh_aligned = MEMHEAD_ALIGNED_FROM_PTR(vmemh);
     address = MEMHEAD_REAL_PTR(memh_aligned);
     size = len + sizeof(*memh_aligned) + MEMHEAD_ALIGN_PADDING(memh_aligned->alignment);
@@ -133,20 +139,21 @@ report_error_on_address(const void *vmemh, const char *message, ...)
 
 size_t MEM_lockfree_allocN_len(const void *vmemh)
 {
-  if (LIKELY(vmemh)) {
+  if (vmemh) [[likely]] {
     return MEMHEAD_LEN(MEMHEAD_FROM_PTR(vmemh));
   }
 
   return 0;
 }
 
-void MEM_lockfree_freeN(void *vmemh, AllocationType allocation_type)
+void MEM_lockfree_freeN(void *vmemh, DestructorType destructor_type)
 {
-  if (UNLIKELY(leak_detector_has_run)) {
+  PRF_scope(blender::ProfileCategory::Core);
+  if (leak_detector_has_run) [[unlikely]] {
     print_error("%s\n", free_after_leak_detection_message);
   }
 
-  if (UNLIKELY(vmemh == nullptr)) {
+  if (vmemh == nullptr) [[unlikely]] {
     report_error_on_address(vmemh, "Attempt to free nullptr pointer\n");
     return;
   }
@@ -154,43 +161,45 @@ void MEM_lockfree_freeN(void *vmemh, AllocationType allocation_type)
   MemHead *memh = MEMHEAD_FROM_PTR(vmemh);
   size_t len = MEMHEAD_LEN(memh);
 
-  if (allocation_type != AllocationType::NEW_DELETE && MEMHEAD_IS_FROM_CPP_NEW(memh)) {
-    report_error_on_address(
-        vmemh,
-        "Attempt to use C-style MEM_freeN on a pointer created with CPP-style MEM_new or new\n");
+  if (destructor_type != DestructorType::NonTrivial && MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memh)) {
+    report_error_on_address(vmemh,
+                            "Attempt to use C-style MEM_delete_void on a pointer created with "
+                            "CPP-style MEM_new or new\n");
   }
 
   memory_usage_block_free(len);
 
-  if (UNLIKELY(malloc_debug_memset && len)) {
+  if (malloc_debug_memset && len) [[unlikely]] {
     memset(memh + 1, 255, len);
   }
-  if (UNLIKELY(MEMHEAD_IS_ALIGNED(memh))) {
+  if (MEMHEAD_IS_ALIGNED(memh)) [[unlikely]] {
     MemHeadAligned *memh_aligned = MEMHEAD_ALIGNED_FROM_PTR(vmemh);
     aligned_free(MEMHEAD_REAL_PTR(memh_aligned));
   }
   else {
+    PRF_memory_free(memh);
     free(memh);
   }
 }
 
 void *MEM_lockfree_dupallocN(const void *vmemh)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   void *newp = nullptr;
   if (vmemh) {
     const MemHead *memh = MEMHEAD_FROM_PTR(vmemh);
     const size_t prev_size = MEM_lockfree_allocN_len(vmemh);
 
-    if (MEMHEAD_IS_FROM_CPP_NEW(memh)) {
+    if (MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memh)) {
       report_error_on_address(vmemh,
-                              "Attempt to use C-style MEM_dupallocN on a pointer created with "
+                              "Attempt to use C-style MEM_dupalloc_void on a pointer created with "
                               "CPP-style MEM_new or new\n");
     }
 
-    if (UNLIKELY(MEMHEAD_IS_ALIGNED(memh))) {
+    if (MEMHEAD_IS_ALIGNED(memh)) [[unlikely]] {
       const MemHeadAligned *memh_aligned = MEMHEAD_ALIGNED_FROM_PTR(vmemh);
       newp = MEM_lockfree_mallocN_aligned(
-          prev_size, size_t(memh_aligned->alignment), "dupli_malloc", AllocationType::ALLOC_FREE);
+          prev_size, size_t(memh_aligned->alignment), "dupli_malloc", DestructorType::Trivial);
     }
     else {
       newp = MEM_lockfree_mallocN(prev_size, "dupli_malloc");
@@ -202,25 +211,27 @@ void *MEM_lockfree_dupallocN(const void *vmemh)
 
 void *MEM_lockfree_reallocN_id(void *vmemh, size_t len, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   void *newp = nullptr;
 
   if (vmemh) {
     const MemHead *memh = MEMHEAD_FROM_PTR(vmemh);
     const size_t old_len = MEM_lockfree_allocN_len(vmemh);
 
-    if (MEMHEAD_IS_FROM_CPP_NEW(memh)) {
-      report_error_on_address(vmemh,
-                              "Attempt to use C-style MEM_reallocN on a pointer created with "
-                              "CPP-style MEM_new or new\n");
+    if (MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memh)) {
+      report_error_on_address(
+          vmemh,
+          "Attempt to use C-style MEM_realloc_uninitialized on a pointer created with "
+          "CPP-style MEM_new or new\n");
     }
 
-    if (LIKELY(!MEMHEAD_IS_ALIGNED(memh))) {
+    if (!MEMHEAD_IS_ALIGNED(memh)) [[likely]] {
       newp = MEM_lockfree_mallocN(len, "realloc");
     }
     else {
       const MemHeadAligned *memh_aligned = MEMHEAD_ALIGNED_FROM_PTR(vmemh);
       newp = MEM_lockfree_mallocN_aligned(
-          len, size_t(memh_aligned->alignment), "realloc", AllocationType::ALLOC_FREE);
+          len, size_t(memh_aligned->alignment), "realloc", DestructorType::Trivial);
     }
 
     if (newp) {
@@ -234,7 +245,7 @@ void *MEM_lockfree_reallocN_id(void *vmemh, size_t len, const char *str)
       }
     }
 
-    MEM_lockfree_freeN(vmemh, AllocationType::ALLOC_FREE);
+    MEM_lockfree_freeN(vmemh, DestructorType::Trivial);
   }
   else {
     newp = MEM_lockfree_mallocN(len, str);
@@ -245,25 +256,27 @@ void *MEM_lockfree_reallocN_id(void *vmemh, size_t len, const char *str)
 
 void *MEM_lockfree_recallocN_id(void *vmemh, size_t len, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   void *newp = nullptr;
 
   if (vmemh) {
     const MemHead *memh = MEMHEAD_FROM_PTR(vmemh);
     const size_t old_len = MEM_lockfree_allocN_len(vmemh);
 
-    if (MEMHEAD_IS_FROM_CPP_NEW(memh)) {
-      report_error_on_address(vmemh,
-                              "Attempt to use C-style MEM_recallocN on a pointer created with "
-                              "CPP-style MEM_new or new\n");
+    if (MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memh)) {
+      report_error_on_address(
+          vmemh,
+          "Attempt to use C-style MEM_realloc_zeroed on a pointer created with "
+          "CPP-style MEM_new or new\n");
     }
 
-    if (LIKELY(!MEMHEAD_IS_ALIGNED(memh))) {
+    if (!MEMHEAD_IS_ALIGNED(memh)) [[likely]] {
       newp = MEM_lockfree_mallocN(len, "recalloc");
     }
     else {
       const MemHeadAligned *memh_aligned = MEMHEAD_ALIGNED_FROM_PTR(vmemh);
       newp = MEM_lockfree_mallocN_aligned(
-          len, size_t(memh_aligned->alignment), "recalloc", AllocationType::ALLOC_FREE);
+          len, size_t(memh_aligned->alignment), "recalloc", DestructorType::Trivial);
     }
 
     if (newp) {
@@ -282,7 +295,7 @@ void *MEM_lockfree_recallocN_id(void *vmemh, size_t len, const char *str)
       }
     }
 
-    MEM_lockfree_freeN(vmemh, AllocationType::ALLOC_FREE);
+    MEM_lockfree_freeN(vmemh, DestructorType::Trivial);
   }
   else {
     newp = MEM_lockfree_callocN(len, str);
@@ -293,13 +306,15 @@ void *MEM_lockfree_recallocN_id(void *vmemh, size_t len, const char *str)
 
 void *MEM_lockfree_callocN(size_t len, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   MemHead *memh;
 
   len = SIZET_ALIGN_4(len);
 
   memh = (MemHead *)calloc(1, len + sizeof(MemHead));
+  PRF_memory_alloc(memh, len + sizeof(MemHead));
 
-  if (LIKELY(memh)) {
+  if (memh) [[likely]] {
     memh->len = len;
     memory_usage_block_alloc(len);
 
@@ -314,8 +329,9 @@ void *MEM_lockfree_callocN(size_t len, const char *str)
 
 void *MEM_lockfree_calloc_arrayN(size_t len, size_t size, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   size_t total_size;
-  if (UNLIKELY(!MEM_size_safe_multiply(len, size, &total_size))) {
+  if (!MEM_size_safe_multiply(len, size, &total_size)) [[unlikely]] {
     print_error(
         "Calloc array aborted due to integer overflow: "
         "len=" SIZET_FORMAT "x" SIZET_FORMAT " in %s, total " SIZET_FORMAT "\n",
@@ -332,6 +348,7 @@ void *MEM_lockfree_calloc_arrayN(size_t len, size_t size, const char *str)
 
 void *MEM_lockfree_mallocN(size_t len, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   MemHead *memh;
 
 #ifdef WITH_MEM_VALGRIND
@@ -340,11 +357,12 @@ void *MEM_lockfree_mallocN(size_t len, const char *str)
   len = SIZET_ALIGN_4(len);
 
   memh = (MemHead *)malloc(len + sizeof(MemHead));
+  PRF_memory_alloc(memh, len + sizeof(MemHead));
 
-  if (LIKELY(memh)) {
+  if (memh) [[likely]] {
 
-    if (LIKELY(len)) {
-      if (UNLIKELY(malloc_debug_memset)) {
+    if (len) [[likely]] {
+      if (malloc_debug_memset) [[unlikely]] {
         memset(memh + 1, 255, len);
       }
 #ifdef WITH_MEM_VALGRIND
@@ -371,8 +389,9 @@ void *MEM_lockfree_mallocN(size_t len, const char *str)
 
 void *MEM_lockfree_malloc_arrayN(size_t len, size_t size, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   size_t total_size;
-  if (UNLIKELY(!MEM_size_safe_multiply(len, size, &total_size))) {
+  if (!MEM_size_safe_multiply(len, size, &total_size)) [[unlikely]] {
     print_error(
         "Malloc array aborted due to integer overflow: "
         "len=" SIZET_FORMAT "x" SIZET_FORMAT " in %s, total " SIZET_FORMAT "\n",
@@ -390,8 +409,9 @@ void *MEM_lockfree_malloc_arrayN(size_t len, size_t size, const char *str)
 void *MEM_lockfree_mallocN_aligned(size_t len,
                                    size_t alignment,
                                    const char *str,
-                                   const AllocationType allocation_type)
+                                   const DestructorType destructor_type)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   /* Huge alignment values doesn't make sense and they wouldn't fit into 'short' used in the
    * MemHead. */
   assert(alignment < 1024);
@@ -419,16 +439,17 @@ void *MEM_lockfree_mallocN_aligned(size_t len,
 
   MemHeadAligned *memh = (MemHeadAligned *)aligned_malloc(
       len + extra_padding + sizeof(MemHeadAligned), alignment);
+  PRF_memory_alloc(memh, len + extra_padding + sizeof(MemHeadAligned));
 
-  if (LIKELY(memh)) {
+  if (memh) [[likely]] {
     /* We keep padding in the beginning of MemHead,
      * this way it's always possible to get MemHead
      * from the data pointer.
      */
     memh = (MemHeadAligned *)((char *)memh + extra_padding);
 
-    if (LIKELY(len)) {
-      if (UNLIKELY(malloc_debug_memset)) {
+    if (len) [[likely]] {
+      if (malloc_debug_memset) [[unlikely]] {
         memset(memh + 1, 255, len);
       }
 #ifdef WITH_MEM_VALGRIND
@@ -442,8 +463,9 @@ void *MEM_lockfree_mallocN_aligned(size_t len,
     }
 
     memh->len = len | size_t(MEMHEAD_FLAG_ALIGN) |
-                size_t(allocation_type == AllocationType::NEW_DELETE ? MEMHEAD_FLAG_FROM_CPP_NEW :
-                                                                       0);
+                size_t(destructor_type == DestructorType::NonTrivial ?
+                           MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR :
+                           0);
     memh->alignment = short(alignment);
     memory_usage_block_alloc(len);
 
@@ -456,13 +478,13 @@ void *MEM_lockfree_mallocN_aligned(size_t len,
   return nullptr;
 }
 
-void *MEM_lockfree_calloc_arrayN_aligned(const size_t len,
-                                         const size_t size,
-                                         const size_t alignment,
-                                         const char *str)
+static void *mem_lockfree_malloc_arrayN_aligned(const size_t len,
+                                                const size_t size,
+                                                const size_t alignment,
+                                                const char *str,
+                                                size_t &r_bytes_num)
 {
-  size_t bytes_num;
-  if (UNLIKELY(!MEM_size_safe_multiply(len, size, &bytes_num))) {
+  if (!MEM_size_safe_multiply(len, size, &r_bytes_num)) [[unlikely]] {
     print_error(
         "Calloc array aborted due to integer overflow: "
         "len=" SIZET_FORMAT "x" SIZET_FORMAT " in %s, total " SIZET_FORMAT "\n",
@@ -474,11 +496,36 @@ void *MEM_lockfree_calloc_arrayN_aligned(const size_t len,
     return nullptr;
   }
   if (alignment <= MEM_MIN_CPP_ALIGNMENT) {
-    return MEM_callocN(bytes_num, str);
+    return mem_mallocN(r_bytes_num, str);
   }
-  /* There is no lower level #calloc with an alignment parameter, so we have to fallback to using
-   * #memset unfortunately. */
-  void *ptr = MEM_mallocN_aligned(bytes_num, alignment, str);
+  void *ptr = MEM_new_uninitialized_aligned(r_bytes_num, alignment, str);
+  return ptr;
+}
+
+void *MEM_lockfree_malloc_arrayN_aligned(const size_t len,
+                                         const size_t size,
+                                         const size_t alignment,
+                                         const char *str)
+{
+  PRF_scope(blender::ProfileCategory::Core);
+  size_t bytes_num;
+  return mem_lockfree_malloc_arrayN_aligned(len, size, alignment, str, bytes_num);
+}
+
+void *MEM_lockfree_calloc_arrayN_aligned(const size_t len,
+                                         const size_t size,
+                                         const size_t alignment,
+                                         const char *str)
+{
+  PRF_scope(blender::ProfileCategory::Core);
+  /* There is no lower level #calloc with an alignment parameter, so unless the alignment is less
+   * than or equal to what we'd get by default, we have to fall back to #memset unfortunately. */
+  if (alignment <= MEM_MIN_CPP_ALIGNMENT) {
+    return MEM_lockfree_calloc_arrayN(len, size, str);
+  }
+
+  size_t bytes_num;
+  void *ptr = mem_lockfree_malloc_arrayN_aligned(len, size, alignment, str, bytes_num);
   if (!ptr) {
     return nullptr;
   }
@@ -492,7 +539,8 @@ void MEM_lockfree_printmemlist() {}
 
 void mem_lockfree_clearmemlist() {}
 
-/* unused */
+/* Unused. */
+
 void MEM_lockfree_callbackmemlist(void (*func)(void *))
 {
   (void)func; /* Ignored. */
@@ -537,7 +585,8 @@ uint MEM_lockfree_get_memory_blocks_in_use()
   return uint(memory_usage_block_num());
 }
 
-/* dummy */
+/* Dummy. */
+
 void MEM_lockfree_reset_peak_memory()
 {
   memory_usage_peak_reset();
@@ -558,5 +607,5 @@ const char *MEM_lockfree_name_ptr(void *vmemh)
   return "MEM_lockfree_name_ptr(nullptr)";
 }
 
-void MEM_lockfree_name_ptr_set(void *UNUSED(vmemh), const char *UNUSED(str)) {}
+void MEM_lockfree_name_ptr_set(void * /*vmemh*/, const char * /*str*/) {}
 #endif /* !NDEBUG */

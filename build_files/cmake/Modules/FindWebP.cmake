@@ -44,7 +44,7 @@ set(_webp_FIND_COMPONENTS
   sharpyuv # New in 1.3
 )
 
-set(_webp_LIBRARIES)
+set(_webp_LIBRARIES "")
 foreach(COMPONENT ${_webp_FIND_COMPONENTS})
   string(TOUPPER ${COMPONENT} UPPERCOMPONENT)
 
@@ -56,7 +56,7 @@ foreach(COMPONENT ${_webp_FIND_COMPONENTS})
       ${_webp_SEARCH_DIRS}
     PATH_SUFFIXES
       lib64 lib lib/static
-    )
+  )
   if(WEBP_${UPPERCOMPONENT}_LIBRARY)
     list(APPEND _webp_LIBRARIES "${WEBP_${UPPERCOMPONENT}_LIBRARY}")
   endif()
@@ -75,7 +75,7 @@ else()
     set(WEBP_INCLUDE_DIRS ${WEBP_INCLUDE_DIR})
     set(WEBP_LIBRARIES ${_webp_LIBRARIES})
   else()
-    set(WEBPL_PUGIXML_FOUND FALSE)
+    set(WEBP_FOUND FALSE)
   endif()
 endif()
 

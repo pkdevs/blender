@@ -6,13 +6,11 @@
  * \ingroup gpu
  */
 
+#pragma once
+
 #include "render_graph/vk_render_graph.hh"
 #include "vk_buffer.hh"
-#include "vk_common.hh"
-
-#include "BLI_vector.hh"
-
-#pragma once
+#include "vk_vertex_input_description.hh"
 
 namespace blender::gpu {
 
@@ -30,12 +28,13 @@ using AttributeMask = uint16_t;
  * them. Building the bindings/attributes should be done inside #VKPipelinePool. */
 class VKVertexAttributeObject {
  public:
-  bool is_valid = false;
-  VkPipelineVertexInputStateCreateInfo info = {
-      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, NULL};
+  VKVertexInputDescription vertex_input;
+  /**
+   * Key from VKVertexInputDescriptionPool, cached to avoid repeated hash/lookup.
+   * Invalidated in clear(), populated by VKVertexAttributeObjectCache after update_bindings().
+   */
+  VKVertexInputDescriptionPool::Key vertex_input_key = VKVertexInputDescriptionPool::invalid_key;
 
-  Vector<VkVertexInputBindingDescription> bindings;
-  Vector<VkVertexInputAttributeDescription> attributes;
   /* Used for batches. */
   Vector<VKVertexBuffer *> vbos;
   /* Used for immediate mode. */
@@ -44,6 +43,8 @@ class VKVertexAttributeObject {
   VKVertexAttributeObject();
   void clear();
 
+  void update_vertex_input_key(VKVertexInputDescriptionPool &pool);
+
   void bind(render_graph::VKVertexBufferBindings &r_vertex_buffer_bindings) const;
 
   /** Copy assignment operator. */
@@ -51,14 +52,6 @@ class VKVertexAttributeObject {
 
   void update_bindings(const VKContext &context, VKBatch &batch);
   void update_bindings(VKImmediate &immediate);
-
-  /**
-   * Ensure that all Vertex Buffers are uploaded to the GPU.
-   *
-   * This is a separate step as uploading could flush the graphics pipeline making the state
-   * inconsistent.
-   */
-  void ensure_vbos_uploaded() const;
 
   void debug_print() const;
 
@@ -71,8 +64,7 @@ class VKVertexAttributeObject {
                        VKBufferWithOffset *immediate_vertex_buffer,
                        const int64_t vertex_len,
                        const VKShaderInterface &interface,
-                       AttributeMask &r_occupied_attributes,
-                       const bool use_instancing);
+                       AttributeMask &r_occupied_attributes);
 };
 
 }  // namespace blender::gpu

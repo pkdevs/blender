@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject IncreasingColorShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject IncreasingColorShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&IncreasingColorShader_Type))
 
 /*---------------------------Python BPy_IncreasingColorShader structure definition----------*/
-typedef struct {
+struct BPy_IncreasingColorShader {
   BPy_StrokeShader py_ss;
-} BPy_IncreasingColorShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

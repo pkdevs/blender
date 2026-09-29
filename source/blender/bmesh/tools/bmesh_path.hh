@@ -8,6 +8,15 @@
  * \ingroup bmesh
  */
 
+#include "BLI_compiler_attrs.hh"
+#include "BLI_sys_types.hh"
+
+#include "bmesh_class.hh"
+
+namespace blender {
+
+struct LinkNode;
+
 struct BMCalcPathParams {
   uint use_topology_distance : 1;
   uint use_step_face : 1;
@@ -33,3 +42,5 @@ LinkNode *BM_mesh_calc_path_face(BMesh *bm,
                                  const BMCalcPathParams *params,
                                  bool (*filter_fn)(BMFace *, void *),
                                  void *user_data) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1, 2, 3, 5);
+
+}  // namespace blender

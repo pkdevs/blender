@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #include "BLI_fileops.hh"
 #include "BLI_serialize.hh"
 
@@ -288,6 +292,16 @@ std::optional<int64_t> DictionaryValue::lookup_int(const StringRef key) const
   return std::nullopt;
 }
 
+std::optional<bool> DictionaryValue::lookup_bool(const StringRef key) const
+{
+  if (const std::shared_ptr<Value> *value = this->lookup(key)) {
+    if (const BooleanValue *bool_value = (*value)->as_boolean_value()) {
+      return bool_value->value();
+    }
+  }
+  return std::nullopt;
+}
+
 std::optional<double> DictionaryValue::lookup_double(const StringRef key) const
 {
   if (const std::shared_ptr<Value> *value = this->lookup(key)) {
@@ -322,6 +336,11 @@ void DictionaryValue::append(std::string key, std::shared_ptr<Value> value)
 void DictionaryValue::append_int(std::string key, const int64_t value)
 {
   this->append(std::move(key), std::make_shared<IntValue>(value));
+}
+
+void DictionaryValue::append_bool(std::string key, const bool value)
+{
+  this->append(std::move(key), std::make_shared<BooleanValue>(value));
 }
 
 void DictionaryValue::append_double(std::string key, const double value)
@@ -363,8 +382,13 @@ void JsonFormatter::serialize(std::ostream &os, const Value &value)
 std::unique_ptr<Value> JsonFormatter::deserialize(std::istream &is)
 {
   nlohmann::ordered_json j;
-  is >> j;
-  return convert_from_json(j);
+  try {
+    is >> j;
+    return convert_from_json(j);
+  }
+  catch (...) {
+    return nullptr;
+  }
 }
 
 void write_json_file(const StringRef path, const Value &value)

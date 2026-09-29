@@ -4,31 +4,30 @@
 
 #pragma once
 
+#include "kernel/geom/object.h"
+#include "kernel/svm/node_types.h"
+#include "kernel/svm/util.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* Vector Transform */
 
-ccl_device_noinline void svm_node_vector_transform(KernelGlobals kg,
-                                                   ccl_private ShaderData *sd,
-                                                   ccl_private float *stack,
-                                                   uint4 node)
+ccl_device_noinline void svm_node_vector_transform(
+    KernelGlobals kg,
+    ccl_private ShaderData *sd,
+    ccl_private float *ccl_restrict stack,
+    const ccl_global SVMNodeVectorTransform &ccl_restrict node)
 {
-  uint itype, ifrom, ito;
-  uint vector_in, vector_out;
+  float3 in = stack_load(stack, node.vector_in);
 
-  svm_unpack_node_uchar3(node.y, &itype, &ifrom, &ito);
-  svm_unpack_node_uchar2(node.z, &vector_in, &vector_out);
-
-  float3 in = stack_load_float3(stack, vector_in);
-
-  NodeVectorTransformType type = (NodeVectorTransformType)itype;
-  NodeVectorTransformConvertSpace from = (NodeVectorTransformConvertSpace)ifrom;
-  NodeVectorTransformConvertSpace to = (NodeVectorTransformConvertSpace)ito;
+  const NodeVectorTransformType type = node.transform_type;
+  const NodeVectorTransformConvertSpace from = node.convert_from;
+  const NodeVectorTransformConvertSpace to = node.convert_to;
 
   Transform tfm;
-  bool is_object = (sd->object != OBJECT_NONE) || (sd->type == PRIMITIVE_LAMP);
-  bool is_normal = (type == NODE_VECTOR_TRANSFORM_TYPE_NORMAL);
-  bool is_direction = (type == NODE_VECTOR_TRANSFORM_TYPE_VECTOR);
+  const bool is_object = (sd->object != OBJECT_NONE);
+  const bool is_normal = (type == NODE_VECTOR_TRANSFORM_TYPE_NORMAL);
+  const bool is_direction = (type == NODE_VECTOR_TRANSFORM_TYPE_VECTOR);
 
   /* From world */
   if (from == NODE_VECTOR_TRANSFORM_CONVERT_SPACE_WORLD) {
@@ -116,8 +115,8 @@ ccl_device_noinline void svm_node_vector_transform(KernelGlobals kg,
   }
 
   /* Output */
-  if (stack_valid(vector_out)) {
-    stack_store_float3(stack, vector_out, in);
+  if (stack_valid(node.vector_out_offset)) {
+    stack_store_float3(stack, node.vector_out_offset, in);
   }
 }
 

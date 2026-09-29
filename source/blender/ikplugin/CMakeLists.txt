@@ -6,11 +6,9 @@ remove_extra_strict_flags()
 
 set(INC
   .
-  ../blenkernel
 )
 
 set(INC_SYS
-
 )
 
 set(SRC
@@ -21,6 +19,7 @@ set(SRC
 )
 
 set(LIB
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
@@ -46,9 +45,6 @@ if(WITH_IK_ITASC)
   )
   list(APPEND INC
     ../../../intern/itasc
-  )
-  list(APPEND INC_SYS
-    ${EIGEN3_INCLUDE_DIRS}
   )
   list(APPEND SRC
     intern/itasc_plugin.cc

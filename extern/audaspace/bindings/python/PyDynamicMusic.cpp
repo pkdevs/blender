@@ -98,7 +98,7 @@ PyDoc_STRVAR(M_aud_DynamicMusic_addTransition_doc,
 	"   :type end: int\n"
 	"   :arg transition: The transition sound.\n"
 	"   :type transition: :class:`Sound`\n"
-	"   :return: false if the ini or end scenes don't exist, true othrwise.\n"
+	"   :return: false if the ini or end scenes don't exist, true otherwise.\n"
 	"   :rtype: bool");
 
 static PyObject *
@@ -392,8 +392,11 @@ static PyGetSetDef DynamicMusic_properties[] = {
 };
 
 PyDoc_STRVAR(M_aud_DynamicMusic_doc,
-	"The DynamicMusic object allows to play music depending on a current scene, scene changes are managed by the class, with the possibility of custom transitions.\n"
-	"The default transition is a crossfade effect, and the default scene is silent and has id 0");
+	".. class:: DynamicMusic(device, /)\n\n"
+	"   The DynamicMusic object allows to play music depending on a current scene, scene changes are managed by the class, with the possibility of custom transitions.\n"
+	"   The default transition is a crossfade effect, and the default scene is silent and has id 0.\n\n"
+	"   :arg device: The device that will be used to play sounds.\n"
+	"   :type device: :class:`Device`\n");
 
 PyTypeObject DynamicMusicType = {
 	PyVarObject_HEAD_INIT(nullptr, 0)

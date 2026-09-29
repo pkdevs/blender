@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "integrator/denoiser.h"
 #include "integrator/guiding.h"
 #include "integrator/pass_accessor.h"
@@ -12,8 +14,7 @@
 
 #include "session/buffers.h"
 
-#include "util/function.h"
-#include "util/guiding.h"
+#include "util/guiding.h"  // IWYU pragma: keep
 #include "util/thread.h"
 #include "util/unique_ptr.h"
 #include "util/vector.h"
@@ -45,7 +46,7 @@ class PathTrace {
   /* Render scheduler is used to report timing information and access things like start/finish
    * sample. */
   PathTrace(Device *device,
-            Device *denoiser_device,
+            Device *denoise_device,
             Film *film,
             DeviceScene *device_scene,
             RenderScheduler &render_scheduler,
@@ -106,7 +107,7 @@ class PathTrace {
   void set_display_driver(unique_ptr<DisplayDriver> driver);
 
   /* Clear the display buffer by filling it in with all zeroes. */
-  void clear_display();
+  void zero_display();
 
   /* Perform drawing of the current state of the DisplayDriver. */
   void draw();
@@ -181,7 +182,7 @@ class PathTrace {
    * It is supposed to be cheaper than buffer update/write, hence can be called more often.
    * Additionally, it might be called form the middle of wavefront (meaning, it is not guaranteed
    * that the buffer is "uniformly" sampled at the moment of this callback). */
-  function<void(void)> progress_update_cb;
+  std::function<void(void)> progress_update_cb;
 
  protected:
   /* Actual implementation of the rendering pipeline.
@@ -193,6 +194,9 @@ class PathTrace {
 
   /* Initialize kernel execution on all integrator queues. */
   void render_init_kernel_execution();
+
+  /* Release kernel execution resources on all integrator queues. */
+  void render_deinit_kernel_execution();
 
   /* Make sure both allocated and effective buffer parameters of path tracer works are up to date
    * with the current big tile parameters, performance-dependent slicing, and resolution divider.
@@ -209,6 +213,7 @@ class PathTrace {
   void path_trace(RenderWork &render_work);
   void adaptive_sample(RenderWork &render_work);
   void denoise(const RenderWork &render_work);
+  void denoise_volume_guiding_buffers(const RenderWork &render_work, const bool has_volume);
   void cryptomatte_postprocess(const RenderWork &render_work);
   void update_display(const RenderWork &render_work);
   void rebalance(const RenderWork &render_work);
@@ -288,7 +293,7 @@ class PathTrace {
   /* Denoiser device descriptor which holds the denoised big tile for multi-device workloads. */
   unique_ptr<PathTraceWork> big_tile_denoise_work_;
 
-#ifdef WITH_PATH_GUIDING
+#if defined(WITH_PATH_GUIDING)
   /* Guiding related attributes */
   GuidingParams guiding_params_;
 
@@ -317,10 +322,11 @@ class PathTrace {
      * Allows to re-use same render buffer, but have less pixels rendered into in it. The way to
      * think of render buffer in this case is as an over-allocated array: the resolution divider
      * affects both resolution and stride as visible by the integrator kernels. */
-    int resolution_divider = 0;
+    float resolution_divider = 0;
 
     /* Parameters of the big tile with the current resolution divider applied. */
     BufferParams effective_big_tile_params;
+    BufferParams effective_denoised_big_tile_params;
 
     /* Denoiser was run and there are denoised versions of the passes in the render buffers. */
     bool has_denoised_result = false;

@@ -2,8 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include "BLI_array_utils.hh"
 #include "BLI_stack.hh"
+
+#include "BKE_curves_utils.hh"
+#include "BKE_deform.hh"
 
 #include "GEO_merge_curves.hh"
 
@@ -126,18 +133,25 @@ static void reorder_and_flip_attributes_group_to_group(
     const Span<bool> flip_direction,
     bke::MutableAttributeAccessor dst_attributes)
 {
-  src_attributes.for_all([&](const StringRef id, const bke::AttributeMetaData meta_data) {
-    if (meta_data.domain != domain) {
-      return true;
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (iter.domain != domain) {
+      return;
     }
-    if (meta_data.data_type == CD_PROP_STRING) {
-      return true;
+    if (iter.data_type == bke::AttrType::String) {
+      return;
     }
-    const GVArray src = *src_attributes.lookup(id, domain);
+    const GVArray src = *iter.get(domain);
+    const CommonVArrayInfo info = src.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src.type(), info.data));
+      if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
+        return;
+      }
+    }
     bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
-        id, domain, meta_data.data_type);
+        iter.name, domain, iter.data_type);
     if (!dst) {
-      return true;
+      return;
     }
 
     threading::parallel_for(old_by_new_map.index_range(), 1024, [&](const IndexRange range) {
@@ -154,7 +168,6 @@ static void reorder_and_flip_attributes_group_to_group(
     });
 
     dst.finish();
-    return true;
   });
 }
 
@@ -248,8 +261,11 @@ static bke::CurvesGeometry join_curves_ranges(const bke::CurvesGeometry &src_cur
 {
   bke::CurvesGeometry dst_curves = bke::CurvesGeometry(src_curves.points_num(),
                                                        old_curves_by_new.size());
+  /* Copy vertex group names. */
+  BKE_defgroup_copy_list(&dst_curves.vertex_group_names, &src_curves.vertex_group_names);
+  dst_curves.attributes_active_index = src_curves.attributes_active_index;
 
-  /* Note: using the offsets as an index map means the first curve of each range is used for
+  /* NOTE: using the offsets as an index map means the first curve of each range is used for
    * attributes. */
   const Span<int> old_by_new_map = old_curves_by_new.data().drop_back(1);
   bke::gather_attributes(src_curves.attributes(),
@@ -301,6 +317,16 @@ bke::CurvesGeometry curves_merge_endpoints(const bke::CurvesGeometry &src_curves
   bke::CurvesGeometry merged_curves = join_curves_ranges(ordered_curves, joined_curves_by_new);
   merged_curves.cyclic_for_write().copy_from(cyclic);
 
+  /**
+   * `curves_merge_endpoints` seems to be working only with CURVE_TYPE_POLY, still adding this here
+   * in advance.
+   */
+  if (src_curves.nurbs_has_custom_knots()) {
+    bke::curves::nurbs::update_custom_knot_modes(merged_curves.curves_range(),
+                                                 NURBS_KNOT_MODE_NORMAL,
+                                                 NURBS_KNOT_MODE_NORMAL,
+                                                 merged_curves);
+  }
   return merged_curves;
 }
 

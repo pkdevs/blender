@@ -15,10 +15,6 @@ extern "C" {
 #include "../geometry/Noise.h"
 #include "../system/PseudoNoise.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject FrsNoise_Type;
@@ -26,18 +22,14 @@ extern PyTypeObject FrsNoise_Type;
 #define BPy_FrsNoise_Check(v) (PyObject_IsInstance((PyObject *)v, (PyObject *)&FrsNoise_Type))
 
 /*---------------------------Python BPy_FrsNoise structure definition----------*/
-typedef struct {
+struct BPy_FrsNoise {
   PyObject_HEAD
   Freestyle::Noise *n;
   Freestyle::PseudoNoise *pn;
-} BPy_FrsNoise;
+};
 
 /*---------------------------Python BPy_FrsNoise visible prototypes-----------*/
 
 int FrsNoise_Init(PyObject *module);
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

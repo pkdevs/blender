@@ -12,10 +12,6 @@
 
 #include "../../stroke/ChainingIterators.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject ChainingIterator_Type;
@@ -24,13 +20,9 @@ extern PyTypeObject ChainingIterator_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&ChainingIterator_Type))
 
 /*---------------------------Python BPy_ChainingIterator structure definition----------*/
-typedef struct {
+struct BPy_ChainingIterator {
   BPy_ViewEdgeIterator py_ve_it;
   Freestyle::ChainingIterator *c_it;
-} BPy_ChainingIterator;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

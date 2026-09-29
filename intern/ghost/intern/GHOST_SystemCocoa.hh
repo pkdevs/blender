@@ -27,15 +27,16 @@ class GHOST_SystemCocoa : public GHOST_System {
   /**
    * Constructor.
    */
-  GHOST_SystemCocoa();
+  GHOST_SystemCocoa(bool background);
+  GHOST_SystemCocoa() : GHOST_SystemCocoa(true) {}
 
   /**
    * Destructor.
    */
-  ~GHOST_SystemCocoa();
+  ~GHOST_SystemCocoa() override;
 
   /***************************************************************************************
-   * Time(r) functionality
+   * Time(r) functionality.
    ***************************************************************************************/
 
   /**
@@ -44,28 +45,28 @@ class GHOST_SystemCocoa : public GHOST_System {
    * Based on ANSI clock() routine.
    * \return The number of milliseconds.
    */
-  uint64_t getMilliSeconds() const;
+  uint64_t getMilliSeconds() const override;
 
   /***************************************************************************************
-   * Display/window management functionality
+   * Display/window management functionality.
    ***************************************************************************************/
 
   /**
    * Returns the number of displays on this system.
    * \return The number of displays.
    */
-  uint8_t getNumDisplays() const;
+  uint8_t getNumDisplays() const override;
 
   /**
    * Returns the dimensions of the main display on this system.
    * \return The dimension of the main display.
    */
-  void getMainDisplayDimensions(uint32_t &width, uint32_t &height) const;
+  void getMainDisplayDimensions(uint32_t &width, uint32_t &height) const override;
 
   /** Returns the combine dimensions of all monitors.
    * \return The dimension of the workspace.
    */
-  void getAllDisplayDimensions(uint32_t &width, uint32_t &height) const;
+  void getAllDisplayDimensions(uint32_t &width, uint32_t &height) const override;
 
   /**
    * Create a new window.
@@ -78,9 +79,9 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \param width: The width the window.
    * \param height: The height the window.
    * \param state: The state of the window when opened.
-   * \param gpuSettings: Misc GPU settings.
+   * \param gpu_settings: Misc GPU settings.
    * \param exclusive: Use to show the window on top and ignore others (used full-screen).
-   * \param parentWindow: Parent (embedder) window.
+   * \param parent_window: Parent (embedder) window.
    * \return The new window (or 0 if creation failed).
    */
   GHOST_IWindow *createWindow(const char *title,
@@ -89,24 +90,24 @@ class GHOST_SystemCocoa : public GHOST_System {
                               uint32_t width,
                               uint32_t height,
                               GHOST_TWindowState state,
-                              GHOST_GPUSettings gpuSettings,
+                              GHOST_GPUSettings gpu_settings,
                               const bool exclusive = false,
                               const bool is_dialog = false,
-                              const GHOST_IWindow *parentWindow = nullptr);
+                              const GHOST_IWindow *parent_window = nullptr) override;
 
   /**
    * Create a new off-screen context.
    * Never explicitly delete the context, use #disposeContext() instead.
    * \return The new context (or 0 if creation failed).
    */
-  GHOST_IContext *createOffscreenContext(GHOST_GPUSettings gpuSettings);
+  GHOST_IContext *createOffscreenContext(GHOST_GPUSettings gpu_settings) override;
 
   /**
    * Dispose of a context.
    * \param context: Pointer to the context to be disposed.
    * \return Indication of success.
    */
-  GHOST_TSuccess disposeContext(GHOST_IContext *context);
+  GHOST_TSuccess disposeContext(GHOST_IContext *context) override;
 
   /**
    * Get the Window under the cursor.
@@ -114,10 +115,10 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \param y: The y-coordinate of the cursor.
    * \return The window under the cursor or nullptr if none.
    */
-  GHOST_IWindow *getWindowUnderCursor(int32_t x, int32_t y);
+  GHOST_IWindow *getWindowUnderCursor(int32_t x, int32_t y) override;
 
   /***************************************************************************************
-   * Event management functionality
+   * Event management functionality.
    ***************************************************************************************/
 
   /**
@@ -125,7 +126,7 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \param waitForEvent: Flag to wait for an event (or return immediately).
    * \return Indication of the presence of events.
    */
-  bool processEvents(bool waitForEvent);
+  bool processEvents(bool waitForEvent) override;
 
   /**
    * Handle User request to quit, from Menu bar Quit, and Command+Q
@@ -144,9 +145,9 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \param eventType: The type of drag & drop event.
    * \param draggedObjectType: The type object concerned.
    * (currently array of file names, string, TIFF image).
+   * \param window: The window on which the event occurred.
    * \param mouseX: x mouse coordinate (in cocoa base window coordinates).
    * \param mouseY: y mouse coordinate.
-   * \param window: The window on which the event occurred.
    * \return Indication whether the event was handled.
    */
   GHOST_TSuccess handleDraggingEvent(GHOST_TEventType eventType,
@@ -157,7 +158,7 @@ class GHOST_SystemCocoa : public GHOST_System {
                                      void *data);
 
   /***************************************************************************************
-   * Cursor management functionality
+   * Cursor management functionality.
    ***************************************************************************************/
 
   /**
@@ -166,7 +167,15 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \param y: The y-coordinate of the cursor.
    * \return Indication of success.
    */
-  GHOST_TSuccess getCursorPosition(int32_t &x, int32_t &y) const;
+  GHOST_TSuccess getCursorPosition(int32_t &x, int32_t &y) const override;
+
+  /**
+   * \return the size of the cursor in logical pixels (before Hi-DPI scaling is applied).
+   *
+   * \warning On macOS the logical cursor size is *always* applied on top of hardware cursors,
+   * this should only be used for software-cursor display.
+   */
+  uint32_t getCursorPreferredLogicalSize() const override;
 
   /**
    * Updates the location of the cursor (location in screen coordinates).
@@ -174,14 +183,14 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \param y: The y-coordinate of the cursor.
    * \return Indication of success.
    */
-  GHOST_TSuccess setCursorPosition(int32_t x, int32_t y);
+  GHOST_TSuccess setCursorPosition(int32_t x, int32_t y) override;
 
   /**
    * Get the color of the pixel at the current mouse cursor location
    * \param r_color: returned sRGB float colors
    * \return Success value (true == successful and supported by platform)
    */
-  GHOST_TSuccess getPixelAtCursor(float r_color[3]) const;
+  GHOST_TSuccess getPixelAtCursor(float r_color[3]) const override;
 
   /***************************************************************************************
    * Access to mouse button and keyboard states.
@@ -192,30 +201,55 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \param keys: The state of all modifier keys (true == pressed).
    * \return Indication of success.
    */
-  GHOST_TSuccess getModifierKeys(GHOST_ModifierKeys &keys) const;
+  GHOST_TSuccess getModifierKeys(GHOST_ModifierKeys &keys) const override;
 
   /**
    * Returns the state of the mouse buttons (outside the message queue).
    * \param buttons: The state of the buttons.
    * \return Indication of success.
    */
-  GHOST_TSuccess getButtons(GHOST_Buttons &buttons) const;
+  GHOST_TSuccess getButtons(GHOST_Buttons &buttons) const override;
 
-  GHOST_TCapabilityFlag getCapabilities() const;
+  GHOST_TCapabilityFlag getCapabilities() const override;
+
+  /***************************************************************************************
+   * Clipboard get / set.
+   ***************************************************************************************/
 
   /**
    * Returns Clipboard data
    * \param selection: Indicate which buffer to return.
    * \return Returns the selected buffer
    */
-  char *getClipboard(bool selection) const;
+  char *getClipboard(bool selection) const override;
 
   /**
    * Puts buffer to system clipboard
    * \param buffer: The buffer to be copied.
    * \param selection: Indicates which buffer to copy too, only used on X11.
    */
-  void putClipboard(const char *buffer, bool selection) const;
+  void putClipboard(const char *buffer, bool selection) const override;
+
+  /**
+   * Returns GHOST_kSuccess if the clipboard contains an image.
+   */
+  GHOST_TSuccess hasClipboardImage() const override;
+
+  /**
+   * Get image data from the Clipboard
+   * \param r_width: the returned image width in pixels.
+   * \param r_height: the returned image height in pixels.
+   * \return pointer uint array in RGBA byte order. Caller must free.
+   */
+  uint *getClipboardImage(int *r_width, int *r_height) const override;
+
+  /**
+   * Put image data to the Clipboard
+   * \param rgba: uint array in RGBA byte order.
+   * \param width: the image width in pixels.
+   * \param height: the image height in pixels.
+   */
+  GHOST_TSuccess putClipboardImage(uint *rgba, int width, int height) const override;
 
   /**
    * Handles a window event. Called by GHOST_WindowCocoa window delegate
@@ -244,7 +278,7 @@ class GHOST_SystemCocoa : public GHOST_System {
   /**
    * \see GHOST_ISystem
    */
-  bool setConsoleWindowState(GHOST_TConsoleWindowState /*action*/)
+  bool setConsoleWindowState(GHOST_TConsoleWindowState /*action*/) override
   {
     return false;
   }
@@ -283,12 +317,12 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \param link: An optional hyperlink.
    * \param dialog_options: Options  how to display the message.
    */
-  virtual GHOST_TSuccess showMessageBox(const char *title,
-                                        const char *message,
-                                        const char *help_label,
-                                        const char *continue_label,
-                                        const char *link,
-                                        GHOST_DialogOptions dialog_options) const;
+  GHOST_TSuccess showMessageBox(const char *title,
+                                const char *message,
+                                const char *help_label,
+                                const char *continue_label,
+                                const char *link,
+                                GHOST_DialogOptions dialog_options) const override;
 
  protected:
   /**
@@ -296,7 +330,7 @@ class GHOST_SystemCocoa : public GHOST_System {
    * For now, it just registers the window class (WNDCLASS).
    * \return A success value.
    */
-  GHOST_TSuccess init();
+  GHOST_TSuccess init() override;
 
   /**
    * Performs the actual cursor position update (location in screen coordinates).
@@ -308,23 +342,26 @@ class GHOST_SystemCocoa : public GHOST_System {
 
   /** Event has been processed directly by Cocoa (or NDOF manager)
    * and has sent a ghost event to be dispatched */
-  bool m_outsideLoopEventProcessed;
+  bool outside_loop_event_processed_;
 
   /** Raised window is not yet known by the window manager,
    * so delay application become active event handling */
-  bool m_needDelayedApplicationBecomeActiveEventProcessing;
+  bool need_delayed_application_become_active_event_processing_;
 
   /** State of the modifiers. */
-  uint32_t m_modifierMask;
+  uint32_t modifier_mask_;
 
   /** Ignores window size messages (when window is dragged). */
-  bool m_ignoreWindowSizedMessages;
+  bool ignore_window_sized_messages_;
+
+  /** Background-mode, do not display the app icon in the macOS Dock. */
+  bool background_mode_;
 
   /** Temporarily ignore momentum scroll events */
-  bool m_ignoreMomentumScroll;
+  bool ignore_momentum_scroll_;
   /** Is the scroll wheel event generated by a multi-touch trackpad or mouse? */
-  bool m_multiTouchScroll;
+  bool multi_touch_scroll_;
   /** To prevent multiple warp, we store the time of the last warp event
    * and ignore mouse moved events generated before that. */
-  double m_last_warp_timestamp;
+  double last_warp_timestamp_;
 };

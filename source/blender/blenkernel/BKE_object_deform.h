@@ -12,9 +12,7 @@
 
 #include "DNA_scene_enums.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 struct ID;
 struct MDeformVert;
@@ -168,6 +166,4 @@ void BKE_object_defgroup_mirror_selection(struct Object *ob,
                                           bool *dg_flags_sel,
                                           int *r_dg_flags_sel_tot);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

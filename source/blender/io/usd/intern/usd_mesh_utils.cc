@@ -4,153 +4,146 @@
 
 #include "usd_mesh_utils.hh"
 #include "usd_attribute_utils.hh"
-#include "usd_hash_types.hh"
+#include "usd_colorspace_utils.hh"
 
 #include "BKE_attribute.hh"
-#include "BKE_report.hh"
-
-#include "BLI_color.hh"
-#include "BLI_span.hh"
 
 #include "DNA_mesh_types.h"
 
-namespace blender::io::usd {
+#include "CLG_log.h"
+
+namespace blender {
+
+static CLG_LogRef LOG = {"io.usd"};
+
+namespace io::usd {
 
 template<typename USDT>
-static void read_color_data_primvar(Mesh *mesh,
+static void read_face_display_color(Mesh *mesh,
                                     const pxr::UsdGeomPrimvar &primvar,
-                                    double motion_sample_time,
-                                    ReportList *reports,
-                                    bool is_left_handed)
+                                    const pxr::TfToken &pv_name,
+                                    const pxr::UsdTimeCode time)
 {
-  const pxr::VtArray<USDT> usd_colors = get_primvar_array<USDT>(primvar, motion_sample_time);
+  const pxr::VtArray<USDT> usd_colors = get_primvar_array<USDT>(primvar, time);
   if (usd_colors.empty()) {
     return;
   }
 
-  const pxr::TfToken interp = primvar.GetInterpolation();
-
-  if ((interp == pxr::UsdGeomTokens->faceVarying && usd_colors.size() != mesh->corners_num) ||
-      (interp == pxr::UsdGeomTokens->varying && usd_colors.size() != mesh->corners_num) ||
-      (interp == pxr::UsdGeomTokens->vertex && usd_colors.size() != mesh->verts_num) ||
-      (interp == pxr::UsdGeomTokens->constant && usd_colors.size() != 1) ||
-      (interp == pxr::UsdGeomTokens->uniform && usd_colors.size() != mesh->faces_num))
-  {
-    BKE_reportf(
-        reports,
-        RPT_WARNING,
-        "USD Import: color attribute value '%s' count inconsistent with interpolation type",
-        primvar.GetName().GetText());
-    return;
-  }
-
-  const StringRef primvar_name(primvar.GetBaseName().GetString());
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
+  const bke::AttrDomain color_domain = bke::AttrDomain::Corner;
 
-  bke::AttrDomain color_domain = bke::AttrDomain::Point;
+  const StringRef attr_name(pv_name.GetString());
 
-  if (ELEM(interp,
-           pxr::UsdGeomTokens->varying,
-           pxr::UsdGeomTokens->faceVarying,
-           pxr::UsdGeomTokens->uniform))
-  {
-    color_domain = bke::AttrDomain::Corner;
-  }
-
-  bke::SpanAttributeWriter<ColorGeometry4f> color_data;
-  color_data = attributes.lookup_or_add_for_write_only_span<ColorGeometry4f>(primvar_name,
-                                                                             color_domain);
-  if (!color_data) {
-    BKE_reportf(reports,
-                RPT_WARNING,
-                "USD Import: couldn't add color attribute '%s'",
-                primvar.GetBaseName().GetText());
+  if (primvar.GetInterpolation() == pxr::UsdGeomTokens->constant) {
+    ColorGeometry4f value = detail::convert_value<USDT, ColorGeometry4f>(usd_colors[0]);
+    colorspace_attr_to_scene_linear(primvar.GetAttr(), value);
+    set_single_value(attributes,
+                     attr_name,
+                     color_domain,
+                     bke::AttrType::ColorFloat,
+                     bke::AttributeInitValue(value));
     return;
   }
 
-  if (ELEM(interp, pxr::UsdGeomTokens->constant)) {
-    /* For situations where there's only a single item, flood fill the object. */
-    color_data.span.fill(detail::convert_value<USDT, ColorGeometry4f>(usd_colors[0]));
+  bke::SpanAttributeWriter<ColorGeometry4f> color_data =
+      attributes.lookup_or_add_for_write_only_span<ColorGeometry4f>(attr_name, color_domain);
+  if (!color_data) {
+    CLOG_WARN(&LOG, "Primvar '%s' could not be added to Blender", primvar.GetBaseName().GetText());
+    return;
   }
-  /* Check for situations that allow for a straight-forward copy by index. */
-  else if (interp == pxr::UsdGeomTokens->vertex ||
-           (interp == pxr::UsdGeomTokens->faceVarying && !is_left_handed))
-  {
-    for (int i = 0; i < usd_colors.size(); i++) {
-      color_data.span[i] = detail::convert_value<USDT, ColorGeometry4f>(usd_colors[i]);
+
+  const OffsetIndices faces = mesh->faces();
+  for (const int i : faces.index_range()) {
+    if (i >= usd_colors.size()) {
+      break;
     }
-  }
-  else {
-    /* Catch all for the remaining cases. */
 
-    /* Special case: we will expand uniform color into corner color.
-     * Uniforms in USD come through as single colors, face-varying. Since Blender does not
-     * support this particular combination for paintable color attributes, we convert the type
-     * here to make sure that the user gets the same visual result.
-     */
-    const OffsetIndices faces = mesh->faces();
-    const Span<int> corner_verts = mesh->corner_verts();
-    for (const int i : faces.index_range()) {
-      const IndexRange face = faces[i];
-      for (int j = 0; j < face.size(); ++j) {
-        int loop_index = face[j];
-
-        /* Default for constant interpolation. */
-        int usd_index = 0;
-
-        if (interp == pxr::UsdGeomTokens->vertex) {
-          usd_index = corner_verts[loop_index];
-        }
-        else if (interp == pxr::UsdGeomTokens->faceVarying) {
-          usd_index = face.start();
-          if (is_left_handed) {
-            usd_index += face.size() - 1 - j;
-          }
-          else {
-            usd_index += j;
-          }
-        }
-        else if (interp == pxr::UsdGeomTokens->uniform) {
-          /* Uniform varying uses the face index. */
-          usd_index = i;
-        }
-
-        if (usd_index >= usd_colors.size()) {
-          continue;
-        }
-
-        color_data.span[loop_index] = detail::convert_value<USDT, ColorGeometry4f>(
-            usd_colors[usd_index]);
-      }
+    /* Take the per-face USD color and place it on each face-corner. */
+    const IndexRange face = faces[i];
+    for (const int j : face.index_range()) {
+      const int corner = face.start() + j;
+      color_data.span[corner] = detail::convert_value<USDT, ColorGeometry4f>(usd_colors[i]);
     }
   }
 
+  colorspace_attr_to_scene_linear(primvar.GetAttr(), color_data.span);
   color_data.finish();
 }
 
-void read_color_data_primvar(Mesh *mesh,
-                             const pxr::UsdGeomPrimvar &primvar,
-                             double motion_sample_time,
-                             ReportList *reports,
-                             bool is_left_handed)
+static std::optional<bke::AttrDomain> convert_usd_varying_to_blender(const pxr::TfToken usd_domain)
 {
-  if (!(mesh && primvar && primvar.HasValue())) {
+  static const Map<pxr::TfToken, bke::AttrDomain> domain_map = []() {
+    Map<pxr::TfToken, bke::AttrDomain> map;
+    map.add_new(pxr::UsdGeomTokens->faceVarying, bke::AttrDomain::Corner);
+    map.add_new(pxr::UsdGeomTokens->vertex, bke::AttrDomain::Point);
+    map.add_new(pxr::UsdGeomTokens->varying, bke::AttrDomain::Point);
+    map.add_new(pxr::UsdGeomTokens->face, bke::AttrDomain::Face);
+    /* Since there's no "domain" concept in USD, promote prim-level "constant" primvars to the
+     * Point domain in Blender. */
+    map.add_new(pxr::UsdGeomTokens->constant, bke::AttrDomain::Point);
+    map.add_new(pxr::UsdGeomTokens->uniform, bke::AttrDomain::Face);
+    /* Notice: Edge types are not supported! */
+    return map;
+  }();
+
+  const bke::AttrDomain *value = domain_map.lookup_ptr(usd_domain);
+
+  if (value == nullptr) {
+    return std::nullopt;
+  }
+
+  return *value;
+}
+
+void read_generic_mesh_primvar(Mesh *mesh,
+                               const pxr::UsdGeomPrimvar &primvar,
+                               const pxr::UsdTimeCode time,
+                               const bool is_left_handed)
+{
+  const pxr::SdfValueTypeName pv_type = primvar.GetTypeName();
+  const pxr::TfToken pv_interp = primvar.GetInterpolation();
+  const pxr::TfToken pv_name = pxr::UsdGeomPrimvar::StripPrimvarsName(primvar.GetPrimvarName());
+
+  const std::optional<bke::AttrDomain> domain = convert_usd_varying_to_blender(pv_interp);
+  const std::optional<bke::AttrType> type = convert_usd_type_to_blender(pv_type);
+
+  if (!domain.has_value() || !type.has_value()) {
+    CLOG_WARN(&LOG,
+              "Primvar '%s' (interpolation %s, type %s) cannot be converted to Blender",
+              pv_name.GetText(),
+              pv_interp.GetText(),
+              pv_type.GetAsToken().GetText());
     return;
   }
 
-  const pxr::SdfValueTypeName pv_type = primvar.GetTypeName();
-  if (ELEM(pv_type,
-           pxr::SdfValueTypeNames->Color3fArray,
-           pxr::SdfValueTypeNames->Color3hArray,
-           pxr::SdfValueTypeNames->Color3dArray))
+  /* Blender does not currently support displaying Face colors with the Viewport Shading
+   * "Attribute" color type. Make a special case for "displayColor" primvars and put them on
+   * the Corner domain instead. */
+  if (pv_name == usdtokens::displayColor &&
+      ELEM(pv_interp, pxr::UsdGeomTokens->uniform, pxr::UsdGeomTokens->constant))
   {
-    read_color_data_primvar<pxr::GfVec3f>(
-        mesh, primvar, motion_sample_time, reports, is_left_handed);
+    if (ELEM(pv_type,
+             pxr::SdfValueTypeNames->Color3fArray,
+             pxr::SdfValueTypeNames->Color3hArray,
+             pxr::SdfValueTypeNames->Color3dArray))
+    {
+      read_face_display_color<pxr::GfVec3f>(mesh, primvar, pv_name, time);
+    }
+    else {
+      read_face_display_color<pxr::GfVec4f>(mesh, primvar, pv_name, time);
+    }
+
+    return;
   }
-  else {
-    read_color_data_primvar<pxr::GfVec4f>(
-        mesh, primvar, motion_sample_time, reports, is_left_handed);
+
+  OffsetIndices<int> faces;
+  if (is_left_handed) {
+    faces = mesh->faces();
   }
+
+  bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
+  copy_primvar_to_blender_attribute(primvar, time, *type, *domain, faces, attributes);
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

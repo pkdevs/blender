@@ -31,9 +31,7 @@
 
 #include "BKE_global.hh"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 namespace Freestyle {
 
@@ -50,9 +48,7 @@ class SphericalGrid {
     // temptation to save 4 or 8 bytes.
     WFace *face;
 
-#ifdef WITH_CXX_GUARDEDALLOC
     MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SphericalGrid:OccluderData")
-#endif
   };
 
  private:
@@ -115,9 +111,7 @@ class SphericalGrid {
     // deque<OccluderData*>::iterator _current, _occludeeCandidate;
     vector<OccluderData *>::iterator _current, _occludeeCandidate;
 
-#ifdef WITH_CXX_GUARDEDALLOC
     MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SphericalGrid:Iterator")
-#endif
   };
 
   class Transform : public GridHelpers::Transform {
@@ -171,9 +165,7 @@ class SphericalGrid {
   Vec3r _viewpoint;
   bool _enableQI;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SphericalGrid")
-#endif
 };
 
 inline void SphericalGrid::Iterator::initBeforeTarget()
@@ -188,7 +180,7 @@ inline void SphericalGrid::Iterator::initAfterTarget()
 {
   if (_foundOccludee) {
 #if SPHERICAL_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << "\tStarting occludee search from occludeeCandidate at depth " << _occludeeDepth
                 << std::endl;
     }
@@ -198,7 +190,7 @@ inline void SphericalGrid::Iterator::initAfterTarget()
   }
 
 #if SPHERICAL_GRID_LOGGING
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     std::cout << "\tStarting occludee search from current position" << std::endl;
   }
 #endif
@@ -217,7 +209,7 @@ inline bool SphericalGrid::Iterator::testOccluder(bool wantOccludee)
     return true;
   }
 #if SPHERICAL_GRID_LOGGING
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     std::cout << "\tTesting occluder " << (*_current)->poly.getVertices()[0];
     for (uint i = 1; i < (*_current)->poly.getVertices().size(); ++i) {
       std::cout << ", " << (*_current)->poly.getVertices()[i];
@@ -229,7 +221,7 @@ inline bool SphericalGrid::Iterator::testOccluder(bool wantOccludee)
   // If we have an occluder candidate and we are unambiguously after it, abort
   if (_foundOccludee && (*_current)->shallowest > _occludeeDepth) {
 #if SPHERICAL_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << "\t\tAborting: shallowest > occludeeCandidate->deepest" << std::endl;
     }
 #endif
@@ -243,7 +235,7 @@ inline bool SphericalGrid::Iterator::testOccluder(bool wantOccludee)
   if (wantOccludee) {
     if ((*_current)->deepest < _target[2]) {
 #if SPHERICAL_GRID_LOGGING
-      if (G.debug & G_DEBUG_FREESTYLE) {
+      if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
         std::cout << "\t\tSkipping: shallower than target while looking for occludee" << std::endl;
       }
 #endif
@@ -253,7 +245,7 @@ inline bool SphericalGrid::Iterator::testOccluder(bool wantOccludee)
   else {
     if ((*_current)->shallowest > _target[2]) {
 #if SPHERICAL_GRID_LOGGING
-      if (G.debug & G_DEBUG_FREESTYLE) {
+      if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
         std::cout << "\t\tStopping: deeper than target while looking for occluder" << std::endl;
       }
 #endif
@@ -270,7 +262,7 @@ inline bool SphericalGrid::Iterator::testOccluder(bool wantOccludee)
       _target[1] > bbMax[1])
   {
 #if SPHERICAL_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << "\t\tSkipping: bounding box violation" << std::endl;
     }
 #endif
@@ -290,13 +282,13 @@ inline void SphericalGrid::Iterator::reportDepth(Vec3r origin, Vec3r u, real t)
   // OptimizedGrid API.
   real depth = (origin + u * t).norm();
 #if SPHERICAL_GRID_LOGGING
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     std::cout << "\t\tReporting depth of occluder/ee: " << depth;
   }
 #endif
   if (depth > _target[2]) {
 #if SPHERICAL_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << " is deeper than target" << std::endl;
     }
 #endif
@@ -307,7 +299,7 @@ inline void SphericalGrid::Iterator::reportDepth(Vec3r origin, Vec3r u, real t)
   }
   else {
 #if SPHERICAL_GRID_LOGGING
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       std::cout << std::endl;
     }
 #endif
@@ -345,7 +337,7 @@ inline bool SphericalGrid::Iterator::validAfterTarget()
 inline void SphericalGrid::Iterator::markCurrentOccludeeCandidate(real depth)
 {
 #if SPHERICAL_GRID_LOGGING
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     std::cout << "\t\tFound occludeeCandidate at depth " << depth << std::endl;
   }
 #endif

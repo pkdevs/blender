@@ -8,6 +8,10 @@
 #               --enable-event-simulate \
 #               --python tools/utils_maintenance/blender_menu_search_coverage.py
 
+__all__ = (
+    "main",
+)
+
 import bpy
 
 # Menu-ID -> class.
@@ -145,7 +149,6 @@ OPERATOR_IGNORE = (
     "text.selection_set",
     "ui.*",
     "uv.rip",
-    "uv.rip_move",
     "uv.select",
     "uv.select_edge_ring",
     "uv.select_lasso",
@@ -419,8 +422,9 @@ def ctx_editmode_mesh():
 
 def ctx_editmode_mesh_extra():
     bpy.ops.object.vertex_group_add()
-    bpy.ops.object.shape_key_add(from_mix=False)
-    bpy.ops.object.shape_key_add(from_mix=True)
+    bpy.ops.object.shape_key_add(from_mix=False)  # Basis Key
+    shape_key = bpy.ops.object.shape_key_add(from_mix=True)
+    shape_key.value = 0.0
     bpy.ops.mesh.uv_texture_add()
     bpy.ops.mesh.vertex_color_add()
     bpy.ops.object.material_slot_add()
@@ -480,23 +484,23 @@ def ctx_gpencil_edit():
 
 
 def ctx_gpencil_sculpt():
-    bpy.ops.object.gpencil_add(type='STROKE')
-    bpy.ops.object.mode_set(mode='SCULPT_GPENCIL')
+    bpy.ops.object.grease_pencil_add(type='STROKE')
+    bpy.ops.object.mode_set(mode='SCULPT_GREASE_PENCIL')
 
 
 def ctx_gpencil_paint_weight():
-    bpy.ops.object.gpencil_add(type='STROKE')
-    bpy.ops.object.mode_set(mode='WEIGHT_GPENCIL')
+    bpy.ops.object.grease_pencil_add(type='STROKE')
+    bpy.ops.object.mode_set(mode='WEIGHT_GREASE_PENCIL')
 
 
 def ctx_gpencil_paint_vertex():
-    bpy.ops.object.gpencil_add(type='STROKE')
-    bpy.ops.object.mode_set(mode='VERTEX_GPENCIL')
+    bpy.ops.object.grease_pencil_add(type='STROKE')
+    bpy.ops.object.mode_set(mode='VERTEX_GREASE_PENCIL')
 
 
 def ctx_gpencil_paint_draw():
-    bpy.ops.object.gpencil_add(type='STROKE')
-    bpy.ops.object.mode_set(mode='PAINT_GPENCIL')
+    bpy.ops.object.grease_pencil_add(type='STROKE')
+    bpy.ops.object.mode_set(mode='PAINT_GREASE_PENCIL')
 
 
 # ------------

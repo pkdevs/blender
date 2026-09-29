@@ -4,24 +4,15 @@
 
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.hh"
-#include "BLI_math_matrix.hh"
+#include "BLI_color.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector.hh"
 
-#include "DNA_screen_types.h"
 #include "DNA_space_types.h"
-
-#include "DEG_depsgraph_query.hh"
-
-#include "UI_interface.hh"
-#include "UI_resources.hh"
-
-#include "RNA_access.hh"
 
 #include "BKE_instances.hh"
 
 #include "spreadsheet_data_source_geometry.hh"
-#include "spreadsheet_intern.hh"
 #include "spreadsheet_layout.hh"
 #include "spreadsheet_row_filter.hh"
 
@@ -31,16 +22,16 @@ template<typename T, typename OperationFn>
 static IndexMask apply_filter_operation(const VArray<T> &data,
                                         OperationFn check_fn,
                                         const IndexMask &mask,
-                                        IndexMaskMemory &memory)
+                                        LinearAllocator<> &memory)
 {
   return IndexMask::from_predicate(
-      mask, GrainSize(1024), memory, [&](const int64_t i) { return check_fn(data[i]); });
+      mask, memory, [&](const int64_t i) { return check_fn(data[i]); });
 }
 
 static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
                                   const Map<StringRef, const ColumnValues *> &columns,
-                                  const IndexMask prev_mask,
-                                  IndexMaskMemory &memory)
+                                  const IndexMask &prev_mask,
+                                  LinearAllocator<> &memory)
 {
   const ColumnValues &column = *columns.lookup(row_filter.column_name);
   const GVArray &column_data = column.data();
@@ -61,7 +52,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const float cell) { return cell > value; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_LESS: {
         return apply_filter_operation(
@@ -69,7 +59,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const float cell) { return cell < value; },
             prev_mask,
             memory);
-        break;
       }
     }
   }
@@ -90,7 +79,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const int cell) { return cell == value; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_GREATER: {
         return apply_filter_operation(
@@ -98,7 +86,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [value](const int cell) { return cell > value; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_LESS: {
         return apply_filter_operation(
@@ -106,7 +93,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const int cell) { return cell < value; },
             prev_mask,
             memory);
-        break;
       }
     }
   }
@@ -119,7 +105,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const int cell) { return cell == value; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_GREATER: {
         return apply_filter_operation(
@@ -127,7 +112,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [value](const int cell) { return cell > value; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_LESS: {
         return apply_filter_operation(
@@ -135,7 +119,32 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const int cell) { return cell < value; },
             prev_mask,
             memory);
-        break;
+      }
+    }
+  }
+  else if (column_data.type().is<int64_t>()) {
+    const int64_t value = row_filter.value_int;
+    switch (row_filter.operation) {
+      case SPREADSHEET_ROW_FILTER_EQUAL: {
+        return apply_filter_operation(
+            column_data.typed<int64_t>(),
+            [&](const int64_t cell) { return cell == value; },
+            prev_mask,
+            memory);
+      }
+      case SPREADSHEET_ROW_FILTER_GREATER: {
+        return apply_filter_operation(
+            column_data.typed<int64_t>(),
+            [value](const int64_t cell) { return cell > value; },
+            prev_mask,
+            memory);
+      }
+      case SPREADSHEET_ROW_FILTER_LESS: {
+        return apply_filter_operation(
+            column_data.typed<int64_t>(),
+            [&](const int64_t cell) { return cell < value; },
+            prev_mask,
+            memory);
       }
     }
   }
@@ -143,29 +152,81 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
     const int2 value = row_filter.value_int2;
     switch (row_filter.operation) {
       case SPREADSHEET_ROW_FILTER_EQUAL: {
-        const float threshold_sq = pow2f(row_filter.threshold);
-        apply_filter_operation(
+        return apply_filter_operation(
             column_data.typed<int2>(),
-            [&](const int2 cell) { return math::distance_squared(cell, value) <= threshold_sq; },
+            [&](const int2 cell) { return cell == value; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_GREATER: {
-        apply_filter_operation(
+        return apply_filter_operation(
             column_data.typed<int2>(),
             [&](const int2 cell) { return cell.x > value.x && cell.y > value.y; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_LESS: {
-        apply_filter_operation(
+        return apply_filter_operation(
             column_data.typed<int2>(),
             [&](const int2 cell) { return cell.x < value.x && cell.y < value.y; },
             prev_mask,
             memory);
-        break;
+      }
+    }
+  }
+  else if (column_data.type().is<int3>()) {
+    const int3 value = row_filter.value_int3;
+    switch (row_filter.operation) {
+      case SPREADSHEET_ROW_FILTER_EQUAL: {
+        return apply_filter_operation(
+            column_data.typed<int3>(),
+            [&](const int3 cell) { return cell == value; },
+            prev_mask,
+            memory);
+      }
+      case SPREADSHEET_ROW_FILTER_GREATER: {
+        return apply_filter_operation(
+            column_data.typed<int3>(),
+            [&](const int3 cell) {
+              return cell.x > value.x && cell.y > value.y && cell.z > value.z;
+            },
+            prev_mask,
+            memory);
+      }
+      case SPREADSHEET_ROW_FILTER_LESS: {
+        return apply_filter_operation(
+            column_data.typed<int3>(),
+            [&](const int3 cell) {
+              return cell.x < value.x && cell.y < value.y && cell.z < value.z;
+            },
+            prev_mask,
+            memory);
+      }
+    }
+  }
+  else if (column_data.type().is<short2>()) {
+    const short2 value = short2(int2(row_filter.value_int2));
+    switch (row_filter.operation) {
+      case SPREADSHEET_ROW_FILTER_EQUAL: {
+        return apply_filter_operation(
+            column_data.typed<short2>(),
+            [&](const short2 cell) { return cell == value; },
+            prev_mask,
+            memory);
+      }
+      case SPREADSHEET_ROW_FILTER_GREATER: {
+        return apply_filter_operation(
+            column_data.typed<short2>(),
+            [&](const short2 cell) { return cell.x > value.x && cell.y > value.y; },
+            prev_mask,
+            memory);
+      }
+      case SPREADSHEET_ROW_FILTER_LESS: {
+        return apply_filter_operation(
+            column_data.typed<short2>(),
+            [&](const short2 cell) { return cell.x < value.x && cell.y < value.y; },
+            prev_mask,
+            memory);
       }
     }
   }
@@ -179,7 +240,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const float2 cell) { return math::distance_squared(cell, value) <= threshold_sq; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_GREATER: {
         return apply_filter_operation(
@@ -187,7 +247,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const float2 cell) { return cell.x > value.x && cell.y > value.y; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_LESS: {
         return apply_filter_operation(
@@ -195,7 +254,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const float2 cell) { return cell.x < value.x && cell.y < value.y; },
             prev_mask,
             memory);
-        break;
       }
     }
   }
@@ -209,7 +267,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             [&](const float3 cell) { return math::distance_squared(cell, value) <= threshold_sq; },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_GREATER: {
         return apply_filter_operation(
@@ -219,7 +276,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_LESS: {
         return apply_filter_operation(
@@ -229,7 +285,37 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             },
             prev_mask,
             memory);
-        break;
+      }
+    }
+  }
+  else if (column_data.type().is<float4>()) {
+    const float4 value = row_filter.value_float4;
+    switch (row_filter.operation) {
+      case SPREADSHEET_ROW_FILTER_EQUAL: {
+        const float threshold_sq = pow2f(row_filter.threshold);
+        return apply_filter_operation(
+            column_data.typed<float4>(),
+            [&](const float4 cell) { return math::distance_squared(cell, value) <= threshold_sq; },
+            prev_mask,
+            memory);
+      }
+      case SPREADSHEET_ROW_FILTER_GREATER: {
+        return apply_filter_operation(
+            column_data.typed<float4>(),
+            [&](const float4 cell) {
+              return cell.x > value.x && cell.y > value.y && cell.z > value.z && cell.w > value.w;
+            },
+            prev_mask,
+            memory);
+      }
+      case SPREADSHEET_ROW_FILTER_LESS: {
+        return apply_filter_operation(
+            column_data.typed<float4>(),
+            [&](const float4 cell) {
+              return cell.x < value.x && cell.y < value.y && cell.z < value.z && cell.w < value.w;
+            },
+            prev_mask,
+            memory);
       }
     }
   }
@@ -245,7 +331,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_GREATER: {
         return apply_filter_operation(
@@ -255,7 +340,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_LESS: {
         return apply_filter_operation(
@@ -265,7 +349,6 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
             },
             prev_mask,
             memory);
-        break;
       }
     }
   }
@@ -279,36 +362,33 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
         return apply_filter_operation(
             column_data.typed<ColorGeometry4b>(),
             [&](const ColorGeometry4b cell_bytes) {
-              const ColorGeometry4f cell = cell_bytes.decode();
+              const ColorGeometry4f cell = color::decode(cell_bytes);
               const float4 cell_floats = {
                   float(cell.r), float(cell.g), float(cell.b), float(cell.a)};
               return math::distance_squared(value_floats, cell_floats) <= threshold_sq;
             },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_GREATER: {
         return apply_filter_operation(
             column_data.typed<ColorGeometry4b>(),
             [&](const ColorGeometry4b cell_bytes) {
-              const ColorGeometry4f cell = cell_bytes.decode();
+              const ColorGeometry4f cell = color::decode(cell_bytes);
               return cell.r > value.r && cell.g > value.g && cell.b > value.b && cell.a > value.a;
             },
             prev_mask,
             memory);
-        break;
       }
       case SPREADSHEET_ROW_FILTER_LESS: {
         return apply_filter_operation(
             column_data.typed<ColorGeometry4b>(),
             [&](const ColorGeometry4b cell_bytes) {
-              const ColorGeometry4f cell = cell_bytes.decode();
+              const ColorGeometry4f cell = color::decode(cell_bytes);
               return cell.r < value.r && cell.g < value.g && cell.b < value.b && cell.a < value.a;
             },
             prev_mask,
             memory);
-        break;
       }
     }
   }
@@ -325,7 +405,7 @@ static IndexMask apply_row_filter(const SpreadsheetRowFilter &row_filter,
               return value == (reinterpret_cast<ID &>(cell.collection()).name + 2);
             }
             case bke::InstanceReference::Type::GeometrySet: {
-              return false;
+              return value == cell.geometry_set().name();
             }
             case bke::InstanceReference::Type::None: {
               return false;
@@ -345,7 +425,7 @@ static bool use_row_filters(const SpaceSpreadsheet &sspreadsheet)
   if (!(sspreadsheet.filter_flag & SPREADSHEET_FILTER_ENABLE)) {
     return false;
   }
-  if (BLI_listbase_is_empty(&sspreadsheet.row_filters)) {
+  if (sspreadsheet.row_filters.is_empty()) {
     return false;
   }
   return true;
@@ -378,13 +458,12 @@ IndexMask spreadsheet_filter_rows(const SpaceSpreadsheet &sspreadsheet,
     return IndexMask(tot_rows);
   }
 
-  IndexMaskMemory &mask_memory = scope.construct<IndexMaskMemory>();
   IndexMask mask(tot_rows);
 
   if (use_selection) {
     const GeometryDataSource *geometry_data_source = dynamic_cast<const GeometryDataSource *>(
         &data_source);
-    mask = geometry_data_source->apply_selection_filter(mask_memory);
+    mask = geometry_data_source->apply_selection_filter(scope.allocator());
   }
 
   if (use_filters) {
@@ -393,12 +472,12 @@ IndexMask spreadsheet_filter_rows(const SpaceSpreadsheet &sspreadsheet,
       columns.add(column.values->name(), column.values);
     }
 
-    LISTBASE_FOREACH (const SpreadsheetRowFilter *, row_filter, &sspreadsheet.row_filters) {
-      if (row_filter->flag & SPREADSHEET_ROW_FILTER_ENABLED) {
-        if (!columns.contains(row_filter->column_name)) {
+    for (const SpreadsheetRowFilter &row_filter : sspreadsheet.row_filters) {
+      if (row_filter.flag & SPREADSHEET_ROW_FILTER_ENABLED) {
+        if (!columns.contains(row_filter.column_name)) {
           continue;
         }
-        mask = apply_row_filter(*row_filter, columns, mask, mask_memory);
+        mask = apply_row_filter(row_filter, columns, mask, scope.allocator());
       }
     }
   }
@@ -408,7 +487,7 @@ IndexMask spreadsheet_filter_rows(const SpaceSpreadsheet &sspreadsheet,
 
 SpreadsheetRowFilter *spreadsheet_row_filter_new()
 {
-  SpreadsheetRowFilter *row_filter = MEM_cnew<SpreadsheetRowFilter>(__func__);
+  SpreadsheetRowFilter *row_filter = MEM_new<SpreadsheetRowFilter>(__func__);
   row_filter->flag = (SPREADSHEET_ROW_FILTER_UI_EXPAND | SPREADSHEET_ROW_FILTER_ENABLED);
   row_filter->operation = SPREADSHEET_ROW_FILTER_LESS;
   row_filter->threshold = 0.01f;
@@ -430,8 +509,8 @@ SpreadsheetRowFilter *spreadsheet_row_filter_copy(const SpreadsheetRowFilter *sr
 
 void spreadsheet_row_filter_free(SpreadsheetRowFilter *row_filter)
 {
-  MEM_SAFE_FREE(row_filter->value_string);
-  MEM_freeN(row_filter);
+  MEM_SAFE_DELETE(row_filter->value_string);
+  MEM_delete(row_filter);
 }
 
 }  // namespace blender::ed::spreadsheet

@@ -8,12 +8,12 @@
 
 #include "DNA_ID.h"
 #include "DNA_linestyle_types.h"
-#include "DNA_listBase.h"
 #include "DNA_outliner_types.h"
 #include "DNA_texture_types.h"
 
 #include "../outliner_intern.hh"
 
+#include "tree_display.hh"
 #include "tree_element_id_linestyle.hh"
 
 namespace blender::ed::outliner {
@@ -35,12 +35,7 @@ void TreeElementIDLineStyle::expand_textures() const
 {
   for (int a = 0; a < MAX_MTEX; a++) {
     if (linestyle_.mtex[a]) {
-      add_element(&legacy_te_.subtree,
-                  reinterpret_cast<ID *>((linestyle_.mtex[a])->tex),
-                  nullptr,
-                  &legacy_te_,
-                  TSE_SOME_ID,
-                  a);
+      add_id_element({.index = a}, reinterpret_cast<ID *>((linestyle_.mtex[a])->tex));
     }
   }
 }

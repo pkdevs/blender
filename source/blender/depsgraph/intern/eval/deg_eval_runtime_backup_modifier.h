@@ -8,11 +8,13 @@
 
 #pragma once
 
-#include "BKE_modifier.hh"
+#include "DNA_modifier_types.h"
+
+namespace blender {
 
 struct ModifierData;
 
-namespace blender::deg {
+namespace deg {
 
 class ModifierDataBackup {
  public:
@@ -22,4 +24,5 @@ class ModifierDataBackup {
   void *runtime;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

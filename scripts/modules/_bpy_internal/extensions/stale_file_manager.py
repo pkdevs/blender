@@ -16,9 +16,7 @@ __all__ = (
 )
 
 
-from typing import (
-    Dict,
-    List,
+from collections.abc import (
     Sequence,
 )
 
@@ -68,10 +66,10 @@ class StaleFiles:
         base_directory = os.path.normpath(base_directory)
         self._base_directory = base_directory if base_directory.endswith(sep) else (base_directory + sep)
         self._stale_filename = stale_filename
-        self._paths: List[str] = []
+        self._paths: list[str] = []
         self._debug: bool = debug
 
-        self._index_cache: Dict[str, int] = {}
+        self._index_cache: dict[str, int] = {}
         self._is_modified: bool = True
 
     def is_empty(self) -> bool:
@@ -90,7 +88,7 @@ class StaleFiles:
         debug = self._debug
 
         assert base_directory.endswith(sep)
-        # Don't support loading multiple times or after adding files.
+        # Don't support loading multiple times or running again after adding files.
         assert len(paths) == 0
 
         stale_filepath = os.path.join(base_directory, self._stale_filename)
@@ -153,9 +151,9 @@ class StaleFiles:
 
                 # Ensure the `base_directory` & `path_abs` they are not the same.
                 # One could be forgiven for thinking they must never be the same since `path`
-                # is known not be be an empty string, one would be mistaken!
+                # is known not be an empty string, one would be mistaken!
                 # WIN32 which considers `C:\path\` the same as `C:\path\. ` to be the same.
-                # Therefor, literal lines containing any combination of trailing full-stop
+                # Therefore, literal lines containing any combination of trailing full-stop
                 # or space characters would be considered files that cannot be removed.
                 # While this should never under normal conditions happen,
                 # guarantee that stale file removal *never* removes anything it should not,
@@ -164,7 +162,7 @@ class StaleFiles:
                 #
                 # If this ever did happen besides potentially trying to remove `base_directory`,
                 # this path could be treated as a file which could not be removed and queued for
-                # removal again causing a single space (for e.g.) to be left in the stale file,
+                # removal again causing a single space (for example) to be left in the stale file,
                 # trying to be removed every startup and failing.
                 # Avoid all these issues by checking the path doesn't resolve to being the same path as it's parent.
                 is_same = False
@@ -322,6 +320,55 @@ class StaleFiles:
 
         return result
 
+    def state_load_remove_and_store(
+            self,
+            *,
+            # A sequence of absolute paths within `_base_directory`.
+            paths: Sequence[str],
+    ) -> bool:
+        # Convenience function for a common operation.
+        # Return true when one or more items from "paths" were removed from the "state".
+
+        self.state_load(check_exists=False)
+        # Accounts for the common case where nothing has been marked for removal.
+        if not self._paths:
+            return False
+
+        paths_remove_canonical = {
+            self._filepath_relative_and_canonicalize(path_abs) for path_abs in paths
+            if self._filepath_relative_test(path_abs)
+        }
+
+        paths_next = [path for path in self._paths if path not in paths_remove_canonical]
+        if len(self._paths) == len(paths_next):
+            return False
+
+        self._paths[:] = paths_next
+        self._is_modified = True
+
+        self.state_store(check_exists=False)
+
+        return True
+
+    def _filepath_relative_test(self, path_abs: str) -> bool:
+        debug = self._debug
+        base_directory = self._base_directory
+        if not path_abs.startswith(base_directory):
+            if debug:
+                print(base_directory, "is not a sub-directory", path_abs)
+            return False
+        return True
+
+    def _filepath_relative_and_canonicalize(self, path_abs: str) -> str:
+        from os import sep
+
+        assert self._filepath_relative_test(path_abs)
+
+        path = path_abs[len(self._base_directory):].lstrip(sep)
+        if sep == "\\":
+            path = path.replace("\\", "/")
+        return path
+
     def _filepath_rename_to_stale(self, path_abs: str) -> str:
         import os
 
@@ -358,22 +405,12 @@ class StaleFiles:
         return path_abs_stale
 
     def filepath_add(self, path_abs: str, *, rename: bool) -> bool:
-        from os import sep
-
-        base_directory = self._base_directory
-        debug = self._debug
-
-        if not path_abs.startswith(self._base_directory):
-            if debug:
-                print(base_directory, "is not a sub-directory", path_abs)
+        if not self._filepath_relative_test(path_abs):
             return False
 
         if rename:
             path_abs = self._filepath_rename_to_stale(path_abs)
-
-        path = path_abs[len(self._base_directory):].lstrip(sep)
-        if sep == "\\":
-            path = path.replace("\\", "/")
+        path = self._filepath_relative_and_canonicalize(path_abs)
 
         self._is_modified = True
         self._paths.append(path)

@@ -12,10 +12,6 @@
 #include "../../BPy_Id.h"
 #include "../BPy_ViewEdge.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -31,25 +27,36 @@ PyDoc_STRVAR(
     "Chain is the last step before the :class:`Stroke` and is used in the\n"
     "Splitting and Creation processes.\n"
     "\n"
-    ".. method:: __init__()\n"
-    "            __init__(brother)\n"
-    "            __init__(id)\n"
+    ".. method:: __init__(*args)\n"
+    "\n"
+    "   Accepted call signatures:\n"
+    "\n"
+    "   - ``__init__()``\n"
+    "   - ``__init__(brother)``\n"
+    "   - ``__init__(id)``\n"
     "\n"
     "   Builds a :class:`Chain` using the default constructor,\n"
     "   copy constructor or from an :class:`Id`.\n"
     "\n"
-    "   :arg brother: A Chain object.\n"
+    "   :param brother: A Chain object.\n"
     "   :type brother: :class:`Chain`\n"
-    "   :arg id: An Id object.\n"
-    "   :type id: :class:`Id`");
-
+    "   :param id: An Id object.\n"
+    "   :type id: :class:`Id`\n");
 static int Chain_init(BPy_Chain *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist_1[] = {"brother", nullptr};
   static const char *kwlist_2[] = {"id", nullptr};
   PyObject *obj = nullptr;
 
-  if (PyArg_ParseTupleAndKeywords(args, kwds, "|O!", (char **)kwlist_1, &Chain_Type, &obj)) {
+  if (PyArg_ParseTupleAndKeywords(args,
+                                  kwds,
+                                  "|"  /* Optional arguments. */
+                                  "O!" /* `brother` */
+                                  ":__init__",
+                                  (char **)kwlist_1,
+                                  &Chain_Type,
+                                  &obj))
+  {
     if (!obj) {
       self->c = new Chain();
     }
@@ -58,7 +65,13 @@ static int Chain_init(BPy_Chain *self, PyObject *args, PyObject *kwds)
     }
   }
   else if ((void)PyErr_Clear(),
-           PyArg_ParseTupleAndKeywords(args, kwds, "O!", (char **)kwlist_2, &Id_Type, &obj))
+           PyArg_ParseTupleAndKeywords(args,
+                                       kwds,
+                                       "O!" /* `id` */
+                                       ":__init__",
+                                       (char **)kwlist_2,
+                                       &Id_Type,
+                                       &obj))
   {
     self->c = new Chain(*(((BPy_Id *)obj)->id));
   }
@@ -79,19 +92,25 @@ PyDoc_STRVAR(
     "\n"
     "   Adds a ViewEdge at the end of the Chain.\n"
     "\n"
-    "   :arg viewedge: The ViewEdge that must be added.\n"
+    "   :param viewedge: The ViewEdge that must be added.\n"
     "   :type viewedge: :class:`ViewEdge`\n"
-    "   :arg orientation: The orientation with which the ViewEdge must be\n"
-    "      processed.\n"
-    "   :type orientation: bool");
-
+    "   :param orientation: The orientation with which the ViewEdge must be processed.\n"
+    "   :type orientation: bool\n");
 static PyObject *Chain_push_viewedge_back(BPy_Chain *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {"viewedge", "orientation", nullptr};
   PyObject *obj1 = nullptr, *obj2 = nullptr;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!O!", (char **)kwlist, &ViewEdge_Type, &obj1, &PyBool_Type, &obj2))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `viewedge` */
+                                   "O!" /* `orientation` */
+                                   ":push_viewedge_back",
+                                   (char **)kwlist,
+                                   &ViewEdge_Type,
+                                   &obj1,
+                                   &PyBool_Type,
+                                   &obj2))
   {
     return nullptr;
   }
@@ -108,19 +127,26 @@ PyDoc_STRVAR(
     "\n"
     "   Adds a ViewEdge at the beginning of the Chain.\n"
     "\n"
-    "   :arg viewedge: The ViewEdge that must be added.\n"
+    "   :param viewedge: The ViewEdge that must be added.\n"
     "   :type viewedge: :class:`ViewEdge`\n"
-    "   :arg orientation: The orientation with which the ViewEdge must be\n"
+    "   :param orientation: The orientation with which the ViewEdge must be\n"
     "      processed.\n"
-    "   :type orientation: bool");
-
+    "   :type orientation: bool\n");
 static PyObject *Chain_push_viewedge_front(BPy_Chain *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {"viewedge", "orientation", nullptr};
   PyObject *obj1 = nullptr, *obj2 = nullptr;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!O!", (char **)kwlist, &ViewEdge_Type, &obj1, &PyBool_Type, &obj2))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `viewedge` */
+                                   "O!" /* `orientation` */
+                                   ":push_viewedge_front",
+                                   (char **)kwlist,
+                                   &ViewEdge_Type,
+                                   &obj1,
+                                   &PyBool_Type,
+                                   &obj2))
   {
     return nullptr;
   }
@@ -129,6 +155,16 @@ static PyObject *Chain_push_viewedge_front(BPy_Chain *self, PyObject *args, PyOb
   self->c->push_viewedge_front(ve, orientation);
   Py_RETURN_NONE;
 }
+
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
+#endif
 
 static PyMethodDef BPy_Chain_methods[] = {
     {"push_viewedge_back",
@@ -141,6 +177,14 @@ static PyMethodDef BPy_Chain_methods[] = {
      Chain_push_viewedge_front_doc},
     {nullptr, nullptr, 0, nullptr},
 };
+
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
+#endif
 
 /*-----------------------BPy_Chain type definition ------------------------------*/
 
@@ -186,7 +230,3 @@ PyTypeObject Chain_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

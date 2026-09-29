@@ -14,10 +14,6 @@
 #include "UnaryFunction0D_ViewShape/BPy_GetOccludeeF0D.h"
 #include "UnaryFunction0D_ViewShape/BPy_GetShapeF0D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -33,21 +29,18 @@ int UnaryFunction0DViewShape_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction0DViewShape_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction0DViewShape_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "UnaryFunction0DViewShape", (PyObject *)&UnaryFunction0DViewShape_Type);
 
   if (PyType_Ready(&GetOccludeeF0D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&GetOccludeeF0D_Type);
-  PyModule_AddObject(module, "GetOccludeeF0D", (PyObject *)&GetOccludeeF0D_Type);
+  PyModule_AddObjectRef(module, "GetOccludeeF0D", (PyObject *)&GetOccludeeF0D_Type);
 
   if (PyType_Ready(&GetShapeF0D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&GetShapeF0D_Type);
-  PyModule_AddObject(module, "GetShapeF0D", (PyObject *)&GetShapeF0D_Type);
+  PyModule_AddObjectRef(module, "GetShapeF0D", (PyObject *)&GetShapeF0D_Type);
 
   return 0;
 }
@@ -65,7 +58,6 @@ PyDoc_STRVAR(
     ".. method:: __init__()\n"
     "\n"
     "   Default constructor.\n");
-
 static int UnaryFunction0DViewShape___init__(BPy_UnaryFunction0DViewShape *self,
                                              PyObject *args,
                                              PyObject *kwds)
@@ -99,8 +91,13 @@ static PyObject *UnaryFunction0DViewShape___call__(BPy_UnaryFunction0DViewShape 
   static const char *kwlist[] = {"it", nullptr};
   PyObject *obj;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &obj))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `it` */
+                                   ":__call__",
+                                   (char **)kwlist,
+                                   &Interface0DIterator_Type,
+                                   &obj))
   {
     return nullptr;
   }
@@ -163,7 +160,3 @@ PyTypeObject UnaryFunction0DViewShape_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

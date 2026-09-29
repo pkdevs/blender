@@ -4,14 +4,11 @@
 
 set(INC
   .
-  ../../blenkernel
   ../../editors/include
-  ../../gpu
-  ../../imbuf
+  ../../makesrna
 )
 
 set(INC_SYS
-  ${PYTHON_INCLUDE_DIRS}
 )
 
 set(SRC
@@ -30,6 +27,7 @@ set(SRC
   gpu_py_shader.cc
   gpu_py_shader_create_info.cc
   gpu_py_state.cc
+  gpu_py_storagebuffer.cc
   gpu_py_texture.cc
   gpu_py_types.cc
   gpu_py_uniformbuffer.cc
@@ -50,6 +48,7 @@ set(SRC
   gpu_py_select.hh
   gpu_py_shader.hh
   gpu_py_state.hh
+  gpu_py_storagebuffer.hh
   gpu_py_texture.hh
   gpu_py_types.hh
   gpu_py_uniformbuffer.hh
@@ -58,19 +57,19 @@ set(SRC
 )
 
 set(LIB
-  ${PYTHON_LINKFLAGS}
-  ${PYTHON_LIBRARIES}
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
+  PRIVATE bf::gpu
+  PRIVATE bf::imbuf
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::windowmanager
+  PRIVATE bf::dependencies::optional::python
 )
 
 if(WITH_OPENGL_BACKEND)
-  list(APPEND INC_SYS
-    ${Epoxy_INCLUDE_DIRS}
-  )
   list(APPEND LIB
-    ${Epoxy_LIBRARIES}
+    PRIVATE bf::dependencies::epoxy
   )
 endif()
 

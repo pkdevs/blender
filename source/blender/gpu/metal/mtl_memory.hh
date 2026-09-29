@@ -2,7 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup gpu
+ */
+
 #pragma once
+
+#include "BLI_map.hh"
+
+#include "mtl_common.hh"
 
 #include <atomic>
 #include <ctime>
@@ -11,8 +19,6 @@
 #include <mutex>
 #include <set>
 #include <unordered_map>
-
-#include "mtl_common.hh"
 
 #include <Cocoa/Cocoa.h>
 #include <Metal/Metal.h>
@@ -54,7 +60,7 @@
  *
  *  Usage:
  *
- *    MTLContext::get_scratchbuffer_manager() - to fetch active manager.
+ *    MTLContext::get_scratch_buffer_manager() - to fetch active manager.
  *
  *    MTLTemporaryBuffer scratch_buffer_allocate_range(size)
  *    MTLTemporaryBuffer scratch_buffer_allocate_range_aligned(size, align)
@@ -81,19 +87,15 @@
  *  Usage:
  *    MTLContext::get_global_memory_manager();  - static routine to fetch global memory manager.
  *
- *    gpu::MTLBuffer *allocate(size, is_cpu_visibile)
- *    gpu::MTLBuffer *allocate_aligned(size, alignment, is_cpu_visibile)
- *    gpu::MTLBuffer *allocate_with_data(size, is_cpu_visibile, data_ptr)
- *    gpu::MTLBuffer *allocate_aligned_with_data(size, alignment, is_cpu_visibile, data_ptr)
+ *    gpu::MTLBuffer *allocate(size, is_cpu_visible)
+ *    gpu::MTLBuffer *allocate_aligned(size, alignment, is_cpu_visible)
+ *    gpu::MTLBuffer *allocate_with_data(size, is_cpu_visible, data_ptr)
+ *    gpu::MTLBuffer *allocate_aligned_with_data(size, alignment, is_cpu_visible, data_ptr)
  */
 
 /* Debug memory statistics: Disabled by Macro rather than guarded for
  * performance considerations. */
 #define MTL_DEBUG_MEMORY_STATISTICS 0
-
-/* Allows a scratch buffer to temporarily grow beyond its maximum, which allows submission
- * of one-time-use data packets which are too large. */
-#define MTL_SCRATCH_BUFFER_ALLOW_TEMPORARY_EXPANSION 1
 
 namespace blender::gpu {
 
@@ -101,6 +103,7 @@ namespace blender::gpu {
 class MTLContext;
 class MTLCommandBufferManager;
 class MTLUniformBuf;
+class MTLStorageBuf;
 
 /* -------------------------------------------------------------------- */
 /** \name Memory Management.
@@ -110,7 +113,7 @@ class MTLUniformBuf;
 class MTLBuffer {
 
  public:
-  /* NOTE: ListBase API is not used due to custom destructor operation required to release
+  /* NOTE: ListBaseT API is not used due to custom destructor operation required to release
    * Metal objective C buffer resource. */
   gpu::MTLBuffer *next, *prev;
 
@@ -213,6 +216,8 @@ class MTLCircularBuffer {
 
   /* Wrapped MTLBuffer allocation handled. */
   gpu::MTLBuffer *cbuffer_;
+  /* Allocated SSBO that serves as source for cbuffer. */
+  MTLStorageBuf *ssbo_source_ = nullptr;
 
   /* Current offset where next allocation will begin. */
   uint64_t current_offset_;
@@ -399,7 +404,7 @@ class MTLBufferPool {
   using MTLBufferResourceOptions = uint64_t;
 
   std::mutex buffer_pool_lock_;
-  blender::Map<MTLBufferResourceOptions, MTLBufferPoolOrderedList *> buffer_pools_;
+  Map<MTLBufferResourceOptions, MTLBufferPoolOrderedList *> buffer_pools_;
 
   /* Linked list to track all existing allocations. Prioritizing fast insert/deletion. */
   gpu::MTLBuffer *allocations_list_base_;
@@ -410,7 +415,7 @@ class MTLBufferPool {
    * MemoryManager pools.
    * Access to this queue is made thread-safe through safelist_lock_. */
   std::mutex safelist_lock_;
-  blender::Vector<MTLSafeFreeList *> completed_safelist_queue_;
+  Vector<MTLSafeFreeList *> completed_safelist_queue_;
 
   /* Current free list, associated with active MTLCommandBuffer submission. */
   /* MTLBuffer::free() can be called from separate threads, due to usage within animation
@@ -494,7 +499,7 @@ class MTLScratchBufferManager {
   MTLCircularBuffer *scratch_buffers_[mtl_max_scratch_buffers_];
 
  public:
-  MTLScratchBufferManager(MTLContext &context) : context_(context){};
+  MTLScratchBufferManager(MTLContext &context) : context_(context) {};
   ~MTLScratchBufferManager();
 
   /* Explicit initialization and freeing of resources.
@@ -514,6 +519,10 @@ class MTLScratchBufferManager {
    * This call will perform a partial flush of the buffer starting from
    * the last offset the data was flushed from, to the current offset. */
   void flush_active_scratch_buffer();
+
+  /* Bind the whole scratch buffer as a SSBO resource. */
+  void bind_as_ssbo(int slot);
+  void unbind_as_ssbo();
 
   MEM_CXX_CLASS_ALLOC_FUNCS("MTLBufferPool");
 };

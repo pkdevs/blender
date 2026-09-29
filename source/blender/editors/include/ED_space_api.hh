@@ -8,6 +8,9 @@
 
 #pragma once
 
+namespace blender {
+
+struct ARegion;
 struct ARegionType;
 struct bContext;
 
@@ -35,17 +38,20 @@ void ED_spacetype_action();
 void ED_spacetype_nla();
 void ED_spacetype_script();
 void ED_spacetype_text();
-void ED_spacetype_sequencer();
 void ED_spacetype_console();
 void ED_spacetype_userpref();
 void ED_spacetype_clip();
+void ED_spacetype_project();
 void ED_spacetype_statusbar();
 void ED_spacetype_topbar();
-namespace blender::ed {
-namespace spreadsheet {
+
+namespace ed::vse {
+void ED_spacetype_sequencer();
+}
+
+namespace ed::spreadsheet {
 void register_spacetype();
 }
-}  // namespace blender::ed
 
 /** \} */
 
@@ -69,6 +75,8 @@ void *ED_region_draw_cb_activate(ARegionType *art,
                                  void *customdata,
                                  int type);
 void ED_region_draw_cb_draw(const bContext *C, ARegion *region, int type);
-void ED_region_surface_draw_cb_draw(ARegionType *art, int type);
+void ED_region_surface_draw_cb_draw(const bContext *C, ARegionType *art, int type);
 bool ED_region_draw_cb_exit(ARegionType *art, void *handle);
 void ED_region_draw_cb_remove_by_type(ARegionType *art, void *draw_fn, void (*free)(void *));
+
+}  // namespace blender

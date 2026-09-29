@@ -19,18 +19,11 @@ class PHYSICS_UL_dynapaint_surfaces(UIList):
         surf = item
         sticon = layout.enum_item_icon(surf, "surface_type", surf.surface_type)
 
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            row = layout.row(align=True)
-            row.label(text="", icon_value=icon)
-            row.prop(surf, "name", text="", emboss=False, icon_value=sticon)
-            row = layout.row(align=True)
-            row.prop(surf, "is_active", text="")
-
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            row = layout.row(align=True)
-            row.label(text="", icon_value=icon)
-            row.label(text="", icon_value=sticon)
+        row = layout.row(align=True)
+        row.label(text="", icon_value=icon)
+        row.prop(surf, "name", text="", emboss=False, icon_value=sticon)
+        row = layout.row(align=True)
+        row.prop(surf, "is_active", text="")
 
 
 class PhysicButtonsPanel:
@@ -89,7 +82,6 @@ class PHYSICS_PT_dynamic_paint(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -115,7 +107,6 @@ class PHYSICS_PT_dynamic_paint_settings(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -204,7 +195,6 @@ class PHYSICS_PT_dp_surface_canvas(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -272,7 +262,6 @@ class PHYSICS_PT_dp_surface_canvas_paint_dry(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -314,7 +303,6 @@ class PHYSICS_PT_dp_surface_canvas_paint_dissolve(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -356,7 +344,6 @@ class PHYSICS_PT_dp_canvas_output(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -437,7 +424,6 @@ class PHYSICS_PT_dp_canvas_output_paintmaps(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -472,7 +458,6 @@ class PHYSICS_PT_dp_canvas_output_wetmaps(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -507,7 +492,6 @@ class PHYSICS_PT_dp_canvas_initial_color(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -552,7 +536,6 @@ class PHYSICS_PT_dp_effects(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -574,7 +557,6 @@ class PHYSICS_PT_dp_effects_spread(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -614,7 +596,6 @@ class PHYSICS_PT_dp_effects_drip(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -655,7 +636,6 @@ class PHYSICS_PT_dp_effects_drip_weights(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -684,7 +664,6 @@ class PHYSICS_PT_dp_effects_shrink(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -719,7 +698,6 @@ class PHYSICS_PT_dp_cache(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -744,7 +722,6 @@ class PHYSICS_PT_dp_brush_source(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -812,7 +789,6 @@ class PHYSICS_PT_dp_brush_source_color_ramp(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -822,9 +798,11 @@ class PHYSICS_PT_dp_brush_source_color_ramp(PhysicButtonsPanel, Panel):
             return False
 
         brush = context.dynamic_paint.brush_settings
-        return ((brush.paint_source in {'DISTANCE', 'VOLUME_DISTANCE', 'POINT'})
-                and (brush.proximity_falloff == 'RAMP')
-                and (context.engine in cls.COMPAT_ENGINES))
+        return (
+            (brush.paint_source in {'DISTANCE', 'VOLUME_DISTANCE', 'POINT'}) and
+            (brush.proximity_falloff == 'RAMP') and
+            (context.engine in cls.COMPAT_ENGINES)
+        )
 
     def draw(self, context):
         layout = self.layout
@@ -844,7 +822,6 @@ class PHYSICS_PT_dp_brush_velocity(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -880,7 +857,6 @@ class PHYSICS_PT_dp_brush_velocity_color_ramp(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -906,7 +882,6 @@ class PHYSICS_PT_dp_brush_velocity_smudge(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -929,7 +904,7 @@ class PHYSICS_PT_dp_brush_velocity_smudge(PhysicButtonsPanel, Panel):
         brush = context.dynamic_paint.brush_settings
 
         layout.active = brush.use_smudge
-        layout.prop(brush, "smudge_strength", text="Strength", slider=True)
+        layout.prop(brush, "smudge_strength", text="Strength", text_ctxt=i18n_contexts.amount, slider=True)
 
 
 class PHYSICS_PT_dp_brush_wave(PhysicButtonsPanel, Panel):
@@ -939,7 +914,6 @@ class PHYSICS_PT_dp_brush_wave(PhysicButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 

@@ -2,8 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <fmt/format.h>
 
+#include "NOD_inverse_eval_params.hh"
 #include "NOD_inverse_eval_path.hh"
 #include "NOD_inverse_eval_run.hh"
 #include "NOD_node_in_compute_context.hh"
@@ -11,18 +16,19 @@
 #include "NOD_value_elem_eval.hh"
 
 #include "BKE_compute_contexts.hh"
-#include "BKE_idprop.hh"
+#include "BKE_context.hh"
+#include "BKE_library.hh"
 #include "BKE_modifier.hh"
 #include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_type_conversions.hh"
 
 #include "BLI_map.hh"
 #include "BLI_math_euler.hh"
-#include "BLI_math_matrix.hh"
 #include "BLI_set.hh"
-#include "BLI_stack.hh"
+#include "BLI_string.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -33,6 +39,8 @@
 
 #include "MOD_nodes.hh"
 
+#include "ANIM_keyframing.hh"
+
 namespace blender::nodes::inverse_eval {
 
 using namespace value_elem;
@@ -41,8 +49,8 @@ std::optional<SocketValueVariant> convert_single_socket_value(const bNodeSocket 
                                                               const bNodeSocket &new_socket,
                                                               const SocketValueVariant &old_value)
 {
-  const eNodeSocketDatatype old_type = eNodeSocketDatatype(old_socket.type);
-  const eNodeSocketDatatype new_type = eNodeSocketDatatype(new_socket.type);
+  const eNodeSocketDatatype old_type = old_socket.type;
+  const eNodeSocketDatatype new_type = new_socket.type;
   if (old_type == new_type) {
     return old_value;
   }
@@ -53,9 +61,12 @@ std::optional<SocketValueVariant> convert_single_socket_value(const bNodeSocket 
   }
   const bke::DataTypeConversions &type_conversions = bke::get_implicit_type_conversions();
   if (type_conversions.is_convertible(*old_cpp_type, *new_cpp_type)) {
-    const void *old_value_ptr = old_value.get_single_ptr_raw();
+    const void *old_value_ptr = old_value.get_if(*old_cpp_type);
+    if (!old_value_ptr) {
+      return std::nullopt;
+    }
     SocketValueVariant new_value;
-    void *new_value_ptr = new_value.allocate_single(new_type);
+    void *new_value_ptr = new_value.allocate_single(*new_cpp_type);
     type_conversions.convert_to_uninitialized(
         *old_cpp_type, *new_cpp_type, old_value_ptr, new_value_ptr);
     return new_value;
@@ -73,7 +84,7 @@ static void evaluate_node_elem_upstream(const NodeInContext &ctx_node,
     /* Node does not support inverse evaluation. */
     return;
   }
-  /* Build temporary map to be used by node evaluation function.*/
+  /* Build temporary map to be used by node evaluation function. */
   Map<const bNodeSocket *, ElemVariant> elem_by_local_socket;
   for (const bNodeSocket *output_socket : node.output_sockets()) {
     if (const ElemVariant *elem = elem_by_socket.lookup_ptr({ctx_node.context, output_socket})) {
@@ -128,13 +139,13 @@ LocalInverseEvalTargets find_local_inverse_eval_targets(const bNodeTree &tree,
 
   tree.ensure_topology_cache();
 
-  ResourceScope scope;
+  bke::ComputeContextCache compute_context_cache;
   Map<SocketInContext, ElemVariant> elem_by_socket;
   elem_by_socket.add({nullptr, initial_socket_elem.socket}, initial_socket_elem.elem);
 
   const partial_eval::UpstreamEvalTargets upstream_eval_targets = partial_eval::eval_upstream(
       {{nullptr, initial_socket_elem.socket}},
-      scope,
+      compute_context_cache,
       /* Evaluate node. */
       [&](const NodeInContext &ctx_node, Vector<const bNodeSocket *> &r_modified_inputs) {
         evaluate_node_elem_upstream(ctx_node, r_modified_inputs, elem_by_socket);
@@ -279,7 +290,7 @@ void foreach_element_on_inverse_eval_path(
   if (!initial_socket_elem.elem) {
     return;
   }
-  ResourceScope scope;
+  bke::ComputeContextCache compute_context_cache;
   Map<SocketInContext, ElemVariant> upstream_elem_by_socket;
   upstream_elem_by_socket.add({&initial_context, initial_socket_elem.socket},
                               initial_socket_elem.elem);
@@ -287,7 +298,7 @@ void foreach_element_on_inverse_eval_path(
   /* In a first pass, propagate upstream to find the upstream targets. */
   const partial_eval::UpstreamEvalTargets upstream_eval_targets = partial_eval::eval_upstream(
       {{&initial_context, initial_socket_elem.socket}},
-      scope,
+      compute_context_cache,
       /* Evaluate node. */
       [&](const NodeInContext &ctx_node, Vector<const bNodeSocket *> &r_modified_inputs) {
         evaluate_node_elem_upstream(ctx_node, r_modified_inputs, upstream_elem_by_socket);
@@ -306,7 +317,7 @@ void foreach_element_on_inverse_eval_path(
    * this case, parts of the evaluation path has to be discarded again. This is done using a second
    * pass. Now we start the evaluation at the discovered upstream targets and propagate the changed
    * socket elements downstream. We only care about the sockets that have already been used by
-   * upstream evaluation, therefor the downstream evaluation is filtered.  */
+   * upstream evaluation, therefor the downstream evaluation is filtered. */
 
   /* Gather all upstream evaluation targets to start downstream evaluation there. */
   Vector<SocketInContext> initial_downstream_evaluation_sockets;
@@ -326,7 +337,7 @@ void foreach_element_on_inverse_eval_path(
 
   partial_eval::eval_downstream(
       initial_downstream_evaluation_sockets,
-      scope,
+      compute_context_cache,
       /* Evaluate node. */
       [&](const NodeInContext &ctx_node, Vector<const bNodeSocket *> &r_outputs_to_propagate) {
         evaluate_node_elem_downstream_filtered(
@@ -378,6 +389,9 @@ static bool set_rna_property(bContext &C,
   const PropertyType dst_type = RNA_property_type(prop);
   const int array_len = RNA_property_array_length(&value_ptr, prop);
 
+  Scene *scene = CTX_data_scene(&C);
+  const bool only_when_keyed = animrig::is_keying_flag(scene, AUTOKEY_FLAG_INSERTAVAILABLE);
+
   switch (dst_type) {
     case PROP_FLOAT: {
       float value = std::visit([](auto v) { return float(v); }, value_variant);
@@ -387,11 +401,15 @@ static bool set_rna_property(bContext &C,
       if (array_len == 0) {
         RNA_property_float_set(&value_ptr, prop, value);
         RNA_property_update(&C, &value_ptr, prop);
+        animrig::autokeyframe_property(
+            &C, scene, &value_ptr, prop, 0, scene->r.cfra, only_when_keyed);
         return true;
       }
       if (index >= 0 && index < array_len) {
         RNA_property_float_set_index(&value_ptr, prop, index, value);
         RNA_property_update(&C, &value_ptr, prop);
+        animrig::autokeyframe_property(
+            &C, scene, &value_ptr, prop, index, scene->r.cfra, only_when_keyed);
         return true;
       }
       break;
@@ -404,11 +422,15 @@ static bool set_rna_property(bContext &C,
       if (array_len == 0) {
         RNA_property_int_set(&value_ptr, prop, value);
         RNA_property_update(&C, &value_ptr, prop);
+        animrig::autokeyframe_property(
+            &C, scene, &value_ptr, prop, 0, scene->r.cfra, only_when_keyed);
         return true;
       }
       if (index >= 0 && index < array_len) {
         RNA_property_int_set_index(&value_ptr, prop, index, value);
         RNA_property_update(&C, &value_ptr, prop);
+        animrig::autokeyframe_property(
+            &C, scene, &value_ptr, prop, index, scene->r.cfra, only_when_keyed);
         return true;
       }
       break;
@@ -418,11 +440,15 @@ static bool set_rna_property(bContext &C,
       if (array_len == 0) {
         RNA_property_boolean_set(&value_ptr, prop, value);
         RNA_property_update(&C, &value_ptr, prop);
+        animrig::autokeyframe_property(
+            &C, scene, &value_ptr, prop, 0, scene->r.cfra, only_when_keyed);
         return true;
       }
       if (index >= 0 && index < array_len) {
         RNA_property_boolean_set_index(&value_ptr, prop, index, value);
         RNA_property_update(&C, &value_ptr, prop);
+        animrig::autokeyframe_property(
+            &C, scene, &value_ptr, prop, index, scene->r.cfra, only_when_keyed);
         return true;
       }
       break;
@@ -455,30 +481,32 @@ static bool set_socket_value(bContext &C,
   bNodeTree &tree = socket.owner_tree();
 
   const std::string default_value_rna_path = fmt::format(
-      "nodes[\"{}\"].inputs[{}].default_value", node.name, socket.index());
+      "nodes[\"{}\"].inputs[{}].default_value", BLI_str_escape(node.name), socket.index());
 
   switch (socket.type) {
     case SOCK_FLOAT: {
-      const float value = value_variant.get<float>();
+      const float value = value_variant.copy_as<float>();
       return set_rna_property(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_INT: {
-      const int value = value_variant.get<int>();
+      const int value = value_variant.copy_as<int>();
       return set_rna_property(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_BOOLEAN: {
-      const bool value = value_variant.get<bool>();
+      const bool value = value_variant.copy_as<bool>();
       return set_rna_property(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_VECTOR: {
-      const float3 value = value_variant.get<float3>();
+      const float3 value = value_variant.copy_as<float3>();
       return set_rna_property_float3(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_ROTATION: {
-      const math::Quaternion rotation = value_variant.get<math::Quaternion>();
+      const math::Quaternion rotation = value_variant.copy_as<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
       return set_rna_property_float3(C, tree.id, default_value_rna_path, euler);
     }
+    default:
+      break;
   }
   return false;
 }
@@ -486,32 +514,34 @@ static bool set_socket_value(bContext &C,
 static bool set_value_node_value(bContext &C, bNode &node, const SocketValueVariant &value_variant)
 {
   bNodeTree &tree = node.owner_tree();
-  switch (node.type) {
+
+  switch (node.type_legacy) {
     case SH_NODE_VALUE: {
-      const float value = value_variant.get<float>();
+      const float value = value_variant.copy_as<float>();
       const std::string rna_path = fmt::format("nodes[\"{}\"].outputs[0].default_value",
-                                               node.name);
+                                               BLI_str_escape(node.name));
       return set_rna_property(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_INT: {
-      const int value = value_variant.get<int>();
-      const std::string rna_path = fmt::format("nodes[\"{}\"].integer", node.name);
+      const int value = value_variant.copy_as<int>();
+      const std::string rna_path = fmt::format("nodes[\"{}\"].integer", BLI_str_escape(node.name));
       return set_rna_property(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_BOOL: {
-      const bool value = value_variant.get<bool>();
-      const std::string rna_path = fmt::format("nodes[\"{}\"].boolean", node.name);
+      const bool value = value_variant.copy_as<bool>();
+      const std::string rna_path = fmt::format("nodes[\"{}\"].boolean", BLI_str_escape(node.name));
       return set_rna_property(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_VECTOR: {
-      const float3 value = value_variant.get<float3>();
-      const std::string rna_path = fmt::format("nodes[\"{}\"].vector", node.name);
+      const float3 value = value_variant.copy_as<float3>();
+      const std::string rna_path = fmt::format("nodes[\"{}\"].vector", BLI_str_escape(node.name));
       return set_rna_property_float3(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_ROTATION: {
-      const math::Quaternion rotation = value_variant.get<math::Quaternion>();
+      const math::Quaternion rotation = value_variant.copy_as<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
-      const std::string rna_path = fmt::format("nodes[\"{}\"].rotation_euler", node.name);
+      const std::string rna_path = fmt::format("nodes[\"{}\"].rotation_euler",
+                                               BLI_str_escape(node.name));
       return set_rna_property_float3(C, tree.id, rna_path, euler);
     }
   }
@@ -527,35 +557,38 @@ static bool set_modifier_value(bContext &C,
   DEG_id_tag_update(&object.id, ID_RECALC_GEOMETRY);
 
   const std::string main_prop_rna_path = fmt::format(
-      "modifiers[\"{}\"][\"{}\"]", nmd.modifier.name, interface_socket.identifier);
+      "modifiers[\"{}\"].properties.inputs.{}.value",
+      BLI_str_escape(nmd.modifier.name),
+      interface_socket.identifier);
 
   switch (interface_socket.socket_typeinfo()->type) {
     case SOCK_FLOAT: {
-      const float value = value_variant.get<float>();
+      const float value = value_variant.copy_as<float>();
       return set_rna_property(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_INT: {
-      const int value = value_variant.get<int>();
+      const int value = value_variant.copy_as<int>();
       return set_rna_property(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_BOOLEAN: {
-      const bool value = value_variant.get<bool>();
+      const bool value = value_variant.copy_as<bool>();
       return set_rna_property(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_VECTOR: {
-      const float3 value = value_variant.get<float3>();
+      const float3 value = value_variant.copy_as<float3>();
       return set_rna_property_float3(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_ROTATION: {
-      const math::Quaternion rotation = value_variant.get<math::Quaternion>();
+      const math::Quaternion rotation = value_variant.copy_as<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
       return set_rna_property_float3(C, object.id, main_prop_rna_path, euler);
     }
+    default:
+      return false;
   }
-  return false;
 }
 
-std::optional<SocketValueVariant> get_logged_socket_value(geo_eval_log::GeoTreeLog &tree_log,
+std::optional<SocketValueVariant> get_logged_socket_value(eval_log::NodeTreeLog &tree_log,
                                                           const bNodeSocket &socket)
 {
   switch (socket.type) {
@@ -600,13 +633,15 @@ std::optional<SocketValueVariant> get_logged_socket_value(geo_eval_log::GeoTreeL
       }
       break;
     }
+    default:
+      break;
   }
   return std::nullopt;
 }
 
 static void backpropagate_socket_values_through_node(
     const NodeInContext &ctx_node,
-    geo_eval_log::GeoModifierLog &eval_log,
+    eval_log::NodesEvalLog &eval_log,
     Map<SocketInContext, SocketValueVariant> &value_by_socket,
     Vector<const bNodeSocket *> &r_modified_inputs)
 {
@@ -621,7 +656,7 @@ static void backpropagate_socket_values_through_node(
     /* We need a context here to access the tree log. */
     return;
   }
-  geo_eval_log::GeoTreeLog &tree_log = eval_log.get_tree_log(context->hash());
+  eval_log::NodeTreeLog &tree_log = eval_log.get_tree_log(context->hash());
   tree_log.ensure_socket_values();
 
   /* Build a temporary map of old socket values for the node evaluation. */
@@ -666,12 +701,12 @@ static void backpropagate_socket_values_through_node(
 bool backpropagate_socket_values(bContext &C,
                                  Object &object,
                                  NodesModifierData &nmd,
-                                 geo_eval_log::GeoModifierLog &eval_log,
+                                 eval_log::NodesEvalLog &eval_log,
                                  const Span<SocketToUpdate> sockets_to_update)
 {
   nmd.node_group->ensure_topology_cache();
 
-  ResourceScope scope;
+  bke::ComputeContextCache compute_context_cache;
   Map<SocketInContext, SocketValueVariant> value_by_socket;
 
   Vector<SocketInContext> initial_sockets;
@@ -707,7 +742,7 @@ bool backpropagate_socket_values(bContext &C,
   /* Actually backpropagate the socket values as far as possible in the node tree. */
   const partial_eval::UpstreamEvalTargets upstream_eval_targets = partial_eval::eval_upstream(
       initial_sockets,
-      scope,
+      compute_context_cache,
       /* Evaluate node. */
       [&](const NodeInContext &ctx_node, Vector<const bNodeSocket *> &r_modified_inputs) {
         backpropagate_socket_values_through_node(
@@ -754,7 +789,8 @@ bool backpropagate_socket_values(bContext &C,
     }
   }
   /* Set new values for modifier inputs. */
-  const bke::ModifierComputeContext modifier_context{nullptr, nmd.modifier.name};
+  const bke::DataBlockComputeContext data_block_context{nullptr, object.id};
+  const bke::GeometryNodesModifierComputeContext modifier_context{&data_block_context, nmd};
   for (const bNode *group_input_node : nmd.node_group->group_input_nodes()) {
     for (const bNodeSocket *socket : group_input_node->output_sockets().drop_back(1)) {
       if (const SocketValueVariant *value = value_by_socket.lookup_ptr(

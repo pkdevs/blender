@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 #include <Python.h>
@@ -24,12 +20,8 @@ extern PyTypeObject StrokeTextureStepShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&StrokeTextureStepShader_Type))
 
 /*---------------------------Python BPy_StrokeTextureStepShader structure definition----------*/
-typedef struct {
+struct BPy_StrokeTextureStepShader {
   BPy_StrokeShader py_ss;
-} BPy_StrokeTextureStepShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

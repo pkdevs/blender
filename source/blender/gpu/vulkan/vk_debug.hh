@@ -8,9 +8,9 @@
 #pragma once
 
 #include "BKE_global.hh"
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "vk_common.hh"
 
@@ -30,11 +30,11 @@ class VKDebuggingTools {
   void print_labels(const VkDebugUtilsMessengerCallbackDataEXT *callback_data);
 
  private:
-  VkDebugUtilsMessengerEXT vk_debug_utils_messenger = nullptr;
+  VkDebugUtilsMessengerEXT vk_debug_utils_messenger = VK_NULL_HANDLE;
 };
 
 void object_label(VkObjectType vk_object_type, uint64_t object_handle, const char *name);
-template<typename T> void object_label(T vk_object_type, const char *name)
+template<typename T> void object_label(T vk_object_type, const StringRefNull name)
 {
   if (!(G.debug & G_DEBUG_GPU)) {
     return;
@@ -43,8 +43,10 @@ template<typename T> void object_label(T vk_object_type, const char *name)
   char label[label_size];
   memset(label, 0, label_size);
   static int stats = 0;
-  SNPRINTF(label, "%s_%d", name, stats++);
-  object_label(to_vk_object_type(vk_object_type), (uint64_t)vk_object_type, (const char *)label);
+  SNPRINTF(label, "%s_%d", name.c_str(), stats++);
+  object_label(to_vk_object_type(vk_object_type),
+               uint64_t(vk_object_type),
+               const_cast<const char *>(label));
 };
 
 /**

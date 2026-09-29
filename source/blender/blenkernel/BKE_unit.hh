@@ -4,7 +4,9 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 /** \file
  * \ingroup bke
@@ -15,7 +17,31 @@ struct UnitSettings;
 /* In all cases the value is assumed to be scaled by the user-preference. */
 
 /**
+ * Representation of a value in units.
+ *
+ * \param prec: Decimal places to show,
+ * Use a negative number to enforce fixed-width formatting, which preserves trailing zeros
+ * (e.g., -3 gives exactly 3 decimal places: 1.004, 0.500).
+ * \param pad: When true & `prec` is positive, stripped zeroes will be replaced with a space
+ * instead of being removed.
+ *
+ * \note Disabling stripping or enabling padding reduces text "jittering" when changing values,
+ * especially with mono-spaced fonts. However, the values will take up more space,
+ * so the default is good when there is little movement (e.g. numerical input or mesh overlays).
+ */
+size_t BKE_unit_value_as_string(char *str,
+                                int str_maxncpy,
+                                double value,
+                                int prec,
+                                int type,
+                                const UnitSettings &settings,
+                                bool pad,
+                                bool do_unit_suffix);
+
+/**
  * Humanly readable representation of a value in units (used for button drawing).
+ *
+ * \copydoc #BKE_unit_value_as_string.
  */
 size_t BKE_unit_value_as_string_adaptive(char *str,
                                          int str_maxncpy,
@@ -24,18 +50,22 @@ size_t BKE_unit_value_as_string_adaptive(char *str,
                                          int system,
                                          int type,
                                          bool split,
-                                         bool pad);
+                                         bool pad,
+                                         bool do_unit_suffix);
+
 /**
- * Representation of a value in units. Negative precision is used to disable stripping of zeroes.
- * This reduces text jumping when changing values.
+ * A version of #BKE_unit_value_as_string with the `value` scaled by #BKE_unit_value_scale.
+ *
+ * \copydoc #BKE_unit_value_as_string.
  */
-size_t BKE_unit_value_as_string(char *str,
-                                int str_maxncpy,
-                                double value,
-                                int prec,
-                                int type,
-                                const UnitSettings *settings,
-                                bool pad);
+size_t BKE_unit_value_as_string_scaled(char *str,
+                                       int str_maxncpy,
+                                       double value,
+                                       int prec,
+                                       int type,
+                                       const UnitSettings &settings,
+                                       bool pad,
+                                       bool do_unit_suffix);
 
 /**
  * Replace units with values, used before python button evaluation.
@@ -65,7 +95,7 @@ bool BKE_unit_string_contains_unit(const char *str, int type);
 /**
  * If user does not specify a unit, this converts it to the unit from the settings.
  */
-double BKE_unit_apply_preferred_unit(const UnitSettings *settings, int type, double value);
+double BKE_unit_apply_preferred_unit(const UnitSettings &settings, int type, double value);
 
 /**
  * Make string keyboard-friendly, e.g: `10µm -> 10um`.
@@ -88,6 +118,12 @@ double BKE_unit_base_scalar(int system, int type);
 bool BKE_unit_is_valid(int system, int type);
 
 /**
+ * Apply the needed correction factor to value, based on unit_type
+ * (only length-related are affected currently) and `unit->scale_length`.
+ */
+double BKE_unit_value_scale(const UnitSettings &settings, int unit_type, double value);
+
+/**
  * Loop over scales, could add names later.
  */
 // double bUnit_Iter(void **unit, char **name, int system, int type);
@@ -95,11 +131,18 @@ bool BKE_unit_is_valid(int system, int type);
 void BKE_unit_system_get(int system, int type, const void **r_usys_pt, int *r_len);
 int BKE_unit_base_get(const void *usys_pt);
 int BKE_unit_base_of_type_get(int system, int type);
+/**
+ * Gets the preffered units of this type if available otherwise returns the
+ * base unit using `BKE_unit_base_of_type_get`.
+ */
+int BKE_preffered_unit_of_type_or_base_get(const UnitSettings &settings, int type);
 const char *BKE_unit_name_get(const void *usys_pt, int index);
 const char *BKE_unit_display_name_get(const void *usys_pt, int index);
+const char *BKE_unit_display_name_short_get(const void *usys_pt, int index);
 const char *BKE_unit_identifier_get(const void *usys_pt, int index);
 double BKE_unit_scalar_get(const void *usys_pt, int index);
 bool BKE_unit_is_suppressed(const void *usys_pt, int index);
+bool BKE_unit_is_adaptive(const UnitSettings &settings, int type);
 
 /** Aligned with #PropertyUnit and `bpyunits_ucategories_items` in `bpy_utils_units.cc`. */
 enum {
@@ -121,3 +164,5 @@ enum {
   B_UNIT_FREQUENCY = 15,
   B_UNIT_TYPE_TOT = 16,
 };
+
+}  // namespace blender

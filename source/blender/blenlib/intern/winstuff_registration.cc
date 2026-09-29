@@ -2,7 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #ifdef WIN32
+#  ifdef WIN32_LEAN_AND_MEAN
+#    undef WIN32_LEAN_AND_MEAN
+#  endif
 #  include <Windows.h>
 
 #  include <KnownFolders.h>
@@ -12,12 +19,14 @@
 #  include <shlobj_core.h>
 #  include <wrl.h>
 
-#  include "BLI_path_util.h"
-#  include "BLI_winstuff.h"
+#  include "BLI_path_utils.hh"
+#  include "BLI_winstuff.hh"
 #  include "BLI_winstuff_com.hh"
 
 #  include "utf_winfunc.hh"
 #  include "utfconv.hh"
+
+namespace blender {
 
 /**
  * Pinning: Windows allows people to pin an application to their taskbar, when a user pins
@@ -44,14 +53,15 @@ bool BLI_windows_update_pinned_launcher(const char *launcher_path)
     return false;
   }
 
-  blender::CoInitializeWrapper initialize(COINIT_APARTMENTTHREADED);
+  CoInitializeWrapper initialize(COINIT_APARTMENTTHREADED);
   if (FAILED(initialize)) {
     return false;
   }
 
   LPWSTR quick_launch_folder_path;
   if (SHGetKnownFolderPath(
-          FOLDERID_ImplicitAppShortcuts, KF_FLAG_DEFAULT, NULL, &quick_launch_folder_path) != S_OK)
+          FOLDERID_ImplicitAppShortcuts, KF_FLAG_DEFAULT, nullptr, &quick_launch_folder_path) !=
+      S_OK)
   {
     return false;
   }
@@ -62,7 +72,8 @@ bool BLI_windows_update_pinned_launcher(const char *launcher_path)
   for (auto const &dir_entry : std::filesystem::recursive_directory_iterator(search_path)) {
 
     Microsoft::WRL::ComPtr<IShellLinkW> shell_link;
-    if (CoCreateInstance(__uuidof(ShellLink), NULL, CLSCTX_ALL, IID_PPV_ARGS(&shell_link)) != S_OK)
+    if (CoCreateInstance(__uuidof(ShellLink), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&shell_link)) !=
+        S_OK)
     {
       return false;
     }
@@ -87,7 +98,7 @@ bool BLI_windows_update_pinned_launcher(const char *launcher_path)
     if (property_store->GetValue(PKEY_AppUserModel_ID, &app_model) == S_OK) {
       if (app_model.vt == VT_LPWSTR && std::wstring(BLENDER_WIN_APPID_16) == app_model.pwszVal) {
         shell_link->SetPath(launcher_path_w);
-        persist_file->Save(NULL, TRUE);
+        persist_file->Save(nullptr, TRUE);
       }
     }
     PropVariantClear(&app_model);
@@ -95,4 +106,7 @@ bool BLI_windows_update_pinned_launcher(const char *launcher_path)
   }
   return true;
 }
+
+}  // namespace blender
+
 #endif

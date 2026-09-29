@@ -10,25 +10,21 @@
 
 #include "ANIM_action.hh"
 
+namespace blender {
+
 struct ID;
 struct NlaStrip;
 
-namespace blender::animrig::nla {
-
-enum class ActionSlotAssignmentResult : int8_t {
-  OK = 0,
-  SlotNotFromAction = 1, /* Slot does not belong to the assigned Action. */
-  SlotNotSuitable = 2,   /* Slot is not suitable for the given ID type.*/
-};
+namespace animrig::nla {
 
 /**
  * Assign the Action to this NLA strip.
  *
  * Similar to animrig::assign_action(), this tries to find a suitable slot.
  *
- * \see blender::animrig::assign_action
+ * \see animrig::assign_action
  *
- * \returns whether a slot was automatically assigned.
+ * \returns whether the assignment was ok.
  */
 bool assign_action(NlaStrip &strip, Action &action, ID &animated_id);
 
@@ -51,8 +47,24 @@ ActionSlotAssignmentResult assign_action_slot_handle(NlaStrip &strip,
                                                      ID &animated_id);
 
 /**
- * Returns whether any NLA strip of this AnimData references the given Action and Slot.
+ * Keyframing function taking the NLA into account.
+ *
+ * Inserts a key into the given FCurve with the current value of the PropertyRNA remapped through
+ * the NLA stack.
+ *
+ * With the removal of the NLA any calls to this can be redirected to
+ * animrig::insert_keyframe_direct.
+ *
+ * \warning This bypasses all animation layer and strip logic. Use with caution. If unsure, use
+ * `insert_keyframes` instead.
  */
-bool is_nla_referencing_slot(const AnimData &adt, const Action &action, slot_handle_t slot_handle);
-
-}  // namespace blender::animrig::nla
+bool insert_keyframe_direct(ReportList *reports,
+                            PointerRNA ptr,
+                            PropertyRNA *prop,
+                            FCurve *fcu,
+                            const AnimationEvalContext *anim_eval_context,
+                            eBezTriple_KeyframeType keytype,
+                            NlaKeyframingContext *nla_context,
+                            eInsertKeyFlags flag);
+}  // namespace animrig::nla
+}  // namespace blender

@@ -8,34 +8,40 @@
 
 #pragma once
 
+#include "GPU_vertex_buffer.hh"
+#include "MEM_guardedalloc.h"
+
+#include "mtl_context.hh"
+
 #include <Cocoa/Cocoa.h>
 #include <Metal/Metal.h>
 #include <QuartzCore/QuartzCore.h>
 
-#include "MEM_guardedalloc.h"
-
-#include "GPU_vertex_buffer.hh"
-#include "mtl_context.hh"
-
 namespace blender::gpu {
+
+MTLVertexFormat gpu_vertex_format_to_metal(VertAttrType vert_format);
+MTLVertexFormat gpu_type_to_metal_vertex_format(shader::Type type);
 
 class MTLVertBuf : public VertBuf {
   friend class gpu::MTLTexture; /* For buffer texture. */
-  friend class MTLShader;       /* For transform feedback. */
   friend class MTLBatch;
-  friend class MTLContext;    /* For transform feedback. */
-  friend class MTLStorageBuf; /* For bind as SSBO resource access and copy sub. */
+  friend class MTLStorageBuf;    /* For bind as SSBO resource access and copy sub. */
+  friend class MTLBottomLevelAS; /* For acceleration structure geometry. */
 
  private:
   /** Metal buffer allocation. */
   gpu::MTLBuffer *vbo_ = nullptr;
   /** Texture used if the buffer is bound as buffer texture. Init on first use. */
-  ::GPUTexture *buffer_texture_ = nullptr;
-  /** Defines whether the buffer handle is wrapped by this MTLVertBuf, i.e. we do not own it and
-   * should not free it. */
+  gpu::Texture *buffer_texture_ = nullptr;
+  /**
+   * Defines whether the buffer handle is wrapped by this MTLVertBuf, i.e. we do not own it and
+   * should not free it.
+   */
   bool is_wrapper_ = false;
-  /** Requested allocation size for Metal buffer.
-   * Differs from raw buffer size as alignment is not included. */
+  /**
+   * Requested allocation size for Metal buffer.
+   * Differs from raw buffer size as alignment is not included.
+   */
   uint64_t alloc_size_ = 0;
   /** Whether existing allocation has been submitted for use by the GPU. */
   bool contents_in_flight_ = false;
@@ -53,12 +59,16 @@ class MTLVertBuf : public VertBuf {
 
  public:
   MTLVertBuf();
-  ~MTLVertBuf();
+  ~MTLVertBuf() override;
 
   void bind();
   void flag_used();
 
   void update_sub(uint start, uint len, const void *data) override;
+  void copy_sub(VertBuf &source_buf,
+                uint source_first_vertex,
+                uint dest_first_vertex,
+                uint vertex_len) override;
 
   void read(void *data) const override;
 
@@ -69,7 +79,6 @@ class MTLVertBuf : public VertBuf {
   void resize_data() override;
   void release_data() override;
   void upload_data() override;
-  void duplicate_data(VertBuf *dst) override;
   void bind_as_ssbo(uint binding) override;
   void bind_as_texture(uint binding) override;
 

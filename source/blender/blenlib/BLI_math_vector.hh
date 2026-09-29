@@ -8,13 +8,12 @@
  * \ingroup bli
  */
 
-#include <cmath>
 #include <type_traits>
 
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 namespace blender::math {
 
@@ -60,10 +59,60 @@ template<typename T, int Size>
   BLI_UNROLL_MATH_VEC_FUNC_VEC_VEC(math::min, a, b);
 }
 
+/**
+ * Element-wise minimum of the passed vectors.
+ */
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> min(Span<VecBase<T, Size>> values)
+{
+  BLI_assert(!values.is_empty());
+
+  VecBase<T, Size> result = values[0];
+  for (const VecBase<T, Size> &v : values.drop_front(1)) {
+    result = min(result, v);
+  }
+
+  return result;
+}
+
+/**
+ * Element-wise minimum of the passed vectors.
+ */
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> min(std::initializer_list<VecBase<T, Size>> values)
+{
+  return min(Span(values));
+}
+
 template<typename T, int Size>
 [[nodiscard]] inline VecBase<T, Size> max(const VecBase<T, Size> &a, const VecBase<T, Size> &b)
 {
   BLI_UNROLL_MATH_VEC_FUNC_VEC_VEC(math::max, a, b);
+}
+
+/**
+ * Element-wise maximum of the passed vectors.
+ */
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> max(Span<VecBase<T, Size>> values)
+{
+  BLI_assert(!values.is_empty());
+
+  VecBase<T, Size> result = values[0];
+  for (const VecBase<T, Size> &v : values.drop_front(1)) {
+    result = max(result, v);
+  }
+
+  return result;
+}
+
+/**
+ * Element-wise maximum of the passed vectors.
+ */
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> max(std::initializer_list<VecBase<T, Size>> values)
+{
+  return max(Span(values));
 }
 
 template<typename T, int Size>
@@ -148,9 +197,32 @@ template<typename T, int Size>
   return result;
 }
 
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> floored_mod(const VecBase<T, Size> &a,
+                                                  const VecBase<T, Size> &b)
+{
+  VecBase<T, Size> result;
+  for (int i = 0; i < Size; i++) {
+    BLI_assert(b[i] != 0);
+    result[i] = math::floored_mod(a[i], b[i]);
+  }
+  return result;
+}
+
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> floored_mod(const VecBase<T, Size> &a, const T &b)
+{
+  BLI_assert(b != 0);
+  VecBase<T, Size> result;
+  for (int i = 0; i < Size; i++) {
+    result[i] = math::floored_mod(a[i], b);
+  }
+  return result;
+}
+
 /**
  * Return the value of x raised to the y power.
- * The result is undefined if x < 0 or if x = 0 and y ≤ 0.
+ * The result is undefined if x < 0 or if x = 0 and y <= 0.
  */
 template<typename T, int Size>
 [[nodiscard]] inline VecBase<T, Size> pow(const VecBase<T, Size> &x, const T &y)
@@ -164,7 +236,37 @@ template<typename T, int Size>
 
 /**
  * Return the value of x raised to the y power.
- * The result is undefined if x < 0 or if x = 0 and y ≤ 0.
+ * The result is x if x < 0 or if x = 0 and y <= 0.
+ */
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> safe_pow(const VecBase<T, Size> &x, const T &y)
+{
+  VecBase<T, Size> result;
+  for (int i = 0; i < Size; i++) {
+    result[i] = math::safe_pow(x[i], y);
+  }
+  return result;
+}
+
+/**
+ * Return the value of x raised to the y power.
+ * The result is the given fallback if x < 0 or if x = 0 and y <= 0.
+ */
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> fallback_pow(const VecBase<T, Size> &x,
+                                                   const T &y,
+                                                   const VecBase<T, Size> &fallback)
+{
+  VecBase<T, Size> result;
+  for (int i = 0; i < Size; i++) {
+    result[i] = math::fallback_pow(x[i], y, fallback[i]);
+  }
+  return result;
+}
+
+/**
+ * Return the value of x raised to the y power.
+ * The result is undefined if x < 0 or if x = 0 and y <= 0.
  */
 template<typename T, int Size>
 [[nodiscard]] inline VecBase<T, Size> pow(const VecBase<T, Size> &x, const VecBase<T, Size> &y)
@@ -183,6 +285,12 @@ template<typename T, int Size>
 template<typename T, int Size> [[nodiscard]] inline VecBase<T, Size> exp(const VecBase<T, Size> &x)
 {
   BLI_UNROLL_MATH_VEC_OP_VEC(math::exp, x);
+}
+
+/* Per-element natural logarithm. */
+template<typename T, int Size> [[nodiscard]] inline VecBase<T, Size> log(const VecBase<T, Size> &x)
+{
+  BLI_UNROLL_MATH_VEC_OP_VEC(math::log, x);
 }
 
 /**
@@ -409,7 +517,7 @@ template<typename T, int Size>
 [[nodiscard]] inline VecBase<T, Size> project(const VecBase<T, Size> &p,
                                               const VecBase<T, Size> &v_proj)
 {
-  if (UNLIKELY(is_zero(v_proj))) {
+  if (is_zero(v_proj)) [[unlikely]] {
     return VecBase<T, Size>(0.0f);
   }
   return v_proj * (dot(p, v_proj) / dot(v_proj, v_proj));
@@ -436,6 +544,11 @@ template<typename T, int Size>
 {
   T len;
   return normalize_and_get_length(v, len);
+}
+
+template<typename T> [[nodiscard]] inline T cross(const VecBase<T, 2> &a, const VecBase<T, 2> &b)
+{
+  return a.x * b.y - a.y * b.x;
 }
 
 /**

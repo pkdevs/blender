@@ -23,11 +23,14 @@ __all__ = (
 # ############################################################
 
 
+# UNUSED.
+"""
 def listbase_iter(data, struct, listbase):
     element = data.get_pointer((struct, listbase, b'first'))
     while element is not None:
         yield element
         element = element.get_pointer(b'next')
+"""
 
 
 def linkdata_iter(collection, data):
@@ -136,7 +139,7 @@ def get_scene_collection(collection):
 
 
 def get_scene_collections(scene):
-    """Return all the scene collections ahd their data"""
+    """Return all the scene collections and their data"""
     master_collection = scene.get_pointer(b'collection')
     return get_scene_collection(master_collection)
 

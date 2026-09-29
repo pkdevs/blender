@@ -2,13 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup gpu
+ */
+
 #pragma once
 
 #include "GPU_compilation_subprocess.hh"
 
 #if BLI_SUBPROCESS_SUPPORT
 
-#  include "BLI_sys_types.h"
+#  include "BLI_sys_types.hh"
 
 namespace blender::gpu {
 
@@ -41,6 +45,8 @@ static_assert(sizeof(ShaderBinaryHeader) == compilation_subprocess_shared_memory
               "Size must match the shared memory size");
 
 void GL_shader_cache_dir_clear_old();
+
+std::string GL_shader_cache_dir_get();
 
 }  // namespace blender::gpu
 

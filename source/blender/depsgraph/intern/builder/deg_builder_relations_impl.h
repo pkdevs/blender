@@ -8,12 +8,13 @@
 
 #pragma once
 
+#include "intern/builder/deg_builder_relations.h"
 #include "intern/node/deg_node_id.hh"
+#include "intern/node/deg_node_time.hh"
 
 #include <iostream>
 
 #include "DNA_ID.h"
-#include "DNA_object_types.h"
 #include "DNA_rigidbody_types.h"
 
 namespace blender::deg {
@@ -78,6 +79,7 @@ Relation *DepsgraphRelationBuilder::add_relation(const TimeSourceKey &key_from,
 }
 
 template<typename KeyType>
+  requires(!std::is_same_v<KeyType, TimeSourceKey>)
 Relation *DepsgraphRelationBuilder::add_node_handle_relation(const KeyType &key_from,
                                                              const DepsNodeHandle *handle,
                                                              const char *description,
@@ -89,20 +91,19 @@ Relation *DepsgraphRelationBuilder::add_node_handle_relation(const KeyType &key_
   if (op_from != nullptr && op_to != nullptr) {
     return add_operation_relation(op_from, op_to, description, flags);
   }
-  else {
-    if (!op_from) {
-      fprintf(stderr,
-              "add_node_handle_relation(%s) - Could not find op_from (%s)\n",
-              description,
-              key_from.identifier().c_str());
-    }
-    if (!op_to) {
-      fprintf(stderr,
-              "add_node_handle_relation(%s) - Could not find op_to (%s)\n",
-              description,
-              key_from.identifier().c_str());
-    }
+  if (!op_from) {
+    fprintf(stderr,
+            "add_node_handle_relation(%s) - Could not find op_from (%s)\n",
+            description,
+            key_from.identifier().c_str());
   }
+  if (!op_to) {
+    fprintf(stderr,
+            "add_node_handle_relation(%s) - Could not find op_to (%s)\n",
+            description,
+            key_from.identifier().c_str());
+  }
+
   return nullptr;
 }
 

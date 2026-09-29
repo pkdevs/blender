@@ -8,6 +8,11 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
+
+namespace blender {
+
+struct bAnimListElem;
 struct ARegion;
 struct ARegionType;
 struct Object;
@@ -15,6 +20,7 @@ struct Scene;
 struct SpaceAction;
 struct bAnimContext;
 struct bContext;
+struct wmKeyConfig;
 struct wmOperatorType;
 
 /* internal exports only */
@@ -33,11 +39,14 @@ void action_buttons_register(ARegionType *art);
 void draw_channel_names(bContext *C,
                         bAnimContext *ac,
                         ARegion *region,
-                        const ListBase /*bAnimListElem*/ &anim_data);
+                        const ListBaseT<bAnimListElem> &anim_data);
 /**
  * Draw keyframes in each channel.
  */
-void draw_channel_strips(bAnimContext *ac, SpaceAction *saction, ARegion *region);
+void draw_channel_strips(bAnimContext *ac,
+                         SpaceAction *saction,
+                         ARegion *region,
+                         ListBaseT<bAnimListElem> *anim_data);
 
 void timeline_draw_cache(const SpaceAction *saction, const Object *ob, const Scene *scene);
 
@@ -54,6 +63,7 @@ void ACTION_OT_select_more(wmOperatorType *ot);
 void ACTION_OT_select_less(wmOperatorType *ot);
 void ACTION_OT_select_leftright(wmOperatorType *ot);
 void ACTION_OT_clickselect(wmOperatorType *ot);
+void ACTION_OT_select_by_type(wmOperatorType *ot);
 
 /* defines for left-right select tool */
 enum eActKeys_LeftRightSelect_Mode {
@@ -135,3 +145,5 @@ enum eActKeys_Mirror_Mode {
 
 void action_operatortypes();
 void action_keymap(wmKeyConfig *keyconf);
+
+}  // namespace blender

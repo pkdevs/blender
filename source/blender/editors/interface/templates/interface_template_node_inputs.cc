@@ -15,112 +15,128 @@
 
 #include "BLT_translation.hh"
 
+#include "NOD_compositor_nodes_caller_ui.hh"
 #include "NOD_node_declaration.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Node Input Buttons Template
  * \{ */
 
-using blender::nodes::ItemDeclaration;
-using blender::nodes::NodeDeclaration;
-using blender::nodes::PanelDeclaration;
-using blender::nodes::SocketDeclaration;
+using nodes::ItemDeclaration;
+using nodes::LayoutDeclaration;
+using nodes::NodeDeclaration;
+using nodes::PanelDeclaration;
+using nodes::SocketDeclaration;
 
-using ItemIterator = blender::Vector<blender::nodes::ItemDeclarationPtr>::const_iterator;
+using ItemIterator = Vector<nodes::ItemDeclarationPtr>::const_iterator;
 
-namespace blender::ui::nodes {
+namespace ui {
+namespace nodes {
 
-static void draw_node_input(bContext *C,
-                            uiLayout *layout,
-                            PointerRNA *node_ptr,
-                            bNodeSocket &socket)
+static void draw_node_input(bContext *C, Layout &layout, PointerRNA *node_ptr, bNodeSocket &socket)
 {
   BLI_assert(socket.typeinfo != nullptr);
   /* Ignore disabled sockets and linked sockets and sockets without a `draw` callback. */
   if (!socket.is_available()) {
     return;
   }
-  if ((socket.flag & (SOCK_IS_LINKED | SOCK_HIDE_VALUE)) != 0) {
+  if (socket.is_directly_linked()) {
+    return;
+  }
+  if (socket.flag & SOCK_HIDE_VALUE) {
     return;
   }
   if (socket.typeinfo->draw == nullptr) {
     return;
   }
-  if (ELEM(socket.type, SOCK_GEOMETRY, SOCK_MATRIX, SOCK_SHADER)) {
+  if (ELEM(socket.type, SOCK_GEOMETRY, SOCK_MATRIX, SOCK_SHADER, SOCK_BUNDLE, SOCK_CLOSURE)) {
     return;
   }
   const bNode &node = *static_cast<bNode *>(node_ptr->data);
   if (node.is_reroute()) {
     return;
   }
+  if (socket.idname == StringRef("NodeSocketVirtual")) {
+    return;
+  }
 
-  PointerRNA socket_ptr = RNA_pointer_create(node_ptr->owner_id, &RNA_NodeSocket, &socket);
-  const char *text = IFACE_(bke::nodeSocketLabel(&socket));
-  uiLayout *row = uiLayoutRow(layout, true);
-  socket.typeinfo->draw(C, row, &socket_ptr, node_ptr, text);
+  PointerRNA socket_ptr = RNA_pointer_create_discrete(node_ptr->owner_id, RNA_NodeSocket, &socket);
+  const StringRef text = CTX_IFACE_(bke::node_socket_translation_context(socket),
+                                    bke::node_socket_label(socket));
+  Layout &row = layout.row(true);
+  socket.typeinfo->draw(C, &row, &socket_ptr, node_ptr, text);
 }
 
-static void draw_node_input(bContext *C,
-                            uiLayout *layout,
-                            PointerRNA *node_ptr,
-                            StringRefNull identifier)
+static bool panel_has_used_inputs(const bNode &node, const PanelDeclaration &panel_decl)
 {
-  bNode &node = *static_cast<bNode *>(node_ptr->data);
-  bNodeSocket *socket = node.runtime->inputs_by_identifier.lookup(identifier);
-  draw_node_input(C, layout, node_ptr, *socket);
-}
-
-/* Consume the item range, draw buttons if layout is not null. */
-static void handle_node_declaration_items(bContext *C,
-                                          Panel *root_panel,
-                                          uiLayout *layout,
-                                          PointerRNA *node_ptr,
-                                          ItemIterator &item_iter,
-                                          const ItemIterator item_end)
-{
-  while (item_iter != item_end) {
-    const ItemDeclaration *item_decl = item_iter->get();
-    ++item_iter;
-
-    if (const SocketDeclaration *socket_decl = dynamic_cast<const SocketDeclaration *>(item_decl))
-    {
-      if (layout && socket_decl->in_out == SOCK_IN) {
-        draw_node_input(C, layout, node_ptr, socket_decl->identifier);
+  for (const ItemDeclaration *item_decl : panel_decl.items) {
+    if (const auto *socket_decl = dynamic_cast<const SocketDeclaration *>(item_decl)) {
+      if (socket_decl->in_out == SOCK_OUT) {
+        continue;
+      }
+      const bNodeSocket &socket = node.socket_by_decl(*socket_decl);
+      if (!socket.is_inactive()) {
+        return true;
       }
     }
-    else if (const PanelDeclaration *panel_decl = dynamic_cast<const PanelDeclaration *>(
-                 item_decl))
-    {
-      const ItemIterator panel_item_end = item_iter + panel_decl->num_child_decls;
-      BLI_assert(panel_item_end <= item_end);
-
-      /* Use a root panel property to toggle open/closed state. */
-      const std::string panel_idname = "NodePanel" + std::to_string(panel_decl->identifier);
-      LayoutPanelState *state = BKE_panel_layout_panel_state_ensure(
-          root_panel, panel_idname.c_str(), panel_decl->default_collapsed);
-      PointerRNA state_ptr = RNA_pointer_create(nullptr, &RNA_LayoutPanelState, state);
-      uiLayout *panel_layout = uiLayoutPanelProp(
-          C, layout, &state_ptr, "is_open", IFACE_(panel_decl->name.c_str()));
-      /* Draw panel buttons at the top of each panel section. */
-      if (panel_layout && panel_decl->draw_buttons) {
-        panel_decl->draw_buttons(panel_layout, C, node_ptr);
+    else if (const auto *sub_panel_decl = dynamic_cast<const PanelDeclaration *>(item_decl)) {
+      if (panel_has_used_inputs(node, *sub_panel_decl)) {
+        return true;
       }
+    }
+  }
+  return false;
+}
 
-      handle_node_declaration_items(
-          C, root_panel, panel_layout, node_ptr, item_iter, panel_item_end);
+static void draw_node_inputs_recursive(bContext *C,
+                                       Layout &layout,
+                                       bNode &node,
+                                       PointerRNA *node_ptr,
+                                       const PanelDeclaration &panel_decl)
+{
+  /* TODO: Use flag on the panel state instead which is better for dynamic panel amounts. */
+  const std::string panel_idname = "NodePanel" + std::to_string(panel_decl.identifier);
+  PanelLayout panel = layout.panel(C, panel_idname, panel_decl.default_collapsed);
+  const bool has_used_inputs = panel_has_used_inputs(node, panel_decl);
+  panel.header->active_set(has_used_inputs);
+
+  const char *panel_translation_context = (panel_decl.translation_context.has_value() ?
+                                               panel_decl.translation_context->c_str() :
+                                               nullptr);
+  panel.header->label(CTX_IFACE_(panel_translation_context, panel_decl.name.ref()), ICON_NONE);
+  if (!panel.body) {
+    return;
+  }
+  for (const ItemDeclaration *item_decl : panel_decl.items) {
+    if (const auto *socket_decl = dynamic_cast<const SocketDeclaration *>(item_decl)) {
+      if (socket_decl->in_out == SOCK_IN) {
+        draw_node_input(C, *panel.body, node_ptr, node.socket_by_decl(*socket_decl));
+      }
+    }
+    else if (const auto *sub_panel_decl = dynamic_cast<const PanelDeclaration *>(item_decl)) {
+      draw_node_inputs_recursive(C, *panel.body, node, node_ptr, *sub_panel_decl);
+    }
+    else if (const auto *layout_decl = dynamic_cast<const LayoutDeclaration *>(item_decl)) {
+      if (!layout_decl->is_default) {
+        Layout &column = panel.body->column(false);
+        layout_decl->draw(column, C, node_ptr);
+      }
     }
   }
 }
 
-}  // namespace blender::ui::nodes
+}  // namespace nodes
 
-void uiTemplateNodeInputs(uiLayout *layout, bContext *C, PointerRNA *ptr)
+void template_node_inputs(Layout *layout, bContext *C, PointerRNA *ptr)
 {
   bNodeTree &tree = *reinterpret_cast<bNodeTree *>(ptr->owner_id);
   bNode &node = *static_cast<bNode *>(ptr->data);
@@ -130,26 +146,65 @@ void uiTemplateNodeInputs(uiLayout *layout, bContext *C, PointerRNA *ptr)
   BLI_assert(node.typeinfo != nullptr);
   /* Draw top-level node buttons. */
   if (node.typeinfo->draw_buttons_ex) {
-    node.typeinfo->draw_buttons_ex(layout, C, ptr);
+    node.typeinfo->draw_buttons_ex(*layout, C, ptr);
   }
   else if (node.typeinfo->draw_buttons) {
-    node.typeinfo->draw_buttons(layout, C, ptr);
+    node.typeinfo->draw_buttons(*layout, C, ptr);
   }
 
   if (node.declaration()) {
     /* Draw socket inputs and panel buttons in the order of declaration panels. */
-    ItemIterator item_iter = node.declaration()->items.begin();
-    const ItemIterator item_end = node.declaration()->items.end();
-    Panel *root_panel = uiLayoutGetRootPanel(layout);
-    blender::ui::nodes::handle_node_declaration_items(
-        C, root_panel, layout, ptr, item_iter, item_end);
+    const NodeDeclaration &node_decl = *node.declaration();
+    for (const ItemDeclaration *item_decl : node_decl.root_items) {
+      if (const auto *panel_decl = dynamic_cast<const PanelDeclaration *>(item_decl)) {
+        nodes::draw_node_inputs_recursive(C, *layout, node, ptr, *panel_decl);
+      }
+      else if (const auto *socket_decl = dynamic_cast<const SocketDeclaration *>(item_decl)) {
+        bNodeSocket &socket = node.socket_by_decl(*socket_decl);
+        if (socket_decl->custom_draw_fn) {
+          Layout &row = layout->row(false);
+          blender::nodes::CustomSocketDrawParams params{
+              *C,
+              row,
+              tree,
+              node,
+              socket,
+              *ptr,
+              RNA_pointer_create_discrete(ptr->owner_id, RNA_NodeSocket, &socket)};
+          (*socket_decl->custom_draw_fn)(params);
+        }
+        else if (socket_decl->in_out == SOCK_IN) {
+          nodes::draw_node_input(C, *layout, ptr, socket);
+        }
+      }
+      else if (const auto *layout_decl = dynamic_cast<const LayoutDeclaration *>(item_decl)) {
+        if (!layout_decl->is_default) {
+          Layout &column = layout->column(false);
+          layout_decl->draw(column, C, ptr);
+        }
+      }
+    }
   }
   else {
     /* Draw socket values using the flat inputs list. */
     for (bNodeSocket *input : node.runtime->inputs) {
-      blender::ui::nodes::draw_node_input(C, layout, ptr, *input);
+      nodes::draw_node_input(C, *layout, ptr, *input);
     }
   }
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Compositor Effect Strip Inputs Template
+ * \{ */
+
+void template_compositor_strip_inputs(Layout *layout, bContext *C, PointerRNA *strip_ptr)
+{
+  blender::nodes::draw_compositor_nodes_effect_ui(*C, strip_ptr, *layout);
+}
+
+/** \} */
+
+}  // namespace ui
+}  // namespace blender

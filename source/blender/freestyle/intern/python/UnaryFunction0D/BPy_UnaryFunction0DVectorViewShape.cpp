@@ -13,11 +13,7 @@
 
 #include "UnaryFunction0D_vector_ViewShape/BPy_GetOccludersF0D.h"
 
-#include "BLI_sys_types.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "BLI_sys_types.hh"
 
 using namespace Freestyle;
 
@@ -34,15 +30,13 @@ int UnaryFunction0DVectorViewShape_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction0DVectorViewShape_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction0DVectorViewShape_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "UnaryFunction0DVectorViewShape", (PyObject *)&UnaryFunction0DVectorViewShape_Type);
 
   if (PyType_Ready(&GetOccludersF0D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&GetOccludersF0D_Type);
-  PyModule_AddObject(module, "GetOccludersF0D", (PyObject *)&GetOccludersF0D_Type);
+  PyModule_AddObjectRef(module, "GetOccludersF0D", (PyObject *)&GetOccludersF0D_Type);
 
   return 0;
 }
@@ -61,7 +55,6 @@ PyDoc_STRVAR(
     ".. method:: __init__()\n"
     "\n"
     "   Default constructor.\n");
-
 static int UnaryFunction0DVectorViewShape___init__(BPy_UnaryFunction0DVectorViewShape *self,
                                                    PyObject *args,
                                                    PyObject *kwds)
@@ -95,8 +88,13 @@ static PyObject *UnaryFunction0DVectorViewShape___call__(BPy_UnaryFunction0DVect
   static const char *kwlist[] = {"it", nullptr};
   PyObject *obj;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &obj))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `it` */
+                                   ":__call__",
+                                   (char **)kwlist,
+                                   &Interface0DIterator_Type,
+                                   &obj))
   {
     return nullptr;
   }
@@ -167,7 +165,3 @@ PyTypeObject UnaryFunction0DVectorViewShape_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

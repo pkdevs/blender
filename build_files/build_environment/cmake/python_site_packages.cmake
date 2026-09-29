@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 if(WIN32 AND BUILD_MODE STREQUAL Debug)
-  set(SITE_PACKAGES_EXTRA --global-option build --global-option --debug)
   # zstandard is determined to build and link release mode libs in a debug
   # configuration, the only way to make it happy is to bend to its will
   # and give it a library to link with.
@@ -16,28 +15,46 @@ else()
   set(PIP_CONFIGURE_COMMAND echo ".")
 endif()
 
+set(PIP_CONSTRAINT_FILE ${BUILD_DIR}/constraints.txt)
+# setuptools-scm is causing issues with their latest version
+# issue: https://github.com/pypa/setuptools-scm/issues/1316
+# but pinning it doesn't work since downstream package dependencies
+# also seem to resolve the later versions
+# we can alter this behaviour by using pip constraints
+file(WRITE ${PIP_CONSTRAINT_FILE}
+"setuptools-scm==${SETUPTOOLS_SCM_VERSION}\n"
+)
+
 ExternalProject_Add(external_python_site_packages
   DOWNLOAD_COMMAND ""
   CONFIGURE_COMMAND ${PIP_CONFIGURE_COMMAND}
   BUILD_COMMAND ""
   PREFIX ${BUILD_DIR}/site_packages
 
-  # setuptools is downgraded to 63.2.0 (same as python 3.10.8) since numpy 1.23.x seemingly has
-  # issues building on windows with the newer versions that ships with python 3.10.9+
-  INSTALL_COMMAND ${PYTHON_BINARY} -m pip install --no-cache-dir ${SITE_PACKAGES_EXTRA}
-  setuptools==63.2.0
-  cython==${CYTHON_VERSION}
-  idna==${IDNA_VERSION}
-  charset-normalizer==${CHARSET_NORMALIZER_VERSION}
-  urllib3==${URLLIB3_VERSION}
-  certifi==${CERTIFI_VERSION}
-  requests==${REQUESTS_VERSION}
-  zstandard==${ZSTANDARD_VERSION}
-  autopep8==${AUTOPEP8_VERSION}
-  pycodestyle==${PYCODESTYLE_VERSION}
-  toml==${TOML_VERSION}
-  meson==${MESON_VERSION}
-  --no-binary :all:
+  # We do not build numpy, cython, or zstandard here as the pip builds are not reproducible.
+  INSTALL_COMMAND
+    ${CMAKE_COMMAND} -E env
+      PIP_CONSTRAINT=${PIP_CONSTRAINT_FILE}
+      ${PYTHON_BINARY} -m pip install --no-cache-dir ${SITE_PACKAGES_EXTRA}
+      setuptools==${SETUPTOOLS_VERSION}
+      meson-python==${MESON_PYTHON_VERSION}
+      packaging==${PACKAGING_VERSION}
+      pyproject-metadata==${PYPROJECT_METADATA_VERSION}
+      idna==${IDNA_VERSION}
+      charset-normalizer==${CHARSET_NORMALIZER_VERSION}
+      urllib3==${URLLIB3_VERSION}
+      certifi==${CERTIFI_VERSION}
+      requests==${REQUESTS_VERSION}
+      autopep8==${AUTOPEP8_VERSION}
+      pycodestyle==${PYCODESTYLE_VERSION}
+      docutils==${DOCUTILS_VERSION}
+      meson==${MESON_VERSION}
+      attrs==${ATTRS_VERSION}
+      cattrs==${CATTRS_VERSION}
+      fastjsonschema==${FASTJSONSCHEMA_VERSION}
+      typing-extensions==${TYPING_EXTENSIONS_VERSION}
+      tomli-w==${TOMLI_W_VERSION}
+      --no-binary :all:
 )
 
 add_dependencies(

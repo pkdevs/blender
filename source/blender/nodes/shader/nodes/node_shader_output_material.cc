@@ -2,16 +2,22 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_output_material_cc {
+namespace blender {
+
+namespace nodes::node_shader_output_material_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Shader>("Surface");
-  b.add_input<decl::Shader>("Volume").translation_context(BLT_I18NCONTEXT_ID_ID);
-  b.add_input<decl::Vector>("Displacement").hide_value();
-  b.add_input<decl::Float>("Thickness").hide_value();
+  b.add_input<decl::Shader>("Surface"_ustr);
+  b.add_input<decl::Shader>("Volume"_ustr).translation_context(BLT_I18NCONTEXT_ID_ID);
+  b.add_input<decl::Vector>("Displacement"_ustr).hide_value();
+  b.add_input<decl::Float>("Thickness"_ustr).hide_value();
 }
 
 static int node_shader_gpu_output_material(GPUMaterial *mat,
@@ -35,7 +41,12 @@ static int node_shader_gpu_output_material(GPUMaterial *mat,
     GPU_material_output_displacement(mat, outlink_displacement);
   }
   if (in[3].link) {
-    GPU_link(mat, "node_output_material_thickness", in[3].link, &outlink_thickness);
+    GPU_link(mat,
+             "node_output_material_thickness",
+             in[3].link,
+             GPU_kernel_globals(),
+             GPU_shading_data(),
+             &outlink_thickness);
     GPU_material_output_thickness(mat, outlink_thickness);
   }
   return true;
@@ -55,21 +66,34 @@ NODE_SHADER_MATERIALX_BEGIN
                             {{"bsdf", bsdf}, {"edf", edf}, {"opacity", opacity}});
     }
   }
+
+  /* Displacement cannot be enabled just yet.
+   * - Verify coordinate system for Tangent Space displacement maps
+   * - Wait on fix for scalar displacement (present in USD 2408+)
+   */
+  // NodeItem displacement = get_input_link("Displacement", NodeItem::Type::DisplacementShader);
+  // return create_node("surfacematerial",
+  //                    NodeItem::Type::Material,
+  //                    {{"surfaceshader", surface}, {"displacementshader", displacement}});
   return create_node("surfacematerial", NodeItem::Type::Material, {{"surfaceshader", surface}});
 }
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_output_material_cc
+}  // namespace nodes::node_shader_output_material_cc
 
 /* node type definition */
 void register_node_type_sh_output_material()
 {
-  namespace file_ns = blender::nodes::node_shader_output_material_cc;
+  namespace file_ns = nodes::node_shader_output_material_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, SH_NODE_OUTPUT_MATERIAL, "Material Output", NODE_CLASS_OUTPUT);
+  sh_node_type_base(&ntype, "ShaderNodeOutputMaterial"_ustr, SH_NODE_OUTPUT_MATERIAL);
+  ntype.ui_name = "Material Output";
+  ntype.ui_description = "Output surface material information for use in rendering";
+  ntype.enum_name_legacy = "OUTPUT_MATERIAL";
+  ntype.nclass = NODE_CLASS_OUTPUT;
   ntype.declare = file_ns::node_declare;
   ntype.add_ui_poll = object_shader_nodes_poll;
   ntype.gpu_fn = file_ns::node_shader_gpu_output_material;
@@ -77,5 +101,7 @@ void register_node_type_sh_output_material()
 
   ntype.no_muting = true;
 
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

@@ -6,12 +6,16 @@
 #
 #  ./blender.bin --background --python ./tools/utils_maintenance/blender_update_themes.py
 
+__all__ = (
+    "main",
+)
+
 import bpy
 import os
 
 
 def update(filepath):
-    import rna_xml
+    import _rna_xml as rna_xml
     context = bpy.context
 
     print("Updating theme: {!r}".format(filepath))
@@ -34,13 +38,13 @@ def update(filepath):
 
 def update_default(filepath):
     with open(filepath, 'w', encoding='utf-8') as fh:
-        fh.write('''<bpy>
+        fh.write("""<bpy>
   <Theme>
   </Theme>
   <ThemeStyle>
   </ThemeStyle>
 </bpy>
-''')
+""")
 
 
 def main():

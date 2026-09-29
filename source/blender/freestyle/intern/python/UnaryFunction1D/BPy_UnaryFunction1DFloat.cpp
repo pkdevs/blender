@@ -12,10 +12,6 @@
 #include "../BPy_IntegrationType.h"
 #include "../BPy_Interface1D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -31,8 +27,7 @@ int UnaryFunction1DFloat_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction1DFloat_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction1DFloat_Type);
-  PyModule_AddObject(module, "UnaryFunction1DFloat", (PyObject *)&UnaryFunction1DFloat_Type);
+  PyModule_AddObjectRef(module, "UnaryFunction1DFloat", (PyObject *)&UnaryFunction1DFloat_Type);
 
   return 0;
 }
@@ -47,15 +42,18 @@ PyDoc_STRVAR(
     "Base class for unary functions (functors) that work on\n"
     ":class:`Interface1D` and return a float value.\n"
     "\n"
-    ".. method:: __init__()\n"
-    "            __init__(integration_type)\n"
+    ".. method:: __init__(*args)\n"
+    "\n"
+    "   Accepted call signatures:\n"
+    "\n"
+    "   - ``__init__()``\n"
+    "   - ``__init__(integration_type)``\n"
     "\n"
     "   Builds a unary 1D function using the default constructor\n"
     "   or the integration method given as an argument.\n"
     "\n"
-    "   :arg integration_type: An integration method.\n"
+    "   :param integration_type: An integration method.\n"
     "   :type integration_type: :class:`IntegrationType`\n");
-
 static int UnaryFunction1DFloat___init__(BPy_UnaryFunction1DFloat *self,
                                          PyObject *args,
                                          PyObject *kwds)
@@ -63,8 +61,14 @@ static int UnaryFunction1DFloat___init__(BPy_UnaryFunction1DFloat *self,
   static const char *kwlist[] = {"integration", nullptr};
   PyObject *obj = nullptr;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "|"  /* Optional arguments. */
+                                   "O!" /* `integration` */
+                                   ":__init__",
+                                   (char **)kwlist,
+                                   &IntegrationType_Type,
+                                   &obj))
   {
     return -1;
   }
@@ -99,7 +103,14 @@ static PyObject *UnaryFunction1DFloat___call__(BPy_UnaryFunction1DFloat *self,
   static const char *kwlist[] = {"inter", nullptr};
   PyObject *obj = nullptr;
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", (char **)kwlist, &Interface1D_Type, &obj)) {
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `inter` */
+                                   ":__call__",
+                                   (char **)kwlist,
+                                   &Interface1D_Type,
+                                   &obj))
+  {
     return nullptr;
   }
 
@@ -124,8 +135,7 @@ PyDoc_STRVAR(
     integration_type_doc,
     "The integration method.\n"
     "\n"
-    ":type: :class:`IntegrationType`");
-
+    ":type: :class:`IntegrationType`\n");
 static PyObject *integration_type_get(BPy_UnaryFunction1DFloat *self, void * /*closure*/)
 {
   return BPy_IntegrationType_from_IntegrationType(self->uf1D_float->getIntegrationType());
@@ -196,7 +206,3 @@ PyTypeObject UnaryFunction1DFloat_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

@@ -8,22 +8,24 @@
 
 #include "BKE_curves.hh"
 
+namespace blender {
+
 struct Mesh;
 
 /** \file
  * \ingroup geo
  */
 
-namespace blender::geometry {
+namespace geometry {
 
 /**
  * Convert the mesh into one or many poly curves. Since curves cannot have branches,
  * intersections of more than three edges will become breaks in curves. Attributes that
  * are not built-in on meshes and not curves are transferred to the result curve.
  */
-bke::CurvesGeometry mesh_to_curve_convert(const Mesh &mesh,
-                                          const IndexMask &selection,
-                                          const bke::AttributeFilter &attribute_filter);
+bke::CurvesGeometry mesh_edges_to_curves_convert(const Mesh &mesh,
+                                                 const IndexMask &selection,
+                                                 const bke::AttributeFilter &attribute_filter);
 
 bke::CurvesGeometry create_curve_from_vert_indices(const bke::AttributeAccessor &mesh_attributes,
                                                    Span<int> vert_indices,
@@ -31,4 +33,10 @@ bke::CurvesGeometry create_curve_from_vert_indices(const bke::AttributeAccessor 
                                                    IndexRange cyclic_curves,
                                                    const bke::AttributeFilter &attribute_filter);
 
-}  // namespace blender::geometry
+/** Convert each mesh face into a cyclic curve. */
+bke::CurvesGeometry mesh_faces_to_curves_convert(const Mesh &mesh,
+                                                 const IndexMask &selection,
+                                                 const bke::AttributeFilter &attribute_filter);
+
+}  // namespace geometry
+}  // namespace blender

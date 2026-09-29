@@ -18,11 +18,11 @@
 #include "BLI_map.hh"
 #include "BLI_string_ref.hh"
 
-#include "BKE_cryptomatte.h"
+namespace blender {
 
 struct ID;
 
-namespace blender::bke::cryptomatte {
+namespace bke::cryptomatte {
 
 /**
  * Format to a cryptomatte meta data key.
@@ -33,8 +33,7 @@ namespace blender::bke::cryptomatte {
  * The output of this function is:
  * 'cryptomatte/{hash of layer_name}/{key_name}'.
  */
-std::string BKE_cryptomatte_meta_data_key(const StringRef layer_name,
-                                          const StringRefNull key_name);
+std::string BKE_cryptomatte_meta_data_key(StringRef layer_name, StringRefNull key_name);
 
 /**
  * Extract the cryptomatte layer name from the given `render_pass_name`.
@@ -51,7 +50,7 @@ std::string BKE_cryptomatte_meta_data_key(const StringRef layer_name,
  * \note The return type is a sub-string of `render_pass_name` and therefore cannot outlive the
  * `render_pass_name` internal data.
  */
-StringRef BKE_cryptomatte_extract_layer_name(const StringRef render_pass_name);
+StringRef BKE_cryptomatte_extract_layer_name(StringRef render_pass_name);
 
 struct CryptomatteHash {
   uint32_t hash;
@@ -59,10 +58,10 @@ struct CryptomatteHash {
   CryptomatteHash(uint32_t hash);
   CryptomatteHash(const char *name, int name_len)
   {
-    hash = BLI_hash_mm3((const unsigned char *)name, name_len, 0);
+    hash = BLI_hash_mm3(reinterpret_cast<const unsigned char *>(name), name_len, 0);
   }
 
-  static CryptomatteHash from_hex_encoded(blender::StringRef hex_encoded);
+  static CryptomatteHash from_hex_encoded(StringRef hex_encoded);
   std::string hex_encoded() const;
 
   /**
@@ -94,15 +93,13 @@ struct CryptomatteHash {
 };
 
 struct CryptomatteLayer {
-  blender::Map<std::string, CryptomatteHash> hashes;
+  Map<std::string, CryptomatteHash> hashes;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("cryptomatte:CryptomatteLayer")
-#endif
 
-  static std::unique_ptr<CryptomatteLayer> read_from_manifest(blender::StringRefNull manifest);
+  static std::unique_ptr<CryptomatteLayer> read_from_manifest(StringRefNull manifest);
   uint32_t add_ID(const ID &id);
-  void add_hash(blender::StringRef name, CryptomatteHash cryptomatte_hash);
+  void add_hash(StringRef name, CryptomatteHash cryptomatte_hash);
   std::string manifest() const;
 
   std::optional<std::string> operator[](float encoded_hash) const;
@@ -110,14 +107,14 @@ struct CryptomatteLayer {
 
 struct CryptomatteStampDataCallbackData {
   CryptomatteSession *session;
-  blender::Map<std::string, std::string> hash_to_layer_name;
+  Map<std::string, std::string> hash_to_layer_name;
 
   /**
    * Extract the hash from a stamp data key.
    *
    * Cryptomatte keys are formatted as "cryptomatte/{layer_hash}/{attribute}".
    */
-  static blender::StringRef extract_layer_hash(blender::StringRefNull key);
+  static StringRef extract_layer_hash(StringRefNull key);
 
   /* C type callback function (StampCallback). */
   static void extract_layer_names(void *_data,
@@ -131,10 +128,8 @@ struct CryptomatteStampDataCallbackData {
                                      int propvalue_maxncpy);
 };
 
-const blender::Vector<std::string> &BKE_cryptomatte_layer_names_get(
-    const CryptomatteSession &session);
-CryptomatteLayer *BKE_cryptomatte_layer_get(CryptomatteSession &session,
-                                            const StringRef layer_name);
+const Vector<std::string> &BKE_cryptomatte_layer_names_get(const CryptomatteSession &session);
+CryptomatteLayer *BKE_cryptomatte_layer_get(CryptomatteSession &session, StringRef layer_name);
 
 struct CryptomatteSessionDeleter {
   void operator()(CryptomatteSession *session)
@@ -145,4 +140,5 @@ struct CryptomatteSessionDeleter {
 
 using CryptomatteSessionPtr = std::unique_ptr<CryptomatteSession, CryptomatteSessionDeleter>;
 
-}  // namespace blender::bke::cryptomatte
+}  // namespace bke::cryptomatte
+}  // namespace blender

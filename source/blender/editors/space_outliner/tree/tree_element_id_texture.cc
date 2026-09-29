@@ -6,12 +6,12 @@
  * \ingroup spoutliner
  */
 
-#include "DNA_listBase.h"
 #include "DNA_outliner_types.h"
 #include "DNA_texture_types.h"
 
 #include "../outliner_intern.hh"
 
+#include "tree_display.hh"
 #include "tree_element_id_texture.hh"
 
 namespace blender::ed::outliner {
@@ -30,12 +30,7 @@ void TreeElementIDTexture::expand(SpaceOutliner & /*space_outliner*/) const
 
 void TreeElementIDTexture::expand_image() const
 {
-  add_element(&legacy_te_.subtree,
-              reinterpret_cast<ID *>(texture_.ima),
-              nullptr,
-              &legacy_te_,
-              TSE_SOME_ID,
-              0);
+  add_id_element({}, reinterpret_cast<ID *>(texture_.ima));
 }
 
 }  // namespace blender::ed::outliner

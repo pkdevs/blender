@@ -8,15 +8,16 @@
 
 #pragma once
 
-#include "BLI_utildefines.h"
 #include "BLI_vector.hh"
+
+namespace blender {
 
 struct ID;
 struct bConstraint;
 struct bPoseChannel;
 struct ModifierData;
 
-namespace blender::deg {
+namespace deg {
 
 /* This class keeps track of the builder calls nesting, allowing to unroll them back and provide a
  * clue about how the builder made it to its current state.
@@ -25,7 +26,7 @@ namespace blender::deg {
  *
  *   void DepsgraphRelationBuilder::my_id_builder(ID *id)
  *   {
- *     if (built_map_.checkIsBuiltAndTag(id)) {
+ *     if (built_map_.check_is_built_and_tag(id)) {
  *       return;
  *     }
  *
@@ -128,4 +129,5 @@ class BuilderStack {
   Stack stack_;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

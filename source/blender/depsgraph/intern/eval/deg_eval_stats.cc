@@ -8,8 +8,6 @@
 
 #include "intern/eval/deg_eval_stats.h"
 
-#include "BLI_utildefines.h"
-
 #include "intern/depsgraph.hh"
 
 #include "intern/node/deg_node.hh"
@@ -24,7 +22,7 @@ void deg_eval_stats_aggregate(Depsgraph *graph)
   /* Reset current evaluation stats for ID and component nodes.
    * Those are not filled in by the evaluation engine. */
   for (Node *node : graph->id_nodes) {
-    IDNode *id_node = (IDNode *)node;
+    IDNode *id_node = static_cast<IDNode *>(node);
     for (ComponentNode *comp_node : id_node->components.values()) {
       comp_node->stats.reset_current();
     }

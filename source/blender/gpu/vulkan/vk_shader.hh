@@ -8,13 +8,17 @@
 
 #pragma once
 
+#include "BLI_string_ref.hh"
+
 #include "gpu_shader_private.hh"
 
 #include "vk_backend.hh"
 #include "vk_context.hh"
 #include "vk_push_constants.hh"
+#include "vk_shader_module.hh"
+#include "vk_vertex_attribute_object.hh"
 
-#include "BLI_string_ref.hh"
+#include "shaderc/shaderc.hpp"
 
 namespace blender::gpu {
 class VKShaderInterface;
@@ -22,11 +26,6 @@ class VKShaderInterface;
 class VKShader : public Shader {
  private:
   VKContext *context_ = nullptr;
-  VkShaderModule vertex_module_ = VK_NULL_HANDLE;
-  VkShaderModule geometry_module_ = VK_NULL_HANDLE;
-  VkShaderModule fragment_module_ = VK_NULL_HANDLE;
-  VkShaderModule compute_module_ = VK_NULL_HANDLE;
-  bool compilation_failed_ = false;
 
   /**
    * Not owning handle to the descriptor layout.
@@ -41,30 +40,60 @@ class VKShader : public Shader {
    */
   VkPipeline vk_pipeline_base_ = VK_NULL_HANDLE;
 
+  bool is_compute_shader_ = false;
   bool is_static_shader_ = false;
 
+  /**
+   * \brief Were there pipelines states precompiled during shader creation.
+   *
+   * Used to detect pipeline states that are missing and could be added. As the mechanism
+   * isn't fool-proof we only show the warning in debug builds and raise an assert when run
+   * using `context.debug_pipeline_creation == true`.
+   */
+  bool has_precompiled_pipelines_ = false;
+  bool use_ray_query_ = false;
+
+  /**
+   * Maximum input attachment index used by this shader's subpass inputs.
+   * Used when VK_EXT_dynamic_rendering_local_read is enabled to correctly set
+   * colorAttachmentCount on the shaders library pipeline.
+   */
+  uint32_t max_input_attachment_index_ = 0;
+
  public:
+  VKShaderModule vertex_module;
+  VKShaderModule geometry_module;
+  VKShaderModule fragment_module;
+  VKShaderModule compute_module;
+
   VkPipelineLayout vk_pipeline_layout = VK_NULL_HANDLE;
   VKPushConstants push_constants;
 
   VKShader(const char *name);
   virtual ~VKShader();
 
-  void init(const shader::ShaderCreateInfo &info, bool is_batch_compilation) override;
+  void init(const shader::ShaderCreateInfo &info, bool is_codegen_only) override;
 
-  void vertex_shader_from_glsl(MutableSpan<const char *> sources) override;
-  void geometry_shader_from_glsl(MutableSpan<const char *> sources) override;
-  void fragment_shader_from_glsl(MutableSpan<const char *> sources) override;
-  void compute_shader_from_glsl(MutableSpan<const char *> sources) override;
+  const shader::ShaderCreateInfo &patch_create_info(
+      const shader::ShaderCreateInfo &original_info) override
+  {
+    return original_info;
+  }
+
+  void vertex_shader_from_glsl(const shader::ShaderCreateInfo &info,
+                               MutableSpan<StringRefNull> sources) override;
+  void geometry_shader_from_glsl(const shader::ShaderCreateInfo &info,
+                                 MutableSpan<StringRefNull> sources) override;
+  void fragment_shader_from_glsl(const shader::ShaderCreateInfo &info,
+                                 MutableSpan<StringRefNull> sources) override;
+  void compute_shader_from_glsl(const shader::ShaderCreateInfo &info,
+                                MutableSpan<StringRefNull> sources) override;
   bool finalize(const shader::ShaderCreateInfo *info = nullptr) override;
+  bool finalize_post(Span<shader::PipelineState> pipeline_states);
+
   void warm_cache(int limit) override;
 
-  void transform_feedback_names_set(Span<const char *> name_list,
-                                    eGPUShaderTFBType geom_type) override;
-  bool transform_feedback_enable(VertBuf *) override;
-  void transform_feedback_disable() override;
-
-  void bind() override;
+  void bind(const shader::SpecializationConstants *constants_state) override;
   void unbind() override;
 
   void uniform_float(int location, int comp_len, int array_size, const float *data) override;
@@ -77,36 +106,17 @@ class VKShader : public Shader {
   std::string geometry_layout_declare(const shader::ShaderCreateInfo &info) const override;
   std::string compute_layout_declare(const shader::ShaderCreateInfo &info) const override;
 
-  /* Unused: SSBO vertex fetch draw parameters. */
-  bool get_uses_ssbo_vertex_fetch() const override
-  {
-    return false;
-  }
-  int get_ssbo_vertex_fetch_output_num_verts() const override
-  {
-    return 0;
-  }
-
-  /* DEPRECATED: Kept only because of BGL API. */
-  int program_handle_get() const override;
-
-  VkPipeline ensure_and_get_compute_pipeline();
-  VkPipeline ensure_and_get_graphics_pipeline(GPUPrimType primitive,
-                                              VKVertexAttributeObject &vao,
-                                              VKStateManager &state_manager,
-                                              VKFrameBuffer &framebuffer);
+  VkPipeline ensure_and_get_compute_pipeline(
+      const shader::SpecializationConstants &constants_state);
+  bool ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_states);
+  VkPipeline ensure_and_get_graphics_pipeline(
+      GPUPrimType primitive,
+      VKVertexInputDescriptionPool::Key vertex_input_description_key,
+      VKStateManager &state_manager,
+      const VKFrameBuffer &framebuffer,
+      shader::SpecializationConstants &constants_state);
 
   const VKShaderInterface &interface_get() const;
-
-  bool is_graphics_shader() const
-  {
-    return !is_compute_shader();
-  }
-
-  bool is_compute_shader() const
-  {
-    return compute_module_ != VK_NULL_HANDLE;
-  }
 
   /**
    * Some shaders don't have a descriptor set and should not bind any descriptor set to the
@@ -123,22 +133,26 @@ class VKShader : public Shader {
     return vk_descriptor_set_layout_;
   }
 
+  bool use_ray_query_get() const
+  {
+    return use_ray_query_;
+  }
+
  private:
-  Vector<uint32_t> compile_glsl_to_spirv(Span<const char *> sources, shaderc_shader_kind kind);
-  void build_shader_module(Span<uint32_t> spirv_module, VkShaderModule *r_shader_module);
-  void build_shader_module(MutableSpan<const char *> sources,
+  void build_shader_module(MutableSpan<StringRefNull> sources,
                            shaderc_shader_kind stage,
-                           VkShaderModule *r_shader_module);
+                           VKShaderModule &r_shader_module);
+  bool finalize_shader_module(VKShaderModule &shader_module, const char *stage_name);
   bool finalize_descriptor_set_layouts(VKDevice &vk_device,
                                        const VKShaderInterface &shader_interface);
-  bool finalize_pipeline_layout(VkDevice vk_device, const VKShaderInterface &shader_interface);
+  bool finalize_pipeline_layout(VKDevice &device, const VKShaderInterface &shader_interface);
 
   /**
    * \brief features available on newer implementation such as native barycentric coordinates
    * and layered rendering, necessitate a geometry shader to work on older hardware.
    */
   std::string workaround_geometry_shader_source_create(const shader::ShaderCreateInfo &info);
-  bool do_geometry_shader_injection(const shader::ShaderCreateInfo *info);
+  bool do_geometry_shader_injection(const shader::ShaderCreateInfo *info) const;
 };
 
 static inline VKShader &unwrap(Shader &shader)

@@ -7,7 +7,6 @@
  */
 
 #include "DNA_lattice_types.h"
-#include "DNA_scene_types.h"
 
 #include "BKE_key.hh"
 
@@ -17,6 +16,8 @@
 #include "ED_screen.hh"
 
 #include "lattice_intern.hh"
+
+namespace blender {
 
 void ED_operatortypes_lattice()
 {
@@ -42,3 +43,5 @@ KeyBlock *ED_lattice_get_edit_shape_key(const Lattice *latt)
 
   return BKE_keyblock_find_by_index(latt->key, latt->editlatt->shapenr - 1);
 }
+
+}  // namespace blender

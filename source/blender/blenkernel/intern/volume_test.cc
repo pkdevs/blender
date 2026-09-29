@@ -4,12 +4,11 @@
 
 #ifdef WITH_OPENVDB
 
-#  include "openvdb/openvdb.h"
-
 #  include "testing/testing.h"
 
 #  include "DNA_volume_types.h"
 
+#  include "BKE_gtest_base.hh"
 #  include "BKE_idtype.hh"
 #  include "BKE_lib_id.hh"
 #  include "BKE_main.hh"
@@ -18,16 +17,9 @@
 
 namespace blender::bke::tests {
 
-class VolumeTest : public ::testing::Test {
+class VolumeTest : public BlenderGTestBase {
  public:
   Main *bmain;
-
-  static void SetUpTestSuite()
-  {
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite() {}
 
   void SetUp() override
   {
@@ -42,7 +34,7 @@ class VolumeTest : public ::testing::Test {
 
 TEST_F(VolumeTest, add_grid_with_name_and_find)
 {
-  Volume *volume = static_cast<Volume *>(BKE_id_new(bmain, ID_VO, nullptr));
+  Volume *volume = BKE_id_new<Volume>(bmain, nullptr);
   GVolumeGrid grid{VOLUME_GRID_FLOAT};
   grid.get_for_write().set_name("My Grid");
   const VolumeGridData *grid_data = grid.release();
@@ -54,8 +46,8 @@ TEST_F(VolumeTest, add_grid_with_name_and_find)
 
 TEST_F(VolumeTest, add_grid_in_two_volumes)
 {
-  Volume *volume_a = static_cast<Volume *>(BKE_id_new(bmain, ID_VO, nullptr));
-  Volume *volume_b = static_cast<Volume *>(BKE_id_new(bmain, ID_VO, nullptr));
+  Volume *volume_a = BKE_id_new<Volume>(bmain, nullptr);
+  Volume *volume_b = BKE_id_new<Volume>(bmain, nullptr);
   GVolumeGrid grid{VOLUME_GRID_FLOAT};
   grid.get_for_write().set_name("My Grid");
   const VolumeGridData *grid_data = grid.release();

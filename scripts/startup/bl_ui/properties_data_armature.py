@@ -5,7 +5,7 @@
 import bpy
 from bpy.types import Panel, Menu, UIList
 from rna_prop_ui import PropertyPanel
-from .space_properties import PropertiesAnimationMixin
+from bl_ui.space_properties import PropertiesAnimationMixin
 
 from bl_ui.properties_animviz import (
     MotionPathButtonsPanel,
@@ -122,15 +122,16 @@ class DATA_PT_bone_collections(ArmatureButtonsPanel, Panel):
             col.operator("armature.collection_move", icon='TRIA_UP', text="").direction = 'UP'
             col.operator("armature.collection_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
 
-        row = layout.row()
+        if context.mode in {'POSE', 'EDIT_ARMATURE', 'PAINT_WEIGHT'}:
+            row = layout.row()
 
-        sub = row.row(align=True)
-        sub.operator("armature.collection_assign", text="Assign")
-        sub.operator("armature.collection_unassign", text="Remove")
+            sub = row.row(align=True)
+            sub.operator("armature.collection_assign", text="Assign")
+            sub.operator("armature.collection_unassign", text="Remove")
 
-        sub = row.row(align=True)
-        sub.operator("armature.collection_select", text="Select")
-        sub.operator("armature.collection_deselect", text="Deselect")
+            sub = row.row(align=True)
+            sub.operator("armature.collection_select", text="Select")
+            sub.operator("armature.collection_deselect", text="Deselect")
 
 
 class ARMATURE_MT_collection_context_menu(Menu):
@@ -282,17 +283,15 @@ class DATA_PT_motion_paths_display(MotionPathButtonsPanel_display, Panel):
 
 
 class DATA_PT_armature_animation(ArmatureButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
-    _animated_id_context_property = 'armature'
+    _animated_id_context_property = "armature"
 
 
 class DATA_PT_custom_props_arm(ArmatureButtonsPanel, PropertyPanel, Panel):
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
     _context_path = "object.data"
     _property_type = bpy.types.Armature
 
 
 class DATA_PT_custom_props_bcoll(ArmatureButtonsPanel, PropertyPanel, Panel):
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
     _context_path = "armature.collections.active"
     _property_type = bpy.types.BoneCollection
     bl_parent_id = "DATA_PT_bone_collections"
@@ -335,9 +334,12 @@ class POSE_PT_selection_sets(Panel):
 
     @classmethod
     def poll(cls, context):
-        return (context.object and
-                context.object.type == 'ARMATURE' and
-                context.object.pose)
+        ob = context.object
+        return (
+            (ob is not None) and
+            (ob.type == 'ARMATURE') and
+            (ob.pose is not None)
+        )
 
     def draw(self, context):
         layout = self.layout
@@ -376,29 +378,27 @@ class POSE_PT_selection_sets(Panel):
         sub.operator("pose.selection_set_unassign", text="Remove")
 
         sub = row.row(align=True)
-        sub.operator("pose.selection_set_select", text="Select")
+        sub.operator("pose.selection_set_select", text="Select").selection_set_index = -1
         sub.operator("pose.selection_set_deselect", text="Deselect")
 
 
 class POSE_UL_selection_set(UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+    def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index):
         row = layout.row()
         row.prop(item, "name", text="", emboss=False)
-        if self.layout_type in ('DEFAULT', 'COMPACT'):
-            row.prop(item, "is_selected", text="")
+        row.prop(item, "is_selected", text="")
 
 
 class POSE_MT_selection_set_create(Menu):
     bl_label = "Choose Selection Set"
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
-        layout.operator("pose.selection_set_add_and_assign",
-                        text="New Selection Set")
+        layout.operator("pose.selection_set_add_and_assign", text="New Selection Set")
 
 
 class POSE_MT_selection_sets_select(Menu):
-    bl_label = 'Select Selection Set'
+    bl_label = "Select Selection Set"
 
     @classmethod
     def poll(cls, context):

@@ -21,11 +21,13 @@
 
 #include "FN_lazy_function.hh"
 
-namespace blender::dot {
+namespace blender {
+
+namespace dot_export {
 class DirectedEdge;
 }
 
-namespace blender::fn::lazy_function {
+namespace fn::lazy_function {
 
 class Socket;
 class InputSocket;
@@ -231,7 +233,7 @@ class Graph : NonCopyable, NonMovable {
   int socket_num_ = 0;
 
  public:
-  Graph(StringRef name = "unkown");
+  Graph(StringRef name = "unknown");
   ~Graph();
 
   StringRefNull name() const;
@@ -302,7 +304,7 @@ class Graph : NonCopyable, NonMovable {
     virtual std::optional<std::string> socket_font_color(const Socket &socket) const;
     virtual void add_edge_attributes(const OutputSocket &from,
                                      const InputSocket &to,
-                                     dot::DirectedEdge &dot_edge) const;
+                                     dot_export::DirectedEdge &dot_edge) const;
   };
 
   /**
@@ -547,4 +549,6 @@ inline int Graph::socket_num() const
 
 /** \} */
 
-}  // namespace blender::fn::lazy_function
+}  // namespace fn::lazy_function
+
+}  // namespace blender

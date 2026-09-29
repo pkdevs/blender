@@ -17,12 +17,14 @@
 #include "DNA_collection_types.h" /* eCollectionLightLinkingState */
 #include "DNA_object_types.h"
 
+namespace blender {
+
 struct Collection;
 struct CollectionLightLinking;
 struct Object;
 struct Scene;
 
-namespace blender::deg::light_linking {
+namespace deg::light_linking {
 
 namespace internal {
 
@@ -125,7 +127,7 @@ class EmitterDataMap {
   /* Get linked collection depending on whether this is emitter information for light or shadow
    * linking. */
   /* TODO(sergey): Check whether template specialization is preferred here. */
-  inline const Collection *get_collection(const Object &emitter) const
+  const Collection *get_collection(const Object &emitter) const
   {
     return BKE_light_linking_collection_get(&emitter, link_type_);
   }
@@ -183,7 +185,7 @@ class LinkingData {
   /* Get light set membership information of the emitter data depending whether this linking
    * data is a light or shadow linking. */
   /* TODO(sergey): Check whether template specialization is preferred here. */
-  inline EmitterSetMembership &get_emitter_set_membership(EmitterData &emitter_data) const
+  EmitterSetMembership &get_emitter_set_membership(EmitterData &emitter_data) const
   {
     if (link_type_ == LIGHT_LINKING_BLOCKER) {
       return emitter_data.shadow_membership;
@@ -277,4 +279,6 @@ class Cache {
   LinkingData shadow_linking_{LIGHT_LINKING_BLOCKER};
 };
 
-}  // namespace blender::deg::light_linking
+}  // namespace deg::light_linking
+
+}  // namespace blender

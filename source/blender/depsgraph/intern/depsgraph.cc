@@ -10,14 +10,10 @@
 
 #include "intern/depsgraph.hh" /* own include */
 
-#include <algorithm>
 #include <cstring>
+#include <type_traits>
 
-#include "MEM_guardedalloc.h"
-
-#include "BLI_console.h"
-#include "BLI_hash.h"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
@@ -29,7 +25,6 @@
 #include "intern/depsgraph_physics.hh"
 #include "intern/depsgraph_registry.hh"
 #include "intern/depsgraph_relation.hh"
-#include "intern/depsgraph_update.hh"
 
 #include "intern/eval/deg_eval_copy_on_write.h"
 
@@ -40,9 +35,9 @@
 #include "intern/node/deg_node_operation.hh"
 #include "intern/node/deg_node_time.hh"
 
-namespace deg = blender::deg;
+namespace blender {
 
-namespace blender::deg {
+namespace deg {
 
 Depsgraph::Depsgraph(Main *bmain, Scene *scene, ViewLayer *view_layer, eEvaluationMode mode)
     : time_source(nullptr),
@@ -63,13 +58,15 @@ Depsgraph::Depsgraph(Main *bmain, Scene *scene, ViewLayer *view_layer, eEvaluati
       is_evaluating(false),
       is_render_pipeline_depsgraph(false),
       use_editors_update(false),
-      update_count(0)
+      physics_relations_effector(nullptr),
+      update_count(0),
+      sync_writeback(DEG_EVALUATE_SYNC_WRITEBACK_NO)
 {
   BLI_spin_init(&lock);
   memset(id_type_updated, 0, sizeof(id_type_updated));
   memset(id_type_updated_backup, 0, sizeof(id_type_updated_backup));
   memset(id_type_exist, 0, sizeof(id_type_exist));
-  memset(physics_relations, 0, sizeof(physics_relations));
+  memset(physics_relations_collision, 0, sizeof(physics_relations_collision));
 
   add_time_source();
 }
@@ -87,7 +84,7 @@ TimeSourceNode *Depsgraph::add_time_source()
 {
   if (time_source == nullptr) {
     DepsNodeFactory *factory = type_get_factory(NodeType::TIMESOURCE);
-    time_source = (TimeSourceNode *)factory->create_node(nullptr, "", "Time Source");
+    time_source = static_cast<TimeSourceNode *>(factory->create_node(nullptr, "", "Time Source"));
   }
   return time_source;
 }
@@ -113,8 +110,8 @@ IDNode *Depsgraph::add_id_node(ID *id, ID *id_cow_hint)
   IDNode *id_node = find_id_node(id);
   if (!id_node) {
     DepsNodeFactory *factory = type_get_factory(NodeType::ID_REF);
-    id_node = (IDNode *)factory->create_node(id, "", id->name);
-    id_node->init_copy_on_write(*this, id_cow_hint);
+    id_node = static_cast<IDNode *>(factory->create_node(id, "", id->name));
+    id_node->init_copy_on_write(id_cow_hint);
     /* Register node in ID hash.
      *
      * NOTE: We address ID nodes by the original ID pointer they are
@@ -194,8 +191,14 @@ Relation *Depsgraph::add_new_relation(Node *from, Node *to, const char *descript
   }
 #endif
 
-  /* Create new relation, and add it to the graph. */
-  rel = new Relation(from, to, description);
+  /* Create new relation, and add it to the graph. The type must be trivially destructible for
+   * `.release()` to be okay. If it weren't, we could store the relations with #destruct_ptr on
+   * either the `inlinks` or `outlinks`. But since so many #Relation structs are allocated, it's
+   * probably better for it be a simple type anyway. */
+  static_assert(std::is_trivially_destructible_v<Relation>);
+  rel = this->build_allocator.construct<Relation>(from, to, description).release();
+  from->outlinks.append(rel);
+  to->inlinks.append(rel);
   rel->flag |= flags;
   return rel;
 }
@@ -237,6 +240,9 @@ void Depsgraph::clear_all_nodes()
   clear_id_nodes();
   delete time_source;
   time_source = nullptr;
+  /* Memory used by the build allocator is now unused. Rebuild it from scratch. */
+  std::destroy_at(&this->build_allocator);
+  new (&this->build_allocator) LinearAllocator<>();
 }
 
 ID *Depsgraph::get_cow_id(const ID *id_orig) const
@@ -260,12 +266,12 @@ ID *Depsgraph::get_cow_id(const ID *id_orig) const
        *   object data). */
       // BLI_assert_msg(0, "Request for non-existing copy-on-evaluation ID");
     }
-    return (ID *)id_orig;
+    return const_cast<ID *>(id_orig);
   }
   return id_node->id_cow;
 }
 
-}  // namespace blender::deg
+}  // namespace deg
 
 /* **************** */
 /* Public Graph API */
@@ -352,3 +358,5 @@ uint64_t DEG_get_update_count(const Depsgraph *depsgraph)
   const deg::Depsgraph *deg_graph = reinterpret_cast<const deg::Depsgraph *>(depsgraph);
   return deg_graph->update_count;
 }
+
+}  // namespace blender

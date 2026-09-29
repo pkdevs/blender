@@ -8,12 +8,17 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
+#include <Python.h>
+
+#include "BLI_compiler_attrs.hh"
+
+namespace blender {
 
 struct GPUOffScreen;
 struct GPUViewport;
 
 extern PyTypeObject BPyGPUOffScreen_Type;
+extern PyTypeObject PyGPUOffscreenStackContext_Type;
 
 #define BPyGPUOffScreen_Check(v) (Py_TYPE(v) == &BPyGPUOffScreen_Type)
 
@@ -23,4 +28,6 @@ struct BPyGPUOffScreen {
   GPUViewport *viewport;
 };
 
-PyObject *BPyGPUOffScreen_CreatePyObject(GPUOffScreen *ofs) ATTR_NONNULL(1);
+[[nodiscard]] PyObject *BPyGPUOffScreen_CreatePyObject(GPUOffScreen *ofs) ATTR_NONNULL(1);
+
+}  // namespace blender

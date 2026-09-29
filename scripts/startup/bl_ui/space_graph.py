@@ -3,10 +3,42 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from bpy.types import Header, Menu, Panel
+from bpy.app.translations import (
+    pgettext_iface as iface_,
+    contexts as i18n_contexts,
+)
 from bl_ui.space_dopesheet import (
     DopesheetFilterPopoverBase,
     dopesheet_filter,
 )
+from bl_ui.space_time import playback_controls
+
+
+def drivers_editor_footer(layout, context):
+    act_fcurve = context.active_editable_fcurve
+    if not act_fcurve:
+        return
+
+    act_driver = act_fcurve.driver
+    if not act_driver:
+        return
+
+    layout.separator_spacer()
+    layout.label(
+        text=iface_("Driver: {:s} ({:s})").format(
+            act_fcurve.id_data.name,
+            act_fcurve.data_path,
+        ),
+        translate=False,
+    )
+
+    if act_driver.variables:
+        layout.separator(type='LINE')
+        layout.label(text=iface_("Variables: {:d}").format(len(act_driver.variables)), translate=False)
+
+    if act_driver.type == 'SCRIPTED' and act_driver.expression:
+        layout.separator(type='LINE')
+        layout.label(text=iface_("Expression: {:s}").format(act_driver.expression), translate=False)
 
 
 class GRAPH_HT_header(Header):
@@ -50,12 +82,20 @@ class GRAPH_HT_header(Header):
         layout.prop(st, "pivot_point", icon_only=True)
 
         row = layout.row(align=True)
-        row.prop(tool_settings, "use_snap_anim", text="")
-        sub = row.row(align=True)
-        sub.popover(
-            panel="GRAPH_PT_snapping",
-            text="",
-        )
+        if context.space_data.mode == 'DRIVERS':
+            row.prop(tool_settings, "use_snap_driver", text="")
+            sub = row.row(align=True)
+            sub.popover(
+                panel="GRAPH_PT_driver_snapping",
+                text="",
+            )
+        else:
+            row.prop(tool_settings, "use_snap_anim", text="")
+            sub = row.row(align=True)
+            sub.popover(
+                panel="GRAPH_PT_snapping",
+                text="",
+            )
 
         row = layout.row(align=True)
         row.prop(tool_settings, "use_proportional_fcurve", text="", icon_only=True)
@@ -68,6 +108,20 @@ class GRAPH_HT_header(Header):
             icon_only=True,
             panel="GRAPH_PT_proportional_edit",
         )
+
+
+class GRAPH_HT_playback_controls(Header):
+    bl_space_type = 'GRAPH_EDITOR'
+    bl_region_type = 'FOOTER'
+
+    def draw(self, context):
+        layout = self.layout
+        is_drivers_editor = context.space_data.mode == 'DRIVERS'
+
+        if is_drivers_editor:
+            drivers_editor_footer(layout, context)
+        else:
+            playback_controls(layout, context)
 
 
 class GRAPH_PT_proportional_edit(Panel):
@@ -123,6 +177,18 @@ class GRAPH_PT_snapping(Panel):
             col.prop(tool_settings, "use_snap_time_absolute")
 
 
+class GRAPH_PT_driver_snapping(Panel):
+    bl_space_type = 'GRAPH_EDITOR'
+    bl_region_type = 'HEADER'
+    bl_label = "Snapping"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        tool_settings = context.tool_settings
+        col.prop(tool_settings, "use_snap_driver_absolute")
+
+
 class GRAPH_MT_editor_menus(Menu):
     bl_idname = "GRAPH_MT_editor_menus"
     bl_label = ""
@@ -149,10 +215,13 @@ class GRAPH_MT_view(Menu):
         layout.prop(st, "show_region_ui")
         layout.prop(st, "show_region_hud")
         layout.prop(st, "show_region_channels")
+        if st.mode != 'DRIVERS':
+            layout.prop(st, "show_region_footer", text="Playback Controls")
         layout.separator()
 
         layout.operator("graph.view_selected")
         layout.operator("graph.view_all")
+        layout.operator("graph.local_view")
         if context.scene.use_preview_range:
             layout.operator("anim.scene_range_frame", text="Frame Preview Range")
         else:
@@ -204,11 +273,11 @@ class GRAPH_MT_select(Menu):
 
         layout.separator()
 
-        layout.operator("graph.select_box")
+        layout.operator("graph.select_box", text="Box Select (Include Handles)")
         props = layout.operator("graph.select_box", text="Box Select (Axis Range)")
         props.axis_range = True
-        props = layout.operator("graph.select_box", text="Box Select (Include Handles)")
-        props.include_handles = True
+        props = layout.operator("graph.select_box")
+        props.include_handles = False
         layout.operator("graph.select_circle")
         layout.operator_menu_enum("graph.select_lasso", "mode")
 
@@ -271,7 +340,7 @@ class GRAPH_MT_channel(Menu):
             layout.operator("graph.driver_delete_invalid")
 
         layout.separator()
-        layout.operator("anim.channels_group")
+        layout.operator("anim.channels_group", text="Group Channels...")
         layout.operator("anim.channels_ungroup")
 
         layout.separator()
@@ -285,7 +354,7 @@ class GRAPH_MT_channel(Menu):
         # To get it to display the hotkey.
         layout.operator_context = operator_context
         layout.operator_menu_enum("graph.fmodifier_add", "type").only_active = False
-        layout.operator_context = 'INVOKE_REGION_CHANNELS'
+        layout.operator("graph.fmodifier_delete", text="Delete F-Curve Modifiers")
 
         layout.separator()
         layout.operator("graph.hide", text="Hide Selected Curves").unselected = False
@@ -297,7 +366,7 @@ class GRAPH_MT_channel(Menu):
         layout.operator("anim.channels_collapse")
 
         layout.separator()
-        layout.operator_menu_enum("anim.channels_move", "direction", text="Move...")
+        layout.operator_menu_enum("anim.channels_move", "direction", text="Move Channels")
 
         layout.separator()
         layout.operator("anim.channels_fcurves_enable")
@@ -319,7 +388,7 @@ class GRAPH_MT_key_density(Menu):
     bl_label = "Density"
 
     def draw(self, _context):
-        from bl_ui_utils.layout import operator_context
+        from _bl_ui_utils.layout import operator_context
         layout = self.layout
         layout.operator("graph.decimate", text="Decimate (Ratio)").mode = 'RATIO'
         # Using the modal operation doesn't make sense for this variant
@@ -334,6 +403,7 @@ class GRAPH_MT_key_density(Menu):
 
 class GRAPH_MT_key_blending(Menu):
     bl_label = "Blend"
+    bl_translation_context = i18n_contexts.operator_default
 
     def draw(self, _context):
         layout = self.layout
@@ -354,6 +424,7 @@ class GRAPH_MT_key_blending(Menu):
 
 class GRAPH_MT_key_smoothing(Menu):
     bl_label = "Smooth"
+    bl_translation_context = i18n_contexts.operator_default
 
     def draw(self, _context):
         layout = self.layout
@@ -376,13 +447,13 @@ class GRAPH_MT_key(Menu):
         layout.separator()
         layout.operator("graph.frame_jump", text="Jump to Selected")
 
+        layout.operator("graph.copy", text="Copy", icon='COPYDOWN')
+        layout.operator("graph.paste", text="Paste", icon='PASTEDOWN')
+        layout.operator("graph.paste", text="Paste Flipped", icon='PASTEFLIPDOWN').flipped = True
+
         layout.separator()
         layout.operator_menu_enum("graph.keyframe_insert", "type", text="Insert")
-        layout.operator("graph.copy", text="Copy")
-        layout.operator("graph.paste", text="Paste")
-        layout.operator("graph.paste", text="Paste Flipped").flipped = True
-        layout.operator("graph.duplicate_move")
-        layout.operator("graph.delete", text="Delete")
+        layout.operator("graph.duplicate_move", icon='DUPLICATE')
 
         layout.separator()
         layout.operator_menu_enum("graph.handle_type", "type", text="Handle Type")
@@ -394,6 +465,8 @@ class GRAPH_MT_key(Menu):
         layout.menu("GRAPH_MT_key_density")
         layout.menu("GRAPH_MT_key_blending")
         layout.menu("GRAPH_MT_key_smoothing")
+        layout.separator()
+        layout.operator("graph.delete", text="Delete", icon='X')
 
 
 class GRAPH_MT_key_transform(Menu):
@@ -477,14 +550,15 @@ class GRAPH_MT_context_menu(Menu):
         layout.separator()
 
         layout.operator("graph.keyframe_insert").type = 'SEL'
-        layout.operator("graph.duplicate_move")
-        layout.operator_context = 'EXEC_REGION_WIN'
-        layout.operator("graph.delete")
+        layout.operator("graph.duplicate_move", icon='DUPLICATE')
 
         layout.separator()
 
         layout.operator_menu_enum("graph.mirror", "type", text="Mirror")
         layout.operator_menu_enum("graph.snap", "type", text="Snap")
+        layout.separator()
+        layout.operator_context = 'EXEC_REGION_WIN'
+        layout.operator("graph.delete", icon='X')
 
 
 class GRAPH_MT_pivot_pie(Menu):
@@ -518,6 +592,7 @@ class GRAPH_MT_snap_pie(Menu):
 
 classes = (
     GRAPH_HT_header,
+    GRAPH_HT_playback_controls,
     GRAPH_PT_proportional_edit,
     GRAPH_MT_editor_menus,
     GRAPH_MT_view,
@@ -537,6 +612,7 @@ classes = (
     GRAPH_MT_view_pie,
     GRAPH_PT_filters,
     GRAPH_PT_snapping,
+    GRAPH_PT_driver_snapping,
 )
 
 if __name__ == "__main__":  # only for live edit.

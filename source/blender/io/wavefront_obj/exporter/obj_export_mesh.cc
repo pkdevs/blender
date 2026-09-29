@@ -10,23 +10,21 @@
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_lib_id.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_object.hh"
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_sort.hh"
 #include "BLI_vector_set.hh"
 
 #include "DEG_depsgraph_query.hh"
 
-#include "DNA_material_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
@@ -40,7 +38,7 @@ namespace blender::io::obj {
 OBJMesh::OBJMesh(Depsgraph *depsgraph, const OBJExportParams &export_params, Object *mesh_object)
 {
   /* We need to copy the object because it may be in temporary space. */
-  Object *obj_eval = DEG_get_evaluated_object(depsgraph, mesh_object);
+  Object *obj_eval = DEG_get_evaluated(depsgraph, mesh_object);
   object_name_ = obj_eval->id.name + 2;
   export_mesh_ = nullptr;
 
@@ -60,7 +58,7 @@ OBJMesh::OBJMesh(Depsgraph *depsgraph, const OBJExportParams &export_params, Obj
     /* Curves and NURBS surfaces need a new mesh when they're
      * exported in the form of vertices and edges.
      */
-    this->set_mesh(BKE_mesh_new_from_object(depsgraph, obj_eval, true, true));
+    this->set_mesh(BKE_mesh_new_from_object(depsgraph, obj_eval, true, true, true));
   }
   if (export_params.export_triangulated_mesh && obj_eval->type == OB_MESH) {
     this->triangulate_mesh_eval();
@@ -71,8 +69,11 @@ OBJMesh::OBJMesh(Depsgraph *depsgraph, const OBJExportParams &export_params, Obj
     this->materials[i] = BKE_object_material_get_eval(obj_eval, i + 1);
   }
 
-  set_world_axes_transform(
-      *obj_eval, export_params.forward_axis, export_params.up_axis, export_params.global_scale);
+  set_world_axes_transform(*obj_eval,
+                           export_params.forward_axis,
+                           export_params.up_axis,
+                           export_params.global_scale,
+                           export_params.apply_transform);
 }
 
 /**
@@ -110,7 +111,7 @@ void OBJMesh::clear()
   normal_coords_ = {};
   face_order_ = {};
   if (face_smooth_groups_) {
-    MEM_freeN(face_smooth_groups_);
+    MEM_delete(face_smooth_groups_);
     face_smooth_groups_ = nullptr;
   }
 }
@@ -148,13 +149,15 @@ void OBJMesh::triangulate_mesh_eval()
 void OBJMesh::set_world_axes_transform(const Object &obj_eval,
                                        const eIOAxis forward,
                                        const eIOAxis up,
-                                       const float global_scale)
+                                       const float global_scale,
+                                       const bool apply_transform)
 {
   float3x3 axes_transform;
   /* +Y-forward and +Z-up are the default Blender axis settings. */
   mat3_from_axis_conversion(forward, up, IO_AXIS_Y, IO_AXIS_Z, axes_transform.ptr());
 
-  const float4x4 &object_to_world = obj_eval.object_to_world();
+  const float4x4 &object_to_world = apply_transform ? obj_eval.object_to_world() :
+                                                      float4x4::identity();
   const float3x3 transform = axes_transform * float3x3(object_to_world);
 
   world_and_axes_transform_ = float4x4(transform);
@@ -208,13 +211,25 @@ void OBJMesh::calc_smooth_groups(const bool use_bitflags)
   const bke::AttributeAccessor attributes = export_mesh_->attributes();
   const VArraySpan sharp_edges = *attributes.lookup<bool>("sharp_edge", bke::AttrDomain::Edge);
   const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", bke::AttrDomain::Face);
-  face_smooth_groups_ = BKE_mesh_calc_smoothgroups(mesh_edges_.size(),
-                                                   mesh_faces_,
-                                                   export_mesh_->corner_edges(),
-                                                   sharp_edges,
-                                                   sharp_faces,
-                                                   &tot_smooth_groups_,
-                                                   use_bitflags);
+  if (use_bitflags) {
+    face_smooth_groups_ = BKE_mesh_calc_smoothgroups_bitflags(mesh_edges_.size(),
+                                                              export_mesh_->verts_num,
+                                                              mesh_faces_,
+                                                              export_mesh_->corner_edges(),
+                                                              export_mesh_->corner_verts(),
+                                                              sharp_edges,
+                                                              sharp_faces,
+                                                              true,
+                                                              &tot_smooth_groups_);
+  }
+  else {
+    face_smooth_groups_ = BKE_mesh_calc_smoothgroups(mesh_edges_.size(),
+                                                     mesh_faces_,
+                                                     export_mesh_->corner_edges(),
+                                                     sharp_edges,
+                                                     sharp_faces,
+                                                     &tot_smooth_groups_);
+  }
 }
 
 void OBJMesh::calc_face_order()
@@ -230,7 +245,7 @@ void OBJMesh::calc_face_order()
   /* Sort faces by their material index. */
   face_order_.reinitialize(material_indices_span.size());
   array_utils::fill_index_range(face_order_.as_mutable_span());
-  blender::parallel_sort(face_order_.begin(), face_order_.end(), [&](int a, int b) {
+  parallel_sort(face_order_.begin(), face_order_.end(), [&](int a, int b) {
     int mat_a = material_indices_span[a];
     int mat_b = material_indices_span[b];
     if (mat_a != mat_b) {
@@ -257,8 +272,7 @@ StringRef OBJMesh::get_object_mesh_name() const
 
 void OBJMesh::store_uv_coords_and_indices()
 {
-  const StringRef active_uv_name = CustomData_get_active_layer_name(&export_mesh_->corner_data,
-                                                                    CD_PROP_FLOAT2);
+  const StringRef active_uv_name = export_mesh_->active_uv_map_name();
   if (active_uv_name.is_empty()) {
     uv_coords_.clear();
     return;
@@ -339,19 +353,11 @@ void OBJMesh::store_normal_coords_and_indices()
     case bke::MeshNormalDomain::Point: {
       const Span<float3> vert_normals = export_mesh_->vert_normals();
       Array<int> vert_normal_indices(vert_normals.size());
-      const bke::LooseVertCache &verts_no_face = export_mesh_->verts_no_face();
-      if (verts_no_face.count == 0) {
-        for (const int vert : vert_normals.index_range()) {
-          vert_normal_indices[vert] = add_normal(vert_normals[vert]);
-        }
-      }
-      else {
-        for (const int vert : vert_normals.index_range()) {
-          if (!verts_no_face.is_loose_bits[vert]) {
-            vert_normal_indices[vert] = add_normal(vert_normals[vert]);
-          }
-        }
-      }
+      const IndexMask &verts_no_face = export_mesh_->verts_no_face();
+      IndexMaskMemory memory;
+      const IndexMask verts = verts_no_face.complement(vert_normals.index_range(), memory);
+      verts.foreach_index(
+          [&](const int vert) { vert_normal_indices[vert] = add_normal(vert_normals[vert]); });
       array_utils::gather(vert_normal_indices.as_span(),
                           mesh_corner_verts_,
                           corner_to_normal_index_.as_mutable_span());
@@ -371,14 +377,14 @@ void OBJMesh::store_normal_coords_and_indices()
 
 int OBJMesh::tot_deform_groups() const
 {
-  return BLI_listbase_count(&export_mesh_->vertex_group_names);
+  return export_mesh_->vertex_group_names.count();
 }
 
 int16_t OBJMesh::get_face_deform_group_index(const int face_index,
                                              MutableSpan<float> group_weights) const
 {
   BLI_assert(face_index < export_mesh_->faces_num);
-  BLI_assert(group_weights.size() == BLI_listbase_count(&export_mesh_->vertex_group_names));
+  BLI_assert(group_weights.size() == export_mesh_->vertex_group_names.count());
   const Span<MDeformVert> dverts = export_mesh_->deform_verts();
   if (dverts.is_empty()) {
     return NOT_FOUND;

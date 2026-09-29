@@ -6,16 +6,12 @@
  * \ingroup RNA
  */
 
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 
-#include "BLI_utildefines.h"
-
 #include "RNA_define.hh"
 
-#include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 
 #include "ANIM_fcurve.hh"
@@ -24,9 +20,14 @@
 
 #ifdef RNA_RUNTIME
 
-#  include <stddef.h>
+#  include <cstddef>
 
 #  include "BKE_fcurve.hh"
+#  include "BKE_report.hh"
+
+#  include "WM_api.hh"
+
+namespace blender {
 
 static void rna_FCurve_convert_to_samples(FCurve *fcu, ReportList *reports, int start, int end)
 {
@@ -73,7 +74,7 @@ static void rna_FCurve_bake(FCurve *fcu,
                             float step,
                             int remove_existing_as_int)
 {
-  using namespace blender::animrig;
+  using namespace animrig;
   if (start_frame >= end_frame) {
     BKE_reportf(reports,
                 RPT_ERROR,
@@ -88,21 +89,25 @@ static void rna_FCurve_bake(FCurve *fcu,
   WM_main_add_notifier(NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, nullptr);
 }
 
+}  // namespace blender
+
 #else
 
+namespace blender {
+
 static const EnumPropertyItem channel_bake_remove_options[] = {
-    {int(blender::animrig::BakeCurveRemove::NONE), "NONE", 0, "None", "Keep all keys"},
-    {int(blender::animrig::BakeCurveRemove::IN_RANGE),
+    {int(animrig::BakeCurveRemove::NONE), "NONE", 0, "None", "Keep all keys"},
+    {int(animrig::BakeCurveRemove::IN_RANGE),
      "IN_RANGE",
      0,
      "In Range",
      "Remove all keys within the defined range"},
-    {int(blender::animrig::BakeCurveRemove::OUT_RANGE),
+    {int(animrig::BakeCurveRemove::OUT_RANGE),
      "OUT_RANGE",
      0,
      "Outside Range",
      "Remove all keys outside the defined range"},
-    {int(blender::animrig::BakeCurveRemove::ALL), "ALL", 0, "All", "Remove all existing keys"},
+    {int(animrig::BakeCurveRemove::ALL), "ALL", 0, "All", "Remove all existing keys"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -158,14 +163,12 @@ void RNA_api_fcurves(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_float(
       func, "step", 1, 0.01, FLT_MAX, "Step", "At which interval to add keys", 1, 16);
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_PYFUNC_OPTIONAL);
   RNA_def_enum(func,
                "remove",
                channel_bake_remove_options,
-               int(blender::animrig::BakeCurveRemove::IN_RANGE),
+               int(animrig::BakeCurveRemove::IN_RANGE),
                "Remove Options",
                "Choose which keys should be automatically removed by the bake");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_PYFUNC_OPTIONAL);
 }
 
 void RNA_api_drivers(StructRNA * /*srna*/)
@@ -173,5 +176,7 @@ void RNA_api_drivers(StructRNA * /*srna*/)
   // FunctionRNA *func;
   // PropertyRNA *parm;
 }
+
+}  // namespace blender
 
 #endif

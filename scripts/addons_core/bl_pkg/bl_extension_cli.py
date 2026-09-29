@@ -18,11 +18,6 @@ import sys
 
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Union,
 )
 
 from .bl_extension_utils import PkgManifest_Normalized
@@ -106,11 +101,11 @@ class subcmd_utils:
 
     @staticmethod
     def _expand_package_ids(
-            packages: List[str],
+            packages: list[str],
             *,
             use_local: bool,
-    ) -> Union[List[Tuple[int, str]], str]:
-        # Takes a terse lists of package names and expands to repo index and name list,
+    ) -> list[tuple[int, str]] | str:
+        # Takes a terse list of package names and expands to repo index and pkg_id list,
         # returning an error string if any can't be resolved.
         from . import repo_cache_store_ensure
         from .bl_extension_ops import extension_repos_read
@@ -173,11 +168,11 @@ class subcmd_utils:
         return repos_and_packages
 
     @staticmethod
-    def expand_package_ids_from_remote(packages: List[str]) -> Union[List[Tuple[int, str]], str]:
+    def expand_package_ids_from_remote(packages: list[str]) -> list[tuple[int, str]] | str:
         return subcmd_utils._expand_package_ids(packages, use_local=False)
 
     @staticmethod
-    def expand_package_ids_from_local(packages: List[str]) -> Union[List[Tuple[int, str]], str]:
+    def expand_package_ids_from_local(packages: list[str]) -> list[tuple[int, str]] | str:
         return subcmd_utils._expand_package_ids(packages, use_local=True)
 
 
@@ -197,10 +192,10 @@ class subcmd_query:
 
         def list_item(
                 pkg_id: str,
-                item_local: Optional[PkgManifest_Normalized],
-                item_remote: Optional[PkgManifest_Normalized],
+                item_local: PkgManifest_Normalized | None,
+                item_remote: PkgManifest_Normalized | None,
                 has_remote: bool,
-                item_warnings: List[str],
+                item_warnings: list[str],
         ) -> None:
             # Both can't be None.
             assert item_remote is not None or item_local is not None
@@ -267,7 +262,7 @@ class subcmd_query:
         import addon_utils  # type: ignore
 
         # pylint: disable-next=protected-access
-        extensions_warnings: Dict[str, List[str]] = addon_utils._extensions_warnings_get()
+        extensions_warnings: dict[str, list[str]] = addon_utils._extensions_warnings_get()
         assert isinstance(extensions_warnings, dict)
 
         # Blocked and installed.
@@ -332,14 +327,14 @@ class subcmd_pkg:
         try:
             bpy.ops.extensions.package_upgrade_all()
         except RuntimeError:
-            return False  # The error will have been printed.
+            return False  # The error was reported (and printed) by the operator.
         return True
 
     @staticmethod
     def install(
             *,
             sync: bool,
-            packages: List[str],
+            packages: list[str],
             enable_on_install: bool,
             no_prefs: bool,
     ) -> bool:
@@ -364,7 +359,7 @@ class subcmd_pkg:
         try:
             bpy.ops.extensions.package_install_marked(enable_on_install=enable_on_install)
         except RuntimeError:
-            return False  # The error will have been printed.
+            return False  # The error was reported (and printed) by the operator.
 
         if not no_prefs:
             if enable_on_install:
@@ -375,7 +370,7 @@ class subcmd_pkg:
     @staticmethod
     def remove(
             *,
-            packages: List[str],
+            packages: list[str],
             no_prefs: bool,
     ) -> bool:
         # Expand all package ID's.
@@ -392,7 +387,7 @@ class subcmd_pkg:
         try:
             bpy.ops.extensions.package_uninstall_marked()
         except RuntimeError:
-            return False  # The error will have been printed.
+            return False  # The error was reported (and printed) by the operator.
 
         if not no_prefs:
             blender_preferences_write()
@@ -419,7 +414,7 @@ class subcmd_pkg:
                 enable_on_install=enable_on_install,
             )
         except RuntimeError:
-            return False  # The error will have been printed.
+            return False  # The error was reported (and printed) by the operator.
         except Exception as ex:
             sys.stderr.write(str(ex))
             sys.stderr.write("\n")
@@ -475,7 +470,7 @@ class subcmd_repo:
     ) -> bool:
         from bpy import context
 
-        # This could be allowed the Python API doesn't prevent it.
+        # This could be allowed, the Python API doesn't prevent it.
         # However this is not going to do what the user would expect so disallow it.
         if url:
             if source == 'SYSTEM':
@@ -579,7 +574,7 @@ def generic_arg_no_prefs(subparse: argparse.ArgumentParser) -> None:
         help=(
             "Treat the user-preferences as read-only,\n"
             "preventing updates for operations that would otherwise modify them.\n"
-            "This means removing extensions or repositories for example, wont update the user-preferences."
+            "This means removing extensions or repositories for example, won't update the user-preferences."
         ),
     )
 
@@ -668,7 +663,7 @@ def cli_extension_args_sync(subparsers: "argparse._SubParsersAction[argparse.Arg
 
 
 def cli_extension_args_upgrade(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
-    # Implement "update".
+    # Implement "upgrade".
     subparse = subparsers.add_parser(
         "update",
         help="Upgrade any outdated packages.",
@@ -804,7 +799,7 @@ def cli_extension_args_repo_add(subparsers: "argparse._SubParsersAction[argparse
         default="",
         help=(
             "The directory where the repository stores local files (optional).\n"
-            "When omitted a directory in the users directory is automatically selected."
+            "When omitted a directory in the user's directory is automatically selected."
         ),
     )
     subparse.add_argument(
@@ -920,7 +915,7 @@ def cli_extension_args_extra(subparsers: "argparse._SubParsersAction[argparse.Ar
     cli_extension_args_repo_remove(subparsers)
 
 
-def cli_extension_handler(args: List[str]) -> int:
+def cli_extension_handler(args: list[str]) -> int:
     from .cli import blender_ext
 
     # Override the default valid tags with a file which Blender includes.

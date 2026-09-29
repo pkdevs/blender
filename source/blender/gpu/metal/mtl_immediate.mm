@@ -10,6 +10,8 @@
 
 #include "BKE_global.hh"
 
+#include "BLI_bit_span.hh"
+
 #include "GPU_vertex_format.hh"
 #include "gpu_context_private.hh"
 #include "gpu_shader_private.hh"
@@ -20,6 +22,7 @@
 #include "mtl_immediate.hh"
 #include "mtl_primitive.hh"
 #include "mtl_shader.hh"
+#include "mtl_vertex_buffer.hh"
 
 namespace blender::gpu {
 
@@ -27,8 +30,6 @@ MTLImmediate::MTLImmediate(MTLContext *ctx)
 {
   context_ = ctx;
 }
-
-MTLImmediate::~MTLImmediate() {}
 
 uchar *MTLImmediate::begin()
 {
@@ -49,7 +50,7 @@ uchar *MTLImmediate::begin()
 
   /* Allocate a range of data and return host-accessible pointer. */
   const size_t bytes_needed = vertex_buffer_size(&vertex_format, vertex_alloc_length);
-  current_allocation_ = context_->get_scratchbuffer_manager()
+  current_allocation_ = context_->get_scratch_buffer_manager()
                             .scratch_buffer_allocate_range_aligned(bytes_needed, 256);
   [current_allocation_.metal_buffer retain];
   return reinterpret_cast<uchar *>(current_allocation_.data);
@@ -64,19 +65,16 @@ void MTLImmediate::end()
   /* Verify context is valid, vertex data is written and a valid shader is bound. */
   if (context_ && this->vertex_idx > 0 && this->shader) {
 
-    MTLShader *active_mtl_shader = static_cast<MTLShader *>(unwrap(shader));
+    MTLShader *active_mtl_shader = static_cast<MTLShader *>(shader);
 
     /* Skip draw if Metal shader is not valid. */
-    if (active_mtl_shader == nullptr || !active_mtl_shader->is_valid() ||
-        active_mtl_shader->get_interface() == nullptr)
-    {
-
-      const char *ptr = (active_mtl_shader) ? active_mtl_shader->name_get() : nullptr;
+    if (active_mtl_shader == nullptr || !active_mtl_shader->is_valid()) {
+      const StringRefNull ptr = (active_mtl_shader) ? active_mtl_shader->name_get() : "";
       MTL_LOG_WARNING(
           "MTLImmediate::end -- cannot perform draw as active shader is NULL or invalid (likely "
           "unimplemented) (shader %p '%s')",
           active_mtl_shader,
-          ptr);
+          ptr.c_str());
       return;
     }
 
@@ -92,152 +90,84 @@ void MTLImmediate::end()
 
     /* Debug markers for frame-capture and detailed error messages. */
     if (G.debug & G_DEBUG_GPU) {
-      [rec pushDebugGroup:[NSString
-                              stringWithFormat:@"immEnd(verts: %d, shader: %s)",
-                                               this->vertex_idx,
-                                               active_mtl_shader->get_interface()->get_name()]];
-      [rec insertDebugSignpost:[NSString stringWithFormat:@"immEnd(verts: %d, shader: %s)",
-                                                          this->vertex_idx,
-                                                          active_mtl_shader->get_interface()
-                                                              ->get_name()]];
+      context_->main_command_buffer.unfold_pending_debug_groups();
+      [rec pushDebugGroup:[NSString stringWithFormat:@"immEnd(Shader:%s)",
+                                                     active_mtl_shader->name_get().c_str()]];
     }
 
     /* Populate pipeline state vertex descriptor. */
     MTLStateManager *state_manager = static_cast<MTLStateManager *>(
         MTLContext::get()->state_manager);
     MTLRenderPipelineStateDescriptor &desc = state_manager->get_pipeline_descriptor();
-    const MTLShaderInterface *interface = active_mtl_shader->get_interface();
+    const MTLShaderInterface &interface = active_mtl_shader->get_interface();
 
     /* Reset vertex descriptor to default state. */
     desc.reset_vertex_descriptor();
-    desc.vertex_descriptor.total_attributes = interface->get_total_attributes();
-    desc.vertex_descriptor.max_attribute_value = interface->get_total_attributes() - 1;
+    desc.vertex_descriptor.total_attributes = interface.attr_len_;
+    desc.vertex_descriptor.max_attribute_value = 0;
     desc.vertex_descriptor.num_vert_buffers = 1;
 
     for (int i = 0; i < desc.vertex_descriptor.total_attributes; i++) {
       desc.vertex_descriptor.attributes[i].format = MTLVertexFormatInvalid;
     }
-    desc.vertex_descriptor.uses_ssbo_vertex_fetch =
-        active_mtl_shader->get_uses_ssbo_vertex_fetch();
-    desc.vertex_descriptor.num_ssbo_attributes = 0;
 
-    /* SSBO Vertex Fetch -- Verify Attributes. */
-    if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
-      active_mtl_shader->ssbo_vertex_fetch_bind_attributes_begin();
-
-      /* Disable Indexed rendering in SSBO vertex fetch. */
-      int uniform_ssbo_use_indexed = active_mtl_shader->uni_ssbo_uses_indexed_rendering;
-      BLI_assert_msg(uniform_ssbo_use_indexed != -1,
-                     "Expected valid uniform location for ssbo_uses_indexed_rendering.");
-      int uses_indexed_rendering = 0;
-      active_mtl_shader->uniform_int(uniform_ssbo_use_indexed, 1, 1, &uses_indexed_rendering);
+    if (interface.vertex_buffer_mask() == 0) {
+      MTL_LOG_ERROR("MTLImmediate::end Not enough buffer slot to bind attributes.");
+      BLI_assert_unreachable();
+      return;
     }
+
+    int imm_buffer_slot = bitscan_forward_uint(interface.vertex_buffer_mask());
 
     /* Populate Vertex descriptor and verify attributes.
      * TODO(Metal): Cache this vertex state based on Vertex format and shaders. */
-    for (int i = 0; i < interface->get_total_attributes(); i++) {
+    for (int i : bits::iter_1_indices(interface.enabled_attr_mask_)) {
+      const ShaderInput *input = interface.attr_get(i);
+      BLI_assert(input != nullptr);
+      StringRefNull input_name(interface.name_at_offset(input->name_offset));
 
-      /* NOTE: Attribute in VERTEX FORMAT does not necessarily share the same array index as
-       * attributes in shader interface. */
       GPUVertAttr *attr = nullptr;
-      const MTLShaderInputAttribute &mtl_shader_attribute = interface->get_attribute(i);
-
       /* Scan through vertex_format attributes until one with a name matching the shader interface
        * is found. */
       for (uint32_t a_idx = 0; a_idx < this->vertex_format.attr_len && attr == nullptr; a_idx++) {
-        GPUVertAttr *check_attribute = &this->vertex_format.attrs[a_idx];
-
+        GPUVertAttr *candidate = &this->vertex_format.attrs[a_idx];
         /* Attributes can have multiple name aliases associated with them. */
-        for (uint32_t n_idx = 0; n_idx < check_attribute->name_len; n_idx++) {
-          const char *name = GPU_vertformat_attr_name_get(
-              &this->vertex_format, check_attribute, n_idx);
-
-          if (strcmp(name, interface->get_name_at_offset(mtl_shader_attribute.name_offset)) == 0) {
-            attr = check_attribute;
+        for (uint32_t n_idx = 0; n_idx < candidate->name_len; n_idx++) {
+          StringRefNull name = GPU_vertformat_attr_name_get(
+              &this->vertex_format, candidate, n_idx);
+          if (name == input_name) {
+            attr = candidate;
             break;
           }
         }
       }
 
-      BLI_assert_msg(attr != nullptr,
-                     "Could not find expected attribute in immediate mode vertex format.");
       if (attr == nullptr) {
-        MTL_LOG_ERROR(
-            "MTLImmediate::end Could not find matching attribute '%s' from Shader Interface in "
-            "Vertex Format! - TODO: Bind Dummy attribute",
-            interface->get_name_at_offset(mtl_shader_attribute.name_offset));
+        MTL_LOG_ERROR("MTLImmediate::end Could not find matching attribute '%s' in Vertex Format!",
+                      input_name.c_str());
+        BLI_assert_unreachable();
         return;
       }
 
-      /* Determine whether implicit type conversion between input vertex format
-       * and shader interface vertex format is supported. */
-      MTLVertexFormat convertedFormat;
-      bool can_use_implicit_conversion = mtl_convert_vertex_format(
-          mtl_shader_attribute.format,
-          (GPUVertCompType)attr->comp_type,
-          attr->comp_len,
-          (GPUVertFetchMode)attr->fetch_mode,
-          &convertedFormat);
-
-      if (can_use_implicit_conversion) {
-        /* Metal API can implicitly convert some formats during vertex assembly:
-         * - Converting from a normalized short2 format to float2
-         * - Type truncation e.g. Float4 to Float2.
-         * - Type expansion from Float3 to Float4.
-         * - NOTE: extra components are filled with the corresponding components of (0,0,0,1).
-         * (See
-         * https://developer.apple.com/documentation/metal/mtlvertexattributedescriptor/1516081-format)
-         */
-        bool is_floating_point_format = (attr->comp_type == GPU_COMP_F32);
-        desc.vertex_descriptor.attributes[i].format = convertedFormat;
-        desc.vertex_descriptor.attributes[i].format_conversion_mode =
-            (is_floating_point_format) ? (GPUVertFetchMode)GPU_FETCH_FLOAT :
-                                         (GPUVertFetchMode)GPU_FETCH_INT;
-        BLI_assert(convertedFormat != MTLVertexFormatInvalid);
-      }
-      else {
-        /* Some conversions are NOT valid, e.g. Int4 to Float4
-         * - In this case, we need to implement a conversion routine inside the shader.
-         * - This is handled using the format_conversion_mode flag
-         * - This flag is passed into the PSO as a function specialization,
-         *   and will generate an appropriate conversion function when reading the vertex attribute
-         *   value into local shader storage.
-         *   (If no explicit conversion is needed, the function specialize to a pass-through). */
-        MTLVertexFormat converted_format;
-        bool can_convert = mtl_vertex_format_resize(
-            mtl_shader_attribute.format, attr->comp_len, &converted_format);
-        desc.vertex_descriptor.attributes[i].format = (can_convert) ? converted_format :
-                                                                      mtl_shader_attribute.format;
-        desc.vertex_descriptor.attributes[i].format_conversion_mode = (GPUVertFetchMode)
-                                                                          attr->fetch_mode;
-        BLI_assert(desc.vertex_descriptor.attributes[i].format != MTLVertexFormatInvalid);
-      }
+      MTLVertexAttributeDescriptorPSO &pso_attr = desc.vertex_descriptor.attributes[i];
+      pso_attr.format = gpu_vertex_format_to_metal(attr->type.format);
+      pso_attr.format_conversion_mode = (is_fetch_float(attr->type.format)) ?
+                                            GPUVertFetchMode(GPU_FETCH_FLOAT) :
+                                            GPUVertFetchMode(GPU_FETCH_INT);
       /* Using attribute offset in vertex format, as this will be correct */
-      desc.vertex_descriptor.attributes[i].offset = attr->offset;
-      desc.vertex_descriptor.attributes[i].buffer_index = mtl_shader_attribute.buffer_index;
+      pso_attr.offset = attr->offset;
+      pso_attr.buffer_index = imm_buffer_slot;
 
-      /* SSBO Vertex Fetch Attribute bind. */
-      if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
-        BLI_assert_msg(mtl_shader_attribute.buffer_index == 0,
-                       "All attributes should be in buffer index zero");
-        MTLSSBOAttribute ssbo_attr(
-            mtl_shader_attribute.index,
-            mtl_shader_attribute.buffer_index,
-            attr->offset,
-            this->vertex_format.stride,
-            MTLShader::ssbo_vertex_type_to_attr_type(desc.vertex_descriptor.attributes[i].format),
-            false);
-        desc.vertex_descriptor.ssbo_attributes[desc.vertex_descriptor.num_ssbo_attributes] =
-            ssbo_attr;
-        desc.vertex_descriptor.num_ssbo_attributes++;
-        active_mtl_shader->ssbo_vertex_fetch_bind_attribute(ssbo_attr);
-      }
+      desc.vertex_descriptor.max_attribute_value = i;
+
+      BLI_assert(pso_attr.format != MTLVertexFormatInvalid);
     }
 
     /* Buffer bindings for singular vertex buffer. */
     desc.vertex_descriptor.buffer_layouts[0].step_function = MTLVertexStepFunctionPerVertex;
     desc.vertex_descriptor.buffer_layouts[0].step_rate = 1;
     desc.vertex_descriptor.buffer_layouts[0].stride = this->vertex_format.stride;
+    desc.vertex_descriptor.buffer_layouts[0].buffer_slot = 0;
     BLI_assert(this->vertex_format.stride > 0);
 
     /* Emulate LineLoop using LineStrip. */
@@ -251,28 +181,18 @@ void MTLImmediate::end()
       this->prim_type = GPU_PRIM_LINE_STRIP;
     }
 
-    /* SSBO Vertex Fetch -- Verify Attributes. */
-    if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
-      active_mtl_shader->ssbo_vertex_fetch_bind_attributes_end(rec);
-
-      /* Set Status uniforms. */
-      BLI_assert_msg(active_mtl_shader->uni_ssbo_input_prim_type_loc != -1,
-                     "ssbo_input_prim_type uniform location invalid!");
-      BLI_assert_msg(active_mtl_shader->uni_ssbo_input_vert_count_loc != -1,
-                     "ssbo_input_vert_count uniform location invalid!");
-      GPU_shader_uniform_int_ex(reinterpret_cast<GPUShader *>(wrap(active_mtl_shader)),
-                                active_mtl_shader->uni_ssbo_input_prim_type_loc,
-                                1,
-                                1,
-                                (const int *)(&this->prim_type));
-      GPU_shader_uniform_int_ex(reinterpret_cast<GPUShader *>(wrap(active_mtl_shader)),
-                                active_mtl_shader->uni_ssbo_input_vert_count_loc,
-                                1,
-                                1,
-                                (const int *)(&this->vertex_idx));
+    if (this->shader->is_polyline) {
+      context_->get_scratch_buffer_manager().bind_as_ssbo(GPU_SSBO_POLYLINE_POS_BUF_SLOT);
+      context_->get_scratch_buffer_manager().bind_as_ssbo(GPU_SSBO_POLYLINE_COL_BUF_SLOT);
+      context_->get_scratch_buffer_manager().bind_as_ssbo(GPU_SSBO_INDEX_BUF_SLOT);
     }
 
+    /* Bind Vertex Buffer. */
+    rps.bind_vertex_buffer(
+        current_allocation_.metal_buffer, current_allocation_.buffer_offset, imm_buffer_slot);
+
     MTLPrimitiveType mtl_prim_type = gpu_prim_type_to_metal(this->prim_type);
+
     if (context_->ensure_render_pipeline_state(mtl_prim_type)) {
 
       /* Issue draw call. */
@@ -292,13 +212,6 @@ void MTLImmediate::end()
         /* Emulate Tri-fan. */
         switch (this->prim_type) {
           case GPU_PRIM_TRI_FAN: {
-            /* Debug safety check for SSBO FETCH MODE. */
-            if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
-              BLI_assert(
-                  false &&
-                  "Topology emulation for TriangleFan not supported with SSBO Vertex Fetch mode");
-            }
-
             /* Prepare Triangle-Fan emulation index buffer on CPU based on number of input
              * vertices. */
             uint32_t base_vert_count = this->vertex_idx;
@@ -310,7 +223,7 @@ void MTLImmediate::end()
             uint32_t *index_buffer = nullptr;
 
             MTLTemporaryBuffer allocation =
-                context_->get_scratchbuffer_manager().scratch_buffer_allocate_range_aligned(
+                context_->get_scratch_buffer_manager().scratch_buffer_allocate_range_aligned(
                     alloc_size, 128);
             index_buffer = (uint32_t *)allocation.data;
 
@@ -322,7 +235,6 @@ void MTLImmediate::end()
             }
 
             @autoreleasepool {
-
               id<MTLBuffer> index_buffer_mtl = nil;
               uint64_t index_buffer_offset = 0;
 
@@ -332,12 +244,8 @@ void MTLImmediate::end()
               index_buffer_mtl = allocation.metal_buffer;
               index_buffer_offset = allocation.buffer_offset;
 
-              /* Set depth stencil state (requires knowledge of primitive type). */
-              context_->ensure_depth_stencil_state(MTLPrimitiveTypeTriangle);
-
-              /* Bind Vertex Buffer. */
-              rps.bind_vertex_buffer(
-                  current_allocation_.metal_buffer, current_allocation_.buffer_offset, 0);
+              /* Set depth stencil state (TODO: Move it back upstream, is legacy of depth bias). */
+              context_->ensure_depth_stencil_state();
 
               /* Draw. */
               [rec drawIndexedPrimitives:MTLPrimitiveTypeTriangle
@@ -347,6 +255,7 @@ void MTLImmediate::end()
                        indexBufferOffset:index_buffer_offset];
               context_->main_command_buffer.register_draw_counters(fan_index_count);
             }
+
             rendered = true;
           } break;
           default: {
@@ -361,50 +270,11 @@ void MTLImmediate::end()
         MTLPrimitiveType primitive_type = metal_primitive_type_;
         int vertex_count = this->vertex_idx;
 
-        /* Bind Vertex Buffer. */
-        rps.bind_vertex_buffer(
-            current_allocation_.metal_buffer, current_allocation_.buffer_offset, 0);
+        /* Set depth stencil state (TODO: Move it back upstream, is legacy of depth bias). */
+        context_->ensure_depth_stencil_state();
 
-        /* Set depth stencil state (requires knowledge of primitive type). */
-        context_->ensure_depth_stencil_state(primitive_type);
-
-        if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
-
-          /* Bind Null Buffers for empty/missing bind slots. */
-          id<MTLBuffer> null_buffer = context_->get_null_buffer();
-          BLI_assert(null_buffer != nil);
-          for (int i = 1; i < MTL_SSBO_VERTEX_FETCH_MAX_VBOS; i++) {
-
-            /* We only need to ensure a buffer is bound to the context, its contents do not matter
-             * as it will not be used. */
-            if (rps.cached_vertex_buffer_bindings[i].metal_buffer == nil) {
-              rps.bind_vertex_buffer(null_buffer, 0, i);
-            }
-          }
-
-          /* SSBO vertex fetch - Nullify elements buffer. */
-          if (rps.cached_vertex_buffer_bindings[MTL_SSBO_VERTEX_FETCH_IBO_INDEX].metal_buffer ==
-              nil)
-          {
-            rps.bind_vertex_buffer(null_buffer, 0, MTL_SSBO_VERTEX_FETCH_IBO_INDEX);
-          }
-
-          /* Submit draw call with modified vertex count, which reflects vertices per primitive
-           * defined in the USE_SSBO_VERTEX_FETCH `pragma`. */
-          int num_input_primitives = gpu_get_prim_count_from_type(vertex_count, this->prim_type);
-          int output_num_verts = num_input_primitives *
-                                 active_mtl_shader->get_ssbo_vertex_fetch_output_num_verts();
-#ifndef NDEBUG
-          BLI_assert(
-              mtl_vertex_count_fits_primitive_type(
-                  output_num_verts, active_mtl_shader->get_ssbo_vertex_fetch_output_prim_type()) &&
-              "Output Vertex count is not compatible with the requested output vertex primitive "
-              "type");
-#endif
-          [rec drawPrimitives:active_mtl_shader->get_ssbo_vertex_fetch_output_prim_type()
-                  vertexStart:0
-                  vertexCount:output_num_verts];
-          context_->main_command_buffer.register_draw_counters(output_num_verts);
+        if (this->shader->is_polyline) {
+          this->polyline_draw_workaround(current_allocation_.buffer_offset);
         }
         else {
           /* Regular draw. */
@@ -415,6 +285,17 @@ void MTLImmediate::end()
     }
     if (G.debug & G_DEBUG_GPU) {
       [rec popDebugGroup];
+    }
+
+    if (this->shader->is_polyline) {
+      context_->get_scratch_buffer_manager().unbind_as_ssbo();
+
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_POLYLINE_POS_BUF_SLOT].ssbo = nil;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_POLYLINE_COL_BUF_SLOT].ssbo = nil;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_INDEX_BUF_SLOT].ssbo = nil;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_POLYLINE_POS_BUF_SLOT].bound = false;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_POLYLINE_COL_BUF_SLOT].bound = false;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_INDEX_BUF_SLOT].bound = false;
     }
   }
 

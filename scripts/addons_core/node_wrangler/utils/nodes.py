@@ -33,8 +33,8 @@ def node_mid_pt(node, axis):
 
 
 def autolink(node1, node2, links):
-    available_inputs = [inp for inp in node2.inputs if inp.enabled]
-    available_outputs = [outp for outp in node1.outputs if outp.enabled]
+    available_inputs = [inp for inp in node2.inputs if inp.enabled and not inp.hide]
+    available_outputs = [outp for outp in node1.outputs if outp.enabled and not outp.hide]
     for outp in available_outputs:
         for inp in available_inputs:
             if not inp.is_linked and inp.name == outp.name:
@@ -129,7 +129,6 @@ def node_at_pos(nodes, context, event):
 
 def store_mouse_cursor(context, event):
     space = context.space_data
-    v2d = context.region.view2d
     tree = space.edit_tree
 
     # convert mouse position to the View2D for later node placement
@@ -137,11 +136,6 @@ def store_mouse_cursor(context, event):
         space.cursor_location_from_region(event.mouse_region_x, event.mouse_region_y)
     else:
         space.cursor_location = tree.view_center
-
-
-def get_nodes_links(context):
-    tree = context.space_data.edit_tree
-    return tree.nodes, tree.links
 
 
 def get_internal_socket(socket):
@@ -181,6 +175,14 @@ def get_output_location(tree):
     loc_x = max_xloc_node.location.x + max_xloc_node.dimensions.x + 80
     loc_y = sum_yloc / len(tree.nodes)
     return loc_x, loc_y
+
+
+def get_viewer_image():
+    for img in bpy.data.images:
+        if (img.source == 'VIEWER'
+                and len(img.render_slots) == 0
+                and sum(img.size) > 0):
+            return img
 
 
 def nw_check(cls, context):
@@ -258,26 +260,53 @@ def nw_check_visible_outputs(cls, context):
 
 
 def nw_check_viewer_node(cls):
-    for img in bpy.data.images:
-        # False if not connected or connected but no image
-        if (img.source == 'VIEWER'
-                and len(img.render_slots) == 0
-                and sum(img.size) > 0):
-            return True
-    cls.poll_message_set("Viewer image not found.")
-    return False
+    if get_viewer_image() is None:
+        cls.poll_message_set("Viewer image not found.")
+        return False
+    return True
 
 
 def get_first_enabled_output(node):
-    for output in node.outputs:
-        if output.enabled:
-            return output
+    for output_socket in node.outputs:
+        if output_socket.enabled:
+            return output_socket
     else:
         return node.outputs[0]
 
 
 def is_visible_socket(socket):
     return not socket.hide and socket.enabled and socket.type != 'CUSTOM'
+
+
+def transfer_links(tree, old_node, new_node):
+    for inp in old_node.inputs:
+        for link in sorted(inp.links, key=lambda link: link.multi_input_sort_id):
+            is_muted = link.is_muted
+
+            try:
+                new_socket = new_node.inputs[inp.identifier]
+            except KeyError:
+                continue
+
+            if new_socket.enabled and not new_socket.hide:
+                new_link = tree.links.new(link.from_socket, new_socket)
+                new_link.is_muted = is_muted
+
+    for outp in old_node.outputs:
+        for link in outp.links[:]:
+            is_muted = link.is_muted
+
+            try:
+                new_socket = new_node.outputs[outp.identifier]
+            except KeyError:
+                continue
+
+            if new_socket.enabled and not new_socket.hide:
+                is_multi_input = link.to_socket.is_multi_input
+                new_link = tree.links.new(new_socket, link.to_socket)
+                if is_multi_input:
+                    new_link.swap_multi_input_sort_id(link)
+                new_link.is_muted = is_muted
 
 
 class NWBase:

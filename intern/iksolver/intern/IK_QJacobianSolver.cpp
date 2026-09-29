@@ -6,7 +6,8 @@
  * \ingroup intern_iksolver
  */
 
-#include <stdio.h>
+#include <algorithm>
+#include <cstdio>
 
 #include "IK_QJacobianSolver.h"
 
@@ -30,9 +31,7 @@ double IK_QJacobianSolver::ComputeScale()
   if (length == 0.0) {
     return 1.0;
   }
-  else {
-    return 1.0 / length;
-  }
+  return 1.0 / length;
 }
 
 void IK_QJacobianSolver::Scale(double scale, std::list<IK_QTask *> &tasks)
@@ -242,7 +241,7 @@ bool IK_QJacobianSolver::UpdateAngles(double &norm)
 {
   // assign each segment a unique id for the jacobian
   std::vector<IK_QSegment *>::iterator seg;
-  IK_QSegment *qseg, *minseg = NULL;
+  IK_QSegment *qseg, *minseg = nullptr;
   double minabsdelta = 1e10, absdelta;
   Vector3d delta, mindelta;
   bool locked = false, clamp[3];
@@ -250,7 +249,7 @@ bool IK_QJacobianSolver::UpdateAngles(double &norm)
 
   // here we check if any angle limits were violated. angles whose clamped
   // position is the same as it was before, are locked immediate. of the
-  // other violation angles the most violating angle is rememberd
+  // other violation angles the most violating angle is remembered
   for (seg = m_segments.begin(); seg != m_segments.end(); seg++) {
     qseg = *seg;
     if (qseg->UpdateAngle(m_jacobian, delta, clamp)) {
@@ -278,9 +277,7 @@ bool IK_QJacobianSolver::UpdateAngles(double &norm)
     minseg->Lock(mindof, m_jacobian, mindelta);
     locked = true;
 
-    if (minabsdelta > norm) {
-      norm = minabsdelta;
-    }
+    norm = std::max(minabsdelta, norm);
   }
 
   if (locked == false) {
@@ -297,7 +294,7 @@ bool IK_QJacobianSolver::UpdateAngles(double &norm)
 
 bool IK_QJacobianSolver::Solve(IK_QSegment *root,
                                std::list<IK_QTask *> tasks,
-                               const double,
+                               const double /*tolerance*/,
                                const int max_iterations)
 {
   float scale = ComputeScale();
@@ -353,9 +350,7 @@ bool IK_QJacobianSolver::Solve(IK_QSegment *root,
 
     // compute angle update norm
     double maxnorm = m_jacobian.AngleUpdateNorm();
-    if (maxnorm > norm) {
-      norm = maxnorm;
-    }
+    norm = std::max(maxnorm, norm);
 
     // check for convergence
     if (norm < 1e-3 && iterations > 10) {

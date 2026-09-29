@@ -7,13 +7,13 @@
 /** \file
  * \ingroup bli
  *
- * A `blender::Set<Key>` is an unordered container for unique elements of type `Key`. It is
+ * A `Set<Key>` is an unordered container for unique elements of type `Key`. It is
  * designed to be a more convenient and efficient replacement for `std::unordered_set`. All core
  * operations (add, remove and contains) can be done in O(1) amortized expected time.
  *
- * In most cases, your default choice for a hash set in Blender should be `blender::Set`.
+ * In most cases, your default choice for a hash set in Blender should be `Set`.
  *
- * blender::Set is implemented using open addressing in a slot array with a power-of-two size.
+ * Set is implemented using open addressing in a slot array with a power-of-two size.
  * Every slot is in one of three states: empty, occupied or removed. If a slot is occupied, it
  * contains an instance of the key type.
  *
@@ -23,9 +23,9 @@
  * to be relatively fast by default in all cases. However, it also offers many customization
  * points that allow it to be optimized for a specific use case.
  *
- * A rudimentary benchmark can be found in BLI_set_test.cc. The results of that benchmark are
- * there as well. The numbers show that in this specific case blender::Set outperforms
- * std::unordered_set consistently by a good amount.
+ * A rudimentary benchmark can be found in `BLI_set_test.cc`. The results of that benchmark are
+ * there as well. The numbers show that in this specific case #Set outperforms
+ * #std::unordered_set consistently by a good amount.
  *
  * Some noteworthy information:
  * - Key must be a movable type.
@@ -142,7 +142,7 @@ class Set {
 
   /** The max load factor is 1/2 = 50% by default. */
 #define LOAD_FACTOR 1, 2
-  LoadFactor max_load_factor_ = LoadFactor(LOAD_FACTOR);
+  static constexpr LoadFactor max_load_factor_ = LoadFactor(LOAD_FACTOR);
   using SlotArray =
       Array<Slot, LoadFactor::compute_total_slots(InlineBufferCapacity, LOAD_FACTOR), Allocator>;
 #undef LOAD_FACTOR
@@ -259,6 +259,25 @@ class Set {
   }
 
   /**
+   * Similar to #add but reinserts the key if it already exists. Using this only makes sense if the
+   * key contains additional data besides what affects the hash.
+   *
+   * \return True if the key was newly added, false if it was already present and was overwritten.
+   */
+  bool add_overwrite(const Key &key)
+  {
+    return this->add_overwrite_as(key);
+  }
+  bool add_overwrite(Key &&key)
+  {
+    return this->add_overwrite_as(std::move(key));
+  }
+  template<typename ForwardKey> bool add_overwrite_as(ForwardKey &&key)
+  {
+    return this->add_overwrite__impl(std::forward<ForwardKey>(key), hash_(key));
+  }
+
+  /**
    * Convenience function to add many keys to the set at once. Duplicates are removed
    * automatically.
    *
@@ -356,6 +375,25 @@ class Set {
   template<typename ForwardKey> const Key &lookup_key_or_add_as(ForwardKey &&key)
   {
     return this->lookup_key_or_add__impl(std::forward<ForwardKey>(key), hash_(key));
+  }
+
+  /**
+   * Returns the key in the set that is equal to the given key. If the key does not exist, a new
+   * key is created with the callback, added to the set and returned.
+   *
+   * Note, the value created by the callback has to compare equal to the given key and also has to
+   * have the same hash.
+   */
+  template<typename CreateValueF>
+  const Key &lookup_key_or_add_cb(const Key &key, CreateValueF &&create_value)
+  {
+    return this->lookup_key_or_add_cb_as(key, std::forward<CreateValueF>(create_value));
+  }
+  template<typename ForwardKey, typename CreateValueF>
+  const Key &lookup_key_or_add_cb_as(ForwardKey &&key, CreateValueF &&create_value)
+  {
+    return this->lookup_key_or_add_cb__impl(
+        std::forward<ForwardKey>(key), hash_(key), std::forward<CreateValueF>(create_value));
   }
 
   /**
@@ -527,9 +565,22 @@ class Set {
   }
 
   /**
-   * Remove all elements from the set.
+   * Remove all elements. Under some circumstances #clear_and_keep_capacity may be more efficient.
    */
   void clear()
+  {
+    std::destroy_at(this);
+    new (this) Set(NoExceptConstructor{});
+  }
+
+  /**
+   * Remove all elements, but don't free the underlying memory.
+   *
+   * This can be more efficient than using #clear if approximately the same or more elements are
+   * added again afterwards. If way fewer elements are added instead, the cost of maintaining a
+   * large hash table can lead to very bad worst-case performance.
+   */
+  void clear_and_keep_capacity()
   {
     for (Slot &slot : slots_) {
       slot.~Slot();
@@ -538,15 +589,6 @@ class Set {
 
     removed_slots_ = 0;
     occupied_and_removed_slots_ = 0;
-  }
-
-  /**
-   * Removes all keys from the set and frees any allocated memory.
-   */
-  void clear_and_shrink()
-  {
-    std::destroy_at(this);
-    new (this) Set(NoExceptConstructor{});
   }
 
   /**
@@ -663,8 +705,12 @@ class Set {
   }
 
  private:
-  BLI_NOINLINE void realloc_and_reinsert(const int64_t min_usable_slots)
+  BLI_NOINLINE void realloc_and_reinsert(int64_t min_usable_slots)
   {
+    /* Avoid rebuilding the hash table just to get rid of a few removed slots. In this case, also
+     * increase the set size to avoid a bad edge case. */
+    min_usable_slots = std::max(min_usable_slots, this->size() * 2);
+
     int64_t total_slots, usable_slots;
     max_load_factor_.compute_total_and_usable_slots(
         SlotArray::inline_buffer_capacity(), min_usable_slots, &total_slots, &usable_slots);
@@ -788,6 +834,7 @@ class Set {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash);
         BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
         occupied_and_removed_slots_++;
         return;
       }
@@ -803,10 +850,33 @@ class Set {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash);
         BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
         occupied_and_removed_slots_++;
         return true;
       }
       if (slot.contains(key, is_equal_, hash)) {
+        return false;
+      }
+    }
+    SET_SLOT_PROBING_END();
+  }
+
+  template<typename ForwardKey> bool add_overwrite__impl(ForwardKey &&key, const uint64_t hash)
+  {
+    this->ensure_can_add();
+
+    SET_SLOT_PROBING_BEGIN (hash, slot) {
+      if (slot.is_empty()) {
+        slot.occupy(std::forward<ForwardKey>(key), hash);
+        BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
+        occupied_and_removed_slots_++;
+        return true;
+      }
+      if (slot.contains(key, is_equal_, hash)) {
+        Key &stored_key = *slot.key();
+        stored_key = std::forward<ForwardKey>(key);
+        BLI_assert(hash_(stored_key) == hash);
         return false;
       }
     }
@@ -855,6 +925,29 @@ class Set {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash);
         BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
+        occupied_and_removed_slots_++;
+        return *slot.key();
+      }
+    }
+    SET_SLOT_PROBING_END();
+  }
+
+  template<typename ForwardKey, typename CreateKeyF>
+  const Key &lookup_key_or_add_cb__impl(ForwardKey &&key,
+                                        const uint64_t hash,
+                                        CreateKeyF &&create_key)
+  {
+    this->ensure_can_add();
+
+    SET_SLOT_PROBING_BEGIN (hash, slot) {
+      if (slot.contains(key, is_equal_, hash)) {
+        return *slot.key();
+      }
+      if (slot.is_empty()) {
+        slot.occupy(create_key(), hash);
+        BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
         occupied_and_removed_slots_++;
         return *slot.key();
       }

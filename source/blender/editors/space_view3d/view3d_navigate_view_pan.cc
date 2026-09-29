@@ -6,8 +6,6 @@
  * \ingroup spview3d
  */
 
-#include "MEM_guardedalloc.h"
-
 #include "WM_api.hh"
 
 #include "RNA_access.hh"
@@ -16,6 +14,8 @@
 #include "view3d_intern.hh"
 
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Pan Operator
@@ -38,10 +38,10 @@ static const EnumPropertyItem prop_view_pan_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int viewpan_invoke_impl(bContext * /*C*/,
-                               ViewOpsData *vod,
-                               const wmEvent * /*event*/,
-                               PointerRNA *ptr)
+static wmOperatorStatus viewpan_invoke_impl(bContext * /*C*/,
+                                            ViewOpsData *vod,
+                                            const wmEvent * /*event*/,
+                                            PointerRNA *ptr)
 {
   int x = 0, y = 0;
   int pandir = RNA_enum_get(ptr, "type");
@@ -64,7 +64,7 @@ static int viewpan_invoke_impl(bContext * /*C*/,
   return OPERATOR_FINISHED;
 }
 
-static int viewpan_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus viewpan_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   return view3d_navigate_invoke_impl(C, op, event, &ViewOpsType_pan);
 }
@@ -76,7 +76,7 @@ void VIEW3D_OT_view_pan(wmOperatorType *ot)
   ot->description = "Pan the view in a given direction";
   ot->idname = ViewOpsType_pan.idname;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = viewpan_invoke;
   ot->poll = view3d_location_poll;
 
@@ -97,3 +97,5 @@ const ViewOpsType ViewOpsType_pan = {
     /*init_fn*/ viewpan_invoke_impl,
     /*apply_fn*/ nullptr,
 };
+
+}  // namespace blender

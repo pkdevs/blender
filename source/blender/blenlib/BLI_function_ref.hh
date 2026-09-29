@@ -4,11 +4,13 @@
 
 #pragma once
 
-#include <optional>
 #include <type_traits>
 #include <utility>
 
-#include "BLI_utildefines.h"
+#include "BLI_build_config.hh"
+#include "BLI_utildefines.hh"
+
+namespace blender {
 
 /** \file
  * \ingroup bli
@@ -67,10 +69,6 @@
  *   some_function([]() { return 0; });
  */
 
-#include "BLI_memory_utils.hh"
-
-namespace blender {
-
 template<typename Function> class FunctionRef;
 
 template<typename Ret, typename... Params> class FunctionRef<Ret(Params...)> {
@@ -111,14 +109,34 @@ template<typename Ret, typename... Params> class FunctionRef<Ret(Params...)> {
    * It is still possible to reference another `FunctionRef` by first wrapping it in
    * another lambda.
    */
-  template<typename Callable,
-           BLI_ENABLE_IF((
-               !std::is_same_v<std::remove_cv_t<std::remove_reference_t<Callable>>, FunctionRef>)),
-           BLI_ENABLE_IF((std::is_invocable_r_v<Ret, Callable, Params...>))>
+  template<typename Callable>
   FunctionRef(Callable &&callable)
+    requires(!std::is_same_v<std::remove_cv_t<std::remove_reference_t<Callable>>, FunctionRef> &&
+             std::is_invocable_r_v<Ret, Callable, Params...>)
       : callback_(callback_fn<typename std::remove_reference_t<Callable>>),
         callable_(intptr_t(&callable))
   {
+    if constexpr (std::is_constructible_v<bool, Callable>) {
+      /* For some types, the compiler can be sure that the callable is always truthy. Good!
+       * Then the entire check can be optimized away. */
+#if COMPILER_CLANG || COMPILER_GCC
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Waddress"
+#  if COMPILER_GCC
+#    pragma GCC diagnostic ignored "-Wnonnull-compare"
+#  endif
+#endif
+      /* Make sure the #FunctionRef is falsy if the callback is falsy.
+       * That can happen when passing in null or empty std::function. */
+      const bool is_truthy = bool(callable);
+      if (!is_truthy) {
+        callback_ = nullptr;
+        callable_ = 0;
+      }
+#if COMPILER_CLANG || COMPILER_GCC
+#  pragma GCC diagnostic pop
+#endif
+    }
   }
 
   /**

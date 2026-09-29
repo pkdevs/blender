@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject ThicknessNoiseShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject ThicknessNoiseShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&ThicknessNoiseShader_Type))
 
 /*---------------------------Python BPy_ThicknessNoiseShader structure definition----------*/
-typedef struct {
+struct BPy_ThicknessNoiseShader {
   BPy_StrokeShader py_ss;
-} BPy_ThicknessNoiseShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

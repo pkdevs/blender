@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject SmoothingShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject SmoothingShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&SmoothingShader_Type))
 
 /*---------------------------Python BPy_SmoothingShader structure definition----------*/
-typedef struct {
+struct BPy_SmoothingShader {
   BPy_StrokeShader py_ss;
-} BPy_SmoothingShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

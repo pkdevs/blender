@@ -4,10 +4,11 @@
 
 
 # -----------------------------------------------------------------------------
-# Build datatoc executable
+# Build `datatoc` executable.
 set(SRC
   datatoc.cc
 )
 
-# SRC_DNA_INC is defined in the parent dir
+# `SRC_DNA_INC` is defined in the parent directory.
 add_executable(datatoc ${SRC})
+optimize_debug_target(datatoc)

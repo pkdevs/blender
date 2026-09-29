@@ -8,9 +8,13 @@
 
 #pragma once
 
+namespace blender {
+
 struct ARegion;
 struct GPUOffScreen;
-struct GPUTexture;
+namespace gpu {
+class Texture;
+}
 struct GPUViewport;
 struct ScrArea;
 struct bContext;
@@ -30,4 +34,6 @@ void wm_draw_region_clear(wmWindow *win, ARegion *region);
 void wm_draw_region_blend(ARegion *region, int view, bool blend);
 void wm_draw_region_test(bContext *C, ScrArea *area, ARegion *region);
 
-GPUTexture *wm_draw_region_texture(ARegion *region, int view);
+gpu::Texture *wm_draw_region_texture(ARegion *region, int view);
+
+}  // namespace blender

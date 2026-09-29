@@ -6,16 +6,20 @@
  * \ingroup pythonintern
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include <Python.h>
 
-#include "bpy_app_alembic.h"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
-#include "../generic/py_capi_utils.h"
+#include "bpy_app_alembic.hh"
+
+#include "../generic/py_capi_utils.hh"
 
 #ifdef WITH_ALEMBIC
 #  include "ABC_alembic.h"
 #endif
+
+namespace blender {
 
 static PyTypeObject BlenderAppABCType;
 
@@ -64,7 +68,7 @@ static PyObject *make_alembic_info()
   SetStrItem("Unknown");
 #endif
 
-  if (UNLIKELY(PyErr_Occurred())) {
+  if (PyErr_Occurred()) [[unlikely]] {
     Py_DECREF(alembic_info);
     return nullptr;
   }
@@ -85,7 +89,9 @@ PyObject *BPY_app_alembic_struct()
   BlenderAppABCType.tp_init = nullptr;
   BlenderAppABCType.tp_new = nullptr;
   /* Without this we can't do `set(sys.modules)` #29635. */
-  BlenderAppABCType.tp_hash = (hashfunc)_Py_HashPointer;
+  BlenderAppABCType.tp_hash = reinterpret_cast<hashfunc>(Py_HashPointer);
 
   return ret;
 }
+
+}  // namespace blender

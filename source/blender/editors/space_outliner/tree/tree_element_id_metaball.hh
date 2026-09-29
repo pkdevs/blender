@@ -10,9 +10,11 @@
 
 #include "tree_element_id.hh"
 
+namespace blender {
+
 struct MetaBall;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementIDMetaBall final : public TreeElementID {
   MetaBall &metaball_;
@@ -20,10 +22,11 @@ class TreeElementIDMetaBall final : public TreeElementID {
  public:
   TreeElementIDMetaBall(TreeElement &legacy_te, MetaBall &metaball);
 
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
 
  private:
   void expand_materials() const;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

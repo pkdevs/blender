@@ -10,7 +10,9 @@
 
 #include "GPU_index_buffer.hh"
 #include "MEM_guardedalloc.h"
+
 #include "mtl_context.hh"
+
 #include <Cocoa/Cocoa.h>
 #include <Metal/Metal.h>
 #include <QuartzCore/QuartzCore.h>
@@ -51,13 +53,18 @@ class MTLIndexBuf : public IndexBuf {
   bool can_optimize_ = true;
 
  public:
-  ~MTLIndexBuf();
+  ~MTLIndexBuf() override;
 
   void bind_as_ssbo(uint32_t binding) override;
   void read(uint32_t *data) const override;
 
   void upload_data() override;
   void update_sub(uint32_t start, uint32_t len, const void *data) override;
+
+  void copy_sub(IndexBuf &source_buf,
+                uint source_first_index,
+                uint dest_first_index,
+                uint index_len) override;
 
   /* #get_index_buffer can conditionally return an optimized index buffer of a
    * differing format, if it is concluded that optimization is preferred

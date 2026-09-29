@@ -14,13 +14,12 @@
 
 #include "IO_wavefront_obj.hh"
 #include "obj_export_io.hh"
+#include "obj_export_mesh.hh"
 #include "obj_export_mtl.hh"
-
-#include <iostream>
 
 namespace blender::io::obj {
 
-class OBJCurve;
+class IOBJCurve;
 class OBJMesh;
 /**
  * Total vertices/ UV vertices/ normals of previous Objects
@@ -42,21 +41,8 @@ class OBJWriter : NonMovable, NonCopyable {
   FILE *outfile_;
 
  public:
-  OBJWriter(const char *filepath, const OBJExportParams &export_params) noexcept(false)
-      : export_params_(export_params), outfile_path_(filepath), outfile_(nullptr)
-  {
-    outfile_ = BLI_fopen(filepath, "wb");
-    if (!outfile_) {
-      throw std::system_error(errno, std::system_category(), "Cannot open file " + outfile_path_);
-    }
-  }
-  ~OBJWriter()
-  {
-    if (outfile_ && std::fclose(outfile_)) {
-      std::cerr << "Error: could not close the file '" << outfile_path_
-                << "' properly, it may be corrupted." << std::endl;
-    }
-  }
+  OBJWriter(const char *filepath, const OBJExportParams &export_params) noexcept(false);
+  ~OBJWriter();
 
   FILE *get_outfile() const
   {
@@ -72,7 +58,7 @@ class OBJWriter : NonMovable, NonCopyable {
   /**
    * Write file name of Material Library in `.OBJ` file.
    */
-  void write_mtllib_name(const StringRefNull mtl_filepath) const;
+  void write_mtllib_name(StringRefNull mtl_filepath) const;
   /**
    * Write vertex coordinates for all vertices as "v x y z" or "v x y z r g b".
    */
@@ -109,7 +95,7 @@ class OBJWriter : NonMovable, NonCopyable {
   /**
    * Write a NURBS curve to the `.OBJ` file in parameter form.
    */
-  void write_nurbs_curve(FormatHandler &fh, const OBJCurve &obj_nurbs_data) const;
+  void write_nurbs_curve(FormatHandler &fh, const IOBJCurve &obj_nurbs_data) const;
 
  private:
   using func_vert_uv_normal_indices = void (OBJWriter::*)(FormatHandler &fh,
@@ -167,7 +153,7 @@ class OBJWriter : NonMovable, NonCopyable {
 class MTLWriter : NonMovable, NonCopyable {
  private:
   FormatHandler fmt_handler_;
-  FILE *outfile_;
+  FILE *outfile_ = nullptr;
   std::string mtl_filepath_;
   Vector<MTLMaterial> mtlmaterials_;
   /* Map from a Material* to an index into mtlmaterials_. */
@@ -177,7 +163,7 @@ class MTLWriter : NonMovable, NonCopyable {
   /*
    * Create the `.MTL` file.
    */
-  MTLWriter(const char *obj_filepath) noexcept(false);
+  MTLWriter(const char *obj_filepath, bool write_file) noexcept(false);
   ~MTLWriter();
 
   void write_header(const char *blen_filepath);

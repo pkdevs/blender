@@ -13,11 +13,9 @@
 #include "NodeViewLayer.h"
 #include "SceneVisitor.h"
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 namespace Freestyle {
 
@@ -57,9 +55,7 @@ class SceneHash : public SceneVisitor {
   uint32_t _sum;
   uint32_t _prevSum;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SceneHash")
-#endif
 };
 
 } /* namespace Freestyle */

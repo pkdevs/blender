@@ -24,7 +24,6 @@
 #  include "BLI_math_vector_types.hh"
 #  include "BLI_span.hh"
 #  include "BLI_utility_mixins.hh"
-#  include "BLI_vector.hh"
 
 namespace blender::meshintersect {
 
@@ -68,7 +67,7 @@ std::ostream &operator<<(std::ostream &os, const Vert *v);
  * A Plane whose equation is `dot(norm, p) + d = 0`.
  * The norm and d fields are always present, but the norm_exact
  * and d_exact fields may be lazily populated. Since we don't
- * store degenerate planes, we can tell if a the exact versions
+ * store degenerate planes, we can tell if the exact versions
  * are not populated yet by having `norm_exact == 0`.
  */
 struct Plane {
@@ -231,7 +230,7 @@ class IMeshArena : NonCopyable, NonMovable {
 };
 
 /**
- * A #blender::meshintersect::IMesh is a self-contained mesh structure
+ * A #meshintersect::IMesh is a self-contained mesh structure
  * that can be used in `blenlib` without depending on the rest of Blender.
  * The Vert and #Face resources used in the #IMesh should be owned by
  * some #IMeshArena.
@@ -289,7 +288,11 @@ class IMesh {
   }
 
   /** Returns index in vert_ where v is, or #NO_INDEX. */
-  int lookup_vert(const Vert *v) const;
+  int lookup_vert(const Vert *v) const
+  {
+    BLI_assert(vert_populated_);
+    return vert_to_index_.lookup_default(v, NO_INDEX);
+  }
 
   IndexRange vert_index_range() const
   {
@@ -403,6 +406,6 @@ IMesh triangulate_polymesh(IMesh &imesh, IMeshArena *arena);
  */
 void write_obj_mesh(IMesh &m, const std::string &objname);
 
-} /* namespace blender::meshintersect */
+}  // namespace blender::meshintersect
 
 #endif /* WITH_GMP */

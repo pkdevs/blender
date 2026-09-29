@@ -64,6 +64,9 @@ endif()
 
 find_library(SYCL_LIBRARY
   NAMES
+    sycl10
+    sycl9
+    sycl8
     sycl7
     sycl6
     sycl
@@ -76,6 +79,9 @@ find_library(SYCL_LIBRARY
 if(WIN32)
   find_library(SYCL_LIBRARY_DEBUG
     NAMES
+      sycl10d
+      sycl9d
+      sycl8d
       sycl7d
       sycl6d
       sycld
@@ -121,7 +127,7 @@ if(SYCL_FOUND)
     set(SYCL_LIBRARIES ${SYCL_LIBRARY})
   endif()
 else()
-  set(SYCL_SYCL_FOUND FALSE)
+  set(SYCL_FOUND FALSE)
 endif()
 
 mark_as_advanced(

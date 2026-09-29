@@ -5,7 +5,10 @@
 #pragma once
 
 #include "kernel/bvh/bvh.h"
-#include "kernel/geom/geom.h"
+
+#include "kernel/geom/shader_data.h"
+
+#include "kernel/integrator/intersect_closest.h"
 #include "kernel/integrator/volume_stack.h"
 
 CCL_NAMESPACE_BEGIN
@@ -25,22 +28,23 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
 
   Ray volume_ray ccl_optional_struct_init;
   volume_ray.P = from_P;
-  volume_ray.D = normalize_len(to_P - from_P, &volume_ray.tmax);
+  volume_ray.D = safe_normalize_len(to_P - from_P, &volume_ray.tmax);
   volume_ray.tmin = 0.0f;
   volume_ray.self.object = INTEGRATOR_STATE(state, isect, object);
   volume_ray.self.prim = INTEGRATOR_STATE(state, isect, prim);
   volume_ray.self.light_object = OBJECT_NONE;
   volume_ray.self.light_prim = PRIM_NONE;
-  volume_ray.self.light = LAMP_NONE;
   /* Store to avoid global fetches on every intersection step. */
   const uint volume_stack_size = kernel_data.volume_stack_size;
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-  const uint32_t visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag, PATH_RAY_ALL_VISIBILITY);
+  const PathRayVisibility visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag,
+                                                                      PATH_RAY_VISIBILITY_ALL);
 
 #  ifdef __VOLUME_RECORD_ALL__
   Intersection hits[2 * MAX_VOLUME_STACK_SIZE + 1];
-  uint num_hits = scene_intersect_volume(kg, &volume_ray, hits, 2 * volume_stack_size, visibility);
+  const uint num_hits = scene_intersect_volume(
+      kg, &volume_ray, hits, 2 * volume_stack_size, visibility);
   if (num_hits > 0) {
     Intersection *isect = hits;
 
@@ -52,7 +56,7 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
         continue;
       }
       shader_setup_from_ray(kg, stack_sd, &volume_ray, isect);
-      volume_stack_enter_exit(kg, state, stack_sd);
+      volume_stack_enter_exit<false>(kg, state, stack_sd);
     }
   }
 #  else
@@ -64,7 +68,7 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
     /* Ignore self, SSS itself already enters and exits the object. */
     if (isect.object != volume_ray.self.object) {
       shader_setup_from_ray(kg, stack_sd, &volume_ray, &isect);
-      volume_stack_enter_exit(kg, state, stack_sd);
+      volume_stack_enter_exit<false>(kg, state, stack_sd);
     }
     /* Move ray forward. */
     volume_ray.tmin = intersection_t_offset(isect.t);
@@ -94,18 +98,20 @@ ccl_device void integrator_volume_stack_init(KernelGlobals kg, IntegratorState s
   volume_ray.self.prim = PRIM_NONE;
   volume_ray.self.light_object = OBJECT_NONE;
   volume_ray.self.light_prim = PRIM_NONE;
-  volume_ray.self.light = LAMP_NONE;
 
-  int stack_index = 0, enclosed_index = 0;
+  int stack_index = 0;
+  int enclosed_index = 0;
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-  const uint32_t visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag, PATH_RAY_CAMERA);
+  const PathRayVisibility visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag,
+                                                                      PATH_RAY_VISIBILITY_CAMERA);
 
   /* Initialize volume stack with background volume For shadow catcher the
    * background volume is always assumed to be CG. */
   if (kernel_data.background.volume_shader != SHADER_NONE) {
     if (!(path_flag & PATH_RAY_SHADOW_CATCHER_PASS)) {
-      INTEGRATOR_STATE_ARRAY_WRITE(state, volume_stack, stack_index, object) = OBJECT_NONE;
+      INTEGRATOR_STATE_ARRAY_WRITE(
+          state, volume_stack, stack_index, object) = kernel_data.background.object_index;
       INTEGRATOR_STATE_ARRAY_WRITE(
           state, volume_stack, stack_index, shader) = kernel_data.background.volume_shader;
       stack_index++;
@@ -117,7 +123,8 @@ ccl_device void integrator_volume_stack_init(KernelGlobals kg, IntegratorState s
 
 #  ifdef __VOLUME_RECORD_ALL__
   Intersection hits[2 * MAX_VOLUME_STACK_SIZE + 1];
-  uint num_hits = scene_intersect_volume(kg, &volume_ray, hits, 2 * volume_stack_size, visibility);
+  const uint num_hits = scene_intersect_volume(
+      kg, &volume_ray, hits, 2 * volume_stack_size, visibility);
   if (num_hits > 0) {
     int enclosed_volumes[MAX_VOLUME_STACK_SIZE];
     Intersection *isect = hits;
@@ -126,7 +133,7 @@ ccl_device void integrator_volume_stack_init(KernelGlobals kg, IntegratorState s
 
     for (uint hit = 0; hit < num_hits; ++hit, ++isect) {
       shader_setup_from_ray(kg, stack_sd, &volume_ray, isect);
-      if (stack_sd->flag & SD_BACKFACING) {
+      if (stack_sd->runtime_flag & SR_BACKFACING) {
         bool need_add = true;
         for (int i = 0; i < enclosed_index && need_add; ++i) {
           /* If ray exited the volume and never entered to that volume
@@ -138,7 +145,7 @@ ccl_device void integrator_volume_stack_init(KernelGlobals kg, IntegratorState s
         }
         for (int i = 0; i < stack_index && need_add; ++i) {
           /* Don't add intersections twice. */
-          VolumeStack entry = integrator_state_read_volume_stack(state, i);
+          const VolumeStack entry = integrator_state_read_volume_stack(state, i);
           if (entry.object == stack_sd->object) {
             need_add = false;
             break;
@@ -172,7 +179,7 @@ ccl_device void integrator_volume_stack_init(KernelGlobals kg, IntegratorState s
     }
 
     shader_setup_from_ray(kg, stack_sd, &volume_ray, &isect);
-    if (stack_sd->flag & SD_BACKFACING) {
+    if (stack_sd->runtime_flag & SR_BACKFACING) {
       /* If ray exited the volume and never entered to that volume
        * it means that camera is inside such a volume.
        */
@@ -235,8 +242,7 @@ ccl_device void integrator_intersect_volume_stack(KernelGlobals kg, IntegratorSt
 #  endif
   {
     /* Volume stack init for camera rays, continue with intersection of camera ray. */
-    integrator_path_next(kg,
-                         state,
+    integrator_path_next(state,
                          DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK,
                          DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST);
   }

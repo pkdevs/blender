@@ -9,14 +9,12 @@
 #include "GPU_batch.hh"
 #include "GPU_immediate.hh"
 
-#include "MEM_guardedalloc.h"
-
-#include "WM_types.hh"
-
 /* only for separate init/exit calls (wm_gizmotype_init/wm_gizmotype_free) */
 
 /* own includes */
 #include "gizmo_library_intern.hh"
+
+namespace blender {
 
 void wm_gizmo_geometryinfo_draw(const GizmoGeomInfo *info,
                                 const bool /*select*/,
@@ -26,7 +24,7 @@ void wm_gizmo_geometryinfo_draw(const GizmoGeomInfo *info,
    * So we don't need to re-created and discard it every time */
 
   GPUVertFormat format = {0};
-  uint pos_id = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos_id = GPU_vertformat_attr_add(&format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
   /* Elements */
   GPUIndexBufBuilder elb = {0};
@@ -35,14 +33,14 @@ void wm_gizmo_geometryinfo_draw(const GizmoGeomInfo *info,
     const ushort *idx = &info->indices[i * 3];
     GPU_indexbuf_add_tri_verts(&elb, idx[0], idx[1], idx[2]);
   }
-  blender::gpu::IndexBuf *el = GPU_indexbuf_build(&elb);
+  gpu::IndexBuf *el = GPU_indexbuf_build(&elb);
 
-  blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+  gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
   GPU_vertbuf_data_alloc(*vbo, info->nverts);
 
   GPU_vertbuf_attr_fill(vbo, pos_id, info->verts);
 
-  blender::gpu::Batch *batch = GPU_batch_create_ex(
+  gpu::Batch *batch = GPU_batch_create_ex(
       GPU_PRIM_TRIS, vbo, el, GPU_BATCH_OWNS_VBO | GPU_BATCH_OWNS_INDEX);
   GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -101,3 +99,5 @@ void wm_gizmo_vec_draw(
     immEnd();
   }
 }
+
+}  // namespace blender

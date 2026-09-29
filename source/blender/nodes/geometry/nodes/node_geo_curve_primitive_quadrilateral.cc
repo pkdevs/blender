@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BKE_curves.hh"
-#include "NOD_rna_define.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
+#include "NOD_rna_define.hh"
 #include "NOD_socket_search_link.hh"
 
 #include "node_geometry_util.hh"
@@ -18,119 +18,124 @@ NODE_STORAGE_FUNCS(NodeGeometryCurvePrimitiveQuad)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Width")
-      .default_value(2.0f)
-      .min(0.0f)
-      .subtype(PROP_DISTANCE)
-      .description("The X axis size of the shape");
-  b.add_input<decl::Float>("Height")
-      .default_value(2.0f)
-      .min(0.0f)
-      .subtype(PROP_DISTANCE)
-      .description("The Y axis size of the shape");
-  b.add_input<decl::Float>("Bottom Width")
-      .default_value(4.0f)
-      .min(0.0f)
-      .subtype(PROP_DISTANCE)
-      .description("The X axis size of the shape");
-  b.add_input<decl::Float>("Top Width")
-      .default_value(2.0f)
-      .min(0.0f)
-      .subtype(PROP_DISTANCE)
-      .description("The X axis size of the shape");
-  b.add_input<decl::Float>("Offset")
-      .default_value(1.0f)
-      .subtype(PROP_DISTANCE)
-      .description(
-          "For Parallelogram, the relative X difference between the top and bottom edges. For "
-          "Trapezoid, the amount to move the top edge in the positive X axis");
-  b.add_input<decl::Float>("Bottom Height")
-      .default_value(3.0f)
-      .min(0.0f)
-      .subtype(PROP_DISTANCE)
-      .description("The distance between the bottom point and the X axis");
-  b.add_input<decl::Float>("Top Height")
-      .default_value(1.0f)
-      .subtype(PROP_DISTANCE)
-      .description("The distance between the top point and the X axis");
-  b.add_input<decl::Vector>("Point 1")
-      .default_value({-1.0f, -1.0f, 0.0f})
-      .subtype(PROP_TRANSLATION)
-      .description("The exact location of the point to use");
-  b.add_input<decl::Vector>("Point 2")
-      .default_value({1.0f, -1.0f, 0.0f})
-      .subtype(PROP_TRANSLATION)
-      .description("The exact location of the point to use");
-  b.add_input<decl::Vector>("Point 3")
-      .default_value({1.0f, 1.0f, 0.0f})
-      .subtype(PROP_TRANSLATION)
-      .description("The exact location of the point to use");
-  b.add_input<decl::Vector>("Point 4")
-      .default_value({-1.0f, 1.0f, 0.0f})
-      .subtype(PROP_TRANSLATION)
-      .description("The exact location of the point to use");
-  b.add_output<decl::Geometry>("Curve");
+  auto &width = b.add_input<decl::Float>("Width"_ustr)
+                    .default_value(2.0f)
+                    .min(0.0f)
+                    .subtype(PROP_DISTANCE)
+                    .description("The X axis size of the shape")
+                    .available(false);
+  auto &height = b.add_input<decl::Float>("Height"_ustr)
+                     .default_value(2.0f)
+                     .min(0.0f)
+                     .subtype(PROP_DISTANCE)
+                     .description("The Y axis size of the shape")
+                     .available(false);
+  auto &bottom = b.add_input<decl::Float>("Bottom Width"_ustr)
+                     .default_value(4.0f)
+                     .min(0.0f)
+                     .subtype(PROP_DISTANCE)
+                     .description("The X axis size of the shape")
+                     .available(false);
+  auto &top = b.add_input<decl::Float>("Top Width"_ustr)
+                  .default_value(2.0f)
+                  .min(0.0f)
+                  .subtype(PROP_DISTANCE)
+                  .description("The X axis size of the shape")
+                  .available(false);
+  auto &offset =
+      b.add_input<decl::Float>("Offset"_ustr)
+          .default_value(1.0f)
+          .subtype(PROP_DISTANCE)
+          .description(
+              "For Parallelogram, the relative X difference between the top and bottom edges. For "
+              "Trapezoid, the amount to move the top edge in the positive X axis")
+          .available(false);
+  auto &bottom_height = b.add_input<decl::Float>("Bottom Height"_ustr)
+                            .default_value(3.0f)
+                            .min(0.0f)
+                            .subtype(PROP_DISTANCE)
+                            .description("The distance between the bottom point and the X axis")
+                            .available(false);
+  auto &top_height = b.add_input<decl::Float>("Top Height"_ustr)
+                         .default_value(1.0f)
+                         .subtype(PROP_DISTANCE)
+                         .description("The distance between the top point and the X axis")
+                         .available(false);
+  auto &p1 = b.add_input<decl::Vector>("Point 1"_ustr)
+                 .default_value({-1.0f, -1.0f, 0.0f})
+                 .subtype(PROP_TRANSLATION)
+                 .description("The exact location of the point to use")
+                 .available(false);
+  auto &p2 = b.add_input<decl::Vector>("Point 2"_ustr)
+                 .default_value({1.0f, -1.0f, 0.0f})
+                 .subtype(PROP_TRANSLATION)
+                 .description("The exact location of the point to use")
+                 .available(false);
+  auto &p3 = b.add_input<decl::Vector>("Point 3"_ustr)
+                 .default_value({1.0f, 1.0f, 0.0f})
+                 .subtype(PROP_TRANSLATION)
+                 .description("The exact location of the point to use")
+                 .available(false);
+  auto &p4 = b.add_input<decl::Vector>("Point 4"_ustr)
+                 .default_value({-1.0f, 1.0f, 0.0f})
+                 .subtype(PROP_TRANSLATION)
+                 .description("The exact location of the point to use")
+                 .available(false);
+  b.add_output<decl::Geometry>("Curve"_ustr);
+
+  const bNode *node = b.node_or_null();
+  if (node != nullptr) {
+    const NodeGeometryCurvePrimitiveQuad &storage = node_storage(*node);
+    switch (GeometryNodeCurvePrimitiveQuadMode(storage.mode)) {
+      case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE:
+        width.available(true);
+        height.available(true);
+        break;
+      case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_PARALLELOGRAM:
+        width.available(true);
+        height.available(true);
+        offset.available(true);
+        break;
+      case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_TRAPEZOID:
+        bottom.available(true);
+        top.available(true);
+        offset.available(true);
+        height.available(true);
+        break;
+      case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_KITE:
+        width.available(true);
+        bottom_height.available(true);
+        top_height.available(true);
+        break;
+      case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_POINTS:
+        p1.available(true);
+        p2.available(true);
+        p3.available(true);
+        p4.available(true);
+        break;
+    }
+  }
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
+  layout.prop(ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryCurvePrimitiveQuad *data = MEM_cnew<NodeGeometryCurvePrimitiveQuad>(__func__);
+  NodeGeometryCurvePrimitiveQuad *data = MEM_new<NodeGeometryCurvePrimitiveQuad>(__func__);
   data->mode = GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE;
   node->storage = data;
 }
 
-static void node_update(bNodeTree *ntree, bNode *node)
-{
-  const NodeGeometryCurvePrimitiveQuad &storage = node_storage(*node);
-  GeometryNodeCurvePrimitiveQuadMode mode = GeometryNodeCurvePrimitiveQuadMode(storage.mode);
-
-  bNodeSocket *width = static_cast<bNodeSocket *>(node->inputs.first);
-  bNodeSocket *height = width->next;
-  bNodeSocket *bottom = height->next;
-  bNodeSocket *top = bottom->next;
-  bNodeSocket *offset = top->next;
-  bNodeSocket *bottom_height = offset->next;
-  bNodeSocket *top_height = bottom_height->next;
-  bNodeSocket *p1 = top_height->next;
-  bNodeSocket *p2 = p1->next;
-  bNodeSocket *p3 = p2->next;
-  bNodeSocket *p4 = p3->next;
-
-  Vector<bNodeSocket *> available_sockets;
-
-  if (mode == GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE) {
-    available_sockets.extend({width, height});
-  }
-  else if (mode == GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_PARALLELOGRAM) {
-    available_sockets.extend({width, height, offset});
-  }
-  else if (mode == GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_TRAPEZOID) {
-    available_sockets.extend({bottom, top, offset, height});
-  }
-  else if (mode == GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_KITE) {
-    available_sockets.extend({width, bottom_height, top_height});
-  }
-  else if (mode == GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_POINTS) {
-    available_sockets.extend({p1, p2, p3, p4});
-  }
-
-  LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
-    bke::node_set_socket_availability(ntree, sock, available_sockets.contains(sock));
-  }
-}
-
 class SocketSearchOp {
  public:
-  std::string socket_name;
+  UString socket_name;
   GeometryNodeCurvePrimitiveQuadMode quad_mode;
   void operator()(LinkSearchOpParams &params)
   {
-    bNode &node = params.add_node("GeometryNodeCurvePrimitiveQuadrilateral");
+    bNode &node = params.add_node("GeometryNodeCurvePrimitiveQuadrilateral"_ustr);
     node_storage(node).mode = quad_mode;
     params.update_and_connect_available_socket(node, socket_name);
   }
@@ -142,21 +147,22 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   if (params.in_out() == SOCK_OUT) {
     search_link_ops_for_declarations(params, declaration.outputs);
   }
-  else if (params.node_tree().typeinfo->validate_link(
-               eNodeSocketDatatype(params.other_socket().type), SOCK_FLOAT))
-  {
+  else if (params.node_tree().typeinfo->validate_link(params.other_socket().type, SOCK_FLOAT)) {
     params.add_item(IFACE_("Width"),
-                    SocketSearchOp{"Width", GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE});
+                    SocketSearchOp{"Width"_ustr, GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE});
     params.add_item(IFACE_("Height"),
-                    SocketSearchOp{"Height", GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE});
-    params.add_item(IFACE_("Bottom Width"),
-                    SocketSearchOp{"Bottom Width", GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_TRAPEZOID});
-    params.add_item(IFACE_("Top Width"),
-                    SocketSearchOp{"Top Width", GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_TRAPEZOID});
-    params.add_item(IFACE_("Offset"),
-                    SocketSearchOp{"Offset", GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_PARALLELOGRAM});
+                    SocketSearchOp{"Height"_ustr, GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE});
+    params.add_item(
+        IFACE_("Bottom Width"),
+        SocketSearchOp{"Bottom Width"_ustr, GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_TRAPEZOID});
+    params.add_item(
+        IFACE_("Top Width"),
+        SocketSearchOp{"Top Width"_ustr, GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_TRAPEZOID});
+    params.add_item(
+        IFACE_("Offset"),
+        SocketSearchOp{"Offset"_ustr, GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_PARALLELOGRAM});
     params.add_item(IFACE_("Point 1"),
-                    SocketSearchOp{"Point 1", GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_POINTS});
+                    SocketSearchOp{"Point 1"_ustr, GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_POINTS});
   }
 }
 
@@ -218,7 +224,7 @@ static void create_kite_curve(MutableSpan<float3> positions,
 static void node_geo_exec(GeoNodeExecParams params)
 {
   const NodeGeometryCurvePrimitiveQuad &storage = node_storage(params.node());
-  const GeometryNodeCurvePrimitiveQuadMode mode = (GeometryNodeCurvePrimitiveQuadMode)storage.mode;
+  const GeometryNodeCurvePrimitiveQuadMode mode = GeometryNodeCurvePrimitiveQuadMode(storage.mode);
 
   Curves *curves_id = bke::curves_new_nomain_single(4, CURVE_TYPE_POLY);
   bke::CurvesGeometry &curves = curves_id->geometry.wrap();
@@ -229,42 +235,42 @@ static void node_geo_exec(GeoNodeExecParams params)
   switch (mode) {
     case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE:
       create_rectangle_curve(positions,
-                             std::max(params.extract_input<float>("Height"), 0.0f),
-                             std::max(params.extract_input<float>("Width"), 0.0f));
+                             std::max(params.extract_input<float>("Height"_ustr), 0.0f),
+                             std::max(params.extract_input<float>("Width"_ustr), 0.0f));
       break;
 
     case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_PARALLELOGRAM:
       create_parallelogram_curve(positions,
-                                 std::max(params.extract_input<float>("Height"), 0.0f),
-                                 std::max(params.extract_input<float>("Width"), 0.0f),
-                                 params.extract_input<float>("Offset"));
+                                 std::max(params.extract_input<float>("Height"_ustr), 0.0f),
+                                 std::max(params.extract_input<float>("Width"_ustr), 0.0f),
+                                 params.extract_input<float>("Offset"_ustr));
       break;
     case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_TRAPEZOID:
       create_trapezoid_curve(positions,
-                             std::max(params.extract_input<float>("Bottom Width"), 0.0f),
-                             std::max(params.extract_input<float>("Top Width"), 0.0f),
-                             params.extract_input<float>("Offset"),
-                             std::max(params.extract_input<float>("Height"), 0.0f));
+                             std::max(params.extract_input<float>("Bottom Width"_ustr), 0.0f),
+                             std::max(params.extract_input<float>("Top Width"_ustr), 0.0f),
+                             params.extract_input<float>("Offset"_ustr),
+                             std::max(params.extract_input<float>("Height"_ustr), 0.0f));
       break;
     case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_KITE:
       create_kite_curve(positions,
-                        std::max(params.extract_input<float>("Width"), 0.0f),
-                        std::max(params.extract_input<float>("Bottom Height"), 0.0f),
-                        params.extract_input<float>("Top Height"));
+                        std::max(params.extract_input<float>("Width"_ustr), 0.0f),
+                        std::max(params.extract_input<float>("Bottom Height"_ustr), 0.0f),
+                        params.extract_input<float>("Top Height"_ustr));
       break;
     case GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_POINTS:
       create_points_curve(positions,
-                          params.extract_input<float3>("Point 1"),
-                          params.extract_input<float3>("Point 2"),
-                          params.extract_input<float3>("Point 3"),
-                          params.extract_input<float3>("Point 4"));
+                          params.extract_input<float3>("Point 1"_ustr),
+                          params.extract_input<float3>("Point 2"_ustr),
+                          params.extract_input<float3>("Point 3"_ustr),
+                          params.extract_input<float3>("Point 4"_ustr));
       break;
     default:
       params.set_default_remaining_outputs();
       return;
   }
 
-  params.set_output("Curve", GeometrySet::from_curves(curves_id));
+  params.set_output("Curve"_ustr, GeometrySet::from_curves(curves_id));
 }
 
 static void node_rna(StructRNA *srna)
@@ -305,20 +311,24 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  geo_node_type_base(
-      &ntype, GEO_NODE_CURVE_PRIMITIVE_QUADRILATERAL, "Quadrilateral", NODE_CLASS_GEOMETRY);
+  static bke::bNodeType ntype;
+  geo_node_type_base(&ntype,
+                     "GeometryNodeCurvePrimitiveQuadrilateral"_ustr,
+                     GEO_NODE_CURVE_PRIMITIVE_QUADRILATERAL);
+  ntype.ui_name = "Quadrilateral";
+  ntype.ui_description = "Generate a polygon with four points";
+  ntype.enum_name_legacy = "CURVE_PRIMITIVE_QUADRILATERAL";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
-  ntype.updatefunc = node_update;
   ntype.initfunc = node_init;
-  blender::bke::node_type_storage(&ntype,
-                                  "NodeGeometryCurvePrimitiveQuad",
-                                  node_free_standard_storage,
-                                  node_copy_standard_storage);
+  bke::node_type_storage(ntype,
+                         "NodeGeometryCurvePrimitiveQuad",
+                         node_free_standard_storage,
+                         node_copy_standard_storage);
   ntype.gather_link_search_ops = node_gather_link_searches;
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

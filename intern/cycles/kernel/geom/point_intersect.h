@@ -4,12 +4,20 @@
 
 #pragma once
 
+#include "kernel/globals.h"
+#include "kernel/types.h"
+
+#include "kernel/geom/gsplat.h"
+#include "kernel/geom/motion_point.h"
+#include "kernel/geom/object.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* Point primitive intersection functions. */
 
 #ifdef __POINTCLOUD__
 
+template<bool use_backface_culling = true>
 ccl_device_forceinline bool point_intersect_test(const float4 point,
                                                  const float3 ray_P,
                                                  const float3 ray_D,
@@ -17,7 +25,7 @@ ccl_device_forceinline bool point_intersect_test(const float4 point,
                                                  const float ray_tmax,
                                                  ccl_private float *t)
 {
-  const float3 center = float4_to_float3(point);
+  const float3 center = make_float3(point);
   const float radius = point.w;
 
   const float rd2 = 1.0f / dot(ray_D, ray_D);
@@ -35,26 +43,25 @@ ccl_device_forceinline bool point_intersect_test(const float4 point,
   const float t_front = projC0 - td;
   const bool valid_front = (ray_tmin <= t_front) & (t_front <= ray_tmax);
 
-  /* Always back-face culling for now. */
-#  if 0
-  const float t_back = projC0 + td;
-  const bool valid_back = (ray_tmin <= t_back) & (t_back <= ray_tmax);
+  if constexpr (use_backface_culling == false) {
+    const float t_back = projC0 + td;
+    const bool valid_back = (ray_tmin <= t_back) & (t_back <= ray_tmax);
 
-  /* check if there is a first hit */
-  const bool valid_first = valid_front | valid_back;
-  if (!valid_first) {
-    return false;
+    /* check if there is a first hit */
+    const bool valid_first = valid_front | valid_back;
+    if (!valid_first) {
+      return false;
+    }
+
+    *t = (valid_front) ? t_front : t_back;
+    return true;
   }
 
-  *t = (valid_front) ? t_front : t_back;
-  return true;
-#  else
   if (!valid_front) {
     return false;
   }
   *t = t_front;
   return true;
-#  endif
 }
 
 ccl_device_forceinline bool point_intersect(KernelGlobals kg,
@@ -68,8 +75,10 @@ ccl_device_forceinline bool point_intersect(KernelGlobals kg,
                                             const float time,
                                             const int type)
 {
-  const float4 point = (type & PRIMITIVE_MOTION) ? motion_point(kg, object, prim, time) :
-                                                   kernel_data_fetch(points, prim);
+  const int position_offset = kernel_data_fetch(objects, object).position_offset;
+  const float4 point = (type & PRIMITIVE_MOTION) ?
+                           motion_point(kg, object, prim, time) :
+                           kernel_data_fetch(points, position_offset + prim);
 
   if (!point_intersect_test(point, ray_P, ray_D, ray_tmin, ray_tmax, &isect->t)) {
     return false;
@@ -85,8 +94,8 @@ ccl_device_forceinline bool point_intersect(KernelGlobals kg,
 
 ccl_device_inline void point_shader_setup(KernelGlobals kg,
                                           ccl_private ShaderData *sd,
-                                          ccl_private const Intersection *isect,
-                                          ccl_private const Ray *ray)
+                                          const ccl_private Intersection *isect,
+                                          const ccl_private Ray *ray)
 {
   sd->shader = kernel_data_fetch(points_shader, isect->prim);
   sd->P = ray->P + ray->D * isect->t;
@@ -98,15 +107,29 @@ ccl_device_inline void point_shader_setup(KernelGlobals kg,
 #  endif
 
   /* Compute point center for normal. */
-  float3 center = float4_to_float3((isect->type & PRIMITIVE_MOTION) ?
-                                       motion_point(kg, sd->object, sd->prim, sd->time) :
-                                       kernel_data_fetch(points, sd->prim));
+  const int position_offset = kernel_data_fetch(objects, sd->object).position_offset;
+  float3 center = make_float3((isect->type & PRIMITIVE_MOTION) ?
+                                  motion_point(kg, sd->object, sd->prim, sd->time) :
+                                  kernel_data_fetch(points, position_offset + sd->prim));
   if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
-    object_position_transform_auto(kg, sd, &center);
+    object_position_transform(kg, sd, &center);
   }
 
   /* Normal */
-  sd->Ng = normalize(sd->P - center);
+#  if defined(__GSPLATS__)
+  if (isect->type & PRIMITIVE_POINT)
+#  endif
+  {
+    sd->Ng = normalize(sd->P - center);
+  }
+#  if defined(__GSPLATS__)
+  else {
+    sd->Ng = gsplat_normal(kg, sd->object, sd->prim, sd->time, sd->type);
+    kernel_assert((kernel_data_fetch(object_flag, sd->object) & SD_OBJECT_TRANSFORM_APPLIED) == 0);
+    object_normal_transform(kg, sd, &sd->Ng);
+  }
+#  endif
+
   sd->N = sd->Ng;
 
 #  ifdef __DPDU__

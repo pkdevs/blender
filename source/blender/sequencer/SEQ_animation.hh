@@ -10,32 +10,40 @@
 
 #include "DNA_listBase.h"
 
-struct GSet;
-struct ListBase;
-struct Scene;
-struct Sequence;
+#include "ANIM_action.hh"
 struct SeqAnimationBackup;
+namespace blender {
 
-bool SEQ_animation_curves_exist(Scene *scene);
-bool SEQ_animation_drivers_exist(Scene *scene);
-void SEQ_free_animdata(Scene *scene, Sequence *seq);
-void SEQ_offset_animdata(Scene *scene, Sequence *seq, int ofs);
-GSet *SEQ_fcurves_by_strip_get(const Sequence *seq, ListBase *fcurve_base);
-struct SeqAnimationBackup {
-  ListBase curves;
-  ListBase drivers;
+struct Scene;
+struct Strip;
+namespace seq {
+
+bool animation_keyframes_exist(const Scene *scene);
+bool animation_drivers_exist(Scene *scene);
+void free_animdata(Scene *scene, Strip *strip);
+void offset_animdata(const Scene *scene, Strip *strip, float ofs);
+
+/**
+ * Return whether the fcurve targets the given strip.
+ */
+bool fcurve_matches(const Strip &strip, const FCurve &fcurve);
+
+struct AnimationBackup {
+  animrig::Channelbag channelbag;
+  ListBaseT<FCurve> drivers;
 };
 /**
  * Move all F-Curves and drivers from `scene` to `backup`.
  */
-void SEQ_animation_backup_original(Scene *scene, SeqAnimationBackup *backup);
+void animation_backup_original(Scene *scene, AnimationBackup *backup);
 /**
  * Move all F-Curves and drivers from `backup` to `scene`.
  */
-void SEQ_animation_restore_original(Scene *scene, SeqAnimationBackup *backup);
+void animation_restore_original(Scene *scene, AnimationBackup *backup);
 /**
- * Duplicate F-Curves and drivers used by `seq` from `backup` to `scene`.
+ * Duplicate F-Curves and drivers used by `strip` from `backup` to `scene`.
  */
-void SEQ_animation_duplicate_backup_to_scene(Scene *scene,
-                                             Sequence *seq,
-                                             SeqAnimationBackup *backup);
+void animation_duplicate_backup_to_scene(Scene *scene, Strip *strip, AnimationBackup *backup);
+
+}  // namespace seq
+}  // namespace blender

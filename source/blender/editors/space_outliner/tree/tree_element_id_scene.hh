@@ -10,7 +10,11 @@
 
 #include "tree_element_id.hh"
 
-namespace blender::ed::outliner {
+namespace blender {
+
+struct Scene;
+
+namespace ed::outliner {
 
 class TreeElementIDScene final : public TreeElementID {
   Scene &scene_;
@@ -18,7 +22,7 @@ class TreeElementIDScene final : public TreeElementID {
  public:
   TreeElementIDScene(TreeElement &legacy_te, Scene &scene);
 
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
 
  private:
   void expand_view_layers() const;
@@ -27,4 +31,5 @@ class TreeElementIDScene final : public TreeElementID {
   void expand_objects() const;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

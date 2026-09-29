@@ -6,6 +6,8 @@
  * \ingroup GHOST
  */
 
+#include <mutex>
+#include <optional>
 #include <sstream>
 
 #include "GHOST_SystemPathsUnix.hh"
@@ -27,9 +29,15 @@ static const char *static_path = PREFIX "/share";
 static const char *static_path = nullptr;
 #endif
 
-GHOST_SystemPathsUnix::GHOST_SystemPathsUnix() {}
+#if defined(PREFIX) && defined(BLENDER_INSTALL_LIBDIR)
+static const char *static_libs_path = PREFIX "/" BLENDER_INSTALL_LIBDIR;
+#else
+static const char *static_libs_path = nullptr;
+#endif
 
-GHOST_SystemPathsUnix::~GHOST_SystemPathsUnix() {}
+GHOST_SystemPathsUnix::GHOST_SystemPathsUnix() = default;
+
+GHOST_SystemPathsUnix::~GHOST_SystemPathsUnix() = default;
 
 const char *GHOST_SystemPathsUnix::getSystemDir(int /*version*/, const char *versionstr) const
 {
@@ -42,16 +50,40 @@ const char *GHOST_SystemPathsUnix::getSystemDir(int /*version*/, const char *ver
   return nullptr;
 }
 
+const char *GHOST_SystemPathsUnix::getSystemLibsDir(int /*version*/, const char *versionstr) const
+{
+  if (static_libs_path) {
+    static string system_libs_path = string(static_libs_path) + "/blender/" + versionstr;
+    return system_libs_path.c_str();
+  }
+
+  return nullptr;
+}
+
+/**
+ * See docstring & code-comments for #BLI_dir_home which matches this functionality.
+ */
+static const char *home_dir_get()
+{
+  const char *home_dir = getenv("HOME");
+  if (home_dir == nullptr) {
+    if (const passwd *pwuser = getpwuid(getuid())) {
+      home_dir = pwuser->pw_dir;
+    }
+  }
+  return home_dir;
+}
+
 const char *GHOST_SystemPathsUnix::getUserDir(int version, const char *versionstr) const
 {
-  static string user_path = "";
+  static string user_path;
   static int last_version = 0;
 
   /* in blender 2.64, we migrate to XDG. to ensure the copy previous settings
    * operator works we give a different path depending on the requested version */
   if (version < 264) {
     if (user_path.empty() || last_version != version) {
-      const char *home = getenv("HOME");
+      const char *home = home_dir_get();
 
       last_version = version;
 
@@ -73,21 +105,22 @@ const char *GHOST_SystemPathsUnix::getUserDir(int version, const char *versionst
       user_path = string(home) + "/blender/" + versionstr;
     }
     else {
-      home = getenv("HOME");
-      if (home == nullptr) {
-        home = getpwuid(getuid())->pw_dir;
+      home = home_dir_get();
+      if (home) {
+        user_path = string(home) + "/.config/blender/" + versionstr;
       }
-      user_path = string(home) + "/.config/blender/" + versionstr;
+      else {
+        return nullptr;
+      }
     }
   }
 
   return user_path.c_str();
 }
 
-const char *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDirTypes type) const
+static std::optional<std::string> user_special_dir_query(GHOST_TUserSpecialDirTypes type)
 {
   const char *type_str;
-  std::string add_path = "";
 
   switch (type) {
     case GHOST_kUserSpecialDirDesktop:
@@ -113,27 +146,27 @@ const char *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDirTypes 
       if (cache_dir) {
         return cache_dir;
       }
-      /* Fallback to ~home/.cache/.
-       * When invoking `xdg-user-dir` without parameters the user folder
-       * will be read. `.cache` will be appended. */
-      type_str = "";
-      add_path = ".cache";
-      break;
+
+      /* If `XDG_CACHE_HOME` is not set, then `$HOME/.cache is used`. */
+      const char *home_dir = home_dir_get();
+      if (home_dir == nullptr) {
+        return std::nullopt;
+      }
+      return string(home_dir) + "/.cache";
     }
     default:
       GHOST_ASSERT(
           false,
           "GHOST_SystemPathsUnix::getUserSpecialDir(): Invalid enum value for type parameter");
-      return nullptr;
+      return std::nullopt;
   }
 
-  static string path = "";
   /* Pipe `stderr` to `/dev/null` to avoid error prints. We will fail gracefully still. */
   string command = string("xdg-user-dir ") + type_str + " 2> /dev/null";
 
   FILE *fstream = popen(command.c_str(), "r");
   if (fstream == nullptr) {
-    return nullptr;
+    return std::nullopt;
   }
   std::stringstream path_stream;
   while (!feof(fstream)) {
@@ -146,15 +179,28 @@ const char *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDirTypes 
   }
   if (pclose(fstream) == -1) {
     perror("GHOST_SystemPathsUnix::getUserSpecialDir failed at pclose()");
-    return nullptr;
+    return std::nullopt;
   }
 
-  if (!add_path.empty()) {
-    path_stream << '/' << add_path;
-  }
+  std::string path = path_stream.str();
+  return path[0] ? std::optional(path) : std::nullopt;
+}
 
-  path = path_stream.str();
-  return path[0] ? path.c_str() : nullptr;
+std::optional<std::string> GHOST_SystemPathsUnix::getUserSpecialDir(
+    GHOST_TUserSpecialDirTypes type) const
+{
+  /* Cached result to avoid launching a process on every call. */
+  GHOST_ASSERT(uint(type) < uint(GHOST_kUserSpecialDirType_Num), "Invalid type");
+  UserSpecialDirCache &cached = user_special_dir_cache_[type];
+  if (!cached.resolved) {
+    static std::mutex mutex;
+    std::lock_guard lock(mutex);
+    if (!cached.resolved) {
+      cached.path = user_special_dir_query(type);
+      cached.resolved = true;
+    }
+  }
+  return cached.path;
 }
 
 const char *GHOST_SystemPathsUnix::getBinaryDir() const

@@ -10,16 +10,15 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_utildefines.h"
-
 #include "BKE_node.hh"
 
 #include "node_util.hh"
 
-#include "RNA_types.hh"
+namespace blender {
 
 struct bNode;
 struct bNodeStack;
+struct bNodeThreadStack;
 struct bNodeTree;
 
 /* Node execution data */
@@ -29,7 +28,7 @@ struct bNodeExec {
   bNodeExecData data;
 
   /** Free function, stored in exec itself to avoid dangling node pointer access. */
-  blender::bke::NodeFreeExecFunction free_exec_fn;
+  bke::NodeFreeExecFunction free_exec_fn;
 };
 
 /* Execution Data for each instance of node tree execution */
@@ -42,7 +41,7 @@ struct bNodeTreeExec {
   int stacksize;
   bNodeStack *stack; /* socket data stack */
   /* only used by material and texture trees to keep one stack for each thread */
-  ListBase *threadstack; /* one instance of the stack for each thread */
+  ListBaseT<bNodeThreadStack> *threadstack; /* one instance of the stack for each thread */
 };
 
 /* stores one stack copy for each thread (material and texture trees) */
@@ -60,3 +59,5 @@ bNodeTreeExec *ntree_exec_begin(bNodeExecContext *context,
                                 bNodeTree *ntree,
                                 bNodeInstanceKey parent_key);
 void ntree_exec_end(bNodeTreeExec *exec);
+
+}  // namespace blender

@@ -12,19 +12,21 @@
 #include <pxr/usd/usdShade/material.h>
 #include <pxr/usd/usdUtils/sparseValueWriter.h>
 
-#include "WM_types.hh"
-
-#include "DNA_material_types.h"
-
 #include <string>
 
+namespace blender {
+
+struct ID;
+struct IDProperty;
 struct Material;
 struct ReportList;
 
-namespace blender::io::usd {
+template<typename T> struct Bounds;
 
-using blender::io::AbstractHierarchyWriter;
-using blender::io::HierarchyContext;
+namespace io::usd {
+
+using io::AbstractHierarchyWriter;
+using io::HierarchyContext;
 
 class USDAbstractWriter : public AbstractHierarchyWriter {
  protected:
@@ -37,7 +39,7 @@ class USDAbstractWriter : public AbstractHierarchyWriter {
  public:
   USDAbstractWriter(const USDExporterContext &usd_export_context);
 
-  virtual void write(HierarchyContext &context) override;
+  void write(HierarchyContext &context) override;
 
   /**
    * Returns true if the data to be written is actually supported. This would, for example, allow a
@@ -53,10 +55,7 @@ class USDAbstractWriter : public AbstractHierarchyWriter {
   const pxr::SdfPath &usd_path() const;
 
   /** Get the wmJobWorkerStatus-provided `reports` list pointer, to use with the BKE_report API. */
-  ReportList *reports() const
-  {
-    return usd_export_context_.export_params.worker_status->reports;
-  }
+  ReportList *reports() const;
 
  protected:
   virtual void do_write(HierarchyContext &context) = 0;
@@ -65,6 +64,14 @@ class USDAbstractWriter : public AbstractHierarchyWriter {
 
   /* Returns the parent path of exported materials. */
   pxr::SdfPath get_material_library_path() const;
+  /* Returns the parent path of exported materials for instance prototypes. */
+  pxr::SdfPath get_proto_material_root_path(const HierarchyContext &context) const;
+  /* Ensure the USD material is created in the default material library folder. */
+  pxr::UsdShadeMaterial ensure_usd_material_created(const HierarchyContext &context,
+                                                    Material *material) const;
+  /* Calls ensure_usd_material_created(). Additionally, if the context is an
+   * instancing prototype, creates a reference to the library material under the
+   * prototype root. */
   pxr::UsdShadeMaterial ensure_usd_material(const HierarchyContext &context,
                                             Material *material) const;
 
@@ -76,7 +83,7 @@ class USDAbstractWriter : public AbstractHierarchyWriter {
                              pxr::UsdTimeCode = pxr::UsdTimeCode::Default()) const;
 
   void write_visibility(const HierarchyContext &context,
-                        const pxr::UsdTimeCode timecode,
+                        const pxr::UsdTimeCode time,
                         const pxr::UsdGeomImageable &usd_geometry);
 
   /**
@@ -103,7 +110,17 @@ class USDAbstractWriter : public AbstractHierarchyWriter {
    *
    * TODO: also provide method for authoring extentsHint on every prim in a hierarchy.
    */
-  virtual void author_extent(const pxr::UsdTimeCode timecode, pxr::UsdGeomBoundable &prim);
+  void author_extent(const pxr::UsdGeomBoundable &boundable, const pxr::UsdTimeCode time);
+
+  /**
+   * Author the `extent` attribute for a boundable prim given the Blender `bounds`.
+   */
+  void author_extent(const pxr::UsdGeomBoundable &boundable,
+                     const std::optional<Bounds<float3>> &bounds,
+                     const pxr::UsdTimeCode time);
+
+  void add_to_prim_map(const pxr::SdfPath &usd_path, const ID *id) const;
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

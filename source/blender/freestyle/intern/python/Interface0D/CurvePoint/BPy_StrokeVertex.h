@@ -12,10 +12,6 @@
 
 #include "../../../stroke/Stroke.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject StrokeVertex_Type;
@@ -24,17 +20,13 @@ extern PyTypeObject StrokeVertex_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&StrokeVertex_Type))
 
 /*---------------------------Python BPy_StrokeVertex structure definition----------*/
-typedef struct {
+struct BPy_StrokeVertex {
   BPy_CurvePoint py_cp;
   Freestyle::StrokeVertex *sv;
-} BPy_StrokeVertex;
+};
 
 /*---------------------------Python BPy_StrokeVertex visible prototypes-----------*/
 
 void StrokeVertex_mathutils_register_callback();
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

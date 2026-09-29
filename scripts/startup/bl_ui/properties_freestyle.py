@@ -4,7 +4,7 @@
 
 import bpy
 from bpy.types import Menu, Panel, UIList
-from .space_properties import PropertiesAnimationMixin
+from bl_ui.space_properties import PropertiesAnimationMixin
 
 
 # Render properties
@@ -25,7 +25,11 @@ class RENDER_PT_freestyle(RenderFreestyleButtonsPanel, Panel):
     bl_label = "Freestyle"
     bl_options = {'DEFAULT_CLOSED'}
     bl_order = 10
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw_header(self, context):
         rd = context.scene.render
@@ -59,10 +63,10 @@ class ViewLayerFreestyleButtonsPanel:
         with_freestyle = bpy.app.build_options.freestyle
 
         return (
-            scene
-            and with_freestyle
-            and rd.use_freestyle
-            and (context.engine in cls.COMPAT_ENGINES)
+            scene and
+            with_freestyle and
+            rd.use_freestyle and
+            (context.engine in cls.COMPAT_ENGINES)
         )
 
 
@@ -75,15 +79,19 @@ class ViewLayerFreestyleEditorButtonsPanel(ViewLayerFreestyleButtonsPanel):
             return False
         view_layer = context.view_layer
         return (
-            view_layer
-            and view_layer.use_freestyle
-            and view_layer.freestyle_settings.mode == 'EDITOR'
+            view_layer and
+            view_layer.use_freestyle and
+            view_layer.freestyle_settings.mode == 'EDITOR'
         )
 
 
 class ViewLayerFreestyleLineStyle(ViewLayerFreestyleEditorButtonsPanel):
     # Freestyle Linestyle Panels
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     @classmethod
     def poll(cls, context):
@@ -108,12 +116,8 @@ class ViewLayerFreestyleLinestyleStrokesSubPanel(ViewLayerFreestyleLineStyle):
 class VIEWLAYER_UL_linesets(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, index):
         lineset = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.prop(lineset, "name", text="", emboss=False, icon_value=icon)
-            layout.prop(lineset, "show_render", text="", index=index)
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            layout.label(text="", icon_value=icon)
+        layout.prop(lineset, "name", text="", emboss=False, icon_value=icon)
+        layout.prop(lineset, "show_render", text="", index=index)
 
 
 class RENDER_MT_lineset_context_menu(Menu):
@@ -127,7 +131,11 @@ class RENDER_MT_lineset_context_menu(Menu):
 
 class VIEWLAYER_PT_freestyle(ViewLayerFreestyleButtonsPanel, Panel):
     bl_label = "Freestyle"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw_header(self, context):
         view_layer = context.view_layer
@@ -157,7 +165,11 @@ class VIEWLAYER_PT_freestyle(ViewLayerFreestyleButtonsPanel, Panel):
 class VIEWLAYER_PT_freestyle_edge_detection(ViewLayerFreestyleButtonsPanel, Panel):
     bl_label = "Edge Detection"
     bl_parent_id = "VIEWLAYER_PT_freestyle"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw(self, context):
         layout = self.layout
@@ -187,7 +199,11 @@ class VIEWLAYER_PT_freestyle_edge_detection(ViewLayerFreestyleButtonsPanel, Pane
 class VIEWLAYER_PT_freestyle_style_modules(ViewLayerFreestyleButtonsPanel, Panel):
     bl_label = "Style Modules"
     bl_parent_id = "VIEWLAYER_PT_freestyle"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     @classmethod
     def poll(cls, context):
@@ -223,7 +239,11 @@ class VIEWLAYER_PT_freestyle_style_modules(ViewLayerFreestyleButtonsPanel, Panel
 
 class VIEWLAYER_PT_freestyle_lineset(ViewLayerFreestyleEditorButtonsPanel, Panel):
     bl_label = "Freestyle Line Set"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw_edge_type_buttons(self, box, lineset, edge_type):
         # property names
@@ -286,7 +306,11 @@ class VIEWLAYER_PT_freestyle_lineset(ViewLayerFreestyleEditorButtonsPanel, Panel
 class VIEWLAYER_PT_freestyle_lineset_visibilty(ViewLayerFreestyleLineStyle, Panel):
     bl_label = "Visibility"
     bl_parent_id = "VIEWLAYER_PT_freestyle_lineset"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw_header(self, context):
         layout = self.layout
@@ -320,7 +344,11 @@ class VIEWLAYER_PT_freestyle_lineset_visibilty(ViewLayerFreestyleLineStyle, Pane
 class VIEWLAYER_PT_freestyle_lineset_edgetype(ViewLayerFreestyleLineStyle, Panel):
     bl_label = "Edge Type"
     bl_parent_id = "VIEWLAYER_PT_freestyle_lineset"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw_header(self, context):
         layout = self.layout
@@ -370,7 +398,11 @@ class VIEWLAYER_PT_freestyle_lineset_edgetype(ViewLayerFreestyleLineStyle, Panel
 class VIEWLAYER_PT_freestyle_lineset_facemarks(ViewLayerFreestyleLineStyle, Panel):
     bl_label = "Face Marks"
     bl_parent_id = "VIEWLAYER_PT_freestyle_lineset"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw_header(self, context):
@@ -399,7 +431,11 @@ class VIEWLAYER_PT_freestyle_lineset_facemarks(ViewLayerFreestyleLineStyle, Pane
 class VIEWLAYER_PT_freestyle_lineset_collection(ViewLayerFreestyleLineStyle, Panel):
     bl_label = "Collection"
     bl_parent_id = "VIEWLAYER_PT_freestyle_lineset"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw_header(self, context):
@@ -454,7 +490,7 @@ def draw_modifier_box_header(box, modifier):
 
 def draw_modifier_box_error(box, _modifier, message):
     row = box.row()
-    row.label(text=message, icon='ERROR')
+    row.label(text=message, icon='STATUS_ERROR')
 
 
 def draw_modifier_common(box, modifier):
@@ -1207,12 +1243,11 @@ class VIEWLAYER_PT_freestyle_linestyle_texture(ViewLayerFreestyleLineStyle, Pane
         layout.prop(linestyle, "texture_spacing", text="Spacing Along Stroke")
 
         row = layout.row()
-        props = row.operator(
-            "wm.properties_context_change",
-            text="Go to Linestyle Textures Properties",
-            icon='TEXTURE',
-        )
-        props.context = 'TEXTURE'
+        if linestyle.active_texture:
+            slot = linestyle.texture_slots[linestyle.active_texture_index]
+            layout.template_ID(slot, "texture", new="texture.new")
+        else:
+            layout.template_ID(linestyle, "active_texture", new="texture.new")
 
 
 class VIEWLAYER_PT_freestyle_animation(ViewLayerFreestyleButtonsPanel, PropertiesAnimationMixin, Panel):
@@ -1220,7 +1255,6 @@ class VIEWLAYER_PT_freestyle_animation(ViewLayerFreestyleButtonsPanel, Propertie
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -1245,18 +1279,22 @@ class MaterialFreestyleButtonsPanel:
         material = context.material
         with_freestyle = bpy.app.build_options.freestyle
         return (
-            with_freestyle
-            and material
-            and scene
-            and scene.render.use_freestyle
-            and (context.engine in cls.COMPAT_ENGINES)
+            with_freestyle and
+            material and
+            scene and
+            scene.render.use_freestyle and
+            (context.engine in cls.COMPAT_ENGINES)
         )
 
 
 class MATERIAL_PT_freestyle_line(MaterialFreestyleButtonsPanel, Panel):
     bl_label = "Freestyle Line"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw(self, context):
         layout = self.layout

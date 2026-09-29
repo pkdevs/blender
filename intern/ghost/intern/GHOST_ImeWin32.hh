@@ -10,7 +10,6 @@
 
 #ifdef WITH_INPUT_IME
 
-#  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 
 #  include <string>
@@ -28,12 +27,15 @@ class GHOST_EventIME : public GHOST_Event {
    * Constructor.
    * \param msec: The time this event was generated.
    * \param type: The type of key event.
-   * \param key: The key code of the key.
+   * \param customdata: custom-data, typically #GHOST_TEventImeData.
    */
-  GHOST_EventIME(uint64_t msec, GHOST_TEventType type, GHOST_IWindow *window, void *customdata)
+  GHOST_EventIME(uint64_t msec,
+                 GHOST_TEventType type,
+                 GHOST_IWindow *window,
+                 const void *customdata)
       : GHOST_Event(msec, type, window)
   {
-    this->m_data = customdata;
+    this->data_ = customdata;
   }
 };
 

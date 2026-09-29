@@ -10,10 +10,6 @@
 
 #include "../BPy_UnaryFunction1DDouble.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject GetProjectedZF1D_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject GetProjectedZF1D_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&GetProjectedZF1D_Type))
 
 /*---------------------------Python BPy_GetProjectedZF1D structure definition----------*/
-typedef struct {
+struct BPy_GetProjectedZF1D {
   BPy_UnaryFunction1DDouble py_uf1D_double;
-} BPy_GetProjectedZF1D;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

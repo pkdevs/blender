@@ -2,8 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup gpu
+ */
+
 void main()
 {
-  vec4 tex_color = textureLod(imageTexture, uvcoordsvar.xy, mip);
+  float4 tex_color = textureLod(imageTexture, screen_uv, mip);
   fragColor = tex_color;
 }

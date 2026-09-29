@@ -2,13 +2,24 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
-#pragma BLENDER_REQUIRE(common_pointcloud_lib.glsl)
+#include "infos/overlay_viewer_attribute_infos.hh"
+
+VERTEX_SHADER_CREATE_INFO(overlay_viewer_attribute_pointcloud)
+
+#include "draw_model_lib.glsl"
+#include "draw_pointcloud_lib.glsl"
+#include "draw_view_clipping_lib.glsl"
+#include "draw_view_lib.glsl"
 
 void main()
 {
-  vec3 world_pos = pointcloud_get_pos();
-  gl_Position = point_world_to_ndc(world_pos);
-  finalColor = pointcloud_get_customdata_vec4(attribute_tx);
+  const eObjectInfoFlag ob_flag = buffer_get(draw_object_infos, drw_infos)[drw_resource_id()].flag;
+
+  const pointcloud::Point ls_pt = pointcloud::point_get(uint(gl_VertexID));
+  const pointcloud::Point ws_pt = pointcloud::object_to_world(ls_pt, drw_modelmat());
+  const pointcloud::ShapePoint pt = pointcloud::shape_point_get(
+      ws_pt, drw_world_incident_vector(ws_pt.P), drw_view_up(), ob_flag);
+
+  gl_Position = drw_point_world_to_homogenous(pt.P);
+  final_color = pointcloud::get_customdata_vec4(ws_pt.point_id, attribute_tx);
 }

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #ifdef WITH_OPENVDB
 
 #  include "BKE_volume_grid.hh"
@@ -28,6 +32,11 @@ openvdb::FloatGrid &resample_sdf_grid_if_necessary(bke::VolumeGrid<float> &volum
 
   /* TODO: Using #doResampleToMatch when the transform is affine and non-scaled may be faster. */
   openvdb::tools::resampleToMatch<openvdb::tools::BoxSampler>(grid, *storage);
+  /* Ensure valid background value for level set grids, otherwise pruning will throw an exception.
+   */
+  if (storage->background() < 0.0f) {
+    storage->tree().root().setBackground(0.0f, true);
+  }
   openvdb::tools::pruneLevelSet(storage->tree());
 
   return *storage;

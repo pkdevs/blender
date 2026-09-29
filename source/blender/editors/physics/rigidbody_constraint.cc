@@ -19,8 +19,10 @@
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_library.hh"
 #include "BKE_report.hh"
 #include "BKE_rigidbody.h"
+#include "BKE_scene.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -38,6 +40,8 @@
 
 #include "physics_intern.hh"
 
+namespace blender {
+
 /* ********************************************** */
 /* Helper API's for RigidBody Constraint Editing */
 
@@ -53,21 +57,18 @@ static bool operator_rigidbody_constraints_editable_poll(Scene *scene)
   return true;
 }
 
-static bool ED_operator_rigidbody_con_active_poll(bContext *C)
+static bool operator_rigidbody_con_active_poll(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
   if (!operator_rigidbody_constraints_editable_poll(scene)) {
     return false;
   }
 
-  if (ED_operator_object_active_editable(C)) {
-    Object *ob = blender::ed::object::context_active_object(C);
-    return (ob && ob->rigidbody_constraint);
-  }
-  return false;
+  Object *ob = ed::object::context_active_object(C);
+  return (ob && ob->rigidbody_constraint && ED_operator_object_active_editable_ex(C, ob));
 }
 
-static bool ED_operator_rigidbody_con_add_poll(bContext *C)
+static bool operator_rigidbody_con_add_poll(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
   if (!operator_rigidbody_constraints_editable_poll(scene)) {
@@ -77,7 +78,7 @@ static bool ED_operator_rigidbody_con_add_poll(bContext *C)
 }
 
 bool ED_rigidbody_constraint_add(
-    Main *bmain, Scene *scene, Object *ob, int type, ReportList *reports)
+    Main *bmain, Scene *scene, Object *ob, eRigidBodyCon_Type type, ReportList *reports)
 {
   RigidBodyWorld *rbw = BKE_rigidbody_get_world(scene);
 
@@ -118,20 +119,25 @@ void ED_rigidbody_constraint_remove(Main *bmain, Scene *scene, Object *ob)
 
 /* ************ Add Rigid Body Constraint ************** */
 
-static int rigidbody_con_add_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus rigidbody_con_add_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
   RigidBodyWorld *rbw = BKE_rigidbody_get_world(scene);
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  Object *ob = BKE_view_layer_active_object_get(view_layer);
-  int type = RNA_enum_get(op->ptr, "type");
+  Object *ob = ed::object::context_active_object(C);
+  eRigidBodyCon_Type type = eRigidBodyCon_Type(RNA_enum_get(op->ptr, "type"));
   bool changed;
+  /* Poll ensures. */
+  BLI_assert(scene && ob);
 
-  /* sanity checks */
-  if (ELEM(nullptr, scene, rbw)) {
+  /* The rigid body world is not ensured by the poll. */
+  if (rbw == nullptr) {
     BKE_report(op->reports, RPT_ERROR, "No Rigid Body World to add Rigid Body Constraint to");
+    return OPERATOR_CANCELLED;
+  }
+  /* Pinned objects could be from another scene. */
+  if (!BKE_scene_object_find(*bmain, scene, ob)) {
+    BKE_report(op->reports, RPT_ERROR, "No object in the scene to add Rigid Body Constraint to");
     return OPERATOR_CANCELLED;
   }
   /* apply to active object */
@@ -156,7 +162,7 @@ void RIGIDBODY_OT_constraint_add(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = rigidbody_con_add_exec;
-  ot->poll = ED_operator_rigidbody_con_add_poll;
+  ot->poll = operator_rigidbody_con_add_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -172,17 +178,18 @@ void RIGIDBODY_OT_constraint_add(wmOperatorType *ot)
 
 /* ************ Remove Rigid Body Constraint ************** */
 
-static int rigidbody_con_remove_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus rigidbody_con_remove_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  Object *ob = BKE_view_layer_active_object_get(view_layer);
+  Object *ob = ed::object::context_active_object(C);
+  /* Poll ensures. */
+  BLI_assert(scene && ob && ob->rigidbody_constraint);
 
-  /* apply to active object */
-  if (ELEM(nullptr, ob, ob->rigidbody_constraint)) {
-    BKE_report(op->reports, RPT_ERROR, "Object has no Rigid Body Constraint to remove");
+  /* Pinned objects could be from another scene. */
+  if (!BKE_scene_object_find(*bmain, scene, ob)) {
+    BKE_report(
+        op->reports, RPT_ERROR, "No object in the scene to remove Rigid Body Constraint from");
     return OPERATOR_CANCELLED;
   }
   ED_rigidbody_constraint_remove(bmain, scene, ob);
@@ -203,8 +210,10 @@ void RIGIDBODY_OT_constraint_remove(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = rigidbody_con_remove_exec;
-  ot->poll = ED_operator_rigidbody_con_active_poll;
+  ot->poll = operator_rigidbody_con_active_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+}  // namespace blender

@@ -233,10 +233,32 @@ class PREFERENCES_OT_keyconfig_import(Operator):
         default=True,
     )
 
-    def execute(self, _context):
+    # When importing keymap files with the same name with built-in presets (like
+    # "Blender" or "Industry Compatible"), we need to rename the imported ones
+    # so those entries can be properly removed (built-in ones can't be removed).
+    # See #118035.
+    @classmethod
+    def _preset_prevent_name_collision(cls, config_name):
         import os
-        from os.path import basename
+        from bpy.utils import is_path_builtin
+        path = bpy.utils.user_resource(
+            'SCRIPTS',
+            path=os.path.join("presets", "keyconfig"),
+            create=True,
+        )
+
+        config_name_final = config_name
+        config_name_noext, config_name_ext = os.path.splitext(config_name)
+        preset_path = bpy.utils.preset_find(config_name_noext, "keyconfig", ext=".py")
+
+        if preset_path is not None and is_path_builtin(preset_path):
+            config_name_final = "{:s} (User){:s}".format(config_name_noext, config_name_ext)
+
+        return os.path.join(path, config_name_final)
+
+    def execute(self, _context):
         import shutil
+        from os.path import basename
 
         if not self.filepath:
             self.report({'ERROR'}, "Filepath not set")
@@ -244,19 +266,14 @@ class PREFERENCES_OT_keyconfig_import(Operator):
 
         config_name = basename(self.filepath)
 
-        path = bpy.utils.user_resource(
-            'SCRIPTS',
-            path=os.path.join("presets", "keyconfig"),
-            create=True,
-        )
-        path = os.path.join(path, config_name)
+        path = self._preset_prevent_name_collision(config_name)
 
         try:
             if self.keep_original:
                 shutil.copy(self.filepath, path)
             else:
                 shutil.move(self.filepath, path)
-        except BaseException as ex:
+        except Exception as ex:
             self.report({'ERROR'}, rpt_("Installing keymap failed: {:s}").format(str(ex)))
             return {'CANCELLED'}
 
@@ -381,6 +398,7 @@ class PREFERENCES_OT_keyitem_restore(Operator):
 
         if (not kmi.is_user_defined) and kmi.is_user_modified:
             km.restore_item_to_default(kmi)
+            context.preferences.is_dirty = True
 
         return {'FINISHED'}
 
@@ -453,9 +471,9 @@ class PREFERENCES_OT_keyconfig_remove(Operator):
 # Add-on Operators
 
 class PREFERENCES_OT_addon_enable(Operator):
-    """Turn on this extension"""
+    """Turn on this add-on"""
     bl_idname = "preferences.addon_enable"
-    bl_label = "Enable Extension"
+    bl_label = "Enable Add-on"
 
     module: StringProperty(
         name="Module",
@@ -484,9 +502,6 @@ class PREFERENCES_OT_addon_enable(Operator):
 
         # Ensure any wheels are setup before enabling.
         module_name = self.module
-        is_extension = addon_utils.check_extension(module_name)
-        if is_extension:
-            addon_utils.extensions_refresh(ensure_wheels=True, addon_modules_pending=[module_name])
 
         mod = addon_utils.enable(module_name, default_set=True, handle_error=err_cb)
 
@@ -499,21 +514,17 @@ class PREFERENCES_OT_addon_enable(Operator):
                 self.report(
                     {'WARNING'},
                     rpt_(
-                        "This script was written Blender "
+                        "This script was written for Blender "
                         "version {:d}.{:d}.{:d} and might not "
                         "function (correctly), "
                         "though it is enabled"
-                    ).format(info_ver)
+                    ).format(*info_ver)
                 )
             result = {'FINISHED'}
         else:
 
             if err_str:
                 self.report({'ERROR'}, err_str)
-
-            if is_extension:
-                # Since the add-on didn't work, remove any wheels it may have installed.
-                addon_utils.extensions_refresh(ensure_wheels=True)
 
             result = {'CANCELLED'}
 
@@ -524,9 +535,9 @@ class PREFERENCES_OT_addon_enable(Operator):
 
 
 class PREFERENCES_OT_addon_disable(Operator):
-    """Turn off this extension"""
+    """Turn off this add-on"""
     bl_idname = "preferences.addon_disable"
-    bl_label = "Disable Extension"
+    bl_label = "Disable Add-on"
 
     module: StringProperty(
         name="Module",
@@ -550,10 +561,7 @@ class PREFERENCES_OT_addon_disable(Operator):
             _wm_wait_cursor(True)
 
         module_name = self.module
-        is_extension = addon_utils.check_extension(module_name)
         addon_utils.disable(module_name, default_set=True, handle_error=err_cb)
-        if is_extension:
-            addon_utils.extensions_refresh(ensure_wheels=True)
 
         if err_str:
             self.report({'ERROR'}, err_str)
@@ -617,7 +625,7 @@ class PREFERENCES_OT_theme_install(Operator):
                 filepath=path_dest,
                 menu_idname="USERPREF_MT_interface_theme_presets",
             )
-        except BaseException:
+        except Exception:
             traceback.print_exc()
             return {'CANCELLED'}
 
@@ -727,7 +735,7 @@ class PREFERENCES_OT_addon_install(Operator):
         if not os.path.isdir(path_addons):
             try:
                 os.makedirs(path_addons, exist_ok=True)
-            except BaseException:
+            except Exception:
                 traceback.print_exc()
 
         # Check if we are installing from a target path,
@@ -749,7 +757,7 @@ class PREFERENCES_OT_addon_install(Operator):
         if zipfile.is_zipfile(pyfile):
             try:
                 file_to_extract = zipfile.ZipFile(pyfile, "r")
-            except BaseException:
+            except Exception:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
@@ -772,7 +780,7 @@ class PREFERENCES_OT_addon_install(Operator):
 
             try:  # extract the file to "addons"
                 file_to_extract.extractall(path_addons)
-            except BaseException:
+            except Exception:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
@@ -788,7 +796,7 @@ class PREFERENCES_OT_addon_install(Operator):
             # if not compressed file just copy into the addon path
             try:
                 shutil.copyfile(pyfile, path_dest)
-            except BaseException:
+            except Exception:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
@@ -955,7 +963,10 @@ class PREFERENCES_OT_addon_show(Operator):
             context.preferences.view.show_addons_enabled_only = False
             context.window_manager.addon_filter = 'All'
             context.window_manager.addon_search = bl_info["name"]
-            bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
+
+            # No need to show the editor if it is already visible in the main window.
+            if 'PREFERENCES' not in (area.type for area in context.screen.areas):
+                bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
 
         return {'FINISHED'}
 
@@ -1006,7 +1017,7 @@ class PREFERENCES_OT_app_template_install(Operator):
         if not os.path.isdir(path_app_templates):
             try:
                 os.makedirs(path_app_templates, exist_ok=True)
-            except BaseException:
+            except Exception:
                 traceback.print_exc()
 
         app_templates_old = set(os.listdir(path_app_templates))
@@ -1015,7 +1026,7 @@ class PREFERENCES_OT_app_template_install(Operator):
         if zipfile.is_zipfile(filepath):
             try:
                 file_to_extract = zipfile.ZipFile(filepath, "r")
-            except BaseException:
+            except Exception:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
@@ -1031,7 +1042,7 @@ class PREFERENCES_OT_app_template_install(Operator):
 
             try:  # extract the file to "bl_app_templates_user"
                 file_to_extract.extractall(path_app_templates)
-            except BaseException:
+            except Exception:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
@@ -1071,6 +1082,17 @@ class PREFERENCES_OT_studiolight_install(Operator):
     bl_idname = "preferences.studiolight_install"
     bl_label = "Install Light"
 
+    def update_type(self, context):
+        filter_glob = "*.sl" if self.type == 'STUDIO' else "*.png;*.jpg;*.hdr;*.exr"
+        if filter_glob == self.filter_glob:
+            return
+
+        self.filter_glob = filter_glob
+
+        space_data = context.space_data
+        if space_data is not None and space_data.type == 'FILE_BROWSER':
+            space_data.params.filter_glob = filter_glob
+
     files: CollectionProperty(
         name="File Path",
         type=OperatorFileListElement,
@@ -1085,7 +1107,7 @@ class PREFERENCES_OT_studiolight_install(Operator):
     )
     filter_glob: StringProperty(
         default="*.png;*.jpg;*.hdr;*.exr",
-        options={'HIDDEN'},
+        options={'HIDDEN', 'SKIP_SAVE'},
     )
     type: EnumProperty(
         name="Type",
@@ -1094,6 +1116,7 @@ class PREFERENCES_OT_studiolight_install(Operator):
             ('WORLD', "World", "Install custom HDRIs"),
             ('STUDIO', "Studio", "Install custom Studio Lights"),
         ),
+        update=update_type,
     )
 
     def execute(self, context):
@@ -1107,9 +1130,24 @@ class PREFERENCES_OT_studiolight_install(Operator):
             self.report({'ERROR'}, "Failed to create Studio Light path")
             return {'CANCELLED'}
 
+        installed = 0
+
         for e in self.files:
-            shutil.copy(os.path.join(self.directory, e.name), path_studiolights)
+            filepath = os.path.join(self.directory, e.name)
+
+            try:
+                shutil.copy(filepath, path_studiolights)
+            except Exception as ex:
+                msg = rpt_("Unable to copy {!r}: {:s}").format(e.name, str(ex))
+                print(msg)
+                self.report({'WARNING'}, msg)
+                continue
+
             prefs.studio_lights.load(os.path.join(path_studiolights, e.name), self.type)
+            installed += 1
+
+        if installed == 0:
+            return {'CANCELLED'}
 
         # print message
         msg = rpt_("StudioLight Installed {!r} into {!r}").format(
@@ -1138,6 +1176,7 @@ class PREFERENCES_OT_studiolight_new(Operator):
     filename: StringProperty(
         name="Name",
         default="StudioLight",
+        subtype='FILE_NAME',
     )
 
     ask_override = False

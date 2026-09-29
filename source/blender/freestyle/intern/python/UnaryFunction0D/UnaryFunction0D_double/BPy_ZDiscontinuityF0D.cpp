@@ -10,10 +10,6 @@
 
 #include "../../../view_map/Functions0D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -39,12 +35,11 @@ PyDoc_STRVAR(
     "   1. Therefore, if no object is occluded by the shape to which the\n"
     "   Interface0D belongs to, 1 is returned.\n"
     "\n"
-    "   :arg it: An Interface0DIterator object.\n"
+    "   :param it: An Interface0DIterator object.\n"
     "   :type it: :class:`freestyle.types.Interface0DIterator`\n"
     "   :return: The normalized distance between the pointed Interface0D\n"
     "      and the occludee.\n"
     "   :rtype: float\n");
-
 static int ZDiscontinuityF0D___init__(BPy_ZDiscontinuityF0D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};
@@ -101,7 +96,3 @@ PyTypeObject ZDiscontinuityF0D_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

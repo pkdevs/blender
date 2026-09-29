@@ -12,10 +12,6 @@
 
 #include "../../view_map/Silhouette.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject SVertex_Type;
@@ -23,17 +19,13 @@ extern PyTypeObject SVertex_Type;
 #define BPy_SVertex_Check(v) (PyObject_IsInstance((PyObject *)v, (PyObject *)&SVertex_Type))
 
 /*---------------------------Python BPy_SVertex structure definition----------*/
-typedef struct {
+struct BPy_SVertex {
   BPy_Interface0D py_if0D;
   Freestyle::SVertex *sv;
-} BPy_SVertex;
+};
 
 /*---------------------------Python BPy_SVertex visible prototypes-----------*/
 
 void SVertex_mathutils_register_callback();
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

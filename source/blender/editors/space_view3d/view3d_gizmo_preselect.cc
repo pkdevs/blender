@@ -8,8 +8,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.h"
-
 #include "ED_gizmo_utils.hh"
 #include "ED_screen.hh"
 
@@ -18,6 +16,8 @@
 #include "WM_types.hh"
 
 #include "view3d_intern.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Mesh Pre-Select Element Gizmo
@@ -30,13 +30,12 @@ struct GizmoGroupPreSelElem {
 static void WIDGETGROUP_mesh_preselect_elem_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   const wmGizmoType *gzt_presel = WM_gizmotype_find("GIZMO_GT_mesh_preselect_elem_3d", true);
-  GizmoGroupPreSelElem *ggd = static_cast<GizmoGroupPreSelElem *>(
-      MEM_callocN(sizeof(GizmoGroupPreSelElem), __func__));
+  GizmoGroupPreSelElem *ggd = MEM_new_zeroed<GizmoGroupPreSelElem>(__func__);
   gzgroup->customdata = ggd;
 
   wmGizmo *gz = ggd->gizmo = WM_gizmo_new_ptr(gzt_presel, gzgroup, nullptr);
-  UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, gz->color);
-  UI_GetThemeColor3fv(TH_GIZMO_HI, gz->color_hi);
+  ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, gz->color);
+  ui::theme::get_color_3fv(TH_GIZMO_HI, gz->color_hi);
 }
 
 void VIEW3D_GGT_mesh_preselect_elem(wmGizmoGroupType *gzgt)
@@ -67,13 +66,12 @@ static void WIDGETGROUP_mesh_preselect_edgering_setup(const bContext * /*C*/,
                                                       wmGizmoGroup *gzgroup)
 {
   const wmGizmoType *gzt_presel = WM_gizmotype_find("GIZMO_GT_mesh_preselect_edgering_3d", true);
-  GizmoGroupPreSelEdgeRing *ggd = static_cast<GizmoGroupPreSelEdgeRing *>(
-      MEM_callocN(sizeof(GizmoGroupPreSelEdgeRing), __func__));
+  GizmoGroupPreSelEdgeRing *ggd = MEM_new_zeroed<GizmoGroupPreSelEdgeRing>(__func__);
   gzgroup->customdata = ggd;
 
   wmGizmo *gz = ggd->gizmo = WM_gizmo_new_ptr(gzt_presel, gzgroup, nullptr);
-  UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, gz->color);
-  UI_GetThemeColor3fv(TH_GIZMO_HI, gz->color_hi);
+  ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, gz->color);
+  ui::theme::get_color_3fv(TH_GIZMO_HI, gz->color_hi);
 }
 
 void VIEW3D_GGT_mesh_preselect_edgering(wmGizmoGroupType *gzgt)
@@ -91,3 +89,5 @@ void VIEW3D_GGT_mesh_preselect_edgering(wmGizmoGroupType *gzgt)
 }
 
 /** \} */
+
+}  // namespace blender

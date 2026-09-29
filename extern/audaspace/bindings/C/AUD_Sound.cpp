@@ -51,10 +51,17 @@
 #include "util/Buffer.h"
 #include "Exception.h"
 
+#include "fx/Echo.h"
+
 #ifdef WITH_CONVOLUTION
 #include "fx/BinauralSound.h"
 #include "fx/ConvolverSound.h"
 #include "fx/Equalizer.h"
+#endif
+
+#ifdef WITH_RUBBERBAND
+#include "fx/TimeStretchPitchScale.h"
+#include "fx/AnimateableTimeStretchPitchScale.h"
 #endif
 
 #include <cassert>
@@ -208,6 +215,8 @@ AUD_API const char* AUD_Sound_write(AUD_Sound* sound, const char* filename, AUD_
 				container = AUD_CONTAINER_OGG;
 			else if(extension == ".wav")
 				container = AUD_CONTAINER_WAV;
+			else if(extension == ".aac")
+				container = AUD_CONTAINER_AAC;
 			else
 				return invalid_container_error;
 		}
@@ -236,6 +245,9 @@ AUD_API const char* AUD_Sound_write(AUD_Sound* sound, const char* filename, AUD_
 				break;
 			case AUD_CONTAINER_WAV:
 				codec = AUD_CODEC_PCM;
+				break;
+			case AUD_CONTAINER_AAC:
+				codec = AUD_CODEC_AAC;
 				break;
 			default:
 				return "Unknown container, cannot select default codec.";
@@ -772,7 +784,22 @@ AUD_API AUD_Sound* AUD_Sound_Binaural(AUD_Sound* sound, AUD_HRTF* hrtfs, AUD_Sou
 		return nullptr;
 	}
 }
+#endif
 
+AUD_API AUD_Sound* AUD_Sound_Echo(AUD_Sound* sound, float delay, float feedback, float mix, bool resetBuffer)
+{
+	assert(sound);
+	try
+	{
+		return new AUD_Sound(new Echo(*sound, delay, feedback, mix, resetBuffer));
+	}
+	catch(Exception&)
+	{
+		return nullptr;
+	}
+}
+
+#ifdef WITH_CONVOLUTION
 AUD_API AUD_Sound* AUD_Sound_equalize(AUD_Sound* sound, float *definition, int size, float maxFreqEq, int sizeConversion)
 {
 	assert(sound);
@@ -781,6 +808,73 @@ AUD_API AUD_Sound* AUD_Sound_equalize(AUD_Sound* sound, float *definition, int s
 	std::memcpy(buf->getBuffer(), definition, sizeof(float)*size);
 	AUD_Sound *equalizer=new AUD_Sound(new Equalizer(*sound, buf, size, maxFreqEq, sizeConversion));
 	return equalizer;
+}
+#endif
+
+#ifdef WITH_RUBBERBAND
+AUD_API AUD_Sound* AUD_Sound_timeStretchPitchScale(AUD_Sound* sound, double timeRatio, double pitchScale, AUD_StretcherQuality quality, char preserveFormant)
+{
+	assert(sound);
+	try
+	{
+		return new AUD_Sound(new TimeStretchPitchScale(*sound, timeRatio, pitchScale, static_cast<StretcherQuality>(quality), preserveFormant));
+	}
+	catch(Exception&)
+	{
+		return nullptr;
+	}
+}
+
+AUD_API AUD_Sound* AUD_Sound_animateableTimeStretchPitchScale(AUD_Sound* sound, float fps, double timeRatio, double pitchScale, AUD_StretcherQuality quality, char preserveFormant)
+{
+	assert(sound);
+	try
+	{
+		return new AUD_Sound(new AnimateableTimeStretchPitchScale(*sound, fps, timeRatio, pitchScale, static_cast<StretcherQuality>(quality), preserveFormant));
+	}
+	catch(Exception&)
+	{
+		return nullptr;
+	}
+}
+
+AUD_API void AUD_Sound_animateableTimeStretchPitchScale_setConstantRangeAnimationData(AUD_Sound* sound, AUD_AnimateablePropertyType type, int frame_start, int frame_end,
+                                                                                      float* data)
+{
+	std::shared_ptr<AnimateableProperty> prop = std::dynamic_pointer_cast<AnimateableTimeStretchPitchScale>(*sound)->getAnimProperty(static_cast<AnimateablePropertyType>(type));
+	prop->writeConstantRange(data, frame_start, frame_end);
+}
+
+AUD_API void AUD_Sound_animateableTimeStretchPitchScale_setAnimationData(AUD_Sound* sound, AUD_AnimateablePropertyType type, int frame, float* data, char animated)
+{
+	std::shared_ptr<AnimateableProperty> prop = std::dynamic_pointer_cast<AnimateableTimeStretchPitchScale>(*sound)->getAnimProperty(static_cast<AnimateablePropertyType>(type));
+	if(animated)
+	{
+		if(frame >= 0)
+			prop->write(data, frame, 1);
+	}
+	else
+	{
+		prop->write(data);
+	}
+}
+
+AUD_API float AUD_Sound_animateableTimeStretchPitchScale_getFPS(AUD_Sound* sound)
+{
+	assert(sound);
+	return dynamic_cast<AnimateableTimeStretchPitchScale*>(sound->get())->getFPS();
+}
+
+AUD_API void AUD_Sound_animateableTimeStretchPitchScale_setFPS(AUD_Sound* sound, float value)
+{
+	assert(sound);
+	dynamic_cast<AnimateableTimeStretchPitchScale*>(sound->get())->setFPS(value);
+}
+
+AUD_API bool AUD_Sound_isAnimateableTimeStretchPitchScale(AUD_Sound* sound)
+{
+	assert(sound);
+	return dynamic_cast<AnimateableTimeStretchPitchScale*>(sound->get()) != nullptr;
 }
 
 #endif

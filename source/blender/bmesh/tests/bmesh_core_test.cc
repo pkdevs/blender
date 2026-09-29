@@ -4,11 +4,17 @@
 
 #include "testing/testing.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+
+#include "BKE_gtest_base.hh"
+
 #include "bmesh.hh"
 
-TEST(bmesh_core, BMVertCreate)
+namespace blender {
+
+class BMeshCoreTest : public bke::BlenderGTestBase {};
+
+TEST_F(BMeshCoreTest, BMVertCreate)
 {
   BMesh *bm;
   BMVert *bv1, *bv2, *bv3;
@@ -42,3 +48,5 @@ TEST(bmesh_core, BMVertCreate)
   EXPECT_EQ(BM_mesh_elem_count(bm, BM_VERT), 3);
   BM_mesh_free(bm);
 }
+
+}  // namespace blender

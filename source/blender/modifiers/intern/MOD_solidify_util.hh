@@ -8,6 +8,12 @@
 
 #pragma once
 
+namespace blender {
+
+struct Mesh;
+struct ModifierData;
+struct ModifierEvalContext;
+
 /* MOD_solidify_extrude.cc */
 
 Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md,
@@ -19,3 +25,5 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md,
 Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
                                           const ModifierEvalContext *ctx,
                                           Mesh *mesh);
+
+}  // namespace blender

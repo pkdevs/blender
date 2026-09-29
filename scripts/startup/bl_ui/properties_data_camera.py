@@ -7,7 +7,7 @@ from bpy.types import Panel
 from bpy.app.translations import contexts as i18n_contexts
 from rna_prop_ui import PropertyPanel
 from bl_ui.utils import PresetPanel
-from .space_properties import PropertiesAnimationMixin
+from bl_ui.space_properties import PropertiesAnimationMixin
 
 
 class CameraButtonsPanel:
@@ -21,6 +21,10 @@ class CameraButtonsPanel:
         return context.camera and (engine in cls.COMPAT_ENGINES)
 
 
+def camera_dof_panorama_unsupported(context, cam):
+    return context.engine == 'BLENDER_EEVEE' and cam.type == 'PANO'
+
+
 class CAMERA_PT_presets(PresetPanel, Panel):
     bl_label = "Camera Presets"
     preset_subdir = "camera"
@@ -29,7 +33,6 @@ class CAMERA_PT_presets(PresetPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -42,7 +45,6 @@ class CAMERA_PT_safe_areas_presets(PresetPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -53,7 +55,6 @@ class DATA_PT_context_camera(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -76,7 +77,6 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -103,7 +103,7 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
 
         elif cam.type == 'PANO':
             engine = context.engine
-            if engine == 'CYCLES':
+            if engine in {'CYCLES', 'BLENDER_EEVEE'}:
                 col.prop(cam, "panorama_type")
                 if cam.panorama_type == 'FISHEYE_EQUIDISTANT':
                     col.prop(cam, "fisheye_fov")
@@ -132,14 +132,27 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
                     sub.prop(cam, "central_cylindrical_range_u_min", text="Longitude Min")
                     sub.prop(cam, "central_cylindrical_range_u_max", text="Max")
                     sub = col.column(align=True)
-                    sub.prop(cam, "central_cylindrical_radius", text="Cylinder radius")
+                    sub.prop(cam, "central_cylindrical_radius", text="Cylinder Radius")
 
-            elif engine in {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}:
+            elif engine in {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}:
                 if cam.lens_unit == 'MILLIMETERS':
                     col.prop(cam, "lens")
                 elif cam.lens_unit == 'FOV':
                     col.prop(cam, "angle")
                 col.prop(cam, "lens_unit")
+
+        elif cam.type == 'CUSTOM':
+            engine = context.engine
+            if engine == 'CYCLES':
+                sub = col.row()
+                sub.prop(cam, "custom_mode", text=" ", expand=True)
+
+                sub = col.row(align=True)
+                if cam.custom_mode == 'EXTERNAL':
+                    sub.prop(cam, "custom_filepath", text=" ")
+                else:
+                    sub.prop(cam, "custom_shader", text=" ")
+                sub.operator("object.camera_custom_update", icon='FILE_REFRESH', text="")
 
         col = layout.column()
         col.separator()
@@ -151,7 +164,7 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
         col.separator()
         sub = col.column(align=True)
         sub.prop(cam, "clip_start", text="Clip Start")
-        sub.prop(cam, "clip_end", text="End")
+        sub.prop(cam, "clip_end", text="End", text_ctxt=i18n_contexts.id_camera)
 
 
 class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
@@ -159,7 +172,6 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -212,7 +224,6 @@ class DATA_PT_camera(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -244,12 +255,17 @@ class DATA_PT_camera(CameraButtonsPanel, Panel):
 class DATA_PT_camera_dof(CameraButtonsPanel, Panel):
     bl_label = "Depth of Field"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw_header(self, context):
         cam = context.camera
         dof = cam.dof
-        self.layout.prop(dof, "use_dof", text="")
+        layout = self.layout
+        layout.enabled = not camera_dof_panorama_unsupported(context, cam)
+        layout.prop(dof, "use_dof", text="")
 
     def draw(self, context):
         layout = self.layout
@@ -257,7 +273,12 @@ class DATA_PT_camera_dof(CameraButtonsPanel, Panel):
 
         cam = context.camera
         dof = cam.dof
-        layout.active = dof.use_dof
+        dof_unsupported = camera_dof_panorama_unsupported(context, cam)
+
+        if dof_unsupported:
+            layout.label(text="Panoramic Depth of Field is not supported yet", icon='ERROR')
+
+        layout.active = dof.use_dof and not dof_unsupported
 
         col = layout.column()
         col.prop(dof, "focus_object", text="Focus on Object")
@@ -271,13 +292,17 @@ class DATA_PT_camera_dof(CameraButtonsPanel, Panel):
         row.operator(
             "ui.eyedropper_depth",
             icon='EYEDROPPER',
-            text="").prop_data_path = "scene.camera.data.dof.focus_distance"
+            text="",
+        ).prop_data_path = "scene.camera.data.dof.focus_distance"
 
 
 class DATA_PT_camera_dof_aperture(CameraButtonsPanel, Panel):
     bl_label = "Aperture"
     bl_parent_id = "DATA_PT_camera_dof"
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
 
     def draw(self, context):
         layout = self.layout
@@ -285,7 +310,7 @@ class DATA_PT_camera_dof_aperture(CameraButtonsPanel, Panel):
 
         cam = context.camera
         dof = cam.dof
-        layout.active = dof.use_dof
+        layout.active = dof.use_dof and not camera_dof_panorama_unsupported(context, cam)
 
         flow = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
 
@@ -304,7 +329,6 @@ class DATA_PT_camera_background_image(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -418,7 +442,6 @@ class DATA_PT_camera_display(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -456,30 +479,33 @@ class DATA_PT_camera_display_composition_guides(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
     def draw(self, context):
-        layout = self.layout
+        self.draw_panel(self.layout, context.camera)
+
+    @classmethod
+    def draw_panel(cls, layout, camera):
         layout.use_property_split = True
 
-        cam = context.camera
-
-        layout.prop(cam, "show_composition_thirds")
+        layout.prop(camera, "show_composition_thirds")
 
         col = layout.column(heading="Center", align=True)
-        col.prop(cam, "show_composition_center")
-        col.prop(cam, "show_composition_center_diagonal", text="Diagonal")
+        col.prop(camera, "show_composition_center")
+        col.prop(camera, "show_composition_center_diagonal", text="Diagonal")
 
         col = layout.column(heading="Golden", align=True)
-        col.prop(cam, "show_composition_golden", text="Ratio")
-        col.prop(cam, "show_composition_golden_tria_a", text="Triangle A")
-        col.prop(cam, "show_composition_golden_tria_b", text="Triangle B")
+        col.prop(camera, "show_composition_golden", text="Ratio")
+        col.prop(camera, "show_composition_golden_tria_a", text="Triangle A")
+        col.prop(camera, "show_composition_golden_tria_b", text="Triangle B")
 
         col = layout.column(heading="Harmony", align=True)
-        col.prop(cam, "show_composition_harmony_tri_a", text="Triangle A")
-        col.prop(cam, "show_composition_harmony_tri_b", text="Triangle B")
+        col.prop(camera, "show_composition_harmony_tri_a", text="Triangle A")
+        col.prop(camera, "show_composition_harmony_tri_b", text="Triangle B")
+
+        col = layout.column()
+        col.prop(camera, "composition_guide_color", text="Color")
 
 
 class DATA_PT_camera_safe_areas(CameraButtonsPanel, Panel):
@@ -488,7 +514,6 @@ class DATA_PT_camera_safe_areas(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -523,7 +548,6 @@ class DATA_PT_camera_safe_areas_center_cut(CameraButtonsPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -552,7 +576,6 @@ class DATA_PT_camera_animation(CameraButtonsPanel, PropertiesAnimationMixin, Pro
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
     _animated_id_context_property = "camera"
@@ -562,34 +585,10 @@ class DATA_PT_custom_props_camera(CameraButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
     _context_path = "object.data"
     _property_type = bpy.types.Camera
-
-
-def draw_display_safe_settings(layout, safe_data, settings):
-    show_safe_areas = settings.show_safe_areas
-    show_safe_center = settings.show_safe_center
-
-    layout.use_property_split = True
-
-    col = layout.column()
-    col.active = show_safe_areas
-
-    sub = col.column()
-    sub.prop(safe_data, "title", slider=True)
-    sub.prop(safe_data, "action", slider=True)
-
-    col.separator()
-
-    col.prop(settings, "show_safe_center", text="Center-Cut Safe Areas")
-
-    sub = col.column()
-    sub.active = show_safe_areas and show_safe_center
-    sub.prop(safe_data, "title_center", slider=True)
-    sub.prop(safe_data, "action_center", slider=True)
 
 
 classes = (

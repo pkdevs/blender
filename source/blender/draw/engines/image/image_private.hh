@@ -10,10 +10,12 @@
 
 #include <optional>
 
-#include "BKE_image.h"
+#include "BKE_image.hh"
 
-#include "image_instance_data.hh"
+#include "image_state.hh"
 #include "image_texture_info.hh"
+
+namespace blender {
 
 /* Forward declarations */
 extern "C" {
@@ -22,36 +24,22 @@ struct Image;
 
 /* *********** LISTS *********** */
 
-namespace blender::draw::image_engine {
-
-struct IMAGE_Data {
-  void *engine_type;
-  DRWViewportEmptyList *fbl;
-  DRWViewportEmptyList *txl;
-  DRWViewportEmptyList *psl;
-  DRWViewportEmptyList *stl;
-  IMAGE_InstanceData *instance_data;
-};
+namespace image_engine {
 
 /**
  * Abstract class for a drawing mode of the image engine.
  *
  * The drawing mode decides how to draw the image on the screen. Each way how to draw would have
- * its own subclass. For now there is only a single drawing mode. #DefaultDrawingMode.
+ * its own subclass.
  */
 class AbstractDrawingMode {
  public:
   virtual ~AbstractDrawingMode() = default;
-  virtual void begin_sync(IMAGE_Data *vedata) const = 0;
-  virtual void image_sync(IMAGE_Data *vedata, Image *image, ImageUser *iuser) const = 0;
-  virtual void draw_viewport(IMAGE_Data *vedata) const = 0;
-  virtual void draw_finish(IMAGE_Data *vedata) const = 0;
+  virtual void begin_sync() const = 0;
+  virtual void image_sync(blender::Image *image, blender::ImageUser *iuser) const = 0;
+  virtual void draw_viewport() const = 0;
 };
 
-/* `image_shader.cc` */
+}  // namespace image_engine
 
-GPUShader *IMAGE_shader_image_get();
-GPUShader *IMAGE_shader_depth_get();
-void IMAGE_shader_free();
-
-}  // namespace blender::draw::image_engine
+}  // namespace blender

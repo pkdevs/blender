@@ -13,16 +13,16 @@
 
 /* Standalone for inclusion in binaries other than Blender. */
 #  ifdef USE_STANDALONE
-#    define MEM_mallocN(size, str) ((void)str, malloc(size))
-#    define MEM_callocN(size, str) ((void)str, calloc(size, 1))
-#    define MEM_freeN(ptr) free(ptr)
+#    define MEM_new_uninitialized(size, str) ((void)str, malloc(size))
+#    define MEM_new_zeroed(size, str) ((void)str, calloc(size, 1))
+#    define MEM_delete(ptr) free(ptr)
 #  else
 #    include "MEM_guardedalloc.h"
 #  endif
 
 #  define WIN32_SKIP_HKEY_PROTECTION /* Need to use `HKEY`. */
-#  include "BLI_utildefines.h"
-#  include "BLI_winstuff.h"
+#  include "BLI_utildefines.hh"
+#  include "BLI_winstuff.hh"
 #  include "utfconv.hh"
 
 #  define PATH_SUFFIX "\\*"
@@ -53,12 +53,12 @@ DIR *opendir(const char *path)
 {
   wchar_t *path_16 = alloc_utf16_from_8(path, 0);
   int path_len;
-  DIR *newd = NULL;
+  DIR *newd = nullptr;
 
   if ((GetFileAttributesW(path_16) & FILE_ATTRIBUTE_DIRECTORY) &&
       ((path_len = strlen(path)) < (sizeof(newd->path) - PATH_SUFFIX_LEN)))
   {
-    newd = static_cast<DIR *>(MEM_mallocN(sizeof(DIR), "opendir"));
+    newd = MEM_new_uninitialized<DIR>("opendir");
     newd->handle = INVALID_HANDLE_VALUE;
     memcpy(newd->path, path, path_len);
     memcpy(newd->path + path_len, PATH_SUFFIX, PATH_SUFFIX_LEN + 1);
@@ -66,33 +66,33 @@ DIR *opendir(const char *path)
     newd->direntry.d_ino = 0;
     newd->direntry.d_off = 0;
     newd->direntry.d_reclen = 0;
-    newd->direntry.d_name = NULL;
+    newd->direntry.d_name = nullptr;
   }
 
   free(path_16);
   return newd;
 }
 
-static char *BLI_alloc_utf_8_from_16(wchar_t *in16, size_t add)
+static char *bli_alloc_utf_8_from_16(wchar_t *in16, size_t add)
 {
   size_t bsize = count_utf_8_from_16(in16);
-  char *out8 = NULL;
+  char *out8 = nullptr;
   if (!bsize) {
-    return NULL;
+    return nullptr;
   }
-  out8 = (char *)MEM_mallocN(sizeof(char) * (bsize + add), "UTF-8 String");
+  out8 = MEM_new_array_uninitialized<char>(bsize + add, "UTF-8 String");
   conv_utf_16_to_8(in16, out8, bsize);
   return out8;
 }
 
-static wchar_t *UNUSED_FUNCTION(BLI_alloc_utf16_from_8)(char *in8, size_t add)
+static wchar_t *UNUSED_FUNCTION(bli_alloc_utf16_from_8)(char *in8, size_t add)
 {
   size_t bsize = count_utf_16_from_8(in8);
-  wchar_t *out16 = NULL;
+  wchar_t *out16 = nullptr;
   if (!bsize) {
-    return NULL;
+    return nullptr;
   }
-  out16 = (wchar_t *)MEM_mallocN(sizeof(wchar_t) * (bsize + add), "UTF-16 String");
+  out16 = MEM_new_array_uninitialized<wchar_t>(bsize + add, "UTF-16 String");
   conv_utf_8_to_16(in8, out16, bsize);
   return out16;
 }
@@ -100,8 +100,8 @@ static wchar_t *UNUSED_FUNCTION(BLI_alloc_utf16_from_8)(char *in8, size_t add)
 struct dirent *readdir(DIR *dp)
 {
   if (dp->direntry.d_name) {
-    MEM_freeN(dp->direntry.d_name);
-    dp->direntry.d_name = NULL;
+    MEM_delete(dp->direntry.d_name);
+    dp->direntry.d_name = nullptr;
   }
 
   if (dp->handle == INVALID_HANDLE_VALUE) {
@@ -109,33 +109,33 @@ struct dirent *readdir(DIR *dp)
     dp->handle = FindFirstFileW(path_16, &(dp->data));
     free(path_16);
     if (dp->handle == INVALID_HANDLE_VALUE) {
-      return NULL;
+      return nullptr;
     }
 
-    dp->direntry.d_name = BLI_alloc_utf_8_from_16(dp->data.cFileName, 0);
+    dp->direntry.d_name = bli_alloc_utf_8_from_16(dp->data.cFileName, 0);
 
     return &dp->direntry;
   }
   else if (FindNextFileW(dp->handle, &(dp->data))) {
-    dp->direntry.d_name = BLI_alloc_utf_8_from_16(dp->data.cFileName, 0);
+    dp->direntry.d_name = bli_alloc_utf_8_from_16(dp->data.cFileName, 0);
 
     return &dp->direntry;
   }
   else {
-    return NULL;
+    return nullptr;
   }
 }
 
 int closedir(DIR *dp)
 {
   if (dp->direntry.d_name) {
-    MEM_freeN(dp->direntry.d_name);
+    MEM_delete(dp->direntry.d_name);
   }
   if (dp->handle != INVALID_HANDLE_VALUE) {
     FindClose(dp->handle);
   }
 
-  MEM_freeN(dp);
+  MEM_delete(dp);
 
   return 0;
 }

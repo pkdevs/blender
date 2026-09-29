@@ -11,9 +11,11 @@
 #include "../stroke/StyleModule.h"
 #include "../system/PythonInterpreter.h"
 
-#include "BLI_utildefines.h"  // BLI_assert()
+#include "BLI_utildefines.hh"  // BLI_assert()
 
+namespace blender {
 struct Text;
+}
 
 namespace Freestyle {
 
@@ -38,14 +40,12 @@ class BufferedStyleModule : public StyleModule {
  private:
   string _buffer;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:BufferedStyleModule")
-#endif
 };
 
 class BlenderStyleModule : public StyleModule {
  public:
-  BlenderStyleModule(struct Text *text, const string &name, Interpreter *inter)
+  BlenderStyleModule(blender::Text *text, const string &name, Interpreter *inter)
       : StyleModule(name, inter)
   {
     _text = text;
@@ -62,11 +62,9 @@ class BlenderStyleModule : public StyleModule {
   }
 
  private:
-  struct Text *_text;
+  struct blender::Text *_text;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:BlenderStyleModule")
-#endif
 };
 
 } /* namespace Freestyle */

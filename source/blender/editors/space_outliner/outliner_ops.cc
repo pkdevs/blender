@@ -8,7 +8,7 @@
 
 #include "WM_api.hh"
 
-#include "ED_screen.hh"
+#include "DNA_space_types.h"
 
 #include "outliner_intern.hh"
 
@@ -33,9 +33,12 @@ void outliner_operatortypes()
   WM_operatortype_append(OUTLINER_OT_lib_relocate);
   WM_operatortype_append(OUTLINER_OT_liboverride_operation);
   WM_operatortype_append(OUTLINER_OT_liboverride_troubleshoot_operation);
+  WM_operatortype_append(OUTLINER_OT_liboverride_property_remove);
   WM_operatortype_append(OUTLINER_OT_id_operation);
   WM_operatortype_append(OUTLINER_OT_id_delete);
+  WM_operatortype_append(OUTLINER_OT_pack_data);
   WM_operatortype_append(OUTLINER_OT_id_remap);
+  WM_operatortype_append(OUTLINER_OT_id_linked_relocate);
   WM_operatortype_append(OUTLINER_OT_id_copy);
   WM_operatortype_append(OUTLINER_OT_id_paste);
   WM_operatortype_append(OUTLINER_OT_data_operation);

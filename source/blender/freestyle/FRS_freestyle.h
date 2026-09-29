@@ -8,9 +8,7 @@
  * \ingroup freestyle
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 struct FreestyleConfig;
 struct FreestyleLineStyle;
@@ -57,6 +55,4 @@ bool FRS_move_active_lineset(struct FreestyleConfig *config, int direction);
 struct Material *FRS_create_stroke_material(struct Main *bmain,
                                             struct FreestyleLineStyle *linestyle);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

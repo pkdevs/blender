@@ -8,7 +8,7 @@
 
 #include "AS_asset_catalog_path.hh"
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 
 #include <sstream>
 
@@ -97,6 +97,11 @@ std::ostream &operator<<(std::ostream &stream, const AssetCatalogPath &path_to_a
 {
   stream << path_to_append.path_;
   return stream;
+}
+
+AssetCatalogPath AssetCatalogPath::from_user_input(const char *path)
+{
+  return AssetCatalogPath(path).cleanup();
 }
 
 AssetCatalogPath AssetCatalogPath::cleanup() const

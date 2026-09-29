@@ -6,13 +6,12 @@
  * \ingroup spclip
  */
 
-#include "DNA_scene_types.h"
-
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
-#include "BKE_tracking.h"
+#include "BKE_tracking.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -26,6 +25,8 @@
 #include "UI_view2d.hh"
 
 #include "clip_intern.hh" /* own include */
+
+namespace blender {
 
 static bool space_clip_dopesheet_poll(bContext *C)
 {
@@ -55,7 +56,7 @@ static bool dopesheet_select_channel_poll(bContext *C)
   return false;
 }
 
-static int dopesheet_select_channel_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus dopesheet_select_channel_exec(bContext *C, wmOperator *op)
 {
   SpaceClip *sc = CTX_wm_space_clip(C);
   MovieClip *clip = ED_space_clip_get_clip(sc);
@@ -70,8 +71,8 @@ static int dopesheet_select_channel_exec(bContext *C, wmOperator *op)
   RNA_float_get_array(op->ptr, "location", location);
   channel_index = -(location[1] - (CHANNEL_FIRST + CHANNEL_HEIGHT_HALF)) / CHANNEL_STEP;
 
-  LISTBASE_FOREACH (MovieTrackingDopesheetChannel *, channel, &dopesheet->channels) {
-    MovieTrackingTrack *track = channel->track;
+  for (MovieTrackingDopesheetChannel &channel : dopesheet->channels) {
+    MovieTrackingTrack *track = channel.track;
 
     if (current_channel_index == channel_index) {
       if (extend) {
@@ -101,12 +102,14 @@ static int dopesheet_select_channel_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int dopesheet_select_channel_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus dopesheet_select_channel_invoke(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent *event)
 {
   ARegion *region = CTX_wm_region(C);
   float location[2];
 
-  UI_view2d_region_to_view(
+  ui::view2d_region_to_view(
       &region->v2d, event->mval[0], event->mval[1], &location[0], &location[1]);
   RNA_float_set_array(op->ptr, "location", location);
 
@@ -120,7 +123,7 @@ void CLIP_OT_dopesheet_select_channel(wmOperatorType *ot)
   ot->description = "Select movie tracking channel";
   ot->idname = "CLIP_OT_dopesheet_select_channel";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = dopesheet_select_channel_invoke;
   ot->exec = dopesheet_select_channel_exec;
   ot->poll = dopesheet_select_channel_poll;
@@ -148,7 +151,7 @@ void CLIP_OT_dopesheet_select_channel(wmOperatorType *ot)
 
 /********************** View All operator *********************/
 
-static int dopesheet_view_all_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus dopesheet_view_all_exec(bContext *C, wmOperator * /*op*/)
 {
   SpaceClip *sc = CTX_wm_space_clip(C);
   ARegion *region = CTX_wm_region(C);
@@ -158,9 +161,11 @@ static int dopesheet_view_all_exec(bContext *C, wmOperator * /*op*/)
   MovieTrackingDopesheet *dopesheet = &tracking->dopesheet;
   int frame_min = INT_MAX, frame_max = INT_MIN;
 
-  LISTBASE_FOREACH (MovieTrackingDopesheetChannel *, channel, &dopesheet->channels) {
-    frame_min = min_ii(frame_min, channel->segments[0]);
-    frame_max = max_ii(frame_max, channel->segments[channel->tot_segment]);
+  for (MovieTrackingDopesheetChannel &channel : dopesheet->channels) {
+    if (channel.segments) {
+      frame_min = min_ii(frame_min, channel.segments[0]);
+      frame_max = max_ii(frame_max, channel.segments[channel.tot_segment]);
+    }
   }
 
   if (frame_min < frame_max) {
@@ -187,10 +192,12 @@ void CLIP_OT_dopesheet_view_all(wmOperatorType *ot)
   ot->description = "Reset viewable area to show full keyframe range";
   ot->idname = "CLIP_OT_dopesheet_view_all";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = dopesheet_view_all_exec;
   ot->poll = space_clip_dopesheet_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+}  // namespace blender

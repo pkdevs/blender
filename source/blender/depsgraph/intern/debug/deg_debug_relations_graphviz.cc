@@ -11,9 +11,6 @@
 #include <cstdarg>
 
 #include "BLI_dot_export.hh"
-#include "BLI_utildefines.h"
-
-#include "DNA_listBase.h"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_debug.hh"
@@ -28,13 +25,12 @@
 
 #include <sstream>
 
-namespace deg = blender::deg;
-namespace dot = blender::dot;
+namespace blender {
 
 /* ****************** */
 /* Graphviz Debugging */
 
-namespace blender::deg {
+namespace deg {
 
 /* Only one should be enabled, defines whether graphviz nodes
  * get colored by individual types or classes.
@@ -107,7 +103,7 @@ static int deg_debug_node_color_index(const Node *node)
     case NodeType::ID_REF:
       return 5;
     case NodeType::OPERATION: {
-      OperationNode *op_node = (OperationNode *)node;
+      OperationNode *op_node = static_cast<OperationNode *>(const_cast<Node *>(node));
       if (op_node->is_noop()) {
         if (op_node->flag & OperationFlag::DEPSOP_FLAG_PINNED) {
           return 7;
@@ -132,7 +128,7 @@ static int deg_debug_node_color_index(const Node *node)
 #endif
 
 #ifdef COLOR_SCHEME_NODE_TYPE
-  const int(*pair)[2];
+  const int (*pair)[2];
   for (pair = deg_debug_node_type_color_map; (*pair)[0] >= 0; pair++) {
     if ((*pair)[0] == node->type) {
       return (*pair)[1];
@@ -144,9 +140,9 @@ static int deg_debug_node_color_index(const Node *node)
 
 struct DotExportContext {
   bool show_tags;
-  dot::DirectedGraph &digraph;
-  Map<const Node *, dot::Node *> nodes_map;
-  Map<const Node *, dot::Cluster *> clusters_map;
+  dot_export::DirectedGraph &digraph;
+  Map<const Node *, dot_export::Node *> nodes_map;
+  Map<const Node *, dot_export::Cluster *> clusters_map;
 };
 
 static void deg_debug_graphviz_legend_color(const char *name,
@@ -162,7 +158,7 @@ static void deg_debug_graphviz_legend_color(const char *name,
 
 static void deg_debug_graphviz_legend(DotExportContext &ctx)
 {
-  dot::Node &legend_node = ctx.digraph.new_node("");
+  dot_export::Node &legend_node = ctx.digraph.new_node("");
   legend_node.attributes.set("rank", "sink");
   legend_node.attributes.set("shape", "none");
   legend_node.attributes.set("margin", 0);
@@ -182,7 +178,7 @@ static void deg_debug_graphviz_legend(DotExportContext &ctx)
 #endif
 
 #ifdef COLOR_SCHEME_NODE_TYPE
-  const int(*pair)[2];
+  const int (*pair)[2];
   for (pair = deg_debug_node_type_color_map; (*pair)[0] >= 0; pair++) {
     DepsNodeFactory *nti = type_get_factory((NodeType)(*pair)[0]);
     deg_debug_graphviz_legend_color(
@@ -198,7 +194,7 @@ static void deg_debug_graphviz_legend(DotExportContext &ctx)
 
 static void deg_debug_graphviz_node_color(DotExportContext &ctx,
                                           const Node *node,
-                                          dot::Attributes &dot_attributes)
+                                          dot_export::Attributes &dot_attributes)
 {
   const char *color_default = "black";
   const char *color_modified = "orangered4";
@@ -206,7 +202,7 @@ static void deg_debug_graphviz_node_color(DotExportContext &ctx,
   const char *color = color_default;
   if (ctx.show_tags) {
     if (node->get_class() == NodeClass::OPERATION) {
-      OperationNode *op_node = (OperationNode *)node;
+      OperationNode *op_node = static_cast<OperationNode *>(const_cast<Node *>(node));
       if (op_node->flag & DEPSOP_FLAG_DIRECTLY_MODIFIED) {
         color = color_modified;
       }
@@ -220,7 +216,7 @@ static void deg_debug_graphviz_node_color(DotExportContext &ctx,
 
 static void deg_debug_graphviz_node_penwidth(DotExportContext &ctx,
                                              const Node *node,
-                                             dot::Attributes &dot_attributes)
+                                             dot_export::Attributes &dot_attributes)
 {
   float penwidth_default = 1.0f;
   float penwidth_modified = 4.0f;
@@ -228,7 +224,7 @@ static void deg_debug_graphviz_node_penwidth(DotExportContext &ctx,
   float penwidth = penwidth_default;
   if (ctx.show_tags) {
     if (node->get_class() == NodeClass::OPERATION) {
-      OperationNode *op_node = (OperationNode *)node;
+      OperationNode *op_node = static_cast<OperationNode *>(const_cast<Node *>(node));
       if (op_node->flag & DEPSOP_FLAG_DIRECTLY_MODIFIED) {
         penwidth = penwidth_modified;
       }
@@ -240,7 +236,8 @@ static void deg_debug_graphviz_node_penwidth(DotExportContext &ctx,
   dot_attributes.set("penwidth", penwidth);
 }
 
-static void deg_debug_graphviz_node_fillcolor(const Node *node, dot::Attributes &dot_attributes)
+static void deg_debug_graphviz_node_fillcolor(const Node *node,
+                                              dot_export::Attributes &dot_attributes)
 {
   const char *defaultcolor = "gainsboro";
   int color_index = deg_debug_node_color_index(node);
@@ -250,7 +247,7 @@ static void deg_debug_graphviz_node_fillcolor(const Node *node, dot::Attributes 
   dot_attributes.set("fillcolor", fillcolor);
 }
 
-static void deg_debug_graphviz_relation_color(const Relation *rel, dot::DirectedEdge &edge)
+static void deg_debug_graphviz_relation_color(const Relation *rel, dot_export::DirectedEdge &edge)
 {
   const char *color_default = "black";
   const char *color_cyclic = "red4";   /* The color of crime scene. */
@@ -265,7 +262,7 @@ static void deg_debug_graphviz_relation_color(const Relation *rel, dot::Directed
   edge.attributes.set("color", color);
 }
 
-static void deg_debug_graphviz_relation_style(const Relation *rel, dot::DirectedEdge &edge)
+static void deg_debug_graphviz_relation_style(const Relation *rel, dot_export::DirectedEdge &edge)
 {
   const char *style_default = "solid";
   const char *style_no_flush = "dashed";
@@ -280,7 +277,8 @@ static void deg_debug_graphviz_relation_style(const Relation *rel, dot::Directed
   edge.attributes.set("style", style);
 }
 
-static void deg_debug_graphviz_relation_arrowhead(const Relation *rel, dot::DirectedEdge &edge)
+static void deg_debug_graphviz_relation_arrowhead(const Relation *rel,
+                                                  dot_export::DirectedEdge &edge)
 {
   const char *shape_default = "normal";
   const char *shape_no_cow = "box";
@@ -288,8 +286,8 @@ static void deg_debug_graphviz_relation_arrowhead(const Relation *rel, dot::Dire
   if (rel->from->get_class() == NodeClass::OPERATION &&
       rel->to->get_class() == NodeClass::OPERATION)
   {
-    OperationNode *op_from = (OperationNode *)rel->from;
-    OperationNode *op_to = (OperationNode *)rel->to;
+    OperationNode *op_from = static_cast<OperationNode *>(rel->from);
+    OperationNode *op_to = static_cast<OperationNode *>(rel->to);
     if (op_from->owner->type == NodeType::COPY_ON_EVAL &&
         /* The #ID::recalc flag depends on run-time state which is not valid at this point in time.
          * Pass in all flags although there may be a better way to represent this. */
@@ -303,12 +301,12 @@ static void deg_debug_graphviz_relation_arrowhead(const Relation *rel, dot::Dire
 
 static void deg_debug_graphviz_node_style(DotExportContext &ctx,
                                           const Node *node,
-                                          dot::Attributes &dot_attributes)
+                                          dot_export::Attributes &dot_attributes)
 {
   StringRef base_style = "filled"; /* default style */
   if (ctx.show_tags) {
     if (node->get_class() == NodeClass::OPERATION) {
-      OperationNode *op_node = (OperationNode *)node;
+      OperationNode *op_node = static_cast<OperationNode *>(const_cast<Node *>(node));
       if (op_node->flag & (DEPSOP_FLAG_DIRECTLY_MODIFIED | DEPSOP_FLAG_NEEDS_UPDATE)) {
         base_style = "striped";
       }
@@ -329,11 +327,11 @@ static void deg_debug_graphviz_node_style(DotExportContext &ctx,
 
 static void deg_debug_graphviz_node_single(DotExportContext &ctx,
                                            const Node *node,
-                                           dot::Cluster *parent_cluster)
+                                           dot_export::Cluster *parent_cluster)
 {
-  string name = node->identifier();
+  std::string name = node->identifier();
 
-  dot::Node &dot_node = ctx.digraph.new_node(name);
+  dot_export::Node &dot_node = ctx.digraph.new_node(name);
   ctx.nodes_map.add_new(node, &dot_node);
   dot_node.set_parent_cluster(parent_cluster);
   dot_node.attributes.set("fontname", deg_debug_graphviz_fontname);
@@ -346,12 +344,11 @@ static void deg_debug_graphviz_node_single(DotExportContext &ctx,
   deg_debug_graphviz_node_penwidth(ctx, node, dot_node.attributes);
 }
 
-static dot::Cluster &deg_debug_graphviz_node_cluster_create(DotExportContext &ctx,
-                                                            const Node *node,
-                                                            dot::Cluster *parent_cluster)
+static dot_export::Cluster &deg_debug_graphviz_node_cluster_create(
+    DotExportContext &ctx, const Node *node, dot_export::Cluster *parent_cluster)
 {
-  string name = node->identifier();
-  dot::Cluster &cluster = ctx.digraph.new_cluster(name);
+  std::string name = node->identifier();
+  dot_export::Cluster &cluster = ctx.digraph.new_cluster(name);
   cluster.set_parent_cluster(parent_cluster);
   cluster.attributes.set("fontname", deg_debug_graphviz_fontname);
   cluster.attributes.set("fontsize", deg_debug_graphviz_node_label_size);
@@ -361,7 +358,7 @@ static dot::Cluster &deg_debug_graphviz_node_cluster_create(DotExportContext &ct
   deg_debug_graphviz_node_fillcolor(node, cluster.attributes);
   deg_debug_graphviz_node_penwidth(ctx, node, cluster.attributes);
   /* dummy node, so we can add edges between clusters */
-  dot::Node &dot_node = ctx.digraph.new_node("");
+  dot_export::Node &dot_node = ctx.digraph.new_node("");
   dot_node.attributes.set("shape", "point");
   dot_node.attributes.set("style", "invis");
   dot_node.set_parent_cluster(&cluster);
@@ -375,16 +372,17 @@ static void deg_debug_graphviz_graph_relations(DotExportContext &ctx, const Deps
 
 static void deg_debug_graphviz_node(DotExportContext &ctx,
                                     const Node *node,
-                                    dot::Cluster *parent_cluster)
+                                    dot_export::Cluster *parent_cluster)
 {
   switch (node->type) {
     case NodeType::ID_REF: {
-      const IDNode *id_node = (const IDNode *)node;
+      const IDNode *id_node = static_cast<const IDNode *>(node);
       if (id_node->components.is_empty()) {
         deg_debug_graphviz_node_single(ctx, node, parent_cluster);
       }
       else {
-        dot::Cluster &cluster = deg_debug_graphviz_node_cluster_create(ctx, node, parent_cluster);
+        dot_export::Cluster &cluster = deg_debug_graphviz_node_cluster_create(
+            ctx, node, parent_cluster);
         for (const ComponentNode *comp : id_node->components.values()) {
           deg_debug_graphviz_node(ctx, comp, &cluster);
         }
@@ -396,6 +394,7 @@ static void deg_debug_graphviz_node(DotExportContext &ctx,
     case NodeType::TRANSFORM:
     case NodeType::GEOMETRY:
     case NodeType::SEQUENCER:
+    case NodeType::COMPOSITOR:
     case NodeType::EVAL_POSE:
     case NodeType::BONE:
     case NodeType::SHADING:
@@ -418,12 +417,13 @@ static void deg_debug_graphviz_node(DotExportContext &ctx,
     case NodeType::VISIBILITY:
     case NodeType::NTREE_OUTPUT:
     case NodeType::NTREE_GEOMETRY_PREPROCESS: {
-      ComponentNode *comp_node = (ComponentNode *)node;
+      ComponentNode *comp_node = static_cast<ComponentNode *>(const_cast<Node *>(node));
       if (comp_node->operations.is_empty()) {
         deg_debug_graphviz_node_single(ctx, node, parent_cluster);
       }
       else {
-        dot::Cluster &cluster = deg_debug_graphviz_node_cluster_create(ctx, node, parent_cluster);
+        dot_export::Cluster &cluster = deg_debug_graphviz_node_cluster_create(
+            ctx, node, parent_cluster);
         for (Node *op_node : comp_node->operations) {
           deg_debug_graphviz_node(ctx, op_node, &cluster);
         }
@@ -447,10 +447,10 @@ static void deg_debug_graphviz_node_relations(DotExportContext &ctx, const Node 
 
     const Node *head = rel->to; /* same as node */
     const Node *tail = rel->from;
-    dot::Node &dot_tail = *ctx.nodes_map.lookup(tail);
-    dot::Node &dot_head = *ctx.nodes_map.lookup(head);
+    dot_export::Node &dot_tail = *ctx.nodes_map.lookup(tail);
+    dot_export::Node &dot_head = *ctx.nodes_map.lookup(head);
 
-    dot::DirectedEdge &edge = ctx.digraph.new_edge(dot_tail, dot_head);
+    dot_export::DirectedEdge &edge = ctx.digraph.new_edge(dot_tail, dot_head);
 
     /* NOTE: without label an id seem necessary to avoid bugs in graphviz/dot. */
     edge.attributes.set("id", rel->name);
@@ -462,11 +462,11 @@ static void deg_debug_graphviz_node_relations(DotExportContext &ctx, const Node 
     /* NOTE: edge from node to our own cluster is not possible and gives graphviz
      * warning, avoid this here by just linking directly to the invisible
      * placeholder node. */
-    dot::Cluster *tail_cluster = ctx.clusters_map.lookup_default(tail, nullptr);
+    dot_export::Cluster *tail_cluster = ctx.clusters_map.lookup_default(tail, nullptr);
     if (tail_cluster != nullptr && tail_cluster->contains(dot_head)) {
       edge.attributes.set("ltail", tail_cluster->name());
     }
-    dot::Cluster *head_cluster = ctx.clusters_map.lookup_default(head, nullptr);
+    dot_export::Cluster *head_cluster = ctx.clusters_map.lookup_default(head, nullptr);
     if (head_cluster != nullptr && head_cluster->contains(dot_tail)) {
       edge.attributes.set("lhead", head_cluster->name());
     }
@@ -500,16 +500,16 @@ static void deg_debug_graphviz_graph_relations(DotExportContext &ctx, const Deps
   }
 }
 
-}  // namespace blender::deg
+}  // namespace deg
 
-std::string DEG_debug_graph_to_dot(const Depsgraph &graph, const blender::StringRef label)
+std::string DEG_debug_graph_to_dot(const Depsgraph &graph, const StringRef label)
 {
   const deg::Depsgraph &deg_graph = reinterpret_cast<const deg::Depsgraph &>(graph);
 
-  dot::DirectedGraph digraph;
+  dot_export::DirectedGraph digraph;
   deg::DotExportContext ctx{false, digraph};
 
-  digraph.set_rankdir(dot::Attr_rankdir::LeftToRight);
+  digraph.set_rankdir(dot_export::Attr_rankdir::LeftToRight);
   digraph.attributes.set("compound", "true");
   digraph.attributes.set("labelloc", "t");
   digraph.attributes.set("fontsize", deg::deg_debug_graphviz_graph_label_size);
@@ -525,3 +525,5 @@ std::string DEG_debug_graph_to_dot(const Depsgraph &graph, const blender::String
 
   return digraph.to_dot_string();
 }
+
+}  // namespace blender

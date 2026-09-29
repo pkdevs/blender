@@ -18,15 +18,14 @@
 #  include "MEM_guardedalloc.h"
 
 #  include "DNA_mesh_types.h"
-#  include "DNA_object_types.h"
-
-#  include "BLI_utildefines.h"
 
 #  include "BKE_customdata.hh"
 
 #  include "BKE_mesh.hh"
 
-#  include "BLI_dynstr.h"
+#  include "BLI_dynstr.hh"
+
+namespace blender {
 
 char *BKE_mesh_debug_info(const Mesh *mesh)
 {
@@ -36,7 +35,7 @@ char *BKE_mesh_debug_info(const Mesh *mesh)
   const char *indent8 = "        ";
 
   BLI_dynstr_append(dynstr, "{\n");
-  BLI_dynstr_appendf(dynstr, "    'ptr': '%p',\n", (void *)mesh);
+  BLI_dynstr_appendf(dynstr, "    'ptr': '%p',\n", mesh);
   BLI_dynstr_appendf(dynstr, "    'totvert': %d,\n", mesh->verts_num);
   BLI_dynstr_appendf(dynstr, "    'totedge': %d,\n", mesh->edges_num);
   BLI_dynstr_appendf(dynstr, "    'totface': %d,\n", mesh->totface_legacy);
@@ -78,7 +77,9 @@ void BKE_mesh_debug_print(const Mesh *mesh)
   char *str = BKE_mesh_debug_info(mesh);
   puts(str);
   fflush(stdout);
-  MEM_freeN(str);
+  MEM_delete(str);
 }
+
+}  // namespace blender
 
 #endif /* !NDEBUG */

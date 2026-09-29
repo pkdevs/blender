@@ -2,21 +2,23 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup depsgraph
+ */
+
 #include <mutex>
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_writeback_sync.hh"
 
-#include "BLI_map.hh"
-
 #include "depsgraph.hh"
 
 namespace blender::deg::sync_writeback {
 
-void add(::Depsgraph &depsgraph, std::function<void()> fn)
+void add(blender::Depsgraph &depsgraph, std::function<void()> fn)
 {
   deg::Depsgraph &deg_graph = reinterpret_cast<deg::Depsgraph &>(depsgraph);
-  if (!deg_graph.is_active) {
+  if (!deg_graph.is_active || deg_graph.sync_writeback == DEG_EVALUATE_SYNC_WRITEBACK_NO) {
     return;
   }
 

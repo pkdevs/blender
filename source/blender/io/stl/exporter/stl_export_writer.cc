@@ -10,14 +10,12 @@
 #include <cstdio>
 #include <stdexcept>
 
-/* SEP macro from BLI path utils clashes with SEP symbol in fmt headers. */
-#undef SEP
 #include <fmt/format.h>
 
 #include "stl_data.hh"
 #include "stl_export_writer.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 
 namespace blender::io::stl {
 

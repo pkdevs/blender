@@ -10,10 +10,6 @@
 
 #include "../../stroke/BasicStrokeShaders.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +27,7 @@ PyDoc_STRVAR(
     "\n"
     "   Builds a TipRemoverShader object.\n"
     "\n"
-    "   :arg tip_length: The length of the piece of stroke we want to remove\n"
+    "   :param tip_length: The length of the piece of stroke we want to remove\n"
     "      at each extremity.\n"
     "   :type tip_length: float\n"
     "\n"
@@ -39,15 +35,20 @@ PyDoc_STRVAR(
     "\n"
     "   Removes the stroke's extremities.\n"
     "\n"
-    "   :arg stroke: A Stroke object.\n"
+    "   :param stroke: A Stroke object.\n"
     "   :type stroke: :class:`freestyle.types.Stroke`\n");
-
 static int TipRemoverShader___init__(BPy_TipRemoverShader *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {"tip_length", nullptr};
   double d;
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "d", (char **)kwlist, &d)) {
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "d" /* `tip_length` */
+                                   ":__init__",
+                                   (char **)kwlist,
+                                   &d))
+  {
     return -1;
   }
   self->py_ss.ss = new StrokeShaders::TipRemoverShader(d);
@@ -98,7 +99,3 @@ PyTypeObject TipRemoverShader_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

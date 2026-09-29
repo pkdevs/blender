@@ -5,14 +5,9 @@
 set(INC
   PUBLIC .
   ../animrig
-  ../blenkernel
-  ../bmesh
-  ../draw
-  ../functions
   ../makesrna
   ../modifiers
-  ../sequencer
-  ../windowmanager
+  ../nodes
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -56,7 +51,6 @@ set(SRC
   intern/eval/deg_eval_flush.cc
   intern/eval/deg_eval_runtime_backup.cc
   intern/eval/deg_eval_runtime_backup_animation.cc
-  intern/eval/deg_eval_runtime_backup_gpencil.cc
   intern/eval/deg_eval_runtime_backup_modifier.cc
   intern/eval/deg_eval_runtime_backup_movieclip.cc
   intern/eval/deg_eval_runtime_backup_object.cc
@@ -126,7 +120,6 @@ set(SRC
   intern/eval/deg_eval_flush.h
   intern/eval/deg_eval_runtime_backup.h
   intern/eval/deg_eval_runtime_backup_animation.h
-  intern/eval/deg_eval_runtime_backup_gpencil.h
   intern/eval/deg_eval_runtime_backup_modifier.h
   intern/eval/deg_eval_runtime_backup_movieclip.h
   intern/eval/deg_eval_runtime_backup_object.h
@@ -154,11 +147,19 @@ set(SRC
 )
 
 set(LIB
-  bf_blenkernel
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::bmesh
   PRIVATE bf::dna
+  PRIVATE bf::draw
+  PRIVATE bf::functions
+  PRIVATE bf::imbuf
   PRIVATE bf::intern::atomic
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::sequencer
+  PRIVATE bf::windowmanager
+  PRIVATE bf::dependencies::optional::audaspace
 )
 
 if(WITH_PYTHON)
@@ -166,10 +167,6 @@ if(WITH_PYTHON)
   list(APPEND INC
     ../python
   )
-endif()
-
-if(WITH_EXPERIMENTAL_FEATURES)
-  add_definitions(-DWITH_ANIM_BAKLAVA)
 endif()
 
 blender_add_lib(bf_depsgraph "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
@@ -183,9 +180,11 @@ if(WITH_GTESTS)
   )
   set(TEST_SRC
     intern/builder/deg_builder_rna_test.cc
+    intern/depsgraph_query_iter_test.cc
   )
   set(TEST_LIB
+    ${LIB}
     bf_depsgraph
   )
-  blender_add_test_suite_lib(depsgraph "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB}")
+  blender_add_test_suite_lib(depsgraph "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${TEST_LIB}")
 endif()

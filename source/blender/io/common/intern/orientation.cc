@@ -2,12 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_main.hh"
-#include "DNA_scene_types.h"
 #include "RNA_access.hh"
 #include "RNA_types.hh"
 
 #include "IO_orientation.hh"
+
+namespace blender {
 
 const EnumPropertyItem io_transform_axis[] = {
     {IO_AXIS_X, "X", 0, "X", "Positive X axis"},
@@ -37,3 +37,5 @@ void io_ui_up_axis_update(Main * /*main*/, Scene * /*scene*/, PointerRNA *ptr)
     RNA_enum_set(ptr, "forward_axis", (forward + 1) % 6);
   }
 }
+
+}  // namespace blender

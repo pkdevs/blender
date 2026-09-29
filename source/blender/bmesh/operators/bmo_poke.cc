@@ -14,9 +14,11 @@
 
 #include "intern/bmesh_operators_private.hh" /* own include */
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_customdata.hh"
+
+namespace blender {
 
 #define ELE_NEW 1
 
@@ -129,3 +131,5 @@ void bmo_poke_exec(BMesh *bm, BMOperator *op)
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "verts.out", BM_VERT, ELE_NEW);
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "faces.out", BM_FACE, ELE_NEW);
 }
+
+}  // namespace blender

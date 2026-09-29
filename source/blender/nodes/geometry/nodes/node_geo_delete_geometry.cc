@@ -4,9 +4,10 @@
 
 #include "NOD_rna_define.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
+#include "GEO_foreach_geometry.hh"
 #include "GEO_separate_geometry.hh"
 
 #include "RNA_enum_types.hh"
@@ -19,31 +20,34 @@ NODE_STORAGE_FUNCS(NodeGeometryDeleteGeometry)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Geometry");
-  b.add_input<decl::Bool>("Selection")
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+  b.add_default_layout();
+  b.add_input<decl::Geometry>("Geometry"_ustr).description("Geometry to delete elements from");
+  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
       .default_value(true)
       .hide_value()
-      .field_on_all()
+      .evaluated_geometry_field()
       .description("The parts of the geometry to be deleted");
-  b.add_output<decl::Geometry>("Geometry").propagate_all();
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
   const bNode *node = static_cast<bNode *>(ptr->data);
   const NodeGeometryDeleteGeometry &storage = node_storage(*node);
   const AttrDomain domain = AttrDomain(storage.domain);
 
-  uiItemR(layout, ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
+  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
   /* Only show the mode when it is relevant. */
   if (ELEM(domain, AttrDomain::Point, AttrDomain::Edge, AttrDomain::Face)) {
-    uiItemR(layout, ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
+    layout.prop(ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
   }
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryDeleteGeometry *data = MEM_cnew<NodeGeometryDeleteGeometry>(__func__);
+  NodeGeometryDeleteGeometry *data = MEM_new<NodeGeometryDeleteGeometry>(__func__);
   data->domain = int(AttrDomain::Point);
   data->mode = GEO_NODE_DELETE_GEOMETRY_MODE_ALL;
 
@@ -52,26 +56,26 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
 
   /* The node's input is a selection of elements that should be deleted, but the code is
    * implemented as a separation operation that copies the selected elements to a new geometry.
    * Invert the selection to avoid the need to keep track of both cases in the code. */
   const Field<bool> selection = fn::invert_boolean_field(
-      params.extract_input<Field<bool>>("Selection"));
+      params.extract_input<Field<bool>>("Selection"_ustr));
 
   const NodeGeometryDeleteGeometry &storage = node_storage(params.node());
   const AttrDomain domain = AttrDomain(storage.domain);
-  const GeometryNodeDeleteGeometryMode mode = (GeometryNodeDeleteGeometryMode)storage.mode;
+  const GeometryNodeDeleteGeometryMode mode = GeometryNodeDeleteGeometryMode(storage.mode);
 
-  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Geometry");
+  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Geometry"_ustr);
 
   if (domain == AttrDomain::Instance) {
     bool is_error;
     geometry::separate_geometry(geometry_set, domain, mode, selection, attribute_filter, is_error);
   }
   else {
-    geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+    geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
       bool is_error;
       /* Invert here because we want to keep the things not in the selection. */
       geometry::separate_geometry(
@@ -79,7 +83,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     });
   }
 
-  params.set_output("Geometry", std::move(geometry_set));
+  params.set_output("Geometry"_ustr, std::move(geometry_set));
 }
 
 static void node_rna(StructRNA *srna)
@@ -110,20 +114,21 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_DELETE_GEOMETRY, "Delete Geometry", NODE_CLASS_GEOMETRY);
-
-  blender::bke::node_type_storage(&ntype,
-                                  "NodeGeometryDeleteGeometry",
-                                  node_free_standard_storage,
-                                  node_copy_standard_storage);
+  geo_node_type_base(&ntype, "GeometryNodeDeleteGeometry"_ustr, GEO_NODE_DELETE_GEOMETRY);
+  ntype.ui_name = "Delete Geometry";
+  ntype.ui_description = "Remove selected elements of a geometry";
+  ntype.enum_name_legacy = "DELETE_GEOMETRY";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
+  bke::node_type_storage(
+      ntype, "NodeGeometryDeleteGeometry", node_free_standard_storage, node_copy_standard_storage);
 
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

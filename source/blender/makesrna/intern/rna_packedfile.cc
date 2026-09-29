@@ -8,16 +8,14 @@
 
 #include <cstdlib>
 
-#include "BLI_utildefines.h"
-
-#include "DNA_packedFile_types.h"
-
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
 #include "BKE_packedFile.hh"
 
 #include "rna_internal.hh"
+
+namespace blender {
 
 const EnumPropertyItem rna_enum_unpack_method_items[] = {
     {PF_REMOVE, "REMOVE", 0, "Remove Pack", ""},
@@ -28,22 +26,32 @@ const EnumPropertyItem rna_enum_unpack_method_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+}
+
 #ifdef RNA_RUNTIME
+
+#  include "DNA_packedFile_types.h"
+
+namespace blender {
 
 static void rna_PackedImage_data_get(PointerRNA *ptr, char *value)
 {
-  PackedFile *pf = (PackedFile *)ptr->data;
+  PackedFile *pf = static_cast<PackedFile *>(ptr->data);
   memcpy(value, pf->data, size_t(pf->size));
   value[pf->size] = '\0';
 }
 
 static int rna_PackedImage_data_len(PointerRNA *ptr)
 {
-  PackedFile *pf = (PackedFile *)ptr->data;
-  return pf->size; /* No need to include trailing nullptr char here! */
+  PackedFile *pf = static_cast<PackedFile *>(ptr->data);
+  return pf->size; /* No need to include trailing null char here! */
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_def_packedfile(BlenderRNA *brna)
 {
@@ -63,5 +71,7 @@ void RNA_def_packedfile(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Data", "Raw data (bytes, exact content of the embedded file)");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
+
+}  // namespace blender
 
 #endif

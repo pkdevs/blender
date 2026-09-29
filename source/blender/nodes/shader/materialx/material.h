@@ -9,6 +9,8 @@
 #include <functional>
 #include <string>
 
+namespace blender {
+
 struct Depsgraph;
 struct Image;
 struct ImageUser;
@@ -16,17 +18,18 @@ struct Main;
 struct Material;
 struct Scene;
 
-namespace blender::nodes::materialx {
+namespace nodes::materialx {
 
 struct ExportParams {
+  std::string output_node_name;
   std::function<std::string(Main *, Scene *, Image *, ImageUser *)> image_fn;
   std::string new_active_uvmap_name;
   std::string original_active_uvmap_name;
 };
 
-MaterialX::DocumentPtr export_to_materialx(Depsgraph *depsgraph,
-                                           Material *material,
-                                           const std::string &material_name,
+MaterialX::DocumentPtr export_to_materialx(const Depsgraph *depsgraph,
+                                           const Material *material,
                                            const ExportParams &export_params);
 
-}  // namespace blender::nodes::materialx
+}  // namespace nodes::materialx
+}  // namespace blender

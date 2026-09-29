@@ -12,19 +12,24 @@
 
 #pragma once
 
-struct bContext;
-struct GPUContext;
+#include "GHOST_Types.hh"
 
+class GHOST_IContext;
+
+namespace blender {
+
+struct GPUContext;
+struct bContext;
 struct wmSurface {
   wmSurface *next, *prev;
 
-  GHOST_ContextHandle system_gpu_context;
+  GHOST_IContext *system_gpu_context;
   GPUContext *blender_gpu_context;
 
   void *customdata;
 
   void (*draw)(bContext *);
-  /* To evaluate the surface's depsgraph. Called as part of the main loop. */
+  /** To evaluate the surface's depsgraph. Called as part of the main loop. */
   void (*do_depsgraph)(bContext *C);
   /** Free customdata, not the surface itself (done by wm_surface API). */
   void (*free_data)(wmSurface *);
@@ -36,18 +41,24 @@ struct wmSurface {
 };
 
 /* Create/Free. */
+
 void wm_surface_add(wmSurface *surface);
 void wm_surface_remove(wmSurface *surface);
 void wm_surfaces_free();
 
 /* Utils. */
+
 void wm_surfaces_iter(bContext *C, void (*cb)(bContext *, wmSurface *));
 
 /* Evaluation. */
+
 void wm_surfaces_do_depsgraph(bContext *C);
 
 /* Drawing. */
+
 void wm_surface_make_drawable(wmSurface *surface);
 void wm_surface_clear_drawable();
 void wm_surface_set_drawable(wmSurface *surface, bool activate);
 void wm_surface_reset_drawable();
+
+}  // namespace blender

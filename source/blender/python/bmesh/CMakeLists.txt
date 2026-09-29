@@ -4,12 +4,9 @@
 
 set(INC
   .
-  ../../blenkernel
-  ../../bmesh
 )
 
 set(INC_SYS
-  ${PYTHON_INCLUDE_DIRS}
 )
 
 set(SRC
@@ -23,27 +20,27 @@ set(SRC
   bmesh_py_types_select.cc
   bmesh_py_utils.cc
 
-  bmesh_py_api.h
-  bmesh_py_geometry.h
-  bmesh_py_ops.h
-  bmesh_py_ops_call.h
-  bmesh_py_types.h
-  bmesh_py_types_customdata.h
-  bmesh_py_types_meshdata.h
-  bmesh_py_types_select.h
-  bmesh_py_utils.h
+  bmesh_py_api.hh
+  bmesh_py_geometry.hh
+  bmesh_py_ops.hh
+  bmesh_py_ops_call.hh
+  bmesh_py_types.hh
+  bmesh_py_types_customdata.hh
+  bmesh_py_types_meshdata.hh
+  bmesh_py_types_select.hh
+  bmesh_py_utils.hh
 )
 
 set(LIB
-  bf_blenkernel
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::bmesh
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
   bf_python_mathutils
 
-  ${PYTHON_LINKFLAGS}
-  ${PYTHON_LIBRARIES}
+  PRIVATE bf::dependencies::optional::python
 )
 
 if(WITH_FREESTYLE)

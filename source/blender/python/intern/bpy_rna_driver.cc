@@ -10,19 +10,17 @@
 
 #include <Python.h>
 
-#include "MEM_guardedalloc.h"
-
 #include "DNA_anim_types.h"
-
-#include "BLI_utildefines.h"
 
 #include "BKE_fcurve_driver.h"
 
 #include "RNA_access.hh"
 
-#include "bpy_rna.h"
+#include "bpy_rna.hh"
 
-#include "bpy_rna_driver.h" /* own include */
+#include "bpy_rna_driver.hh" /* own include */
+
+namespace blender {
 
 PyObject *pyrna_driver_get_variable_value(const AnimationEvalContext *anim_eval_context,
                                           ChannelDriver *driver,
@@ -33,8 +31,7 @@ PyObject *pyrna_driver_get_variable_value(const AnimationEvalContext *anim_eval_
   PropertyRNA *prop = nullptr;
   int index;
 
-  switch (driver_get_variable_property(
-      anim_eval_context, driver, dvar, dtar, true, &ptr, &prop, &index))
+  switch (driver_get_variable_property(anim_eval_context, driver, dvar, dtar, &ptr, &prop, &index))
   {
     case DRIVER_VAR_PROPERTY_SUCCESS:
       /* object only */
@@ -78,7 +75,7 @@ bool pyrna_driver_is_equal_anim_rna(const PathResolvedRNA *anim_rna, const PyObj
 {
   if (BPy_StructRNA_Check(py_anim_rna)) {
     const PointerRNA *ptr_a = &anim_rna->ptr;
-    const PointerRNA *ptr_b = &(((const BPy_StructRNA *)py_anim_rna)->ptr);
+    const PointerRNA *ptr_b = &reinterpret_cast<const BPy_StructRNA *>(py_anim_rna)->ptr.value();
 
     if ((ptr_a->owner_id == ptr_b->owner_id) && (ptr_a->type == ptr_b->type) &&
         (ptr_a->data == ptr_b->data))
@@ -88,3 +85,5 @@ bool pyrna_driver_is_equal_anim_rna(const PathResolvedRNA *anim_rna, const PyObj
   }
   return false;
 }
+
+}  // namespace blender

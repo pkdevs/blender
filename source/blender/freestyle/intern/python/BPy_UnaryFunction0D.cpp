@@ -19,10 +19,6 @@
 #include "UnaryFunction0D/BPy_UnaryFunction0DVectorViewShape.h"
 #include "UnaryFunction0D/BPy_UnaryFunction0DViewShape.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -37,8 +33,7 @@ int UnaryFunction0D_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction0D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction0D_Type);
-  PyModule_AddObject(module, "UnaryFunction0D", (PyObject *)&UnaryFunction0D_Type);
+  PyModule_AddObjectRef(module, "UnaryFunction0D", (PyObject *)&UnaryFunction0D_Type);
 
   UnaryFunction0DDouble_Init(module);
   UnaryFunction0DEdgeNature_Init(module);
@@ -77,7 +72,6 @@ PyDoc_STRVAR(
     "* :class:`UnaryFunction0DVec3f`\n"
     "* :class:`UnaryFunction0DVectorViewShape`\n"
     "* :class:`UnaryFunction0DViewShape`\n");
-
 static void UnaryFunction0D___dealloc__(BPy_UnaryFunction0D *self)
 {
   Py_TYPE(self)->tp_free((PyObject *)self);
@@ -95,8 +89,7 @@ PyDoc_STRVAR(
     UnaryFunction0D_name_doc,
     "The name of the unary 0D function.\n"
     "\n"
-    ":type: str");
-
+    ":type: str\n");
 static PyObject *UnaryFunction0D_name_get(BPy_UnaryFunction0D *self, void * /*closure*/)
 {
   return PyUnicode_FromString(Py_TYPE(self)->tp_name);
@@ -155,7 +148,3 @@ PyTypeObject UnaryFunction0D_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

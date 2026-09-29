@@ -15,11 +15,14 @@
 #include "GPU_immediate.hh"
 #include "GPU_matrix.hh"
 #include "GPU_texture.hh"
+#include "GPU_uniform_buffer.hh"
 
 #include "gpu_context_private.hh"
 #include "gpu_immediate_private.hh"
 #include "gpu_shader_private.hh"
 #include "gpu_vertex_format_private.hh"
+
+namespace blender {
 
 using namespace blender::gpu;
 
@@ -41,7 +44,7 @@ GPUVertFormat *immVertexFormat()
   return &imm->vertex_format;
 }
 
-void immBindShader(GPUShader *shader)
+void immBindShader(gpu::Shader *shader)
 {
   BLI_assert(imm->shader == nullptr);
 
@@ -55,12 +58,11 @@ void immBindShader(GPUShader *shader)
 
   GPU_shader_bind(shader);
   GPU_matrix_bind(shader);
-  Shader::set_srgb_uniform(shader);
 }
 
-void immBindBuiltinProgram(eGPUBuiltinShader shader_id)
+void immBindBuiltinProgram(GPUBuiltinShader shader_id)
 {
-  GPUShader *shader = GPU_shader_get_builtin_shader(shader_id);
+  gpu::Shader *shader = GPU_shader_get_builtin_shader(shader_id);
   immBindShader(shader);
   imm->builtin_shader_bound = shader_id;
 }
@@ -73,7 +75,12 @@ void immUnbindProgram()
   imm->shader = nullptr;
 }
 
-GPUShader *immGetShader()
+bool immIsShaderBound()
+{
+  return imm->shader != nullptr;
+}
+
+gpu::Shader *immGetShader()
 {
   return imm->shader;
 }
@@ -122,7 +129,7 @@ static void wide_line_workaround_start(GPUPrimType prim_type)
 
   float line_width = GPU_line_width_get();
 
-  if (line_width == 1.0f) {
+  if (line_width == 1.0f && !GPU_line_smooth_get()) {
     /* No need to change the shader. */
     return;
   }
@@ -130,7 +137,7 @@ static void wide_line_workaround_start(GPUPrimType prim_type)
     return;
   }
 
-  eGPUBuiltinShader polyline_sh;
+  GPUBuiltinShader polyline_sh;
   switch (*imm->builtin_shader_bound) {
     case GPU_SHADER_3D_CLIPPED_UNIFORM_COLOR:
       polyline_sh = GPU_SHADER_3D_POLYLINE_CLIPPED_UNIFORM_COLOR;
@@ -214,7 +221,7 @@ void immBeginAtMost(GPUPrimType prim_type, uint vertex_len)
   immBegin(prim_type, vertex_len);
 }
 
-blender::gpu::Batch *immBeginBatch(GPUPrimType prim_type, uint vertex_len)
+gpu::Batch *immBeginBatch(GPUPrimType prim_type, uint vertex_len)
 {
   BLI_assert(imm->prim_type == GPU_PRIM_NONE); /* Make sure we haven't already begun. */
   BLI_assert(vertex_count_makes_sense_for_primitive(vertex_len, prim_type));
@@ -235,7 +242,7 @@ blender::gpu::Batch *immBeginBatch(GPUPrimType prim_type, uint vertex_len)
   return imm->batch;
 }
 
-blender::gpu::Batch *immBeginBatchAtMost(GPUPrimType prim_type, uint vertex_len)
+gpu::Batch *immBeginBatchAtMost(GPUPrimType prim_type, uint vertex_len)
 {
   BLI_assert(vertex_len > 0);
   imm->strict_vertex_len = false;
@@ -266,6 +273,7 @@ void immEnd()
     imm->batch = nullptr; /* don't free, batch belongs to caller */
   }
   else {
+    Context::get()->assert_framebuffer_shader_compatibility(imm->shader);
     imm->end();
   }
 
@@ -275,6 +283,78 @@ void immEnd()
   imm->vertex_data = nullptr;
 
   wide_line_workaround_end();
+}
+
+void Immediate::polyline_draw_workaround(uint64_t offset)
+{
+  /* Check compatible input primitive. */
+  BLI_assert(ELEM(imm->prim_type, GPU_PRIM_LINES, GPU_PRIM_LINE_STRIP, GPU_PRIM_LINE_LOOP));
+
+  Batch *tri_batch = Context::get()->procedural_triangles_batch_get();
+  GPU_batch_set_shader(tri_batch, imm->shader);
+
+  BLI_assert(offset % 4 == 0);
+
+  /* Setup primitive and index buffer. */
+  int stride = (imm->prim_type == GPU_PRIM_LINES) ? 2 : 1;
+  int data[3] = {stride, int(imm->vertex_idx), int(offset / 4)};
+  GPU_shader_uniform_3iv(imm->shader, "gpu_vert_stride_count_offset", data);
+  GPU_shader_uniform_1b(imm->shader, "gpu_index_no_buffer", true);
+
+  {
+    /* Setup attributes metadata uniforms. */
+    const GPUVertFormat &format = imm->vertex_format;
+    /* Only support 4byte aligned formats. */
+    BLI_assert((format.stride % 4) == 0);
+    BLI_assert(format.attr_len > 0);
+
+    int pos_attr_id = -1;
+    int col_attr_id = -1;
+
+    for (uint a_idx = 0; a_idx < format.attr_len; a_idx++) {
+      const GPUVertAttr *a = &format.attrs[a_idx];
+      const char *name = GPU_vertformat_attr_name_get(&format, a, 0);
+      if (pos_attr_id == -1 && StringRefNull(name) == "pos") {
+        int descriptor[2] = {int(format.stride) / 4, int(a->offset) / 4};
+        const bool fetch_int = false;
+        BLI_assert(is_fetch_float(a->type.format) || fetch_int);
+        BLI_assert_msg((a->offset % 4) == 0, "Only support 4byte aligned attributes");
+        GPU_shader_uniform_2iv(imm->shader, "gpu_attr_0", descriptor);
+        GPU_shader_uniform_1i(imm->shader, "gpu_attr_0_len", a->type.comp_len());
+        GPU_shader_uniform_1b(imm->shader, "gpu_attr_0_fetch_int", fetch_int);
+        pos_attr_id = a_idx;
+      }
+      else if (col_attr_id == -1 && StringRefNull(name) == "color") {
+        int descriptor[2] = {int(format.stride) / 4, int(a->offset) / 4};
+        /* Maybe we can relax this if needed. */
+        BLI_assert_msg(ELEM(a->type.format,
+                            VertAttrType::SFLOAT_32,
+                            VertAttrType::SFLOAT_32_32,
+                            VertAttrType::SFLOAT_32_32_32,
+                            VertAttrType::SFLOAT_32_32_32_32,
+                            VertAttrType::UNORM_8_8_8_8),
+                       "Only support float attributes or uchar4");
+        const bool fetch_unorm8 = a->type.format == VertAttrType::UNORM_8_8_8_8;
+        BLI_assert_msg((a->offset % 4) == 0, "Only support 4byte aligned attributes");
+        GPU_shader_uniform_2iv(imm->shader, "gpu_attr_1", descriptor);
+        GPU_shader_uniform_1i(imm->shader, "gpu_attr_1_len", a->type.comp_len());
+        GPU_shader_uniform_1i(imm->shader, "gpu_attr_1_fetch_unorm8", fetch_unorm8);
+        col_attr_id = a_idx;
+      }
+      if (pos_attr_id != -1 && col_attr_id != -1) {
+        break;
+      }
+    }
+
+    BLI_assert(pos_attr_id != -1);
+    /* Could check for color attribute but we need to know which variant of the polyline shader is
+     * the one we are rendering with. */
+    // BLI_assert(pos_attr_id != -1);
+  }
+
+  IndexRange range = GPU_batch_draw_expanded_parameter_get(
+      imm->prim_type, GPU_PRIM_TRIS, imm->vertex_idx, 0, 2);
+  GPU_batch_draw_advanced(tri_batch, range.start(), range.size(), 0, 0);
 }
 
 static void setAttrValueBit(uint attr_id)
@@ -290,13 +370,12 @@ void immAttr1f(uint attr_id, float x)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_F32);
-  BLI_assert(attr->comp_len == 1);
+  BLI_assert(ELEM(attr->type.format, VertAttrType::SFLOAT_32));
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
   setAttrValueBit(attr_id);
 
-  float *data = (float *)(imm->vertex_data + attr->offset);
+  float *data = reinterpret_cast<float *>(imm->vertex_data + attr->offset);
   // printf("%s %td %p\n", __FUNCTION__, (GLubyte*)data - imm->buffer_data, data);
 
   data[0] = x;
@@ -306,13 +385,12 @@ void immAttr2f(uint attr_id, float x, float y)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_F32);
-  BLI_assert(attr->comp_len == 2);
+  BLI_assert(ELEM(attr->type.format, VertAttrType::SFLOAT_32_32));
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
   setAttrValueBit(attr_id);
 
-  float *data = (float *)(imm->vertex_data + attr->offset);
+  float *data = reinterpret_cast<float *>(imm->vertex_data + attr->offset);
   // printf("%s %td %p\n", __FUNCTION__, (GLubyte*)data - imm->buffer_data, data);
 
   data[0] = x;
@@ -323,13 +401,12 @@ void immAttr3f(uint attr_id, float x, float y, float z)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_F32);
-  BLI_assert(attr->comp_len == 3);
+  BLI_assert(ELEM(attr->type.format, VertAttrType::SFLOAT_32_32_32));
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
   setAttrValueBit(attr_id);
 
-  float *data = (float *)(imm->vertex_data + attr->offset);
+  float *data = reinterpret_cast<float *>(imm->vertex_data + attr->offset);
   // printf("%s %td %p\n", __FUNCTION__, (GLubyte*)data - imm->buffer_data, data);
 
   data[0] = x;
@@ -341,13 +418,12 @@ void immAttr4f(uint attr_id, float x, float y, float z, float w)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_F32);
-  BLI_assert(attr->comp_len == 4);
+  BLI_assert(ELEM(attr->type.format, VertAttrType::SFLOAT_32_32_32_32));
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
   setAttrValueBit(attr_id);
 
-  float *data = (float *)(imm->vertex_data + attr->offset);
+  float *data = reinterpret_cast<float *>(imm->vertex_data + attr->offset);
   // printf("%s %td %p\n", __FUNCTION__, (GLubyte*)data - imm->buffer_data, data);
 
   data[0] = x;
@@ -360,13 +436,12 @@ void immAttr1u(uint attr_id, uint x)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_U32);
-  BLI_assert(attr->comp_len == 1);
+  BLI_assert(ELEM(attr->type.format, VertAttrType::UINT_32));
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
   setAttrValueBit(attr_id);
 
-  uint *data = (uint *)(imm->vertex_data + attr->offset);
+  uint *data = reinterpret_cast<uint *>(imm->vertex_data + attr->offset);
 
   data[0] = x;
 }
@@ -375,29 +450,12 @@ void immAttr2i(uint attr_id, int x, int y)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_I32);
-  BLI_assert(attr->comp_len == 2);
+  BLI_assert(ELEM(attr->type.format, VertAttrType::SINT_32_32));
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
   setAttrValueBit(attr_id);
 
-  int *data = (int *)(imm->vertex_data + attr->offset);
-
-  data[0] = x;
-  data[1] = y;
-}
-
-void immAttr2s(uint attr_id, short x, short y)
-{
-  GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
-  BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_I16);
-  BLI_assert(attr->comp_len == 2);
-  BLI_assert(imm->vertex_idx < imm->vertex_len);
-  BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
-  setAttrValueBit(attr_id);
-
-  short *data = (short *)(imm->vertex_data + attr->offset);
+  int *data = reinterpret_cast<int *>(imm->vertex_data + attr->offset);
 
   data[0] = x;
   data[1] = y;
@@ -418,30 +476,11 @@ void immAttr4fv(uint attr_id, const float data[4])
   immAttr4f(attr_id, data[0], data[1], data[2], data[3]);
 }
 
-void immAttr3ub(uint attr_id, uchar r, uchar g, uchar b)
-{
-  GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
-  BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_U8);
-  BLI_assert(attr->comp_len == 3);
-  BLI_assert(imm->vertex_idx < imm->vertex_len);
-  BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
-  setAttrValueBit(attr_id);
-
-  uchar *data = imm->vertex_data + attr->offset;
-  // printf("%s %td %p\n", __FUNCTION__, data - imm->buffer_data, data);
-
-  data[0] = r;
-  data[1] = g;
-  data[2] = b;
-}
-
 void immAttr4ub(uint attr_id, uchar r, uchar g, uchar b, uchar a)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_U8);
-  BLI_assert(attr->comp_len == 4);
+  BLI_assert(ELEM(attr->type.format, VertAttrType::UINT_8_8_8_8, VertAttrType::UNORM_8_8_8_8));
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
   setAttrValueBit(attr_id);
@@ -453,11 +492,6 @@ void immAttr4ub(uint attr_id, uchar r, uchar g, uchar b, uchar a)
   data[1] = g;
   data[2] = b;
   data[3] = a;
-}
-
-void immAttr3ubv(uint attr_id, const uchar data[3])
-{
-  immAttr3ub(attr_id, data[0], data[1], data[2]);
 }
 
 void immAttr4ubv(uint attr_id, const uchar data[4])
@@ -491,7 +525,7 @@ static void immEndVertex() /* and move on to the next vertex */
 #endif
 
         uchar *data = imm->vertex_data + a->offset;
-        memcpy(data, data - imm->vertex_format.stride, a->size);
+        memcpy(data, data - imm->vertex_format.stride, a->type.size());
         /* TODO: consolidate copy of adjacent attributes */
       }
     }
@@ -523,12 +557,6 @@ void immVertex4f(uint attr_id, float x, float y, float z, float w)
 void immVertex2i(uint attr_id, int x, int y)
 {
   immAttr2i(attr_id, x, y);
-  immEndVertex();
-}
-
-void immVertex2s(uint attr_id, short x, short y)
-{
-  immAttr2s(attr_id, x, y);
   immEndVertex();
 }
 
@@ -589,7 +617,8 @@ void immUniform4fv(const char *name, const float data[4])
 
 void immUniformArray4fv(const char *name, const float *data, int count)
 {
-  GPU_shader_uniform_4fv_array(imm->shader, name, count, (const float(*)[4])data);
+  GPU_shader_uniform_4fv_array(
+      imm->shader, name, count, reinterpret_cast<const float (*)[4]>(data));
 }
 
 void immUniformMatrix4fv(const char *name, const float data[4][4])
@@ -602,19 +631,19 @@ void immUniform1i(const char *name, int x)
   GPU_shader_uniform_1i(imm->shader, name, x);
 }
 
-void immBindTexture(const char *name, GPUTexture *tex)
+void immBindTexture(const char *name, gpu::Texture *tex)
 {
   int binding = GPU_shader_get_sampler_binding(imm->shader, name);
   GPU_texture_bind(tex, binding);
 }
 
-void immBindTextureSampler(const char *name, GPUTexture *tex, GPUSamplerState state)
+void immBindTextureSampler(const char *name, gpu::Texture *tex, GPUSamplerState state)
 {
   int binding = GPU_shader_get_sampler_binding(imm->shader, name);
   GPU_texture_bind_ex(tex, state, binding);
 }
 
-void immBindUniformBuf(const char *name, GPUUniformBuf *ubo)
+void immBindUniformBuf(const char *name, gpu::UniformBuf *ubo)
 {
   int binding = GPU_shader_get_ubo_binding(imm->shader, name);
   GPU_uniformbuf_bind(ubo, binding);
@@ -684,14 +713,14 @@ void immUniformColor4ubv(const uchar rgba[4])
 void immUniformThemeColor(int color_id)
 {
   float color[4];
-  UI_GetThemeColor4fv(color_id, color);
+  ui::theme::get_color_4fv(color_id, color);
   immUniformColor4fv(color);
 }
 
 void immUniformThemeColorAlpha(int color_id, float a)
 {
   float color[4];
-  UI_GetThemeColor3fv(color_id, color);
+  ui::theme::get_color_3fv(color_id, color);
   color[3] = a;
   immUniformColor4fv(color);
 }
@@ -699,43 +728,45 @@ void immUniformThemeColorAlpha(int color_id, float a)
 void immUniformThemeColor3(int color_id)
 {
   float color[3];
-  UI_GetThemeColor3fv(color_id, color);
+  ui::theme::get_color_3fv(color_id, color);
   immUniformColor3fv(color);
 }
 
 void immUniformThemeColorShade(int color_id, int offset)
 {
   float color[4];
-  UI_GetThemeColorShade4fv(color_id, offset, color);
+  ui::theme::get_color_shade_4fv(color_id, offset, color);
   immUniformColor4fv(color);
 }
 
 void immUniformThemeColorShadeAlpha(int color_id, int color_offset, int alpha_offset)
 {
   float color[4];
-  UI_GetThemeColorShadeAlpha4fv(color_id, color_offset, alpha_offset, color);
+  ui::theme::get_color_shade_alpha_4fv(color_id, color_offset, alpha_offset, color);
   immUniformColor4fv(color);
 }
 
 void immUniformThemeColorBlendShade(int color_id1, int color_id2, float fac, int offset)
 {
   float color[4];
-  UI_GetThemeColorBlendShade4fv(color_id1, color_id2, fac, offset, color);
+  ui::theme::get_color_blend_shade_4fv(color_id1, color_id2, fac, offset, color);
   immUniformColor4fv(color);
 }
 
 void immUniformThemeColorBlend(int color_id1, int color_id2, float fac)
 {
   uint8_t color[3];
-  UI_GetThemeColorBlend3ubv(color_id1, color_id2, fac, color);
+  ui::theme::get_color_blend_3ubv(color_id1, color_id2, fac, color);
   immUniformColor3ubv(color);
 }
 
 void immThemeColorShadeAlpha(int colorid, int coloffset, int alphaoffset)
 {
   uchar col[4];
-  UI_GetThemeColorShadeAlpha4ubv(colorid, coloffset, alphaoffset, col);
+  ui::theme::get_color_shade_alpha_4ubv(colorid, coloffset, alphaoffset, col);
   immUniformColor4ub(col[0], col[1], col[2], col[3]);
 }
 
 #endif /* !GPU_STANDALONE */
+
+}  // namespace blender

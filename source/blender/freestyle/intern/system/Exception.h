@@ -9,18 +9,16 @@
  * \brief Singleton to manage exceptions
  */
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 namespace Freestyle {
 
 class Exception {
  public:
-  typedef enum {
+  enum exception_type {
     NO_EXCEPTION,
     UNDEFINED,
-  } exception_type;
+  };
 
   static int getException()
   {
@@ -43,9 +41,7 @@ class Exception {
  private:
   static exception_type _exception;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Exception")
-#endif
 };
 
 } /* namespace Freestyle */

@@ -6,14 +6,7 @@
  * \ingroup RNA
  */
 
-#include <cstdio>
 #include <cstdlib>
-
-#include "BLI_utildefines.h"
-
-#include "RNA_define.hh"
-
-#include "DNA_material_types.h"
 
 #include "rna_internal.hh" /* own include */
 
@@ -21,10 +14,14 @@
 
 #else
 
+namespace blender {
+
 void RNA_api_material(StructRNA * /*srna*/)
 {
   // FunctionRNA *func;
   // PropertyRNA *parm;
 }
+
+}  // namespace blender
 
 #endif

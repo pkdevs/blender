@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 #ifndef SELECT_ENABLE
 /* Avoid requesting the select_id when not in selection mode. */
 #  define select_id_set(select_id)
@@ -9,7 +11,7 @@
 
 #elif defined(GPU_VERTEX_SHADER)
 
-void select_id_set(int id)
+void select_id_set(uint id)
 {
   /* Declared in the create info. */
   select_id = id;
@@ -17,16 +19,25 @@ void select_id_set(int id)
 
 #elif defined(GPU_FRAGMENT_SHADER)
 
-void select_id_output(int id)
+void select_id_output(uint id)
 {
-  if (id == -1) {
+  if (id == uint(-1)) {
     /* Invalid index */
     return;
   }
 
   if (select_info_buf.mode == SELECT_ALL) {
+    if (select_info_buf.radius > 0) {
+      /* When the radius is set, we assume that the center is cursor is the center of a circle. */
+      int2 coord = int2(gl_FragCoord.xy) - select_info_buf.cursor;
+      uint dist_sq = uint(coord.x * coord.x + coord.y * coord.y);
+      uint rad_sq = select_info_buf.radius * select_info_buf.radius;
+      if (dist_sq > rad_sq) {
+        return;
+      }
+    }
     /* Set the bit of the select id in the bitmap. */
-    atomicOr(out_select_buf[id / 32u], 1u << (uint(id) % 32u));
+    atomicOr(out_select_buf[id / 32u], 1u << (id % 32u));
   }
   else if (select_info_buf.mode == SELECT_PICK_ALL) {
     /* Stores the nearest depth for this select id. */
@@ -36,7 +47,7 @@ void select_id_output(int id)
     /* Stores the nearest depth with the distance to the cursor. */
 
     /* Distance function to the cursor. Currently a simple pixel ring distance. */
-    ivec2 coord = abs(ivec2(gl_FragCoord.xy) - select_info_buf.cursor);
+    int2 coord = abs(int2(gl_FragCoord.xy) - select_info_buf.cursor);
     uint dist = uint(max(coord.x, coord.y));
 
     uint depth = uint(gl_FragCoord.z * float(0x00FFFFFFu));

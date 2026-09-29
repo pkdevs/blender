@@ -14,44 +14,16 @@
 
 #pragma once
 
-#include <functional>
+#include <cstdint>
+
+namespace blender {
 
 /* TODO(sergey): Ideally we'll just use char* and statically allocated strings
  * to avoid any possible overhead caused by string (re)allocation/formatting. */
-#include <algorithm>
-#include <deque>
-#include <map>
-#include <set>
-#include <string>
-#include <vector>
 
-#include "BLI_map.hh"
-#include "BLI_set.hh"
-#include "BLI_string_ref.hh"
-#include "BLI_vector.hh"
-#include "BLI_vector_set.hh"
-
-struct Depsgraph;
 struct CustomData_MeshMasks;
 
-namespace blender::deg {
-
-/* Commonly used types. */
-using std::deque;
-using std::optional;
-using std::pair;
-using std::string;
-using std::unique_ptr;
-
-/* Commonly used functions. */
-using std::make_pair;
-using std::max;
-using std::to_string;
-
-/* Function bindings. */
-using std::function;
-using namespace std::placeholders;
-#define function_bind std::bind
+namespace deg {
 
 /* Source of the dependency graph node update tag.
  *
@@ -158,4 +130,5 @@ struct DEGCustomDataMeshMasks {
   }
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

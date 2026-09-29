@@ -10,9 +10,11 @@
 
 #include "intern/node/deg_node_factory.hh"
 
+namespace blender {
+
 struct ID;
 
-namespace blender::deg {
+namespace deg {
 
 template<class ModeObjectType> NodeType DepsNodeFactoryImpl<ModeObjectType>::type() const
 {
@@ -32,7 +34,7 @@ template<class ModeObjectType> int DepsNodeFactoryImpl<ModeObjectType>::id_recal
 template<class ModeObjectType>
 Node *DepsNodeFactoryImpl<ModeObjectType>::create_node(const ID *id,
                                                        const char *subdata,
-                                                       const char *name) const
+                                                       const StringRef name) const
 {
   Node *node = new ModeObjectType();
   node->type = type();
@@ -41,4 +43,5 @@ Node *DepsNodeFactoryImpl<ModeObjectType>::create_node(const ID *id,
   return node;
 }
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

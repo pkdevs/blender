@@ -20,9 +20,7 @@
 
 #include "BKE_global.hh"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 namespace Freestyle {
 
@@ -34,7 +32,7 @@ class GridDensityProvider {
  public:
   GridDensityProvider(OccluderSource &source) : source(source) {}
 
-  virtual ~GridDensityProvider(){};
+  virtual ~GridDensityProvider() {};
 
   float cellSize()
   {
@@ -73,7 +71,7 @@ class GridDensityProvider {
         source.next();
       }
     }
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       cout << "Proscenium: (" << proscenium[0] << ", " << proscenium[1] << ", " << proscenium[2]
            << ", " << proscenium[3] << ")" << endl;
     }
@@ -105,7 +103,7 @@ class GridDensityProvider {
                              std::min(std::min(p5.y(), p6.y()), std::min(p7.y(), p8.y())));
     proscenium[3] = std::max(std::max(std::max(p1.y(), p2.y()), std::max(p3.y(), p4.y())),
                              std::max(std::max(p5.y(), p6.y()), std::max(p7.y(), p8.y())));
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       cout << "Proscenium: " << proscenium[0] << ", " << proscenium[1] << ", " << proscenium[2]
            << ", " << proscenium[3] << endl;
     }
@@ -117,9 +115,7 @@ class GridDensityProvider {
   float _cellSize;
   float _cellOrigin[2];
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:GridDensityProvider")
-#endif
 };
 
 class GridDensityProviderFactory {
@@ -142,9 +138,7 @@ class GridDensityProviderFactory {
 
   virtual ~GridDensityProviderFactory() {}
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:GridDensityProviderFactory")
-#endif
 };
 
 } /* namespace Freestyle */

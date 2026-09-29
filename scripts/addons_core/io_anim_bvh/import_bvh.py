@@ -7,23 +7,24 @@ from math import radians, ceil
 import bpy
 from bpy.app.translations import pgettext_tip as tip_
 from mathutils import Vector, Euler, Matrix
+from bpy_extras import anim_utils
 
 
 class BVH_Node:
     __slots__ = (
-        # Bvh joint name.
+        # BVH joint name.
         'name',
         # BVH_Node type or None for no parent.
         'parent',
         # A list of children of this type..
         'children',
-        # Worldspace rest location for the head of this node.
+        # World-space rest location for the head of this node.
         'rest_head_world',
-        # Localspace rest location for the head of this node.
+        # Local-space rest location for the head of this node.
         'rest_head_local',
-        # Worldspace rest location for the tail of this node.
+        # World-space rest location for the tail of this node.
         'rest_tail_world',
-        # Worldspace rest location for the tail of this node.
+        # World-space rest location for the tail of this node.
         'rest_tail_local',
         # List of 6 ints, -1 for an unused channel,
         # otherwise an index for the BVH motion data lines,
@@ -106,7 +107,7 @@ def read_bvh(context, file_path, rotate_mode='XYZ', global_scale=1.0):
     if len(file_lines) == 1:
         file_lines = file_lines[0].split('\r')
 
-    # Split by whitespace.
+    # Split by white-space.
     file_lines = [ll for ll in [l.split() for l in file_lines] if ll]
 
     # Create hierarchy as empties
@@ -322,7 +323,7 @@ def read_bvh(context, file_path, rotate_mode='XYZ', global_scale=1.0):
                     rest_tail_local += bvh_node_child.rest_head_local
 
                 bvh_node.rest_tail_world = rest_tail_world * (1.0 / len(bvh_node.children))
-                bvh_node.rest_tail_local = rest_tail_local * (1.0 / len(bvh_node.children))
+                bvh_node.rest_tail_local = bvh_node.rest_head_local + (rest_tail_local * (1.0 / len(bvh_node.children)))
 
         # Make sure tail isn't the same location as the head.
         if (bvh_node.rest_tail_local - bvh_node.rest_head_local).length <= 0.001 * global_scale:
@@ -453,7 +454,7 @@ def bvh_node_dict2armature(
     ZERO_AREA_BONES = []
     for bvh_node in bvh_nodes_list:
 
-        # New editbone
+        # New edit-bone.
         bone = bvh_node.temp = arm_data.edit_bones.new(bvh_node.name)
 
         bone.head = bvh_node.rest_head_world
@@ -475,7 +476,7 @@ def bvh_node_dict2armature(
 
     for bvh_node in bvh_nodes_list:
         if bvh_node.parent:
-            # bvh_node.temp is the Editbone
+            # bvh_node.temp is the Edit-bone.
 
             # Set the bone parent
             bvh_node.temp.parent = bvh_node.parent.temp
@@ -488,8 +489,8 @@ def bvh_node_dict2armature(
             ):
                 bvh_node.temp.use_connect = True
 
-    # Replace the editbone with the editbone name,
-    # to avoid memory errors accessing the editbone outside editmode
+    # Replace the edit-bone with the edit-bone name,
+    # to avoid memory errors accessing the edit-bone outside edit-mode.
     for bvh_node in bvh_nodes_list:
         bvh_node.temp = bvh_node.temp.name
 
@@ -511,16 +512,26 @@ def bvh_node_dict2armature(
         for pose_bone in pose_bones:
             pose_bone.rotation_mode = rotate_mode
     else:
-        # Quats default
+        # Quaternions default.
         pass
 
     context.view_layer.update()
 
-    arm_ob.animation_data_create()
+    arm_ob_adt = arm_ob.animation_data_create()
     action = bpy.data.actions.new(name=bvh_name)
-    arm_ob.animation_data.action = action
+    # Always use the same name for the slot. The Armature is named after the
+    # BVH file, and so when importing multiple files to get multiple Actions
+    # for a single character, it is likely that all but one of the Armatures
+    # is going to be deleted again. It should be simple to switch between
+    # imported Actions while keeping Slot auto-assignment, which means that
+    # all Actions should use the same slot name.
+    action_slot = action.slots.new(arm_ob.id_type, "Slot")
+    channelbag = anim_utils.action_ensure_channelbag_for_slot(action, action_slot)
 
-    # Replace the bvh_node.temp (currently an editbone)
+    arm_ob_adt.action = action
+    arm_ob_adt.action_slot = action_slot
+
+    # Replace the bvh_node.temp (currently an edit-bone)
     # With a tuple  (pose_bone, armature_bone, bone_rest_matrix, bone_rest_matrix_inv)
     num_frame = 0
     for bvh_node in bvh_nodes_list:
@@ -578,7 +589,7 @@ def bvh_node_dict2armature(
 
             # For each location x, y, z.
             for axis_i in range(3):
-                curve = action.fcurves.new(data_path=data_path, index=axis_i, action_group=bvh_node.name)
+                curve = channelbag.fcurves.new(data_path=data_path, index=axis_i, group_name=bvh_node.name)
                 keyframe_points = curve.keyframe_points
                 keyframe_points.add(num_frame)
 
@@ -622,7 +633,7 @@ def bvh_node_dict2armature(
 
             # For each euler angle x, y, z (or quaternion w, x, y, z).
             for axis_i in range(len(rotate[0])):
-                curve = action.fcurves.new(data_path=data_path, index=axis_i, action_group=bvh_node.name)
+                curve = channelbag.fcurves.new(data_path=data_path, index=axis_i, group_name=bvh_node.name)
                 keyframe_points = curve.keyframe_points
                 keyframe_points.add(num_frame)
 
@@ -632,9 +643,9 @@ def bvh_node_dict2armature(
                         rotate[frame_i][axis_i],
                     )
 
-    for cu in action.fcurves:
+    for cu in channelbag.fcurves:
         if IMPORT_LOOP:
-            pass  # 2.5 doenst have cyclic now?
+            pass  # 2.5 doesn't have cyclic now?
 
         for bez in cu.keyframe_points:
             bez.interpolation = 'LINEAR'

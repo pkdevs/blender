@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import bpy
-import re
 import os
+import numpy as np
 from typing import List
 
 from ... import get_version_string
 from ...io.com import gltf2_io, gltf2_io_extensions
-from ...io.com.path import path_to_uri, uri_to_path
+from ...io.exp.meshopt import MeshoptEncoder
+from ...io.com.path import uri_to_path
 from ...io.com.constants import ComponentType, DataType
 from ...io.exp import binary_data as gltf2_io_binary_data, buffer as gltf2_io_buffer, image_data as gltf2_io_image_data
 from ...io.exp.user_extensions import export_user_extensions
@@ -68,7 +69,14 @@ class GlTF2Exporter:
 
         self.additional_data = AdditionalData()
 
-        self.__buffer = gltf2_io_buffer.Buffer()
+        self.__buffer = gltf2_io_buffer.Buffer(
+            export_settings['gltf_format'] == 'GLB',
+            export_settings['gltf_meshopt_extension'] if export_settings['gltf_meshopt_compression'] else None,)
+        if export_settings['gltf_meshopt_compression']:
+            self.__additional_buffer = gltf2_io_buffer.Buffer(
+                export_settings['gltf_format'] == 'GLB',
+                export_settings['gltf_meshopt_extension'] if export_settings['gltf_meshopt_compression'] else None,
+                buffer_index=1)
         self.__images = {}
 
         # mapping of all glTFChildOfRootProperty types to their corresponding root level arrays
@@ -118,15 +126,18 @@ class GlTF2Exporter:
         if self.__finalized:
             raise RuntimeError("Tried to finalize buffers for finalized glTF file")
 
-        if self.__buffer.byte_length > 0:
+        # Meshopt compression ... We need to invert buffers
+        buffer_to_use = self.__additional_buffer if self.export_settings['gltf_meshopt_compression'] else self.__buffer
+
+        if buffer_to_use.byte_length > 0:
             if is_glb:
                 uri = None
             elif output_path and buffer_name:
                 with open(output_path + uri_to_path(buffer_name), 'wb') as f:
-                    f.write(self.__buffer.to_bytes())
+                    f.write(buffer_to_use.to_bytes())
                 uri = buffer_name
             else:
-                uri = self.__buffer.to_embed_string()
+                uri = buffer_to_use.to_embed_string()
 
             buffer = gltf2_io.Buffer(
                 byte_length=self.__buffer.byte_length,
@@ -135,12 +146,35 @@ class GlTF2Exporter:
                 name=None,
                 uri=uri
             )
-            self.__gltf.buffers.append(buffer)
+
+            if not self.export_settings['gltf_meshopt_compression']:
+                self.__gltf.buffers.append(buffer)
+            else:
+                # Add extension on the buffer if meshopt is enabled
+                buffer.extensions = {self.export_settings['gltf_meshopt_extension']: {"fallback": True}}
+                buffer.uri = None
+                buffer.byte_length = self.__buffer.get_fake_bytelength()
+                if not is_glb:
+                    # Make sure to add the compressed first
+                    self.__gltf.buffers.append(buffer)
+
+                # Create a new buffer for meshopt compressed data, and add it to the glTF
+                compressed_buffer = gltf2_io.Buffer(
+                    byte_length=self.__additional_buffer.byte_length,
+                    extensions=None,
+                    extras=None,
+                    name=None,
+                    uri=uri if not is_glb else None
+                )
+                self.__gltf.buffers.append(compressed_buffer)
+                if is_glb:
+                    # Now that the compressed buffer is added first, we can add the fallback
+                    self.__gltf.buffers.append(buffer)
 
         self.__finalized = True
 
         if is_glb:
-            return self.__buffer.to_bytes()
+            return buffer_to_use.to_bytes()
 
     def add_draco_extension(self):
         """
@@ -150,6 +184,15 @@ class GlTF2Exporter:
         """
         self.__gltf.extensions_required.append('KHR_draco_mesh_compression')
         self.__gltf.extensions_used.append('KHR_draco_mesh_compression')
+
+    def add_meshopt_extension(self):
+        """
+        Register Meshopt extension as *used* and *required*.
+
+        :return:
+        """
+        self.__gltf.extensions_required.append(self.export_settings['gltf_meshopt_extension'])
+        self.__gltf.extensions_used.append(self.export_settings['gltf_meshopt_extension'])
 
     def finalize_images(self):
         """
@@ -161,7 +204,7 @@ class GlTF2Exporter:
             os.makedirs(output_path, exist_ok=True)
 
         for name, image in self.__images.items():
-            dst_path = output_path + "/" + name
+            dst_path = os.path.join(self.export_settings['gltf_filedirectory'], uri_to_path(image.uri))
             with open(dst_path, 'wb') as f:
                 f.write(image.data)
 
@@ -230,34 +273,94 @@ class GlTF2Exporter:
                     scale.append(i)
 
             # Create Accessors for the extension
+
+            binary_data_translation = gltf2_io_binary_data.BinaryData.from_list(translation, ComponentType.Float)
+            binary_data_rotation = gltf2_io_binary_data.BinaryData.from_list(rotation, ComponentType.Float)
+            binary_data_scale = gltf2_io_binary_data.BinaryData.from_list(scale, ComponentType.Float)
+            normalized_rotation = None
+            filter_rotation = None
+            if self.export_settings['gltf_meshopt_compression']:
+
+                byteStride_translation = 12
+                byteStride_rotation = 8
+                byteStride_scale = 12
+
+                num_components_translation = DataType.num_elements(DataType.Vec3)
+                num_components_rotation = DataType.num_elements(DataType.Vec4)
+                num_components_scale = DataType.num_elements(DataType.Vec3)
+                compressed_translation, filter_translation = MeshoptEncoder.encode_attribute('GPU_TRANSLATION', np.array(
+                    translation, dtype=np.float32).reshape(-1, num_components_translation), byteStride_translation, self.export_settings)
+                compressed_rotation, filter_rotation = MeshoptEncoder.encode_attribute('GPU_ROTATION', np.array(
+                    rotation, dtype=np.float32).reshape(-1, num_components_rotation), byteStride_rotation, self.export_settings)
+                compressed_scale, filter_scale = MeshoptEncoder.encode_attribute('GPU_SCALE', np.array(
+                    scale, dtype=np.float32).reshape(-1, num_components_scale), byteStride_scale, self.export_settings)
+
+                binary_data_translation.set_extension(self.export_settings['gltf_meshopt_extension'], {
+                    'buffer': compressed_translation,  # to be filled in later by the exporter, use data in placeholder for now
+                    'byteOffset': None,  # to be filled in later by the exporter
+                    'byteLength': len(compressed_translation),
+                    'count': len(translation) // DataType.num_elements(DataType.Vec3),
+                    'byteStride': byteStride_translation,
+                    'mode': 'ATTRIBUTES',
+                    'filter': filter_translation
+                })
+
+                binary_data_rotation.set_extension(self.export_settings['gltf_meshopt_extension'], {
+                    'buffer': compressed_rotation,  # to be filled in later by the exporter, use data in placeholder for now
+                    'byteOffset': None,  # to be filled in later by the exporter
+                    'byteLength': len(compressed_rotation),
+                    'count': len(rotation) // DataType.num_elements(DataType.Vec4),
+                    'byteStride': byteStride_rotation,
+                    'mode': 'ATTRIBUTES',
+                    'filter': filter_rotation
+                })
+
+                binary_data_scale.set_extension(self.export_settings['gltf_meshopt_extension'], {
+                    'buffer': compressed_scale,  # to be filled in later by the exporter, use data in placeholder for now
+                    'byteOffset': None,  # to be filled in later by the exporter
+                    'byteLength': len(compressed_scale),
+                    'count': len(scale) // DataType.num_elements(DataType.Vec3),
+                    'byteStride': byteStride_scale,
+                    'mode': 'ATTRIBUTES',
+                    'filter': filter_scale
+                })
+
+                normalized_rotation = True if filter_rotation == 'QUATERNION' else None
+
             ext = {}
             ext['attributes'] = {}
             ext['attributes']['TRANSLATION'] = gather_accessor(
-                gltf2_io_binary_data.BinaryData.from_list(translation, ComponentType.Float),
+                binary_data_translation,
                 ComponentType.Float,
                 len(translation) // 3,
                 None,
                 None,
                 DataType.Vec3,
-                None
+                None,
+                self.export_settings
             )
-            ext['attributes']['ROTATION'] = gather_accessor(
-                gltf2_io_binary_data.BinaryData.from_list(rotation, ComponentType.Float),
-                ComponentType.Float,
+            rotation_accessor = gather_accessor(
+                binary_data_rotation,
+                ComponentType.Short if filter_rotation == 'QUATERNION' else ComponentType.Float,
                 len(rotation) // 4,
                 None,
                 None,
                 DataType.Vec4,
-                None
+                normalized_rotation,
+                self.export_settings
             )
+            if filter_rotation == 'QUATERNION':
+                rotation_accessor.normalized = True
+            ext['attributes']['ROTATION'] = rotation_accessor
             ext['attributes']['SCALE'] = gather_accessor(
-                gltf2_io_binary_data.BinaryData.from_list(scale, ComponentType.Float),
+                binary_data_scale,
                 ComponentType.Float,
                 len(scale) // 3,
                 None,
                 None,
                 DataType.Vec3,
-                None
+                None,
+                self.export_settings
             )
 
             # Add extension to the Node, and traverse it
@@ -277,6 +380,10 @@ class GlTF2Exporter:
 
             self.nodes_idx_to_remove.extend(insts)
 
+        for child_idx in node.children:
+            child = self.__gltf.nodes[child_idx]
+            self.manage_gpu_instancing(child, also_mesh=child.mesh is not None)
+
     def manage_gpu_instancing_nodes(self, export_settings):
         if export_settings['gltf_gpu_instances'] is True:
             for scene_num in range(len(self.__gltf.scenes)):
@@ -289,9 +396,6 @@ class GlTF2Exporter:
                         self.manage_gpu_instancing(node)
                     else:
                         self.manage_gpu_instancing(node, also_mesh=True)
-                    for child_idx in node.children:
-                        child = self.__gltf.nodes[child_idx]
-                        self.manage_gpu_instancing(child, also_mesh=child.mesh is not None)
 
                 # Slides other nodes index
 
@@ -339,7 +443,7 @@ class GlTF2Exporter:
 
         The scene should be built up with the generated glTF classes
         :param scene: gltf2_io.Scene type. Root node of the scene graph
-        :param active: If true, sets the glTD.scene index to the added scene
+        :param active: If true, sets the glTF.scene index to the added scene
         :return: nothing
         """
         if self.__finalized:
@@ -419,28 +523,9 @@ class GlTF2Exporter:
             return index
 
     def __add_image(self, image: gltf2_io_image_data.ImageData):
-        name = image.adjusted_name()
-        count = 1
-        regex = re.compile(r"-\d+$")
-        while name + image.file_extension in self.__images.keys():
-            regex_found = re.findall(regex, name)
-            if regex_found:
-                name = re.sub(regex, "-" + str(count), name)
-            else:
-                name += "-" + str(count)
+        self.__images[image.adjusted_name] = image
 
-            count += 1
-        # TODO: allow embedding of images (base64)
-
-        self.__images[name + image.file_extension] = image
-
-        texture_dir = self.export_settings['gltf_texturedirectory']
-        abs_path = os.path.join(texture_dir, name + image.file_extension)
-        rel_path = os.path.relpath(
-            abs_path,
-            start=self.export_settings['gltf_filedirectory'],
-        )
-        return path_to_uri(rel_path)
+        return image.uri
 
     @classmethod
     def __get_key_path(cls, d: dict, keypath: List[str], default):
@@ -471,7 +556,7 @@ class GlTF2Exporter:
             #         self.__append_unique_and_get_index(self.__gltf.extensions_required, extension_name)
 
         if self.export_settings['gltf_trs_w_animation_pointer'] is True:
-            if type(node) == gltf2_io.AnimationChannelTarget:
+            if type(node) is gltf2_io.AnimationChannelTarget:
                 if node.path in ["translation", "rotation", "scale", "weights"]:
                     if node.extensions is None:
                         node.extensions = {}
@@ -480,13 +565,26 @@ class GlTF2Exporter:
                     node.path = "pointer"
                     self.__append_unique_and_get_index(self.__gltf.extensions_used, "KHR_animation_pointer")
 
-        if type(node) == gltf2_io.AnimationChannelTarget:
+        if type(node) is gltf2_io.AnimationChannelTarget:
             if node.path not in ["translation", "rotation", "scale", "weights"] and node.path != "pointer":
                 if node.extensions is None:
                     node.extensions = {}
+                original_node = node.node  # Used only for alpha pointer
+                original_path = node.path  # Used only for alpha pointer
                 node.extensions["KHR_animation_pointer"] = {"pointer": node.path.replace("XXX", str(node.node))}
                 node.node = None
                 node.path = "pointer"
+
+                # In case the animation is on alpha, we need to change the alpha mode of the material
+                tab = original_path.split("/")
+                if len(tab) == 5 and tab[1] == "materials" and \
+                        tab[3] == "pbrMetallicRoughness" and tab[4] == "baseColorFactor" and \
+                        node.tmp_alpha_cst is False:
+
+                    self.__gltf.materials[original_node].alpha_mode = "BLEND"
+
+                node.tmp_alpha_cst = None
+
                 self.__append_unique_and_get_index(self.__gltf.extensions_used, "KHR_animation_pointer")
 
         return node
@@ -522,7 +620,8 @@ class GlTF2Exporter:
 
         # binary data needs to be moved to a buffer and referenced with a buffer view
         if isinstance(node, gltf2_io_binary_data.BinaryData):
-            buffer_view = self.__buffer.add_and_get_view(node)
+            add_buffer = self.__additional_buffer if self.export_settings['gltf_meshopt_compression'] else None
+            buffer_view = self.__buffer.add_and_get_view(node, additional_buffer=add_buffer)
             return self.__to_reference(buffer_view)
 
         # image data needs to be saved to file

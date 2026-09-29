@@ -6,25 +6,39 @@
  * \ingroup RNA
  */
 
-#include <cstdlib>
+#include "DNA_pointcloud_types.h"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
 #include "rna_internal.hh"
 
-#include "DNA_pointcloud_types.h"
-
 #include "BKE_attribute.h"
 
-#include "BLI_math_base.h"
-#include "BLI_string.h"
+namespace blender {
+
+const EnumPropertyItem rna_enum_pointcloud_type_items[] = {
+    {int(PointCloudType::Points),
+     "POINTS",
+     0,
+     "Points",
+     "Simple point cloud represented by points with position and radius"},
+    {int(PointCloudType::GSplat),
+     "GAUSSIAN_SPLAT",
+     0,
+     "3D Gaussian Splat",
+     "A point cloud that represents the original 3D Gaussian Splats technique"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+}
 
 #ifdef RNA_RUNTIME
 
 #  include <fmt/format.h>
 
-#  include "BLI_math_vector.h"
+#  include "BLI_math_vector_c.hh"
+#  include "BLI_virtual_array.hh"
 
 #  include "BKE_customdata.hh"
 #  include "BKE_pointcloud.hh"
@@ -34,28 +48,28 @@
 #  include "WM_api.hh"
 #  include "WM_types.hh"
 
+namespace blender {
+
 static PointCloud *rna_pointcloud(const PointerRNA *ptr)
 {
-  return (PointCloud *)ptr->owner_id;
+  return id_cast<PointCloud *>(ptr->owner_id);
 }
 
-static float (*get_pointcloud_positions(PointCloud *pointcloud))[3]
+static float3 *get_pointcloud_positions(PointCloud *pointcloud)
 {
-  return (float(*)[3])CustomData_get_layer_named_for_write(
-      &pointcloud->pdata, CD_PROP_FLOAT3, "position", pointcloud->totpoint);
+  return pointcloud->positions_for_write().data();
 }
 
-static const float (*get_pointcloud_positions_const(const PointCloud *pointcloud))[3]
+static const float3 *get_pointcloud_positions_const(const PointCloud *pointcloud)
 {
-  return (const float(*)[3])CustomData_get_layer_named(
-      &pointcloud->pdata, CD_PROP_FLOAT3, "position");
+  return pointcloud->positions().data();
 }
 
 static int rna_Point_index_get_const(const PointerRNA *ptr)
 {
   const PointCloud *pointcloud = rna_pointcloud(ptr);
-  const float(*co)[3] = static_cast<const float(*)[3]>(ptr->data);
-  const float(*positions)[3] = get_pointcloud_positions_const(pointcloud);
+  const float3 *co = static_cast<const float3 *>(ptr->data);
+  const float3 *positions = get_pointcloud_positions_const(pointcloud);
   return int(co - positions);
 }
 
@@ -74,8 +88,9 @@ static void rna_PointCloud_points_begin(CollectionPropertyIterator *iter, Pointe
 {
   PointCloud *pointcloud = rna_pointcloud(ptr);
   rna_iterator_array_begin(iter,
+                           ptr,
                            get_pointcloud_positions(pointcloud),
-                           sizeof(float[3]),
+                           sizeof(float3),
                            pointcloud->totpoint,
                            false,
                            nullptr);
@@ -87,42 +102,31 @@ bool rna_PointCloud_points_lookup_int(PointerRNA *ptr, int index, PointerRNA *r_
   if (index < 0 || index >= pointcloud->totpoint) {
     return false;
   }
-  r_ptr->owner_id = &pointcloud->id;
-  r_ptr->type = &RNA_Point;
-  r_ptr->data = &get_pointcloud_positions(pointcloud)[index];
+  rna_pointer_create_with_ancestors(
+      *ptr, RNA_Point, &get_pointcloud_positions(pointcloud)[index], *r_ptr);
   return true;
 }
 
 static void rna_Point_location_get(PointerRNA *ptr, float value[3])
 {
-  copy_v3_v3(value, (const float *)ptr->data);
+  copy_v3_v3(value, *static_cast<const float3 *>(ptr->data));
 }
 
 static void rna_Point_location_set(PointerRNA *ptr, const float value[3])
 {
-  copy_v3_v3((float *)ptr->data, value);
+  *static_cast<float3 *>(ptr->data) = float3(value);
 }
 
 static float rna_Point_radius_get(PointerRNA *ptr)
 {
   const PointCloud *pointcloud = rna_pointcloud(ptr);
-  const float *radii = (const float *)CustomData_get_layer_named(
-      &pointcloud->pdata, CD_PROP_FLOAT, "radius");
-  if (radii == nullptr) {
-    return 0.0f;
-  }
-  return radii[rna_Point_index_get_const(ptr)];
+  return pointcloud->radius().get(rna_Point_index_get_const(ptr));
 }
 
 static void rna_Point_radius_set(PointerRNA *ptr, float value)
 {
   PointCloud *pointcloud = rna_pointcloud(ptr);
-  float *radii = (float *)CustomData_get_layer_named_for_write(
-      &pointcloud->pdata, CD_PROP_FLOAT, "radius", pointcloud->totpoint);
-  if (radii == nullptr) {
-    return;
-  }
-  radii[rna_Point_index_get_const(ptr)] = value;
+  pointcloud->radius_for_write()[rna_Point_index_get_const(ptr)] = value;
 }
 
 static std::optional<std::string> rna_Point_path(const PointerRNA *ptr)
@@ -141,7 +145,16 @@ static void rna_PointCloud_update_data(Main * /*bmain*/, Scene * /*scene*/, Poin
   }
 }
 
+static void rna_PointCloud_resize(PointCloud *pointcloud, const int size)
+{
+  pointcloud_resize(*pointcloud, size);
+}
+
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_point(BlenderRNA *brna)
 {
@@ -173,6 +186,8 @@ static void rna_def_pointcloud(BlenderRNA *brna)
 {
   StructRNA *srna;
   PropertyRNA *prop;
+  FunctionRNA *func;
+  PropertyRNA *parm;
 
   srna = RNA_def_struct(brna, "PointCloud", "ID");
   RNA_def_struct_ui_text(srna, "Point Cloud", "Point cloud data-block");
@@ -192,6 +207,9 @@ static void rna_def_pointcloud(BlenderRNA *brna)
                                     nullptr,
                                     nullptr);
   RNA_def_property_ui_text(prop, "Points", "");
+  func = RNA_def_function(srna, "resize", "rna_PointCloud_resize");
+  parm = RNA_def_int(func, "size", 0, 0, INT_MAX, "Size", "New number of points", 0, INT_MAX);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   /* materials */
   prop = RNA_def_property(srna, "materials", PROP_COLLECTION, PROP_NONE);
@@ -211,6 +229,12 @@ static void rna_def_pointcloud(BlenderRNA *brna)
 
   rna_def_attributes_common(srna, AttributeOwnerType::PointCloud);
 
+  /* Type. */
+  prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_pointcloud_type_items);
+  RNA_def_property_ui_text(prop, "Type", "Representation type of the pointcloud");
+  RNA_def_property_update(prop, 0, "rna_PointCloud_update_data");
+
   /* common */
   rna_def_animdata_common(srna);
 }
@@ -220,5 +244,7 @@ void RNA_def_pointcloud(BlenderRNA *brna)
   rna_def_point(brna);
   rna_def_pointcloud(brna);
 }
+
+}  // namespace blender
 
 #endif

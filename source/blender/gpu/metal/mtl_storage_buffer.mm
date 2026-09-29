@@ -6,8 +6,8 @@
  * \ingroup gpu
  */
 
-#include "BLI_string.h"
-#include "BLI_time.h"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
 
 #include "GPU_state.hh"
 #include "gpu_backend.hh"
@@ -17,15 +17,26 @@
 #include "mtl_context.hh"
 #include "mtl_debug.hh"
 #include "mtl_index_buffer.hh"
+#include "mtl_memory.hh"
 #include "mtl_storage_buffer.hh"
 #include "mtl_uniform_buffer.hh"
 #include "mtl_vertex_buffer.hh"
+#include <cstdio>
 
 namespace blender::gpu {
+
+static CLG_LogRef LOG = {"gpu.metal"};
 
 /* -------------------------------------------------------------------- */
 /** \name Creation & Deletion
  * \{ */
+
+MTLStorageBuf::MTLStorageBuf(size_t size) : StorageBuf(size, "Immediate")
+{
+  usage_ = GPU_USAGE_STREAM;
+  storage_source_ = MTL_STORAGE_BUF_TYPE_DEFAULT;
+  metal_buffer_ = MTLContext::get_global_memory_manager()->allocate_aligned(size, 256, true);
+}
 
 MTLStorageBuf::MTLStorageBuf(size_t size, GPUUsageType usage, const char *name)
     : StorageBuf(size, name)
@@ -92,8 +103,7 @@ MTLStorageBuf::~MTLStorageBuf()
    * to check deactivated context's. */
   MTLContext *ctx = MTLContext::get();
   if (ctx) {
-    for (int i = 0; i < MTL_MAX_BUFFER_BINDINGS; i++) {
-      MTLStorageBufferBinding &slot = ctx->pipeline_state.ssbo_bindings[i];
+    for (MTLStorageBufferBinding &slot : ctx->pipeline_state.ssbo_bindings) {
       if (slot.bound && slot.ssbo == this) {
         slot.bound = false;
         slot.ssbo = nullptr;
@@ -127,7 +137,9 @@ void MTLStorageBuf::init()
       size_in_bytes_, (usage_ == GPU_USAGE_DEVICE_ONLY) ? false : true);
 
 #ifndef NDEBUG
-  metal_buffer_->set_label([NSString stringWithFormat:@"Storage Buffer %s", name_]);
+  static std::atomic<int> global_counter = 0;
+  int index = global_counter.fetch_add(1);
+  metal_buffer_->set_label([NSString stringWithFormat:@"SSBO %i %s", index, name_]);
 #endif
   BLI_assert(metal_buffer_ != nullptr);
   BLI_assert(metal_buffer_->get_metal_buffer() != nil);
@@ -212,12 +224,12 @@ void MTLStorageBuf::update(const void *data)
 void MTLStorageBuf::bind(int slot)
 {
   if (slot >= MTL_MAX_BUFFER_BINDINGS) {
-    fprintf(
-        stderr,
-        "Error: Trying to bind \"%s\" ssbo to slot %d which is above the reported limit of %d.\n",
-        name_,
-        slot,
-        MTL_MAX_BUFFER_BINDINGS);
+    CLOG_ERROR(&LOG,
+               "Error: Trying to bind \"%s\" ssbo to slot %d which is above the reported limit of "
+               "%d.",
+               name_,
+               slot,
+               MTL_MAX_BUFFER_BINDINGS);
     BLI_assert(false);
     return;
   }
@@ -228,7 +240,7 @@ void MTLStorageBuf::bind(int slot)
 
   if (data_ != nullptr) {
     this->update(data_);
-    MEM_SAFE_FREE(data_);
+    MEM_SAFE_DELETE_VOID(data_);
   }
 
   /* Bind current UBO to active context. */
@@ -249,10 +261,11 @@ void MTLStorageBuf::unbind()
    * Otherwise, only perform a full unbind upon destruction
    * to ensure no lingering references. */
 #ifndef NDEBUG
-  if (true) {
+  if (true)
 #else
-  if (G.debug & G_DEBUG_GPU) {
+  if (G.debug & G_DEBUG_GPU)
 #endif
+  {
     if (bound_ctx_ != nullptr && bind_slot_ > -1) {
       MTLStorageBufferBinding &ctx_ssbo_bind_slot =
           bound_ctx_->pipeline_state.ssbo_bindings[bind_slot_];
@@ -371,7 +384,7 @@ void MTLStorageBuf::async_flush_to_host()
   /* Encode event signal and flush command buffer to ensure GPU work is in the pipeline for future
    * reads. */
   ctx->main_command_buffer.encode_signal_event(gpu_write_fence_, ++host_read_signal_value_);
-  GPU_flush();
+  ctx->flush();
 }
 
 void MTLStorageBuf::read(void *data)
@@ -434,6 +447,7 @@ void MTLStorageBuf::read(void *data)
       }
     }
     else {
+      /* In the case of unified memory. Wait for all pending operation. */
       GPU_finish();
     }
 
@@ -447,6 +461,9 @@ void MTLStorageBuf::read(void *data)
       id<MTLBlitCommandEncoder> blit_encoder =
           ctx->main_command_buffer.ensure_begin_blit_encoder();
       [blit_encoder synchronizeResource:metal_buffer_->get_metal_buffer()];
+
+      /* Wait for the blit to finish. */
+      GPU_finish();
     }
 
     /* Read data. NOTE: Unless explicitly synchronized with GPU work, results may not be ready. */
@@ -508,5 +525,7 @@ size_t MTLStorageBuf::get_size()
   BLI_assert(this);
   return size_in_bytes_;
 }
+
+/** \} */
 
 }  // namespace blender::gpu

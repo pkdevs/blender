@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_anonymous_attribute_id.hh"
+/** \file
+ * \ingroup bke
+ */
 
 namespace blender::bke {
 

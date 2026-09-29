@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# The cpu check module cannot build with sse42 since it will be executed
-# by cpus that may not support these instructions
+# The CPU check module cannot build with sse42 since it will be executed
+# by CPU's that may not support these instructions.
 
 set(SRC
   cpu_check.cc
 )
 
-if(COMPILER_SSE42_FLAG)
-  remove_cc_flag("${COMPILER_SSE42_FLAG}")
+if(COMPILER_SIMD_FLAGS)
+  remove_c_and_cxx_flag("${COMPILER_SIMD_FLAGS}")
 endif()
 add_library(blender_cpu_check SHARED ${SRC})
 

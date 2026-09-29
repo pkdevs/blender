@@ -12,10 +12,6 @@
 
 #include "../../stroke/StrokeIterators.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject StrokeVertexIterator_Type;
@@ -24,16 +20,12 @@ extern PyTypeObject StrokeVertexIterator_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&StrokeVertexIterator_Type))
 
 /*---------------------------Python BPy_StrokeVertexIterator structure definition----------*/
-typedef struct {
+struct BPy_StrokeVertexIterator {
   BPy_Iterator py_it;
   Freestyle::StrokeInternal::StrokeVertexIterator *sv_it;
   bool reversed;
   /* attribute to make next() work correctly */
   bool at_start;
-} BPy_StrokeVertexIterator;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

@@ -2,15 +2,18 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup depsgraph
+ */
+
 #include "pipeline_view_layer.h"
 
 #include "intern/builder/deg_builder_nodes.h"
 #include "intern/builder/deg_builder_relations.h"
-#include "intern/depsgraph.hh"
 
 namespace blender::deg {
 
-ViewLayerBuilderPipeline::ViewLayerBuilderPipeline(::Depsgraph *graph)
+ViewLayerBuilderPipeline::ViewLayerBuilderPipeline(blender::Depsgraph *graph)
     : AbstractBuilderPipeline(graph)
 {
 }

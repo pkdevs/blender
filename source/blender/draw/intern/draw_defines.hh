@@ -15,7 +15,6 @@
 #define DRW_VIEW_UBO_SLOT 11
 #define DRW_VIEW_CULLING_UBO_SLOT 10
 #define DRW_OBJ_DATA_INFO_UBO_SLOT 9
-#define DRW_OBJ_MAT_UBO_SLOT 8
 #define DRW_LAYER_ATTR_UBO_SLOT 7
 /* Slots 0-6 are reserved for engine use. */
 /* TODO(fclem): Legacy. To be removed once we remove the old DRW. */
@@ -30,13 +29,20 @@
 #define DRW_OBJ_ATTR_SLOT 8
 /* Slots 0-7 are reserved for engine use. */
 /* Debug SSBOs are not counted in the limit [12 - 15+]. */
-#define DRW_DEBUG_PRINT_SLOT 15
 #define DRW_DEBUG_DRAW_SLOT 14
+#define DRW_DEBUG_DRAW_FEEDBACK_SLOT 15
 
 #define DRW_COMMAND_GROUP_SIZE 64
 #define DRW_FINALIZE_GROUP_SIZE 64
 /* Must be multiple of 32. Set to 32 for shader simplicity. */
 #define DRW_VISIBILITY_GROUP_SIZE 32
+#define DRW_GSPLAT_GROUP_SIZE 128
+
+/* Only used during gsplat and deferred draws; does not conflict with gbuffer
+ * sampling in engines. */
+#define DRW_GSPLAT_SHAPE_DATA_TEX_SLOT 17
+#define DRW_GSPLAT_ELLIPSE_COMP_TEX_SLOT 18
+#define DRW_GSPLAT_RADIANCE_COMP_TEX_SLOT 19
 
 /**
  * The maximum of indexable views is dictated by:
@@ -44,3 +50,9 @@
  * - The maximum resource index supported for shaders using multi-view (see DRW_VIEW_SHIFT).
  */
 #define DRW_VIEW_MAX 64
+
+#define DRW_POINTCLOUD_STRIP_TILE_SIZE 8
+#define DRW_GSPLAT_STRIP_TILE_SIZE 5
+
+/* TODO(fclem): Move to overlay. */
+#define OVERLAY_GLOBALS_SLOT 7

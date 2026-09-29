@@ -16,10 +16,6 @@
 #include "UnaryFunction1D_void/BPy_IncrementChainingTimeStampF1D.h"
 #include "UnaryFunction1D_void/BPy_TimeStampF1D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -35,27 +31,23 @@ int UnaryFunction1DVoid_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction1DVoid_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction1DVoid_Type);
-  PyModule_AddObject(module, "UnaryFunction1DVoid", (PyObject *)&UnaryFunction1DVoid_Type);
+  PyModule_AddObjectRef(module, "UnaryFunction1DVoid", (PyObject *)&UnaryFunction1DVoid_Type);
 
   if (PyType_Ready(&ChainingTimeStampF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ChainingTimeStampF1D_Type);
-  PyModule_AddObject(module, "ChainingTimeStampF1D", (PyObject *)&ChainingTimeStampF1D_Type);
+  PyModule_AddObjectRef(module, "ChainingTimeStampF1D", (PyObject *)&ChainingTimeStampF1D_Type);
 
   if (PyType_Ready(&IncrementChainingTimeStampF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&IncrementChainingTimeStampF1D_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "IncrementChainingTimeStampF1D", (PyObject *)&IncrementChainingTimeStampF1D_Type);
 
   if (PyType_Ready(&TimeStampF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&TimeStampF1D_Type);
-  PyModule_AddObject(module, "TimeStampF1D", (PyObject *)&TimeStampF1D_Type);
+  PyModule_AddObjectRef(module, "TimeStampF1D", (PyObject *)&TimeStampF1D_Type);
 
   return 0;
 }
@@ -70,15 +62,18 @@ PyDoc_STRVAR(
     "Base class for unary functions (functors) working on\n"
     ":class:`Interface1D`.\n"
     "\n"
-    ".. method:: __init__()\n"
-    "             __init__(integration_type)\n"
+    ".. method:: __init__(*args)\n"
+    "\n"
+    "   Accepted call signatures:\n"
+    "\n"
+    "   - ``__init__()``\n"
+    "   - ``__init__(integration_type)``\n"
     "\n"
     "   Builds a unary 1D function using either a default constructor\n"
     "   or the integration method given as an argument.\n"
     "\n"
-    "   :arg integration_type: An integration method.\n"
+    "   :param integration_type: An integration method.\n"
     "   :type integration_type: :class:`IntegrationType`\n");
-
 static int UnaryFunction1DVoid___init__(BPy_UnaryFunction1DVoid *self,
                                         PyObject *args,
                                         PyObject *kwds)
@@ -86,8 +81,14 @@ static int UnaryFunction1DVoid___init__(BPy_UnaryFunction1DVoid *self,
   static const char *kwlist[] = {"integration", nullptr};
   PyObject *obj = nullptr;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "|"  /* Optional arguments. */
+                                   "O!" /* `integration` */
+                                   ":__init__",
+                                   (char **)kwlist,
+                                   &IntegrationType_Type,
+                                   &obj))
   {
     return -1;
   }
@@ -122,7 +123,14 @@ static PyObject *UnaryFunction1DVoid___call__(BPy_UnaryFunction1DVoid *self,
   static const char *kwlist[] = {"inter", nullptr};
   PyObject *obj = nullptr;
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", (char **)kwlist, &Interface1D_Type, &obj)) {
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `inter` */
+                                   ":__call__",
+                                   (char **)kwlist,
+                                   &Interface1D_Type,
+                                   &obj))
+  {
     return nullptr;
   }
 
@@ -147,8 +155,7 @@ PyDoc_STRVAR(
     integration_type_doc,
     "The integration method.\n"
     "\n"
-    ":type: :class:`IntegrationType`");
-
+    ":type: :class:`IntegrationType`\n");
 static PyObject *integration_type_get(BPy_UnaryFunction1DVoid *self, void * /*closure*/)
 {
   return BPy_IntegrationType_from_IntegrationType(self->uf1D_void->getIntegrationType());
@@ -217,7 +224,3 @@ PyTypeObject UnaryFunction1DVoid_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

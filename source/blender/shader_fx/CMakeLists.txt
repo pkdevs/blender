@@ -5,24 +5,18 @@
 set(INC
   .
   intern
-  ../blenkernel
-  ../blentranslation
-  ../bmesh
   ../editors/include
   ../makesrna
-  ../render
-  ../windowmanager
   ../../../intern/eigen
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 set(INC_SYS
-  ${ZLIB_INCLUDE_DIRS}
 )
 
 set(SRC
-  intern/FX_shader_util.h
+  intern/FX_shader_util.hh
   intern/FX_ui_common.cc
 
   intern/FX_shader_blur.cc
@@ -36,16 +30,22 @@ set(SRC
   intern/FX_shader_util.cc
   intern/FX_shader_wave.cc
 
-  intern/FX_ui_common.h
-  FX_shader_types.h
+  intern/FX_ui_common.hh
+  FX_shader_types.hh
 )
 
 set(LIB
   PRIVATE bf::blenfont
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::blentranslation
+  PRIVATE bf::bmesh
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::render
+  PRIVATE bf::windowmanager
+  PRIVATE bf::dependencies::zlib
 )
 
 

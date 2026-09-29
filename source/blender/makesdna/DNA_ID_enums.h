@@ -9,9 +9,9 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "BLI_enum_flags.hh"
+
+namespace blender {
 
 enum eIconSizes {
   ICON_SIZE_ICON = 0,
@@ -21,7 +21,7 @@ enum eIconSizes {
 };
 
 /** #IDProperty.type */
-typedef enum eIDPropertyType {
+enum eIDPropertyType : char {
   IDP_STRING = 0,
   IDP_INT = 1,
   IDP_FLOAT = 2,
@@ -36,11 +36,11 @@ typedef enum eIDPropertyType {
    * be 0 or 1.
    */
   IDP_BOOLEAN = 10,
-} eIDPropertyType;
+};
 #define IDP_NUMTYPES 11
 
 /** Used by some IDP utils, keep values in sync with type enum above. */
-enum {
+enum eIDPropertyTypeFilter : int {
   IDP_TYPE_FILTER_STRING = 1 << IDP_STRING,
   IDP_TYPE_FILTER_INT = 1 << IDP_INT,
   IDP_TYPE_FILTER_FLOAT = 1 << IDP_FLOAT,
@@ -51,15 +51,16 @@ enum {
   IDP_TYPE_FILTER_IDPARRAY = 1 << IDP_IDPARRAY,
   IDP_TYPE_FILTER_BOOLEAN = 1 << IDP_BOOLEAN,
 };
+ENUM_OPERATORS(eIDPropertyTypeFilter)
 
 /** #IDProperty.subtype for #IDP_STRING properties. */
-typedef enum eIDPropertySubType {
+enum eIDPropertySubType {
   IDP_STRING_SUB_UTF8 = 0, /* default */
   IDP_STRING_SUB_BYTE = 1, /* arbitrary byte array, _not_ null terminated */
-} eIDPropertySubType;
+};
 
 /** #IDProperty.flag. */
-typedef enum eIDPropertyFlag {
+enum eIDPropertyFlag : short {
   /**
    * This #IDProperty may be library-overridden.
    * Should only be used/be relevant for custom properties.
@@ -89,7 +90,26 @@ typedef enum eIDPropertyFlag {
    * #RNA_property_is_set, currently this is a runtime flag.
    */
   IDP_FLAG_GHOST = 1 << 7,
-} eIDPropertyFlag;
+};
+ENUM_OPERATORS(eIDPropertyFlag)
+
+/**
+ * #Library.flag
+ *
+ * Some of these flags define a 'virtual' library, which may not be an actual blendfile, store
+ * 'archived' embedded data, etc. IDs contained in these virtual libraries are _not_ managed by
+ * regular linking code.
+ *
+ * Warning: 16 bits only (uint16_t) currently!
+ */
+enum LibraryFlag {
+  /** The library is an 'archive' that only contains embedded linked data. */
+  LIBRARY_FLAG_IS_ARCHIVE = 1 << 0,
+  /**
+   * The library is an 'external' (non-blend file) archive that only contains embedded linked data.
+   */
+  LIBRARY_FLAG_IS_EXTERNAL = 1 << 1,
+};
 
 /**
  * Defines for working with IDs.
@@ -97,14 +117,8 @@ typedef enum eIDPropertyFlag {
  * The tags represent types! This is a dirty way of enabling RTTI. The
  * sig_byte end endian defines aren't really used much.
  */
-
-#ifdef __BIG_ENDIAN__
-/* big endian */
-#  define MAKE_ID2(c, d) ((c) << 8 | (d))
-#else
-/* little endian */
-#  define MAKE_ID2(c, d) ((d) << 8 | (c))
-#endif
+/* NOTE: this is endianness-sensitive. */
+#define MAKE_ID2(c, d) ((d) << 8 | (c))
 
 /**
  * ID from database.
@@ -112,9 +126,14 @@ typedef enum eIDPropertyFlag {
  * Written to #BHead.code (for file IO)
  * and the first 2 bytes of #ID.name (for runtime checks, see #GS macro).
  *
+ * These types should also be available on their corresponding DNA struct.
+ * It must be a static `constexpr` data member so that it can be used in
+ * compile-time expressions and does not take up space in the struct.
+ * This is used by e.g. #BKE_id_new_nomain for improved type safety.
+ *
  * Update #ID_TYPE_IS_DEPRECATED() when deprecating types.
  */
-typedef enum ID_Type {
+enum ID_Type : uint16_t {
   ID_SCE = MAKE_ID2('S', 'C'),       /* Scene */
   ID_LI = MAKE_ID2('L', 'I'),        /* Library */
   ID_OB = MAKE_ID2('O', 'B'),        /* Object */
@@ -127,10 +146,9 @@ typedef enum ID_Type {
   ID_LT = MAKE_ID2('L', 'T'),        /* Lattice */
   ID_LA = MAKE_ID2('L', 'A'),        /* Light */
   ID_CA = MAKE_ID2('C', 'A'),        /* Camera */
-  ID_IP = MAKE_ID2('I', 'P'),        /* Ipo (depreciated, replaced by FCurves) */
   ID_KE = MAKE_ID2('K', 'E'),        /* Key (shape key) */
   ID_WO = MAKE_ID2('W', 'O'),        /* World */
-  ID_SCR = MAKE_ID2('S', 'R'),       /* Screen */
+  ID_SCR = MAKE_ID2('S', 'R'),       /* bScreen */
   ID_VF = MAKE_ID2('V', 'F'),        /* VFont (Vector Font) */
   ID_TXT = MAKE_ID2('T', 'X'),       /* Text */
   ID_SPK = MAKE_ID2('S', 'K'),       /* Speaker */
@@ -142,7 +160,7 @@ typedef enum ID_Type {
   ID_BR = MAKE_ID2('B', 'R'),        /* Brush */
   ID_PA = MAKE_ID2('P', 'A'),        /* ParticleSettings */
   ID_GD_LEGACY = MAKE_ID2('G', 'D'), /* bGPdata, (legacy Grease Pencil) */
-  ID_WM = MAKE_ID2('W', 'M'),        /* WindowManager */
+  ID_WM = MAKE_ID2('W', 'M'),        /* wmWindowManager */
   ID_MC = MAKE_ID2('M', 'C'),        /* MovieClip */
   ID_MSK = MAKE_ID2('M', 'S'),       /* Mask */
   ID_LS = MAKE_ID2('L', 'S'),        /* FreestyleLineStyle */
@@ -155,7 +173,7 @@ typedef enum ID_Type {
   ID_PT = MAKE_ID2('P', 'T'),        /* PointCloud */
   ID_VO = MAKE_ID2('V', 'O'),        /* Volume */
   ID_GP = MAKE_ID2('G', 'P'),        /* Grease Pencil */
-} ID_Type;
+};
 
 /* Only used as 'placeholder' in .blend files for directly linked data-blocks. */
 #define ID_LINK_PLACEHOLDER MAKE_ID2('I', 'D') /* (internal use only) */
@@ -174,6 +192,4 @@ typedef enum ID_Type {
 /* fluidsim Ipo */
 #define ID_FLUIDSIM MAKE_ID2('F', 'S')
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

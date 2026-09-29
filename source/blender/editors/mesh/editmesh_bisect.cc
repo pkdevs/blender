@@ -8,6 +8,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
 #include "BLT_translation.hh"
@@ -17,11 +18,12 @@
 #include "BKE_global.hh"
 #include "BKE_layer.hh"
 #include "BKE_report.hh"
+#include "BKE_workspace.hh"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -45,9 +47,9 @@
 #  include "ED_undo.hh"
 #endif
 
-using blender::Vector;
+namespace blender {
 
-static int mesh_bisect_exec(bContext *C, wmOperator *op);
+static wmOperatorStatus mesh_bisect_exec(bContext *C, wmOperator *op);
 
 /* -------------------------------------------------------------------- */
 /* Model Helpers */
@@ -105,8 +107,9 @@ static void mesh_bisect_interactive_calc(bContext *C,
   ED_view3d_win_to_3d(v3d, region, co_ref, co_a_ss, plane_co);
 }
 
-static int mesh_bisect_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus mesh_bisect_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   int valid_objects = 0;
@@ -120,11 +123,10 @@ static int mesh_bisect_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   }
 
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-    if (em->bm->totedgesel != 0) {
+    const BMesh *bm = BKE_editmesh_bmesh_get(obedit);
+    if (bm->totedgesel != 0) {
       valid_objects++;
     }
   }
@@ -135,7 +137,7 @@ static int mesh_bisect_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   }
 
   /* Support flipping if side matters. */
-  int ret;
+  wmOperatorStatus ret;
   const bool clear_inner = RNA_boolean_get(op->ptr, "clear_inner");
   const bool clear_outer = RNA_boolean_get(op->ptr, "clear_outer");
   const bool use_fill = RNA_boolean_get(op->ptr, "use_fill");
@@ -150,21 +152,19 @@ static int mesh_bisect_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
     BisectData *opdata;
 
-    opdata = static_cast<BisectData *>(MEM_mallocN(sizeof(BisectData), "inset_operator_data"));
+    opdata = MEM_new_uninitialized<BisectData>("inset_operator_data");
     gesture->user_data.data = opdata;
 
     opdata->backup_len = objects.size();
-    opdata->backup = static_cast<BisectData::BisectDataBackup *>(
-        MEM_callocN(sizeof(*opdata->backup) * objects.size(), __func__));
+    opdata->backup = MEM_new_array_zeroed<BisectData::BisectDataBackup>(objects.size(), __func__);
 
     /* Store the mesh backups. */
     for (const int ob_index : objects.index_range()) {
       Object *obedit = objects[ob_index];
-      BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-      if (em->bm->totedgesel != 0) {
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+      if (bm->totedgesel != 0) {
         opdata->backup[ob_index].is_valid = true;
-        opdata->backup[ob_index].mesh_backup = EDBM_redo_state_store(em);
+        opdata->backup[ob_index].mesh_backup = EDBM_redo_state_store(bm);
       }
     }
 
@@ -172,7 +172,9 @@ static int mesh_bisect_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     G.moving = G_TRANSFORM_EDIT;
 
     /* Initialize modal callout. */
-    ED_workspace_status_text(C, IFACE_("LMB: Click and drag to draw cut line"));
+    WorkspaceStatus status(C);
+    status.item(IFACE_("Cancel"), ICON_EVENT_ESC);
+    status.item(IFACE_("Draw Cut Line"), ICON_MOUSE_LMB_DRAG);
   }
   return ret;
 }
@@ -186,26 +188,23 @@ static void edbm_bisect_exit(BisectData *opdata)
       EDBM_redo_state_free(&opdata->backup[ob_index].mesh_backup);
     }
   }
-  MEM_freeN(opdata->backup);
+  MEM_delete(opdata->backup);
 }
 
-static int mesh_bisect_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus mesh_bisect_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
   BisectData *opdata = static_cast<BisectData *>(gesture->user_data.data);
   BisectData opdata_back = *opdata; /* annoyance, WM_gesture_straightline_modal, frees */
-  int ret;
+  wmOperatorStatus ret;
 
   ret = WM_gesture_straightline_modal(C, op, event);
 
   /* update or clear modal callout */
-  if (event->type == EVT_MODAL_MAP) {
-    if (event->val == GESTURE_MODAL_BEGIN) {
-      ED_workspace_status_text(C, IFACE_("LMB: Release to confirm cut line"));
-    }
-    else {
-      ED_workspace_status_text(C, nullptr);
-    }
+  WorkSpace *workspace = CTX_wm_workspace(C);
+
+  if (workspace) {
+    BKE_workspace_status_clear(workspace);
   }
 
   if (ret & (OPERATOR_FINISHED | OPERATOR_CANCELLED)) {
@@ -228,14 +227,15 @@ static int mesh_bisect_modal(bContext *C, wmOperator *op, const wmEvent *event)
 /* End Model Helpers */
 /* -------------------------------------------------------------------- */
 
-static int mesh_bisect_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus mesh_bisect_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
 
   /* both can be nullptr, fallbacks values are used */
   RegionView3D *rv3d = ED_view3d_context_rv3d(C);
 
-  int ret = OPERATOR_CANCELLED;
+  wmOperatorStatus ret = OPERATOR_CANCELLED;
 
   float plane_co[3];
   float plane_no[3];
@@ -291,16 +291,16 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
   /* -------------------------------------------------------------------- */
 
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_view3d(C));
+      *bmain, scene, CTX_data_view_layer(C), CTX_wm_view3d(C));
 
   for (const int ob_index : objects.index_range()) {
     Object *obedit = objects[ob_index];
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     if (opdata != nullptr) {
       if (opdata->backup[ob_index].is_dirty) {
-        EDBM_redo_state_restore(&opdata->backup[ob_index].mesh_backup, em, false);
+        EDBM_redo_state_restore(&opdata->backup[ob_index].mesh_backup, em, bm, false);
         opdata->backup[ob_index].is_dirty = false;
       }
     }
@@ -326,7 +326,7 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
 
     BMOperator bmop;
     EDBM_op_init(
-        em,
+        bm,
         &bmop,
         op,
         "bisect_plane geom=%hvef plane_co=%v plane_no=%v dist=%f clear_inner=%b clear_outer=%b",
@@ -338,7 +338,7 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
         clear_outer);
     BMO_op_exec(bm, &bmop);
 
-    EDBM_flag_disable_all(em, BM_ELEM_SELECT);
+    EDBM_flag_disable_all(bm, BM_ELEM_SELECT);
 
     if (use_fill) {
       float normal_fill[3];
@@ -381,13 +381,16 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
     BMO_slot_buffer_hflag_enable(
         bm, bmop.slots_out, "geom_cut.out", BM_VERT | BM_EDGE, BM_ELEM_SELECT, true);
 
-    if (EDBM_op_finish(em, &bmop, op, true)) {
+    if (EDBM_op_finish(bm, &bmop, op, true)) {
       EDBMUpdate_Params params{};
       params.calc_looptris = true;
       params.calc_normals = false;
       params.is_destructive = true;
-      EDBM_update(static_cast<Mesh *>(obedit->data), &params);
-      EDBM_selectmode_flush(em);
+      EDBM_update(id_cast<Mesh *>(obedit->data), &params);
+
+      EDBM_selectmode_flush(bm, em->selectmode);
+      EDBM_uvselect_clear(bm);
+
       ret = OPERATOR_FINISHED;
     }
   }
@@ -407,7 +410,7 @@ void MESH_OT_bisect(wmOperatorType *ot)
   ot->description = "Cut geometry along a plane (click-drag to define plane)";
   ot->idname = "MESH_OT_bisect";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = mesh_bisect_exec;
   ot->invoke = mesh_bisect_invoke;
   ot->modal = mesh_bisect_modal;
@@ -501,8 +504,8 @@ struct GizmoGroup {
 static void gizmo_bisect_exec(GizmoGroup *ggd)
 {
   wmOperator *op = ggd->data.op;
-  if (op == WM_operator_last_redo((bContext *)ggd->data.context)) {
-    ED_undo_operator_repeat((bContext *)ggd->data.context, op);
+  if (op == WM_operator_last_redo(ggd->data.context)) {
+    ED_undo_operator_repeat(ggd->data.context, op);
   }
 }
 
@@ -686,7 +689,7 @@ static void gizmo_mesh_bisect_setup(const bContext *C, wmGizmoGroup *gzgroup)
     return;
   }
 
-  GizmoGroup *ggd = static_cast<GizmoGroup *>(MEM_callocN(sizeof(GizmoGroup), __func__));
+  GizmoGroup *ggd = MEM_new_zeroed<GizmoGroup>(__func__);
   gzgroup->customdata = ggd;
 
   const wmGizmoType *gzt_arrow = WM_gizmotype_find("GIZMO_GT_arrow_3d", true);
@@ -697,9 +700,9 @@ static void gizmo_mesh_bisect_setup(const bContext *C, wmGizmoGroup *gzgroup)
   ggd->translate_c = WM_gizmo_new_ptr(gzt_move, gzgroup, nullptr);
   ggd->rotate_c = WM_gizmo_new_ptr(gzt_dial, gzgroup, nullptr);
 
-  UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, ggd->translate_z->color);
-  UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, ggd->translate_c->color);
-  UI_GetThemeColor3fv(TH_GIZMO_SECONDARY, ggd->rotate_c->color);
+  ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, ggd->translate_z->color);
+  ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, ggd->translate_c->color);
+  ui::theme::get_color_3fv(TH_GIZMO_SECONDARY, ggd->rotate_c->color);
 
   RNA_enum_set(ggd->translate_z->ptr, "draw_style", ED_GIZMO_ARROW_STYLE_NORMAL);
   RNA_enum_set(ggd->translate_c->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
@@ -708,7 +711,7 @@ static void gizmo_mesh_bisect_setup(const bContext *C, wmGizmoGroup *gzgroup)
   WM_gizmo_set_flag(ggd->rotate_c, WM_GIZMO_DRAW_VALUE, true);
 
   {
-    ggd->data.context = (bContext *)C;
+    ggd->data.context = const_cast<bContext *>(C);
     ggd->data.op = op;
     ggd->data.prop_plane_co = RNA_struct_find_property(op->ptr, "plane_co");
     ggd->data.prop_plane_no = RNA_struct_find_property(op->ptr, "plane_no");
@@ -751,7 +754,7 @@ static void gizmo_mesh_bisect_draw_prepare(const bContext * /*C*/, wmGizmoGroup 
 {
   GizmoGroup *ggd = static_cast<GizmoGroup *>(gzgroup->customdata);
   if (ggd->data.op->next) {
-    ggd->data.op = WM_operator_last_redo((bContext *)ggd->data.context);
+    ggd->data.op = WM_operator_last_redo(ggd->data.context);
   }
   gizmo_mesh_bisect_update_from_op(ggd);
 }
@@ -774,3 +777,5 @@ static void MESH_GGT_bisect(wmGizmoGroupType *gzgt)
 /** \} */
 
 #endif /* USE_GIZMO */
+
+}  // namespace blender

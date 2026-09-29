@@ -4,15 +4,14 @@
 
 #pragma once
 
-#include "kernel/integrator/path_state.h"
-#include "kernel/integrator/state_util.h"
+#include "kernel/integrator/state_flow.h"
 
 CCL_NAMESPACE_BEGIN
 
 /* Check whether current surface bounce is where path is to be split for the shadow catcher. */
 ccl_device_inline bool kernel_shadow_catcher_is_path_split_bounce(KernelGlobals kg,
                                                                   IntegratorState state,
-                                                                  const int object_flag)
+                                                                  const uint object_flag)
 {
 #ifdef __SHADOW_CATCHER__
   if (!kernel_data.integrator.has_shadow_catcher) {
@@ -47,8 +46,7 @@ ccl_device_inline bool kernel_shadow_catcher_is_path_split_bounce(KernelGlobals 
 }
 
 /* Check whether the current path can still split. */
-ccl_device_inline bool kernel_shadow_catcher_path_can_split(KernelGlobals kg,
-                                                            ConstIntegratorState state)
+ccl_device_inline bool kernel_shadow_catcher_path_can_split(ConstIntegratorState state)
 {
   if (integrator_path_is_terminated(state)) {
     return false;

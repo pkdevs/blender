@@ -9,6 +9,7 @@
 #pragma once
 
 #include "MEM_guardedalloc.h"
+
 #include "gpu_uniform_buffer_private.hh"
 
 #include "mtl_context.hh"
@@ -27,10 +28,6 @@ class MTLUniformBuf : public UniformBuf {
   /* Allocation Handle. */
   gpu::MTLBuffer *metal_buffer_ = nullptr;
 
-  /* Whether buffer has contents, if false, no GPU buffer will
-   * have yet been allocated. */
-  bool has_data_ = false;
-
   /* Bind-state tracking. */
   int bind_slot_ = -1;
   MTLContext *bound_ctx_ = nullptr;
@@ -40,7 +37,7 @@ class MTLUniformBuf : public UniformBuf {
 
  public:
   MTLUniformBuf(size_t size, const char *name);
-  ~MTLUniformBuf();
+  ~MTLUniformBuf() override;
 
   void update(const void *data) override;
   void bind(int slot) override;

@@ -12,24 +12,35 @@
 
 #include <Alembic/AbcGeom/OCurves.h>
 
-namespace blender::io::alembic {
+namespace blender::bke {
+class CurvesGeometry;
+}
 
-extern const std::string ABC_CURVE_RESOLUTION_U_PROPNAME;
+namespace blender::io::alembic {
 
 class ABCCurveWriter : public ABCAbstractWriter {
  private:
   Alembic::AbcGeom::OCurves abc_curve_;
   Alembic::AbcGeom::OCurvesSchema abc_curve_schema_;
 
+  std::unique_ptr<AttributeParamMaps> attribute_maps_ = nullptr;
+
  public:
   explicit ABCCurveWriter(const ABCWriterConstructorArgs &args);
 
-  virtual void create_alembic_objects(const HierarchyContext *context) override;
-  virtual Alembic::Abc::OObject get_alembic_object() const override;
+  void create_alembic_objects(const HierarchyContext *context) override;
+  Alembic::Abc::OObject get_alembic_object() const override;
   Alembic::Abc::OCompoundProperty abc_prop_for_custom_props() override;
 
  protected:
-  virtual void do_write(HierarchyContext &context) override;
+  void do_write(HierarchyContext &context) override;
+
+ private:
+  void write_arb_geo_params(const bke::CurvesGeometry &curves,
+                            const Object &object,
+                            const size_t num_geom_samples);
+
+  AttributeParamMaps &get_attribute_param_maps();
 };
 
 class ABCCurveMeshWriter : public ABCGenericMeshWriter {
@@ -37,7 +48,7 @@ class ABCCurveMeshWriter : public ABCGenericMeshWriter {
   ABCCurveMeshWriter(const ABCWriterConstructorArgs &args);
 
  protected:
-  virtual Mesh *get_export_mesh(Object *object_eval, bool &r_needsfree) override;
+  Mesh *get_export_mesh(Object *object_eval, bool &r_needsfree) override;
 };
 
 }  // namespace blender::io::alembic

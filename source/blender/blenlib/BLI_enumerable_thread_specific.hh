@@ -2,31 +2,20 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #pragma once
 
 #ifdef WITH_TBB
-/* Quiet top level deprecation message, unrelated to API usage here. */
-#  if defined(WIN32) && !defined(NOMINMAX)
-/* TBB includes Windows.h which will define min/max macros causing issues
- * when we try to use std::min and std::max later on. */
-#    define NOMINMAX
-#    define TBB_MIN_MAX_CLEANUP
-#  endif
 #  include <tbb/enumerable_thread_specific.h>
-#  ifdef WIN32
-/* We cannot keep this defined, since other parts of the code deal with this on their own, leading
- * to multiple define warnings unless we un-define this, however we can only undefine this if we
- * were the ones that made the definition earlier. */
-#    ifdef TBB_MIN_MAX_CLEANUP
-#      undef NOMINMAX
-#    endif
-#  endif
 #else
 #  include <atomic>
 #  include <functional>
-#  include <mutex>
 
 #  include "BLI_map.hh"
+#  include "BLI_mutex.hh"
 #endif
 
 #include "BLI_utility_mixins.hh"
@@ -77,7 +66,7 @@ template<typename T> class EnumerableThreadSpecific : NonCopyable, NonMovable {
 #else /* WITH_TBB */
 
  private:
-  std::mutex mutex_;
+  Mutex mutex_;
   /* Maps thread ids to their corresponding values. The values are not embedded in the map, so that
    * their addresses do not change when the map grows. */
   Map<int, std::reference_wrapper<T>> values_;
@@ -100,7 +89,7 @@ template<typename T> class EnumerableThreadSpecific : NonCopyable, NonMovable {
     const int thread_id = enumerable_thread_specific_utils::thread_id;
     std::lock_guard lock{mutex_};
     return values_.lookup_or_add_cb(thread_id, [&]() {
-      T *value = (T *)::operator new(sizeof(T));
+      T *value = static_cast<T *>(::operator new(sizeof(T)));
       initializer_(value);
       owned_values_.append(std::unique_ptr<T>{value});
       return std::reference_wrapper<T>{*value};

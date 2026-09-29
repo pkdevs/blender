@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
 /**
@@ -24,16 +28,19 @@
 
 #include "DNA_viewer_path_types.h"
 
+namespace blender {
+
 struct BlendWriter;
 struct BlendDataReader;
 struct LibraryForeachIDData;
 
-namespace blender::bke::id {
+namespace bke::id {
 class IDRemapper;
 }
 
 enum ViewerPathEqualFlag {
-  VIEWER_PATH_EQUAL_FLAG_IGNORE_REPEAT_ITERATION = (1 << 0),
+  VIEWER_PATH_EQUAL_FLAG_IGNORE_ITERATION = (1 << 0),
+  VIEWER_PATH_EQUAL_FLAG_CONSIDER_UI_NAME = (1 << 1),
 };
 
 void BKE_viewer_path_init(ViewerPath *viewer_path);
@@ -42,11 +49,11 @@ void BKE_viewer_path_copy(ViewerPath *dst, const ViewerPath *src);
 bool BKE_viewer_path_equal(const ViewerPath *a,
                            const ViewerPath *b,
                            ViewerPathEqualFlag flag = ViewerPathEqualFlag(0));
+uint64_t BKE_viewer_path_hash(const ViewerPath &viewer_path);
 void BKE_viewer_path_blend_write(BlendWriter *writer, const ViewerPath *viewer_path);
 void BKE_viewer_path_blend_read_data(BlendDataReader *reader, ViewerPath *viewer_path);
 void BKE_viewer_path_foreach_id(LibraryForeachIDData *data, ViewerPath *viewer_path);
-void BKE_viewer_path_id_remap(ViewerPath *viewer_path,
-                              const blender::bke::id::IDRemapper &mappings);
+void BKE_viewer_path_id_remap(ViewerPath *viewer_path, const bke::id::IDRemapper &mappings);
 
 ViewerPathElem *BKE_viewer_path_elem_new(ViewerPathElemType type);
 IDViewerPathElem *BKE_viewer_path_elem_new_id();
@@ -55,8 +62,14 @@ GroupNodeViewerPathElem *BKE_viewer_path_elem_new_group_node();
 SimulationZoneViewerPathElem *BKE_viewer_path_elem_new_simulation_zone();
 ViewerNodeViewerPathElem *BKE_viewer_path_elem_new_viewer_node();
 RepeatZoneViewerPathElem *BKE_viewer_path_elem_new_repeat_zone();
+ForeachGeometryElementZoneViewerPathElem *BKE_viewer_path_elem_new_foreach_geometry_element_zone();
+EvaluateClosureNodeViewerPathElem *BKE_viewer_path_elem_new_evaluate_closure();
+
 ViewerPathElem *BKE_viewer_path_elem_copy(const ViewerPathElem *src);
 bool BKE_viewer_path_elem_equal(const ViewerPathElem *a,
                                 const ViewerPathElem *b,
                                 ViewerPathEqualFlag flag = ViewerPathEqualFlag(0));
+uint64_t BKE_viewer_path_elem_hash(const ViewerPathElem &elem);
 void BKE_viewer_path_elem_free(ViewerPathElem *elem);
+
+}  // namespace blender

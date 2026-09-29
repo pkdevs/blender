@@ -14,11 +14,11 @@ namespace blender::deg {
 
 class ViewLayerBuilderPipeline : public AbstractBuilderPipeline {
  public:
-  ViewLayerBuilderPipeline(::Depsgraph *graph);
+  ViewLayerBuilderPipeline(blender::Depsgraph *graph);
 
  protected:
-  virtual void build_nodes(DepsgraphNodeBuilder &node_builder) override;
-  virtual void build_relations(DepsgraphRelationBuilder &relation_builder) override;
+  void build_nodes(DepsgraphNodeBuilder &node_builder) override;
+  void build_relations(DepsgraphRelationBuilder &relation_builder) override;
 };
 
 }  // namespace blender::deg

@@ -2,13 +2,19 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
 #include "BLI_fileops.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_implicit_sharing.hh"
+#include "BLI_mutex.hh"
 #include "BLI_serialize.hh"
 
-#include "BKE_bake_items.hh"
+#include "BKE_bake_values.hh"
 
 namespace blender::bke::bake {
 
@@ -29,6 +35,8 @@ struct BlobSlice {
  */
 class BlobReader {
  public:
+  virtual ~BlobReader() = default;
+
   /**
    * Read the data from the given slice into the provided memory buffer.
    * \return True on success, otherwise false.
@@ -47,7 +55,12 @@ class BlobReader {
  * Abstract base class for writing binary data.
  */
 class BlobWriter {
+ protected:
+  int64_t total_written_size_ = 0;
+
  public:
+  virtual ~BlobWriter() = default;
+
   /**
    * Write the provided binary data.
    * \return Slice where the data has been written to.
@@ -62,6 +75,11 @@ class BlobWriter {
    */
   virtual BlobSlice write_as_stream(StringRef file_extension,
                                     FunctionRef<void(std::ostream &)> fn);
+
+  int64_t written_size() const
+  {
+    return total_written_size_;
+  }
 };
 
 /**
@@ -125,7 +143,7 @@ class BlobReadSharing : NonCopyable, NonMovable {
   /**
    * Use a mutex so that #read_shared can be implemented in a thread-safe way.
    */
-  mutable std::mutex mutex_;
+  mutable Mutex mutex_;
   /**
    * Map used to detect when some data has been previously loaded. This keeps strong
    * references to #ImplicitSharingInfo.
@@ -150,7 +168,7 @@ class BlobReadSharing : NonCopyable, NonMovable {
 class DiskBlobReader : public BlobReader {
  private:
   const std::string blobs_dir_;
-  mutable std::mutex mutex_;
+  mutable Mutex mutex_;
   mutable Map<std::string, std::unique_ptr<fstream>> open_input_streams_;
 
  public:
@@ -184,13 +202,56 @@ class DiskBlobWriter : public BlobWriter {
                             FunctionRef<void(std::ostream &)> fn) override;
 };
 
-void serialize_bake(const BakeState &bake_state,
+/**
+ * A specific #BlobWriter that keeps all data in memory.
+ */
+class MemoryBlobWriter : public BlobWriter {
+ public:
+  struct OutputStream {
+    std::unique_ptr<std::ostringstream> stream;
+    int64_t offset = 0;
+  };
+
+ private:
+  std::string base_name_;
+  std::string blob_name_;
+  Map<std::string, OutputStream> stream_by_name_;
+  int independent_file_count_ = 0;
+
+ public:
+  MemoryBlobWriter(std::string base_name);
+
+  BlobSlice write(const void *data, int64_t size) override;
+
+  BlobSlice write_as_stream(StringRef file_extension,
+                            FunctionRef<void(std::ostream &)> fn) override;
+
+  const Map<std::string, OutputStream> &get_stream_by_name() const
+  {
+    return stream_by_name_;
+  }
+};
+
+/**
+ * A specific #BlobReader that reads data from in-memory buffers.
+ */
+class MemoryBlobReader : public BlobReader {
+ private:
+  Map<std::string, Span<std::byte>> blob_by_name_;
+
+ public:
+  void add(StringRef name, Span<std::byte> blob);
+
+  [[nodiscard]] bool read(const BlobSlice &slice, void *r_data) const override;
+};
+
+void serialize_bake(const BakeValues &bake_values,
                     BlobWriter &blob_writer,
                     BlobWriteSharing &blob_sharing,
                     std::ostream &r_stream);
 
-std::optional<BakeState> deserialize_bake(std::istream &stream,
-                                          const BlobReader &blob_reader,
-                                          const BlobReadSharing &blob_sharing);
+std::optional<BakeValues> deserialize_bake(std::istream &stream,
+                                           const BlobReader &blob_reader,
+                                           const BlobReadSharing &blob_sharing);
 
 }  // namespace blender::bke::bake

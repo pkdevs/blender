@@ -7,8 +7,8 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
-#include "BKE_fcurve.hh"
 #include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -20,39 +20,24 @@
 
 #include "ED_anim_api.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
-class ActionFilterTest : public testing::Test {
+class ActionFilterTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
   Action *action;
   Object *cube;
   Object *suzanne;
 
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
-
   void SetUp() override
   {
     bmain = BKE_main_new();
     G_MAIN = bmain; /* For BKE_animdata_free(). */
 
-    action = &static_cast<bAction *>(BKE_id_new(bmain, ID_AC, "ACÄnimåtië"))->wrap();
+    action = &BKE_id_new<bAction>(bmain, "ACÄnimåtië")->wrap();
     cube = BKE_object_add_only_object(bmain, OB_EMPTY, "Küüübus");
     suzanne = BKE_object_add_only_object(bmain, OB_EMPTY, "OBSuzanne");
   }
@@ -68,37 +53,40 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
 {
   Slot &slot_cube = action->slot_add();
   Slot &slot_suzanne = action->slot_add();
-  ASSERT_TRUE(action->assign_id(&slot_cube, cube->id));
-  ASSERT_TRUE(action->assign_id(&slot_suzanne, suzanne->id));
+  ASSERT_TRUE(assign_action(action, cube->id));
+  ASSERT_TRUE(assign_action(action, suzanne->id));
+  ASSERT_EQ(assign_action_slot(&slot_cube, cube->id), ActionSlotAssignmentResult::OK);
+  ASSERT_EQ(assign_action_slot(&slot_suzanne, suzanne->id), ActionSlotAssignmentResult::OK);
 
   Layer &layer = action->layer_add("Kübus layer");
-  KeyframeStrip &key_strip = layer.strip_add(Strip::Type::Keyframe).as<KeyframeStrip>();
+  Strip &key_strip = layer.strip_add(*action, Strip::Type::Keyframe);
+  StripKeyframeData &strip_data = key_strip.data<StripKeyframeData>(*action);
 
   /* Create multiple FCurves for multiple Slots. */
   const KeyframeSettings settings = get_keyframe_settings(false);
-  ASSERT_EQ(SingleKeyingResult::SUCCESS,
-            key_strip.keyframe_insert(bmain, slot_cube, {"location", 0}, {1.0f, 0.25f}, settings));
-  ASSERT_EQ(SingleKeyingResult::SUCCESS,
-            key_strip.keyframe_insert(bmain, slot_cube, {"location", 1}, {1.0f, 0.25f}, settings));
   ASSERT_EQ(
       SingleKeyingResult::SUCCESS,
-      key_strip.keyframe_insert(bmain, slot_suzanne, {"location", 0}, {1.0f, 0.25f}, settings));
+      strip_data.keyframe_insert(bmain, slot_cube, {"location", 0}, {1.0f, 0.25f}, settings));
   ASSERT_EQ(
       SingleKeyingResult::SUCCESS,
-      key_strip.keyframe_insert(bmain, slot_suzanne, {"location", 1}, {1.0f, 0.25f}, settings));
+      strip_data.keyframe_insert(bmain, slot_cube, {"location", 1}, {1.0f, 0.25f}, settings));
+  ASSERT_EQ(
+      SingleKeyingResult::SUCCESS,
+      strip_data.keyframe_insert(bmain, slot_suzanne, {"location", 0}, {1.0f, 0.25f}, settings));
+  ASSERT_EQ(
+      SingleKeyingResult::SUCCESS,
+      strip_data.keyframe_insert(bmain, slot_suzanne, {"location", 1}, {1.0f, 0.25f}, settings));
 
-  ChannelBag *cube_channel_bag = key_strip.channelbag_for_slot(slot_cube);
-  ASSERT_NE(nullptr, cube_channel_bag);
-  FCurve *fcu_cube_loc_x = cube_channel_bag->fcurve_find({"location", 0});
-  FCurve *fcu_cube_loc_y = cube_channel_bag->fcurve_find({"location", 1});
+  Channelbag *cube_channelbag = strip_data.channelbag_for_slot(slot_cube);
+  ASSERT_NE(nullptr, cube_channelbag);
+  FCurve *fcu_cube_loc_x = cube_channelbag->fcurve_find({"location", 0});
+  FCurve *fcu_cube_loc_y = cube_channelbag->fcurve_find({"location", 1});
   ASSERT_NE(nullptr, fcu_cube_loc_x);
   ASSERT_NE(nullptr, fcu_cube_loc_y);
 
   /* Mock an bAnimContext for the Animation editor, with the above Animation showing. */
-  SpaceAction saction = {nullptr};
-  saction.action = action;
-  saction.action_slot_handle = slot_cube.handle;
-  saction.ads.filterflag = ADS_FILTER_ALL_SLOTS;
+  SpaceAction saction = {};
+  saction.ads.filterflag = eDopeSheet_FilterFlag(0);
 
   bAnimContext ac = {nullptr};
   ac.bmain = bmain;
@@ -107,6 +95,8 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
   ac.spacetype = SPACE_ACTION;
   ac.sl = reinterpret_cast<SpaceLink *>(&saction);
   ac.obact = cube;
+  ac.active_action = action;
+  ac.active_action_user = &cube->id;
   ac.ads = &saction.ads;
 
   { /* Test with collapsed slots. */
@@ -114,14 +104,14 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
     slot_suzanne.set_expanded(false);
 
     /* This should produce 2 slots and no FCurves. */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                                 ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS |
                                 ANIMFILTER_LIST_CHANNELS);
     const int num_entries = ANIM_animdata_filter(
         &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
     EXPECT_EQ(2, num_entries);
-    EXPECT_EQ(2, BLI_listbase_count(&anim_data));
+    EXPECT_EQ(2, anim_data.count());
 
     ASSERT_GE(num_entries, 1)
         << "Missing 1st ANIMTYPE_ACTION_SLOT entry, stopping to prevent crash";
@@ -151,14 +141,14 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
     slot_suzanne.set_expanded(false);
 
     /* This should produce 2 slots and 2 FCurves. */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                                 ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS |
                                 ANIMFILTER_LIST_CHANNELS);
     const int num_entries = ANIM_animdata_filter(
         &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
     EXPECT_EQ(4, num_entries);
-    EXPECT_EQ(4, BLI_listbase_count(&anim_data));
+    EXPECT_EQ(4, anim_data.count());
 
     /* First should be Cube slot. */
     ASSERT_GE(num_entries, 1) << "Missing 1st ale, stopping to prevent crash";
@@ -198,14 +188,14 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
     fcu_cube_loc_y->flag |= FCURVE_SELECTED;
 
     /* This should produce 1 slot and 1 FCurve. */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                                 ANIMFILTER_SEL | ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS |
                                 ANIMFILTER_LIST_CHANNELS);
     const int num_entries = ANIM_animdata_filter(
         &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
     EXPECT_EQ(2, num_entries);
-    EXPECT_EQ(2, BLI_listbase_count(&anim_data));
+    EXPECT_EQ(2, anim_data.count());
 
     /* First should be Cube's selected FCurve. */
     const bAnimListElem *ale = static_cast<bAnimListElem *>(BLI_findlink(&anim_data, 0));
@@ -226,33 +216,34 @@ TEST_F(ActionFilterTest, layered_action_active_fcurves)
   Slot &slot_cube = action->slot_add();
   /* The Action+Slot has to be assigned to what the bAnimContext thinks is the active Object.
    * See the BLI_assert_msg() call in the ANIMCONT_ACTION case of ANIM_animdata_filter(). */
-  ASSERT_TRUE(action->assign_id(&slot_cube, cube->id));
+  ASSERT_EQ(assign_action_and_slot(action, &slot_cube, cube->id), ActionSlotAssignmentResult::OK);
 
   Layer &layer = action->layer_add("Kübus layer");
-  KeyframeStrip &key_strip = layer.strip_add(Strip::Type::Keyframe).as<KeyframeStrip>();
+  Strip &key_strip = layer.strip_add(*action, Strip::Type::Keyframe);
+  StripKeyframeData &strip_data = key_strip.data<StripKeyframeData>(*action);
 
   /* Create multiple FCurves. */
   const KeyframeSettings settings = get_keyframe_settings(false);
-  ASSERT_EQ(SingleKeyingResult::SUCCESS,
-            key_strip.keyframe_insert(bmain, slot_cube, {"location", 0}, {1.0f, 0.25f}, settings));
-  ASSERT_EQ(SingleKeyingResult::SUCCESS,
-            key_strip.keyframe_insert(bmain, slot_cube, {"location", 1}, {1.0f, 0.25f}, settings));
+  ASSERT_EQ(
+      SingleKeyingResult::SUCCESS,
+      strip_data.keyframe_insert(bmain, slot_cube, {"location", 0}, {1.0f, 0.25f}, settings));
+  ASSERT_EQ(
+      SingleKeyingResult::SUCCESS,
+      strip_data.keyframe_insert(bmain, slot_cube, {"location", 1}, {1.0f, 0.25f}, settings));
 
   /* Set one F-Curve as the active one, and the other as inactive. The latter is necessary because
    * by default the first curve is automatically marked active, but that's too trivial a test case
    * (it's too easy to mistakenly just return the first-seen F-Curve). */
-  ChannelBag *cube_channel_bag = key_strip.channelbag_for_slot(slot_cube);
-  ASSERT_NE(nullptr, cube_channel_bag);
-  FCurve *fcurve_active = cube_channel_bag->fcurve_find({"location", 1});
+  Channelbag *cube_channelbag = strip_data.channelbag_for_slot(slot_cube);
+  ASSERT_NE(nullptr, cube_channelbag);
+  FCurve *fcurve_active = cube_channelbag->fcurve_find({"location", 1});
   fcurve_active->flag |= FCURVE_ACTIVE;
-  FCurve *fcurve_other = cube_channel_bag->fcurve_find({"location", 0});
+  FCurve *fcurve_other = cube_channelbag->fcurve_find({"location", 0});
   fcurve_other->flag &= ~FCURVE_ACTIVE;
 
   /* Mock an bAnimContext for the Action editor. */
-  SpaceAction saction = {nullptr};
-  saction.action = action;
-  saction.action_slot_handle = slot_cube.handle;
-  saction.ads.filterflag = ADS_FILTER_ALL_SLOTS;
+  SpaceAction saction = {};
+  saction.ads.filterflag = eDopeSheet_FilterFlag(0);
 
   bAnimContext ac = {nullptr};
   ac.bmain = bmain;
@@ -261,17 +252,19 @@ TEST_F(ActionFilterTest, layered_action_active_fcurves)
   ac.spacetype = SPACE_ACTION;
   ac.sl = reinterpret_cast<SpaceLink *>(&saction);
   ac.obact = cube;
+  ac.active_action = action;
+  ac.active_action_user = &cube->id;
   ac.ads = &saction.ads;
 
   {
     /* This should produce just the active F-Curve. */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                                 ANIMFILTER_FCURVESONLY | ANIMFILTER_ACTIVE);
     const int num_entries = ANIM_animdata_filter(
         &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
     EXPECT_EQ(1, num_entries);
-    EXPECT_EQ(1, BLI_listbase_count(&anim_data));
+    EXPECT_EQ(1, anim_data.count());
 
     const bAnimListElem *first_ale = static_cast<bAnimListElem *>(BLI_findlink(&anim_data, 0));
     EXPECT_EQ(ANIMTYPE_FCURVE, first_ale->type);

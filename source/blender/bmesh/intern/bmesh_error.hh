@@ -10,12 +10,16 @@
 
 #include "bmesh_operator_api.hh"
 
+#include "bmesh_class.hh"
+
+namespace blender {
+
 /*----------- BMOP error system ----------*/
 
 /**
  * \note More can be added as needed.
  */
-typedef enum eBMOpErrorLevel {
+enum eBMOpErrorLevel {
   /**
    * Use when the operation could not succeed,
    * typically from input that isn't sufficient for completing the operation.
@@ -34,7 +38,7 @@ typedef enum eBMOpErrorLevel {
    * See #BMBackup type & function calls.
    */
   BMO_ERROR_FATAL = 2,
-} eBMOpErrorLevel;
+};
 
 /**
  * Pushes an error onto the bmesh error stack.
@@ -89,3 +93,5 @@ void BMO_error_clear(BMesh *bm);
                     _BMESH_DUMMY_ABORT(), \
                     NULL)) : \
                   NULL)
+
+}  // namespace blender

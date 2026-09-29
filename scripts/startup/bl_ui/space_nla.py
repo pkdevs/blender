@@ -9,6 +9,7 @@ from bl_ui.space_dopesheet import (
     DopesheetActionPanelBase,
     dopesheet_filter,
 )
+from bl_ui.space_time import playback_controls
 
 
 class NLA_HT_header(Header):
@@ -39,6 +40,16 @@ class NLA_HT_header(Header):
             panel="NLA_PT_snapping",
             text="",
         )
+
+
+class NLA_HT_playback_controls(Header):
+    bl_space_type = 'NLA_EDITOR'
+    bl_region_type = 'FOOTER'
+
+    def draw(self, context):
+        layout = self.layout
+
+        playback_controls(layout, context)
 
 
 class NLA_PT_snapping(Panel):
@@ -113,6 +124,7 @@ class NLA_MT_view(Menu):
         layout.prop(st, "show_region_ui")
         layout.prop(st, "show_region_hud")
         layout.prop(st, "show_region_channels")
+        layout.prop(st, "show_region_footer", text="Playback Controls")
         layout.separator()
 
         layout.operator("nla.view_selected")
@@ -215,13 +227,14 @@ class NLA_MT_tracks(Menu):
 
         layout.operator("nla.tracks_add", text="Add").above_selected = False
         layout.operator("nla.tracks_add", text="Add Above Selected").above_selected = True
-        layout.operator("nla.tracks_delete", text="Delete")
 
         layout.separator()
         layout.operator_menu_enum("anim.channels_move", "direction", text="Move")
 
         layout.separator()
         layout.operator("anim.channels_clean_empty")
+        layout.separator()
+        layout.operator("nla.tracks_delete", text="Delete", icon='X')
 
 
 class NLA_MT_strips(Menu):
@@ -239,9 +252,8 @@ class NLA_MT_strips(Menu):
         layout.operator("nla.split", text="Split")
 
         layout.separator()
-        layout.operator("nla.duplicate", text="Duplicate").linked = False
+        layout.operator("nla.duplicate", text="Duplicate", icon='DUPLICATE').linked = False
         layout.operator("nla.duplicate", text="Linked Duplicate").linked = True
-        layout.operator("nla.delete", text="Delete")
 
         layout.separator()
 
@@ -276,6 +288,8 @@ class NLA_MT_strips(Menu):
                 "nla.tweakmode_enter",
                 text="Start Tweaking Strip Actions (Lower Stack)",
             ).use_upper_stack_evaluation = False
+        layout.separator()
+        layout.operator("nla.delete", text="Delete", icon='X')
 
 
 class NLA_MT_strips_transform(Menu):
@@ -351,13 +365,8 @@ class NLA_MT_context_menu(Menu):
         props = layout.operator("wm.call_panel", text="Rename...")
         props.name = "TOPBAR_PT_name"
         props.keep_open = False
-        layout.operator("nla.duplicate_move")
+        layout.operator("nla.duplicate_move", icon='DUPLICATE')
         layout.operator("nla.duplicate_linked_move")
-
-        layout.separator()
-
-        layout.operator("nla.split")
-        layout.operator("nla.delete")
 
         layout.separator()
 
@@ -371,6 +380,10 @@ class NLA_MT_context_menu(Menu):
         layout.separator()
 
         layout.operator_menu_enum("nla.snap", "type", text="Snap")
+        layout.separator()
+
+        layout.operator("nla.split")
+        layout.operator("nla.delete", icon='X')
 
 
 class NLA_MT_channel_context_menu(Menu):
@@ -379,19 +392,21 @@ class NLA_MT_channel_context_menu(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator_menu_enum("anim.channels_move", "direction", text="Track Ordering...")
+        layout.operator_menu_enum("anim.channels_move", "direction", text="Track Ordering")
 
         layout.separator()
 
         layout.operator("nla.tracks_add", text="Add Track").above_selected = False
         layout.operator("nla.tracks_add", text="Add Track Above Selected").above_selected = True
         layout.separator()
-        layout.operator("nla.tracks_delete")
         layout.operator("anim.channels_clean_empty")
+        layout.separator()
+        layout.operator("nla.tracks_delete", icon='X')
 
 
 classes = (
     NLA_HT_header,
+    NLA_HT_playback_controls,
     NLA_MT_editor_menus,
     NLA_MT_view,
     NLA_MT_select,

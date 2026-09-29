@@ -17,49 +17,59 @@
 #include <Alembic/AbcGeom/GeometryScope.h>
 #include <Alembic/AbcGeom/OGeomParam.h>
 
+#include "BKE_attribute.hh"
+
 #include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
+
+namespace blender {
 
 struct CustomData;
 struct Mesh;
 
 using Alembic::Abc::ICompoundProperty;
 using Alembic::Abc::OCompoundProperty;
+using Alembic::Abc::UInt32ArraySamplePtr;
+using Alembic::Abc::V2fArraySamplePtr;
 using Alembic::Abc::V3fArraySamplePtr;
-namespace blender::io::alembic {
+
+namespace io::alembic {
 
 struct UVSample {
   std::vector<Imath::V2f> uvs;
   std::vector<uint32_t> indices;
 };
 
+enum AbcUvScope {
+  ABC_UV_SCOPE_NONE,
+  ABC_UV_SCOPE_LOOP,
+  ABC_UV_SCOPE_VERTEX,
+};
+
 struct CDStreamConfig {
-  int *corner_verts;
-  int totloop;
+  int *corner_verts = nullptr;
+  int totloop = 0;
 
-  int *face_offsets;
-  int faces_num;
+  int *face_offsets = nullptr;
+  int faces_num = 0;
 
-  float3 *positions;
-  int totvert;
+  float3 *positions = nullptr;
+  int totvert = 0;
 
-  float2 *mloopuv;
+  bke::SpanAttributeWriter<float2> uv_map;
 
-  CustomData *loopdata;
-
-  bool pack_uvs;
+  bool pack_uvs = false;
 
   /* TODO(kevin): might need a better way to handle adding and/or updating
    * custom data such that it updates the custom data holder and its pointers properly. */
-  Mesh *mesh;
-  void *(*add_customdata_cb)(Mesh *mesh, const char *name, int data_type);
+  Mesh *mesh = nullptr;
 
-  Alembic::Abc::chrono_t time;
-  int timesample_index;
+  Alembic::Abc::chrono_t time = 0.0;
+  int timesample_index = 0;
 
-  const char **modifier_error_message;
+  const char **modifier_error_message = nullptr;
 
   /* Alembic needs Blender to keep references to C++ objects (the destructors finalize the writing
    * to ABC). The following fields are all used to keep these references. */
@@ -71,29 +81,18 @@ struct CDStreamConfig {
   /* ORCO coordinates, aka Generated Coordinates. */
   Alembic::AbcGeom::OV3fGeomParam abc_orco;
 
-  /* Mapping from vertex color layer name to its Alembic color data. */
-  std::map<std::string, Alembic::AbcGeom::OC4fGeomParam> abc_vertex_colors;
+  AbcUvScope uv_scope;
+  V2fArraySamplePtr uvs;
+  UInt32ArraySamplePtr uvs_indices;
 
-  CDStreamConfig()
-      : corner_verts(NULL),
-        totloop(0),
-        face_offsets(NULL),
-        faces_num(0),
-        totvert(0),
-        pack_uvs(false),
-        mesh(NULL),
-        add_customdata_cb(NULL),
-        time(0.0),
-        modifier_error_message(NULL)
-  {
-  }
+  CDStreamConfig() = default;
 };
 
 /* Get the UVs for the main UV property on a OSchema.
  * Returns the name of the UV layer.
  *
  * For now the active layer is used, maybe needs a better way to choose this. */
-const char *get_uv_sample(UVSample &sample, const CDStreamConfig &config, CustomData *data);
+const char *get_uv_sample(UVSample &sample, const CDStreamConfig &config, const Mesh &mesh);
 
 void write_generated_coordinates(const OCompoundProperty &prop, CDStreamConfig &config);
 
@@ -105,21 +104,12 @@ void read_generated_coordinates(const ICompoundProperty &prop,
                                 const CDStreamConfig &config,
                                 const Alembic::Abc::ISampleSelector &iss);
 
-void write_custom_data(const OCompoundProperty &prop,
-                       CDStreamConfig &config,
-                       CustomData *data,
-                       int data_type);
+void write_uv_maps(const OCompoundProperty &prop, CDStreamConfig &config, const Mesh &mesh);
 
 void read_custom_data(const std::string &iobject_full_name,
                       const ICompoundProperty &prop,
                       const CDStreamConfig &config,
                       const Alembic::Abc::ISampleSelector &iss);
-
-typedef enum {
-  ABC_UV_SCOPE_NONE,
-  ABC_UV_SCOPE_LOOP,
-  ABC_UV_SCOPE_VERTEX,
-} AbcUvScope;
 
 /**
  * UVs can be defined per-loop (one value per vertex per face), or per-vertex (one value per
@@ -133,4 +123,14 @@ AbcUvScope get_uv_scope(const Alembic::AbcGeom::GeometryScope scope,
                         const CDStreamConfig &config,
                         const Alembic::AbcGeom::UInt32ArraySamplePtr &indices);
 
-}  // namespace blender::io::alembic
+/**
+ * Sets the active and default color attribute names on the mesh. Defaults to the first color
+ * attribute layer if the #user_props do not have the Blender-specific properties which are set
+ * by the exporter.
+ */
+void read_active_and_default_color_attributes(Mesh &mesh,
+                                              const ICompoundProperty &user_props,
+                                              const Alembic::AbcGeom::ISampleSelector &sample_sel);
+
+}  // namespace io::alembic
+}  // namespace blender

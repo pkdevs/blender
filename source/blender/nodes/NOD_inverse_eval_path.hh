@@ -2,11 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BLI_compute_context.hh"
 
-#include "NOD_inverse_eval_params.hh"
 #include "NOD_value_elem.hh"
 
 namespace blender::nodes::inverse_eval {

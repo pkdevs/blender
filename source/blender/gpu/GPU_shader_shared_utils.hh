@@ -14,7 +14,7 @@
  * IMPORTANT:
  * - Always use `u` suffix for enum values. GLSL do not support implicit cast.
  * - Define all values. This is in order to simplify custom pre-processor code.
- * - (C++ only) Always use `uint32_t` as underlying type (`enum eMyEnum : uint32_t`).
+ * - (C++ only) Always use `uint32_t` as underlying type (`enum MyEnum : uint32_t`).
  * - (C only) do NOT use the enum type inside UBO/SSBO structs and use `uint` instead.
  * - Use float suffix by default for float literals to avoid double promotion in C++.
  * - Pack one float or int after a vec3/ivec3 to fulfill alignment rules.
@@ -28,16 +28,17 @@
  * NOTE: You can use bool type using bool32_t a int boolean type matching the GLSL type.
  */
 
-#ifdef GPU_SHADER
+#pragma once
+
+#ifdef GLSL_CPP_STUBS
+#  include "gpu_shader_compat.hh"
+
 /* Silence macros when compiling for shaders. */
 #  define BLI_STATIC_ASSERT(cond, msg)
 #  define BLI_STATIC_ASSERT_ALIGN(type_, align_)
 #  define BLI_STATIC_ASSERT_SIZE(type_, size_)
-#  define ENUM_OPERATORS(a, b)
-#  define UNUSED_VARS(a)
-/* Incompatible keywords. */
-#  define static
-#  define inline
+#  define ENUM_OPERATORS(a)
+#  define UNUSED_VARS(a) (void)a
 /* Math function renaming. */
 #  define cosf cos
 #  define sinf sin
@@ -50,13 +51,38 @@
 #  define sqrtf sqrt
 #  define expf exp
 
-#else /* C / C++ */
-#  pragma once
+#elif defined(GPU_SHADER)
+#  include "gpu_shader_compat.hh"
 
-#  include "BLI_assert.h"
+/* Silence macros when compiling for shaders. */
+#  define BLI_STATIC_ASSERT(cond, msg)
+#  define BLI_STATIC_ASSERT_ALIGN(type_, align_)
+#  define BLI_STATIC_ASSERT_SIZE(type_, size_)
+#  define ENUM_OPERATORS(a)
+#  define UNUSED_VARS(a)
+/* Math function renaming. */
+#  define cosf cos
+#  define sinf sin
+#  define tanf tan
+#  define acosf acos
+#  define asinf asin
+#  define atanf atan
+#  define floorf floor
+#  define ceilf ceil
+#  define sqrtf sqrt
+#  define expf exp
 
-#  include "BLI_math_matrix_types.hh"
-#  include "BLI_math_vector_types.hh"
+#else                /* C / C++ */
+#  ifndef GPU_SHADER /* Avoid parsing this into shader code. */
+
+#    include "BLI_assert.hh"
+#    include "BLI_enum_flags.hh"
+#    include "BLI_sys_types.hh"
+
+#    include <math.h>
+
+#    include "BLI_math_matrix_types.hh"
+#    include "BLI_math_vector_types.hh"
 
 using bool32_t = int32_t;
 // using bool2 = blender::int2; /* Size is not consistent across backend. */
@@ -69,8 +95,10 @@ using blender::int2;
 using blender::int4;
 using blender::uint2;
 using blender::uint4;
-/** IMPORTANT: Do not use in shared struct. Use packed_(float/int/uint)3 instead.
- * Here for static functions usage only. */
+/**
+ * IMPORTANT: Do not use in shared struct. Use packed_(float/int/uint)3 instead.
+ * Here for static functions usage only.
+ */
 using blender::float3;
 using blender::int3;
 using blender::uint3;
@@ -89,4 +117,31 @@ using blender::float2x4;
 using blender::float3x4;
 using blender::float4x4;
 
+/**
+ * Wrapper type for members of unions in host shared structure.
+ * Passthrough implementation when compiled with host code.
+ * See gpu_shader_compat_cxx.hh for the C++ stub implementation.
+ * This implementation needs to have the correct base type and can safely cast to it.
+ */
+template<typename T> struct union_t {
+  T data;
+
+  const T &operator()() const
+  {
+    return *reinterpret_cast<const T *>(this);
+  }
+
+  T &operator()()
+  {
+    return *reinterpret_cast<T *>(this);
+  }
+};
+
+/* Mute the following attributes. Avoid warning about unknown attribute.
+ * These are parsed by our shader translation tool. */
+
+/* To be used on struct. Means the layout is to be used with uniform or storage buffers. */
+#    define host_shared
+
+#  endif
 #endif

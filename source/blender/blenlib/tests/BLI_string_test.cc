@@ -13,118 +13,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
+
+namespace blender {
 
 using std::initializer_list;
 using std::pair;
 using std::string;
 using std::vector;
-
-/* -------------------------------------------------------------------- */
-/** \name String Copy (UTF8)
- * \{ */
-
-TEST(string, StrCopyUTF8_ASCII)
-{
-#define STRNCPY_UTF8_ASCII(...) \
-  { \
-    const char src[] = {__VA_ARGS__, 0}; \
-    char dst[sizeof(src)]; \
-    memset(dst, 0xff, sizeof(dst)); \
-    STRNCPY_UTF8(dst, src); \
-    EXPECT_EQ(strlen(dst), sizeof(dst) - 1); \
-    EXPECT_STREQ(dst, src); \
-  }
-
-  STRNCPY_UTF8_ASCII('a');
-  STRNCPY_UTF8_ASCII('a', 'b', 'c');
-
-#undef STRNCPY_UTF8_ASCII
-}
-
-TEST(string, StrCopyUTF8_ASCII_Truncate)
-{
-#define STRNCPY_UTF8_ASCII_TRUNCATE(maxncpy, ...) \
-  { \
-    char src[] = {__VA_ARGS__}; \
-    char dst[sizeof(src)]; \
-    memset(dst, 0xff, sizeof(dst)); \
-    BLI_strncpy_utf8(dst, src, maxncpy); \
-    int len_expect = std::min<int>(sizeof(src), maxncpy) - 1; \
-    src[len_expect] = '\0'; /* To be able to use `EXPECT_STREQ`. */ \
-    EXPECT_EQ(strlen(dst), len_expect); \
-    EXPECT_STREQ(dst, src); \
-  }
-
-  STRNCPY_UTF8_ASCII_TRUNCATE(1, '\0');
-  STRNCPY_UTF8_ASCII_TRUNCATE(3, 'A', 'A', 'A', 'A');
-
-#undef STRNCPY_UTF8_ASCII_TRUNCATE
-}
-
-TEST(string, StrCopyUTF8_TruncateEncoding)
-{
-  /* Ensure copying one byte less than the code-point results in it being ignored entirely. */
-#define STRNCPY_UTF8_TRUNCATE(byte_size, ...) \
-  { \
-    const char src[] = {__VA_ARGS__, 0}; \
-    EXPECT_EQ(BLI_str_utf8_size_or_error(src), byte_size); \
-    char dst[sizeof(src)]; \
-    memset(dst, 0xff, sizeof(dst)); \
-    STRNCPY_UTF8(dst, src); \
-    EXPECT_EQ(strlen(dst), sizeof(dst) - 1); \
-    EXPECT_STREQ(dst, src); \
-    BLI_strncpy_utf8(dst, src, sizeof(dst) - 1); \
-    EXPECT_STREQ(dst, ""); \
-  }
-
-  STRNCPY_UTF8_TRUNCATE(6, 252, 1, 1, 1, 1, 1);
-  STRNCPY_UTF8_TRUNCATE(5, 248, 1, 1, 1, 1);
-  STRNCPY_UTF8_TRUNCATE(4, 240, 1, 1, 1);
-  STRNCPY_UTF8_TRUNCATE(3, 224, 1, 1);
-  STRNCPY_UTF8_TRUNCATE(2, 192, 1);
-  STRNCPY_UTF8_TRUNCATE(1, 96);
-
-#undef STRNCPY_UTF8_TRUNCATE
-}
-
-TEST(string, StrCopyUTF8_TerminateEncodingEarly)
-{
-  /* A UTF8 sequence that has a null byte before the sequence ends.
-   * Ensure the UTF8 sequence does not step over the null byte. */
-#define STRNCPY_UTF8_TERMINATE_EARLY(byte_size, ...) \
-  { \
-    char src[] = {__VA_ARGS__, 0}; \
-    EXPECT_EQ(BLI_str_utf8_size_or_error(src), byte_size); \
-    char dst[sizeof(src)]; \
-    memset(dst, 0xff, sizeof(dst)); \
-    STRNCPY_UTF8(dst, src); \
-    EXPECT_EQ(strlen(dst), sizeof(dst) - 1); \
-    EXPECT_STREQ(dst, src); \
-    for (int i = sizeof(dst) - 1; i > 1; i--) { \
-      src[i] = '\0'; \
-      memset(dst, 0xff, sizeof(dst)); \
-      const int dst_copied = STRNCPY_UTF8_RLEN(dst, src); \
-      EXPECT_STREQ(dst, src); \
-      EXPECT_EQ(strlen(dst), i); \
-      EXPECT_EQ(dst_copied, i); \
-    } \
-  }
-
-  STRNCPY_UTF8_TERMINATE_EARLY(6, 252, 1, 1, 1, 1, 1);
-  STRNCPY_UTF8_TERMINATE_EARLY(5, 248, 1, 1, 1, 1);
-  STRNCPY_UTF8_TERMINATE_EARLY(4, 240, 1, 1, 1);
-  STRNCPY_UTF8_TERMINATE_EARLY(3, 224, 1, 1);
-  STRNCPY_UTF8_TERMINATE_EARLY(2, 192, 1);
-  STRNCPY_UTF8_TERMINATE_EARLY(1, 96);
-
-#undef STRNCPY_UTF8_TERMINATE_EARLY
-}
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name String Concatenate
@@ -242,8 +141,8 @@ TEST(string, StrPartition)
     /* "" -> "", nullptr, nullptr, 0 */
     pre_len = BLI_str_partition(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 0);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 
   {
@@ -252,8 +151,8 @@ TEST(string, StrPartition)
     /* "material" -> "material", nullptr, nullptr, 8 */
     pre_len = BLI_str_partition(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 8);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
@@ -301,8 +200,8 @@ TEST(string, StrRPartition)
     /* "" -> "", nullptr, nullptr, 0 */
     pre_len = BLI_str_rpartition(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 0);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 
   {
@@ -311,8 +210,8 @@ TEST(string, StrRPartition)
     /* "material" -> "material", nullptr, nullptr, 8 */
     pre_len = BLI_str_rpartition(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 8);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
@@ -342,15 +241,15 @@ TEST(string, StrPartitionEx)
     /* "mate.rial" over "mate" -> "mate.rial", nullptr, nullptr, 4 */
     pre_len = BLI_str_partition_ex(str, str + 4, delim, &sep, &suf, true);
     EXPECT_EQ(pre_len, 4);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
 /* BLI_str_partition_utf8 */
 TEST(string, StrPartitionUtf8)
 {
-  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* ying-yang */, '\0'};
+  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* yin-yang */, '\0'};
   const char *sep, *suf;
   size_t pre_len;
 
@@ -391,8 +290,8 @@ TEST(string, StrPartitionUtf8)
     /* "" -> "", nullptr, nullptr, 0 */
     pre_len = BLI_str_partition_utf8(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 0);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 
   {
@@ -401,15 +300,15 @@ TEST(string, StrPartitionUtf8)
     /* "material" -> "material", nullptr, nullptr, 8 */
     pre_len = BLI_str_partition_utf8(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 8);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
 /* BLI_str_rpartition_utf8 */
 TEST(string, StrRPartitionUtf8)
 {
-  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* ying-yang */, '\0'};
+  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* yin-yang */, '\0'};
   const char *sep, *suf;
   size_t pre_len;
 
@@ -450,8 +349,8 @@ TEST(string, StrRPartitionUtf8)
     /* "" -> "", nullptr, nullptr, 0 */
     pre_len = BLI_str_rpartition_utf8(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 0);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 
   {
@@ -460,15 +359,15 @@ TEST(string, StrRPartitionUtf8)
     /* "material" -> "material", nullptr, nullptr, 8 */
     pre_len = BLI_str_rpartition_utf8(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 8);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
 /* BLI_str_partition_ex_utf8 */
 TEST(string, StrPartitionExUtf8)
 {
-  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* ying-yang */, '\0'};
+  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* yin-yang */, '\0'};
   const char *sep, *suf;
   size_t pre_len;
 
@@ -492,8 +391,8 @@ TEST(string, StrPartitionExUtf8)
     /* "mate\xe2\x98\xafrial" over "mate" -> "mate\xe2\x98\xafrial", nullptr, nullptr, 4 */
     pre_len = BLI_str_partition_ex_utf8(str, str + 4, delim, &sep, &suf, true);
     EXPECT_EQ(pre_len, 4);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
@@ -733,7 +632,7 @@ TEST(string, StrFormatDecimalUnits)
   EXPECT_STREQ("-1.0B", size_str);
 
   /* Smallest possible value. */
-  BLI_str_format_decimal_unit(size_str, size = -INT32_MAX);
+  BLI_str_format_decimal_unit(size_str, size = INT32_MIN);
   EXPECT_STREQ("-2.1B", size_str);
 }
 
@@ -830,7 +729,7 @@ TEST(string, StrFormatIntegerUnits)
   EXPECT_STREQ("-1B", size_str);
 
   /* Smallest possible value. */
-  BLI_str_format_integer_unit(size_str, size = -INT32_MAX);
+  BLI_str_format_integer_unit(size_str, size = INT32_MIN);
   EXPECT_STREQ("-2B", size_str);
 }
 
@@ -876,7 +775,7 @@ static void string_join_array_test_truncate(const char *strings[],
   { /* Ensure the allocated version is the same. */
     char *buffer_alloc = BLI_string_join_arrayN(strings, strings_num);
     EXPECT_STREQ(buffer_alloc, buffer);
-    MEM_freeN(buffer_alloc);
+    MEM_delete(buffer_alloc);
   }
 
   for (int dst_size = buffer_len + 1; dst_size > 0; dst_size--) {
@@ -897,7 +796,7 @@ static void string_join_array_with_sep_char_test_truncate(const char *strings[],
   { /* Ensure the allocated version is the same. */
     char *buffer_alloc = BLI_string_join_array_by_sep_charN('|', strings, strings_num);
     EXPECT_STREQ(buffer_alloc, buffer);
-    MEM_freeN(buffer_alloc);
+    MEM_delete(buffer_alloc);
   }
 
   for (int dst_size = buffer_len + 1; dst_size > 0; dst_size--) {
@@ -1006,7 +905,7 @@ class StringFindSplitWords : public testing::Test {
         str.c_str(),
         max_length,
         ' ',
-        reinterpret_cast<int(*)[2]>(actual_word_info.data()),
+        reinterpret_cast<int (*)[2]>(actual_word_info.data()),
         effective_max_words);
     /* Schrink actual array to an actual number of words, so we can compare
      * vectors as-is. */
@@ -1161,7 +1060,7 @@ TEST(string, StringStrncasestr)
   EXPECT_EQ(res, str_test0 + 1);
 
   res = BLI_strncasestr(str_test0, "not there", 9);
-  EXPECT_EQ(res, (void *)nullptr);
+  EXPECT_EQ(res, static_cast<void *>(nullptr));
 }
 
 /** \} */
@@ -1527,3 +1426,23 @@ TEST(BLI_string, bounded_strcpy)
     EXPECT_STREQ(str, "Hello, ");
   }
 }
+
+TEST(BLI_string, StartsWith)
+{
+  EXPECT_TRUE(BLI_str_startswith("ab", "a"));
+  EXPECT_FALSE(BLI_str_startswith("ab", "b"));
+  EXPECT_TRUE(BLI_str_startswith("ab", "ab"));
+  EXPECT_TRUE(BLI_str_startswith("ab", ""));
+  EXPECT_TRUE(BLI_str_startswith("", ""));
+}
+
+TEST(BLI_string, EndsWith)
+{
+  EXPECT_TRUE(BLI_str_endswith("ab", "b"));
+  EXPECT_FALSE(BLI_str_endswith("ab", "a"));
+  EXPECT_TRUE(BLI_str_endswith("ab", "ab"));
+  EXPECT_TRUE(BLI_str_endswith("ab", ""));
+  EXPECT_TRUE(BLI_str_endswith("", ""));
+}
+
+}  // namespace blender

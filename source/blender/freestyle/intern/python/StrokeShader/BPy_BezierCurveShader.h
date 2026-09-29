@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject BezierCurveShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject BezierCurveShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&BezierCurveShader_Type))
 
 /*---------------------------Python BPy_BezierCurveShader structure definition----------*/
-typedef struct {
+struct BPy_BezierCurveShader {
   BPy_StrokeShader py_ss;
-} BPy_BezierCurveShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

@@ -17,6 +17,7 @@ ExternalProject_Add(external_zlib
   URL_HASH ${ZLIB_HASH_TYPE}=${ZLIB_HASH}
   PREFIX ${BUILD_DIR}/zlib
   PATCH_COMMAND ${ZLIB_PATCH_COMMAND}
+  CMAKE_GENERATOR ${PLATFORM_ALT_GENERATOR}
 
   CMAKE_ARGS
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
@@ -58,7 +59,8 @@ else()
     COMMAND ${CMAKE_COMMAND} -E copy
       ${LIBDIR}/zlib/lib/libz.a
       ${LIBDIR}/zlib/lib/libz_pic.a
-
+    # Make sure that our libraries do not pick up the shared libraries by mistake
+    COMMAND sh -c "rm -f ${LIBDIR}/zlib/lib/*.so*"
     DEPENDEES install
   )
 endif()

@@ -19,10 +19,6 @@
 
 #include "BPy_MediumType.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -37,44 +33,37 @@ int Interface1D_Init(PyObject *module)
   if (PyType_Ready(&Interface1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Interface1D_Type);
-  PyModule_AddObject(module, "Interface1D", (PyObject *)&Interface1D_Type);
+  PyModule_AddObjectRef(module, "Interface1D", (PyObject *)&Interface1D_Type);
 
   if (PyType_Ready(&FrsCurve_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&FrsCurve_Type);
-  PyModule_AddObject(module, "Curve", (PyObject *)&FrsCurve_Type);
+  PyModule_AddObjectRef(module, "Curve", (PyObject *)&FrsCurve_Type);
 
   if (PyType_Ready(&Chain_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Chain_Type);
-  PyModule_AddObject(module, "Chain", (PyObject *)&Chain_Type);
+  PyModule_AddObjectRef(module, "Chain", (PyObject *)&Chain_Type);
 
   if (PyType_Ready(&FEdge_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&FEdge_Type);
-  PyModule_AddObject(module, "FEdge", (PyObject *)&FEdge_Type);
+  PyModule_AddObjectRef(module, "FEdge", (PyObject *)&FEdge_Type);
 
   if (PyType_Ready(&FEdgeSharp_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&FEdgeSharp_Type);
-  PyModule_AddObject(module, "FEdgeSharp", (PyObject *)&FEdgeSharp_Type);
+  PyModule_AddObjectRef(module, "FEdgeSharp", (PyObject *)&FEdgeSharp_Type);
 
   if (PyType_Ready(&FEdgeSmooth_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&FEdgeSmooth_Type);
-  PyModule_AddObject(module, "FEdgeSmooth", (PyObject *)&FEdgeSmooth_Type);
+  PyModule_AddObjectRef(module, "FEdgeSmooth", (PyObject *)&FEdgeSmooth_Type);
 
   if (PyType_Ready(&Stroke_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Stroke_Type);
-  PyModule_AddObject(module, "Stroke", (PyObject *)&Stroke_Type);
+  PyModule_AddObjectRef(module, "Stroke", (PyObject *)&Stroke_Type);
 
 #define ADD_TYPE_CONST(id) \
   PyLong_subtype_add_to_dict(Stroke_Type.tp_dict, &MediumType_Type, STRINGIFY(id), Stroke::id)
@@ -86,8 +75,7 @@ int Interface1D_Init(PyObject *module)
   if (PyType_Ready(&ViewEdge_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ViewEdge_Type);
-  PyModule_AddObject(module, "ViewEdge", (PyObject *)&ViewEdge_Type);
+  PyModule_AddObjectRef(module, "ViewEdge", (PyObject *)&ViewEdge_Type);
 
   FEdgeSharp_mathutils_register_callback();
   FEdgeSmooth_mathutils_register_callback();
@@ -104,8 +92,7 @@ PyDoc_STRVAR(
     "\n"
     ".. method:: __init__()\n"
     "\n"
-    "   Default constructor.");
-
+    "   Default constructor.\n");
 static int Interface1D_init(BPy_Interface1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};
@@ -141,8 +128,7 @@ PyDoc_STRVAR(
     "   first vertex.\n"
     "\n"
     "   :return: An Interface0DIterator pointing to the first vertex.\n"
-    "   :rtype: :class:`Interface0DIterator`");
-
+    "   :rtype: :class:`Interface0DIterator`\n");
 static PyObject *Interface1D_vertices_begin(BPy_Interface1D *self)
 {
   Interface0DIterator if0D_it(self->if1D->verticesBegin());
@@ -158,8 +144,7 @@ PyDoc_STRVAR(
     "   the last vertex.\n"
     "\n"
     "   :return: An Interface0DIterator pointing after the last vertex.\n"
-    "   :rtype: :class:`Interface0DIterator`");
-
+    "   :rtype: :class:`Interface0DIterator`\n");
 static PyObject *Interface1D_vertices_end(BPy_Interface1D *self)
 {
   Interface0DIterator if0D_it(self->if1D->verticesEnd());
@@ -176,18 +161,24 @@ PyDoc_STRVAR(
     "   iterate over points of the 1D element at a any given sampling.\n"
     "   Indeed, for each iteration, a virtual point is created.\n"
     "\n"
-    "   :arg t: A sampling with which we want to iterate over points of\n"
+    "   :param t: A sampling with which we want to iterate over points of\n"
     "      this 1D element.\n"
     "   :type t: float\n"
     "   :return: An Interface0DIterator pointing to the first point.\n"
-    "   :rtype: :class:`Interface0DIterator`");
-
+    "   :rtype: :class:`Interface0DIterator`\n");
 static PyObject *Interface1D_points_begin(BPy_Interface1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {"t", nullptr};
   float f = 0.0f;
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|f", (char **)kwlist, &f)) {
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "|" /* Optional arguments. */
+                                   "f" /* `t` */
+                                   ":points_begin",
+                                   (char **)kwlist,
+                                   &f))
+  {
     return nullptr;
   }
   Interface0DIterator if0D_it(self->if1D->pointsBegin(f));
@@ -204,23 +195,39 @@ PyDoc_STRVAR(
     "   iterate over points of the 1D element at a given sampling. Indeed,\n"
     "   for each iteration, a virtual point is created.\n"
     "\n"
-    "   :arg t: A sampling with which we want to iterate over points of\n"
+    "   :param t: A sampling with which we want to iterate over points of\n"
     "      this 1D element.\n"
     "   :type t: float\n"
     "   :return: An Interface0DIterator pointing after the last point.\n"
-    "   :rtype: :class:`Interface0DIterator`");
-
+    "   :rtype: :class:`Interface0DIterator`\n");
 static PyObject *Interface1D_points_end(BPy_Interface1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {"t", nullptr};
   float f = 0.0f;
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|f", (char **)kwlist, &f)) {
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "|" /* Optional arguments. */
+                                   "f" /* `t` */
+                                   ":points_end",
+                                   (char **)kwlist,
+                                   &f))
+  {
     return nullptr;
   }
   Interface0DIterator if0D_it(self->if1D->pointsEnd(f));
   return BPy_Interface0DIterator_from_Interface0DIterator(if0D_it, true);
 }
+
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
+#endif
 
 static PyMethodDef BPy_Interface1D_methods[] = {
     {"vertices_begin",
@@ -242,6 +249,14 @@ static PyMethodDef BPy_Interface1D_methods[] = {
     {nullptr, nullptr, 0, nullptr},
 };
 
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
+#endif
+
 /*----------------------Interface1D get/setters ----------------------------*/
 
 PyDoc_STRVAR(
@@ -249,8 +264,7 @@ PyDoc_STRVAR(
     Interface1D_name_doc,
     "The string of the name of the 1D element.\n"
     "\n"
-    ":type: str");
-
+    ":type: str\n");
 static PyObject *Interface1D_name_get(BPy_Interface1D *self, void * /*closure*/)
 {
   return PyUnicode_FromString(Py_TYPE(self)->tp_name);
@@ -261,8 +275,7 @@ PyDoc_STRVAR(
     Interface1D_id_doc,
     "The Id of this Interface1D.\n"
     "\n"
-    ":type: :class:`Id`");
-
+    ":type: :class:`Id`\n");
 static PyObject *Interface1D_id_get(BPy_Interface1D *self, void * /*closure*/)
 {
   Id id(self->if1D->getId());
@@ -277,8 +290,7 @@ PyDoc_STRVAR(
     Interface1D_nature_doc,
     "The nature of this Interface1D.\n"
     "\n"
-    ":type: :class:`Nature`");
-
+    ":type: :class:`Nature`\n");
 static PyObject *Interface1D_nature_get(BPy_Interface1D *self, void * /*closure*/)
 {
   Nature::VertexNature nature = self->if1D->getNature();
@@ -293,8 +305,7 @@ PyDoc_STRVAR(
     Interface1D_length_2d_doc,
     "The 2D length of this Interface1D.\n"
     "\n"
-    ":type: float");
-
+    ":type: float\n");
 static PyObject *Interface1D_length_2d_get(BPy_Interface1D *self, void * /*closure*/)
 {
   real length = self->if1D->getLength2D();
@@ -309,8 +320,7 @@ PyDoc_STRVAR(
     Interface1D_time_stamp_doc,
     "The time stamp of the 1D element, mainly used for selection.\n"
     "\n"
-    ":type: int");
-
+    ":type: int\n");
 static PyObject *Interface1D_time_stamp_get(BPy_Interface1D *self, void * /*closure*/)
 {
   return PyLong_FromLong(self->if1D->getTimeStamp());
@@ -389,7 +399,3 @@ PyTypeObject Interface1D_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

@@ -8,9 +8,9 @@
 
 #include "BKE_context.hh"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "WM_api.hh"
 
@@ -18,6 +18,8 @@
 
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Rotate Operator
@@ -295,13 +297,13 @@ static void viewrotate_apply(ViewOpsData *vod, const int event_xy[2])
   ED_region_tag_redraw(vod->region);
 }
 
-static int viewrotate_modal_impl(bContext *C,
-                                 ViewOpsData *vod,
-                                 const eV3D_OpEvent event_code,
-                                 const int xy[2])
+static wmOperatorStatus viewrotate_modal_impl(bContext *C,
+                                              ViewOpsData *vod,
+                                              const eV3D_OpEvent event_code,
+                                              const int xy[2])
 {
   bool use_autokey = false;
-  int ret = OPERATOR_RUNNING_MODAL;
+  wmOperatorStatus ret = OPERATOR_RUNNING_MODAL;
 
   switch (event_code) {
     case VIEW_APPLY: {
@@ -332,10 +334,10 @@ static int viewrotate_modal_impl(bContext *C,
   return ret;
 }
 
-static int viewrotate_invoke_impl(bContext * /*C*/,
-                                  ViewOpsData *vod,
-                                  const wmEvent *event,
-                                  PointerRNA * /*ptr*/)
+static wmOperatorStatus viewrotate_invoke_impl(bContext *C,
+                                               ViewOpsData *vod,
+                                               const wmEvent *event,
+                                               PointerRNA * /*ptr*/)
 {
   if (vod->use_dyn_ofs && (vod->rv3d->is_persp == false)) {
     vod->use_dyn_ofs_ortho_correction = true;
@@ -357,13 +359,15 @@ static int viewrotate_invoke_impl(bContext * /*C*/,
       copy_v2_v2_int(m_xy, event->prev_xy);
     }
     viewrotate_apply(vod, m_xy);
+
+    ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, true, true);
     return OPERATOR_FINISHED;
   }
 
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int viewrotate_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus viewrotate_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   return view3d_navigate_invoke_impl(C, op, event, &ViewOpsType_rotate);
 }
@@ -375,7 +379,7 @@ void VIEW3D_OT_rotate(wmOperatorType *ot)
   ot->description = "Rotate the view";
   ot->idname = ViewOpsType_rotate.idname;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = viewrotate_invoke;
   ot->modal = view3d_navigate_modal_fn;
   ot->poll = view3d_rotation_poll;
@@ -396,3 +400,5 @@ const ViewOpsType ViewOpsType_rotate = {
     /*init_fn*/ viewrotate_invoke_impl,
     /*apply_fn*/ viewrotate_modal_impl,
 };
+
+}  // namespace blender

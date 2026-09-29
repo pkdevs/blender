@@ -8,14 +8,10 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "BLI_string_ref.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
-/* SEP macro from BLI path utils clashes with SEP symbol in fmt headers. */
-#undef SEP
 #include <fmt/format.h>
 
 namespace blender::io::ply {
@@ -81,7 +77,7 @@ class FileBuffer : private NonMovable {
     }
   }
 
-  template<typename... T> void write_fstring(const char *fmt, T &&...args)
+  template<typename... T> void write_fstring(fmt::format_string<T...> fmt, T &&...args)
   {
     /* Format into a local buffer. */
     fmt::memory_buffer buf;

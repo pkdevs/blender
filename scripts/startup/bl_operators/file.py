@@ -29,7 +29,7 @@ class WM_OT_previews_batch_generate(Operator):
         type=OperatorFileListElement,
         options={'HIDDEN', 'SKIP_SAVE'},
         name="",
-        description="Collection of file paths with common `directory` root",
+        description="Collection of file paths with common ``directory`` root",
     )
 
     directory: StringProperty(
@@ -37,7 +37,7 @@ class WM_OT_previews_batch_generate(Operator):
         subtype='FILE_PATH',
         options={'HIDDEN', 'SKIP_SAVE'},
         name="",
-        description="Root path of all files listed in `files` collection",
+        description="Root path of all files listed in ``files`` collection",
     )
 
     # Show only images/videos, and directories!
@@ -95,7 +95,7 @@ class WM_OT_previews_batch_generate(Operator):
     def execute(self, context):
         import os
         import subprocess
-        from bl_previews_utils import bl_previews_render as preview_render
+        from _bl_previews_utils import bl_previews_render as preview_render
 
         context.window_manager.progress_begin(0, len(self.files))
         context.window_manager.progress_update(0)
@@ -204,7 +204,7 @@ class WM_OT_previews_batch_clear(Operator):
     def execute(self, context):
         import os
         import subprocess
-        from bl_previews_utils import bl_previews_render as preview_render
+        from _bl_previews_utils import bl_previews_render as preview_render
 
         context.window_manager.progress_begin(0, len(self.files))
         context.window_manager.progress_update(0)

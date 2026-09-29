@@ -8,7 +8,7 @@
 
 #include <functional>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DNA_space_types.h"
 
@@ -24,21 +24,17 @@ bool outliner_shows_mode_column(const SpaceOutliner &space_outliner)
   return tree_display.supports_mode_column() && (space_outliner.flag & SO_MODE_COLUMN);
 }
 
-/**
- * Iterate over the entire tree (including collapsed sub-elements), probing if any of the elements
- * has a warning to be displayed.
- */
 bool outliner_has_element_warnings(const SpaceOutliner &space_outliner)
 {
-  std::function<bool(const ListBase &)> recursive_fn;
+  std::function<bool(const ListBaseT<TreeElement> &)> recursive_fn;
 
-  recursive_fn = [&](const ListBase &lb) {
-    LISTBASE_FOREACH (const TreeElement *, te, &lb) {
-      if (te->abstract_element && !te->abstract_element->get_warning().is_empty()) {
+  recursive_fn = [&](const ListBaseT<TreeElement> &lb) {
+    for (const TreeElement &te : lb) {
+      if (te.abstract_element && !te.abstract_element->get_warning().is_empty()) {
         return true;
       }
 
-      if (recursive_fn(te->subtree)) {
+      if (recursive_fn(te.subtree)) {
         return true;
       }
     }
@@ -46,7 +42,7 @@ bool outliner_has_element_warnings(const SpaceOutliner &space_outliner)
     return false;
   };
 
-  return recursive_fn(space_outliner.tree);
+  return recursive_fn(space_outliner.runtime->tree);
 }
 
 }  // namespace blender::ed::outliner

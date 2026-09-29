@@ -15,9 +15,18 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
+
+namespace blender {
+
+struct bContext;
+struct wmEvent;
 struct wmEventHandler_Gizmo;
 struct wmEventHandler_Op;
+struct wmGizmo;
+struct wmGizmoGroup;
 struct wmGizmoMap;
+struct wmKeyConfig;
 struct wmOperatorType;
 
 /* -------------------------------------------------------------------- */
@@ -72,6 +81,8 @@ void wm_gizmomaps_handled_modal_update(bContext *C, wmEvent *event, wmEventHandl
 void wm_gizmomap_handler_context_op(bContext *C, wmEventHandler_Op *handler);
 void wm_gizmomap_handler_context_gizmo(bContext *C, wmEventHandler_Gizmo *handler);
 
+bool wm_gizmomap_highlight_pending(const wmGizmoMap *gzmap);
+bool wm_gizmomap_highlight_handled(wmGizmoMap *gzmap);
 /**
  * Try to find a gizmo under the mouse position. 2D intersections have priority over
  * 3D ones (could check for smallest screen-space distance but not needed right now).
@@ -90,7 +101,7 @@ void wm_gizmomap_modal_set(
 
 wmGizmo *wm_gizmomap_modal_get(wmGizmoMap *gzmap);
 wmGizmo **wm_gizmomap_selected_get(wmGizmoMap *gzmap, int *r_selected_len);
-ListBase *wm_gizmomap_groups_get(wmGizmoMap *gzmap);
+ListBaseT<wmGizmoGroup> *wm_gizmomap_groups_get(wmGizmoMap *gzmap);
 
 /** \} */
 
@@ -101,3 +112,5 @@ ListBase *wm_gizmomap_groups_get(wmGizmoMap *gzmap);
 void wm_gizmomaptypes_free();
 
 /** \} */
+
+}  // namespace blender

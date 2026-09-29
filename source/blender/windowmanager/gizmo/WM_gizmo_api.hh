@@ -13,28 +13,40 @@
 
 #pragma once
 
+#include "WM_gizmo_types.hh"
+#include "wm_gizmo_fn.hh"
+
+#include "BLI_string_ref.hh"
+
+#include "DNA_listBase.h"
+
+namespace blender {
+
 struct ARegion;
-struct GHashIterator;
+struct bContext;
 struct IDProperty;
 struct Main;
+struct PointerRNA;
 struct PropertyRNA;
 struct ScrArea;
 struct bToolRef;
 struct wmGizmo;
 struct wmGizmoGroup;
 struct wmGizmoGroupType;
+struct wmGizmoGroupTypeRef;
 struct wmGizmoMap;
 struct wmGizmoMapType;
 struct wmGizmoMapType_Params;
+struct wmGizmoOpElem;
 struct wmGizmoProperty;
 struct wmGizmoPropertyType;
 struct wmGizmoType;
 struct wmKeyConfig;
 struct wmMsgSubscribeKey;
 struct wmMsgSubscribeValue;
+struct wmOperatorType;
+struct wmWindow;
 struct wmWindowManager;
-
-#include "wm_gizmo_fn.hh"
 
 /* -------------------------------------------------------------------- */
 /* #wmGizmo. */
@@ -45,7 +57,7 @@ wmGizmo *WM_gizmo_new_ptr(const wmGizmoType *gzt, wmGizmoGroup *gzgroup, Pointer
  * if you need to check it exists use #WM_gizmo_new_ptr
  * because callers of this function don't NULL check the return value.
  */
-wmGizmo *WM_gizmo_new(const char *idname, wmGizmoGroup *gzgroup, PointerRNA *properties);
+wmGizmo *WM_gizmo_new(StringRef idname, wmGizmoGroup *gzgroup, PointerRNA *properties);
 /**
  * \warning this doesn't check #wmGizmoMap (highlight, selection etc).
  * Typical use is when freeing the windowing data,
@@ -56,7 +68,7 @@ void WM_gizmo_free(wmGizmo *gz);
  * Free \a gizmo and unlink from \a gizmolist.
  * \a gizmolist is allowed to be NULL.
  */
-void WM_gizmo_unlink(ListBase *gizmolist, wmGizmoMap *gzmap, wmGizmo *gz, bContext *C);
+void WM_gizmo_unlink(ListBaseT<wmGizmo> *gizmolist, wmGizmoMap *gzmap, wmGizmo *gz, bContext *C);
 
 /**
  * Remove from selection array without running callbacks.
@@ -89,7 +101,10 @@ PointerRNA *WM_gizmo_operator_set(wmGizmo *gz,
                                   int part_index,
                                   wmOperatorType *ot,
                                   IDProperty *properties);
-int WM_gizmo_operator_invoke(bContext *C, wmGizmo *gz, wmGizmoOpElem *gzop, const wmEvent *event);
+wmOperatorStatus WM_gizmo_operator_invoke(bContext *C,
+                                          wmGizmo *gz,
+                                          wmGizmoOpElem *gzop,
+                                          const wmEvent *event);
 
 /* Callbacks. */
 
@@ -131,7 +146,7 @@ void WM_gizmo_set_color_highlight(wmGizmo *gz, const float color_hi[4]);
 /**
  * Leaving values NULL use values from #wmGizmo.
  */
-struct WM_GizmoMatrixParams {
+struct wmGizmoMatrixParams {
   const float (*matrix_space)[4];
   const float (*matrix_basis)[4];
   const float (*matrix_offset)[4];
@@ -139,7 +154,7 @@ struct WM_GizmoMatrixParams {
 };
 
 void WM_gizmo_calc_matrix_final_params(const wmGizmo *gz,
-                                       const WM_GizmoMatrixParams *params,
+                                       const wmGizmoMatrixParams *params,
                                        float r_mat[4][4]);
 void WM_gizmo_calc_matrix_final_no_offset(const wmGizmo *gz, float r_mat[4][4]);
 
@@ -148,12 +163,12 @@ void WM_gizmo_calc_matrix_final(const wmGizmo *gz, float r_mat[4][4]);
 /* Properties. */
 
 void WM_gizmo_properties_create_ptr(PointerRNA *ptr, wmGizmoType *gzt);
-void WM_gizmo_properties_create(PointerRNA *ptr, const char *gtstring);
+void WM_gizmo_properties_create(PointerRNA *ptr, StringRef gtstring);
 /**
  * Similar to #WM_gizmo_properties_create
  * except its uses ID properties used for key-maps and macros.
  */
-void WM_gizmo_properties_alloc(PointerRNA **ptr, IDProperty **properties, const char *gtstring);
+void WM_gizmo_properties_alloc(PointerRNA **ptr, IDProperty **properties, StringRef gtstring);
 void WM_gizmo_properties_sanitize(PointerRNA *ptr, bool no_context);
 /**
  * Set all props to their default.
@@ -173,30 +188,22 @@ void WM_gizmo_properties_free(PointerRNA *ptr);
 
 /* `wm_gizmo_type.cc` */
 
-const wmGizmoType *WM_gizmotype_find(const char *idname, bool quiet);
+const wmGizmoType *WM_gizmotype_find(StringRef idname, bool quiet);
 void WM_gizmotype_append(void (*gtfunc)(wmGizmoType *));
 void WM_gizmotype_append_ptr(void (*gtfunc)(wmGizmoType *, void *), void *userdata);
-bool WM_gizmotype_remove(bContext *C, Main *bmain, const char *idname);
+bool WM_gizmotype_remove(bContext *C, Main *bmain, StringRef idname);
 void WM_gizmotype_remove_ptr(bContext *C, Main *bmain, wmGizmoType *gzt);
 /**
- * Free but don't remove from #GHash.
+ * Free but don't remove from the global list.
  */
 void WM_gizmotype_free_ptr(wmGizmoType *gzt);
-/**
- * Caller must free.
- */
-void WM_gizmotype_iter(GHashIterator *ghi);
 
 /* `wm_gizmo_group_type.cc` */
 
-wmGizmoGroupType *WM_gizmogrouptype_find(const char *idname, bool quiet);
+wmGizmoGroupType *WM_gizmogrouptype_find(StringRef idname, bool quiet);
 wmGizmoGroupType *WM_gizmogrouptype_append(void (*wtfunc)(wmGizmoGroupType *));
 wmGizmoGroupType *WM_gizmogrouptype_append_ptr(void (*wtfunc)(wmGizmoGroupType *, void *),
                                                void *userdata);
-/**
- * Caller must free.
- */
-void WM_gizmogrouptype_iter(GHashIterator *ghi);
 
 /**
  * Append and insert into a gizmo type-map.
@@ -223,8 +230,6 @@ void WM_gizmoconfig_update_tag_reinit_all();
 
 /* `wm_gizmo_target_props.cc`. */
 
-wmGizmoProperty *WM_gizmo_target_property_array(wmGizmo *gz);
-wmGizmoProperty *WM_gizmo_target_property_at_index(wmGizmo *gz, int index);
 wmGizmoProperty *WM_gizmo_target_property_find(wmGizmo *gz, const char *idname);
 
 void WM_gizmo_target_property_def_rna_ptr(wmGizmo *gz,
@@ -245,7 +250,7 @@ void WM_gizmo_target_property_def_func(wmGizmo *gz,
 void WM_gizmo_target_property_clear_rna_ptr(wmGizmo *gz, const wmGizmoPropertyType *gz_prop_type);
 void WM_gizmo_target_property_clear_rna(wmGizmo *gz, const char *idname);
 
-bool WM_gizmo_target_property_is_valid_any(wmGizmo *gz);
+bool WM_gizmo_target_property_is_valid_any(const wmGizmo *gz);
 bool WM_gizmo_target_property_is_valid(const wmGizmoProperty *gz_prop);
 float WM_gizmo_target_property_float_get(const wmGizmo *gz, wmGizmoProperty *gz_prop);
 void WM_gizmo_target_property_float_set(bContext *C,
@@ -314,8 +319,8 @@ wmKeyMap *WM_gizmo_keymap_generic_select(wmWindowManager *wm);
 wmKeyMap *WM_gizmo_keymap_generic_drag_with_keyconfig(wmKeyConfig *kc);
 wmKeyMap *WM_gizmo_keymap_generic_drag(wmWindowManager *wm);
 
-wmKeyMap *WM_gizmo_keymap_generic_click_drag_with_keyconfig(wmKeyConfig *kc);
-wmKeyMap *WM_gizmo_keymap_generic_click_drag(wmWindowManager *wm);
+wmKeyMap *WM_gizmo_keymap_generic_press_drag_with_keyconfig(wmKeyConfig *kc);
+wmKeyMap *WM_gizmo_keymap_generic_press_drag(wmWindowManager *wm);
 
 /**
  * Drag or press depending on preference.
@@ -325,7 +330,7 @@ wmKeyMap *WM_gizmo_keymap_generic_maybe_drag(wmWindowManager *wm);
 
 void WM_gizmogroup_ensure_init(const bContext *C, wmGizmoGroup *gzgroup);
 
-/* Sort utilities for use with 'BLI_listbase_sort'. */
+/* Sort utilities for use with `BLI_listbase_sort`. */
 
 int WM_gizmo_cmp_temp_fl(const void *gz_a_ptr, const void *gz_b_ptr);
 int WM_gizmo_cmp_temp_fl_reverse(const void *gz_a_ptr, const void *gz_b_ptr);
@@ -341,7 +346,7 @@ wmGizmoMap *WM_gizmomap_new_from_type(const wmGizmoMapType_Params *gzmap_params)
  * Re-create the gizmos (use when changing theme settings).
  */
 void WM_gizmomap_reinit(wmGizmoMap *gzmap);
-const ListBase *WM_gizmomap_group_list(wmGizmoMap *gzmap);
+const ListBaseT<wmGizmoGroup> *WM_gizmomap_group_list(wmGizmoMap *gzmap);
 wmGizmoGroup *WM_gizmomap_group_find(wmGizmoMap *gzmap, const char *idname);
 wmGizmoGroup *WM_gizmomap_group_find_ptr(wmGizmoMap *gzmap, const wmGizmoGroupType *gzgt);
 
@@ -383,14 +388,14 @@ ARegion *WM_gizmomap_tooltip_init(
 wmGizmoMapType *WM_gizmomaptype_find(const wmGizmoMapType_Params *gzmap_params);
 wmGizmoMapType *WM_gizmomaptype_ensure(const wmGizmoMapType_Params *gzmap_params);
 
-wmGizmoGroupTypeRef *WM_gizmomaptype_group_find(wmGizmoMapType *gzmap_type, const char *idname);
+wmGizmoGroupTypeRef *WM_gizmomaptype_group_find(wmGizmoMapType *gzmap_type, StringRef idname);
 wmGizmoGroupTypeRef *WM_gizmomaptype_group_find_ptr(wmGizmoMapType *gzmap_type,
                                                     const wmGizmoGroupType *gzgt);
 /**
  * Use this for registering gizmos on startup.
  * For runtime, use #WM_gizmomaptype_group_link_runtime.
  */
-wmGizmoGroupTypeRef *WM_gizmomaptype_group_link(wmGizmoMapType *gzmap_type, const char *idname);
+wmGizmoGroupTypeRef *WM_gizmomaptype_group_link(wmGizmoMapType *gzmap_type, StringRef idname);
 wmGizmoGroupTypeRef *WM_gizmomaptype_group_link_ptr(wmGizmoMapType *gzmap_type,
                                                     wmGizmoGroupType *gzgt);
 
@@ -418,11 +423,11 @@ void WM_gizmomaptype_group_free(wmGizmoGroupTypeRef *gzgt_ref);
 
 void WM_gizmo_group_type_add_ptr_ex(wmGizmoGroupType *gzgt, wmGizmoMapType *gzmap_type);
 void WM_gizmo_group_type_add_ptr(wmGizmoGroupType *gzgt);
-void WM_gizmo_group_type_add(const char *idname);
+void WM_gizmo_group_type_add(StringRef idname);
 
 bool WM_gizmo_group_type_ensure_ptr_ex(wmGizmoGroupType *gzgt, wmGizmoMapType *gzmap_type);
 bool WM_gizmo_group_type_ensure_ptr(wmGizmoGroupType *gzgt);
-bool WM_gizmo_group_type_ensure(const char *idname);
+bool WM_gizmo_group_type_ensure(StringRef idname);
 
 /**
  * Call #WM_gizmo_group_type_free_ptr after to remove & free.
@@ -431,18 +436,18 @@ void WM_gizmo_group_type_remove_ptr_ex(Main *bmain,
                                        wmGizmoGroupType *gzgt,
                                        wmGizmoMapType *gzmap_type);
 void WM_gizmo_group_type_remove_ptr(Main *bmain, wmGizmoGroupType *gzgt);
-void WM_gizmo_group_type_remove(Main *bmain, const char *idname);
+void WM_gizmo_group_type_remove(Main *bmain, StringRef idname);
 
 void WM_gizmo_group_type_unlink_delayed_ptr_ex(wmGizmoGroupType *gzgt, wmGizmoMapType *gzmap_type);
 void WM_gizmo_group_type_unlink_delayed_ptr(wmGizmoGroupType *gzgt);
-void WM_gizmo_group_type_unlink_delayed(const char *idname);
+void WM_gizmo_group_type_unlink_delayed(StringRef idname);
 
 void WM_gizmo_group_unlink_delayed_ptr_from_space(wmGizmoGroupType *gzgt,
                                                   wmGizmoMapType *gzmap_type,
                                                   ScrArea *area);
 
 void WM_gizmo_group_type_free_ptr(wmGizmoGroupType *gzgt);
-bool WM_gizmo_group_type_free(const char *idname);
+bool WM_gizmo_group_type_free(StringRef idname);
 
 /**
  * Has the result of unlinking and linking (re-initializes gizmo's).
@@ -451,9 +456,11 @@ void WM_gizmo_group_type_reinit_ptr_ex(Main *bmain,
                                        wmGizmoGroupType *gzgt,
                                        wmGizmoMapType *gzmap_type);
 void WM_gizmo_group_type_reinit_ptr(Main *bmain, wmGizmoGroupType *gzgt);
-void WM_gizmo_group_type_reinit(Main *bmain, const char *idname);
+void WM_gizmo_group_type_reinit(Main *bmain, StringRef idname);
 
 /* Utilities. */
+
+bool WM_gizmo_group_is_modal(const wmGizmoGroup *gzgroup);
 
 bool WM_gizmo_context_check_drawstep(const bContext *C, eWM_GizmoFlagMapDrawStep step);
 
@@ -468,3 +475,5 @@ void WM_gizmo_group_tag_remove(wmGizmoGroup *gzgroup);
 
 bool WM_gizmo_group_type_poll(const bContext *C, const wmGizmoGroupType *gzgt);
 void WM_gizmo_group_refresh(const bContext *C, wmGizmoGroup *gzgroup);
+
+}  // namespace blender

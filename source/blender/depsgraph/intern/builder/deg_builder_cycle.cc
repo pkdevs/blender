@@ -12,8 +12,9 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "BLI_stack.h"
-#include "BLI_utildefines.h"
+#include "BLI_stack.hh"
+
+#include "CLG_log.h"
 
 #include "intern/node/deg_node.hh"
 #include "intern/node/deg_node_component.hh"
@@ -22,7 +23,11 @@
 #include "intern/depsgraph.hh"
 #include "intern/depsgraph_relation.hh"
 
-namespace blender::deg {
+namespace blender {
+
+static CLG_LogRef LOG = {"depsgraph"};
+
+namespace deg {
 
 namespace {
 
@@ -42,20 +47,15 @@ struct StackEntry {
 };
 
 struct CyclesSolverState {
-  CyclesSolverState(Depsgraph *graph)
-      : graph(graph), traversal_stack(BLI_stack_new(sizeof(StackEntry), "DEG detect cycles stack"))
-  {
-    /* pass */
-  }
+  CyclesSolverState(Depsgraph *graph) : graph(graph) {}
   ~CyclesSolverState()
   {
-    BLI_stack_free(traversal_stack);
     if (num_cycles != 0) {
-      printf("Detected %d dependency cycles\n", num_cycles);
+      CLOG_WARN(&LOG, "Detected %d dependency cycles", num_cycles);
     }
   }
   Depsgraph *graph;
-  BLI_Stack *traversal_stack;
+  Stack<StackEntry> traversal_stack;
   int num_cycles = 0;
 };
 
@@ -66,7 +66,7 @@ inline void set_node_visited_state(Node *node, eCyclicCheckVisitedState state)
 
 inline eCyclicCheckVisitedState get_node_visited_state(Node *node)
 {
-  return (eCyclicCheckVisitedState)(node->custom_flags & 0x3);
+  return eCyclicCheckVisitedState(node->custom_flags & 0x3);
 }
 
 inline void set_node_num_visited_children(Node *node, int num_children)
@@ -85,7 +85,7 @@ void schedule_node_to_stack(CyclesSolverState *state, OperationNode *node)
   entry.node = node;
   entry.from = nullptr;
   entry.via_relation = nullptr;
-  BLI_stack_push(state->traversal_stack, &entry);
+  state->traversal_stack.push(entry);
   set_node_visited_state(node, NODE_IN_STACK);
 }
 
@@ -141,7 +141,7 @@ Relation *select_relation_to_murder(Relation *relation, StackEntry *cycle_start_
     return relation;
   }
   StackEntry *current = cycle_start_entry;
-  OperationNode *to_node = (OperationNode *)relation->to;
+  OperationNode *to_node = static_cast<OperationNode *>(relation->to);
   while (current->node != to_node) {
     if (check_relation_can_murder(current->via_relation)) {
       return current->via_relation;
@@ -154,20 +154,20 @@ Relation *select_relation_to_murder(Relation *relation, StackEntry *cycle_start_
 /* Solve cycles with all nodes which are scheduled for traversal. */
 void solve_cycles(CyclesSolverState *state)
 {
-  BLI_Stack *traversal_stack = state->traversal_stack;
-  while (!BLI_stack_is_empty(traversal_stack)) {
-    StackEntry *entry = (StackEntry *)BLI_stack_peek(traversal_stack);
+  Stack<StackEntry> &traversal_stack = state->traversal_stack;
+  while (!traversal_stack.is_empty()) {
+    StackEntry *entry = &traversal_stack.peek();
     OperationNode *node = entry->node;
     bool all_child_traversed = true;
     const int num_visited = get_node_num_visited_children(node);
     for (int i = num_visited; i < node->outlinks.size(); i++) {
       Relation *rel = node->outlinks[i];
       if (rel->to->type == NodeType::OPERATION) {
-        OperationNode *to = (OperationNode *)rel->to;
+        OperationNode *to = static_cast<OperationNode *>(rel->to);
         eCyclicCheckVisitedState to_state = get_node_visited_state(to);
         if (to_state == NODE_IN_STACK) {
-          string cycle_str = "  " + to->full_identifier() + " depends on\n  " +
-                             node->full_identifier() + " via '" + rel->name + "'\n";
+          std::string cycle_str = "  " + to->full_identifier() + " depends on\n  " +
+                                  node->full_identifier() + " via '" + rel->name + "'\n";
           StackEntry *current = entry;
           while (current->node != to) {
             BLI_assert(current != nullptr);
@@ -175,7 +175,7 @@ void solve_cycles(CyclesSolverState *state)
                          current->via_relation->name + "'\n";
             current = current->from;
           }
-          printf("Dependency cycle detected:\n%s", cycle_str.c_str());
+          CLOG_WARN(&LOG, "Dependency cycle detected:\n%s", cycle_str.c_str());
           Relation *sacrificial_relation = select_relation_to_murder(rel, entry);
           sacrificial_relation->flag |= RELATION_FLAG_CYCLIC;
           ++state->num_cycles;
@@ -185,7 +185,7 @@ void solve_cycles(CyclesSolverState *state)
           new_entry.node = to;
           new_entry.from = entry;
           new_entry.via_relation = rel;
-          BLI_stack_push(traversal_stack, &new_entry);
+          traversal_stack.push(new_entry);
           set_node_visited_state(node, NODE_IN_STACK);
           all_child_traversed = false;
           set_node_num_visited_children(node, i);
@@ -195,7 +195,7 @@ void solve_cycles(CyclesSolverState *state)
     }
     if (all_child_traversed) {
       set_node_visited_state(node, NODE_VISITED);
-      BLI_stack_discard(traversal_stack);
+      traversal_stack.pop();
     }
   }
 }
@@ -217,4 +217,5 @@ void deg_graph_detect_cycles(Depsgraph *graph)
   }
 }
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

@@ -10,25 +10,22 @@
 
 #include "DNA_action_types.h"
 #include "DNA_anim_types.h"
-#include "DNA_scene_types.h"
 
-#ifdef WITH_ANIM_BAKLAVA
-#  include "ANIM_action.hh"
-#  include "ANIM_nla.hh"
-#endif
+#include "ANIM_action.hh"
+#include "ANIM_nla.hh"
 
-#include "BLI_utildefines.h"
+#include "BLT_translation.hh"
 
-#include "MEM_guardedalloc.h"
-
-#include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
+#include "rna_action_tools.hh"
 #include "rna_internal.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
+
+namespace blender {
 
 /* Enum defines exported for `rna_animation.cc`. */
 
@@ -74,11 +71,17 @@ const EnumPropertyItem rna_enum_nla_mode_extend_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+}  // namespace blender
+
 #ifdef RNA_RUNTIME
 
 #  include <fmt/format.h>
 #  include <math.h>
 #  include <stdio.h>
+
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 /* needed for some of the validation stuff... */
 #  include "BKE_anim_data.hh"
@@ -92,9 +95,13 @@ const EnumPropertyItem rna_enum_nla_mode_extend_items[] = {
 #  include "DEG_depsgraph.hh"
 #  include "DEG_depsgraph_build.hh"
 
+#  include "rna_action_tools.hh"
+
+namespace blender {
+
 static void rna_NlaStrip_name_set(PointerRNA *ptr, const char *value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   /* copy the name first */
   STRNCPY_UTF8(data->name, value);
@@ -108,7 +115,7 @@ static void rna_NlaStrip_name_set(PointerRNA *ptr, const char *value)
 
 static std::optional<std::string> rna_NlaStrip_path(const PointerRNA *ptr)
 {
-  NlaStrip *strip = (NlaStrip *)ptr->data;
+  NlaStrip *strip = static_cast<NlaStrip *>(ptr->data);
   AnimData *adt = BKE_animdata_from_id(ptr->owner_id);
 
   /* if we're attached to AnimData, try to resolve path back to AnimData */
@@ -116,8 +123,8 @@ static std::optional<std::string> rna_NlaStrip_path(const PointerRNA *ptr)
     NlaTrack *nlt;
     NlaStrip *nls;
 
-    for (nlt = static_cast<NlaTrack *>(adt->nla_tracks.first); nlt; nlt = nlt->next) {
-      for (nls = static_cast<NlaStrip *>(nlt->strips.first); nls; nls = nls->next) {
+    for (nlt = adt->nla_tracks.first(); nlt; nlt = nlt->next) {
+      for (nls = nlt->strips.first(); nls; nls = nls->next) {
         if (nls == strip) {
           /* XXX but if we animate like this, the control will never work... */
           char name_esc_nlt[sizeof(nlt->name) * 2];
@@ -152,7 +159,7 @@ static void rna_NlaStrip_dependency_update(Main *bmain, Scene *scene, PointerRNA
 
 static void rna_NlaStrip_transform_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  NlaStrip *strip = (NlaStrip *)ptr->data;
+  NlaStrip *strip = static_cast<NlaStrip *>(ptr->data);
 
   BKE_nlameta_flush_transforms(strip);
 
@@ -180,7 +187,7 @@ static void rna_NlaStrip_start_frame_set(PointerRNA *ptr, float value)
    * strips can be 'glued' to one another. If they are however, ensure transitions have a bit of
    * time allotted in order to be performed.
    */
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   const float limit_prev = BKE_nlastrip_compute_frame_from_previous_strip(data);
   const float limit_next = BKE_nlastrip_compute_frame_to_next_strip(data);
@@ -211,7 +218,7 @@ static void rna_NlaStrip_start_frame_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_frame_start_ui_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   /* Changing the NLA strip's start frame is exactly the same as translating it in the NLA editor.
    * When 'translating' the clip, the length of it should stay identical. Se we also need to set
@@ -257,7 +264,7 @@ static void rna_NlaStrip_frame_start_ui_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_end_frame_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   const float limit_prev = BKE_nlastrip_compute_frame_from_previous_strip(data);
   const float limit_next = BKE_nlastrip_compute_frame_to_next_strip(data);
@@ -288,7 +295,7 @@ static void rna_NlaStrip_end_frame_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_frame_end_ui_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   /* Changing the strip's end frame will update its action 'range' (defined by actstart->actend) to
    * accommodate the extra length of the strip. No other parameters of the strip will change. But
@@ -351,7 +358,7 @@ static void rna_NlaStrip_frame_end_ui_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_scale_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   /* set scale value */
   /* NOTE: these need to be synced with the values in the
@@ -365,7 +372,7 @@ static void rna_NlaStrip_scale_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_repeat_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   /* set repeat value */
   /* NOTE: these need to be synced with the values in the
@@ -379,7 +386,7 @@ static void rna_NlaStrip_repeat_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_blend_in_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
   float len;
 
   /* blend-in is limited to the length of the strip, and also cannot overlap with blendout */
@@ -391,7 +398,7 @@ static void rna_NlaStrip_blend_in_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_blend_out_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
   float len;
 
   /* blend-out is limited to the length of the strip */
@@ -408,7 +415,7 @@ static void rna_NlaStrip_blend_out_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_use_auto_blend_set(PointerRNA *ptr, bool value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   if (value) {
     /* set the flag */
@@ -434,9 +441,33 @@ static void rna_NlaStrip_use_auto_blend_set(PointerRNA *ptr, bool value)
   }
 }
 
+static void rna_NlaStrip_action_set(PointerRNA *ptr, PointerRNA value, ReportList *reports)
+{
+  using namespace animrig;
+  BLI_assert(ptr->owner_id);
+  BLI_assert(*ptr);
+
+  ID &animated_id = *ptr->owner_id;
+  NlaStrip &strip = *static_cast<NlaStrip *>(ptr->data);
+  Action *action = static_cast<Action *>(value.data);
+
+  if (!action) {
+    nla::unassign_action(strip, animated_id);
+    return;
+  }
+
+  if (!nla::assign_action(strip, *action, animated_id)) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Could not assign action %s to NLA strip %s",
+                action->id.name + 2,
+                strip.name);
+  }
+}
+
 static int rna_NlaStrip_action_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
-  NlaStrip *strip = (NlaStrip *)ptr->data;
+  NlaStrip *strip = static_cast<NlaStrip *>(ptr->data);
 
   /* Strip actions shouldn't be editable if NLA tweak-mode is on. */
   if (ptr->owner_id) {
@@ -459,167 +490,58 @@ static int rna_NlaStrip_action_editable(const PointerRNA *ptr, const char ** /*r
   return PROP_EDITABLE;
 }
 
-#  ifdef WITH_ANIM_BAKLAVA
-
-static void nlastrip_assign_action_slot(NlaStrip &strip,
-                                        blender::animrig::Slot *slot,
-                                        blender::animrig::Action &action,
-                                        ID &animated_id)
+static void rna_NlaStrip_action_slot_handle_set(PointerRNA *ptr,
+                                                const animrig::slot_handle_t new_slot_handle)
 {
-  using namespace blender::animrig;
-
-  const nla::ActionSlotAssignmentResult result = nla::assign_action_slot(strip, slot, animated_id);
-
-  switch (result) {
-    case nla::ActionSlotAssignmentResult::OK:
-      break;
-    case nla::ActionSlotAssignmentResult::SlotNotFromAction:
-      BLI_assert_msg(slot,
-                     "'not a slot from this Action' error can only occur when there is a slot");
-      WM_reportf(RPT_ERROR,
-                 "Slot '%s' cannot be assigned to Strip '%s' as it does not belong to the "
-                 "already-assigned Action '%s'",
-                 slot->name,
-                 strip.name,
-                 action.id.name + 2);
-      break;
-    case nla::ActionSlotAssignmentResult::SlotNotSuitable:
-      BLI_assert_msg(slot, "'slot not suitable' error can only occur when there is a slot");
-      WM_reportf(RPT_ERROR,
-                 "Action '%s' slot '%s' is not suitable to animate a strip of %s",
-                 action.id.name + 2,
-                 slot->name,
-                 animated_id.name + 2);
-      break;
-  }
+  NlaStrip *strip = static_cast<NlaStrip *>(ptr->data);
+  rna_generic_action_slot_handle_set(new_slot_handle,
+                                     *ptr->owner_id,
+                                     strip->act,
+                                     strip->action_slot_handle,
+                                     strip->last_slot_identifier);
 }
 
-static void rna_NlaStrip_action_slot_handle_set(
-    PointerRNA *ptr, const blender::animrig::slot_handle_t new_slot_handle)
+/**
+ * Emit a 'diff' for the .action_slot_handle property whenever the .action property differs.
+ *
+ * \see rna_generic_action_slot_handle_override_diff()
+ */
+static void rna_NlaStrip_action_slot_handle_override_diff(
+    Main *bmain, RNAPropertyOverrideDiffContext &rnadiff_ctx)
 {
-  using namespace blender::animrig;
+  const NlaStrip *strip_a = static_cast<NlaStrip *>(rnadiff_ctx.prop_a->ptr->data);
+  const NlaStrip *strip_b = static_cast<NlaStrip *>(rnadiff_ctx.prop_b->ptr->data);
 
-  BLI_assert(ptr->owner_id);
-  ID &animated_id = *ptr->owner_id;
-  NlaStrip *strip = (NlaStrip *)ptr->data;
-
-  if (new_slot_handle == Slot::unassigned && !strip->act) {
-    /* No Action assigned, so no slot was used anyway. Just blindly assign the
-     * 'unassigned' handle. */
-    strip->action_slot_handle = Slot::unassigned;
-    return;
-  }
-
-  if (!strip->act) {
-    /* No Action to verify the slot handle is valid. As the slot handle will be
-     * completely ignored when re-assigning an Action, better to refuse setting
-     * it altogether. This will make bugs in Python code more obvious. */
-    WM_reportf(
-        RPT_ERROR, "Strip '%s' does not have an Action, cannot set slot handle", strip->name);
-    return;
-  }
-
-  Action &action = strip->act->wrap();
-  Slot *slot = action.slot_for_handle(new_slot_handle);
-
-  nlastrip_assign_action_slot(*strip, slot, action, animated_id);
+  rna_generic_action_slot_handle_override_diff(bmain, rnadiff_ctx, strip_a->act, strip_b->act);
 }
 
 static PointerRNA rna_NlaStrip_action_slot_get(PointerRNA *ptr)
 {
-  using namespace blender;
-
-  BLI_assert(ptr->owner_id);
-  NlaStrip *strip = (NlaStrip *)ptr->data;
-
-  if (!strip->act || strip->action_slot_handle == animrig::Slot::unassigned) {
-    return PointerRNA_NULL;
-  }
-
-  animrig::Action &action = strip->act->wrap();
-  animrig::Slot *slot = action.slot_for_handle(strip->action_slot_handle);
-  if (!slot) {
-    return PointerRNA_NULL;
-  }
-  return RNA_pointer_create(&action.id, &RNA_ActionSlot, slot);
+  NlaStrip *strip = static_cast<NlaStrip *>(ptr->data);
+  return rna_generic_action_slot_get(strip->act, strip->action_slot_handle);
 }
 
 static void rna_NlaStrip_action_slot_set(PointerRNA *ptr, PointerRNA value, ReportList *reports)
 {
-  using namespace blender::animrig;
-
-  NlaStrip *strip = (NlaStrip *)ptr->data;
-  ActionSlot *dna_slot = static_cast<ActionSlot *>(value.data);
-
-  if (!dna_slot && !strip->act) {
-    /* No Action assigned, so no slot was used anyway. Just blindly assign the
-     * 'unassigned' handle. */
-    strip->action_slot_handle = Slot::unassigned;
-    return;
-  }
-
-  if (!strip->act) {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Cannot set slot without an assigned Action on strip %s.",
-                strip->name);
-    return;
-  }
-
-  Action &action = strip->act->wrap();
-  Slot *slot = dna_slot ? &dna_slot->wrap() : nullptr;
-  ID &animated_id = *ptr->owner_id;
-
-  nlastrip_assign_action_slot(*strip, slot, action, animated_id);
+  NlaStrip *strip = static_cast<NlaStrip *>(ptr->data);
+  rna_generic_action_slot_set(value,
+                              *ptr->owner_id,
+                              strip->act,
+                              strip->action_slot_handle,
+                              strip->last_slot_identifier,
+                              reports);
 }
 
-/* Skip any slot that is not suitable for the ID owning the NLA strip.
- * TODO: merge this and rna_iterator_animdata_action_slots_skip() as they are identical. */
-static bool rna_iterator_nlastrip_action_slots_skip(CollectionPropertyIterator *iter, void *data)
+static void rna_iterator_nlastrip_action_suitable_slots_begin(CollectionPropertyIterator *iter,
+                                                              PointerRNA *ptr)
 {
-  using blender::animrig::Slot;
-
-  /* Get the current Slot being iterated over. */
-  const Slot **slot_ptr_ptr = static_cast<const Slot **>(data);
-  BLI_assert(slot_ptr_ptr);
-  BLI_assert(*slot_ptr_ptr);
-  const Slot &slot = **slot_ptr_ptr;
-
-  /* Get the animated ID. */
-  const ID *animated_id = iter->parent.owner_id;
-  BLI_assert(animated_id);
-
-  /* Skip this Slot if it's not suitable for the animated ID. */
-  return !slot.is_suitable_for(*animated_id);
+  NlaStrip *strip = static_cast<NlaStrip *>(ptr->data);
+  rna_iterator_generic_action_suitable_slots_begin(iter, ptr, strip->act);
 }
-
-static void rna_iterator_nlastrip_action_slots_begin(CollectionPropertyIterator *iter,
-                                                     PointerRNA *ptr)
-{
-  using namespace blender;
-  NlaStrip *strip = (NlaStrip *)ptr->data;
-
-  if (!strip->act) {
-    /* No action means no slots. */
-    rna_iterator_array_begin(iter, nullptr, 0, 0, 0, nullptr);
-    return;
-  }
-
-  animrig::Action &action = strip->act->wrap();
-  Span<animrig::Slot *> slots = action.slots();
-  rna_iterator_array_begin(iter,
-                           (void *)slots.data(),
-                           sizeof(animrig::Slot *),
-                           slots.size(),
-                           0,
-                           rna_iterator_nlastrip_action_slots_skip);
-}
-
-#  endif /* WITH_ANIM_BAKLAVA */
 
 static void rna_NlaStrip_action_start_frame_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   /* prevent start frame from occurring after end of action */
   CLAMP(value, MINAFRAME, data->actend);
@@ -632,7 +554,7 @@ static void rna_NlaStrip_action_start_frame_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_action_end_frame_set(PointerRNA *ptr, float value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   /* prevent end frame from starting before start of action */
   CLAMP(value, data->actstart, MAXFRAME);
@@ -644,7 +566,7 @@ static void rna_NlaStrip_action_end_frame_set(PointerRNA *ptr, float value)
 
 static void rna_NlaStrip_animated_influence_set(PointerRNA *ptr, bool value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   if (value) {
     /* set the flag, then make sure a curve for this exists */
@@ -658,7 +580,7 @@ static void rna_NlaStrip_animated_influence_set(PointerRNA *ptr, bool value)
 
 static void rna_NlaStrip_animated_time_set(PointerRNA *ptr, bool value)
 {
-  NlaStrip *data = (NlaStrip *)ptr->data;
+  NlaStrip *data = static_cast<NlaStrip *>(ptr->data);
 
   if (value) {
     /* set the flag, then make sure a curve for this exists */
@@ -689,7 +611,7 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
                                   Main *bmain,
                                   bContext *C,
                                   ReportList *reports,
-                                  const char * /*name*/,
+                                  const char *name,
                                   int start,
                                   bAction *action)
 {
@@ -728,7 +650,7 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
     while ((nlt = nlt->prev) != nullptr) {
       nlt_p = nlt;
     }
-    adt.nla_tracks.first = nlt_p;
+    adt.nla_tracks.first_ = nlt_p;
 
     /* do the same thing to find the last track */
     nlt_p = track;
@@ -736,9 +658,9 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
     while ((nlt = nlt->next) != nullptr) {
       nlt_p = nlt;
     }
-    adt.nla_tracks.last = nlt_p;
+    adt.nla_tracks.last_ = nlt_p;
 
-    /* now we can just auto-name as usual */
+    STRNCPY(strip->name, name);
     BKE_nlastrip_validate_name(&adt, strip);
   }
 
@@ -761,7 +683,7 @@ static void rna_NlaStrip_remove(
   }
 
   BKE_nlastrip_remove_and_free(&track->strips, strip, true);
-  RNA_POINTER_INVALIDATE(strip_ptr);
+  strip_ptr->invalidate();
 
   WM_event_add_notifier(C, NC_ANIMATION | ND_NLA | NA_REMOVED, nullptr);
 
@@ -769,12 +691,26 @@ static void rna_NlaStrip_remove(
   DEG_id_tag_update_ex(bmain, id, ID_RECALC_ANIMATION | ID_RECALC_SYNC_TO_EVAL);
 }
 
+static std::optional<std::string> rna_NlaTrack_path(const PointerRNA *ptr)
+{
+  const NlaTrack *nlt = static_cast<const NlaTrack *>(ptr->data);
+  const AnimData *adt = BKE_animdata_from_id(ptr->owner_id);
+
+  if (!adt) {
+    return "";
+  }
+
+  char name_esc[sizeof(nlt->name) * 2];
+  BLI_str_escape(name_esc, nlt->name, sizeof(name_esc));
+  return fmt::format("animation_data.nla_tracks[\"{}\"]", name_esc);
+}
+
 /* Set the 'solo' setting for the given NLA-track, making sure that it is the only one
  * that has this status in its AnimData block.
  */
 static void rna_NlaTrack_solo_set(PointerRNA *ptr, bool value)
 {
-  NlaTrack *data = (NlaTrack *)ptr->data;
+  NlaTrack *data = static_cast<NlaTrack *>(ptr->data);
   AnimData *adt = BKE_animdata_from_id(ptr->owner_id);
   NlaTrack *nt;
 
@@ -806,7 +742,11 @@ static void rna_NlaTrack_solo_set(PointerRNA *ptr, bool value)
   }
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_strip_fcurves(BlenderRNA *brna, PropertyRNA *cprop)
 {
@@ -879,6 +819,7 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   RNA_def_property_clear_flag(
       prop, PROP_EDITABLE); /* XXX for now, not editable, since this is dangerous */
   RNA_def_property_enum_items(prop, prop_type_items);
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_ACTION);
   RNA_def_property_ui_text(prop, "Type", "Type of NLA Strip");
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_update");
 
@@ -950,9 +891,9 @@ static void rna_def_nlastrip(BlenderRNA *brna)
       "property instead.");
   RNA_def_property_update(
       prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_transform_update");
-  /* The `..._ui` properties should NOT be considered for library overrides, as they are meant to
-   * have different behavior than when setting their non-`..._ui` counterparts. */
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
+  /* The `..._ui` properties should NOT be considered for library overrides. But they should *act*
+   * as if they are a overridable property since from a user perspective they are. */
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_IGNORE);
 
   prop = RNA_def_property(srna, "frame_end_ui", PROP_FLOAT, PROP_TIME);
   RNA_def_property_float_sdna(prop, nullptr, "end");
@@ -965,9 +906,9 @@ static void rna_def_nlastrip(BlenderRNA *brna)
       "changed, see the \"frame_end\" property instead.");
   RNA_def_property_update(
       prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_transform_update");
-  /* The `..._ui` properties should NOT be considered for library overrides, as they are meant to
-   * have different behavior than when setting their non-`..._ui` counterparts. */
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
+  /* The `..._ui` properties should NOT be considered for library overrides. But they should *act*
+   * as if they are a overridable property since from a user perspective they are. */
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_IGNORE);
 
   /* Blending */
   prop = RNA_def_property(srna, "blend_in", PROP_FLOAT, PROP_NONE);
@@ -995,14 +936,14 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   /* Action */
   prop = RNA_def_property(srna, "action", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, nullptr, "act");
-  RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, "rna_Action_id_poll");
-  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+  RNA_def_property_pointer_funcs(
+      prop, nullptr, "rna_NlaStrip_action_set", nullptr, "rna_Action_id_poll");
+  RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_editable_func(prop, "rna_NlaStrip_action_editable");
   RNA_def_property_ui_text(prop, "Action", "Action referenced by this strip");
   RNA_def_property_update(
       prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_dependency_update");
 
-#  ifdef WITH_ANIM_BAKLAVA
   /* This property is not necessary for the Python API (that is better off using
    * slot references/pointers directly), but it is needed for library overrides
    * to work. */
@@ -1014,16 +955,18 @@ static void rna_def_nlastrip(BlenderRNA *brna)
                            "A number that identifies which sub-set of the Action is considered "
                            "to be for this NLA strip");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_override_funcs(
+      prop, "rna_NlaStrip_action_slot_handle_override_diff", nullptr, nullptr);
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA_ACTCHANGE, "rna_NlaStrip_dependency_update");
 
-  prop = RNA_def_property(srna, "action_slot_name", PROP_STRING, PROP_NONE);
-  RNA_def_property_string_sdna(prop, nullptr, "action_slot_name");
+  prop = RNA_def_property(srna, "last_slot_identifier", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "last_slot_identifier");
   RNA_def_property_ui_text(
       prop,
-      "Action Slot Name",
-      "The name of the action slot. The slot identifies which sub-set of the Action "
-      "is considered to be for this strip, and its name is used to find the right slot "
-      "when assigning an Action.");
+      "Last Action Slot Identifier",
+      "The identifier of the most recently assigned action slot. The slot identifies which "
+      "sub-set of the Action is considered to be for this strip, and its identifier is used to "
+      "find the right slot when assigning an Action.");
 
   prop = RNA_def_property(srna, "action_slot", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "ActionSlot");
@@ -1048,10 +991,10 @@ static void rna_def_nlastrip(BlenderRNA *brna)
    * and that's enough. */
   RNA_def_property_override_flag(prop, PROPOVERRIDE_IGNORE);
 
-  prop = RNA_def_property(srna, "action_slots", PROP_COLLECTION, PROP_NONE);
+  prop = RNA_def_property(srna, "action_suitable_slots", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "ActionSlot");
   RNA_def_property_collection_funcs(prop,
-                                    "rna_iterator_nlastrip_action_slots_begin",
+                                    "rna_iterator_nlastrip_action_suitable_slots_begin",
                                     "rna_iterator_array_next",
                                     "rna_iterator_array_end",
                                     "rna_iterator_array_dereference_get",
@@ -1060,8 +1003,7 @@ static void rna_def_nlastrip(BlenderRNA *brna)
                                     nullptr,
                                     nullptr);
   RNA_def_property_ui_text(
-      prop, "Action Slots", "The list action slots suitable for this NLA strip");
-#  endif /* WITH_ANIM_BAKLAVA */
+      prop, "Action Slots", "The list of action slots suitable for this NLA strip");
 
   /* Action extents */
   prop = RNA_def_property(srna, "action_frame_start", PROP_FLOAT, PROP_TIME);
@@ -1221,7 +1163,7 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_flag(func,
                         FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func, "Add a new Action-Clip strip to the track");
-  parm = RNA_def_string(func, "name", "NlaStrip", 0, "", "Name for the NLA Strips");
+  parm = RNA_def_string(func, "name", "NlaStrip", 0, "", "Name for the NLA Strip");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_int(func,
                      "start",
@@ -1237,6 +1179,7 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "strip", "NlaStrip", "", "New NLA Strip");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_NlaStrip_remove");
@@ -1256,6 +1199,7 @@ static void rna_def_nlatrack(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "NlaTrack", nullptr);
   RNA_def_struct_ui_text(
       srna, "NLA Track", "An animation layer containing Actions referenced as NLA strips");
+  RNA_def_struct_path_func(srna, "rna_NlaTrack_path");
   RNA_def_struct_ui_icon(srna, ICON_NLA);
 
   /* strips collection */
@@ -1328,5 +1272,7 @@ void RNA_def_nla(BlenderRNA *brna)
   rna_def_nlatrack(brna);
   rna_def_nlastrip(brna);
 }
+
+}  // namespace blender
 
 #endif

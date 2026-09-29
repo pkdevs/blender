@@ -8,11 +8,12 @@
  * Makes the mesh symmetrical by splitting along an axis and duplicating the geometry.
  */
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
 
 #include "bmesh.hh"
 #include "intern/bmesh_operators_private.hh"
+
+namespace blender {
 
 #define ELE_OUT 1
 
@@ -99,3 +100,5 @@ void bmo_symmetrize_exec(BMesh *bm, BMOperator *op)
   /* Create output */
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "geom.out", BM_ALL_NOLOOP, ELE_OUT);
 }
+
+}  // namespace blender

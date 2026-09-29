@@ -18,7 +18,6 @@ class PHYSICS_PT_rigid_body_constraint(PHYSICS_PT_rigidbody_constraint_panel, Pa
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -43,7 +42,6 @@ class PHYSICS_PT_rigid_body_constraint_settings(PHYSICS_PT_rigidbody_constraint_
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -79,7 +77,6 @@ class PHYSICS_PT_rigid_body_constraint_objects(PHYSICS_PT_rigidbody_constraint_p
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -105,7 +102,6 @@ class PHYSICS_PT_rigid_body_constraint_override_iterations(PHYSICS_PT_rigidbody_
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -136,7 +132,6 @@ class PHYSICS_PT_rigid_body_constraint_limits(PHYSICS_PT_rigidbody_constraint_pa
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -145,8 +140,10 @@ class PHYSICS_PT_rigid_body_constraint_limits(PHYSICS_PT_rigidbody_constraint_pa
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and rbc and (rbc.type in {'GENERIC', 'GENERIC_SPRING', 'HINGE', 'SLIDER', 'PISTON'})
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and rbc and (rbc.type in {'GENERIC', 'GENERIC_SPRING', 'HINGE', 'SLIDER', 'PISTON'}) and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw(self, _context):
         return  # do nothing.
@@ -158,7 +155,6 @@ class PHYSICS_PT_rigid_body_constraint_limits_linear(PHYSICS_PT_rigidbody_constr
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -167,9 +163,11 @@ class PHYSICS_PT_rigid_body_constraint_limits_linear(PHYSICS_PT_rigidbody_constr
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and rbc
-                and (rbc.type in {'GENERIC', 'GENERIC_SPRING', 'SLIDER', 'PISTON'})
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and rbc and
+            (rbc.type in {'GENERIC', 'GENERIC_SPRING', 'SLIDER', 'PISTON'}) and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw(self, context):
         layout = self.layout
@@ -220,7 +218,6 @@ class PHYSICS_PT_rigid_body_constraint_limits_angular(PHYSICS_PT_rigidbody_const
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -229,9 +226,11 @@ class PHYSICS_PT_rigid_body_constraint_limits_angular(PHYSICS_PT_rigidbody_const
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and rbc
-                and (rbc.type in {'GENERIC', 'GENERIC_SPRING', 'HINGE', 'PISTON'})
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and rbc and
+            (rbc.type in {'GENERIC', 'GENERIC_SPRING', 'HINGE', 'PISTON'}) and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw(self, context):
         layout = self.layout
@@ -291,7 +290,6 @@ class PHYSICS_PT_rigid_body_constraint_motor(PHYSICS_PT_rigidbody_constraint_pan
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -300,8 +298,10 @@ class PHYSICS_PT_rigid_body_constraint_motor(PHYSICS_PT_rigidbody_constraint_pan
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and rbc and rbc.type == 'MOTOR'
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and rbc and rbc.type == 'MOTOR' and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw(self, _context):
         return  # do nothing.
@@ -313,7 +313,6 @@ class PHYSICS_PT_rigid_body_constraint_motor_angular(PHYSICS_PT_rigidbody_constr
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -322,8 +321,12 @@ class PHYSICS_PT_rigid_body_constraint_motor_angular(PHYSICS_PT_rigidbody_constr
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and rbc and rbc.type == 'MOTOR'
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and
+            rbc and
+            rbc.type == 'MOTOR' and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw_header(self, context):
         ob = context.object
@@ -354,7 +357,6 @@ class PHYSICS_PT_rigid_body_constraint_motor_linear(PHYSICS_PT_rigidbody_constra
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -363,8 +365,10 @@ class PHYSICS_PT_rigid_body_constraint_motor_linear(PHYSICS_PT_rigidbody_constra
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and rbc and rbc.type == 'MOTOR'
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and rbc and rbc.type == 'MOTOR' and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw_header(self, context):
         ob = context.object
@@ -395,7 +399,6 @@ class PHYSICS_PT_rigid_body_constraint_springs(PHYSICS_PT_rigidbody_constraint_p
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -404,9 +407,11 @@ class PHYSICS_PT_rigid_body_constraint_springs(PHYSICS_PT_rigidbody_constraint_p
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and ob.rigid_body_constraint
-                and rbc.type == 'GENERIC_SPRING'
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and ob.rigid_body_constraint and
+            rbc.type == 'GENERIC_SPRING' and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw(self, context):
         layout = self.layout
@@ -424,7 +429,6 @@ class PHYSICS_PT_rigid_body_constraint_springs_angular(PHYSICS_PT_rigidbody_cons
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -433,9 +437,11 @@ class PHYSICS_PT_rigid_body_constraint_springs_angular(PHYSICS_PT_rigidbody_cons
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and ob.rigid_body_constraint
-                and rbc.type == 'GENERIC_SPRING'
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and ob.rigid_body_constraint and
+            rbc.type == 'GENERIC_SPRING' and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw(self, context):
         layout = self.layout
@@ -477,7 +483,6 @@ class PHYSICS_PT_rigid_body_constraint_springs_linear(PHYSICS_PT_rigidbody_const
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
 
@@ -486,9 +491,11 @@ class PHYSICS_PT_rigid_body_constraint_springs_linear(PHYSICS_PT_rigidbody_const
         ob = context.object
         rbc = ob.rigid_body_constraint
 
-        return (ob and ob.rigid_body_constraint
-                and rbc.type == 'GENERIC_SPRING'
-                and context.engine in cls.COMPAT_ENGINES)
+        return (
+            ob and ob.rigid_body_constraint and
+            rbc.type == 'GENERIC_SPRING' and
+            context.engine in cls.COMPAT_ENGINES
+        )
 
     def draw(self, context):
         layout = self.layout

@@ -10,7 +10,6 @@
 
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
 
 namespace blender {
 
@@ -83,7 +82,7 @@ class RandomNumberGenerator {
    */
   float get_float()
   {
-    return (float)this->get_int32() / 0x80000000;
+    return float(this->get_int32()) / 0x80000000;
   }
 
   template<typename T> void shuffle(MutableSpan<T> values)

@@ -10,10 +10,6 @@
 
 #include "../BPy_UnaryFunction0DVec2f.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject Normal2DF0D_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject Normal2DF0D_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&Normal2DF0D_Type))
 
 /*---------------------------Python BPy_Normal2DF0D structure definition----------*/
-typedef struct {
+struct BPy_Normal2DF0D {
   BPy_UnaryFunction0DVec2f py_uf0D_vec2f;
-} BPy_Normal2DF0D;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

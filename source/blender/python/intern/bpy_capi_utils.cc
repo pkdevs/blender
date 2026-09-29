@@ -11,16 +11,15 @@
 
 #include <Python.h>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
-
-#include "bpy_capi_utils.h"
+#include "bpy_capi_utils.hh"
 
 #include "MEM_guardedalloc.h"
 
 #include "BKE_report.hh"
 
-#include "../generic/py_capi_utils.h"
+#include "../generic/py_capi_utils.hh"
+
+namespace blender {
 
 short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool clear)
 {
@@ -34,7 +33,7 @@ short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool 
 
   if (report_str) {
     PyErr_SetString(exception, report_str);
-    MEM_freeN(report_str);
+    MEM_delete(report_str);
   }
 
   return (report_str == nullptr) ? 0 : -1;
@@ -42,11 +41,25 @@ short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool 
 
 void BPy_reports_write_stdout(const ReportList *reports, const char *header)
 {
+  const Report *report;
+  for (report = reports->list.first(); report; report = report->next) {
+    if (report->type < reports->printlevel) {
+      continue;
+    }
+    break;
+  }
+  if (report == nullptr) {
+    return;
+  }
+
   if (header) {
     PySys_WriteStdout("%s\n", header);
   }
 
-  LISTBASE_FOREACH (const Report *, report, &reports->list) {
+  for (; report; report = report->next) {
+    if (report->type < reports->printlevel) {
+      continue;
+    }
     PySys_WriteStdout("%s: %s\n", report->typestr, report->message);
   }
 }
@@ -124,3 +137,5 @@ bool BPy_errors_to_report(ReportList *reports)
 {
   return BPy_errors_to_report_ex(reports, nullptr, true, true);
 }
+
+}  // namespace blender

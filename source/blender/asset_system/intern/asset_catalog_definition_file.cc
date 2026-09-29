@@ -9,15 +9,17 @@
 #include <iostream>
 
 #include "BLI_fileops.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 
 #include "CLG_log.h"
 
 #include "asset_catalog_definition_file.hh"
 
-static CLG_LogRef LOG = {"asset_system.asset_catalog_definition_file"};
+namespace blender {
 
-namespace blender::asset_system {
+static CLG_LogRef LOG = {"asset.catalog"};
+
+namespace asset_system {
 
 const int AssetCatalogDefinitionFile::SUPPORTED_VERSION = 1;
 const std::string AssetCatalogDefinitionFile::VERSION_MARKER = "VERSION ";
@@ -185,6 +187,11 @@ bool AssetCatalogDefinitionFile::write_to_disk(const CatalogFilePath &dest_file_
   return true;
 }
 
+bool AssetCatalogDefinitionFile::exists_on_disk() const
+{
+  return BLI_exists(this->file_path.c_str());
+}
+
 bool AssetCatalogDefinitionFile::write_to_disk_unsafe(const CatalogFilePath &dest_file_path) const
 {
   char directory[PATH_MAX];
@@ -286,4 +293,6 @@ std::unique_ptr<AssetCatalogDefinitionFile> AssetCatalogDefinitionFile::copy_and
   return copy;
 }
 
-}  // namespace blender::asset_system
+}  // namespace asset_system
+
+}  // namespace blender

@@ -2,15 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_vector_types.hh"
-#include "BLI_vector.hh"
+/** \file
+ * \ingroup bke
+ */
 
-#include "IMB_imbuf.hh"
-#include "IMB_imbuf_types.hh"
+#pragma once
 
-#include "BKE_image_wrappers.hh"
-#include "BKE_pbvh.hh"
-#include "BKE_pbvh_pixels.hh"
+#include "BKE_paint_bvh.hh"
 
 #include "pbvh_uv_islands.hh"
 
@@ -18,7 +16,7 @@ namespace blender::bke::pbvh::pixels {
 
 void copy_update(Tree &pbvh,
                  Image &image,
-                 ImageUser &image_user,
+                 const ImageUser &image_user,
                  const uv_islands::MeshData &mesh_data);
 
 }  // namespace blender::bke::pbvh::pixels

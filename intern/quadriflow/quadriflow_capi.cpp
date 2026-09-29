@@ -6,9 +6,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "config.hpp"
-#include "field-math.hpp"
-#include "loader.hpp"
 #include "optimizer.hpp"
 #include "parametrizer.hpp"
 #include "quadriflow_capi.hpp"
@@ -20,9 +17,7 @@ struct ObjVertex {
   uint32_t n = (uint32_t)-1;
   uint32_t uv = (uint32_t)-1;
 
-  ObjVertex()
-  {
-  }
+  ObjVertex() = default;
 
   ObjVertex(uint32_t pi)
   {
@@ -45,7 +40,7 @@ struct ObjVertexHash {
   }
 };
 
-typedef std::unordered_map<ObjVertex, uint32_t, ObjVertexHash> VertexMap;
+using VertexMap = std::unordered_map<ObjVertex, uint32_t, ObjVertexHash>;
 
 static int check_if_canceled(float progress,
                              void (*update_cb)(void *, float progress, int *cancel),
@@ -192,8 +187,11 @@ void QFLOW_quadriflow_remesh(QuadriflowRemeshData *qrd,
     return;
   }
 
-  /* Compute the final quad geomtry using a maxflow solver */
-  field.ComputeIndexMap();
+  /* Compute the final quad geometry using a maxflow solver */
+  if (!field.ComputeIndexMap()) {
+    /* Error computing the result. */
+    return;
+  }
 
   if (check_if_canceled(0.9f, update_cb, update_cb_data)) {
     return;
@@ -203,8 +201,8 @@ void QFLOW_quadriflow_remesh(QuadriflowRemeshData *qrd,
   qrd->out_totverts = field.O_compact.size();
   qrd->out_totfaces = field.F_compact.size();
 
-  qrd->out_verts = (float *)MEM_malloc_arrayN(qrd->out_totverts, sizeof(float[3]), __func__);
-  qrd->out_faces = (int *)MEM_malloc_arrayN(qrd->out_totfaces, sizeof(int[4]), __func__);
+  qrd->out_verts = MEM_new_array_uninitialized<float>(qrd->out_totverts * 3, __func__);
+  qrd->out_faces = MEM_new_array_uninitialized<int>(qrd->out_totfaces * 4, __func__);
 
   for (int i = 0; i < qrd->out_totverts; i++) {
     auto t = field.O_compact[i] * field.normalize_scale + field.normalize_offset;

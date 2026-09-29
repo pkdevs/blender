@@ -11,9 +11,7 @@
 
 #include <string.h>  // for memcpy
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 namespace Freestyle {
 
@@ -130,9 +128,9 @@ class FrsImage {
    *    The width of the rectangle that will actually be stored.
    *  \param sh:
    *    The height of the rectangle that will actually be stored.
-   *  \param ox:
+   *  \param x:
    *    The x-abscissa of the origin of the rectangle that will actually be stored.
-   *  \param oy:
+   *  \param y:
    *    The x-abscissa of the origin of the rectangle that will actually be stored.
    *  \param copy:
    *    If true, the array is copied, otherwise the pointer is copied
@@ -159,9 +157,7 @@ class FrsImage {
   uint _Ox;  // origin of the stored part
   uint _Oy;  // origin of the stored part
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:FrsImage")
-#endif
 };
 
 //

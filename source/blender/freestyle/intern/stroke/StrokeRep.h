@@ -13,12 +13,14 @@
 
 #include "../geometry/Geom.h"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 #include "DNA_material_types.h"  // for MAX_MTEX
+
+namespace blender {
 struct bNodeTree;
+struct MTex;
+}  // namespace blender
 
 namespace Freestyle {
 
@@ -113,9 +115,7 @@ class StrokeVertexRep {
   Vec3r _color;
   float _alpha;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:StrokeVertexRep")
-#endif
 };
 
 class Strip {
@@ -156,9 +156,7 @@ class Strip {
     return _vertices;
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Strip")
-#endif
 };
 
 class StrokeRep {
@@ -168,9 +166,9 @@ class StrokeRep {
   Stroke::MediumType _strokeType;
   uint _textureId;
   float _textureStep;
-  MTex *_mtex[MAX_MTEX];
-  bNodeTree *_nodeTree;
-  Material *_material;
+  blender::MTex *_mtex[MAX_MTEX];
+  blender::bNodeTree *_nodeTree;
+  blender::Material *_material;
   bool _hasTex;
 
   // float _averageTextureAlpha;
@@ -198,17 +196,17 @@ class StrokeRep {
     return _textureId;
   }
 
-  inline MTex *getMTex(int idx) const
+  inline blender::MTex *getMTex(int idx) const
   {
     return _mtex[idx];
   }
 
-  inline Material *getMaterial() const
+  inline blender::Material *getMaterial() const
   {
     return _material;
   }
 
-  inline bNodeTree *getNodeTree() const
+  inline blender::bNodeTree *getNodeTree() const
   {
     return _nodeTree;
   }
@@ -244,20 +242,18 @@ class StrokeRep {
     _textureId = textureId;
   }
 
-  inline void setMaterial(Material *mat)
+  inline void setMaterial(blender::Material *mat)
   {
     _material = mat;
   }
 #if 0
-  inline void setMTex(int idx, MTex *mtex_ptr)
+  inline void setMTex(int idx, blender::MTex *mtex_ptr)
   {
     _mtex[idx] = mtex_ptr;
   }
 #endif
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:StrokeRep")
-#endif
 };
 
 } /* namespace Freestyle */

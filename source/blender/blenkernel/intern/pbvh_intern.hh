@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "BKE_pbvh.hh"
+#include "BKE_paint_bvh.hh"
 
 /** \file
  * \ingroup bke
@@ -15,14 +15,14 @@
 namespace blender::bke::pbvh {
 
 bool ray_face_intersection_quad(const float3 &ray_start,
-                                IsectRayPrecalc *isect_precalc,
+                                const IsectRayPrecalc *isect_precalc,
                                 const float3 &t0,
                                 const float3 &t1,
                                 const float3 &t2,
                                 const float3 &t3,
                                 float *depth);
 bool ray_face_intersection_tri(const float3 &ray_start,
-                               IsectRayPrecalc *isect_precalc,
+                               const IsectRayPrecalc *isect_precalc,
                                const float3 &t0,
                                const float3 &t1,
                                const float3 &t2,
@@ -46,26 +46,13 @@ bool ray_face_nearest_tri(const float3 &ray_start,
 
 /* pbvh_bmesh.cc */
 
-bool bmesh_node_raycast(blender::bke::pbvh::BMeshNode &node,
-                        const float3 &ray_start,
-                        const float3 &ray_normal,
-                        IsectRayPrecalc *isect_precalc,
-                        float *dist,
-                        bool use_original,
-                        PBVHVertRef *r_active_vertex,
-                        float *r_face_normal);
-bool bmesh_node_nearest_to_ray(blender::bke::pbvh::BMeshNode &node,
+bool bmesh_node_nearest_to_ray(bke::pbvh::BMeshNode &node,
                                const float3 &ray_start,
                                const float3 &ray_normal,
-                               float *depth,
+                               float *r_depth,
                                float *dist_sq,
                                bool use_original);
 
 void bmesh_normals_update(Tree &pbvh, const IndexMask &nodes_to_update);
-
-/* pbvh_pixels.hh */
-
-void node_pixels_free(blender::bke::pbvh::Node *node);
-void pixels_free(blender::bke::pbvh::Tree *pbvh);
 
 }  // namespace blender::bke::pbvh

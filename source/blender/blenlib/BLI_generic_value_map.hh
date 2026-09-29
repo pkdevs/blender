@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #pragma once
 
 #include "BLI_generic_pointer.hh"
@@ -44,7 +48,7 @@ template<typename Key> class GValueMap {
   template<typename ForwardKey> void add_new_by_move(ForwardKey &&key, GMutablePointer value)
   {
     const CPPType &type = *value.type();
-    void *buffer = allocator_.allocate(type.size(), type.alignment());
+    void *buffer = allocator_.allocate(type);
     type.move_construct(value.get(), buffer);
     values_.add_new_as(std::forward<ForwardKey>(key), GMutablePointer{type, buffer});
   }
@@ -54,7 +58,7 @@ template<typename Key> class GValueMap {
   template<typename ForwardKey> void add_new_by_copy(ForwardKey &&key, GPointer value)
   {
     const CPPType &type = *value.type();
-    void *buffer = allocator_.allocate(type.size(), type.alignment());
+    void *buffer = allocator_.allocate(type);
     type.copy_construct(value.get(), buffer);
     values_.add_new_as(std::forward<ForwardKey>(key), GMutablePointer{type, buffer});
   }
@@ -99,7 +103,7 @@ template<typename Key> class GValueMap {
     GMutablePointer value = values_.lookup_as(key);
     BLI_assert(value.is_type<T>());
     BLI_assert(value.get() != nullptr);
-    return *(const T *)value.get();
+    return *static_cast<const T *>(value.get());
   }
 
   template<typename ForwardKey> bool contains(const ForwardKey &key) const

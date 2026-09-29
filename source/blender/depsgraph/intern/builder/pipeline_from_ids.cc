@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup depsgraph
+ */
+
 #include "pipeline_from_ids.h"
 
 #include "DNA_layer_types.h"
@@ -76,17 +80,17 @@ class DepsgraphFromIDsRelationBuilder : public DepsgraphRelationBuilder {
 
 }  // namespace
 
-FromIDsBuilderPipeline::FromIDsBuilderPipeline(::Depsgraph *graph, Span<ID *> ids)
+FromIDsBuilderPipeline::FromIDsBuilderPipeline(blender::Depsgraph *graph, Span<ID *> ids)
     : AbstractBuilderPipeline(graph), ids_(ids)
 {
 }
 
-unique_ptr<DepsgraphNodeBuilder> FromIDsBuilderPipeline::construct_node_builder()
+std::unique_ptr<DepsgraphNodeBuilder> FromIDsBuilderPipeline::construct_node_builder()
 {
   return std::make_unique<DepsgraphFromIDsNodeBuilder>(bmain_, deg_graph_, &builder_cache_, ids_);
 }
 
-unique_ptr<DepsgraphRelationBuilder> FromIDsBuilderPipeline::construct_relation_builder()
+std::unique_ptr<DepsgraphRelationBuilder> FromIDsBuilderPipeline::construct_relation_builder()
 {
   return std::make_unique<DepsgraphFromIDsRelationBuilder>(
       bmain_, deg_graph_, &builder_cache_, ids_);

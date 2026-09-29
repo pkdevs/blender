@@ -17,12 +17,15 @@
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "BLT_translation.hh"
 
+#include "BKE_brush.hh"
 #include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 
 #include "ED_paint.hh"
 #include "ED_view3d.hh"
@@ -37,8 +40,10 @@
 
 #include "paint_intern.hh"
 
+namespace blender {
+
 #define PAINT_CURVE_SELECT_THRESHOLD 40.0f
-#define PAINT_CURVE_POINT_SELECT(pcp, i) (*(&pcp->bez.f1 + i) = SELECT)
+#define PAINT_CURVE_POINT_SELECT(pcp, i) (*(&pcp->bez.f1 + i) = BEZT_FLAG_SELECT)
 
 bool paint_curve_poll(bContext *C)
 {
@@ -46,7 +51,7 @@ bool paint_curve_poll(bContext *C)
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
   SpaceImage *sima;
 
-  if (rv3d && !(ob && ((ob->mode & (OB_MODE_ALL_PAINT | OB_MODE_SCULPT_CURVES)) != 0))) {
+  if (rv3d && !(ob && ((ob->mode & (OB_MODE_ALL_PAINT_MESH | OB_MODE_SCULPT_CURVES)) != 0))) {
     return false;
   }
 
@@ -59,7 +64,7 @@ bool paint_curve_poll(bContext *C)
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
 
-  if (brush && (brush->flag & BRUSH_CURVE)) {
+  if (brush && (brush->stroke_method == BRUSH_STROKE_CURVE)) {
     return true;
   }
 
@@ -144,14 +149,22 @@ static char paintcurve_point_side_index(const BezTriple *bezt,
 
 /******************* Operators *********************************/
 
-static int paintcurve_new_exec(bContext *C, wmOperator * /*op*/)
+static PaintCurve *paintcurve_for_brush_add(Main *bmain, const char *name, const Brush *brush)
+{
+  PaintCurve *curve = BKE_paint_curve_add(bmain, name);
+  BKE_id_move_to_same_lib(*bmain, curve->id, brush->id);
+  return curve;
+}
+
+static wmOperatorStatus paintcurve_new_exec(bContext *C, wmOperator * /*op*/)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
   Main *bmain = CTX_data_main(C);
 
   if (brush) {
-    brush->paint_curve = BKE_paint_curve_add(bmain, DATA_("PaintCurve"));
+    brush->paint_curve = paintcurve_for_brush_add(bmain, DATA_("PaintCurve"), brush);
+    BKE_brush_tag_unsaved_changes(brush);
   }
 
   WM_event_add_notifier(C, NC_PAINTCURVE | NA_ADDED, nullptr);
@@ -166,7 +179,7 @@ void PAINTCURVE_OT_new(wmOperatorType *ot)
   ot->description = "Add new paint curve";
   ot->idname = "PAINTCURVE_OT_new";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = paintcurve_new_exec;
   ot->poll = paint_curve_poll;
 
@@ -185,13 +198,12 @@ static void paintcurve_point_add(bContext *C, wmOperator *op, const int loc[2])
 
   PaintCurve *pc = br->paint_curve;
   if (!pc) {
-    br->paint_curve = pc = BKE_paint_curve_add(bmain, DATA_("PaintCurve"));
+    br->paint_curve = pc = paintcurve_for_brush_add(bmain, DATA_("PaintCurve"), br);
   }
 
   ED_paintcurve_undo_push_begin(op->type->name);
 
-  PaintCurvePoint *pcp = static_cast<PaintCurvePoint *>(
-      MEM_mallocN((pc->tot_points + 1) * sizeof(PaintCurvePoint), "PaintCurvePoint"));
+  PaintCurvePoint *pcp = MEM_new_array<PaintCurvePoint>((pc->tot_points + 1), "PaintCurvePoint");
   int add_index = pc->add_index;
 
   if (pc->points) {
@@ -204,39 +216,42 @@ static void paintcurve_point_add(bContext *C, wmOperator *op, const int loc[2])
              (pc->tot_points - add_index) * sizeof(PaintCurvePoint));
     }
 
-    MEM_freeN(pc->points);
+    MEM_delete(pc->points);
   }
   pc->points = pcp;
   pc->tot_points++;
 
   /* initialize new point */
-  memset(&pcp[add_index], 0, sizeof(PaintCurvePoint));
+  pcp[add_index] = PaintCurvePoint{};
   copy_v3_v3(pcp[add_index].bez.vec[0], vec);
   copy_v3_v3(pcp[add_index].bez.vec[1], vec);
   copy_v3_v3(pcp[add_index].bez.vec[2], vec);
 
   /* last step, clear selection from all bezier handles expect the next */
   for (int i = 0; i < pc->tot_points; i++) {
-    pcp[i].bez.f1 = pcp[i].bez.f2 = pcp[i].bez.f3 = 0;
+    pcp[i].bez.f1 = pcp[i].bez.f2 = pcp[i].bez.f3 = eBezTriple_Flag{};
   }
 
   BKE_paint_curve_clamp_endpoint_add_index(pc, add_index);
 
   if (pc->add_index != 0) {
-    pcp[add_index].bez.f3 = SELECT;
+    pcp[add_index].bez.f3 = BEZT_FLAG_SELECT;
     pcp[add_index].bez.h2 = HD_ALIGN;
   }
   else {
-    pcp[add_index].bez.f1 = SELECT;
+    pcp[add_index].bez.f1 = BEZT_FLAG_SELECT;
     pcp[add_index].bez.h1 = HD_ALIGN;
   }
 
   ED_paintcurve_undo_push_end(C);
+  BKE_brush_tag_unsaved_changes(br);
 
   WM_paint_cursor_tag_redraw(window, region);
 }
 
-static int paintcurve_add_point_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus paintcurve_add_point_invoke(bContext *C,
+                                                    wmOperator *op,
+                                                    const wmEvent *event)
 {
   const int loc[2] = {event->mval[0], event->mval[1]};
   paintcurve_point_add(C, op, loc);
@@ -244,7 +259,7 @@ static int paintcurve_add_point_invoke(bContext *C, wmOperator *op, const wmEven
   return OPERATOR_FINISHED;
 }
 
-static int paintcurve_add_point_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus paintcurve_add_point_exec(bContext *C, wmOperator *op)
 {
   int loc[2];
 
@@ -264,7 +279,7 @@ void PAINTCURVE_OT_add_point(wmOperatorType *ot)
   ot->description = ot->name;
   ot->idname = "PAINTCURVE_OT_add_point";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = paintcurve_add_point_invoke;
   ot->exec = paintcurve_add_point_exec;
   ot->poll = paint_curve_poll;
@@ -285,7 +300,7 @@ void PAINTCURVE_OT_add_point(wmOperatorType *ot)
                      SHRT_MAX);
 }
 
-static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *br = BKE_paint_brush(paint);
@@ -307,7 +322,7 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 
   for (i = 0, pcp = pc->points; i < pc->tot_points; i++, pcp++) {
     if (BEZT_ISSEL_ANY(&pcp->bez)) {
-      pcp->bez.f2 |= DELETE_TAG;
+      pcp->bez.f2 |= eBezTriple_Flag(DELETE_TAG);
       tot_del++;
     }
   }
@@ -317,8 +332,7 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
     int new_tot = pc->tot_points - tot_del;
     PaintCurvePoint *points_new = nullptr;
     if (new_tot > 0) {
-      points_new = static_cast<PaintCurvePoint *>(
-          MEM_mallocN(new_tot * sizeof(PaintCurvePoint), "PaintCurvePoint"));
+      points_new = MEM_new_array<PaintCurvePoint>(new_tot, "PaintCurvePoint");
     }
 
     for (i = 0, pcp = pc->points; i < pc->tot_points; i++, pcp++) {
@@ -335,7 +349,7 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
         pc->add_index = j;
       }
     }
-    MEM_freeN(pc->points);
+    MEM_delete(pc->points);
 
     pc->points = points_new;
     pc->tot_points = new_tot;
@@ -344,6 +358,7 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 #undef DELETE_TAG
 
   ED_paintcurve_undo_push_end(C);
+  BKE_brush_tag_unsaved_changes(br);
 
   WM_paint_cursor_tag_redraw(window, region);
 
@@ -357,7 +372,7 @@ void PAINTCURVE_OT_delete_point(wmOperatorType *ot)
   ot->description = ot->name;
   ot->idname = "PAINTCURVE_OT_delete_point";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = paintcurve_delete_point_exec;
   ot->poll = paint_curve_poll;
 
@@ -386,20 +401,22 @@ static bool paintcurve_point_select(
 
   if (toggle) {
     PaintCurvePoint *pcp;
-    char select = 0;
+    eBezTriple_Flag select = eBezTriple_Flag{};
     bool selected = false;
 
     pcp = pc->points;
 
     for (i = 0; i < pc->tot_points; i++) {
-      if (pcp[i].bez.f1 || pcp[i].bez.f2 || pcp[i].bez.f3) {
+      if ((pcp[i].bez.f1 & BEZT_FLAG_SELECT) || (pcp[i].bez.f2 & BEZT_FLAG_SELECT) ||
+          (pcp[i].bez.f3 & BEZT_FLAG_SELECT))
+      {
         selected = true;
         break;
       }
     }
 
     if (!selected) {
-      select = SELECT;
+      select = BEZT_FLAG_SELECT;
     }
 
     for (i = 0; i < pc->tot_points; i++) {
@@ -417,26 +434,26 @@ static bool paintcurve_point_select(
 
       if (selflag == SEL_F2) {
         if (extend) {
-          pcp->bez.f2 ^= SELECT;
+          pcp->bez.f2 ^= BEZT_FLAG_SELECT;
         }
         else {
-          pcp->bez.f2 |= SELECT;
+          pcp->bez.f2 |= BEZT_FLAG_SELECT;
         }
       }
       else if (selflag == SEL_F1) {
         if (extend) {
-          pcp->bez.f1 ^= SELECT;
+          pcp->bez.f1 ^= BEZT_FLAG_SELECT;
         }
         else {
-          pcp->bez.f1 |= SELECT;
+          pcp->bez.f1 |= BEZT_FLAG_SELECT;
         }
       }
       else if (selflag == SEL_F3) {
         if (extend) {
-          pcp->bez.f3 ^= SELECT;
+          pcp->bez.f3 ^= BEZT_FLAG_SELECT;
         }
         else {
-          pcp->bez.f3 |= SELECT;
+          pcp->bez.f3 |= BEZT_FLAG_SELECT;
         }
       }
     }
@@ -444,7 +461,7 @@ static bool paintcurve_point_select(
     /* clear selection for unselected points if not extending and if a point has been selected */
     if (!extend && pcp) {
       for (i = 0; i < pc->tot_points; i++) {
-        pc->points[i].bez.f1 = pc->points[i].bez.f2 = pc->points[i].bez.f3 = 0;
+        pc->points[i].bez.f1 = pc->points[i].bez.f2 = pc->points[i].bez.f3 = eBezTriple_Flag{};
 
         if ((pc->points + i) == pcp) {
           char index = paintcurve_point_co_index(selflag);
@@ -466,7 +483,9 @@ static bool paintcurve_point_select(
   return true;
 }
 
-static int paintcurve_select_point_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus paintcurve_select_point_invoke(bContext *C,
+                                                       wmOperator *op,
+                                                       const wmEvent *event)
 {
   const int loc[2] = {event->mval[0], event->mval[1]};
   bool toggle = RNA_boolean_get(op->ptr, "toggle");
@@ -478,7 +497,7 @@ static int paintcurve_select_point_invoke(bContext *C, wmOperator *op, const wmE
   return OPERATOR_CANCELLED;
 }
 
-static int paintcurve_select_point_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus paintcurve_select_point_exec(bContext *C, wmOperator *op)
 {
   int loc[2];
 
@@ -503,7 +522,7 @@ void PAINTCURVE_OT_select(wmOperatorType *ot)
   ot->description = "Select a paint curve point";
   ot->idname = "PAINTCURVE_OT_select";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = paintcurve_select_point_invoke;
   ot->exec = paintcurve_select_point_exec;
   ot->poll = paint_curve_poll;
@@ -537,7 +556,7 @@ struct PointSlideData {
   bool align;
 };
 
-static int paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   const float loc_fl[2] = {float(event->mval[0]), float(event->mval[1])};
@@ -570,8 +589,7 @@ static int paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *e
   if (pcp) {
     ARegion *region = CTX_wm_region(C);
     wmWindow *window = CTX_wm_window(C);
-    PointSlideData *psd = static_cast<PointSlideData *>(
-        MEM_mallocN(sizeof(PointSlideData), "PointSlideData"));
+    PointSlideData *psd = MEM_new_uninitialized<PointSlideData>("PointSlideData");
     copy_v2_v2_int(psd->initial_loc, event->mval);
     psd->event = event->type;
     psd->pcp = pcp;
@@ -584,12 +602,13 @@ static int paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *e
 
     /* first, clear all selection from points */
     for (i = 0; i < pc->tot_points; i++) {
-      pc->points[i].bez.f1 = pc->points[i].bez.f3 = pc->points[i].bez.f2 = 0;
+      pc->points[i].bez.f1 = pc->points[i].bez.f3 = pc->points[i].bez.f2 = eBezTriple_Flag{};
     }
 
     /* only select the active point */
     PAINT_CURVE_POINT_SELECT(pcp, psd->select);
     BKE_paint_curve_clamp_endpoint_add_index(pc, pcp - pc->points);
+    BKE_brush_tag_unsaved_changes(br);
 
     WM_event_add_modal_handler(C, op);
     WM_paint_cursor_tag_redraw(window, region);
@@ -599,12 +618,12 @@ static int paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *e
   return OPERATOR_PASS_THROUGH;
 }
 
-static int paintcurve_slide_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus paintcurve_slide_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   PointSlideData *psd = static_cast<PointSlideData *>(op->customdata);
 
   if (event->type == psd->event && event->val == KM_RELEASE) {
-    MEM_freeN(psd);
+    MEM_delete(psd);
     ED_paintcurve_undo_push_begin(op->type->name);
     ED_paintcurve_undo_push_end(C);
     return OPERATOR_FINISHED;
@@ -649,7 +668,7 @@ void PAINTCURVE_OT_slide(wmOperatorType *ot)
   ot->description = "Select and slide paint curve point";
   ot->idname = "PAINTCURVE_OT_slide";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = paintcurve_slide_invoke;
   ot->modal = paintcurve_slide_modal;
   ot->poll = paint_curve_poll;
@@ -664,7 +683,7 @@ void PAINTCURVE_OT_slide(wmOperatorType *ot)
       ot->srna, "select", true, "Select", "Attempt to select a point handle before transform");
 }
 
-static int paintcurve_draw_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus paintcurve_draw_exec(bContext *C, wmOperator * /*op*/)
 {
   PaintMode mode = BKE_paintmode_get_active_from_context(C);
   const char *name;
@@ -686,17 +705,11 @@ static int paintcurve_draw_exec(bContext *C, wmOperator * /*op*/)
     case PaintMode::SculptCurves:
       name = "SCULPT_CURVES_OT_brush_stroke";
       break;
-    case PaintMode::GPencil:
-      name = "GREASE_PENCIL_OT_brush_stroke";
-      break;
-    case PaintMode::SculptGreasePencil:
-      name = "GREASE_PENCIL_OT_sculpt_paint";
-      break;
     default:
       return OPERATOR_PASS_THROUGH;
   }
 
-  return WM_operator_name_call(C, name, WM_OP_INVOKE_DEFAULT, nullptr, nullptr);
+  return WM_operator_name_call(C, name, wm::OpCallContext::InvokeDefault, nullptr, nullptr);
 }
 
 void PAINTCURVE_OT_draw(wmOperatorType *ot)
@@ -706,7 +719,7 @@ void PAINTCURVE_OT_draw(wmOperatorType *ot)
   ot->description = "Draw curve";
   ot->idname = "PAINTCURVE_OT_draw";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = paintcurve_draw_exec;
   ot->poll = paint_curve_poll;
 
@@ -714,7 +727,9 @@ void PAINTCURVE_OT_draw(wmOperatorType *ot)
   ot->flag = OPTYPE_UNDO;
 }
 
-static int paintcurve_cursor_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
+static wmOperatorStatus paintcurve_cursor_invoke(bContext *C,
+                                                 wmOperator * /*op*/,
+                                                 const wmEvent *event)
 {
   PaintMode mode = BKE_paintmode_get_active_from_context(C);
 
@@ -728,7 +743,7 @@ static int paintcurve_cursor_invoke(bContext *C, wmOperator * /*op*/, const wmEv
         return OPERATOR_CANCELLED;
       }
 
-      UI_view2d_region_to_view(
+      ui::view2d_region_to_view(
           &region->v2d, event->mval[0], event->mval[1], &location[0], &location[1]);
       copy_v2_v2(sima->cursor, location);
       WM_event_add_notifier(C, NC_SPACE | ND_SPACE_IMAGE, nullptr);
@@ -749,10 +764,12 @@ void PAINTCURVE_OT_cursor(wmOperatorType *ot)
   ot->description = "Place cursor";
   ot->idname = "PAINTCURVE_OT_cursor";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = paintcurve_cursor_invoke;
   ot->poll = paint_curve_poll;
 
   /* flags */
   ot->flag = 0;
 }
+
+}  // namespace blender

@@ -2,20 +2,22 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#include <stdarg.h>
-#include <stdio.h>
+#include <cstdarg>
+#include <cstdio>
 
 #include <algorithm>
 #include <cctype>
 
-#include "util/foreach.h"
 #include "util/string.h"
-#include "util/windows.h"
+#include "util/types_float4.h"
 
 #ifdef _WIN32
+#  include "util/windows.h"
 #  ifndef vsnprintf
 #    define vsnprintf _vsnprintf
 #  endif
+#else
+#  include <locale.h>
 #endif /* _WIN32 */
 
 CCL_NAMESPACE_BEGIN
@@ -24,12 +26,12 @@ string string_printf(const char *format, ...)
 {
   vector<char> str(128, 0);
 
-  while (1) {
+  while (true) {
     va_list args;
     int result;
 
     va_start(args, format);
-    result = vsnprintf(&str[0], str.size(), format, args);
+    result = vsnprintf(str.data(), str.size(), format, args);
     va_end(args);
 
     if (result == -1) {
@@ -42,13 +44,13 @@ string string_printf(const char *format, ...)
       str.resize(str.size() * 2, 0);
       continue;
     }
-    else if (result >= (int)str.size()) {
+    if (result >= (int)str.size()) {
       /* not enough space */
       str.resize(result + 1, 0);
       continue;
     }
 
-    return string(&str[0]);
+    return string(str.data());
   }
 }
 
@@ -72,7 +74,8 @@ void string_split(vector<string> &tokens,
                   const string &separators,
                   bool skip_empty_tokens)
 {
-  size_t token_start = 0, token_length = 0;
+  size_t token_start = 0;
+  size_t token_length = 0;
   for (size_t i = 0; i < str.size(); ++i) {
     const char ch = str[i];
     if (separators.find(ch) == string::npos) {
@@ -86,7 +89,7 @@ void string_split(vector<string> &tokens,
        * append current token to the list.
        */
       if (!skip_empty_tokens || token_length > 0) {
-        string token = str.substr(token_start, token_length);
+        const string token = str.substr(token_start, token_length);
         tokens.push_back(token);
       }
       token_start = i + 1;
@@ -95,7 +98,7 @@ void string_split(vector<string> &tokens,
   }
   /* Append token from the tail of the string if exists. */
   if (token_length) {
-    string token = str.substr(token_start, token_length);
+    const string token = str.substr(token_start, token_length);
     tokens.push_back(token);
   }
 }
@@ -103,23 +106,34 @@ void string_split(vector<string> &tokens,
 bool string_startswith(const string_view s, const string_view start)
 {
   const size_t len = start.size();
-
   if (len > s.size()) {
     return false;
   }
 
-  return strncmp(s.c_str(), start.data(), len) == 0;
+  for (size_t i = 0; i < len; i++) {
+    if (s[i] != start[i]) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool string_endswith(const string_view s, const string_view end)
 {
   const size_t len = end.size();
-
   if (len > s.size()) {
     return false;
   }
 
-  return strncmp(s.c_str() + s.size() - len, end.data(), len) == 0;
+  const size_t offset = s.size() - len;
+  for (size_t i = 0; i < len; i++) {
+    if (s[offset + i] != end[i]) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 string string_strip(const string &s)
@@ -132,7 +146,8 @@ string string_strip(const string &s)
 
 void string_replace(string &haystack, const string &needle, const string &other)
 {
-  size_t i = 0, index;
+  size_t i = 0;
+  size_t index;
   while ((index = haystack.find(needle, i)) != string::npos) {
     haystack.replace(index, needle.size(), other);
     i = index + other.size();
@@ -172,14 +187,26 @@ string string_from_bool(bool var)
   if (var) {
     return "True";
   }
-  else {
-    return "False";
+  return "False";
+}
+
+string string_hex(const uint8_t *data, const size_t size)
+{
+  string result;
+  for (size_t i = 0; i < size; i++) {
+    result += string_printf("%x", data[i]);
   }
+  return result;
 }
 
 string to_string(const char *str)
 {
   return string(str);
+}
+
+string to_string(const float2 &v)
+{
+  return string_printf("%f,%f", v.x, v.y);
 }
 
 string to_string(const float4 &v)
@@ -194,37 +221,92 @@ string string_to_lower(const string &s)
   return r;
 }
 
-/* Wide char strings helpers for Windows. */
+string string_remove_gpu_from_cpu_name(const string &s)
+{
+  if (s.find("AMD") == std::string::npos) {
+    return s;
+  }
 
-#ifdef _WIN32
+  size_t pos = s.find("w/");
+  if (pos == std::string::npos) {
+    pos = s.find("with");
+  }
+
+  if (pos != std::string::npos) {
+    return string_strip(s.substr(0, pos));
+  }
+
+  return s;
+}
+
+/* Wide char strings helpers for Windows. */
 
 wstring string_to_wstring(const string &str)
 {
-  const int length_wc = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), NULL, 0);
+#ifdef _WIN32
+  const int length_wc = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), nullptr, 0);
   wstring str_wc(length_wc, 0);
   MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), &str_wc[0], length_wc);
+#else
+  locale_t new_locale = newlocale(LC_CTYPE_MASK, "en_US.UTF-8", (locale_t)0);
+  locale_t old_locale = new_locale ? uselocale(new_locale) : (locale_t)0;
+  mbstate_t state = {};
+  const char *str_p = str.c_str();
+  const size_t length_wc = mbsrtowcs(nullptr, &str_p, 0, &state);
+  wstring str_wc;
+  if (length_wc != (size_t)-1) {
+    str_wc.resize(length_wc, 0);
+    mbsrtowcs(str_wc.data(), &str_p, str_wc.size(), &state);
+  }
+  if (new_locale) {
+    uselocale(old_locale);
+    freelocale(new_locale);
+  }
+#endif
   return str_wc;
 }
 
 string string_from_wstring(const wstring &str)
 {
-  int length_mb = WideCharToMultiByte(CP_UTF8, 0, str.c_str(), str.size(), NULL, 0, NULL, NULL);
+#ifdef _WIN32
+  int length_mb = WideCharToMultiByte(
+      CP_UTF8, 0, str.c_str(), str.size(), nullptr, 0, nullptr, nullptr);
   string str_mb(length_mb, 0);
-  WideCharToMultiByte(CP_UTF8, 0, str.c_str(), str.size(), &str_mb[0], length_mb, NULL, NULL);
+  WideCharToMultiByte(
+      CP_UTF8, 0, str.c_str(), str.size(), &str_mb[0], length_mb, nullptr, nullptr);
+#else
+  locale_t new_locale = newlocale(LC_CTYPE_MASK, "en_US.UTF-8", (locale_t)0);
+  locale_t old_locale = new_locale ? uselocale(new_locale) : (locale_t)0;
+  const wchar_t *str_p = str.c_str();
+  mbstate_t state = {};
+  const size_t length_mb = wcsrtombs(nullptr, &str_p, 0, &state);
+  string str_mb;
+  if (length_mb != (size_t)-1) {
+    str_mb.resize(length_mb, 0);
+    wcsrtombs(str_mb.data(), &str_p, str_mb.size(), &state);
+  }
+  if (new_locale) {
+    uselocale(old_locale);
+    freelocale(new_locale);
+  }
+#endif
   return str_mb;
 }
 
+#ifdef _WIN32
+
 string string_to_ansi(const string &str)
 {
-  const int length_wc = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), NULL, 0);
+  const int length_wc = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), nullptr, 0);
   wstring str_wc(length_wc, 0);
   MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), &str_wc[0], length_wc);
 
   int length_mb = WideCharToMultiByte(
-      CP_ACP, 0, str_wc.c_str(), str_wc.size(), NULL, 0, NULL, NULL);
+      CP_ACP, 0, str_wc.c_str(), str_wc.size(), nullptr, 0, nullptr, nullptr);
 
   string str_mb(length_mb, 0);
-  WideCharToMultiByte(CP_ACP, 0, str_wc.c_str(), str_wc.size(), &str_mb[0], length_mb, NULL, NULL);
+  WideCharToMultiByte(
+      CP_ACP, 0, str_wc.c_str(), str_wc.size(), &str_mb[0], length_mb, nullptr, nullptr);
 
   return str_mb;
 }
@@ -247,9 +329,7 @@ string string_human_readable_size(size_t size)
   if (*suffix != 'B') {
     return string_printf("%.2f%c", double(size * 1024 + r) / 1024.0, *suffix);
   }
-  else {
-    return string_printf("%zu", size);
-  }
+  return string_printf("%zuB", size);
 }
 
 string string_human_readable_number(size_t num)
@@ -266,7 +346,8 @@ string string_human_readable_number(size_t num)
 
   int i = -1;
   while (num) {
-    if (++i && i % 3 == 0) {
+    i++;
+    if (i && i % 3 == 0) {
       *(--p) = ',';
     }
 

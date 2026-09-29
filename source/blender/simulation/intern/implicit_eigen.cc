@@ -6,8 +6,6 @@
  * \ingroup sim
  */
 
-#include "implicit.h"
-
 #ifdef IMPLICIT_SOLVER_EIGEN
 
 // #define USE_EIGEN_CORE
@@ -53,8 +51,8 @@ extern "C" {
 #  include "DNA_scene_types.h"
 #  include "DNA_texture_types.h"
 
-#  include "BLI_linklist.h"
-#  include "BLI_utildefines.h"
+#  include "BLI_linklist.hh"
+#  include "BLI_utildefines.hh"
 
 #  include "BKE_cloth.hh"
 #  include "BKE_collision.h"
@@ -132,8 +130,9 @@ class fMatrix : public Eigen::Matrix3f {
   }
 };
 
-/* Extension of dense Eigen vectors,
- * providing 3-float block access for blenlib math functions
+/**
+ * Extension of dense Eigen vectors,
+ * providing 3-float block access for `blenlib` math functions
  */
 class lVector : public Eigen::VectorXf {
  public:

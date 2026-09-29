@@ -7,21 +7,24 @@
 
 #include "BLI_map.hh"
 
+namespace blender {
+
 struct Bone;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 class USDArmatureWriter : public USDAbstractWriter {
  public:
   USDArmatureWriter(const USDExporterContext &ctx);
 
  protected:
-  virtual void do_write(HierarchyContext &context) override;
+  void do_write(HierarchyContext &context) override;
 
-  virtual bool check_is_animated(const HierarchyContext &context) const override;
+  bool check_is_animated(const HierarchyContext &context) const override;
 
  private:
   Map<StringRef, const Bone *> deform_map_;
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

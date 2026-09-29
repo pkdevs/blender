@@ -12,10 +12,6 @@
 
 #include "../../stroke/ChainingIterators.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject ChainPredicateIterator_Type;
@@ -24,15 +20,11 @@ extern PyTypeObject ChainPredicateIterator_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&ChainPredicateIterator_Type))
 
 /*---------------------------Python BPy_ChainPredicateIterator structure definition----------*/
-typedef struct {
+struct BPy_ChainPredicateIterator {
   BPy_ChainingIterator py_c_it;
   Freestyle::ChainPredicateIterator *cp_it;
   PyObject *upred;
   PyObject *bpred;
-} BPy_ChainPredicateIterator;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

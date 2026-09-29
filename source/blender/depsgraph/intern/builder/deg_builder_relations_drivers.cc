@@ -11,10 +11,14 @@
 #include "intern/builder/deg_builder_relations_drivers.h"
 
 #include <cstring>
+#include <deque>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DNA_anim_types.h"
+
+#include "RNA_access.hh"
+#include "RNA_path.hh"
 
 #include "BKE_anim_data.hh"
 
@@ -55,7 +59,7 @@ bool DriverDescriptor::determine_relations_needed()
     return true;
   }
 
-  /* Drivers on Booleans and Enums (when used as bitflags) can write to the same memory location,
+  /* Drivers on Booleans and Enums (when used as bit-flags) can write to the same memory location,
    * so they need relations between each other. */
   return ELEM(RNA_property_type(property_rna_), PROP_BOOLEAN, PROP_ENUM);
 }
@@ -83,26 +87,28 @@ OperationKey DriverDescriptor::depsgraph_key() const
   return OperationKey(id_ptr_->owner_id,
                       NodeType::PARAMETERS,
                       OperationCode::DRIVER,
-                      fcu_->rna_path,
+                      fcu_->rna_path().c_str(),
                       fcu_->array_index);
 }
 
 void DriverDescriptor::split_rna_path()
 {
-  const char *last_dot = strrchr(fcu_->rna_path, '.');
+  const StringRefNull rna_path = fcu_->rna_path();
+  const char *last_dot = strrchr(rna_path.c_str(), '.');
   if (last_dot == nullptr || last_dot[1] == '\0') {
     rna_prefix = StringRef();
-    rna_suffix = StringRef(fcu_->rna_path);
+    rna_suffix = rna_path;
     return;
   }
 
-  rna_prefix = StringRef(fcu_->rna_path, last_dot);
+  rna_prefix = StringRef(rna_path.c_str(), last_dot);
   rna_suffix = StringRef(last_dot + 1);
 }
 
 bool DriverDescriptor::resolve_rna()
 {
-  return RNA_path_resolve_property(id_ptr_, fcu_->rna_path, &pointer_rna_, &property_rna_);
+  return RNA_path_resolve_property(
+      id_ptr_, fcu_->rna_path().c_str(), &pointer_rna_, &property_rna_);
 }
 
 static bool is_reachable(const Node *const from, const Node *const to)
@@ -113,7 +119,7 @@ static bool is_reachable(const Node *const from, const Node *const to)
 
   /* Perform a graph walk from 'to' towards its incoming connections.
    * Walking from 'from' towards its outgoing connections is 10x slower on the Spring rig. */
-  deque<const Node *> queue;
+  std::deque<const Node *> queue;
   Set<const Node *> seen;
   queue.push_back(to);
   while (!queue.empty()) {
@@ -164,16 +170,16 @@ void DepsgraphRelationBuilder::build_driver_relations(IDNode *id_node)
   }
 
   /* Mapping from RNA prefix -> set of driver descriptors: */
-  Map<string, Vector<DriverDescriptor>> driver_groups;
+  Map<std::string, Vector<DriverDescriptor>> driver_groups;
 
   PointerRNA id_ptr = RNA_id_pointer_create(id_orig);
 
-  LISTBASE_FOREACH (FCurve *, fcu, &adt->drivers) {
-    if (fcu->rna_path == nullptr) {
+  for (FCurve &fcu : adt->drivers) {
+    if (fcu.rna_path().is_empty()) {
       continue;
     }
 
-    DriverDescriptor driver_desc(&id_ptr, fcu);
+    DriverDescriptor driver_desc(&id_ptr, &fcu);
     if (!driver_desc.driver_relations_needed()) {
       continue;
     }
@@ -234,6 +240,34 @@ void DepsgraphRelationBuilder::build_driver_relations(IDNode *id_node)
       }
     }
   }
+}
+
+bool data_path_maybe_shared(const ID &id, const StringRef data_path)
+{
+  /* As it is hard to generally detect implicit sharing, this is implemented as
+   * a 'known to not share' list. */
+
+  /* Allow concurrent writes to custom properties. #140706 shows that this
+   * shouldn't be a problem in practice. */
+  if (data_path.startswith("[\"") && data_path.endswith("\"]")) {
+    return false;
+  }
+
+  if (GS(id.name) == ID_OB) {
+    const Object &ob = *reinterpret_cast<const Object *>(&id);
+    const bool is_thread_safe = (ob.type == OB_ARMATURE && data_path.startswith("pose.bones["));
+    return !is_thread_safe;
+  }
+
+  /* Allow concurrent writes to shape-key values. #140706 shows that this
+   * shouldn't be a problem in practice. */
+  if (GS(id.name) == ID_KE) {
+    const bool is_thread_safe = data_path.startswith("key_blocks[") &&
+                                data_path.endswith("].value");
+    return !is_thread_safe;
+  }
+
+  return true;
 }
 
 }  // namespace blender::deg

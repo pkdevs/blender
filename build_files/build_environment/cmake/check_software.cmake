@@ -14,6 +14,7 @@ if(UNIX)
     automake
     bison
     ${_libtoolize_name}
+    flex
     ninja
     pkg-config
     tclsh
@@ -23,7 +24,10 @@ if(UNIX)
   if(APPLE)
     list(APPEND _required_software dos2unix)
   else()
+    list(APPEND _required_software autopoint)
     list(APPEND _required_software patchelf)
+    list(APPEND _required_software help2man)
+    list(APPEND _required_software makeinfo)
   endif()
 
   foreach(_software ${_required_software})
@@ -47,13 +51,13 @@ if(UNIX)
   endif()
 
   if(_software_missing)
-    message(
+    message(WARNING
       "\n"
       "Missing software for building Blender dependencies:\n"
       "  ${_software_missing}\n"
       "\n"
       "On Debian and Ubuntu:\n"
-      "  apt install autoconf automake bison libtool yasm tcl ninja-build meson python3-mako patchelf\n"
+      "  apt install autoconf automake autopoint flex help2man gettext texinfo bison libtool yasm tcl ninja-build meson python3-mako patchelf pkg-config\n"
       "\n"
       "On macOS (with homebrew):\n"
       "  brew install autoconf automake bison dos2unix flex libtool meson ninja pkg-config yasm\n"

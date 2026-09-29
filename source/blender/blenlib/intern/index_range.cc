@@ -2,8 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #include "BLI_index_range.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include <ostream>
 

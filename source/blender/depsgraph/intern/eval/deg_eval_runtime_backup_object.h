@@ -8,20 +8,22 @@
 
 #pragma once
 
+#include <optional>
+
 #include "DNA_object_types.h"
 #include "DNA_session_uid_types.h"
 
 #include "BKE_object_types.hh"
 
-#include "BLI_session_uid.h"
+#include "BLI_map.hh"
 
-#include "intern/depsgraph_type.hh"
 #include "intern/eval/deg_eval_runtime_backup_modifier.h"
-#include "intern/eval/deg_eval_runtime_backup_pose.h"
+
+namespace blender {
 
 struct Object;
 
-namespace blender::deg {
+namespace deg {
 
 struct Depsgraph;
 
@@ -43,11 +45,12 @@ class ObjectRuntimeBackup {
   void restore_pose_channel_runtime_data(Object *object);
 
   bke::ObjectRuntime runtime;
-  optional<LightLinkingRuntime> light_linking_runtime;
+  std::optional<LightLinkingRuntime> light_linking_runtime;
   short base_flag;
   unsigned short base_local_view_bits;
   Map<int, ModifierDataBackup> modifier_runtime_data;
   Map<SessionUID, bPoseChannel_Runtime> pose_channel_runtime_data;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

@@ -10,58 +10,18 @@
 
 #include "DNA_anim_types.h"
 
-#include "BKE_animsys.h"
+#include "BKE_anim_data.hh"
+#include "BKE_animsys.hh"
 
 #include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_types.hh"
 
 #include "intern/depsgraph.hh"
 
 namespace blender::deg {
 
-namespace {
-
-struct AnimatedPropertyStoreCalbackData {
-  AnimationBackup *backup;
-
-  /* ID which needs to be stored.
-   * Is used to check possibly nested IDs which f-curves are pointing to. */
-  ID *id;
-
-  PointerRNA id_pointer_rna;
-};
-
-void animated_property_store_cb(ID *id, FCurve *fcurve, void *data_v)
-{
-  AnimatedPropertyStoreCalbackData *data = reinterpret_cast<AnimatedPropertyStoreCalbackData *>(
-      data_v);
-  if (fcurve->rna_path == nullptr || fcurve->rna_path[0] == '\0') {
-    return;
-  }
-  if (id != data->id) {
-    return;
-  }
-
-  /* Resolve path to the property. */
-  PathResolvedRNA resolved_rna;
-  if (!BKE_animsys_rna_path_resolve(
-          &data->id_pointer_rna, fcurve->rna_path, fcurve->array_index, &resolved_rna))
-  {
-    return;
-  }
-
-  /* Read property value. */
-  float value;
-  if (!BKE_animsys_read_from_rna_path(&resolved_rna, &value)) {
-    return;
-  }
-
-  data->backup->values_backup.append({fcurve->rna_path, fcurve->array_index, value});
-}
-
-}  // namespace
-
-AnimationValueBackup::AnimationValueBackup(const string &rna_path, int array_index, float value)
+AnimationValueBackup::AnimationValueBackup(ParsedRNAPath<> rna_path, int array_index, float value)
     : rna_path(rna_path), array_index(array_index), value(value)
 {
 }
@@ -84,11 +44,32 @@ void AnimationBackup::init_from_id(ID *id)
    * the current version of backup. */
   return;
 
-  AnimatedPropertyStoreCalbackData data;
-  data.backup = this;
-  data.id = id;
-  data.id_pointer_rna = RNA_id_pointer_create(id);
-  BKE_fcurves_id_cb(id, animated_property_store_cb, &data);
+  PointerRNA id_pointer_rna = RNA_id_pointer_create(id);
+  BKE_fcurves_id_cb(id, [&](ID *cb_id, FCurve *fcurve) {
+    const ParsedRNAPathRef rna_path = fcurve->rna_path_parsed();
+    if (rna_path.is_empty()) {
+      return;
+    }
+    if (id != cb_id) {
+      return;
+    }
+
+    /* Resolve path to the property. */
+    PathResolvedRNA resolved_rna;
+    if (!BKE_animsys_rna_path_resolve(
+            &id_pointer_rna, rna_path, fcurve->array_index, &resolved_rna))
+    {
+      return;
+    }
+
+    /* Read property value. */
+    float value;
+    if (!BKE_animsys_read_from_rna_path(&resolved_rna, &value)) {
+      return;
+    }
+
+    this->values_backup.append({rna_path, fcurve->array_index, value});
+  });
 }
 
 void AnimationBackup::restore_to_id(ID *id)
@@ -102,10 +83,8 @@ void AnimationBackup::restore_to_id(ID *id)
      * NOTE: Do it again (after storing), since the sub-data pointers might be
      * changed after copy-on-evaluation. */
     PathResolvedRNA resolved_rna;
-    if (!BKE_animsys_rna_path_resolve(&id_pointer_rna,
-                                      value_backup.rna_path.c_str(),
-                                      value_backup.array_index,
-                                      &resolved_rna))
+    if (!BKE_animsys_rna_path_resolve(
+            &id_pointer_rna, value_backup.rna_path, value_backup.array_index, &resolved_rna))
     {
       return;
     }

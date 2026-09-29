@@ -15,6 +15,8 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+namespace blender {
+
 /* own includes */
 
 static void gizmo_blank_draw(const bContext * /*C*/, wmGizmo * /*gz*/)
@@ -22,12 +24,14 @@ static void gizmo_blank_draw(const bContext * /*C*/, wmGizmo * /*gz*/)
   /* pass */
 }
 
-static int gizmo_blank_invoke(bContext * /*C*/, wmGizmo * /*gz*/, const wmEvent * /*event*/)
+static wmOperatorStatus gizmo_blank_invoke(bContext * /*C*/,
+                                           wmGizmo * /*gz*/,
+                                           const wmEvent * /*event*/)
 {
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int gizmo_blank_test_select(bContext * /*C*/, wmGizmo * /*gz*/, const int[2] /*mval*/)
+static int gizmo_blank_test_select(bContext * /*C*/, wmGizmo * /*gz*/, const int /*mval*/[2])
 {
   return 0;
 }
@@ -41,7 +45,7 @@ static void GIZMO_GT_blank_3d(wmGizmoType *gzt)
   /* identifiers */
   gzt->idname = "GIZMO_GT_blank_3d";
 
-  /* api callbacks */
+  /* API callbacks. */
   gzt->draw = gizmo_blank_draw;
   gzt->invoke = gizmo_blank_invoke;
   gzt->test_select = gizmo_blank_test_select;
@@ -55,3 +59,5 @@ void ED_gizmotypes_blank_3d()
 }
 
 /** \} */
+
+}  // namespace blender

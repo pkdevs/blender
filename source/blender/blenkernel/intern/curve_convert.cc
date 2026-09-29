@@ -9,7 +9,7 @@
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_curve.hh"
 #include "BKE_displist.h"
@@ -19,15 +19,18 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
+namespace blender {
+
 static Curve *curve_from_font_object(Object *object, Depsgraph *depsgraph)
 {
-  Curve *curve = (Curve *)object->data;
-  Curve *new_curve = (Curve *)BKE_id_copy_ex(nullptr, &curve->id, nullptr, LIB_ID_COPY_LOCALIZE);
+  Curve *curve = id_cast<Curve *>(object->data);
+  Curve *new_curve = id_cast<Curve *>(
+      BKE_id_copy_ex(nullptr, &curve->id, nullptr, LIB_ID_COPY_LOCALIZE));
 
-  Object *evaluated_object = DEG_get_evaluated_object(depsgraph, object);
+  Object *evaluated_object = DEG_get_evaluated(depsgraph, object);
   BKE_vfont_to_curve_nubase(evaluated_object, FO_EDIT, &new_curve->nurb);
 
-  new_curve->type = OB_CURVES_LEGACY;
+  new_curve->ob_type = OB_CURVES_LEGACY;
 
   new_curve->flag &= ~CU_3D;
   BKE_curve_dimension_update(new_curve);
@@ -37,9 +40,10 @@ static Curve *curve_from_font_object(Object *object, Depsgraph *depsgraph)
 
 static Curve *curve_from_curve_object(Object *object, Depsgraph *depsgraph, bool apply_modifiers)
 {
-  Object *evaluated_object = DEG_get_evaluated_object(depsgraph, object);
-  Curve *curve = (Curve *)evaluated_object->data;
-  Curve *new_curve = (Curve *)BKE_id_copy_ex(nullptr, &curve->id, nullptr, LIB_ID_COPY_LOCALIZE);
+  Object *evaluated_object = DEG_get_evaluated(depsgraph, object);
+  Curve *curve = id_cast<Curve *>(evaluated_object->data);
+  Curve *new_curve = id_cast<Curve *>(
+      BKE_id_copy_ex(nullptr, &curve->id, nullptr, LIB_ID_COPY_LOCALIZE));
 
   if (apply_modifiers) {
     BKE_curve_calc_modifiers_pre(depsgraph,
@@ -65,3 +69,5 @@ Curve *BKE_curve_new_from_object(Object *object, Depsgraph *depsgraph, bool appl
 
   return curve_from_curve_object(object, depsgraph, apply_modifiers);
 }
+
+}  // namespace blender

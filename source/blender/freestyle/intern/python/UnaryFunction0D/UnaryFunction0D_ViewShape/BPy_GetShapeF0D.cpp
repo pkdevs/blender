@@ -10,10 +10,6 @@
 
 #include "../../../view_map/Functions0D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -35,11 +31,10 @@ PyDoc_STRVAR(
     "   Returns the :class:`freestyle.types.ViewShape` containing the\n"
     "   Interface0D pointed by the Interface0DIterator.\n"
     "\n"
-    "   :arg it: An Interface0DIterator object.\n"
+    "   :param it: An Interface0DIterator object.\n"
     "   :type it: :class:`freestyle.types.Interface0DIterator`\n"
     "   :return: The ViewShape containing the pointed Interface0D.\n"
     "   :rtype: :class:`freestyle.types.ViewShape`\n");
-
 static int GetShapeF0D___init__(BPy_GetShapeF0D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};
@@ -96,7 +91,3 @@ PyTypeObject GetShapeF0D_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

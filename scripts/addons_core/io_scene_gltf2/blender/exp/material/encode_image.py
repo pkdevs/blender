@@ -185,6 +185,16 @@ class ExportImage:
 
             for fill in self.fills.values():
                 return fill.image
+
+        if self.__on_happy_path_udim():
+            # Store that this image is fully exported (used to export or not not used images)
+            for fill in self.fills.values():
+                export_settings['exported_images'][fill.image.name] = 1  # Fully used
+                break
+
+            for fill in self.fills.values():
+                return fill.image
+
         return None
 
     def __on_happy_path(self) -> bool:
@@ -350,6 +360,8 @@ class ExportImage:
                     out_buf[int(dst_chan)::4] = fill.value
                 elif isinstance(fill, FillImageRGB2BW) and fill.image == image:
                     out_buf[int(dst_chan)::4] = tmp_buf[0::4] * 0.2989 + tmp_buf[1::4] * 0.5870 + tmp_buf[2::4] * 0.1140
+                    if image.alpha_mode in ["STRAIGHT", "PREMUL"]:
+                        out_buf[int(dst_chan)::4] *= tmp_buf[3::4]
 
         tmp_buf = None  # GC this
 
@@ -401,6 +413,7 @@ class ExportImage:
             return _encode_temp_image(tmp_image, self.file_format, export_settings)
 
     def __encode_from_image_tile(self, udim_image, tile, export_settings):
+        data = None
         src_path = bpy.path.abspath(udim_image.filepath_raw).replace("<UDIM>", tile)
 
         if os.path.isfile(src_path):
@@ -419,6 +432,10 @@ class ExportImage:
                     return data
 
         # We don't manage UDIM packed image, so this could not happen to be here
+        # Lets display an error
+        export_settings['log'].error(
+            "UDIM packed images are not supported for export. Please unpack them before exporting.")
+        return b''
 
 
 def _encode_temp_image(tmp_image: bpy.types.Image, file_format: str, export_settings) -> bytes:
@@ -428,14 +445,18 @@ def _encode_temp_image(tmp_image: bpy.types.Image, file_format: str, export_sett
 
         tmp_image.file_format = file_format
 
-        # if image is jpeg, use quality export settings
-        if file_format in ["JPEG", "WEBP"]:
-            tmp_image.save(quality=export_settings['gltf_image_quality'])
-        else:
-            tmp_image.save()
+        try:
+            # if image is jpeg, use quality export settings
+            if file_format in ["JPEG", "WEBP"]:
+                tmp_image.save(quality=export_settings['gltf_image_quality'])
+            else:
+                tmp_image.save()
 
-        with open(tmpfilename, "rb") as f:
-            return f.read()
+            with open(tmpfilename, "rb") as f:
+                return f.read()
+        except Exception as e:
+            export_settings['log'].error("Error while saving image: %s" % e)
+            return b''
 
 
 class TmpImageGuard:
@@ -457,9 +478,13 @@ def make_temp_image_copy(guard: TmpImageGuard, src_image: bpy.types.Image):
     guard.image = src_image.copy()
     tmp_image = guard.image
 
-    tmp_image.update()
-    # See #1564 and T95616
-    tmp_image.scale(*src_image.size)
+    try:
+        tmp_image.update()
+        # See #1564 and T95616
+        tmp_image.scale(*src_image.size)
+    except RuntimeError:
+        # Can happen if the user deleted the image from the HDD
+        pass
 
     if src_image.is_dirty:  # Warning, img size change doesn't make it dirty, see T95616
         # Unsaved changes aren't copied by .copy(), so do them ourselves
