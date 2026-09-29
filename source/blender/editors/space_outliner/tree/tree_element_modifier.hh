@@ -18,17 +18,10 @@ struct GpencilModifierData;
 struct ModifierData;
 struct Object;
 
-enum ModifierDataStoreType { MODIFIER_TYPE, GPENCIL_MODIFIER_TYPE };
-
 struct ModifierDataStoreElem {
-  union {
-    ModifierData *md;
-    GpencilModifierData *gp_md;
-  };
-  ModifierDataStoreType type;
+  ModifierData *md;
 
-  ModifierDataStoreElem(ModifierData *md_) : md(md_), type(MODIFIER_TYPE) {}
-  ModifierDataStoreElem(GpencilModifierData *md_) : gp_md(md_), type(GPENCIL_MODIFIER_TYPE) {}
+  ModifierDataStoreElem(ModifierData *md_) : md(md_) {}
 };
 
 namespace ed::outliner {
@@ -71,12 +64,7 @@ class TreeElementModifier final : public AbstractTreeElement {
 
   ModifierData *data() const
   {
-    /* Legacy GP modifier isn't used anymore, could be removed. */
-    if (md_.type == MODIFIER_TYPE) {
-      return md_.md;
-    }
-
-    return nullptr;
+    return md_.md;
   }
 
  private:
