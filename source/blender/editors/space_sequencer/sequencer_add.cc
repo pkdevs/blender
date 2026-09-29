@@ -286,12 +286,14 @@ static void sequencer_generic_props__internal(wmOperatorType *ot, int flag)
       ot->srna, "overlap", false, "Allow Overlap", "Don't correct overlap on new strips");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
-  prop = RNA_def_boolean(ot->srna,
-                         "ripple",
-                         false,
-                         "Ripple",
-                         "Push existing strips further along the timeline to make room, instead "
-                         "of using the overlap mode from the tool settings");
+  prop = RNA_def_enum(
+      ot->srna,
+      "overlap_mode",
+      rna_enum_strip_overlap_mode_items,
+      SEQ_OVERLAP_SHUFFLE,
+      "Overlap Mode",
+      "How to resolve overlap with existing strips. If unset, fallback to the overlap mode "
+      "from the tool settings, but shuffle vertically instead of horizontally");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   prop = RNA_def_boolean(ot->srna,
@@ -690,10 +692,17 @@ static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> s
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
 
+  const bool overlap_mode_is_set = RNA_struct_property_is_set(op->ptr, "overlap_mode");
+  const eSeqOverlapMode overlap_mode = overlap_mode_is_set ?
+                                           eSeqOverlapMode(RNA_enum_get(op->ptr, "overlap_mode")) :
+                                           seq::tool_settings_overlap_mode_get(scene);
+
   /* Do some minimal shuffling now (on add) if there will be a move afterwards; this parks the
    * strip in a free channel so that there will be no overlap on undo of the add. Otherwise, this
    * is the final placement, so resolve overlap more properly instead of hardcoding to shuffle. */
-  if (should_move_strips_after_add(op)) {
+  if (should_move_strips_after_add(op) ||
+      (!overlap_mode_is_set && overlap_mode == SEQ_OVERLAP_SHUFFLE))
+  {
     for (Strip *strip : strips) {
       seq::transform_shuffle_vertical(ed->current_strips(), strip, scene);
     }
@@ -703,9 +712,6 @@ static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> s
   ScrArea *area = CTX_wm_area(C);
   const bool use_sync_markers = ((area->spacedata.first_as<SpaceSeq>())->flag &
                                  SEQ_MARKER_TRANS) != 0;
-  const eSeqOverlapMode overlap_mode = RNA_boolean_get(op->ptr, "ripple") ?
-                                           SEQ_OVERLAP_RIPPLE :
-                                           seq::tool_settings_overlap_mode_get(scene);
   seq::transform_handle_overlap(scene,
                                 ed->current_strips(),
                                 strips,

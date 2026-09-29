@@ -340,6 +340,8 @@ static float update_overlay_strip_position_data(bContext *C, const int mval[2])
 
 static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
 {
+  Scene *scene = CTX_data_sequencer_scene(C);
+
   if (g_drop_coords.in_use) {
     if (!g_drop_coords.has_read_mouse_pos) {
       /* We didn't read the mouse position, so we need to do it manually here. */
@@ -360,12 +362,14 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
     RNA_int_set(drop->ptr, "frame_start", g_drop_coords.start_frame);
     RNA_int_set(drop->ptr, "channel", g_drop_coords.channel);
     RNA_boolean_set(drop->ptr, "skip_locked_or_muted_channels", false);
-    RNA_boolean_set(drop->ptr, "ripple", g_drop_coords.use_ripple);
+    RNA_enum_set(drop->ptr,
+                 "overlap_mode",
+                 g_drop_coords.use_ripple ? SEQ_OVERLAP_RIPPLE :
+                                            seq::tool_settings_overlap_mode_get(scene));
   }
   else {
     /* We are dropped inside the preview region. Put the strip on top of the
      * current displayed frame. */
-    Scene *scene = CTX_data_sequencer_scene(C);
     Editing *ed = seq::editing_ensure(scene);
     ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
     ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
@@ -382,6 +386,9 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
 
     if (max_channel != -1) {
       RNA_int_set(drop->ptr, "channel", max_channel);
+    }
+    if (CTX_wm_window(C)->runtime->eventstate->modifier & KM_SHIFT) {
+      RNA_enum_set(drop->ptr, "overlap_mode", SEQ_OVERLAP_RIPPLE);
     }
   }
 

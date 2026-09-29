@@ -545,8 +545,15 @@ wmOperatorStatus sequencer_clipboard_paste_exec(bContext *C, wmOperator *op)
   ScrArea *area = CTX_wm_area(C);
   const bool use_sync_markers = ((area->spacedata.first_as<SpaceSeq>())->flag &
                                  SEQ_MARKER_TRANS) != 0;
-  seq::transform_handle_overlap(
-      scene_dst, ed_dst->current_strips(), pasted_strips, use_sync_markers);
+  if (seq::tool_settings_overlap_mode_get(scene_dst) == SEQ_OVERLAP_SHUFFLE) {
+    for (Strip *strip : pasted_strips) {
+      seq::transform_shuffle_vertical(ed_dst->current_strips(), strip, scene_dst);
+    }
+  }
+  else {
+    seq::transform_handle_overlap(
+        scene_dst, ed_dst->current_strips(), pasted_strips, use_sync_markers);
+  }
 
   seq::animation_restore_original(scene_dst, &animation_backup);
 
