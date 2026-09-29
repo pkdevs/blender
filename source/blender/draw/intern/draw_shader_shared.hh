@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 #include "GPU_shader_shared_utils.hh"
@@ -26,6 +30,7 @@ struct ObjectMatrices;
 struct ObjectInfos;
 struct ObjectBounds;
 struct VolumeInfos;
+struct GSplatInfos;
 struct CurvesInfos;
 struct ObjectAttribute;
 struct LayerAttribute;
@@ -72,9 +77,13 @@ using namespace math;
 /** \name Views
  * \{ */
 
+/* NOTE: Legacy, should be removed after we port everything to BSL. */
+
+/** Global that needs to be set correctly in each shader stage. */
+[[maybe_unused]] static uint drw_view_id = 0;
+
 #if !defined(DRW_VIEW_LEN) && !defined(GLSL_CPP_STUBS)
 /* Single-view case (default). */
-#  define drw_view_id 0
 #  define DRW_VIEW_LEN 1
 #  define DRW_VIEW_SHIFT 0
 #  define DRW_VIEW_FROM_RESOURCE_ID
@@ -83,8 +92,6 @@ using namespace math;
 /* Multi-view case. */
 /** This should be already defined at shaderCreateInfo level. */
 // #  define DRW_VIEW_LEN 64
-/** Global that needs to be set correctly in each shader stage. */
-uint drw_view_id = 0;
 /**
  * In order to reduce the memory requirements, the view id is merged with resource id to avoid
  * doubling the memory required only for view indexing.
@@ -248,6 +255,11 @@ struct [[host_shared]] ViewMatrices {
     return (winmat * float4(vP, 1.0f));
   }
 
+  float3 point_homogeneous_to_view(float4 hP) const
+  {
+    return (wininv * hP).xyz();
+  }
+
   float3 point_view_to_ndc(float3 vP) const
   {
     return perspective_divide(point_view_to_homogenous(vP));
@@ -261,6 +273,11 @@ struct [[host_shared]] ViewMatrices {
   float4 point_world_to_homogenous(float3 P) const
   {
     return (winmat * (viewmat * float4(P, 1.0f)));
+  }
+
+  float3 point_homogeneous_to_world(float4 hP) const
+  {
+    return point_view_to_world(point_homogeneous_to_view(hP));
   }
 
   float3 point_world_to_ndc(float3 P) const
@@ -521,12 +538,53 @@ inline bool drw_bounds_are_valid(ObjectBounds bounds)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Data quantization and packing
+ * \{ */
+
+/* Struct to scale a value from [0, 1] to a range [M, N]. Can be used for
+ * quantized packing if the value's boundaries are known. */
+struct [[host_shared]] ScalingRange {
+  packed_float3 range_add;
+  float _pad0;
+  packed_float3 range_mul;
+  float _pad1;
+
+  /** Scale from a value in [0, 1] to a value in the scaling range. */
+  float3 scale_from_unit(float3 value) const
+  {
+    return value * range_mul + range_add;
+  }
+
+#if !defined(GPU_SHADER)
+  /** Scale from a value in the scaling range to a value in[0, 1]. */
+  float3 scale_to_unit(float3 value) const
+  {
+    float3 reciprocal_denom;
+    for (int i = 0; i < 3; ++i) {
+      reciprocal_denom[i] = range_mul[i] == 0.0f ? 1.0f : (1.0f / range_mul[i]);
+    }
+    return math::clamp((value - range_add) * reciprocal_denom, float3(0.0f), float3(1.0f));
+  }
+#endif
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Object attributes
  * \{ */
 
+struct [[host_shared]] GSplatInfos {
+  /* Data ranges for unpacking. */
+  struct ScalingRange splat_mean_range;
+  struct ScalingRange splat_scale_range;
+  struct ScalingRange radiance_base_range;
+  struct ScalingRange radiance_sh_range;
+};
+
 struct [[host_shared]] VolumeInfos {
   /** Object to grid-space. */
-  float4x4 grids_xform[DRW_GRID_PER_VOLUME_MAX];
+  float4x4 grids_xform[16 /*DRW_GRID_PER_VOLUME_MAX*/];
   /** \note float4 for alignment. Only float3 needed. */
   float4 color_mul;
   float density_scale;
@@ -536,18 +594,13 @@ struct [[host_shared]] VolumeInfos {
 };
 
 struct [[host_shared]] CurvesInfos {
-  /* TODO(fclem): Make it a single uint. */
-  /** Per attribute scope, follows loading order.
-   * \note uint as bool in GLSL is 4 bytes.
-   * \note GLSL pad arrays of scalar to 16 bytes (std140). */
-  uint4 is_point_attribute[DRW_ATTRIBUTE_PER_CURVES_MAX];
-
+  /* Attribute domain. One bit per attribute. */
+  uint is_point_attribute;
   /* Number of vertex in a segment (including restart vertex for cylinder). */
   uint vertex_per_segment;
   /* Edge count for the visible half cylinder. Equal to face count + 1. */
   uint half_cylinder_face_count;
   uint _pad0;
-  uint _pad1;
 };
 
 #pragma pack(push, 4)
@@ -569,11 +622,14 @@ struct [[host_shared]] ObjectAttribute {
    *                        or just 0 if the ObjectRef doesn't contain any instances.
    */
   bool sync(const draw::ObjectRef &ref, const GPUUniformAttr &attr, int instance_index);
+  bool sync(const draw::ObjectRef &ref, const char *name, bool use_dupli, int instance_index);
 #endif
 };
 #pragma pack(pop)
-/** \note we only align to 4 bytes and fetch data manually so make sure
- * C++ compiler gives us the same size. */
+/**
+ * \note we only align to 4 bytes and fetch data manually so make sure
+ * C++ compiler gives us the same size.
+ */
 #ifndef GPU_SHADER
 BLI_STATIC_ASSERT_ALIGN(ObjectAttribute, 20)
 #endif

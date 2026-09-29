@@ -8,9 +8,9 @@ FRAGMENT_SHADER_CREATE_INFO(gpencil_geometry)
 
 #include "draw_colormanagement_lib.glsl"
 #include "draw_grease_pencil_lib.glsl"
-#include "gpu_shader_common_color_utils.glsl"
-#include "gpu_shader_common_hash.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_common_color_utils.bsl.hh"
+#include "gpu_shader_common_hash.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
 
 float3 gpencil_lighting()
 {
@@ -75,8 +75,7 @@ float4 get_color(float2 uv, float2 dx, float2 dy)
   else if (flag_test(gp_interp_flat.mat_flag, GP_FILL_GRADIENT_USE)) {
     bool radial = flag_test(gp_interp_flat.mat_flag, GP_FILL_GRADIENT_RADIAL);
     float fac = clamp(radial ? length(uv * 2.0f - 1.0f) : uv.x, 0.0f, 1.0f);
-    uint matid = gp_interp_flat.mat_flag >> GPENCIL_MATID_SHIFT;
-    col = mix(gp_materials[matid].fill_color, gp_materials[matid].fill_mix_color, fac);
+    col = textureLod(gp_fill_tx, float2(fac, 0.0f), 0.0f);
   }
   else /* SOLID */ {
     col = float4(1.0f);

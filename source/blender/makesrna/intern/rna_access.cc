@@ -54,6 +54,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 #include "RNA_path.hh"
+#include "RNA_prototypes.hh"
 #include "RNA_types.hh"
 
 #include "UI_resources.hh"
@@ -2587,7 +2588,19 @@ static void rna_property_update(
     /* End message bus. */
   }
 
-  const bool is_idprop = prop->flag & PROP_IDPROPERTY;
+  /* NOTE(@ideasman42): Regarding the #RNA_OperatorProperties check.
+   * Operator properties use ID-property storage but aren't custom properties,
+   * exclude them so assigning them from UI layout code doesn't redraw every region.
+   *
+   * Without the operator exception, an operator property with an `update` callback can
+   * enter into an eternal draw-loop, see: #163991.
+   *
+   * Currently operator properties are excluded, others types could be excluded too,
+   * take care though as it's possible scripts rely on the redraw.
+   * Operators are a clear case where we need to set the values in draw functions,
+   * so triggering redraw and entering a loop isn't acceptable. */
+  const bool is_idprop = (prop->flag & PROP_IDPROPERTY) &&
+                         !RNA_struct_is_a(ptr->type, RNA_OperatorProperties);
   const bool use_deg_update = !(prop->flag & PROP_NO_DEG_UPDATE);
   if (!is_rna || (is_idprop && use_deg_update)) {
 
@@ -4578,6 +4591,9 @@ int RNA_property_enum_step(
   RNA_property_enum_items(const_cast<bContext *>(C), ptr, prop, &item_array, &totitem, &free);
 
   if (!totitem) {
+    if (free) {
+      MEM_delete(item_array);
+    }
     return result_value;
   }
 
@@ -6565,7 +6581,7 @@ void rna_iterator_listbase_begin(CollectionPropertyIterator *iter,
 
   ListBaseIterator *internal = &iter->internal.listbase;
 
-  internal->link = (lb) ? static_cast<Link *>(lb->first) : nullptr;
+  internal->link = (lb) ? static_cast<Link *>(lb->first_) : nullptr;
   internal->skip = skip;
 
   iter->valid = (internal->link != nullptr);
@@ -7632,7 +7648,7 @@ PropertyRNA *RNA_function_find_parameter(PointerRNA * /*ptr*/,
 {
   PropertyRNA *parm;
 
-  parm = static_cast<PropertyRNA *>(func->cont.properties.first);
+  parm = func->cont.properties.first();
   for (; parm; parm = parm->next) {
     if (STREQ(RNA_property_identifier(parm), identifier)) {
       break;
@@ -7761,7 +7777,7 @@ void RNA_parameter_list_free(ParameterList *parms)
 {
   PropertyRNA *parm;
 
-  parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first);
+  parm = parms->func->cont.properties.first();
   void *data = parms->data;
   for (; parm; parm = parm->next) {
     if (parm->type == PROP_COLLECTION) {
@@ -7812,7 +7828,7 @@ void RNA_parameter_list_begin(ParameterList *parms, ParameterIterator *iter)
   // RNA_pointer_create_discrete(nullptr, RNA_Function, parms->func, &iter->funcptr); /* UNUSED */
 
   iter->parms = parms;
-  iter->parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first);
+  iter->parm = parms->func->cont.properties.first();
   iter->valid = iter->parm != nullptr;
   iter->offset = 0;
 
@@ -7872,7 +7888,7 @@ void RNA_parameter_get_lookup(ParameterList *parms, const char *identifier, void
 {
   PropertyRNA *parm;
 
-  parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first);
+  parm = parms->func->cont.properties.first();
   for (; parm; parm = parm->next) {
     if (STREQ(RNA_property_identifier(parm), identifier)) {
       break;
@@ -7942,7 +7958,7 @@ void RNA_parameter_set_lookup(ParameterList *parms, const char *identifier, cons
 {
   PropertyRNA *parm;
 
-  parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first);
+  parm = parms->func->cont.properties.first();
   for (; parm; parm = parm->next) {
     if (STREQ(RNA_property_identifier(parm), identifier)) {
       break;

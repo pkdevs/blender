@@ -2,11 +2,19 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup draw
+ *
  * Compile shader files as C++ inside one compilation unit to lint syntax and get IDE integration.
  */
 
-#include "draw_model.bsl.hh" /* IWYU pragma: export */
-#include "draw_view.bsl.hh"  /* IWYU pragma: export */
+#include "draw_curves_interpolation.bsl.hh"    /* IWYU pragma: export */
+#include "draw_curves_length_intercept.bsl.hh" /* IWYU pragma: export */
+#include "draw_curves_topology.bsl.hh"         /* IWYU pragma: export */
+#include "draw_gsplat.bsl.hh"                  /* IWYU pragma: export */
+#include "draw_gsplat_lib.bsl.hh"              /* IWYU pragma: export */
+#include "draw_model.bsl.hh"                   /* IWYU pragma: export */
+#include "draw_view.bsl.hh"                    /* IWYU pragma: export */
+#include "draw_visibility.bsl.hh"              /* IWYU pragma: export */
 
 void main() {}

@@ -2,10 +2,18 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 #ifndef GPU_SHADER
 #  include "GPU_shader_shared_utils.hh"
+#endif
+
+#ifdef GPU_SHADER
+#  include "gpu_shader_compat.hh"
 #endif
 
 /* Copy of DNA enum in `DNA_curves_types.h`. */
