@@ -106,6 +106,20 @@ bool foreach_action_slot_use(const ID &animated_id,
                                                  forward_to_callback);
 }
 
+static bool visit_pose_bone_constraints(const Object &object)
+{
+  if ((object.type != OB_ARMATURE) || (!object.pose)) {
+    return true;
+  }
+  for (bPoseChannel &pchan : object.pose->chanbase) {
+    for (bConstraint &con : pchan.constraints) {
+      if (!visit_constraint(con)) {
+        return false;
+      }
+    }
+  }
+}
+
 bool foreach_action_slot_use_with_references(
     ID &animated_id,
     FunctionRef<bool(ID &animated_id,
@@ -174,14 +188,9 @@ bool foreach_action_slot_use_with_references(
   }
 
   /* Visit Pose Bone constraints. */
-  if (object.type == OB_ARMATURE && object.pose) {
-    for (bPoseChannel &pchan : object.pose->chanbase) {
-      for (bConstraint &con : pchan.constraints) {
-        if (!visit_constraint(con)) {
-          return false;
-        }
-      }
-    }
+  const bool constraints_success = visit_pose_bone_constraints(object);
+  if (!constraints_success) {
+    return false;
   }
 
   return true;
@@ -263,14 +272,9 @@ bool foreach_action_slot_use_with_rna(ID &animated_id,
   }
 
   /* Visit Pose Bone constraints. */
-  if (object.type == OB_ARMATURE) {
-    for (bPoseChannel &pchan : object.pose->chanbase) {
-      for (bConstraint &con : pchan.constraints) {
-        if (!visit_constraint(con)) {
-          return false;
-        }
-      }
-    }
+  const bool constraints_success = visit_pose_bone_constraints(object);
+  if (!constraints_success) {
+    return false;
   }
 
   return true;
