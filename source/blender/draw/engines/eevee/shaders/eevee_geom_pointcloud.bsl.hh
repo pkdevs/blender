@@ -7,9 +7,6 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-VERTEX_SHADER_CREATE_INFO(eevee_nodetree)
-VERTEX_SHADER_CREATE_INFO(eevee_clip_plane)
-
 #include "draw_model.bsl.hh"
 #include "draw_pointcloud_lib.glsl"
 #include "draw_view.bsl.hh"
@@ -17,7 +14,7 @@ VERTEX_SHADER_CREATE_INFO(eevee_clip_plane)
 #include "eevee_nodetree_vert_lib.glsl"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
-#include "eevee_sampling_shared.hh" /* TODO(fclem): Remove. Needed becaused of fragment shader. */
+#include "eevee_sampling_shared.hh" /* TODO(fclem): Remove. Needed because of fragment shader. */
 #include "eevee_surf_common.bsl.hh"
 #include "eevee_velocity.bsl.hh"
 
@@ -34,6 +31,7 @@ struct GeomPointCloud {
 };
 
 [[vertex]] [[clip_control]] void geom_pointcloud(
+    [[resource_table]] KernelGlobals &kg,
     [[resource_table]] const PipelineConstants &pipe,
     [[resource_table]] const GeomPointCloud & /*srt*/,
     [[resource_table]] const Uniform &uni,
@@ -47,8 +45,7 @@ struct GeomPointCloud {
     [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
     [[vertex_id]] const int vert_id,
     [[position]] float4 &out_position,
-    /* Note: Removed manually if not needed. Otherwise, can generate geometry shader fallback. */
-    [[viewport_index]] int &out_viewport)
+    [[viewport_index, condition(is_shadow_pipe &&use_multi_viewport)]] int &out_viewport)
 {
   draw::ID id = res_id.get(inst_index);
   uint view_id = 0;
@@ -65,7 +62,7 @@ struct GeomPointCloud {
   auto &interp = interface_get(eevee_geom_iface_info, interp);
   auto &pointcloud_interp = interface_get(eevee_geom_pointcloud_iface_info, pointcloud_interp);
 
-  /* clang-format off */ /* Multiline macro breaks error line counting. */
+  /* clang-format off */ /* Multi-line macro breaks error line counting. */
   auto &pointcloud_interp_flat = interface_get(eevee_geom_pointcloud_iface_info, pointcloud_interp_flat);
   /* clang-format on */
 
@@ -73,7 +70,9 @@ struct GeomPointCloud {
     auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
 
     shadow_iface.shadow_view_id = int(view_id);
-    out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
+    if (pipe.use_multi_viewport) [[static_branch]] {
+      out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
+    }
   }
 
   init_interface(id.raw_id);
@@ -99,7 +98,7 @@ struct GeomPointCloud {
   }
 
   if (pipe.use_velocity) [[static_branch]] {
-    /* clang-format off */ /* Multiline define messes up line index. */
+    /* clang-format off */ /* Multi-line define messes up line index. */
     [[resource_table]] const GeometryVelocity &geo_vel = resource_table_get(eevee::GeometryVelocity);
     /* clang-format on */
     auto &motion = interface_get(eevee_velocity_iface_info, motion);
@@ -117,10 +116,10 @@ struct GeomPointCloud {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = ls_pt.P * ob_infos.orco_mul + ob_infos.orco_add;
 
-  init_globals(uni, view, true);
+  ShadingData sd = init_globals(uni, view, true, float4(0));
   attrib_load(PointCloudPoint{ls_pt.P, ws_pt.point_id, lP_orco});
 
-  interp.P += nodetree_displacement();
+  interp.P += nodetree_displacement(kg, sd);
 
   if (pipe.use_clip_plane) [[static_branch]] {
     auto &clip_interp = interface_get(eevee_clip_plane, clip_interp);

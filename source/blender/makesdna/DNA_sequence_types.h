@@ -267,19 +267,24 @@ struct StripTransform {
   float scale_x = 0;
   float scale_y = 0;
   float rotation = 0;
-  /** 0-1 range, `seq::image_transform_origin_offset_pixelspace_get` to convert to pixel-space. */
+  /**
+   * Relative 0-1 range, where (0,0) is the bottom-left of the image.
+   * NOTE: Do not access directly outside of internal transform code!
+   * Either call #image_transform_origin_get, or convert to absolute view-space pixel offset from
+   * the preview center with #image_transform_origin_preview_offset_get.
+   */
   float origin[2] = {};
   eStripTransformFilter filter = SEQ_TRANSFORM_FILTER_AUTO;
 };
 
 struct StripColorBalance {
   eModColorBalanceMethod method = SEQ_COLOR_BALANCE_METHOD_LIFTGAMMAGAIN;
-  float lift[3] = {};
-  float gamma[3] = {};
-  float gain[3] = {};
-  float slope[3] = {};
-  float offset[3] = {};
-  float power[3] = {};
+  float lift[3] = {1.0, 1.0, 1.0};
+  float gamma[3] = {1.0, 1.0, 1.0};
+  float gain[3] = {1.0, 1.0, 1.0};
+  float slope[3] = {1.0, 1.0, 1.0};
+  float offset[3] = {1.0, 1.0, 1.0};
+  float power[3] = {1.0, 1.0, 1.0};
   eModColorBalanceInverseFlag flag = SEQ_COLOR_BALANCE_INVERSE_NONE;
   char _pad[4] = {};
 };
@@ -308,6 +313,11 @@ struct StripData {
    * NULL for all other strip-types.
    */
   StripElem *stripdata = nullptr;
+  /* The size of the `stripdata` array. */
+  int stripdata_num = 0;
+
+  char _pad[4] = {};
+
   char dirpath[/*FILE_MAXDIR*/ 768] = "";
   StripProxy *proxy = nullptr;
   StripCrop *crop = nullptr;
@@ -352,7 +362,8 @@ struct Strip {
 
   eStripFlag flag = SEQ_FLAG_NONE;
   StripType type = STRIP_TYPE_IMAGE;
-  /** The length of the contents of this strip before handles are applied. */
+  /** The length of the contents of this strip before handles are applied. To be used with
+   * #content_length() and #content_length_set(). */
   int len = 0;
   /**
    * Start frame of contents of strip in absolute frame coordinates.
@@ -544,6 +555,18 @@ struct Strip {
    * Returns 0 for unsupported strip or if media can't be loaded.
    */
   float media_fps(Scene *scene);
+
+  /**
+   * Raw frame count before any handles are applied.
+   * */
+  int content_length() const;
+  void content_length_set(int new_length);
+
+  /**
+   * Frame distance from the right handle to the content end.
+   */
+  float end_offset() const;
+  void end_offset_set(float new_end_offset);
 
 #endif
 };
@@ -860,6 +883,7 @@ struct ColorMixVars {
 
 struct CompositorEffectVars {
   struct bNodeTree *node_group = nullptr;
+  struct IDProperty *system_properties = nullptr;
 };
 
 /** \} */
@@ -974,16 +998,16 @@ struct SequencerMaskModifierData {
 struct WhiteBalanceModifierData {
   StripModifierData modifier;
 
-  float white_value[3] = {};
+  float white_value[3] = {1.0f, 1.0f, 1.0f};
   char _pad[4] = {};
 };
 
 struct SequencerTonemapModifierData {
   StripModifierData modifier;
 
-  float key = 0, offset = 0, gamma = 0;
-  float intensity = 0, contrast = 0, adaptation = 0, correction = 0;
-  eModTonemapType type = SEQ_TONEMAP_RH_SIMPLE;
+  float key = 0.18f, offset = 1.0f, gamma = 1.0f;
+  float intensity = 0, contrast = 0, adaptation = 1.0f, correction = 0;
+  eModTonemapType type = SEQ_TONEMAP_RD_PHOTORECEPTOR;
 };
 
 struct SequencerCompositorModifierData {
