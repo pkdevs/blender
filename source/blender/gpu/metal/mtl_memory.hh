@@ -318,6 +318,9 @@ class MTLSafeFreeList {
    * overhead of small pool flushes, while ensuring floating memory overhead is not excessive. */
   static const int MAX_NUM_BUFFERS_ = 8192;
   static const int MIN_BUFFER_FLUSH_COUNT = 120;
+  /* A few image staging buffers can be much larger than hundreds of small buffers. */
+  static constexpr uint64_t MIN_BUFFER_FLUSH_BYTES = 64 * 1024 * 1024;
+  std::atomic<uint64_t> buffer_size_bytes_ = 0;
   std::atomic<int> current_list_index_;
   gpu::MTLBuffer *safe_free_pool_[MAX_NUM_BUFFERS_];
 

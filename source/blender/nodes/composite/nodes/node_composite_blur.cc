@@ -5,12 +5,19 @@
 #include "BLI_assert.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_path_utils.hh"
+#include "BLI_timeit.hh"
+
+#include <cstdio>
+
+#include <fmt/format.h>
 
 #include "RNA_types.hh"
 
 #include "UI_interface_layout.hh"
 
 #include "GPU_shader.hh"
+#include "GPU_state.hh"
 
 #include "COM_algorithm_dual_kawase_blur.hh"
 #include "COM_algorithm_pad.hh"
@@ -128,6 +135,52 @@ class BlurOperation : public NodeOperation {
   using NodeOperation::NodeOperation;
 
   void execute() override
+  {
+    /* Opt-in instrumentation for comp_blur_benchmark.py. Keep synchronization out of normal
+     * compositor evaluation. GPU_finish submits and waits on Metal, OpenGL, and Vulkan. */
+    static const bool benchmark = [] {
+      const char *value = BLI_getenv("BLENDER_BLUR_BENCHMARK");
+      return value && value[0] == '1' && value[1] == '\0';
+    }();
+    if (!benchmark) {
+      this->execute_impl();
+      return;
+    }
+
+    const bool use_gpu = this->context().use_gpu();
+    const char *mode = "UNKNOWN";
+    for (const EnumPropertyItem &item : type_items) {
+      if (item.identifier && item.value == this->get_type()) {
+        mode = item.identifier;
+        break;
+      }
+    }
+    const std::string radii = this->get_input("Size").is_single_value() ?
+                                  fmt::format("[{},{}]",
+                                              this->get_blur_size().x,
+                                              this->get_blur_size().y) :
+                                  "null";
+    if (use_gpu) {
+      GPU_finish();
+    }
+    const timeit::TimePoint start = timeit::Clock::now();
+    this->execute_impl();
+    if (use_gpu) {
+      GPU_finish();
+    }
+    const double milliseconds =
+        std::chrono::duration<double, std::milli>(timeit::Clock::now() - start).count();
+    const std::string record = fmt::format(
+        "BLUR_BENCH {{\"device\":\"{}\",\"mode\":\"{}\",\"radii\":{},\"ms\":{}}}\n",
+        use_gpu ? "GPU" : "CPU",
+        mode,
+        radii,
+        milliseconds);
+    std::fputs(record.c_str(), stdout);
+    std::fflush(stdout);
+  }
+
+  void execute_impl()
   {
     const Result &input = this->get_input("Image");
     Result &output = this->get_result("Image");

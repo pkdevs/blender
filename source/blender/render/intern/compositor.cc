@@ -832,6 +832,13 @@ class Compositor {
       }
     }
 
+    /* Background compositor renders may never enter the window draw loop that normally services
+     * deferred GPU resource reclamation. Recycle resources from previous evaluations while the
+     * GPU context is active. */
+    if (context.use_gpu()) {
+      GPU_render_step();
+    }
+
     {
       context.evaluate();
 

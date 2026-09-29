@@ -584,6 +584,7 @@ MTLSafeFreeList::MTLSafeFreeList()
 void MTLSafeFreeList::insert_buffer(gpu::MTLBuffer *buffer)
 {
   BLI_assert(in_free_queue_ == false);
+  buffer_size_bytes_.fetch_add(buffer->get_size(), std::memory_order_relaxed);
 
   /* Lockless list insert. */
   uint insert_index = current_list_index_++;
@@ -643,12 +644,13 @@ void MTLSafeFreeList::decrement_reference()
 bool MTLSafeFreeList::should_flush()
 {
   /* We should only consider refreshing a list if it has been referenced by active workloads, and
-   * contains a sufficient buffer count to avoid overheads associated with flushing the list. If
+   * contains a sufficient buffer count or byte size to justify flushing the list. If
    * the reference count is only equal to 1, buffers may have been added, but no command
    * submissions will have been issued, hence buffers could be returned to the pool prematurely if
    * associated workload submission occurs later. */
   return ((reference_count_ > 1 || referenced_by_workload_) &&
-          current_list_index_ > MIN_BUFFER_FLUSH_COUNT);
+          (current_list_index_ > MIN_BUFFER_FLUSH_COUNT ||
+           buffer_size_bytes_.load(std::memory_order_relaxed) >= MIN_BUFFER_FLUSH_BYTES));
 }
 
 /** \} */
