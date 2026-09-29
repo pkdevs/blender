@@ -72,7 +72,7 @@ static gpu::VertBuf &face_offsets_ensure(const MeshRenderData &mr, MeshBufferCac
     return *cache.face_offsets;
   }
   if (mr.extract_type == MeshExtractType::Mesh) {
-    cache.face_offsets = gpu::VertBuf::from_span(mr.faces.data());
+    cache.face_offsets = gpu::VertBuf::from_span(mr.faces.data().cast<uint>());
     return *cache.face_offsets;
   }
   const BMesh &bm = *mr.bm;

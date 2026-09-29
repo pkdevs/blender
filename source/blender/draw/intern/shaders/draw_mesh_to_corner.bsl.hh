@@ -49,7 +49,7 @@ void gather_main([[resource_table]] GatherResources &srt,
 struct ScatterFacesResources {
   [[storage(0, read)]] const uint (&src)[];
   /** The start of each face's range of corners, e.g. #Mesh::face_offsets(). */
-  [[storage(1, read)]] const int (&face_offsets)[];
+  [[storage(1, read)]] const uint (&face_offsets)[];
   [[storage(2, write)]] uint (&dst)[];
 
   [[push_constant]] const int faces_num;
