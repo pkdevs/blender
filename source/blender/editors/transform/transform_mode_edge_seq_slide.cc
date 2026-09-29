@@ -73,13 +73,21 @@ static void headerSeqSlide(TransInfo *t, const float val[2], char str[UI_MAX_DRA
     BLI_snprintf_utf8(&tvec[0], NUM_STR_REP_LEN, "%.0f, %.0f", val[0], val[1]);
   }
 
-  ofs += BLI_snprintf_utf8_rlen(
-      str + ofs,
-      UI_MAX_DRAW_STR - ofs,
-      IFACE_("Sequence Slide: %s%s | %s"),
-      &tvec[0],
-      t->con.text,
-      seq_slide_overlap_mode_name(seq::tool_settings_overlap_mode_get(scene)));
+  const eSeqOverlapMode overlap_mode = seq::tool_settings_overlap_mode_get(scene);
+  ofs += BLI_snprintf_utf8_rlen(str + ofs,
+                                UI_MAX_DRAW_STR - ofs,
+                                IFACE_("Sequence Slide: %s%s | Overlap: %s"),
+                                &tvec[0],
+                                t->con.text,
+                                seq_slide_overlap_mode_name(overlap_mode));
+
+  if (overlap_mode == SEQ_OVERLAP_RIPPLE) {
+    const eSeqRippleFlag ripple_flag = seq::tool_settings_ripple_flag_get(scene);
+    ofs += BLI_snprintf_utf8_rlen(str + ofs,
+                                  UI_MAX_DRAW_STR - ofs,
+                                  IFACE_(" | Insert: %s"),
+                                  WM_bool_as_string((ripple_flag & SEQ_RIPPLE_INSERT) != 0));
+  }
 }
 
 static void applySeqSlideValue(TransInfo *t, const float val[2])
