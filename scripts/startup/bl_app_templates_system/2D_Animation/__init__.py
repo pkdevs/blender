@@ -13,9 +13,9 @@ def update_factory_startup_screens():
     screen = bpy.data.screens["2D Animation"]
     for area in screen.areas:
         if area.type == 'PROPERTIES':
-            # Set Tool settings as default in properties panel.
+            # Set Object Data settings as default in properties panel.
             space = area.spaces.active
-            space.context = 'TOOL'
+            space.context = 'DATA'
         elif area.type == 'DOPESHEET_EDITOR':
             # Open sidebar in Dope-sheet.
             space = area.spaces.active
