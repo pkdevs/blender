@@ -159,15 +159,17 @@ static std::optional<float3x3> compute_homography_matrix(const DeformGizmoGroup 
   return homography_matrix;
 }
 
-static void update_positions_transform(DeformGizmoGroup *deform_group, const float4x4 &mat)
+static void update_positions_transform(DeformGizmoGroup *deform_group)
 {
+  const float4x4 matrix_space = float4x4(deform_group->transform_border->matrix_space);
+  const float4x4 matrix_offset = float4x4(deform_group->transform_border->matrix_offset);
+
   const Vector<MutableDrawingInfo> drawings = deform_group->drawings;
   const Vector<IndexMask> selections = deform_group->selections;
   const Vector<Array<float3>> &src_positions = deform_group->src_positions;
   const Vector<Array<float>> &src_radii = deform_group->src_radii;
 
-  const float4x4 transform = float4x4(deform_group->transform_border->matrix_space) * mat *
-                             math::invert(float4x4(deform_group->transform_border->matrix_space));
+  const float4x4 transform = matrix_space * matrix_offset * math::invert(matrix_space);
 
   const float scale_fac = math::sqrt(math::abs(math::determinant(float3x3(transform))));
 
@@ -373,21 +375,17 @@ static void gizmo_transform_border_matrix_get(const wmGizmo * /*gz*/,
                                               wmGizmoProperty *gz_prop,
                                               void * /*value_p*/)
 {
-  // float (*matrix)[4] = static_cast<float (*)[4]>(value_p);
   BLI_assert(gz_prop->type->array_length == 16);
 }
 
 static void gizmo_transform_border_matrix_set(const wmGizmo *gz,
                                               wmGizmoProperty *gz_prop,
-                                              const void *value_p)
+                                              const void * /*value_p*/)
 {
   BLI_assert(gz_prop->type->array_length == 16);
-  const float (*matrix)[4] = static_cast<const float (*)[4]>(value_p);
-  const float4x4 mat = float4x4(matrix);
-
   DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gz->parent_gzgroup->customdata);
 
-  update_positions_transform(deform_group, mat);
+  update_positions_transform(deform_group);
 }
 
 static std::optional<Bounds<float2>> compute_plane_space_drawing_bounds(
@@ -739,7 +737,7 @@ static void deform_gizmo_draw_prepare(const bContext *C, wmGizmoGroup *gzgroup)
     deform_group->is_scale_thickness = ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS;
 
     if (deform_group->mode == DeformMode::TRANSFORM) {
-      recompute_gizmo_plane(C, gzgroup);
+      update_positions_transform(deform_group);
     }
     if (deform_group->mode == DeformMode::PERSPECTIVE) {
       update_positions_prespective(deform_group);
