@@ -75,6 +75,17 @@ enum RenderEngineFlag {
   RE_ENGINE_VIEW_PAUSED_NOTIFIED = (1 << 9),
 };
 
+/** The purpose of this enum is informing the selection engine of which faces are visible to the
+ * user. */
+enum eRenderEngineUseBackfaceCulling {
+  /** Render engine doesn't do backface culling */
+  RE_USE_BACKFACE_CULLING_NONE,
+  /** Render engine culls all backfaces */
+  RE_USE_BACKFACE_CULLING_ALL,
+  /** Render engine respects #MA_BL_CULL_BACKFACE (Material.use_backface_culling) */
+  RE_USE_BACKFACE_CULLING_MATERIAL
+};
+
 extern ListBaseT<RenderEngineType> R_engines;
 
 struct RenderEngineType {
@@ -116,6 +127,8 @@ struct RenderEngineType {
                     struct Depsgraph *depsgraph);
   void (*view_pause)(struct RenderEngine *engine, const struct bContext *context);
   void (*view_resume)(struct RenderEngine *engine, const struct bContext *context);
+  eRenderEngineUseBackfaceCulling (*view_use_backface_culling)(struct RenderEngine *engine,
+                                                               Scene *scene);
 
   void (*update_script_node)(struct RenderEngine *engine,
                              struct bNodeTree *ntree,

@@ -95,6 +95,7 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
     /*view_draw*/ nullptr,
     /*view_pause*/ nullptr,
     /*view_resume*/ nullptr,
+    /*view_use_backface_culling*/ nullptr,
     /*update_script_node*/ nullptr,
     /*update_render_passes*/ &eevee_render_update_passes,
     /*update_custom_camera*/ nullptr,

@@ -135,9 +135,21 @@ struct Instance : public DrawEngine {
       state |= DRW_STATE_CLIP_PLANES;
     }
 
+    eRenderEngineUseBackfaceCulling use_backface_culling = RE_USE_BACKFACE_CULLING_NONE;
     if (draw_ctx->v3d->shading.flag & V3D_SHADING_BACKFACE_CULLING &&
         draw_ctx->v3d->shading.type == OB_SOLID)
     {
+      use_backface_culling = RE_USE_BACKFACE_CULLING_ALL;
+    }
+    if (ELEM(draw_ctx->v3d->shading.type, OB_MATERIAL, OB_RENDER)) {
+      RenderEngine *render_engine = RE_view_engine_get(draw_ctx->rv3d->view_render);
+      if (render_engine && render_engine->type->view_use_backface_culling) {
+        use_backface_culling = render_engine->type->view_use_backface_culling(render_engine,
+                                                                              draw_ctx->scene);
+      }
+    }
+
+    if (use_backface_culling == RE_USE_BACKFACE_CULLING_ALL) {
       state |= DRW_STATE_CULL_BACK;
     }
 

@@ -244,6 +244,30 @@ static void engine_view_resume(RenderEngine *engine, const bContext *context)
   RNA_parameter_list_free(&list);
 }
 
+static eRenderEngineUseBackfaceCulling engine_view_use_backface_culling(RenderEngine *engine,
+                                                                        Scene *scene)
+{
+  extern FunctionRNA *rna_RenderEngine_view_use_backface_culling_func;
+  ParameterList list;
+  FunctionRNA *func;
+
+  PointerRNA ptr = RNA_pointer_create_discrete(nullptr, engine->type->rna_ext.srna, engine);
+  func = rna_RenderEngine_view_use_backface_culling_func;
+
+  RNA_parameter_list_create(&list, &ptr, func);
+  RNA_parameter_set_lookup(&list, "scene", &scene);
+  engine->type->rna_ext.call(nullptr, &ptr, func, &list);
+
+  void *ret;
+  RNA_parameter_get_lookup(&list, "use_backface_culling", &ret);
+  eRenderEngineUseBackfaceCulling use_backface_culling = eRenderEngineUseBackfaceCulling(
+      *static_cast<int *>(ret));
+
+  RNA_parameter_list_free(&list);
+
+  return use_backface_culling;
+}
+
 static void engine_view_draw(RenderEngine *engine, const bContext *context, Depsgraph *depsgraph)
 {
   extern FunctionRNA *rna_RenderEngine_view_draw_func;
@@ -343,7 +367,7 @@ static StructRNA *rna_RenderEngine_register(Main *bmain,
   const char *error_prefix = "Registering render engine class:";
   RenderEngineType *et, dummy_et = {nullptr};
   RenderEngine dummy_engine = {nullptr};
-  bool have_function[12];
+  bool have_function[13];
 
   /* setup dummy engine & engine type to store static properties in */
   dummy_engine.type = &dummy_et;
@@ -409,9 +433,10 @@ static StructRNA *rna_RenderEngine_register(Main *bmain,
   et->view_draw = (have_function[6]) ? engine_view_draw : nullptr;
   et->view_pause = (have_function[7]) ? engine_view_pause : nullptr;
   et->view_resume = (have_function[8]) ? engine_view_resume : nullptr;
-  et->update_script_node = (have_function[9]) ? engine_update_script_node : nullptr;
-  et->update_render_passes = (have_function[10]) ? engine_update_render_passes : nullptr;
-  et->update_custom_camera = (have_function[11]) ? engine_update_custom_camera : nullptr;
+  et->view_use_backface_culling = (have_function[9]) ? engine_view_use_backface_culling : nullptr;
+  et->update_script_node = (have_function[10]) ? engine_update_script_node : nullptr;
+  et->update_render_passes = (have_function[11]) ? engine_update_render_passes : nullptr;
+  et->update_custom_camera = (have_function[12]) ? engine_update_custom_camera : nullptr;
 
   RE_engines_register(et);
 
@@ -658,6 +683,25 @@ static void rna_def_render_engine(BlenderRNA *brna)
   RNA_def_function_flag(func, FUNC_REGISTER_OPTIONAL | FUNC_ALLOW_WRITE);
   parm = RNA_def_pointer(func, "context", "Context", "", "The context");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna, "view_use_backface_culling", nullptr);
+  RNA_def_function_ui_description(func, "Get backface culling usage");
+  RNA_def_function_flag(func, FUNC_REGISTER_OPTIONAL);
+  parm = RNA_def_pointer(func, "scene", "Scene", "", "The scene");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  static const EnumPropertyItem use_backface_culling_items[] = {
+      {RE_USE_BACKFACE_CULLING_NONE, "NONE", 0, "None", ""},
+      {RE_USE_BACKFACE_CULLING_ALL, "ALL", 0, "All", ""},
+      {RE_USE_BACKFACE_CULLING_MATERIAL, "MATERIAL", 0, "Material", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  parm = RNA_def_enum(func,
+                      "use_backface_culling",
+                      use_backface_culling_items,
+                      RE_USE_BACKFACE_CULLING_NONE,
+                      "Use Backface Culling",
+                      "");
+  RNA_def_function_output(func, parm);
 
   /* shader script callbacks */
   func = RNA_def_function(srna, "update_script_node", nullptr);
