@@ -30,13 +30,18 @@ def update_factory_startup_scenes():
         if scene.name == "Edit":
             scene.tool_settings.use_keyframe_insert_auto = False
     for obj in bpy.data.objects:
-        if obj.type in {'GREASEPENCIL'}:
-            obj.use_lights = False
+        if obj.type == 'GREASEPENCIL':
+            if hasattr(obj, "use_grease_pencil_lights"):
+                obj.use_grease_pencil_lights = False
 
 
 def update_factory_startup_grease_pencils():
     for grease_pencil in bpy.data.grease_pencils:
         grease_pencil.onion_keyframe_type = 'ALL'
+
+    for layer in grease_pencil.layers:
+            if hasattr(layer, "use_lights"):
+                layer.use_lights = False
 
 
 @persistent
