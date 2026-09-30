@@ -1753,8 +1753,8 @@ static void pchan_draw_ik_lines(const Armatures::DrawContext *ctx,
         while (parchan->parent) {
           segcount++;
           /* FIXME: revise the breaking conditions */
-          if (segcount == data->chainlen || segcount > blender::bke::SPLINE_IK_MAX_CHAIN_LEN) {
-            break;
+          if (segcount == data->chainlen || segcount > 255) {
+            break; /* 255 is weak */
           }
           parchan = parchan->parent;
         }
