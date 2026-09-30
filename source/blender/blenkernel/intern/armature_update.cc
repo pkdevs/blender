@@ -44,7 +44,7 @@ struct tSplineIK_Tree {
   float totlength; /* total length of bones in the chain */
 
   const float *points;  /* parametric positions for the joints along the curve */
-  blender::Array<bPoseChannel *> chain; /* chain of bones to affect using Spline IK (ordered from the tip) */
+  bPoseChannel **chain; /* chain of bones to affect using Spline IK (ordered from the tip) */
 
   bPoseChannel *root; /* bone that is the root node of the chain */
 
@@ -153,14 +153,15 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/,
    * since that would take precedence... */
   {
     /* Make a new tree. */
-    tSplineIK_Tree *tree = MEM_new<tSplineIK_Tree>("SplineIK Tree");
+    tSplineIK_Tree *tree = MEM_callocN<tSplineIK_Tree>("SplineIK Tree");
     tree->type = CONSTRAINT_TYPE_SPLINEIK;
 
     tree->chainlen = segcount;
     tree->totlength = totlength;
 
-    /* Move the array of links to bones in the chain (from tip to root) to the tree. */
-    tree->chain = pchan_chain;
+    /* Copy over the array of links to bones in the chain (from tip to root). */
+    tree->chain = MEM_malloc_arrayN<bPoseChannel *>(size_t(segcount), "SplineIK Chain");
+    memcpy(tree->chain, pchan_chain.data(), sizeof(bPoseChannel *) * segcount);
 
     /* Store reference to joint position array. */
     tree->points = ik_data->points;
@@ -764,11 +765,13 @@ static void splineik_execute_tree(
       }
     }
 
-    /* free the tree info specific to SplineIK trees by removing the original array from scope */
-	tree->chain = blender::Array<bPoseChannel *>();
+    /* free the tree info specific to SplineIK trees now */
+    if (tree->chain) {
+      MEM_freeN(tree->chain);
+    }
 
     /* free this tree */
-    BLI_deletelink(&pchan_root->siktree, tree);
+    BLI_freelinkN(&pchan_root->siktree, tree);
   }
 }
 

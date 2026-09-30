@@ -279,18 +279,6 @@ void BLI_freelinkN(ListBase *listbase, void *vlink)
   MEM_freeN(link);
 }
 
-void BLI_deletelink(ListBase *listbase, void *vlink)
-{
-  Link *link = static_cast<Link *>(vlink);
-
-  if (link == nullptr) {
-    return;
-  }
-
-  BLI_remlink(listbase, link);
-  MEM_delete(link);
-}
-
 /**
  * Assigns all #Link.prev pointers from #Link.next
  */

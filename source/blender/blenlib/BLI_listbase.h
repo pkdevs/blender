@@ -233,13 +233,9 @@ BLI_INLINE bool BLI_listbase_count_is_equal_to(const ListBase *listbase, const i
  */
 int BLI_listbase_count(const ListBase *listbase) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 /**
- * Removes \a vlink from listbase and disposes of it. The vlink must be a trivial type. Assumes it is linked into there!
- */
-void BLI_freelinkN(ListBase *listbase, void *vlink) ATTR_NONNULL(1);
-/**
  * Removes \a vlink from listbase and disposes of it. Assumes it is linked into there!
  */
-void BLI_deletelink(ListBase *listbase, void *vlink) ATTR_NONNULL(1);
+void BLI_freelinkN(ListBase *listbase, void *vlink) ATTR_NONNULL(1);
 
 /**
  * Swaps \a vlinka and \a vlinkb in the list. Assumes they are both already in the list!
