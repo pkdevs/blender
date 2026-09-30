@@ -1530,6 +1530,7 @@ static void drw_callbacks_post_scene_view3d(DRWContext &draw_ctx)
     GPU_depth_test(GPU_DEPTH_LESS_EQUAL);
   }
 }
+
 #ifdef WITH_XR_OPENXR
 static void drw_callbacks_post_scene_xr_surface(DRWContext &draw_ctx)
 {
