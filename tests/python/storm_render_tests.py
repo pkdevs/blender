@@ -331,6 +331,8 @@ def main():
     test_dir_name = Path(args.testdir).name
 
     os.environ['BLENDER_HYDRA_EXPORT_METHOD'] = args.export_method
+    os.environ['HGIVULKAN_ENABLE_BUILTIN_BARYCENTRICS'] = "0"
+    os.environ['HGIGL_ENABLE_BUILTIN_BARYCENTRICS'] = "0"
 
     ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
 
