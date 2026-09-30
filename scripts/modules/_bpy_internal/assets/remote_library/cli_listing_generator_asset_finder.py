@@ -205,65 +205,17 @@ def list_assets(blendfile_version_info: FileVersionInfo,
     return blendfile_info, assets, file_dependencies
 
 
-def _find_dependencies_recursive(
-    # Track of pointers already visited when gatering dependencies, used to avoid cicular recursion calls
-    visited_pointers: set[typing.Any],
-    data: bpy.types.bpy_struct,
-    prop_name_filter: set[str],
-) -> set[bpy.types.ID]:
-    """Loops through the data-block properties recursivesly searching for ID references that migth point to external files."""
+def _get_asset_dependencies(datablock: bpy.types.ID) -> set[bpy.types.ID]:
+    dependency_map: dict[bpy.types.ID, set[bpy.types.ID]] = bpy.data.user_map()
 
-    # Make sure this is a blender defined struct type
-    assert (isinstance(data, bpy.types.bpy_struct))
-
-    # Avoid infinite recusion calls with circular references
-    if data in visited_pointers:
-        return set()
-
-    # Set as visited current data pointer, its ID data in their RNA definitions
-    visited_pointers |= {data, data.id_data, data.rna_type, data.bl_rna}
-
-    dependencies: set[bpy.types.ID] = set()
-
-    if isinstance(data, bpy.types.ID) and data.id_data:
-        dependencies.add(data)
-
-    for prop in data.bl_rna.properties:
-        if prop.is_deprecated:
-            continue
-        attr = prop.identifier
-        if attr in prop_name_filter:
-            continue
-        match prop.type:
-            case 'BOOLEAN' | 'INT' | 'FLOAT' | 'ENUM' | 'STRING':
-                continue
-            case 'COLLECTION':
-                value = getattr(data, attr)
-                if not isinstance(value, bpy.types.bpy_prop_collection):
-                    continue
-                for item in value:
-                    dependencies |= _find_dependencies_recursive(visited_pointers, item, prop_name_filter)
-            case 'POINTER':
-                value = getattr(data, attr)
-                if not isinstance(value, bpy.types.bpy_struct):
-                    continue
-                dependencies |= _find_dependencies_recursive(visited_pointers, value, prop_name_filter)
-
-    if not data.id_data:
-        return dependencies
-
-    for _, value in data.id_data.items():
-        if not isinstance(value, bpy.types.bpy_struct):
-            continue
-        dependencies |= _find_dependencies_recursive(visited_pointers, value, prop_name_filter)
-    return dependencies
-
-
-def _find_asset_dependencies(datablock,
-                             prop_name_filter: set[str] = ("parent", "owner"),
-                             ) -> set[bpy.types.ID]:
-    """Loops through the data-block properties recursivesly searching for ID references that migth point to external files."""
-    return _find_dependencies_recursive(set(), datablock, prop_name_filter)
+    def get_asset_dependencies_recursive(id: bpy.types.ID) -> set[bpy.types.ID]:
+        items: set[bpy.types.ID] = set()
+        for key, users in dependency_map.items():
+            if id in users:
+                items.add(key)
+                items |= get_asset_dependencies_recursive(key)
+        return items
+    return get_asset_dependencies_recursive(datablock)
 
 
 def _find_assets(
@@ -281,7 +233,7 @@ def _find_assets(
         asset_data: bpy.types.AssetData = datablock.asset_data
         if not asset_data:
             continue
-        asset_dependencies: set[bpy.types.ID] = _find_asset_dependencies(datablock)
+        asset_dependencies: set[bpy.types.ID] = _get_asset_dependencies(datablock)
         files = [blendfile_relpath]
         asset_dependencias_filenames = set()
 
