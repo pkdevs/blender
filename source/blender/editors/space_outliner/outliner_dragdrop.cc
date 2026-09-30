@@ -1570,7 +1570,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
           }
         }
       }
-      else {
+      else if (!BKE_collection_has_object(data.to, object)) {
         BKE_collection_object_add(bmain, data.to, object);
       }
 
