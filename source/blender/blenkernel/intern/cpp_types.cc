@@ -21,6 +21,8 @@
 #include "NOD_geometry_nodes_values.hh"
 #include "NOD_menu_value.hh"
 
+#include "COM_closure.hh"
+
 #include "DNA_meshdata_types.h"
 
 namespace blender {
@@ -104,6 +106,8 @@ void BKE_cpp_types_init()
   BLI_CPP_TYPE_REGISTER(bke::volume_grid::VolumeGrid<int3>, CPPTypeFlags::None);
   BLI_CPP_TYPE_REGISTER(bke::volume_grid::VolumeGrid<double3>, CPPTypeFlags::None);
 #endif
+
+  BLI_CPP_TYPE_REGISTER(compositor::ClosurePtr, CPPTypeFlags::None);
 }
 
 }  // namespace blender

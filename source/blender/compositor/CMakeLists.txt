@@ -24,6 +24,8 @@ set(INC_SYS
 
 set(SRC
   COM_bundle_item.hh
+  COM_closure.hh
+  COM_closure_zone_operation.hh
   COM_context.hh
   COM_conversion_operation.hh
   COM_derived_resources.hh
@@ -57,6 +59,8 @@ set(SRC
   COM_zone_tree_operation.hh
 
   intern/bundle_item.cc
+  intern/closure.cc
+  intern/closure_zone_operation.cc
   intern/context.cc
   intern/conversion_operation.cc
   intern/domain.cc

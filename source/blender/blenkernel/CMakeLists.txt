@@ -4,6 +4,11 @@
 
 set(INC
   PUBLIC .
+  ../compositor
+  ../compositor/algorithms
+  ../compositor/cached_resources
+  ../compositor/derived_resources
+  ../compositor/utilities
   ../ikplugin
   ../makesrna
   ../modifiers
@@ -587,6 +592,7 @@ set(LIB
   PRIVATE bf::blenloader
   PRIVATE bf::blentranslation
   PRIVATE bf::bmesh
+  bf_compositor
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::draw
