@@ -194,26 +194,24 @@ static void traverse_edge_loop(BMVert *v_start,
  * Runs `traverse_edge_loop` in both forward and backward direction from a specific
  * edge and combines them into CurveChainData.
  */
-static CurveChainData build_curve_chain_from_edge(BMEdge *start_edge, Set<BMEdge *> &visited_edges)
+static CurveChainData build_curve_chain_from_edge(BMEdge *e_start, Set<BMEdge *> &visited_edges)
 {
   CurveChainData chain;
   chain.is_closed = false;
 
   Vector<BMVert *> forward_trace;
   bool is_forward_circular = false;
-  traverse_edge_loop(
-      start_edge->v1, start_edge, visited_edges, forward_trace, is_forward_circular);
+  traverse_edge_loop(e_start->v1, e_start, visited_edges, forward_trace, is_forward_circular);
 
   if (is_forward_circular) {
     chain.is_closed = true;
-    chain.verts.append(start_edge->v1);
+    chain.verts.append(e_start->v1);
     chain.verts.extend(forward_trace);
   }
   else {
     Vector<BMVert *> backward_trace;
     bool is_backward_circular = false;
-    traverse_edge_loop(
-        start_edge->v2, start_edge, visited_edges, backward_trace, is_backward_circular);
+    traverse_edge_loop(e_start->v2, e_start, visited_edges, backward_trace, is_backward_circular);
 
     std::ranges::reverse(backward_trace);
     chain.verts.extend(backward_trace);
@@ -229,12 +227,12 @@ static void get_perpendicular_chains(const CurveChainData &chain,
 {
   for (BMVert *vert : chain.verts) {
     BMIter iter;
-    BMEdge *edge;
-    BM_ITER_ELEM (edge, &iter, vert, BM_EDGES_OF_VERT) {
-      if (BM_elem_flag_test(edge, BM_ELEM_HIDDEN) || visited_edges.contains(edge)) {
+    BMEdge *e;
+    BM_ITER_ELEM (e, &iter, vert, BM_EDGES_OF_VERT) {
+      if (BM_elem_flag_test(e, BM_ELEM_HIDDEN) || visited_edges.contains(e)) {
         continue;
       }
-      CurveChainData perp_chain = build_curve_chain_from_edge(edge, visited_edges);
+      CurveChainData perp_chain = build_curve_chain_from_edge(e, visited_edges);
       r_chains.append(std::move(perp_chain));
     }
   }
@@ -242,47 +240,47 @@ static void get_perpendicular_chains(const CurveChainData &chain,
 
 static void calc_curve_input_chains_from_bm(BMesh *bm, Vector<CurveChainData> &r_chains)
 {
-  Vector<BMVert *> selected_verts;
+  Vector<BMVert *> tag_verts;
   BMIter iter;
   BMVert *v;
   BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
     if (BM_elem_flag_test(v, BM_ELEM_TAG)) {
-      selected_verts.append(v);
+      tag_verts.append(v);
     }
   }
 
   Set<BMEdge *> visited_edges;
 
-  for (BMVert *start_vert : selected_verts) {
+  for (BMVert *v_start : tag_verts) {
     BMIter v_edge_iter;
-    BMEdge *start_edge;
-    BM_ITER_ELEM (start_edge, &v_edge_iter, start_vert, BM_EDGES_OF_VERT) {
-      if (BM_elem_flag_test(start_edge, BM_ELEM_HIDDEN)) {
+    BMEdge *e_start;
+    BM_ITER_ELEM (e_start, &v_edge_iter, v_start, BM_EDGES_OF_VERT) {
+      if (BM_elem_flag_test(e_start, BM_ELEM_HIDDEN)) {
         continue;
       }
-      if (visited_edges.contains(start_edge)) {
+      if (visited_edges.contains(e_start)) {
         continue;
       }
 
-      CurveChainData chain = build_curve_chain_from_edge(start_edge, visited_edges);
+      CurveChainData chain = build_curve_chain_from_edge(e_start, visited_edges);
 
       if (chain.verts.size() < 3) {
         continue;
       }
 
-      int num_selected = 0;
-      for (BMVert *chain_vert : chain.verts) {
-        if (BM_elem_flag_test(chain_vert, BM_ELEM_TAG)) {
-          num_selected++;
+      int tag_count = 0;
+      for (BMVert *v_chain : chain.verts) {
+        if (BM_elem_flag_test(v_chain, BM_ELEM_TAG)) {
+          tag_count++;
         }
       }
 
-      /* If a whole edge loop is selected, all edge loops perpendicular to it are operated on,
-       * with the selected edge loop being used as control points.  */
-      if (num_selected == chain.verts.size()) {
+      /* If a whole edge loop is tagged, all edge loops perpendicular to it are operated on,
+       * with the tagged edge loop being used as control points.  */
+      if (tag_count == chain.verts.size()) {
         get_perpendicular_chains(chain, r_chains, visited_edges);
       }
-      else if (num_selected >= 1) {
+      else if (tag_count >= 1) {
         r_chains.append(std::move(chain));
       }
     }
@@ -414,8 +412,8 @@ static void calculate_curve_distances(const Span<BMVert *> verts,
     if (total > CURVE_EPSILON) {
       const float spacing = total / float(is_closed ? verts_num : verts_num - 1);
       for (const int i : point_indices.index_range()) {
-        const int vert_index = point_indices[i];
-        r_point_distances[i] = float(vert_index) * spacing;
+        const int v_index = point_indices[i];
+        r_point_distances[i] = float(v_index) * spacing;
       }
       for (const int ki : knot_indices.index_range()) {
         r_knot_distances[ki] = float(knot_indices[ki]) * spacing;
@@ -563,8 +561,8 @@ static void execute_curve_chain(const Span<BMVert *> input_chain,
   }
 
   for (const int i : point_indices.index_range()) {
-    const int vert_index = point_indices[i];
-    BMVert *vert = verts[vert_index];
+    const int v_index = point_indices[i];
+    BMVert *vert = verts[v_index];
     float3 new_pos = new_positions[i];
 
     const float3 old_pos(vert->co);
