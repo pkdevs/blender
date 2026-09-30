@@ -2057,7 +2057,7 @@ enum eTool_Unwrapper : char {
 };
 
 /** #ToolSettings::uvcalc_flag */
-enum eTool_UvCalcFlag : char {
+enum eTool_UvCalcFlag : short {
   UVCALC_FILLHOLES = 1 << 0,
   /** Would call this UVCALC_ASPECT_CORRECT, except it should be default with old file. */
   UVCALC_NO_ASPECT_CORRECT = 1 << 1,
@@ -2073,6 +2073,8 @@ enum eTool_UvCalcFlag : char {
   UVCALC_UNWRAP_NO_FLIP = 1 << 6,
   /** Use importance weights. */
   UVCALC_UNWRAP_USE_WEIGHTS = 1 << 7,
+  /** Keep UVs with uniform scale when unwrapping. */
+  UVCALC_UNIFORM_SCALE = 1 << 8,
 };
 ENUM_OPERATORS(eTool_UvCalcFlag)
 
@@ -2258,6 +2260,8 @@ struct ToolSettings {
   eTool_UvFlag uv_flag = UV_FLAG_SELECT_SYNC;
   eTool_UvSelectMode uv_selectmode = UV_SELECT_VERT;
   eTool_UvSticky uv_sticky = UV_STICKY_LOCATION;
+
+  char _pad_uvcalc[7] = {};
 
   rctf uv_custom_region = {};
 
