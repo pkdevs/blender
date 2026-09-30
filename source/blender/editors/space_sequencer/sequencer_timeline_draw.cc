@@ -8,6 +8,7 @@
  */
 
 #include <cmath>
+#include <fmt/format.h>
 
 #include "BLI_listbase.hh"
 #include "BLI_math_color_c.hh"
@@ -71,6 +72,7 @@
 #include "UI_view2d.hh"
 
 #include "WM_api.hh"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "BLF_api.hh"
@@ -2184,10 +2186,29 @@ static void blade_box_draw(Scene *scene, const ARegion *region)
   GPU_blend(GPU_BLEND_NONE);
 }
 
-static void blade_split_draw(Scene *scene,
-                             const ARegion *region,
-                             const wmWindow *win,
-                             const int2 &xy)
+static bool split_tool_prop_from_toolsettings(bToolRef *tref,
+                                              const char *identifier,
+                                              const bool default_value)
+{
+  if (tref == nullptr) {
+    return default_value;
+  }
+
+  wmOperatorType *ot_split = WM_operatortype_find("SEQUENCER_OT_split", false);
+  if (ot_split == nullptr) {
+    return default_value;
+  }
+
+  PointerRNA tool_props;
+  if (!WM_toolsystem_ref_properties_get_from_operator(tref, ot_split, &tool_props)) {
+    return default_value;
+  }
+
+  return RNA_boolean_get(&tool_props, identifier);
+}
+
+static void blade_split_draw(
+    Scene *scene, const ARegion *region, const wmWindow *win, bToolRef *tref, const int2 &xy)
 {
   const View2D *v2d = &region->v2d;
   Editing *ed = seq::editing_get(scene);
@@ -2201,14 +2222,13 @@ static void blade_split_draw(Scene *scene,
 
   const uint8_t modifier = win->runtime->eventstate->modifier;
   const bool all_channels = (modifier & KM_SHIFT) != 0;
-  const bool ignore_connections = !all_channels && (modifier & KM_ALT) != 0;
+  const bool ignore_connections = !all_channels && ((modifier & KM_ALT) != 0 ||
+                                                    split_tool_prop_from_toolsettings(
+                                                        tref, "ignore_connections", false));
 
   const Strip *strip = strip_under_mouse_get(scene, v2d, mval);
   if (!all_channels) {
-    /* Keep in sync with `sequencer_split_invoke()`. */
-    if (strip == nullptr || split_frame == strip->left_handle() ||
-        split_frame == strip->right_handle(scene))
-    {
+    if (strip == nullptr || !seq::strip_splits_frame(scene, strip, split_frame)) {
       return;
     }
   }
@@ -2255,7 +2275,6 @@ static void blade_split_draw(Scene *scene,
   uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
-  /* Same width as the snapping indicator, see #drawSnapping. */
   auto draw_lines = [&](const float expand) {
     for (const Strip *strip : targets) {
       const rctf bounds = strip_bounds_get(scene, strip);
@@ -2273,9 +2292,9 @@ static void blade_split_draw(Scene *scene,
   /* Draw dark outline underneath so the line is visible on light strips too. */
   GPU_blend(GPU_BLEND_ALPHA);
   immUniformColor4f(0.0f, 0.0f, 0.0f, 0.8f);
-  draw_lines(2.0f);
+  draw_lines(2.5f);
   immUniformThemeColor(TH_GIZMO_PRIMARY);
-  draw_lines(1.0f);
+  draw_lines(1.5f);
   GPU_blend(GPU_BLEND_NONE);
 
   immUnbindProgram();
@@ -2288,6 +2307,7 @@ static void blade_paint_cursor_draw(bContext *C,
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
+  ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
   wmWindow *win = CTX_wm_window(C);
 
@@ -2295,7 +2315,7 @@ static void blade_paint_cursor_draw(bContext *C,
     blade_box_draw(scene, region);
   }
   else {
-    blade_split_draw(scene, region, win, xy);
+    blade_split_draw(scene, region, win, area->runtime.tool, xy);
   }
 }
 
@@ -2309,23 +2329,11 @@ void sequencer_blade_cursor_ensure(wmWindowManager *wm)
       SPACE_SEQ, RGN_TYPE_WINDOW, blade_paint_cursor_poll, blade_paint_cursor_draw, nullptr);
 }
 
-static void box_blade_number_str_get(Scene *scene,
-                                     Editing *ed,
-                                     bool display_seconds,
-                                     char *r_number_str,
-                                     size_t r_number_str_maxncpy)
+static std::string blade_frame_str_get(const Scene *scene, const int frame, const bool timecode)
 {
-  const rctf box_rect = ed->runtime->box_blade_preview.rect;
-  const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
-
-  char str_start[64], str_end[64], str_duration[64];
-  ED_get_current_time_str(scene, display_seconds, rect_frames[0], str_start, sizeof(str_start));
-  ED_get_current_time_str(scene, display_seconds, rect_frames[1], str_end, sizeof(str_end));
-  ED_get_current_time_str(
-      scene, display_seconds, rect_frames[1] - rect_frames[0], str_duration, sizeof(str_duration));
-
-  BLI_snprintf_utf8_rlen(
-      r_number_str, r_number_str_maxncpy, "%s -> %s (%s)", str_start, str_end, str_duration);
+  char str[64];
+  ED_get_current_time_str(scene, timecode, frame, str, sizeof(str));
+  return str;
 }
 
 /* Shown without delay & re-created on every cursor move, unlike regular tooltips. */
@@ -2336,17 +2344,23 @@ static ARegion *blade_tooltip_init(
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
   wmWindow *win = CTX_wm_window(C);
-  const SpaceSeq *sseq = CTX_wm_space_seq(C);
   const wmEvent *event = win->runtime->eventstate;
-
-  const bool display_seconds = (sseq->flag & SEQ_DRAWFRAMES) == 0;
 
   *r_exit_on_event = false;
 
-  char number_str[256];
+  std::string frames_str, timecode_str;
   /* Box blade. */
   if (ed->runtime->box_blade_preview.is_active) {
-    box_blade_number_str_get(scene, ed, display_seconds, number_str, sizeof(number_str));
+    const rctf box_rect = ed->runtime->box_blade_preview.rect;
+    const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
+    auto range_str_get = [&](const bool timecode) {
+      return fmt::format("{} " BLI_STR_UTF8_RIGHTWARDS_ARROW " {}  ({})",
+                         blade_frame_str_get(scene, rect_frames[0], timecode),
+                         blade_frame_str_get(scene, rect_frames[1], timecode),
+                         blade_frame_str_get(scene, rect_frames[1] - rect_frames[0], timecode));
+    };
+    frames_str = range_str_get(false);
+    timecode_str = range_str_get(true);
   }
   /* Regular blade. */
   else {
@@ -2366,7 +2380,8 @@ static ARegion *blade_tooltip_init(
         return nullptr;
       }
     }
-    ED_get_current_time_str(scene, display_seconds, split_frame, number_str, sizeof(number_str));
+    frames_str = blade_frame_str_get(scene, split_frame, false);
+    timecode_str = blade_frame_str_get(scene, split_frame, true);
   }
 
   /* Offset the tooltip to the right to avoid covering the split line. */
@@ -2376,8 +2391,8 @@ static ARegion *blade_tooltip_init(
   return ui::tooltip_create_from_func_and_pos(
       C,
       [&](ui::TooltipData &data) {
-        ui::tooltip_text_field_add(
-            data, std::string(number_str), {}, ui::TIP_STYLE_NORMAL, ui::TIP_LC_MAIN);
+        ui::tooltip_text_field_add(data, frames_str, {}, ui::TIP_STYLE_NORMAL, ui::TIP_LC_MAIN);
+        ui::tooltip_text_field_add(data, timecode_str, {}, ui::TIP_STYLE_NORMAL, ui::TIP_LC_VALUE);
       },
       init_position);
 }

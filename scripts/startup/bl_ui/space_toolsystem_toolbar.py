@@ -3360,7 +3360,7 @@ class _defs_sequencer_generic:
     @ToolDef.from_fn
     def blade():
         def draw_settings(context, layout, tool, *, extra=False):
-            # It's possible to unhide VSE tool settings, and we can't draw panels in there.
+            # If tool settings are shown in the header, we can't draw panels in there.
             # Instead, show just the first split option, and the rest of the options in an extra "..."
             region_is_header = context.region.type == 'TOOL_HEADER'
             if region_is_header and not extra:
@@ -3371,14 +3371,15 @@ class _defs_sequencer_generic:
                 return
 
             # Split properties.
-            if not extra:
-                header, panel = layout.panel("SEQUENCER_PT_tool_split", default_closed=False)
-                header.label(text="Split")
-                if panel:
-                    props = tool.operator_properties("sequencer.split")
+            header, panel = layout.panel("SEQUENCER_PT_tool_split", default_closed=False)
+            header.label(text="Split")
+            if panel:
+                props = tool.operator_properties("sequencer.split")
+                if not extra:
                     row = layout.row()
                     row.prop(props, "type", expand=True)
-                    col = layout.column()
+                col = layout.column()
+                col.prop(props, "ignore_connections", expand=True)
 
             # Box Blade properties.
             header, panel = layout.panel("SEQUENCER_PT_tool_box_blade", default_closed=False)
