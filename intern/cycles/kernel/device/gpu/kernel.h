@@ -1357,7 +1357,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
   }
 
   if (pass_sample_count == PASS_UNUSED || upscale_factor == 1.0f) {
-    for (int c = 0; c < num_components; c++) {
+    for (int c = 0; c < 4 && c < num_components; c++) {
       denoised_pixel[c] *= pixel_scale;
     }
   }
@@ -1423,7 +1423,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
   }
 
   if (pass_sample_count == PASS_UNUSED || upscale_factor == 1.0f) {
-    for (int c = 0; c < num_components; c++) {
+    for (int c = 0; c < 4 && c < num_components; c++) {
       denoised_pixel[c] *= pixel_scale;
     }
   }
