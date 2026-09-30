@@ -39,6 +39,8 @@ struct VertIn {
   [[attribute(0)]] float3 pos;
   [[attribute(1), condition(!use_uniform_color)]] float4 color;
   [[attribute(2), condition(use_lighting)]] float3 nor;
+  /* Length along the dashed line for that vertex. */
+  [[attribute(3), condition(use_dashed)]] float u;
 };
 
 struct VertOutFlat {
@@ -57,6 +59,7 @@ struct VertOutDashed {
   /* We leverage hardware interpolation to compute distance along the line. */
   [[flat]] float2 stipple_start; /* In screen space */
   [[no_perspective]] float2 stipple_pos;
+  [[smooth]] float u;
 };
 
 [[vertex]] void simple_vert(
@@ -89,6 +92,7 @@ struct VertOutDashed {
   if (srt.use_dashed) [[static_branch]] {
     dashed_out.stipple_pos = srt.viewport_size * 0.5f * (out_pos.xy / out_pos.w);
     dashed_out.stipple_start = dashed_out.stipple_pos;
+    dashed_out.u = v_in.u;
   }
 
   if (srt.use_clipping) [[static_branch]] {
@@ -296,19 +300,17 @@ struct Dashed {
                                    [[in]] const VertOutDashed &v_out,
                                    [[out]] FragOut &frag_out)
 {
-  float distance_along_line = distance(v_out.stipple_pos, v_out.stipple_start);
+  // float distance_along_line = distance(v_out.stipple_pos, v_out.stipple_start);
   /* Solid line case, simple. */
   if (srt.udash_factor >= 1.0f) {
     frag_out.color = srt.color;
   }
   /* Actually dashed line... */
   else {
-    float normalized_distance = fract(distance_along_line / srt.dash_width);
-    if (normalized_distance <= srt.udash_factor) {
+    float foo = mod((v_out.u / 32.0f), 1.0f);
+    if (foo < 0.5) {
       frag_out.color = srt.color;
-    }
-    else if (srt.colors_len > 0) {
-      frag_out.color = srt.color2;
+      // frag_out.color = float4(v_out.u, v_out.u, v_out.u, 1.0);
     }
     else {
       gpu_discard_fragment();

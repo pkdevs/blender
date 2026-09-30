@@ -13,6 +13,7 @@
 #include <cstring>
 
 #include "BLI_listbase.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
@@ -729,6 +730,7 @@ static void draw_fcurve_curve_samples(bAnimContext *ac,
                                       FCurve *fcu,
                                       View2D *v2d,
                                       const uint shdr_pos,
+                                      const uint shdr_u,
                                       const bool draw_extrapolation)
 {
   if (!draw_extrapolation && fcu->totvert == 1) {
@@ -780,13 +782,22 @@ static void draw_fcurve_curve_samples(bAnimContext *ac,
       }
       v[1] = prevfpt->vec[1] - fac * (prevfpt->vec[1] - fpt->vec[1]);
     }
-
+    immAttr1f(shdr_u, 0);
     immVertex2fv(shdr_pos, v);
   }
-
+  float length = 0;
   /* loop over samples, drawing segments */
   /* draw curve between first and last keyframe (if there are enough to do so) */
+  int2 prev_pt_screen_space;
+  ui::view2d_view_to_region(
+      v2d, prevfpt->vec[0], prevfpt->vec[1], &prev_pt_screen_space.x, &prev_pt_screen_space.y);
   while (b--) {
+    int2 pt_screen_space;
+    ui::view2d_view_to_region(
+        v2d, prevfpt->vec[0], prevfpt->vec[1], &pt_screen_space.x, &pt_screen_space.y);
+    length += math::length_manhattan(pt_screen_space - prev_pt_screen_space);
+    immAttr1f(shdr_u, length);
+    prev_pt_screen_space = pt_screen_space;
     /* Linear interpolation: just add one point (which should add a new line segment) */
     immVertex2fv(shdr_pos, prevfpt->vec);
 
@@ -817,6 +828,7 @@ static void draw_fcurve_curve_samples(bAnimContext *ac,
       v[1] = prevfpt->vec[1] - fac * (prevfpt->vec[1] - fpt->vec[1]);
     }
 
+    immAttr1f(shdr_u, 1);
     immVertex2fv(shdr_pos, v);
   }
 
@@ -1013,8 +1025,13 @@ static void expand_key_bounds(const BezTriple *left_key, const BezTriple *right_
 }
 
 /* Helper function - draw one repeat of an F-Curve (using Bezier curve approximations). */
-static void draw_fcurve_curve_keys(
-    bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d, uint pos, const bool draw_extrapolation)
+static void draw_fcurve_curve_keys(bAnimContext *ac,
+                                   ID *id,
+                                   FCurve *fcu,
+                                   View2D *v2d,
+                                   uint pos,
+                                   const uint shdr_u,
+                                   const bool draw_extrapolation)
 {
   if (!draw_extrapolation && fcu->totvert == 1) {
     return;
@@ -1132,7 +1149,20 @@ static void draw_fcurve_curve_keys(
   }
 
   immBegin(GPU_PRIM_LINE_STRIP, curve_vertices.size());
+  float length = 0;
+  int2 prev_vert_screen_space;
+  ui::view2d_view_to_region(v2d,
+                            curve_vertices[0].x,
+                            curve_vertices[0].y,
+                            &prev_vert_screen_space.x,
+                            &prev_vert_screen_space.y);
   for (const float2 vertex : curve_vertices) {
+    int2 vert_screen_space;
+    ui::view2d_view_to_region(v2d, vertex.x, vertex.y, &vert_screen_space.x, &vert_screen_space.y);
+    /* Using Manhattan length is accurate enough. */
+    length += math::length_manhattan(prev_vert_screen_space - vert_screen_space);
+    immAttr1f(shdr_u, length);
+    prev_vert_screen_space = vert_screen_space;
     immVertex2fv(pos, vertex);
   }
   immEnd();
@@ -1174,8 +1204,9 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
     }
     GPU_blend(GPU_BLEND_ALPHA);
 
-    const uint shdr_pos = GPU_vertformat_attr_add(
-        immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
+    GPUVertFormat *format = immVertexFormat();
+    const uint shdr_pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+    const uint shdr_u = GPU_vertformat_attr_add(format, "u", gpu::VertAttrType::SFLOAT_32);
 
     float viewport_size[4];
     GPU_viewport_size_get_f(viewport_size);
@@ -1234,10 +1265,12 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
     else if (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)) {
       /* just draw curve based on defined data (i.e. no modifiers) */
       if (fcu->bezt) {
-        draw_fcurve_curve_keys(ac, ale->id, fcu, &region->v2d, shdr_pos, draw_extrapolation);
+        draw_fcurve_curve_keys(
+            ac, ale->id, fcu, &region->v2d, shdr_pos, shdr_u, draw_extrapolation);
       }
       else if (fcu->fpt) {
-        draw_fcurve_curve_samples(ac, ale->id, fcu, &region->v2d, shdr_pos, draw_extrapolation);
+        draw_fcurve_curve_samples(
+            ac, ale->id, fcu, &region->v2d, shdr_pos, shdr_u, draw_extrapolation);
       }
     }
 
@@ -1451,8 +1484,9 @@ void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region
   }
   GPU_blend(GPU_BLEND_ALPHA);
 
-  const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
+  GPUVertFormat *format = immVertexFormat();
+  const uint shdr_pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  const uint shdr_u = GPU_vertformat_attr_add(format, "u", gpu::VertAttrType::SFLOAT_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
@@ -1477,7 +1511,8 @@ void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region
     immUniformColor3fvAlpha(fcu.color, 0.5f);
 
     /* simply draw the stored samples */
-    draw_fcurve_curve_samples(ac, nullptr, &fcu, &region->v2d, shdr_pos, draw_extrapolation);
+    draw_fcurve_curve_samples(
+        ac, nullptr, &fcu, &region->v2d, shdr_pos, shdr_u, draw_extrapolation);
   }
 
   immUnbindProgram();
