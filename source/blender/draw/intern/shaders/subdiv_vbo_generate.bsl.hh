@@ -91,7 +91,8 @@ void normals_accumulate_main([[resource_table]] const SubdivResources &srt,
     /* Compute the face normal using Newell's method. */
     float3 verts[4];
     for (uint j = 0; j < 4; j++) [[unroll]] {
-      verts[j] = load_data(accum.positions[start_loop_index + j]);
+      StoredFloat3 data = accum.positions[start_loop_index + j];
+      verts[j] = load_data(data);
     }
 
     float3 face_normal = float3(0.0f);
@@ -157,9 +158,12 @@ struct EdgeFac {
     }
 
     const uint start_corner_index_other = uint(quad_other * 4);
-    const float3 v0 = load_data(positions[start_corner_index_other + 0]);
-    const float3 v1 = load_data(positions[start_corner_index_other + 1]);
-    const float3 v2 = load_data(positions[start_corner_index_other + 2]);
+    const StoredFloat3 f0 = positions[start_corner_index_other + 0];
+    const StoredFloat3 f1 = positions[start_corner_index_other + 1];
+    const StoredFloat3 f2 = positions[start_corner_index_other + 2];
+    const float3 v0 = load_data(f0);
+    const float3 v1 = load_data(f1);
+    const float3 v2 = load_data(f2);
     const float3 face_normal_other = normalize(cross(v1 - v0, v2 - v0));
 
     return loop_edge_factor_get(face_normal, face_normal_other);
@@ -182,9 +186,12 @@ void edge_fac_main([[resource_table]] const SubdivResources &srt,
   const uint start_loop_index = quad_index * 4;
 
   /* First compute the face normal, we need it to compute the bihedral edge angle. */
-  float3 v0 = load_data(edges.positions[start_loop_index + 0]);
-  float3 v1 = load_data(edges.positions[start_loop_index + 1]);
-  float3 v2 = load_data(edges.positions[start_loop_index + 2]);
+  StoredFloat3 f0 = edges.positions[start_loop_index + 0];
+  StoredFloat3 f1 = edges.positions[start_loop_index + 1];
+  StoredFloat3 f2 = edges.positions[start_loop_index + 2];
+  float3 v0 = load_data(f0);
+  float3 v1 = load_data(f1);
+  float3 v2 = load_data(f2);
   float3 face_normal = normalize(cross(v1 - v0, v2 - v0));
 
   for (uint i = 0; i < 4; i++) {
@@ -323,10 +330,14 @@ void loop_normals_main([[resource_table]] const SubdivResources &srt,
     }
   }
   else {
-    float3 v0 = load_data(lnors.positions[start_loop_index + 0]);
-    float3 v1 = load_data(lnors.positions[start_loop_index + 1]);
-    float3 v2 = load_data(lnors.positions[start_loop_index + 2]);
-    float3 v3 = load_data(lnors.positions[start_loop_index + 3]);
+    StoredFloat3 f0 = lnors.positions[start_loop_index + 0];
+    StoredFloat3 f1 = lnors.positions[start_loop_index + 1];
+    StoredFloat3 f2 = lnors.positions[start_loop_index + 2];
+    StoredFloat3 f3 = lnors.positions[start_loop_index + 3];
+    float3 v0 = load_data(f0);
+    float3 v1 = load_data(f1);
+    float3 v2 = load_data(f2);
+    float3 v3 = load_data(f3);
 
     float3 face_normal = float3(0.0f);
     add_newell_cross_v3_v3v3(face_normal, v0, v1);
