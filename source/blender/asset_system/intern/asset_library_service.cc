@@ -89,9 +89,8 @@ static void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
     return;
   }
 #ifdef WITH_PYTHON
-  {
-    static constexpr const char *script =
-        R"(
+  static constexpr const char *script =
+      R"(
 import tomllib
 from pathlib import Path
 
@@ -127,38 +126,37 @@ if "uuid" not in config_dict or config_dict["uuid"] is None:
 
 ret_uuid = config_dict["uuid"]
 )";
-    /* New UUID to assign if the library have not identifier yet. */
-    UUID new_uuid = BLI_uuid_generate_random();
-    std::unique_ptr locals = bke::idprop::create_group("locals");
-    IDP_AddToGroup(locals.get(), IDP_NewString(new_uuid.str(), "new_uuid"));
-    IDP_AddToGroup(locals.get(), IDP_NewString(custom_library.resolved_dirpath, "library_path"));
+  /* New UUID to assign if the library have not identifier yet. */
+  UUID new_uuid = BLI_uuid_generate_random();
+  std::unique_ptr locals = bke::idprop::create_group("locals");
+  IDP_AddToGroup(locals.get(), IDP_NewString(new_uuid.str(), "new_uuid"));
+  IDP_AddToGroup(locals.get(), IDP_NewString(custom_library.resolved_dirpath, "library_path"));
 
-    std::optional<blender::IDProperty *> idprop_optptr =
-        BPY_run_string_exec_with_locals_return_idprop(nullptr, script, *locals, "ret_uuid");
+  std::optional<blender::IDProperty *> idprop_optptr =
+      BPY_run_string_exec_with_locals_return_idprop(nullptr, script, *locals, "ret_uuid");
 
-    if (!idprop_optptr) {
-      custom_library.runtime->invalid_uuid = "<error-reading-uuid>";
-      return;
-    }
-    IDProperty *ret_idprop = *idprop_optptr;
-
-    /* Check the returned value. */
-    if (ret_idprop == nullptr || ret_idprop->type != IDP_STRING) {
-      custom_library.runtime->invalid_uuid = "<error-reading-uuid>";
-      IDP_FreeProperty(ret_idprop);
-      return;
-    }
-
-    bUUID ret_uuid;
-    const char *ret_uuid_str = IDP_string_get(ret_idprop);
-    if (!BLI_uuid_parse_string(&ret_uuid, ret_uuid_str)) {
-      custom_library.runtime->invalid_uuid = ret_uuid_str;
-      IDP_FreeProperty(ret_idprop);
-      return;
-    }
-    IDP_FreeProperty(ret_idprop);
-    custom_library.runtime->uuid = ret_uuid;
+  if (!idprop_optptr) {
+    custom_library.runtime->invalid_uuid = "<error-reading-uuid>";
+    return;
   }
+  IDProperty *ret_idprop = *idprop_optptr;
+
+  /* Check the returned value. */
+  if (ret_idprop == nullptr || ret_idprop->type != IDP_STRING) {
+    custom_library.runtime->invalid_uuid = "<error-reading-uuid>";
+    IDP_FreeProperty(ret_idprop);
+    return;
+  }
+
+  bUUID ret_uuid;
+  const char *ret_uuid_str = IDP_string_get(ret_idprop);
+  if (!BLI_uuid_parse_string(&ret_uuid, ret_uuid_str)) {
+    custom_library.runtime->invalid_uuid = ret_uuid_str;
+    IDP_FreeProperty(ret_idprop);
+    return;
+  }
+  IDP_FreeProperty(ret_idprop);
+  custom_library.runtime->uuid = ret_uuid;
 #endif
 }
 

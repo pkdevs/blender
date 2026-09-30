@@ -61,35 +61,25 @@ bool AssetLibraryListItemCommon::rename(const bContext &C, StringRefNull new_nam
 static void asset_library_identifier_invalid_error_draw(ui::Layout &layout,
                                                         const AnyAssetLibraryDefinition &library)
 {
-  if (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED) {
-    ui::Layout &row = layout.row(false);
-    row.red_alert_set(true);
-    row.label_multiline(
-        "Asset Library has an invalid identifier (invalid UUID). Either manually edit the "
-        "configuration file or regenerate it here.",
-        ICON_ERROR,
-        ui::UI_STYLE_TEXT_LEFT,
-        7);
-    ui::Layout &row2 = row.row(false);
-    row2.alignment_set(ui::LayoutAlign::Left);
-    row2.red_alert_set(false);
+  const bool is_project_defined = library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED;
+  ui::Layout &row = layout.row(false);
+  row.red_alert_set(true);
+  StringRefNull error_message = is_project_defined ?
+                                "Asset Library has an invalid identifier (invalid UUID). Either "
+                                "manually edit the configuration file or regenerate it here." :
+                                "Asset Library has an invalid identifier (invalid UUID). Manually "
+                                "edit the configuration file.";
+  row.label_multiline(error_message, ICON_ERROR, ui::UI_STYLE_TEXT_LEFT, 7);
+  ui::Layout &row2 = row.row(false);
+  row2.alignment_set(ui::LayoutAlign::Left);
+  row2.red_alert_set(false);
+  if (is_project_defined) {
     row2.button("Regenerate UUID", 0, [library](blender::bContext & /*C*/) {
       library.user_library->runtime->invalid_uuid.clear();
     });
-    return;
   }
-  ui::Layout &row = layout.row(false);
-  row.red_alert_set(true);
-  if (BLI_uuid_is_nil(library.user_library->runtime->uuid)) {
-    row.label_multiline(
-        "Asset Library has an invalid identifier (invalid UUID). Manually edit the "
-        "configuration file.",
-        ICON_ERROR,
-        ui::UI_STYLE_TEXT_LEFT,
-        7);
-    ui::Layout &row2 = row.row(false);
-    row2.alignment_set(ui::LayoutAlign::Left);
-    row2.red_alert_set(false);
+  else {
+    /* Add a button that opens containing folder so user can fix the invalid UUID.*/
     PointerRNA op_ptr = row2.op("WM_OT_path_open", "Open Asset Library folder", ICON_FILE_FOLDER);
     RNA_string_set(&op_ptr, "filepath", library.user_library->resolved_dirpath);
   }
@@ -153,7 +143,6 @@ void draw_active_library_settings(const bContext *C,
       }
     }
     else {
-
       layout.prop(&library_ptr, "path", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       layout.prop(&library_ptr, "import_method", UI_ITEM_NONE, IFACE_("Import Method"), ICON_NONE);
       layout.prop(&library_ptr, "use_relative_path", UI_ITEM_NONE, std::nullopt, ICON_NONE);
