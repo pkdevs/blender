@@ -38,7 +38,7 @@ class NODE_OT_change_factor(Operator, NWBase):
         option = self.option
         any_socket_modified = False
 
-        if option in {0.0, 1.0}:    
+        if option in {0.0, 1.0}:
             for node in context.selected_nodes:
                 if socket := node.inputs.get("Factor"):
                     socket.hide = False
