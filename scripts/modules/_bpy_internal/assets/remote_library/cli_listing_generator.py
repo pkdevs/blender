@@ -93,7 +93,7 @@ def cli_main(arguments_raw: argparse.Namespace) -> None:
         files.extend(dependencies_in_file)
     _sort_assets(assets)
 
-    # Avoid duplicate file entries
+    # Remove duplicate file entries
     unique_paths: set[str] = set()
     unique_files: list[api_models.FileV1] = []
     for file in files:

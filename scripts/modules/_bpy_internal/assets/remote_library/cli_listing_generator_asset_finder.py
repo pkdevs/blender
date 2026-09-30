@@ -10,12 +10,10 @@ import os
 import re
 import shutil
 import unicodedata
-import typing
 import urllib.parse
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
-from dataclasses import dataclass
 
 import bpy
 
@@ -51,10 +49,10 @@ class FileVersionInfo:
     path: Path
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class DependencyFile:
     absolute_path: Path
-    blendlib_version: BlenderVersion | None = None  # None means the file is not at blender file
+    blendlib_version: BlenderVersion | None = None  # None means the file is not at blend file
 
 
 # Match numbers after `@b`, but do not allow leading zeroes. This prevents having different markers (and thus different
