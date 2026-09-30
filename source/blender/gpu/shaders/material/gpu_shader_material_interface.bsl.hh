@@ -34,10 +34,12 @@ enum eObjectInfoFlag : uint32_t {
   OBJECT_NO_INFO = ~OBJECT_HOLDOUT
 };
 
-#define RAY_TYPE_CAMERA 0
-#define RAY_TYPE_SHADOW 1
-#define RAY_TYPE_DIFFUSE 2
-#define RAY_TYPE_GLOSSY 3
+enum RayPipelineType : uint32_t {
+  RAY_TYPE_CAMERA,
+  RAY_TYPE_SHADOW,
+  RAY_TYPE_DIFFUSE,
+  RAY_TYPE_GLOSSY,
+};
 
 /* Expected members of ViewMatrices. */
 struct ViewMatrices {
@@ -319,15 +321,11 @@ float ambient_occlusion_eval([[resource_table]] const KernelGlobals & /*kg*/,
 
 /* Attribute node occlusion node. */
 
-float4 attr_load_color_post(float4 attr)
+float4 attr_load_color_post([[resource_table]] KernelGlobals & /*kg*/, float4 attr)
 {
   return attr;
 }
-float attr_load_temperature_post(float attr)
-{
-  return attr;
-}
-float4 attr_load_radiance_post(float4 attr)
+float attr_load_temperature_post([[resource_table]] KernelGlobals & /*kg*/, float attr)
 {
   return attr;
 }
@@ -385,7 +383,7 @@ void scene_time_uniforms([[resource_table]] KernelGlobals & /*kg*/,
 {
 }
 
-/* Shadow Raycast Node. */
+/* Shadow Ray-cast Node. */
 
 void node_shadow_raycast_impl([[resource_table]] KernelGlobals & /*kg*/,
                               const ShadingData & /*sd*/,
@@ -449,7 +447,7 @@ template void node_light_evaluation_impl<true>(
 template void node_light_evaluation_impl<false>(
     KernelGlobals &, const ShadingData &, int, float3, float3, float, float &);
 
-/* Raycast Node. */
+/* Ray-cast Node. */
 
 void raycast_eval([[resource_table]] KernelGlobals & /*kg*/,
                   const ShadingData & /*sd*/,
