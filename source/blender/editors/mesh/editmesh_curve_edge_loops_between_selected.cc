@@ -143,7 +143,8 @@ void MESH_OT_curve_edge_loops_between_selected(wmOperatorType *ot)
                prop_clamp_elevation_items,
                CURVE_CLAMP_ELEVATION_NONE,
                "Clamp Elevation",
-               "Restrictions on how the vertices can be moved");
+               "Restrictions on how the vertices can be moved "
+               "(wire edges are not supported)");
   RNA_def_boolean(ot->srna,
                   "extend_loop",
                   false,

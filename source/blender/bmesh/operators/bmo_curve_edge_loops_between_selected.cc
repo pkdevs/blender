@@ -132,8 +132,8 @@ static void calculate_splines_axis(const Span<float> distances,
 }
 
 /**
- * Starts at a specific edge and walks continuously in one direction along quad edges until it
- * loops back into itself in a circle or hits the end of the edge loop.
+ * Starts at a specific edge and walks continuously in one direction along quad or wire edges
+ * until it loops back into itself in a circle or hits the end of the edge loop.
  */
 static void traverse_edge_loop(BMVert *v_start,
                                BMEdge *e_start,
@@ -172,8 +172,17 @@ static void traverse_edge_loop(BMVert *v_start,
       }
     }
 
-    if (edge_count < 3 || edge_count > 4) {
-      break;
+    if (is_wire) {
+      /* Stop at the end of a wire chain or where it branches. */
+      if (edge_count != 2) {
+        break;
+      }
+    }
+    else {
+      /* Stop at poles & corners, where the loop has no single continuation. */
+      if (edge_count < 3 || edge_count > 4) {
+        break;
+      }
     }
     BM_ITER_ELEM (e, &iter, v_next, BM_EDGES_OF_VERT) {
       if (BM_edge_is_wire(e) != is_wire) {
@@ -576,7 +585,8 @@ static void execute_curve_chain(const Span<BMVert *> input_chain,
     const float3 old_pos(vert->co);
     const float3 delta = new_pos - old_pos;
 
-    if (clamp_elevation != CURVE_CLAMP_ELEVATION_NONE) {
+    /* Wire vertices have no face normal to clamp against. */
+    if ((clamp_elevation != CURVE_CLAMP_ELEVATION_NONE) && !BM_vert_is_wire(vert)) {
       if (math::length_squared(delta) > math::square(CURVE_EPSILON)) {
         const float3 normal(vert->no);
         const float dot_val = math::dot(delta, normal);
