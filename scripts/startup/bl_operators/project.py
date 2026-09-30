@@ -156,6 +156,7 @@ class ProjectConfig:
     name: str
     variables: list[ProjectVariable] | None = None
     asset_libraries: list[AssetLibraryDefinition] | None = None
+    ocio_config: str = ""
 
     @staticmethod
     def new_from_real(project):
@@ -186,6 +187,7 @@ class ProjectConfig:
             name=project.name,
             variables=variables,
             asset_libraries=asset_list,
+            ocio_config=project.ocio_config_path,
         )
 
     def populate_real(self, project):
@@ -193,6 +195,9 @@ class ProjectConfig:
         if self.variables is not None:
             for config_var in self.variables:
                 config_var.add_as_real(bpy.data.project.variables)
+
+        # Populate the project's OpenColorIO config path.
+        project.ocio_config_path = self.ocio_config
 
         if self.asset_libraries is None:
             return
@@ -345,7 +350,7 @@ def save_project(project, report=None):
     config_path = root_path.joinpath(PROJECT_DIR, PROJECT_CONFIG)
 
     try:
-        with config_path.open(mode='wt') as f:
+        with config_path.open(mode='wt', encoding='utf-8', newline='\n') as f:
             f.write(config_toml)
     except PermissionError:
         if report:
@@ -772,10 +777,6 @@ class PROJECT_OT_AssetLibraryAdd(Operator):
             .decode('utf-8', 'ignore') \
             or data_(ASSET_LIBRARY_DEFAULT_NAME)
 
-        # Replace base path with {project_root} if it is within the project folder.
-        root_path = bpy.data.project.root_path
-        if asset_library_path.startswith(root_path):
-            asset_library_path = "{project_root}" + asset_library_path[len(root_path):]
         bpy.data.project.asset_libraries.new(name=asset_library_name, directory=asset_library_path)
 
         return {'FINISHED'}

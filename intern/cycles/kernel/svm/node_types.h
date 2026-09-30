@@ -71,6 +71,18 @@ struct SVMNodeBooleanMath {
 static_assert(alignof(SVMNodeBooleanMath) <= alignof(uint));
 static_assert(sizeof(SVMNodeBooleanMath) % sizeof(uint) == 0);
 
+/* NODE_INTEGER_MATH */
+struct SVMNodeIntegerMath {
+  NodeIntegerMathType math_type;
+  SVMInputInt value1;
+  SVMInputInt value2;
+  SVMInputInt value3;
+  SVMStackOffset result_offset;
+  uint8_t _pad[3];
+};
+static_assert(alignof(SVMNodeIntegerMath) <= alignof(uint));
+static_assert(sizeof(SVMNodeIntegerMath) % sizeof(uint) == 0);
+
 /* NODE_CLAMP */
 struct SVMNodeClamp {
   NodeClampType clamp_type;
@@ -198,6 +210,8 @@ static_assert(sizeof(SVMNodeLightPath) % sizeof(uint) == 0);
 /* NODE_ATTR / NODE_ATTR_DERIVATIVE */
 struct SVMNodeAttr {
   int attr;
+  SVMInputFloat3 missing;
+  SVMInputFloat missing_alpha;
   SVMStackOffset out_offset;
   NodeAttributeOutputType output_type;
   NodeBumpOffset bump_offset;
@@ -751,6 +765,8 @@ static_assert(sizeof(SVMNodeTexGradient) % sizeof(uint) == 0);
 struct SVMNodeTexImage {
   int id;
   uint projection; /* NodeImageProjection */
+  SVMInputFloat3 missing;
+  SVMInputFloat missing_alpha;
   uint8_t flags;
   SVMStackOffset co;
   SVMStackOffset out_offset;
@@ -763,6 +779,8 @@ static_assert(sizeof(SVMNodeTexImage) % sizeof(uint) == 0);
 struct SVMNodeTexImageBox {
   int id;
   float blend;
+  SVMInputFloat3 missing;
+  SVMInputFloat missing_alpha;
   uint8_t flags;
   SVMStackOffset co;
   SVMStackOffset out_offset;
@@ -775,6 +793,8 @@ static_assert(sizeof(SVMNodeTexImageBox) % sizeof(uint) == 0);
 struct SVMNodeTexEnvironment {
   int id;
   NodeEnvironmentProjection projection;
+  SVMInputFloat3 missing;
+  SVMInputFloat missing_alpha;
   uint8_t flags;
   SVMStackOffset co;
   SVMStackOffset out_offset;

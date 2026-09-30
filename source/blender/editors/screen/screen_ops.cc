@@ -794,17 +794,21 @@ bool ED_operator_uvedit_space_image(bContext *C)
 bool ED_operator_uvmap(bContext *C)
 {
   Object *obedit = CTX_data_edit_object(C);
-  BMEditMesh *em = nullptr;
-
-  if (obedit && obedit->type == OB_MESH) {
-    em = BKE_editmesh_from_object(obedit);
+  if (!obedit) {
+    return false;
   }
-
-  if (em && (em->bm->totface)) {
-    return true;
+  if (obedit->type != OB_MESH) {
+    return false;
   }
-
-  return false;
+  BMEditMesh *em = BKE_editmesh_from_object(obedit);
+  if (!em) {
+    return false;
+  }
+  const BMesh *bm = BKE_editmesh_bmesh_get(obedit);
+  if (bm->totface == 0) {
+    return false;
+  }
+  return true;
 }
 
 bool ED_operator_editsurfcurve(bContext *C)
@@ -7039,6 +7043,13 @@ std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen
   if (!play_screen || !play_screen->animtimer) {
     return std::nullopt;
   }
+
+  /* Only continue if playback is running in this screen, so scrubbing in
+   * another screen does not interrupt playback. See #164040. */
+  if (play_screen != &screen) {
+    return std::nullopt;
+  }
+
   const ScreenAnimData *sad = static_cast<ScreenAnimData *>(play_screen->animtimer->customdata);
   if (sad == nullptr) {
     return std::nullopt;
