@@ -52,7 +52,7 @@ class FileVersionInfo:
 @dataclasses.dataclass(frozen=True)
 class DependencyFile:
     absolute_path: Path
-    blendlib_version: BlenderVersion | None = None  # None means the file is not at blend file
+    blendlib_version: BlenderVersion | None = None  # None means the file is not at blend file.
 
 
 # Match numbers after `@b`, but do not allow leading zeroes. This prevents having different markers (and thus different
