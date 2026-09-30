@@ -119,8 +119,8 @@ class DeviceInfo {
   bool operator==(const DeviceInfo &info) const
   {
     /* Multiple Devices with the same ID would be very bad. */
-   if(id != info.id ||
-           (type == info.type && num == info.num && description == info.description)){
+   if(!(id != info.id ||
+           (type == info.type && num == info.num && description == info.description))){
       LOG_WARNING << "id=" << id << ",info.id=" << info.id;
       LOG_WARNING << "type=" << type << ",info.type=" << info.type;
       LOG_WARNING << "num=" << num << ",info.num=" << info.num;
