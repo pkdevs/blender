@@ -387,6 +387,21 @@ template<typename T> inline T mix_indices(const Span<T> src, const Span<int> ind
   return accum;
 }
 
+template<> inline float2 mix_indices(const Span<float2> source, const Span<int> indices)
+{
+  if (indices.is_empty()) {
+    return float2(0.0f);
+  }
+  /* Mesh operations average UV coordinates through this function. Rounding during interpolation
+   * can change a component shared by every source. Offsets from a source value preserve it. */
+  const float2 reference = source[indices[0]];
+  float2 offsets(0.0f);
+  for (const int index : indices.drop_front(1)) {
+    offsets += source[index] - reference;
+  }
+  return reference + offsets * math::rcp(float(indices.size()));
+}
+
 template<typename T, typename ToAccumFn, typename ToFinalFn>
 inline T mix_indices(const Span<T> src,
                      const Span<int> indices,
@@ -455,6 +470,36 @@ inline T mix_indices(const Span<T> src, const Span<int> indices, const Span<floa
     weight_accum += weights[i];
   }
   return accum * math::safe_rcp(weight_accum);
+}
+
+template<>
+inline float2 mix_indices(const Span<float2> source,
+                          const Span<int> indices,
+                          const Span<float> weights)
+{
+  if (indices.is_empty()) {
+    return float2(0.0f);
+  }
+  int reference_index = 0;
+  float weight_sum = weights[0];
+  for (const int i : indices.index_range().drop_front(1)) {
+    weight_sum += weights[i];
+    if (math::abs(weights[i]) > math::abs(weights[reference_index])) {
+      reference_index = i;
+    }
+  }
+  if (weight_sum == 0.0f) {
+    return float2(0.0f);
+  }
+  /* The source with the largest weight magnitude reduces cancellation near a source corner,
+   * including when weights are negative. Unlike the CustomData callback, this function accepts
+   * arbitrary weight totals, so keep its normalization. */
+  const float2 reference = source[indices[reference_index]];
+  float2 offsets(0.0f);
+  for (const int i : indices.index_range()) {
+    offsets += (source[indices[i]] - reference) * weights[i];
+  }
+  return reference + offsets * math::rcp(weight_sum);
 }
 
 template<typename T, typename ToAccumFn, typename ToFinalFn>

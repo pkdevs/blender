@@ -776,6 +776,7 @@ if(WITH_GTESTS)
     intern/armature_deform_test.cc
     intern/armature_test.cc
     intern/asset_metadata_test.cc
+    intern/attribute_math_test.cc
     intern/attribute_storage_test.cc
     intern/bake_items_serialize_test.cc
     intern/blender_project_test.cc
