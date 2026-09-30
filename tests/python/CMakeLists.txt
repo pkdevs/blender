@@ -259,6 +259,12 @@ add_python_test(
   --blender "${TEST_BLENDER_EXE}"
 )
 
+# OpenColorIO config of projects found when opening blend files.
+add_blender_test(
+  script_ocio_config
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_ocio_config_tests.py
+)
+
 # test running operators doesn't segfault under various conditions
 if(WITH_TESTS_EXPERIMENTAL)
   add_blender_test(
@@ -751,6 +757,13 @@ add_blender_test(
 add_blender_test(
   bl_animation_context_markers
   --python ${TEST_PYTHON_DIR}/bl_animation_context_markers.py
+)
+
+add_blender_test(
+  bl_animation_copy_paste
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_animation_copy_paste.py
+  --
+  --testdir "${TEST_SRC_DIR}/animation"
 )
 
 add_blender_test(
@@ -1701,6 +1714,13 @@ if(TEST_SRC_DIR_EXISTS)
   )
 
   add_blender_test(
+    bl_grease_pencil_paint_tests
+    --python ${CMAKE_CURRENT_LIST_DIR}/sculpt_paint/grease_pencil_paint_tests.py
+    --
+    --testdir "${TEST_SRC_DIR}/grease_pencil"
+  )
+
+  add_blender_test(
     bl_sculpt_brush_curve_presets
     --python ${CMAKE_CURRENT_LIST_DIR}/sculpt_paint/brush_strength_curves_test.py
     --
@@ -1848,6 +1868,7 @@ if(WITH_UI_TESTS)
     test_tool_activation.image_editor
     test_tool_activation.node_editor
     test_tool_activation.sequencer
+    test_modifiers_constraints_draw.modifiers_constraints_draw
     test_preferences_draw_all.test_preferences_draw_all
     test_info_reports.test_info_report_selection_modes
     test_info_reports.test_info_report_delete
@@ -1878,6 +1899,7 @@ if(WITH_UI_TESTS)
     test_blend_autoexec.pref_disabled_drop_blend_file_trusted_source_enable_autoexec
     test_blend_autoexec.pref_disabled_open_file_selector_enable_autoexec
     test_blend_autoexec.pref_enabled_open_file_selector_untrusted_enable_autoexec
+    test_blend_autoexec.pref_disabled_drop_blend_file_trusted_source_next_enable_autoexec
   )
   foreach(ui_test ${_ui_tests_enable_autoexec})
     add_blender_test_ui(
@@ -1896,6 +1918,7 @@ if(WITH_UI_TESTS)
     test_blend_autoexec.pref_enabled_drop_blend_file_trusted_source_disable_autoexec
     test_blend_autoexec.pref_enabled_drop_blend_file_untrusted_trusted_source_disable_autoexec
     test_blend_autoexec.pref_enabled_open_file_selector_disable_autoexec
+    test_blend_autoexec.pref_enabled_drop_blend_file_trusted_source_next_disable_autoexec
   )
   foreach(ui_test ${_ui_tests_disable_autoexec})
     add_blender_test_ui(

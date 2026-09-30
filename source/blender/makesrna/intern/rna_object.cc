@@ -201,7 +201,7 @@ const EnumPropertyItem rna_enum_metaelem_type_items[] = {
     {MB_TUBE, "CAPSULE", ICON_META_CAPSULE, "Capsule", ""},
     {MB_PLANE, "PLANE", ICON_META_PLANE, "Plane", ""},
     /* NOTE: typo at original definition! */
-    {MB_ELIPSOID, "ELLIPSOID", ICON_META_ELLIPSOID, "Ellipsoid", ""},
+    {MB_ELLIPSOID, "ELLIPSOID", ICON_META_ELLIPSOID, "Ellipsoid", ""},
     {MB_CUBE, "CUBE", ICON_META_CUBE, "Cube", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
@@ -507,9 +507,12 @@ static void rna_Object_active_shape_update(Main *bmain, Scene * /*scene*/, Point
 
 static void rna_Object_dependency_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
+  Object *ob = id_cast<Object *>(ptr->owner_id);
   DEG_id_tag_update(ptr->owner_id, ID_RECALC_TRANSFORM);
   DEG_relations_tag_update(bmain);
   WM_main_add_notifier(NC_OBJECT | ND_PARENT, ptr->owner_id);
+
+  BKE_collection_object_parented_sort_index_reset(*bmain, *ob);
 }
 
 void rna_Object_data_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -2971,7 +2974,7 @@ static void rna_def_object_visibility(StructRNA *srna)
   RNA_def_property_ui_text(
       prop,
       "Raycast Visibility",
-      "Object visibility to raycast rays. Implicitly false for Blended materials.");
+      "Object visibility to raycast rays. Implicitly false for Blended materials in EEVEE.");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update_draw");
 }
 

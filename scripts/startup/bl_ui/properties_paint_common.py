@@ -527,40 +527,15 @@ class TextureMaskPanel(BrushPanel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
 
         brush = context.tool_settings.image_paint.brush
+
+        col = layout.column()
         mask_tex_slot = brush.mask_texture_slot
 
-        col = layout.column()
         col.template_ID_preview(mask_tex_slot, "texture", new="texture.new", rows=3, cols=8)
 
-        # map_mode
-        layout.row().prop(mask_tex_slot, "mask_map_mode", text="Mask Mapping")
-
-        if mask_tex_slot.map_mode == 'STENCIL':
-            if brush.mask_texture and brush.mask_texture.type == 'IMAGE':
-                layout.operator("brush.stencil_fit_image_aspect").mask = True
-            layout.operator("brush.stencil_reset_transform").mask = True
-
-        col = layout.column()
-        col.prop(brush, "use_pressure_masking", text="Pressure Masking")
-        # angle and texture_angle_source
-        if mask_tex_slot.has_texture_angle:
-            col = layout.column()
-            col.prop(mask_tex_slot, "angle", text="Angle")
-            if mask_tex_slot.has_texture_angle_source:
-                col.prop(mask_tex_slot, "use_rake", text="Rake")
-
-                if brush.brush_capabilities.has_random_texture_angle and mask_tex_slot.has_random_texture_angle:
-                    col.prop(mask_tex_slot, "use_random", text="Random")
-                    if mask_tex_slot.use_random:
-                        col.prop(mask_tex_slot, "random_angle", text="Random Angle")
-
-        # scale and offset
-        col.prop(mask_tex_slot, "offset")
-        col.prop(mask_tex_slot, "scale")
+        brush_mask_texture_settings(col, brush)
 
 
 class StrokePanel(BrushPanel):
@@ -1853,7 +1828,9 @@ def brush_basic__draw_color_selector(context, layout, brush, gp_settings):
             sub_row = row.row(align=True)
             sub_row.enabled = show_vertex_color
             sub_row.scale_x = 0.8
-            sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+            ups = settings.unified_paint_settings
+            prop_owner = ups if brush.use_unified_color else brush
+            sub_row.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
         row.prop(gp_settings, "pin_draw_mode", text="")
 
 
@@ -1879,37 +1856,27 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         size = "size"
         if brush.use_locked_size == 'SCENE' and (grease_pencil_brush_type == 'DRAW' or is_primitive_tool):
             size = "unprojected_size"
-        row = layout.row(align=True)
-        row.prop(brush, size, slider=True, text="Size")
-        row.prop(brush, "use_pressure_size", text="")
-        if not compact:
-            row.prop(
-                paint,
-                "show_size_curve",
-                text="",
-                icon='DOWNARROW_HLT' if paint.show_size_curve else 'RIGHTARROW',
-                emboss=False,
-            )
-            if paint.show_size_curve:
-                col = layout.column()
-                col.active = brush.use_pressure_size
-                col.template_curve_mapping(gp_settings, "curve_sensitivity", brush=True, show_presets=True)
-
-        row = layout.row(align=True)
-        row.prop(brush, "strength", slider=True, text="Strength")
-        row.prop(brush, "use_pressure_strength", text="")
-        if not compact:
-            row.prop(
-                paint,
-                "show_strength_curve",
-                text="",
-                icon='DOWNARROW_HLT' if paint.show_strength_curve else 'RIGHTARROW',
-                emboss=False,
-            )
-            if paint.show_strength_curve:
-                col = layout.column()
-                col.active = brush.use_pressure_strength
-                col.template_curve_mapping(gp_settings, "curve_strength", brush=True, show_presets=True)
+        UnifiedPaintPanel.prop_unified(
+            layout,
+            context,
+            brush,
+            size,
+            pressure_name="use_pressure_size",
+            unified_name="use_unified_size",
+            text="Size",
+            slider=True,
+            header=compact,
+        )
+        UnifiedPaintPanel.prop_unified(
+            layout,
+            context,
+            brush,
+            "strength",
+            pressure_name="use_pressure_strength",
+            unified_name="use_unified_strength",
+            text="Strength",
+            header=compact,
+        )
 
     if props:
         layout.prop(props, "subdivision")
@@ -1954,6 +1921,12 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
             row.prop_enum(brush.gpencil_settings, "stroke_type", 'BOTH', text="", icon='GP_DRAW_BOTH')
         else:
             row.prop(brush.gpencil_settings, "stroke_type")
+
+        row = layout.row(align=True)
+        if compact:
+            row.prop(gp_settings, "use_cyclic_stroke", text="")
+        else:
+            row.prop(gp_settings, "use_cyclic_stroke", text="Cyclic")
 
         row = layout.row(align=True)
         if compact:

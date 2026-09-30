@@ -10,7 +10,7 @@
  * Unlike regular versioning this makes changes that ensure the startup file
  * has brushes and other presets setup to take advantage of newer features.
  *
- * To update preference defaults see `userdef_default.c`.
+ * To update preference defaults see `versioning_userdef.cc`.
  */
 
 #define DNA_DEPRECATED_ALLOW
@@ -640,7 +640,6 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
       ma = static_cast<Material *>(
           BLI_findstring(&bmain->materials, "Solid Stroke", offsetof(ID, name) + 2));
       if (ma != nullptr) {
-        ma->gp_style->mix_rgba[3] = 1.0f;
         ma->gp_style->texture_offset[0] = -0.5f;
         ma->gp_style->mix_factor = 0.5f;
       }
@@ -650,7 +649,6 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
           BLI_findstring(&bmain->materials, "Solid Fill", offsetof(ID, name) + 2));
       if (ma != nullptr) {
         ma->gp_style->flag &= ~GP_MATERIAL_STROKE_SHOW;
-        ma->gp_style->mix_rgba[3] = 1.0f;
         ma->gp_style->texture_offset[0] = -0.5f;
         ma->gp_style->mix_factor = 0.5f;
       }

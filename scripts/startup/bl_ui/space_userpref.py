@@ -1777,8 +1777,8 @@ class USERPREF_PT_saveload_autorun(FilePathsPanel, Panel):
 
         text = iface_("Auto Run Python Scripts")
 
-        if bpy.app.autoexec_override:
-            if bpy.app.autoexec:
+        if (autoexec_override := bpy.app.autoexec_override) is not None:
+            if autoexec_override:
                 text_warn = iface_("enabled on startup, overriding the preference")
             else:
                 text_warn = iface_("disabled on startup, overriding the preference")
@@ -1795,6 +1795,14 @@ class USERPREF_PT_saveload_autorun(FilePathsPanel, Panel):
         layout.use_property_decorate = False  # No animation.
 
         layout.active = paths.use_scripts_auto_execute
+
+        if paths.use_scripts_auto_execute:
+            layout.label_multiline(
+                text=(
+                    "Opening blend files from the internet and other untrusted sources is unsafe with Auto-Run. Use with caution."
+                ),
+                icon='STATUS_WARNING',
+            )
 
         box = layout.box()
         row = box.row()
