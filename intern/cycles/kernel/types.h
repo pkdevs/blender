@@ -608,10 +608,8 @@ enum ReSTIRLightReferenceFlag : uint {
   RESTIR_LIGHT_REFERENCE_HAS_PARAM = (1u << 1),
 };
 
-/**
- * Persistent identity and emitter-local parameterization of a selected light sample.
- * Target-dependent LightSample fields are reconstructed when the sample is reused.
- */
+/* Persistent identity and emitter-local parameterization of a selected light sample.
+ * Target-dependent LightSample fields are reconstructed when the sample is reused. */
 struct LightSampleReference {
   LightType type;
   uint flags;
@@ -619,37 +617,49 @@ struct LightSampleReference {
   int object;
   int prim;
 
-  /*
-   * Emitter-specific canonical sample parameters.
-   *
-   * LIGHT_TRIANGLE:
-   *   Triangle barycentric coordinates. These also correspond to the u/v
-   *   parameters required by shader_setup_from_sample().
-   *
-   * LIGHT_POINT sphere:
-   *   Encoded light-local sphere-surface normal.
-   *
-   * LIGHT_POINT delta:
-   *   Unused.
-   *
-   * LIGHT_SPOT:
-   *   Unused for delta-position spot lights.
-   *
-   * LIGHT_SUN finite angle:
-   *   Encoded selected light-local direction.
-   *
-   * LIGHT_SUN delta:
-   *   Unused.
-   *
-   * LIGHT_AREA:
-   *   Canonical emitter-local position.
-   *
-   * LIGHT_BACKGROUND:
-   *   Canonical sampled environment direction, if not represented elsewhere.
-   *
-   * Except for LIGHT_TRIANGLE, these parameters must not be passed directly
-   * to shader_setup_from_sample() as shader UV coordinates.
-   */
+/* Emitter-specific canonical sample parameters.
+ *
+ * LIGHT_TRIANGLE:
+ *   Triangle barycentric coordinates. These also correspond to the u/v
+ *   parameters required by shader_setup_from_sample().
+ *
+ * LIGHT_POINT sphere:
+ *   Encoded light-local sphere-surface normal (map_to_sphere() of the local normal).
+ *
+ * LIGHT_POINT disk (radius > 0):
+ *   Unit-disk (u, v) coordinates in the receiver-billboarded. The disk is re-oriented
+ *   toward whichever point reuses the sample.
+ *
+ * LIGHT_POINT delta (radius == 0):
+ *   Unused.
+ *
+ * LIGHT_SPOT sphere:
+ *   Same as LIGHT_POINT sphere.
+ *
+ * LIGHT_SPOT disk (radius > 0):
+ *   Same as LIGHT_POINT disk.
+ *
+ * LIGHT_SPOT delta (radius == 0):
+ *   Unused.
+ *
+ * LIGHT_SUN finite angle:
+ *   Encoded selected light-local direction.
+ *
+ * LIGHT_SUN delta:
+ *   Unused.
+ *
+ * LIGHT_AREA:
+ *   Canonical emitter-local position.
+ *
+ * LIGHT_BACKGROUND:
+ *   Canonical sampled environment direction, if not represented elsewhere.
+ *
+ * Except for LIGHT_TRIANGLE, these parameters must not be passed directly
+ * to shader_setup_from_sample() as shader UV coordinates.
+ *
+ * RESTIR_LIGHT_REFERENCE_HAS_PARAM indicates whether `param` holds a meaningful value for 
+ * this sample; it isn't implied by type alone (e.g. LIGHT_POINT/_SPOT only set it when r > 0).
+ */
   float2 param;
 };
 

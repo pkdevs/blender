@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "util/types_rgbe.h" // TODO(Tri): Make sure it doesn't conflict with spectral rendering...
+
 #include "kernel/types.h"
 #include "kernel/light/common.h" // light_reference helpers
 
@@ -20,7 +22,7 @@ struct Reservoir {
   /* Number of samples this reservoir represents. Temporal combination grows
    * it (capped by restir_temporal_sample/frame_count) as history accumulates
    * across samples/frames. */
-  int M = 1;
+  int M = 1; // !!!(Tri): Shared for both temporal frames & temporal samples...
 
   int num_light_samples;
   int num_bsdf_samples = 1;
@@ -107,7 +109,7 @@ if (reservoir->total_weight > 0) {
 }
 
 
-  /* Apply unbiased contribution weight. */
+  /* Apply unbiased contribution weight. */ // TODO(Tri): use unbiased flag?
   reservoir->total_weight /= reservoir->luminance; // !!!
 
   // if (!(isfinite(reservoir->total_weight) && reservoir->total_weight > 0.0f)) { // !!!: Suspicious
@@ -480,7 +482,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
   int i = 0;
 
   // TODO: this works for diffuse surfaces. For specular, probably `sd->wi` is needed instead.
-  // TODO: compress the data.
+  // TODO: compress the data. 
 
   reservoir->reference.type = (LightType)(int)buffer[i++];
   reservoir->reference.flags = (uint32_t)buffer[i++];
@@ -555,9 +557,10 @@ ccl_debug_printf( // Accepted candidates
  * SpatialReservoir::sd is. Written every sample, ping-ponged like the
  * reservoir buffer. */
 struct ReprojectionSurface {
-  float3 N;       // Shading normal
-  float depth;    // Position or linear depth
-  float2 motion;  // raster-space displacement toward the previous frame
+  float3 N;       /* Shading normal. */
+  float depth;    /* Position or linear depth. */
+  float2 motion;  /* raster-space displacement toward the previous frame. */
+// TODO(Tri): Compress: steal a sign bit or a spare bit from depth's mantissa, or pack it into motion
   bool is_valid;
 };
 
@@ -675,13 +678,17 @@ ccl_debug_printf(
  */
 struct GlobalReservoir {
   // File intern/cycles/util/types_rgbe.h
-  /* TODO(weizhen): Compress with rgbe. http://www.graphics.cornell.edu/online/formats/rgbe
+  /* TODO(weizhen): Compress with rgbe (at render buffer boundary only)
+   * in restir_unpack_reservoir_pt() / film_add_reservoir_pt() / film_write_pass_reservoir_pt()
+   * http://www.graphics.cornell.edu/online/formats/rgbe
    * https://www.graphics.cornell.edu/~bjw/rgbe.html
    * https://github.com/box/hdrCompressor/blob/master/src/rgbe/rgbe.c */
   Spectrum radiance;
   float total_weight = 0.0f;
   ShaderData sd;
   uint32_t path_flag;
+
+  // int M = 1;
 
   /* Information about the reconnection vertex (rcv). */
   int rcv_index;
@@ -797,7 +804,10 @@ ccl_device_inline bool restir_unpack_reservoir_pt(KernelGlobals kg,
   reservoir->total_weight = kernel_read_pass_float(buffer);
   reservoir->path_flag = (uint32_t)kernel_read_pass_float(buffer + 1);
   reservoir->rcv_index = (int)kernel_read_pass_float(buffer + 2);
-  reservoir->radiance = kernel_read_pass_float3(buffer + 3);
+
+  RGBE rgbe;
+  rgbe.f = kernel_read_pass_float(buffer + 3);
+  reservoir->radiance = rgb_to_spectrum(rgbe_to_rgb(rgbe));
 
 if (reservoir->total_weight > 0) {
 // !!!: If this isn't logged, The reservoir is being written but never consumed.

@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "util/types_rgbe.h"
+
 #include "kernel/integrator/path_state.h" // RNGState
 #include "kernel/film/write.h"
 
@@ -493,11 +495,12 @@ ccl_device_inline void film_write_emission_or_background_pass(
 
 // MARK: - 
 
+// RIS
 /* GI/PT counterpart of film_add_reservoir_di().
  * Merges a newly produced path throughput into the persistent PT reservoir. */
 // !!!: Logged and seems to be fine...
 // !!!: Doesn't require the geometry_term...
-ccl_device_inline void film_add_reservoir_pt(KernelGlobals kg,
+ccl_device_inline void film_add_reservoir_pt(KernelGlobals kg, // rgbe
                                              const uint32_t path_flag,
                                              const ccl_private Spectrum &throughput,
                                              ccl_private const RNGState *rng_state,
@@ -538,8 +541,7 @@ ccl_device_inline void film_add_reservoir_pt(KernelGlobals kg,
 
 // ccl_debug_printf("before add_sample\n");
 
-const bool selected =
-    global_reservoir_add_sample(&reservoir, throughput, rand);
+  const bool selected = global_reservoir_add_sample(&reservoir, throughput, rand);
 
 // ccl_debug_printf("film_add_reservoir_pt after add_sample selected=%d total=%f, reservoir.rcv_index=%d\n",
 //        (int)selected,
@@ -551,7 +553,9 @@ const bool selected =
   if (selected) {
     film_overwrite_pass_float (ptr + 1, (float)path_flag);
     film_overwrite_pass_float (ptr + 2, (float)reservoir.rcv_index); // New
-    film_overwrite_pass_float3(ptr + 3, reservoir.radiance); // !!!: Not serializing sd
+
+    const RGBE rgbe = rgb_to_rgbe(spectrum_to_rgb(reservoir.radiance)); // TODO(Tri): Test & validate
+    film_overwrite_pass_float(ptr + 3, rgbe.f); // !!!: Not serializing sd
   }
 
   film_overwrite_pass_float(ptr, reservoir.total_weight);
@@ -562,7 +566,7 @@ const bool selected =
 }
 
 // !!!: LOGGED This method's totally fine 
-ccl_device_inline void film_write_pass_reservoir_pt(KernelGlobals kg,
+ccl_device_inline void film_write_pass_reservoir_pt(KernelGlobals kg, // rgbe
                                                     ConstIntegratorState state,
                                                     ccl_private GlobalReservoir *reservoir,
                                                     ccl_global float *ccl_restrict render_buffer,
@@ -579,7 +583,11 @@ ccl_device_inline void film_write_pass_reservoir_pt(KernelGlobals kg,
   film_overwrite_pass_float(ptr, reservoir->total_weight);
   film_overwrite_pass_float(ptr + 1, (float)reservoir->path_flag);
   film_overwrite_pass_float(ptr + 2, (float)reservoir->rcv_index);
-  film_overwrite_pass_float3(ptr + 3, reservoir->radiance);
+
+  /* PT's radiance is the result of a recursive, stochastic path that already happened.
+   * So it must be persisted in render buffer. */
+  const RGBE rgbe = rgb_to_rgbe(spectrum_to_rgb(reservoir->radiance));
+  film_overwrite_pass_float(ptr + 3, rgbe.f);
 
 // // This tells us whether spatial resampling itself is replacing the valid initial reservoir with an empty one.
 // ccl_debug_printf("film_write_pass_reservoir_pt: PT SPATIAL WRITE pixel=%u write_prev=%d ptr=%p weight=%f\n",
@@ -800,7 +808,7 @@ ccl_device_inline void film_write_background(KernelGlobals kg,
 ccl_device_inline void film_write_pass_reservoir_at(ccl_private const Reservoir *reservoir,
                                                     ccl_global float *ccl_restrict ptr)
 {
-  // TODO(weizhen): it is possible to compress the light sample reference.
+  // TODO(weizhen): it is possible to compress the light sample reference. Possibly Not! we don't store any radiance here...
 
   film_overwrite_pass_float(ptr++, (float)reservoir->reference.type);
   film_overwrite_pass_float(ptr++, (float)reservoir->reference.flags);
@@ -813,7 +821,8 @@ ccl_device_inline void film_write_pass_reservoir_at(ccl_private const Reservoir 
 
   film_overwrite_pass_float(ptr++, reservoir->total_weight);
   film_overwrite_pass_float(ptr++, reservoir->luminance);
-  film_overwrite_pass_float(ptr,   (float)reservoir->M); // !!!: Issue here? canonical cannot keep reservoir_init()'s default (1) on empty reservoirs since this overwrites 'em
+  /* radiance isn't stored but rather derived via radiance_eval(); compute-for-bandwidth tradeoff. */
+  film_overwrite_pass_float(ptr,   (float)reservoir->M);
 
   if (reservoir->luminance > 0) {
     ccl_debug_printf("film_write_pass_reservoir_at(), total_weight=%f luminance=%f, (float)M=%f\n",

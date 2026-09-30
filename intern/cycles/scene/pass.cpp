@@ -416,10 +416,12 @@ PassInfo Pass::get_info(const PassType type,
       pass_info.num_components = 7;
       break;
     case PASS_RESTIR_PT_PREVIOUS_RESERVOIR:
-      pass_info.num_components = 6;
+      /* Would be 6 without RGBE compression. */
+      pass_info.num_components = 4;
       break;
     case PASS_RESTIR_PT_RESERVOIR:
-      pass_info.num_components = 6;
+      /* Would be 6 without RGBE compression. */
+      pass_info.num_components = 4;
       break;
 	  case PASS_SURFACE_DATA:
       pass_info.num_components = 8;
