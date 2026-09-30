@@ -7,6 +7,34 @@
 import bpy
 from bpy.app.handlers import persistent
 
+SIDEBAR_TAB_RETRY_INTERVAL = 0.05
+SIDEBAR_TAB_RETRY_COUNT = 100
+
+def make_sidebar_tool_tab_timer(screen_name):
+    remaining = SIDEBAR_TAB_RETRY_COUNT
+
+    def timer():
+        nonlocal remaining
+        screen = bpy.data.screens.get(screen_name)
+        if screen is None:
+            return None
+        for area in screen.areas:
+            if area.type != 'VIEW_3D':
+                continue
+            for region in area.regions:
+                if region.type != 'UI':
+                    continue
+                try:
+                    region.active_panel_category = 'Tool'
+                except (AttributeError, TypeError):
+                    # Region has not drawn its panels yet, retry shortly.
+                    remaining -= 1
+                    return SIDEBAR_TAB_RETRY_INTERVAL if remaining > 0 else None
+        return None
+
+    return timer
+
+
 
 def update_factory_startup_screens():
     # Storyboarding.
@@ -20,7 +48,15 @@ def update_factory_startup_screens():
             # Open sidebar in Dope-sheet.
             space = area.spaces.active
             space.show_region_ui = True
+        elif area.type == 'VIEW_3D':
+            # Open sidebar in the 3D viewport.
+            space = area.spaces.active
+            space.show_region_ui = True
 
+    bpy.app.timers.register(
+        make_sidebar_tool_tab_timer("Storyboarding"),
+        first_interval=SIDEBAR_TAB_RETRY_INTERVAL,
+    )
 
 def update_factory_startup_scenes():
     for scene in bpy.data.scenes:
