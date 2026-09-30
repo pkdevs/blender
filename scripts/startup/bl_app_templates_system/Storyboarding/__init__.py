@@ -40,8 +40,8 @@ def update_factory_startup_grease_pencils():
         grease_pencil.onion_keyframe_type = 'ALL'
 
     for layer in grease_pencil.layers:
-            if hasattr(layer, "use_lights"):
-                layer.use_lights = False
+        if hasattr(layer, "use_lights"):
+            layer.use_lights = False
 
 
 @persistent
