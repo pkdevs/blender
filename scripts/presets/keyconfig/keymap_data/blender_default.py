@@ -3167,11 +3167,8 @@ def km_sequencer(params):
          {"properties": [("linked_time", True), ("extend", True)]}),
         ("sequencer.select", {"type": params.select_mouse, "value": 'CLICK', "ctrl": True},
          {"properties": [("side_of_frame", True)]}),
-        # XXX TODO: TEMP-FIX for blade tool on alt-click , ctrl-click needs some treatment too.
-        # Better fix is needed than binding to click rather than press (which is what this does)
         ("sequencer.select", {"type": params.select_mouse, "value": params.select_mouse_value_fallback, "alt": True},
          {"properties": [("deselect_all", True), ("ignore_connections", True)]}),
-        # XXX TODO
         ("sequencer.select",
          {"type": params.select_mouse, "value": params.select_mouse_value_fallback, "alt": True, "shift": True},
          {"properties": [("toggle", True), ("ignore_connections", True)]}),
@@ -8795,6 +8792,10 @@ def km_sequencer_tool_generic_select_lcs(_params):
          {"properties": [("deselect_all", True)]}),
         ("sequencer.select", {"type": 'LEFTMOUSE', "value": 'PRESS',
          "shift": True}, {"properties": [("toggle", True)]}),
+        ("sequencer.select", {"type": 'LEFTMOUSE', "value": 'PRESS',
+         "alt": True}, {"properties": [("deselect_all", True), ("ignore_connections", True)]}),
+        ("sequencer.select", {"type": 'LEFTMOUSE', "value": 'PRESS',
+         "shift": True, "alt": True}, {"properties": [("toggle", True), ("ignore_connections", True)]}),
         ("anim.change_frame", {"type": 'RIGHTMOUSE', "value": 'PRESS',
          "shift": True}, {"properties": [("seq_solo_preview", True), ("pass_through_on_strip_handles", False)]}),
     ]
@@ -8943,15 +8944,7 @@ def km_sequencer_tool_blade(_params):
                  ("use_cursor_position", True),
                  ("ignore_connections", True),
              ]}),
-            # XXX TODO: should or should not be click?
             ("sequencer.split", {"type": 'LEFTMOUSE', "value": 'CLICK', "shift": True},
-             {"properties": [
-                 ("side", 'NO_CHANGE'),
-                 ("use_cursor_position", True),
-                 ("all_channels", True),
-             ]}),
-            # XXX TODO: should or should not be click?
-            ("sequencer.split", {"type": 'LEFTMOUSE', "value": 'CLICK', "shift": True, "alt": True},
              {"properties": [
                  ("side", 'NO_CHANGE'),
                  ("use_cursor_position", True),
