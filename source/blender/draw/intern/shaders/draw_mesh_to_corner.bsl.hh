@@ -32,19 +32,24 @@ struct GatherResources {
 
   [[push_constant]] const int start;
   [[push_constant]] const int count;
-  [[push_constant]] const int words_per_element;
+};
+
+/** The size of each element, specialized to allow the compiler to unroll the copy. */
+struct ElementSize {
+  [[compilation_constant]] int words_per_element;
 };
 
 /** `dst[i] = src[indices[i]]`. One thread processes one face corner. */
 [[compute, local_size(DRW_MESH_TO_CORNER_GROUP_SIZE)]]
 void gather_main([[resource_table]] GatherResources &srt,
+                 [[resource_table]] const ElementSize &element,
                  [[global_invocation_id]] const uint3 global_id)
 {
   if (global_id.x >= uint(srt.count)) {
     return;
   }
   const uint i = uint(srt.start) + global_id.x;
-  const uint words_num = uint(srt.words_per_element);
+  const uint words_num = uint(element.words_per_element);
   const uint src_start = uint(srt.indices[i]) * words_num;
   const uint dst_start = i * words_num;
   for (uint word = 0u; word < words_num; word++) {
@@ -60,19 +65,19 @@ struct ScatterFacesResources {
 
   [[push_constant]] const int start;
   [[push_constant]] const int count;
-  [[push_constant]] const int words_per_element;
 };
 
 /** Copy each face's value to all of its corners. One thread processes one face. */
 [[compute, local_size(DRW_MESH_TO_CORNER_GROUP_SIZE)]]
 void scatter_faces_main([[resource_table]] ScatterFacesResources &srt,
+                        [[resource_table]] const ElementSize &element,
                         [[global_invocation_id]] const uint3 global_id)
 {
   if (global_id.x >= uint(srt.count)) {
     return;
   }
   const uint face = uint(srt.start) + global_id.x;
-  const uint words_num = uint(srt.words_per_element);
+  const uint words_num = uint(element.words_per_element);
   const uint src_start = face * words_num;
   for (uint corner = srt.face_offsets[face]; corner < srt.face_offsets[face + 1]; corner++) {
     const uint dst_start = corner * words_num;
@@ -82,7 +87,13 @@ void scatter_faces_main([[resource_table]] ScatterFacesResources &srt,
   }
 }
 
-PipelineCompute gather(gather_main);
-PipelineCompute scatter_faces(scatter_faces_main);
+PipelineCompute gather_4(gather_main, ElementSize{.words_per_element = 1});
+PipelineCompute gather_8(gather_main, ElementSize{.words_per_element = 2});
+PipelineCompute gather_12(gather_main, ElementSize{.words_per_element = 3});
+PipelineCompute gather_16(gather_main, ElementSize{.words_per_element = 4});
+PipelineCompute scatter_faces_4(scatter_faces_main, ElementSize{.words_per_element = 1});
+PipelineCompute scatter_faces_8(scatter_faces_main, ElementSize{.words_per_element = 2});
+PipelineCompute scatter_faces_12(scatter_faces_main, ElementSize{.words_per_element = 3});
+PipelineCompute scatter_faces_16(scatter_faces_main, ElementSize{.words_per_element = 4});
 
 }  // namespace draw::mesh
