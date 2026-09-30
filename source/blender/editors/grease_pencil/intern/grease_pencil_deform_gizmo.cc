@@ -98,6 +98,10 @@ struct DeformGizmoGroup {
   Vector<Array<float3>> src_positions;
   Vector<Array<float>> src_radii;
 
+  int3 triangle_drawing_indices;
+  int3 triangle_point_indices;
+  float3x3 deformed_triangle_points;
+
   GreasePencil *grease_pencil_src;
 
   IndexMaskMemory memory;
@@ -159,6 +163,23 @@ static std::optional<float3x3> compute_homography_matrix(const DeformGizmoGroup 
   return homography_matrix;
 }
 
+static void update_triangle_data(DeformGizmoGroup *deform_group)
+{
+  const Vector<MutableDrawingInfo> drawings = deform_group->drawings;
+
+  for (const int i : IndexRange(3)) {
+    const int point_i = deform_group->triangle_point_indices[i];
+
+    if (point_i == -1) {
+      deform_group->deformed_triangle_points[i] = float3(0.0f);
+      continue;
+    }
+
+    const MutableDrawingInfo &info = drawings[deform_group->triangle_drawing_indices[i]];
+    deform_group->deformed_triangle_points[i] = info.drawing.strokes().positions()[point_i];
+  }
+}
+
 static void update_positions_transform(DeformGizmoGroup *deform_group)
 {
   const float4x4 matrix_space = float4x4(deform_group->transform_border->matrix_space);
@@ -198,6 +219,8 @@ static void update_positions_transform(DeformGizmoGroup *deform_group)
 
     info.drawing.tag_positions_changed();
   }
+
+  update_triangle_data(deform_group);
 
   DEG_id_tag_update(&deform_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(deform_group->update_data.context,
@@ -255,6 +278,8 @@ static void update_positions_prespective(DeformGizmoGroup *deform_group)
 
     info.drawing.tag_positions_changed();
   }
+
+  update_triangle_data(deform_group);
 
   DEG_id_tag_update(&deform_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(deform_group->update_data.context,
@@ -341,6 +366,8 @@ static void update_positions_grid(DeformGizmoGroup *deform_group)
 
     info.drawing.tag_positions_changed();
   }
+
+  update_triangle_data(deform_group);
 
   DEG_id_tag_update(&deform_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(deform_group->update_data.context,
@@ -618,6 +645,24 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
     }
   }
 
+  deform_group->triangle_point_indices = {-1, -1, -1};
+
+  /* Try to find 3 point. */
+  for (const int drawing_i : deform_group->selections.index_range()) {
+    const IndexMask selection = deform_group->selections[drawing_i];
+
+    if (selection.size() >= 3) {
+      for (const int i : IndexRange(3)) {
+        deform_group->triangle_drawing_indices[i] = drawing_i;
+        deform_group->triangle_point_indices[i] = int(selection[i]);
+      }
+
+      break;
+    }
+  }
+
+  update_triangle_data(deform_group);
+
   DEG_id_tag_update(&deform_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(deform_group->update_data.context,
                         NC_GEOM | ND_DATA | NA_EDITED,
@@ -749,6 +794,35 @@ static void deform_gizmo_draw_prepare(const bContext *C, wmGizmoGroup *gzgroup)
 
   if (should_recompute(C, gzgroup)) {
     recompute_gizmo_plane(C, gzgroup);
+  }
+  else {
+    const Vector<MutableDrawingInfo> drawings = deform_group->drawings;
+
+    bool is_moved = false;
+
+    for (const int i : IndexRange(3)) {
+      const int point_i = deform_group->triangle_point_indices[i];
+
+      if (point_i == -1) {
+        continue;
+      }
+
+      const MutableDrawingInfo &info = drawings[deform_group->triangle_drawing_indices[i]];
+
+      const float3 deformed_pos = deform_group->deformed_triangle_points[i];
+      const float3 current_pos = info.drawing.strokes().positions()[point_i];
+
+      /* Check if the point has moved besides from the deform. */
+      if (math::distance(deformed_pos, current_pos) > 0.0001f) {
+        is_moved = true;
+        break;
+      }
+    }
+
+    /* TODO. */
+    if (is_moved) {
+      recompute_gizmo_plane(C, gzgroup);
+    }
   }
 }
 
