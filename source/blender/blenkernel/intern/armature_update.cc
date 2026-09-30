@@ -60,8 +60,10 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/,
                                           bPoseChannel *pchan_tip)
 {
   bPoseChannel *pchan, *pchan_root = nullptr;
+  blender::Vector<bPoseChannel *> pchan_chain;
   bConstraint *con = nullptr;
   bSplineIKConstraint *ik_data = nullptr;
+  blender::Vector<float> bone_lengths;
   float totlength = 0.0f;
   int segcount = 0;
 
@@ -87,10 +89,12 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/,
     return;
   }
 
+  /* Resize the bone length and chain vectors to handle the entire chain length. */
+  pchan_chain.resize(ik_data->chainlen);
+  bone_lengths.resize(ik_data->chainlen);
+
   /* Find the root bone and the chain of bones from the root to the tip.
    * NOTE: this assumes that the bones are connected, but that may not be true... */
-  blender::Array<bPoseChannel *> pchan_chain(ik_data->chainlen);
-  blender::Array<float> bone_lengths(ik_data->chainlen);
   for (pchan = pchan_tip; pchan && (segcount < ik_data->chainlen);
        pchan = pchan->parent, segcount++)
   {
