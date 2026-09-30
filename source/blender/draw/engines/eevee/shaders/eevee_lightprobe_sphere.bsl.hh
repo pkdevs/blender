@@ -144,8 +144,9 @@ float3 parallax_eval(SphereProbeData probe, float3 P, float3 L)
   float3 lP = float4(P, 1.0f) * probe.world_to_probe_transposed;
   float3 lL = (L * to_float3x3(probe.world_to_probe_transposed)) / probe.parallax_distance;
 
-  float dist = (probe.parallax_shape == SHAPE_ELIPSOID) ? line_unit_sphere_intersect_dist(lP, lL) :
-                                                          line_unit_box_intersect_dist(lP, lL);
+  float dist = (probe.parallax_shape == SHAPE_ELLIPSOID) ?
+                   line_unit_sphere_intersect_dist(lP, lL) :
+                   line_unit_box_intersect_dist(lP, lL);
 
   /* Use distance in world space directly to recover intersection.
    * This works because we assume no shear in the probe matrix. */
@@ -202,14 +203,14 @@ struct LightprobeSphereRenderData {
     for (int index = 0; index < SPHERE_PROBE_MAX; index++) {
       SphereProbeData probe_data = lightprobe_sphere_buf[index];
       /* SphereProbeData doesn't contain any gap, exit at first item that is invalid. */
-      if (probe_data.atlas_coord.layer == -1) {
+      if (probe_data.atlas_coord.layer == -1.0f) {
         /* We hit the end of the array. Return last valid index. */
         return index - 1;
       }
       /* NOTE: The vector-matrix multiplication swapped on purpose to cancel the matrix transpose.
        */
       float3 lP = float4(P, 1.0f) * probe_data.world_to_probe_transposed;
-      float gradient = (probe_data.influence_shape == SHAPE_ELIPSOID) ?
+      float gradient = (probe_data.influence_shape == SHAPE_ELLIPSOID) ?
                            length(lP) :
                            max(max(abs(lP.x), abs(lP.y)), abs(lP.z));
       float score = saturate(probe_data.influence_bias - gradient * probe_data.influence_scale);
