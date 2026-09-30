@@ -978,22 +978,11 @@ void fill_attribute_range_default(MutableAttributeAccessor attributes,
 }
 
 void transform_custom_normal_attribute(const float4x4 &transform,
-                                       MutableAttributeAccessor &attributes,
-                                       const Mesh *mesh)
+                                       MutableAttributeAccessor &attributes)
 {
   PRF_scope(ProfileCategory::Default);
   const GAttributeReader normals = attributes.lookup("custom_normal");
   if (!normals) {
-    return;
-  }
-  if (normals.varray.type().is<short2>() && normals.domain == AttrDomain::Corner) {
-    float3 *new_data = MEM_malloc_arrayN<float3>(size_t(normals.varray.size()), __func__);
-    MutableSpan<float3> new_normals(new_data, normals.varray.size());
-    new_normals.copy_from(mesh->corner_normals());
-    math::transform_normals(float3x3(transform), new_normals);
-
-    attributes.remove("custom_normal");
-    attributes.add<float3>("custom_normal", AttrDomain::Corner, AttributeInitMoveArray(new_data));
     return;
   }
   if (!normals.varray.type().is<float3>()) {

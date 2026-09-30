@@ -1123,8 +1123,7 @@ void fill_attribute_range_default(MutableAttributeAccessor dst_attributes,
  * Apply a transform to the "custom_normal" attribute.
  */
 void transform_custom_normal_attribute(const float4x4 &transform,
-                                       MutableAttributeAccessor &attributes,
-                                       const Mesh *mesh = nullptr);
+                                       MutableAttributeAccessor &attributes);
 
 }  // namespace bke
 }  // namespace blender
