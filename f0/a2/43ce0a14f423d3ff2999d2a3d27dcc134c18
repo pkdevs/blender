@@ -1,1 +1,2 @@
 Referenced by issue #160523, Vulkan: the command builder doesn't store image layouts correctly for depth images.
+Referenced by pull request #164345, Vulkan: Fix image subresource tracking across rendering suspension
