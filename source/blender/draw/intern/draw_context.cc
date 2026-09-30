@@ -1471,8 +1471,6 @@ static void drw_callbacks_post_scene_view3d(DRWContext &draw_ctx)
 
   DefaultFramebufferList *dfbl = DRW_context_get()->viewport_framebuffer_list_get();
 
-  DRW_submission_start();
-
   GPU_framebuffer_bind(dfbl->overlay_fb);
 
   GPU_matrix_projection_set(rv3d->winmat);
