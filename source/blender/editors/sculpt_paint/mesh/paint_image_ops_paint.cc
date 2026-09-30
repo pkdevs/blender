@@ -494,6 +494,13 @@ struct ExperimentalTexturePaintStroke final : public PaintStroke {
       StrokeToggleSettings toggle_settings;
 
       toggle_settings.invert = stroke_mode == BrushStrokeMode::Invert || pen_flip;
+
+      if (this->brush && this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK) {
+        toggle_settings.invert = toggle_settings.invert ^
+                                 ((tool_settings->imapaint.flag &
+                                   IMAGEPAINT_PROJECT_LAYER_STENCIL_INV) != 0);
+      }
+
       ss.cache->toggle_settings = toggle_settings;
 
       /* TODO: Further toggle support */
@@ -534,7 +541,7 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
 
   std::unique_ptr<TexturePaintData> texture_paint_data = std::make_unique<TexturePaintData>();
   texture_paint_data->image_data = ImageData::init_active_image(*this->object, *settings_);
-  texture_paint_data->mask_data = ImageData::init_mask(*settings_);
+  texture_paint_data->mask_data = ImageData::init_mask_image(*settings_);
   if (!texture_paint_data->image_data ||
       (this->brush && this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK &&
        !texture_paint_data->mask_data))
@@ -661,11 +668,11 @@ static void do_brush_action(const Depsgraph &depsgraph,
   switch (brush.image_brush_type) {
     case IMAGE_PAINT_BRUSH_TYPE_DRAW:
       do_3d_image_paint_brush(
-          depsgraph, image_paint_settings, brush, ob, *mode_data->image_data, node_mask);
+          depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
       break;
     case IMAGE_PAINT_BRUSH_TYPE_MASK:
       do_3d_image_paint_brush(
-          depsgraph, image_paint_settings, brush, ob, *mode_data->mask_data, node_mask);
+          depsgraph, image_paint_settings.paint, brush, ob, *mode_data->mask_data, node_mask);
       break;
     default:
       /* TODO: Implement the rest of them... */

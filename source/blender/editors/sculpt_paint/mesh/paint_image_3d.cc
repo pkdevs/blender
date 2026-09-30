@@ -83,7 +83,7 @@ std::unique_ptr<ImageData> ImageData::init_active_image(Object &ob, ImagePaintSe
 
   return image_data;
 }
-std::unique_ptr<ImageData> ImageData::init_mask(ImagePaintSettings &settings)
+std::unique_ptr<ImageData> ImageData::init_mask_image(ImagePaintSettings &settings)
 {
   if (!settings.stencil) {
     return nullptr;
@@ -247,19 +247,13 @@ struct PaintBlendSettings {
   IMB_BlendMode blend_mode;
 };
 
-static PaintBlendSettings mask_brush_blend_settings(const ImagePaintSettings &paint_settings,
-                                                    const Brush &brush,
-                                                    const bool invert)
+static PaintBlendSettings mask_brush_blend_settings(const Brush &brush, const bool invert)
 {
   PaintBlendSettings blend_settings;
-  float mask_value = (invert ^
-                      ((paint_settings.flag & IMAGEPAINT_PROJECT_LAYER_STENCIL_INV) != 0)) ?
-                         1.0f - brush.weight :
-                         brush.weight;
-  blend_settings.brush_color = float4(float3(mask_value), 1.0f);
+  blend_settings.brush_color = float4(invert ? float3(1.0f - brush.weight) : float3(brush.weight),
+                                      1.0f);
   blend_settings.brush_alpha = brush.alpha;
   blend_settings.blend_mode = IMB_BlendMode(brush.blend);
-
   return blend_settings;
 }
 
@@ -797,7 +791,7 @@ static void fix_non_manifold_seam_bleeding(Object &ob,
 /** \} */
 
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
-                             const ImagePaintSettings &paint_settings,
+                             const Paint &paint,
                              const Brush &brush,
                              Object &ob,
                              ImageData &image_data,
@@ -812,9 +806,9 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
 
   const bool is_mask_brush = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK;
   const bool is_inverted = ob.runtime->sculpt_session->cache->toggle_settings.invert;
-  const PaintBlendSettings blend_settings =
-      is_mask_brush ? mask_brush_blend_settings(paint_settings, brush, is_inverted) :
-                      PaintBlendSettings(paint_settings.paint, brush, is_inverted);
+  const PaintBlendSettings blend_settings = is_mask_brush ?
+                                                mask_brush_blend_settings(brush, is_inverted) :
+                                                PaintBlendSettings(paint, brush, is_inverted);
 
   node_mask.foreach_index([&](const int i) {
     fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], is_mask_brush);

@@ -44,7 +44,7 @@ struct ImageData : NonCopyable {
   ~ImageData();
 
   static std::unique_ptr<ImageData> init_active_image(Object &ob, ImagePaintSettings &settings);
-  static std::unique_ptr<ImageData> init_mask(ImagePaintSettings &settings);
+  static std::unique_ptr<ImageData> init_mask_image(ImagePaintSettings &settings);
   const ImageUser &image_user_get() const
   {
     if (std::holds_alternative<ImageUser *>(image_user)) {
@@ -56,7 +56,7 @@ struct ImageData : NonCopyable {
 };
 
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
-                             const ImagePaintSettings &paint_settings,
+                             const Paint &paint,
                              const Brush &brush,
                              Object &ob,
                              ImageData &image_data,
