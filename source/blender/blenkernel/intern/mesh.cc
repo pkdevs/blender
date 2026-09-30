@@ -2088,9 +2088,6 @@ void mesh_translate(Mesh &mesh, const float3 &translation, const bool do_shape_k
 
 void mesh_transform(Mesh &mesh, const float4x4 &transform, bool do_shape_keys)
 {
-  MutableAttributeAccessor attributes = mesh.attributes_for_write();
-  transform_custom_normal_attribute(transform, attributes, &mesh);
-
   math::transform_points(transform, mesh.vert_positions_for_write());
 
   if (do_shape_keys && mesh.key) {
@@ -2098,6 +2095,8 @@ void mesh_transform(Mesh &mesh, const float4x4 &transform, bool do_shape_keys)
       math::transform_points(transform, MutableSpan(static_cast<float3 *>(kb.data), kb.totelem));
     }
   }
+  MutableAttributeAccessor attributes = mesh.attributes_for_write();
+  transform_custom_normal_attribute(transform, attributes);
 
   mesh.tag_positions_changed();
 }
