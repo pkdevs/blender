@@ -462,7 +462,7 @@ bool outliner_item_is_co_within_close_toggle(const TreeElement *te, float view_c
 void outliner_scroll_view(SpaceOutliner *space_outliner, ARegion *region, int delta_y)
 {
   int tree_width, tree_height;
-  outliner_tree_dimensions(space_outliner, &tree_width, &tree_height);
+  outliner_tree_dimensions(region, space_outliner, &tree_width, &tree_height);
   int y_min = std::min(int(region->v2d.cur.ymin), -tree_height);
 
   region->v2d.cur.ymax += delta_y;

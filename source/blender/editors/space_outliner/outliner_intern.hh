@@ -10,7 +10,9 @@
 
 #include <memory>
 
+#include "DNA_ID.h"
 #include "DNA_listBase.h"
+#include "DNA_object_types.h"
 
 #include "BLI_function_ref.hh"
 
@@ -63,6 +65,9 @@ struct SpaceOutliner_Runtime {
 
   /* Hash table for tree-store elements, using `(id, type, index)` as key. */
   std::unique_ptr<treehash::TreeHash> tree_hash;
+
+  bool have_warnings = false;
+  bool draw_cache_dirty = true;
 
   ListBaseT<ed::outliner::TreeElement> tree = {nullptr, nullptr};
 
@@ -126,7 +131,10 @@ struct TreeElement {
   short index;               /* Index for data arrays. */
   short idcode;              /* From TreeStore id. */
   short xend;                /* Width of item display, for select. */
+  int level;
+  int ymin;
   const char *name;
+  std::unique_ptr<struct MergedSubtree> merged_subtree;
   void *directdata; /* Armature Bones, Base, ... */
 };
 
@@ -316,7 +324,10 @@ bool outliner_treesort_tiebreak(bool a_is_object,
  */
 void draw_outliner(const bContext *C, bool do_rebuild);
 
-void outliner_tree_dimensions(SpaceOutliner *space_outliner, int *r_width, int *r_height);
+void outliner_tree_dimensions(ARegion *region,
+                              SpaceOutliner *space_outliner,
+                              int *r_width,
+                              int *r_height);
 
 TreeElementIcon tree_element_get_icon(TreeStoreElem *tselem, TreeElement *te);
 
@@ -526,12 +537,7 @@ void OUTLINER_OT_orphans_manage(wmOperatorType *ot);
 
 /* `outliner_query.cc` */
 
-/**
- * Iterate over the entire tree (including collapsed sub-elements),
- * probing if any of the elements has a warning to be displayed.
- */
 bool outliner_shows_mode_column(const SpaceOutliner &space_outliner);
-bool outliner_has_element_warnings(const SpaceOutliner &space_outliner);
 
 /* `outliner_tools.cc` */
 
@@ -714,6 +720,12 @@ template<typename TreeElementT> TreeElementT *tree_element_cast(const TreeElemen
                 "Requested tree-element type must be an AbstractTreeElement");
   return dynamic_cast<TreeElementT *>(te->abstract_element.get());
 }
+
+struct MergedSubtree {
+  eOLDrawState active[INDEX_ID_MAX + OB_TYPE_MAX];
+  int num_elements[INDEX_ID_MAX + OB_TYPE_MAX];
+  TreeElement *tree_element[INDEX_ID_MAX + OB_TYPE_MAX];
+};
 
 }  // namespace ed::outliner
 }  // namespace blender
