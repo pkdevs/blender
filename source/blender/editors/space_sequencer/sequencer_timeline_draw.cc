@@ -2130,7 +2130,7 @@ static void blade_box_draw(Scene *scene, const ARegion *region)
   /* Gather the strips the cut propagates to, like the split preview does. */
   VectorSet<Strip *> targets;
   for (Strip &candidate : *seqbase) {
-    if (!data.ignore_selection && (candidate.flag & SEQ_SELECT) == 0) {
+    if (data.only_selected && (candidate.flag & SEQ_SELECT) == 0) {
       continue;
     }
     if (seq::transform_is_locked(channels, &candidate)) {
@@ -2225,6 +2225,7 @@ static void blade_split_draw(
   const bool ignore_connections = !all_channels && ((modifier & KM_ALT) != 0 ||
                                                     split_tool_prop_from_toolsettings(
                                                         tref, "ignore_connections", false));
+  const bool only_selected = split_tool_prop_from_toolsettings(tref, "only_selected", false);
 
   const Strip *strip = strip_under_mouse_get(scene, v2d, mval);
   if (!all_channels) {
@@ -2234,7 +2235,7 @@ static void blade_split_draw(
   }
 
   VectorSet<Strip *> candidates = split_candidates_get(
-      scene, split_frame, split_channel, true, all_channels);
+      scene, split_frame, split_channel, true, all_channels, only_selected);
 
   /* Expand to the strips each split propagates to, skip chains that fail to split. */
   VectorSet<Strip *> targets;

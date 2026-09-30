@@ -136,7 +136,7 @@ struct EditingRuntime {
     rctf rect;
     bool remove_gaps = false;
     bool ignore_connections = false;
-    bool ignore_selection = false;
+    bool only_selected = false;
     bool is_active = false;
   } box_blade_preview;
 

@@ -218,8 +218,12 @@ VectorSet<Strip *> all_strips_from_context(bContext *C);
 /* XXX TODO: Make local to split code, remove from this header */
 /** Get strips that the split operator would attempt to split at \a `split_frame` before
  * effect/connected strip expansion in #seq::edit_strip_split.  */
-VectorSet<Strip *> split_candidates_get(
-    Scene *scene, int split_frame, int split_channel, bool split_at_cursor, bool all_channels);
+VectorSet<Strip *> split_candidates_get(Scene *scene,
+                                        int split_frame,
+                                        int split_channel,
+                                        bool split_at_cursor,
+                                        bool all_channels,
+                                        bool only_selected);
 
 /* Externals. */
 
