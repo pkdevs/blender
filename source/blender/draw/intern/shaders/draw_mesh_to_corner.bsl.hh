@@ -15,26 +15,10 @@
 
 #include "draw_defines.hh"
 
+#include "draw_attribute_shader_shared.hh"
 #include "gpu_shader_compat.hh"
 
 namespace draw::mesh {
-
-/**
- * Elements of each supported size. Use integers instead of floats so bit patterns of other types
- * that happen to be denormal floats (e.g. packed normals) are never flushed to zero.
- */
-struct Bytes4 {
-  uint x;
-};
-struct Bytes8 {
-  uint x, y;
-};
-struct Bytes12 {
-  uint x, y, z;
-};
-struct Bytes16 {
-  uint x, y, z, w;
-};
 
 /**
  * Both shaders process a batch of `count` elements starting at `start`, to stay within the
@@ -51,10 +35,10 @@ template<typename T> struct GatherResources {
   [[push_constant]] const int count;
 };
 
-template struct GatherResources<Bytes4>;
-template struct GatherResources<Bytes8>;
-template struct GatherResources<Bytes12>;
-template struct GatherResources<Bytes16>;
+template struct GatherResources<StoredUint>;
+template struct GatherResources<StoredUint2>;
+template struct GatherResources<StoredUint3>;
+template struct GatherResources<StoredUint4>;
 
 /** `dst[i] = src[indices[i]]`. One thread processes one face corner. */
 template<typename T>
@@ -69,10 +53,10 @@ void gather_main([[resource_table]] GatherResources<T> &srt,
   srt.dst[i] = srt.src[srt.indices[i]];
 }
 
-template void gather_main<Bytes4>(GatherResources<Bytes4> &, const uint3);
-template void gather_main<Bytes8>(GatherResources<Bytes8> &, const uint3);
-template void gather_main<Bytes12>(GatherResources<Bytes12> &, const uint3);
-template void gather_main<Bytes16>(GatherResources<Bytes16> &, const uint3);
+template void gather_main<StoredUint>(GatherResources<StoredUint> &, const uint3);
+template void gather_main<StoredUint2>(GatherResources<StoredUint2> &, const uint3);
+template void gather_main<StoredUint3>(GatherResources<StoredUint3> &, const uint3);
+template void gather_main<StoredUint4>(GatherResources<StoredUint4> &, const uint3);
 
 template<typename T> struct ScatterFacesResources {
   [[storage(0, read)]] const T (&src)[];
@@ -84,10 +68,10 @@ template<typename T> struct ScatterFacesResources {
   [[push_constant]] const int count;
 };
 
-template struct ScatterFacesResources<Bytes4>;
-template struct ScatterFacesResources<Bytes8>;
-template struct ScatterFacesResources<Bytes12>;
-template struct ScatterFacesResources<Bytes16>;
+template struct ScatterFacesResources<StoredUint>;
+template struct ScatterFacesResources<StoredUint2>;
+template struct ScatterFacesResources<StoredUint3>;
+template struct ScatterFacesResources<StoredUint4>;
 
 /** Copy each face's value to all of its corners. One thread processes one face. */
 template<typename T>
@@ -105,18 +89,18 @@ void scatter_faces_main([[resource_table]] ScatterFacesResources<T> &srt,
   }
 }
 
-template void scatter_faces_main<Bytes4>(ScatterFacesResources<Bytes4> &, const uint3);
-template void scatter_faces_main<Bytes8>(ScatterFacesResources<Bytes8> &, const uint3);
-template void scatter_faces_main<Bytes12>(ScatterFacesResources<Bytes12> &, const uint3);
-template void scatter_faces_main<Bytes16>(ScatterFacesResources<Bytes16> &, const uint3);
+template void scatter_faces_main<StoredUint>(ScatterFacesResources<StoredUint> &, const uint3);
+template void scatter_faces_main<StoredUint2>(ScatterFacesResources<StoredUint2> &, const uint3);
+template void scatter_faces_main<StoredUint3>(ScatterFacesResources<StoredUint3> &, const uint3);
+template void scatter_faces_main<StoredUint4>(ScatterFacesResources<StoredUint4> &, const uint3);
 
-PipelineCompute gather_4(gather_main<Bytes4>);
-PipelineCompute gather_8(gather_main<Bytes8>);
-PipelineCompute gather_12(gather_main<Bytes12>);
-PipelineCompute gather_16(gather_main<Bytes16>);
-PipelineCompute scatter_faces_4(scatter_faces_main<Bytes4>);
-PipelineCompute scatter_faces_8(scatter_faces_main<Bytes8>);
-PipelineCompute scatter_faces_12(scatter_faces_main<Bytes12>);
-PipelineCompute scatter_faces_16(scatter_faces_main<Bytes16>);
+PipelineCompute gather_4(gather_main<StoredUint>);
+PipelineCompute gather_8(gather_main<StoredUint2>);
+PipelineCompute gather_12(gather_main<StoredUint3>);
+PipelineCompute gather_16(gather_main<StoredUint4>);
+PipelineCompute scatter_faces_4(scatter_faces_main<StoredUint>);
+PipelineCompute scatter_faces_8(scatter_faces_main<StoredUint2>);
+PipelineCompute scatter_faces_12(scatter_faces_main<StoredUint3>);
+PipelineCompute scatter_faces_16(scatter_faces_main<StoredUint4>);
 
 }  // namespace draw::mesh
