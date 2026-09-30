@@ -1834,6 +1834,9 @@ void OneapiDevice::iterate_devices(OneAPIDeviceIteratorCallback cb, void *user_p
     if (device.has(sycl::aspect::ext_intel_pci_address)) {
       id.append("_" + device.get_info<sycl::ext::intel::info::device::pci_address>());
     }
+
+    LOG_WARNING << "new oneAPI device entry: " << id;
+
     (cb)(id.c_str(),
          name.c_str(),
          num,

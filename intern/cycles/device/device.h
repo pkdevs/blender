@@ -12,6 +12,7 @@
 #include "device/denoise.h"
 #include "device/memory.h"
 
+#include "util/log.h"
 #include "util/profiling.h"
 #include "util/stats.h"
 #include "util/string.h"
@@ -118,8 +119,14 @@ class DeviceInfo {
   bool operator==(const DeviceInfo &info) const
   {
     /* Multiple Devices with the same ID would be very bad. */
-    assert(id != info.id ||
-           (type == info.type && num == info.num && description == info.description));
+   if(id != info.id ||
+           (type == info.type && num == info.num && description == info.description)){
+      LOG_WARNING << "id=" << id << ",info.id=" << info.id;
+      LOG_WARNING << "type=" << type << ",info.type=" << info.type;
+      LOG_WARNING << "num=" << num << ",info.num=" << info.num;
+      LOG_WARNING << "description=" << description << ",info.description=" << info.description;
+   }
+
     return id == info.id && use_hardware_raytracing == info.use_hardware_raytracing &&
            kernel_optimization_level == info.kernel_optimization_level;
   }
