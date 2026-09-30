@@ -545,7 +545,7 @@ GPUDevice::Mem *CUDADevice::generic_alloc(device_memory &mem, const size_t pitch
     Mem *const cmem = GPUDevice::generic_alloc(mem, pitch_padding);
     mem.move_to_host = false;
 
-    if (cmem) {
+    if (cmem && mem.shared_pointer && mem.host_pointer != mem.shared_pointer) {
       memcpy(mem.shared_pointer, mem.host_pointer, mem.memory_size());
       host_free(mem.type, mem.host_pointer, mem.memory_size());
       mem.host_pointer = mem.shared_pointer;
