@@ -196,8 +196,8 @@ class TexturePaintUndoTest(unittest.TestCase):
         self._assert_pixels_equal(image, after_b, "Redo should restore second stroke")
 
     def test_image_editor_undo_redo_each_step_after_pack(self):
-        # Undoing the pack regenerates the image buffer, which the already applied
-        # image steps before it must restore again.
+        # Undoing pack regenerates the image buffer, test that we properly restore
+        # partial image undo steps from painting before packing.
         image = self._image_editor_startup()
         states = [("New Image", get_image_pixels(image))]
 

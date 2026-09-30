@@ -586,7 +586,7 @@ struct UndoImageHandle {
 enum class RestoreMode {
   /** Restore only tiles this undo step changed. */
   Changed,
-  /** Restore image buffers regenerated outside of image undoby memfile undo. */
+  /** Restore image buffers regenerated outside of image undo by memfile undo. */
   FullUpdateChanged,
   /** Restore all tiles (for debugging). */
   All,
