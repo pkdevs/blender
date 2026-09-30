@@ -1,1 +1,2 @@
 Referenced by issue #161827, "Render Audio" produces bad sound file (when called from scripts)
+Referenced by issue #164505, Audio mixdown produces nothing in background mode
