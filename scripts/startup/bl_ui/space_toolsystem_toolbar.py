@@ -2267,28 +2267,50 @@ class _defs_weight_paint:
         )
 
 
+def draw_deform_gizmo_settings(context, row, tool):
+    tool_settings = context.tool_settings
+    settings = tool_settings.gpencil_sculpt
+
+    props = tool.gizmo_group_properties("VIEW3D_GGT_grease_pencil_deform")
+    row.prop(props, "mode", expand=True)
+
+    if props.mode == "GRID":
+        row.prop(props, "subdivisions")
+
+    row.prop(settings, "use_scale_thickness", text="Scale Thickness")
+
+
 class _defs_grease_pencil_paint:
 
     @ToolDef.from_fn
     def select():
+        def draw_settings(context, layout, tool):
+            row = layout.row()
+            draw_deform_gizmo_settings(context, row, tool)
+
         return dict(
             idname="builtin.select",
             label="Tweak",
             icon="ops.generic.select",
+            widget="VIEW3D_GGT_grease_pencil_deform",
             keymap="3D View Tool: Tweak",
+            draw_settings=draw_settings,
         )
 
     @ToolDef.from_fn
     def box_select():
-        def draw_settings(_context, layout, tool):
+        def draw_settings(context, layout, tool):
             props = tool.operator_properties("view3d.select_box")
             row = layout.row()
             row.use_property_split = False
             row.prop(props, "mode", text="", expand=True, icon_only=True)
+
+            draw_deform_gizmo_settings(context, row, tool)
         return dict(
             idname="builtin.select_box",
             label="Select Box",
             icon="ops.generic.select_box",
+            widget="VIEW3D_GGT_grease_pencil_deform",
             keymap="3D View Tool: Select Box",
             draw_settings=draw_settings,
         )
@@ -2296,21 +2318,12 @@ class _defs_grease_pencil_paint:
     @ToolDef.from_fn
     def lasso_select():
         def draw_settings(context, layout, tool):
-            tool_settings = context.tool_settings
-            settings = tool_settings.gpencil_sculpt
-
             props = tool.operator_properties("view3d.select_lasso")
             row = layout.row()
             row.use_property_split = False
             row.prop(props, "mode", text="", expand=True, icon_only=True)
 
-            props = tool.gizmo_group_properties("VIEW3D_GGT_grease_pencil_deform")
-            row.prop(props, "mode", expand=True)
-
-            if props.mode == "GRID":
-                row.prop(props, "subdivisions")
-
-            row.prop(settings, "use_scale_thickness", text="Scale Thickness")
+            draw_deform_gizmo_settings(context, row, tool)
         return dict(
             idname="builtin.select_lasso",
             label="Select Lasso",
@@ -2322,12 +2335,14 @@ class _defs_grease_pencil_paint:
 
     @ToolDef.from_fn
     def circle_select():
-        def draw_settings(_context, layout, tool):
+        def draw_settings(context, layout, tool):
             props = tool.operator_properties("view3d.select_circle")
             row = layout.row()
             row.use_property_split = False
             row.prop(props, "mode", text="", expand=True, icon_only=True)
-            layout.prop(props, "radius")
+            row.prop(props, "radius")
+
+            draw_deform_gizmo_settings(context, row, tool)
 
         def draw_cursor(_context, tool, xy):
             from gpu_extras.presets import draw_circle_2d
@@ -2339,6 +2354,7 @@ class _defs_grease_pencil_paint:
             idname="builtin.select_circle",
             label="Select Circle",
             icon="ops.generic.select_circle",
+            widget="VIEW3D_GGT_grease_pencil_deform",
             keymap="3D View Tool: Select Circle",
             draw_settings=draw_settings,
             draw_cursor=draw_cursor,
