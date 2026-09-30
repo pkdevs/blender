@@ -780,7 +780,7 @@ class PrimitiveCreator:
                     if indices.shape[0] == 0:
                         continue
 
-                    # Reset UVMap to 0-1 : reset to Blener UVMAP => slide to 0-1 => go to glTF UVMap
+                    # Reset UVMap to 0-1 : reset to Blender UVMAP => slide to 0-1 => go to glTF UVMap
                     self.dots[uvmap_name + '1'][indices] -= 1
                     self.dots[uvmap_name + '1'][indices] *= -1
                     self.dots[uvmap_name + '0'][indices] -= u
@@ -1047,9 +1047,17 @@ class PrimitiveCreator:
 
             if self.blender_idxs_edges.shape[0] > 0:
                 # Export one glTF vert per unique Blender vert in a loose edge
-                self.blender_idxs = self.blender_idxs_edges
-                dots_edges, indices = fast_structured_np_unique(self.dots_edges, return_inverse=True)
-                self.blender_idxs = np.unique(self.blender_idxs_edges)
+                # Issue #2579: self.blender_idxs must come from the SAME dedup as
+                # self.dots_edges, matching primitive_creation_shared/_not_shared below.
+                # It previously came from an independent np.unique(blender_idxs_edges),
+                # which sorts by raw vertex index rather than by the structured dots_edges
+                # bytes, so its row order didn't match dots_edges/indices. POSITION is
+                # built from self.locs[self.blender_idxs] while other attributes are read
+                # straight off dots_edges, so the mismatch paired each vertex's position
+                # with another vertex's attribute value (e.g. a custom float attribute).
+                self.dots_edges, indices = fast_structured_np_unique(self.dots_edges, return_inverse=True)
+                dots_edges = self.dots_edges
+                self.blender_idxs = self.dots_edges['vertex_index']
 
                 self.attributes_edges_points = {}
 

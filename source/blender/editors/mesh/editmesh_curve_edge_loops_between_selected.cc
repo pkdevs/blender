@@ -71,7 +71,7 @@ static wmOperatorStatus edbm_curve_edge_loops_between_selected_exec(bContext *C,
 
     has_verts_selected = true;
 
-    if (!EDBM_op_callf(em,
+    if (!EDBM_op_callf(em->bm,
                        op,
                        "curve_edge_loops_between_selected geom=%hv factor=%f clamp_elevation=%i "
                        "extend_loop=%b regular=%b "

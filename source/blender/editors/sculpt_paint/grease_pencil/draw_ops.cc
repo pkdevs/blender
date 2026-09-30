@@ -111,7 +111,7 @@ static std::unique_ptr<GreasePencilStrokeOperation> get_stroke_operation(bContex
   const auto brush_switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
 
   if (mode == PaintMode::GPencil) {
-    if (eBrushGPaintType(brush.gpencil_brush_type) == GPAINT_BRUSH_TYPE_DRAW &&
+    if (brush.gpencil_brush_type == GPAINT_BRUSH_TYPE_DRAW &&
         brush_switch_mode == BrushSwitchMode::Erase)
     {
       /* Special case: We're using the draw tool but with the eraser mode, so create an erase
@@ -119,7 +119,7 @@ static std::unique_ptr<GreasePencilStrokeOperation> get_stroke_operation(bContex
       return greasepencil::new_erase_operation(true);
     }
     /* FIXME: Somehow store the unique_ptr in the PaintStroke. */
-    switch (eBrushGPaintType(brush.gpencil_brush_type)) {
+    switch (brush.gpencil_brush_type) {
       case GPAINT_BRUSH_TYPE_DRAW:
         return greasepencil::new_paint_operation();
       case GPAINT_BRUSH_TYPE_ERASE:
@@ -252,6 +252,48 @@ static bool grease_pencil_brush_stroke_poll(bContext *C)
   return true;
 }
 
+static bool use_duplicate_previous_key(bContext *C, wmOperator *op)
+{
+  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Brush *brush = BKE_paint_brush_for_read(paint);
+  const PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  const auto brush_switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
+
+  if (brush && mode == PaintMode::GPencil) {
+    /* For the eraser and tint tool, we don't want auto-key to create an empty keyframe, so we
+     * duplicate the previous frame. */
+    if (ELEM(brush->gpencil_brush_type, GPAINT_BRUSH_TYPE_ERASE, GPAINT_BRUSH_TYPE_TINT)) {
+      return true;
+    }
+    /* Same for the temporary eraser when using the draw tool. */
+    if (brush->gpencil_brush_type == GPAINT_BRUSH_TYPE_DRAW &&
+        brush_switch_mode == BrushSwitchMode::Erase)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static wmOperatorStatus grease_pencil_brush_stroke_exec(bContext *C, wmOperator *op)
+{
+  if (!ed::greasepencil::grease_pencil_draw_operator_begin(
+          C, op, use_duplicate_previous_key(C, op)))
+  {
+    return OPERATOR_CANCELLED;
+  }
+  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(
+      __func__, C, op, nullptr, PaintMode::GPencil);
+  op->customdata = stroke;
+
+  const wmOperatorStatus retval = stroke->exec(C, op);
+  OPERATOR_RETVAL_CHECK(retval);
+
+  MEM_delete(stroke);
+
+  return OPERATOR_FINISHED;
+}
+
 static wmOperatorStatus grease_pencil_brush_stroke_invoke(bContext *C,
                                                           wmOperator *op,
                                                           const wmEvent *event)
@@ -260,41 +302,17 @@ static wmOperatorStatus grease_pencil_brush_stroke_invoke(bContext *C,
     RNA_enum_set(op->ptr, "brush_toggle", int(BrushSwitchMode::Erase));
   }
 
-  const bool use_duplicate_previous_key = [&]() -> bool {
-    const Paint *paint = BKE_paint_get_active_from_context(C);
-    const Brush &brush = *BKE_paint_brush_for_read(paint);
-    const PaintMode mode = BKE_paintmode_get_active_from_context(C);
-    const auto brush_switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
-
-    if (mode == PaintMode::GPencil) {
-      /* For the eraser and tint tool, we don't want auto-key to create an empty keyframe, so we
-       * duplicate the previous frame. */
-      if (ELEM(eBrushGPaintType(brush.gpencil_brush_type),
-               GPAINT_BRUSH_TYPE_ERASE,
-               GPAINT_BRUSH_TYPE_TINT))
-      {
-        return true;
-      }
-      /* Same for the temporary eraser when using the draw tool. */
-      if (eBrushGPaintType(brush.gpencil_brush_type) == GPAINT_BRUSH_TYPE_DRAW &&
-          brush_switch_mode == BrushSwitchMode::Erase)
-      {
-        return true;
-      }
-    }
-    return false;
-  }();
-  wmOperatorStatus retval = ed::greasepencil::grease_pencil_draw_operator_invoke(
-      C, op, use_duplicate_previous_key);
-  if (retval != OPERATOR_RUNNING_MODAL) {
-    return retval;
+  if (!ed::greasepencil::grease_pencil_draw_operator_begin(
+          C, op, use_duplicate_previous_key(C, op)))
+  {
+    return OPERATOR_CANCELLED;
   }
 
   GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(
       __func__, C, op, event, PaintMode::GPencil);
   op->customdata = stroke;
 
-  retval = op->type->modal(C, op, event);
+  const wmOperatorStatus retval = op->type->modal(C, op, event);
   OPERATOR_RETVAL_CHECK(retval);
 
   if (retval == OPERATOR_FINISHED) {
@@ -334,6 +352,7 @@ static void GREASE_PENCIL_OT_brush_stroke(wmOperatorType *ot)
 
   ot->poll = grease_pencil_brush_stroke_poll;
   ot->invoke = grease_pencil_brush_stroke_invoke;
+  ot->exec = grease_pencil_brush_stroke_exec;
   ot->modal = grease_pencil_brush_stroke_modal;
   ot->cancel = grease_pencil_brush_stroke_cancel;
 
@@ -1522,6 +1541,7 @@ static bke::CurvesGeometry simplify_fixed(bke::CurvesGeometry &curves, const int
 
 static void set_fill_attributes(bke::CurvesGeometry &fill_curves,
                                 const ViewContext &view_context,
+                                const Paint &paint,
                                 const Brush &brush,
                                 const Scene &scene,
                                 const float4x4 &to_world,
@@ -1546,13 +1566,14 @@ static void set_fill_attributes(bke::CurvesGeometry &fill_curves,
     const float pressure = 1.0f;
     radii.span[point_i] = ed::greasepencil::radius_from_input_sample(view_context.rv3d,
                                                                      view_context.region,
+                                                                     paint,
                                                                      &brush,
                                                                      pressure,
                                                                      positions[point_i],
                                                                      to_world,
                                                                      brush.gpencil_settings);
     opacities.span[point_i] = ed::greasepencil::opacity_from_input_sample(
-        pressure, &brush, brush.gpencil_settings);
+        pressure, paint, &brush, brush.gpencil_settings);
   }
 
   radii.finish();
@@ -1570,7 +1591,7 @@ static void set_fill_attributes(bke::CurvesGeometry &fill_curves,
       scene.toolsettings->gp_paint, &brush);
   if (use_vertex_color) {
     ColorGeometry4f vertex_color;
-    copy_v3_v3(vertex_color, brush.color);
+    copy_v3_v3(vertex_color, BKE_brush_color_get(&paint, &brush));
     vertex_color.a = brush.gpencil_settings->vertex_factor;
 
     skip_curve_attributes.add("fill_color");
@@ -1626,7 +1647,8 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   auto &op_data = *static_cast<GreasePencilFillOpData *>(op.customdata);
   const ToolSettings &ts = *CTX_data_tool_settings(&C);
-  Brush &brush = *BKE_paint_brush(&ts.gp_paint->paint);
+  Paint &paint = ts.gp_paint->paint;
+  Brush &brush = *BKE_paint_brush(&paint);
   const float2 mouse_position = float2(event.mval);
   const int simplify_levels = brush.gpencil_settings->fill_simplylvl;
   const std::optional<float> opacity_threshold =
@@ -1703,6 +1725,7 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
 
     set_fill_attributes(fill_curves,
                         view_context,
+                        paint,
                         brush,
                         scene,
                         layer.to_world_space(object),
