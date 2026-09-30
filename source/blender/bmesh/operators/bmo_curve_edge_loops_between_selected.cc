@@ -156,12 +156,17 @@ static void traverse_edge_loop(BMVert *v_start,
       break;
     }
 
+    /* Never step between wire & face edges. */
+    const bool is_wire = BM_edge_is_wire(e_curr);
     int edge_count = 0;
     BMIter iter;
     BMEdge *e;
     BMEdge *e_next = nullptr;
 
     BM_ITER_ELEM (e, &iter, v_next, BM_EDGES_OF_VERT) {
+      if (BM_edge_is_wire(e) != is_wire) {
+        continue;
+      }
       if (!BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
         edge_count++;
       }
@@ -171,6 +176,9 @@ static void traverse_edge_loop(BMVert *v_start,
       break;
     }
     BM_ITER_ELEM (e, &iter, v_next, BM_EDGES_OF_VERT) {
+      if (BM_edge_is_wire(e) != is_wire) {
+        continue;
+      }
       if (e == e_curr || BM_elem_flag_test(e, BM_ELEM_HIDDEN) || visited_edges.contains(e)) {
         continue;
       }
