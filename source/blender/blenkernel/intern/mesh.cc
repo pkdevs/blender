@@ -1813,6 +1813,18 @@ void BKE_mesh_assign_object(Main *bmain, Object *ob, Mesh *mesh)
 void BKE_mesh_material_index_remove(Mesh *mesh, short index)
 {
   using namespace blender::bke;
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
+    BMIter iter;
+    BMFace *efa;
+
+    BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+      if (efa->mat_nr > 0 && efa->mat_nr >= index) {
+        efa->mat_nr--;
+      }
+    }
+    return;
+  }
+
   MutableAttributeAccessor attributes = mesh->attributes_for_write();
   AttributeWriter<int> material_indices = attributes.lookup_for_write<int>("material_index");
   if (!material_indices) {
@@ -1837,6 +1849,18 @@ void BKE_mesh_material_index_remove(Mesh *mesh, short index)
 bool BKE_mesh_material_index_used(Mesh *mesh, short index)
 {
   using namespace blender::bke;
+  if (const BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+    BMIter iter;
+    BMFace *efa;
+
+    BM_ITER_MESH (efa, &iter, const_cast<BMesh *>(bm), BM_FACES_OF_MESH) {
+      if (efa->mat_nr == index) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   const AttributeAccessor attributes = mesh->attributes();
   const VArray<int> material_indices = *attributes.lookup_or_default<int>(
       "material_index", AttrDomain::Face, 0);
@@ -1850,6 +1874,16 @@ bool BKE_mesh_material_index_used(Mesh *mesh, short index)
 void BKE_mesh_material_index_clear(Mesh *mesh)
 {
   using namespace blender::bke;
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
+    BMIter iter;
+    BMFace *efa;
+
+    BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+      efa->mat_nr = 0;
+    }
+    return;
+  }
+
   MutableAttributeAccessor attributes = mesh->attributes_for_write();
   attributes.remove("material_index");
 

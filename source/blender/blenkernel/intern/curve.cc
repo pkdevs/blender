@@ -5309,18 +5309,33 @@ void BKE_curve_translate(Curve *cu, const float offset[3], const bool do_keys)
   }
 }
 
+static MutableSpan<CharInfo> curve_font_charinfo_get(Curve *cu)
+{
+  if (EditFont *ef = cu->editfont) {
+    return {ef->textbufinfo, ef->len};
+  }
+  return {cu->strinfo, cu->len_char32};
+}
+
+static Span<CharInfo> curve_font_charinfo_get_for_read(const Curve *cu)
+{
+  if (const EditFont *ef = cu->editfont) {
+    return {ef->textbufinfo, ef->len};
+  }
+  return {cu->strinfo, cu->len_char32};
+}
+
 void BKE_curve_material_index_remove(Curve *cu, int index)
 {
   if (cu->ob_type == OB_FONT) {
-    CharInfo *info = cu->strinfo;
-    for (int i = cu->len_char32 - 1; i >= 0; i--, info++) {
-      if (info->mat_nr && info->mat_nr >= index) {
-        info->mat_nr--;
+    for (CharInfo &info : curve_font_charinfo_get(cu)) {
+      if (info.mat_nr && info.mat_nr >= index) {
+        info.mat_nr--;
       }
     }
   }
   else {
-    for (Nurb &nu : cu->nurb) {
+    for (Nurb &nu : *BKE_curve_nurbs_get(cu)) {
       if (nu.mat_nr && nu.mat_nr >= index) {
         nu.mat_nr--;
       }
@@ -5331,15 +5346,14 @@ void BKE_curve_material_index_remove(Curve *cu, int index)
 bool BKE_curve_material_index_used(const Curve *cu, int index)
 {
   if (cu->ob_type == OB_FONT) {
-    const CharInfo *info = cu->strinfo;
-    for (int i = cu->len_char32 - 1; i >= 0; i--, info++) {
-      if (info->mat_nr == index) {
+    for (const CharInfo &info : curve_font_charinfo_get_for_read(cu)) {
+      if (info.mat_nr == index) {
         return true;
       }
     }
   }
   else {
-    for (const Nurb &nu : cu->nurb) {
+    for (const Nurb &nu : *BKE_curve_nurbs_get_for_read(cu)) {
       if (nu.mat_nr == index) {
         return true;
       }
@@ -5352,13 +5366,12 @@ bool BKE_curve_material_index_used(const Curve *cu, int index)
 void BKE_curve_material_index_clear(Curve *cu)
 {
   if (cu->ob_type == OB_FONT) {
-    CharInfo *info = cu->strinfo;
-    for (int i = cu->len_char32 - 1; i >= 0; i--, info++) {
-      info->mat_nr = 0;
+    for (CharInfo &info : curve_font_charinfo_get(cu)) {
+      info.mat_nr = 0;
     }
   }
   else {
-    for (Nurb &nu : cu->nurb) {
+    for (Nurb &nu : *BKE_curve_nurbs_get(cu)) {
       nu.mat_nr = 0;
     }
   }

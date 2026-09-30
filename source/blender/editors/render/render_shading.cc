@@ -135,21 +135,15 @@ static Vector<Object *> object_array_for_shading_edit_mode_enabled(bContext *C)
       C, object_array_for_shading_edit_mode_enabled_filter, C);
 }
 
-static bool object_array_for_shading_edit_mode_disabled_filter(const Object *ob, void *user_data)
+static bool object_array_for_shading_filter(const Object *ob, void *user_data)
 {
   bContext *C = static_cast<bContext *>(user_data);
-  if (object_materials_supported_poll_ex(C, ob)) {
-    if (BKE_object_is_in_editmode(ob) == false) {
-      return true;
-    }
-  }
-  return false;
+  return object_materials_supported_poll_ex(C, ob);
 }
 
-static Vector<Object *> object_array_for_shading_edit_mode_disabled(bContext *C)
+static Vector<Object *> object_array_for_shading(bContext *C)
 {
-  return ed::object::objects_in_mode_or_selected(
-      C, object_array_for_shading_edit_mode_disabled_filter, C);
+  return ed::object::objects_in_mode_or_selected(C, object_array_for_shading_filter, C);
 }
 
 /** \} */
@@ -250,11 +244,6 @@ static bool material_slot_remove_poll(bContext *C)
     return false;
   }
 
-  /* Removing material slots in edit mode screws things up, see bug #21822. */
-  if (BKE_object_is_in_editmode(ob)) {
-    CTX_wm_operator_poll_msg_set(C, "Unable to remove material slot in edit mode");
-    return false;
-  }
   if (!material_slot_populated_poll(C)) {
     return false;
   }
@@ -708,7 +697,7 @@ static wmOperatorStatus material_slot_remove_unused_exec(bContext *C, wmOperator
   Main *bmain = CTX_data_main(C);
   int removed = 0;
 
-  Vector<Object *> objects = object_array_for_shading_edit_mode_disabled(C);
+  Vector<Object *> objects = object_array_for_shading(C);
   for (Object *ob : objects) {
     removed += BKE_object_material_remove_unused(bmain, ob);
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
@@ -751,12 +740,11 @@ void OBJECT_OT_material_slot_remove_unused(wmOperatorType *ot)
 
 static wmOperatorStatus material_slot_remove_all_exec(bContext *C, wmOperator *op)
 {
-  /* Removing material slots in edit mode screws things up, see bug #21822. */
   Object *ob_active = CTX_data_active_object(C);
   Main *bmain = CTX_data_main(C);
   int removed = 0;
 
-  Vector<Object *> objects = object_array_for_shading_edit_mode_disabled(C);
+  Vector<Object *> objects = object_array_for_shading(C);
   for (Object *ob : objects) {
     removed += BKE_object_material_remove_all(bmain, ob);
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
