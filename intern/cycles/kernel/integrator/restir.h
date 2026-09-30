@@ -381,6 +381,7 @@ ccl_device_inline Reservoir restir_unpack_canonical_reservoir(KernelGlobals kg,
                                 current->sd.shader,
                                 current->path_flag,
                                 &canonical.light);
+// TODO(Tri): Maybe call radiance_eval() here, & maybe rename the func, all for simplification...? see its call sites
   }
 
   return canonical;
@@ -527,248 +528,231 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
   return reservoir_finalize(&current->reservoir);
 }
 
-/* Temporal counterpart of streaming_di_samples()'s per-neighbor step.
- * Reuse this pixel's own reservoir from previous sample (RIS/WRS), essentially an
- * RIS accumulation across a pixel's own progressive samples at a fixed shading point. */
-ccl_device_inline bool streaming_progressive_resample(KernelGlobals kg, // Maybe rename to streaming_intra_frame_resample()?
-                                                      IntegratorState state,
-                                                      ccl_private SpatialReservoir *current,
-                                                      const ccl_private RNGState *rng_state,
-                                                      const bool visibility,
-                                                      ccl_global float *ccl_restrict render_buffer)
+/* Combines the progressive & cross-frame history into current's reservoir. */
+ccl_device_inline bool streaming_temporal_resample(KernelGlobals kg,
+                                                   IntegratorState state,
+                                                   const ccl_private TemporalReprojection *reprojection,
+                                                   ccl_private SpatialReservoir *current,
+                                                   const ccl_private RNGState *rng_state,
+                                                   const bool visibility,
+                                                   ccl_global float *ccl_restrict render_buffer,
+                                                   const bool use_progressive,
+                                                   const bool use_frames,
+                                                   const int x,
+                                                   const int y,
+                                                   const int scheduled_sample)
 {
+  (void)scheduled_sample;
+
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
 
-  Reservoir history;
-  reservoir_init(kg, &history);
+  /* Canonical: current's own reservoir, frozen as a separate local. */
+  Reservoir canonical = current->reservoir;
 
-  ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-                                   kernel_data.film.pass_restir_temporal_history_reservoir;
+ccl_debug_printf("PRE-CLEAR canonical: W=%f L=%f M=%d ref_valid=%d\n",
+    (double)canonical.total_weight, (double)canonical.luminance, canonical.M,
+    (int)reservoir_has_valid_reference(&canonical));
 
-  if (!restir_unpack_reservoir(kg, &history, buffer)) {
-ccl_debug_printf("streaming_progressive_resample() RETURNED EARLY! can't unpack history\n\n\n");
+  reservoir_clear(&current->reservoir);
+  /* override reservoir_clear()'s default of 1: we want the final M to be exactly canonical.M+sum(neighbors' M). */
+  current->reservoir.M = 0;
 
-    return false; /* No valid history yet (first sample, or history invalidated). */
+  float canonical_mis_weight = 1.0f;
+  int added_neighbors = 0;
+
+
+/* MARK: Progressive neighbor: this pixel's own reservoir from the previous sample. */
+
+  if (use_progressive) {
+    Reservoir history;
+    reservoir_init(kg, &history);
+
+    ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+                                     kernel_data.film.pass_restir_temporal_history_reservoir;
+
+    if (!restir_unpack_reservoir(kg, &history, buffer)) {
+ccl_debug_printf("streaming_temporal_resample() progressive: RETURNED EARLY, can't unpack history\n\n");
+    }
+    else {
+      history.M = min(history.M,
+                      (int)((float)canonical.M * kernel_data.integrator.restir_temporal_sample_count));
+
+      light_sample_from_reference(kg, &history.reference, current->sd.P, current->sd.N,
+                                  current->sd.time, current->sd.shader, current->path_flag,
+                                  &history.light);
+
+      radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
+      const float history_at_current = compute_luminance(kg, history.radiance);
+
+      /* Symmetric canonical term: same pixel, same shading point as canonical.
+       * No re-evaluation needed here, unlike the cross-frame case. */
+      if (!reservoir_is_empty(&canonical)) {
+        canonical_mis_weight += (1.0f - reservoir_pairwise_mis_weight(
+            canonical.luminance, canonical.luminance,
+            /*N0=*/(float)history.M, /*N1=*/(float)canonical.M));
+      }
+
+      const float mis_weight = reservoir_pairwise_mis_weight(
+          history.luminance, history_at_current,
+          /*N0=*/(float)history.M, /*N1=*/(float)canonical.M);
+      history.total_weight *= mis_weight;
+
+      const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
+      spatial_reservoir_add_reservoir(current, history, rand);
+      current->reservoir.M += history.M;
+      added_neighbors++;
+
+ccl_debug_printf(
+    "--- streaming_temporal_resample() progressive: history_W=%f history_L=%f mis=%f ---\n\n",
+    (double)history.total_weight, (double)history_at_current, (double)mis_weight);
+    }
   }
 
-  /* Cap history so a lighting change or moving object doesn't get stuck
-   * behind decades of stale confidence. */
-  history.M = min(history.M, current->reservoir.M * kernel_data.integrator.restir_temporal_sample_count); // restir_temporal_max_history
 
-  light_sample_from_reference(kg,
-                              &history.reference,
-                              current->sd.P,
-                              current->sd.N,
-                              current->sd.time,
-                              current->sd.shader,
-                              current->path_flag,
-                              &history.light);
+/* MARK: - Cross-frame neighbor: reprojected pixel from the previous frame */
 
-  radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
-  const float history_at_current = compute_luminance(kg, history.radiance);
+  if (use_frames) {
+    ccl_global const float *reproj_buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+                                            kernel_data.film.pass_restir_reprojection_surface;
+    const ReprojectionSurface curr_surf = reprojection_surface_unpack(reproj_buffer);
 
-  /* TODO(Tri): Unify spatial + temporal into one combined-M pairwise estimator
-     Right now, it's separate from the spatial loop's constant-neighbors weight. */
-  /* Reuse the existing pairwise weighting, but with the *true* persisted M
-   * of the history reservoir standing in for the constant "neighbors" count
-   * used by the spatial loop; this is the one place temporal and spatial
-   * pairwise weighting genuinely differ; unifying them into a single
-   * combined-M estimator is a follow-up once this is validated in isolation. */
-  history.total_weight *= reservoir_pairwise_mis_weight(
-      history.luminance, history_at_current,
-      /*N0=*/(float)history.M, /*N1=*/(float)current->reservoir.M);
+    if (!curr_surf.is_valid) {
+      /* First frame temporal-frame reuse ran, or a background ray (background pixels
+       * never go through film_write_restir_reprojection_surface_pass(), only
+       * film_write_data_passes_background()). */
+      // TODO(Tri): Basically background rays... Handle temporal GI here...
+    }
+    else {
+      const uint3 prev_pixel = reprojection->get_previous_pixel(x, y, curr_surf.motion);
 
-  const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
-  spatial_reservoir_add_reservoir(current, history, rand);
-
-  current->reservoir.M += history.M;
-
-ccl_debug_printf("\n--- streaming_progressive_resample(): true! current total_weight=%f M=%d---\n"
-                  "history.total_weight=%f\n\n",
-    (double)current->reservoir.total_weight, current->reservoir.M,
-    (double)history.total_weight); // !!!(Tri): Still some occasional zero weights!
-  return true;
-}
-
-// TODO(Tri): Render mode only (no viewport) since it's using kcam->motion_pass_pre/motion_pass_post
-// TODO(Tri): Merge with above so that: Reprojected + same-pixel static-scene
-/* Object-motion + camera motion reprojection. */
-ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
-                                                 IntegratorState state,
-                                                 const ccl_private TemporalReprojection *reprojection,
-                                                 ccl_private SpatialReservoir *current,
-                                                 const ccl_private RNGState *rng_state,
-                                                 const bool visibility,
-                                                 ccl_global float *ccl_restrict render_buffer,
-                                                 const int x,
-                                                 const int y,
-                                                 const int scheduled_sample)
-{
-  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-
-  ccl_global const float *reproj_buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-                                          kernel_data.film.pass_restir_reprojection_surface;
-  const ReprojectionSurface curr_surf = reprojection_surface_unpack(reproj_buffer);
-
-  if (!curr_surf.is_valid) {
-    /* First frame temporal-frame reuse ran, or a background ray (background
-     * pixels never go through film_write_restir_reprojection_surface_pass(),
-     * only film_write_data_passes_background()). */
-    // TODO(Tri): Basically background rays, through film_write_data_passes_background()... Handle temporal GI here...
-    return false;
-  }
-
-  const uint3 prev_pixel = reprojection->get_previous_pixel(x, y, curr_surf.motion);
-  if (prev_pixel.z == (uint)-1) {
-    return false; /* Off-screen last frame. */
-  }
-
-  if (kg->restir_prev_reprojection_surface == nullptr) {
-    return false; /* No persistent history yet (first frame, or feature just enabled). */
-  }
-
+      if (prev_pixel.z == (uint)-1) {
+        /* Off-screen last frame. */
+      }
+      else if (kg->restir_prev_reprojection_surface == nullptr) {
+        /* No persistent history yet (first frame, or feature just enabled). */
+      }
+      else {
 ccl_debug_printf("TEMPORAL REPROJECTION: curr=(%d,%d) prev=(%d,%d) prev_index=%u\n",
     // "restir_temporal_normal_threshold=%f restir_temporal_depth_threshold=%f\n\n",
     x, y, prev_pixel.x, prev_pixel.y, prev_pixel.z);
 
-  const ReprojectionSurface prev_surf = reprojection_surface_unpack(
-      kg->restir_prev_reprojection_surface + prev_pixel.z * RESTIR_REPROJECTION_SURFACE_STRIDE);
+        const ReprojectionSurface prev_surf = reprojection_surface_unpack(
+            kg->restir_prev_reprojection_surface + prev_pixel.z * RESTIR_REPROJECTION_SURFACE_STRIDE);
 
+        if (!TemporalReprojection::is_valid_reprojection(
+                &curr_surf, &prev_surf,
+                kernel_data.integrator.restir_temporal_normal_threshold,
+                kernel_data.integrator.restir_temporal_depth_threshold))
+        {
+ccl_debug_printf("streaming_temporal_resample() returned false early on is_valid_reprojection()\n\n");
+        }
+        else {
+          Reservoir history;
+          reservoir_init(kg, &history);
 
-if (prev_pixel.z == 359) {
-ccl_debug_printf(
-    "READ CHECK: index=%u valid=%d raw_valid=%f\n",
-    prev_pixel.z,
-    prev_surf.is_valid,
-    (double)kg->restir_prev_reprojection_surface[prev_pixel.z * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
-}
+          const bool history_ok = restir_unpack_reservoir(
+              kg, &history, kg->restir_prev_temporal_reservoir + prev_pixel.z * RESTIR_RESERVOIR_STRIDE);
 
-  if (!TemporalReprojection::is_valid_reprojection(
-          &curr_surf, &prev_surf,
-          kernel_data.integrator.restir_temporal_normal_threshold,
-          kernel_data.integrator.restir_temporal_depth_threshold))
-  {
-ccl_debug_printf("streaming_temporal_sample() returned false early on is_valid_reprojection()\n\n"); 
+          if (!history_ok) {
+            ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NO_HISTORY\n", x, y);
+          }
+          else {
+            history.M = min(history.M,
+                            (int)((float)canonical.M * kernel_data.integrator.restir_temporal_frame_count));
 
-    return false; /* Reprojection miss: disocclusion, silhouette edge, etc. */
-  }
+            light_sample_from_reference(kg, &history.reference, current->sd.P, current->sd.N,
+                                        current->sd.time, current->sd.shader, current->path_flag,
+                                        &history.light);
 
-  Reservoir history;
-  reservoir_init(kg, &history);
+            /* A history sample that was valid from last frame's shading point can
+             * legitimately become invalid here; radiance_eval() returns pdf<=0, zero
+             * luminance whenever light_sample_from_reference() reconstructs a
+             * direction/PDF outside this frame's shading point's valid domain.
+             * Sub-pixel jitter alone shifts the shading point frame-to-frame even on
+             * a fully static scene, and lights with hard sampling-domain boundaries
+             * are sensitive to that shift. Observed in practice for samples whose
+             * stored luminance was already small/near-boundary; large, well-inside
+             * samples reproject cleanly. */
+            radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
+            const float history_at_current = compute_luminance(kg, history.radiance);
 
-  // ccl_global const float *buffer = 
-  //     kg->restir_prev_temporal_reservoir + prev_pixel.z * RESTIR_RESERVOIR_STRIDE;
+            uint32_t history_path_flag;
+            ShaderData history_sd;
+            const bool sd_setup = shader_data_setup_from_restir_history(
+                kg, state, &history_sd,
+                kg->restir_prev_surface_data + prev_pixel.z * RESTIR_PREV_SURFACE_DATA_STRIDE,
+                render_buffer, &history_path_flag);
 
-  const bool history_ok = restir_unpack_reservoir(
-      kg, &history, kg->restir_prev_temporal_reservoir + prev_pixel.z * RESTIR_RESERVOIR_STRIDE);
-  if (!history_ok) {
-    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NO_HISTORY\n", x, y);
-    return false;
-  }
+            if (!sd_setup) {
+              // TODO(Tri): see shader_setup_geometry_from_restir()
+              /* Curve/point-cloud history, or a pixel whose SURFACE_DATA was never
+               * finalized last frame. Skip this neighbor to avoid crash. */
+            }
+            else {
+              float current_at_history = 0.0f;
+              if (!reservoir_is_empty(&canonical)) {
+                LightSample current_at_history_ls = canonical.light;
+                light_sample_from_reference(kg, &canonical.reference, history_sd.P, history_sd.N,
+                                            history_sd.time, history_sd.shader, history_path_flag,
+                                            &current_at_history_ls);
+                BsdfEval current_at_history_radiance;
+                radiance_eval(kg, state, &history_sd, &current_at_history_ls,
+                             &current_at_history_radiance, nullptr, visibility);
+                current_at_history = compute_luminance(kg, current_at_history_radiance);
 
-ccl_debug_printf("TEMPORAL_FRAME min function: history.M=%f current->reservoir.M=%f\n", 
-    (double)history.M, (double)current->reservoir.M); // !!!: current->reservoir.M (Before) coming out 0 on accepted candidates
+                canonical_mis_weight += (1.0f - reservoir_pairwise_mis_weight(
+                    current_at_history, canonical.luminance,
+                    /*N0=*/(float)history.M, /*N1=*/(float)canonical.M));
+              }
 
-  history.M = min( // !!!
-      history.M, current->reservoir.M * kernel_data.integrator.restir_temporal_frame_count);
-
-  light_sample_from_reference(kg, &history.reference, current->sd.P, current->sd.N,
-                              current->sd.time, current->sd.shader, current->path_flag, &history.light);
-
-  /* A history sample that was valid from last frame's shading point can
-   * legitimately become invalid here; radiance_eval() returns pdf<=0, zero
-   * luminance whenever light_sample_from_reference() reconstructs a
-   * direction/PDF outside this frame's shading point's valid domain.
-   * Sub-pixel jitter alone shifts the shading point frame-to-frame even on
-   * a fully static scene, and lights with hard sampling-domain boundaries
-   * are sensitive to that shift. Observed in practice for samples whose
-   * stored luminance was already small/near-boundary; large, well-inside
-   * samples reproject cleanly. */
-  radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
-  const float history_at_current = compute_luminance(kg, history.radiance);
-
-  uint32_t history_path_flag;
-  ShaderData history_sd;
-  const bool sd_setup = shader_data_setup_from_restir_history(
-      kg, state, &history_sd,
-      kg->restir_prev_surface_data + prev_pixel.z * RESTIR_PREV_SURFACE_DATA_STRIDE,
-      render_buffer, &history_path_flag);
-
-  if (!sd_setup) {
-    /* Before proceeding to the symmetric-reweight math. */
-    return false;
-  }
-
-  LightSample current_at_history_ls = current->reservoir.light;
-  light_sample_from_reference(kg, &current->reservoir.reference, history_sd.P, history_sd.N,
-                              history_sd.time, history_sd.shader, history_path_flag,
-                              &current_at_history_ls);
-  BsdfEval current_at_history_radiance;
-  radiance_eval(kg, state, &history_sd, &current_at_history_ls, &current_at_history_radiance,
-               nullptr, visibility);
-  const float current_at_history = compute_luminance(kg, current_at_history_radiance);
-
-// TODO(Tri): Mergin' streaming_progressive_resample() & streaming_temporal_sample() should fix this?
-  /* Capture current's own state BEFORE either side is reweighted. matches
-   * spatial's canonical/neighbor treatment where both weight computations use
-   * the pre-combine luminance/M of each side, not values already mutated by
-   * this or an earlier combine step.
-   *
-   !!!(Tri): current->reservoir.total_weight may already include an additive
-   * contribution from same-pixel streaming_progressive_resample() if both
-   * t-samples & t-frames are enabled together. the *= below retroactively 
-   * scales that contribution too, unlike spatial's canonical, which is a fresh 
-   * local never touched before its one multiply. */
-  const float current_luminance_before = current->reservoir.luminance;
-  const float current_M_before = (float)current->reservoir.M;
-
-const float old_M = current->reservoir.M; // TODO(Tri): Remove
-const float history_M = history.M;
-
-  /* Canonical (current) reweight, generalized to a single "neighbor" (history) 
-   * rather than a sum over several. */
-  const float canonical_pairwise = reservoir_pairwise_mis_weight(
-      current_at_history, current_luminance_before,
-      /*N0=*/(float)history.M, /*N1=*/current_M_before);
-
-  current->reservoir.total_weight *= (1.0f + (1.0f - canonical_pairwise));
-
-// TODO(Tri): Disable pairwise MIS in the temporal resampling pass. It seems to lead to a lot of variance under camera movement.
-
-  /* History's own reweight, symmetric to spatial's neighbor term. */
-  const float history_mis_weight = reservoir_pairwise_mis_weight(
-      history.luminance, history_at_current,
-      /*N0=*/(float)history.M, /*N1=*/current_M_before);
+              const float history_mis_weight = reservoir_pairwise_mis_weight(
+                  history.luminance, history_at_current,
+                  /*N0=*/(float)history.M, /*N1=*/(float)canonical.M);
 
 ccl_debug_printf(
-  "TEMPORAL DEBUG pixel=(%d,%d): "
-  "stored_W=%f stored_L=%f reconstructed_L=%f M=%d MIS=%f\n",
+  "TEMPORAL_FRAME DEBUG pixel=(%d,%d): "
+  "stored_W=%f stored_L=%f reconstructed_L=%f current_at_history=%f M=%d MIS=%f\n",
   x, y,
   (double)history.total_weight,
   (double)history.luminance,
-  (double)history_at_current, // If reconstructed_L=0: problem is light reconstruction / visibility / radiance evaluation
+  (double)history_at_current,
+  (double)current_at_history,
   history.M,
   (double)history_mis_weight);
 
-  // history.total_weight *= mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
-  history.total_weight *= history_mis_weight;
+              history.total_weight *= history_mis_weight;
 
-  const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
-  spatial_reservoir_add_reservoir(current, history, rand);
-
-  current->reservoir.M += history.M; // !!!: unconditional & doesn't tell whether the historical candidate actually became the selected sample
+              const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
+              spatial_reservoir_add_reservoir(current, history, rand);
+              current->reservoir.M += history.M;
+              added_neighbors++;
 
 ccl_debug_printf(
-    "TEMPORAL_FRAME MERGE pixel=(%d,%d) old_M=%f->%f\n"
-    "history_M=%f history_W=%f history_L=%f\n\n", 
-    x, y,
-    (double)old_M, (double)current->reservoir.M,
-    (double)history_M,
-    (double)history.total_weight,
-    (double)history_at_current);
+    "TEMPORAL_FRAME MERGE pixel=(%d,%d) history_M=%f history_W=%f history_L=%f\n\n",
+    x, y, (double)history.M, (double)history.total_weight, (double)history_at_current);
 
+            }
+          }
+        }
+      }
+    }
+  }
 
-  return true;
+  /* Fold canonical back in *Once*, with its fully-accumulated MIS weight. */
+  if (!reservoir_is_empty(&canonical)) {
+    /* To populate the canonical.radiance.sum. */
+    radiance_eval(kg, state, &current->sd, &canonical.light, &canonical.radiance, nullptr, visibility);
+
+    canonical.total_weight *= canonical_mis_weight;
+    const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
+    spatial_reservoir_add_reservoir(current, canonical, rand);
+    current->reservoir.M += canonical.M;
+  }
+
+ccl_debug_printf("POST-FOLD current->reservoir: W=%f L=%f M=%d\n",
+    (double)current->reservoir.total_weight, (double)current->reservoir.luminance, current->reservoir.M);
+
+  return added_neighbors > 0;
 }
 
 /* Standalone temporal-resampling pass, dispatched once per sample before
@@ -805,17 +789,24 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
   const bool use_temporal_samples = kernel_data.integrator.use_temporal_samples;
   const bool use_temporal_frames  = kernel_data.integrator.use_temporal_frames;
 
-ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_temporal_frames=%d visibility=%d\n\n",
-                 use_temporal_samples, use_temporal_frames, visibility);
+// ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_temporal_frames=%d visibility=%d\n\n",
+//                  use_temporal_samples, use_temporal_frames, visibility);
 
-  if (use_temporal_samples) {
-    streaming_progressive_resample(kg, state, &current, &rng_state, visibility, render_buffer);
+  if (use_temporal_samples || use_temporal_frames) {
+    TemporalReprojection reprojection(tile);
+    streaming_temporal_resample(kg, state, &reprojection, &current, &rng_state, visibility,
+                                render_buffer, use_temporal_samples, use_temporal_frames,
+                                x, y, scheduled_sample);
   }
 
-  if (use_temporal_frames) {
-    TemporalReprojection reprojection(tile);
-    streaming_temporal_sample(
-        kg, state, &reprojection, &current, &rng_state, visibility, render_buffer, x, y, scheduled_sample);
+  // !!!(Tri): Necessary here?
+  const bool finalize_ok = reservoir_finalize(&current.reservoir);
+
+ccl_debug_printf("POST-FINALIZE: ok=%d W=%f L=%f\n",
+    (int)finalize_ok, (double)current.reservoir.total_weight, (double)current.reservoir.luminance);
+
+  if (finalize_ok) {
+    film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, /*write_prev=*/false);
   }
 
   film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, /*write_prev=*/false);
@@ -824,9 +815,9 @@ ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_tem
                            kernel_data.integrator.restir_spatial_radius > 0 &&
                            kernel_data.integrator.restir_spatial_neighbors > 0 &&
                            kernel_data.integrator.restir_spatial_iterations > 0;
-  if (!use_spatial) {
+  if (!use_spatial && finalize_ok) {
     /* Only persist here when integrator_restir() won't run this sample. */
-    film_write_pass_reservoir_temporal(kg, state, &current.reservoir, render_buffer);  
+    film_write_pass_reservoir_temporal(kg, state, &current.reservoir, render_buffer);
   }
 
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL);
