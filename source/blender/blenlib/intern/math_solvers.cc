@@ -6,21 +6,25 @@
  * \ingroup bli
  */
 
-#include "BLI_math_base.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_solvers.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_solvers.hh"
+#include "BLI_math_vector_c.hh"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "eigen_capi.h"
 
 #include <cstring>
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
-/********************************** Eigen Solvers *********************************/
+namespace blender {
+
+/* -------------------------------------------------------------------- */
+/** \name Eigen Solvers
+ * \{ */
 
 bool BLI_eigen_solve_selfadjoint_m3(const float m3[3][3],
                                     float r_eigen_values[3],
@@ -33,16 +37,26 @@ bool BLI_eigen_solve_selfadjoint_m3(const float m3[3][3],
   }
 #endif
 
-  return EIG_self_adjoint_eigen_solve(
-      3, (const float *)m3, r_eigen_values, (float *)r_eigen_vectors);
+  return EIG_self_adjoint_eigen_solve(3,
+                                      reinterpret_cast<const float *>(m3),
+                                      r_eigen_values,
+                                      reinterpret_cast<float *>(r_eigen_vectors));
 }
 
 void BLI_svd_m3(const float m3[3][3], float r_U[3][3], float r_S[3], float r_V[3][3])
 {
-  EIG_svd_square_matrix(3, (const float *)m3, (float *)r_U, r_S, (float *)r_V);
+  EIG_svd_square_matrix(3,
+                        reinterpret_cast<const float *>(m3),
+                        reinterpret_cast<float *>(r_U),
+                        r_S,
+                        reinterpret_cast<float *>(r_V));
 }
 
-/***************************** Simple Solvers ************************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Simple Solvers
+ * \{ */
 
 bool BLI_tridiagonal_solve(
     const float *a, const float *b, const float *c, const float *d, float *r_x, const int count)
@@ -51,7 +65,7 @@ bool BLI_tridiagonal_solve(
     return false;
   }
 
-  double *c1 = MEM_malloc_arrayN<double>(size_t(count) * 2, "tridiagonal_c1d1");
+  double *c1 = MEM_new_array_uninitialized<double>(size_t(count) * 2, "tridiagonal_c1d1");
   if (!c1) {
     return false;
   }
@@ -82,7 +96,7 @@ bool BLI_tridiagonal_solve(
     r_x[i] = float(x_prev);
   }
 
-  MEM_freeN(c1);
+  MEM_delete(c1);
 
   return isfinite(x_prev);
 }
@@ -117,7 +131,7 @@ bool BLI_tridiagonal_solve_cyclic(
   }
 
   size_t bytes = sizeof(float) * uint(count);
-  float *tmp = MEM_malloc_arrayN<float>(size_t(count) * 2, "tridiagonal_ex");
+  float *tmp = MEM_new_array_uninitialized<float>(size_t(count) * 2, "tridiagonal_ex");
   if (!tmp) {
     return false;
   }
@@ -145,7 +159,7 @@ bool BLI_tridiagonal_solve_cyclic(
     }
   }
 
-  MEM_freeN(tmp);
+  MEM_delete(tmp);
 
   return success;
 }
@@ -235,3 +249,7 @@ bool BLI_newton3d_solve(Newton3D_DeltaFunc func_delta,
   copy_v3_v3(result, x);
   return success;
 }
+
+/** \} */
+
+}  // namespace blender

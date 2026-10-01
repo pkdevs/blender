@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup balembic
+ */
+
 #include "abc_hierarchy_iterator.h"
 #include "abc_writer_abstract.h"
 #include "abc_writer_camera.h"
@@ -13,11 +17,12 @@
 #include "abc_writer_nurbs.h"
 #include "abc_writer_points.h"
 #include "abc_writer_transform.h"
+#include "intern/abc_util.h"
 
 #include <memory>
 #include <string>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
@@ -83,12 +88,7 @@ void ABCHierarchyIterator::release_writer(AbstractHierarchyWriter *writer)
 
 std::string ABCHierarchyIterator::make_valid_name(const std::string &name) const
 {
-  std::string abc_name(name);
-  std::replace(abc_name.begin(), abc_name.end(), ' ', '_');
-  std::replace(abc_name.begin(), abc_name.end(), '.', '_');
-  std::replace(abc_name.begin(), abc_name.end(), ':', '_');
-  std::replace(abc_name.begin(), abc_name.end(), '/', '_');
-  return abc_name;
+  return get_valid_abc_name(name.c_str());
 }
 
 ObjectIdentifier ABCHierarchyIterator::determine_graph_index_object(
@@ -208,6 +208,8 @@ ABCAbstractWriter *ABCHierarchyIterator::create_data_writer_for_object_type(
       return new ABCNurbsWriter(writer_args);
     case OB_MBALL:
       return new ABCMetaballWriter(writer_args);
+    case OB_POINTCLOUD:
+      return new ABCPointCloudWriter(writer_args);
 
     case OB_EMPTY:
     case OB_LAMP:
@@ -216,6 +218,9 @@ ABCAbstractWriter *ABCHierarchyIterator::create_data_writer_for_object_type(
     case OB_LIGHTPROBE:
     case OB_LATTICE:
     case OB_ARMATURE:
+    case OB_GPENCIL_LEGACY:
+    case OB_VOLUME:
+    case OB_GREASE_PENCIL:
       return nullptr;
     case OB_TYPE_MAX:
       BLI_assert_msg(0, "OB_TYPE_MAX should not be used");

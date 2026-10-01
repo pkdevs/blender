@@ -23,6 +23,12 @@ ccl_device_forceinline VolumeStack volume_stack_read(const IntegratorGenericStat
   else {
     return integrator_state_read_volume_stack(state, i);
   }
+
+#  ifdef __KERNEL_GPU__
+  /* Silence false positive warning with some GPU compilers. */
+  VolumeStack stack = {};
+  return stack;
+#  endif
 }
 
 template<const bool shadow, typename IntegratorGenericState>
@@ -36,6 +42,27 @@ ccl_device_forceinline void volume_stack_write(IntegratorGenericState state,
   else {
     integrator_state_write_volume_stack(state, i, entry);
   }
+}
+
+template<const bool shadow, typename IntegratorGenericState>
+ccl_device_inline void volume_stack_exit(IntegratorGenericState state, const int exit_i)
+{
+  /* Get size of the volume stack. */
+  /* TODO(weizhen): instead looping until SHADER_NONE, can we store the size in the first entry? */
+  int i = exit_i;
+  for (;; i++) {
+    if (volume_stack_read<shadow>(state, i + 1).shader == SHADER_NONE) {
+      break;
+    }
+  }
+
+  if (exit_i != i) {
+    /* Swap the last entry and the exit entry. */
+    volume_stack_write<shadow>(state, exit_i, volume_stack_read<shadow>(state, i));
+  }
+
+  /* Write sentinel value. */
+  volume_stack_write<shadow>(state, i, {OBJECT_NONE, SHADER_NONE});
 }
 
 template<const bool shadow, typename IntegratorGenericState>
@@ -55,26 +82,20 @@ ccl_device void volume_stack_enter_exit(KernelGlobals kg,
   /* todo: we should have some way for objects to indicate if they want the
    * world shader to work inside them. excluding it by default is problematic
    * because non-volume objects can't be assumed to be closed manifolds */
-  if (!(sd->flag & SD_HAS_VOLUME)) {
+  if (!(sd->shader_flag & SD_HAS_VOLUME)) {
     return;
   }
 
-  if (sd->flag & SD_BACKFACING) {
+  if (sd->runtime_flag & SR_BACKFACING) {
     /* Exit volume object: remove from stack. */
     for (int i = 0;; i++) {
-      VolumeStack entry = volume_stack_read<shadow>(state, i);
+      const VolumeStack entry = volume_stack_read<shadow>(state, i);
       if (entry.shader == SHADER_NONE) {
         break;
       }
 
       if (entry.object == sd->object && entry.shader == sd->shader) {
-        /* Shift back next stack entries. */
-        do {
-          entry = volume_stack_read<shadow>(state, i + 1);
-          volume_stack_write<shadow>(state, i, entry);
-          i++;
-        } while (entry.shader != SHADER_NONE);
-
+        volume_stack_exit<shadow>(state, i);
         return;
       }
     }
@@ -145,12 +166,12 @@ ccl_device_inline bool volume_is_homogeneous(KernelGlobals kg,
 
   if (shader_flag & SD_NEED_VOLUME_ATTRIBUTES) {
     const int object = entry.object;
-    if (object == OBJECT_NONE) {
+    if (object == kernel_data.background.object_index) {
       /* Volume attributes for world is not supported. */
       return true;
     }
 
-    const int object_flag = kernel_data_fetch(object_flag, object);
+    const uint object_flag = kernel_data_fetch(object_flag, object);
     if (object_flag & SD_OBJECT_HAS_VOLUME_ATTRIBUTES) {
       /* If both the shader and the object needs volume attributes, the volume is heterogeneous. */
       return false;
@@ -161,8 +182,29 @@ ccl_device_inline bool volume_is_homogeneous(KernelGlobals kg,
 }
 
 template<const bool shadow, typename IntegratorGenericState>
+ccl_device_inline bool volume_is_homogeneous(KernelGlobals kg, const IntegratorGenericState state)
+{
+  for (int i = 0;; i++) {
+    const VolumeStack entry = volume_stack_read<shadow>(state, i);
+
+    if (entry.shader == SHADER_NONE) {
+      return true;
+    }
+
+    if (!volume_is_homogeneous(kg, entry)) {
+      return false;
+    }
+  }
+
+  kernel_assert(false);
+  return false;
+}
+
+template<const bool shadow, typename IntegratorGenericState>
 ccl_device float volume_stack_step_size(KernelGlobals kg, const IntegratorGenericState state)
 {
+  kernel_assert(kernel_data.integrator.volume_ray_marching);
+
   float step_size = FLT_MAX;
 
   for (int i = 0;; i++) {
@@ -172,8 +214,7 @@ ccl_device float volume_stack_step_size(KernelGlobals kg, const IntegratorGeneri
     }
 
     if (!volume_is_homogeneous(kg, entry)) {
-      float object_step_size = object_volume_step_size(kg, entry.object);
-      object_step_size *= kernel_data.integrator.volume_step_rate;
+      const float object_step_size = kernel_data_fetch(volume_step_size, entry.object);
       step_size = fminf(object_step_size, step_size);
     }
   }
@@ -227,6 +268,6 @@ ccl_device VolumeSampleMethod volume_stack_sample_method(KernelGlobals kg, Integ
   return method;
 }
 
-#endif /* __VOLUME__*/
+#endif /* __VOLUME__ */
 
 CCL_NAMESPACE_END

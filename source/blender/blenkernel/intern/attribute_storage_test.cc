@@ -6,18 +6,20 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_attribute_storage.hh"
+#include "BKE_gtest_base.hh"
 
 namespace blender::bke::tests {
 
-TEST(attribute_storage, Empty)
+class AttributeStorageTest : public BlenderGTestBase {};
+
+TEST_F(AttributeStorageTest, Empty)
 {
   AttributeStorage storage;
-  int count = 0;
-  storage.foreach([&](const Attribute & /*attribute*/) { count++; });
+  const int count = std::distance(storage.begin(), storage.end());
   EXPECT_EQ(count, 0);
 }
 
-TEST(attribute_storage, Single)
+TEST_F(AttributeStorageTest, Single)
 {
   AttributeStorage storage;
 
@@ -36,12 +38,40 @@ TEST(attribute_storage, Single)
     EXPECT_EQ(data.data, sharing_info->data.data());
   }
 
-  int count = 0;
-  storage.foreach([&](const Attribute & /*attribute*/) { count++; });
+  const int count = std::distance(storage.begin(), storage.end());
   EXPECT_EQ(count, 1);
 }
 
-TEST(attribute_storage, GetForWrite)
+TEST_F(AttributeStorageTest, Iterator)
+{
+  AttributeStorage storage;
+
+  storage.add("foo",
+              AttrDomain::Point,
+              AttrType::Float,
+              Attribute::SingleData::from_default_value(CPPType::get<float>()));
+  storage.add("bar",
+              AttrDomain::Point,
+              AttrType::Float,
+              Attribute::SingleData::from_default_value(CPPType::get<float>()));
+  Vector<StringRef> expected_names{"foo", "bar"};
+  {
+    Vector<StringRef> names;
+    for (Attribute &attr : storage) {
+      names.append(attr.name());
+    }
+    EXPECT_EQ(names, expected_names);
+  }
+  {
+    Vector<StringRef> names;
+    for (const Attribute &attr : const_cast<const AttributeStorage &>(storage)) {
+      names.append(attr.name());
+    }
+    EXPECT_EQ(names, expected_names);
+  }
+}
+
+TEST_F(AttributeStorageTest, GetForWrite)
 {
   AttributeStorage storage;
 
@@ -76,7 +106,7 @@ TEST(attribute_storage, GetForWrite)
   }
 }
 
-TEST(attribute_storage, MultipleShared)
+TEST_F(AttributeStorageTest, MultipleShared)
 {
   AttributeStorage storage;
 
@@ -104,12 +134,11 @@ TEST(attribute_storage, MultipleShared)
     EXPECT_EQ(data_ptr[3], 1.0f);
   }
 
-  int count = 0;
-  storage.foreach([&](const Attribute & /*attribute*/) { count++; });
+  const int count = std::distance(storage.begin(), storage.end());
   EXPECT_EQ(count, 5);
 }
 
-TEST(attribute_storage, CopyConstruct)
+TEST_F(AttributeStorageTest, CopyConstruct)
 {
   AttributeStorage storage;
 
@@ -132,7 +161,7 @@ TEST(attribute_storage, CopyConstruct)
   }
 }
 
-TEST(attribute_storage, MoveConstruct)
+TEST_F(AttributeStorageTest, MoveConstruct)
 {
   AttributeStorage storage;
 
@@ -155,7 +184,7 @@ TEST(attribute_storage, MoveConstruct)
   }
 }
 
-TEST(attribute_storage, UniqueNames)
+TEST_F(AttributeStorageTest, UniqueNames)
 {
   AttributeStorage storage;
 
@@ -179,8 +208,7 @@ TEST(attribute_storage, UniqueNames)
   storage.add(
       storage.unique_name_calc("foo_2"), AttrDomain::Point, AttrType::Float, create_array_data());
 
-  int count = 0;
-  storage.foreach([&](const Attribute & /*attribute*/) { count++; });
+  const int count = std::distance(storage.begin(), storage.end());
   EXPECT_EQ(count, 6);
 }
 

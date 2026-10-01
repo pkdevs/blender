@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_edit_mode_info.hh"
+#include "infos/overlay_edit_mode_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_edit_curve_wire)
 
@@ -14,7 +14,7 @@ void main()
 {
   float3 final_pos = pos;
 
-  float flip = (gl_InstanceID != 0) ? -1.0f : 1.0f;
+  float flip = (gpu_InstanceIndex != 0) ? -1.0f : 1.0f;
 
   if (gl_VertexID % 2 == 0) {
     final_pos += normal_size * rad * (flip * nor - tangent);

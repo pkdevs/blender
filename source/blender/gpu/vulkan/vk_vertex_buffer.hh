@@ -12,7 +12,6 @@
 
 #include "vk_buffer.hh"
 #include "vk_common.hh"
-#include "vk_data_conversion.hh"
 
 namespace blender::gpu {
 
@@ -30,13 +29,26 @@ class VKVertexBuffer : public VertBuf {
   void bind_as_texture(uint binding) override;
   void wrap_handle(uint64_t handle) override;
 
-  void update_sub(uint start, uint len, const void *data) override;
+  void update_sub(uint start_offset, uint data_size_in_bytes, const void *data) override;
+  void copy_sub(VertBuf &source_buf,
+                uint source_first_vertex,
+                uint dest_first_vertex,
+                uint vertex_len) override;
+
   void read(void *data) const override;
 
   VkBuffer vk_handle() const
   {
-    BLI_assert(buffer_.is_allocated());
     return buffer_.vk_handle();
+  }
+  const VKResourceWithHandle<VkBuffer> &resource() const
+  {
+    return buffer_.resource();
+  }
+
+  inline bool has_device_address() const
+  {
+    return buffer_.has_device_address();
   }
 
   inline VkDeviceAddress device_address_get() const
@@ -53,9 +65,9 @@ class VKVertexBuffer : public VertBuf {
   void ensure_updated();
   void ensure_buffer_view();
 
-  inline VkFormat to_vk_format()
+  VkFormat to_vk_format()
   {
-    return blender::gpu::to_vk_format(to_texture_format(&format));
+    return gpu::to_vk_format(to_texture_format(&format));
   }
 
  protected:
@@ -77,6 +89,10 @@ class VKVertexBuffer : public VertBuf {
 BLI_INLINE VKVertexBuffer *unwrap(VertBuf *vertex_buffer)
 {
   return static_cast<VKVertexBuffer *>(vertex_buffer);
+}
+BLI_INLINE VKVertexBuffer &unwrap(VertBuf &vertex_buffer)
+{
+  return static_cast<VKVertexBuffer &>(vertex_buffer);
 }
 
 }  // namespace blender::gpu

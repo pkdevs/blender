@@ -8,14 +8,16 @@
 
 #include <algorithm>
 
-#include "BLI_math_base.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_vector_c.hh"
 
-#include "BLI_math_base_safe.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_rotation_c.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Interpolation
@@ -65,7 +67,7 @@ bool interp_v3_v3v3_slerp(float target[3], const float a[3], const float b[3], c
   cosom = dot_v3v3(a, b);
 
   /* direct opposites */
-  if (UNLIKELY(cosom < (-1.0f + FLT_EPSILON))) {
+  if (cosom < (-1.0f + FLT_EPSILON)) [[unlikely]] {
     return false;
   }
 
@@ -80,19 +82,19 @@ bool interp_v3_v3v3_slerp(float target[3], const float a[3], const float b[3], c
 
 void interp_v3_v3v3_slerp_safe(float target[3], const float a[3], const float b[3], const float t)
 {
-  if (UNLIKELY(!interp_v3_v3v3_slerp(target, a, b, t))) {
+  if (!interp_v3_v3v3_slerp(target, a, b, t)) [[unlikely]] {
     /* Axis are aligned so any orthogonal vector is acceptable. */
     float ab_ortho[3];
     ortho_v3_v3(ab_ortho, a);
     normalize_v3(ab_ortho);
     if (t < 0.5f) {
-      if (UNLIKELY(!interp_v3_v3v3_slerp(target, a, ab_ortho, t * 2.0f))) {
+      if (!interp_v3_v3v3_slerp(target, a, ab_ortho, t * 2.0f)) [[unlikely]] {
         BLI_assert(0);
         copy_v3_v3(target, a);
       }
     }
     else {
-      if (UNLIKELY(!interp_v3_v3v3_slerp(target, ab_ortho, b, (t - 0.5f) * 2.0f))) {
+      if (!interp_v3_v3v3_slerp(target, ab_ortho, b, (t - 0.5f) * 2.0f)) [[unlikely]] {
         BLI_assert(0);
         copy_v3_v3(target, b);
       }
@@ -481,7 +483,7 @@ void angle_poly_v3(float *angles, const float *verts[3], int len)
 
 void project_v2_v2v2(float out[2], const float p[2], const float v_proj[2])
 {
-  if (UNLIKELY(is_zero_v2(v_proj))) {
+  if (is_zero_v2(v_proj)) [[unlikely]] {
     zero_v2(out);
     return;
   }
@@ -492,7 +494,7 @@ void project_v2_v2v2(float out[2], const float p[2], const float v_proj[2])
 
 void project_v3_v3v3(float out[3], const float p[3], const float v_proj[3])
 {
-  if (UNLIKELY(is_zero_v3(v_proj))) {
+  if (is_zero_v3(v_proj)) [[unlikely]] {
     zero_v3(out);
     return;
   }
@@ -828,7 +830,7 @@ float normalize_vn_vn(float *array_tar, const float *array_src, const int size)
     mul_vn_vn_fl(array_tar, array_src, size, 1.0f / d_sqrt);
   }
   else {
-    copy_vn_fl(array_tar, size, 0.0f);
+    std::fill_n(array_tar, size, 0.0f);
     d_sqrt = 0.0f;
   }
   return d_sqrt;
@@ -837,26 +839,6 @@ float normalize_vn_vn(float *array_tar, const float *array_src, const int size)
 float normalize_vn(float *array_tar, const int size)
 {
   return normalize_vn_vn(array_tar, array_tar, size);
-}
-
-void range_vn_i(int *array_tar, const int size, const int start)
-{
-  int *array_pt = array_tar + (size - 1);
-  int j = start + (size - 1);
-  int i = size;
-  while (i--) {
-    *(array_pt--) = j--;
-  }
-}
-
-void range_vn_u(uint *array_tar, const int size, const uint start)
-{
-  uint *array_pt = array_tar + (size - 1);
-  uint j = start + uint(size - 1);
-  int i = size;
-  while (i--) {
-    *(array_pt--) = j--;
-  }
 }
 
 void range_vn_fl(float *array_tar, const int size, const float start, const float step)
@@ -991,33 +973,6 @@ void interp_vn_vn(float *array_tar, const float *array_src, const float t, const
   }
 }
 
-void copy_vn_i(int *array_tar, const int size, const int val)
-{
-  int *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
-void copy_vn_short(short *array_tar, const int size, const short val)
-{
-  short *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
-void copy_vn_fl(float *array_tar, const int size, const float val)
-{
-  float *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1075,3 +1030,5 @@ void interp_v2_v2v2_db(double target[2], const double a[2], const double b[2], c
 }
 
 /** \} */
+
+}  // namespace blender

@@ -14,6 +14,8 @@
 
 #include "DNA_uuid_types.h"
 
+namespace blender {
+
 struct ARegion;
 struct FileAssetSelectParams;
 struct FileDirEntry;
@@ -25,15 +27,19 @@ struct ScrArea;
 struct SpaceFile;
 struct bContext;
 struct bScreen;
-struct uiBlock;
+namespace ui {
+struct Block;
+}
 struct wmOperator;
 struct wmWindow;
 struct wmWindowManager;
 struct View2D;
 struct rcti;
-namespace blender::asset_system {
+namespace asset_system {
 class AssetLibrary;
 }
+
+enum eFileSortType : short;
 
 #define FILE_LAYOUT_HOR 1
 #define FILE_LAYOUT_VER 2
@@ -53,7 +59,7 @@ struct FileAttributeColumn {
 
   float width;
   /** The sort type to use when sorting by this column. */
-  int sort_type; /* eFileSortType */
+  eFileSortType sort_type;
 
   /** Alignment of column texts, header text is always left aligned */
   int text_align; /* eFontStyle_Align */
@@ -121,13 +127,8 @@ void ED_fileselect_set_params_from_userdef(SpaceFile *sfile);
 /**
  * Update the user-preference data for the file space. In fact, this also contains some
  * non-FileSelectParams data, but we can safely ignore this.
- *
- * \param temp_win_size: If the browser was opened in a temporary window,
- * pass its size here so we can store that in the preferences. Otherwise NULL.
  */
-void ED_fileselect_params_to_userdef(SpaceFile *sfile,
-                                     const int temp_win_size[2],
-                                     bool is_maximized);
+void ED_fileselect_params_to_userdef(SpaceFile *sfile);
 
 void ED_fileselect_init_layout(SpaceFile *sfile, ARegion *region);
 
@@ -158,8 +159,7 @@ void ED_fileselect_exit(wmWindowManager *wm, SpaceFile *sfile);
 
 bool ED_fileselect_is_file_browser(const SpaceFile *sfile);
 bool ED_fileselect_is_asset_browser(const SpaceFile *sfile);
-blender::asset_system::AssetLibrary *ED_fileselect_active_asset_library_get(
-    const SpaceFile *sfile);
+asset_system::AssetLibrary *ED_fileselect_active_asset_library_get(const SpaceFile *sfile);
 ID *ED_fileselect_active_asset_get(const SpaceFile *sfile);
 
 void ED_fileselect_activate_asset_catalog(const SpaceFile *sfile, bUUID catalog_id);
@@ -207,7 +207,7 @@ ScrArea *ED_fileselect_handler_area_find_any_with_op(const wmWindow *win);
  */
 void ED_fileselect_ensure_default_filepath(bContext *C, wmOperator *op, const char *extension);
 
-blender::Vector<std::string> ED_fileselect_selected_files_full_paths(const SpaceFile *sfile);
+Vector<std::string> ED_fileselect_selected_files_full_paths(const SpaceFile *sfile);
 
 /* TODO: Maybe we should move this to BLI?
  * On the other hand, it's using defines from space-file area, so not sure... */
@@ -225,9 +225,9 @@ void ED_file_change_dir_ex(bContext *C, ScrArea *area);
 void ED_file_change_dir(bContext *C);
 
 void ED_file_path_button(bScreen *screen,
-                         const SpaceFile *sfile,
+                         SpaceFile *sfile,
                          FileSelectParams *params,
-                         uiBlock *block);
+                         ui::Block *block);
 
 /* File menu stuff */
 
@@ -238,7 +238,6 @@ struct FSMenuEntry {
   char *path;
   char name[/*FILE_MAXFILE*/ 256];
   short save;
-  short valid;
   int icon;
 };
 
@@ -258,8 +257,6 @@ enum FSMenuInsert {
   FS_INSERT_FIRST = (1 << 2),
   /** just append to preserve delivered order */
   FS_INSERT_LAST = (1 << 3),
-  /** Do not validate the link when inserted. */
-  FS_INSERT_NO_VALIDATE = (1 << 4),
 };
 
 FSMenu *ED_fsmenu_get();
@@ -278,3 +275,5 @@ void ED_fsmenu_entry_set_name(FSMenuEntry *fsentry, const char *name);
 
 int ED_fsmenu_entry_get_icon(FSMenuEntry *fsentry);
 void ED_fsmenu_entry_set_icon(FSMenuEntry *fsentry, int icon);
+
+}  // namespace blender

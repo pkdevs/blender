@@ -43,15 +43,16 @@ class PathTraceWork {
   RenderBuffers *get_render_buffers();
 
   /* Set effective parameters of the big tile and the work itself. */
-  void set_effective_buffer_params(const BufferParams &effective_full_params,
-                                   const BufferParams &effective_big_tile_params,
-                                   const BufferParams &effective_buffer_params);
+  void set_effective_buffer_params(const BufferParams &effective_big_tile_params,
+                                   const BufferParams &effective_buffer_params,
+                                   const BufferParams &effective_denoised_big_tile_params,
+                                   const BufferParams &effective_denoised_buffer_params);
 
   /* Check whether the big tile is being worked on by multiple path trace works. */
   bool has_multiple_works() const;
 
   /* Allocate working memory for execution. Must be called before init_execution(). */
-  virtual void alloc_work_memory(){};
+  virtual void alloc_work_memory() {};
 
   /* Initialize execution of kernels.
    * Will ensure that all device queues are initialized for execution.
@@ -59,6 +60,9 @@ class PathTraceWork {
    * This method is to be called after any change in the scene. It is not needed to call it prior
    * to an every call of the `render_samples()`. */
   virtual void init_execution() = 0;
+
+  /* Release resources acquired by init_execution(). */
+  virtual void deinit_execution() {}
 
   /* Render given number of samples as a synchronous blocking call.
    * The samples are added to the render buffer associated with this work. */
@@ -125,6 +129,9 @@ class PathTraceWork {
   virtual int adaptive_sampling_converge_filter_count_active(const float threshold,
                                                              bool reset) = 0;
 
+  /* Denoise Volume Scattering Probability Guiding buffers. */
+  virtual void denoise_volume_guiding_buffers() = 0;
+
   /* Run cryptomatte pass post-processing kernels. */
   virtual void cryptomatte_postproces() = 0;
 
@@ -162,8 +169,8 @@ class PathTraceWork {
 
   /* Get destination which offset and stride are configured so that writing to it will write to a
    * proper location of GPU display texture, taking current tile and device slice into account. */
-  PassAccessor::Destination get_display_destination_template(
-      const PathTraceDisplay *display) const;
+  PassAccessor::Destination get_display_destination_template(const PathTraceDisplay *display,
+                                                             const PassMode mode) const;
 
   /* Device which will be used for path tracing.
    * Note that it is an actual render device (and never is a multi-device). */
@@ -181,12 +188,13 @@ class PathTraceWork {
    * It also defines possible subset of a big tile in the case of multi-device rendering. */
   unique_ptr<RenderBuffers> buffers_;
 
-  /* Effective parameters of the full, big tile, and current work render buffer.
+  /* Effective parameters of the big tile, and current work render buffer.
    * The latter might be different from `buffers_->params` when there is a resolution divider
    * involved. */
-  BufferParams effective_full_params_;
   BufferParams effective_big_tile_params_;
   BufferParams effective_buffer_params_;
+  BufferParams effective_denoised_big_tile_params_;
+  BufferParams effective_denoised_buffer_params_;
 
   const bool *cancel_requested_flag_ = nullptr;
 };

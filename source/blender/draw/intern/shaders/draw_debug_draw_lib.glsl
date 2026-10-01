@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
-#include "draw_debug_info.hh"
+#include "draw_debug_infos.hh"
 
 SHADER_LIBRARY_CREATE_INFO(draw_debug_draw)
 
@@ -33,7 +37,7 @@ uint drw_debug_start_draw(uint v_needed)
   return vertid;
 }
 
-void drw_debug_line(inout uint vertid, float3 v1, float3 v2, uint v_color, uint lifetime)
+void drw_debug_line(uint &vertid, float3 v1, float3 v2, uint v_color, uint lifetime)
 {
   uint out_line_id = vertid / 2u;
   drw_debug_lines_buf[out_line_id + drw_debug_draw_offset] = debug_line_make(floatBitsToUint(v1.x),
@@ -88,10 +92,10 @@ void drw_debug_quad(float3 v1, float3 v2, float3 v3, float3 v4, float4 v_color, 
   uint vertid = drw_debug_start_draw(v_needed);
   if (vertid + v_needed < DRW_DEBUG_DRAW_VERT_MAX) {
     uint pcolor = debug_color_pack(v_color);
-    drw_debug_line(vertid, v1, v2, pcolor, drw_debug_default_lifetime);
-    drw_debug_line(vertid, v2, v3, pcolor, drw_debug_default_lifetime);
-    drw_debug_line(vertid, v3, v4, pcolor, drw_debug_default_lifetime);
-    drw_debug_line(vertid, v4, v1, pcolor, drw_debug_default_lifetime);
+    drw_debug_line(vertid, v1, v2, pcolor, lifetime);
+    drw_debug_line(vertid, v2, v3, pcolor, lifetime);
+    drw_debug_line(vertid, v3, v4, pcolor, lifetime);
+    drw_debug_line(vertid, v4, v1, pcolor, lifetime);
   }
 }
 void drw_debug_quad(float3 v1, float3 v2, float3 v3, float3 v4, float4 v_color)
@@ -192,8 +196,7 @@ void drw_debug_sphere(float3 p, float radius)
  */
 void drw_debug_matrix(float4x4 mat, uint lifetime)
 {
-  float4 p[4] = float4_array(
-      float4(0, 0, 0, 1), float4(1, 0, 0, 1), float4(0, 1, 0, 1), float4(0, 0, 1, 1));
+  float4 p[4] = {float4(0, 0, 0, 1), float4(1, 0, 0, 1), float4(0, 1, 0, 1), float4(0, 0, 1, 1)};
   for (int i = 0; i < 4; i++) {
     p[i] = mat * p[i];
     p[i].xyz /= p[i].w;
@@ -212,14 +215,14 @@ void drw_debug_matrix(float4x4 mat)
  */
 void drw_debug_matrix_as_bbox(float4x4 mat, float4 v_color, uint lifetime)
 {
-  float4 p[8] = float4_array(float4(-1, -1, -1, 1),
-                             float4(1, -1, -1, 1),
-                             float4(1, 1, -1, 1),
-                             float4(-1, 1, -1, 1),
-                             float4(-1, -1, 1, 1),
-                             float4(1, -1, 1, 1),
-                             float4(1, 1, 1, 1),
-                             float4(-1, 1, 1, 1));
+  float4 p[8] = {float4(-1, -1, -1, 1),
+                 float4(1, -1, -1, 1),
+                 float4(1, 1, -1, 1),
+                 float4(-1, 1, -1, 1),
+                 float4(-1, -1, 1, 1),
+                 float4(1, -1, 1, 1),
+                 float4(1, 1, 1, 1),
+                 float4(-1, 1, 1, 1)};
   for (int i = 0; i < 8; i++) {
     p[i] = mat * p[i];
     p[i].xyz /= p[i].w;

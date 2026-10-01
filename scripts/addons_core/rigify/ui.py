@@ -16,6 +16,7 @@ from bpy.app.translations import (
     pgettext_rpt as rpt_,
     contexts as i18n_contexts,
 )
+from bpy_extras import anim_utils
 
 from collections import defaultdict
 from typing import TYPE_CHECKING, Callable, Any
@@ -100,7 +101,7 @@ class DATA_PT_rigify(bpy.types.Panel):
         obj = verify_armature_obj(C.object)
 
         if metarig_needs_upgrade(obj):
-            layout.label(text="This metarig requires upgrading to Bone Collections", icon='ERROR')
+            layout.label(text="This metarig requires upgrading to Bone Collections", icon='STATUS_ERROR')
             layout.operator("armature.rigify_upgrade_layers", text="Upgrade Metarig")
             return
 
@@ -139,23 +140,23 @@ class DATA_PT_rigify(bpy.types.Panel):
                 show_upgrade_face = True
 
         if show_warning:
-            layout.label(text=WARNING, icon='ERROR')
+            layout.label(text=WARNING, icon='STATUS_WARNING')
 
         enable_generate = not (show_not_updatable or show_update_metarig)
 
         if show_not_updatable:
             layout.label(text="WARNING: This metarig contains deprecated Rigify rig-types and "
-                              "cannot be upgraded automatically.", icon='ERROR')
+                              "cannot be upgraded automatically.", icon='STATUS_WARNING')
             text = iface_("({:s} on bone {:s})").format(old_rig, old_bone)
             layout.label(text=text, translate=False)
         elif show_update_metarig:
             layout.label(text="This metarig contains old rig-types that can be automatically "
-                              "upgraded to benefit from new rigify features.", icon='ERROR')
+                              "upgraded to benefit from new rigify features.", icon='STATUS_WARNING')
             text = iface_("({:s} on bone {:s})").format(old_rig, old_bone)
             layout.label(text=text, translate=False)
             layout.operator("pose.rigify_upgrade_types", text="Upgrade Metarig")
         elif show_upgrade_face:
-            layout.label(text="This metarig uses the old face rig.", icon='INFO')
+            layout.label(text="This metarig uses the old face rig.", icon='STATUS_INFO')
             layout.operator("pose.rigify_upgrade_face")
 
         # Rig type field
@@ -211,7 +212,7 @@ class DATA_PT_rigify_advanced(bpy.types.Panel):
         col.row().prop(armature_id_store, "rigify_force_widget_update")
         col.row().prop(armature_id_store, "rigify_mirror_widgets")
         col.separator()
-        col.row().prop(armature_id_store, "rigify_finalize_script", text="Run Script")
+        col.row().prop(armature_id_store, "rigify_finalize_script", text="Post Generation")
 
 
 # noinspection PyPep8Naming
@@ -341,7 +342,10 @@ class DATA_PT_rigify_collection_list(bpy.types.Panel):
             col.operator("armature.collection_move", icon='TRIA_UP', text="").direction = 'UP'
             col.operator("armature.collection_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
 
-        layout.operator(operator='armature.rigify_validate_layers')
+        row = layout.row()
+        split = row.split(factor=row.property_split_factor)
+        split.label(text="")
+        split.operator(operator='armature.rigify_validate_layers')
 
         if active_coll:
             col = layout.column()
@@ -359,7 +363,7 @@ class DATA_PT_rigify_collection_list(bpy.types.Panel):
 
         if ROOT_COLLECTION not in arm.collections_all:
             text = iface_("The '{:s}' collection will be added upon generation").format(ROOT_COLLECTION)
-            layout.label(text=text, translate=False, icon='INFO')
+            layout.label(text=text, translate=False, icon='STATUS_INFO')
 
 
 # noinspection PyPep8Naming
@@ -411,7 +415,7 @@ class DATA_PT_rigify_collection_ui(bpy.types.Panel):
         active_bcoll_idx = arm.collections.active_index
 
         if active_bcoll_idx < 0:
-            layout.label(text="Click a button to select a collection:", icon="INFO")
+            layout.label(text="Click a button to select a collection:", icon='STATUS_INFO')
 
         box = layout.box()
         last_row = max(row_table.keys())
@@ -421,7 +425,7 @@ class DATA_PT_rigify_collection_ui(bpy.types.Panel):
             row_items = row_table[row_id]
 
             if row_id == 1 and not has_buttons:
-                row.label(text="Click to assign the button here:", icon="INFO")
+                row.label(text="Click to assign the button here:", icon='STATUS_INFO')
 
             grid = row.grid_flow(row_major=True, columns=len(row_items), even_columns=True)
             for bcoll_id in row_items:
@@ -450,7 +454,7 @@ class DATA_PT_rigify_collection_ui(bpy.types.Panel):
 
         if 0 in row_table:
             box = layout.box()
-            box.label(text="Permanently hidden collections:")
+            box.label(text="Permanently Hidden Collections:")
 
             grid = box.grid_flow(row_major=True, columns=2, even_columns=True)
 
@@ -485,7 +489,7 @@ class DATA_OT_rigify_collection_select(bpy.types.Operator):
 # noinspection PyPep8Naming
 class DATA_OT_rigify_collection_set_ui_row(bpy.types.Operator):
     bl_idname = "armature.rigify_collection_set_ui_row"
-    bl_label = "Move Between UI Rows"
+    bl_label = "Move/Delete Button"
     bl_options = {'UNDO'}
 
     index: IntProperty(name="Index")
@@ -543,6 +547,7 @@ class DATA_OT_rigify_collection_add_ui_row(bpy.types.Operator):
 class DATA_OT_rigify_add_color_sets(bpy.types.Operator):
     bl_idname = "armature.rigify_add_color_sets"
     bl_label = "Rigify Add Standard Color Sets"
+    bl_description = "Add the predefined color sets included with Rigify"
     bl_options = {'UNDO'}
 
     @classmethod
@@ -589,7 +594,8 @@ class DATA_OT_rigify_add_color_sets(bpy.types.Operator):
 # noinspection PyPep8Naming
 class DATA_OT_rigify_use_standard_colors(bpy.types.Operator):
     bl_idname = "armature.rigify_use_standard_colors"
-    bl_label = "Rigify Get active/select colors from current theme"
+    bl_label = "Get active/selected colors from current Blender theme"
+    bl_description = "Set the color palette to match Blender's active theme for selected and active bones"
     bl_options = {'UNDO'}
 
     @classmethod
@@ -620,6 +626,7 @@ class DATA_OT_rigify_use_standard_colors(bpy.types.Operator):
 class DATA_OT_rigify_apply_selection_colors(bpy.types.Operator):
     bl_idname = "armature.rigify_apply_selection_colors"
     bl_label = "Rigify Apply user defined active/select colors"
+    bl_description = "Apply the active/selected colors above to all color sets below"
     bl_options = {'UNDO'}
 
     @classmethod
@@ -649,7 +656,8 @@ class DATA_OT_rigify_apply_selection_colors(bpy.types.Operator):
 # noinspection PyPep8Naming
 class DATA_OT_rigify_color_set_add(bpy.types.Operator):
     bl_idname = "armature.rigify_color_set_add"
-    bl_label = "Rigify Add Color Set"
+    bl_label = "Add Color Set"
+    bl_description = "Add New Rigify Color Set"
     bl_options = {'UNDO'}
 
     @classmethod
@@ -681,29 +689,30 @@ class DATA_OT_rigify_color_set_add(bpy.types.Operator):
 class DATA_OT_rigify_color_set_add_theme(bpy.types.Operator):
     bl_idname = "armature.rigify_color_set_add_theme"
     bl_label = "Rigify Add Color Set from Theme"
+    bl_description = "Add the color set from the bone theme on the left"
     bl_options = {"REGISTER", "UNDO"}
 
     theme: EnumProperty(items=(
-        ('THEME01', 'THEME01', ''),
-        ('THEME02', 'THEME02', ''),
-        ('THEME03', 'THEME03', ''),
-        ('THEME04', 'THEME04', ''),
-        ('THEME05', 'THEME05', ''),
-        ('THEME06', 'THEME06', ''),
-        ('THEME07', 'THEME07', ''),
-        ('THEME08', 'THEME08', ''),
-        ('THEME09', 'THEME09', ''),
-        ('THEME10', 'THEME10', ''),
-        ('THEME11', 'THEME11', ''),
-        ('THEME12', 'THEME12', ''),
-        ('THEME13', 'THEME13', ''),
-        ('THEME14', 'THEME14', ''),
-        ('THEME15', 'THEME15', ''),
-        ('THEME16', 'THEME16', ''),
-        ('THEME17', 'THEME17', ''),
-        ('THEME18', 'THEME18', ''),
-        ('THEME19', 'THEME19', ''),
-        ('THEME20', 'THEME20', '')
+        ('THEME01', 'Theme 01', ''),
+        ('THEME02', 'Theme 02', ''),
+        ('THEME03', 'Theme 03', ''),
+        ('THEME04', 'Theme 04', ''),
+        ('THEME05', 'Theme 05', ''),
+        ('THEME06', 'Theme 06', ''),
+        ('THEME07', 'Theme 07', ''),
+        ('THEME08', 'Theme 08', ''),
+        ('THEME09', 'Theme 09', ''),
+        ('THEME10', 'Theme 10', ''),
+        ('THEME11', 'Theme 11', ''),
+        ('THEME12', 'Theme 12', ''),
+        ('THEME13', 'Theme 13', ''),
+        ('THEME14', 'Theme 14', ''),
+        ('THEME15', 'Theme 15', ''),
+        ('THEME16', 'Theme 16', ''),
+        ('THEME17', 'Theme 17', ''),
+        ('THEME18', 'Theme 18', ''),
+        ('THEME19', 'Theme 19', ''),
+        ('THEME20', 'Theme 20', '')
     ),
         name='Theme')
 
@@ -739,6 +748,7 @@ class DATA_OT_rigify_color_set_add_theme(bpy.types.Operator):
 class DATA_OT_rigify_color_set_remove(bpy.types.Operator):
     bl_idname = "armature.rigify_color_set_remove"
     bl_label = "Rigify Remove Color Set"
+    bl_description = "Remove the active color set from the list"
     bl_options = {'UNDO'}
 
     idx: IntProperty()
@@ -769,6 +779,7 @@ class DATA_OT_rigify_color_set_remove(bpy.types.Operator):
 class DATA_OT_rigify_color_set_remove_all(bpy.types.Operator):
     bl_idname = "armature.rigify_color_set_remove_all"
     bl_label = "Rigify Remove All Color Sets"
+    bl_description = "Remove All Color Sets"
     bl_options = {'UNDO'}
 
     @classmethod
@@ -843,14 +854,14 @@ class DATA_PT_rigify_color_sets(bpy.types.Panel):
 
         layout = self.layout
         row = layout.row()
-        row.operator("armature.rigify_use_standard_colors", icon='FILE_REFRESH', text='')
+        row.operator("armature.rigify_use_standard_colors", icon='COLOR', text='')
         row = row.row(align=True)
         row.prop(selection_colors, 'select', text='')
         row.prop(selection_colors, 'active', text='')
         row = layout.row(align=True)
         icon = 'LOCKED' if is_locked else 'UNLOCKED'
-        row.prop(armature, 'rigify_colors_lock', text='Unified select/active colors', icon=icon)
-        row.operator("armature.rigify_apply_selection_colors", icon='FILE_REFRESH', text='Apply')
+        row.prop(armature, 'rigify_colors_lock', text='Lock Selected/Active Colors', icon=icon)
+        row.operator("armature.rigify_apply_selection_colors", icon='FILE_REFRESH', text='Apply Colors')
         row = layout.row()
         row.template_list("DATA_UL_rigify_color_sets", "", obj.data, "rigify_colors", obj.data, "rigify_colors_index")
 
@@ -858,10 +869,14 @@ class DATA_PT_rigify_color_sets(bpy.types.Panel):
         col.operator("armature.rigify_color_set_add", icon='ADD', text="")
         col.operator("armature.rigify_color_set_remove", icon='REMOVE', text="").idx = idx
         col.menu("DATA_MT_rigify_color_sets_context_menu", icon='DOWNARROW_HLT', text="")
+
         row = layout.row()
-        row.prop(armature, 'rigify_theme_to_add', text='Theme')
+        split = row.split(factor=row.property_split_factor)
+        split.label(text="Bone Theme:")
+        split.prop(armature, 'rigify_theme_to_add', text="")
         op = row.operator("armature.rigify_color_set_add_theme", text="Add From Theme")
         op.theme = theme
+
         row = layout.row()
         row.operator("armature.rigify_add_color_sets", text="Add Standard")
 
@@ -904,8 +919,8 @@ class BONE_PT_rigify_buttons(bpy.types.Panel):
             except (ImportError, AttributeError, KeyError):
                 row = layout.row()
                 box = row.box()
-                text = iface_("ERROR: type \"{:s}\" does not exist!").format(rig_name)
-                box.label(text=text, icon='ERROR', translate=False)
+                text = rpt_("ERROR: type \"{:s}\" does not exist!").format(rig_name)
+                box.label(text=text, icon='STATUS_ERROR', translate=False)
             else:
                 if hasattr(rig.Rig, 'parameters_ui'):
                     rig = rig.Rig
@@ -1127,8 +1142,8 @@ class ValidateMetarigLayers(bpy.types.Operator):
     bl_idname = "armature.rigify_validate_layers"
     bl_label = "Validate Collection References"
     bl_description = (
-        "Validate references from rig component settings to bone collections.\n"
-        "Always run this both before and after joining two metarig armature objects into one to avoid glitches"
+        "Ensure that the settings on each component in this armature refer to a bone collection that actually exists.\n"
+        "Run this both before and after joining two metarig armature objects to avoid glitches."
     )
     bl_options = {'UNDO'}
 
@@ -1352,10 +1367,10 @@ def fk_to_ik(rig: ArmatureObject, window='ALL'):
                     # fk_ctrl = names['fk_ctrl']
                     parent = names['parent']
                     pole = names['pole']
-                    rig.pose.bones[controls[0]].bone.select = True
-                    rig.pose.bones[controls[4]].bone.select = True
-                    rig.pose.bones[pole].bone.select = True
-                    rig.pose.bones[parent].bone.select = True
+                    rig.pose.bones[controls[0]].select = True
+                    rig.pose.bones[controls[4]].select = True
+                    rig.pose.bones[pole].select = True
+                    rig.pose.bones[parent].select = True
                     kwargs = {'uarm_fk': controls[1], 'farm_fk': controls[2], 'hand_fk': controls[3],
                               'uarm_ik': controls[0], 'farm_ik': ik_ctrl[1], 'hand_ik': controls[4],
                               'pole': pole, 'main_parent': parent}
@@ -1368,11 +1383,11 @@ def fk_to_ik(rig: ArmatureObject, window='ALL'):
                     # fk_ctrl = names['fk_ctrl']
                     parent = names['parent']
                     pole = names['pole']
-                    rig.pose.bones[controls[0]].bone.select = True
-                    rig.pose.bones[controls[6]].bone.select = True
-                    rig.pose.bones[controls[5]].bone.select = True
-                    rig.pose.bones[pole].bone.select = True
-                    rig.pose.bones[parent].bone.select = True
+                    rig.pose.bones[controls[0]].select = True
+                    rig.pose.bones[controls[6]].select = True
+                    rig.pose.bones[controls[5]].select = True
+                    rig.pose.bones[pole].select = True
+                    rig.pose.bones[parent].select = True
                     # noinspection SpellCheckingInspection
                     kwargs = {'thigh_fk': controls[1], 'shin_fk': controls[2], 'foot_fk': controls[3],
                               'mfoot_fk': controls[7], 'thigh_ik': controls[0], 'shin_ik': ik_ctrl[1],
@@ -1431,9 +1446,9 @@ def ik_to_fk(rig: ArmatureObject, window='ALL'):
                     # fk_ctrl = names['fk_ctrl']
                     parent = names['parent']
                     pole = names['pole']
-                    rig.pose.bones[controls[1]].bone.select = True
-                    rig.pose.bones[controls[2]].bone.select = True
-                    rig.pose.bones[controls[3]].bone.select = True
+                    rig.pose.bones[controls[1]].select = True
+                    rig.pose.bones[controls[2]].select = True
+                    rig.pose.bones[controls[3]].select = True
                     kwargs = {'uarm_fk': controls[1], 'farm_fk': controls[2], 'hand_fk': controls[3],
                               'uarm_ik': controls[0], 'farm_ik': ik_ctrl[1],
                               'hand_ik': controls[4]}
@@ -1446,9 +1461,9 @@ def ik_to_fk(rig: ArmatureObject, window='ALL'):
                     # fk_ctrl = names['fk_ctrl']
                     parent = names['parent']
                     pole = names['pole']
-                    rig.pose.bones[controls[1]].bone.select = True
-                    rig.pose.bones[controls[2]].bone.select = True
-                    rig.pose.bones[controls[3]].bone.select = True
+                    rig.pose.bones[controls[1]].select = True
+                    rig.pose.bones[controls[2]].select = True
+                    rig.pose.bones[controls[3]].select = True
                     # noinspection SpellCheckingInspection
                     kwargs = {'thigh_fk': controls[1], 'shin_fk': controls[2], 'foot_fk': controls[3],
                               'mfoot_fk': controls[7], 'thigh_ik': controls[0], 'shin_ik': ik_ctrl[1],
@@ -1469,7 +1484,7 @@ def ik_to_fk(rig: ArmatureObject, window='ALL'):
                 break
 
 
-def clear_animation(act, anim_type, names):
+def clear_animation(channelbag, anim_type, names):
     bones = []
     for group in names:
         if names[group]['limb_type'] == 'arm':
@@ -1485,7 +1500,7 @@ def clear_animation(act, anim_type, names):
                 bones.extend([names[group]['controls'][1], names[group]['controls'][2], names[group]['controls'][3],
                               names[group]['controls'][4]])
     f_curves = []
-    for fcu in act.fcurves:
+    for fcu in channelbag.fcurves:
         words = fcu.data_path.split('"')
         if words[0] == "pose.bones[" and words[1] in bones:
             f_curves.append(fcu)
@@ -1494,7 +1509,7 @@ def clear_animation(act, anim_type, names):
         return
 
     for fcu in f_curves:
-        act.fcurves.remove(fcu)
+        channelbag.fcurves.remove(fcu)
 
     # Put cleared bones back to rest pose
     bpy.ops.pose.loc_clear()
@@ -1549,10 +1564,10 @@ def rot_pole_toggle(rig: ArmatureObject, window='ALL', value=False, toggle=False
                     # fk_ctrl = names['fk_ctrl']
                     parent = names['parent']
                     pole = names['pole']
-                    rig.pose.bones[controls[0]].bone.select = not new_pole_vector_value
-                    rig.pose.bones[controls[4]].bone.select = not new_pole_vector_value
-                    rig.pose.bones[parent].bone.select = not new_pole_vector_value
-                    rig.pose.bones[pole].bone.select = new_pole_vector_value
+                    rig.pose.bones[controls[0]].select = not new_pole_vector_value
+                    rig.pose.bones[controls[4]].select = not new_pole_vector_value
+                    rig.pose.bones[parent].select = not new_pole_vector_value
+                    rig.pose.bones[pole].select = new_pole_vector_value
 
                     kwargs1 = {'uarm_fk': controls[1], 'farm_fk': controls[2], 'hand_fk': controls[3],
                                'uarm_ik': controls[0], 'farm_ik': ik_ctrl[1],
@@ -1569,11 +1584,11 @@ def rot_pole_toggle(rig: ArmatureObject, window='ALL', value=False, toggle=False
                     # fk_ctrl = names['fk_ctrl']
                     parent = names['parent']
                     pole = names['pole']
-                    rig.pose.bones[controls[0]].bone.select = not new_pole_vector_value
-                    rig.pose.bones[controls[6]].bone.select = not new_pole_vector_value
-                    rig.pose.bones[controls[5]].bone.select = not new_pole_vector_value
-                    rig.pose.bones[parent].bone.select = not new_pole_vector_value
-                    rig.pose.bones[pole].bone.select = new_pole_vector_value
+                    rig.pose.bones[controls[0]].select = not new_pole_vector_value
+                    rig.pose.bones[controls[6]].select = not new_pole_vector_value
+                    rig.pose.bones[controls[5]].select = not new_pole_vector_value
+                    rig.pose.bones[parent].select = not new_pole_vector_value
+                    rig.pose.bones[pole].select = new_pole_vector_value
 
                     # noinspection SpellCheckingInspection
                     kwargs1 = {'thigh_fk': controls[1], 'shin_fk': controls[2], 'foot_fk': controls[3],
@@ -1673,7 +1688,7 @@ class OBJECT_OT_ClearAnimation(bpy.types.Operator):
     bl_idname = "rigify.clear_animation"
     bl_label = "Clear Animation"
     bl_description = "Clear animation for FK or IK bones"
-    bl_options = {'INTERNAL'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     anim_type: StringProperty()
 
@@ -1681,13 +1696,14 @@ class OBJECT_OT_ClearAnimation(bpy.types.Operator):
         rig = verify_armature_obj(context.object)
 
         if not rig.animation_data:
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
-        act = rig.animation_data.action
-        if not act:
-            return {'FINISHED'}
+        channelbag = anim_utils.action_get_channelbag_for_slot(
+            rig.animation_data.action, rig.animation_data.action_slot)
+        if not channelbag:
+            return {'CANCELLED'}
 
-        clear_animation(act, self.anim_type, names=get_limb_generated_names(rig))
+        clear_animation(channelbag, self.anim_type, names=get_limb_generated_names(rig))
         return {'FINISHED'}
 
 
@@ -1709,7 +1725,7 @@ class OBJECT_OT_Rot2Pole(bpy.types.Operator):
 
         if self.bone_name:
             bpy.ops.pose.select_all(action='DESELECT')
-            rig.pose.bones[self.bone_name].bone.select = True
+            rig.pose.bones[self.bone_name].select = True
 
         rot_pole_toggle(rig, window=self.window, toggle=self.toggle, value=self.value, bake=self.bake)
         return {'FINISHED'}

@@ -196,11 +196,8 @@ def get_attribute(attributes, name, data_type, domain):
 
 
 def get_gltf_interpolation(interpolation, export_settings):
-    return {
-        "BEZIER": "CUBICSPLINE",
-        "LINEAR": "LINEAR",
-        "CONSTANT": "STEP"
-    }.get(interpolation, export_settings['gltf_sampling_interpolation_fallback']) # If unknown, default to the mode choosen by the user
+    return {"BEZIER": "CUBICSPLINE", "LINEAR": "LINEAR", "CONSTANT": "STEP"}.get(
+        interpolation, export_settings['gltf_sampling_interpolation_fallback'])  # If unknown, default to the mode chosen by the user
 
 
 def get_anisotropy_rotation_gltf_to_blender(rotation):
@@ -213,7 +210,7 @@ def get_anisotropy_rotation_blender_to_gltf(rotation):
     return rotation * (2 * np.pi)
 
 
-def yvof_blender_to_gltf(angle, width, height, sensor_fit):
+def yfov_blender_to_gltf(angle, width, height, sensor_fit):
 
     aspect_ratio = width / height
 

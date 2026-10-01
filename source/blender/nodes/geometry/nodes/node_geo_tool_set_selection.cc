@@ -5,12 +5,18 @@
 #include "BKE_mesh.hh"
 #include "BKE_type_conversions.hh"
 
+#include "FN_field.hh"
+#include "FN_multi_function.hh"
+#include "FN_multi_function_registry.hh"
+
 #include "NOD_rna_define.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_enum_types.hh"
+
+#include "GEO_foreach_geometry.hh"
 
 #include "FN_multi_function_builder.hh"
 
@@ -29,24 +35,24 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.add_default_layout();
-  b.add_input<decl::Geometry>("Geometry").description("Geometry to update the selection of");
-  b.add_output<decl::Geometry>("Geometry").align_with_previous();
+  b.add_input<decl::Geometry>("Geometry"_ustr).description("Geometry to update the selection of");
+  b.add_output<decl::Geometry>("Geometry"_ustr).align_with_previous();
   if (const bNode *node = b.node_or_null()) {
     switch (SelectionType(node->custom2)) {
       case SelectionType::Boolean:
-        b.add_input<decl::Bool>("Selection").default_value(true).field_on_all();
+        b.add_input<decl::Bool>("Selection"_ustr).default_value(true).evaluated_geometry_field();
         break;
       case SelectionType::Float:
-        b.add_input<decl::Float>("Selection").default_value(1.0f).field_on_all();
+        b.add_input<decl::Float>("Selection"_ustr).default_value(1.0f).evaluated_geometry_field();
         break;
     }
   }
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  layout->prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
-  layout->prop(ptr, "selection_type", UI_ITEM_NONE, "", ICON_NONE);
+  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
+  layout.prop(ptr, "selection_type", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
@@ -68,14 +74,29 @@ static GField clamp_selection(const GField &selection)
 static GField invert_selection(const GField &selection)
 {
   if (selection.cpp_type().is<bool>()) {
-    static auto invert = mf::build::SI1_SO<bool, bool>("Invert Selection",
-                                                       [](const bool value) { return !value; });
+    static const mf::MultiFunction &invert = fn::multi_function::registry::lookup("!bool"_ustr);
     return GField(FieldOperation::from(invert, {selection}));
   }
 
-  static auto invert = mf::build::SI1_SO<float, float>(
-      "Invert Selection", [](const float value) { return 1.0f - value; });
-  return GField(FieldOperation::from(invert, {selection}));
+  static const mf::MultiFunction &invert = fn::multi_function::registry::lookup(
+      "float - float"_ustr);
+  return GField(FieldOperation::from(invert, {fn::Field<float>(1.0f), selection}));
+}
+
+/**
+ * After conversion to and from other geometry types, the selection attributes can end up on the
+ * wrong domain (usually the point domain). Since the node requires certain domains to work, just
+ * remove the attributes in this case.
+ */
+static void remove_with_wrong_domain(bke::MutableAttributeAccessor attributes,
+                                     const StringRef name,
+                                     const bke::AttrDomain domain)
+{
+  if (const std::optional<bke::AttributeMetaData> meta_data = attributes.lookup_meta_data(name)) {
+    if (meta_data->domain != domain) {
+      attributes.remove(name);
+    }
+  }
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -83,29 +104,29 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (!check_tool_context_and_error(params)) {
     return;
   }
-  GeometrySet geometry = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry = params.extract_input<GeometrySet>("Geometry"_ustr);
   const eObjectMode mode = params.user_data()->call_data->operator_data->mode;
   if (ELEM(mode, OB_MODE_OBJECT, OB_MODE_PAINT_GREASE_PENCIL)) {
     params.error_message_add(NodeWarningType::Error,
                              "Selection control is not supported in this mode");
-    params.set_output("Geometry", std::move(geometry));
+    params.set_output("Geometry"_ustr, std::move(geometry));
     return;
   }
 
-  const GField selection = params.extract_input<GField>("Selection");
+  const GField selection = params.extract_input<GField>("Selection"_ustr);
   const AttrDomain domain = AttrDomain(params.node().custom1);
   const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
-  geometry.modify_geometry_sets([&](GeometrySet &geometry) {
+  geometry::foreach_real_geometry(geometry, [&](GeometrySet &geometry) {
     if (Mesh *mesh = geometry.get_mesh_for_write()) {
+      bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
+      remove_with_wrong_domain(attributes, ".select_vert", AttrDomain::Point);
+      remove_with_wrong_domain(attributes, ".select_edge", AttrDomain::Edge);
+      remove_with_wrong_domain(attributes, ".select_poly", AttrDomain::Face);
       switch (mode) {
         case OB_MODE_EDIT: {
-          const Field<bool> field = conversions.try_convert(selection, CPPType::get<bool>());
+          const Field<bool> field = *conversions.try_convert<bool>(selection);
           switch (domain) {
             case AttrDomain::Point:
-              /* Remove attributes in case they are on the wrong domain, which can happen after
-               * conversion to and from other geometry types. */
-              mesh->attributes_for_write().remove(".select_edge");
-              mesh->attributes_for_write().remove(".select_poly");
               bke::try_capture_field_on_geometry(geometry.get_component_for_write<MeshComponent>(),
                                                  ".select_vert",
                                                  AttrDomain::Point,
@@ -120,10 +141,6 @@ static void node_geo_exec(GeoNodeExecParams params)
               bke::mesh_select_edge_flush(*mesh);
               break;
             case AttrDomain::Face:
-              /* Remove attributes in case they are on the wrong domain, which can happen after
-               * conversion to and from other geometry types. */
-              mesh->attributes_for_write().remove(".select_vert");
-              mesh->attributes_for_write().remove(".select_edge");
               bke::try_capture_field_on_geometry(geometry.get_component_for_write<MeshComponent>(),
                                                  ".select_poly",
                                                  AttrDomain::Face,
@@ -137,11 +154,10 @@ static void node_geo_exec(GeoNodeExecParams params)
           break;
         }
         case OB_MODE_SCULPT: {
-          GField on_domain = GField(
-              std::make_shared<bke::EvaluateOnDomainInput>(selection, domain));
+          GField on_domain = GField::from_input<bke::EvaluateOnDomainInput>(selection, domain);
           GField clamped_and_inverted = invert_selection(clamp_selection(std::move(on_domain)));
-          const Field<float> field = conversions.try_convert(std::move(clamped_and_inverted),
-                                                             CPPType::get<float>());
+          const Field<float> field = *conversions.try_convert<float>(
+              std::move(clamped_and_inverted));
           bke::try_capture_field_on_geometry(geometry.get_component_for_write<MeshComponent>(),
                                              ".sculpt_mask",
                                              AttrDomain::Point,
@@ -169,7 +185,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
     if (geometry.has_grease_pencil()) {
       /* Grease Pencil only supports boolean selection. */
-      const Field<bool> field = conversions.try_convert(selection, CPPType::get<bool>());
+      const Field<bool> field = *conversions.try_convert<bool>(selection);
       if (ELEM(domain, AttrDomain::Point, AttrDomain::Curve)) {
         bke::try_capture_field_on_geometry(
             geometry.get_component_for_write<GreasePencilComponent>(),
@@ -179,7 +195,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       }
     }
   });
-  params.set_output("Geometry", std::move(geometry));
+  params.set_output("Geometry"_ustr, std::move(geometry));
 }
 
 static void node_rna(StructRNA *srna)
@@ -216,8 +232,8 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeToolSetSelection", GEO_NODE_TOOL_SET_SELECTION);
+  static bke::bNodeType ntype;
+  geo_node_type_base(&ntype, "GeometryNodeToolSetSelection"_ustr, GEO_NODE_TOOL_SET_SELECTION);
   ntype.ui_name = "Set Selection";
   ntype.ui_description = "Set selection of the edited geometry, for tool execution";
   ntype.enum_name_legacy = "TOOL_SELECTION_SET";
@@ -227,7 +243,7 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.gather_link_search_ops = search_link_ops_for_tool_node;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

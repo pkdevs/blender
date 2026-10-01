@@ -88,9 +88,10 @@ class BONE_PT_transform(BoneButtonsPanel, Panel):
                 row.prop(pchan, "rotation_euler", text="Rotation")
                 row.use_property_decorate = False
                 row.prop(pchan, "lock_rotation", text="", emboss=False, icon='DECORATE_UNLOCKED')
+
             row = layout.row(align=True)
             row.prop(pchan, "rotation_mode", text="Mode")
-            row.label(text="", icon='BLANK1')
+            row.operator_menu_enum("anim.rotation_mode_convert", "mode", icon='DOWNARROW_HLT', text="")
 
             col = layout.column()
             row = col.row(align=True)
@@ -176,7 +177,7 @@ class BONE_PT_curved(BoneButtonsPanel, Panel):
 
         row = col.row(align=True)
         row.use_property_split = False
-        split = row.split(factor=0.4)
+        split = row.split(factor=row.property_split_factor)
         split.alignment = 'RIGHT'
         split.label(text="Scale")
         split2 = split.split(factor=0.7)
@@ -196,7 +197,7 @@ class BONE_PT_curved(BoneButtonsPanel, Panel):
 
         row = col.row(align=True)
         row.use_property_split = False
-        split = row.split(factor=0.4)
+        split = row.split(factor=row.property_split_factor)
         split.alignment = 'RIGHT'
         split.label(text="Scale")
         split2 = split.split(factor=0.7)
@@ -323,17 +324,18 @@ class BONE_PT_display(BoneButtonsPanel, Panel):
         bone = context.bone
 
         col = layout.column()
-        col.prop(bone, "hide", text="Hide", toggle=False)
+        # Figure out the pose bone.
+        ob = context.object
+        pose_bone = ob and ob.pose.bones[bone.name]
         hide_select_sub = col.column()
-        hide_select_sub.active = not bone.hide
+        if pose_bone:
+            col.prop(pose_bone, "hide", text="Hide", toggle=False)
+            hide_select_sub.active = not pose_bone.hide
         hide_select_sub.prop(bone, "hide_select", invert_checkbox=True)
         col.prop(bone, "display_type", text="Display As")
 
-        # Figure out the pose bone.
-        ob = context.object
-        if not ob:
+        if not pose_bone:
             return
-        pose_bone = ob.pose.bones[bone.name]
 
         # Allow the layout to use the space normally occupied by the 'set a key' diamond.
         layout.use_property_decorate = False
@@ -417,6 +419,12 @@ class BONE_PT_display_custom_shape(BoneButtonsPanel, Panel):
             sub.prop(pchan, "custom_shape_scale_xyz", text="Scale")
 
             sub.prop_search(pchan, "custom_shape_transform", ob.pose, "bones", text="Override Transform")
+            subsub = sub.column()
+            subsub.active = bool(pchan and pchan.custom_shape and pchan.custom_shape_transform)
+            subsub.prop(pchan, "use_transform_at_custom_shape")
+            subsubsub = subsub.column()
+            subsubsub.active = subsub.active and pchan.use_transform_at_custom_shape
+            subsubsub.prop(pchan, "use_transform_around_custom_shape")
             sub.prop(pchan, "use_custom_shape_bone_size")
 
             sub.separator()
@@ -441,7 +449,7 @@ class BONE_PT_inverse_kinematics(BoneButtonsPanel, Panel):
         bone = context.bone
         pchan = ob.pose.bones[bone.name]
 
-        active = pchan.is_in_ik_chain
+        active = pchan.is_in_ik_chain or ob.pose.use_auto_ik
 
         col = layout.column()
         col.prop(pchan, "ik_stretch", slider=True)

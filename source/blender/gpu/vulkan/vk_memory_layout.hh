@@ -10,6 +10,11 @@
 
 #include "gpu_shader_create_info.hh"
 
+#include "BLI_math_base_c.hh"
+#include "BLI_math_vector_types.hh"
+
+#include "vk_common.hh"
+
 namespace blender::gpu {
 
 /**
@@ -77,13 +82,7 @@ template<typename LayoutT>
 static void align(const shader::Type &type, const int32_t array_size, uint32_t *r_offset)
 {
   uint32_t alignment = LayoutT::element_alignment(type, array_size != 0);
-  uint32_t alignment_mask = alignment - 1;
-  uint32_t offset = *r_offset;
-  if ((offset & alignment_mask) != 0) {
-    offset &= ~alignment_mask;
-    offset += alignment;
-    *r_offset = offset;
-  }
+  *r_offset = ceil_to_multiple_ul(*r_offset, alignment);
 }
 
 /**
@@ -116,5 +115,32 @@ template<typename LayoutT> static void align_end_of_struct(uint32_t *r_offset)
 {
   align<LayoutT>(shader::Type::float4_t, 0, r_offset);
 }
+
+/**
+ * Image transfers can use multiple transfer buffers for a single request.
+ *
+ * This helper class helps in splitting the transfers in smaller chunks.
+ */
+struct TransferRegion {
+  int3 offset;
+  int3 extent;
+  IndexRange layers;
+
+  int64_t sample_count() const
+  {
+    return int64_t(extent.x) * int64_t(extent.y) * int64_t(extent.z) * layers.size();
+  }
+
+  int64_t result_offset(int3 sub_offset, int layer) const
+  {
+    int64_t diff_x = sub_offset.x - offset.x;
+    int64_t diff_y = sub_offset.y - offset.y;
+    int64_t diff_z = sub_offset.z - offset.z;
+    int64_t diff_l = layer - layers.start();
+
+    return (diff_l * extent.x * extent.y * extent.z) + (diff_z * extent.x * extent.y) +
+           (diff_y * extent.x) + diff_x;
+  }
+};
 
 }  // namespace blender::gpu

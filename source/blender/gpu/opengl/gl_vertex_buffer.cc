@@ -21,8 +21,8 @@ void GLVertBuf::acquire_data()
   }
 
   /* Discard previous data if any. */
-  MEM_SAFE_FREE(data_);
-  data_ = MEM_malloc_arrayN<uchar>(this->size_alloc_get(), __func__);
+  MEM_SAFE_DELETE(data_);
+  data_ = MEM_new_array_uninitialized<uchar>(this->size_alloc_get(), __func__);
 }
 
 void GLVertBuf::resize_data()
@@ -31,7 +31,8 @@ void GLVertBuf::resize_data()
     return;
   }
 
-  data_ = (uchar *)MEM_reallocN(data_, sizeof(uchar) * this->size_alloc_get());
+  data_ = static_cast<uchar *>(
+      MEM_realloc_uninitialized(data_, sizeof(uchar) * this->size_alloc_get()));
 }
 
 void GLVertBuf::release_data()
@@ -42,12 +43,12 @@ void GLVertBuf::release_data()
 
   if (vbo_id_ != 0) {
     GPU_TEXTURE_FREE_SAFE(buffer_texture_);
-    GLContext::buf_free(vbo_id_);
+    GLContext::buffer_free(vbo_id_);
     vbo_id_ = 0;
     memory_usage -= vbo_size_;
   }
 
-  MEM_SAFE_FREE(data_);
+  MEM_SAFE_DELETE(data_);
 }
 
 void GLVertBuf::upload_data()
@@ -79,7 +80,7 @@ void GLVertBuf::bind()
     memory_usage += vbo_size_;
 
     if (usage_ == GPU_USAGE_STATIC) {
-      MEM_SAFE_FREE(data_);
+      MEM_SAFE_DELETE(data_);
     }
     flag &= ~GPU_VERTBUF_DATA_DIRTY;
     flag |= GPU_VERTBUF_DATA_UPLOADED;
@@ -139,6 +140,37 @@ bool GLVertBuf::is_active() const
 void GLVertBuf::update_sub(uint start, uint len, const void *data)
 {
   glBufferSubData(GL_ARRAY_BUFFER, start, len, data);
+}
+
+void GLVertBuf::copy_sub(VertBuf &source_buf,
+                         uint source_first_vertex,
+                         uint dest_first_vertex,
+                         uint vertex_len)
+{
+  BLI_assert(format.stride == source_buf.format.stride);
+  BLI_assert_msg(size_t(source_first_vertex) + vertex_len <= source_buf.vertex_alloc,
+                 "Copy source range exceeds the source vertex buffer bounds");
+  BLI_assert_msg(size_t(dest_first_vertex) + vertex_len <= vertex_alloc,
+                 "Copy destination range exceeds the vertex buffer bounds");
+  GLVertBuf &src = static_cast<GLVertBuf &>(source_buf);
+  BLI_assert_msg(vbo_id_, "GPU_vertbuf_use() not called on this buffer");
+  BLI_assert_msg(src.vbo_id_, "GPU_vertbuf_use() not called on the source buffer");
+
+  const size_t src_offset = size_t(source_first_vertex) * src.format.stride;
+  const size_t dst_offset = size_t(dest_first_vertex) * format.stride;
+  const size_t copy_size = size_t(vertex_len) * format.stride;
+
+  if (GLContext::direct_state_access_support) {
+    glCopyNamedBufferSubData(src.vbo_id_, vbo_id_, src_offset, dst_offset, copy_size);
+  }
+  else {
+    glBindBuffer(GL_COPY_READ_BUFFER, src.vbo_id_);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, vbo_id_);
+    glCopyBufferSubData(
+        GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, src_offset, dst_offset, copy_size);
+    glBindBuffer(GL_COPY_READ_BUFFER, 0);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+  }
 }
 
 }  // namespace blender::gpu

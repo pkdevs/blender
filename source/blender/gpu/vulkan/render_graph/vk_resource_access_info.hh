@@ -37,8 +37,7 @@ struct VKImageAccess {
    * we can temporary change a subset of layers, when the image is used as an attachment and a
    * image load/store.
    */
-  uint32_t layer_base;
-  uint32_t layer_count;
+  VKSubImageRange subimage;
 
   /** Determine the image layout for the vk_access_flags. */
   VkImageLayout to_vk_image_layout(bool supports_local_read) const;
@@ -46,7 +45,7 @@ struct VKImageAccess {
 
 /** Struct describing the access to a buffer. */
 struct VKBufferAccess {
-  VkBuffer vk_buffer;
+  ResourceHandle handle;
   VkAccessFlags vk_access_flags;
 };
 
@@ -58,7 +57,7 @@ struct VKResourceAccessInfo : NonCopyable {
   /**
    * Extract read/write resource dependencies and add them to `node_links`.
    */
-  void build_links(VKResourceStateTracker &resources, VKRenderGraphNodeLinks &node_links) const;
+  void build_links(VKResourceStateTracker &resources, VKRenderGraphLinks &links) const;
 
   /**
    * Reset the instance for reuse.

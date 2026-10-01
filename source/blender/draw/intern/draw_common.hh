@@ -18,6 +18,9 @@ namespace blender::draw {
 
 void hair_init();
 
+/**
+ * \note Only valid after #DRW_curves_update().
+ */
 gpu::VertBuf *hair_pos_buffer_get(Scene *scene,
                                   Object *object,
                                   ParticleSystem *psys,
@@ -39,27 +42,46 @@ gpu::Batch *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
 
 /** Curves. */
 
-gpu::VertBuf *curves_pos_buffer_get(Scene *scene, Object *object);
+/**
+ * \note Content of the vertex buf is only valid after #DRW_curves_update().
+ */
+gpu::VertBuf *curves_pos_buffer_get(Object *object);
 
 gpu::Batch *curves_sub_pass_setup(PassMain::Sub &ps,
                                   const Scene *scene,
                                   Object *ob,
+                                  const char *&r_error,
                                   GPUMaterial *gpu_material = nullptr);
 
 gpu::Batch *curves_sub_pass_setup(PassSimple::Sub &ps,
                                   const Scene *scene,
                                   Object *ob,
+                                  const char *&r_error,
                                   GPUMaterial *gpu_material = nullptr);
 
 /* Point cloud. */
 
 gpu::Batch *pointcloud_sub_pass_setup(PassMain::Sub &sub_ps,
-                                      Object *object,
+                                      const ObjectRef &ob_ref,
+                                      const ResourceHandleRange &res_handle,
                                       GPUMaterial *gpu_material = nullptr);
 
 gpu::Batch *pointcloud_sub_pass_setup(PassSimple::Sub &sub_ps,
-                                      Object *object,
+                                      const ObjectRef &ob_ref,
+                                      const ResourceHandleRange &res_handle,
                                       GPUMaterial *gpu_material = nullptr);
+
+/* GSplats. */
+
+gpu::Batch *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
+                                  const ObjectRef &ob_ref,
+                                  const ResourceHandleRange &res_handle,
+                                  GPUMaterial *gpu_material = nullptr);
+
+gpu::Batch *gsplat_sub_pass_setup(PassSimple::Sub &sub_ps,
+                                  const ObjectRef &ob_ref,
+                                  const ResourceHandleRange &res_handle,
+                                  GPUMaterial *gpu_material = nullptr);
 
 /** Volume. */
 

@@ -9,7 +9,7 @@
 #include <pxr/usd/usdGeom/tokens.h>
 
 #include "BKE_camera.h"
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -22,7 +22,7 @@ USDCameraWriter::USDCameraWriter(const USDExporterContext &ctx) : USDAbstractWri
 
 bool USDCameraWriter::is_supported(const HierarchyContext *context) const
 {
-  const Camera *camera = static_cast<const Camera *>(context->object->data);
+  const Camera *camera = id_cast<const Camera *>(context->object->data);
   return camera->type == CAM_PERSP;
 }
 
@@ -65,7 +65,7 @@ void USDCameraWriter::do_write(HierarchyContext &context)
   pxr::UsdGeomCamera usd_camera = pxr::UsdGeomCamera::Define(usd_export_context_.stage,
                                                              usd_export_context_.usd_path);
 
-  const Camera *camera = static_cast<const Camera *>(context.object->data);
+  const Camera *camera = id_cast<const Camera *>(context.object->data);
   const Scene *scene = DEG_get_evaluated_scene(usd_export_context_.depsgraph);
 
   usd_camera.CreateProjectionAttr().Set(pxr::UsdGeomTokens->perspective);
@@ -120,8 +120,12 @@ void USDCameraWriter::do_write(HierarchyContext &context)
                   time,
                   usd_value_writer_);
   }
+  else {
+    set_attribute(usd_camera.CreateFStopAttr(pxr::VtValue(), true), 0.0f, time, usd_value_writer_);
+  }
 
   auto prim = usd_camera.GetPrim();
+  add_to_prim_map(prim.GetPath(), &camera->id);
   write_id_properties(prim, camera->id, time);
 }
 

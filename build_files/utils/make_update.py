@@ -23,6 +23,7 @@ These can be unquoted eventually.
 
 __all__ = (
     "main",
+    "floating_checkout_update",
 )
 
 
@@ -263,7 +264,7 @@ def git_update_skip(args: argparse.Namespace, check_remote_exists: bool = True) 
     # Abort if uncommitted changes.
     changes = check_output([args.git_command, 'status', '--porcelain', '--untracked-files=no', '--ignore-submodules'])
     if len(changes) != 0:
-        return "you have unstaged changes"
+        return "you have uncommitted changes"
 
     # Test if there is an upstream branch configured
     if check_remote_exists:
@@ -647,7 +648,7 @@ def lfs_fallback_setup(args: argparse.Namespace) -> None:
     for remote in remotes:
         url = make_utils.git_get_remote_url(args.git_command, remote)
         if "projects.blender.org" not in url and "git.blender.org" not in url:
-            make_utils.git_set_config(args.git_command, f"lfs.{remote}.searchall", "true")
+            make_utils.git_set_config(args.git_command, "lfs.remote.searchall", "true")
         else:
             add_fallback_remote = False
 
@@ -668,7 +669,6 @@ def main() -> int:
 
     blender_skip_msg = ""
     libraries_skip_msg = ""
-    submodules_skip_msg = ""
 
     blender_version = make_utils. parse_blender_version()
     if blender_version.cycle != 'alpha':
@@ -702,7 +702,7 @@ def main() -> int:
         libraries_skip_msg += submodules_lib_update(args, branch)
 
     # Report any skipped repositories at the end, so it's not as easy to miss.
-    skip_msg = blender_skip_msg + libraries_skip_msg + submodules_skip_msg
+    skip_msg = blender_skip_msg + libraries_skip_msg
     if skip_msg:
         print_stage("Update finished with the following messages")
         print(skip_msg.strip())
@@ -719,11 +719,11 @@ def main() -> int:
         print()
         print('NOTE: --use-linux-libraries is a deprecated command line argument, kept for compatibility purposes.')
 
-    # For failed submodule update we throw an error, since not having correct
-    # submodules can make Blender throw errors.
+    # For failed library update we throw an error, since not having correct
+    # libraries can make Blender throw errors.
     # For Blender itself we don't and consider "make update" to be a command
     # you can use while working on uncommitted code.
-    if submodules_skip_msg:
+    if libraries_skip_msg:
         return 1
 
     return 0

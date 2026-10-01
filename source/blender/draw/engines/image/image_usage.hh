@@ -26,6 +26,8 @@ struct ImageUsage {
   short layer = 0;
   /** View of the image that is used. */
   short view = 0;
+  /** Render slot of the image that is displayed. */
+  short render_slot = 0;
 
   ColorManagedColorspaceSettings colorspace_settings;
   /** IMA_ALPHA_* */
@@ -33,16 +35,21 @@ struct ImageUsage {
   bool last_tile_drawing;
 
   const void *last_image = nullptr;
+  const void *last_scene = nullptr;
 
   ImageUsage() = default;
-  ImageUsage(const ::Image *image, const ::ImageUser *image_user, bool do_tile_drawing)
+  ImageUsage(const blender::Image *image,
+             const blender::ImageUser *image_user,
+             bool do_tile_drawing)
   {
     pass = image_user ? image_user->pass : 0;
     layer = image_user ? image_user->layer : 0;
     view = image_user ? image_user->multi_index : 0;
+    render_slot = image->render_slot;
     colorspace_settings = image->colorspace_settings;
     alpha_mode = image->alpha_mode;
     last_image = static_cast<const void *>(image);
+    last_scene = image_user ? static_cast<const void *>(image_user->scene) : nullptr;
     last_tile_drawing = do_tile_drawing;
   }
 

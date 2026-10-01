@@ -6,9 +6,16 @@
 
 #include <pxr/usd/usdGeom/basisCurves.h>
 #include <pxr/usd/usdGeom/tokens.h>
+#include <pxr/usd/usdShade/materialBindingAPI.h>
 
+#include "BKE_material.hh"
 #include "BKE_particle.h"
 
+#include "BLI_math_matrix.hh"
+#include "BLI_math_vector_types.hh"
+
+#include "DNA_material_types.h"
+#include "DNA_object_types.h"
 #include "DNA_particle_types.h"
 
 namespace blender::io::usd {
@@ -27,13 +34,23 @@ void USDHairWriter::do_write(HierarchyContext &context)
   pxr::UsdGeomBasisCurves curves = pxr::UsdGeomBasisCurves::Define(usd_export_context_.stage,
                                                                    usd_export_context_.usd_path);
 
-  /* TODO(Sybren): deal with (psys->part->flag & PART_HAIR_BSPLINE) */
-  curves.CreateBasisAttr(pxr::VtValue(pxr::UsdGeomTokens->bspline));
-  curves.CreateTypeAttr(pxr::VtValue(pxr::UsdGeomTokens->cubic));
+  if (psys->part->flag & PART_HAIR_BSPLINE) {
+    curves.CreateBasisAttr(pxr::VtValue(pxr::UsdGeomTokens->bspline));
+    curves.CreateTypeAttr(pxr::VtValue(pxr::UsdGeomTokens->cubic));
+  }
+  else {
+    curves.CreateBasisAttr(pxr::VtValue(pxr::UsdGeomTokens->catmullRom));
+    curves.CreateTypeAttr(pxr::VtValue(pxr::UsdGeomTokens->cubic));
+    curves.CreateWrapAttr(pxr::VtValue(pxr::UsdGeomTokens->pinned));
+  }
 
   pxr::VtArray<pxr::GfVec3f> points;
   pxr::VtIntArray curve_point_counts;
   curve_point_counts.reserve(psys->totpart);
+
+  /* Reverse current transform since the Hair curves will be placed under the object's Xform and we
+   * don't want a double-transform to happen. */
+  const float4x4 inv = math::invert(context.object->object_to_world());
 
   ParticleCacheKey *strand;
   for (int strand_index = 0; strand_index < psys->totpart; ++strand_index) {
@@ -43,7 +60,8 @@ void USDHairWriter::do_write(HierarchyContext &context)
     curve_point_counts.push_back(point_count);
 
     for (int point_index = 0; point_index < point_count; ++point_index, ++strand) {
-      points.push_back(pxr::GfVec3f(strand->co));
+      const float3 vert = math::transform_point(inv, float3(strand->co));
+      points.push_back(pxr::GfVec3f(vert.x, vert.y, vert.z));
     }
   }
 
@@ -64,10 +82,37 @@ void USDHairWriter::do_write(HierarchyContext &context)
 
   if (psys->part) {
     auto prim = curves.GetPrim();
+    add_to_prim_map(prim.GetPath(), &psys->part->id);
     write_id_properties(prim, psys->part->id, time);
   }
 
+  assign_material(context, curves, psys->part->omat);
+
   this->author_extent(curves, time);
+}
+
+void USDHairWriter::assign_material(const HierarchyContext &context,
+                                    const pxr::UsdGeomBasisCurves &curves,
+                                    const int material_slot)
+{
+  if (!usd_export_context_.export_params.export_materials) {
+    return;
+  }
+
+  Material *material = BKE_object_material_get_eval(context.object, material_slot);
+  if (material == nullptr) {
+    return;
+  }
+
+  pxr::UsdShadeMaterial usd_material = ensure_usd_material(context, material);
+  if (!usd_material) {
+    return;
+  }
+
+  auto curves_prim = curves.GetPrim();
+  pxr::UsdShadeMaterialBindingAPI binding(curves_prim);
+  binding.Bind(usd_material);
+  pxr::UsdShadeMaterialBindingAPI::Apply(curves_prim);
 }
 
 bool USDHairWriter::check_is_animated(const HierarchyContext & /*context*/) const

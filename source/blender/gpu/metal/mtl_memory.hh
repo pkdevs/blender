@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup gpu
+ */
+
 #pragma once
 
 #include "BLI_map.hh"
@@ -56,7 +60,7 @@
  *
  *  Usage:
  *
- *    MTLContext::get_scratchbuffer_manager() - to fetch active manager.
+ *    MTLContext::get_scratch_buffer_manager() - to fetch active manager.
  *
  *    MTLTemporaryBuffer scratch_buffer_allocate_range(size)
  *    MTLTemporaryBuffer scratch_buffer_allocate_range_aligned(size, align)
@@ -83,10 +87,10 @@
  *  Usage:
  *    MTLContext::get_global_memory_manager();  - static routine to fetch global memory manager.
  *
- *    gpu::MTLBuffer *allocate(size, is_cpu_visibile)
- *    gpu::MTLBuffer *allocate_aligned(size, alignment, is_cpu_visibile)
- *    gpu::MTLBuffer *allocate_with_data(size, is_cpu_visibile, data_ptr)
- *    gpu::MTLBuffer *allocate_aligned_with_data(size, alignment, is_cpu_visibile, data_ptr)
+ *    gpu::MTLBuffer *allocate(size, is_cpu_visible)
+ *    gpu::MTLBuffer *allocate_aligned(size, alignment, is_cpu_visible)
+ *    gpu::MTLBuffer *allocate_with_data(size, is_cpu_visible, data_ptr)
+ *    gpu::MTLBuffer *allocate_aligned_with_data(size, alignment, is_cpu_visible, data_ptr)
  */
 
 /* Debug memory statistics: Disabled by Macro rather than guarded for
@@ -109,7 +113,7 @@ class MTLStorageBuf;
 class MTLBuffer {
 
  public:
-  /* NOTE: ListBase API is not used due to custom destructor operation required to release
+  /* NOTE: ListBaseT API is not used due to custom destructor operation required to release
    * Metal objective C buffer resource. */
   gpu::MTLBuffer *next, *prev;
 
@@ -400,7 +404,7 @@ class MTLBufferPool {
   using MTLBufferResourceOptions = uint64_t;
 
   std::mutex buffer_pool_lock_;
-  blender::Map<MTLBufferResourceOptions, MTLBufferPoolOrderedList *> buffer_pools_;
+  Map<MTLBufferResourceOptions, MTLBufferPoolOrderedList *> buffer_pools_;
 
   /* Linked list to track all existing allocations. Prioritizing fast insert/deletion. */
   gpu::MTLBuffer *allocations_list_base_;
@@ -411,7 +415,7 @@ class MTLBufferPool {
    * MemoryManager pools.
    * Access to this queue is made thread-safe through safelist_lock_. */
   std::mutex safelist_lock_;
-  blender::Vector<MTLSafeFreeList *> completed_safelist_queue_;
+  Vector<MTLSafeFreeList *> completed_safelist_queue_;
 
   /* Current free list, associated with active MTLCommandBuffer submission. */
   /* MTLBuffer::free() can be called from separate threads, due to usage within animation
@@ -495,7 +499,7 @@ class MTLScratchBufferManager {
   MTLCircularBuffer *scratch_buffers_[mtl_max_scratch_buffers_];
 
  public:
-  MTLScratchBufferManager(MTLContext &context) : context_(context){};
+  MTLScratchBufferManager(MTLContext &context) : context_(context) {};
   ~MTLScratchBufferManager();
 
   /* Explicit initialization and freeing of resources.

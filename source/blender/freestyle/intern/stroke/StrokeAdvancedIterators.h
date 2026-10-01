@@ -46,7 +46,7 @@ class vertex_iterator_base : public IteratorBase<Traits, BidirectionalIteratorTa
   vertex_container_iterator _end;
 
  public:
-  friend class Stroke;
+  friend class Freestyle::Stroke;
   // friend class vertex_iterator;
 
   inline vertex_iterator_base() : parent_class() {}
@@ -120,7 +120,7 @@ class vertex_iterator_base : public IteratorBase<Traits, BidirectionalIteratorTa
     return tmp;
   }
 
-  // comparibility
+  // comparability
   virtual bool operator!=(const Self &b) const
   {
     return (_it != b._it);

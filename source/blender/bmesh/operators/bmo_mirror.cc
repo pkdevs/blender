@@ -8,12 +8,14 @@
  * Basic mirror, optionally with UVs's.
  */
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
 #include "BKE_customdata.hh"
 
 #include "bmesh.hh"
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 #define ELE_NEW 1
 
@@ -104,3 +106,5 @@ void bmo_mirror_exec(BMesh *bm, BMOperator *op)
 
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "geom.out", BM_ALL_NOLOOP, ELE_NEW);
 }
+
+}  // namespace blender

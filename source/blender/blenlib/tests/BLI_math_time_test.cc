@@ -4,7 +4,9 @@
 
 #include "testing/testing.h"
 
-#include "BLI_math_time.h"
+#include "BLI_math_time.hh"
+
+namespace blender {
 
 TEST(math_time, SecondsExplode)
 {
@@ -35,3 +37,5 @@ TEST(math_time, SecondsExplode)
   EXPECT_NEAR(813.0, r_minutes, epsilon);
   EXPECT_NEAR(9369.0, r_milliseconds, epsilon);
 }
+
+}  // namespace blender

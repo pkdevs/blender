@@ -9,25 +9,20 @@
 
 #include "DNA_action_types.h"
 
-#include "BLI_listbase.h"
+#include "BKE_gtest_base.hh"
+
+#include "BLI_listbase.hh"
 
 #include "testing/testing.h"
 
 namespace blender::animrig::versioning::tests {
 
-TEST(animrig_versioning, action_is_layered)
+class AnimrigVersioninTest : public bke::BlenderGTestBase {};
+
+TEST_F(AnimrigVersioninTest, action_is_layered)
 {
   /* This unit test doesn't put valid data in the action under test. Since action_is_layered()
    * only looks at the length of lists, and not their contents, that should be fine. */
-
-  { /* Pre-Animato Action / Blender version 2.49 and older. */
-    bAction action = {};
-    Link /* Ipo */ fake_ipo = {};
-
-    BLI_addtail(&action.chanbase, &fake_ipo);
-    EXPECT_FALSE(action_is_layered(action))
-        << "Pre-2.5 Actions should NOT be considered 'layered'";
-  }
 
   { /* Animato Action only fcurves / Blender version [2.5, 4.4) */
     bAction action = {};

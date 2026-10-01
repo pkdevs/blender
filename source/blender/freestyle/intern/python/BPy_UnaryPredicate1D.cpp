@@ -114,11 +114,10 @@ PyDoc_STRVAR(
     "\n"
     "   Must be overload by inherited classes.\n"
     "\n"
-    "   :arg inter: The Interface1D on which we wish to evaluate the predicate.\n"
+    "   :param inter: The Interface1D on which we wish to evaluate the predicate.\n"
     "   :type inter: :class:`Interface1D`\n"
     "   :return: True if the condition is satisfied, false otherwise.\n"
     "   :rtype: bool\n");
-
 static int UnaryPredicate1D___init__(BPy_UnaryPredicate1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};
@@ -149,7 +148,13 @@ static PyObject *UnaryPredicate1D___call__(BPy_UnaryPredicate1D *self,
   static const char *kwlist[] = {"inter", nullptr};
   PyObject *py_if1D;
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", (char **)kwlist, &Interface1D_Type, &py_if1D))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `inter` */
+                                   ":__call__",
+                                   (char **)kwlist,
+                                   &Interface1D_Type,
+                                   &py_if1D))
   {
     return nullptr;
   }
@@ -182,8 +187,7 @@ PyDoc_STRVAR(
     UnaryPredicate1D_name_doc,
     "The name of the unary 1D predicate.\n"
     "\n"
-    ":type: str");
-
+    ":type: str\n");
 static PyObject *UnaryPredicate1D_name_get(BPy_UnaryPredicate1D *self, void * /*closure*/)
 {
   return PyUnicode_FromString(Py_TYPE(self)->tp_name);

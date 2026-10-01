@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_bounds.hh"
-#include "BLI_color.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_color_types.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_curves.hh"
@@ -17,6 +18,7 @@
 #include "DEG_depsgraph_query.hh"
 
 #include "GEO_resample_curves.hh"
+#include "GEO_set_curve_type.hh"
 
 #include "grease_pencil_io_intern.hh"
 
@@ -36,7 +38,7 @@
 namespace blender::io::grease_pencil {
 
 constexpr const char *svg_exporter_name = "SVG Export for Grease Pencil";
-constexpr const char *svg_exporter_version = "v2.0";
+constexpr const char *svg_exporter_version = "v2.1";
 
 static std::string rgb_to_hexstr(const float color[3])
 {
@@ -49,6 +51,7 @@ static std::string rgb_to_hexstr(const float color[3])
 static void write_stroke_color_attribute(pugi::xml_node node,
                                          const ColorGeometry4f &stroke_color,
                                          const float stroke_opacity,
+                                         const std::optional<float> miter_limit_angle,
                                          const bool round_cap)
 {
   ColorGeometry4f color;
@@ -60,6 +63,22 @@ static void write_stroke_color_attribute(pugi::xml_node node,
 
   node.append_attribute("fill").set_value("none");
   node.append_attribute("stroke-linecap").set_value(round_cap ? "round" : "square");
+
+  if (miter_limit_angle) {
+    if (*miter_limit_angle <= GP_STROKE_MITER_ANGLE_ROUND) {
+      node.append_attribute("stroke-linejoin").set_value("round");
+    }
+    else if (*miter_limit_angle >= GP_STROKE_MITER_ANGLE_BEVEL) {
+      node.append_attribute("stroke-linejoin").set_value("bevel");
+    }
+    else {
+      /* Convert the Miter angle to the Miter limit. */
+      const float miter_limit = 1.0f / math::sin(*miter_limit_angle / 2.0f);
+
+      node.append_attribute("stroke-linejoin").set_value("miter");
+      node.append_attribute("stroke-miterlimit").set_value(miter_limit);
+    }
+  }
 }
 
 static void write_fill_color_attribute(pugi::xml_node node,
@@ -105,7 +124,7 @@ class SVGExporter : public GreasePencilExporter {
 
   pugi::xml_document main_doc_;
 
-  bool export_scene(Scene &scene, StringRefNull filepath);
+  ExportStatus export_scene(Scene &scene, StringRefNull filepath);
   void export_grease_pencil_objects(pugi::xml_node node, int frame_number);
   void export_grease_pencil_layer(pugi::xml_node node,
                                   const Object &object,
@@ -117,18 +136,16 @@ class SVGExporter : public GreasePencilExporter {
   pugi::xml_node write_animation_node(pugi::xml_node parent_node,
                                       IndexMask frames,
                                       float duration);
-  pugi::xml_node write_polygon(pugi::xml_node node,
-                               const float4x4 &transform,
-                               Span<float3> positions);
-  pugi::xml_node write_polyline(pugi::xml_node node,
-                                const float4x4 &transform,
-                                Span<float3> positions,
-                                bool cyclic,
-                                std::optional<float> width);
   pugi::xml_node write_path(pugi::xml_node node,
                             const float4x4 &transform,
-                            Span<float3> positions,
-                            bool cyclic);
+                            const Span<float3> positions,
+                            const Span<float3> positions_left,
+                            const Span<float3> positions_right,
+                            const OffsetIndices<int> points_by_curve,
+                            const Span<int> shape,
+                            const VArray<bool> &cyclic,
+                            const VArray<int8_t> &types,
+                            std::optional<float> width);
 
   bool write_to_file(StringRefNull filepath);
 };
@@ -139,7 +156,7 @@ std::string SVGExporter::get_node_uuid_string()
   return id;
 }
 
-bool SVGExporter::export_scene(Scene &scene, StringRefNull filepath)
+ExportStatus SVGExporter::export_scene(Scene &scene, StringRefNull filepath)
 {
   this->_node_uuid = 0;
 
@@ -153,7 +170,8 @@ bool SVGExporter::export_scene(Scene &scene, StringRefNull filepath)
 
       this->export_grease_pencil_objects(main_node, frame_number);
 
-      return this->write_to_file(filepath);
+      const bool write_success = this->write_to_file(filepath);
+      return write_success ? ExportStatus::Ok : ExportStatus::FileWriteError;
     }
     case ExportParams::FrameMode::Selected:
     case ExportParams::FrameMode::Scene: {
@@ -164,12 +182,18 @@ bool SVGExporter::export_scene(Scene &scene, StringRefNull filepath)
 
       IndexMaskMemory memory;
       if (selection_only) {
-        const Object &ob_eval = *DEG_get_evaluated(context_.depsgraph, params_.object);
-        const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob_eval.data);
-        frames = IndexMask::from_predicate(
-            frames, GrainSize(1024), memory, [&](const int frame_number) {
-              return this->is_selected_frame(grease_pencil, frame_number);
-            });
+        const Object *ob_eval = DEG_get_evaluated(context_.depsgraph, params_.object);
+        if (!ob_eval || ob_eval->type != OB_GREASE_PENCIL) {
+          return ExportStatus::InvalidActiveObjectType;
+        }
+        const GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob_eval->data);
+        frames = IndexMask::from_predicate(frames, memory, [&](const int frame_number) {
+          return this->is_selected_frame(grease_pencil, frame_number);
+        });
+      }
+
+      if (frames.is_empty()) {
+        return ExportStatus::NoFramesSelected;
       }
 
       this->prepare_render_params(scene, frames.first());
@@ -202,11 +226,12 @@ bool SVGExporter::export_scene(Scene &scene, StringRefNull filepath)
 
       this->write_animation_node(main_node, frames, duration);
 
-      return this->write_to_file(filepath);
+      const bool write_success = this->write_to_file(filepath);
+      return write_success ? ExportStatus::Ok : ExportStatus::FileWriteError;
     }
     default:
       BLI_assert_unreachable();
-      return false;
+      return ExportStatus::UnknownError;
   }
 }
 
@@ -255,7 +280,7 @@ void SVGExporter::export_grease_pencil_objects(pugi::xml_node node, const int fr
     /* Use evaluated version to get strokes with modifiers. */
     const Object *ob_eval = DEG_get_evaluated(context_.depsgraph, ob);
     BLI_assert(ob_eval->type == OB_GREASE_PENCIL);
-    const GreasePencil *grease_pencil_eval = static_cast<const GreasePencil *>(ob_eval->data);
+    const GreasePencil *grease_pencil_eval = id_cast<const GreasePencil *>(ob_eval->data);
 
     for (const bke::greasepencil::Layer *layer : grease_pencil_eval->layers()) {
       if (!layer->is_visible()) {
@@ -272,20 +297,22 @@ void SVGExporter::export_grease_pencil_objects(pugi::xml_node node, const int fr
       layer_node.append_attribute("id").set_value(layer_node_id.c_str());
 
       const bke::CurvesGeometry &curves = drawing->strokes();
-      /* TODO: Instead of converting all the other curve types to poly curves, export them directly
-       * as curve paths to the SVG. */
-      if (curves.has_curve_with_type(
-              {CURVE_TYPE_CATMULL_ROM, CURVE_TYPE_BEZIER, CURVE_TYPE_NURBS}))
-      {
+      /* Convert NURBS and Catmull Rom to bezier then export. */
+      if (curves.has_curve_with_type({CURVE_TYPE_CATMULL_ROM, CURVE_TYPE_NURBS})) {
         IndexMaskMemory memory;
         const IndexMask non_poly_selection = curves.indices_for_curve_type(CURVE_TYPE_POLY, memory)
                                                  .complement(curves.curves_range(), memory);
 
-        Drawing export_drawing;
-        export_drawing.strokes_for_write() = geometry::resample_to_evaluated(curves,
-                                                                             non_poly_selection);
-        export_drawing.tag_topology_changed();
+        geometry::ConvertCurvesOptions options;
+        options.convert_bezier_handles_to_poly_points = false;
+        options.convert_bezier_handles_to_catmull_rom_points = false;
+        options.keep_bezier_shape_as_nurbs = true;
+        options.keep_catmull_rom_shape_as_nurbs = true;
 
+        Drawing export_drawing;
+        export_drawing.strokes_for_write() = geometry::convert_curves(
+            curves, non_poly_selection, CURVE_TYPE_BEZIER, {}, options);
+        export_drawing.tag_topology_changed();
         export_grease_pencil_layer(layer_node, *ob_eval, *layer, export_drawing);
       }
       else {
@@ -304,25 +331,39 @@ void SVGExporter::export_grease_pencil_layer(pugi::xml_node layer_node,
 
   const float4x4 layer_to_world = layer.to_world_space(object);
 
-  auto write_stroke = [&](const Span<float3> positions,
-                          const bool cyclic,
-                          const ColorGeometry4f &color,
-                          const float opacity,
-                          const std::optional<float> width,
-                          const bool round_cap,
-                          const bool is_outline) {
+  auto write_shape = [&](const Span<float3> positions,
+                         const Span<float3> positions_left,
+                         const Span<float3> positions_right,
+                         const OffsetIndices<int> points_by_curve,
+                         const Span<int> shape,
+                         const VArray<bool> &cyclic,
+                         const VArray<int8_t> &types,
+                         const ColorGeometry4f &color,
+                         const float opacity,
+                         const std::optional<float> width,
+                         const std::optional<float> miter_limit_angle,
+                         const bool round_cap,
+                         const bool is_outline) {
+    pugi::xml_node element_node = write_path(layer_node,
+                                             layer_to_world,
+                                             positions,
+                                             positions_left,
+                                             positions_right,
+                                             points_by_curve,
+                                             shape,
+                                             cyclic,
+                                             types,
+                                             width);
+
     if (is_outline) {
-      pugi::xml_node element_node = write_path(layer_node, layer_to_world, positions, cyclic);
       write_fill_color_attribute(element_node, color, opacity);
+      /* Outlines might self-overlap which creates visual holes with the `even-odd` fill rule. */
+      element_node.append_attribute("fill-rule").set_value("nonzero");
     }
     else {
-      /* Fill is always exported as polygon because the stroke of the fill is done
-       * in a different SVG command. */
-      pugi::xml_node element_node = write_polyline(
-          layer_node, layer_to_world, positions, cyclic, width);
-
+      element_node.append_attribute("fill-rule").set_value("evenodd");
       if (width) {
-        write_stroke_color_attribute(element_node, color, opacity, round_cap);
+        write_stroke_color_attribute(element_node, color, opacity, miter_limit_angle, round_cap);
       }
       else {
         write_fill_color_attribute(element_node, color, opacity);
@@ -330,7 +371,7 @@ void SVGExporter::export_grease_pencil_layer(pugi::xml_node layer_node,
     }
   };
 
-  foreach_stroke_in_layer(object, layer, drawing, write_stroke);
+  foreach_shape_in_layer(object, layer, drawing, write_shape);
 }
 
 void SVGExporter::write_document_header()
@@ -396,7 +437,7 @@ pugi::xml_node SVGExporter::write_animation_node(pugi::xml_node parent_node,
   animate_node.append_attribute("repeatCount").set_value("indefinite");
 
   std::string animated_frame_ids = [&]() {
-    std::string frame_ids_text = "";
+    std::string frame_ids_text;
     frames.foreach_index([&](const int frame) {
       std::string frame_url_entry = "#" + frame_name(frame) + ";";
       frame_ids_text.append(frame_url_entry);
@@ -409,94 +450,86 @@ pugi::xml_node SVGExporter::write_animation_node(pugi::xml_node parent_node,
   return use_node;
 }
 
-pugi::xml_node SVGExporter::write_polygon(pugi::xml_node node,
-                                          const float4x4 &transform,
-                                          const Span<float3> positions)
+pugi::xml_node SVGExporter::write_path(pugi::xml_node node,
+                                       const float4x4 &transform,
+                                       const Span<float3> positions,
+                                       const Span<float3> positions_left,
+                                       const Span<float3> positions_right,
+                                       const OffsetIndices<int> points_by_curve,
+                                       const Span<int> shape,
+                                       const VArray<bool> &cyclic,
+                                       const VArray<int8_t> &types,
+                                       const std::optional<float> width)
 {
-  pugi::xml_node element_node = node.append_child("polygon");
-
-  std::string txt;
-  for (const int i : positions.index_range()) {
-    if (i > 0) {
-      txt.append(" ");
-    }
-    /* SVG has inverted Y axis. */
-    const float2 screen_co = this->project_to_screen(transform, positions[i]);
-    if (camera_persmat_) {
-      txt.append(std::to_string(screen_co.x) + "," +
-                 std::to_string(camera_rect_.size().y - screen_co.y));
-    }
-    else {
-      txt.append(std::to_string(screen_co.x) + "," +
-                 std::to_string(screen_rect_.size().y - screen_co.y));
-    }
-  }
-
-  element_node.append_attribute("points").set_value(txt.c_str());
-
-  return element_node;
-}
-
-pugi::xml_node SVGExporter::write_polyline(pugi::xml_node node,
-                                           const float4x4 &transform,
-                                           const Span<float3> positions,
-                                           const bool cyclic,
-                                           const std::optional<float> width)
-{
-  pugi::xml_node element_node = node.append_child(cyclic ? "polygon" : "polyline");
+  pugi::xml_node element_node = node.append_child("path");
 
   if (width) {
     element_node.append_attribute("stroke-width").set_value(*width);
   }
 
   std::string txt;
-  for (const int i : positions.index_range()) {
-    if (i > 0) {
-      txt.append(" ");
-    }
-    /* SVG has inverted Y axis. */
-    const float2 screen_co = this->project_to_screen(transform, positions[i]);
-    if (camera_persmat_) {
-      txt.append(std::to_string(screen_co.x) + "," +
-                 std::to_string(camera_rect_.size().y - screen_co.y));
+  for (const int curve_i : shape) {
+    txt.append("M");
+    const IndexRange points = points_by_curve[curve_i];
+
+    const Span<float3> curve_pos = positions.slice(points);
+
+    if (types[curve_i] != CURVE_TYPE_BEZIER) {
+      for (const int i : curve_pos.index_range()) {
+        const float2 screen_co = this->project_to_screen(transform, curve_pos[i]);
+
+        if (i > 0) {
+          txt.append("L");
+        }
+
+        txt.append(coord_to_svg_string(screen_co));
+      }
+      /* Close path (cyclic). */
+      if (cyclic[curve_i]) {
+        txt.append("z");
+      }
     }
     else {
-      txt.append(std::to_string(screen_co.x) + "," +
-                 std::to_string(screen_rect_.size().y - screen_co.y));
-    }
-  }
+      const Span<float3> curve_pos_right = positions_right.slice(points);
+      const Span<float3> curve_pos_left = positions_left.slice(points);
 
-  element_node.append_attribute("points").set_value(txt.c_str());
+      for (const int i : curve_pos.index_range().drop_back(1)) {
+        const float2 screen_co = this->project_to_screen(transform, curve_pos[i]);
+        const float2 screen_co_right = this->project_to_screen(transform, curve_pos_right[i]);
+        const float2 screen_co_left = this->project_to_screen(transform, curve_pos_left[i + 1]);
 
-  return element_node;
-}
+        txt.append(coord_to_svg_string(screen_co));
+        txt.append(" C ");
+        txt.append(coord_to_svg_string(screen_co_right));
+        txt.append(", ");
+        txt.append(coord_to_svg_string(screen_co_left));
 
-pugi::xml_node SVGExporter::write_path(pugi::xml_node node,
-                                       const float4x4 &transform,
-                                       const Span<float3> positions,
-                                       const bool cyclic)
-{
-  pugi::xml_node element_node = node.append_child("path");
+        if (i != curve_pos.size() - 2) {
+          txt.append(", ");
+        }
+      }
 
-  std::string txt = "M";
-  for (const int i : positions.index_range()) {
-    if (i > 0) {
-      txt.append("L");
+      {
+        txt.append(", ");
+        const float2 screen_co = this->project_to_screen(transform, curve_pos.last());
+        txt.append(coord_to_svg_string(screen_co));
+      }
+
+      /* Close path (cyclic). */
+      if (cyclic[curve_i]) {
+        const float2 screen_co_right = this->project_to_screen(transform, curve_pos_right.last());
+        const float2 screen_co_left = this->project_to_screen(transform, curve_pos_left.first());
+        const float2 screen_co = this->project_to_screen(transform, curve_pos.first());
+
+        txt.append(" C ");
+        txt.append(coord_to_svg_string(screen_co_right));
+        txt.append(", ");
+        txt.append(coord_to_svg_string(screen_co_left));
+        txt.append(", ");
+        txt.append(coord_to_svg_string(screen_co));
+        txt.append("z");
+      }
     }
-    const float2 screen_co = this->project_to_screen(transform, positions[i]);
-    /* SVG has inverted Y axis. */
-    if (camera_persmat_) {
-      txt.append(std::to_string(screen_co.x) + "," +
-                 std::to_string(camera_rect_.size().y - screen_co.y));
-    }
-    else {
-      txt.append(std::to_string(screen_co.x) + "," +
-                 std::to_string(screen_rect_.size().y - screen_co.y));
-    }
-  }
-  /* Close patch (cyclic). */
-  if (cyclic) {
-    txt.append("z");
   }
 
   element_node.append_attribute("d").set_value(txt.c_str());
@@ -520,10 +553,10 @@ bool SVGExporter::write_to_file(StringRefNull filepath)
   return result;
 }
 
-bool export_svg(const IOContext &context,
-                const ExportParams &params,
-                Scene &scene,
-                StringRefNull filepath)
+ExportStatus export_svg(const IOContext &context,
+                        const ExportParams &params,
+                        Scene &scene,
+                        StringRefNull filepath)
 {
   SVGExporter exporter(context, params);
   return exporter.export_scene(scene, filepath);

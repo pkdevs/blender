@@ -9,8 +9,11 @@
  */
 
 #include "BLI_function_ref.hh"
+#include "BLI_hash.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 struct BVHTree;
 struct DistProjectedAABBPrecalc;
@@ -31,17 +34,30 @@ struct BVHTreeAxisRange {
 struct BVHTreeOverlap {
   int indexA;
   int indexB;
+
+  uint64_t hash() const
+  {
+    return get_default_hash(this->indexA, this->indexB);
+  }
+
+  friend bool operator==(const BVHTreeOverlap &a, const BVHTreeOverlap &b) = default;
 };
 
 struct BVHTreeNearest {
-  /** The index of the nearest found
-   * (untouched if none is found within a dist radius from the given coordinates) */
+  /**
+   * The index of the nearest found
+   * (untouched if none is found within a dist radius from the given coordinates)
+   */
   int index;
-  /** Nearest coordinates
-   * (untouched it none is found within a dist radius from the given coordinates). */
+  /**
+   * Nearest coordinates
+   * (untouched it none is found within a dist radius from the given coordinates).
+   */
   float co[3];
-  /** Normal at nearest coordinates
-   * (untouched it none is found within a dist radius from the given coordinates). */
+  /**
+   * Normal at nearest coordinates
+   * (untouched it none is found within a dist radius from the given coordinates).
+   */
   float no[3];
   /** squared distance to search around */
   float dist_sq;
@@ -307,8 +323,6 @@ int BLI_bvhtree_find_nearest_projected(const BVHTree *tree,
  * Expose for BVH callbacks to use.
  */
 extern const float bvhtree_kdop_axes[13][3];
-
-namespace blender {
 
 using BVHTree_RayCastCallback_CPP =
     FunctionRef<void(int index, const BVHTreeRay &ray, BVHTreeRayHit &hit)>;

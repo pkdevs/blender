@@ -12,6 +12,8 @@
 
 #include "RNA_prototypes.hh"
 
+namespace blender {
+
 /* We only need to define is_disabled; because it always returns 1,
  * no other functions will be called
  */
@@ -54,4 +56,7 @@ ModifierTypeInfo modifierType_None = {
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
+    /*foreach_working_space_color*/ nullptr,
 };
+
+}  // namespace blender

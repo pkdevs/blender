@@ -14,8 +14,8 @@
 #include "DNA_key_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_anim_path.h"
 #include "BKE_curve.hh"
@@ -23,6 +23,8 @@
 #include "BKE_object_types.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
 
 static CLG_LogRef LOG = {"anim"};
 
@@ -43,7 +45,7 @@ int BKE_anim_path_get_array_size(const CurveCache *curve_cache)
 {
   BLI_assert(curve_cache != nullptr);
 
-  BevList *bl = static_cast<BevList *>(curve_cache->bev.first);
+  BevList *bl = curve_cache->bev.first();
 
   BLI_assert(bl != nullptr && bl->nr > 1);
 
@@ -67,10 +69,10 @@ void BKE_anim_path_calc_data(Object *ob)
   }
 
   /* Free old data. */
-  MEM_SAFE_FREE(ob->runtime->curve_cache->anim_path_accum_length);
+  MEM_SAFE_DELETE(ob->runtime->curve_cache->anim_path_accum_length);
 
   /* We only use the first curve. */
-  BevList *bl = static_cast<BevList *>(ob->runtime->curve_cache->bev.first);
+  BevList *bl = ob->runtime->curve_cache->bev.first();
   /* There are no points. */
   if (bl == nullptr) {
     return;
@@ -85,7 +87,7 @@ void BKE_anim_path_calc_data(Object *ob)
    * In this case either calculate a single length (for a cyclic) curve or nothing.
    * While not useful, it's harmless too. */
   const int seg_size = get_bevlist_seg_array_size(bl);
-  float *len_data = MEM_malloc_arrayN<float>(size_t(seg_size), "calcpathdist");
+  float *len_data = MEM_new_array_uninitialized<float>(size_t(seg_size), "calcpathdist");
   ob->runtime->curve_cache->anim_path_accum_length = len_data;
 
   BevPoint *bp_arr = bl->bevpoints;
@@ -186,7 +188,7 @@ static bool binary_search_anim_path(const float *accum_len_arr,
 
   /* Special case, for a single segment accessing the `right_len`
    * would be an invalid index, see: #132976. */
-  if (UNLIKELY(seg_size == 1)) {
+  if (seg_size == 1) [[unlikely]] {
     *r_idx = 0;
     *r_frac = goal_len / accum_len_arr[0];
     return true;
@@ -210,7 +212,7 @@ static bool binary_search_anim_path(const float *accum_len_arr,
       return true;
     }
 
-    if (UNLIKELY(cur_step == 0)) {
+    if (cur_step == 0) [[unlikely]] {
       /* This should never happen unless there is something horribly wrong. */
       CLOG_ERROR(&LOG, "Couldn't find any valid point on the animation path!");
       BLI_assert_msg(0, "Couldn't find any valid point on the animation path!");
@@ -238,7 +240,7 @@ bool BKE_where_on_path(const Object *ob,
   if (ob == nullptr || ob->type != OB_CURVES_LEGACY) {
     return false;
   }
-  Curve *cu = static_cast<Curve *>(ob->data);
+  Curve *cu = id_cast<Curve *>(ob->data);
   if (ob->runtime->curve_cache == nullptr) {
     CLOG_WARN(&LOG, "No curve cache!");
     return false;
@@ -248,9 +250,16 @@ bool BKE_where_on_path(const Object *ob,
     return false;
   }
   /* We only use the first curve. */
-  BevList *bl = static_cast<BevList *>(ob->runtime->curve_cache->bev.first);
+  BevList *bl = ob->runtime->curve_cache->bev.first();
   if (bl == nullptr || !bl->nr) {
     CLOG_WARN(&LOG, "No bev list data!");
+    return false;
+  }
+  /* A curve with co-located vertices results in a single bevel point without a "segment".
+   * While we could snap to the point, none of the derived values (direction, rotation, ...),
+   * will be set usefully so following the path won't work well.
+   * Further, historically this read out-of-bounds memory (evaluating to NAN for e.g.). */
+  if (bl->nr < 2) {
     return false;
   }
 
@@ -290,7 +299,7 @@ bool BKE_where_on_path(const Object *ob,
     int idx;
     const bool found_idx = binary_search_anim_path(accum_len_arr, seg_size, goal_len, &idx, &frac);
 
-    if (UNLIKELY(!found_idx)) {
+    if (!found_idx) [[unlikely]] {
       return false;
     }
     get_curve_points_from_idx(idx, bl, is_cyclic, &p0, &p1, &p2, &p3);
@@ -300,7 +309,7 @@ bool BKE_where_on_path(const Object *ob,
    *
    *       If it's ever be uncommented watch out for BKE_curve_deform_coords()
    *       which used to temporary set CU_FOLLOW flag for the curve and no
-   *       longer does it (because of threading issues of such a thing.
+   *       longer does it (because of threading issues of such a thing).
    */
   // if (cu->flag & CU_FOLLOW) {
 
@@ -316,11 +325,11 @@ bool BKE_where_on_path(const Object *ob,
   }
   //}
 
-  const ListBase *nurbs = BKE_curve_editNurbs_get(cu);
+  const ListBaseT<Nurb> *nurbs = BKE_curve_editNurbs_get(cu);
   if (!nurbs) {
     nurbs = &cu->nurb;
   }
-  const Nurb *nu = static_cast<const Nurb *>(nurbs->first);
+  const Nurb *nu = nurbs->first();
 
   /* Make sure that first and last frame are included in the vectors here. */
   if (ELEM(nu->type, CU_POLY, CU_BEZIER, CU_NURBS)) {
@@ -386,3 +395,5 @@ bool BKE_where_on_path(const Object *ob,
 
   return true;
 }
+
+}  // namespace blender

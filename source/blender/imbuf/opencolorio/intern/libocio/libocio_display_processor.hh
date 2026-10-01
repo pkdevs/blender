@@ -4,9 +4,9 @@
 
 #pragma once
 
-#if defined(WITH_OPENCOLORIO)
+#include "BLI_string_ref.hh"
 
-#  include "../opencolorio.hh"
+#include "../opencolorio.hh"
 
 namespace blender::ocio {
 
@@ -16,6 +16,11 @@ struct DisplayParameters;
 OCIO_NAMESPACE::ConstProcessorRcPtr create_ocio_display_processor(
     const LibOCIOConfig &config, const DisplayParameters &display_parameters);
 
-}  // namespace blender::ocio
+OCIO_NAMESPACE::TransformRcPtr create_ocio_display_transform(
+    const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config,
+    StringRefNull display,
+    StringRefNull view,
+    StringRefNull look,
+    StringRefNull from_colorspace);
 
-#endif
+}  // namespace blender::ocio

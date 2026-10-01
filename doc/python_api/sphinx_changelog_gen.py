@@ -25,7 +25,7 @@ blender --background --factory-startup --python doc/python_api/sphinx_changelog_
         changelog --filepath-out doc/python_api/rst/change_log.rst
 
 # Api comparison can also run without Blender,
-# will by default generate changeloig between the last two available versions listed in the index,
+# will by default generate changelog between the last two available versions listed in the index,
 # unless input files are provided explicitly:
 python doc/python_api/sphinx_changelog_gen.py -- \
         --indexpath="path/to/api/docs/api_dump_index.json" \
@@ -101,7 +101,7 @@ class JSONEncoderAPIDump(json.JSONEncoder):
 
 
 def api_dump(args):
-    import rna_info
+    import _rna_info as rna_info
     import inspect
 
     version, version_key = api_version()

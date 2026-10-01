@@ -19,6 +19,8 @@ WARMUP_FRAMES = 10
 SHADER_FALLBACK_SECONDS = 60
 RECORD_PLAYBACK_ITER = 3
 MIN_NUM_FRAMES_TOTAL = 250
+MIN_RECORDING_TIME_SECONDS = 20
+MAX_RECORDING_TIME_SECONDS = 60  # still finishes last iteration
 LOG_KEY = "ANIMATION_PERFORMANCE: "
 
 
@@ -36,6 +38,7 @@ def frame_change_handler(scene):
     import bpy
 
     global record_stage
+    global frame_set_mode
     global start_time
     global start_record_time
     global start_warmup_time
@@ -47,6 +50,9 @@ def frame_change_handler(scene):
     if record_stage == RecordStage.INIT:
         screen = bpy.context.window_manager.windows[0].screen
         bpy.context.scene.sync_mode = 'NONE'
+        frame_set_mode = False
+        # Overwrite animation FPS limit set by .blend files.
+        bpy.context.scene.render.fps = 1000
 
         for area in screen.areas:
             if area.type == 'VIEW_3D':
@@ -71,16 +77,22 @@ def frame_change_handler(scene):
             record_stage = RecordStage.WARMUP
 
     elif record_stage == RecordStage.WARMUP:
+        if frame_set_mode:
+            # scene.frame_set results in a recursive call to frame_change_handler.
+            # Avoid running into a RecursionError.
+            return
         warmup_frame += 1
         # Check for two-stage shader compilation that can happen later than the first frame.
         if hasattr(bpy.app, 'is_job_running') and bpy.app.is_job_running("SHADER_COMPILATION"):
             record_stage = RecordStage.WAIT_SHADERS
         elif time.perf_counter() - start_warmup_time > WARMUP_SECONDS and warmup_frame > WARMUP_FRAMES:
-            start_record_time = time.perf_counter()
             playback_iteration = 0
             num_frames = 0
             scene = bpy.context.scene
+            frame_set_mode = True
             scene.frame_set(scene.frame_start)
+            frame_set_mode = False
+            start_record_time = time.perf_counter()
             record_stage = RecordStage.RECORD
 
     elif record_stage == RecordStage.RECORD:
@@ -89,8 +101,18 @@ def frame_change_handler(scene):
         num_frames += 1
         if scene.frame_current == scene.frame_end:
             playback_iteration += 1
+            reached_new_playback_iteration = True
+        else:
+            reached_new_playback_iteration = False
 
-        if playback_iteration >= RECORD_PLAYBACK_ITER and num_frames >= MIN_NUM_FRAMES_TOTAL:
+        elapsed_seconds = current_time - start_record_time
+        reached_min_recording_time = elapsed_seconds >= MIN_RECORDING_TIME_SECONDS
+
+        # Make sure that the playback iteration is finished even when the minimum recording time
+        # has been reached.
+        if (playback_iteration >= RECORD_PLAYBACK_ITER and num_frames >= MIN_NUM_FRAMES_TOTAL and
+            reached_new_playback_iteration and reached_min_recording_time) \
+                or (reached_new_playback_iteration and elapsed_seconds >= MAX_RECORDING_TIME_SECONDS):
             stop_record_time = current_time
             record_stage = RecordStage.FINISHED
 
@@ -99,7 +121,7 @@ def frame_change_handler(scene):
         elapsed_seconds = stop_record_time - start_record_time
         avg_frame_time = elapsed_seconds / num_frames
         fps = 1.0 / avg_frame_time
-        print(f"{LOG_KEY}{{'time': {avg_frame_time}, 'fps': {fps} }}")
+        print(f"{LOG_KEY}{{'fps': {fps} }}")
         bpy.app.handlers.frame_change_post.remove(frame_change_handler)
         bpy.ops.wm.quit_blender()
 
@@ -120,12 +142,24 @@ else:
         def category(self):
             return "eevee"
 
+        def use_device(self) -> bool:
+            return True
+
+        def supported_device_types(self):
+            return [
+                "METAL", "VULKAN", "OPENGL",
+            ]
+
         def use_background(self):
             return False
 
-        def run(self, env, device_id):
+        def run(self, env, device_id, gpu_backend):
             args = {}
-            _, log = env.run_in_blender(_run, args, [self.filepath], foreground=True)
+
+            blender_args = api.test.Test.blender_gpu_arguments(device_id, gpu_backend)
+            blender_args.append(self.filepath)
+
+            _, log = env.run_in_blender(_run, args, blender_args, foreground=True)
             for line in log:
                 if line.startswith(LOG_KEY):
                     result_str = line[len(LOG_KEY):]

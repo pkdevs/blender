@@ -46,9 +46,6 @@ int hipewCompilerVersion()
 
 bool hipSupportsDriver()
 {
-#  ifdef _WIN32
-#    ifndef WITH_HIP_SDK_5
-  /* This check is only necessary if we're using HIP SDK 6 or newer. */
   int hip_driver_version = 0;
   hipError_t result = hipDriverGetVersion(&hip_driver_version);
   if (result != hipSuccess) {
@@ -56,14 +53,20 @@ bool hipSupportsDriver()
     return false;
   }
 
-  LOG_DEBUG << "Detected HIP driver version: " << hip_driver_version;
+  LOG_TRACE << "Detected HIP driver version: " << hip_driver_version;
 
-  if (hip_driver_version < 60140252) {
-    /* Cycles crashes during rendering due to issues in older GPU drivers.
-     * 60140252 corresponds to Adrenalin 24.6.1. */
+#  ifdef _WIN32
+  if (hip_driver_version < 60241512) {
+    /* Users get error messages about being unable to find GPU binaries on older GPU drivers.
+     * 60241512 corresponds to Adrenalin 24.9.1. */
     return false;
   }
-#    endif
+#  else /* Linux */
+  if (hip_driver_version < 60342131) {
+    /* Users get error messages about being unable to load GPU kernels on older ROCm versions.
+     * 60342131 corresponds to ROCm 6.3.0 */
+    return false;
+  }
 #  endif
 
   return true;

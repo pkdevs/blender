@@ -27,9 +27,11 @@ class MTLStorageBuf : public StorageBuf {
   friend MTLCircularBuffer;
 
  private:
-  /** Allocation Handle or indirect wrapped instance.
+  /**
+   * Allocation Handle or indirect wrapped instance.
    * MTLStorageBuf can wrap a MTLVertBuf, MTLIndexBuf or MTLUniformBuf for binding as a writeable
-   * resource. */
+   * resource.
+   */
   enum {
     MTL_STORAGE_BUF_TYPE_DEFAULT = 0,
     MTL_STORAGE_BUF_TYPE_UNIFORMBUF = 1,
@@ -81,7 +83,7 @@ class MTLStorageBuf : public StorageBuf {
   void copy_sub(VertBuf *src, uint dst_offset, uint src_offset, uint copy_size) override;
   void read(void *data) override;
   void async_flush_to_host() override;
-  void sync_as_indirect_buffer() override{/* No-Op. */};
+  void sync_as_indirect_buffer() override { /* No-Op. */ };
 
   void init();
 

@@ -16,6 +16,7 @@
 
 #include "sequence/AnimateableProperty.h"
 
+#include <cassert>
 #include <cstring>
 #include <cmath>
 #include <mutex>
@@ -25,13 +26,13 @@ AUD_NAMESPACE_BEGIN
 AnimateableProperty::AnimateableProperty(int count) :
 	Buffer(count * sizeof(float)), m_count(count), m_isAnimated(false)
 {
-	std::memset(getBuffer(), 0, count * sizeof(float));
+	std::memset(Buffer::getBuffer(), 0, count * sizeof(float));
 }
 
 AnimateableProperty::AnimateableProperty(int count, float value) :
 	Buffer(count * sizeof(float)), m_count(count), m_isAnimated(false)
 {
-	sample_t* buf = getBuffer();
+	sample_t* buf = Buffer::getBuffer();
 
 	for(int i = 0; i < count; i++)
 		buf[i] = value;
@@ -39,7 +40,7 @@ AnimateableProperty::AnimateableProperty(int count, float value) :
 
 void AnimateableProperty::updateUnknownCache(int start, int end)
 {
-	float* buf = getBuffer();
+	float* buf = Buffer::getBuffer();
 
 	// we could do a better interpolation than zero order, but that doesn't work with Blender's animation system
 	// as frames are only written when changing, so to support jumps, we need zero order interpolation here.
@@ -62,13 +63,23 @@ void AnimateableProperty::write(const float* data)
 
 	m_isAnimated = false;
 	m_unknown.clear();
-	std::memcpy(getBuffer(), data, m_count * sizeof(float));
+	std::memcpy(Buffer::getBuffer(), data, m_count * sizeof(float));
 }
 
 void AnimateableProperty::writeConstantRange(const float* data, int position_start, int position_end)
 {
+	int pos = getSize() / (sizeof(float) * m_count);
+
 	assureSize(position_end * m_count * sizeof(float), true);
-	float* buffer = getBuffer();
+	float* buffer = Buffer::getBuffer();
+	
+	// if we were not animated yet, use the new constant value as the
+	// first/default value to fill in the unknown parts
+	if (!m_isAnimated)
+	{
+		std::memcpy(buffer, data, m_count * sizeof(float));
+		pos = 0;
+	}
 
 	for(int i = position_start; i < position_end; i++)
 	{
@@ -76,6 +87,8 @@ void AnimateableProperty::writeConstantRange(const float* data, int position_sta
 	}
 
 	m_isAnimated = true;
+	
+	updateUnknownAfterWrite(pos, position_start, position_end - position_start);
 }
 
 void AnimateableProperty::write(const float* data, int position, int count)
@@ -91,10 +104,15 @@ void AnimateableProperty::write(const float* data, int position, int count)
 
 	assureSize((count + position) * m_count * sizeof(float), true);
 
-	float* buf = getBuffer();
+	float* buf = Buffer::getBuffer();
 
 	std::memcpy(buf + position * m_count, data, count * m_count * sizeof(float));
+	
+	updateUnknownAfterWrite(pos, position, count);
+}
 
+void AnimateableProperty::updateUnknownAfterWrite(int pos, int position, int count)
+{
 	// have to fill up space between?
 	if(pos < position)
 	{
@@ -171,7 +189,7 @@ void AnimateableProperty::read(float position, float* out)
 
 	if(!m_isAnimated)
 	{
-		std::memcpy(out, getBuffer(), m_count * sizeof(float));
+		std::memcpy(out, Buffer::getBuffer(), m_count * sizeof(float));
 		return;
 	}
 
@@ -192,7 +210,7 @@ void AnimateableProperty::read(float position, float* out)
 
 	if(t == 0)
 	{
-		std::memcpy(out, getBuffer() + int(std::floor(position)) * m_count, m_count * sizeof(float));
+		std::memcpy(out, Buffer::getBuffer() + int(std::floor(position)) * m_count, m_count * sizeof(float));
 	}
 	else
 	{
@@ -201,7 +219,7 @@ void AnimateableProperty::read(float position, float* out)
 		float t3 = t2 * t;
 		float m0, m1;
 		float* p0;
-		float* p1 = getBuffer() + pos;
+		float* p1 = Buffer::getBuffer() + pos;
 		float* p2;
 		float* p3;
 		last *= m_count;
@@ -222,15 +240,27 @@ void AnimateableProperty::read(float position, float* out)
 			m0 = (p2[i] - p0[i]) / 2.0f;
 			m1 = (p3[i] - p1[i]) / 2.0f;
 
-			out[i] = (2 * t3 - 3 * t2 + 1) * p0[i] + (-2 * t3 + 3 * t2) * p1[i] +
-					 (t3 - 2 * t2 + t) * m0 + (t3 - t2) * m1;
+			out[i] = (2 * t3 - 3 * t2 + 1) * p1[i] + (-2 * t3 + 3 * t2) * p2[i] + (t3 - 2 * t2 + t) * m0 + (t3 - t2) * m1;
 		}
 	}
+}
+
+float AnimateableProperty::readSingle(float position)
+{
+	assert(m_count == 1);
+	float value;
+	read(position, &value);
+	return value;
 }
 
 bool AnimateableProperty::isAnimated() const
 {
 	return m_isAnimated;
+}
+
+const Buffer& AnimateableProperty::getBuffer()
+{
+	return *this;
 }
 
 AUD_NAMESPACE_END

@@ -2,12 +2,20 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
+
+namespace blender {
 
 void register_nodes();
 
 void register_node_type_frame();
 void register_node_type_reroute();
+void register_node_type_implicit_conversion();
+void register_node_type_comment();
 
 void register_node_type_group_input();
 void register_node_type_group_output();
@@ -37,3 +45,5 @@ void register_texture_nodes();
   { \
     REGISTER_FUNC(); \
   }
+
+}  // namespace blender

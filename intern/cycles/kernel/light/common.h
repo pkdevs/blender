@@ -10,23 +10,30 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* Light Sample Result */
-
+/* Result from light sampling with next event estimation.
+ *
+ * TODO: It may be possible to reduce the size of this struct now that shader evaluation
+ * no longer uses this. For example D, Ng or P, though it's not trivial. */
 struct LightSample {
   float3 P;            /* position on light, or direction for distant light */
   packed_float3 Ng;    /* normal on light */
   float t;             /* distance to light (FLT_MAX for distant light) */
   float3 D;            /* direction from shading point to light */
-  float u, v;          /* parametric coordinate on primitive */
   float pdf;           /* pdf for selecting light and point on light */
   float pdf_selection; /* pdf for selecting light */
-  float eval_fac;      /* intensity multiplier */
+  float eval_fac;      /* intensity multiplier (normalization, spot falloff) */
   int object;          /* object id for triangle/curve lights */
   int prim;            /* lamp id for lights, primitive id for triangle/curve lights */
   int shader;          /* shader id */
   int group;           /* lightgroup */
   LightType type;      /* type of light */
   int emitter_id;      /* index in the emitter array */
+};
+
+/* Result of evaluating a light from an intersection. */
+struct LightEval {
+  float eval_fac = 0.0f; /* Intensity multiplier (normalization, spot falloff) */
+  float pdf = 0.0f;      /* PDF for light sampling with next event estimation sampling. */
 };
 
 /* Utilities */
@@ -64,18 +71,21 @@ ccl_device float light_pdf_area_to_solid_angle(const float3 Ng, const float3 I, 
 }
 
 /* Visibility flag om the light shader. */
-ccl_device_inline bool is_light_shader_visible_to_path(const int shader, const uint32_t path_flag)
+ccl_device_inline bool is_light_shader_visible_to_path(const int shader,
+                                                       const PathRayVisibility path_visibility,
+                                                       const uint32_t path_flag)
 {
   if ((shader & SHADER_EXCLUDE_ANY) == 0) {
     return true;
   }
 
-  if (((shader & SHADER_EXCLUDE_DIFFUSE) && (path_flag & PATH_RAY_DIFFUSE)) ||
-      ((shader & SHADER_EXCLUDE_GLOSSY) && ((path_flag & (PATH_RAY_GLOSSY | PATH_RAY_REFLECT)) ==
-                                            (PATH_RAY_GLOSSY | PATH_RAY_REFLECT))) ||
-      ((shader & SHADER_EXCLUDE_TRANSMIT) && (path_flag & PATH_RAY_TRANSMIT)) ||
-      ((shader & SHADER_EXCLUDE_CAMERA) && (path_flag & PATH_RAY_CAMERA)) ||
-      ((shader & SHADER_EXCLUDE_SCATTER) && (path_flag & PATH_RAY_VOLUME_SCATTER)))
+  if (((shader & SHADER_EXCLUDE_DIFFUSE) && (path_visibility & PATH_RAY_VISIBILITY_DIFFUSE)) ||
+      ((shader & SHADER_EXCLUDE_GLOSSY) &&
+       ((path_visibility & PATH_RAY_VISIBILITY_GLOSSY) && (path_flag & PATH_RAY_REFLECT))) ||
+      ((shader & SHADER_EXCLUDE_TRANSMIT) && (path_visibility & PATH_RAY_VISIBILITY_TRANSMIT)) ||
+      ((shader & SHADER_EXCLUDE_CAMERA) && (path_visibility & PATH_RAY_VISIBILITY_CAMERA)) ||
+      ((shader & SHADER_EXCLUDE_SCATTER) &&
+       (path_visibility & PATH_RAY_VISIBILITY_VOLUME_SCATTER)))
   {
     return false;
   }

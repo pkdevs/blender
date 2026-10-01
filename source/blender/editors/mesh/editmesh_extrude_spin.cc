@@ -6,11 +6,12 @@
  * \ingroup edmesh
  */
 
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
@@ -28,7 +29,7 @@
 
 #include "mesh_intern.hh" /* own include */
 
-using blender::Vector;
+namespace blender {
 
 #define USE_GIZMO
 
@@ -38,6 +39,7 @@ using blender::Vector;
 
 static wmOperatorStatus edbm_spin_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   float cent[3], axis[3];
@@ -58,15 +60,14 @@ static wmOperatorStatus edbm_spin_exec(bContext *C, wmOperator *op)
   }
 
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     BMOperator spinop;
 
     /* Keep the values in world-space since we're passing the `obmat`. */
-    if (!EDBM_op_init(em,
+    if (!EDBM_op_init(bm,
                       &spinop,
                       op,
                       "spin geom=%hvef cent=%v axis=%v dvec=%v steps=%i angle=%f space=%m4 "
@@ -86,11 +87,11 @@ static wmOperatorStatus edbm_spin_exec(bContext *C, wmOperator *op)
     }
     BMO_op_exec(bm, &spinop);
     if (use_auto_merge == false) {
-      EDBM_flag_disable_all(em, BM_ELEM_SELECT);
+      EDBM_flag_disable_all(bm, BM_ELEM_SELECT);
       BMO_slot_buffer_hflag_enable(
           bm, spinop.slots_out, "geom_last.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, true);
     }
-    if (!EDBM_op_finish(em, &spinop, op, true)) {
+    if (!EDBM_op_finish(bm, &spinop, op, true)) {
       continue;
     }
 
@@ -98,7 +99,7 @@ static wmOperatorStatus edbm_spin_exec(bContext *C, wmOperator *op)
     params.calc_looptris = true;
     params.calc_normals = false;
     params.is_destructive = true;
-    EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+    EDBM_update(id_cast<Mesh *>(obedit->data), &params);
   }
 
   return OPERATOR_FINISHED;
@@ -226,3 +227,5 @@ void MESH_OT_spin(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

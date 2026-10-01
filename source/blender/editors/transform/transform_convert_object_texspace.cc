@@ -8,8 +8,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_layer.hh"
 #include "BKE_object.hh"
@@ -41,21 +41,21 @@ static void createTransTexspace(bContext * /*C*/, TransInfo *t)
   ID *id;
   char *texspace_flag;
 
-  BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+  BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
   ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ob == nullptr) { /* Shouldn't logically happen, but still. */
     return;
   }
 
-  id = static_cast<ID *>(ob->data);
+  id = ob->data;
   if (id == nullptr || !ELEM(GS(id->name), ID_ME, ID_CU_LEGACY, ID_MB)) {
-    BKE_report(t->reports, RPT_ERROR, "Unsupported object type for text-space transform");
+    BKE_report(t->reports, RPT_ERROR, "Unsupported object type for texture space transform");
     return;
   }
 
   if (BKE_object_obdata_is_libdata(ob)) {
-    BKE_report(t->reports, RPT_ERROR, "Linked data can't text-space transform");
+    BKE_report(t->reports, RPT_ERROR, "Cannot create transform on linked data");
     return;
   }
 
@@ -63,8 +63,8 @@ static void createTransTexspace(bContext * /*C*/, TransInfo *t)
     BLI_assert(t->data_container_len == 1);
     TransDataContainer *tc = t->data_container;
     tc->data_len = 1;
-    td = tc->data = MEM_callocN<TransData>("TransTexspace");
-    td_ext = tc->data_ext = MEM_callocN<TransDataExtension>("TransTexspace");
+    td = tc->data = MEM_new_zeroed<TransData>("TransTexspace");
+    td_ext = tc->data_ext = MEM_new_zeroed<TransDataExtension>("TransTexspace");
   }
 
   td->flag = TD_SELECTED;

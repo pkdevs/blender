@@ -7,12 +7,16 @@
  */
 
 #include "BLI_math_base.hh"
+#include "BLI_math_constants.hh"
 
 #include "BKE_ocean.h"
+
 #include "ocean_intern.h"
 
 #include <algorithm>
 #include <cmath>
+
+namespace blender {
 
 #ifdef WITH_OCEANSIM
 
@@ -48,7 +52,7 @@ static float alpha_beta_spectrum(const float alpha,
 
 static float peak_sharpen(const float omega, const float peakomega, const float gamma)
 {
-  using blender::math::square;
+  using math::square;
   const float sigma = (omega < peakomega) ? 0.07 : 0.09;
   const float exponent = -square((omega - peakomega) / (sigma * peakomega)) / 2.0;
   return pow(gamma, exp(exponent));
@@ -199,3 +203,5 @@ float BLI_ocean_spectrum_jonswap(const Ocean *oc, const float kx, const float kz
 /** \} */
 
 #endif /* WITH_OCEANSIM */
+
+}  // namespace blender

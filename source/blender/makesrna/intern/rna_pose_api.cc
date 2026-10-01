@@ -10,33 +10,38 @@
 #include <cstring>
 #include <ctime>
 
+/* #include "BLI_sys_types.hh" */
+
 #include "RNA_define.hh"
-
-/* #include "BLI_sys_types.h" */
-
+#include "RNA_types.hh"
 #include "rna_internal.hh" /* own include */
-
-using namespace blender;
 
 #ifdef RNA_RUNTIME
 
-#  include "BKE_animsys.h"
+#  include "BKE_animsys.hh"
 #  include "BKE_armature.hh"
 #  include "BKE_context.hh"
 #  include "BKE_pose_backup.h"
 
 #  include "DNA_action_types.h"
 #  include "DNA_anim_types.h"
+#  include "DNA_armature_types.h"
 
-#  include "BLI_ghash.h"
-#  include "BLI_math_matrix.h"
+#  include "BLI_ghash.hh"
+#  include "BLI_math_matrix_c.hh"
 
 #  include "ANIM_action.hh"
 #  include "ANIM_pose.hh"
 
-static float rna_PoseBone_do_envelope(bPoseChannel *chan, const float vec[3])
+#  include "DEG_depsgraph.hh"
+
+#  include "WM_api.hh"
+
+namespace blender {
+
+static float rna_PoseBone_do_envelope(ID *self, bPoseChannel *chan, const float vec[3])
 {
-  Bone *bone = chan->bone;
+  Bone *bone = chan->bone_get(id_cast<Object &>(*self));
 
   float scale = (bone->flag & BONE_MULT_VG_ENV) == BONE_MULT_VG_ENV ? bone->weight : 1.0f;
 
@@ -48,14 +53,19 @@ static float rna_PoseBone_do_envelope(bPoseChannel *chan, const float vec[3])
                             bone->dist * scale);
 }
 
-static void rna_PoseBone_bbone_segment_index(
-    bPoseChannel *pchan, ReportList *reports, const float pt[3], int *r_index, float *r_blend_next)
+static void rna_PoseBone_bbone_segment_index(ID *self,
+                                             bPoseChannel *pchan,
+                                             ReportList *reports,
+                                             const float pt[3],
+                                             int *r_index,
+                                             float *r_blend_next)
 {
-  if (!pchan->bone || pchan->bone->segments <= 1) {
+  Bone *bone = pchan->bone_get(id_cast<Object &>(*self));
+  if (!bone || bone->segments <= 1) {
     BKE_reportf(reports, RPT_ERROR, "Bone '%s' is not a B-Bone!", pchan->name);
     return;
   }
-  if (pchan->runtime.bbone_segments != pchan->bone->segments) {
+  if (pchan->runtime.bbone_segments != bone->segments) {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "Bone '%s' has out of date B-Bone segment data - depsgraph update required!",
@@ -63,17 +73,18 @@ static void rna_PoseBone_bbone_segment_index(
     return;
   }
 
-  BKE_pchan_bbone_deform_segment_index(pchan, pt, r_index, r_blend_next);
+  BKE_pchan_bbone_deform_segment_index({pchan, bone}, pt, r_index, r_blend_next);
 }
 
 static void rna_PoseBone_bbone_segment_matrix(
-    bPoseChannel *pchan, ReportList *reports, float mat_ret[16], int index, bool rest)
+    ID *self, bPoseChannel *pchan, ReportList *reports, float mat_ret[16], int index, bool rest)
 {
-  if (!pchan->bone || pchan->bone->segments <= 1) {
+  Bone *bone = pchan->bone_get(id_cast<Object &>(*self));
+  if (!bone || bone->segments <= 1) {
     BKE_reportf(reports, RPT_ERROR, "Bone '%s' is not a B-Bone!", pchan->name);
     return;
   }
-  if (pchan->runtime.bbone_segments != pchan->bone->segments) {
+  if (pchan->runtime.bbone_segments != bone->segments) {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "Bone '%s' has out of date B-Bone segment data - depsgraph update required!",
@@ -87,14 +98,15 @@ static void rna_PoseBone_bbone_segment_matrix(
   }
 
   if (rest) {
-    copy_m4_m4((float(*)[4])mat_ret, pchan->runtime.bbone_rest_mats[index].mat);
+    copy_m4_m4(reinterpret_cast<float (*)[4]>(mat_ret), pchan->runtime.bbone_rest_mats[index].mat);
   }
   else {
-    copy_m4_m4((float(*)[4])mat_ret, pchan->runtime.bbone_pose_mats[index].mat);
+    copy_m4_m4(reinterpret_cast<float (*)[4]>(mat_ret), pchan->runtime.bbone_pose_mats[index].mat);
   }
 }
 
-static void rna_PoseBone_compute_bbone_handles(bPoseChannel *pchan,
+static void rna_PoseBone_compute_bbone_handles(ID *self,
+                                               bPoseChannel *pchan,
                                                ReportList *reports,
                                                float ret_h1[3],
                                                float *ret_roll1,
@@ -104,14 +116,18 @@ static void rna_PoseBone_compute_bbone_handles(bPoseChannel *pchan,
                                                bool ease,
                                                bool offsets)
 {
-  if (!pchan->bone || pchan->bone->segments <= 1) {
+  Object *ob = id_cast<Object *>(self);
+  bArmature &armature = id_cast<bArmature &>(*ob->data);
+
+  Bone *bone = pchan->bone_get(*ob);
+  if (!bone || bone->segments <= 1) {
     BKE_reportf(reports, RPT_ERROR, "Bone '%s' is not a B-Bone!", pchan->name);
     return;
   }
 
   BBoneSplineParameters params;
 
-  BKE_pchan_bbone_spline_params_get(pchan, rest, &params);
+  BKE_pchan_bbone_spline_params_get({pchan, bone}, armature, rest, &params);
   BKE_pchan_bbone_handles_compute(
       &params, ret_h1, ret_roll1, ret_h2, ret_roll2, ease || offsets, offsets);
 }
@@ -122,7 +138,7 @@ static void rna_Pose_apply_pose_from_action(ID *pose_owner,
                                             const float evaluation_time)
 {
   BLI_assert(GS(pose_owner->name) == ID_OB);
-  Object *pose_owner_ob = (Object *)pose_owner;
+  Object *pose_owner_ob = id_cast<Object *>(pose_owner);
 
   AnimationEvalContext anim_eval_context = {CTX_data_depsgraph_pointer(C), evaluation_time};
   animrig::pose_apply_action({pose_owner_ob}, action->wrap(), &anim_eval_context, 1.0);
@@ -139,7 +155,7 @@ static void rna_Pose_blend_pose_from_action(ID *pose_owner,
                                             const float evaluation_time)
 {
   BLI_assert(GS(pose_owner->name) == ID_OB);
-  Object *pose_owner_ob = (Object *)pose_owner;
+  Object *pose_owner_ob = id_cast<Object *>(pose_owner);
 
   AnimationEvalContext anim_eval_context = {CTX_data_depsgraph_pointer(C), evaluation_time};
   animrig::pose_apply_action({pose_owner_ob}, action->wrap(), &anim_eval_context, blend_factor);
@@ -157,14 +173,14 @@ static void rna_Pose_backup_create(ID *pose_owner, bAction *action)
      * tagging an empty action as a pose asset. */
     return;
   }
-  Object *pose_owner_ob = (Object *)pose_owner;
+  Object *pose_owner_ob = id_cast<Object *>(pose_owner);
   BKE_pose_backup_create_on_object(pose_owner_ob, action);
 }
 
 static bool rna_Pose_backup_restore(ID *pose_owner, bContext *C)
 {
   BLI_assert(GS(pose_owner->name) == ID_OB);
-  Object *pose_owner_ob = (Object *)pose_owner;
+  Object *pose_owner_ob = id_cast<Object *>(pose_owner);
 
   const bool success = BKE_pose_backup_restore_on_object(pose_owner_ob);
   if (!success) {
@@ -181,12 +197,16 @@ static bool rna_Pose_backup_restore(ID *pose_owner, bContext *C)
 static void rna_Pose_backup_clear(ID *pose_owner)
 {
   BLI_assert(GS(pose_owner->name) == ID_OB);
-  Object *pose_owner_ob = (Object *)pose_owner;
+  Object *pose_owner_ob = id_cast<Object *>(pose_owner);
 
   BKE_pose_backup_clear(pose_owner_ob);
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_api_pose(StructRNA *srna)
 {
@@ -243,7 +263,7 @@ void RNA_api_pose(StructRNA *srna)
       func,
       "Create a backup of the current pose. Only those bones that are animated in the Action are "
       "backed up. The object owns the backup, and each object can have only one backup at a time. "
-      "When you no longer need it, it must be freed use `backup_clear()`.");
+      "When you no longer need it, it must be freed use ``backup_clear()``.");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_NO_SELF);
   parm = RNA_def_pointer(func,
                          "action",
@@ -258,19 +278,19 @@ void RNA_api_pose(StructRNA *srna)
   RNA_def_function_ui_description(
       func,
       "Restore the previously made pose backup. "
-      "This can be called multiple times. See `Pose.backup_create()` for more info.");
+      "This can be called multiple times. See ``Pose.backup_create()`` for more info.");
   /* return value */
   parm = RNA_def_boolean(
       func,
       "success",
       false,
       "",
-      "`True` when the backup was restored, `False` if there was no backup to restore");
+      "``True`` when the backup was restored, ``False`` if there was no backup to restore");
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "backup_clear", "rna_Pose_backup_clear");
   RNA_def_function_ui_description(
-      func, "Free a previously made pose backup. See `Pose.backup_create()` for more info.");
+      func, "Free a previously made pose backup. See ``Pose.backup_create()`` for more info.");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_NO_SELF);
 }
 
@@ -280,6 +300,7 @@ void RNA_api_pose_channel(StructRNA *srna)
   FunctionRNA *func;
 
   func = RNA_def_function(srna, "evaluate_envelope", "rna_PoseBone_do_envelope");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID);
   RNA_def_function_ui_description(func, "Calculate bone envelope at given point");
   parm = RNA_def_float_vector_xyz(func,
                                   "point",
@@ -299,7 +320,7 @@ void RNA_api_pose_channel(StructRNA *srna)
 
   /* B-Bone segment index from point */
   func = RNA_def_function(srna, "bbone_segment_index", "rna_PoseBone_bbone_segment_index");
-  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
   RNA_def_function_ui_description(
       func, "Retrieve the index and blend factor of the B-Bone segments based on vertex position");
   parm = RNA_def_float_vector_xyz(func,
@@ -325,7 +346,7 @@ void RNA_api_pose_channel(StructRNA *srna)
   func = RNA_def_function(srna, "bbone_segment_matrix", "rna_PoseBone_bbone_segment_matrix");
   RNA_def_function_ui_description(
       func, "Retrieve the matrix of the joint between B-Bone segments if available");
-  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
   parm = RNA_def_property(func, "matrix_return", PROP_FLOAT, PROP_MATRIX);
   RNA_def_property_multi_array(parm, 2, rna_matrix_dimsize_4x4);
   RNA_def_property_ui_text(parm, "", "The resulting matrix in bone local space");
@@ -338,7 +359,7 @@ void RNA_api_pose_channel(StructRNA *srna)
   func = RNA_def_function(srna, "compute_bbone_handles", "rna_PoseBone_compute_bbone_handles");
   RNA_def_function_ui_description(
       func, "Retrieve the vectors and rolls coming from B-Bone custom handles");
-  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
   parm = RNA_def_property(func, "handle1", PROP_FLOAT, PROP_XYZ);
   RNA_def_property_array(parm, 3);
   RNA_def_property_ui_text(
@@ -359,5 +380,7 @@ void RNA_api_pose_channel(StructRNA *srna)
   parm = RNA_def_boolean(
       func, "offsets", false, "", "Apply roll and curve offsets from bone properties");
 }
+
+}  // namespace blender
 
 #endif

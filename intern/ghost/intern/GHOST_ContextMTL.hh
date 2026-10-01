@@ -9,6 +9,7 @@
 #pragma once
 
 #include "GHOST_Context.hh"
+#include "GHOST_Types.hh"
 
 #include <Cocoa/Cocoa.h>
 #include <Metal/Metal.h>
@@ -22,6 +23,8 @@
 @class NSView;
 
 class GHOST_ContextMTL : public GHOST_Context {
+  friend class GHOST_XrGraphicsBindingMetal;
+
  public:
   /* Defines the number of simultaneous command buffers which can be in flight.
    * The default limit of `64` is considered to be optimal for Blender. Too many command buffers
@@ -41,18 +44,26 @@ class GHOST_ContextMTL : public GHOST_Context {
   /**
    * Constructor.
    */
-  GHOST_ContextMTL(bool stereoVisual, NSView *metalView, CAMetalLayer *metalLayer, int debug);
+  GHOST_ContextMTL(const GHOST_ContextParams &context_params,
+                   NSView *metalView,
+                   CAMetalLayer *metalLayer);
 
   /**
    * Destructor.
    */
   ~GHOST_ContextMTL() override;
 
+  /** \copydoc #GHOST_IContext::swapBuffersAcquire */
+  GHOST_TSuccess swapBufferAcquire() override
+  {
+    return GHOST_kSuccess;
+  }
+
   /**
    * Swaps front and back buffers of a window.
    * \return A boolean success indicator.
    */
-  GHOST_TSuccess swapBuffers() override;
+  GHOST_TSuccess swapBufferRelease() override;
 
   /**
    * Activates the drawing context of this window.
@@ -90,10 +101,10 @@ class GHOST_ContextMTL : public GHOST_Context {
 
   /**
    * Gets the current swap interval for #swapBuffers.
-   * \param intervalOut: Variable to store the swap interval if it can be read.
+   * \param interval_out: Variable to store the swap interval if it can be read.
    * \return Whether the swap interval can be read.
    */
-  GHOST_TSuccess getSwapInterval(int &intervalOut) override;
+  GHOST_TSuccess getSwapInterval(int &interval_out) override;
 
   /**
    * Updates the drawing context of this window.
@@ -120,22 +131,23 @@ class GHOST_ContextMTL : public GHOST_Context {
   MTLDevice *metalDevice();
 
   /**
-   * Register present callback
+   * Callback registration.
    */
   void metalRegisterPresentCallback(void (*callback)(
       MTLRenderPassDescriptor *, id<MTLRenderPipelineState>, id<MTLTexture>, id<CAMetalDrawable>));
+  void metalRegisterXrBlitCallback(void (*callback)(id<MTLTexture>, int, int, int, int));
 
  private:
   /** Metal state */
-  NSView *m_metalView;
-  CAMetalLayer *m_metalLayer;
-  MTLRenderPipelineState *m_metalRenderPipeline;
-  bool m_ownsMetalDevice;
+  NSView *metal_view_;
+  CAMetalLayer *metal_layer_;
+  MTLRenderPipelineState *metal_render_pipeline_;
+  bool owns_metal_device_;
 
   /** The virtualized default frame-buffer's texture. */
   /**
    * Texture that you can render into with Metal. The texture will be
-   * composited on top of `m_defaultFramebufferMetalTexture` whenever
+   * composited on top of `default_framebuffer_metal_texture_` whenever
    * `swapBuffers` is called.
    */
   static const int METAL_SWAPCHAIN_SIZE = 3;
@@ -143,7 +155,7 @@ class GHOST_ContextMTL : public GHOST_Context {
     id<MTLTexture> texture;
     unsigned int index;
   };
-  MTLSwapchainTexture m_defaultFramebufferMetalTexture[METAL_SWAPCHAIN_SIZE];
+  MTLSwapchainTexture default_framebuffer_metal_texture_[METAL_SWAPCHAIN_SIZE];
   unsigned int current_swapchain_index = 0;
 
   /* Present callback.
@@ -155,9 +167,10 @@ class GHOST_ContextMTL : public GHOST_Context {
                                  id<MTLRenderPipelineState>,
                                  id<MTLTexture>,
                                  id<CAMetalDrawable>);
+  /* XR texture blitting callback. */
+  void (*xrBlitCallback)(id<MTLTexture>, int, int, int, int);
 
   int mtl_SwapInterval;
-  const bool m_debug;
 
   static int s_sharedCount;
 
@@ -170,5 +183,5 @@ class GHOST_ContextMTL : public GHOST_Context {
   void metalInitFramebuffer();
   void metalUpdateFramebuffer();
   void metalSwapBuffers();
-  void initClear(){};
+  void initClear() {};
 };

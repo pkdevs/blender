@@ -2,11 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_paint_info.hh"
+#include "infos/overlay_paint_infos.hh"
 
 FRAGMENT_SHADER_CREATE_INFO(overlay_paint_texture)
 
-#include "draw_colormanagement_lib.glsl"
+#include "draw_colormanagement.bsl.hh"
 
 void main()
 {

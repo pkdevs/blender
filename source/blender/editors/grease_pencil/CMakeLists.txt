@@ -5,6 +5,7 @@
 set(INC
   ../include
   ../../makesrna
+  ../curves
   ../../../../extern/curve_fit_nd
   ../sculpt_paint
   ../../modifiers/intern/lineart
@@ -18,6 +19,8 @@ set(INC_SYS
 set(SRC
   intern/grease_pencil_add.cc
   intern/grease_pencil_bake_animation.cc
+  intern/grease_pencil_boolean.cc
+  intern/grease_pencil_carver.cc
   intern/grease_pencil_edit.cc
   intern/grease_pencil_frames.cc
   intern/grease_pencil_geom.cc
@@ -29,14 +32,18 @@ set(SRC
   intern/grease_pencil_merge.cc
   intern/grease_pencil_modes.cc
   intern/grease_pencil_ops.cc
+  intern/grease_pencil_pen.cc
   intern/grease_pencil_primitive.cc
   intern/grease_pencil_randomize.cc
+  intern/grease_pencil_segments_geom.cc
   intern/grease_pencil_select.cc
   intern/grease_pencil_trim.cc
   intern/grease_pencil_undo.cc
   intern/grease_pencil_utils.cc
   intern/grease_pencil_vertex_paint.cc
   intern/grease_pencil_weight_paint.cc
+
+  intern/grease_pencil_segments_intern.hh
 )
 
 set(LIB
@@ -54,16 +61,17 @@ set(LIB
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::clog
   PRIVATE bf::windowmanager
-  extern_curve_fit_nd
-  extern_fmtlib
+  PRIVATE bf::extern::curve_fit_nd
 )
 
 blender_add_lib(bf_editor_grease_pencil "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-add_dependencies(bf_editor_curves bf_rna)
+add_dependencies(bf_editor_grease_pencil bf_rna)
 
 if(WITH_GTESTS)
   set(TEST_SRC
     tests/grease_pencil_merge_test.cc
+    tests/grease_pencil_trim_test.cc
+    tests/grease_pencil_boolean_test.cc
   )
   set(TEST_INC
   )

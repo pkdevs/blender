@@ -17,10 +17,15 @@
 
 #include "DNA_world_types.h"
 
+#include "draw_view.hh"
+
 #include "eevee_defines.hh"
+#include "eevee_lightprobe_shared.hh"
 #include "eevee_sync.hh"
 
 namespace blender::eevee {
+
+using namespace draw;
 
 class Instance;
 class VolumeProbeModule;
@@ -49,14 +54,14 @@ struct SphereProbeAtlasCoord {
     return SPHERE_PROBE_ATLAS_RES >> (subdivision_lvl + mip_lvl);
   }
 
-  /* Coordinate of the area in [0..area_count_per_dimension[ range. */
+  /* Coordinate of the area in [0..area_count_per_dimension) range. */
   int2 area_location() const
   {
     const int area_count_per_dimension = 1 << subdivision_lvl;
     return int2(area_index % area_count_per_dimension, area_index / area_count_per_dimension);
   }
 
-  /* Coordinate of the bottom left corner of the area in [0..SPHERE_PROBE_ATLAS_RES[ range. */
+  /* Coordinate of the bottom left corner of the area in [0..SPHERE_PROBE_ATLAS_RES) range. */
   int2 area_offset(int mip_lvl = 0) const
   {
     return area_location() * area_extent(mip_lvl);
@@ -226,19 +231,19 @@ class LightProbeModule {
 
  public:
   LightProbeModule(Instance &inst);
-  ~LightProbeModule(){};
+  ~LightProbeModule() {};
 
   void init();
 
   void begin_sync();
-  void sync_probe(const Object *ob, ObjectHandle &handle);
-  void sync_world(const ::World *world, bool has_update);
+  void sync_probe(const ObjectRef &ob_ref);
+  void sync_world(const blender::World *world, bool has_update);
   void end_sync();
 
  private:
-  void sync_sphere(const Object *ob, ObjectHandle &handle);
-  void sync_volume(const Object *ob, ObjectHandle &handle);
-  void sync_planar(const Object *ob, ObjectHandle &handle);
+  void sync_sphere(const ObjectRef &ob_ref);
+  void sync_volume(const ObjectRef &ob_ref);
+  void sync_planar(const ObjectRef &ob_ref);
 
   /** Get the number of atlas layers needed to store light probe spheres. */
   int sphere_layer_count() const;

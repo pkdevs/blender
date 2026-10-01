@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_bicubic_sampler_lib.glsl"
+#include "infos/compositor_plane_deform_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_plane_deform)
+
+#include "gpu_shader_bicubic_sampler.bsl.hh"
 #include "gpu_shader_compositor_texture_utilities.glsl"
 
 void main()
@@ -22,8 +26,12 @@ void main()
 
   float4 sampled_color = SAMPLER_FUNCTION(input_tx, projected_coordinates);
 
+#if defined(PREMULTIPLY_MASK)
   /* Premultiply the mask value as an alpha. */
   float4 plane_color = sampled_color * texture_load(mask_tx, texel).x;
+#else
+  float4 plane_color = sampled_color;
+#endif
 
   imageStore(output_img, texel, plane_color);
 }

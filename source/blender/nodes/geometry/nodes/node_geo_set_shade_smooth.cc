@@ -11,6 +11,8 @@
 
 #include "RNA_enum_types.hh"
 
+#include "GEO_foreach_geometry.hh"
+
 #include "node_geometry_util.hh"
 
 namespace blender::nodes::node_geo_set_shade_smooth_cc {
@@ -20,17 +22,22 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.add_default_layout();
-  b.add_input<decl::Geometry>("Mesh", "Geometry")
+  b.add_input<decl::Geometry>("Mesh"_ustr, "Geometry"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
-      .description("Description to set the smoothness of");
-  b.add_output<decl::Geometry>("Mesh", "Geometry").propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Bool>("Shade Smooth").default_value(true).field_on_all();
+      .description("Geometry to set the smoothness of");
+  b.add_output<decl::Geometry>("Mesh"_ustr, "Geometry"_ustr)
+      .propagate_all_geometry()
+      .align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Bool>("Shade Smooth"_ustr).default_value(true).evaluated_geometry_field();
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  layout->prop(ptr, "domain", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "domain", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
@@ -48,7 +55,7 @@ static bool try_removing_sharp_attribute(Mesh &mesh,
                                          const Field<bool> &selection,
                                          const Field<bool> &sharpness)
 {
-  if (selection.node().depends_on_input() || sharpness.node().depends_on_input()) {
+  if (selection.depends_on_input() || sharpness.depends_on_input()) {
     return false;
   }
   if (!fn::evaluate_constant_field(selection)) {
@@ -84,12 +91,12 @@ static void set_sharp(Mesh &mesh,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
   const AttrDomain domain = AttrDomain(params.node().custom1);
-  const Field<bool> selection = params.extract_input<Field<bool>>("Selection");
-  const Field<bool> smooth_field = params.extract_input<Field<bool>>("Shade Smooth");
+  const Field<bool> selection = params.extract_input<Field<bool>>("Selection"_ustr);
+  const Field<bool> smooth_field = params.extract_input<Field<bool>>("Shade Smooth"_ustr);
 
-  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+  geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
       set_sharp(*mesh,
                 domain,
@@ -98,7 +105,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                 fn::invert_boolean_field(smooth_field));
     }
   });
-  params.set_output("Geometry", std::move(geometry_set));
+  params.set_output("Geometry"_ustr, std::move(geometry_set));
 }
 
 static void node_rna(StructRNA *srna)
@@ -113,9 +120,9 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSetShadeSmooth", GEO_NODE_SET_SHADE_SMOOTH);
+  geo_node_type_base(&ntype, "GeometryNodeSetShadeSmooth"_ustr, GEO_NODE_SET_SHADE_SMOOTH);
   ntype.ui_name = "Set Shade Smooth";
   ntype.ui_description =
       "Control the smoothness of mesh normals around each face by changing the \"shade smooth\" "
@@ -126,7 +133,7 @@ static void node_register()
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
   ntype.draw_buttons = node_layout;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

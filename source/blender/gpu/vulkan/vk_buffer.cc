@@ -11,7 +11,13 @@
 #include "vk_context.hh"
 #include <vulkan/vulkan_core.h>
 
-namespace blender::gpu {
+#include "CLG_log.h"
+
+namespace blender {
+
+static CLG_LogRef LOG = {"gpu.vulkan"};
+
+namespace gpu {
 
 VKBuffer::~VKBuffer()
 {
@@ -22,13 +28,15 @@ VKBuffer::~VKBuffer()
 
 bool VKBuffer::create(size_t size_in_bytes,
                       VkBufferUsageFlags buffer_usage,
-                      VkMemoryPropertyFlags required_flags,
-                      VkMemoryPropertyFlags preferred_flags,
+                      VmaMemoryUsage vma_memory_usage,
                       VmaAllocationCreateFlags allocation_flags,
-                      bool export_memory)
+                      float priority,
+                      bool export_memory,
+                      const char *debug_name,
+                      size_t alignment)
 {
   BLI_assert(!is_allocated());
-  BLI_assert(vk_buffer_ == VK_NULL_HANDLE);
+  BLI_assert(resource_.vk_handle == VK_NULL_HANDLE);
   BLI_assert(mapped_memory_ == nullptr);
   if (allocation_failed_) {
     return false;
@@ -39,8 +47,21 @@ bool VKBuffer::create(size_t size_in_bytes,
    * Vulkan doesn't allow empty buffers but some areas (DrawManager Instance data, PyGPU) create
    * them.
    */
-  alloc_size_in_bytes_ = ceil_to_multiple_ul(max_ulul(size_in_bytes_, 16), 16);
+  alloc_size_in_bytes_ = max_ulul(size_in_bytes_, 16);
   VKDevice &device = VKBackend::get().device;
+
+  /* Precheck max buffer size. */
+  if (device.extensions_get().maintenance4 &&
+      alloc_size_in_bytes_ > device.physical_device_maintenance4_properties_get().maxBufferSize)
+  {
+    CLOG_WARN(
+        &LOG,
+        "Couldn't allocate buffer, requested allocation exceeds the maxBufferSize of the device.");
+    allocation_failed_ = true;
+    size_in_bytes_ = 0;
+    alloc_size_in_bytes_ = 0;
+    return false;
+  }
 
   VmaAllocator allocator = device.mem_allocator_get();
   VkBufferCreateInfo create_info = {};
@@ -60,30 +81,30 @@ bool VKBuffer::create(size_t size_in_bytes,
 
   VmaAllocationCreateInfo vma_create_info = {};
   vma_create_info.flags = allocation_flags;
-  vma_create_info.priority = 1.0f;
-  vma_create_info.requiredFlags = required_flags;
-  vma_create_info.preferredFlags = preferred_flags;
-  vma_create_info.usage = VMA_MEMORY_USAGE_AUTO;
+  vma_create_info.priority = priority;
+  vma_create_info.usage = vma_memory_usage;
 
   if (export_memory) {
     create_info.pNext = &external_memory_create_info;
-#ifdef _WIN32
-    external_memory_create_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
-#else
-    external_memory_create_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
-#endif
+    external_memory_create_info.handleTypes = vk_external_memory_handle_type();
+
     /* Dedicated allocation for zero offset. */
     vma_create_info.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-    vma_create_info.pool = device.vma_pools.external_memory;
+    vma_create_info.pool = device.vma_pools.external_memory_pixel_buffer.pool;
   }
 
-  const bool use_descriptor_buffer = device.extensions_get().descriptor_buffer;
-  if (use_descriptor_buffer) {
-    create_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+  if (debug_name && G.debug & G_DEBUG_GPU) {
+    vma_create_info.flags |= VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
+    vma_create_info.pUserData = (void *)debug_name;
   }
 
-  VkResult result = vmaCreateBuffer(
-      allocator, &create_info, &vma_create_info, &vk_buffer_, &allocation_, nullptr);
+  VkResult result = vmaCreateBufferWithAlignment(allocator,
+                                                 &create_info,
+                                                 &vma_create_info,
+                                                 alignment,
+                                                 &resource_.vk_handle,
+                                                 &allocation_,
+                                                 nullptr);
   if (result != VK_SUCCESS) {
     allocation_failed_ = true;
     size_in_bytes_ = 0;
@@ -91,17 +112,29 @@ bool VKBuffer::create(size_t size_in_bytes,
     return false;
   }
 
-  device.resources.add_buffer(vk_buffer_);
+  resource_.resource_handle = device.resources.add_buffer(resource_.vk_handle);
 
-  if (use_descriptor_buffer) {
+  if (bool(create_info.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)) {
     VkBufferDeviceAddressInfo vk_buffer_device_address_info = {
-        VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, vk_buffer_};
-    vk_device_address = vkGetBufferDeviceAddress(device.vk_handle(),
-                                                 &vk_buffer_device_address_info);
+        VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, resource_};
+    vk_device_address = device.functions.vkGetBufferDeviceAddressKHR(
+        device.vk_handle(), &vk_buffer_device_address_info);
   }
 
-  vmaGetAllocationMemoryProperties(allocator, allocation_, &vk_memory_property_flags_);
-  if (vk_memory_property_flags_ & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+  if (debug_name) {
+    debug::object_label(resource_.vk_handle, debug_name);
+  }
+
+  /* Check if the memory is mappable. Although the Vulkan specs allow to map any memory that is
+   * host visible, VMA checks for specific host access flags.
+   *
+   * Source:
+   * https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/memory_mapping.html
+   */
+  const bool is_mappable = bool(allocation_flags &
+                                (VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
+                                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT));
+  if (is_mappable) {
     return map();
   }
 
@@ -125,7 +158,7 @@ void VKBuffer::update_render_graph(VKContext &context, void *data) const
 {
   BLI_assert(size_in_bytes_ <= 65536 && size_in_bytes_ % 4 == 0);
   render_graph::VKUpdateBufferNode::CreateInfo update_buffer = {};
-  update_buffer.dst_buffer = vk_buffer_;
+  update_buffer.dst_buffer = resource();
   update_buffer.data_size = size_in_bytes_;
   update_buffer.data = data;
   context.render_graph().add_node(update_buffer);
@@ -141,7 +174,7 @@ void VKBuffer::flush() const
 void VKBuffer::clear(VKContext &context, uint32_t clear_value)
 {
   render_graph::VKFillBufferNode::CreateInfo fill_buffer = {};
-  fill_buffer.vk_buffer = vk_buffer_;
+  fill_buffer.buffer = resource();
   fill_buffer.data = clear_value;
   fill_buffer.size = alloc_size_in_bytes_;
   context.render_graph().add_node(fill_buffer);
@@ -208,11 +241,25 @@ VkDeviceMemory VKBuffer::export_memory_get(size_t &memory_size)
   /* VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT should ensure this. */
   if (info.offset != 0) {
     BLI_assert(!"Failed to get zero offset export memory for Vulkan buffer");
-    return nullptr;
+    return VK_NULL_HANDLE;
   }
 
   memory_size = info.size;
   return info.deviceMemory;
+}
+
+void VKBuffer::flush_mapped_memory()
+{
+  const VKDevice &device = VKBackend::get().device;
+  VmaAllocator allocator = device.mem_allocator_get();
+  vmaFlushAllocation(allocator, allocation_, 0, size_in_bytes_);
+}
+
+void VKBuffer::invalidate_mapped_memory()
+{
+  const VKDevice &device = VKBackend::get().device;
+  VmaAllocator allocator = device.mem_allocator_get();
+  vmaInvalidateAllocation(allocator, allocation_, 0, size_in_bytes_);
 }
 
 bool VKBuffer::free()
@@ -221,25 +268,26 @@ bool VKBuffer::free()
     unmap();
   }
 
-  VKDiscardPool::discard_pool_get().discard_buffer(vk_buffer_, allocation_);
+  VKDiscardPool::discard_pool_get().discard_buffer(resource_, allocation_);
 
   allocation_ = VK_NULL_HANDLE;
-  vk_buffer_ = VK_NULL_HANDLE;
+  resource_ = {};
 
   return true;
 }
 
 void VKBuffer::free_immediately(VKDevice &device)
 {
-  BLI_assert(vk_buffer_ != VK_NULL_HANDLE);
+  BLI_assert(resource_.vk_handle != VK_NULL_HANDLE);
   BLI_assert(allocation_ != VK_NULL_HANDLE);
   if (is_mapped()) {
     unmap();
   }
-  device.resources.remove_buffer(vk_buffer_);
-  vmaDestroyBuffer(device.mem_allocator_get(), vk_buffer_, allocation_);
+  device.resources.remove_buffer(resource_);
+  vmaDestroyBuffer(device.mem_allocator_get(), resource_, allocation_);
   allocation_ = VK_NULL_HANDLE;
-  vk_buffer_ = VK_NULL_HANDLE;
+  resource_ = {};
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

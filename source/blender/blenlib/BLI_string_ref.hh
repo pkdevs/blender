@@ -7,13 +7,13 @@
 /** \file
  * \ingroup bli
  *
- * A `blender::StringRef` references a const char array owned by someone else. It is just a pointer
+ * A `StringRef` references a const char array owned by someone else. It is just a pointer
  * and a size. Since the memory is not owned, StringRef should not be used to transfer ownership of
  * the string. The data referenced by a StringRef cannot be mutated through it.
  *
  * A StringRef is NOT null-terminated. This makes it much more powerful within C++, because we can
  * also cut off parts of the end without creating a copy. When interfacing with C code that expects
- * null-terminated strings, `blender::StringRefNull` can be used. It is essentially the same as
+ * null-terminated strings, `StringRefNull` can be used. It is essentially the same as
  * StringRef, but with the restriction that the string has to be null-terminated.
  *
  * Whenever possible, string parameters should be of type StringRef and the string return type
@@ -21,7 +21,7 @@
  * return it when the string exists only in the scope of the function. This convention makes
  * functions usable in the most contexts.
  *
- * blender::StringRef vs. std::string_view:
+ * StringRef vs. std::string_view:
  *   Both types are certainly very similar. The main benefit of using StringRef in Blender is that
  *   this allows us to add convenience methods at any time. Especially, when doing a lot of string
  *   manipulation, this helps to keep the code clean. Furthermore, we need StringRefNull anyway,
@@ -53,7 +53,10 @@ class StringRefBase {
   constexpr StringRefBase(const char *data, int64_t size);
 
  public:
-  /* Similar to string_view::npos, but signed. */
+  /** Makes this type "string-like" for some libraries (e.g. `fmt`). */
+  using value_type = char;
+
+  /** Similar to #string_view::npos, but signed. */
   static constexpr int64_t not_found = -1;
 
   constexpr int64_t size() const;
@@ -78,6 +81,17 @@ class StringRefBase {
   template<size_t N> void copy_utf8_truncated(char (&dst)[N]) const;
 
   /**
+   * Copy the string into a char array. The copied string will be null-terminated. If it does not
+   * fit, it will be truncated.
+   *
+   * \note #copy_utf8_truncated should be used UTF8 strings,
+   * this should be used for strings which are allowed to contain arbitrary
+   * byte sequences without a known encoding such as file-paths.
+   */
+  void copy_bytes_truncated(char *dst, int64_t dst_size) const;
+  template<size_t N> void copy_bytes_truncated(char (&dst)[N]) const;
+
+  /**
    * Copy the string into a buffer. The buffer has to be one byte larger than the size of the
    * string, because the copied string will be null-terminated. Only use this when you are
    * absolutely sure that the buffer is large enough.
@@ -94,6 +108,9 @@ class StringRefBase {
   /**
    * The behavior of those functions matches the standard library implementation of
    * std::string_view.
+   *
+   * \return the offset at which the char/string was found, or StringRefBase::not_found when
+   * nothing was found.
    */
   constexpr int64_t find(char c, int64_t pos = 0) const;
   constexpr int64_t find(StringRef str, int64_t pos = 0) const;
@@ -111,6 +128,10 @@ class StringRefBase {
   constexpr StringRef trim() const;
   constexpr StringRef trim(StringRef characters_to_remove) const;
   constexpr StringRef trim(char character_to_remove) const;
+  constexpr StringRef trim_left() const;
+  constexpr StringRef trim_left(StringRef characters_to_remove) const;
+  constexpr StringRef trim_right() const;
+  constexpr StringRef trim_right(StringRef characters_to_remove) const;
 };
 
 /**
@@ -150,6 +171,7 @@ class StringRef : public StringRefBase {
   constexpr StringRef drop_prefix(int64_t n) const;
   constexpr StringRef drop_known_prefix(StringRef prefix) const;
   constexpr StringRef drop_suffix(int64_t n) const;
+  constexpr StringRef drop_known_suffix(StringRef suffix) const;
 
   constexpr char operator[](int64_t index) const;
 };
@@ -229,6 +251,11 @@ inline void StringRefBase::copy_unsafe(char *dst) const
 template<size_t N> inline void StringRefBase::copy_utf8_truncated(char (&dst)[N]) const
 {
   this->copy_utf8_truncated(dst, N);
+}
+
+template<size_t N> inline void StringRefBase::copy_bytes_truncated(char (&dst)[N]) const
+{
+  this->copy_bytes_truncated(dst, N);
 }
 
 /**
@@ -376,13 +403,17 @@ constexpr int64_t StringRefBase::find_last_not_of(char c, int64_t pos) const
   return index_or_npos_to_int64(std::string_view(*this).find_last_not_of(c, size_t(pos)));
 }
 
+/**
+ * Return a new StringRef that does not contain leading and trailing white-space.
+ */
 constexpr StringRef StringRefBase::trim() const
 {
   return this->trim(" \t\r\n");
 }
 
 /**
- * Return a new StringRef that does not contain leading and trailing white-space.
+ * Return a new StringRef that does not contain leading and trailing `character_to_remove`
+ * characters.
  */
 constexpr StringRef StringRefBase::trim(const char character_to_remove) const
 {
@@ -407,6 +438,48 @@ constexpr StringRef StringRefBase::trim(StringRef characters_to_remove) const
                  "forward search found characters-to-not-remove, but backward search did not");
   const int64_t substr_len = find_end - find_front + 1;
   return this->substr(find_front, substr_len);
+}
+
+/**
+ * Return a new StringRef that does not contain leading white-space.
+ */
+constexpr StringRef StringRefBase::trim_left() const
+{
+  return this->trim_left(" \t\r\n");
+}
+
+/**
+ * Return a new StringRef that removes all the leading characters that occur in
+ * `characters_to_remove`.
+ */
+constexpr StringRef StringRefBase::trim_left(StringRef characters_to_remove) const
+{
+  const int64_t find_front = this->find_first_not_of(characters_to_remove);
+  if (find_front == not_found) {
+    return StringRef();
+  }
+  return this->substr(find_front);
+}
+
+/**
+ * Return a new StringRef that does not contain trailing white-space.
+ */
+constexpr StringRef StringRefBase::trim_right() const
+{
+  return this->trim_right(" \t\r\n");
+}
+
+/**
+ * Return a new StringRef that removes all the trailing characters that occur in
+ * `characters_to_remove`.
+ */
+constexpr StringRef StringRefBase::trim_right(StringRef characters_to_remove) const
+{
+  const int64_t find_end = this->find_last_not_of(characters_to_remove);
+  if (find_end == not_found) {
+    return StringRef();
+  }
+  return this->substr(0, find_end + 1);
 }
 
 /** \} */
@@ -524,6 +597,16 @@ constexpr StringRef StringRef::drop_suffix(const int64_t n) const
   BLI_assert(n >= 0);
   const int64_t new_size = std::max<int64_t>(0, size_ - n);
   return StringRef(data_, new_size);
+}
+
+/**
+ * Return a new StringRef with the given suffix being skipped. This invokes undefined behavior if
+ * the string does not begin with the given suffix.
+ */
+constexpr StringRef StringRef::drop_known_suffix(StringRef suffix) const
+{
+  BLI_assert(this->endswith(suffix));
+  return this->drop_suffix(suffix.size());
 }
 
 /**

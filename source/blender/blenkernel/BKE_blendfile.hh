@@ -9,17 +9,21 @@
 
 #include "BKE_main.hh"
 
+#include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_map.hh"
 #include "BLI_utility_mixins.hh"
 
 #include <string>
 
+namespace blender {
+
 struct bContext;
 struct BlendFileData;
 struct BlendFileReadParams;
 struct BlendFileReadReport;
 struct BlendFileReadWMSetupData;
+struct BlendFileWriteParams;
 struct ID;
 struct IDNameLib_Map;
 struct Library;
@@ -156,7 +160,7 @@ WorkspaceConfigFileData *BKE_blendfile_workspace_config_read(const char *filepat
                                                              ReportList *reports);
 void BKE_blendfile_workspace_config_data_free(WorkspaceConfigFileData *workspace_config);
 
-namespace blender::bke::blendfile {
+namespace bke::blendfile {
 
 /**
  * Partial blendfile writing.
@@ -203,13 +207,13 @@ class PartialWriteContext : NonCopyable, NonMovable {
   IDNameLib_Map *matching_uid_map_;
 
   /** A mapping from the absolute library paths to the #Library IDs in the context. */
-  blender::Map<std::string, Library *> libraries_map_;
+  Map<std::string, Library *> libraries_map_;
 
  public:
   /* Passing a reference root filepath is mandatory, for remapping of relative paths to work as
    * expected. */
   PartialWriteContext() = delete;
-  PartialWriteContext(StringRefNull reference_root_filepath);
+  PartialWriteContext(Main &reference_main);
   ~PartialWriteContext();
 
   /**
@@ -321,9 +325,8 @@ class PartialWriteContext : NonCopyable, NonMovable {
    */
   ID *id_add(const ID *id,
              IDAddOptions options,
-             blender::FunctionRef<IDAddOperations(LibraryIDLinkCallbackData *cb_data,
-                                                  IDAddOptions options)> dependencies_filter_cb =
-                 nullptr);
+             FunctionRef<IDAddOperations(LibraryIDLinkCallbackData *cb_data, IDAddOptions options)>
+                 dependencies_filter_cb = nullptr);
 
   /**
    * Add and return a new ID into the partial write context.
@@ -382,6 +385,12 @@ class PartialWriteContext : NonCopyable, NonMovable {
    */
   bool write(const char *write_filepath, int write_flags, int remap_mode, ReportList &reports);
   bool write(const char *write_filepath, ReportList &reports);
+  /**
+   * Write the content of the current context as a copy/paste buffer blendfile on disk.
+   *
+   * \return `true` on success.
+   */
+  bool write_as_copypaste_buffer(const char *write_filepath, ReportList &reports);
 
   /* TODO: To allow editing an existing external blendfile:
    *   - API to load a context from a blendfile.
@@ -427,9 +436,15 @@ class PartialWriteContext : NonCopyable, NonMovable {
    * one if needed.
    */
   Library *ensure_library(StringRefNull library_absolute_path);
+
+  /** Actual writing code, hidden behind the public simpler APIs. */
+  bool write_impl(const char *write_filepath,
+                  int write_flags,
+                  const BlendFileWriteParams &blend_file_write_params,
+                  ReportList &reports);
 };
 
-ENUM_OPERATORS(PartialWriteContext::IDAddOperations,
-               PartialWriteContext::IDAddOperations::MASK_INHERITED);
+ENUM_OPERATORS(PartialWriteContext::IDAddOperations);
 
-}  // namespace blender::bke::blendfile
+}  // namespace bke::blendfile
+}  // namespace blender

@@ -9,12 +9,14 @@
 #include <cstdlib> /* abort() */
 #include <cstring>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_stack.h" /* own include */
+#include "BLI_stack_c.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 #define USE_TOTELEM
 
@@ -42,7 +44,8 @@ struct BLI_Stack {
 
 static void *stack_get_last_elem(BLI_Stack *stack)
 {
-  return ((char *)(stack)->chunk_curr->data) + ((stack)->elem_size * (stack)->chunk_index);
+  return (static_cast<char *>((stack)->chunk_curr->data)) +
+         ((stack)->elem_size * (stack)->chunk_index);
 }
 
 /**
@@ -55,7 +58,7 @@ static size_t stack_chunk_elem_max_calc(const size_t elem_size, size_t chunk_siz
 
   BLI_assert((elem_size != 0) && (chunk_size != 0));
 
-  while (UNLIKELY(chunk_size <= elem_size_min)) {
+  while (chunk_size <= elem_size_min) [[unlikely]] {
     chunk_size <<= 1;
   }
 
@@ -69,7 +72,7 @@ BLI_Stack *BLI_stack_new_ex(const size_t elem_size,
                             const char *description,
                             const size_t chunk_size)
 {
-  BLI_Stack *stack = MEM_callocN<BLI_Stack>(description);
+  BLI_Stack *stack = MEM_new_zeroed<BLI_Stack>(description);
 
   stack->chunk_elem_max = stack_chunk_elem_max_calc(elem_size, chunk_size);
   stack->elem_size = elem_size;
@@ -88,7 +91,7 @@ static void stack_free_chunks(StackChunk *data)
 {
   while (data) {
     StackChunk *data_next = data->next;
-    MEM_freeN(data);
+    MEM_delete(data);
     data = data_next;
   }
 }
@@ -97,22 +100,22 @@ void BLI_stack_free(BLI_Stack *stack)
 {
   stack_free_chunks(stack->chunk_curr);
   stack_free_chunks(stack->chunk_free);
-  MEM_freeN(stack);
+  MEM_delete(stack);
 }
 
 void *BLI_stack_push_r(BLI_Stack *stack)
 {
   stack->chunk_index++;
 
-  if (UNLIKELY(stack->chunk_index == stack->chunk_elem_max)) {
+  if (stack->chunk_index == stack->chunk_elem_max) [[unlikely]] {
     StackChunk *chunk;
     if (stack->chunk_free) {
       chunk = stack->chunk_free;
       stack->chunk_free = chunk->next;
     }
     else {
-      chunk = static_cast<StackChunk *>(
-          MEM_mallocN(sizeof(*chunk) + (stack->elem_size * stack->chunk_elem_max), __func__));
+      chunk = static_cast<StackChunk *>(MEM_new_uninitialized(
+          sizeof(*chunk) + (stack->elem_size * stack->chunk_elem_max), __func__));
     }
     chunk->next = stack->chunk_curr;
     stack->chunk_curr = chunk;
@@ -150,7 +153,7 @@ void BLI_stack_pop_n(BLI_Stack *stack, void *dst, uint n)
 
   while (n--) {
     BLI_stack_pop(stack, dst);
-    dst = (void *)((char *)dst + stack->elem_size);
+    dst = static_cast<void *>(static_cast<char *>(dst) + stack->elem_size);
   }
 }
 
@@ -158,10 +161,10 @@ void BLI_stack_pop_n_reverse(BLI_Stack *stack, void *dst, uint n)
 {
   BLI_assert(n <= BLI_stack_count(stack));
 
-  dst = (void *)((char *)dst + (stack->elem_size * n));
+  dst = static_cast<void *>(static_cast<char *>(dst) + (stack->elem_size * n));
 
   while (n--) {
-    dst = (void *)((char *)dst - stack->elem_size);
+    dst = static_cast<void *>(static_cast<char *>(dst) - stack->elem_size);
     BLI_stack_pop(stack, dst);
   }
 }
@@ -180,7 +183,7 @@ void BLI_stack_discard(BLI_Stack *stack)
 #ifdef USE_TOTELEM
   stack->elem_num--;
 #endif
-  if (UNLIKELY(--stack->chunk_index == CHUNK_EMPTY)) {
+  if (--stack->chunk_index == CHUNK_EMPTY) [[unlikely]] {
     StackChunk *chunk_free;
 
     chunk_free = stack->chunk_curr;
@@ -196,12 +199,12 @@ void BLI_stack_discard(BLI_Stack *stack)
 void BLI_stack_clear(BLI_Stack *stack)
 {
 #ifdef USE_TOTELEM
-  if (UNLIKELY(stack->elem_num == 0)) {
+  if (stack->elem_num == 0) [[unlikely]] {
     return;
   }
   stack->elem_num = 0;
 #else
-  if (UNLIKELY(stack->chunk_curr == nullptr)) {
+  if (stack->chunk_curr == nullptr) [[unlikely]] {
     return;
   }
 #endif
@@ -254,3 +257,5 @@ bool BLI_stack_is_empty(const BLI_Stack *stack)
 #endif
   return (stack->chunk_curr == nullptr);
 }
+
+}  // namespace blender

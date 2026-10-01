@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup depsgraph
+ */
+
 #include "pipeline_from_ids.h"
 
 #include "DNA_layer_types.h"
@@ -76,7 +80,7 @@ class DepsgraphFromIDsRelationBuilder : public DepsgraphRelationBuilder {
 
 }  // namespace
 
-FromIDsBuilderPipeline::FromIDsBuilderPipeline(::Depsgraph *graph, Span<ID *> ids)
+FromIDsBuilderPipeline::FromIDsBuilderPipeline(blender::Depsgraph *graph, Span<ID *> ids)
     : AbstractBuilderPipeline(graph), ids_(ids)
 {
 }

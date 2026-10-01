@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'a7042ca30c82')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'2cef5b8c951a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-29 08:51+0000\n"
+"POT-Creation-Date: 2026-09-14 07:47+0000\n"
 "PO-Revision-Date: 2025-07-23 15:13+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Basque <https://translate.blender.org/projects/blender-ui/ui/eu/>\n"
@@ -207,6 +207,10 @@ msgid "Default"
 msgstr "Lehenetsia"
 
 
+msgid "Display Mode"
+msgstr "Bistaraketa Modua"
+
+
 msgid "Height"
 msgstr "Altuera"
 
@@ -243,6 +247,10 @@ msgid "File Browser"
 msgstr "Fitxategi Bilatzailea"
 
 
+msgid "Link"
+msgstr "Estekatu"
+
+
 msgid "Vector"
 msgstr "ektorea"
 
@@ -253,6 +261,10 @@ msgstr "Puntu"
 
 msgid "Layer"
 msgstr "Geruza"
+
+
+msgid "Object"
+msgstr "Objektua"
 
 
 msgid "+X"
@@ -269,10 +281,6 @@ msgstr "-X"
 
 msgid "-Y"
 msgstr "-Y"
-
-
-msgid "Object"
-msgstr "Objektua"
 
 
 msgid "Emit"
@@ -317,10 +325,6 @@ msgstr "Trazua"
 
 msgid "Curve"
 msgstr "Kurba"
-
-
-msgid "Look"
-msgstr "Ikusi"
 
 
 msgid "Temperature"
@@ -395,14 +399,6 @@ msgid "Environment"
 msgstr "Ingurunea"
 
 
-msgid "Display Mode"
-msgstr "Bistaraketa Modua"
-
-
-msgid "Link"
-msgstr "Estekatu"
-
-
 msgid "Time"
 msgstr "Denbora"
 
@@ -413,6 +409,14 @@ msgstr "Ezabatu"
 
 msgid "Normal"
 msgstr "Normala"
+
+
+msgid "Text"
+msgstr "Testua"
+
+
+msgid "Sound"
+msgstr "Soinua"
 
 
 msgid "Grid"
@@ -427,10 +431,6 @@ msgid "Tools"
 msgstr "Tresnak"
 
 
-msgid "Groups"
-msgstr "Taldeak"
-
-
 msgid "Local"
 msgstr "Lokala"
 
@@ -438,10 +438,6 @@ msgstr "Lokala"
 msgctxt "Curve"
 msgid "Sphere"
 msgstr "Esfera"
-
-
-msgid "Direction"
-msgstr "Norabidea"
 
 
 msgid "Sequence"
@@ -488,10 +484,6 @@ msgid "Angular Velocity"
 msgstr "Abiadura-angeluarra"
 
 
-msgid "Sound"
-msgstr "Soinua"
-
-
 msgid "Image Texture"
 msgstr "Irudiaren ehundura"
 
@@ -532,6 +524,10 @@ msgid "Owner"
 msgstr "Jabea"
 
 
+msgid "Direction"
+msgstr "Norabidea"
+
+
 msgctxt "UI_Events_KeyMaps"
 msgid "Delete"
 msgstr "Ezabatu"
@@ -539,6 +535,10 @@ msgstr "Ezabatu"
 
 msgid "Mouse"
 msgstr "Sagua"
+
+
+msgid "Groups"
+msgstr "Taldeak"
 
 
 msgid "Selected Objects"
@@ -553,28 +553,24 @@ msgid "Min Angle"
 msgstr "Angelu Minimoa"
 
 
-msgid "Relations"
-msgstr "Loturak"
-
-
 msgid "Show/Hide"
 msgstr "Erakutsi/Ezkutatu"
 
 
-msgid "Text"
-msgstr "Testua"
+msgid "Import"
+msgstr "Inportatu"
 
 
 msgid "UV"
 msgstr "UV"
 
 
+msgid "Relations"
+msgstr "Loturak"
+
+
 msgid "Show/Hide Faces"
 msgstr "Aurpegiak erakutsi/ezkutatu"
-
-
-msgid "Import"
-msgstr "Inportatu"
 
 
 msgid "Physics"
@@ -623,14 +619,6 @@ msgid "Starting"
 msgstr "Hasten"
 
 
-msgid "Shadow"
-msgstr "Itzala"
-
-
-msgid "Combined"
-msgstr "Konbinatuak"
-
-
 msgid "Translate"
 msgstr "Mugitu"
 
@@ -675,6 +663,10 @@ msgid "Z Axis"
 msgstr "Z Ardatza"
 
 
+msgid "Shadow"
+msgstr "Itzala"
+
+
 msgctxt "Operator"
 msgid "Console Execute"
 msgstr "Kontsola Exekutatu"
@@ -693,11 +685,6 @@ msgstr "Berria"
 msgctxt "Operator"
 msgid "Play Rendered Animation"
 msgstr "Renderizatutako Animazioa Erreproduzitu"
-
-
-msgctxt "Operator"
-msgid "Save System Info"
-msgstr "Sistemaren Informazioa Gorde"
 
 
 msgctxt "Operator"
@@ -727,6 +714,11 @@ msgstr "Gaitu"
 
 msgid "(undocumented operator)"
 msgstr "(Dokumentatu gabeko operadorea)"
+
+
+msgctxt "Operator"
+msgid "Select Directory"
+msgstr "Direktorioa hautatu"
 
 
 msgctxt "Operator"
@@ -888,6 +880,18 @@ msgid "Reset Original Length"
 msgstr "Jatorrizko Luzera Berrasieratu"
 
 
+msgid "Remove from selection"
+msgstr "Hautaketatik ezabatu"
+
+
+msgid "Toggle Selection"
+msgstr "Hautaketa txandakatu"
+
+
+msgid "Toggle the selection"
+msgstr "Hautaketa txandakatu"
+
+
 msgctxt "Operator"
 msgid "(De)select First"
 msgstr "(Ez)hautatu Lehena"
@@ -906,18 +910,6 @@ msgstr "Kurba Bikoiztu"
 msgctxt "Operator"
 msgid "Add Duplicate"
 msgstr "Bikoizketa Gehitu"
-
-
-msgid "Remove from selection"
-msgstr "Hautaketatik ezabatu"
-
-
-msgid "Toggle Selection"
-msgstr "Hautaketa txandakatu"
-
-
-msgid "Toggle the selection"
-msgstr "Hautaketa txandakatu"
 
 
 msgid "Object Types"
@@ -1079,11 +1071,6 @@ msgstr "(Ez)hautatu fitxategi guztiak"
 
 msgid "Select or deselect all files"
 msgstr "Hautatu edo ez-hautatu fitxategi guztiak"
-
-
-msgctxt "Operator"
-msgid "Select Directory"
-msgstr "Direktorioa hautatu"
 
 
 msgid "Next"
@@ -1294,6 +1281,11 @@ msgstr "Kurtsorea finkatu"
 
 
 msgctxt "Operator"
+msgid "Local View"
+msgstr "Bista Lokala"
+
+
+msgctxt "Operator"
 msgid "Grease Pencil Draw"
 msgstr "Arkatzez marraztu"
 
@@ -1445,6 +1437,10 @@ msgstr "Bikoiztu Estekatua"
 
 msgid "Mouse location"
 msgstr "Arratoiaren lokalizazioa"
+
+
+msgid "Combined"
+msgstr "Konbinatuak"
 
 
 msgctxt "Operator"
@@ -1629,11 +1625,6 @@ msgstr "Menua Hautatu"
 
 
 msgctxt "Operator"
-msgid "Local View"
-msgstr "Bista Lokala"
-
-
-msgctxt "Operator"
 msgid "Rotate View"
 msgstr "Bista Biratu"
 
@@ -1804,6 +1795,11 @@ msgid "Report a Bug"
 msgstr "Akats baten berri eman"
 
 
+msgctxt "Operator"
+msgid "Clear"
+msgstr "Garbitu"
+
+
 msgid "3D View"
 msgstr "3D Bista"
 
@@ -1826,11 +1822,6 @@ msgid "Priority"
 msgstr "Lehentasuna"
 
 
-msgctxt "Operator"
-msgid "Clear"
-msgstr "Garbitu"
-
-
 msgid "Lower"
 msgstr "Baxua"
 
@@ -1845,18 +1836,13 @@ msgstr "Gorde honela..."
 
 
 msgctxt "Operator"
-msgid "Color"
-msgstr "Kolorea"
-
-
-msgctxt "Operator"
 msgid "Text"
 msgstr "Testua"
 
 
 msgctxt "Operator"
-msgid "Scene..."
-msgstr "Eszena"
+msgid "Color"
+msgstr "Kolorea"
 
 
 msgctxt "Text"
@@ -1883,6 +1869,11 @@ msgstr "Testua: Barnekoa"
 
 
 msgctxt "Operator"
+msgid "Save Copy..."
+msgstr "Kopia gorde..."
+
+
+msgctxt "Operator"
 msgid "Quit"
 msgstr "Irten"
 
@@ -1890,11 +1881,6 @@ msgstr "Irten"
 msgctxt "Operator"
 msgid "Render Animation"
 msgstr "Animazioa"
-
-
-msgctxt "Operator"
-msgid "Save Copy..."
-msgstr "Kopia gorde..."
 
 
 msgctxt "Operator"
@@ -1967,6 +1953,10 @@ msgstr "Helbide hutsa, ezin da gorde"
 
 msgid "Path too long, cannot save"
 msgstr "Helbide oso luzea, ezin da gorde"
+
+
+msgid "Look"
+msgstr "Ikusi"
 
 
 msgctxt "Action"

@@ -378,16 +378,6 @@ class CLIP_OT_delete_proxy(Operator):
             self._rmproxy(d + "_undistorted")
             self._rmproxy(os.path.join(absproxy, "proxy_{:d}.avi".format(x)))
 
-        tc = (
-            "free_run.blen_tc",
-            "interp_free_run.blen_tc",
-            "record_run.blen_tc",
-            "record_run_no_gaps.blen_tc",
-        )
-
-        for x in tc:
-            self._rmproxy(os.path.join(absproxy, x))
-
         # Remove proxy per-clip directory.
         try:
             os.rmdir(absproxy)
@@ -732,7 +722,7 @@ class CLIP_OT_setup_tracking_scene(Operator):
         rlayer_fg = tree.nodes.new(type='CompositorNodeRLayers')
         rlayer_bg = tree.nodes.new(type='CompositorNodeRLayers')
         output = tree.nodes.new(type='NodeGroupOutput')
-        tree.interface.new_socket(name="Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+        tree.interface.new_socket(name="Image", in_out='OUTPUT', socket_type="NodeSocketColor")
 
         movieclip = tree.nodes.new(type='CompositorNodeMovieClip')
         distortion = tree.nodes.new(type='CompositorNodeMovieDistortion')
@@ -749,12 +739,12 @@ class CLIP_OT_setup_tracking_scene(Operator):
         movieclip.clip = clip
 
         distortion.clip = clip
-        distortion.distortion_type = 'UNDISTORT'
+        distortion.inputs['Type'].default_value = 'Undistort'
 
         if need_stabilization:
             stabilize.clip = clip
 
-        scale.space = 'RENDER_SIZE'
+        scale.inputs['Type'].default_value = 'Render Size'
 
         rlayer_bg.scene = scene
         rlayer_bg.layer = "Background"
@@ -771,15 +761,15 @@ class CLIP_OT_setup_tracking_scene(Operator):
         else:
             tree.links.new(distortion.outputs["Image"], scale.inputs["Image"])
 
-        tree.links.new(scale.outputs["Image"], shadowcatcher.inputs[1])
+        tree.links.new(scale.outputs["Image"], shadowcatcher.inputs["Background"])
 
-        tree.links.new(rlayer_bg.outputs["Image"], shadowcatcher.inputs[2])
+        tree.links.new(rlayer_bg.outputs["Image"], shadowcatcher.inputs["Foreground"])
 
-        tree.links.new(rlayer_fg.outputs["Image"], alphaover.inputs[2])
+        tree.links.new(rlayer_fg.outputs["Image"], alphaover.inputs["Foreground"])
 
-        tree.links.new(shadowcatcher.outputs["Image"], alphaover.inputs[1])
+        tree.links.new(shadowcatcher.outputs["Image"], alphaover.inputs["Background"])
 
-        tree.links.new(alphaover.outputs["Image"], output.inputs[0])
+        tree.links.new(alphaover.outputs["Image"], output.inputs["Image"])
         tree.links.new(alphaover.outputs["Image"], viewer.inputs["Image"])
 
         # Place nodes.

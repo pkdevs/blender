@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_rna_define.hh"
 
 namespace blender::nodes {
@@ -33,7 +37,8 @@ PropertyRNA *RNA_def_node_enum(StructRNA *srna,
                                const bool allow_animation)
 {
   PropertyRNA *prop = RNA_def_property(srna, identifier, PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_funcs_runtime(prop, accessors.getter, accessors.setter, item_func);
+  RNA_def_property_enum_funcs_runtime(
+      prop, accessors.getter, accessors.setter, item_func, nullptr, nullptr);
   RNA_def_property_enum_items(prop, static_items);
   if (default_value.has_value()) {
     RNA_def_property_enum_default(prop, *default_value);
@@ -59,7 +64,8 @@ PropertyRNA *RNA_def_node_boolean(StructRNA *srna,
                                   bool allow_animation)
 {
   PropertyRNA *prop = RNA_def_property(srna, identifier, PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_funcs_runtime(prop, accessors.getter, accessors.setter);
+  RNA_def_property_boolean_funcs_runtime(
+      prop, accessors.getter, accessors.setter, nullptr, nullptr);
   if (default_value.has_value()) {
     RNA_def_property_boolean_default(prop, *default_value);
   }

@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "BLI_assert.h"
-#include "BLI_compiler_compat.h"
+#include "BLI_assert.hh"
+#include "BLI_compiler_compat.hh"
 
 #include "BKE_subdiv.hh"
 
@@ -24,6 +24,11 @@ BLI_INLINE void ptex_face_uv_to_grid_uv(const float ptex_u,
 {
   *r_grid_u = 1.0f - ptex_v;
   *r_grid_v = 1.0f - ptex_u;
+}
+
+BLI_INLINE float2 ptex_face_uv_to_grid_uv(const float2 &ptex_uv)
+{
+  return float2(1.0f - ptex_uv.y, 1.0f - ptex_uv.x);
 }
 
 BLI_INLINE void grid_uv_to_ptex_face_uv(const float grid_u,
@@ -70,6 +75,22 @@ BLI_INLINE int rotate_quad_to_corner(const float quad_u,
   return corner;
 }
 
+BLI_INLINE float2 rotate_quad_to_corner(const int corner, const float2 &quad)
+{
+  switch (corner) {
+    case 0:
+      return 2.0f * quad;
+    case 1:
+      return {2.0f * quad.y, 2.0f * (1.0f - quad.x)};
+    case 2:
+      return 2.0f * (1.0f - quad);
+    case 3:
+    default:
+      BLI_assert(corner == 3);
+      return {2.0f * (1.0f - quad.y), 2.0f * quad.x};
+  }
+}
+
 BLI_INLINE void rotate_grid_to_quad(
     const int corner, const float grid_u, const float grid_v, float *r_quad_u, float *r_quad_v)
 {
@@ -100,6 +121,11 @@ BLI_INLINE float crease_to_sharpness(float crease)
 BLI_INLINE float sharpness_to_crease(float sharpness)
 {
   return sqrt(sharpness * 0.1f);
+}
+
+BLI_INLINE float4 quad_weights_from_uv(float u, float v)
+{
+  return {(1.0f - u) * (1.0f - v), u * (1.0f - v), u * v, (1.0f - u) * v};
 }
 
 }  // namespace blender::bke::subdiv

@@ -18,7 +18,8 @@ class TileManager;
 
 class RenderWork {
  public:
-  int resolution_divider = 1;
+  float resolution_divider = 1;
+  float denoised_resolution_divider = 1;
 
   /* Initialize render buffers.
    * Includes steps like zeroing the buffer on the device, and optional reading of pixels from the
@@ -77,6 +78,9 @@ class RenderWork {
    * Note that the scheduler does not know anything about devices, so if there is only a single
    * device used, then it is up for the PathTracer to ignore the balancing. */
   bool rebalance = false;
+
+  /* Perform volume guiding buffer denoise. */
+  bool volume_guiding_denoise = false;
 
   /* Conversion to bool, to simplify checks about whether there is anything to be done for this
    * work. */
@@ -207,6 +211,7 @@ class RenderScheduler {
   void report_rebalance_time(const RenderWork &render_work,
                              const double time,
                              bool balance_changed);
+  void report_volume_guiding_denoise_time(const RenderWork &render_work, const double time);
 
   /* Generate full multi-line report of the rendering process, including rendering parameters,
    * times, and so on. */
@@ -243,6 +248,9 @@ class RenderScheduler {
   /* Check whether denoising is active during interactive update while resolution divider is not
    * unit. */
   bool is_denoise_active_during_update() const;
+
+  /* Check whether a real-time denoiser like DLSS is active. */
+  bool is_denoiser_interactive() const;
 
   /* Heuristic which aims to give perceptually pleasant update of display interval in a way that at
    * lower samples and near the beginning of rendering, updates happen more often, but with higher
@@ -435,6 +443,7 @@ class RenderScheduler {
   TimeWithAverage denoise_time_;
   TimeWithAverage display_update_time_;
   TimeWithAverage rebalance_time_;
+  TimeWithAverage volume_guiding_denoise_time_;
 
   /* Whether cryptomatte-related work will be scheduled. */
   bool need_schedule_cryptomatte_ = false;

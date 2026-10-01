@@ -23,11 +23,10 @@ PyDoc_STRVAR(
     "\n"
     "   Always returns true.\n"
     "\n"
-    "   :arg it: An Interface0DIterator object.\n"
+    "   :param it: An Interface0DIterator object.\n"
     "   :type it: :class:`freestyle.types.Interface0DIterator`\n"
     "   :return: True.\n"
     "   :rtype: bool\n");
-
 static int TrueUP0D___init__(BPy_TrueUP0D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};

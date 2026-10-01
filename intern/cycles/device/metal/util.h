@@ -15,7 +15,7 @@
 
 #  include "util/thread.h"
 
-#  define metal_printf LOG_STATS << string_printf
+#  define metal_printf LOG_TRACE << string_printf
 
 CCL_NAMESPACE_BEGIN
 
@@ -37,13 +37,6 @@ struct MetalInfo {
   static int optimal_sort_partition_elements();
   static string get_device_name(id<MTLDevice> device);
 };
-
-void metal_gpu_address_helper_init(id<MTLDevice> device);
-
-uint64_t metal_gpuAddress(id<MTLBuffer> buffer);
-uint64_t metal_gpuResourceID(id<MTLTexture> texture);
-uint64_t metal_gpuResourceID(id<MTLAccelerationStructure> accel_struct);
-uint64_t metal_gpuResourceID(id<MTLIntersectionFunctionTable> ift);
 
 CCL_NAMESPACE_END
 

@@ -7,8 +7,8 @@
 /** \file
  * \ingroup bli
  *
- * A `blender::MultiValueMap<Key, Value>` is an unordered associative container that stores
- * key-value pairs. It is different from `blender::Map` in that it can store multiple values for
+ * A `MultiValueMap<Key, Value>` is an unordered associative container that stores
+ * key-value pairs. It is different from `Map` in that it can store multiple values for
  * the same key. The list of values that corresponds to a specific key can contain duplicates
  * and their order is maintained.
  *
@@ -21,7 +21,6 @@
  */
 
 #include "BLI_map.hh"
-#include "BLI_struct_equality_utils.hh"
 #include "BLI_vector.hh"
 
 namespace blender {
@@ -145,6 +144,14 @@ template<typename Key, typename Value> class MultiValueMap {
   /**
    * NOTE: This signature will change when the implementation changes.
    */
+  typename MapType::MutableItemIterator items()
+  {
+    return map_.items();
+  }
+
+  /**
+   * NOTE: This signature will change when the implementation changes.
+   */
   typename MapType::KeyIterator keys() const
   {
     return map_.keys();
@@ -154,6 +161,14 @@ template<typename Key, typename Value> class MultiValueMap {
    * NOTE: This signature will change when the implementation changes.
    */
   typename MapType::ValueIterator values() const
+  {
+    return map_.values();
+  }
+
+  /**
+   * NOTE: This signature will change when the implementation changes.
+   */
+  typename MapType::MutableValueIterator values()
   {
     return map_.values();
   }
@@ -168,7 +183,7 @@ template<typename Key, typename Value> class MultiValueMap {
     map_.clear_and_shrink();
   }
 
-  BLI_STRUCT_EQUALITY_OPERATORS_1(MultiValueMap, map_)
+  friend bool operator==(const MultiValueMap &a, const MultiValueMap &b) = default;
 };
 
 }  // namespace blender

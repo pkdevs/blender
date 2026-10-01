@@ -13,8 +13,9 @@
 #  include <mutex>
 
 #  include "BLI_mutex.hh"
-#  include "BLI_threads.h"
 #  include "BLI_vector.hh"
+
+#  include "movie_util.hh"
 
 extern "C" {
 #  include <libavutil/opt.h>
@@ -23,6 +24,8 @@ extern "C" {
 
 #  include "ffmpeg_compat.h"
 }
+
+namespace blender {
 
 /* libswscale context creation and destruction is expensive.
  * Maintain a cache of already created contexts. */
@@ -42,9 +45,9 @@ struct SwscaleContext {
   bool is_used = false;
 };
 
-static blender::Mutex swscale_cache_lock;
+static Mutex swscale_cache_lock;
 static int64_t swscale_cache_timestamp = 0;
-static blender::Vector<SwscaleContext> *swscale_cache = nullptr;
+static Vector<SwscaleContext> *swscale_cache = nullptr;
 
 static SwsContext *sws_create_context(int src_width,
                                       int src_height,
@@ -68,7 +71,7 @@ static SwsContext *sws_create_context(int src_width,
   av_opt_set_int(c, "dsth", dst_height, 0);
   av_opt_set_int(c, "dst_format", av_dst_format, 0);
   av_opt_set_int(c, "sws_flags", sws_flags, 0);
-  av_opt_set_int(c, "threads", BLI_system_thread_count(), 0);
+  av_opt_set_int(c, "threads", MOV_thread_count(), 0);
 
   if (sws_init_context(c, nullptr, nullptr) < 0) {
     sws_freeContext(c);
@@ -93,7 +96,7 @@ static SwsContext *sws_create_context(int src_width,
 static void init_swscale_cache_if_needed()
 {
   if (swscale_cache == nullptr) {
-    swscale_cache = new blender::Vector<SwscaleContext>();
+    swscale_cache = new Vector<SwscaleContext>();
     swscale_cache_timestamp = 0;
   }
 }
@@ -264,3 +267,5 @@ void ffmpeg_sws_scale_frame(SwsContext *ctx, AVFrame *dst, const AVFrame *src)
 }
 
 #endif /* WITH_FFMPEG */
+
+}  // namespace blender

@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_string_utf8_symbols.hh"
 #include "BLI_vector.hh"
 
 #include "testing/testing.h"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender::tests {
 
@@ -401,6 +401,64 @@ TEST(string_ref, TrimCharacter)
   EXPECT_EQ(ref3.trim('\000'), "does this work?");
 }
 
+TEST(string_ref, TrimLeftArbitrary)
+{
+  StringRef ref1("test");
+  StringRef ref2("   test ");
+  StringRef ref3(" \t  Urož with spaces ");
+  StringRef ref4("žžžžleepyžžž");
+  EXPECT_EQ(ref1.trim_left("t"), "est");
+  EXPECT_EQ(ref1.trim_left("te"), "st");
+  EXPECT_EQ(ref1.trim_left("et"), "st");
+  EXPECT_EQ(ref1.trim_left("tes"), "");
+  EXPECT_EQ(ref1.trim_left("est"), "");
+  EXPECT_EQ(ref2.trim_left("t"), "   test ");
+  EXPECT_EQ(ref2.trim_left(""), "   test ");
+  EXPECT_EQ(ref3.trim_left(" "), "\t  Urož with spaces ");
+  EXPECT_EQ(ref4.trim_left("ž"), "leepyžžž");
+}
+
+TEST(string_ref, TrimLeftWhitespace)
+{
+  StringRef ref1("test");
+  StringRef ref2("   test ");
+  StringRef ref3(" \t  Urož with spaces ");
+  StringRef ref4(" \t \n\r  \t ");
+  EXPECT_EQ(ref1.trim_left(), "test");
+  EXPECT_EQ(ref2.trim_left(), "test ");
+  EXPECT_EQ(ref3.trim_left(), "Urož with spaces ");
+  EXPECT_EQ(ref4.trim_left(), "");
+}
+
+TEST(string_ref, TrimRightArbitrary)
+{
+  StringRef ref1("test");
+  StringRef ref2("   test ");
+  StringRef ref3(" \t  Urož with spaces ");
+  StringRef ref4("žžžžleepyžžž");
+  EXPECT_EQ(ref1.trim_right("t"), "tes");
+  EXPECT_EQ(ref1.trim_right("te"), "tes");
+  EXPECT_EQ(ref1.trim_right("et"), "tes");
+  EXPECT_EQ(ref1.trim_right("test"), "");
+  EXPECT_EQ(ref1.trim_right("est"), "");
+  EXPECT_EQ(ref2.trim_right("t"), "   test ");
+  EXPECT_EQ(ref2.trim_right(""), "   test ");
+  EXPECT_EQ(ref3.trim_right(" "), " \t  Urož with spaces");
+  EXPECT_EQ(ref4.trim_right("ž"), "žžžžleepy");
+}
+
+TEST(string_ref, TrimRightWhitespace)
+{
+  StringRef ref1("test");
+  StringRef ref2("   test ");
+  StringRef ref3(" \t  Urož with spaces ");
+  StringRef ref4(" \t \n\r  \t ");
+  EXPECT_EQ(ref1.trim_right(), "test");
+  EXPECT_EQ(ref2.trim_right(), "   test");
+  EXPECT_EQ(ref3.trim_right(), " \t  Urož with spaces");
+  EXPECT_EQ(ref4.trim_right(), "");
+}
+
 TEST(string_ref, Substr)
 {
   StringRef ref("hello world");
@@ -460,6 +518,58 @@ TEST(string_ref, CopyUtf8Truncated)
       char dst[5];
       ref.copy_utf8_truncated(dst);
       EXPECT_EQ(StringRef(dst), BLI_STR_UTF8_SUPERSCRIPT_2 BLI_STR_UTF8_SUPERSCRIPT_2);
+    }
+  }
+}
+
+TEST(string_ref, CopyBytesTruncated)
+{
+  {
+    StringRef ref("hello");
+    char dst[10];
+    memset(dst, 0xFF, 10);
+    ref.copy_bytes_truncated(dst);
+    EXPECT_EQ(dst[5], '\0');
+    EXPECT_EQ(dst[6], 0xFF);
+    EXPECT_EQ(ref, dst);
+  }
+  {
+    StringRef ref("0123456789");
+    char dst[4];
+    memset(dst, 0xFF, 4);
+    ref.copy_bytes_truncated(dst);
+    EXPECT_EQ(dst[0], '0');
+    EXPECT_EQ(dst[1], '1');
+    EXPECT_EQ(dst[2], '2');
+    EXPECT_EQ(dst[3], '\0');
+  }
+  {
+    /* Simple 4 byte string. */
+    StringRef ref("01234");
+    {
+      char dst[1];
+      ref.copy_bytes_truncated(dst);
+      EXPECT_EQ(dst[0], '\0');
+    }
+    {
+      char dst[2];
+      ref.copy_bytes_truncated(dst);
+      EXPECT_EQ(dst[0], '0');
+    }
+    {
+      char dst[3];
+      ref.copy_bytes_truncated(dst);
+      EXPECT_EQ(StringRef(dst), "01");
+    }
+    {
+      char dst[4];
+      ref.copy_bytes_truncated(dst);
+      EXPECT_EQ(StringRef(dst), "012");
+    }
+    {
+      char dst[5];
+      ref.copy_bytes_truncated(dst);
+      EXPECT_EQ(StringRef(dst), "0123");
     }
   }
 }
