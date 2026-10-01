@@ -149,6 +149,21 @@ class TestObjectEdit(unittest.TestCase):
         self.assertEqual(tuple(data.attributes["radiance:sh_2"].data[0].vector), (3.0, 3.0, 3.0))
         self._assert_gaussian_splat_transformed(data, 1)
 
+    def test_join_gaussian_splats_into_points(self):
+        splats = self._add_gaussian_splat_object()
+        points = bpy.data.objects.new("Points", bpy.data.pointclouds.new("Points"))
+        points.data.resize(2)
+        bpy.context.collection.objects.link(points)
+        bpy.ops.object.select_all(action='DESELECT')
+        splats.select_set(True)
+        points.select_set(True)
+        bpy.context.view_layer.objects.active = points
+        bpy.ops.object.join()
+
+        # The result type does not depend on which object is active.
+        self.assertEqual(points.data.type, 'GAUSSIAN_SPLAT')
+        self.assertEqual(len(points.data.attributes["position"].data), 3)
+
     def test_auto_smooth_detection(self):
         bpy.ops.mesh.primitive_cube_add()
         ob = bpy.context.object

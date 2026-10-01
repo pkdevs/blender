@@ -1501,10 +1501,16 @@ static void execute_realize_pointcloud_tasks(const RealizeInstancesOptions &opti
     return;
   }
 
-  /* Allocate new point cloud. */
+  /* Allocate new point cloud. The result is a gaussian splat point cloud if any of the realized
+   * point clouds is one, independent of their order. */
+  const bool is_gsplat = std::any_of(
+      tasks.begin(), tasks.end(), [](const RealizePointCloudTask &task) {
+        return task.pointcloud_info->pointcloud->type == PointCloudType::GSplat;
+      });
   const RealizePointCloudTask &first_task = tasks.first();
   const PointCloud &first_pointcloud = *first_task.pointcloud_info->pointcloud;
-  PointCloud *dst_pointcloud = BKE_pointcloud_new_nomain(first_pointcloud.type, tot_points);
+  PointCloud *dst_pointcloud = BKE_pointcloud_new_nomain(
+      is_gsplat ? PointCloudType::GSplat : PointCloudType::Points, tot_points);
   r_result.geometry.replace_pointcloud(dst_pointcloud);
   bke::MutableAttributeAccessor dst_attributes = dst_pointcloud->attributes_for_write();
 

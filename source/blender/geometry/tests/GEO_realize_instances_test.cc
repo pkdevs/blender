@@ -20,6 +20,7 @@
 #include "DNA_curves_types.h"
 #include "DNA_pointcloud_types.h"
 
+#include "GEO_join_geometries.hh"
 #include "GEO_realize_instances.hh"
 #include "GEO_transform.hh"
 
@@ -392,6 +393,27 @@ TEST_F(RealizeInstancesTest, PointsAttributesAreNotTransformed)
     expect_near(read<float3>(result, "radiance:sh_0", slice),
                 read<float3>(src, "radiance:sh_0", all),
                 0.0f);
+  }
+}
+
+TEST_F(RealizeInstancesTest, MixedPointsAndGSplatsGiveGSplats)
+{
+  const GeometrySet points = GeometrySet::from_pointcloud(
+      create_splats(PointCloudType::Points, 2, false, 0, 8));
+  const GeometrySet splats = GeometrySet::from_pointcloud(
+      create_splats(PointCloudType::GSplat, 3, true, 3, 9));
+  for (const Array<GeometrySet> &inputs :
+       {Array<GeometrySet>{points, splats}, Array<GeometrySet>{splats, points}})
+  {
+    GeometrySet result_geometry;
+    const PointCloud &result = realize(
+        create_instances(inputs, {0, 1}, {float4x4::identity(), float4x4::identity()}),
+        result_geometry);
+    EXPECT_EQ(result.type, PointCloudType::GSplat);
+    EXPECT_EQ(result.totpoint, 5);
+
+    const GeometrySet joined = join_geometries(inputs, AttributeFilter::default_filter());
+    EXPECT_EQ(joined.get_pointcloud()->type, PointCloudType::GSplat);
   }
 }
 
