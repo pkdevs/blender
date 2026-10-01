@@ -617,7 +617,7 @@ const EnumPropertyItem rna_enum_node_grease_pencil_stroke_type_items[] = {
      "BOTH",
      ICON_GP_DRAW_BOTH,
      "Both",
-     "Set the color and opacity for the both stroke points and fills"},
+     "Set the color and opacity for stroke points and fills together"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
