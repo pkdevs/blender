@@ -1315,7 +1315,7 @@ static void wm_operator_finished(bContext *C,
     }
     else if (has_undo_step) {
       /* An undo step was added but the operator wasn't registered (and won't register itself),
-       * therefor a redo panel wouldn't redo this action but the previous registered action,
+       * therefore a redo panel wouldn't redo this action but the previous registered action,
        * causing the "redo" to remove/loose this operator. See: #101743.
        * Register check is needed so nested operator calls don't clear the HUD. See: #103587. */
       if (!(has_register || do_register)) {
@@ -4156,7 +4156,9 @@ static void wm_event_handle_xrevent(wmWindowManager *wm,
   }
 
   /* The undo operator may have re-allocated the XR context Scene and Main data pointers.
-   * Prevent dangling pointers in the main Blender context by re-assigning them as needed. */
+   * Prevent dangling pointers in the main Blender context by re-assigning them as needed.
+   *
+   * This is the inverse of the re-anchoring in #WM_xr_session_context_ensure(). */
   CTX_data_main_set(main_context, CTX_data_main(xr_context));
   if (ctx_xr_main_scene_match) {
     CTX_data_scene_set(main_context, CTX_data_scene(xr_context));

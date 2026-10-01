@@ -28,6 +28,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_rect.hh"
+#include "BLI_set.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
@@ -414,8 +415,10 @@ static void image_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   }
   writer->write_struct(ima->stereo3d_format);
 
-  writer->write_struct_list(&ima->tiles, [](BlendStructWriter<ImageTile> &struct_writer) {
-    struct_writer.shallow_data.runtime = {};
+  writer->write_struct_list(&ima->tiles, [&](BlendStructWriter<ImageTile> &struct_writer) {
+    if (!is_undo) {
+      struct_writer.shallow_data.runtime = {};
+    }
   });
 
   ima->packedfile = nullptr;
@@ -531,7 +534,8 @@ static ImBuf *image_acquire_ibuf(Image *ima,
                                  ImageUser *iuser,
                                  void **r_lock,
                                  const bool ensure_host_buffer,
-                                 bool *r_load_failed = nullptr);
+                                 bool *r_load_failed = nullptr,
+                                 const bool cached_only = false);
 static void image_update_views_format(Image *ima, ImageUser *iuser);
 static void image_add_view(Image *ima, const char *viewname, const char *filepath);
 
@@ -695,6 +699,23 @@ void BKE_image_free_buffers(Image *ima)
   BKE_image_free_buffers_ex(ima, false);
 }
 
+/* Gather image buffers used by a multilayer image. */
+static Set<const ImBuf *> image_multilayer_ibufs(const Image &ima)
+{
+  Set<const ImBuf *> buffers;
+  if (ima.type != IMA_TYPE_MULTILAYER || ima.rr == nullptr) {
+    return buffers;
+  }
+  for (const RenderLayer &rl : ima.rr->layers) {
+    for (const RenderPass &rpass : rl.passes) {
+      if (rpass.ibuf) {
+        buffers.add(rpass.ibuf);
+      }
+    }
+  }
+  return buffers;
+}
+
 void BKE_image_free_old_buffers(Main *bmain)
 {
   static int64_t lasttime = 0;
@@ -724,6 +745,8 @@ void BKE_image_free_old_buffers(Main *bmain)
     {
       std::scoped_lock lock(ima.runtime->cache_mutex);
 
+      const Set<const ImBuf *> multilayer_ibufs = image_multilayer_ibufs(ima);
+
       /* Gather entries to remove. */
       Vector<ImageCacheKey> to_remove;
       ImBufCacheIter *iter = IMB_cacheIter_new(ima.runtime->cache);
@@ -732,9 +755,11 @@ void BKE_image_free_old_buffers(Main *bmain)
         if (ibuf != nullptr) {
           /* GPU buffers: free when past timeout and image buffer is not used elsewhere. */
           bool freed_gpu = false;
+          /* Multilayer images have another reference we need to account for. */
+          const int owner_refs = multilayer_ibufs.contains(ibuf) ? 1 : 0;
           if (ctime - ibuf->gpu.lastused > U.textimeout) {
             if ((ibuf->gpu.texture || ibuf->gpu.flag & IMB_GPU_LOAD_FAILED) &&
-                ibuf->refcounter == 0)
+                ibuf->refcounter == owner_refs)
             {
               IMB_free_gpu_textures(ibuf);
               freed_gpu = true;
@@ -760,6 +785,12 @@ void BKE_image_free_old_buffers(Main *bmain)
       /* Remove entries. */
       for (const ImageCacheKey &key : to_remove) {
         imagecache_remove(&ima, key);
+      }
+
+      /* Also free multilayer render result when all buffers are unused. */
+      if (!any_buffer_left && !multilayer_ibufs.is_empty()) {
+        RE_FreeRenderResult(ima.rr);
+        ima.rr = nullptr;
       }
     }
 
@@ -1117,7 +1148,7 @@ static void image_init_color_management(Image *ima)
 
   /* Will set input color space to image format default's. */
   ibuf = IMB_load_image_from_filepath(
-      filepath, ImBufFlags::Test | ImBufFlags::AlphaDetect, ima->colorspace_settings.name);
+      filepath, ImBufFlags::Test | ImBufFlags::AlphaDetect, &ima->colorspace_settings);
 
   if (ibuf) {
     if (flag_is_set(ibuf->flags, ImBufFlags::AlphaPremul)) {
@@ -1310,7 +1341,7 @@ static ImBuf *add_ibuf_for_tile(Image *ima, ImageTile *tile)
       const char *colorspace = IMB_colormanagement_role_colorspace_name_get(
           COLOR_ROLE_SCENE_LINEAR);
 
-      STRNCPY_UTF8(ima->colorspace_settings.name, colorspace);
+      IMB_colormanagement_colorspace_settings_set(&ima->colorspace_settings, colorspace);
     }
 
     if (ibuf != nullptr) {
@@ -1335,7 +1366,7 @@ static ImBuf *add_ibuf_for_tile(Image *ima, ImageTile *tile)
       const char *colorspace = IMB_colormanagement_role_colorspace_name_get(
           COLOR_ROLE_DEFAULT_BYTE);
 
-      STRNCPY_UTF8(ima->colorspace_settings.name, colorspace);
+      IMB_colormanagement_colorspace_settings_set(&ima->colorspace_settings, colorspace);
     }
 
     if (ibuf != nullptr) {
@@ -1414,8 +1445,8 @@ Image *BKE_image_add_generated(Main *bmain,
   copy_v4_v4(tile->gen_color, color);
 
   if (is_data) {
-    STRNCPY_UTF8(ima->colorspace_settings.name,
-                 IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DATA));
+    IMB_colormanagement_colorspace_settings_set(
+        &ima->colorspace_settings, IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DATA));
   }
 
   for (view_id = 0; view_id < 2; view_id++) {
@@ -1450,7 +1481,7 @@ static void image_colorspace_from_imbuf(Image *image, const ImBuf *ibuf)
   }
 
   if (colorspace_name) {
-    STRNCPY_UTF8(image->colorspace_settings.name, colorspace_name);
+    IMB_colormanagement_colorspace_settings_set(&image->colorspace_settings, colorspace_name);
   }
 }
 
@@ -2853,11 +2884,12 @@ MovieReader *openanim_noload(const char *filepath,
                              const ImBufFlags flags,
                              const int streamindex,
                              const bool keep_original_colorspace,
-                             char colorspace[IMA_MAX_SPACE])
+                             ColorManagedColorspaceSettings *colorspace_settings)
 {
   MovieReader *anim;
 
-  anim = MOV_open_file(filepath, flags, streamindex, keep_original_colorspace, colorspace);
+  anim = MOV_open_file(
+      filepath, flags, streamindex, keep_original_colorspace, colorspace_settings);
   return anim;
 }
 
@@ -2865,12 +2897,13 @@ MovieReader *openanim(const char *filepath,
                       const ImBufFlags ibuf_flags,
                       const int streamindex,
                       const bool keep_original_colorspace,
-                      char colorspace[IMA_MAX_SPACE])
+                      ColorManagedColorspaceSettings *colorspace_settings)
 {
   MovieReader *anim;
   ImBuf *ibuf;
 
-  anim = MOV_open_file(filepath, ibuf_flags, streamindex, keep_original_colorspace, colorspace);
+  anim = MOV_open_file(
+      filepath, ibuf_flags, streamindex, keep_original_colorspace, colorspace_settings);
   if (anim == nullptr) {
     return nullptr;
   }
@@ -4231,6 +4264,11 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int e
     // else printf("pass not found\n");
   }
 
+  /* Cache null to indicate failed load. */
+  if (ibuf == nullptr && ima->rr == nullptr) {
+    image_assign_ibuf(ima, nullptr, iuser ? iuser->multi_index : 0, entry);
+  }
+
   return ibuf;
 }
 
@@ -4255,7 +4293,7 @@ static ImBuf *load_movie_single(Image *ima, ImageUser *iuser, int frame, const i
     BKE_image_user_file_path(&iuser_t, ima, filepath);
 
     /* FIXME: make several stream accessible in image editor, too. */
-    ia->anim = openanim(filepath, flags, 0, false, ima->colorspace_settings.name);
+    ia->anim = openanim(filepath, flags, 0, false, &ima->colorspace_settings);
 
     /* let's initialize this user */
     if (ia->anim && iuser && iuser->frames == 0) {
@@ -4357,7 +4395,7 @@ static ImBuf *load_image_single(Image *ima,
                                             flag,
                                             "<packed data>",
                                             nullptr,
-                                            ima->colorspace_settings.name);
+                                            &ima->colorspace_settings);
           if (ibuf && flag_is_set(ibuf->flags, ImBufFlags::MultiLayer)) {
             exr_handle = IMB_exr_open_multilayer_from_memory(data, imapf.packedfile->size);
           }
@@ -4390,7 +4428,7 @@ static ImBuf *load_image_single(Image *ima,
     BKE_image_user_file_path(&iuser_t, ima, filepath);
 
     /* read ibuf */
-    ibuf = IMB_load_image_from_filepath(filepath, flag, ima->colorspace_settings.name);
+    ibuf = IMB_load_image_from_filepath(filepath, flag, &ima->colorspace_settings);
     if (ibuf && flag_is_set(ibuf->flags, ImBufFlags::MultiLayer)) {
       exr_handle = IMB_exr_open_multilayer(filepath);
     }
@@ -4558,7 +4596,7 @@ void BKE_image_populate_cache_from_autosave(Image *ima)
           flag,
           "<packed data>",
           nullptr,
-          ima->colorspace_settings.name);
+          &ima->colorspace_settings);
       if (ibuf) {
         ibuf->userflags |= IB_BITMAPDIRTY;
         image_assign_ibuf(ima, ibuf, index, entry);
@@ -4595,6 +4633,11 @@ static ImBuf *image_get_ibuf_multilayer(Image *ima, ImageUser *iuser)
 
       image_assign_ibuf(ima, ibuf, iuser ? iuser->multi_index : IMA_NO_INDEX, 0);
     }
+  }
+
+  /* Cache null to indicate failed load. */
+  if (ibuf == nullptr && ima->rr == nullptr) {
+    image_assign_ibuf(ima, nullptr, iuser ? iuser->multi_index : IMA_NO_INDEX, 0);
   }
 
   return ibuf;
@@ -4845,7 +4888,8 @@ static ImBuf *image_acquire_ibuf(Image *ima,
                                  ImageUser *iuser,
                                  void **r_lock,
                                  const bool ensure_host_buffer,
-                                 bool *r_load_failed)
+                                 bool *r_load_failed,
+                                 const bool cached_only)
 {
   ImBuf *ibuf = nullptr;
   int entry = 0, index = 0;
@@ -4868,6 +4912,11 @@ static ImBuf *image_acquire_ibuf(Image *ima,
     if (r_load_failed) {
       *r_load_failed = true;
     }
+    return nullptr;
+  }
+
+  if (ibuf == nullptr && cached_only) {
+    /* Don't load from file. */
     return nullptr;
   }
 
@@ -4990,14 +5039,15 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock)
 
 /* Identical to BKE_image_acquire_ibuf but passing false to the ensure_host_buffer argument for the
  * image_acquire_ibuf function. */
-ImBuf *BKE_image_acquire_ibuf_gpu(Image *ima, ImageUser *iuser, void **r_lock, bool *r_load_failed)
+ImBuf *BKE_image_acquire_ibuf_gpu(
+    Image *ima, ImageUser *iuser, void **r_lock, bool *r_load_failed, const bool cached_only)
 {
   if (ima == nullptr) {
     return nullptr;
   }
 
   std::scoped_lock lock(ima->runtime->cache_mutex);
-  return image_acquire_ibuf(ima, iuser, r_lock, false, r_load_failed);
+  return image_acquire_ibuf(ima, iuser, r_lock, false, r_load_failed, cached_only);
 }
 
 static int get_multilayer_view_index(const Image &image,
