@@ -2141,28 +2141,6 @@ static void blade_box_draw(Scene *scene, const ARegion *region, wmOperator *op)
   const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
 
-  const float2 region_offset = {float(region->winrct.xmin), float(region->winrct.ymin)};
-
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
-  GPU_blend(GPU_BLEND_ALPHA);
-  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-
-  if (remove_gaps) {
-    const int channel_min = max_ii(int(box_rect.ymin), 1);
-    const int channel_max = min_ii(int(box_rect.ymax), seq::MAX_CHANNELS);
-    /* Slightly brighten all channels that the box touches. */
-    immUniformColor4ub(255, 255, 255, 15);
-    for (int channel = channel_min; channel <= channel_max; channel++) {
-      float y_bottom = ui::view2d_view_to_region_y(v2d, channel);
-      float y_top = ui::view2d_view_to_region_y(v2d, channel + 1);
-      immRectf(pos,
-               region_offset.x,
-               y_bottom + region_offset.y,
-               region_offset.x + region->winx,
-               y_top + region_offset.y);
-    }
-  }
-
   /* Gather the strips the cut propagates to, like the split preview does. */
   VectorSet<Strip *> targets;
   for (Strip &candidate : *ed->current_strips()) {
@@ -2176,22 +2154,36 @@ static void blade_box_draw(Scene *scene, const ARegion *region, wmOperator *op)
     split_expand_strips(ed, &candidate, ignore_connections, targets);
   }
 
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
+  GPU_blend(GPU_BLEND_ALPHA);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+
+  /* Paint cursors draw in window space, not region space. */
+  auto draw_view_rect = [&](const rctf &rect) {
+    rcti rect_region;
+    ui::view2d_view_to_region_rcti(v2d, &rect, &rect_region);
+    BLI_rcti_translate(&rect_region, region->winrct.xmin, region->winrct.ymin);
+    immRectf(pos, rect_region.xmin, rect_region.ymin, rect_region.xmax, rect_region.ymax);
+  };
+
+  if (remove_gaps) {
+    const int channel_min = max_ii(int(box_rect.ymin), 1);
+    const int channel_max = min_ii(int(box_rect.ymax), seq::MAX_CHANNELS);
+    /* Slightly brighten all channels that the box touches. */
+    immUniformColor4ub(255, 255, 255, 15);
+    for (int channel = channel_min; channel <= channel_max; channel++) {
+      draw_view_rect({v2d->cur.xmin, v2d->cur.xmax, float(channel), float(channel + 1)});
+    }
+  }
+
   immUniformThemeColor(TH_SEQ_STRIP_ALERT);
   for (const Strip *strip : targets) {
-    const float xmin = max_ff(strip->left_handle(), rect_frames[0]);
-    const float xmax = min_ff(strip->right_handle(scene), rect_frames[1]);
-    if (xmin >= xmax) {
-      continue;
+    rctf cut_rect = strip_bounds_get(scene, strip);
+    cut_rect.xmin = max_ff(cut_rect.xmin, rect_frames[0]);
+    cut_rect.xmax = min_ff(cut_rect.xmax, rect_frames[1]);
+    if (cut_rect.xmin < cut_rect.xmax) {
+      draw_view_rect(cut_rect);
     }
-    const rctf bounds = strip_bounds_get(scene, strip);
-    float x1, y1, x2, y2;
-    ui::view2d_view_to_region_fl(v2d, xmin, bounds.ymin, &x1, &y1);
-    ui::view2d_view_to_region_fl(v2d, xmax, bounds.ymax, &x2, &y2);
-    immRectf(pos,
-             x1 + region_offset.x,
-             y1 + region_offset.y,
-             x2 + region_offset.x,
-             y2 + region_offset.y);
   }
 
   immUnbindProgram();
