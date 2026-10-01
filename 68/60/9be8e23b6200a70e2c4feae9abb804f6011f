@@ -1,1 +1,2 @@
 Referenced by pull request #164539, WIP: Geometry: Transform gaussian splat attributes when realizing instances
+Referenced by issue #164570, Cycles: Generate Texture Cache crashes (null write in make_tx) instead of failing when memory runs out; all images converted in parallel as full float copies
