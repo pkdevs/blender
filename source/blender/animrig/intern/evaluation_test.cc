@@ -213,8 +213,7 @@ TEST_F(AnimationEvaluationTest, evaluate_layer__mesh_vertices)
 
   for (const int vertex_index : IndexRange(vertex_count)) {
     const std::string rna_path = "vertices[" + std::to_string(vertex_index) + "].co";
-    const std::optional<ParsedRNAPath<>> parsed_rna_path =
-        ParsedRNAPath<>::from_string(rna_path);
+    const std::optional<ParsedRNAPath<>> parsed_rna_path = ParsedRNAPath<>::from_string(rna_path);
     ASSERT_TRUE(parsed_rna_path.has_value());
 
     for (const int component : IndexRange(3)) {
