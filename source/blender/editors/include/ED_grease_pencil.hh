@@ -226,9 +226,17 @@ struct ClosestGreasePencilDrawing {
 };
 
 const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
-    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name, bke::AttrDomain domain);
+    ViewContext const &vc,
+    Object *obj,
+    int2 screen_pos,
+    char const *vertex_group_name,
+    bke::AttrDomain domain);
 MutableClosestGreasePencilDrawing find_closest_editable_greasepencil_drawing_screen_space(
-    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name, bke::AttrDomain domain);
+    ViewContext const &vc,
+    Object *obj,
+    int2 screen_pos,
+    char const *vertex_group_name,
+    bke::AttrDomain domain);
 
 struct MutableClosestGreasePencil {
   Object *greasepencil_object = nullptr;

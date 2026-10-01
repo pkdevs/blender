@@ -2190,7 +2190,11 @@ bool remove_fill_guides(bke::CurvesGeometry &curves)
 /* Find the closest drawing to a screen position, if the vertex_group_name is set only consider
  * drawing having that vertex group active. */
 const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
-    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name, bke::AttrDomain domain)
+    ViewContext const &vc,
+    Object *obj,
+    int2 screen_pos,
+    char const *vertex_group_name,
+    bke::AttrDomain domain)
 {
 
   /* Collect visible drawings. */
@@ -2226,8 +2230,9 @@ const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
 
           BLI_assert(ELEM(domain, bke::AttrDomain::Point, bke::AttrDomain::Curve));
           IndexMaskMemory memory;
-          const IndexMask mask = domain == bke::AttrDomain::Point ? retrieve_visible_points(*vc.obact, info.drawing, memory)
-                                           : retrieve_visible_strokes(*vc.obact, info.drawing, memory)   ;
+          const IndexMask mask = domain == bke::AttrDomain::Point ?
+                                     retrieve_visible_points(*vc.obact, info.drawing, memory) :
+                                     retrieve_visible_strokes(*vc.obact, info.drawing, memory);
           if (mask.is_empty()) {
             continue;
           }
@@ -2263,7 +2268,11 @@ const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
 /* Find the closest drawing to a screen position, if the vertex_group_name is set only consider
  * drawing having that vertex group active */
 MutableClosestGreasePencilDrawing find_closest_editable_greasepencil_drawing_screen_space(
-    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name, bke::AttrDomain domain)
+    ViewContext const &vc,
+    Object *obj,
+    int2 screen_pos,
+    char const *vertex_group_name,
+    bke::AttrDomain domain)
 {
 
   /* Collect visible drawings. */
@@ -2299,8 +2308,9 @@ MutableClosestGreasePencilDrawing find_closest_editable_greasepencil_drawing_scr
 
           BLI_assert(ELEM(domain, bke::AttrDomain::Point, bke::AttrDomain::Curve));
           IndexMaskMemory memory;
-          const IndexMask mask = domain == bke::AttrDomain::Point ? retrieve_visible_points(*vc.obact, info.drawing, memory)
-                                           : retrieve_visible_strokes(*vc.obact, info.drawing, memory)   ;
+          const IndexMask mask = domain == bke::AttrDomain::Point ?
+                                     retrieve_visible_points(*vc.obact, info.drawing, memory) :
+                                     retrieve_visible_strokes(*vc.obact, info.drawing, memory);
           if (mask.is_empty()) {
             continue;
           }
