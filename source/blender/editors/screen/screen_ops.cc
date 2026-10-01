@@ -3914,7 +3914,8 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
   }
   scene->r.subframe = 0.0f;
 
-  ED_screen_stop_playback_on_frame_change(C);
+  /* Jumping to a frame should stop playback. */
+  stop_playback(C);
 
   ED_areas_do_frame_follow(C, false);
 
@@ -3958,7 +3959,8 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  ED_screen_stop_playback_on_frame_change(C);
+  /* Jumping to a frame should stop playback. */
+  stop_playback(C);
 
   wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
   const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
@@ -4063,7 +4065,8 @@ static wmOperatorStatus frame_jump_delta_exec(bContext *C, wmOperator *op)
     scene->r.subframe -= subframe_offset;
   }
 
-  ED_screen_stop_playback_on_frame_change(C);
+  /* Jumping to a frame should stop playback. */
+  stop_playback(C);
 
   const bool wrap_timeline_navigation = scene->r.flag & SCER_WRAP_TIMELINE_NAVIGATION;
   if (wrap_timeline_navigation) {
@@ -4307,7 +4310,8 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  ED_screen_stop_playback_on_frame_change(C);
+  /* Jumping to a frame should stop playback. */
+  stop_playback(C);
 
   ED_areas_do_frame_follow(C, true);
   ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
@@ -4424,7 +4428,8 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
 
   scene->r.cfra = closest;
 
-  ED_screen_stop_playback_on_frame_change(C);
+  /* Jumping to a frame should stop playback. */
+  stop_playback(C);
 
   ED_areas_do_frame_follow(C, true);
 
@@ -6958,13 +6963,6 @@ static void stop_playback(bContext *C)
   screen_stop_playback(CTX_data_main(C), wm, CTX_wm_window(C), stopscreen);
 }
 
-void ED_screen_stop_playback_on_frame_change(bContext *C)
-{
-  if (U.animation_flag & USER_ANIM_STOP_ON_FRAME_CHANGE) {
-    stop_playback(C);
-  }
-}
-
 static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
 {
   Main *bmain = CTX_data_main(C);
@@ -7054,8 +7052,6 @@ std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen
 {
   BLI_assert_msg(!screen.scrubbing, "scrubbing should not be active yet");
   screen.scrubbing = true;
-
-  ED_screen_stop_playback_on_frame_change(&C);
 
   wmWindowManager *wm = CTX_wm_manager(&C);
   bScreen *play_screen = ED_screen_animation_no_scrub(wm);

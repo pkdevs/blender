@@ -578,13 +578,6 @@ void ED_reset_audio_device(bContext *C);
 wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode);
 
 /**
- * Stop animation playback if the "Pause on Frame Change" preference
- * (#USER_ANIM_STOP_ON_FRAME_CHANGE) is enabled. Called by operators that change the
- * current frame.
- */
-void ED_screen_stop_playback_on_frame_change(bContext *C);
-
-/**
  * Start scrubbing, returns optional playback state.
  * \param C: The current context, which is used to find the screen that is currently managing the
  * animation playback.

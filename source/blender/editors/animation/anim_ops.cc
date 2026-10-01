@@ -562,10 +562,6 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   if (!scene) {
     return;
   }
-
-  /* For interactive scrubbing this already happened in #ED_screen_scrubbing_enable. */
-  ED_screen_stop_playback_on_frame_change(C);
-
   float frame = RNA_float_get(op->ptr, "frame");
   bool do_snap = RNA_boolean_get(op->ptr, "snap");
 
