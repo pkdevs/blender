@@ -2154,19 +2154,20 @@ void SEQUENCER_OT_split(wmOperatorType *ot)
                "Type",
                "The type of split operation to perform on strips");
 
-  RNA_def_boolean(ot->srna,
-                  "use_cursor_position",
-                  false,
-                  "Split at Cursor",
-                  "Split at the position of the mouse cursor instead of the current frame");
+  prop = RNA_def_boolean(ot->srna,
+                         "use_cursor_position",
+                         false,
+                         "Split at Cursor",
+                         "Split at the position of the mouse cursor instead of the current frame");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
-  RNA_def_boolean(ot->srna,
-                  "all_channels",
-                  false,
-                  "All Channels",
-                  "Split strips in all channels at the split frame, not only the one under the "
-                  "cursor");
+  prop = RNA_def_boolean(ot->srna,
+                         "all_channels",
+                         false,
+                         "All Channels",
+                         "Split strips in all channels at the split frame, not only the one under "
+                         "the cursor");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   RNA_def_boolean(ot->srna, "only_selected", false, "Only Selected", "Only split selected strips");
 
