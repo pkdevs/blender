@@ -2266,7 +2266,7 @@ static void blade_split_draw(
     }
   }
 
-  if (targets.is_empty()) {
+  if (targets.is_empty() && !all_channels) {
     return;
   }
 
@@ -2275,6 +2275,13 @@ static void blade_split_draw(
 
   uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  GPU_blend(GPU_BLEND_ALPHA);
+
+  if (all_channels) {
+    const float x = ui::view2d_view_to_region_x(v2d, split_frame) + region_offset.x;
+    immUniformThemeColorAlpha(TH_GIZMO_PRIMARY, 0.3f);
+    immRectf(pos, x - 1.5f, region_offset.y, x + 1.5f, region_offset.y + region->winy);
+  }
 
   auto draw_lines = [&](const float expand) {
     for (const Strip *strip : targets) {
@@ -2291,7 +2298,6 @@ static void blade_split_draw(
   };
 
   /* Draw dark outline underneath so the line is visible on light strips too. */
-  GPU_blend(GPU_BLEND_ALPHA);
   immUniformColor4f(0.0f, 0.0f, 0.0f, 0.8f);
   draw_lines(2.5f);
   immUniformThemeColor(TH_GIZMO_PRIMARY);
