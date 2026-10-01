@@ -33,6 +33,10 @@ class Manager;
 using ObjectBoundsBuf = StorageArrayBuffer<ObjectBounds, 128>;
 using ObjectInfosBuf = StorageArrayBuffer<ObjectInfos, 128>;
 using VisibilityBuf = StorageArrayBuffer<uint, 4, true>;
+using MeshletBuf = StorageArrayBuffer<DrawMeshlet, 128>;
+using MeshletObjectBuf = StorageArrayBuffer<MeshletObject, 128>;
+using MatrixBuf = StorageArrayBuffer<ObjectMatrices, 128>;
+using MeshletVisibilityBuf = StorageArrayBuffer<uint, 4, true>;
 
 class View {
   friend Manager;
@@ -53,6 +57,12 @@ class View {
   UniformArrayBuffer<ViewCullingData, DRW_VIEW_MAX> culling_freeze_;
   /** Result of the visibility computation. 1 bit or 1 or 2 word per resource ID per view. */
   VisibilityBuf visibility_buf_;
+  /**
+   * Result of the per-meshlet visibility computation: one bit per (resource, meshlet) slot,
+   * `resource * meshlet_stride + local` meshlet. Filled alongside #visibility_buf_ when the
+   * manager registers meshlets for the view's resources.
+   */
+  MeshletVisibilityBuf meshlet_visibility_buf_;
   /* Fingerprint of the manager state when visibility was computed. */
   uint64_t manager_fingerprint_ = 0;
 
@@ -68,7 +78,11 @@ class View {
 
  public:
   View(const char *name, int view_len = 1, bool procedural = false)
-      : visibility_buf_(name), debug_name_(name), view_len_(view_len), procedural_(procedural)
+      : visibility_buf_(name),
+        meshlet_visibility_buf_(name),
+        debug_name_(name),
+        view_len_(view_len),
+        procedural_(procedural)
   {
     BLI_assert(view_len <= DRW_VIEW_MAX);
   }
@@ -245,8 +259,13 @@ class View {
   virtual void compute_visibility(ObjectBoundsBuf &bounds,
                                   ObjectInfosBuf &infos,
                                   uint resource_len,
-                                  bool debug_freeze);
+                                  bool debug_freeze,
+                                  MatrixBuf &matrices,
+                                  MeshletBuf &meshlets,
+                                  MeshletObjectBuf &meshlet_objects,
+                                  uint meshlet_stride);
   virtual VisibilityBuf &get_visibility_buffer();
+  virtual MeshletVisibilityBuf &get_meshlet_visibility_buffer();
 
   bool has_computed_visibility() const
   {

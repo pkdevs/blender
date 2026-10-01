@@ -42,6 +42,7 @@ namespace draw {
 
 namespace detail {
 template<typename T> class Pass;
+template<typename T> class PassBase;
 }  // namespace detail
 
 namespace command {
@@ -59,6 +60,8 @@ class Manager {
   using ObjectInfosBuf = StorageArrayBuffer<ObjectInfos, 128>;
   using ObjectAttributeBuf = StorageArrayBuffer<ObjectAttribute, 128>;
   using LayerAttributeBuf = UniformArrayBuffer<LayerAttribute, 512>;
+  using MeshletBuf = StorageArrayBuffer<DrawMeshlet, 128>;
+  using MeshletObjectBuf = StorageArrayBuffer<MeshletObject, 128>;
 
  public:
   struct SubmitDebugOutput {
@@ -66,6 +69,8 @@ class Manager {
     Span<uint32_t> visibility;
     /** Indexed by drawn instance. */
     Span<uint32_t> resource_id;
+    /** Indirect draw commands, one per (facing, meshlet) slot of each group (PassMain only). */
+    Span<const DrawCommand> commands;
   };
 
   struct DataDebugOutput {
@@ -75,6 +80,10 @@ class Manager {
     Span<ObjectBounds> bounds;
     /** Indexed by resource id. */
     Span<ObjectInfos> infos;
+    /** Indexed by `MeshletID`. */
+    Span<DrawMeshlet> meshlets;
+    /** Indexed by resource id. */
+    Span<MeshletObject> meshlet_objects;
   };
 
   struct DeferredTexture {
@@ -95,6 +104,16 @@ class Manager {
   SwapChain<ObjectMatricesBuf, 2> matrix_buf;
   SwapChain<ObjectBoundsBuf, 2> bounds_buf;
   SwapChain<ObjectInfosBuf, 2> infos_buf;
+
+  /**
+   * All meshlets of the frame, indexed by `MeshletID`. Append-only and dense: every distinct
+   * meshlet of every drawn mesh, copied once per frame regardless of how many resources draw it.
+   */
+  SwapChain<MeshletBuf, 2> meshlet_buf;
+  /**
+   * Per-resource meshlet range, indexed by resource id, sized like #bounds_buf.
+   */
+  SwapChain<MeshletObjectBuf, 2> meshlet_object_buf;
 
   /**
    * Object Attributes are reference by indirection data inside ObjectInfos.
@@ -136,6 +155,10 @@ class Manager {
   uint resource_len_ = 0;
   /** Number of object attribute recorded. */
   uint attribute_len_ = 0;
+  /** Number of meshlet recorded. */
+  uint meshlet_len_ = 0;
+  /** Max meshlet count of any registered resource this frame; the visibility pass's bit stride. */
+  uint meshlet_count_max_ = 0;
 
   Object *object_active = nullptr;
 
@@ -347,6 +370,27 @@ class Manager {
     return resource_len_;
   }
 
+  /**
+   * Register the meshlets of \a mesh for this frame and bind them to \a resource_id.
+   *
+   * The meshlets are copied into #meshlet_buf once per mesh per frame, deduplicated by mesh
+   * identity: a mesh drawn by many resources (or many passes) stores its meshlets a single time,
+   * and every resource drawing it gets a range pointing at that copy. The range is also stored
+   * on the mesh so later calls reuse it without re-reading the span.
+   *
+   * Called at submit time (after the frame's sync), once \a resource_id exists.
+   *
+   * \return The first `MeshletID` of the registered range.
+   */
+  MeshletID meshlet_register(Mesh *mesh, ResourceID resource_id);
+  /**
+   * Return the number of meshlets recorded this frame.
+   */
+  uint meshlet_count() const
+  {
+    return meshlet_len_;
+  }
+
   /** TODO(fclem): The following should become private at some point. */
   void begin_sync(Object *object_active = nullptr);
   void end_sync();
@@ -358,6 +402,16 @@ class Manager {
 
  private:
   void sync_layer_attributes();
+  /** Register every (mesh, resource) draw pair recorded in \a pass for this frame, and upload
+   *  the meshlet buffers if anything was registered. */
+  void meshlets_register_pass(PassSimple &pass);
+  void meshlets_register_pass(PassMain &pass);
+  /**
+   * Walk the recorded commands of a simple pass and register every drawn mesh.
+   *
+   * \return True if at least one mesh was registered.
+   */
+  bool meshlets_register_commands(detail::PassBase<command::DrawCommandBuf> &pass_base);
 
   /* Fingerprint of the manager in a certain state. Assured to not be 0.
    * Not reliable enough for general update detection. Only to be used for debugging assertion. */
@@ -393,6 +447,7 @@ inline ResourceHandleRange Manager::resource_handle(const ObjectRef &ref, float 
       const float4x4 dupli_mat(dupli->mat);
       matrix_buf.current().get_or_resize(resource_len_).sync(dupli_mat);
       bounds_buf.current().get_or_resize(resource_len_) = proto_bounds;
+      meshlet_object_buf.current().get_or_resize(resource_len_).meshlet_count = 0;
 
       ObjectInfos &info = infos_buf.current().get_or_resize(resource_len_);
       info = proto_info;
@@ -409,6 +464,7 @@ inline ResourceHandleRange Manager::resource_handle(const ObjectRef &ref, float 
   else {
     matrix_buf.current().get_or_resize(resource_len_).sync(*ref.object);
     bounds_buf.current().get_or_resize(resource_len_).sync(*ref.object, inflate_bounds);
+    meshlet_object_buf.current().get_or_resize(resource_len_).meshlet_count = 0;
     infos_buf.current()
         .get_or_resize(resource_len_)
         .sync(ref, is_active_object, is_active_edit_mode);
@@ -442,6 +498,7 @@ inline ResourceHandleRange Manager::resource_handle(const ObjectRef &ref,
   infos_buf.current()
       .get_or_resize(resource_len_)
       .sync(ref, is_active_object, is_active_edit_mode);
+  meshlet_object_buf.current().get_or_resize(resource_len_).meshlet_count = 0;
   return ResourceHandle(resource_len_++, (ref.object->transflag & OB_NEG_SCALE) != 0);
 }
 
@@ -449,6 +506,7 @@ inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix)
 {
   matrix_buf.current().get_or_resize(resource_len_).sync(model_matrix);
   bounds_buf.current().get_or_resize(resource_len_).sync();
+  meshlet_object_buf.current().get_or_resize(resource_len_).meshlet_count = 0;
   infos_buf.current().get_or_resize(resource_len_).sync();
   return ResourceHandle(resource_len_++, false);
 }
@@ -459,6 +517,7 @@ inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix,
 {
   matrix_buf.current().get_or_resize(resource_len_).sync(model_matrix);
   bounds_buf.current().get_or_resize(resource_len_).sync(bounds_center, bounds_half_extent);
+  meshlet_object_buf.current().get_or_resize(resource_len_).meshlet_count = 0;
   infos_buf.current().get_or_resize(resource_len_).sync();
   return ResourceHandle(resource_len_++, false);
 }
@@ -474,6 +533,7 @@ inline ResourceHandle Manager::resource_handle_for_psys(const ObjectRef &ref,
                              ref.object->mode == object_active->mode;
   matrix_buf.current().get_or_resize(resource_len_).sync(model_matrix);
   bounds_buf.current().get_or_resize(resource_len_).sync();
+  meshlet_object_buf.current().get_or_resize(resource_len_).meshlet_count = 0;
   infos_buf.current()
       .get_or_resize(resource_len_)
       .sync(ref, is_active_object, is_active_edit_mode);

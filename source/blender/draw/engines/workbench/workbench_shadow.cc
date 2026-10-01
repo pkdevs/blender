@@ -209,7 +209,11 @@ void ShadowPass::ShadowView::set_mode(ShadowPass::PassType type)
 void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
                                                 ObjectInfosBuf & /*infos*/,
                                                 uint resource_len,
-                                                bool /*debug_freeze*/)
+                                                bool /*debug_freeze*/,
+                                                MatrixBuf & /*matrices*/,
+                                                MeshletBuf & /*meshlets*/,
+                                                MeshletObjectBuf & /*meshlet_objects*/,
+                                                uint /*meshlet_stride*/)
 {
   /* TODO (Miguel Pozo): Add debug_freeze support */
 

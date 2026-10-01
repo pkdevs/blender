@@ -1261,7 +1261,11 @@ int ShadowModule::max_view_per_tilemap()
 void ShadowModule::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
                                                   ObjectInfosBuf &infos,
                                                   uint resource_len,
-                                                  bool /*debug_freeze*/)
+                                                  bool /*debug_freeze*/,
+                                                  MatrixBuf & /*matrices*/,
+                                                  MeshletBuf & /*meshlets*/,
+                                                  MeshletObjectBuf & /*meshlet_objects*/,
+                                                  uint /*meshlet_stride*/)
 {
   GPU_debug_group_begin("View.compute_visibility");
 

@@ -229,6 +229,9 @@ void DrawMulti::execute(RecordingState &state) const
   DrawMultiBuf::DrawCommandBuf &indirect_buf = multi_draw_buf->command_buf_;
   DrawMultiBuf::DrawGroupBuf &groups = multi_draw_buf->group_buf_;
 
+  constexpr intptr_t stride = sizeof(DrawCommand);
+  const uint meshlet_max = multi_draw_buf->meshlet_max_;
+
   uint group_index = this->group_first;
   while (group_index != uint(-1)) {
     const DrawGroup &group = groups[group_index];
@@ -244,19 +247,30 @@ void DrawMulti::execute(RecordingState &state) const
 
       GPU_batch_set_shader(batch, state.shader, state.specialization_constants_get());
 
-      constexpr intptr_t stride = sizeof(DrawCommand);
-      /* We have 2 indirect command reserved per draw group. */
-      intptr_t offset = stride * group_index * 2;
+      /* We have two indirect commands per draw group and per meshlet. */
+      const intptr_t offset = stride * group_index * 2 * meshlet_max;
 
       /* Draw negatively scaled geometry first. */
       if (group.len - group.front_facing_len > 0) {
         state.front_facing_set(true);
-        GPU_batch_draw_indirect(batch, indirect_buf, offset);
+        if (meshlet_max > 1) {
+          GPU_batch_multi_draw_indirect(batch, indirect_buf, int(meshlet_max), offset, stride);
+        }
+        else {
+          GPU_batch_draw_indirect(batch, indirect_buf, offset);
+        }
       }
 
       if (group.front_facing_len > 0) {
         state.front_facing_set(false);
-        GPU_batch_draw_indirect(batch, indirect_buf, offset + stride);
+        if (meshlet_max > 1) {
+          GPU_batch_multi_draw_indirect(batch, indirect_buf, int(meshlet_max), offset +
+                                                                       stride * meshlet_max,
+                                       stride);
+        }
+        else {
+          GPU_batch_draw_indirect(batch, indirect_buf, offset + stride);
+        }
       }
     }
 
@@ -813,7 +827,10 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
                                      VisibilityBuf &visibility_buf,
                                      int visibility_word_per_draw,
                                      int view_len,
-                                     bool use_custom_ids)
+                                     bool use_custom_ids,
+                                     MeshletBuf &meshlets,
+                                     MeshletVisibilityBuf &meshlet_visibility,
+                                     uint meshlet_stride)
 {
   GPU_debug_group_begin("DrawMultiBuf.bind");
 
@@ -849,9 +866,11 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
 
       group.vertex_first = vert_range.start();
       group.vertex_len = vert_range.size();
-      /* Override base index to -1 as the generated draw-call will not use an index buffer and do
-       * the indirection manually inside the shader. */
-      group.base_index = -1;
+      /* Override base index as the generated draw-call will not use an index buffer and do the
+       * indirection manually inside the shader. `-2` (not `-1`) marks the range as an expanded
+       * one, so the per-meshlet command path keeps the whole expanded range: meshlet ranges are
+       * in the original batch space and do not apply to the expanded buffer. */
+      group.base_index = -2;
     }
 
     /* Reset counters to 0 for the GPU. */
@@ -860,12 +879,29 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
 
   group_buf_.push_update();
   prototype_buf_.push_update();
+  /* One command per (facing, meshlet) per group, and a full set of instance slots per facing and
+   * meshlet. Multi-view groups keep one whole-range command and one slot per view. */
+  const uint meshlet_max = (visibility_word_per_draw > 0) ? 1u :
+                           std::max<unsigned>(1u, meshlet_stride);
+  meshlet_max_ = meshlet_max;
   /* Allocate enough for the expansion pass. */
-  resource_id_buf_.get_or_resize(resource_id_count_ * view_len * (use_custom_ids ? 2 : 1));
-  /* Two commands per group (inverted and non-inverted scale). */
-  command_buf_.get_or_resize(group_count_ * 2);
+  resource_id_entry_count_ =
+      resource_id_count_ * uint(view_len) * meshlet_max * (use_custom_ids ? 2u : 1u);
+  resource_id_buf_.get_or_resize(resource_id_entry_count_);
+  command_buf_.get_or_resize(group_count_ * 2u * meshlet_max);
+  instance_count_buf_.get_or_resize(group_count_ * 2u * meshlet_max);
 
   if (prototype_count_ > 0) {
+    /* The per-meshlet instance counts are accumulated on the GPU, and culled instance slots keep
+     * the clear value. At `meshlet_max == 1` the layout is the pre-meshlet one: every command
+     * slot is written by `write_draw_call_meshlets` and the instance regions hold exactly the
+     * visible instances, so the command and resource-id clears are dead (they were never
+     * needed before the meshlet path). */
+    if (meshlet_max > 1) {
+      GPU_storagebuf_clear(command_buf_, 0);
+      GPU_storagebuf_clear(resource_id_buf_, 0xFFFFFFFFu);
+    }
+    GPU_storagebuf_clear(instance_count_buf_, 0);
     gpu::Shader *shader = DRW_shader_draw_command_generate_get();
     GPU_shader_bind(shader);
     GPU_shader_uniform_1i(shader, "prototype_len", prototype_count_);
@@ -873,10 +909,14 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
     GPU_shader_uniform_1i(shader, "view_len", view_len);
     GPU_shader_uniform_1i(shader, "view_shift", log2_ceil_u(view_len));
     GPU_shader_uniform_1b(shader, "use_custom_ids", use_custom_ids);
+    GPU_shader_uniform_1i(shader, "meshlet_stride", int(meshlet_stride));
     GPU_storagebuf_bind(group_buf_, GPU_shader_get_ssbo_binding(shader, "group_buf"));
     GPU_storagebuf_bind(visibility_buf, GPU_shader_get_ssbo_binding(shader, "visibility_buf"));
     GPU_storagebuf_bind(prototype_buf_, GPU_shader_get_ssbo_binding(shader, "prototype_buf"));
     GPU_storagebuf_bind(command_buf_, GPU_shader_get_ssbo_binding(shader, "command_buf"));
+    GPU_storagebuf_bind(meshlets, GPU_shader_get_ssbo_binding(shader, "meshlet_buf"));
+    GPU_storagebuf_bind(instance_count_buf_, GPU_shader_get_ssbo_binding(shader, "instance_count_buf"));
+    GPU_storagebuf_bind(meshlet_visibility, GPU_shader_get_ssbo_binding(shader, "meshlet_visibility_buf"));
     GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
     GPU_compute_dispatch(shader, divide_ceil_u(prototype_count_, DRW_COMMAND_GROUP_SIZE), 1, 1);
     /* TODO(@fclem): Investigate moving the barrier in the bind function. */

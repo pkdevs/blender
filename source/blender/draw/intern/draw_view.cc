@@ -257,7 +257,11 @@ void View::compute_procedural_bounds()
 void View::compute_visibility(ObjectBoundsBuf &bounds,
                               ObjectInfosBuf & /*infos*/,
                               uint resource_len,
-                              bool debug_freeze)
+                              bool debug_freeze,
+                              MatrixBuf &matrices,
+                              MeshletBuf &meshlets,
+                              MeshletObjectBuf &meshlet_objects,
+                              uint meshlet_stride)
 {
   if (debug_freeze && frozen_ == false) {
     data_freeze_[0] = static_cast<ViewMatrices>(data_[0]);
@@ -286,14 +290,29 @@ void View::compute_visibility(ObjectBoundsBuf &bounds,
   const uint32_t data = 0xFFFFFFFFu;
   GPU_storagebuf_clear(visibility_buf_, data);
 
+  /* Per-meshlet bits: one bit per (resource, meshlet) slot. Fixed stride so the index is
+   * `resource * meshlet_stride + local` with no per-resource offset array. Only split meshes
+   * (stride > 1) read or write the bits, so at stride 1 the per-frame clear is skipped. */
+  uint meshlet_bit_len = resource_len * meshlet_stride;
+  uint meshlet_words_len = ceil_to_multiple_u(max_ii(1, divide_ceil_u(meshlet_bit_len, 32)), 4);
+  meshlet_visibility_buf_.resize(meshlet_words_len);
+  if (meshlet_stride > 1) {
+    GPU_storagebuf_clear(meshlet_visibility_buf_, 0xFFFFFFFFu);
+  }
+
   if (do_visibility_) {
     gpu::Shader *shader = DRW_shader_draw_visibility_compute_get();
     GPU_shader_bind(shader);
     GPU_shader_uniform_1i(shader, "resource_len", resource_len);
     GPU_shader_uniform_1i(shader, "view_len", view_len_);
     GPU_shader_uniform_1i(shader, "visibility_word_per_draw", word_per_draw);
+    GPU_shader_uniform_1i(shader, "meshlet_stride", int(meshlet_stride));
     GPU_storagebuf_bind(bounds, GPU_shader_get_ssbo_binding(shader, "bounds_buf"));
     GPU_storagebuf_bind(visibility_buf_, GPU_shader_get_ssbo_binding(shader, "visibility_buf"));
+    GPU_storagebuf_bind(meshlets, GPU_shader_get_ssbo_binding(shader, "meshlet_buf"));
+    GPU_storagebuf_bind(meshlet_objects, GPU_shader_get_ssbo_binding(shader, "meshlet_object_buf"));
+    GPU_storagebuf_bind(matrices, GPU_shader_get_ssbo_binding(shader, "matrix_buf"));
+    GPU_storagebuf_bind(meshlet_visibility_buf_, GPU_shader_get_ssbo_binding(shader, "meshlet_visibility_buf"));
     GPU_uniformbuf_bind(frozen_ ? data_freeze_ : data_, DRW_VIEW_UBO_SLOT);
     GPU_uniformbuf_bind(frozen_ ? culling_freeze_ : culling_, DRW_VIEW_CULLING_UBO_SLOT);
     GPU_compute_dispatch(shader, divide_ceil_u(resource_len, DRW_VISIBILITY_GROUP_SIZE), 1, 1);
@@ -312,6 +331,11 @@ void View::compute_visibility(ObjectBoundsBuf &bounds,
 VisibilityBuf &View::get_visibility_buffer()
 {
   return visibility_buf_;
+}
+
+MeshletVisibilityBuf &View::get_meshlet_visibility_buffer()
+{
+  return meshlet_visibility_buf_;
 }
 
 draw::View &View::default_get()

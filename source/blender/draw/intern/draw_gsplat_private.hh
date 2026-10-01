@@ -135,6 +135,13 @@ struct GSplatEvalCache {
   Mesh *dots_get();
   Mesh *edit_dots_get();
   Mesh *surface_get(const PointCloud &pointcloud);
+  /**
+   * Fill the meshlets of the requested dot batches from their draw parameters.
+   *
+   * \a bounding_sphere is the object's bounding sphere in object space.
+   * Call after `ensure_requested()` has filled the batches.
+   */
+  void meshlets_resync(float4 bounding_sphere);
 
   /** Fill and build all requested buffers/batches. */
   void ensure_requested(PointCloud &pointcloud);

@@ -537,6 +537,141 @@ inline bool drw_bounds_are_valid(ObjectBounds bounds)
 
 /** \} */
 
+struct [[host_shared]] DrawMeshlet {
+  /** First index, or vertex for a non-indexed batch, of this meshlet inside its batch. */
+  int vertex_start;
+  /** Number of indices, or vertices, in this meshlet. Zero marks an empty meshlet. */
+  int vertex_count;
+  /** Added to every index read, or -1 for a non-indexed batch. */
+  int base_index;
+  /** Object-space AABB, 5 bits per axis-value quantized against the object's own bounds. */
+  uint packed_bounds;
+};
+
+#ifndef GPU_SHADER
+BLI_STATIC_ASSERT(sizeof(DrawMeshlet) == 16, "DrawMeshlet must be exactly 16 bytes")
+#endif
+
+/**
+ * Pack one meshlet's object-space AABB into `DrawMeshlet::packed_bounds`, quantized against the
+ * object's own AABB. Each axis uses 10 bits: min in bits 0-4 (rounded down), max in bits 5-9
+ * (rounded up); axis x = bits 0-9, y = 10-19, z = 20-29. Both endpoints round outward so the
+ * decoded box always contains the meshlet. A zero-range axis stores the full [0, 31] span.
+ */
+inline uint drw_meshlet_bounds_pack(float3 meshlet_min,
+                                     float3 meshlet_max,
+                                     float3 object_min,
+                                     float3 object_max)
+{
+  uint bits = 0;
+  uint min_q;
+  uint max_q;
+  float range;
+
+  range = object_max.x - object_min.x;
+  if (range <= 0.0f) {
+    min_q = 0;
+    max_q = 31;
+  }
+  else {
+    min_q = uint(clamp(floor((meshlet_min.x - object_min.x) / range * 31.0f), 0.0f, 31.0f));
+    max_q = uint(clamp(ceil((meshlet_max.x - object_min.x) / range * 31.0f), 0.0f, 31.0f));
+  }
+  bits |= min_q | (max_q << 5u);
+
+  range = object_max.y - object_min.y;
+  if (range <= 0.0f) {
+    min_q = 0;
+    max_q = 31;
+  }
+  else {
+    min_q = uint(clamp(floor((meshlet_min.y - object_min.y) / range * 31.0f), 0.0f, 31.0f));
+    max_q = uint(clamp(ceil((meshlet_max.y - object_min.y) / range * 31.0f), 0.0f, 31.0f));
+  }
+  bits |= (min_q | (max_q << 5u)) << 10u;
+
+  range = object_max.z - object_min.z;
+  if (range <= 0.0f) {
+    min_q = 0;
+    max_q = 31;
+  }
+  else {
+    min_q = uint(clamp(floor((meshlet_min.z - object_min.z) / range * 31.0f), 0.0f, 31.0f));
+    max_q = uint(clamp(ceil((meshlet_max.z - object_min.z) / range * 31.0f), 0.0f, 31.0f));
+  }
+  bits |= (min_q | (max_q << 5u)) << 20u;
+
+  return bits;
+}
+
+/**
+ * Unpack `DrawMeshlet::packed_bounds` into the meshlet's object-space AABB min and max corners.
+ */
+inline void drw_meshlet_bounds_unpack(uint packed_bounds,
+                                      float3 object_min,
+                                      float3 object_max,
+                                      float3 &out_min,
+                                      float3 &out_max)
+{
+  out_min = float3(object_min.x + float(packed_bounds & 31u) * ((object_max.x - object_min.x) / 31.0f),
+                   object_min.y + float((packed_bounds >> 10u) & 31u) * ((object_max.y - object_min.y) / 31.0f),
+                   object_min.z + float((packed_bounds >> 20u) & 31u) * ((object_max.z - object_min.z) / 31.0f));
+  out_max = float3(object_min.x + float((packed_bounds >> 5u) & 31u) * ((object_max.x - object_min.x) / 31.0f),
+                   object_min.y + float((packed_bounds >> 15u) & 31u) * ((object_max.y - object_min.y) / 31.0f),
+                   object_min.z + float((packed_bounds >> 25u) & 31u) * ((object_max.z - object_min.z) / 31.0f));
+}
+
+/**
+ * Index into the manager's per-frame meshlet array. Dense: one entry per distinct meshlet in the
+ * frame, shared by every instance that draws it.
+ */
+#ifndef GPU_SHADER
+using MeshletID = uint;
+#endif
+
+/**
+ * Join between the manager's meshlet array (indexed by `MeshletID`) and its per-resource object
+ * array (indexed by the resource id). One entry per (meshlet, drawn instance) pair — the
+ * composite index that names a single meshlet instance; visibility bits and job units are indexed
+ * by it.
+ */
+struct [[host_shared]] MeshletInstance {
+  /** Index into the meshlet array. */
+  uint meshlet_id;
+  /** Index into the per-resource object array. */
+  uint resource_id;
+};
+
+#ifndef GPU_SHADER
+BLI_STATIC_ASSERT(sizeof(MeshletInstance) == 8, "MeshletInstance must be exactly 8 bytes")
+#endif
+
+/**
+ * Per-resource meshlet data, indexed by resource id. The meshlet range points into the dense
+ * meshlet array, so a mesh drawn by N resources stores its meshlets once and all N resources
+ * share the same range. A resource draws one mesh per frame: the range covers that mesh's
+ * meshlets, and re-registering for another mesh replaces the range. `meshlet_count == 0` means
+ * the resource draws no meshlets and its draw-calls fall back to object-level culling.
+ */
+struct [[host_shared]] MeshletObject {
+  /**
+   * Object-space AABB the meshlets' `packed_bounds` are quantized against (min corner). The
+   * visibility pass decodes each meshlet's bounds against this box before transforming to world
+   * space. The `uint` members are interleaved into the vector padding to match the standard SSBO
+   * layout (see #ObjectInfos).
+   */
+  packed_float3 bounds_min;
+  /** First `MeshletID` of this resource's meshlets in the meshlet array. */
+  uint meshlet_offset;
+  /** Object-space AABB max corner. */
+  packed_float3 bounds_max;
+  /** Number of meshlets this resource draws. */
+  uint meshlet_count;
+};
+
+#ifndef GPU_SHADER
+BLI_STATIC_ASSERT(sizeof(MeshletObject) == 32, "MeshletObject must be exactly 32 bytes")
+#endif
 /* -------------------------------------------------------------------- */
 /** \name Data quantization and packing
  * \{ */

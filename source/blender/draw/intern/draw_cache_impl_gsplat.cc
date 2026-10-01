@@ -384,6 +384,16 @@ void GSplatEvalCache::ensure_requested(PointCloud &pointcloud)
   }
 }
 
+void GSplatEvalCache::meshlets_resync(float4 bounding_sphere)
+{
+  if (dots) {
+    dots->meshlet_resync(bounding_sphere);
+  }
+  if (edit_dots) {
+    edit_dots->meshlet_resync(bounding_sphere);
+  }
+}
+
 void GSplatEvalCache::discard_buffers()
 {
   MEM_SAFE_DELETE(surface);
@@ -602,7 +612,13 @@ void DRW_gsplat_batch_cache_create_requested(Object *ob)
   if (pointcloud.type != PointCloudType::GSplat) {
     return;
   }
-  GSplatEvalCache::get(pointcloud).ensure_requested(pointcloud);
+  GSplatEvalCache &eval_cache = GSplatEvalCache::get(pointcloud);
+  eval_cache.ensure_requested(pointcloud);
+
+  /* Fill the meshlets of the requested batches, now that their geometry is complete. */
+  ObjectBounds bounds;
+  bounds.sync(*ob);
+  eval_cache.meshlets_resync(bounds.bounding_sphere);
 }
 
 void DRW_gsplat_batch_cache_dirty_tag(PointCloud *pointcloud, int mode)

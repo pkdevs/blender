@@ -923,6 +923,20 @@ void DRW_curve_batch_cache_create_requested(Object *ob, const Scene *scene)
     curve_create_edit_curves_nor(rdata, *cache->edit.curves_nor, scene);
   }
 
+  /* Fill the meshlets of the requested batches, now that their geometry is complete. */
+  ObjectBounds bounds;
+  bounds.sync(*ob);
+  const float4 bounding_sphere = bounds.bounding_sphere;
+  Mesh *curve_batches[] = {cache->batch.curves,
+                           cache->batch.curves_viewer_attribute,
+                           cache->batch.edit_edges,
+                           cache->batch.edit_verts,
+                           cache->batch.edit_normals};
+  for (Mesh *mesh : curve_batches) {
+    if (mesh) {
+      mesh->meshlet_resync(bounding_sphere);
+    }
+  }
   curve_render_data_free(rdata);
 
 #ifndef NDEBUG

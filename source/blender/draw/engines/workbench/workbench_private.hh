@@ -424,7 +424,11 @@ class ShadowPass {
     void compute_visibility(ObjectBoundsBuf &bounds,
                             ObjectInfosBuf &infos,
                             uint resource_len,
-                            bool debug_freeze) override;
+                            bool debug_freeze,
+                            MatrixBuf &matrices,
+                            MeshletBuf &meshlets,
+                            MeshletObjectBuf &meshlet_objects,
+                            uint meshlet_stride) override;
     VisibilityBuf &get_visibility_buffer() override;
   } view_ = {};
 

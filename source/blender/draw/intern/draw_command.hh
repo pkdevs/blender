@@ -658,6 +658,7 @@ class DrawMultiBuf {
   using DrawPrototypeBuf = StorageArrayBuffer<DrawPrototype, 16>;
   using DrawCommandBuf = StorageArrayBuffer<DrawCommand, 16, true>;
   using ResourceIdBuf = StorageArrayBuffer<uint, 128, true>;
+  using InstanceCountBuf = StorageArrayBuffer<uint, 128, true>;
 
   using DrawGroupKey = std::pair<uint, Mesh *>;
   using DrawGroupMap = Map<DrawGroupKey, uint>;
@@ -672,6 +673,8 @@ class DrawMultiBuf {
   DrawCommandBuf command_buf_ = {"DrawCommandBuf"};
   /** Array of resource id. One per instance. Lives on GPU. */
   ResourceIdBuf resource_id_buf_ = {"ResourceIdBuf"};
+  /** One instance counter per (group, facing, meshlet) command slot. Lives on GPU. */
+  InstanceCountBuf instance_count_buf_ = {"InstanceCountBuf"};
   /** Give unique ID to each header so we can use that as hash key. */
   uint header_id_counter_ = 0;
   /** Number of groups inside group_buf_. */
@@ -680,13 +683,18 @@ class DrawMultiBuf {
   uint prototype_count_ = 0;
   /** Used items in the resource_id_buf_. Not it's allocated length. */
   uint resource_id_count_ = 0;
+ /** Used entries in the resource_id_buf_ (accounts for `use_custom_ids` two-entry slots). */
+ uint resource_id_entry_count_ = 0;
+  /** Meshlets per group slot reserved in the command and resource-id buffers (1 for multi-view). */
+  uint meshlet_max_ = 1;
 
  public:
   void clear()
   {
     group_buf_.trim_to_next_power_of_2(group_count_);
-    /* Two commands per group (inverted and non-inverted scale). */
-    command_buf_.trim_to_next_power_of_2(group_count_ * 2);
+    /* One command per group, facing and meshlet. */
+    command_buf_.trim_to_next_power_of_2(group_count_ * 2 * meshlet_max_);
+    instance_count_buf_.trim_to_next_power_of_2(group_count_ * 2 * meshlet_max_);
     prototype_buf_.trim_to_next_power_of_2(prototype_count_);
     resource_id_buf_.trim_to_next_power_of_2(resource_id_count_);
     header_id_counter_ = 0;
@@ -744,6 +752,8 @@ class DrawMultiBuf {
         group.front_facing_len = inverted ? 0 : instance_len;
         group.front_facing_counter = 0;
         group.back_facing_counter = 0;
+        group.meshlet_offset = 0;
+        group.meshlet_count = 0;
         group.desc.vertex_len = vertex_len;
         group.desc.vertex_first = vertex_first;
         group.desc.mesh = mesh;
@@ -783,7 +793,10 @@ class DrawMultiBuf {
                          VisibilityBuf &visibility_buf,
                          int visibility_word_per_draw,
                          int view_len,
-                         bool use_custom_ids);
+                         bool use_custom_ids,
+                         MeshletBuf &meshlets,
+                         MeshletVisibilityBuf &meshlet_visibility,
+                         uint meshlet_stride);
 
   void bind(RecordingState &state);
 };

@@ -305,7 +305,11 @@ class ShadowModule {
     void compute_visibility(ObjectBoundsBuf &bounds,
                             ObjectInfosBuf &infos,
                             uint resource_len,
-                            bool debug_freeze) override;
+                            bool debug_freeze,
+                            MatrixBuf &matrices,
+                            MeshletBuf &meshlets,
+                            MeshletObjectBuf &meshlet_objects,
+                            uint meshlet_stride) override;
   };
 
   /** Multi-View containing a maximum of 64 view to be rendered with the shadow pipeline. */

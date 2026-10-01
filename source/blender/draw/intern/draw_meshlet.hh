@@ -12,6 +12,9 @@
 
 #include "GPU_batch.hh"
 #include "MEM_guardedalloc.h"
+#include "BLI_math_vector.hh"
+#include "BLI_span.hh"
+#include "draw_shader_shared.hh"
 
 namespace blender::draw {
 
@@ -25,7 +28,8 @@ namespace blender::draw {
  */
 struct Mesh {
  private:
-  /** GPU batch wrapped by this draw-mesh. */
+  friend class Manager;
+
   gpu::Batch *batch_ = nullptr;
   /** Whether the batch is owned by this draw-mesh and discarded on destruction. */
   bool owns_batch_ = false;
@@ -35,36 +39,44 @@ struct Mesh {
    */
   GPUPrimType batch_prim_ = GPU_PRIM_NONE;
 
-#if 0
-  /* Commented out as Meshlet integration will be added later.*/
+  /** Bounds and draw range of the whole batch, or of the whole procedural primitive. */
+  DrawMeshlet meshlet_;
   /**
-   * Refers to meshlets of the batch.
+   * Meshlets covering #batch_. Empty until a mesh carries more than one, in which case this
+   * spans them and #meshlet_ is unused. Reserved for meshlet splitting.
    */
-  Span<MeshLet> meshlets_;
+  Span<DrawMeshlet> meshlets_;
   /**
-   * Contains the extracted meshlet for non-owning batches. Would contain the data to draw the
-   * whole batch and \a meshlets_ would point to this entry.
+   * The manager `sync_counter_` of the frame in which #meshlets() was last registered with the
+   * manager; 0 = never registered. Per-manager stamping keeps a mesh registered once per manager
+   * per frame even when several managers (viewports) draw it.
    */
-  MeshLet meshlet_;
-#endif
+  uint meshlet_registered_sync_ = 0;
+  /**
+   * First #MeshletID of the registered meshlets. Valid while #meshlet_registered_sync_ matches
+   * the manager's current sync counter.
+   */
+  MeshletID meshlet_id_ = 0;
 
  public:
   MEM_CXX_CLASS_ALLOC_FUNCS("Mesh")
 
-  /** Takes ownership of \a batch. The batch is discarded when the #Mesh is destroyed. */
-  Mesh(gpu::Batch *batch);
   /**
-   * Wraps \a batch, taking ownership only when \a owns_batch is true.
+   * Wraps \a batch. Takes ownership by default; pass `owns_batch = false` for batches owned by
+   * other data (motion paths) that must outlive every command referencing them.
    *
-   * Use `owns_batch = false` for batches that are not owned by the draw system, e.g. batches owned
-   * by other data (motion paths). The batch must outlive every command that references it.
+   * Prefills #meshlet_ from the batch's draw parameters and encodes \a bounding_sphere into
+   * #meshlet_.packed_bounds.
    */
-  Mesh(gpu::Batch *batch, bool owns_batch);
+  Mesh(gpu::Batch *batch, bool owns_batch = true, float4 bounding_sphere = float4(0.0f));
   /**
    * Creates a procedural draw-mesh that stores no batch.
    *
    * The underlying batch is resolved from the active GPU context on access (see #batch_get), so
    * the same draw-mesh can be safely shared across threads and contexts.
+   *
+   * The procedural batch is a per-context dummy whose draw count is supplied per call, not by
+   * the batch, so #meshlet_ is left empty.
    *
    * \a batch_prim must not be #GPU_PRIM_NONE, which is reserved as the sentinel for regular
    * (non-procedural) draw-meshes.
@@ -91,12 +103,30 @@ struct Mesh {
    * follows context and thread switches. For regular draw-meshes it returns the wrapped batch.
    */
   gpu::Batch *batch_get() const;
+  /** Meshlets of this mesh. Never empty for a mesh with geometry. */
+  Span<DrawMeshlet> meshlets() const
+  {
+    return meshlets_.is_empty() ? Span<DrawMeshlet>(&meshlet_, 1) : meshlets_;
+  }
+
+  /**
+   * (Re)fill #meshlet_ from #batch_get()'s draw parameters.
+   *
+   * \a bounding_sphere is in object space. Its encoding into #meshlet_.packed_bounds is a full
+   * AABB at 5 bits per axis-value quantized against the object's own bounds; see
+   * `draw::DrawMeshlet`.
+   *
+   * The batch may be in the `DRW_batch_request` state (no geometry yet); the meshlet is then
+   * left empty, and the cache owner calls this again after the batch has been filled.
+   */
+  void meshlet_resync(float4 bounding_sphere);
 
   static inline void clear(Mesh *mesh)
   {
     if (mesh) {
       BLI_assert(mesh->owns_batch_);
       GPU_BATCH_CLEAR_SAFE(mesh->batch_);
+      mesh->meshlet_ = DrawMeshlet();
     }
   }
 };

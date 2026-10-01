@@ -1090,6 +1090,27 @@ void DRW_curves_batch_cache_create_requested(Object *ob)
   draw::CurvesBatchCache &cache = draw::get_batch_cache(curves_id);
   const bke::CurvesGeometry &curves_orig = curves_orig_id.geometry.wrap();
 
+  /* Object bounds used to encode the meshlets' culling data. */
+  ObjectBounds bounds;
+  bounds.sync(*ob);
+  const float4 bounding_sphere = bounds.bounding_sphere;
+
+  /* Fill the meshlets of the requested batches once their geometry is complete. */
+  const auto meshlets_resync = [&]() {
+    if (cache.edit_points) {
+      cache.edit_points->meshlet_resync(bounding_sphere);
+    }
+    if (cache.sculpt_cage) {
+      cache.sculpt_cage->meshlet_resync(bounding_sphere);
+    }
+    if (cache.edit_handles) {
+      cache.edit_handles->meshlet_resync(bounding_sphere);
+    }
+    if (cache.edit_curves_lines) {
+      cache.edit_curves_lines->meshlet_resync(bounding_sphere);
+    }
+  };
+
   bool is_edit_data_needed = false;
 
   if (cache.edit_points && DRW_batch_requested(cache.edit_points->batch_get(), GPU_PRIM_POINTS)) {
@@ -1143,6 +1164,8 @@ void DRW_curves_batch_cache_create_requested(Object *ob)
     create_lines_ibo_with_cyclic(
         curves_orig.evaluated_points_by_curve(), cyclic, *cache.edit_curves_lines_ibo);
   }
+
+  meshlets_resync();
 
   if (!is_edit_data_needed) {
     return;
@@ -1203,6 +1226,7 @@ void DRW_curves_batch_cache_create_requested(Object *ob)
                           cyclic,
                           *cache.edit_handles_ibo);
   }
+  meshlets_resync();
 }
 
 }  // namespace blender::draw

@@ -461,6 +461,17 @@ void DRW_pointcloud_batch_cache_create_requested(Object *ob)
   if (DRW_vbo_requested(cache.eval_cache.pos_rad)) {
     pointcloud_extract_position_and_radius(pointcloud, cache);
   }
+
+  /* Fill the meshlets of the requested batches, now that their geometry is complete. */
+  ObjectBounds bounds;
+  bounds.sync(*ob);
+  const float4 bounding_sphere = bounds.bounding_sphere;
+  if (cache.eval_cache.dots) {
+    cache.eval_cache.dots->meshlet_resync(bounding_sphere);
+  }
+  if (cache.edit_selection) {
+    cache.edit_selection->meshlet_resync(bounding_sphere);
+  }
 }
 
 Mesh *DRW_pointcloud_batch_cache_get_edit_dots(Object *ob)

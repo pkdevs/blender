@@ -1750,6 +1750,11 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                                      false,
                                      use_hide);
 
+  /* Object bounds used to encode the meshlets' culling data. */
+  ObjectBounds bounds;
+  bounds.sync(ob);
+  const float4 bounding_sphere = bounds.bounding_sphere;
+
   std::array<MeshBufferCache *, 3> caches{&cache.final, &cache.cage, &cache.uv_cage};
   for (const BatchCreateData &batch : batch_info) {
     MeshBufferCache &cache_for_batch = *caches[int(batch.list)];
@@ -1760,6 +1765,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       GPU_batch_vertbuf_add(
           batch.mesh.batch_get(), cache_for_batch.buff.vbos.lookup(vbo_request).get(), false);
     }
+    batch.mesh.meshlet_resync(bounding_sphere);
   }
 
   if (batches_to_create & MBC_SURFACE_PER_MAT) {
@@ -1788,6 +1794,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
         GPU_batch_vertbuf_add(
             batch, buffers.vbos.lookup(VBOType(int8_t(VBOType::Attr0) + i)).get(), false);
       }
+      draw_mesh->meshlet_resync(bounding_sphere);
     }
   }
 

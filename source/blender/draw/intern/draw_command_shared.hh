@@ -59,6 +59,11 @@ struct [[host_shared]] DrawGroup {
   uint front_facing_counter;
   uint back_facing_counter;
 
+  /** First `MeshletID` of this group's mesh meshlets in the manager's dense meshlet array. */
+  uint meshlet_offset;
+  /** Number of meshlets of this group's mesh; 0 = whole-batch range fallback (no meshlets). */
+  uint meshlet_count;
+
   /* CPU specific region of the struct. Should be kept constant after recording.
    * Can be used by GPU but needs to be initialized by GPU before usage. */
 #ifndef GPU_SHADER
@@ -73,7 +78,6 @@ struct [[host_shared]] DrawGroup {
 
     /** Needed to create the correct draw call. */
     Mesh *mesh;
-    uint64_t _cpu_pad0;
   } desc;
 #else
   uint _cpu_reserved_1;
@@ -81,8 +85,6 @@ struct [[host_shared]] DrawGroup {
 
   uint _cpu_reserved_3;
   uint _cpu_reserved_4;
-  uint _cpu_reserved_5;
-  uint _cpu_reserved_6;
 #endif
 };
 #ifndef GPU_SHADER
