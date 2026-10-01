@@ -1,2 +1,3 @@
 Referenced by issue #129534, Node Editor Shortcut Entry missing in "Industry Compatible" Mode
 Referenced by issue #122978, Node Wrangler Ctrl+Shift+LMB ("view" node) doesn't do anything.
+Referenced by issue #164540, Alt+Shift+LMB on Compositor Nodes won't link it to the Group Output as in Other Editor
