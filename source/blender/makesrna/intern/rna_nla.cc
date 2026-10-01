@@ -607,14 +607,14 @@ static FCurve *rna_NlaStrip_fcurve_find(NlaStrip *strip,
   return BKE_fcurve_find(&strip->fcurves, data_path, index);
 }
 
-static NlaStrip *rna_NlaStrip_new(ID *id,
-                                  NlaStrip *strip,
-                                  NlaTrack *track,
-                                  Main *bmain,
-                                  bContext *C,
-                                  ReportList *reports,
-                                  const char *name,
-                                  int start)
+static NlaStrip *generic_NlaStrip_new(ID *id,
+                                      NlaStrip *strip,
+                                      NlaTrack *track,
+                                      Main *bmain,
+                                      bContext *C,
+                                      ReportList *reports,
+                                      const char *name,
+                                      int start)
 {
   if (strip == nullptr) {
     BKE_report(reports, RPT_ERROR, "Unable to create new strip");
@@ -683,8 +683,7 @@ static NlaStrip *rna_NlaStrip_new_clip(ID *id,
 
   NlaStrip *strip = BKE_nlastrip_new(action, *id);
 
-  /* forward to the generic function */
-  return rna_NlaStrip_new(id, strip, track, bmain, C, reports, name, start);
+  return generic_NlaStrip_new(id, strip, track, bmain, C, reports, name, start);
 }
 
 static NlaStrip *rna_NlaStrip_new_sound(ID *id,
@@ -700,8 +699,7 @@ static NlaStrip *rna_NlaStrip_new_sound(ID *id,
 
   NlaStrip *strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), speaker);
 
-  /* forward to the generic function */
-  return rna_NlaStrip_new(id, strip, track, bmain, C, reports, name, start);
+  return generic_NlaStrip_new(id, strip, track, bmain, C, reports, name, start);
 }
 
 static void rna_NlaStrip_remove(
