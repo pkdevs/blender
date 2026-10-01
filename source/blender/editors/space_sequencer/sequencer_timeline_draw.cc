@@ -2223,15 +2223,16 @@ static void blade_split_draw(
                                                         tref, "ignore_connections", false));
   const bool only_selected = split_tool_prop_from_toolsettings(tref, "only_selected", false);
 
-  const Strip *strip = strip_under_mouse_get(scene, v2d, mval);
   if (!all_channels) {
+    const Strip *strip = strip_under_mouse_get(scene, v2d, mval);
     if (strip == nullptr || !seq::strip_splits_frame(scene, strip, split_frame)) {
       return;
     }
   }
 
-  VectorSet<Strip *> candidates = split_candidates_get(
-      scene, split_frame, split_channel, true, all_channels, only_selected);
+  const std::optional<int> channel = all_channels ? std::nullopt :
+                                                    std::optional<int>(split_channel);
+  Vector<Strip *> candidates = split_strips_get(scene, split_frame, channel, only_selected);
 
   /* Expand to the strips each split propagates to, skip chains that fail to split. */
   VectorSet<Strip *> targets;

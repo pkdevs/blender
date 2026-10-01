@@ -215,15 +215,17 @@ bool sequencer_view_strips_poll(bContext *C);
  */
 VectorSet<Strip *> all_strips_from_context(bContext *C);
 
-/* XXX TODO: Make local to split code, remove from this header */
-/** Get strips that the split operator would attempt to split at \a `split_frame` before
- * effect/connected strip expansion in #seq::edit_strip_split.  */
-VectorSet<Strip *> split_candidates_get(Scene *scene,
-                                        int split_frame,
-                                        int split_channel,
-                                        bool split_at_cursor,
-                                        bool all_channels,
-                                        bool only_selected);
+/**
+ * Strips that #SEQUENCER_OT_split splits at \a frame; note that this does not include effects or
+ * connections, the caller must propagate to them by #edit_strip_split or #split_expand_strips.
+ *
+ * With \a channel set, there is only one possible strip split in that channel at that frame,
+ * assuming no bugged overlapping strips.
+ */
+Vector<Strip *> split_strips_get(Scene *scene,
+                                 int frame,
+                                 std::optional<int> channel,
+                                 bool only_selected);
 
 /* Externals. */
 
