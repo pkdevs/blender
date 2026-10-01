@@ -746,6 +746,34 @@ static std::unique_ptr<TooltipData> tooltip_data_from_tool(bContext *C,
     }
   }
 
+  if (show_shortcut) {
+    /* Shortcut for Hold
+     *
+     * As a third option, we may have a shortcut that enables a tool when held, and
+     * returns to the previous tool when released.
+     */
+
+    PointerRNA op_props = WM_operator_properties_create_ptr(but->optype);
+    RNA_string_set(&op_props, "name", tool_id);
+    RNA_boolean_set(&op_props, "hold", true);
+    const std::optional<std::string> shortcut = WM_key_event_operator_string(
+        C,
+        but->optype->idname,
+        wm::OpCallContext::InvokeRegionWin,
+        static_cast<IDProperty *>(op_props.data),
+        true);
+    WM_operator_properties_free(&op_props);
+
+    if (shortcut) {
+      tooltip_text_field_add(*data,
+                             fmt::format(fmt::runtime(TIP_("Shortcut Hold: {}")), *shortcut),
+                             {},
+                             TIP_STYLE_NORMAL,
+                             TIP_LC_VALUE,
+                             true);
+    }
+  }
+
   /* Python */
   if ((is_quick_tip == false) && (U.flag & USER_TOOLTIPS_PYTHON)) {
     std::string str = tooltip_text_python_from_op(C, but->optype, but->opptr);
