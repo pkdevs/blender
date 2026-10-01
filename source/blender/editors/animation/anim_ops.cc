@@ -562,6 +562,12 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   if (!scene) {
     return;
   }
+
+  /* Stop playback before setting the frame so the exact requested frame is used, rather than being
+   * clamped into the playback range below. For interactive scrubbing this already happened in
+   * #ED_screen_scrubbing_enable, so this is a no-op there. */
+  ED_screen_stop_playback_on_frame_change(C);
+
   float frame = RNA_float_get(op->ptr, "frame");
   bool do_snap = RNA_boolean_get(op->ptr, "snap");
 
@@ -590,9 +596,6 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
       wmTimer *wt = screen->animtimer;
       ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
       BKE_scene_frame_clamp_for_playback(scene, (sad->flag & ANIMPLAY_FLAG_REVERSE) == 0);
-      if (U.animation_flag & USER_ANIM_STOP_ON_FRAME_CHANGE) {
-        stop_playback(C);
-      }
     }
   }
   FRAMENUMBER_MIN_CLAMP(scene->r.cfra);

@@ -102,7 +102,6 @@ namespace blender {
 
 static wmOperatorStatus start_playback(bContext *C, int sync, int mode);
 static void stop_playback(bContext *C);
-static void stop_playback_on_frame_change_check(bContext *C);
 
 /* -------------------------------------------------------------------- */
 /** \name Public Poll API
@@ -3915,7 +3914,7 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
   }
   scene->r.subframe = 0.0f;
 
-  stop_playback_on_frame_change_check(C);
+  ED_screen_stop_playback_on_frame_change(C);
 
   ED_areas_do_frame_follow(C, false);
 
@@ -3958,6 +3957,10 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
+  /* When enabled, stop playback so the frame is set directly below (`animtimer` is cleared
+   * synchronously), rather than being scheduled as the next playback frame. */
+  ED_screen_stop_playback_on_frame_change(C);
+
   wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
   const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
 
@@ -3965,7 +3968,7 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
    * first/last frame not to be actually shown (bad since for example physics
    * simulations aren't reset properly).
    */
-  if (animtimer && !U.animation_flag & USER_ANIM_STOP_ON_FRAME_CHANGE) {
+  if (animtimer) {
     ScreenAnimData *sad = static_cast<ScreenAnimData *>(animtimer->customdata);
 
     sad->flag |= ANIMPLAY_FLAG_USE_NEXT_FRAME;
@@ -3985,8 +3988,6 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
       scene->r.cfra = playback_range.start_frame;
     }
     scene->r.subframe = 0.0f;
-
-    stop_playback_on_frame_change_check(C);
 
     ED_areas_do_frame_follow(C, true);
 
@@ -4063,7 +4064,7 @@ static wmOperatorStatus frame_jump_delta_exec(bContext *C, wmOperator *op)
     scene->r.subframe -= subframe_offset;
   }
 
-  stop_playback_on_frame_change_check(C);
+  ED_screen_stop_playback_on_frame_change(C);
 
   const bool wrap_timeline_navigation = scene->r.flag & SCER_WRAP_TIMELINE_NAVIGATION;
   if (wrap_timeline_navigation) {
@@ -4307,7 +4308,7 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  stop_playback_on_frame_change_check(C);
+  ED_screen_stop_playback_on_frame_change(C);
 
   ED_areas_do_frame_follow(C, true);
   ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
@@ -4424,7 +4425,7 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
 
   scene->r.cfra = closest;
 
-  stop_playback_on_frame_change_check(C);
+  ED_screen_stop_playback_on_frame_change(C);
 
   ED_areas_do_frame_follow(C, true);
 
@@ -6958,7 +6959,7 @@ static void stop_playback(bContext *C)
   screen_stop_playback(CTX_data_main(C), wm, CTX_wm_window(C), stopscreen);
 }
 
-static void stop_playback_on_frame_change_check(bContext *C)
+void ED_screen_stop_playback_on_frame_change(bContext *C)
 {
   if (U.animation_flag & USER_ANIM_STOP_ON_FRAME_CHANGE) {
     stop_playback(C);
@@ -7055,7 +7056,7 @@ std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen
   BLI_assert_msg(!screen.scrubbing, "scrubbing should not be active yet");
   screen.scrubbing = true;
 
-  stop_playback_on_frame_change_check(&C);
+  ED_screen_stop_playback_on_frame_change(&C);
 
   wmWindowManager *wm = CTX_wm_manager(&C);
   bScreen *play_screen = ED_screen_animation_no_scrub(wm);
