@@ -1618,8 +1618,8 @@ int curve_fit_cubic_to_points_refit_db(
 			}
 		}
 
-		if (is_cyclic == false && knots_len > 1) {
-			corner_index_array[c_index++] = k_index;
+		if (is_cyclic == false) {
+			corner_index_array[c_index++] = (knots_len > 1) ? k_index : 0;
 			k_index++;
 		}
 
