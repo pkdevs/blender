@@ -1863,6 +1863,14 @@ const EnumPropertyItem prop_split_side_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+static bool only_selected_get(wmOperator *op)
+{
+  if (RNA_struct_property_is_set(op->ptr, "ignore_selection")) {
+    return !RNA_boolean_get(op->ptr, "ignore_selection");
+  }
+  return RNA_boolean_get(op->ptr, "only_selected");
+}
+
 /* Get the splitting side for the Split Strips's operator exec() callback. */
 static seq::Side sequence_split_side_for_exec_get(wmOperator *op)
 {
@@ -1933,7 +1941,7 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
 
   const bool split_at_cursor = RNA_boolean_get(op->ptr, "use_cursor_position");
   const bool all_channels = RNA_boolean_get(op->ptr, "all_channels");
-  const bool only_selected = RNA_boolean_get(op->ptr, "only_selected");
+  const bool only_selected = only_selected_get(op);
 
   const int split_frame = RNA_struct_property_is_set(op->ptr, "frame") ?
                               RNA_int_get(op->ptr, "frame") :
@@ -2170,6 +2178,12 @@ void SEQUENCER_OT_split(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   RNA_def_boolean(ot->srna, "only_selected", false, "Only Selected", "Only split selected strips");
+  prop = RNA_def_boolean(ot->srna,
+                         "ignore_selection",
+                         false,
+                         "Ignore Selection",
+                         "Deprecated, will be removed in 6.0. Use only_selected instead");
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   prop = RNA_def_enum(ot->srna,
                       "side",
@@ -2214,7 +2228,7 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
   ui::view2d_region_to_view_rctf(v2d, &box_rect, &box_rect);
 
   const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
-  const bool only_selected = RNA_boolean_get(op->ptr, "only_selected");
+  const bool only_selected = only_selected_get(op);
   const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
   const seq::eSplitMethod method = seq::eSplitMethod(RNA_enum_get(op->ptr, "type"));
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
@@ -2399,7 +2413,7 @@ static wmOperatorStatus sequencer_box_blade_modal(bContext *C,
     preview.rect = box_rect;
     preview.remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
     preview.ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
-    preview.only_selected = RNA_boolean_get(op->ptr, "only_selected");
+    preview.only_selected = only_selected_get(op);
     preview.is_active = true;
 
     /* Region event handlers don't run during the gesture, keep the tooltip updated here. */
@@ -2461,7 +2475,14 @@ void SEQUENCER_OT_box_blade(wmOperatorType *ot)
                seq::SPLIT_SOFT,
                "Type",
                "The type of split operation to perform on strips");
-  RNA_def_boolean(ot->srna, "only_selected", false, "Only Selected", "Only cut selected strips");
+  RNA_def_boolean(ot->srna, "only_selected", false, "Only Selected", "Only split selected strips");
+  PropertyRNA *prop = RNA_def_boolean(
+      ot->srna,
+      "ignore_selection",
+      false,
+      "Ignore Selection",
+      "Deprecated, will be removed in 6.0. Use only_selected instead");
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
   RNA_def_boolean(ot->srna,
                   "ignore_connections",
                   false,
