@@ -84,6 +84,11 @@ ClosureType closure_type_get(ClosureThinRefraction /*cl*/)
   return CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID;
 }
 
+ClosureType closure_type_get(ClosureHair /*cl*/)
+{
+  return CLOSURE_BSDF_HAIR_REFLECTION_ID;
+}
+
 /**
  * Assign `candidate` to `destination` based on a random value and the respective weights.
  */

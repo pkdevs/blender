@@ -8,6 +8,7 @@
 
 #include "eevee_bxdf.bsl.hh"                         /* IWYU pragma: export */
 #include "eevee_bxdf_diffuse.bsl.hh"                 /* IWYU pragma: export */
+#include "eevee_bxdf_hair.bsl.hh"                    /* IWYU pragma: export */
 #include "eevee_bxdf_lut.bsl.hh"                     /* IWYU pragma: export */
 #include "eevee_bxdf_lut_lib.bsl.hh"                 /* IWYU pragma: export */
 #include "eevee_bxdf_microfacet.bsl.hh"              /* IWYU pragma: export */

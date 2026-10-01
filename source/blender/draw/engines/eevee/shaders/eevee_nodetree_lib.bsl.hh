@@ -398,9 +398,54 @@ Closure closure_eval(ShadingData &sd, ClosureVolumeAbsorption volume_absorption)
   return Closure(0);
 }
 
-Closure closure_eval(ShadingData & /*sd*/, ClosureHair /*hair*/)
+Closure closure_eval(ShadingData &sd, ClosureHair hair)
 {
-  /* TODO */
+  ClosureUndetermined cl;
+  /* The strand tangent space is not stored in the gbuffer.
+   * Lighting uses the cylinder normal, which sweeps around the strand and produces
+   * the characteristic hair highlight streak. */
+  cl.N = sd.N;
+  cl.color = hair.color;
+  cl.type = closure_type_get(hair);
+  /* `data.x`: effective isotropic roughness.
+   * `data.y`: cuticle offset (kept for debug / future tangent-aware evaluation). */
+  cl.data.x = max(hair.roughness.x, hair.roughness.y);
+  cl.data.y = hair.offset;
+
+  /* Same bin layout as the reflection closures (specular bin). */
+#ifdef MAT_CLEARCOAT
+#  if CLOSURE_BIN_COUNT == 2
+  /* Multiple reflection closures. */
+  if (sd.closure_reflection_bin) {
+    closure_select(sd.closure_bins[1], cl);
+  }
+  else {
+    closure_select(sd.closure_bins[0], cl);
+  }
+#  elif CLOSURE_BIN_COUNT == 3
+  /* Multiple reflection closures and one other closure. */
+  if (sd.closure_reflection_bin) {
+    closure_select(sd.closure_bins[2], cl);
+  }
+  else {
+    closure_select(sd.closure_bins[1], cl);
+  }
+#  else
+#    error Hair should always have at least 2 bins with clearcoat
+#  endif
+  sd.closure_reflection_bin = !sd.closure_reflection_bin;
+#else
+#  if CLOSURE_BIN_COUNT == 1
+  /* Only one closure is present in the whole tree. */
+  closure_select(sd.closure_bins[0], cl);
+#  elif CLOSURE_BIN_COUNT == 2
+  /* Only one hair closure and one other closure. */
+  closure_select(sd.closure_bins[1], cl);
+#  elif CLOSURE_BIN_COUNT == 3
+  closure_select(sd.closure_bins[2], cl);
+#  endif
+#endif
+
   return Closure(0);
 }
 

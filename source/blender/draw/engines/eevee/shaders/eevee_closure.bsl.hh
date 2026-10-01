@@ -14,6 +14,8 @@ float closure_apparent_roughness_get(ClosureUndetermined cl)
     case CLOSURE_BSSRDF_BURLEY_ID:
     case CLOSURE_BSDF_DIFFUSE_ID:
       return bxdf_diffuse_perceived_roughness();
+    case CLOSURE_BSDF_HAIR_REFLECTION_ID:
+      return bxdf_hair_roughness_get(to_closure_hair(cl));
     case CLOSURE_BSDF_TRANSLUCENT_ID:
       return bxdf_translucent_perceived_roughness();
     case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
@@ -43,6 +45,9 @@ float closure_evaluate_pdf(ClosureUndetermined cl, float3 L, float3 V, Thickness
       ClosureReflection cl_ = to_closure_reflection(cl);
       float roughness_sq = square(cl_.roughness);
       return bxdf_ggx_eval_reflection(cl.N, L, V, roughness_sq, true).pdf;
+    }
+    case CLOSURE_BSDF_HAIR_REFLECTION_ID: {
+      return bxdf_hair_eval(to_closure_hair(cl), cl.N, L, V, true).pdf;
     }
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID: {
       ClosureRefraction cl_ = to_closure_refraction(cl);
@@ -75,6 +80,7 @@ LightProbeRay bxdf_lightprobe_ray(ClosureUndetermined cl,
     case CLOSURE_BSSRDF_BURLEY_ID:
     case CLOSURE_BSDF_DIFFUSE_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
+    case CLOSURE_BSDF_HAIR_REFLECTION_ID:
     case CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID:
       break;
   }
@@ -88,6 +94,8 @@ LightProbeRay bxdf_lightprobe_ray(ClosureUndetermined cl,
       return bxdf_diffuse_lightprobe(cl.N);
     case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
       return bxdf_ggx_lightprobe_reflection(to_closure_reflection(cl), V);
+    case CLOSURE_BSDF_HAIR_REFLECTION_ID:
+      return bxdf_hair_lightprobe(to_closure_hair(cl), cl.N, V);
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
       return bxdf_ggx_lightprobe_transmission(to_closure_refraction(cl), V, thickness);
     case CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID:
@@ -124,6 +132,7 @@ ClosureLight closure_light_new_ex(const UtilityTexture &util_tx,
       case CLOSURE_BSDF_TRANSLUCENT_ID:
       /* Defaults to avoid UB. */
       case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
+      case CLOSURE_BSDF_HAIR_REFLECTION_ID:
       case CLOSURE_BSDF_DIFFUSE_ID:
       case CLOSURE_NONE_ID:
         cl_light = bxdf_translucent_light(cl, V, thickness);
@@ -135,6 +144,9 @@ ClosureLight closure_light_new_ex(const UtilityTexture &util_tx,
     switch (cl.type) {
       case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
         cl_light = bxdf_ggx_light_reflection(util_tx, to_closure_reflection(cl), V);
+        break;
+      case CLOSURE_BSDF_HAIR_REFLECTION_ID:
+        cl_light = bxdf_hair_light(util_tx, to_closure_hair(cl), cl.N, V);
         break;
       case CLOSURE_BSSRDF_BURLEY_ID:
       case CLOSURE_BSDF_DIFFUSE_ID:

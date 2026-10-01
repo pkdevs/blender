@@ -297,6 +297,7 @@ void sphere_eval_frag([[resource_table]] LightEvalIterator &lights,
         case CLOSURE_BSSRDF_BURLEY_ID:
         case CLOSURE_BSDF_DIFFUSE_ID:
         case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
+        case CLOSURE_BSDF_HAIR_REFLECTION_ID:
           albedo_front += cl.color;
           break;
         case CLOSURE_BSDF_TRANSLUCENT_ID:
@@ -421,6 +422,7 @@ void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
     if (i < closure_count) {
       ClosureUndetermined cl = gbuf.layer[i];
       switch (cl.type) {
+        case CLOSURE_BSDF_HAIR_REFLECTION_ID:
         case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID: {
           cl_reflect.color += cl.color;
           /* Average roughness and normals. */

@@ -244,9 +244,23 @@ static int node_shader_gpu_hair_principled(GPUMaterial *mat,
                                            GPUNodeStack *in,
                                            GPUNodeStack *out)
 {
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
+  NodeShaderHairPrincipled *data = static_cast<NodeShaderHairPrincipled *>(node->storage);
+  GPU_material_flag_set(mat, GPU_MATFLAG_HAIR);
+  if (in[0].might_be_tinted() || in[3].might_be_tinted()) {
+    GPU_material_flag_set(mat, GPU_MATFLAG_HAIR_MAYBE_COLORED);
+  }
 
-  return GPU_stack_link(mat, node, "node_bsdf_hair_principled", in, out, GPU_shading_data());
+  float model = float(data->model);
+  float parametrization = float(data->parametrization);
+
+  return GPU_stack_link(mat,
+                        node,
+                        "node_bsdf_hair_principled",
+                        in,
+                        out,
+                        GPU_constant(&model),
+                        GPU_constant(&parametrization),
+                        GPU_shading_data());
 }
 
 }  // namespace nodes::node_shader_bsdf_hair_principled_cc
@@ -265,7 +279,7 @@ void register_node_type_sh_bsdf_hair_principled()
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
-  ntype.add_ui_poll = object_cycles_shader_nodes_poll;
+  ntype.add_ui_poll = object_cycles_or_eevee_shader_nodes_poll;
   ntype.draw_buttons = file_ns::node_shader_buts_principled_hair;
   ntype.default_width = bke::NodeWidth::_240;
   ntype.initfunc = file_ns::node_shader_init_hair_principled;

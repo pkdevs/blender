@@ -357,6 +357,7 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_attributes_world_lib.bsl.hh
   engines/eevee/shaders/eevee_bxdf.bsl.hh
   engines/eevee/shaders/eevee_bxdf_diffuse.bsl.hh
+  engines/eevee/shaders/eevee_bxdf_hair.bsl.hh
   engines/eevee/shaders/eevee_bxdf_lut.bsl.hh
   engines/eevee/shaders/eevee_bxdf_lut_lib.bsl.hh
   engines/eevee/shaders/eevee_bxdf_microfacet.bsl.hh

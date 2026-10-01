@@ -131,6 +131,7 @@ enum eClosureBits : uint32_t {
   CLOSURE_REFLECTION = (1u << 2u),
   CLOSURE_REFRACTION = (1u << 3u),
   CLOSURE_TRANSLUCENT = (1u << 4u),
+  CLOSURE_HAIR = (1u << 5u),
   CLOSURE_TRANSPARENCY = (1u << 8u),
   CLOSURE_EMISSION = (1u << 9u),
   CLOSURE_HOLDOUT = (1u << 10u),
@@ -160,6 +161,9 @@ static inline eClosureBits shader_closure_bits_from_flag(const GPUMaterial *gpum
   }
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_GLOSSY)) {
     closure_bits |= CLOSURE_REFLECTION;
+  }
+  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_HAIR)) {
+    closure_bits |= CLOSURE_HAIR;
   }
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_COAT)) {
     closure_bits |= CLOSURE_CLEARCOAT;
@@ -206,6 +210,10 @@ static inline int to_gbuffer_bin_count(const eClosureBits closure_bits)
     closure_data_slots |= (1 << 0);
   }
   if (closure_bits & CLOSURE_REFLECTION) {
+    closure_data_slots |= (1 << 1);
+  }
+  if (closure_bits & CLOSURE_HAIR) {
+    /* Same slot as the reflection closures: same gbuffer layout, same bin. */
     closure_data_slots |= (1 << 1);
   }
   if (closure_bits & CLOSURE_CLEARCOAT) {

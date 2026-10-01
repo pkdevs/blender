@@ -163,6 +163,64 @@ void eevee_test_gbuffer_closure_main(
     EXPECT_NEAR(out_reflection.data.r, data_in.closure[0].data.r, 1e-5f);
   }
 
+  TEST(eevee_gbuffer, ClosureHair)
+  {
+    gbuffer::InputClosures data_in = gbuffer_new();
+    data_in.closure[0].type = CLOSURE_BSDF_HAIR_REFLECTION_ID;
+    data_in.closure[0].color = float3(0.1f, 0.2f, 0.3f);
+    data_in.closure[0].data.x = 0.4f;
+    data_in.closure[0].data.y = 0.1f;
+    data_in.closure[0].N = normalize(float3(0.2f, 0.1f, 0.3f));
+
+    const gbuffer::Packed data_out = gbuffer::pack(param, data_in, Ng, N, thickness, false);
+    const gbuffer::Header header = gbuffer::Header::from_data(data_out.header);
+
+    EXPECT_EQ(uint(data_out.used_layers), 0u);
+    EXPECT_NEAR(float3(header.empty_bins()), float3(0, 1, 1), 0.5f);
+    EXPECT_EQ(header.closure_len(), uchar(1));
+
+    ClosureUndetermined out_hair;
+    out_hair.type = gbuffer::mode_to_closure_type(header.bin_type(0));
+    out_hair.color = gbuffer::closure_color_unpack(data_out.closure[0]);
+    out_hair.N = gbuffer::normal_unpack(data_out.normal[0]);
+    gbuffer::Hair::unpack_additional(out_hair, data_out.closure[1]);
+
+    EXPECT_EQ(out_hair.type, CLOSURE_BSDF_HAIR_REFLECTION_ID);
+    EXPECT_NEAR(out_hair.color, data_in.closure[0].color, 1e-5f);
+    EXPECT_NEAR(out_hair.N, data_in.closure[0].N, 1e-5f);
+    EXPECT_NEAR(out_hair.data.r, data_in.closure[0].data.r, 1e-5f);
+    EXPECT_NEAR(out_hair.data.g, data_in.closure[0].data.g, 1e-5f);
+  }
+
+  TEST(eevee_gbuffer, ClosureHairColorless)
+  {
+    gbuffer::InputClosures data_in = gbuffer_new();
+    data_in.closure[0].type = CLOSURE_BSDF_HAIR_REFLECTION_ID;
+    data_in.closure[0].color = float3(0.1f, 0.1f, 0.1f);
+    data_in.closure[0].data.x = 0.4f;
+    data_in.closure[0].data.y = 0.1f;
+    data_in.closure[0].N = normalize(float3(0.2f, 0.1f, 0.3f));
+
+    const gbuffer::Packed data_out = gbuffer::pack(param, data_in, Ng, N, thickness, false);
+    const gbuffer::Header header = gbuffer::Header::from_data(data_out.header);
+
+    EXPECT_EQ(uint(data_out.used_layers), 0u);
+    EXPECT_NEAR(float3(header.empty_bins()), float3(0, 1, 1), 0.5f);
+    EXPECT_EQ(header.closure_len(), uchar(1));
+
+    ClosureUndetermined out_hair;
+    out_hair.type = gbuffer::mode_to_closure_type(header.bin_type(0));
+    out_hair.color = gbuffer::closure_color_unpack(data_out.closure[0]);
+    out_hair.N = gbuffer::normal_unpack(data_out.normal[0]);
+    gbuffer::HairColorless::unpack_additional(out_hair, data_out.closure[0]);
+
+    EXPECT_EQ(out_hair.type, CLOSURE_BSDF_HAIR_REFLECTION_ID);
+    EXPECT_NEAR(out_hair.color, data_in.closure[0].color, 1e-5f);
+    EXPECT_NEAR(out_hair.N, data_in.closure[0].N, 1e-5f);
+    EXPECT_NEAR(out_hair.data.r, data_in.closure[0].data.r, 1e-5f);
+    EXPECT_NEAR(out_hair.data.g, data_in.closure[0].data.g, 1e-5f);
+  }
+
   TEST(eevee_gbuffer, ClosureRefraction)
   {
     gbuffer::InputClosures data_in = gbuffer_new();
@@ -344,6 +402,8 @@ PipelineCompute eevee_test_gbuffer_closure(eevee_test_gbuffer_closure_main,
                                                .gbuffer_has_subsurface = true,
                                                .gbuffer_has_translucent = true,
                                                .gbuffer_reflection_colorless = false,
+                                               .gbuffer_has_hair = true,
+                                               .gbuffer_hair_colorless = false,
                                                .gbuffer_refraction_colorless = false,
                                                .gbuffer_layer_max = 3,
                                                .gbuffer_simple_layout = false,

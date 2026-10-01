@@ -168,6 +168,7 @@ void combine_frag([[resource_table]] Combine &srt,
             }
             break;
           case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
+          case CLOSURE_BSDF_HAIR_REFLECTION_ID:
           case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
           case CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID:
             specular_color += cl.color;

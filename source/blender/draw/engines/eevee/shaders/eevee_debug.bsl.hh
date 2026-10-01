@@ -610,6 +610,7 @@ void frag_main([[resource_table]] Resources &srt,
       case CLOSURE_BSDF_DIFFUSE_ID:
       case CLOSURE_BSDF_TRANSLUCENT_ID:
       case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
+      case CLOSURE_BSDF_HAIR_REFLECTION_ID:
       case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
         eval_cost += 1.0f;
         break;

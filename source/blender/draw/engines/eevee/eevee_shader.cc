@@ -1098,6 +1098,9 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_GLOSSY)) {
     info.define("MAT_REFLECTION");
   }
+  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_HAIR)) {
+    info.define("MAT_HAIR");
+  }
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_COAT)) {
     info.define("MAT_CLEARCOAT");
   }
@@ -1144,6 +1147,13 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
         gpu::shader::Type::bool_t,
         "gbuffer_reflection_colorless",
         GPU_material_flag_get(gpumat, GPU_MATFLAG_REFLECTION_MAYBE_COLORED) == false);
+    info.compilation_constant(gpu::shader::Type::bool_t,
+                              "gbuffer_has_hair",
+                              GPU_material_flag_get(gpumat, GPU_MATFLAG_HAIR));
+    info.compilation_constant(gpu::shader::Type::bool_t,
+                              "gbuffer_hair_colorless",
+                              GPU_material_flag_get(gpumat, GPU_MATFLAG_HAIR_MAYBE_COLORED) ==
+                                  false);
     info.compilation_constant(
         gpu::shader::Type::bool_t,
         "gbuffer_refraction_colorless",
@@ -1158,6 +1168,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
        * simplifies the shader code and improves compilation time (see #145347). */
       const bool colorless_reflection = !GPU_material_flag_get(
           gpumat, GPU_MATFLAG_REFLECTION_MAYBE_COLORED);
+      const bool colorless_hair = !GPU_material_flag_get(gpumat, GPU_MATFLAG_HAIR_MAYBE_COLORED);
       const bool colorless_refraction = !GPU_material_flag_get(
           gpumat, GPU_MATFLAG_REFRACTION_MAYBE_COLORED);
       int closure_layer_count = 0;
@@ -1169,6 +1180,9 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       }
       if (closure_bits & CLOSURE_REFLECTION) {
         closure_layer_count += colorless_reflection ? 1 : 2;
+      }
+      if (closure_bits & CLOSURE_HAIR) {
+        closure_layer_count += colorless_hair ? 1 : 2;
       }
       if (closure_bits & CLOSURE_REFRACTION) {
         closure_layer_count += colorless_refraction ? 1 : 2;

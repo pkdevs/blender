@@ -86,6 +86,7 @@ enum eGPUMaterialFlag {
   GPU_MATFLAG_LIGHTING = (1 << 12),
   GPU_MATFLAG_LIGHT_ATTRIBUTE = (1 << 13),
   GPU_MATFLAG_SHADOW_OFFSET = (1 << 14),
+  GPU_MATFLAG_HAIR = (1 << 15),
 
   GPU_MATFLAG_VOLUME_SCATTER = (1 << 16),
   GPU_MATFLAG_VOLUME_ABSORPTION = (1 << 17),
@@ -105,6 +106,10 @@ enum eGPUMaterialFlag {
 
   /* Signals scene time use. */
   GPU_MATFLAG_SCENE_TIME = (1 << 25),
+
+  /* Signals that hair closures might *not* be colorless.
+   * If this flag is not set, all hair closures are ensured to not be tinted. */
+  GPU_MATFLAG_HAIR_MAYBE_COLORED = (1 << 26),
 
   /* Tells the render engine the material was just compiled or updated. */
   GPU_MATFLAG_UPDATED = (1 << 29),

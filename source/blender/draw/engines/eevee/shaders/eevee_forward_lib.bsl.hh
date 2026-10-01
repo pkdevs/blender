@@ -122,7 +122,7 @@ void forward_lighting_eval([[resource_table]] KernelGlobals &kg,
     samp.volume_irradiance = spherical_harmonics::clamp_energy(samp.volume_irradiance,
                                                                clamp_indirect_sh);
 
-#ifdef MAT_REFLECTION /* Disable if only rough surfaces. */
+#if defined(MAT_REFLECTION) || defined(MAT_HAIR) /* Disable if only rough surfaces. */
     /* Planar reflection. */
     float3 planar_probe_radiance = float3(0.0f);
     float3 average_N = sd.Ng * 0.001f;
@@ -173,8 +173,10 @@ void forward_lighting_eval([[resource_table]] KernelGlobals &kg,
           float3 direct_light = ctx.stack.cl[i].light_shadowed;
           float3 indirect_light = lightprobes.eval(samp, cl, sd.P, V, thickness);
 
-#ifdef MAT_REFLECTION
-          if (cl.type == CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID) {
+#if defined(MAT_REFLECTION) || defined(MAT_HAIR)
+          if ((cl.type == CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID ||
+               cl.type == CLOSURE_BSDF_HAIR_REFLECTION_ID))
+          {
             const float blend = saturate(to_closure_reflection(cl).roughness * -10.0f + 1.0f) *
                                 saturate(dot(average_N, cl.N) * 100.0f - 99.0f);
             indirect_light = mix(indirect_light, planar_probe_radiance, blend);

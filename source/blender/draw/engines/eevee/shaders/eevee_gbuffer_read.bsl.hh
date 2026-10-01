@@ -43,6 +43,12 @@ ClosureUndetermined unpack_closure(ClosurePacking cl_in)
     case GBUF_REFLECTION_COLORLESS:
       gbuffer::ReflectionColorless::unpack_additional(cl, cl_in.data0);
       break;
+    case GBUF_HAIR:
+      gbuffer::Hair::unpack_additional(cl, cl_in.data1);
+      break;
+    case GBUF_HAIR_COLORLESS:
+      gbuffer::HairColorless::unpack_additional(cl, cl_in.data0);
+      break;
     case GBUF_REFRACTION:
       gbuffer::Refraction::unpack_additional(cl, cl_in.data1);
       break;

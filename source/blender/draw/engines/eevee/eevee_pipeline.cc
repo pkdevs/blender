@@ -822,7 +822,8 @@ void DeferredLayer::end_sync(bool is_first_pass,
   /* We need the feedback output in case of refraction in the next pass (see #126455). */
   const bool is_layer_refracted = (next_layer_has_transmission && has_any_closure);
   const bool has_transmit_closure = (closure_bits_ & (CLOSURE_REFRACTION | CLOSURE_TRANSLUCENT));
-  const bool has_reflect_closure = (closure_bits_ & (CLOSURE_REFLECTION | CLOSURE_DIFFUSE));
+  const bool has_reflect_closure = (closure_bits_ &
+                                    (CLOSURE_REFLECTION | CLOSURE_HAIR | CLOSURE_DIFFUSE));
   const bool has_transparent_shader_to_rgba = (closure_bits_ & CLOSURE_TRANSPARENCY) &&
                                               (closure_bits_ & CLOSURE_SHADER_TO_RGBA);
   const bool use_direct_scale = inst_.sampling.use_direct_scale();

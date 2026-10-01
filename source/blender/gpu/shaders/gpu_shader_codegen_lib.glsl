@@ -94,7 +94,7 @@ enum ClosureType : uchar {
   // CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID = 8u, /* TODO */
   // CLOSURE_BSDF_ASHIKHMIN_VELVET_ID = 9u,  /* TODO */
   // CLOSURE_BSDF_GLOSSY_TOON_ID = 10u,      /* TODO */
-  // CLOSURE_BSDF_HAIR_REFLECTION_ID = 11u,  /* TODO */
+  CLOSURE_BSDF_HAIR_REFLECTION_ID = 11u,
 
   /* Transmission */
   CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID = 12u,
@@ -248,6 +248,17 @@ ClosureThinRefraction to_closure_thin_refraction(ClosureUndetermined cl)
   closure.N = cl.N;
   closure.color = cl.color;
   closure.roughness = cl.data.x;
+  return closure;
+}
+
+ClosureHair to_closure_hair(ClosureUndetermined cl)
+{
+  ClosureHair closure;
+  /* Tangent space is not stored in the gbuffer. */
+  closure.T = float3(0.0f);
+  closure.color = cl.color;
+  closure.offset = cl.data.y;
+  closure.roughness = float2(cl.data.x, cl.data.x);
   return closure;
 }
 

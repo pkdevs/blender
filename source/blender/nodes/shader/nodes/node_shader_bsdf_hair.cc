@@ -52,7 +52,10 @@ static int node_shader_gpu_bsdf_hair(GPUMaterial *mat,
                                      GPUNodeStack *in,
                                      GPUNodeStack *out)
 {
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
+  GPU_material_flag_set(mat, GPU_MATFLAG_HAIR);
+  if (in[0].might_be_tinted()) {
+    GPU_material_flag_set(mat, GPU_MATFLAG_HAIR_MAYBE_COLORED);
+  }
 
   return GPU_stack_link(mat, node, "node_bsdf_hair", in, out, GPU_shading_data());
 }
@@ -73,7 +76,7 @@ void register_node_type_sh_bsdf_hair()
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
-  ntype.add_ui_poll = object_cycles_shader_nodes_poll;
+  ntype.add_ui_poll = object_cycles_or_eevee_shader_nodes_poll;
   ntype.draw_buttons = file_ns::node_shader_buts_hair;
   ntype.default_width = bke::NodeWidth::_160;
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_hair;

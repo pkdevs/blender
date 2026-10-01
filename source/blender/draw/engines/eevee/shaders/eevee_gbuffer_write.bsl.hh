@@ -31,6 +31,8 @@ struct PackParameters {
   [[compilation_constant]] bool gbuffer_has_subsurface;
   [[compilation_constant]] bool gbuffer_has_translucent;
   [[compilation_constant]] bool gbuffer_reflection_colorless;
+  [[compilation_constant]] bool gbuffer_has_hair;
+  [[compilation_constant]] bool gbuffer_hair_colorless;
   [[compilation_constant]] bool gbuffer_refraction_colorless;
   [[compilation_constant]] int gbuffer_layer_max;
   [[compilation_constant]] bool gbuffer_simple_layout;
@@ -70,6 +72,22 @@ ClosurePacking pack_closure(const PackParameters &srt, ClosureUndetermined cl)
     case GBUF_REFLECTION_COLORLESS:
       if (srt.gbuffer_has_reflection) [[static_branch]] {
         gbuffer::ReflectionColorless::pack_additional(cl_packed, cl);
+      }
+      break;
+    case GBUF_HAIR:
+      if (srt.gbuffer_has_hair) [[static_branch]] {
+        if (srt.gbuffer_hair_colorless) [[static_branch]] {
+          /* Material is colored, but the flag is set to colorless. */
+          assert(false);
+        }
+        else {
+          gbuffer::Hair::pack_additional(cl_packed, cl);
+        }
+      }
+      break;
+    case GBUF_HAIR_COLORLESS:
+      if (srt.gbuffer_has_hair) [[static_branch]] {
+        gbuffer::HairColorless::pack_additional(cl_packed, cl);
       }
       break;
     case GBUF_REFRACTION:

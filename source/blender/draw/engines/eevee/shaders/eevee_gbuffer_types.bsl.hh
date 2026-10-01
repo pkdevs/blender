@@ -66,6 +66,10 @@ enum GBufferMode : uchar {
   /** Used for surfaces that have no lit closure and just encode a normal layer. */
   GBUF_UNLIT = 4u,
 
+  /* Hair. */
+  GBUF_HAIR = 6u,
+  GBUF_HAIR_COLORLESS = 7u,
+
   /**
    * Special bit that marks all closures with refraction.
    * Allows to detect the presence of transmission more easily.
@@ -94,6 +98,8 @@ GBufferMode closure_type_to_mode(ClosureType type, bool is_grayscale)
       return GBUF_TRANSLUCENT;
     case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
       return is_grayscale ? GBUF_REFLECTION_COLORLESS : GBUF_REFLECTION;
+    case CLOSURE_BSDF_HAIR_REFLECTION_ID:
+      return is_grayscale ? GBUF_HAIR_COLORLESS : GBUF_HAIR;
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
       return is_grayscale ? GBUF_REFRACTION_COLORLESS : GBUF_REFRACTION;
     case CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID:
@@ -117,6 +123,9 @@ ClosureType mode_to_closure_type(uint mode)
     case GBUF_REFLECTION_COLORLESS:
     case GBUF_REFLECTION:
       return ClosureType(CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID);
+    case GBUF_HAIR_COLORLESS:
+    case GBUF_HAIR:
+      return ClosureType(CLOSURE_BSDF_HAIR_REFLECTION_ID);
     case GBUF_REFRACTION_COLORLESS:
     case GBUF_REFRACTION:
       return ClosureType(CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID);
@@ -539,8 +548,9 @@ struct ClosurePacking {
 
   bool use_data1() const
   {
-    return this->mode == GBUF_REFLECTION || this->mode == GBUF_REFRACTION ||
-           this->mode == GBUF_THIN_REFRACTION || this->mode == GBUF_SUBSURFACE;
+    return this->mode == GBUF_REFLECTION || this->mode == GBUF_HAIR ||
+           this->mode == GBUF_REFRACTION || this->mode == GBUF_THIN_REFRACTION ||
+           this->mode == GBUF_SUBSURFACE;
   }
 
   bool is_empty() const
@@ -583,6 +593,34 @@ struct Reflection {
   static void unpack_additional(ClosureUndetermined &cl, float4 data1)
   {
     cl.data.x = data1.x; /* Roughness. */
+  }
+};
+
+struct Hair {
+  static void pack_additional(ClosurePacking &cl_packed, ClosureUndetermined cl)
+  {
+    cl_packed.data1 = float4(cl.data.x, cl.data.y, 0.0f, 0.0f); /* Roughness, offset. */
+  }
+
+  static void unpack_additional(ClosureUndetermined &cl, float4 data1)
+  {
+    cl.data.x = data1.x; /* Roughness. */
+    cl.data.y = data1.y; /* Offset. */
+  }
+};
+
+/* Special case where we can save 1 data layers per closure. */
+struct HairColorless {
+  static void pack_additional(ClosurePacking &cl_packed, ClosureUndetermined cl)
+  {
+    cl_packed.data0 = float4(cl.data.x, cl.data.y, cl_packed.data0.zw);
+  }
+
+  static void unpack_additional(ClosureUndetermined &cl, float4 data0)
+  {
+    cl.color = cl.color.zzz;
+    cl.data.x = data0.x; /* Roughness. */
+    cl.data.y = data0.y; /* Offset. */
   }
 };
 
