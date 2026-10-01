@@ -563,9 +563,7 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
     return;
   }
 
-  /* Stop playback before setting the frame so the exact requested frame is used, rather than being
-   * clamped into the playback range below. For interactive scrubbing this already happened in
-   * #ED_screen_scrubbing_enable, so this is a no-op there. */
+  /* For interactive scrubbing this already happened in #ED_screen_scrubbing_enable. */
   ED_screen_stop_playback_on_frame_change(C);
 
   float frame = RNA_float_get(op->ptr, "frame");

@@ -3957,8 +3957,7 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
-  /* When enabled, stop playback so the frame is set directly below (`animtimer` is cleared
-   * synchronously), rather than being scheduled as the next playback frame. */
+
   ED_screen_stop_playback_on_frame_change(C);
 
   wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
