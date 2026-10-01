@@ -342,6 +342,21 @@ static bool sound_mixdown_progress(float progress, void *data)
   return G.is_break == false && worker_status->stop == false;
 }
 
+/* Stored in the wmOperator's customdata field to indicate it should run as a background job.
+ * This is set when the operator is invoked, and not set when it is only executed. */
+struct SoundMixdownOptions {
+  bool as_background_job;
+};
+
+static void free_operator_customdata(wmOperator *op)
+{
+  if (op->customdata) {
+    SoundMixdownOptions *options = static_cast<SoundMixdownOptions *>(op->customdata);
+    MEM_delete(options);
+    op->customdata = nullptr;
+  }
+}
+
 struct SoundMixdownJobData {
   wmWindowManager *wm = nullptr;
   bool interface_locked = false;
@@ -414,6 +429,12 @@ static void sound_mixdown_endjob(void *customdata)
 static wmOperatorStatus sound_mixdown_exec(bContext *C, wmOperator *op)
 {
 #ifdef WITH_AUDASPACE
+  if (!RNA_struct_property_is_set_ex(op->ptr, "filepath", false)) {
+    BKE_report(op->reports, RPT_ERROR, "No filepath given");
+    free_operator_customdata(op);
+    return OPERATOR_CANCELLED;
+  }
+
   char filepath[FILE_MAX];
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
@@ -455,7 +476,11 @@ static wmOperatorStatus sound_mixdown_exec(bContext *C, wmOperator *op)
     mixdown_job_data->interface_locked = true;
   }
 
-  if (!G.background) {
+  const SoundMixdownOptions *options = static_cast<SoundMixdownOptions *>(op->customdata);
+  const bool as_background_job = (options != nullptr && options->as_background_job);
+  free_operator_customdata(op);
+
+  if (as_background_job) {
     wmJob *wm_job = WM_jobs_get(wm,
                                 CTX_wm_window(C),
                                 CTX_data_scene(C),
@@ -572,6 +597,10 @@ static wmOperatorStatus sound_mixdown_invoke(bContext *C, wmOperator *op, const 
   if (RNA_struct_property_is_set(op->ptr, "filepath")) {
     return sound_mixdown_exec(C, op);
   }
+
+  SoundMixdownOptions *options = MEM_new_zeroed<SoundMixdownOptions>("SoundMixdownOptions");
+  options->as_background_job = true;
+  op->customdata = options;
 
   return WM_operator_filesel(C, op, event);
 }
