@@ -660,11 +660,7 @@ ccl_device_inline float light_sample_pdf_surface(KernelGlobals kg,
   return pdf;
 }
 
-/* Probability of sampling an analytic light from a shading point.
- *
- * `lamp` is the KernelLight index. `light_sample_pdf` is the conditional
- * sampling PDF before multiplication by the light-selection probability.
- */
+/* Probability of sampling an analytic light from a shading point. */
 ccl_device_inline float light_sample_pdf_lamp(KernelGlobals kg,
                                               IntegratorState state,
                                               const PathRayVisibility path_visibility,

@@ -344,7 +344,7 @@ void BlenderSession::render(blender::Depsgraph &b_depsgraph_)
     return;
   }
 
-  update_restir_temporal_storage();   // NEW — before anything else touches the session's works
+  update_restir_temporal_storage();
 
   /* Create driver to write out render results. */
   ensure_display_driver_if_needed();
@@ -465,6 +465,7 @@ void BlenderSession::render(blender::Depsgraph &b_depsgraph_)
 
   /* Save after the completed frame. */
   session->save_restir_temporal_history();
+  last_rendered_frame_ = b_scene->r.cfra;
 
   /* add metadata */
   stamp_view_layer_metadata(scene, b_rlay_name);
@@ -1148,6 +1149,20 @@ void BlenderSession::update_restir_temporal_storage()
     restir_prev_surface_data_.clear();
     session->bind_restir_temporal_history(nullptr, nullptr, nullptr);
     return;
+  }
+
+  const int current_frame = b_scene->r.cfra;
+
+  if (current_frame == last_rendered_frame_) {
+    /* Same frame being re-rendered (repeated "Render Image"). The persisted history
+     * describes THIS frame's previous output, not a genuine previous frame.
+     * using it would reproject onto itself and compound every re-render. */
+    std::fill(restir_prev_reprojection_surface_.begin(),
+             restir_prev_reprojection_surface_.end(), 0.0f);
+    std::fill(restir_prev_temporal_reservoir_.begin(),
+             restir_prev_temporal_reservoir_.end(), 0.0f);
+    std::fill(restir_prev_surface_data_.begin(),
+             restir_prev_surface_data_.end(), 0.0f);
   }
 
 // TODO(Tri): It's a single-device assumption; handle tiles!

@@ -160,9 +160,21 @@ class BlenderSession {
 
   vector<string> full_buffer_files_;
 
+  /* Persistent history for ReSTIR temporal-frame reuse.
+   * The `ReprojectionSurface` is per-pixel N/depth/motion/is_valid,
+   * written once per frame, read by this frame's reprojection test. */
   vector<float> restir_prev_reprojection_surface_;
+  /* Reservoir contents (reference + weight/luminance/M) for the pixel each
+   * restir_prev_reprojection_surface_ entry reprojects to. */
   vector<float> restir_prev_temporal_reservoir_;
+  /* SURFACE_DATA snapshot (object/prim/u/v/time) for re-shading a history pixel's
+   * point, needed for the symmetric canonical-vs-history MIS reweighting. */
   vector<float> restir_prev_surface_data_;
+
+  // TODO(Tri): Ask Brecht if it's the optimal way...
+  /* Current-frame number as of the last completed render(), used to detect
+   * a re-render of the SAME frame versus a genuine animation-frame advance. */
+  int last_rendered_frame_ = INT_MIN;
 
   /* (Re)size storage to the current frame dimensions if needed, and (re)bind
    * it into the current Session's PathTraceWork(s). Safe and cheap to call
