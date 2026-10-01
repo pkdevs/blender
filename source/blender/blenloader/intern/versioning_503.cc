@@ -24,12 +24,14 @@
 #include "DNA_windowmanager_types.h"
 
 #include "BLI_listbase_iterator.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_sys_types.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_camera.h"
+#include "BKE_colorband.hh"
 #include "BKE_compositor.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
@@ -199,6 +201,17 @@ static void do_versioning_camera_view_zoom(Main *bmain)
       }
     }
   }
+}
+
+static void clear_deprecated_brush_flags(Brush &brush)
+{
+  if (brush.gpencil_settings) {
+    brush.gpencil_settings->flag &= ~GP_BRUSH_UNUSED_1;
+    brush.gpencil_settings->flag2 &= ~(GP_BRUSH_UNUSED_2 | GP_BRUSH_UNUSED_3 | GP_BRUSH_UNUSED_4 |
+                                       GP_BRUSH_UNUSED_5 | GP_BRUSH_UNUSED_6 | GP_BRUSH_UNUSED_7);
+  }
+  brush.paint_flags &= ~BRUSH_PAINT_UNUSED_2;
+  brush.flag &= ~(BRUSH_UNUSED_7 | BRUSH_UNUSED_8);
 }
 
 void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
@@ -417,7 +430,7 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
     for (Brush &brush : bmain->brushes) {
       if (brush.curve_hardness == nullptr) {
-        brush.curve_hardness = brush.paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE_INVERT ?
+        brush.curve_hardness = brush.paint_flags & BRUSH_PAINT_UNUSED_2 ?
                                    BKE_paint_default_curve_inverted() :
                                    BKE_paint_default_curve();
       }
@@ -467,8 +480,7 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
     for (Brush &brush : bmain->brushes) {
       if (brush.ob_mode & OB_MODE_WEIGHT_PAINT || brush.ob_mode & OB_MODE_VERTEX_PAINT) {
-        if (brush.flag & BRUSH_FRONTFACE_FALLOFF_DEPRECATED && brush.falloff_angle_legacy != 0.0f)
-        {
+        if (brush.flag & BRUSH_UNUSED_7 && brush.falloff_angle_legacy != 0.0f) {
           switch (brush.falloff_shape) {
             case PAINT_FALLOFF_SHAPE_SPHERE:
               brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_BRUSH_NORMAL;
@@ -609,6 +621,52 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
     }
   }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 23)) {
+    for (Brush &brush : bmain->brushes) {
+      clear_deprecated_brush_flags(brush);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 24)) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &space : area.spacedata) {
+          if (space.spacetype == SPACE_OUTLINER) {
+            SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
+            space_outliner->flag &= ~SO_EXPAND_ON_FOCUS;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 25)) {
+    for (Material &materials : bmain->materials) {
+      if (materials.gp_style == nullptr) {
+        continue;
+      }
+
+      if (materials.gp_style->fill_style != GP_MATERIAL_FILL_STYLE_GRADIENT) {
+        continue;
+      }
+
+      materials.gp_style->gradient = BKE_colorband_add(true);
+
+      if (materials.gp_style->flag & GP_MATERIAL_FLIP_FILL) {
+        copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->mix_rgba);
+        copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->fill_rgba);
+      }
+      else {
+        copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->fill_rgba);
+        copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->mix_rgba);
+      }
+
+      /* This flag is now deprecated. */
+      materials.gp_style->flag &= ~GP_MATERIAL_FLIP_FILL;
+    }
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
