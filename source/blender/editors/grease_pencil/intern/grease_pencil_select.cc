@@ -486,7 +486,7 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
     return false;
   }
 
-  bke::CurvesGeometry closest_curves = closest.drawing.drawing->strokes_for_write();
+  bke::CurvesGeometry &closest_curves = closest.drawing.drawing->strokes_for_write();
   const bke::AttrDomain selection_domain = ED_grease_pencil_selection_domain_get(
       vc.scene->toolsettings, closest.greasepencil_object);
 
