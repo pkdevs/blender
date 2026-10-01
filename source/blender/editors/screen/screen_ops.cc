@@ -3914,7 +3914,6 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
   }
   scene->r.subframe = 0.0f;
 
-  /* Jumping to a frame should stop playback. */
   stop_playback(C);
 
   ED_areas_do_frame_follow(C, false);
@@ -3959,7 +3958,6 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  /* Jumping to a frame should stop playback. */
   stop_playback(C);
 
   wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
@@ -4065,7 +4063,6 @@ static wmOperatorStatus frame_jump_delta_exec(bContext *C, wmOperator *op)
     scene->r.subframe -= subframe_offset;
   }
 
-  /* Jumping to a frame should stop playback. */
   stop_playback(C);
 
   const bool wrap_timeline_navigation = scene->r.flag & SCER_WRAP_TIMELINE_NAVIGATION;
@@ -4310,7 +4307,6 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  /* Jumping to a frame should stop playback. */
   stop_playback(C);
 
   ED_areas_do_frame_follow(C, true);
@@ -4428,7 +4424,6 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
 
   scene->r.cfra = closest;
 
-  /* Jumping to a frame should stop playback. */
   stop_playback(C);
 
   ED_areas_do_frame_follow(C, true);
