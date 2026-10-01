@@ -155,6 +155,20 @@ void transform(const float3x3 &linear,
   });
 }
 
+AttributesToTransform attributes_to_transform(const AttributeAccessor &attributes)
+{
+  AttributesToTransform result;
+  result.rotation_and_scale = is_point_attribute(attributes, "rotation", AttrType::Quaternion) &&
+                              is_point_attribute(attributes, "scale", AttrType::Float3);
+  int sh_num = 0;
+  while (is_point_attribute(attributes, fmt::format("radiance:sh_{}", sh_num), AttrType::Float3)) {
+    sh_num++;
+  }
+  const int degree = sh_degree_for_coefficients_num(sh_num);
+  result.sh_num = (degree + 1) * (degree + 1) - 1;
+  return result;
+}
+
 void transform_attributes(const float4x4 &object_transform, PointCloud &pointcloud)
 {
   if (pointcloud.type != PointCloudType::GSplat) {
@@ -165,24 +179,18 @@ void transform_attributes(const float4x4 &object_transform, PointCloud &pointclo
     return;
   }
   MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
+  const AttributesToTransform to_transform = attributes_to_transform(attributes);
 
   SpanAttributeWriter<math::Quaternion> rotations;
   SpanAttributeWriter<float3> scales;
-  if (is_point_attribute(attributes, "rotation", AttrType::Quaternion) &&
-      is_point_attribute(attributes, "scale", AttrType::Float3))
-  {
+  if (to_transform.rotation_and_scale) {
     rotations = attributes.lookup_for_write_span<math::Quaternion>("rotation");
     scales = attributes.lookup_for_write_span<float3>("scale");
   }
 
-  int sh_num = 0;
-  while (is_point_attribute(attributes, fmt::format("radiance:sh_{}", sh_num), AttrType::Float3)) {
-    sh_num++;
-  }
-  const int degree = sh_degree_for_coefficients_num(sh_num);
   Vector<SpanAttributeWriter<float3>> sh_writers;
   Vector<MutableSpan<float3>> sh;
-  for (const int i : IndexRange((degree + 1) * (degree + 1) - 1)) {
+  for (const int i : IndexRange(to_transform.sh_num)) {
     sh_writers.append(attributes.lookup_for_write_span<float3>(fmt::format("radiance:sh_{}", i)));
     sh.append(sh_writers.last().span);
   }

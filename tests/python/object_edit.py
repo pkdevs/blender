@@ -106,15 +106,18 @@ class TestObjectEdit(unittest.TestCase):
         for value in ob.scale:
             self.assertAlmostEqual(value, 1.0, delta=1e-5)
 
-        data = ob.data
-        rotation_value = tuple(data.attributes["rotation"].data[0].value)
+        self._assert_gaussian_splat_transformed(ob.data, 0)
+
+    def _assert_gaussian_splat_transformed(self, data, index):
+        # The splat of #_add_gaussian_splat_object, rotated 90 degrees about Z and scaled by 2.
+        rotation_value = tuple(data.attributes["rotation"].data[index].value)
         # Quaternion of 90 degrees about Z, in (w, x, y, z) order. #to_quaternion() may return
         # either sign, so compare up to sign.
         expected_rotation = (math.cos(math.pi / 4), 0.0, 0.0, math.sin(math.pi / 4))
         dot = sum(a * b for a, b in zip(rotation_value, expected_rotation))
         self.assertAlmostEqual(abs(dot), 1.0, delta=1e-5)
 
-        scale_value = tuple(data.attributes["scale"].data[0].vector)
+        scale_value = tuple(data.attributes["scale"].data[index].vector)
         for value, expected in zip(scale_value, (2.0, 4.0, 6.0)):
             self.assertAlmostEqual(value, expected, delta=1e-5)
 
@@ -122,9 +125,29 @@ class TestObjectEdit(unittest.TestCase):
         # (c0, c1, c2) to (c2, c1, -c0).
         expected_sh = ((3.0, 3.0, 3.0), (2.0, 2.0, 2.0), (-1.0, -1.0, -1.0))
         for i, expected in enumerate(expected_sh):
-            sh_value = tuple(data.attributes[f"radiance:sh_{i}"].data[0].vector)
+            sh_value = tuple(data.attributes[f"radiance:sh_{i}"].data[index].vector)
             for value, expected_value in zip(sh_value, expected):
                 self.assertAlmostEqual(value, expected_value, delta=1e-5)
+
+    def test_join_gaussian_splats(self):
+        active = self._add_gaussian_splat_object()
+        other = self._add_gaussian_splat_object()
+        other.rotation_euler = (0.0, 0.0, math.pi / 2)
+        other.scale = (2.0, 2.0, 2.0)
+        bpy.ops.object.select_all(action='DESELECT')
+        active.select_set(True)
+        other.select_set(True)
+        bpy.context.view_layer.objects.active = active
+        bpy.ops.object.join()
+
+        data = active.data
+        self.assertEqual(data.type, 'GAUSSIAN_SPLAT')
+        self.assertEqual(len(data.attributes["position"].data), 2)
+        # The splat of the active object is unchanged.
+        self.assertEqual(tuple(data.attributes["rotation"].data[0].value), (1.0, 0.0, 0.0, 0.0))
+        self.assertEqual(tuple(data.attributes["scale"].data[0].vector), (1.0, 2.0, 3.0))
+        self.assertEqual(tuple(data.attributes["radiance:sh_2"].data[0].vector), (3.0, 3.0, 3.0))
+        self._assert_gaussian_splat_transformed(data, 1)
 
     def test_auto_smooth_detection(self):
         bpy.ops.mesh.primitive_cube_add()

@@ -6,6 +6,8 @@
  * \ingroup geo
  */
 
+#include <fmt/format.h>
+
 #include "GEO_join_geometries.hh"
 #include "GEO_realize_instances.hh"
 
@@ -26,6 +28,7 @@
 #include "BKE_geometry_nodes_gizmos_transforms.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_grease_pencil_fills.hh"
+#include "BKE_gsplat.hh"
 #include "BKE_instances.hh"
 #include "BKE_material.hh"
 #include "BKE_mesh.hh"
@@ -84,6 +87,8 @@ struct PointCloudRealizeInfo {
   Span<float3> positions;
   VArray<float> radii;
   VArray<int> stored_ids;
+  /** Gaussian splats are rotated and scaled based on each instance's transformation. */
+  bke::gsplat::AttributesToTransform gsplat_attributes;
 };
 
 struct RealizePointCloudTask {
@@ -1317,14 +1322,98 @@ static AllPointCloudsInfo preprocess_pointclouds(const bke::GeometrySet &geometr
     const VArray<float3> position_attribute = *attributes.lookup_or_default<float3>(
         "position", bke::AttrDomain::Point, float3(0));
     pointcloud_info.positions = position_attribute.get_internal_span();
+    if (pointcloud->type == PointCloudType::GSplat) {
+      pointcloud_info.gsplat_attributes = bke::gsplat::attributes_to_transform(attributes);
+    }
   }
   return info;
+}
+
+/**
+ * Indices of the gaussian splat attributes in #OrderedAttributes, or -1 if the result does not
+ * have the attribute with the type that #bke::gsplat::transform expects.
+ */
+struct GSplatAttributeIndices {
+  int rotation = -1;
+  int scale = -1;
+  /** Consecutive `radiance:sh_*` attributes, starting at `radiance:sh_0`. */
+  Vector<int> sh;
+
+  GSplatAttributeIndices(const OrderedAttributes &ordered_attributes)
+  {
+    const auto find = [&](const StringRef name, const bke::AttrType type) {
+      const int index = ordered_attributes.names.index_of_try(name);
+      if (index == -1 || ordered_attributes.kinds[index].data_type != type) {
+        return -1;
+      }
+      return index;
+    };
+    this->rotation = find("rotation", bke::AttrType::Quaternion);
+    this->scale = find("scale", bke::AttrType::Float3);
+    while (true) {
+      const int index = find(fmt::format("radiance:sh_{}", this->sh.size()),
+                             bke::AttrType::Float3);
+      if (index == -1) {
+        break;
+      }
+      this->sh.append(index);
+    }
+  }
+
+  bool contains(const int attribute_index) const
+  {
+    return ELEM(attribute_index, this->rotation, this->scale) ||
+           this->sh.contains(attribute_index);
+  }
+};
+
+/** Same tolerance as #skip_transform, translations don't affect gaussian splat attributes. */
+static bool transforms_gsplat_attributes(const RealizePointCloudTask &task)
+{
+  return task.pointcloud_info->pointcloud->type == PointCloudType::GSplat &&
+         !math::is_equal(float3x3(task.transform), float3x3::identity(), 1e-6f);
+}
+
+/**
+ * Transform the gaussian splat attributes that were copied from the task's point cloud, like
+ * #bke::gsplat::transform_attributes. Values that come from instance attributes or defaults are
+ * not changed.
+ */
+static void transform_gsplat_attributes(const RealizePointCloudTask &task,
+                                        const IndexRange point_slice,
+                                        const GSplatAttributeIndices &indices,
+                                        MutableSpan<GSpanAttributeWriter> dst_attribute_writers)
+{
+  if (!transforms_gsplat_attributes(task)) {
+    return;
+  }
+  const bke::gsplat::AttributesToTransform &src = task.pointcloud_info->gsplat_attributes;
+  const auto dst_span = [&](const int attribute_index) {
+    return dst_attribute_writers[attribute_index].span.typed<float3>().slice(point_slice);
+  };
+
+  MutableSpan<math::Quaternion> rotations;
+  MutableSpan<float3> scales;
+  if (src.rotation_and_scale && indices.rotation != -1 && indices.scale != -1) {
+    rotations = dst_attribute_writers[indices.rotation].span.typed<math::Quaternion>().slice(
+        point_slice);
+    scales = dst_span(indices.scale);
+  }
+  const int degree = bke::gsplat::sh_degree_for_coefficients_num(
+      std::min<int>(src.sh_num, indices.sh.size()));
+  Vector<MutableSpan<float3>, 24> sh;
+  for (const int i : IndexRange((degree + 1) * (degree + 1) - 1)) {
+    sh.append(dst_span(indices.sh[i]));
+  }
+
+  bke::gsplat::transform(float3x3(task.transform), rotations, scales, sh);
 }
 
 static void execute_realize_pointcloud_task(
     const RealizeInstancesOptions &options,
     const RealizePointCloudTask &task,
     const OrderedAttributes &ordered_attributes,
+    const GSplatAttributeIndices &gsplat_indices,
     MutableSpan<GSpanAttributeWriter> dst_attribute_writers,
     MutableSpan<float> all_dst_radii,
     MutableSpan<int> all_dst_ids,
@@ -1356,6 +1445,8 @@ static void execute_realize_pointcloud_task(
         return point_slice;
       },
       dst_attribute_writers);
+
+  transform_gsplat_attributes(task, point_slice, gsplat_indices, dst_attribute_writers);
 }
 
 static void add_instance_attributes_to_single_geometry(
@@ -1396,6 +1487,7 @@ static void execute_realize_pointcloud_tasks(const RealizeInstancesOptions &opti
     if (!skip_transform(task.transform)) {
       math::transform_points(task.transform, new_points->positions_for_write());
       new_points->tag_positions_changed();
+      bke::gsplat::transform_attributes(task.transform, *new_points);
     }
     add_instance_attributes_to_single_geometry(
         ordered_attributes, task.attribute_fallbacks, new_points->attributes_for_write());
@@ -1434,12 +1526,18 @@ static void execute_realize_pointcloud_tasks(const RealizeInstancesOptions &opti
                                                                           bke::AttrDomain::Point);
   }
 
+  const GSplatAttributeIndices gsplat_indices(ordered_attributes);
+  /* Transformed gaussian splat attributes are not shared, even if all their values are equal. */
+  const bool any_gsplat_transform = std::any_of(
+      tasks.begin(), tasks.end(), transforms_gsplat_attributes);
+
   /* Prepare generic output attributes. */
   Vector<GSpanAttributeWriter> dst_attribute_writers;
   for (const int attribute_index : ordered_attributes.index_range()) {
     const StringRef name = ordered_attributes.names[attribute_index];
     const bke::AttrType data_type = ordered_attributes.kinds[attribute_index].data_type;
-    if (try_join_single_value_attribute(
+    if (!(any_gsplat_transform && gsplat_indices.contains(attribute_index)) &&
+        try_join_single_value_attribute(
             tasks.size(),
             ordered_attributes,
             [&](const int task_index) -> TaskAttrInfo {
@@ -1463,6 +1561,7 @@ static void execute_realize_pointcloud_tasks(const RealizeInstancesOptions &opti
       execute_realize_pointcloud_task(options,
                                       task,
                                       ordered_attributes,
+                                      gsplat_indices,
                                       dst_attribute_writers,
                                       point_radii.span,
                                       point_ids.span,

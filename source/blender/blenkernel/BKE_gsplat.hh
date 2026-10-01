@@ -19,6 +19,10 @@ namespace blender {
 struct PointCloud;
 }
 
+namespace blender::bke {
+class AttributeAccessor;
+}
+
 namespace blender::bke::gsplat {
 
 /**
@@ -41,6 +45,16 @@ void transform(const float3x3 &linear,
                MutableSpan<math::Quaternion> rotations,
                MutableSpan<float3> scales,
                Span<MutableSpan<float3>> sh);
+
+/** The gaussian splat attributes of a point cloud that #transform_attributes changes. */
+struct AttributesToTransform {
+  /** Whether the `rotation` and `scale` attributes are transformed. */
+  bool rotation_and_scale = false;
+  /** The number of `radiance:sh_*` attributes that are transformed, always complete bands. */
+  int sh_num = 0;
+};
+
+AttributesToTransform attributes_to_transform(const AttributeAccessor &attributes);
 
 /**
  * Transform the gaussian splat attributes of the point cloud, see #transform. Does nothing for
