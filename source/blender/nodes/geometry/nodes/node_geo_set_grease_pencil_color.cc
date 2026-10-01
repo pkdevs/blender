@@ -51,13 +51,13 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->custom1 = int(GEO_NODE_GREASE_PENCIL_STROKE);
 }
 
-static void set_gp_color(GeometrySet &geometry_set,
-                         const AttrDomain domain,
-                         const StringRef color_attr,
-                         const StringRef opacity_attr,
-                         const Field<bool> &selection,
-                         const Field<ColorGeometry4f> &color_field,
-                         const Field<float> &opacity_field)
+static void set_grease_pencil_color(GeometrySet &geometry_set,
+                                    const AttrDomain domain,
+                                    const StringRef color_attr,
+                                    const StringRef opacity_attr,
+                                    const Field<bool> &selection,
+                                    const Field<ColorGeometry4f> &color_field,
+                                    const Field<float> &opacity_field)
 {
   using namespace bke::greasepencil;
 
@@ -103,22 +103,22 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<float> opacity_field = params.extract_input<Field<float>>("Opacity"_ustr);
 
   if (ELEM(mode, GEO_NODE_GREASE_PENCIL_STROKE, GEO_NODE_GREASE_PENCIL_BOTH)) {
-    set_gp_color(geometry_set,
-                 AttrDomain::Point,
-                 "vertex_color",
-                 "opacity",
-                 selection,
-                 color_field,
-                 opacity_field);
+    set_grease_pencil_color(geometry_set,
+                            AttrDomain::Point,
+                            "vertex_color",
+                            "opacity",
+                            selection,
+                            color_field,
+                            opacity_field);
   }
   if (ELEM(mode, GEO_NODE_GREASE_PENCIL_FILL, GEO_NODE_GREASE_PENCIL_BOTH)) {
-    set_gp_color(geometry_set,
-                 AttrDomain::Curve,
-                 "fill_color",
-                 "fill_opacity",
-                 selection,
-                 color_field,
-                 opacity_field);
+    set_grease_pencil_color(geometry_set,
+                            AttrDomain::Curve,
+                            "fill_color",
+                            "fill_opacity",
+                            selection,
+                            color_field,
+                            opacity_field);
   }
 
   params.set_output("Grease Pencil"_ustr, std::move(geometry_set));
