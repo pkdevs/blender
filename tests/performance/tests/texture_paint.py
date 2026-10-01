@@ -216,6 +216,9 @@ def _run_brush_test(args: dict):
     timeout = 10
     total_time_start = time.time()
 
+    # Keep only a few undo steps to limit memory usage.
+    context.preferences.edit.undo_steps = 2
+
     # Create an undo stack explicitly. This isn't created by default in background mode.
     bpy.ops.ed.undo_push()
 
@@ -306,7 +309,11 @@ def _run_udim_brush_test(args: dict):
     # Create an undo stack explicitly. This isn't created by default in background mode.
     bpy.ops.ed.undo_push()
 
-    prepare_brush()
+    context_override = context.copy()
+    set_view3d_context_override(context_override)
+    with context.temp_override(**context_override):
+        # This needs to run in a View3D context to work correctly for texture paint
+        prepare_brush()
     prepare_udim_scene(context, args["data_type"], args["subdivide_level"])
 
     return _measure_brush_strokes(context, args.get("include_setup", False), total_time_start, timeout)
