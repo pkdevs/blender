@@ -539,7 +539,7 @@ static void GREASE_PENCIL_OT_select_linked_pick(wmOperatorType *ot)
   ot->description = "Select all points in the stroke under the cursor";
 
   ot->invoke = select_linked_pick_invoke;
-  ot->poll = editable_grease_pencil_poll;  // todo! do correct poll
+  ot->poll = editable_grease_pencil_poll;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
