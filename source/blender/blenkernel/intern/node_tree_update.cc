@@ -1536,7 +1536,8 @@ class NodeTreeMainUpdater {
       if (node->type_legacy == SH_NODE_SHADERTORGB) {
         node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::ShaderToRGB);
       }
-      else if (node->type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+      else if (ELEM(node->type_legacy, SH_NODE_LIGHT_ACCUMULATION, SH_NODE_LIGHT_ACCUMULATION_AOV))
+      {
         node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::LightAccumulation);
       }
 

@@ -981,7 +981,7 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
    * an assert in the shader dead code optimization. */
   bool has_light_accumulation = false;
   for (bNode &node : ntree->nodes) {
-    if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+    if (ELEM(node.type_legacy, SH_NODE_LIGHT_ACCUMULATION, SH_NODE_LIGHT_ACCUMULATION_AOV)) {
       has_light_accumulation = true;
       break;
     }
@@ -1007,6 +1007,7 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
   for (bNode &node : ntree->nodes) {
     if (ELEM(node.type_legacy,
              SH_NODE_LIGHT_ACCUMULATION,
+             SH_NODE_LIGHT_ACCUMULATION_AOV,
              SH_NODE_LIGHT_INFO,
              SH_NODE_LIGHT_EVALUATION,
              SH_NODE_SHADOW_RAYCAST) ||
@@ -1025,7 +1026,7 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
                          node,
                          *ntree_shader_node_input_get(&node, 0));
 
-      if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+      if (ELEM(node.type_legacy, SH_NODE_LIGHT_ACCUMULATION, SH_NODE_LIGHT_ACCUMULATION_AOV)) {
         /* Connect accumulation result to the zone output node.
          * Create one zone IO for each Light Accumulation node. */
         bke::node_add_static_socket(
