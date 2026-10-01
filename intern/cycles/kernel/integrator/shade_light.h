@@ -144,7 +144,7 @@ ccl_device ShaderEvalResult integrate_light_nee(KernelGlobals kg, IntegratorShad
     if (light_type == LIGHT_BACKGROUND) {
       /* Background light. */
 #ifdef __RAY_DIFFERENTIALS__
-      const float ray_dD = ray.dD;
+      const float ray_dD = background_light_clamp_dD(kg, ray.dD);
 #else
       const float ray_dD = 0.0f;
 #endif
@@ -194,7 +194,7 @@ ccl_device ShaderEvalResult integrate_light_nee(KernelGlobals kg, IntegratorShad
   surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
       kg, state, emission_sd, nullptr, PATH_RAY_VISIBILITY_NONE, PATH_RAY_EMISSION);
 
-  if (emission_sd->flag & SD_CACHE_MISS) {
+  if (emission_sd->runtime_flag & SR_CACHE_MISS) {
     return SHADER_EVAL_CACHE_MISS;
   }
 

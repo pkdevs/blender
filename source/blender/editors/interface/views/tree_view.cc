@@ -207,6 +207,30 @@ AbstractViewItem *AbstractTreeView::navigate_down(AbstractViewItem *from)
   return next_item ? next_item : from;
 }
 
+void AbstractTreeView::page_scroll(bContext * /*C*/, PageScrollDirection direction)
+{
+  if (this->is_fully_visible() || !this->supports_scrolling()) {
+    return;
+  }
+
+  const int visible_rows = this->tot_visible_row_count().value_or(0);
+
+  switch (direction) {
+    case PageScrollDirection::Up:
+      *this->scroll_value_ = std::max(0, *this->scroll_value_ - visible_rows);
+      break;
+    case PageScrollDirection::Down:
+      *this->scroll_value_ = std::min(this->last_tot_items_, *this->scroll_value_ + visible_rows);
+      break;
+    case PageScrollDirection::Top:
+      *this->scroll_value_ = 0;
+      break;
+    case PageScrollDirection::Bottom:
+      *this->scroll_value_ = this->last_tot_items_;
+      break;
+  }
+}
+
 void AbstractTreeView::set_default_rows(int default_rows)
 {
   BLI_assert_msg(default_rows >= MIN_ROWS,
@@ -272,8 +296,7 @@ int AbstractTreeView::count_visible_descendants(const AbstractTreeViewItem &pare
   return count;
 }
 
-void AbstractTreeView::get_hierarchy_lines(const ARegion &region,
-                                           const TreeViewOrItem &parent,
+void AbstractTreeView::get_hierarchy_lines(const TreeViewOrItem &parent,
                                            const float aspect,
                                            Vector<std::pair<int2, int2>> &lines,
                                            int &visible_item_index) const
@@ -332,7 +355,7 @@ void AbstractTreeView::get_hierarchy_lines(const ARegion &region,
                      padded_item_height() / aspect;
     lines.append(std::make_pair(int2(x, ymax), int2(x, ymin)));
 
-    this->get_hierarchy_lines(region, *item, aspect, lines, visible_item_index);
+    this->get_hierarchy_lines(*item, aspect, lines, visible_item_index);
   }
 }
 
@@ -376,7 +399,7 @@ void AbstractTreeView::draw_hierarchy_lines(const ARegion &region, const Block &
 
   Vector<std::pair<int2, int2>> lines;
   int index = 0;
-  get_hierarchy_lines(region, *this, aspect, lines, index);
+  get_hierarchy_lines(*this, aspect, lines, index);
   if (lines.is_empty()) {
     return;
   }
@@ -665,6 +688,8 @@ void AbstractTreeViewItem::add_collapse_chevron(Block &block) const
   Button *but = uiDefIconBut(
       &block, ButtonType::ButToggle, icon, 0, 0, UI_TREEVIEW_INDENT, UI_UNIT_Y, nullptr, 0, 0, "");
   button_func_set(but, collapse_chevron_click_fn, nullptr, nullptr);
+  /* To make drag toggle work. */
+  button_func_pushed_state_set(but, [this](const Button &) { return this->is_collapsed(); });
   button_flag_disable(but, BUT_UNDO);
 }
 
@@ -1168,8 +1193,10 @@ void TreeViewLayoutBuilder::build_row(AbstractTreeViewItem &item) const
   }
 
   Layout *row = &overlap.row(false);
-  /* Enable emboss for mouse hover highlight. */
-  row->emboss_set(EmbossType::Emboss);
+  /* Enable emboss for mouse hover highlight. Only emboss real items, otherwise
+   * the list gets filled with empty slots (visible when list item background is non-transparent),
+   * see: !160795 */
+  row->emboss_set(item.is_interactive_ ? EmbossType::Emboss : EmbossType::None);
   /* Every item gets one! Other buttons can be overlapped on top. */
   item.add_treerow_button(block_);
 

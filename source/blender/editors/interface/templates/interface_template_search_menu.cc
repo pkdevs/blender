@@ -84,8 +84,8 @@ struct MenuSearch_Item {
   StringRef drawstr;
   StringRef drawwstr_full;
   int icon = 0;
-  int state = 0;
   float weight = 0.0f;
+  int64_t state = 0; /**  Used to store #ButtonFlag values. */
 
   MenuSearch_Parent *menu_parent = nullptr;
   MenuType *mt = nullptr;
@@ -621,7 +621,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
     break
 
       if (area != nullptr) {
-        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+        SpaceLink *sl = area->spacedata.first_as<SpaceLink>();
         switch (eSpace_Type(area->spacetype)) {
           SPACE_MENU_MAP(SPACE_VIEW3D, "VIEW3D_MT_editor_menus");
           SPACE_MENU_MAP(SPACE_GRAPH, "GRAPH_MT_editor_menus");

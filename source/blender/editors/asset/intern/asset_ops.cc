@@ -536,8 +536,9 @@ static bool asset_library_reload_listing_poll(bContext *C)
     return false;
   }
 
-  /* Check the flag after checking for the remote library to have an online component. Because if
-   * there is not, then enabling the online access in the prefs isn't going to do anything. */
+  /* Check the flag after checking for the remote library to have an online component.
+   * Because if there is not, then enabling the online access in the preferences
+   * isn't going to do anything. */
   if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
     CTX_wm_operator_poll_msg_set(C, "Online access is disabled in the Preferences");
     return false;
@@ -1050,7 +1051,7 @@ static bool is_contained_in_selected_asset_library(wmOperator *op, const char *f
   if (!lib) {
     return false;
   }
-  return BLI_path_contains(lib->dirpath, filepath);
+  return BLI_path_contains(lib->resolved_dirpath, filepath);
 }
 
 /**
@@ -1072,7 +1073,7 @@ static bool set_filepath_for_asset_lib(const Main *bmain, wmOperator *op)
   }
 
   char file_path[FILE_MAX];
-  BLI_path_join(file_path, sizeof(file_path), lib->dirpath, blend_filename);
+  BLI_path_join(file_path, sizeof(file_path), lib->resolved_dirpath, blend_filename);
   RNA_string_set(op->ptr, "filepath", file_path);
 
   return true;
@@ -1330,7 +1331,7 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
   bool render_offscreen = false;
   if (area_p1 == area_p2 && area_p1 != nullptr && area_p1->spacetype == SPACE_VIEW3D) {
     Scene *scene = CTX_data_scene(C);
-    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first);
+    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first_);
     /* For #ED_view3d_draw_offscreen_imbuf only EEVEE only produces a good result. See #141732. */
     if (eDrawType(v3d->shading.type) == OB_RENDER) {
       const char *engine_name = scene->r.engine;
@@ -1344,7 +1345,7 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
     }
   }
   if (render_offscreen) {
-    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first);
+    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first_);
     ARegion *region = BKE_area_find_region_type(area_p1, RGN_TYPE_WINDOW);
     if (!region) {
       /* Unlikely to be hit, but just being cautious. */
@@ -1794,6 +1795,15 @@ static wmOperatorStatus asset_download_exec(bContext *C, wmOperator *op)
 {
   const asset_system::AssetRepresentation *asset =
       operator_asset_reference_props_get_asset_from_all_library(*C, *op->ptr, op->reports);
+
+  if (!asset) {
+    const std::string asset_relpath = RNA_string_get(op->ptr, "relative_asset_identifier");
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Asset could not be found (relative identifier: '%s')",
+                asset_relpath.c_str());
+    return OPERATOR_CANCELLED;
+  }
 
   if (!asset->needs_download()) {
     BKE_reportf(

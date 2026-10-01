@@ -104,7 +104,8 @@ template<> inline pxr::GfMatrix4d convert_value(const float4x4 &value)
   pxr::GfMatrix4d result;
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
-      result[i][j] = value[i][j];
+      /* USD is row-major, Blender is column-major. */
+      result[j][i] = value[i][j];
     }
   }
   return result;
@@ -136,7 +137,8 @@ template<> inline float4x4 convert_value(const pxr::GfMatrix4d &value)
   float4x4 result;
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
-      result[i][j] = float(value[i][j]);
+      /* USD is row-major, Blender is column-major. */
+      result[j][i] = float(value[i][j]);
     }
   }
   return result;
@@ -177,7 +179,8 @@ void set_attribute(const pxr::UsdAttribute &attr,
 /**
  * Set the USD attribute to the provided array value at the given time. The value will be written
  * sparsely. For efficiency, this function swaps out the given value, leaving it empty, so it can
- * leverage the USD API where no additional copy of the data is required. */
+ * leverage the USD API where no additional copy of the data is required.
+ */
 template<typename USDT>
 void set_attribute(const pxr::UsdAttribute &attr,
                    pxr::VtArray<USDT> &value,

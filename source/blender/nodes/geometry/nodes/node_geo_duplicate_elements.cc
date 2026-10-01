@@ -998,7 +998,7 @@ static void duplicate_points_mesh(GeometrySet &geometry_set,
     MutableSpan dst(static_cast<int *>(CustomData_add_layer(
                         &new_mesh->vert_data, CD_ORIGINDEX, CD_CONSTRUCT, new_mesh->verts_num)),
                     new_mesh->verts_num);
-    array_utils::gather_to_groups(src, selection, src, dst);
+    array_utils::gather_to_groups(duplicates, selection, src, dst);
   }
 
   new_mesh->tag_overlapping_none();
@@ -1032,7 +1032,7 @@ static void duplicate_points_pointcloud(GeometrySet &geometry_set,
   const OffsetIndices<int> duplicates = accumulate_counts_to_offsets(
       selection, counts, offset_data);
 
-  PointCloud *pointcloud = BKE_pointcloud_new_nomain(duplicates.total_size());
+  PointCloud *pointcloud = BKE_pointcloud_new_nomain(src_points.type, duplicates.total_size());
 
   bke::gather_attributes_to_groups(src_points.attributes(),
                                    AttrDomain::Point,

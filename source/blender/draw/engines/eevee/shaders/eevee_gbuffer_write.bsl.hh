@@ -38,6 +38,7 @@ struct PackParameters {
 
 /* WORKAROUND: Arrays cannot be sized using compilation_constant. */
 #ifdef SRT_CONSTANT_gbuffer_layer_max
+#  undef GBUFFER_LAYER_MAX
 #  define GBUFFER_LAYER_MAX SRT_CONSTANT_gbuffer_layer_max
 #endif
 
@@ -53,7 +54,7 @@ ClosurePacking pack_closure([[resource_table]] const PackParameters &srt, Closur
   ClosurePacking cl_packed;
   cl_packed.mode = gbuffer::closure_type_to_mode(cl.type, gbuffer::color_is_grayscale(cl.color));
 
-  if (cl.weight <= CLOSURE_WEIGHT_CUTOFF) {
+  if (cl.weight() <= CLOSURE_WEIGHT_CUTOFF) {
     cl_packed.mode = GBUF_NONE;
   }
   /* Common to all configs. */
