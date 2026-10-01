@@ -5367,35 +5367,24 @@ AutoComplete *autocomplete_begin(const char *startname, size_t maxncpy)
 
 void autocomplete_update_name(AutoComplete *autocpl, const StringRef name)
 {
-  char *truncate = autocpl->truncate;
-  const char *startname = autocpl->startname;
-  int match_index = 0;
-  for (int a = 0; a < std::min<size_t>(name.size(), autocpl->maxncpy) - 1; a++) {
-    if (startname[a] == 0 || startname[a] != name[a]) {
-      match_index = a;
-      break;
-    }
+  if (!name.startswith(autocpl->startname)) {
+    return;
   }
 
-  /* found a match */
-  if (startname[match_index] == 0) {
-    autocpl->matches++;
-    /* first match */
-    if (truncate[0] == 0) {
-      name.copy_utf8_truncated(truncate, autocpl->maxncpy);
+  char *truncate = autocpl->truncate;
+  autocpl->matches++;
+  /* first match */
+  if (truncate[0] == 0) {
+    name.copy_utf8_truncated(truncate, autocpl->maxncpy);
+  }
+  else {
+    /* Shorten truncate to the prefix it has in common with name. */
+    const size_t len = std::min(size_t(name.size()), autocpl->maxncpy - 1);
+    size_t a = 0;
+    while (a < len && truncate[a] != 0 && truncate[a] == name[a]) {
+      a++;
     }
-    else {
-      /* remove from truncate what is not in bone->name */
-      for (int a = 0; a < std::min<size_t>(name.size(), autocpl->maxncpy) - 1; a++) {
-        if (name[a] == 0) {
-          truncate[a] = 0;
-          break;
-        }
-        if (truncate[a] != name[a]) {
-          truncate[a] = 0;
-        }
-      }
-    }
+    truncate[a] = 0;
   }
 }
 
