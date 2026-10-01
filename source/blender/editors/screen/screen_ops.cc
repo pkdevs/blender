@@ -102,6 +102,7 @@ namespace blender {
 
 static wmOperatorStatus start_playback(bContext *C, int sync, int mode);
 static void stop_playback(bContext *C);
+static void ED_stop_playback_on_frame_change_check(bContext *C);
 
 /* -------------------------------------------------------------------- */
 /** \name Public Poll API
@@ -3914,6 +3915,8 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
   }
   scene->r.subframe = 0.0f;
 
+  ED_stop_playback_on_frame_change_check(C);
+
   ED_areas_do_frame_follow(C, false);
 
   ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
@@ -3982,6 +3985,8 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
       scene->r.cfra = playback_range.start_frame;
     }
     scene->r.subframe = 0.0f;
+
+    ED_stop_playback_on_frame_change_check(C);
 
     ED_areas_do_frame_follow(C, true);
 
@@ -4057,6 +4062,8 @@ static wmOperatorStatus frame_jump_delta_exec(bContext *C, wmOperator *op)
     scene->r.cfra += frame_offset;
     scene->r.subframe -= subframe_offset;
   }
+
+  ED_stop_playback_on_frame_change_check(C);
 
   const bool wrap_timeline_navigation = scene->r.flag & SCER_WRAP_TIMELINE_NAVIGATION;
   if (wrap_timeline_navigation) {
@@ -4300,6 +4307,8 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  ED_stop_playback_on_frame_change_check(C);
+
   ED_areas_do_frame_follow(C, true);
   ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
 
@@ -4414,6 +4423,8 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
   }
 
   scene->r.cfra = closest;
+
+  ED_stop_playback_on_frame_change_check(C);
 
   ED_areas_do_frame_follow(C, true);
 
@@ -6945,6 +6956,13 @@ static void stop_playback(bContext *C)
   wmWindowManager *wm = CTX_wm_manager(C);
   bScreen *stopscreen = ED_screen_animation_playing(wm);
   screen_stop_playback(CTX_data_main(C), wm, CTX_wm_window(C), stopscreen);
+}
+
+static void ED_stop_playback_on_frame_change_check(bContext *C)
+{
+  if (U.animation_flag & USER_ANIM_STOP_ON_FRAME_CHANGE) {
+    stop_playback(C);
+  }
 }
 
 static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
