@@ -396,11 +396,8 @@ static void rna_PoseChannel_active_constraint_set(PointerRNA *ptr,
   BKE_constraints_active_set(&pchan->constraints, static_cast<bConstraint *>(value.data));
 }
 
-static bConstraint *rna_PoseChannel_constraints_new(ID *id,
-                                                    bPoseChannel *pchan,
-                                                    Main *main,
-                                                    int type,
-                                                    const char *name)
+static bConstraint *rna_PoseChannel_constraints_new(
+    ID *id, bPoseChannel *pchan, Main *main, int type, const char *name)
 {
   Object *ob = id_cast<Object *>(id);
   bConstraint *new_con = BKE_constraint_add_for_pose(ob, pchan, name, eBConstraint_Types(type));
