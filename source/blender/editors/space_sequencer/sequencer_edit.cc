@@ -2161,7 +2161,6 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
   ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
 
   scene->ed->runtime->show_transform_preview = false;
-  scene->ed->runtime->box_blade_preview.is_active = false;
 
   View2D *v2d = ui::view2d_fromcontext(C);
   rctf box_rect;
@@ -2343,20 +2342,9 @@ static wmOperatorStatus sequencer_box_blade_modal(bContext *C,
   wmOperatorStatus gesture_return = WM_gesture_box_modal(C, op, event);
   if (gesture_return == OPERATOR_CANCELLED) {
     scene->ed->runtime->show_transform_preview = false;
-    scene->ed->runtime->box_blade_preview.is_active = false;
   }
 
   if (gesture_return == OPERATOR_RUNNING_MODAL) {
-    rctf box_rect;
-    WM_operator_properties_border_to_rctf(op, &box_rect);
-    ui::view2d_region_to_view_rctf(v2d, &box_rect, &box_rect);
-    auto &preview = scene->ed->runtime->box_blade_preview;
-    preview.rect = box_rect;
-    preview.remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
-    preview.ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
-    preview.only_selected = only_selected_get(op);
-    preview.is_active = true;
-
     /* Region event handlers don't run during the gesture, keep the tooltip updated here. */
     sequencer_blade_tooltip_show(C);
   }
@@ -2383,9 +2371,8 @@ static wmOperatorStatus sequencer_box_blade_modal(bContext *C,
 static void sequencer_box_blade_cancel(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
-  if (scene->ed != nullptr) {
+  if (scene && scene->ed) {
     scene->ed->runtime->show_transform_preview = false;
-    scene->ed->runtime->box_blade_preview.is_active = false;
   }
   WM_gesture_box_cancel(C, op);
 }

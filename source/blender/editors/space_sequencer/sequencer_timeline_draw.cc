@@ -32,10 +32,12 @@
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
 #include "BKE_layer.hh"
+#include "BKE_main.hh"
 #include "BKE_screen.hh"
 #include "BKE_sound.hh"
 
 #include "ED_anim_api.hh"
+#include "ED_gizmo_utils.hh"
 #include "ED_markers.hh"
 #include "ED_mask.hh"
 #include "ED_sequencer.hh"
@@ -2089,16 +2091,54 @@ static bool blade_paint_cursor_poll(bContext *C)
   return scene != nullptr && seq::editing_get(scene) != nullptr;
 }
 
-static void blade_box_draw(Scene *scene, const ARegion *region)
+static wmOperator *box_blade_op_get(wmWindow *win)
+{
+  return WM_operator_find_modal_by_type(win,
+                                        WM_operatortype_find("SEQUENCER_OT_box_blade", false));
+}
+
+static rctf box_blade_rect_get(wmOperator *op, const View2D *v2d)
+{
+  rctf rect;
+  WM_operator_properties_border_to_rctf(op, &rect);
+  ui::view2d_region_to_view_rctf(v2d, &rect, &rect);
+  return rect;
+}
+
+/* Expand to the strips each split propagates to, skip chains that fail to split. */
+static void split_expand_strips(Editing *ed,
+                                Strip *strip,
+                                const bool ignore_connections,
+                                VectorSet<Strip *> &targets)
+{
+  if (targets.contains(strip)) {
+    return;
+  }
+  VectorSet<Strip *> chain;
+  chain.add(strip);
+  seq::expand_strips(ed,
+                     chain,
+                     ignore_connections ? seq::StripRelation::EffectChain :
+                                          seq::StripRelation::ConnectedEffectChain);
+  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
+  for (Strip *strip_chain : chain) {
+    if (seq::transform_is_locked(channels, strip_chain)) {
+      return;
+    }
+  }
+  targets.add_multiple(chain.as_span());
+}
+
+static void blade_box_draw(Scene *scene, const ARegion *region, wmOperator *op)
 {
   Editing *ed = seq::editing_get(scene);
-  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
   const View2D *v2d = &region->v2d;
-  ListBaseT<Strip> *seqbase = ed->current_strips();
 
   /* Keep in sync with `sequencer_box_blade_exec()`. */
-  const auto &data = ed->runtime->box_blade_preview;
-  const rctf box_rect = data.rect;
+  const rctf box_rect = box_blade_rect_get(op, v2d);
+  const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
+  const bool only_selected = RNA_boolean_get(op->ptr, "only_selected");
+  const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
 
   const float2 region_offset = {float(region->winrct.xmin), float(region->winrct.ymin)};
@@ -2107,7 +2147,7 @@ static void blade_box_draw(Scene *scene, const ARegion *region)
   GPU_blend(GPU_BLEND_ALPHA);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
-  if (data.remove_gaps) {
+  if (remove_gaps) {
     const int channel_min = max_ii(int(box_rect.ymin), 1);
     const int channel_max = min_ii(int(box_rect.ymax), seq::MAX_CHANNELS);
     /* Slightly brighten all channels that the box touches. */
@@ -2125,39 +2165,15 @@ static void blade_box_draw(Scene *scene, const ARegion *region)
 
   /* Gather the strips the cut propagates to, like the split preview does. */
   VectorSet<Strip *> targets;
-  for (Strip &candidate : *seqbase) {
-    if (data.only_selected && (candidate.flag & SEQ_SELECT) == 0) {
-      continue;
-    }
-    if (seq::transform_is_locked(channels, &candidate)) {
+  for (Strip &candidate : *ed->current_strips()) {
+    if (only_selected && (candidate.flag & SEQ_SELECT) == 0) {
       continue;
     }
     rctf strip_rect = strip_bounds_get(scene, &candidate);
     if (!BLI_rctf_isect(&strip_rect, &box_rect, nullptr)) {
       continue;
     }
-    if (targets.contains(&candidate)) {
-      continue;
-    }
-    VectorSet<Strip *> chain;
-    chain.add(&candidate);
-    seq::expand_strips(ed,
-                       chain,
-                       data.ignore_connections ? seq::StripRelation::EffectChain :
-                                                 seq::StripRelation::ConnectedEffectChain);
-    bool locked = false;
-    for (Strip *strip : chain) {
-      if (seq::transform_is_locked(channels, strip)) {
-        locked = true;
-        break;
-      }
-    }
-    if (locked) {
-      continue;
-    }
-    for (Strip *strip : chain) {
-      targets.add(strip);
-    }
+    split_expand_strips(ed, &candidate, ignore_connections, targets);
   }
 
   immUniformThemeColor(TH_SEQ_STRIP_ALERT);
@@ -2208,7 +2224,6 @@ static void blade_split_draw(
 {
   const View2D *v2d = &region->v2d;
   Editing *ed = seq::editing_get(scene);
-  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
 
   const int mval[2] = {xy.x - region->winrct.xmin, xy.y - region->winrct.ymin};
   float mouse_co[2];
@@ -2232,35 +2247,9 @@ static void blade_split_draw(
 
   const std::optional<int> channel = all_channels ? std::nullopt :
                                                     std::optional<int>(split_channel);
-  Vector<Strip *> candidates = split_strips_get(scene, split_frame, channel, only_selected);
-
-  /* Expand to the strips each split propagates to, skip chains that fail to split. */
   VectorSet<Strip *> targets;
-  for (Strip *candidate : candidates) {
-    if (targets.contains(candidate)) {
-      continue;
-    }
-    VectorSet<Strip *> chain;
-    chain.add(candidate);
-    seq::expand_strips(ed,
-                       chain,
-                       ignore_connections ? seq::StripRelation::EffectChain :
-                                            seq::StripRelation::ConnectedEffectChain);
-    bool locked = false;
-    for (Strip *strip : chain) {
-      if (seq::transform_is_locked(channels, strip)) {
-        locked = true;
-        break;
-      }
-    }
-    if (locked) {
-      continue;
-    }
-    for (Strip *strip : chain) {
-      if (seq::strip_splits_frame(scene, strip, split_frame)) {
-        targets.add(strip);
-      }
-    }
+  for (Strip *strip : split_strips_get(scene, split_frame, channel, only_selected)) {
+    split_expand_strips(ed, strip, ignore_connections, targets);
   }
 
   if (targets.is_empty() && !all_channels) {
@@ -2282,6 +2271,9 @@ static void blade_split_draw(
 
   auto draw_lines = [&](const float expand) {
     for (const Strip *strip : targets) {
+      if (!seq::strip_splits_frame(scene, strip, split_frame)) {
+        continue;
+      }
       const rctf bounds = strip_bounds_get(scene, strip);
       float x, y_bottom, y_top;
       ui::view2d_view_to_region_fl(v2d, split_frame, bounds.ymin, &x, &y_bottom);
@@ -2307,30 +2299,50 @@ static void blade_split_draw(
 static void blade_paint_cursor_draw(bContext *C,
                                     const int2 &xy,
                                     const float2 & /*tilt*/,
-                                    void * /*customdata*/)
+                                    void *customdata)
 {
-  Scene *scene = CTX_data_sequencer_scene(C);
-  Editing *ed = seq::editing_get(scene);
+  wmWindow *win = CTX_wm_window(C);
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
-  wmWindow *win = CTX_wm_window(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
 
-  if (ed->runtime->box_blade_preview.is_active) {
-    blade_box_draw(scene, region);
+  if (region != customdata) {
+    return;
+  }
+
+  if (wmOperator *box_blade_op = box_blade_op_get(win)) {
+    blade_box_draw(scene, region, box_blade_op);
   }
   else {
     blade_split_draw(scene, region, win, area->runtime.tool, xy);
   }
 }
 
-void sequencer_blade_cursor_ensure(wmWindowManager *wm)
+static void blade_paint_cursor_free_fn(void *customdata)
 {
-  /* Paint cursors don't survive window-manager swaps on file load, so instead of storing the
-   * handle, remove any previous instance and register again. */
-  WM_paint_cursor_remove_by_type(wm, blade_paint_cursor_draw, nullptr);
-  /* XXX TODO: Pass most state as customdata rather than place it in runtime? */
-  WM_paint_cursor_activate(
-      SPACE_SEQ, RGN_TYPE_WINDOW, blade_paint_cursor_poll, blade_paint_cursor_draw, nullptr);
+  if (G_MAIN->wm.first()) {
+    WM_paint_cursor_end(static_cast<wmPaintCursor *>(customdata));
+  }
+}
+
+static void WIDGETGROUP_blade_setup(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  ARegion *region = CTX_wm_region(C);
+  gzgroup->customdata = WM_paint_cursor_activate(
+      SPACE_SEQ, RGN_TYPE_WINDOW, blade_paint_cursor_poll, blade_paint_cursor_draw, region);
+  gzgroup->customdata_free = blade_paint_cursor_free_fn;
+}
+
+void SEQUENCER_GGT_blade(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "Blade Widget";
+  gzgt->idname = "SEQUENCER_GGT_blade";
+
+  gzgt->gzmap_params.spaceid = SPACE_SEQ;
+  gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;
+
+  gzgt->poll = ED_gizmo_poll_or_unlink_delayed_from_tool;
+  gzgt->setup = WIDGETGROUP_blade_setup;
 }
 
 static std::string blade_frame_str_get(const Scene *scene, const int frame, const bool timecode)
@@ -2341,21 +2353,19 @@ static std::string blade_frame_str_get(const Scene *scene, const int frame, cons
 }
 
 /* Shown without delay & re-created on every cursor move, unlike regular tooltips. */
-/* XXX TODO: Can we keep it around between draws? (Probably not, nor worth it) */
 static ARegion *blade_tooltip_init(
     bContext *C, ARegion *region, int * /*pass*/, double * /*pass_delay*/, bool *r_exit_on_event)
 {
-  Scene *scene = CTX_data_sequencer_scene(C);
-  Editing *ed = seq::editing_get(scene);
   wmWindow *win = CTX_wm_window(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
   const wmEvent *event = win->runtime->eventstate;
 
   *r_exit_on_event = false;
 
   std::string frames_str, timecode_str;
   /* Box blade. */
-  if (ed->runtime->box_blade_preview.is_active) {
-    const rctf box_rect = ed->runtime->box_blade_preview.rect;
+  if (wmOperator *box_blade_op = box_blade_op_get(win)) {
+    const rctf box_rect = box_blade_rect_get(box_blade_op, &region->v2d);
     const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
     auto range_str_get = [&](const bool timecode) {
       return fmt::format("{} " BLI_STR_UTF8_RIGHTWARDS_ARROW " {}  ({})",

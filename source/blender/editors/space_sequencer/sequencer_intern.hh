@@ -49,7 +49,7 @@ struct wmEvent;
 struct wmKeyConfig;
 struct wmOperator;
 struct wmOperatorType;
-struct wmWindowManager;
+struct wmGizmoGroupType;
 
 namespace ed::asset {
 struct AssetItemTree;
@@ -144,10 +144,10 @@ float strip_handle_draw_size_get(const Scene *scene, const Strip *strip, float p
 void draw_timeline_seq(const bContext *C, const ARegion *region);
 void sequencer_scrubbing_region_draw(const bContext *C, ARegion *region);
 void draw_timeline_seq_display(const bContext *C, ARegion *region);
-/* XXX TODO: Any better way than re-registering here? */
-void sequencer_blade_cursor_ensure(wmWindowManager *wm);
 void sequencer_blade_tooltip_ensure(ARegion *region);
 void sequencer_blade_tooltip_show(bContext *C);
+
+void SEQUENCER_GGT_blade(wmGizmoGroupType *gzgt);
 
 /* `sequencer_preview_draw.cc` */
 

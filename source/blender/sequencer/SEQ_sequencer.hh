@@ -130,16 +130,6 @@ struct EditingRuntime {
   int transform_preview_frame = 0;
   bool show_transform_preview = false;
 
-  /* XXX TODO: Pass most state as paint cursor customdata rather than place it in runtime? */
-  /** Set while dragging box blade tool, with `rect` in timeline view-space. */
-  struct {
-    rctf rect;
-    bool remove_gaps = false;
-    bool ignore_connections = false;
-    bool only_selected = false;
-    bool is_active = false;
-  } box_blade_preview;
-
   CompositorCache &ensure_compositor_cache();
 };
 

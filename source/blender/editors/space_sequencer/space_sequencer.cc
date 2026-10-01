@@ -424,6 +424,7 @@ static void sequencer_gizmos()
   WM_gizmogrouptype_append(SEQUENCER_GGT_gizmo2d_translate);
   WM_gizmogrouptype_append(SEQUENCER_GGT_gizmo2d_resize);
   WM_gizmogrouptype_append(SEQUENCER_GGT_gizmo2d_rotate);
+  WM_gizmogrouptype_append(SEQUENCER_GGT_blade);
 
   const wmGizmoMapType_Params params_preview = {SPACE_SEQ, RGN_TYPE_PREVIEW};
   wmGizmoMapType *gzmap_type_preview = WM_gizmomaptype_ensure(&params_preview);
@@ -464,8 +465,6 @@ static void sequencer_main_region_init(wmWindowManager *wm, ARegion *region)
 
   WM_event_add_dropbox_handler(&region->runtime->handlers, lb);
 
-  /* XXX TODO: Hacky.... */
-  sequencer_blade_cursor_ensure(wm);
   sequencer_blade_tooltip_ensure(region);
 }
 

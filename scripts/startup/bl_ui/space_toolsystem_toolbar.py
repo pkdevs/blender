@@ -3398,7 +3398,7 @@ class _defs_sequencer_generic:
             label="Blade",
             icon="ops.sequencer.blade",
             cursor='CROSSHAIR',
-            widget=None,
+            widget="SEQUENCER_GGT_blade",
             keymap="Sequencer Tool: Blade",
             draw_settings=draw_settings,
             options={'KEYMAP_FALLBACK'},
