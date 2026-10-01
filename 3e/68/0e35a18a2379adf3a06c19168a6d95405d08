@@ -2,3 +2,4 @@ Referenced by issue #158172, Sequencer: Playback speed regression
 Referenced by issue #163842, Windows: Save As dialog becomes stuck in the file browser address bar after entering a forward slash
 Referenced by pull request #163909, Fix #163842: File Browser ignores clicks after typing a path with /
 Referenced by pull request #164538, Fix #163842: File-browser dir stuck editing if it contained `/` on WIN32
+Referenced by commit fa38b8e7d0a851f3cde6013b4c26c36c97a92504, Fix #163842: File-browser dir stuck editing if it contained `/` on WIN32
