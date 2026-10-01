@@ -548,8 +548,7 @@ void ForwardPipeline::transparent_add(const Object *ob,
    * since this function is not called from PipelineModule::material_add. */
   inst_.pipelines.has_raycast |= GPU_material_flag_get(gpumat, GPU_MATFLAG_RAYCAST);
 
-  const bool bind_previous_layer = GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA) &&
-                                   GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT);
+  const bool bind_previous_layer = GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT);
 
   /* Transparent needs to use one sub pass per object to support reordering.
    * NOTE: Pre-pass needs to be created first in order to be sorted first. */
