@@ -197,6 +197,11 @@ class NODE_MT_shader_node_output_base(node_add_menu.NodeMenu):
         )
         self.node_operator(
             layout,
+            "ShaderNodeLightAccumulationAOV",
+            poll=object_eevee_shader_nodes_poll(context)
+        )
+        self.node_operator(
+            layout,
             "ShaderNodeOutputLineStyle",
             poll=line_style_shader_nodes_poll(context),
         )
@@ -275,11 +280,6 @@ class NODE_MT_shader_node_shader_base(node_add_menu.NodeMenu):
         self.node_operator(
             layout,
             "ShaderNodeLightAccumulation",
-            poll=object_eevee_shader_nodes_poll(context)
-        )
-        self.node_operator(
-            layout,
-            "ShaderNodeLightAccumulationAOV",
             poll=object_eevee_shader_nodes_poll(context)
         )
         self.node_operator(

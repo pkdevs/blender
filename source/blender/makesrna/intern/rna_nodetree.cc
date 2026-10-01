@@ -6860,6 +6860,20 @@ static void def_sh_output_aov(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_struct_sdna_from(srna, "bNode", nullptr);
 }
 
+static void def_sh_light_accumulation_aov(BlenderRNA * /*brna*/, StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeShaderLightAccumulationAOV", "storage");
+
+  prop = RNA_def_property(srna, "aov_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "name");
+  RNA_def_property_ui_text(prop, "Name", "Name of the AOV that this output writes to");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  RNA_def_struct_sdna_from(srna, "bNode", nullptr);
+}
+
 static void def_sh_combsep_color(BlenderRNA * /*brna*/, StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -10920,7 +10934,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("ShaderNode", "ShaderNodeInvert");
   define("ShaderNode", "ShaderNodeLayerWeight");
   define("ShaderNode", "ShaderNodeLightAccumulation");
-  define("ShaderNode", "ShaderNodeLightAccumulationAOV");
+  define("ShaderNode", "ShaderNodeLightAccumulationAOV", def_sh_light_accumulation_aov);
   define("ShaderNode", "ShaderNodeLightEvaluation", def_light_evaluation);
   define("ShaderNode", "ShaderNodeLightFalloff");
   define("ShaderNode", "ShaderNodeLightInfo");

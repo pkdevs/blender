@@ -2956,6 +2956,12 @@ struct NodeShaderOutputAOV {
   char name[/*MAX_NAME*/ 64] = "";
 };
 
+struct NodeShaderLightAccumulationAOV {
+  DNA_DEFINE_CXX_METHODS(NodeShaderLightAccumulationAOV)
+
+  char name[/*MAX_NAME*/ 64] = "";
+};
+
 struct NodeSunBeams {
   DNA_DEFINE_CXX_METHODS(NodeSunBeams)
 
