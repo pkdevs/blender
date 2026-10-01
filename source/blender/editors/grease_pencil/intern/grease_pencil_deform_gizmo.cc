@@ -798,6 +798,8 @@ static void deform_gizmo_draw_prepare(const bContext *C, wmGizmoGroup *gzgroup)
   else {
     const Vector<MutableDrawingInfo> drawings = deform_group->drawings;
 
+    float3x3 triangle_current_positions;
+
     bool is_moved = false;
 
     for (const int i : IndexRange(3)) {
@@ -812,16 +814,68 @@ static void deform_gizmo_draw_prepare(const bContext *C, wmGizmoGroup *gzgroup)
       const float3 deformed_pos = deform_group->deformed_triangle_points[i];
       const float3 current_pos = info.drawing.strokes().positions()[point_i];
 
+      triangle_current_positions[i] = current_pos;
+
       /* Check if the point has moved besides from the deform. */
       if (math::distance(deformed_pos, current_pos) > 0.0001f) {
         is_moved = true;
-        break;
       }
     }
 
-    /* TODO. */
     if (is_moved) {
-      recompute_gizmo_plane(C, gzgroup);
+      if (deform_group->triangle_point_indices[0] == -1 ||
+          deform_group->triangle_point_indices[1] == -1 ||
+          deform_group->triangle_point_indices[2] == -1)
+      {
+        recompute_gizmo_plane(C, gzgroup);
+        return;
+      }
+
+      const float3x3 &deformed_triangle_points = deform_group->deformed_triangle_points;
+
+      const float4x4 matrix_space = float4x4(deform_group->transform_border->matrix_space);
+      const float4x4 matrix_offset = float4x4(deform_group->transform_border->matrix_offset);
+
+      const float3 deform_dir_1 = deformed_triangle_points[1] - deformed_triangle_points[0];
+      const float3 deform_dir_2 = deformed_triangle_points[2] - deformed_triangle_points[0];
+
+      const float deform_l_1 = math::length(deform_dir_1);
+      const float deform_l_2 = math::length(deform_dir_2);
+
+      const float3 deformed_triangle_point_4 = math::cross(deform_dir_1 / deform_l_1,
+                                                           deform_dir_2 / deform_l_2) *
+                                                   (deform_l_1 + deform_l_2) * 0.5f +
+                                               deformed_triangle_points[0];
+
+      const float3 current_dir_1 = triangle_current_positions[1] - triangle_current_positions[0];
+      const float3 current_dir_2 = triangle_current_positions[2] - triangle_current_positions[0];
+
+      const float current_l_1 = math::length(current_dir_1);
+      const float current_l_2 = math::length(current_dir_2);
+
+      const float3 triangle_current_position_4 = math::cross(current_dir_1 / current_l_1,
+                                                             current_dir_2 / current_l_2) *
+                                                     (current_l_1 + current_l_2) * 0.5f +
+                                                 triangle_current_positions[0];
+
+      const float4x4 curr_m = float4x4(float4(triangle_current_positions[0], 1.0f),
+                                       float4(triangle_current_positions[1], 1.0f),
+                                       float4(triangle_current_positions[2], 1.0f),
+                                       float4(triangle_current_position_4, 1.0f));
+
+      const float4x4 def_m = float4x4(float4(deformed_triangle_points[0], 1.0f),
+                                      float4(deformed_triangle_points[1], 1.0f),
+                                      float4(deformed_triangle_points[2], 1.0f),
+                                      float4(deformed_triangle_point_4, 1.0f));
+
+      const float4x4 offset_m = curr_m * math::invert(def_m);
+
+      const float4x4 new_offset = (math::invert(matrix_space) * offset_m * matrix_space) *
+                                  matrix_offset;
+
+      copy_m4_m4(deform_group->transform_border->matrix_offset, new_offset.ptr());
+
+      update_triangle_data(deform_group);
     }
   }
 }
