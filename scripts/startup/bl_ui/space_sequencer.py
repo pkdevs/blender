@@ -1166,7 +1166,7 @@ class SEQUENCER_MT_strip(Menu):
                 props.type = 'SOFT'
                 props.only_selected = True
 
-                props = layout.operator("sequencer.split", text="Hold Split", text_ctxt=i18n_contexts.id_sequence)
+                props = layout.operator("sequencer.split", text="Hard Split", text_ctxt=i18n_contexts.id_sequence)
                 props.type = 'HARD'
                 props.only_selected = True
 
