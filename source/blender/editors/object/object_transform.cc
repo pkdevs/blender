@@ -869,6 +869,15 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
         multiresModifier_scale_disp(depsgraph, scene, ob);
       }
 
+      Array<float3> custom_normals;
+      const bke::GAttributeReader custom_normal = mesh->attributes().lookup("custom_normal");
+      if (custom_normal && custom_normal.domain == bke::AttrDomain::Corner &&
+          custom_normal.varray.type().is<short2>())
+      {
+        custom_normals.reinitialize(mesh->corners_num);
+        math::transform_normals(mesh->corner_normals(), float3x3(float4x4(mat)), custom_normals);
+      }
+
       /* adjust data */
       bke::mesh_transform(*mesh, float4x4(mat), true);
       /* The determinant of mat will be negative for objects with an odd number of negative scale
@@ -876,6 +885,17 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
        * flip them back. */
       if (corrective_flip_normals && math::determinant(float4x4(mat)) < 0.0f) {
         bke::mesh_flip_faces(*mesh, IndexMask(mesh->faces_num));
+        if (!custom_normals.is_empty()) {
+          const OffsetIndices faces = mesh->faces();
+          threading::parallel_for(faces.index_range(), 1024, [&](const IndexRange range) {
+            for (const int face : range) {
+              custom_normals.as_mutable_span().slice(faces[face].drop_front(1)).reverse();
+            }
+          });
+        }
+      }
+      if (!custom_normals.is_empty()) {
+        bke::mesh_set_custom_normals_normalized(*mesh, custom_normals);
       }
     }
     else if (ob->type == OB_ARMATURE) {
