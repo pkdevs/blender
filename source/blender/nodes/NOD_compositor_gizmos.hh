@@ -8,11 +8,14 @@
 
 namespace blender {
 struct bContext;
+struct bNode;
 struct wmGizmoGroup;
 struct ARegion;
 struct wmGizmoGroupType;
 
 namespace nodes::gizmos {
+
+bool node_has_gizmo(const bNode &node);
 
 /* -------------------------------------------------------------------- */
 /** \name Common BBox Gizmos

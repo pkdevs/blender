@@ -121,6 +121,32 @@ static bool image_gizmo_is_set_visible(const SpaceImage &sima)
   return true;
 }
 
+static bool gizmo_is_interacting(const wmGizmo &gz)
+{
+  return gz.interaction_data != nullptr;
+}
+
+/** The compositor clears its log at the start of every evaluation, so syncing during those times
+ * would make the gizmo jump to the fallback values. */
+static bool should_sync_gizmo_state_from_log(const SpaceNode &snode,
+                                             const bNode &node,
+                                             const wmGizmo &gz)
+{
+  if (gizmo_is_interacting(gz)) {
+    return false;
+  }
+
+  eval_log::ContextualNodeTreeLogs tree_logs = eval_log::NodesEvalLog::get_contextual_tree_logs(
+      snode);
+  eval_log::NodeTreeLog *tree_log = tree_logs.get_main_tree_log(node);
+  if (!tree_log) {
+    return false;
+  }
+
+  tree_log->ensure_evaluated_gizmo_nodes();
+  return tree_log->evaluated_gizmo_nodes.contains(node.identifier);
+}
+
 static SpaceNode *find_active_node_editor(const bContext *C)
 {
   wmWindowManager *window_manager = CTX_wm_manager(C);
@@ -1427,6 +1453,9 @@ void translate_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   NodeBBoxWidgetGroup *translate_group = MEM_new<NodeBBoxWidgetGroup>(__func__);
 
+  translate_group->state.dims = GIZMO_NODE_DEFAULT_DIMS;
+  translate_group->state.offset = float2(0.0f);
+
   translate_group->border = WM_gizmo_new("GIZMO_GT_move_3d", gzgroup, nullptr);
 
   RNA_enum_set(translate_group->border->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
@@ -1501,7 +1530,9 @@ void translate_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
   bNode *node = bke::node_get_active(*snode->edittree);
 
-  translate_group->state.offset = translate_gizmo_input_offset(*snode, *node);
+  if (should_sync_gizmo_state_from_log(*snode, *node, *gz)) {
+    translate_group->state.offset = translate_gizmo_input_offset(*snode, *node);
+  }
   translate_group->update_data.context = const_cast<bContext *>(C);
   bNodeSocket *source_input = bke::node_find_socket(*node, SOCK_IN, "X"_ustr);
   translate_group->update_data.ptr = RNA_pointer_create_discrete(
@@ -1630,6 +1661,10 @@ bool transform_poll_space_node(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 void transform_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   NodeBBoxWidgetGroup *transform_group = MEM_new<NodeBBoxWidgetGroup>(__func__);
+
+  transform_group->state.dims = GIZMO_NODE_DEFAULT_DIMS;
+  transform_group->state.offset = float2(0.0f);
+
   transform_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
 
   RNA_enum_set(transform_group->border->ptr,
@@ -1792,11 +1827,13 @@ void transform_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
   bNode *node = bke::node_get_active(*snode->edittree);
 
-  transform_group->state.offset = translate_gizmo_input_offset(*snode, *node);
-  /* Fall back to the size of the viewer image if the input size is not known, which is closer to
-   * the actual size than an arbitrary default. */
-  const float2 fallback = node_gizmo_safe_calc_dims(ibuf, GIZMO_NODE_DEFAULT_DIMS);
-  transform_group->state.dims = gizmo_input_dims_from_log(*snode, *node, fallback);
+  if (should_sync_gizmo_state_from_log(*snode, *node, *gz)) {
+    transform_group->state.offset = translate_gizmo_input_offset(*snode, *node);
+    /* Fall back to the size of the viewer image if the input size is not known, which is closer to
+     * the actual size than an arbitrary default. */
+    const float2 fallback = node_gizmo_safe_calc_dims(ibuf, GIZMO_NODE_DEFAULT_DIMS);
+    transform_group->state.dims = gizmo_input_dims_from_log(*snode, *node, fallback);
+  }
   RNA_float_set_array(gz->ptr, "dimensions", transform_group->state.dims);
 
   transform_group->update_data.context = const_cast<bContext *>(C);
@@ -1919,9 +1956,11 @@ void scale_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
   bNode *node = bke::node_get_active(*snode->edittree);
 
-  scale_group->state.offset = translate_gizmo_input_offset(*snode, *node);
-  const float2 fallback = node_gizmo_safe_calc_dims(ibuf, GIZMO_NODE_DEFAULT_DIMS);
-  scale_group->state.dims = gizmo_input_dims_from_log(*snode, *node, fallback);
+  if (should_sync_gizmo_state_from_log(*snode, *node, *gz)) {
+    scale_group->state.offset = translate_gizmo_input_offset(*snode, *node);
+    const float2 fallback = node_gizmo_safe_calc_dims(ibuf, GIZMO_NODE_DEFAULT_DIMS);
+    scale_group->state.dims = gizmo_input_dims_from_log(*snode, *node, fallback);
+  }
   RNA_float_set_array(gz->ptr, "dimensions", scale_group->state.dims);
 
   scale_group->update_data.context = const_cast<bContext *>(C);
@@ -1945,6 +1984,10 @@ void scale_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 void scale_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   NodeBBoxWidgetGroup *scale_group = MEM_new<NodeBBoxWidgetGroup>(__func__);
+
+  scale_group->state.dims = GIZMO_NODE_DEFAULT_DIMS;
+  scale_group->state.offset = float2(0.0f);
+
   scale_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
 
   RNA_enum_set(scale_group->border->ptr, "transform", ED_GIZMO_CAGE_XFORM_FLAG_SCALE);
@@ -2007,5 +2050,23 @@ bool scale_poll_space_image(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 
   return show_scale_gizmo(*snode);
 }
+
+/* -------------------------------------------------------------------- */
+/** \name Gizmo Nodes
+ * \{ */
+
+bool node_has_gizmo(const bNode &node)
+{
+  return node.is_type("CompositorNodeBoxMask"_ustr) || node.is_type("CompositorNodeCrop"_ustr) ||
+         node.is_type("CompositorNodeEllipseMask"_ustr) ||
+         node.is_type("CompositorNodeGlare"_ustr) ||
+         node.is_type("CompositorNodeCornerPin"_ustr) ||
+         node.is_type("CompositorNodeSplit"_ustr) ||
+         node.is_type("CompositorNodeTranslate"_ustr) ||
+         node.is_type("CompositorNodeTransform"_ustr) ||
+         node.is_type("CompositorNodeScale"_ustr) || node.is_type("CompositorNodeViewer"_ustr);
+}
+
+/** \} */
 
 }  // namespace blender::nodes::gizmos
