@@ -2185,9 +2185,9 @@ bool remove_fill_guides(bke::CurvesGeometry &curves)
 }
 
 /* Find the closest drawing to a screen position, if the vertex_group_name is set only consider
- * drawing having that vertex group active (todo, check)*/
+ * drawing having that vertex group active. */
 const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
-    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name)
+    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name, bke::AttrDomain domain)
 {
 
   /* Collect visible drawings. */
@@ -2221,9 +2221,11 @@ const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
               bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
                   ob_eval, *vc.obact, info.drawing);
 
+          BLI_assert(ELEM(domain, bke::AttrDomain::Point, bke::AttrDomain::Curve));
           IndexMaskMemory memory;
-          const IndexMask points = retrieve_visible_points(*vc.obact, info.drawing, memory);
-          if (points.is_empty()) {
+          const IndexMask mask = domain == bke::AttrDomain::Point ? retrieve_visible_points(*vc.obact, info.drawing, memory)
+                                           : retrieve_visible_strokes(*vc.obact, info.drawing, memory)   ;
+          if (mask.is_empty()) {
             continue;
           }
           const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
@@ -2237,8 +2239,8 @@ const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
                   deformation.positions,
                   curves.cyclic(),
                   projection,
-                  points,
-                  bke::AttrDomain::Point,
+                  mask,
+                  domain,
                   screen_pos,
                   {new_closest.stroke_index, new_closest.distance_sq});
           if (new_closest_elem) {
@@ -2256,9 +2258,9 @@ const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
 }
 
 /* Find the closest drawing to a screen position, if the vertex_group_name is set only consider
- * drawing having that vertex group active (todo, check)*/
+ * drawing having that vertex group active */
 MutableClosestGreasePencilDrawing find_closest_editable_greasepencil_drawing_screen_space(
-    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name)
+    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name, bke::AttrDomain domain)
 {
 
   /* Collect visible drawings. */
@@ -2292,9 +2294,11 @@ MutableClosestGreasePencilDrawing find_closest_editable_greasepencil_drawing_scr
               bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
                   ob_eval, *vc.obact, info.drawing);
 
+          BLI_assert(ELEM(domain, bke::AttrDomain::Point, bke::AttrDomain::Curve));
           IndexMaskMemory memory;
-          const IndexMask points = retrieve_visible_points(*vc.obact, info.drawing, memory);
-          if (points.is_empty()) {
+          const IndexMask mask = domain == bke::AttrDomain::Point ? retrieve_visible_points(*vc.obact, info.drawing, memory)
+                                           : retrieve_visible_strokes(*vc.obact, info.drawing, memory)   ;
+          if (mask.is_empty()) {
             continue;
           }
           const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
@@ -2308,8 +2312,8 @@ MutableClosestGreasePencilDrawing find_closest_editable_greasepencil_drawing_scr
                   deformation.positions,
                   curves.cyclic(),
                   projection,
-                  points,
-                  bke::AttrDomain::Point,
+                  mask,
+                  domain,
                   screen_pos,
                   {new_closest.stroke_index, new_closest.distance_sq});
           if (new_closest_elem) {
@@ -2341,7 +2345,7 @@ const MutableClosestGreasePencil find_closest_editable_greasepencil_object(
           new_closest.greasepencil_object = &gp_ob;
           new_closest.greasepencil_id = &gp_id;
           new_closest.drawing = find_closest_editable_greasepencil_drawing_screen_space(
-              vc, &gp_ob, mval, nullptr);
+              vc, &gp_ob, mval, nullptr, bke::AttrDomain::Curve);
         }
         return new_closest;
       },

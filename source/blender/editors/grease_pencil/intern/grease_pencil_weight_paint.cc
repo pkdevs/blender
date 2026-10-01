@@ -457,7 +457,7 @@ static wmOperatorStatus weight_sample_invoke(bContext *C,
 
   /* Find stroke points closest to mouse cursor position. */
   const ClosestGreasePencilDrawing closest = find_closest_greasepencil_drawing_screen_space(
-      vc, vc.obact, event->mval, object_defgroup->name);
+      vc, vc.obact, event->mval, object_defgroup->name, bke::AttrDomain::Point);
   if (!closest.drawing) {
     return OPERATOR_CANCELLED;
   }
