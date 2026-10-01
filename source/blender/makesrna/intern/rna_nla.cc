@@ -692,8 +692,7 @@ static NlaStrip *rna_NlaStrip_new_sound(ID *id,
                                         bContext *C,
                                         ReportList *reports,
                                         const char *name,
-                                        int start,
-                                        Speaker *speaker)
+                                        int start)
 {
   BLI_assert(id);
 
@@ -704,7 +703,7 @@ static NlaStrip *rna_NlaStrip_new_sound(ID *id,
     return nullptr;
   }
 
-  NlaStrip *strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), speaker);
+  NlaStrip *strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), blender::id_cast<Speaker*>(ob->data));
 
   return generic_NlaStrip_new(id, strip, track, bmain, C, reports, name, start);
 }
@@ -1235,12 +1234,6 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
                      INT_MIN,
                      INT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_pointer(func,
-                         "speaker",
-                         "Speaker",
-                         "",
-                         "Speaker to source to this strip");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "strip", "NlaStrip", "", "New NLA Strip");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));

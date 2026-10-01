@@ -28,9 +28,6 @@ class AbstractNlaStripTest(unittest.TestCase):
     speaker_object: bpy.types.Object = None
     """ Speaker object to test 'SOUND' NLA strips. """
 
-    speaker_data: bpy.types.Speaker = None
-    """ Speaker data to attach a NLA strip 'SOUND' to. """
-
     speaker_nla_tracks: bpy.types.NlaTracks = None
     """ NLA tracks of the Speaker object. """
 
@@ -50,8 +47,8 @@ class AbstractNlaStripTest(unittest.TestCase):
         channelbag = strip.channelbags.new(slot)
 
         """ 'SOUND' NLA Strips related """
-        self.speaker_data = bpy.data.speakers.new(name="SpeakerData")
-        self.speaker_object = bpy.data.objects.new(name="SpeakerObject", object_data=self.speaker_data)
+        speaker_data = bpy.data.speakers.new(name="SpeakerData")
+        self.speaker_object = bpy.data.objects.new(name="SpeakerObject", object_data=speaker_data)
         bpy.context.collection.objects.link(self.speaker_object)
 
         self.speaker_object.animation_data_create()
@@ -63,7 +60,7 @@ class AbstractNlaStripTest(unittest.TestCase):
 
     def add_strip_sound(self, nla_track: bpy.types.NlaTrack, start: int) -> bpy.types.NlaStrip:
         """ Places a new 'SOUND' strip with the Speaker data. """
-        strip = nla_track.strips.new_sound("ObjectClip", start, self.speaker_data)
+        strip = nla_track.strips.new_sound("ObjectClip", start)
         return strip
 
     def add_strip_no_extrapolation(self, nla_track: bpy.types.NlaTrack, start: int) -> bpy.types.NlaStrip:
