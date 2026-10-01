@@ -1509,8 +1509,7 @@ static void strip_data_outline_params_set(const StripDrawContext &strip,
    *  - Red when overlapping with other strips or handles are clamped.
    *  - Slightly lighter while translating strips. */
   if ((translating && overlaps && !use_overwrite) || clamped_l || clamped_r) {
-    col[0] = 255;
-    col[1] = col[2] = 33;
+    ui::theme::get_color_3ubv(TH_SEQ_STRIP_ALERT, col);
     data.flags |= GPU_SEQ_FLAG_OVERLAP;
   }
   else if (translating && selected) {
@@ -2104,9 +2103,6 @@ static void blade_box_draw(Scene *scene, const ARegion *region)
 
   const float2 region_offset = {float(region->winrct.xmin), float(region->winrct.ymin)};
 
-  uchar col[4];
-  ui::theme::get_color_3ubv(TH_GIZMO_PRIMARY, col);
-
   uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   GPU_blend(GPU_BLEND_ALPHA);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -2164,7 +2160,7 @@ static void blade_box_draw(Scene *scene, const ARegion *region)
     }
   }
 
-  immUniformColor4ub(col[0], col[1], col[2], 60);
+  immUniformThemeColor(TH_SEQ_STRIP_ALERT);
   for (const Strip *strip : targets) {
     const float xmin = max_ff(strip->left_handle(), rect_frames[0]);
     const float xmax = min_ff(strip->right_handle(scene), rect_frames[1]);

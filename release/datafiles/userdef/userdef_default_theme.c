@@ -545,6 +545,7 @@ const bTheme U_theme_default = {
     .selected_strip = RGBA(0xff8f0dff),
     .text_strip_cursor = RGBA(0x71a8ffff),
     .selected_text = RGBA(0xffffff4d),
+    .strip_alert = RGBA(0xff212166),
     .gp_vertex_size = 3,
     .gp_vertex_select = RGBA(0xff8500ff),
     .row_alternate = RGBA(0xffffff05),
