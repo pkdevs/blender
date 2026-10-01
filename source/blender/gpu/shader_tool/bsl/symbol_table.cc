@@ -55,7 +55,7 @@ Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declara
     }
   }
 
-  return {scope.root_scope()->lookup_class(SymbolTable::err_symbol), err};
+  return {root->lookup_class(SymbolTable::err_symbol), err};
 }
 
 Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
@@ -228,6 +228,8 @@ void SymbolTable::register_builtins(LocalScope node)
       {"float", 4, 4, builtin::float_t},
       {"bool", 1, 1, builtin::bool_t},
       {"bool32_t", 4, 4, builtin::bool_t},
+
+      {"string_t", 4, 4, builtin::uint_t},
   };
 
   for (const auto &t : basic_types) {
@@ -256,8 +258,6 @@ void SymbolTable::register_builtins(LocalScope node)
       {err_symbol, 1, 1},
 
       {"void", 1, 1}, /* Only for function return type. */
-
-      {"string_t", 4, 4},
 
       {"samplerBuffer", 0, 1},
       {"sampler1D", 0, 1},
@@ -503,11 +503,12 @@ void SymbolTable::register_builtins(LocalScope node)
         SymbolFunction *sym = fun_arena.alloc(
             root, tok, fn.return_type, fn.id, SymbolFunction::GLOBAL);
         sym->is_error = fn.id == err_symbol;
-        sym->is_builtin = allow_vector_promotion;
+        sym->allow_vector_promotion = allow_vector_promotion;
         sym->is_constexpr = is_constexpr;
+        sym->is_builtin = true;
         sym->reserve_arguments(fn.arg_types.size());
         for (SymbolClass *arg : fn.arg_types) {
-          sym->add_argument(arg);
+          sym->add_argument(true, arg);
         }
         root->function_emplace(sym, true);
       };
@@ -567,10 +568,10 @@ void SymbolTable::register_builtins(LocalScope node)
       {"FLT_MAX", "float", true, ConstexprValue(std::bit_cast<float>(0x7F7FFFFFu))},
       {"FLT_MIN", "float", true, ConstexprValue(std::bit_cast<float>(0x00800000u))},
       {"FLT_EPSILON", "float", true, ConstexprValue(1.192092896e-07f)},
-      {"SHRT_MAX", "float", true, ConstexprValue(0x00007FFF)},
-      {"INT_MAX", "float", true, ConstexprValue(0x7FFFFFFF)},
-      {"USHRT_MAX", "float", true, ConstexprValue(0x0000FFFFu)},
-      {"UINT_MAX", "float", true, ConstexprValue(0xFFFFFFFFu)},
+      {"SHRT_MAX", "int", true, ConstexprValue(0x00007FFF)},
+      {"INT_MAX", "int", true, ConstexprValue(0x7FFFFFFF)},
+      {"USHRT_MAX", "uint", true, ConstexprValue(0x0000FFFFu)},
+      {"UINT_MAX", "uint", true, ConstexprValue(0xFFFFFFFFu)},
       {"NAN_FLT", "float", true, ConstexprValue(NAN)},
       {"FLT_11_MAX", "float", false, ConstexprValue(0)},
       {"FLT_10_MAX", "float", false, ConstexprValue(0)},
@@ -650,9 +651,9 @@ MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from,
     return MatchRank::None;
   }
 
-  /* Casting enum or packed types. */
+  /* Casting enum or packed types of the underlying type matches. */
   if (from->builtin_class == to->builtin_class) {
-    return MatchRank::Conversion;
+    return from->is_enum ? MatchRank::Promotion : MatchRank::Conversion;
   }
 
   using namespace builtin;
@@ -668,7 +669,9 @@ MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from,
   const uint16_t to_len = to_raw & LEN_MASK;
   /* Check standard GLSL compatible convertible base types (int <-> uint <-> float). */
   const bool both_numeric = (from_raw & FLAG_NUMERIC) && (to_raw & FLAG_NUMERIC);
-  const bool is_promotion = (from_raw & FLAG_INTEGER) == (to_raw & FLAG_INTEGER);
+  /* Require both the family (Integer vs Float) and the signedness to match exactly */
+  const uint16_t PROMOTE_MASK = FLAG_INTEGER | FLAG_SIGN;
+  const bool is_promotion = (from_raw & PROMOTE_MASK) == (to_raw & PROMOTE_MASK);
 
   if (from_len == to_len) {
     if (from_len == 1) {
@@ -693,7 +696,8 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   vector<BuiltinFunc> functions = {{err_cls, err_symbol, {}}};
 
   /* Special functions */
-  functions.push_back({void_cls, "printf", {str_cls}});
+  functions.push_back({uint_cls, "print_data", {uint_cls, str_cls}});
+  functions.push_back({uint_cls, "print_start", {uint_cls}});
   functions.push_back({void_cls, "static_assert", {bool_cls}});
 
   for (SymbolClass *type : {float_cls,
@@ -832,20 +836,27 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     }
   };
 
-  const vector<string> trig_unary = {"radians",
-                                     "degrees",
-                                     "sin",
-                                     "cos",
-                                     "tan",
-                                     "asin",
-                                     "acos",
-                                     "atan",
-                                     "sinh",
-                                     "cosh",
-                                     "tanh",
-                                     "asinh",
-                                     "acosh",
-                                     "atanh"};
+  const vector<string> trig_unary = {
+      "radians",
+      "degrees",
+      "sin",
+      "cos",
+      "tan",
+      "asin",
+      "acos",
+      "atan",
+      "sinh",
+      "cosh",
+      "tanh",
+      "asinh",
+      "acosh",
+      "atanh",
+      /* For C++ compat. Do something about it. Doesn't belong here. */
+      "sinf",
+      "cosf",
+      "tanf",
+      "atanf",
+  };
   for (const auto &name : trig_unary) {
     add_unary(name, f_types);
   }
@@ -864,7 +875,17 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   add_ternary("EXPECT_NEAR", f_types);
   add_vec_vec_scalar_ternary("EXPECT_NEAR", f_types);
 
-  const vector<string> exp_unary = {"exp", "log", "exp2", "log2", "sqrt", "inversesqrt"};
+  const vector<string> exp_unary = {
+      "exp",
+      "log",
+      "exp2",
+      "log2",
+      "sqrt",
+      "inversesqrt",
+      /* For C++ compat. Do something about it. Doesn't belong here. */
+      "expf",
+      "sqrtf",
+  };
   for (const auto &name : exp_unary) {
     add_unary(name, f_types);
   }
@@ -878,6 +899,9 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       "ceil",
       "fract",
       "saturate",
+      /* For C++ compat. Do something about it. Doesn't belong here. */
+      "floorf",
+      "ceilf",
   };
   for (const auto &name : common_float_unary) {
     add_unary(name, f_types);
@@ -942,7 +966,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   functions.push_back({float4_cls, "unpackSnorm4x8", {uint_cls}});
   functions.push_back({float2_cls, "unpackHalf2x16", {uint_cls}});
 
-  for (size_t i = 0; i < f_types.size(); ++i) {
+  for (size_t i = 1; i < f_types.size(); ++i) {
     functions.push_back({float_cls, "length", {f_types[i]}});
     functions.push_back({float_cls, "distance", {f_types[i], f_types[i]}});
     functions.push_back({float_cls, "dot", {f_types[i], f_types[i]}});
@@ -1037,6 +1061,11 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   };
 
   for (auto [type, prefix] : image_types) {
+    SymbolClass *sampler = root->classes[prefix + "samplerBuffer"];
+    functions.push_back({type, "texelFetch", {sampler, i_types[0]}});
+  }
+
+  for (auto [type, prefix] : image_types) {
     vector<tuple<SymbolClass *, int, int>> samplers = {
         /* Name, Coordinate Dimensions. */
         {root->classes[prefix + "sampler1D"], 1, 1},
@@ -1066,12 +1095,14 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       SymbolClass *deriv_type = f_types[deriv_dim - 1];
 
       functions.push_back({type, "texture", {sampler, coord_type}});
+      functions.push_back({type, "texture", {sampler, coord_type, float_cls}}); /* Lod bias. */
       functions.push_back({type, "textureLod", {sampler, coord_type, float_cls}});
       functions.push_back({type, "textureGather", {sampler, coord_type}});
       functions.push_back({type, "textureGather", {sampler, coord_type, int_cls}});
       functions.push_back({type, "textureGrad", {sampler, coord_type, deriv_type, deriv_type}});
       functions.push_back({icoord_type, "textureSize", {sampler, int_cls}});
       functions.push_back({type, "texelFetch", {sampler, icoord_type, int_cls}});
+      functions.push_back({type, "texelFetchExtend", {sampler, icoord_type, int_cls}});
     }
 
     vector<tuple<SymbolClass *, int>> images = {

@@ -159,6 +159,8 @@ static void mesh_copy_data(Main *bmain,
   mesh_dst->runtime->vert_to_face_map_cache = mesh_src->runtime->vert_to_face_map_cache;
   mesh_dst->runtime->vert_to_corner_map_cache = mesh_src->runtime->vert_to_corner_map_cache;
   mesh_dst->runtime->corner_to_face_map_cache = mesh_src->runtime->corner_to_face_map_cache;
+  mesh_dst->runtime->edge_to_corner_offset_cache = mesh_src->runtime->edge_to_corner_offset_cache;
+  mesh_dst->runtime->edge_to_corner_map_cache = mesh_src->runtime->edge_to_corner_map_cache;
   mesh_dst->runtime->bvh_cache_edges = mesh_src->runtime->bvh_cache_edges;
   mesh_dst->runtime->bvh_cache_faces = mesh_src->runtime->bvh_cache_faces;
   mesh_dst->runtime->bvh_cache_corner_tris = mesh_src->runtime->bvh_cache_corner_tris;
@@ -296,9 +298,11 @@ static void mesh_foreach_path(ID *id, BPathForeachPathData *bpath_data)
     /* CustomDataExternal should only be the case for CD_MDISPS, but check all layers regardless.
      */
     const Span<CustomDataLayer> layers(data.layers, data.totlayer);
-    if (std::any_of(layers.begin(), layers.end(), [&](const CustomDataLayer &layer) {
-          return CustomData_external_test(&data, eCustomDataType(layer.type));
-        }))
+    if (std::any_of(layers.begin(),
+                    layers.end(),
+                    [&](const CustomDataLayer &layer) {
+                      return CustomData_external_test(&data, eCustomDataType(layer.type));
+                    }))
     {
       BKE_bpath_foreach_path_fixed_process(
           bpath_data, data.external->filepath, sizeof(data.external->filepath));

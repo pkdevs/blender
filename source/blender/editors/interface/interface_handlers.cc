@@ -556,6 +556,8 @@ struct AfterFunc {
   BlockInteraction_Handle *custom_interaction_handle;
 
   std::optional<bContextStore> context;
+  /** See #PopupBlockHandle::ctx_region_popup. */
+  ARegion *region_popup;
 
   char undostr[BKE_UNDO_STR_MAX];
   std::string drawstr;
@@ -905,6 +907,9 @@ static void handle_afterfunc_add_operator_ex(wmOperatorType *ot,
   if (context_but && context_but->context) {
     after->context = *context_but->context;
   }
+  if (context_but && context_but->block->handle) {
+    after->region_popup = context_but->block->handle->ctx_region_popup;
+  }
 
   if (context_but) {
     after->drawstr = button_drawstr_without_sep_char(context_but);
@@ -1029,6 +1034,9 @@ static void apply_but_func(bContext *C, Button *but)
   if (but->context) {
     after->context = *but->context;
   }
+  if (but->block->handle) {
+    after->region_popup = but->block->handle->ctx_region_popup;
+  }
 
   after->drawstr = button_drawstr_without_sep_char(but);
 }
@@ -1149,6 +1157,20 @@ static void apply_but_funcs_after(bContext *C)
       CTX_store_set(C, &after.context.value());
     }
 
+    /* Set the popup this button's popup was opened from (a context menu in a popover)
+     * so operators can access the popup's active button, see: #151170.
+     * That popup may have been closed along with the menu, so check it still exists. */
+    ARegion *region_popup_prev = nullptr;
+    if (after.region_popup) {
+      if (BLI_findindex(&CTX_wm_screen(C)->regionbase, after.region_popup) != -1) {
+        region_popup_prev = CTX_wm_region_popup(C);
+        CTX_wm_region_popup_set(C, after.region_popup);
+      }
+      else {
+        after.region_popup = nullptr;
+      }
+    }
+
     if (after.popup_op) {
       popup_check(C, after.popup_op);
     }
@@ -1179,6 +1201,10 @@ static void apply_but_funcs_after(bContext *C)
 
     if (after.context) {
       CTX_store_set(C, nullptr);
+    }
+
+    if (after.region_popup) {
+      CTX_wm_region_popup_set(C, region_popup_prev);
     }
 
     if (after.rename_full_func) {
@@ -1328,7 +1354,7 @@ static void apply_but_TEX(bContext *C, Button *but, HandleButtonData *data)
 
   ButtonText *text_button = but->type == ButtonType::Text ? static_cast<ButtonText *>(but) :
                                                             nullptr;
-  /* only if there are afterfuncs, otherwise 'renam_orig' isn't freed */
+  /* only if there are afterfuncs, otherwise 'rename_orig' isn't freed */
   if (text_button && afterfunc_check(but->block, but)) {
     /* give butfunc a copy of the original text too.
      * feature used for bone renaming, channels, etc.
@@ -4406,6 +4432,13 @@ static int do_but_textedit(
           changed = autocomplete != AUTOCOMPLETE_NO_MATCH;
 
           if (autocomplete == AUTOCOMPLETE_FULL_MATCH) {
+            if (but->flag & BUT_TEXTEDIT_AUTOCOMPLETE_KEEP_ACTIVE) {
+              /* Exit to apply, then re-activate (as with Tab cycling between text fields),
+               * so this only runs when Tab is pressed, see: #150689. */
+              but->flag |= BUT_ACTIVATE_ON_INIT_NO_SELECT;
+              data->postbut = but;
+              data->posttype = BUTTON_ACTIVATE_TEXT_EDITING;
+            }
             button_activate_state(C, but, BUTTON_STATE_EXIT);
           }
         }
@@ -5129,8 +5162,10 @@ static int do_but_BUT(bContext *C, Button *but, HandleButtonData *data, const wm
     }
   }
 #endif
-  if (button_draw_as_link(but) && !data->changed_cursor) {
-    WM_cursor_set(data->window, WM_CURSOR_HAND_POINT);
+  if (button_draw_as_link(but)) {
+    if (data->window->cursor != WM_CURSOR_HAND_POINT) {
+      WM_cursor_modal_set(data->window, WM_CURSOR_HAND_POINT);
+    }
     data->changed_cursor = true;
   }
   if (button_opens_link(but) && !data->changed_wokspace_status) {
@@ -9842,7 +9877,7 @@ static void button_activate_exit(
 #endif
 
   if (data->changed_cursor) {
-    if (but->type == ButtonType::TextBox) {
+    if (but->type == ButtonType::TextBox || button_draw_as_link(but)) {
       WM_cursor_modal_restore(win);
     }
     WM_cursor_set(win, WM_CURSOR_DEFAULT);
@@ -10108,7 +10143,8 @@ ARegion *region_searchbox_region_get(const ARegion *button_region)
 void context_update_anim_flag(const bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
-  ARegion *region = CTX_wm_region(C);
+  ARegion *region_popup = CTX_wm_region_popup(C);
+  ARegion *region = region_popup ? region_popup : CTX_wm_region(C);
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
       depsgraph, (scene) ? BKE_scene_frame_get(scene) : 0.0f);
@@ -12142,14 +12178,23 @@ static int handle_menu_event(bContext *C,
         if (but_active && menu->keynav_state.is_keynav) {
           /* Key-navigation activates the button navigated onto, not the default. */
         }
+        else if ((but_default != nullptr) &&
+                 ((but_default->type == ButtonType::But) &&
+                  ((but_default->active == nullptr) ||
+                   (but_default->active->state == BUTTON_STATE_HIGHLIGHT))))
+        {
+          /* Regarding the #BUTTON_STATE_HIGHLIGHT check above.
+           * It's important to run immediately in this case. Letting the button flash first
+           * (see #BUTTON_STATE_WAIT_FLASH) delays running it until a timer fires,
+           * so events after "Return" reach the popup while it's still open and are lost.
+           * This can happen while typing quickly or a slow redraw.
+           * It also happens during tests that use simulated events. */
+
+          button_execute(C, region, but_default);
+          retval = WM_UI_HANDLER_BREAK;
+        }
         else if ((but_default != nullptr) && (but_default->active == nullptr)) {
-          if (but_default->type == ButtonType::But) {
-            button_execute(C, region, but_default);
-            retval = WM_UI_HANDLER_BREAK;
-          }
-          else {
-            handle_button_activate_by_type(C, region, but_default);
-          }
+          handle_button_activate_by_type(C, region, but_default);
         }
         /* enter will always close this block, we let the event
          * get handled by the button if it is activated, otherwise we cancel */
@@ -13423,7 +13468,7 @@ static Button *block_find_rna_text_button(Block &block,
                                           const char *rna_prop_id)
 {
   for (Button &but : block.buttons()) {
-    if (but.type == ButtonType::Text) {
+    if (ELEM(but.type, ButtonType::Text, ButtonType::TextBox)) {
       if (but.rnaprop && but.rnapoin.data == rna_poin_data) {
         if (STREQ(RNA_property_identifier(but.rnaprop), rna_prop_id)) {
           return &but;

@@ -259,6 +259,12 @@ add_python_test(
   --blender "${TEST_BLENDER_EXE}"
 )
 
+# OpenColorIO config of projects found when opening blend files.
+add_blender_test(
+  script_ocio_config
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_ocio_config_tests.py
+)
+
 # test running operators doesn't segfault under various conditions
 if(WITH_TESTS_EXPERIMENTAL)
   add_blender_test(
@@ -751,6 +757,13 @@ add_blender_test(
 add_blender_test(
   bl_animation_context_markers
   --python ${TEST_PYTHON_DIR}/bl_animation_context_markers.py
+)
+
+add_blender_test(
+  bl_animation_copy_paste
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_animation_copy_paste.py
+  --
+  --testdir "${TEST_SRC_DIR}/animation"
 )
 
 add_blender_test(
@@ -1701,6 +1714,18 @@ if(TEST_SRC_DIR_EXISTS)
   )
 
   add_blender_test(
+    bl_texture_paint_undo
+    --python ${CMAKE_CURRENT_LIST_DIR}/sculpt_paint/texture_paint_undo_test.py
+  )
+
+  add_blender_test(
+    bl_grease_pencil_paint_tests
+    --python ${CMAKE_CURRENT_LIST_DIR}/sculpt_paint/grease_pencil_paint_tests.py
+    --
+    --testdir "${TEST_SRC_DIR}/grease_pencil"
+  )
+
+  add_blender_test(
     bl_sculpt_brush_curve_presets
     --python ${CMAKE_CURRENT_LIST_DIR}/sculpt_paint/brush_strength_curves_test.py
     --
@@ -1762,6 +1787,7 @@ if(WITH_UI_TESTS)
     test_undo.view3d_mesh_edit_shape_key
     test_undo.view3d_mesh_edit_separate
     test_undo.view3d_mesh_particle_edit_mode_simple
+    test_undo.view3d_multi_mode_undo_history
     test_undo.view3d_multi_mode_multi_window
     test_undo.view3d_multi_mode_select
     test_undo.view3d_particle_edit_undo_from_texture_paint
@@ -1772,7 +1798,6 @@ if(WITH_UI_TESTS)
     test_undo.view3d_sculpt_with_empty_memfile_step
     test_undo.view3d_sculpt_trim
     test_undo.view3d_simple
-    test_undo.view3d_texture_paint_complex
     test_undo.view3d_texture_paint_simple
     test_workspace.sanity_check_general
     test_workspace.sanity_check_2d_animation
@@ -1848,6 +1873,7 @@ if(WITH_UI_TESTS)
     test_tool_activation.image_editor
     test_tool_activation.node_editor
     test_tool_activation.sequencer
+    test_modifiers_constraints_draw.modifiers_constraints_draw
     test_preferences_draw_all.test_preferences_draw_all
     test_info_reports.test_info_report_selection_modes
     test_info_reports.test_info_report_delete
@@ -1878,6 +1904,7 @@ if(WITH_UI_TESTS)
     test_blend_autoexec.pref_disabled_drop_blend_file_trusted_source_enable_autoexec
     test_blend_autoexec.pref_disabled_open_file_selector_enable_autoexec
     test_blend_autoexec.pref_enabled_open_file_selector_untrusted_enable_autoexec
+    test_blend_autoexec.pref_disabled_drop_blend_file_trusted_source_next_enable_autoexec
   )
   foreach(ui_test ${_ui_tests_enable_autoexec})
     add_blender_test_ui(
@@ -1896,6 +1923,7 @@ if(WITH_UI_TESTS)
     test_blend_autoexec.pref_enabled_drop_blend_file_trusted_source_disable_autoexec
     test_blend_autoexec.pref_enabled_drop_blend_file_untrusted_trusted_source_disable_autoexec
     test_blend_autoexec.pref_enabled_open_file_selector_disable_autoexec
+    test_blend_autoexec.pref_enabled_drop_blend_file_trusted_source_next_disable_autoexec
   )
   foreach(ui_test ${_ui_tests_disable_autoexec})
     add_blender_test_ui(
