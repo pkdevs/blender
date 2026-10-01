@@ -2219,21 +2219,26 @@ static bool split_tool_prop_from_toolsettings(bToolRef *tref,
   return RNA_boolean_get(&tool_props, identifier);
 }
 
-static void blade_split_draw(
+struct BladeSplit {
+  int frame;
+  bool all_channels;
+  VectorSet<Strip *> strips;
+};
+
+static std::optional<BladeSplit> blade_split_get(
     Scene *scene, const ARegion *region, const wmWindow *win, bToolRef *tref, const int2 &xy)
 {
   const View2D *v2d = &region->v2d;
   Editing *ed = seq::editing_get(scene);
 
-  const int mval[2] = {xy.x - region->winrct.xmin, xy.y - region->winrct.ymin};
-  float mouse_co[2];
-  ui::view2d_region_to_view(v2d, mval[0], mval[1], &mouse_co[0], &mouse_co[1]);
-  const int split_frame = round_fl_to_int(mouse_co[0]);
-  const int split_channel = int(mouse_co[1]);
+  const int2 mval = xy - int2(region->winrct.xmin, region->winrct.ymin);
+  float2 mouse_co;
+  ui::view2d_region_to_view(v2d, mval.x, mval.y, &mouse_co.x, &mouse_co.y);
+  const int split_frame = round_fl_to_int(mouse_co.x);
 
-  const uint8_t modifier = win->runtime->eventstate->modifier;
-  const bool all_channels = (modifier & KM_SHIFT) != 0;
-  const bool ignore_connections = !all_channels && ((modifier & KM_ALT) != 0 ||
+  const wmEvent *event = win->runtime->eventstate;
+  const bool all_channels = (event->modifier & KM_SHIFT) != 0;
+  const bool ignore_connections = !all_channels && ((event->modifier & KM_ALT) != 0 ||
                                                     split_tool_prop_from_toolsettings(
                                                         tref, "ignore_connections", false));
   const bool only_selected = split_tool_prop_from_toolsettings(tref, "only_selected", false);
@@ -2241,20 +2246,27 @@ static void blade_split_draw(
   if (!all_channels) {
     const Strip *strip = strip_under_mouse_get(scene, v2d, mval);
     if (strip == nullptr || !seq::strip_splits_frame(scene, strip, split_frame)) {
-      return;
+      return std::nullopt;
     }
   }
 
   const std::optional<int> channel = all_channels ? std::nullopt :
-                                                    std::optional<int>(split_channel);
-  VectorSet<Strip *> targets;
+                                                    std::optional<int>(int(mouse_co.y));
+  BladeSplit split = {split_frame, all_channels, {}};
   for (Strip *strip : split_strips_get(scene, split_frame, channel, only_selected)) {
-    split_expand_strips(ed, strip, ignore_connections, targets);
+    split_expand_strips(ed, strip, ignore_connections, split.strips);
   }
 
-  if (targets.is_empty() && !all_channels) {
-    return;
+  if (split.strips.is_empty() && !all_channels) {
+    return std::nullopt;
   }
+  return split;
+}
+
+static void blade_split_draw(Scene *scene, const ARegion *region, const BladeSplit &split)
+{
+  const View2D *v2d = &region->v2d;
+  const int split_frame = split.frame;
 
   /* Paint cursors draw in window space, not region space. */
   const float2 region_offset = {float(region->winrct.xmin), float(region->winrct.ymin)};
@@ -2263,14 +2275,14 @@ static void blade_split_draw(
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   GPU_blend(GPU_BLEND_ALPHA);
 
-  if (all_channels) {
+  if (split.all_channels) {
     const float x = ui::view2d_view_to_region_x(v2d, split_frame) + region_offset.x;
     immUniformThemeColorAlpha(TH_GIZMO_PRIMARY, 0.3f);
     immRectf(pos, x - 1.5f, region_offset.y, x + 1.5f, region_offset.y + region->winy);
   }
 
   auto draw_lines = [&](const float expand) {
-    for (const Strip *strip : targets) {
+    for (const Strip *strip : split.strips) {
       if (!seq::strip_splits_frame(scene, strip, split_frame)) {
         continue;
       }
@@ -2313,8 +2325,10 @@ static void blade_paint_cursor_draw(bContext *C,
   if (wmOperator *box_blade_op = box_blade_op_get(win)) {
     blade_box_draw(scene, region, box_blade_op);
   }
-  else {
-    blade_split_draw(scene, region, win, area->runtime.tool, xy);
+  else if (const std::optional<BladeSplit> split = blade_split_get(
+               scene, region, win, area->runtime.tool, xy))
+  {
+    blade_split_draw(scene, region, *split);
   }
 }
 
@@ -2357,6 +2371,7 @@ static ARegion *blade_tooltip_init(
     bContext *C, ARegion *region, int * /*pass*/, double * /*pass_delay*/, bool *r_exit_on_event)
 {
   wmWindow *win = CTX_wm_window(C);
+  ScrArea *area = CTX_wm_area(C);
   Scene *scene = CTX_data_sequencer_scene(C);
   const wmEvent *event = win->runtime->eventstate;
 
@@ -2377,25 +2392,14 @@ static ARegion *blade_tooltip_init(
     timecode_str = range_str_get(true);
   }
   /* Regular blade. */
+  else if (const std::optional<BladeSplit> split = blade_split_get(
+               scene, region, win, area->runtime.tool, int2(event->xy)))
+  {
+    frames_str = blade_frame_str_get(scene, split->frame, false);
+    timecode_str = blade_frame_str_get(scene, split->frame, true);
+  }
   else {
-    const View2D *v2d = &region->v2d;
-    const int mval[2] = {event->xy[0] - region->winrct.xmin, event->xy[1] - region->winrct.ymin};
-    float mouse_co[2];
-    ui::view2d_region_to_view(v2d, mval[0], mval[1], &mouse_co[0], &mouse_co[1]);
-    const int split_frame = round_fl_to_int(mouse_co[0]);
-
-    /* Always show tooltip if `Shift` is pressed, but if not, check for strip under the cursor: */
-    if ((event->modifier & KM_SHIFT) == 0) {
-      const Strip *strip = strip_under_mouse_get(scene, v2d, mval);
-
-      if (strip == nullptr || split_frame == strip->left_handle() ||
-          split_frame == strip->right_handle(scene))
-      {
-        return nullptr;
-      }
-    }
-    frames_str = blade_frame_str_get(scene, split_frame, false);
-    timecode_str = blade_frame_str_get(scene, split_frame, true);
+    return nullptr;
   }
 
   /* Offset the tooltip to the right to avoid covering the split line. */
