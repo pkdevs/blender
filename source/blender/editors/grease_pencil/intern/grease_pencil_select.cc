@@ -473,7 +473,6 @@ static void GREASE_PENCIL_OT_select_linked(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
-#if 0
 static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_Params &params)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(&C);
@@ -482,39 +481,41 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
   const Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
       *vc.bmain, vc.scene, vc.view_layer, vc.v3d);
 
-
-  const ClosesGPDataBlock closest = find_closest_curve(*depsgraph, vc, bases, mval);
-  if (!closest.curves_id) {
+  MutableClosestGreasePencil closest = find_closest_editable_greasepencil_object(vc, bases, mval);
+  if (!closest.greasepencil_id) {
     return false;
   }
 
-  bke::CurvesGeometry &closest_curves = closest.curves_id->geometry.wrap();
-  const bke::AttrDomain selection_domain = bke::AttrDomain(closest.curves_id->selection_domain);
+  bke::CurvesGeometry closest_curves = closest.drawing.drawing->strokes_for_write();
+  const bke::AttrDomain selection_domain = ED_grease_pencil_selection_domain_get(
+      vc.scene->toolsettings, closest.greasepencil_object);
+  //  bke::AttrDomain(closest.greasepencil_id->selection_domain);
 
   if (selection_domain == bke::AttrDomain::Point) {
     const OffsetIndices points_by_curve = closest_curves.points_by_curve();
-    foreach_selection_attribute_writer(
+    blender::ed::curves::foreach_selection_attribute_writer(
         closest_curves, bke::AttrDomain::Point, [&](bke::GSpanAttributeWriter &selection) {
-          for (const int point : points_by_curve[closest.elem.index]) {
-            apply_selection_operation_at_index(selection.span, point, params.sel_op);
+          for (const int point : points_by_curve[closest.drawing.stroke_index]) {
+            blender::ed::curves::apply_selection_operation_at_index(
+                selection.span, point, params.sel_op);
           }
         });
   }
   else if (selection_domain == bke::AttrDomain::Curve) {
-    bke::GSpanAttributeWriter selection = ensure_selection_attribute(
+    bke::GSpanAttributeWriter selection = blender::ed::curves::ensure_selection_attribute(
         closest_curves, bke::AttrDomain::Curve, bke::AttrType::Bool);
-    apply_selection_operation_at_index(selection.span, closest.elem.index, params.sel_op);
+    blender::ed::curves::apply_selection_operation_at_index(
+        selection.span, closest.drawing.stroke_index, params.sel_op);
     selection.finish();
   }
 
   /* Use #ID_RECALC_GEOMETRY instead of #ID_RECALC_SELECT because it is handled as a
    * generic attribute for now. */
-  DEG_id_tag_update(&closest.curves_id->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(&C, NC_GEOM | ND_DATA, closest.curves_id);
+  DEG_id_tag_update(&closest.greasepencil_id->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(&C, NC_GEOM | ND_DATA, closest.greasepencil_id);
 
   return true;
 }
-#endif
 
 #if 0
 static wmOperatorStatus select_linked_pick_exec(bContext *C, wmOperator *op)
@@ -543,7 +544,6 @@ static wmOperatorStatus select_linked_pick_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 #endif
-
 
 #if 0
 static wmOperatorStatus select_linked_pick_invoke(bContext *C,

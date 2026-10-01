@@ -440,7 +440,6 @@ void add_armature_automatic_weights(Scene &scene, Object &object, const Object &
   });
 }
 
-
 static wmOperatorStatus weight_sample_invoke(bContext *C,
                                              wmOperator * /*op*/,
                                              const wmEvent *event)
@@ -457,7 +456,8 @@ static wmOperatorStatus weight_sample_invoke(bContext *C,
       BLI_findlink(BKE_object_defgroup_list(vc.obact), object_defgroup_nr));
 
   /* Find stroke points closest to mouse cursor position. */
-  const ClosestGreasePencilDrawing closest = find_closest_greasepencil_drawing_screen_space(vc, vc.obact, event->mval, object_defgroup->name);
+  const ClosestGreasePencilDrawing closest = find_closest_greasepencil_drawing_screen_space(
+      vc, vc.obact, event->mval, object_defgroup->name);
   if (!closest.drawing) {
     return OPERATOR_CANCELLED;
   }

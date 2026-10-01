@@ -210,6 +210,12 @@ class DrawingPlacement {
   float3 try_project_depth(float2 co) const;
 };
 
+struct MutableClosestGreasePencilDrawing {
+  bke::greasepencil::Drawing *drawing = nullptr;
+  int active_defgroup_index = -1;
+  int stroke_index = -1;
+  float distance_sq = FLT_MAX;
+};
 
 struct ClosestGreasePencilDrawing {
   const bke::greasepencil::Drawing *drawing = nullptr;
@@ -218,20 +224,19 @@ struct ClosestGreasePencilDrawing {
   float distance_sq = FLT_MAX;
 };
 
-const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name);
+const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
+    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name);
+MutableClosestGreasePencilDrawing find_closest_editable_greasepencil_drawing_screen_space(
+    ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name);
 
-struct ClosestGreasePencilDataBlock {
-    const GreasePencil *greasepencil_id = nullptr;
-    ClosestGreasePencilDrawing drawing;
+struct MutableClosestGreasePencil {
+  Object *greasepencil_object = nullptr;
+  GreasePencil *greasepencil_id = nullptr;
+  MutableClosestGreasePencilDrawing drawing;
 };
 
-
-const ClosestGreasePencilDataBlock find_closest_greasepencil_datablock(const Depsgraph &depsgraph,
-                                                const ViewContext &vc,
-                                                const Span<Base *> bases,
-                                                const int2 &mval);
-
-
+const MutableClosestGreasePencil find_closest_editable_greasepencil_object(
+    const ViewContext &vc, const Span<Base *> bases, const int2 &mval);
 
 void set_selected_frames_type(bke::greasepencil::Layer &layer,
                               const eBezTriple_KeyframeType key_type);
