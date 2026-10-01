@@ -2362,8 +2362,34 @@ class WM_OT_tool_set_by_id(Operator):
         default=False,
         options={'SKIP_SAVE', 'HIDDEN'},
     )
+    hold: BoolProperty(
+        name="Hold",
+        description="Only use the tool while the key is held, then go back to the previous tool",
+        default=False,
+        options={'SKIP_SAVE'},
+    )
 
     space_type: rna_space_type_prop
+
+    def invoke(self, context, event):
+        from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+
+        if not self.hold:
+            return self.execute(context)
+        self._tool_prev = ToolSelectPanelHelper.tool_active_from_context(context).idname
+        self._key = event.type
+        if self.execute(context) != {'FINISHED'}:
+            return {'CANCELLED'}
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        from bl_ui.space_toolsystem_common import activate_by_id
+
+        if event.type != self._key or event.value != 'RELEASE':
+            return {'PASS_THROUGH'}
+        activate_by_id(context, context.space_data.type, self._tool_prev)
+        return {'FINISHED'}
 
     @staticmethod
     def space_type_from_operator(op, context):
