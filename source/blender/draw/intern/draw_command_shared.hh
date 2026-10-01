@@ -45,7 +45,7 @@ struct [[host_shared]] DrawGroup {
   /** Number of non inverted scaling instances in this Group. */
   uint front_facing_len;
 
-  /** #gpu::Batch values (or subrange of) copied to #DrawCommand after sorting. */
+  /** #Mesh values (or a subrange of) copied to #DrawCommand after sorting. */
   int vertex_len;
   int vertex_first;
   /* Set to -1 if not an indexed draw. */
@@ -95,7 +95,7 @@ BLI_STATIC_ASSERT_ALIGN(DrawGroup, 16)
  * #DrawPrototype might get merged into the same final #DrawCommand.
  */
 struct [[host_shared]] DrawPrototype {
-  /* Reference to parent DrawGroup to get the gpu::Batch vertex / instance count. */
+  /* Reference to parent DrawGroup to get the #Mesh vertex / instance count. */
   uint group_id;
   /* Resource handle associated with this call. Also reference visibility. */
   uint res_id;

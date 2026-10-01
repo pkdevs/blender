@@ -283,7 +283,6 @@ struct SceneResources {
 
   ~SceneResources()
   {
-    /* TODO(fclem): Auto destruction. */
     if (missing_texture.gpu.texture) {
       GPU_texture_free(missing_texture.gpu.texture);
     }

@@ -23,6 +23,8 @@ namespace blender::draw::command {
 
 Mesh *procedural_draw_mesh_get(GPUPrimType primitive)
 {
+  /* Safe as function local statics: the procedural meshes are not owned, their destructors are
+   * no-ops. */
   static Mesh mesh_pts(GPU_PRIM_POINTS);
   static Mesh mesh_lines(GPU_PRIM_LINES);
   static Mesh mesh_tris(GPU_PRIM_TRIS);

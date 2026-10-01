@@ -34,7 +34,20 @@ struct Mesh {
    * is resolved from the active GPU context on every access (see #batch_get).
    */
   GPUPrimType batch_prim_ = GPU_PRIM_NONE;
-  // TODO: Vector<MeshLet> meshlets;
+
+#if 0
+  /* Commented out as Meshlet integration will be added later.*/
+  /**
+   * Refers to meshlets of the batch.
+   */
+  Span<MeshLet> meshlets_;
+  /**
+   * Contains the extracted meshlet for non-owning batches. Would contain the data to draw the
+   * whole batch and \a meshlets_ would point to this entry.
+   */
+  MeshLet meshlet_;
+#endif
+
  public:
   MEM_CXX_CLASS_ALLOC_FUNCS("Mesh")
 
@@ -81,9 +94,9 @@ struct Mesh {
 
   static inline void clear(Mesh *mesh)
   {
-    /* Never clear procedural draw-meshes: they reference the context-owned singleton batch. */
-    if (mesh && mesh->batch_) {
-      GPU_batch_clear(mesh->batch_);
+    if (mesh) {
+      BLI_assert(mesh->owns_batch_);
+      GPU_BATCH_CLEAR_SAFE(mesh->batch_);
     }
   }
 };

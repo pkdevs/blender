@@ -226,6 +226,7 @@ class Prepass : Overlay {
       return;
     }
 
+    /* At most one of these is set. geom_list is only filled for material slot selection. */
     Mesh *geom_single = nullptr;
     Span<Mesh *> geom_list;
 
@@ -260,10 +261,7 @@ class Prepass : Overlay {
           /* TODO(fclem): Would be nice to have even when not selecting to occlude overlays. */
           return;
         }
-        {
-          Mesh *volume_surface = DRW_cache_volume_selection_surface_get(ob_ref.object);
-          geom_single = volume_surface;
-        }
+        geom_single = DRW_cache_volume_selection_surface_get(ob_ref.object);
         pass = mesh_ps_;
         /* TODO(fclem): Get rid of these check and enforce correct API on the batch cache. */
         if (geom_single == nullptr) {

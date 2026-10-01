@@ -29,15 +29,6 @@ namespace blender {
     (flag |= DRW_ibo_requested(ibo) ? (value) : 0)
 #endif
 
-// TODO: Deprecated
-inline gpu::Batch *DRW_batch_request(gpu::Batch **batch)
-{
-  /* XXX TODO(fclem): We are writing to batch cache here. Need to make this thread safe. */
-  if (*batch == nullptr) {
-    *batch = GPU_batch_calloc();
-  }
-  return *batch;
-}
 inline draw::Mesh *DRW_batch_request(draw::Mesh **mesh)
 {
   /* XXX TODO(fclem): We are writing to batch cache here. Need to make this thread safe. */

@@ -56,16 +56,6 @@ static void particle_batch_cache_clear(ParticleSystem *psys);
 /* ---------------------------------------------------------------------- */
 /* Particle gpu::Batch Cache */
 
-struct ParticleHairFinalCache {
-  /* Output of the subdivision stage: vertex buff sized to subdiv level. */
-  gpu::VertBuf *proc_buf;
-
-  /* Just contains a huge index buffer used to draw the final hair. */
-  Mesh *proc_hairs[MAX_THICKRES];
-
-  int strands_res; /* points per hair, at least 2 */
-};
-
 struct ParticleHairCache {
   gpu::VertBuf *pos;
   gpu::IndexBuf *indices;

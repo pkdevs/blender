@@ -20,12 +20,6 @@
 
 namespace blender {
 
-namespace gpu {
-class Batch;
-class IndexBuf;
-class VertBuf;
-}  // namespace gpu
-
 namespace draw {
 struct Mesh;
 }  // namespace draw

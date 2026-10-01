@@ -34,8 +34,7 @@ class MotionPath : Overlay {
   /**
    * Non-owning #Mesh wrappers around the motion path batches.
    *
-   * The motion path batches are owned by the motion path data. The commands recorded this frame
-   * reference these wrappers until the pass is submitted, so they
+   * The motion path batches are owned by the motion path data.
    */
   Vector<MeshPtr> motion_path_draw_meshes_;
 

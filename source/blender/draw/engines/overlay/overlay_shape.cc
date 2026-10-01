@@ -339,9 +339,9 @@ ShapeCache::ShapeCache()
     gpu::IndexBuf *ibo = GPU_indexbuf_build(&elb);
 
     /* NOTE: Reuses the same VBO as bone_octahedron. Thus has the same vertex format. */
-    gpu::Batch &octahedron_solid = *bone_octahedron->batch_get();
+    gpu::Batch *octahedron_solid = bone_octahedron->batch_get();
     bone_octahedron_wire = make_mesh(GPU_batch_create_ex(
-        GPU_PRIM_LINES_ADJ, octahedron_solid.verts[0], ibo, GPU_BATCH_OWNS_INDEX));
+        GPU_PRIM_LINES_ADJ, octahedron_solid->verts[0], ibo, GPU_BATCH_OWNS_INDEX));
   }
 
   /* Armature Sphere. */
@@ -359,9 +359,9 @@ ShapeCache::ShapeCache()
         GPU_PRIM_TRI_FAN, vbo_from_vector(verts), nullptr, GPU_BATCH_OWNS_VBO));
   }
   {
-    gpu::Batch &sphere_solid = *bone_sphere->batch_get();
+    gpu::Batch *sphere_solid = bone_sphere->batch_get();
     bone_sphere_wire = make_mesh(
-        GPU_batch_create(GPU_PRIM_LINE_STRIP, sphere_solid.verts[0], nullptr));
+        GPU_batch_create(GPU_PRIM_LINE_STRIP, sphere_solid->verts[0], nullptr));
   }
 
   /* Armature Stick. */
@@ -428,9 +428,9 @@ ShapeCache::ShapeCache()
     gpu::IndexBuf *ibo = GPU_indexbuf_build(&elb);
 
     /* NOTE: Reuses the same VBO as bone_box. Thus has the same vertex format. */
-    gpu::Batch &box_solid = *bone_box->batch_get();
+    gpu::Batch *box_solid = bone_box->batch_get();
     bone_box_wire = make_mesh(
-        GPU_batch_create_ex(GPU_PRIM_LINES_ADJ, box_solid.verts[0], ibo, GPU_BATCH_OWNS_INDEX));
+        GPU_batch_create_ex(GPU_PRIM_LINES_ADJ, box_solid->verts[0], ibo, GPU_BATCH_OWNS_INDEX));
   }
 
   /* Armature Envelope. */

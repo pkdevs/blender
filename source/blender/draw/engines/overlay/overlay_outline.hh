@@ -190,8 +190,7 @@ class Outline : Overlay {
         }
         break;
       case OB_VOLUME: {
-        Mesh *volume_surface = DRW_cache_volume_selection_surface_get(ob_ref.object);
-        geom = volume_surface;
+        geom = DRW_cache_volume_selection_surface_get(ob_ref.object);
         /* TODO(fclem): Get rid of these check and enforce correct API on the batch cache. */
         if (geom) {
           prepass_volume_ps_->draw(geom, manager.unique_handle(ob_ref));
