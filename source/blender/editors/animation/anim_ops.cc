@@ -19,7 +19,6 @@
 
 #include "DNA_ID.h"
 #include "DNA_scene_types.h"
-#include "DNA_userdef_types.h"
 
 #include "BKE_anim_data.hh"
 #include "BKE_armature.hh"
@@ -708,12 +707,6 @@ static wmOperatorStatus change_frame_invoke(bContext *C, wmOperator *op, const w
       sequencer_is_mouse_over_handle(C, event))
   {
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
-  }
-
-  if ((U.animation_flag & USER_ANIM_PAUSE_ON_FRAME_CHANGE) &&
-      ED_screen_animation_playing(CTX_wm_manager(C)))
-  {
-    ED_screen_animation_play(C, 0, 0);
   }
 
   /* Change to frame that mouse is over before adding modal handler,

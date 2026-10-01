@@ -5891,12 +5891,11 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_userdef_anim_update");
 
   prop = RNA_def_property(srna, "use_pause_on_frame_change", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "animation_flag", USER_ANIM_PAUSE_ON_FRAME_CHANGE);
-  RNA_def_property_ui_text(
-      prop,
-      "Pause on Frame Change",
-      "Stop animation playback when manually changing the current frame, "
-      "whether by scrubbing, jumping, or stepping");
+  RNA_def_property_boolean_sdna(prop, nullptr, "animation_flag", USER_ANIM_STOP_ON_FRAME_CHANGE);
+  RNA_def_property_ui_text(prop,
+                           "Pause on Frame Change",
+                           "Stop animation playback when manually changing the current frame, "
+                           "whether by scrubbing, jumping, or stepping");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
   prop = RNA_def_property(srna, "fcurve_new_auto_smoothing", PROP_ENUM, PROP_NONE);
