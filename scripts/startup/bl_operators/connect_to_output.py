@@ -39,7 +39,6 @@ class NODE_OT_connect_to_output(Operator, NodeEditorBase):
 
     @classmethod
     def poll(cls, context):
-        """Already implemented natively for compositing nodes."""
         return (node_editor_poll(cls, context) and
                 node_space_type_poll(cls, context, {'ShaderNodeTree', 'GeometryNodeTree', 'CompositorNodeTree'}))
 
@@ -160,7 +159,7 @@ class NODE_OT_connect_to_output(Operator, NodeEditorBase):
         return socket in self.used_viewer_sockets_active_mat
 
     def has_socket_other_users(self, socket):
-        """List the other users for this socket (other materials or geometry nodes groups)"""
+        """List the other users for this socket"""
         if not hasattr(self, "other_viewer_sockets_users"):
             self.other_viewer_sockets_users = []
             if socket.id_data.type == 'COMPOSITE':
@@ -325,7 +324,7 @@ class NODE_OT_connect_to_output(Operator, NodeEditorBase):
             output_node = self.ensure_group_output(base_node_tree)
 
             active_node_socket_index = self.get_output_index(
-                active, output_node, base_node_tree == active_tree, 'RGBA'
+                active, output_node, base_node_tree == active_tree, 'RGBA', check_type=True
             )
 
             if active_node_socket_index is None:
