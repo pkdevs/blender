@@ -60,6 +60,18 @@ struct LightAccumulationAOV {
   uint hash;
 };
 
+#if !defined(SRT_CONSTANT_light_accumulation_aov_count)
+#  define SRT_CONSTANT_light_accumulation_aov_count 0
+#endif
+
+#ifdef GLSL_CPP_STUBS
+#  define LIGHT_ACCUMULATION_AOV_COUNT 3
+#elif SRT_CONSTANT_light_accumulation_aov_count == 0
+#  define LIGHT_ACCUMULATION_AOV_COUNT 1 /* Avoid compilation error. */
+#else
+#  define LIGHT_ACCUMULATION_AOV_COUNT SRT_CONSTANT_light_accumulation_aov_count
+#endif
+
 struct LightAccumulation {
   packed_float3 diffuse_light;
   packed_float3 diffuse_color;
@@ -68,9 +80,7 @@ struct LightAccumulation {
   packed_float3 transmission_light;
   packed_float3 transmission_color;
   int light_accumulation_count;
-#ifdef LIGHT_ACCUMULATION_AOV_COUNT
   LightAccumulationAOV aovs[LIGHT_ACCUMULATION_AOV_COUNT];
-#endif
 };
 
 struct ShadingData {
@@ -314,13 +324,13 @@ Closure closure_eval(ShadingData &sd, ClosureReflection reflection)
   cl.data.r = reflection.roughness;
 
 #ifdef MAT_CLEARCOAT
-/* Alternate between two bins on a per closure basis.
- * Allow clearcoat layer without noise.
- * Choosing the bin with the least weight can choose a
- * different bin for the same closure and
- * produce issue with ray-tracing denoiser.
- * Always start with the second bin, this one doesn't
- * overlap with other closure. */
+  /* Alternate between two bins on a per closure basis.
+   * Allow clearcoat layer without noise.
+   * Choosing the bin with the least weight can choose a
+   * different bin for the same closure and
+   * produce issue with ray-tracing denoiser.
+   * Always start with the second bin, this one doesn't
+   * overlap with other closure. */
 #  if CLOSURE_BIN_COUNT == 2
   /* Multiple reflection closures. */
   if (sd.closure_reflection_bin) {
@@ -668,11 +678,11 @@ template<typename T> float3 F_brdf_multi_scatter(float3 f0, float3 f90, T lut)
 
   /* The original paper uses `FssEss * radiance + Fms*Ems * irradiance`, but
    * "A Journey Through Implementing Multi-scattering BRDFs and Area Lights" by Steve McAuley
-   * suggests to use `FssEss * radiance + Fms*Ems * radiance` which results in comparable quality.
-   * We handle `radiance` outside of this function, so the result simplifies to:
-   * `FssEss + Fms*Ems = FssEss * (1 + Ems*Favg / (1 - Ems*Favg)) = FssEss / (1 - Ems*Favg)`.
-   * This is a simple albedo scaling very similar to the approach used by Cycles:
-   * "Practical multiple scattering compensation for microfacet model". */
+   * suggests to use `FssEss * radiance + Fms*Ems * radiance` which results in comparable
+   * quality. We handle `radiance` outside of this function, so the result simplifies to: `FssEss
+   * + Fms*Ems = FssEss * (1 + Ems*Favg / (1 - Ems*Favg)) = FssEss / (1 - Ems*Favg)`. This is a
+   * simple albedo scaling very similar to the approach used by Cycles: "Practical multiple
+   * scattering compensation for microfacet model". */
   return FssEss / (1.0f - Ems * Favg);
 }
 template float3 F_brdf_multi_scatter<eevee::lut::GGXBrdfData>(float3,
@@ -713,8 +723,8 @@ void brdf_f82_tint_lut(KernelGlobals &kg,
   }
 }
 
-/* Computes the reflectance and transmittance based on the tint (`f0`, `f90`, `transmission_tint`)
- * and the BSDF LUT. */
+/* Computes the reflectance and transmittance based on the tint (`f0`, `f90`,
+ * `transmission_tint`) and the BSDF LUT. */
 void bsdf_lut(KernelGlobals &kg,
               float3 F0,
               float3 F90,
@@ -831,7 +841,8 @@ float texture_lod_bias_get(KernelGlobals &kg)
  * Scale hardware derivatives depending on render resolution.
  * This is because the distance between pixels increases as we lower the resolution. The hardware
  * uses neighboring pixels to compute derivatives and thus the value increases as we lower the
- * resolution. So we compensate by scaling them back to the expected amplitude at full resolution.
+ * resolution. So we compensate by scaling them back to the expected amplitude at full
+ * resolution.
  */
 float derivative_scale_get(KernelGlobals &kg)
 {
@@ -1318,11 +1329,9 @@ void node_light_accumulation_aov_impl(KernelGlobals &kg,
                                       Closure &result)
 {
 #if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
-  if (kg.pipe.use_lighting_nodes) [[static_branch]] {
-#  ifdef LIGHT_ACCUMULATION_AOV_COUNT
+  if (kg.pipe.use_light_accumulation_aovs) [[static_branch]] {
     sd.light_accum.aovs[light_accumulation_aov_index].hash = hash;
     sd.light_accum.aovs[light_accumulation_aov_index].light += light;
-#  endif
   }
 #endif
 
@@ -1345,7 +1354,8 @@ void output_aov(KernelGlobals &kg,
 
     uint total_len = render_pass.aovs.color_len + render_pass.aovs.value_len;
 
-    /* Search hashes in uint4 packs with 4 comparisons to find the index of a matching AOV hash. */
+    /* Search hashes in uint4 packs with 4 comparisons to find the index of a matching AOV hash.
+     */
     uint hash_index;
     for (hash_index = 0u; hash_index < AOV_MAX && hash_index < total_len; hash_index += 4u) {
       bool4 cmp_mask = equal(render_pass.aovs.hash[hash_index >> 2u], uint4(hash));
