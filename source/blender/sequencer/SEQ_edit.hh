@@ -66,7 +66,7 @@ enum eSplitMethod {
  * \return true if \a timeline_frame exists in the strip's (start_frame, end_frame) range,
  * i.e., exclusive start and end.
  */
-bool strip_splits_frame(const Scene *scene, const Strip *strip, const int timeline_frame);
+bool edit_frame_splits_strip(const Scene *scene, const Strip *strip, const int timeline_frame);
 
 /**
  * Split Strip at timeline_frame in two.

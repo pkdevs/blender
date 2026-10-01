@@ -1898,7 +1898,7 @@ Vector<Strip *> split_strips_get(Scene *scene,
 
   Vector<Strip *> strips;
   for (Strip &strip : *ed->current_strips()) {
-    if (!seq::strip_splits_frame(scene, &strip, frame)) {
+    if (!seq::edit_frame_splits_strip(scene, &strip, frame)) {
       continue;
     }
     if (channel) {
@@ -2011,7 +2011,7 @@ static wmOperatorStatus sequencer_split_invoke(bContext *C, wmOperator *op, cons
     split_frame = round_fl_to_int(mouseloc[0]);
     if (!RNA_boolean_get(op->ptr, "all_channels")) {
       Strip *strip = strip_under_mouse_get(scene, v2d, event->mval);
-      if (strip == nullptr || !seq::strip_splits_frame(scene, strip, split_frame)) {
+      if (strip == nullptr || !seq::edit_frame_splits_strip(scene, strip, split_frame)) {
         /* Do not pass through to selection. */
         return OPERATOR_CANCELLED;
       }

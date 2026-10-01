@@ -2237,7 +2237,7 @@ static std::optional<BladeSplit> blade_split_get(
 
   if (!all_channels) {
     const Strip *strip = strip_under_mouse_get(scene, v2d, mval);
-    if (strip == nullptr || !seq::strip_splits_frame(scene, strip, split_frame)) {
+    if (strip == nullptr || !seq::edit_frame_splits_strip(scene, strip, split_frame)) {
       return std::nullopt;
     }
   }
@@ -2275,7 +2275,7 @@ static void blade_split_draw(Scene *scene, const ARegion *region, const BladeSpl
 
   auto draw_lines = [&](const float expand) {
     for (const Strip *strip : split.strips) {
-      if (!seq::strip_splits_frame(scene, strip, split_frame)) {
+      if (!seq::edit_frame_splits_strip(scene, strip, split_frame)) {
         continue;
       }
       const rctf bounds = strip_bounds_get(scene, strip);
