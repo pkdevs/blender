@@ -590,6 +590,9 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
       wmTimer *wt = screen->animtimer;
       ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
       BKE_scene_frame_clamp_for_playback(scene, (sad->flag & ANIMPLAY_FLAG_REVERSE) == 0);
+      if (U.animation_flag & USER_ANIM_STOP_ON_FRAME_CHANGE) {
+        stop_playback(C);
+      }
     }
   }
   FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
