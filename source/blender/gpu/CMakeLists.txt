@@ -18,7 +18,6 @@ set(INC
   # For `*_info.hh` includes.
   ../compositor/shaders/infos
   ../draw/engines/eevee
-  ../draw/engines/eevee/shaders/infos
   ../draw/engines/gpencil
   ../draw/engines/gpencil/shaders/infos
   ../draw/engines/image/shaders/infos
@@ -557,6 +556,7 @@ set(GLSL_SRC
 
   shaders/gpu_shader_codegen_lib.glsl
 
+  shaders/python/gpu_shader_python_base.glsl
   shaders/python/gpu_shader_python_colorspace_lib.glsl
   shaders/python/gpu_shader_python_comp.glsl
   shaders/python/gpu_shader_python_frag.glsl

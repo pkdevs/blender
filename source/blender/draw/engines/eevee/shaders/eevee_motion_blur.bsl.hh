@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "draw_math_geom_lib.glsl"
+#include "draw_math_geom.bsl.hh"
 #include "eevee_motion_blur_shared.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
@@ -71,7 +71,7 @@ struct TileBuf {
 namespace flatten {
 
 template<enum TextureWriteFormat velocity_format> struct Resources {
-  [[resource_table]] srt_t<CameraVelocity> camera;
+  [[resource_table]] CameraVelocity camera;
 
   [[uniform(0)]] const MotionBlurData &motion_blur_buf;
   [[sampler(0)]] sampler2DDepth depth_tx;
