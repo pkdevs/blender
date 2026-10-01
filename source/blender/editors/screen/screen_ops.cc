@@ -3895,6 +3895,12 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  if ((U.animation_flag & USER_ANIM_PAUSE_ON_FRAME_CHANGE) &&
+      ED_screen_animation_playing(CTX_wm_manager(C)))
+  {
+    ED_screen_animation_play(C, 0, 0);
+  }
+
   int delta = RNA_int_get(op->ptr, "delta");
 
   /* In order to jump from e.g. 1.5 to 1 the delta needs to be incremented by 1 since the sub-frame

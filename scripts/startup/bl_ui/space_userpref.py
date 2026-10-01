@@ -631,6 +631,7 @@ class USERPREF_PT_animation_timeline(AnimationPanel, CenterAlignMixIn, Panel):
     def draw_centered(self, context, layout):
         prefs = context.preferences
         view = prefs.view
+        edit = prefs.edit
 
         col = layout.column()
         col.prop(view, "view2d_grid_spacing_min", text="Minimum Grid Spacing")
@@ -640,6 +641,9 @@ class USERPREF_PT_animation_timeline(AnimationPanel, CenterAlignMixIn, Panel):
             col.prop(view, "view_frame_seconds")
         elif view.view_frame_type == 'KEYFRAMES':
             col.prop(view, "view_frame_keyframes")
+
+        col.separator()
+        col.prop(edit, "use_pause_on_frame_change")
 
 
 class USERPREF_PT_animation_keyframes(AnimationPanel, CenterAlignMixIn, Panel):
