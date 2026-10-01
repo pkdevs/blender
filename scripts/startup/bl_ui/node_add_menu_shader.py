@@ -279,6 +279,11 @@ class NODE_MT_shader_node_shader_base(node_add_menu.NodeMenu):
         )
         self.node_operator(
             layout,
+            "ShaderNodeLightAccumulationAOV",
+            poll=object_eevee_shader_nodes_poll(context)
+        )
+        self.node_operator(
+            layout,
             "ShaderNodeBsdfMetallic",
             poll=object_material_shader_nodes_poll(context),
         )

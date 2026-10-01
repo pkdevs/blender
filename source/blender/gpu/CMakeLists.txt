@@ -663,6 +663,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_invert_rotation.bsl.hh
   shaders/material/gpu_shader_material_layer_weight.bsl.hh
   shaders/material/gpu_shader_material_light_accumulation.bsl.hh
+  shaders/material/gpu_shader_material_light_accumulation_aov.bsl.hh
   shaders/material/gpu_shader_material_light_evaluation.bsl.hh
   shaders/material/gpu_shader_material_light_falloff.bsl.hh
   shaders/material/gpu_shader_material_light_info.bsl.hh

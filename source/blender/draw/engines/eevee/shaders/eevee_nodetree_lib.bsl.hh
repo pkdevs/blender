@@ -1301,6 +1301,18 @@ void node_light_accumulation_impl(KernelGlobals &kg,
   result = Closure(0);
 }
 
+void node_light_accumulation_aov_impl(
+    KernelGlobals &kg, ShadingData &sd, const int light_index, float3 light, Closure &result)
+{
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
+  if (kg.pipe.use_lighting_nodes) [[static_branch]] {
+    LightData light = kg.lrd.light_buf[light_index];
+  }
+#endif
+
+  result = Closure(0);
+}
+
 /** \} */
 
 void output_aov(KernelGlobals &kg,

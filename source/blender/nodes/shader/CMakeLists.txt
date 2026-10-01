@@ -57,6 +57,7 @@ set(SRC
   nodes/node_shader_invert.cc
   nodes/node_shader_layer_weight.cc
   nodes/node_shader_light_accumulation.cc
+  nodes/node_shader_light_accumulation_aov.cc
   nodes/node_shader_light_evaluation.cc
   nodes/node_shader_light_falloff.cc
   nodes/node_shader_light_info.cc
