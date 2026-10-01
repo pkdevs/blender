@@ -108,7 +108,13 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
                                const PathRayVisibility path_visibility,
                                const uint32_t path_flag)
 {
+#ifdef __KERNEL_ONEAPI__
+  /* On Intel GPUs, for large structs in private memory, an alignment of 64 gives the best
+   * performance. */
+  ccl_align(64) float stack[SVM_STACK_SIZE];
+#else
   float stack[SVM_STACK_SIZE];
+#endif
   /* Initialize to silence (false positive?) warning about uninitialized use on Windows. */
   Spectrum closure_weight = zero_spectrum();
   int offset = (sd->shader & SHADER_MASK) * (1 + sizeof(SVMNodeShaderJump) / sizeof(uint));
@@ -465,16 +471,12 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
       SVM_CASE(NODE_PARTICLE_INFO)
       svm_node_particle_info(kg, sd, stack, svm_node_get<SVMNodeParticleInfo>(kg, &offset));
       break;
-#if defined(__HAIR__)
       SVM_CASE(NODE_HAIR_INFO)
       svm_node_hair_info(kg, sd, stack, svm_node_get<SVMNodeHairInfo>(kg, &offset));
       break;
-#endif
-#if defined(__POINTCLOUD__)
       SVM_CASE(NODE_POINT_INFO)
       svm_node_point_info(kg, sd, stack, svm_node_get<SVMNodePointInfo>(kg, &offset));
       break;
-#endif
       SVM_CASE(NODE_TEXTURE_MAPPING)
       svm_node_texture_mapping<float3>(stack, svm_node_get<SVMNodeTextureMapping>(kg, &offset));
       break;
