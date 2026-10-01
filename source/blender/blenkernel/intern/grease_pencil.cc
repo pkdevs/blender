@@ -618,7 +618,7 @@ static void update_triangle_and_offsets_cache(const Span<float3> positions,
                 continue;
               }
 
-              vert_id_to_intersection_point.add(vert, intersection_point_results[pos].size());
+              vert_id_to_intersection_point.add_new(vert, intersection_point_results[pos].size());
 
               const float2 co = float2(result.vert[vert]);
               intersection_point_results[pos].append(invert_axis_mat * float3(co.x, co.y, 0.0f) +
