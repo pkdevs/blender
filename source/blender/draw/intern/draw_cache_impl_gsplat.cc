@@ -118,20 +118,19 @@ BLI_INLINE uint4 pack_gaussian(const float3 &bounded_mean,
                                float opacity)
 {
   /* Quantize mean to `pu`: 3x22b. */
-  uint3 pu = static_cast<uint3>(bounded_mean * ((1 << 22) - 1u));
+  uint3 pu = static_cast<uint3>(math::round(bounded_mean * ((1 << 22) - 1u)));
   /* Quantize scaling to `su`: 3x9b. */
-  uint3 su = static_cast<uint3>(bounded_log_scale * 511.0f);
+  uint3 su = static_cast<uint3>(math::round(bounded_log_scale * 511.0f));
   /* Quantize opacity to `au`, 1x8b. */
-  uint au = static_cast<uint>(clamp(opacity, 0.0f, 1.0f) * 255.0f);
+  uint au = static_cast<uint>(math::round(clamp(opacity, 0.0f, 1.0f) * 255.0f));
   /* Quantize rotation to `ru`: 3x9b.
-   * Note that we shuffle quaternion `wxyz` to `xyzw` for consistency inside draw module shaders.
-   */
+   * Note that we shuffle quaternion `wxyz` to `xyzw` for consistency inside draw shaders. */
   float4 q = math::normalize(float4(rotation.x, rotation.y, rotation.z, rotation.w));
   if (q.w < 0.0f) {
     q = -q;
   }
   float3 vr = math::clamp((pack_quaternion_4_to_3(q) + 1.0f) * 0.5f, 0.0f, 1.0f);
-  uint3 ru = static_cast<uint3>(vr * 511.0f);
+  uint3 ru = static_cast<uint3>(math::round(vr * 511.0f));
 
   /* Now for the fun part: pack quantized data to 4 words. */
   uint4 w;
@@ -176,7 +175,7 @@ BLI_INLINE RadiancePack pack_radiance(const Array<float3, radiance_coeffs_max> &
   RadiancePack pack;
   for (uint32_t i = 0u; i < radiance_coeffs_max; ++i) {
     /* Quantize float3 coefficients to 3x8b. */
-    uchar3 shu = static_cast<uchar3>(math::clamp(radiance_sh[i] * 255.0f, 0.0f, 255.0f));
+    uchar3 shu = static_cast<uchar3>(math::round(math::clamp(radiance_sh[i] * 255.0f, 0.0f, 255.0f)));
     /* Coefficients are stored in packs with a padding byte every 15 bytes.
      * This simplifies unpacking shader-side, until we find more data to pack in. */
     uchar3 *shu_data = reinterpret_cast<uchar3 *>(pack.radiance_sh + (3 * i));
@@ -219,7 +218,7 @@ void GSplatEvalCache::ensure_builtin_buffers(PointCloud &pointcloud)
   const VArray<float3> exp_scale = *attributes.lookup_or_default<float3>(
       "scale", bke::AttrDomain::Point, float3(value_scale_default));
   const VArray<math::Quaternion> quaternion = *attributes.lookup_or_default<math::Quaternion>(
-      "rotation", bke::AttrDomain::Point, math::Quaternion(0.0f, 0.0f, 0.0f, 1.0f));
+      "rotation", bke::AttrDomain::Point, math::Quaternion::identity());
   const VArray<float4> radiance_base = *attributes.lookup_or_default<float4>(
       "radiance:base", bke::AttrDomain::Point, float4(0.0f, 0.0f, 0.0f, value_opacity_default));
   const Vector<VArraySpan<float3>> radiance_sh = detail::read_radiance_sh_attributes(attributes);
@@ -344,7 +343,11 @@ void GSplatEvalCache::ensure_attribute(PointCloud &pointcloud, int attrib_i)
 void GSplatEvalCache::ensure_compute_buffers(PointCloud &pointcloud)
 {
   static const GPUVertFormat ellipse_format = gpu::GenericVertexFormat<uint2>::format();
-  static const GPUVertFormat radiance_format = gpu::GenericVertexFormat<float2>::format();
+  static const GPUVertFormat radiance_format = [&]() {
+    GPUVertFormat format{};
+    GPU_vertformat_attr_add(&format, "radiance_comp_tx", gpu::VertAttrType::SFLOAT_16_16_16_16);
+    return format;
+  }();
   static const GPUUsageType buffer_usage_flag = GPU_USAGE_STATIC | GPU_USAGE_DEVICE_ONLY |
                                                 GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY;
 
