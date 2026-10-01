@@ -195,14 +195,14 @@ class NODE_OT_connect_to_output(Operator, NodeEditorBase):
                         self.search_connected_viewer_sockets(output_node, self.other_viewer_sockets_users)
         return socket in self.other_viewer_sockets_users
 
-    def get_output_index(self, node, output_node, is_base_node_tree, socket_type, check_type=False):
+    def get_output_index(self, node, output_node, is_base_node_tree, socket_types, check_type=False):
         """Get the next available output socket in the active node"""
         out_i = None
         valid_outputs = []
         for i, out in enumerate(node.outputs):
             if out.select:
                 return i
-            if is_visible_socket(out) and (not check_type or out.type == socket_type):
+            if is_visible_socket(out) and (not check_type or out.type in socket_types):
                 valid_outputs.append(i)
         if valid_outputs:
             out_i = valid_outputs[0]  # Start index of node's outputs.
@@ -297,7 +297,7 @@ class NODE_OT_connect_to_output(Operator, NodeEditorBase):
             output_node = self.ensure_group_output(base_node_tree)
 
             active_node_socket_index = self.get_output_index(
-                active, output_node, base_node_tree == active_tree, 'GEOMETRY', check_type=True
+                active, output_node, base_node_tree == active_tree, ('GEOMETRY',), check_type=True
             )
             # If there is no 'GEOMETRY' output type - We can't preview the node.
             if active_node_socket_index is None:
@@ -324,7 +324,8 @@ class NODE_OT_connect_to_output(Operator, NodeEditorBase):
             output_node = self.ensure_group_output(base_node_tree)
 
             active_node_socket_index = self.get_output_index(
-                active, output_node, base_node_tree == active_tree, 'RGBA', check_type=True
+                active, output_node, base_node_tree == active_tree,
+                ('RGBA', 'VALUE', 'VECTOR', 'INT', 'BOOLEAN'), check_type=True
             )
 
             if active_node_socket_index is None:
@@ -359,7 +360,7 @@ class NODE_OT_connect_to_output(Operator, NodeEditorBase):
                 output_node.select = False
 
             active_node_socket_index = self.get_output_index(
-                active, output_node, base_node_tree == active_tree, 'SHADER'
+                active, output_node, base_node_tree == active_tree, ('SHADER',)
             )
 
             # Cancel if no socket was found. This can happen for group input
