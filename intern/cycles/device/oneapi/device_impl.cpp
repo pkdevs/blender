@@ -369,7 +369,7 @@ bool OneapiDevice::shared_alloc(void *&shared_pointer, const size_t size)
   return shared_pointer != nullptr;
 }
 
-void OneapiDevice::shared_free(void *shared_pointer)
+void OneapiDevice::shared_free(void *shared_pointer, const size_t /*size*/)
 {
   usm_free(device_queue_, shared_pointer);
 }
@@ -1267,7 +1267,8 @@ void OneapiDevice::set_global_memory(SyclQueue *queue_,
 
 /* This macro will change global ptr of KernelGlobals via name matching. */
 #  define KERNEL_DATA_ARRAY(type, name) \
-    else if (#name == matched_name) { \
+    else if (#name == matched_name) \
+    { \
       globals->__##name = (type *)memory_device_pointer; \
       return; \
     }
@@ -1279,7 +1280,8 @@ void OneapiDevice::set_global_memory(SyclQueue *queue_,
   }
   KERNEL_DATA_ARRAY(KernelData, data)
 #  include "kernel/data_arrays.h"
-  else {
+  else
+  {
     std::cerr << "Can't found global/constant memory with name \"" << matched_name << "\"!"
               << std::endl;
     assert(false);
