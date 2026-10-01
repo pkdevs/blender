@@ -1105,6 +1105,14 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   info.compilation_constant(
       gpu::shader::Type::bool_t, "use_sss", GPU_material_flag_get(gpumat, GPU_MATFLAG_SUBSURFACE));
 
+  int light_accumulation_aov_count = GPU_material_light_accumulation_aov_count(gpumat);
+  info.compilation_constant(
+      gpu::shader::Type::int_t, "light_accumulation_aov_count", light_accumulation_aov_count);
+  if (light_accumulation_aov_count) {
+    BLI_assert(use_lighting_nodes);
+    info.define("LIGHT_ACCUMULATION_AOV_COUNT", std::to_string(light_accumulation_aov_count));
+  }
+
   const eClosureBits closure_bits = shader_closure_bits_from_flag(gpumat);
 
   int32_t closure_bin_count = to_gbuffer_bin_count(closure_bits);

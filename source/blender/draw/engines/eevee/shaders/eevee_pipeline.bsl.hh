@@ -16,6 +16,7 @@ struct PipelineConstants {
   [[compilation_constant]] bool is_gsplat;
   [[compilation_constant]] bool is_world;
   [[compilation_constant]] bool use_lighting_nodes;
+  [[compilation_constant]] int light_accumulation_aov_count;
   [[compilation_constant]] bool use_ambient_occlusion;
   [[compilation_constant]] bool use_velocity;
   [[compilation_constant]] bool use_transparency;

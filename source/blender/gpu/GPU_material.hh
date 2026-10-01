@@ -694,6 +694,10 @@ void GPU_material_output_displacement(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_output_thickness(GPUMaterial *material, GPUNodeLink *link);
 
 void GPU_material_add_output_link_aov(GPUMaterial *material, GPUNodeLink *link, int hash);
+int GPU_material_add_output_link_light_accumulation_aov(GPUMaterial *material,
+                                                        GPUNodeLink *link,
+                                                        int hash);
+int GPU_material_light_accumulation_aov_count(GPUMaterial *material);
 
 void GPU_material_add_output_link_composite(GPUMaterial *material, GPUNodeLink *link);
 

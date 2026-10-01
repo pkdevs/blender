@@ -582,6 +582,19 @@ void GPU_material_add_output_link_aov(GPUMaterial *material, GPUNodeLink *link, 
   BLI_addtail(&material->graph.outlink_aovs, aov_link);
 }
 
+int GPU_material_add_output_link_light_accumulation_aov(GPUMaterial *material,
+                                                        GPUNodeLink *link,
+                                                        int hash)
+{
+  GPU_material_add_output_link_aov(material, link, hash);
+  return material->graph.light_accumulation_aovs_count++;
+}
+
+int GPU_material_light_accumulation_aov_count(GPUMaterial *material)
+{
+  return material->graph.light_accumulation_aovs_count;
+}
+
 void GPU_material_add_output_link_composite(GPUMaterial *material, GPUNodeLink *link)
 {
   GPUNodeGraphOutputLink *compositor_link = MEM_new_zeroed<GPUNodeGraphOutputLink>(__func__);

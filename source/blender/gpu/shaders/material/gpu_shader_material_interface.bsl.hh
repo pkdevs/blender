@@ -416,6 +416,8 @@ void node_light_accumulation_aov_impl([[resource_table]] KernelGlobals & /*kg*/,
                                       ShadingData & /*sd*/,
                                       int /*light_index*/,
                                       float3 /*light*/,
+                                      uint /*hash*/,
+                                      uint /*light_accumulation_aov_index*/,
                                       Closure & /*result*/)
 {
 }

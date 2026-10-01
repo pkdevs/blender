@@ -91,11 +91,18 @@ static int node_shader_gpu_light_accumulation_aov(GPUMaterial *mat,
   GPUNodeLink *hash_link = GPU_constant(reinterpret_cast<float *>(&hash));
 
   GPU_material_flag_set(mat, GPU_MATFLAG_AOV | GPU_MATFLAG_OBJECT_INFO | GPU_MATFLAG_LIGHTING);
+  int light_accumulation_aov_index = GPU_material_add_output_link_light_accumulation_aov(
+      mat, outlink, hash);
 
-  return GPU_stack_link(
-      mat, node, "node_light_accumulation_aov", in, out, GPU_kernel_globals(), GPU_shading_data());
-
-  GPU_material_add_output_link_aov(mat, outlink, hash);
+  return GPU_stack_link(mat,
+                        node,
+                        "node_light_accumulation_aov",
+                        in,
+                        out,
+                        GPU_kernel_globals(),
+                        GPU_shading_data(),
+                        light_accumulation_aov_index,
+                        hash);
 }
 
 }  // namespace nodes::node_shader_light_accumulation_aov_cc

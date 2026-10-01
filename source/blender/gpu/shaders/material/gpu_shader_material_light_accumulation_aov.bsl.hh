@@ -10,10 +10,18 @@
 [[node]]
 void node_light_accumulation_aov(const float light_index,
                                  float4 light,
+                                 float hash,
+                                 float light_accumulation_aov_index,
                                  [[resource_table]] KernelGlobals &kg,
                                  ShadingData &sd,
                                  Closure &result)
 {
   light = max(light, float4(0.0f));
-  node_light_accumulation_aov_impl(kg, sd, int(light_index), light.rgb, result);
+  node_light_accumulation_aov_impl(kg,
+                                   sd,
+                                   int(light_index),
+                                   light.rgb,
+                                   floatBitsToUint(hash),
+                                   int(light_accumulation_aov_index),
+                                   result);
 }
