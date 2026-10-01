@@ -568,10 +568,12 @@ class PrimitiveCreator:
                                     'gltf_name': 'COLOR_' + str(self.vc_infos_index),
                                     'forced': False
                                 })
-                                self.material_idxs_using_vc[int(material_idx)].append('COLOR_' + str(self.vc_infos_index))
+                                self.material_idxs_using_vc[int(material_idx)].append(
+                                    'COLOR_' + str(self.vc_infos_index))
                                 self.vc_infos_index += 1
                             else:
-                                self.material_idxs_using_vc[int(material_idx)].append('COLOR_' + str(self.vc_infos_index - 1))
+                                self.material_idxs_using_vc[int(material_idx)].append(
+                                    'COLOR_' + str(self.vc_infos_index - 1))
                                 pass  # Using the same Vertex Color
 
                     elif base_material is not None and self.export_settings['gltf_vertex_color'] == "MATERIAL":
@@ -649,7 +651,8 @@ class PrimitiveCreator:
                             self.vc_infos_index += 1
 
                         else:
-                            self.material_idxs_using_vc[int(material_idx)].append('COLOR_' + str(self.vc_infos_index - 1))
+                            self.material_idxs_using_vc[int(material_idx)].append(
+                                'COLOR_' + str(self.vc_infos_index - 1))
                             pass  # Using the same Vertex Color
 
             ##### UDIM #####
