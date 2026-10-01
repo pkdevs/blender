@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 /**
@@ -9,7 +13,7 @@
  */
 
 #include "draw_debug_draw_lib.glsl"
-#include "draw_shape_lib.glsl"
+#include "draw_shape.bsl.hh"
 
 void drw_debug(Box shape, float4 color)
 {
