@@ -697,6 +697,13 @@ static NlaStrip *rna_NlaStrip_new_sound(ID *id,
 {
   BLI_assert(id);
 
+  Object *const ob = blender::id_cast<Object*>(id);
+  if (ob->type != OB_SPEAKER) {
+    BKE_report(
+        reports, RPT_ERROR, "Only Speaker objects support Sound NLA strips");
+    return nullptr;
+  }
+
   NlaStrip *strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), speaker);
 
   return generic_NlaStrip_new(id, strip, track, bmain, C, reports, name, start);
