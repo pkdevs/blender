@@ -816,79 +816,79 @@ ccl_device
 
 #ifdef OPENPBR_SPEC_COMPLIANT  // OpenPBR v1.1 spec version (glossy diffuse layer)
       /* Translucent Component*/
-      /* FIXME(OpenPBR): should be reflective || refractive. Also fix specular_ior == 1. */
-      if (transmission_weight > CLOSURE_WEIGHT_CUTOFF &&
-          (refractive_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
-      {
-        const float3 transmission_color = saturate(stack_load(stack, data.transmission_color));
-        FresnelThinFilm thinfilm = {thin_film_thickness, thin_film_ior, thin_film_weight};
-        if (thin_wall) {
-          bsdf_thin_glass_setup(kg,
-                                sd,
-                                reflective_caustics,
-                                refractive_caustics,
-                                MicrofacetFresnel::DIELECTRIC_TINT,
-                                {specular_color, transmission_color},
-                                transmission_weight * weight,
-                                valid_reflection_N,
-                                len(specular_alpha) * M_SQRT1_2F,
-                                modulated_specular_ior,
-                                thinfilm,
-                                ray_visibility,
-                                path_flag);
-        }
-        else {
-          ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-              sd, sizeof(MicrofacetBsdf), weight * transmission_weight);
-          if (bsdf) {
-            bsdf->N = valid_reflection_N;
-            const float dispersion_scale = saturatef(
-                stack_load(stack, data.transmission_dispersion_scale));
-            const float abbe_number = fmaxf(
-                stack_load(stack, data.transmission_dispersion_abbe_number), 0.0f);
-            const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
-            bsdf->ior = bsdf_glass_ior(sd, modulated_specular_ior, inv_abbe);
-            bsdf->T = geometry_tangent;
-            bsdf->alpha_x = specular_alpha.x;
-            bsdf->alpha_y = specular_alpha.y;
-            if (backfacing) {
-              /* TODO(OpenPBR): do we need to modulate thin film IOR too? */
-              adjust_thin_film_ior_at_backface(thinfilm.ior, modulated_specular_ior);
-            }
-
-            const Spectrum specular_tint = backfacing ? white : specular_color;
-            const float transmission_depth = max(stack_load(stack, data.transmission_depth), 0.0f);
-
-            if (transmission_depth == 0.0f) {
-              ccl_private FresnelDielectricTint *fresnel = (ccl_private FresnelDielectricTint *)
-                  closure_alloc_extra(sd, sizeof(FresnelDielectricTint));
-
-              if (fresnel) {
-                fresnel->thin_film = thinfilm;
-                fresnel->tint = {specular_tint, transmission_color};
-                bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel);
+      if (transmission_weight > CLOSURE_WEIGHT_CUTOFF) {
+        if (refractive_caustics || refractive_caustics) {
+          const float3 transmission_color = saturate(stack_load(stack, data.transmission_color));
+          FresnelThinFilm thinfilm = {thin_film_thickness, thin_film_ior, thin_film_weight};
+          if (thin_wall) {
+            bsdf_thin_glass_setup(kg,
+                                  sd,
+                                  reflective_caustics,
+                                  refractive_caustics,
+                                  MicrofacetFresnel::DIELECTRIC_TINT,
+                                  {specular_color, transmission_color},
+                                  transmission_weight * weight,
+                                  valid_reflection_N,
+                                  len(specular_alpha) * M_SQRT1_2F,
+                                  modulated_specular_ior,
+                                  thinfilm,
+                                  ray_visibility,
+                                  path_flag);
+          }
+          else {
+            ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+                sd, sizeof(MicrofacetBsdf), weight * transmission_weight);
+            if (bsdf) {
+              bsdf->N = valid_reflection_N;
+              const float dispersion_scale = saturatef(
+                  stack_load(stack, data.transmission_dispersion_scale));
+              const float abbe_number = fmaxf(
+                  stack_load(stack, data.transmission_dispersion_abbe_number), 0.0f);
+              const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
+              bsdf->ior = bsdf_glass_ior(sd, modulated_specular_ior, inv_abbe);
+              bsdf->T = geometry_tangent;
+              bsdf->alpha_x = specular_alpha.x;
+              bsdf->alpha_y = specular_alpha.y;
+              if (backfacing) {
+                /* TODO(OpenPBR): do we need to modulate thin film IOR too? */
+                adjust_thin_film_ior_at_backface(thinfilm.ior, modulated_specular_ior);
               }
-            }
-            else {
-              ccl_private FresnelDielectricVolumetric *fresnel =
-                  (ccl_private FresnelDielectricVolumetric *)closure_alloc_extra(
-                      sd, sizeof(FresnelDielectricVolumetric));
 
-              if (fresnel) {
-                /* TODO(OpenPBR): no need to allocate volume for backfacing transmission. */
-                const Spectrum transmission_scatter = rgb_to_spectrum(
-                    saturate(stack_load(stack, data.transmission_scatter)));
-                fresnel->reflection_tint = specular_tint;
-                fresnel->thin_film = thinfilm;
-                fresnel->anisotropy = clamp(
-                    stack_load(stack, data.transmission_scatter_anisotropy), -1.0f, 1.0f);
-                sd->runtime_flag |= bsdf_volumetric_setup(kg,
-                                                          bsdf,
-                                                          sd->wi,
-                                                          fresnel,
-                                                          transmission_scatter,
-                                                          transmission_color,
-                                                          transmission_depth);
+              const Spectrum specular_tint = backfacing ? white : specular_color;
+              const float transmission_depth = max(stack_load(stack, data.transmission_depth),
+                                                   0.0f);
+
+              if (transmission_depth == 0.0f) {
+                ccl_private FresnelDielectricTint *fresnel = (ccl_private FresnelDielectricTint *)
+                    closure_alloc_extra(sd, sizeof(FresnelDielectricTint));
+
+                if (fresnel) {
+                  fresnel->thin_film = thinfilm;
+                  fresnel->tint = {specular_tint, transmission_color};
+                  bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel);
+                }
+              }
+              else {
+                ccl_private FresnelDielectricVolumetric *fresnel =
+                    (ccl_private FresnelDielectricVolumetric *)closure_alloc_extra(
+                        sd, sizeof(FresnelDielectricVolumetric));
+
+                if (fresnel) {
+                  /* TODO(OpenPBR): no need to allocate volume for backfacing transmission. */
+                  const Spectrum transmission_scatter = rgb_to_spectrum(
+                      saturate(stack_load(stack, data.transmission_scatter)));
+                  fresnel->reflection_tint = specular_tint;
+                  fresnel->thin_film = thinfilm;
+                  fresnel->anisotropy = clamp(
+                      stack_load(stack, data.transmission_scatter_anisotropy), -1.0f, 1.0f);
+                  sd->runtime_flag |= bsdf_volumetric_setup(kg,
+                                                            bsdf,
+                                                            sd->wi,
+                                                            fresnel,
+                                                            transmission_scatter,
+                                                            transmission_color,
+                                                            transmission_depth);
+                }
               }
             }
           }
