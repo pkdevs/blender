@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "BLI_sys_types.hh"
-
 namespace blender {
 
 struct ARegion;
@@ -55,7 +53,10 @@ bool ED_time_scrub_event_in_region_poll(const wmWindow *win,
 
 void ED_time_scrub_channel_search_draw(const bContext *C, ARegion *region, bDopeSheet *dopesheet);
 void ED_time_scrub_region_rect_get(const ARegion *region, rcti *r_rect);
-void ED_get_current_time_str(
-    const Scene *scene, bool display_seconds, const float frame, char *r_str, uint str_maxncpy);
+void ED_get_current_time_str(const Scene *scene,
+                             bool display_seconds,
+                             const float frame,
+                             char *r_str,
+                             unsigned int str_maxncpy);
 
 }  // namespace blender
