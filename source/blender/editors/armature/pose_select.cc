@@ -19,7 +19,6 @@
 #include "BLI_assert.hh"
 #include "BLI_listbase.hh"
 #include "BLI_map.hh"
-// #include "BLI_math_matrix.h"
 #include "BLI_math_vector.hh"
 #include "BLI_string.hh"
 
@@ -888,7 +887,6 @@ void POSE_OT_select_parent(wmOperatorType *ot)
 }
 
 /* -------------------------------------- */
-// Should this move to the top with the other helps?
 static bool is_constraint_target_selected(const bConstraintTarget &ct,
                                           const Set<bPoseChannel *> &starting_bone_selection)
 {
@@ -961,16 +959,13 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
 
 void POSE_OT_select_constrained_by_selection(wmOperatorType *ot)
 {
-  /* Identifiers. */
   ot->name = "Select Constraint Owners";
   ot->idname = "POSE_OT_select_constrained_by_selection";
   ot->description = "Select bones that use the currently selected bones as constraint targets";
 
-  /* API callbacks. */
   ot->exec = pose_select_constrained_by_selection_exec;
   ot->poll = ED_operator_posemode;
 
-  /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
@@ -1092,19 +1087,15 @@ static wmOperatorStatus pose_select_scaled_exec(bContext *C, wmOperator *op)
 
 void POSE_OT_select_scaled(wmOperatorType *ot)
 {
-  /* Identifiers. */
   ot->name = "Select Scaled Bones";
   ot->idname = "POSE_OT_select_scaled";
   ot->description = "Select bones that have non-uniform or non-unit scale";
 
-  /* API callbacks. */
   ot->exec = pose_select_scaled_exec;
   ot->poll = ED_operator_posemode;
 
-  /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* Props. */
   static const EnumPropertyItem deform_items[] = {{int(BoneScale::NON_UNIFORM),
                                                    "NON_UNIFORM",
                                                    0,
@@ -1156,7 +1147,7 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
       }
 
       const bool is_deform = !(bone->flag & BONE_NO_DEFORM);
-      bool select = (mode == BoneDeform::DEFORM) ? is_deform : !is_deform;
+      const bool select = (mode == BoneDeform::DEFORM) ? is_deform : !is_deform;
       if (select) {
         pose_do_bone_select({&pchan, bone}, SEL_SELECT);
       }
@@ -1169,19 +1160,15 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
 
 void POSE_OT_select_deform(wmOperatorType *ot)
 {
-  /* Identifiers. */
   ot->name = "Select Deform Bones";
   ot->idname = "POSE_OT_select_deform";
   ot->description = "Select bones the have the deform option enabled (or disabled)";
 
-  /* API callbacks. */
   ot->exec = armature_select_deform_exec;
   ot->poll = ED_operator_posemode;
 
-  /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* Props. */
   static const EnumPropertyItem deform_items[] = {
       {int(BoneDeform::DEFORM),
        "DEFORM",
