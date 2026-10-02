@@ -12,6 +12,7 @@
 #include "DNA_windowmanager_types.h"
 
 #include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
@@ -190,6 +191,11 @@ static void applyResize(TransInfo *t)
     transform_snap_mixed_apply(t, t->values_final);
   }
 
+  if (t->prevent_negative_scale) {
+    float3 &scale = *reinterpret_cast<float3 *>(t->values_final);
+    scale = math::max(scale, float3(0.0f));
+  }
+
   size_to_mat3(mat, t->values_final);
   if (t->con.mode & CON_APPLY) {
     t->con.applySize(t, nullptr, nullptr, mat);
@@ -263,6 +269,7 @@ static void initResize(TransInfo *t, wmOperator *op)
   float mouse_dir_constraint[3];
   if (op) {
     PropertyRNA *prop = RNA_struct_find_property(op->ptr, "mouse_dir_constraint");
+    t->prevent_negative_scale = RNA_boolean_get(op->ptr, "prevent_negative");
     if (prop) {
       RNA_property_float_get_array(op->ptr, prop, mouse_dir_constraint);
     }

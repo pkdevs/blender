@@ -907,6 +907,9 @@ static void TRANSFORM_OT_resize(wmOperatorType *ot)
                               FLT_MAX);
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
+  RNA_def_boolean(
+      ot->srna, "prevent_negative", false, "Prevent Negative", "Prevent negative scaling");
+
   WM_operatortype_props_advanced_begin(ot);
 
   properties_register(ot,

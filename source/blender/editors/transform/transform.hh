@@ -961,6 +961,9 @@ struct TransInfo {
   /** Remove elements if operator is canceled. */
   bool remove_on_cancel;
 
+  /** Prevent the scale of an object from going below zero. */
+  bool prevent_negative_scale;
+
   void *view;
   /** Only valid (non null) during an operator called function. */
   bContext *context;
