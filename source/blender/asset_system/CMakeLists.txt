@@ -23,6 +23,7 @@ set(SRC
   intern/asset_catalog_path.cc
   intern/asset_catalog_tree.cc
   intern/asset_library.cc
+  intern/asset_library_toml.cc
   intern/asset_library_service.cc
   intern/asset_representation.cc
   intern/disk_file_hash_service.cc
@@ -47,6 +48,7 @@ set(SRC
   intern/asset_catalog_collection.hh
   intern/asset_catalog_definition_file.hh
   intern/asset_library_service.hh
+  intern/asset_library_toml.hh
   intern/library_types/all_library.hh
   intern/library_types/common.hh
   intern/library_types/essentials_library.hh
@@ -55,6 +57,9 @@ set(SRC
   intern/library_types/remote_library.hh
   intern/library_types/runtime_library.hh
   intern/utils.hh
+
+  # Without these files listed, they aren't known to CMake.
+  ../../../extern/toml11/toml.hpp
 )
 
 set(LIB
@@ -66,6 +71,7 @@ set(LIB
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::windowmanager
+  PRIVATE bf::extern::toml
 )
 
 if(WITH_PYTHON)

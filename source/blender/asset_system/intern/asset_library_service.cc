@@ -9,23 +9,15 @@
 #include <memory>
 
 #include "BKE_blender.hh"
-#include "BKE_idprop.hh"
 #include "BKE_preferences.h"
 
 #include "BLI_fileops.hh"  // IWYU pragma: keep
 #include "BLI_path_utils.hh"
-#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
-#ifdef WITH_PYTHON
-#  include "BPY_extern_run.hh"
-#endif
-
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
-
-#include "WM_api.hh"
 
 #include "CLG_log.h"
 
@@ -35,6 +27,7 @@
 #include "asset_catalog_collection.hh"
 #include "asset_catalog_definition_file.hh"  // IWYU pragma: keep
 #include "asset_library_service.hh"
+#include "asset_library_toml.hh"
 #include "essentials_library.hh"
 #include "on_disk_library.hh"
 #include "preferences_on_disk_library.hh"
@@ -77,87 +70,6 @@ void AssetLibraryService::destroy()
   }
   instance_->app_handler_unregister();
   instance_.reset();
-}
-
-/**
- * Reads the Asset Library identifier (UUID) from the `.blender_asset_lib.toml` library file, this
- * would assign a new UUID if not value is assigned yet.
- */
-static void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
-{
-  if (custom_library.flag & ASSET_LIBRARY_PROJECT_DEFINED) {
-    return;
-  }
-#ifdef WITH_PYTHON
-  static constexpr const char *script =
-      R"(
-import tomllib
-from pathlib import Path
-
-ret = None
-
-try:
-    with open(Path(library_path) / ".blender_asset_lib.toml", "rb") as f:
-        config_dict = tomllib.load(f)
-except FileNotFoundError:
-    # Use an emtpy dictionary when there is not existing file
-    config_dict = {}
-except e:
-    # Something went wrong, raise error
-    raise e
-
-# Assign input uuid when no value is assigned to the library yet
-if "uuid" not in config_dict or config_dict["uuid"] is None:
-    config_dict["uuid"] = fallback_uuid
-
-    import tomli_w
-    max_len_backup = tomli_w._writer.MAX_LINE_LENGTH
-    try:
-        tomli_w._writer.MAX_LINE_LENGTH = 10
-        config_toml = tomli_w.dumps(config_dict)
-    finally:
-        # Restore max line length, for any other users of tomli_w.
-        tomli_w._writer.MAX_LINE_LENGTH = max_len_backup
-    try:
-        with (Path(library_path) / ".blender_asset_lib.toml").open(mode='wt') as f:
-            f.write(config_toml)
-    finally:
-        pass
-
-ret_uuid = config_dict["uuid"]
-)";
-  /* New UUID to assign if the library have not identifier yet. */
-  UUID fallback_uuid = BLI_uuid_generate_random();
-  std::unique_ptr locals = bke::idprop::create_group("locals");
-  IDP_AddToGroup(locals.get(), IDP_NewString(fallback_uuid.str(), "fallback_uuid"));
-  IDP_AddToGroup(locals.get(), IDP_NewString(custom_library.resolved_dirpath, "library_path"));
-
-  std::optional<blender::IDProperty *> idprop_optptr =
-      BPY_run_string_exec_with_locals_return_idprop(nullptr, script, *locals, "ret_uuid");
-
-  if (!idprop_optptr) {
-    custom_library.runtime->invalid_uuid = "<error-reading-uuid>";
-    return;
-  }
-  IDProperty *ret_idprop = *idprop_optptr;
-
-  /* Check the returned value. */
-  if (ret_idprop == nullptr || ret_idprop->type != IDP_STRING) {
-    custom_library.runtime->invalid_uuid = "<error-reading-uuid>";
-    IDP_FreeProperty(ret_idprop);
-    return;
-  }
-
-  bUUID ret_uuid;
-  const char *ret_uuid_str = IDP_string_get(ret_idprop);
-  if (!BLI_uuid_parse_string(&ret_uuid, ret_uuid_str)) {
-    custom_library.runtime->invalid_uuid = ret_uuid_str;
-    IDP_FreeProperty(ret_idprop);
-    return;
-  }
-  IDP_FreeProperty(ret_idprop);
-  custom_library.runtime->uuid = ret_uuid;
-#endif
 }
 
 AssetLibrary *AssetLibraryService::get_asset_library(
