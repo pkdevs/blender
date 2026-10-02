@@ -27,7 +27,6 @@
 #include "BLI_listbase.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.hh"
 
@@ -169,7 +168,7 @@ static bool object_materials_supported_poll_ex(bContext *C, const Object *ob)
   }
 
   /* Material linked to object. */
-  if (ob->matbits && ob->actcol && ob->matbits[ob->actcol - 1]) {
+  if (ob->matbits && ob->actcol >= 1 && ob->actcol <= ob->totcol && ob->matbits[ob->actcol - 1]) {
     return true;
   }
 
@@ -323,7 +322,9 @@ static wmOperatorStatus material_slot_assign_exec(bContext *C, wmOperator * /*op
     if (ob->totcol == 0) {
       continue;
     }
-    if (obact && (mat_active == BKE_object_material_get(ob, obact->actcol))) {
+    if (obact && (obact->actcol >= 1 && obact->actcol <= ob->totcol) &&
+        (mat_active == BKE_object_material_get(ob, obact->actcol)))
+    {
       /* Avoid searching since there may be multiple slots with the same material.
        * For the active object or duplicates: match the material slot index first. */
       mat_nr_active = obact->actcol - 1;
@@ -345,12 +346,11 @@ static wmOperatorStatus material_slot_assign_exec(bContext *C, wmOperator * /*op
 
     bool changed = false;
     if (ob->type == OB_MESH) {
-      BMEditMesh *em = BKE_editmesh_from_object(ob);
       BMFace *efa;
       BMIter iter;
 
-      if (em) {
-        BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+      if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob)) {
+        BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
           if (BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
             changed = true;
             efa->mat_nr = mat_nr_active;
@@ -439,7 +439,8 @@ static wmOperatorStatus material_slot_de_select(bContext *C, bool select)
       BMEditMesh *em = BKE_editmesh_from_object(ob);
 
       if (em) {
-        changed = EDBM_deselect_by_material(em, mat_nr_active, select);
+        BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+        changed = EDBM_deselect_by_material(bm, mat_nr_active, select);
       }
     }
     else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
@@ -631,6 +632,8 @@ static wmOperatorStatus material_slot_move_exec(bContext *C, wmOperator *op)
   if (!ob || ob->totcol < 2) {
     return OPERATOR_CANCELLED;
   }
+
+  BKE_object_material_active_index_sanitize(ob);
 
   /* up */
   if (dir == 1 && ob->actcol > 1) {
@@ -1078,7 +1081,7 @@ void SCENE_OT_view_layer_add(wmOperatorType *ot)
 static bool view_layer_remove_poll(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
-  return (scene->view_layers.first != scene->view_layers.last);
+  return (scene->view_layers.first() != scene->view_layers.last());
 }
 
 static wmOperatorStatus view_layer_remove_exec(bContext *C, wmOperator * /*op*/)
@@ -1548,7 +1551,7 @@ static wmOperatorStatus lightprobe_cache_bake_modal(bContext *C,
   Scene *scene = data->scene;
 
   /* No running bake, remove handler and pass through. */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_LIGHT_BAKE)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), scene, WM_JOB_TYPE_LIGHT_BAKE)) {
     std::string report = data->report;
 
     MEM_delete(data);
@@ -2807,7 +2810,7 @@ static int paste_material_nodetree_ids_relink_or_clear(LibraryIDLinkCallbackData
     if (cb_data->cb_flag & IDWALK_CB_USER) {
       id_us_min(*id_p);
     }
-    ListBaseT<ID> *lb = which_libbase(bmain, GS((*id_p)->name));
+    ListBaseT<ID> *lb = which_libbase(bmain, (*id_p)->id_type());
     ID *id_local = static_cast<ID *>(
         BLI_findstring(lb, (*id_p)->name + 2, offsetof(ID, name) + 2));
     *id_p = id_local;
@@ -2835,10 +2838,6 @@ static wmOperatorStatus paste_material_exec(bContext *C, wmOperator *op)
 
   /* Read copy buffer .blend file. */
   char filepath[FILE_MAX];
-  Main *temp_bmain = BKE_main_new();
-
-  STRNCPY(temp_bmain->filepath, BKE_main_blendfile_path_from_global());
-
   material_copybuffer_filepath_get(filepath, sizeof(filepath));
 
   /* NOTE(@ideasman42) The node tree might reference different kinds of ID types.
@@ -2858,9 +2857,9 @@ static wmOperatorStatus paste_material_exec(bContext *C, wmOperator *op)
        * Note that object data is *not* included. */
       FILTER_ID_OB);
 
-  if (!BKE_copybuffer_read(temp_bmain, filepath, op->reports, ntree_filter)) {
+  Main *temp_bmain = BKE_copybuffer_read(*bmain, filepath, op->reports, ntree_filter);
+  if (!temp_bmain) {
     BKE_report(op->reports, RPT_ERROR, "Internal clipboard is empty");
-    BKE_main_free(temp_bmain);
     return OPERATOR_CANCELLED;
   }
 
@@ -3006,7 +3005,7 @@ static void copy_mtex_copybuf(ID *id)
 {
   MTex **mtex = nullptr;
 
-  switch (GS(id->name)) {
+  switch (id->id_type()) {
     case ID_PA:
       mtex = &(
           (id_cast<ParticleSettings *>(id))->mtex[int((id_cast<ParticleSettings *>(id))->texact)]);
@@ -3036,7 +3035,7 @@ static void paste_mtex_copybuf(ID *id)
     return;
   }
 
-  switch (GS(id->name)) {
+  switch (id->id_type()) {
     case ID_PA:
       mtex = &(
           (id_cast<ParticleSettings *>(id))->mtex[int((id_cast<ParticleSettings *>(id))->texact)]);

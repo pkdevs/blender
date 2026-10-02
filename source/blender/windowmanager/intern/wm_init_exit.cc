@@ -47,6 +47,7 @@
 #include "BKE_mball_tessellate.hh"
 #include "BKE_preferences.h"
 #include "BKE_preview_image.hh"
+#include "BKE_recents.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_sound.hh"
@@ -190,7 +191,7 @@ static void sound_jack_sync_callback(Main *bmain, int mode, double time)
     return;
   }
 
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
 
   for (wmWindow &window : wm->windows) {
     Scene *scene = WM_window_get_active_scene(&window);
@@ -206,6 +207,28 @@ static void sound_jack_sync_callback(Main *bmain, int mode, double time)
     BKE_sound_jack_scene_update(scene_eval, mode, time);
   }
 }
+
+/* Reset the per-frame tracking of on-demand GPU pipeline compilation. Registered after Python is
+ * started so it runs after the `frame_change_post` Python handlers, letting a poll of
+ * `bpy.app.is_job_running("SHADER_COMPILATION")` reflect the pipelines compiled during a frame. */
+static void wm_frame_change_post_gpu_callback(Main * /*bmain*/,
+                                              PointerRNA ** /*pointers*/,
+                                              const int /*pointers_num*/,
+                                              void * /*arg*/)
+{
+  if (GPU_is_init()) {
+    GPU_shader_compiler_reset_frame_pipeline_tracking();
+  }
+}
+
+static bCallbackFuncStore wm_frame_change_post_gpu_callback_funcstore = {
+    /*next*/ nullptr,
+    /*prev*/ nullptr,
+    /*func*/ wm_frame_change_post_gpu_callback,
+    /*arg*/ nullptr,
+    /*alloc*/ 0,
+};
+static bool wm_frame_change_post_gpu_callback_registered = false;
 
 void WM_init(bContext *C, int argc, const char **argv)
 {
@@ -241,6 +264,10 @@ void WM_init(bContext *C, int argc, const char **argv)
   ED_node_init_butfuncs();
 
   BLF_init();
+
+  if (!G.background) {
+    recents::init_async();
+  }
 
   BLT_lang_init();
   /* Must call first before doing any `.blend` file reading,
@@ -343,6 +370,10 @@ void WM_init(bContext *C, int argc, const char **argv)
   UNUSED_VARS(argc, argv);
 #endif
 
+  /* Registered after Python so it runs after the `frame_change_post` Python handlers. */
+  BKE_callback_add(&wm_frame_change_post_gpu_callback_funcstore, BKE_CB_EVT_FRAME_CHANGE_POST);
+  wm_frame_change_post_gpu_callback_registered = true;
+
   if (!G.background) {
     GHOST_ISystem *ghost_system = GHOST_ISystem::getSystem();
     if (wm_start_with_console) {
@@ -376,7 +407,7 @@ void WM_init(bContext *C, int argc, const char **argv)
   wm_init_scripts_extensions_once(C);
 
   WM_keyconfig_update_postpone_end();
-  WM_keyconfig_update_on_startup(static_cast<wmWindowManager *>(G_MAIN->wm.first));
+  WM_keyconfig_update_on_startup(G_MAIN->wm.first());
 
   wm_homefile_read_post(C, params_file_read_post);
 }
@@ -421,7 +452,7 @@ void WM_init_splash(bContext *C)
   }
 
   wmWindow *prevwin = CTX_wm_window(C);
-  CTX_wm_window_set(C, static_cast<wmWindow *>(wm->windows.first));
+  CTX_wm_window_set(C, wm->windows.first());
   WM_operator_name_call(C, "WM_OT_splash", wm::OpCallContext::InvokeDefault, nullptr, nullptr);
   CTX_wm_window_set(C, prevwin);
 }
@@ -474,7 +505,7 @@ void wm_exit_schedule_delayed(const bContext *C)
   }
   else {
     /* Unlikely but possible, in this case just ensure exit runs as it's not interactive. */
-    wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+    wmWindowManager *wm = G_MAIN->wm.first();
     for (wmWindow &win : wm->windows) {
       wm_exit_schedule_delayed_for_window(C, win);
     }
@@ -496,6 +527,12 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   if (C) {
     /* Run `exit_pre` Python handlers. */
     BKE_callback_exec_boolean(CTX_data_main(C), do_user_exit_actions, BKE_CB_EVT_EXIT_PRE);
+  }
+
+  if (wm_frame_change_post_gpu_callback_registered) {
+    BKE_callback_remove(&wm_frame_change_post_gpu_callback_funcstore,
+                        BKE_CB_EVT_FRAME_CHANGE_POST);
+    wm_frame_change_post_gpu_callback_registered = false;
   }
 
   /* First wrap up running stuff, we assume only the active WM is running. */
@@ -649,6 +686,10 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   WM_uilisttype_free();
 
   BLF_exit();
+
+  if (!G.background && do_user_exit_actions) {
+    recents::save();
+  }
 
   BLT_lang_free();
 
