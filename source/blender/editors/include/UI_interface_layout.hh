@@ -959,6 +959,13 @@ enum eUI_Item_Flag : uint32_t {
   ITEM_R_TEXT_BUT_FORCE_SEMI_MODAL_ACTIVE = 1 << 15,
   /** Text buttons with no emboss styled like labels. */
   ITEM_R_TEXT_BUT_LABEL_STYLE = 1 << 16,
+
+  /**
+   * Do not automatically add extra operations to the regular property drawing (e.g. the buttons
+   * call an operator to open the filebrowser, for filepath/dirpath sub-types of string
+   * properties).
+   */
+  ITEM_R_NO_AUTO_OPERATIONS = 1 << 17,
 };
 ENUM_OPERATORS(eUI_Item_Flag)
 #define UI_ITEM_NONE ui::eUI_Item_Flag(0)
