@@ -532,7 +532,9 @@ class ConvertKuwaharaOperation : public NodeOperation {
        * next code section. */
       float4 weighted_mean_of_squared_color_of_sectors[8];
       float4 weighted_mean_of_color_of_sectors[8];
-      float sum_of_weights_of_sectors[8];
+      /* Opposite sectors have equal total weights because each sample is paired.
+       * Share the weight sum between sectors [i] and [i+4]. */
+      float sum_of_weights_of_sectors[4];
 
       /* The center pixel (0, 0) is exempt from the main loop below for reasons that are explained
        * in the first if statement in the loop, so we need to accumulate its color, squared color,
@@ -547,6 +549,8 @@ class ConvertKuwaharaOperation : public NodeOperation {
       for (int i = 0; i < number_of_sectors; i++) {
         weighted_mean_of_squared_color_of_sectors[i] = weighted_center_color_squared;
         weighted_mean_of_color_of_sectors[i] = weighted_center_color;
+      }
+      for (int i = 0; i < number_of_sectors / 2; i++) {
         sum_of_weights_of_sectors[i] = center_weight;
       }
 
@@ -635,17 +639,16 @@ class ConvertKuwaharaOperation : public NodeOperation {
 
           for (int k = 0; k < number_of_sectors; k++) {
             float weight = sector_weights[k] * radial_gaussian_weight;
+            sum_of_weights_of_sectors[k % (number_of_sectors / 2)] += weight;
 
             /* Accumulate the pixel to each of the sectors multiplied by the sector weight. */
             int upper_index = k;
-            sum_of_weights_of_sectors[upper_index] += weight;
             weighted_mean_of_color_of_sectors[upper_index] += upper_color * weight;
             weighted_mean_of_squared_color_of_sectors[upper_index] += upper_color_squared * weight;
 
             /* Accumulate the mirrored pixel to each of the sectors multiplied by the sector
              * weight. */
             int lower_index = (k + number_of_sectors / 2) % number_of_sectors;
-            sum_of_weights_of_sectors[lower_index] += weight;
             weighted_mean_of_color_of_sectors[lower_index] += lower_color * weight;
             weighted_mean_of_squared_color_of_sectors[lower_index] += lower_color_squared * weight;
           }
@@ -657,8 +660,9 @@ class ConvertKuwaharaOperation : public NodeOperation {
       float sum_of_weights = 0.0f;
       float4 weighted_sum = float4(0.0f);
       for (int i = 0; i < number_of_sectors; i++) {
-        weighted_mean_of_color_of_sectors[i] /= sum_of_weights_of_sectors[i];
-        weighted_mean_of_squared_color_of_sectors[i] /= sum_of_weights_of_sectors[i];
+        float sector_weight_sum = sum_of_weights_of_sectors[i % (number_of_sectors / 2)];
+        weighted_mean_of_color_of_sectors[i] /= sector_weight_sum;
+        weighted_mean_of_squared_color_of_sectors[i] /= sector_weight_sum;
 
         float4 color_mean = weighted_mean_of_color_of_sectors[i];
         float4 squared_color_mean = weighted_mean_of_squared_color_of_sectors[i];
