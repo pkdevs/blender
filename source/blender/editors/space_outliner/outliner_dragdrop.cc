@@ -1250,6 +1250,9 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     const TreeElement *parent_te = outliner_find_parent_element(
         &space_outliner->runtime->tree, nullptr, te);
     if (parent_te != nullptr && parent_te->idcode == ID_OB) {
+      if (te->flag & TE_CHILD_NOT_IN_COLLECTION) {
+        return false;
+      }
       const Object *parent_ob = id_cast<Object *>(TREESTORE(parent_te)->id);
       for (const wmDragID &drag_id : drag->ids) {
         if (GS(drag_id.id->name) == ID_OB) {
@@ -1334,10 +1337,13 @@ static std::string collection_drop_tooltip(bContext *C,
     const bool target_is_object_row = is_object_element(te);
     const bool target_is_collection_row = is_collection_element(te);
 
-    if (!target_is_object_row && !target_is_collection_row) {
-      return "";
-    }
     const bool tooltip_link = (is_link && !same_level);
+
+    if (!target_is_object_row && !target_is_collection_row &&
+        ELEM(data.insert_type, TE_INSERT_BEFORE, TE_INSERT_AFTER))
+    {
+      return tooltip_link ? TIP_("Link inside Collection") : TIP_("Move inside Collection");
+    }
 
     /* Adapt the tooltip based on whether the hovered row is an object or collection. */
     const char *tooltip_before = tooltip_link ?
@@ -1470,7 +1476,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
   if (is_custom_sort_move) {
     if (is_parented_object) {
       for (TreeElement &te : parent_te->subtree) {
-        if (te.idcode == ID_OB) {
+        if (te.idcode == ID_OB && (te.flag & TE_CHILD_NOT_IN_COLLECTION) == 0) {
           Object *ob = id_cast<Object *>(TREESTORE(&te)->id);
           items.append(ob);
         }
@@ -1489,12 +1495,6 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
       if (std::holds_alternative<Object *>(item)) {
         Object *ob = std::get<Object *>(item);
         CollectionObject *cob = BKE_collection_object_find_in(*data.to, *ob);
-        if (cob == nullptr) {
-          Collection *other_col = BKE_collection_object_find(bmain, scene, nullptr, ob);
-          if (other_col != nullptr) {
-            cob = BKE_collection_object_find_in(*other_col, *ob);
-          }
-        }
         if (cob) {
           sort_index = is_parented_object ? cob->parented_sort_index : cob->sort_index;
         }
@@ -1622,12 +1622,6 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
             using T = std::decay_t<decltype(item)>;
             if constexpr (std::is_same_v<T, Object *>) {
               CollectionObject *cob = BKE_collection_object_find_in(*data.to, *item);
-              if (cob == nullptr) {
-                Collection *other_col = BKE_collection_object_find(bmain, scene, nullptr, item);
-                if (other_col != nullptr) {
-                  cob = BKE_collection_object_find_in(*other_col, *item);
-                }
-              }
               if (cob != nullptr) {
                 if (is_parented_object) {
                   cob->parented_sort_index = i;
@@ -1826,7 +1820,8 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
         parent = scene->master_collection;
       }
 
-      if ((te_selected->flag & TE_CHILD_NOT_IN_COLLECTION) == 0) {
+      const bool in_parent_collection = (te_selected->flag & TE_CHILD_NOT_IN_COLLECTION) == 0;
+      if (in_parent_collection) {
         for (wmDragID &drag_id : drag->ids) {
           if (drag_id.id == id) {
             drag_id.from_parent = &parent->id;
@@ -1834,7 +1829,7 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
           }
         }
       }
-      WM_drag_add_local_ID(drag, id, &parent->id);
+      WM_drag_add_local_ID(drag, id, in_parent_collection ? &parent->id : nullptr);
     }
 
     selected.selected_array.free_no_destruct();

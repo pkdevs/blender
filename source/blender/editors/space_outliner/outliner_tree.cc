@@ -356,6 +356,19 @@ struct OutlinerSortMaps {
   Map<Object *, CollectionObject *> object_to_any_cob_map;
 };
 
+static CollectionObject *get_sort_cob(const OutlinerSortMaps &sort_maps,
+                                      Collection *collection,
+                                      Object *ob,
+                                      const bool is_parented_object)
+{
+  CollectionObject *cob = sort_maps.collection_and_object_to_cob_map.lookup_default(
+      {collection, ob}, nullptr);
+  if (cob == nullptr && !is_parented_object) {
+    cob = sort_maps.object_to_any_cob_map.lookup_default(ob, nullptr);
+  }
+  return cob;
+}
+
 static int get_sort_index(const tTreeSort &x,
                           const OutlinerSortMaps &sort_maps,
                           const Map<Collection *, CollectionChild *> &collection_map,
@@ -364,11 +377,7 @@ static int get_sort_index(const tTreeSort &x,
 {
   if (x.idcode == ID_OB) {
     Object *ob = reinterpret_cast<Object *>(x.id);
-    CollectionObject *cob = sort_maps.collection_and_object_to_cob_map.lookup_default(
-        {collection, ob}, nullptr);
-    if (cob == nullptr) {
-      cob = sort_maps.object_to_any_cob_map.lookup_default(ob, nullptr);
-    }
+    CollectionObject *cob = get_sort_cob(sort_maps, collection, ob, is_parented_object);
     if (cob) {
       int sort_idx = is_parented_object ? cob->parented_sort_index : cob->sort_index;
       if (sort_idx >= 0) {
@@ -402,6 +411,12 @@ static bool treesort_custom(const tTreeSort &x1,
 
   if (!x1_valid || !x2_valid) {
     return false;
+  }
+
+  if (x1.idcode == ID_OB && x2.idcode == ID_OB) {
+    if (std::optional<bool> comp = treesort_child_not_in_collection(x1, x2)) {
+      return *comp;
+    }
   }
 
   int x1_sort_index = get_sort_index(
@@ -612,11 +627,7 @@ static void outliner_sort_custom(Main *bmain,
       for (tTreeSort element : tear_vec) {
         if (element.idcode == ID_OB) {
           Object *ob = reinterpret_cast<Object *>(element.id);
-          CollectionObject *cob = sort_maps.collection_and_object_to_cob_map.lookup_default(
-              {collection, ob}, nullptr);
-          if (cob == nullptr) {
-            cob = sort_maps.object_to_any_cob_map.lookup_default(ob, nullptr);
-          }
+          CollectionObject *cob = get_sort_cob(sort_maps, collection, ob, is_parented_object);
           if (cob != nullptr) {
             if (is_parented_object) {
               cob->parented_sort_index = index++;
