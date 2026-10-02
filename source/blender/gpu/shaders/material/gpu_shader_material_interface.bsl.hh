@@ -329,10 +329,6 @@ float attr_load_temperature_post([[resource_table]] KernelGlobals & /*kg*/, floa
 {
   return attr;
 }
-float4 attr_load_radiance_post([[resource_table]] KernelGlobals & /*kg*/, float4 attr)
-{
-  return attr;
-}
 
 /* TODO remove attr as parameter. */
 float4 attr_load_uniform([[resource_table]] KernelGlobals & /*kg*/,
@@ -387,7 +383,7 @@ void scene_time_uniforms([[resource_table]] KernelGlobals & /*kg*/,
 {
 }
 
-/* Shadow Raycast Node. */
+/* Shadow Ray-cast Node. */
 
 void node_shadow_raycast_impl([[resource_table]] KernelGlobals & /*kg*/,
                               const ShadingData & /*sd*/,
@@ -451,7 +447,7 @@ template void node_light_evaluation_impl<true>(
 template void node_light_evaluation_impl<false>(
     KernelGlobals &, const ShadingData &, int, float3, float3, float, float &);
 
-/* Raycast Node. */
+/* Ray-cast Node. */
 
 void raycast_eval([[resource_table]] KernelGlobals & /*kg*/,
                   const ShadingData & /*sd*/,

@@ -8,7 +8,7 @@
  * Film accumulation utils functions.
  */
 
-#include "draw_math_geom_lib.glsl"
+#include "draw_math_geom.bsl.hh"
 #include "eevee_camera_lib.bsl.hh"
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_cryptomatte.bsl.hh"
@@ -21,6 +21,7 @@
 #include "gpu_shader_math_vector.bsl.hh"
 #include "gpu_shader_math_vector_compare.bsl.hh"
 #include "gpu_shader_math_vector_safe.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 namespace eevee::film {
 
