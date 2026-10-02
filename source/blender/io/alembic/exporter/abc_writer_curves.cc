@@ -98,7 +98,9 @@ void ABCCurveWriter::create_alembic_objects(const HierarchyContext *context)
     case OB_CURVES: {
       Curves *curves_id = id_cast<Curves *>(context->object->data);
       const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
-      resolution_u = curves.resolution().first();
+      if (!curves.is_empty()) {
+        resolution_u = curves.resolution().first();
+      }
       break;
     }
     default:
@@ -159,12 +161,13 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
     return;
   }
 
-  const bool is_cyclic = curves.cyclic().first();
+  const bool is_cyclic = !curves.is_empty() && curves.cyclic().first();
   Alembic::AbcGeom::BasisType curve_basis = Alembic::AbcGeom::kNoBasis;
   Alembic::AbcGeom::CurveType curve_type = Alembic::AbcGeom::kLinear;
   Alembic::AbcGeom::CurvePeriodicity periodicity = is_cyclic ? Alembic::AbcGeom::kPeriodic :
                                                                Alembic::AbcGeom::kNonPeriodic;
-  const CurveType blender_curve_type = CurveType(curves.curve_types().first());
+  const CurveType blender_curve_type = curves.is_empty() ? CURVE_TYPE_POLY :
+                                                           CurveType(curves.curve_types().first());
   switch (blender_curve_type) {
     case CURVE_TYPE_POLY:
       curve_basis = Alembic::AbcGeom::kNoBasis;
@@ -197,7 +200,7 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
 
   const VArray<float> radii = curves.radius();
   Alembic::AbcGeom::GeometryScope width_scope = kVertexScope;
-  if (radii.is_single()) {
+  if (radii.is_single() && !radii.is_empty()) {
     width_scope = kConstantScope;
     widths.push_back(radii[0] * 2.0f);
   }
