@@ -1103,8 +1103,9 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   }
   info.compilation_constant(
       gpu::shader::Type::bool_t, "use_light_accumulation_aovs", light_accumulation_aov_count != 0);
-  info.compilation_constant(
-      gpu::shader::Type::int_t, "light_accumulation_aov_count", light_accumulation_aov_count);
+  info.compilation_constant(gpu::shader::Type::int_t,
+                            "light_accumulation_aov_count",
+                            math::max(light_accumulation_aov_count, 1));
 
   const eClosureBits closure_bits = shader_closure_bits_from_flag(gpumat);
 

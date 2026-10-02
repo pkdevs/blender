@@ -60,18 +60,6 @@ struct LightAccumulationAOV {
   uint hash;
 };
 
-#if !defined(SRT_CONSTANT_light_accumulation_aov_count)
-#  define SRT_CONSTANT_light_accumulation_aov_count 0
-#endif
-
-#ifdef GLSL_CPP_STUBS
-#  define LIGHT_ACCUMULATION_AOV_COUNT 3
-#elif SRT_CONSTANT_light_accumulation_aov_count == 0
-#  define LIGHT_ACCUMULATION_AOV_COUNT 1 /* Avoid compilation error. */
-#else
-#  define LIGHT_ACCUMULATION_AOV_COUNT SRT_CONSTANT_light_accumulation_aov_count
-#endif
-
 struct LightAccumulation {
   packed_float3 diffuse_light;
   packed_float3 diffuse_color;
@@ -80,7 +68,7 @@ struct LightAccumulation {
   packed_float3 transmission_light;
   packed_float3 transmission_color;
   int light_accumulation_count;
-  LightAccumulationAOV aovs[LIGHT_ACCUMULATION_AOV_COUNT];
+  [[capacity(light_accumulation_aov_count)]] LightAccumulationAOV aovs[AOV_MAX];
 };
 
 struct ShadingData {
