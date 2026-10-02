@@ -2,3 +2,4 @@ Referenced by issue #161827, "Render Audio" produces bad sound file (when called
 Referenced by issue #164505, Audio mixdown produces nothing in background mode
 Referenced by issue #164503, VSE Audio Mixdown Depends on Current Scene Frame When Exporting from the command line with bpy.ops.sound.mixdown
 Referenced by pull request #164517, Fix #161827: Audio mixdown from scripts produces bad output
+Referenced by commit 8cfd7333d8419d2ee922a09a69c53b6b8d8b0acc, Fix #161827: Audio mixdown from scripts produces bad output
