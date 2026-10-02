@@ -1133,6 +1133,7 @@ struct CodegenContext : NodeErrorHandler {
 
     if (cls.is_srt()) {
       generate_srt_placeholder_macros(cls);
+      lint_compilation_constant_redefinition(cls);
     }
 
     /* Emit static variables. */
@@ -1242,6 +1243,40 @@ struct CodegenContext : NodeErrorHandler {
     if (cls.is_srt()) {
       parse_class_metadata(cls, body);
     }
+  }
+
+  void lint_compilation_constant_redefinition(SymbolClass &cls)
+  {
+    vector<const SymbolVariable *> compilation_constants;
+    /* Avoid infinite loops or redundant visit. */
+    vector<const SymbolClass *> visited_srt;
+
+    auto check_class = [&](auto &self, SymbolClass *cls) {
+      if (std::ranges::find(visited_srt, cls) != visited_srt.end()) {
+        return;
+      }
+      visited_srt.emplace_back(cls);
+
+      for (const auto &[k, v] : cls->variables) {
+        const SymbolVariable &member = *v.second;
+        if (member.is_compilation_const) {
+          /* Check for duplicate O(N^2). */
+          for (const SymbolVariable *other : compilation_constants) {
+            if (other->original == member.original) {
+              NOTE(other->loc.tok, Diag::CompilationConstantPreviousDecl, "");
+              error(member.loc.tok, Diag::CompilationConstantRedefinition, member.original);
+            }
+          }
+          compilation_constants.emplace_back(&member);
+        }
+        if (member.type->srt_type == ResourceTableType::RESOURCE_TABLE) {
+          /* Recurse. */
+          self(self, member.type);
+        }
+      }
+    };
+
+    check_class(check_class, &cls);
   }
 
   void generate_srt_placeholder_macros(SymbolClass &cls)
@@ -1359,8 +1394,10 @@ struct CodegenContext : NodeErrorHandler {
                 int dim = 0;
                 Subscript sub = d.array().sub();
                 while (sub.is_valid()) {
+                  string len = var->capacity_value.is_valid() ?
+                                   "SRT_CONSTANT_" + string(var->capacity_value.str()) :
+                                   string(sub.expr().str());
                   string var = get_temp_name(dim++);
-                  string len = string(sub.expr().str());
                   members += "for(int " + var + " =0;" + var + " < " + len + ";++" + var + ") {";
                   close += "}";
                   access += "[" + var + "]";
@@ -1637,7 +1674,7 @@ struct CodegenContext : NodeErrorHandler {
 
     if (inst_fn->fn_type == SymbolFunction::MEMBER && decl.is_template()) {
       if (SymbolClass *cls = inst_fn->parent_class(); cls) {
-        /* Leave a breadcrum for a mutation pass which will move the following forward declaration
+        /* Leave a breadcrumb for a mutation pass which will move the following forward declaration
          * all the way up at the class declaration. This is needed to allow other member functions
          * to call the templated function. */
         builder.ss << "#pragma member_forward_decl " << inst_fn->parent_class()->identifier
@@ -1836,7 +1873,7 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::BASE_INSTANCE:
         case ResourceType::NUM_WORK_GROUP:
         case ResourceType::INSTANCE_INDEX:
-        case ResourceType::FRAG_STENCIL_REF:
+        case ResourceType::STENCIL_REF:
           create_info_decl += "BUILTINS(BuiltinBits::" + to_str(attr.res_type) + ")\n";
           break;
         case ResourceType::FRAG_DEPTH:
@@ -1864,7 +1901,14 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::OUT:
         case ResourceType::IN:
           if (var->type->srt_type == ResourceTableType::VERTEX_OUT) {
-            create_info_decl += "VERTEX_OUT(" + resolved_type + "_t)\n";
+            string res_condition_lambda = parse_condition(arg.attributes());
+            if (res_condition_lambda.empty()) {
+              create_info_decl += ".vertex_out(" + resolved_type + "_t)\n";
+            }
+            else {
+              create_info_decl += ".vertex_out(" + resolved_type + "_t" + res_condition_lambda +
+                                  ")\n";
+            }
           }
           else {
             create_info_decl += "ADDITIONAL_INFO(" + resolved_type + ")\n";
@@ -1888,6 +1932,7 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::FRAG_OUT:
         case ResourceType::CLIP_CONTROL:
         case ResourceType::CONDITION:
+        case ResourceType::CAPACITY:
         case ResourceType::FREQUENCY:
         case ResourceType::DUAL_SOURCE_INDEX:
         case ResourceType::RASTER_ORDER_GROUP:
@@ -1911,7 +1956,7 @@ struct CodegenContext : NodeErrorHandler {
     for (Attr attr : attributes.children_of_type<Attr>()) {
       if (attr.identifier().str() == "condition") {
         if (!cond.empty()) {
-          error(attr.identifier(), Diag::MultipleConditionAttributes);
+          error(attr.identifier(), Diag::ConditionAttributeMultiple);
           break;
         }
         for (LocalVar var : attributes.descendants_of_type<LocalVar>()) {
@@ -2282,7 +2327,7 @@ struct CodegenContext : NodeErrorHandler {
     id_type_resolved(type.identifier(), scope);
   }
 
-  void array_decl(ArrayDecl array, Declarator decl, SymbolScope &scope)
+  void array_decl(SymbolVariable &var, ArrayDecl array, Declarator decl, SymbolScope &scope)
   {
     if (!array.is_valid()) {
       return;
@@ -2302,6 +2347,17 @@ struct CodegenContext : NodeErrorHandler {
         if (size == 0) {
           error(decl, Diag::ArraySizeMustBeGreaterThanZero);
         }
+        if (var.capacity_value.is_valid()) {
+          error(decl, Diag::CapacityArrayImplicitSize);
+        }
+        return;
+      }
+      if (var.capacity_value.is_valid()) {
+        builder << builder.curr;
+        builder << "SRT_CONSTANT_" + string(var.capacity_value.str());
+        /* Replace the whole expression. */
+        builder.curr = array.sub().back();
+        builder << array.sub().back();
         return;
       }
     }
@@ -2342,7 +2398,11 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     const bool par = match_if('(');
-    if (var->type->is_srt()) {
+
+    /* Lookup the type from the declaration as var might be ERROR_SYMBOL for forward declared
+     * functions (because of name mismatch). */
+    SymbolClass *type = scope.lookup_class(table, decl.type().identifier()).unwrap(this);
+    if (type->is_srt()) {
       /* WORKAROUND: Do not pass SRT by reference because it causes issue on metal when the caller
        * is just calling the constructor in place. */
       skip_if('&');
@@ -2363,7 +2423,7 @@ struct CodegenContext : NodeErrorHandler {
       match_if(')');
     }
 
-    array_decl(array, decl, scope);
+    array_decl(*var, array, decl, scope);
 
     skip_node(decl.bitfield());
 
@@ -2485,13 +2545,16 @@ struct CodegenContext : NodeErrorHandler {
         if (designated.is_valid() && var->identifier == designated.identifier().str()) {
           AssignStmt stmt = designated.assign();
           content += init_expression_or_initializer_list(stmt.child_first(), scope, var->type).str;
-          content += opt_str(designated.back().next(), Comma);
+          string_view comma = opt_str(designated.back().next(), Comma);
+          content += comma.empty() ? "," : comma;
           designated = designated.next();
         }
         else {
           content += default_value(*var->type) + ",";
         }
       }
+
+      content = content.substr(0, content.rfind(","));
 
       if (designated.is_valid()) {
         if (auto *var = cls->lookup_variable(string(designated.identifier().str()));

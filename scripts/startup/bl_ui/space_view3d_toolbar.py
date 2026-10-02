@@ -791,18 +791,6 @@ class VIEW3D_PT_tools_mask_texture(Panel, View3DPaintPanel, TextureMaskPanel):
         settings = cls.paint_settings_from_active_tool(context)
         return (settings and settings.brush and context.image_paint_object)
 
-    def draw(self, context):
-        layout = self.layout
-
-        brush = context.tool_settings.image_paint.brush
-
-        col = layout.column()
-        mask_tex_slot = brush.mask_texture_slot
-
-        col.template_ID_preview(mask_tex_slot, "texture", new="texture.new", rows=3, cols=8)
-
-        brush_mask_texture_settings(col, brush)
-
 
 class VIEW3D_PT_tools_brush_stroke(Panel, View3DPaintPanel, StrokePanel):
     bl_context = ".paint_common"  # dot on purpose (access from topbar)
@@ -1285,17 +1273,15 @@ class VIEW3D_PT_tools_imagepaint_options_external(Panel, View3DPaintPanel):
         tool_settings = context.tool_settings
         ipaint = tool_settings.image_paint
 
-        layout.prop(ipaint, "screen_grab_size", text="Screen Grab Size")
+        layout.prop(ipaint, "screen_grab_size", text="Image Size")
 
         layout.separator()
 
-        flow = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
-        col = flow.column()
-        col.operator("image.project_edit", text="Quick Edit")
-        col = flow.column()
-        col.operator("image.project_apply", text="Apply")
-        col = flow.column()
-        col.operator("paint.project_image", text="Apply Camera Image")
+        layout.operator("image.project_edit", text="Quick Edit...")
+
+        row = layout.row(align=True)
+        row.operator("image.project_apply", text="Apply")
+        row.operator("paint.project_image", text="Apply Camera Image")
 
 
 class VIEW3D_PT_tools_imagepaint_symmetry(Panel, View3DPaintPanel):
@@ -1348,6 +1334,7 @@ class VIEW3D_PT_tools_imagepaint_options(View3DPaintPanel, Panel):
     bl_context = ".imagepaint"  # dot on purpose (access from topbar)
     bl_label = "Options"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_ui_units_x = 14
 
     @classmethod
     def poll(cls, context):
@@ -1737,25 +1724,17 @@ class VIEW3D_PT_tools_grease_pencil_brush_vertex_color(View3DPanel, Panel):
         tool_settings = context.tool_settings
         settings = tool_settings.gpencil_vertex_paint
         brush = settings.brush
-        use_unified_paint = (context.object.mode != 'PAINT_GREASE_PENCIL')
-        ups = settings.unified_paint_settings
-        prop_owner = ups if use_unified_paint and brush.use_unified_color else brush
 
         col = layout.column()
 
-        col.template_color_picker(prop_owner, "color", value_slider=True)
+        UnifiedPaintPanel.prop_unified_color_picker(col, context, brush, "color", value_slider=True)
 
         sub_row = col.row(align=True)
-        if use_unified_paint:
-            UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "color", text="")
-            UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "secondary_color", text="")
-        else:
-            sub_row.prop(brush, "color", text="")
-            sub_row.prop(brush, "secondary_color", text="")
+        UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "color", text="")
+        UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "secondary_color", text="")
 
         sub_row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
-        if use_unified_paint:
-            sub_row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
+        sub_row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
 
 
 class VIEW3D_PT_tools_grease_pencil_brush_vertex_falloff(GreasePencilBrushFalloff, Panel, View3DPaintPanel):
@@ -2278,7 +2257,7 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor(View3DPanel, Panel):
 
         from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
         tool = ToolSelectPanelHelper.tool_active_from_context(context)
-        if tool and tool.idname in {"builtin.cutter", "builtin.eyedropper", "builtin.interpolate"}:
+        if tool and tool.idname in {"builtin.trim", "builtin.carver", "builtin.eyedropper", "builtin.interpolate"}:
             return False
 
         if brush.gpencil_brush_type == 'TINT':
@@ -2295,9 +2274,6 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor(View3DPanel, Panel):
         settings = tool_settings.gpencil_paint
         brush = settings.brush
         gp_settings = brush.gpencil_settings
-        use_unified_paint = (context.object.mode != 'PAINT_GREASE_PENCIL')
-        ups = settings.unified_paint_settings
-        prop_owner = ups if use_unified_paint and brush.use_unified_color else brush
 
         row = layout.row()
         row.prop(settings, "color_mode", expand=True)
@@ -2307,18 +2283,14 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor(View3DPanel, Panel):
         col = layout.column()
         col.enabled = settings.color_mode == 'VERTEXCOLOR'
 
-        # This panel is only used for Draw mode, which does not use unified paint settings.
-        col.template_color_picker(prop_owner, "color", value_slider=True)
+        UnifiedPaintPanel.prop_unified_color_picker(col, context, brush, "color", value_slider=True)
 
         sub_row = col.row(align=True)
-        if use_unified_paint:
-            UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "color", text="")
-            UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "secondary_color", text="")
-        else:
-            sub_row.prop(brush, "color", text="")
-            sub_row.prop(brush, "secondary_color", text="")
+        UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "color", text="")
+        UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "secondary_color", text="")
 
         sub_row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
+        sub_row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
 
         if brush.gpencil_brush_type in {'DRAW', 'FILL'}:
             col.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
@@ -2342,7 +2314,7 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mix_palette(View3DPanel, Panel):
 
         from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
         tool = ToolSelectPanelHelper.tool_active_from_context(context)
-        if tool and tool.idname in {"builtin.cutter", "builtin.eyedropper", "builtin.interpolate"}:
+        if tool and tool.idname in {"builtin.trim", "builtin.carver", "builtin.eyedropper", "builtin.interpolate"}:
             return False
 
         if brush.gpencil_brush_type == 'TINT':
