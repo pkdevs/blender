@@ -1790,8 +1790,17 @@ class _RepoDataSource_JSON(_RepoDataSource_ABC):
         self._data = data
         self._mtime = mtime
 
-        assetlib_auth_method = data_dict.get("assetlib_auth_method")
-        if assetlib_auth_method is None or assetlib_auth_method not in ASSETLIB_AUTH_METHOD_VALID:
+        assetlib_auth_method = data_dict.get("assetlib_auth_method", ASSETLIB_AUTH_METHOD_DEFAULT)
+        if not (isinstance(assetlib_auth_method, str) and assetlib_auth_method in ASSETLIB_AUTH_METHOD_VALID):
+            error_fn(Exception(
+                "Remote repository data from {:s} must have \"assetlib_auth_method\" set to one of ({:s}), "
+                "found {!r}, using \"{:s}\"".format(
+                    self._filepath,
+                    ", ".join(sorted(ASSETLIB_AUTH_METHOD_VALID)),
+                    assetlib_auth_method,
+                    ASSETLIB_AUTH_METHOD_DEFAULT,
+                )
+            ))
             assetlib_auth_method = ASSETLIB_AUTH_METHOD_DEFAULT
         self._assetlib_auth_method = assetlib_auth_method
 
