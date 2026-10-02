@@ -264,7 +264,7 @@ gpu::Shader *GPU_shader_create_from_info_python(const GPUShaderCreateInfo *_info
   const bool is_compute = !info.compute_source_generated.empty();
 
   std::array<StringRefNull, 2> includes = {
-      "draw_colormanagement_lib.glsl",
+      "gpu_shader_python_base.glsl",
       "gpu_shader_python_typedef_lib.glsl",
   };
 
@@ -343,7 +343,13 @@ void GPU_shader_async_compilation_cancel(AsyncCompilationHandle &handle)
 
 bool GPU_shader_compiler_has_pending_work()
 {
-  return GPUBackend::get()->get_compiler()->is_compiling();
+  return GPUBackend::get()->get_compiler()->is_compiling() ||
+         GPUBackend::get()->pipelines_compiled_since_last_reset();
+}
+
+void GPU_shader_compiler_reset_frame_pipeline_tracking()
+{
+  GPUBackend::get()->reset_pipeline_compilation_tracking();
 }
 
 void GPU_shader_compiler_wait_for_all()
