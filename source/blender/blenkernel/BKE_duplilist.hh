@@ -37,7 +37,9 @@ struct DupliObject {
   float orco[3], uv[2];
 
   short type; /* From #Object::transflag. */
-  char no_draw;
+  bool no_draw : 1;
+  /* The preview should be drawn by overlays rather than the regular render path. */
+  bool preview_overlay_only : 1;
   /** Depth in the instance hierarchy. */
   int8_t level;
   /* If this dupli object is belongs to a preview, this is non-null. */
@@ -78,8 +80,9 @@ void object_duplilist(Depsgraph *depsgraph,
                       DupliList &r_duplilist);
 /**
  * Fill a Vector of #DupliObject for the preview geometry referenced by the #ViewerPath.
+ * \return True if the previewed geometry replaces the object's geometry.
  */
-void object_duplilist_preview(Depsgraph *depsgraph,
+bool object_duplilist_preview(Depsgraph *depsgraph,
                               Object *ob,
                               const ViewerPath *viewer_path,
                               DupliList &r_duplilist);

@@ -67,7 +67,8 @@ static void ensure_dependency_data(MeshRenderData &mr,
                                vbo_requests.contains(VBOType::VertexNormal) ||
                                vbo_requests.contains(VBOType::IndexVert) ||
                                vbo_requests.contains(VBOType::IndexEdge) ||
-                               vbo_requests.contains(VBOType::EdgeFactor);
+                               vbo_requests.contains(VBOType::EdgeFactor) ||
+                               vbo_requests.contains(VBOType::ViewerColor);
 
   if (calc_loose_geom) {
     mesh_render_data_update_loose_geom(mr, cache);
@@ -245,6 +246,9 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
       const int8_t attr_index = int8_t(type) - int8_t(VBOType::Attr0);
       created_vbos[i] = extract_attribute(mr, mbc, cache.attr_used[attr_index]);
     }
+    else if (type == VBOType::ViewerColor) {
+      created_vbos[i] = extract_viewer_color(mr, mbc);
+    }
   }
 
   threading::parallel_for_each(vbos_to_create.index_range(), [&](const int i) {
@@ -269,6 +273,7 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
       case VBOType::Attr13:
       case VBOType::Attr14:
       case VBOType::Attr15:
+      case VBOType::ViewerColor:
         break;
       case VBOType::EdgeFactor:
         created_vbos[i] = extract_edge_factor(mr);

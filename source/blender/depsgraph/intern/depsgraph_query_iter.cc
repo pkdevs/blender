@@ -230,10 +230,13 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
 
     const bool use_preview = object_orig == data->object_orig_with_preview;
     if (use_preview) {
-      object_duplilist_preview(data->graph, object, data->settings->viewer_path, data->dupli_list);
-      deg_iterator_duplis_init(data, object);
-      data->id_node_index++;
-      return true;
+      if (object_duplilist_preview(
+              data->graph, object, data->settings->viewer_path, data->dupli_list))
+      {
+        deg_iterator_duplis_init(data, object);
+        data->id_node_index++;
+        return true;
+      }
     }
 
     int ob_visibility = OB_VISIBLE_ALL;
@@ -241,6 +244,7 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
       ob_visibility = BKE_object_visibility(object, data->eval_mode);
 
       if (!DEG_iterator_object_is_visible(data->eval_mode, object)) {
+        data->dupli_list.clear();
         continue;
       }
     }
@@ -251,9 +255,9 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
       {
         BLI_assert(deg::deg_validate_eval_copy_datablock(&object->id));
         object_duplilist(data->graph, object, data->settings->included_objects, data->dupli_list);
-        deg_iterator_duplis_init(data, object);
       }
     }
+    deg_iterator_duplis_init(data, object);
 
     if (ob_visibility & (OB_VISIBLE_SELF | OB_VISIBLE_PARTICLES)) {
       BLI_assert(deg::deg_validate_eval_copy_datablock(&object->id));

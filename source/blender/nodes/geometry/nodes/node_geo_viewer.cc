@@ -18,6 +18,7 @@
 #include "DNA_vfont_types.h"
 
 #include "NOD_geo_viewer.hh"
+#include "NOD_geometry_nodes_viewer_bundles.hh"
 #include "NOD_node_extra_info.hh"
 #include "NOD_socket_items_blend.hh"
 #include "NOD_socket_items_ops.hh"
@@ -542,6 +543,8 @@ static void node_register()
   ntype.blend_write_storage_content = node_blend_write;
   ntype.blend_data_read_storage_content = node_blend_read;
   bke::node_register_type(ntype);
+
+  viewer_bundles::GeometryOverlayBundle::get_bundle_type();
 }
 NOD_REGISTER_NODE(node_register)
 

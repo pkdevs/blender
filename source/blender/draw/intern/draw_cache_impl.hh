@@ -232,6 +232,8 @@ gpu::Batch *DRW_mesh_batch_cache_get_surface_sculpt(Object &object, Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_surface_weights(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_sculpt_overlays(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_surface_viewer_attribute(Mesh &mesh);
+gpu::Batch *DRW_mesh_batch_cache_get_viewer_color_surface(Mesh &mesh);
+gpu::Batch *DRW_mesh_batch_cache_get_viewer_color_loose_edges(Mesh &mesh);
 
 gpu::BottomLevelAS *DRW_mesh_batch_cache_get_surface_blas(Mesh &mesh);
 

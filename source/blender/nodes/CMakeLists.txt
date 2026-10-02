@@ -89,6 +89,7 @@ set(SRC
   intern/geometry_nodes_physics_bundles.cc
   intern/geometry_nodes_repeat_zone.cc
   intern/geometry_nodes_srna.cc
+  intern/geometry_nodes_viewer_bundles.cc
   intern/inverse_eval.cc
   intern/list_function_eval.cc
   intern/math_functions.cc
@@ -148,6 +149,7 @@ set(SRC
   NOD_geometry_nodes_physics_bundles.hh
   NOD_geometry_nodes_srna.hh
   NOD_geometry_nodes_values.hh
+  NOD_geometry_nodes_viewer_bundles.hh
   NOD_inverse_eval_params.hh
   NOD_inverse_eval_path.hh
   NOD_inverse_eval_run.hh

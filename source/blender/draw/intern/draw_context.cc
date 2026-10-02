@@ -993,8 +993,10 @@ static void foreach_obref_in_scene(
 
     if (parent_filter == DrawFilter::Draw && ob_visible) {
       /* NOTE: object_duplilist_preview is still handled by DEG_OBJECT_ITER,
-       * dupli_parent and dupli_object_current won't be null for these. */
-      ObjectRef ob_ref(ob, data_.dupli_parent, data_.dupli_object_current);
+       * dupli_parent and dupli_object_current won't be null for these. The dupli parent is also
+       * set when the object itself is iterated before its preview duplis. */
+      Object *dupli_parent = data_.dupli_object_current ? data_.dupli_parent : nullptr;
+      ObjectRef ob_ref(ob, dupli_parent, data_.dupli_object_current);
       draw_object_cb(ob_ref);
     }
 
@@ -1160,8 +1162,16 @@ static void drw_engines_cache_populate(draw::ObjectRef &ref,
   }
 
   DRWContext &ctx = drw_get();
-  ctx.view_data_active->foreach_enabled_engine(
-      [&](DrawEngine &instance) { instance.object_sync(ref, *DRW_manager_get()); });
+  if (ref.preview_overlay_only()) {
+    DrawEngine::Pointer &overlay = ctx.view_data_active->overlay;
+    if (overlay.instance && overlay.instance->used) {
+      overlay.instance->object_sync(ref, *DRW_manager_get());
+    }
+  }
+  else {
+    ctx.view_data_active->foreach_enabled_engine(
+        [&](DrawEngine &instance) { instance.object_sync(ref, *DRW_manager_get()); });
+  }
 
   /* TODO: in the future it would be nice to generate once for all viewports.
    * But we need threaded DRW manager first. */

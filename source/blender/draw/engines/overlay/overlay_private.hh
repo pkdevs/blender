@@ -461,6 +461,7 @@ class ShaderModule {
   StaticShader attribute_viewer_gsplat = shader_clippable("overlay_viewer_attribute_gsplat");
   StaticShader attribute_viewer_curve = shader_clippable("overlay_viewer_attribute_curve");
   StaticShader attribute_viewer_curves = shader_clippable("overlay_viewer_attribute_curves");
+  StaticShader viewer_flat_geometry_edges = shader_clippable("overlay_viewer_flat_geometry_edges");
   StaticShader background_fill = {"overlay_background"};
   StaticShader background_clip_bound = {"overlay_clipbound"};
   StaticShader curve_edit_points = shader_clippable("overlay_edit_curves_point");

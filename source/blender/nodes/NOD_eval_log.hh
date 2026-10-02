@@ -239,6 +239,8 @@ class ListInfoLog : public ValueLog {
 class ViewerNodeLog {
   mutable CacheMutex main_geometry_cache_mutex_;
   mutable std::optional<bke::GeometrySet> main_geometry_cache_;
+  mutable CacheMutex overlay_geometry_cache_mutex_;
+  mutable std::optional<bke::GeometrySet> overlay_geometry_cache_;
 
  public:
   struct Item {
@@ -257,6 +259,12 @@ class ViewerNodeLog {
   CustomIDVectorSet<Item, ItemIdentifierGetter> items;
 
   const bke::GeometrySet *main_geometry() const;
+
+  /**
+   * Geometry from all viewer bundles (#GeometryOverlayBundle) that should be drawn by the overlay
+   * engine. Each bundle's geometry is stored as a separate instance.
+   */
+  const bke::GeometrySet *overlay_geometry() const;
 };
 
 /* Compositor image result. */

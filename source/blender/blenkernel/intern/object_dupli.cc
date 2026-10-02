@@ -102,6 +102,10 @@ struct DupliContext {
    * Top level geometry set that is previewed.
    */
   const GeometrySet *preview_base_geometry;
+  /**
+   * The previewed geometry should only be drawn by overlays, not by the regular render path.
+   */
+  bool preview_overlay_only;
 
   /**
    * A stack that contains all the "parent" objects of a particular instance when recursive
@@ -178,6 +182,7 @@ static void init_context(DupliContext *r_ctx,
 
   r_ctx->preview_instance_index = -1;
   r_ctx->preview_base_geometry = nullptr;
+  r_ctx->preview_overlay_only = false;
 
   r_ctx->include_objects = include_objects;
 }
@@ -274,6 +279,7 @@ static DupliObject *make_dupli(const DupliContext *ctx,
   dob->type = ctx->gen == nullptr ? 0 : ctx->dupli_gen_type_stack->last();
   dob->preview_base_geometry = ctx->preview_base_geometry;
   dob->preview_instance_index = ctx->preview_instance_index;
+  dob->preview_overlay_only = ctx->preview_overlay_only;
   dob->level = ctx->level;
 
   /* Set persistent id, which is an array with a persistent index for each level
@@ -1828,7 +1834,7 @@ void object_duplilist(Depsgraph *depsgraph,
   }
 }
 
-void object_duplilist_preview(Depsgraph *depsgraph,
+bool object_duplilist_preview(Depsgraph *depsgraph,
                               Object *ob_eval,
                               const ViewerPath *viewer_path,
                               DupliList &r_duplilist)
@@ -1848,6 +1854,7 @@ void object_duplilist_preview(Depsgraph *depsgraph,
 
   Object *ob_orig = DEG_get_original(ob_eval);
 
+  bool replaces_object = false;
   for (ModifierData &md_orig : ob_orig->modifiers) {
     if (md_orig.type != eModifierType_Nodes) {
       continue;
@@ -1860,15 +1867,24 @@ void object_duplilist_preview(Depsgraph *depsgraph,
             nodes::eval_log::NodesEvalLog::find_viewer_node_log_for_path(*viewer_path))
     {
       if (const bke::GeometrySet *viewer_geometry = viewer_log->main_geometry()) {
+        replaces_object = true;
         ctx.preview_base_geometry = &*viewer_geometry;
+        ctx.preview_overlay_only = false;
         make_duplis_geometry_set_impl(&ctx,
                                       *viewer_geometry,
                                       ob_eval->object_to_world().ptr(),
                                       true,
                                       ob_eval->type == OB_CURVES);
       }
+      if (const bke::GeometrySet *overlay_geometry = viewer_log->overlay_geometry()) {
+        ctx.preview_base_geometry = &*overlay_geometry;
+        ctx.preview_overlay_only = true;
+        make_duplis_geometry_set_impl(
+            &ctx, *overlay_geometry, ob_eval->object_to_world().ptr(), true, false);
+      }
     }
   }
+  return replaces_object;
 }
 
 bke::Instances object_duplilist_legacy_instances(Depsgraph &depsgraph, Object &ob)

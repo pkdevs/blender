@@ -506,6 +506,7 @@ void Instance::begin_sync()
     layer.relations.begin_sync(resources, state);
     layer.speakers.begin_sync(resources, state);
     layer.sculpts.begin_sync(resources, state);
+    layer.viewer_flat_geometry.begin_sync(resources, state);
     layer.wireframe.begin_sync(resources, state);
   };
   begin_sync_layer(regular);
@@ -518,6 +519,13 @@ void Instance::begin_sync()
 
 void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
 {
+  if (ob_ref.preview_overlay_only()) {
+    /* Geometry from viewer node overlays is only drawn by a dedicated overlay. */
+    OverlayLayer &layer = object_is_in_front(ob_ref.object, state) ? infront : regular;
+    layer.viewer_flat_geometry.object_sync(manager, ob_ref, resources, state);
+    return;
+  }
+
   const bool in_object_mode = ob_ref.object->mode == OB_MODE_OBJECT;
   const bool in_edit_mode = ob_ref.object->mode == OB_MODE_EDIT;
   const bool in_paint_mode = object_is_paint_mode(ob_ref.object);
@@ -787,6 +795,7 @@ void Instance::draw(Manager &manager)
       layer.particles.pre_draw(manager, view);
       layer.pointclouds.pre_draw(manager, view);
       layer.prepass.pre_draw(manager, view);
+      layer.viewer_flat_geometry.pre_draw(manager, view);
       layer.wireframe.pre_draw(manager, view);
     };
 
@@ -871,6 +880,7 @@ void Instance::draw_v3d(Manager &manager, View &view)
   };
 
   auto draw_line = [&](OverlayLayer &layer, Framebuffer &framebuffer) {
+    layer.viewer_flat_geometry.draw_line(framebuffer, manager, view);
     layer.bounds.draw_line(framebuffer, manager, view);
     layer.wireframe.draw_line(framebuffer, manager, view);
     layer.cameras.draw_line(framebuffer, manager, view);

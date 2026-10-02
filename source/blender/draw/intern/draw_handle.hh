@@ -397,6 +397,18 @@ class ObjectRef {
     return nullptr;
   }
 
+  /**
+   * The object is a viewer node preview that should only be drawn by the overlay engine (e.g.
+   * from a #GeometryOverlayBundle), not by render engines.
+   */
+  bool preview_overlay_only() const
+  {
+    if (dupli_object_) {
+      return dupli_object_->preview_overlay_only;
+    }
+    return false;
+  }
+
   bool parent_is_in_edit_paint_mode(const Object *active_object,
                                     eObjectMode ob_mode,
                                     eContextObjectMode ctx_mode) const

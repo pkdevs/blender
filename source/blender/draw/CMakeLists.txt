@@ -287,6 +287,7 @@ set(SRC
   engines/overlay/overlay_sculpt.hh
   engines/overlay/overlay_speaker.hh
   engines/overlay/overlay_text.hh
+  engines/overlay/overlay_viewer_flat_geometry.hh
   engines/overlay/overlay_wireframe.hh
   engines/overlay/overlay_xray_fade.hh
   engines/select/select_defines.hh
@@ -717,6 +718,8 @@ set(GLSL_SRC
   engines/overlay/shaders/overlay_viewer_attribute_frag.glsl
   engines/overlay/shaders/overlay_viewer_attribute_mesh_vert.glsl
   engines/overlay/shaders/overlay_viewer_attribute_pointcloud_vert.glsl
+  engines/overlay/shaders/overlay_viewer_flat_geometry_edges_frag.glsl
+  engines/overlay/shaders/overlay_viewer_flat_geometry_edges_vert.glsl
   engines/overlay/shaders/overlay_volume_gridlines_vert.glsl
   engines/overlay/shaders/overlay_volume_velocity_vert.glsl
   engines/overlay/shaders/overlay_wireframe_frag.glsl

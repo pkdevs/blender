@@ -11,6 +11,7 @@
 #include "NOD_geometry_nodes_closure.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
 #include "NOD_geometry_nodes_list.hh"
+#include "NOD_geometry_nodes_viewer_bundles.hh"
 
 #include "BLI_listbase.hh"
 #include "BLI_stack.hh"
@@ -23,14 +24,17 @@
 #include "BKE_anonymous_attribute_id.hh"
 #include "BKE_compute_context_cache.hh"
 #include "BKE_compute_contexts.hh"
+#include "BKE_curve_to_mesh.hh"
 #include "BKE_curves.hh"
 #include "BKE_geometry_nodes_gizmos_transforms.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
+#include "BKE_mesh.hh"
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_socket_value.hh"
+#include "BKE_pointcloud.hh"
 #include "BKE_report.hh"
 #include "BKE_scene_runtime.hh"
 #include "BKE_type_conversions.hh"
@@ -45,6 +49,9 @@
 #include "ED_geometry.hh"
 #include "ED_node.hh"
 #include "ED_viewer_path.hh"
+
+#include "GEO_foreach_geometry.hh"
+#include "GEO_join_geometries.hh"
 
 #include "MOD_nodes.hh"
 
@@ -433,6 +440,117 @@ const bke::GeometrySet *ViewerNodeLog::main_geometry() const
     }
   });
   return main_geometry_cache_ ? &*main_geometry_cache_ : nullptr;
+}
+
+namespace {
+struct GeometryOverlay {
+  bke::GeometrySet geometry;
+  float edge_width;
+};
+}  // namespace
+
+/** Add the color attribute with the default color if it doesn't exist yet. */
+static void ensure_overlay_color(bke::MutableAttributeAccessor attributes)
+{
+  using viewer_bundles::GeometryOverlayBundle;
+  if (attributes.contains(GeometryOverlayBundle::color_attribute_name)) {
+    return;
+  }
+  const int points_num = attributes.domain_size(bke::AttrDomain::Point);
+  attributes.add<ColorGeometry4f>(GeometryOverlayBundle::color_attribute_name,
+                                  bke::AttrDomain::Point,
+                                  bke::AttributeInitVArray(VArray<ColorGeometry4f>::from_single(
+                                      GeometryOverlayBundle::default_color, points_num)));
+}
+static void prepare_overlay_geometry(bke::GeometrySet &geometry)
+{
+  geometry::foreach_real_geometry(geometry, [](bke::GeometrySet &geometry) {
+    if (geometry.has_mesh()) {
+      ensure_overlay_color(geometry.get_mesh_for_write()->attributes_for_write());
+    }
+    if (geometry.has_pointcloud()) {
+      ensure_overlay_color(geometry.get_pointcloud_for_write()->attributes_for_write());
+    }
+    if (const Curves *curves_id = geometry.get_curves()) {
+      /* Convert curves to loose edges as a simple way to share the mesh shader without the
+       * complexity of GPU evaluated curves, etc. That could be supported eventually though. */
+      Mesh *wire_mesh = bke::curve_to_wire_mesh(curves_id->geometry.wrap());
+      ensure_overlay_color(wire_mesh->attributes_for_write());
+      if (geometry.has_mesh()) {
+        bke::GeometrySet mesh_geometry = geometry;
+        mesh_geometry.keep_only({bke::GeometryComponent::Type::Mesh});
+        bke::GeometrySet joined = geometry::join_geometries(
+            {std::move(mesh_geometry), bke::GeometrySet::from_mesh(wire_mesh)}, {});
+        geometry.replace_mesh(joined.get_component_for_write<bke::MeshComponent>().release());
+      }
+      else {
+        geometry.replace_mesh(wire_mesh);
+      }
+    }
+    geometry.keep_only(
+        {bke::GeometryComponent::Type::Mesh, bke::GeometryComponent::Type::PointCloud});
+  });
+}
+
+static void gather_geometry_overlays(const Bundle &bundle, Vector<GeometryOverlay> &r_overlays)
+{
+  using viewer_bundles::GeometryOverlayBundle;
+  if (bundle.type() == GeometryOverlayBundle::name) {
+    if (const bke::GeometrySet *geometry = bundle.lookup_ptr<bke::GeometrySet>(
+            *BundleKey::from_str("geometry")))
+    {
+      bke::GeometrySet overlay_geometry = *geometry;
+      prepare_overlay_geometry(overlay_geometry);
+      const float edge_width = bundle.lookup<float>(*BundleKey::from_str("edge_width"))
+                                   .value_or(GeometryOverlayBundle::default_edge_width);
+      r_overlays.append({std::move(overlay_geometry), edge_width});
+    }
+    return;
+  }
+  for (const Bundle::BundleItemMap::Item &item : bundle.items()) {
+    if (const BundlePtr *child = item.value.as_pointer<BundlePtr>()) {
+      if (*child) {
+        gather_geometry_overlays(**child, r_overlays);
+      }
+    }
+  }
+}
+
+const bke::GeometrySet *ViewerNodeLog::overlay_geometry() const
+{
+  overlay_geometry_cache_mutex_.ensure([&]() {
+    Vector<GeometryOverlay> overlays;
+    for (const Item &item : this->items) {
+      if (const BundlePtr *bundle = item.value.get_if<BundlePtr>()) {
+        if (*bundle) {
+          gather_geometry_overlays(**bundle, overlays);
+        }
+      }
+    }
+    if (overlays.is_empty()) {
+      return;
+    }
+    /* Always use a separate instance for each bundle, so that the overlay engine can retrieve the
+     * bundle's settings from instance attributes with #DupliObject::preview_instance_index. */
+    bke::Instances *instances = new bke::Instances();
+    instances->resize(overlays.size());
+    MutableSpan<int> handles = instances->reference_handles_for_write();
+    instances->transforms_for_write().fill(float4x4::identity());
+    for (const int i : overlays.index_range()) {
+      handles[i] = instances->add_new_reference(
+          bke::InstanceReference(std::move(overlays[i].geometry)));
+    }
+    bke::MutableAttributeAccessor attributes = instances->attributes_for_write();
+    bke::SpanAttributeWriter edge_widths = attributes.lookup_or_add_for_write_only_span<float>(
+        viewer_bundles::GeometryOverlayBundle::edge_width_instance_attribute_name,
+        bke::AttrDomain::Instance);
+    for (const int i : overlays.index_range()) {
+      edge_widths.span[i] = overlays[i].edge_width;
+    }
+    edge_widths.finish();
+    overlay_geometry_cache_ = bke::GeometrySet::from_instances(instances);
+  });
+  return overlay_geometry_cache_ ? &*overlay_geometry_cache_ : nullptr;
 }
 
 void NodeTreeLog::ensure_node_warnings(const NodesModifierData &nmd)

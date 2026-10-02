@@ -845,6 +845,23 @@ gpu::Batch *DRW_mesh_batch_cache_get_surface_viewer_attribute(Mesh &mesh)
   return cache.batch.surface_viewer_attribute;
 }
 
+gpu::Batch *DRW_mesh_batch_cache_get_viewer_color_surface(Mesh &mesh)
+{
+  MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
+  cache.batch_requested |= MBC_VIEWER_COLOR_SURFACE;
+  return DRW_batch_request(&cache.batch.viewer_color_surface);
+}
+
+gpu::Batch *DRW_mesh_batch_cache_get_viewer_color_loose_edges(Mesh &mesh)
+{
+  MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
+  if (cache.no_loose_wire) {
+    return nullptr;
+  }
+  cache.batch_requested |= MBC_VIEWER_COLOR_LOOSE_EDGES;
+  return DRW_batch_request(&cache.batch.viewer_color_loose_edges);
+}
+
 /** \} */
 
 /* ---------------------------------------------------------------------- */
@@ -1312,6 +1329,20 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                          list,
                          IBOType::Tris,
                          {VBOType::Position, VBOType::AttrViewer}});
+    }
+    if (batches_to_create & MBC_VIEWER_COLOR_SURFACE) {
+      batch_info.append({*cache.batch.viewer_color_surface,
+                         GPU_PRIM_TRIS,
+                         list,
+                         IBOType::Tris,
+                         {VBOType::Position, VBOType::ViewerColor}});
+    }
+    if (batches_to_create & MBC_VIEWER_COLOR_LOOSE_EDGES) {
+      batch_info.append({*cache.batch.viewer_color_loose_edges,
+                         GPU_PRIM_LINES,
+                         list,
+                         IBOType::LinesLoose,
+                         {VBOType::Position, VBOType::ViewerColor}});
     }
     if (batches_to_create & MBC_ALL_VERTS) {
       batch_info.append(

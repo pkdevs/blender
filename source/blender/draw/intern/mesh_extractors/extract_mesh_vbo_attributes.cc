@@ -6,12 +6,15 @@
  * \ingroup draw
  */
 
+#include "BLI_array_utils.hh"
 #include "BLI_string.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_attribute_legacy_convert.hh"
 #include "BKE_attribute_math.hh"
 #include "BKE_mesh.hh"
+
+#include "NOD_geometry_nodes_viewer_bundles.hh"
 
 #include "attribute_convert.hh"
 #include "draw_attributes.hh"
@@ -73,8 +76,31 @@ static int domain_size(const MeshRenderData &mr, const bke::AttrDomain domain)
 
 /**
  * Copy values from vertices, edges, or faces to face corners on the GPU.
- * \param src: A value for every element in \a domain, with the given format.
+ * \param src: A value for every element in \a domain.
+ * \param dst: A device-only buffer with the same format as \a src and a value for every face
+ * corner, optionally followed by values for loose geometry.
  */
+static void copy_to_corners_gpu(const MeshRenderData &mr,
+                                MeshBufferCache &cache,
+                                const bke::AttrDomain domain,
+                                gpu::VertBuf &src,
+                                gpu::VertBuf &dst)
+{
+  switch (domain) {
+    case bke::AttrDomain::Point:
+      gather_vert_to_corner_gpu(mr, cache, src, dst);
+      break;
+    case bke::AttrDomain::Edge:
+      gather_edge_to_corner_gpu(mr, cache, src, dst);
+      break;
+    case bke::AttrDomain::Face:
+      scatter_face_to_corner_gpu(mr, cache, src, dst);
+      break;
+    default:
+      BLI_assert_unreachable();
+  }
+}
+
 static gpu::VertBufPtr copy_to_corners_gpu(const MeshRenderData &mr,
                                            MeshBufferCache &cache,
                                            const bke::AttrDomain domain,
@@ -82,19 +108,7 @@ static gpu::VertBufPtr copy_to_corners_gpu(const MeshRenderData &mr,
                                            const GPUVertFormat &format)
 {
   gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_on_device(format, mr.corners_num));
-  switch (domain) {
-    case bke::AttrDomain::Point:
-      gather_vert_to_corner_gpu(mr, cache, src, *vbo);
-      break;
-    case bke::AttrDomain::Edge:
-      gather_edge_to_corner_gpu(mr, cache, src, *vbo);
-      break;
-    case bke::AttrDomain::Face:
-      scatter_face_to_corner_gpu(mr, cache, src, *vbo);
-      break;
-    default:
-      BLI_assert_unreachable();
-  }
+  copy_to_corners_gpu(mr, cache, domain, src, *vbo);
   return vbo;
 }
 
@@ -273,6 +287,81 @@ gpu::VertBufPtr extract_attr_viewer(const MeshRenderData &mr)
   const bke::AttributeReader attribute = attributes.lookup_or_default<ColorGeometry4f>(
       attr_name, bke::AttrDomain::Corner, {1.0f, 0.0f, 1.0f, 1.0f});
   attribute.varray.materialize(vbo_data);
+  return vbo;
+}
+
+static void extract_viewer_color_loose(const MeshRenderData &mr,
+                                       const bke::AttributeAccessor attributes,
+                                       const StringRef name,
+                                       const ColorGeometry4f &default_color,
+                                       MutableSpan<ColorGeometry4f> loose_data)
+{
+  if (loose_data.is_empty()) {
+    return;
+  }
+  MutableSpan loose_edge_data = loose_data.take_front(mr.loose_edges.size() * 2);
+  MutableSpan loose_vert_data = loose_data.take_back(mr.loose_verts.size());
+
+  /* Fill loose vertices and loose edges from their corresponding domain. */
+  const VArraySpan vert_colors = *attributes.lookup_or_default<ColorGeometry4f>(
+      name, bke::AttrDomain::Point, default_color);
+  const std::optional<bke::AttributeMetaData> meta_data = attributes.lookup_meta_data(name);
+  if (meta_data && meta_data->domain == bke::AttrDomain::Edge) {
+    const VArraySpan edge_colors = *attributes.lookup<ColorGeometry4f>(name,
+                                                                       bke::AttrDomain::Edge);
+    mr.loose_edges.foreach_index(
+        [&](const int i, const int pos) {
+          loose_edge_data[pos * 2 + 0] = edge_colors[i];
+          loose_edge_data[pos * 2 + 1] = edge_colors[i];
+        },
+        exec_mode::grain_size(4096));
+  }
+  else {
+    extract_mesh_loose_edge_data(vert_colors, mr.edges, mr.loose_edges, loose_edge_data);
+  }
+  array_utils::gather(vert_colors, mr.loose_verts, loose_vert_data);
+}
+
+gpu::VertBufPtr extract_viewer_color(const MeshRenderData &mr, MeshBufferCache &cache)
+{
+  using nodes::viewer_bundles::GeometryOverlayBundle;
+  static const GPUVertFormat format = GPU_vertformat_from_attribute(
+      "attribute_value", gpu::VertAttrType::SFLOAT_32_32_32_32);
+  const ColorGeometry4f default_color = GeometryOverlayBundle::default_color;
+  const StringRef name = GeometryOverlayBundle::color_attribute_name;
+  const int vbo_size = mr.corners_num + mr.loose_indices_num;
+
+  if (mr.extract_type != MeshExtractType::Mesh) {
+    gpu::VertBufPtr vbo = vbo_create(format, vbo_size);
+    vbo->data<ColorGeometry4f>().fill(default_color);
+    return vbo;
+  }
+
+  const bke::AttributeAccessor attributes = mr.mesh->attributes();
+  const bke::AttributeReader attr = attributes.lookup<ColorGeometry4f>(name);
+
+  if (attr && !attr.varray.is_single() && attr.domain != bke::AttrDomain::Corner) {
+    /* Upload values for the attribute's domain and copy them to face corners on the GPU. */
+    gpu::VertBufPtr src = vbo_create(format, domain_size(mr, attr.domain));
+    attr.varray.materialize(src->data<ColorGeometry4f>());
+    gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_on_device(format, vbo_size));
+    copy_to_corners_gpu(mr, cache, attr.domain, *src, *vbo);
+
+    Array<ColorGeometry4f> loose_data(mr.loose_indices_num);
+    extract_viewer_color_loose(mr, attributes, name, default_color, loose_data);
+    loose_data_upload(mr, loose_data.as_span(), *vbo);
+    return vbo;
+  }
+
+  gpu::VertBufPtr vbo = vbo_create(format, vbo_size);
+  MutableSpan vbo_data = vbo->data<ColorGeometry4f>();
+  MutableSpan corner_data = vbo_data.take_front(mr.corners_num);
+  if (!attr) {
+    corner_data.fill(default_color);
+  }
+  attr.varray.materialize(corner_data);
+  extract_viewer_color_loose(
+      mr, attributes, name, default_color, vbo_data.drop_front(mr.corners_num));
   return vbo;
 }
 
