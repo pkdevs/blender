@@ -85,7 +85,7 @@ void surf_depth([[resource_table]] KernelGlobals &kg,
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
 
-    float threshold = hashed_transparency::alpha_threshold<hashed_transparency::HashType::PCG>(
+    float threshold = hashed_transparency::alpha_threshold(
         uni.pipeline_buf.alpha_hash_scale, noise_offset, sd.P);
 
     float transparency = average(sd.transmittance);

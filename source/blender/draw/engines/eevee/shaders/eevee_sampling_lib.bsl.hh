@@ -223,18 +223,6 @@ template float2 hammersley_2d<float>(float i, float sample_count);
 template float2 hammersley_2d<uint>(uint i, uint sample_count);
 template float2 hammersley_2d<int>(int i, int sample_count);
 
-/* 1D fitted sine hash function on 2D input [wymn2017]. */
-float sine(float2 a)
-{
-  return fract(1e4f * sin(17.0f * a.x + 0.1f * a.y) * (0.1f + abs(sin(13.0f * a.y + a.x))));
-}
-
-/* 1D nested variant of the above [wymn2017]. */
-float sine(float3 a)
-{
-  return sine(float2(sine(a.xy), a.z));
-}
-
 }  // namespace random
 
 /* Not random but still useful. sample_count should be an even. */
