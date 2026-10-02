@@ -349,6 +349,21 @@ class TOPBAR_MT_file_project(Menu):
         layout.operator("project.open", icon='FILE_FOLDER')
         if bpy.data.project is not None:
             layout.operator("project.close")
+        layout.menu("TOPBAR_MT_file_open_recent_project")
+
+
+class TOPBAR_MT_file_open_recent_project(Menu):
+    bl_label = "Open Recent Project"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator_context = 'INVOKE_DEFAULT'
+
+        if layout.template_recent_projects(rows=20):
+            layout.separator()
+            layout.operator("wm.clear_recent_projects", text="Clear Recent Projects List...", icon='TRASH')
+        else:
+            layout.label(text="No Recent Projects")
 
 
 # Include technical operators here which would otherwise have no way for users to access.
@@ -908,6 +923,7 @@ classes = (
     TOPBAR_MT_file_recover,
     TOPBAR_MT_file_defaults,
     TOPBAR_MT_file_project,
+    TOPBAR_MT_file_open_recent_project,
     TOPBAR_MT_templates_more,
     TOPBAR_MT_file_import,
     TOPBAR_MT_file_export,

@@ -433,4 +433,16 @@ std::string BKE_blender_project_path_make_relative(StringRef path,
                                                    bool path_is_template,
                                                    const bke::BlenderProject &project);
 
+struct RecentProject {
+  std::string path;
+  std::string name;
+};
+
+/** Recently opened projects, most recent first. */
+Vector<RecentProject> BKE_blender_project_recent_get();
+/** Move the active project to the top of the recent projects. */
+void BKE_blender_project_recent_update(const Main *bmain);
+/** Clear the recent projects, or only the ones not found on disk. */
+void BKE_blender_project_recent_clear(bool only_missing);
+
 }  // namespace blender
