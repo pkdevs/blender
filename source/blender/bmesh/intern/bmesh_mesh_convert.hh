@@ -94,32 +94,10 @@ void BM_mesh_bm_to_me(struct Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMe
  */
 void BM_mesh_bm_to_me_for_eval(BMesh &bm, Mesh &mesh, const CustomData_MeshMasks *cd_mask_extra);
 
-/** Controls for which attributes are copied to the #Mesh. */
-enum class BMeshToMeshAttrs {
-  None = 0,
-  /** ".hide_vert", ".hide_edge" and ".hide_poly". */
-  Hide = 1 << 0,
-  /** ".select_vert", ".select_edge", ".select_poly" and the UV selection attributes. */
-  Selection = 1 << 1,
-  /** "sharp_edge", "sharp_face", "uv_seam" and "material_index". */
-  Other = 1 << 2,
-  /** The generic attributes stored in the #BMesh custom data layers. */
-  Generic = 1 << 3,
-  All = Hide | Selection | Other | Generic,
-};
-ENUM_OPERATORS(BMeshToMeshAttrs)
-
 /**
- * A version of #BM_mesh_bm_to_me_for_eval but copying data layers and Mesh attributes is optional.
- * It also allows shape-keys but don't re-assigns shape-key indices.
- *
- * \param mask: Custom data masks to control which layers are copied.
- * If nullptr, no layer data is copied.
- * \param attrs_to_add: Which mesh attributes to add during the conversion.
+ * A version of #BM_mesh_bm_to_me_for_eval but only copies positions, topology, and the selection
+ * and visibility attributes (not including UV selection).
  */
-void BM_mesh_bm_to_me_compact(BMesh &bm,
-                              Mesh &mesh,
-                              const CustomData_MeshMasks *mask,
-                              BMeshToMeshAttrs attrs_to_add);
+void BM_mesh_bm_to_me_only_select_and_hide(BMesh &bm, Mesh &mesh);
 
 }  // namespace blender

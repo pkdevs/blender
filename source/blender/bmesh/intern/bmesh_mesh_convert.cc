@@ -1968,16 +1968,11 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
   }
 }
 
-void BM_mesh_bm_to_me_compact(BMesh &bm,
-                              Mesh &mesh,
-                              const CustomData_MeshMasks *mask,
-                              const BMeshToMeshAttrs attrs_to_add)
+static void mesh_bm_to_me_compact(BMesh &bm,
+                                  Mesh &mesh,
+                                  const CustomData_MeshMasks *mask,
+                                  const bool only_select_and_hide)
 {
-  const bool add_hide = bool(attrs_to_add & BMeshToMeshAttrs::Hide);
-  const bool add_selection = bool(attrs_to_add & BMeshToMeshAttrs::Selection);
-  const bool add_other = bool(attrs_to_add & BMeshToMeshAttrs::Other);
-  const bool add_generic = bool(attrs_to_add & BMeshToMeshAttrs::Generic);
-
   /* NOTE: The function is called from multiple threads with the same input BMesh and different
    * mesh objects. */
 
@@ -1994,7 +1989,8 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
   mesh.faces_num = bm.totface;
 
   /* Will have been cleared when clearing geometry. */
-  const bool need_uv_select = add_selection && CustomData_has_layer(&bm.ldata, CD_PROP_FLOAT2);
+  const bool need_uv_select = !only_select_and_hide &&
+                              CustomData_has_layer(&bm.ldata, CD_PROP_FLOAT2);
   if (need_uv_select && bm.uv_select_sync_valid) {
     mesh.flag |= ME_FLAG_UV_SELECT_SYNC_VALID;
   }
@@ -2050,18 +2046,13 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
       });
   bm.elem_index_dirty &= ~(BM_VERT | BM_EDGE | BM_FACE | BM_LOOP);
 
-  need_select_vert &= add_selection;
-  need_select_edge &= add_selection;
-  need_select_poly &= add_selection;
-  need_hide_vert &= add_hide;
-  need_hide_edge &= add_hide;
-  need_hide_poly &= add_hide;
-  need_material_index &= add_other;
-  need_sharp_edge &= add_other;
-  need_sharp_face &= add_other;
-  need_uv_seams &= add_other;
-
-  if (add_generic) {
+  if (only_select_and_hide) {
+    need_material_index = false;
+    need_sharp_edge = false;
+    need_sharp_face = false;
+    need_uv_seams = false;
+  }
+  else {
     const CustomData_MeshMasks &mask_final = mask ? *mask : CD_MASK_DERIVEDMESH;
 
     const CustomData &bm_data = get_bm_custom_data(bm, AttrDomain::Corner);
@@ -2074,16 +2065,16 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
     add_bm_cd_to_mesh(bm, bke::AttrDomain::Edge, mask_final.emask, mesh);
     add_bm_cd_to_mesh(bm, bke::AttrDomain::Face, mask_final.pmask, mesh);
     add_bm_cd_to_mesh(bm, bke::AttrDomain::Corner, mask_final.lmask, mesh);
-  }
 
-  if (const char *name = CustomData_get_active_layer_name(&bm.ldata, CD_PROP_FLOAT2)) {
-    MEM_SAFE_DELETE(mesh.active_uv_map_attribute);
-    mesh.active_uv_map_attribute = BLI_strdup(name);
-  }
+    if (const char *name = CustomData_get_active_layer_name(&bm.ldata, CD_PROP_FLOAT2)) {
+      MEM_SAFE_DELETE(mesh.active_uv_map_attribute);
+      mesh.active_uv_map_attribute = BLI_strdup(name);
+    }
 
-  if (const char *name = CustomData_get_render_layer_name(&bm.ldata, CD_PROP_FLOAT2)) {
-    MEM_SAFE_DELETE(mesh.default_uv_map_attribute);
-    mesh.default_uv_map_attribute = BLI_strdup(name);
+    if (const char *name = CustomData_get_render_layer_name(&bm.ldata, CD_PROP_FLOAT2)) {
+      MEM_SAFE_DELETE(mesh.default_uv_map_attribute);
+      mesh.default_uv_map_attribute = BLI_strdup(name);
+    }
   }
 
   /* Add optional mesh attributes before parallel iteration. */
@@ -2242,7 +2233,12 @@ void BM_mesh_bm_to_me_for_eval(BMesh &bm, Mesh &mesh, const CustomData_MeshMasks
   }
   mask.vmask &= ~CD_MASK_SHAPEKEY;
 
-  BM_mesh_bm_to_me_compact(bm, mesh, &mask, BMeshToMeshAttrs::All);
+  mesh_bm_to_me_compact(bm, mesh, &mask, false);
+}
+
+void BM_mesh_bm_to_me_only_select_and_hide(BMesh &bm, Mesh &mesh)
+{
+  mesh_bm_to_me_compact(bm, mesh, nullptr, true);
 }
 
 }  // namespace blender
