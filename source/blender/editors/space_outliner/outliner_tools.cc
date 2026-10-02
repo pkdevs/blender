@@ -4120,6 +4120,123 @@ static bool sort_selected_alphabetically_poll(bContext *C)
   return true;
 }
 
+/**
+ * Sort the selected objects and collections among the children of \a parent_te alphabetically,
+ * keeping the positions occupied by the unselected ones. Like #outliner_sort_custom, all children
+ * are first given sequential sort indices in their display order, objects and collections sharing
+ * the same index space.
+ */
+static bool sort_selected_children_alphabetically(Main *bmain,
+                                                  Scene *scene,
+                                                  TreeElement *parent_te,
+                                                  const Set<const TreeElement *> &selected_tes)
+{
+  const bool is_parented_object = parent_te->idcode == ID_OB;
+
+  Collection *collection = nullptr;
+  for (TreeElement *te_parent = parent_te; te_parent != nullptr && collection == nullptr;
+       te_parent = te_parent->parent)
+  {
+    collection = outliner_collection_from_tree_element(te_parent);
+  }
+  if (collection == nullptr) {
+    return false;
+  }
+
+  struct SelectedItem {
+    int *sort_index;
+    const char *name;
+  };
+
+  Map<Collection *, CollectionChild *> collection_child_map;
+  for (CollectionChild &cc : collection->children) {
+    collection_child_map.add(cc.collection, &cc);
+  }
+
+  Vector<int *> sort_indices;
+  Vector<SelectedItem> selected_items;
+  Vector<int> selected_indices;
+  Set<Collection *> owner_collections;
+  for (TreeElement &te : parent_te->subtree) {
+    int *sort_index = nullptr;
+    const char *name = nullptr;
+    if (te.idcode == ID_OB) {
+      Object *ob = id_cast<Object *>(TREESTORE(&te)->id);
+      Collection *owner = collection;
+      CollectionObject *cob = BKE_collection_object_find_in(*collection, *ob);
+      if (cob == nullptr) {
+        owner = BKE_collection_object_find(bmain, scene, nullptr, ob);
+        if (owner != nullptr) {
+          cob = BKE_collection_object_find_in(*owner, *ob);
+        }
+      }
+      if (cob == nullptr) {
+        continue;
+      }
+      sort_index = is_parented_object ? &cob->parented_sort_index : &cob->sort_index;
+      name = ob->id.name + 2;
+      owner_collections.add(owner);
+    }
+    else if (Collection *child_col = outliner_collection_from_tree_element(&te)) {
+      CollectionChild *cc = collection_child_map.lookup_default(child_col, nullptr);
+      if (cc == nullptr) {
+        continue;
+      }
+      sort_index = &cc->sort_index;
+      name = child_col->id.name + 2;
+      owner_collections.add(collection);
+    }
+    else {
+      continue;
+    }
+
+    if (selected_tes.contains(&te)) {
+      selected_items.append({sort_index, name});
+      selected_indices.append(int(sort_indices.size()));
+    }
+    sort_indices.append(sort_index);
+  }
+
+  if (selected_items.size() <= 1) {
+    return false;
+  }
+  for (Collection *owner : owner_collections) {
+    if (!ID_IS_EDITABLE(owner) || ID_IS_OVERRIDE_LIBRARY(owner)) {
+      return false;
+    }
+  }
+
+  for (const int i : sort_indices.index_range()) {
+    *sort_indices[i] = i;
+  }
+
+  std::ranges::stable_sort(selected_items, [](const SelectedItem &a, const SelectedItem &b) {
+    return BLI_strcasecmp_natural(a.name, b.name) < 0;
+  });
+  for (const int i : selected_items.index_range()) {
+    *selected_items[i].sort_index = selected_indices[i];
+  }
+
+  for (Collection *owner : owner_collections) {
+    DEG_id_tag_update(&owner->id, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_HIERARCHY);
+  }
+  return true;
+}
+
+static TreeTraversalAction collect_selected_sortable_elements(TreeElement *te, void *customdata)
+{
+  Vector<TreeElement *> *elements = static_cast<Vector<TreeElement *> *>(customdata);
+  TreeStoreElem *tselem = TREESTORE(te);
+
+  if (outliner_is_collection_tree_element(te) ||
+      (tselem->type == TSE_SOME_ID && tselem->id != nullptr && tselem->id->id_type() == ID_OB))
+  {
+    elements->append(te);
+    return TRAVERSE_CONTINUE;
+  }
+  return TRAVERSE_SKIP_CHILDS;
+}
+
 static wmOperatorStatus sort_selected_alphabetically_exec(bContext *C, wmOperator * /*op*/)
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -4128,90 +4245,26 @@ static wmOperatorStatus sort_selected_alphabetically_exec(bContext *C, wmOperato
   }
 
   Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
 
-  IDsSelectedData data = {{nullptr}};
+  Vector<TreeElement *> selected_tes;
   outliner_tree_traverse(space_outliner,
                          &space_outliner->runtime->tree,
                          0,
                          TSE_SELECTED,
-                         outliner_collect_selected_objects,
-                         &data);
+                         collect_selected_sortable_elements,
+                         &selected_tes);
 
-  if (BLI_listbase_is_empty(&data.selected_array)) {
-    return OPERATOR_CANCELLED;
-  }
-
-  Map<Collection *, Vector<TreeElement *>> selected_by_collection;
-  for (LinkData &link : data.selected_array) {
-    TreeElement *te = static_cast<TreeElement *>(link.data);
-    Collection *coll = outliner_collection_from_tree_element(te->parent);
-    if (coll != nullptr && ID_IS_EDITABLE(coll) && !ID_IS_OVERRIDE_LIBRARY(coll)) {
-      selected_by_collection.lookup_or_add_default(coll).append(te);
+  Map<TreeElement *, Set<const TreeElement *>> selected_by_parent;
+  for (TreeElement *te : selected_tes) {
+    if (te->parent != nullptr) {
+      selected_by_parent.lookup_or_add_default(te->parent).add(te);
     }
-  }
-
-  data.selected_array.free_no_destruct();
-
-  if (selected_by_collection.is_empty()) {
-    return OPERATOR_CANCELLED;
   }
 
   bool changed = false;
-
-  for (auto item : selected_by_collection.items()) {
-    Collection *coll = item.key;
-    const Vector<TreeElement *> &selected_te_vec = item.value;
-
-    if (selected_te_vec.size() <= 1) {
-      continue;
-    }
-
-    Vector<CollectionObject *> cobs;
-    for (CollectionObject &cob : coll->gobject) {
-      cobs.append(&cob);
-    }
-
-    std::ranges::sort(cobs, [](const CollectionObject *a, const CollectionObject *b) {
-      const int sort_a = a->sort_index >= 0 ? a->sort_index : INT_MAX;
-      const int sort_b = b->sort_index >= 0 ? b->sort_index : INT_MAX;
-      if (sort_a != sort_b) {
-        return sort_a < sort_b;
-      }
-      return BLI_strcasecmp_natural(a->ob->id.name + 2, b->ob->id.name + 2) < 0;
-    });
-
-    for (const int i : cobs.index_range()) {
-      cobs[i]->sort_index = i;
-    }
-
-    Set<const Object *> selected_obs;
-    for (TreeElement *te : selected_te_vec) {
-      selected_obs.add(reinterpret_cast<const Object *>(TREESTORE(te)->id));
-    }
-
-    Vector<CollectionObject *> selected_cobs;
-    Vector<int> selected_indices;
-    for (CollectionObject *cob : cobs) {
-      if (selected_obs.contains(cob->ob)) {
-        selected_cobs.append(cob);
-        selected_indices.append(cob->sort_index);
-      }
-    }
-
-    if (selected_cobs.size() <= 1) {
-      continue;
-    }
-
-    std::ranges::sort(selected_cobs, [](const CollectionObject *a, const CollectionObject *b) {
-      return BLI_strcasecmp_natural(a->ob->id.name + 2, b->ob->id.name + 2) < 0;
-    });
-
-    for (const int i : selected_cobs.index_range()) {
-      selected_cobs[i]->sort_index = selected_indices[i];
-    }
-
-    DEG_id_tag_update(&coll->id, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_HIERARCHY);
-    changed = true;
+  for (auto item : selected_by_parent.items()) {
+    changed |= sort_selected_children_alphabetically(bmain, scene, item.key, item.value);
   }
 
   if (changed) {
@@ -4229,7 +4282,7 @@ void OUTLINER_OT_sort_selected_alphabetically(wmOperatorType *ot)
 {
   ot->name = "Sort Selected Alphabetically";
   ot->idname = "OUTLINER_OT_sort_selected_alphabetically";
-  ot->description = "Sort the selected objects alphabetically";
+  ot->description = "Sort the selected objects and collections alphabetically";
 
   ot->exec = sort_selected_alphabetically_exec;
   ot->poll = sort_selected_alphabetically_poll;

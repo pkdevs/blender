@@ -278,6 +278,10 @@ class OUTLINER_MT_collection(Menu):
 
         layout.separator()
 
+        layout.operator("outliner.sort_selected_alphabetically", text="Sort Selected Alphabetically")
+
+        layout.separator()
+
         layout.operator("outliner.collection_instance", text="Instance to Scene")
 
         if space.display_mode != 'VIEW_LAYER':
