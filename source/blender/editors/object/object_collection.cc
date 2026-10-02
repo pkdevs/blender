@@ -673,8 +673,14 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
    * push an undo step. */
   wm->op_undo_depth++;
 
-  wmOperatorStatus op_result = WM_operator_name_call_ptr(
-      temp_C, ot, wm::OpCallContext::ExecDefault, &properties, nullptr);
+  /* Use own reportlist, which is then moved back into this operator's reports once import
+   * operation into the temp Main is done. */
+  ReportList reports;
+  BKE_reports_init(&reports, RPT_STORE | RPT_OP_HOLD | RPT_PRINT_HANDLED_BY_OWNER);
+  wmOperatorStatus op_result = WM_operator_type_call_ptr_with_reports(
+      temp_C, ot, wm::OpCallContext::ExecDefault, &properties, &reports, nullptr);
+  BKE_reports_move_to_reports(op->reports, &reports);
+  BKE_reports_free(&reports);
 
   wm->op_undo_depth--;
 
