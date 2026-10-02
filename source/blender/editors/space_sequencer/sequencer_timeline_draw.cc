@@ -775,7 +775,13 @@ static void draw_seq_text_get_source(const Strip *strip, char *r_source, size_t 
 
   /* Set source for the most common types. */
   switch (strip->type) {
-    case STRIP_TYPE_IMAGE:
+    case STRIP_TYPE_IMAGE_ID:
+    case STRIP_TYPE_IMAGE: {
+      if (strip->image != nullptr) {
+        BLI_strncpy_utf8(r_source, strip->image->id.name + 2, source_maxncpy);
+      }
+      break;
+    }
     case STRIP_TYPE_MOVIE: {
       BLI_path_join(
           r_source, source_maxncpy, strip->data->dirpath, strip->data->stripdata->filename);

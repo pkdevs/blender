@@ -1015,24 +1015,6 @@ static bool strip_foreach_path_callback(Strip *strip, void *user_data)
                                                    se->filename,
                                                    sizeof(se->filename));
     }
-    else if ((strip->type == STRIP_TYPE_IMAGE) && se) {
-      /* NOTE: An option not to loop over all strips could be useful? */
-      uint len = uint(strip->data->stripdata_num);
-      uint i;
-
-      if (bpath_data->flag & BKE_BPATH_FOREACH_PATH_SKIP_MULTIFILE) {
-        /* only operate on one path */
-        len = std::min(1u, len);
-      }
-
-      for (i = 0; i < len; i++, se++) {
-        BKE_bpath_foreach_path_dirfile_fixed_process(bpath_data,
-                                                     strip->data->dirpath,
-                                                     sizeof(strip->data->dirpath),
-                                                     se->filename,
-                                                     sizeof(se->filename));
-      }
-    }
     else {
       /* simple case */
       BKE_bpath_foreach_path_fixed_process(

@@ -1027,7 +1027,7 @@ static bool movieclip_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wm
 
 static bool image_id_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
-    return WM_drag_is_ID_type(drag, ID_IM);
+  return WM_drag_is_ID_type(drag, ID_IM);
 }
 
 static bool mask_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)

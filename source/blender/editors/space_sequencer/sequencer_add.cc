@@ -85,33 +85,6 @@ struct SequencerAddData {
   ImageFormatData im_format;
 };
 
-enum class ImageImport {
-  Detect,
-  Sequence,
-  Individual,
-};
-
-static const EnumPropertyItem rna_enum_image_import_type_items[] = {
-    {int(ImageImport::Detect),
-     "DETECT",
-     0,
-     "Auto Detect",
-     "Add images as individual strips, unless their filenames match Blender's numbered sequence "
-     "pattern, in which case they are grouped into a single image sequence"},
-    {int(ImageImport::Sequence),
-     "SEQUENCE",
-     0,
-     "Image Sequence",
-     "Import all selected images as a single image sequence. The sequence of images does not have "
-     "to match Blender's numbered sequence pattern, so placeholders cannot be inferred"},
-    {int(ImageImport::Individual),
-     "INDIVIDUAL",
-     0,
-     "Individual Images",
-     "Add each selected image as an individual strip"},
-    {0, nullptr, 0, nullptr, nullptr},
-};
-
 /* Avoid passing multiple args and be more verbose. */
 #define SEQPROP_STARTFRAME (1 << 0)
 /* For image and effect strips only. */
@@ -160,11 +133,6 @@ static bool sequencer_add_draw_check_fn(PointerRNA *ptr, PropertyRNA *prop, void
 {
   const char *prop_id = RNA_property_identifier(prop);
 
-  /* Only show placeholders option if image sequence creation is not forced. */
-  if (STREQ(prop_id, "use_placeholders")) {
-    return ImageImport(RNA_enum_get(ptr, "image_import_type")) == ImageImport::Detect;
-  }
-
   return !STR_ELEM(prop_id,
                    "filepath",
                    "directory",
@@ -174,8 +142,7 @@ static bool sequencer_add_draw_check_fn(PointerRNA *ptr, PropertyRNA *prop, void
                    "length",
                    "move_strips",
                    "replace_sel",
-                   "skip_locked_or_muted_channels",
-                   "use_sequence_detection");
+                   "skip_locked_or_muted_channels");
 }
 
 static void sequencer_add_ui(bContext * /*C*/, wmOperator *op)
@@ -207,9 +174,7 @@ static void sequencer_add_ui(bContext * /*C*/, wmOperator *op)
                    false);
 
   /* There is no effect strip add UI, so assume an image is being imported if "length" is found. */
-  if (RNA_struct_find_property(op->ptr, "length") &&
-      ImageImport(RNA_enum_get(op->ptr, "image_import_type")) != ImageImport::Sequence)
-  {
+  if (RNA_struct_find_property(op->ptr, "length")) {
     layout.prop(op->ptr, "length", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
@@ -530,8 +495,6 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
 
   load_data->start_frame = RNA_int_get(op->ptr, "frame_start");
   load_data->channel = RNA_int_get(op->ptr, "channel");
-  load_data->image.length = 1;
-  load_data->image.count = 1;
 
   PropertyRNA *prop;
   if ((prop = RNA_struct_find_property(op->ptr, "fit_method"))) {
@@ -581,8 +544,7 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
   }
 
   if ((prop = RNA_struct_find_property(op->ptr, "length"))) {
-    load_data->image.length = RNA_property_int_get(op->ptr, prop);
-    load_data->effect.length = load_data->image.length;
+    load_data->effect.length = RNA_property_int_get(op->ptr, prop);
   }
 
   if ((prop = RNA_struct_find_property(op->ptr, "cache")) &&
@@ -1122,7 +1084,7 @@ static wmOperatorStatus sequencer_add_image_id_strip_exec(bContext *C, wmOperato
   if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
-  load_data.image_id = image;
+  load_data.image = image;
 
   Strip *strip = seq::add_image_id_strip(scene, ed->current_strips(), &load_data);
   seq_load_apply_generic_options(C, op, strip);
@@ -1761,94 +1723,81 @@ void SEQUENCER_OT_sound_strip_add(wmOperatorType *ot)
 /** \name Add Image Strip
  * \{ */
 
-void frame_filename_set(char *dst,
-                        size_t dst_maxncpy,
-                        const char *filename_stripped,
-                        const int frame,
-                        const int numdigits,
-                        const char *ext)
+static wmOperatorStatus sequencer_add_image_strip_exec(bContext *C, wmOperator *op)
 {
-  BLI_strncpy(dst, filename_stripped, dst_maxncpy);
-  BLI_path_frame(dst, dst_maxncpy, frame, numdigits);
-  BLI_path_extension_ensure(dst, dst_maxncpy, ext);
-}
-
-static void sequencer_add_image_strip_load_files(wmOperator *op,
-                                                 Scene *scene,
-                                                 Strip *strip,
-                                                 seq::LoadData *load_data,
-                                                 const ImageFrameRange *range)
-{
-  int framenr, numdigits;
-  if (!BLI_path_frame_get(load_data->path, &framenr, &numdigits)) {
-    numdigits = 0;
-  }
-
-  char ext[FILE_MAX];
-  char filename_stripped[FILE_MAX];
-  BLI_path_split_file_part(load_data->path, filename_stripped, sizeof(filename_stripped));
-  BLI_path_frame_strip(filename_stripped, ext, sizeof(ext));
-
-  StripElem *se = strip->data->stripdata;
-  const bool use_placeholders = RNA_boolean_get(op->ptr, "use_placeholders");
-  if (use_placeholders) {
-    for (int i = range->offset; i < range->max_framenr + 1; i++, se++) {
-      frame_filename_set(se->filename, sizeof(se->filename), filename_stripped, i, numdigits, ext);
-    }
-  }
-  else {
-    size_t strip_frame = 0;
-    for (ImageFrame &frame : range->frames) {
-      char filename[FILE_MAX];
-      frame_filename_set(
-          filename, sizeof(filename), filename_stripped, frame.framenr, numdigits, ext);
-      seq::add_image_load_file(scene, strip, strip_frame, filename);
-      strip_frame++;
-    }
-  }
-}
-
-static bool sequencer_add_image_sequence_force(bContext *C,
-                                               wmOperator *op,
-                                               seq::LoadData &load_data)
-{
-  if ((op->flag & OP_IS_INVOKE) && !WM_operator_poll_or_report_error(C, op->type, op->reports)) {
-    return false;
-  }
-
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_sequencer_scene(C);
-  Editing *ed = seq::editing_ensure(scene);
 
-  /* Note that forced image sequence creation does not consider `use_placeholders`, since their
-   * existence can only be determined if images follow the naming scheme (not guaranteed here).  */
-  load_data.image.count = RNA_property_collection_length(
-      op->ptr, RNA_struct_find_property(op->ptr, "files"));
-
-  if (load_data.image.count == 0) {
-    sequencer_add_free(C, op);
-    return false;
+  seq::LoadData load_data;
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+    return OPERATOR_CANCELLED;
   }
 
-  Strip *strip = seq::add_image_strip(bmain, scene, ed->current_strips(), &load_data);
-  char dirpath[sizeof(strip->data->dirpath)];
-  BLI_path_split_dir_part(load_data.path, dirpath, sizeof(dirpath));
-  seq::add_image_set_directory(strip, dirpath);
+  Image *image = static_cast<Image *>(
+      BLI_findlink(&bmain->images, RNA_enum_get(op->ptr, "image")));
 
-  int i = 0;
-  RNA_BEGIN (op->ptr, itemptr, "files") {
-    std::string filename = RNA_string_get(&itemptr, "name");
-    seq::add_image_load_file(scene, strip, i, filename.c_str());
-    i++;
-  }
-  RNA_END;
-
-  seq::add_image_init_alpha_mode(bmain, scene, strip);
+  load_data.image = image;
+  Strip *strip = seq::add_image_strip(bmain, scene, scene->ed->current_strips(), &load_data);
   seq_load_apply_generic_options(C, op, strip);
-  return true;
+
+  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+  sequencer_select_do_updates(C, scene);
+  move_strips(C, op);
+
+  sequencer_add_free(C, op);
+
+  return OPERATOR_FINISHED;
 }
 
-static bool sequencer_add_images(bContext *C, wmOperator *op, seq::LoadData &load_data)
+// TODO: GD;; We can go on with filepath support either by opereators macro (which will be the
+// simpliest) or adding a filepath property here or to a new operator.
+static wmOperatorStatus sequencer_add_image_strip_invoke(bContext *C,
+                                                         wmOperator *op,
+                                                         const wmEvent *event)
+{
+  if (!RNA_struct_property_is_set(op->ptr, "image")) {
+    return WM_enum_search_invoke(C, op, event);
+  }
+
+  sequencer_add_init(C, op);
+
+  sequencer_generic_invoke_xy__internal(C, op, 0, STRIP_TYPE_IMAGE_ID, event);
+  return sequencer_add_image_strip_exec(C, op);
+}
+
+void SEQUENCER_OT_image_strip_add(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  /* Identifiers. */
+  ot->name = "Add Image Strip";
+  ot->idname = "SEQUENCER_OT_image_strip_add";
+  ot->description = "Add an image datablock to the sequencer";
+
+  /* API callbacks. */
+  ot->invoke = sequencer_add_image_strip_invoke;
+  ot->exec = sequencer_add_image_strip_exec;
+  ot->cancel = sequencer_add_free;
+  ot->ui = sequencer_add_ui;
+  ot->poll = ED_operator_sequencer_active_editable;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  sequencer_generic_props__internal(ot, SEQPROP_STARTFRAME | SEQPROP_MOVE);
+  prop = RNA_def_enum(
+      ot->srna, "image", rna_enum_dummy_NULL_items, 0, "Image", "Image to add as a strip");
+  RNA_def_enum_funcs(prop, RNA_image_itemf);
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MOVIECLIP);
+  RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE);
+  ot->prop = prop;
+}
+
+/* -------------------------------------------------------------------- */
+/** \name Load Image Strip
+ * \{ */
+
+static bool sequencer_load_images_from_path(bContext *C, wmOperator *op, seq::LoadData &load_data)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_sequencer_scene(C);
@@ -1862,36 +1811,29 @@ static bool sequencer_add_images(bContext *C, wmOperator *op, seq::LoadData &loa
     return false;
   }
 
-  const bool use_placeholders = RNA_boolean_get(op->ptr, "use_placeholders");
   for (ImageFrameRange &range : ranges) {
-    /* Populate `load_data` with data from `range`. */
-    load_data.image.count = use_placeholders ? range.max_framenr - range.offset + 1 :
-                                               range.frames.count();
-    STRNCPY(load_data.path, range.filepath);
-    BLI_path_split_file_part(load_data.path, load_data.name, sizeof(load_data.name));
+    Image *image = BKE_image_load_exists(bmain, range.filepath);
+    int frames_count = range.frames.count();
+    if (frames_count > 1) {
+      image->source = IMA_SRC_SEQUENCE;
+    }
 
+    load_data.image = image;
+    load_data.image_frames_count = frames_count;
     Strip *strip = seq::add_image_strip(bmain, scene, ed->current_strips(), &load_data);
 
-    char dirpath[sizeof(strip->data->dirpath)];
-    BLI_path_split_dir_part(load_data.path, dirpath, sizeof(dirpath));
-    seq::add_image_set_directory(strip, dirpath);
-
-    /* Set `StripElem` filenames, one for each `ImageFrame` in this range, or if `use_placeholders`
-     * is set, every frame between `offset` and `max_framenr` . */
-    sequencer_add_image_strip_load_files(op, scene, strip, &load_data, &range);
-
-    seq::add_image_init_alpha_mode(bmain, scene, strip);
+    // seq::add_image_init_alpha_mode(bmain, scene, strip);
 
     seq_load_apply_generic_options(C, op, strip);
-    load_data.start_frame += seq::transform_single_image_check(strip) ? load_data.image.length :
-                                                                        load_data.image.count;
+    // load_data.start_frame += seq::transform_single_image_check(strip) ? load_data.image.length :
+    //                                                                   load_data.image.count;
     range.frames.free_no_destruct();
   }
   ranges.free_no_destruct();
   return true;
 }
 
-static wmOperatorStatus sequencer_add_image_strip_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus sequencer_load_image_strip_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
 
@@ -1903,20 +1845,12 @@ static wmOperatorStatus sequencer_add_image_strip_exec(bContext *C, wmOperator *
   char vt_old[64];
   STRNCPY_UTF8(vt_old, scene->view_settings.view_transform);
 
-  const ImageImport import_type = ImageImport(RNA_enum_get(op->ptr, "image_import_type"));
-
-  if (import_type == ImageImport::Sequence) {
-    if (!sequencer_add_image_sequence_force(C, op, load_data)) {
-      return OPERATOR_CANCELLED;
-    }
-  }
-  else {
-    /* Note that `use_sequence_detection` is false when import type is `ImageImport::Individual`.
-     * This is used by `ED_image_filesel_detect_sequences`, called from `sequencer_add_images`. */
-    RNA_boolean_set(op->ptr, "use_sequence_detection", import_type == ImageImport::Detect);
-    if (!sequencer_add_images(C, op, load_data)) {
-      return OPERATOR_CANCELLED;
-    }
+  /* Note that `use_sequence_detection` is false when import type is `ImageImport::Individual`.
+   * This is used by `ED_image_filesel_detect_sequences`, called from
+   * `sequencer_load_images_from_path`. */
+  // RNA_boolean_set(op->ptr, "use_sequence_detection", import_type == ImageImport::Detect);
+  if (!sequencer_load_images_from_path(C, op, load_data)) {
+    return OPERATOR_CANCELLED;
   }
 
   if (!STREQ(vt_old, scene->view_settings.view_transform)) {
@@ -1936,9 +1870,9 @@ static wmOperatorStatus sequencer_add_image_strip_exec(bContext *C, wmOperator *
   return OPERATOR_FINISHED;
 }
 
-static wmOperatorStatus sequencer_add_image_strip_invoke(bContext *C,
-                                                         wmOperator *op,
-                                                         const wmEvent *event)
+static wmOperatorStatus sequencer_load_image_strip_invoke(bContext *C,
+                                                          wmOperator *op,
+                                                          const wmEvent *event)
 {
   PropertyRNA *prop;
   Scene *scene = CTX_data_sequencer_scene(C);
@@ -1958,7 +1892,7 @@ static wmOperatorStatus sequencer_add_image_strip_invoke(bContext *C,
       return OPERATOR_CANCELLED;
     }
 
-    return sequencer_add_image_strip_exec(C, op);
+    return sequencer_load_image_strip_exec(C, op);
   }
 
   sequencer_generic_invoke_xy__internal(
@@ -1972,17 +1906,17 @@ static wmOperatorStatus sequencer_add_image_strip_invoke(bContext *C,
   return OPERATOR_RUNNING_MODAL;
 }
 
-void SEQUENCER_OT_image_strip_add(wmOperatorType *ot)
+void SEQUENCER_OT_image_strip_load(wmOperatorType *ot)
 {
 
   /* Identifiers. */
-  ot->name = "Add Image Strip";
-  ot->idname = "SEQUENCER_OT_image_strip_add";
-  ot->description = "Add an image or image sequence to the sequencer";
+  ot->name = "Load Image Strip";
+  ot->idname = "SEQUENCER_OT_image_strip_load";
+  ot->description = "Load an image or image sequence to the sequencer from the file browser";
 
   /* API callbacks. */
-  ot->invoke = sequencer_add_image_strip_invoke;
-  ot->exec = sequencer_add_image_strip_exec;
+  ot->invoke = sequencer_load_image_strip_invoke;
+  ot->exec = sequencer_load_image_strip_exec;
   ot->cancel = sequencer_add_free;
   ot->ui = sequencer_add_ui;
   ot->poll = ED_operator_sequencer_active_editable;
@@ -2001,30 +1935,13 @@ void SEQUENCER_OT_image_strip_add(wmOperatorType *ot)
   sequencer_generic_props__internal(ot,
                                     SEQPROP_STARTFRAME | SEQPROP_LENGTH | SEQPROP_FIT_METHOD |
                                         SEQPROP_VIEW_TRANSFORM | SEQPROP_MOVE);
-
-  RNA_def_enum(ot->srna,
-               "image_import_type",
-               rna_enum_image_import_type_items,
-               int(ImageImport::Detect),
-               "Import As",
-               "Mode for importing selected images");
-
-  /* Required for `ED_image_filesel_detect_sequences`, but not shown in UI.
-   * Set to true on ImageImport::Detect. */
   RNA_def_boolean(
       ot->srna,
       "use_sequence_detection",
       true,
       "Detect Sequences",
       "Automatically detect animated sequences in selected images (based on file names)");
-
-  RNA_def_boolean(ot->srna,
-                  "use_placeholders",
-                  false,
-                  "Use Placeholders",
-                  "Reserve placeholder frames for missing frames of the image sequence");
 }
-
 /** \} */
 
 /* -------------------------------------------------------------------- */

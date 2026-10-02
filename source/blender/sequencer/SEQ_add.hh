@@ -50,13 +50,13 @@ struct LoadData {
   char name[64];      /* Strip name, including file extension. */
   /** Typically a `filepath` but may reference any kind of path. */
   char path[/*FILE_MAX*/ 1024];
-  struct {
-    int count; /* Number of images in this strip, 1 if not an image sequence. */
-    int length;
-  } image;         /* Only for image strips. */
+
+  /* Only for image strips. */
+  Image *image;
+  int image_frames_count; /* Number of frames for image sequences (for some reason the image doesn't store it anywhere, so we have to do it separately)*/
+  
   Scene *scene;    /* Only for scene strips. */
   MovieClip *clip; /* Only for clip strips. */
-  Image *image_id; /* Only for image id strips. */
   Mask *mask;      /* Only for mask strips. */
   struct {
     StripType type;

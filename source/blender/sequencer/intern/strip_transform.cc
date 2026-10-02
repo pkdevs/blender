@@ -50,9 +50,6 @@ bool transform_single_image_check(const Strip *strip)
       return true;
     }
 
-    if (ELEM(strip->image->source, IMA_SRC_SEQUENCE, IMA_SRC_MOVIE)) {
-      return false;
-    }
     return true;
   }
 
@@ -555,11 +552,21 @@ static int2 strip_source_size_get(const Scene *scene, const Strip *strip)
 
   switch (strip->type) {
     case STRIP_TYPE_IMAGE: {
-      const StripElem *se = seq::render_give_stripelem(scene, strip, scene->r.cfra);
-      if (se == nullptr) {
+      if (strip->image != nullptr) {
+        ImageUser *user = &scene->ed->image_user;  // the original one is not a potiner
+        user->framenr = give_frame_index(scene, strip, scene->r.cfra) + strip->anim_startofs + 1;
+        void *lock;
+        ImBuf *ibuf = BKE_image_acquire_ibuf(strip->image, user, &lock);
+        // print in one line ibuf, x and y of ibuf
+        //printf("IBUF: %p, size: %d x %d\n", ibuf, ibuf->x, ibuf->y);
+        if (ibuf) {
+          const int2 size(ibuf->x, ibuf->y);
+          BKE_image_release_ibuf(strip->image, ibuf, lock);
+          return size;
+        }
+        // For cases where there's an accidental missing frame, etc.
         return parent_scene_size;
       }
-      return int2(se->orig_width, se->orig_height);
     }
     case STRIP_TYPE_MOVIE: {
       const StripElem *se = strip->data->stripdata;
@@ -608,13 +615,14 @@ int2 image_transform_box_size_get(const Scene *scene, const Strip *strip)
 
   if (strip->type == STRIP_TYPE_IMAGE_ID) {
     if (strip->image != nullptr) {
-      void *lock;
-      ImBuf *ibuf = BKE_image_acquire_ibuf(strip->image, nullptr, &lock);
+      /*void *lock;
+      ImBuf *ibuf = BKE_image_acquire_ibuf(strip->image, &scene->ed->image_user, &lock);
       if (ibuf) {
         const int2 size(ibuf->x, ibuf->y);
         BKE_image_release_ibuf(strip->image, ibuf, lock);
         return size;
-      }
+      }*/
+     return source_size;
     }
   }
 

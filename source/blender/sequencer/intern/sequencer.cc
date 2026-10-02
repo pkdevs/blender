@@ -773,7 +773,15 @@ static Strip *strip_duplicate(StripDuplicateContext &ctx,
     }
   }
   else if (strip->type == STRIP_TYPE_IMAGE) {
-    strip_new->data->stripdata = MEM_dupalloc(strip->data->stripdata);
+    if (flag_is_set(ctx.dupe_flag, StripDuplicate::Data) && strip_new->image != nullptr) {
+      Image *image_old = strip_new->image;
+      ctx.image_ids.add(image_old);
+      strip_new->image = reinterpret_cast<Image *>(BKE_id_copy_for_duplicate(
+          ctx.bmain, reinterpret_cast<ID *>(image_old), USER_DUP_LINKED_ID, LIB_ID_COPY_DEFAULT));
+    }
+    if ((ctx.copy_flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
+      id_us_plus(&strip_new->image->id);
+    }
   }
   else if (strip->is_effect()) {
     EffectHandle sh = strip_effect_handle_get(strip);
@@ -957,9 +965,6 @@ static bool strip_write_data_cb(Strip *strip, void *userdata)
     if (data->proxy) {
       writer->write_struct(data->proxy);
     }
-    if (strip->type == STRIP_TYPE_IMAGE) {
-      writer->write_struct_array(data->stripdata_num, data->stripdata);
-    }
     else if (ELEM(strip->type, STRIP_TYPE_MOVIE, STRIP_TYPE_SOUND)) {
       writer->write_struct(data->stripdata);
     }
@@ -1068,16 +1073,6 @@ static bool strip_read_data_cb(Strip *strip, void *user_data)
   BLO_read_struct(reader, StripData, &strip->data);
   if (strip->data) {
     switch (strip->type) {
-      case STRIP_TYPE_IMAGE: {
-        /* Avoid using `strip->data->stripdata_num` since it is initialized by versioning code. */
-        const int count = strip->data->stripdata_num == 0 ?
-                              strip->anim_startofs + strip->len + strip->anim_endofs :
-                              strip->data->stripdata_num;
-        if (!BLO_read_array(reader, &strip->data->stripdata, count)) {
-          strip->data->stripdata_num = 0;
-        }
-        break;
-      }
       case STRIP_TYPE_MOVIE:
       case STRIP_TYPE_SOUND:
       case STRIP_TYPE_SOUND_HD: {

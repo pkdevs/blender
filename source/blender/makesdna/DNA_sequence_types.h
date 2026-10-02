@@ -121,7 +121,7 @@ enum eStripAlphaMode : uint8_t {
  * Note: update #Strip::is_effect when adding new effect types.
  */
 enum StripType : uint32_t {
-  STRIP_TYPE_IMAGE = 0, /* DEPRECATED */
+  STRIP_TYPE_IMAGE = 0,
   STRIP_TYPE_META = 1,
   STRIP_TYPE_SCENE = 2,
   STRIP_TYPE_MOVIE = 3,
@@ -196,7 +196,7 @@ enum StripBlendMode : uint32_t {
 };
 
 #define STRIP_HAS_PATH(_strip) \
-  (ELEM((_strip)->type, STRIP_TYPE_MOVIE, STRIP_TYPE_IMAGE, STRIP_TYPE_SOUND, STRIP_TYPE_SOUND_HD))
+  (ELEM((_strip)->type, STRIP_TYPE_MOVIE, STRIP_TYPE_SOUND, STRIP_TYPE_SOUND_HD))
 
 enum StripColorTag : int8_t {
   STRIP_COLOR_NONE = -1,
@@ -408,7 +408,7 @@ struct Strip {
   char *scene_view_layer_name = nullptr;
   /** For MOVIECLIP strips. */
   struct MovieClip *clip = nullptr;
-  /** For IMAGE_ID strips. */
+  /** For IMAGE strips. */
   struct Image *image = nullptr;
   /** For MASK strips. */
   struct Mask *mask = nullptr;

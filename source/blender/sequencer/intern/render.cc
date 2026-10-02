@@ -222,19 +222,6 @@ StripElem *render_give_stripelem(const Scene *scene, const Strip *strip, int tim
 {
   StripElem *se = strip->data->stripdata;
 
-  if (strip->type == STRIP_TYPE_IMAGE) {
-    /* only IMAGE strips use the whole array, MOVIE strips use only the first element,
-     * all other strips don't use this...
-     */
-
-    int frame_index = round_fl_to_int(give_frame_index(scene, strip, timeline_frame));
-
-    if (frame_index == -1 || se == nullptr) {
-      return nullptr;
-    }
-
-    se += frame_index + strip->anim_startofs;
-  }
   return se;
 }
 
@@ -1839,9 +1826,17 @@ static SeqResult do_render_strip_uncached(const RenderData *context,
     out = seq_render_effect_strip_impl(context, state, strip, timeline_frame);
   }
   else if (strip->type == STRIP_TYPE_IMAGE) {
-    out.image = seq_render_image_strip(context, strip, timeline_frame, r_is_proxy_image);
+    out.image = seq_get_image_id_strip(context, strip, round_fl_to_int(frame_index));
     if (out.image && !out.image->can_contain_alpha()) {
       out.is_opaque_before_transform = true;
+    }
+
+    /* Not sure if neccesry */
+    if (out.image) {
+      /* duplicate frame so image id cache wouldn't be confused by sequencer's stuff */
+      ImBuf *i = IMB_dupImBuf(out.image);
+      IMB_freeImBuf(out.image);
+      out.image = i;
     }
   }
   else if (strip->type == STRIP_TYPE_MOVIE) {

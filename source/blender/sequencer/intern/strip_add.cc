@@ -106,7 +106,7 @@ static void strip_add_set_name(Scene *scene, Strip *strip, LoadData *load_data)
       edit_strip_name_set(scene, strip, load_data->clip->id.name + 2);
     }
     else if (strip->type == STRIP_TYPE_IMAGE_ID) {
-      edit_strip_name_set(scene, strip, load_data->image_id->id.name + 2);
+      edit_strip_name_set(scene, strip, load_data->image->id.name + 2);
     }
     else if (strip->type == STRIP_TYPE_MASK) {
       edit_strip_name_set(scene, strip, load_data->mask->id.name + 2);
@@ -163,35 +163,43 @@ Strip *add_movieclip_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *lo
   return strip;
 }
 
-float get_image_id_len(Image *ima)
+float get_image_len(LoadData *load_data, Scene *scene)
 {
-  /* Try getting the length of the strip according to sequence/movie source */
-  if (!BKE_image_has_anim(ima)) {
-    /* Ensure image has been loaded into memory and frame duration is known. */
-    void *lock;
-    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
-    BKE_image_release_ibuf(ima, ibuf, lock);
+  Image *image = load_data->image;
+  if(image == nullptr){
+    return 0;
   }
 
-  if (BKE_image_has_anim(ima)) {
-    MovieReader *anim = (ima->anims.first())->anim;
+  if(image->source == IMA_SRC_SEQUENCE) {
+    return load_data->image_frames_count;
+  }
+  
+  /* Try getting the length of the strip according to sequence/movie source */
+  if (!BKE_image_has_anim(image)) {
+    /* Ensure image has been loaded into memory and frame duration is known. */
+    void *lock;
+    ImBuf *ibuf = BKE_image_acquire_ibuf(image, nullptr, &lock);
+    BKE_image_release_ibuf(image, ibuf, lock);
+  }
+
+  if (BKE_image_has_anim(image)) {
+    MovieReader *anim = (image->anims.first())->anim;
     if (anim) {
       return MOV_get_duration_frames(anim);
     }
   }
 
   /* It's a static image, return default */
-  return 25;  // TODO: GD;; Find a better way to do that instead of hardcoded magic number (like
-              // DEFAULT_IMG_STRIP_LENGTH)
+  return default_strip_length(scene->frames_per_second());
 }
 
 Strip *add_image_id_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, STRIP_TYPE_IMAGE_ID);
-  strip->image = load_data->image_id;
-  strip->len = get_image_id_len(load_data->image_id);
-  id_us_ensure_real(id_cast<ID *>(load_data->image_id));
+  strip->image = load_data->image;
+  strip->len = get_image_len(load_data, scene);
+  id_us_ensure_real(id_cast<ID *>(load_data->image));
   strip_add_set_name(scene, strip, load_data);
   strip_add_generic_update(scene, strip);
   return strip;
@@ -284,13 +292,12 @@ Strip *add_image_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, Loa
 {
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, STRIP_TYPE_IMAGE);
-  strip->content_length_set(load_data->image.count);
-  StripData *data = strip->data;
-  data->stripdata = MEM_new_array<StripElem>(load_data->image.count, "stripelem");
-  data->stripdata_num = load_data->image.count;
+  strip->image = load_data->image;
+  strip->len = get_image_len(load_data, scene);
+  id_us_ensure_real(id_cast<ID *>(load_data->image));
 
-  if (strip->content_length() == 1) {
-    strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
+  if (!ELEM(load_data->image->source, IMA_SRC_SEQUENCE, IMA_SRC_MOVIE)) {
+      strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
   }
 
   /* Multiview settings. */
@@ -303,31 +310,11 @@ Strip *add_image_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, Loa
     *strip->stereo3d_format = *load_data->stereo3d_format;
   }
 
-  /* Set initial scale based on load_data->fit_method. */
-  char file_path[FILE_MAX];
-  STRNCPY(file_path, load_data->path);
-  BLI_path_abs(file_path, ID_BLEND_PATH(bmain, &scene->id));
-
-  ImBuf *ibuf = IMB_load_image_from_filepath(
-      file_path, ImBufFlags::ByteData, strip->data->colorspace_settings.name);
+  void *lock;
+  ImBuf *ibuf = BKE_image_acquire_ibuf(load_data->image, &scene->ed->image_user, &lock);
   if (ibuf != nullptr) {
-    /* Set image resolution. Assume that all images in sequence are same size. This fields are only
-     * informative. */
-    StripElem *strip_elem = data->stripdata;
-    for (int i = 0; i < load_data->image.count; i++) {
-      strip_elem->orig_width = ibuf->x;
-      strip_elem->orig_height = ibuf->y;
-      strip_elem++;
-    }
-
     set_scale_to_fit(strip, ibuf->x, ibuf->y, scene->r.xsch, scene->r.ysch, load_data->fit_method);
-    IMB_freeImBuf(ibuf);
-  }
-
-  /* Adjust starting length of strip from handle to handle.
-   * Note that this differs from the content `strip->len`, which is always 1 for single images. */
-  if (seq::transform_single_image_check(strip)) {
-    strip->right_handle_set(scene, load_data->start_frame + load_data->image.length);
+    BKE_image_release_ibuf(strip->image, ibuf, lock);
   }
 
   strip_add_set_view_transform(scene, strip, load_data);
@@ -585,7 +572,20 @@ static void add_reload_new_file_impl(
 
   switch (strip->type) {
     case STRIP_TYPE_IMAGE: {
-      int new_len = strip->data->stripdata_num;
+      if (strip->image == nullptr) {
+        return;
+      }
+
+      // TODO: GD;; Review this whole part later
+      // strip->len = get_image_len(strip->image);
+
+      LoadData *load_data;
+      memset(load_data, 0, sizeof(LoadData));
+      load_data->image = strip->image;
+      load_data->image_frames_count = strip->content_length();
+
+      int new_len = get_image_len(load_data, scene);
+
       new_len -= strip->anim_startofs;
       new_len -= strip->anim_endofs;
       new_len = std::max(new_len, 0);
@@ -633,16 +633,21 @@ static void add_reload_new_file_impl(
         return;
       }
 
+      // TODO: GD;; Review this whole part later
+      // strip->len = get_image_len(strip->image);
 
-      //TODO: GD;; Review this whole part later
-      //strip->len = get_image_id_len(strip->image);
+      LoadData *load_data;
+      memset(load_data, 0, sizeof(LoadData));
+      load_data->image = strip->image;
+      load_data->image_frames_count = strip->content_length();
 
-      int new_len = get_image_id_len(strip->image);
+      int new_len = get_image_len(load_data, scene);
 
       new_len -= strip->anim_startofs;
       new_len -= strip->anim_endofs;
       new_len = std::max(new_len, 0);
       strip->content_length_set(new_len);
+      
       break;
     }
     case STRIP_TYPE_MASK: {

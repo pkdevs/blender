@@ -2853,6 +2853,7 @@ static wmOperatorStatus sequencer_separate_images_exec(bContext *C, wmOperator *
 
   seq::prefetch_stop(scene);
 
+  // TODO: GD;; Reimplement
   while (strip) {
     if ((strip->flag & SEQ_SELECT) && (strip->type == STRIP_TYPE_IMAGE) &&
         (strip->content_length() > 1))
@@ -3684,6 +3685,19 @@ void SEQUENCER_OT_change_effect_type(wmOperatorType *ot)
 /** \name Change Data/Files Operator
  * \{ */
 
+static void frame_filename_set(char *dst,
+                               size_t dst_maxncpy,
+                               const char *filename_stripped,
+                               const int frame,
+                               const int numdigits,
+                               const char *ext)
+{
+  BLI_strncpy(dst, filename_stripped, dst_maxncpy);
+  BLI_path_frame(dst, dst_maxncpy, frame, numdigits);
+  BLI_path_extension_ensure(dst, dst_maxncpy, ext);
+}
+
+// TODO: GD;; Reimplement/Remove
 static wmOperatorStatus sequencer_change_path_exec(bContext *C, wmOperator *op)
 {
   if ((op->flag & OP_IS_INVOKE) && !WM_operator_poll_or_report_error(C, op->type, op->reports)) {
@@ -3694,7 +3708,6 @@ static wmOperatorStatus sequencer_change_path_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_sequencer_scene(C);
   Strip *strip = seq::select_active_get(scene);
   const bool is_relative_path = RNA_boolean_get(op->ptr, "relative_path");
-  const bool use_placeholders = RNA_boolean_get(op->ptr, "use_placeholders");
 
   if (strip->type == STRIP_TYPE_IMAGE) {
     char directory[FILE_MAX];
@@ -3705,7 +3718,7 @@ static wmOperatorStatus sequencer_change_path_exec(bContext *C, wmOperator *op)
     ListBaseT<ImageFrameRange> ranges = ED_image_filesel_detect_sequences(
         blendfile_path, blendfile_path, op, false);
     for (ImageFrameRange &range : ranges) {
-      len += use_placeholders ? range.max_framenr - range.offset + 1 : range.frames.count();
+      len += range.frames.count();
     }
 
     if (len == 0) {
@@ -3737,24 +3750,12 @@ static wmOperatorStatus sequencer_change_path_exec(bContext *C, wmOperator *op)
       BLI_path_split_file_part(range.filepath, filename_stripped, sizeof(filename_stripped));
       BLI_path_frame_strip(filename_stripped, ext, sizeof(ext));
 
-      if (use_placeholders) {
-        for (const int i : IndexRange::from_begin_end(range.offset, range.max_framenr + 1)) {
-          frame_filename_set(
-              se->filename, sizeof(se->filename), filename_stripped, i, numdigits, ext);
-          se++;
-        }
+      for (ImageFrame &frame : range.frames) {
+        frame_filename_set(
+            se->filename, sizeof(se->filename), filename_stripped, frame.framenr, numdigits, ext);
+        se++;
       }
-      else {
-        for (ImageFrame &frame : range.frames) {
-          frame_filename_set(se->filename,
-                             sizeof(se->filename),
-                             filename_stripped,
-                             frame.framenr,
-                             numdigits,
-                             ext);
-          se++;
-        }
-      }
+
       range.frames.free_no_destruct();
     }
     ranges.free_no_destruct();

@@ -715,18 +715,13 @@ class SEQUENCER_MT_add(Menu):
             layout.menu("SEQUENCER_MT_add_mask", text="Mask", icon='MOD_MASK')
         else:
             layout.menu("SEQUENCER_MT_add_empty", text="Mask", icon='MOD_MASK')
-            
-        #TODO: GD;; Add new image operator
-        if bpy.data.images:
-            layout.menu("SEQUENCER_MT_add_image", text="Image ID", icon='IMAGE_DATA')
-        else:
-            layout.menu("SEQUENCER_MT_add_empty", text="Image ID", text_ctxt=i18n_contexts.id_image, icon='IMAGE_DATA')
+
+        layout.menu("SEQUENCER_MT_add_image", text="Image", icon='IMAGE_DATA')
 
         layout.separator()
 
         layout.operator("sequencer.movie_strip_add", text="Movie...", icon='FILE_MOVIE')
         layout.operator("sequencer.sound_strip_add", text="Sound...", icon='FILE_SOUND')
-        layout.operator("sequencer.image_strip_add", text="Image/Sequence...", icon='FILE_IMAGE')
 
         layout.separator()
 
@@ -784,8 +779,15 @@ class SEQUENCER_MT_add_image(Menu):
         layout = self.layout
         layout.operator_context = 'INVOKE_REGION_WIN'
 
-        for image in bpy.data.images:
-            layout.operator("sequencer.image_id_strip_add", text=image.name, translate=False).image = image.name
+        layout.operator("sequencer.image_strip_load", text="Open...", translate=False, icon='FILEBROWSER')
+        layout.separator()
+
+        if bpy.data.images:
+            for image in bpy.data.images:
+                layout.operator("sequencer.image_strip_add", text=image.name, translate=False).image = image.name
+        else:
+            layout.label(text="No Items Available")
+
 
 class SEQUENCER_MT_add_mask(Menu):
     bl_label = "Mask"

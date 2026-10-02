@@ -3382,26 +3382,11 @@ static void rna_def_image(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Image Strip", "Sequence strip to load one or more images");
   RNA_def_struct_sdna(srna, "Strip");
 
-  prop = RNA_def_property(srna, "directory", PROP_STRING, PROP_DIRPATH);
-  RNA_def_property_string_sdna(prop, nullptr, "data->dirpath");
-  RNA_def_property_ui_text(prop, "Directory", "");
-  RNA_def_property_flag(prop, PROP_PATH_SUPPORTS_BLEND_RELATIVE);
+  prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "Image");
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Image", "Image datablock that this strip uses");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");
-
-  prop = RNA_def_property(srna, "elements", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_collection_sdna(prop, nullptr, "data->stripdata", nullptr);
-  RNA_def_property_struct_type(prop, "StripElement");
-  RNA_def_property_ui_text(prop, "Elements", "");
-  RNA_def_property_collection_funcs(prop,
-                                    "rna_Strip_elements_begin",
-                                    "rna_iterator_array_next",
-                                    "rna_iterator_array_end",
-                                    "rna_iterator_array_get",
-                                    "rna_Strip_elements_length",
-                                    nullptr,
-                                    nullptr,
-                                    nullptr);
-  RNA_api_strip_elements(brna, prop);
 
   rna_def_retiming_keys(srna);
 
@@ -3680,6 +3665,7 @@ static void rna_def_image_id(BlenderRNA *brna)
   RNA_def_struct_sdna(srna, "Strip");
 
   prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "Image");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Image", "Image datablock that this strip uses");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");

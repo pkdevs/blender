@@ -246,36 +246,17 @@ static Strip *rna_Strips_new_image(ID *id,
                                    Main *bmain,
                                    ReportList *reports,
                                    const char *name,
-                                   const char *file,
+                                   Image *image,
                                    int channel,
                                    int frame_start,
                                    int fit_method)
 {
   Scene *scene = id_cast<Scene *>(id);
-
   seq::LoadData load_data;
-  seq::add_load_data_init(&load_data, name, file, frame_start, channel);
-  load_data.image.count = 1;
+  seq::add_load_data_init(&load_data, name, nullptr, frame_start, channel);
+  load_data.image = image;
   load_data.fit_method = eSeqImageFitMethod(fit_method);
-
-  char vt_old[64];
-  STRNCPY_UTF8(vt_old, scene->view_settings.view_transform);
-
   Strip *strip = seq::add_image_strip(bmain, scene, seqbase, &load_data);
-
-  if (!STREQ(vt_old, scene->view_settings.view_transform)) {
-    BKE_reportf(reports,
-                RPT_WARNING,
-                "View transform set to %s (converted from %s)",
-                scene->view_settings.view_transform,
-                vt_old);
-  }
-
-  char dirpath[FILE_MAX], filename[FILE_MAXFILE];
-  BLI_path_split_dir_file(file, dirpath, sizeof(dirpath), filename, sizeof(filename));
-  seq::add_image_set_directory(strip, dirpath);
-  seq::add_image_load_file(scene, strip, 0, filename);
-  seq::add_image_init_alpha_mode(bmain, scene, strip);
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
@@ -289,13 +270,13 @@ static Strip *rna_Strips_editing_new_image(ID *id,
                                            Main *bmain,
                                            ReportList *reports,
                                            const char *name,
-                                           const char *file,
+                                           Image *image,
                                            int channel,
                                            int frame_start,
                                            int fit_method)
 {
   return rna_Strips_new_image(
-      id, &ed->seqbase, bmain, reports, name, file, channel, frame_start, fit_method);
+      id, &ed->seqbase, bmain, reports, name, image, channel, frame_start, fit_method);
 }
 
 static Strip *rna_Strips_meta_new_image(ID *id,
@@ -303,13 +284,13 @@ static Strip *rna_Strips_meta_new_image(ID *id,
                                         Main *bmain,
                                         ReportList *reports,
                                         const char *name,
-                                        const char *file,
+                                        Image *image,
                                         int channel,
                                         int frame_start,
                                         int fit_method)
 {
   return rna_Strips_new_image(
-      id, &strip->seqbase, bmain, reports, name, file, channel, frame_start, fit_method);
+      id, &strip->seqbase, bmain, reports, name, image, channel, frame_start, fit_method);
 }
 
 static Strip *rna_Strips_new_movie(ID *id,
@@ -1030,8 +1011,8 @@ void RNA_api_strips(StructRNA *srna, const bool metastrip)
   RNA_def_function_ui_description(func, "Add a new image strip");
   parm = RNA_def_string(func, "name", "Name", 0, "", "Name for the new strip");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_string(func, "filepath", "File", 0, "", "Filepath to image");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "image", "Image", "", "Image to add");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   parm = RNA_def_int(func,
                      "channel",
                      0,

@@ -287,8 +287,7 @@ static void invalidate_image_id_strips(Scene *scene,
                                        const Image *image_target,
                                        ListBaseT<Strip> *seqbase)
 {
-  for (Strip *strip = seqbase->first(); strip != nullptr; strip = strip->next)
-  {
+  for (Strip *strip = seqbase->first(); strip != nullptr; strip = strip->next) {
     if (strip->image == image_target) {
       relations_invalidate_cache_raw(scene, strip);
     }

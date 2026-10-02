@@ -62,7 +62,7 @@ static void strip_get_thumb_image_dimensions(const Strip *strip,
                                              float *r_image_height)
 {
   int image_width = seq::THUMB_SIZE, image_height = seq::THUMB_SIZE;
-  if (ELEM(strip->type, STRIP_TYPE_IMAGE, STRIP_TYPE_MOVIE)) {
+  if (strip->type == STRIP_TYPE_MOVIE) {
     image_width = strip->data->stripdata->orig_width;
     image_height = strip->data->stripdata->orig_height;
   }
@@ -70,7 +70,7 @@ static void strip_get_thumb_image_dimensions(const Strip *strip,
     image_width = strip->clip->lastsize[0];
     image_height = strip->clip->lastsize[1];
   }
-  else if (strip->type == STRIP_TYPE_IMAGE_ID && strip->image) {
+  else if (ELEM(strip->type, STRIP_TYPE_IMAGE, STRIP_TYPE_IMAGE_ID) && strip->image) {
     if (strip->image != nullptr) {
       void *lock;
       ImBuf *ibuf = BKE_image_acquire_ibuf(strip->image, nullptr, &lock);

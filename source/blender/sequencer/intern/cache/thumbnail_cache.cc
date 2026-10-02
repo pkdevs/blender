@@ -271,20 +271,23 @@ bool strip_can_have_thumbnail(const Scene *scene, const Strip *strip)
   if (scene == nullptr || scene->ed == nullptr || strip == nullptr) {
     return false;
   }
-  if (ELEM(strip->type, STRIP_TYPE_MOVIE, STRIP_TYPE_IMAGE) && strip->data) {
+  if (strip->type == STRIP_TYPE_MOVIE && strip->data) {
     const StripElem *se = strip->data->stripdata;
     if (se->orig_height == 0 || se->orig_width == 0) {
       return false;
     }
     return true;
   }
+  if (strip->type == STRIP_TYPE_IMAGE && strip->image) {
+    return true;
+  }
   if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip) {
     return true;
   }
-  if (strip->type == STRIP_TYPE_MASK && strip->mask) {
+  if (strip->type == STRIP_TYPE_IMAGE_ID && strip->image) {
     return true;
   }
-  if (strip->type == STRIP_TYPE_IMAGE_ID && strip->image) {
+  if (strip->type == STRIP_TYPE_MASK && strip->mask) {
     return true;
   }
   if (strip->type == STRIP_TYPE_SCENE && (strip->flag & SEQ_SCENE_STRIPS) == 0 && strip->scene &&
@@ -317,12 +320,8 @@ static ThumbnailCache::SourceKey get_key_from_strip(const Scene *scene,
   filepath[0] = 0;
   switch (strip->type) {
     case STRIP_TYPE_IMAGE: {
-      const StripElem *s_elem = render_give_stripelem(scene, strip, timeline_frame);
-      if (s_elem != nullptr) {
-        BLI_path_join(filepath, sizeof(filepath), strip->data->dirpath, s_elem->filename);
-        BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(&scene->id));
-        return ThumbnailCache::SourceKey(filepath);
-      }
+      BLI_assert(strip->image);
+      return ThumbnailCache::SourceKey(&strip->image->id);
     } break;
     case STRIP_TYPE_MOVIE:
       BLI_path_join(
@@ -544,14 +543,7 @@ void ThumbGenerationJob::run_fn(void *customdata, wmJobWorkerStatus *worker_stat
         ++total_thumbs;
 #endif
         ImBuf *thumb = nullptr;
-        if (request.strip_type == STRIP_TYPE_IMAGE) {
-          /* Load thumbnail for an image. */
-#ifdef DEBUG_PRINT_THUMB_JOB_TIMES
-          ++total_images;
-#endif
-          thumb = make_thumb_for_image(job->scene_, request);
-        }
-        else if (request.strip_type == STRIP_TYPE_MOVIE) {
+        if (request.strip_type == STRIP_TYPE_MOVIE) {
           /* Load thumbnail for a movie. */
 #ifdef DEBUG_PRINT_THUMB_JOB_TIMES
           ++total_movies;
@@ -585,6 +577,20 @@ void ThumbGenerationJob::run_fn(void *customdata, wmJobWorkerStatus *worker_stat
               cur_proxy_size = IMB_PROXY_NONE;
               thumb = MOV_decode_frame(cur_anim, request.frame_index, cur_proxy_size);
             }
+            if (thumb != nullptr) {
+              seq_imbuf_assign_spaces(job->scene_, thumb);
+            }
+          }
+        }
+        else if (request.strip_type == STRIP_TYPE_IMAGE) {
+          /* Load thumbnail for a image id. */
+          Image *img = reinterpret_cast<Image *>(
+              get_id_copy(job->cache_, request, cur_id_copy, cur_source_generation));
+          if (img != nullptr) {
+            ImageUser user = {};
+            user.framenr = request.frame_index + 1;
+            // TODO: GD;; We probably should also scale down the imbuf to THUMB_SIZE
+            thumb = BKE_image_acquire_ibuf(img, &user, nullptr);
             if (thumb != nullptr) {
               seq_imbuf_assign_spaces(job->scene_, thumb);
             }
@@ -750,6 +756,9 @@ static ImBuf *query_thumbnail(ThumbnailCache &cache,
      * One copy per source is shared across all frame requests. Lifetime is handled in
      * run_fn (worker takes ownership) and ThumbnailCache::clear(). */
     const ID *source_id = nullptr;
+    if (strip->type == STRIP_TYPE_IMAGE && strip->clip != nullptr) {
+      source_id = &strip->image->id;
+    }
     if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip != nullptr) {
       source_id = &strip->clip->id;
     }
@@ -802,6 +811,7 @@ ImBuf *thumbnail_cache_get(const bContext *C,
   const ThumbnailCache::SourceKey key = get_key_from_strip(scene, strip, timeline_frame);
   int frame_index = give_frame_index(scene, strip, timeline_frame);
   if (ELEM(strip->type,
+           STRIP_TYPE_IMAGE,
            STRIP_TYPE_MOVIE,
            STRIP_TYPE_MOVIECLIP,
            STRIP_TYPE_SCENE,
@@ -912,14 +922,10 @@ void thumbnail_cache_invalidate_strip(Scene *scene, const Strip *strip)
     std::scoped_lock lock(thumb_cache_mutex);
     ThumbnailCache *cache = query_thumbnail_cache(scene);
     if (cache != nullptr) {
-      if (ELEM(strip->type, STRIP_TYPE_MOVIE, STRIP_TYPE_IMAGE)) {
+      if (strip->type == STRIP_TYPE_MOVIE) {
         const StripElem *elem = strip->data->stripdata;
         if (elem != nullptr) {
           int paths_count = 1;
-          if (strip->type == STRIP_TYPE_IMAGE) {
-            /* Image strip has array of file names. */
-            paths_count = strip->data->stripdata_num;
-          }
           char filepath[FILE_MAX];
           const char *basepath = ID_BLEND_PATH_FROM_GLOBAL(&scene->id);
           for (int i = 0; i < paths_count; i++, elem++) {
@@ -928,6 +934,9 @@ void thumbnail_cache_invalidate_strip(Scene *scene, const Strip *strip)
             invalidated |= cache->invalidate_entry(ThumbnailCache::SourceKey(filepath));
           }
         }
+      }
+      else if (strip->type == STRIP_TYPE_IMAGE && strip->image) {
+        invalidated |= cache->remove_entry(ThumbnailCache::SourceKey(&strip->image->id));
       }
       else if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip) {
         invalidated |= cache->invalidate_entry(ThumbnailCache::SourceKey(&strip->clip->id));

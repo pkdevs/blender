@@ -539,24 +539,9 @@ class STRIP_PT_source(StripButtonsPanel, Panel):
                 split.label(text=channel_enum_items[channel_enum_items.find(sound.channels)].name)
                 del channel_enum_items
         else:
-            if strip_type == 'IMAGE':
-                col = layout.column()
-                col.prop(strip, "directory", text="")
-
-                # Current element for the filename.
-                elem = strip.strip_elem_from_frame(scene.frame_current)
-                if elem:
-                    col.prop(elem, "filename", text="")  # strip.elements[0] could be a fallback
-
-                col.prop_with_menu(
-                    strip.colorspace_settings,
-                    "name",
-                    text="Color Space",
-                    menu="UI_MT_color_space_select")
-
-                col.prop(strip, "alpha_mode", text="Alpha")
-                sub = col.column(align=True)
-                sub.operator("sequencer.change_path", text="Change Data/Files", icon='FILEBROWSER').filter_image = True
+            if strip_type == 'IMAGE' or strip_type == 'IMAGE_ID':
+                iuser = scene.sequence_editor.image_user
+                layout.template_image(strip, "image", iuser, multiview=True)
             elif strip_type == 'MOVIE':
                 elem = strip.elements[0]
 
@@ -569,9 +554,6 @@ class STRIP_PT_source(StripButtonsPanel, Panel):
                     menu="UI_MT_color_space_select")
                 col.prop(strip, "stream_index")
                 col.prop(strip, "use_deinterlace")
-            else:  # elif strip_Type == 'IMAGE_ID'
-                iuser = scene.sequence_editor.image_user
-                layout.template_image(strip, "image", iuser, multiview=True)
 
             if scene.render.use_multiview:
                 layout.prop(strip, "use_multiview")
@@ -586,7 +568,7 @@ class STRIP_PT_source(StripButtonsPanel, Panel):
                 box.template_image_stereo_3d(strip.stereo_3d_format)
 
             # Resolution.
-            if strip_type != 'IMAGE_ID':
+            if strip_type == 'MOVIE':
                 col = layout.box()
                 col = col.column(align=True)
                 split = col.split(factor=0.5, align=False)
