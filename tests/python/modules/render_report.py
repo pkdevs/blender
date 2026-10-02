@@ -602,7 +602,7 @@ class Report:
         diff_alpha_url = self._relative_url(test_result.diff_alpha_img)
 
         test_html = f"""
-              <tr{tr_style} data-category="{test_category}" data-name="{name}" data-result="{result_attr}">
+            <tr{tr_style} data-category="{test_category}" data-name="{name}" data-result="{result_attr}">
                 <td><b>{name}</b><br/>{test_category}<br/>{status}</td>
                 <td><img src="{new_url}" onmouseover="this.src='{ref_url}';" onmouseout="this.src='{new_url}';" class="render"></td>
                 <td><img src="{ref_url}" onmouseover="this.src='{new_url}';" onmouseout="this.src='{ref_url}';" class="render"></td>
@@ -620,11 +620,11 @@ class Report:
             ref_url = os.path.join(base_path, self._engine_path(*self.compare_engine), new_url)
 
             test_html = """
-                  <tr{tr_style} data-category="{test_category}" data-name="{name}" data-result="{result_attr}">
+                <tr{tr_style} data-category="{test_category}" data-name="{name}" data-result="{result_attr}">
                     <td><b>{name}</b><br/>{testname}<br/>{status}</td>
                     <td><img src="{new_url}" onmouseover="this.src='{ref_url}';" onmouseout="this.src='{new_url}';" class="render"></td>
                     <td><img src="{ref_url}" onmouseover="this.src='{new_url}';" onmouseout="this.src='{ref_url}';" class="render"></td>
-                  </tr>""" . format(tr_style=tr_style, test_category=test_category, result_attr=result_attr,
+                </tr>""" . format(tr_style=tr_style, test_category=test_category, result_attr=result_attr,
                                   name=name,
                                   testname=test_result.name,
                                   status=status,
