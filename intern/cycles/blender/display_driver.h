@@ -88,7 +88,7 @@ class BlenderDisplayDriver : public DisplayDriver {
   void set_zoom(const float zoom_x, const float zoom_y);
 
  protected:
-  void reset();
+  void reset() override;
   void next_tile_begin() override;
 
   bool update_begin(const Params &params,

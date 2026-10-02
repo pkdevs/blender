@@ -118,7 +118,7 @@ class DisplayDriver {
     }
   };
 
-  virtual void reset() = 0;
+  virtual void reset() {}
   virtual void next_tile_begin() = 0;
 
   /* Update the render from the rendering thread.
