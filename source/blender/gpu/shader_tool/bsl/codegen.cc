@@ -1887,7 +1887,7 @@ struct CodegenContext : NodeErrorHandler {
           }
           break;
         case ResourceType::RESOURCE_TABLE: {
-          string res_condition_lambda = parse_condition(arg.attributes());
+          string res_condition_lambda = parse_condition_as_lambda(fn, arg.attributes());
           if (res_condition_lambda.empty()) {
             create_info_decl += "ADDITIONAL_INFO(" + resolved_type + ")\n";
           }
@@ -1901,7 +1901,7 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::OUT:
         case ResourceType::IN:
           if (var->type->srt_type == ResourceTableType::VERTEX_OUT) {
-            string res_condition_lambda = parse_condition(arg.attributes());
+            string res_condition_lambda = parse_condition_as_lambda(fn, arg.attributes());
             if (res_condition_lambda.empty()) {
               create_info_decl += ".vertex_out(" + resolved_type + "_t)\n";
             }
@@ -1948,28 +1948,6 @@ struct CodegenContext : NodeErrorHandler {
     create_info_decl = "GPU_SHADER_CREATE_INFO(" + fn.identifier + "_infos_)\n" +
                        create_info_decl + "GPU_SHADER_CREATE_END()\n";
     metadata.create_infos_declarations.emplace_back(create_info_decl);
-  }
-
-  string parse_condition(AttrList attributes)
-  {
-    string cond;
-    for (Attr attr : attributes.children_of_type<Attr>()) {
-      if (attr.identifier().str() == "condition") {
-        if (!cond.empty()) {
-          error(attr.identifier(), Diag::ConditionAttributeMultiple);
-          break;
-        }
-        for (LocalVar var : attributes.descendants_of_type<LocalVar>()) {
-          string id = string(var.identifier().str());
-          cond += "int " + id + " = ShaderCreateInfo::find_constant(constants, \"" + id + "\"); ";
-        }
-        cond += "return " + string(attr.parameters().str()) + ";";
-      }
-    }
-    if (!cond.empty()) {
-      cond = ", [](blender::Span<CompilationConstant> constants) { " + cond + "}";
-    }
-    return cond;
   }
 
   void func_arg_list(FuncArgList list,
@@ -2736,7 +2714,7 @@ struct CodegenContext : NodeErrorHandler {
           srt.emplace_back(parse_resource(decl.attributes(), type_name, var_name, d.array(), cls));
           break;
         case ResourceTableType::VERTEX_IN:
-          vertex_in.emplace_back(parse_vertex_input(decl.attributes(), type_name, var_name));
+          vertex_in.emplace_back(parse_vertex_input(decl.attributes(), type_name, var_name, cls));
           break;
         case ResourceTableType::VERTEX_OUT:
           vertex_out.emplace_back(parse_vertex_output(decl.attributes(), type_name, var_name));
@@ -2776,7 +2754,8 @@ struct CodegenContext : NodeErrorHandler {
 
   metadata::ParsedVertInput parse_vertex_input(AttrList attributes,
                                                const string &type,
-                                               const string &name)
+                                               const string &name,
+                                               const SymbolClass &cls)
   {
     auto attr = resource_type_from_attributes(attributes).unwrap(this);
     return {
@@ -2784,7 +2763,7 @@ struct CodegenContext : NodeErrorHandler {
         .var_type = type,
         .var_name = name,
         .slot = string(attr.param1.str()),
-        .res_condition = attr.parse_condition(),
+        .res_condition = parse_condition(cls, attr.condition),
     };
   }
 
@@ -2903,7 +2882,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_name = name,
                 .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
-                .res_condition = attr.parse_condition()};
+                .res_condition = parse_condition(cls, attr.condition)};
       case ResourceType::SPECIALIZATION_CONST:
         return {.line = 0,
                 .var_type = type,
@@ -2911,7 +2890,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_value = string(attr.param1.str()),
-                .res_condition = attr.parse_condition()};
+                .res_condition = parse_condition(cls, attr.condition)};
       case ResourceType::SAMPLER:
         return {.line = 0,
                 .var_type = type,
@@ -2919,7 +2898,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
-                .res_condition = attr.parse_condition(),
+                .res_condition = parse_condition(cls, attr.condition),
                 .res_frequency = parse_frequency(attr.frequency)};
       case ResourceType::UNIFORM_BUF:
         return {.line = 0,
@@ -2928,7 +2907,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
-                .res_condition = attr.parse_condition(),
+                .res_condition = parse_condition(cls, attr.condition),
                 .res_frequency = parse_frequency(attr.frequency)};
       case ResourceType::STORAGE_BUF:
         return {.line = 0,
@@ -2938,7 +2917,7 @@ struct CodegenContext : NodeErrorHandler {
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_qualifier = string(attr.param2.str()),
-                .res_condition = attr.parse_condition(),
+                .res_condition = parse_condition(cls, attr.condition),
                 .res_frequency = parse_frequency(attr.frequency)};
       case ResourceType::IMAGE:
         return {.line = 0,
@@ -2949,7 +2928,7 @@ struct CodegenContext : NodeErrorHandler {
                 .res_slot = string(attr.param1.str()),
                 .res_qualifier = string(attr.param2.str()),
                 .res_format = parse_image_format(cls, attr.param3),
-                .res_condition = attr.parse_condition(),
+                .res_condition = parse_condition(cls, attr.condition),
                 .res_frequency = parse_frequency(attr.frequency)};
         break;
       default:
@@ -2957,6 +2936,46 @@ struct CodegenContext : NodeErrorHandler {
         break;
     }
     return {};
+  }
+
+  string parse_condition(const SymbolScope &scope, ast::Expr condition) const
+  {
+    if (!condition.is_valid()) {
+      return "";
+    }
+    string str;
+    for (LocalVar node : condition.children_of_type<LocalVar>()) {
+      if (SymbolVariable *var = scope.lookup_variable(table, node.identifier());
+          !var->is_error && var->is_constexpr)
+      {
+        str += "int " + string(node.str()) + " = " + var->value_str() + "; ";
+      }
+      else {
+        /* TODO(fclem): Check constant validity. */
+        str += "int " + string(node.str()) + " = ";
+        str += "ShaderCreateInfo::find_constant(constants, \"" + string(node.str()) + "\"); ";
+      }
+    }
+    str += "return " + string(condition.str()) + ";";
+    return str;
+  }
+
+  string parse_condition_as_lambda(const SymbolScope &scope, AttrList attributes)
+  {
+    string cond;
+    for (Attr attr : attributes.children_of_type<Attr>()) {
+      if (attr.identifier().str() == "condition") {
+        if (!cond.empty()) {
+          error(attr.identifier(), Diag::ConditionAttributeMultiple);
+          break;
+        }
+        cond = parse_condition(scope, attr.parameters().splat_1().arg1);
+      }
+    }
+    if (!cond.empty()) {
+      cond = ", [](blender::Span<CompilationConstant> constants) { " + cond + "}";
+    }
+    return cond;
   }
 
   /** \} */
