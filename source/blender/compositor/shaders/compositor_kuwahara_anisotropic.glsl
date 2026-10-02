@@ -212,6 +212,8 @@ void main()
 
       for (int k = 0; k < number_of_sectors; k++) {
         float weight = sector_weights[k] * radial_gaussian_weight;
+        /* Note: CPU code skips loop body when weight == 0, on a GPU
+         * that is not beneficial. */
         sum_of_weights_of_sectors[k % (number_of_sectors / 2)] += weight;
 
         /* Accumulate the pixel to each of the sectors multiplied by the sector weight. */

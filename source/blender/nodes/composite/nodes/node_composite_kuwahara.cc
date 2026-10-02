@@ -630,6 +630,10 @@ class ConvertKuwaharaOperation : public NodeOperation {
 
           for (int k = 0; k < number_of_sectors; k++) {
             float weight = sector_weights[k] * radial_gaussian_weight;
+            /* Skip zero weight sectors. */
+            if (weight == 0.0f) {
+              continue;
+            }
             sum_of_weights_of_sectors[k % (number_of_sectors / 2)] += weight;
 
             /* Accumulate the pixel to each of the sectors multiplied by the sector weight. */
