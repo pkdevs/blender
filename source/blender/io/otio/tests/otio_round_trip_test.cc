@@ -420,6 +420,47 @@ TEST_F(OTIOTest, MixedMeta)
   }
 }
 
+TEST_F(OTIOTest, SoundSubframeOffset)
+{
+#ifndef WITH_AUDASPACE
+  GTEST_SKIP() << "Sound support is unavailable";
+#endif
+  Scene *scene = new_scene();
+  const double fps = scene->frames_per_second();
+  const std::pair<const char *, float> cases[] = {{"Small", 0.3f}, {"Large", 0.7f}};
+  for (const int i : IndexRange(2)) {
+    seq::LoadData load_data;
+    seq::add_load_data_init(
+        &load_data, cases[i].first, asset_path("sound/pink_panther.ogg").c_str(), 1, i + 1);
+    Strip *sound = seq::add_sound_strip(bfile->main, scene, &scene->ed->seqbase, &load_data);
+    sound->handles_set(scene, 6, 26);
+    sound->sound_offset = cases[i].second / fps;
+  }
+
+  Scene *imported = round_trip(scene);
+  ASSERT_NE(imported, nullptr);
+
+  SerializableObject::Retainer<Timeline> timeline = read_otio();
+  for (const auto &[name, offset] : cases) {
+    const Strip *original = seq::lookup_strip_by_name(scene->ed, name);
+    const Strip *strip = seq::lookup_strip_by_name(imported->ed, name);
+    ASSERT_NE(strip, nullptr) << name;
+    EXPECT_EQ(strip->left_handle(), original->left_handle()) << name;
+    EXPECT_EQ(strip->right_handle(imported), original->right_handle(scene)) << name;
+    EXPECT_NEAR(strip->content_start() + strip->sound_offset * fps,
+                original->content_start() + original->sound_offset * fps,
+                1e-4)
+        << name;
+
+    for (const SerializableObject::Retainer<Clip> &clip : timeline->find_clips()) {
+      if (clip->name() == name) {
+        EXPECT_NEAR(clip->source_range()->start_time().value_rescaled_to(fps), 5.0 - offset, 1e-4)
+            << name;
+      }
+    }
+  }
+}
+
 TEST_F(OTIOTest, Transitions)
 {
   Scene *scene = new_scene();

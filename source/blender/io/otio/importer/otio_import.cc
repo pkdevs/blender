@@ -199,9 +199,10 @@ static Strip *clip_to_strip(StripImportContext &ctx,
   const TimeRange range = clip.trimmed_range();
   const std::optional<TimeRange> available_range = reference ? reference->available_range() :
                                                                std::nullopt;
-  const int media_start = to_frames(
-      ctx,
-      range.start_time() - (available_range ? available_range->start_time() : RationalTime()));
+  const RationalTime media_time = range.start_time() - (available_range ?
+                                                            available_range->start_time() :
+                                                            RationalTime());
+  const int media_start = to_frames(ctx, media_time);
 
   seq::LoadData load_data;
   seq::add_load_data_init(&load_data, clip.name().c_str(), nullptr, start - media_start, channel);
@@ -211,7 +212,11 @@ static Strip *clip_to_strip(StripImportContext &ctx,
     const std::string filepath = url_to_filepath(external->target_url());
     STRNCPY(load_data.path, filepath.c_str());
     if (is_audio) {
-      return seq::add_sound_strip(ctx.bmain, ctx.scene, &seqbase, &load_data);
+      Strip *strip = seq::add_sound_strip(ctx.bmain, ctx.scene, &seqbase, &load_data);
+      if (strip) {
+        strip->sound_offset = media_start / ctx.fps - media_time.to_seconds();
+      }
+      return strip;
     }
     if (!BLI_path_extension_check_array(filepath.c_str(), imb_ext_image)) {
       return seq::add_movie_strip(ctx.bmain, ctx.scene, &seqbase, &load_data);
