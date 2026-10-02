@@ -84,12 +84,12 @@ struct Tracks {
   Vector<SerializableObject::Retainer<Track>> audio;
 };
 
-static RationalTime frames(const StripExportContext &ctx, const int count)
+static RationalTime frames(const StripExportContext &ctx, const double count)
 {
   return RationalTime(count, ctx.fps);
 }
 
-static TimeRange frame_range(const StripExportContext &ctx, const int start, const int duration)
+static TimeRange frame_range(const StripExportContext &ctx, const double start, const int duration)
 {
   return TimeRange(frames(ctx, start), frames(ctx, duration));
 }
@@ -335,10 +335,13 @@ static SerializableObject::Retainer<Clip> strip_to_clip(StripExportContext &ctx,
     return nullptr;
   }
 
-  int source_start = strip.left_handle() - int(strip.content_start()) + strip.anim_startofs;
+  double source_start = strip.left_handle() - int(strip.content_start()) + strip.anim_startofs;
   const int duration = strip.right_handle(ctx.scene) - strip.left_handle();
   if (seq::transform_single_image_check(&strip)) {
     source_start = 0;
+  }
+  if (strip.type == STRIP_TYPE_SOUND) {
+    source_start -= strip.sound_offset * ctx.fps;
   }
 
   auto clip = SerializableObject::Retainer<Clip>(

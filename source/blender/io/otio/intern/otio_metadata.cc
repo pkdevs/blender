@@ -41,6 +41,7 @@ static bool skip_property(PointerRNA &ptr, PropertyRNA *prop)
       "content_start",
       "content_trim_start",
       "content_trim_end",
+      "sound_offset",
       "duration",
       "filepath",
       "directory",
