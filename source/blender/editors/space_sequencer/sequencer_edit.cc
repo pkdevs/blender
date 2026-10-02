@@ -1863,7 +1863,7 @@ const EnumPropertyItem prop_split_side_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static bool only_selected_get(wmOperator *op)
+bool only_selected_get(wmOperator *op)
 {
   if (RNA_struct_property_is_set(op->ptr, "ignore_selection")) {
     return !RNA_boolean_get(op->ptr, "ignore_selection");
@@ -2166,7 +2166,7 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
   Editing *ed = seq::editing_get(scene);
   ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
 
-  scene->ed->runtime->show_transform_preview = false;
+  ed->edit_point_set(scene, std::nullopt);
 
   View2D *v2d = ui::view2d_fromcontext(C);
   rctf box_rect;
@@ -2341,13 +2341,12 @@ static wmOperatorStatus sequencer_box_blade_modal(bContext *C,
 
   View2D *v2d = ui::view2d_fromcontext(C);
   int mouse_frame = ui::view2d_region_to_view_x(v2d, event->mval[0]);
-  scene->ed->runtime->show_transform_preview = true;
-  scene->ed->runtime->transform_preview_frame = mouse_frame;
+  scene->ed->edit_point_set(scene, mouse_frame);
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
   wmOperatorStatus gesture_return = WM_gesture_box_modal(C, op, event);
   if (gesture_return == OPERATOR_CANCELLED) {
-    scene->ed->runtime->show_transform_preview = false;
+    scene->ed->edit_point_set(scene, std::nullopt);
   }
 
   if (gesture_return == OPERATOR_RUNNING_MODAL) {
@@ -2366,9 +2365,8 @@ static wmOperatorStatus sequencer_box_blade_modal(bContext *C,
     rctf box_rect;
     WM_operator_properties_border_to_rctf(op, &box_rect);
     ui::view2d_region_to_view_rctf(v2d, &box_rect, &box_rect);
-    scene->ed->runtime->transform_preview_frame = (mouse_frame == int(box_rect.xmin)) ?
-                                                      int(box_rect.xmax) :
-                                                      int(box_rect.xmin);
+    scene->ed->edit_point_set(
+        scene, (mouse_frame == int(box_rect.xmin)) ? int(box_rect.xmax) : int(box_rect.xmin));
   }
 
   return gesture_return;
@@ -2378,7 +2376,7 @@ static void sequencer_box_blade_cancel(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   if (scene && scene->ed) {
-    scene->ed->runtime->show_transform_preview = false;
+    scene->ed->edit_point_set(scene, std::nullopt);
   }
   WM_gesture_box_cancel(C, op);
 }

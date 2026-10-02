@@ -214,6 +214,7 @@ bool sequencer_view_strips_poll(bContext *C);
  * \return collection of strips (`Strip`)
  */
 VectorSet<Strip *> all_strips_from_context(bContext *C);
+bool only_selected_get(wmOperator *op);
 
 /**
  * Strips that #SEQUENCER_OT_split splits at \a frame; note that this does not include effects or

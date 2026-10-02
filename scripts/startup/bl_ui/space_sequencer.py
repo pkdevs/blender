@@ -446,7 +446,7 @@ class SEQUENCER_MT_view(Menu):
         layout.separator()
 
         if is_preview:
-            layout.prop(st, "show_transform_preview", text="Preview During Transform")
+            layout.prop(st, "show_transform_preview")
         layout.separator()
 
         layout.operator_context = 'INVOKE_REGION_WIN'

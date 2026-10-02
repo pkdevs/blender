@@ -2138,7 +2138,7 @@ static void blade_box_draw(Scene *scene, const ARegion *region, wmOperator *op)
   /* Keep in sync with `sequencer_box_blade_exec()`. */
   const rctf box_rect = box_blade_rect_get(op, v2d);
   const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
-  const bool only_selected = RNA_boolean_get(op->ptr, "only_selected");
+  const bool only_selected = only_selected_get(op);
   const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
 
@@ -2414,16 +2414,35 @@ void sequencer_blade_tooltip_show(bContext *C)
       C, CTX_wm_window(C), CTX_wm_area(C), CTX_wm_region(C), blade_tooltip_init);
 }
 
+static void blade_edit_point_update(bContext *C)
+{
+  wmWindow *win = CTX_wm_window(C);
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *region = CTX_wm_region(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (scene == nullptr || scene->ed == nullptr) {
+    return;
+  }
+
+  std::optional<int> frame;
+  if (blade_paint_cursor_poll(C)) {
+    if (const std::optional<BladeSplit> split = blade_split_get(
+            scene, region, win, area->runtime.tool, int2(win->runtime->eventstate->xy)))
+    {
+      frame = split->frame;
+    }
+  }
+  scene->ed->edit_point_set(scene, frame);
+}
+
 static int blade_tooltip_ui_handler(bContext *C, const wmEvent *event, void * /*user_data*/)
 {
+  if (event->type == MOUSEMOVE || ISKEYMODIFIER(event->type)) {
+    blade_edit_point_update(C);
+  }
   if (blade_paint_cursor_poll(C)) {
     if (event->type == MOUSEMOVE || ISKEYMODIFIER(event->type)) {
       sequencer_blade_tooltip_show(C);
-    }
-    else if (ISMOUSE_BUTTON(event->type) || ISMOUSE_WHEEL(event->type)) {
-      /* Clicking or zooming destroys the tooltip, and it is only cleared
-       * on cursor motion otherwise, see #wm_event_do_handlers. */
-      WM_tooltip_clear(C, CTX_wm_window(C));
     }
   }
   return WM_UI_HANDLER_CONTINUE;

@@ -23,6 +23,8 @@
 
 #include "BLI_enum_flags.hh"
 
+#include <optional>
+
 namespace blender {
 
 struct MovieClip;
@@ -687,6 +689,9 @@ struct Editing {
   /** Access currently displayed channels, from root sequence or a meta-strip. */
   ListBaseT<SeqTimelineChannel> *current_channels();
   ListBaseT<SeqTimelineChannel> *current_channels() const;
+
+  std::optional<int> edit_point() const;
+  void edit_point_set(Scene *scene, std::optional<int> frame);
 #endif
 };
 

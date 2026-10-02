@@ -23,6 +23,7 @@
 #include "BKE_layer.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
+#include "BKE_main.hh"
 #include "BKE_screen.hh"
 
 #include "ED_screen.hh"
@@ -289,6 +290,17 @@ static SpaceLink *sequencer_duplicate(SpaceLink *sl)
   // sseq->gpd = gpencil_data_duplicate(sseq->gpd, false);
 
   return reinterpret_cast<SpaceLink *>(sseqn);
+}
+
+static void sequencer_deactivate(ScrArea *area)
+{
+  wmWindowManager *wm = G_MAIN->wm.first();
+  wmWindow *win = wm ? WM_window_find_by_area(wm, area) : nullptr;
+  WorkSpace *workspace = win ? WM_window_get_active_workspace(win) : nullptr;
+  Scene *scene = workspace ? workspace->sequencer_scene : nullptr;
+  if (scene && scene->ed) {
+    scene->ed->edit_point_set(scene, std::nullopt);
+  }
 }
 
 static void sequencer_listener(const wmSpaceTypeListenerParams *params)
@@ -1271,6 +1283,7 @@ void ED_spacetype_sequencer()
   st->dropboxes = sequencer_dropboxes;
   st->refresh = sequencer_refresh;
   st->listener = sequencer_listener;
+  st->deactivate = sequencer_deactivate;
   st->id_remap = sequencer_id_remap;
   st->foreach_id = sequencer_foreach_id;
   st->blend_read_data = sequencer_space_blend_read_data;
