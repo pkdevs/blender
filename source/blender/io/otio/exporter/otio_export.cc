@@ -212,12 +212,14 @@ static SerializableObject::Retainer<MediaReference> image_sequence_reference(
   BLI_strncpy(dirpath, strip.data->dirpath, sizeof(dirpath));
   BLI_path_abs(dirpath, BKE_main_blendfile_path(ctx.bmain));
 
+  /* OTIO expects the rate of the full sequence, counting file numbers that don't exist. */
+  const double rate = ctx.fps * frame_step;
   return new ImageSequenceReference(dirpath,
                                     name_prefix,
                                     name_suffix,
                                     start_frame,
                                     frame_step,
-                                    ctx.fps,
+                                    rate,
                                     padding,
                                     ImageSequenceReference::MissingFramePolicy::error,
                                     frame_range(ctx, 0, media_length(ctx, strip)));
@@ -330,7 +332,7 @@ static SerializableObject::Retainer<Clip> strip_to_clip(StripExportContext &ctx,
     CLOG_WARN(&LOG, "Skipping strip '%s' of unsupported type", strip.name + 2);
     BKE_reportf(ctx.params.reports,
                 RPT_WARNING,
-                "Strip '%s' was not exported, its type is not supported",
+                "Strip '%s' was not exported, its type is currently unsupported",
                 strip.name + 2);
     return nullptr;
   }
@@ -464,7 +466,7 @@ static SerializableObject::Retainer<Track> build_track(const StripExportContext 
                                                        const int channel_index,
                                                        const int origin)
 {
-  std::stable_sort(items.begin(), items.end(), [](const PlacedItem &a, const PlacedItem &b) {
+  std::ranges::stable_sort(items, [](const PlacedItem &a, const PlacedItem &b) {
     return std::tie(a.start, a.end) < std::tie(b.start, b.end);
   });
 

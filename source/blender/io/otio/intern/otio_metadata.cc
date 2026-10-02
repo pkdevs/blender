@@ -76,6 +76,9 @@ static std::any pointer_value(PointerRNA &ptr)
   if (RNA_struct_is_a(ptr.type, RNA_Strip)) {
     return std::string(static_cast<Strip *>(ptr.data)->name + 2);
   }
+  if (RNA_struct_is_a(ptr.type, RNA_ViewLayer)) {
+    return std::string(static_cast<ViewLayer *>(ptr.data)->name);
+  }
   return rna_to_dictionary(ptr);
 }
 
