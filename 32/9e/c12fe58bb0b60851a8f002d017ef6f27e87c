@@ -1,2 +1,3 @@
 Referenced by issue #164122, Geometry nodes - crash when editing a mesh with curve to mesh node in the node tree
 Referenced by issue #164315, Crash selecting points in edit mode with a specific geometry node modifier
+Referenced by issue #164522, Blender crashes when applying Voxel remesh and Smooth Corrective
