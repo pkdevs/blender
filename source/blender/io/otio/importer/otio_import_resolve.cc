@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "BLI_math_base.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
@@ -20,6 +21,7 @@
 #include "opentimelineio/effect.h"
 
 #include "otio_import_resolve.hh"
+#include "otio_metadata.hh"
 
 namespace blender::io::otio {
 
@@ -58,16 +60,7 @@ static const std::any *parameter(const AnyDictionary &effect, const std::string 
 
 static std::optional<double> number(const std::any *value)
 {
-  if (!value) {
-    return std::nullopt;
-  }
-  if (const double *number = std::any_cast<double>(value)) {
-    return *number;
-  }
-  if (const int64_t *number = std::any_cast<int64_t>(value)) {
-    return double(*number);
-  }
-  return std::nullopt;
+  return value ? to_number(*value) : std::nullopt;
 }
 
 static void copy_number(AnyDictionary &dst,
@@ -94,10 +87,9 @@ static const char *blend_type_from_composite_mode(const int64_t mode)
 
 static AnyVector hex_to_color(const std::string &hex)
 {
-  const unsigned long value = hex.size() == 7 ? std::strtoul(hex.c_str() + 1, nullptr, 16) : 0;
-  return AnyVector{double((value >> 16) & 0xFF) / 255.0,
-                   double((value >> 8) & 0xFF) / 255.0,
-                   double(value & 0xFF) / 255.0};
+  float3 color(0.0f);
+  hex_to_rgb(hex.c_str(), &color.x, &color.y, &color.z);
+  return AnyVector{double(color.x), double(color.y), double(color.z)};
 }
 
 static void add_effect_properties(const AnyDictionary &effect,

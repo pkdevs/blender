@@ -10,6 +10,7 @@
 
 #include "BKE_colortools.hh"
 #include "BKE_idprop.hh"
+#include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 
 #include "BLI_array.hh"
@@ -178,7 +179,7 @@ AnyDictionary rna_to_dictionary(PointerRNA &ptr)
   return dictionary;
 }
 
-static std::optional<double> to_number(const std::any &value)
+std::optional<double> to_number(const std::any &value)
 {
   if (const double *number = std::any_cast<double>(&value)) {
     return *number;
@@ -224,6 +225,12 @@ static PointerRNA find_by_name(
     Strip *strip = seq::lookup_strip_by_name(editing, name.c_str());
     return RNA_pointer_create_discrete(owner.owner_id, RNA_Strip, strip);
   }
+  if (RNA_struct_is_a(type, RNA_ViewLayer) && RNA_struct_is_a(owner.type, RNA_SceneStrip)) {
+    Scene *scene = static_cast<Strip *>(owner.data)->scene;
+    if (ViewLayer *view_layer = scene ? BKE_view_layer_find(scene, name.c_str()) : nullptr) {
+      return RNA_pointer_create_id_subdata(scene->id, RNA_ViewLayer, view_layer);
+    }
+  }
   return {};
 }
 
@@ -267,6 +274,27 @@ static void resize_collection(PointerRNA &ptr, const StringRef name, const int s
   }
 }
 
+static float *curve_mapping_clip(PointerRNA &ptr, const StringRef name)
+{
+  if (!RNA_struct_is_a(ptr.type, RNA_CurveMapping)) {
+    return nullptr;
+  }
+  rctf &clip = static_cast<CurveMapping *>(ptr.data)->clipr;
+  if (name == "clip_min_x") {
+    return &clip.xmin;
+  }
+  if (name == "clip_max_x") {
+    return &clip.xmax;
+  }
+  if (name == "clip_min_y") {
+    return &clip.ymin;
+  }
+  if (name == "clip_max_y") {
+    return &clip.ymax;
+  }
+  return nullptr;
+}
+
 static void set_property(
     Main *bmain, Editing *editing, PointerRNA &ptr, PropertyRNA *prop, const std::any &value)
 {
@@ -276,7 +304,12 @@ static void set_property(
     case PROP_BOOLEAN:
     case PROP_INT:
     case PROP_FLOAT: {
-      if (const AnyVector *values = std::any_cast<AnyVector>(&value)) {
+      if (float *clip = curve_mapping_clip(ptr, name)) {
+        if (const std::optional<double> number = to_number(value)) {
+          *clip = float(*number);
+        }
+      }
+      else if (const AnyVector *values = std::any_cast<AnyVector>(&value)) {
         const int length = std::min<int>(RNA_property_array_length(&ptr, prop), values->size());
         for (const int i : IndexRange(length)) {
           if (const std::optional<double> number = to_number((*values)[i])) {

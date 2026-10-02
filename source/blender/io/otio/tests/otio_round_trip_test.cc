@@ -341,8 +341,9 @@ TEST_F(OTIOTest, ImageSequences)
   Scene *imported = round_trip(scene);
   ASSERT_NE(imported, nullptr);
 
+  SerializableObject::Retainer<Timeline> timeline = read_otio();
   auto *reference = dynamic_cast<ImageSequenceReference *>(
-      read_otio()->find_clips()[0]->media_reference());
+      timeline->find_clips()[0]->media_reference());
   ASSERT_NE(reference, nullptr);
   EXPECT_EQ(reference->name_prefix(), "shot.");
   EXPECT_EQ(reference->start_frame(), 101);
@@ -400,6 +401,7 @@ TEST_F(OTIOTest, MixedMeta)
   Strip *sound = seq::add_sound_strip(bfile->main, scene, &meta->seqbase, &load_data);
   sound->handles_set(scene, 10, 20);
   seq::time_update_meta_strip_range(scene, meta);
+  meta->handles_set(scene, 10, 20);
 
   Scene *imported = round_trip(scene);
   ASSERT_NE(imported, nullptr);
@@ -612,13 +614,16 @@ static AnyDictionary resolve_effect(const std::string &name,
 TEST_F(OTIOTest, ResolveMetadata)
 {
   const TimeRange range(RationalTime(0, 24), RationalTime(10, 24));
-  auto generator = new GeneratorReference("Solid Color", "Solid Color", range);
+  auto *generator = new GeneratorReference("Solid Color", "Solid Color", range);
   generator->parameters()["Resolve_OTIO"] = AnyVector{
       resolve_effect("Solid Color", {{"color", std::string("#ff8000")}})};
   auto clip = SerializableObject::Retainer<Clip>(new Clip("Solid Color", generator, range));
+  AnyDictionary clip_resolve;
+  clip_resolve["Link Group ID"] = int64_t(1);
+  clip->metadata()["Resolve_OTIO"] = clip_resolve;
 
   auto add_effect = [&](const AnyDictionary &resolve) {
-    auto effect = new otio::Effect("", "Resolve Effect");
+    auto *effect = new otio::Effect("", "Resolve Effect");
     effect->metadata()["Resolve_OTIO"] = resolve;
     clip->effects().push_back(effect);
   };

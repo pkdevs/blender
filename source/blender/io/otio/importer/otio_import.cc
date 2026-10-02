@@ -476,7 +476,7 @@ static Scene *import_scene(bContext *C, const std::string &name)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   if (!scene || (scene->ed && !BLI_listbase_is_empty(&scene->ed->seqbase))) {
-    scene = BKE_scene_add(CTX_data_main(C), name.empty() ? DATA_("Scene") : name.c_str());
+    scene = BKE_scene_add(CTX_data_main(C), name.empty() ? DATA_("OTIO Import") : name.c_str());
   }
   seq::editing_ensure(scene);
   return scene;

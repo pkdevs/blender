@@ -20,8 +20,9 @@ struct PointerRNA;
 namespace blender::io::otio {
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
 
-AnyDictionary rna_to_dictionary(PointerRNA &ptr);
+std::optional<double> to_number(const std::any &value);
 
+AnyDictionary rna_to_dictionary(PointerRNA &ptr);
 void rna_from_dictionary(Main *bmain,
                          Editing *editing,
                          const AnyDictionary &dictionary,
