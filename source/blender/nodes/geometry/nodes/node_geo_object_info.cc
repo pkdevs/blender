@@ -8,7 +8,12 @@
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_instances.hh"
 
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
+#include "DNA_pointcloud_types.h"
+#include "DNA_volume_types.h"
+
+#include "BKE_grease_pencil.hh"
 
 #include "NOD_rna_define.hh"
 #include "NOD_socket_search_link.hh"
@@ -46,6 +51,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Rotation>("Rotation"_ustr);
   b.add_output<decl::Vector>("Scale"_ustr);
   b.add_output<decl::Geometry>("Geometry"_ustr).available(is_geometry);
+  b.add_output(eNodeSocketDatatype::SOCK_MATERIAL, "Materials"_ustr)
+      .structure_type(StructureType::List)
+      .align_with_previous()
+      .description("List of Materials")
+      .available(is_geometry);
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -54,6 +64,42 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
   if (node_tree.type == NTREE_GEOMETRY) {
     layout.prop(ptr, "transform_space", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
   }
+}
+
+static GSpan find_materials(Object *object)
+{
+  // todo check if we have object level materials??
+  const CPPType &cpp_type = CPPType::get<Material *>();
+
+  switch (GS(object->data->name)) {
+    case ID_ME: {
+      Mesh *mesh = id_cast<Mesh *>(object->data);
+      return GSpan(cpp_type, mesh->mat, mesh->totcol);
+    } break;
+    case ID_VO: {
+      Volume *volume = id_cast<Volume *>(object->data);
+      return GSpan(cpp_type, volume->mat, volume->totcol);
+    } break;
+    case ID_PT: {
+      PointCloud *pointcloud = id_cast<PointCloud *>(object->data);
+      return GSpan(cpp_type, pointcloud->mat, pointcloud->totcol);
+    } break;
+    case ID_CV: {
+      Curves *curves = id_cast<Curves *>(object->data);
+      return GSpan(cpp_type, curves->mat, curves->totcol);
+    } break;
+    case ID_GP: {
+      GreasePencil *grease_pencil = id_cast<GreasePencil *>(object->data);
+      return GSpan(cpp_type, grease_pencil->material_array, grease_pencil->material_array_num);
+    } break;
+    default:
+     return GSpan(cpp_type, nullptr, 0);
+    break;
+  }
+
+  BLI_assert_unreachable();
+
+  return GSpan(cpp_type, nullptr, 0);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -107,7 +153,8 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Scale"_ustr, scale);
   params.set_output("Transform"_ustr, output_transform);
 
-  if (!params.output_is_required("Geometry"_ustr)) {
+  if (!(params.output_is_required("Geometry"_ustr) || params.output_is_required("Materials"_ustr)))
+  {
     return;
   }
   /* Compare by `orig_id` because objects may be copied into separate depsgraphs. */
@@ -165,6 +212,10 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   geometry_set.set_name(object->id.name + 2);
   params.set_output("Geometry"_ustr, geometry_set);
+
+  GArray<> mat_data(find_materials(object));
+  GListPtr materials_list = GList::from_garray(std::move(mat_data));
+  params.set_output("Materials"_ustr, std::move(materials_list));
 }
 
 using namespace blender::compositor;
