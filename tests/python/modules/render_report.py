@@ -624,12 +624,12 @@ class Report:
                     <td><b>{name}</b><br/>{testname}<br/>{status}</td>
                     <td><img src="{new_url}" onmouseover="this.src='{ref_url}';" onmouseout="this.src='{new_url}';" class="render"></td>
                     <td><img src="{ref_url}" onmouseover="this.src='{new_url}';" onmouseout="this.src='{ref_url}';" class="render"></td>
-                 </tr>""" . format(tr_style=tr_style, test_category=test_category, result_attr=result_attr,
-                                   name=name,
-                                   testname=test_result.name,
-                                   status=status,
-                                   new_url=new_url,
-                                   ref_url=ref_url)
+                  </tr>""" . format(tr_style=tr_style, test_category=test_category, result_attr=result_attr,
+                                  name=name,
+                                  testname=test_result.name,
+                                  status=status,
+                                  new_url=new_url,
+                                  ref_url=ref_url)
 
             self.compare_tests += test_html
 
