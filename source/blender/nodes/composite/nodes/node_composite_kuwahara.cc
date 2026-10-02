@@ -614,7 +614,8 @@ class ConvertKuwaharaOperation : public NodeOperation {
           float sector_weights_sum = sector_weights[0] + sector_weights[1] + sector_weights[2] +
                                      sector_weights[3] + sector_weights[4] + sector_weights[5] +
                                      sector_weights[6] + sector_weights[7];
-          float radial_gaussian_weight = math::exp(-std::numbers::pi * disk_point_length_squared) /
+          float radial_gaussian_weight = math::exp(-float(std::numbers::pi) *
+                                                   disk_point_length_squared) /
                                          sector_weights_sum;
 
           /* Load the color of the pixel and its mirrored pixel and compute their square. */
