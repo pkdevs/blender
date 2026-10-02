@@ -4405,6 +4405,68 @@ class EXTENSIONS_OT_userpref_show_for_update(Operator):
         return {'FINISHED'}
 
 
+# This closely follows conventions from: `PREFERENCES_OT_addon_show`.
+class EXTENSIONS_OT_userpref_show_package(Operator):
+    """Show this extension in Preferences"""
+    bl_idname = "extensions.userpref_show_package"
+    bl_label = ""
+    bl_options = {'INTERNAL'}
+
+    extension_id: StringProperty(
+        name="Extension ID",
+        description="The extension to show, formatted as \"{repo_module}.{pkg_id}\"",
+    )
+
+    def execute(self, context):
+        from . import repo_cache_store_ensure
+
+        repo_module, pkg_id = self.extension_id.partition(".")[0::2]
+
+        repo_index, repo_item = next(
+            (
+                (repo_index, repo_item)
+                for repo_index, repo_item in enumerate(extension_repos_read())
+                if repo_item.module == repo_module
+            ),
+            (-1, None),
+        )
+        if repo_item is None:
+            self.report({'ERROR'}, "Repository \"{:s}\" not found or disabled".format(repo_module))
+            return {'CANCELLED'}
+
+        pkg_manifest_local = repo_cache_store_ensure().refresh_local_from_directory(
+            directory=repo_item.directory,
+            error_fn=print,
+        )
+        if (item_local := (pkg_manifest_local or {}).get(pkg_id)) is None:
+            self.report({'ERROR'}, "Extension \"{:s}\" not installed".format(self.extension_id))
+            return {'CANCELLED'}
+
+        wm = context.window_manager
+        prefs = context.preferences
+
+        prefs.active_section = 'EXTENSIONS'
+
+        # Narrows down, in case there are overlapping names between types.
+        wm.extension_type = next(
+            (key for key, value in blender_filter_by_type_map.items() if value == item_local.type),
+            'ALL',
+        )
+        # No need to clear tags, just disable filtering.
+        wm.extension_use_filter = False
+
+        wm.extension_show_panel_installed = True
+        wm.extension_search = item_local.name
+
+        blender_extension_show.add((pkg_id, repo_index))
+
+        # No need to show the editor if it is already visible in the main window.
+        if 'PREFERENCES' not in (area.type for area in context.screen.areas):
+            bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
+
+        return {'FINISHED'}
+
+
 # NOTE: this is a wrapper for `SCREEN_OT_userpref_show`.
 # It exists *only* to add a poll function which sets a message when offline mode is forced.
 class EXTENSIONS_OT_userpref_show_online(Operator):
@@ -4541,6 +4603,7 @@ classes = (
 
     EXTENSIONS_OT_userpref_tags_set,
     EXTENSIONS_OT_userpref_show_for_update,
+    EXTENSIONS_OT_userpref_show_package,
     EXTENSIONS_OT_userpref_show_online,
     EXTENSIONS_OT_userpref_allow_online,
     EXTENSIONS_OT_userpref_allow_online_popup,
