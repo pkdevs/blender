@@ -12,7 +12,6 @@
 
 #include "COM_algorithm_downsampled_gaussian_blur.hh"
 #include "COM_algorithm_pad.hh"
-#include "COM_algorithm_symmetric_separable_blur.hh"
 #include "COM_context.hh"
 #include "COM_result.hh"
 #include "COM_utilities.hh"
@@ -22,13 +21,14 @@ namespace blender::compositor {
 /* "Downsampled" Gaussian blur: downsample to a working resolution (which could be different
  * per axis), apply a small separable Gaussian there, reconstruct to full resolution image.
  *
- * The algorithm is similar to Skia's GPU Gaussian blur as of 2026 Sep (FilterResult::Builder::blur
- * and FilterResult::rescale),
- * https://skia.googlesource.com/skia/+/15a9437eec87/src/core/SkImageFilterTypes.cpp
- * independent X/Y scaling, texture samples placed to use bilinear filtering, one pixel border on
- * downsampled images that preserve the original image edges (this way bright interiors do not
- * overbright the result at large radius). Additions compared to Skia blur are:
+ * The algorithm is similar to Skia's GPU Gaussian blur as of 2026 Sep: independent X/Y scaling,
+ * texture samples placed to use bilinear filtering, one pixel border on downsampled images that
+ * preserve the original image edges (this way bright interiors do not overbright the result at
+ * large radius).
+ * See https://skia.googlesource.com/skia/+/15a9437eec87/src/core/SkImageFilterTypes.cpp
+ * particularly FilterResult::Builder::blur and FilterResult::rescale.
  *
+ * Additions compared to Skia blur are:
  * - When downsampling odd-sized image, we do more correct pixel area integration, so that isolated
  *   bright pixels do not flicker with sampling phase shift.
  * - Downsampled levels are ceil-halved sizes, and downsampling kicks in at sigma=6 (so in
@@ -57,7 +57,6 @@ namespace blender::compositor {
  *   https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-20-fast-third-order-texture-filtering
  */
 
-static constexpr float direct_blur_radius_sum = 40.0f;
 static constexpr float max_working_sigma = 6.0f;
 /* Bilinear-paired taps on each side of the center; their 24 pixels cover four sigma at
  * max_working_sigma. Must match the size of the taps array in the filter shader. */
@@ -76,39 +75,38 @@ struct DownsampledImage {
   int2 padding; /* Potential one pixel border. */
 };
 
-static DownsampledImage downsample(Context &context,
-                                   const DownsampledImage &input,
-                                   const int2 size,
-                                   const int2 padding,
-                                   const bool use_4x)
+static void downsample_gpu(Context &context,
+                           const DownsampledImage &input,
+                           const int2 size,
+                           const int2 padding,
+                           const int2 physical_size,
+                           const bool use_4x,
+                           DownsampledImage &output)
 {
-  DownsampledImage output = {context.create_result(ResultType::Color), size, padding};
-  const int2 physical_size = size + 2 * padding;
-  output.image.allocate_texture(physical_size);
-  /* GPU downsample. */
-  if (context.use_gpu()) {
-    gpu::Shader *shader = context.get_shader(use_4x ?
-                                                 "compositor_downsampled_gaussian_downsample_4x" :
-                                                 "compositor_downsampled_gaussian_downsample");
-    GPU_shader_bind(shader);
-    GPU_shader_uniform_int_ex(shader,
-                              GPU_shader_get_uniform(shader, "source_bounds"),
-                              4,
-                              1,
-                              int4(input.size, input.padding));
-    GPU_shader_uniform_int_ex(
-        shader, GPU_shader_get_uniform(shader, "destination_bounds"), 4, 1, int4(size, padding));
-    bind_as_bilinear_texture(shader, input.image, "input_tx");
-    output.image.bind_as_image(shader, "output_img");
-    compute_dispatch_threads_at_least(shader, physical_size);
-    input.image.unbind_as_texture();
-    output.image.unbind_as_image();
-    GPU_shader_unbind();
-    return output;
-  }
+  gpu::Shader *shader = context.get_shader(use_4x ?
+                                               "compositor_downsampled_gaussian_downsample_4x" :
+                                               "compositor_downsampled_gaussian_downsample");
+  GPU_shader_bind(shader);
+  GPU_shader_uniform_2iv(shader, "source_size", input.size);
+  GPU_shader_uniform_2iv(shader, "source_padding", input.padding);
+  GPU_shader_uniform_2iv(shader, "destination_size", size);
+  GPU_shader_uniform_2iv(shader, "destination_padding", padding);
+  bind_as_bilinear_texture(shader, input.image, "input_tx");
+  output.image.bind_as_image(shader, "output_img");
+  compute_dispatch_threads_at_least(shader, physical_size);
+  input.image.unbind_as_texture();
+  output.image.unbind_as_image();
+  GPU_shader_unbind();
+}
 
-  /* CPU downsample: same logic as GPU shader, but don't use paired bilinear reads since they
-   * are not "free" on the CPU. No need for special 4x downsample code here either. */
+static void downsample_cpu(const DownsampledImage &input,
+                           const int2 size,
+                           const int2 padding,
+                           const int2 physical_size,
+                           DownsampledImage &output)
+{
+  /* Same logic as GPU shader, but don't use paired bilinear reads since they are expensive
+   * on the CPU. No need for special 4x downsample code here either. */
   const int2 input_physical_size = input.image.domain().data_size;
   const float2 scale = float2(input.size) / float2(size);
   parallel_for(physical_size, [&](const int2 texel) {
@@ -137,7 +135,80 @@ static DownsampledImage downsample(Context &context,
     }
     output.image.store_pixel(texel, Color(color / ((hi.x - lo.x) * (hi.y - lo.y))));
   });
+}
+
+static DownsampledImage downsample(Context &context,
+                                   const DownsampledImage &input,
+                                   const int2 size,
+                                   const int2 padding,
+                                   const bool use_4x)
+{
+  DownsampledImage output = {context.create_result(ResultType::Color), size, padding};
+  const int2 physical_size = size + 2 * padding;
+  output.image.allocate_texture(physical_size);
+  if (context.use_gpu()) {
+    downsample_gpu(context, input, size, padding, physical_size, use_4x, output);
+  }
+  else {
+    downsample_cpu(input, size, padding, physical_size, output);
+  }
   return output;
+}
+
+static void gaussian_axis_gpu(Context &context,
+                              const Result &input,
+                              const int axis,
+                              const float4 *taps,
+                              const int tap_count,
+                              const float center_weight,
+                              Result &output)
+{
+  const int2 size = input.domain().data_size;
+
+  gpu::Shader *shader = context.get_shader("compositor_downsampled_gaussian_filter");
+  GPU_shader_bind(shader);
+  float2 uv_step(0.0f);
+  uv_step[axis] = 1.0f / size[axis];
+  GPU_shader_uniform_2fv(shader, "uv_step", uv_step);
+  GPU_shader_uniform_1f(shader, "center_weight", center_weight);
+  GPU_shader_uniform_1i(shader, "tap_count", tap_count);
+  GPU_shader_uniform_4fv_array(
+      shader, "taps", max_tap_pairs, reinterpret_cast<const float (*)[4]>(taps));
+  bind_as_bilinear_texture(shader, input, "input_tx");
+  output.bind_as_image(shader, "output_img");
+  compute_dispatch_threads_at_least(shader, size);
+  input.unbind_as_texture();
+  output.unbind_as_image();
+  GPU_shader_unbind();
+}
+
+static void gaussian_axis_cpu(const Result &input,
+                              const int axis,
+                              const float *weights,
+                              const int tap_count,
+                              const float center_weight,
+                              Result &output)
+{
+  /* Same logic as GPU, except we don't use bilinear paired taps. */
+
+  const int2 size = input.domain().data_size;
+  int weight_count = 2 * tap_count;
+  while (weight_count > 0 && weights[weight_count - 1] == 0.0f) {
+    weight_count--;
+  }
+  parallel_for(size, [&](const int2 texel) {
+    float4 color = float4(input.load_pixel<Color>(texel)) * center_weight;
+    for (int i = 1; i <= weight_count; i++) {
+      int2 negative = texel;
+      int2 positive = texel;
+      negative[axis] = math::max(0, texel[axis] - i);
+      positive[axis] = math::min(size[axis] - 1, texel[axis] + i);
+      color += (float4(input.load_pixel<Color>(negative)) +
+                float4(input.load_pixel<Color>(positive))) *
+               weights[i - 1];
+    }
+    output.store_pixel(texel, Color(color));
+  });
 }
 
 static Result gaussian_axis(Context &context,
@@ -187,44 +258,12 @@ static Result gaussian_axis(Context &context,
   const int2 size = input.domain().data_size;
   output.allocate_texture(input.domain());
 
-  /* GPU blur. */
   if (context.use_gpu()) {
-    gpu::Shader *shader = context.get_shader("compositor_downsampled_gaussian_filter");
-    GPU_shader_bind(shader);
-    float2 uv_step(0.0f);
-    uv_step[axis] = 1.0f / size[axis];
-    GPU_shader_uniform_2fv(shader, "uv_step", uv_step);
-    GPU_shader_uniform_1f(shader, "center_weight", center_weight);
-    GPU_shader_uniform_1i(shader, "tap_count", tap_count);
-    GPU_shader_uniform_4fv_array(
-        shader, "taps", max_tap_pairs, reinterpret_cast<const float (*)[4]>(taps));
-    bind_as_bilinear_texture(shader, input, "input_tx");
-    output.bind_as_image(shader, "output_img");
-    compute_dispatch_threads_at_least(shader, size);
-    input.unbind_as_texture();
-    output.unbind_as_image();
-    GPU_shader_unbind();
-    return output;
+    gaussian_axis_gpu(context, input, axis, taps, tap_count, center_weight, output);
   }
-
-  /* CPU blur: same logic as GPU, except we don't use bilinear paired taps. */
-  int weight_count = 2 * tap_count;
-  while (weight_count > 0 && weights[weight_count - 1] == 0.0f) {
-    weight_count--;
+  else {
+    gaussian_axis_cpu(input, axis, weights, tap_count, center_weight, output);
   }
-  parallel_for(size, [&](const int2 texel) {
-    float4 color = float4(input.load_pixel<Color>(texel)) * center_weight;
-    for (int i = 1; i <= weight_count; i++) {
-      int2 negative = texel;
-      int2 positive = texel;
-      negative[axis] = math::max(0, texel[axis] - i);
-      positive[axis] = math::min(size[axis] - 1, texel[axis] + i);
-      color += (float4(input.load_pixel<Color>(negative)) +
-                float4(input.load_pixel<Color>(positive))) *
-               weights[i - 1];
-    }
-    output.store_pixel(texel, Color(color));
-  });
   return output;
 }
 
@@ -365,6 +404,55 @@ static DownsampledImage downsample_to_level(Context &context,
   return current;
 }
 
+static void upsample_gpu(Context &context,
+                         const Result &input,
+                         const int2 size,
+                         const DownsampledImage &working,
+                         const Result &filtered,
+                         Result &output)
+{
+  output.allocate_texture(input.domain());
+  gpu::Shader *shader = context.get_shader("compositor_downsampled_gaussian_reconstruct");
+  GPU_shader_bind(shader);
+  GPU_shader_uniform_2iv(shader, "input_size", working.size);
+  GPU_shader_uniform_2iv(shader, "input_padding", working.padding);
+  bind_as_bilinear_texture(shader, filtered, "input_tx");
+  output.bind_as_image(shader, "output_img");
+  compute_dispatch_threads_at_least(shader, size);
+  filtered.unbind_as_texture();
+  output.unbind_as_image();
+  GPU_shader_unbind();
+}
+
+static void upsample_cpu(const Result &input,
+                         const int2 size,
+                         const DownsampledImage &working,
+                         const Result &filtered,
+                         Result &output)
+{
+  output.allocate_texture(input.domain());
+  const Array<ReconstructionSample> samples_x = reconstruction_axis(
+      working.size.x, size.x, working.padding.x);
+  const Array<ReconstructionSample> samples_y = reconstruction_axis(
+      working.size.y, size.y, working.padding.y);
+  const int2 samples_per_axis(reconstruction_sample_count(working.size.x, size.x),
+                              reconstruction_sample_count(working.size.y, size.y));
+  parallel_for(size, [&](const int2 texel) {
+    const ReconstructionSample &sample_x = samples_x[texel.x];
+    const ReconstructionSample &sample_y = samples_y[texel.y];
+    float4 color(0.0f);
+    for (int j = 0; j < samples_per_axis.y; j++) {
+      float4 row(0.0f);
+      for (int i = 0; i < samples_per_axis.x; i++) {
+        row += float4(filtered.load_pixel<Color>(int2(sample_x.indices[i], sample_y.indices[j]))) *
+               sample_x.weights[i];
+      }
+      color += row * sample_y.weights[j];
+    }
+    output.store_pixel(texel, Color(color));
+  });
+}
+
 static void do_blur(Context &context, const Result &input, Result &output, const float2 &radius)
 {
   const int2 size = input.domain().data_size;
@@ -381,46 +469,10 @@ static void do_blur(Context &context, const Result &input, Result &output, const
     output.share_data(filtered);
   }
   else if (context.use_gpu()) {
-    /* GPU upsample reconstruction. */
-    output.allocate_texture(input.domain());
-    gpu::Shader *shader = context.get_shader("compositor_downsampled_gaussian_reconstruct");
-    GPU_shader_bind(shader);
-    GPU_shader_uniform_int_ex(shader,
-                              GPU_shader_get_uniform(shader, "input_bounds"),
-                              4,
-                              1,
-                              int4(working.size, working.padding));
-    bind_as_bilinear_texture(shader, filtered, "input_tx");
-    output.bind_as_image(shader, "output_img");
-    compute_dispatch_threads_at_least(shader, size);
-    filtered.unbind_as_texture();
-    output.unbind_as_image();
-    GPU_shader_unbind();
+    upsample_gpu(context, input, size, working, filtered, output);
   }
   else {
-    /* CPU upsample reconstruction. */
-    output.allocate_texture(input.domain());
-    const Array<ReconstructionSample> samples_x = reconstruction_axis(
-        working.size.x, size.x, working.padding.x);
-    const Array<ReconstructionSample> samples_y = reconstruction_axis(
-        working.size.y, size.y, working.padding.y);
-    const int2 samples_per_axis(reconstruction_sample_count(working.size.x, size.x),
-                                reconstruction_sample_count(working.size.y, size.y));
-    parallel_for(size, [&](const int2 texel) {
-      const ReconstructionSample &sample_x = samples_x[texel.x];
-      const ReconstructionSample &sample_y = samples_y[texel.y];
-      float4 color(0.0f);
-      for (int j = 0; j < samples_per_axis.y; j++) {
-        float4 row(0.0f);
-        for (int i = 0; i < samples_per_axis.x; i++) {
-          row += float4(
-                     filtered.load_pixel<Color>(int2(sample_x.indices[i], sample_y.indices[j]))) *
-                 sample_x.weights[i];
-        }
-        color += row * sample_y.weights[j];
-      }
-      output.store_pixel(texel, Color(color));
-    });
+    upsample_cpu(input, size, working, filtered, output);
   }
   filtered.release();
 }
@@ -431,13 +483,6 @@ void downsampled_gaussian_blur(Context &context,
                                const float2 &radius,
                                const bool extend_bounds)
 {
-  /* Direct blur is faster for small blur radii. */
-  if (radius.x + radius.y < direct_blur_radius_sum) {
-    symmetric_separable_blur(
-        context, input, output, radius, math::FilterKernel::Gauss, extend_bounds);
-    return;
-  }
-
   if (!extend_bounds) {
     do_blur(context, input, output, radius);
     return;

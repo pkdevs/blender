@@ -9,7 +9,8 @@
 namespace compositor::downsampled_gaussian::reconstruction {
 
 struct Resources {
-  [[push_constant]] int4 input_bounds;
+  [[push_constant]] int2 input_size;
+  [[push_constant]] int2 input_padding;
 
   [[sampler(0)]] sampler2D input_tx;
   [[image(0, write, SFLOAT_16_16_16_16)]] image2D output_img;
@@ -48,9 +49,9 @@ void compute_main([[resource_table]] Resources &srt,
     return;
   }
   const float2 uv = (float2(texel) + float2(0.5f)) / float2(output_size);
-  const int2 size = srt.input_bounds.xy;
-  const float3 x_axis = cubic_axis(uv.x, size.x, output_size.x, srt.input_bounds.z);
-  const float3 y_axis = cubic_axis(uv.y, size.y, output_size.y, srt.input_bounds.w);
+  const int2 size = srt.input_size;
+  const float3 x_axis = cubic_axis(uv.x, size.x, output_size.x, srt.input_padding.x);
+  const float3 y_axis = cubic_axis(uv.y, size.y, output_size.y, srt.input_padding.y);
   float4 color = textureLod(srt.input_tx, float2(x_axis.x, y_axis.x), 0.0f);
   if (2 * size.x < output_size.x) {
     color = mix(color, textureLod(srt.input_tx, float2(x_axis.y, y_axis.x), 0.0f), x_axis.z);

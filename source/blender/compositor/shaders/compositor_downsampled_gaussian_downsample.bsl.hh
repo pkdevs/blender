@@ -11,8 +11,10 @@ namespace compositor::downsampled_gaussian::downsampling {
 struct Resources {
   [[compilation_constant]] const bool use_4x;
 
-  [[push_constant]] int4 source_bounds;
-  [[push_constant]] int4 destination_bounds;
+  [[push_constant]] int2 source_size;
+  [[push_constant]] int2 source_padding;
+  [[push_constant]] int2 destination_size;
+  [[push_constant]] int2 destination_padding;
 
   [[sampler(0)]] sampler2D input_tx;
   [[image(0, write, SFLOAT_16_16_16_16)]] image2D output_img;
@@ -46,16 +48,16 @@ void compute_main([[resource_table]] Resources &srt,
      * Four bilinear reads average a 4x4 footprint, or two reads average a 4x1 footprint.
      * Unchanged axes and preserved borders use one coordinate. */
     const int2 physical_size = textureSize(srt.input_tx, 0);
-    const int2 scale = srt.source_bounds.xy / srt.destination_bounds.xy;
-    const int2 pixel = texel - srt.destination_bounds.zw;
-    float2 center = (float2(pixel) + 0.5f) * float2(scale) + float2(srt.source_bounds.zw);
+    const int2 scale = srt.source_size / srt.destination_size;
+    const int2 pixel = texel - srt.destination_padding;
+    float2 center = (float2(pixel) + 0.5f) * float2(scale) + float2(srt.source_padding);
     float2 offset = float2(scale.x == 4 ? 1.0f : 0.0f, scale.y == 4 ? 1.0f : 0.0f);
     for (int axis = 0; axis < 2; axis++) {
       if (pixel[axis] < 0) {
         center[axis] = 0.5f;
         offset[axis] = 0.0f;
       }
-      else if (pixel[axis] >= srt.destination_bounds[axis]) {
+      else if (pixel[axis] >= srt.destination_size[axis]) {
         center[axis] = float(physical_size[axis]) - 0.5f;
         offset[axis] = 0.0f;
       }
@@ -76,14 +78,14 @@ void compute_main([[resource_table]] Resources &srt,
     imageStore(srt.output_img, texel, color);
   }
   else {
-    const int2 input_size = srt.source_bounds.xy;
-    const int2 logical_output_size = srt.destination_bounds.xy;
+    const int2 input_size = srt.source_size;
+    const int2 logical_output_size = srt.destination_size;
     const int2 physical_size = textureSize(srt.input_tx, 0);
-    const int2 pixel = texel - srt.destination_bounds.zw;
+    const int2 pixel = texel - srt.destination_padding;
     const float2 scale = float2(input_size) / float2(logical_output_size);
-    float2 lo = float2(pixel) * scale + float2(srt.source_bounds.zw);
+    float2 lo = float2(pixel) * scale + float2(srt.source_padding);
     float2 hi = min(float2(pixel + int2(1)) * scale, float2(input_size)) +
-                float2(srt.source_bounds.zw);
+                float2(srt.source_padding);
     /* Preserve the outermost source edge in the border. */
     for (int axis = 0; axis < 2; axis++) {
       if (pixel[axis] < 0) {
