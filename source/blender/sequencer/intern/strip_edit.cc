@@ -371,7 +371,7 @@ static bool seq_edit_split_operation_permitted_check(const Scene *scene,
   for (Strip *strip : strips) {
     const ListBaseT<SeqTimelineChannel> *channels = channels_displayed_get(editing_get(scene));
     if (transform_is_locked(channels, strip)) {
-      *r_error = "Strip is locked.";
+      *r_error = "Strip is locked, cannot split";
       return false;
     }
     if (!strip->is_effect()) {

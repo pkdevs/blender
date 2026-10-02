@@ -1924,6 +1924,7 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
   bool changed = false;
+  bool failed = false;
 
   const bool split_at_cursor = RNA_boolean_get(op->ptr, "use_cursor_position");
   const bool all_channels = RNA_boolean_get(op->ptr, "all_channels");
@@ -1962,7 +1963,8 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
       changed = true;
     }
     if (error_msg != nullptr) {
-      BKE_report(op->reports, RPT_ERROR, error_msg);
+      BKE_report(op->reports, RPT_WARNING, error_msg);
+      failed = true;
     }
   }
 
@@ -1983,6 +1985,10 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
     }
     WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
     return OPERATOR_FINISHED;
+  }
+
+  if (failed) {
+    return OPERATOR_CANCELLED;
   }
 
   /* Passthrough to selection if used as tool. */
