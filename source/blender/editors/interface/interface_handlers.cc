@@ -436,9 +436,8 @@ struct HandleButtonData {
   /** Unit hint drawn faded after the edit string, empty when there is none. */
   std::string text_edit_unit_hint;
 
-  
   wmTimer *text_select_auto_scroll = nullptr;
-  double text_select_auto_scroll_last_time = -1.0;
+  double text_select_auto_scroll_last_time = std::numeric_limits<double>::lowest();
 
   double value = 0.0f;
   double origvalue = 0.0f;
@@ -4588,21 +4587,20 @@ static int do_but_textedit_select(
                                                               nullptr;
 
   switch (event->type) {
-case TIMER: {
-  if (!textbox || event->customdata != data->text_select_auto_scroll) {
-    break;
-  }
+    case TIMER: {
+      if (!textbox || event->customdata != data->text_select_auto_scroll) {
+        break;
+      }
 
-  /* Prevent processing the same timer tick multiple times from duplicate UI handlers. */
-  const wmTimer *timer = static_cast<const wmTimer *>(event->customdata);
-  if (timer->time_duration == data->text_select_auto_scroll_last_time) {
-    retval = WM_UI_HANDLER_BREAK;
-    break;
-  }
-  data->text_select_auto_scroll_last_time = timer->time_duration;
+      const wmTimer *timer = static_cast<const wmTimer *>(event->customdata);
+      if (timer->time_duration == data->text_select_auto_scroll_last_time) {
+        retval = WM_UI_HANDLER_BREAK;
+        break;
+      }
+      data->text_select_auto_scroll_last_time = timer->time_duration;
 
-  rctf rect;
-  block_to_window_rctf(data->region, block, &rect, &but->rect);
+      rctf rect;
+      block_to_window_rctf(data->region, block, &rect, &but->rect);
 
       rect.ymax -= textbox_vertical_padding() / block->aspect;
       rect.ymin += textbox_vertical_padding() / block->aspect;
