@@ -516,7 +516,28 @@ static wmOperatorStatus collection_importer_add_exec(bContext *C, wmOperator *op
     return OPERATOR_CANCELLED;
   }
 
-  BKE_collection_importer_add(collection, fh->idname);
+  /* `collection_importer_add_exec` might be called once file selection from the filebrowser
+   * invoked from the `collection_importer_add_invoke` function is validated. In such case, the
+   * collection importer has already been created, only need to set its filepath property value. */
+  CollectionImport *collection_importer = static_cast<CollectionImport *>(op->customdata);
+  if (collection_importer) {
+    BLI_assert(STREQ(collection_importer->fh_idname, fh->idname));
+  }
+  else {
+    collection_importer = BKE_collection_importer_add(collection, fh->idname);
+    op->customdata = collection_importer;
+  }
+
+  std::string filepath = RNA_string_get(op->ptr, "filepath");
+  if (!filepath.empty()) {
+    if (!collection_importer->import_properties) {
+      collection_importer->import_properties =
+          bke::idprop::create_group("Collection Import System Properties").release();
+    }
+    IDProperty *import_properties = collection_importer->import_properties;
+    IDProperty *filepath_property = bke::idprop::create("filepath", filepath).release();
+    IDP_AddToGroup(import_properties, filepath_property);
+  }
 
   BKE_view_layer_need_resync_tag(CTX_data_view_layer(C));
   DEG_id_tag_update(&collection->id, ID_RECALC_SYNC_TO_EVAL);
@@ -527,21 +548,69 @@ static wmOperatorStatus collection_importer_add_exec(bContext *C, wmOperator *op
   return OPERATOR_FINISHED;
 }
 
+static wmOperatorStatus collection_importer_add_invoke(bContext *C,
+                                                       wmOperator *op,
+                                                       const wmEvent *event)
+{
+  if (RNA_struct_property_is_set(op->ptr, "filepath")) {
+    return WM_operator_call_notest(C, op); /* Call exec direct. */
+  }
+
+  /* Unconditionally call `collection_importer_add_exec`, to ensure that the collection importer is
+   * created, even if the user 'cancel' the file selector. */
+  const wmOperatorStatus ret_status = WM_operator_call_notest(C, op);
+  if (ret_status != wmOperatorStatus::OPERATOR_FINISHED) {
+    return ret_status;
+  }
+  BLI_assert(op->customdata != nullptr);
+
+  char name[MAX_ID_NAME - 2]; /* id name */
+  RNA_string_get(op->ptr, "name", name);
+
+  bke::FileHandlerType *fh = bke::file_handler_find(name);
+  if (!fh) {
+    BKE_reportf(op->reports, RPT_ERROR, "File handler '%s' not found", name);
+    return OPERATOR_CANCELLED;
+  }
+
+  RNA_string_set(op->ptr, "filter_glob", fh->filter_glob_from_extensions().c_str());
+
+  /* This will call again `collection_importer_add_exec` when user validate their choice, which
+   * will copy the value of the 'filepath' property of this operator, into the collection_importer
+   * 'filepath' property. */
+  return WM_operator_filesel(C, op, event);
+}
+
 static void COLLECTION_OT_importer_add(wmOperatorType *ot)
 {
+  PropertyRNA *prop;
+
   /* identifiers */
   ot->name = "Add Importer";
   ot->description = "Add Importer";
   ot->idname = "COLLECTION_OT_importer_add";
 
   /* api callbacks */
+  ot->invoke = collection_importer_add_invoke;
   ot->exec = collection_importer_add_exec;
   ot->poll = collection_importer_add_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  RNA_def_string(ot->srna, "name", nullptr, MAX_ID_NAME - 2, "Name", "FileHandler idname");
+  prop = RNA_def_string(ot->srna, "name", nullptr, MAX_ID_NAME - 2, "Name", "FileHandler idname");
+  RNA_def_property_flag(prop, PROP_HIDDEN);
+
+  prop = RNA_def_string(
+      ot->srna, "filepath", nullptr, FILE_MAX, "Filepath", "Filepath for the collection import");
+  RNA_def_property_flag(prop, PROP_HIDDEN);
+  prop = RNA_def_string(ot->srna,
+                        "filter_glob",
+                        nullptr,
+                        FH_MAX_FILE_EXTENSIONS_STR,
+                        "File Extension",
+                        "'Glob' file type extension(s), as defined by the selected file handler");
+  RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
 static wmOperatorStatus collection_importer_remove_exec(bContext *C, wmOperator * /*op*/)
