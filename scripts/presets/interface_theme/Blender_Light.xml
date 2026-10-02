@@ -715,7 +715,6 @@
         row_alternate="#ffffff0d"
         text_strip_cursor="#71a8ffff"
         selected_text="#19191a4d"
-        strip_alert="#ff212166"
         >
         <space>
           <ThemeSpaceGeneric

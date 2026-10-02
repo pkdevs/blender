@@ -1511,7 +1511,8 @@ static void strip_data_outline_params_set(const StripDrawContext &strip,
    *  - Red when overlapping with other strips or handles are clamped.
    *  - Slightly lighter while translating strips. */
   if ((translating && overlaps && !use_overwrite) || clamped_l || clamped_r) {
-    ui::theme::get_color_3ubv(TH_SEQ_STRIP_ALERT, col);
+    col[0] = 255;
+    col[1] = col[2] = 33;
     data.flags |= GPU_SEQ_FLAG_OVERLAP;
   }
   else if (translating && selected) {
@@ -2176,7 +2177,7 @@ static void blade_box_draw(Scene *scene, const ARegion *region, wmOperator *op)
     }
   }
 
-  immUniformThemeColor(TH_SEQ_STRIP_ALERT);
+  immUniformThemeColorAlpha(TH_REDALERT, 0.4f);
   for (const Strip *strip : targets) {
     rctf cut_rect = strip_bounds_get(scene, strip);
     cut_rect.xmin = max_ff(cut_rect.xmin, rect_frames[0]);

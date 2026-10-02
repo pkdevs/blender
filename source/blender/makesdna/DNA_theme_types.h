@@ -381,7 +381,6 @@ typedef struct ThemeSpace {
   unsigned char movie[4], movieclip[4], mask[4], image[4], scene[4], audio[4];
   unsigned char effect[4], transition[4], meta[4], text_strip[4], color_strip[4];
   unsigned char active_strip[4], selected_strip[4], text_strip_cursor[4], selected_text[4];
-  unsigned char strip_alert[4];
 
   /** For dope-sheet - scale factor for size of keyframes (i.e. height of channels). */
   float keyframe_scale_fac;
@@ -403,7 +402,7 @@ typedef struct ThemeSpace {
   unsigned char gp_wire_edit[4];
   unsigned char gp_vertex_size;
   unsigned char gp_vertex[4], gp_vertex_select[4];
-  char _pad11[8];
+  char _pad11[12];
 
   unsigned char preview_back[4];
   unsigned char preview_stitch_face[4];

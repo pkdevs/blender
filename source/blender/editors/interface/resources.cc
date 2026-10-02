@@ -743,9 +743,6 @@ const uchar *get_color_ptr(const bTheme *btheme, int spacetype, int colorid)
         case TH_SEQ_SELECTED_TEXT:
           cp = ts->selected_text;
           break;
-        case TH_SEQ_STRIP_ALERT:
-          cp = ts->strip_alert;
-          break;
 
         case TH_CONSOLE_OUTPUT:
           cp = ts->console_output;
