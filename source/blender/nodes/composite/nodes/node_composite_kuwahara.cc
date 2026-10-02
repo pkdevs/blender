@@ -402,6 +402,16 @@ class ConvertKuwaharaOperation : public NodeOperation {
     return "compositor_kuwahara_anisotropic_variable_size";
   }
 
+  static float radial_falloff(float x)
+  {
+    /* We know x is in [0..1] range, and the Gaussian falloff
+     * function we want is `exp(-PI * x)`. This approximates
+     * it with a polynomial. */
+    return 0.99963078f +
+           x * (-3.12538948f +
+                x * (4.76244166f + x * (-4.41057815f + x * (2.39937989f + x * (-0.58256130f)))));
+  }
+
   void execute_anisotropic_cpu(const Result &structure_tensor)
   {
     const float eccentricity = this->compute_eccentricity();
@@ -614,8 +624,7 @@ class ConvertKuwaharaOperation : public NodeOperation {
           float sector_weights_sum = sector_weights[0] + sector_weights[1] + sector_weights[2] +
                                      sector_weights[3] + sector_weights[4] + sector_weights[5] +
                                      sector_weights[6] + sector_weights[7];
-          float radial_gaussian_weight = math::exp(-float(std::numbers::pi) *
-                                                   disk_point_length_squared) /
+          float radial_gaussian_weight = radial_falloff(disk_point_length_squared) /
                                          sector_weights_sum;
 
           /* Load the color of the pixel and its mirrored pixel and compute their square. */
