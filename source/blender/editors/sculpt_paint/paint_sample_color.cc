@@ -277,18 +277,17 @@ static std::optional<float3> sample_mesh_attribute_color(ViewContext &vc,
   const int vert = std::get<int>(active_element->vert);
   const int face = active_element->active_face_idx;
 
-  if (color_attribute.domain == bke::AttrDomain::Corner && faces.index_range().contains(face)) {
-    const int corner = bke::mesh::face_find_corner_from_vert(faces[face], corner_verts, vert);
-    if (corner != -1) {
-      float4 sampled_color;
-      color::gather_colors(colors, Span<int>(&corner, 1), MutableSpan<float4>(&sampled_color, 1));
-      return sampled_color.xyz();
+  if (face != -1) {
+    if (color_attribute.domain == bke::AttrDomain::Corner && faces.index_range().contains(face)) {
+      const int corner = bke::mesh::face_find_corner_from_vert(faces[face], corner_verts, vert);
+      if (corner != -1) {
+        float4 sampled_color;
+        sampled_color = color::color_corner_get(colors, corner);
+        return sampled_color.xyz();
+      }
     }
   }
-
-  return color::color_vert_get(
-             faces, corner_verts, vert_to_face_map, colors, color_attribute.domain, vert)
-      .xyz();
+  return std::nullopt;
 }
 
 static void apply_sampled_color(Main &bMain,
