@@ -1,1 +1,2 @@
 Referenced by issue #59164, Calling the Alembic export/importer from a .py script crashes Blender
+Referenced by pull request #164517, Fix #161827: Audio mixdown from scripts produces bad output
