@@ -100,7 +100,7 @@ try:
     with open(Path(library_path) / ".blender_asset_lib.toml", "rb") as f:
         config_dict = tomllib.load(f)
 except FileNotFoundError:
-    # Use an emtpy dictionary when there is not an existing file
+    # Use an emtpy dictionary when there is not existing file
     config_dict = {}
 except e:
     # Something went wrong, raise error
@@ -108,7 +108,7 @@ except e:
 
 # Assign input uuid when no value is assigned to the library yet
 if "uuid" not in config_dict or config_dict["uuid"] is None:
-    config_dict["uuid"] = new_uuid
+    config_dict["uuid"] = fallback_uuid
 
     import tomli_w
     max_len_backup = tomli_w._writer.MAX_LINE_LENGTH
@@ -127,9 +127,9 @@ if "uuid" not in config_dict or config_dict["uuid"] is None:
 ret_uuid = config_dict["uuid"]
 )";
   /* New UUID to assign if the library have not identifier yet. */
-  UUID new_uuid = BLI_uuid_generate_random();
+  UUID fallback_uuid = BLI_uuid_generate_random();
   std::unique_ptr locals = bke::idprop::create_group("locals");
-  IDP_AddToGroup(locals.get(), IDP_NewString(new_uuid.str(), "new_uuid"));
+  IDP_AddToGroup(locals.get(), IDP_NewString(fallback_uuid.str(), "fallback_uuid"));
   IDP_AddToGroup(locals.get(), IDP_NewString(custom_library.resolved_dirpath, "library_path"));
 
   std::optional<blender::IDProperty *> idprop_optptr =

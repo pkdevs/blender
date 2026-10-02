@@ -531,7 +531,7 @@ static int rna_userdef_asset_library_uuid_length(PointerRNA *ptr)
 
 static void rna_userdef_asset_library_invalid_uuid_get(PointerRNA *ptr, char *value)
 {
-  const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  const bUserAssetLibrary *library = ptr->data_as<bUserAssetLibrary>();
   if (!library->runtime->invalid_uuid.empty()) {
     strcpy(value, library->runtime->invalid_uuid.c_str());
   }
@@ -542,7 +542,7 @@ static void rna_userdef_asset_library_invalid_uuid_get(PointerRNA *ptr, char *va
 
 static int rna_userdef_asset_library_invalid_uuid_length(PointerRNA *ptr)
 {
-  const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  const bUserAssetLibrary *library = ptr->data_as<bUserAssetLibrary>();
   return library->runtime->invalid_uuid.length();
 }
 

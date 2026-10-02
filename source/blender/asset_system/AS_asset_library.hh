@@ -44,7 +44,7 @@ struct bUserAssetLibrary_Runtime {
    * If the asset library was created with an invalid UUID string, it will be stored here.
    * The library will be disabled and we will notify the user that it has an invalid UUID.
    * We store the invalid UUID string so that we don't introduce any data loss when saving the
-   * UUIDs to files. (If it is invalid it is up to the end user to fix it.
+   * UUIDs to config files. (If it is invalid it is up to the end user to fix it.)
    */
   std::string invalid_uuid;
 };

@@ -64,23 +64,26 @@ static void asset_library_identifier_invalid_error_draw(ui::Layout &layout,
   const bool is_project_defined = library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED;
   ui::Layout &row = layout.row(false);
   row.red_alert_set(true);
-  StringRefNull error_message = is_project_defined ?
-                                "Asset Library has an invalid identifier (invalid UUID). Either "
-                                "manually edit the configuration file or regenerate it here." :
-                                "Asset Library has an invalid identifier (invalid UUID). Manually "
-                                "edit the configuration file.";
+  StringRefNull error_message =
+      is_project_defined ? RPT_(
+                               "Asset Library has an invalid identifier (invalid UUID). Either "
+                               "manually edit the configuration file or regenerate it here.") :
+                           RPT_(
+                               "Asset Library has an invalid identifier (invalid UUID). Manually "
+                               "edit the configuration file.");
   row.label_multiline(error_message, ICON_ERROR, ui::UI_STYLE_TEXT_LEFT, 7);
   ui::Layout &row2 = row.row(false);
   row2.alignment_set(ui::LayoutAlign::Left);
   row2.red_alert_set(false);
   if (is_project_defined) {
-    row2.button("Regenerate UUID", 0, [library](blender::bContext & /*C*/) {
+    row2.button(IFACE_("Regenerate UUID"), 0, [library](blender::bContext & /*C*/) {
       library.user_library->runtime->invalid_uuid.clear();
     });
   }
   else {
     /* Add a button that opens containing folder so user can fix the invalid UUID.*/
-    PointerRNA op_ptr = row2.op("WM_OT_path_open", "Open Asset Library folder", ICON_FILE_FOLDER);
+    PointerRNA op_ptr = row2.op(
+        "WM_OT_path_open", IFACE_("Open Asset Library folder"), ICON_FILE_FOLDER);
     RNA_string_set(&op_ptr, "filepath", library.user_library->resolved_dirpath);
   }
 }
