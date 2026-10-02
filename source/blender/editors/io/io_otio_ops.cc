@@ -96,7 +96,12 @@ static bool wm_otio_export_poll(bContext *C)
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *editing = seq::editing_get(scene);
 
-  if (!scene || !editing || BLI_listbase_is_empty(&editing->seqbase)) {
+  if (!scene) {
+    CTX_wm_operator_poll_msg_set(C, "No sequencer scene");
+    return false;
+  }
+  if (!editing || BLI_listbase_is_empty(&editing->seqbase)) {
+    CTX_wm_operator_poll_msg_set(C, "Sequencer scene has no strips");
     return false;
   }
 
