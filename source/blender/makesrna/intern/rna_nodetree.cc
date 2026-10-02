@@ -11320,6 +11320,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeInterpolateCurves");
   define("GeometryNode", "GeometryNodeIsViewport");
   define("GeometryNode", "GeometryNodeJoinGeometry");
+  define("GeometryNode", "GeometryNodeJoltSolver");
   define("GeometryNode", "GeometryNodeListGetItem");
   define("GeometryNode", "GeometryNodeListLength");
   define("GeometryNode", "GeometryNodeGeometryMaterials");

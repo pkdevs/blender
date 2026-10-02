@@ -25,6 +25,7 @@ set(SRC
   intern/foreach_geometry.cc
   intern/interpolate_curves.cc
   intern/join_geometries.cc
+  intern/jolt.cc
   intern/merge_curves.cc
   intern/merge_layers.cc
   intern/mesh_bevel.cc
@@ -74,6 +75,7 @@ set(SRC
   GEO_grid_samplers.hh
   GEO_interpolate_curves.hh
   GEO_join_geometries.hh
+  GEO_jolt.hh
   GEO_merge_curves.hh
   GEO_merge_layers.hh
   GEO_mesh_bevel.hh
@@ -147,8 +149,10 @@ set(LIB
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::profile
   PRIVATE bf::extern::curve_fit_nd
+  PRIVATE bf::extern::xxhash
   PRIVATE bf::dependencies::optional::manifold
   PRIVATE bf::dependencies::optional::gmp
+  PRIVATE bf::dependencies::optional::jolt
 )
 
 if(WITH_UV_SLIM)

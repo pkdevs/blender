@@ -190,6 +190,7 @@ set(SRC
   nodes/node_geo_is_viewport.cc
   nodes/node_geo_join_bundle.cc
   nodes/node_geo_join_geometry.cc
+  nodes/node_geo_jolt_solver.cc
   nodes/node_geo_list_get_item.cc
   nodes/node_geo_list_length.cc
   nodes/node_geo_material_replace.cc
@@ -363,6 +364,7 @@ set(LIB
   PRIVATE bf::windowmanager
   PRIVATE bf::dependencies::optional::gmp
   PRIVATE bf::dependencies::optional::bullet
+  PRIVATE bf::dependencies::optional::jolt
 )
 
 if(WITH_IO_SPZ)

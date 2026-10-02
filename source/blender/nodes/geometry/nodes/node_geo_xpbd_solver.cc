@@ -40,28 +40,17 @@
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_list.hh"
 #include "NOD_geometry_nodes_physics_bundles.hh"
+#include "NOD_geometry_nodes_simulation.hh"
 
 #include "node_geometry_util.hh"
 
 namespace blender::nodes::node_geo_xpbd_solver_cc {
 
 using namespace physics_bundles;
+using simulation::DataKey;
+using simulation::GeometrySetData;
 
-namespace attribute_names {
-
-constexpr StringRefNull position = "position";
-constexpr StringRefNull velocity = "velocity";
-constexpr StringRefNull rotation = "rotation";
-constexpr StringRefNull angular_velocity = "angular_velocity";
-constexpr StringRefNull external_force = "external_force";
-constexpr StringRefNull external_torque = "external_torque";
-constexpr StringRefNull mass = "mass";
-constexpr StringRefNull moment_of_inertia = "moment_of_inertia";
-constexpr StringRefNull static_friction = "static_friction";
-constexpr StringRefNull dynamic_friction = "dynamic_friction";
-constexpr StringRefNull radius = "radius";
-
-}  // namespace attribute_names
+namespace attribute_names = simulation::attribute_names;
 
 class XPBDSolverDataBundle {
  public:
@@ -147,19 +136,6 @@ static void node_declare(NodeDeclarationBuilder &b)
     p.add_input<decl::Float>("End"_ustr).default_value(1.0).min(0.0);
   }
 }
-
-struct DataKey {
-  int geo_bundle_i;
-  bke::GeometryComponent::Type type;
-  std::optional<int> layer_i;
-
-  uint64_t hash() const
-  {
-    return get_default_hash(this->geo_bundle_i, this->type, this->layer_i.value_or(0));
-  }
-
-  friend bool operator==(const DataKey &a, const DataKey &b) = default;
-};
 
 struct GeometryDataChunk {
   int data_key_i;
@@ -388,16 +364,6 @@ struct GeometryData {
   Vector<ConstraintWithColoring> static_constraints;
 
   GeometryData(const bke::MutableAttributeAccessor attributes) : attributes(attributes) {}
-};
-
-struct GeometrySetData {
-  std::string path;
-  /**
-   * The geometry is moved out of the world bundle for local processing and is moved back in the
-   * end.
-   */
-  GeometrySet geometry;
-  Set<std::string> tags;
 };
 
 struct Geometries {
@@ -698,40 +664,12 @@ class XpbdSolverStep {
 
   void gather_from_world__geometries()
   {
+    geometries_.geometry_sets = simulation::gather_geometry_set_data(world_, geometry_tag_filter_);
+
     TLS &tls = tls_.local();
-    /* Gather geometry sets to process from the world. */
-    Vector<std::string> paths = gather_bundle_paths_by_data_type(world_, SOCK_GEOMETRY);
-    /* Ensure the order is deterministic. */
-    std::ranges::sort(paths);
-    for (const StringRef path : paths) {
-      GeometrySet &geometry = *world_.lookup_path_for_write_ptr<GeometrySet>(path);
-      Set<std::string> tags;
-      if (geometry.has_bundle()) {
-        const Bundle &bundle_in_geo = *geometry.bundle();
-        if (const std::optional<GListPtr> tags_list_ptr = bundle_in_geo.lookup_path<GListPtr>(
-                "tags"))
-        {
-          if (*tags_list_ptr) {
-            const GList &tags_list = **tags_list_ptr;
-            if (tags_list.cpp_type().is<std::string>()) {
-              tags_list.typed<std::string>().foreach(
-                  [&](const std::string &tag) { tags.add(tag); });
-            }
-          }
-        }
-      }
-      if (!tag_filter_matches(geometry_tag_filter_, tags)) {
-        continue;
-      }
 
-      GeometrySetData geo_set_data;
-      geo_set_data.path = path;
-      geo_set_data.geometry = std::move(geometry);
-      geo_set_data.tags = std::move(tags);
-      geometries_.geometry_sets.append(std::move(geo_set_data));
-    }
-
-    /* Gather individual components that should be simulated. There may be more than geometry sets
+    /* Gather individual components that should be simulated. There may be more than geometry
+    sets
      * because each geometry set could contain e.g. a mesh and curves. */
     for (const int geo_bundle_i : geometries_.geometry_sets.index_range()) {
       GeometrySetData &geo_set_data = geometries_.geometry_sets[geo_bundle_i];
@@ -775,6 +713,7 @@ class XpbdSolverStep {
         }
       }
     }
+
     geometries_.total_points_num = 0;
     for (const int data_key_i : geometries_.data_keys.index_range()) {
       GeometryData &geo_data = *geometries_.data[data_key_i];
