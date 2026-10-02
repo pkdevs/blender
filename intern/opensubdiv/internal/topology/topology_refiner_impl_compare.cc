@@ -82,8 +82,8 @@ static bool checkBaseMeshTopologyMatches(const TopologyRefinerImpl *topology_ref
     return false;
   }
 
-  // NOTE: Ignoring the sharpness we don't really care of the content of the edges, they should be
-  // in the consistent state with the faces and face-vertices compared above. If that's not the
+  // NOTE: Ignoring the sharpness we don't really care about the content of the edges, they should
+  // be in the consistent state with the faces and face-vertices compared above. If that's not the
   // case the mesh is invalid and comparison can not happen reliably. For sharpness it is
   // important to know that the edges still connect the same pair of vertices though.
   const std::vector<std::pair<int, int>> &base_edges = topology_refiner_impl->base_edges_sparse;
