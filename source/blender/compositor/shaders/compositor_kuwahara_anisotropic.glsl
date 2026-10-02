@@ -127,7 +127,7 @@ void main()
   float sum_of_weights_of_sectors[4];
 
   /* The center pixel (0, 0) is exempt from the main loop below for reasons that are explained in
-   * the first if statement in the loop, so we need to accumulate its color, squared color, and
+   * the first row's lower bound, so we need to accumulate its color, squared color, and
    * weight separately first. Luckily, the zero coordinates of the center pixel zeros out most of
    * the complex computations below, and it can easily be shown that the weight for the center
    * pixel in all sectors is simply (1 / number_of_sectors). */
@@ -149,18 +149,10 @@ void main()
    * only the upper two quadrants, and compute each two mirrored pixels at the same time using the
    * same weight as an optimization. */
   for (int j = 0; j <= ellipse_bounds.y; j++) {
-    for (int i = -ellipse_bounds.x; i <= ellipse_bounds.x; i++) {
-      /* Since we compute each two mirrored pixels at the same time, we need to also exempt the
-       * pixels whose x coordinates are negative and their y coordinates are zero, that's because
-       * those are mirrored versions of the pixels whose x coordinates are positive and their y
-       * coordinates are zero, and we don't want to compute and accumulate them twice. Moreover, we
-       * also need to exempt the center pixel with zero coordinates for the same reason, however,
-       * since the mirror of the center pixel is itself, it need to be accumulated separately,
-       * hence why we did that in the code section just before this loop. */
-      if (j == 0 && i <= 0) {
-        continue;
-      }
-
+    /* On the first row, negative offsets are covered by the mirrored samples, and the center
+     * pixel was accumulated separately above. */
+    int lower_bound = j == 0 ? 1 : -ellipse_bounds.x;
+    for (int i = lower_bound; i <= ellipse_bounds.x; i++) {
       /* Map the pixels of the ellipse into a unit disk, exempting any points that are not part of
        * the ellipse or disk. */
       float2 disk_point = inverse_ellipse_matrix * float2(i, j);
