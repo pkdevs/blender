@@ -6923,9 +6923,8 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader,
 
         BLO_read_array_and_validate_size(reader, &data->points, &data->numpoints);
 
-        /* Clamp spline IK chain lengths to a value that will not crash Blender versions older than
-         * 5.3, which may be encountered when opening future versions' .blend files. */
-        CLAMP(data->chainlen, 0, 255);
+        /* Clamp spline IK chains to a minimum meaningful length. */
+        CLAMP_MIN(data->chainlen, 0);
         break;
       }
       case CONSTRAINT_TYPE_KINEMATIC: {
