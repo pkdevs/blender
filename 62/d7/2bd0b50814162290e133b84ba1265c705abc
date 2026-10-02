@@ -3,3 +3,4 @@ Referenced by issue #153492, Slow UV Box Selection in Edge Island Mode
 Referenced by commit 11633ceea7a6605db7b379e2c0c4a5d813ae3c58, Fix #153492: Slow UV island box selection
 Referenced by issue #156888, "UV Island Selection Mode (4) is hidden when Sync Selection is enabled."
 Referenced by pull request #164586, Fix #164323:  UV Editor: Edge Ring Select (Ctrl+Alt+Click) freezes Blender with UV Sync Selection in vertex select mode
+Referenced by commit 8931427c0a55f25a462c8bc657a9a1a31a746266, Fix #164323: UV Edge Ring Select hangs in select-sync & vertex selection
