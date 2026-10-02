@@ -2,3 +2,4 @@ Referenced by issue #148315, Regression of mesh validation: glTF / glb Import on
 Referenced by commit ac4ac585cd5f987640e810bcb07fd7bda1b49b70, Fix: Mesh validation doesn't recalculate edges after refactor
 Referenced by issue #149429, The Mesh Validate API removes unexpected pieces of mesh in 5.1
 Referenced by pull request #164605, Refactor: Changes to reduce reliance on untyped allocator functions
+Referenced by commit 67a27a523614208f5e884392b178d77148896195, Fix: Mesh: Memory leak of multires data when removing invalid faces
