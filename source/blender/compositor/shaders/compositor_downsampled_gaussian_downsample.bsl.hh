@@ -10,8 +10,10 @@ namespace compositor::downsampled_gaussian::downsampling {
 
 struct Resources {
   [[compilation_constant]] const bool use_4x;
+  [[compilation_constant]] const bool virtual_padding;
 
   [[push_constant]] int2 source_size;
+  [[push_constant]] int2 source_offset;
   [[push_constant]] int2 source_padding;
   [[push_constant]] int2 destination_size;
   [[push_constant]] int2 destination_padding;
@@ -33,6 +35,21 @@ float3 area_axis(float lo, float hi, float physical_size)
                 w2 / (hi - lo));
 }
 
+float4 sample_input([[resource_table]] Resources &srt, float2 uv)
+{
+  if (srt.virtual_padding) [[static_branch]] {
+    /* Emulate bilinear sampling if "virtually" zero-padded input. */
+    const float2 size = float2(srt.source_size + 2 * srt.source_padding);
+    const float2 position = clamp(uv * size, float2(0.5f), size - 0.5f);
+    const float2 input_uv = (position - float2(srt.source_offset)) /
+                            float2(textureSize(srt.input_tx, 0));
+    return textureLod(srt.input_tx, input_uv, 0.0f);
+  }
+  else {
+    return textureLod(srt.input_tx, uv, 0.0f);
+  }
+}
+
 [[compute, local_size(16, 16)]]
 void compute_main([[resource_table]] Resources &srt,
                   [[global_invocation_id]] const uint3 global_id)
@@ -47,7 +64,7 @@ void compute_main([[resource_table]] Resources &srt,
     /* Exact 4x downsampling code path.
      * Four bilinear reads average a 4x4 footprint, or two reads average a 4x1 footprint.
      * Unchanged axes and preserved borders use one coordinate. */
-    const int2 physical_size = textureSize(srt.input_tx, 0);
+    const int2 physical_size = srt.source_size + 2 * srt.source_padding;
     const int2 scale = srt.source_size / srt.destination_size;
     const int2 pixel = texel - srt.destination_padding;
     float2 center = (float2(pixel) + 0.5f) * float2(scale) + float2(srt.source_padding);
@@ -64,14 +81,14 @@ void compute_main([[resource_table]] Resources &srt,
     }
     const float2 lo = (center - offset) / float2(physical_size);
     const float2 hi = (center + offset) / float2(physical_size);
-    float4 color = textureLod(srt.input_tx, lo, 0.0f);
+    float4 color = sample_input(srt, lo);
     if (scale.x == 4) {
-      color = 0.5f * (color + textureLod(srt.input_tx, float2(hi.x, lo.y), 0.0f));
+      color = 0.5f * (color + sample_input(srt, float2(hi.x, lo.y)));
     }
     if (scale.y == 4) {
-      float4 row = textureLod(srt.input_tx, float2(lo.x, hi.y), 0.0f);
+      float4 row = sample_input(srt, float2(lo.x, hi.y));
       if (scale.x == 4) {
-        row = 0.5f * (row + textureLod(srt.input_tx, hi, 0.0f));
+        row = 0.5f * (row + sample_input(srt, hi));
       }
       color = 0.5f * (color + row);
     }
@@ -80,7 +97,7 @@ void compute_main([[resource_table]] Resources &srt,
   else {
     const int2 input_size = srt.source_size;
     const int2 logical_output_size = srt.destination_size;
-    const int2 physical_size = textureSize(srt.input_tx, 0);
+    const int2 physical_size = srt.source_size + 2 * srt.source_padding;
     const int2 pixel = texel - srt.destination_padding;
     const float2 scale = float2(input_size) / float2(logical_output_size);
     float2 lo = float2(pixel) * scale + float2(srt.source_padding);
@@ -102,7 +119,7 @@ void compute_main([[resource_table]] Resources &srt,
         (input_size.y == logical_output_size.y || input_size.y == 2 * logical_output_size.y))
     {
       const float2 uv = (lo + hi) * 0.5f / float2(physical_size);
-      imageStore(srt.output_img, texel, textureLod(srt.input_tx, uv, 0.0f));
+      imageStore(srt.output_img, texel, sample_input(srt, uv));
       return;
     }
     const float3 x_axis = area_axis(lo.x, hi.x, float(physical_size.x));
@@ -113,14 +130,14 @@ void compute_main([[resource_table]] Resources &srt,
                           input_size.x != 2 * logical_output_size.x;
     const bool second_y = input_size.y != logical_output_size.y &&
                           input_size.y != 2 * logical_output_size.y;
-    float4 color = textureLod(srt.input_tx, float2(x_axis.x, y_axis.x), 0.0f);
+    float4 color = sample_input(srt, float2(x_axis.x, y_axis.x));
     if (second_x) {
-      color = mix(color, textureLod(srt.input_tx, float2(x_axis.y, y_axis.x), 0.0f), x_axis.z);
+      color = mix(color, sample_input(srt, float2(x_axis.y, y_axis.x)), x_axis.z);
     }
     if (second_y) {
-      float4 row = textureLod(srt.input_tx, float2(x_axis.x, y_axis.y), 0.0f);
+      float4 row = sample_input(srt, float2(x_axis.x, y_axis.y));
       if (second_x) {
-        row = mix(row, textureLod(srt.input_tx, float2(x_axis.y, y_axis.y), 0.0f), x_axis.z);
+        row = mix(row, sample_input(srt, float2(x_axis.y, y_axis.y)), x_axis.z);
       }
       color = mix(color, row, y_axis.z);
     }
@@ -133,8 +150,18 @@ void compute_main([[resource_table]] Resources &srt,
 #ifndef GLSL_CPP_STUBS
 PipelineCompute compositor_downsampled_gaussian_downsample(
     compositor::downsampled_gaussian::downsampling::compute_main,
-    compositor::downsampled_gaussian::downsampling::Resources{.use_4x = false});
+    compositor::downsampled_gaussian::downsampling::Resources{.use_4x = false,
+                                                              .virtual_padding = false});
 PipelineCompute compositor_downsampled_gaussian_downsample_4x(
     compositor::downsampled_gaussian::downsampling::compute_main,
-    compositor::downsampled_gaussian::downsampling::Resources{.use_4x = true});
+    compositor::downsampled_gaussian::downsampling::Resources{.use_4x = true,
+                                                              .virtual_padding = false});
+PipelineCompute compositor_downsampled_gaussian_downsample_padded(
+    compositor::downsampled_gaussian::downsampling::compute_main,
+    compositor::downsampled_gaussian::downsampling::Resources{.use_4x = false,
+                                                              .virtual_padding = true});
+PipelineCompute compositor_downsampled_gaussian_downsample_4x_padded(
+    compositor::downsampled_gaussian::downsampling::compute_main,
+    compositor::downsampled_gaussian::downsampling::Resources{.use_4x = true,
+                                                              .virtual_padding = true});
 #endif

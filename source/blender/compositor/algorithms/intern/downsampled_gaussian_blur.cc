@@ -81,17 +81,29 @@ static void downsample_gpu(Context &context,
                            const int2 padding,
                            const int2 physical_size,
                            const bool use_4x,
+                           const int2 source_offset,
                            DownsampledImage &output)
 {
-  gpu::Shader *shader = context.get_shader(use_4x ?
-                                               "compositor_downsampled_gaussian_downsample_4x" :
-                                               "compositor_downsampled_gaussian_downsample");
+  const bool virtual_padding = source_offset != int2(0);
+  const char *shader_name = virtual_padding ?
+                                (use_4x ? "compositor_downsampled_gaussian_downsample_4x_padded" :
+                                          "compositor_downsampled_gaussian_downsample_padded") :
+                                (use_4x ? "compositor_downsampled_gaussian_downsample_4x" :
+                                          "compositor_downsampled_gaussian_downsample");
+  gpu::Shader *shader = context.get_shader(shader_name);
   GPU_shader_bind(shader);
   GPU_shader_uniform_2iv(shader, "source_size", input.size);
+  if (virtual_padding) {
+    GPU_shader_uniform_2iv(shader, "source_offset", source_offset);
+  }
   GPU_shader_uniform_2iv(shader, "source_padding", input.padding);
   GPU_shader_uniform_2iv(shader, "destination_size", size);
   GPU_shader_uniform_2iv(shader, "destination_padding", padding);
-  bind_as_bilinear_texture(shader, input.image, "input_tx");
+  GPU_texture_filter_mode(input.image, true);
+  GPU_texture_extend_mode(input.image,
+                          virtual_padding ? GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER :
+                                            GPU_SAMPLER_EXTEND_MODE_EXTEND);
+  input.image.bind_as_texture(shader, "input_tx");
   output.image.bind_as_image(shader, "output_img");
   compute_dispatch_threads_at_least(shader, physical_size);
   input.image.unbind_as_texture();
@@ -103,11 +115,12 @@ static void downsample_cpu(const DownsampledImage &input,
                            const int2 size,
                            const int2 padding,
                            const int2 physical_size,
+                           const int2 source_offset,
                            DownsampledImage &output)
 {
   /* Same logic as GPU shader, but don't use paired bilinear reads since they are expensive
    * on the CPU. No need for special 4x downsample code here either. */
-  const int2 input_physical_size = input.image.domain().data_size;
+  const int2 input_physical_size = input.size + 2 * input.padding;
   const float2 scale = float2(input.size) / float2(size);
   parallel_for(physical_size, [&](const int2 texel) {
     const int2 pixel = texel - padding;
@@ -130,7 +143,10 @@ static void downsample_cpu(const DownsampledImage &input,
       for (int x = int(std::floor(lo.x)); x < int(std::ceil(hi.x)); x++) {
         const float2 overlap = math::max(
             float2(0.0f), math::min(hi, float2(x + 1, y + 1)) - math::max(lo, float2(x, y)));
-        color += float4(input.image.load_pixel<Color>(int2(x, y))) * overlap.x * overlap.y;
+        const Color sample = source_offset == int2(0) ?
+                                 input.image.load_pixel<Color>(int2(x, y)) :
+                                 input.image.load_pixel_zero<Color>(int2(x, y) - source_offset);
+        color += float4(sample) * overlap.x * overlap.y;
       }
     }
     output.image.store_pixel(texel, Color(color / ((hi.x - lo.x) * (hi.y - lo.y))));
@@ -141,16 +157,17 @@ static DownsampledImage downsample(Context &context,
                                    const DownsampledImage &input,
                                    const int2 size,
                                    const int2 padding,
-                                   const bool use_4x)
+                                   const bool use_4x,
+                                   const int2 source_offset)
 {
   DownsampledImage output = {context.create_result(ResultType::Color), size, padding};
   const int2 physical_size = size + 2 * padding;
   output.image.allocate_texture(physical_size);
   if (context.use_gpu()) {
-    downsample_gpu(context, input, size, padding, physical_size, use_4x, output);
+    downsample_gpu(context, input, size, padding, physical_size, use_4x, source_offset, output);
   }
   else {
-    downsample_cpu(input, size, padding, physical_size, output);
+    downsample_cpu(input, size, padding, physical_size, source_offset, output);
   }
   return output;
 }
@@ -373,9 +390,10 @@ static int working_level(const float sigma, const int size)
  * an optimization. */
 static DownsampledImage downsample_to_level(Context &context,
                                             const Result &input,
-                                            const int2 target_level)
+                                            const int2 target_level,
+                                            const int2 original_size,
+                                            const int2 input_padding)
 {
-  const int2 original_size = input.domain().data_size;
   const auto size_at_level = [&](const int2 level) {
     return int2(downsampled_size(original_size.x, level.x),
                 downsampled_size(original_size.y, level.y));
@@ -395,8 +413,12 @@ static DownsampledImage downsample_to_level(Context &context,
       next = candidate;
     }
     /* Axes that have been downsampled get one pixel of padding. */
-    DownsampledImage downsampled = downsample(
-        context, current, size_at_level(next), math::min(next, int2(1)), use_4x);
+    DownsampledImage downsampled = downsample(context,
+                                              current,
+                                              size_at_level(next),
+                                              math::min(next, int2(1)),
+                                              use_4x,
+                                              level == int2(0) ? input_padding : int2(0));
     current.image.release();
     current = downsampled;
     level = next;
@@ -405,13 +427,13 @@ static DownsampledImage downsample_to_level(Context &context,
 }
 
 static void upsample_gpu(Context &context,
-                         const Result &input,
+                         const Domain &output_domain,
                          const int2 size,
                          const DownsampledImage &working,
                          const Result &filtered,
                          Result &output)
 {
-  output.allocate_texture(input.domain());
+  output.allocate_texture(output_domain);
   gpu::Shader *shader = context.get_shader("compositor_downsampled_gaussian_reconstruct");
   GPU_shader_bind(shader);
   GPU_shader_uniform_2iv(shader, "input_size", working.size);
@@ -424,13 +446,13 @@ static void upsample_gpu(Context &context,
   GPU_shader_unbind();
 }
 
-static void upsample_cpu(const Result &input,
+static void upsample_cpu(const Domain &output_domain,
                          const int2 size,
                          const DownsampledImage &working,
                          const Result &filtered,
                          Result &output)
 {
-  output.allocate_texture(input.domain());
+  output.allocate_texture(output_domain);
   const Array<ReconstructionSample> samples_x = reconstruction_axis(
       working.size.x, size.x, working.padding.x);
   const Array<ReconstructionSample> samples_y = reconstruction_axis(
@@ -453,12 +475,23 @@ static void upsample_cpu(const Result &input,
   });
 }
 
-static void do_blur(Context &context, const Result &input, Result &output, const float2 &radius)
+static void do_blur(Context &context,
+                    const Result &input,
+                    Result &output,
+                    const float2 &radius,
+                    const int2 input_padding = int2(0))
 {
-  const int2 size = input.domain().data_size;
+  Domain output_domain = input.domain();
+  output_domain.data_size += 2 * input_padding;
+  output_domain.display_size += 2 * input_padding;
+  const int2 size = output_domain.data_size;
   const float2 sigma = math::max(radius, float2(0.0f)) / 3.0f;
   DownsampledImage working = downsample_to_level(
-      context, input, int2(working_level(sigma.x, size.x), working_level(sigma.y, size.y)));
+      context,
+      input,
+      int2(working_level(sigma.x, size.x), working_level(sigma.y, size.y)),
+      size,
+      input_padding);
   Result horizontal = gaussian_axis(
       context, working.image, working_sigma(sigma.x, working.size.x, size.x), 0);
   Result filtered = gaussian_axis(
@@ -469,10 +502,10 @@ static void do_blur(Context &context, const Result &input, Result &output, const
     output.share_data(filtered);
   }
   else if (context.use_gpu()) {
-    upsample_gpu(context, input, size, working, filtered, output);
+    upsample_gpu(context, output_domain, size, working, filtered, output);
   }
   else {
-    upsample_cpu(input, size, working, filtered, output);
+    upsample_cpu(output_domain, size, working, filtered, output);
   }
   filtered.release();
 }
@@ -487,8 +520,21 @@ void downsampled_gaussian_blur(Context &context,
     do_blur(context, input, output, radius);
     return;
   }
+
+  /* Input padding is needed: figure out whether we can use "virtual" padding code path. */
+  const int2 padding = int2(math::ceil(radius));
+  const int2 size = input.domain().data_size + 2 * padding;
+  const float2 sigma = math::max(radius, float2(0.0f)) / 3.0f;
+  if (working_level(sigma.x, size.x) > 0 || working_level(sigma.y, size.y) > 0) {
+    /* We will do a downsample, which means we can save on allocating the padded input image,
+     * and instead do a "virtual" padding. */
+    do_blur(context, input, output, radius, padding);
+    return;
+  }
+
+  /* No input downsampling will be done, so we need to actually pad the input. */
   Result padded_input = context.create_result(input.type());
-  pad(context, input, padded_input, int2(math::ceil(radius)), PaddingMethod::Zero);
+  pad(context, input, padded_input, padding, PaddingMethod::Zero);
   do_blur(context, padded_input, output, radius);
   padded_input.release();
 }
