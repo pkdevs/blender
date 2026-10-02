@@ -278,7 +278,7 @@ static std::optional<float3> sample_mesh_attribute_color(ViewContext &vc,
   const int face = active_element->active_face_idx;
 
   if (face != -1) {
-    if (color_attribute.domain == bke::AttrDomain::Corner && faces.index_range().contains(face)) {
+    if (color_attribute.domain == bke::AttrDomain::Corner) {
       const int corner = bke::mesh::face_find_corner_from_vert(faces[face], corner_verts, vert);
       if (corner != -1) {
         float4 sampled_color;
