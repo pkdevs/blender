@@ -156,7 +156,7 @@ void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &e
                                            cyclic,
                                            iterations,
                                            influences,
-                                           true,
+                                           false,
                                            false,
                                            opacities);
           changed = true;
@@ -169,7 +169,7 @@ void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &e
                                            cyclic,
                                            iterations,
                                            influences,
-                                           true,
+                                           false,
                                            false,
                                            radii);
           curves.tag_radii_changed();
@@ -186,7 +186,7 @@ void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &e
                                              cyclic,
                                              iterations,
                                              influences,
-                                             true,
+                                             false,
                                              false,
                                              rotations.span);
             rotations.finish();
