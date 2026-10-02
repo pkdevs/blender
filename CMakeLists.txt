@@ -529,9 +529,6 @@ mark_as_advanced(WITH_SYSTEM_GLOG)
 # Freestyle
 option(WITH_FREESTYLE "Enable Freestyle (advanced edges rendering)" ON)
 
-# OpenTimelineIO
-option(WITH_OPENTIMELINEIO "Enable Video Sequencer OpenTimelineIO support" ON)
-
 # Libraries.
 if(UNIX AND NOT APPLE)
   # Optionally build without pre-compiled libraries.
@@ -2564,7 +2561,6 @@ if(FIRST_RUN)
   info_cfg_option(WITH_MANIFOLD)
   info_cfg_option(WITH_OPENIMAGEDENOISE)
   info_cfg_option(WITH_OPENSUBDIV)
-  info_cfg_option(WITH_OPENTIMELINEIO)
   info_cfg_option(WITH_OPENVDB)
   info_cfg_option(WITH_POTRACE)
   info_cfg_option(WITH_PUGIXML)

@@ -588,13 +588,6 @@ if(WITH_TRACY)
   mark_as_advanced(Tracy_DIR)
 endif()
 
-if(WITH_OPENTIMELINEIO)
-  find_package_wrapper(OpenTimelineIO REQUIRED)
-  set_and_warn_library_found("OpenTimelineIO" OPENTIMELINEIO_FOUND WITH_OPENTIMELINEIO)
-  mark_as_advanced(OpenTimelineIO_DIR)
-endif()
-add_bundled_libraries(opentimelineio/lib)
-
 if(DEFINED LIBDIR)
   without_system_libs_end()
 endif()
