@@ -456,62 +456,63 @@ class Report:
             columns_html = "<tr><th>Name</th><th>New</th><th>Reference</th><th>Diff Color</th><th>Diff Alpha</th>"
 
         filter_ui = """
-               <div id="report-filter" style="max-width: 480px;">
-                   <div class="form-inline">
-                       <input type="text" id="report-filter-input" class="form-control mr-2"
-                          placeholder="Filter by category or test name">
-                       <select id="report-filter-result" class="form-control">
-                           <option value="all">All</option>
-                           <option value="failures">Failures</option>
-                           <option value="crashes">Crashes</option>
-                       </select>
-                         <span id="report-filter-status" class="ml-2 text-muted"></span>
-                   </div>
-               </div>
-               """
+<div id="report-filter" style="max-width: 640px;">
+    <div class="form-inline">
+        <input type="text" id="report-filter-input" class="form-control mr-2"
+            style="width: 320px;"
+            placeholder="Category or test">
+        <select id="report-filter-result" class="form-control mr-2">
+            <option value="all">All</option>
+            <option value="failures">Failures</option>
+            <option value="crashes">Crashes</option>
+        </select>
+        <span id="report-filter-status" class="ml-2 text-muted"></span>
+    </div>
+</div>
+"""
 
         filter_script = """
-               <script>
-               (function () {
-                  var input = document.getElementById('report-filter-input');
-                  var resultSel = document.getElementById('report-filter-result');
-                  var statusEl = document.getElementById('report-filter-status');
-                  if (!input) {
-                      return;
-                   }
-                  var rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-name]'));
-                  function apply() {
-                      var q = input.value.trim().toLowerCase();
-                      var f = resultSel ? resultSel.value : 'all';
-                      var shown = 0;
-                      rows.forEach(function (row) {
-                          var cat = row.getAttribute('data-category') || '';
-                          var name = row.getAttribute('data-name') || '';
-                          var hay = (cat + ' ' + name).toLowerCase();
-                          var matchText = !q || hay.indexOf(q) !== -1;
-                          var result = row.getAttribute('data-result') || '';
-                          var matchResult =
-                              f === 'all' ||
-                               (f === 'failures' && result !== '') ||
-                               (f === 'crashes' && result === 'CRASH');
-                          var visible = matchText && matchResult;
-                          row.style.display = visible ? '' : 'none';
-                          if (visible) {
-                              shown++;
-                            }
-                        });
-                        if (statusEl) {
-                            statusEl.textContent = 'Showing ' + shown + ' of ' + rows.length + ' rows';
-                          }
-                 }
-                  input.addEventListener('input', apply);
-                  if (resultSel) {
-                      resultSel.addEventListener('change', apply);
-                   }
-                  apply();
-               })();
-               </script>
-               """
+<script>
+(function () {
+    var input = document.getElementById('report-filter-input');
+    var resultSel = document.getElementById('report-filter-result');
+    var statusEl = document.getElementById('report-filter-status');
+    if (!input) {
+        return;
+    }
+    var rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-name]'));
+    function apply() {
+        var q = input.value.trim().toLowerCase();
+        var f = resultSel ? resultSel.value : 'all';
+        var shown = 0;
+        rows.forEach(function (row) {
+            var cat = row.getAttribute('data-category') || '';
+            var name = row.getAttribute('data-name') || '';
+            var hay = (cat + ' ' + name).toLowerCase();
+            var matchText = !q || hay.indexOf(q) !== -1;
+            var result = row.getAttribute('data-result') || '';
+            var matchResult =
+                f === 'all' ||
+                (f === 'failures' && result !== '') ||
+                (f === 'crashes' && result === 'CRASH');
+            var visible = matchText && matchResult;
+            row.style.display = visible ? '' : 'none';
+            if (visible) {
+                shown++;
+            }
+        });
+        if (statusEl) {
+            statusEl.textContent = 'Showing ' + shown + ' of ' + rows.length + ' rows';
+        }
+    }
+    input.addEventListener('input', apply);
+    if (resultSel) {
+        resultSel.addEventListener('change', apply);
+    }
+    apply();
+})();
+</script>
+"""
         html = f"""
 <html>
 <head>
