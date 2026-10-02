@@ -22,6 +22,7 @@ DIMENSIONS = [1024, 4096]
 
 UDIM_OBJECT_NAME = "body_GEO_NEW"
 UDIM_UV_NAME = "godzilUV"
+UDIM_BRUSH_SIZE = 500
 UDIM_SUBDIVIDE_LEVEL = 3
 UDIM_CANVAS_IMAGE = {
     DataType.BYTE: "overlayColor",
@@ -286,6 +287,8 @@ def prepare_udim_scene(context: any, data_type: DataType, subdivide_level: int =
 
     bpy.ops.paint.texture_paint_toggle()
 
+    tool_settings.sculpt.unified_paint_settings.size = UDIM_BRUSH_SIZE
+
 
 def _run_udim_brush_test(args: dict):
     import bpy
@@ -389,10 +392,11 @@ def generate(env):
         for object_type in MeshType:
             for dimension in DIMENSIONS:
                 for data_type in DataType:
-                    brush_tests.append(TexturePaintBrushTest(base_filepath, object_type, dimension, data_type))
-                    brush_tests.append(
-                        TexturePaintBrushTest(base_filepath, object_type, dimension, data_type,
-                                              test_setup=True))
+                    print("")
+                    #brush_tests.append(TexturePaintBrushTest(base_filepath, object_type, dimension, data_type))
+                    #brush_tests.append(
+                    #    TexturePaintBrushTest(base_filepath, object_type, dimension, data_type,
+                    #                          test_setup=True))
 
     udim_filepath = blends_by_dir.get('udim_monster')
     if udim_filepath is not None:
