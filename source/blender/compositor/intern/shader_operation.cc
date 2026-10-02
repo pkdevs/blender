@@ -513,6 +513,16 @@ void ShaderOperation::link_node_input_external(const bNodeSocket &input_socket,
   stack.link = output_to_material_attribute_map_.lookup(&output_socket);
 }
 
+ResultType ShaderOperation::get_output_type(const bNodeSocket &output)
+{
+  if (node_tree_evaluator_.pixel_compile_unit().contains(&output.owner_node())) {
+    return get_node_socket_result_type(&output);
+  }
+
+  Result &result = node_tree_evaluator_.get_result_from_output_socket(output);
+  return result.type();
+}
+
 void ShaderOperation::declare_operation_input(const bNodeSocket &input_socket,
                                               const bNodeSocket &output_socket)
 {
@@ -524,8 +534,7 @@ void ShaderOperation::declare_operation_input(const bNodeSocket &input_socket,
    * exception is when the output is a single value only type, which is not supported on GPU, so we
    * assume the input type. */
   InputDescriptor input_descriptor = input_descriptor_from_input_socket(&input_socket);
-  Result &result = node_tree_evaluator_.get_result_from_output_socket(output_socket);
-  const ResultType output_type = result.type();
+  const ResultType output_type = this->get_output_type(output_socket);
   if (!Result::is_single_value_only_type(output_type)) {
     input_descriptor.type = output_type;
   }
@@ -709,7 +718,7 @@ static GPUNodeLink *get_default_input_value_link(const ResultType type)
 
 void ShaderOperation::convert_input_link_type(const bNodeSocket &input, const bNodeSocket &output)
 {
-  const ResultType source_type = get_node_socket_result_type(&output);
+  const ResultType source_type = this->get_output_type(output);
   const ResultType target_type = get_node_socket_result_type(&input);
   if (target_type == source_type) {
     return;
