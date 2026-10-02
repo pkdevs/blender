@@ -26,13 +26,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>("Positions"_ustr)
       .structure_type(StructureType::List)
       .hide_value()
-      .description("A list of all the positions of all the points");
+      .description("A list of the point positions in all curves");
   b.add_input<decl::Int>("Curve Offsets"_ustr)
       .structure_type(StructureType::List)
       .hide_value()
       .description(
-          "The point index for the start of each curve. There must be an additional offset at the "
-          "end with the total number of points");
+          "A list with a size one larger than the number of curves storing the first point index "
+          "of each curve and a final value for the total number of points. This is a prefix sum "
+          "of the curve sizes");
 }
 
 static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
@@ -150,7 +151,7 @@ static void node_register()
   static bke::bNodeType ntype;
   geo_node_type_base(&ntype, "GeometryNodeConstructCurves"_ustr);
   ntype.ui_name = "Construct Curves";
-  ntype.ui_description = "Construct new curves from positions and curve offsets";
+  ntype.ui_description = "Construct curves from raw topology data";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
