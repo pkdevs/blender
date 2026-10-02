@@ -2,24 +2,61 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw_engine
+ *
+ * Surface-stable stochastic transparency implementation. Multiple underlying sampling hashes can
+ * be used.
+ *
+ * References:
+ *
+ *  [wymn2017]  Chris Wyman and Morgan McGuire
+ *              Hashed Alpha Testing
+ *              ACM I3D 2017
+ *              https://research.nvidia.com/labs/rtr/publication/wyman2017hashed/
+ */
+
 #pragma once
 
+#include "eevee_sampling_lib.bsl.hh"
 #include "gpu_shader_compat.hh"
 
-/* From the paper "Hashed Alpha Testing" by Chris Wyman and Morgan McGuire. */
 namespace eevee::hashed_transparency {
 
-float hash(float2 a)
+/* For the underlying hashes, refer to `eevee_sampling_lib.bsl.hh`. */
+enum class HashType : uchar {
+  /* Sine hash used in the original implementation. Deprecated. */
+  Sine,
+  /* PCG hash, less artifact-ey on imprecise world-space inputs. */
+  PCG
+};
+
+/**
+ * Wrapper for a scaled, hashed alpha threshold used below, with a selectable underlying hash.
+ */
+template<HashType Hash> float2 alpha_hash(float2 /* pixel_scale */, float3 /* P */)
 {
-  return fract(1e4f * sin(17.0f * a.x + 0.1f * a.y) * (0.1f + abs(sin(13.0f * a.y + a.x))));
+  return float2(0.0f);
+}
+template<> float2 alpha_hash<HashType::Sine>(float2 pixel_scale, float3 P)
+{
+  float2 alpha;
+  alpha.x = random::sine(floor(pixel_scale.x * P));
+  alpha.y = random::sine(floor(pixel_scale.y * P));
+  return alpha;
+}
+template<> float2 alpha_hash<HashType::PCG>(float2 pixel_scale, float3 P)
+{
+  float2 alpha;
+  alpha.x = random::pcg(floor(pixel_scale.x * P));
+  alpha.y = random::pcg(floor(pixel_scale.y * P));
+  return alpha;
 }
 
-float hash_3d(float3 a)
-{
-  return hash(float2(hash(a.xy), a.z));
-}
-
-float alpha_threshold(float hash_scale, float hash_offset, float3 P)
+/**
+ * Surface-stable alpha testing [wymn2017].
+ */
+template<HashType Hash> float alpha_threshold(float hash_scale, float hash_offset, float3 P)
 {
   /* Find the discretized derivatives of our coordinates. */
   float max_deriv = max(length(gpu_dfdx(P)), length(gpu_dfdy(P)));
@@ -30,9 +67,7 @@ float alpha_threshold(float hash_scale, float hash_offset, float3 P)
   pix_scales.x = exp2(floor(pix_scale_log));
   pix_scales.y = exp2(ceil(pix_scale_log));
   /* Compute alpha thresholds at our two noise scales. */
-  float2 alpha;
-  alpha.x = hash_3d(floor(pix_scales.x * P));
-  alpha.y = hash_3d(floor(pix_scales.y * P));
+  float2 alpha = alpha_hash<Hash>(pix_scales, P);
   /* Factor to interpolate lerp with. */
   float fac = fract(log2(pix_scale));
   /* Interpolate alpha threshold from noise at two scales. */
@@ -51,5 +86,7 @@ float alpha_threshold(float hash_scale, float hash_offset, float3 P)
   threshold = clamp(threshold, 1.0e-6f, 1.0f);
   return threshold;
 }
+template float alpha_threshold<HashType::Sine>(float, float, float3);
+template float alpha_threshold<HashType::PCG>(float, float, float3);
 
 }  // namespace eevee::hashed_transparency
