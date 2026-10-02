@@ -116,7 +116,7 @@ static void filelist_start_job_all_asset_library(FileListReadJob *job_params)
   }
 
   asset_system::foreach_registered_user_remote_library([&](bUserAssetLibrary &library) {
-    if (!library.is_enabled()) {
+    if (library.flag & ASSET_LIBRARY_DISABLED) {
       return;
     }
 

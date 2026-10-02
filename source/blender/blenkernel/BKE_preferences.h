@@ -150,8 +150,8 @@ int BKE_preferences_asset_library_get_index(const struct UserDef *userdef,
  * Check if \a library can be used, this matches the "enabled" setting except libraries defined
  * by extensions also require their repository to be enabled.
  *
- * \note #bUserAssetLibrary::is_enabled is only the setting the user controls, disabling a
- * repository never changes it so the setting is kept for when the repository is enabled again.
+ * \note #ASSET_LIBRARY_DISABLED is only the setting the user controls, disabling a repository
+ * never changes it so the setting is kept for when the repository is enabled again.
  */
 bool BKE_preferences_asset_library_is_available(const struct UserDef *userdef,
                                                 const struct bUserAssetLibrary *library)

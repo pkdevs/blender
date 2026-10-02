@@ -179,8 +179,8 @@ struct AssetLibraryListItem : public AssetLibraryListItemCommon {
       sub.label(IFACE_("Built-In"), ICON_NONE);
     }
 
-    if (library.user_library && library.user_library->is_enabled() && is_remote_library &&
-        !library.user_library->remote_url[0])
+    if (library.user_library && !(library.user_library->flag & ASSET_LIBRARY_DISABLED) &&
+        is_remote_library && !library.user_library->remote_url[0])
     {
       row.label("", ICON_STATUS_ERROR);
     }
@@ -192,7 +192,8 @@ struct AssetLibraryListItem : public AssetLibraryListItemCommon {
                "enabled",
                UI_ITEM_NONE,
                "",
-               library.user_library->is_enabled() ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT);
+               (library.user_library->flag & ASSET_LIBRARY_DISABLED) ? ICON_CHECKBOX_DEHLT :
+                                                                       ICON_CHECKBOX_HLT);
     }
   }
 
