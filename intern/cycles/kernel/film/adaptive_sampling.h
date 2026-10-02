@@ -26,7 +26,7 @@ ccl_device_forceinline bool film_need_sample_pixel(KernelGlobals kg,
 
 /* Determines whether to continue sampling a given pixel or if it has sufficiently converged. */
 
-ccl_device bool film_adaptive_sampling_convergence_check(KernelGlobals kg,
+ccl_device bool film_adaptive_sampling_convergence_check(KernelGlobals kg, // !!!
                                                          ccl_global float *render_buffer,
                                                          const int x,
                                                          const int y,
@@ -53,7 +53,7 @@ ccl_device bool film_adaptive_sampling_convergence_check(KernelGlobals kg,
     return true;
   }
 
-  const float4 I = kernel_read_pass_float4(buffer + kernel_data.film.pass_combined);
+  const float4 I = kernel_read_pass_float4(buffer + kernel_data.film.pass_combined); // adaptive-sampling is Based on PASS_COMBINED
 
   const float sample = __float_as_uint(buffer[kernel_data.film.pass_sample_count]);
   const float intensity_scale = kernel_data.film.exposure / sample;
@@ -87,6 +87,13 @@ ccl_device bool film_adaptive_sampling_convergence_check(KernelGlobals kg,
   buffer[aux_w_offset] = did_converge;
 
   return did_converge;
+
+/* TODO(Tri): Adaptive sampling is force-disabled whenever ReSTIR is active (sync.cpp).
+ * RIS changes the per-sample estimator in ways this convergence heuristic doesn't account for.
+ * forcing early-stop here produced a dimmer, noisier image rather than fixing anything. */
+// !!!: Doesn't fix anything
+  // return true;
+  // return false;
 }
 
 /* This is a simple box filter in two passes.

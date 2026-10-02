@@ -172,10 +172,10 @@ ccl_device_inline ShaderEvalResult integrate_background(
  * contributions for affected pixels. */
 
 // TODO(Tri): Change this, So the relevant distinction should eventually be something like: "Is this a PT candidate vertex?"
-    const bool use_restir = kernel_data.integrator.use_restir &&
-                            (INTEGRATOR_STATE(state, path, bounce) > 0);
+  const bool use_initial_resampling = kernel_data.integrator.use_initial_resampling &&
+                                      (INTEGRATOR_STATE(state, path, bounce) > 0);
 
-    if (use_restir) {
+    if (use_initial_resampling) {
       /* candidate = already-integrated final pixel contribution. */
       Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
 

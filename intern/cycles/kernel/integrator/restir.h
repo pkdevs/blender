@@ -387,6 +387,7 @@ ccl_device_inline Reservoir restir_unpack_canonical_reservoir(KernelGlobals kg,
   return canonical;
 }
 
+// TODO(Tri): Implements only Falcor's kUsePairwiseMIS == true branch
 /* Add neighboring reservoirs to the current reservoir using pairewise MIS weight. */
 ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
                                             IntegratorState state,
@@ -528,6 +529,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
   return reservoir_finalize(&current->reservoir);
 }
 
+// !!!(Tri): Fails in GI
 /* Combines the progressive & cross-frame history into current's reservoir. */
 ccl_device_inline bool streaming_temporal_resample(KernelGlobals kg,
                                                    IntegratorState state,
@@ -596,14 +598,18 @@ ccl_debug_printf("streaming_temporal_resample() progressive: RETURNED EARLY, can
           history.luminance, history_at_current,
           /*N0=*/(float)history.M, /*N1=*/(float)canonical.M);
       history.total_weight *= mis_weight;
+/* !!!(Tri): temporal-samples can cause a candidate selected early in the frame to survive 
+ * disproportionately longer... may not do anything practical at all! */
+      // history.total_weight *= 100.0f;  // DEBUG ONLY: exaggerate progressive history: Brightens all lit pixels
 
       const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
       spatial_reservoir_add_reservoir(current, history, rand);
-      current->reservoir.M += history.M;
+      current->reservoir.M += history.M; // !!!
       added_neighbors++;
 
 ccl_debug_printf(
-    "--- streaming_temporal_resample() progressive: history_W=%f history_L=%f mis=%f ---\n\n",
+    "--- streaming_temporal_resample() progressive: pixel=(%d,%d) ---\n"
+    "history_W=%f history_L=%f mis=%f\n\n", x, y,
     (double)history.total_weight, (double)history_at_current, (double)mis_weight);
     }
   }
@@ -721,6 +727,7 @@ ccl_debug_printf(
   (double)history_mis_weight);
 
               history.total_weight *= history_mis_weight;
+              // history.total_weight *= 1000.0f; // DEBUG ONLY
 
               const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
               spatial_reservoir_add_reservoir(current, history, rand);

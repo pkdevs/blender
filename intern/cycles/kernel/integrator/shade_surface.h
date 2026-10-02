@@ -229,7 +229,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
   }
 }
 
-/** Evaluate the integrand of the rendering equation in area measure:
+/* Evaluate the integrand of the rendering equation in area measure:
  *   BSDF * L * cos_NO * V * G
  *
  * Writes the spectral result to `radiance`.
@@ -845,6 +845,7 @@ ccl_device
    * construction altogether. Use ordinary single-sample NEE instead, which
    * also restores MIS weighting, constant-light-shader termination, and
    * MNEE handling that the RIS path below does not (yet) fully replicate. */
+  // if (!kernel_data.integrator.use_initial_resampling) { // !!!(Tri): Wrong
   if (!kernel_data.integrator.use_restir) {
     return integrate_surface_nee_legacy(kg, state, sd, rng_state, render_buffer);
   }

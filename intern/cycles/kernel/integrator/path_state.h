@@ -460,9 +460,14 @@ ccl_device_forceinline bool light_is_direct_illumination(IntegratorState state)
   return !(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_ANY_PASS);
 }
 
+// TODO(Tri): Rename or what?
 ccl_device_forceinline bool path_use_restir(KernelGlobals kg, IntegratorState state)
 {
-  return INTEGRATOR_STATE(state, path, bounce) >= 1 && kernel_data.integrator.use_restir &&
+ccl_debug_printf("path_use_restir() use_initial_resampling=%d\n\n", kernel_data.integrator.use_initial_resampling);
+
+  return INTEGRATOR_STATE(state, path, bounce) >= 1 &&
+         kernel_data.integrator.use_restir &&
+        //  kernel_data.integrator.use_initial_resampling &&
          kernel_data.integrator.use_direct_light;
 }
 

@@ -438,6 +438,9 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
     scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
   }
 
+/* TODO(Tri): Ask Brecht to add a MISHeuristic/pairwise_mis_type enum for ordinary forward/NEE
+ * Changes to reservoir_power_heuristic() / reservoir_mis_weight_nee() / reservoir_mis_weight_forward() on the ReSTIR side, 
+ * and power_heuristic() / light_sample_mis_weight_nee() / light_sample_mis_weight_forward() on the legacy. */
 	/* ReSTIR. */
   const bool use_restir = get_boolean(cscene, "use_restir");
 
@@ -445,6 +448,9 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   bool use_spatial_resampling  = get_boolean(cscene, "use_spatial_resampling");
   bool use_temporal_samples    = get_boolean(cscene, "use_temporal_samples");
   bool use_temporal_frames     = get_boolean(cscene, "use_temporal_frames");
+/* TODO(Tri): Only the pairwise-MIS spatial/temporal resampling algorithm is ported
+ * (Falcor's kUsePairwiseMIS == true branch; 
+ * The non-pairwise branch in those same files (kUsePairwiseMIS == false) was never ported. */
   const bool pairwise_mis      = get_boolean(cscene, "restir_pairwise");
   const bool restir_unbiased   = get_boolean(cscene, "restir_unbiased");
 
@@ -456,6 +462,8 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   int light_samples = get_int(cscene, "restir_light_samples");
   int bsdf_samples  = 1;
 
+  // TODO: Remove since we've got integrator use_initial_resampling?
+  // Needed since it computes the local that feeds both set_use_restir() & set_use_initial_resampling() below.
   if (light_samples == 1 && bsdf_samples == 1 && 
         !(use_spatial_resampling && restir_unbiased && use_temporal_samples && use_temporal_frames)) {
     use_initial_resampling = false;
@@ -478,16 +486,18 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
     // TODO(Tri): Surface this to the user via RNA/UI warning
   }
 
-  // TODO(Tri):
+  // TODO(Tri): removed the pairwise_mis bit; it isn't deployed yet!
   /* TODO(weizhen): add proper flags if necessary. */
   integrator->set_use_restir(use_initial_resampling + (use_spatial_resampling << 1) +
-                             (pairwise_mis << 2) + (use_temporal_samples << 3) +
+                             /*(pairwise_mis << 2) + */(use_temporal_samples << 3) +
                              (use_temporal_frames << 4));
+  integrator->set_use_initial_resampling(use_initial_resampling);
   integrator->set_use_temporal_samples(use_temporal_samples);
   integrator->set_use_temporal_frames(use_temporal_frames);
   integrator->set_use_spatial_resampling(use_spatial_resampling);
   integrator->set_restir_unbiased(restir_unbiased);
   integrator->set_restir_light_samples(light_samples);
+
   integrator->set_restir_spatial_radius(get_int(cscene, "restir_spatial_radius"));
   integrator->set_restir_spatial_neighbors(get_int(cscene, "restir_spatial_neighbors"));
   integrator->set_restir_spatial_iterations(
@@ -541,14 +551,15 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   bool use_adaptive_sampling = false;
   if (preview) {
     samples = get_int(cscene, "preview_samples");
-    use_adaptive_sampling = RNA_boolean_get(&cscene, "use_preview_adaptive_sampling");
+    use_adaptive_sampling = RNA_boolean_get(&cscene, "use_preview_adaptive_sampling") &&
+                            !use_restir; // TODO(Tri): Remove !use_restir once supported
     integrator->set_use_adaptive_sampling(use_adaptive_sampling);
     integrator->set_adaptive_threshold(get_float(cscene, "preview_adaptive_threshold"));
     integrator->set_adaptive_min_samples(get_int(cscene, "preview_adaptive_min_samples"));
   }
   else {
     samples = get_int(cscene, "samples");
-    use_adaptive_sampling = RNA_boolean_get(&cscene, "use_adaptive_sampling");
+    use_adaptive_sampling = RNA_boolean_get(&cscene, "use_adaptive_sampling") && !use_restir; // TODO(Tri): Remove
     integrator->set_use_adaptive_sampling(use_adaptive_sampling);
     integrator->set_adaptive_threshold(get_float(cscene, "adaptive_threshold"));
     integrator->set_adaptive_min_samples(get_int(cscene, "adaptive_min_samples"));

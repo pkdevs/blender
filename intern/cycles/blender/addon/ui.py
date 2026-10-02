@@ -231,7 +231,8 @@ class CYCLES_RENDER_PT_sampling_viewport(CyclesButtonsPanel, Panel):
         row = heading.row(align=True)
         row.prop(cscene, "use_preview_adaptive_sampling", text="")
         sub = row.row()
-        sub.active = cscene.use_preview_adaptive_sampling
+        # TODO(Tri): adaptive sampling isn't supported on ReSTIR yet
+        sub.active = cscene.use_preview_adaptive_sampling and not cscene.use_restir
         sub.prop(cscene, "preview_adaptive_threshold", text="")
 
         if cscene.use_preview_adaptive_sampling:
@@ -304,7 +305,8 @@ class CYCLES_RENDER_PT_sampling_render(CyclesButtonsPanel, Panel):
         row = heading.row(align=True)
         row.prop(cscene, "use_adaptive_sampling", text="")
         sub = row.row()
-        sub.active = cscene.use_adaptive_sampling
+        # TODO(Tri): adaptive sampling isn't supported on ReSTIR yet
+        sub.active = cscene.use_adaptive_sampling and not cscene.use_restir
         sub.prop(cscene, "adaptive_threshold", text="")
 
         col = layout.column(align=True)
@@ -550,7 +552,10 @@ class CYCLES_RENDER_PT_sampling_lights_restir(CyclesButtonsPanel, Panel):
         col = layout.column(heading="MIS weight", align=True)
         row = col.row(align=True)
         row.prop(cscene, "restir_unbiased", toggle=True)
-        row.prop(cscene, "restir_pairwise", toggle=True)
+        # row.prop(cscene, "restir_pairwise", toggle=True) # TODO(Tri): Uncomment once restir_pairwise lands
+        sub = row.row(align=True)
+        sub.enabled = False
+        sub.prop(cscene, "restir_pairwise", toggle=True)
         # col.prop(cscene, "restir_heuristics")
         
         col.prop(cscene, "restir_temporal_normal_threshold", text="Normal Threshold")

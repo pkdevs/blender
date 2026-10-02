@@ -267,6 +267,7 @@ enum_guiding_directional_sampling_types = (
      2),
 )
 
+# TODO(Tri): MISHeuristic/pairwise_mis_type enum must be deployed
 enum_restir_heuristics = (
     ('BALANCE_HEURISTIC', "Balance Heuristic", ""),
     ('POWER_HEURISTIC', "Power Heuristic", ""),
@@ -616,7 +617,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True)
     restir_pairwise: BoolProperty(
         name="Pairwise",
-        description="Use pairwise MIS when combining samples (TODO): probably remove this option",
+        description="Use pairwise MIS when combining samples",
         default=True)
     restir_heuristics: EnumProperty(
         name=" ",

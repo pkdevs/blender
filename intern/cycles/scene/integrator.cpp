@@ -100,9 +100,10 @@ NODE_DEFINE(Integrator)
   /* ReSTIR. */
   SOCKET_BOOLEAN(use_restir, "ReSTIR", true);
   SOCKET_BOOLEAN(restir_unbiased, "Unbiased", true);
-  SOCKET_BOOLEAN(use_spatial_resampling, "Spatial Resampling", true);
+  SOCKET_BOOLEAN(use_initial_resampling, "Initial Resampling", true);
   SOCKET_BOOLEAN(use_temporal_samples, "Scene-Static Temporal Resampling", true);
   SOCKET_BOOLEAN(use_temporal_frames, "Cross Frame Temporal Resampling", true);
+  SOCKET_BOOLEAN(use_spatial_resampling, "Spatial Resampling", true);
   SOCKET_INT(restir_light_samples, "Light", 4);
   SOCKET_INT(restir_spatial_radius, "Radius", 10);
   SOCKET_INT(restir_spatial_neighbors, "Samples", 6);
@@ -419,6 +420,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
   /* ReSTIR. */
   kintegrator->use_restir = use_restir & 0b11;
+  kintegrator->use_initial_resampling = use_initial_resampling;
   kintegrator->use_temporal_samples = use_temporal_samples;
   kintegrator->use_temporal_frames = use_temporal_frames;
   kintegrator->use_spatial_resampling = use_spatial_resampling;
