@@ -310,6 +310,10 @@ struct CodegenContext : NodeErrorHandler {
         return {var, whitespace};
       }
 
+      if (var->condition.is_valid()) {
+        ctx.check_condition(id, var->condition);
+      }
+
       if (var->type->is_srt()) {
         bool followed_by_dot = id.back().next() == '.';
         bool followed_by_member_call = id.parent().next().next() == NodeType::FuncCall;
@@ -2143,6 +2147,178 @@ struct CodegenContext : NodeErrorHandler {
     }
   }
 
+  struct StaticConditionStack {
+   public:
+    struct SubCondition {
+      ast::Node front, back;
+
+      string_view str()
+      {
+        return front.p->substr(front.front(), back.back());
+      }
+    };
+
+   private:
+    vector<ast::Expr> pos_conditions;
+    vector<ast::Expr> neg_conditions;
+
+   public:
+    void push_positive_condition(ast::Condition cond)
+    {
+      /* Note: Assumes If statements have only one LocalStmt. */
+      pos_conditions.emplace_back(cond.child_first().child_first());
+    }
+    void pop_positive_condition()
+    {
+      pos_conditions.pop_back();
+    }
+
+    void push_negative_condition(ast::Condition cond)
+    {
+      /* Note: Assumes If statements have only one LocalStmt. */
+      neg_conditions.emplace_back(cond.child_first().child_first());
+    }
+    void pop_negative_condition()
+    {
+      neg_conditions.pop_back();
+    }
+
+    /* Checks if all conditions inside `expr` are already checked inside the active static
+     * conditions in the stack. */
+    vector<SubCondition> check_condition(ast::Expr expr)
+    {
+      /* Note that an exact implementation would require a SAT Solver since this is a NP-complete
+       * problem (see https://en.wikipedia.org/wiki/Boolean_satisfiability_problem)
+       *
+       * Since most of the conditions are simple we consider a series of non-nested expression
+       * ANDed together and check for matching token strings for each sub expression.
+       * This is enough for detecting 99% of the logic issues. */
+
+      /* Split the expression to check into subexpressions to test individually. */
+      vector<SubCondition> expr_split = split_expr(expr, LogicalAnd);
+
+      for (ast::Expr cond : pos_conditions) {
+        remove_included_expr(expr_split, split_expr(cond, LogicalAnd), false);
+      }
+      for (ast::Expr cond : neg_conditions) {
+        /* Because of DeMorgan's law: `!(A || B) <=> !A && !B`
+         * Split the condition on LogicalOr and negate each expression.  */
+        remove_included_expr(expr_split, split_expr(cond, LogicalOr), true);
+      }
+
+      return expr_split;
+    }
+
+   private:
+    vector<SubCondition> split_expr(ast::Expr &expr_split, const TokenType split_token)
+    {
+      vector<SubCondition> split;
+
+      ast::Node front = expr_split.child_first();
+      ast::Node back = front;
+
+      while (back.next().is_valid()) {
+        back = back.next();
+        if (back.front() == split_token) {
+          split.emplace_back(front, back.prev());
+          /* Advance past the operator. */
+          front = back.next();
+          back = front;
+        }
+      }
+      if (front.is_valid()) {
+        split.emplace_back(front, back);
+      }
+      return split;
+    }
+
+    void remove_included_expr(vector<SubCondition> &expr_split,
+                              const vector<SubCondition> &cond_split,
+                              bool negative_cond)
+    {
+      std::erase_if(expr_split, [&](const SubCondition &expr) {
+        return std::ranges::any_of(cond_split, [&](const SubCondition &cond) {
+          return check_expression_inclusion(expr, cond, negative_cond);
+        });
+      });
+    }
+
+    /* Check if `expr` is logically included inside `cond`.
+     *
+     * If `negative_cond` is true, checks if `expr` is starting with a negation and compare the
+     * rest of expression. This have the same effect as negating the condition.
+     *
+     * NOTE: This function doesn't aim to be a full inclusion check (NP-complete problem), but it
+     * should be at least conservative.  */
+    bool check_expression_inclusion(SubCondition expr, SubCondition cond, bool negative_cond)
+    {
+      /* Check if both expressions are equivalent. */
+      ast::Node node_expr = expr.front;
+      ast::Node node_cond = cond.front;
+      if (negative_cond) {
+        if (node_expr.front() == '!' && node_expr.front().str().length() == 1) {
+          node_expr = node_expr.next();
+        }
+        else {
+          return false;
+        }
+      }
+      bool match = true;
+      while (match) {
+        switch (node_expr.type()) {
+          case NodeType::LocalVar:
+            /* Go to the last token of an accessor and check the last token. */
+            /* Don't do that for node_expr since it is not supposed to contain member access. */
+            while (node_cond.next().front() == '.') {
+              node_cond = node_cond.next().next();
+            }
+            if (node_cond.type() != NodeType::LocalVar) {
+              /* Invalid condition expression. */
+              match = false;
+              break;
+            }
+            [[fallthrough]];
+          case NodeType::Op:
+          case NodeType::NumConst:
+            /* Textual comparison. */
+            match &= node_expr.str() == node_cond.str();
+            break;
+          default:
+            // error(node_expr, Diag::InvalidOp);
+            match = false;
+            break;
+        }
+
+        bool end_of_cond = node_cond.front() == cond.back.front();
+        bool end_of_expr = node_expr.front() == expr.back.front();
+
+        if (end_of_cond || end_of_expr) {
+          /* Only valid match if both are terminated. */
+          match &= end_of_cond && end_of_expr;
+          break;
+        }
+
+        node_expr = node_expr.next();
+        node_cond = node_cond.next();
+
+        match = (node_expr.type() == node_cond.type());
+      }
+      return match;
+    }
+  } static_condition_stack;
+
+  void check_condition(ast::IdQualified id, ast::Expr expr)
+  {
+    /* Split the expression to check into subexpressions to test individually. */
+    vector<StaticConditionStack::SubCondition> expr_split = static_condition_stack.check_condition(
+        expr);
+
+    if (!expr_split.empty()) {
+      NOTE(expr, Diag::ConditionAttributeDeclaredHere, "");
+      error(id, Diag::ConditionAttributeNotChecked, id.str());
+    }
+  }
+
   void static_if_statement(Node decl,
                            SymbolScope &parent_scope,
                            int &local_scope_id,
@@ -2171,6 +2347,8 @@ struct CodegenContext : NodeErrorHandler {
                               parent_scope, stmt.expr().child_first(), unused_count, true)
                           .unwrap(this);
       builder.ss << (first ? "#if " : "#elif ") + cond_str + "\n";
+
+      static_condition_stack.push_positive_condition(cond);
     }
     else {
       builder.ss << "#else\n";
@@ -2184,6 +2362,12 @@ struct CodegenContext : NodeErrorHandler {
     jump_to(body.front());
 
     local_scope(body, *scope);
+
+    if (cond.is_valid()) {
+      /* Convert the active condition into an inactive one (negated). */
+      static_condition_stack.pop_positive_condition();
+      static_condition_stack.push_negative_condition(cond);
+    }
 
     /* Process preprocessor directive that can be added between if statements. */
     Node node = body.next();
@@ -2202,6 +2386,11 @@ struct CodegenContext : NodeErrorHandler {
       /* Pretty align. */
       builder.ss << string(decl.front().char_number(), ' ') + "#endif\n";
       jump_to(next.front());
+    }
+
+    if (cond.is_valid()) {
+      /* Remove the negated condition. */
+      static_condition_stack.pop_negative_condition();
     }
   }
 
