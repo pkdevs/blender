@@ -284,6 +284,7 @@ struct StrokeCache {
   const Paint *paint = nullptr;
 
   float special_rotation = 0.0f;
+  float tip_rotation = 0.0f;
   float3 grab_delta = float3(0);
   float3 grab_delta_symm = float3(0);
   float3 old_grab_location = float3(0);

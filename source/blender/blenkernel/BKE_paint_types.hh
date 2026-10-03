@@ -117,6 +117,7 @@ struct PaintRuntime : NonCopyable, NonMovable {
    */
   float brush_rotation = 0.0f;
   float brush_rotation_sec = 0.0f;
+  float tip_rotation = 0.0f;
 
   /*******************************************************************************
    * All data below are used to communicate with cursor drawing and tex sampling *

@@ -2818,7 +2818,7 @@ static void calc_brush_local_mat(const float rotation,
   const StrokeCache *cache = ob.runtime->sculpt_session->cache;
 
   calc_brush_local_mat(rotation,
-                       cache->special_rotation,
+                       cache->tip_rotation,
                        *cache->vc,
                        ob,
                        tip_normal,
@@ -2926,7 +2926,7 @@ float3 tilt_effective_normal_get(const SculptSession &ss, const Brush &brush)
   return tilt_apply_to_normal(ss.cache->sculpt_normal_symm, *ss.cache, brush.tilt_strength_factor);
 }
 
-static void update_brush_local_mat(const Sculpt &sd, Object &ob)
+static void update_brush_texture_local_mat(const Sculpt &sd, Object &ob)
 {
   PRF_scope(ProfileCategory::Editor);
   StrokeCache *cache = ob.runtime->sculpt_session->cache;
@@ -2935,10 +2935,14 @@ static void update_brush_local_mat(const Sculpt &sd, Object &ob)
     const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
     const MTex *mask_tex = BKE_brush_mask_texture_get(brush, PaintMode::Sculpt);
     calc_brush_local_mat(mask_tex->rot,
+                         cache->special_rotation,
+                         *cache->vc,
                          ob,
                          eBrushFalloffShape(brush->falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
                              cache->sculpt_normal_symm :
                              cache->view_normal_symm,
+                         cache->location_symm,
+                         cache->radius,
                          cache->brush_local_mat.ptr(),
                          cache->brush_local_mat_inv.ptr());
   }
@@ -3523,7 +3527,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
     update_sculpt_normal(depsgraph, sd, ob, cursor_sample_result);
   }
 
-  update_brush_local_mat(sd, ob);
+  update_brush_texture_local_mat(sd, ob);
 
   /* Cube tipped brushes cannot run on the first brush step due to needing the screen delta to
    * calculate tip alignment. */
@@ -5667,6 +5671,7 @@ static void stroke_cache_update(ViewContext &vc,
   }
 
   cache.special_rotation = paint_runtime.brush_rotation;
+  cache.tip_rotation = paint_runtime.tip_rotation;
 
   cache.iteration_count++;
 }

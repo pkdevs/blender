@@ -1993,28 +1993,29 @@ static float paint_rake_rotation_spacing(const Paint & /*paint*/,
   }
 }
 
-void BKE_paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation)
-{
-  bke::PaintRuntime &paint_runtime = *paint.runtime;
-  paint_runtime.brush_rotation = rotation;
-
-  if (brush.mask_mtex.brush_angle_mode & MTEX_ANGLE_RAKE) {
-    paint_runtime.brush_rotation_sec = rotation;
-  }
-  else {
-    paint_runtime.brush_rotation_sec = 0.0f;
-  }
-}
-
 static bool paint_rake_rotation_active(const MTex &mtex)
 {
   return mtex.tex && mtex.brush_angle_mode & MTEX_ANGLE_RAKE;
 }
 
+static bool paint_rake_rotation_active(const Brush &brush)
+{
+  return brush.brush_angle_mode & MTEX_ANGLE_RAKE;
+}
+
+void BKE_paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation)
+{
+  bke::PaintRuntime &paint_runtime = *paint.runtime;
+  paint_runtime.brush_rotation = rotation;
+  paint_runtime.brush_rotation_sec = paint_rake_rotation_active(brush.mask_mtex) ? rotation : 0;
+
+  paint_runtime.tip_rotation = paint_rake_rotation_active(brush) ? rotation : 0;
+}
+
 static bool paint_rake_rotation_active(const Brush &brush, PaintMode paint_mode)
 {
   return paint_rake_rotation_active(brush.mtex) || paint_rake_rotation_active(brush.mask_mtex) ||
-         BKE_brush_has_cube_tip(&brush, paint_mode);
+         paint_rake_rotation_active(brush);
 }
 
 bool BKE_paint_calculate_rake_rotation(Paint &paint,
@@ -2053,7 +2054,7 @@ bool BKE_paint_calculate_rake_rotation(Paint &paint,
     }
   }
   else {
-    paint_runtime.brush_rotation = paint_runtime.brush_rotation_sec = 0.0f;
+    paint_runtime.brush_rotation = paint_runtime.brush_rotation_sec = paint_runtime.tip_rotation = 0.0f;
     ok = true;
   }
   return ok;

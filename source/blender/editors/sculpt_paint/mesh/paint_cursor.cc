@@ -693,7 +693,7 @@ static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
     float local_mat_inv[4][4];
 
     calc_brush_local_mat(0,
-                         pcontext.paint->runtime->brush_rotation,
+                         pcontext.paint->runtime->tip_rotation,
                          pcontext.vc,
                          *pcontext.vc.obact,
                          normal,

@@ -980,6 +980,10 @@ void PaintStroke::done(bContext *C, const bool is_cancel)
     if (!(this->brush->mask_mtex.brush_angle_mode & MTEX_ANGLE_RAKE)) {
       paint_runtime->brush_rotation_sec = 0.0f;
     }
+
+    if (!(this->brush->brush_angle_mode & MTEX_ANGLE_RAKE)) {
+      paint_runtime->tip_rotation = 0.0f;
+    }
   }
 
   /* TODO: Is this stroke_started_ guard necessary? */
