@@ -1195,7 +1195,34 @@ static bool ffmpeg_must_decode(MovieReader *anim, int position)
 
 static bool ffmpeg_must_seek(MovieReader *anim, int position)
 {
-  bool must_seek = position != anim->cur_position + 1 || ffmpeg_is_first_frame_decode(anim);
+  if (ffmpeg_is_first_frame_decode(anim)) {
+    anim->seek_before_decode = true;
+    return true;
+  }
+
+  const int frame_delta = position - anim->cur_position;
+
+  if (frame_delta <= 0) {
+    anim->seek_before_decode = true;
+    return true;
+  }
+
+  if (frame_delta == 1) {
+    anim->seek_before_decode = false;
+    return false;
+  }
+
+  if (anim->pCodecCtx) {
+    const AVCodecDescriptor *desc = avcodec_descriptor_get(anim->pCodecCtx->codec_id);
+    if (desc && (desc->props & AV_CODEC_PROP_INTRA_ONLY)) {
+      anim->seek_before_decode = true;
+      return true;
+    }
+  }
+
+  constexpr int MAX_FORWARD_SCAN_FRAMES = 6;
+
+  const bool must_seek = (frame_delta > MAX_FORWARD_SCAN_FRAMES);
   anim->seek_before_decode = must_seek;
   return must_seek;
 }
