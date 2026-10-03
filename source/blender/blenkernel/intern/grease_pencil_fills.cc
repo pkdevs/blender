@@ -279,12 +279,14 @@ IndexMask curves_mask_to_shapes(const IndexMask &curve_mask,
   }
 
   Array<int> curve_to_shape_map(curves_num);
-  for (const int shape_i : shapes.index_range()) {
-    const Span<int> shape = shapes[shape_i];
-    for (const int curve_i : shape) {
-      curve_to_shape_map[curve_i] = shape_i;
+  threading::parallel_for(shapes.index_range(), 4096, [&](const IndexRange range) {
+    for (const int shape_i : range) {
+      const Span<int> shape = shapes[shape_i];
+      for (const int curve_i : shape) {
+        curve_to_shape_map[curve_i] = shape_i;
+      }
     }
-  }
+  });
 
   VectorSet<int> selected_shapes;
   curve_mask.foreach_index([&](const int curve_i) {

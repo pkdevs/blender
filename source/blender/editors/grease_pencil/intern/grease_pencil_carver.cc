@@ -41,6 +41,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
                                       Object &obact,
                                       const ARegion &region,
                                       const float4x4 &projection,
+                                      const int layer_index,
                                       const float4x4 &layer_to_world,
                                       const DrawingPlacement &placement,
                                       const Span<float2> mcoords,
@@ -162,12 +163,18 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   const GroupedSpan<int> shapes = shapes_data.shapes();
   const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
+  IndexMaskMemory memory;
+  const IndexMask editable_strokes = ed::greasepencil::retrieve_editable_strokes(
+      obact, drawing, layer_index, memory);
+  const IndexMask editable_shapes = bke::greasepencil::curves_mask_to_shapes(
+      editable_strokes, shapes, memory);
+
   bke::CurvesGeometry carved_strokes = boolean::curve_boolean_with_planes(op_params,
                                                                           input_curves,
                                                                           project_fn,
                                                                           shapes,
                                                                           curve_planes,
-                                                                          shapes.index_range(),
+                                                                          editable_shapes,
                                                                           clipping_shapes,
                                                                           layer_to_world,
                                                                           region);
@@ -255,6 +262,7 @@ static wmOperatorStatus grease_pencil_stroke_carver_exec(bContext *C, wmOperator
                                     *obact,
                                     *region,
                                     projection,
+                                    info.layer_index,
                                     layer_to_world,
                                     placement,
                                     lasso_pos.as_span(),
@@ -295,6 +303,7 @@ static wmOperatorStatus grease_pencil_stroke_carver_exec(bContext *C, wmOperator
                                     *obact,
                                     *region,
                                     projection,
+                                    info.layer_index,
                                     layer_to_world,
                                     placement,
                                     lasso_pos,

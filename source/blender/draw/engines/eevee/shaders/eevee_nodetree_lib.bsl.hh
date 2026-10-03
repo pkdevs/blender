@@ -85,7 +85,7 @@ struct ShadingData {
   float hair_diameter;
   /** Index of the strand for per strand effects. */
   int hair_strand_id;
-  /** Pointcloud infos. */
+  /** Point-cloud infos. */
   packed_float3 point_position;
   float point_radius;
   int point_id;
@@ -577,7 +577,7 @@ void raycast_eval(KernelGlobals &kg,
       }
 
       float noise_offset = kg.sampling.rng_1D_get(SAMPLING_RAYTRACE_W);
-      float jitter = interleaved_gradient_noise(sd.frag_co.xy, 1.0f, noise_offset);
+      float jitter = random::interleaved_gradient(sd.frag_co.xy, 1.0f, noise_offset);
 
       float2 hit_uv = float2(0.0f);
       uint self_id = kg.resource_id_get(sd) & uint(0xFFFF);
