@@ -2773,9 +2773,11 @@ static void update_sculpt_normal(const Depsgraph &depsgraph,
   /* We check whether sculpt_normal is zero because it would be uninitialized on the second brush
    * step when brush has cube tip. For brushes where update_normal is false, sculpt_normal would
    * remain uninitialized if we do not add this zero check. */
+  /* TODO: sculpt_normal can't always be initialized at a usual point. To distinguish a degenerate
+   * normal <0,0,0> from an uninitialized one, we can make it into an std::optional. */
   if (cache.mirror_symmetry_pass == 0 && cache.radial_symmetry_pass == 0 &&
       (stroke_is_first_brush_step_of_symmetry_pass(cache) || update_normal ||
-       is_zero_v3(cache.sculpt_normal)))
+       math::is_zero(cache.sculpt_normal)))
   {
     if (cursor_sample_result.plane_normal) {
       cache.sculpt_normal = *cursor_sample_result.plane_normal;
@@ -6835,8 +6837,6 @@ void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
   const StrokeCache &cache = *ss.cache;
 
   const Span<int> verts = node.verts();
-  /* Fill initial factors from hide and mask, and apply front face culling and region clipping.
-   */
   fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
   filter_region_clip_factors(ss, vert_positions, verts, factors);
   if (brush.flag & BRUSH_FRONTFACE) {
