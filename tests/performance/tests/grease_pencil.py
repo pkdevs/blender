@@ -128,5 +128,10 @@ class GreasePencilTest(api.Test):
 
 
 def generate(env):
-    filepaths = env.find_blend_files('grease_pencil/*')
-    return [GreasePencilTest(filepath) for filepath in filepaths]
+    filepaths = env.find_blend_files('grease_pencil/**')
+    benchmark_dir = env.benchmarks_dir / 'grease_pencil'
+    filepaths = [
+        fp for fp in filepaths
+        if 'scuplt_brushes' not in fp.relative_to(benchmark_dir).parts
+    ]
+    return [GreasePencilTest(fp) for fp in filepaths]
