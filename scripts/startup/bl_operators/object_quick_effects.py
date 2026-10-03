@@ -89,6 +89,17 @@ class QuickFur(ObjectModeOperator, Operator):
         default=True,
     )
 
+    @classmethod
+    def poll(cls, context):
+        if not super().poll(context):
+            return False
+
+        if context.active_object is None or context.active_object.type != 'MESH':
+            cls.poll_message_set("No active mesh object.")
+            return False
+
+        return True
+
     def execute(self, context):
         import os
         from collections import namedtuple
@@ -202,6 +213,10 @@ class QuickFur(ObjectModeOperator, Operator):
                         modifier_apply_error = True
 
             curves_object.modifiers.move(0, len(curves_object.modifiers) - 1)
+
+        for modifier in curves_object.modifiers:
+            if hasattr(modifier, "show_group_selector"):
+                modifier.show_group_selector = False
 
         if mesh_with_zero_area:
             self.report({'WARNING'}, "Mesh has no face area")

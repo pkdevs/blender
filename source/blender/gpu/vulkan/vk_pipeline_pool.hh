@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "xxhash.h"
 
 #include "BLI_map.hh"
@@ -126,7 +128,7 @@ struct VKGraphicsInfo {
     /* Dynamic rendering */
     VkFormat depth_attachment_format;
     VkFormat stencil_attachment_format;
-    Vector<VkFormat> color_attachment_formats;
+    Vector<VkFormat, GPU_FB_MAX_COLOR_ATTACHMENT> color_attachment_formats;
 
     bool operator==(const FragmentOut &other) const
     {
@@ -271,11 +273,11 @@ template<typename PipelineInfo> class VKPipelineMap {
    *
    * \note Handle is passed to fix recursive inclusion of vk_device.hh
    */
-  void free_data(VkDevice vk_device)
+  void free_data(VkDevice vk_device, const volk::VolkDeviceTable &functions)
   {
     std::scoped_lock lock(mutex_);
     for (VkPipeline &vk_pipeline : pipelines_.values()) {
-      vkDestroyPipeline(vk_device, vk_pipeline, nullptr);
+      functions.vkDestroyPipeline(vk_device, vk_pipeline, nullptr);
     }
     pipelines_.clear();
   }
@@ -368,6 +370,12 @@ class VKPipelinePool : public NonCopyable {
   VKPipelineMap<VKGraphicsInfo::Shaders> shaders_libs_;
   VKPipelineMap<VKGraphicsInfo::FragmentOut> fragment_output_libs_;
 
+  /* Total count of pipelines compiled on demand since app start so ongoing pipeline compilation
+   * can be reported to `bpy.app.is_job_running("SHADER_COMPILATION")`. */
+  std::atomic<uint64_t> compilation_counter_ = 0;
+  /* The value of the compilation counter at the last frame boundary. */
+  uint64_t compilation_counter_at_reset_ = 0;
+
  public:
   void init();
 
@@ -445,12 +453,23 @@ class VKPipelinePool : public NonCopyable {
   void discard(VKDiscardPool &discard_pool, VkPipelineLayout vk_pipeline_layout);
 
   /**
+   * Returns true when any pipeline has been created on demand since the last reset.
+   */
+  bool compiled_since_last_reset() const;
+
+  /**
+   * Snapshot the on-demand pipeline compilation counter, so `compiled_since_last_reset` reports
+   * only pipelines created after this call. Meant to be called once per frame.
+   */
+  void reset_compilation_tracking();
+
+  /**
    * Destroy all created pipelines.
    *
    * Function is called just before the device is removed. This cannot be done in the destructor as
    * that would be called after the device is removed.
    */
-  void free_data();
+  void free_data(const VKDevice &device);
 
   /**
    * Read the static pipeline cache from cache file.
