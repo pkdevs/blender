@@ -23,24 +23,16 @@ namespace seq {
 
 bool edit_strip_swap(Scene *scene, Strip *strip_a, Strip *strip_b, const char **r_error_str);
 /**
- * Move strip to seqbase.
- *
- * \param scene: Scene containing the editing
- * \param seqbase: seqbase where `strip` is located
- * \param strip: Strip to move
- * \param dst_seqbase: Target seqbase
+ * Move \a strip from \a seqbase to \a dst_seqbase.
  */
 bool edit_move_strip_to_seqbase(Scene *scene,
                                 ListBaseT<Strip> *seqbase,
                                 Strip *strip,
                                 ListBaseT<Strip> *dst_seqbase);
 /**
- * Move strip to meta-strip.
+ * Move \a src_strip into meta-strip \a dst_stripm.
  *
- * \param scene: Scene containing the editing
- * \param src_strip: Strip to move
- * \param dst_stripm: Target meta-strip
- * \param r_error_str: Error message
+ * \param r_error_str: Set on failure.
  */
 bool edit_move_strip_to_meta(Scene *scene,
                              Strip *src_strip,
@@ -51,7 +43,7 @@ bool edit_move_strip_to_meta(Scene *scene,
  */
 void edit_flag_for_removal(Scene *scene, Strip *strip);
 /**
- * Remove all flagged strips, return true if strip is removed.
+ * Remove all flagged strips.
  */
 void edit_remove_flagged_strips(Scene *scene, ListBaseT<Strip> *seqbase);
 void edit_update_muting(Editing *ed);
@@ -83,12 +75,10 @@ Vector<Strip *> edit_split_strips_get(Scene *scene,
                                       bool only_selected);
 
 /**
- * Split Strip at timeline_frame in two.
+ * Split \a strip in two at \a timeline_frame.
  *
- * \param strip: Strip to be split
- * \param timeline_frame: frame at which strip is split.
- * \param method: affects type of offset to be applied to resize Strip
- * \return The newly created strip. This is always the Strip on the right side.
+ * \param method: Soft keeps content beyond the split point, hard turns them into hold frames.
+ * \return The new right-side strip, or null if the split failed.
  */
 Strip *edit_strip_split(Main *bmain,
                         Scene *scene,
@@ -99,13 +89,10 @@ Strip *edit_strip_split(Main *bmain,
                         bool ignore_connections,
                         const char **r_error);
 /**
- * Find gap after initial_frame and move strips on right side to close the gap
+ * Find the gap after \a initial_frame and move strips on its right side to close it.
  *
- * \param scene: Scene in which strips are located
- * \param seqbase: List in which strips are located
- * \param initial_frame: frame on timeline from where gaps are searched for
- * \param remove_all_gaps: remove all gaps instead of one gap
- * \return true if gap is removed, otherwise false
+ * \param remove_all_gaps: Close every gap after \a initial_frame, not just the first.
+ * \return Whether a gap was removed.
  */
 bool edit_remove_gaps(Scene *scene,
                       ListBaseT<Strip> *seqbase,
