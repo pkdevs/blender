@@ -124,4 +124,13 @@ else()
     install(CODE "execute_process(COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/utils/strip_libraries.py ${HARVEST_TARGET} \n
                   COMMAND_ERROR_IS_FATAL ANY)")
   endfunction()
+
+  # Harvest a file while doing a string search and replace step (a->b) in between. 
+  function(harvest_file_search_and_replace project from to file a b)
+    install(CODE "\
+      file(READ \"${LIBDIR}/${from}/${file}\" FILE_CONTENT ) \n
+      string(REPLACE \"${a}\" \"${b}\" FILE_CONTENT \"\${FILE_CONTENT}\" ) \n
+      file(WRITE \"${HARVEST_TARGET}/${to}/${file}\" \"\${FILE_CONTENT}\") \n
+      ")
+  endfunction()
 endif()
