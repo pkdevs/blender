@@ -7,9 +7,11 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BKE_anim_data.hh"
 #include "BKE_appdir.hh"
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
+#include "BKE_fcurve.hh"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_report.hh"
@@ -24,6 +26,7 @@
 
 #include "BLO_readfile.hh"
 
+#include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
@@ -32,6 +35,7 @@
 
 #include "SEQ_add.hh"
 #include "SEQ_channels.hh"
+#include "SEQ_connect.hh"
 #include "SEQ_modifier.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_sound.hh"
@@ -53,6 +57,7 @@
 #include "opentimelineio/stack.h"
 #include "opentimelineio/timeline.h"
 #include "opentimelineio/track.h"
+#include "opentimelineio/transition.h"
 
 namespace blender::io::otio {
 
@@ -691,6 +696,137 @@ TEST_F(OTIOTest, ReverseTimeWarp)
     }
   }
   EXPECT_EQ(speed_strips, 1);
+}
+
+TEST_F(OTIOTest, ResolveEditMetadata)
+{
+  const TimeRange range(RationalTime(0, 24), RationalTime(20, 24));
+  auto image = SerializableObject::Retainer<Clip>(
+      new Clip("Image",
+               new ExternalReference(asset_path("sequence_editing/filter/31x17.png"), range),
+               range));
+  auto add_effect = [&](Clip &clip, const AnyDictionary &resolve) {
+    auto *effect = new otio::Effect("", "Resolve Effect");
+    effect->metadata()["Resolve_OTIO"] = resolve;
+    clip.effects().push_back(effect);
+  };
+  add_effect(*image, resolve_effect("Retime and Scaling", {{"scale", int64_t(3)}}));
+  add_effect(*image,
+             resolve_effect("Transform",
+                            {{"transformationFlipX", true},
+                             {"transformationAnchorPoint", AnyVector{0.1, 0.05}}}));
+  AnyDictionary composite = resolve_effect("Composite", {{"opacity", 100.0}});
+  AnyDictionary key_start;
+  key_start["Value"] = 100.0;
+  AnyDictionary key_end;
+  key_end["Value"] = 0.0;
+  AnyDictionary keys;
+  keys["0"] = key_start;
+  keys["10"] = key_end;
+  std::any_cast<AnyDictionary &>(
+      std::any_cast<AnyVector &>(composite["Parameters"])[0])["Key Frames"] = keys;
+  add_effect(*image, composite);
+
+  auto *wipe = new Transition(
+      "Edge Wipe", "Custom_Transition", RationalTime(5, 24), RationalTime(5, 24));
+  AnyDictionary wipe_resolve;
+  wipe_resolve["Effects"] = resolve_effect("Edge Wipe", {{"angle", int64_t(45)}});
+  wipe->metadata()["Resolve_OTIO"] = wipe_resolve;
+
+  AnyDictionary link_resolve;
+  link_resolve["Link Group ID"] = int64_t(7);
+  auto *linked_video = new Clip("Linked Video", new GeneratorReference("", "COLOR", range), range);
+  linked_video->metadata()["Resolve_OTIO"] = link_resolve;
+  auto *linked_other = new Clip("Linked Other", new GeneratorReference("", "COLOR", range), range);
+  linked_other->metadata()["Resolve_OTIO"] = link_resolve;
+
+  auto track_1 = SerializableObject::Retainer<Track>(new Track("V1"));
+  track_1->append_child(image);
+  track_1->append_child(wipe);
+  track_1->append_child(linked_video);
+  auto *adjustment = new Clip("Adjustment", new MissingReference(), range);
+  add_effect(*adjustment, resolve_effect("Effect", {}));
+  std::any_cast<AnyDictionary &>(
+      adjustment->effects()[0]->metadata()["Resolve_OTIO"])["Type"] = int64_t(74);
+  auto track_2 = SerializableObject::Retainer<Track>(new Track("V2"));
+  track_2->append_child(adjustment);
+  track_2->append_child(linked_other);
+
+  auto *sound = new Clip(
+      "Sound", new ExternalReference(asset_path("sound/pink_panther.ogg"), range), range);
+  add_effect(*sound,
+             resolve_effect("Fairlight Clip Volume and Fades",
+                            {{"volume", 0.0}, {"faderIn", 4.0}, {"faderOut", 6.0}}));
+  auto track_3 = SerializableObject::Retainer<Track>(
+      new Track("A1", std::nullopt, Track::Kind::audio));
+  track_3->append_child(sound);
+
+  auto timeline = SerializableObject::Retainer<Timeline>(new Timeline("Resolve"));
+  timeline->tracks()->append_child(track_1);
+  timeline->tracks()->append_child(track_2);
+  timeline->tracks()->append_child(track_3);
+  write_otio(timeline);
+
+  Scene *imported = import_otio();
+  ASSERT_NE(imported, nullptr);
+  Strip *strip = seq::lookup_strip_by_name(imported->ed, "Image");
+  ASSERT_NE(strip, nullptr);
+  const float scale = std::max(imported->r.xsch / 31.0f, imported->r.ysch / 17.0f);
+  EXPECT_FLOAT_EQ(strip->data->transform->scale_x, scale);
+  EXPECT_FLOAT_EQ(strip->data->transform->origin[0],
+                  0.5f + 0.1f * imported->r.ysch / (31.0f * scale));
+  EXPECT_FLOAT_EQ(strip->data->transform->origin[1],
+                  0.5f + 0.05f * imported->r.ysch / (17.0f * scale));
+  EXPECT_TRUE(strip->flag & SEQ_FLIPX);
+
+  FCurve *fcurve = BKE_animadata_fcurve_find_by_rna_path(
+      BKE_animdata_from_id(&imported->id),
+      "sequence_editor.strips_all[\"Image\"].blend_alpha",
+      0,
+      nullptr,
+      nullptr);
+  ASSERT_NE(fcurve, nullptr);
+  ASSERT_EQ(fcurve->totvert, 2);
+  EXPECT_FLOAT_EQ(fcurve->bezt[0].vec[1][0], strip->left_handle());
+  EXPECT_FLOAT_EQ(fcurve->bezt[0].vec[1][1], 1.0f);
+  EXPECT_FLOAT_EQ(fcurve->bezt[1].vec[1][0], strip->left_handle() + 10);
+  EXPECT_FLOAT_EQ(fcurve->bezt[1].vec[1][1], 0.0f);
+
+  Strip *wipe_strip = seq::lookup_strip_by_name(imported->ed, "Edge Wipe");
+  ASSERT_NE(wipe_strip, nullptr);
+  EXPECT_EQ(wipe_strip->type, STRIP_TYPE_WIPE);
+  EXPECT_NEAR(static_cast<WipeVars *>(wipe_strip->effectdata)->angle, M_PI_4, 1e-5f);
+
+  Strip *video = seq::lookup_strip_by_name(imported->ed, "Linked Video");
+  Strip *other = seq::lookup_strip_by_name(imported->ed, "Linked Other");
+  ASSERT_NE(video, nullptr);
+  ASSERT_NE(other, nullptr);
+  EXPECT_TRUE(seq::connected_strips_get(video).contains(other));
+
+  Strip *adjustment_strip = seq::lookup_strip_by_name(imported->ed, "Adjustment");
+  ASSERT_NE(adjustment_strip, nullptr);
+  EXPECT_EQ(adjustment_strip->type, STRIP_TYPE_ADJUSTMENT);
+
+  Strip *sound_strip = seq::lookup_strip_by_name(imported->ed, "Sound");
+  ASSERT_NE(sound_strip, nullptr);
+  FCurve *volume = BKE_animadata_fcurve_find_by_rna_path(
+      BKE_animdata_from_id(&imported->id),
+      "sequence_editor.strips_all[\"Sound\"].volume",
+      0,
+      nullptr,
+      nullptr);
+  ASSERT_NE(volume, nullptr);
+  ASSERT_EQ(volume->totvert, 4);
+  const int start = sound_strip->left_handle();
+  const int end = sound_strip->right_handle(imported);
+  EXPECT_FLOAT_EQ(volume->bezt[0].vec[1][0], start);
+  EXPECT_FLOAT_EQ(volume->bezt[0].vec[1][1], 0.0f);
+  EXPECT_FLOAT_EQ(volume->bezt[1].vec[1][0], start + 4);
+  EXPECT_FLOAT_EQ(volume->bezt[1].vec[1][1], 1.0f);
+  EXPECT_FLOAT_EQ(volume->bezt[2].vec[1][0], end - 6);
+  EXPECT_FLOAT_EQ(volume->bezt[2].vec[1][1], 1.0f);
+  EXPECT_FLOAT_EQ(volume->bezt[3].vec[1][0], end);
+  EXPECT_FLOAT_EQ(volume->bezt[3].vec[1][1], 0.0f);
 }
 
 TEST_F(OTIOTest, KdenliveMetadata)

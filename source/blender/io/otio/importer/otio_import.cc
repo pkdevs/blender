@@ -210,6 +210,9 @@ static Strip *clip_to_strip(StripImportContext &ctx,
   seq::LoadData load_data;
   seq::add_load_data_init(&load_data, clip.name().c_str(), nullptr, start - media_start, channel);
   load_data.allow_invalid_file = true;
+  if (const std::optional<eSeqImageFitMethod> fit_method = resolve_fit_method(clip)) {
+    load_data.fit_method = *fit_method;
+  }
 
   if (auto *external = dynamic_cast<ExternalReference *>(reference)) {
     const std::string filepath = url_to_filepath(external->target_url());
@@ -247,25 +250,29 @@ static Strip *clip_to_strip(StripImportContext &ctx,
         ctx, seqbase, load_data, url_to_filepath(sequence->target_url_base()), filenames);
   }
 
+  std::optional<StripType> type;
   if (auto *generator = dynamic_cast<GeneratorReference *>(reference)) {
     const std::string kind = generator->generator_kind();
-    std::optional<StripType> type = strip_type_from_identifier(&kind);
+    type = strip_type_from_identifier(&kind);
     if (!type) {
       type = resolve_generator_type(*generator);
     }
     if (!type) {
       type = kdenlive_generator_type(*generator);
     }
-    if (type && seq::effect_type_get_min_num_inputs(*type) == 2) {
-      ctx.pending_effects.append({&clip, &seqbase, channel, start, duration, *type});
-      return nullptr;
-    }
-    if (type) {
-      load_data.start_frame = start;
-      load_data.effect.type = *type;
-      load_data.effect.length = duration;
-      return seq::add_effect_strip(ctx.scene, &seqbase, &load_data);
-    }
+  }
+  else if (resolve_is_adjustment_clip(clip)) {
+    type = STRIP_TYPE_ADJUSTMENT;
+  }
+  if (type && seq::effect_type_get_min_num_inputs(*type) == 2) {
+    ctx.pending_effects.append({&clip, &seqbase, channel, start, duration, *type});
+    return nullptr;
+  }
+  if (type) {
+    load_data.start_frame = start;
+    load_data.effect.type = *type;
+    load_data.effect.length = duration;
+    return seq::add_effect_strip(ctx.scene, &seqbase, &load_data);
   }
 
   if (strip_type_from_identifier(strip_metadata_string(clip, "type")) == STRIP_TYPE_SCENE) {
@@ -383,8 +390,12 @@ static void add_transition(StripImportContext &ctx,
   seq::LoadData load_data;
   seq::add_load_data_init(
       &load_data, transition.name().c_str(), nullptr, from.right_handle(ctx.scene), from.channel);
-  load_data.effect.type = strip_type_from_identifier(strip_metadata_string(transition, "type"))
-                              .value_or(STRIP_TYPE_CROSS);
+  std::optional<StripType> type = strip_type_from_identifier(
+      strip_metadata_string(transition, "type"));
+  if (!type) {
+    type = resolve_transition_type(transition);
+  }
+  load_data.effect.type = type.value_or(STRIP_TYPE_CROSS);
   load_data.effect.input1 = &from;
   load_data.effect.input2 = &to;
   Strip *strip = seq::add_effect_strip(ctx.scene, &seqbase, &load_data);
@@ -537,11 +548,13 @@ Scene *importer_main(bContext *C, const OTIOImportParams &params)
     }
     store_foreign_metadata(*otio_object, strip->prop);
   }
+  resolve_connect_strips(ctx.strip_metadata);
   import_markers(ctx, *timeline->tracks(), origin);
   store_foreign_metadata(*timeline, scene->id.properties);
 
   DEG_relations_tag_update(bmain);
-  DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_FPS | ID_RECALC_SEQUENCER_STRIPS);
+  DEG_id_tag_update(&scene->id,
+                    ID_RECALC_AUDIO_FPS | ID_RECALC_SEQUENCER_STRIPS | ID_RECALC_ANIMATION);
   return scene;
 }
 

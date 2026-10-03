@@ -8,6 +8,10 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "ANIM_action.hh"
+#include "ANIM_animdata.hh"
+#include "ANIM_fcurve.hh"
+
 #include "BKE_colortools.hh"
 #include "BKE_idprop.hh"
 #include "BKE_layer.hh"
@@ -26,6 +30,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
 #include "SEQ_modifier.hh"
@@ -228,6 +233,35 @@ static void set_number(PointerRNA &ptr, PropertyRNA *prop, const int index, cons
   }
 }
 
+static void insert_keyframes(Main *bmain,
+                             PointerRNA &ptr,
+                             PropertyRNA *prop,
+                             const AnyVector &keyframes)
+{
+  const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop);
+  if (!path || RNA_property_array_check(prop)) {
+    return;
+  }
+  bAction *action = animrig::id_action_ensure(bmain, ptr.owner_id);
+  if (!action) {
+    return;
+  }
+  FCurve &fcurve = animrig::action_fcurve_ensure(bmain, *action, *ptr.owner_id, {*path, 0});
+  animrig::KeyframeSettings settings = animrig::get_keyframe_settings(false);
+  settings.interpolation = BEZT_IPO_LIN;
+  for (const std::any &item : keyframes) {
+    const AnyVector *keyframe = std::any_cast<AnyVector>(&item);
+    if (!keyframe || keyframe->size() != 2) {
+      continue;
+    }
+    const std::optional<double> frame = to_number((*keyframe)[0]);
+    const std::optional<double> value = to_number((*keyframe)[1]);
+    if (frame && value) {
+      animrig::insert_vert_fcurve(&fcurve, float2(*frame, *value), settings, INSERTKEY_NOFLAGS);
+    }
+  }
+}
+
 static PointerRNA find_by_name(
     Main *bmain, Editing *editing, PointerRNA &owner, StructRNA *type, const std::string &name)
 {
@@ -321,6 +355,11 @@ static void set_property(
       if (float *clip = curve_mapping_clip(ptr, name)) {
         if (const std::optional<double> number = to_number(value)) {
           *clip = float(*number);
+        }
+      }
+      else if (const AnyDictionary *animation = std::any_cast<AnyDictionary>(&value)) {
+        if (const AnyVector *keyframes = find<AnyVector>(*animation, "keyframes")) {
+          insert_keyframes(bmain, ptr, prop, *keyframes);
         }
       }
       else if (const AnyVector *values = std::any_cast<AnyVector>(&value)) {
