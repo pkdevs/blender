@@ -41,7 +41,7 @@ class BindSpaceUniformBuffers {
   void bind(VKUniformBuffer *resource, int binding)
   {
     if (bound_resources.size() <= binding) {
-      bound_resources.resize(binding + 1);
+      bound_resources.resize(binding + 1, nullptr);
     }
     bound_resources[binding] = resource;
   }
@@ -82,7 +82,7 @@ template<int Offset> class BindSpaceImages {
       binding -= Offset;
     }
     if (bound_resources.size() <= binding) {
-      bound_resources.resize(binding + 1);
+      bound_resources.resize(binding + 1, nullptr);
     }
     bound_resources[binding] = resource;
     state_manager->image_formats[binding] = format;
@@ -133,7 +133,7 @@ class BindSpaceStorageBuffers {
   void bind(Type resource_type, void *resource, int binding, VkDeviceSize offset)
   {
     if (bound_resources.size() <= binding) {
-      bound_resources.resize(binding + 1);
+      bound_resources.resize(binding + 1, {});
     }
     bound_resources[binding].resource_type = resource_type;
     bound_resources[binding].resource = resource;
@@ -222,7 +222,7 @@ class BindSpaceTopLevelAS {
   void bind(VKTopLevelAS *resource, int binding)
   {
     if (bound_resources.size() <= binding) {
-      bound_resources.resize(binding + 1);
+      bound_resources.resize(binding + 1, nullptr);
     }
     bound_resources[binding] = resource;
   }
