@@ -1283,7 +1283,7 @@ static Button *item_with_label(Layout *layout,
     }
   }
 
-  /* Highlight in red on path template validity errors. */
+  /* Highlight in red on path template validity errors and warnings. */
   if (but != nullptr && ELEM(but->type, ButtonType::Text)) {
     /* We include PROP_NONE here because some plain string properties are used
      * as parts of paths. For example, the sub-paths in the compositor's File
@@ -1297,7 +1297,9 @@ static Button *item_with_label(Layout *layout,
                   static_cast<const bContext *>(block->evil_C), ptr, prop);
           BLI_assert(variables.has_value());
 
-          if (!BKE_path_validate_template(path, *variables).is_empty()) {
+          if (!BKE_path_validate_template(path, *variables).is_empty() ||
+              BKE_path_template_uses_unsaved_blend_dir(path, *variables))
+          {
             button_flag_enable(but, BUT_REDALERT);
           }
         }

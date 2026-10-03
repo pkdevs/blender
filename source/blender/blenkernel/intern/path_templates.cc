@@ -16,6 +16,7 @@
 
 #include "BKE_blender_project.hh"
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_idprop.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -1050,6 +1051,43 @@ Vector<Error> BKE_path_validate_template(
     StringRef path, const bke::path_templates::VariableMap &template_variables)
 {
   return eval_template(nullptr, path, template_variables);
+}
+
+bool BKE_path_template_uses_unsaved_blend_dir(
+    const StringRef path, const bke::path_templates::VariableMap &template_variables)
+{
+  /* Only paths that have access to `{blend_dir}` can use its fallback, see
+   * #BKE_add_template_variables_general(). */
+  if (!template_variables.contains("blend_dir") ||
+      BKE_main_blendfile_path_from_global()[0] != '\0')
+  {
+    return false;
+  }
+  bool uses_blend_dir = false;
+  for (const Token &token : parse_template(path)) {
+    if (token.type == TokenType::VARIABLE_EXPRESSION && token.variable_name == "blend_dir") {
+      uses_blend_dir = true;
+      break;
+    }
+  }
+  if (!uses_blend_dir) {
+    return false;
+  }
+  /* Project variables take precedence over the built-in variables, so a project variable named
+   * `blend_dir` is used instead of the built-in one and its fallback. */
+  const bool is_project_variable = BKE_blender_project_read_callback(
+      G_MAIN, [](const bke::BlenderProject *project) {
+        if (project == nullptr) {
+          return false;
+        }
+        for (const std::unique_ptr<bke::ProjectVariable> &var : project->variables) {
+          if (var->name_get() == "blend_dir") {
+            return true;
+          }
+        }
+        return false;
+      });
+  return !is_project_variable;
 }
 
 Vector<Error> BKE_path_apply_template(char *path,
