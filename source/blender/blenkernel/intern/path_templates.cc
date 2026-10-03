@@ -1052,6 +1052,75 @@ Vector<Error> BKE_path_validate_template(
   return eval_template(nullptr, path, template_variables);
 }
 
+/**
+ * Project variables take precedence over the built-in variables with the same name, see
+ * #BKE_add_template_variables_general().
+ */
+static bool is_project_variable(const Main *bmain, const StringRef name)
+{
+  return BKE_blender_project_read_callback(bmain, [&](const bke::BlenderProject *project) {
+    if (project == nullptr) {
+      return false;
+    }
+    for (const std::unique_ptr<bke::ProjectVariable> &var : project->variables) {
+      if (var->name_get() == name) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
+bool BKE_path_prop_uses_unsaved_blend_dir(const bContext *C, PointerRNA *ptr, PropertyRNA *prop)
+{
+  /* Linked data-blocks always come from saved blend-files, so this can only happen while the
+   * current blend-file is unsaved. */
+  if (BKE_main_blendfile_path_from_global()[0] != '\0' || RNA_property_type(prop) != PROP_STRING) {
+    return false;
+  }
+
+  const PropertySubType subtype = RNA_property_subtype(prop);
+  const int flag = RNA_property_flag(prop);
+  const bool supports_blend_relative = ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH) &&
+                                       (flag & PROP_PATH_SUPPORTS_BLEND_RELATIVE);
+  const bool supports_templates = flag & PROP_PATH_SUPPORTS_TEMPLATES;
+  if (!supports_blend_relative && !supports_templates) {
+    return false;
+  }
+
+  /* Whether the blend-file that the path is stored in is unsaved. Both `//` and `{blend_dir_lib}`
+   * are relative to that blend-file. */
+  const bool owner_blend_file_unsaved = ptr->owner_id &&
+                                        ID_BLEND_PATH_FROM_GLOBAL(ptr->owner_id)[0] == '\0';
+
+  const std::string path = RNA_property_string_get(ptr, prop);
+  if (supports_blend_relative && owner_blend_file_unsaved && BLI_path_is_rel(path.c_str())) {
+    return true;
+  }
+
+  if (!supports_templates || !BKE_path_contains_template_syntax(path)) {
+    return false;
+  }
+  const std::optional<VariableMap> variables = BKE_build_template_variables_for_prop(C, ptr, prop);
+  BLI_assert(variables.has_value());
+  const Main *bmain = CTX_data_main(C);
+  for (const Token &token : parse_template(path)) {
+    if (token.type != TokenType::VARIABLE_EXPRESSION) {
+      continue;
+    }
+    /* Built-in variables that fall back to `./` for unsaved blend-files. */
+    const bool is_unsaved_blend_dir = token.variable_name == "blend_dir" ||
+                                      (token.variable_name == "blend_dir_lib" &&
+                                       owner_blend_file_unsaved);
+    if (is_unsaved_blend_dir && variables->contains(token.variable_name) &&
+        !is_project_variable(bmain, token.variable_name))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 Vector<Error> BKE_path_apply_template(char *path,
                                       int path_maxncpy,
                                       const VariableMap &template_variables)

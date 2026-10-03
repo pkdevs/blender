@@ -1263,6 +1263,16 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
           }
         }
       }
+
+      /* Paths relative to an unsaved blend-file (will already display red-alert). */
+      if (BKE_path_prop_uses_unsaved_blend_dir(C, &but->rnapoin, rnaprop)) {
+        tooltip_text_field_add(*data,
+                               TIP_("Warning: this path is relative to the blend-file directory, "
+                                    "but the blend-file has not been saved yet."),
+                               {},
+                               TIP_STYLE_NORMAL,
+                               TIP_LC_ALERT);
+      }
     }
   }
 

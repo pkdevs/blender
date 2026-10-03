@@ -1305,6 +1305,15 @@ static Button *item_with_label(Layout *layout,
     }
   }
 
+  /* Highlight in red on paths relative to an unsaved blend-file. This is only a warning: the path
+   * is still valid, but likely doesn't refer to the intended location. */
+  if (but != nullptr && ELEM(but->type, ButtonType::Text) &&
+      BKE_path_prop_uses_unsaved_blend_dir(
+          static_cast<const bContext *>(block->evil_C), ptr, prop))
+  {
+    button_flag_enable(but, BUT_REDALERT);
+  }
+
   if (flag & ITEM_R_IMMEDIATE) {
     button_flag_enable(but, BUT_ACTIVATE_ON_INIT);
   }

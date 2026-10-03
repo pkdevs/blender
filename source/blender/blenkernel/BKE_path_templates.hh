@@ -402,6 +402,24 @@ Vector<bke::path_templates::Error> BKE_path_validate_template(
     StringRef path, const bke::path_templates::VariableMap &template_variables);
 
 /**
+ * Check if the path stored in the given property depends on the directory of a
+ * blend-file that has not been saved yet. This is the case when the path:
+ *
+ * - Starts with the blend-file relative prefix `//`, for properties that
+ *   support it. Only for paths stored in a local data-block: other paths, like
+ *   the ones in the preferences, are not relative to a specific blend-file.
+ * - References the built-in `{blend_dir}` or `{blend_dir_lib}` variables, for
+ *   properties that support path templates. Not when a project variable with
+ *   the same name takes precedence over the built-in one.
+ *
+ * This is not an error, the path is still valid. But since the blend-file
+ * directory is not known yet, the path resolves relative to the current working
+ * directory or a temporary directory instead, or cannot be resolved at all,
+ * depending on where it is used. So this is meant to be used for warning users.
+ */
+bool BKE_path_prop_uses_unsaved_blend_dir(const bContext *C, PointerRNA *ptr, PropertyRNA *prop);
+
+/**
  * Perform variable substitution and escaping on the given path.
  *
  * This mutates the path in-place. `path` must be a null-terminated string.
