@@ -2,10 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-set(INC
-  # TODO: remove once `ktx` is provided as a precompiled dependency and `extern/ktx` is removed.
-  ../../extern/ktx/ktx/src/include
-)
 
 set(SRC
   intern/common.cpp
@@ -17,10 +13,8 @@ set(SRC
   intern/encoder.h
 )
 
-# TODO: switch to `PRIVATE bf::dependencies::optional::ktx` once `ktx` is provided as a
-# precompiled dependency. Until then, link against the `ktx` target built from `extern/ktx`.
 set(LIB
-  PRIVATE ktx
+  PRIVATE bf::dependencies::optional::ktx
 )
 
 # Equivalent `blender_add_lib`, unrolled and stripped down to be able to set the library type to `SHARED`.
