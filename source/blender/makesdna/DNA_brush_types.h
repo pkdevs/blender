@@ -454,7 +454,9 @@ struct Brush {
   struct MeshAutomaskingSettings *mesh_automasking_settings = nullptr;
   eBrushUnifiedPaintFlags unified_paint_flags = BRUSH_USE_UNIFIED_PAINT_SIZE |
                                                 BRUSH_USE_UNIFIED_PAINT_COLOR;
-  char _pad3[4] = {};
+  /* TODO: Implement brush-level random angle. */
+  eMTex_BrushAngleMode brush_angle_mode = {};
+  char _pad3[3] = {};
 };
 
 struct PaletteColor {

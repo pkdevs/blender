@@ -962,6 +962,10 @@ def brush_settings(layout, context, brush, popover=False):
                 text = iface_("Magnify")
             layout.prop(brush, "crease_pinch_factor", slider=True, text=text, translate=False)
 
+        # rake
+        if capabilities.has_tip_roundness:
+            layout.prop(brush, "use_rake", text="Rake")
+
         # rake_factor
         if capabilities.has_rake_factor:
             layout.prop(brush, "rake_factor", slider=True)
