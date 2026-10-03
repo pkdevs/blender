@@ -27,7 +27,9 @@
 #include "RNA_prototypes.hh"
 
 #include "DNA_ID_enums.h"
+#include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
+#include "DNA_object_types.h"
 
 namespace blender {
 
@@ -288,6 +290,23 @@ std::optional<VariableMap> BKE_build_template_variables_for_prop(const bContext 
     BKE_add_template_variables_for_node(variables, *bnode);
   }
 
+  /* Modifiers. */
+  if (std::optional<AncestorPointerRNA> modifier_rna_ptr =
+          RNA_struct_search_closest_ancestor_by_type(ptr, RNA_Modifier))
+  {
+    const Object *object = id_cast<const Object *>(ptr->owner_id);
+    const ModifierData *md = static_cast<const ModifierData *>(modifier_rna_ptr->data);
+    BKE_add_template_variables_for_modifier(variables, *object, *md);
+  }
+
+  /* Geometry Nodes modifier bakes. */
+  if (std::optional<AncestorPointerRNA> bake_rna_ptr = RNA_struct_search_closest_ancestor_by_type(
+          ptr, RNA_NodesModifierBake))
+  {
+    const NodesModifierBake *bake = static_cast<const NodesModifierBake *>(bake_rna_ptr->data);
+    BKE_add_template_variables_for_nodes_modifier_bake(variables, *bake);
+  }
+
   return variables;
 }
 
@@ -388,6 +407,20 @@ void BKE_add_template_variables_for_node(bke::path_templates::VariableMap &varia
                                          const bNode &owning_node)
 {
   variables.add_string("node_name", owning_node.name);
+}
+
+void BKE_add_template_variables_for_modifier(bke::path_templates::VariableMap &variables,
+                                             const Object &owning_object,
+                                             const ModifierData &owning_modifier)
+{
+  variables.add_string("object_name", owning_object.id.name + 2);
+  variables.add_string("modifier_name", owning_modifier.name);
+}
+
+void BKE_add_template_variables_for_nodes_modifier_bake(
+    bke::path_templates::VariableMap &variables, const NodesModifierBake &owning_bake)
+{
+  variables.add_integer("bake_id", owning_bake.id);
 }
 
 /* -------------------------------------------------------------------- */

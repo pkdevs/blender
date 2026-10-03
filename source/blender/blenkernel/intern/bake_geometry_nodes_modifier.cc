@@ -105,10 +105,16 @@ void scene_simulation_states_reset(Scene &scene)
   FOREACH_SCENE_OBJECT_END;
 }
 
+/**
+ * \param bake: The bake whose custom directory is resolved, or null to resolve the directory of
+ * the modifier.
+ */
 static std::optional<std::string> resolve_bake_directory(const Main &bmain,
                                                          const Object &object,
-                                                         const StringRef directory)
+                                                         const NodesModifierData &nmd,
+                                                         const NodesModifierBake *bake)
 {
+  const StringRef directory = bake ? bake->directory : nmd.bake_directory;
   if (directory.is_empty() || directory.size() >= FILE_MAX) {
     return std::nullopt;
   }
@@ -118,6 +124,10 @@ static std::optional<std::string> resolve_bake_directory(const Main &bmain,
   BKE_blender_project_read_callback(&bmain, [&](const BlenderProject *project) {
     BKE_add_template_variables_general(variables, &object.id, project);
   });
+  BKE_add_template_variables_for_modifier(variables, object, nmd.modifier);
+  if (bake) {
+    BKE_add_template_variables_for_nodes_modifier_bake(variables, *bake);
+  }
   if (!BKE_path_apply_template(absolute_bake_dir, sizeof(absolute_bake_dir), variables).is_empty())
   {
     return std::nullopt;
@@ -140,7 +150,7 @@ std::optional<std::string> get_modifier_bake_path(const Main &bmain,
                                                   const Object &object,
                                                   const NodesModifierData &nmd)
 {
-  return resolve_bake_directory(bmain, object, nmd.bake_directory);
+  return resolve_bake_directory(bmain, object, nmd, nullptr);
 }
 
 std::optional<NodesModifierBakeTarget> get_node_bake_target(const Object & /*object*/,
@@ -170,8 +180,7 @@ std::optional<bake::BakePath> get_node_bake_path(const Main &bmain,
     return std::nullopt;
   }
   if (bake->flag & NODES_MODIFIER_BAKE_CUSTOM_PATH) {
-    const std::optional<std::string> bake_dir = resolve_bake_directory(
-        bmain, object, bake->directory);
+    const std::optional<std::string> bake_dir = resolve_bake_directory(bmain, object, nmd, bake);
     if (!bake_dir) {
       return std::nullopt;
     }

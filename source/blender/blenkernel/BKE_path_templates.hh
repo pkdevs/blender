@@ -85,6 +85,9 @@
 namespace blender {
 
 struct bContext;
+struct ModifierData;
+struct NodesModifierBake;
+struct Object;
 struct PointerRNA;
 struct PropertyRNA;
 
@@ -369,6 +372,38 @@ void BKE_add_template_variables_for_render_path(bke::path_templates::VariableMap
  */
 void BKE_add_template_variables_for_node(bke::path_templates::VariableMap &variables,
                                          const bNode &owning_node);
+
+/**
+ * Add the variables that should be available for paths owned by a modifier:
+ * `object_name` and `modifier_name`.
+ *
+ * This is typically used when building a variable map to pass to
+ * #BKE_path_apply_template().
+ *
+ * \param owning_object: the object that the modifier belongs to.
+ * \param owning_modifier: the modifier that owns the path property that will
+ * be evaluated with the produced variable map.
+ *
+ * \see BKE_path_apply_template()
+ */
+void BKE_add_template_variables_for_modifier(bke::path_templates::VariableMap &variables,
+                                             const Object &owning_object,
+                                             const ModifierData &owning_modifier);
+
+/**
+ * Add the variables that should be available for paths owned by a bake of a
+ * Geometry Nodes modifier: `bake_id`.
+ *
+ * This is typically used when building a variable map to pass to
+ * #BKE_path_apply_template().
+ *
+ * \param owning_bake: the bake that owns the path property that will be
+ * evaluated with the produced variable map.
+ *
+ * \see BKE_path_apply_template()
+ */
+void BKE_add_template_variables_for_nodes_modifier_bake(
+    bke::path_templates::VariableMap &variables, const NodesModifierBake &owning_bake);
 
 /**
  * Escape `{` and `}`, so #BKE_path_apply_template() does not treat them as templates.
