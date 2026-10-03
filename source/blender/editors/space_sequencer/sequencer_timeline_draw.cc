@@ -2098,14 +2098,6 @@ static wmOperator *box_blade_op_get(wmWindow *win)
                                         WM_operatortype_find("SEQUENCER_OT_box_blade", false));
 }
 
-static rctf box_blade_rect_get(wmOperator *op, const View2D *v2d)
-{
-  rctf rect;
-  WM_operator_properties_border_to_rctf(op, &rect);
-  ui::view2d_region_to_view_rctf(v2d, &rect, &rect);
-  return rect;
-}
-
 /* Expand to the strips each split propagates to, skip chains that fail to split. */
 static void split_expand_strips(Editing *ed,
                                 Strip *strip,
@@ -2135,7 +2127,6 @@ static void box_blade_draw(Scene *scene, const ARegion *region, wmOperator *op)
   Editing *ed = seq::editing_get(scene);
   const View2D *v2d = &region->v2d;
 
-  /* Keep in sync with `sequencer_box_blade_exec()`. */
   const rctf box_rect = box_blade_rect_get(op, v2d);
   const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
   const bool only_selected = split_only_selected_get(op);
@@ -2169,7 +2160,7 @@ static void box_blade_draw(Scene *scene, const ARegion *region, wmOperator *op)
 
   if (remove_gaps) {
     const int channel_min = max_ii(int(box_rect.ymin), 1);
-    const int channel_max = min_ii(int(box_rect.ymax), seq::MAX_CHANNELS);
+    const int channel_max = min_ii(int(box_rect.ymax) - 1, seq::MAX_CHANNELS);
     /* Slightly brighten all channels that the box touches. */
     immUniformColor4ub(255, 255, 255, 15);
     for (int channel = channel_min; channel <= channel_max; channel++) {
@@ -2236,13 +2227,6 @@ static std::optional<BladeSplit> blade_split_get(
                                                     split_tool_prop_from_toolsettings(
                                                         tref, "ignore_connections", false));
   const bool only_selected = split_tool_prop_from_toolsettings(tref, "only_selected", false);
-
-  if (!all_channels) {
-    const Strip *strip = strip_under_mouse_get(scene, v2d, mval);
-    if (strip == nullptr || !seq::edit_frame_splits_strip(scene, strip, split_frame)) {
-      return std::nullopt;
-    }
-  }
 
   const std::optional<int> channel = all_channels ? std::nullopt :
                                                     std::optional<int>(int(mouse_co.y));

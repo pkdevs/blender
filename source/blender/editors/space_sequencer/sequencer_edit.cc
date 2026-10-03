@@ -1994,12 +1994,11 @@ static wmOperatorStatus sequencer_split_invoke(bContext *C, wmOperator *op, cons
     float mouseloc[2];
     ui::view2d_region_to_view(v2d, event->mval[0], event->mval[1], &mouseloc[0], &mouseloc[1]);
     split_frame = round_fl_to_int(mouseloc[0]);
-    if (!RNA_boolean_get(op->ptr, "all_channels")) {
-      Strip *strip = strip_under_mouse_get(scene, v2d, event->mval);
-      if (strip == nullptr || !seq::edit_frame_splits_strip(scene, strip, split_frame)) {
-        /* Do not pass through to selection. */
-        return OPERATOR_CANCELLED;
-      }
+    if (!RNA_boolean_get(op->ptr, "all_channels") &&
+        seq::edit_split_strips_get(scene, split_frame, int(mouseloc[1]), false).is_empty())
+    {
+      /* Do not pass through to selection. */
+      return OPERATOR_CANCELLED;
     }
     RNA_int_set(op->ptr, "channel", mouseloc[1]);
   }
@@ -2143,6 +2142,18 @@ static bool sequencer_box_blade_poll(bContext *C)
   return sequencer_edit_poll(C) && sequencer_view_strips_poll(C);
 }
 
+rctf box_blade_rect_get(wmOperator *op, const View2D *v2d)
+{
+  rctf rect;
+  WM_operator_properties_border_to_rctf(op, &rect);
+  ui::view2d_region_to_view_rctf(v2d, &rect, &rect);
+  /* Snap box rect to full channel sizes, so that it doesn't have to be overlapping a strip's true
+   * size (which is slightly shorter than the channel height) to cut it. */
+  rect.ymin = floorf(rect.ymin);
+  rect.ymax = ceilf(rect.ymax);
+  return rect;
+}
+
 static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -2153,15 +2164,13 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
   ed->edit_point_set(scene, std::nullopt);
 
   View2D *v2d = ui::view2d_fromcontext(C);
-  rctf box_rect;
-  WM_operator_properties_border_to_rctf(op, &box_rect);
-  ui::view2d_region_to_view_rctf(v2d, &box_rect, &box_rect);
 
+  const rctf box_rect = box_blade_rect_get(op, v2d);
   const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
   const bool only_selected = split_only_selected_get(op);
   const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
-  const seq::eSplitMethod method = seq::eSplitMethod(RNA_enum_get(op->ptr, "type"));
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
+  const seq::eSplitMethod method = seq::eSplitMethod(RNA_enum_get(op->ptr, "type"));
 
   int2 gap_removal_boundary = {INT_MAX, INT_MIN};
   VectorSet<Strip *> to_remove;
@@ -2295,7 +2304,7 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
 
       /* Ripple strips for all channels that the blade box extends to, so that the user can
        * optionally affect other channels than those with strips to cut. */
-      if (strip->channel <= int(box_rect.ymax) && strip->channel >= int(box_rect.ymin) &&
+      if (strip->channel < int(box_rect.ymax) && strip->channel >= int(box_rect.ymin) &&
           (strip->left_handle() > rect_frames[0]))
       {
         to_offset.add(strip);
@@ -2363,9 +2372,7 @@ static wmOperatorStatus sequencer_box_blade_modal(bContext *C,
 
   /* Set preview frame to the opposite side when moving the box. */
   if (gesture && gesture->move) {
-    rctf box_rect;
-    WM_operator_properties_border_to_rctf(op, &box_rect);
-    ui::view2d_region_to_view_rctf(v2d, &box_rect, &box_rect);
+    const rctf box_rect = box_blade_rect_get(op, v2d);
     scene->ed->edit_point_set(
         scene, (mouse_frame == int(box_rect.xmin)) ? int(box_rect.xmax) : int(box_rect.xmin));
   }

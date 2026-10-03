@@ -218,6 +218,7 @@ VectorSet<Strip *> all_strips_from_context(bContext *C);
 /** Temporary shim to query split & box blade property, where either the new #only_selected or
  * deprecated #ignore_selection may be used, to be removed in 6.0.  */
 bool split_only_selected_get(wmOperator *op);
+rctf box_blade_rect_get(wmOperator *op, const View2D *v2d);
 
 /* Externals. */
 
