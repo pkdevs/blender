@@ -133,7 +133,7 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
       film_overwrite_pass_float(ptr, sd->time);
 
       /* ReprojectionSurface must describe the SAME hit as SURFACE_DATA. */
-      if (kernel_data.integrator.use_temporal_frames) {
+      if (kernel_data.integrator.use_temporal) {
         film_write_restir_reprojection_surface_pass(kg, sd, buffer);
       }
     }

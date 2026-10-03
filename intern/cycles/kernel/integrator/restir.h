@@ -9,8 +9,6 @@
 
 CCL_NAMESPACE_BEGIN
 
-// TODO(Tri): InitialResampling's own M-handling!
-
 struct SpatialResampling {
   ccl_global const KernelWorkTile *tile;
   int radius;
@@ -538,7 +536,6 @@ ccl_device_inline bool streaming_temporal_resample(KernelGlobals kg,
                                                    const ccl_private RNGState *rng_state,
                                                    const bool visibility,
                                                    ccl_global float *ccl_restrict render_buffer,
-                                                   const bool use_progressive,
                                                    const bool use_frames,
                                                    const int x,
                                                    const int y,
@@ -561,59 +558,6 @@ ccl_debug_printf("PRE-CLEAR canonical: W=%f L=%f M=%d ref_valid=%d\n",
 
   float canonical_mis_weight = 1.0f;
   int added_neighbors = 0;
-
-
-/* MARK: Progressive neighbor: this pixel's own reservoir from the previous sample. */
-
-  if (use_progressive) {
-    Reservoir history;
-    reservoir_init(kg, &history);
-
-    ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-                                     kernel_data.film.pass_restir_temporal_history_reservoir;
-
-    if (!restir_unpack_reservoir(kg, &history, buffer)) {
-ccl_debug_printf("streaming_temporal_resample() progressive: RETURNED EARLY, can't unpack history\n\n");
-    }
-    else {
-      history.M = min(history.M,
-                      (int)((float)canonical.M * kernel_data.integrator.restir_temporal_sample_count));
-
-      light_sample_from_reference(kg, &history.reference, current->sd.P, current->sd.N,
-                                  current->sd.time, current->sd.shader, current->path_flag,
-                                  &history.light);
-
-      radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
-      const float history_at_current = compute_luminance(kg, history.radiance);
-
-      /* Symmetric canonical term: same pixel, same shading point as canonical.
-       * No re-evaluation needed here, unlike the cross-frame case. */
-      if (!reservoir_is_empty(&canonical)) {
-        canonical_mis_weight += (1.0f - reservoir_pairwise_mis_weight(
-            canonical.luminance, canonical.luminance,
-            /*N0=*/(float)history.M, /*N1=*/(float)canonical.M));
-      }
-
-      const float mis_weight = reservoir_pairwise_mis_weight(
-          history.luminance, history_at_current,
-          /*N0=*/(float)history.M, /*N1=*/(float)canonical.M);
-      history.total_weight *= mis_weight;
-/* !!!(Tri): temporal-samples can cause a candidate selected early in the frame to survive 
- * disproportionately longer... may not do anything practical at all! */
-      // history.total_weight *= 100.0f;  // DEBUG ONLY: exaggerate progressive history: Brightens all lit pixels
-
-      const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
-      spatial_reservoir_add_reservoir(current, history, rand);
-      current->reservoir.M += history.M; // !!!
-      added_neighbors++;
-
-ccl_debug_printf(
-    "--- streaming_temporal_resample() progressive: pixel=(%d,%d) ---\n"
-    "history_W=%f history_L=%f mis=%f\n\n", x, y,
-    (double)history.total_weight, (double)history_at_current, (double)mis_weight);
-    }
-  }
-
 
 /* MARK: - Cross-frame neighbor: reprojected pixel from the previous frame */
 
@@ -793,17 +737,12 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
   // !!!: Sets current->reservoir.M
   current.reservoir = restir_unpack_canonical_reservoir(kg, state, &current, render_buffer, false);
 
-  const bool use_temporal_samples = kernel_data.integrator.use_temporal_samples;
-  const bool use_temporal_frames  = kernel_data.integrator.use_temporal_frames;
+  const bool use_temporal = kernel_data.integrator.use_temporal;
 
-// ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_temporal_frames=%d visibility=%d\n\n",
-//                  use_temporal_samples, use_temporal_frames, visibility);
-
-  if (use_temporal_samples || use_temporal_frames) {
+  if (use_temporal) {
     TemporalReprojection reprojection(tile);
     streaming_temporal_resample(kg, state, &reprojection, &current, &rng_state, visibility,
-                                render_buffer, use_temporal_samples, use_temporal_frames,
-                                x, y, scheduled_sample);
+                                render_buffer, use_temporal, x, y, scheduled_sample);
   }
 
   // !!!(Tri): Necessary here?

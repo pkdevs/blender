@@ -207,8 +207,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   /* Temporal Resampling: runs before spatial regardless of its 
    * iteration count, since temporal and spatial reuse are orthogonal settings. */
   if (device_scene_->data.integrator.use_restir &&
-      (device_scene_->data.integrator.restir_temporal_sample_count > 0 ||
-          device_scene_->data.integrator.restir_temporal_frame_count > 0))
+      device_scene_->data.integrator.restir_temporal_frame_count > 0)
   {
     /* Invoked once per render_pipeline()->path_trace()->work-dispatch. */
     restir_init_kernel_globals();
@@ -224,7 +223,9 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
         [&] { temporal_resampling(image_width, image_height, start_sample, sample_offset); });
   }
 
-  /* TODO(Weizhen): spatial resampling makes adaptive sampling (noise threshold) fail. */
+  /* TODO(Tri): spatial resampling makes adaptive sampling (noise threshold) fail.
+     Possibly the whole ReSTIR? */
+
   /* Spatial Resampling. */
   int i = 0;
   if (device_scene_->data.integrator.use_restir) {
@@ -453,13 +454,63 @@ void PathTraceWorkCPU::save_restir_temporal_history()
            render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_reprojection_surface,
            RESTIR_REPROJECTION_SURFACE_STRIDE * sizeof(float));
 
+// if (i == 359) {
+//   ccl_debug_printf("SAVE CHECK: index=%zu valid=%f\n",
+//       i, restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
+// }
+
+// if (restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6] > 0.0f) { // is_valid
+// ccl_debug_printf( // !!!: the reservoir side of the pipeline can be trusted
+//     "restir_prev_reprojection_surface_[%zu]: \nN=(%f,%f,%f) depth=%f motion=(%f,%f) valid=%f\n\n",
+//     i,
+//     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 0],
+//     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 1],
+//     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 2],
+//     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 3],
+//     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 4],
+//     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 5],
+//     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
+// }
+
     memcpy(&restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE],
            render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_temporal_history_reservoir,
            RESTIR_RESERVOIR_STRIDE * sizeof(float));
 
+// if (restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5] > 0) { // W > 0
+// ccl_debug_printf(
+//     "restir_prev_temporal_reservoir_[%zu]: \n"
+//     "type=%f flags=%f object=%f prim=%f param=(%f,%f) W=%f L=%f M=%f\n\n",
+//     i,
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 0],
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 1],
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 2],
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 3],
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 4],
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5],
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 6],
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 7],
+//     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 8]);
+// }
+
     memcpy(&restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE],
            render_buffer + i * pass_stride + device_scene_->data.film.pass_surface_data,
            RESTIR_PREV_SURFACE_DATA_STRIDE * sizeof(float));
+
+// if (restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 3] > 0.0f) {
+//   ccl_debug_printf(
+//       "restir_prev_surface_data_[%zu]: \n"
+//       "path_flag=%f u=%f v=%f type=%f object=%f prim=%f lcg_state=%f time=%f\n\n",
+//       i,
+//       (double)restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 0],
+//       (double)restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 1],
+//       (double)restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 2],
+//       (double)restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 3],
+//       (double)restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 4],
+//       (double)restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 5],
+//       (double)restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 6],
+//       (double)restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE + 7]);
+// }
+
   }
 }
 

@@ -571,14 +571,8 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True,
     )
 
-    use_temporal_samples: BoolProperty(
-        name="Temporal Samples",
-        description="Reuse from the previous samples' reservoirs",
-        default=True,
-    )
-
-    use_temporal_frames: BoolProperty(
-        name="Temporal Frames",
+    use_temporal: BoolProperty( # TODO(Tri): Better desc?
+        name="Temporal Resampling",
         description="Reuse from the previous frames' reservoirs",
         default=True,
     )
@@ -623,14 +617,6 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         name=" ",
         items=enum_restir_heuristics,
         default='POWER_HEURISTIC',
-    )
-
-    restir_temporal_sample_count: IntProperty(
-        name="Sample History Limit",
-        description="Maximum count of Samples to accumulate for temporal history",
-        min=0,
-        max=512,
-        default=16,
     )
 
     restir_temporal_frame_count: IntProperty(

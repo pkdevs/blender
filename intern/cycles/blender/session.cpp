@@ -1143,7 +1143,7 @@ void BlenderSession::ensure_display_driver_if_needed()
 
 void BlenderSession::update_restir_temporal_storage()
 {
-  if (!scene->integrator->get_use_temporal_frames()) {
+  if (!scene->integrator->get_use_temporal()) {
     restir_prev_reprojection_surface_.clear();
     restir_prev_temporal_reservoir_.clear();
     restir_prev_surface_data_.clear();

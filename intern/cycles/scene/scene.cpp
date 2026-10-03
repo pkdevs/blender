@@ -432,7 +432,7 @@ bool Scene::need_motion_pass() const
 {
   const bool denoiser_motion = integrator->get_use_denoise() &&
       (integrator->get_denoiser_passes() & (DENOISER_PASS_MOTION | DENOISER_PASS_BACKWARD_MOTION)) != 0;
-  return denoiser_motion || integrator->get_use_temporal_frames() ||
+  return denoiser_motion || integrator->get_use_temporal() ||
          Pass::contains(passes, PASS_MOTION) || Pass::contains(passes, PASS_DENOISING_BACKWARD_MOTION);
 }
 

@@ -101,14 +101,13 @@ NODE_DEFINE(Integrator)
   SOCKET_BOOLEAN(use_restir, "ReSTIR", true);
   SOCKET_BOOLEAN(restir_unbiased, "Unbiased", true);
   SOCKET_BOOLEAN(use_initial_resampling, "Initial Resampling", true);
-  SOCKET_BOOLEAN(use_temporal_samples, "Scene-Static Temporal Resampling", true);
-  SOCKET_BOOLEAN(use_temporal_frames, "Cross Frame Temporal Resampling", true);
+  SOCKET_BOOLEAN(use_temporal, "Cross Frame Temporal Resampling", true);
   SOCKET_BOOLEAN(use_spatial_resampling, "Spatial Resampling", true);
+
   SOCKET_INT(restir_light_samples, "Light", 4);
   SOCKET_INT(restir_spatial_radius, "Radius", 10);
   SOCKET_INT(restir_spatial_neighbors, "Samples", 6);
   SOCKET_INT(restir_spatial_iterations, "Iterations", 2);
-  SOCKET_INT(restir_temporal_sample_count, "Samples Limit", 32);
   SOCKET_INT(restir_temporal_frame_count, "Frames Limit", 4);
   SOCKET_FLOAT(restir_temporal_normal_threshold, "Normal cosine threshold for Spatiotemporal", 0.5f);
   SOCKET_FLOAT(restir_temporal_depth_threshold, "Relative depth threshold for Spatiotemporal", 0.1f);
@@ -421,19 +420,18 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   /* ReSTIR. */
   kintegrator->use_restir = use_restir & 0b11;
   kintegrator->use_initial_resampling = use_initial_resampling;
-  kintegrator->use_temporal_samples = use_temporal_samples;
-  kintegrator->use_temporal_frames = use_temporal_frames;
+  kintegrator->use_temporal = use_temporal;
   kintegrator->use_spatial_resampling = use_spatial_resampling;
   kintegrator->restir_unbiased = restir_unbiased;
+
   kintegrator->restir_light_samples = restir_light_samples;
   kintegrator->restir_spatial_radius = restir_spatial_radius;
   kintegrator->restir_spatial_neighbors = restir_spatial_neighbors;
   kintegrator->restir_spatial_iterations = restir_spatial_iterations;
-  kintegrator->restir_temporal_sample_count = restir_temporal_sample_count;
   kintegrator->restir_temporal_frame_count = restir_temporal_frame_count;
   kintegrator->restir_temporal_normal_threshold= restir_temporal_normal_threshold;
   kintegrator->restir_temporal_depth_threshold= restir_temporal_depth_threshold;
-  kintegrator->restir_pairwise_mis = (use_restir >> 2) & 1;
+  kintegrator->restir_pairwise_mis = (use_restir >> 2) & 1; // !!!(Tri)
 
   dscene->sample_pattern_lut.clear_modified();
   clear_modified();
@@ -476,7 +474,7 @@ void Integrator::tag_update(Scene *scene, const uint32_t flag) ///
     scene->camera->tag_modified();
   }
 
-  if (use_temporal_frames_is_modified()) {
+  if (use_temporal_is_modified()) {
     scene->object_manager->tag_update(scene, ObjectManager::MOTION_BLUR_MODIFIED);
     // scene->camera->tag_modified();
   }

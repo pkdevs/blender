@@ -1068,6 +1068,9 @@ ccl_device_inline void film_add_reservoir_di(
   reservoir_add_bsdf_sample(
       &reservoir, ls, candidate_reference, radiance, bsdf_pdf, rand_pick);
 
+  /* M must still be 1 here (After integrate_surface_nee): unpacked from the NEE pass's reservoir. */
+  kernel_assert(reservoir.M == 1);
+
 /*
  * because film_write_pass_reservoir() writes only the serialized reference, weight, and luminance, 
  * the Reservoir must contain the candidate reference selected by reservoir_add_sample(). 

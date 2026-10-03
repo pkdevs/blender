@@ -19,10 +19,9 @@ struct Reservoir {
   float luminance;
   float total_weight = 0.0f;
 
-  /* Number of samples this reservoir represents. Temporal combination grows
-   * it (capped by restir_temporal_sample/frame_count) as history accumulates
-   * across samples/frames. */
-  int M = 1; // !!!(Tri): Shared for both temporal frames & temporal samples...
+  /* sample_count: Number of samples this reservoir represents. Temporal combination
+   * grows it (capped by frame_count) as history accumulates across frames. */
+  int M = 1;
 
   int num_light_samples;
   int num_bsdf_samples = 1;
@@ -50,8 +49,8 @@ ccl_device_inline void reservoir_init(KernelGlobals kg,
   reservoir->num_light_samples = 0;
   reservoir->num_bsdf_samples = 1;
   reservoir->max_samples = 0;
-  reservoir->rgb_to_y = float4_to_float3(kernel_data.film.rgb_to_y); // make_float3()
-  reservoir->direct_sampling_method = kernel_data.integrator.direct_light_sampling_type;
+  reservoir->rgb_to_y = float4_to_float3(kernel_data.film.rgb_to_y); // make_float3() // TODO: reservoir_pairwise_mis_type
+  reservoir->direct_sampling_method = kernel_data.integrator.direct_light_sampling_type; // !!!
 }
 
 ccl_device_inline void reservoir_init(KernelGlobals kg,
@@ -132,6 +131,7 @@ ccl_device_inline float reservoir_power_heuristic(const int num_a,
   return (denominator > 0.0f) ? sqr(pdf_a) / denominator : 0.0f;
 }
 
+// TODO(Tri): Add MISHeuristic enum; current imp: MISHeuristic::Balance
 /* Confidence-weighted balance heuristic for reservoir-to-reservoir combination
  * (Bitterli et al. 2020, "Spatiotemporal Reservoir Resampling", Algorithm 6).
  * q0/q1: target-function values of the same candidate evaluated at the two
@@ -141,6 +141,7 @@ ccl_device_inline float reservoir_pairwise_mis_weight(float q0, float q1, float 
   return (q1 == 0.0f) ? 0.0f : (N0 * q0) / (q0 * N0 + q1 * N1);
 }
 
+/* An adapted copy of legacy `light_sample_mis_weight_nee()`. */
 ccl_device_inline float reservoir_mis_weight_nee(ccl_private const Reservoir *reservoir,
                                                  float light_pdf,
                                                  float bsdf_pdf)
@@ -279,12 +280,8 @@ patching the reference alone would still shade every non-ReSTIR bounce through t
 //     "bsdf_pdf=%f\n"
 //     "jacobian=%f\n"
 //     "========================\n",
-//     ls.type,
-//     ls.prim,
-//     ls.object,
-//     (double)ls.pdf,
-//     (double)bsdf_pdf,
-//     (double)jacobian);
+//     ls.type, ls.prim, ls.object,
+//     (double)ls.pdf, (double)bsdf_pdf, (double)jacobian);
 
   if (jacobian > 0.0f) {
     light_pdf_in_area *= jacobian;
@@ -636,23 +633,23 @@ ccl_debug_printf("is_valid_reprojection(): prev.is_valid=%d curr.N=(%f,%f,%f)\n"
     (double)prev->N.x, (double)prev->N.y, (double)prev->N.z, 
     (double)curr->depth, (double)prev->depth);
 
-    if (!prev->is_valid) { // !!!(Tri): Rejecting essentially every temporal candidate:
+    if (!prev->is_valid) {
       /* Disocclusion, off-screen last frame, or history never written
        * (first sample of the render). */
       return false;
     }
 
-ccl_debug_printf(
-    "is_valid_reprojection() CHECK: curr=(N=%f,%f,%f D=%f) prev=(N=%f,%f,%f D=%f) "
-    "dot=%f depth_diff=%f thresholds=(N=%f D=%f)\n",
-    (double)curr->N.x, (double)curr->N.y, (double)curr->N.z,
-    (double)curr->depth,
-    (double)prev->N.x, (double)prev->N.y, (double)prev->N.z,
-    (double)prev->depth,
-    (double)dot(curr->N, prev->N),
-    (double)fabsf(curr->depth - prev->depth),
-    (double)normal_threshold,
-    (double)depth_threshold);
+// ccl_debug_printf(
+//     "is_valid_reprojection() CHECK: curr=(N=%f,%f,%f D=%f) prev=(N=%f,%f,%f D=%f) "
+//     "dot=%f depth_diff=%f thresholds=(N=%f D=%f)\n",
+//     (double)curr->N.x, (double)curr->N.y, (double)curr->N.z,
+//     (double)curr->depth,
+//     (double)prev->N.x, (double)prev->N.y, (double)prev->N.z,
+//     (double)prev->depth,
+//     (double)dot(curr->N, prev->N),
+//     (double)fabsf(curr->depth - prev->depth),
+//     (double)normal_threshold,
+//     (double)depth_threshold);
 
     if (dot(curr->N, prev->N) < normal_threshold) {
       return false;

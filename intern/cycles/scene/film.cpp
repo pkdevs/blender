@@ -666,7 +666,7 @@ void Film::update_passes(Scene *scene)
 
   /* Cross-frame temporal should be independently enabled. */
   // if (use_restir_flags & (1 << 4)) { // !!!: Doesn't enter!
-  if (use_restir_flags && integrator->get_use_temporal_frames()) {
+  if (use_restir_flags && integrator->get_use_temporal()) {
 // ccl_debug_printf("Film::update_passes(), temporal pass, use_restir_flags=%d use_restir=%d\n\n", use_restir_flags, use_restir);
 
     add_auto_pass(scene, PASS_RESTIR_REPROJECTION_SURFACE);
@@ -733,7 +733,7 @@ void Film::update_passes(Scene *scene)
   const bool have_motion_pass = Pass::contains(scene->passes, PASS_MOTION) ||
                                 Pass::contains(scene->passes, PASS_DENOISING_BACKWARD_MOTION) ||
                                 // (integrator->get_use_restir() & (1 << 4)); // New
-                                integrator->get_use_temporal_frames();
+                                integrator->get_use_temporal();
 
 ccl_debug_printf("update_passes(): have_motion_pass=%d\n", have_motion_pass);
 

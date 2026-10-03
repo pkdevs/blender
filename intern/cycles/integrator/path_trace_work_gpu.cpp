@@ -433,7 +433,6 @@ void PathTraceWorkGPU::reset_work_tile_scheduler(const int start_sample,
                              device_scene_->data.integrator.scrambling_distance);
 }
 
-
 // TODO(Tri): Do a validity check and a cleanup
 void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
                                       const int start_sample,
@@ -497,47 +496,47 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     ++num_iterations;
   }
 
+  // TODO(Tri): Needs a rework
   /* MARK: - ReSTIR temporal resampling. */
 
-  if (!is_cancel_requested() && device_scene_->data.integrator.use_restir &&
-      device_scene_->data.integrator.restir_temporal_sample_count > 0)
-  {
-    setup_restir_ = false;
-    setup_temporal_ = true;
-    final_evaluation_ = false;
+  // if (!is_cancel_requested() && device_scene_->data.integrator.use_restir)
+  // {
+  //   setup_restir_ = false;
+  //   setup_temporal_ = true;
+  //   final_evaluation_ = false;
 
-    reset_work_tile_scheduler(start_sample, samples_num, sample_offset);
+  //   reset_work_tile_scheduler(start_sample, samples_num, sample_offset);
 
-    while (true) {
-      bool finished = false;
+  //   while (true) {
+  //     bool finished = false;
 
-      if (enqueue_work_tiles(finished)) {
-        if (!update_queue_counter_and_cache()) {
-          break; /* Matching Initial PT's convention. */
-        }
-      }
+  //     if (enqueue_work_tiles(finished)) {
+  //       if (!update_queue_counter_and_cache()) {
+  //         break; /* Matching Initial PT's convention. */
+  //       }
+  //     }
 
-      if (is_cancel_requested()) {
-        break;
-      }
+  //     if (is_cancel_requested()) {
+  //       break;
+  //     }
 
-      if (finished) {
-        break;
-      }
+  //     if (finished) {
+  //       break;
+  //     }
 
-      if (enqueue_path_iteration()) {
-        if (!update_queue_counter_and_cache()) {
-          break;
-        }
-      }
+  //     if (enqueue_path_iteration()) {
+  //       if (!update_queue_counter_and_cache()) {
+  //         break;
+  //       }
+  //     }
 
-      if (is_cancel_requested()) {
-        break;
-      }
-    }
+  //     if (is_cancel_requested()) {
+  //       break;
+  //     }
+  //   }
 
-    setup_temporal_ = false;
-  }
+  //   setup_temporal_ = false;
+  // }
 
   /* MARK: - ReSTIR spatial resampling. */
 

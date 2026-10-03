@@ -1010,11 +1010,33 @@ ccl_device
     reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick); // !!!(Tri)
   }
 
+  /* After initial resampling (reservoir_add_light_sample/integrate_surface_emission()->reservoir_add_bsdf_sample calls here), 
+   * M must be exactly 1. the finalized reservoir represents one resampled candidate, and
+   * downstream spatial/temporal pairwise MIS, reads M as confidence. */
+  kernel_assert(reservoir.M == 1);
+
   if (reservoir_is_empty(&reservoir)) {
     return SHADER_EVAL_EMPTY;
   }
 
   /* TODO(weizhen): write reconnection vertex. Treat as rough if at least one closure is rough. */
+/*
+1. Add hit-point position + normal (and probably the reconnection-vertex's local BSDF sample info) to `GlobalReservoir`'s persisted buffer, mirroring `PackedGIReservoir`.
+2. Implement reconnection: reconstruct the new edge from the current pixel to that hit point, recompute its Jacobian (same family as the DI `jacobian_solid_angle_to_area` work, but over a full reflected path segment rather than a direct light connection), check visibility, reject or down-weight when the reconnection vertex is behind a near-specular bounce.
+3. Add the roughness/distance gating (`LocalStrategy`) that decides when reconnection is even attempted versus skipped.
+4. Random replay as the fallback for the specular case — this is the expensive one, since it needs a way to re-derive or persist enough of the RNG state to regenerate the same path deterministically from a different starting pixel, which Cycles' current RNG scheme (seeded per-pixel/per-sample, not per-path-independent-of-pixel) isn't obviously set up for.
+
+What I'd actually do:
+- Fold the "Shift mapping" TODO into the existing `GlobalReservoir`/reconnection-vertex TODO 
+  rather than tracking it separately — it's the same blocker, and merging them avoids the PR 
+  looking like it has two open unknowns when it has one.
+- Explicitly flag in the PR description that GI spatial/temporal reuse currently combines reservoirs 
+  **without** a reconnection shift, so any reviewer looking closely at GI quality knows that's a 
+  known, named limitation rather than an undiagnosed bug — this matters because without it, GI 
+  reuse across pixels is probably introducing bias of its own right now, silently, the same category 
+  of problem you spent this whole session hunting down for DI.
+
+*/
 
   /*
    * The selected light and reference remain paired inside Reservoir.
