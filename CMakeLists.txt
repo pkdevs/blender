@@ -514,7 +514,7 @@ endif()
 # Compression
 option(WITH_DRACO "Enable Draco mesh compression Python module (used for glTF)" ON)
 option(WITH_MESHOPTIMIZER "Enable meshoptimizer compression Python module (used for glTF)" ON)
-option(WITH_KTX "Enable KTX texture support" ON)
+option(WITH_KTX "Enable KTX texture support (used for glTF)" ON)
 
 # Camera/motion tracking
 option(WITH_LIBMV "Enable Libmv structure from motion library" ON)
