@@ -1128,7 +1128,7 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
   Vector<Object *> objects = BKE_object_pose_array_get_unique(
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
-  const BoneDeform mode = BoneDeform(RNA_enum_get(op->ptr, "deform"));
+  const BoneDeform mode = BoneDeform(RNA_enum_get(op->ptr, "mode"));
 
   for (Object *pose_object : objects) {
     bArmature *arm = id_cast<bArmature *>(pose_object->data);
@@ -1182,7 +1182,7 @@ void POSE_OT_select_deform(wmOperatorType *ot)
        "Select bones that have the 'deform' option disabled"},
       {0, nullptr, 0, nullptr, nullptr}};
 
-  RNA_def_enum(ot->srna, "deform", deform_items, int(BoneDeform::DEFORM), "Deform", "");
+  RNA_def_enum(ot->srna, "mode", deform_items, int(BoneDeform::DEFORM), "Deform", "");
 }
 
 /* -------------------------------------- */
