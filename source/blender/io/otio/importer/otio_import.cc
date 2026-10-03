@@ -200,7 +200,9 @@ static Strip *clip_to_strip(StripImportContext &ctx,
   const TimeRange range = clip.trimmed_range();
   const std::optional<TimeRange> available_range = reference ? reference->available_range() :
                                                                std::nullopt;
-  const RationalTime media_time = range.start_time() - (available_range ?
+  const bool has_available_start = available_range &&
+                                   available_range->start_time().is_valid_time();
+  const RationalTime media_time = range.start_time() - (has_available_start ?
                                                             available_range->start_time() :
                                                             RationalTime());
   const int media_start = to_frames(ctx, media_time);

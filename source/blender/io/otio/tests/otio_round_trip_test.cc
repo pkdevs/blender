@@ -690,4 +690,27 @@ TEST_F(OTIOTest, KdenliveMetadata)
   EXPECT_FLOAT_EQ(color->col[2], 0.0f);
 }
 
+TEST_F(OTIOTest, KdenliveTimeline)
+{
+  auto timeline = SerializableObject::Retainer<Timeline>(
+      new Timeline("Kdenlive", RationalTime(0, 24)));
+  auto track = SerializableObject::Retainer<Track>(new Track());
+  track->append_child(new Gap(RationalTime(10, 24)));
+  track->append_child(
+      new Clip("Missing",
+               new ExternalReference("file:///missing.mov",
+                                     TimeRange(RationalTime(0, 0), RationalTime(120, 0))),
+               TimeRange(RationalTime(5, 24), RationalTime(10, 24))));
+  timeline->tracks()->append_child(track);
+  write_otio(timeline);
+
+  Scene *imported = import_otio();
+  ASSERT_NE(imported, nullptr);
+  Strip *strip = seq::lookup_strip_by_name(imported->ed, "Missing");
+  ASSERT_NE(strip, nullptr);
+  EXPECT_FLOAT_EQ(strip->content_start(), 5.0f);
+  EXPECT_EQ(strip->left_handle(), 10);
+  EXPECT_EQ(strip->right_handle(imported), 20);
+}
+
 }  // namespace blender::io::otio
