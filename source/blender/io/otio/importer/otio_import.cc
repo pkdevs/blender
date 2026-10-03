@@ -303,6 +303,13 @@ static void add_strip_effects(StripImportContext &ctx,
     if (!type || seq::effect_type_get_min_num_inputs(*type) != 1) {
       continue;
     }
+    auto *time_warp = dynamic_cast<LinearTimeWarp *>(effect.value);
+    if (time_warp && time_warp->time_scalar() < 0.0) {
+      input.flag |= SEQ_REVERSE_FRAMES;
+      if (time_warp->time_scalar() == -1.0) {
+        continue;
+      }
+    }
 
     seq::LoadData load_data;
     seq::add_load_data_init(
@@ -311,10 +318,10 @@ static void add_strip_effects(StripImportContext &ctx,
     load_data.effect.input1 = &input;
     Strip *strip = seq::add_effect_strip(ctx.scene, &seqbase, &load_data);
 
-    if (auto *time_warp = dynamic_cast<LinearTimeWarp *>(effect.value)) {
+    if (time_warp) {
       SpeedControlVars *speed = static_cast<SpeedControlVars *>(strip->effectdata);
       speed->speed_control_type = SEQ_SPEED_MULTIPLY;
-      speed->speed_fader = time_warp->time_scalar();
+      speed->speed_fader = std::abs(time_warp->time_scalar());
     }
     place_strip(ctx,
                 strip,

@@ -47,6 +47,7 @@
 #include "opentimelineio/gap.h"
 #include "opentimelineio/generatorReference.h"
 #include "opentimelineio/imageSequenceReference.h"
+#include "opentimelineio/linearTimeWarp.h"
 #include "opentimelineio/missingReference.h"
 #include "opentimelineio/serialization.h"
 #include "opentimelineio/stack.h"
@@ -660,6 +661,36 @@ TEST_F(OTIOTest, ResolveMetadata)
   EXPECT_STREQ(seq::channel_get_by_index(&imported->ed->channels, 1)->name, "V1");
   EXPECT_TRUE(seq::channel_get_by_index(&imported->ed->channels, 1)->is_locked());
   EXPECT_NE(IDP_GetPropertyFromGroup(strip->prop, "otio_metadata"), nullptr);
+}
+
+TEST_F(OTIOTest, ReverseTimeWarp)
+{
+  const TimeRange range(RationalTime(0, 24), RationalTime(10, 24));
+  auto track = SerializableObject::Retainer<Track>(new Track());
+  for (const double time_scalar : {-1.0, -2.0}) {
+    auto *clip = new Clip(
+        std::to_string(time_scalar), new GeneratorReference("", "COLOR", range), range);
+    clip->effects().push_back(new LinearTimeWarp("", "", time_scalar));
+    track->append_child(clip);
+  }
+  auto timeline = SerializableObject::Retainer<Timeline>(new Timeline("Reverse"));
+  timeline->tracks()->append_child(track);
+  write_otio(timeline);
+
+  Scene *imported = import_otio();
+  ASSERT_NE(imported, nullptr);
+  ASSERT_EQ(BLI_listbase_count(&imported->ed->seqbase), 3);
+  int speed_strips = 0;
+  for (Strip &strip : imported->ed->seqbase) {
+    if (strip.type == STRIP_TYPE_SPEED) {
+      EXPECT_FLOAT_EQ(static_cast<SpeedControlVars *>(strip.effectdata)->speed_fader, 2.0f);
+      speed_strips++;
+    }
+    else {
+      EXPECT_TRUE(strip.flag & SEQ_REVERSE_FRAMES);
+    }
+  }
+  EXPECT_EQ(speed_strips, 1);
 }
 
 TEST_F(OTIOTest, KdenliveMetadata)
