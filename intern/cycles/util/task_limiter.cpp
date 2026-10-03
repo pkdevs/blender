@@ -15,6 +15,7 @@
 #include "util/system.h"
 #include "util/tbb.h"
 #include "util/thread.h"
+#include "util/types.h"
 
 CCL_NAMESPACE_BEGIN
 
