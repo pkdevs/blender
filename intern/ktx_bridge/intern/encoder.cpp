@@ -17,14 +17,14 @@
 #define VK_FORMAT_R8G8B8A8_SRGB 43
 
 int encodeToFile(const char *filename,
-                  const unsigned char *pixels,
-                  unsigned int width,
-                  unsigned int height,
-                  unsigned int channels,
-                  int quality,
-                  int is_data,
-                  int use_uastc,
-                  int compress)
+                 const unsigned char *pixels,
+                 unsigned int width,
+                 unsigned int height,
+                 unsigned int channels,
+                 int quality,
+                 int is_data,
+                 int use_uastc,
+                 int compress)
 {
   if (pixels == nullptr || (channels != 3 && channels != 4)) {
     return KTX_INVALID_VALUE;
@@ -69,8 +69,12 @@ int encodeToFile(const char *filename,
     return result;
   }
 
-  result = ktxTexture_SetImageFromMemory(
-      ktxTexture(texture), /*level*/ 0, /*layer*/ 0, /*faceSlice*/ 0, flipped.data(), flipped.size());
+  result = ktxTexture_SetImageFromMemory(ktxTexture(texture),
+                                         /*level*/ 0,
+                                         /*layer*/ 0,
+                                         /*faceSlice*/ 0,
+                                         flipped.data(),
+                                         flipped.size());
   if (result != KTX_SUCCESS) {
     ktxTexture_Destroy(ktxTexture(texture));
     return result;

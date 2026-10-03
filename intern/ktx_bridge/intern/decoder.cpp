@@ -6,7 +6,8 @@
 
 int decodeFromFile(const char *filename, ktxTexture2 **newTex)
 {
-  ktx_error_code_e result = ktxTexture2_CreateFromNamedFile(filename, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, newTex);
+  ktx_error_code_e result = ktxTexture2_CreateFromNamedFile(
+      filename, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, newTex);
   if (result != KTX_SUCCESS) {
     return result;
   }
