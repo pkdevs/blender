@@ -227,6 +227,14 @@ static bool is_input_needed(const Context &context,
                             const bNodeSocket &input,
                             SocketResultFn socket_result_fn)
 {
+  /* Lazy evaluation of inputs that reference outputs outside of their own zone are currently not
+   * supported. */
+  const bke::bNodeTreeZones &zones = *node.owner_tree().zones();
+  const bNodeSocket *output = get_output_linked_to_input(input);
+  if (output && zones.get_zone_by_socket(input) != zones.get_zone_by_socket(*output)) {
+    return true;
+  }
+
   if (node.is_group_output()) {
     const Result *result = socket_result_fn(input);
     if (!result) {
@@ -567,9 +575,9 @@ static NeededBuffers compute_number_of_needed_buffers(const Context &context,
       /* If any of the links is not between two pixel nodes, it means that the node outputs
        * a buffer through this output and so we increment the number of output buffers. */
       if (!is_pixel_node(node) ||
-          is_output_linked_to_input_conditioned(*output, [&](const bNodeSocket &input) {
-            return !is_pixel_node(input.owner_node());
-          }))
+          is_output_linked_to_input_conditioned(
+              *output,
+              [&](const bNodeSocket &input) { return !is_pixel_node(input.owner_node()); }))
       {
         number_of_output_buffers++;
       }
@@ -710,7 +718,8 @@ Schedule compute_schedule(const Context &context,
 
   /* Validate node group. */
   node_group.ensure_topology_cache();
-  if (node_group.has_available_link_cycle()) {
+  const bke::bNodeTreeZones *zones = schedule.node_group.zones();
+  if (node_group.has_available_link_cycle() || !zones) {
     return schedule;
   }
 

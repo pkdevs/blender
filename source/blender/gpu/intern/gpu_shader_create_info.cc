@@ -96,17 +96,6 @@ bool ShaderCreateInfo::is_vulkan_compatible() const
   return true;
 }
 
-std::string ShaderCreateInfo::buffer_typename(StringRefNull type_name, bool uniform_buffer) const
-{
-  if (flag_is_set(this->builtins_combined(), BuiltinBits::NO_BUFFER_TYPE_LINTING) ||
-      type_name.startswith("int") || type_name.startswith("uint") ||
-      type_name.startswith("float") || type_name.startswith("packed_"))
-  {
-    return type_name;
-  }
-  return type_name + "_host_shared_" + (uniform_buffer ? "uniform_" : "");
-}
-
 /** \} */
 
 ShaderCreateInfo::ShaderCreateInfo(const char *name) : name_(name)
@@ -790,7 +779,7 @@ void gpu_shader_create_info_init()
 #ifndef NDEBUG
     /* Automatically amend the create info for ease of use of the debug feature. */
     if (flag_is_set(info->builtins_combined(), BuiltinBits::USE_DEBUG_DRAW)) {
-      info->additional_info("draw_debug_draw");
+      info->additional_info("DebugDraw");
     }
 #endif
   }
