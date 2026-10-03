@@ -293,7 +293,6 @@ float3 BKE_paint_seed_hsv_jitter();
 bool BKE_paint_calculate_rake_rotation(Paint &paint,
                                        const Brush &brush,
                                        const float mouse_pos[2],
-                                       PaintMode paint_mode,
                                        bool in_stroke,
                                        bool is_first_dab);
 void BKE_paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation);

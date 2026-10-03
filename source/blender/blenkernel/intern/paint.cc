@@ -1993,12 +1993,12 @@ static float paint_rake_rotation_spacing(const Paint & /*paint*/,
   }
 }
 
-static bool paint_rake_rotation_active(const MTex &mtex)
+static bool mtex_rake_rotation_active(const MTex &mtex)
 {
   return mtex.tex && mtex.brush_angle_mode & MTEX_ANGLE_RAKE;
 }
 
-static bool paint_rake_rotation_active(const Brush &brush)
+static bool tip_rake_rotation_active(const Brush &brush)
 {
   return brush.brush_angle_mode & MTEX_ANGLE_RAKE;
 }
@@ -2007,28 +2007,27 @@ void BKE_paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, floa
 {
   bke::PaintRuntime &paint_runtime = *paint.runtime;
   paint_runtime.brush_rotation = rotation;
-  paint_runtime.brush_rotation_sec = paint_rake_rotation_active(brush.mask_mtex) ? rotation : 0;
+  paint_runtime.brush_rotation_sec = mtex_rake_rotation_active(brush.mask_mtex) ? rotation : 0;
 
-  paint_runtime.tip_rotation = paint_rake_rotation_active(brush) ? rotation : 0;
+  paint_runtime.tip_rotation = tip_rake_rotation_active(brush) ? rotation : 0;
 }
 
-static bool paint_rake_rotation_active(const Brush &brush, PaintMode paint_mode)
+static bool paint_rake_rotation_active(const Brush &brush)
 {
-  return paint_rake_rotation_active(brush.mtex) || paint_rake_rotation_active(brush.mask_mtex) ||
-         paint_rake_rotation_active(brush);
+  return mtex_rake_rotation_active(brush.mtex) || mtex_rake_rotation_active(brush.mask_mtex) ||
+         tip_rake_rotation_active(brush);
 }
 
 bool BKE_paint_calculate_rake_rotation(Paint &paint,
                                        const Brush &brush,
                                        const float mouse_pos[2],
-                                       const PaintMode paint_mode,
                                        bool in_stroke,
                                        bool is_first_dab)
 {
   bke::PaintRuntime &paint_runtime = *paint.runtime;
 
   bool ok = false;
-  if (paint_rake_rotation_active(brush, paint_mode)) {
+  if (paint_rake_rotation_active(brush)) {
     const float r = paint_rake_rotation_spacing(paint, brush, in_stroke, is_first_dab);
     float rotation;
 
@@ -2054,7 +2053,8 @@ bool BKE_paint_calculate_rake_rotation(Paint &paint,
     }
   }
   else {
-    paint_runtime.brush_rotation = paint_runtime.brush_rotation_sec = paint_runtime.tip_rotation = 0.0f;
+    paint_runtime.brush_rotation = paint_runtime.brush_rotation_sec = paint_runtime.tip_rotation =
+        0.0f;
     ok = true;
   }
   return ok;
