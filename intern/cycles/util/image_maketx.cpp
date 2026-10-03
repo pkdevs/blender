@@ -569,6 +569,15 @@ static void write_stats_tx(OIIO::ImageBuf &buf, const bool use_openexr)
   }
 }
 
+template<typename Func> static void parallel_for_pixels(const int64_t num, const Func &func)
+{
+  parallel_for(blocked_range<int64_t>(0, num, 65536), [&](const blocked_range<int64_t> &range) {
+    for (int64_t i = range.begin(); i < range.end(); i++) {
+      func(i);
+    }
+  });
+}
+
 static void clamp_half_tx(OIIO::ImageBuf &buf, const TypeDesc out_format)
 {
   /* Clamp to half bounds to avoid creating inf when converting from float to half on write. */
@@ -580,9 +589,8 @@ static void clamp_half_tx(OIIO::ImageBuf &buf, const TypeDesc out_format)
 
   const int64_t num_values = int64_t(buf.spec().width) * buf.spec().height * buf.spec().nchannels;
   float *pixels = static_cast<float *>(buf.localpixels());
-  for (int64_t i = 0; i < num_values; i++) {
-    pixels[i] = clamp(pixels[i], -HALF_MAX, HALF_MAX);
-  }
+  parallel_for_pixels(num_values,
+                      [&](const int64_t i) { pixels[i] = clamp(pixels[i], -HALF_MAX, HALF_MAX); });
 }
 
 static void convert_srgb_tx(OIIO::ImageBuf &buf,
@@ -597,19 +605,17 @@ static void convert_srgb_tx(OIIO::ImageBuf &buf,
   if (buf.spec().nchannels == 1) {
     float *pixels = static_cast<float *>(buf.localpixels());
     if (from_srgb) {
-      for (int64_t i = 0; i < num_pixels; i++) {
-        pixels[i] = color_srgb_to_linear(pixels[i]);
-      }
+      parallel_for_pixels(num_pixels,
+                          [&](const int64_t i) { pixels[i] = color_srgb_to_linear(pixels[i]); });
     }
     else {
-      for (int64_t i = 0; i < num_pixels; i++) {
-        pixels[i] = color_linear_to_srgb(pixels[i]);
-      }
+      parallel_for_pixels(num_pixels,
+                          [&](const int64_t i) { pixels[i] = color_linear_to_srgb(pixels[i]); });
     }
   }
   else {
     float4 *pixels = static_cast<float4 *>(buf.localpixels());
-    for (int64_t i = 0; i < num_pixels; i++) {
+    parallel_for_pixels(num_pixels, [&](const int64_t i) {
       float4 value = pixels[i];
       const bool has_alpha = unassociate_alpha && !(value.w <= 0.0f || value.w == 1.0f);
 
@@ -634,7 +640,7 @@ static void convert_srgb_tx(OIIO::ImageBuf &buf,
       }
 
       pixels[i] = value;
-    }
+    });
   }
 }
 
