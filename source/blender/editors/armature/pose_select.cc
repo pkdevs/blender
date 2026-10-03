@@ -1053,7 +1053,8 @@ static wmOperatorStatus pose_select_scaled_exec(bContext *C, wmOperator *op)
       if (!animrig::bone_is_selectable(arm, &pchan)) {
         continue;
       }
-      const float epsilon = 1.0e-5f;
+      const float epsilon = 1.0e-5f; /* Accounts for any rounding errors when the bones
+                                      * are just slightly rotated (and not scaled).*/
       const float3x3 pbone_mat = float3x3(float4x4(pchan.pose_mat));
       const float3 axis_scale = math::to_scale(pbone_mat);
       bool select = false;
