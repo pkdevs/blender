@@ -127,6 +127,9 @@
 #  define condition(cond) maybe_unused
 /* Set binding frequency of a resource (storage, uniform, image, sampler). */
 #  define frequency(freq) maybe_unused
+/* Allow to resize array at runtime using the given compilation constants.
+ * The array must be sized to its maximum size. */
+#  define capacity(const) maybe_unused
 
 /* Make a structure layout or enum shared between CPU and GPU code.
  * Required for structs defining storage and uniform buffer layout. */
@@ -144,6 +147,8 @@
  * IMPORTANT: Will discard any iteration above N.
  */
 #  define unroll_n(N) likely
+/* Force a function to be inlined during BSL compilation. */
+#  define force_inline maybe_unused
 #else
 /* This path checks for unused variables. Disable warning about unknown attributes. */
 #  if defined(__GNUC__) || defined(__clang__)
