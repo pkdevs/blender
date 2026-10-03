@@ -178,12 +178,16 @@ static void node_geo_exec(GeoNodeExecParams params)
   geometry_set.set_name(object->id.name + 2);
   params.set_output("Geometry"_ustr, geometry_set);
 
-  GSpan materials_as_span(CPPType::get<Material *>(),
-                          BKE_object_material_array_p(object),
-                          *BKE_object_material_len_p(object));
-  GArray<> mat_data(materials_as_span);
-  GListPtr materials_list = GList::from_garray(std::move(mat_data));
-  params.set_output("Materials"_ustr, std::move(materials_list));
+  Material ***mat_p = BKE_object_material_array_p(object);
+  short int *mat_l = BKE_object_material_len_p(object);
+  if (mat_p != nullptr && mat_l != nullptr) {
+    GSpan materials_as_span(CPPType::get<Material *>(), *mat_p, *mat_l);
+    GArray<> mat_data(materials_as_span);
+    GListPtr materials_list = GList::from_garray(std::move(mat_data));
+    params.set_output("Materials"_ustr, std::move(materials_list));
+  }
+
+  params.set_default_remaining_outputs();
 };
 using namespace blender::compositor;
 
