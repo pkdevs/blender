@@ -1453,7 +1453,7 @@ void ARMATURE_OT_select_all(wmOperatorType *ot)
 /** \name Select Deform Operator
  * \{ */
 
-enum class BoneDeform { DEFORM = 0, NO_DEFORM = 1 };
+enum class BoneDeform { NO_DEFORM = 0, DEFORM = 1 };
 
 static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
 {
@@ -1476,7 +1476,7 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
       }
 
       const bool is_deform = !(ebone.flag & BONE_NO_DEFORM);
-      bool select = (mode == BoneDeform::DEFORM) ? is_deform : !is_deform;
+      const bool select = is_deform == (mode == BoneDeform::DEFORM);
       if (select) {
         ED_armature_ebone_select_set(&ebone, true);
       }
@@ -1505,16 +1505,16 @@ void ARMATURE_OT_select_deform(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   static const EnumPropertyItem deform_items[] = {
-      {int(BoneDeform::DEFORM),
-       "DEFORM",
-       0,
-       "Enabled",
-       "Select bones that have the 'deform' option enabled"},
       {int(BoneDeform::NO_DEFORM),
        "NO_DEFORM",
        0,
        "Disabled",
        "Select bones that have the 'deform' option disabled"},
+      {int(BoneDeform::DEFORM),
+       "DEFORM",
+       0,
+       "Enabled",
+       "Select bones that have the 'deform' option enabled"},
       {0, nullptr, 0, nullptr, nullptr}};
 
   RNA_def_enum(ot->srna, "deform", deform_items, int(BoneDeform::DEFORM), "Deform", "");
@@ -2137,7 +2137,7 @@ static void select_similar_ui(bContext * /*C*/, wmOperator *op)
 
   const int type = RNA_enum_get(op->ptr, "type");
   layout.prop(op->ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  if ((type == SIMEDBONE_LENGTH) || (type == SIMEDBONE_DIRECTION)) {
+  if (ELEM(type, SIMEDBONE_LENGTH, SIMEDBONE_DIRECTION)) {
     layout.prop(op->ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
