@@ -46,8 +46,8 @@ void textbox_jump_line(ButtonTextBox *textbox,
                        const bool select);
 
 /**
- * Wraps input text into lines, this may overwrite draw string if there is IME data available.
- * This also may override active font style.
+ * Wraps input text into lines, if the button is in text editing mode it will insert and wrap
+ * ongoing IME composition string if available. This may override active font style.
  */
 Vector<StringRef> textbox_wrap_lines(ButtonTextBox *textbox);
 
@@ -58,7 +58,9 @@ float textbox_grip_height();
 /* Top/Bottom padding for text in a text-box. */
 float textbox_vertical_padding();
 
-TextboxState *textbox_ensure_state(ARegion *region, StringRefNull idname);
+TextboxState *textbox_ensure_state(ARegion *region,
+                                   StringRefNull idname,
+                                   const int initial_visible_lines = 3);
 
 }  // namespace ui
 }  // namespace blender

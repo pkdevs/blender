@@ -15,7 +15,7 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_subsurface_shared.hh"
 #include "gpu_shader_compat.hh"
-#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
 
 namespace eevee::lut {
 
@@ -250,7 +250,7 @@ struct GGXBtdfGt1Closure {
  * material, back-lit by a directional light. We only care about a single color primary, as the
  * profile is applied to each primary independently. The other components are for debugging.
  *
- * Params: `x = distance`, while output is interpreted as exit radiance.
+ * Parameters: `x = distance`, while output is interpreted as exit radiance.
  */
 float4 burley_sss_translucency(float3 params)
 {
@@ -316,7 +316,7 @@ template<typename F> float4 integrate(const F &func)
   float4 measure = float4(0.0f);
   for (uint i = 1u; i <= sample_count; i++) {
     /* Warp sequence to a point on the unit cylinder. */
-    float2 rand = hammersley_2d(i, sample_count);
+    float2 rand = random::hammersley_2d(i, sample_count);
     float3 Xi = sample_cylinder(rand);
 
     /* Add sample to measure. */

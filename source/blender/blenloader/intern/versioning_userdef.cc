@@ -443,6 +443,15 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(tui.wcol_state.error);
   }
 
+  if (!USER_VERSION_ATLEAST(503, 5)) {
+    FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
+  }
+
+  if (!USER_VERSION_ATLEAST(503, 19)) {
+    /* Alpha is now used, but was hardcoded to be opaque before. */
+    btheme->common.anim.playhead[3] = 255;
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
@@ -851,11 +860,11 @@ void blo_do_versions_userdef(UserDef *userdef)
   if (userdef->gpu_backend == USER_GPU_BACKEND_OPENGL ||
       userdef->gpu_backend == USER_GPU_BACKEND_VULKAN)
   {
-    userdef->gpu_backend = USER_GPU_BACKEND_METAL;
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
   }
 #else
   if (userdef->gpu_backend == USER_GPU_BACKEND_METAL) {
-    userdef->gpu_backend = USER_GPU_BACKEND_OPENGL;
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
   }
 #endif
 
@@ -1396,13 +1405,9 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->dupflag |= USER_DUP_CURVES | USER_DUP_POINTCLOUD;
   }
 
-  /* Set GPU backend to OpenGL. */
+  /* Set GPU backend to the default backend. */
   if (!USER_VERSION_ATLEAST(305, 5)) {
-#ifdef __APPLE__
-    userdef->gpu_backend = USER_GPU_BACKEND_METAL;
-#else
-    userdef->gpu_backend = USER_GPU_BACKEND_OPENGL;
-#endif
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
   }
 
   if (!USER_VERSION_ATLEAST(305, 10)) {
@@ -1502,8 +1507,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   if (!USER_VERSION_ATLEAST(402, 36)) {
     /* Reset repositories. */
     while (!userdef->extension_repos.is_empty()) {
-      BKE_preferences_extension_repo_remove(
-          userdef, static_cast<bUserExtensionRepo *>(userdef->extension_repos.first));
+      BKE_preferences_extension_repo_remove(userdef, userdef->extension_repos.first());
     }
 
     BKE_preferences_extension_repo_add_default_remote(userdef);
@@ -1685,7 +1689,8 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(500, 11)) {
-    userdef->gpu_flag &= ~USER_GPU_FLAG_UNUSED_0;
+    /* This used to be USER_GPU_FLAG_UNUSED_0. */
+    userdef->gpu_flag &= ~USER_GPU_FLAG_WORKBENCH_RT_SHADOWS;
   }
 
   if (!USER_VERSION_ATLEAST(500, 59)) {
@@ -1766,7 +1771,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(502, 13)) {
-    userdef->geometry_nodes_stack_limit = 100;
+    userdef->nodes_stack_limit = 100;
   }
 
   if (!USER_VERSION_ATLEAST(502, 35)) {
@@ -1782,6 +1787,38 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(503, 2)) {
     userdef->asset_flag |= USER_ASSETS_USE_ONLINE_ESSENTIALS;
+  }
+
+  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
+#ifdef __APPLE__
+#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+#else
+  if (!USER_VERSION_ATLEAST(503, 10)) {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
+  }
+#endif
+
+  if (!USER_VERSION_ATLEAST(503, 18)) {
+    const char *remapped_paths[][2] = {
+        {"Camera & Lens Effects", "Compositing/Camera & Lens Effects"},
+        {"Creative", "Compositing/Creative"},
+        {"Utilities", "Compositing/Utilities"},
+        {"Mask", "Compositing/Mask"},
+    };
+    for (const auto &remap : remapped_paths) {
+      if (BKE_preferences_asset_shelf_settings_disable_catalog_path(
+              userdef, "NODE_AST_compositor", remap[0]))
+      {
+        BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+            userdef, "NODE_AST_compositor", remap[1]);
+      }
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(503, 21)) {
+    if (userdef->sequencer_default_strip_length == 0.0f) {
+      userdef->sequencer_default_strip_length = 1.0f;
+    }
   }
 
   /**

@@ -35,7 +35,7 @@ but not to fully cover each topic.
 
 A quick list of helpful things to know before starting:
 
-- Enable :ref:`Developer Extra <blender_manual:bpy.types.PreferencesView.show_developer_ui>`
+- Enable :ref:`Developer Extras <blender_manual:bpy.types.PreferencesView.show_developer_ui>`
   and :ref:`Python Tooltips <blender_manual:bpy.types.PreferencesView.show_tooltips_python>`.
 - The :ref:`Python Console <blender_manual:bpy.types.SpaceConsole>`
   is great for testing one-liners; it has autocompletion so you can inspect the API quickly.
@@ -196,6 +196,12 @@ Note that these properties can only be assigned basic Python types:
 - int, float, string
 - array of ints or floats
 - dictionary (only string keys are supported, values must be basic types too)
+
+.. note::
+
+   Using dictionaries allow to nest data into other data.
+   There is a hard limit of 1024 levels to the supported nesting depth.
+   Deeper nesting will lead to error messages and loss of data.
 
 These properties are valid outside of Python. They can be animated by curves or used in driver paths.
 

@@ -34,6 +34,8 @@ KERNEL_STRUCT_MEMBER(background, float, map_weight)
 KERNEL_STRUCT_MEMBER(background, float, portal_weight)
 KERNEL_STRUCT_MEMBER(background, int, map_res_x)
 KERNEL_STRUCT_MEMBER(background, int, map_res_y)
+/* Ray differential used for generating the importance map. */
+KERNEL_STRUCT_MEMBER(background, float, map_dD)
 /* Multiple importance sampling. */
 KERNEL_STRUCT_MEMBER(background, int, use_mis)
 /* Light-group. */
@@ -42,7 +44,6 @@ KERNEL_STRUCT_MEMBER(background, int, lightgroup)
 KERNEL_STRUCT_MEMBER(background, int, object_index)
 /* Padding. */
 KERNEL_STRUCT_MEMBER(background, int, pad1)
-KERNEL_STRUCT_MEMBER(background, int, pad2)
 KERNEL_STRUCT_END(KernelBackground)
 
 /* BVH: own BVH2 if no native device acceleration struct used. */
@@ -135,6 +136,7 @@ KERNEL_STRUCT_MEMBER(film, int, pass_denoising_normal)
 KERNEL_STRUCT_MEMBER(film, int, pass_denoising_roughness)
 KERNEL_STRUCT_MEMBER(film, int, pass_denoising_depth)
 KERNEL_STRUCT_MEMBER(film, int, pass_denoising_backward_motion)
+KERNEL_STRUCT_MEMBER(film, int, pass_denoising_specular_motion)
 KERNEL_STRUCT_MEMBER(film, int, denoising_pass_options_flag)
 /* AOVs. */
 KERNEL_STRUCT_MEMBER(film, int, pass_aov_color)
@@ -193,6 +195,7 @@ KERNEL_STRUCT_MEMBER(integrator, int, transparent_shadows)
 KERNEL_STRUCT_MEMBER(integrator, int, caustics_reflective)
 KERNEL_STRUCT_MEMBER(integrator, int, caustics_refractive)
 KERNEL_STRUCT_MEMBER(integrator, float, filter_glossy)
+KERNEL_STRUCT_MEMBER(integrator, float, differential_widen_scale)
 /* Seed. */
 KERNEL_STRUCT_MEMBER_DONT_SPECIALIZE
 KERNEL_STRUCT_MEMBER(integrator, int, seed)
@@ -233,6 +236,7 @@ KERNEL_STRUCT_MEMBER(integrator, int, use_surface_guiding)
 KERNEL_STRUCT_MEMBER(integrator, int, use_volume_guiding)
 KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_direct_light)
 KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_mis_weights)
+KERNEL_STRUCT_MEMBER(integrator, int, pad1)
 
 KERNEL_STRUCT_MEMBER(integrator, float2, pixel_jitter)
 KERNEL_STRUCT_END(KernelIntegrator)
