@@ -79,7 +79,7 @@ set(USD_EXTRA_ARGS
   -DPXR_ENABLE_OPENVDB_SUPPORT=ON
   -DPYTHON_EXECUTABLE=${PYTHON_BINARY}
   -DPython3_EXECUTABLE=${PYTHON_BINARY}
-  -DPXR_BUILD_MONOLITHIC=ON
+  -DPXR_BUILD_MONOLITHIC=OFF
   # OSL is an optional dependency of the Imaging module. However, since that
   # module was included for its support for converting primitive shapes (sphere,
   # cube, etc.) to geometry, it's not necessary. Disabling it will make it
@@ -207,19 +207,15 @@ if(WIN32)
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${LIBDIR}/usd/lib/site-packages
         ${HARVEST_TARGET}/usd/lib/debug/site-packages
-      COMMAND ${CMAKE_COMMAND} -E copy
-        ${LIBDIR}/usd/lib/usd_ms_d.dll
-        ${HARVEST_TARGET}/usd/lib/usd_ms_d.dll
-      COMMAND ${CMAKE_COMMAND} -E copy
-        ${LIBDIR}/usd/lib/usd_ms_d.lib
-        ${HARVEST_TARGET}/usd/lib/usd_ms_d.lib
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${LIBDIR}/usd/lib/
+        ${HARVEST_TARGET}/usd/lib/
       DEPENDEES install
     )
   endif()
 else()
-  harvest(external_usd usd/include usd/include "*.h")
-  harvest(external_usd usd/include usd/include "*.hpp")
-  harvest_rpath_lib(external_usd usd/lib usd/lib "libusd_ms${SHAREDLIBEXT}")
+  harvest(external_usd usd/include usd/include "*")
+  harvest_rpath_lib(external_usd usd/lib usd/lib "*${SHAREDLIBEXT}*")
   harvest(external_usd usd/lib/usd usd/lib/usd "*")
   harvest_rpath_python(
     external_usd
