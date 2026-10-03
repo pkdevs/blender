@@ -7,6 +7,7 @@
 
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_instances.hh"
+#include "BKE_material.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
@@ -64,42 +65,6 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
   if (node_tree.type == NTREE_GEOMETRY) {
     layout.prop(ptr, "transform_space", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
   }
-}
-
-static GSpan find_materials(Object *object)
-{
-  // todo check if we have object level materials??
-  const CPPType &cpp_type = CPPType::get<Material *>();
-
-  switch (GS(object->data->name)) {
-    case ID_ME: {
-      Mesh *mesh = id_cast<Mesh *>(object->data);
-      return GSpan(cpp_type, mesh->mat, mesh->totcol);
-    } break;
-    case ID_VO: {
-      Volume *volume = id_cast<Volume *>(object->data);
-      return GSpan(cpp_type, volume->mat, volume->totcol);
-    } break;
-    case ID_PT: {
-      PointCloud *pointcloud = id_cast<PointCloud *>(object->data);
-      return GSpan(cpp_type, pointcloud->mat, pointcloud->totcol);
-    } break;
-    case ID_CV: {
-      Curves *curves = id_cast<Curves *>(object->data);
-      return GSpan(cpp_type, curves->mat, curves->totcol);
-    } break;
-    case ID_GP: {
-      GreasePencil *grease_pencil = id_cast<GreasePencil *>(object->data);
-      return GSpan(cpp_type, grease_pencil->material_array, grease_pencil->material_array_num);
-    } break;
-    default:
-     return GSpan(cpp_type, nullptr, 0);
-    break;
-  }
-
-  BLI_assert_unreachable();
-
-  return GSpan(cpp_type, nullptr, 0);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -213,11 +178,13 @@ static void node_geo_exec(GeoNodeExecParams params)
   geometry_set.set_name(object->id.name + 2);
   params.set_output("Geometry"_ustr, geometry_set);
 
-  GArray<> mat_data(find_materials(object));
+  GSpan materials_as_span(CPPType::get<Material *>(),
+                          BKE_object_material_array_p(object),
+                          *BKE_object_material_len_p(object));
+  GArray<> mat_data(materials_as_span);
   GListPtr materials_list = GList::from_garray(std::move(mat_data));
   params.set_output("Materials"_ustr, std::move(materials_list));
-}
-
+};
 using namespace blender::compositor;
 
 class ObjectInfoOperation : public NodeOperation {
