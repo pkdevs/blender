@@ -219,7 +219,7 @@ def show_experimental_texture_paint(brush):
     return brush.image_brush_type in {'DRAW'}
 
 
-class UnifiedPaintPanel():
+class UnifiedPaintPanel:
     # subclass must set
     # bl_space_type = 'IMAGE_EDITOR'
     # bl_region_type = 'UI'
