@@ -57,6 +57,7 @@
 #include "opentimelineio/transition.h"
 
 #include "otio_import.hh"
+#include "otio_import_kdenlive.hh"
 #include "otio_import_resolve.hh"
 #include "otio_metadata.hh"
 
@@ -249,6 +250,9 @@ static Strip *clip_to_strip(StripImportContext &ctx,
     std::optional<StripType> type = strip_type_from_identifier(&kind);
     if (!type) {
       type = resolve_generator_type(*generator);
+    }
+    if (!type) {
+      type = kdenlive_generator_type(*generator);
     }
     if (type && seq::effect_type_get_min_num_inputs(*type) == 2) {
       ctx.pending_effects.append({&clip, &seqbase, channel, start, duration, *type});
@@ -518,6 +522,7 @@ Scene *importer_main(bContext *C, const OTIOImportParams &params)
     PointerRNA ptr = RNA_pointer_create_discrete(&scene->id, RNA_Strip, strip);
     rna_from_dictionary(
         bmain, scene->ed, resolve_strip_properties(*scene, *strip, *otio_object), ptr);
+    rna_from_dictionary(bmain, scene->ed, kdenlive_strip_properties(*otio_object), ptr);
     if (const AnyDictionary *metadata = strip_metadata(*otio_object)) {
       rna_from_dictionary(bmain, scene->ed, *metadata, ptr);
     }

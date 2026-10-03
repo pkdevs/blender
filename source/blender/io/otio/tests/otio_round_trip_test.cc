@@ -662,4 +662,32 @@ TEST_F(OTIOTest, ResolveMetadata)
   EXPECT_NE(IDP_GetPropertyFromGroup(strip->prop, "otio_metadata"), nullptr);
 }
 
+TEST_F(OTIOTest, KdenliveMetadata)
+{
+  const TimeRange range(RationalTime(0, 24), RationalTime(10, 24));
+  AnyDictionary kdenlive;
+  kdenlive["color"] = std::string("0xff8000ff");
+  AnyDictionary parameters;
+  parameters["kdenlive"] = kdenlive;
+  auto clip = SerializableObject::Retainer<Clip>(
+      new Clip("Orange",
+               new GeneratorReference("Orange", "kdenlive:SolidColor", range, parameters),
+               range));
+  auto track = SerializableObject::Retainer<Track>(new Track());
+  track->append_child(clip);
+  auto timeline = SerializableObject::Retainer<Timeline>(new Timeline("Kdenlive"));
+  timeline->tracks()->append_child(track);
+  write_otio(timeline);
+
+  Scene *imported = import_otio();
+  ASSERT_NE(imported, nullptr);
+  Strip *strip = seq::lookup_strip_by_name(imported->ed, "Orange");
+  ASSERT_NE(strip, nullptr);
+  ASSERT_EQ(strip->type, STRIP_TYPE_COLOR);
+  const SolidColorVars *color = static_cast<const SolidColorVars *>(strip->effectdata);
+  EXPECT_FLOAT_EQ(color->col[0], 1.0f);
+  EXPECT_NEAR(color->col[1], 128.0f / 255.0f, 1e-5f);
+  EXPECT_FLOAT_EQ(color->col[2], 0.0f);
+}
+
 }  // namespace blender::io::otio

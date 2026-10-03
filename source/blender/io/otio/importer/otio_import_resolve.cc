@@ -9,7 +9,6 @@
 #include <cmath>
 
 #include "BLI_math_base.hh"
-#include "BLI_math_color_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
@@ -24,18 +23,6 @@
 #include "otio_metadata.hh"
 
 namespace blender::io::otio {
-
-static const std::any *find(const AnyDictionary &dictionary, const std::string &key)
-{
-  auto it = dictionary.find(key);
-  return it != dictionary.end() ? &it->second : nullptr;
-}
-
-template<typename T> static const T *find(const AnyDictionary &dictionary, const std::string &key)
-{
-  const std::any *value = find(dictionary, key);
-  return value ? std::any_cast<T>(value) : nullptr;
-}
 
 static const AnyDictionary *resolve_metadata(SerializableObjectWithMetadata &object)
 {
@@ -83,13 +70,6 @@ static const char *blend_type_from_composite_mode(const int64_t mode)
       nullptr,      "ADD",        "LINEAR_BURN", "LINEAR_LIGHT", "VIVID_LIGHT", "PIN_LIGHT",
   };
   return mode >= 0 && mode < int64_t(std::size(blend_types)) ? blend_types[mode] : nullptr;
-}
-
-static AnyVector hex_to_color(const std::string &hex)
-{
-  float3 color(0.0f);
-  hex_to_rgb(hex.c_str(), &color.x, &color.y, &color.z);
-  return AnyVector{double(color.x), double(color.y), double(color.z)};
 }
 
 static void add_effect_properties(const AnyDictionary &effect,

@@ -20,6 +20,7 @@ set(SRC
   exporter/otio_export.cc
   exporter/otio_export_resolve.cc
   importer/otio_import.cc
+  importer/otio_import_kdenlive.cc
   importer/otio_import_resolve.cc
   intern/otio_metadata.cc
   intern/otio_resolve.cc
@@ -28,6 +29,7 @@ set(SRC
   exporter/otio_export.hh
   exporter/otio_export_resolve.hh
   importer/otio_import.hh
+  importer/otio_import_kdenlive.hh
   importer/otio_import_resolve.hh
   intern/otio_metadata.hh
   intern/otio_resolve.hh

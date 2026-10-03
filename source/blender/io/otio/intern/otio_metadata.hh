@@ -21,6 +21,13 @@ namespace blender::io::otio {
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
 
 std::optional<double> to_number(const std::any &value);
+const std::any *find(const AnyDictionary &dictionary, const std::string &key);
+template<typename T> const T *find(const AnyDictionary &dictionary, const std::string &key)
+{
+  const std::any *value = find(dictionary, key);
+  return value ? std::any_cast<T>(value) : nullptr;
+}
+AnyVector hex_to_color(const std::string &hex);
 
 AnyDictionary rna_to_dictionary(PointerRNA &ptr);
 void rna_from_dictionary(Main *bmain,

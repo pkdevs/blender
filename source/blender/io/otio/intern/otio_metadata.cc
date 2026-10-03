@@ -15,6 +15,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_index_range.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 
@@ -191,6 +192,19 @@ std::optional<double> to_number(const std::any &value)
     return double(*number);
   }
   return std::nullopt;
+}
+
+const std::any *find(const AnyDictionary &dictionary, const std::string &key)
+{
+  auto it = dictionary.find(key);
+  return it != dictionary.end() ? &it->second : nullptr;
+}
+
+AnyVector hex_to_color(const std::string &hex)
+{
+  float3 color(0.0f);
+  hex_to_rgb(hex.c_str(), &color.x, &color.y, &color.z);
+  return AnyVector{double(color.x), double(color.y), double(color.z)};
 }
 
 static void set_number(PointerRNA &ptr, PropertyRNA *prop, const int index, const double value)
