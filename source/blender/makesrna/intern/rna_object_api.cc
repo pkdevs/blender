@@ -237,11 +237,11 @@ static Base *rna_Object_local_view_property_helper(bScreen *screen,
   }
 
   if (view_layer == nullptr) {
-    win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(G_MAIN->wm.first));
+    win = ED_screen_window_find(screen, G_MAIN->wm.first());
     view_layer = WM_window_get_active_view_layer(win);
   }
 
-  /* FIXME Using G_MAIN is weak, but should work in practrice given current context (code already
+  /* FIXME Using G_MAIN is weak, but should work in practice given current context (code already
    * relies on 'G_MAIN data'). */
   BKE_view_layer_synced_ensure(
       *G_MAIN, win ? WM_window_get_active_scene(win) : nullptr, view_layer);

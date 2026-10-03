@@ -82,7 +82,11 @@ using namespace blender::compositor;
 
 class Stabilize2DOperation : public NodeOperation {
  public:
-  using NodeOperation::NodeOperation;
+  Stabilize2DOperation(Context &context, const bNode &node) : NodeOperation(context, node)
+  {
+    InputDescriptor &image_descriptor = this->get_input_descriptor("Image");
+    image_descriptor.skip_type_conversion = true;
+  }
 
   void execute() override
   {
@@ -91,6 +95,7 @@ class Stabilize2DOperation : public NodeOperation {
 
     MovieClip *movie_clip = get_movie_clip();
     if (input.is_single_value() || !movie_clip) {
+      output.set_type(input.type());
       output.share_data(input);
       return;
     }
@@ -111,6 +116,7 @@ class Stabilize2DOperation : public NodeOperation {
       transformation = math::invert(transformation);
     }
 
+    output.set_type(input.type());
     output.share_data(input);
     output.transform(transformation);
     output.get_realization_options().interpolation = this->get_interpolation();

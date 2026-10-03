@@ -68,9 +68,9 @@ static void node_gizmo_calc_matrix_space_with_image_dims(const ARegion *region,
   mul_v3_fl(matrix_space[0], zoom * image_dims.x);
   mul_v3_fl(matrix_space[1], zoom * image_dims.y);
   matrix_space[3][0] = ((region->winx / 2) + space_offset.x) -
-                       ((image_dims.x / 2.0f - image_offset.x) * zoom);
+                       ((image_dims.x / 2.0f - image_offset.x + 0.5f) * zoom);
   matrix_space[3][1] = ((region->winy / 2) + space_offset.y) -
-                       ((image_dims.y / 2.0f - image_offset.y) * zoom);
+                       ((image_dims.y / 2.0f - image_offset.y + 0.5f) * zoom);
 }
 
 static void node_gizmo_calc_matrix_space(const ARegion *region,
@@ -81,8 +81,8 @@ static void node_gizmo_calc_matrix_space(const ARegion *region,
   unit_m4(matrix_space);
   mul_v3_fl(matrix_space[0], zoom);
   mul_v3_fl(matrix_space[1], zoom);
-  matrix_space[3][0] = (region->winx / 2) - offset.x;
-  matrix_space[3][1] = (region->winy / 2) - offset.y;
+  matrix_space[3][0] = (region->winx / 2) - offset.x - 0.5f * zoom;
+  matrix_space[3][1] = (region->winy / 2) - offset.y - 0.5f * zoom;
 }
 
 static bool node_gizmo_is_set_visible(const SpaceNode &snode)
@@ -127,13 +127,13 @@ static SpaceNode *find_active_node_editor(const bContext *C)
   for (wmWindow &window : window_manager->windows) {
     bScreen *screen = WM_window_get_active_screen(&window);
     for (ScrArea &area : screen->areabase) {
-      SpaceLink *space_link = static_cast<SpaceLink *>(area.spacedata.first);
+      SpaceLink *space_link = area.spacedata.first();
       if (!space_link || space_link->spacetype != SPACE_NODE) {
         continue;
       }
       SpaceNode *snode = reinterpret_cast<SpaceNode *>(space_link);
       if (snode->edittree && snode->edittree->type == NTREE_COMPOSIT) {
-        bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.last);
+        bNodeTreePath *path = snode->treepath.last();
         if (snode->nodetree->active_viewer_key == path->parent_key) {
           return snode;
         }
@@ -253,7 +253,7 @@ void box_mask_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 void bbox_draw_prepare_space_node(const bContext *C, wmGizmoGroup *gzgroup)
 {
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceNode *snode = CTX_wm_space_node(C);
 
@@ -264,7 +264,7 @@ void bbox_draw_prepare_space_node(const bContext *C, wmGizmoGroup *gzgroup)
 void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
 {
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceImage *sima = CTX_wm_space_image(C);
   const float2 offset = float2{sima->xof, sima->yof} * sima->zoom;
@@ -600,7 +600,7 @@ bool crop_poll_space_image(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 void crop_draw_prepare_space_node(const bContext *C, wmGizmoGroup *gzgroup)
 {
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceNode *snode = CTX_wm_space_node(C);
 
@@ -741,7 +741,7 @@ void glare_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
 
   NodeGlareWidgetGroup *glare_group = static_cast<NodeGlareWidgetGroup *>(gzgroup->customdata);
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceImage *sima = CTX_wm_space_image(C);
   const float2 offset = float2{-sima->xof, -sima->yof} * sima->zoom;
@@ -778,7 +778,7 @@ void glare_draw_prepare_space_node(const bContext *C, wmGizmoGroup *gzgroup)
 
   NodeGlareWidgetGroup *glare_group = static_cast<NodeGlareWidgetGroup *>(gzgroup->customdata);
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceNode *snode = CTX_wm_space_node(C);
 
@@ -984,9 +984,7 @@ void corner_pin_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
   /* need to set property here for undo. TODO: would prefer to do this in _init. */
   int i = 0;
-  for (bNodeSocket *sock = static_cast<bNodeSocket *>(node->inputs.first); sock && i < 4;
-       sock = sock->next)
-  {
+  for (bNodeSocket *sock = node->inputs.first(); sock && i < 4; sock = sock->next) {
     if (sock->type == SOCK_VECTOR) {
       wmGizmo *gz = cpin_group->gizmos[i++];
 
@@ -1277,8 +1275,8 @@ static void gizmo_node_backdrop_prop_matrix_get(const wmGizmo *gz,
   const float2 offset = transform_group->state.offset;
   matrix[0][0] = snode->zoom;
   matrix[1][1] = snode->zoom;
-  matrix[3][0] = snode->xof + offset.x * snode->zoom;
-  matrix[3][1] = snode->yof + offset.y * snode->zoom;
+  matrix[3][0] = snode->xof + (offset.x - 0.5f) * snode->zoom;
+  matrix[3][1] = snode->yof + (offset.y - 0.5f) * snode->zoom;
 }
 
 static void gizmo_node_backdrop_prop_matrix_set(const wmGizmo *gz,
@@ -1292,8 +1290,8 @@ static void gizmo_node_backdrop_prop_matrix_set(const wmGizmo *gz,
   const float2 offset = transform_group->state.offset;
   SpaceNode *snode = static_cast<SpaceNode *>(gz_prop->custom_func.user_data);
   snode->zoom = matrix[0][0];
-  snode->xof = matrix[3][0] - offset.x * snode->zoom;
-  snode->yof = matrix[3][1] - offset.y * snode->zoom;
+  snode->xof = matrix[3][0] - (offset.x - 0.5f) * snode->zoom;
+  snode->yof = matrix[3][1] - (offset.y - 0.5f) * snode->zoom;
 }
 
 bool transform_poll(const bContext *C, wmGizmoGroupType * /*gzgt*/)

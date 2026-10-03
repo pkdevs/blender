@@ -162,7 +162,7 @@ static gpu::Texture *gpu_texture_create_tile_mapping(Image *ima, gpu::Texture *t
 
   /* Determine maximum tile number. */
   BKE_image_sort_tiles(ima);
-  ImageTile *last_tile = static_cast<ImageTile *>(ima->tiles.last);
+  ImageTile *last_tile = ima->tiles.last();
   int max_tile = last_tile->tile_number - 1001;
 
   /* create image */
@@ -257,10 +257,10 @@ static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
   BLI_listbase_sort(&boxes, compare_packtile);
   int arraylayers = 0;
   /* Keep adding layers until all tiles are packed. */
-  while (boxes.first != nullptr) {
+  while (boxes.first() != nullptr) {
     ListBaseT<FixedSizeBoxPack> packed = {nullptr};
     BLI_box_pack_2d_fixedarea(&boxes, arraywidth, arrayheight, &packed);
-    BLI_assert(packed.first != nullptr);
+    BLI_assert(packed.first() != nullptr);
 
     for (const FixedSizeBoxPack &fixedpack : packed) {
       const PackTile *packtile = reinterpret_cast<const PackTile *>(&fixedpack);
@@ -478,8 +478,8 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
   }
 
   /* Get changeset ID that we will update to, and last changeset ID. */
-  const int64_t new_changeset_id = BKE_image_partial_update_flush(image, &tile_user);
-  const int64_t last_changeset_id = atlas_ibuf->gpu.partial_update_changeset;
+  const imbuf::ChangesetID new_changeset_id = BKE_image_partial_update_flush(image, &tile_user);
+  const imbuf::ChangesetID last_changeset_id = atlas_ibuf->gpu.partial_update_changeset_id;
 
   for (ImageTile &tile : image->tiles) {
     tile_user.tile = tile.tile_number;
@@ -518,7 +518,7 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
     }
   }
 
-  atlas_ibuf->gpu.partial_update_changeset = new_changeset_id;
+  atlas_ibuf->gpu.partial_update_changeset_id = new_changeset_id;
   IMB_freeImBuf(atlas_ibuf);
 
   if (need_full_rebuild) {
@@ -569,7 +569,7 @@ static ImageGPUTextures image_get_gpu_texture_tiled(Image *ima,
   }
 
   /* Get changeset ID that we will update to. */
-  const int64_t new_changeset_id = BKE_image_partial_update_flush(ima, nullptr);
+  const imbuf::ChangesetID new_changeset_id = BKE_image_partial_update_flush(ima, nullptr);
 
   /* Acquire image buffer. */
   ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, nullptr);
@@ -622,8 +622,8 @@ static ImageGPUTextures image_get_gpu_texture_tiled(Image *ima,
   IMB_assign_gpu_texture(atlas_ibuf, atlas_tex);
   IMB_assign_gpu_texture(mapping_ibuf, mapping_tex);
 
-  atlas_ibuf->gpu.partial_update_changeset = new_changeset_id;
-  mapping_ibuf->gpu.partial_update_changeset = new_changeset_id;
+  atlas_ibuf->gpu.partial_update_changeset_id = new_changeset_id;
+  mapping_ibuf->gpu.partial_update_changeset_id = new_changeset_id;
 
   IMB_freeImBuf(atlas_ibuf);
   IMB_freeImBuf(mapping_ibuf);
@@ -652,7 +652,7 @@ static ImageGPUTextures image_get_gpu_texture_single(Image *ima,
   void *lock = nullptr;
   bool cpu_load_failed = false;
   ImBuf *ibuf = BKE_image_acquire_ibuf_gpu(
-      ima, iuser, use_viewers ? &lock : nullptr, &cpu_load_failed);
+      ima, iuser, use_viewers ? &lock : nullptr, &cpu_load_failed, try_only);
 
   bool gpu_load_failed = false;
   if (ibuf != nullptr && (!only_full_resolution || image_gpu_texture_fits_full_resolution(ibuf))) {

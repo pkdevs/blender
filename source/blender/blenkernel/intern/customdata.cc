@@ -2332,10 +2332,9 @@ class CustomDataLayerImplicitSharing : public ImplicitSharingInfo {
   }
 };
 
-/** Create a #ImplicitSharingInfo that takes ownership of the data. */
-static const ImplicitSharingInfo *make_implicit_sharing_info_for_layer(const eCustomDataType type,
-                                                                       const void *data,
-                                                                       const int totelem)
+const ImplicitSharingInfo *CustomData_make_layer_sharing_info(const eCustomDataType type,
+                                                              const void *data,
+                                                              const int totelem)
 {
   return MEM_new<CustomDataLayerImplicitSharing>(__func__, data, totelem, type);
 }
@@ -2359,7 +2358,7 @@ static void ensure_layer_data_is_mutable(CustomDataLayer &layer, const int totel
      * we're still copying from it here. */
     layer.data = copy_layer_data(type, old_data, totelem);
     layer.sharing_info->remove_user_and_delete_if_last();
-    layer.sharing_info = make_implicit_sharing_info_for_layer(type, layer.data, totelem);
+    layer.sharing_info = CustomData_make_layer_sharing_info(type, layer.data, totelem);
   }
 }
 
@@ -2417,7 +2416,7 @@ void CustomData_realloc(CustomData *data,
     /* Take ownership of new array. */
     layer->data = new_layer_data;
     if (layer->data) {
-      layer->sharing_info = make_implicit_sharing_info_for_layer(
+      layer->sharing_info = CustomData_make_layer_sharing_info(
           eCustomDataType(layer->type), layer->data, new_size);
     }
 
@@ -2814,7 +2813,7 @@ static CustomDataLayer *customData_add_layer__internal(
 
   if (new_layer.data != nullptr && new_layer.sharing_info == nullptr) {
     /* Make layer data shareable. */
-    new_layer.sharing_info = make_implicit_sharing_info_for_layer(type, new_layer.data, totelem);
+    new_layer.sharing_info = CustomData_make_layer_sharing_info(type, new_layer.data, totelem);
   }
 
   new_layer.type = type;
@@ -4814,7 +4813,7 @@ static void blend_write_layer_data(BlendWriter *writer,
         int datasize = structnum * count;
         writer->write_struct_array_by_name(structname, datasize, layer.data);
       }
-      else if (!BLO_write_is_undo(writer)) { /* Do not warn on undo. */
+      else if (!writer->is_undo()) { /* Do not warn on undo. */
         printf("%s error: layer '%s':%d - can't be written to file\n",
                __func__,
                structname,
@@ -4832,13 +4831,13 @@ void CustomData_blend_write(BlendWriter *writer,
                             ID *id)
 {
   /* write external customdata (not for undo) */
-  if (data->external && !BLO_write_is_undo(writer)) {
-    CustomData_external_write(data, BLO_write_filepath(writer), id, cddata_mask, count, 0);
+  if (data->external && !writer->is_undo()) {
+    CustomData_external_write(data, writer->filepath(), id, cddata_mask, count, 0);
   }
 
   for (const CustomDataLayer &layer : layers_to_write) {
     const size_t size_in_bytes = CustomData_sizeof(eCustomDataType(layer.type)) * count;
-    BLO_write_shared(writer, layer.data, size_in_bytes, layer.sharing_info, [&]() {
+    writer->write_shared(layer.data, size_in_bytes, layer.sharing_info, [&]() {
       blend_write_layer_data(writer, layer, count);
     });
   }
@@ -4986,7 +4985,7 @@ void CustomData_blend_read(BlendDataReader *reader, CustomData *data, const int 
             if (layer->data == nullptr) {
               return nullptr;
             }
-            return make_implicit_sharing_info_for_layer(
+            return CustomData_make_layer_sharing_info(
                 eCustomDataType(layer->type), layer->data, count);
           });
       i++;
