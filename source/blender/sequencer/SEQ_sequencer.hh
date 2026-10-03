@@ -125,7 +125,7 @@ struct EditingRuntime {
 
   /**
    * During some tools/operators like blade tool or handle tweaking, this is set to a different
-   * frame to temporarily render in the preview if #SEQ_DRAW_TRANSFORM_PREVIEW is set.
+   * frame to temporarily render in the preview if #SEQ_DRAW_EDIT_POINT_PREVIEW is set.
    */
   std::optional<int> edit_point;
 

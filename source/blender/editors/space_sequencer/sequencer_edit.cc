@@ -1863,7 +1863,7 @@ const EnumPropertyItem prop_split_side_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-bool only_selected_get(wmOperator *op)
+bool split_only_selected_get(wmOperator *op)
 {
   if (RNA_struct_property_is_set(op->ptr, "ignore_selection")) {
     return !RNA_boolean_get(op->ptr, "ignore_selection");
@@ -1888,36 +1888,6 @@ static seq::Side sequence_split_side_for_exec_get(wmOperator *op)
   return split_side;
 }
 
-Vector<Strip *> split_strips_get(Scene *scene,
-                                 const int frame,
-                                 const std::optional<int> channel,
-                                 const bool only_selected)
-{
-  Editing *ed = seq::editing_get(scene);
-  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
-
-  Vector<Strip *> strips;
-  for (Strip &strip : *ed->current_strips()) {
-    if (!seq::edit_frame_splits_strip(scene, &strip, frame)) {
-      continue;
-    }
-    if (channel) {
-      if (strip.channel == *channel) {
-        return {&strip};
-      }
-      continue;
-    }
-    if (only_selected && (strip.flag & SEQ_SELECT) == 0) {
-      continue;
-    }
-    if (!only_selected && seq::transform_is_locked(channels, &strip)) {
-      continue;
-    }
-    strips.append(&strip);
-  }
-  return strips;
-}
-
 static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -1928,7 +1898,7 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
 
   const bool split_at_cursor = RNA_boolean_get(op->ptr, "use_cursor_position");
   const bool all_channels = RNA_boolean_get(op->ptr, "all_channels");
-  const bool only_selected = only_selected_get(op);
+  const bool only_selected = split_only_selected_get(op);
 
   const int split_frame = RNA_struct_property_is_set(op->ptr, "frame") ?
                               RNA_int_get(op->ptr, "frame") :
@@ -1949,7 +1919,7 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
   const std::optional<int> channel = (split_at_cursor && !all_channels) ?
                                          std::optional<int>(split_channel) :
                                          std::nullopt;
-  for (Strip *strip : split_strips_get(scene, split_frame, channel, only_selected)) {
+  for (Strip *strip : seq::edit_split_strips_get(scene, split_frame, channel, only_selected)) {
     const char *error_msg = nullptr;
     if (seq::edit_strip_split(bmain,
                               scene,
@@ -2174,7 +2144,7 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
   ui::view2d_region_to_view_rctf(v2d, &box_rect, &box_rect);
 
   const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
-  const bool only_selected = only_selected_get(op);
+  const bool only_selected = split_only_selected_get(op);
   const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
   const seq::eSplitMethod method = seq::eSplitMethod(RNA_enum_get(op->ptr, "type"));
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};

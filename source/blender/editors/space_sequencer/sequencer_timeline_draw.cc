@@ -2130,7 +2130,7 @@ static void split_expand_strips(Editing *ed,
   targets.add_multiple(chain.as_span());
 }
 
-static void blade_box_draw(Scene *scene, const ARegion *region, wmOperator *op)
+static void box_blade_draw(Scene *scene, const ARegion *region, wmOperator *op)
 {
   Editing *ed = seq::editing_get(scene);
   const View2D *v2d = &region->v2d;
@@ -2138,7 +2138,7 @@ static void blade_box_draw(Scene *scene, const ARegion *region, wmOperator *op)
   /* Keep in sync with `sequencer_box_blade_exec()`. */
   const rctf box_rect = box_blade_rect_get(op, v2d);
   const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
-  const bool only_selected = only_selected_get(op);
+  const bool only_selected = split_only_selected_get(op);
   const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
 
@@ -2246,7 +2246,7 @@ static std::optional<BladeSplit> blade_split_get(
   const std::optional<int> channel = all_channels ? std::nullopt :
                                                     std::optional<int>(int(mouse_co.y));
   BladeSplit split = {split_frame, all_channels, {}};
-  for (Strip *strip : split_strips_get(scene, split_frame, channel, only_selected)) {
+  for (Strip *strip : seq::edit_split_strips_get(scene, split_frame, channel, only_selected)) {
     split_expand_strips(ed, strip, ignore_connections, split.strips);
   }
 
@@ -2316,7 +2316,7 @@ static void blade_paint_cursor_draw(bContext *C,
   }
 
   if (wmOperator *box_blade_op = box_blade_op_get(win)) {
-    blade_box_draw(scene, region, box_blade_op);
+    box_blade_draw(scene, region, box_blade_op);
   }
   else if (const std::optional<BladeSplit> split = blade_split_get(
                scene, region, win, area->runtime.tool, xy))
@@ -2355,7 +2355,7 @@ void SEQUENCER_GGT_blade(wmGizmoGroupType *gzgt)
 static std::string blade_frame_str_get(const Scene *scene, const int frame, const bool timecode)
 {
   char str[64];
-  ED_get_current_time_str(scene, timecode, frame, str, sizeof(str));
+  ED_time_scrub_frame_str_get(scene, timecode, frame, str, sizeof(str));
   return str;
 }
 
@@ -2399,7 +2399,7 @@ static ARegion *blade_tooltip_init(
   const float right_offset = UI_SCALE_FAC * 55.0f;
   const float init_position[2] = {float(event->xy[0]) + right_offset, float(event->xy[1])};
 
-  return ui::tooltip_create_from_func_and_pos(
+  return ui::tooltip_create_from_func(
       C,
       [&](ui::TooltipData &data) {
         ui::tooltip_text_field_add(data, frames_str, {}, ui::TIP_STYLE_NORMAL, ui::TIP_LC_MAIN);
@@ -2435,7 +2435,7 @@ static void blade_edit_point_update(bContext *C)
   scene->ed->edit_point_set(scene, frame);
 }
 
-static int blade_tooltip_ui_handler(bContext *C, const wmEvent *event, void * /*user_data*/)
+static int blade_handler(bContext *C, const wmEvent *event, void * /*user_data*/)
 {
   if (event->type == MOUSEMOVE || ISKEYMODIFIER(event->type)) {
     blade_edit_point_update(C);
@@ -2448,14 +2448,13 @@ static int blade_tooltip_ui_handler(bContext *C, const wmEvent *event, void * /*
   return WM_UI_HANDLER_CONTINUE;
 }
 
-void sequencer_blade_tooltip_ensure(ARegion *region)
+void sequencer_blade_handlers_add(ARegion *region)
 {
   /* Region init can run more than once, keep a single instance of the handler. */
-  WM_event_remove_ui_handler(
-      &region->runtime->handlers, blade_tooltip_ui_handler, nullptr, nullptr, false);
+  WM_event_remove_ui_handler(&region->runtime->handlers, blade_handler, nullptr, nullptr, false);
   WM_event_add_ui_handler(nullptr,
                           &region->runtime->handlers,
-                          blade_tooltip_ui_handler,
+                          blade_handler,
                           nullptr,
                           nullptr,
                           eWM_EventHandlerFlag(0));

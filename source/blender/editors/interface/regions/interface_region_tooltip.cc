@@ -1808,9 +1808,9 @@ ARegion *tooltip_create_from_gizmo(bContext *C, wmGizmo *gz)
   return tooltip_create_with_data(C, std::move(data), init_position, nullptr);
 }
 
-ARegion *tooltip_create_from_func_and_pos(bContext *C,
-                                          const FunctionRef<void(TooltipData &data)> create_fn,
-                                          const float init_position[2])
+ARegion *tooltip_create_from_func(bContext *C,
+                                  const FunctionRef<void(TooltipData &data)> create_fn,
+                                  const float init_position[2])
 {
   std::unique_ptr<TooltipData> data = std::make_unique<TooltipData>();
   create_fn(*data);

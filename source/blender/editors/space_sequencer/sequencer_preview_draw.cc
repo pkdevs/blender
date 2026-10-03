@@ -1835,7 +1835,7 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
   const bool need_reference_frame = draw_frame_overlay && space_sequencer.overlay_frame_type !=
                                                               SEQ_OVERLAY_FRAME_TYPE_CURRENT;
 
-  const bool show_edit_point = (space_sequencer.draw_flag & SEQ_DRAW_TRANSFORM_PREVIEW) &&
+  const bool show_edit_point = (space_sequencer.draw_flag & SEQ_DRAW_EDIT_POINT_PREVIEW) &&
                                !ED_screen_animation_playing(wm);
   const int timeline_frame = show_edit_point ? editing.edit_point().value_or(render_data.cfra) :
                                                render_data.cfra;

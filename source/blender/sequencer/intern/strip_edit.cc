@@ -311,6 +311,36 @@ bool edit_frame_splits_strip(const Scene *scene, const Strip *strip, const int t
   return timeline_frame > strip->left_handle() && timeline_frame < strip->right_handle(scene);
 }
 
+Vector<Strip *> edit_split_strips_get(Scene *scene,
+                                      const int frame,
+                                      const std::optional<int> channel,
+                                      const bool only_selected)
+{
+  Editing *ed = editing_get(scene);
+  const ListBaseT<SeqTimelineChannel> *channels = channels_displayed_get(ed);
+
+  Vector<Strip *> strips;
+  for (Strip &strip : *ed->current_strips()) {
+    if (!edit_frame_splits_strip(scene, &strip, frame)) {
+      continue;
+    }
+    if (channel) {
+      if (strip.channel == *channel) {
+        return {&strip};
+      }
+      continue;
+    }
+    if (only_selected && (strip.flag & SEQ_SELECT) == 0) {
+      continue;
+    }
+    if (!only_selected && transform_is_locked(channels, &strip)) {
+      continue;
+    }
+    strips.append(&strip);
+  }
+  return strips;
+}
+
 static void seq_edit_split_handle_strip_offsets(Main *bmain,
                                                 Scene *scene,
                                                 Strip *left_strip,

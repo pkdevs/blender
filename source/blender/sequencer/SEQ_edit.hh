@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "BLI_vector.hh"
+
 #include "DNA_listBase.h"
 
 namespace blender {
@@ -67,6 +69,18 @@ enum eSplitMethod {
  * i.e., exclusive start and end.
  */
 bool edit_frame_splits_strip(const Scene *scene, const Strip *strip, const int timeline_frame);
+
+/**
+ * Strips that #SEQUENCER_OT_split splits at \a frame; note that this does not include effects or
+ * connections, the caller must propagate to them by #edit_strip_split or #split_expand_strips.
+ *
+ * With \a channel set, there is only one possible strip split in that channel at that frame,
+ * assuming no bugged overlapping strips.
+ */
+Vector<Strip *> edit_split_strips_get(Scene *scene,
+                                      int frame,
+                                      std::optional<int> channel,
+                                      bool only_selected);
 
 /**
  * Split Strip at timeline_frame in two.

@@ -89,7 +89,7 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
                                 SEQ_TIMELINE_SHOW_THUMBNAILS | SEQ_TIMELINE_STRIP_END_THUMBNAILS;
 
   sseq->cache_overlay.flag = SEQ_CACHE_SHOW | SEQ_CACHE_SHOW_FINAL_OUT;
-  sseq->draw_flag |= SEQ_DRAW_TRANSFORM_PREVIEW;
+  sseq->draw_flag |= SEQ_DRAW_EDIT_POINT_PREVIEW;
 
   /* Header. */
   region = BKE_area_region_new();
@@ -477,7 +477,7 @@ static void sequencer_main_region_init(wmWindowManager *wm, ARegion *region)
 
   WM_event_add_dropbox_handler(&region->runtime->handlers, lb);
 
-  sequencer_blade_tooltip_ensure(region);
+  sequencer_blade_handlers_add(region);
 }
 
 /* Strip editing timeline. */

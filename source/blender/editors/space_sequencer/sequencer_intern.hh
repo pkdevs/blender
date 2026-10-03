@@ -144,7 +144,7 @@ float strip_handle_draw_size_get(const Scene *scene, const Strip *strip, float p
 void draw_timeline_seq(const bContext *C, const ARegion *region);
 void sequencer_scrubbing_region_draw(const bContext *C, ARegion *region);
 void draw_timeline_seq_display(const bContext *C, ARegion *region);
-void sequencer_blade_tooltip_ensure(ARegion *region);
+void sequencer_blade_handlers_add(ARegion *region);
 void sequencer_blade_tooltip_show(bContext *C);
 
 void SEQUENCER_GGT_blade(wmGizmoGroupType *gzgt);
@@ -214,19 +214,10 @@ bool sequencer_view_strips_poll(bContext *C);
  * \return collection of strips (`Strip`)
  */
 VectorSet<Strip *> all_strips_from_context(bContext *C);
-bool only_selected_get(wmOperator *op);
 
-/**
- * Strips that #SEQUENCER_OT_split splits at \a frame; note that this does not include effects or
- * connections, the caller must propagate to them by #edit_strip_split or #split_expand_strips.
- *
- * With \a channel set, there is only one possible strip split in that channel at that frame,
- * assuming no bugged overlapping strips.
- */
-Vector<Strip *> split_strips_get(Scene *scene,
-                                 int frame,
-                                 std::optional<int> channel,
-                                 bool only_selected);
+/** Temporary shim to query split & box blade property, where either the new #only_selected or
+ * deprecated #ignore_selection may be used, to be removed in 6.0.  */
+bool split_only_selected_get(wmOperator *op);
 
 /* Externals. */
 
