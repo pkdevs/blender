@@ -1908,12 +1908,12 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
   const seq::eSplitMethod method = seq::eSplitMethod(RNA_enum_get(op->ptr, "type"));
   const seq::Side split_side = sequence_split_side_for_exec_get(op);
 
-  /* Ignoring connections makes no sense with all channels, unless only selected strips are split,
-   * but playhead split should always ignore in other cases (it uses the selection). For cursor
-   * split, leave it up to the user (alt). */
-  const bool ignore_connections = all_channels ? only_selected :
-                                                 (!split_at_cursor ||
-                                                  RNA_boolean_get(op->ptr, "ignore_connections"));
+  /* Only splitting selected strips never propagates to connections. Otherwise, it only matters for
+   * cursor split on a single channel (other splits cut all strips at the frame anyway), so leave
+   * it up to the user (alt). */
+  const bool ignore_connections = only_selected ||
+                                  (split_at_cursor && !all_channels &&
+                                   RNA_boolean_get(op->ptr, "ignore_connections"));
 
   const std::optional<int> channel = (split_at_cursor && !all_channels) ?
                                          std::optional<int>(split_channel) :
@@ -2025,19 +2025,19 @@ static void sequencer_split_ui(bContext * /*C*/, wmOperator *op)
 
   const bool split_at_cursor = RNA_boolean_get(op->ptr, "use_cursor_position");
   const bool all_channels = RNA_boolean_get(op->ptr, "all_channels");
+  const bool only_selected = split_only_selected_get(op);
 
   if (split_at_cursor) {
     layout.prop(op->ptr, "all_channels", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (!split_at_cursor || all_channels) {
-    layout.prop(op->ptr, "only_selected", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  }
+  layout.prop(op->ptr, "only_selected", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   /* Ignoring connections only makes sense when we split at the mouse cursor.
    * If splitting at the playhead, we either split selected strips (default) or on all channels.
-   * Also, if `all_channels` is set, it makes no sense to ignore connections. */
-  if (split_at_cursor && !all_channels) {
+   * Also, if `all_channels` is set, it makes no sense to ignore connections, and `only_selected`
+   * always ignores them. */
+  if (split_at_cursor && !all_channels && !only_selected) {
     layout.prop(op->ptr, "ignore_connections", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
@@ -2103,12 +2103,7 @@ void SEQUENCER_OT_split(wmOperatorType *ot)
                          "the cursor");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-  RNA_def_boolean(ot->srna,
-                  "only_selected",
-                  false,
-                  "Only Selected",
-                  "Only split selected strips. When splitting at the cursor, this has no effect "
-                  "if All Channels is off");
+  RNA_def_boolean(ot->srna, "only_selected", false, "Only Selected", "Only split selected strips");
   prop = RNA_def_boolean(ot->srna,
                          "ignore_selection",
                          false,
@@ -2341,7 +2336,9 @@ static void sequencer_box_blade_ui(bContext * /*C*/, wmOperator *op)
   layout.prop(op->ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(op->ptr, "remove_gaps", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(op->ptr, "only_selected", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  layout.prop(op->ptr, "ignore_connections", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (!split_only_selected_get(op)) {
+    layout.prop(op->ptr, "ignore_connections", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
 }
 
 static wmOperatorStatus sequencer_box_blade_modal(bContext *C,

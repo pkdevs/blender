@@ -324,13 +324,13 @@ Vector<Strip *> edit_split_strips_get(Scene *scene,
     if (!edit_frame_splits_strip(scene, &strip, frame)) {
       continue;
     }
+    if (only_selected && (strip.flag & SEQ_SELECT) == 0) {
+      continue;
+    }
     if (channel) {
       if (strip.channel == *channel) {
         return {&strip};
       }
-      continue;
-    }
-    if (only_selected && (strip.flag & SEQ_SELECT) == 0) {
       continue;
     }
     if (!only_selected && transform_is_locked(channels, &strip)) {

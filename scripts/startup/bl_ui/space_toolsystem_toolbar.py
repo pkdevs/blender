@@ -3379,7 +3379,7 @@ class _defs_sequencer_generic:
                 panel.prop(props, "all_channels")
                 panel.prop(props, "only_selected")
                 row = panel.row()
-                row.active = not props.all_channels
+                row.active = not (props.all_channels or props.only_selected)
                 row.prop(props, "ignore_connections")
 
             # Box Blade properties.

@@ -2224,10 +2224,10 @@ static std::optional<BladeSplit> blade_split_get(
   const bool all_channels = (event->modifier & KM_SHIFT) != 0 ||
                             split_tool_prop_from_toolsettings(tref, "all_channels", false);
   const bool only_selected = split_tool_prop_from_toolsettings(tref, "only_selected", false);
-  const bool ignore_connections = all_channels ? only_selected :
-                                                 ((event->modifier & KM_ALT) != 0 ||
-                                                  split_tool_prop_from_toolsettings(
-                                                      tref, "ignore_connections", false));
+  const bool ignore_connections = only_selected ||
+                                  (!all_channels && ((event->modifier & KM_ALT) != 0 ||
+                                                     split_tool_prop_from_toolsettings(
+                                                         tref, "ignore_connections", false)));
 
   const std::optional<int> channel = all_channels ? std::nullopt :
                                                     std::optional<int>(int(mouse_co.y));
