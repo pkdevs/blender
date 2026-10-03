@@ -2037,8 +2037,10 @@ static void sequencer_split_ui(bContext * /*C*/, wmOperator *op)
    * If splitting at the playhead, we either split selected strips (default) or on all channels.
    * Also, if `all_channels` is set, it makes no sense to ignore connections, and `only_selected`
    * always ignores them. */
-  if (split_at_cursor && !all_channels && !only_selected) {
-    layout.prop(op->ptr, "ignore_connections", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (split_at_cursor) {
+    ui::Layout &row = layout.row(false);
+    row.active_set(!all_channels && !only_selected);
+    row.prop(op->ptr, "ignore_connections", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
@@ -2336,9 +2338,9 @@ static void sequencer_box_blade_ui(bContext * /*C*/, wmOperator *op)
   layout.prop(op->ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(op->ptr, "remove_gaps", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(op->ptr, "only_selected", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  if (!split_only_selected_get(op)) {
-    layout.prop(op->ptr, "ignore_connections", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  }
+  ui::Layout &row = layout.row(false);
+  row.active_set(!split_only_selected_get(op));
+  row.prop(op->ptr, "ignore_connections", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static wmOperatorStatus sequencer_box_blade_modal(bContext *C,
