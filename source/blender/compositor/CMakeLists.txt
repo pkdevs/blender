@@ -162,9 +162,11 @@ set(SRC
 
   derived_resources/COM_denoised_auxiliary_pass.hh
 
+  utilities/intern/node_tree_logging.cc
   utilities/intern/oidn.cc
 
   utilities/COM_utilities_diagonals.hh
+  utilities/COM_utilities_node_tree_logging.hh
   utilities/COM_utilities_oidn.hh
 )
 
@@ -172,6 +174,7 @@ set(LIB
   PRIVATE bf::blenfont
   PRIVATE bf::blenkernel
   PRIVATE bf::blentranslation
+  PRIVATE bf::depsgraph
   PRIVATE bf::functions
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
