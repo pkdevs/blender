@@ -401,7 +401,7 @@ void do_scene_project_brush(const Depsgraph &depsgraph,
   const bool bidirectional = brush.flag2 & BRUSH_PROJECT_USE_BIDIRECTIONAL;
   const float3 normal = calc_normal(brush, cache);
   float4x4 mat;
-  ed::sculpt_paint::cube_tip_init(sd, object, brush, mat.ptr());
+  cube_tip_init(sd, object, brush, mat.ptr());
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {

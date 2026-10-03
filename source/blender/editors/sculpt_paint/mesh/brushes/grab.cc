@@ -235,7 +235,7 @@ void do_grab_brush(const Depsgraph &depsgraph,
 
   const float3 grab_delta = grab_delta_get(brush, *ss.cache) * ss.cache->bstrength;
   float4x4 mat;
-  ed::sculpt_paint::cube_tip_init(sd, object, brush, mat.ptr());
+  cube_tip_init(sd, object, brush, mat.ptr());
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {

@@ -307,7 +307,7 @@ void do_smooth_brush(const Depsgraph &depsgraph,
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
   float4x4 mat;
-  ed::sculpt_paint::cube_tip_init(sd, object, brush, mat.ptr());
+  cube_tip_init(sd, object, brush, mat.ptr());
 
   boundary::ensure_boundary_info(object);
 

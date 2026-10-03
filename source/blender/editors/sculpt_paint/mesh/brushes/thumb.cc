@@ -203,7 +203,7 @@ void do_thumb_brush(const Depsgraph &depsgraph,
   const float3 &normal = ss.cache->sculpt_normal_symm;
   const float3 offset = math::cross(math::cross(normal, grab_delta), normal) * ss.cache->bstrength;
   float4x4 mat;
-  ed::sculpt_paint::cube_tip_init(sd, object, brush, mat.ptr());
+  cube_tip_init(sd, object, brush, mat.ptr());
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
