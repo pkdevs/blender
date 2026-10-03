@@ -2130,7 +2130,7 @@ static void box_blade_draw(Scene *scene, const ARegion *region, wmOperator *op)
   const rctf box_rect = box_blade_rect_get(op, v2d);
   const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
   const bool only_selected = split_only_selected_get(op);
-  const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
+  const bool ignore_connections = only_selected || RNA_boolean_get(op->ptr, "ignore_connections");
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
 
   /* Gather the strips the cut propagates to, like the split preview does. */
@@ -2223,10 +2223,11 @@ static std::optional<BladeSplit> blade_split_get(
   const wmEvent *event = win->runtime->eventstate;
   const bool all_channels = (event->modifier & KM_SHIFT) != 0 ||
                             split_tool_prop_from_toolsettings(tref, "all_channels", false);
-  const bool ignore_connections = !all_channels && ((event->modifier & KM_ALT) != 0 ||
-                                                    split_tool_prop_from_toolsettings(
-                                                        tref, "ignore_connections", false));
   const bool only_selected = split_tool_prop_from_toolsettings(tref, "only_selected", false);
+  const bool ignore_connections = all_channels ? only_selected :
+                                                 ((event->modifier & KM_ALT) != 0 ||
+                                                  split_tool_prop_from_toolsettings(
+                                                      tref, "ignore_connections", false));
 
   const std::optional<int> channel = all_channels ? std::nullopt :
                                                     std::optional<int>(int(mouse_co.y));

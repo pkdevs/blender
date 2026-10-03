@@ -3390,7 +3390,9 @@ class _defs_sequencer_generic:
                 panel.row().prop(props, "type", expand=True)
                 panel.prop(props, "remove_gaps")
                 panel.prop(props, "only_selected")
-                panel.prop(props, "ignore_connections")
+                row = panel.row()
+                row.active = not props.only_selected
+                row.prop(props, "ignore_connections")
         return dict(
             idname="builtin.blade",
             label="Blade",

@@ -1908,11 +1908,12 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
   const seq::eSplitMethod method = seq::eSplitMethod(RNA_enum_get(op->ptr, "type"));
   const seq::Side split_side = sequence_split_side_for_exec_get(op);
 
-  /* Ignoring connections makes no sense with all channels, but playhead split should always ignore
-   * in other cases (it uses the selection). For cursor split, leave it up to the user (alt). */
-  const bool ignore_connections = !all_channels &&
-                                  (!split_at_cursor ||
-                                   RNA_boolean_get(op->ptr, "ignore_connections"));
+  /* Ignoring connections makes no sense with all channels, unless only selected strips are split,
+   * but playhead split should always ignore in other cases (it uses the selection). For cursor
+   * split, leave it up to the user (alt). */
+  const bool ignore_connections = all_channels ? only_selected :
+                                                 (!split_at_cursor ||
+                                                  RNA_boolean_get(op->ptr, "ignore_connections"));
 
   const std::optional<int> channel = (split_at_cursor && !all_channels) ?
                                          std::optional<int>(split_channel) :
@@ -2168,7 +2169,7 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
   const rctf box_rect = box_blade_rect_get(op, v2d);
   const bool remove_gaps = RNA_boolean_get(op->ptr, "remove_gaps");
   const bool only_selected = split_only_selected_get(op);
-  const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
+  const bool ignore_connections = only_selected || RNA_boolean_get(op->ptr, "ignore_connections");
   const int2 rect_frames = {round_fl_to_int(box_rect.xmin), round_fl_to_int(box_rect.xmax)};
   const seq::eSplitMethod method = seq::eSplitMethod(RNA_enum_get(op->ptr, "type"));
 
