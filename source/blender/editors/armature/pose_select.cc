@@ -889,7 +889,7 @@ void POSE_OT_select_parent(wmOperatorType *ot)
 
 /* -------------------------------------- */
 static bool is_constraint_target_selected(const bConstraintTarget &ct,
-                                          const Set<bPoseChannel *> &starting_bone_selection)
+                                          const Set<bPoseChannel *> &selected_bones)
 {
   if (!ct.tar || ct.subtarget[0] == '\0') {
     return false;
@@ -897,7 +897,7 @@ static bool is_constraint_target_selected(const bConstraintTarget &ct,
 
   bPoseChannel *target_pchan = BKE_pose_channel_find_name(ct.tar->pose, ct.subtarget);
 
-  return target_pchan && starting_bone_selection.contains(target_pchan);
+  return target_pchan && selected_bones.contains(target_pchan);
 }
 
 static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, wmOperator * /*op*/)
@@ -911,12 +911,12 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
   Vector<Object *> objects = BKE_object_pose_array_get_unique(
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
-  Set<bPoseChannel *> starting_bone_selection;
+  Set<bPoseChannel *> selected_bones;
 
   for (Object *ob : objects) {
     Set<bPoseChannel *> selected_pose_bones = get_selected_pose_bones(*ob);
     for (bPoseChannel *pchan : selected_pose_bones) {
-      starting_bone_selection.add(pchan);
+      selected_bones.add(pchan);
     }
   }
 
@@ -937,7 +937,7 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
         }
 
         for (bConstraintTarget &ct : targets) {
-          if (is_constraint_target_selected(ct, starting_bone_selection)) {
+          if (is_constraint_target_selected(ct, selected_bones)) {
             animrig::bone_select(&pchan);
             found = true;
             break;
