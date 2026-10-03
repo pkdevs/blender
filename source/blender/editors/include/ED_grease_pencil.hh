@@ -834,7 +834,8 @@ using SelectionUpdateFunc = FunctionRef<IndexMask(const ed::greasepencil::Mutabl
                                                   StringRef attribute_name,
                                                   IndexMaskMemory &memory)>;
 
-bool selection_update(const ViewContext *vc,
+bool selection_update(const bContext *C,
+                      const ViewContext *vc,
                       const eSelectOp sel_op,
                       SelectionUpdateFunc select_operation);
 

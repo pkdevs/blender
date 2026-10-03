@@ -213,7 +213,8 @@ bool apply_mask_as_segment_selection(bke::CurvesGeometry &curves,
   return true;
 }
 
-bool selection_update(const ViewContext *vc,
+bool selection_update(const bContext *C,
+                      const ViewContext *vc,
                       const eSelectOp sel_op,
                       SelectionUpdateFunc select_operation)
 {
@@ -304,7 +305,7 @@ bool selection_update(const ViewContext *vc,
     /* Use #ID_RECALC_GEOMETRY instead of #ID_RECALC_SELECT because it is handled as a
      * generic attribute for now. */
     DEG_id_tag_update(object->data, ID_RECALC_GEOMETRY);
-    WM_event_add_notifier(vc->C, NC_GEOM | ND_DATA, object->data);
+    WM_event_add_notifier(C, NC_GEOM | ND_DATA, object->data);
   }
 
   return changed;
@@ -366,7 +367,8 @@ static wmOperatorStatus select_more_exec(bContext *C, wmOperator * /*op*/)
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
   const ViewContext vc = ED_view3d_viewcontext_init(C, CTX_data_depsgraph_pointer(C));
 
-  ed::greasepencil::selection_update(&vc,
+  ed::greasepencil::selection_update(C,
+                                     &vc,
                                      SEL_OP_ADD,
                                      [&](const ed::greasepencil::MutableDrawingInfo &info,
                                          const IndexMask & /*universe*/,
@@ -402,7 +404,8 @@ static wmOperatorStatus select_less_exec(bContext *C, wmOperator * /*op*/)
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
   const ViewContext vc = ED_view3d_viewcontext_init(C, CTX_data_depsgraph_pointer(C));
 
-  ed::greasepencil::selection_update(&vc,
+  ed::greasepencil::selection_update(C,
+                                     &vc,
                                      SEL_OP_SUB,
                                      [&](const ed::greasepencil::MutableDrawingInfo &info,
                                          const IndexMask & /*universe*/,
@@ -492,6 +495,7 @@ static wmOperatorStatus select_random_exec(bContext *C, wmOperator *op)
    * by segment length.
    */
   ed::greasepencil::selection_update(
+      C,
       &vc,
       SEL_OP_SET,
       [&](const ed::greasepencil::MutableDrawingInfo &info,
@@ -824,6 +828,7 @@ static wmOperatorStatus select_ends_exec(bContext *C, wmOperator *op)
   const ViewContext vc = ED_view3d_viewcontext_init(C, CTX_data_depsgraph_pointer(C));
 
   ed::greasepencil::selection_update(
+      C,
       &vc,
       SEL_OP_SET,
       [&](const ed::greasepencil::MutableDrawingInfo &info,

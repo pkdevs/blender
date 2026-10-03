@@ -69,7 +69,6 @@ class Texture;
 
 /** For mesh drawing callbacks, for viewport selection, etc. */
 struct ViewContext {
-  bContext *C;
   Main *bmain;
   /* Dependency graph is uses for depth drawing, viewport camera matrix access, and also some areas
    * are re-using this to access evaluated entities.
@@ -83,6 +82,7 @@ struct ViewContext {
   ARegion *region;
   View3D *v3d;
   wmWindow *win;
+  wmWindowManager *wm;
   RegionView3D *rv3d;
   BMEditMesh *em;
   int mval[2];

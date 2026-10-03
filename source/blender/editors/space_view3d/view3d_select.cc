@@ -113,7 +113,6 @@ ViewContext ED_view3d_viewcontext_init(bContext *C, Depsgraph *depsgraph)
 {
   /* TODO: should return whether there is valid context to continue. */
   ViewContext vc = {};
-  vc.C = C;
   vc.region = CTX_wm_region(C);
   vc.bmain = CTX_data_main(C);
   vc.depsgraph = depsgraph;
@@ -121,6 +120,7 @@ ViewContext ED_view3d_viewcontext_init(bContext *C, Depsgraph *depsgraph)
   vc.view_layer = CTX_data_view_layer(C);
   vc.v3d = CTX_wm_view3d(C);
   vc.win = CTX_wm_window(C);
+  vc.wm = CTX_wm_manager(C);
   vc.rv3d = CTX_wm_region_view3d(C);
   vc.obact = CTX_data_active_object(C);
   vc.obedit = CTX_data_edit_object(C);
@@ -1197,7 +1197,8 @@ static bool do_lasso_select_meta(const ViewContext *vc,
   return data.is_changed;
 }
 
-static bool do_lasso_select_grease_pencil(const ViewContext *vc,
+static bool do_lasso_select_grease_pencil(bContext *C,
+                                          const ViewContext *vc,
                                           const Span<int2> mcoords,
                                           const eSelectOp sel_op)
 {
@@ -1208,6 +1209,7 @@ static bool do_lasso_select_grease_pencil(const ViewContext *vc,
       vc->scene->toolsettings, object);
 
   return ed::greasepencil::selection_update(
+      C,
       vc,
       sel_op,
       [&](const ed::greasepencil::MutableDrawingInfo &info,
@@ -1290,7 +1292,8 @@ static void do_lasso_select_meshobject__doSelectVert(void *user_data,
     data->is_changed = true;
   }
 }
-static bool do_lasso_select_paintvert(const ViewContext *vc,
+static bool do_lasso_select_paintvert(bContext *C,
+                                      const ViewContext *vc,
                                       wmGenericUserData *wm_userdata,
                                       const Span<int2> mcoords,
                                       const eSelectOp sel_op)
@@ -1351,12 +1354,13 @@ static bool do_lasso_select_paintvert(const ViewContext *vc,
       BKE_mesh_mselect_validate(mesh);
     }
     paintvert_flush_flags(ob);
-    paintvert_tag_select_update(vc->C, ob);
+    paintvert_tag_select_update(C, ob);
   }
 
   return changed;
 }
-static bool do_lasso_select_paintface(const ViewContext *vc,
+static bool do_lasso_select_paintface(bContext *C,
+                                      const ViewContext *vc,
                                       wmGenericUserData *wm_userdata,
                                       const Span<int2> mcoords,
                                       const eSelectOp sel_op)
@@ -1372,7 +1376,7 @@ static bool do_lasso_select_paintface(const ViewContext *vc,
   bool changed = false;
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
     /* flush selection at the end */
-    changed |= paintface_deselect_all_visible(vc->C, ob, SEL_DESELECT, false);
+    changed |= paintface_deselect_all_visible(C, ob, SEL_DESELECT, false);
   }
 
   BLI_lasso_boundbox(&rect, mcoords);
@@ -1390,7 +1394,7 @@ static bool do_lasso_select_paintface(const ViewContext *vc,
   }
 
   if (changed) {
-    paintface_flush_flags(vc->C, ob, true, false);
+    paintface_flush_flags(C, ob, true, false);
   }
   return changed;
 }
@@ -1408,13 +1412,13 @@ static bool view3d_lasso_select(bContext *C,
 
   if (vc->obedit == nullptr) { /* Object Mode */
     if (BKE_paint_select_face_test(ob)) {
-      changed_multi |= do_lasso_select_paintface(vc, wm_userdata, mcoords, sel_op);
+      changed_multi |= do_lasso_select_paintface(C, vc, wm_userdata, mcoords, sel_op);
     }
     else if (BKE_paint_select_vert_test(ob)) {
-      changed_multi |= do_lasso_select_paintvert(vc, wm_userdata, mcoords, sel_op);
+      changed_multi |= do_lasso_select_paintvert(C, vc, wm_userdata, mcoords, sel_op);
     }
     else if (BKE_paint_select_grease_pencil_test(ob)) {
-      changed_multi |= do_lasso_select_grease_pencil(vc, mcoords, sel_op);
+      changed_multi |= do_lasso_select_grease_pencil(C, vc, mcoords, sel_op);
     }
     else if (ob && (ob->mode & OB_MODE_SCULPT_CURVES) && (ob->type == OB_CURVES)) {
       changed_multi = do_curves_sculpt_lasso_select(*vc, mcoords, sel_op);
@@ -1503,7 +1507,7 @@ static bool view3d_lasso_select(bContext *C,
           break;
         }
         case OB_GREASE_PENCIL: {
-          changed = do_lasso_select_grease_pencil(vc, mcoords, sel_op);
+          changed = do_lasso_select_grease_pencil(C, vc, mcoords, sel_op);
           break;
         }
         default:
@@ -3515,7 +3519,8 @@ static bool ed_grease_pencil_select_pick(bContext *C,
 
   const IndexMask selection_mask = IndexRange::from_single(closest.elem.index);
 
-  ed::greasepencil::selection_update(&vc,
+  ed::greasepencil::selection_update(C,
+                                     &vc,
                                      params.sel_op,
                                      [&](const ed::greasepencil::MutableDrawingInfo &info,
                                          const IndexMask & /*universe*/,
@@ -3786,7 +3791,8 @@ static void do_paintvert_box_select__doSelectVert(void *user_data,
     data->is_changed = true;
   }
 }
-static bool do_paintvert_box_select(const ViewContext *vc,
+static bool do_paintvert_box_select(bContext *C,
+                                    const ViewContext *vc,
                                     wmGenericUserData *wm_userdata,
                                     const rcti *rect,
                                     const eSelectOp sel_op)
@@ -3841,12 +3847,13 @@ static bool do_paintvert_box_select(const ViewContext *vc,
       BKE_mesh_mselect_validate(mesh);
     }
     paintvert_flush_flags(vc->obact);
-    paintvert_tag_select_update(vc->C, vc->obact);
+    paintvert_tag_select_update(C, vc->obact);
   }
   return changed;
 }
 
-static bool do_paintface_box_select(const ViewContext *vc,
+static bool do_paintface_box_select(bContext *C,
+                                    const ViewContext *vc,
                                     wmGenericUserData *wm_userdata,
                                     const rcti *rect,
                                     eSelectOp sel_op)
@@ -3861,7 +3868,7 @@ static bool do_paintface_box_select(const ViewContext *vc,
 
   bool changed = false;
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
-    changed |= paintface_deselect_all_visible(vc->C, vc->obact, SEL_DESELECT, false);
+    changed |= paintface_deselect_all_visible(C, vc->obact, SEL_DESELECT, false);
   }
 
   if (BLI_rcti_is_empty(rect)) {
@@ -3881,7 +3888,7 @@ static bool do_paintface_box_select(const ViewContext *vc,
   }
 
   if (changed) {
-    paintface_flush_flags(vc->C, vc->obact, true, false);
+    paintface_flush_flags(C, vc->obact, true, false);
   }
   return changed;
 }
@@ -4495,7 +4502,8 @@ static bool do_pose_box_select(bContext *C,
   return changed_multi;
 }
 
-static bool do_grease_pencil_box_select(const ViewContext *vc,
+static bool do_grease_pencil_box_select(bContext *C,
+                                        const ViewContext *vc,
                                         const rcti *rect,
                                         const eSelectOp sel_op)
 {
@@ -4506,6 +4514,7 @@ static bool do_grease_pencil_box_select(const ViewContext *vc,
       vc->scene->toolsettings, object);
 
   return ed::greasepencil::selection_update(
+      C,
       vc,
       sel_op,
       [&](const ed::greasepencil::MutableDrawingInfo &info,
@@ -4652,7 +4661,7 @@ static wmOperatorStatus view3d_box_select_exec(bContext *C, wmOperator *op)
           break;
         }
         case OB_GREASE_PENCIL: {
-          changed = do_grease_pencil_box_select(&vc, &rect, sel_op);
+          changed = do_grease_pencil_box_select(C, &vc, &rect, sel_op);
           break;
         }
         default:
@@ -4665,13 +4674,13 @@ static wmOperatorStatus view3d_box_select_exec(bContext *C, wmOperator *op)
   }
   else { /* No edit-mode, unified for bones and objects. */
     if (vc.obact && BKE_paint_select_face_test(vc.obact)) {
-      changed_multi = do_paintface_box_select(&vc, wm_userdata, &rect, sel_op);
+      changed_multi = do_paintface_box_select(C, &vc, wm_userdata, &rect, sel_op);
     }
     else if (vc.obact && BKE_paint_select_vert_test(vc.obact)) {
-      changed_multi = do_paintvert_box_select(&vc, wm_userdata, &rect, sel_op);
+      changed_multi = do_paintvert_box_select(C, &vc, wm_userdata, &rect, sel_op);
     }
     else if (vc.obact && BKE_paint_select_grease_pencil_test(vc.obact)) {
-      changed_multi = do_grease_pencil_box_select(&vc, &rect, sel_op);
+      changed_multi = do_grease_pencil_box_select(C, &vc, &rect, sel_op);
     }
     else if (vc.obact && (vc.obact->mode & OB_MODE_SCULPT_CURVES) && (vc.obact->type == OB_CURVES))
     {
@@ -4928,7 +4937,8 @@ static bool mesh_circle_select(const ViewContext *vc,
   return changed;
 }
 
-static bool paint_facesel_circle_select(const ViewContext *vc,
+static bool paint_facesel_circle_select(bContext *C,
+                                        const ViewContext *vc,
                                         wmGenericUserData *wm_userdata,
                                         const eSelectOp sel_op,
                                         const int mval[2],
@@ -4941,7 +4951,7 @@ static bool paint_facesel_circle_select(const ViewContext *vc,
   bool changed = false;
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
     /* flush selection at the end */
-    changed |= paintface_deselect_all_visible(vc->C, ob, SEL_DESELECT, false);
+    changed |= paintface_deselect_all_visible(C, ob, SEL_DESELECT, false);
   }
 
   if (wm_userdata->data == nullptr) {
@@ -4960,7 +4970,7 @@ static bool paint_facesel_circle_select(const ViewContext *vc,
   }
 
   if (changed) {
-    paintface_flush_flags(vc->C, ob, true, false);
+    paintface_flush_flags(C, ob, true, false);
   }
   return changed;
 }
@@ -4982,7 +4992,8 @@ static void paint_vertsel_circle_select_doSelectVert(void *user_data,
     data->is_changed = true;
   }
 }
-static bool paint_vertsel_circle_select(const ViewContext *vc,
+static bool paint_vertsel_circle_select(bContext *C,
+                                        const ViewContext *vc,
                                         wmGenericUserData *wm_userdata,
                                         const eSelectOp sel_op,
                                         const int mval[2],
@@ -5040,7 +5051,7 @@ static bool paint_vertsel_circle_select(const ViewContext *vc,
       BKE_mesh_mselect_validate(mesh);
     }
     paintvert_flush_flags(ob);
-    paintvert_tag_select_update(vc->C, ob);
+    paintvert_tag_select_update(C, ob);
   }
   return changed;
 }
@@ -5346,7 +5357,8 @@ static bool mball_circle_select(const ViewContext *vc,
   return data.is_changed;
 }
 
-static bool grease_pencil_circle_select(const ViewContext *vc,
+static bool grease_pencil_circle_select(const bContext *C,
+                                        const ViewContext *vc,
                                         const eSelectOp sel_op,
                                         const int mval[2],
                                         const float rad)
@@ -5358,6 +5370,7 @@ static bool grease_pencil_circle_select(const ViewContext *vc,
       vc->scene->toolsettings, object);
 
   return ed::greasepencil::selection_update(
+      C,
       vc,
       sel_op,
       [&](const ed::greasepencil::MutableDrawingInfo &info,
@@ -5484,7 +5497,7 @@ static bool obedit_circle_select(bContext *C,
       break;
     }
     case OB_GREASE_PENCIL:
-      changed = grease_pencil_circle_select(vc, sel_op, mval, rad);
+      changed = grease_pencil_circle_select(C, vc, sel_op, mval, rad);
       break;
 
     default:
@@ -5629,13 +5642,13 @@ static wmOperatorStatus view3d_circle_select_exec(bContext *C, wmOperator *op)
         obedit_circle_select(C, &vc, wm_userdata, sel_op, mval, float(radius));
       }
       else if (BKE_paint_select_face_test(obact)) {
-        paint_facesel_circle_select(&vc, wm_userdata, sel_op, mval, float(radius));
+        paint_facesel_circle_select(C, &vc, wm_userdata, sel_op, mval, float(radius));
       }
       else if (BKE_paint_select_vert_test(obact)) {
-        paint_vertsel_circle_select(&vc, wm_userdata, sel_op, mval, float(radius));
+        paint_vertsel_circle_select(C, &vc, wm_userdata, sel_op, mval, float(radius));
       }
       else if (BKE_paint_select_grease_pencil_test(obact)) {
-        grease_pencil_circle_select(&vc, sel_op, mval, float(radius));
+        grease_pencil_circle_select(C, &vc, sel_op, mval, float(radius));
       }
       else if ((obact->mode & OB_MODE_SCULPT_CURVES) && (obact->type == OB_CURVES)) {
         const bool changed = do_curves_sculpt_circle_select(vc, sel_op, mval, float(radius));
