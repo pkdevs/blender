@@ -189,11 +189,10 @@ static void applyResize(TransInfo *t)
     }
 
     transform_snap_mixed_apply(t, t->values_final);
-  }
-
-  if (t->prevent_negative_scale) {
-    float3 &scale = *reinterpret_cast<float3 *>(t->values_final);
-    scale = math::max(scale, float3(0.0f));
+    if (t->prevent_negative_scale && !hasNumInput(&t->num)) {
+      float3 &scale = *reinterpret_cast<float3 *>(t->values_final);
+      scale = math::max(scale, float3(0.0f));
+    }
   }
 
   size_to_mat3(mat, t->values_final);
