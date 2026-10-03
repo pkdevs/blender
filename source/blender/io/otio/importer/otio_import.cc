@@ -7,6 +7,7 @@
  */
 
 #include <cmath>
+#include <sstream>
 
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
@@ -16,6 +17,7 @@
 #include "BLI_index_range.hh"
 #include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
+#include "BLI_serialize.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
@@ -496,6 +498,54 @@ static void import_markers(StripImportContext &ctx, Stack &stack, const int orig
   }
 }
 
+/**
+ * TODO: Temporary workaround, will report upstream, and remove if fixed..
+ *
+ * When upgrading a `Marker.2` to `Marker.3`, OpenTimelineIO also runs the `Marker.1` to `Marker.2`
+ * upgrade function, which overwrites `marked_range` with the nonexistent `range` key and makes
+ * reading the whole file fail. Adding a copy of `marked_range` as `range` makes that upgrade
+ * function restore the original value.
+ */
+static void workaround_marker_v2_upgrade(serialize::Value &value)
+{
+  if (value.type() == serialize::eValueType::Dictionary) {
+    auto &dictionary = static_cast<serialize::DictionaryValue &>(value);
+    const std::shared_ptr<serialize::Value> *marked_range = dictionary.lookup("marked_range");
+    if (marked_range && dictionary.lookup_str("OTIO_SCHEMA") == "Marker.2") {
+      dictionary.append("range", *marked_range);
+    }
+    for (const serialize::DictionaryValue::Item &item : dictionary.elements()) {
+      workaround_marker_v2_upgrade(*item.second);
+    }
+  }
+  else if (const serialize::ArrayValue *array = value.as_array_value()) {
+    for (const std::shared_ptr<serialize::Value> &item : array->elements()) {
+      workaround_marker_v2_upgrade(*item);
+    }
+  }
+}
+
+/**
+ * TODO: Temporary workaround... replace with #SerializableObject::from_json_file once
+ * #workaround_marker_v2_upgrade is no longer needed.
+ *
+ * Reads the file as JSON first so it can be patched before OpenTimelineIO parses it. Falls back to
+ * reading it directly when Blender's JSON parser can't handle the file.
+ */
+static SerializableObject *read_otio_file_with_workarounds(
+    const char *filepath, opentimelineio::OPENTIMELINEIO_VERSION_NS::ErrorStatus *error_status)
+{
+  const std::shared_ptr<serialize::Value> value = serialize::read_json_file(filepath);
+  if (!value) {
+    return SerializableObject::from_json_file(filepath, error_status);
+  }
+  workaround_marker_v2_upgrade(*value);
+  serialize::JsonFormatter formatter;
+  std::stringstream json;
+  formatter.serialize(json, *value);
+  return SerializableObject::from_json_string(json.str(), error_status);
+}
+
 static Scene *import_scene(bContext *C, const std::string &name)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
@@ -510,7 +560,7 @@ Scene *importer_main(bContext *C, const OTIOImportParams &params)
 {
   opentimelineio::OPENTIMELINEIO_VERSION_NS::ErrorStatus error_status;
   SerializableObject::Retainer<SerializableObject> object(
-      SerializableObject::from_json_file(params.filepath, &error_status));
+      read_otio_file_with_workarounds(params.filepath, &error_status));
   auto *timeline = dynamic_cast<Timeline *>(object.value);
   if (!timeline) {
     CLOG_ERROR(&LOG,

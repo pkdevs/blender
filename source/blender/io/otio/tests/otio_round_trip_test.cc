@@ -52,6 +52,7 @@
 #include "opentimelineio/generatorReference.h"
 #include "opentimelineio/imageSequenceReference.h"
 #include "opentimelineio/linearTimeWarp.h"
+#include "opentimelineio/marker.h"
 #include "opentimelineio/missingReference.h"
 #include "opentimelineio/serialization.h"
 #include "opentimelineio/stack.h"
@@ -615,6 +616,28 @@ static AnyDictionary resolve_effect(const std::string &name,
   effect["Enabled"] = true;
   effect["Parameters"] = parameters;
   return effect;
+}
+
+TEST_F(OTIOTest, MarkerSchemaVersion2)
+{
+  auto timeline = SerializableObject::Retainer<Timeline>(
+      new Timeline("Markers", RationalTime(0, 24)));
+  timeline->tracks()->markers().push_back(
+      new Marker("Old", TimeRange(RationalTime(5, 24), RationalTime(1, 24)), std::nullopt));
+  std::string json = timeline->to_json_string();
+  const std::string schema = "\"Marker.3\"";
+  const size_t schema_start = json.find(schema);
+  ASSERT_NE(schema_start, std::string::npos);
+  json.replace(schema_start, schema.size(), "\"Marker.2\"");
+  fstream stream(otio_path, std::ios::out);
+  stream << json;
+  stream.close();
+
+  Scene *imported = import_otio();
+  ASSERT_NE(imported, nullptr);
+  ASSERT_EQ(BLI_listbase_count(&imported->markers), 1);
+  EXPECT_EQ(imported->markers.first()->frame, 5);
+  EXPECT_STREQ(imported->markers.first()->name, "Old");
 }
 
 TEST_F(OTIOTest, ResolveMetadata)
