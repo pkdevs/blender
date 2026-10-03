@@ -3376,8 +3376,11 @@ class _defs_sequencer_generic:
                 props = tool.operator_properties("sequencer.split")
                 if not extra:
                     panel.row().prop(props, "type", expand=True)
+                panel.prop(props, "all_channels")
                 panel.prop(props, "only_selected")
-                panel.prop(props, "ignore_connections")
+                row = panel.row()
+                row.active = not props.all_channels
+                row.prop(props, "ignore_connections")
 
             # Box Blade properties.
             header, panel = layout.panel("SEQUENCER_PT_tool_box_blade")

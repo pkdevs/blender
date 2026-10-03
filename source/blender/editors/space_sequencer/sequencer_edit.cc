@@ -1914,12 +1914,21 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
                                   (!split_at_cursor ||
                                    RNA_boolean_get(op->ptr, "ignore_connections"));
 
-  seq::prefetch_stop(scene);
-
   const std::optional<int> channel = (split_at_cursor && !all_channels) ?
                                          std::optional<int>(split_channel) :
                                          std::nullopt;
-  for (Strip *strip : seq::edit_split_strips_get(scene, split_frame, channel, only_selected)) {
+  const Vector<Strip *> strips = seq::edit_split_strips_get(
+      scene, split_frame, channel, only_selected);
+  if (strips.is_empty() && only_selected &&
+      !seq::edit_split_strips_get(scene, split_frame, channel, false).is_empty())
+  {
+    BKE_report(op->reports, RPT_WARNING, "No selected strips to split");
+    return OPERATOR_CANCELLED;
+  }
+
+  seq::prefetch_stop(scene);
+
+  for (Strip *strip : strips) {
     const char *error_msg = nullptr;
     if (seq::edit_strip_split(bmain,
                               scene,
@@ -2094,7 +2103,12 @@ void SEQUENCER_OT_split(wmOperatorType *ot)
                          "the cursor");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-  RNA_def_boolean(ot->srna, "only_selected", false, "Only Selected", "Only split selected strips");
+  RNA_def_boolean(ot->srna,
+                  "only_selected",
+                  false,
+                  "Only Selected",
+                  "Only split selected strips. When splitting at the cursor, this has no effect "
+                  "if All Channels is off");
   prop = RNA_def_boolean(ot->srna,
                          "ignore_selection",
                          false,
@@ -2155,6 +2169,23 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
   Vector<Strip *> strips = only_selected ? selected_strips_from_context(C).extract_vector() :
                                            all_strips_from_context(C).extract_vector();
   strips.remove_if([&](Strip *strip) { return seq::transform_is_locked(channels, strip); });
+
+  auto box_cuts_any = [&](const Span<Strip *> candidates) {
+    for (const Strip *strip : candidates) {
+      const rctf strip_rect = strip_bounds_get(scene, strip);
+      if (!seq::transform_is_locked(channels, strip) &&
+          BLI_rctf_isect(&strip_rect, &box_rect, nullptr))
+      {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (only_selected && !box_cuts_any(strips) && box_cuts_any(all_strips_from_context(C).as_span()))
+  {
+    BKE_report(op->reports, RPT_WARNING, "No selected strips to split");
+    return OPERATOR_CANCELLED;
+  }
 
   seq::prefetch_stop(scene);
 

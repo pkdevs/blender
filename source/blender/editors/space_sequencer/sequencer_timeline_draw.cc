@@ -2230,7 +2230,8 @@ static std::optional<BladeSplit> blade_split_get(
   const int split_frame = round_fl_to_int(mouse_co.x);
 
   const wmEvent *event = win->runtime->eventstate;
-  const bool all_channels = (event->modifier & KM_SHIFT) != 0;
+  const bool all_channels = (event->modifier & KM_SHIFT) != 0 ||
+                            split_tool_prop_from_toolsettings(tref, "all_channels", false);
   const bool ignore_connections = !all_channels && ((event->modifier & KM_ALT) != 0 ||
                                                     split_tool_prop_from_toolsettings(
                                                         tref, "ignore_connections", false));
