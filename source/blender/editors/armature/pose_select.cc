@@ -19,6 +19,7 @@
 #include "BLI_assert.hh"
 #include "BLI_listbase.hh"
 #include "BLI_map.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_string.hh"
 
@@ -1054,9 +1055,7 @@ static wmOperatorStatus pose_select_scaled_exec(bContext *C, wmOperator *op)
       }
       const float epsilon = 1.0e-5f;
       const float3x3 pbone_mat = float3x3(float4x4(pchan.pose_mat));
-      const float3 axis_scale = float3(math::length(pbone_mat.x_axis()),
-                                       math::length(pbone_mat.y_axis()),
-                                       math::length(pbone_mat.z_axis()));
+      const float3 axis_scale = math::to_scale(pbone_mat);
       bool select = false;
 
       switch (scale_mode) {
