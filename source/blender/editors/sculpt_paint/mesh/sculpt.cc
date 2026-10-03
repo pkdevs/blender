@@ -6843,7 +6843,6 @@ void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
     calc_front_face(cache.view_normal_symm, vert_normals, verts, factors);
   }
 
-  /* Calculate local positions. */
   calc_local_positions(vert_positions,
                        verts,
                        mat,
@@ -6852,14 +6851,12 @@ void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
                        eBrushFalloffShape(brush.falloff_shape),
                        local_positions);
 
-  /* Find the cube distance. */
   calc_brush_cube_distances<float3>(brush, local_positions, distances);
 
   /* The radius is already applied to the local positions, so use a radius of 1.0 here. */
   filter_distances_with_radius(1.0f, distances, factors);
   apply_hardness_to_distances(1.0f, cache.hardness, distances);
 
-  /* Apply falloff curve. */
   BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
                                brush.curve_distance_falloff,
                                distances,
@@ -6931,6 +6928,8 @@ void calc_cube_tip_factors_common_grids(const Depsgraph &depsgraph,
   }
 
   /* Calculate local positions. */
+  Vector<float3> local_positions_storage(positions.size());
+  MutableSpan<float3> local_positions = local_positions_storage;
   calc_local_positions(positions,
                        mat,
                        cache.location_symm,
