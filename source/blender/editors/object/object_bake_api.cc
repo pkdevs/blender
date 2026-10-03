@@ -123,7 +123,7 @@ struct BakeAPIRender {
   float *progress;
   bool *do_update;
 
-  /* To check for job cancelation. */
+  /* To check for job cancellation. */
   bool *stop;
 
   /* Operator state. */
@@ -1854,7 +1854,7 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 {
   bScreen *screen = CTX_wm_screen(C);
 
-  bkr->ob = CTX_data_active_object(C);
+  bkr->ob = context_active_object(C);
   bkr->main = CTX_data_main(C);
   bkr->view_layer = CTX_data_view_layer(C);
   bkr->scene = CTX_data_scene(C);
