@@ -558,6 +558,7 @@ float4 dot_segment2(float2 xy,
     float r1 = (use_curr) ? ss1.w : ss2.w;
     float r2 = (use_curr) ? ss2.w : ss3.w;
 
+    /* Length of segments. */
     float l0;
     float l1;
     float2 local0_x = safe_normalize_and_get_length(p1 - p0, l0);
@@ -568,12 +569,15 @@ float4 dot_segment2(float2 xy,
     float a0 = r1 - r0;
     float a1 = r2 - r1;
 
+    /* Cosine of the angle. */
     float c0 = -a0 / l0;
     float c1 = -a1 / l1;
 
+    /* Sine of the angle. */
     float s0 = sqrt(1.0f - c0 * c0);
     float s1 = sqrt(1.0f - c1 * c1);
 
+    /* The slope. */
     float S0 = -c0 / s0;
     float S1 = -c1 / s1;
 
@@ -612,9 +616,11 @@ float4 dot_segment2(float2 xy,
       }
     }
     else {
+      /* The height of the slope line at zero. */
       float H0 = r0 / s0;
       float H1 = r1 / s1;
 
+      /* Flip the slope and height for the negative side. */
       S0 *= xy.y;
       S1 *= xy.y;
       H0 *= xy.y;
