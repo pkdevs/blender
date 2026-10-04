@@ -464,6 +464,8 @@ float4 dot_segment2(float2 xy,
                     bool miter_break,
                     float4 viewport_res)
 {
+  float z_depth = mix(ss1.z, ss2.z, 0.5f);
+
   float l = 0.0f;
   float2 local_x = safe_normalize_and_get_length(ss2.xy - ss1.xy, l);
   float2 local_y = orthogonal(local_x);
@@ -495,6 +497,10 @@ float4 dot_segment2(float2 xy,
     else {
       local = xy * r2 + float2(l, 0.0f);
     }
+
+    float2 ssp = ss1.xy + local.x * local_x + local.y * local_y;
+
+    return screen_space_to_ndc(float4(ssp, z_depth, 0.0f), viewport_res.xy);
   }
   else {
     /* Calculate the area of both shapes divided by the width */
@@ -671,7 +677,6 @@ float4 dot_segment2(float2 xy,
     }
   }
 
-  float z_depth = mix(ss1.z, ss2.z, 0.5f);
   return screen_space_to_ndc(float4(ssp, z_depth, 0.0f), viewport_res.xy);
 }
 
