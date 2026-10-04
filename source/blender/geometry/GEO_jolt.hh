@@ -49,7 +49,6 @@ inline math::Quaternion convert_quat(const JPH::Quat &q)
 
 struct CollisionShapeParams {
   const bke::GeometrySet &geometry;
-  const float3 &scale;
 };
 
 class GeometryShapeHash {
@@ -112,9 +111,49 @@ struct CollisionShapeCache {
     bool operator==(const ConvexHullID &) const = default;
   };
 
+  struct TranslatedID {
+    JPH::RefConst<JPH::Shape> inner_shape;
+    float3 translation;
+
+    uint64_t hash() const
+    {
+      return get_default_hash(&*this->inner_shape, this->translation);
+    }
+
+    bool operator==(const TranslatedID &) const = default;
+  };
+
+  struct RotatedTranslatedID {
+    JPH::RefConst<JPH::Shape> inner_shape;
+    float3 translation;
+    math::Quaternion rotation;
+
+    uint64_t hash() const
+    {
+      return get_default_hash(&*this->inner_shape, this->rotation, this->translation);
+    }
+
+    bool operator==(const RotatedTranslatedID &) const = default;
+  };
+
+  struct ScaledID {
+    JPH::RefConst<JPH::Shape> inner_shape;
+    float3 scale;
+
+    uint64_t hash() const
+    {
+      return get_default_hash(&*this->inner_shape, this->scale);
+    }
+
+    bool operator==(const ScaledID &) const = default;
+  };
+
   Map<BoxID, CachedShape> boxes;
   Map<SphereID, CachedShape> spheres;
   Map<ConvexHullID, CachedShape> convex_hulls;
+  Map<TranslatedID, CachedShape> translated;
+  Map<RotatedTranslatedID, CachedShape> rotated_translated;
+  Map<ScaledID, CachedShape> scaled;
 
   void reset_used();
   void remove_unused();
@@ -124,6 +163,14 @@ struct CollisionShapeCache {
   JPH::ShapeSettings::ShapeResult get_or_create_sphere(const CollisionShapeParams &params);
   JPH::ShapeSettings::ShapeResult get_or_create_sphere(const float radius);
   JPH::ShapeSettings::ShapeResult get_or_create_convex_hull(const CollisionShapeParams &params);
+  JPH::ShapeSettings::ShapeResult get_or_create_translated_shape(
+      const JPH::RefConst<JPH::Shape> &inner_shape, const float3 &translation);
+  JPH::ShapeSettings::ShapeResult get_or_create_rotated_translated_shape(
+      const JPH::RefConst<JPH::Shape> &inner_shape,
+      const float3 &translation,
+      const math::Quaternion &rotation);
+  JPH::ShapeSettings::ShapeResult get_or_create_scaled_shape(
+      const JPH::RefConst<JPH::Shape> &inner_shape, const float3 &scale);
 };
 
 #endif

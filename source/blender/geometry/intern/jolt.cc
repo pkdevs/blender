@@ -12,6 +12,9 @@
 
 #  include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #  include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#  include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
+#  include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#  include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 #  include <Jolt/Physics/Collision/Shape/SphereShape.h>
 
 #  include "BLI_bounds.hh"
@@ -115,8 +118,7 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_box(
   if (!bounds) {
     return {};
   }
-  const float3 half_extent = math::max(math::abs(bounds->min), math::abs(bounds->max)) *
-                             params.scale;
+  const float3 half_extent = math::max(math::abs(bounds->min), math::abs(bounds->max));
   return this->get_or_create_box(half_extent);
 }
 
@@ -143,8 +145,7 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_sphere(
   if (!bounds) {
     return {};
   }
-  const float3 half_extent = math::max(math::abs(bounds->min), math::abs(bounds->max)) *
-                             params.scale;
+  const float3 half_extent = math::max(math::abs(bounds->min), math::abs(bounds->max));
   const float radius = std::max({half_extent.x, half_extent.y, half_extent.z});
   return this->get_or_create_sphere(radius);
 }
@@ -166,7 +167,7 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_convex_hull(
     const CollisionShapeParams &params)
 {
   const auto shape_hash = GeometryShapeHash::from_geometry(params.geometry);
-  const ConvexHullID convex_hull_id{shape_hash, params.scale};
+  const ConvexHullID convex_hull_id{shape_hash};
   CachedShape &cached_shape = this->convex_hulls.lookup_or_add_cb(
       convex_hull_id, [&]() -> CachedShape {
         Vector<JPH::Vec3, 0, GuardedAlignedAllocator<>> points;
@@ -174,7 +175,7 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_convex_hull(
           points.reserve(points.size() + mesh->verts_num);
           const Span<float3> positions = mesh->vert_positions();
           for (const int i : positions.index_range()) {
-            points.append(convert_vec3(positions[i] * params.scale));
+            points.append(convert_vec3(positions[i]));
           }
         }
         if (points.is_empty()) {
@@ -183,6 +184,53 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_convex_hull(
         JPH::ConvexHullShapeSettings hull_settings(points.data(), points.size(), 0.0f);
         return hull_settings.Create();
       });
+  if (cached_shape.shape.IsValid()) {
+    cached_shape.still_used = true;
+  }
+  return cached_shape.shape;
+}
+
+JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_translated_shape(
+    const JPH::RefConst<JPH::Shape> &inner_shape, const float3 &translation)
+{
+  const TranslatedID translated_id{inner_shape, translation};
+  CachedShape &cached_shape = this->translated.lookup_or_add_cb(
+      translated_id, [&]() -> CachedShape {
+        JPH::OffsetCenterOfMassShapeSettings settings(convert_vec3(translation), inner_shape);
+        return settings.Create();
+      });
+  if (cached_shape.shape.IsValid()) {
+    cached_shape.still_used = true;
+  }
+  return cached_shape.shape;
+}
+
+JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_rotated_translated_shape(
+    const JPH::RefConst<JPH::Shape> &inner_shape,
+    const float3 &translation,
+    const math::Quaternion &rotation)
+{
+  const RotatedTranslatedID rotated_translated_id{inner_shape, translation, rotation};
+  CachedShape &cached_shape = this->rotated_translated.lookup_or_add_cb(
+      rotated_translated_id, [&]() -> CachedShape {
+        JPH::RotatedTranslatedShapeSettings settings(
+            convert_vec3(translation), convert_quat(rotation), inner_shape);
+        return settings.Create();
+      });
+  if (cached_shape.shape.IsValid()) {
+    cached_shape.still_used = true;
+  }
+  return cached_shape.shape;
+}
+
+JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_scaled_shape(
+    const JPH::RefConst<JPH::Shape> &inner_shape, const float3 &scale)
+{
+  const ScaledID scaled_id{inner_shape, scale};
+  CachedShape &cached_shape = this->scaled.lookup_or_add_cb(scaled_id, [&]() -> CachedShape {
+    JPH::ScaledShapeSettings settings(inner_shape, convert_vec3(scale));
+    return settings.Create();
+  });
   if (cached_shape.shape.IsValid()) {
     cached_shape.still_used = true;
   }

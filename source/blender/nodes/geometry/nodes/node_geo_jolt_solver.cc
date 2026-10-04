@@ -270,6 +270,7 @@ struct GeometryData {
   VArraySpan<float3> external_torque_attr;
 
   VArraySpan<int> collision_shape_types;
+  VArraySpan<float4x4> collision_shape_transforms;
   VArraySpan<int> motion_types;
   VArraySpan<float> frictions;
   VArraySpan<float> bouncinesses;
@@ -320,7 +321,7 @@ static std::optional<JPH::EMotionType> parse_motion_type(const int type)
   }
 }
 
-static JPH::ShapeSettings::ShapeResult make_collision_shape(
+static JPH::ShapeSettings::ShapeResult make_primitive_collision_shape(
     const CollisionShapeType type,
     const geometry::jolt::CollisionShapeParams &params,
     geometry::jolt::CollisionShapeCache &cache)
@@ -505,6 +506,11 @@ class JoltSolverStep {
 
       geo_data.collision_shape_types = this->lookup_attribute_default<int>(
           data_key_i, attribute_names::collision_shape_type, geo_data.domain, 0);
+      geo_data.collision_shape_transforms = this->lookup_attribute_default<float4x4>(
+          data_key_i,
+          attribute_names::collision_shape_transform,
+          geo_data.domain,
+          float4x4::identity());
       geo_data.motion_types = this->lookup_attribute_default<int>(
           data_key_i, attribute_names::motion_type, geo_data.domain, 0.0f);
       geo_data.frictions = this->lookup_attribute_default<float>(
@@ -577,6 +583,11 @@ class JoltSolverStep {
       reference_geometry_sets[i] = std::move(reference_geometry);
     }
 
+    /* Combined key of reference geometry index and the base shape type. */
+    using BaseShapeKey = std::pair<int, CollisionShapeType>;
+    /* Map of all base shapes constructed so far. */
+    Map<BaseShapeKey, JPH::Ref<JPH::Shape>> base_shapes;
+
     JoltRigidBodies rigid_bodies;
     for (const int instance_i : geo_data.instance_ids.index_range()) {
       const int reference_i = geo_data.reference_handles[instance_i];
@@ -589,6 +600,7 @@ class JoltSolverStep {
       if (!collision_shape_type) {
         continue;
       }
+      const float4x4 &collision_shape_transform = geo_data.collision_shape_transforms[instance_i];
       const std::optional<JPH::EMotionType> motion_type = parse_motion_type(
           geo_data.motion_types[instance_i]);
       if (!motion_type) {
@@ -618,12 +630,56 @@ class JoltSolverStep {
         density = 1.0f;
       }
 
-      const geometry::jolt::CollisionShapeParams collision_shape_params{reference_geometry,
-                                                                        instance_scale};
-      JPH::ShapeSettings::ShapeResult collision_shape = make_collision_shape(
-          *collision_shape_type, collision_shape_params, state_.collision_shape_cache);
-      if (!collision_shape.IsValid()) {
+      const JPH::Ref<JPH::Shape> &base_shape = base_shapes.lookup_or_add_cb(
+          {reference_i, *collision_shape_type}, [&]() -> JPH::Ref<JPH::Shape> {
+            const geometry::jolt::CollisionShapeParams collision_shape_params{reference_geometry};
+            JPH::ShapeSettings::ShapeResult result = make_primitive_collision_shape(
+                *collision_shape_type, collision_shape_params, state_.collision_shape_cache);
+            if (!result.IsValid()) {
+              return {};
+            }
+            return result.Get();
+          });
+      if (!base_shape) {
         continue;
+      }
+
+      constexpr float shape_transform_epsilon = 1e-5f;
+      JPH::Ref<JPH::Shape> collision_shape = base_shape;
+      if (!math::is_unit_scale(instance_scale) || !math::is_identity(collision_shape_transform)) {
+        const float4x4 shape_transform = math::from_scale<float4x4>(instance_scale) *
+                                         collision_shape_transform;
+        float3 shape_translation;
+        math::Quaternion shape_rotation;
+        float3 shape_scale;
+        math::to_loc_rot_scale_safe<true>(
+            shape_transform, shape_translation, shape_rotation, shape_scale);
+
+        if (!math::is_unit_scale(shape_scale)) {
+          JPH::ShapeSettings::ShapeResult result =
+              state_.collision_shape_cache.get_or_create_scaled_shape(collision_shape,
+                                                                      shape_scale);
+          if (result.IsValid()) {
+            collision_shape = result.Get();
+          }
+        }
+        if (!math::is_equal(shape_rotation, math::Quaternion::identity(), shape_transform_epsilon))
+        {
+          JPH::ShapeSettings::ShapeResult result =
+              state_.collision_shape_cache.get_or_create_rotated_translated_shape(
+                  collision_shape, shape_translation, shape_rotation);
+          if (result.IsValid()) {
+            collision_shape = result.Get();
+          }
+        }
+        else if (!math::is_zero(shape_translation)) {
+          JPH::ShapeSettings::ShapeResult result =
+              state_.collision_shape_cache.get_or_create_translated_shape(collision_shape,
+                                                                          shape_translation);
+          if (result.IsValid()) {
+            collision_shape = result.Get();
+          }
+        }
       }
 
       const float friction = geo_data.frictions[instance_i];
@@ -639,7 +695,7 @@ class JoltSolverStep {
       }
       if (!rigid_body) {
         JPH::BodyCreationSettings jolt_body_settings{
-            collision_shape.Get(),
+            collision_shape,
             geometry::jolt::convert_dvec3(instance_position),
             geometry::jolt::convert_quat(instance_rotation),
             *motion_type,
@@ -656,7 +712,7 @@ class JoltSolverStep {
       }
 
       body_interface.SetShape(
-          rigid_body->body->GetID(), collision_shape.Get(), true, JPH::EActivation::Activate);
+          rigid_body->body->GetID(), collision_shape, true, JPH::EActivation::Activate);
       rigid_body->body->SetFriction(friction);
       rigid_body->body->SetRestitution(bounciness);
 

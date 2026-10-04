@@ -34,6 +34,7 @@ constexpr StringRefNull static_friction = "static_friction";
 constexpr StringRefNull dynamic_friction = "dynamic_friction";
 constexpr StringRefNull radius = "radius";
 constexpr StringRefNull collision_shape_type = "collision_shape_type";
+constexpr StringRefNull collision_shape_transform = "collision_shape_transform";
 constexpr StringRefNull motion_type = "motion_type";
 constexpr StringRefNull bounciness = "bounciness";
 constexpr StringRefNull density = "density";
