@@ -93,6 +93,7 @@ struct PrefetchJob {
   bool stop = false;
   /* Set from outside. */
   bool is_scrubbing = false;
+  bool is_playing = false;
 
  public:
   void init_depsgraph();
@@ -130,6 +131,17 @@ static void seq_prefetch_job_scrubbing_set(Scene *scene, bool is_scrubbing)
   }
 
   pfjob->is_scrubbing = is_scrubbing;
+}
+
+static void seq_prefetch_job_playing_set(Scene *scene, bool is_playing)
+{
+  PrefetchJob *pfjob = seq_prefetch_job_get(scene);
+
+  if (!pfjob) {
+    return;
+  }
+
+  pfjob->is_playing = is_playing;
 }
 
 static bool seq_prefetch_job_is_waiting(Scene *scene)
@@ -559,7 +571,7 @@ static bool seq_prefetch_must_skip_frame(PrefetchJob *pfjob)
 
 static bool seq_prefetch_need_suspend(PrefetchJob *pfjob)
 {
-  return seq_prefetch_is_cache_full(pfjob->scene) || pfjob->is_scrubbing ||
+  return seq_prefetch_is_cache_full(pfjob->scene) || pfjob->is_scrubbing || pfjob->is_playing ||
          (pfjob->num_frames_prefetched >= pfjob->timeline_length);
 }
 
@@ -693,6 +705,7 @@ void seq_prefetch_start(const RenderData *context, float timeline_frame)
     bool scrubbing = context->is_scrubbing;
     bool running = seq_prefetch_job_is_running(scene);
     seq_prefetch_job_scrubbing_set(scene, scrubbing);
+    seq_prefetch_job_playing_set(scene, playing);
     seq_prefetch_resume(scene);
 
     /* conditions to start:
