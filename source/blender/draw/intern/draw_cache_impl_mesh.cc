@@ -434,6 +434,8 @@ static void mesh_batch_cache_init(Mesh &mesh)
   cache->mat_len = BKE_id_material_used_with_fallback_eval(mesh.id);
   cache->surface_per_mat = Array<gpu::Batch *>(cache->mat_len, nullptr);
   cache->tris_per_mat.reinitialize(cache->mat_len);
+  cache->edit_selection_faces_per_mat = Array<gpu::Batch *>(cache->mat_len, nullptr);
+  cache->edit_selection_tris_per_mat.reinitialize(cache->mat_len);
 
   cache->is_dirty = false;
   cache->batch_ready = DRWBatchFlag(0);
@@ -608,6 +610,7 @@ static void mesh_batch_cache_clear(MeshBatchCache &cache)
   }
 
   cache.tris_per_mat = {};
+  cache.edit_selection_tris_per_mat = {};
 
   for (int i = 0; i < sizeof(cache.batch) / sizeof(void *); i++) {
     gpu::Batch **batch = reinterpret_cast<gpu::Batch **>(&cache.batch);
@@ -616,10 +619,14 @@ static void mesh_batch_cache_clear(MeshBatchCache &cache)
   for (const int i : cache.surface_per_mat.index_range()) {
     GPU_BATCH_DISCARD_SAFE(cache.surface_per_mat[i]);
   }
+  for (const int i : cache.edit_selection_faces_per_mat.index_range()) {
+    GPU_BATCH_DISCARD_SAFE(cache.edit_selection_faces_per_mat[i]);
+  }
 
   mesh_batch_cache_discard_shaded_tri(cache);
   mesh_batch_cache_discard_uvedit(cache);
   cache.surface_per_mat = {};
+  cache.edit_selection_faces_per_mat = {};
   cache.mat_len = 0;
 
   cache.batch_ready = DRWBatchFlag(0);
@@ -906,11 +913,15 @@ gpu::Batch *DRW_mesh_batch_cache_get_edit_skin_roots(Mesh &mesh)
 /** \name Edit Mode selection API
  * \{ */
 
-gpu::Batch *DRW_mesh_batch_cache_get_triangles_with_select_id(Mesh &mesh)
+Span<gpu::Batch *> DRW_mesh_batch_cache_get_triangles_with_select_id(Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
-  cache.batch_requested |= MBC_EDIT_SELECTION_FACES;
-  return DRW_batch_request(&cache.batch.edit_selection_faces);
+  cache.batch_requested |= MBC_EDIT_SELECTION_FACES_PER_MAT;
+  // TODO opti: only do used materials (like mesh_batch_cache_request_surface_batches)
+  for (auto &batch : cache.edit_selection_faces_per_mat) {
+    DRW_batch_request(&batch);
+  }
+  return cache.edit_selection_faces_per_mat;
 }
 
 gpu::Batch *DRW_mesh_batch_cache_get_facedots_with_select_id(Mesh &mesh)
@@ -1540,18 +1551,6 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                            {VBOType::Position, VBOType::IndexEdge}});
       }
     }
-    if (batches_to_create & MBC_EDIT_SELECTION_FACES) {
-      if (is_editmode && !edit_mapping_valid) {
-        init_empty_dummy_batch(*cache.batch.edit_selection_faces);
-      }
-      else {
-        batch_info.append({*cache.batch.edit_selection_faces,
-                           GPU_PRIM_TRIS,
-                           list,
-                           IBOType::Tris,
-                           {VBOType::Position, VBOType::IndexFace}});
-      }
-    }
     if (batches_to_create & MBC_EDIT_SELECTION_FACEDOTS) {
       if (is_editmode && !edit_mapping_valid) {
         init_empty_dummy_batch(*cache.batch.edit_selection_fdots);
@@ -1675,6 +1674,11 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     }
   }
 
+  if (batches_to_create & MBC_EDIT_SELECTION_FACES_PER_MAT) {
+    vbo_requests[int(BufferList::Final)].add(VBOType::Position);
+    vbo_requests[int(BufferList::Final)].add(VBOType::IndexFace);
+  }
+
   if (do_uvcage) {
     mesh_buffer_cache_create_requested(task_graph,
                                        scene,
@@ -1778,6 +1782,30 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       for (const int i : cache.attr_used.index_range()) {
         GPU_batch_vertbuf_add(
             batch, buffers.vbos.lookup(VBOType(int8_t(VBOType::Attr0) + i)).get(), false);
+      }
+    }
+  }
+
+  if (batches_to_create & MBC_EDIT_SELECTION_FACES_PER_MAT) {
+    MeshBufferList &buffers = cache.final.buff;
+    gpu::IndexBuf &tris_ibo = *buffers.ibos.lookup(IBOType::Tris);
+    /* This duplicates work that may be done in the MBC_SURFACE_PER_MAT case above, but we do need
+     * different tris_per_mat buffers since the associated batches may differ in lifetime. */
+    create_material_subranges(
+        cache.final.face_sorted, tris_ibo, cache.edit_selection_tris_per_mat);
+    for (const int material : IndexRange(cache.mat_len)) {
+      gpu::Batch *batch = cache.edit_selection_faces_per_mat[material];
+      if (!batch) {
+        continue;
+      }
+      if (is_editmode && !edit_mapping_valid) {
+        init_empty_dummy_batch(*batch);
+      }
+      else {
+        GPU_batch_init(
+            batch, GPU_PRIM_TRIS, nullptr, cache.edit_selection_tris_per_mat[material].get());
+        GPU_batch_vertbuf_add(batch, buffers.vbos.lookup(VBOType::Position).get(), false);
+        GPU_batch_vertbuf_add(batch, buffers.vbos.lookup(VBOType::IndexFace).get(), false);
       }
     }
   }

@@ -172,7 +172,6 @@ struct MeshBatchList {
   /* Edit selection */
   gpu::Batch *edit_selection_verts;
   gpu::Batch *edit_selection_edges;
-  gpu::Batch *edit_selection_faces;
   gpu::Batch *edit_selection_fdots;
   /* Common display / Other */
   gpu::Batch *uv_faces;
@@ -217,7 +216,6 @@ enum DRWBatchFlag : uint64_t {
   MBC_EDITUV_FACEDOTS = (1u << MBC_BATCH_INDEX(edituv_fdots)),
   MBC_EDIT_SELECTION_VERTS = (1u << MBC_BATCH_INDEX(edit_selection_verts)),
   MBC_EDIT_SELECTION_EDGES = (1u << MBC_BATCH_INDEX(edit_selection_edges)),
-  MBC_EDIT_SELECTION_FACES = (1u << MBC_BATCH_INDEX(edit_selection_faces)),
   MBC_EDIT_SELECTION_FACEDOTS = (1u << MBC_BATCH_INDEX(edit_selection_fdots)),
   MBC_ALL_VERTS = (1u << MBC_BATCH_INDEX(all_verts)),
   MBC_ALL_EDGES = (1u << MBC_BATCH_INDEX(all_edges)),
@@ -233,10 +231,11 @@ enum DRWBatchFlag : uint64_t {
   MBC_PAINT_OVERLAY_VERTS = (uint64_t(1u) << MBC_BATCH_INDEX(paint_overlay_verts)),
   MBC_PAINT_OVERLAY_SURFACE = (uint64_t(1u) << MBC_BATCH_INDEX(paint_overlay_surface)),
   MBC_SURFACE_PER_MAT = (uint64_t(1u) << MBC_BATCH_LEN),
+  MBC_EDIT_SELECTION_FACES_PER_MAT = (uint64_t(1u) << (MBC_BATCH_LEN + 1)),
 };
 ENUM_OPERATORS(DRWBatchFlag);
 
-BLI_STATIC_ASSERT(MBC_BATCH_LEN < 64, "Number of batches exceeded the limit of bit fields");
+BLI_STATIC_ASSERT(MBC_BATCH_LEN + 1 < 64, "Number of batches exceeded the limit of bit fields");
 
 struct MeshExtractLooseGeom {
   /** Indices of all vertices not used by edges in the #Mesh or #BMesh. */
@@ -294,7 +293,9 @@ struct MeshBatchCache {
 
   /* Index buffer per material. These are sub-ranges of `ibo.tris`. */
   Array<gpu::IndexBufPtr> tris_per_mat;
+  Array<gpu::IndexBufPtr> edit_selection_tris_per_mat;
   Array<gpu::Batch *> surface_per_mat;
+  Array<gpu::Batch *> edit_selection_faces_per_mat;
   gpu::BottomLevelAS *surface_blas;
 
   DRWSubdivCache *subdiv_cache;

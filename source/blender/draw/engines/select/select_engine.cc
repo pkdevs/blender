@@ -11,6 +11,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_editmesh.hh"
+#include "BKE_material.hh"
 #include "BKE_mesh_types.hh"
 #include "BLI_math_matrix_c.hh"
 
@@ -44,8 +45,6 @@ namespace draw::edit_select {
 /** \name Select Engine
  * \{ */
 
-#define USE_CAGE_OCCLUSION
-
 struct Instance : public DrawEngine {
  private:
   PassSimple depth_only_ps = {"depth_only_ps"};
@@ -60,7 +59,11 @@ struct Instance : public DrawEngine {
 
   PassSimple select_face_ps = {"select_id_face_ps"};
   PassSimple::Sub *select_face_uniform = nullptr;
+  /** Like select_face_uniform but with backface culling */
+  PassSimple::Sub *select_face_uniform_bfcull = nullptr;
   PassSimple::Sub *select_face_flat = nullptr;
+  /** Like select_face_flat but with backface culling */
+  PassSimple::Sub *select_face_flat_bfcull = nullptr;
 
   View view_faces = {"view_faces"};
   View view_edges = {"view_edges"};
@@ -69,6 +72,9 @@ struct Instance : public DrawEngine {
   UniformArrayBuffer<float4, 6> clip_planes_buf;
 
   const DRWContext *draw_ctx = nullptr;
+
+  /** How to handle backface culling according to the current render engine */
+  eRenderEngineUseBackfaceCulling use_backface_culling = RE_USE_BACKFACE_CULLING_NONE;
 
  public:
   struct StaticData {
@@ -135,7 +141,7 @@ struct Instance : public DrawEngine {
       state |= DRW_STATE_CLIP_PLANES;
     }
 
-    eRenderEngineUseBackfaceCulling use_backface_culling = RE_USE_BACKFACE_CULLING_NONE;
+    use_backface_culling = RE_USE_BACKFACE_CULLING_NONE;
     if (draw_ctx->v3d->shading.flag & V3D_SHADING_BACKFACE_CULLING &&
         draw_ctx->v3d->shading.type == OB_SOLID)
     {
@@ -197,7 +203,9 @@ struct Instance : public DrawEngine {
       select_face_ps.state_set(state, clipping_plane_count);
       select_face_ps.bind_ubo(DRW_CLIPPING_UBO_SLOT, clip_planes_buf);
       select_face_uniform = nullptr;
+      select_face_uniform_bfcull = nullptr;
       select_face_flat = nullptr;
+      select_face_flat_bfcull = nullptr;
       if (e_data.context.select_mode & SCE_SELECT_FACE) {
         auto &sub = select_face_ps.sub("Face");
         const float vertex_size = U.pixelsize * draw::overlay::Resources::vertex_size_get();
@@ -205,6 +213,13 @@ struct Instance : public DrawEngine {
         sub.push_constant("vertex_size", float(2 * vertex_size));
         sub.push_constant("retopology_offset", retopology_offset);
         select_face_flat = &sub;
+
+        auto &sub_bfcull = select_face_ps.sub("FaceBFCull");
+        sub_bfcull.state_set(state | DRW_STATE_CULL_BACK, clipping_plane_count);
+        sub_bfcull.shader_set(sh->select_id_flat);
+        sub_bfcull.push_constant("vertex_size", float(2 * vertex_size));
+        sub_bfcull.push_constant("retopology_offset", retopology_offset);
+        select_face_flat_bfcull = &sub_bfcull;
       }
       else {
         auto &sub = select_face_ps.sub("FaceNoSelect");
@@ -212,6 +227,13 @@ struct Instance : public DrawEngine {
         sub.push_constant("select_id", 0);
         sub.push_constant("retopology_offset", retopology_offset);
         select_face_uniform = &sub;
+
+        auto &sub_bfcull = select_face_ps.sub("FaceNoSelectBFCull");
+        sub_bfcull.state_set(state | DRW_STATE_CULL_BACK, clipping_plane_count);
+        sub_bfcull.shader_set(sh->select_id_uniform);
+        sub_bfcull.push_constant("select_id", 0);
+        sub_bfcull.push_constant("retopology_offset", retopology_offset);
+        select_face_uniform_bfcull = &sub_bfcull;
       }
 
       select_edge_ps.init();
@@ -266,24 +288,40 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_FACE) {
       ranges.face = alloc_range(ranges.total, bm->totface);
 
-      gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
-      PassSimple::Sub *face_sub = select_face_flat;
-      face_sub->push_constant("offset", int(ranges.face.start()));
-      face_sub->draw(geom_faces, res_handle);
+      Span<gpu::Batch *> geom_faces_per_mat = DRW_mesh_batch_cache_get_triangles_with_select_id(
+          mesh);
+      select_face_flat->push_constant("offset", int(ranges.face.start()));
+      select_face_flat_bfcull->push_constant("offset", int(ranges.face.start()));
+      for (int mat : geom_faces_per_mat.index_range()) {
+        PassSimple::Sub *face_sub = select_face_flat;
+        if (use_backface_culling == RE_USE_BACKFACE_CULLING_MATERIAL) {
+          const Material *ma = BKE_object_material_get_eval(ob, mat + 1);
+          if (ma && (ma->blend_flag & MA_BL_CULL_BACKFACE)) {
+            face_sub = select_face_flat_bfcull;
+          }
+        }
+        face_sub->draw(geom_faces_per_mat[mat], res_handle);
+      }
 
       if (draw_facedot) {
         gpu::Batch *geom_facedots = DRW_mesh_batch_cache_get_facedots_with_select_id(mesh);
-        face_sub->draw(geom_facedots, res_handle);
+        select_face_flat->draw(geom_facedots, res_handle);
       }
     }
     else {
       if (ob->dt >= OB_SOLID) {
-#ifdef USE_CAGE_OCCLUSION
-        gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
-#else
-        gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_surface(mesh);
-#endif
-        select_face_uniform->draw(geom_faces, res_handle);
+        Span<gpu::Batch *> geom_faces_per_mat = DRW_mesh_batch_cache_get_triangles_with_select_id(
+            mesh);
+        for (int mat : geom_faces_per_mat.index_range()) {
+          PassSimple::Sub *face_sub = select_face_uniform;
+          if (use_backface_culling == RE_USE_BACKFACE_CULLING_MATERIAL) {
+            const Material *ma = BKE_object_material_get_eval(ob, mat + 1);
+            if (ma && (ma->blend_flag & MA_BL_CULL_BACKFACE)) {
+              face_sub = select_face_uniform_bfcull;
+            }
+          }
+          face_sub->draw(geom_faces_per_mat[mat], res_handle);
+        }
       }
     }
 
@@ -318,16 +356,36 @@ struct Instance : public DrawEngine {
     ElemIndexRanges ranges{};
     ranges.total = IndexRange::from_begin_size(initial_index, 0);
 
-    gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
+    Span<gpu::Batch *> geom_faces_per_mat = DRW_mesh_batch_cache_get_triangles_with_select_id(
+        mesh);
     if (select_mode & SCE_SELECT_FACE) {
       ranges.face = alloc_range(ranges.total, mesh.faces_num);
 
       select_face_flat->push_constant("offset", int(ranges.face.start()));
-      select_face_flat->draw(geom_faces, res_handle);
+      select_face_flat_bfcull->push_constant("offset", int(ranges.face.start()));
+      for (int mat : geom_faces_per_mat.index_range()) {
+        PassSimple::Sub *face_sub = select_face_flat;
+        if (use_backface_culling == RE_USE_BACKFACE_CULLING_MATERIAL) {
+          const Material *ma = BKE_object_material_get_eval(ob, mat + 1);
+          if (ma && (ma->blend_flag & MA_BL_CULL_BACKFACE)) {
+            face_sub = select_face_flat_bfcull;
+          }
+        }
+        face_sub->draw(geom_faces_per_mat[mat], res_handle);
+      }
     }
     else {
       /* Only draw faces to mask out verts, we don't want their selection ID's. */
-      select_face_uniform->draw(geom_faces, res_handle);
+      for (int mat : geom_faces_per_mat.index_range()) {
+        PassSimple::Sub *face_sub = select_face_uniform;
+        if (use_backface_culling == RE_USE_BACKFACE_CULLING_MATERIAL) {
+          const Material *ma = BKE_object_material_get_eval(ob, mat + 1);
+          if (ma && (ma->blend_flag & MA_BL_CULL_BACKFACE)) {
+            face_sub = select_face_uniform_bfcull;
+          }
+        }
+        face_sub->draw(geom_faces_per_mat[mat], res_handle);
+      }
     }
 
     if (select_mode & SCE_SELECT_EDGE) {

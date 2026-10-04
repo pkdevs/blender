@@ -255,7 +255,7 @@ gpu::Batch *DRW_mesh_batch_cache_get_edit_skin_roots(Mesh &mesh);
 /** \name Edit-mesh Selection
  * \{ */
 
-gpu::Batch *DRW_mesh_batch_cache_get_triangles_with_select_id(Mesh &mesh);
+Span<gpu::Batch *> DRW_mesh_batch_cache_get_triangles_with_select_id(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_facedots_with_select_id(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_edges_with_select_id(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_verts_with_select_id(Mesh &mesh);
