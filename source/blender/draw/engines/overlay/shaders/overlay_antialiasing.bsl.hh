@@ -14,10 +14,7 @@
 
 #include "gpu_shader_compat.hh"
 #include "gpu_shader_fullscreen.bsl.hh"
-#include "gpu_shader_math_constants.bsl.hh"
-#include "gpu_shader_math_vector_compare.bsl.hh"
-#include "infos/overlay_common_infos.hh"
-#include "overlay_common_lib.glsl"
+#include "overlay_common.bsl.hh"
 #include "overlay_shader_shared.hh"
 
 namespace overlay::antialiasing {
@@ -210,10 +207,9 @@ struct FragOut {
 
 [[fragment]] void frag_main([[frag_coord]] const float4 &frag_coord,
                             [[resource_table]] Resources &srt,
+                            [[resource_table]] const Uniform &uni,
                             [[out]] FragOut &frag)
 {
-  SHADER_LIBRARY_CREATE_INFO(draw_globals);
-
   const int2 texel = int2(frag_coord.xy);
 
   /* Fetch center pixel. */
@@ -238,7 +234,7 @@ struct FragOut {
   const bool original_center_has_alpha = center.color.a < 1.0f;
 
   /* Blend center color over background. */
-  const float kernel_size = theme.sizes.pixel * 0.5f - 0.5f;
+  const float kernel_size = uni.uniform_buf.sizes.pixel * 0.5f - 0.5f;
   center_kernel(center, background, kernel_size, srt.do_smooth_lines);
   /* We don't order fragments; instead blending neighbors alpha-over/alpha-under based on
    * a tracked depth for each neighbor, using the center pixel as starting reference. */
