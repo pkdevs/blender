@@ -782,7 +782,16 @@ static void draw_bake_panel(ui::Layout &layout, PointerRNA *modifier_ptr)
   col.use_property_split_set(true);
   col.use_property_decorate_set(false);
   col.prop(modifier_ptr, "bake_target", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(modifier_ptr, "bake_directory", UI_ITEM_NONE, IFACE_("Bake Path"), ICON_NONE);
+  /* Only a hint for the path that is used by default. The actual default path is stored in the
+   * modifier when baking, see #bke::bake::get_default_modifier_bake_directory. */
+  col.prop(modifier_ptr,
+           RNA_struct_find_property(modifier_ptr, "bake_directory"),
+           -1,
+           0,
+           UI_ITEM_NONE,
+           IFACE_("Bake Path"),
+           ICON_NONE,
+           "//blendcache_{blend_name}/{object_name}_{modifier_name}");
 }
 
 static void draw_named_attributes_panel(ui::Layout &layout, Object &object, NodesModifierData &nmd)
