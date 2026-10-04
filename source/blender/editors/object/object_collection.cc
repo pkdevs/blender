@@ -567,14 +567,6 @@ static wmOperatorStatus collection_importer_remove_exec(bContext *C, wmOperator 
   return OPERATOR_FINISHED;
 }
 
-static wmOperatorStatus collection_importer_remove_invoke(bContext *C,
-                                                          wmOperator *op,
-                                                          const wmEvent * /*event*/)
-{
-  return WM_operator_confirm_ex(
-      C, op, IFACE_("Remove importer?"), nullptr, IFACE_("Delete"), ui::AlertIcon::None, false);
-}
-
 static void COLLECTION_OT_importer_remove(wmOperatorType *ot)
 {
   /* identifiers */
@@ -582,7 +574,6 @@ static void COLLECTION_OT_importer_remove(wmOperatorType *ot)
   ot->idname = "COLLECTION_OT_importer_remove";
 
   /* api callbacks */
-  ot->invoke = collection_importer_remove_invoke;
   ot->exec = collection_importer_remove_exec;
   ot->poll = collection_importer_remove_poll;
 
@@ -643,9 +634,7 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
 
   /* TODO: If there is already a library for this collection, then an import has already occurred.
    * Return early until "reload" is implemented in the future. */
-  for (Library *lib = static_cast<Library *>(bmain->libraries.first); lib;
-       lib = static_cast<Library *>(lib->id.next))
-  {
+  for (Library *lib = bmain->libraries.first(); lib; lib = static_cast<Library *>(lib->id.next)) {
     if (STREQ(lib->id.name + 2, collection_name)) {
       BKE_reportf(op->reports,
                   RPT_WARNING,
@@ -850,14 +839,6 @@ static wmOperatorStatus collection_exporter_remove_exec(bContext *C, wmOperator 
   return OPERATOR_FINISHED;
 }
 
-static wmOperatorStatus collection_exporter_remove_invoke(bContext *C,
-                                                          wmOperator *op,
-                                                          const wmEvent * /*event*/)
-{
-  return WM_operator_confirm_ex(
-      C, op, IFACE_("Remove exporter?"), nullptr, IFACE_("Delete"), ui::AlertIcon::None, false);
-}
-
 static void COLLECTION_OT_exporter_remove(wmOperatorType *ot)
 {
   /* identifiers */
@@ -866,7 +847,6 @@ static void COLLECTION_OT_exporter_remove(wmOperatorType *ot)
   ot->idname = "COLLECTION_OT_exporter_remove";
 
   /* API callbacks. */
-  ot->invoke = collection_exporter_remove_invoke;
   ot->exec = collection_exporter_remove_exec;
   ot->poll = collection_exporter_remove_poll;
 
@@ -1161,7 +1141,8 @@ static void collection_importer_menu_draw(const bContext * /*C*/, Menu *menu)
   bool at_least_one = false;
   for (const auto &fh : bke::file_handlers()) {
     if (STREQ(fh->idname, "IO_FH_usd") && WM_operatortype_find(fh->import_operator, true)) {
-      PointerRNA op_ptr = layout.op("COLLECTION_OT_importer_add", fh->label, ICON_NONE);
+      PointerRNA op_ptr = layout.op(
+          "COLLECTION_OT_importer_add", fh->label_with_extensions(), ICON_NONE);
       RNA_string_set(&op_ptr, "name", fh->idname);
       at_least_one = true;
     }
@@ -1180,7 +1161,8 @@ static void collection_exporter_menu_draw(const bContext * /*C*/, Menu *menu)
   bool at_least_one = false;
   for (const auto &fh : bke::file_handlers()) {
     if (WM_operatortype_find(fh->export_operator, true)) {
-      PointerRNA op_ptr = layout.op("COLLECTION_OT_exporter_add", fh->label, ICON_NONE);
+      PointerRNA op_ptr = layout.op(
+          "COLLECTION_OT_exporter_add", fh->label_with_extensions(), ICON_NONE);
       RNA_string_set(&op_ptr, "name", fh->idname);
       at_least_one = true;
     }
