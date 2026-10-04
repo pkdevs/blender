@@ -437,21 +437,6 @@ Vector<bke::path_templates::Error> BKE_path_validate_template(
     StringRef path, const bke::path_templates::VariableMap &template_variables);
 
 /**
- * Check if the path references the built-in `{blend_dir}` variable while the
- * current blend file has not been saved yet. A project variable with the same
- * name takes precedence over the built-in one, so it is not reported.
- *
- * This is not an error: in that case `{blend_dir}` falls back to `./`, which
- * is still a valid path. But the path then likely doesn't refer to the
- * location the user intended, so this is meant to be used for warning users.
- *
- * \param template_variables: the variables available to the path. Paths
- * without access to `{blend_dir}` never use its fallback.
- */
-bool BKE_path_template_uses_unsaved_blend_dir(
-    StringRef path, const bke::path_templates::VariableMap &template_variables);
-
-/**
  * Perform variable substitution and escaping on the given path.
  *
  * This mutates the path in-place. `path` must be a null-terminated string.

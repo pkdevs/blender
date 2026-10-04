@@ -1242,7 +1242,7 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
        * as parts of paths. For example, the sub-paths in the compositor's File
        * Output node. */
       if (ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH, PROP_FILENAME, PROP_NONE)) {
-        /* Template parse errors and warnings, for paths that support it. */
+        /* Template parse errors, for paths that support it. */
         if ((RNA_property_flag(rnaprop) & PROP_PATH_SUPPORTS_TEMPLATES) != 0) {
           const std::string path = RNA_property_string_get(&but->rnapoin, rnaprop);
           if (BKE_path_contains_template_syntax(path)) {
@@ -1259,18 +1259,6 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
                 error_message += "\n  - " + BKE_path_template_error_to_string(error, path);
               }
               tooltip_text_field_add(*data, error_message, {}, TIP_STYLE_NORMAL, TIP_LC_ALERT);
-            }
-
-            if (BKE_path_template_uses_unsaved_blend_dir(path, *variables)) {
-              tooltip_text_field_add(
-                  *data,
-                  fmt::format(fmt::runtime(TIP_("Warning: the blend-file has not been saved yet, "
-                                                "so \"{}\" resolves to the current working "
-                                                "directory.")),
-                              "{blend_dir}"),
-                  {},
-                  TIP_STYLE_NORMAL,
-                  TIP_LC_ALERT);
             }
           }
         }
