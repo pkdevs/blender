@@ -247,7 +247,7 @@ ccl_device_inline bool shader_data_setup_from_restir_history(
   sd->type = (uint)prev_surface_data[i++];
   sd->object = (int)prev_surface_data[i++];
   sd->prim = (int)prev_surface_data[i++];
-  sd->lcg_state = (uint)prev_surface_data[i];
+  sd->lcg_state = (uint)prev_surface_data[i++];
   /* Previous frame's actual shading time */
   sd->time = prev_surface_data[i];
 
@@ -754,8 +754,6 @@ ccl_debug_printf("POST-FINALIZE: ok=%d W=%f L=%f\n",
   if (finalize_ok) {
     film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, /*write_prev=*/false);
   }
-
-  film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, /*write_prev=*/false);
 
   const bool use_spatial = kernel_data.integrator.use_spatial_resampling &&
                            kernel_data.integrator.restir_spatial_radius > 0 &&

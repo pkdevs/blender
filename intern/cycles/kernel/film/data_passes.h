@@ -127,7 +127,7 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
       film_overwrite_pass_float(ptr++, (float)sd->type);
       film_overwrite_pass_float(ptr++, (float)sd->object);
       film_overwrite_pass_float(ptr++, (float)sd->prim);
-      film_overwrite_pass_float(ptr, (float)sd->lcg_state);
+      film_overwrite_pass_float(ptr++, (float)sd->lcg_state);
       /* Needed to reconstruct shader_setup_object_transforms()'s time 
        * when this pixel is later *re-shaded* as temporal-frame history. */
       film_overwrite_pass_float(ptr, sd->time);
