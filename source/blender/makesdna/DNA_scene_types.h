@@ -239,7 +239,7 @@ struct AudioData {
   float speed_of_sound = 343.3f;
   float doppler_factor = 1.0f;
   int distance_model = 2.0f;
-  short flag = AUDIO_SYNC;
+  short flag = 0;
   char _pad[2] = {};
   float volume = 1.0f;
   char _pad2[4] = {};

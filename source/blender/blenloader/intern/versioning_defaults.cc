@@ -734,6 +734,7 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
     if (app_template && STREQ(app_template, "Video_Editing")) {
       /* Pass: no extra tweaks needed. Keep the view settings configured above, and rely on the
        * default state of enabled AV sync. */
+      scene.audio.flag |= AUDIO_SYNC;
     }
     else {
       /* AV Sync break physics sim caching, disable until that is fixed. */

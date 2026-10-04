@@ -9513,7 +9513,7 @@ void RNA_def_scene(BlenderRNA *brna)
   prop = RNA_def_property(srna, "sync_mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_funcs(prop, "rna_Scene_sync_mode_get", "rna_Scene_sync_mode_set", nullptr);
   RNA_def_property_enum_items(prop, sync_mode_items);
-  RNA_def_property_enum_default(prop, AUDIO_SYNC);
+  RNA_def_property_enum_default(prop, 0);
   RNA_def_property_ui_text(prop, "Sync Mode", "How to sync playback");
   RNA_def_property_update(prop, NC_SCENE, nullptr);
 
