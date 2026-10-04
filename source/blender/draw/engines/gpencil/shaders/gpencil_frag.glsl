@@ -529,7 +529,9 @@ void main()
       frag_color = base_color;
       frag_color *= mask;
 
-      if (!flag_test(gp_interp_flat.mat_flag, GP_STROKE_ALIGNMENT)) {
+      if (!flag_test(gp_interp_flat.mat_flag, GP_STROKE_ALIGNMENT) &&
+          flag_test(gp_interp_flat.mat_flag, GP_STROKE_OVERLAP))
+      {
         float r1 = gp_interp_flat.sspos_1.w;
         float2 p1 = gp_interp_flat.sspos_1.xy;
         float2 p0 = gp_interp_flat.sspos_0;

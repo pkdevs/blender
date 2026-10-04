@@ -342,7 +342,13 @@ float4 discard_ndc()
  *
  * Will generate either a trapezoid or a rectangle depending on which has smaller area.
  */
-float4 dot_segment(float2 xy, float4 ss1, float4 ss2, bool is_squares, float4 viewport_res)
+float4 dot_segment(float2 xy,
+                   float4 ss1,
+                   float4 ss2,
+                   bool is_squares,
+                   bool flat_start,
+                   bool flat_end,
+                   float4 viewport_res)
 {
   float l = 0.0f;
   float2 local_x = safe_normalize_and_get_length(ss2.xy - ss1.xy, l);
@@ -350,12 +356,6 @@ float4 dot_segment(float2 xy, float4 ss1, float4 ss2, bool is_squares, float4 vi
 
   float r1 = ss1.w;
   float r2 = ss2.w;
-
-  /* Scale each circle up by the diagonal of the square. */
-  if (is_squares) {
-    r1 *= M_SQRT2;
-    r2 *= M_SQRT2;
-  }
 
   float x = xy.x;
   float y = xy.y;
@@ -381,6 +381,13 @@ float4 dot_segment(float2 xy, float4 ss1, float4 ss2, bool is_squares, float4 vi
     else {
       local = xy * r2 + float2(l, 0.0f);
     }
+
+    if (flat_start) {
+      local.x = 0.0f;
+    }
+    if (flat_end) {
+      local.x = l;
+    }
   }
   else {
     /* Calculate the area of both shapes divided by the width */
@@ -389,6 +396,7 @@ float4 dot_segment(float2 xy, float4 ss1, float4 ss2, bool is_squares, float4 vi
 
     /* Determent if it is better to use a trapezoid or a rectangle. */
     if (area_trapezoid < area_rectangle) {
+      /* Trapezoid. */
       if (x == -1.0f) {
         local.x += -r1;
         local.y += y * r1 / tan_half_theta;
@@ -397,8 +405,23 @@ float4 dot_segment(float2 xy, float4 ss1, float4 ss2, bool is_squares, float4 vi
         local.x += l + r2;
         local.y += y * r2 * tan_half_theta;
       }
+
+      if (flat_start) {
+        float hi = r1 / tan_half_theta +
+                   (r2 * tan_half_theta - r1 / tan_half_theta) * r1 / (l + r2 + r1);
+
+        local = float2(0.0f, hi * y);
+      }
+
+      if (flat_end) {
+        float hi = r1 / tan_half_theta +
+                   (r2 * tan_half_theta - r1 / tan_half_theta) * (l + r1) / (l + r2 + r1);
+
+        local = float2(l, hi * y);
+      }
     }
     else {
+      /* Rectangle. */
       if (x == -1.0f) {
         local.x -= r1;
         local.y += y * max_r;
@@ -406,6 +429,13 @@ float4 dot_segment(float2 xy, float4 ss1, float4 ss2, bool is_squares, float4 vi
       else {
         local.x += l + r2;
         local.y += y * max_r;
+      }
+
+      if (flat_start) {
+        local.x = 0.0f;
+      }
+      if (flat_end) {
+        local.x = l;
       }
     }
   }
@@ -416,8 +446,16 @@ float4 dot_segment(float2 xy, float4 ss1, float4 ss2, bool is_squares, float4 vi
   return screen_space_to_ndc(float4(ssp, z_depth, 0.0f), viewport_res.xy);
 }
 
-float4 dot_segment2(
-    float2 xy, float4 ss1, float4 ss2, bool flat_start, bool flat_end, float4 viewport_res)
+float4 dot_segment2(float2 xy,
+                    float4 ss0,
+                    float4 ss1,
+                    float4 ss2,
+                    float4 ss3,
+                    bool is_stroke_start,
+                    bool is_stroke_end,
+                    bool flat_start,
+                    bool flat_end,
+                    float4 viewport_res)
 {
   float l = 0.0f;
   float2 local_x = safe_normalize_and_get_length(ss2.xy - ss1.xy, l);
@@ -624,8 +662,10 @@ float4 gpencil_vertex(float4 viewport_res,
   float4 col2 = texelFetch(gp_col_tx, (stroke_point_id + 1) * 2 + 0);
   float4 fcol1 = texelFetch(gp_col_tx, (stroke_point_id + 0) * 2 + 1);
 
+#  define thickness0 pos.w
 #  define thickness1 pos1.w
 #  define thickness2 pos2.w
+#  define thickness3 pos3.w
 #  define strength1 uv1.w
 #  define strength2 uv2.w
 
@@ -712,18 +752,20 @@ float4 gpencil_vertex(float4 viewport_res,
     out_P = (use_curr) ? wpos1 : wpos2;
     out_strength = abs((use_curr) ? strength1 : strength2);
 
+    float radius0 = gpencil_stroke_thickness_modulate(thickness0, viewport_res) / 2.0;
     float radius1 = gpencil_stroke_thickness_modulate(thickness1, viewport_res) / 2.0;
     float radius2 = gpencil_stroke_thickness_modulate(thickness2, viewport_res) / 2.0;
+    float radius3 = gpencil_stroke_thickness_modulate(thickness3, viewport_res) / 2.0;
 
-    float2 ss0 = gpencil_project_to_screenspace(ndc0, viewport_res);
+    float4 ss0 = ndc_and_radius_to_screen_space(ndc0, radius0, viewport_res.xy);
     float4 ss1 = ndc_and_radius_to_screen_space(ndc1, radius1, viewport_res.xy);
     float4 ss2 = ndc_and_radius_to_screen_space(ndc2, radius2, viewport_res.xy);
-    float2 ss3 = gpencil_project_to_screenspace(ndc3, viewport_res);
+    float4 ss3 = ndc_and_radius_to_screen_space(ndc3, radius3, viewport_res.xy);
 
     /* Screen-space Lines tangents. */
     float2 line = safe_normalize(ss2.xy - ss1.xy);
-    float2 line1 = safe_normalize(ss1.xy - ss0);
-    float2 line2 = safe_normalize(ss3 - ss2.xy);
+    float2 line1 = safe_normalize(ss1.xy - ss0.xy);
+    float2 line2 = safe_normalize(ss3.xy - ss2.xy);
     float2 line_adj = (use_curr) ? line1 : line2;
 
     float thickness = abs((use_curr) ? thickness1 : thickness2);
@@ -744,13 +786,13 @@ float4 gpencil_vertex(float4 viewport_res,
       out_sspos_2 = float4(0.0f);
     }
     if (ma.x != -1) {
-      out_sspos_0 = ss0;
+      out_sspos_0 = ss0.xy;
     }
     else {
       out_sspos_0 = float2(0.0f);
     }
     if (ma3.x != -1) {
-      out_sspos_3 = ss3;
+      out_sspos_3 = ss3.xy;
     }
     else {
       out_sspos_3 = float2(0.0f);
@@ -780,7 +822,7 @@ float4 gpencil_vertex(float4 viewport_res,
       out_aspect.xy = 1.0f / out_aspect.xy;
       out_aspect.zw = x_axis;
 
-      out_ndc = dot_segment(float2(x, y), ss1, ss2, is_squares, viewport_res);
+      out_ndc = dot_segment(float2(x, y), ss1, ss2, is_squares, false, false, viewport_res);
 
       out_ndc /= out_ndc.w;
       out_ndc.z = (use_curr) ? (ndc1.z / ndc1.w) : (ndc2.z / ndc2.w);
@@ -847,7 +889,21 @@ float4 gpencil_vertex(float4 viewport_res,
       bool flat_start = is_stroke_start && strength1 < 0.0f;
       bool flat_end = is_stroke_end && thickness1 < 0.0f;
 
-      out_ndc = dot_segment2(float2(x, y), ss1, ss2, flat_start, flat_end, viewport_res);
+      if (flag_test(material_flags, GP_STROKE_OVERLAP)) {
+        out_ndc = dot_segment(float2(x, y), ss1, ss2, false, flat_start, flat_end, viewport_res);
+      }
+      else {
+        out_ndc = dot_segment2(float2(x, y),
+                               ss0,
+                               ss1,
+                               ss2,
+                               ss3,
+                               is_stroke_start,
+                               is_stroke_end,
+                               flat_start,
+                               flat_end,
+                               viewport_res);
+      }
 
       out_uv.x = (use_curr) ? uv1.z : uv2.z;
     }
