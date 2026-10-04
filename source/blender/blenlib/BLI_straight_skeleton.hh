@@ -76,15 +76,68 @@ namespace blender::straightskeleton {
 /** \name Input
  * \{ */
 
+/** Controls the domain into which straight skeleton wavefronts propagate. */
+enum class PropagationDirection : uint8_t {
+  /**
+   * Propagate into interior domains: between even-parity faces and their contained
+   * odd-parity holes. For wire edges, propagates outward on both sides.
+   */
+  Inside = 0,
+  /**
+   * Propagate into exterior domains: outside outermost even faces, and inside holes
+   * towards any contained islands.
+   */
+  Outside = 1,
+  /**
+   * Propagate into both inside and outside domains simultaneously.
+   * Every boundary edge advances on both of its sides.
+   */
+  Both = 2,
+};
+
 /**
  * Input to the straight skeleton computation.
- * Specifies 1 outer polygon (oriented CCW) and any number of hole polygons (each oriented CW).
- * All indices inside #outer_polygon and #hole_vert_indices refer to positions in #vert.
+ * Supports arbitrary Planar Straight Line Graphs (PSLGs) consisting of:
+ *   - 2D vertices (#vert).
+ *   - Optional wire edges (#edge) representing standalone lines, open chains, or networks.
+ *   - Optional closed faces (#face_offsets, #face_vert_indices). Faces can have arbitrary
+ *     winding (CW or CCW); nesting and even-odd polarity are determined automatically.
+ *
+ * For backward compatibility, legacy inputs (#outer_polygon, #hole_offsets, #hole_vert_indices,
+ * and #edge_chain) are also accepted.
  */
 class StraightSkeletonInput {
  public:
   /** 2D positions of the input vertices. */
   Span<double2> vert;
+
+  /**
+   * Wire edges given as pairs of indices into #vert.
+   * May represent standalone lines, open chains, branched networks (trees),
+   * or edges shared with faces.
+   */
+  Span<int2> edge;
+
+  /** Per-face vertex ranges into #face_vert_indices. */
+  OffsetIndices<int> face_offsets;
+
+  /**
+   * Concatenated list of vertex indices in #vert for all input faces.
+   * Each face is a closed cyclic polygon. Polarity (islands vs. holes) and orientation
+   * are determined automatically.
+   */
+  Span<int> face_vert_indices;
+
+  /** Direction of wavefront propagation: Inside, Outside, or Both. */
+  PropagationDirection direction{PropagationDirection::Inside};
+
+  /**
+   * Percentage by which to expand the surrounding bounding box when outside propagation
+   * or uncontained wire edges are active (e.g. 10.0 for 10% expansion).
+   */
+  double bbox_expansion_pct{10.0};
+
+  /* --- Legacy Inputs (for backward compatibility) --- */
 
   /** Vertex indices in #vert of the outer boundary polygon, oriented CCW. */
   Span<int> outer_polygon;
@@ -97,7 +150,6 @@ class StraightSkeletonInput {
 
   /**
    * Vertex indices in #vert of an open polyline (edge chain) to offset.
-   * Either (#outer_polygon with optional holes) OR #edge_chain must be provided, but not both.
    * When #edge_chain is provided, #offset must be a finite positive distance.
    */
   Span<int> edge_chain;

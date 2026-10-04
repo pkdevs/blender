@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -19,6 +20,8 @@
 #include "BLI_set.hh"
 #include "BLI_straight_skeleton.hh"
 #include "BLI_vector.hh"
+
+#include "test_font_glyphs.hh"
 
 /* Debug output mode for tests:
  *   DebugOutputMode::NONE   (0) - No debug output (standard quiet test run, assert failures only).
@@ -231,6 +234,18 @@ inline void write_debug_svg(const char *test_name,
     const int v = input.edge_chain[k + 1];
     input_boundary_edges.add({std::min(u, v), std::max(u, v)});
   }
+  for (const int2 &e : input.edge) {
+    input_boundary_edges.add({std::min(e[0], e[1]), std::max(e[0], e[1])});
+  }
+  for (const int f : IndexRange(input.face_offsets.size())) {
+    const IndexRange r = input.face_offsets[f];
+    const int n_f = int(r.size());
+    for (int k = 0; k < n_f; k++) {
+      const int u = input.face_vert_indices[r[k]];
+      const int v = input.face_vert_indices[r[(k + 1) % n_f]];
+      input_boundary_edges.add({std::min(u, v), std::max(u, v)});
+    }
+  }
 
   /* Draw straight skeleton edges (non-boundary internal arcs in crimson red). */
   for (const int2 &e : output.edge) {
@@ -304,7 +319,9 @@ inline void write_debug_svg(const char *test_name,
         safe_name += *c;
       }
     }
-    std::string svg_path = std::string("/tmp/") + safe_name + ".svg";
+    const char *env_dir = std::getenv("STRAIGHT_SKELETON_SVG_DIR");
+    const std::string dir = (env_dir && env_dir[0] != '\0') ? env_dir : "/tmp";
+    std::string svg_path = dir + "/" + safe_name + ".svg";
     std::ofstream sf(svg_path);
     if (sf.is_open()) {
       sf << svg.str();
@@ -2980,6 +2997,448 @@ TEST(straight_skeleton, MutualExclusionValidation)
     const StraightSkeletonOutput output = straight_skeleton_calc(input);
     EXPECT_EQ(output.face_offsets().size(), 0);
   }
+}
+
+TEST(straight_skeleton, PSLG_ArbitraryWindingHoles)
+{
+  const Array<double2> verts = {
+      /* Outer square 0..3 (CCW) */
+      double2(0.0, 0.0),
+      double2(10.0, 0.0),
+      double2(10.0, 10.0),
+      double2(0.0, 10.0),
+      /* Inner square 4..7 (deliberately CCW instead of CW!) */
+      double2(3.0, 3.0),
+      double2(7.0, 3.0),
+      double2(7.0, 7.0),
+      double2(3.0, 7.0),
+  };
+
+  const Array<int> face_offsets_data = {0, 4, 8};
+  const Array<int> face_vert_indices = {0, 1, 2, 3, 4, 5, 6, 7};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Inside;
+  input.offset = 1.0;
+  input.label = "PSLG_ArbitraryWindingHoles";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_GT(output.face_offsets().size(), 0);
+  EXPECT_GT(output.edge.size(), 0);
+}
+
+TEST(straight_skeleton, PSLG_MultiNestedHierarchy)
+{
+  const Array<double2> verts = {
+      /* Inner island (6..14) - verts 0..3 */
+      double2(6.0, 6.0),
+      double2(14.0, 6.0),
+      double2(14.0, 14.0),
+      double2(6.0, 14.0),
+      /* Outermost island (0..20) - verts 4..7 */
+      double2(0.0, 0.0),
+      double2(20.0, 0.0),
+      double2(20.0, 20.0),
+      double2(0.0, 20.0),
+      /* Middle hole (3..17) - verts 8..11 */
+      double2(3.0, 3.0),
+      double2(17.0, 3.0),
+      double2(17.0, 17.0),
+      double2(3.0, 17.0),
+  };
+
+  const Array<int> face_offsets_data = {0, 4, 8, 12};
+  const Array<int> face_vert_indices = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Inside;
+  input.offset = 1.0;
+  input.label = "PSLG_MultiNestedHierarchy";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_GT(output.face_offsets().size(), 0);
+  EXPECT_GT(output.edge.size(), 0);
+}
+
+TEST(straight_skeleton, PSLG_WireEdges_Polyline)
+{
+  const Array<double2> verts = {
+      double2(0.0, 0.0),
+      double2(5.0, 5.0),
+      double2(10.0, 0.0),
+  };
+  const Array<int2> edges = {
+      int2(0, 1),
+      int2(1, 2),
+  };
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.edge = edges.as_span();
+  input.offset = 1.0;
+  input.label = "PSLG_WireEdges_Polyline";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_GT(output.face_offsets().size(), 0);
+  EXPECT_GT(output.edge.size(), 0);
+}
+
+TEST(straight_skeleton, PSLG_WireEdges_InsideFace)
+{
+  const Array<double2> verts = {
+      /* Square outer face */
+      double2(0.0, 0.0),
+      double2(20.0, 0.0),
+      double2(20.0, 20.0),
+      double2(0.0, 20.0),
+      /* Interior wire edge */
+      double2(7.0, 10.0),
+      double2(13.0, 10.0),
+  };
+  const Array<int> face_offsets_data = {0, 4};
+  const Array<int> face_vert_indices = {0, 1, 2, 3};
+  const Array<int2> edges = {int2(4, 5)};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.edge = edges.as_span();
+  input.direction = PropagationDirection::Inside;
+  input.offset = 1.5;
+  input.label = "PSLG_WireEdges_InsideFace";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_GT(output.face_offsets().size(), 0);
+  EXPECT_GT(output.edge.size(), 0);
+}
+
+TEST(straight_skeleton, PSLG_Outside_WithBoundingBox)
+{
+  const Array<double2> verts = {
+      double2(0.0, 0.0),
+      double2(10.0, 0.0),
+      double2(10.0, 10.0),
+      double2(0.0, 10.0),
+  };
+  const Array<int> face_offsets_data = {0, 4};
+  const Array<int> face_vert_indices = {0, 1, 2, 3};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Outside;
+  input.offset = 2.0;
+  input.bbox_expansion_pct = 50.0;
+  input.label = "PSLG_Outside_WithBoundingBox";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_GT(output.face_offsets().size(), 0);
+  EXPECT_GT(output.edge.size(), 0);
+}
+
+TEST(straight_skeleton, PSLG_Both_Directions)
+{
+  const Array<double2> verts = {
+      double2(0.0, 0.0),
+      double2(10.0, 0.0),
+      double2(10.0, 10.0),
+      double2(0.0, 10.0),
+  };
+  const Array<int> face_offsets_data = {0, 4};
+  const Array<int> face_vert_indices = {0, 1, 2, 3};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Both;
+  input.offset = 1.0;
+  input.bbox_expansion_pct = 50.0;
+  input.label = "PSLG_Both_Directions";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_GT(output.face_offsets().size(), 0);
+  EXPECT_GT(output.edge.size(), 0);
+}
+
+TEST(straight_skeleton, PSLG_MultipleDisjointIslands)
+{
+  /* Two separate 10x10 squares separated by 20 units in X.
+   * With Inside propagation, each island forms an independent straight skeleton
+   * with 4 roof faces, total area 200.0, and no cross-island interaction. */
+  const Array<double2> verts = {
+      /* Square 1 */
+      double2(0.0, 0.0),
+      double2(10.0, 0.0),
+      double2(10.0, 10.0),
+      double2(0.0, 10.0),
+      /* Square 2 */
+      double2(30.0, 0.0),
+      double2(40.0, 0.0),
+      double2(40.0, 10.0),
+      double2(30.0, 10.0),
+  };
+  const Array<int> face_offsets_data = {0, 4, 8};
+  const Array<int> face_vert_indices = {0, 1, 2, 3, 4, 5, 6, 7};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Inside;
+  input.offset = std::numeric_limits<double>::infinity();
+  input.label = "PSLG_MultipleDisjointIslands";
+  input.full_verification = true;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_TRUE(output.is_valid);
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_EQ(output.face_offsets().size(), 8);
+  EXPECT_NEAR(total_faces_area(output), 200.0, 1e-4);
+
+  /* Verify no edge spans between Square 1 (x <= 10) and Square 2 (x >= 30). */
+  for (const int2 &e : output.edge) {
+    const double2 &p1 = output.vert[e[0]];
+    const double2 &p2 = output.vert[e[1]];
+    const bool p1_sq1 = (p1.x <= 15.0);
+    const bool p2_sq1 = (p2.x <= 15.0);
+    EXPECT_EQ(p1_sq1, p2_sq1);
+  }
+}
+
+/**
+ * Font glyph lowercase 'e': outer boundary (194 vertices) + inner hole (65 vertices).
+ * Tests complete coverage without dropped faces / gaps.
+ */
+TEST(straight_skeleton, FontGlyph_LowercaseE)
+{
+  Vector<double2> verts;
+  for (const double2 &p : lowercase_e_outer) {
+    verts.append(p);
+  }
+  for (const double2 &p : lowercase_e_inner) {
+    verts.append(p);
+  }
+
+  const Array<int> face_offsets_data = {0, 194, 259};
+  Array<int> face_vert_indices(259);
+  for (int i = 0; i < 259; i++) {
+    face_vert_indices[i] = i;
+  }
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Inside;
+  input.offset = std::numeric_limits<double>::infinity();
+  input.label = "FontGlyph_LowercaseE";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* Verify 2-manifold edge topology: each interior edge is shared by at most 2 faces. */
+  std::map<std::pair<int, int>, int> edge_face_count;
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange r = output.face_offsets()[fi];
+    const int n = int(r.size());
+    for (const int i : IndexRange(n)) {
+      int u = output.face_vert_indices[r[i]];
+      int v = output.face_vert_indices[r[(i + 1) % n]];
+      if (u > v) {
+        std::swap(u, v);
+      }
+      edge_face_count[{u, v}]++;
+    }
+  }
+  for (const auto &[edge, count] : edge_face_count) {
+    EXPECT_LE(count, 2) << "Overloaded edge (" << edge.first << ", " << edge.second
+                        << ") shared by " << count << " faces";
+  }
+
+  EXPECT_TRUE(output.is_valid);
+  EXPECT_FALSE(output.hit_max_events);
+}
+
+/**
+ * Font glyph capital 'G': 262 vertices.
+ * Tests that no roof faces or skeleton edges extend outside the input boundary.
+ */
+TEST(straight_skeleton, FontGlyph_CapitalG)
+{
+  Vector<double2> verts;
+  for (const double2 &p : capital_G_verts) {
+    verts.append(p);
+  }
+
+  const Array<int> face_offsets_data = {0, 262};
+  Array<int> face_vert_indices(262);
+  for (int i = 0; i < 262; i++) {
+    face_vert_indices[i] = i;
+  }
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Inside;
+  input.offset = std::numeric_limits<double>::infinity();
+  input.label = "FontGlyph_CapitalG";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_TRUE(output.is_valid);
+  EXPECT_FALSE(output.hit_max_events);
+  std::cout << "Capital G: output faces = " << output.face_offsets().size()
+            << ", total area = " << total_faces_area(output) << std::endl;
+}
+
+/**
+ * Font glyph capital 'C': 258 vertices.
+ */
+TEST(straight_skeleton, FontGlyph_CapitalC)
+{
+  Vector<double2> verts;
+  for (const double2 &p : capital_C_verts) {
+    verts.append(p);
+  }
+
+  const Array<int> face_offsets_data = {0, 258};
+  Array<int> face_vert_indices(258);
+  for (int i = 0; i < 258; i++) {
+    face_vert_indices[i] = i;
+  }
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Inside;
+  input.offset = std::numeric_limits<double>::infinity();
+  input.label = "FontGlyph_CapitalC";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* Verify 2-manifold edge topology: each interior edge is shared by at most 2 faces. */
+  std::map<std::pair<int, int>, int> edge_face_count;
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange r = output.face_offsets()[fi];
+    const int n = int(r.size());
+    for (const int i : IndexRange(n)) {
+      int u = output.face_vert_indices[r[i]];
+      int v = output.face_vert_indices[r[(i + 1) % n]];
+      if (u > v) {
+        std::swap(u, v);
+      }
+      edge_face_count[{u, v}]++;
+    }
+  }
+  for (const auto &[edge, count] : edge_face_count) {
+    if (count > 2) {
+      std::cout << "Overloaded edge (" << edge.first << ", " << edge.second
+                << ") shared by faces: ";
+      for (const int fi : output.face_offsets().index_range()) {
+        const IndexRange r = output.face_offsets()[fi];
+        const int n = int(r.size());
+        for (const int i : IndexRange(n)) {
+          int u = output.face_vert_indices[r[i]];
+          int v = output.face_vert_indices[r[(i + 1) % n]];
+          if ((u == edge.first && v == edge.second) || (v == edge.first && u == edge.second)) {
+            std::cout << fi << " (dir: " << u << "->" << v << ", orig=" << output.face_orig[fi]
+                      << ") ";
+            break;
+          }
+        }
+      }
+      std::cout << std::endl;
+      for (const int fi : output.face_offsets().index_range()) {
+        const IndexRange r = output.face_offsets()[fi];
+        const int n = int(r.size());
+        for (const int i : IndexRange(n)) {
+          int u = output.face_vert_indices[r[i]];
+          int v = output.face_vert_indices[r[(i + 1) % n]];
+          if ((u == edge.first && v == edge.second) || (v == edge.first && u == edge.second)) {
+            std::cout << "  face " << fi << " verts: ";
+            for (int vi : r)
+              std::cout << output.face_vert_indices[vi] << " ";
+            std::cout << std::endl;
+            break;
+          }
+        }
+      }
+    }
+    EXPECT_LE(count, 2) << "Overloaded edge (" << edge.first << ", " << edge.second
+                        << ") shared by " << count << " faces";
+  }
+
+  EXPECT_TRUE(output.is_valid);
+  EXPECT_FALSE(output.hit_max_events);
+  std::cout << "Capital C: output faces = " << output.face_offsets().size()
+            << ", total area = " << total_faces_area(output) << std::endl;
+}
+
+/**
+ * Font glyph capital 'A'.
+ */
+TEST(straight_skeleton, FontGlyph_CapitalA)
+{
+  const Vector<double2> verts = {
+      double2(1.4480, 2.7440),
+      double2(1.1720, 2.7440),
+      double2(0.0000, 0.0000),
+      double2(0.4000, 0.0000),
+      double2(0.7440, 0.8040),
+      double2(1.9040, 0.8040),
+      double2(2.2680, 0.0000),
+      double2(2.6680, 0.0000),
+      double2(1.3040, 2.1440),
+      double2(1.7440, 1.1560),
+      double2(0.8960, 1.1560),
+  };
+
+  const Array<int> face_offsets_data = {0, 8, 11};
+  const Array<int> face_vert_indices = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Inside;
+  input.offset = std::numeric_limits<double>::infinity();
+  input.label = "FontGlyph_CapitalA";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
 }
 
 /** \} */
