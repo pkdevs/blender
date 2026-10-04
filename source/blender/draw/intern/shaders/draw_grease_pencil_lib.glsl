@@ -461,6 +461,7 @@ float4 dot_segment2(float2 xy,
                     bool is_stroke_end,
                     bool flat_start,
                     bool flat_end,
+                    bool miter_break,
                     float4 viewport_res)
 {
   float l = 0.0f;
@@ -604,6 +605,22 @@ float4 dot_segment2(float2 xy,
                    (r1 * tan_half_theta - r0 / tan_half_theta) * (l0 + r0) / (l0 + r1 + r0);
 
         local = float2(l0, hi * y);
+
+        ssp = ss1.xy + local.x * local_x + local.y * local_y;
+      }
+      else {
+        local = float2(0.0f);
+        local.x += l0 + r1;
+        local.y += y * r1 * tan_half_theta;
+
+        ssp = ss1.xy + local.x * local_x + local.y * local_y;
+      }
+    }
+    else if (miter_break) {
+      if (use_curr) {
+        local = float2(0.0f);
+        local.x += -r1;
+        local.y += y * r1 / tan_half_theta;
 
         ssp = ss1.xy + local.x * local_x + local.y * local_y;
       }
@@ -979,6 +996,22 @@ float4 gpencil_vertex(float4 viewport_res,
         out_thickness.w = MITER_LIMIT_TYPE_BEVEL;
       }
 
+      float miter_limit = use_curr ? miter_limit1 : miter_limit2;
+
+      if (miter_limit == MITER_LIMIT_TYPE_BEVEL || miter_limit == MITER_LIMIT_TYPE_ROUND) {
+        /* Approximately cosine of 25 degrees. */
+        miter_limit = 0.9f;
+      }
+
+      /* Prevent the limit from becoming to small. */
+      if (miter_limit < 0.5f) {
+        miter_limit = 0.5f;
+      }
+
+      float cos_angle_adj = (use_curr) ? cos_angle1 : cos_angle2;
+      /* Break corners after a certain angle to avoid really thick corners. */
+      bool miter_break = cos_angle_adj > miter_limit;
+
       out_thickness.x = clamped_thickness / out_ndc.w;
       out_thickness.y = thickness / out_ndc.w;
       out_aspect = float4(1.0f, 1.0f, 1.0f, 0.0f);
@@ -1000,6 +1033,7 @@ float4 gpencil_vertex(float4 viewport_res,
                                is_stroke_end,
                                flat_start,
                                flat_end,
+                               miter_break,
                                viewport_res);
       }
 
