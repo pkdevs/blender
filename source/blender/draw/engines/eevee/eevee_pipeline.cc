@@ -348,9 +348,6 @@ void Prepass::end_sync()
           SET_FLAG_FROM_TEST(state, !double_sided, DRW_STATE_CULL_BACK);
           SET_FLAG_FROM_TEST(state, write_raycast || write_motion, DRW_STATE_WRITE_COLOR);
           sub->state_set(state);
-          /* `velocity` and `velocity_local` are written together. */
-          const GPUAttachmentState motion_state = write_motion ? GPU_ATTACHMENT_WRITE :
-                                                                  GPU_ATTACHMENT_IGNORE;
           sub->subpass_transition(
               GPU_ATTACHMENT_WRITE,
               {write_raycast ?
@@ -359,8 +356,7 @@ void Prepass::end_sync()
                (write_raycast && write_id) ?
                    GPU_ATTACHMENT_WRITE :
                    (read_raycast ? GPU_ATTACHMENT_READ : GPU_ATTACHMENT_IGNORE),
-               motion_state,
-               motion_state});
+               write_motion ? GPU_ATTACHMENT_WRITE : GPU_ATTACHMENT_IGNORE});
         }
       }
     }

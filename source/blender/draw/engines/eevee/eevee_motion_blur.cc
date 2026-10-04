@@ -157,7 +157,6 @@ void MotionBlurModule::sync()
     sub.bind_ubo("motion_blur_buf", data_);
     sub.bind_texture("depth_tx", &render_buffers.depth_tx);
     sub.bind_image("velocity_img", &render_buffers.vector_tx);
-    sub.bind_image("velocity_local_img", &render_buffers.vector_local_tx);
     sub.bind_image("out_tiles_img", &tiles_tx_);
     sub.dispatch(&dispatch_flatten_size_);
     sub.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH);
@@ -179,7 +178,6 @@ void MotionBlurModule::sync()
     sub.bind_ssbo("tile_indirection_buf", tile_indirection_buf_);
     sub.bind_texture("depth_tx", &render_buffers.depth_tx, no_filter);
     sub.bind_texture("velocity_tx", &render_buffers.vector_tx, no_filter);
-    sub.bind_texture("velocity_local_tx", &render_buffers.vector_local_tx, no_filter);
     sub.bind_texture("in_color_tx", &input_color_tx_, no_filter);
     sub.bind_image("in_tiles_img", &tiles_tx_);
     sub.bind_image("out_color_img", &output_color_tx_);

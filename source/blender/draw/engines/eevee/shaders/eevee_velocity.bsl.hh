@@ -109,9 +109,14 @@ struct CameraVelocity {
   }
 
   /**
-   * Face-local variant of `surface_velocity()` for `RenderBuffers::vector_local_tx`.
+   * Face-local variant of `surface_velocity()`, for `RenderBuffers::vector_tx`. Called from the
+   * depth pre-pass with the true \a P_prv/\a P_nxt, and from `resolve_local()`'s static-geometry
+   * fallback with \a P_prv == \a P == \a P_nxt.
    */
-  float4 surface_velocity_local(const ViewMatrices &view, float3 P_prv, float3 P, float3 P_nxt) const
+  float4 surface_velocity_local(const ViewMatrices &view,
+                                float3 P_prv,
+                                float3 P,
+                                float3 P_nxt) const
   {
     if (!is_panoramic(camera_curr.type)) {
       return surface_velocity(P_prv, P, P_nxt);
@@ -124,50 +129,18 @@ struct CameraVelocity {
     float2 prev_ndc = project_point(view.winmat, transform_point(viewmat_prev, P_prv)).xy;
     float2 next_ndc = project_point(view.winmat, transform_point(viewmat_next, P_nxt)).xy;
 
-    if (any(isnan(prev_ndc)) || any(isinf(prev_ndc))) {
+    /* `project_point()` can land P_prv/P_nxt near this cubeface's own grazing angle under a large
+     * enough inter-frame rotation, producing a huge-but-finite NDC value long before it reaches
+     * isnan/isinf - a legitimate NDC coordinate (even with generous overscan) never approaches
+     * this. Treat it the same as the NaN/Inf case already guarded below. */
+    const float max_valid_ndc = 20.0f;
+    if (any(isnan(prev_ndc)) || any(greaterThan(abs(prev_ndc), float2(max_valid_ndc)))) {
       prev_ndc = curr_ndc;
     }
-    if (any(isnan(next_ndc)) || any(isinf(next_ndc))) {
+    if (any(isnan(next_ndc)) || any(greaterThan(abs(next_ndc), float2(max_valid_ndc)))) {
       next_ndc = curr_ndc;
     }
     return float4(prev_ndc - curr_ndc, curr_ndc - next_ndc) * 0.5f;
-  }
-
-  /**
-   * Given a world space view vector V, compute the previous and next motion vectors for background pixels.
-   * Returns uv space motion vectors in pairs (motion_prev.xy, motion_next.xy).
-   */
-  float4 background_velocity(float3 V) const
-  {
-    float2 prev_uv, curr_uv, next_uv;
-    const bool panoramic = is_panoramic(camera_curr.type);
-    if (panoramic) {
-      /* Project through the panoramic mapping so the motion vector lands in the same warped film
-       * space the accumulation buffer is stored in. */
-      prev_uv = eevee::camera::uv_from_view(camera_prev,
-                                            transform_direction(camera_prev.viewmat, V));
-      curr_uv = eevee::camera::uv_from_view(camera_curr,
-                                            transform_direction(camera_curr.viewmat, V));
-      next_uv = eevee::camera::uv_from_view(camera_next,
-                                            transform_direction(camera_next.viewmat, V));
-    }
-    else {
-      /* NOTE: We use CameraData matrices instead of drw_view().winmat to avoid adding the TAA
-       * jitter to the velocity. */
-      prev_uv = project_point(camera_prev.winmat, transform_direction(camera_prev.viewmat, V)).xy;
-      curr_uv = project_point(camera_curr.winmat, transform_direction(camera_curr.viewmat, V)).xy;
-      next_uv = project_point(camera_next.winmat, transform_direction(camera_next.viewmat, V)).xy;
-    }
-    /* NOTE: We output both vectors in the same direction so we can reuse the same vector
-     * with RGRG swizzle in viewport. */
-    float4 motion = float4(prev_uv - curr_uv, curr_uv - next_uv);
-    if (!panoramic) {
-      /* Convert NDC velocity to UV velocity. `uv_from_view` above already returns UV space
-       * directly for the panoramic case. */
-      motion *= 0.5f;
-    }
-
-    return motion;
   }
 
   /* World-space view direction. Must use `view`, which is this cubeface for panoramic camera. */
@@ -179,7 +152,9 @@ struct CameraVelocity {
   }
 
   /**
-   * Face-local variant of `resolve()` for `RenderBuffers::vector_local_tx`.
+   * Resolves `RenderBuffers::vector_tx` into this cubeface's own local NDC space. Real motion is
+   * a plain unpack, already written by `surface_velocity_local()` in the depth pre-pass.
+   * Background/no-data pixels fall back to reprojecting a static point/direction.
    */
   float4 resolve_local(const ViewMatrices &view, float4 vector_local, float2 uv, float depth) const
   {
@@ -208,31 +183,92 @@ struct CameraVelocity {
     return surface_velocity_local(view, P, P, P);
   }
 
-  float4 resolve(const draw::View &views, float4 vector, float2 uv, float depth) const
-  {
-    const ViewMatrices view = views.get(0);
-    if (vector.x == VELOCITY_INVALID) {
-      bool is_background = (depth == 1.0f);
-      if (is_background) {
-        return background_velocity(background_world_direction(view, uv));
-      }
-      /* Static geometry. No translation in world space. */
-      float3 P = view.point_screen_to_world(float3(uv, depth));
-      return surface_velocity(P, P, P);
-    }
-    return velocity::unpack(vector);
-  }
-
   /**
    * Load and resolve correct velocity as some pixels might still not have correct
    * motion data for performance reasons.
-   * Returns motion vector in render UV space.
+   * Returns motion vector in this cubeface's own local NDC space.
    */
-  float4 resolve(const draw::View &views, sampler2D vector_tx, int2 texel, float depth) const
+  float4 resolve_local(const draw::View &views, sampler2D vector_tx, int2 texel, float depth) const
   {
+    const ViewMatrices view = views.get(0);
     float2 uv = (float2(texel) + 0.5f) / float2(textureSize(vector_tx, 0).xy);
     float4 vector = texelFetch(vector_tx, texel, 0);
-    return resolve(views, vector, uv, depth);
+    return resolve_local(view, vector, uv, depth);
+  }
+
+  /**
+   * Converts a motion vector from this cubeface's own local NDC space (see `resolve_local()`)
+   * into whole-panorama UV space, via the local Jacobian of the panoramic mapping relative to
+   * this cubeface's own projection. A first-order approximation, accurate for the small,
+   * per-frame motion this is used for - not the same thing as the single global scale factor
+   * that doesn't work here (see `RenderBuffers::vector_tx`): the Jacobian varies per pixel,
+   * a fixed scale doesn't. Identity for non-panoramic cameras, which have only one space.
+   */
+  float4 local_to_panoramic(const ViewMatrices &view, float4 local_motion, float2 uv) const
+  {
+    if (!is_panoramic(camera_curr.type)) {
+      return local_motion;
+    }
+    const float eps = 1.0f / 1024.0f;
+    float2 uv0 = eevee::camera::uv_from_view(
+        camera_curr, transform_direction(camera_curr.viewmat, background_world_direction(view, uv)));
+    float2 uv_u = eevee::camera::uv_from_view(
+        camera_curr,
+        transform_direction(camera_curr.viewmat,
+                            background_world_direction(view, uv + float2(eps, 0.0f))));
+    float2 uv_v = eevee::camera::uv_from_view(
+        camera_curr,
+        transform_direction(camera_curr.viewmat,
+                            background_world_direction(view, uv + float2(0.0f, eps))));
+    /* A finite-difference sample landing across the panoramic mapping's own wrap/seam jumps by
+     * O(1) instead of O(eps), corrupting the Jacobian with a huge-but-finite value (isnan/isinf
+     * alone doesn't catch this, same lesson as `background_world_direction()`'s own postmortem).
+     * Detect it directly and fall back to zero motion. */
+    if (any(greaterThan(abs(uv_u - uv0), float2(0.5f))) ||
+        any(greaterThan(abs(uv_v - uv0), float2(0.5f))) || any(isnan(uv0)) || any(isnan(uv_u)) ||
+        any(isnan(uv_v)))
+    {
+      return float4(0.0f);
+    }
+    float2 jac_u = (uv_u - uv0) / eps;
+    float2 jac_v = (uv_v - uv0) / eps;
+    float2 prev_delta = jac_u * local_motion.x + jac_v * local_motion.y;
+    float2 next_delta = jac_u * local_motion.z + jac_v * local_motion.w;
+    return float4(prev_delta, next_delta);
+  }
+
+  /**
+   * Whole-panorama UV variant of `resolve_local()`, for consumers needing motion in the same
+   * warped film space Film's history/accumulation buffer is stored in (TAA reprojection, the
+   * "Vector" pass) - see `local_to_panoramic()`.
+   */
+  float4 resolve_panoramic(const draw::View &views,
+                           sampler2D vector_tx,
+                           int2 texel,
+                           float depth) const
+  {
+    const ViewMatrices view = views.get(0);
+    float2 uv = (float2(texel) + 0.5f) / float2(textureSize(vector_tx, 0).xy);
+    float4 vector = texelFetch(vector_tx, texel, 0);
+    if (is_panoramic(camera_curr.type) && vector.x == VELOCITY_INVALID && depth == 1.0f) {
+      /* Background: resolve directly in panorama space, skipping `resolve_local()`'s own
+       * depth == 1.0f branch and the `local_to_panoramic()` Jacobian entirely. That branch
+       * reprojects through this cubeface's own ~90 degree local frustum first, which, unlike the
+       * whole-panorama mapping below, has real edges - under large enough rotation the reprojected
+       * direction lands near one of them and `project_point()` blows up to a huge-but-finite
+       * value well before the Jacobian ever runs (not caught by its isnan/isinf guard). Nothing
+       * here needs the local buffer, so there is no need to go through local space at all. */
+      float3 V = background_world_direction(view, uv);
+      float2 prev_uv = eevee::camera::uv_from_view(camera_prev,
+                                                    transform_direction(camera_prev.viewmat, V));
+      float2 curr_uv = eevee::camera::uv_from_view(camera_curr,
+                                                    transform_direction(camera_curr.viewmat, V));
+      float2 next_uv = eevee::camera::uv_from_view(camera_next,
+                                                    transform_direction(camera_next.viewmat, V));
+      return float4(prev_uv - curr_uv, curr_uv - next_uv);
+    }
+    float4 local_motion = resolve_local(view, vector, uv, depth);
+    return local_to_panoramic(view, local_motion, uv);
   }
 };
 

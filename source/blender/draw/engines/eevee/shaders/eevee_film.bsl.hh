@@ -560,7 +560,7 @@ struct Film {
       }
     }
 
-    float4 vector = camera.resolve(views, vector_tx, nearest_texel, min_depth);
+    float4 vector = camera.resolve_panoramic(views, vector_tx, nearest_texel, min_depth);
 
     /* Transform to pixel space. */
     vector.xy *= float2(uniforms.uniform_buf.film.extent);
@@ -1081,7 +1081,7 @@ struct Film {
       /* Using film weight as distance to the pixel. So the check is inverted. */
       if (film_sample.weight > film_distance) {
         float depth = reverse_z::read(texelFetch(depth_tx, film_sample.texel, 0).x);
-        float4 vector = camera.resolve(views, vector_tx, film_sample.texel, depth);
+        float4 vector = camera.resolve_panoramic(views, vector_tx, film_sample.texel, depth);
         /* Transform to pixel space, matching Cycles format. */
         vector *= float4(float2(uni.film.render_extent), float2(uni.film.render_extent));
 

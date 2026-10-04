@@ -87,13 +87,6 @@ void RenderBuffers::acquire(int2 extent, gpu::TextureFormat raycast_depth_format
 
   /* TODO(fclem): Make vector pass allocation optional if no TAA or motion blur is needed. */
   vector_tx.acquire_2d(extent, vector_tx_format(), usage_attachment_read_write);
-  if (inst_.camera.is_panoramic()) {
-    vector_local_tx.acquire_2d(extent, vector_tx_format(), usage_attachment_read_write);
-  }
-  else {
-    /* Still acquire it, since the passes can't conditionally bind textures. */
-    vector_local_tx.acquire_2d(int2(1), vector_tx_format(), usage_attachment_read_write);
-  }
   if (inst_.pipelines.has_raycast) {
     raycast_depth_tx.acquire_2d(extent, raycast_depth_format, GPU_TEXTURE_USAGE_SHADER_READ);
     object_id_tx.acquire_2d(extent, object_id_format, usage_attachment_read);
@@ -110,7 +103,6 @@ void RenderBuffers::acquire(int2 extent, gpu::TextureFormat raycast_depth_format
   if (do_motion_vectors_swizzle) {
     /* Change texture swizzling to avoid complexity in shaders. */
     GPU_texture_swizzle_set(vector_tx, "rgrg");
-    GPU_texture_swizzle_set(vector_local_tx, "rgrg");
   }
 
   int color_len = data.color_len + data.aovs.color_len;
@@ -142,10 +134,8 @@ void RenderBuffers::release()
   if (do_motion_vectors_swizzle) {
     /* Reset swizzle since this texture might be reused in other places. */
     GPU_texture_swizzle_set(vector_tx, "rgba");
-    GPU_texture_swizzle_set(vector_local_tx, "rgba");
   }
   vector_tx.release();
-  vector_local_tx.release();
   raycast_depth_tx.release();
   object_id_tx.release();
   prepass_normal_tx.release();
