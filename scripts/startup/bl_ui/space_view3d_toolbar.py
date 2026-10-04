@@ -2270,6 +2270,7 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor(View3DPanel, Panel):
 
     def draw(self, context):
         layout = self.layout
+        ob = context.object
         tool_settings = context.tool_settings
         settings = tool_settings.gpencil_paint
         brush = settings.brush
@@ -2281,19 +2282,64 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor(View3DPanel, Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         col = layout.column()
-        col.enabled = settings.color_mode == 'VERTEXCOLOR'
 
-        UnifiedPaintPanel.prop_unified_color_picker(col, context, brush, "color", value_slider=True)
+        if settings.color_mode == 'VERTEXCOLOR':
+            UnifiedPaintPanel.prop_unified_color_picker(col, context, brush, "color", value_slider=True)
 
-        sub_row = col.row(align=True)
-        UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "color", text="")
-        UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "secondary_color", text="")
+            sub_row = col.row(align=True)
+            UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "color", text="")
+            UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "secondary_color", text="")
 
-        sub_row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
-        sub_row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
+            sub_row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
+            sub_row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
 
-        if brush.gpencil_brush_type in {'DRAW', 'FILL'}:
-            col.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
+            if brush.gpencil_brush_type in {'DRAW', 'FILL'}:
+                col.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
+        else:
+            row = layout.row(align=True)
+            row_mat = row.split(factor=0.4)
+            row_sub = row_mat.column()
+            row_sub.alignment = 'RIGHT'
+            row_sub.label(text="Active Material")
+
+            ma = None
+            gp_settings = brush.gpencil_settings
+            if gp_settings.use_material_pin is False:
+                if len(ob.material_slots) > 0 and ob.active_material_index >= 0:
+                    ma = ob.material_slots[ob.active_material_index].material
+            else:
+                ma = gp_settings.material
+
+            if ma is None:
+                row_mat.template_ID(ob, "active_material", new="material.new", live_icon=True)
+                return
+
+            icon_id = 0
+            ma.id_data.preview_ensure()
+            if ma.id_data.preview:
+                icon_id = ma.id_data.preview.icon_id
+
+            row_2 = row_mat.row(align=True)
+            row_2.popover(
+                panel="TOPBAR_PT_grease_pencil_materials",
+                text="",
+                translate=False,
+                icon_value=icon_id,
+            )
+
+            row_2.prop(ma, "name", text="")
+
+            gpcolor = ma.grease_pencil
+            layout.prop(gpcolor, "color", text="Stroke Color")
+            if gpcolor.fill_style == 'SOLID':
+                layout.prop(gpcolor, "fill_color", text="Fill Color")
+            elif gpcolor.fill_style == 'GRADIENT':
+                layout.separator()
+                col = layout.column()
+                col.prop(gpcolor, "gradient_type", text="Fill Gradient Type")
+                col.template_color_ramp(gpcolor, "gradient")
+            elif gpcolor.fill_style == "TEXTURE":
+                layout.prop(gpcolor, "fill_color", text="Fill Color")
 
 
 class VIEW3D_PT_tools_grease_pencil_v3_brush_mix_palette(View3DPanel, Panel):
@@ -2323,6 +2369,9 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mix_palette(View3DPanel, Panel):
         if brush.gpencil_brush_type not in {'DRAW', 'FILL'}:
             return False
 
+        if settings.color_mode != 'VERTEXCOLOR':
+            return False
+
         return True
 
     def draw(self, context):
@@ -2333,12 +2382,59 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mix_palette(View3DPanel, Panel):
         settings = tool_settings.gpencil_paint
 
         col = layout.column()
-        col.enabled = settings.color_mode == 'VERTEXCOLOR'
 
         row = col.row(align=True)
         row.template_ID(settings, "palette", new="palette.new")
         if settings.palette:
             col.template_palette(settings, "palette")
+
+
+class VIEW3D_PT_tools_grease_pencil_v3_brush_mix_materials(View3DPanel, Panel):
+    bl_context = ".grease_pencil_paint"
+    bl_label = "Materials"
+    bl_category = "Tool"
+    bl_parent_id = "VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor"
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.object
+        tool_settings = context.tool_settings
+        settings = tool_settings.gpencil_paint
+        brush = settings.brush
+
+        if ob is None or brush is None:
+            return False
+
+        from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+        tool = ToolSelectPanelHelper.tool_active_from_context(context)
+        if tool and tool.idname in {"builtin.trim", "builtin.carver", "builtin.eyedropper", "builtin.interpolate"}:
+            return False
+
+        if brush.gpencil_brush_type == 'TINT':
+            return True
+
+        if brush.gpencil_brush_type not in {'DRAW', 'FILL'}:
+            return False
+
+        if settings.color_mode != 'MATERIAL':
+            return False
+
+        return True
+
+    def draw(self, context):
+        ob = context.object
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        tool_settings = context.tool_settings
+        settings = tool_settings.gpencil_paint
+
+        col = layout.column()
+
+        row = col.row(align=True)
+
+        rows = 7
+        row.template_list("GPENCIL_UL_matslots", "", ob, "material_slots", ob, "active_material_index", rows=rows)
 
 
 class VIEW3D_PT_tools_grease_pencil_v3_brush_gap_closure(View3DPanel, Panel):
@@ -2475,6 +2571,7 @@ classes = (
     VIEW3D_PT_tools_grease_pencil_v3_brush_stabilizer,
     VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor,
     VIEW3D_PT_tools_grease_pencil_v3_brush_mix_palette,
+    VIEW3D_PT_tools_grease_pencil_v3_brush_mix_materials,
     VIEW3D_PT_tools_grease_pencil_v3_brush_gap_closure,
     VIEW3D_PT_tools_grease_pencil_paint_appearance,
 )
