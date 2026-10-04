@@ -10,9 +10,13 @@
 
 #include "BKE_paint.hh"
 
+#include "DNA_object_types.h"
 #include "DNA_particle_types.h"
 
+#include "RE_engine.h"
+
 #include "draw_sculpt.hh"
+#include "draw_state.hh"
 
 #include "overlay_base.hh"
 #include "overlay_grease_pencil.hh"
@@ -63,6 +67,8 @@ class Prepass : Overlay {
  private:
   PassMain ps_ = {"prepass"};
   PassMain::Sub *mesh_ps_ = nullptr;
+  /** Like mesh_ps_ but with backface culling */
+  PassMain::Sub *mesh_bfcull_ps_ = nullptr;
   PassMain::Sub *mesh_flat_ps_ = nullptr;
   PassMain::Sub *hair_ps_ = nullptr;
   PassMain::Sub *curves_ps_ = nullptr;
@@ -89,7 +95,7 @@ class Prepass : Overlay {
 
     use_material_slot_selection_ = state.is_material_select;
 
-    bool use_cull = res.globals_buf.backface_culling;
+    bool use_cull = state.use_backface_culling == RE_USE_BACKFACE_CULLING_ALL;
     DRWState backface_cull_state = use_cull ? DRW_STATE_CULL_BACK : DRWState(0);
 
     ps_.init();
@@ -102,7 +108,19 @@ class Prepass : Overlay {
       auto &sub = ps_.sub("Mesh");
       sub.shader_set(res.is_selection() ? res.shaders->depth_mesh_conservative.get() :
                                           res.shaders->depth_mesh.get());
+      if (res.is_selection()) {
+        sub.push_constant("backface_culling", use_cull);
+      }
       mesh_ps_ = &sub;
+    }
+    {
+      auto &sub = ps_.sub("MeshBFCull");
+      sub.shader_set(res.is_selection() ? res.shaders->depth_mesh_conservative.get() :
+                                          res.shaders->depth_mesh.get());
+      if (res.is_selection()) {
+        sub.push_constant("backface_culling", true);
+      }
+      mesh_bfcull_ps_ = &sub;
     }
     {
       auto &sub = ps_.sub("MeshFlat");
@@ -233,27 +251,22 @@ class Prepass : Overlay {
 
     PassMain::Sub *pass = nullptr;
     switch (ob_ref.object->type) {
-      case OB_MESH:
-        if (use_material_slot_selection_) {
-          /* TODO(fclem): Improve the API. */
-          const int materials_len = BKE_object_material_used_with_fallback_eval(*ob_ref.object);
-          Array<GPUMaterial *> materials(materials_len, nullptr);
-          geom_list = DRW_cache_mesh_surface_shaded_get(ob_ref.object, materials);
-        }
-        else {
-          geom_single = DRW_cache_mesh_surface_get(ob_ref.object);
+      case OB_MESH: {
+        /* TODO(fclem): Improve the API. */
+        const int materials_len = BKE_object_material_used_with_fallback_eval(*ob_ref.object);
+        Array<GPUMaterial *> materials(materials_len, nullptr);
+        geom_list = DRW_cache_mesh_surface_shaded_get(ob_ref.object, materials);
 
-          if (res.is_selection() && !use_material_slot_selection_ &&
-              FlatObjectRef::flat_axis_index_get(ob_ref) != -1)
-          {
-            /* Avoid losing flat objects when in ortho views (see #56549) */
-            mesh_flat_ps_->draw(DRW_cache_mesh_all_edges_get(ob_ref.object),
-                                manager.unique_handle(ob_ref),
-                                res.select_id(ob_ref).get());
-          }
+        if (res.is_selection() && !use_material_slot_selection_ &&
+            FlatObjectRef::flat_axis_index_get(ob_ref) != -1)
+        {
+          /* Avoid losing flat objects when in ortho views (see #56549) */
+          mesh_flat_ps_->draw(DRW_cache_mesh_all_edges_get(ob_ref.object),
+                              manager.unique_handle(ob_ref),
+                              res.select_id(ob_ref).get());
         }
-        pass = mesh_ps_;
         break;
+      }
       case OB_VOLUME:
         if (!res.is_selection()) {
           /* Disable during display, only enable for selection. */
@@ -296,7 +309,7 @@ class Prepass : Overlay {
         break;
     }
 
-    if (pass == nullptr) {
+    if (ob_ref.object->type != OB_MESH && pass == nullptr) {
       return;
     }
 
@@ -308,10 +321,20 @@ class Prepass : Overlay {
         continue;
       }
 
+      if (ob_ref.object->type == OB_MESH) {
+        pass = mesh_ps_;
+        if (state.use_backface_culling == RE_USE_BACKFACE_CULLING_MATERIAL) {
+          const Material *ma = BKE_object_material_get_eval(ob_ref.object, material_id + 1);
+          if (ma && (ma->blend_flag & MA_BL_CULL_BACKFACE)) {
+            pass = mesh_bfcull_ps_;
+          }
+        }
+      }
+
       select::ID select_id = use_material_slot_selection_ ?
                                  res.select_id(ob_ref, (material_id + 1) << 16) :
                                  res.select_id(ob_ref);
-      if (res.is_selection() && (pass == mesh_ps_)) {
+      if (res.is_selection() && (pass == mesh_ps_ || pass == mesh_bfcull_ps_)) {
         /* Conservative shader needs expanded draw-call. */
         pass->draw_expand(
             geom_list[material_id], GPU_PRIM_TRIS, 1, 1, res_handle, select_id.get());

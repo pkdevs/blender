@@ -13,6 +13,8 @@
 
 #include "BKE_paint.hh"
 
+#include "RE_engine.h"
+
 #include "draw_common_c.hh"
 #include "draw_debug.hh"
 #include "overlay_instance.hh"
@@ -89,6 +91,20 @@ void Instance::init()
     /* For depth only drawing, no other render engine is expected. Except for Grease Pencil which
      * outputs valid depth. Otherwise depth is cleared and is valid. */
     state.is_render_depth_available |= state.is_depth_only_drawing;
+
+    state.use_backface_culling = RE_USE_BACKFACE_CULLING_NONE;
+    if (state.v3d->shading.flag & V3D_SHADING_BACKFACE_CULLING &&
+        state.v3d->shading.type == OB_SOLID)
+    {
+      state.use_backface_culling = RE_USE_BACKFACE_CULLING_ALL;
+    }
+    if (ELEM(state.v3d->shading.type, OB_MATERIAL, OB_RENDER) && state.rv3d->view_render) {
+      RenderEngine *render_engine = RE_view_engine_get(state.rv3d->view_render);
+      if (render_engine && render_engine->type->view_use_backface_culling) {
+        state.use_backface_culling = render_engine->type->view_use_backface_culling(render_engine,
+                                                                                    ctx->scene);
+      }
+    }
 
     if (!state.hide_overlays) {
       state.overlay = state.v3d->overlay;
@@ -436,22 +452,6 @@ void Resources::update_theme_settings(const DRWContext *ctx, const State &state)
 
   gb.size_viewport = ctx->viewport_size_get();
   gb.size_viewport_inv = 1.0f / gb.size_viewport;
-
-  if (state.v3d) {
-    const View3DShading &shading = state.v3d->shading;
-    gb.backface_culling = (shading.type == OB_SOLID) &&
-                          (shading.flag & V3D_SHADING_BACKFACE_CULLING);
-
-    if (is_selection() || state.is_depth_only_drawing) {
-      /* This is bad as this makes a solid mode setting affect material preview / render mode
-       * selection and auto-depth. But users are relying on this to work in scene using backface
-       * culling in shading (see #136335 and #136418). */
-      gb.backface_culling = (shading.flag & V3D_SHADING_BACKFACE_CULLING);
-    }
-  }
-  else {
-    gb.backface_culling = false;
-  }
 
   globals_buf.push_update();
 }

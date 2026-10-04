@@ -10,8 +10,8 @@ FRAGMENT_SHADER_CREATE_INFO(overlay_depth_mesh_base)
 
 void main()
 {
-#ifdef SELECT_ENABLE
-  if (uniform_buf.backface_culling && !gl_FrontFacing) {
+#ifdef SELECT_BFCULL_ENABLE
+  if (backface_culling && !gl_FrontFacing) {
     /* Return early since we are not using early depth testing. */
     return;
   }

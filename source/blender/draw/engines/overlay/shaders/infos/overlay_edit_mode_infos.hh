@@ -783,7 +783,7 @@ GPU_SHADER_CREATE_END()
 
 /* clang-format off */
 CREATE_INFO_VARIANT(overlay_depth_mesh, overlay_depth_mesh_base, draw_modelmat)
-CREATE_INFO_VARIANT(overlay_depth_mesh_selectable, overlay_depth_mesh_base, draw_modelmat_with_custom_id, overlay_select)
+CREATE_INFO_VARIANT(overlay_depth_mesh_selectable, overlay_depth_mesh_base, draw_modelmat_with_custom_id, overlay_select_bfcull)
 CREATE_INFO_VARIANT(overlay_depth_mesh_clipped, overlay_depth_mesh, drw_clipped)
 CREATE_INFO_VARIANT(overlay_depth_mesh_selectable_clipped, overlay_depth_mesh_selectable, drw_clipped)
 /* clang-format on */
@@ -800,7 +800,7 @@ GPU_SHADER_CREATE_END()
 
 /* clang-format off */
 CREATE_INFO_VARIANT(overlay_depth_mesh_conservative, overlay_depth_mesh_conservative_base, draw_modelmat)
-CREATE_INFO_VARIANT(overlay_depth_mesh_conservative_selectable, overlay_depth_mesh_conservative_base, draw_modelmat_with_custom_id, overlay_select)
+CREATE_INFO_VARIANT(overlay_depth_mesh_conservative_selectable, overlay_depth_mesh_conservative_base, draw_modelmat_with_custom_id, overlay_select_bfcull)
 CREATE_INFO_VARIANT(overlay_depth_mesh_conservative_clipped, overlay_depth_mesh_conservative, drw_clipped)
 CREATE_INFO_VARIANT(overlay_depth_mesh_conservative_selectable_clipped, overlay_depth_mesh_conservative_selectable, drw_clipped)
 /* clang-format on */

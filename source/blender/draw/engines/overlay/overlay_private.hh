@@ -22,6 +22,7 @@
 
 #include "DRW_gpu_wrapper.hh"
 #include "DRW_render.hh"
+#include "RE_engine.h"
 #include "UI_resources.hh"
 #include "draw_manager.hh"
 #include "draw_pass.hh"
@@ -157,6 +158,8 @@ struct State {
   bool draw_background = false;
   /** True if the render engine outputs satisfactory depth information to the depth buffer. */
   bool is_render_depth_available = false;
+  /** How to handle backface culling according to the current render engine. */
+  eRenderEngineUseBackfaceCulling use_backface_culling;
   /** Whether we should render a vignette over the scene. */
   bool vignette_enabled = false;
   /** Should text draw in this mode? */

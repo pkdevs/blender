@@ -332,7 +332,7 @@ struct [[host_shared]] UniformData {
 
   float fresnel_mix_edit;
   float pixel_fac;
-  bool32_t backface_culling;
+  float _pad0;
   float _pad1;
 };
 
