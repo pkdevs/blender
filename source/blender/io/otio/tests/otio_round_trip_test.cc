@@ -14,6 +14,7 @@
 #include "BKE_fcurve.hh"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_sound.hh"
@@ -64,6 +65,7 @@ namespace blender::io::otio {
 
 class OTIOTest : public BlendfileLoadingBaseTest {
  protected:
+  Main *bmain = nullptr;
   bContext *C = nullptr;
   ReportList reports{};
   Vector<std::unique_ptr<bContextStore>> context_store;
@@ -85,9 +87,9 @@ class OTIOTest : public BlendfileLoadingBaseTest {
   void SetUp() override
   {
     BlendfileLoadingBaseTest::SetUp();
-    ASSERT_TRUE(blendfile_load("io_tests/empty.blend"));
+    bmain = BKE_main_new();
     C = CTX_create();
-    CTX_data_main_set(C, bfile->main);
+    CTX_data_main_set(C, bmain);
     BKE_reports_init(&reports, RPT_STORE);
     BKE_tempdir_init(nullptr);
     directory = std::string(BKE_tempdir_session()) + SEP_STR + "io_otio";
@@ -100,12 +102,13 @@ class OTIOTest : public BlendfileLoadingBaseTest {
     BLI_delete(directory.c_str(), true, true);
     BKE_reports_free(&reports);
     CTX_free(C);
+    BKE_main_free(bmain);
     BlendfileLoadingBaseTest::TearDown();
   }
 
   Scene *new_scene(const char *name = "Timeline")
   {
-    Scene *scene = BKE_scene_add(bfile->main, name);
+    Scene *scene = BKE_scene_add(bmain, name);
     scene->r.frs_sec = 24;
     scene->r.frs_sec_base = 1.0f;
     scene->r.sfra = 1;
@@ -220,7 +223,7 @@ class OTIOTest : public BlendfileLoadingBaseTest {
     seq::LoadData load_data;
     seq::add_load_data_init(&load_data, name, copy_image(filenames[0]).c_str(), start, channel);
     load_data.image.count = filenames.size();
-    Strip *strip = seq::add_image_strip(bfile->main, scene, &scene->ed->seqbase, &load_data);
+    Strip *strip = seq::add_image_strip(bmain, scene, &scene->ed->seqbase, &load_data);
     seq::add_image_set_directory(strip, directory.c_str());
     for (const int i : filenames.index_range()) {
       copy_image(filenames[i]);
@@ -323,11 +326,11 @@ TEST_F(OTIOTest, MediaStrips)
                           asset_path("sequence_editing/ffmpeg/media/grad_h264.mp4").c_str(),
                           5,
                           1);
-  Strip *movie = seq::add_movie_strip(bfile->main, scene, &scene->ed->seqbase, &load_data);
+  Strip *movie = seq::add_movie_strip(bmain, scene, &scene->ed->seqbase, &load_data);
   movie->handles_set(scene, movie->left_handle() + 2, movie->right_handle(scene) - 3);
 
   seq::add_load_data_init(&load_data, "Sound", asset_path("sound/pink_panther.ogg").c_str(), 1, 2);
-  Strip *sound = seq::add_sound_strip(bfile->main, scene, &scene->ed->seqbase, &load_data);
+  Strip *sound = seq::add_sound_strip(bmain, scene, &scene->ed->seqbase, &load_data);
   sound->volume = 0.5f;
   EQCurveMappingData *graph = seq::sound_equalizermodifier_add_graph(
       reinterpret_cast<SoundEqualizerModifierData *>(
@@ -405,7 +408,7 @@ TEST_F(OTIOTest, MixedMeta)
   add_effect(scene, meta->seqbase, STRIP_TYPE_COLOR, "Picture", 1, 10, 10);
   seq::add_load_data_init(
       &load_data, "Sound", asset_path("sound/pink_panther.ogg").c_str(), 10, 2);
-  Strip *sound = seq::add_sound_strip(bfile->main, scene, &meta->seqbase, &load_data);
+  Strip *sound = seq::add_sound_strip(bmain, scene, &meta->seqbase, &load_data);
   sound->handles_set(scene, 10, 20);
   seq::time_update_meta_strip_range(scene, meta);
   meta->handles_set(scene, 10, 20);
@@ -441,7 +444,7 @@ TEST_F(OTIOTest, SoundSubframeOffset)
     seq::LoadData load_data;
     seq::add_load_data_init(
         &load_data, cases[i].first, asset_path("sound/pink_panther.ogg").c_str(), 1, i + 1);
-    Strip *sound = seq::add_sound_strip(bfile->main, scene, &scene->ed->seqbase, &load_data);
+    Strip *sound = seq::add_sound_strip(bmain, scene, &scene->ed->seqbase, &load_data);
     sound->handles_set(scene, 6, 26);
     sound->sound_offset = cases[i].second / fps;
   }
