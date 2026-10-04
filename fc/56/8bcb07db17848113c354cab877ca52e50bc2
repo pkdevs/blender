@@ -1,1 +1,2 @@
 Referenced by pull request #120807, Fix #120806: Clamp gamma when passed to OCIO
+Referenced by issue #164684, Grease Pencil vertex colors are not shown in the VR (OpenXR)
