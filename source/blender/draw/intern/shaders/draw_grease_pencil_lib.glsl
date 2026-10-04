@@ -548,6 +548,92 @@ float4 dot_segment2(float2 xy,
 
   float2 ssp = ss1.xy + local.x * local_x + local.y * local_y;
 
+  {
+    bool use_curr = xy.x == -1.0f;
+
+    float2 p0 = (use_curr) ? ss0.xy : ss1.xy;
+    float2 p1 = (use_curr) ? ss1.xy : ss2.xy;
+    float2 p2 = (use_curr) ? ss2.xy : ss3.xy;
+    float r0 = (use_curr) ? ss0.w : ss1.w;
+    float r1 = (use_curr) ? ss1.w : ss2.w;
+    float r2 = (use_curr) ? ss2.w : ss3.w;
+
+    float l0;
+    float l1;
+    float2 local0_x = safe_normalize_and_get_length(p1 - p0, l0);
+    float2 local1_x = safe_normalize_and_get_length(p2 - p1, l1);
+    float2 local0_y = orthogonal(local0_x);
+    float2 local1_y = orthogonal(local1_x);
+
+    float a0 = r1 - r0;
+    float a1 = r2 - r1;
+
+    float c0 = -a0 / l0;
+    float c1 = -a1 / l1;
+
+    float s0 = sqrt(1.0f - c0 * c0);
+    float s1 = sqrt(1.0f - c1 * c1);
+
+    float S0 = -c0 / s0;
+    float S1 = -c1 / s1;
+
+    if (is_stroke_start) {
+      if (flat_start) {
+        float hi = r1 / tan_half_theta +
+                   (r2 * tan_half_theta - r1 / tan_half_theta) * r1 / (l1 + r2 + r1);
+
+        local = float2(0.0f, hi * y);
+
+        ssp = ss1.xy + local.x * local_x + local.y * local_y;
+      }
+      else {
+        local = float2(0.0f);
+        local.x += -r1;
+        local.y += y * r1 / tan_half_theta;
+
+        ssp = ss1.xy + local.x * local_x + local.y * local_y;
+      }
+    }
+    else if (is_stroke_end) {
+      if (flat_end) {
+        float hi = r0 / tan_half_theta +
+                   (r1 * tan_half_theta - r0 / tan_half_theta) * (l0 + r0) / (l0 + r1 + r0);
+
+        local = float2(l0, hi * y);
+
+        ssp = ss1.xy + local.x * local_x + local.y * local_y;
+      }
+      else {
+        local = float2(0.0f);
+        local.x += l0 + r1;
+        local.y += y * r1 * tan_half_theta;
+
+        ssp = ss1.xy + local.x * local_x + local.y * local_y;
+      }
+    }
+    else {
+      float H0 = r0 / s0;
+      float H1 = r1 / s1;
+
+      S0 *= xy.y;
+      S1 *= xy.y;
+      H0 *= xy.y;
+      H1 *= xy.y;
+
+      float2 D0 = local0_y - local0_x * S0;
+      float2 D1 = local1_y - local1_x * S1;
+
+      float A0 = D0.x;
+      float A1 = D1.x;
+      float B0 = D0.y;
+      float B1 = D1.y;
+      float C0 = -H0 - dot(p0, D0);
+      float C1 = -H1 - dot(p1, D1);
+
+      ssp = float2(B0 * C1 - B1 * C0, -(A0 * C1 - A1 * C0)) / (A0 * B1 - A1 * B0);
+    }
+  }
+
   float z_depth = mix(ss1.z, ss2.z, 0.5f);
   return screen_space_to_ndc(float4(ssp, z_depth, 0.0f), viewport_res.xy);
 }
