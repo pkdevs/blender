@@ -634,6 +634,9 @@ class JoltSolverStep {
             geometry::jolt::convert_quat(instance_rotation),
             *motion_type,
             object_layer};
+        /* Body motion type can be changed from static to dynamic/kinematic, which requires valid
+         * motion properties. Without this flag a static body will never have motion properties. */
+        jolt_body_settings.mAllowDynamicOrKinematic = true;
         jolt_body_settings.mLinearVelocity = geometry::jolt::convert_vec3(linear_velocity);
         jolt_body_settings.mAngularVelocity = geometry::jolt::convert_vec3(angular_velocity);
 
