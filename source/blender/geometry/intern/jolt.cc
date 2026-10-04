@@ -117,16 +117,14 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_box(
   }
   const float3 half_extent = math::max(math::abs(bounds->min), math::abs(bounds->max)) *
                              params.scale;
-  return this->get_or_create_box(half_extent, params.density);
+  return this->get_or_create_box(half_extent);
 }
 
-JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_box(const float3 &half_extent,
-                                                                       const float density)
+JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_box(const float3 &half_extent)
 {
-  const BoxID box_id{half_extent, density};
+  const BoxID box_id{half_extent};
   CachedShape &cached_shape = this->boxes.lookup_or_add_cb(box_id, [&]() {
     JPH::BoxShapeSettings box_shape_settings{convert_vec3(half_extent)};
-    box_shape_settings.mDensity = density;
     const float min_axis = std::min({half_extent.x, half_extent.y, half_extent.z});
     box_shape_settings.mConvexRadius = 0.5 * std::min(min_axis, 0.1f);
     return box_shape_settings.Create();
@@ -148,16 +146,14 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_sphere(
   const float3 half_extent = math::max(math::abs(bounds->min), math::abs(bounds->max)) *
                              params.scale;
   const float radius = std::max({half_extent.x, half_extent.y, half_extent.z});
-  return this->get_or_create_sphere(radius, params.density);
+  return this->get_or_create_sphere(radius);
 }
 
-JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_sphere(const float radius,
-                                                                          const float density)
+JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_sphere(const float radius)
 {
-  const SphereID sphere_id{radius, density};
+  const SphereID sphere_id{radius};
   CachedShape &cached_shape = this->spheres.lookup_or_add_cb(sphere_id, [&]() {
     JPH::SphereShapeSettings sphere_shape_settings{radius};
-    sphere_shape_settings.mDensity = density;
     return sphere_shape_settings.Create();
   });
   if (cached_shape.shape.IsValid()) {
@@ -170,7 +166,7 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_convex_hull(
     const CollisionShapeParams &params)
 {
   const auto shape_hash = GeometryShapeHash::from_geometry(params.geometry);
-  const ConvexHullID convex_hull_id{shape_hash, params.scale, params.density};
+  const ConvexHullID convex_hull_id{shape_hash, params.scale};
   CachedShape &cached_shape = this->convex_hulls.lookup_or_add_cb(
       convex_hull_id, [&]() -> CachedShape {
         Vector<JPH::Vec3, 0, GuardedAlignedAllocator<>> points;
@@ -185,7 +181,6 @@ JPH::ShapeSettings::ShapeResult CollisionShapeCache::get_or_create_convex_hull(
           return {};
         }
         JPH::ConvexHullShapeSettings hull_settings(points.data(), points.size(), 0.0f);
-        hull_settings.mDensity = params.density;
         return hull_settings.Create();
       });
   if (cached_shape.shape.IsValid()) {

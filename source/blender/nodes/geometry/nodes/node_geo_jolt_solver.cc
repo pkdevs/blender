@@ -340,6 +340,16 @@ static JPH::ShapeSettings::ShapeResult make_collision_shape(
   return {};
 }
 
+/* Compute new mass properties of a shape using density. */
+static JPH::MassProperties scale_shape_mass_properties(const JPH::Shape &shape, float density)
+{
+  /* Default shape density is 1000 kg/m^3. */
+  constexpr float inv_default_density = 0.001f;
+  JPH::MassProperties mass_props = shape.GetMassProperties();
+  mass_props.ScaleToMass(mass_props.mMass * density * inv_default_density);
+  return mass_props;
+}
+
 class JoltSolverStep {
  private:
   struct TLS {
@@ -608,8 +618,8 @@ class JoltSolverStep {
         density = 1.0f;
       }
 
-      const geometry::jolt::CollisionShapeParams collision_shape_params{
-          reference_geometry, instance_scale, density};
+      const geometry::jolt::CollisionShapeParams collision_shape_params{reference_geometry,
+                                                                        instance_scale};
       JPH::ShapeSettings::ShapeResult collision_shape = make_collision_shape(
           *collision_shape_type, collision_shape_params, state_.collision_shape_cache);
       if (!collision_shape.IsValid()) {
@@ -643,14 +653,19 @@ class JoltSolverStep {
         JPH::Body *jolt_body = body_interface.CreateBody(jolt_body_settings);
         body_interface.AddBody(jolt_body->GetID(), JPH::EActivation::Activate);
         rigid_body = JoltRigidBody{jolt_body};
-
-        this->write_mass_attributes(*jolt_body, geo_data, instance_i);
       }
 
       body_interface.SetShape(
           rigid_body->body->GetID(), collision_shape.Get(), true, JPH::EActivation::Activate);
       rigid_body->body->SetFriction(friction);
       rigid_body->body->SetRestitution(bounciness);
+
+      /* Rigid bodies always have motion properties (see mAllowDynamicOrKinematic). */
+      rigid_body->body->GetMotionPropertiesUnchecked()->SetMassProperties(
+          JPH::EAllowedDOFs::All,
+          scale_shape_mass_properties(*rigid_body->body->GetShape(), density));
+      /* Mass attributes are needed to calculcate gravity forces outside of the solver node. */
+      this->write_mass_attributes(*rigid_body->body, geo_data, instance_i);
 
       if (motion_type != rigid_body->body->GetMotionType()) {
         /* TODO Skip activation if changing to static/kinematic? */
@@ -665,11 +680,6 @@ class JoltSolverStep {
               rigid_body->body->GetID(),
               geometry::jolt::convert_vec3(linear_velocity),
               geometry::jolt::convert_vec3(angular_velocity));
-
-          /* Mass attributes are needed to calculcate gravity forces outside of the solver node. */
-          rigid_body->body->GetMotionPropertiesUnchecked()->SetMassProperties(
-              JPH::EAllowedDOFs::All, rigid_body->body->GetShape()->GetMassProperties());
-          this->write_mass_attributes(*rigid_body->body, geo_data, instance_i);
         }
       }
 

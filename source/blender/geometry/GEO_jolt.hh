@@ -50,7 +50,6 @@ inline math::Quaternion convert_quat(const JPH::Quat &q)
 struct CollisionShapeParams {
   const bke::GeometrySet &geometry;
   const float3 &scale;
-  const float density;
 };
 
 class GeometryShapeHash {
@@ -81,11 +80,10 @@ struct CollisionShapeCache {
 
   struct BoxID {
     float3 half_extent;
-    float density;
 
     uint64_t hash() const
     {
-      return get_default_hash(this->half_extent, this->density);
+      return get_default_hash(this->half_extent);
     }
 
     bool operator==(const BoxID &) const = default;
@@ -93,11 +91,10 @@ struct CollisionShapeCache {
 
   struct SphereID {
     float radius;
-    float density;
 
     uint64_t hash() const
     {
-      return get_default_hash(this->radius, this->density);
+      return get_default_hash(this->radius);
     }
 
     bool operator==(const SphereID &) const = default;
@@ -106,11 +103,10 @@ struct CollisionShapeCache {
   struct ConvexHullID {
     GeometryShapeHash shape_hash;
     float3 scale;
-    float density;
 
     uint64_t hash() const
     {
-      return get_default_hash(this->shape_hash, this->scale, this->density);
+      return get_default_hash(this->shape_hash, this->scale);
     }
 
     bool operator==(const ConvexHullID &) const = default;
@@ -124,10 +120,9 @@ struct CollisionShapeCache {
   void remove_unused();
 
   JPH::ShapeSettings::ShapeResult get_or_create_box(const CollisionShapeParams &params);
-  JPH::ShapeSettings::ShapeResult get_or_create_box(const float3 &half_extent,
-                                                    const float density);
+  JPH::ShapeSettings::ShapeResult get_or_create_box(const float3 &half_extent);
   JPH::ShapeSettings::ShapeResult get_or_create_sphere(const CollisionShapeParams &params);
-  JPH::ShapeSettings::ShapeResult get_or_create_sphere(const float radius, const float density);
+  JPH::ShapeSettings::ShapeResult get_or_create_sphere(const float radius);
   JPH::ShapeSettings::ShapeResult get_or_create_convex_hull(const CollisionShapeParams &params);
 };
 
