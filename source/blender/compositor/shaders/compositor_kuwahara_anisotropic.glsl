@@ -136,11 +136,14 @@ void main()
   float center_weight = 1.0f / number_of_sectors;
   float4 weighted_center_color = center_color * center_weight;
   float4 weighted_center_color_squared = center_color_squared * center_weight;
-  for (int i = 0; i < number_of_sectors; i++) {
+
+  /* Note: explicitly unroll all the sector loops, this has a big performance
+   * boost on the GPU. */
+  for (int i = 0; i < 8 /* number_of_sectors */; i++) [[unroll]] {
     weighted_mean_of_squared_color_of_sectors[i] = weighted_center_color_squared;
     weighted_mean_of_color_of_sectors[i] = weighted_center_color;
   }
-  for (int i = 0; i < number_of_sectors / 2; i++) {
+  for (int i = 0; i < 4 /* number_of_sectors/2 */; i++) [[unroll]] {
     sum_of_weights_of_sectors[i] = center_weight;
   }
 
@@ -210,7 +213,7 @@ void main()
       float4 upper_color_squared = upper_color * upper_color;
       float4 lower_color_squared = lower_color * lower_color;
 
-      for (int k = 0; k < number_of_sectors; k++) {
+      for (int k = 0; k < 8 /* number_of_sectors */; k++) [[unroll]] {
         float weight = sector_weights[k] * radial_gaussian_weight;
         /* Note: CPU code skips loop body when weight == 0, on a GPU
          * that is not beneficial. */
@@ -233,7 +236,7 @@ void main()
    * gets more significant weight than sectors with higher standard deviation. */
   float sum_of_weights = 0.0f;
   float4 weighted_sum = float4(0.0f);
-  for (int i = 0; i < number_of_sectors; i++) {
+  for (int i = 0; i < 8 /* number_of_sectors */; i++) [[unroll]] {
     float sector_weight_sum = sum_of_weights_of_sectors[i % (number_of_sectors / 2)];
     weighted_mean_of_color_of_sectors[i] /= sector_weight_sum;
     weighted_mean_of_squared_color_of_sectors[i] /= sector_weight_sum;
