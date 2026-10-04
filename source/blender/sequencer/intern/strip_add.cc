@@ -165,12 +165,17 @@ Strip *add_movieclip_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *lo
 
 float get_image_len(LoadData *load_data, Scene *scene)
 {
+  int default_len = default_strip_length(scene->frames_per_second());
+
   Image *image = load_data->image;
   if(image == nullptr){
-    return 0;
+    return default_len;
   }
 
   if(image->source == IMA_SRC_SEQUENCE) {
+    if(load_data->image_frames_count <= 0) {
+      return default_len;
+    }
     return load_data->image_frames_count;
   }
   
@@ -190,7 +195,7 @@ float get_image_len(LoadData *load_data, Scene *scene)
   }
 
   /* It's a static image, return default */
-  return default_strip_length(scene->frames_per_second());
+  return default_len;
 }
 
 Strip *add_image_id_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
@@ -642,6 +647,8 @@ static void add_reload_new_file_impl(
       load_data->image_frames_count = strip->content_length();
 
       int new_len = get_image_len(load_data, scene);
+      MEM_delete(load_data);
+      load_data = nullptr;
 
       new_len -= strip->anim_startofs;
       new_len -= strip->anim_endofs;
