@@ -1236,8 +1236,16 @@ bool rna_IDMaterials_assign_int(PointerRNA *ptr, int key, const PointerRNA *assi
   }
 }
 
-static void rna_IDMaterials_append_id(ID *id, Main *bmain, Material *ma)
+static void rna_IDMaterials_append_id(ID *id, Main *bmain, ReportList *reports, Material *ma)
 {
+  if (ma && ((ma->id.tag & ID_TAG_NO_MAIN) != (id->tag & ID_TAG_NO_MAIN))) {
+    BKE_report(reports,
+               RPT_ERROR,
+               "Can only assign evaluated data to evaluated data-block, or original data to "
+               "original data-block");
+    return;
+  }
+
   BKE_id_material_append(bmain, id, ma);
 
   WM_main_add_notifier(NC_OBJECT | ND_DRAW, id);
@@ -1801,7 +1809,7 @@ static void rna_def_ID_materials(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "ID Materials", "Collection of materials");
 
   func = RNA_def_function(srna, "append", "rna_IDMaterials_append_id");
-  RNA_def_function_flag(func, FUNC_USE_MAIN);
+  RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_MAIN);
   RNA_def_function_ui_description(func, "Add a new material to the data-block");
   parm = RNA_def_pointer(func, "material", "Material", "", "Material to add");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);

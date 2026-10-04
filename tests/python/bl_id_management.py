@@ -259,6 +259,46 @@ class TestIdRename(TestHelper, unittest.TestCase):
         self.ensure_proper_order()
 
 
+class TestIdEvaluatedMaterialAssign(unittest.TestCase):
+    """Evaluated materials must not end up in original data, where they dangle once the
+    depsgraph frees them."""
+
+    def setUp(self):
+        self.material = bpy.data.materials.new("Material")
+        source_mesh = bpy.data.meshes.new("Source")
+        source_mesh.materials.append(self.material)
+        source = bpy.data.objects.new("Source", source_mesh)
+        bpy.context.scene.collection.objects.link(source)
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        self.material_eval = source.evaluated_get(depsgraph).material_slots[0].material
+        self.assertTrue(self.material_eval.is_evaluated)
+
+        self.mesh = bpy.data.meshes.new("Target")
+        self.object = bpy.data.objects.new("Target", self.mesh)
+        bpy.context.scene.collection.objects.link(self.object)
+        self.ids = [source, self.object, source_mesh, self.mesh, self.material]
+
+    def tearDown(self):
+        bpy.data.batch_remove(self.ids)
+
+    def test_materials_append(self):
+        with self.assertRaises(RuntimeError):
+            self.mesh.materials.append(self.material_eval)
+        self.assertEqual(len(self.mesh.materials), 0)
+
+        self.mesh.materials.append(self.material_eval.original)
+        self.assertEqual(self.mesh.materials[0], self.material)
+
+    def test_material_slot_assign(self):
+        self.mesh.materials.append(None)
+        with self.assertRaises(RuntimeError):
+            self.object.material_slots[0].material = self.material_eval
+        self.assertIsNone(self.object.material_slots[0].material)
+
+        self.object.material_slots[0].material = self.material_eval.original
+        self.assertEqual(self.object.material_slots[0].material, self.material)
+
+
 if __name__ == '__main__':
     import sys
     sys.argv = [__file__] + (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])

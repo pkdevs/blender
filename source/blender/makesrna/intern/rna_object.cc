@@ -1370,12 +1370,19 @@ static PointerRNA rna_MaterialSlot_material_get(PointerRNA *ptr)
   return RNA_id_pointer_create(reinterpret_cast<ID *>(ma));
 }
 
-static void rna_MaterialSlot_material_set(PointerRNA *ptr,
-                                          PointerRNA value,
-                                          ReportList * /*reports*/)
+static void rna_MaterialSlot_material_set(PointerRNA *ptr, PointerRNA value, ReportList *reports)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   int index = rna_MaterialSlot_index(ptr);
+  ID *id = static_cast<ID *>(value.data);
+
+  if (id && ((id->tag & ID_TAG_NO_MAIN) != (ob->id.tag & ID_TAG_NO_MAIN))) {
+    BKE_report(reports,
+               RPT_ERROR,
+               "Can only assign evaluated data to evaluated object, or original data to "
+               "original object");
+    return;
+  }
 
   BLI_assert(BKE_id_is_in_global_main(&ob->id));
   BLI_assert(BKE_id_is_in_global_main(static_cast<ID *>(value.data)));
