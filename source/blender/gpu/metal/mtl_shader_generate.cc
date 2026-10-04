@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup gpu
+ */
+
 #include <fmt/format.h>
 #include <sstream>
 #include <string>
@@ -735,7 +739,7 @@ static void generate_acceleration_structure(GeneratedStreams &generated,
 static void generate_resource(GeneratedStreams &generated,
                               const ShaderCreateInfo::Resource &res,
                               const ShaderStage stage,
-                              const ShaderCreateInfo &info,
+                              const ShaderCreateInfo & /*info*/,
                               const bool use_sampler_argument_buffer)
 {
   switch (res.bind_type) {
@@ -761,7 +765,7 @@ static void generate_resource(GeneratedStreams &generated,
     case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
       generate_buffer(generated,
                       false,
-                      info.buffer_typename(res.uniformbuf.type_name, true),
+                      res.uniformbuf.type_name,
                       res.uniformbuf.name,
                       MTL_UBO_SLOT_OFFSET + res.slot,
                       stage);
@@ -769,7 +773,7 @@ static void generate_resource(GeneratedStreams &generated,
     case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
       generate_buffer(generated,
                       bool(res.storagebuf.qualifiers & shader::Qualifier::write),
-                      info.buffer_typename(res.storagebuf.type_name),
+                      res.storagebuf.type_name,
                       res.storagebuf.name,
                       MTL_SSBO_SLOT_OFFSET + res.slot,
                       stage);
@@ -987,7 +991,7 @@ static std::string generate_raster_builtins(GeneratedStreams &ss,
   if (flag_is_set(info.builtins_combined(), BuiltinBits::CLIP_DISTANCES) &&
       stage == ShaderStage::VERTEX)
   {
-    /** WORKAROUND: BSL has currently no way to disable clip distances using compilation constant.
+    /* WORKAROUND: BSL has currently no way to disable clip distances using compilation constant.
      * This induce a huge performance gap with the BSL port of workbench shader (see #155865).
      * This adds back the same preprocessor check that was previously here. However, this code is
      * heavily tailored to workbench and assume exact match with the compilation constant name.

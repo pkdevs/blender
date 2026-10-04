@@ -193,6 +193,7 @@ class SourceProcessor {
    * points. */
   void parse_builtins(const std::string &str, const std::string &filename, bool pure_glsl = false);
   void parse_builtins(Parser &parser, const std::string &filename);
+  void parse_draw_debug(Parser &parser, const std::string &filename);
 
   /* Legacy shared variable support. */
   std::string threadgroup_variables_parse_and_remove(const std::string &str);
@@ -223,7 +224,7 @@ class SourceProcessor {
   /* --- Lowering --- */
 
   /* Remove `maybe_unused` attribute. */
-  void lower_maybe_unused(Parser &parser);
+  void lower_noop_attributes(Parser &parser);
   /* Lower parameters that have no name (invalid in GLSL). */
   void lower_namesless_parameters(Parser &parser);
   void lower_namesless_parameters_ast(Parser &parser);
@@ -374,6 +375,12 @@ class SourceProcessor {
   void lower_union_accessor_templates(Parser &parser);
   void lower_union_accessor_templates_ast(Parser &parser);
   void lower_union_setters(Parser &parser);
+  /**
+   * Convert bitfieldExtract into bitfieldInsert when assigned to.
+   *
+   * Need to run after lower_union_setters.
+   */
+  void lower_bitfield_setters(Parser &parser);
   /**
    * For safety reason, nested resource tables need to be declared with the srt_t template.
    * This avoid chained member access which isn't well defined with the preprocessing we are doing.
