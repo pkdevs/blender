@@ -49,7 +49,7 @@ def main():
         # bridge edge loops
         SpecMeshTest(
             "CubeBridgeEdgeLoop",
-            "testCubeBrigeEdgeLoop",
+            "testCubeBridgeEdgeLoop",
             "expectedCubeBridgeEdgeLoop",
             [OperatorSpecEditMode("bridge_edge_loops", {}, "FACE", {0, 1})],
         ),
@@ -82,13 +82,13 @@ def main():
         # delete edge loop
         SpecMeshTest(
             "MonkeyDeleteEdgeLoopVertices",
-            "testMokneyDeleteEdgeLoopVertices",
+            "testMonkeyDeleteEdgeLoopVertices",
             "expectedMonkeyDeleteEdgeLoopVertices",
             [OperatorSpecEditMode("delete_edgeloop", {}, "VERT", MONKEY_LOOP_VERT)],
         ),
         SpecMeshTest(
             "MonkeyDeleteEdgeLoopEdges",
-            "testMokneyDeleteEdgeLoopEdges",
+            "testMonkeyDeleteEdgeLoopEdges",
             "expectedMonkeyDeleteEdgeLoopEdges",
             [OperatorSpecEditMode("delete_edgeloop", {}, "EDGE", MONKEY_LOOP_EDGE)],
         ),
@@ -147,7 +147,7 @@ def main():
             [OperatorSpecEditMode("dissolve_edges", {"use_verts": False}, "EDGE", {0, 5, 6, 9})],
         ),
         SpecMeshTest(
-            "CylinderDissolveEdges.AngleThrehsoldNoDissolve",
+            "CylinderDissolveEdges.AngleThresholdNoDissolve",
             "testCylinderDissolveEdges",
             "expectedCylinderDissolveEdges.DissolveNoVerts",
             [OperatorSpecEditMode("dissolve_edges", {"use_verts": True, "angle_threshold": 0}, "EDGE", {0, 5, 6, 9})],
@@ -274,7 +274,7 @@ def main():
         # ),
         # SpecMeshTest(
         #     "EmptyMeshEdgeRingSelect",
-        #     "testEmptyMeshdgeRingSelect",
+        #     "testEmptyMeshEdgeRingSelect",
         #     "expectedEmptyMeshEdgeRingSelect",
         #     [OperatorSpecEditMode("edgering_select", {}, "VERT", {})],
         # ),
@@ -473,7 +473,7 @@ def main():
         ),
         # loop multi select
         SpecMeshTest(
-            "MokeyLoopMultiSelect",
+            "MonkeyLoopMultiSelect",
             "testMonkeyLoopMultiSelect",
             "expectedMonkeyLoopMultiSelect",
             [OperatorSpecEditMode("select_edge_loop_multi", {}, "VERT", {355, 359, 73, 301, 302})],
