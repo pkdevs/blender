@@ -31,13 +31,21 @@ constexpr toml::spec version = toml::spec::v(1, 1, 0);
  * name = "Blender"
  *
  * [library]
- * # Name of the library when registered; informational only. 
+ * # Name of the library when registered; informational only.
  * name = "Asset Library Name"
  * uuid = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
  * # # Optional: Link to the remote library if this library is hosted online; informational only.
  * # remore_url = "url"
  * @endcode
  * \{ */
+
+static void asset_lib_config_print_errors(const std::vector<toml::error_info> &errors)
+{
+  for (const toml::error_info &error : errors) {
+    std::string msg = toml::format_error(error);
+    fprintf(stderr, "%s\n", msg.c_str());
+  }
+}
 
 static const toml::value &default_asset_lib_config_get()
 {
@@ -57,14 +65,6 @@ name = "Blender"
     return default_result.unwrap();
   }();
   return value;
-}
-
-static void asset_lib_config_print_errors(const std::vector<toml::error_info> &errors)
-{
-  for (const toml::error_info &error : errors) {
-    std::string msg = toml::format_error(error);
-    fprintf(stderr, "%s\n", msg.c_str());
-  }
 }
 
 static const toml::value *toml_find_item(const toml::value &data, StringRef key)
