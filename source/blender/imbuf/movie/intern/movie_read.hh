@@ -74,6 +74,7 @@ struct MovieReader {
 
   bool seek_before_decode = false;
   bool is_float = false;
+  bool is_intra_only = false;
 
   /* When set, never seek within the video, and only ever decode one frame.
    * This is a workaround for some Ogg files that have full audio but only

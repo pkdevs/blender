@@ -416,6 +416,9 @@ static int startffmpeg(MovieReader *anim)
     return -1;
   }
 
+  const AVCodecDescriptor *codec_descriptor = avcodec_descriptor_get(pCodecCtx->codec_id);
+  anim->is_intra_only = (codec_descriptor != nullptr) && ((codec_descriptor->props & AV_CODEC_PROP_INTRA_ONLY) != 0);
+
   /* Check if we need the "never seek, only decode one frame" ffmpeg bug workaround. */
   const bool is_ogg_container = STREQ(pFormatCtx->iformat->name, "ogg");
   const bool is_non_ogg_video = video_stream->codecpar->codec_id != AV_CODEC_ID_THEORA;
@@ -1212,12 +1215,9 @@ static bool ffmpeg_must_seek(MovieReader *anim, int position)
     return false;
   }
 
-  if (anim->pCodecCtx) {
-    const AVCodecDescriptor *desc = avcodec_descriptor_get(anim->pCodecCtx->codec_id);
-    if (desc && (desc->props & AV_CODEC_PROP_INTRA_ONLY)) {
-      anim->seek_before_decode = true;
-      return true;
-    }
+  if (anim->is_intra_only) {
+    anim->seek_before_decode = true;
+    return true;
   }
 
   constexpr int MAX_FORWARD_SCAN_FRAMES = 6;
