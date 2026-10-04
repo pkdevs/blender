@@ -653,7 +653,21 @@ float4 dot_segment2(float2 xy,
       float C0 = -H0 - dot(p0, D0);
       float C1 = -H1 - dot(p1, D1);
 
-      ssp = float2(B0 * C1 - B1 * C0, -(A0 * C1 - A1 * C0)) / (A0 * B1 - A1 * B0);
+      float E = A0 * B1 - A1 * B0;
+
+      if (abs(E) < 0.0001f) {
+        local = float2(0.0f);
+        local.x += c1 * r1;
+        local.y += s1 * r1 * y;
+        if (!use_curr) {
+          local.x += l0;
+        }
+
+        ssp = ss1.xy + local.x * local_x + local.y * local_y;
+      }
+      else {
+        ssp = float2(B0 * C1 - B1 * C0, -(A0 * C1 - A1 * C0)) / E;
+      }
     }
   }
 
