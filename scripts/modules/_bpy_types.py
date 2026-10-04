@@ -978,6 +978,11 @@ class _RNAMeta(type):
     # TODO(campbell): move to C-API
     @property
     def is_registered(cls):
+        """
+        Whether the class is registered in Blender.
+
+        :type: bool
+        """
         return "bl_rna" in cls.__dict__
 
 

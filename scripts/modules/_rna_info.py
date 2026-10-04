@@ -190,14 +190,22 @@ class InfoStructRNA:
         return ls
 
     def _get_py_visible_attrs(self):
-        attrs = []
+        attrs = {}
         py_class = self.py_class
 
         for attr_str in dir(py_class):
             if attr_str.startswith("_"):
                 continue
-            attrs.append((attr_str, getattr(py_class, attr_str)))
-        return attrs
+            attrs[attr_str] = getattr(py_class, attr_str)
+
+        # `dir()` does not list attributes defined on the metaclass like `is_registered` from `_RNAMeta`.
+        for meta_class in type(py_class).__mro__:
+            for attr_str, attr in vars(meta_class).items():
+                if attr_str.startswith("_") or attr_str in attrs:
+                    continue
+                attrs[attr_str] = attr
+
+        return sorted(attrs.items())
 
     def get_py_properties(self):
         properties = []
