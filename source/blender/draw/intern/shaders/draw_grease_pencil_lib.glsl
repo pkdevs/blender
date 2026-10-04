@@ -357,6 +357,12 @@ float4 dot_segment(float2 xy,
   float r1 = ss1.w;
   float r2 = ss2.w;
 
+  /* Scale each circle up by the diagonal of the square. */
+  if (is_squares) {
+    r1 *= M_SQRT2;
+    r2 *= M_SQRT2;
+  }
+
   float x = xy.x;
   float y = xy.y;
 
