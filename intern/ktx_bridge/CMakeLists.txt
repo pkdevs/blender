@@ -19,7 +19,6 @@ set(LIB
 
 # Equivalent `blender_add_lib`, unrolled and stripped down to be able to set the library type to `SHARED`.
 add_library(bf_intern_ktx_bridge SHARED "${SRC}")
-blender_target_include_dirs(bf_intern_ktx_bridge ${INC})
 blender_link_libraries(bf_intern_ktx_bridge "${LIB}")
 blender_source_group(bf_intern_ktx_bridge "${SRC}")
 
