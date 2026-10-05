@@ -529,7 +529,7 @@ struct StripDuplicateContext {
   Set<Scene *> scenes;
   Set<Object *> scene_cameras;
   Set<MovieClip *> movieclips;
-  Set<Image *> image_ids;
+  Set<Image *> images;
   Set<Mask *> masks;
 };
 
@@ -584,7 +584,7 @@ static void seq_duplicate_postprocess(StripDuplicateContext &ctx)
         BKE_libblock_relink_to_newid(ctx.bmain, movieclip_src->id.newid, remap_flag);
       }
     }
-    for (Image *image_src : ctx.image_ids) {
+    for (Image *image_src : ctx.images) {
       BLI_assert(image_src);
       if (image_src->id.newid) {
         BKE_libblock_relink_to_newid(ctx.bmain, image_src->id.newid, remap_flag);
@@ -622,7 +622,7 @@ static void seq_duplicate_postprocess(StripDuplicateContext &ctx)
     BLI_assert(ctx.scenes.is_empty());
     BLI_assert(ctx.scene_cameras.is_empty());
     BLI_assert(ctx.movieclips.is_empty());
-    BLI_assert(ctx.image_ids.is_empty());
+    BLI_assert(ctx.images.is_empty());
     BLI_assert(ctx.masks.is_empty());
   }
 
@@ -739,17 +739,6 @@ static Strip *strip_duplicate(StripDuplicateContext &ctx,
       id_us_plus(&strip_new->clip->id);
     }
   }
-  else if (strip->type == STRIP_TYPE_IMAGE_ID) {
-    if (flag_is_set(ctx.dupe_flag, StripDuplicate::Data) && strip_new->image != nullptr) {
-      Image *image_old = strip_new->image;
-      ctx.image_ids.add(image_old);
-      strip_new->image = reinterpret_cast<Image *>(BKE_id_copy_for_duplicate(
-          ctx.bmain, reinterpret_cast<ID *>(image_old), USER_DUP_LINKED_ID, LIB_ID_COPY_DEFAULT));
-    }
-    if ((ctx.copy_flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
-      id_us_plus(&strip_new->image->id);
-    }
-  }
   else if (strip->type == STRIP_TYPE_MASK) {
     if (flag_is_set(ctx.dupe_flag, StripDuplicate::Data) && strip_new->mask != nullptr) {
       Mask *mask_old = strip_new->mask;
@@ -775,7 +764,7 @@ static Strip *strip_duplicate(StripDuplicateContext &ctx,
   else if (strip->type == STRIP_TYPE_IMAGE) {
     if (flag_is_set(ctx.dupe_flag, StripDuplicate::Data) && strip_new->image != nullptr) {
       Image *image_old = strip_new->image;
-      ctx.image_ids.add(image_old);
+      ctx.images.add(image_old);
       strip_new->image = reinterpret_cast<Image *>(BKE_id_copy_for_duplicate(
           ctx.bmain, reinterpret_cast<ID *>(image_old), USER_DUP_LINKED_ID, LIB_ID_COPY_DEFAULT));
     }

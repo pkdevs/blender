@@ -1064,81 +1064,6 @@ void SEQUENCER_OT_movieclip_strip_add(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Add Image ID Strip
- * \{ */
-
-static wmOperatorStatus sequencer_add_image_id_strip_exec(bContext *C, wmOperator *op)
-{
-  Main *bmain = CTX_data_main(C);
-  Scene *scene = CTX_data_sequencer_scene(C);
-  const Editing *ed = seq::editing_ensure(scene);
-  Image *image = static_cast<Image *>(
-      BLI_findlink(&bmain->images, RNA_enum_get(op->ptr, "image")));
-
-  if (image == nullptr) {
-    BKE_report(op->reports, RPT_ERROR, "Image not found");
-    return OPERATOR_CANCELLED;
-  }
-
-  seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
-    return OPERATOR_CANCELLED;
-  }
-  load_data.image = image;
-
-  Strip *strip = seq::add_image_id_strip(scene, ed->current_strips(), &load_data);
-  seq_load_apply_generic_options(C, op, strip);
-
-  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  sequencer_select_do_updates(C, scene);
-  move_strips(C, op);
-
-  return OPERATOR_FINISHED;
-}
-
-static wmOperatorStatus sequencer_add_image_id_strip_invoke(bContext *C,
-                                                            wmOperator *op,
-                                                            const wmEvent *event)
-{
-  if (!RNA_struct_property_is_set(op->ptr, "image")) {
-    return WM_enum_search_invoke(C, op, event);
-  }
-
-  sequencer_add_init(C, op);
-
-  sequencer_generic_invoke_xy__internal(C, op, 0, STRIP_TYPE_IMAGE_ID, event);
-  return sequencer_add_image_id_strip_exec(C, op);
-}
-
-void SEQUENCER_OT_image_id_strip_add(wmOperatorType *ot)
-{
-  PropertyRNA *prop;
-
-  /* Identifiers. */
-  ot->name = "Add Image ID Strip";
-  ot->idname = "SEQUENCER_OT_image_id_strip_add";
-  ot->description = "Add a Image ID strip to the sequencer";
-
-  /* API callbacks. */
-  ot->invoke = sequencer_add_image_id_strip_invoke;
-  ot->exec = sequencer_add_image_id_strip_exec;
-  ot->poll = ED_operator_sequencer_active_editable;
-
-  /* Flags. */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-
-  sequencer_generic_props__internal(ot, SEQPROP_STARTFRAME | SEQPROP_MOVE);
-  prop = RNA_def_enum(
-      ot->srna, "image", rna_enum_dummy_NULL_items, 0, "Image", "Image to add as a strip");
-  RNA_def_enum_funcs(prop, RNA_image_itemf);
-  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_IMAGE);
-  RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE);
-  ot->prop = prop;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Add Mask Strip
  * \{ */
 
@@ -1761,7 +1686,7 @@ static wmOperatorStatus sequencer_add_image_strip_invoke(bContext *C,
 
   sequencer_add_init(C, op);
 
-  sequencer_generic_invoke_xy__internal(C, op, 0, STRIP_TYPE_IMAGE_ID, event);
+  sequencer_generic_invoke_xy__internal(C, op, 0, STRIP_TYPE_IMAGE, event);
   return sequencer_add_image_strip_exec(C, op);
 }
 

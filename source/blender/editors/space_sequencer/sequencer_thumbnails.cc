@@ -66,11 +66,7 @@ static void strip_get_thumb_image_dimensions(const Strip *strip,
     image_width = strip->data->stripdata->orig_width;
     image_height = strip->data->stripdata->orig_height;
   }
-  else if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip) {
-    image_width = strip->clip->lastsize[0];
-    image_height = strip->clip->lastsize[1];
-  }
-  else if (ELEM(strip->type, STRIP_TYPE_IMAGE, STRIP_TYPE_IMAGE_ID) && strip->image) {
+  else if (strip->type == STRIP_TYPE_IMAGE && strip->image) {
     if (strip->image != nullptr) {
       void *lock;
       ImBuf *ibuf = BKE_image_acquire_ibuf(strip->image, nullptr, &lock);
@@ -80,6 +76,10 @@ static void strip_get_thumb_image_dimensions(const Strip *strip,
         BKE_image_release_ibuf(strip->image, ibuf, lock);
       }
     }
+  }
+  else if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip) {
+    image_width = strip->clip->lastsize[0];
+    image_height = strip->clip->lastsize[1];
   }
   else if (strip->type == STRIP_TYPE_SCENE && strip->scene) {
     image_width = strip->scene->r.xsch;

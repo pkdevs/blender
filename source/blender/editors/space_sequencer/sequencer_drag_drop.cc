@@ -137,7 +137,7 @@ static bool is_image(wmDrag *drag)
   return false;
 }
 
-static bool image_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+static bool image_path_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   if (is_image(drag) && (drag->type != WM_DRAG_PATH ||
                          test_single_file_handler_poll(C, drag, "SEQUENCER_FH_image_strip")))
@@ -148,7 +148,7 @@ static bool image_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   return false;
 }
 
-static bool image_id_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+static bool image_datablock_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   if (WM_drag_is_ID_type(drag, ID_IM)) {
     return generic_poll_operations(C, event, TH_SEQ_IMAGE);
@@ -341,21 +341,6 @@ static float update_overlay_strip_position_data(bContext *C, const int mval[2])
   return strip_len;
 }
 
-static int find_image_id_index(bContext *C, Image *image)
-{
-  int index = 0;
-
-  for (Image &iter_image : CTX_data_main(C)->images) {
-    if (&iter_image == image) {
-      return index;
-    }
-    index++;
-  }
-
-  /* Image not found */
-  return -1;
-}
-
 static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
 {
   if (g_drop_coords.in_use) {
@@ -420,14 +405,8 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
   if (id != nullptr) {
     const ID_Type id_type = GS(id->name);
     if (id_type == ID_IM) {
-      Image *ima = id_cast<Image *>(id);
-
-      /* It's abit of a workaround, but since RNA_enum_set works only with indexes, we have to find
-       * the index of the Image datablock */
-      int image_index = find_image_id_index(C, ima);
-      if (RNA_struct_find_property(drop->ptr, "image") && image_index >= 0) {
-        RNA_enum_set(drop->ptr, "image", image_index);
-      }
+      Main *bmain = CTX_data_main(C);
+      RNA_enum_set(drop->ptr, "clip", BLI_findindex(&bmain->movieclips, id));
     }
     else if (id_type == ID_MC) {
       Main *bmain = CTX_data_main(C);
@@ -922,15 +901,15 @@ static void sequencer_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
 {
   wmDropBox *drop;
   drop = WM_dropbox_add(
-      lb, "SEQUENCER_OT_image_strip_add", image_drop_poll, sequencer_drop_copy, nullptr, nullptr);
+      lb, "SEQUENCER_OT_image_strip_load", image_path_drop_poll, sequencer_drop_copy, nullptr, nullptr);
   drop->draw_droptip = nop_draw_droptip_fn;
   drop->draw_in_view = draw_strip_in_view;
   drop->on_enter = image_drop_on_enter;
   drop->on_exit = sequencer_drop_on_exit;
 
   drop = WM_dropbox_add(lb,
-                        "SEQUENCER_OT_image_id_strip_add",
-                        image_id_drop_poll,
+                        "SEQUENCER_OT_image_strip_add",
+                        image_datablock_drop_poll,
                         sequencer_drop_copy,
                         nullptr,
                         nullptr);
@@ -997,7 +976,7 @@ static void sequencer_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
   drop->on_exit = sequencer_drop_on_exit;
 }
 
-static bool image_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
+static bool image_path_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
 {
   if (drag->type == WM_DRAG_PATH) {
     const eFileSel_File_Types file_type = eFileSel_File_Types(WM_drag_get_path_file_type(drag));
@@ -1025,7 +1004,7 @@ static bool movieclip_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wm
   return WM_drag_is_ID_type(drag, ID_MC);
 }
 
-static bool image_id_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+static bool image_datablock_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   return WM_drag_is_ID_type(drag, ID_IM);
 }
@@ -1055,15 +1034,15 @@ static bool sound_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent * /
 static void sequencer_preview_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
 {
   WM_dropbox_add(lb,
-                 "SEQUENCER_OT_image_strip_add",
-                 image_drop_preview_poll,
+                 "SEQUENCER_OT_image_strip_load",
+                 image_path_drop_preview_poll,
                  sequencer_drop_copy,
                  nullptr,
                  nullptr);
 
   WM_dropbox_add(lb,
-                 "SEQUENCER_OT_image_id_strip_add",
-                 image_id_drop_preview_poll,
+                 "SEQUENCER_OT_image_strip_add",
+                 image_datablock_drop_preview_poll,
                  sequencer_drop_copy,
                  nullptr,
                  nullptr);

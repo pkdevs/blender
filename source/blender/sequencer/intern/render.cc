@@ -1271,7 +1271,7 @@ static ImBuf *seq_render_movieclip_strip(const RenderData *context,
   return ibuf;
 }
 
-static ImBuf *seq_get_image_id_strip(const RenderData *context, Strip *strip, float frame_index)
+static ImBuf *seq_render_image_strip(const RenderData *context, Strip *strip, float frame_index)
 {
   if (!strip->image) {
     return nullptr;
@@ -1826,7 +1826,7 @@ static SeqResult do_render_strip_uncached(const RenderData *context,
     out = seq_render_effect_strip_impl(context, state, strip, timeline_frame);
   }
   else if (strip->type == STRIP_TYPE_IMAGE) {
-    out.image = seq_get_image_id_strip(context, strip, round_fl_to_int(frame_index));
+    out.image = seq_render_image_strip(context, strip, round_fl_to_int(frame_index));
     if (out.image && !out.image->can_contain_alpha()) {
       out.is_opaque_before_transform = true;
     }
@@ -1854,20 +1854,6 @@ static SeqResult do_render_strip_uncached(const RenderData *context,
 
     if (out.image) {
       /* duplicate frame so movie cache wouldn't be confused by sequencer's stuff */
-      ImBuf *i = IMB_dupImBuf(out.image);
-      IMB_freeImBuf(out.image);
-      out.image = i;
-    }
-  }
-  else if (strip->type == STRIP_TYPE_IMAGE_ID) {
-    out.image = seq_get_image_id_strip(context, strip, round_fl_to_int(frame_index));
-    if (out.image && !out.image->can_contain_alpha()) {
-      out.is_opaque_before_transform = true;
-    }
-
-    /* Not sure if neccesry */
-    if (out.image) {
-      /* duplicate frame so image id cache wouldn't be confused by sequencer's stuff */
       ImBuf *i = IMB_dupImBuf(out.image);
       IMB_freeImBuf(out.image);
       out.image = i;

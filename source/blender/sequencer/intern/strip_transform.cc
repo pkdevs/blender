@@ -45,14 +45,6 @@ namespace blender::seq {
 
 bool transform_single_image_check(const Strip *strip)
 {
-  if (strip->type == STRIP_TYPE_IMAGE_ID) {
-    if (strip->image == nullptr) {
-      return true;
-    }
-
-    return true;
-  }
-
   return (strip->flag & SEQ_SINGLE_FRAME_CONTENT) != 0;
 }
 
@@ -565,8 +557,8 @@ static int2 strip_source_size_get(const Scene *scene, const Strip *strip)
           return size;
         }
         // For cases where there's an accidental missing frame, etc.
-        return parent_scene_size;
       }
+      return parent_scene_size;
     }
     case STRIP_TYPE_MOVIE: {
       const StripElem *se = strip->data->stripdata;
@@ -612,19 +604,6 @@ float2 image_transform_mirror_factor_get(const Strip *strip)
 int2 image_transform_box_size_get(const Scene *scene, const Strip *strip)
 {
   const int2 source_size = strip_source_size_get(scene, strip);
-
-  if (strip->type == STRIP_TYPE_IMAGE_ID) {
-    if (strip->image != nullptr) {
-      /*void *lock;
-      ImBuf *ibuf = BKE_image_acquire_ibuf(strip->image, &scene->ed->image_user, &lock);
-      if (ibuf) {
-        const int2 size(ibuf->x, ibuf->y);
-        BKE_image_release_ibuf(strip->image, ibuf, lock);
-        return size;
-      }*/
-     return source_size;
-    }
-  }
 
   if (strip->type == STRIP_TYPE_TEXT) {
     TextVars *data = static_cast<TextVars *>(strip->effectdata);

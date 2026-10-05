@@ -298,7 +298,7 @@ static std::optional<std::string> rna_ImageUser_path(const PointerRNA *ptr)
       /* This code assumes there's no other image user owned by Scene ID but the sequencer editing
        * one, but if this will change we'll have to properly adjust this. */
       case ID_SCE: {
-        //  if (ptr->type != RNA_ImageIdStrip) {
+        //  if (ptr->type != RNA_ImageStrip) {
         const Scene *scene = reinterpret_cast<const Scene *>(ptr->owner_id);
         if (scene->ed) {
           const ImageUser *iuser = static_cast<const ImageUser *>(ptr->data);

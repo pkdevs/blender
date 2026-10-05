@@ -1090,8 +1090,6 @@ static StructRNA *rna_Strip_refine(PointerRNA *ptr)
       return RNA_MovieStrip;
     case STRIP_TYPE_MOVIECLIP:
       return RNA_MovieClipStrip;
-    case STRIP_TYPE_IMAGE_ID:
-      return RNA_ImageIdStrip;
     case STRIP_TYPE_MASK:
       return RNA_MaskStrip;
     case STRIP_TYPE_SOUND:
@@ -2594,7 +2592,6 @@ static void rna_def_strip(BlenderRNA *brna)
       {STRIP_TYPE_SCENE, "SCENE", 0, "Scene", ""},
       {STRIP_TYPE_MOVIE, "MOVIE", 0, "Movie", ""},
       {STRIP_TYPE_MOVIECLIP, "MOVIECLIP", 0, "Clip", ""},
-      {STRIP_TYPE_IMAGE_ID, "IMAGE_ID", 0, "Image ID", ""},
       {STRIP_TYPE_MASK, "MASK", 0, "Mask", ""},
       {STRIP_TYPE_SOUND, "SOUND", 0, "Sound", ""},
       {STRIP_TYPE_CROSS, "CROSS", 0, "Crossfade", ""},
@@ -3652,26 +3649,6 @@ static void rna_def_movieclip(BlenderRNA *brna)
   rna_def_filter_video(srna);
   rna_def_input(srna);
   rna_def_movie_types(srna);
-}
-
-static void rna_def_image_id(BlenderRNA *brna)
-{
-  StructRNA *srna;
-  PropertyRNA *prop;
-
-  srna = RNA_def_struct(brna, "ImageIdStrip", "Strip");
-  RNA_def_struct_ui_text(
-      srna, "ImageID Strip", "Sequence strip to load an image from the image editor");
-  RNA_def_struct_sdna(srna, "Strip");
-
-  prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
-  RNA_def_property_struct_type(prop, "Image");
-  RNA_def_property_flag(prop, PROP_EDITABLE);
-  RNA_def_property_ui_text(prop, "Image", "Image datablock that this strip uses");
-  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");
-
-  rna_def_filter_video(srna);
-  rna_def_input(srna);
 }
 
 static void rna_def_mask(BlenderRNA *brna)
@@ -4875,7 +4852,6 @@ void RNA_def_sequencer(BlenderRNA *brna)
   rna_def_scene(brna);
   rna_def_movie(brna);
   rna_def_movieclip(brna);
-  rna_def_image_id(brna);
   rna_def_mask(brna);
   rna_def_sound(brna);
   rna_def_effect(brna);

@@ -284,9 +284,6 @@ bool strip_can_have_thumbnail(const Scene *scene, const Strip *strip)
   if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip) {
     return true;
   }
-  if (strip->type == STRIP_TYPE_IMAGE_ID && strip->image) {
-    return true;
-  }
   if (strip->type == STRIP_TYPE_MASK && strip->mask) {
     return true;
   }
@@ -331,9 +328,6 @@ static ThumbnailCache::SourceKey get_key_from_strip(const Scene *scene,
     case STRIP_TYPE_MOVIECLIP:
       BLI_assert(strip->clip);
       return ThumbnailCache::SourceKey(&strip->clip->id);
-    case STRIP_TYPE_IMAGE_ID:
-      BLI_assert(strip->image);
-      return ThumbnailCache::SourceKey(&strip->image->id);
     case STRIP_TYPE_MASK:
       BLI_assert(strip->mask);
       return ThumbnailCache::SourceKey(&strip->mask->id);
@@ -617,20 +611,6 @@ void ThumbGenerationJob::run_fn(void *customdata, wmJobWorkerStatus *worker_stat
             }
           }
         }
-        else if (request.strip_type == STRIP_TYPE_IMAGE_ID) {
-          /* Load thumbnail for a image id. */
-          Image *img = reinterpret_cast<Image *>(
-              get_id_copy(job->cache_, request, cur_id_copy, cur_source_generation));
-          if (img != nullptr) {
-            ImageUser user = {};
-            user.framenr = request.frame_index + 1;
-            // TODO: GD;; We probably should also scale down the imbuf to THUMB_SIZE
-            thumb = BKE_image_acquire_ibuf(img, &user, nullptr);
-            if (thumb != nullptr) {
-              seq_imbuf_assign_spaces(job->scene_, thumb);
-            }
-          }
-        }
         else if (request.strip_type == STRIP_TYPE_MASK) {
           /* Load thumbnail for a mask. */
           Mask *mask = reinterpret_cast<Mask *>(
@@ -762,9 +742,6 @@ static ImBuf *query_thumbnail(ThumbnailCache &cache,
     if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip != nullptr) {
       source_id = &strip->clip->id;
     }
-    else if (strip->type == STRIP_TYPE_IMAGE_ID && strip->image != nullptr) {
-      source_id = &strip->image->id;
-    }
     else if (strip->type == STRIP_TYPE_MASK && strip->mask != nullptr) {
       source_id = &strip->mask->id;
     }
@@ -814,8 +791,7 @@ ImBuf *thumbnail_cache_get(const bContext *C,
            STRIP_TYPE_IMAGE,
            STRIP_TYPE_MOVIE,
            STRIP_TYPE_MOVIECLIP,
-           STRIP_TYPE_SCENE,
-           STRIP_TYPE_IMAGE_ID))
+           STRIP_TYPE_SCENE))
   {
     frame_index += strip->anim_startofs;
   }
@@ -940,9 +916,6 @@ void thumbnail_cache_invalidate_strip(Scene *scene, const Strip *strip)
       }
       else if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip) {
         invalidated |= cache->invalidate_entry(ThumbnailCache::SourceKey(&strip->clip->id));
-      }
-      else if (strip->type == STRIP_TYPE_IMAGE_ID && strip->image) {
-        invalidated |= cache->remove_entry(ThumbnailCache::SourceKey(&strip->image->id));
       }
       else if (strip->type == STRIP_TYPE_MASK && strip->mask) {
         invalidated |= cache->invalidate_entry(ThumbnailCache::SourceKey(&strip->mask->id));

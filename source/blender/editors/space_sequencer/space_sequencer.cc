@@ -317,7 +317,7 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
 
       if (wmn->reference) {
         Image *ima = static_cast<Image *>(wmn->reference);
-        seq::relations_invalidate_image_id_strips(params->bmain, ima);
+        seq::relations_invalidate_image_strips(params->bmain, ima);
       }
     case NC_WINDOW:
     case NC_SPACE:

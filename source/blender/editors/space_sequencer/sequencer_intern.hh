@@ -114,7 +114,6 @@ struct StripDrawContext {
   bool show_strip_color_tag;
   bool missing_data_block;
   bool missing_media;
-  bool is_image_id;
   bool is_connected;
   bool is_muted;
   bool has_retiming;
@@ -324,7 +323,6 @@ void SEQUENCER_OT_scene_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_scene_strip_add_new(wmOperatorType *ot);
 void SEQUENCER_OT_movie_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_movieclip_strip_add(wmOperatorType *ot);
-void SEQUENCER_OT_image_id_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_mask_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_sound_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_image_strip_add(wmOperatorType *ot);

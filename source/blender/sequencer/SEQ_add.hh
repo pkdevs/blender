@@ -149,15 +149,6 @@ Strip *add_scene_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_d
  */
 Strip *add_movieclip_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data);
 /**
- * Add image id strip.
- *
- * \param scene: Scene where strips will be added
- * \param seqbase: List where strips will be added
- * \param load_data: SeqLoadData with information necessary to create strip
- * \return created strip
- */
-Strip *add_image_id_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data);
-/**
  * Add mask strip.
  *
  * \param scene: Scene where strips will be added

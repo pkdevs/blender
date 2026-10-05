@@ -283,7 +283,7 @@ void relations_invalidate_movieclip_strips(Main *bmain, MovieClip *clip_target)
   }
 }
 
-static void invalidate_image_id_strips(Scene *scene,
+static void invalidate_image_strips(Scene *scene,
                                        const Image *image_target,
                                        ListBaseT<Strip> *seqbase)
 {
@@ -293,18 +293,18 @@ static void invalidate_image_id_strips(Scene *scene,
     }
 
     if (strip->seqbase.first() != nullptr) {
-      invalidate_image_id_strips(scene, image_target, &strip->seqbase);
+      invalidate_image_strips(scene, image_target, &strip->seqbase);
     }
   }
 }
 
-void relations_invalidate_image_id_strips(const Main *bmain, Image *image_target)
+void relations_invalidate_image_strips(const Main *bmain, Image *image_target)
 {
   for (Scene *scene = bmain->scenes.first(); scene != nullptr;
        scene = static_cast<Scene *>(scene->id.next))
   {
     if (scene->ed != nullptr) {
-      invalidate_image_id_strips(scene, image_target, &scene->ed->seqbase);
+      invalidate_image_strips(scene, image_target, &scene->ed->seqbase);
     }
   }
 }

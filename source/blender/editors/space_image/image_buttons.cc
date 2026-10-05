@@ -897,7 +897,7 @@ void uiTemplateImage(ui::Layout *layout,
 
     /* Since lots of the animated image features won't be very useful in the VSE Image ID Strip
      * (And also aren't supported), we better simply hide them. */
-    if (ptr->type != RNA_ImageIdStrip) {
+    if (ptr->type != RNA_ImageStrip) {
       row.prop(userptr, "frame_duration", UI_ITEM_NONE, IFACE_("Frames"), ICON_NONE);
       row.op("IMAGE_OT_match_movie_length", "", ICON_FILE_REFRESH);
 

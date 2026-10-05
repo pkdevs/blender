@@ -2620,6 +2620,11 @@ static bool select_grouped_data(VectorSet<Strip *> strips,
       return STRIP_HAS_PATH(strip) && strip->data && STREQ(strip->data->dirpath, dirpath);
     });
   }
+  else if (act_strip->type == STRIP_TYPE_IMAGE) {
+    Image *img = act_strip->image;
+    select_matching(
+        [&](Strip *strip) { return strip->type == STRIP_TYPE_IMAGE && strip->image == img; });
+  }
   else if (act_strip->type == STRIP_TYPE_SCENE) {
     Scene *scene = act_strip->scene;
     select_matching(
@@ -2629,11 +2634,6 @@ static bool select_grouped_data(VectorSet<Strip *> strips,
     MovieClip *clip = act_strip->clip;
     select_matching(
         [&](Strip *strip) { return strip->type == STRIP_TYPE_MOVIECLIP && strip->clip == clip; });
-  }
-  else if (act_strip->type == STRIP_TYPE_IMAGE_ID) {
-    Image *img = act_strip->image;
-    select_matching(
-        [&](Strip *strip) { return strip->type == STRIP_TYPE_IMAGE_ID && strip->image == img; });
   }
   else if (act_strip->type == STRIP_TYPE_MASK) {
     Mask *mask = act_strip->mask;

@@ -99,14 +99,14 @@ static void strip_add_set_name(Scene *scene, Strip *strip, LoadData *load_data)
     edit_strip_name_set(scene, strip, load_data->name);
   }
   else {
-    if (strip->type == STRIP_TYPE_SCENE) {
+    if (strip->type == STRIP_TYPE_IMAGE) {
+      edit_strip_name_set(scene, strip, load_data->image->id.name + 2);
+    }
+    else if (strip->type == STRIP_TYPE_SCENE) {
       edit_strip_name_set(scene, strip, load_data->scene->id.name + 2);
     }
     else if (strip->type == STRIP_TYPE_MOVIECLIP) {
       edit_strip_name_set(scene, strip, load_data->clip->id.name + 2);
-    }
-    else if (strip->type == STRIP_TYPE_IMAGE_ID) {
-      edit_strip_name_set(scene, strip, load_data->image->id.name + 2);
     }
     else if (strip->type == STRIP_TYPE_MASK) {
       edit_strip_name_set(scene, strip, load_data->mask->id.name + 2);
@@ -196,18 +196,6 @@ float get_image_len(LoadData *load_data, Scene *scene)
 
   /* It's a static image, return default */
   return default_len;
-}
-
-Strip *add_image_id_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
-{
-  Strip *strip = strip_alloc(
-      seqbase, load_data->start_frame, load_data->channel, STRIP_TYPE_IMAGE_ID);
-  strip->image = load_data->image;
-  strip->len = get_image_len(load_data, scene);
-  id_us_ensure_real(id_cast<ID *>(load_data->image));
-  strip_add_set_name(scene, strip, load_data);
-  strip_add_generic_update(scene, strip);
-  return strip;
 }
 
 Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
@@ -563,7 +551,6 @@ static void add_reload_new_file_impl(
            STRIP_TYPE_SCENE,
            STRIP_TYPE_META,
            STRIP_TYPE_MOVIECLIP,
-           STRIP_TYPE_IMAGE_ID,
            STRIP_TYPE_MASK) == 0)
   {
     return;
@@ -633,30 +620,6 @@ static void add_reload_new_file_impl(
       new_len -= strip->anim_endofs;
       new_len = std::max(new_len, 0);
       strip->content_length_set(new_len);
-      break;
-    }
-    case STRIP_TYPE_IMAGE_ID: {
-      if (strip->image == nullptr) {
-        return;
-      }
-
-      // TODO: GD;; Review this whole part later
-      // strip->len = get_image_len(strip->image);
-
-      LoadData *load_data;
-      memset(load_data, 0, sizeof(LoadData));
-      load_data->image = strip->image;
-      load_data->image_frames_count = strip->content_length();
-
-      int new_len = get_image_len(load_data, scene);
-      MEM_delete(load_data);
-      load_data = nullptr;
-
-      new_len -= strip->anim_startofs;
-      new_len -= strip->anim_endofs;
-      new_len = std::max(new_len, 0);
-      strip->content_length_set(new_len);
-      
       break;
     }
     case STRIP_TYPE_MASK: {

@@ -2381,6 +2381,11 @@ static void sequencer_report_duplicates(wmOperator *op, ListBaseT<Strip> *duplic
 
   for (Strip &strip : *duplicated_strips) {
     switch (strip.type) {
+      case STRIP_TYPE_IMAGE:
+        if (strip.image) {
+          images.add(strip.image);
+        }
+        break;
       case STRIP_TYPE_SCENE:
         if (strip.scene) {
           scenes.add(strip.scene);
@@ -2389,11 +2394,6 @@ static void sequencer_report_duplicates(wmOperator *op, ListBaseT<Strip> *duplic
       case STRIP_TYPE_MOVIECLIP:
         if (strip.clip) {
           movieclips.add(strip.clip);
-        }
-        break;
-      case STRIP_TYPE_IMAGE_ID:
-        if (strip.image) {
-          images.add(strip.image);
         }
         break;
       case STRIP_TYPE_MASK:

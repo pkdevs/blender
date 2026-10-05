@@ -165,7 +165,6 @@ bool retiming_is_allowed(const Strip *strip)
               STRIP_TYPE_SCENE,
               STRIP_TYPE_MOVIE,
               STRIP_TYPE_MOVIECLIP,
-              STRIP_TYPE_IMAGE_ID,
               STRIP_TYPE_MASK);
 }
 
