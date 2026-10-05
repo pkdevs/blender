@@ -552,6 +552,10 @@ static wmOperatorStatus collection_importer_add_invoke(bContext *C,
                                                        wmOperator *op,
                                                        const wmEvent *event)
 {
+  if (!RNA_struct_property_is_set(op->ptr, "relative_path")) {
+    RNA_boolean_set(op->ptr, "relative_path", (U.flag & USER_RELPATHS) != 0);
+  }
+
   if (RNA_struct_property_is_set(op->ptr, "filepath")) {
     return WM_operator_call_notest(C, op); /* Call exec direct. */
   }
@@ -611,6 +615,11 @@ static void COLLECTION_OT_importer_add(wmOperatorType *ot)
                         "File Extension",
                         "'Glob' file type extension(s), as defined by the selected file handler");
   RNA_def_property_flag(prop, PROP_HIDDEN);
+  RNA_def_boolean(ot->srna,
+                  "relative_path",
+                  true,
+                  "Relative Path",
+                  "Select the file relative to the blend file");
 }
 
 static wmOperatorStatus collection_importer_remove_exec(bContext *C, wmOperator * /*op*/)
