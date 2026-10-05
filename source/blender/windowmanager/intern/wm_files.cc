@@ -1722,6 +1722,24 @@ static void wm_history_file_update()
 /** \} */
 
 /* -------------------------------------------------------------------- */
+
+bool WM_project_open(bContext *C, const char *directory)
+{
+  wmOperatorType *ot = WM_operatortype_find("PROJECT_OT_open", false);
+  if (ot == nullptr) {
+    return false;
+  }
+
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
+  RNA_string_set(&props, "directory", directory);
+  const wmOperatorStatus status = WM_operator_name_call_ptr(
+      C, ot, wm::OpCallContext::ExecDefault, &props, nullptr);
+  WM_operator_properties_free(&props);
+
+  return status & OPERATOR_FINISHED;
+}
+
+/* -------------------------------------------------------------------- */
 /** \name Recent Project Files
  * \{ */
 

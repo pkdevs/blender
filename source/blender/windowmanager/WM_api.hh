@@ -172,6 +172,10 @@ void WM_main(bContext *C) ATTR_NORETURN;
  */
 void WM_init_splash_on_startup(bContext *C);
 /**
+ * Open the project that was open on exit, if preference is enabeld.
+ */
+void WM_init_project_on_startup(bContext *C);
+/**
  * Show the splash screen.
  */
 void WM_init_splash(bContext *C);
@@ -579,6 +583,11 @@ bool WM_file_recover_last_session(bContext *C,
                                   const bool use_scripts_autoexec_check,
                                   ReportList *reports);
 void WM_file_tag_modified();
+
+/**
+ * Open the project containing the directory.
+ */
+bool WM_project_open(bContext *C, const char *directory);
 
 /**
  * \note `scene` (and related `view_layer` and `v3d`) pointers may be NULL,
