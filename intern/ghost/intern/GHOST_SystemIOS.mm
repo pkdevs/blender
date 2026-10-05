@@ -6,6 +6,7 @@
 
 #include "GHOST_ContextIOS.hh"
 #include "GHOST_IOSRuntime.hh"
+#include "GHOST_IOSTheme.hh"
 #include "GHOST_WindowIOS.hh"
 #include <chrono>
 #include <condition_variable>
@@ -135,6 +136,7 @@ UIWindowScene *GHOST_getIOSWindowScene()
 
 void GHOST_ios_register_window(UIWindow *window)
 {
+  blenderIOSApplyTheme(window);
   if (!native_windows) {
     native_windows = [[NSMutableArray alloc] init];
   }
@@ -218,6 +220,7 @@ void GHOST_ios_unregister_window(UIWindow *window)
   if (!started) {
     started = true;
     self.window = [[[UIWindow alloc] initWithWindowScene:g_window_scene] autorelease];
+    blenderIOSApplyTheme(self.window);
     self.window.rootViewController = [[[UIViewController alloc] init] autorelease];
     self.window.backgroundColor = UIColor.systemBackgroundColor;
     [self.window makeKeyAndVisible];
