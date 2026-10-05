@@ -194,6 +194,22 @@ static void rna_Armature_edit_bone_remove(bArmature *arm,
   ebone_ptr->invalidate();
 }
 
+static void rna_Armature_edit_bone_clear(bArmature *arm, ReportList *reports)
+{
+  if (arm->edbo == nullptr) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Armature '%s' not in edit mode, cannot clear edit bones",
+                arm->id.name + 2);
+    return;
+  }
+
+  /* Frees every EditBone (including IDProperties) and resets the listbase. */
+  ED_armature_ebone_listbase_free(arm->edbo, true);
+
+  arm->act_edbone = nullptr;
+}
+
 static void rna_iterator_bone_collections_all_begin(CollectionPropertyIterator *iter,
                                                     PointerRNA *ptr)
 {
@@ -2020,6 +2036,10 @@ static void rna_def_armature_edit_bones(BlenderRNA *brna, PropertyRNA *cprop)
   parm = RNA_def_pointer(func, "bone", "EditBone", "", "EditBone to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
+
+   func = RNA_def_function(srna, "clear", "rna_Armature_edit_bone_clear");
+  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  RNA_def_function_ui_description(func, "Remove all edit bones from the armature");
 }
 
 /** Armature.collections collection-of-bone-collections interface. */
