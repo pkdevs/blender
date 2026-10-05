@@ -54,15 +54,24 @@ class IPadResizeTest(unittest.TestCase):
         scale = method(window, "- (void)updateMTKViewDrawableScale\n")
         resize = method(system, "- (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:")
         bounds = method(window, "void GHOST_WindowIOS::getClientBounds(")
+        geometry = method(window, "void GHOST_WindowIOS::publishGeometry(CGSize size)")
         harness = r'''
 #import <UIKit/UIKit.h>
 #import <MetalKit/MetalKit.h>
 #include <vector>
+#include <atomic>
 #define GHOST_ASSERT(condition, message) NSCAssert(condition, @"%s", message)
 struct GHOST_Rect { double l_, t_, r_, b_; };
+class GHOST_SystemIOS;
+struct TestSurface { void resize(CGSize) {} };
 class GHOST_WindowIOS {
  public:
   MTKView *metal_view_;
+  std::atomic<float> scale_{1};
+  std::atomic<uint64_t> drawable_size_{0};
+  TestSurface *surface = nullptr;
+  GHOST_SystemIOS *system_ios_;
+  void publishGeometry(CGSize size);
   bool getValid() const { return true; }
   void getClientBounds(GHOST_Rect &bounds) const;
 };
@@ -99,7 +108,10 @@ class GHOST_SystemIOS : public GHOST_ISystem {
 };
 static GHOST_SystemIOS ghost;
 GHOST_ISystem *GHOST_ISystem::getSystem() { return &ghost; }
-@interface ResizeRenderer : NSObject <MTKViewDelegate>
+''' + geometry + r'''
+@interface ResizeRenderer : NSObject <MTKViewDelegate> {
+@public GHOST_WindowIOS *_window;
+}
 @end
 @implementation ResizeRenderer
 - (void)drawInMTKView:(MTKView *)view {}
@@ -118,8 +130,10 @@ int main() {
     view.autoResizeDrawable = YES;
     view.paused = YES;
     GHOST_WindowIOS window{view};
+    window.system_ios_ = &ghost;
     ghost.current_active_window_ = &window;
     ResizeRenderer *renderer = [[[ResizeRenderer alloc] init] autorelease];
+    renderer->_window = &window;
     view.delegate = renderer;
     ResizeController *controller = [[[ResizeController alloc] init] autorelease];
     controller->_view = view;
@@ -141,6 +155,7 @@ int main() {
     }
     NSCAssert(ghost.sizes.size() >= 9, @"Resize updates deferred until the end");
     ghost.current_active_window_ = nullptr;
+    renderer->_window = nullptr;
     [renderer mtkView:view drawableSizeWillChange:CGSizeMake(500, 500)];
     NSLog(@"PASS: intermediate resize, Retina dimensions, portrait, landscape, restore");
   }
