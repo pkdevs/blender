@@ -50,7 +50,10 @@ class NativeFilesTest(unittest.TestCase):
         device = os.environ.get("IOS_TEST_SIMULATOR_UDID", candidates[0]["udid"])
         source = (ROOT / "intern/ghost/intern/GHOST_IOSDocumentPicker.mm").read_text()
         source = source.replace('#include "GHOST_WindowIOS.hh"',
-                                'class GHOST_WindowIOS { public: UIWindow *rootWindow; };\n#include <string>')
+                                '#include <atomic>\n#include <memory>\n#include <string>\n'
+                                'class GHOST_WindowIOS { public: UIWindow *rootWindow; '
+                                'std::shared_ptr<std::atomic<bool>> input_alive = '
+                                'std::make_shared<std::atomic<bool>>(true); };')
         source += Path(__file__).with_name("native_files_test.mm").read_text()
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory) / "NativeFilesTest.app"
@@ -72,6 +75,7 @@ class NativeFilesTest(unittest.TestCase):
             build = subprocess.run([
                 "xcrun", "--sdk", "iphonesimulator", "clang++", "-std=c++17", "-fblocks", "-fno-objc-arc",
                 "-I", str(ROOT / "intern/ghost"), "-isysroot", sdk,
+                "-I", str(ROOT / "intern/ghost/intern"),
                 "-target", f"{os.uname().machine}-apple-ios26.0-simulator",
                 "-framework", "UIKit", "-framework", "Foundation", "-framework", "UniformTypeIdentifiers",
                 str(code), "-o", str(app / "NativeFilesTest"),

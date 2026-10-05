@@ -6,24 +6,24 @@
 
 #include "wm_apple_ios_file.hh"
 
-#include "GHOST_IOSDocumentPicker.hh"
-#include "BKE_context.hh"
-#include "BKE_main.hh"
-#include "BKE_report.hh"
-#include "BLI_listbase.h"
-#include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "DNA_space_types.h"
-#include "DNA_windowmanager_types.h"
-#include "RNA_access.hh"
-#include "WM_api.hh"
-#include "wm_event_system.hh"
-#include "wm_event_types.hh"
+#  include "BKE_context.hh"
+#  include "BKE_main.hh"
+#  include "BKE_report.hh"
+#  include "BLI_listbase.h"
+#  include "BLI_path_utils.hh"
+#  include "BLI_string.h"
+#  include "DNA_space_types.h"
+#  include "DNA_windowmanager_types.h"
+#  include "GHOST_IOSDocumentPicker.hh"
+#  include "GHOST_IOSMessageQueue.hh"
+#  include "RNA_access.hh"
+#  include "WM_api.hh"
+#  include "wm_event_system.hh"
+#  include "wm_event_types.hh"
 
-#include <map>
-#include <mutex>
-#include <string>
-#include <vector>
+#  include <map>
+#  include <string>
+#  include <vector>
 
 namespace {
 struct Request {
@@ -38,8 +38,7 @@ struct Result {
 };
 std::map<uint64_t, Request> requests;
 uint64_t next_request = 0;
-std::mutex result_mutex;
-std::vector<Result> results;
+GHOST_IOSMessageQueue<Result> results;
 
 bool boolean(wmOperator *op, const char *name)
 {
@@ -58,8 +57,7 @@ void completed(uint64_t id, const char *const *paths, int count, const char *err
   for (int i = 0; i < count; i++) {
     result.paths.emplace_back(paths[i]);
   }
-  std::lock_guard lock(result_mutex);
-  results.push_back(std::move(result));
+  results.push(std::move(result));
 }
 
 bool operator_is_live(bContext *C, const wmOperator *op)
@@ -162,11 +160,7 @@ void WM_apple_ios_fileselect_cancel(wmOperator *op)
 
 void WM_apple_ios_fileselect_flush(bContext *C)
 {
-  std::vector<Result> ready;
-  {
-    std::lock_guard lock(result_mutex);
-    ready.swap(results);
-  }
+  auto ready = results.take();
   for (const Result &result : ready) {
     auto it = requests.find(result.id);
     if (it == requests.end()) {

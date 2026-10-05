@@ -47,7 +47,20 @@ static PickerHarness *makePicker(GHOST_IOSDocumentMode mode)
   return picker;
 }
 
-static void checkRouting()
+static void waitUntil(BOOL (^ready)(), void (^next)(), int attempts = 500)
+{
+  if (ready()) {
+    next();
+    return;
+  }
+  assert(attempts > 0);
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_MSEC * 10), dispatch_get_main_queue(), ^{
+        waitUntil(ready, next, attempts - 1);
+      });
+}
+
+static void checkRouting(void (^finished)())
 {
   GHOST_ios_document_access_restore();
   assert([documentFilename(@"  Model  ", @"blend") isEqual:@"Model.blend"]);
@@ -111,45 +124,77 @@ static void checkRouting()
   DismissablePicker *dismissable = [[[DismissablePicker alloc]
       initForOpeningContentTypes:@[UTTypeFolder] asCopy:NO] autorelease];
   [picker documentPicker:dismissable didPickDocumentsAtURLs:@[[NSURL fileURLWithPath:root]]];
-  assert(calls == 4 && picked.size() == 1);
-  assert(picked[0] == [root stringByAppendingPathComponent:@"New.blend"].UTF8String);
-  assert(![NSFileManager.defaultManager fileExistsAtPath:[root stringByAppendingPathComponent:@"New.blend"]]);
+  waitUntil(
+      ^BOOL {
+        return calls == 4;
+      },
+      ^{
+        assert(calls == 4 && picked.size() == 1);
+        assert(picked[0] == [root stringByAppendingPathComponent:@"New.blend"].UTF8String);
+        assert(![NSFileManager.defaultManager
+            fileExistsAtPath:[root stringByAppendingPathComponent:@"New.blend"]]);
 
-  picker = makePicker(GHOST_IOSDocumentMode::Save);
-  picker.filename = @"First.blend";
-  [picker documentPicker:dismissable didPickDocumentsAtURLs:@[[NSURL fileURLWithPath:root]]];
-  UIAlertController *replace = (id)picker.controller;
-  assert([replace isKindOfClass:UIAlertController.class]);
-  assert([replace.actions.lastObject.title isEqual:@"Replace"] && calls == 4);
-  [picker finish:nil error:nil];
-  assert(calls == 5 && picked.empty());
-  assert([[NSString stringWithContentsOfURL:first encoding:NSUTF8StringEncoding error:nil]
-      isEqual:@"fixture"]); // Cancelled replacement leaves the original intact.
+        PickerHarness *replacement = makePicker(GHOST_IOSDocumentMode::Save);
+        replacement.filename = @"First.blend";
+        [replacement documentPicker:dismissable
+             didPickDocumentsAtURLs:@[ [NSURL fileURLWithPath:root] ]];
+        waitUntil(
+            ^BOOL {
+              return replacement.controller != nil;
+            },
+            ^{
+              UIAlertController *replace = (id)replacement.controller;
+              assert([replace isKindOfClass:UIAlertController.class]);
+              assert([replace.actions.lastObject.title isEqual:@"Replace"] && calls == 4);
+              [replacement finish:nil error:nil];
+              assert(calls == 5 && picked.empty());
+              assert([[NSString stringWithContentsOfURL:first
+                                               encoding:NSUTF8StringEncoding
+                                                  error:nil]
+                  isEqual:@"fixture"]);  // Cancelled replacement leaves the original intact.
 
-  picker = makePicker(GHOST_IOSDocumentMode::Directory);
-  [picker start];
-  assert(![(UIDocumentPickerViewController *)picker.controller allowsMultipleSelection]);
-  [picker documentPicker:nil didPickDocumentsAtURLs:@[[NSURL fileURLWithPath:root]]];
-  assert(calls == 6 && picked[0] == root.UTF8String);
+              PickerHarness *directory = makePicker(GHOST_IOSDocumentMode::Directory);
+              [directory start];
+              assert(![(UIDocumentPickerViewController *)
+                           directory.controller allowsMultipleSelection]);
+              [directory documentPicker:nil
+                  didPickDocumentsAtURLs:@[ [NSURL fileURLWithPath:root] ]];
+              assert(calls == 6 && picked[0] == root.UTF8String);
 
-  char error[1024] = {};
-  int executions = 0;
-  assert(GHOST_ios_document_can_write_path(first.path.UTF8String));
-  assert(GHOST_ios_document_coordinate(first.path.UTF8String, false,
-      [](void *context, const char *path) {
-        ++*static_cast<int *>(context);
-        assert([[NSString stringWithContentsOfFile:[NSString stringWithUTF8String:path]
-            encoding:NSUTF8StringEncoding error:nil] isEqual:@"fixture"]);
-      }, &executions, error, sizeof(error)));
-  assert(executions == 1);
-  assert(GHOST_ios_document_coordinate(first.path.UTF8String, true,
-      [](void *context, const char *path) {
-        ++*static_cast<int *>(context);
-        assert([@"saved" writeToFile:[NSString stringWithUTF8String:path]
-            atomically:YES encoding:NSUTF8StringEncoding error:nil]);
-      }, &executions, error, sizeof(error)));
-  assert(executions == 2);
-  [NSFileManager.defaultManager removeItemAtPath:root error:nil];
+              char error[1024] = {};
+              int executions = 0;
+              assert(GHOST_ios_document_can_write_path(first.path.UTF8String));
+              assert(GHOST_ios_document_coordinate(
+                  first.path.UTF8String,
+                  false,
+                  [](void *context, const char *path) {
+                    ++*static_cast<int *>(context);
+                    assert([[NSString stringWithContentsOfFile:[NSString stringWithUTF8String:path]
+                                                      encoding:NSUTF8StringEncoding
+                                                         error:nil] isEqual:@"fixture"]);
+                  },
+                  &executions,
+                  error,
+                  sizeof(error)));
+              assert(executions == 1);
+              assert(GHOST_ios_document_coordinate(
+                  first.path.UTF8String,
+                  true,
+                  [](void *context, const char *path) {
+                    ++*static_cast<int *>(context);
+                    assert([@"saved" writeToFile:[NSString stringWithUTF8String:path]
+                                      atomically:YES
+                                        encoding:NSUTF8StringEncoding
+                                           error:nil]);
+                  },
+                  &executions,
+                  error,
+                  sizeof(error)));
+              assert(executions == 2);
+              [NSFileManager.defaultManager removeItemAtPath:root error:nil];
+              finished();
+            });
+      });
 }
 
 @interface FilesTestDelegate : UIResponder <UIApplicationDelegate>
@@ -167,28 +212,42 @@ static void checkRouting()
   testWindow.rootViewController.view.backgroundColor = UIColor.systemBackgroundColor;
   [testWindow makeKeyAndVisible];
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-    checkRouting();
-    GHOST_WindowIOS window;
-    window.rootWindow = testWindow;
-    assert(GHOST_ios_document_picker_begin(&window, 100, GHOST_IOSDocumentMode::Open,
-        "Open Blender File", "", "public.data", "*.blend", false, complete));
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-      assert([testWindow.rootViewController.presentedViewController
-          isKindOfClass:UIDocumentPickerViewController.class]);
-      UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc]
-          initWithSize:testWindow.bounds.size] autorelease];
-      UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
-        [testWindow drawViewHierarchyInRect:testWindow.bounds afterScreenUpdates:YES];
-      }];
-      NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
-          NSUserDomainMask, YES).firstObject;
-      [UIImagePNGRepresentation(image) writeToFile:
-          [documents stringByAppendingPathComponent:@"native-files-picker.png"] atomically:YES];
-      GHOST_ios_document_picker_cancel(100);
-      assert(calls == 6 && document_pickers.count == 0);
-      GHOST_ios_document_access_shutdown();
-      fprintf(stderr, "PASS: native document picker, save destination, overwrite cancellation, coordination\n");
-      exit(0);
+    checkRouting(^{
+      GHOST_WindowIOS window;
+      window.rootWindow = testWindow;
+      assert(GHOST_ios_document_picker_begin(&window,
+                                             100,
+                                             GHOST_IOSDocumentMode::Open,
+                                             "Open Blender File",
+                                             "",
+                                             "public.data",
+                                             "*.blend",
+                                             false,
+                                             complete));
+      dispatch_after(
+          dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            assert([testWindow.rootViewController.presentedViewController
+                isKindOfClass:UIDocumentPickerViewController.class]);
+            UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc]
+                initWithSize:testWindow.bounds.size] autorelease];
+            UIImage *image = [renderer
+                imageWithActions:^(UIGraphicsImageRendererContext *context) {
+                  [testWindow drawViewHierarchyInRect:testWindow.bounds afterScreenUpdates:YES];
+                }];
+            NSString *documents = NSSearchPathForDirectoriesInDomains(
+                                      NSDocumentDirectory, NSUserDomainMask, YES)
+                                      .firstObject;
+            [UIImagePNGRepresentation(image)
+                writeToFile:[documents stringByAppendingPathComponent:@"native-files-picker.png"]
+                 atomically:YES];
+            GHOST_ios_document_picker_cancel(100);
+            assert(calls == 6 && document_pickers.count == 0);
+            GHOST_ios_document_access_shutdown();
+            fprintf(stderr,
+                    "PASS: native document picker, save destination, overwrite cancellation, "
+                    "coordination\n");
+            exit(0);
+          });
     });
   });
 }

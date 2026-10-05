@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include "GHOST_IOSDocumentPicker.hh"
+#include "GHOST_IOSMessageQueue.hh"
 
 constexpr int FILE_MAX = 4096, FILE_LOADLIB = 1, RPT_ERROR = 1;
 constexpr int EVT_FILESELECT_CANCEL = 2, EVT_FILESELECT_EXEC = 3, WM_HANDLER_TYPE_OP = 4;

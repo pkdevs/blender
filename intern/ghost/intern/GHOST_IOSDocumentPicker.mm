@@ -6,6 +6,7 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include "GHOST_IOSDocumentPicker.hh"
+#include "GHOST_IOSRuntime.hh"
 #include "GHOST_WindowIOS.hh"
 
 #include <cstdio>
@@ -14,6 +15,18 @@
 static NSMutableDictionary<NSString *, NSURL *> *document_access;
 static NSMutableDictionary<NSNumber *, id> *document_pickers;
 static NSString *const bookmark_key = @"BlenderDocumentBookmarks";
+static char document_queue_key;
+
+static dispatch_queue_t documentQueue()
+{
+  static dispatch_queue_t queue;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    queue = dispatch_queue_create("org.blender.document.access", DISPATCH_QUEUE_SERIAL);
+    dispatch_queue_set_specific(queue, &document_queue_key, &document_queue_key, nullptr);
+  });
+  return queue;
+}
 
 static BOOL documentPathIsInside(NSString *path, NSString *directory)
 {
@@ -25,11 +38,16 @@ static BOOL documentPathIsInside(NSString *path, NSString *directory)
 
 extern "C" void GHOST_ios_document_access_restore()
 {
+  if (!dispatch_get_specific(&document_queue_key)) {
+    dispatch_sync(documentQueue(), ^{
+      GHOST_ios_document_access_restore();
+    });
+    return;
+  }
   if (document_access) {
     return;
   }
   document_access = [[NSMutableDictionary alloc] init];
-  document_pickers = [[NSMutableDictionary alloc] init];
   NSDictionary *bookmarks = [NSUserDefaults.standardUserDefaults dictionaryForKey:bookmark_key];
   for (NSData *data in bookmarks.allValues) {
     if (![data isKindOfClass:NSData.class]) {
@@ -46,6 +64,17 @@ extern "C" void GHOST_ios_document_access_restore()
 
 static void documentRememberAccess(NSArray<NSURL *> *urls)
 {
+  if (!dispatch_get_specific(&document_queue_key)) {
+    NSArray *owned = [urls copy];
+    dispatch_async(documentQueue(), ^{
+      @autoreleasepool {
+        documentRememberAccess(owned);
+        [owned release];
+      }
+    });
+    return;
+  }
+  GHOST_ios_document_access_restore();
   NSMutableDictionary *bookmarks = [[[NSUserDefaults.standardUserDefaults
       dictionaryForKey:bookmark_key] mutableCopy] autorelease];
   if (!bookmarks) {
@@ -68,6 +97,13 @@ static void documentRememberAccess(NSArray<NSURL *> *urls)
 
 extern "C" bool GHOST_ios_document_can_write_path(const char *path)
 {
+  if (!dispatch_get_specific(&document_queue_key)) {
+    __block bool result;
+    dispatch_sync(documentQueue(), ^{
+      result = GHOST_ios_document_can_write_path(path);
+    });
+    return result;
+  }
   GHOST_ios_document_access_restore();
   NSString *value = [NSString stringWithUTF8String:path];
   if (documentPathIsInside(value, NSHomeDirectory())) {
@@ -279,20 +315,50 @@ static NSString *documentFilename(NSString *value, NSString *extension)
   }
   if (self.mode == GHOST_IOSDocumentMode::Save) {
     NSURL *destination = [urls.firstObject URLByAppendingPathComponent:self.filename];
-    [picker dismissViewControllerAnimated:YES completion:^{
-      if ([NSFileManager.defaultManager fileExistsAtPath:destination.path]) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Replace File?"
-            message:destination.lastPathComponent preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel
-            handler:^(UIAlertAction *) { [self finish:nil error:nil]; }]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"Replace" style:UIAlertActionStyleDestructive
-            handler:^(UIAlertAction *) { [self finish:@[destination] error:nil]; }]];
-        [self present:alert];
-      }
-      else {
-        [self finish:@[destination] error:nil];
-      }
-    }];
+    [picker
+        dismissViewControllerAnimated:YES
+                           completion:^{
+                             /* Transfer ownership without retaining UIKit objects in the file
+                              * queue's block, so the final release always happens on main. */
+                             void *picker_token = [self retain];
+                             dispatch_async(documentQueue(), ^{
+                               const BOOL exists = [NSFileManager.defaultManager
+                                   fileExistsAtPath:destination.path];
+                               dispatch_async(dispatch_get_main_queue(), ^{
+                                 GHOSTIOSDocumentPicker *owner = (GHOSTIOSDocumentPicker *)
+                                     picker_token;
+                                 if (owner.finished) {
+                                   [owner release];
+                                   return;
+                                 }
+                                 if (exists) {
+                                   UIAlertController *alert = [UIAlertController
+                                       alertControllerWithTitle:@"Replace File?"
+                                                        message:destination.lastPathComponent
+                                                 preferredStyle:UIAlertControllerStyleAlert];
+                                   [alert addAction:[UIAlertAction
+                                                        actionWithTitle:@"Cancel"
+                                                                  style:UIAlertActionStyleCancel
+                                                                handler:^(UIAlertAction *) {
+                                                                  [owner finish:nil error:nil];
+                                                                }]];
+                                   [alert
+                                       addAction:[UIAlertAction
+                                                     actionWithTitle:@"Replace"
+                                                               style:UIAlertActionStyleDestructive
+                                                             handler:^(UIAlertAction *) {
+                                                               [owner finish:@[ destination ]
+                                                                       error:nil];
+                                                             }]];
+                                   [owner present:alert];
+                                 }
+                                 else {
+                                   [owner finish:@[ destination ] error:nil];
+                                 }
+                                 [owner release];
+                               });
+                             });
+                           }];
     return;
   }
   NSString *parent = urls.firstObject.URLByDeletingLastPathComponent.path;
@@ -320,36 +386,51 @@ extern "C" bool GHOST_ios_document_picker_begin(
     void *window, uint64_t request, GHOST_IOSDocumentMode mode, const char *title, const char *path,
     const char *types, const char *glob, bool multiple, GHOST_IOSDocumentCompletion completion)
 {
-  GHOST_ios_document_access_restore();
   if (!window) {
     return false;
   }
-  UIViewController *presenter = static_cast<GHOST_WindowIOS *>(window)->rootWindow.rootViewController;
-  if (!presenter) {
-    return false;
-  }
-  while (presenter.presentedViewController) {
-    presenter = presenter.presentedViewController;
-  }
-  GHOSTIOSDocumentPicker *picker = [[[GHOSTIOSDocumentPicker alloc] init] autorelease];
-  picker.request = request;
-  picker.mode = mode;
-  picker.completion = completion;
-  picker.presenter = presenter;
-  picker.title = [NSString stringWithUTF8String:title];
-  picker.initialPath = [NSString stringWithUTF8String:path];
-  picker.types = documentContentTypes([NSString stringWithUTF8String:types],
-                                      [NSString stringWithUTF8String:glob]);
-  picker.multiple = multiple;
-  picker.scopedURLs = [NSMutableArray array];
-  document_pickers[@(request)] = picker;
-  /* Never enter UIKit presentation reentrantly from Blender's operator dispatch. */
-  dispatch_async(dispatch_get_main_queue(), ^{ if (!picker.finished) [picker start]; });
+  UIWindow *native_window = static_cast<GHOST_WindowIOS *>(window)->rootWindow;
+  auto alive = static_cast<GHOST_WindowIOS *>(window)->input_alive;
+  NSString *owned_title = [NSString stringWithUTF8String:title];
+  NSString *owned_path = [NSString stringWithUTF8String:path];
+  NSArray *owned_types = documentContentTypes([NSString stringWithUTF8String:types],
+                                              [NSString stringWithUTF8String:glob]);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    UIViewController *presenter = alive->load() ? native_window.rootViewController : nil;
+    if (!presenter) {
+      completion(request, nullptr, 0, nullptr);
+      return;
+    }
+    while (presenter.presentedViewController) {
+      presenter = presenter.presentedViewController;
+    }
+    GHOSTIOSDocumentPicker *picker = [[[GHOSTIOSDocumentPicker alloc] init] autorelease];
+    picker.request = request;
+    picker.mode = mode;
+    picker.completion = completion;
+    picker.presenter = presenter;
+    picker.title = owned_title;
+    picker.initialPath = owned_path;
+    picker.types = owned_types;
+    picker.multiple = multiple;
+    picker.scopedURLs = [NSMutableArray array];
+    if (!document_pickers) {
+      document_pickers = [[NSMutableDictionary alloc] init];
+    }
+    document_pickers[@(request)] = picker;
+    [picker start];
+  });
   return true;
 }
 
 extern "C" void GHOST_ios_document_picker_cancel(uint64_t request)
 {
+  if (!NSThread.isMainThread) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      GHOST_ios_document_picker_cancel(request);
+    });
+    return;
+  }
   GHOSTIOSDocumentPicker *picker = document_pickers[@(request)];
   if (picker) {
     [[picker retain] autorelease];
@@ -385,14 +466,18 @@ extern "C" bool GHOST_ios_document_coordinate(const char *path, bool writing,
 
 extern "C" void GHOST_ios_document_access_shutdown()
 {
-  for (NSNumber *request in [[document_pickers.allKeys copy] autorelease]) {
-    GHOST_ios_document_picker_cancel(request.unsignedLongLongValue);
-  }
-  [document_pickers release];
-  document_pickers = nil;
-  for (NSURL *url in document_access.allValues) {
-    [url stopAccessingSecurityScopedResource];
-  }
-  [document_access release];
-  document_access = nil;
+  GHOST_ios_main_sync(^{
+    for (NSNumber *request in [[document_pickers.allKeys copy] autorelease]) {
+      GHOST_ios_document_picker_cancel(request.unsignedLongLongValue);
+    }
+    [document_pickers release];
+    document_pickers = nil;
+  });
+  dispatch_sync(documentQueue(), ^{
+    for (NSURL *url in document_access.allValues) {
+      [url stopAccessingSecurityScopedResource];
+    }
+    [document_access release];
+    document_access = nil;
+  });
 }
