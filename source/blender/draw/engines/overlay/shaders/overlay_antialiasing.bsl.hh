@@ -95,8 +95,6 @@ struct TexelData {
 };
 
 struct Resources {
-  [[legacy_info]] ShaderCreateInfo draw_globals;
-
   [[sampler(0)]] const sampler2DDepth depth_tx;
   [[sampler(1)]] const sampler2D color_tx;
   [[sampler(2)]] const sampler2D line_tx;
