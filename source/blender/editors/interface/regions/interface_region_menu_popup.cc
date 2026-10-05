@@ -30,6 +30,9 @@
 #include "BKE_screen.hh"
 
 #include "WM_api.hh"
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+#  include "WM_apple_ios.hh"
+#endif
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
@@ -555,6 +558,10 @@ uiLayout *UI_popup_menu_layout(uiPopupMenu *pup)
 
 void UI_popup_menu_reports(bContext *C, ReportList *reports)
 {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  WM_apple_ios_reports(CTX_wm_window(C), reports, reports->printlevel);
+  return;
+#endif
   uiPopupMenu *pup = nullptr;
   uiLayout *layout;
 

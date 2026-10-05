@@ -28,6 +28,10 @@
 #include "BKE_screen.hh"
 
 #include "WM_api.hh"
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+#  include "GHOST_IOSDialog.hh"
+#  include "WM_apple_ios.hh"
+#endif
 #include "WM_types.hh"
 
 #include "ED_screen.hh"
@@ -1131,6 +1135,15 @@ void UI_alert(bContext *C,
               const eAlertIcon icon,
               const bool compact)
 {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  GHOST_IOSDialog dialog;
+  dialog.title = std::string(title);
+  dialog.message = std::string(message);
+  dialog.actions = {{"OK"}};
+  dialog.preferred_action = 0;
+  WM_apple_ios_dialog_begin(C, dialog, {});
+  return;
+#endif
   uiAlertData *data = MEM_new<uiAlertData>(__func__);
   data->title = title;
   data->message = message;

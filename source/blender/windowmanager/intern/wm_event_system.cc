@@ -73,6 +73,9 @@
 #include "UI_view2d.hh"
 
 #include "WM_api.hh"
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+#  include "WM_apple_ios.hh"
+#endif
 #include "WM_keymap.hh"
 #include "WM_message.hh"
 #include "WM_toolsystem.hh"
@@ -1036,6 +1039,11 @@ void WM_reports_from_reports_move(wmWindowManager *wm, ReportList *reports)
   }
 
   /* Add reports to the global list, otherwise they are not seen. */
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  WM_apple_ios_reports(wm->runtime->winactive ? wm->runtime->winactive :
+                          static_cast<wmWindow *>(wm->windows.first),
+                      reports, RPT_WARNING);
+#endif
   BKE_reports_move_to_reports(&wm->runtime->reports, reports);
 
   WM_report_banner_show(wm, nullptr);
