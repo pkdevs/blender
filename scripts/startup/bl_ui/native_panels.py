@@ -79,9 +79,17 @@ class WM_OT_native_panel_edit(bpy.types.Operator):
             if request.get('action') == 'select':
                 if context.mode != 'OBJECT' or obj.hide_select or not obj.visible_get():
                     raise ValueError("This object cannot be selected in the current mode.")
-                for other in context.view_layer.objects:
-                    other.select_set(other == obj)
-                context.view_layer.objects.active = obj
+                selected = bool(request.get('value', True))
+                if not request.get('extend', False):
+                    for other in context.view_layer.objects:
+                        other.select_set(other == obj)
+                else:
+                    obj.select_set(selected)
+                if selected:
+                    context.view_layer.objects.active = obj
+                elif context.view_layer.objects.active == obj:
+                    context.view_layer.objects.active = next(
+                        (other for other in context.view_layer.objects if other.select_get()), None)
             elif request.get('action') == 'visibility':
                 obj.hide_set(bool(request['value']), view_layer=context.view_layer)
             else:
