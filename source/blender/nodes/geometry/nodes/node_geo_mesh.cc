@@ -12,7 +12,6 @@
 #include "NOD_geometry_nodes_values.hh"
 #include "NOD_rna_define.hh"
 #include "NOD_socket.hh"
-#include "NOD_socket_usage_inference.hh"
 
 #include "list_function_eval.hh"
 #include "node_geometry_util.hh"
@@ -25,35 +24,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   if (!node) {
     return;
   }
-  b.use_custom_socket_order();
-  b.allow_any_socket_order();
+  b.add_input<decl::Vector>("Positions"_ustr).structure_type(StructureType::List).hide_value();
+  b.add_input<decl::Int>("Corners"_ustr).structure_type(StructureType::List).hide_value();
+  b.add_input<decl::Int>("Face Offsets"_ustr).structure_type(StructureType::List).hide_value();
+  b.add_input<decl::Int>("Loose Edges"_ustr).structure_type(StructureType::List).hide_value();
 
   b.add_output<decl::Geometry>("Mesh"_ustr);
-
-  b.add_input<decl::Int>("Vertices"_ustr)
-      .default_value(1)
-      .min(1)
-      .description("The number of vertices in the mesh");
-  b.add_input<decl::Vector>("Positions"_ustr).structure_type(StructureType::Field).hide_value();
-  b.add_input<decl::Int>("Faces"_ustr).structure_type(StructureType::List).hide_value();
-
-  {
-    auto &panel = b.add_panel("Loose Edges"_ustr);
-    panel.add_input<decl::Bool>("Loose Edges"_ustr).panel_toggle();
-    panel.add_input<decl::Int>("Edges"_ustr)
-        .default_value(1)
-        .min(1)
-        .description("The number of loose edges in the mesh")
-        .usage_by_panel_toggle();
-    panel.add_input<decl::Int>("Vertex 1"_ustr)
-        .structure_type(StructureType::Field)
-        .hide_value()
-        .usage_by_panel_toggle();
-    panel.add_input<decl::Int>("Vertex 2"_ustr)
-        .structure_type(StructureType::Field)
-        .hide_value()
-        .usage_by_panel_toggle();
-  }   
 }
 
 static int get_num_corners_from_faces_list(const GListPtr &faces_list,
@@ -86,28 +62,45 @@ static int get_num_corners_from_faces_list(const GListPtr &faces_list,
   return num_corners;
 }
 
-static void get_edges_from_edge_fields(const IndexRange verts,
-                                       const int edges_num,
-                                       GField &vertex_1_field,
-                                       GField &vertex_2_field,
-                                       MutableSpan<int2> edges)
+static bool get_edges_from_edges_list(GeoNodeExecParams &params,
+                                      const GListPtr &edges_list,
+                                      const IndexRange verts,
+                                      MutableSpan<int2> edges)
 {
-  ListFieldContext context;
-  fn::FieldEvaluator evaluator{context, edges_num};
-  evaluator.add(std::move(vertex_1_field));
-  evaluator.add(std::move(vertex_2_field));
-  evaluator.evaluate();
-
-  const VArray<int> vertex_1 = evaluator.get_evaluated<int>(0);
-  const VArray<int> vertex_2 = evaluator.get_evaluated<int>(1);
-
-  threading::parallel_for(edges.index_range(), 2048, [&](const IndexRange range) {
-    for (const int i : range) {
-      const int vert1 = math::clamp(int64_t(vertex_1[i]), verts.first(), verts.last());
-      const int vert2 = math::clamp(int64_t(vertex_2[i]), verts.first(), verts.last());
-      edges[i] = {vert1, vert2};
+  if (!edges_list) {
+    return true;
+  }
+  if (!edges_list->cpp_type().is<bke::SocketValueVariant>()) {
+    params.error_message_add(NodeWarningType::Error, "Edges must be a list of integer lists");
+    return false;
+  }
+  const auto values = edges_list->typed<bke::SocketValueVariant>().values();
+  if (const auto *span_values = std::get_if<Span<bke::SocketValueVariant>>(&values)) {
+    for (const int i : span_values->index_range()) {
+      const bke::SocketValueVariant &value = (*span_values)[i];
+      if (!value.is_list()) {
+        params.error_message_add(NodeWarningType::Error, "Edges must be a list of integer lists");
+        return false;
+      }
+      const GListPtr edge_list = value.get<GListPtr>();
+      if (!edge_list->cpp_type().is<int>() || edge_list->size() != 2) {
+        params.error_message_add(NodeWarningType::Error,
+                                 "Edge must be a list of integers with exactly 2 elements");
+        return false;
+      }
+      edge_list->varray().materialize(&edges[i]);
+      if (!verts.contains(edges[i][0]) || !verts.contains(edges[i][1])) {
+        params.error_message_add(NodeWarningType::Error, "Edge vertex index out of bounds");
+        return false;
+      }
+      if (edges[i][0] == edges[i][1]) {
+        params.error_message_add(NodeWarningType::Error, "Edge vertex indices must be different");
+        return false;
+      }
     }
-  });
+  }
+
+  return true;
 }
 
 static bool get_corners_from_face_list(GeoNodeExecParams &params,
@@ -167,32 +160,44 @@ static bool get_corners_from_face_list(GeoNodeExecParams &params,
   return true;
 }
 
-static Mesh *create_mesh_from_topology_info(GeoNodeExecParams &params,
-                                            const int verts_num,
-                                            GField &positions_field,
-                                            const GListPtr &faces_list,
-                                            const std::optional<int> loose_edges_num,
-                                            std::optional<GField> &vertex_1_field,
-                                            std::optional<GField> &vertex_2_field)
+static Mesh *create_mesh_from_lists(GeoNodeExecParams &params,
+                                    const GListPtr &positions_list,
+                                    const GListPtr &edges_list,
+                                    const GListPtr &faces_list)
 {
+  const int verts_num = positions_list ? positions_list->size() : 0;
   const IndexRange verts(verts_num);
 
-  const int edges_num = loose_edges_num.has_value() ? *loose_edges_num : 0;
+  const int edges_num = edges_list ? edges_list->size() : 0;
   int faces_num = faces_list ? faces_list->size() : 0;
 
   Array<int> face_offsets(faces_num + 1);
-  const int corners_num = get_num_corners_from_faces_list(faces_list, face_offsets);
+  int corners_num = get_num_corners_from_faces_list(faces_list, face_offsets);
 
-  Mesh *mesh = BKE_mesh_new_nomain(verts_num, edges_num, faces_num, corners_num);
+  Mesh *mesh = bke::mesh_new_no_attributes(verts_num, edges_num, faces_num, corners_num);
 
-  ListFieldContext context;
-  fn::FieldEvaluator evaluator{context, verts_num};
-  evaluator.add_with_destination(std::move(positions_field), mesh->vert_positions_for_write());
-  evaluator.evaluate();
+  const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(&positions_list->data());
+  if (positions_array_data) {
+    /* Share the position data with the list to avoid copying it. */
+    mesh->attributes_for_write().assign_data(
+        "position",
+        bke::AttributeInitShared(positions_array_data->data, *positions_array_data->sharing_info));
+  }
+  else if (const auto *positions_single_value = std::get_if<nodes::GList::SingleData>(
+               &positions_list->data()))
+  {
+    mesh->vert_positions_for_write().fill(
+        *static_cast<const float3 *>(positions_single_value->value));
+  }
+  else {
+    BLI_assert_unreachable();
+  }
 
-  if (loose_edges_num && edges_num > 0) {
-    get_edges_from_edge_fields(
-        verts, edges_num, *vertex_1_field, *vertex_2_field, mesh->edges_for_write());
+  if (edges_num > 0) {
+    if (!get_edges_from_edges_list(params, edges_list, verts, mesh->edges_for_write())) {
+      BKE_id_free_ex(nullptr, mesh, LIB_ID_FREE_NO_MAIN, false);
+      return nullptr;
+    }
   }
 
   if (faces_num > 0) {
@@ -209,7 +214,7 @@ static Mesh *create_mesh_from_topology_info(GeoNodeExecParams &params,
   }
 
   if (edges_num > 0 || faces_num > 0) {
-    bke::mesh_calc_edges(*mesh, edges_num > 0, false);
+    bke::mesh_calc_edges(*mesh, true, false);
   }
 
   return mesh;
@@ -217,32 +222,21 @@ static Mesh *create_mesh_from_topology_info(GeoNodeExecParams &params,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  const int num_verts = params.extract_input<int>("Vertices"_ustr);
-  if (num_verts < 1) {
-    params.error_message_add(NodeWarningType::Error, "Number of vertices must not be negative");
+  const GListPtr positions_list = params.extract_input<GListPtr>("Positions"_ustr);
+  if (positions_list->size() < 1) {
+    params.error_message_add(NodeWarningType::Error, "Number of points must be greater than zero");
+    params.set_default_remaining_outputs();
+    return;
+  }
+  if (!positions_list->cpp_type().is<float3>()) {
+    params.error_message_add(NodeWarningType::Error, "Positions must be a list of vectors");
     params.set_default_remaining_outputs();
     return;
   }
   if (params.output_is_required("Mesh"_ustr)) {
-    GField positions_field = params.extract_input<GField>("Positions"_ustr);
+    const GListPtr edges_list = params.extract_input<GListPtr>("Edges"_ustr);
     const GListPtr faces_list = params.extract_input<GListPtr>("Faces"_ustr);
-
-    std::optional<int> loose_edges_num;
-    std::optional<GField> vertex_1_field;
-    std::optional<GField> vertex_2_field;
-    const bool use_loose_edges = params.extract_input<bool>("Loose Edges"_ustr);
-    if (use_loose_edges) {
-      loose_edges_num = params.extract_input<int>("Edges"_ustr);
-      vertex_1_field = params.extract_input<GField>("Vertex 1"_ustr);
-      vertex_2_field = params.extract_input<GField>("Vertex 2"_ustr);
-    }
-    Mesh *mesh = create_mesh_from_topology_info(params,
-                                                num_verts,
-                                                positions_field,
-                                                faces_list,
-                                                loose_edges_num,
-                                                vertex_1_field,
-                                                vertex_2_field);
+    Mesh *mesh = create_mesh_from_lists(params, positions_list, edges_list, faces_list);
     params.set_output("Mesh"_ustr, GeometrySet::from_mesh(mesh));
   }
 }
