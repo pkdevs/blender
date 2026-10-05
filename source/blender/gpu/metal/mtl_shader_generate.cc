@@ -1137,6 +1137,27 @@ static void generate_subpass_inputs(GeneratedStreams &generated, const ShaderCre
     return;
   }
 
+  if (!MTLBackend::get_capabilities().supports_native_tile_inputs) {
+    /* Match the image bindings installed by MTLFrameBuffer::subpass_transition_impl. */
+    for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
+      const std::string image = "mtl_subpass_image_" + std::to_string(input.index);
+      const std::string value = image + "_value";
+      const bool layered = ELEM(
+          input.img_type, ImageType::Float2DArray, ImageType::Int2DArray, ImageType::Uint2DArray);
+      const std::string layer = bool(info.builtins_ & BuiltinBits::LAYER) ?
+                                    "mtl_vert_out.gpu_Layer" : "0";
+      const std::string swizzle = std::string("xyzw").substr(0, to_component_count(input.type));
+      generated.wrapper_class_members << "  " << input.type << " " << input.name << ";\n";
+      generated.wrapper_constructor_parameters << Sep() << input.type << " " << value;
+      generated.wrapper_constructor_assign << Sep() << input.name << "(" << value << ")";
+      generated.wrapper_instance_init << Sep() << value;
+      generated.entry_point_start << "  auto " << value << " = " << image
+                                  << ".read(uint2(mtl_vert_out.gl_FragCoord.xy)"
+                                  << (layered ? ", " + layer : "") << ")." << swizzle << ";\n";
+    }
+    return;
+  }
+
   StringRefNull mem_scope = "thread ";
 
   {

@@ -147,6 +147,29 @@ const shader::ShaderCreateInfo &MTLShader::patch_create_info(
     patch_create_info_atomic_workaround(patched_info_, original_info);
   }
 
+  if (!MTLBackend::get_capabilities().supports_native_tile_inputs &&
+      !original_info.subpass_inputs_.is_empty())
+  {
+    if (patched_info_ == nullptr) {
+      patched_info_ = std::make_unique<PatchedShaderCreateInfo>(original_info);
+    }
+    patched_info_->info.builtins_ |= BuiltinBits::FRAG_COORD;
+    for (const ShaderCreateInfo::SubpassIn &input : original_info.subpass_inputs_) {
+      patched_info_->names.append(
+          std::make_unique<std::string>("mtl_subpass_image_" + std::to_string(input.index)));
+      const TextureFormat format = ELEM(input.img_type, ImageType::Uint2D, ImageType::Uint2DArray) ?
+                                       TextureFormat::UINT_32_32_32_32 :
+                                   ELEM(input.img_type, ImageType::Int2D, ImageType::Int2DArray) ?
+                                       TextureFormat::SINT_32_32_32_32 :
+                                       TextureFormat::SFLOAT_32_32_32_32;
+      patched_info_->info.image(input.index,
+                                format,
+                                Qualifier::read,
+                                ImageReadWriteType(input.img_type),
+                                *patched_info_->names.last());
+    }
+  }
+
   if (original_info.max_sampler_slot() > 16) {
     if (patched_info_ == nullptr) {
       patched_info_ = std::make_unique<PatchedShaderCreateInfo>(original_info);
