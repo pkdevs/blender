@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Blender Authors
+#
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+[binaries]
+c = '@CMAKE_C_COMPILER@'
+cpp = '@CMAKE_CXX_COMPILER@'
+ar = '@CMAKE_AR@'
+strip = '@CMAKE_STRIP@'
+python = '@PYTHON_BINARY@'
+cython = ['@PYTHON_BINARY@', '-m', 'cython']
+pkg-config = 'pkg-config'
+
+[host_machine]
+system = 'darwin'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+
+[properties]
+needs_exe_wrapper = true
+longdouble_format = 'IEEE_DOUBLE_LE'
+
+[built-in options]
+c_args = ['-isysroot', '@CMAKE_OSX_SYSROOT@', '@APPLE_OS_MINVERSION_CFLAG@', '-arch', 'arm64', '-I@LIBDIR@/python/include/python@PYTHON_SHORT_VERSION@']
+cpp_args = ['-isysroot', '@CMAKE_OSX_SYSROOT@', '@APPLE_OS_MINVERSION_CFLAG@', '-arch', 'arm64', '-I@LIBDIR@/python/include/python@PYTHON_SHORT_VERSION@']
+c_link_args = ['-isysroot', '@CMAKE_OSX_SYSROOT@', '@APPLE_OS_MINVERSION_CFLAG@', '-arch', 'arm64']
+cpp_link_args = ['-isysroot', '@CMAKE_OSX_SYSROOT@', '@APPLE_OS_MINVERSION_CFLAG@', '-arch', 'arm64']
+pkg_config_path = ['@LIBDIR@/python/lib/pkgconfig']

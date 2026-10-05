@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Blender Authors
+#
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+[binaries]
+python = '@PYTHON_BINARY@'
+cython = ['@PYTHON_BINARY@', '-m', 'cython']

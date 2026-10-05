@@ -278,11 +278,3 @@ else()
   harvest(external_python python/include python/include "*h")
   harvest(external_python python/lib python/lib "*")
 endif()
-
-if(WITH_APPLE_CROSSPLATFORM)
-  # Harvest Numpy from darwin_arm64
-  ExternalProject_Add_Step(external_python after_install
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_DEPS_CROSSCOMPILE_INSTALLDIR}/python/lib/python${PYTHON_SHORT_VERSION}/site-packages/numpy ${LIBDIR}/python/lib/python${PYTHON_SHORT_VERSION}/site-packages/numpy 
-    DEPENDEES install
-  )
-endif()
