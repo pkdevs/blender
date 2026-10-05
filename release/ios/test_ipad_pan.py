@@ -101,8 +101,9 @@ int main() {
                         reconfigure.index("wm_keymap_patch_update("))
         native = (root / "intern/ghost/intern/GHOST_WindowIOS.mm").read_text()
         start = native.index("/* Pan, pinch, and twist")
-        start = native.index("{", start)
-        delegate_body = native[start:native.index("\n}", start) + 2]
+        # Only navigation pairing belongs in this C++ harness; UIKit hover is independent.
+        start = native.index("  const BOOL is_navigation", start)
+        delegate_body = "{\n" + native[start:native.index("\n}", start) + 2]
         region = (root / "source/blender/editors/space_view3d/space_view3d.cc").read_text()
         region = region[region.index("static void view3d_main_region_init("):]
         self.assertLess(region.index('"3D View iPad Gestures"'), region.index('"Paint Face Mask'))
@@ -169,11 +170,13 @@ int main()
             source.write_text(harness)
             for ios in (0, 1):
                 with self.subTest(ios=ios):
-                    subprocess.run([
+                    result = subprocess.run([
                         compiler, "-std=c++17", "-DWITH_APPLE_CROSSPLATFORM",
                         f"-DAPPLE_TARGET_IOS={ios}", str(source), "-o", str(executable),
-                    ], check=True, capture_output=True, text=True)
-                    subprocess.run([str(executable)], check=True, capture_output=True, text=True)
+                    ], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    result = subprocess.run([str(executable)], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
