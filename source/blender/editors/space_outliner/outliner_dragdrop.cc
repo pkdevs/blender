@@ -1169,6 +1169,18 @@ static Collection *collection_parent_from_ID(ID *id)
   return nullptr;
 }
 
+/* A child shown under a parent object stores its sort index in its #CollectionObject, so it can
+ * only be reordered when that #CollectionObject belongs to the same library as the collection it
+ * is shown in. */
+static bool is_foreign_child(Main *bmain, Scene *scene, Collection *collection, Object *ob)
+{
+  Collection *owner = BKE_collection_object_find_in(*collection, *ob) ?
+                          collection :
+                          BKE_collection_object_find(bmain, scene, nullptr, ob);
+  const Library *owner_lib = owner ? owner->id.lib : ob->id.lib;
+  return owner_lib != collection->id.lib;
+}
+
 static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], CollectionDrop *data)
 {
   /* Get collection to drop into. */
@@ -1250,14 +1262,19 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     const TreeElement *parent_te = outliner_find_parent_element(
         &space_outliner->runtime->tree, nullptr, te);
     if (parent_te != nullptr && parent_te->idcode == ID_OB) {
-      if (is_object_element(te) && ID_IS_LINKED(TREESTORE(te)->id)) {
+      Main *bmain = CTX_data_main(C);
+      Scene *scene = CTX_data_scene(C);
+      if (is_object_element(te) &&
+          is_foreign_child(bmain, scene, to_collection, id_cast<Object *>(TREESTORE(te)->id)))
+      {
         return false;
       }
       const Object *parent_ob = id_cast<Object *>(TREESTORE(parent_te)->id);
       for (const wmDragID &drag_id : drag->ids) {
         if (GS(drag_id.id->name) == ID_OB) {
-          const Object *object = id_cast<const Object *>(drag_id.id);
-          if (object->parent != parent_ob || ID_IS_LINKED(object)) {
+          Object *object = id_cast<Object *>(drag_id.id);
+          if (object->parent != parent_ob || is_foreign_child(bmain, scene, to_collection, object))
+          {
             return false;
           }
         }
@@ -1473,9 +1490,11 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
   if (is_custom_sort_move) {
     if (is_parented_object) {
       for (TreeElement &te : parent_te->subtree) {
-        if (te.idcode == ID_OB && !ID_IS_LINKED(TREESTORE(&te)->id)) {
+        if (te.idcode == ID_OB) {
           Object *ob = id_cast<Object *>(TREESTORE(&te)->id);
-          items.append(ob);
+          if (!is_foreign_child(bmain, scene, data.to, ob)) {
+            items.append(ob);
+          }
         }
       }
     }

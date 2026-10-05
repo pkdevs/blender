@@ -351,21 +351,51 @@ static bool treesort_alpha_ob(const tTreeSort &x1, const tTreeSort &x2)
   return outliner_treesort_tiebreak(a_is_ob, x1.name, b_is_ob, x2.name);
 }
 
-/* Children coming from a different library than the collection they are shown in can't be
- * reordered, so they are grouped after the other children. Comparing against the collection's
- * library (rather than against local data) keeps the order the same when the whole hierarchy is
- * linked into another file. */
-static bool is_foreign_child(const ID *id, const Collection *collection)
+/* A #CollectionObject together with the collection that owns it (and so stores its sort index). */
+struct SortCob {
+  Collection *owner = nullptr;
+  CollectionObject *cob = nullptr;
+};
+
+struct OutlinerSortMaps {
+  Map<std::pair<Collection *, Object *>, CollectionObject *> collection_and_object_to_cob_map;
+  Map<Object *, SortCob> object_to_any_cob_map;
+};
+
+static SortCob find_sort_cob(const OutlinerSortMaps &sort_maps, Collection *collection, Object *ob)
 {
-  return id->lib != collection->id.lib;
+  if (CollectionObject *cob = sort_maps.collection_and_object_to_cob_map.lookup_default(
+          {collection, ob}, nullptr))
+  {
+    return {collection, cob};
+  }
+  return sort_maps.object_to_any_cob_map.lookup_default(ob, {});
+}
+
+/* The sort index of a child is stored in its #CollectionObject, so a child is foreign when that
+ * #CollectionObject belongs to a different library than the collection it is shown in. Such
+ * children can't be reordered and are grouped after the other children. Comparing against the
+ * collection's library (rather than against local data) keeps the order the same when the whole
+ * hierarchy is linked into another file. */
+static bool is_foreign_child(ID *id, Collection *collection, const OutlinerSortMaps &sort_maps)
+{
+  const Library *owner_lib = id->lib;
+  if (GS(id->name) == ID_OB) {
+    const SortCob sort_cob = find_sort_cob(sort_maps, collection, id_cast<Object *>(id));
+    if (sort_cob.owner != nullptr) {
+      owner_lib = sort_cob.owner->id.lib;
+    }
+  }
+  return owner_lib != collection->id.lib;
 }
 
 static std::optional<bool> treesort_linked_child(const tTreeSort &x1,
                                                  const tTreeSort &x2,
-                                                 const Collection *collection)
+                                                 Collection *collection,
+                                                 const OutlinerSortMaps &sort_maps)
 {
-  const bool x1_foreign = is_foreign_child(x1.id, collection);
-  const bool x2_foreign = is_foreign_child(x2.id, collection);
+  const bool x1_foreign = is_foreign_child(x1.id, collection, sort_maps);
+  const bool x2_foreign = is_foreign_child(x2.id, collection, sort_maps);
   if (x1_foreign != x2_foreign) {
     return x2_foreign;
   }
@@ -387,11 +417,6 @@ static std::optional<bool> treesort_linked_child(const tTreeSort &x1,
   return std::nullopt;
 }
 
-struct OutlinerSortMaps {
-  Map<std::pair<Collection *, Object *>, CollectionObject *> collection_and_object_to_cob_map;
-  Map<Object *, CollectionObject *> object_to_any_cob_map;
-};
-
 static int get_sort_index(const tTreeSort &x,
                           const OutlinerSortMaps &sort_maps,
                           const Map<Collection *, CollectionChild *> &collection_map,
@@ -400,11 +425,7 @@ static int get_sort_index(const tTreeSort &x,
 {
   if (x.idcode == ID_OB) {
     Object *ob = reinterpret_cast<Object *>(x.id);
-    CollectionObject *cob = sort_maps.collection_and_object_to_cob_map.lookup_default(
-        {collection, ob}, nullptr);
-    if (cob == nullptr) {
-      cob = sort_maps.object_to_any_cob_map.lookup_default(ob, nullptr);
-    }
+    CollectionObject *cob = find_sort_cob(sort_maps, collection, ob).cob;
     if (cob) {
       int sort_idx = is_parented_object ? cob->parented_sort_index : cob->sort_index;
       if (sort_idx >= 0) {
@@ -441,7 +462,7 @@ static bool treesort_custom(const tTreeSort &x1,
   }
 
   if (is_parented_object) {
-    if (std::optional<bool> comp = treesort_linked_child(x1, x2, collection)) {
+    if (std::optional<bool> comp = treesort_linked_child(x1, x2, collection, sort_maps)) {
       return *comp;
     }
   }
@@ -653,15 +674,11 @@ static void outliner_sort_custom(Main *bmain,
       int index = 0;
       for (tTreeSort element : tear_vec) {
         if (element.idcode == ID_OB) {
-          if (is_parented_object && is_foreign_child(element.id, collection)) {
+          if (is_parented_object && is_foreign_child(element.id, collection, sort_maps)) {
             continue;
           }
           Object *ob = reinterpret_cast<Object *>(element.id);
-          CollectionObject *cob = sort_maps.collection_and_object_to_cob_map.lookup_default(
-              {collection, ob}, nullptr);
-          if (cob == nullptr) {
-            cob = sort_maps.object_to_any_cob_map.lookup_default(ob, nullptr);
-          }
+          CollectionObject *cob = find_sort_cob(sort_maps, collection, ob).cob;
           if (cob != nullptr) {
             if (is_parented_object) {
               cob->parented_sort_index = index++;
@@ -699,7 +716,7 @@ static void map_all_objects_to_collection(Collection *collection, OutlinerSortMa
 {
   for (CollectionObject &cob : collection->gobject) {
     sort_maps.collection_and_object_to_cob_map.add_overwrite({collection, cob.ob}, &cob);
-    sort_maps.object_to_any_cob_map.add_overwrite(cob.ob, &cob);
+    sort_maps.object_to_any_cob_map.add_overwrite(cob.ob, {collection, &cob});
   }
   for (CollectionChild &child : collection->children) {
     map_all_objects_to_collection(child.collection, sort_maps);
