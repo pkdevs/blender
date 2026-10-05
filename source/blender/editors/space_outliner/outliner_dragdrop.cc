@@ -1250,11 +1250,14 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     const TreeElement *parent_te = outliner_find_parent_element(
         &space_outliner->runtime->tree, nullptr, te);
     if (parent_te != nullptr && parent_te->idcode == ID_OB) {
+      if (is_object_element(te) && ID_IS_LINKED(TREESTORE(te)->id)) {
+        return false;
+      }
       const Object *parent_ob = id_cast<Object *>(TREESTORE(parent_te)->id);
       for (const wmDragID &drag_id : drag->ids) {
         if (GS(drag_id.id->name) == ID_OB) {
           const Object *object = id_cast<const Object *>(drag_id.id);
-          if (object->parent != parent_ob) {
+          if (object->parent != parent_ob || ID_IS_LINKED(object)) {
             return false;
           }
         }
@@ -1470,7 +1473,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
   if (is_custom_sort_move) {
     if (is_parented_object) {
       for (TreeElement &te : parent_te->subtree) {
-        if (te.idcode == ID_OB) {
+        if (te.idcode == ID_OB && !ID_IS_LINKED(TREESTORE(&te)->id)) {
           Object *ob = id_cast<Object *>(TREESTORE(&te)->id);
           items.append(ob);
         }

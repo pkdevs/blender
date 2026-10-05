@@ -351,6 +351,42 @@ static bool treesort_alpha_ob(const tTreeSort &x1, const tTreeSort &x2)
   return outliner_treesort_tiebreak(a_is_ob, x1.name, b_is_ob, x2.name);
 }
 
+/* Children coming from a different library than the collection they are shown in can't be
+ * reordered, so they are grouped after the other children. Comparing against the collection's
+ * library (rather than against local data) keeps the order the same when the whole hierarchy is
+ * linked into another file. */
+static bool is_foreign_child(const ID *id, const Collection *collection)
+{
+  return id->lib != collection->id.lib;
+}
+
+static std::optional<bool> treesort_linked_child(const tTreeSort &x1,
+                                                 const tTreeSort &x2,
+                                                 const Collection *collection)
+{
+  const bool x1_foreign = is_foreign_child(x1.id, collection);
+  const bool x2_foreign = is_foreign_child(x2.id, collection);
+  if (x1_foreign != x2_foreign) {
+    return x2_foreign;
+  }
+  if (!x1_foreign) {
+    return std::nullopt;
+  }
+  const Library *x1_lib = x1.id->lib;
+  const Library *x2_lib = x2.id->lib;
+  if ((x1_lib == nullptr) != (x2_lib == nullptr)) {
+    return x2_lib != nullptr;
+  }
+  if (x1_lib != x2_lib) {
+    const int comp = BLI_strcasecmp_natural(x1_lib->filepath, x2_lib->filepath);
+    if (comp != 0) {
+      return comp < 0;
+    }
+    return BLI_strcasecmp_natural(x1_lib->id.name + 2, x2_lib->id.name + 2) < 0;
+  }
+  return treesort_alpha(x1, x2);
+}
+
 struct OutlinerSortMaps {
   Map<std::pair<Collection *, Object *>, CollectionObject *> collection_and_object_to_cob_map;
   Map<Object *, CollectionObject *> object_to_any_cob_map;
@@ -402,6 +438,12 @@ static bool treesort_custom(const tTreeSort &x1,
 
   if (!x1_valid || !x2_valid) {
     return false;
+  }
+
+  if (is_parented_object) {
+    if (std::optional<bool> comp = treesort_linked_child(x1, x2, collection)) {
+      return *comp;
+    }
   }
 
   int x1_sort_index = get_sort_index(
@@ -611,6 +653,9 @@ static void outliner_sort_custom(Main *bmain,
       int index = 0;
       for (tTreeSort element : tear_vec) {
         if (element.idcode == ID_OB) {
+          if (is_parented_object && is_foreign_child(element.id, collection)) {
+            continue;
+          }
           Object *ob = reinterpret_cast<Object *>(element.id);
           CollectionObject *cob = sort_maps.collection_and_object_to_cob_map.lookup_default(
               {collection, ob}, nullptr);
