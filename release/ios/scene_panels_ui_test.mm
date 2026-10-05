@@ -161,6 +161,9 @@ int main()
     slider.value = 0.7;
     [panels performSelector:NSSelectorFromString(@"changeSlider:") withObject:slider];
     NSCAssert(request == beforeSlide, @"Dragging previews locally without intermediate undo steps");
+    UITextField *factorField = [panels valueForKey:@"_controls"][@"factor"];
+    NSCAssert(fabs([[formatter numberFromString:factorField.text] doubleValue] - 0.7) < 1e-9,
+              @"Slider feedback hides floating-point representation noise");
     [panels performSelector:NSSelectorFromString(@"finishSlider:") withObject:slider];
     NSCAssert([request[@"key"] isEqual:@"factor"] && fabs([request[@"value"] doubleValue] - 0.7) < 1e-6,
               @"Releasing slider queues one property edit");

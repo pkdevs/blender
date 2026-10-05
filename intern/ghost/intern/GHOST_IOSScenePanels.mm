@@ -834,7 +834,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   formatter.numberStyle = NSNumberFormatterDecimalStyle;
   formatter.usesGroupingSeparator = NO;
   formatter.usesSignificantDigits = YES;
-  formatter.maximumSignificantDigits = 9;
+  formatter.maximumSignificantDigits = [slider.descriptor[@"type"] isEqual:@"INT"] ? 10 : 6;
   field.text = [formatter stringFromNumber:@(value * ([slider.descriptor[@"angle"] boolValue] ? 180.0 / M_PI : 1))];
   field.originalText = field.text;
   slider.accessibilityValue = field.text;
@@ -1036,7 +1036,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
             formatter.numberStyle = NSNumberFormatterDecimalStyle;
             formatter.usesGroupingSeparator = NO;
             formatter.usesSignificantDigits = YES;
-            formatter.maximumSignificantDigits = 9;
+            formatter.maximumSignificantDigits = slider ? ([property[@"type"] isEqual:@"INT"] ? 10 : 6) : 9;
             field.text = [formatter stringFromNumber:@(number)];
           }
           else {
