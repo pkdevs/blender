@@ -236,6 +236,9 @@ def _find_assets(
 
         def visit_path_fn(owner_id: bpy.types.ID, path: str, meta):
             absolute_path = Path(bpy.path.abspath(path, library=owner_id.library))
+            if asset_library_root not in absolute_path.parents:
+                log.warning("The asset dependency is located outside the asset library: %s", absolute_path)
+                return
             bl_version = owner_id.version if isinstance(owner_id, bpy.types.Library) else None
             dependencies.add(DependencyFile(absolute_path, bl_version))
 
