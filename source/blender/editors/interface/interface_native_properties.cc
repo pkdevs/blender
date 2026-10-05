@@ -13,6 +13,7 @@
 #include "DNA_space_types.h"
 #include "ED_buttons.hh"
 #include "ED_undo.hh"
+#include "IMB_colormanagement.hh"
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
 #include "RNA_path.hh"
@@ -106,6 +107,13 @@ bool panel_poll(bContext *C, PanelType *panel)
          (!panel->poll || panel->poll(C, panel));
 }
 
+bool is_color(PointerRNA *ptr, PropertyRNA *prop)
+{
+  return RNA_property_type(prop) == PROP_FLOAT &&
+         ELEM(RNA_property_subtype(prop), PROP_COLOR, PROP_COLOR_GAMMA) &&
+         ELEM(RNA_property_array_length(ptr, prop), 3, 4);
+}
+
 bool set_property(bContext *C, Button &but, int index, const DictionaryValue &request)
 {
   PointerRNA *ptr = &but.rnapoin;
@@ -119,6 +127,53 @@ bool set_property(bContext *C, Button &but, int index, const DictionaryValue &re
   const double numeric = number.value_or(integer.value_or(0));
   switch (RNA_property_type(prop)) {
     case PROP_FLOAT: {
+      if (is_color(ptr, prop) && index == -1) {
+        const auto *components = request.lookup_array("value");
+        const int length = RNA_property_array_length(ptr, prop);
+        if (!components || components->elements().size() != length) {
+          return false;
+        }
+        float color[4] = {0, 0, 0, 1};
+        for (int i = 0; i < length; i++) {
+          const auto &component = components->elements()[i];
+          const auto *real = component->as_double_value();
+          const auto *integer_component = component->as_int_value();
+          if (!real && !integer_component) {
+            return false;
+          }
+          const double value = real ? real->value() : double(integer_component->value());
+          if (!std::isfinite(value) || std::abs(value) > FLT_MAX) {
+            return false;
+          }
+          color[i] = float(value);
+        }
+        if (RNA_property_subtype(prop) == PROP_COLOR) {
+          IMB_colormanagement_srgb_to_scene_linear_v3(color, color);
+        }
+        float minimum, maximum;
+        RNA_property_float_range(ptr, prop, &minimum, &maximum);
+        for (int i = 0; i < length; i++) {
+          if (!std::isfinite(color[i])) {
+            return false;
+          }
+          color[i] = std::clamp(color[i], minimum, maximum);
+        }
+        if (length == 4) {
+          color[3] = std::clamp(color[3], 0.0f, 1.0f);
+        }
+        float original[4];
+        RNA_property_float_get_array(ptr, prop, original);
+        bool changed = false;
+        for (int i = 0; i < length; i++) {
+          changed |= std::abs(original[i] - color[i]) >
+                     1e-6f * std::max(1.0f, std::abs(original[i]));
+        }
+        if (!changed) {
+          return true;
+        }
+        RNA_property_float_set_array(ptr, prop, color);
+        break;
+      }
       if ((!number && !integer) || !std::isfinite(numeric)) {
         return false;
       }
@@ -233,6 +288,28 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
   const bool array = RNA_property_array_check(prop);
   const int length = RNA_property_array_length(ptr, prop);
   const PropertyType type = RNA_property_type(prop);
+  if (is_color(ptr, prop)) {
+    float color[4] = {0, 0, 0, 1};
+    RNA_property_float_get_array(ptr, prop, color);
+    const float exposure = std::max({1.0f, color[0], color[1], color[2]});
+    if (RNA_property_subtype(prop) == PROP_COLOR) {
+      IMB_colormanagement_scene_linear_to_srgb_v3(color, color);
+    }
+    field.append_str("type", "COLOR");
+    field.append_str("label", RNA_property_ui_name(prop));
+    field.append_str("key", property_key(but, -1));
+    field.append_str("property", RNA_property_identifier(prop));
+    field.append_str("owner", RNA_struct_is_a(ptr->type, RNA_Object) ? "object" : "data");
+    field.append_int("alpha", length == 4);
+    field.append_double("exposure", std::isfinite(exposure) ? exposure : 1);
+    field.append_int("editable", RNA_property_editable(ptr, prop) &&
+        !(but.flag & (BUT_DISABLED | BUT_INACTIVE)));
+    auto values = field.append_array("value");
+    for (int i = 0; i < length; i++) {
+      values->append_double(std::isfinite(color[i]) ? color[i] : 0);
+    }
+    return;
+  }
   std::string title = RNA_property_ui_name(prop);
   if (array && length <= 4) {
     const bool color = ELEM(RNA_property_subtype(prop), PROP_COLOR, PROP_COLOR_GAMMA);
@@ -546,8 +623,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         continue;
       }
       const int length = RNA_property_array_length(&but.rnapoin, but.rnaprop);
-      const int begin = length ? std::max(0, but.rnaindex) : -1;
-      const int end = length && but.rnaindex < 0 ? std::min(length, 16) : begin + 1;
+      const bool color = is_color(&but.rnapoin, but.rnaprop);
+      const int begin = !color && length ? std::max(0, but.rnaindex) : -1;
+      const int end = !color && length && but.rnaindex < 0 ? std::min(length, 16) : begin + 1;
       for (int index = begin; index < end; index++) {
         const std::string key = property_key(but, index);
         if (!seen.insert(key).second) {
