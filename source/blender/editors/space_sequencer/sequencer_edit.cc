@@ -2661,12 +2661,6 @@ void operator_properties_ripple(wmOperatorType *ot, const eSeqRippleFlag options
     RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   }
 
-  if ((options & SEQ_RIPPLE_PLAYHEAD) != 0) {
-    prop = RNA_def_boolean(
-        ot->srna, "playhead", true, "Move Playhead", "Ripple the current frame along with strips");
-    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-  }
-
   if ((options & SEQ_RIPPLE_CLEAR_RANGES) != 0) {
     prop = RNA_def_boolean(
         ot->srna,
@@ -2699,7 +2693,6 @@ static void ripple_properties_from_tool_settings(bContext *C, wmOperator *op)
   const eSeqRippleFlag ripple_flag = seq::tool_settings_ripple_flag_get(scene);
   RNA_boolean_set(op->ptr, "all_channels", (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0);
   RNA_boolean_set(op->ptr, "markers", (ripple_flag & SEQ_RIPPLE_MARKERS) != 0);
-  RNA_boolean_set(op->ptr, "playhead", (ripple_flag & SEQ_RIPPLE_PLAYHEAD) != 0);
   RNA_boolean_set(op->ptr, "clear_ranges", (ripple_flag & SEQ_RIPPLE_CLEAR_RANGES) != 0);
 }
 
@@ -2709,7 +2702,6 @@ static eSeqRippleFlag ripple_flag_from_properties(wmOperator *op)
   SET_FLAG_FROM_TEST(
       ripple_flag, RNA_boolean_get(op->ptr, "all_channels"), SEQ_RIPPLE_ALL_CHANNELS);
   SET_FLAG_FROM_TEST(ripple_flag, RNA_boolean_get(op->ptr, "markers"), SEQ_RIPPLE_MARKERS);
-  SET_FLAG_FROM_TEST(ripple_flag, RNA_boolean_get(op->ptr, "playhead"), SEQ_RIPPLE_PLAYHEAD);
   SET_FLAG_FROM_TEST(
       ripple_flag, RNA_boolean_get(op->ptr, "clear_ranges"), SEQ_RIPPLE_CLEAR_RANGES);
   return ripple_flag;
@@ -2830,7 +2822,6 @@ static void ripple_delete_range(Scene *scene,
   const bool all_channels = (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0;
   const bool clear_ranges = (ripple_flag & SEQ_RIPPLE_CLEAR_RANGES) != 0;
   const bool ripple_markers = (ripple_flag & SEQ_RIPPLE_MARKERS) != 0;
-  const bool ripple_playhead = (ripple_flag & SEQ_RIPPLE_PLAYHEAD) != 0;
 
   if (clear_ranges) {
     ripple_range_clear(scene, seqbasep, channels, range, all_channels);
@@ -2865,9 +2856,7 @@ static void ripple_delete_range(Scene *scene,
       }
     }
 
-    if (ripple_playhead) {
-      ripple_frame(scene->r.cfra);
-    }
+    ripple_frame(scene->r.cfra);
   }
 }
 
@@ -2947,9 +2936,8 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* Properties. */
-  operator_properties_ripple(ot,
-                             SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_PLAYHEAD |
-                                 SEQ_RIPPLE_CLEAR_RANGES);
+  operator_properties_ripple(
+      ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_CLEAR_RANGES);
 }
 
 /** \} */
@@ -3079,9 +3067,8 @@ void SEQUENCER_OT_ripple_trim(wmOperatorType *ot)
                int(seq::Side::Left),
                "Side",
                "The side of the strips to trim to the current frame");
-  operator_properties_ripple(ot,
-                             SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_PLAYHEAD |
-                                 SEQ_RIPPLE_CLEAR_RANGES);
+  operator_properties_ripple(
+      ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_CLEAR_RANGES);
 }
 
 /** \} */

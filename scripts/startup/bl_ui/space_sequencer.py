@@ -2051,7 +2051,6 @@ class SEQUENCER_PT_edit_mode(Panel):
         col = layout.column(heading="Ripple Remove")
         col.use_property_split = True
 
-        col.prop(sequencer_tool_settings, "ripple_playhead")
         col.prop(sequencer_tool_settings, "ripple_clear_ranges")
 
 
