@@ -16,4 +16,6 @@
 - (void)updateSnapshot:(NSDictionary *)snapshot;
 - (void)layoutInRect:(CGRect)rect;
 - (void)dismiss;
+- (void)presentShadingFrom:(UIBarButtonItem *)button controller:(UIViewController *)controller;
+- (void)dismissShading;
 @end

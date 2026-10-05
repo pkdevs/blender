@@ -3687,7 +3687,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 
   NSMutableArray *actions = [NSMutableArray array];
-  for (UIAction *item in _viewport_shading_button.menu.children) {
+  UIMenu *menu = (UIMenu *)_viewport_shading_button.menuRepresentation;
+  for (UIAction *item in menu.children) {
     UIAction *action = [[item copy] autorelease];
     const BOOL selected = action.identifier.integerValue == command.integerValue;
     action.state = selected ? UIMenuElementStateOn : UIMenuElementStateOff;
@@ -3697,9 +3698,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     }
     [actions addObject:action];
   }
-  _viewport_shading_button.menu =
-      [_viewport_shading_button.menu menuByReplacingChildren:actions];
-  _viewport_shading_button.menuRepresentation = _viewport_shading_button.menu;
+  _viewport_shading_button.menuRepresentation =
+      [menu menuByReplacingChildren:actions];
   _viewport_shading_button.tag = command.integerValue;
 }
 
@@ -4335,6 +4335,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _mesh_select_group.barButtonItems.firstObject.menuRepresentation = menu;
 }
 
+- (void)showViewportShading:(UIBarButtonItem *)button
+{
+  [_scene_panels presentShadingFrom:button controller:self];
+}
+
 - (UIBarButtonItem *)viewportShadingButton
 {
   UIBarButtonItem *button = [[[UIBarButtonItem alloc]
@@ -4361,6 +4366,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                           command:GHOST_IOS_UI_COMMAND_SET_VIEWPORT_RENDERED],
            ]];
   button.menuRepresentation = button.menu;
+  button.menu = nil;
+  button.target = self;
+  button.action = @selector(showViewportShading:);
   return button;
 }
 

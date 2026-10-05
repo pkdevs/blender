@@ -193,6 +193,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   GHOSTIOSColorButton *_colorButton;
   BOOL _colorPending;
   GHOSTIOSPropertyField *_scrubField;
+  BOOL _shadingOnly;
+  GHOSTIOSScenePanels *_shadingPanels;
+  UINavigationController *_shadingController;
 }
 
 - (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage *(^)(NSString *))icon
@@ -308,6 +311,10 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)dealloc
 {
+  _shadingController.presentationController.delegate = nil;
+  _shadingController.popoverPresentationController.delegate = nil;
+  [_shadingPanels release];
+  [_shadingController release];
   [_scrubField release];
   _tree.delegate = nil;
   _tree.dataSource = nil;
@@ -426,7 +433,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)toggleInspector:(id)sender
 {
-  [_inspector endEditing:YES];
+  [_form endEditing:YES];
   _showInspector = !_showInspector;
   if (_showInspector && _layoutRect.size.width < 700) {
     _showHierarchy = NO;
@@ -441,21 +448,73 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   _showHierarchy = !_showHierarchy;
   if (_showHierarchy && _layoutRect.size.width < 700) {
     _showInspector = NO;
-    [_inspector endEditing:YES];
+    [_form endEditing:YES];
   }
   [self applyVisibility];
 }
 
 - (void)dismiss
 {
-  [_inspector endEditing:YES];
+  [self dismissShading];
+  [_form endEditing:YES];
   [_hierarchy endEditing:YES];
   _showInspector = _showHierarchy = NO;
   [self applyVisibility];
 }
 
+- (void)presentShadingFrom:(UIBarButtonItem *)button controller:(UIViewController *)controller
+{
+  if (_shadingController.presentingViewController || controller.presentedViewController) { return; }
+  if (!_shadingController) {
+    UIViewController *content = [[[UIViewController alloc] init] autorelease];
+    content.title = @"Viewport Shading";
+    content.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
+    _shadingPanels = [[GHOSTIOSScenePanels alloc] initWithOverlay:content.view icon:_icon];
+    _shadingPanels->_shadingOnly = YES;
+    _shadingPanels->_selectedTab = [@"SHADING" copy];
+    [_shadingPanels->_inspector removeFromSuperview];
+    UITableView *form = _shadingPanels->_form;
+    UIActivityIndicatorView *loading = [[[UIActivityIndicatorView alloc]
+        initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium] autorelease];
+    [loading startAnimating];
+    form.backgroundView = loading;
+    [form removeFromSuperview];
+    [content.view addSubview:form];
+    [NSLayoutConstraint activateConstraints:@[
+      [form.leadingAnchor constraintEqualToAnchor:content.view.leadingAnchor],
+      [form.trailingAnchor constraintEqualToAnchor:content.view.trailingAnchor],
+      [form.topAnchor constraintEqualToAnchor:content.view.safeAreaLayoutGuide.topAnchor],
+      [form.bottomAnchor constraintEqualToAnchor:content.view.bottomAnchor],
+    ]];
+    content.navigationItem.rightBarButtonItem = [[[UIBarButtonItem alloc]
+        initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(dismissShading)] autorelease];
+    _shadingController = [[UINavigationController alloc] initWithRootViewController:content];
+    _shadingController.preferredContentSize = CGSizeMake(400, 640);
+  }
+  _shadingPanels->_showInspector = YES;
+  [_shadingPanels requestProperties];
+  WM_apple_ios_ui_setting_enqueue("native_shading_visible", "1");
+  _shadingController.modalPresentationStyle = UIModalPresentationPopover;
+  _shadingController.popoverPresentationController.barButtonItem = button;
+  _shadingController.popoverPresentationController.delegate = self;
+  _shadingController.presentationController.delegate = self;
+  [controller presentViewController:_shadingController animated:YES completion:nil];
+}
+
+- (void)dismissShading
+{
+  if (!_shadingPanels || !_shadingPanels->_showInspector) { return; }
+  [_shadingPanels cancelNumberScrub];
+  [_shadingPanels closeColorPicker];
+  [_shadingPanels->_form endEditing:YES];
+  _shadingPanels->_showInspector = NO;
+  WM_apple_ios_ui_setting_enqueue("native_shading_visible", "0");
+  [_shadingController dismissViewControllerAnimated:YES completion:nil];
+}
+
 - (void)layoutInRect:(CGRect)rect
 {
+  if (_shadingOnly) { return; }
   _layoutRect = rect;
   if (rect.size.width < 700 && _showInspector && _showHierarchy) {
     _showHierarchy = NO;
@@ -476,8 +535,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)send:(NSDictionary *)request
 {
+  static uint64_t sequence = 0;
   NSMutableDictionary *payload = [[request mutableCopy] autorelease];
-  payload[@"sequence"] = @(++_sequence);
+  payload[@"sequence"] = @(_sequence = ++sequence);
   NSData *data = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
   NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
   WM_apple_ios_ui_setting_enqueue([request[@"native"] boolValue] ? "native_properties_edit" : "native_panel_edit", json.UTF8String);
@@ -695,9 +755,26 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         control = toggle;
       }
       else if ([kind isEqual:@"ENUM"]) {
-        UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-        button.showsMenuAsPrimaryAction = YES;
-        control = button;
+        if (_shadingOnly && [property[@"property"] isEqual:@"type"]) {
+          NSMutableArray *items = [NSMutableArray array];
+          for (NSDictionary *option in property[@"options"]) {
+            [items addObject:_icon(option[@"icon"]) ?: option[@"label"]];
+          }
+          UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:items] autorelease];
+          [segments addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+            NSInteger index = ((UISegmentedControl *)action.sender).selectedSegmentIndex;
+            if (index >= 0 && index < [property[@"options"] count]) {
+              [owner editProperty:property object:objectID value:property[@"options"][index][@"value"]];
+            }
+          }] forControlEvents:UIControlEventValueChanged];
+          control = segments;
+          label.hidden = YES;
+        }
+        else {
+          UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+          button.showsMenuAsPrimaryAction = YES;
+          control = button;
+        }
       }
       else {
         GHOSTIOSPropertyField *field = [[[GHOSTIOSPropertyField alloc] init] autorelease];
@@ -813,7 +890,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         if ([kind isEqual:@"COLOR"]) {
           [control.widthAnchor constraintEqualToConstant:44].active = YES;
         }
-        else if (!vector && ![kind isEqual:@"OPERATOR"] && ![kind isEqual:@"MENU"]) {
+        else if (!vector && ![kind isEqual:@"OPERATOR"] && ![kind isEqual:@"MENU"] &&
+                 ![control isKindOfClass:UISegmentedControl.class]) {
           [control.widthAnchor constraintEqualToAnchor:row.widthAnchor multiplier:0.53].active = YES;
         }
         [control.heightAnchor constraintGreaterThanOrEqualToConstant:slider ? 32 : 40].active = YES;
@@ -877,7 +955,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   if (!presenter || presenter.isBeingDismissed) {
     return;
   }
-  [_inspector endEditing:YES];
+  [_form endEditing:YES];
   _colorButton = [button retain];
   _colorPicker = [[UIColorPickerViewController alloc] init];
   _colorPicker.title = button.descriptor[@"label"];
@@ -947,11 +1025,19 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController
 {
+  if (presentationController.presentedViewController == _shadingController) {
+    [self dismissShading];
+    return;
+  }
   [self closeColorPicker];
 }
 
 - (void)popoverPresentationControllerDidDismissPopover:(UIPopoverPresentationController *)popover
 {
+  if (popover.presentedViewController == _shadingController) {
+    [self dismissShading];
+    return;
+  }
   [self closeColorPicker];
 }
 
@@ -964,7 +1050,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   }
   NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
   NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-  WM_apple_ios_ui_setting_enqueue("native_properties_state", json.UTF8String);
+  WM_apple_ios_ui_setting_enqueue(_shadingOnly ? "native_shading_state" : "native_properties_state", json.UTF8String);
 }
 
 - (void)updatePropertiesTabs:(NSDictionary *)inspector
@@ -988,7 +1074,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       button.accessibilityLabel = tab[@"title"];
       [button addInteraction:[[[UIToolTipInteraction alloc] initWithDefaultToolTip:tab[@"title"]] autorelease]];
       [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
-        [owner->_inspector endEditing:YES];
+        [owner->_form endEditing:YES];
         [owner cancelNumberScrub];
         [owner->_selectedTab release];
         owner->_selectedTab = [tab[@"id"] copy];
@@ -1026,7 +1112,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   }
 }
 
-- (void)finishNumber:(id)sender { [_inspector endEditing:YES]; }
+- (void)finishNumber:(id)sender { [_form endEditing:YES]; }
 
 - (NSDictionary *)propertyForKey:(NSString *)key
 {
@@ -1059,7 +1145,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         ![current[@"lock"][@"editable"] boolValue]) {
       return;
     }
-    [owner->_inspector endEditing:YES];
+    [owner->_form endEditing:YES];
     [owner editProperty:current[@"lock"] object:objectID value:@(!locked)];
   }];
   if (![lock[@"editable"] boolValue]) {
@@ -1089,7 +1175,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       }
       for (NSDictionary *available in current[@"animation"]) {
         if ([available[@"id"] isEqual:identifier]) {
-          [owner->_inspector endEditing:YES];
+          [owner->_form endEditing:YES];
           NSMutableDictionary *request = [[current mutableCopy] autorelease];
           request[@"action"] = @"animation";
           request[@"animation_action"] = identifier;
@@ -1122,7 +1208,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       for (NSDictionary *available in current[@"options"]) {
         if ([available[@"value"] isEqual:option[@"value"]]) {
           if (![current[@"value"] isEqual:option[@"value"]]) {
-            [owner->_inspector endEditing:YES];
+            [owner->_form endEditing:YES];
             [owner editProperty:current object:objectID value:option[@"value"]];
           }
           break;
@@ -1197,7 +1283,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)beginSlider:(GHOSTIOSPropertySlider *)slider
 {
-  [_inspector endEditing:YES];
+  [_form endEditing:YES];
   slider.editing = YES;
   slider.changed = NO;
 }
@@ -1290,7 +1376,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     return;
   }
   [self cancelNumberScrub];
-  [_inspector endEditing:YES];
+  [_form endEditing:YES];
   _scrubField = [field retain];
   field.scrubbing = YES;
   field.scrubStart = field.scrubValue = [field.descriptor[@"value"] doubleValue];
@@ -1451,6 +1537,10 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)updateSnapshot:(NSDictionary *)snapshot
 {
+  if (_shadingPanels && [snapshot[@"shading"] isKindOfClass:NSDictionary.class]) {
+    [_shadingPanels updateSnapshot:@{@"ack": snapshot[@"ack"] ?: @0,
+        @"error": snapshot[@"error"] ?: @"", @"inspector": snapshot[@"shading"]}];
+  }
   if (![snapshot isKindOfClass:NSDictionary.class] || [snapshot[@"ack"] unsignedLongLongValue] < _sequence) {
     return;
   }
@@ -1488,7 +1578,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   if (![_objectID isEqual:inspector[@"id"]] || ![_schema isEqual:schema]) {
     BOOL preserve = [_objectID isEqual:inspector[@"id"]];
     /* Commit to the original ID before replacing the controls on a selection change. */
-    if (!preserve) { [_inspector endEditing:YES]; }
+    if (!preserve) { [_form endEditing:YES]; }
     [_objectID release];
     _objectID = [inspector[@"id"] copy];
     [_schema release];
@@ -1560,6 +1650,17 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         ((UISwitch *)control).on = [value boolValue];
       }
       else if ([property[@"type"] isEqual:@"ENUM"]) {
+        if ([control isKindOfClass:UISegmentedControl.class]) {
+          UISegmentedControl *segments = (UISegmentedControl *)control;
+          segments.selectedSegmentIndex = UISegmentedControlNoSegment;
+          for (NSUInteger i = 0; i < [property[@"options"] count]; i++) {
+            if ([property[@"options"][i][@"value"] isEqual:value]) {
+              segments.selectedSegmentIndex = i;
+              segments.accessibilityValue = property[@"options"][i][@"label"];
+            }
+          }
+          continue;
+        }
         UIButton *button = (UIButton *)control;
         NSArray *options = property[@"options"];
         BOOL unchanged = [control.accessibilityValue isEqual:value] && button.menu.children.count == options.count;
@@ -1722,7 +1823,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   _disclosureButtons[identifier] = header;
   __block GHOSTIOSScenePanels *owner = self;
   [header addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
-    [owner->_inspector endEditing:YES];
+    [owner->_form endEditing:YES];
     [owner cancelNumberScrub];
     NSMutableSet *open = owner->_expandedPanels[owner->_selectedTab ?: @"OBJECT"];
     NSInteger currentSection = [owner->_sectionIdentifiers indexOfObject:identifier];
