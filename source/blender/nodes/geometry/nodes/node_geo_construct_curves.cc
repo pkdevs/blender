@@ -65,8 +65,7 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
     BLI_assert_unreachable();
   }
 
-  const auto *curve_offset_data = std::get_if<nodes::GList::ArrayData>(
-      &curve_offsets_list.data());
+  const auto *curve_offset_data = std::get_if<nodes::GList::ArrayData>(&curve_offsets_list.data());
   BLI_assert(curve_offset_data != nullptr);
 
   const int curves_num = curve_offsets_list.size() - 1;
