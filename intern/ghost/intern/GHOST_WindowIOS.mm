@@ -878,6 +878,10 @@ typedef struct UserInputEvent {
     shouldRecognizeSimultaneouslyWithGestureRecognizer:
         (UIGestureRecognizer *)otherGestureRecognizer
 {
+  if ([gestureRecognizer isKindOfClass:UIHoverGestureRecognizer.class] &&
+      [otherGestureRecognizer isKindOfClass:UIHoverGestureRecognizer.class]) {
+    return YES;
+  }
   const BOOL is_navigation = gestureRecognizer == pan2f_gesture_recognizer ||
                              gestureRecognizer == zoom_gesture_recognizer ||
                              gestureRecognizer == rotation_gesture_recognizer;
@@ -2073,6 +2077,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSLayoutConstraint *_action_phone_bottom_constraint;
   NSLayoutConstraint *_action_phone_trailing_constraint;
   UIButton *_toolbar_hover_button;
+  UIVisualEffectView *_toolbar_label_bubble;
+  UILabel *_toolbar_label;
+  UIButton *_toolbar_label_button;
+  NSUInteger _toolbar_label_generation;
+  BOOL _toolbar_label_transient;
   UIButton *_view_pie_hover_button;
   BOOL _tool_rail_docked_left_center;
   BOOL _toolbar_expanded;
@@ -2449,19 +2458,81 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
   button.tintColor = UIColor.labelColor;
-  button.accessibilityLabel = title;
-  button.accessibilityIdentifier = toolIdentifier;
   button.translatesAutoresizingMaskIntoConstraints = NO;
   button.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
-  UIImage *image = blenderIOSIcon(
-      [NSString stringWithFormat:@"tool.%@.%@", mode, toolIdentifier], nil);
-  if (image == nil) {
-    image = blenderIOSIcon([@"tool." stringByAppendingString:toolIdentifier], systemImage);
+  UIImageView *group_indicator = [[[UIImageView alloc]
+      initWithImage:[UIImage systemImageNamed:@"arrowtriangle.down.fill"]] autorelease];
+  group_indicator.tag = 9001;
+  group_indicator.tintColor = UIColor.secondaryLabelColor;
+  group_indicator.translatesAutoresizingMaskIntoConstraints = NO;
+  group_indicator.userInteractionEnabled = NO;
+  group_indicator.isAccessibilityElement = NO;
+  [button addSubview:group_indicator];
+  [NSLayoutConstraint activateConstraints:@[
+    [group_indicator.widthAnchor constraintEqualToConstant:7.0],
+    [group_indicator.heightAnchor constraintEqualToConstant:7.0],
+    [group_indicator.trailingAnchor constraintEqualToAnchor:button.trailingAnchor constant:-6.0],
+    [group_indicator.bottomAnchor constraintEqualToAnchor:button.bottomAnchor constant:-6.0],
+  ]];
+  [self configureToolbarButton:button
+                         tool:@{@"id": toolIdentifier, @"title": title, @"symbol": systemImage ?: @""}
+                         mode:mode];
+
+  [button addTarget:self
+                action:@selector(handleToolbarToolButton:)
+      forControlEvents:UIControlEventTouchUpInside];
+
+  UILongPressGestureRecognizer *press_select_gesture = [[UILongPressGestureRecognizer alloc]
+      initWithTarget:self
+              action:@selector(handleToolbarPressSelectGesture:)];
+  press_select_gesture.minimumPressDuration = 0.22;
+  press_select_gesture.allowableMovement = 10.0;
+  press_select_gesture.cancelsTouchesInView = YES;
+  press_select_gesture.delegate = self;
+  [button addGestureRecognizer:press_select_gesture];
+  [press_select_gesture release];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [button.heightAnchor constraintEqualToConstant:52.0],
+  ]];
+
+  [_toolbar_buttons addObject:button];
+  [button setNeedsUpdateConfiguration];
+  return button;
+}
+
+- (UIImage *)toolbarImageForTool:(NSDictionary *)tool mode:(NSString *)mode
+{
+  NSString *icon = tool[@"icon"];
+  UIImage *image = [icon isKindOfClass:NSString.class] ?
+      [UIImage imageNamed:[@"blender.tool." stringByAppendingString:icon]] : nil;
+  if (image) {
+    return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
   }
+  NSString *toolIdentifier = tool[@"id"];
+  image = blenderIOSIcon([NSString stringWithFormat:@"tool.%@.%@", mode, toolIdentifier], nil);
   if (image == nil) {
-    image = [UIImage systemImageNamed:@"questionmark.circle"];
+    NSString *symbol = tool[@"symbol"];
+    image = blenderIOSIcon([@"tool." stringByAppendingString:toolIdentifier],
+                           symbol.length ? symbol : nil);
   }
+  return image ?: [UIImage systemImageNamed:@"questionmark.circle"];
+}
+
+- (void)configureToolbarButton:(UIButton *)button tool:(NSDictionary *)tool mode:(NSString *)mode
+{
+  NSString *title = tool[@"title"];
+  button.accessibilityLabel = title;
+  button.accessibilityIdentifier = tool[@"id"];
+  UIImage *image = [self toolbarImageForTool:tool mode:mode];
+  NSArray *children = tool[@"children"];
+  const BOOL grouped = children.count > 1;
+  [button viewWithTag:9001].hidden = !grouped;
+  button.accessibilityHint = grouped ? @"Touch and hold for related tools" : nil;
+  button.menu = grouped ? [self toolbarMenuForTool:tool mode:mode] : nil;
+  button.showsMenuAsPrimaryAction = NO;
+  button.preferredMenuElementOrder = UIContextMenuConfigurationElementOrderFixed;
 
   button.configurationUpdateHandler = ^(UIButton *updated_button) {
     const BOOL shows_text = self->_toolbar_expanded;
@@ -2485,28 +2556,50 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     updated_button.configuration = configuration;
   };
 
-  [button addTarget:self
-                action:@selector(handleToolbarToolButton:)
-      forControlEvents:UIControlEventTouchUpInside];
-
-  UILongPressGestureRecognizer *press_select_gesture = [[UILongPressGestureRecognizer alloc]
-      initWithTarget:self
-              action:@selector(handleToolbarPressSelectGesture:)];
-  press_select_gesture.minimumPressDuration = 0.22;
-  press_select_gesture.allowableMovement = CGFLOAT_MAX;
-  press_select_gesture.cancelsTouchesInView = YES;
-  press_select_gesture.delegate = self;
-  [button addGestureRecognizer:press_select_gesture];
-  [press_select_gesture release];
-
-  [NSLayoutConstraint activateConstraints:@[
-    [button.heightAnchor constraintEqualToConstant:52.0],
-  ]];
-
-  [_toolbar_buttons addObject:button];
   [button setNeedsUpdateConfiguration];
+}
 
-  return button;
+- (UIMenu *)toolbarMenuForTool:(NSDictionary *)tool mode:(NSString *)mode
+{
+  NSMutableArray *sections = [NSMutableArray array];
+  NSMutableArray *actions = [NSMutableArray array];
+  for (id child in tool[@"children"]) {
+    if (![child isKindOfClass:NSDictionary.class]) {
+      if (actions.count) {
+        [sections addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
+                                         options:UIMenuOptionsDisplayInline children:actions]];
+        actions = [NSMutableArray array];
+      }
+      continue;
+    }
+    UIAction *action = [UIAction actionWithTitle:child[@"title"]
+                                         image:[self toolbarImageForTool:child mode:mode]
+                                    identifier:child[@"id"]
+                                       handler:^(UIAction *selected) {
+      UIButton *chosen_button = nil;
+      /* Resolve the current button: snapshots may have replaced the menu's original anchor. */
+      for (UIButton *button in self->_toolbar_buttons) {
+        if ([button.menu.identifier isEqualToString:tool[@"group"]]) {
+          NSMutableDictionary *updated = [NSMutableDictionary dictionaryWithDictionary:tool];
+          [updated addEntriesFromDictionary:child];
+          [self configureToolbarButton:button tool:updated mode:mode];
+          chosen_button = button;
+          break;
+        }
+      }
+      [self setActiveToolbarToolIdentifier:selected.identifier];
+      WM_apple_ios_ui_tool_set_by_id(selected.identifier.UTF8String);
+      [self showToolbarLabelForButton:chosen_button transient:YES];
+    }];
+    action.state = [child[@"id"] isEqualToString:tool[@"id"]] ?
+                      UIMenuElementStateOn : UIMenuElementStateOff;
+    [actions addObject:action];
+  }
+  if (actions.count) {
+    [sections addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
+                                     options:UIMenuOptionsDisplayInline children:actions]];
+  }
+  return [UIMenu menuWithTitle:@"" image:nil identifier:tool[@"group"] options:0 children:sections];
 }
 
 - (BOOL)isToolbarListVisible
@@ -2657,8 +2750,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   if ([gestureRecognizer isKindOfClass:UILongPressGestureRecognizer.class] &&
       [_toolbar_buttons containsObject:gestureRecognizer.view])
   {
-    /* Press-and-slide picking belongs only to the compact tool button. */
-    return ![self isToolbarListVisible];
+    /* Group flyouts use UIButton's native hold menu; scrolling owns a moving touch. */
+    return !_toolbar_expanded && ((UIButton *)gestureRecognizer.view).menu == nil;
   }
   if (gestureRecognizer.view == _tool_drag_handle) {
     CGPoint velocity = [(UIPanGestureRecognizer *)gestureRecognizer velocityInView:_overlay_view];
@@ -2716,6 +2809,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)collapseToolbarFromHandle:(id)sender
 {
+  [self hideToolbarLabelAnimated:YES];
   UNUSED_VARS(sender);
   _toolbar_press_select_active = NO;
   _toolbar_expanded = NO;
@@ -2838,6 +2932,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 
   _toolbar_expanded = expanded;
+  [self hideToolbarLabelAnimated:NO];
   [self updateToolbarVisibilityAnimated:animated];
 }
 
@@ -2864,27 +2959,15 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (NSString *)toolbarSignatureForTools:(NSArray *)tools mode:(NSString *)mode
 {
-  NSMutableString *signature = [NSMutableString stringWithString:mode ?: @""];
-  for (NSDictionary *tool in tools) {
-    if (![tool isKindOfClass:[NSDictionary class]]) {
-      continue;
-    }
-    NSString *tool_id = tool[@"id"];
-    NSString *title = tool[@"title"];
-    if ([tool_id isKindOfClass:[NSString class]]) {
-      [signature appendString:@"|"];
-      [signature appendString:tool_id];
-    }
-    if ([title isKindOfClass:[NSString class]]) {
-      [signature appendString:@":"];
-      [signature appendString:title];
-    }
-  }
-  return signature;
+  NSData *data = [NSJSONSerialization dataWithJSONObject:tools options:NSJSONWritingSortedKeys error:nil];
+  NSString *contents = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+  return [NSString stringWithFormat:@"%@:%@", mode ?: @"", contents ?: @""];
 }
 
 - (void)rebuildToolbarWithTools:(NSArray *)tools mode:(NSString *)mode
 {
+  NSString *label_tool = [[_toolbar_label_button.accessibilityIdentifier copy] autorelease];
+  _toolbar_label_button = nil;
   NSArray *arranged_subviews = [[_tool_stack.arrangedSubviews copy] autorelease];
   for (UIView *view in arranged_subviews) {
     [_tool_stack removeArrangedSubview:view];
@@ -2895,6 +2978,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
   for (NSDictionary *tool in tools) {
     if (![tool isKindOfClass:[NSDictionary class]]) {
+      UIView *previous = _tool_stack.arrangedSubviews.lastObject;
+      if (previous) {
+        [_tool_stack setCustomSpacing:12.0 afterView:previous];
+      }
       continue;
     }
     NSString *title = tool[@"title"];
@@ -2905,12 +2992,23 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     {
       continue;
     }
-    [_tool_stack addArrangedSubview:[self toolbarButtonWithTitle:title
-                                                     systemImage:symbol
-                                                  toolIdentifier:tool_id
-                                                           mode:mode]];
+    UIButton *button = [self toolbarButtonWithTitle:title
+                                       systemImage:symbol
+                                    toolIdentifier:tool_id
+                                             mode:mode];
+    [self configureToolbarButton:button tool:tool mode:mode];
+    [_tool_stack addArrangedSubview:button];
+    if ([button.accessibilityIdentifier isEqualToString:label_tool]) {
+      _toolbar_label_button = button;
+    }
   }
   [self updateToolbarVisibilityAnimated:NO];
+  if (_toolbar_label_button) {
+    [self layoutToolbarLabel];
+  }
+  else {
+    [self hideToolbarLabelAnimated:NO];
+  }
 }
 
 - (void)updateAxisConstraintButton:(UIButton *)button selected:(BOOL)selected
@@ -4257,6 +4355,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _tool_drag_handle_height_constraint = [_tool_drag_handle.heightAnchor constraintEqualToConstant:0.0];
 
   _tool_scroll = [[GHOSTIOSButtonScrollView alloc] initWithFrame:CGRectZero];
+  UIHoverGestureRecognizer *tool_hover = [[UIHoverGestureRecognizer alloc]
+      initWithTarget:self action:@selector(handleToolbarHover:)];
+  [_tool_scroll addGestureRecognizer:tool_hover];
+  [tool_hover release];
   _tool_scroll.translatesAutoresizingMaskIntoConstraints = NO;
   _tool_scroll.backgroundColor = UIColor.clearColor;
   _tool_scroll.clipsToBounds = YES;
@@ -4481,14 +4583,126 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     return;
   }
 
-  if (!_toolbar_expanded) {
-    [self setToolbarExpanded:YES animated:YES];
-    return;
-  }
-
   [self setActiveToolbarToolIdentifier:tool_id];
   WM_apple_ios_ui_tool_set_by_id(tool_id.UTF8String);
-  [self setToolbarExpanded:NO animated:YES];
+  [self showToolbarLabelForButton:sender transient:YES];
+}
+
+- (void)layoutToolbarLabel
+{
+  UIButton *button = _toolbar_label_button;
+  if (!button || !button.window || button.hidden || _toolbar_label_bubble.hidden) {
+    return;
+  }
+  CGRect anchor = [button convertRect:button.bounds toView:_overlay_view];
+  CGRect rail = [_tool_rail convertRect:_tool_rail.bounds toView:_overlay_view];
+  CGRect safe = CGRectInset(_overlay_view.safeAreaLayoutGuide.layoutFrame, 8, 8);
+  CGFloat x = CGRectGetMaxX(rail) + 10;
+  CGFloat max_width = MAX(44.0, CGRectGetMaxX(safe) - x);
+  CGSize text_size = [_toolbar_label sizeThatFits:CGSizeMake(MAX(16.0, max_width - 28), CGFLOAT_MAX)];
+  CGSize size = CGSizeMake(MIN(max_width, ceil(text_size.width) + 28), ceil(text_size.height) + 16);
+  CGFloat y = MIN(CGRectGetMaxY(safe) - size.height,
+                  MAX(CGRectGetMinY(safe), CGRectGetMidY(anchor) - size.height / 2));
+  _toolbar_label_bubble.bounds = CGRectMake(0, 0, size.width, size.height);
+  _toolbar_label_bubble.center = CGPointMake(x + size.width / 2, y + size.height / 2);
+  _toolbar_label_bubble.layer.cornerRadius = MIN(20.0, size.height / 2);
+  _toolbar_label.frame = CGRectInset(_toolbar_label_bubble.bounds, 14, 8);
+}
+
+- (void)hideToolbarLabelAnimated:(BOOL)animated
+{
+  const NSUInteger generation = ++_toolbar_label_generation;
+  _toolbar_label_button = nil;
+  _toolbar_label_transient = NO;
+  [UIView animateWithDuration:animated && !UIAccessibilityIsReduceMotionEnabled() ? 0.18 : 0
+                        delay:0
+                      options:UIViewAnimationOptionBeginFromCurrentState |
+                              UIViewAnimationOptionAllowUserInteraction
+                   animations:^{ self->_toolbar_label_bubble.alpha = 0; }
+                   completion:^(BOOL finished) {
+                     if (self->_toolbar_label_generation == generation) {
+                       self->_toolbar_label_bubble.hidden = YES;
+                     }
+                   }];
+}
+
+- (void)showToolbarLabelForButton:(UIButton *)button transient:(BOOL)transient
+{
+  if (!button.accessibilityLabel.length) {
+    return;
+  }
+  if (!_toolbar_label_bubble) {
+    _toolbar_label_bubble = [[[UIVisualEffectView alloc]
+        initWithEffect:[UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular]] autorelease];
+    _toolbar_label_bubble.userInteractionEnabled = NO;
+    _toolbar_label_bubble.clipsToBounds = YES;
+    _toolbar_label_bubble.accessibilityIdentifier = @"blender.toolbar.tool-name";
+    _toolbar_label_bubble.alpha = 0;
+    _toolbar_label = [[[UILabel alloc] initWithFrame:CGRectZero] autorelease];
+    _toolbar_label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+    _toolbar_label.adjustsFontForContentSizeCategory = YES;
+    _toolbar_label.numberOfLines = 0;
+    _toolbar_label.textColor = UIColor.labelColor;
+    [_toolbar_label_bubble.contentView addSubview:_toolbar_label];
+    [_overlay_view addSubview:_toolbar_label_bubble];
+  }
+  const BOOL unchanged_hover = !transient && !_toolbar_label_transient &&
+                                _toolbar_label_button == button && !_toolbar_label_bubble.hidden;
+  _toolbar_label_button = button;
+  _toolbar_label_transient = transient;
+  _toolbar_label.text = button.accessibilityLabel;
+  _toolbar_label_bubble.hidden = NO;
+  [self layoutToolbarLabel];
+  if (unchanged_hover) {
+    return;
+  }
+  const NSUInteger generation = ++_toolbar_label_generation;
+  if (_toolbar_label_bubble.alpha == 0 && !UIAccessibilityIsReduceMotionEnabled()) {
+    _toolbar_label_bubble.transform = CGAffineTransformMakeTranslation(-5, 0);
+  }
+  [_overlay_view bringSubviewToFront:_toolbar_label_bubble];
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.18
+                        delay:0
+                      options:UIViewAnimationOptionBeginFromCurrentState |
+                              UIViewAnimationOptionAllowUserInteraction
+                   animations:^{
+                     self->_toolbar_label_bubble.alpha = 1;
+                     self->_toolbar_label_bubble.transform = CGAffineTransformIdentity;
+                   }
+                   completion:nil];
+  if (transient) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(0.9 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+      if (self->_toolbar_label_generation == generation) {
+        [self hideToolbarLabelAnimated:YES];
+      }
+    });
+  }
+}
+
+- (void)handleToolbarHover:(UIHoverGestureRecognizer *)gesture
+{
+  UIButton *hovered = nil;
+  if (gesture.state == UIGestureRecognizerStateBegan ||
+      gesture.state == UIGestureRecognizerStateChanged) {
+    CGPoint location = [gesture locationInView:_tool_scroll];
+    if (CGRectContainsPoint(_tool_scroll.bounds, location)) {
+      UIView *hit = [_tool_scroll hitTest:location withEvent:nil];
+      while (hit && hit != _tool_scroll) {
+        if ([_toolbar_buttons containsObject:hit]) {
+          hovered = (UIButton *)hit;
+          break;
+        }
+        hit = hit.superview;
+      }
+    }
+  }
+  if (hovered) {
+    [self showToolbarLabelForButton:hovered transient:NO];
+  }
+  else if (!_toolbar_label_transient) {
+    [self hideToolbarLabelAnimated:YES];
+  }
 }
 
 - (UIButton *)toolbarButtonAtGestureLocation:(UIGestureRecognizer *)gesture
@@ -4535,13 +4749,16 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 
   [self setToolbarExpanded:NO animated:YES];
+  if (button) {
+    [self showToolbarLabelForButton:button transient:YES];
+  }
 }
 
 - (void)handleToolbarPressSelectGesture:(UILongPressGestureRecognizer *)gesture
 {
   switch (gesture.state) {
     case UIGestureRecognizerStateBegan:
-      if ([self isToolbarListVisible]) {
+      if (_toolbar_expanded) {
         return;
       }
       _toolbar_press_select_active = YES;

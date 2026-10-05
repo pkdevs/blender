@@ -48,6 +48,11 @@ class NativeToolbarScrollTest(unittest.TestCase):
             "- (void)handleToolbarToolButton:", "- (UIButton *)toolbarButtonAtGestureLocation:",
             "- (void)setToolbarHoverButton:", "- (void)finishToolbarPressSelectWithButton:",
             "- (void)handleToolbarPressSelectGesture:",
+            "- (void)layoutToolbarLabel\n", "- (void)hideToolbarLabelAnimated:",
+            "- (void)showToolbarLabelForButton:", "- (void)handleToolbarHover:",
+            "- (UIImage *)toolbarImageForTool:", "- (void)configureToolbarButton:",
+            "- (UIMenu *)toolbarMenuForTool:", "- (NSString *)toolbarSignatureForTools:",
+            "- (void)rebuildToolbarWithTools:",
         )
         methods = []
         for signature in signatures:
@@ -59,8 +64,12 @@ class NativeToolbarScrollTest(unittest.TestCase):
 #include <initializer_list>
 #define UNUSED_VARS(...) ((void)0)
 static int toolCalls;
+static NSString *lastTool;
 static UIImage *blenderIOSIcon(NSString *, NSString *) { return [UIImage systemImageNamed:@"cube"]; }
-static void WM_apple_ios_ui_tool_set_by_id(const char *) { toolCalls++; }
+static void WM_apple_ios_ui_tool_set_by_id(const char *tool) {
+  toolCalls++;
+  lastTool = [NSString stringWithUTF8String:tool];
+}
 ''' + classes + r'''
 @interface CountingOverlay : GHOSTIOSPassThroughOverlayView
 @property(nonatomic) NSUInteger layoutRequests;
@@ -96,6 +105,14 @@ static void WM_apple_ios_ui_tool_set_by_id(const char *) { toolCalls++; }
 @implementation TestPress
 - (UIGestureRecognizerState)state { return self.testState; }
 @end
+@interface TestToolHover : UIHoverGestureRecognizer
+@property(nonatomic) UIGestureRecognizerState testState;
+@property(nonatomic) CGPoint point;
+@end
+@implementation TestToolHover
+- (UIGestureRecognizerState)state { return self.testState; }
+- (CGPoint)locationInView:(UIView *)view { return self.point; }
+@end
 @interface ToolbarTest : UIViewController <UIGestureRecognizerDelegate> {
 @public
   GHOSTIOSPassThroughOverlayView *_overlay_view;
@@ -110,6 +127,11 @@ static void WM_apple_ios_ui_tool_set_by_id(const char *) { toolCalls++; }
   NSLayoutConstraint *_tool_rail_bottom_constraint, *_tool_rail_center_y_constraint;
   NSMutableArray *_toolbar_buttons;
   NSString *_active_tool_identifier;
+  UIVisualEffectView *_toolbar_label_bubble;
+  UILabel *_toolbar_label;
+  UIButton *_toolbar_label_button;
+  NSUInteger _toolbar_label_generation;
+  BOOL _toolbar_label_transient;
   BOOL _toolbar_expanded, _tool_rail_docked_left_center, _toolbar_press_select_active;
 }
 @end
@@ -145,6 +167,8 @@ int main() {
   @autoreleasepool {
     [UIView setAnimationsEnabled:NO];
     ToolbarTest *controller = [[[ToolbarTest alloc] init] autorelease];
+    UIWindow *window = [[[UIWindow alloc] initWithFrame:controller.view.bounds] autorelease];
+    [window addSubview:controller.view];
     CountingOverlay *overlay = (CountingOverlay *)controller.view;
     CountingGlass *glass = (CountingGlass *)controller->_tool_rail;
     NSCAssert(glass.effect != nil, @"Tool glass missing at installation");
@@ -198,7 +222,8 @@ int main() {
         NSCAssert([controller->_tool_scroll touchesShouldCancelInContentView:controller->_toolbar_buttons[0]],
                   @"Tool buttons prevent scrolling");
         NSCAssert(![controller gestureRecognizerShouldBegin:railPan], @"List drag can move the whole toolbar");
-        NSCAssert(![controller gestureRecognizerShouldBegin:press], @"Slow scroll can become tool picking");
+        NSCAssert([controller gestureRecognizerShouldBegin:press] == !labels,
+                  @"Only a stationary hold on the icon list may reveal labels");
         CGRect handleFrame = controller->_tool_drag_handle.frame;
         for (CGFloat offset : {100.0, 500.0, 0.0}) {
           [controller->_tool_scroll setContentOffset:CGPointMake(0, offset) animated:NO];
@@ -236,6 +261,103 @@ int main() {
     NSCAssert(controller->_tool_rail.bounds.size.height == 64 && !controller->_tool_scroll.scrollEnabled,
               @"Collapsed geometry or scrolling incorrect");
     NSCAssert([controller gestureRecognizerShouldBegin:press], @"Compact press-and-slide picker lost");
+    NSDictionary *box = @{@"id": @"builtin.select_box", @"title": @"Select Box", @"symbol": @""};
+    NSDictionary *circle = @{@"id": @"builtin.select_circle", @"title": @"Select Circle", @"symbol": @""};
+    NSMutableDictionary *group = [NSMutableDictionary dictionaryWithDictionary:box];
+    group[@"group"] = @"builtin.select";
+    group[@"children"] = @[box, NSNull.null, circle];
+    NSArray *tools = @[group, NSNull.null, @{@"id": @"builtin.move", @"title": @"Move", @"symbol": @""}];
+    [controller rebuildToolbarWithTools:tools mode:@"objectmode"];
+    [controller setActiveToolbarToolIdentifier:@"builtin.select_box"];
+    NSCAssert(controller->_toolbar_buttons.count == 2, @"Group was flattened into separate buttons");
+    UIButton *groupButton = controller->_toolbar_buttons[0];
+    NSCAssert(![groupButton viewWithTag:9001].hidden, @"Group indicator missing");
+    NSCAssert(!groupButton.showsMenuAsPrimaryAction && groupButton.menu.children.count == 2,
+              @"Flyout must open on hold and preserve internal separators");
+    NSCAssert([controller->_tool_stack customSpacingAfterView:groupButton] == 12,
+              @"Toolbar separator was lost");
+    TestPress *groupPress = [[[TestPress alloc] init] autorelease];
+    [groupButton addGestureRecognizer:groupPress];
+    NSCAssert(![controller gestureRecognizerShouldBegin:groupPress],
+              @"Compact picker stole the group hold gesture");
+    [controller setToolbarExpanded:YES animated:NO];
+    NSCAssert(![controller gestureRecognizerShouldBegin:groupPress] &&
+              ![controller gestureRecognizerShouldBegin:railPan], @"Grouped toolbar breaks scrolling");
+    UIMenu *first = (UIMenu *)groupButton.menu.children[0];
+    UIMenu *second = (UIMenu *)groupButton.menu.children[1];
+    NSCAssert(((UIAction *)first.children[0]).state == UIMenuElementStateOn,
+              @"Current group tool not checked");
+    UIButton *actionDriver = [UIButton buttonWithType:UIButtonTypeSystem];
+    [actionDriver addAction:(UIAction *)second.children[0] forControlEvents:UIControlEventTouchUpInside];
+    [actionDriver sendActionsForControlEvents:UIControlEventTouchUpInside];
+    NSCAssert(toolCalls == 1 && [lastTool isEqualToString:@"builtin.select_circle"],
+              @"Flyout did not enqueue the selected Blender tool");
+    NSCAssert([groupButton.accessibilityIdentifier isEqualToString:lastTool] &&
+              [groupButton.accessibilityLabel isEqualToString:@"Select Circle"],
+              @"Group representative did not update immediately");
+    NSCAssert([controller isToolbarListVisible], @"Flyout selection unexpectedly collapsed toolbar");
+    second = (UIMenu *)groupButton.menu.children[1];
+    NSCAssert(((UIAction *)second.children[0]).state == UIMenuElementStateOn,
+              @"Flyout checkmark did not follow selection");
+    NSCAssert([controller->_toolbar_label.text isEqualToString:@"Select Circle"] &&
+              controller->_toolbar_label_bubble.alpha == 1,
+              @"Grouped tool selection did not show its name");
+    for (BOOL labels : {NO, YES}) {
+      [controller setToolRailDockedLeftCenter:YES animated:NO];
+      [controller setToolbarExpanded:labels animated:NO];
+      UIButton *move = controller->_toolbar_buttons[1];
+      CGFloat width = controller->_tool_rail_width_constraint.constant;
+      int previousCalls = toolCalls;
+      NSCAssert([[move actionsForTarget:controller forControlEvent:UIControlEventTouchUpInside]
+          containsObject:@"handleToolbarToolButton:"], @"Tap target is missing");
+      [controller handleToolbarToolButton:move];
+      NSCAssert(toolCalls == previousCalls + 1 && [lastTool isEqualToString:@"builtin.move"],
+                @"Tap must select the tool immediately: %d -> %d, %@, %@", previousCalls, toolCalls,
+                lastTool, move.allTargets);
+      NSCAssert(controller->_toolbar_expanded == labels && [controller isToolbarListVisible] &&
+                controller->_tool_rail_width_constraint.constant == width,
+                @"Tap expanded or collapsed the toolbar");
+      NSCAssert(controller->_toolbar_label_transient &&
+                [controller->_toolbar_label.text isEqualToString:@"Move"], @"Missing tap label");
+    }
+    [controller setToolbarExpanded:NO animated:NO];
+    TestToolHover *hover = [TestToolHover new];
+    UIButton *move = controller->_toolbar_buttons[1];
+    [controller.view layoutIfNeeded];
+    hover.point = [move convertPoint:CGPointMake(26, 26) toView:controller->_tool_scroll];
+    hover.testState = UIGestureRecognizerStateChanged;
+    [controller handleToolbarHover:hover];
+    NSCAssert(!controller->_toolbar_label_transient && controller->_toolbar_label_button == move,
+              @"Hover did not reveal the pointed tool's name");
+    CGRect bubble = controller->_toolbar_label_bubble.frame;
+    CGRect rail = [controller->_tool_rail convertRect:controller->_tool_rail.bounds toView:controller.view];
+    NSCAssert(CGRectGetMinX(bubble) > CGRectGetMaxX(rail) &&
+              CGRectContainsRect(controller.view.bounds, bubble), @"Name bubble overlaps rail or clips");
+    [controller showToolbarLabelForButton:move transient:YES];
+    hover.testState = UIGestureRecognizerStateEnded;
+    [controller handleToolbarHover:hover];
+    NSCAssert(controller->_toolbar_label_bubble.alpha == 1, @"Hover exit erased the tap confirmation");
+    [controller showToolbarLabelForButton:groupButton transient:YES];
+    hover.testState = UIGestureRecognizerStateChanged;
+    [controller handleToolbarHover:hover];
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1.15]];
+    NSCAssert(controller->_toolbar_label_bubble.alpha == 1 &&
+              [controller->_toolbar_label.text isEqualToString:@"Move"],
+              @"Old tap timer erased a new hover label");
+    hover.testState = UIGestureRecognizerStateEnded;
+    [controller handleToolbarHover:hover];
+    NSCAssert(controller->_toolbar_label_bubble.alpha == 0, @"Hover exit left a stuck label");
+    [controller showToolbarLabelForButton:move transient:YES];
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1.15]];
+    NSCAssert(controller->_toolbar_label_bubble.alpha == 0, @"Tap confirmation did not fade");
+    NSString *signature = [controller toolbarSignatureForTools:tools mode:@"objectmode"];
+    group[@"children"] = @[box];
+    NSCAssert(![signature isEqualToString:[controller toolbarSignatureForTools:tools mode:@"objectmode"]],
+              @"Changed group contents did not invalidate toolbar");
+    [controller rebuildToolbarWithTools:@[box] mode:@"mesh_edit"];
+    NSCAssert(((UIButton *)controller->_toolbar_buttons[0]).menu == nil &&
+              [controller->_toolbar_buttons[0] viewWithTag:9001].hidden,
+              @"Mode change retained a stale group flyout");
     NSLog(@"PASS: scroll isolation, pinned handle, button cancellation, docked/labeled lists, resizing");
   }
 }
