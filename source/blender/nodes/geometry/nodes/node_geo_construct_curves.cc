@@ -97,15 +97,29 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
     return nullptr;
   }
 
-  for (const int i : curve_offsets.drop_back(1).index_range()) {
-    const int curr = curve_offsets[i];
-    const int next = curve_offsets[i + 1];
-    const int size = next - curr;
-    if (size < 1) {
-      params.error_message_add(NodeWarningType::Error, "Curve sizes must be at least 1");
-      BKE_id_free_ex(nullptr, curves_id, LIB_ID_FREE_NO_MAIN, false);
-      return nullptr;
-    }
+  const bool sizes_greater_zero = threading::parallel_reduce(
+      curve_offsets.drop_back(1).index_range(),
+      4096,
+      true,
+      [&](const IndexRange range, const bool sizes_greater_zero) {
+        if (!sizes_greater_zero) {
+          return false;
+        }
+        for (const int i : range) {
+          const int curr = curve_offsets[i];
+          const int next = curve_offsets[i + 1];
+          const int size = next - curr;
+          if (size < 1) {
+            return false;
+          }
+        }
+        return true;
+      },
+      std::logical_and<>());
+  if (!sizes_greater_zero) {
+    params.error_message_add(NodeWarningType::Error, "Curve sizes must be at least 1");
+    BKE_id_free_ex(nullptr, curves_id, LIB_ID_FREE_NO_MAIN, false);
+    return nullptr;
   }
 
   curves.fill_curve_types(CURVE_TYPE_POLY);
