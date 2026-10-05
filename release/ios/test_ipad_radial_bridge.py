@@ -19,11 +19,15 @@ class IPadRadialBridgeTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         source = (root / "source/blender/windowmanager/intern/wm_apple_ios_ui.cc").read_text()
         start = source.index("struct IOSMenuRequest {")
-        state = source[start:source.index("bool ios_ui_layout_ready", start)]
+        state = source[start:source.index("using IOSUIMessage", start)]
+        state += "GHOST_IOSMessageQueue<IOSMenuRequest> ios_ui_messages;\n"
+        state += "GHOST_IOSMessageQueue<std::pair<uint64_t, std::string>> ios_menu_completed;\n"
+        state += "std::map<uint64_t, std::string> ios_menu_results;\n"
+        state += "std::atomic<uint64_t> ios_menu_next_identifier{0};\n"
         start = source.index('extern "C" uint64_t WM_apple_ios_ui_menu_request(')
         enqueue = source[start:source.index("/* UIKit only exchanges", start)]
-        start = source.index("  for (IOSMenuRequest &request : menu_requests) {")
-        dispatch = source[start:source.index("\n  ios_context_menu_build(C);", start)]
+        start = source.index("static void ios_ui_dispatch_menu(")
+        dispatch = source[start:source.index("\n}\n", start) + 2]
         harness = r'''
 #include <cassert>
 #include <cstdint>
@@ -31,6 +35,7 @@ class IPadRadialBridgeTest(unittest.TestCase):
 #include <mutex>
 #include <string>
 #include <vector>
+#include "GHOST_IOSMessageQueue.hh"
 #define LISTBASE_FOREACH(type, name, list) for (type name : *(list))
 enum { WM_HANDLER_TYPE_OP = 1, WM_HANDLER_TYPE_UI = 2 };
 struct wmEventHandler { int type; };
@@ -58,12 +63,15 @@ static std::string native_menu_query(bContext *C, const std::string &route, bool
 }
 }
 static std::mutex ios_ui_command_mutex;
-''' + state + enqueue + r'''
+''' + state + enqueue + dispatch + r'''
 static void flush(bContext *C) {
-  std::vector<IOSMenuRequest> menu_requests;
-  menu_requests.swap(ios_menu_requests);
-''' + dispatch + r'''
+  for (auto &request : ios_ui_messages.take()) {
+    ios_ui_dispatch_menu(C, request);
+  }
   assert(contextDepth == 0);
+  for (auto &result : ios_menu_completed.take()) {
+    ios_menu_results.emplace(result.first, std::move(result.second));
+  }
 }
 int main() {
   wmEvent event;
@@ -80,7 +88,9 @@ int main() {
   win.modalhandlers.push_back(&tool);
   id = WM_apple_ios_ui_menu_at_position_request(leaf, true, 45, 67);
   flush(&C);
-  assert(calls == 1 && ios_menu_requests.size() == 1 && ios_menu_requests[0].identifier == id);
+  auto pending = ios_ui_messages.take();
+  assert(calls == 1 && pending.size() == 1 && pending[0].identifier == id);
+  ios_ui_messages.push(std::move(pending[0]));
   win.modalhandlers.clear();
   flush(&C);
   assert(calls == 2 && executed && received == leaf && !ios_menu_results.count(id));
@@ -88,10 +98,10 @@ int main() {
   win.modalhandlers.push_back(&tool);
   id = WM_apple_ios_ui_menu_at_position_request(root, false, 1, 2);
   flush(&C); flush(&C); flush(&C);
-  assert(calls == 2 && ios_menu_requests.empty() && ios_menu_results.at(id) == "[]");
+  assert(calls == 2 && ios_ui_messages.take().empty() && ios_menu_results.at(id) == "[]");
   id = WM_apple_ios_ui_menu_at_position_request(leaf, true, 1, 2);
   flush(&C); flush(&C); flush(&C);
-  assert(calls == 2 && ios_menu_requests.empty() && !ios_menu_results.count(id));
+  assert(calls == 2 && ios_ui_messages.take().empty() && !ios_menu_results.count(id));
   win.modalhandlers.clear();
   wmEventHandler ui{WM_HANDLER_TYPE_UI};
   win.modalhandlers.push_back(&ui);
@@ -118,7 +128,8 @@ int main() {
             source_file = Path(directory) / "menu_bridge.cc"
             executable = Path(directory) / "menu_bridge"
             source_file.write_text(harness)
-            result = subprocess.run([compiler, "-std=c++17", str(source_file), "-o", str(executable)],
+            result = subprocess.run([compiler, "-std=c++17", "-I", str(root / "intern/ghost"),
+                                    str(source_file), "-o", str(executable)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(executable)], capture_output=True, text=True)
@@ -134,13 +145,14 @@ int main() {
         command = source[start:source.index("\n};", start) + 3]
         start = source.index('extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(')
         enqueue = source[start:source.index("\n}", start) + 2]
-        start = source.index("  if (!operator_commands.empty()) {")
-        dispatch = source[start:source.index("\n  if (!operator_property_commands.empty())", start)]
+        start = source.index("static void ios_ui_dispatch_operator(")
+        dispatch = source[start:source.index("\n}\n", start) + 2]
         harness = r'''
 #include <cassert>
 #include <mutex>
 #include <string>
 #include <vector>
+#include "GHOST_IOSMessageQueue.hh"
 #define LISTBASE_FOREACH(type, name, list) for (type name : *(list))
 enum { WM_HANDLER_TYPE_OP = 1, WM_HANDLER_TYPE_UI = 2 };
 struct wmEventHandler { int type; };
@@ -162,12 +174,12 @@ static void ios_operator_invoke(bContext *C, const char *) {
 }
 ''' + command + r'''
 static std::mutex ios_ui_command_mutex;
-static std::vector<IOSOperatorCommand> ios_ui_operator_commands;
-''' + enqueue + r'''
+static GHOST_IOSMessageQueue<IOSOperatorCommand> ios_ui_messages;
+''' + enqueue + dispatch + r'''
 static void flush(bContext *C) {
-  std::vector<IOSOperatorCommand> operator_commands;
-  operator_commands.swap(ios_ui_operator_commands);
-''' + dispatch + r'''
+  for (auto &command : ios_ui_messages.take()) {
+    ios_ui_dispatch_operator(C, command);
+  }
 }
 int main() {
   wmEvent event;
@@ -175,7 +187,7 @@ int main() {
   bContext C{&win};
   WM_apple_ios_ui_operator_at_position_enqueue(nullptr, 0, 0);
   WM_apple_ios_ui_operator_at_position_enqueue("", 0, 0);
-  assert(ios_ui_operator_commands.empty());
+  assert(ios_ui_messages.take().empty());
   WM_apple_ios_ui_operator_at_position_enqueue("TRANSFORM_OT_translate", 120, 340);
   event.xy[0] = event.xy[1] = 888; // Menu selection must not replace its opening point.
   flush(&C);
@@ -184,14 +196,16 @@ int main() {
   win.modalhandlers.push_back(&tool);
   WM_apple_ios_ui_operator_at_position_enqueue("MESH_OT_bevel", 45, 67);
   flush(&C);
-  assert(calls == 1 && ios_ui_operator_commands.size() == 1);
+  auto pending = ios_ui_messages.take();
+  assert(calls == 1 && pending.size() == 1);
+  ios_ui_messages.push(std::move(pending[0]));
   win.modalhandlers.clear(); // Queued Escape/release has now cancelled the previous tool.
   flush(&C);
   assert(calls == 2 && resultX == 90 && resultY == 1864);
   win.modalhandlers.push_back(&tool);
   WM_apple_ios_ui_operator_at_position_enqueue("MESH_OT_bevel", 45, 67);
   flush(&C); flush(&C); flush(&C);
-  assert(calls == 2 && ios_ui_operator_commands.empty()); // Never build an unbounded retry queue.
+  assert(calls == 2 && ios_ui_messages.take().empty()); // Never build an unbounded retry queue.
   win.modalhandlers.clear();
   wmEventHandler ui{WM_HANDLER_TYPE_UI};
   win.modalhandlers.push_back(&ui);
@@ -201,14 +215,15 @@ int main() {
   C.region = false;
   WM_apple_ios_ui_operator_at_position_enqueue("MESH_OT_bevel", 45, 67);
   flush(&C);
-  assert(calls == 3 && ios_ui_operator_commands.empty());
+  assert(calls == 3 && ios_ui_messages.take().empty());
 }
 '''
         with tempfile.TemporaryDirectory() as directory:
             source_file = Path(directory) / "radial_bridge.cc"
             executable = Path(directory) / "radial_bridge"
             source_file.write_text(harness)
-            result = subprocess.run([compiler, "-std=c++17", str(source_file), "-o", str(executable)],
+            result = subprocess.run([compiler, "-std=c++17", "-I", str(root / "intern/ghost"),
+                                    str(source_file), "-o", str(executable)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(executable)], capture_output=True, text=True)

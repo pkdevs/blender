@@ -25,6 +25,12 @@ positioned_request.restype = ctypes.c_uint64
 take_result = engine.WM_apple_ios_ui_menu_take_result
 take_result.argtypes = [ctypes.c_uint64]
 take_result.restype = ctypes.c_void_p
+probe_path = Path(bpy.app.binary_path).parent / 'Frameworks/ResponsiveDeviceProbe.dylib'
+probe = ctypes.CDLL(str(probe_path)) if probe_path.exists() else None
+if probe:
+    take_result = probe.blender_device_probe_menu_result
+    take_result.argtypes = [ctypes.c_uint64]
+    take_result.restype = ctypes.c_void_p
 free = ctypes.CDLL('/usr/lib/libSystem.B.dylib').free
 free.argtypes = [ctypes.c_void_p]
 report = {'checks': []}
@@ -57,7 +63,7 @@ class WM_OT_native_menu_probe(bpy.types.Operator):
 def append_probe(self, context):
     self.layout.separator()
     self.layout.operator_context = 'EXEC_REGION_WIN'
-    op = self.layout.operator('wm.native_menu_probe', text='Native Probe Execute')
+    op = self.layout.operator('wm.native_menu_probe', text='Native Probe Execute', icon='MESH_CUBE')
     op.number, op.text, op.flag = 73, 'Exact properties: "quoted"', True
     self.layout.operator_context = 'INVOKE_REGION_WIN'
     op = self.layout.operator('wm.native_menu_probe', text='Native Probe Invoke')
@@ -85,6 +91,29 @@ def tests():
     report['object_roots'] = [i.get('title') for i in roots]
     check({'File', 'Edit', 'Render', 'View', 'Select', 'Add', 'Object'} <= set(report['object_roots']),
           'Real object-mode menu roots')
+    add_items = yield route(find(roots, 'Add'))
+    check(find(add_items, 'Mesh').get('icon') == 'OUTLINER_OB_MESH', 'Add submenu retains its Blender Mesh icon')
+    check(find(add_items, 'Curve').get('icon') == 'OUTLINER_OB_CURVE', 'Add submenu retains its Blender Curve icon')
+    mesh_items = yield route(find(add_items, 'Mesh'))
+    cube = next(item for item in mesh_items if item.get('operator') == 'MESH_OT_primitive_cube_add')
+    camera = next(item for item in add_items if item.get('operator') == 'OBJECT_OT_camera_add')
+    check(cube.get('icon') == 'MESH_CUBE', 'Add Cube retains its Blender icon')
+    check(camera.get('icon') == 'OUTLINER_OB_CAMERA', 'Add Camera retains its Blender icon')
+    selected = list(bpy.context.selected_objects)
+    active = bpy.context.view_layer.objects.active
+    for item, object_type in [(cube, 'MESH'), (camera, 'CAMERA')]:
+        before = set(bpy.context.scene.objects)
+        yield route(item, True)
+        created = set(bpy.context.scene.objects) - before
+        check(len(created) == 1 and next(iter(created)).type == object_type,
+              f'Add menu creates a real {object_type} object')
+        check(bpy.context.view_layer.objects.active in created,
+              f'Added {object_type} becomes the active object')
+        for obj in created:
+            bpy.data.objects.remove(obj, do_unlink=True)
+    for obj in selected:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = active
     file = find(roots, 'File')
     file_items = yield route(file)
     report['file_items'] = file_items
@@ -97,6 +126,8 @@ def tests():
     check(any(i.get('operator') for i in import_items), 'Real registered import operators')
     execute = find(file_items, 'Native Probe Execute')
     invoke = find(file_items, 'Native Probe Invoke')
+    check(execute.get('icon') == 'MESH_CUBE' and not invoke.get('icon'),
+          'Same operator preserves per-entry icons and iconless entries')
     yield route(execute, True)
     check(calls[-1] == (73, 'Exact properties: "quoted"', True, 'VIEW_3D', 'WINDOW', 'EXEC'),
           'Exact typed properties and EXEC_REGION_WIN dispatch')
@@ -206,6 +237,10 @@ def tick():
     except Exception:
         report['cleanup_error'] = traceback.format_exc()
     output.write_text(json.dumps(report, indent=2))
+    if probe and report.get('passed'):
+        probe.blender_device_probe_add_menu.restype = None
+        # Let UIKit consume the final Object-mode menu snapshot before taking a screenshot.
+        bpy.app.timers.register(lambda: probe.blender_device_probe_add_menu(1), first_interval=1.0)
     return None
 
 

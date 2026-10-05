@@ -45,8 +45,6 @@ extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
                                                        const char *prop_name,
                                                        const char *prop_value);
-extern "C" char *WM_apple_ios_ui_context_menu_copy_json();
-extern "C" void WM_apple_ios_ui_context_menu_free_json(char *json);
 extern "C" uint64_t WM_apple_ios_ui_menu_request(const char *route, bool execute);
 extern "C" uint64_t WM_apple_ios_ui_menu_at_position_request(const char *route,
                                                             bool execute,
@@ -2273,46 +2271,6 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [super dealloc];
 }
 
-- (NSArray *)contextMenuItems
-{
-  char *json = WM_apple_ios_ui_context_menu_copy_json();
-  if (json == nullptr) {
-    return [self fallbackContextMenuItems];
-  }
-
-  NSData *data = [NSData dataWithBytes:json length:strlen(json)];
-  WM_apple_ios_ui_context_menu_free_json(json);
-  if (data == nil) {
-    return [self fallbackContextMenuItems];
-  }
-
-  NSError *error = nil;
-  id object = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
-  if (error != nil || ![object isKindOfClass:[NSArray class]]) {
-    return [self fallbackContextMenuItems];
-  }
-  if ([(NSArray *)object count] == 0) {
-    return [self fallbackContextMenuItems];
-  }
-  return (NSArray *)object;
-}
-
-- (NSArray *)fallbackContextMenuItems
-{
-  return @[
-    @{@"separator" : @NO, @"title" : @"Move", @"operator" : @"TRANSFORM_OT_translate"},
-    @{@"separator" : @NO, @"title" : @"Rotate", @"operator" : @"TRANSFORM_OT_rotate"},
-    @{@"separator" : @NO, @"title" : @"Scale", @"operator" : @"TRANSFORM_OT_resize"},
-    @{@"separator" : @YES, @"title" : @"", @"operator" : @""},
-    @{@"separator" : @NO, @"title" : @"Frame Selected", @"operator" : @"VIEW3D_OT_view_selected"},
-    @{@"separator" : @NO, @"title" : @"Frame All", @"operator" : @"VIEW3D_OT_view_all"},
-    @{@"separator" : @YES, @"title" : @"", @"operator" : @""},
-    @{@"separator" : @NO, @"title" : @"Duplicate", @"operator" : @"OBJECT_OT_duplicate_move"},
-    @{@"separator" : @NO, @"title" : @"Set Origin", @"operator" : @"OBJECT_OT_origin_set"},
-    @{@"separator" : @NO, @"title" : @"Delete", @"operator" : @"OBJECT_OT_delete"},
-  ];
-}
-
 - (NSArray<NSDictionary *> *)radialItemsFromBlenderMenu:(NSArray *)sources
 {
   NSMutableArray *items = [NSMutableArray array];
@@ -2378,65 +2336,14 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   WM_apple_ios_ui_menu_at_position_request(route.UTF8String, true, pixels.x, pixels.y);
 }
 
-- (UIMenu *)nativeBlenderContextMenuWithTitle:(NSString *)title items:(NSArray *)items
-{
-  NSMutableArray *children = [NSMutableArray array];
-  NSMutableArray *section_children = [NSMutableArray array];
-
-  void (^flushSection)(void) = ^{
-    if (section_children.count == 0) {
-      return;
-    }
-    NSArray *section = [[section_children copy] autorelease];
-    /* Separators become inline groups, not navigable submenus with blank titles. */
-    [children addObject:[UIMenu menuWithTitle:@""
-                                      image:nil
-                                 identifier:nil
-                                    options:UIMenuOptionsDisplayInline
-                                   children:section]];
-    [section_children removeAllObjects];
-  };
-
-  for (NSDictionary *item in items) {
-    if (![item isKindOfClass:[NSDictionary class]]) {
-      continue;
-    }
-
-    if ([item[@"separator"] boolValue]) {
-      flushSection();
-      continue;
-    }
-
-    NSString *title = item[@"title"];
-    NSString *op_name = item[@"operator"];
-    if (![title isKindOfClass:[NSString class]] || ![op_name isKindOfClass:[NSString class]] ||
-        title.length == 0 || op_name.length == 0)
-    {
-      continue;
-    }
-
-    UIAction *action = [UIAction actionWithTitle:title
-                                           image:blenderIOSIcon(
-                                                     [@"operator." stringByAppendingString:op_name], nil)
-                                      identifier:nil
-                                         handler:^(__kindof UIAction *action) {
-                                           WM_apple_ios_ui_operator_enqueue(op_name.UTF8String);
-                                         }];
-    [section_children addObject:action];
-  }
-
-  flushSection();
-  return [UIMenu menuWithTitle:title children:children];
-}
-
-- (UIMenu *)nativeBlenderContextMenuWithTitle:(NSString *)title
-{
-  return [self nativeBlenderContextMenuWithTitle:title items:[self contextMenuItems]];
-}
-
 - (UIMenu *)nativeBlenderContextMenu
 {
-  return [self nativeBlenderContextMenuWithTitle:@"Actions"];
+  /* Resolve the same live context menu as Blender and the Pencil radial menu.
+   * A deferred provider keeps UIKit responsive while the engine is busy. */
+  return blenderIOSNativeSubmenu(@{
+    @"title" : @"Actions",
+    @"route" : @{@"root" : @"context", @"path" : @[]},
+  }, nil);
 }
 
 - (UIMenu *)editMenuInteraction:(UIEditMenuInteraction *)interaction
@@ -4413,14 +4320,14 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     return;
   }
 
-  NSArray *items = [self contextMenuItems];
+  NSArray *items = _native_menubar_items ?: @[];
   if (_actions_button.menu != nil && [_actions_menu_items isEqualToArray:items]) {
     return;
   }
 
   /* Replacing a presented UIMenu makes UIKit rebuild it visibly. Poll the model, but only
    * install a new menu when its contents actually change. Build from the same snapshot. */
-  UIMenu *menu = [self nativeBlenderContextMenuWithTitle:@"Actions" items:items];
+  UIMenu *menu = [UIMenu menuWithTitle:@"Blender" children:blenderIOSNativeMenuElements(items)];
   [_actions_menu_items release];
   _actions_menu_items = [items copy];
   _actions_button.menu = menu;
@@ -4433,8 +4340,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIBarButtonItem *button = [[[UIBarButtonItem alloc]
       initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
                menu:nil] autorelease];
-  button.title = @"Actions";
-  button.accessibilityLabel = @"Actions";
+  button.title = @"Menus";
+  button.accessibilityLabel = @"Blender Menus";
   button.identifier = @"blender.actions";
   return button;
 }

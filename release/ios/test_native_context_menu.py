@@ -34,13 +34,10 @@ class NativeContextMenuTest(unittest.TestCase):
         device = os.environ.get("IOS_TEST_SIMULATOR_UDID", candidates[0]["udid"])
         root = Path(__file__).resolve().parents[2]
         source = (root / "intern/ghost/intern/GHOST_WindowIOS.mm").read_text()
-        start = source.index("- (UIMenu *)nativeBlenderContextMenuWithTitle:")
-        end = source.index("\n- (UIMenu *)nativeBlenderContextMenu\n", start)
         # Compile the real method, so changing its menu options or dispatch is
         # covered by the test rather than a duplicate implementation.
-        method = source[start:end]
         update_start = source.index("- (void)updateActionsButtonMenu\n")
-        method += source[update_start:source.index("\n}", update_start) + 2]
+        method = source[update_start:source.index("\n}", update_start) + 2]
         radial_start = source.index("- (NSArray<NSDictionary *> *)radialItemsFromBlenderMenu:")
         radial_method = source[radial_start:source.index("\n}\n", radial_start) + 2]
         for signature in (
@@ -58,12 +55,15 @@ class NativeContextMenuTest(unittest.TestCase):
         action_icon = source[icon_start:source.index("\n}", icon_start) + 2]
         action_start = source.index("- (void)updateAxisConstraintButton:")
         action_button = source[action_start:source.index("- (NSString *)actionSignatureForActions:", action_start)]
+        helper_start = source.index("static NSString *blenderIOSMenuRoute(")
+        menu_helpers = source[helper_start:source.index("@interface GHOST_IOSViewController", helper_start)]
         for signature in ("- (NSString *)actionSignatureForActions:", "- (void)handleActionButton:",
                           "- (UIBarButtonItem *)actionsButton\n"):
             start = source.index(signature)
             action_button += source[start:source.index("\n}", start) + 2]
         harness = r'''
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 #define UNUSED_VARS(...) ((void)0)
 static NSMutableArray *queued;
 static NSMutableDictionary *icons;
@@ -72,6 +72,28 @@ static NSDictionary *mapping;
 static BOOL missingAssets;
 static NSInteger queuedCommand;
 static NSMutableArray *settings;
+static NSMutableArray *menuRequests;
+static NSString *menuReply;
+static void (^menuProvider)(void (^)(NSArray<UIMenuElement *> *));
+@interface UIDeferredMenuElement (MenuTest)
++ (instancetype)testElementWithProvider:(void (^)(void (^)(NSArray<UIMenuElement *> *)))provider;
+@end
+@implementation UIDeferredMenuElement (MenuTest)
++ (instancetype)testElementWithProvider:(void (^)(void (^)(NSArray<UIMenuElement *> *)))provider {
+  menuProvider = [[provider copy] autorelease];
+  return [self testElementWithProvider:provider];
+}
+@end
+static uint64_t WM_apple_ios_ui_menu_request(const char *route, bool execute) {
+  [menuRequests addObject:@{@"route": [NSString stringWithUTF8String:route], @"execute": @(execute)}];
+  return menuRequests.count;
+}
+static char *WM_apple_ios_ui_menu_take_result(uint64_t) {
+  if (!menuReply) return nullptr;
+  char *result = strdup(menuReply.UTF8String);
+  menuReply = nil;
+  return result;
+}
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *setting, const char *value) {
   [settings addObject:@[[NSString stringWithUTF8String:setting], [NSString stringWithUTF8String:value]]];
 }
@@ -84,8 +106,10 @@ static void checkMenu(UIMenu *actual, UIMenu *expected) {
     NSCAssert([a.title isEqual:b.title], @"Overflow action title differs");
     if ([b isKindOfClass:UIMenu.class]) {
       checkMenu((UIMenu *)a, (UIMenu *)b);
-    } else {
+    } else if ([b isKindOfClass:UIAction.class]) {
       NSCAssert(((UIAction *)a).state == ((UIAction *)b).state, @"Overflow checkmark differs");
+    } else {
+      NSCAssert([a isKindOfClass:UIDeferredMenuElement.class], @"Overflow lost lazy submenu");
     }
   }
 }
@@ -109,7 +133,7 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
 {
   [queued addObject:[NSString stringWithUTF8String:name]];
 }
-''' + command_enum + "\n" + action_icon + "\n" + r'''
+''' + command_enum + "\n" + action_icon + "\n" + menu_helpers + r'''
 @interface MenuCountingButton : UIBarButtonItem
 @property(nonatomic) NSUInteger menuAssignments;
 @property(nonatomic) NSUInteger enabledAssignments;
@@ -158,9 +182,11 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
   UIBarButtonItem *_undo_button;
   UIBarButtonItem *_actions_button;
   NSArray *_actions_menu_items;
+  NSArray *_native_menubar_items;
   NSMutableArray *_action_buttons;
 }
 @property(nonatomic, retain) NSArray *items;
+@property(nonatomic, retain) NSArray *menuRoots;
 @property(nonatomic, retain) NSDictionary *model;
 @property(nonatomic, retain) UIBarButtonItem *shadingButton;
 @property(nonatomic, retain) UIBarButtonItem *undoControl;
@@ -168,8 +194,6 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
 @property(nonatomic, retain) UIView *viewport;
 @property(nonatomic, retain) MenuTestPencilMenu *pencilMenu;
 @property(nonatomic, retain) MenuTestInteraction *editInteraction;
-- (NSArray *)contextMenuItems;
-- (UIMenu *)nativeBlenderContextMenuWithTitle:(NSString *)title;
 @end
 @implementation MenuTest
 @synthesize shadingButton = _viewport_shading_button;
@@ -178,13 +202,13 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
 @synthesize viewport = _view;
 @synthesize pencilMenu = _pencil_menu;
 @synthesize editInteraction = _actions_edit_menu_interaction;
+@synthesize menuRoots = _native_menubar_items;
 - (instancetype)init {
   self = [super init];
   if (self) _action_buttons = [[NSMutableArray alloc] init];
   return self;
 }
 - (void)sendBlenderKeyNamed:(NSString *)key { NSCAssert(NO, @"Axis button sent a keyboard event"); }
-- (NSArray *)contextMenuItems { return self.items; }
 - (NSDictionary *)toolbarModel { return self.model; }
 ''' + method + shading_methods + action_button + radial_method + r'''
 @end
@@ -202,6 +226,7 @@ int main()
   @autoreleasepool {
     queued = [NSMutableArray array];
     settings = [NSMutableArray array];
+    menuRequests = [NSMutableArray array];
     icons = [NSMutableDictionary dictionary];
     iconKeys = [NSMutableArray array];
     NSData *manifest = [NSData dataWithContentsOfFile:@MANIFEST_PATH];
@@ -210,23 +235,58 @@ int main()
     UIBarButtonItem *more = [builder actionsButton];
     NSCAssert([more.image isEqual:[UIImage systemImageNamed:@"ellipsis.circle"]],
               @"More must use the native circled ellipsis, not Blender artwork");
-    NSCAssert(more.customView == nil && [more.accessibilityLabel isEqual:@"Actions"],
+    NSCAssert(more.customView == nil && [more.accessibilityLabel isEqual:@"Blender Menus"],
               @"More lost its native control or accessible label");
     NSDictionary *separator = @{ @"separator": @YES };
+    NSArray *expectedTitles = @[@"Move", @"Rotate", @"Duplicate", @"Frame Selected"];
+    NSArray *expectedOperators = @[@"TRANSFORM_OT_translate", @"TRANSFORM_OT_rotate",
+                                   @"OBJECT_OT_duplicate_move", @"VIEW3D_OT_view_selected"];
+    NSMutableArray *expectedRoutes = [NSMutableArray array];
+    for (NSString *name in expectedOperators) {
+      [expectedRoutes addObject:@{@"root": @"VIEW3D_MT_object_context_menu", @"path": @[name]}];
+    }
     builder.items = @[
       separator,
-      @{ @"title": @"Move", @"operator": @"TRANSFORM_OT_translate" },
-      @{ @"title": @"Rotate", @"operator": @"TRANSFORM_OT_rotate" },
+      @{ @"title": @"Move", @"operator": expectedOperators[0], @"route": expectedRoutes[0] },
+      @{ @"title": @"Rotate", @"operator": expectedOperators[1], @"route": expectedRoutes[1] },
       separator, separator,
       @"invalid item", @{ @"title": @"", @"operator": @"OBJECT_OT_delete" },
       @{ @"title": @"Invalid", @"operator": @42 },
-      @{ @"title": @"Duplicate", @"operator": @"OBJECT_OT_duplicate_move" },
+      @{ @"title": @"Duplicate", @"operator": expectedOperators[2], @"route": expectedRoutes[2] },
       separator,
-      @{ @"title": @"Frame Selected", @"operator": @"VIEW3D_OT_view_selected" },
+      @{ @"title": @"Frame Selected", @"operator": expectedOperators[3], @"route": expectedRoutes[3] },
       separator,
     ];
-    UIMenu *menu = [builder nativeBlenderContextMenuWithTitle:@"Actions"];
-    NSCAssert([menu.title isEqualToString:@"Actions"], @"Missing menu title");
+    Method providerMethod = class_getClassMethod(UIDeferredMenuElement.class,
+        @selector(elementWithUncachedProvider:));
+    Method captureMethod = class_getClassMethod(UIDeferredMenuElement.class,
+        @selector(testElementWithProvider:));
+    method_exchangeImplementations(providerMethod, captureMethod);
+    UIMenu *context = [builder nativeBlenderContextMenu];
+    method_exchangeImplementations(providerMethod, captureMethod);
+    NSCAssert([context.title isEqual:@"Actions"] && context.children.count == 1 &&
+              [context.children.firstObject isKindOfClass:UIDeferredMenuElement.class],
+              @"Context menu must resolve Blender definitions asynchronously, not invent fallback commands");
+    __block NSArray *resolved = nil;
+    menuProvider(^(NSArray<UIMenuElement *> *items) { resolved = [items retain]; });
+    NSDictionary *contextRoute = [NSJSONSerialization JSONObjectWithData:
+        [menuRequests.lastObject[@"route"] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    NSDictionary *expectedContextRoute = @{@"root": @"context", @"path": @[]};
+    NSCAssert([contextRoute isEqual:expectedContextRoute] &&
+              ![menuRequests.lastObject[@"execute"] boolValue], @"Wrong Blender context-menu request");
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    NSCAssert(resolved == nil, @"Busy engine caused invented fallback commands");
+    menuReply = @"[]";
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:2];
+    while (!resolved && deadline.timeIntervalSinceNow > 0) {
+      [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.025]];
+    }
+    NSCAssert(resolved.count == 1 && [resolved.firstObject isKindOfClass:UIAction.class] &&
+              (((UIAction *)resolved.firstObject).attributes & UIMenuElementAttributesDisabled),
+              @"Empty Blender menu must show no executable fallback commands");
+    [resolved release];
+    [menuRequests removeAllObjects];
+    UIMenu *menu = [UIMenu menuWithTitle:@"Actions" children:blenderIOSNativeMenuElements(builder.items)];
     NSCAssert(menu.children.count == 3, @"Empty or missing sections");
     NSMutableArray *titles = [NSMutableArray array];
     for (UIMenu *section in menu.children) {
@@ -235,54 +295,81 @@ int main()
       for (UIAction *action in section.children) {
         NSCAssert([action isKindOfClass:UIAction.class] && action.title.length > 0,
                   @"Unlabelled or nested action");
-        NSCAssert(action.image != nil, @"Missing Blender operator icon");
+        NSCAssert(action.image == nil, @"Iconless Blender entry gained a guessed operator icon");
         [titles addObject:action.title];
         UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
         [button addAction:action forControlEvents:UIControlEventTouchUpInside];
         [button sendActionsForControlEvents:UIControlEventTouchUpInside];
       }
     }
-    NSArray *expectedTitles = @[@"Move", @"Rotate", @"Duplicate", @"Frame Selected"];
-    NSArray *expectedOperators = @[@"TRANSFORM_OT_translate", @"TRANSFORM_OT_rotate",
-                                   @"OBJECT_OT_duplicate_move", @"VIEW3D_OT_view_selected"];
     NSCAssert([titles isEqual:expectedTitles], @"Missing/reordered commands");
-    NSCAssert([queued isEqual:expectedOperators], @"Action dispatched wrong operator");
+    NSCAssert(queued.count == 0 && menuRequests.count == expectedRoutes.count,
+              @"Menu bypassed property-bearing Blender routes");
+    for (NSUInteger i = 0; i < expectedRoutes.count; i++) {
+      NSDictionary *request = menuRequests[i];
+      NSDictionary *route = [NSJSONSerialization JSONObjectWithData:
+          [request[@"route"] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+      NSCAssert([request[@"execute"] boolValue] && [route isEqual:expectedRoutes[i]],
+                @"Action lost its Blender route");
+    }
     // The 250 ms toolbar poll must not replace an unchanged, potentially presented menu.
     MenuCountingButton *actions = [[[MenuCountingButton alloc] init] autorelease];
     builder.actionsControl = actions;
+    NSMutableArray *roots = [NSMutableArray array];
+    for (NSString *title in @[@"File", @"Edit", @"Render", @"View", @"Select", @"Add", @"Object"]) {
+      [roots addObject:@{@"title": title, @"submenu": @YES,
+          @"route": @{@"root": @"VIEW3D_MT_editor_menus", @"path": @[title]}}];
+    }
+    builder.menuRoots = roots;
     [builder updateActionsButtonMenu];
     UIMenu *stableMenu = [[actions.menu retain] autorelease];
+    UIMenu *rootSection = (UIMenu *)stableMenu.children.firstObject;
+    NSCAssert(rootSection.children.count == 7, @"Full Blender menus missing from visible button");
+    UIMenu *addMenu = (UIMenu *)rootSection.children[5];
+    NSCAssert([addMenu.title isEqual:@"Add"] &&
+              [addMenu.children.firstObject isKindOfClass:UIDeferredMenuElement.class],
+              @"Add must load Blender's live object-creation commands");
     checkMenu((UIMenu *)actions.menuRepresentation, stableMenu);
     NSUInteger assignments = actions.menuAssignments;
-    NSData *snapshot = [NSJSONSerialization dataWithJSONObject:builder.items options:0 error:nil];
+    NSArray *contextItems = builder.items;
+    builder.items = @[@{@"title": @"X", @"key": @"X"}];
+    [builder updateActionsButtonMenu];
+    NSCAssert(actions.menu == stableMenu && actions.menuAssignments == assignments,
+              @"Contextual shortcuts replaced the full Blender menu hierarchy");
+    builder.items = contextItems;
+    NSData *snapshot = [NSJSONSerialization dataWithJSONObject:builder.menuRoots options:0 error:nil];
     for (NSUInteger tick = 0; tick < 100; tick++) {
       // The bridge returns new containers every poll, even when their contents are unchanged.
-      builder.items = [NSJSONSerialization JSONObjectWithData:snapshot options:0 error:nil];
+      builder.menuRoots = [NSJSONSerialization JSONObjectWithData:snapshot options:0 error:nil];
       [builder updateActionsButtonMenu];
       NSCAssert(actions.menu == stableMenu && actions.menuAssignments == assignments,
                 @"Toolbar polling replaced the unchanged Actions menu");
     }
-    NSArray *originalItems = builder.items;
-    builder.items = @[@{@"title": @"Rotate Selection", @"operator": @"TRANSFORM_OT_rotate"}];
+    NSArray *originalItems = builder.menuRoots;
+    NSDictionary *meshRoute = @{@"root": @"VIEW3D_MT_editor_menus", @"path": @[@"Mesh"]};
+    builder.menuRoots = @[@{@"title": @"Mesh", @"operator": @"TEST_OT_menu", @"route": meshRoute}];
     [builder updateActionsButtonMenu];
     NSCAssert(actions.menu != stableMenu && actions.menuAssignments == assignments + 1,
               @"Changed context did not replace the menu exactly once");
     UIMenu *changedSection = (UIMenu *)actions.menu.children.firstObject;
     UIAction *changedAction = (UIAction *)changedSection.children.firstObject;
-    NSCAssert([changedAction.title isEqual:@"Rotate Selection"], @"Menu retained stale contents");
+    NSCAssert([changedAction.title isEqual:@"Mesh"], @"Menu retained stale contents");
     UIButton *changedTrigger = [UIButton buttonWithType:UIButtonTypeSystem];
     [changedTrigger addAction:changedAction forControlEvents:UIControlEventTouchUpInside];
     [changedTrigger sendActionsForControlEvents:UIControlEventTouchUpInside];
-    NSCAssert([queued.lastObject isEqual:@"TRANSFORM_OT_rotate"], @"Changed menu dispatched stale action");
-    builder.items = @[separator];
+    NSDictionary *submitted = [NSJSONSerialization JSONObjectWithData:
+        [menuRequests.lastObject[@"route"] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    NSCAssert([submitted isEqual:meshRoute] && [menuRequests.lastObject[@"execute"] boolValue],
+              @"Changed menu dispatched a stale route");
+    builder.menuRoots = @[separator];
     [builder updateActionsButtonMenu];
     NSCAssert(!actions.enabled && actions.menu.children.count == 0, @"Empty menu remained enabled");
     assignments = actions.menuAssignments;
     [builder updateActionsButtonMenu];
     NSCAssert(actions.menuAssignments == assignments, @"Empty menu rebuilt on every poll");
-    builder.items = originalItems;
+    builder.menuRoots = originalItems;
     [builder updateActionsButtonMenu];
-    NSCAssert(actions.enabled && actions.menu.children.count == 3, @"Menu did not recover with context");
+    NSCAssert(actions.enabled && actions.menu.children.count == 1, @"Menu did not recover with context");
     builder.viewport = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, 834, 1210)] autorelease];
     builder.pencilMenu = [[[MenuTestPencilMenu alloc] init] autorelease];
     builder.editInteraction = [[[MenuTestInteraction alloc] init] autorelease];
@@ -330,7 +417,7 @@ int main()
     NSCAssert(builder.editInteraction.presentations == 1, @"Long press presented multiple times");
     actions.menu = nil;
     [builder updateActionsButtonMenu];
-    NSCAssert(actions.menu.children.count == 3, @"Missing menu was not restored");
+    NSCAssert(actions.menu.children.count == 1, @"Missing menu was not restored");
     builder.model = @{@"mode": @"objectmode", @"canUndo": @YES,
                       @"actions": @[@{@"title": @"Move", @"operator": @"TRANSFORM_OT_translate"},
                                     @{@"title": @"X", @"key": @"X"}]};
@@ -359,12 +446,10 @@ int main()
     NSCAssert([radial[3][@"destructive"] boolValue], @"Lost destructive hint");
     NSCAssert(radial[4][@"image"] == nil, @"Unknown command gained an arbitrary icon");
     NSCAssert([builder radialItemsFromBlenderMenu:@[]].count == 0, @"Invented fallback actions");
-    for (NSString *name in expectedOperators) {
-      NSCAssert([iconKeys containsObject:[@"operator." stringByAppendingString:name]],
-                @"Operator icon requested using the wrong semantic key");
-    }
+    NSCAssert(radial[0][@"image"] == nil && radial[1][@"image"] == nil && radial[3][@"image"] == nil,
+              @"Iconless context entries gained guessed operator icons");
     builder.items = @[separator, separator];
-    NSCAssert([builder nativeBlenderContextMenuWithTitle:@"Actions"].children.count == 0,
+    NSCAssert(blenderIOSNativeMenuElements(builder.items).count == 0,
               @"Separator-only input produced blank entries");
     builder.shadingButton = [builder viewportShadingButton];
     NSArray *modes = @[@"wireframe", @"solid", @"material", @"rendered", @"solid"];
