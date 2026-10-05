@@ -22,6 +22,7 @@
 - (void)finishNumberScrub:(UITextField *)field;
 - (void)cancelNumberScrub;
 - (void)dismissShading;
+- (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)path leading:(BOOL)leading;
 - (void)handleToolbarHover:(UIHoverGestureRecognizer *)gesture;
 @end
 
@@ -153,6 +154,34 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     UIBarButtonItem *inspector = [panels valueForKey:@"inspectorButton"];
     UIBarButtonItem *hierarchy = [panels valueForKey:@"hierarchyButton"];
     NSString *action = request[@"action"];
+    NSMutableArray *swipeActions = [NSMutableArray array];
+    if ([action isEqual:@"hierarchy_swipe"]) {
+      UICollectionViewDiffableDataSource *source = [panels valueForKey:@"_treeDataSource"];
+      for (NSDictionary *node in [[panels valueForKey:@"_nodesByKey"] allValues]) {
+        if (![node[@"id"] isEqual:request[@"id"]]) { continue; }
+        NSIndexPath *path = [source indexPathForItemIdentifier:node[@"key"]];
+        if (!path) { continue; }
+        UISwipeActionsConfiguration *config = [panels hierarchySwipeActionsAtIndexPath:path leading:[request[@"leading"] boolValue]];
+        for (UIContextualAction *item in config.actions) {
+          [swipeActions addObject:@{@"title": item.title, @"destructive": @(item.style == UIContextualActionStyleDestructive),
+                                    @"fullSwipe": @(config.performsFirstActionWithFullSwipe)}];
+          if ([item.title isEqual:request[@"title"]]) {
+            item.handler(item, [panels valueForKey:@"_tree"], ^(BOOL success) {});
+          }
+        }
+        break;
+      }
+    }
+    if ([action isEqual:@"hierarchy_alert_text"]) {
+      UIAlertController *alert = (UIAlertController *)blenderPresentedController();
+      if ([alert isKindOfClass:UIAlertController.class]) {
+        alert.textFields.firstObject.text = request[@"value"];
+        [alert.textFields.firstObject sendActionsForControlEvents:UIControlEventEditingChanged];
+      }
+    }
+    if ([action isEqual:@"hierarchy_alert_close"]) {
+      [blenderPresentedController() dismissViewControllerAnimated:NO completion:nil];
+    }
     if ([action isEqual:@"inspector"] || [action isEqual:@"hierarchy"]) {
       UIBarButtonItem *button = [action isEqual:@"inspector"] ? inspector : hierarchy;
       [button.target performSelector:button.action withObject:button];
@@ -422,6 +451,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities,
       @"switches": switches,
       @"scrubs": scrubs,
+      @"swipeActions": swipeActions,
       @"shadingPresented": @(((UIViewController *)[scenePanels valueForKey:@"_shadingController"]).presentingViewController != nil),
       @"hierarchyClass": NSStringFromClass(tree.class), @"selectedObjects": selectedObjects,
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
