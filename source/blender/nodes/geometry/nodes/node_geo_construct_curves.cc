@@ -45,8 +45,9 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
   Curves *curves_id = bke::curves_new_nomain(bke::curves_new_no_attributes(points_num, 0));
   bke::CurvesGeometry &curves = curves_id->geometry.wrap();
 
-  const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(&positions_list.data());
-  if (positions_array_data) {
+  if (const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(
+          &positions_list.data()))
+  {
     /* Share the position data with the list to avoid copying it. */
     curves.attributes_for_write().add<float3>(
         "position",
@@ -62,6 +63,7 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
         bke::AttributeInitValue(*static_cast<const float3 *>(positions_single_value->value)));
   }
   else {
+    /* Use VArray for the general case. This might be slow, because it has to copy data. */
     curves.attributes_for_write().add<float3>(
         "position", bke::AttrDomain::Point, bke::AttributeInitVArray(positions_list.varray()));
   }
