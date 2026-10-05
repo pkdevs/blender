@@ -806,7 +806,7 @@ void do_version_image_datablock_strips(Main *bmain, Scene *scene)
     }
 
     if (strip->type == STRIP_TYPE_IMAGE) {
-      if (strip->data->dirpath == nullptr) {
+      if (strip->data->dirpath == nullptr || strip->data->stripdata == nullptr) {
         continue;
       }
 
@@ -821,7 +821,6 @@ void do_version_image_datablock_strips(Main *bmain, Scene *scene)
       strip->data->dirpath[0] = '\0';
       MEM_delete(strip->data->stripdata);
 
-      strip->type = STRIP_TYPE_IMAGE_ID;
       strip->image = img;
       id_us_ensure_real(id_cast<ID *>(img));
 
