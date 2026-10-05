@@ -51,20 +51,24 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
 
   const int points_num = positions_list->size();
   /* Curve offsets are shared with the list data. So don't create the offsets array here. */
-  Curves *curves_id = bke::curves_new_nomain(points_num, 0);
+  Curves *curves_id = bke::curves_new_nomain(bke::curves_new_no_attributes(points_num, 0));
   bke::CurvesGeometry &curves = curves_id->geometry.wrap();
 
   const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(&positions_list->data());
   if (positions_array_data) {
     /* Share the position data with the list to avoid copying it. */
-    curves.attributes_for_write().assign_data(
+    curves.attributes_for_write().add<float3>(
         "position",
+        bke::AttrDomain::Point,
         bke::AttributeInitShared(positions_array_data->data, *positions_array_data->sharing_info));
   }
   else if (const auto *positions_single_value = std::get_if<nodes::GList::SingleData>(
                &positions_list->data()))
   {
-    curves.positions_for_write().fill(*static_cast<const float3 *>(positions_single_value->value));
+    curves.attributes_for_write().add<float3>(
+        "position",
+        bke::AttrDomain::Point,
+        bke::AttributeInitValue(*static_cast<const float3 *>(positions_single_value->value)));
   }
   else {
     BLI_assert_unreachable();
