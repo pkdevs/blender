@@ -94,6 +94,11 @@ static bool get_thumb_dir(char *dir, ThumbSize size)
   }
   s += BLI_strncpy_rlen(s, home, FILE_MAX);
 
+#  if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* The iOS sandbox permits cache writes here, not directly under its home directory. */
+  s += BLI_strncpy_rlen(s, "/Library/Caches", FILE_MAX - (s - dir));
+#  endif
+
 #  ifdef USE_FREEDESKTOP
   if (!home_cache) {
     s += BLI_strncpy_rlen(s, "/.cache", FILE_MAX - (s - dir));
