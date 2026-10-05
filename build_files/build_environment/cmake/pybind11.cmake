@@ -7,6 +7,11 @@ set(PYBIND11_EXTRA_ARGS
   -DPYTHON_EXECUTABLE=${PYTHON_BINARY}
 )
 
+if(WITH_APPLE_CROSSPLATFORM)
+  # This target installs headers only; consumers select their target Python ABI.
+  list(APPEND PYBIND11_EXTRA_ARGS -DPYBIND11_NOPYTHON=ON)
+endif()
+
 ExternalProject_Add(external_pybind11
   URL file://${PACKAGE_DIR}/${PYBIND11_FILE}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
