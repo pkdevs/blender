@@ -307,6 +307,40 @@ def tests():
           not header(safe_id, 'show_safe_center')['editable'],
           'Disabled contents do not disable their parent enable switch')
     bpy.data.objects['Camera'].data.show_safe_center = False
+    ui(action='tab', id='RENDER')
+    yield 1.0
+    sampling_id = 'RENDER_PT_eevee_sampling'
+    if sampling_id not in ui()['expanded']:
+        ui(action='section', id=sampling_id)
+    yield 1.0
+    shadows_key = header(sampling_id, 'use_shadows')['key']
+    ui(action='scroll_property', key=shadows_key)
+    yield 0.5
+    for enabled in (False, True, False):
+        ui(action='toggle', key=shadows_key, value=enabled)
+        yield 0.7
+        switch_state = ui()['switches'][shadows_key]
+        check(bpy.context.scene.eevee.use_shadows == enabled and switch_state['on'] == enabled,
+              f'Native Shadows switch sets the Blender value to {enabled}')
+        check(switch_state['enabled'] and switch_state['hittable'],
+              f'Shadows switch remains enabled and touchable when its value is {enabled}')
+        rays = next(item for item in panel(sampling_id)['properties']
+                    if item.get('property') == 'shadow_ray_count')
+        check(bool(rays['editable']) == enabled,
+              f'Shadow settings follow the master switch when its value is {enabled}')
+    ui(action='section', id=sampling_id)
+    yield 0.7
+    ui(action='section', id=sampling_id)
+    yield 0.7
+    ui(action='scroll_property', key=shadows_key)
+    yield 0.5
+    switch_state = ui()['switches'][shadows_key]
+    check(switch_state['enabled'] and switch_state['hittable'] and not switch_state['on'],
+          'Reopening Sampling preserves the available Shadows enable switch')
+    ui(action='toggle', key=shadows_key, value=True)
+    yield 0.7
+    check(bpy.context.scene.eevee.use_shadows,
+          'Shadows can be re-enabled after reopening the disabled panel')
     cube = bpy.data.objects['Cube']
     ui(action='select', id=str(cube.session_uid))
     ui(action='tab', id='OBJECT')

@@ -174,6 +174,21 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       }
     }
     NSDictionary *controls = [panels valueForKey:@"_controls"];
+    if ([action isEqual:@"scroll_property"]) {
+      UIView *control = controls[request[@"key"]];
+      UITableView *form = [panels valueForKey:@"_form"];
+      NSArray *sections = [panels valueForKey:@"_formSections"];
+      for (NSUInteger section = 0; section < sections.count; section++) {
+        NSArray *rows = sections[section];
+        for (NSUInteger row = 0; row < rows.count; row++) {
+          if ([control isDescendantOfView:rows[row]] && [form numberOfRowsInSection:section] > row) {
+            [form scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:section]
+                       atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
+            [form layoutIfNeeded];
+          }
+        }
+      }
+    }
     NSString *lockMenuTitle = @"";
     NSMutableArray *propertyMenu = [NSMutableArray array];
     NSMutableArray *groupMenu = [NSMutableArray array];
@@ -251,7 +266,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     if ([action isEqual:@"toggle"]) {
       UISwitch *toggle = controls[request[@"key"]];
-      if ([toggle isKindOfClass:UISwitch.class]) {
+      if ([toggle isKindOfClass:UISwitch.class] && toggle.enabled) {
         toggle.on = [request[@"value"] boolValue];
         [toggle sendActionsForControlEvents:UIControlEventValueChanged];
       }
@@ -292,6 +307,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     NSMutableDictionary *values = [NSMutableDictionary dictionary];
     NSMutableDictionary *fieldIdentities = [NSMutableDictionary dictionary];
+    NSMutableDictionary *switches = [NSMutableDictionary dictionary];
     NSMutableDictionary *sliderValues = [NSMutableDictionary dictionary];
     for (NSString *key in [panels valueForKey:@"_sliders"]) {
       UISlider *slider = [panels valueForKey:@"_sliders"][key];
@@ -299,6 +315,14 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     for (NSString *key in controls) {
       id control = controls[key];
+      if ([control isKindOfClass:UISwitch.class]) {
+        UISwitch *toggle = control;
+        UIWindow *window = toggle.window;
+        CGPoint center = [toggle convertPoint:CGPointMake(CGRectGetMidX(toggle.bounds), CGRectGetMidY(toggle.bounds)) toView:window];
+        UIView *hit = [window hitTest:center withEvent:nil];
+        switches[key] = @{@"enabled": @(toggle.enabled), @"on": @(toggle.on),
+                          @"hittable": @(hit && [hit isDescendantOfView:toggle])};
+      }
       if ([control isKindOfClass:UITextField.class]) {
         NSDictionary *descriptor = [control valueForKey:@"descriptor"];
         NSString *semantic = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
@@ -316,6 +340,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
       @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities,
+      @"switches": switches,
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
       @"sliders": sliderValues,
