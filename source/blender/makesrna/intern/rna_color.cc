@@ -262,6 +262,11 @@ static std::optional<std::string> rna_ColorRamp_path(const PointerRNA *ptr)
                                                 static_cast<ColorBand *>(ptr->data));
       }
 
+      /* Grease Pencil gradients are stored under the #MaterialGPencilStyle the material. */
+      case ID_MA: {
+        return "grease_pencil.gradient";
+      }
+
       default:
         /* everything else just uses 'color_ramp' */
         return "color_ramp";
@@ -327,6 +332,16 @@ static std::optional<std::string> rna_ColorRampElement_path(const PointerRNA *pt
           COLRAMP_GETPATH;
         }
         listbase.free_no_destruct();
+        break;
+      }
+      case ID_MA: {
+
+        /** Grease Pencil gradients are stored under the #MaterialGPencilStyle the material.
+         * Create pointer to the ID block, and try to resolve "gradient" pointer. */
+        ramp_ptr = RNA_id_pointer_create(id);
+        if (RNA_path_resolve(&ramp_ptr, "grease_pencil.gradient", &ramp_ptr, &prop)) {
+          COLRAMP_GETPATH;
+        }
         break;
       }
 
@@ -753,14 +768,15 @@ static int rna_ColorManagedColorspaceSettings_interop_id_get(PointerRNA *ptr)
 {
   ColorManagedColorspaceSettings *colorspace = static_cast<ColorManagedColorspaceSettings *>(
       ptr->data);
-  return IMB_colormanagement_colorspace_get_interop_id_index(colorspace->name);
+  return IMB_colormanagement_colorspace_get_interop_id_index(colorspace->name,
+                                                             colorspace->interop_id);
 }
 
 static void rna_ColorManagedColorspaceSettings_interop_id_set(PointerRNA *ptr, int value)
 {
-  if (value != -1) {
-    rna_ColorManagedColorspaceSettings_colorspace_set(ptr, value);
-  }
+  ColorManagedColorspaceSettings *colorspace = static_cast<ColorManagedColorspaceSettings *>(
+      ptr->data);
+  IMB_colormanagement_colorspace_interop_id_set(colorspace->name, colorspace->interop_id, value);
 }
 
 static const EnumPropertyItem *rna_ColorManagedColorspaceSettings_interop_id_itemf(
