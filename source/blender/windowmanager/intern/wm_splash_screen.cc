@@ -289,6 +289,10 @@ static int is_using_macos_rosetta()
 
 static ui::Block *wm_block_splash_create(bContext *C, ARegion *region, void * /*arg*/)
 {
+  wmWindow *win = CTX_wm_window(C);
+
+  WM_window_dpi_set_userdef(win);
+
   const uiStyle *style = ui::style_get_dpi();
 
   ui::Block *block = block_begin(C, region, "splash", ui::EmbossType::Emboss);
@@ -300,7 +304,7 @@ static ui::Block *wm_block_splash_create(bContext *C, ARegion *region, void * /*
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
 
   int splash_width = style->widget.points * 45 * UI_SCALE_FAC;
-  CLAMP_MAX(splash_width, WM_window_native_pixel_x(CTX_wm_window(C)) * 0.7f);
+  CLAMP_MAX(splash_width, WM_window_native_pixel_x(win) * 0.7f);
   int splash_height;
 
   /* Would be nice to support caching this, so it only has to be re-read (and likely resized) on
