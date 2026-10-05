@@ -37,15 +37,15 @@ static void node_declare(NodeDeclarationBuilder &b)
 }
 
 static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
-                                                const GListPtr positions_list,
-                                                const GListPtr curve_offsets_list)
+                                                const List<float3> &positions_list,
+                                                const List<int> &curve_offsets_list)
 {
-  const int points_num = positions_list->size();
+  const int points_num = positions_list.size();
   /* Curve offsets are shared with the list data. So don't create the offsets array here. */
   Curves *curves_id = bke::curves_new_nomain(bke::curves_new_no_attributes(points_num, 0));
   bke::CurvesGeometry &curves = curves_id->geometry.wrap();
 
-  const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(&positions_list->data());
+  const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(&positions_list.data());
   if (positions_array_data) {
     /* Share the position data with the list to avoid copying it. */
     curves.attributes_for_write().add<float3>(
@@ -54,7 +54,7 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
         bke::AttributeInitShared(positions_array_data->data, *positions_array_data->sharing_info));
   }
   else if (const auto *positions_single_value = std::get_if<nodes::GList::SingleData>(
-               &positions_list->data()))
+               &positions_list.data()))
   {
     curves.attributes_for_write().add<float3>(
         "position",
@@ -66,10 +66,10 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
   }
 
   const auto *curve_offset_data = std::get_if<nodes::GList::ArrayData>(
-      &curve_offsets_list->data());
+      &curve_offsets_list.data());
   BLI_assert(curve_offset_data != nullptr);
 
-  const int curves_num = curve_offsets_list->size() - 1;
+  const int curves_num = curve_offsets_list.size() - 1;
   curves.attribute_storage.wrap().resize(AttrDomain::Curve, curves_num);
   /* Share the offset data with the list to avoid copying it. */
   implicit_sharing::copy_shared_pointer(
@@ -153,7 +153,8 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
   if (params.output_is_required("Curves"_ustr)) {
-    Curves *curves = create_curves_from_topology_info(params, positions_list, curve_offsets_list);
+    Curves *curves = create_curves_from_topology_info(
+        params, positions_list->typed<float3>(), curve_offsets_list->typed<int>());
     params.set_output("Curves"_ustr, GeometrySet::from_curves(curves));
   }
 }
