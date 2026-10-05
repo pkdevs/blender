@@ -781,22 +781,22 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
     bl_options = {'HIDE_HEADER'}
 
     @staticmethod
-    def metadata_prop(layout, asset_metadata, propname):
+    def metadata_prop(layout, asset_metadata, propname, initial_visible_lines: int = 1):
         """
         Only display properties that are either set or can be modified (i.e. the
         asset is in the current file). Empty, non-editable fields are not really useful.
         """
         if getattr(asset_metadata, propname) or not asset_metadata.is_property_readonly(propname):
-            split = layout.split(factor=0.4)
             ui_name = asset_metadata.rna_type.properties[propname].name
-            sub = split.row()
-            sub.alignment = 'RIGHT'
-            sub.label(text=ui_name)
             if asset_metadata.is_property_readonly(propname):
-                split.label_multiline(
-                    text=getattr(asset_metadata, propname))
+                split = layout.split(factor=layout.property_split_factor)
+                sub = split.row()
+                sub.alignment = 'RIGHT'
+                sub.label(text=ui_name)
+                split.label_multiline(text=getattr(asset_metadata, propname))
             else:
-                split.textbox(asset_metadata, propname, placeholder=ui_name)
+                layout.textbox(asset_metadata, propname, placeholder=ui_name,
+                               initial_visible_lines=initial_visible_lines)
 
     def draw(self, context):
         layout = self.layout
@@ -839,7 +839,7 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
             row.operator("asset.open_containing_blend_file", text="", icon='FILE_BLEND')
 
         metadata = asset.metadata
-        self.metadata_prop(layout, metadata, "description")
+        self.metadata_prop(layout, metadata, "description", initial_visible_lines=3)
         self.metadata_prop(layout, metadata, "license")
         self.metadata_prop(layout, metadata, "copyright")
         self.metadata_prop(layout, metadata, "author")
@@ -954,11 +954,6 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
             layout.operator("asset.assets_download", icon='DOWNLOAD')
             layout.separator()
 
-        layout.operator("asset.library_refresh", icon='FILE_REFRESH')
-        layout.operator("asset.library_reload_listing", text="Refresh Remote Listing")
-
-        layout.separator()
-
         sub = layout.column()
         sub.operator_context = 'EXEC_DEFAULT'
         sub.operator("asset.clear", text="Clear Asset").set_fake_user = False
@@ -968,6 +963,11 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
 
         layout.operator("asset.open_containing_blend_file", icon='FILE_BLEND')
         layout.operator("asset.browse_containing_blend_file")
+
+        layout.separator()
+
+        layout.operator("asset.library_refresh", icon='FILE_REFRESH')
+        layout.operator("asset.library_reload_listing", text="Refresh Remote Listing")
 
         layout.separator()
 
