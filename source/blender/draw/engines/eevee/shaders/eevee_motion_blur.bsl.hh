@@ -111,7 +111,7 @@ uint2 unpack_payload(uint payload)
  *
  * Adapted from G3D Innovation Engine implementation.
  */
-template<enum TextureWriteFormat velocity_format, bool flatten_rg>
+template<enum TextureWriteFormat velocity_format>
 [[compute, local_size(MOTION_BLUR_GROUP_SIZE, MOTION_BLUR_GROUP_SIZE)]]
 void flatten_comp([[resource_table]] Resources<velocity_format> &srt,
                   [[resource_table]] const draw::View &views,
@@ -139,7 +139,7 @@ void flatten_comp([[resource_table]] Resources<velocity_format> &srt,
   float2 uv = (float2(texel) + 0.5f) / render_size;
   float depth = reverse_z::read(texelFetch(srt.depth_tx, texel, 0).r);
   float4 motion = cam_vel.resolve(views, imageLoad(srt.velocity_img, texel), uv, depth);
-  if constexpr (flatten_rg) {
+  if constexpr (velocity_format == SFLOAT_16_16) {
     /* imageLoad does not perform the swizzling like sampler does. Do it manually. */
     motion = motion.xyxy;
   }
@@ -190,13 +190,13 @@ void flatten_comp([[resource_table]] Resources<velocity_format> &srt,
   }
 }
 
-template void flatten_comp<SFLOAT_16_16, true>(Resources<SFLOAT_16_16> &,
+template void flatten_comp<SFLOAT_16_16>(Resources<SFLOAT_16_16> &,
                                          const draw::View &,
                                          const uint3,
                                          const uint3,
                                          const uint3,
                                          const uint);
-template void flatten_comp<SFLOAT_16_16_16_16, false>(Resources<SFLOAT_16_16_16_16> &,
+template void flatten_comp<SFLOAT_16_16_16_16>(Resources<SFLOAT_16_16_16_16> &,
                                                const draw::View &,
                                                const uint3,
                                                const uint3,
@@ -570,7 +570,7 @@ void gather_comp([[resource_table]] Resources &srt,
 
 PipelineCompute eevee_motion_blur_tiles_dilate(eevee::motion_blur::dilate::dilate_comp);
 PipelineCompute eevee_motion_blur_tiles_flatten_rg(
-    eevee::motion_blur::flatten::flatten_comp<SFLOAT_16_16, true>);
+    eevee::motion_blur::flatten::flatten_comp<SFLOAT_16_16>);
 PipelineCompute eevee_motion_blur_tiles_flatten_rgba(
-    eevee::motion_blur::flatten::flatten_comp<SFLOAT_16_16_16_16, false>);
+    eevee::motion_blur::flatten::flatten_comp<SFLOAT_16_16_16_16>);
 PipelineCompute eevee_motion_blur_gather(eevee::motion_blur::gather::gather_comp);
