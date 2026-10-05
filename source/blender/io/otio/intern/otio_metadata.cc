@@ -13,6 +13,7 @@
 #include "BLI_string_ref.hh"
 
 #include "DNA_ID.h"
+#include "DNA_layer_types.h"
 #include "DNA_sequence_types.h"
 
 #include "RNA_access.hh"
