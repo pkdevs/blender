@@ -2665,7 +2665,7 @@ void operator_properties_ripple(wmOperatorType *ot, const eSeqRippleFlag options
     prop = RNA_def_boolean(
         ot->srna,
         "clear_ranges",
-        false,
+        true,
         "Clear Ranges",
         "Delete strip contents inside the removed ranges on rippled channels so later strips "
         "close the full gap, else ripple later strips only as far as they can");

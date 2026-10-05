@@ -1856,7 +1856,8 @@ struct SequencerToolSettings {
   eSequencerSnapMode snap_mode = {};
   eSequencerSnapFlag snap_flag = {};
   eSeqOverlapMode overlap_mode = SEQ_OVERLAP_RIPPLE;
-  eSeqRippleFlag ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS;
+  eSeqRippleFlag ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS |
+                               SEQ_RIPPLE_CLEAR_RANGES;
   /**
    * When there are many snap points,
    * 0-1 range corresponds to resolution from bound-box to all possible snap points.
