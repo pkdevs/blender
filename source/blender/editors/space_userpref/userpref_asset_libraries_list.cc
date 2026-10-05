@@ -180,7 +180,11 @@ void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
     label_row.label(IFACE_("Edit Project asset libraries in Project Settings."), ICON_NONE);
     ui::Layout &operator_row = label_row.row(false);
     operator_row.alignment_set(ui::LayoutAlign::Right);
-    operator_row.op("SCREEN_OT_project_setup_show", "Open Projects Settings", ICON_PROJECT, wm::OpCallContext::InvokeDefault, UI_ITEM_NONE);
+    operator_row.op("SCREEN_OT_project_setup_show",
+                    "Open Projects Settings",
+                    ICON_PROJECT,
+                    wm::OpCallContext::InvokeDefault,
+                    UI_ITEM_NONE);
   }
   else {
     layout.separator();
