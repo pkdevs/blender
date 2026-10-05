@@ -61,6 +61,8 @@ static Mesh *create_mesh_from_lists(GeoNodeExecParams &params,
   }
 
   if (faces_num > 0) {
+    /* If there are faces, we expect corner vertices. */
+    BLI_assert(corner_vertices_list);
     const auto *face_offset_data = std::get_if<nodes::GList::ArrayData>(&face_offset_list->data());
     BLI_assert(face_offset_data != nullptr);
 
@@ -71,6 +73,14 @@ static Mesh *create_mesh_from_lists(GeoNodeExecParams &params,
         &mesh->runtime->face_offsets_sharing_info);
 
     const Span<int> face_offsets = mesh->face_offsets();
+    if (face_offsets.last() != corner_vertices_list->size()) {
+      params.error_message_add(
+          NodeWarningType::Error,
+          "Total number of face vertices must be equal to number of corner vertices");
+      BKE_id_free_ex(nullptr, mesh, LIB_ID_FREE_NO_MAIN, false);
+      return nullptr;
+    }
+
     const bool sizes_greater_zero = threading::parallel_reduce(
         face_offsets.drop_back(1).index_range(),
         4096,
