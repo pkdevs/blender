@@ -40,15 +40,6 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
                                                 const GListPtr positions_list,
                                                 const GListPtr curve_offsets_list)
 {
-  const auto *curve_offset_data = std::get_if<nodes::GList::ArrayData>(
-      &curve_offsets_list->data());
-  if (!curve_offset_data) {
-    /* Offsets should contain array data. */
-    params.error_message_add(NodeWarningType::Error,
-                             "Curve offsets must have at least two values");
-    return nullptr;
-  }
-
   const int points_num = positions_list->size();
   /* Curve offsets are shared with the list data. So don't create the offsets array here. */
   Curves *curves_id = bke::curves_new_nomain(bke::curves_new_no_attributes(points_num, 0));
@@ -73,6 +64,10 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
   else {
     BLI_assert_unreachable();
   }
+
+  const auto *curve_offset_data = std::get_if<nodes::GList::ArrayData>(
+      &curve_offsets_list->data());
+  BLI_assert(curve_offset_data != nullptr);
 
   const int curves_num = curve_offsets_list->size() - 1;
   curves.attribute_storage.wrap().resize(AttrDomain::Curve, curves_num);
