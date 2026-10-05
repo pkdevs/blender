@@ -54,6 +54,34 @@ def tests():
                     if section['id'] == 'OBJECT_PT_transform')
 
     transforms = transform_fields()
+    def rotation_heading():
+        return next(item for item in transform_fields() if item.get('group_menu'))
+
+    heading = rotation_heading()
+    check(heading['group'] == 'Rotation' and heading['key'] in ui()['groupHeadings'],
+          'Rotation label is a native long-press menu target')
+    check(not any(item.get('property') == 'rotation_mode' for item in transforms),
+          'Rotation mode moves into the heading instead of a separate row')
+    options = ui(action='group_menu', key=heading['key'])['groupMenu']
+    check({item['id'] for item in options} == {'XYZ', 'XZY', 'YXZ', 'YZX', 'ZXY', 'ZYX', 'QUATERNION', 'AXIS_ANGLE'} and
+          [item['id'] for item in options if item['checked']] == ['XYZ'],
+          'Heading menu exposes all Blender rotation modes with the current mode checked')
+    ui(action='group_option', key=heading['key'], value='ZYX')
+    yield 1.0
+    check(bpy.data.objects['Cube'].rotation_mode == 'ZYX', 'Native Rotation heading changes the Blender rotation mode')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_undo')
+    yield 1.0
+    check(bpy.data.objects['Cube'].rotation_mode == 'XYZ', 'Rotation heading edits are undoable')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_redo')
+    yield 1.0
+    check(bpy.data.objects['Cube'].rotation_mode == 'ZYX', 'Rotation heading edits are redoable')
+    for order in ['XZY', 'YXZ', 'YZX', 'ZXY', 'XYZ']:
+        ui(action='group_option', key=rotation_heading()['key'], value=order)
+        yield 0.7
+        options = ui(action='group_menu', key=rotation_heading()['key'])['groupMenu']
+        check(bpy.data.objects['Cube'].rotation_mode == order and
+              [item['id'] for item in options if item['checked']] == [order],
+              'Native heading selects and checks Euler order ' + order)
     check(not any(item.get('property') in {'lock_location', 'lock_rotation', 'lock_scale'}
                   for item in transforms), 'Transform locks do not create separate toggle rows')
     for name, lock_name in [('location', 'lock_location'), ('rotation_euler', 'lock_rotation'),
@@ -81,8 +109,10 @@ def tests():
     yield 1.0
     check(not any(bpy.data.objects['Cube'].lock_location), 'Native Unlock action clears the Blender lock')
     for mode, prop in [('QUATERNION', 'rotation_quaternion'), ('AXIS_ANGLE', 'rotation_axis_angle')]:
-        bpy.data.objects['Cube'].rotation_mode = mode
+        ui(action='group_option', key=rotation_heading()['key'], value=mode)
         yield 1.0
+        check(bpy.data.objects['Cube'].rotation_mode == mode and rotation_heading()['group'] == 'Rotation',
+              'Native Rotation heading switches to ' + mode)
         fields = [item for item in transform_fields() if item.get('property') == prop]
         check(len(fields) == 4 and all(item['lock']['property'] ==
               ('lock_rotation_w' if item['index'] == 0 else 'lock_rotation') and
@@ -96,7 +126,7 @@ def tests():
         ui(action='property_lock', key=first['key'])
         yield 1.0
         check(not bpy.data.objects['Cube'].lock_rotation_w, mode + ' native W unlock works')
-    bpy.data.objects['Cube'].rotation_mode = 'XYZ'
+    ui(action='group_option', key=rotation_heading()['key'], value='XYZ')
     yield 1.0
 
     def curves(owner, path):

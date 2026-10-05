@@ -11,6 +11,7 @@
 @interface NSObject (BlenderResponsivenessTest)
 - (NSDictionary *)propertyForKey:(NSString *)key;
 - (NSArray<UIMenuElement *> *)menuActionsForProperty:(NSDictionary *)property;
+- (NSArray<UIMenuElement *> *)groupMenuActionsForProperty:(NSDictionary *)property;
 - (void)setToolbarExpanded:(BOOL)expanded animated:(BOOL)animated;
 - (void)handleViewGizmoHover:(UIHoverGestureRecognizer *)gesture;
 - (void)handleViewGizmoHold:(UILongPressGestureRecognizer *)gesture;
@@ -175,6 +176,17 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     NSDictionary *controls = [panels valueForKey:@"_controls"];
     NSString *lockMenuTitle = @"";
     NSMutableArray *propertyMenu = [NSMutableArray array];
+    NSMutableArray *groupMenu = [NSMutableArray array];
+    if ([action isEqual:@"group_menu"] || [action isEqual:@"group_option"]) {
+      NSDictionary *property = [panels propertyForKey:request[@"key"]];
+      for (UIAction *item in [panels groupMenuActionsForProperty:property]) {
+        [groupMenu addObject:@{@"id": item.identifier, @"title": item.title,
+                              @"checked": @(item.state == UIMenuElementStateOn)}];
+        if ([action isEqual:@"group_option"] && [item.identifier isEqual:request[@"value"]]) {
+          [item performWithSender:nil target:nil];
+        }
+      }
+    }
     if ([action isEqual:@"property_menu"] || [action isEqual:@"property_animation"]) {
       NSDictionary *property = [panels propertyForKey:request[@"key"]];
       for (UIAction *item in [panels menuActionsForProperty:property]) {
@@ -300,6 +312,8 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"sliders": sliderValues,
       @"lockMenu": lockMenuTitle,
       @"propertyMenu": propertyMenu,
+      @"groupMenu": groupMenu,
+      @"groupHeadings": [[panels valueForKey:@"_groupHeadings"] allKeys],
       @"tabs": [panels valueForKey:@"_tabs"] ?: @[],
       @"properties": [panels valueForKey:@"_snapshot"][@"inspector"] ?: @{},
       @"colorPicker": @([[panels valueForKey:@"_colorPicker"] isKindOfClass:UIColorPickerViewController.class]),
