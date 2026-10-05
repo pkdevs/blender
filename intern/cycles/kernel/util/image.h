@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include "kernel/device/cpu/compat.h"
-#include "kernel/device/cpu/globals.h"
 #include "kernel/util/image_2d.h"
 
 #include "util/defines.h"
