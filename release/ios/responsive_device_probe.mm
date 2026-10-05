@@ -127,6 +127,98 @@ static UIViewController *blenderPresentedController()
   return presented;
 }
 
+extern "C" char *blender_device_probe_scene_panels(const char *request_json)
+{
+  NSString *json = request_json ? [NSString stringWithUTF8String:request_json] : @"{}";
+  NSDictionary *request = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+                                                         options:0 error:nil];
+  __block char *result = nullptr;
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    id panels = [blenderController() valueForKey:@"_scene_panels"];
+    UIBarButtonItem *inspector = [panels valueForKey:@"inspectorButton"];
+    UIBarButtonItem *hierarchy = [panels valueForKey:@"hierarchyButton"];
+    NSString *action = request[@"action"];
+    if ([action isEqual:@"inspector"] || [action isEqual:@"hierarchy"]) {
+      UIBarButtonItem *button = [action isEqual:@"inspector"] ? inspector : hierarchy;
+      [button.target performSelector:button.action withObject:button];
+    }
+    if ([action isEqual:@"tab"]) {
+      UIStackView *tabs = [panels valueForKey:@"_tabsStack"];
+      for (UIButton *button in tabs.arrangedSubviews) {
+        if ([button.accessibilityIdentifier isEqual:request[@"id"]]) {
+          [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+        }
+      }
+    }
+    if ([action isEqual:@"section"]) {
+      UITableView *form = [panels valueForKey:@"_form"];
+      NSArray *identifiers = [panels valueForKey:@"_sectionIdentifiers"];
+      NSUInteger index = [identifiers indexOfObject:request[@"id"]];
+      if (index != NSNotFound) {
+        UIView *view = [form.delegate tableView:form viewForHeaderInSection:index];
+        UIButton *header = [view isKindOfClass:UIButton.class] ? (UIButton *)view :
+                            (UIButton *)((UIStackView *)view).arrangedSubviews.firstObject;
+        [header sendActionsForControlEvents:UIControlEventTouchUpInside];
+      }
+    }
+    NSDictionary *controls = [panels valueForKey:@"_controls"];
+    if ([action isEqual:@"toggle"]) {
+      UISwitch *toggle = controls[request[@"key"]];
+      if ([toggle isKindOfClass:UISwitch.class]) {
+        toggle.on = [request[@"value"] boolValue];
+        [toggle sendActionsForControlEvents:UIControlEventValueChanged];
+      }
+    }
+    NSArray *rows = [panels valueForKey:@"_rows"];
+    UITableView *tree = [panels valueForKey:@"_tree"];
+    if ([action isEqual:@"select"]) {
+      NSUInteger index = [rows indexOfObjectPassingTest:^BOOL(NSDictionary *row, NSUInteger index, BOOL *stop) {
+        return [row[@"id"] isEqual:request[@"id"]];
+      }];
+      if (index != NSNotFound) {
+        [tree.delegate tableView:tree didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:index inSection:0]];
+      }
+    }
+    if ([action isEqual:@"property"]) {
+      for (id control in controls.allValues) {
+        if (![control isKindOfClass:UITextField.class]) {
+          continue;
+        }
+        NSDictionary *descriptor = [control valueForKey:@"descriptor"];
+        NSString *key = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
+        if ([key isEqual:request[@"key"]]) {
+          UITextField *field = control;
+          field.text = request[@"value"];
+          [field sendActionsForControlEvents:UIControlEventEditingDidEnd];
+          break;
+        }
+      }
+    }
+    NSMutableDictionary *values = [NSMutableDictionary dictionary];
+    for (NSString *key in controls) {
+      id control = controls[key];
+      if ([control isKindOfClass:UITextField.class]) {
+        NSDictionary *descriptor = [control valueForKey:@"descriptor"];
+        NSString *semantic = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
+        values[semantic] = ((UITextField *)control).text ?: @"";
+      }
+    }
+    UIView *left = [panels valueForKey:@"_inspector"];
+    UIView *right = [panels valueForKey:@"_hierarchy"];
+    NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
+      @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
+      @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
+      @"tabs": [panels valueForKey:@"_tabs"] ?: @[],
+      @"properties": [panels valueForKey:@"_snapshot"][@"inspector"] ?: @{},
+      @"tab": [panels valueForKey:@"_selectedTab"] ?: @"",
+      @"sections": [panels valueForKey:@"_sectionIdentifiers"] ?: @[],
+      @"expanded": [[panels valueForKey:@"_expandedPanels"][[panels valueForKey:@"_selectedTab"] ?: @""] allObjects] ?: @[]};
+    NSData *data = [NSJSONSerialization dataWithJSONObject:snapshot options:0 error:nil];
+    result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
+  });
+  return result;
+}
+
 extern "C" char *blender_device_probe_view_gizmo(int action, int item)
 {
   __block char *result = nullptr;
@@ -322,8 +414,10 @@ extern "C" char *blender_device_probe_mesh_select(int index)
       @"selected": @(segments.selectedSegmentIndex), @"hidden": @(group.hidden),
       @"segments": @(segments.numberOfSegments), @"momentary": @(segments.momentary),
       @"names": names, @"frame": rectValues([segments convertRect:segments.bounds toView:controller.view]),
-      @"nextToMode": @(item.leadingItemGroups.count > 1 && item.leadingItemGroups[1] == group &&
-          item.leadingItemGroups[0].barButtonItems.firstObject == [controller valueForKey:@"_mode_button"]),
+      @"nextToMode": @([item.leadingItemGroups indexOfObject:group] > 0 &&
+          [item.leadingItemGroups indexOfObject:group] != NSNotFound &&
+          item.leadingItemGroups[[item.leadingItemGroups indexOfObject:group] - 1].barButtonItems.firstObject ==
+          [controller valueForKey:@"_mode_button"]),
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strndup((const char *)json.bytes, json.length);
