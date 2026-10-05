@@ -398,6 +398,26 @@ static bool ffmpeg_hw_codec_supports_device(const AVCodec *codec, const AVHWDevi
   return false;
 }
 
+static AVHWDeviceType ffmpeg_hw_device_type_forced()
+{
+  if (!USER_DEVELOPER_TOOL_TEST(&U, use_video_decoding_debug)) {
+    return AV_HWDEVICE_TYPE_NONE;
+  }
+  switch (U.video_decoding_device) {
+    case USER_VIDEO_DECODING_DEVICE_AUTOMATIC:
+      return AV_HWDEVICE_TYPE_NONE;
+    case USER_VIDEO_DECODING_DEVICE_VIDEOTOOLBOX:
+      return AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
+    case USER_VIDEO_DECODING_DEVICE_D3D11VA:
+      return AV_HWDEVICE_TYPE_D3D11VA;
+    case USER_VIDEO_DECODING_DEVICE_CUDA:
+      return AV_HWDEVICE_TYPE_CUDA;
+    case USER_VIDEO_DECODING_DEVICE_VULKAN:
+      return AV_HWDEVICE_TYPE_VULKAN;
+  }
+  return AV_HWDEVICE_TYPE_NONE;
+}
+
 static void ffmpeg_hw_setup_decode(const MovieReader *anim,
                                    AVCodecContext *codec_ctx,
                                    const AVCodec *codec)
@@ -411,7 +431,12 @@ static void ffmpeg_hw_setup_decode(const MovieReader *anim,
   if (pix_fmt_name == nullptr) {
     pix_fmt_name = "unknown";
   }
-  for (const AVHWDeviceType device_type : ffmpeg_hw_device_types) {
+  const AVHWDeviceType forced_device_type = ffmpeg_hw_device_type_forced();
+  const Span<AVHWDeviceType> device_types = forced_device_type != AV_HWDEVICE_TYPE_NONE ?
+                                                Span(&forced_device_type, 1) :
+                                                Span(ffmpeg_hw_device_types,
+                                                     ARRAY_SIZE(ffmpeg_hw_device_types));
+  for (const AVHWDeviceType device_type : device_types) {
     if (!ffmpeg_hw_codec_supports_device(codec, device_type)) {
       continue;
     }

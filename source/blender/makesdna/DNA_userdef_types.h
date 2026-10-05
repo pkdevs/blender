@@ -564,6 +564,14 @@ enum eUserpref_SeqProxySetup : short {
   USER_SEQ_PROXY_SETUP_AUTOMATIC = 1,
 };
 
+enum eUserpref_VideoDecodingDevice : short {
+  USER_VIDEO_DECODING_DEVICE_AUTOMATIC = 0,
+  USER_VIDEO_DECODING_DEVICE_VIDEOTOOLBOX = 1,
+  USER_VIDEO_DECODING_DEVICE_D3D11VA = 2,
+  USER_VIDEO_DECODING_DEVICE_CUDA = 3,
+  USER_VIDEO_DECODING_DEVICE_VULKAN = 4,
+};
+
 enum eUserpref_SeqEditorFlags : int {
   USER_SEQ_ED_UNUSED_0 = (1 << 0), /* Dirty. */
   USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT = (1 << 1),
@@ -886,6 +894,7 @@ struct UserDef_Experimental {
   char write_legacy_blend_file_format = 0;
   char no_data_block_packing = 0;
   char use_paint_debug = 0;
+  char use_video_decoding_debug = 0;
   char SANITIZE_AFTER_HERE = {};
   /**
    * The following options are automatically sanitized (set to 0)
@@ -901,7 +910,7 @@ struct UserDef_Experimental {
    */
   char use_remote_asset_libraries = 1;
   char use_collection_importer = 0;
-  char _pad[4] = {};
+  char _pad[3] = {};
 };
 
 #define USER_EXPERIMENTAL_TEST(userdef, member) (((userdef)->experimental).member)
@@ -1300,7 +1309,7 @@ struct UserDef {
   float sequencer_default_strip_length = 1.0f;
 
   eUserpref_SeqProxySetup sequencer_proxy_setup = USER_SEQ_PROXY_SETUP_AUTOMATIC;
-  short _pad1 = {};
+  eUserpref_VideoDecodingDevice video_decoding_device = USER_VIDEO_DECODING_DEVICE_AUTOMATIC;
 
   float collection_instance_empty_size = 1.0f;
   eTextEdit_Flags text_flag = {};
