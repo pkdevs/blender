@@ -532,7 +532,9 @@ void ntreeExecGPUNodes(bNodeTreeExec *exec,
 
     do_it = false;
     /* for groups, only execute outputs for edited group */
-    if (node->typeinfo->nclass == NODE_CLASS_OUTPUT) {
+    if (node->typeinfo->nclass == NODE_CLASS_OUTPUT &&
+        node->type_legacy != SH_NODE_LIGHT_ACCUMULATION_AOV)
+    {
       if ((output_node != nullptr) && (node == output_node)) {
         do_it = true;
       }

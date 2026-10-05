@@ -204,8 +204,6 @@ struct GPUNodeGraph {
   /* List of GPUNodeGraphOutputLink */
   ListBaseT<GPUNodeGraphOutputLink> outlink_compositor;
 
-  int light_accumulation_aovs_count;
-
   /* Requested attributes and textures. */
   ListBaseT<GPUMaterialAttribute> attributes;
   ListBaseT<GPUMaterialTexture> textures;

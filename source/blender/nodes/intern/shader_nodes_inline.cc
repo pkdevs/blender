@@ -379,6 +379,10 @@ class ShaderNodesInliner {
             continue;
           }
           for (const bNodeSocket *socket : node->input_sockets()) {
+            if (StringRefNull("LightAccumulation") == socket->name) {
+              /* TODO: Find a cleaner solution. */
+              continue;
+            }
             output_sockets.append({tree.context, socket});
           }
         }
@@ -393,6 +397,7 @@ class ShaderNodesInliner {
         add_output_type("ShaderNodeOutputMaterial"_ustr);
         add_output_type("ShaderNodeOutputLight"_ustr);
         add_output_type("ShaderNodeOutputAOV"_ustr);
+        add_output_type("ShaderNodeLightAccumulationAOV"_ustr);
         break;
       case ID_WO:
         add_output_type("ShaderNodeOutputWorld"_ustr);

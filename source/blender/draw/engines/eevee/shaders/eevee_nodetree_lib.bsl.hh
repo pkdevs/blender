@@ -55,11 +55,6 @@ struct Raycast {
 
 }
 
-struct LightAccumulationAOV {
-  packed_float3 light;
-  uint hash;
-};
-
 struct LightAccumulation {
   packed_float3 diffuse_light;
   packed_float3 diffuse_color;
@@ -68,7 +63,6 @@ struct LightAccumulation {
   packed_float3 transmission_light;
   packed_float3 transmission_color;
   int light_accumulation_count;
-  [[capacity(light_accumulation_aov_count)]] LightAccumulationAOV aovs[AOV_MAX];
 };
 
 struct ShadingData {
@@ -1302,24 +1296,6 @@ void node_light_accumulation_impl(KernelGlobals &kg,
     sd.light_accum.glossy_color += glossy_color_weight;
     sd.light_accum.transmission_color += transmission_color_weight;
     sd.light_accum.light_accumulation_count++;
-  }
-#endif
-
-  result = Closure(0);
-}
-
-void node_light_accumulation_aov_impl(KernelGlobals &kg,
-                                      ShadingData &sd,
-                                      const int light_index,
-                                      float3 light,
-                                      uint hash,
-                                      uint light_accumulation_aov_index,
-                                      Closure &result)
-{
-#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
-  if (kg.pipe.use_light_accumulation_aovs) [[static_branch]] {
-    sd.light_accum.aovs[light_accumulation_aov_index].hash = hash;
-    sd.light_accum.aovs[light_accumulation_aov_index].light += light;
   }
 #endif
 

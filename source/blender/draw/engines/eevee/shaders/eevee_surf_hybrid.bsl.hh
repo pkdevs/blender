@@ -234,19 +234,6 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
       sd.emission += sd.light_accum.transmission_light;
     }
 #endif
-
-    if (kg.pipe.use_light_accumulation_aovs) [[static_branch]] {
-      for (int i = 0; i < kg.pipe.light_accumulation_aov_count; i++) {
-        // TODO: Check if sd.holdout is correct at this point.
-        output_aov(kg,
-                   out_texel,
-                   float4(sd.light_accum.aovs[i].light, 1.0f),
-                   0.0f,
-                   sd.light_accum.aovs[i].hash,
-                   sd.holdout,
-                   ob_flag);
-      }
-    }
   }
 
   /* ----- GBuffer output ----- */

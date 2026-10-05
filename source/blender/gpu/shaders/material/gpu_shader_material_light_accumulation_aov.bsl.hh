@@ -8,20 +8,9 @@
 #include "gpu_shader_utildefines.bsl.hh"
 
 [[node]]
-void node_light_accumulation_aov(const float light_index,
-                                 float4 light,
-                                 float hash,
-                                 float light_accumulation_aov_index,
-                                 [[resource_table]] KernelGlobals &kg,
-                                 ShadingData &sd,
-                                 Closure &result)
+void node_light_accumulation_aov(float4 light_accumulated, float4 light, float4 &result)
 {
   light = max(light, float4(0.0f));
-  node_light_accumulation_aov_impl(kg,
-                                   sd,
-                                   int(light_index),
-                                   light.rgb,
-                                   floatBitsToUint(hash),
-                                   int(light_accumulation_aov_index),
-                                   result);
+  result = light + light_accumulated;
+  result.a = 1.0f;
 }

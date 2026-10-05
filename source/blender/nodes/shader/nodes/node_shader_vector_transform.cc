@@ -115,6 +115,7 @@ static int gpu_shader_vect_transform(GPUMaterial *mat,
 
   if (has_light_space && !in[0].link) {
     /* Error: not linked to a light accumulation node */
+    BLI_assert_unreachable();
     return false;
   }
 

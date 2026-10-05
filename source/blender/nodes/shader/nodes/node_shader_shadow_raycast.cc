@@ -36,6 +36,7 @@ static int node_shader_gpu_shadow_raycast(GPUMaterial *mat,
 {
   if (!in[0].link) {
     /* Error: not linked to a light accumulation node */
+    BLI_assert_unreachable();
     return false;
   }
 

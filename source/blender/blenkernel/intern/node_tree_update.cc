@@ -1007,7 +1007,8 @@ class NodeTreeMainUpdater {
       for (const UString idname : {"ShaderNodeOutputMaterial"_ustr,
                                    "ShaderNodeOutputLight"_ustr,
                                    "ShaderNodeOutputWorld"_ustr,
-                                   "ShaderNodeOutputAOV"_ustr})
+                                   "ShaderNodeOutputAOV"_ustr,
+                                   "ShaderNodeLightAccumulationAOV"_ustr})
       {
         const Span<const bNode *> nodes = ntree.nodes_by_type(idname);
         if (!nodes.is_empty()) {

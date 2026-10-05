@@ -28,11 +28,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
-  b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
+  b.add_input<decl::Color>("LightAccumulation"_ustr).available(is_gpu_internal);
 
   b.add_input<decl::Color>("Light"_ustr).default_value({0.0f, 0.0f, 0.0f, 1.0f}).hide_value();
 
-  b.add_output<decl::Shader>("Shader"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Color>("Result"_ustr).available(is_gpu_internal);
 }
 
 static BIFIconID aov_icon(const ViewLayer *view_layer, PointerRNA *ptr)
@@ -79,30 +79,13 @@ static int node_shader_gpu_light_accumulation_aov(GPUMaterial *mat,
                                                   GPUNodeStack *out)
 {
   if (!in[0].link) {
-    /* Error: not linked to a light accumulation node */
+    /* Error: not linked to light_iter_internal. */
+    BLI_assert_unreachable();
     return false;
   }
 
-  GPUNodeLink *outlink;
-  NodeShaderOutputAOV *aov = static_cast<NodeShaderOutputAOV *>(node->storage);
-  uint hash = BLI_hash_string(aov->name);
-  /* WORKAROUND: We don't support int/uint constants for now. So make sure the aliasing works.
-   * We cast back to uint in GLSL. */
-  GPUNodeLink *hash_link = GPU_constant(reinterpret_cast<float *>(&hash));
-
-  GPU_material_flag_set(mat, GPU_MATFLAG_AOV | GPU_MATFLAG_OBJECT_INFO | GPU_MATFLAG_LIGHTING);
-  int light_accumulation_aov_index = GPU_material_add_output_link_light_accumulation_aov(
-      mat, outlink, hash);
-
-  return GPU_stack_link(mat,
-                        node,
-                        "node_light_accumulation_aov",
-                        in,
-                        out,
-                        GPU_kernel_globals(),
-                        GPU_shading_data(),
-                        light_accumulation_aov_index,
-                        hash);
+  GPU_material_flag_set(mat, GPU_MATFLAG_LIGHTING);
+  return GPU_stack_link(mat, node, "node_light_accumulation_aov", in, out);
 }
 
 }  // namespace nodes::node_shader_light_accumulation_aov_cc

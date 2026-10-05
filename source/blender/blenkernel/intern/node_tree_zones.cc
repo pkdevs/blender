@@ -348,7 +348,8 @@ static std::unique_ptr<bNodeTreeZones> discover_tree_zones(const bNodeTree &tree
                                       "ShaderNodeOutputMaterial"_ustr,
                                       "ShaderNodeOutputLight"_ustr,
                                       "ShaderNodeOutputWorld"_ustr,
-                                      "ShaderNodeOutputAOV"_ustr})
+                                      "ShaderNodeOutputAOV"_ustr,
+                                      "ShaderNodeLightAccumulationAOV"_ustr})
   {
     for (const bNode *node : tree.nodes_by_type(output_idname)) {
       if (tree_zones->zone_by_node_id.contains(node->identifier)) {
