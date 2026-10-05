@@ -145,7 +145,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 @interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate,
                                    UISearchBarDelegate, UITextFieldDelegate,
-                                   UIColorPickerViewControllerDelegate, UIPopoverPresentationControllerDelegate>
+                                   UIColorPickerViewControllerDelegate, UIPopoverPresentationControllerDelegate,
+                                   UIContextMenuInteractionDelegate>
 @end
 
 @implementation GHOSTIOSScenePanels {
@@ -172,6 +173,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSString *_objectID;
   NSMutableDictionary *_controls;
   NSMutableDictionary *_sliders;
+  NSMutableDictionary *_lockIndicators;
   uint64_t _sequence;
   BOOL _showInspector, _showHierarchy;
   CGRect _layoutRect;
@@ -188,6 +190,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     _collapsed = [[NSMutableSet alloc] init];
     _controls = [[NSMutableDictionary alloc] init];
     _sliders = [[NSMutableDictionary alloc] init];
+    _lockIndicators = [[NSMutableDictionary alloc] init];
     _expandedPanels = [[NSMutableDictionary alloc] init];
     _inspectorButton = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"sidebar.right"]
         style:UIBarButtonItemStylePlain target:self action:@selector(toggleInspector:)];
@@ -270,6 +273,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_collapsed release];
   [_controls release];
   [_sliders release];
+  [_lockIndicators release];
   [_formSections release];
   [_headerControls release];
   [_menuProvider release];
@@ -454,6 +458,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSMutableArray *identifiers = [NSMutableArray array];
   [_controls removeAllObjects];
   [_sliders removeAllObjects];
+  [_lockIndicators removeAllObjects];
   _status = [self label:@"" style:UIFontTextStyleFootnote];
   _status.textColor = UIColor.systemRedColor;
   _status.hidden = YES;
@@ -624,6 +629,20 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       row.spacing = vector ? 4 : 10;
       row.axis = UILayoutConstraintAxisHorizontal;
       row.alignment = UIStackViewAlignmentCenter;
+      if (property[@"lock"]) {
+        UIImage *image = _icon(@"LOCKED") ?: [UIImage systemImageNamed:@"lock.fill"];
+        UIImageView *indicator = [[[UIImageView alloc] initWithImage:image] autorelease];
+        indicator.contentMode = UIViewContentModeScaleAspectFit;
+        indicator.tintColor = UIColor.secondaryLabelColor;
+        indicator.isAccessibilityElement = NO;
+        [indicator.widthAnchor constraintEqualToConstant:12].active = YES;
+        [indicator.heightAnchor constraintEqualToConstant:12].active = YES;
+        [row insertArrangedSubview:indicator atIndex:1];
+        _lockIndicators[key] = indicator;
+        row.accessibilityIdentifier = key;
+        [row addInteraction:[[[UIContextMenuInteraction alloc] initWithDelegate:self] autorelease]];
+        control.accessibilityHint = @"Touch and hold for Lock or Unlock.";
+      }
       if (vector) {
         label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
         [label setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
@@ -827,6 +846,82 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)finishNumber:(id)sender { [_inspector endEditing:YES]; }
 
+- (NSDictionary *)propertyForKey:(NSString *)key
+{
+  for (NSDictionary *section in _snapshot[@"inspector"][@"sections"]) {
+    for (NSDictionary *property in section[@"properties"]) {
+      if ([[self keyForProperty:property] isEqual:key]) {
+        return property;
+      }
+    }
+  }
+  return nil;
+}
+
+- (UIAction *)lockActionForProperty:(NSDictionary *)property
+{
+  NSDictionary *lock = property[@"lock"];
+  if (!lock) {
+    return nil;
+  }
+  BOOL locked = [lock[@"value"] boolValue];
+  NSString *key = [self keyForProperty:property];
+  NSString *objectID = _objectID;
+  __block GHOSTIOSScenePanels *owner = self;
+  UIAction *action = [UIAction actionWithTitle:locked ? @"Unlock" : @"Lock"
+      image:_icon(locked ? @"UNLOCKED" : @"LOCKED") ?: [UIImage systemImageNamed:locked ? @"lock.open" : @"lock"]
+      identifier:@"blender.property.lock" handler:^(__kindof UIAction *selected) {
+    NSDictionary *current = [owner propertyForKey:key];
+    if (![owner->_objectID isEqual:objectID] ||
+        ![current[@"lock"][@"key"] isEqual:lock[@"key"]] ||
+        ![current[@"lock"][@"editable"] boolValue]) {
+      return;
+    }
+    [owner->_inspector endEditing:YES];
+    [owner editProperty:current[@"lock"] object:objectID value:@(!locked)];
+  }];
+  if (![lock[@"editable"] boolValue]) {
+    action.attributes = UIMenuElementAttributesDisabled;
+  }
+  return action;
+}
+
+- (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+                       configurationForMenuAtLocation:(CGPoint)location
+{
+  NSString *key = interaction.view.accessibilityIdentifier;
+  NSDictionary *property = [self propertyForKey:key];
+  if (!property[@"lock"]) {
+    return nil;
+  }
+  NSString *objectID = _objectID;
+  __block GHOSTIOSScenePanels *owner = self;
+  return [UIContextMenuConfiguration configurationWithIdentifier:key previewProvider:nil
+      actionProvider:^UIMenu *(NSArray<UIMenuElement *> *suggested) {
+    if (![owner->_objectID isEqual:objectID]) {
+      return nil;
+    }
+    NSDictionary *current = [owner propertyForKey:key];
+    UIAction *action = [owner lockActionForProperty:current];
+    NSString *title = current[@"group"] ? [NSString stringWithFormat:@"%@ %@", current[@"group"], current[@"label"]] : current[@"label"];
+    return action ? [UIMenu menuWithTitle:title children:@[action]] : nil;
+  }];
+}
+
+- (UIMenu *)textField:(UITextField *)textField
+    editMenuForCharactersInRanges:(NSArray<NSValue *> *)ranges
+                suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions
+{
+  NSDictionary *property = [self propertyForKey:[self keyForProperty:((GHOSTIOSPropertyField *)textField).descriptor]];
+  UIAction *lock = [self lockActionForProperty:property];
+  if (!lock) {
+    return [UIMenu menuWithChildren:suggestedActions];
+  }
+  NSMutableArray *items = [NSMutableArray arrayWithObject:lock];
+  [items addObjectsFromArray:suggestedActions];
+  return [UIMenu menuWithChildren:items];
+}
+
 - (void)displaySliderValue:(GHOSTIOSPropertySlider *)slider value:(double)value
 {
   GHOSTIOSPropertyField *field = _controls[[self keyForProperty:slider.descriptor]];
@@ -994,6 +1089,11 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       NSMutableDictionary *shape = [[property mutableCopy] autorelease];
       [shape removeObjectForKey:@"value"];
       [shape removeObjectForKey:@"exposure"];
+      if (shape[@"lock"]) {
+        NSMutableDictionary *lockShape = [[shape[@"lock"] mutableCopy] autorelease];
+        [lockShape removeObjectForKey:@"value"];
+        shape[@"lock"] = lockShape;
+      }
       [schema addObject:shape];
     }
   }
@@ -1015,6 +1115,11 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       UIControl *control = _controls[[self keyForProperty:property]];
       GHOSTIOSPropertySlider *slider = _sliders[[self keyForProperty:property]];
       id value = property[@"value"];
+      if (property[@"lock"]) {
+        BOOL locked = [property[@"lock"][@"value"] boolValue];
+        ((UIImageView *)_lockIndicators[[self keyForProperty:property]]).alpha = locked ? 1 : 0;
+        control.accessibilityLabel = [NSString stringWithFormat:@"%@ %@%@", section[@"title"], property[@"label"], locked ? @", Locked" : @""];
+      }
       if (slider && !slider.editing && !control.isFirstResponder) {
         slider.descriptor = property;
         [slider setPropertyValue:[value doubleValue]];

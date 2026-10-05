@@ -197,6 +197,48 @@ int main()
     UITextField *angleField = [panels valueForKey:@"_controls"][@"angle"];
     NSCAssert([[formatter numberFromString:angleField.text] doubleValue] == 45,
               @"Angle numeric field displays degrees");
+    NSMutableDictionary *lockModel = [[acknowledged mutableCopy] autorelease];
+    lockModel[@"ack"] = [panels valueForKey:@"_sequence"];
+    NSMutableDictionary *lockProperty = [@{@"key": @"location-x", @"property": @"location", @"index": @0,
+      @"label": @"X", @"group": @"Location", @"type": @"FLOAT", @"value": @0, @"editable": @YES,
+      @"lock": @{@"key": @"lock-location-x", @"property": @"lock_location", @"index": @0,
+                  @"type": @"BOOLEAN", @"native": @YES, @"editable": @YES, @"value": @NO}} mutableCopy];
+    lockModel[@"inspector"] = @{@"id": @"locked-object", @"name": @"Properties",
+      @"sections": @[@{@"id": @"transform", @"title": @"Transform", @"open": @YES, @"properties": @[lockProperty]}]};
+    [panels updateSnapshot:lockModel];
+    UITextField *lockField = [panels valueForKey:@"_controls"][@"location-x"];
+    UIContextMenuInteraction *interaction = nil;
+    for (id item in lockField.superview.interactions) {
+      if ([item isKindOfClass:UIContextMenuInteraction.class]) { interaction = item; }
+    }
+    NSCAssert(interaction && [interaction.delegate contextMenuInteraction:interaction configurationForMenuAtLocation:CGPointZero],
+              @"Corresponding property row supports a native long-press context menu");
+    UIMenu *lockMenu = [lockField.delegate textField:lockField editMenuForCharactersInRanges:@[] suggestedActions:@[]];
+    UIAction *lockAction = (UIAction *)lockMenu.children.firstObject;
+    NSCAssert([lockAction.title isEqual:@"Lock"] && [[panels valueForKey:@"_controls"] count] == 1,
+              @"Lock appears in the menu, without a separate lock toggle");
+    [lockAction performWithSender:lockField target:nil];
+    NSCAssert([request[@"key"] isEqual:@"lock-location-x"] && [request[@"value"] boolValue],
+              @"Context menu changes the exact axis lock through the engine queue");
+    lockProperty[@"lock"] = @{@"key": @"lock-location-x", @"property": @"lock_location", @"index": @0,
+                                @"type": @"BOOLEAN", @"native": @YES, @"editable": @YES, @"value": @YES};
+    lockModel[@"ack"] = [panels valueForKey:@"_sequence"];
+    [panels updateSnapshot:lockModel];
+    NSCAssert([panels valueForKey:@"_controls"][@"location-x"] == lockField &&
+              [[panels valueForKey:@"_lockIndicators"][@"location-x"] alpha] == 1,
+              @"Lock indicator updates without rebuilding controls");
+    lockMenu = [lockField.delegate textField:lockField editMenuForCharactersInRanges:@[] suggestedActions:@[]];
+    UIAction *unlockAction = (UIAction *)lockMenu.children.firstObject;
+    NSCAssert([unlockAction.title isEqual:@"Unlock"], @"Locked properties offer Unlock");
+    [unlockAction performWithSender:lockField target:nil];
+    NSCAssert(![request[@"value"] boolValue], @"Unlock queues the inverse lock value");
+    NSDictionary *beforeStaleMenu = request;
+    lockModel[@"ack"] = [panels valueForKey:@"_sequence"];
+    lockModel[@"inspector"] = @{@"id": @"other-object", @"name": @"Properties", @"sections": @[]};
+    [panels updateSnapshot:lockModel];
+    [lockAction performWithSender:nil target:nil];
+    NSCAssert(request == beforeStaleMenu, @"A stale menu cannot change the newly selected object");
+    [lockProperty release];
     [panels layoutInRect:CGRectMake(0, 60, 390, 600)];
     NSCAssert(!(panels.inspectorButton.selected && panels.hierarchyButton.selected), @"Phone panels do not overlap");
     tap(panels.hierarchyButton);
