@@ -53,6 +53,12 @@ static bool custom_library_is_valid(const bUserAssetLibrary *user_library)
     return false;
   }
 
+  if (USER_EXPERIMENTAL_TEST(&U, use_blender_projects) &&
+      (user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED))
+  {
+    return false;
+  }
+
   return BKE_preferences_asset_library_is_valid(
       &U,
       user_library,
@@ -129,6 +135,9 @@ static void rna_enum_add_custom_libraries(EnumPropertyItem **item,
   }
 
   if (!have_project_libraries) {
+    return;
+  }
+  if (!USER_EXPERIMENTAL_TEST(&U, use_blender_projects)) {
     return;
   }
   RNA_enum_item_add_separator(item, totitem);

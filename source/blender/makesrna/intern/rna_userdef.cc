@@ -7926,6 +7926,11 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
       prop, "Collection Import", "Enables a file importer to be configured on a Collection");
   RNA_def_property_update(prop, 0, "rna_userdef_ui_update");
 
+  prop = RNA_def_property(srna, "use_blender_projects", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop, "Blender Projects", "Enable the Blender project setup and usage UIs");
+  RNA_def_property_update(prop, 0, "rna_userdef_update");
+
   prop = RNA_def_property(srna, "use_extensions_debug", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_ui_text(
       prop,

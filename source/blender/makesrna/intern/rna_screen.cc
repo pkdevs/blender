@@ -218,6 +218,11 @@ static const EnumPropertyItem *rna_Area_ui_type_itemf(bContext *C,
       continue;
     }
 
+    /* Hide the project setup editor when the project support experimental feature is disabled. */
+    if ((item_from->value == SPACE_PROJECT) && !USER_EXPERIMENTAL_TEST(&U, use_blender_projects)) {
+      continue;
+    }
+
     SpaceType *st = item_from->identifier[0] ? BKE_spacetype_from_id(item_from->value) : nullptr;
     int totitem_prev = totitem;
     if (C && st && st->space_subtype_item_extend != nullptr) {

@@ -38,6 +38,13 @@ template<typename AssetLibraryListItemType> struct AssetLibraryList : public ui:
 
     int i = 0;
     for (const AnyAssetLibraryDefinition &library : libraries) {
+      /* Skip project defined libraries when the project support experimental feature is disabled
+       * (should hide all project related stuff from the UI). */
+      if (library.user_library && library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED &&
+          !USER_EXPERIMENTAL_TEST(&U, use_blender_projects))
+      {
+        continue;
+      }
       add_tree_item<AssetLibraryListItemType>(library, i++);
     }
   }

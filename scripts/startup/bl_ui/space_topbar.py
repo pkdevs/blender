@@ -121,7 +121,7 @@ class TOPBAR_MT_editor_menus(Menu):
 
         layout.menu("TOPBAR_MT_render")
 
-        if bpy.data.project:
+        if context.preferences.experimental.use_blender_projects and bpy.data.project:
             layout.menu("TOPBAR_MT_project")
 
         layout.menu("TOPBAR_MT_window")
@@ -198,9 +198,10 @@ class TOPBAR_MT_file(Menu):
 
         layout.separator()
 
-        layout.menu("TOPBAR_MT_file_project", icon='PROJECT')
+        if context.preferences.experimental.use_blender_projects:
+            layout.menu("TOPBAR_MT_file_project", icon='PROJECT')
 
-        layout.separator()
+            layout.separator()
 
         layout.menu("TOPBAR_MT_file_import", icon='IMPORT')
         layout.menu("TOPBAR_MT_file_export", icon='EXPORT')

@@ -900,7 +900,8 @@ struct UserDef_Experimental {
    */
   char use_remote_asset_libraries = 1;
   char use_collection_importer = 0;
-  char _pad[4] = {};
+  char use_blender_projects = 0;
+  char _pad[3] = {};
 };
 
 #define USER_EXPERIMENTAL_TEST(userdef, member) (((userdef)->experimental).member)

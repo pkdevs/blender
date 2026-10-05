@@ -8,6 +8,8 @@
 
 #include "BLI_path_utils.hh"
 
+#include "DNA_userdef_types.h"
+
 #include "testing/testing.h"
 
 namespace blender::bke::tests {
@@ -19,6 +21,7 @@ class BlenderProjectTest : public bke::BlenderGTestBase {
   void SetUp() override
   {
     bmain = BKE_main_new();
+    U.experimental.use_blender_projects = true;
   }
 
   void TearDown() override

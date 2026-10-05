@@ -411,6 +411,10 @@ bool BKE_blender_project_init(blender::StringRef name, blender::StringRef root_p
 
   BKE_blender_project_clear();
 
+  if (!USER_EXPERIMENTAL_TEST(&U, use_blender_projects)) {
+    return false;
+  }
+
   bke::with_blender_project_write_lock([&] {
     std::optional<bke::BlenderProject> &project = get_project();
 

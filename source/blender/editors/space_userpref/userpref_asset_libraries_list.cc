@@ -139,6 +139,41 @@ struct AssetLibraryListItem : public AssetLibraryListItemCommon {
   }
 };
 
+/**
+ * Make sure the displayed active library is not a project library when the project support
+ * experimental feature is disabled. Doesn't modify #U.active_asset_library in place, but returns
+ * the new value it should take, just so it's obvious from the caller site that it's modifying it.
+ */
+[[nodiscard]]
+static int ensure_active_library_index_valid(const Vector<AnyAssetLibraryDefinition> &libraries)
+{
+  if (USER_EXPERIMENTAL_TEST(&U, use_blender_projects)) {
+    /* Project support is enabled, allow displaying project libraries (nothing to sanitize). */
+    return U.active_asset_library;
+  }
+
+  const bool active_is_project_library = U.active_asset_library >= 0 &&
+                                         U.active_asset_library < libraries.size() &&
+                                         libraries[U.active_asset_library].user_library &&
+                                         (libraries[U.active_asset_library].user_library->flag &
+                                          ASSET_LIBRARY_PROJECT_DEFINED);
+  if (!active_is_project_library) {
+    return U.active_asset_library;
+  }
+
+  /* Find the first non-project library and make that active. */
+  for (const int i : libraries.index_range()) {
+    if (libraries[i].user_library &&
+        !(libraries[i].user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED))
+    {
+      return i;
+    }
+  }
+
+  /* No non-project library found. */
+  return -1;
+}
+
 void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
 {
   Vector<AnyAssetLibraryDefinition> libraries = userpref_ui_asset_libraries();
@@ -157,6 +192,8 @@ void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
     PointerRNA props = col.op("preferences.asset_library_add", "", ICON_ADD);
     RNA_enum_set(&props, "type", ASSET_LIBRARY_LOCAL);
   }
+
+  U.active_asset_library = ensure_active_library_index_valid(libraries);
 
   ui::Layout &sub = col.row(true);
   const bool active_idx_in_range = U.active_asset_library >= 0 &&

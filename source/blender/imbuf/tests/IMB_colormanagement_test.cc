@@ -14,6 +14,7 @@
 
 #include "DNA_color_types.h"
 #include "DNA_image_types.h"
+#include "DNA_userdef_types.h"
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_project.hh"
@@ -341,6 +342,7 @@ class ColorManagementProjectConfigTest : public bke::BlenderGTestBase {
   void SetUp() override
   {
     bmain_ = BKE_main_new();
+    U.experimental.use_blender_projects = true;
     BKE_blender_project_init("test", BKE_tempdir_session());
 
     colormanage_environment_setup_for_test(std::nullopt, std::nullopt);
