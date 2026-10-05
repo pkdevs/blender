@@ -48,6 +48,7 @@
 
 #include "buttons/interface_label.hh"
 #include "buttons/interface_label_markdown.hh"
+#include "buttons/interface_region_search.hh"
 #include "buttons/interface_textbox.hh"
 #include "interface_intern.hh"
 
@@ -1118,20 +1119,20 @@ static void keymap_but_cb(bContext * /*C*/, void *but_v, void * /*key_v*/)
       &but->rnapoin, "hyper", (hotkey_but->modifier_key & KM_HYPER) ? KM_MOD_HELD : KM_NOTHING);
 }
 
-struct PropVariableSearchArg {
+struct TemplateVariableSearchArg {
   PointerRNA rnapoin;
   PropertyRNA *rnaprop;
 };
 
-static void prop_variable_search_arg_free_fn(void *ptr)
+static void prop_template_variable_search_arg_free_fn(void *ptr)
 {
-  MEM_delete(static_cast<PropVariableSearchArg *>(ptr));
+  MEM_delete(static_cast<TemplateVariableSearchArg *>(ptr));
 }
 
 static void prop_variable_search_update_fn(
     const bContext *C, void *arg, const char *str, SearchItems *items, bool /*is_first*/)
 {
-  PropVariableSearchArg *search_arg = static_cast<PropVariableSearchArg *>(arg);
+  TemplateVariableSearchArg *search_arg = static_cast<TemplateVariableSearchArg *>(arg);
 
   const StringRefNull text = str;
   const int64_t cursor = search_items_cursor_pos(items);
@@ -1176,7 +1177,7 @@ static void prop_variable_search_update_fn(
 
 static void prop_variable_search_set(Button *but)
 {
-  PropVariableSearchArg *search_arg = MEM_new<PropVariableSearchArg>(__func__);
+  TemplateVariableSearchArg *search_arg = MEM_new<TemplateVariableSearchArg>(__func__);
   search_arg->rnapoin = but->rnapoin;
   search_arg->rnaprop = but->rnaprop;
 
@@ -1186,7 +1187,7 @@ static void prop_variable_search_set(Button *but)
                          prop_variable_search_update_fn,
                          search_arg,
                          true,
-                         prop_variable_search_arg_free_fn,
+                         prop_template_variable_search_arg_free_fn,
                          nullptr,
                          nullptr);
 

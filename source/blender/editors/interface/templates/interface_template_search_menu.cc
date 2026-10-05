@@ -44,6 +44,7 @@
 
 #include "UI_interface_layout.hh"
 #include "UI_string_search.hh"
+#include "buttons/interface_region_search.hh"
 #include "interface_intern.hh"
 
 /* For key-map item access. */

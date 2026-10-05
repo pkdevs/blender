@@ -72,6 +72,7 @@
 
 #include "BPY_extern_run.hh"
 
+#include "buttons/interface_region_search.hh"
 #include "buttons/interface_textbox.hh"
 #include "interface_intern.hh"
 
@@ -436,7 +437,7 @@ struct HandleButtonData {
   /**
    * Input hint drawn faded, empty when there is none.
    */
-  std::string text_edit_unit_hint;
+  std::string button_edit_hint_get;
 
   /* Only used for autocomplete hinting. */
   int64_t text_edit_hint_replace_start = 0;
@@ -3727,10 +3728,10 @@ const wmIMEData *button_ime_data_get(Button *but)
 std::optional<ButtonEditHint> button_edit_hint_get(const Button &but)
 {
   const HandleButtonData *data = but.semi_modal_state ? but.semi_modal_state : but.active;
-  if (data == nullptr || data->text_edit_unit_hint.empty()) {
+  if (data == nullptr || data->button_edit_hint_get.empty()) {
     return std::nullopt;
   }
-  return ButtonEditHint{data->text_edit_unit_hint,
+  return ButtonEditHint{data->button_edit_hint_get,
                         data->text_edit_hint_replace_start,
                         data->text_edit_hint_replace_end};
 }
@@ -3760,7 +3761,7 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
   const std::optional<StringRef> subtype_hint = button_edit_unit_hint_get_from_prop_subtype(
       subtype);
   if (!button_is_unit(but) && !subtype_hint.has_value()) {
-    data->text_edit_unit_hint.clear();
+    data->button_edit_hint_get.clear();
     return;
   }
 
@@ -3770,13 +3771,13 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
   if (unit_type != PROP_NONE) {
     /* If the string contains the unit already, don't add it as a hint. */
     if (BKE_unit_string_contains_unit(data->text_edit.edit_string, unit_type)) {
-      data->text_edit_unit_hint.clear();
+      data->button_edit_hint_get.clear();
       return;
     }
 
     /* If the expression we're entering is not valid, don't show the hint. */
     if (!BPY_string_compile_check(data->text_edit.edit_string)) {
-      data->text_edit_unit_hint.clear();
+      data->button_edit_hint_get.clear();
       return;
     }
 
@@ -3796,83 +3797,37 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
     const StringRefNull str(data->text_edit.edit_string);
     BLI_assert(!name_short.empty());
     if (str.find(name_short) != StringRef::not_found) {
-      data->text_edit_unit_hint.clear();
+      data->button_edit_hint_get.clear();
       return;
     }
 
     /* If the expression we're entering is not valid, don't show the hint. */
     if (!BPY_string_compile_check(data->text_edit.edit_string)) {
-      data->text_edit_unit_hint.clear();
+      data->button_edit_hint_get.clear();
       return;
     }
   }
 
   if (name_short.empty()) {
-    data->text_edit_unit_hint.clear();
+    data->button_edit_hint_get.clear();
     return;
   }
 
   /* Add a space before the short unit name. */
-  data->text_edit_unit_hint = " " + name_short;
+  data->button_edit_hint_get = " " + name_short;
   data->text_edit_hint_replace_start = data->text_edit_hint_replace_end = int64_t(
       strlen(data->text_edit.edit_string));
 }
 
 std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64_t cursor)
 {
-  int64_t start = -1;
-  const int64_t size = text.size();
-
-  for (int64_t i = 0; i < size; i++) {
-    if (start == -1) {
-      if (text[i] == '{') {
-        if (i + 1 < size && text[i + 1] == '{' && cursor != i + 1) {
-          i++;
-          continue;
-        }
-        start = i;
-      }
-      else if (text[i] == '}' && i + 1 < size && text[i + 1] == '}') {
-        i++;
-      }
-      continue;
-    }
-
-    if (text[i] == '}') {
-      const int64_t name_start = start + 1;
-      const int64_t name_end = i;
-      if (cursor >= name_start && cursor <= name_end) {
-        return IndexRange::from_begin_end(name_start, name_end);
-      }
-      /* Expression closed, and it's not the one the cursor is in: keep scanning. */
-      start = -1;
-    }
-    else if (text[i] == '{') {
-      const int64_t name_start = start + 1;
-      const int64_t name_end = i;
-      if (cursor >= name_start && cursor <= name_end) {
-        return IndexRange::from_begin_end(name_start, name_end);
-      }
-      if (i + 1 < size && text[i + 1] == '{') {
-        i++;
-        start = -1;
-      }
-      else {
-        start = i;
-      }
-    }
+  const int64_t open = text.substr(0, cursor).find_last_of("{}");
+  if (open == StringRef::not_found || text[open] != '{') {
+    return std::nullopt;
   }
-
-  /* Reached the end of the text with an unclosed expression open. */
-  if (start != -1) {
-    const int64_t name_start = start + 1;
-    const int64_t name_end = size;
-    if (cursor >= name_start && cursor <= name_end) {
-      return IndexRange::from_begin_end(name_start, name_end);
-    }
-  }
-
-  return std::nullopt;
+  const int64_t close = text.find_first_of("{}", cursor);
+  const int64_t name_end = close == StringRef::not_found ? text.size() : close;
+  return IndexRange::from_begin_end(open + 1, name_end);
 }
 
 std::optional<StringRef> template_variable_item_name(StringRef item_text)
@@ -3922,9 +3877,9 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
   const int64_t name_end = span->one_after_last();
   const bool has_closing_brace = name_end < int64_t(text.size()) && text[name_end] == '}';
 
-  data->text_edit_unit_hint = name.substr(typed.size());
+  data->button_edit_hint_get = name.substr(typed.size());
   if (!has_closing_brace) {
-    data->text_edit_unit_hint += "}";
+    data->button_edit_hint_get += "}";
   }
   data->text_edit_hint_replace_start = cursor;
   data->text_edit_hint_replace_end = name_end;
@@ -3933,7 +3888,7 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
 static void button_edit_hint_refresh(bContext *C, Button *but, HandleButtonData *data)
 {
   button_edit_unit_hint_refresh(C, but, data);
-  if (data->text_edit_unit_hint.empty()) {
+  if (data->button_edit_hint_get.empty()) {
     button_edit_template_variable_hint_refresh(but, data);
   }
 }

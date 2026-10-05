@@ -76,6 +76,7 @@
 
 #include "buttons/interface_label.hh"
 #include "buttons/interface_label_markdown.hh"
+#include "buttons/interface_region_search.hh"
 #include "interface_intern.hh"
 
 namespace blender::ui {
@@ -5373,7 +5374,7 @@ void autocomplete_update_name(AutoComplete *autocpl, const StringRef name)
 
   char *truncate = autocpl->truncate;
   autocpl->matches++;
-  /* first match */
+  /* First match. */
   if (truncate[0] == 0) {
     name.copy_utf8_truncated(truncate, autocpl->maxncpy);
   }

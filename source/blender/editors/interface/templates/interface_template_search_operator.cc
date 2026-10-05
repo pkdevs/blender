@@ -24,6 +24,7 @@
 #include "WM_types.hh"
 
 #include "UI_interface_layout.hh"
+#include "buttons/interface_region_search.hh"
 #include "interface_intern.hh"
 
 namespace blender::ui {

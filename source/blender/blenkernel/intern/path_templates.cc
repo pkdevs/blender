@@ -144,16 +144,13 @@ Vector<StringRefNull> VariableMap::names() const
   result.reserve(this->strings_.size() + this->filepaths_.size() + this->integers_.size() +
                  this->floats_.size());
 
-  const auto gather = [&](const auto &map) {
-    for (const std::string &name : map.keys()) {
-      result.append(StringRefNull(name));
-    }
+  const auto gather_key = [&](const std::string &key, const auto & /*value*/) {
+    result.append(StringRefNull(key));
   };
-
-  gather(this->strings_);
-  gather(this->filepaths_);
-  gather(this->integers_);
-  gather(this->floats_);
+  this->strings_.foreach_item(gather_key);
+  this->filepaths_.foreach_item(gather_key);
+  this->integers_.foreach_item(gather_key);
+  this->floats_.foreach_item(gather_key);
 
   return result;
 }

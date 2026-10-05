@@ -42,6 +42,7 @@
 #include "BLF_api.hh"
 
 #include "GPU_state.hh"
+#include "buttons/interface_region_search.hh"
 #include "interface_intern.hh"
 #include "interface_regions_intern.hh"
 

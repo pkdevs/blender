@@ -114,6 +114,7 @@ set(SRC
 
   buttons/interface_label.hh
   buttons/interface_label_markdown.hh
+  buttons/interface_region_search.hh
   buttons/interface_textbox.hh
   eyedroppers/eyedropper_intern.hh
   templates/interface_templates_intern.hh
