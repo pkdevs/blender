@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** Native Properties projects the registered Blender panels and their RNA controls. */
+#include "BKE_animsys.h"
 #include "BKE_context.hh"
 #include "BKE_main.hh"
 #include "BKE_screen.hh"
+#include "BKE_scene.hh"
 #include "BLI_listbase.h"
 #include "BLI_serialize.hh"
 #include "DNA_ID.h"
@@ -287,6 +289,90 @@ bool set_property(bContext *C, Button &but, int index, const DictionaryValue &re
   return true;
 }
 
+struct PropertyAnimationAction {
+  std::string id;
+  std::string title;
+  const char *operator_id;
+  const char *icon;
+  bool all;
+};
+
+std::vector<PropertyAnimationAction> property_animation_actions(bContext *C, Button &but, int index)
+{
+  if (!RNA_property_anim_editable(&but.rnapoin, but.rnaprop) ||
+      !RNA_property_path_from_ID_check(&but.rnapoin, but.rnaprop) ||
+      (but.flag & (BUT_DISABLED | BUT_INACTIVE))) {
+    return {};
+  }
+  const int old_index = but.rnaindex, old_flag = but.flag, old_drawflag = but.drawflag;
+  but.rnaindex = index;
+  const AnimationEvalContext eval = BKE_animsys_eval_context_construct(
+      CTX_data_depsgraph_pointer(C), BKE_scene_frame_get(CTX_data_scene(C)));
+  button_anim_flag(&but, &eval);
+  const bool keyed = but.flag & BUT_ANIMATED_KEY;
+  const bool animated = but.flag & BUT_ANIMATED;
+  const bool driven = but.flag & BUT_DRIVEN;
+  but.rnaindex = old_index;
+  but.flag = old_flag;
+  but.drawflag = old_drawflag;
+  if (driven) {
+    return {};
+  }
+  const bool component = RNA_property_array_check(but.rnaprop) && index >= 0;
+  std::vector<PropertyAnimationAction> actions;
+  auto add = [&](const char *id, const char *verb, const char *operator_id, const char *icon) {
+    actions.push_back({std::string(id) + "_all",
+                       std::string(verb) + (component || std::string(id) == "clear" ? " Keyframes" : " Keyframe"),
+                       operator_id, icon, true});
+    if (component) {
+      actions.push_back({std::string(id) + "_single",
+                         std::string(verb) + (std::string(id) == "clear" ? " Single Keyframes" : " Single Keyframe"),
+                         operator_id, icon, false});
+    }
+  };
+  add("insert", keyed ? "Replace" : "Insert", "ANIM_OT_keyframe_insert_button", "KEY_HLT");
+  if (keyed) {
+    add("delete", "Delete", "ANIM_OT_keyframe_delete_button", "KEY_DEHLT");
+  }
+  if (animated && but.rnapoin.type != RNA_NlaStrip) {
+    add("clear", "Clear", "ANIM_OT_keyframe_clear_button", "KEY_DEHLT");
+  }
+  return actions;
+}
+
+bool animate_property(bContext *C, Button &but, int index, const std::string &action_id)
+{
+  for (const PropertyAnimationAction &action : property_animation_actions(C, but, index)) {
+    if (action.id != action_id) {
+      continue;
+    }
+    /* Reuse Blender's button operators, with this detached control as their active property. */
+    ARegion *region = CTX_wm_region(C);
+    ARegion *popup = CTX_wm_region_popup(C);
+    const bContextStore *store = CTX_store_get(C);
+    const int old_index = but.rnaindex, old_flag = but.flag;
+    but.rnaindex = index;
+    but.flag |= BUT_ACTIVE_OVERRIDE;
+    BLI_addtail(&region->runtime->uiblocks, but.block);
+    CTX_wm_region_popup_set(C, nullptr);
+    if (but.context) {
+      CTX_store_set(C, but.context);
+    }
+    PointerRNA properties = WM_operator_properties_create(action.operator_id);
+    RNA_boolean_set(&properties, "all", action.all);
+    const bool changed = WM_operator_name_call(C, action.operator_id, wm::OpCallContext::ExecDefault,
+                                               &properties, nullptr) & OPERATOR_FINISHED;
+    WM_operator_properties_free(&properties);
+    CTX_store_set(C, store);
+    CTX_wm_region_popup_set(C, popup);
+    BLI_remlink(&region->runtime->uiblocks, but.block);
+    but.rnaindex = old_index;
+    but.flag = old_flag;
+    return changed;
+  }
+  return false;
+}
+
 void project_property(bContext *C, Button &but, int index, DictionaryValue &field)
 {
   PointerRNA *ptr = &but.rnapoin;
@@ -294,6 +380,16 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
   const bool array = RNA_property_array_check(prop);
   const int length = RNA_property_array_length(ptr, prop);
   const PropertyType type = RNA_property_type(prop);
+  const auto actions = property_animation_actions(C, but, index);
+  if (!actions.empty()) {
+    auto animation = field.append_array("animation");
+    for (const PropertyAnimationAction &action : actions) {
+      auto item = animation->append_dict();
+      item->append_str("id", action.id);
+      item->append_str("title", action.title);
+      item->append_str("icon", action.icon);
+    }
+  }
   if (is_color(ptr, prop)) {
     float color[4] = {0, 0, 0, 1};
     RNA_property_float_get_array(ptr, prop, color);
@@ -692,7 +788,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         }
         if (execute) {
           if (target_panel && requested_key && *requested_key == key) {
-            applied = set_property(C, but, index, *query);
+            const auto animation_action = query->lookup_str("animation_action");
+            applied = animation_action ? animate_property(C, but, index, *animation_action) :
+                                         set_property(C, but, index, *query);
           }
         }
         else {
