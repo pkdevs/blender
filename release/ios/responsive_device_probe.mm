@@ -21,6 +21,7 @@
 - (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation;
 - (void)finishNumberScrub:(UITextField *)field;
 - (void)cancelNumberScrub;
+- (void)dismissShading;
 - (void)handleToolbarHover:(UIHoverGestureRecognizer *)gesture;
 @end
 
@@ -142,6 +143,13 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
   __block char *result = nullptr;
   dispatch_sync(dispatch_get_main_queue(), ^{
     id panels = [blenderController() valueForKey:@"_scene_panels"];
+    id scenePanels = panels;
+    if ([request[@"action"] isEqual:@"shading_open"]) {
+      UIBarButtonItem *button = [blenderController() valueForKey:@"_viewport_shading_button"];
+      [button.target performSelector:button.action withObject:button];
+    }
+    if ([request[@"action"] isEqual:@"shading_close"]) { [scenePanels dismissShading]; }
+    if ([request[@"scope"] isEqual:@"shading"]) { panels = [scenePanels valueForKey:@"_shadingPanels"]; }
     UIBarButtonItem *inspector = [panels valueForKey:@"inspectorButton"];
     UIBarButtonItem *hierarchy = [panels valueForKey:@"hierarchyButton"];
     NSString *action = request[@"action"];
@@ -178,6 +186,25 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       }
     }
     NSDictionary *controls = [panels valueForKey:@"_controls"];
+    if ([action isEqual:@"enum"]) {
+      NSDictionary *property = [panels propertyForKey:request[@"key"]];
+      UIControl *control = controls[request[@"key"]];
+      NSUInteger index = [property[@"options"] indexOfObjectPassingTest:^BOOL(NSDictionary *option, NSUInteger i, BOOL *stop) {
+        return [option[@"value"] isEqual:request[@"value"]];
+      }];
+      if (index != NSNotFound) {
+        if ([control isKindOfClass:UISegmentedControl.class]) {
+          ((UISegmentedControl *)control).selectedSegmentIndex = index;
+          [control sendActionsForControlEvents:UIControlEventValueChanged];
+        }
+        else if ([control isKindOfClass:UIButton.class]) {
+          NSString *title = property[@"options"][index][@"label"];
+          for (UIAction *item in ((UIButton *)control).menu.children) {
+            if ([item.title isEqual:title]) { [item performWithSender:control target:nil]; break; }
+          }
+        }
+      }
+    }
     if ([action hasPrefix:@"scrub_"]) {
       UITextField *field = controls[request[@"key"]];
       if ([action isEqual:@"scrub_begin"]) { [panels beginNumberScrub:field]; }
@@ -395,6 +422,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities,
       @"switches": switches,
       @"scrubs": scrubs,
+      @"shadingPresented": @(((UIViewController *)[scenePanels valueForKey:@"_shadingController"]).presentingViewController != nil),
       @"hierarchyClass": NSStringFromClass(tree.class), @"selectedObjects": selectedObjects,
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",

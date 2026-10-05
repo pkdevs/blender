@@ -36,6 +36,54 @@ static void tap(UIBarButtonItem *button)
   [button.target performSelector:button.action withObject:button];
 }
 
+static void testShadingPopover(UIViewController *controller)
+{
+  GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:controller.view
+      icon:^UIImage *(NSString *name) { return nil; }] autorelease];
+  UIBarButtonItem *anchor = [[[UIBarButtonItem alloc] initWithTitle:@"Shading"
+      style:UIBarButtonItemStylePlain target:nil action:nil] autorelease];
+  controller.navigationItem.rightBarButtonItem = anchor;
+  [panels presentShadingFrom:anchor controller:controller];
+  GHOSTIOSScenePanels *shading = [panels valueForKey:@"_shadingPanels"];
+  NSCAssert(shading && [setting isEqual:@"native_shading_visible"], @"Opening requests asynchronous shading snapshots");
+  NSMutableDictionary *mode = [NSMutableDictionary dictionaryWithDictionary:
+      @{@"key": @"shading.type", @"property": @"type", @"type": @"ENUM", @"label": @"Shading",
+        @"tab": @"SHADING", @"native": @YES, @"editable": @YES, @"value": @"SOLID", @"options": @[
+          @{@"value": @"WIREFRAME", @"label": @"Wireframe"},
+          @{@"value": @"SOLID", @"label": @"Solid"},
+          @{@"value": @"MATERIAL", @"label": @"Material"},
+          @{@"value": @"RENDERED", @"label": @"Rendered"}]}];
+  void (^snapshot)(void) = ^{
+    [panels updateSnapshot:@{@"ack": @99999, @"shading": @{@"id": @"SHADING:1", @"tab": @"SHADING",
+      @"name": @"Viewport Shading", @"tabs": @[], @"sections": @[
+        @{@"id": @"shading", @"title": @"Shading", @"open": @YES,
+          @"properties": @[[[mode copy] autorelease]]}]}}];
+  };
+  snapshot();
+  UISegmentedControl *segments = [shading valueForKey:@"_controls"][@"shading.type"];
+  NSCAssert([segments isKindOfClass:UISegmentedControl.class] && segments.numberOfSegments == 4 &&
+            segments.selectedSegmentIndex == 1, @"Shading modes use the native segmented control");
+  UITableView *form = [shading valueForKey:@"_form"];
+  NSCAssert(!form.backgroundView, @"First snapshot replaces the loading indicator");
+  segments.selectedSegmentIndex = 2;
+  [segments sendActionsForControlEvents:UIControlEventValueChanged];
+  NSCAssert([request[@"tab"] isEqual:@"SHADING"] && [request[@"value"] isEqual:@"MATERIAL"] &&
+            [setting isEqual:@"native_properties_edit"], @"Mode changes use the asynchronous RNA edit queue");
+  mode[@"value"] = @"RENDERED";
+  snapshot();
+  NSCAssert([shading valueForKey:@"_controls"][@"shading.type"] == segments && segments.selectedSegmentIndex == 3,
+            @"External shading changes update the selector in place");
+  GHOSTIOSScenePanels *other = [[[GHOSTIOSScenePanels alloc] initWithOverlay:controller.view
+      icon:^UIImage *(NSString *name) { return nil; }] autorelease];
+  NSNumber *shadingSequence = request[@"sequence"];
+  [other performSelector:@selector(send:) withObject:@{@"native": @YES, @"key": @"test"}];
+  NSCAssert([request[@"sequence"] unsignedLongLongValue] > shadingSequence.unsignedLongLongValue,
+            @"Inspector and shading instances share monotonic command sequence numbers");
+  [panels dismissShading];
+  NSCAssert(![[shading valueForKey:@"_showInspector"] boolValue] && [setting isEqual:@"native_shading_visible"],
+            @"Closing stops shading snapshot requests");
+}
+
 static void testNumberScrubbing(UIView *overlay)
 {
   GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
@@ -505,6 +553,7 @@ int main()
     [panels dismiss];
     NSCAssert(!panels.hierarchyButton.selected && !panels.inspectorButton.selected, @"Temporary panels dismiss");
     testNumberScrubbing(controller.view);
+    testShadingPopover(controller);
     NSLog(@"PASS: floating scene panels, search, selection, native fields, async ownership, responsive layout");
   }
 }
