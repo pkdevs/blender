@@ -208,15 +208,17 @@ def _get_asset_dependencies(datablock: bpy.types.ID) -> set[bpy.types.ID]:
     deps_of_datablock: set[bpy.types.ID] = set()
 
     def get_asset_dependencies_recursive(visit_id: bpy.types.ID) -> set[bpy.types.ID]:
+        assert visit_id not in deps_of_datablock
+        deps_of_datablock.add(visit_id)
         for key, users in dependency_map.items():
             if visit_id not in users:
                 continue
-            if key in deps_of_datablock:
-                continue
-            deps_of_datablock.add(key)
             get_asset_dependencies_recursive(key)
 
     get_asset_dependencies_recursive(datablock)
+
+    # `datablock`` was added when visited recursively, remove it now from the dependencies
+    deps_of_datablock.remove(datablock)
 
     return deps_of_datablock
 
