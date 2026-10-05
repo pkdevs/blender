@@ -407,15 +407,34 @@ static void ffmpeg_hw_setup_decode(const MovieReader *anim,
   {
     return;
   }
+  const char *pix_fmt_name = av_get_pix_fmt_name(codec_ctx->pix_fmt);
+  if (pix_fmt_name == nullptr) {
+    pix_fmt_name = "unknown";
+  }
   for (const AVHWDeviceType device_type : ffmpeg_hw_device_types) {
     if (!ffmpeg_hw_codec_supports_device(codec, device_type)) {
       continue;
     }
     if (AVBufferRef *hw_device_ctx = ffmpeg_hw_device_get(device_type)) {
       codec_ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+      CLOG_INFO(&LOG,
+                "Using %s hardware decoding for %s %s %dx%d (%s)",
+                av_hwdevice_get_type_name(device_type),
+                codec->name,
+                pix_fmt_name,
+                codec_ctx->width,
+                codec_ctx->height,
+                anim->filepath);
       return;
     }
   }
+  CLOG_INFO(&LOG,
+            "Using software decoding for %s %s %dx%d (%s)",
+            codec->name,
+            pix_fmt_name,
+            codec_ctx->width,
+            codec_ctx->height,
+            anim->filepath);
 }
 
 static AVPixelFormat ffmpeg_codec_pix_fmt_get(const AVCodecContext *codec_ctx)
