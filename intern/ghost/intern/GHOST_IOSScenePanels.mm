@@ -24,8 +24,82 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 }
 @end
 
+@interface GHOSTIOSColorButton : UIButton
+@property(nonatomic, retain) NSDictionary *descriptor;
+@property(nonatomic, copy) NSString *objectID;
+@property(nonatomic, readonly) UIColorWell *well;
+@end
+
+@implementation GHOSTIOSColorButton
+- (instancetype)initWithFrame:(CGRect)frame
+{
+  if ((self = [super initWithFrame:frame])) {
+    _well = [[UIColorWell alloc] init];
+    /* Keep the system swatch, with explicit picker delegation for undo boundaries. */
+    _well.userInteractionEnabled = NO;
+    _well.isAccessibilityElement = NO;
+    _well.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_well];
+    [NSLayoutConstraint activateConstraints:@[
+      [_well.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+      [_well.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_well.widthAnchor constraintEqualToConstant:32],
+      [_well.heightAnchor constraintEqualToConstant:32],
+    ]];
+  }
+  return self;
+}
+- (void)setEnabled:(BOOL)enabled
+{
+  [super setEnabled:enabled];
+  _well.enabled = enabled;
+}
+- (void)dealloc
+{
+  [_well release];
+  [_descriptor release];
+  [_objectID release];
+  [super dealloc];
+}
+@end
+
+static UIColor *blenderNativeColor(NSArray *components)
+{
+  if (components.count != 3 && components.count != 4) {
+    return UIColor.clearColor;
+  }
+  CGFloat values[] = {[components[0] doubleValue], [components[1] doubleValue],
+                      [components[2] doubleValue], components.count == 4 ? [components[3] doubleValue] : 1};
+  CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceExtendedSRGB);
+  CGColorRef color = CGColorCreate(space, values);
+  UIColor *result = [UIColor colorWithCGColor:color];
+  CGColorRelease(color);
+  CGColorSpaceRelease(space);
+  return result;
+}
+
+static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
+{
+  CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceExtendedSRGB);
+  CGColorRef converted = CGColorCreateCopyByMatchingToColorSpace(space, kCGRenderingIntentDefault,
+                                                               color.CGColor, nullptr);
+  CGColorSpaceRelease(space);
+  if (!converted || CGColorGetNumberOfComponents(converted) != 4) {
+    if (converted) {
+      CGColorRelease(converted);
+    }
+    return nil;
+  }
+  const CGFloat *values = CGColorGetComponents(converted);
+  NSArray *result = alpha ? @[@(values[0]), @(values[1]), @(values[2]), @(values[3])] :
+                           @[@(values[0]), @(values[1]), @(values[2])];
+  CGColorRelease(converted);
+  return result;
+}
+
 @interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate,
-                                   UISearchBarDelegate, UITextFieldDelegate>
+                                   UISearchBarDelegate, UITextFieldDelegate,
+                                   UIColorPickerViewControllerDelegate, UIPopoverPresentationControllerDelegate>
 @end
 
 @implementation GHOSTIOSScenePanels {
@@ -54,6 +128,9 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   uint64_t _sequence;
   BOOL _showInspector, _showHierarchy;
   CGRect _layoutRect;
+  UIColorPickerViewController *_colorPicker;
+  GHOSTIOSColorButton *_colorButton;
+  BOOL _colorPending;
 }
 
 - (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage *(^)(NSString *))icon
@@ -157,6 +234,10 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   [_schema release];
   [_snapshot release];
   [_objectID release];
+  _colorPicker.delegate = nil;
+  _colorPicker.presentationController.delegate = nil;
+  [_colorPicker release];
+  [_colorButton release];
   [super dealloc];
 }
 
@@ -220,6 +301,9 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 
 - (void)applyVisibility
 {
+  if (!_showInspector) {
+    [self closeColorPicker];
+  }
   _inspectorButton.selected = _showInspector;
   _hierarchyButton.selected = _showHierarchy;
   [self animatePanel:_inspector visible:_showInspector];
@@ -313,6 +397,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 
 - (void)rebuildInspector:(NSDictionary *)inspector
 {
+  [self closeColorPicker];
   [_headerControls release];
   _headerControls = [[NSMutableArray alloc] init];
   [_formSections removeAllObjects];
@@ -400,6 +485,15 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
         control = button;
         label.hidden = YES;
       }
+      else if ([kind isEqual:@"COLOR"]) {
+        GHOSTIOSColorButton *button = [[[GHOSTIOSColorButton alloc] initWithFrame:CGRectZero] autorelease];
+        button.descriptor = property;
+        button.objectID = objectID;
+        button.well.title = property[@"label"];
+        button.well.supportsAlpha = [property[@"alpha"] boolValue];
+        [button addTarget:self action:@selector(openColorPicker:) forControlEvents:UIControlEventTouchUpInside];
+        control = button;
+      }
       else if ([kind isEqual:@"BOOLEAN"]) {
         UISwitch *toggle = [[[UISwitch alloc] init] autorelease];
         [toggle addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
@@ -474,7 +568,10 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
         [label setContentCompressionResistancePriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
       }
       if (![control isKindOfClass:UISwitch.class]) {
-        if (!vector && ![kind isEqual:@"OPERATOR"] && ![kind isEqual:@"MENU"]) {
+        if ([kind isEqual:@"COLOR"]) {
+          [control.widthAnchor constraintEqualToConstant:44].active = YES;
+        }
+        else if (!vector && ![kind isEqual:@"OPERATOR"] && ![kind isEqual:@"MENU"]) {
           [control.widthAnchor constraintEqualToAnchor:row.widthAnchor multiplier:0.53].active = YES;
         }
         [control.heightAnchor constraintGreaterThanOrEqualToConstant:40].active = YES;
@@ -493,6 +590,96 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   [_sectionIdentifiers release];
   _sectionIdentifiers = [identifiers copy];
   [_form reloadData];
+}
+
+- (void)openColorPicker:(GHOSTIOSColorButton *)button
+{
+  if (_colorPicker || !button.enabled) {
+    return;
+  }
+  UIViewController *presenter = _overlay.window.rootViewController;
+  while (presenter.presentedViewController) {
+    presenter = presenter.presentedViewController;
+  }
+  if (!presenter || presenter.isBeingDismissed) {
+    return;
+  }
+  [_inspector endEditing:YES];
+  _colorButton = [button retain];
+  _colorPicker = [[UIColorPickerViewController alloc] init];
+  _colorPicker.title = button.descriptor[@"label"];
+  _colorPicker.supportsAlpha = button.well.supportsAlpha;
+  _colorPicker.maximumLinearExposure = MAX(1, [button.descriptor[@"exposure"] doubleValue]);
+  _colorPicker.selectedColor = button.well.selectedColor;
+  _colorPicker.delegate = self;
+  _colorPicker.modalPresentationStyle = UIModalPresentationPopover;
+  _colorPicker.popoverPresentationController.sourceView = button;
+  _colorPicker.popoverPresentationController.sourceRect = button.bounds;
+  _colorPicker.popoverPresentationController.delegate = self;
+  [presenter presentViewController:_colorPicker animated:YES completion:nil];
+}
+
+- (void)commitColor
+{
+  if (!_colorPending || !_colorButton) {
+    return;
+  }
+  _colorPending = NO;
+  NSArray *components = blenderNativeColorComponents(_colorButton.well.selectedColor,
+                                                     _colorButton.well.supportsAlpha);
+  if (components) {
+    [self editProperty:_colorButton.descriptor object:_colorButton.objectID value:components];
+  }
+}
+
+- (void)closeColorPicker
+{
+  [self commitColor];
+  if (_colorButton && [_snapshot[@"ack"] unsignedLongLongValue] >= _sequence) {
+    for (NSDictionary *section in _snapshot[@"inspector"][@"sections"]) {
+      for (NSDictionary *property in section[@"properties"]) {
+        if ([property[@"key"] isEqual:_colorButton.descriptor[@"key"]] &&
+            [property[@"type"] isEqual:@"COLOR"]) {
+          _colorButton.well.selectedColor = blenderNativeColor(property[@"value"]);
+        }
+      }
+    }
+  }
+  _colorPicker.delegate = nil;
+  _colorPicker.presentationController.delegate = nil;
+  [_colorPicker dismissViewControllerAnimated:YES completion:nil];
+  [_colorPicker release];
+  _colorPicker = nil;
+  [_colorButton release];
+  _colorButton = nil;
+}
+
+- (void)colorPickerViewController:(UIColorPickerViewController *)picker
+                  didSelectColor:(UIColor *)color continuously:(BOOL)continuously
+{
+  if (picker != _colorPicker) {
+    return;
+  }
+  _colorButton.well.selectedColor = color;
+  _colorPending = YES;
+  if (!continuously) {
+    [self commitColor];
+  }
+}
+
+- (void)colorPickerViewControllerDidFinish:(UIColorPickerViewController *)picker
+{
+  [self closeColorPicker];
+}
+
+- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController
+{
+  [self closeColorPicker];
+}
+
+- (void)popoverPresentationControllerDidDismissPopover:(UIPopoverPresentationController *)popover
+{
+  [self closeColorPicker];
 }
 
 - (void)requestProperties
@@ -665,6 +852,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     for (NSDictionary *property in section[@"properties"]) {
       NSMutableDictionary *shape = [[property mutableCopy] autorelease];
       [shape removeObjectForKey:@"value"];
+      [shape removeObjectForKey:@"exposure"];
       [schema addObject:shape];
     }
   }
@@ -685,7 +873,14 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     for (NSDictionary *property in section[@"properties"]) {
       UIControl *control = _controls[[self keyForProperty:property]];
       id value = property[@"value"];
-      if ([control isKindOfClass:GHOSTIOSPropertyField.class]) {
+      if ([control isKindOfClass:GHOSTIOSColorButton.class]) {
+        GHOSTIOSColorButton *button = (GHOSTIOSColorButton *)control;
+        if (button != _colorButton) {
+          button.descriptor = property;
+          button.well.selectedColor = blenderNativeColor(value);
+        }
+      }
+      else if ([control isKindOfClass:GHOSTIOSPropertyField.class]) {
         GHOSTIOSPropertyField *field = (GHOSTIOSPropertyField *)control;
         if (!field.isFirstResponder) {
           field.descriptor = property;

@@ -104,6 +104,34 @@ int main()
               @"Nested panel is an inline section with its own header switch");
     NSCAssert([form.dataSource numberOfSectionsInTableView:form] == 1,
               @"Only outermost panels are table sections");
+    NSDictionary *rgba = @{@"key": @"object.color", @"label": @"Color", @"type": @"COLOR",
+      @"native": @YES, @"alpha": @YES, @"editable": @YES, @"value": @[@0.5, @0.25, @0.75, @0.4]};
+    NSDictionary *rgb = @{@"key": @"light.color", @"label": @"Light Color", @"type": @"COLOR",
+      @"native": @YES, @"alpha": @NO, @"editable": @YES, @"value": @[@1, @0.5, @0.25]};
+    NSMutableDictionary *colorModel = [[acknowledged mutableCopy] autorelease];
+    colorModel[@"inspector"] = @{@"id": @"colors", @"name": @"Properties",
+      @"sections": @[@{@"id": @"colors", @"title": @"Colors", @"open": @YES, @"properties": @[rgba, rgb]}]};
+    [panels updateSnapshot:colorModel];
+    controls = [panels valueForKey:@"_controls"];
+    UIButton *colorButton = controls[@"object.color"];
+    UIColorWell *well = [colorButton valueForKey:@"well"];
+    NSCAssert([well isKindOfClass:UIColorWell.class] && well.supportsAlpha &&
+              ![[controls[@"light.color"] valueForKey:@"well"] supportsAlpha],
+              @"RGB and RGBA use native color swatches with correct alpha support");
+    NSCAssert(controls.count == 2, @"Color properties are single controls, not component fields");
+    [panels performSelector:NSSelectorFromString(@"openColorPicker:") withObject:colorButton];
+    UIColorPickerViewController *picker = [panels valueForKey:@"_colorPicker"];
+    NSCAssert([picker isKindOfClass:UIColorPickerViewController.class] && picker.supportsAlpha,
+              @"Swatch opens the native color picker");
+    NSDictionary *beforeColor = request;
+    UIColor *chosen = [UIColor colorWithRed:0.2 green:0.4 blue:0.6 alpha:0.3];
+    [picker.delegate colorPickerViewController:picker didSelectColor:chosen continuously:YES];
+    NSCAssert(request == beforeColor, @"Continuous color preview does not flood engine or undo");
+    [picker.delegate colorPickerViewController:picker didSelectColor:chosen continuously:NO];
+    NSCAssert([setting isEqual:@"native_properties_edit"] && [request[@"key"] isEqual:@"object.color"] &&
+              [request[@"value"] count] == 4 && fabs([request[@"value"][3] doubleValue] - 0.3) < 1e-5,
+              @"Completed color gesture commits all components atomically");
+    [panels performSelector:NSSelectorFromString(@"closeColorPicker")];
     [panels layoutInRect:CGRectMake(0, 60, 390, 600)];
     NSCAssert(!(panels.inspectorButton.selected && panels.hierarchyButton.selected), @"Phone panels do not overlap");
     tap(panels.hierarchyButton);
