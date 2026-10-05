@@ -174,6 +174,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSMutableDictionary *_controls;
   NSMutableDictionary *_sliders;
   NSMutableDictionary *_lockIndicators;
+  NSMutableDictionary *_groupHeadings;
   uint64_t _sequence;
   BOOL _showInspector, _showHierarchy;
   CGRect _layoutRect;
@@ -191,6 +192,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     _controls = [[NSMutableDictionary alloc] init];
     _sliders = [[NSMutableDictionary alloc] init];
     _lockIndicators = [[NSMutableDictionary alloc] init];
+    _groupHeadings = [[NSMutableDictionary alloc] init];
     _expandedPanels = [[NSMutableDictionary alloc] init];
     _inspectorButton = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"sidebar.right"]
         style:UIBarButtonItemStylePlain target:self action:@selector(toggleInspector:)];
@@ -274,6 +276,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_controls release];
   [_sliders release];
   [_lockIndicators release];
+  [_groupHeadings release];
   [_formSections release];
   [_headerControls release];
   [_menuProvider release];
@@ -459,6 +462,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_controls removeAllObjects];
   [_sliders removeAllObjects];
   [_lockIndicators removeAllObjects];
+  [_groupHeadings removeAllObjects];
   _status = [self label:@"" style:UIFontTextStyleFootnote];
   _status.textColor = UIColor.systemRedColor;
   _status.hidden = YES;
@@ -512,6 +516,16 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
           vectors[groupKey] = vectorRow;
           UILabel *title = [self label:group style:UIFontTextStyleCaption1];
           title.textColor = UIColor.secondaryLabelColor;
+          if (property[@"group_menu"]) {
+            NSString *key = [self keyForProperty:property];
+            title.userInteractionEnabled = YES;
+            title.accessibilityIdentifier = [@"blender.group." stringByAppendingString:key];
+            title.accessibilityTraits |= UIAccessibilityTraitButton;
+            title.accessibilityHint = @"Touch and hold to change the mode.";
+            [title.heightAnchor constraintGreaterThanOrEqualToConstant:28].active = YES;
+            [title addInteraction:[[[UIContextMenuInteraction alloc] initWithDelegate:self] autorelease]];
+            _groupHeadings[key] = title;
+          }
           UIStackView *vectorGroup = [[[UIStackView alloc] initWithArrangedSubviews:@[title, vectorRow]] autorelease];
           vectorGroup.axis = UILayoutConstraintAxisVertical;
           vectorGroup.spacing = 0;
@@ -928,15 +942,53 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   return items;
 }
 
+- (NSArray<UIMenuElement *> *)groupMenuActionsForProperty:(NSDictionary *)property
+{
+  NSDictionary *mode = property[@"group_menu"];
+  NSMutableArray *actions = [NSMutableArray array];
+  NSString *key = [self keyForProperty:property];
+  NSString *objectID = _objectID;
+  __block GHOSTIOSScenePanels *owner = self;
+  for (NSDictionary *option in mode[@"options"]) {
+    UIAction *action = [UIAction actionWithTitle:option[@"label"] image:_icon(option[@"icon"])
+        identifier:option[@"value"] handler:^(__kindof UIAction *selected) {
+      NSDictionary *current = [owner propertyForKey:key][@"group_menu"];
+      if (![owner->_objectID isEqual:objectID] || ![current[@"key"] isEqual:mode[@"key"]] ||
+          ![current[@"editable"] boolValue]) {
+        return;
+      }
+      for (NSDictionary *available in current[@"options"]) {
+        if ([available[@"value"] isEqual:option[@"value"]]) {
+          if (![current[@"value"] isEqual:option[@"value"]]) {
+            [owner->_inspector endEditing:YES];
+            [owner editProperty:current object:objectID value:option[@"value"]];
+          }
+          break;
+        }
+      }
+    }];
+    action.state = [mode[@"value"] isEqual:option[@"value"]] ? UIMenuElementStateOn : UIMenuElementStateOff;
+    if (![mode[@"editable"] boolValue]) {
+      action.attributes = UIMenuElementAttributesDisabled;
+    }
+    [actions addObject:action];
+  }
+  return actions;
+}
+
 - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
                        configurationForMenuAtLocation:(CGPoint)location
 {
   NSString *key = interaction.view.accessibilityIdentifier;
-  if ([key hasPrefix:@"blender.property."]) {
+  BOOL group = [key hasPrefix:@"blender.group."];
+  if (group) {
+    key = [key substringFromIndex:@"blender.group.".length];
+  }
+  else if ([key hasPrefix:@"blender.property."]) {
     key = [key substringFromIndex:@"blender.property.".length];
   }
   NSDictionary *property = [self propertyForKey:key];
-  if (!property[@"lock"] && ![property[@"animation"] count]) {
+  if (group ? !property[@"group_menu"] : (!property[@"lock"] && ![property[@"animation"] count])) {
     return nil;
   }
   NSString *objectID = _objectID;
@@ -947,8 +999,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       return nil;
     }
     NSDictionary *current = [owner propertyForKey:key];
-    NSArray *actions = [owner menuActionsForProperty:current];
-    NSString *title = current[@"group"] ? [NSString stringWithFormat:@"%@ %@", current[@"group"], current[@"label"]] : current[@"label"];
+    NSArray *actions = group ? [owner groupMenuActionsForProperty:current] : [owner menuActionsForProperty:current];
+    NSString *title = group ? current[@"group_menu"][@"label"] :
+        current[@"group"] ? [NSString stringWithFormat:@"%@ %@", current[@"group"], current[@"label"]] : current[@"label"];
     return actions.count ? [UIMenu menuWithTitle:title children:actions] : nil;
   }];
 }
@@ -1134,6 +1187,18 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       NSMutableDictionary *shape = [[property mutableCopy] autorelease];
       [shape removeObjectForKey:@"value"];
       [shape removeObjectForKey:@"exposure"];
+      if (shape[@"group_menu"]) {
+        NSMutableDictionary *menuShape = [[shape[@"group_menu"] mutableCopy] autorelease];
+        [menuShape removeObjectForKey:@"value"];
+        NSMutableArray *options = [NSMutableArray array];
+        for (NSDictionary *option in menuShape[@"options"]) {
+          NSMutableDictionary *optionShape = [[option mutableCopy] autorelease];
+          [optionShape removeObjectForKey:@"checked"];
+          [options addObject:optionShape];
+        }
+        menuShape[@"options"] = options;
+        shape[@"group_menu"] = menuShape;
+      }
       if (shape[@"animation"]) {
         /* Keyframe/frame changes update menu contents without replacing the active controls. */
         shape[@"animation"] = @YES;
@@ -1164,6 +1229,15 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       UIControl *control = _controls[[self keyForProperty:property]];
       GHOSTIOSPropertySlider *slider = _sliders[[self keyForProperty:property]];
       id value = property[@"value"];
+      UILabel *heading = _groupHeadings[[self keyForProperty:property]];
+      if (heading) {
+        for (NSDictionary *option in property[@"group_menu"][@"options"]) {
+          if ([option[@"value"] isEqual:property[@"group_menu"][@"value"]]) {
+            heading.accessibilityValue = option[@"label"];
+            break;
+          }
+        }
+      }
       if (property[@"lock"]) {
         BOOL locked = [property[@"lock"][@"value"] boolValue];
         ((UIImageView *)_lockIndicators[[self keyForProperty:property]]).alpha = locked ? 1 : 0;

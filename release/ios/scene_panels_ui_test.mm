@@ -4,6 +4,10 @@
 
 #import "GHOST_IOSScenePanels.hh"
 
+@interface GHOSTIOSScenePanels (PropertyHeadingTests)
+- (NSArray<UIMenuElement *> *)groupMenuActionsForProperty:(NSDictionary *)property;
+@end
+
 static NSString *setting;
 static NSDictionary *request;
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *key, const char *value)
@@ -285,6 +289,46 @@ int main()
       NSCAssert(menuInteraction && [menuInteraction.delegate contextMenuInteraction:menuInteraction configurationForMenuAtLocation:CGPointZero],
                 @"Animation-only fields, header switches and color swatches support native context menus");
     }
+    NSMutableDictionary *mode = [@{@"key": @"rotation-mode", @"label": @"Rotation Mode", @"type": @"ENUM",
+      @"native": @YES, @"editable": @YES, @"value": @"XYZ", @"options": @[
+        @{@"value": @"XYZ", @"label": @"XYZ Euler", @"checked": @YES},
+        @{@"value": @"ZYX", @"label": @"ZYX Euler", @"checked": @NO}]} mutableCopy];
+    NSDictionary *rotation = @{@"key": @"rotation-x", @"label": @"X", @"group": @"Rotation",
+      @"property": @"rotation_euler", @"type": @"FLOAT", @"value": @0, @"editable": @YES, @"group_menu": mode};
+    lockModel[@"inspector"] = @{@"id": @"rotation-object", @"name": @"Properties", @"sections": @[
+      @{@"id": @"transform", @"title": @"Transform", @"open": @YES, @"properties": @[rotation]}]};
+    [panels updateSnapshot:lockModel];
+    UILabel *rotationHeading = [panels valueForKey:@"_groupHeadings"][@"rotation-x"];
+    NSCAssert([rotationHeading.text isEqual:@"Rotation"] && rotationHeading.userInteractionEnabled,
+              @"The Rotation heading is a native long-press target");
+    UIContextMenuInteraction *headingInteraction = (UIContextMenuInteraction *)rotationHeading.interactions.firstObject;
+    NSCAssert([headingInteraction.delegate contextMenuInteraction:headingInteraction configurationForMenuAtLocation:CGPointZero],
+              @"Rotation heading provides a native context menu");
+    NSArray *modeActions = [panels groupMenuActionsForProperty:rotation];
+    NSCAssert(((UIAction *)modeActions[0]).state == UIMenuElementStateOn &&
+              ((UIAction *)modeActions[1]).state == UIMenuElementStateOff, @"Current rotation mode is checked");
+    UIAction *changeMode = modeActions[1];
+    [changeMode performWithSender:rotationHeading target:nil];
+    NSCAssert([request[@"key"] isEqual:@"rotation-mode"] && [request[@"value"] isEqual:@"ZYX"] &&
+              [setting isEqual:@"native_properties_edit"], @"Heading options edit the real enum through the engine queue");
+    mode[@"value"] = @"ZYX";
+    mode[@"options"] = @[@{@"value": @"XYZ", @"label": @"XYZ Euler", @"checked": @NO},
+                          @{@"value": @"ZYX", @"label": @"ZYX Euler", @"checked": @YES}];
+    lockModel[@"ack"] = [panels valueForKey:@"_sequence"];
+    [panels updateSnapshot:lockModel];
+    NSCAssert([panels valueForKey:@"_groupHeadings"][@"rotation-x"] == rotationHeading &&
+              [rotationHeading.accessibilityValue isEqual:@"ZYX Euler"], @"Euler-order changes refresh without rebuilding the heading");
+    modeActions = [panels groupMenuActionsForProperty:rotation];
+    NSCAssert(((UIAction *)modeActions[1]).state == UIMenuElementStateOn, @"Mode checkmark follows the latest snapshot");
+    NSDictionary *beforeModeRepeat = request;
+    [changeMode performWithSender:rotationHeading target:nil];
+    NSCAssert(request == beforeModeRepeat, @"Selecting the current mode does not add an undo step");
+    UIAction *oldMode = modeActions[0];
+    lockModel[@"inspector"] = @{@"id": @"another-object", @"name": @"Properties", @"sections": @[]};
+    [panels updateSnapshot:lockModel];
+    [oldMode performWithSender:nil target:nil];
+    NSCAssert(request == beforeModeRepeat, @"A stale heading menu cannot change another object's mode");
+    [mode release];
     [lockProperty release];
     [panels layoutInRect:CGRectMake(0, 60, 390, 600)];
     NSCAssert(!(panels.inspectorButton.selected && panels.hierarchyButton.selected), @"Phone panels do not overlap");
