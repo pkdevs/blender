@@ -74,7 +74,8 @@ if(WITH_APPLE_CROSSPLATFORM)
 
   # Run host build process to ensure host tools are up to date. (creating build_darwin_tools folder)
   # NOTE: ENV command used to isolate environment, as running inside Xcode otherhwise causes Cflags to be inherited.
-  set(CROSSCOMPILE_TOOLDIR "${CMAKE_SOURCE_DIR}/../build_ios/build_darwin_tools/${CMAKE_BUILD_TYPE}")
+  set(CROSSCOMPILE_TOOLDIR "${CMAKE_SOURCE_DIR}/../build_ios/build_darwin_tools/${CMAKE_BUILD_TYPE}"
+    CACHE PATH "Directory for macOS tools used when cross-compiling Blender")
   # Override the defines that are used for building Blender (make sure they come after CMAKE_ARGS)
   set(CMAKE_TOOLS_ARGS "${CMAKE_ARGS} -DWITH_CROSSCOMPILED_TOOLS=ON -DAPPLE_TARGET_DEVICE=macos ${CROSSCOMPILE_C_FLAGS} ${CROSSCOMPILE_CXX_FLAGS}")
   # IOS_FIXME - Add Cross-Compile defines to the C-Flags
