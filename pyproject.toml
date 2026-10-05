@@ -53,3 +53,17 @@ tools/svn_rev_map/rev_to_sha1.py,
 [tool.black]
 skip-string-normalization = true
 line-length = 120
+
+# Configure Python versions for Pyright and Ty checkers.
+[tool.pyright]
+pythonVersion = "3.13"
+executionEnvironments = [
+    # Older Python versions for scripts running directly on Rocky 8.
+    { root = "build_files/utils", pythonVersion = "3.9" },
+    { root = "tests/performance", pythonVersion = "3.9" },
+    { root = "." },
+]
+
+# No per directory overrides in Ty.
+[tool.ty.environment]
+python-version = "3.13"
