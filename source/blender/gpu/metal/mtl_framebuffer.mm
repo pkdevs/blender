@@ -88,6 +88,9 @@ MTLFrameBuffer::~MTLFrameBuffer()
 
   /* Remove attachments - release FB texture references. */
   this->remove_all_attachments();
+#if TARGET_OS_SIMULATOR
+  [attachmentless_target_ release];
+#endif
 
   if (context_ == nullptr) {
     return;
@@ -1547,6 +1550,29 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
   BLI_assert(metal_ctx && metal_ctx->get_inside_frame());
   UNUSED_VARS_NDEBUG(metal_ctx);
 
+#if TARGET_OS_SIMULATOR
+  const bool needs_attachmentless_target = colour_attachment_count_ == 0 &&
+                                          !mtl_depth_attachment_.used &&
+                                          !mtl_stencil_attachment_.used;
+  if (needs_attachmentless_target &&
+      (attachmentless_target_ == nil || attachmentless_target_.width != width_ ||
+       attachmentless_target_.height != height_))
+  {
+    BLI_assert(width_ > 0 && height_ > 0);
+    MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatR8Unorm
+                                    width:width_
+                                   height:height_
+                                mipmapped:NO];
+    texture_desc.usage = MTLTextureUsageRenderTarget;
+    texture_desc.storageMode = MTLStorageModePrivate;
+    [attachmentless_target_ release];
+    attachmentless_target_ = [metal_ctx->device newTextureWithDescriptor:texture_desc];
+    attachmentless_target_.label = @"Attachmentless render fallback";
+    is_dirty_ = true;
+  }
+#endif
+
   /* If Frame-buffer has been modified, regenerate descriptor. */
   if (is_dirty_) {
     /* Clear all configurations. */
@@ -1820,6 +1846,13 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
       framebuffer_descriptor_[descriptor_config].renderTargetWidth = width_;
       framebuffer_descriptor_[descriptor_config].renderTargetHeight = height_;
       framebuffer_descriptor_[descriptor_config].defaultRasterSampleCount = 1;
+#if TARGET_OS_SIMULATOR
+      MTLRenderPassColorAttachmentDescriptor *attachment =
+          framebuffer_descriptor_[descriptor_config].colorAttachments[0];
+      attachment.texture = attachmentless_target_;
+      attachment.loadAction = MTLLoadActionDontCare;
+      attachment.storeAction = MTLStoreActionDontCare;
+#endif
     }
 
     descriptor_dirty_[descriptor_config] = false;

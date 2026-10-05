@@ -17,6 +17,7 @@
 #include "mtl_texture.hh"
 
 #include <Metal/Metal.h>
+#include <TargetConditionals.h>
 
 namespace blender::gpu {
 
@@ -55,6 +56,10 @@ class MTLFrameBuffer : public FrameBuffer {
   MTLAttachment mtl_depth_attachment_;
   MTLAttachment mtl_stencil_attachment_;
   bool use_multilayered_rendering_ = false;
+#if TARGET_OS_SIMULATOR
+  /* Simulator Metal requires a real attachment even for storage-only fragment shaders. */
+  id<MTLTexture> attachmentless_target_ = nil;
+#endif
 
   /* State. */
 

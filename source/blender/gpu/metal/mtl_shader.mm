@@ -1233,6 +1233,20 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
     desc.depthAttachmentPixelFormat = pipeline_descriptor.depth_attachment_format;
     desc.stencilAttachmentPixelFormat = pipeline_descriptor.stencil_attachment_format;
 
+#if TARGET_OS_SIMULATOR
+    /* Match MTLFrameBuffer's attachmentless fallback without producing color output. */
+    bool has_attachment = desc.depthAttachmentPixelFormat != MTLPixelFormatInvalid ||
+                          desc.stencilAttachmentPixelFormat != MTLPixelFormatInvalid;
+    for (int i = 0; i < GPU_FB_MAX_COLOR_ATTACHMENT; i++) {
+      has_attachment |= desc.colorAttachments[i].pixelFormat != MTLPixelFormatInvalid;
+    }
+    if (!has_attachment) {
+      desc.colorAttachments[0].pixelFormat = MTLPixelFormatR8Unorm;
+      desc.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
+      desc.colorAttachments[0].blendingEnabled = NO;
+    }
+#endif
+
     /* Bind-point range validation.
      * We need to ensure that the PSO will have valid bind-point ranges, or is using the
      * appropriate bindless fallback path if any bind limits are exceeded. */
