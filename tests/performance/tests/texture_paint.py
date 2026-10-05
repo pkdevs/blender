@@ -392,11 +392,10 @@ def generate(env):
         for object_type in MeshType:
             for dimension in DIMENSIONS:
                 for data_type in DataType:
-                    print("")
-                    #brush_tests.append(TexturePaintBrushTest(base_filepath, object_type, dimension, data_type))
-                    #brush_tests.append(
-                    #    TexturePaintBrushTest(base_filepath, object_type, dimension, data_type,
-                    #                          test_setup=True))
+                    brush_tests.append(TexturePaintBrushTest(base_filepath, object_type, dimension, data_type))
+                    brush_tests.append(
+                        TexturePaintBrushTest(base_filepath, object_type, dimension, data_type,
+                                              test_setup=True))
 
     udim_filepath = blends_by_dir.get('udim_monster')
     if udim_filepath is not None:
