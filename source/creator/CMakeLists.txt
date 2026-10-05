@@ -1734,7 +1734,7 @@ elseif(WIN32)
 
   windows_install_shared_manifest(
     FILES ${LIBDIR}/ktx/bin/ktx.dll
-    RELEASE
+    ALL
   )
 
   windows_install_shared_manifest(
