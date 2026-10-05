@@ -175,3 +175,25 @@ def view3d_mesh_edit_snap_to_self_shape_key():
     t.assertAlmostEqual(co.z, 2.0, places=4)
 
     yield e.tab()                       # Object mode.
+
+
+def view3d_rotate_repeat_last():
+    import bpy
+    from math import radians
+    e, t, window = ui.test_window()
+
+    yield e.shift.f5()                  # 3D Viewport.
+    yield e.a()                         # Select all.
+    yield e.delete().ret()              # Delete all.
+
+    bpy.ops.mesh.primitive_cube_add()
+    yield
+
+    ob = window.view_layer.objects.active
+
+    yield e.r().x().text("5").ret()     # Rotate X 5.
+    first_rotation = ob.rotation_euler.x
+    t.assertAlmostEqual(first_rotation, radians(5.0), places=4)
+
+    yield e.shift.r()                   # Repeat last.
+    t.assertAlmostEqual(ob.rotation_euler.x, first_rotation * 2.0, places=4)
