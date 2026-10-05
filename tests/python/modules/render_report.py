@@ -486,10 +486,10 @@ class Report:
         var f = resultSel ? resultSel.value : 'all';
         var shown = 0;
         rows.forEach(function (row) {
-            var cat = row.getAttribute('data-category') || '';
+            var category = row.getAttribute('data-category') || '';
             var name = row.getAttribute('data-name') || '';
-            var hay = (cat + ' ' + name).toLowerCase();
-            var matchText = !q || hay.indexOf(q) !== -1;
+            var combined = (category + ';' + name).toLowerCase();
+            var matchText = !q || combined.indexOf(q) !== -1;
             var result = row.getAttribute('data-result') || '';
             var matchResult =
                 f === 'all' ||
@@ -624,7 +624,9 @@ class Report:
                     <td><b>{name}</b><br/>{testname}<br/>{status}</td>
                     <td><img src="{new_url}" onmouseover="this.src='{ref_url}';" onmouseout="this.src='{new_url}';" class="render"></td>
                     <td><img src="{ref_url}" onmouseover="this.src='{new_url}';" onmouseout="this.src='{ref_url}';" class="render"></td>
-                </tr>""" . format(tr_style=tr_style, test_category=test_category, result_attr=result_attr,
+                </tr>""" . format(tr_style=tr_style,
+                                  test_category=test_category,
+                                  result_attr=result_attr,
                                   name=name,
                                   testname=test_result.name,
                                   status=status,
