@@ -62,6 +62,7 @@ namespace blender::ui {
 std::string native_menu_query(bContext *C, const std::string &request, bool execute);
 }
 
+namespace blender {
 namespace {
 
 enum class IOSUICommand {
@@ -199,7 +200,8 @@ wmOperator *ios_constraint_operator(wmWindow *win)
     return nullptr;
   }
 
-  LISTBASE_FOREACH (wmEventHandler *, handler_base, &win->modalhandlers) {
+  for (wmEventHandler &handler_base_item : win->runtime->modalhandlers) {
+    wmEventHandler *handler_base = &handler_base_item;
     if (handler_base->type != WM_HANDLER_TYPE_OP) {
       continue;
     }
@@ -308,7 +310,8 @@ ScrArea *ios_find_view3d_area(bScreen *screen)
 
   ScrArea *best_area = nullptr;
   int best_area_size = -1;
-  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+  for (ScrArea &area_item : screen->areabase) {
+    ScrArea *area = &area_item;
     if (area->spacetype != SPACE_VIEW3D) {
       continue;
     }
@@ -327,7 +330,8 @@ ARegion *ios_find_window_region(ScrArea *area)
     return nullptr;
   }
 
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+  for (ARegion &region_item : area->regionbase) {
+    ARegion *region = &region_item;
     if (region->regiontype == RGN_TYPE_WINDOW) {
       return region;
     }
@@ -424,7 +428,8 @@ bool ios_undo_available(bContext *C)
     return false;
   }
   /* Undo must not invalidate data owned by an in-progress tool or navigation operation. */
-  LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
+  for (wmEventHandler &handler_item : win->runtime->modalhandlers) {
+    wmEventHandler *handler = &handler_item;
     if (handler->type == WM_HANDLER_TYPE_OP) {
       return false;
     }
@@ -459,8 +464,7 @@ void ios_operator_call_with_enum_property(bContext *C,
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, prop_name, prop_value);
   ios_operator_call(C, op_name, &props);
   WM_operator_properties_free(&props);
@@ -468,13 +472,12 @@ void ios_operator_call_with_enum_property(bContext *C,
 
 void ios_mode_set(bContext *C, const char *mode)
 {
-  PointerRNA props;
   wmOperatorType *ot = WM_operatortype_find("OBJECT_OT_mode_set", false);
   if (ot == nullptr) {
     return;
   }
 
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "mode", mode);
   RNA_boolean_set(&props, "toggle", false);
   if (WM_operator_name_poll(C, "OBJECT_OT_mode_set")) {
@@ -490,8 +493,7 @@ void ios_view_axis(bContext *C, const char *axis_type)
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "type", axis_type);
   RNA_boolean_set(&props, "align_active", false);
   RNA_boolean_set(&props, "relative", false);
@@ -506,8 +508,7 @@ void ios_view_orbit(bContext *C, const char *direction)
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "type", direction);
   ios_operator_call(C, "VIEW3D_OT_view_orbit", &props);
   WM_operator_properties_free(&props);
@@ -520,8 +521,7 @@ void ios_view_roll_angle(bContext *C, const float angle)
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "type", "ANGLE");
   RNA_float_set(&props, "angle", angle);
   if (WM_operator_name_poll(C, "VIEW3D_OT_view_roll")) {
@@ -723,8 +723,7 @@ void ios_mesh_select_mode_set(bContext *C, const std::string &value)
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "type", value.c_str());
   RNA_enum_set_identifier(C, &props, "action", "ENABLE");
   RNA_boolean_set(&props, "use_extend", false);
@@ -959,7 +958,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
                                 &result))
     {
       tools_json = result;
-      MEM_freeN(result);
+      MEM_delete(result);
     }
   }
 #endif
@@ -1294,7 +1293,8 @@ static void ios_ui_dispatch_operator(bContext *C, IOSOperatorCommand &command)
   wmWindow *win = CTX_wm_window(C);
   bool ready = win && CTX_wm_area(C) && CTX_wm_region(C);
   if (ready && command.has_position) {
-    LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
+    for (wmEventHandler &handler_item : win->runtime->modalhandlers) {
+      wmEventHandler *handler = &handler_item;
       if (handler->type == WM_HANDLER_TYPE_OP) {
         ready = false;
         break;
@@ -1304,11 +1304,11 @@ static void ios_ui_dispatch_operator(bContext *C, IOSOperatorCommand &command)
       /* Allow the queued Pencil cancellation/release to reach the modal handler. */
       ios_ui_messages.push(command);
     }
-    if (ready && win->eventstate) {
+    if (ready && win->runtime->eventstate) {
       int x = command.x, y = command.y;
       wm_cursor_position_from_ghost_client_coords(win, &x, &y);
-      win->eventstate->xy[0] = x;
-      win->eventstate->xy[1] = y;
+      win->runtime->eventstate->xy[0] = x;
+      win->runtime->eventstate->xy[1] = y;
     }
   }
   if (ready) {
@@ -1324,7 +1324,8 @@ static void ios_ui_dispatch_menu(bContext *C, IOSMenuRequest &request)
   wmWindow *win = CTX_wm_window(C);
   bool ready = true;
   if (win && request.has_position) {
-    LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
+    for (wmEventHandler &handler_item : win->runtime->modalhandlers) {
+      wmEventHandler *handler = &handler_item;
       if (handler->type == WM_HANDLER_TYPE_OP) {
         ready = false;
         break;
@@ -1335,11 +1336,11 @@ static void ios_ui_dispatch_menu(bContext *C, IOSMenuRequest &request)
       ios_context_pop(C, context_store);
       return;
     }
-    if (ready && win->eventstate) {
+    if (ready && win->runtime->eventstate) {
       int x = request.x, y = request.y;
       wm_cursor_position_from_ghost_client_coords(win, &x, &y);
-      win->eventstate->xy[0] = x;
-      win->eventstate->xy[1] = y;
+      win->runtime->eventstate->xy[0] = x;
+      win->runtime->eventstate->xy[1] = y;
     }
   }
   if (ready && win && CTX_wm_area(C) && CTX_wm_region(C)) {
@@ -1426,3 +1427,5 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
 
   ios_toolbar_build(C);
 }
+
+}  // namespace blender

@@ -22,6 +22,16 @@ enum wmOperatorStatus { OPERATOR_CANCELLED, OPERATOR_FINISHED };
 #define LISTBASE_FOREACH(type, var, list) \
   for (type var = (type)(list)->first; var; var = (type)var->next)
 struct ListBase { void *first = nullptr; };
+template<typename T> struct ListBaseT : ListBase {
+  struct Iterator {
+    T *value;
+    T &operator*() const { return *value; }
+    void operator++() { value = static_cast<T *>(value->next); }
+    bool operator!=(const Iterator &other) const { return value != other.value; }
+  };
+  Iterator begin() const { return {static_cast<T *>(first)}; }
+  Iterator end() const { return {nullptr}; }
+};
 struct PropertyRNA {
   std::string text;
   bool value = false, default_value = false;
@@ -39,8 +49,13 @@ struct wmOperatorType {
 struct wmOperator { PointerRNA *ptr; wmOperatorType *type; void *reports = nullptr; };
 struct wmEventHandler { void *next = nullptr; int type = WM_HANDLER_TYPE_OP; };
 struct wmEventHandler_Op { wmEventHandler head; bool is_fileselect = true; wmOperator *op; };
-struct wmWindow { void *next = nullptr; ListBase modalhandlers; void *ghostwin = nullptr; };
-struct wmWindowManager { ListBase windows; };
+struct WindowRuntime { ListBaseT<wmEventHandler> modalhandlers; void *ghostwin = nullptr; };
+struct wmWindow {
+  void *next = nullptr;
+  WindowRuntime storage;
+  WindowRuntime *runtime = &storage;
+};
+struct wmWindowManager { ListBaseT<wmWindow> windows; };
 struct Main { const char *filepath = "/project/scene.blend"; };
 struct bContext { wmWindow *win; wmWindowManager *wm; Main main; };
 static wmWindowManager *CTX_wm_manager(bContext *C) { return C->wm; }
@@ -128,7 +143,7 @@ int main()
   wmOperator op{&props, &type};
   wmEventHandler_Op handler{{}, true, &op};
   wmWindow win;
-  win.modalhandlers.first = &handler;
+  win.runtime->modalhandlers.first = &handler;
   wmWindowManager wm;
   wm.windows.first = &win;
   bContext C{&win, &wm};
@@ -183,12 +198,12 @@ int main()
 
   // Stale callbacks must not dereference an operator whose modal handler disappeared.
   assert(WM_apple_ios_fileselect_begin(&C, &op));
-  win.modalhandlers.first = nullptr;
+  win.runtime->modalhandlers.first = nullptr;
   done(shown, images, 2, nullptr);
   events.clear();
   WM_apple_ios_fileselect_flush(&C);
   assert(events.empty() && !WM_apple_ios_fileselect_active(&op));
-  win.modalhandlers.first = &handler;
+  win.runtime->modalhandlers.first = &handler;
   props.props.clear();
   props.props["directory"];
   assert(WM_apple_ios_fileselect_begin(&C, &op) && shown_mode == GHOST_IOSDocumentMode::Directory);

@@ -43,13 +43,13 @@ GHOST_TKey convertKey(int rawCode, uint16_t recvChar, uint16_t /*keyAction*/);
 
 class GHOST_SystemIOS : public GHOST_System {
   struct NativeEvent {
-    std::unique_ptr<GHOST_IEvent> event;
+    std::unique_ptr<const GHOST_IEvent> event;
     std::shared_ptr<std::atomic<bool>> alive;
   };
   GHOST_IOSMessageQueue<NativeEvent> native_events_;
 
  public:
-  GHOST_TSuccess pushEvent(GHOST_IEvent *event);
+  GHOST_TSuccess pushEvent(std::unique_ptr<const GHOST_IEvent> event);
   GHOST_TSuccess disposeWindow(GHOST_IWindow *window) override;
   /**
    * Constructor.
@@ -126,7 +126,7 @@ class GHOST_SystemIOS : public GHOST_System {
    * Never explicitly delete the context, use #disposeContext() instead.
    * \return The new context (or 0 if creation failed).
    */
-  GHOST_IContext *createOffscreenContext(GHOST_GPUSettings glSettings) override;
+  GHOST_IContext *createOffscreenContext(GHOST_GPUSettings gpu_settings) override;
 
   /**
    * Dispose of a context.

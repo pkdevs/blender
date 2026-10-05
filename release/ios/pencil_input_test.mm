@@ -69,10 +69,10 @@ struct GHOST_EventTrackpad : GHOST_Event {
   template<typename... Args> GHOST_EventTrackpad(Args...) : GHOST_Event(-100) {}
 };
 struct GHOST_SystemIOS {
-  std::vector<GHOST_Event *> events;
+  std::vector<std::unique_ptr<const GHOST_Event>> events;
   uint64_t getMilliSeconds() { return 1000; }
-  void pushEvent(GHOST_Event *event) { events.push_back(event); }
-  void clear() { for (auto *event : events) delete event; events.clear(); }
+  void pushEvent(std::unique_ptr<const GHOST_Event> event) { events.push_back(std::move(event)); }
+  void clear() { events.clear(); }
 };
 
 // INPUT_EVENT

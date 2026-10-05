@@ -39,7 +39,7 @@ static OpCallContext context;
 static PointerRNA properties;
 static bool WM_operator_name_poll(bContext *, const char *) { return allowed; }
 static wmOperatorType *WM_operatortype_find(const char *, bool) { static wmOperatorType type; return &type; }
-static void WM_operator_properties_create_ptr(PointerRNA *, wmOperatorType *) { allocated++; }
+static PointerRNA WM_operator_properties_create_ptr(wmOperatorType *) { allocated++; return {}; }
 static void WM_operator_properties_free(PointerRNA *) { allocated--; }
 static void RNA_enum_set_identifier(bContext *, PointerRNA *p, const char *, const char *value) { p->type = value; }
 static void RNA_boolean_set(PointerRNA *p, const char *name, bool value) {

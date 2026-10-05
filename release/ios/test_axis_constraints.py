@@ -27,6 +27,7 @@ class AxisConstraintTest(unittest.TestCase):
 #include <cassert>
 #include <string>
 #include <vector>
+#include <functional>
 #define ELEM(a, b, c) ((a) == (b) || (a) == (c))
 #define IFACE_(s) s
 #define LISTBASE_FOREACH(type, name, list) for (type name : *(list))
@@ -47,7 +48,8 @@ struct wmOperatorType { struct { void *first = nullptr; } macro; void (*modal)()
 struct wmOperator { wmOperatorType *type; void *customdata; wmOperator *opm = nullptr; };
 struct wmEventHandler { int type; };
 struct wmEventHandler_Op : wmEventHandler { wmOperator *op; };
-struct wmWindow { std::vector<wmEventHandler *> modalhandlers; };
+struct WindowRuntime { std::vector<std::reference_wrapper<wmEventHandler>> modalhandlers; };
+struct wmWindow { WindowRuntime *runtime; };
 static void transform_modal() {}
 static void unrelated_modal() {}
 static int applies = 0, gizmos = 0;
@@ -124,7 +126,8 @@ int main() {
   assert(modal_constraint_get(&macro, axes) && axes == 0);
   wmEventHandler_Op handler{{WM_HANDLER_TYPE_OP}, &macro};
   wmEventHandler ui{WM_HANDLER_TYPE_UI};
-  wmWindow win{{&ui, &handler}};
+  WindowRuntime runtime{{std::ref(ui), std::ref(static_cast<wmEventHandler &>(handler))}};
+  wmWindow win{&runtime};
   assert(ios_constraint_operator(&win) == &macro);
   assert(!ios_constraint_operator(nullptr));
   const int before = applies;

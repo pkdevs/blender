@@ -163,7 +163,9 @@ struct wmWindow {
   bool event_queue_check_drag_handled = false;
 };
 struct bContext { wmWindow *win; };
-struct ListBase {};
+struct wmEventHandler {};
+template<typename T> struct ListBaseT {};
+using ListBase = ListBaseT<wmEventHandler>;
 static wmWindow *CTX_wm_window(bContext *C) { return C->win; }
 static void wm_event_handler_return_value_check(bContext *, wmEvent *, int) {}
 static void copy_v2_v2_int(int *dst, const int *src) { dst[0] = src[0]; dst[1] = src[1]; }

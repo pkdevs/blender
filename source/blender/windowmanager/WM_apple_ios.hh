@@ -7,10 +7,12 @@
 #include <cstdint>
 #include <functional>
 
+struct GHOST_IOSDialog;
+
+namespace blender {
 struct bContext;
 struct wmWindow;
 struct ReportList;
-struct GHOST_IOSDialog;
 
 /* Engine-thread API. UIKit exchanges only owned values and request identifiers. */
 bool WM_apple_ios_dialog_begin(bContext *C,
@@ -21,3 +23,5 @@ bool WM_apple_ios_dialog_begin(bContext *C,
 void WM_apple_ios_dialog_flush(bContext *C);
 bool WM_apple_ios_dialog_active(const wmWindow *win);
 void WM_apple_ios_reports(wmWindow *win, ReportList *reports, int minimum_level);
+
+}  // namespace blender

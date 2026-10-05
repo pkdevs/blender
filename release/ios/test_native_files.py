@@ -23,7 +23,7 @@ class NativeFilesTest(unittest.TestCase):
         if not compiler:
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "source/blender/windowmanager/intern/wm_apple_ios_file.cc").read_text()
-        source = source[source.index("namespace {"):source.rindex("#endif")]
+        source = source[source.index("namespace {"):source.rindex("}  // namespace blender")]
         harness = Path(__file__).with_name("native_files_bridge_test.cc").read_text()
         harness = harness.replace("// BRIDGE_IMPLEMENTATION", source)
         with tempfile.TemporaryDirectory() as directory:

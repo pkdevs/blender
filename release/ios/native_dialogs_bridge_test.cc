@@ -20,6 +20,16 @@ struct Link {
 struct ListBase {
   Link *first = nullptr, *last = nullptr;
 };
+template<typename T> struct ListBaseT : ListBase {
+  struct Iterator {
+    T *value;
+    T &operator*() const { return *value; }
+    void operator++() { value = static_cast<T *>(value->next); }
+    bool operator!=(const Iterator &other) const { return value != other.value; }
+  };
+  Iterator begin() const { return {static_cast<T *>(first)}; }
+  Iterator end() const { return {nullptr}; }
+};
 static void add(ListBase *list, Link *link)
 {
   link->prev = list->last;
@@ -59,9 +69,14 @@ struct ScrArea : Link {
 struct bScreen {
   ListBase areabase;
 };
-struct wmWindow : Link {
+struct wmEventHandler;
+struct WindowRuntime {
   void *ghostwin = this;
-  ListBase modalhandlers;
+  ListBaseT<wmEventHandler> modalhandlers;
+};
+struct wmWindow : Link {
+  WindowRuntime storage;
+  WindowRuntime *runtime = &storage;
   bScreen screen;
 };
 struct wmWindowManager {
@@ -190,7 +205,7 @@ int main()
   auto done = [&](bContext *context, int action, uint64_t toggles) {
     assert(std::this_thread::get_id() == engine_thread);
     assert(context->win == &win && context->area == &area && context->region == &region);
-    assert(!WM_apple_ios_dialog_active(&win) && !win.modalhandlers.first);
+    assert(!WM_apple_ios_dialog_active(&win) && !win.runtime->modalhandlers.first);
     assert(action == 1 && toggles == 3);
     executed++;
   };
@@ -216,17 +231,17 @@ int main()
   assert(cancelled == 1 && requests.empty());
 
   assert(WM_apple_ios_dialog_begin(&C, dialog, done, cancel, ""));
-  auto *handler = static_cast<wmEventHandler_UI *>(win.modalhandlers.first);
+  auto *handler = static_cast<wmEventHandler_UI *>(win.runtime->modalhandlers.first);
   handler->remove_fn(&C, handler->user_data);  // File/window teardown.
-  unlink(&win.modalhandlers, handler);
+  unlink(&win.runtime->modalhandlers, handler);
   delete handler;
   native_completion(native_id, 1, 3);
   WM_apple_ios_dialog_flush(&C);
   assert(cancelled == 2 && executed == 1);
 
   assert(WM_apple_ios_dialog_begin(&C, dialog, done, cancel, ""));
-  handler = static_cast<wmEventHandler_UI *>(win.modalhandlers.first);
-  unlink(&win.modalhandlers, handler);
+  handler = static_cast<wmEventHandler_UI *>(win.runtime->modalhandlers.first);
+  unlink(&win.runtime->modalhandlers, handler);
   delete handler;  // Editor removal without callback.
   WM_apple_ios_dialog_flush(&C);
   assert(cancelled == 3 && !WM_apple_ios_dialog_active(&win));
