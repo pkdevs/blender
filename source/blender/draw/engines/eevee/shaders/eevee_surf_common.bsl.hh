@@ -68,7 +68,8 @@ struct GeomShadow {
 
 void init_globals_mesh([[maybe_unused]] const VertOutCommon &interp, ShadingData &sd)
 {
-#if defined(USE_BARYCENTRICS) && defined(GPU_FRAGMENT_SHADER) && defined(SRT_CONSTANT_is_mesh)
+#if defined(USE_BARYCENTRICS) && defined(GPU_FRAGMENT_SHADER) && \
+    (defined(SRT_CONSTANT_is_mesh) && (SRT_CONSTANT_is_mesh == 1))
   float wp_delta = length(gpu_dfdx(interp.P)) + length(gpu_dfdy(interp.P));
   float bc_delta = length(gpu_dfdx(gpu_BaryCoord)) + length(gpu_dfdy(gpu_BaryCoord));
   float rate_of_change = wp_delta / bc_delta;
