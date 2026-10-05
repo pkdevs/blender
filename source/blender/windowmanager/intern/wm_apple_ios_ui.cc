@@ -14,6 +14,7 @@
 #include "BKE_screen.hh"
 
 #include "BLI_listbase.h"
+#include "BLI_serialize.hh"
 #include "GHOST_IOSMessageQueue.hh"
 
 #include "DNA_object_types.h"
@@ -49,9 +50,11 @@
 #endif
 
 #include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -60,6 +63,8 @@
 
 namespace blender::ui {
 std::string native_menu_query(bContext *C, const std::string &request, bool execute);
+std::string native_properties_query(bContext *C, const std::string &request, bool execute);
+std::string native_properties_menu_query(bContext *C, const std::string &request, bool execute);
 }
 
 namespace blender {
@@ -143,6 +148,12 @@ std::map<uint64_t, std::string> ios_menu_results;
 std::atomic<uint64_t> ios_menu_next_identifier{0};
 bool ios_ui_layout_ready = false;
 bool ios_ui_gizmo_refresh_pending = true;
+int ios_panels_visible = 0;
+std::chrono::steady_clock::time_point ios_panels_next_snapshot;
+std::string ios_panels_json = "null";
+std::string ios_properties_state = "{\"tab\":\"OBJECT\"}";
+std::string ios_properties_error;
+int64_t ios_panels_sequence = 0;
 std::atomic<bool> ios_navigation_hover_active{false};
 std::atomic<bool> ios_navigation_redraw_pending{false};
 
@@ -736,6 +747,59 @@ void ios_mesh_select_mode_set(bContext *C, const std::string &value)
 
 void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
 {
+  if (command.setting == "native_properties_state") {
+    ios_properties_state = command.value;
+    ios_panels_next_snapshot = {};
+    return;
+  }
+  if (command.setting == "native_properties_edit" || command.setting == "native_panel_edit") {
+    std::istringstream stream(command.value);
+    auto value = io::serialize::JsonFormatter().deserialize(stream);
+    if (const auto *request = value ? value->as_dictionary_value() : nullptr) {
+      ios_panels_sequence = request->lookup_int("sequence").value_or(ios_panels_sequence);
+    }
+    ios_properties_error.clear();
+  }
+  if (command.setting == "native_properties_edit") {
+    ios_panels_next_snapshot = {};
+    if (wmWindow *window = CTX_wm_window(C)) {
+      for (wmEventHandler &handler : window->runtime->modalhandlers) {
+        if (handler.type == WM_HANDLER_TYPE_OP) {
+          ios_properties_error = "Finish the current operation before editing properties.";
+          return;
+        }
+      }
+    }
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    if (WM_apple_ios_dialog_active(CTX_wm_window(C))) {
+      ios_properties_error = "Finish the current dialog before editing properties.";
+      return;
+    }
+#endif
+    ios_properties_error = ui::native_properties_query(C, command.value, true);
+    return;
+  }
+  if (command.setting == "native_panels") {
+    ios_panels_next_snapshot = {};
+    ios_panels_visible = command.value == "3" ? 3 : command.value == "2" ? 2 :
+                         command.value == "1" ? 1 : 0;
+    return;
+  }
+#ifdef WITH_PYTHON
+  if (command.setting == "native_panel_edit") {
+    ios_panels_next_snapshot = {};
+    const char *imports[] = {"bpy", "bl_ui", nullptr};
+    bool blocked = false;
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    blocked = WM_apple_ios_dialog_active(CTX_wm_window(C));
+#endif
+    const std::string expression = "bl_ui.native_panels.apply_json(bpy.context, \"" +
+                                   ios_json_escape(command.value) + "\", " +
+                                   (blocked ? "True" : "False") + ")";
+    BPY_run_string_eval(C, imports, expression.c_str());
+    return;
+  }
+#endif
   if (command.setting == "constraint_axis") {
     const int axis = command.value == "X" ? 0 : command.value == "Y" ? 1 :
                     command.value == "Z" ? 2 : -1;
@@ -947,6 +1011,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   bToolRef *active_tool = has_view3d_context ? WM_toolsystem_ref_from_context(C) : nullptr;
   const char *active_tool_id = active_tool ? active_tool->idname : "builtin.select_box";
   std::string tools_json = "[]";
+  std::string panels_json = "null";
 #ifdef WITH_PYTHON
   if (has_view3d_context) {
     const char *imports[] = {"bpy", "bl_ui", nullptr};
@@ -959,6 +1024,46 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
     {
       tools_json = result;
       MEM_delete(result);
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (ios_panels_visible && now >= ios_panels_next_snapshot) {
+      /* Scene projection follows the native refresh cadence, not the viewport frame rate. */
+      ios_panels_next_snapshot = now + std::chrono::milliseconds(250);
+      const std::string expression = "bl_ui.native_panels.snapshot_json(bpy.context, " +
+                                     std::to_string(ios_panels_visible & 2) + ")";
+      result = nullptr;
+      if (BPY_run_string_as_string(C, imports, expression.c_str(), nullptr, &result)) {
+        ios_panels_json = result;
+        MEM_delete(result);
+      }
+      using namespace io::serialize;
+      std::istringstream base_stream(ios_panels_json);
+      auto base = JsonFormatter().deserialize(base_stream);
+      DictionaryValue merged;
+      if (const auto *dictionary = base ? base->as_dictionary_value() : nullptr) {
+        for (const auto &item : dictionary->elements()) {
+          if (item.first != "ack" && (item.first != "error" || ios_properties_error.empty())) {
+            merged.append(item.first, item.second);
+          }
+        }
+      }
+      merged.append_int("ack", ios_panels_sequence);
+      if (!ios_properties_error.empty()) {
+        merged.append_str("error", ios_properties_error);
+      }
+      if (ios_panels_visible & 1) {
+        std::istringstream properties_stream(ui::native_properties_query(C, ios_properties_state, false));
+        auto properties = JsonFormatter().deserialize(properties_stream);
+        if (properties) {
+          merged.append("inspector", std::move(properties));
+        }
+      }
+      std::ostringstream merged_stream;
+      JsonFormatter().serialize(merged_stream, merged);
+      ios_panels_json = merged_stream.str();
+    }
+    if (ios_panels_visible) {
+      panels_json = ios_panels_json;
     }
   }
 #endif
@@ -1004,6 +1109,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += navigation_json;
   json += ",\"tools\":";
   json += tools_json;
+  json += ",\"panels\":";
+  json += panels_json;
   json += ",\"actions\":[";
 
   bool needs_comma = false;
@@ -1344,7 +1451,7 @@ static void ios_ui_dispatch_menu(bContext *C, IOSMenuRequest &request)
     }
   }
   if (ready && win && CTX_wm_area(C) && CTX_wm_region(C)) {
-    result = blender::ui::native_menu_query(C, request.route, request.execute);
+    result = blender::ui::native_properties_menu_query(C, request.route, request.execute);
   }
   ios_context_pop(C, context_store);
   if (!request.execute) {
@@ -1355,7 +1462,12 @@ static void ios_ui_dispatch_menu(bContext *C, IOSMenuRequest &request)
 static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
 {
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  if (WM_apple_ios_dialog_active(CTX_wm_window(C))) {
+  const auto *setting = std::get_if<IOSSettingCommand>(&message);
+  const bool panel_message = setting && (setting->setting == "native_panels" ||
+                                         setting->setting == "native_panel_edit" ||
+                                         setting->setting == "native_properties_state" ||
+                                         setting->setting == "native_properties_edit");
+  if (WM_apple_ios_dialog_active(CTX_wm_window(C)) && !panel_message) {
     if (const auto *request = std::get_if<IOSMenuRequest>(&message)) {
       if (!request->execute) {
         ios_menu_completed.push({request->identifier, "[]"});

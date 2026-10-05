@@ -58,7 +58,7 @@ static int calls, resultX, resultY;
 static bool executed;
 static std::string received;
 namespace blender::ui {
-static std::string native_menu_query(bContext *C, const std::string &route, bool execute) {
+static std::string native_properties_menu_query(bContext *C, const std::string &route, bool execute) {
   calls++; received = route; executed = execute;
   resultX = C->win->runtime->eventstate->xy[0]; resultY = C->win->runtime->eventstate->xy[1];
   return "projected menu";
