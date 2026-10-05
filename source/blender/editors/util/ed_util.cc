@@ -257,11 +257,12 @@ void ED_editors_exit(Main *bmain, bool do_undo_system)
    *
    * To reproduce the problem where stale data is used, see: #84920. */
   for (Object &ob : bmain->objects) {
-    if (object::editmode_free_ex(bmain, &ob)) {
-      if (do_undo_system == false) {
-        DEG_id_tag_update(&ob.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-      }
+    if (do_undo_system == false && BKE_object_is_in_editmode(&ob)) {
+      DEG_id_tag_update(&ob.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+      /* Tag the object data to propagate tags to all objects using it. */
+      DEG_id_tag_update(ob.data, ID_RECALC_GEOMETRY);
     }
+    object::editmode_free_ex(bmain, &ob);
   }
 
   /* global in meshtools... */
