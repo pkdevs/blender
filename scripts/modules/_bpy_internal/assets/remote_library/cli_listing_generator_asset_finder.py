@@ -196,8 +196,7 @@ def list_assets(blendfile_version_info: FileVersionInfo,
     file_dependencies = []
     for dependency in dependencies:
         dependency_info = _file_info(dependency.absolute_path, asset_library_root)
-        dependency_info.blender_version = _version_to_string(
-            dependency.blendlib_version) if dependency.blendlib_version else None
+        dependency_info.blender_version = _version_to_string(dependency.blendlib_version) or None
         file_dependencies.append(dependency_info)
 
     return blendfile_info, assets, file_dependencies
@@ -416,8 +415,10 @@ def _file_info(filepath: Path, asset_library_root: Path) -> api_models.FileV1:
     )
 
 
-def _version_to_string(version: Iterable[int]) -> str:
+def _version_to_string(version: Iterable[int] | None) -> str:
     """(6, 40) -> '6.40'."""
+    if version is None:
+        return ""
     return ".".join(map(str, version))
 
 
