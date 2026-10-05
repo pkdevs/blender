@@ -124,12 +124,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
   const GListPtr positions_list = params.extract_input<GListPtr>("Positions"_ustr);
   const GListPtr curve_offsets_list = params.extract_input<GListPtr>("Curve Offsets"_ustr);
-  if (positions_list->size() < 1) {
+  if (!positions_list || positions_list->size() < 1) {
     params.error_message_add(NodeWarningType::Error, "Number of points must be greater than zero");
     params.set_default_remaining_outputs();
     return;
   }
-  if (curve_offsets_list->size() < 2) {
+  if (!curve_offsets_list || curve_offsets_list->size() < 2) {
     params.error_message_add(NodeWarningType::Error, "Number of curve offsets must be at least 2");
     params.set_default_remaining_outputs();
     return;
