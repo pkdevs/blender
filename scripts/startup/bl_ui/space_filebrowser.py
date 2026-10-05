@@ -750,6 +750,7 @@ class ASSETBROWSER_MT_asset(Menu):
 
         layout.separator()
 
+        layout.operator("asset.import", icon='IMPORT')
         layout.operator("asset.open_containing_blend_file", icon='FILE_BLEND')
         layout.operator("asset.browse_containing_blend_file")
 
@@ -961,6 +962,7 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
 
         layout.separator()
 
+        layout.operator("asset.import", icon='IMPORT')
         layout.operator("asset.open_containing_blend_file", icon='FILE_BLEND')
         layout.operator("asset.browse_containing_blend_file")
 

@@ -1835,6 +1835,132 @@ static void ASSET_OT_asset_download(wmOperatorType *ot)
 
 /* -------------------------------------------------------------------- */
 
+/* FIXME: copy-paste from rna_space.cc */
+static const EnumPropertyItem rna_enum_fileselect_params_asset_import_method_items[] = {
+    {FILE_ASSET_IMPORT_FOLLOW_PREFS,
+     "FOLLOW_PREFS",
+     0,
+     "Follow Asset or Preferences",
+     "Use the import method set in the Preferences for this asset library, don't override it "
+     "for this Asset Browser"},
+    {FILE_ASSET_IMPORT_LINK,
+     "LINK",
+     ICON_LINK_BLEND,
+     "Link",
+     "Import the assets as linked data-block"},
+    {FILE_ASSET_IMPORT_APPEND,
+     "APPEND",
+     ICON_APPEND_BLEND,
+     "Append",
+     "Import the asset as copied data-block, with no link to the original asset data-block"},
+    {FILE_ASSET_IMPORT_APPEND_REUSE,
+     "APPEND_REUSE",
+     ICON_APPEND_BLEND,
+     "Append (Reuse Data)",
+     "Import the asset as copied data-block while avoiding multiple copies of nested, "
+     "typically heavy data. For example the textures of a material asset, or the mesh of an "
+     "object asset, don't have to be copied every time this asset is imported. The instances of "
+     "the asset share the data instead"},
+    {FILE_ASSET_IMPORT_PACK,
+     "PACK",
+     ICON_PACKAGE,
+     "Pack",
+     "Import the asset as linked data-block, and pack it in the current file (ensures that it "
+     "remains unchanged in case the library data is modified, is not available anymore, etc.)"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static wmOperatorStatus asset_import_exec(bContext *C, wmOperator *op)
+{
+  const eFileAssetImportMethod prop_import_method = static_cast<eFileAssetImportMethod>(
+      RNA_enum_get(op->ptr, "import_method"));
+  std::optional<eAssetImportMethod> import_method;
+  switch (prop_import_method) {
+    case FILE_ASSET_IMPORT_LINK:
+      import_method = std::make_optional(ASSET_IMPORT_LINK);
+      break;
+    case FILE_ASSET_IMPORT_APPEND:
+      import_method = std::make_optional(ASSET_IMPORT_APPEND);
+      break;
+    case FILE_ASSET_IMPORT_APPEND_REUSE:
+      import_method = std::make_optional(ASSET_IMPORT_APPEND_REUSE);
+      break;
+    case FILE_ASSET_IMPORT_PACK:
+      import_method = std::make_optional(ASSET_IMPORT_PACK);
+      break;
+    case FILE_ASSET_IMPORT_FOLLOW_PREFS:
+      /* TODO(redmser): nullopt turns into append&reuse, but we'd like to use the "effective import
+       * method" here instead! */
+      import_method = std::nullopt;
+      break;
+  }
+
+  Main *main = CTX_data_main(C);
+  const Vector<const asset_system::AssetRepresentation *> assets = selected_or_active_assets(C);
+  int failed = 0;
+  for (const asset_system::AssetRepresentation *asset : assets) {
+    ID *id = asset_local_id_ensure_imported(*main, *asset, 0, import_method);
+    if (id == nullptr) {
+      failed++;
+    }
+  }
+
+  if (failed == 0) {
+    BKE_reportf(op->reports, RPT_INFO, "Imported %i asset(s)", assets.size());
+  }
+  else {
+    BKE_reportf(
+        op->reports, RPT_WARNING, "%i of %i asset(s) failed to import", failed, assets.size());
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static bool asset_import_poll(bContext *C)
+{
+  const Vector<const asset_system::AssetRepresentation *> assets = selected_or_active_assets(C);
+  if (assets.is_empty()) {
+    CTX_wm_operator_poll_msg_set(C, "No asset selected or active");
+    return false;
+  }
+
+  const bool only_downloadable_assets = [&]() {
+    for (const asset_system::AssetRepresentation *asset : assets) {
+      if (!asset->needs_download()) {
+        return false;
+      }
+    }
+    return true;
+  }();
+
+  if (only_downloadable_assets) {
+    CTX_wm_operator_poll_msg_set(C, "None of the selected assets are downloaded");
+    return false;
+  }
+
+  return true;
+}
+
+static void ASSET_OT_import(wmOperatorType *ot)
+{
+  ot->name = "Import Asset";
+  ot->description = "Imports the asset into the current blend-file";
+  ot->idname = "ASSET_OT_import";
+
+  ot->exec = asset_import_exec;
+  ot->poll = asset_import_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  ot->prop = RNA_def_property(ot->srna, "import_method", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(ot->prop, rna_enum_fileselect_params_asset_import_method_items);
+  RNA_def_property_enum_default(ot->prop, FILE_ASSET_IMPORT_FOLLOW_PREFS);
+  RNA_def_property_ui_text(ot->prop, "Import Method", "Determine how the asset will be imported");
+  RNA_def_enum_funcs(ot->prop, rna_asset_library_reference_itemf);
+}
+
+/* -------------------------------------------------------------------- */
+
 void operatortypes_asset()
 {
   WM_operatortype_append(ASSET_OT_mark);
@@ -1857,6 +1983,7 @@ void operatortypes_asset()
 
   WM_operatortype_append(ASSET_OT_assets_download);
   WM_operatortype_append(ASSET_OT_asset_download);
+  WM_operatortype_append(ASSET_OT_import);
 }
 
 }  // namespace blender::ed::asset
