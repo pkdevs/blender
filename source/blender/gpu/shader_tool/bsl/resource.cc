@@ -14,20 +14,6 @@ namespace bsl {
 
 using namespace blender::gpu::shader::parser::ast;
 
-string ParsedAttribute::parse_condition() const
-{
-  if (!condition.is_valid()) {
-    return "";
-  }
-  string str;
-  for (LocalVar node : condition.children_of_type<LocalVar>()) {
-    str += "int " + string(node.str()) + " = ";
-    str += "ShaderCreateInfo::find_constant(constants, \"" + string(node.str()) + "\"); ";
-  }
-  str += "return " + string(condition.str()) + ";";
-  return str;
-}
-
 Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
 {
   struct AttributeDescriptor {
@@ -113,6 +99,7 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
         {"frequency",                               {ResourceTableType::NONE,           ResourceType::FREQUENCY,               1}},
         {"index",                                   {ResourceTableType::NONE,           ResourceType::DUAL_SOURCE_INDEX,       1}},
         {"raster_order_group",                      {ResourceTableType::NONE,           ResourceType::RASTER_ORDER_GROUP,      1}},
+        {"capacity",                                {ResourceTableType::NONE,           ResourceType::CAPACITY,                1}},
       /* clang-format on */
   };
 
@@ -147,6 +134,9 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
 
       if (res_type == ResourceType::CONDITION) {
         result.value.condition = params.child_first();
+      }
+      else if (res_type == ResourceType::CAPACITY) {
+        result.value.capacity = params.child_first();
       }
       else if (res_type == ResourceType::FREQUENCY) {
         result.value.frequency = params.child_first();
