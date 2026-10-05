@@ -429,6 +429,53 @@ typedef struct UserInputEvent {
 
 @end
 
+@interface GHOSTIOSFadingButtonScrollView : GHOSTIOSButtonScrollView
+@end
+
+@implementation GHOSTIOSFadingButtonScrollView {
+  CAGradientLayer *_edge_fade;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame
+{
+  self = [super initWithFrame:frame];
+  if (self) {
+    _edge_fade = [[CAGradientLayer alloc] init];
+    _edge_fade.startPoint = CGPointMake(0, 0.5);
+    _edge_fade.endPoint = CGPointMake(1, 0.5);
+    self.layer.mask = _edge_fade;
+  }
+  return self;
+}
+
+- (void)dealloc
+{
+  [_edge_fade release];
+  [super dealloc];
+}
+
+- (void)layoutSubviews
+{
+  [super layoutSubviews];
+  CGFloat width = self.bounds.size.width;
+  CGFloat fade = width > 0 ? MIN(18.0, width * 0.25) / width : 0.0;
+  BOOL leading = self.contentOffset.x + self.adjustedContentInset.left > 0.5;
+  BOOL trailing = self.contentSize.width + self.adjustedContentInset.right -
+                      CGRectGetMaxX(self.bounds) > 0.5;
+  id opaque = (id)UIColor.blackColor.CGColor;
+  id clear = (id)UIColor.clearColor.CGColor;
+  /* UIScrollView's bounds origin follows its offset. Keep the mask fixed to the
+   * visible window, with no implicit animation lag while dragging or resizing. */
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  _edge_fade.frame = self.bounds;
+  _edge_fade.locations = @[@0, @(fade), @(1.0 - fade), @1];
+  _edge_fade.colors = @[leading ? clear : opaque, opaque, opaque, trailing ? clear : opaque];
+  [CATransaction commit];
+}
+
+@end
+
 @interface GHOSTIOSPassThroughVisualEffectView : UIVisualEffectView
 @end
 
@@ -2002,6 +2049,14 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIGlassEffect *_action_rail_glass_effect;
   UIScrollView *_action_scroll;
   UIStackView *_action_stack;
+  UIView *_action_group;
+  UIButton *_action_toggle;
+  NSLayoutConstraint *_action_expanded_width_constraint;
+  NSLayoutConstraint *_action_collapsed_width_constraint;
+  NSLayoutConstraint *_action_toggle_width_constraint;
+  NSLayoutConstraint *_action_toggle_trailing_constraint;
+  BOOL _actions_collapsed;
+  NSUInteger _action_transition_generation;
   UIView *_view_gizmo_hotspot;
   NSMutableArray *_view_pie_buttons;
   NSTimer *_toolbar_refresh_timer;
@@ -2137,6 +2192,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_rail_glass_effect release];
   [_action_scroll release];
   [_action_stack release];
+  [_action_expanded_width_constraint release];
+  [_action_collapsed_width_constraint release];
+  [_action_toggle_width_constraint release];
+  [_action_toggle_trailing_constraint release];
   [_view_pie_buttons release];
   [super dealloc];
 }
@@ -2495,9 +2554,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   if (safe_width <= 0.0) {
     safe_width = self.view.bounds.size.width;
   }
-  const CGFloat reserved = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone ?
-                               160.0 : 284.0;
-  return MIN(240.0, MAX(64.0, safe_width - reserved));
+  return MIN(240.0, MAX(64.0, safe_width - 284.0));
 }
 
 - (CGFloat)toolRailBottomDockCenterY
@@ -3033,6 +3090,108 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_scroll setContentOffset:CGPointZero animated:NO];
 }
 
+- (void)installActionStripToggle
+{
+  _action_group = [[[GHOSTIOSPassThroughOverlayView alloc] init] autorelease];
+  _action_group.translatesAutoresizingMaskIntoConstraints = NO;
+  [_action_rail.contentView addSubview:_action_group];
+  [_action_group addSubview:_action_scroll];
+
+  _action_toggle = [UIButton buttonWithType:UIButtonTypeSystem];
+  _action_toggle.translatesAutoresizingMaskIntoConstraints = NO;
+  _action_toggle.tintColor = UIColor.labelColor;
+  _action_toggle.accessibilityIdentifier = @"blender.quick-actions.toggle";
+  _action_toggle.titleLabel.adjustsFontSizeToFitWidth = YES;
+  _action_toggle.titleLabel.minimumScaleFactor = 0.7;
+  [_action_toggle addTarget:self action:@selector(toggleActionStrip:)
+          forControlEvents:UIControlEventTouchUpInside];
+  [_action_group addSubview:_action_toggle];
+
+  _action_expanded_width_constraint = [[_action_group.widthAnchor
+      constraintEqualToAnchor:_action_stack.widthAnchor constant:60.0] retain];
+  _action_expanded_width_constraint.priority = UILayoutPriorityDefaultHigh;
+  _action_collapsed_width_constraint = [[_action_group.widthAnchor
+      constraintEqualToConstant:96.0] retain];
+  _action_collapsed_width_constraint.priority = UILayoutPriorityDefaultHigh;
+  _action_toggle_width_constraint = [[_action_toggle.widthAnchor
+      constraintEqualToConstant:44.0] retain];
+  _action_toggle_trailing_constraint = [[_action_toggle.trailingAnchor
+      constraintEqualToAnchor:_action_group.trailingAnchor] retain];
+  NSLayoutConstraint *center = [_action_group.centerXAnchor
+      constraintEqualToAnchor:_overlay_view.centerXAnchor];
+  center.priority = UILayoutPriorityRequired - 2;
+  NSLayoutConstraint *minimum_width = [_action_group.widthAnchor constraintGreaterThanOrEqualToConstant:92.0];
+  minimum_width.priority = UILayoutPriorityRequired - 1;
+  [NSLayoutConstraint activateConstraints:@[
+    center,
+    minimum_width,
+    [_action_group.leadingAnchor constraintGreaterThanOrEqualToAnchor:_action_rail.contentView.leadingAnchor],
+    [_action_group.trailingAnchor constraintLessThanOrEqualToAnchor:_action_rail.contentView.trailingAnchor],
+    [_action_group.topAnchor constraintEqualToAnchor:_action_rail.contentView.topAnchor],
+    [_action_group.bottomAnchor constraintEqualToAnchor:_action_rail.contentView.bottomAnchor],
+    [_action_toggle.leadingAnchor constraintEqualToAnchor:_action_group.leadingAnchor],
+    [_action_toggle.centerYAnchor constraintEqualToAnchor:_action_group.centerYAnchor],
+    [_action_toggle.heightAnchor constraintEqualToConstant:44.0],
+  ]];
+  [self setActionsCollapsed:NO animated:NO];
+}
+
+- (void)toggleActionStrip:(UIButton *)sender
+{
+  [self setActionsCollapsed:!_actions_collapsed animated:YES];
+}
+
+- (void)setActionsCollapsed:(BOOL)collapsed animated:(BOOL)animated
+{
+  [_action_rail layoutIfNeeded];
+  _actions_collapsed = collapsed;
+  const NSUInteger generation = ++_action_transition_generation;
+  const BOOL animate = animated && !UIAccessibilityIsReduceMotionEnabled();
+  _action_expanded_width_constraint.active = NO;
+  _action_collapsed_width_constraint.active = NO;
+  _action_toggle_width_constraint.active = NO;
+  _action_toggle_trailing_constraint.active = NO;
+  _action_expanded_width_constraint.active = !collapsed;
+  _action_collapsed_width_constraint.active = collapsed;
+  _action_toggle_width_constraint.active = !collapsed;
+  _action_toggle_trailing_constraint.active = collapsed;
+
+  UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
+  configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+  configuration.title = collapsed ? @"Actions" : nil;
+  configuration.image = collapsed ? nil : [UIImage systemImageNamed:@"xmark"];
+  configuration.preferredSymbolConfigurationForImage =
+      [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold];
+  configuration.contentInsets = NSDirectionalEdgeInsetsMake(8, 10, 8, 10);
+  _action_toggle.configuration = configuration;
+  _action_toggle.accessibilityLabel = collapsed ? @"Show Quick Actions" : @"Hide Quick Actions";
+  _action_toggle.accessibilityValue = collapsed ? @"Collapsed" : @"Expanded";
+  _action_toggle.toolTip = _action_toggle.accessibilityLabel;
+  _action_scroll.hidden = NO;
+  _action_scroll.userInteractionEnabled = !collapsed;
+  _action_scroll.accessibilityElementsHidden = collapsed;
+
+  /* Keep the native glass control while its bounds change. Individual glass
+   * buttons stay inside the scroll clip as the row contracts into the pill. */
+  [UIView animateWithDuration:animate ? 0.36 : 0.0
+                        delay:0.0
+       usingSpringWithDamping:0.86
+        initialSpringVelocity:0.0
+                      options:UIViewAnimationOptionBeginFromCurrentState |
+                              UIViewAnimationOptionAllowUserInteraction
+                   animations:^{
+                     [self->_action_rail layoutIfNeeded];
+                     self->_action_scroll.alpha = collapsed ? 0.0 : 1.0;
+                     self->_action_scroll.transform = collapsed && animate ?
+                         CGAffineTransformMakeTranslation(-20.0, 0.0) : CGAffineTransformIdentity;
+                   }
+                   completion:^(BOOL finished) {
+                     if (self->_action_transition_generation == generation) {
+                       self->_action_scroll.hidden = self->_actions_collapsed;
+                     }
+                   }];
+}
+
 - (void)refreshNativeMenuBar
 {
   if (_native_menubar_request) {
@@ -3172,9 +3331,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)updatePhoneActionStripLayout
 {
-  const BOOL narrow = self.view.safeAreaLayoutGuide.layoutFrame.size.width < 600.0;
-  _action_phone_bottom_constraint.constant = narrow ? -132.0 : -6.0;
-  _action_phone_trailing_constraint.constant = narrow ? -12.0 : -130.0;
+  /* Folding or rotating a phone should narrow the scrolling lane, not lift it
+   * into the viewport. Reserve the actual gizmo footprint beside the lane. */
+  CGRect safe = _overlay_view.safeAreaLayoutGuide.layoutFrame;
+  _action_phone_bottom_constraint.constant = -6.0;
+  _action_phone_trailing_constraint.constant =
+      -MAX(12.0, CGRectGetMaxX(safe) - CGRectGetMinX(_view_gizmo_hotspot.frame) + 12.0);
 }
 
 - (void)installActionStripLayout
@@ -4122,7 +4284,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _action_rail.alpha = 0.0;
   [_overlay_view addSubview:_action_rail];
 
-  _action_scroll = [[GHOSTIOSButtonScrollView alloc] initWithFrame:CGRectZero];
+  _action_scroll = [[GHOSTIOSFadingButtonScrollView alloc] initWithFrame:CGRectZero];
   _action_scroll.translatesAutoresizingMaskIntoConstraints = NO;
   _action_scroll.backgroundColor = UIColor.clearColor;
   _action_scroll.clipsToBounds = YES;
@@ -4138,6 +4300,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _action_stack.spacing = 4.0;
   _action_stack.translatesAutoresizingMaskIntoConstraints = NO;
   [_action_scroll addSubview:_action_stack];
+  [self installActionStripToggle];
 
   NSArray *view_pie_specs = @[
     @{@"title" : @"Frame All",
@@ -4262,9 +4425,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     [_tool_stack.widthAnchor constraintEqualToAnchor:_tool_scroll.frameLayoutGuide.widthAnchor
                                            constant:-12.0],
 
-    [_action_scroll.leadingAnchor constraintEqualToAnchor:_action_rail.contentView.leadingAnchor
-                                                constant:0.0],
-    [_action_scroll.trailingAnchor constraintEqualToAnchor:_action_rail.contentView.trailingAnchor
+    [_action_scroll.leadingAnchor constraintEqualToAnchor:_action_group.leadingAnchor
+                                                constant:48.0],
+    [_action_scroll.trailingAnchor constraintEqualToAnchor:_action_group.trailingAnchor
                                                  constant:0.0],
     [_action_scroll.topAnchor constraintEqualToAnchor:_action_rail.contentView.topAnchor
                                             constant:0.0],
