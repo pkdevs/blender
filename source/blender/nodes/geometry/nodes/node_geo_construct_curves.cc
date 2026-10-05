@@ -103,8 +103,7 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
         for (const int i : range) {
           const int curr = curve_offsets[i];
           const int next = curve_offsets[i + 1];
-          const int size = next - curr;
-          if (size < 1) {
+          if (next <= curr) {
             return false;
           }
         }
