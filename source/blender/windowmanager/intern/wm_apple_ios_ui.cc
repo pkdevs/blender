@@ -14,6 +14,7 @@
 #include "BKE_screen.hh"
 
 #include "BLI_listbase.h"
+#include "GHOST_IOSMessageQueue.hh"
 
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
@@ -44,18 +45,18 @@
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
 #  include "wm_apple_ios_file.hh"
+#  include "WM_apple_ios.hh"
 #endif
 
-#include <cstring>
-#include <cstdlib>
 #include <atomic>
-#include <mutex>
+#include <cstdlib>
+#include <cstring>
+#include <map>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <variant>
 #include <vector>
-#include <map>
 
 namespace blender::ui {
 std::string native_menu_query(bContext *C, const std::string &request, bool execute);
@@ -118,13 +119,6 @@ struct IOSSettingCommand {
   std::string value;
 };
 
-std::mutex ios_ui_command_mutex;
-std::vector<IOSUICommand> ios_ui_commands;
-std::vector<IOSOperatorCommand> ios_ui_operator_commands;
-std::vector<IOSOperatorPropertyCommand> ios_ui_operator_property_commands;
-std::vector<IOSSettingCommand> ios_ui_setting_commands;
-std::vector<std::string> ios_ui_tool_commands;
-std::vector<float> ios_ui_view_roll_commands;
 struct IOSMenuRequest {
   uint64_t identifier;
   std::string route;
@@ -133,28 +127,23 @@ struct IOSMenuRequest {
   int x = 0, y = 0;
   int retries = 0;
 };
-std::vector<IOSMenuRequest> ios_menu_requests;
+using IOSUIMessage = std::variant<IOSUICommand,
+                                  IOSOperatorCommand,
+                                  IOSOperatorPropertyCommand,
+                                  IOSSettingCommand,
+                                  std::string,
+                                  float,
+                                  IOSMenuRequest>;
+/* A single inbox preserves ordering across tools, settings, operators and menus. */
+GHOST_IOSMessageQueue<IOSUIMessage> ios_ui_messages;
+GHOST_IOSMessageQueue<std::pair<uint64_t, std::string>> ios_menu_completed;
+/* UIKit-owned result cache. */
 std::map<uint64_t, std::string> ios_menu_results;
-uint64_t ios_menu_next_identifier = 0;
+std::atomic<uint64_t> ios_menu_next_identifier{0};
 bool ios_ui_layout_ready = false;
 bool ios_ui_gizmo_refresh_pending = true;
 std::atomic<bool> ios_navigation_hover_active{false};
 std::atomic<bool> ios_navigation_redraw_pending{false};
-
-struct IOSContextMenuItem {
-  std::string title;
-  std::string op_name;
-  bool separator = false;
-};
-
-std::mutex ios_context_menu_mutex;
-std::vector<IOSContextMenuItem> ios_context_menu_items;
-
-struct IOSToolbarItem {
-  const char *title;
-  const char *idname;
-  const char *symbol;
-};
 
 struct IOSActionItem {
   const char *title;
@@ -166,7 +155,7 @@ struct IOSActionItem {
   bool selected = false;
 };
 
-std::mutex ios_toolbar_mutex;
+GHOST_IOSLatest<std::string> ios_toolbar_snapshot;
 std::string ios_toolbar_json =
     "{\"mode\":\"objectmode\",\"active\":\"builtin.select_box\",\"tools\":[]}";
 
@@ -927,169 +916,6 @@ void ios_tool_set_by_id(bContext *C, const std::string &tool_id)
   ios_context_pop(C, context_store);
 }
 
-void ios_context_menu_add_operator(bContext * /*C*/,
-                                   std::vector<IOSContextMenuItem> &items,
-                                   const char *title,
-                                   const char *op_name)
-{
-  /* Build the native menu from Blender's registered operators, not from the current poll result.
-   * Polling here can be overly fragile because UIKit asks for a menu snapshot outside the original
-   * pointer event path; the command is polled again when it is actually executed. */
-  if (WM_operatortype_find(op_name, false) != nullptr) {
-    items.push_back({title, op_name, false});
-  }
-}
-
-void ios_context_menu_add_separator(std::vector<IOSContextMenuItem> &items)
-{
-  if (!items.empty() && !items.back().separator) {
-    items.push_back({"", "", true});
-  }
-}
-
-void ios_context_menu_add_transform(std::vector<IOSContextMenuItem> &items, bContext *C)
-{
-  ios_context_menu_add_operator(C, items, "Move", "TRANSFORM_OT_translate");
-  ios_context_menu_add_operator(C, items, "Rotate", "TRANSFORM_OT_rotate");
-  ios_context_menu_add_operator(C, items, "Scale", "TRANSFORM_OT_resize");
-  ios_context_menu_add_operator(C, items, "Transform", "TRANSFORM_OT_transform");
-}
-
-void ios_context_menu_add_view(std::vector<IOSContextMenuItem> &items, bContext *C)
-{
-  ios_context_menu_add_operator(C, items, "Frame Selected", "VIEW3D_OT_view_selected");
-  ios_context_menu_add_operator(C, items, "Frame All", "VIEW3D_OT_view_all");
-}
-
-void ios_context_menu_add_snap(std::vector<IOSContextMenuItem> &items, bContext *C)
-{
-  ios_context_menu_add_operator(C, items, "Selection to Grid", "VIEW3D_OT_snap_selected_to_grid");
-  ios_context_menu_add_operator(C, items, "Selection to Cursor", "VIEW3D_OT_snap_selected_to_cursor");
-  ios_context_menu_add_operator(C, items, "Selection to Active", "VIEW3D_OT_snap_selected_to_active");
-}
-
-void ios_context_menu_build_object(std::vector<IOSContextMenuItem> &items, bContext *C)
-{
-  Object *active_object = CTX_data_active_object(C);
-
-  if (active_object != nullptr && active_object->type == OB_CAMERA) {
-    ios_context_menu_add_operator(C, items, "Set Active Camera", "VIEW3D_OT_object_as_camera");
-    ios_context_menu_add_separator(items);
-  }
-
-  if (active_object != nullptr &&
-      ELEM(active_object->type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_GREASE_PENCIL))
-  {
-    ios_context_menu_add_operator(C, items, "Shade Smooth", "OBJECT_OT_shade_smooth");
-    ios_context_menu_add_operator(C, items, "Shade Auto Smooth", "OBJECT_OT_shade_auto_smooth");
-    ios_context_menu_add_operator(C, items, "Shade Flat", "OBJECT_OT_shade_flat");
-    ios_context_menu_add_separator(items);
-  }
-
-  ios_context_menu_add_operator(C, items, "Join", "OBJECT_OT_join");
-  ios_context_menu_add_operator(C, items, "Convert", "OBJECT_OT_convert");
-  ios_context_menu_add_operator(C, items, "Set Origin", "OBJECT_OT_origin_set");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Copy Objects", "VIEW3D_OT_copybuffer");
-  ios_context_menu_add_operator(C, items, "Paste Objects", "VIEW3D_OT_pastebuffer");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Duplicate", "OBJECT_OT_duplicate_move");
-  ios_context_menu_add_operator(C, items, "Duplicate Linked", "OBJECT_OT_duplicate_move_linked");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Mirror", "TRANSFORM_OT_mirror");
-  ios_context_menu_add_snap(items, C);
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Set Parent", "OBJECT_OT_parent_set");
-  ios_context_menu_add_operator(C, items, "Clear Parent", "OBJECT_OT_parent_clear");
-  ios_context_menu_add_operator(C, items, "Move to Collection", "OBJECT_OT_move_to_collection");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Insert Keyframe", "ANIM_OT_keyframe_insert");
-  ios_context_menu_add_operator(C, items, "Insert Keyframe with Keying Set", "ANIM_OT_keyframe_insert_menu");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Delete", "OBJECT_OT_delete");
-}
-
-void ios_context_menu_build_edit_mesh(std::vector<IOSContextMenuItem> &items, bContext *C)
-{
-  ios_context_menu_add_operator(C, items, "Subdivide", "MESH_OT_subdivide");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Extrude Vertices", "MESH_OT_extrude_vertices_move");
-  ios_context_menu_add_operator(C, items, "Extrude Edges", "MESH_OT_extrude_edges_move");
-  ios_context_menu_add_operator(C, items, "Extrude Faces", "VIEW3D_OT_edit_mesh_extrude_move_normal");
-  ios_context_menu_add_operator(C, items, "Extrude Faces Along Normals",
-                                "VIEW3D_OT_edit_mesh_extrude_move_shrink_fatten");
-  ios_context_menu_add_operator(C, items, "Inset Faces", "MESH_OT_inset");
-  ios_context_menu_add_operator(C, items, "Bevel", "MESH_OT_bevel");
-  ios_context_menu_add_operator(C, items, "Bridge Edge Loops", "MESH_OT_bridge_edge_loops");
-  ios_context_menu_add_operator(C, items, "New Edge/Face from Vertices", "MESH_OT_edge_face_add");
-  ios_context_menu_add_operator(C, items, "Merge", "MESH_OT_merge");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Loop Cut", "MESH_OT_loopcut_slide");
-  ios_context_menu_add_operator(C, items, "Offset Edge Loop Cut", "MESH_OT_offset_edge_loops_slide");
-  ios_context_menu_add_operator(C, items, "Knife", "MESH_OT_knife_tool");
-  ios_context_menu_add_operator(C, items, "Bisect", "MESH_OT_bisect");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Push/Pull", "TRANSFORM_OT_push_pull");
-  ios_context_menu_add_operator(C, items, "Shrink/Fatten", "TRANSFORM_OT_shrink_fatten");
-  ios_context_menu_add_operator(C, items, "Shear", "TRANSFORM_OT_shear");
-  ios_context_menu_add_operator(C, items, "Slide Vertices", "TRANSFORM_OT_vert_slide");
-  ios_context_menu_add_operator(C, items, "Slide Edges", "TRANSFORM_OT_edge_slide");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Shade Smooth", "MESH_OT_faces_shade_smooth");
-  ios_context_menu_add_operator(C, items, "Shade Flat", "MESH_OT_faces_shade_flat");
-  ios_context_menu_add_separator(items);
-
-  ios_context_menu_add_operator(C, items, "Split", "MESH_OT_split");
-  ios_context_menu_add_operator(C, items, "Separate", "MESH_OT_separate");
-  ios_context_menu_add_operator(C, items, "Dissolve", "MESH_OT_dissolve_mode");
-  ios_context_menu_add_operator(C, items, "Delete", "MESH_OT_delete");
-}
-
-void ios_context_menu_build(bContext *C)
-{
-  const IOSContextStore context_store = ios_context_push_view3d(C);
-  std::vector<IOSContextMenuItem> items;
-
-  if (CTX_wm_window(C) != nullptr && CTX_wm_area(C) != nullptr && CTX_wm_region(C) != nullptr) {
-    ios_context_menu_add_transform(items, C);
-    ios_context_menu_add_separator(items);
-
-    Object *active_object = CTX_data_active_object(C);
-    const int mode = active_object ? active_object->mode : OB_MODE_OBJECT;
-
-    if (mode & OB_MODE_EDIT) {
-      ios_context_menu_build_edit_mesh(items, C);
-    }
-    else {
-      ios_context_menu_build_object(items, C);
-    }
-
-    ios_context_menu_add_separator(items);
-    ios_context_menu_add_view(items, C);
-  }
-
-  while (!items.empty() && items.back().separator) {
-    items.pop_back();
-  }
-
-  {
-    std::lock_guard lock(ios_context_menu_mutex);
-    ios_context_menu_items = std::move(items);
-  }
-
-  ios_context_pop(C, context_store);
-}
-
 std::string ios_toolbar_build_json_for_context(bContext *C)
 {
   const IOSContextStore context_store = ios_context_push_view3d(C);
@@ -1210,8 +1036,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
 void ios_toolbar_build(bContext *C)
 {
   std::string json = ios_toolbar_build_json_for_context(C);
-  std::lock_guard lock(ios_toolbar_mutex);
-  ios_toolbar_json = std::move(json);
+  ios_toolbar_snapshot.publish(std::move(json));
 }
 
 std::string ios_json_escape(const std::string &value)
@@ -1253,8 +1078,7 @@ extern "C" void WM_apple_ios_ui_command_enqueue(int command)
     return;
   }
 
-  std::lock_guard lock(ios_ui_command_mutex);
-  ios_ui_commands.push_back(IOSUICommand(command));
+  ios_ui_messages.push(IOSUICommand(command));
 }
 
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name)
@@ -1263,8 +1087,7 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name)
     return;
   }
 
-  std::lock_guard lock(ios_ui_command_mutex);
-  ios_ui_operator_commands.push_back({op_name});
+  ios_ui_messages.push(IOSOperatorCommand{op_name});
 }
 
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y)
@@ -1272,8 +1095,7 @@ extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name
   if (op_name == nullptr || op_name[0] == '\0') {
     return;
   }
-  std::lock_guard lock(ios_ui_command_mutex);
-  ios_ui_operator_commands.push_back({op_name, true, x, y});
+  ios_ui_messages.push(IOSOperatorCommand{op_name, true, x, y});
 }
 
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
@@ -1284,9 +1106,8 @@ extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
     return;
   }
 
-  std::lock_guard lock(ios_ui_command_mutex);
-  ios_ui_operator_property_commands.push_back(
-      {op_name, prop_name ? prop_name : "", prop_value ? prop_value : ""});
+  ios_ui_messages.push(IOSOperatorPropertyCommand{
+      op_name, prop_name ? prop_name : "", prop_value ? prop_value : ""});
 }
 
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *setting, const char *value)
@@ -1295,8 +1116,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *setting, const char 
     return;
   }
 
-  std::lock_guard lock(ios_ui_command_mutex);
-  ios_ui_setting_commands.push_back({setting, value});
+  ios_ui_messages.push(IOSSettingCommand{setting, value});
 }
 
 extern "C" void WM_apple_ios_ui_tool_set_by_id(const char *tool_id)
@@ -1305,8 +1125,7 @@ extern "C" void WM_apple_ios_ui_tool_set_by_id(const char *tool_id)
     return;
   }
 
-  std::lock_guard lock(ios_ui_command_mutex);
-  ios_ui_tool_commands.push_back(tool_id);
+  ios_ui_messages.push(std::string(tool_id));
 }
 
 extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle)
@@ -1315,48 +1134,12 @@ extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle)
     return;
   }
 
-  std::lock_guard lock(ios_ui_command_mutex);
-  ios_ui_view_roll_commands.push_back(angle);
-}
-
-extern "C" char *WM_apple_ios_ui_context_menu_copy_json()
-{
-  std::lock_guard lock(ios_context_menu_mutex);
-
-  std::string json = "[";
-  bool needs_comma = false;
-  for (const IOSContextMenuItem &item : ios_context_menu_items) {
-    if (needs_comma) {
-      json += ",";
-    }
-    needs_comma = true;
-
-    json += "{\"separator\":";
-    json += item.separator ? "true" : "false";
-    json += ",\"title\":\"";
-    json += ios_json_escape(item.title);
-    json += "\",\"operator\":\"";
-    json += ios_json_escape(item.op_name);
-    json += "\"}";
-  }
-  json += "]";
-
-  char *json_copy = static_cast<char *>(std::malloc(json.size() + 1));
-  if (json_copy == nullptr) {
-    return nullptr;
-  }
-  std::memcpy(json_copy, json.c_str(), json.size() + 1);
-  return json_copy;
-}
-
-extern "C" void WM_apple_ios_ui_context_menu_free_json(char *json)
-{
-  std::free(json);
+  ios_ui_messages.push(angle);
 }
 
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json()
 {
-  std::lock_guard lock(ios_toolbar_mutex);
+  ios_toolbar_snapshot.take(ios_toolbar_json);
 
   char *json_copy = static_cast<char *>(std::malloc(ios_toolbar_json.size() + 1));
   if (json_copy == nullptr) {
@@ -1455,9 +1238,8 @@ extern "C" void WM_apple_ios_ui_ensure_layout(bContext *C)
 
 extern "C" uint64_t WM_apple_ios_ui_menu_request(const char *route, bool execute)
 {
-  std::lock_guard lock(ios_ui_command_mutex);
   const uint64_t identifier = ++ios_menu_next_identifier;
-  ios_menu_requests.push_back({identifier, route ? route : "{}", execute});
+  ios_ui_messages.push(IOSMenuRequest{identifier, route ? route : "{}", execute});
   return identifier;
 }
 
@@ -1466,16 +1248,20 @@ extern "C" uint64_t WM_apple_ios_ui_menu_at_position_request(const char *route,
                                                             int x,
                                                             int y)
 {
-  std::lock_guard lock(ios_ui_command_mutex);
   const uint64_t identifier = ++ios_menu_next_identifier;
-  ios_menu_requests.push_back({identifier, route ? route : "{}", execute, true, x, y});
+  ios_ui_messages.push(IOSMenuRequest{identifier, route ? route : "{}", execute, true, x, y});
   return identifier;
 }
 
 /* UIKit only exchanges owned JSON with the engine, never live Blender UI pointers. */
 extern "C" char *WM_apple_ios_ui_menu_take_result(uint64_t identifier)
 {
-  std::lock_guard lock(ios_ui_command_mutex);
+  for (auto &result : ios_menu_completed.take()) {
+    ios_menu_results.emplace(result.first, std::move(result.second));
+  }
+  while (ios_menu_results.size() > 128) {
+    ios_menu_results.erase(ios_menu_results.begin());
+  }
   const auto found = ios_menu_results.find(identifier);
   if (found == ios_menu_results.end()) {
     return nullptr;
@@ -1502,6 +1288,118 @@ extern "C" void WM_apple_ios_ui_navigation_redraw_request()
   ios_navigation_redraw_pending.store(true);
 }
 
+static void ios_ui_dispatch_operator(bContext *C, IOSOperatorCommand &command)
+{
+  const IOSContextStore context_store = ios_context_push_view3d(C);
+  wmWindow *win = CTX_wm_window(C);
+  bool ready = win && CTX_wm_area(C) && CTX_wm_region(C);
+  if (ready && command.has_position) {
+    LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
+      if (handler->type == WM_HANDLER_TYPE_OP) {
+        ready = false;
+        break;
+      }
+    }
+    if (!ready && command.retries++ < 2) {
+      /* Allow the queued Pencil cancellation/release to reach the modal handler. */
+      ios_ui_messages.push(command);
+    }
+    if (ready && win->eventstate) {
+      int x = command.x, y = command.y;
+      wm_cursor_position_from_ghost_client_coords(win, &x, &y);
+      win->eventstate->xy[0] = x;
+      win->eventstate->xy[1] = y;
+    }
+  }
+  if (ready) {
+    ios_operator_invoke(C, command.op_name.c_str());
+  }
+  ios_context_pop(C, context_store);
+}
+
+static void ios_ui_dispatch_menu(bContext *C, IOSMenuRequest &request)
+{
+  const IOSContextStore context_store = ios_context_push_view3d(C);
+  std::string result = "[]";
+  wmWindow *win = CTX_wm_window(C);
+  bool ready = true;
+  if (win && request.has_position) {
+    LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
+      if (handler->type == WM_HANDLER_TYPE_OP) {
+        ready = false;
+        break;
+      }
+    }
+    if (!ready && request.retries++ < 2) {
+      ios_ui_messages.push(request);
+      ios_context_pop(C, context_store);
+      return;
+    }
+    if (ready && win->eventstate) {
+      int x = request.x, y = request.y;
+      wm_cursor_position_from_ghost_client_coords(win, &x, &y);
+      win->eventstate->xy[0] = x;
+      win->eventstate->xy[1] = y;
+    }
+  }
+  if (ready && win && CTX_wm_area(C) && CTX_wm_region(C)) {
+    result = blender::ui::native_menu_query(C, request.route, request.execute);
+  }
+  ios_context_pop(C, context_store);
+  if (!request.execute) {
+    ios_menu_completed.push({request.identifier, std::move(result)});
+  }
+}
+
+static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
+{
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  if (WM_apple_ios_dialog_active(CTX_wm_window(C))) {
+    if (const auto *request = std::get_if<IOSMenuRequest>(&message)) {
+      if (!request->execute) {
+        ios_menu_completed.push({request->identifier, "[]"});
+      }
+    }
+    return;
+  }
+#endif
+  std::visit(
+      [&](auto &command) {
+        using T = std::decay_t<decltype(command)>;
+        if constexpr (std::is_same_v<T, IOSUICommand>) {
+          ios_command_execute(C, command);
+        }
+        else if constexpr (std::is_same_v<T, std::string>) {
+          ios_tool_set_by_id(C, command);
+        }
+        else if constexpr (std::is_same_v<T, IOSOperatorCommand>) {
+          ios_ui_dispatch_operator(C, command);
+        }
+        else if constexpr (std::is_same_v<T, IOSMenuRequest>) {
+          ios_ui_dispatch_menu(C, command);
+        }
+        else {
+          const IOSContextStore context_store = ios_context_push_view3d(C);
+          if (CTX_wm_window(C) && CTX_wm_area(C) && CTX_wm_region(C)) {
+            if constexpr (std::is_same_v<T, IOSSettingCommand>) {
+              ios_setting_execute(C, command);
+            }
+            else if constexpr (std::is_same_v<T, float>) {
+              ios_view_roll_angle(C, command);
+            }
+            else if constexpr (std::is_same_v<T, IOSOperatorPropertyCommand>) {
+              ios_operator_call_with_enum_property(C,
+                                                   command.op_name.c_str(),
+                                                   command.prop_name.c_str(),
+                                                   command.prop_value.c_str());
+            }
+          }
+          ios_context_pop(C, context_store);
+        }
+      },
+      message);
+}
+
 extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
 {
   if (C == nullptr) {
@@ -1509,6 +1407,7 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
   }
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  WM_apple_ios_dialog_flush(C);
   WM_apple_ios_fileselect_flush(C);
 #endif
   WM_apple_ios_ui_ensure_layout(C);
@@ -1521,132 +1420,9 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     ios_context_pop(C, context_store);
   }
 
-  std::vector<IOSUICommand> commands;
-  std::vector<IOSOperatorCommand> operator_commands;
-  std::vector<IOSOperatorPropertyCommand> operator_property_commands;
-  std::vector<IOSSettingCommand> setting_commands;
-  std::vector<std::string> tool_commands;
-  std::vector<float> view_roll_commands;
-  std::vector<IOSMenuRequest> menu_requests;
-  {
-    std::lock_guard lock(ios_ui_command_mutex);
-    commands.swap(ios_ui_commands);
-    operator_commands.swap(ios_ui_operator_commands);
-    operator_property_commands.swap(ios_ui_operator_property_commands);
-    setting_commands.swap(ios_ui_setting_commands);
-    tool_commands.swap(ios_ui_tool_commands);
-    view_roll_commands.swap(ios_ui_view_roll_commands);
-    menu_requests.swap(ios_menu_requests);
+  for (IOSUIMessage &message : ios_ui_messages.take()) {
+    ios_ui_dispatch(C, message);
   }
 
-  for (const IOSUICommand command : commands) {
-    ios_command_execute(C, command);
-  }
-
-  for (const std::string &tool_id : tool_commands) {
-    ios_tool_set_by_id(C, tool_id);
-  }
-
-  if (!setting_commands.empty()) {
-    const IOSContextStore context_store = ios_context_push_view3d(C);
-    if (CTX_wm_window(C) != nullptr && CTX_wm_area(C) != nullptr && CTX_wm_region(C) != nullptr) {
-      for (const IOSSettingCommand &command : setting_commands) {
-        ios_setting_execute(C, command);
-      }
-    }
-    ios_context_pop(C, context_store);
-  }
-
-  if (!view_roll_commands.empty()) {
-    const IOSContextStore context_store = ios_context_push_view3d(C);
-    if (CTX_wm_window(C) != nullptr && CTX_wm_area(C) != nullptr && CTX_wm_region(C) != nullptr) {
-      for (const float angle : view_roll_commands) {
-        ios_view_roll_angle(C, angle);
-      }
-    }
-    ios_context_pop(C, context_store);
-  }
-
-  if (!operator_commands.empty()) {
-    const IOSContextStore context_store = ios_context_push_view3d(C);
-    if (CTX_wm_window(C) != nullptr && CTX_wm_area(C) != nullptr && CTX_wm_region(C) != nullptr) {
-      for (IOSOperatorCommand &command : operator_commands) {
-        if (command.has_position) {
-          wmWindow *win = CTX_wm_window(C);
-          bool has_modal = false;
-          LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
-            has_modal |= handler->type == WM_HANDLER_TYPE_OP;
-          }
-          if (has_modal) {
-            /* A hold can cancel a Pencil stroke in the same native event batch.
-             * Give its queued Escape/release a chance to reach Blender first. */
-            if (command.retries++ < 2) {
-              std::lock_guard lock(ios_ui_command_mutex);
-              ios_ui_operator_commands.push_back(command);
-            }
-            continue;
-          }
-          int x = command.x, y = command.y;
-          wm_cursor_position_from_ghost_client_coords(win, &x, &y);
-          win->eventstate->xy[0] = x;
-          win->eventstate->xy[1] = y;
-        }
-        ios_operator_invoke(C, command.op_name.c_str());
-      }
-    }
-    ios_context_pop(C, context_store);
-  }
-
-  if (!operator_property_commands.empty()) {
-    const IOSContextStore context_store = ios_context_push_view3d(C);
-    if (CTX_wm_window(C) != nullptr && CTX_wm_area(C) != nullptr && CTX_wm_region(C) != nullptr) {
-      for (const IOSOperatorPropertyCommand &command : operator_property_commands) {
-        ios_operator_call_with_enum_property(
-            C, command.op_name.c_str(), command.prop_name.c_str(), command.prop_value.c_str());
-      }
-    }
-    ios_context_pop(C, context_store);
-  }
-
-  for (IOSMenuRequest &request : menu_requests) {
-    const IOSContextStore context_store = ios_context_push_view3d(C);
-    std::string result = "[]";
-    wmWindow *win = CTX_wm_window(C);
-    bool ready = true;
-    if (win && request.has_position) {
-      LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
-        if (handler->type == WM_HANDLER_TYPE_OP) {
-          ready = false;
-          break;
-        }
-      }
-      if (!ready && request.retries++ < 2) {
-        std::lock_guard lock(ios_ui_command_mutex);
-        ios_menu_requests.push_back(request);
-        ios_context_pop(C, context_store);
-        continue;
-      }
-      if (ready && win->eventstate) {
-        int x = request.x, y = request.y;
-        wm_cursor_position_from_ghost_client_coords(win, &x, &y);
-        win->eventstate->xy[0] = x;
-        win->eventstate->xy[1] = y;
-      }
-    }
-    if (ready && win && CTX_wm_area(C) && CTX_wm_region(C)) {
-      result = blender::ui::native_menu_query(C, request.route, request.execute);
-    }
-    ios_context_pop(C, context_store);
-    if (!request.execute) {
-      std::lock_guard lock(ios_ui_command_mutex);
-      ios_menu_results[request.identifier] = std::move(result);
-      /* Bound abandoned results if a native window is destroyed mid-request. */
-      while (ios_menu_results.size() > 128) {
-        ios_menu_results.erase(ios_menu_results.begin());
-      }
-    }
-  }
-
-  ios_context_menu_build(C);
   ios_toolbar_build(C);
 }
