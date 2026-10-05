@@ -17,6 +17,10 @@
 - (void)handleViewGizmoHold:(UILongPressGestureRecognizer *)gesture;
 - (void)cancelViewGizmoInteraction;
 - (void)setToolRailDockedLeftCenter:(BOOL)docked animated:(BOOL)animated;
+- (void)beginNumberScrub:(UITextField *)field;
+- (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation;
+- (void)finishNumberScrub:(UITextField *)field;
+- (void)cancelNumberScrub;
 - (void)handleToolbarHover:(UIHoverGestureRecognizer *)gesture;
 @end
 
@@ -174,6 +178,15 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       }
     }
     NSDictionary *controls = [panels valueForKey:@"_controls"];
+    if ([action hasPrefix:@"scrub_"]) {
+      UITextField *field = controls[request[@"key"]];
+      if ([action isEqual:@"scrub_begin"]) { [panels beginNumberScrub:field]; }
+      else if ([action isEqual:@"scrub_change"]) {
+        [panels changeNumberScrub:field translation:[request[@"translation"] doubleValue]];
+      }
+      else if ([action isEqual:@"scrub_finish"]) { [panels finishNumberScrub:field]; }
+      else if ([action isEqual:@"scrub_cancel"]) { [panels cancelNumberScrub]; }
+    }
     if ([action isEqual:@"scroll_property"]) {
       UIView *control = controls[request[@"key"]];
       UITableView *form = [panels valueForKey:@"_form"];
@@ -338,6 +351,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     NSMutableDictionary *values = [NSMutableDictionary dictionary];
     NSMutableDictionary *fieldIdentities = [NSMutableDictionary dictionary];
+    NSMutableDictionary *scrubs = [NSMutableDictionary dictionary];
     NSMutableDictionary *switches = [NSMutableDictionary dictionary];
     NSMutableDictionary *sliderValues = [NSMutableDictionary dictionary];
     for (NSString *key in [panels valueForKey:@"_sliders"]) {
@@ -359,6 +373,8 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
         NSString *semantic = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
         values[semantic] = ((UITextField *)control).text ?: @"";
         fieldIdentities[semantic] = [NSString stringWithFormat:@"%p", control];
+        scrubs[key] = @{@"active": [control valueForKey:@"scrubbing"],
+                        @"value": [control valueForKey:@"scrubValue"]};
       }
     }
     UIView *left = [panels valueForKey:@"_inspector"];
@@ -378,6 +394,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
       @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities,
       @"switches": switches,
+      @"scrubs": scrubs,
       @"hierarchyClass": NSStringFromClass(tree.class), @"selectedObjects": selectedObjects,
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",

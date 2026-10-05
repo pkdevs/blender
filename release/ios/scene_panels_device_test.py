@@ -110,6 +110,50 @@ def tests():
                     if section['id'] == 'OBJECT_PT_transform')
 
     transforms = transform_fields()
+    location = next(item for item in transforms if item.get('property') == 'location' and item.get('index') == 0)
+    check(location.get('dragStep', 0) > 0 and 'slider' not in location,
+          'Unbounded fields expose Blender numeric drag sensitivity')
+    start_x = bpy.data.objects['Cube'].location.x
+    ui(action='scrub_begin', key=location['key'])
+    ui(action='scrub_change', key=location['key'], translation=23)
+    yield 0.4
+    expected_x = start_x + 23 * location['dragStep']
+    scrub = ui()['scrubs'][location['key']]
+    check(scrub['active'] and abs(scrub['value'] - expected_x) < 1e-6 and
+          bpy.data.objects['Cube'].location.x == start_x,
+          'Number drag previews locally and survives periodic snapshots')
+    ui(action='scrub_finish', key=location['key'])
+    ui(action='scrub_begin', key=location['key'])
+    ui(action='scrub_change', key=location['key'], translation=10)
+    yield 0.4
+    repeated = ui()['scrubs'][location['key']]
+    check(repeated['active'] and abs(repeated['value'] - expected_x - 10 * location['dragStep']) < 1e-6,
+          'Rapid repeated drags continue from the pending value across engine acknowledgement')
+    ui(action='scrub_cancel')
+    yield 0.7
+    check(abs(bpy.data.objects['Cube'].location.x - expected_x) < 1e-6,
+          'Releasing a number drag commits the value to Blender')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_undo')
+    yield 0.7
+    check(abs(bpy.data.objects['Cube'].location.x - start_x) < 1e-6,
+          'An entire number drag is one undo step')
+    ui(action='scrub_begin', key=location['key'])
+    ui(action='scrub_change', key=location['key'], translation=-20)
+    check(ui()['scrubs'][location['key']]['value'] < start_x, 'Dragging left decreases an unbounded number')
+    ui(action='scrub_cancel')
+    yield 0.4
+    check(bpy.data.objects['Cube'].location.x == start_x and not ui()['scrubs'][location['key']]['active'],
+          'Cancelling a number drag leaves the scene unchanged')
+    ui(action='scrub_begin', key=location['key'])
+    ui(action='scrub_change', key=location['key'], translation=50)
+    ui(action='select', id=camera_id)
+    yield 0.7
+    ui(action='scrub_finish', key=location['key'])
+    check(bpy.data.objects['Cube'].location.x == start_x,
+          'Selection changes cancel a drag without editing the old object')
+    ui(action='select', id=cube_id)
+    yield 0.7
+    transforms = transform_fields()
     def rotation_heading():
         return next(item for item in transform_fields() if item.get('group_menu'))
 
