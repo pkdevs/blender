@@ -1567,11 +1567,13 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
         BKE_collection_object_move(bmain, scene, data.to, from, object);
         if ((event->modifier & (KM_CTRL | KM_SHIFT)) == 0) {
           Vector<Object *> child_objects;
-          TreeElement *from_collection_te = outliner_find_id(space_outliner, &space_outliner->runtime->tree, &from->id, TreeElementFlag(0));
+          TreeElement *from_collection_te = outliner_find_id(
+              space_outliner, &space_outliner->runtime->tree, &from->id, TreeElementFlag(0));
           if (!from_collection_te) {
             continue;
           }
-          TreeElement *te_object =  outliner_find_id(space_outliner, &from_collection_te->subtree, &object->id, TreeElementFlag(0));
+          TreeElement *te_object = outliner_find_id(
+              space_outliner, &from_collection_te->subtree, &object->id, TreeElementFlag(0));
           find_child_objects_recursive(te_object, child_objects);
           for (Object *child_ob : child_objects) {
             BKE_collection_object_move(bmain, scene, data.to, from, child_ob);
