@@ -3539,6 +3539,27 @@ class WM_MT_splash_quick_setup(Menu):
         layout.separator(factor=2.0)
 
 
+class WM_MT_splash_project(Menu):
+    bl_label = "Project"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator_context = 'INVOKE_DEFAULT'
+
+        have_recent = layout.template_recent_projects(rows=10)
+        if have_recent:
+            layout.separator()
+
+        layout.operator("project.open", text="Open Project...")
+        if bpy.data.project is not None:
+            layout.operator("project.close")
+        layout.operator("wm.clear_recent_projects", text="Clear Recent Projects List...")
+
+        layout.separator()
+
+        layout.prop(context.preferences, "use_project_remember")
+
+
 class WM_MT_splash(Menu):
     bl_label = "Splash"
 
@@ -3557,13 +3578,34 @@ class WM_MT_splash(Menu):
 
         # Recent
         col2 = split.column()
-        col2_title = col2.row()
 
-        found_recent = col2.template_recent_files(rows=5)
+        # Project switcher, in place of one recent file.
+        recent_rows = 5
+        project = bpy.data.project
+        if project or context.window_manager.has_recent_projects:
+            row = col2.split(factor=0.3)
+            row.label(text="Project")
+            sub = row.row()
+            sub.emboss = 'NORMAL'
+            sub.menu(
+                "WM_MT_splash_project",
+                text=project.name if project else iface_("Open Project…"),
+                translate=False,
+            )
+            recent_rows -= 1
+
+        # Show project files if a project is active, but also other recent files
+        # if there is more space available.
+        found_project = col2.template_recent_files(rows=recent_rows,
+                                                   filter='PROJECT', project_ratio=1.0)
+        col2_title = col2.row()
+        found_other = col2.template_recent_files(rows=recent_rows,
+                                                 filter='OTHER', project_ratio=1.0)
+        found_recent = found_project + found_other
 
         if found_recent:
-            col2_title.label(text="Recent Files")
-
+            if found_other:
+                col2_title.label(text="More Recent Files" if found_project else "Recent Files")
             col_more = col2.column()
             col_more.operator_context = 'INVOKE_DEFAULT'
             more_props = col_more.operator("wm.search_single_menu", text="More...", icon='VIEWZOOM')
@@ -3901,6 +3943,7 @@ classes = (
     BatchRenameAction,
     WM_OT_batch_rename,
     WM_MT_splash_quick_setup,
+    WM_MT_splash_project,
     WM_MT_splash,
     WM_MT_splash_about,
     WM_MT_region_toggle_pie,
