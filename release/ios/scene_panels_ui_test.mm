@@ -132,6 +132,68 @@ int main()
               [request[@"value"] count] == 4 && fabs([request[@"value"][3] doubleValue] - 0.3) < 1e-5,
               @"Completed color gesture commits all components atomically");
     [panels performSelector:NSSelectorFromString(@"closeColorPicker")];
+    NSMutableDictionary *sliderModel = [[acknowledged mutableCopy] autorelease];
+    sliderModel[@"ack"] = @3;
+    NSMutableArray *sliderProperties = [NSMutableArray array];
+    for (NSDictionary *spec in @[
+      @{@"key": @"factor", @"type": @"FLOAT", @"value": @0.25, @"min": @0, @"max": @1, @"scale": @"LINEAR"},
+      @{@"key": @"count", @"type": @"INT", @"value": @3, @"min": @1, @"max": @9, @"scale": @"LINEAR"},
+      @{@"key": @"angle", @"type": @"FLOAT", @"value": @(M_PI / 2), @"min": @0, @"max": @(M_PI), @"scale": @"LINEAR", @"angle": @YES},
+      @{@"key": @"log", @"type": @"FLOAT", @"value": @10, @"min": @1, @"max": @1000, @"scale": @"LOG"},
+      @{@"key": @"cubic", @"type": @"FLOAT", @"value": @0.125, @"min": @0, @"max": @1, @"scale": @"CUBIC"},
+    ]) {
+      NSMutableDictionary *descriptor = [[spec mutableCopy] autorelease];
+      descriptor[@"label"] = spec[@"key"];
+      descriptor[@"editable"] = @YES;
+      descriptor[@"native"] = @YES;
+      descriptor[@"slider"] = @{@"min": spec[@"min"], @"max": spec[@"max"], @"scale": spec[@"scale"]};
+      [sliderProperties addObject:descriptor];
+    }
+    sliderModel[@"inspector"] = @{@"id": @"sliders", @"name": @"Properties",
+      @"sections": @[@{@"id": @"sliders", @"title": @"Sliders", @"open": @YES, @"properties": sliderProperties}]};
+    [panels updateSnapshot:sliderModel];
+    NSDictionary *sliders = [panels valueForKey:@"_sliders"];
+    UISlider *slider = sliders[@"factor"];
+    NSCAssert([slider isKindOfClass:UISlider.class] && fabs(slider.value - 0.25) < 1e-6,
+              @"Blender sliders use native UISlider controls");
+    NSDictionary *beforeSlide = request;
+    [panels performSelector:NSSelectorFromString(@"beginSlider:") withObject:slider];
+    slider.value = 0.7;
+    [panels performSelector:NSSelectorFromString(@"changeSlider:") withObject:slider];
+    NSCAssert(request == beforeSlide, @"Dragging previews locally without intermediate undo steps");
+    [panels performSelector:NSSelectorFromString(@"finishSlider:") withObject:slider];
+    NSCAssert([request[@"key"] isEqual:@"factor"] && fabs([request[@"value"] doubleValue] - 0.7) < 1e-6,
+              @"Releasing slider queues one property edit");
+    beforeSlide = request;
+    [panels performSelector:NSSelectorFromString(@"beginSlider:") withObject:slider];
+    slider.value = 0.1;
+    [panels performSelector:NSSelectorFromString(@"changeSlider:") withObject:slider];
+    [panels performSelector:NSSelectorFromString(@"cancelSlider:") withObject:slider];
+    NSCAssert(request == beforeSlide && fabs(slider.value - 0.25) < 1e-6, @"Cancel restores the snapshot without an edit");
+    [panels performSelector:NSSelectorFromString(@"beginSlider:") withObject:slider];
+    [panels performSelector:NSSelectorFromString(@"finishSlider:") withObject:slider];
+    NSCAssert(request == beforeSlide, @"Touching a slider without dragging does not create an edit");
+    [panels performSelector:NSSelectorFromString(@"beginSlider:") withObject:slider];
+    slider.value = 0.25;
+    [panels performSelector:NSSelectorFromString(@"changeSlider:") withObject:slider];
+    [panels performSelector:NSSelectorFromString(@"finishSlider:") withObject:slider];
+    NSCAssert(request != beforeSlide && [request[@"value"] doubleValue] == 0.25,
+              @"A rapid return to the old value is queued even before the preceding edit is acknowledged");
+    UISlider *integerSlider = sliders[@"count"];
+    integerSlider.value = 0.6;
+    [panels performSelector:NSSelectorFromString(@"changeSlider:") withObject:integerSlider];
+    NSCAssert([request[@"value"] intValue] == 6, @"Integer slider snaps to whole values");
+    NSCAssert(fabs(((UISlider *)sliders[@"log"]).value - 1.0 / 3) < 1e-6 &&
+              fabs(((UISlider *)sliders[@"cubic"]).value - 0.5) < 1e-6,
+              @"Logarithmic and cubic ranges match Blender");
+    UISlider *angleSlider = sliders[@"angle"];
+    angleSlider.value = 0.25;
+    [panels performSelector:NSSelectorFromString(@"changeSlider:") withObject:angleSlider];
+    NSCAssert(fabs([request[@"value"] doubleValue] - M_PI / 4) < 1e-6,
+              @"Native angle slider commits radians");
+    UITextField *angleField = [panels valueForKey:@"_controls"][@"angle"];
+    NSCAssert([[formatter numberFromString:angleField.text] doubleValue] == 45,
+              @"Angle numeric field displays degrees");
     [panels layoutInRect:CGRectMake(0, 60, 390, 600)];
     NSCAssert(!(panels.inspectorButton.selected && panels.hierarchyButton.selected), @"Phone panels do not overlap");
     tap(panels.hierarchyButton);

@@ -24,6 +24,52 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 }
 @end
 
+@interface GHOSTIOSPropertySlider : UISlider
+@property(nonatomic, retain) NSDictionary *descriptor;
+@property(nonatomic, copy) NSString *objectID;
+@property(nonatomic) BOOL editing;
+@property(nonatomic) BOOL changed;
+- (double)propertyValue;
+- (void)setPropertyValue:(double)value;
+@end
+
+@implementation GHOSTIOSPropertySlider
+- (double)propertyValue
+{
+  NSDictionary *range = self.descriptor[@"slider"];
+  double minimum = [range[@"min"] doubleValue], maximum = [range[@"max"] doubleValue];
+  double value = minimum + self.value * (maximum - minimum);
+  if ([range[@"scale"] isEqual:@"LOG"] && minimum > 0) {
+    value = minimum * pow(maximum / minimum, self.value);
+  }
+  else if ([range[@"scale"] isEqual:@"CUBIC"]) {
+    value = (pow(value, 3) - pow(minimum, 3)) / (pow(maximum, 3) - pow(minimum, 3)) *
+            (maximum - minimum) + minimum;
+  }
+  return [self.descriptor[@"type"] isEqual:@"INT"] ? round(value) : value;
+}
+- (void)setPropertyValue:(double)value
+{
+  NSDictionary *range = self.descriptor[@"slider"];
+  double minimum = [range[@"min"] doubleValue], maximum = [range[@"max"] doubleValue];
+  double fraction = (value - minimum) / (maximum - minimum);
+  if ([range[@"scale"] isEqual:@"LOG"] && minimum > 0) {
+    fraction = value > 0 ? log(value / minimum) / log(maximum / minimum) : 0;
+  }
+  else if ([range[@"scale"] isEqual:@"CUBIC"]) {
+    const double cube = fraction * (pow(maximum, 3) - pow(minimum, 3)) + pow(minimum, 3);
+    fraction = (cbrt(cube) - minimum) / (maximum - minimum);
+  }
+  self.value = std::isfinite(fraction) ? fmin(1, fmax(0, fraction)) : 0;
+}
+- (void)dealloc
+{
+  [_descriptor release];
+  [_objectID release];
+  [super dealloc];
+}
+@end
+
 @interface GHOSTIOSColorButton : UIButton
 @property(nonatomic, retain) NSDictionary *descriptor;
 @property(nonatomic, copy) NSString *objectID;
@@ -125,6 +171,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSDictionary *_snapshot;
   NSString *_objectID;
   NSMutableDictionary *_controls;
+  NSMutableDictionary *_sliders;
   uint64_t _sequence;
   BOOL _showInspector, _showHierarchy;
   CGRect _layoutRect;
@@ -140,6 +187,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     _icon = [icon copy];
     _collapsed = [[NSMutableSet alloc] init];
     _controls = [[NSMutableDictionary alloc] init];
+    _sliders = [[NSMutableDictionary alloc] init];
     _expandedPanels = [[NSMutableDictionary alloc] init];
     _inspectorButton = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"sidebar.right"]
         style:UIBarButtonItemStylePlain target:self action:@selector(toggleInspector:)];
@@ -221,6 +269,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_hierarchy release];
   [_collapsed release];
   [_controls release];
+  [_sliders release];
   [_formSections release];
   [_headerControls release];
   [_menuProvider release];
@@ -404,6 +453,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSMutableArray *titles = [NSMutableArray array];
   NSMutableArray *identifiers = [NSMutableArray array];
   [_controls removeAllObjects];
+  [_sliders removeAllObjects];
   _status = [self label:@"" style:UIFontTextStyleFootnote];
   _status.textColor = UIColor.systemRedColor;
   _status.hidden = YES;
@@ -546,6 +596,24 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       NSString *key = [self keyForProperty:property];
       control.accessibilityIdentifier = [@"blender.property." stringByAppendingString:key];
       _controls[key] = control;
+      GHOSTIOSPropertySlider *slider = nil;
+      if (property[@"slider"] && [control isKindOfClass:GHOSTIOSPropertyField.class]) {
+        slider = [[[GHOSTIOSPropertySlider alloc] init] autorelease];
+        slider.descriptor = property;
+        slider.objectID = objectID;
+        slider.minimumValue = 0;
+        slider.maximumValue = 1;
+        slider.continuous = YES;
+        slider.enabled = control.enabled;
+        slider.accessibilityLabel = control.accessibilityLabel;
+        slider.accessibilityIdentifier = [@"blender.slider." stringByAppendingString:key];
+        [slider addTarget:self action:@selector(beginSlider:) forControlEvents:UIControlEventTouchDown];
+        [slider addTarget:self action:@selector(changeSlider:) forControlEvents:UIControlEventValueChanged];
+        [slider addTarget:self action:@selector(finishSlider:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
+        [slider addTarget:self action:@selector(cancelSlider:) forControlEvents:UIControlEventTouchCancel];
+        [slider.heightAnchor constraintGreaterThanOrEqualToConstant:32].active = YES;
+        _sliders[key] = slider;
+      }
       if ([property[@"header"] boolValue] && [control isKindOfClass:UISwitch.class]) {
         [control setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
         [control setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
@@ -574,14 +642,19 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         else if (!vector && ![kind isEqual:@"OPERATOR"] && ![kind isEqual:@"MENU"]) {
           [control.widthAnchor constraintEqualToAnchor:row.widthAnchor multiplier:0.53].active = YES;
         }
-        [control.heightAnchor constraintGreaterThanOrEqualToConstant:40].active = YES;
+        [control.heightAnchor constraintGreaterThanOrEqualToConstant:slider ? 32 : 40].active = YES;
       }
-      [row.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+      [row.heightAnchor constraintGreaterThanOrEqualToConstant:slider ? 32 : 44].active = YES;
+      UIStackView *content = row;
+      if (slider) {
+        content = [[[UIStackView alloc] initWithArrangedSubviews:@[row, slider]] autorelease];
+        content.axis = UILayoutConstraintAxisVertical;
+      }
       if (vectorRow) {
-        [vectorRow addArrangedSubview:row];
+        [vectorRow addArrangedSubview:content];
       }
       else {
-        [sectionRows addObject:row];
+        [sectionRows addObject:content];
       }
     }
   }
@@ -754,6 +827,73 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)finishNumber:(id)sender { [_inspector endEditing:YES]; }
 
+- (void)displaySliderValue:(GHOSTIOSPropertySlider *)slider value:(double)value
+{
+  GHOSTIOSPropertyField *field = _controls[[self keyForProperty:slider.descriptor]];
+  NSNumberFormatter *formatter = [[[NSNumberFormatter alloc] init] autorelease];
+  formatter.numberStyle = NSNumberFormatterDecimalStyle;
+  formatter.usesGroupingSeparator = NO;
+  formatter.usesSignificantDigits = YES;
+  formatter.maximumSignificantDigits = 9;
+  field.text = [formatter stringFromNumber:@(value * ([slider.descriptor[@"angle"] boolValue] ? 180.0 / M_PI : 1))];
+  field.originalText = field.text;
+  slider.accessibilityValue = field.text;
+}
+
+- (void)beginSlider:(GHOSTIOSPropertySlider *)slider
+{
+  [_inspector endEditing:YES];
+  slider.editing = YES;
+  slider.changed = NO;
+}
+
+- (void)changeSlider:(GHOSTIOSPropertySlider *)slider
+{
+  if (_sliders[[self keyForProperty:slider.descriptor]] != slider || !slider.enabled) {
+    return;
+  }
+  double value = slider.propertyValue;
+  slider.changed = YES;
+  [slider setPropertyValue:value];
+  [self displaySliderValue:slider value:value];
+  if (!slider.editing) {
+    /* Accessibility adjustments are complete edits without touch-down/up events. */
+    [self finishSlider:slider];
+  }
+}
+
+- (void)finishSlider:(GHOSTIOSPropertySlider *)slider
+{
+  slider.editing = NO;
+  if (_sliders[[self keyForProperty:slider.descriptor]] != slider || !slider.enabled || !slider.changed) {
+    return;
+  }
+  slider.changed = NO;
+  double value = slider.propertyValue;
+  [self editProperty:slider.descriptor object:slider.objectID value:@(value)];
+}
+
+- (void)cancelSlider:(GHOSTIOSPropertySlider *)slider
+{
+  slider.editing = NO;
+  slider.changed = NO;
+  if (_sliders[[self keyForProperty:slider.descriptor]] != slider) {
+    return;
+  }
+  NSDictionary *current = slider.descriptor;
+  for (NSDictionary *section in _snapshot[@"inspector"][@"sections"]) {
+    for (NSDictionary *property in section[@"properties"]) {
+      if ([[self keyForProperty:property] isEqual:[self keyForProperty:slider.descriptor]]) {
+        current = property;
+      }
+    }
+  }
+  slider.descriptor = current;
+  ((GHOSTIOSPropertyField *)_controls[[self keyForProperty:current]]).descriptor = current;
+  [slider setPropertyValue:[current[@"value"] doubleValue]];
+  [self displaySliderValue:slider value:[current[@"value"] doubleValue]];
+}
+
 - (void)stepNumber:(UIStepper *)stepper
 {
   UITextField *field = _controls[stepper.accessibilityIdentifier];
@@ -786,6 +926,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   }
   if (![value isEqual:field.descriptor[@"value"]]) {
     [self editProperty:field.descriptor object:field.objectID value:value];
+    [_sliders[[self keyForProperty:field.descriptor]] setPropertyValue:[value doubleValue]];
   }
 }
 
@@ -872,7 +1013,12 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   for (NSDictionary *section in inspector[@"sections"]) {
     for (NSDictionary *property in section[@"properties"]) {
       UIControl *control = _controls[[self keyForProperty:property]];
+      GHOSTIOSPropertySlider *slider = _sliders[[self keyForProperty:property]];
       id value = property[@"value"];
+      if (slider && !slider.editing && !control.isFirstResponder) {
+        slider.descriptor = property;
+        [slider setPropertyValue:[value doubleValue]];
+      }
       if ([control isKindOfClass:GHOSTIOSColorButton.class]) {
         GHOSTIOSColorButton *button = (GHOSTIOSColorButton *)control;
         if (button != _colorButton) {
@@ -882,7 +1028,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       }
       else if ([control isKindOfClass:GHOSTIOSPropertyField.class]) {
         GHOSTIOSPropertyField *field = (GHOSTIOSPropertyField *)control;
-        if (!field.isFirstResponder) {
+        if (!field.isFirstResponder && !slider.editing) {
           field.descriptor = property;
           if ([value isKindOfClass:NSNumber.class]) {
             double number = [value doubleValue] * ([property[@"angle"] boolValue] ? 180.0 / M_PI : 1.0);
@@ -897,6 +1043,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
             field.text = value;
           }
           field.originalText = field.text;
+          slider.accessibilityValue = field.text;
         }
       }
       else if ([control isKindOfClass:UISwitch.class]) {
