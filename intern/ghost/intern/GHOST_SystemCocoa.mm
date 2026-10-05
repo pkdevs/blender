@@ -1964,6 +1964,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
     }
     case NSEventTypeFlagsChanged: {
       const unsigned int modifiers = event.modifierFlags;
+      window = window_manager_->getActiveWindow();
 
       if ((modifiers & NSEventModifierFlagShift) != (modifier_mask_ & NSEventModifierFlagShift)) {
         pushEvent(std::make_unique<GHOST_EventKey>(
