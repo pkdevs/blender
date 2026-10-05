@@ -175,16 +175,16 @@ void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
     return;
   }
 
-  ui::Layout &settings_row = layout.column(false);
   if (is_project_library) {
-    settings_row.enabled_set(false);
-    ui::Layout &operator_row = settings_row.row(false);
+    ui::Layout &operator_row = layout.row(false);
     operator_row.label(IFACE_("Edit Project asset libraries in Project Settings."), ICON_NONE);
     operator_row.op("SCREEN_OT_project_setup_show", "Open Projects Settings", ICON_PREFERENCES, wm::OpCallContext::InvokeDefault, UI_ITEM_NONE);
   }
   else {
-    settings_row.separator();
+    layout.separator();
   }
+  ui::Layout &settings_row = layout.column(false);
+  settings_row.enabled_set(!is_project_library);
   draw_active_library_settings(C, settings_row, libraries[U.active_asset_library]);
 }
 
