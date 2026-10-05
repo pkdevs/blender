@@ -161,7 +161,29 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
         [header sendActionsForControlEvents:UIControlEventTouchUpInside];
       }
     }
+    if ([action isEqual:@"scroll_section"]) {
+      UITableView *form = [panels valueForKey:@"_form"];
+      NSUInteger index = [[panels valueForKey:@"_sectionIdentifiers"] indexOfObject:request[@"id"]];
+      if (index != NSNotFound && [form numberOfRowsInSection:index] > 0) {
+        [form scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:index]
+                   atScrollPosition:UITableViewScrollPositionTop animated:NO];
+        [form layoutIfNeeded];
+      }
+    }
     NSDictionary *controls = [panels valueForKey:@"_controls"];
+    if ([action hasPrefix:@"slider_"]) {
+      UISlider *slider = [panels valueForKey:@"_sliders"][request[@"key"]];
+      if ([action isEqual:@"slider_begin"]) {
+        [slider sendActionsForControlEvents:UIControlEventTouchDown];
+      }
+      else if ([action isEqual:@"slider_change"]) {
+        slider.value = [request[@"value"] floatValue];
+        [slider sendActionsForControlEvents:UIControlEventValueChanged];
+      }
+      else {
+        [slider sendActionsForControlEvents:[action isEqual:@"slider_cancel"] ? UIControlEventTouchCancel : UIControlEventTouchUpInside];
+      }
+    }
     if ([action isEqual:@"color_open"]) {
       UIControl *button = controls[request[@"key"]];
       UITableView *form = [panels valueForKey:@"_form"];
@@ -216,13 +238,27 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
         NSString *key = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
         if ([key isEqual:request[@"key"]]) {
           UITextField *field = control;
-          field.text = request[@"value"];
+          if ([request[@"value"] isKindOfClass:NSNumber.class]) {
+            NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
+            formatter.numberStyle = NSNumberFormatterDecimalStyle;
+            formatter.usesGroupingSeparator = NO;
+            formatter.maximumFractionDigits = 9;
+            field.text = [formatter stringFromNumber:request[@"value"]];
+          }
+          else {
+            field.text = request[@"value"];
+          }
           [field sendActionsForControlEvents:UIControlEventEditingDidEnd];
           break;
         }
       }
     }
     NSMutableDictionary *values = [NSMutableDictionary dictionary];
+    NSMutableDictionary *sliderValues = [NSMutableDictionary dictionary];
+    for (NSString *key in [panels valueForKey:@"_sliders"]) {
+      UISlider *slider = [panels valueForKey:@"_sliders"][key];
+      sliderValues[key] = @{@"value": @(slider.value), @"enabled": @(slider.enabled)};
+    }
     for (NSString *key in controls) {
       id control = controls[key];
       if ([control isKindOfClass:UITextField.class]) {
@@ -236,6 +272,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
+      @"sliders": sliderValues,
       @"tabs": [panels valueForKey:@"_tabs"] ?: @[],
       @"properties": [panels valueForKey:@"_snapshot"][@"inspector"] ?: @{},
       @"colorPicker": @([[panels valueForKey:@"_colorPicker"] isKindOfClass:UIColorPickerViewController.class]),

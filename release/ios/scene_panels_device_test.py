@@ -86,6 +86,31 @@ def tests():
     yield 1.0
     check('DATA_PT_camera_safe_areas_center_cut' not in ui()['sections'],
           'Nested panels are sections, not outer disclosure panels')
+    safe_slider = next(item for item in panel(safe_id)['properties']
+                       if item.get('property') == 'title' and item.get('index') == 0)
+    check('slider' in safe_slider and safe_slider['key'] in ui()['sliders'],
+          'Blender vector sliders project as native UISlider controls')
+    old_safe = bpy.context.scene.safe_areas.title[0]
+    ui(action='slider_begin', key=safe_slider['key'])
+    ui(action='slider_change', key=safe_slider['key'], value=0.6)
+    yield 0.5
+    check(bpy.context.scene.safe_areas.title[0] == old_safe,
+          'Slider drag updates native feedback without intermediate undo entries')
+    ui(action='slider_finish', key=safe_slider['key'])
+    yield 1.0
+    expected_safe = safe_slider['slider']['min'] + 0.6 * (safe_slider['slider']['max'] - safe_slider['slider']['min'])
+    check(abs(bpy.context.scene.safe_areas.title[0] - expected_safe) < 1e-5,
+          'Slider release updates the real Blender property')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_undo')
+    yield 1.0
+    check(abs(bpy.context.scene.safe_areas.title[0] - old_safe) < 1e-5,
+          'A complete slider drag is one undo step')
+    ui(action='slider_begin', key=safe_slider['key'])
+    ui(action='slider_change', key=safe_slider['key'], value=0.8)
+    ui(action='slider_cancel', key=safe_slider['key'])
+    yield 0.5
+    check(abs(bpy.context.scene.safe_areas.title[0] - old_safe) < 1e-5,
+          'Cancelled slider drag leaves Blender unchanged')
     child_switch = header(safe_id, 'show_safe_center')
     check(child_switch.get('section') == 'Center-Cut Safe Areas',
           'Nested enable switch belongs to its inline section heading')
@@ -202,6 +227,59 @@ def tests():
         ui(action='color_open', key=color['key'])
         yield 1.0
         check(ui()['colorPresented'], 'Native picker is visible on the physical iPad')
+    bpy.types.Scene.native_slider_factor = bpy.props.FloatProperty(
+        name='Amount', subtype='FACTOR', default=0.25, min=0, max=2, soft_min=0, soft_max=1)
+    bpy.types.Scene.native_slider_count = bpy.props.IntProperty(
+        name='Count', default=2, min=0, max=10)
+    bpy.types.Scene.native_slider_angle = bpy.props.FloatProperty(
+        name='Angle', subtype='ANGLE', default=0, min=0, max=3.141592653589793)
+
+    class SCENE_PT_native_slider_test(bpy.types.Panel):
+        bl_label = 'Native Sliders'
+        bl_space_type = 'PROPERTIES'
+        bl_region_type = 'WINDOW'
+        bl_context = 'scene'
+
+        def draw(self, context):
+            self.layout.prop(context.scene, 'native_slider_factor', slider=True)
+            self.layout.prop(context.scene, 'native_slider_count', slider=True)
+            self.layout.prop(context.scene, 'native_slider_angle', slider=True)
+
+    bpy.utils.register_class(SCENE_PT_native_slider_test)
+    ui(action='tab', id='SCENE')
+    yield 1.0
+    ui(action='section', id='SCENE_PT_native_slider_test')
+    yield 1.0
+    props = {item['property']: item for item in panel('SCENE_PT_native_slider_test')['properties']}
+    check(all('slider' in item for item in props.values()),
+          'Float, integer and angle properties retain Blender slider metadata')
+    count = props['native_slider_count']
+    ui(action='slider_begin', key=count['key'])
+    ui(action='slider_change', key=count['key'], value=0.56)
+    ui(action='slider_finish', key=count['key'])
+    yield 1.0
+    check(bpy.context.scene.native_slider_count == 6, 'Native integer slider rounds to whole values')
+    angle = props['native_slider_angle']
+    ui(action='slider_begin', key=angle['key'])
+    ui(action='slider_change', key=angle['key'], value=0.25)
+    ui(action='slider_finish', key=angle['key'])
+    yield 1.0
+    check(abs(bpy.context.scene.native_slider_angle - 3.141592653589793 / 4) < 1e-5,
+          'Native angle slider writes radians and displays degrees')
+    ui(action='property', key='data.native_slider_factor.', value=1.5)
+    yield 1.0
+    check(abs(bpy.context.scene.native_slider_factor - 1.5) < 1e-5,
+          'Precise numeric entry can exceed the slider soft range within RNA hard limits')
+    if '--native-slider-preview' not in sys.argv:
+        bpy.utils.unregister_class(SCENE_PT_native_slider_test)
+        del bpy.types.Scene.native_slider_factor
+        del bpy.types.Scene.native_slider_count
+        del bpy.types.Scene.native_slider_angle
+        ui(action='tab', id='OBJECT')
+        yield 1.0
+    else:
+        ui(action='scroll_section', id='SCENE_PT_native_slider_test')
+        yield 1.0
     report['state'] = ui()
     report['passed'] = True
 
