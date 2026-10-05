@@ -68,4 +68,40 @@ check(bpy.context.active_object == cube and state()['error'], 'Edit Mode guarded
 bpy.ops.object.mode_set(mode='OBJECT')
 panels.apply_json(bpy.context, json.dumps(dict(id=str(camera.session_uid), sequence=1000, action='select')), True)
 check(state()['error'] and bpy.context.active_object == cube, 'Native dialog blocks edits')
+edit(cube, 'rename', value='  Renamed Cube  ')
+check(cube.name == 'Renamed Cube', 'Rename trims the native field')
+edit(cube, 'rename', value='  ')
+check(cube.name == 'Renamed Cube' and state()['error'], 'Blank names are rejected')
+camera.select_set(True)
+before = set(bpy.data.objects)
+edit(cube, 'duplicate')
+added = set(bpy.data.objects) - before
+check(len(added) == 1 and not state()['error'], 'Duplicate targets only the swiped row despite multi-selection')
+duplicate = added.pop()
+check(duplicate.data != cube.data and duplicate.data.vertices[0].co == cube.data.vertices[0].co,
+      'Duplicate uses Blender data duplication')
+check(bpy.context.active_object == duplicate and duplicate.select_get() and not camera.select_get(),
+      'Duplicate becomes the active selected object')
+camera.select_set(True)
+edit(duplicate, 'delete')
+check(set(bpy.data.objects) == before and camera.select_get(), 'Delete targets only one row and preserves other selected objects')
+edit(cube, 'visibility', value=True)
+actions = next(row['actions'] for row in state()['hierarchy'] if row['id'] == str(cube.session_uid))
+check('duplicate' not in actions and {'visibility', 'rename', 'delete'} <= set(actions),
+      'Hidden rows expose only applicable actions')
+edit(cube, 'duplicate')
+check(state()['error'] and set(bpy.data.objects) == before, 'Hidden-object duplication is rejected')
+edit(cube, 'visibility', value=False)
+edit(cube, 'select')
+bpy.ops.object.mode_set(mode='EDIT')
+for action in ('delete', 'duplicate', 'rename'):
+    edit(camera, action, value='Not renamed')
+    check(state()['error'] and bpy.data.objects.get('Camera') == camera, 'Edit Mode guards ' + action)
+bpy.ops.object.mode_set(mode='OBJECT')
+# Scene-local deletion must retain an object linked into another scene.
+other_scene = bpy.data.scenes.new('Other Scene')
+other_scene.collection.objects.link(camera)
+edit(camera, 'delete')
+check(camera.name in other_scene.objects and camera.name not in bpy.context.scene.objects,
+      'Delete respects Blender scene-local unlinking')
 print('PASS: native scene panels ' + json.dumps(checks))

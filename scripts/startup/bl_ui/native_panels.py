@@ -16,6 +16,17 @@ def _uid(item):
     return str(item.session_uid)
 
 
+def _object_actions(context, obj):
+    actions = ['visibility']
+    if context.mode == 'OBJECT' and obj.is_editable:
+        actions.append('rename')
+        if obj.visible_get(view_layer=context.view_layer) and not obj.hide_select:
+            actions.append('duplicate')
+        if not obj.library and not obj.override_library:
+            actions.append('delete')
+    return actions
+
+
 def _hierarchy(context):
     rows = []
     active = context.view_layer.objects.active
@@ -41,6 +52,7 @@ def _hierarchy(context):
                              "icon": 'OUTLINER_OB_' + obj.type, "active": obj == active,
                              "selected": obj.select_get(view_layer=context.view_layer),
                              "hidden": obj.hide_get(view_layer=context.view_layer),
+                             "actions": _object_actions(context, obj),
                              "enabled": obj.visible_get(view_layer=context.view_layer)
                              and not obj.hide_select and context.mode == 'OBJECT'})
                 object_rows(obj.name, level + 1, obj_key)
@@ -92,6 +104,37 @@ class WM_OT_native_panel_edit(bpy.types.Operator):
                         (other for other in context.view_layer.objects if other.select_get()), None)
             elif request.get('action') == 'visibility':
                 obj.hide_set(bool(request['value']), view_layer=context.view_layer)
+            elif request.get('action') in {'duplicate', 'delete', 'rename'}:
+                action = request['action']
+                if action not in _object_actions(context, obj):
+                    raise ValueError("This action is no longer available for this object.")
+                if action == 'rename':
+                    name = request.get('value')
+                    if not isinstance(name, str) or not name.strip():
+                        raise ValueError("Enter an object name.")
+                    obj.name = name.strip()
+                elif action == 'delete':
+                    # Delete only this row, retaining Blender's scene/link and override handling.
+                    with context.temp_override(selected_objects=[obj]):
+                        result = bpy.ops.object.delete('EXEC_DEFAULT', False, use_global=False)
+                    if 'FINISHED' not in result:
+                        raise ValueError("This object could not be deleted.")
+                else:
+                    selected = list(context.selected_objects)
+                    active = context.view_layer.objects.active
+                    try:
+                        # The duplicate operator consumes selected bases, not just RNA objects.
+                        for other in context.view_layer.objects:
+                            other.select_set(other == obj)
+                        context.view_layer.objects.active = obj
+                        result = bpy.ops.object.duplicate('EXEC_DEFAULT', False, linked=False)
+                        if 'FINISHED' not in result:
+                            raise ValueError("This object could not be duplicated.")
+                    except Exception:
+                        for other in context.view_layer.objects:
+                            other.select_set(other in selected)
+                        context.view_layer.objects.active = active
+                        raise
             else:
                 raise ValueError("Unknown hierarchy action.")
             for area in context.screen.areas:
