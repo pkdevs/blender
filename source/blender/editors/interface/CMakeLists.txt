@@ -138,6 +138,10 @@ set(LIB
   PRIVATE bf::windowmanager
 )
 
+if(WITH_APPLE_CROSSPLATFORM)
+  list(APPEND SRC interface_native_menu.cc)
+endif()
+
 if(WITH_INTERNATIONAL)
   add_definitions(-DWITH_INTERNATIONAL)
 endif()

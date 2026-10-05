@@ -320,14 +320,11 @@ void GHOST_ContextIOS::metalInitFramebuffer()
 
 void GHOST_ContextIOS::metalUpdateFramebuffer()
 {
-  CGRect screenRect = [[UIScreen mainScreen] bounds];
-  CGFloat scaling_fac = [UIScreen mainScreen].scale;
-  CGFloat screenWidth = screenRect.size.width;
-  CGFloat screenHeight = screenRect.size.height;
-  size_t width = screenWidth * scaling_fac;
-  size_t height = screenHeight * scaling_fac;
+  const CGSize drawable_size = metal_view_.drawableSize;
+  size_t width = size_t(drawable_size.width);
+  size_t height = size_t(drawable_size.height);
 
-  if (width <= 0 && height <= 0) {
+  if (width <= 0 || height <= 0) {
     GHOST_ASSERT(false, "Negative or null display dimmensions");
     /* TOOD: Better default size. This should not happen but is here to avoid erroneous
      * initialization. */

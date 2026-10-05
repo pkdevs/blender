@@ -167,3 +167,15 @@ diff -Naur ll.org/llvm/lib/Support/Unix/Path.inc ll/llvm/lib/Support/Unix/Path.i
 -  intrinsics_gen
 -  bugpoint
 -  )
+
+--- a/llvm/tools/sancov/sancov.cpp	2026-05-19 00:00:00
++++ b/llvm/tools/sancov/sancov.cpp	2026-05-19 00:00:00
+@@ -518,7 +518,7 @@
+   static std::unique_ptr<SpecialCaseList> createUserIgnorelist() {
+     if (ClIgnorelist.empty())
+       return std::unique_ptr<SpecialCaseList>();
+-    return SpecialCaseList::createOrDie({{ClIgnorelist}},
++    return SpecialCaseList::createOrDie({std::string(ClIgnorelist)},
+                                         *vfs::getRealFileSystem());
+   }
+   std::unique_ptr<SpecialCaseList> DefaultIgnorelist;

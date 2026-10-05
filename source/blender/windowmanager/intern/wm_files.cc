@@ -103,6 +103,10 @@
 #include "ED_asset.hh"
 #include "ED_datafiles.h"
 #include "ED_fileselect.hh"
+
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+#  include "GHOST_IOSDocumentPicker.hh"
+#endif
 #include "ED_image.hh"
 #include "ED_outliner.hh"
 #include "ED_render.hh"
@@ -3776,8 +3780,33 @@ static wmOperatorStatus wm_save_as_mainfile_exec(bContext *C, wmOperator *op)
   /* Set compression flag. */
   SET_FLAG_FROM_TEST(fileflags, RNA_boolean_get(op->ptr, "compress"), G_FILE_COMPRESS);
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  struct IOSFileWrite {
+    bContext *C;
+    int flags;
+    eBLO_WritePathRemap remap;
+    bool copy;
+    ReportList *reports;
+    char *filepath;
+    bool success = false;
+  } write{C, fileflags, remap_mode, use_save_as_copy, op->reports, filepath};
+  char coordination_error[1024] = {};
+  const bool coordinated = GHOST_ios_document_coordinate(
+      filepath, true,
+      [](void *data, const char *path) {
+        auto &write = *static_cast<IOSFileWrite *>(data);
+        BLI_strncpy(write.filepath, path, FILE_MAX);
+        write.success = wm_file_write(
+            write.C, path, write.flags, write.remap, write.copy, write.reports);
+      }, &write, coordination_error, sizeof(coordination_error));
+  if (!coordinated) {
+    BKE_report(op->reports, RPT_ERROR, coordination_error);
+  }
+  const bool success = write.success;
+#else
   const bool success = wm_file_write(
       C, filepath, fileflags, remap_mode, use_save_as_copy, op->reports);
+#endif
 
   if ((op->flag & OP_IS_INVOKE) == 0) {
     /* OP_IS_INVOKE is set when the operator is called from the GUI.
@@ -3929,7 +3958,11 @@ static wmOperatorStatus wm_save_mainfile_invoke(bContext *C,
     }
   }
 
-  if (blendfile_path[0] != '\0') {
+  if (blendfile_path[0] != '\0'
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+      && GHOST_ios_document_can_write_path(blendfile_path)
+#endif
+  ) {
     if (BKE_main_needs_overwrite_confirm(CTX_data_main(C))) {
       wm_save_file_overwrite_dialog(C, op);
       ret = OPERATOR_INTERFACE;

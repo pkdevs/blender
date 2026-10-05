@@ -689,6 +689,8 @@ typedef struct {
   char isDirectionInverted;
   /** Number of fingers triggering trackpad or touch event. */
   uint numFingers;
+  /** Non-zero identity shared by a gesture and its momentum; zero when unavailable. */
+  uint64_t gesture_id;
 } GHOST_TEventTrackpadData;
 
 typedef enum {

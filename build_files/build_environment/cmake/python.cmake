@@ -100,6 +100,10 @@ else()
         export ac_cv_func_system=no &&
         # TODO: Ensure paths are correct, pointing to build system tools.
         export ac_cv_prog_READELF=""  &&
+        # These are detected as available when cross-compiling against the simulator SDK,
+        # but are not declared there.
+        export ac_cv_func_dup3=no &&
+        export ac_cv_func_pipe2=no &&
         # Disable nis module
         export py_cv_module_nis=n/a &&
         # Disable posix shmem module

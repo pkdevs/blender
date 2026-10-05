@@ -85,6 +85,10 @@
 #include "wm_window.hh"
 #include "wm_window_private.hh"
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+#  include "wm_apple_ios_file.hh"
+#endif
+
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
@@ -1316,10 +1320,16 @@ static void wm_operator_finished(bContext *C,
 
   if (hud_status != NOP) {
     if (hud_status == SET) {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+      /* The iPad shell replaces Blender's desktop HUD with native controls. Keep the operator
+       * registered for redo/repeat, but never show the "Adjust Last Operation" region. */
+      ED_area_type_hud_clear(wm, nullptr);
+#else
       ScrArea *area = CTX_wm_area(C);
       if (area && ((area->flag & AREA_FLAG_OFFSCREEN) == 0)) {
         ED_area_type_hud_ensure(C, area);
       }
+#endif
     }
     else if (hud_status == CLEAR) {
       ED_area_type_hud_clear(wm, nullptr);
@@ -2789,6 +2799,9 @@ static eHandlerActionFlag wm_handler_operator_call(bContext *C,
 
 static void wm_operator_free_for_fileselect(wmOperator *file_operator)
 {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  WM_apple_ios_fileselect_cancel(file_operator);
+#endif
   LISTBASE_FOREACH (bScreen *, screen, &G_MAIN->screens) {
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       if (area->spacetype == SPACE_FILE) {
@@ -2817,6 +2830,11 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
 
   switch (val) {
     case EVT_FILESELECT_FULL_OPEN: {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+      if (WM_apple_ios_fileselect_begin(C, handler->op)) {
+        return WM_HANDLER_BREAK;
+      }
+#endif
       ScrArea *area = ED_screen_temp_space_open(
           C, IFACE_("Blender File View"), SPACE_FILE, U.filebrowser_display_type, true);
       if (!area) {
@@ -2858,7 +2876,11 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
           handler->context.win = nullptr;
         }
       }
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+      else if (!WM_apple_ios_fileselect_active(handler->op)) {
+#else
       else {
+#endif
         ScrArea *ctx_area = CTX_wm_area(C);
 
         wmWindow *temp_win = nullptr;
@@ -2934,7 +2956,11 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
           wm->op_undo_depth++;
         }
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+        const wmOperatorStatus retval = WM_apple_ios_fileselect_exec(C, handler->op);
+#else
         const wmOperatorStatus retval = handler->op->type->exec(C, handler->op);
+#endif
         OPERATOR_RETVAL_CHECK(retval);
 
         /* XXX check this carefully, `CTX_wm_manager(C) == wm` is a bit hackish. */
@@ -3277,12 +3303,22 @@ static eHandlerActionFlag wm_handlers_do_gizmo_handler(bContext *C,
   bool handle_highlight = false;
   bool handle_keymap = false;
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* A Pencil can land without hovering, or tap a different axis from the last
+   * highlighted one. Resolve the actual press/click before invoking its keymap. */
+  const bool is_direct_gizmo_press = ISMOUSE_BUTTON(event->type) &&
+                                     ELEM(event->val, KM_PRESS, KM_CLICK, KM_DBL_CLICK) &&
+                                     event->tablet.is_motion_absolute;
+#else
+  const bool is_direct_gizmo_press = false;
+#endif
+
   /* Handle gizmo highlighting. */
   if ((prev.gz_modal == nullptr) &&
-      ((event->type == MOUSEMOVE) || is_event_modifier || is_event_drag))
+      ((event->type == MOUSEMOVE) || is_event_modifier || is_event_drag || is_direct_gizmo_press))
   {
     handle_highlight = true;
-    if (is_event_modifier || is_event_drag) {
+    if (is_event_modifier || is_event_drag || is_direct_gizmo_press) {
       handle_keymap = true;
     }
   }
@@ -3317,7 +3353,12 @@ static eHandlerActionFlag wm_handlers_do_gizmo_handler(bContext *C,
 
     if (wm_gizmomap_highlight_set(gzmap, C, gz, part)) {
       if (gz != nullptr) {
-        if ((U.flag & USER_TOOLTIPS) && (gz->flag & WM_GIZMO_NO_TOOLTIP) == 0) {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+        const bool use_gizmo_tooltip = false;
+#else
+        const bool use_gizmo_tooltip = (U.flag & USER_TOOLTIPS) != 0;
+#endif
+        if (use_gizmo_tooltip && (gz->flag & WM_GIZMO_NO_TOOLTIP) == 0) {
           WM_tooltip_timer_init(C, CTX_wm_window(C), area, region, WM_gizmomap_tooltip_init);
         }
       }
@@ -4328,6 +4369,7 @@ void wm_event_do_handlers(bContext *C)
       /* Un-link and free here, Blender-quit then frees all. */
       BLI_remlink(&win->runtime->event_queue, event);
       wm_event_free_last_handled(win, event);
+
     }
 
     /* Only add mouse-move when the event queue was read entirely. */
@@ -5784,7 +5826,9 @@ static wmEvent *wm_event_add_trackpad(wmWindow *win, const wmEvent *event, int d
   /* Ignore in between trackpad events for performance, we only need high accuracy
    * for painting with mouse moves, for navigation using the accumulated value is ok. */
   const wmEvent *event_last = static_cast<wmEvent *>(win->runtime->event_queue.last);
-  if (event_last && event_last->type == event->type) {
+  if (event_last && event_last->type == event->type &&
+      event_last->trackpad_gesture_id == event->trackpad_gesture_id)
+  {
     deltax += event_last->xy[0] - event_last->prev_xy[0];
     deltay += event_last->xy[1] - event_last->prev_xy[1];
 
@@ -5936,6 +5980,7 @@ void wm_event_add_ghostevent(wmWindowManager *wm,
   /* Initialize and copy state (only mouse x y and modifiers). */
   event = *event_state;
   event.flag = (eWM_EventFlag)0;
+  event.trackpad_gesture_id = 0;
 
   /**
    * Always support accessing the last key press/release. This is set from `win->eventstate`,
@@ -6053,6 +6098,8 @@ void wm_event_add_ghostevent(wmWindowManager *wm,
       wm_cursor_position_from_ghost_screen_coords(win, &event.xy[0], &event.xy[1]);
       copy_v2_v2_int(event_state->xy, event.xy);
       event.val = KM_NOTHING;
+
+      event.trackpad_gesture_id = pd->gesture_id;
 
       /* The direction is inverted from the device due to system preferences. */
       if (pd->isDirectionInverted) {

@@ -795,6 +795,9 @@ struct wmEvent {
 
   eWM_EventFlag flag;
 
+  /** Trackpad gesture identity, including momentum. Zero when unavailable. */
+  uint64_t trackpad_gesture_id;
+
   /* Custom data. */
 
   /** Custom data type, stylus, 6-DOF, see `wm_event_types.hh`. */

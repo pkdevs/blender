@@ -171,7 +171,7 @@ execute_process(
     unset(_ar_cmake)
   else()
     ExternalProject_Add_Step(external_x265 after_install
-      COMMAND libtool -static -o
+      COMMAND /usr/bin/libtool -static -o
         ${LIBDIR}/x265/lib/${LIB_PREFIX}x265${LIB_SUFFIX}${LIBEXT}
         ${LIBDIR}/x265/lib/${LIB_PREFIX}x265${LIB_SUFFIX}_unmerged${LIBEXT}.part
         ${LIBDIR}/x265_10/lib/${LIB_PREFIX}x265${LIB_SUFFIX}${LIBEXT}

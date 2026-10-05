@@ -343,6 +343,8 @@ else()
   if(WITH_APPLE_CROSSPLATFORM)
     # Add Storyboard - required for main window interface.
     set(storyboards ${OSX_APP_SOURCEDIR}/Main.storyboard)
+    set(IOS_LIQUID_GLASS_APP_ICON
+      ${CMAKE_SOURCE_DIR}/release/darwin/blender_liquid_glass.icon)
 
     add_executable(blender ${EXETYPE} ${SRC} ${storyboards})
 
@@ -1660,8 +1662,46 @@ elseif(APPLE)
       MACOSX_BUNDLE_LONG_VERSION_STRING "${BLENDER_VERSION}.${BLENDER_VERSION_PATCH} ${BLENDER_DATE}"
     )
 
-    set(allresources ${storyboards})
+    set(IOS_ICON_MANIFEST ${CMAKE_SOURCE_DIR}/release/ios/blender_icons.json)
+    set(IOS_ICON_EXPORTER ${CMAKE_SOURCE_DIR}/release/ios/export_icons.py)
+    set(IOS_ICON_CATALOG ${CMAKE_CURRENT_BINARY_DIR}/BlenderIcons.xcassets)
+    file(GLOB IOS_ICON_SOURCES CONFIGURE_DEPENDS
+      ${CMAKE_SOURCE_DIR}/release/datafiles/icons_svg/*.svg
+      ${CMAKE_SOURCE_DIR}/release/datafiles/icons/*.dat
+    )
+    set_property(TARGET blender APPEND PROPERTY LINK_DEPENDS
+      ${IOS_ICON_MANIFEST} ${IOS_ICON_EXPORTER} ${IOS_ICON_SOURCES}
+    )
+    target_sources(blender PRIVATE ${IOS_ICON_MANIFEST})
+    set(allresources ${storyboards} ${IOS_ICON_MANIFEST})
     set_target_properties(blender PROPERTIES RESOURCE "${allresources}")
+
+    add_custom_command(
+      TARGET blender
+      POST_BUILD
+      COMMAND ${PYTHON_EXECUTABLE} ${IOS_ICON_EXPORTER}
+        --manifest ${IOS_ICON_MANIFEST}
+        --source ${CMAKE_SOURCE_DIR}/release/datafiles
+        --output ${IOS_ICON_CATALOG}
+      COMMAND
+        /bin/sh -c
+        "platform=\"\${PLATFORM_NAME:-iphoneos}\"; xcrun actool --compile \"$<TARGET_BUNDLE_DIR:blender>\" --platform \"$platform\" --minimum-deployment-target \"${CMAKE_OSX_DEPLOYMENT_TARGET}\" --app-icon blender_liquid_glass \"${IOS_LIQUID_GLASS_APP_ICON}\" \"${IOS_ICON_CATALOG}\" --output-partial-info-plist \"$<TARGET_BUNDLE_DIR:blender>/assetcatalog_generated_info.plist\""
+      COMMENT "Exporting Blender template icons and compiling iOS assets"
+      VERBATIM
+    )
+
+    if(CMAKE_GENERATOR MATCHES "Xcode")
+      add_custom_command(
+        TARGET blender
+        POST_BUILD
+        COMMAND
+          ${CMAKE_COMMAND}
+          -DBUILD_TYPE=$<CONFIG>
+          -P ${CMAKE_BINARY_DIR}/cmake_install.cmake
+        COMMENT "Installing Blender iOS runtime assets into app bundle"
+        VERBATIM
+      )
+    endif()
 
     # Xcode Archiving support (Testflight, App Store, etc...)
     # This includes the Blender.app in the archive, and targets the local app dir (/Applications) as an install

@@ -473,7 +473,7 @@ tools: .FORCE
 	$(BUILD_COMMAND) -C "$(BUILD_DIR)" -j $(NPROCS) datatoc
 	$(BUILD_COMMAND) -C "$(BUILD_DIR)" -j $(NPROCS) makesrna
 	$(BUILD_COMMAND) -C "$(BUILD_DIR)" -j $(NPROCS) makesdna
-	$(BUILD_COMMAND) -C "$(BUILD_DIR)" -j $(NPROCS) msgfmt
+	$(BUILD_COMMAND) -C "$(BUILD_DIR)" -j $(NPROCS) msgfmt || test -x "$(BUILD_DIR)/bin/msgfmt"
    	
 # -----------------------------------------------------------------------------
 # Build dependencies

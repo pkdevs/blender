@@ -84,10 +84,19 @@ if(WITH_APPLE_CROSSPLATFORM)
   set(CMAKE_TOOLS_ARGS "${CMAKE_TOOLS_ARGS} -DCMAKE_C_FLAGS=\"-DWITH_CROSSCOMPILED_TOOLS -DWITH_APPLE_CROSSPLATFORM\"")
   set(CMAKE_TOOLS_ARGS "${CMAKE_TOOLS_ARGS} -DCMAKE_CXX_FLAGS=\"-DWITH_CROSSCOMPILED_TOOLS -DWITH_APPLE_CROSSPLATFORM\"")
 
+  set(CROSSCOMPILE_DEVELOPER_DIR "$ENV{DEVELOPER_DIR}")
+  if(NOT CROSSCOMPILE_DEVELOPER_DIR)
+    set(CROSSCOMPILE_DEVELOPER_DIR "${XCODE_DEVELOPER_DIR}")
+  endif()
+  if(NOT CROSSCOMPILE_DEVELOPER_DIR AND EXISTS "/Applications/Xcode.app/Contents/Developer")
+    set(CROSSCOMPILE_DEVELOPER_DIR "/Applications/Xcode.app/Contents/Developer")
+  endif()
+  message(STATUS "Cross compile tools DEVELOPER_DIR: ${CROSSCOMPILE_DEVELOPER_DIR}")
+
   get_filename_component(CMAKE_BIN_DIRECTORY "${CMAKE_COMMAND}" DIRECTORY)
   add_custom_target(blender_cross_tools_compile
     COMMENT "\n---------------------------\n Building Cross Compile Tools\n"
-    COMMAND env -i PATH="${CMAKE_BIN_DIRECTORY}:$ENV{PATH}" BUILD_CMAKE_ARGS=${CMAKE_TOOLS_ARGS} BUILD_DIR=${CROSSCOMPILE_TOOLDIR} make tools
+    COMMAND env -i PATH="${CMAKE_BIN_DIRECTORY}:$ENV{PATH}" DEVELOPER_DIR="${CROSSCOMPILE_DEVELOPER_DIR}" BUILD_CMAKE_ARGS=${CMAKE_TOOLS_ARGS} BUILD_DIR=${CROSSCOMPILE_TOOLDIR} make tools
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
 
@@ -369,7 +378,7 @@ string(APPEND PLATFORM_CFLAGS " -pipe -funsigned-char -fno-strict-aliasing -ffp-
 if(WITH_APPLE_CROSSPLATFORM)
   # Link different frameworks for iOS
   set(PLATFORM_LINKFLAGS
-    "-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework UIKit -framework AudioToolbox -framework CoreAudio -framework Metal -framework MetalKit -framework QuartzCore -framework ImageIO -framework GameController -framework CoreGraphics"
+    "-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework UIKit -framework UniformTypeIdentifiers -framework AudioToolbox -framework CoreAudio -framework Metal -framework MetalKit -framework QuartzCore -framework ImageIO -framework GameController -framework CoreGraphics"
   )
   list(APPEND PLATFORM_LINKLIBS "${LIBDIR}/libb2/lib/libb2.a")
 else()

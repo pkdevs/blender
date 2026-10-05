@@ -4145,6 +4145,7 @@ static int ui_do_but_textedit(
 #if (WITH_APPLE_CROSSPLATFORM)
       case EVT_TEXTEDIT: {
         if (but) {
+          wmWindow *win = data->window;
           const char *keyboard_string = GHOST_getKeyboardInput(
               static_cast<GHOST_WindowHandle>(win->ghostwin));
           if (but->active->text_edit.edit_string) {

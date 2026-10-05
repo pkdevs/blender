@@ -41,7 +41,17 @@ const char **argv = nullptr;
 
 /* Implemented in wm.cc. */
 void WM_main_loop_body(bContext *C);
+#include "GHOST_IOSDocumentPicker.hh"
+
+extern "C" void WM_apple_ios_ui_flush_commands(bContext *C);
 int main_ios_callback(int argc, const char **argv);
+
+static UIWindowScene *g_window_scene = nil;
+
+UIWindowScene *GHOST_getIOSWindowScene()
+{
+  return g_window_scene;
+}
 
 @interface IOSAppDelegate : UIResponder <UIApplicationDelegate>
 
@@ -51,11 +61,23 @@ int main_ios_callback(int argc, const char **argv);
 
 @implementation IOSAppDelegate
 
+- (void)buildMenuWithBuilder:(id<UIMenuBuilder>)builder
+{
+  [super buildMenuWithBuilder:builder];
+  if (builder.system != UIMenuSystem.mainSystem) {
+    return;
+  }
+  /* UIKit asks the app delegate, not the view controller, for the system menu bar. */
+  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
+  if (system && system->current_active_window_) {
+    [system->current_active_window_->rootWindow.rootViewController buildMenuWithBuilder:builder];
+  }
+}
+
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-  main_ios_callback(argc, argv);
-
+  UNUSED_VARS(application, launchOptions);
   return YES;
 }
 
@@ -68,6 +90,60 @@ int main_ios_callback(int argc, const char **argv);
   system->handleOpenDocumentRequest(url.path);
 
   return YES;
+}
+
+@end
+
+@interface IOSSceneDelegate : UIResponder <UIWindowSceneDelegate>
+@property(strong, nonatomic) UIWindow *window;
+@end
+
+@implementation IOSSceneDelegate
+
+- (void)scene:(UIScene *)scene
+    willConnectToSession:(UISceneSession *)session
+                 options:(UISceneConnectionOptions *)connectionOptions
+{
+  UNUSED_VARS(session);
+  if (![scene isKindOfClass:[UIWindowScene class]]) {
+    return;
+  }
+
+  g_window_scene = (UIWindowScene *)scene;
+  if (C == nullptr) {
+    main_ios_callback(argc, argv);
+  }
+  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
+  if (system && system->current_active_window_) {
+    self.window = system->current_active_window_->rootWindow;
+    self.window.windowScene = g_window_scene;
+    [self.window makeKeyAndVisible];
+  }
+  [self scene:scene openURLContexts:connectionOptions.URLContexts];
+}
+
+- (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts
+{
+  UNUSED_VARS(scene);
+  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
+  if (system) {
+    for (UIOpenURLContext *context in URLContexts) {
+      system->handleOpenDocumentRequest(context.URL.path);
+    }
+  }
+}
+
+- (void)sceneDidDisconnect:(UIScene *)scene
+{
+  if (g_window_scene == scene) {
+    g_window_scene = nil;
+  }
+}
+
+- (void)dealloc
+{
+  [_window release];
+  [super dealloc];
 }
 
 @end
@@ -114,6 +190,7 @@ int main_ios_callback(int argc, const char **argv);
 
   /* Run the main loop to handle all events. */
   if (C) {
+    WM_apple_ios_ui_flush_commands(C);
     WM_main_loop_body(C);
   }
 
@@ -428,10 +505,14 @@ GHOST_SystemIOS::GHOST_SystemIOS()
   last_warp_timestamp_ = 0;
 }
 
-GHOST_SystemIOS::~GHOST_SystemIOS() {}
+GHOST_SystemIOS::~GHOST_SystemIOS()
+{
+  GHOST_ios_document_access_shutdown();
+}
 
 GHOST_TSuccess GHOST_SystemIOS::init()
 {
+  GHOST_ios_document_access_restore();
   GHOST_TSuccess success = GHOST_System::init();
   if (success) {
 
@@ -558,19 +639,16 @@ GHOST_TSuccess GHOST_SystemIOS::disposeContext(GHOST_IContext *context)
   return GHOST_kSuccess;
 }
 
-/**
- * \note : returns 0,0 on ios as no cursor is present.
- * TODO: If external mouse or trackpad is connected, we can query cursor position.
- */
-GHOST_TSuccess GHOST_SystemIOS::getCursorPosition(int32_t & /*x*/, int32_t & /*y*/) const
+/* iOS has no global cursor query. Use the last absolute input sample rather than
+ * reporting success with uninitialized output coordinates. */
+GHOST_TSuccess GHOST_SystemIOS::getCursorPosition(int32_t &x, int32_t &y) const
 {
-  /* iOS Passthrough. */
-  GHOST_IWindow *window = this->window_manager_->getActiveWindow();
+  const GHOST_WindowIOS *window = static_cast<const GHOST_WindowIOS *>(
+      window_manager_->getActiveWindow());
   if (!window) {
     return GHOST_kFailure;
   }
-  // GHOST_ASSERT(FALSE,"GHOST_SystemIOS::getCursorPosition unsupported on iOS");
-  return GHOST_kSuccess;
+  return window->getPointerPosition(x, y);
 }
 
 /**
@@ -583,6 +661,7 @@ GHOST_TSuccess GHOST_SystemIOS::setCursorPosition(int32_t x, int32_t y)
   if (!window)
     return GHOST_kFailure;
 
+  window->updatePointerPosition(x, y);
   pushEvent(new GHOST_EventCursor(
       getMilliSeconds(), GHOST_kEventCursorMove, window, x, y, window->getTabletData()));
   outside_loop_event_processed_ = true;

@@ -332,6 +332,24 @@ static wmOperatorStatus viewrotate_modal_impl(bContext *C,
   return ret;
 }
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+static float viewrotate_gesture_reverse(View3D_Runtime &runtime,
+                                       RegionView3D *rv3d,
+                                       const uint64_t gesture_id,
+                                       const float reverse)
+{
+  if (gesture_id == 0) {
+    return reverse;
+  }
+  if (runtime.orbit_gesture_id != gesture_id || runtime.orbit_gesture_region != rv3d) {
+    runtime.orbit_gesture_id = gesture_id;
+    runtime.orbit_gesture_region = rv3d;
+    runtime.orbit_gesture_reverse = reverse;
+  }
+  return runtime.orbit_gesture_reverse;
+}
+#endif
+
 static wmOperatorStatus viewrotate_invoke_impl(bContext *C,
                                                ViewOpsData *vod,
                                                const wmEvent *event,
@@ -344,6 +362,12 @@ static wmOperatorStatus viewrotate_invoke_impl(bContext *C,
   eV3D_OpEvent event_code = ELEM(event->type, MOUSEROTATE, MOUSEPAN) ? VIEW_CONFIRM : VIEW_PASS;
 
   if (event_code == VIEW_CONFIRM) {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    /* Each trackpad update creates fresh ViewOpsData. Keep the initial turntable direction,
+     * just as a modal mouse orbit does, instead of reversing yaw when crossing a pole. */
+    vod->reverse = viewrotate_gesture_reverse(
+        vod->v3d->runtime, vod->rv3d, event->trackpad_gesture_id, vod->reverse);
+#endif
     /* MOUSEROTATE performs orbital rotation, so y axis delta is set to 0 */
     const bool is_inverted = (event->flag & WM_EVENT_SCROLL_INVERT) &&
                              (event->type != MOUSEROTATE);
@@ -367,10 +391,11 @@ static wmOperatorStatus viewrotate_invoke_impl(bContext *C,
 
 static wmOperatorStatus viewrotate_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-#ifdef WITH_APPLE_CROSSPLATFORM
-  /* Only scroll view with multiple fingers on iOS. */
-  if (!(event->flag & WM_EVENT_MULTITOUCH_TWO_FINGERS)) {
-    return OPERATOR_FINISHED;
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* iPad viewport navigation: one-finger direct touch orbits. Two-finger drag is reserved for
+   * panning, pinch for zooming, and twist for view roll. */
+  if (event->type != MOUSEROTATE || (event->flag & WM_EVENT_MULTITOUCH_TWO_FINGERS)) {
+    return OPERATOR_PASS_THROUGH;
   }
 #endif
 

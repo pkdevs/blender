@@ -177,7 +177,7 @@ index a97a755..07ce853 100644
 +_contextvars _contextvarsmodule.c
 +_csv _csv.c
 +_datetime _datetimemodule.c
-+_decimal _decimal/libmpdec/context.c _decimal/_decimal.c _decimal/libmpdec/basearith.c _decimal/libmpdec/constants.c _decimal/libmpdec/convolute.c _decimal/libmpdec/crt.c _decimal/libmpdec/difradix2.c _decimal/libmpdec/fnt.c _decimal/libmpdec/fourstep.c _decimal/libmpdec/io.c _decimal/libmpdec/mpalloc.c _decimal/libmpdec/mpdecimal.c _decimal/libmpdec/numbertheory.c _decimal/libmpdec/sixstep.c _decimal/libmpdec/transpose.c -I$(srcdir)/Modules/_decimal/  -I$(srcdir)/Modules/_decimal/libmpdec -DCONFIG_64 -DANSI
++#_decimal _decimal/_decimal.c -I$(srcdir)/Modules/_decimal/ -I$(srcdir)/Modules/_decimal/libmpdec -DCONFIG_64 -DANSI
 +_heapq _heapqmodule.c
 +_json _json.c
 +_lsprof _lsprof.c rotatingtree.c

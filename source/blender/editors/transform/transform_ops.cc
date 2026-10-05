@@ -41,7 +41,10 @@
 #include "ED_mesh.hh"
 
 #include "transform.hh"
+#include "transform_constraints.hh"
 #include "transform_convert.hh"
+#include "transform_gizmo.hh"
+#include "transform_orientations.hh"
 
 namespace blender::ed::transform {
 
@@ -518,6 +521,87 @@ static wmOperatorStatus transform_modal(bContext *C, wmOperator *op, const wmEve
   }
 
   return exit_code;
+}
+
+static TransInfo *modal_constraint_data(wmOperator *op)
+{
+  /* Modal macros keep their currently running child in opm (e.g. extrude/move). */
+  while (op && op->type && op->type->macro.first) {
+    op = op->opm;
+  }
+  if (!op || !op->type || op->type->modal != transform_modal || !op->customdata) {
+    return nullptr;
+  }
+  TransInfo *t = static_cast<TransInfo *>(op->customdata);
+  if (t->spacetype != SPACE_VIEW3D || (t->flag & (T_NO_CONSTRAINT | T_2D_EDIT)) ||
+      !ELEM(t->state, TRANS_STARTING, TRANS_RUNNING))
+  {
+    return nullptr;
+  }
+  return t;
+}
+
+bool modal_constraint_get(wmOperator *op, int &r_axes)
+{
+  r_axes = 0;
+  const TransInfo *t = modal_constraint_data(op);
+  if (!t) {
+    return false;
+  }
+  if (t->con.mode & CON_APPLY) {
+    r_axes = ((t->con.mode & CON_AXIS0) ? 1 : 0) | ((t->con.mode & CON_AXIS1) ? 2 : 0) |
+             ((t->con.mode & CON_AXIS2) ? 4 : 0);
+  }
+  return true;
+}
+
+bool modal_constraint_toggle(bContext *C, wmOperator *op, const int axis)
+{
+  int axes;
+  if (axis < 0 || axis > 2 || !modal_constraint_get(op, axes)) {
+    return false;
+  }
+  TransInfo *t = modal_constraint_data(op);
+  axes ^= 1 << axis;
+  t->context = C;
+  t->modifiers &= ~(MOD_CONSTRAINT_SELECT_AXIS | MOD_CONSTRAINT_SELECT_PLANE);
+  /* All three axes, like no axes, means unrestricted movement. */
+  if (axes == 0 || axes == 7) {
+    stopConstraint(t);
+  }
+  else {
+    if (t->orient_curr == O_DEFAULT) {
+      transform_orientations_current_set(t, O_SCENE);
+    }
+    const char *text = "";
+    switch (axes) {
+      case 1:
+        text = IFACE_("along %s X");
+        break;
+      case 2:
+        text = IFACE_("along %s Y");
+        break;
+      case 4:
+        text = IFACE_("along %s Z");
+        break;
+      case 3:
+        text = IFACE_("locking %s Z");
+        break;
+      case 5:
+        text = IFACE_("locking %s Y");
+        break;
+      case 6:
+        text = IFACE_("locking %s X");
+        break;
+    }
+    const int mode = ((axes & 1) ? CON_AXIS0 : 0) | ((axes & 2) ? CON_AXIS1 : 0) |
+                     ((axes & 4) ? CON_AXIS2 : 0);
+    setUserConstraint(t, mode, text);
+  }
+  transform_gizmo_3d_model_from_constraint_and_mode_set(t);
+  t->redraw |= TREDRAW_HARD;
+  transformApply(C, t);
+  return true;
 }
 
 static void transform_cancel(bContext *C, wmOperator *op)

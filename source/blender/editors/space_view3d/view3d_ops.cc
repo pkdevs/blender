@@ -259,6 +259,11 @@ void view3d_keymap(wmKeyConfig *keyconf)
   /* only for region 3D window */
   WM_keymap_ensure(keyconf, "3D View", SPACE_VIEW3D, RGN_TYPE_WINDOW);
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* Items are populated after Python loads the preset, which clears default keymaps. */
+  WM_keymap_ensure(keyconf, "3D View iPad Gestures", SPACE_VIEW3D, RGN_TYPE_WINDOW);
+#endif
+
   fly_modal_keymap(keyconf);
   walk_modal_keymap(keyconf);
   viewrotate_modal_keymap(keyconf);

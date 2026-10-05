@@ -319,6 +319,9 @@ class GHOST_WindowIOS : public GHOST_Window {
   bool is_active_window_;
   bool request_to_make_active_;
 
+  int32_t pointer_position_[2] = {0, 0};
+  bool pointer_position_valid_ = false;
+
   GHOST_WindowIOS *parent_window_;
 
   char *window_title_;
@@ -329,6 +332,23 @@ class GHOST_WindowIOS : public GHOST_Window {
     return uiview_;
   }
   CGPoint scalePointToWindow(CGPoint &point);
+
+  void updatePointerPosition(int32_t x, int32_t y)
+  {
+    pointer_position_[0] = x;
+    pointer_position_[1] = y;
+    pointer_position_valid_ = true;
+  }
+
+  GHOST_TSuccess getPointerPosition(int32_t &x, int32_t &y) const
+  {
+    if (!pointer_position_valid_) {
+      return GHOST_kFailure;
+    }
+    x = pointer_position_[0];
+    y = pointer_position_[1];
+    return GHOST_kSuccess;
+  }
 
   void beginFrame();
   void endFrame();

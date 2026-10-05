@@ -1106,6 +1106,10 @@ static void area_azone_init(const wmWindow *win, const bScreen *screen, ScrArea 
 
 static void fullscreen_azone_init(ScrArea *area, ARegion *region)
 {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  UNUSED_VARS(area, region);
+  return;
+#else
   if (ED_area_is_global(area) || !ELEM(region->regiontype, RGN_TYPE_WINDOW, RGN_TYPE_PREVIEW)) {
     return;
   }
@@ -1129,6 +1133,7 @@ static void fullscreen_azone_init(ScrArea *area, ARegion *region)
   az->y1 = az->y2 - AZONEFADEOUT;
 
   BLI_rcti_init(&az->rect, az->x1, az->x2, az->y1, az->y2);
+#endif
 }
 
 /**

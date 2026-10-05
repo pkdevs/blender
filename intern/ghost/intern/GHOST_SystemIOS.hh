@@ -25,6 +25,8 @@ class GHOST_WindowIOS;
 #ifdef __OBJC__
 #  import <MetalKit/MTKView.h>
 
+UIWindowScene *GHOST_getIOSWindowScene();
+
 @interface GHOST_IOSMetalRenderer : NSObject <MTKViewDelegate>
 
 - (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView;

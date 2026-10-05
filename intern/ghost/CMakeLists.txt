@@ -188,6 +188,10 @@ elseif(APPLE AND NOT WITH_GHOST_X11)
 
         intern/GHOST_SystemIOS.mm
         intern/GHOST_WindowIOS.mm
+        intern/GHOST_IOSPencilMenu.hh
+        intern/GHOST_IOSPencilMenu.mm
+        GHOST_IOSDocumentPicker.hh
+        intern/GHOST_IOSDocumentPicker.mm
 
         intern/GHOST_ContextIOS.mm
         intern/GHOST_ContextIOS.hh

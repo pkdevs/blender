@@ -105,10 +105,10 @@ static wmOperatorStatus viewmove_invoke_impl(bContext *C,
 
 static wmOperatorStatus viewmove_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-#ifdef WITH_APPLE_CROSSPLATFORM
-  /* Only handle inverted events for 3D view interaction on iOS */
-  if (!(event->flag & WM_EVENT_MULTITOUCH_TWO_FINGERS)) {
-    return OPERATOR_FINISHED;
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* Finger panning must not consume unrelated pointer or active-tool events. */
+  if (event->type != MOUSEPAN || !(event->flag & WM_EVENT_MULTITOUCH_TWO_FINGERS)) {
+    return OPERATOR_PASS_THROUGH;
   }
 #endif
 

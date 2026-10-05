@@ -33,6 +33,9 @@ set(SRC
   intern/wm_jobs.cc
   intern/wm_keymap.cc
   intern/wm_keymap_utils.cc
+  intern/wm_apple_ios_ui.cc
+  intern/wm_apple_ios_file.cc
+  intern/wm_apple_ios_file.hh
   intern/wm_menu_type.cc
   intern/wm_operator_props.cc
   intern/wm_operator_type.cc

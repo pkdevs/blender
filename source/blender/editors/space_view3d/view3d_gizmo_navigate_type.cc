@@ -15,11 +15,13 @@
  */
 
 #include <algorithm>
+#include <cmath>
 
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector_types.hh"
 #include "BLI_sort_utils.h"
+#include "BLI_time.h"
 
 #include "BKE_context.hh"
 
@@ -50,6 +52,37 @@
 /* distance within this from center is considered positive. */
 #define AXIS_DEPTH_BIAS 0.01f
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+extern "C" bool WM_apple_ios_ui_navigation_hover_active();
+extern "C" void WM_apple_ios_ui_navigation_redraw_request();
+
+struct NavigateRotateGizmo {
+  wmGizmo gizmo;
+  float hover[6];
+  double previous_draw_time;
+};
+
+static bool gizmo_axis_hover_update(NavigateRotateGizmo *axis, const double now, const int part)
+{
+  const double dt = axis->previous_draw_time == 0.0 ? 1.0 / 60.0 :
+                        std::clamp(now - axis->previous_draw_time, 0.0, 1.0 / 15.0);
+  axis->previous_draw_time = now;
+  const float blend = 1.0f - std::exp(float(-dt / 0.065));
+  bool animating = false;
+  for (int i = 0; i < 6; i++) {
+    const float target = part == i + 1 ? 1.0f : 0.0f;
+    axis->hover[i] += (target - axis->hover[i]) * blend;
+    if (std::abs(target - axis->hover[i]) < 0.001f) {
+      axis->hover[i] = target;
+    }
+    else {
+      animating = true;
+    }
+  }
+  return animating;
+}
+#endif
+
 static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
 {
   struct {
@@ -79,6 +112,19 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
 
   /* When the cursor is over any of the gizmos (show circle backdrop). */
   const bool is_active = ((gz->state & WM_GIZMO_STATE_HIGHLIGHT) != 0);
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  constexpr bool minimal = true;
+  NavigateRotateGizmo *axis_gizmo = reinterpret_cast<NavigateRotateGizmo *>(gz);
+  const int hover_part = is_active && WM_apple_ios_ui_navigation_hover_active() ?
+                             gz->highlight_part : -1;
+  if (gizmo_axis_hover_update(axis_gizmo, BLI_time_now_seconds(), hover_part)) {
+    /* The UIKit display link consumes this before the next Blender draw. Stop
+     * requesting frames as soon as all six elements have reached their targets. */
+    WM_apple_ios_ui_navigation_redraw_request();
+  }
+#else
+  constexpr bool minimal = false;
+#endif
 
   /* Background color of the View3D, used to mix colors. */
   float view_color[4];
@@ -141,7 +187,7 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
   GPU_polygon_smooth(false);
 
   /* Circle defining active area. */
-  if (is_active) {
+  if (is_active && !minimal) {
     const float rad = WIDGET_RADIUS;
     GPU_matrix_push();
     GPU_matrix_scale_1f(1.0f / rad);
@@ -174,6 +220,18 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
     if (is_aligned_front && (axis_order[axis_index].axis_opposite + 1 == gz->highlight_part)) {
       is_highlight = true;
     }
+    float hover = 0.0f;
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    hover = axis_gizmo->hover[index];
+    if (is_aligned_front) {
+      hover = std::max(hover, axis_gizmo->hover[axis_order[axis_index].axis_opposite]);
+    }
+#endif
+    const float handle_size = minimal ?
+                                  (is_pos ? 0.11f + 0.09f * hover :
+                                   is_aligned_front ? 0.14f + 0.06f * hover :
+                                                      0.055f + 0.125f * hover) :
+                                  AXIS_HANDLE_SIZE;
 
     UI_GetThemeColor3fv(TH_AXIS_X + axis, axis_color[axis]);
     axis_color[axis][3] = 1.0f;
@@ -185,6 +243,9 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
     /* Color that is midway between front and back. */
     float middle_color[4];
     interp_v4_v4v4(middle_color, view_color, axis_color[axis], 0.75f);
+    if (minimal) {
+      middle_color[3] = fading_color[3] = 0.55f + 0.3f * hover;
+    }
 
     GPU_blend(GPU_BLEND_ALPHA);
 
@@ -197,11 +258,12 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
 
       /* Decrease length of line by ball radius. */
       float v_end[3] = {0.0f, 0.0f, 0.0f};
-      mul_v3_v3fl(v_end, v_final, 1.0f - AXIS_HANDLE_SIZE);
+      mul_v3_v3fl(v_end, v_final, minimal ? 1.0f - handle_size / (1.0f - AXIS_HANDLE_SIZE) :
+                                           1.0f - AXIS_HANDLE_SIZE);
 
       immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_SMOOTH_COLOR);
       immUniform2fv("viewportSize", &viewport_size[2]);
-      immUniform1f("lineWidth", AXIS_LINE_WIDTH);
+      immUniform1f("lineWidth", AXIS_LINE_WIDTH * (minimal ? 0.55f : 1.0f));
       immBegin(GPU_PRIM_LINES, 2);
       immAttr4fv(color_id, middle_color);
       immVertex3fv(pos_id, v_start);
@@ -230,24 +292,37 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
         }
       }
 
+      float minimal_fill[4];
+      if (minimal) {
+        copy_v4_v4(minimal_fill, fading_color);
+        minimal_fill[3] = (is_pos || is_aligned_front) ? 0.16f + 0.84f * hover :
+                                                       0.65f + 0.35f * hover;
+        inner_color = outline_color = minimal_fill;
+      }
+
       GPU_matrix_push();
       GPU_matrix_translate_3fv(v_final);
       GPU_matrix_mul(font.matrix);
       /* Size change from back to front: 0.92f - 1.08f. */
       float scale = ((depth + 1) * 0.08f) + 0.92f;
-      const float rad = WIDGET_RADIUS * AXIS_HANDLE_SIZE * scale;
+      const float rad = WIDGET_RADIUS * handle_size * scale;
       rctf rect{};
       rect.xmin = -rad;
       rect.xmax = rad;
       rect.ymin = -rad;
       rect.ymax = rad;
       UI_draw_roundbox_4fv_ex(
-          &rect, inner_color, nullptr, 0.0f, outline_color, AXIS_RING_WIDTH, rad);
+          &rect, inner_color, nullptr, 0.0f, outline_color, minimal ? 0.0f : AXIS_RING_WIDTH, rad);
       GPU_matrix_pop();
     }
 
     /* Axis XYZ Character. */
-    if ((is_pos || is_highlight || (axis == axis_align)) && !is_aligned_back) {
+    if ((is_pos || (axis == axis_align) || (minimal ? hover > 0.01f : is_highlight)) &&
+        !is_aligned_back)
+    {
+      if (minimal) {
+        BLF_size(font.id, AXIS_TEXT_SIZE * (0.8f + 0.25f * hover));
+      }
       float axis_str_width, axis_string_height;
       char axis_str[3] = {char('X' + axis), 0, 0};
       if (!is_pos) {
@@ -269,7 +344,11 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
       GPU_matrix_translate_3fv(v_final_px);
       GPU_matrix_mul(font.matrix);
       float text_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-      if (!is_highlight) {
+      if (minimal) {
+        interp_v4_v4v4(text_color, axis_color[axis], blender::float4{1, 1, 1, 1}, hover);
+        text_color[3] = (is_pos || is_aligned_front) ? 0.95f : hover;
+      }
+      else if (!is_highlight) {
         zero_v4(text_color);
         text_color[3] = is_active ? 1.0f : 0.9f;
       }
@@ -368,5 +447,9 @@ void VIEW3D_GT_navigate_rotate(wmGizmoType *gzt)
   gzt->cursor_get = gizmo_axis_cursor_get;
   gzt->screen_bounds_get = gizmo_axis_screen_bounds_get;
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  gzt->struct_size = sizeof(NavigateRotateGizmo);
+#else
   gzt->struct_size = sizeof(wmGizmo);
+#endif
 }

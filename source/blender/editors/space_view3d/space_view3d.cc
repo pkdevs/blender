@@ -334,6 +334,13 @@ static void view3d_main_region_init(wmWindowManager *wm, ARegion *region)
   ListBase *lb;
   wmKeyMap *keymap;
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* Handle finger panning before mode/tool keymaps; Pencil still drives the active tool. */
+  keymap = WM_keymap_ensure(
+      wm->runtime->defaultconf, "3D View iPad Gestures", SPACE_VIEW3D, RGN_TYPE_WINDOW);
+  WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
+#endif
+
   /* object ops. */
 
   /* important to be before Pose keymap since they can both be enabled at once */

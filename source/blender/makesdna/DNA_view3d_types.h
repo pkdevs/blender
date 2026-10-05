@@ -287,8 +287,14 @@ typedef struct View3D_Runtime {
    */
   float ofs_last_center[3];
 
+  /** Turntable direction is fixed for a direct-touch gesture, including its momentum. */
+  uint64_t orbit_gesture_id;
+  float orbit_gesture_reverse;
+  char _pad_orbit[4];
+
   /* Only used for overlay stats while in local-view. */
   struct SceneStats *local_stats;
+  struct RegionView3D *orbit_gesture_region;
 } View3D_Runtime;
 
 /** 3D ViewPort Struct. */

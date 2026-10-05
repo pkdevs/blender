@@ -18,7 +18,7 @@ if(WITH_APPLE_CROSSPLATFORM)
     set(APPLE_SDK_CROSSPLATFORM_NAME "iPhoneOS")
     set(APPLE_SDK_CROSSPLATFORM_NAME_LOWER "iphoneos")
 
-    set(OSX_MIN_DEPLOYMENT_TARGET 16.00)
+    set(OSX_MIN_DEPLOYMENT_TARGET 26.0)
     set(APPLE_OS_MINVERSION_CFLAG "-miphoneos-version-min=${OSX_MIN_DEPLOYMENT_TARGET}")
   # iOS-Simulator arm64
   elseif(APPLE_TARGET_DEVICE STREQUAL "ios-simulator")
@@ -28,7 +28,7 @@ if(WITH_APPLE_CROSSPLATFORM)
     set(APPLE_SDK_CROSSPLATFORM_NAME "iPhoneSimulator")
     set(APPLE_SDK_CROSSPLATFORM_NAME_LOWER "iphonesimulator")
 
-    set(OSX_MIN_DEPLOYMENT_TARGET 16.00)
+    set(OSX_MIN_DEPLOYMENT_TARGET 26.0)
     set(APPLE_OS_MINVERSION_CFLAG "-miphonesimulator-version-min=${OSX_MIN_DEPLOYMENT_TARGET}")
   else()
     message(FATAL_ERROR "Unsupported APPLE_TARGET_DEVICE = ${APPLE_TARGET_DEVICE}. To add support, ensure setup parameters in platform_apple_xcode.cmake are configured. ")
@@ -58,10 +58,14 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "${OSX_MIN_DEPLOYMENT_TARGET}" CACHE STRING "" F
 
 # Detect developer directory. Depending on configuration this may be either
 # an Xcode or Command Line Tools installation.
-execute_process(
-  COMMAND xcode-select --print-path
-  OUTPUT_VARIABLE XCODE_DEVELOPER_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if(DEFINED ENV{DEVELOPER_DIR})
+  set(XCODE_DEVELOPER_DIR "$ENV{DEVELOPER_DIR}")
+else()
+  execute_process(
+    COMMAND xcode-select --print-path
+    OUTPUT_VARIABLE XCODE_DEVELOPER_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+endif()
 
 # Detect Xcode version. It is provided by the Xcode generator but not
 # Unix Makefiles or Ninja.

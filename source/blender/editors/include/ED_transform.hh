@@ -23,12 +23,20 @@ struct View3D;
 struct ViewLayer;
 struct wmGizmoGroupType;
 struct wmKeyConfig;
+struct wmOperator;
 struct wmOperatorType;
 
 namespace blender::ed::transform {
 
 void keymap_transform(wmKeyConfig *keyconf);
 void transform_operatortypes();
+
+/**
+ * Read/toggle the live 3D transform's axes (X=1, Y=2, Z=4), including macro operators.
+ * Return false when the operator is not a running, constrainable 3D transform.
+ */
+bool modal_constraint_get(wmOperator *op, int &r_axes);
+bool modal_constraint_toggle(bContext *C, wmOperator *op, int axis);
 
 /* ******************** Macros & Prototypes *********************** */
 

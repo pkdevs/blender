@@ -319,7 +319,7 @@ static void MyUserNameInitializer() {
     char buffer[1024] = {'\0'};
     uid_t uid = geteuid();
     int pwuid_res = getpwuid_r(uid, &pwd, buffer, sizeof(buffer), &result);
-    if (pwuid_res == 0) {
+    if (pwuid_res == 0 && result != NULL && pwd.pw_name != NULL) {
       g_my_user_name = pwd.pw_name;
     } else {
       snprintf(buffer, sizeof(buffer), "uid%d", uid);

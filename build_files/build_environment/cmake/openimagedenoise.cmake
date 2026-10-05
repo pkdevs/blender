@@ -21,6 +21,7 @@ if(APPLE)
     # TODO: Enable OIDN_DEVICE_METAL for cross-platform builds.
     set(OIDN_EXTRA_ARGS
       ${OIDN_EXTRA_ARGS}
+      -DOIDN_DEVICE_CPU=OFF
       -DISPC_EXECUTABLE=${ISPC_EXECUTABLE_PATH}
     )
   else()
