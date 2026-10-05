@@ -43,7 +43,6 @@ if(WITH_APPLE_CROSSPLATFORM)
     -DCLANG_TABLEGEN=${CMAKE_DEPS_CROSSCOMPILE_BUILDDIR}/deps_arm64/Release/llvm/bin/clang-tblgen
   )
   set(PYTHON_ROOT_DIR ${CMAKE_DEPS_CROSSCOMPILE_BUILDDIR}/deps_arm64/Release/python)
-  set(PYTHON_BINARY ${PYTHON_ROOT_DIR}/bin/python3)
 else()
   set(PYTHON_ROOT_DIR ${LIBDIR}/python/)
 endif()
