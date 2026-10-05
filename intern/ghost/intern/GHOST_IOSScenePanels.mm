@@ -273,7 +273,10 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         initWithAppearance:UICollectionLayoutListAppearanceSidebar] autorelease];
     list.backgroundColor = UIColor.clearColor;
     list.trailingSwipeActionsConfigurationProvider = ^UISwipeActionsConfiguration *(NSIndexPath *path) {
-      return [owner hierarchySwipeActionsAtIndexPath:path];
+      return [owner hierarchySwipeActionsAtIndexPath:path leading:NO];
+    };
+    list.leadingSwipeActionsConfigurationProvider = ^UISwipeActionsConfiguration *(NSIndexPath *path) {
+      return [owner hierarchySwipeActionsAtIndexPath:path leading:YES];
     };
     _tree = [[[UICollectionView alloc] initWithFrame:CGRectZero
         collectionViewLayout:[UICollectionViewCompositionalLayout layoutWithListConfiguration:list]] autorelease];
@@ -1929,21 +1932,96 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   cell.accessories = accessories;
 }
 
-- (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)indexPath
+- (BOOL)sendHierarchyAction:(NSString *)action node:(NSDictionary *)node value:(id)value
+{
+  NSDictionary *current = _nodesByKey[node[@"key"]];
+  if (![current[@"id"] isEqual:node[@"id"]] || ![current[@"actions"] containsObject:action]) {
+    return NO;
+  }
+  NSMutableDictionary *request = [NSMutableDictionary dictionaryWithDictionary:
+      @{@"action": action, @"id": current[@"id"]}];
+  if (value) { request[@"value"] = value; }
+  [self send:request];
+  return YES;
+}
+
+- (void)promptHierarchyAction:(NSString *)action node:(NSDictionary *)node completion:(void (^)(BOOL))complete
+{
+  NSDictionary *current = _nodesByKey[node[@"key"]];
+  if (![current[@"actions"] containsObject:action]) { complete(NO); return; }
+  UIViewController *presenter = _overlay.window.rootViewController;
+  while (presenter.presentedViewController) { presenter = presenter.presentedViewController; }
+  if (!presenter || presenter.isBeingDismissed || [presenter isKindOfClass:UIAlertController.class]) {
+    complete(NO);
+    return;
+  }
+  BOOL deleting = [action isEqual:@"delete"];
+  UIAlertController *alert = [UIAlertController alertControllerWithTitle:
+      deleting ? [NSString stringWithFormat:@"Delete \"%@\"?", current[@"name"]] : @"Rename Object"
+      message:deleting ? @"The object will be removed from this scene. You can undo this change." : nil
+      preferredStyle:UIAlertControllerStyleAlert];
+  if (!deleting) {
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+      field.text = current[@"name"];
+      field.clearButtonMode = UITextFieldViewModeWhileEditing;
+      field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+      field.autocorrectionType = UITextAutocorrectionTypeNo;
+      field.accessibilityLabel = @"Object name";
+    }];
+  }
+  __block GHOSTIOSScenePanels *owner = self;
+  __block UIAlertController *prompt = alert;
+  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel
+      handler:^(UIAlertAction *chosen) { complete(NO); }]];
+  UIAlertAction *confirm = [UIAlertAction actionWithTitle:deleting ? @"Delete" : @"Rename"
+      style:deleting ? UIAlertActionStyleDestructive : UIAlertActionStyleDefault handler:^(UIAlertAction *chosen) {
+        complete([owner sendHierarchyAction:action node:node value:deleting ? nil : prompt.textFields.firstObject.text]);
+      }];
+  [alert addAction:confirm];
+  if (!deleting) {
+    [alert.textFields.firstObject addAction:[UIAction actionWithHandler:^(__kindof UIAction *event) {
+      NSString *name = ((UITextField *)event.sender).text;
+      confirm.enabled = [name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length > 0;
+    }] forControlEvents:UIControlEventEditingChanged];
+  }
+  [presenter presentViewController:alert animated:YES completion:nil];
+}
+
+- (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)indexPath leading:(BOOL)leading
 {
   NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
-  if (![node[@"kind"] isEqual:@"object"]) {
-    return nil;
-  }
-  const BOOL hidden = [node[@"hidden"] boolValue];
+  if (![node[@"kind"] isEqual:@"object"]) { return nil; }
+  NSMutableArray *items = [NSMutableArray array];
   __block GHOSTIOSScenePanels *owner = self;
-  UIContextualAction *action = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal
-      title:hidden ? @"Show" : @"Hide" handler:^(UIContextualAction *action, UIView *view, void (^complete)(BOOL)) {
-        [owner send:@{@"action": @"visibility", @"id": node[@"id"], @"value": @(!hidden)}];
-        complete(YES);
-      }];
-  action.image = [UIImage systemImageNamed:hidden ? @"eye" : @"eye.slash"];
-  UISwipeActionsConfiguration *actions = [UISwipeActionsConfiguration configurationWithActions:@[action]];
+  for (NSString *identifier in leading ? @[@"duplicate", @"rename"] : @[@"delete", @"visibility"]) {
+    if (![node[@"actions"] containsObject:identifier]) { continue; }
+    BOOL deleting = [identifier isEqual:@"delete"];
+    BOOL duplicate = [identifier isEqual:@"duplicate"];
+    BOOL visibility = [identifier isEqual:@"visibility"];
+    BOOL hidden = [node[@"hidden"] boolValue];
+    NSString *title = deleting ? @"Delete" : duplicate ? @"Duplicate" : visibility ? (hidden ? @"Show" : @"Hide") : @"Rename";
+    UIContextualAction *item = [UIContextualAction contextualActionWithStyle:
+        deleting ? UIContextualActionStyleDestructive : UIContextualActionStyleNormal title:title
+        handler:^(UIContextualAction *action, UIView *view, void (^complete)(BOOL)) {
+          if (deleting || [identifier isEqual:@"rename"]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [owner promptHierarchyAction:identifier node:node completion:complete];
+            });
+          }
+          else {
+            NSDictionary *current = owner->_nodesByKey[node[@"key"]];
+            complete([owner sendHierarchyAction:identifier node:node
+                value:visibility ? @(![current[@"hidden"] boolValue]) : nil]);
+          }
+        }];
+    NSString *icon = deleting ? @"TRASH" : duplicate ? @"DUPLICATE" : visibility ? (hidden ? @"HIDE_OFF" : @"HIDE_ON") : @"GREASEPENCIL";
+    NSString *symbol = deleting ? @"trash" : duplicate ? @"plus.square.on.square" : visibility ? (hidden ? @"eye" : @"eye.slash") : @"pencil";
+    item.image = _icon(icon) ?: [UIImage systemImageNamed:symbol];
+    if (!deleting) { item.backgroundColor = duplicate ? UIColor.systemBlueColor : UIColor.systemGrayColor; }
+    [items addObject:item];
+  }
+  if (!items.count) { return nil; }
+  UISwipeActionsConfiguration *actions = [UISwipeActionsConfiguration configurationWithActions:items];
   actions.performsFirstActionWithFullSwipe = NO;
   return actions;
 }

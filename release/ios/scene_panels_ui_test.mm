@@ -11,6 +11,7 @@
 - (void)finishNumberScrub:(UITextField *)field;
 - (void)cancelNumberScrub;
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture;
+- (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)path leading:(BOOL)leading;
 @end
 
 @interface NumberTestPan : UIPanGestureRecognizer
@@ -34,6 +35,50 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *key, const char *val
 static void tap(UIBarButtonItem *button)
 {
   [button.target performSelector:button.action withObject:button];
+}
+
+static void testHierarchySwipes(UIView *overlay)
+{
+  GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
+      icon:^UIImage *(NSString *name) { return nil; }] autorelease];
+  [panels layoutInRect:CGRectMake(0, 70, 1194, 680)];
+  tap(panels.hierarchyButton);
+  NSMutableDictionary *node = [NSMutableDictionary dictionaryWithDictionary:
+      @{@"key": @"object", @"parent": @"", @"id": @"42", @"kind": @"object", @"name": @"Cube",
+        @"enabled": @YES, @"actions": @[@"duplicate", @"rename", @"delete", @"visibility"]}];
+  void (^update)(void) = ^{
+    [panels updateSnapshot:@{@"ack": @99999, @"hierarchy": @[[[node copy] autorelease]]}];
+  };
+  update();
+  NSIndexPath *path = [NSIndexPath indexPathForItem:0 inSection:0];
+  UISwipeActionsConfiguration *leading = [panels hierarchySwipeActionsAtIndexPath:path leading:YES];
+  UISwipeActionsConfiguration *trailing = [panels hierarchySwipeActionsAtIndexPath:path leading:NO];
+  NSCAssert([leading.actions[0].title isEqual:@"Duplicate"] && [leading.actions[1].title isEqual:@"Rename"],
+            @"Leading swipe exposes duplicate and rename");
+  NSCAssert([trailing.actions[0].title isEqual:@"Delete"] && trailing.actions[0].style == UIContextualActionStyleDestructive &&
+            [trailing.actions[1].title isEqual:@"Hide"], @"Trailing swipe exposes destructive delete and visibility");
+  NSCAssert(!leading.performsFirstActionWithFullSwipe && !trailing.performsFirstActionWithFullSwipe,
+            @"Full swipe cannot accidentally execute an action");
+  __block BOOL completed = NO;
+  UIContextualAction *duplicate = leading.actions[0];
+  duplicate.handler(duplicate, overlay, ^(BOOL success) { completed = success; });
+  NSCAssert(completed && [request[@"action"] isEqual:@"duplicate"] && [request[@"id"] isEqual:@"42"],
+            @"Duplicate queues only the swiped object");
+  node[@"hidden"] = @YES;
+  update();
+  UIContextualAction *hide = trailing.actions[1];
+  hide.handler(hide, overlay, ^(BOOL success) {});
+  NSCAssert([request[@"action"] isEqual:@"visibility"] && ![request[@"value"] boolValue],
+            @"Visibility uses the latest state even when the swipe was opened earlier");
+  node[@"actions"] = @[@"visibility"];
+  update();
+  NSDictionary *before = request;
+  duplicate.handler(duplicate, overlay, ^(BOOL success) { completed = success; });
+  NSCAssert(!completed && request == before, @"Stale swipe actions cannot bypass changed availability");
+  NSCAssert(![panels hierarchySwipeActionsAtIndexPath:path leading:YES] &&
+            [[panels hierarchySwipeActionsAtIndexPath:path leading:NO].actions[0].title isEqual:@"Show"],
+            @"Unavailable actions disappear and hidden rows offer Show");
+  [panels dismiss];
 }
 
 static void testShadingPopover(UIViewController *controller)
@@ -553,6 +598,7 @@ int main()
     [panels dismiss];
     NSCAssert(!panels.hierarchyButton.selected && !panels.inspectorButton.selected, @"Temporary panels dismiss");
     testNumberScrubbing(controller.view);
+    testHierarchySwipes(controller.view);
     testShadingPopover(controller);
     NSLog(@"PASS: floating scene panels, search, selection, native fields, async ownership, responsive layout");
   }
