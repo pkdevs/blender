@@ -2027,7 +2027,7 @@ class SEQUENCER_PT_edit_mode(Panel):
     bl_space_type = 'SEQUENCE_EDITOR'
     bl_region_type = 'HEADER'
     bl_label = "Edit Mode"
-    bl_ui_units_x = 12
+    bl_ui_units_x = 11
 
     @classmethod
     def poll(cls, context):
@@ -2037,18 +2037,20 @@ class SEQUENCER_PT_edit_mode(Panel):
         layout = self.layout
         sequencer_tool_settings = context.sequencer_scene.tool_settings.sequencer_tool_settings
 
-        col = layout.column(heading="Ripple")
+        layout.label(text="Ripple")
+
+        col = layout.column(heading="Edit")
         col.use_property_split = True
 
         col.prop(sequencer_tool_settings, "ripple_all_channels")
         col.prop(sequencer_tool_settings, "ripple_markers")
 
-        col = layout.column(heading="Ripple Add")
+        col = layout.column(heading="Add")
         col.use_property_split = True
 
         col.prop(sequencer_tool_settings, "ripple_insert")
 
-        col = layout.column(heading="Ripple Remove")
+        col = layout.column(heading="Remove")
         col.use_property_split = True
 
         col.prop(sequencer_tool_settings, "ripple_clear_ranges")
