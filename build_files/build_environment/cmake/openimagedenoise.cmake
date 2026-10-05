@@ -5,9 +5,7 @@
 if(WITH_APPLE_CROSSPLATFORM)
   # Use cross-compiled host ISPC
   set(ISPC_EXECUTABLE_PATH ${CMAKE_DEPS_CROSSCOMPILE_BUILDDIR}/deps_arm64/Release/ispc/bin/ispc)
-  if(NOT EXISTS ${ISPC_EXECUTABLE_PATH})
-    message(FATAL_ERROR "Could not find cross-compiled ISPC executable at: ${ISPC_EXECUTABLE_PATH}. Please ensure host dependencies are built before attempting to build for ios.")
-  endif()
+  # iOS only builds OIDN's Metal device; its CPU-only ISPC compiler is not needed.
 else()
   set(ISPC_EXECUTABLE_PATH ${LIBDIR}/ispc/bin/ispc)
 endif()
