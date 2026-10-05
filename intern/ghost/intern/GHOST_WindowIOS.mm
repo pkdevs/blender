@@ -2109,6 +2109,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   MTKView *_view;
   GHOST_WindowIOS *_ghost_window;
   GHOST_IOSMetalRenderer *_renderer;
+  UIActivityIndicatorView *_viewport_loading_indicator;
   UIEditMenuInteraction *_actions_edit_menu_interaction;
   GHOSTIOSPassThroughOverlayView *_overlay_view;
   GHOSTIOSNavigationBar *_top_bar;
@@ -2225,6 +2226,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _view.delegate = _renderer;
 
   [self installIPadOverlay];
+  [self installViewportLoadingIndicator];
   _toolbar_refresh_timer = [NSTimer scheduledTimerWithTimeInterval:0.25
                                                             target:self
                                                           selector:@selector(refreshToolbarFromBlender)
@@ -2267,8 +2269,38 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 }
 
+- (void)installViewportLoadingIndicator
+{
+  _viewport_loading_indicator = [[[UIActivityIndicatorView alloc]
+      initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge] autorelease];
+  _viewport_loading_indicator.translatesAutoresizingMaskIntoConstraints = NO;
+  _viewport_loading_indicator.color = UIColor.secondaryLabelColor;
+  _viewport_loading_indicator.hidesWhenStopped = YES;
+  _viewport_loading_indicator.userInteractionEnabled = NO;
+  _viewport_loading_indicator.isAccessibilityElement = YES;
+  _viewport_loading_indicator.accessibilityLabel = @"Loading Viewport";
+  _viewport_loading_indicator.accessibilityIdentifier = @"blender.viewport.loading";
+  [self.view addSubview:_viewport_loading_indicator];
+  [NSLayoutConstraint activateConstraints:@[
+    [_viewport_loading_indicator.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+    [_viewport_loading_indicator.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
+  ]];
+  [_viewport_loading_indicator startAnimating];
+}
+
+- (void)updateViewportLoadingIndicator
+{
+  /* Read only the presentation mailbox; never wait for the Blender thread. */
+  if (_viewport_loading_indicator.isAnimating && _ghost_window && _ghost_window->surface &&
+      _ghost_window->surface->hasPresentedFrame()) {
+    [_viewport_loading_indicator stopAnimating];
+    _viewport_loading_indicator.accessibilityElementsHidden = YES;
+  }
+}
+
 - (void)detachBlender
 {
+  [_viewport_loading_indicator stopAnimating];
   [self hideToolbarLabelAnimated:NO];
   [self cancelViewGizmoInteraction];
   [_toolbar_refresh_timer invalidate];
@@ -3385,6 +3417,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)refreshToolbarFromBlender
 {
+  [self updateViewportLoadingIndicator];
   [self refreshNativeMenuBar];
   NSDictionary *model = [self toolbarModel];
   NSArray *navigation_geometry = model[@"navigationGizmo"];
