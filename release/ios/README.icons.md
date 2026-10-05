@@ -9,6 +9,12 @@ operator/property-specific Blender artwork, or explicitly approved SF fallbacks
 for Undo, Redo, Duplicate, and Delete. Other unmapped actions and X/Y/Z constraints
 are text-only, with no placeholder icon or reserved icon spacing.
 
+Projected menus carry each Blender button's actual icon identifier, including
+submenu headings and enum entries. UIKit resolves these directly to `blender.*`
+template assets; entries without artwork stay iconless instead of guessing from
+their operator. The same loader is used by the native menu bar, popup menus, and
+Pencil menu. Tool groups similarly use their live `ToolDef.icon` names.
+
 The iOS CMake build automatically runs `export_icons.py`, then compiles the
 resulting asset catalog together with the app icon using Apple's `actool`.
 Both catalogs must be compiled in one invocation to retain both in `Assets.car`.
@@ -37,6 +43,7 @@ python3 -m unittest discover -s release/ios -p 'test_export_icons.py'
   dynamic `UIColor.labelColor`, not a baked light/dark RGB color. UIKit handles
   appearance, increased contrast, and control-state tinting.
 
-Add semantic mappings to the manifest to export more source icons. Missing
+All bundled SVG interface icons and vector-triangle tool icons are exported.
+Add semantic mappings to the manifest for native controls that need named aliases. Missing
 sources or unsupported SVG constructs fail the export instead of silently
 shipping an empty asset. Source artwork and its original licensing stay in place.

@@ -29,6 +29,12 @@ def element(name, attrs=None, parent=None):
 
 def svg_template(path):
     root = ET.parse(path).getroot()
+    if "viewBox" not in root.attrib:
+        width = float(root.attrib["width"].removesuffix("px"))
+        height = float(root.attrib["height"].removesuffix("px"))
+        if width <= 0 or height <= 0:
+            raise ValueError(f"{path}: invalid SVG dimensions")
+        root.set("viewBox", f"0 0 {width:g} {height:g}")
     # Editor metadata is not artwork and is not understood by CoreSVG.
     for parent in root.iter():
         for child in list(parent):
@@ -41,7 +47,9 @@ def svg_template(path):
             for declaration in node.attrib.pop("style").split(";"):
                 if declaration.strip():
                     key, value = declaration.split(":", 1)
-                    node.set(key.strip(), value.strip())
+                    # Editor-only CSS properties are not valid SVG presentation attributes.
+                    if not key.strip().startswith("-"):
+                        node.set(key.strip(), value.strip())
         for key in list(node.attrib):
             if key.startswith("{"):
                 del node.attrib[key]
@@ -52,8 +60,6 @@ def svg_template(path):
     root.set("width", str(POINT_SIZE))
     root.set("height", str(POINT_SIZE))
     root.set("preserveAspectRatio", "xMidYMid meet")
-    if "viewBox" not in root.attrib:
-        raise ValueError(f"{path}: missing viewBox")
     return root
 
 
@@ -126,7 +132,11 @@ def geometry_template(path):
 def export_catalog(source, manifest, output):
     mapping = json.loads(manifest.read_text())
     names = set(mapping.values())
+    # Projected menus carry Blender icon names, including icons absent from the toolbar.
+    names.update(path.stem for path in (source / "icons_svg").glob("*.svg"))
     tool_names = {name for key, name in mapping.items() if key.startswith("tool.")}
+    # Native tool groups use ToolDef.icon directly, including context-dependent tools.
+    tool_names.update(path.stem for path in (source / "icons").glob("*.dat"))
     variants = [(f"blender.{name}", name, POINT_SIZE) for name in sorted(names)]
     variants += [(f"blender.tool.{name}", name, TOOL_POINT_SIZE) for name in sorted(tool_names)]
     output.mkdir(parents=True, exist_ok=True)

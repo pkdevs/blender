@@ -17,7 +17,7 @@ class ExportIconsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "test.svg"
             path.write_text(f'<svg xmlns="{SVG}" viewBox="0 0 1600 1500" width="1600" height="1500">'
-                            '<path style="fill:#ffffff;opacity:.6;stroke:none" d="M0 0h100v100Z"/>'
+                            '<path style="fill:#ffffff;opacity:.6;stroke:none;-inkscape-stroke:none" d="M0 0h100v100Z"/>'
                             '<path fill="none" stroke="#ff0000" stroke-opacity=".3" d="M0 0L100 100"/>'
                             '</svg>')
             root = svg_template(path)
@@ -27,8 +27,15 @@ class ExportIconsTest(unittest.TestCase):
             self.assertEqual(root[0].attrib["opacity"], ".6")
             self.assertEqual(root[0].attrib["fill"], "#000")
             self.assertEqual(root[0].attrib["stroke"], "none")
+            self.assertNotIn("-inkscape-stroke", root[0].attrib)
             self.assertEqual(root[1].attrib["fill"], "none")
             self.assertEqual(root[1].attrib["stroke-opacity"], ".3")
+
+    def test_svg_intrinsic_dimensions_supply_viewbox(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "test.svg"
+            path.write_text(f'<svg xmlns="{SVG}" width="1400px" height="1600"><path d="M0 0h10v10Z"/></svg>')
+            self.assertEqual(svg_template(path).attrib["viewBox"], "0 0 1400 1600")
 
     def test_vco_coordinates_tones_and_validation(self):
         data = b"VCO\x00\xff\xff\x00\x00" + bytes((0, 0, 255, 0, 0, 255))
@@ -63,7 +70,10 @@ class ExportIconsTest(unittest.TestCase):
             output = Path(directory) / "Icons.xcassets"
             export_catalog(release / "datafiles", manifest, output)
             tool_names = {name for key, name in mapping.items() if key.startswith("tool.")}
-            self.assertEqual(len(list(output.glob("*.imageset"))), len(set(mapping.values())) + len(tool_names))
+            tool_names.update(path.stem for path in (release / "datafiles/icons").glob("*.dat"))
+            interface_names = set(mapping.values()) | {
+                path.stem for path in (release / "datafiles/icons_svg").glob("*.svg")}
+            self.assertEqual(len(list(output.glob("*.imageset"))), len(interface_names) + len(tool_names))
             for imageset in output.glob("*.imageset"):
                 contents = json.loads((imageset / "Contents.json").read_text())
                 self.assertEqual(contents["properties"]["template-rendering-intent"], "template")
@@ -72,7 +82,7 @@ class ExportIconsTest(unittest.TestCase):
                 root = ET.parse(imageset / "icon.svg").getroot()
                 self.assertEqual(root.attrib["width"], expected_size)
                 self.assertEqual(root.attrib["height"], expected_size)
-            for name in tool_names:
+            for name in tool_names.intersection(mapping.values()):
                 regular = ET.parse(output / f"blender.{name}.imageset/icon.svg").getroot()
                 enlarged = ET.parse(output / f"blender.tool.{name}.imageset/icon.svg").getroot()
                 enlarged.set("width", "24")

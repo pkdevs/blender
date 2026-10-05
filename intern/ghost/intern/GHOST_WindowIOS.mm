@@ -1862,6 +1862,18 @@ static NSString *blenderIOSMenuRoute(NSDictionary *route)
   return [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
 }
 
+static UIImage *blenderIOSMenuIcon(NSDictionary *item)
+{
+  NSString *name = item[@"icon"];
+  if (![name isKindOfClass:NSString.class] || name.length == 0 ||
+      [@[@"NONE", @"BLANK1"] containsObject:name])
+  {
+    return nil;
+  }
+  UIImage *image = [UIImage imageNamed:[@"blender." stringByAppendingString:name.lowercaseString]];
+  return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+}
+
 static NSArray *blenderIOSMenuResult(uint64_t identifier)
 {
   char *json = WM_apple_ios_ui_menu_take_result(identifier);
@@ -1901,7 +1913,7 @@ static UIMenu *blenderIOSNativeSubmenu(NSDictionary *item, NSString *identifier)
         }];
         [NSRunLoop.mainRunLoop addTimer:poll forMode:NSRunLoopCommonModes];
       }];
-  return [UIMenu menuWithTitle:item[@"title"] image:nil identifier:identifier
+  return [UIMenu menuWithTitle:item[@"title"] image:blenderIOSMenuIcon(item) identifier:identifier
                       options:0 children:@[content]];
 }
 
@@ -1917,11 +1929,15 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     }
   };
   for (NSDictionary *item in items) {
+    if (![item isKindOfClass:NSDictionary.class]) {
+      continue;
+    }
     if ([item[@"separator"] boolValue]) {
       flush();
       continue;
     }
-    if (![item[@"title"] length]) {
+    if (![item[@"title"] isKindOfClass:NSString.class] || ![item[@"title"] length] ||
+        ![item[@"route"] isKindOfClass:NSDictionary.class]) {
       continue;
     }
     if ([item[@"submenu"] boolValue] && ![item[@"disabled"] boolValue]) {
@@ -1929,8 +1945,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
       continue;
     }
     NSString *route = blenderIOSMenuRoute(item[@"route"]);
-    NSString *operatorName = item[@"operator"];
-    UIImage *icon = operatorName.length ? blenderIOSIcon([@"operator." stringByAppendingString:operatorName], nil) : nil;
+    UIImage *icon = blenderIOSMenuIcon(item);
     UIAction *action = [UIAction actionWithTitle:item[@"title"] image:icon identifier:nil
                                        handler:^(__kindof UIAction *) {
                                          WM_apple_ios_ui_menu_request(route.UTF8String, true);
@@ -2184,7 +2199,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
      * when several entries invoke the same operator (e.g. Set Origin or Delete). */
     NSMutableDictionary *item = [[source mutableCopy] autorelease];
     item[@"destructive"] = @([op isEqual:@"OBJECT_OT_delete"] || [op isEqual:@"MESH_OT_delete"]);
-    UIImage *image = [op isKindOfClass:NSString.class] ? blenderIOSActionIcon(op, @"", @"") : nil;
+    UIImage *image = blenderIOSMenuIcon(source);
     if (!image && [source[@"submenu"] boolValue]) {
       image = [UIImage systemImageNamed:@"chevron.right"];
     }

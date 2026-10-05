@@ -30,6 +30,7 @@ class NativeMenuBarTest(unittest.TestCase):
         source = (root / "intern/ghost/intern/GHOST_WindowIOS.mm").read_text()
         start = source.index("static NSString *blenderIOSMenuRoute(")
         helpers = source[start:source.index("@interface GHOST_IOSViewController", start)]
+        helpers = helpers.replace("[UIImage imageNamed:", "[MenuTestImages imageNamed:")
         start = source.rindex("- (void)buildMenuWithBuilder:")
         build = source[start:source.index("\n- (void)refreshToolbarFromBlender", start)]
         start = source.index("@interface GHOSTIOSNavigationController")
@@ -39,6 +40,17 @@ class NativeMenuBarTest(unittest.TestCase):
         delegate_method = system[start:system.index("\n}\n", start) + 2]
         harness = r'''
 #import <UIKit/UIKit.h>
+static NSMutableArray *loadedAssets;
+@interface MenuTestImages : NSObject
++ (UIImage *)imageNamed:(NSString *)name;
+@end
+@implementation MenuTestImages
++ (UIImage *)imageNamed:(NSString *)name {
+  [loadedAssets addObject:name];
+  return [@[@"blender.mesh_cube", @"blender.outliner_ob_mesh"] containsObject:name] ?
+      [UIImage systemImageNamed:@"cube"] : nil;
+}
+@end
 static NSMutableArray *requests;
 static uint64_t WM_apple_ios_ui_menu_request(const char *route, bool execute) {
   [requests addObject:@{@"route": [NSString stringWithUTF8String:route], @"execute": @(execute)}];
@@ -82,7 +94,14 @@ static UIImage *blenderIOSIcon(NSString *key, NSString *fallback) { return nil; 
 @property(nonatomic, retain) UIViewController *rootViewController;
 @end
 @implementation MenuWindow
+- (BOOL)isKeyWindow { return YES; }
 @end
+@interface MenuScene : NSObject
+@property(nonatomic, retain) NSArray *windows;
+@end
+@implementation MenuScene
+@end
+static MenuScene *g_window_scene;
 struct TestGhostWindow { MenuWindow *rootWindow; };
 class GHOST_ISystem {
 public:
@@ -102,11 +121,14 @@ GHOST_ISystem *GHOST_ISystem::getSystem() { return &ghost; }
 int main() {
   @autoreleasepool {
     requests = [NSMutableArray array];
+    loadedAssets = [NSMutableArray array];
     NSDictionary *route = @{@"root": @"TOPBAR_MT_editor_menus", @"path": @[@"File", @"Save Copy:copy=True"]};
-    NSDictionary *action = @{@"title": @"Save Copy", @"operator": @"WM_OT_save_as_mainfile", @"route": route};
+    NSDictionary *action = @{@"title": @"Save Copy", @"operator": @"WM_OT_save_as_mainfile",
+                             @"icon": @"MESH_CUBE", @"route": route};
     NSDictionary *toggle = @{@"title": @"Toggle", @"route": route, @"checked": @1};
     NSDictionary *disabled = @{@"title": @"Unavailable", @"route": route, @"disabled": @1};
-    NSDictionary *submenu = @{@"title": @"Nested", @"route": route, @"submenu": @1};
+    NSDictionary *submenu = @{@"title": @"Nested", @"route": route, @"submenu": @1,
+                              @"icon": @"OUTLINER_OB_MESH"};
     NSArray *elements = blenderIOSNativeMenuElements(@[@{@"separator": @1}, action,
       @{@"separator": @1}, @{@"separator": @1}, toggle, disabled, submenu, @{@"separator": @1}]);
     NSCAssert(elements.count == 2, @"Empty sections or missing separators");
@@ -114,6 +136,8 @@ int main() {
     NSCAssert(first.options & UIMenuOptionsDisplayInline, @"Blank submenu instead of separator");
     UIAction *save = (UIAction *)first.children[0];
     NSCAssert(save.attributes == 0, @"Valid operator disabled");
+    NSCAssert(save.image && save.image.renderingMode == UIImageRenderingModeAlwaysTemplate,
+              @"Menu artwork must use native template tinting");
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     [button addAction:save forControlEvents:UIControlEventTouchUpInside];
     [button sendActionsForControlEvents:UIControlEventTouchUpInside];
@@ -124,6 +148,14 @@ int main() {
     NSCAssert(((UIAction *)second.children[0]).state == UIMenuElementStateOn, @"Lost checkbox");
     NSCAssert(((UIAction *)second.children[1]).attributes & UIMenuElementAttributesDisabled, @"Lost poll");
     UIMenu *nested = (UIMenu *)second.children[2];
+    NSCAssert(nested.image && nested.image.renderingMode == UIImageRenderingModeAlwaysTemplate,
+              @"Submenu lost its Blender icon");
+    NSCAssert([loadedAssets containsObject:@"blender.mesh_cube"] &&
+              [loadedAssets containsObject:@"blender.outliner_ob_mesh"], @"Wrong Blender artwork names");
+    NSCAssert(((UIAction *)second.children[0]).image == nil, @"Iconless entry gained artwork");
+    for (id icon in @[@"NONE", @"BLANK1", @"", @42, NSNull.null, @"UNKNOWN_ADDON_ICON"]) {
+      NSCAssert(blenderIOSMenuIcon(@{@"icon": icon}) == nil, @"Invalid/empty icon not handled gracefully");
+    }
     NSCAssert([nested.children[0] isKindOfClass:UIDeferredMenuElement.class], @"Submenu not lazy");
     MenuController *controller = [[[MenuController alloc] init] autorelease];
     MenuBuilder *builder = [[[MenuBuilder alloc] init] autorelease];
@@ -141,6 +173,8 @@ int main() {
     MenuWindow *window = [[[MenuWindow alloc] init] autorelease];
     window.rootViewController = [[[GHOSTIOSNavigationController alloc]
         initWithRootViewController:controller] autorelease];
+    g_window_scene = [[[MenuScene alloc] init] autorelease];
+    g_window_scene.windows = @[window];
     TestGhostWindow ghostWindow{window};
     ghost.current_active_window_ = &ghostWindow;
     MenuAppDelegate *delegate = [[[MenuAppDelegate alloc] init] autorelease];
