@@ -91,6 +91,17 @@ static Block *ui_icon_view_menu_cb(bContext *C, ARegion *region, void *arg_litem
   return block;
 }
 
+bool template_icon_view_property_get(const Button &button, PointerRNA &ptr, PropertyRNA *&prop)
+{
+  if (button.block_create_func != ui_icon_view_menu_cb || !button.func_argN) {
+    return false;
+  }
+  const auto &args = *static_cast<const IconViewMenuArgs *>(button.func_argN);
+  ptr = args.ptr;
+  prop = args.prop;
+  return true;
+}
+
 void template_icon(Layout *layout, int icon_value, float icon_scale)
 {
   Block *block = layout->absolute().block();

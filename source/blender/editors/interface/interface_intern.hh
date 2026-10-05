@@ -1694,6 +1694,9 @@ uiListType *UI_UL_cache_file_layers();
 ID *template_id_liboverride_hierarchy_make(
     bContext *C, Main *bmain, ID *owner_id, ID *id, const char **r_undo_push_label);
 
+/** Read the RNA target of an icon-view template's popup button. */
+bool template_icon_view_property_get(const Button &button, PointerRNA &ptr, PropertyRNA *&prop);
+
 /**
  * Functions in this namespace are only exposed for unit testing purposes, and
  * should not be used outside of the files where they are defined.
