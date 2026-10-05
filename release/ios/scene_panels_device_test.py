@@ -98,6 +98,77 @@ def tests():
         check(not bpy.data.objects['Cube'].lock_rotation_w, mode + ' native W unlock works')
     bpy.data.objects['Cube'].rotation_mode = 'XYZ'
     yield 1.0
+
+    def curves(owner, path):
+        data = owner.animation_data
+        if not data or not data.action or not data.action.layers:
+            return []
+        bag = data.action.layers[0].strips[0].channelbag(data.action_slot)
+        return [curve for curve in bag.fcurves if curve.data_path == path] if bag else []
+
+    def location_curves():
+        return curves(bpy.data.objects['Cube'], 'location')
+
+    def animation_titles(key):
+        return [item['title'] for item in ui(action='property_menu', key=key)['propertyMenu']]
+
+    key = location_x['key']
+    check({'Lock', 'Insert Keyframes', 'Insert Single Keyframe'}.issubset(animation_titles(key)),
+          'Native long-press menu combines lock and Blender single/all keyframe actions')
+    ui(action='property_animation', key=key, operation='insert_single')
+    yield 1.0
+    check(len(location_curves()) == 1 and location_curves()[0].array_index == 0 and
+          len(location_curves()[0].keyframe_points) == 1,
+          'Insert Single Keyframe keys only the pressed axis')
+    check({'Replace Single Keyframe', 'Delete Single Keyframe', 'Clear Single Keyframes'}.issubset(animation_titles(key)),
+          'Keyed properties offer Blender replace, delete and clear actions')
+    ui(action='property', key='object.location.0', value=3)
+    yield 1.0
+    ui(action='property_animation', key=key, operation='insert_single')
+    yield 1.0
+    check(location_curves()[0].keyframe_points[0].co.y == 3,
+          'Replace Keyframe captures the edited property value')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_undo')
+    yield 1.0
+    check(location_curves()[0].keyframe_points[0].co.y == 0, 'Native keyframe replacement is undoable')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_redo')
+    yield 1.0
+    check(location_curves()[0].keyframe_points[0].co.y == 3, 'Native keyframe replacement is redoable')
+    bpy.context.scene.frame_set(10)
+    yield 1.0
+    check('Insert Single Keyframe' in animation_titles(key) and 'Delete Single Keyframe' not in animation_titles(key),
+          'Menu refreshes for an animated property without a key on the current frame')
+    ui(action='property_animation', key=key, operation='insert_single')
+    yield 1.0
+    check(len(location_curves()[0].keyframe_points) == 2, 'Native insertion uses the current Blender frame')
+    ui(action='property_animation', key=key, operation='delete_single')
+    yield 1.0
+    check(len(location_curves()[0].keyframe_points) == 1 and location_curves()[0].keyframe_points[0].co.x == 1,
+          'Delete Keyframe removes only the key on the current frame')
+    ui(action='property_animation', key=key, operation='insert_all')
+    yield 1.0
+    check({curve.array_index for curve in location_curves()} == {0, 1, 2},
+          'Insert Keyframes keys all XYZ components')
+    ui(action='property_animation', key=key, operation='clear_single')
+    yield 1.0
+    check({curve.array_index for curve in location_curves()} == {1, 2},
+          'Clear Single Keyframes removes the pressed axis curve and preserves the others')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_undo')
+    yield 1.0
+    check({curve.array_index for curve in location_curves()} == {0, 1, 2},
+          'Clearing property animation is undoable')
+    ui(action='property_animation', key=key, operation='clear_all')
+    yield 1.0
+    check(not location_curves(), 'Clear Keyframes removes animation for the entire property')
+    bpy.context.scene.frame_set(1)
+    bpy.data.objects['Cube'].location = (0, 0, 0)
+    driver = bpy.data.objects['Cube'].driver_add('scale', 0)
+    driver.driver.expression = '1.0'
+    yield 1.0
+    scale_x = next(item for item in transform_fields() if item.get('property') == 'scale' and item['index'] == 0)
+    check(not scale_x.get('animation'), 'Driven properties do not offer inappropriate keyframe actions')
+    bpy.data.objects['Cube'].driver_remove('scale', 0)
+    yield 1.0
     camera = bpy.data.objects['Camera']
     ui(action='select', id=str(camera.session_uid))
     yield 1.0
@@ -115,6 +186,15 @@ def tests():
     engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_redo')
     yield 1.0
     check(bpy.data.objects['Camera'].data.lens == 72, 'Native inspector edit is redoable')
+    lens = next(item for section in ui()['properties']['sections'] for item in section['properties']
+                if item.get('property') == 'lens')
+    check('Insert Keyframe' in animation_titles(lens['key']), 'Scalar property offers native Insert Keyframe')
+    ui(action='property_animation', key=lens['key'], operation='insert_all')
+    yield 1.0
+    check(len(curves(bpy.data.objects['Camera'].data, 'lens')) == 1, 'Native keying targets the property data owner')
+    ui(action='property_animation', key=lens['key'], operation='delete_all')
+    yield 1.0
+    check(not curves(bpy.data.objects['Camera'].data, 'lens'), 'Native scalar Delete Keyframe removes its last key')
     def panel(identifier):
         return next(item for item in ui()['properties']['sections'] if item['id'] == identifier)
 
@@ -194,6 +274,12 @@ def tests():
     check(color['type'] == 'COLOR' and color['alpha'] and len(color['value']) == 4,
           'RGBA property projects as one native color swatch')
     original_color = tuple(bpy.data.objects['Cube'].color)
+    ui(action='property_animation', key=color['key'], operation='insert_all')
+    yield 1.0
+    check(len(curves(bpy.data.objects['Cube'], 'color')) == 4, 'Color swatch menu keys the whole RGBA property')
+    ui(action='property_animation', key=color['key'], operation='clear_all')
+    yield 1.0
+    check(not curves(bpy.data.objects['Cube'], 'color'), 'Color swatch menu can clear RGBA animation')
     ui(action='color_open', key=color['key'])
     yield 1.0
     check(ui()['colorPresented'] and ui()['colorAlpha'], 'RGBA swatch presents the native alpha-enabled picker')

@@ -9,6 +9,8 @@
 #include <dlfcn.h>
 
 @interface NSObject (BlenderResponsivenessTest)
+- (NSDictionary *)propertyForKey:(NSString *)key;
+- (NSArray<UIMenuElement *> *)menuActionsForProperty:(NSDictionary *)property;
 - (void)setToolbarExpanded:(BOOL)expanded animated:(BOOL)animated;
 - (void)handleViewGizmoHover:(UIHoverGestureRecognizer *)gesture;
 - (void)handleViewGizmoHold:(UILongPressGestureRecognizer *)gesture;
@@ -172,6 +174,17 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     NSDictionary *controls = [panels valueForKey:@"_controls"];
     NSString *lockMenuTitle = @"";
+    NSMutableArray *propertyMenu = [NSMutableArray array];
+    if ([action isEqual:@"property_menu"] || [action isEqual:@"property_animation"]) {
+      NSDictionary *property = [panels propertyForKey:request[@"key"]];
+      for (UIAction *item in [panels menuActionsForProperty:property]) {
+        [propertyMenu addObject:@{@"id": item.identifier ?: @"", @"title": item.title}];
+        if ([action isEqual:@"property_animation"] &&
+            [item.identifier isEqual:[@"blender.property.animation." stringByAppendingString:request[@"operation"]]]) {
+          [item performWithSender:controls[request[@"key"]] target:nil];
+        }
+      }
+    }
     if ([action isEqual:@"property_lock"] || [action isEqual:@"lock_menu"]) {
       UITextField *field = controls[request[@"key"]];
       if ([field isKindOfClass:UITextField.class]) {
@@ -286,6 +299,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
       @"sliders": sliderValues,
       @"lockMenu": lockMenuTitle,
+      @"propertyMenu": propertyMenu,
       @"tabs": [panels valueForKey:@"_tabs"] ?: @[],
       @"properties": [panels valueForKey:@"_snapshot"][@"inspector"] ?: @{},
       @"colorPicker": @([[panels valueForKey:@"_colorPicker"] isKindOfClass:UIColorPickerViewController.class]),
