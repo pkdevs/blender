@@ -792,7 +792,9 @@ bool MTLShader::generate_msl_from_glsl(const shader::ShaderCreateInfo *info)
 
     /* Generate global structs */
     ss_fragment << msl_iface.generate_msl_vertex_out_struct(ShaderStage::FRAGMENT);
-    if (msl_iface.fragment_tile_inputs.is_empty() == false) {
+    if (MTLBackend::capabilities.supports_native_tile_inputs &&
+        !msl_iface.fragment_tile_inputs.is_empty())
+    {
       ss_fragment << msl_iface.generate_msl_fragment_struct(true);
     }
     ss_fragment << msl_iface.generate_msl_fragment_struct(false);
@@ -1900,7 +1902,9 @@ std::string MSLGeneratorInterface::generate_msl_fragment_inputs_string()
   }
 
   /* Fragment tile-inputs. */
-  if (this->fragment_tile_inputs.is_empty() == false) {
+  if (MTLBackend::capabilities.supports_native_tile_inputs &&
+      !this->fragment_tile_inputs.is_empty())
+  {
     out << parameter_delimiter(is_first_parameter) << "\n\t"
         << get_stage_class_name(ShaderStage::FRAGMENT)
         << "::" FRAGMENT_TILE_IN_STRUCT_NAME " fragment_tile_in";
