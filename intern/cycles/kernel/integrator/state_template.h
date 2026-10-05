@@ -73,6 +73,7 @@ KERNEL_STRUCT_MEMBER(path, PackedSpectrum, denoising_feature_throughput, KERNEL_
 KERNEL_STRUCT_MEMBER(path, uint32_t, shader_sort_key, KERNEL_FEATURE_PATH_TRACING)
 /* ReSTIR state. */
 KERNEL_STRUCT_MEMBER(path, int, last_bounce_is_rough, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(path, bool, restir_di_disabled, KERNEL_FEATURE_PATH_TRACING)
 
 KERNEL_STRUCT_MEMBER(path, int, spatial_iteration, KERNEL_FEATURE_PATH_TRACING) // !!! KERNEL_FEATURE_RESTIR is (1U << 32U) which isn't supported on a 32bit design
 KERNEL_STRUCT_MEMBER(path, bool, setup_restir, KERNEL_FEATURE_PATH_TRACING)

@@ -105,6 +105,7 @@ const NodeEnum *Pass::get_type_enum()
     pass_type_enum.insert("restir_previous_reservoir", PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR);
     pass_type_enum.insert("pass_restir_reprojection_surface", PASS_RESTIR_REPROJECTION_SURFACE);
     pass_type_enum.insert("pass_restir_previous_reprojection_surface", PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE);
+    pass_type_enum.insert("pass_restir_sss_exit", PASS_RESTIR_SSS_EXIT);
 
     pass_type_enum.insert("restir_pt_previous_reservoir", PASS_RESTIR_PT_PREVIOUS_RESERVOIR);
     pass_type_enum.insert("restir_pt_reservoir", PASS_RESTIR_PT_RESERVOIR);
@@ -414,6 +415,9 @@ PassInfo Pass::get_info(const PassType type,
       break;
     case PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE:
       pass_info.num_components = 7;
+      break;
+    case PASS_RESTIR_SSS_EXIT:
+      pass_info.num_components = 8;
       break;
     case PASS_RESTIR_PT_PREVIOUS_RESERVOIR:
       /* Would be 6 without RGBE compression. */

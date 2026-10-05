@@ -106,6 +106,9 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   }
 #endif
 
+  INTEGRATOR_STATE_WRITE(state, path, restir_di_disabled) = false;
+
+  // TODO(Tri):
   /* TODO(weizhen): if has kernel features. */
   if (true) {
     INTEGRATOR_STATE_WRITE(state, path, last_bounce_is_rough) = false;
@@ -454,7 +457,7 @@ ccl_device_inline float path_state_rng_light_termination(KernelGlobals kg,
 }
 
 /* TODO(weizhen): move these radiance functions to somewhere more appropriate. Revisit when 
-    implementing ReSTIR PT. */
+    implementing ReSTIR PT. */ 
 ccl_device_forceinline bool light_is_direct_illumination(IntegratorState state)
 {
   return !(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_ANY_PASS);

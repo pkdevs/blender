@@ -91,8 +91,9 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
     RNGState rng_state;
     path_state_rng_load(state, &rng_state);
 
-    /* TODO(weizhen): this has artefacts when `num_hits > 1` due to transparent lights. */
-    if (INTEGRATOR_STATE(state, path, bounce) == 1) {
+    /* TODO(weizhen): this has artifacts when `num_hits > 1` due to transparent lights. */
+    if (INTEGRATOR_STATE(state, path, bounce) == 1 &&
+        !INTEGRATOR_STATE(state, path, restir_di_disabled)) {
       /* Reconstruct both LightSample and the ReSTIR reference */
       LightSample ls ccl_optional_struct_init;
       LightSampleReference ref = light_reference_empty();

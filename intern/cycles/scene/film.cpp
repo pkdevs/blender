@@ -220,6 +220,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->pass_restir_temporal_history_reservoir = PASS_UNUSED;
   kfilm->pass_restir_reprojection_surface = PASS_UNUSED;
   kfilm->pass_restir_previous_reprojection_surface = PASS_UNUSED;
+  kfilm->pass_restir_sss_exit = PASS_UNUSED;
   kfilm->pass_restir_pt_previous_reservoir = PASS_UNUSED;
   kfilm->pass_restir_pt_reservoir = PASS_UNUSED;
   kfilm->pass_surface_data = PASS_UNUSED;
@@ -469,6 +470,9 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
       case PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE:
         kfilm->pass_restir_previous_reprojection_surface = kfilm->pass_stride;
         break;
+      case PASS_RESTIR_SSS_EXIT:
+        kfilm->pass_restir_sss_exit = kfilm->pass_stride;
+        break;
       case PASS_RESTIR_PREVIOUS_RESERVOIR:
         kfilm->pass_restir_previous_reservoir = kfilm->pass_stride;
         break;
@@ -634,6 +638,7 @@ void Film::update_passes(Scene *scene)
 
   if (use_restir) {
     add_auto_pass(scene, PASS_SURFACE_DATA);
+    add_auto_pass(scene, PASS_RESTIR_SSS_EXIT);
   }
 
   /* Create passes for shadow catcher. */
@@ -662,6 +667,7 @@ void Film::update_passes(Scene *scene)
     add_auto_pass(scene, PASS_RESTIR_PREVIOUS_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_RESERVOIR);
     add_auto_pass(scene, PASS_SURFACE_DATA);
+    add_auto_pass(scene, PASS_RESTIR_SSS_EXIT);
   }
 
   /* Cross-frame temporal should be independently enabled. */

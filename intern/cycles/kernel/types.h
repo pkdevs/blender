@@ -432,6 +432,7 @@ enum PassType {
   PASS_SHADOW_CATCHER_MATTE,
   
   PASS_SURFACE_DATA,
+  PASS_RESTIR_SSS_EXIT,
 
   /* Guiding related debug rendering passes */
   /* The estimated sample color from the PathSegmentStorage. If everything is integrated correctly
@@ -442,7 +443,7 @@ enum PassType {
   /* The avg. roughness at the first bounce. */
   PASS_GUIDING_AVG_ROUGHNESS,
 
-  PASS_RESTIR_PT_PREVIOUS_RESERVOIR = 58,
+  PASS_RESTIR_PT_PREVIOUS_RESERVOIR = 59,
   PASS_RESTIR_PT_RESERVOIR,
   PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR,
   PASS_RESTIR_REPROJECTION_SURFACE,
@@ -454,7 +455,7 @@ enum PassType {
    * When reading this pass, it is converted to majorant transmittance */
   PASS_VOLUME_MAJORANT,
   PASS_VOLUME_MAJORANT_SAMPLE_COUNT,
-  PASS_CATEGORY_DATA_END = 67,
+  PASS_CATEGORY_DATA_END = 68,
 
   /* Denoising passes */
   PASS_DENOISING_ALBEDO,
@@ -463,12 +464,12 @@ enum PassType {
   PASS_DENOISING_ROUGHNESS,
   PASS_DENOISING_DEPTH,
   PASS_DENOISING_BACKWARD_MOTION,
-  PASS_CATEGORY_DENOISING_END = 95,
+  PASS_CATEGORY_DENOISING_END = 96,
 
   PASS_BAKE_PRIMITIVE,
   PASS_BAKE_SEED,
   PASS_BAKE_DIFFERENTIAL,
-  PASS_CATEGORY_BAKE_END = 127,
+  PASS_CATEGORY_BAKE_END = 128,
 
   PASS_DENOISING_PREVIOUS,
 
