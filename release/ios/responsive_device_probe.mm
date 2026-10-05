@@ -979,6 +979,37 @@ extern "C" char *blender_device_probe_dialog_snapshot()
   return result;
 }
 
+extern "C" char *blender_device_probe_theme(int style)
+{
+  __block char *result = nullptr;
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    UIWindow *window = blenderController().view.window;
+    if (style >= 0) { window.overrideUserInterfaceStyle = (UIUserInterfaceStyle)style; }
+    UITraitCollection *traits = window.traitCollection;
+    UIColor *blue = [UIColor.systemBlueColor resolvedColorWithTraitCollection:traits];
+    BOOL (^isBlue)(UIColor *) = ^BOOL(UIColor *color) {
+      return [[color resolvedColorWithTraitCollection:traits] isEqual:blue];
+    };
+    NSMutableArray *views = [NSMutableArray array];
+    dialogViews(window, views);
+    NSMutableArray *switches = [NSMutableArray array], *segments = [NSMutableArray array], *selectedRows = [NSMutableArray array];
+    for (UIView *view in views) {
+      if ([view isKindOfClass:UISwitch.class]) { [switches addObject:@(isBlue(((UISwitch *)view).onTintColor))]; }
+      if ([view isKindOfClass:UISegmentedControl.class]) { [segments addObject:@(isBlue(((UISegmentedControl *)view).selectedSegmentTintColor))]; }
+      if ([view isKindOfClass:UICollectionViewListCell.class] && ((UICollectionViewListCell *)view).selected) {
+        [selectedRows addObject:@(isBlue(((UICollectionViewListCell *)view).backgroundConfiguration.backgroundColor))];
+      }
+    }
+    UINavigationBar *bar = [blenderController() valueForKey:@"_top_bar"];
+    NSDictionary *state = @{@"window": @(isBlue(window.tintColor)), @"toolbar": @(isBlue(bar.tintColor)),
+        @"switches": switches, @"segments": segments, @"selectedRows": selectedRows,
+        @"style": @(traits.userInterfaceStyle)};
+    NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
+    result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
+  });
+  return result;
+}
+
 extern "C" bool blender_device_probe_dialog_choose(const char *title)
 {
   NSString *name = [NSString stringWithUTF8String:title];

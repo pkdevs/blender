@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #import "GHOST_IOSScenePanels.hh"
+#import "GHOST_IOSTheme.hh"
 
 @interface GHOSTIOSScenePanels (PropertyHeadingTests)
 - (NSArray<UIMenuElement *> *)groupMenuActionsForProperty:(NSDictionary *)property;
@@ -236,9 +237,28 @@ int main()
     [UIApplication sharedApplication];
     [UIView setAnimationsEnabled:NO];
     UIWindow *window = [[[UIWindow alloc] initWithFrame:CGRectMake(0, 0, 1194, 834)] autorelease];
+    blenderIOSApplyTheme(window);
     UIViewController *controller = [[[UIViewController alloc] init] autorelease];
     window.rootViewController = controller;
     [window makeKeyAndVisible];
+    UISwitch *themeSwitch = [[[UISwitch alloc] initWithFrame:CGRectMake(0, 0, 60, 40)] autorelease];
+    UISegmentedControl *themeSegments = [[[UISegmentedControl alloc] initWithItems:@[@"One", @"Two"]] autorelease];
+    themeSegments.frame = CGRectMake(70, 0, 160, 40);
+    [controller.view addSubview:themeSwitch];
+    [controller.view addSubview:themeSegments];
+    [controller.view layoutIfNeeded];
+    for (NSNumber *style in @[@(UIUserInterfaceStyleLight), @(UIUserInterfaceStyleDark)]) {
+      UITraitCollection *traits = [UITraitCollection traitCollectionWithUserInterfaceStyle:(UIUserInterfaceStyle)style.integerValue];
+      UIColor *blue = [UIColor.systemBlueColor resolvedColorWithTraitCollection:traits];
+      NSCAssert([[window.tintColor resolvedColorWithTraitCollection:traits] isEqual:blue] &&
+                [[themeSwitch.onTintColor resolvedColorWithTraitCollection:traits] isEqual:blue] &&
+                [[themeSegments.selectedSegmentTintColor resolvedColorWithTraitCollection:traits] isEqual:blue],
+                @"Window, switches and mode selections share adaptive blue in both appearances");
+    }
+    NSCAssert([[themeSegments titleTextAttributesForState:UIControlStateSelected][NSForegroundColorAttributeName]
+               isEqual:UIColor.whiteColor], @"Selected segment labels contrast with the blue fill");
+    [themeSwitch removeFromSuperview];
+    [themeSegments removeFromSuperview];
     GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:controller.view
         icon:^UIImage *(NSString *name) { return [UIImage systemImageNamed:@"cube"]; }] autorelease];
     CGRect safe = CGRectMake(0, 70, 1194, 680);
@@ -268,6 +288,11 @@ int main()
     NSCAssert([root isKindOfClass:UICollectionViewListCell.class] &&
               [root.accessories.firstObject isKindOfClass:UICellAccessoryOutlineDisclosure.class], @"System disclosure accessory");
     NSCAssert([tree.indexPathsForSelectedItems containsObject:[NSIndexPath indexPathForItem:1 inSection:0]], @"Blender selection uses native selected state");
+    UICollectionViewListCell *selectedCell = (UICollectionViewListCell *)[tree cellForItemAtIndexPath:[NSIndexPath indexPathForItem:1 inSection:0]];
+    selectedCell.configurationUpdateHandler(selectedCell, selectedCell.configurationState);
+    NSCAssert([selectedCell.backgroundConfiguration.backgroundColor isEqual:UIColor.systemBlueColor] &&
+              [((UIListContentConfiguration *)selectedCell.contentConfiguration).textProperties.color isEqual:UIColor.whiteColor],
+              @"Hierarchy selection uses the shared blue with readable labels");
     NSDiffableDataSourceSectionSnapshot *outline = [dataSource snapshotForSection:@"scene"];
     dataSource.sectionSnapshotHandlers.willCollapseItemHandler(@"/c1");
     [outline collapseItems:@[@"/c1"]];
