@@ -73,6 +73,8 @@ Depsgraph *animviz_depsgraph_build(Main *bmain,
   /* Allocate dependency graph. */
   Depsgraph *depsgraph = DEG_graph_new(bmain, scene, view_layer, DAG_EVAL_VIEWPORT);
 
+  DEG_disable_visibility_optimization(depsgraph); // Show motion path regardless of visibility
+
   /* Make a flat array of IDs for the DEG API. */
   Array<ID *> ids(targets.size());
   int current_id_index = 0;
