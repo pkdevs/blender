@@ -590,6 +590,8 @@ static void add_reload_new_file_impl(
       load_data->image_frames_count = strip->content_length();
 
       int new_len = get_image_len(load_data, scene);
+      MEM_delete(load_data);
+      load_data = nullptr;
 
       new_len -= strip->anim_startofs;
       new_len -= strip->anim_endofs;

@@ -793,7 +793,7 @@ bNodeTree *version_get_scene_compositor_node_tree(Main *bmain, Scene *scene)
   return scene->compositing_node_group;
 }
 
-void do_version_image_id_strips(Main *bmain, Scene *scene)
+void do_version_image_datablock_strips(Main *bmain, Scene *scene)
 {
   Editing *ed = seq::editing_get(scene);
   if (ed == nullptr) {
@@ -967,7 +967,7 @@ void do_versions_after_setup(Main *new_bmain,
   if (!blendfile_or_libraries_versions_atleast(new_bmain, 503, 99)) {
     for (Scene &scene : new_bmain->scenes) {
       /* Change all image strips to image id strips */
-      do_version_image_id_strips(new_bmain, &scene);
+      do_version_image_datablock_strips(new_bmain, &scene);
     }
   }
 }

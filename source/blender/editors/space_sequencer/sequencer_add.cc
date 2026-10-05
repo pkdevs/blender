@@ -225,7 +225,7 @@ static void sequencer_generic_props__internal(wmOperatorType *ot, int flag)
                 1,
                 INT_MAX,
                 "Length",
-                "Length of the strip in frames, or the length of each strip if multiple are added",
+                "Length of the strip in frames, or the length of each strip if multiple are added (do not affect image sequence strips)",
                 1,
                 MAXFRAME);
   }
@@ -1814,13 +1814,19 @@ static bool sequencer_load_images_from_path(bContext *C, wmOperator *op, seq::Lo
   for (ImageFrameRange &range : ranges) {
     Image *image = BKE_image_load_exists(bmain, range.filepath);
     int frames_count = range.frames.count();
-    if (frames_count > 1) {
-      image->source = IMA_SRC_SEQUENCE;
-    }
-
+    bool is_sequence = frames_count > 1;
+    
     load_data.image = image;
     load_data.image_frames_count = frames_count;
     Strip *strip = seq::add_image_strip(bmain, scene, ed->current_strips(), &load_data);
+    
+    if (is_sequence) {
+      image->source = IMA_SRC_SEQUENCE;
+    } else {
+      int len = RNA_int_get(op->ptr, "length");
+      strip->content_length_set(len);
+
+    }
 
     // seq::add_image_init_alpha_mode(bmain, scene, strip);
 
