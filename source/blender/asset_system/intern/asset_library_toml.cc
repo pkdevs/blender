@@ -21,7 +21,9 @@
 
 namespace blender::asset_system {
 
-constexpr toml::spec version = toml::spec::v(1, 1, 0);
+constexpr char BLENDER_ASSET_LIB_TOML_FILENAME[] = "blender_asset_lib.toml";
+
+constexpr toml::spec TOML_SPEC_VERSION = toml::spec::v(1, 1, 0);
 
 /* -------------------------------------------------------------------- */
 /** \name Blender Asset Library TOML Configuration
@@ -57,7 +59,7 @@ name = "Blender"
 [library]
 
 )_delim_";
-    toml::result default_result = toml::try_parse_str(default_str, version);
+    toml::result default_result = toml::try_parse_str(default_str, TOML_SPEC_VERSION);
     if (!default_result.is_ok()) {
       asset_lib_config_print_errors(default_result.unwrap_err());
       return toml::value();
@@ -113,12 +115,12 @@ void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
   BLI_path_join(blender_asset_lib_toml_path,
                 sizeof(blender_asset_lib_toml_path),
                 custom_library.resolved_dirpath,
-                "blender_asset_lib.toml");
+                BLENDER_ASSET_LIB_TOML_FILENAME);
 
   toml::value asset_lib_toml_value = default_asset_lib_config_get();
 
   if (BLI_exists(blender_asset_lib_toml_path)) {
-    toml::result file_result = toml::try_parse(blender_asset_lib_toml_path, version);
+    toml::result file_result = toml::try_parse(blender_asset_lib_toml_path, TOML_SPEC_VERSION);
     if (file_result.is_ok()) {
       asset_lib_toml_value = file_result.unwrap();
     }
@@ -137,7 +139,7 @@ void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
     if (custom_library.remote_url[0]) {
       asset_lib_toml_value["library"]["remote_url"] = custom_library.remote_url;
     }
-    std::string toml_as_string = toml::format(asset_lib_toml_value, version);
+    std::string toml_as_string = toml::format(asset_lib_toml_value, TOML_SPEC_VERSION);
     FILE *file_handle = BLI_fopen(blender_asset_lib_toml_path, "w");
     if (file_handle == nullptr) {
       return;
