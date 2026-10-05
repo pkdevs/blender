@@ -181,7 +181,7 @@ void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
     ui::Layout &operator_row = label_row.row(false);
     operator_row.alignment_set(ui::LayoutAlign::Right);
     operator_row.op("SCREEN_OT_project_setup_show",
-                    "Open Projects Settings",
+                    "Open Project Settings",
                     ICON_PROJECT,
                     wm::OpCallContext::InvokeDefault,
                     UI_ITEM_NONE);
