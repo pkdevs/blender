@@ -5,7 +5,12 @@
 #include "GHOST_SystemIOS.hh"
 
 #include "GHOST_ContextIOS.hh"
+#include "GHOST_IOSRuntime.hh"
 #include "GHOST_WindowIOS.hh"
+#include <chrono>
+#include <condition_variable>
+#include <functional>
+#include <string>
 
 #include "GHOST_Debug.hh"
 #include "GHOST_EventButton.hh"
@@ -47,10 +52,99 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C);
 int main_ios_callback(int argc, const char **argv);
 
 static UIWindowScene *g_window_scene = nil;
+static NSMutableArray<UIWindow *> *native_windows; /* UIKit-only window registry. */
+static std::atomic<bool> engine_active{false};
+static std::atomic<bool> engine_wakeup{false};
+static std::condition_variable engine_condition;
+static std::mutex engine_wait_mutex;
+static GHOST_IOSMessageQueue<std::function<void()>> engine_requests;
+
+void GHOST_ios_engine_wake()
+{
+  engine_wakeup.store(true);
+  engine_condition.notify_one();
+}
+
+static void open_document(NSURL *url)
+{
+  const std::string path = url.path.UTF8String ?: "";
+  engine_requests.push([path] {
+    auto *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
+    if (system) {
+      system->handleOpenDocumentRequest([NSString stringWithUTF8String:path.c_str()]);
+    }
+  });
+  GHOST_ios_engine_wake();
+}
+
+static void run_engine()
+{
+  @autoreleasepool {
+    main_ios_callback(argc, argv);
+  }
+  auto deadline = std::chrono::steady_clock::now();
+  while (C) {
+    {
+      std::unique_lock lock(engine_wait_mutex);
+      if (engine_active.load()) {
+        engine_condition.wait_until(lock, deadline, [] { return engine_wakeup.exchange(false); });
+      }
+      else {
+        /* UIKit signals without taking this lock. A bounded wait also covers a
+         * notification racing the transition into sleep. */
+        engine_condition.wait_for(
+            lock, std::chrono::milliseconds(100), [] { return engine_active.load(); });
+      }
+    }
+    if (!engine_active.load()) {
+      continue;
+    }
+    deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(16667);
+    @autoreleasepool {
+      auto *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
+      for (auto &request : engine_requests.take()) {
+        request();
+      }
+      if (!C) {
+        break;
+      }
+      WM_apple_ios_ui_flush_commands(C);
+      WM_main_loop_body(C);
+      if (system->current_active_window_) {
+        system->current_active_window_->flushDeferredSwapBuffers();
+      }
+      if (system->next_active_window_) {
+        if (system->current_active_window_) {
+          system->current_active_window_->resignKeyWindow();
+        }
+        system->next_active_window_->makeKeyWindow();
+        system->next_active_window_ = nullptr;
+      }
+    }
+  }
+}
 
 UIWindowScene *GHOST_getIOSWindowScene()
 {
+  GHOST_ASSERT(NSThread.isMainThread, "Scene access belongs to UIKit");
   return g_window_scene;
+}
+
+void GHOST_ios_register_window(UIWindow *window)
+{
+  if (!native_windows) {
+    native_windows = [[NSMutableArray alloc] init];
+  }
+  [native_windows addObject:window];
+}
+
+void GHOST_ios_unregister_window(UIWindow *window)
+{
+  id<UIWindowSceneDelegate> delegate = (id<UIWindowSceneDelegate>)g_window_scene.delegate;
+  if (delegate.window == window) {
+    delegate.window = nil;
+  }
+  [native_windows removeObject:window];
 }
 
 @interface IOSAppDelegate : UIResponder <UIApplicationDelegate>
@@ -68,9 +162,11 @@ UIWindowScene *GHOST_getIOSWindowScene()
     return;
   }
   /* UIKit asks the app delegate, not the view controller, for the system menu bar. */
-  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
-  if (system && system->current_active_window_) {
-    [system->current_active_window_->rootWindow.rootViewController buildMenuWithBuilder:builder];
+  for (UIWindow *window in g_window_scene.windows) {
+    if (window.isKeyWindow) {
+      [window.rootViewController buildMenuWithBuilder:builder];
+      break;
+    }
   }
 }
 
@@ -85,9 +181,7 @@ UIWindowScene *GHOST_getIOSWindowScene()
             openURL:(NSURL *)url
             options:(NSDictionary<UIApplicationOpenURLOptionsKey, id> *)options
 {
-  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
-
-  system->handleOpenDocumentRequest(url.path);
+  open_document(url);
 
   return YES;
 }
@@ -110,14 +204,28 @@ UIWindowScene *GHOST_getIOSWindowScene()
   }
 
   g_window_scene = (UIWindowScene *)scene;
-  if (C == nullptr) {
-    main_ios_callback(argc, argv);
+  for (UIWindow *window in native_windows) {
+    window.windowScene = g_window_scene;
   }
-  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
-  if (system && system->current_active_window_) {
-    self.window = system->current_active_window_->rootWindow;
-    self.window.windowScene = g_window_scene;
+  if (native_windows.count) {
+    self.window = native_windows.lastObject;
     [self.window makeKeyAndVisible];
+  }
+  static bool started = false; /* UIKit-only startup state. */
+  if (!started) {
+    started = true;
+    self.window = [[[UIWindow alloc] initWithWindowScene:g_window_scene] autorelease];
+    self.window.rootViewController = [[[UIViewController alloc] init] autorelease];
+    self.window.backgroundColor = UIColor.systemBackgroundColor;
+    [self.window makeKeyAndVisible];
+    NSThread *thread = [[NSThread alloc] initWithBlock:^{
+      run_engine();
+    }];
+    thread.name = @"Blender Engine";
+    thread.stackSize = 8 * 1024 * 1024;
+    thread.qualityOfService = NSQualityOfServiceUserInitiated;
+    [thread start];
+    [thread release];
   }
   [self scene:scene openURLContexts:connectionOptions.URLContexts];
 }
@@ -125,17 +233,29 @@ UIWindowScene *GHOST_getIOSWindowScene()
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts
 {
   UNUSED_VARS(scene);
-  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
-  if (system) {
-    for (UIOpenURLContext *context in URLContexts) {
-      system->handleOpenDocumentRequest(context.URL.path);
-    }
+  for (UIOpenURLContext *context in URLContexts) {
+    open_document(context.URL);
   }
+}
+
+- (void)sceneDidBecomeActive:(UIScene *)scene
+{
+  engine_active.store(true);
+  GHOST_ios_engine_wake();
+  [[NSNotificationCenter defaultCenter] postNotificationName:@"BlenderSceneActive" object:scene];
+}
+
+- (void)sceneWillResignActive:(UIScene *)scene
+{
+  engine_active.store(false);
+  [[NSNotificationCenter defaultCenter] postNotificationName:@"BlenderSceneInactive" object:scene];
 }
 
 - (void)sceneDidDisconnect:(UIScene *)scene
 {
   if (g_window_scene == scene) {
+    engine_active.store(false);
+    [NSNotificationCenter.defaultCenter postNotificationName:@"BlenderSceneInactive" object:scene];
     g_window_scene = nil;
   }
 }
@@ -150,74 +270,62 @@ UIWindowScene *GHOST_getIOSWindowScene()
 
 @implementation GHOST_IOSMetalRenderer
 {
-  id<MTLDevice> _device;
-  id<MTLCommandQueue> _commandQueue;
+  GHOST_WindowIOS *_window;
 }
 
-- (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView
+- (nonnull instancetype)initWithWindow:(nonnull GHOST_WindowIOS *)window
 {
   self = [super init];
   if (self) {
-    _device = mtkView.device;
-
-    /* Create the command queue. */
-    _commandQueue = [_device newCommandQueue];
+    _window = window;
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(sceneActive:)
+                                               name:@"BlenderSceneActive"
+                                             object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(sceneInactive:)
+                                               name:@"BlenderSceneInactive"
+                                             object:nil];
   }
-
   return self;
 }
 
-- (void)drawInMTKView:(nonnull MTKView *)MTKView
+- (void)detach
 {
-  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+  _window = nullptr;
+}
 
-  /* We should always have a window... */
-  if (system->current_active_window_) {
+- (void)dealloc
+{
+  [self detach];
+  [super dealloc];
+}
 
-    /* If the current window has some outstanding swaps we need to
-     * service them before handing control back to Blender otherwise
-     * they may go missing. */
-    if (system->current_active_window_->deferred_swap_buffers_count) {
-      IOS_SYSTEM_LOG(@"Issuing oustanding swaps");
-      system->current_active_window_->flushDeferredSwapBuffers();
-      /* Make sure we get another call to draw. */
-      system->current_active_window_->needsDisplayUpdate();
-      return;
-    }
-
-    system->current_active_window_->beginFrame();
+- (void)sceneActive:(NSNotification *)notification
+{
+  if (_window && _window->surface && _window->rootWindow.isKeyWindow) {
+    _window->surface->setVisible(true);
   }
+}
 
-  /* Run the main loop to handle all events. */
-  if (C) {
-    WM_apple_ios_ui_flush_commands(C);
-    WM_main_loop_body(C);
+- (void)sceneInactive:(NSNotification *)notification
+{
+  if (_window && _window->surface) {
+    _window->surface->setVisible(false);
   }
+}
 
-  if (system->current_active_window_) {
-    system->current_active_window_->flushDeferredSwapBuffers();
-    system->current_active_window_->endFrame();
-  }
-
-  /* Was there a request to switch windows? */
-  if (system->next_active_window_ != nullptr) {
-    if (system->current_active_window_) {
-      system->current_active_window_->resignKeyWindow();
-    }
-    system->next_active_window_->makeKeyWindow();
-    system->next_active_window_ = nullptr;
-  }
+- (void)drawInMTKView:(nonnull MTKView *)view
+{
+  GHOST_ios_engine_wake();
 }
 
 - (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size
 {
-  GHOST_SystemIOS *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
-  if (!system->current_active_window_) {
-    return;
+  if (_window) {
+    _window->publishGeometry(size);
   }
-
-  system->pushEvent(new GHOST_Event(
-      system->getMilliSeconds(), GHOST_kEventWindowSize, system->current_active_window_));
 }
 
 @end
@@ -540,8 +648,12 @@ uint8_t GHOST_SystemIOS::getNumDisplays() const
 
 void GHOST_SystemIOS::getMainDisplayDimensions(uint32_t &width, uint32_t &height) const
 {
-  CGRect screenRect = [[UIScreen mainScreen] bounds];
-  CGFloat scaling_fac = [UIScreen mainScreen].scale;
+  __block CGRect screenRect;
+  __block CGFloat scaling_fac;
+  GHOST_ios_main_sync(^{
+    screenRect = [UIScreen mainScreen].bounds;
+    scaling_fac = [UIScreen mainScreen].scale;
+  });
   CGFloat screenWidth = screenRect.size.width * scaling_fac;
   CGFloat screenHeight = screenRect.size.height * scaling_fac;
 
@@ -577,7 +689,10 @@ GHOST_IWindow *GHOST_SystemIOS::createWindow(const char *title,
   @autoreleasepool {
 
     /* Create window at native size. */
-    CGRect bounds = [[UIScreen mainScreen] bounds];
+    __block CGRect bounds;
+    GHOST_ios_main_sync(^{
+      bounds = [UIScreen mainScreen].bounds;
+    });
 
     window = (GHOST_IWindow *)new GHOST_WindowIOS(this,
                                                   title,
@@ -618,7 +733,7 @@ GHOST_IContext *GHOST_SystemIOS::createOffscreenContext(GHOST_GPUSettings gpu_se
   const GHOST_ContextParams context_params_offscreen =
       GHOST_CONTEXT_PARAMS_FROM_GPU_SETTINGS_OFFSCREEN(gpu_settings);
 
-  GHOST_Context *context = new GHOST_ContextIOS(context_params_offscreen, nullptr, nullptr);
+  GHOST_Context *context = new GHOST_ContextIOS(context_params_offscreen);
   if (context->initializeDrawingContext()) {
     return context;
   }
@@ -702,12 +817,36 @@ GHOST_TCapabilityFlag GHOST_SystemIOS::getCapabilities() const
  */
 bool GHOST_SystemIOS::processEvents(bool /*waitForEvent*/)
 {
-  /*
-   Touch screen events are being processed through the UIView interactions
-   We may need some additional code here to handle key presses if an external keybaord
-   is attached
-   */
+  GHOST_ASSERT(!NSThread.isMainThread, "Blender events belong to the engine thread");
+  for (auto &entry : native_events_.take()) {
+    if (entry.alive->load() && validWindow(entry.event->getWindow())) {
+      GHOST_System::pushEvent(entry.event.release());
+    }
+  }
   return true;
+}
+
+GHOST_TSuccess GHOST_SystemIOS::pushEvent(GHOST_IEvent *event)
+{
+  if (!NSThread.isMainThread) {
+    return GHOST_System::pushEvent(event);
+  }
+  auto *window = static_cast<GHOST_WindowIOS *>(event->getWindow());
+  if (!window || !window->input_alive->load()) {
+    delete event;
+    return GHOST_kFailure;
+  }
+  native_events_.push({std::unique_ptr<GHOST_IEvent>(event), window->input_alive});
+  GHOST_ios_engine_wake();
+  return GHOST_kSuccess;
+}
+
+GHOST_TSuccess GHOST_SystemIOS::disposeWindow(GHOST_IWindow *window)
+{
+  if (validWindow(window)) {
+    static_cast<GHOST_WindowIOS *>(window)->detachNativeInput();
+  }
+  return GHOST_System::disposeWindow(window);
 }
 
 GHOST_TSuccess GHOST_SystemIOS::handleApplicationBecomeActiveEvent()
@@ -1040,27 +1179,30 @@ GHOST_TSuccess GHOST_SystemIOS::handleKeyEvent(void * /*eventPtr*/)
 
 char *GHOST_SystemIOS::getClipboard(bool /*selection*/) const
 {
-  @autoreleasepool {
-    UIPasteboard *pasteBoard = [UIPasteboard generalPasteboard];
-    NSString *textPasted = pasteBoard.string;
+  __block char *result = nullptr;
+  GHOST_ios_main_sync(^{
+    @autoreleasepool {
+      UIPasteboard *pasteBoard = [UIPasteboard generalPasteboard];
+      NSString *textPasted = pasteBoard.string;
 
-    if (textPasted == nil) {
-      return nullptr;
+      if (textPasted == nil) {
+        return;
+      }
+
+      const size_t pastedTextSize = [textPasted lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+
+      char *temp_buff = (char *)malloc(pastedTextSize + 1);
+
+      if (temp_buff == nullptr) {
+        return;
+      }
+
+      memcpy(temp_buff, [textPasted cStringUsingEncoding:NSUTF8StringEncoding], pastedTextSize);
+      temp_buff[pastedTextSize] = '\0';
+      result = temp_buff;
     }
-
-    const size_t pastedTextSize = [textPasted lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
-
-    char *temp_buff = (char *)malloc(pastedTextSize + 1);
-
-    if (temp_buff == nullptr) {
-      return nullptr;
-    }
-
-    memcpy(temp_buff, [textPasted cStringUsingEncoding:NSUTF8StringEncoding], pastedTextSize);
-    temp_buff[pastedTextSize] = '\0';
-    return temp_buff;
-  }
-  return nullptr;
+  });
+  return result;
 }
 
 void GHOST_SystemIOS::putClipboard(const char *buffer, bool selection) const
@@ -1070,9 +1212,10 @@ void GHOST_SystemIOS::putClipboard(const char *buffer, bool selection) const
   }
 
   @autoreleasepool {
-    UIPasteboard *pasteBoard = UIPasteboard.generalPasteboard;
     NSString *textToCopy = [NSString stringWithCString:buffer encoding:NSUTF8StringEncoding];
-    [pasteBoard setString:textToCopy];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      UIPasteboard.generalPasteboard.string = textToCopy;
+    });
   }
 }
 

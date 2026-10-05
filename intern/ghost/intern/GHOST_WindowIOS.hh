@@ -13,6 +13,7 @@
 #  error Apple OSX only!
 #endif  // __APPLE__
 
+#include "GHOST_IOSSurface.hh"
 #include "GHOST_Window.hh"
 #ifdef WITH_INPUT_IME
 #  include "GHOST_Event.hh"
@@ -32,6 +33,10 @@ class GHOST_SystemIOS;
 class GHOST_WindowIOS : public GHOST_Window {
  public:
   UIWindow *rootWindow;
+  std::shared_ptr<std::atomic<bool>> input_alive = std::make_shared<std::atomic<bool>>(true);
+  std::shared_ptr<GHOST_IOSSurface> surface;
+  void publishGeometry(CGSize size);
+  void detachNativeInput();
   /**
    * Constructor.
    * Creates a new window and opens it.
@@ -313,14 +318,17 @@ class GHOST_WindowIOS : public GHOST_Window {
   UIView *uiview_;
   MTKView *metal_view_;
 
-  bool immediate_draw_;
-  bool debug_context_;  // for debug messages during context setup
+  bool immediate_draw_ = false;
+  bool debug_context_ = false;  // for debug messages during context setup
   bool is_dialog_;
-  bool is_active_window_;
-  bool request_to_make_active_;
+  bool is_active_window_ = false;
+  bool request_to_make_active_ = false;
 
-  int32_t pointer_position_[2] = {0, 0};
-  bool pointer_position_valid_ = false;
+  std::atomic<uint64_t> pointer_position_{0};
+  std::atomic<bool> pointer_position_valid_{false};
+  std::atomic<float> scale_{1.0f};
+  std::atomic<uint64_t> drawable_size_{(uint64_t(1) << 32) | 1};
+  std::string keyboard_string_;
 
   GHOST_WindowIOS *parent_window_;
 
@@ -335,9 +343,8 @@ class GHOST_WindowIOS : public GHOST_Window {
 
   void updatePointerPosition(int32_t x, int32_t y)
   {
-    pointer_position_[0] = x;
-    pointer_position_[1] = y;
-    pointer_position_valid_ = true;
+    pointer_position_.store((uint64_t(uint32_t(x)) << 32) | uint32_t(y));
+    pointer_position_valid_.store(true);
   }
 
   GHOST_TSuccess getPointerPosition(int32_t &x, int32_t &y) const
@@ -345,23 +352,16 @@ class GHOST_WindowIOS : public GHOST_Window {
     if (!pointer_position_valid_) {
       return GHOST_kFailure;
     }
-    x = pointer_position_[0];
-    y = pointer_position_[1];
+    const uint64_t position = pointer_position_.load();
+    x = int32_t(position >> 32);
+    y = int32_t(position);
     return GHOST_kSuccess;
   }
 
   void beginFrame();
   void endFrame();
-  /* The current approach is to issue the swap/present from the main
-   * draw loop *only* for the currently active window. This is because trying
-   * to issue presents on anything but the MTKView supplied to drawInMTKView
-   * can result in issues. We also defer the swap/present until the end of the
-   * draw loop because Blender can sometime issue multiple requests and this can
-   * make iOS sad if we try and issue more than one per draw-loop.
-   * Because every on-screen window (viewport, file loading etc.) is always full
-   * screen we only have one active window at a time. If we change to having
-   * sub windows then we may need to revisit this.
-   */
+  /* Engine-only: coalesce swaps within an iteration, then publish one complete frame.
+   * Drawable acquisition and presentation are independent of this counter. */
   void flushDeferredSwapBuffers();
   int deferred_swap_buffers_count;
 
@@ -369,7 +369,6 @@ class GHOST_WindowIOS : public GHOST_Window {
   GHOST_TSuccess popupOnscreenKeyboard(const GHOST_KeyboardProperties &keyboard_properties);
   GHOST_TSuccess hideOnscreenKeyboard();
   const GHOST_TabletData getTabletData();
-  UITextField *getUITextField();
   const char *getLastKeyboardString();
   /* This is the size of the window pre-scaled */
   CGSize getLogicalWindowSize();

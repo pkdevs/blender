@@ -197,6 +197,10 @@ elseif(APPLE AND NOT WITH_GHOST_X11)
 
         intern/GHOST_ContextIOS.mm
         intern/GHOST_ContextIOS.hh
+        GHOST_IOSMessageQueue.hh
+        intern/GHOST_IOSRuntime.hh
+        intern/GHOST_IOSSurface.hh
+        intern/GHOST_IOSSurface.mm
       )
     endif()
   else()

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "GHOST_WindowIOS.hh"
+#include "GHOST_IOSRuntime.hh"
 
 #include "GHOST_ContextIOS.hh"
 #include "GHOST_SystemIOS.hh"
@@ -544,6 +545,7 @@ typedef struct UserInputEvent {
 - (void)setSystemAndWindowIOS:(GHOST_SystemIOS *)sysCocoa windowIOS:(GHOST_WindowIOS *)winCocoa;
 - (void)setPencilContextMenu:(GHOSTIOSPencilMenu *)menu;
 - (void)setFingerToolEnabled:(BOOL)enabled;
+- (void)detachBlender;
 
 /* Blender event generation. */
 - (void)generateUserInputEvents:(const UserInputEvent &)event_info;
@@ -580,6 +582,31 @@ typedef struct UserInputEvent {
 @end
 
 @implementation GHOSTUIWindow
+- (void)detachBlender
+{
+  [self cancelPencilStroke];
+  [self stopOrbitMomentum];
+  [self hideOnscreenKeyboard];
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+  self.userInteractionEnabled = NO;
+  NSArray *recognizers = [window->getView().gestureRecognizers copy];
+  for (UIGestureRecognizer *recognizer in recognizers) {
+    recognizer.enabled = NO;
+    [window->getView() removeGestureRecognizer:recognizer];
+  }
+  [recognizers release];
+  recognizers = [self.gestureRecognizers copy];
+  for (UIGestureRecognizer *recognizer in recognizers) {
+    recognizer.enabled = NO;
+    [self removeGestureRecognizer:recognizer];
+  }
+  [recognizers release];
+  [pencil_context_menu cancel];
+  pencil_context_menu = nil;
+  window = nullptr;
+  system = nullptr;
+}
+
 - (void)setFingerToolEnabled:(BOOL)enabled
 {
   [self cancelPencilStroke];
@@ -770,6 +797,9 @@ typedef struct UserInputEvent {
  * inputs. */
 - (void)generateUserInputEvents:(const UserInputEvent &)event_info
 {
+  if (!window || !system) {
+    return;
+  }
   /* Lock access to ensure all input-events are received sequentially. */
   @synchronized(self) {
     for (int i = 0; i < event_info.num_events; i++) {
@@ -1013,6 +1043,10 @@ typedef struct UserInputEvent {
 /* Observe Pencil input before UIKit's responder chain can consume the viewport touches. */
 - (void)sendEvent:(UIEvent *)event
 {
+  if (!window) {
+    [super sendEvent:event];
+    return;
+  }
   if (event.type == UIEventTypeTouches) {
     NSUInteger fingers = 0;
     for (UITouch *touch in event.allTouches) {
@@ -2066,7 +2100,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView
                                       window:(nonnull GHOST_WindowIOS *)window;
-- (NSArray *)fallbackContextMenuItems;
+- (void)detachBlender;
 
 @end
 
@@ -2170,17 +2204,17 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [super viewDidLoad];
   _view = (MTKView *)self.view;
   _view.enableSetNeedsDisplay = NO;
-  _view.device = MTLCreateSystemDefaultDevice();
   _view.clearColor = MTLClearColorMake(0, 0, 0, 1.0);
-  _view.paused = NO;
-  _view.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
+  /* MTKView only manages native layout. It must never acquire a drawable on UIKit. */
+  _view.paused = YES;
+  _view.colorPixelFormat = MTLPixelFormatRGBA16Float;
   _view.autoResizeDrawable = YES;
   _view.contentMode = UIViewContentModeScaleToFill;
   [self updateMTKViewDrawableScale];
   /* Set the refresh rate to the screen's maximum. There may be some value in capping
    * this value to preserve battery life (60fps seems to work well). */
   _view.preferredFramesPerSecond = [UIScreen mainScreen].maximumFramesPerSecond;
-  _renderer = [[GHOST_IOSMetalRenderer alloc] initWithMetalKitView:_view];
+  _renderer = [[GHOST_IOSMetalRenderer alloc] initWithWindow:_ghost_window];
   if (!_renderer) {
     NSLog(@"Renderer initialization failed");
     return;
@@ -2231,6 +2265,18 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   if (!CGSizeEqualToSize(_view.drawableSize, drawable_size)) {
     _view.drawableSize = drawable_size;
   }
+}
+
+- (void)detachBlender
+{
+  [self hideToolbarLabelAnimated:NO];
+  [self cancelViewGizmoInteraction];
+  [_toolbar_refresh_timer invalidate];
+  _toolbar_refresh_timer = nil;
+  _pencil_menu.delegate = nil;
+  [_renderer detach];
+  _view.delegate = nil;
+  _ghost_window = nullptr;
 }
 
 - (void)dealloc
@@ -2307,6 +2353,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                 atPoint:(CGPoint)point
              completion:(void (^)(NSArray<NSDictionary *> *))completion
 {
+  if (!_ghost_window) {
+    completion(@[]);
+    return;
+  }
   CGPoint viewport_point = [menu convertPoint:point toView:_view];
   CGPoint pixels = _ghost_window->scalePointToWindow(viewport_point);
   NSString *request_route = blenderIOSMenuRoute(route);
@@ -2327,7 +2377,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     didChooseItem:(NSDictionary *)item
           atPoint:(CGPoint)point
 {
-  if ([item[@"disabled"] boolValue] || ![item[@"route"] isKindOfClass:NSDictionary.class]) {
+  if (!_ghost_window || [item[@"disabled"] boolValue] ||
+      ![item[@"route"] isKindOfClass:NSDictionary.class])
+  {
     return;
   }
   CGPoint viewport_point = [menu convertPoint:point toView:_view];
@@ -4999,7 +5051,7 @@ GHOST_WindowIOS::GHOST_WindowIOS(GHOST_SystemIOS *system_ios,
                                  GHOST_TWindowState state,
                                  GHOST_TDrawingContextType type,
                                  const GHOST_ContextParams &context_params,
-                                 bool /*is_dialog*/,
+                                 bool is_dialog,
                                  GHOST_WindowIOS *parent_window)
     : GHOST_Window(width, height, state, context_params, false), metal_view_(nil)
 {
@@ -5008,98 +5060,101 @@ GHOST_WindowIOS::GHOST_WindowIOS(GHOST_SystemIOS *system_ios,
   /* Parent window will be the window that focus is returned to upon close. */
   parent_window_ = parent_window;
   window_title_ = nullptr;
+  is_dialog_ = is_dialog;
+  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
 
-  UIWindowScene *window_scene = GHOST_getIOSWindowScene();
-  GHOST_ASSERT(window_scene != nil, "iOS window requires a connected scene");
-  CGRect window_frame = full_screen_ ? window_scene.effectiveGeometry.coordinateSpace.bounds :
-                                      CGRectMake(left, bottom, width, height);
+  GHOST_ios_main_sync(^{
+    UIWindowScene *window_scene = GHOST_getIOSWindowScene();
+    CGRect window_frame = full_screen_ && window_scene ?
+                              window_scene.effectiveGeometry.coordinateSpace.bounds :
+                              CGRectMake(left, bottom, width, height);
 
-  /* Create MTKView. */
-  metal_view_ = [[MTKView alloc] initWithFrame:window_frame];
-  metal_view_.autoresizingMask = UIViewAutoresizingFlexibleWidth |
-                                 UIViewAutoresizingFlexibleHeight;
-  [metal_view_ retain];
-  GHOST_ASSERT(metal_view_, "metalview not valid");
+    /* Create MTKView. */
+    metal_view_ = [[MTKView alloc] initWithFrame:window_frame];
+    metal_view_.device = device;
+    metal_view_.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+                                   UIViewAutoresizingFlexibleHeight;
+    GHOST_ASSERT(metal_view_, "metalview not valid");
 
-  /* Create view controller. */
-  UIApplication *app = [UIApplication sharedApplication];
-  GHOST_ASSERT(app, "App not valid");
-  id<UIApplicationDelegate> app_delegate = [app delegate];
-  GHOST_ASSERT(app_delegate, "App not valid");
+    /* Create view controller. */
+    UIApplication *app = [UIApplication sharedApplication];
+    GHOST_ASSERT(app, "App not valid");
+    id<UIApplicationDelegate> app_delegate = [app delegate];
+    GHOST_ASSERT(app_delegate, "App not valid");
 
-  GHOSTUIWindow *ghost_rootWindow = nullptr;
+    GHOSTUIWindow *ghost_rootWindow = nullptr;
 
-  if (full_screen_) {
-    /* Init window at native res. */
-    ghost_rootWindow = [[GHOSTUIWindow alloc] initWithWindowScene:window_scene];
-    [ghost_rootWindow retain];
-    /* Ensure fullscreen. */
-    CGRect rect = window_scene.effectiveGeometry.coordinateSpace.bounds;
-    ghost_rootWindow.frame = rect;
-  }
-  else {
-    /* Init window at specified size. */
-    ghost_rootWindow = [[GHOSTUIWindow alloc] initWithWindowScene:window_scene];
-    ghost_rootWindow.frame = CGRectMake(left, bottom, width, height);
-    [ghost_rootWindow retain];
-    [ghost_rootWindow setClipsToBounds:YES];
-  }
+    if (full_screen_) {
+      /* Init window at native res. */
+      ghost_rootWindow = window_scene ? [[GHOSTUIWindow alloc] initWithWindowScene:window_scene] :
+                                        [[GHOSTUIWindow alloc] initWithFrame:window_frame];
+      /* Ensure fullscreen. */
+      ghost_rootWindow.frame = window_frame;
+    }
+    else {
+      /* Init window at specified size. */
+      ghost_rootWindow = [[GHOSTUIWindow alloc] initWithWindowScene:window_scene];
+      ghost_rootWindow.frame = CGRectMake(left, bottom, width, height);
+      [ghost_rootWindow setClipsToBounds:YES];
+    }
 
-  rootWindow = (UIWindow *)ghost_rootWindow;
+    rootWindow = (UIWindow *)ghost_rootWindow;
+    GHOST_ios_register_window(rootWindow);
 
-  [ghost_rootWindow setSystemAndWindowIOS:system_ios_ windowIOS:this];
-  rootWindow.windowLevel = UIWindowLevelAlert;
+    [ghost_rootWindow setSystemAndWindowIOS:system_ios_ windowIOS:this];
+    rootWindow.windowLevel = UIWindowLevelAlert;
 
-  GHOST_ASSERT(rootWindow, "UIWindow not valid");
-  uiview_controller_ = [[[GHOST_IOSViewController alloc] initWithMetalKitView:metal_view_
-                                                                       window:this] retain];
-  GHOST_ASSERT(uiview_controller_, "UIViewController not valid");
+    GHOST_ASSERT(rootWindow, "UIWindow not valid");
+    uiview_controller_ = [[GHOST_IOSViewController alloc] initWithMetalKitView:metal_view_
+                                                                        window:this];
+    GHOST_ASSERT(uiview_controller_, "UIViewController not valid");
 
-  /* Set presentation style depending on whether main window, dialog or temporary window. */
-  if (full_screen_) {
-    /* Initial window has no parent and is always fullscreen. */
-    uiview_controller_.modalPresentationStyle = UIModalPresentationFullScreen;
-  }
-  else {
-    /* Initial window has no parent and is always fullscreen. */
-    uiview_controller_.modalPresentationStyle = UIModalPresentationPageSheet;
-  }
-  if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
-    GHOSTIOSNavigationController *navigation = [[GHOSTIOSNavigationController
-        alloc] initWithNavigationBarClass:GHOSTIOSNavigationBar.class toolbarClass:nil];
-    [navigation setViewControllers:@[ uiview_controller_ ] animated:NO];
-    rootWindow.rootViewController = navigation;
-    [navigation release];
-  }
-  else {
-    rootWindow.rootViewController = uiview_controller_;
-  }
-  [uiview_controller_ loadViewIfNeeded];
+    /* Set presentation style depending on whether main window, dialog or temporary window. */
+    if (full_screen_) {
+      /* Initial window has no parent and is always fullscreen. */
+      uiview_controller_.modalPresentationStyle = UIModalPresentationFullScreen;
+    }
+    else {
+      /* Initial window has no parent and is always fullscreen. */
+      uiview_controller_.modalPresentationStyle = UIModalPresentationPageSheet;
+    }
+    if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
+      GHOSTIOSNavigationController *navigation = [[GHOSTIOSNavigationController
+          alloc] initWithNavigationBarClass:GHOSTIOSNavigationBar.class toolbarClass:nil];
+      [navigation setViewControllers:@[ uiview_controller_ ] animated:NO];
+      rootWindow.rootViewController = navigation;
+      [navigation release];
+    }
+    else {
+      rootWindow.rootViewController = uiview_controller_;
+    }
+    [uiview_controller_ loadViewIfNeeded];
 
-  /* Create UIView */
-  GHOST_ASSERT(width > 0 && height > 0, "invalid wh");
-  uiview_ = uiview_controller_.view;
-  GHOST_ASSERT(uiview_, "uiview not valid");
+    /* Create UIView */
+    GHOST_ASSERT(width > 0 && height > 0, "invalid wh");
+    uiview_ = uiview_controller_.view;
+    GHOST_ASSERT(uiview_, "uiview not valid");
 
-  /* Initialize Metal device. */
-  metal_view_.device = MTLCreateSystemDefaultDevice();
+    /* Enable HDR/EDR Support. */
+    CAMetalLayer *metalLayer = (CAMetalLayer *)metal_view_.layer;
+    metalLayer.wantsExtendedDynamicRangeContent = YES;
+    metalLayer.pixelFormat = MTLPixelFormatRGBA16Float;
+    CGColorSpaceRef colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedSRGB);
+    metalLayer.colorspace = colorspace;
+    CGColorSpaceRelease(colorspace);
+    metalLayer.allowsNextDrawableTimeout = YES;
+    surface = std::make_shared<GHOST_IOSSurface>(metalLayer);
+    publishGeometry(metal_view_.drawableSize);
 
-  /* Enable HDR/EDR Support. */
-  CAMetalLayer *metalLayer = (CAMetalLayer *)metal_view_.layer;
-  metalLayer.wantsExtendedDynamicRangeContent = YES;
-  metalLayer.pixelFormat = MTLPixelFormatRGBA16Float;
-  CGColorSpaceRef colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedSRGB);
-  metalLayer.colorspace = colorspace;
-  CGColorSpaceRelease(colorspace);
+    [ghost_rootWindow registerGestureRecognizers];
+  });
+  [device release];
 
   setDrawingContextType(type);
   updateDrawingContext();
   activateDrawingContext();
 
   setTitle(title);
-
-  /* Gesture recognizers. */
-  [ghost_rootWindow registerGestureRecognizers];
 
   deferred_swap_buffers_count = 0;
 
@@ -5108,8 +5163,7 @@ GHOST_WindowIOS::GHOST_WindowIOS(GHOST_SystemIOS *system_ios,
     parent_window_->requestToDeactivateWindow();
   }
 
-  /* Make it the key window if there is no other window.
-   * (Otherwise there will never be a call to drawInMTKView) */
+  /* Engine-owned activation, with native visibility applied on UIKit. */
   if (!system_ios_->current_active_window_) {
     request_to_make_active_ = true;
     makeKeyWindow();
@@ -5124,7 +5178,10 @@ GHOST_WindowIOS::~GHOST_WindowIOS()
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
-  [(GHOSTUIWindow *)rootWindow stopOrbitMomentum];
+  detachNativeInput();
+  if (surface) {
+    surface->close();
+  }
 
   releaseNativeHandles();
 
@@ -5140,25 +5197,29 @@ GHOST_WindowIOS::~GHOST_WindowIOS()
     resignKeyWindow();
   }
 
-  if (metal_view_) {
-    metal_view_.delegate = nil;
-    [metal_view_ release];
-    metal_view_ = nil;
-  }
-  if (uiview_) {
-    [uiview_ release];
-    uiview_ = nil;
-  }
+  GHOST_ios_main_sync(^{
+    if (metal_view_) {
+      metal_view_.delegate = nil;
+      [metal_view_ release];
+      metal_view_ = nil;
+    }
+    if (uiview_) {
+      uiview_ = nil;
+    }
 
-  /* Release window. */
-  if (rootWindow) {
-    [rootWindow release];
-    rootWindow = nil;
-  }
-  if (uiview_controller_) {
-    [uiview_controller_ release];
-    uiview_controller_ = nil;
-  }
+    /* Release window. */
+    if (rootWindow) {
+      GHOST_ios_unregister_window(rootWindow);
+      rootWindow.hidden = YES;
+      rootWindow.rootViewController = nil;
+      [rootWindow release];
+      rootWindow = nil;
+    }
+    if (uiview_controller_) {
+      [uiview_controller_ release];
+      uiview_controller_ = nil;
+    }
+  });
 
   if (window_title_) {
     free(window_title_);
@@ -5166,6 +5227,30 @@ GHOST_WindowIOS::~GHOST_WindowIOS()
   }
 
   [pool drain];
+}
+
+void GHOST_WindowIOS::detachNativeInput()
+{
+  GHOST_ios_main_sync(^{
+    if (input_alive->exchange(false)) {
+      [(GHOSTUIWindow *)rootWindow detachBlender];
+      [(GHOST_IOSViewController *)uiview_controller_ detachBlender];
+    }
+  });
+}
+
+void GHOST_WindowIOS::publishGeometry(CGSize size)
+{
+  GHOST_ASSERT(NSThread.isMainThread, "Geometry is published by UIKit");
+  scale_.store(MAX(1.0, metal_view_.contentScaleFactor));
+  const uint64_t packed = (uint64_t(MAX(1.0, size.width)) << 32) | uint32_t(MAX(1.0, size.height));
+  if (surface) {
+    surface->resize(size);
+  }
+  if (drawable_size_.exchange(packed) != packed) {
+    system_ios_->pushEvent(
+        new GHOST_Event(system_ios_->getMilliSeconds(), GHOST_kEventWindowSize, this));
+  }
 }
 
 #pragma mark accessors
@@ -5183,7 +5268,7 @@ void *GHOST_WindowIOS::getOSWindow() const
 
 GHOST_TSuccess GHOST_WindowIOS::swapBuffers()
 {
-  deferred_swap_buffers_count++;
+  deferred_swap_buffers_count = 1;
   return GHOST_kSuccess;
 }
 
@@ -5210,22 +5295,15 @@ void GHOST_WindowIOS::flushDeferredSwapBuffers()
                    deferred_swap_buffers_count);
 
     GHOST_ContextIOS *context = reinterpret_cast<GHOST_ContextIOS *>(getContext());
-    context->swapBuffers();
-    deferred_swap_buffers_count = 0;
+    if (context->swapBuffers() == GHOST_kSuccess) {
+      deferred_swap_buffers_count = 0;
+    }
   }
 }
 
-void GHOST_WindowIOS::beginFrame()
-{
-  GHOSTUIWindow *ui_window = (GHOSTUIWindow *)rootWindow;
-  [ui_window beginFrame];
-}
+void GHOST_WindowIOS::beginFrame() {}
 
-void GHOST_WindowIOS::endFrame()
-{
-  GHOSTUIWindow *ui_window = (GHOSTUIWindow *)rootWindow;
-  [ui_window endFrame];
-}
+void GHOST_WindowIOS::endFrame() {}
 
 void GHOST_WindowIOS::setTitle(const char *title)
 {
@@ -5239,7 +5317,10 @@ void GHOST_WindowIOS::setTitle(const char *title)
   }
   strcpy(window_title_, title);
   NSString *window_title = [NSString stringWithCString:title encoding:NSUTF8StringEncoding];
-  uiview_controller_.title = window_title;
+  UIViewController *controller = uiview_controller_;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    controller.title = window_title;
+  });
 }
 
 std::string GHOST_WindowIOS::getTitle() const
@@ -5249,33 +5330,26 @@ std::string GHOST_WindowIOS::getTitle() const
 
 void GHOST_WindowIOS::needsDisplayUpdate()
 {
-  [uiview_ setNeedsDisplay];
+  GHOST_ios_engine_wake();
 }
 
 void GHOST_WindowIOS::getWindowBounds(GHOST_Rect &bounds) const
 {
   GHOST_ASSERT(getValid(), "GHOST_WindowIOS::getWindowBounds(): window invalid");
 
-  const CGFloat scale = metal_view_.contentScaleFactor > 0.0 ? metal_view_.contentScaleFactor :
-                                                              [UIScreen mainScreen].scale;
-  const CGSize drawable_size = metal_view_.drawableSize;
-
-  bounds.l_ = rootWindow.frame.origin.x * scale;
-  bounds.t_ = rootWindow.frame.origin.y * scale;
-  bounds.r_ = bounds.l_ + drawable_size.width;
-  bounds.b_ = bounds.t_ + drawable_size.height;
+  getClientBounds(bounds);
 }
 
 void GHOST_WindowIOS::getClientBounds(GHOST_Rect &bounds) const
 {
   GHOST_ASSERT(getValid(), "GHOST_WindowIOS::getWindowBounds(): window invalid");
 
-  const CGSize drawable_size = metal_view_.drawableSize;
+  const uint64_t size = drawable_size_.load();
 
   bounds.l_ = 0;
   bounds.t_ = 0;
-  bounds.r_ = drawable_size.width;
-  bounds.b_ = drawable_size.height;
+  bounds.r_ = size >> 32;
+  bounds.b_ = uint32_t(size);
 }
 
 GHOST_TSuccess GHOST_WindowIOS::setClientWidth(uint32_t /*width*/)
@@ -5382,7 +5456,7 @@ GHOST_Context *GHOST_WindowIOS::newDrawingContext(GHOST_TDrawingContextType type
 
   if (type == GHOST_kDrawingContextTypeMetal) {
 
-    GHOST_Context *context = new GHOST_ContextIOS(want_context_params_, uiview_, metal_view_);
+    GHOST_Context *context = new GHOST_ContextIOS(want_context_params_, surface);
 
     if (context->initializeDrawingContext())
       return context;
@@ -5475,52 +5549,61 @@ GHOST_TSuccess GHOST_WindowIOS::popupOnscreenKeyboard(
     const GHOST_KeyboardProperties &keyboard_properties)
 {
   GHOSTUIWindow *ghost_rootWindow = (GHOSTUIWindow *)rootWindow;
-  return [ghost_rootWindow popupOnscreenKeyboard:keyboard_properties];
+  __block GHOST_TSuccess result;
+  GHOST_ios_main_sync(^{
+    result = [ghost_rootWindow popupOnscreenKeyboard:keyboard_properties];
+  });
+  return result;
 }
 
 GHOST_TSuccess GHOST_WindowIOS::hideOnscreenKeyboard()
 {
   GHOSTUIWindow *ghost_rootWindow = (GHOSTUIWindow *)rootWindow;
-  return [ghost_rootWindow hideOnscreenKeyboard];
+  __block GHOST_TSuccess result;
+  GHOST_ios_main_sync(^{
+    result = [ghost_rootWindow hideOnscreenKeyboard];
+  });
+  return result;
 }
 
 const char *GHOST_WindowIOS::getLastKeyboardString()
 {
   GHOSTUIWindow *ghost_rootWindow = (GHOSTUIWindow *)rootWindow;
-  return [ghost_rootWindow getLastKeyboardString];
-}
-
-UITextField *GHOST_WindowIOS::getUITextField()
-{
-  GHOSTUIWindow *ghost_rootWindow = (GHOSTUIWindow *)rootWindow;
-  return [ghost_rootWindow getUITextField];
+  GHOST_ios_main_sync(^{
+    const char *text = [ghost_rootWindow getLastKeyboardString];
+    keyboard_string_ = text ? text : "";
+  });
+  return keyboard_string_.c_str();
 }
 
 const GHOST_TabletData GHOST_WindowIOS::getTabletData()
 {
   GHOSTUIWindow *ghost_rootWindow = (GHOSTUIWindow *)rootWindow;
-  return [ghost_rootWindow getTabletData];
+  __block GHOST_TabletData result;
+  GHOST_ios_main_sync(^{
+    result = [ghost_rootWindow getTabletData];
+  });
+  return result;
 }
 
 /* This is the size of the window pre-scaled */
 CGSize GHOST_WindowIOS::getLogicalWindowSize()
 {
-  return metal_view_.frame.size;
+  CGSize size = getNativeWindowSize();
+  float scale = scale_.load();
+  return CGSizeMake(size.width / scale, size.height / scale);
 }
 
 /* This is the size of the window post-scaled */
 CGSize GHOST_WindowIOS::getNativeWindowSize()
 {
-  return metal_view_.drawableSize;
+  const uint64_t size = drawable_size_.load();
+  return CGSizeMake(size >> 32, uint32_t(size));
 }
 
 float GHOST_WindowIOS::getWindowScaleFactor()
 {
-  if (metal_view_ != nil && metal_view_.contentScaleFactor > 0.0) {
-    return metal_view_.contentScaleFactor;
-  }
-  UIScreen *screen = rootWindow.screen ?: [UIScreen mainScreen];
-  return screen.nativeScale > 0.0 ? screen.nativeScale : screen.scale;
+  return scale_.load();
 }
 
 /* Indicate that we want this window to be the next active one. */
@@ -5560,9 +5643,14 @@ bool GHOST_WindowIOS::makeKeyWindow()
                "GHOST_WindowIOS::makeKeyWindow() must request activation first");
 
   /* Make window primary visible window. */
-  [rootWindow makeKeyAndVisible];
-  /* Enable the drawInMTKView() calls for this window. */
-  metal_view_.paused = NO;
+  GHOST_ios_main_sync(^{
+    [rootWindow makeKeyAndVisible];
+    id<UIWindowSceneDelegate> delegate = (id<UIWindowSceneDelegate>)
+                                             rootWindow.windowScene.delegate;
+    delegate.window = rootWindow;
+    surface->setVisible(rootWindow.windowScene.activationState ==
+                        UISceneActivationStateForegroundActive);
+  });
 
   IOS_WINDOW_LOG(@"Key Window: (ui_View)%p (mtkView)%p con(%p) (win=%p)",
                  uiview_,
@@ -5585,11 +5673,7 @@ void GHOST_WindowIOS::resignKeyWindow()
   GHOST_ASSERT(!request_to_make_active_,
                "GHOST_WindowIOS::resignKeyWindow(): activation request outstanding");
 
-  /* Disable the drawInMTKView() calls for this window. */
-  metal_view_.paused = YES;
-  /* Wait until any outstanding presents in flight are done. */
-  while (uiview_controller_.beingPresented) {
-  }
+  surface->setVisible(false);
   IOS_WINDOW_LOG(@"Resigning Key Window: (ui_View)%p (mtkView)%p con(%p) (win=%p)",
                  uiview_,
                  metal_view_,

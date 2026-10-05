@@ -2678,6 +2678,12 @@ void present(MTLRenderPassDescriptor *blit_descriptor,
   /* Flush any outstanding work. */
   ctx->flush();
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* GHOST publishes a completed texture copy on this queue after the flush. Drawable
+   * acquisition and presentation have an independent lifetime and never enter UIKit. */
+  return;
+#endif
+
   /* Always pace CPU to maximum of 3 drawables in flight.
    * nextDrawable may have more in flight if backing swapchain
    * textures are re-allocate, such as during resize events.

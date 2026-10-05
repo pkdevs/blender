@@ -15,7 +15,9 @@
 
 // #define __CARBONSOUND__
 
+#include "GHOST_IOSMessageQueue.hh"
 #include "GHOST_System.hh"
+#include <memory>
 
 class GHOST_EventCursor;
 class GHOST_EventKey;
@@ -26,10 +28,13 @@ class GHOST_WindowIOS;
 #  import <MetalKit/MTKView.h>
 
 UIWindowScene *GHOST_getIOSWindowScene();
+void GHOST_ios_register_window(UIWindow *window);
+void GHOST_ios_unregister_window(UIWindow *window);
 
 @interface GHOST_IOSMetalRenderer : NSObject <MTKViewDelegate>
 
-- (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView;
+- (nonnull instancetype)initWithWindow:(nonnull GHOST_WindowIOS *)window;
+- (void)detach;
 
 @end
 #endif
@@ -37,7 +42,15 @@ UIWindowScene *GHOST_getIOSWindowScene();
 GHOST_TKey convertKey(int rawCode, uint16_t recvChar, uint16_t /*keyAction*/);
 
 class GHOST_SystemIOS : public GHOST_System {
+  struct NativeEvent {
+    std::unique_ptr<GHOST_IEvent> event;
+    std::shared_ptr<std::atomic<bool>> alive;
+  };
+  GHOST_IOSMessageQueue<NativeEvent> native_events_;
+
  public:
+  GHOST_TSuccess pushEvent(GHOST_IEvent *event);
+  GHOST_TSuccess disposeWindow(GHOST_IWindow *window) override;
   /**
    * Constructor.
    */
