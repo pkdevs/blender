@@ -685,11 +685,11 @@ template<typename T> float3 F_brdf_multi_scatter(float3 f0, float3 f90, T lut)
 
   /* The original paper uses `FssEss * radiance + Fms*Ems * irradiance`, but
    * "A Journey Through Implementing Multi-scattering BRDFs and Area Lights" by Steve McAuley
-   * suggests to use `FssEss * radiance + Fms*Ems * radiance` which results in comparable
-   * quality. We handle `radiance` outside of this function, so the result simplifies to: `FssEss
-   * + Fms*Ems = FssEss * (1 + Ems*Favg / (1 - Ems*Favg)) = FssEss / (1 - Ems*Favg)`. This is a
-   * simple albedo scaling very similar to the approach used by Cycles: "Practical multiple
-   * scattering compensation for microfacet model". */
+   * suggests to use `FssEss * radiance + Fms*Ems * radiance` which results in comparable quality.
+   * We handle `radiance` outside of this function, so the result simplifies to:
+   * `FssEss + Fms*Ems = FssEss * (1 + Ems*Favg / (1 - Ems*Favg)) = FssEss / (1 - Ems*Favg)`.
+   * This is a simple albedo scaling very similar to the approach used by Cycles:
+   * "Practical multiple scattering compensation for microfacet model". */
   return FssEss / (1.0f - Ems * Favg);
 }
 template float3 F_brdf_multi_scatter<eevee::lut::GGXBrdfData>(float3,
@@ -730,8 +730,8 @@ void brdf_f82_tint_lut(KernelGlobals &kg,
   }
 }
 
-/* Computes the reflectance and transmittance based on the tint (`f0`, `f90`,
- * `transmission_tint`) and the BSDF LUT. */
+/* Computes the reflectance and transmittance based on the tint (`f0`, `f90`, `transmission_tint`)
+ * and the BSDF LUT. */
 void bsdf_lut(KernelGlobals &kg,
               float3 F0,
               float3 F90,
@@ -848,8 +848,7 @@ float texture_lod_bias_get(KernelGlobals &kg)
  * Scale hardware derivatives depending on render resolution.
  * This is because the distance between pixels increases as we lower the resolution. The hardware
  * uses neighboring pixels to compute derivatives and thus the value increases as we lower the
- * resolution. So we compensate by scaling them back to the expected amplitude at full
- * resolution.
+ * resolution. So we compensate by scaling them back to the expected amplitude at full resolution.
  */
 float derivative_scale_get(KernelGlobals &kg)
 {
@@ -1344,8 +1343,7 @@ void output_aov(KernelGlobals &kg,
 
     uint total_len = render_pass.aovs.color_len + render_pass.aovs.value_len;
 
-    /* Search hashes in uint4 packs with 4 comparisons to find the index of a matching AOV hash.
-     */
+    /* Search hashes in uint4 packs with 4 comparisons to find the index of a matching AOV hash. */
     uint hash_index;
     for (hash_index = 0u; hash_index < AOV_MAX && hash_index < total_len; hash_index += 4u) {
       bool4 cmp_mask = equal(render_pass.aovs.hash[hash_index >> 2u], uint4(hash));
