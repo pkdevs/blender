@@ -247,31 +247,31 @@ def prepare_udim_scene(context: any, data_type: DataType, subdivide_level: int =
     depsgraph = context.evaluated_depsgraph_get()
     baked_mesh = bpy.data.meshes.new_from_object(
         body.evaluated_get(depsgraph), preserve_all_data_layers=True, depsgraph=depsgraph)
-    object = bpy.data.objects.new("udim_paint_target", baked_mesh)
-    context.scene.collection.objects.link(object)
-    object.matrix_world = body.matrix_world
-    context.view_layer.objects.active = object
+    paint_object = bpy.data.objects.new("udim_paint_target", baked_mesh)
+    context.scene.collection.objects.link(paint_object)
+    paint_object.matrix_world = body.matrix_world
+    context.view_layer.objects.active = paint_object
 
     # Remove other objects.
     for other in list(bpy.data.objects):
-        if other is not object:
+        if other is not paint_object:
             bpy.data.objects.remove(other, do_unlink=True)
 
     if subdivide_level > 0:
         # Apply subdivision.
-        modifier = object.modifiers.new("Subdivision", 'SUBSURF')
+        modifier = paint_object.modifiers.new("Subdivision", 'SUBSURF')
         modifier.levels = subdivide_level
-        with context.temp_override(object=object):
+        with context.temp_override(object=paint_object):
             bpy.ops.object.modifier_apply(modifier=modifier.name)
 
     # Select object.
     for ob in context.view_layer.objects:
         ob.select_set(False)
-    object.select_set(True)
-    context.view_layer.objects.active = object
+    paint_object.select_set(True)
+    context.view_layer.objects.active = paint_object
 
     # Set active UV map and paint canvas.
-    mesh = object.data
+    mesh = paint_object.data
     mesh.uv_layers.active = mesh.uv_layers[UDIM_UV_NAME]
 
     tool_settings = context.scene.tool_settings
