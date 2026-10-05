@@ -384,7 +384,7 @@ static std::optional<bool> treesort_linked_child(const tTreeSort &x1,
     }
     return BLI_strcasecmp_natural(x1_lib->id.name + 2, x2_lib->id.name + 2) < 0;
   }
-  return treesort_alpha(x1, x2);
+  return std::nullopt;
 }
 
 struct OutlinerSortMaps {
