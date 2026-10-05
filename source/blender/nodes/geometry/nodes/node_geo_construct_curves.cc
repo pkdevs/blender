@@ -141,17 +141,9 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_default_remaining_outputs();
     return;
   }
-  if (!positions_list->cpp_type().is<float3>()) {
-    params.error_message_add(NodeWarningType::Error, "Positions must be a list of vectors");
-    params.set_default_remaining_outputs();
-    return;
-  }
-  if (!curve_offsets_list->cpp_type().is<int>()) {
-    params.error_message_add(NodeWarningType::Error, "Curve offsets must be a list of integers");
-    params.set_default_remaining_outputs();
-    return;
-  }
   if (params.output_is_required("Curves"_ustr)) {
+    BLI_assert(positions_list->cpp_type().is<float3>());
+    BLI_assert(curve_offsets_list->cpp_type().is<int>());
     Curves *curves = create_curves_from_topology_info(
         params, positions_list->typed<float3>(), curve_offsets_list->typed<int>());
     params.set_output("Curves"_ustr, GeometrySet::from_curves(curves));
