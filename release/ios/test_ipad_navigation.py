@@ -12,6 +12,94 @@ import unittest
 
 
 class IPadNavigationTest(unittest.TestCase):
+    def test_native_view_commands_invoke_smooth_view_without_changing_gestures(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "source/blender/windowmanager/intern/wm_apple_ios_ui.cc").read_text()
+
+        def function(name):
+            start = source.index(f"void {name}(")
+            return source[start:source.index("\n}\n", start) + 2]
+
+        harness = r'''
+#include <cassert>
+#include <string>
+#include <string_view>
+template<typename T, typename... V> bool elem(T value, V... values) {
+  return ((value == values) || ...);
+}
+#define ELEM(...) elem(__VA_ARGS__)
+namespace blender::wm { enum class OpCallContext { ExecRegionWin, InvokeRegionWin }; }
+using blender::wm::OpCallContext;
+struct bContext {};
+struct PointerRNA { std::string type; float angle = 0; bool align = false, relative = false; };
+struct wmOperatorType {};
+static bool allowed = true;
+static int calls = 0, allocated = 0;
+static OpCallContext context;
+static PointerRNA properties;
+static bool WM_operator_name_poll(bContext *, const char *) { return allowed; }
+static wmOperatorType *WM_operatortype_find(const char *, bool) { static wmOperatorType type; return &type; }
+static void WM_operator_properties_create_ptr(PointerRNA *, wmOperatorType *) { allocated++; }
+static void WM_operator_properties_free(PointerRNA *) { allocated--; }
+static void RNA_enum_set_identifier(bContext *, PointerRNA *p, const char *, const char *value) { p->type = value; }
+static void RNA_boolean_set(PointerRNA *p, const char *name, bool value) {
+  if (std::string_view(name) == "relative") p->relative = value; else p->align = value;
+}
+static void RNA_float_set(PointerRNA *p, const char *, float value) { p->angle = value; }
+static void WM_operator_name_call(bContext *, const char *, OpCallContext c, PointerRNA *p, void *) {
+  context = c; calls++; properties = p ? *p : PointerRNA{};
+}
+static void WM_operator_name_call_ptr(bContext *C, wmOperatorType *, OpCallContext c, PointerRNA *p, void *) {
+  WM_operator_name_call(C, "", c, p, nullptr);
+}
+''' + '\n'.join(function(name) for name in (
+            "ios_operator_call", "ios_operator_call_with_enum_property", "ios_view_axis",
+            "ios_view_orbit", "ios_view_roll_angle")) + r'''
+int main() {
+  for (const char *name : {"VIEW3D_OT_view_selected", "VIEW3D_OT_view_all", "VIEW3D_OT_localview",
+                           "VIEW3D_OT_view_camera", "VIEW3D_OT_view_persportho",
+                           "VIEW3D_OT_view_axis", "VIEW3D_OT_view_orbit"}) {
+    std::string ownedName(name); // Native messages own their strings; pointer identity is irrelevant.
+    ios_operator_call(nullptr, ownedName.c_str());
+    assert(context == OpCallContext::InvokeRegionWin);
+    ios_operator_call_with_enum_property(nullptr, ownedName.c_str(), "", "");
+    assert(context == OpCallContext::InvokeRegionWin);
+  }
+  for (const char *axis : {"FRONT", "BACK", "LEFT", "RIGHT", "TOP", "BOTTOM"}) {
+    ios_view_axis(nullptr, axis);
+    assert(context == OpCallContext::InvokeRegionWin && properties.type == axis);
+    assert(!properties.align && !properties.relative && allocated == 0);
+  }
+  for (const char *direction : {"ORBITLEFT", "ORBITRIGHT", "ORBITUP", "ORBITDOWN"}) {
+    ios_view_orbit(nullptr, direction);
+    assert(context == OpCallContext::InvokeRegionWin && properties.type == direction);
+  }
+  ios_operator_call_with_enum_property(nullptr, "VIEW3D_OT_view_axis", "type", "TOP");
+  assert(context == OpCallContext::InvokeRegionWin && properties.type == "TOP");
+  ios_view_roll_angle(nullptr, 0.25f);
+  assert(context == OpCallContext::ExecRegionWin && properties.angle == 0.25f);
+  ios_operator_call_with_enum_property(nullptr, "OBJECT_OT_duplicate", "", "");
+  assert(context == OpCallContext::ExecRegionWin);
+  ios_operator_call_with_enum_property(nullptr, "MESH_OT_select_all", "action", "SELECT");
+  assert(context == OpCallContext::ExecRegionWin && properties.type == "SELECT");
+  const int previous = calls;
+  allowed = false;
+  ios_view_axis(nullptr, "TOP");
+  ios_view_orbit(nullptr, "ORBITLEFT");
+  ios_operator_call(nullptr, "VIEW3D_OT_view_selected");
+  assert(calls == previous && allocated == 0);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            code = Path(directory) / "view_commands.cc"
+            executable = Path(directory) / "view_commands"
+            code.write_text(harness)
+            result = subprocess.run(["c++", "-std=c++17", str(code), "-o", str(executable)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            result = subprocess.run([str(executable)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_pencil_taps_retarget_axes_without_hover_and_preserve_drag_routing(self):
         compiler = shutil.which("c++")
         if compiler is None:
@@ -120,7 +208,7 @@ int main() {
         animation = source[start:source.index("\n#endif", start)]
         bridge = (root / "source/blender/windowmanager/intern/wm_apple_ios_ui.cc").read_text()
         start = bridge.index('extern "C" void WM_apple_ios_ui_navigation_hover_set(')
-        bridge_methods = bridge[start:bridge.index('extern "C" void WM_apple_ios_ui_flush_commands(', start)]
+        bridge_methods = bridge[start:bridge.index('static void ios_ui_dispatch_operator(', start)]
         native = (root / "intern/ghost/intern/GHOST_WindowIOS.mm").read_text()
         self.assertIn('view_gizmo_drag.allowedTouchTypes = @[ @(UITouchTypeDirect) ]', native)
         self.assertIn('ios_navigation_redraw_pending.exchange(false)', bridge)

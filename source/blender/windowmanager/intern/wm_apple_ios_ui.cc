@@ -51,6 +51,9 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <string_view>
+#include <type_traits>
+#include <variant>
 #include <vector>
 #include <map>
 
@@ -406,7 +409,22 @@ void ios_context_pop(bContext *C, const IOSContextStore &store)
 void ios_operator_call(bContext *C, const char *op_name, PointerRNA *props = nullptr)
 {
   if (WM_operator_name_poll(C, op_name)) {
-    WM_operator_name_call(C, op_name, blender::wm::OpCallContext::ExecRegionWin, props, nullptr);
+    /* Smooth view uses OP_IS_INVOKE, including for operators with only an exec callback.
+     * Keep non-navigation quick actions on their existing execution path. */
+    const bool smooth_view = ELEM(std::string_view(op_name),
+                                  "VIEW3D_OT_view_selected",
+                                  "VIEW3D_OT_view_all",
+                                  "VIEW3D_OT_localview",
+                                  "VIEW3D_OT_view_camera",
+                                  "VIEW3D_OT_view_persportho",
+                                  "VIEW3D_OT_view_axis",
+                                  "VIEW3D_OT_view_orbit");
+    WM_operator_name_call(C,
+                          op_name,
+                          smooth_view ? blender::wm::OpCallContext::InvokeRegionWin :
+                                        blender::wm::OpCallContext::ExecRegionWin,
+                          props,
+                          nullptr);
   }
 }
 
@@ -455,9 +473,7 @@ void ios_operator_call_with_enum_property(bContext *C,
   PointerRNA props;
   WM_operator_properties_create_ptr(&props, ot);
   RNA_enum_set_identifier(C, &props, prop_name, prop_value);
-  if (WM_operator_name_poll(C, op_name)) {
-    WM_operator_name_call_ptr(C, ot, blender::wm::OpCallContext::ExecRegionWin, &props, nullptr);
-  }
+  ios_operator_call(C, op_name, &props);
   WM_operator_properties_free(&props);
 }
 
@@ -490,9 +506,7 @@ void ios_view_axis(bContext *C, const char *axis_type)
   RNA_enum_set_identifier(C, &props, "type", axis_type);
   RNA_boolean_set(&props, "align_active", false);
   RNA_boolean_set(&props, "relative", false);
-  if (WM_operator_name_poll(C, "VIEW3D_OT_view_axis")) {
-    WM_operator_name_call_ptr(C, ot, blender::wm::OpCallContext::ExecRegionWin, &props, nullptr);
-  }
+  ios_operator_call(C, "VIEW3D_OT_view_axis", &props);
   WM_operator_properties_free(&props);
 }
 
@@ -506,9 +520,7 @@ void ios_view_orbit(bContext *C, const char *direction)
   PointerRNA props;
   WM_operator_properties_create_ptr(&props, ot);
   RNA_enum_set_identifier(C, &props, "type", direction);
-  if (WM_operator_name_poll(C, "VIEW3D_OT_view_orbit")) {
-    WM_operator_name_call_ptr(C, ot, blender::wm::OpCallContext::ExecRegionWin, &props, nullptr);
-  }
+  ios_operator_call(C, "VIEW3D_OT_view_orbit", &props);
   WM_operator_properties_free(&props);
 }
 
