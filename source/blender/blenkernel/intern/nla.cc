@@ -1869,11 +1869,26 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
       /* set default flags */
       fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED);
       fcu->auto_smoothing = U.auto_smoothing_new;
+      fcu->extend = FCURVE_EXTRAPOLATE_LINEAR;
 
       /* store path - make copy, and store that */
       fcu->rna_path_set("strip_time");
 
-      /* TODO: insert a few keyframes to ensure default behavior? */
+      /* Insert two keyframes to ensure default behavior, extrapolated to continue forever. */
+      fcu->bezt = MEM_new_array_zeroed<BezTriple>(2, "nlastrip strip time bezt");
+      fcu->totvert = 2;
+
+      for (int i = 0; i <= 1; i++) {
+        BezTriple *bezt = fcu->bezt + i;
+
+        /* Two keyframes, 1 frame apart, with value increasing by 1 as well. */
+        bezt->vec[1][0] = strip->start + static_cast<float>(i);
+        bezt->vec[1][1] = strip->actstart + static_cast<float>(i);
+
+        /* Always use linear interpolation for these keyframes. */
+        bezt->h1 = bezt->h2 = HD_VECT;
+        bezt->ipo = BEZT_IPO_LIN;
+      }
     }
   }
 }
