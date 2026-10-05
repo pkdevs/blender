@@ -85,6 +85,7 @@ class NativeSettingsStripTest(unittest.TestCase):
                        view_button + "  return view;\n}")
         harness = r'''
 #import <UIKit/UIKit.h>
+#import "GHOST_IOSScenePanels.hh"
 #import <QuartzCore/QuartzCore.h>
 #include <cmath>
 #include <initializer_list>
@@ -110,6 +111,7 @@ static BOOL fingerTool;
 @interface StripTest : UIViewController {
 @public
   UIView *_overlay_view;
+  GHOSTIOSScenePanels *_scene_panels;
   GHOSTIOSNavigationBar *_top_bar;
   UINavigationItem *_top_bar_item;
   NSLayoutConstraint *_top_bar_height_constraint;
@@ -195,6 +197,8 @@ static void runChecks() {
     StripTest *builder = [[[StripTest alloc] init] autorelease];
     testWindow.rootViewController = builder;
     builder->_overlay_view = builder.view;
+    builder->_scene_panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:builder.view
+        icon:^UIImage *(NSString *) { return nil; }] autorelease];
     builder->_mesh_select_buttons = [NSMutableArray array];
     [builder installNativeTopBar];
     [testWindow makeKeyAndVisible];
@@ -312,7 +316,11 @@ static void runChecks() {
     }
     NSCAssert(item.pinnedTrailingGroup.barButtonItems.firstObject ==
               builder->_viewport_shading_button, @"Shading must stay on the trailing side");
-    NSCAssert(item.trailingItemGroups.count == 0, @"Scene actions must not remain on the right");
+    NSArray *panelButtons = @[builder->_scene_panels.hierarchyButton, builder->_scene_panels.inspectorButton];
+    NSCAssert(item.trailingItemGroups.count == 1 &&
+              [item.trailingItemGroups[0].barButtonItems isEqual:panelButtons] &&
+              !builder->_viewport_shading_button.sharesBackground,
+              @"Panel toggles must share a separate trailing group");
     UIBarButtonItemGroup *strip = builder->_top_settings_group;
     NSCAssert(strip.hidden && builder->_mesh_select_group.hidden, @"Initial context groups visible");
     [builder setTopSettingsVisible:YES animated:NO];
@@ -673,6 +681,8 @@ static void runChecks() {
     testWindow.rootViewController = navigation;
     phone.view.backgroundColor = UIColor.systemTealColor;
     phone->_overlay_view = phone.view;
+    phone->_scene_panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:phone.view
+        icon:^UIImage *(NSString *) { return nil; }] autorelease];
     phone->_mesh_select_buttons = [NSMutableArray array];
     [phone installNativeTopBar];
     [phone setMeshSelectModeVisible:YES animated:NO];
@@ -788,6 +798,8 @@ int main(int argc, char **argv) {
                 "-isysroot", sdk.stdout.strip(), "-target", f"{os.uname().machine}-apple-ios26.0-simulator",
                 "-framework", "UIKit", "-framework", "Foundation", "-framework", "CoreGraphics",
                 "-framework", "QuartzCore",
+                "-I", str(root / "intern/ghost/intern"),
+                str(root / "intern/ghost/intern/GHOST_IOSScenePanels.mm"),
                 str(source_file), "-o", str(executable),
             ], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

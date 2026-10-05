@@ -40,6 +40,7 @@
 #endif
 
 extern "C" void WM_apple_ios_ui_command_enqueue(int command);
+#import "GHOST_IOSScenePanels.hh"
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
@@ -2110,6 +2111,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIBarButtonItem *_viewport_shading_button;
   UIBarButtonItem *_undo_button;
   UIBarButtonItem *_finger_input_button;
+  GHOSTIOSScenePanels *_scene_panels;
   BOOL _finger_tool_enabled;
   GHOSTIOSPencilMenu *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
@@ -2303,6 +2305,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)dealloc
 {
+  [_scene_panels release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
@@ -3410,6 +3413,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self updateViewportLoadingIndicator];
   [self refreshNativeMenuBar];
   NSDictionary *model = [self toolbarModel];
+  [_scene_panels updateSnapshot:model[@"panels"]];
   NSArray *navigation_geometry = model[@"navigationGizmo"];
   if ([navigation_geometry isKindOfClass:NSArray.class] && navigation_geometry.count == 3 &&
       ![_view_gizmo_geometry isEqual:navigation_geometry]) {
@@ -3468,6 +3472,14 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (void)viewDidLayoutSubviews
 {
   [super viewDidLayoutSubviews];
+  CGRect panel_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
+  const CGRect bar_rect = [_top_bar convertRect:_top_bar.bounds toView:_overlay_view];
+  const CGFloat panel_top = MAX(CGRectGetMinY(panel_rect), CGRectGetMaxY(bar_rect));
+  const CGFloat panel_bottom = MIN(CGRectGetMaxY(panel_rect) - 64,
+      CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame));
+  panel_rect.origin.y = panel_top;
+  panel_rect.size.height = MAX(0, panel_bottom - panel_top);
+  [_scene_panels layoutInRect:panel_rect];
   [self layoutToolbarLabel];
   [self layoutViewPie];
   [self updateMTKViewDrawableScale];
@@ -4458,7 +4470,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
         arrayByAddingObject:_finger_input_button.creatingFixedGroup];
   }
   _top_bar_item.centerItemGroups = @[ [self topSettingsControlGroup] ];
-  _top_bar_item.trailingItemGroups = @[];
+  _top_bar_item.trailingItemGroups = @[
+    [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:nil
+        items:@[_scene_panels.hierarchyButton, _scene_panels.inspectorButton]],
+  ];
+  _viewport_shading_button.sharesBackground = NO;
   _top_bar_item.pinnedTrailingGroup = _viewport_shading_button.creatingFixedGroup;
   if (@available(iOS 27.0, *)) {
     _mode_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
@@ -4500,6 +4516,20 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self.view addSubview:_overlay_view];
 
   _mesh_select_buttons = [[NSMutableArray alloc] init];
+  _scene_panels = [[GHOSTIOSScenePanels alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
+    if (!name.length) {
+      return nil;
+    }
+    return [[UIImage imageNamed:[@"blender." stringByAppendingString:name.lowercaseString]]
+        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  }];
+  _scene_panels.menuProvider = ^UIMenu *(NSDictionary *property) {
+    return blenderIOSNativeSubmenu(@{@"title": property[@"label"],
+                                    @"icon": property[@"icon"] ?: @"",
+                                    @"route": @{@"root": property[@"menu"], @"path": @[],
+                                                @"propertiesTab": property[@"tab"]}},
+                                   property[@"menu"]);
+  };
   [self installNativeTopBar];
   _pencil_menu = [[GHOSTIOSPencilMenu alloc] initWithFrame:_overlay_view.bounds];
   _pencil_menu.delegate = self;
