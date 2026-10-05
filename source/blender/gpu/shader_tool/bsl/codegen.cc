@@ -1880,6 +1880,9 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::STENCIL_REF:
           create_info_decl += "BUILTINS(BuiltinBits::" + to_str(attr.res_type) + ")\n";
           break;
+        case ResourceType::BARY_COORD:
+          create_info_decl += "BUILTINS(BuiltinBits::BARYCENTRIC_COORD)\n";
+          break;
         case ResourceType::FRAG_DEPTH:
           for (Attr attr : arg.attributes().children_of_type<Attr>()) {
             string_view id = attr.identifier().str();
