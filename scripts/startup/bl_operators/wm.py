@@ -2477,6 +2477,22 @@ class WM_OT_tool_set_by_brush_type(Operator):
         if (space_type := WM_OT_tool_set_by_id.space_type_from_operator(self, context)) is None:
             return {'CANCELLED'}
 
+        # Get the current tool.
+        tool = ToolSelectPanelHelper.tool_active_from_context(context)
+
+        if tool.idname.startswith("builtin"):
+            # Builtin tool, proceed with default workflow.
+            pass
+        elif tool.use_brushes and tool.brush_type is not None:
+            # Sometimes, if the image editor is visible, but not the active area,
+            # the ui fot it's brush selector panel does not redraw automatically.
+            for area in context.screen.areas:
+                if area.type == 'IMAGE_EDITOR':
+                    area.tag_redraw()
+
+            if tool.brush_type in {self.brush_type, 'ANY'}:
+                return {'FINISHED'}
+
         tool_helper_cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
         # Lookup a tool with a matching brush type (ignoring some specific ones).
         tool_id = "builtin.brush"
@@ -2484,6 +2500,11 @@ class WM_OT_tool_set_by_brush_type(Operator):
                 tool_helper_cls.tools_from_context(context, mode=context.mode),
         ):
             if item is None:
+                continue
+
+            # Depending on brush type a custom tool can interfere
+            # with the operator's default behavior, so avoid them.
+            if item.idname.startswith("builtin") == False:
                 continue
 
             # Never automatically activate these tools, they use a brush type that we want to use
