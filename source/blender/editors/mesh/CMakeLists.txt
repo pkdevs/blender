@@ -22,6 +22,7 @@ set(SRC
   editmesh_bevel.cc
   editmesh_bisect.cc
   editmesh_circularize.cc
+  editmesh_curve_edge_loops_between_selected.cc
   editmesh_extrude.cc
   editmesh_extrude_screw.cc
   editmesh_extrude_spin.cc
@@ -36,6 +37,7 @@ set(SRC
   editmesh_polybuild.cc
   editmesh_preselect_edgering.cc
   editmesh_preselect_elem.cc
+  editmesh_relax_edge_loops.cc
   editmesh_rip.cc
   editmesh_rip_edge.cc
   editmesh_select.cc
