@@ -6,6 +6,7 @@
 
 import ctypes
 import json
+import sys
 from pathlib import Path
 import traceback
 
@@ -113,6 +114,94 @@ def tests():
     check(ui()['fields']['object.location.1'] == '1', 'External Blender edit updates the native inspector')
     bpy.data.objects['Cube'].location.y = 0
     yield 0.6
+    ui(action='section', id='OBJECT_PT_display')
+    yield 1.0
+    color = next(item for item in panel('OBJECT_PT_display')['properties'] if item.get('property') == 'color')
+    check(color['type'] == 'COLOR' and color['alpha'] and len(color['value']) == 4,
+          'RGBA property projects as one native color swatch')
+    original_color = tuple(bpy.data.objects['Cube'].color)
+    ui(action='color_open', key=color['key'])
+    yield 1.0
+    check(ui()['colorPresented'] and ui()['colorAlpha'], 'RGBA swatch presents the native alpha-enabled picker')
+    ui(action='color_select', value=[0.5, 0.25, 0.75, 0.4], continuous=True)
+    yield 0.4
+    check(tuple(bpy.data.objects['Cube'].color) == original_color,
+          'Picker drag previews locally without flooding Blender undo')
+    ui(action='color_select', value=[0.5, 0.25, 0.75, 0.4], continuous=False)
+    yield 1.0
+    def linear(value):
+        return value / 12.92 if value < 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+    expected = [linear(0.5), linear(0.25), linear(0.75), 0.4]
+    check(all(abs(a - b) < 1e-5 for a, b in zip(bpy.data.objects['Cube'].color, expected)),
+          'Picker commits RGBA atomically with correct scene-linear conversion')
+    ui(action='color_close')
+    yield 0.5
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_undo')
+    yield 1.0
+    check(all(abs(a - b) < 1e-5 for a, b in zip(bpy.data.objects['Cube'].color, original_color)),
+          'One undo restores the complete original color')
+    ui(action='select', id=str(bpy.data.objects['Light'].session_uid))
+    ui(action='tab', id='DATA')
+    yield 1.0
+    colors = [item for section in ui()['properties']['sections'] for item in section['properties']
+              if item.get('type') == 'COLOR']
+    if not colors:
+        for identifier in ui()['sections']:
+            if identifier not in ui()['expanded'] and 'light' in identifier.lower():
+                ui(action='section', id=identifier)
+        yield 1.0
+        colors = [item for section in ui()['properties']['sections'] for item in section['properties']
+                  if item.get('type') == 'COLOR']
+    light_color = next(item for item in colors if item['property'] == 'color')
+    check(not light_color['alpha'] and len(light_color['value']) == 3,
+          'RGB light color uses a swatch without an alpha channel')
+    ui(action='color_open', key=light_color['key'])
+    yield 1.0
+    check(ui()['colorPresented'] and not ui()['colorAlpha'], 'RGB picker hides the opacity control')
+    ui(action='color_select', value=[0.25, 0.5, 0.75], continuous=False)
+    yield 1.0
+    check(all(abs(a - linear(b)) < 1e-5 for a, b in zip(bpy.data.objects['Light'].data.color, [0.25, 0.5, 0.75])),
+          'Native RGB picker edits the real light color')
+    ui(action='color_close')
+    yield 0.5
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_undo')
+    yield 1.0
+    bpy.types.Scene.native_picker_gamma_test = bpy.props.FloatVectorProperty(
+        name='Display Color', size=3, subtype='COLOR_GAMMA', default=(0.1, 0.2, 0.3), min=0, max=1)
+
+    class SCENE_PT_native_picker_test(bpy.types.Panel):
+        bl_label = 'Color Picker Test'
+        bl_space_type = 'PROPERTIES'
+        bl_region_type = 'WINDOW'
+        bl_context = 'scene'
+
+        def draw(self, context):
+            self.layout.prop(context.scene, 'native_picker_gamma_test')
+
+    bpy.utils.register_class(SCENE_PT_native_picker_test)
+    ui(action='tab', id='SCENE')
+    yield 1.0
+    ui(action='section', id='SCENE_PT_native_picker_test')
+    yield 1.0
+    gamma = panel('SCENE_PT_native_picker_test')['properties'][0]
+    ui(action='color_open', key=gamma['key'])
+    yield 1.0
+    ui(action='color_select', value=[0.2, 0.4, 0.6], continuous=False)
+    yield 1.0
+    check(all(abs(a - b) < 1e-5 for a, b in zip(bpy.context.scene.native_picker_gamma_test, [0.2, 0.4, 0.6])),
+          'Display-referred color properties are not incorrectly linearized')
+    ui(action='color_close')
+    yield 0.5
+    bpy.utils.unregister_class(SCENE_PT_native_picker_test)
+    del bpy.types.Scene.native_picker_gamma_test
+    ui(action='select', id=str(bpy.data.objects['Cube'].session_uid))
+    ui(action='tab', id='OBJECT')
+    yield 1.0
+    if '--native-color-preview' in sys.argv:
+        color = next(item for item in panel('OBJECT_PT_display')['properties'] if item.get('property') == 'color')
+        ui(action='color_open', key=color['key'])
+        yield 1.0
+        check(ui()['colorPresented'], 'Native picker is visible on the physical iPad')
     report['state'] = ui()
     report['passed'] = True
 
@@ -127,6 +216,7 @@ def tick():
         delay = None
     except Exception:
         report['error'] = traceback.format_exc()
+        report['state'] = ui()
         delay = None
     output.write_text(json.dumps(report, indent=2))
     return delay

@@ -162,6 +162,34 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       }
     }
     NSDictionary *controls = [panels valueForKey:@"_controls"];
+    if ([action isEqual:@"color_open"]) {
+      UIControl *button = controls[request[@"key"]];
+      UITableView *form = [panels valueForKey:@"_form"];
+      NSArray *sections = [panels valueForKey:@"_formSections"];
+      for (NSUInteger section = 0; section < sections.count; section++) {
+        NSArray *rows = sections[section];
+        for (NSUInteger row = 0; row < rows.count; row++) {
+          if ([button isDescendantOfView:rows[row]]) {
+            [form scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:section]
+                       atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
+            [form layoutIfNeeded];
+          }
+        }
+      }
+      [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+    }
+    if ([action isEqual:@"color_select"]) {
+      UIColorPickerViewController *picker = [panels valueForKey:@"_colorPicker"];
+      NSArray *value = request[@"value"];
+      UIColor *color = [UIColor colorWithRed:[value[0] doubleValue] green:[value[1] doubleValue]
+                                       blue:[value[2] doubleValue] alpha:value.count == 4 ? [value[3] doubleValue] : 1];
+      [picker.delegate colorPickerViewController:picker didSelectColor:color
+                                   continuously:[request[@"continuous"] boolValue]];
+    }
+    if ([action isEqual:@"color_close"]) {
+      UIColorPickerViewController *picker = [panels valueForKey:@"_colorPicker"];
+      [picker.delegate colorPickerViewControllerDidFinish:picker];
+    }
     if ([action isEqual:@"toggle"]) {
       UISwitch *toggle = controls[request[@"key"]];
       if ([toggle isKindOfClass:UISwitch.class]) {
@@ -210,6 +238,12 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
       @"tabs": [panels valueForKey:@"_tabs"] ?: @[],
       @"properties": [panels valueForKey:@"_snapshot"][@"inspector"] ?: @{},
+      @"colorPicker": @([[panels valueForKey:@"_colorPicker"] isKindOfClass:UIColorPickerViewController.class]),
+      @"colorPresented": @(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"]).viewIfLoaded.window != nil),
+      @"colorWindowLevel": @(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"]).viewIfLoaded.window.windowLevel),
+      @"colorFrame": rectValues(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"]).viewIfLoaded.frame),
+      @"rootWindowLevel": @(left.window.windowLevel),
+      @"colorAlpha": @([[panels valueForKey:@"_colorPicker"] supportsAlpha]),
       @"tab": [panels valueForKey:@"_selectedTab"] ?: @"",
       @"sections": [panels valueForKey:@"_sectionIdentifiers"] ?: @[],
       @"expanded": [[panels valueForKey:@"_expandedPanels"][[panels valueForKey:@"_selectedTab"] ?: @""] allObjects] ?: @[]};
