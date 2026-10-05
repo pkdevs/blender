@@ -49,6 +49,30 @@ def tests():
           'Blender Properties context tabs are projected')
     check(state['expanded'] == [state['sections'][0]], 'Only the first Blender panel starts expanded')
     check('object.location.0' in state['fields'], 'Native inspector exposes the active object transform')
+    transform_identity = state['fieldIdentities']['object.location.0']
+    ui(action='section', id='OBJECT_PT_transform')
+    check(ui()['sectionRows']['OBJECT_PT_transform'] == 0, 'Property section collapses immediately without waiting for Blender')
+    yield 0.7
+    ui(action='section', id='OBJECT_PT_transform')
+    reopened = ui()
+    check(reopened['sectionRows']['OBJECT_PT_transform'] > 0 and
+          reopened['fieldIdentities']['object.location.0'] == transform_identity,
+          'Cached property section reopens immediately with its original controls')
+    yield 0.7
+    ui(action='section', id='OBJECT_PT_display')
+    yield 0.7
+    check(ui()['fieldIdentities']['object.location.0'] == transform_identity,
+          'Expanding another section preserves existing native controls')
+    ui(action='section', id='OBJECT_PT_display')
+    yield 0.7
+    for _ in range(10):
+        ui(action='section', id='OBJECT_PT_transform')
+    check(ui()['sectionRows']['OBJECT_PT_transform'] > 0, 'Rapid animated section toggles leave the table consistent')
+    yield 0.7
+    for _ in range(6):
+        ui(action='inspector')
+    yield 0.4
+    check(ui()['inspector'], 'Interrupted floating-panel animations settle open correctly')
     def transform_fields():
         return next(section['properties'] for section in ui()['properties']['sections']
                     if section['id'] == 'OBJECT_PT_transform')

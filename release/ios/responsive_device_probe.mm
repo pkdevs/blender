@@ -291,6 +291,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       }
     }
     NSMutableDictionary *values = [NSMutableDictionary dictionary];
+    NSMutableDictionary *fieldIdentities = [NSMutableDictionary dictionary];
     NSMutableDictionary *sliderValues = [NSMutableDictionary dictionary];
     for (NSString *key in [panels valueForKey:@"_sliders"]) {
       UISlider *slider = [panels valueForKey:@"_sliders"][key];
@@ -302,11 +303,19 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
         NSDictionary *descriptor = [control valueForKey:@"descriptor"];
         NSString *semantic = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
         values[semantic] = ((UITextField *)control).text ?: @"";
+        fieldIdentities[semantic] = [NSString stringWithFormat:@"%p", control];
       }
     }
     UIView *left = [panels valueForKey:@"_inspector"];
     UIView *right = [panels valueForKey:@"_hierarchy"];
+    NSMutableDictionary *sectionRows = [NSMutableDictionary dictionary];
+    UITableView *form = [panels valueForKey:@"_form"];
+    NSArray *sectionIDs = [panels valueForKey:@"_sectionIdentifiers"];
+    for (NSUInteger i = 0; i < sectionIDs.count; i++) {
+      sectionRows[sectionIDs[i]] = @([form numberOfRowsInSection:i]);
+    }
     NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
+      @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities,
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
       @"sliders": sliderValues,
