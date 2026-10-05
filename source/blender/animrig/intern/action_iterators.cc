@@ -174,7 +174,7 @@ bool foreach_action_slot_use_with_references(
   }
 
   /* Visit Pose Bone constraints. */
-  if (object.type == OB_ARMATURE && object.pose) {
+  if (object.type == OB_ARMATURE) {
     for (bPoseChannel &pchan : object.pose->chanbase) {
       for (bConstraint &con : pchan.constraints) {
         if (!visit_constraint(con)) {
@@ -263,7 +263,7 @@ bool foreach_action_slot_use_with_rna(ID &animated_id,
   }
 
   /* Visit Pose Bone constraints. */
-  if (object.type == OB_ARMATURE && object.pose) {
+  if (object.type == OB_ARMATURE) {
     for (bPoseChannel &pchan : object.pose->chanbase) {
       for (bConstraint &con : pchan.constraints) {
         if (!visit_constraint(con)) {
