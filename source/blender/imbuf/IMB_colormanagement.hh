@@ -8,7 +8,7 @@
  * \ingroup imbuf
  */
 
-#include "BLI_compiler_compat.h"
+#include "BLI_compiler_compat.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
@@ -30,6 +30,7 @@ struct EnumPropertyItem;
 struct ImBuf;
 struct ImageFormatData;
 struct Main;
+struct MainColorspace;
 struct bContext;
 
 namespace ocio {
@@ -64,13 +65,58 @@ enum ColorManagedDisplaySpace {
 
 enum class ColorManagedFileOutput { Image, Video };
 
+enum class ColorManagedConfigSource {
+  EnvBlenderOCIO = 0, /**< BLENDER_OCIO environment variable. */
+  EnvOCIO = 1,        /**< OCIO environment variable. */
+  Project = 2,        /**< Project OCIO config setting. */
+  Blender = 3,        /**< Blender default OCIO config. */
+  Fallback = 4,       /**< Embedded fallback OCIO config. */
+};
+
 /* -------------------------------------------------------------------- */
 /** \name Generic Functions
  * \{ */
 
 ColorManagedConfig &IMB_colormanagement_get_config();
 
+StringRefNull IMB_colormanagement_config_path_get();
+ColorManagedConfigSource IMB_colormanagement_config_source_get();
+
+/**
+ * Reload the OpenColorIO config after the project of a blend file was loaded.
+ * This must be done before reading the blend file, which involves converting
+ * linked libraries to the same working space.
+ */
+void IMB_colormanagement_project_read_post(Main *bmain);
+
+/**
+ * Set up color management after reading a blend file, before it replaces #old_bmain:
+ * - Set the working space from the file
+ * - Convert editable asset data in #old_bmain to it, before it is moved to #bmain.
+ */
+void IMB_colormanagement_file_read_post(Main *bmain,
+                                        Main *old_bmain,
+                                        bool is_startup,
+                                        bool have_editable_assets);
+
+/**
+ * Set up color management after undo:
+ * - Set the working space from the file
+ * - Convert linked data (which undo left unchanged) to it.
+ * - Restore config warnings from #old_colorspace.
+ */
+void IMB_colormanagement_undo_read_post(Main *bmain, const MainColorspace &old_colorspace);
+
 void IMB_colormanagement_check_file_config(Main *bmain);
+
+/**
+ * Switch the active OpenColorIO config to #filepath.
+ *
+ * This keeps existing #ColorSpace pointers valid, so that it is safe to switch
+ * while thumbnails, assets, and other data may still have image buffers pointing
+ * to color spaces that no longer exist in the new config.
+ */
+bool IMB_colormanagement_switch_config(const char *filepath);
 
 void IMB_colormanagement_validate_settings(const ColorManagedDisplaySettings *display_settings,
                                            ColorManagedViewSettings *view_settings);
@@ -88,8 +134,14 @@ const char *IMB_colormanagement_space_from_filepath_rules(const char *filepath);
 const ColorSpace *IMB_colormanagement_space_get_named(const char *name);
 const ColorSpace *IMB_colormanagement_space_get_named(StringRefNull name);
 bool IMB_colormanagement_space_is_data(const ColorSpace *colorspace);
+
+/** Is colorspace the same as the scene linear working space? */
 bool IMB_colormanagement_space_is_scene_linear(const ColorSpace *colorspace);
+/** Is the colorspace sRGB? */
 bool IMB_colormanagement_space_is_srgb(const ColorSpace *colorspace);
+/* Is the colorspace scene linear + the sRGB transfer function? */
+bool IMB_colormanagement_space_is_scene_linear_srgb(const ColorSpace *colorspace);
+
 bool IMB_colormanagement_space_name_is_data(const char *name);
 bool IMB_colormanagement_space_name_is_scene_linear(const char *name);
 bool IMB_colormanagement_space_name_is_srgb(const char *name);
@@ -116,6 +168,8 @@ const ColorSpace *IMB_colormanagement_space_from_cicp(const int cicp[4],
  */
 StringRefNull IMB_colormanagement_space_get_interop_id(const ColorSpace *colorspace);
 const ColorSpace *IMB_colormanagement_space_from_interop_id(StringRefNull interop_id);
+int IMB_colormanagement_colorspace_get_interop_id_index(const char *name, const char *interop_id);
+void IMB_colormanagement_colorspace_interop_id_set(char *name, char *interop_id, int index);
 
 BLI_INLINE void IMB_colormanagement_get_luminance_coefficients(float r_rgb[3]);
 
@@ -405,6 +459,13 @@ const char *IMB_colormanagement_look_validate_for_view(const char *view_name,
 int IMB_colormanagement_colorspace_get_named_index(const char *name);
 const char *IMB_colormanagement_colorspace_get_indexed_name(int index);
 const char *IMB_colormanagement_colorspace_get_name(const ColorSpace *colorspace);
+
+/** Set the color space name. Always use this when setting color space name to write
+ * both the name and interop ID, for compatibility with multiple configs. */
+void IMB_colormanagement_colorspace_name_set(char *name, char *interop_id, const char *new_name);
+void IMB_colormanagement_colorspace_settings_set(ColorManagedColorspaceSettings *settings,
+                                                 const char *name);
+
 const char *IMB_colormanagement_colorspace_get_family(const ColorSpace *colorspace);
 const char *IMB_colormanagement_colorspace_get_description(const ColorSpace *colorspace);
 const char *IMB_colormanagement_view_get_default_name(const char *display_name);
@@ -423,12 +484,8 @@ const char *IMB_colormanagement_working_space_get_default();
 const char *IMB_colormanagement_working_space_get();
 
 bool IMB_colormanagement_working_space_set_from_name(const char *name);
-void IMB_colormanagement_working_space_check(Main *bmain,
-                                             bool for_undo,
-                                             bool have_editable_assets);
 
 void IMB_colormanagement_working_space_init_default(Main *bmain);
-void IMB_colormanagement_working_space_init_startup(Main *bmain);
 void IMB_colormanagement_working_space_convert(Main *bmain,
                                                const float3x3 &current_scene_linear_to_xyz,
                                                const float3x3 &new_xyz_to_scene_linear,
@@ -454,6 +511,8 @@ void IMB_colormanagement_view_items_add(EnumPropertyItem **items,
 void IMB_colormanagement_look_items_add(EnumPropertyItem **items,
                                         int *totitem,
                                         const char *view_name);
+
+void IMB_colormanagement_interop_id_items_add(EnumPropertyItem **items, int *totitem);
 void IMB_colormanagement_colorspace_items_add(EnumPropertyItem **items, int *totitem);
 
 /** \} */

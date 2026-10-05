@@ -29,11 +29,12 @@ void mesh_custom_normals_to_generic(Mesh &mesh);
 void mesh_sculpt_mask_to_generic(Mesh &mesh);
 
 void mesh_freestyle_marks_to_generic(Mesh &mesh);
-void mesh_freestyle_marks_to_legacy(AttributeStorage::BlendWriteData &attr_write_data,
-                                    CustomData &edge_data,
-                                    CustomData &face_data,
-                                    Vector<CustomDataLayer, 16> &edge_layers,
-                                    Vector<CustomDataLayer, 16> &face_layers);
+
+void mesh_skin_to_generic(Mesh &mesh);
+void mesh_skin_to_legacy(AttributeStorage::BlendWriteData &attr_write_data,
+                         CustomData &vert_data,
+                         Vector<CustomDataLayer, 16> &vert_layers,
+                         int verts_num);
 
 }  // namespace bke
 

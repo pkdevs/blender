@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #ifdef WITH_MANIFOLD
 #  include <algorithm>
 #  include <iomanip>
@@ -10,9 +14,9 @@
 #  include "BLI_array.hh"
 #  include "BLI_array_utils.hh"
 #  include "BLI_map.hh"
-#  include "BLI_math_geom.h"
-#  include "BLI_math_matrix.h"
+#  include "BLI_math_geom_c.hh"
 #  include "BLI_math_matrix.hh"
+#  include "BLI_math_matrix_c.hh"
 #  include "BLI_math_matrix_types.hh"
 #  include "BLI_math_vector.hh"
 #  include "BLI_math_vector_types.hh"
@@ -1828,9 +1832,9 @@ Mesh *mesh_boolean_manifold(Span<const Mesh *> meshes,
 
     MeshGL meshgl_result;
     Operation op = op_params.boolean_mode;
-    if (std::any_of(manifolds.begin(), manifolds.end(), [](const Manifold &m) {
-          return m.Status() != Manifold::Error::NoError;
-        }))
+    if (std::any_of(manifolds.begin(),
+                    manifolds.end(),
+                    [](const Manifold &m) { return m.Status() != Manifold::Error::NoError; }))
     {
       /* Check special case of subtracting a plane, which Manifold can handle. */
       float3 normal;

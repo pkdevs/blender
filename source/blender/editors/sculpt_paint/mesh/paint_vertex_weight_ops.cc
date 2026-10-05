@@ -8,11 +8,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_bitmap.h"
+#include "BLI_bitmap.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_mesh_types.h"
@@ -142,8 +142,8 @@ void PAINT_OT_weight_from_bones(wmOperatorType *ot)
   ot->name = "Weight from Bones";
   ot->idname = "PAINT_OT_weight_from_bones";
   ot->description =
-      ("Set the weights of the groups matching the attached armature's selected bones, "
-       "using the distance between the vertices and the bones");
+      ("Set the weights of the groups matching the attached armature's bones that have \"Deform\" "
+       "option enabled, using the distance between the vertices and the bones");
 
   /* API callbacks. */
   ot->exec = weight_from_bones_exec;
@@ -306,7 +306,7 @@ static bool weight_paint_sample_mark_groups(const MDeformVert *dvert, MutableSpa
   int i = dvert->totweight;
   MDeformWeight *dw;
   for (dw = dvert->dw; i > 0; dw++, i--) {
-    if (UNLIKELY(dw->def_nr >= groups.size())) {
+    if (dw->def_nr >= groups.size()) [[unlikely]] {
       continue;
     }
     groups[dw->def_nr] = true;
@@ -535,6 +535,11 @@ void PAINT_OT_weight_set(wmOperatorType *ot)
 /* -------------------------------------------------------------------- */
 /** \name Interactive Weight Gradient Operator
  * \{ */
+
+enum {
+  WPAINT_GRADIENT_TYPE_LINEAR,
+  WPAINT_GRADIENT_TYPE_RADIAL,
+};
 
 /* *** VGroups Gradient *** */
 struct WPGradient_vertStore {

@@ -10,8 +10,8 @@
 
 #include "BKE_unit.hh"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -98,7 +98,7 @@ static void draw_matrix_template(Layout &layout, PointerRNA &ptr, PropertyRNA &p
   float m3[3][3];
   copy_m3_m4(m3, m4);
   if (!is_orthogonal_m3(m3)) {
-    layout_.label(RPT_("Matrix has a shear"), ICON_ERROR);
+    layout_.label(RPT_("Matrix has a shear"), ICON_STATUS_WARNING);
   }
 
   float loc[3], quat[4], size[3];
