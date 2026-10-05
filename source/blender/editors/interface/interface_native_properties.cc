@@ -581,6 +581,50 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       pt.draw(C, panel);
     }
     block_end(C, block);
+    /* Only replace locks which have a corresponding value in this actual panel layout. */
+    std::map<std::string, std::pair<Button *, int>> field_locks;
+    std::set<std::string> attached_locks;
+    for (const auto &value_button : block->buttons) {
+      Button &value = *value_button;
+      if (!value.rnaprop || !value.rnapoin.data || (value.flag & UI_HIDDEN) ||
+          !ELEM(RNA_property_type(value.rnaprop), PROP_FLOAT, PROP_INT, PROP_STRING) ||
+          is_color(&value.rnapoin, value.rnaprop)) {
+        continue;
+      }
+      const std::string identifier = RNA_property_identifier(value.rnaprop);
+      const int length = RNA_property_array_length(&value.rnapoin, value.rnaprop);
+      const int begin = length ? std::max(0, value.rnaindex) : -1;
+      const int end = length && value.rnaindex < 0 ? std::min(length, 16) : begin + 1;
+      for (int index = begin; index < end; index++) {
+        std::string lock_name = "lock_" + identifier;
+        int lock_index = index;
+        if (identifier == "rotation_euler") {
+          lock_name = "lock_rotation";
+        }
+        else if (ELEM(identifier, "rotation_quaternion", "rotation_axis_angle")) {
+          lock_name = index == 0 ? "lock_rotation_w" : "lock_rotation";
+          lock_index = index - 1;
+        }
+        for (const auto &lock_button : block->buttons) {
+          Button &lock = *lock_button;
+          if (!lock.rnaprop || lock.rnapoin.data != value.rnapoin.data ||
+              lock.rnapoin.type != value.rnapoin.type || (lock.flag & UI_HIDDEN) ||
+              RNA_property_type(lock.rnaprop) != PROP_BOOLEAN ||
+              lock_name != RNA_property_identifier(lock.rnaprop)) {
+            continue;
+          }
+          const int lock_length = RNA_property_array_length(&lock.rnapoin, lock.rnaprop);
+          const int component = lock_length ? lock_index : -1;
+          if ((lock_length && (component < 0 || component >= lock_length)) ||
+              (lock_length && lock.rnaindex >= 0 && lock.rnaindex != component)) {
+            continue;
+          }
+          field_locks[property_key(value, index)] = {&lock, component};
+          attached_locks.insert(property_key(lock, component));
+          break;
+        }
+      }
+    }
     std::set<std::string> seen;
     for (const auto &button : block->buttons) {
       Button &but = *button;
@@ -652,8 +696,18 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           }
         }
         else {
+          if (attached_locks.count(key)) {
+            continue;
+          }
           auto field = append_field();
           project_property(C, but, index, *field);
+          if (const auto found = field_locks.find(key); found != field_locks.end()) {
+            auto lock = field->append_dict("lock");
+            project_property(C, *found->second.first, found->second.second, *lock);
+            lock->append_str("panel", candidate.id);
+            lock->append_str("tab", tab_id);
+            lock->append_int("native", 1);
+          }
           if (header_toggle) {
             field->append_int("header", 1);
           }
