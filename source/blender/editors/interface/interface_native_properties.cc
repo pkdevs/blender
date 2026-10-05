@@ -440,6 +440,11 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
     slider->append_str("scale", scale == PROP_SCALE_LOG && but.softmin > 0 ? "LOG" :
                                 scale == PROP_SCALE_CUBIC ? "CUBIC" : "LINEAR");
   }
+  if (but.type == ButtonType::Num && ELEM(type, PROP_INT, PROP_FLOAT)) {
+    const double step = type == PROP_INT ? 0.5 :
+        0.01 * static_cast<ButtonNumber &>(but).step_size;
+    field.append_double("dragStep", std::isfinite(step) && step > 0 ? step : 0.01);
+  }
   switch (type) {
     case PROP_BOOLEAN:
       field.append_str("type", "BOOLEAN");
