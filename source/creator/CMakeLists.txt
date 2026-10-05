@@ -1883,11 +1883,13 @@ elseif(APPLE)
       ${TARGETDIR_VER}/python/lib
     )
 
-    # Install Python executable.
-    install(
-      PROGRAMS ${PYTHON_EXECUTABLE}
-      DESTINATION ${TARGETDIR_VER}/python/bin
-    )
+    # On iOS this is the macOS build interpreter, not a runnable device helper.
+    if(NOT WITH_APPLE_CROSSPLATFORM)
+      install(
+        PROGRAMS ${PYTHON_EXECUTABLE}
+        DESTINATION ${TARGETDIR_VER}/python/bin
+      )
+    endif()
 
     # Needed for `distutils/pip`.
     # Get the last part of the include dir, will be `python{version}{abiflag}`.
