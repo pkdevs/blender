@@ -65,6 +65,15 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
     -fsycl-max-parallel-link-jobs=${SYCL_OFFLINE_COMPILER_PARALLEL_JOBS}
     --offload-compress
     --offload-compression-level=19
+    # Hardware ray tracing kernels such as intersect_* make Embree calls
+    # that rely on intel_* functions, which are defined only by the Intel
+    # driver during the JIT/runtime compilation of these kernels. This
+    # compilation is triggered unconditionally, as we need these functions
+    # to be defined, and the AOT binaries of these kernels are discarded
+    # at runtime.
+    # In order to avoid the expected warnings about undefined functions
+    # during DPC++ compilation, the compiler option below is used.
+    -Wno-sycl-undefined-func-in-image
     -shared
     -DWITH_ONEAPI
     -O2
