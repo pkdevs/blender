@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #import "GHOST_IOSScenePanels.hh"
+#include <cfloat>
 #include <cmath>
 
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
@@ -11,6 +12,10 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 @property(nonatomic, retain) NSDictionary *descriptor;
 @property(nonatomic, copy) NSString *objectID;
 @property(nonatomic, copy) NSString *originalText;
+@property(nonatomic) BOOL scrubbing;
+@property(nonatomic) double scrubStart;
+@property(nonatomic) double scrubValue;
+@property(nonatomic) CGFloat scrubTranslation;
 @end
 @implementation GHOSTIOSPropertyField
 - (CGRect)textRectForBounds:(CGRect)bounds { return CGRectInset(bounds, 8, 0); }
@@ -146,7 +151,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 @interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate, UICollectionViewDelegate,
                                    UISearchBarDelegate, UITextFieldDelegate,
                                    UIColorPickerViewControllerDelegate, UIPopoverPresentationControllerDelegate,
-                                   UIContextMenuInteractionDelegate>
+                                   UIContextMenuInteractionDelegate, UIGestureRecognizerDelegate>
 @end
 
 @implementation GHOSTIOSScenePanels {
@@ -187,6 +192,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   UIColorPickerViewController *_colorPicker;
   GHOSTIOSColorButton *_colorButton;
   BOOL _colorPending;
+  GHOSTIOSPropertyField *_scrubField;
 }
 
 - (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage *(^)(NSString *))icon
@@ -302,6 +308,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)dealloc
 {
+  [_scrubField release];
   _tree.delegate = nil;
   _tree.dataSource = nil;
   [_treeDataSource release];
@@ -405,6 +412,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (void)applyVisibility
 {
   if (!_showInspector) {
+    [self cancelNumberScrub];
     [self closeColorPicker];
   }
   _inspectorButton.selected = _showInspector;
@@ -722,6 +730,17 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
             [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(finishNumber:)] autorelease],
           ];
           field.inputAccessoryView = accessory;
+          if (!property[@"slider"] && ([kind isEqual:@"FLOAT"] || [kind isEqual:@"INT"])) {
+            UIPanGestureRecognizer *pan = [[[UIPanGestureRecognizer alloc]
+                initWithTarget:self action:@selector(scrubNumber:)] autorelease];
+            pan.name = @"blender.number.scrub";
+            pan.maximumNumberOfTouches = 1;
+            pan.allowedTouchTypes = @[@(UITouchTypeDirect), @(UITouchTypeStylus)];
+            pan.delegate = self;
+            [field addGestureRecognizer:pan];
+            [_form.panGestureRecognizer requireGestureRecognizerToFail:pan];
+            field.layer.cornerRadius = 6;
+          }
         }
         [field addTarget:self action:@selector(commitField:) forControlEvents:UIControlEventEditingDidEnd];
         control = field;
@@ -827,6 +846,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     nextCache[sectionID] = record;
   }
   [_sectionViewCache setDictionary:nextCache];
+  if (_scrubField && _controls[[self keyForProperty:_scrubField.descriptor]] != _scrubField) {
+    [self cancelNumberScrub];
+  }
   [_sectionTitles release];
   _sectionTitles = [titles copy];
   [_sectionIdentifiers release];
@@ -967,6 +989,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       [button addInteraction:[[[UIToolTipInteraction alloc] initWithDefaultToolTip:tab[@"title"]] autorelease]];
       [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
         [owner->_inspector endEditing:YES];
+        [owner cancelNumberScrub];
         [owner->_selectedTab release];
         owner->_selectedTab = [tab[@"id"] copy];
         [owner requestProperties];
@@ -1236,8 +1259,112 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   field.text = [formatter stringFromNumber:@(stepper.value)];
 }
 
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer
+{
+  if (![recognizer.name isEqual:@"blender.number.scrub"]) { return YES; }
+  GHOSTIOSPropertyField *field = (GHOSTIOSPropertyField *)recognizer.view;
+  CGPoint velocity = [(UIPanGestureRecognizer *)recognizer velocityInView:field];
+  return field.enabled && !field.isFirstResponder && !field.descriptor[@"slider"] &&
+      _controls[[self keyForProperty:field.descriptor]] == field &&
+      [field.objectID isEqual:_objectID] && fabs(velocity.x) > fabs(velocity.y) * 1.2;
+}
+
+- (void)displayNumberScrub:(GHOSTIOSPropertyField *)field
+{
+  NSNumberFormatter *formatter = [[[NSNumberFormatter alloc] init] autorelease];
+  formatter.numberStyle = NSNumberFormatterDecimalStyle;
+  formatter.usesGroupingSeparator = NO;
+  formatter.usesSignificantDigits = YES;
+  formatter.maximumSignificantDigits = [field.descriptor[@"type"] isEqual:@"INT"] ? 10 : 9;
+  double value = field.scrubValue;
+  if ([field.descriptor[@"type"] isEqual:@"INT"]) { value = round(value); }
+  field.text = [formatter stringFromNumber:@(value * ([field.descriptor[@"angle"] boolValue] ? 180.0 / M_PI : 1))];
+  field.originalText = field.text;
+}
+
+- (void)beginNumberScrub:(GHOSTIOSPropertyField *)field
+{
+  if (!field.enabled || field.isFirstResponder || field.descriptor[@"slider"] ||
+      !([field.descriptor[@"type"] isEqual:@"FLOAT"] || [field.descriptor[@"type"] isEqual:@"INT"]) ||
+      _controls[[self keyForProperty:field.descriptor]] != field || ![field.objectID isEqual:_objectID]) {
+    return;
+  }
+  [self cancelNumberScrub];
+  [_inspector endEditing:YES];
+  _scrubField = [field retain];
+  field.scrubbing = YES;
+  field.scrubStart = field.scrubValue = [field.descriptor[@"value"] doubleValue];
+  field.scrubTranslation = 0;
+  field.backgroundColor = [_overlay.tintColor colorWithAlphaComponent:0.12];
+}
+
+- (void)changeNumberScrub:(GHOSTIOSPropertyField *)field translation:(CGFloat)translation
+{
+  if (field != _scrubField || !field.scrubbing || !std::isfinite(translation)) { return; }
+  if (!field.enabled || _controls[[self keyForProperty:field.descriptor]] != field ||
+      ![field.objectID isEqual:_objectID]) {
+    [self cancelNumberScrub];
+    return;
+  }
+  double step = field.descriptor[@"dragStep"] ? [field.descriptor[@"dragStep"] doubleValue] :
+      [field.descriptor[@"type"] isEqual:@"INT"] ? 0.5 : 0.01;
+  if ([field.descriptor[@"angle"] boolValue]) { step *= M_PI / 180.0; }
+  double value = field.scrubValue + (translation - field.scrubTranslation) * step;
+  double minimum = field.descriptor[@"min"] ? [field.descriptor[@"min"] doubleValue] : -DBL_MAX;
+  double maximum = field.descriptor[@"max"] ? [field.descriptor[@"max"] doubleValue] : DBL_MAX;
+  field.scrubValue = fmin(maximum, fmax(minimum, value));
+  field.scrubTranslation = translation;
+  [self displayNumberScrub:field];
+}
+
+- (void)finishNumberScrub:(GHOSTIOSPropertyField *)field
+{
+  if (field != _scrubField) { return; }
+  BOOL valid = field.enabled && _controls[[self keyForProperty:field.descriptor]] == field &&
+      [field.objectID isEqual:_objectID];
+  double value = [field.descriptor[@"type"] isEqual:@"INT"] ? round(field.scrubValue) : field.scrubValue;
+  field.scrubbing = NO;
+  field.backgroundColor = UIColor.clearColor;
+  if (valid && value != field.scrubStart) {
+    [self editProperty:field.descriptor object:field.objectID value:@(value)];
+    NSMutableDictionary *updated = [[field.descriptor mutableCopy] autorelease];
+    updated[@"value"] = @(value);
+    field.descriptor = updated;
+  }
+  [_scrubField release];
+  _scrubField = nil;
+}
+
+- (void)cancelNumberScrub
+{
+  if (!_scrubField) { return; }
+  _scrubField.scrubValue = _scrubField.scrubStart;
+  [self displayNumberScrub:_scrubField];
+  _scrubField.scrubbing = NO;
+  _scrubField.backgroundColor = UIColor.clearColor;
+  [_scrubField release];
+  _scrubField = nil;
+}
+
+- (void)scrubNumber:(UIPanGestureRecognizer *)pan
+{
+  GHOSTIOSPropertyField *field = (GHOSTIOSPropertyField *)pan.view;
+  if (pan.state == UIGestureRecognizerStateBegan) {
+    [self beginNumberScrub:field];
+    [pan setTranslation:CGPointZero inView:_overlay];
+  }
+  else if (pan.state == UIGestureRecognizerStateChanged || pan.state == UIGestureRecognizerStateEnded) {
+    [self changeNumberScrub:field translation:[pan translationInView:_overlay].x];
+    if (pan.state == UIGestureRecognizerStateEnded) { [self finishNumberScrub:field]; }
+  }
+  else if (pan.state == UIGestureRecognizerStateCancelled || pan.state == UIGestureRecognizerStateFailed) {
+    if (field == _scrubField) { [self cancelNumberScrub]; }
+  }
+}
+
 - (void)commitField:(GHOSTIOSPropertyField *)field
 {
+  if (field.scrubbing) { return; }
   if ([field.text isEqual:field.originalText]) {
     return;
   }
@@ -1406,7 +1533,12 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       }
       else if ([control isKindOfClass:GHOSTIOSPropertyField.class]) {
         GHOSTIOSPropertyField *field = (GHOSTIOSPropertyField *)control;
-        if (!field.isFirstResponder && !slider.editing) {
+        double tolerance = [property[@"type"] isEqual:@"INT"] ? 0 :
+            4 * FLT_EPSILON * fmax(fabs([value doubleValue]), fabs(field.scrubStart));
+        if (field.scrubbing && (!field.enabled || fabs([value doubleValue] - field.scrubStart) > tolerance)) {
+          [self cancelNumberScrub];
+        }
+        if (!field.isFirstResponder && !slider.editing && !field.scrubbing) {
           field.descriptor = property;
           if ([value isKindOfClass:NSNumber.class]) {
             double number = [value doubleValue] * ([property[@"angle"] boolValue] ? 180.0 / M_PI : 1.0);
@@ -1591,6 +1723,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   __block GHOSTIOSScenePanels *owner = self;
   [header addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
     [owner->_inspector endEditing:YES];
+    [owner cancelNumberScrub];
     NSMutableSet *open = owner->_expandedPanels[owner->_selectedTab ?: @"OBJECT"];
     NSInteger currentSection = [owner->_sectionIdentifiers indexOfObject:identifier];
     if (currentSection == NSNotFound || !open) { return; }

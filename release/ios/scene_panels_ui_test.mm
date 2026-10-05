@@ -6,6 +6,18 @@
 
 @interface GHOSTIOSScenePanels (PropertyHeadingTests)
 - (NSArray<UIMenuElement *> *)groupMenuActionsForProperty:(NSDictionary *)property;
+- (void)beginNumberScrub:(UITextField *)field;
+- (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation;
+- (void)finishNumberScrub:(UITextField *)field;
+- (void)cancelNumberScrub;
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture;
+@end
+
+@interface NumberTestPan : UIPanGestureRecognizer
+@property(nonatomic) CGPoint testVelocity;
+@end
+@implementation NumberTestPan
+- (CGPoint)velocityInView:(UIView *)view { return self.testVelocity; }
 @end
 
 static NSString *setting;
@@ -22,6 +34,107 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *key, const char *val
 static void tap(UIBarButtonItem *button)
 {
   [button.target performSelector:button.action withObject:button];
+}
+
+static void testNumberScrubbing(UIView *overlay)
+{
+  GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
+      icon:^UIImage *(NSString *name) { return nil; }] autorelease];
+  [panels layoutInRect:CGRectMake(0, 70, 1194, 680)];
+  tap(panels.inspectorButton);
+  NSMutableDictionary *property = [NSMutableDictionary dictionaryWithDictionary:
+      @{@"key": @"number", @"owner": @"object", @"property": @"test", @"label": @"Number",
+        @"type": @"FLOAT", @"value": @1.5, @"editable": @YES, @"dragStep": @0.01,
+        @"min": @(-1e30), @"max": @1e30}];
+  UITextField *(^apply)(void) = ^UITextField *{
+    [panels updateSnapshot:@{@"ack": @99999, @"inspector": @{@"id": @"99", @"name": @"Test",
+        @"sections": @[@{@"id": @"numbers", @"title": @"Numbers", @"open": @YES,
+                         @"properties": @[[[property copy] autorelease]]}]}}];
+    return [panels valueForKey:@"_controls"][@"number"];
+  };
+  UITextField *field = apply();
+  NSNumberFormatter *numbers = [[[NSNumberFormatter alloc] init] autorelease];
+  numbers.numberStyle = NSNumberFormatterDecimalStyle;
+  [overlay layoutIfNeeded];
+  [[panels valueForKey:@"_form"] layoutIfNeeded];
+  BOOL hasPan = NO;
+  for (UIGestureRecognizer *gesture in field.gestureRecognizers) {
+    hasPan |= [gesture.name isEqual:@"blender.number.scrub"];
+  }
+  NSCAssert(hasPan, @"Non-slider numeric fields have a scrub gesture");
+  NumberTestPan *pan = [[[NumberTestPan alloc] init] autorelease];
+  pan.name = @"blender.number.scrub";
+  [field addGestureRecognizer:pan];
+  pan.testVelocity = CGPointMake(2, 30);
+  NSCAssert(![panels gestureRecognizerShouldBegin:pan], @"Vertical drags remain scrolling");
+  pan.testVelocity = CGPointMake(30, 2);
+  NSCAssert([panels gestureRecognizerShouldBegin:pan], @"Horizontal drags scrub");
+  NSCAssert([field becomeFirstResponder], @"Numeric field can still receive typed input");
+  NSCAssert(![panels gestureRecognizerShouldBegin:pan], @"Typing preserves text-selection gestures");
+  [field resignFirstResponder];
+  NSDictionary *before = request;
+  [panels beginNumberScrub:field];
+  [panels changeNumberScrub:field translation:25];
+  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.75 && request == before,
+            @"Drag previews smoothly without engine commands");
+  apply();
+  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.75, @"Snapshots do not erase an active drag");
+  [panels finishNumberScrub:field];
+  NSCAssert([request[@"value"] doubleValue] == 1.75, @"Release commits one edit");
+  [panels beginNumberScrub:field];
+  [panels changeNumberScrub:field translation:25];
+  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 2.0,
+            @"Rapid repeated drags start from the pending value without waiting for Blender");
+  [panels cancelNumberScrub];
+  property[@"value"] = @1.75;
+  field = apply();
+  before = request;
+  [panels beginNumberScrub:field];
+  [panels changeNumberScrub:field translation:-50];
+  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.25, @"Leftward drags decrease the number");
+  [panels cancelNumberScrub];
+  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.75 && request == before, @"Cancelled drags restore without an edit");
+  [panels beginNumberScrub:field];
+  [panels finishNumberScrub:field];
+  NSCAssert(request == before, @"Zero-distance drags do not create undo entries");
+  [panels beginNumberScrub:field];
+  [panels changeNumberScrub:field translation:100];
+  property[@"value"] = @7;
+  apply();
+  [panels finishNumberScrub:field];
+  NSCAssert([field.text isEqual:@"7"] && request == before, @"External changes cancel stale scrubs");
+  property[@"type"] = @"INT";
+  property[@"dragStep"] = @0.5;
+  property[@"min"] = @0;
+  property[@"max"] = @10;
+  property[@"value"] = @9;
+  field = apply();
+  [panels beginNumberScrub:field];
+  [panels changeNumberScrub:field translation:100];
+  NSCAssert([field.text isEqual:@"10"], @"Scrubbing respects hard limits");
+  [panels changeNumberScrub:field translation:96];
+  NSCAssert([field.text isEqual:@"8"], @"Reversing at a limit responds immediately");
+  [panels finishNumberScrub:field];
+  NSCAssert([request[@"value"] intValue] == 8, @"Integer scrubs commit integral values");
+  property[@"type"] = @"FLOAT";
+  property[@"dragStep"] = @1;
+  property[@"angle"] = @YES;
+  property[@"max"] = @1000;
+  property[@"value"] = @0;
+  field = apply();
+  [panels beginNumberScrub:field];
+  [panels changeNumberScrub:field translation:90];
+  NSCAssert([field.text isEqual:@"90"], @"Angles scrub in displayed degrees");
+  [panels finishNumberScrub:field];
+  NSCAssert(fabs([request[@"value"] doubleValue] - M_PI_2) < 1e-9, @"Angles commit radians to Blender");
+  property[@"editable"] = @NO;
+  field = apply();
+  before = request;
+  [panels beginNumberScrub:field];
+  [panels changeNumberScrub:field translation:50];
+  [panels finishNumberScrub:field];
+  NSCAssert(request == before, @"Disabled fields cannot be scrubbed");
+  [panels dismiss];
 }
 
 int main()
@@ -391,6 +504,7 @@ int main()
     NSCAssert(panels.hierarchyButton.selected && !panels.inspectorButton.selected, @"Phone switches floating panel");
     [panels dismiss];
     NSCAssert(!panels.hierarchyButton.selected && !panels.inspectorButton.selected, @"Temporary panels dismiss");
+    testNumberScrubbing(controller.view);
     NSLog(@"PASS: floating scene panels, search, selection, native fields, async ownership, responsive layout");
   }
 }
