@@ -62,7 +62,8 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
         bke::AttributeInitValue(*static_cast<const float3 *>(positions_single_value->value)));
   }
   else {
-    BLI_assert_unreachable();
+    curves.attributes_for_write().add<float3>(
+        "position", bke::AttrDomain::Point, bke::AttributeInitVArray(positions_list.varray()));
   }
 
   const auto *curve_offset_data = std::get_if<nodes::GList::ArrayData>(&curve_offsets_list.data());
