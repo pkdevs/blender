@@ -1777,7 +1777,7 @@ if(WITH_UI_TESTS)
     test_tools.sculpt_mode_toolbar
     test_transform.view3d_mesh_edit_snap_to_self
     test_transform.view3d_mesh_edit_snap_to_self_shape_key
-    test_transform.view3d_rotate_repeat_last
+    test_transform.view3d_rotate_repeat_last_constrained
     test_undo.compositor_make_group
     test_undo.text_editor_edit_mode_mix
     test_undo.text_editor_simple

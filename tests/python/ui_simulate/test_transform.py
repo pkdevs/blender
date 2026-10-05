@@ -243,7 +243,8 @@ def view3d_mesh_edit_snap_skips_selection():
 
     yield e.tab()                       # Object mode.
 
-def view3d_rotate_repeat_last():
+
+def view3d_rotate_repeat_last_constrained():
     import bpy
     from math import radians
     e, t, window = ui.test_window()
