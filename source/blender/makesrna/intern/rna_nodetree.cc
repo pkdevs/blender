@@ -11396,6 +11396,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeSetGeometryName");
   define("GeometryNode", "GeometryNodeSetGreasePencilColor", def_geo_set_grease_pencil_color);
   define("GeometryNode", "GeometryNodeSetGreasePencilDepth", def_geo_set_grease_pencil_depth);
+  define("GeometryNode", "GeometryNodeSetGreasePencilOpacity");
   define("GeometryNode", "GeometryNodeSetGreasePencilSoftness");
   define("GeometryNode", "GeometryNodeSetGridBackground");
   define("GeometryNode", "GeometryNodeSetGridTransform");
