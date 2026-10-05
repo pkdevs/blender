@@ -29,6 +29,11 @@
 
 #include "RNA_access.hh"
 
+#ifdef WITH_PYTHON
+#  include "BPY_extern_run.hh"
+#  include "MEM_guardedalloc.h"
+#endif
+
 #include "WM_api.hh"
 #include "WM_gizmo_api.hh"
 #include "WM_toolsystem.hh"
@@ -164,202 +169,6 @@ std::string ios_toolbar_json =
 
 std::string ios_json_escape(const std::string &value);
 
-constexpr IOSToolbarItem IOS_TOOL_SELECT{"Select", "builtin.select", "cursorarrow"};
-constexpr IOSToolbarItem IOS_TOOL_SELECT_BOX{"Select Box", "builtin.select_box", "cursorarrow"};
-constexpr IOSToolbarItem IOS_TOOL_SELECT_CIRCLE{"Select Circle",
-                                                "builtin.select_circle",
-                                                "circle.dashed"};
-constexpr IOSToolbarItem IOS_TOOL_SELECT_LASSO{"Select Lasso",
-                                               "builtin.select_lasso",
-                                               "lasso"};
-constexpr IOSToolbarItem IOS_TOOL_CURSOR{"Cursor", "builtin.cursor", "smallcircle.circle"};
-constexpr IOSToolbarItem IOS_TOOL_MOVE{"Move",
-                                       "builtin.move",
-                                       "arrow.up.and.down.and.arrow.left.and.right"};
-constexpr IOSToolbarItem IOS_TOOL_ROTATE{"Rotate", "builtin.rotate", "rotate.3d"};
-constexpr IOSToolbarItem IOS_TOOL_SCALE{"Scale",
-                                        "builtin.scale",
-                                        "arrow.up.left.and.arrow.down.right"};
-constexpr IOSToolbarItem IOS_TOOL_SCALE_CAGE{"Scale Cage",
-                                             "builtin.scale_cage",
-                                             "arrow.up.left.and.arrow.down.right"};
-constexpr IOSToolbarItem IOS_TOOL_TRANSFORM{"Transform",
-                                            "builtin.transform",
-                                            "arrow.triangle.2.circlepath"};
-constexpr IOSToolbarItem IOS_TOOL_SHEAR{"Shear", "builtin.shear", "skew"};
-constexpr IOSToolbarItem IOS_TOOL_ANNOTATE{"Annotate", "builtin.annotate", "pencil"};
-constexpr IOSToolbarItem IOS_TOOL_ANNOTATE_LINE{"Annotate Line",
-                                                "builtin.annotate_line",
-                                                "pencil.line"};
-constexpr IOSToolbarItem IOS_TOOL_ANNOTATE_POLYGON{"Annotate Polygon",
-                                                   "builtin.annotate_polygon",
-                                                   "pencil.tip"};
-constexpr IOSToolbarItem IOS_TOOL_ANNOTATE_ERASER{"Annotate Eraser",
-                                                  "builtin.annotate_eraser",
-                                                  "eraser"};
-constexpr IOSToolbarItem IOS_TOOL_MEASURE{"Measure", "builtin.measure", "ruler"};
-
-void ios_toolbar_append_common(std::vector<IOSToolbarItem> &items)
-{
-  items.insert(items.end(),
-               {IOS_TOOL_SELECT,
-                IOS_TOOL_SELECT_BOX,
-                IOS_TOOL_SELECT_CIRCLE,
-                IOS_TOOL_SELECT_LASSO,
-                IOS_TOOL_CURSOR,
-                IOS_TOOL_MOVE,
-                IOS_TOOL_ROTATE,
-                IOS_TOOL_SCALE,
-                IOS_TOOL_SCALE_CAGE,
-                IOS_TOOL_TRANSFORM,
-                IOS_TOOL_ANNOTATE,
-                IOS_TOOL_ANNOTATE_LINE,
-                IOS_TOOL_ANNOTATE_POLYGON,
-                IOS_TOOL_ANNOTATE_ERASER,
-                IOS_TOOL_MEASURE});
-}
-
-void ios_toolbar_append_add_mesh(std::vector<IOSToolbarItem> &items)
-{
-  items.insert(items.end(),
-               {{"Add Cube", "builtin.primitive_cube_add", "cube"},
-                {"Add Cone", "builtin.primitive_cone_add", "triangle"},
-                {"Add Cylinder", "builtin.primitive_cylinder_add", "cylinder"},
-                {"Add UV Sphere", "builtin.primitive_uv_sphere_add", "circle"},
-                {"Add Ico Sphere", "builtin.primitive_ico_sphere_add", "circle.hexagongrid"}});
-}
-
-void ios_toolbar_append_edit_mesh(std::vector<IOSToolbarItem> &items)
-{
-  ios_toolbar_append_add_mesh(items);
-  items.insert(items.end(),
-               {{"Extrude", "builtin.extrude", "arrow.up.square"},
-                {"Extrude Manifold", "builtin.extrude_manifold", "arrow.up.square"},
-                {"Extrude Along Normals", "builtin.extrude_along_normals", "arrow.up.square"},
-                {"Extrude Individual", "builtin.extrude_individual", "arrow.up.square"},
-                {"Extrude To Cursor", "builtin.extrude_to_cursor", "cursorarrow.motionlines"},
-                {"Inset Faces", "builtin.inset_faces", "square.inset.filled"},
-                {"Bevel", "builtin.bevel", "square.on.circle"},
-                {"Loop Cut", "builtin.loop_cut", "line.3.horizontal"},
-                {"Offset Loop Cut", "builtin.offset_edge_loop_cut", "line.3.horizontal.decrease"},
-                {"Knife", "builtin.knife", "scissors"},
-                {"Bisect", "builtin.bisect", "rectangle.split.2x1"},
-                {"Poly Build", "builtin.poly_build", "point.topleft.down.curvedto.point.bottomright.up"},
-                {"Spin", "builtin.spin", "arrow.triangle.2.circlepath"},
-                {"Smooth", "builtin.smooth", "wand.and.stars"},
-                {"Randomize", "builtin.randomize", "shuffle"},
-                {"Edge Slide", "builtin.edge_slide", "arrow.left.and.right"},
-                {"Vertex Slide", "builtin.vertex_slide", "arrow.up.and.down"},
-                {"Shrink/Fatten", "builtin.shrink_fatten", "arrow.down.right.and.arrow.up.left"},
-                {"Push/Pull", "builtin.push_pull", "arrow.up.left.and.arrow.down.right"},
-                IOS_TOOL_SHEAR,
-                {"To Sphere", "builtin.to_sphere", "circle"},
-                {"Rip Region", "builtin.rip_region", "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left"},
-                {"Rip Edge", "builtin.rip_edge", "arrow.left.and.right"}});
-}
-
-void ios_toolbar_append_sculpt(std::vector<IOSToolbarItem> &items)
-{
-  items.insert(items.end(),
-               {{"Brush", "builtin.brush", "paintbrush"},
-                {"Paint", "builtin_brush.paint", "paintpalette"},
-                {"Mask", "builtin_brush.mask", "theatermasks"},
-                {"Draw Face Sets", "builtin_brush.draw_face_sets", "face.smiling"},
-                {"Dyntopo Density", "builtin_brush.simplify", "circle.grid.cross"},
-                {"Multires Eraser", "builtin_brush.displacement_eraser", "eraser"},
-                {"Multires Smear", "builtin_brush.displacement_smear", "hand.draw"},
-                {"Box Mask", "builtin.box_mask", "rectangle.dashed"},
-                {"Lasso Mask", "builtin.lasso_mask", "lasso"},
-                {"Line Mask", "builtin.line_mask", "line.diagonal"},
-                {"Polyline Mask", "builtin.polyline_mask", "scribble"},
-                {"Box Hide", "builtin.box_hide", "eye.slash"},
-                {"Lasso Hide", "builtin.lasso_hide", "eye.slash"},
-                {"Line Hide", "builtin.line_hide", "eye.slash"},
-                {"Polyline Hide", "builtin.polyline_hide", "eye.slash"},
-                {"Box Face Set", "builtin.box_face_set", "face.smiling"},
-                {"Lasso Face Set", "builtin.lasso_face_set", "face.smiling"},
-                {"Line Face Set", "builtin.line_face_set", "face.smiling"},
-                {"Polyline Face Set", "builtin.polyline_face_set", "face.smiling"},
-                {"Box Trim", "builtin.box_trim", "crop"},
-                {"Lasso Trim", "builtin.lasso_trim", "crop"},
-                {"Line Trim", "builtin.line_trim", "crop"},
-                {"Polyline Trim", "builtin.polyline_trim", "crop"},
-                {"Line Project", "builtin.line_project", "rays"},
-                {"Mesh Filter", "builtin.mesh_filter", "camera.filters"},
-                {"Cloth Filter", "builtin.cloth_filter", "camera.filters"},
-                {"Color Filter", "builtin.color_filter", "camera.filters"},
-                {"Face Set Edit", "builtin.face_set_edit", "face.smiling"},
-                {"Mask By Color", "builtin.mask_by_color", "eyedropper"},
-                IOS_TOOL_MOVE,
-                IOS_TOOL_ROTATE,
-                IOS_TOOL_SCALE,
-                IOS_TOOL_TRANSFORM,
-                IOS_TOOL_ANNOTATE,
-                IOS_TOOL_ANNOTATE_LINE,
-                IOS_TOOL_ANNOTATE_POLYGON,
-                IOS_TOOL_ANNOTATE_ERASER});
-}
-
-void ios_toolbar_append_paint_texture(std::vector<IOSToolbarItem> &items)
-{
-  items.insert(items.end(),
-               {{"Brush", "builtin.brush", "paintbrush"},
-                {"Blur", "builtin_brush.soften", "drop"},
-                {"Smear", "builtin_brush.smear", "hand.draw"},
-                {"Clone", "builtin_brush.clone", "doc.on.doc"},
-                {"Fill", "builtin_brush.fill", "paintbucket"},
-                {"Mask", "builtin_brush.mask", "theatermasks"},
-                IOS_TOOL_SELECT,
-                IOS_TOOL_SELECT_BOX,
-                IOS_TOOL_SELECT_CIRCLE,
-                IOS_TOOL_SELECT_LASSO,
-                IOS_TOOL_ANNOTATE,
-                IOS_TOOL_ANNOTATE_LINE,
-                IOS_TOOL_ANNOTATE_POLYGON,
-                IOS_TOOL_ANNOTATE_ERASER});
-}
-
-void ios_toolbar_append_paint_vertex(std::vector<IOSToolbarItem> &items)
-{
-  items.insert(items.end(),
-               {{"Brush", "builtin.brush", "paintbrush"},
-                {"Blur", "builtin_brush.blur", "drop"},
-                {"Average", "builtin_brush.average", "circle.lefthalf.filled"},
-                {"Smear", "builtin_brush.smear", "hand.draw"},
-                IOS_TOOL_SELECT,
-                IOS_TOOL_SELECT_BOX,
-                IOS_TOOL_SELECT_CIRCLE,
-                IOS_TOOL_SELECT_LASSO,
-                IOS_TOOL_ANNOTATE,
-                IOS_TOOL_ANNOTATE_LINE,
-                IOS_TOOL_ANNOTATE_POLYGON,
-                IOS_TOOL_ANNOTATE_ERASER});
-}
-
-void ios_toolbar_append_paint_weight(std::vector<IOSToolbarItem> &items)
-{
-  items.insert(items.end(),
-               {{"Brush", "builtin.brush", "paintbrush"},
-                {"Blur", "builtin_brush.blur", "drop"},
-                {"Average", "builtin_brush.average", "circle.lefthalf.filled"},
-                {"Smear", "builtin_brush.smear", "hand.draw"},
-                {"Gradient", "builtin.gradient", "slider.horizontal.3"},
-                {"Sample Weight", "builtin.sample_weight", "eyedropper"},
-                {"Sample Vertex Group", "builtin.sample_vertex_group", "eyedropper.halffull"},
-                IOS_TOOL_CURSOR,
-                IOS_TOOL_MOVE,
-                IOS_TOOL_ROTATE,
-                IOS_TOOL_SCALE,
-                IOS_TOOL_TRANSFORM,
-                IOS_TOOL_SELECT,
-                IOS_TOOL_SELECT_BOX,
-                IOS_TOOL_SELECT_CIRCLE,
-                IOS_TOOL_SELECT_LASSO,
-                IOS_TOOL_ANNOTATE,
-                IOS_TOOL_ANNOTATE_LINE,
-                IOS_TOOL_ANNOTATE_POLYGON,
-                IOS_TOOL_ANNOTATE_ERASER});
-}
 
 bool ios_tool_id_starts_with(const char *tool_id, const char *prefix)
 {
@@ -498,60 +307,6 @@ std::vector<IOSActionItem> ios_action_items_for_tool(bContext *C,
   return items;
 }
 
-std::vector<IOSToolbarItem> ios_toolbar_items_for_mode(const eContextObjectMode mode)
-{
-  std::vector<IOSToolbarItem> items;
-  switch (mode) {
-    case CTX_MODE_OBJECT:
-      ios_toolbar_append_common(items);
-      ios_toolbar_append_add_mesh(items);
-      break;
-    case CTX_MODE_EDIT_MESH:
-      ios_toolbar_append_common(items);
-      ios_toolbar_append_edit_mesh(items);
-      break;
-    case CTX_MODE_SCULPT:
-      ios_toolbar_append_sculpt(items);
-      break;
-    case CTX_MODE_PAINT_TEXTURE:
-      ios_toolbar_append_paint_texture(items);
-      break;
-    case CTX_MODE_PAINT_VERTEX:
-      ios_toolbar_append_paint_vertex(items);
-      break;
-    case CTX_MODE_PAINT_WEIGHT:
-      ios_toolbar_append_paint_weight(items);
-      break;
-    case CTX_MODE_EDIT_TEXT:
-      items.insert(items.end(), {{"Select Text", "builtin.select_text", "selection.pin.in.out"}});
-      ios_toolbar_append_common(items);
-      break;
-    case CTX_MODE_POSE:
-      ios_toolbar_append_common(items);
-      items.insert(items.end(),
-                   {{"Breakdowner", "builtin.breakdowner", "point.topleft.down.curvedto.point.bottomright.up"},
-                    {"Push", "builtin.push", "arrow.up.left.and.arrow.down.right"},
-                    {"Relax", "builtin.relax", "wand.and.stars"}});
-      break;
-    case CTX_MODE_EDIT_CURVE:
-    case CTX_MODE_EDIT_CURVES:
-      ios_toolbar_append_common(items);
-      items.insert(items.end(),
-                   {{"Draw", "builtin.draw", "pencil.and.outline"},
-                    {"Pen", "builtin.pen", "pencil.tip"},
-                    {"Extrude", "builtin.extrude", "arrow.up.square"},
-                    {"Extrude To Cursor", "builtin.extrude_cursor", "cursorarrow.motionlines"},
-                    {"Radius", "builtin.radius", "circle.dotted"},
-                    {"Tilt", "builtin.tilt", "rotate.3d"},
-                    IOS_TOOL_SHEAR,
-                    {"Randomize", "builtin.randomize", "shuffle"}});
-      break;
-    default:
-      ios_toolbar_append_common(items);
-      break;
-  }
-  return items;
-}
 
 ScrArea *ios_find_view3d_area(bScreen *screen)
 {
@@ -1354,12 +1109,46 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
                                            "";
   bToolRef *active_tool = has_view3d_context ? WM_toolsystem_ref_from_context(C) : nullptr;
   const char *active_tool_id = active_tool ? active_tool->idname : "builtin.select_box";
-  const std::vector<IOSToolbarItem> tools = ios_toolbar_items_for_mode(mode);
+  std::string tools_json = "[]";
+#ifdef WITH_PYTHON
+  if (has_view3d_context) {
+    const char *imports[] = {"bpy", "bl_ui", nullptr};
+    char *result = nullptr;
+    if (BPY_run_string_as_string(C,
+                                imports,
+                                "bl_ui.space_toolsystem_common.native_toolbar_json(bpy.context)",
+                                nullptr,
+                                &result))
+    {
+      tools_json = result;
+      MEM_freeN(result);
+    }
+  }
+#endif
   const std::vector<IOSActionItem> actions = has_view3d_context ?
                                                 ios_action_items_for_tool(C, mode, active_tool_id) :
                                                 std::vector<IOSActionItem>();
   const bool can_undo = has_view3d_context && ios_undo_available(C);
   const std::string settings_json = ios_transform_settings_json(scene, mode);
+  std::string navigation_json = "null";
+  if (has_view3d_context) {
+    const wmWindow *win = CTX_wm_window(C);
+    ARegion *region = CTX_wm_region(C);
+    const rcti *visible = ED_region_visible_rect(region);
+    const float width = WM_window_native_pixel_x(win);
+    const float height = WM_window_native_pixel_y(win);
+    const float radius = U.gizmo_size_navigate_v3d * 0.5f * U.scale_factor;
+    const float inset = radius + 10.0f * U.scale_factor;
+    if (width > 0 && height > 0) {
+      /* Match view3d_gizmo_navigate.cc, in normalized UIKit window coordinates.
+       * The native shell can follow the last frame during asynchronous resizing. */
+      navigation_json = "[" +
+                        std::to_string((region->winrct.xmin + visible->xmax - inset) / width) +
+                        "," +
+                        std::to_string(1.0f - (region->winrct.ymin + visible->ymin + inset) / height) +
+                        "," + std::to_string(radius / width) + "]";
+    }
+  }
   ios_context_pop(C, context_store);
 
   std::string json = "{\"mode\":\"";
@@ -1374,25 +1163,13 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += can_undo ? "true" : "false";
   json += ",\"settings\":";
   json += settings_json;
-  json += ",\"tools\":[";
+  json += ",\"navigationGizmo\":";
+  json += navigation_json;
+  json += ",\"tools\":";
+  json += tools_json;
+  json += ",\"actions\":[";
 
   bool needs_comma = false;
-  for (const IOSToolbarItem &tool : tools) {
-    if (needs_comma) {
-      json += ",";
-    }
-    needs_comma = true;
-    json += "{\"title\":\"";
-    json += ios_json_escape(tool.title);
-    json += "\",\"id\":\"";
-    json += ios_json_escape(tool.idname);
-    json += "\",\"symbol\":\"";
-    json += ios_json_escape(tool.symbol);
-    json += "\"}";
-  }
-  json += "],\"actions\":[";
-
-  needs_comma = false;
   for (const IOSActionItem &action : actions) {
     if (needs_comma) {
       json += ",";

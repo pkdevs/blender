@@ -188,6 +188,46 @@ class ToolActivePanelHelper:
         )
 
 
+def native_toolbar_json(context):
+    """Snapshot the same context-dependent groups and remembered tools as draw_cls."""
+    import json
+    from bpy.app.translations import pgettext_iface
+
+    helper = ToolSelectPanelHelper
+    space_type = context.space_data.type
+    cls = helper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return "[]"
+    active_id = getattr(helper._tool_active_from_context(context, space_type), "idname", None)
+
+    def tool_data(tool):
+        return {"id": tool.idname, "title": pgettext_iface(tool.label),
+                "icon": tool.icon, "symbol": ""}
+
+    tools = []
+    for item in cls.tools_from_context(context):
+        if item is None:
+            tools.append(None)
+        elif type(item) is tuple:
+            members = [tool for tool in item if tool is not None]
+            if not members:
+                continue
+            index = next((i for i, tool in enumerate(item)
+                          if tool is not None and tool.idname == active_id), None)
+            if index is not None:
+                cls._tool_group_active[item[0].idname] = index
+            else:
+                index = cls._tool_group_active_get_from_item(item)
+            representative = item[index] or members[0]
+            group = tool_data(representative)
+            group["group"] = members[0].idname
+            group["children"] = [tool_data(tool) if tool is not None else None for tool in item]
+            tools.append(group)
+        else:
+            tools.append(tool_data(item))
+    return json.dumps(tools, ensure_ascii=False, separators=(",", ":"))
+
+
 class ToolSelectPanelHelper:
     """
     Generic Class, can be used for any toolbar.
