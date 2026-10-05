@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "draw_gsplat_lib.bsl.hh"
 #include "draw_intersect.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
@@ -84,7 +85,7 @@ struct ShadingData {
   float hair_diameter;
   /** Index of the strand for per strand effects. */
   int hair_strand_id;
-  /** Pointcloud infos. */
+  /** Point-cloud infos. */
   packed_float3 point_position;
   float point_radius;
   int point_id;
@@ -576,7 +577,7 @@ void raycast_eval(KernelGlobals &kg,
       }
 
       float noise_offset = kg.sampling.rng_1D_get(SAMPLING_RAYTRACE_W);
-      float jitter = interleaved_gradient_noise(sd.frag_co.xy, 1.0f, noise_offset);
+      float jitter = random::interleaved_gradient(sd.frag_co.xy, 1.0f, noise_offset);
 
       float2 hit_uv = float2(0.0f);
       uint self_id = kg.resource_id_get(sd) & uint(0xFFFF);
@@ -979,32 +980,6 @@ float4 attr_load_color_post(KernelGlobals &kg, float4 attr)
   }
   return attr;
 }
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name GSplat Attributes
- *
- * GSplats override the radiance attribute, unpacking packed data from a float2. Additionally,
- * it applies its own alpha transparency on top of existing transmittance.
- *
- * \{ */
-
-#if defined(MAT_GEOM_GSPLAT) && !defined(MAT_VOLUME)
-#  define GSPLAT_ATTRIBUTES_LOAD_POST
-#endif
-
-float4 attr_load_radiance_post(KernelGlobals & /*kg*/, float4 attr)
-{
-#ifdef GSPLAT_ATTRIBUTES_LOAD_POST
-  /* Radiance is packed as 2xfp16, unpack it from this representation. */
-  uint2 data = floatBitsToUint(attr.xy);
-  return float4(unpackHalf2x16(data.x), unpackHalf2x16(data.y));
-#endif
-  return attr;
-}
-
-#undef GSPLAT_ATTRIBUTES_LOAD_POST
 
 /** \} */
 

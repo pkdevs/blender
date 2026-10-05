@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include "draw_gsplat_lib.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
-
 #include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
@@ -86,6 +84,7 @@ void surf_depth([[resource_table]] KernelGlobals &kg,
     }
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
+
     float threshold = hashed_transparency::alpha_threshold(
         uni.pipeline_buf.alpha_hash_scale, noise_offset, sd.P);
 
