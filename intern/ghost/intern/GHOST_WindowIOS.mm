@@ -57,6 +57,7 @@ extern "C" void WM_apple_ios_ui_tool_set_by_id(const char *tool_id);
 extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle);
 extern "C" void WM_apple_ios_ui_navigation_hover_set(bool active);
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json();
+extern "C" char *WM_apple_ios_ui_panels_take_json();
 extern "C" void WM_apple_ios_ui_toolbar_free_json(char *json);
 
 enum GHOSTIOSUICommand {
@@ -2148,6 +2149,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   BOOL _view_gizmo_pressed;
   NSMutableArray *_view_pie_buttons;
   NSTimer *_toolbar_refresh_timer;
+  NSTimer *_panels_refresh_timer;
   NSArray *_native_menubar_items;
   uint64_t _native_menubar_request;
   NSString *_toolbar_signature;
@@ -2225,6 +2227,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                                           userInfo:nil
                                                            repeats:YES];
   [self refreshToolbarFromBlender];
+  _panels_refresh_timer = [NSTimer timerWithTimeInterval:1.0 / 60.0 target:self
+      selector:@selector(refreshScenePanelsFromBlender) userInfo:nil repeats:YES];
+  [NSRunLoop.mainRunLoop addTimer:_panels_refresh_timer forMode:NSRunLoopCommonModes];
   _actions_edit_menu_interaction = [[UIEditMenuInteraction alloc] initWithDelegate:self];
   [_view addInteraction:_actions_edit_menu_interaction];
 
@@ -2297,6 +2302,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self cancelViewGizmoInteraction];
   [_toolbar_refresh_timer invalidate];
   _toolbar_refresh_timer = nil;
+  [_panels_refresh_timer invalidate];
+  _panels_refresh_timer = nil;
   _pencil_menu.delegate = nil;
   [_renderer detach];
   _view.delegate = nil;
@@ -2314,6 +2321,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _pencil_menu.delegate = nil;
   [_pencil_menu release];
   [_toolbar_refresh_timer invalidate];
+  [_panels_refresh_timer invalidate];
   [_toolbar_signature release];
   [_action_signature release];
   [_actions_menu_items release];
@@ -2984,6 +2992,19 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self updateToolbarVisibilityAnimated:animated];
 }
 
+- (void)refreshScenePanelsFromBlender
+{
+  /* The mailbox returns immediately when unchanged, including while Blender is busy. */
+  char *json = WM_apple_ios_ui_panels_take_json();
+  if (!json) {
+    return;
+  }
+  NSData *data = [NSData dataWithBytes:json length:strlen(json)];
+  WM_apple_ios_ui_toolbar_free_json(json);
+  NSDictionary *snapshot = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+  [_scene_panels updateSnapshot:snapshot];
+}
+
 - (NSDictionary *)toolbarModel
 {
   char *json = WM_apple_ios_ui_toolbar_copy_json();
@@ -3413,7 +3434,6 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self updateViewportLoadingIndicator];
   [self refreshNativeMenuBar];
   NSDictionary *model = [self toolbarModel];
-  [_scene_panels updateSnapshot:model[@"panels"]];
   NSArray *navigation_geometry = model[@"navigationGizmo"];
   if ([navigation_geometry isKindOfClass:NSArray.class] && navigation_geometry.count == 3 &&
       ![_view_gizmo_geometry isEqual:navigation_geometry]) {

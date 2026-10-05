@@ -168,6 +168,7 @@ struct IOSActionItem {
 };
 
 GHOST_IOSLatest<std::string> ios_toolbar_snapshot;
+GHOST_IOSLatest<std::string> ios_panels_snapshot;
 std::string ios_toolbar_json =
     "{\"mode\":\"objectmode\",\"active\":\"builtin.select_box\",\"tools\":[]}";
 
@@ -1061,9 +1062,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
       std::ostringstream merged_stream;
       JsonFormatter().serialize(merged_stream, merged);
       ios_panels_json = merged_stream.str();
-    }
-    if (ios_panels_visible) {
-      panels_json = ios_panels_json;
+      ios_panels_snapshot.publish(ios_panels_json);
     }
   }
 #endif
@@ -1253,6 +1252,19 @@ extern "C" char *WM_apple_ios_ui_toolbar_copy_json()
   }
   std::memcpy(json_copy, ios_toolbar_json.c_str(), ios_toolbar_json.size() + 1);
   return json_copy;
+}
+
+extern "C" char *WM_apple_ios_ui_panels_take_json()
+{
+  std::string json;
+  if (!ios_panels_snapshot.take(json)) {
+    return nullptr;
+  }
+  char *copy = static_cast<char *>(std::malloc(json.size() + 1));
+  if (copy) {
+    std::memcpy(copy, json.c_str(), json.size() + 1);
+  }
+  return copy;
 }
 
 extern "C" void WM_apple_ios_ui_toolbar_free_json(char *json)
