@@ -118,6 +118,15 @@ static NSArray *rectValues(CGRect rect)
   return @[ @(rect.origin.x), @(rect.origin.y), @(rect.size.width), @(rect.size.height) ];
 }
 
+static UIViewController *blenderPresentedController()
+{
+  UIViewController *presented = blenderController().view.window.rootViewController.presentedViewController;
+  while (presented.presentedViewController) {
+    presented = presented.presentedViewController;
+  }
+  return presented;
+}
+
 extern "C" char *blender_device_probe_view_gizmo(int action, int item)
 {
   __block char *result = nullptr;
@@ -357,9 +366,8 @@ extern "C" char *blender_device_probe_snapshot()
                          @"title": tool.accessibilityLabel ?: @""}];
     }
     snapshot[@"nativeTools"] = tools;
-    snapshot[@"presented"] = controller.presentedViewController ?
-                                 NSStringFromClass(controller.presentedViewController.class) :
-                                 @"";
+    UIViewController *presented = blenderPresentedController();
+    snapshot[@"presented"] = presented ? NSStringFromClass(presented.class) : @"";
     data = [NSJSONSerialization dataWithJSONObject:snapshot options:0 error:nil];
     result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
   });
@@ -479,7 +487,7 @@ extern "C" bool blender_device_probe_cancel_picker()
 {
   __block BOOL cancelled = NO;
   dispatch_sync(dispatch_get_main_queue(), ^{
-    UIViewController *presented = blenderController().presentedViewController;
+    UIViewController *presented = blenderPresentedController();
     if ([presented isKindOfClass:UIDocumentPickerViewController.class]) {
       UIDocumentPickerViewController *picker = (UIDocumentPickerViewController *)presented;
       [picker.delegate documentPickerWasCancelled:picker];
@@ -589,7 +597,7 @@ extern "C" char *blender_device_probe_dialog_snapshot()
 {
   __block char *result;
   dispatch_sync(dispatch_get_main_queue(), ^{
-    UIViewController *controller = blenderController().presentedViewController;
+    UIViewController *controller = blenderPresentedController();
     NSMutableDictionary *state = [NSMutableDictionary dictionary];
     state[@"class"] = controller ? NSStringFromClass(controller.class) : @"";
     if ([controller isKindOfClass:UIAlertController.class]) {
@@ -623,7 +631,7 @@ extern "C" bool blender_device_probe_dialog_choose(const char *title)
   NSString *name = [NSString stringWithUTF8String:title];
   __block BOOL found = NO;
   dispatch_sync(dispatch_get_main_queue(), ^{
-    UIViewController *controller = blenderController().presentedViewController;
+    UIViewController *controller = blenderPresentedController();
     if ([controller isKindOfClass:UIAlertController.class]) {
       for (UIAlertAction *action in ((UIAlertController *)controller).actions) {
         if ([action.title isEqual:name] && action.enabled) {
