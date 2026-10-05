@@ -245,6 +245,8 @@ if(WITH_APPLE_CROSSPLATFORM)
     external_sndfile
     external_materialx
     external_manifold
+    external_rubberband
+    external_ceres
   )
 endif()
 
