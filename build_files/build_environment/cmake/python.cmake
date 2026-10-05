@@ -304,8 +304,8 @@ if(WITH_APPLE_CROSSPLATFORM)
   # Copy sysconfigdata to darwin_arm64
   ExternalProject_Add_Step(external_python after_install
     COMMAND ${CMAKE_COMMAND} -E copy
-    ${BUILD_DIR}/python/src/external_python/build/lib.darwin-3.13/_sysconfigdata__darwin_arm64-${APPLE_SDK_CROSSPLATFORM_NAME_LOWER}.py
-    ${CMAKE_DEPS_CROSSCOMPILE_BUILDDIR}/deps_arm64/Release/python/lib/python3.13/_sysconfigdata__darwin_arm64-${APPLE_SDK_CROSSPLATFORM_NAME_LOWER}.py
+    ${LIBDIR}/python/lib/python${PYTHON_SHORT_VERSION}/_sysconfigdata__darwin_arm64-${APPLE_SDK_CROSSPLATFORM_NAME_LOWER}.py
+    ${CMAKE_DEPS_CROSSCOMPILE_BUILDDIR}/deps_arm64/Release/python/lib/python${PYTHON_SHORT_VERSION}/_sysconfigdata__darwin_arm64-${APPLE_SDK_CROSSPLATFORM_NAME_LOWER}.py
     DEPENDEES install
   )
 endif()
