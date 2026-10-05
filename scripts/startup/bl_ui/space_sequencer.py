@@ -2050,7 +2050,7 @@ class SEQUENCER_PT_edit_mode(Panel):
 
         col.prop(sequencer_tool_settings, "ripple_insert")
 
-        col = layout.column(heading="Remove")
+        col = layout.column(heading="Delete")
         col.use_property_split = True
 
         col.prop(sequencer_tool_settings, "ripple_clear_ranges")
