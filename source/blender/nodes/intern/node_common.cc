@@ -501,7 +501,7 @@ static void node_group_declare_panel_recursive(
           const bNode &node = *ptr->data_as<bNode>();
           const SpaceNode &snode = *CTX_wm_space_node(C);
           const std::optional<ed::space_node::ObjectAndModifier> object_and_modifier =
-              ed::space_node::get_modifier_for_node_editor(snode);
+              ed::space_node::get_geometry_nodes_modifier_for_node_editor(snode);
           if (!object_and_modifier) {
             layout.label(IFACE_("No modifier found"), ICON_ERROR);
             return;

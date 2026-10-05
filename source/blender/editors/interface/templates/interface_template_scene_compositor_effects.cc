@@ -267,7 +267,8 @@ static void draw_effect_inputs(const bContext &C, PointerRNA &effect_ptr, ui::La
                 const std::optional<StringRef> /*parent_name*/) {
               draw_property_for_socket(
                   C, layout, socket, *input_ptr, *effect.node_group, input_usages);
-            });
+            },
+            {});
         break;
       }
       case NodeTreeInterfaceItemType::Socket: {
@@ -282,6 +283,9 @@ static void draw_effect_inputs(const bContext &C, PointerRNA &effect_ptr, ui::La
                 C, layout, socket, input_ptr, *effect.node_group, input_usages);
           }
         }
+        break;
+      }
+      case NodeTreeInterfaceItemType::Bake: {
         break;
       }
     }
