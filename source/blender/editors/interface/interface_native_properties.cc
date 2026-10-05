@@ -417,7 +417,9 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
     const bool color = ELEM(RNA_property_subtype(prop), PROP_COLOR, PROP_COLOR_GAMMA);
     const char *axes = color ? "RGBA" : length == 4 ? "WXYZ" : "XYZW";
     title = std::string(1, axes[index]);
-    field.append_str("group", RNA_property_ui_name(prop));
+    field.append_str("group", ELEM(std::string(RNA_property_identifier(prop)),
+                                   "rotation_euler", "rotation_quaternion", "rotation_axis_angle") ?
+                                  "Rotation" : RNA_property_ui_name(prop));
   }
   field.append_str("label", title);
   field.append_str("key", property_key(but, index));
@@ -680,6 +682,8 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     /* Only replace locks which have a corresponding value in this actual panel layout. */
     std::map<std::string, std::pair<Button *, int>> field_locks;
     std::set<std::string> attached_locks;
+    std::map<std::string, Button *> field_modes;
+    std::set<std::string> attached_modes;
     for (const auto &value_button : block->buttons) {
       Button &value = *value_button;
       if (!value.rnaprop || !value.rnapoin.data || (value.flag & UI_HIDDEN) ||
@@ -692,6 +696,19 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       const int begin = length ? std::max(0, value.rnaindex) : -1;
       const int end = length && value.rnaindex < 0 ? std::min(length, 16) : begin + 1;
       for (int index = begin; index < end; index++) {
+        if (ELEM(identifier, "rotation_euler", "rotation_quaternion", "rotation_axis_angle")) {
+          for (const auto &mode_button : block->buttons) {
+            Button &mode = *mode_button;
+            if (mode.rnaprop && mode.rnapoin.data == value.rnapoin.data &&
+                mode.rnapoin.type == value.rnapoin.type && !(mode.flag & UI_HIDDEN) &&
+                RNA_property_type(mode.rnaprop) == PROP_ENUM &&
+                std::string(RNA_property_identifier(mode.rnaprop)) == "rotation_mode") {
+              field_modes[property_key(value, index)] = &mode;
+              attached_modes.insert(property_key(mode, -1));
+              break;
+            }
+          }
+        }
         std::string lock_name = "lock_" + identifier;
         int lock_index = index;
         if (identifier == "rotation_euler") {
@@ -794,11 +811,18 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           }
         }
         else {
-          if (attached_locks.count(key)) {
+          if (attached_locks.count(key) || attached_modes.count(key)) {
             continue;
           }
           auto field = append_field();
           project_property(C, but, index, *field);
+          if (const auto found = field_modes.find(key); found != field_modes.end()) {
+            auto mode = field->append_dict("group_menu");
+            project_property(C, *found->second, -1, *mode);
+            mode->append_str("panel", candidate.id);
+            mode->append_str("tab", tab_id);
+            mode->append_int("native", 1);
+          }
           if (const auto found = field_locks.find(key); found != field_locks.end()) {
             auto lock = field->append_dict("lock");
             project_property(C, *found->second.first, found->second.second, *lock);
