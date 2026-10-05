@@ -175,14 +175,17 @@ void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
     return;
   }
 
-  layout.separator();
-
+  ui::Layout &settings_row = layout.column(false);
   if (is_project_library) {
-    layout.label(IFACE_("Settings of project asset libraries can be edited in Project Setup."),
-                 ICON_NONE);
-    return;
+    settings_row.enabled_set(false);
+    ui::Layout &operator_row = settings_row.row(false);
+    operator_row.label(IFACE_("Edit Project asset libraries in Project Settings."), ICON_NONE);
+    operator_row.op("SCREEN_OT_project_setup_show", "Open Projects Settings", ICON_PREFERENCES, wm::OpCallContext::InvokeDefault, UI_ITEM_NONE);
   }
-  draw_active_library_settings(C, layout, libraries[U.active_asset_library]);
+  else {
+    settings_row.separator();
+  }
+  draw_active_library_settings(C, settings_row, libraries[U.active_asset_library]);
 }
 
 }  // namespace blender
