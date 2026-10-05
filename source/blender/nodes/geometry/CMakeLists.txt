@@ -48,6 +48,7 @@ set(SRC
   nodes/node_geo_combine_bundle.cc
   nodes/node_geo_combine_list.cc
   nodes/node_geo_common.cc
+  nodes/node_geo_construct_mesh.cc
   nodes/node_geo_convex_hull.cc
   nodes/node_geo_cube_grid_topology.cc
   nodes/node_geo_curve_endpoint_selection.cc
@@ -198,7 +199,6 @@ set(SRC
   nodes/node_geo_merge_by_distance.cc
   nodes/node_geo_merge_layers.cc
   nodes/node_geo_merge_points.cc
-  nodes/node_geo_mesh.cc
   nodes/node_geo_mesh_bevel.cc
   nodes/node_geo_mesh_face_group_boundaries.cc
   nodes/node_geo_mesh_primitive_circle.cc

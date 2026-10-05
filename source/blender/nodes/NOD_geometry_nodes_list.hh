@@ -111,6 +111,8 @@ template<typename T> class List {
   using base_type = T;
   using generic_type = GList;
 
+  using DataVariant = std::variant<GList::ArrayData, GList::SingleData>;
+
  private:
   /**
    * #List<T> just stores a #GList. This makes converting between the two types easy.
@@ -128,6 +130,10 @@ template<typename T> class List {
 
   /** This is implicitly cast to #GField which is always valid. */
   operator const GList &() const;
+
+  DataVariant &data();
+  const DataVariant &data() const;
+  int64_t size() const;
 
   /** Access the list as virtual array. */
   VArray<T> varray() const;
@@ -235,6 +241,26 @@ template<typename T> inline List<T> &GList::typed()
 }
 
 template<typename T> inline List<T>::List() : list_(CPPType::get<T>()) {}
+
+template<typename T> inline List<T>::operator const GList &() const
+{
+  return list_;
+}
+
+template<typename T> inline GList::DataVariant &List<T>::data()
+{
+  return list_.data();
+}
+
+template<typename T> inline const GList::DataVariant &List<T>::data() const
+{
+  return list_.data();
+}
+
+template<typename T> inline int64_t List<T>::size() const
+{
+  return list_.size();
+}
 
 template<typename T> inline VArray<T> List<T>::varray() const
 {

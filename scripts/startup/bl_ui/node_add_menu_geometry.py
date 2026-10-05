@@ -484,6 +484,8 @@ class NODE_MT_gn_mesh_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, path="Mesh/Primitives")
         self.draw_menu(layout, path="Mesh/Topology")
         self.draw_menu(layout, path="Mesh/UV")
+        layout.separator()
+        self.node_operator(layout, "GeometryNodeConstructMesh")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -574,7 +576,6 @@ class NODE_MT_gn_mesh_primitives_base(node_add_menu.NodeMenu):
 
     def draw(self, _context):
         layout = self.layout
-        self.node_operator(layout, "GeometryNodeMesh")
         self.node_operator(layout, "GeometryNodeMeshCone")
         self.node_operator(layout, "GeometryNodeMeshCube")
         self.node_operator(layout, "GeometryNodeMeshCylinder")
