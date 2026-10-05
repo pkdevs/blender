@@ -36,6 +36,15 @@ set(LIBHEIF_EXTRA_ARGS
   -DWITH_GDK_PIXBUF=OFF
 )
 
+if(WITH_APPLE_CROSSPLATFORM)
+  # The CLI image converters are unused and must not discover macOS libraries.
+  list(APPEND LIBHEIF_EXTRA_ARGS
+    -DCMAKE_DISABLE_FIND_PACKAGE_JPEG=ON
+    -DCMAKE_DISABLE_FIND_PACKAGE_PNG=ON
+    -DCMAKE_DISABLE_FIND_PACKAGE_TIFF=ON
+  )
+endif()
+
 ExternalProject_Add(external_libheif
   URL file://${PACKAGE_DIR}/${LIBHEIF_FILE}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
