@@ -36,10 +36,57 @@ static void node_declare(NodeDeclarationBuilder &b)
           "of the curve sizes");
 }
 
+static bool validate_inputs(GeoNodeExecParams &params,
+                            const List<float3> &positions_list,
+                            const List<int> &curve_offsets_list)
+{
+  const int points_num = positions_list.size();
+  const std::variant<Span<int>, const int *> offset_values = curve_offsets_list.values();
+  if (const Span<int> *curve_offsets = std::get_if<Span<int>>(&offset_values)) {
+    if (curve_offsets->first() != 0) {
+      params.error_message_add(NodeWarningType::Error, "First curve offset must be 0");
+      return false;
+    }
+    if (curve_offsets->last() != points_num) {
+      params.error_message_add(NodeWarningType::Error,
+                               "Curve sizes must sum to the number of points");
+      return false;
+    }
+    const bool sizes_greater_zero = threading::parallel_reduce(
+        curve_offsets->drop_back(1).index_range(),
+        4096,
+        true,
+        [&](const IndexRange range, const bool sizes_greater_zero) {
+          if (!sizes_greater_zero) {
+            return false;
+          }
+          for (const int i : range) {
+            const int curr = (*curve_offsets)[i];
+            const int next = (*curve_offsets)[i + 1];
+            if (next <= curr) {
+              return false;
+            }
+          }
+          return true;
+        },
+        std::logical_and<>());
+    if (!sizes_greater_zero) {
+      params.error_message_add(NodeWarningType::Error, "Curve sizes must be greater than zero");
+      return false;
+    }
+    return true;
+  }
+  params.error_message_add(NodeWarningType::Error, "Number of curve offsets must be at least 2");
+  return false;
+}
+
 static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
                                                 const List<float3> &positions_list,
                                                 const List<int> &curve_offsets_list)
 {
+  if (!validate_inputs(params, positions_list, curve_offsets_list)) {
+    return nullptr;
+  }
   const int points_num = positions_list.size();
   /* Curve offsets are shared with the list data. So don't create the offsets array here. */
   Curves *curves_id = bke::curves_new_nomain(bke::curves_new_no_attributes(points_num, 0));
@@ -80,43 +127,6 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
       &curves.curve_offsets,
       &curves.runtime->curve_offsets_sharing_info);
   curves.curve_num = curves_num;
-
-  const Span<int> curve_offsets = curves.offsets();
-  if (curve_offsets.first() != 0) {
-    params.error_message_add(NodeWarningType::Error, "First curve offset must be 0");
-    BKE_id_free_ex(nullptr, curves_id, LIB_ID_FREE_NO_MAIN, false);
-    return nullptr;
-  }
-  if (curve_offsets.last() != points_num) {
-    params.error_message_add(NodeWarningType::Error,
-                             "Curve sizes must sum to the number of points");
-    BKE_id_free_ex(nullptr, curves_id, LIB_ID_FREE_NO_MAIN, false);
-    return nullptr;
-  }
-
-  const bool sizes_greater_zero = threading::parallel_reduce(
-      curve_offsets.drop_back(1).index_range(),
-      4096,
-      true,
-      [&](const IndexRange range, const bool sizes_greater_zero) {
-        if (!sizes_greater_zero) {
-          return false;
-        }
-        for (const int i : range) {
-          const int curr = curve_offsets[i];
-          const int next = curve_offsets[i + 1];
-          if (next <= curr) {
-            return false;
-          }
-        }
-        return true;
-      },
-      std::logical_and<>());
-  if (!sizes_greater_zero) {
-    params.error_message_add(NodeWarningType::Error, "Curve sizes must be greater than zero");
-    BKE_id_free_ex(nullptr, curves_id, LIB_ID_FREE_NO_MAIN, false);
-    return nullptr;
-  }
 
   curves.fill_curve_types(CURVE_TYPE_POLY);
 
