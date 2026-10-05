@@ -1695,6 +1695,11 @@ void OUTLINER_OT_collection_drop(wmOperatorType *ot)
 
 #define OUTLINER_DRAG_SCOLL_OUTSIDE_PAD 7 /* In UI units */
 
+static bool outliner_is_scene_collection_tree_element(const TreeElement *te)
+{
+  return ELEM(TREESTORE(te)->type, TSE_SCENE_COLLECTION_BASE, TSE_VIEW_COLLECTION_BASE);
+}
+
 /* Gathers selected objects and collections together in tree order. */
 static TreeTraversalAction outliner_collect_selected_objects_and_collections(TreeElement *te,
                                                                              void *customdata)
@@ -1703,6 +1708,9 @@ static TreeTraversalAction outliner_collect_selected_objects_and_collections(Tre
   TreeStoreElem *tselem = TREESTORE(te);
 
   if (outliner_is_collection_tree_element(te)) {
+    if (outliner_is_scene_collection_tree_element(te)) {
+      return TRAVERSE_CONTINUE;
+    }
     BLI_addtail(&data->selected_array, BLI_genericNodeN(te));
     return TRAVERSE_SKIP_CHILDS;
   }
@@ -1811,23 +1819,6 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
       ID *id;
 
       if (outliner_is_collection_tree_element(te_selected)) {
-        /* Keep collection hierarchies intact when dragging. */
-        bool parent_selected = false;
-        for (TreeElement *te_parent = te_selected->parent; te_parent;
-             te_parent = te_parent->parent)
-        {
-          if (outliner_is_collection_tree_element(te_parent)) {
-            if (TREESTORE(te_parent)->flag & TSE_SELECTED) {
-              parent_selected = true;
-              break;
-            }
-          }
-        }
-
-        if (parent_selected) {
-          continue;
-        }
-
         id = &outliner_collection_from_tree_element(te_selected)->id;
       }
       else {
