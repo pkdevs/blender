@@ -1088,8 +1088,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       }] forControlEvents:UIControlEventTouchUpInside];
       button.configurationUpdateHandler = ^(UIButton *item) {
         UIButtonConfiguration *config = item.configuration;
-        config.baseForegroundColor = item.selected ? owner->_overlay.tintColor : UIColor.secondaryLabelColor;
-        config.background.backgroundColor = item.selected ? UIColor.tertiarySystemFillColor : UIColor.clearColor;
+        config.baseForegroundColor = item.selected ? UIColor.whiteColor : UIColor.secondaryLabelColor;
+        config.background.backgroundColor = item.selected ? UIColor.systemBlueColor : UIColor.clearColor;
         config.background.cornerRadius = 8;
         item.configuration = config;
       };
@@ -1908,6 +1908,19 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   content.image = _icon(node[@"icon"]) ?: [UIImage systemImageNamed:collection ? @"folder" : @"cube"];
   content.imageProperties.maximumSize = CGSizeMake(22, 22);
   cell.contentConfiguration = content;
+  cell.configurationUpdateHandler = ^(UICollectionViewCell *updated, UICellConfigurationState *state) {
+    UIListContentConfiguration *configuration = [content updatedConfigurationForState:state];
+    UIBackgroundConfiguration *background = [[UIBackgroundConfiguration listSidebarCellConfiguration]
+        updatedConfigurationForState:state];
+    if (state.selected) {
+      background.backgroundColor = UIColor.systemBlueColor;
+      configuration.textProperties.color = UIColor.whiteColor;
+      configuration.imageProperties.tintColor = UIColor.whiteColor;
+    }
+    updated.contentConfiguration = configuration;
+    updated.backgroundConfiguration = background;
+  };
+  [cell setNeedsUpdateConfiguration];
   cell.accessibilityIdentifier = [@"blender.hierarchy." stringByAppendingString:node[@"id"]];
   cell.accessibilityValue = [node[@"active"] boolValue] ? @"Active" : @"";
   __block GHOSTIOSScenePanels *owner = self;

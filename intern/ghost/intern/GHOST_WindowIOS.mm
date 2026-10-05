@@ -2470,7 +2470,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
   button.tag = command;
-  button.tintColor = UIColor.labelColor;
+  button.tintColor = UIColor.systemBlueColor;
   button.accessibilityLabel = title;
   button.translatesAutoresizingMaskIntoConstraints = NO;
 
@@ -2595,9 +2595,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     const BOOL is_emphasized = [self isToolbarListVisible] &&
                                (updated_button.selected ||
                                 updated_button == self->_toolbar_hover_button);
-    UIButtonConfiguration *configuration = is_emphasized ?
+    UIButtonConfiguration *configuration = updated_button.selected ?
+                                              [UIButtonConfiguration prominentGlassButtonConfiguration] : is_emphasized ?
                                               [UIButtonConfiguration glassButtonConfiguration] :
                                               [UIButtonConfiguration plainButtonConfiguration];
+    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
+    configuration.baseBackgroundColor = updated_button.selected ? UIColor.systemBlueColor : nil;
     configuration.title = shows_text ? title : nil;
     configuration.image = image;
     configuration.imagePlacement = NSDirectionalRectEdgeLeading;
@@ -3146,7 +3149,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   UNUSED_VARS(systemImage);
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-  button.tintColor = UIColor.labelColor;
+  button.tintColor = UIColor.systemBlueColor;
   button.accessibilityLabel = title;
   button.accessibilityIdentifier = opName;
   button.accessibilityValue = propertyName;
@@ -3708,7 +3711,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                               command:(NSInteger)command
 {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-  button.tintColor = UIColor.labelColor;
+  button.tintColor = UIColor.systemBlueColor;
   button.translatesAutoresizingMaskIntoConstraints = YES;
   button.accessibilityLabel = title;
   button.tag = command;
@@ -3719,8 +3722,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
   button.configurationUpdateHandler = ^(UIButton *updated_button) {
     UIButtonConfiguration *configuration = updated_button.selected ?
-                                              [UIButtonConfiguration glassButtonConfiguration] :
+                                              [UIButtonConfiguration prominentGlassButtonConfiguration] :
                                               [UIButtonConfiguration clearGlassButtonConfiguration];
+    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.systemBlueColor;
+    configuration.baseBackgroundColor = updated_button.selected ? UIColor.systemBlueColor : nil;
     configuration.title = title;
     configuration.image = image;
     configuration.imagePlacement = NSDirectionalRectEdgeLeading;
@@ -4472,7 +4477,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     _top_bar.translatesAutoresizingMaskIntoConstraints = NO;
     _top_bar_item = [[UINavigationItem alloc] initWithTitle:@""];
   }
-  _top_bar.tintColor = UIColor.labelColor;
+  _top_bar.tintColor = UIColor.systemBlueColor;
   _top_bar.accessibilityIdentifier = @"blender.top-toolbar";
   _top_bar_item.style = UINavigationItemStyleEditor;
 
