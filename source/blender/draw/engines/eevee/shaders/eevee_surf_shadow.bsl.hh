@@ -63,7 +63,7 @@ void surf_shadow([[resource_table]] KernelGlobals &kg,
   if (pipe.use_transparency) [[static_branch]] {
     const ViewMatrices view = views.get(shadow_iface.shadow_view_id);
 
-    ShadingData sd = init_globals(uni, interp, view, front_face, frag_co);
+    ShadingData sd = init_globals(pipe, uni, interp, view, front_face, frag_co);
     if (pipe.is_mesh) [[static_branch]] {
       init_globals_mesh(interp, sd);
     }
@@ -81,7 +81,7 @@ void surf_shadow([[resource_table]] KernelGlobals &kg,
     }
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
-    float random_threshold = pcg4d(float4(sd.P, noise_offset)).x;
+    float random_threshold = random::pcg_4d(float4(sd.P, noise_offset)).x;
 
     float transparency = average(sd.transmittance);
     if (transparency > random_threshold) {

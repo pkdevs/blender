@@ -1078,7 +1078,6 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
        * collide with other resources. */
       Resource res(info, Resource::BindType::SAMPLER, input.index, nullptr);
       res.sampler.type = input.img_type;
-      res.sampler.sampler = GPUSamplerState::default_sampler();
       res.sampler.name = image_name;
       print_resource(ss, interface, res, info);
 
@@ -1392,6 +1391,8 @@ bool VKShader::ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_st
       graphics_info.fragment_out.color_attachment_formats.append(to_vk_format(color_format));
     }
     graphics_info.fragment_out.state = pipeline_state.state_;
+    graphics_info.shaders.color_attachment_count = uint32_t(
+        graphics_info.fragment_out.color_attachment_formats.size());
 
     bool pipeline_created = false;
     VkPipeline vk_pipeline = device.pipelines.get_or_create_graphics_pipeline(
@@ -1464,6 +1465,8 @@ VkPipeline VKShader::ensure_and_get_graphics_pipeline(
   graphics_info.fragment_out.color_attachment_formats.extend(
       framebuffer.color_attachment_formats_get());
   graphics_info.fragment_out.state = graphics_info.shaders.state;
+  graphics_info.shaders.color_attachment_count = uint32_t(
+      graphics_info.fragment_out.color_attachment_formats.size());
 
   bool pipeline_created = false;
   VkPipeline vk_pipeline = device.pipelines.get_or_create_graphics_pipeline(

@@ -407,6 +407,8 @@ enum ButtonFlag : int64_t {
    * buttons currently.
    */
   BUT_FORCE_SEMI_MODAL_ACTIVE = int64_t(1) << 33,
+  /** On a full Tab auto-complete match, apply the value & keep editing (cursor at the end). */
+  BUT_TEXTEDIT_AUTOCOMPLETE_KEEP_ACTIVE = int64_t(1) << 34,
 };
 
 /** #Button.dragflag */
@@ -876,6 +878,10 @@ bool block_is_empty_ex(const Block *block, bool skip_title);
 bool block_is_empty(const Block *block);
 bool block_can_add_separator(const Block *block);
 /**
+ * Return the first default button (activated by "Return") or null.
+ */
+const Button *block_active_default_button_find(const Block *block);
+/**
  * Return true when the block has a default button.
  * Use this for popups to detect when pressing "Return" will run an action.
  */
@@ -1259,11 +1265,6 @@ const ColorManagedDisplay *button_cm_display_get(Button &but);
  * Set at hint that describes the expected value when empty.
  */
 void button_placeholder_set(Button *but, StringRef placeholder_text);
-
-/**
- * Unselect any text selection in the button's text field.
- */
-void button_clear_selection(Button *but);
 
 /**
  * Special button case, only draw it when used actively, for outliner etc.
@@ -3112,7 +3113,7 @@ ARegion *tooltip_create_from_search_item_generic(bContext *C,
                                                  ID *id);
 
 /* How long before a tool-tip shows. */
-#define UI_TOOLTIP_DELAY 1.0
+#define UI_TOOLTIP_DELAY 0.5
 #define UI_TOOLTIP_DELAY_QUICK 0.2
 
 /* Float precision helpers */
