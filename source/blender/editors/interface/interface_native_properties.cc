@@ -543,37 +543,50 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   if (!query || !CTX_data_scene(C)) {
     return "{}";
   }
-  PropertiesContext context(C);
-  PointerRNA space_ptr = RNA_pointer_create_discrete(nullptr, RNA_SpaceProperties, context.space);
-  PropertyRNA *tab_prop = RNA_struct_find_property(&space_ptr, "context");
-  const EnumPropertyItem *tabs;
-  int tab_count;
-  bool free_tabs;
-  RNA_property_enum_items(C, &space_ptr, tab_prop, &tabs, &tab_count, &free_tabs);
-  const std::string requested_tab = query->lookup_str("tab").value_or("OBJECT");
-  int selected = BCONTEXT_OBJECT;
-  if (!RNA_enum_value_from_identifier(tabs, requested_tab.c_str(), &selected)) {
-    selected = context.space->mainb;
+  const bool shading = query->lookup_str("tab").value_or("") == "SHADING";
+  std::unique_ptr<PropertiesContext> properties_context;
+  if (!shading) {
+    properties_context = std::make_unique<PropertiesContext>(C);
   }
-  context.space->mainbuser = context.space->mainb = selected;
-  ED_buttons_native_context_prepare(C, context.space);
+  else if (!CTX_wm_view3d(C)) {
+    return "{}";
+  }
+  ARegion *panel_region = shading ? CTX_wm_region(C) : properties_context->region;
+  ARegionType *panel_region_type = shading ?
+      BKE_regiontype_from_id(CTX_wm_area(C)->type, RGN_TYPE_HEADER) : panel_region->runtime->type;
+  std::string tab_id = shading ? "SHADING" : "OBJECT";
   auto tab_items = result.append_array("tabs");
-  std::string tab_id = "OBJECT";
-  for (int i = 0; i < tab_count; i++) {
-    const auto &tab = tabs[i];
-    if (!tab.identifier || !tab.identifier[0]) {
-      continue;
+  if (!shading) {
+    PropertiesContext &context = *properties_context;
+    PointerRNA space_ptr = RNA_pointer_create_discrete(nullptr, RNA_SpaceProperties, context.space);
+    PropertyRNA *tab_prop = RNA_struct_find_property(&space_ptr, "context");
+    const EnumPropertyItem *tabs;
+    int tab_count;
+    bool free_tabs;
+    RNA_property_enum_items(C, &space_ptr, tab_prop, &tabs, &tab_count, &free_tabs);
+    const std::string requested_tab = query->lookup_str("tab").value_or("OBJECT");
+    int selected = BCONTEXT_OBJECT;
+    if (!RNA_enum_value_from_identifier(tabs, requested_tab.c_str(), &selected)) {
+      selected = context.space->mainb;
     }
-    auto item = tab_items->append_dict();
-    item->append_str("id", tab.identifier);
-    item->append_str("title", tab.name);
-    item->append_str("icon", icon_name(tab.icon));
-    if (tab.value == context.space->mainb) {
-      tab_id = tab.identifier;
+    context.space->mainbuser = context.space->mainb = selected;
+    ED_buttons_native_context_prepare(C, context.space);
+    for (int i = 0; i < tab_count; i++) {
+      const auto &tab = tabs[i];
+      if (!tab.identifier || !tab.identifier[0]) {
+        continue;
+      }
+      auto item = tab_items->append_dict();
+      item->append_str("id", tab.identifier);
+      item->append_str("title", tab.name);
+      item->append_str("icon", icon_name(tab.icon));
+      if (tab.value == context.space->mainb) {
+        tab_id = tab.identifier;
+      }
     }
-  }
-  if (free_tabs) {
-    MEM_delete(tabs);
+    if (free_tabs) {
+      MEM_delete(tabs);
+    }
   }
   std::string panel_context = tab_id;
   std::transform(panel_context.begin(), panel_context.end(), panel_context.begin(), ::tolower);
@@ -581,7 +594,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     panel_context = "particle";
   }
   result.append_str("tab", tab_id);
-  result.append_str("name", "Properties");
+  result.append_str("name", shading ? "Viewport Shading" : "Properties");
   Object *object = CTX_data_active_object(C);
   result.append_str("id", tab_id + ":" + std::to_string(object ? object->id.session_uid : 0));
   auto sections = result.append_array("sections");
@@ -600,18 +613,23 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     Panel *instance;
     std::string id;
     std::string parent;
+    bool enabled = true;
   };
   std::vector<Candidate> candidates;
   std::set<Panel *> instances;
-  for (PanelType &pt : context.region->runtime->type->paneltypes) {
+  for (PanelType &pt : panel_region_type->paneltypes) {
+    if (shading && !STREQ(pt.idname, "VIEW3D_PT_shading") &&
+        !STREQ(pt.parent_id, "VIEW3D_PT_shading")) {
+      continue;
+    }
     if (!(pt.flag & PANEL_TYPE_INSTANCED)) {
-      candidates.push_back({&pt, nullptr, pt.idname, pt.parent_id});
+      candidates.push_back({&pt, nullptr, pt.idname, shading ? "" : pt.parent_id});
     }
   }
   for (size_t candidate_index = 0; candidate_index < candidates.size(); candidate_index++) {
     const Candidate candidate = candidates[candidate_index];
     PanelType &pt = *candidate.type;
-    if (!pt.draw || (!candidate.instance && panel_context != pt.context) ||
+    if (!pt.draw || (!shading && !candidate.instance && panel_context != pt.context) ||
         ((pt.flag & PANEL_TYPE_NO_HEADER) && !pt.label[0]) || !panel_poll(C, &pt)) {
       continue;
     }
@@ -622,7 +640,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       continue;
     }
     const bool open = is_outer ? (expanded ? std::any_of(expanded->elements().begin(), expanded->elements().end(),
-        [&](const auto &item) { return item->as_string_value() && item->as_string_value()->value() == candidate.id; }) : sections->elements().is_empty()) : open_panels.count(outer) != 0;
+        [&](const auto &item) { return item->as_string_value() && item->as_string_value()->value() == candidate.id; }) : shading || sections->elements().is_empty()) : open_panels.count(outer) != 0;
     if (open) {
       open_panels.insert(outer);
     }
@@ -658,7 +676,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     const bool instance_container = !candidate.instance &&
         ELEM(tab_id, "MODIFIER", "CONSTRAINT", "BONE_CONSTRAINT", "SHADERFX");
     if ((!execute && !open && !is_outer && !instance_container) ||
-        (execute && !target_panel && !instance_container)) {
+        (execute && !target_panel && !instance_container && !shading)) {
       continue;
     }
     Block *block = block_begin(C, nullptr, "native_properties", EmbossType::Emboss);
@@ -682,8 +700,31 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       body.operator_context_set(wm::OpCallContext::ExecDefault);
       panel->layout = &body;
       pt.draw(C, panel);
+      if (shading && candidate.id == "VIEW3D_PT_shading") {
+        PointerRNA ptr = RNA_pointer_create_discrete(
+            &CTX_wm_screen(C)->id, RNA_View3DShading, &CTX_wm_view3d(C)->shading);
+        body.prop(&ptr, "type", eUI_Item_Flag(0), "Shading", ICON_NONE);
+      }
     }
     block_end(C, block);
+    for (const auto &button : block->buttons) {
+      /* Icon templates keep their RNA target in callback data, not in the button itself. */
+      if (template_icon_view_property_get(*button, button->rnapoin, button->rnaprop)) {
+        button->rnaindex = -1;
+      }
+    }
+    if (shading) {
+      for (const auto &button : block->buttons) {
+        if (!candidate.enabled) { button->flag |= BUT_DISABLED; }
+        PanelType *nested = button_paneltype_get(button.get());
+        if (nested && std::none_of(candidates.begin(), candidates.end(), [&](const Candidate &item) {
+              return item.id == nested->idname;
+            })) {
+          candidates.push_back({nested, nullptr, nested->idname, "",
+                                !(button->flag & (BUT_DISABLED | BUT_INACTIVE))});
+        }
+      }
+    }
     /* Only replace locks which have a corresponding value in this actual panel layout. */
     std::map<std::string, std::pair<Button *, int>> field_locks;
     std::set<std::string> attached_locks;
@@ -766,6 +807,10 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         }
       }
       if (but.optype && !(but.flag & UI_HIDDEN)) {
+        if (shading && STREQ(but.optype->idname, "SCREEN_OT_userpref_show")) {
+          /* This opens an unrelated Blender window, not a viewport shading setting. */
+          continue;
+        }
         const std::string key = std::string(but.optype->idname) + ":" +
             (but.opptr ? RNA_pointer_as_string_keywords(C, but.opptr, false, false, true, INT_MAX) : "") + ":" +
             std::to_string(object ? object->id.session_uid : 0);
@@ -862,8 +907,8 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         self(self, &child, id);
       }
     };
-    if (!candidate.instance) {
-      for (Panel &instance : context.region->panels) {
+    if (!candidate.instance && !shading) {
+      for (Panel &instance : panel_region->panels) {
         add_instance(add_instance, &instance, "");
       }
     }

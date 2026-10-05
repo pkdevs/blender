@@ -152,6 +152,7 @@ int ios_panels_visible = 0;
 std::chrono::steady_clock::time_point ios_panels_next_snapshot;
 std::string ios_panels_json = "null";
 std::string ios_properties_state = "{\"tab\":\"OBJECT\"}";
+std::string ios_shading_state = "{\"tab\":\"SHADING\"}";
 std::string ios_properties_error;
 int64_t ios_panels_sequence = 0;
 std::atomic<bool> ios_navigation_hover_active{false};
@@ -748,6 +749,16 @@ void ios_mesh_select_mode_set(bContext *C, const std::string &value)
 
 void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
 {
+  if (command.setting == "native_shading_state") {
+    ios_shading_state = command.value;
+    ios_panels_next_snapshot = {};
+    return;
+  }
+  if (command.setting == "native_shading_visible") {
+    ios_panels_visible = (ios_panels_visible & ~4) | (command.value == "1" ? 4 : 0);
+    ios_panels_next_snapshot = {};
+    return;
+  }
   if (command.setting == "native_properties_state") {
     ios_properties_state = command.value;
     ios_panels_next_snapshot = {};
@@ -782,8 +793,8 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   }
   if (command.setting == "native_panels") {
     ios_panels_next_snapshot = {};
-    ios_panels_visible = command.value == "3" ? 3 : command.value == "2" ? 2 :
-                         command.value == "1" ? 1 : 0;
+    ios_panels_visible = (ios_panels_visible & 4) | (command.value == "3" ? 3 : command.value == "2" ? 2 :
+                         command.value == "1" ? 1 : 0);
     return;
   }
 #ifdef WITH_PYTHON
@@ -1058,6 +1069,11 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
         if (properties) {
           merged.append("inspector", std::move(properties));
         }
+      }
+      if (ios_panels_visible & 4) {
+        std::istringstream shading_stream(ui::native_properties_query(C, ios_shading_state, false));
+        auto shading = JsonFormatter().deserialize(shading_stream);
+        if (shading) { merged.append("shading", std::move(shading)); }
       }
       std::ostringstream merged_stream;
       JsonFormatter().serialize(merged_stream, merged);
@@ -1476,6 +1492,8 @@ static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
   const auto *setting = std::get_if<IOSSettingCommand>(&message);
   const bool panel_message = setting && (setting->setting == "native_panels" ||
+                                         setting->setting == "native_shading_state" ||
+                                         setting->setting == "native_shading_visible" ||
                                          setting->setting == "native_panel_edit" ||
                                          setting->setting == "native_properties_state" ||
                                          setting->setting == "native_properties_edit");
