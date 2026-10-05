@@ -3,3 +3,4 @@ Referenced by pull request #154926, Fix #154892: Cycles CUDA error when disablin
 Referenced by commit 3a1ffd512f55ee64fec969caccd99b81f85d04b5, Fix #154892: Cycles CUDA error when disabling light tree
 Referenced by issue #158255, Blender 5.1.1 - Cast Shadow issue with node-based lights using textures in Emission Color
 Referenced by pull request #164683, Fix: Cycles: Issues with emissive curves and shadow linking
+Referenced by commit 0391790e14263caa13a3309931abbdbb9a0b2fbf, Fix: Cycles: Issues with emissive curves and shadow linking
