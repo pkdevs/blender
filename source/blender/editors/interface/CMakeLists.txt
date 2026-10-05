@@ -140,7 +140,7 @@ set(LIB
 )
 
 if(WITH_APPLE_CROSSPLATFORM)
-  list(APPEND SRC interface_native_menu.cc)
+  list(APPEND SRC interface_native_menu.cc interface_native_properties.cc)
 endif()
 
 if(WITH_INTERNATIONAL)

@@ -855,6 +855,11 @@ static bool is_pointer_in_path(ButsContextPath *path, PointerRNA *ptr)
   return false;
 }
 
+void ED_buttons_native_context_prepare(const bContext *C, SpaceProperties *sbuts)
+{
+  buttons_context_compute(C, sbuts);
+}
+
 bool ED_buttons_should_sync_with_outliner(const bContext *C,
                                           const SpaceProperties *sbuts,
                                           ScrArea *area)
