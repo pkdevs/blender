@@ -346,7 +346,10 @@ if(WITH_CODEC_FFMPEG)
     mp3lame ogg opus swresample swscale
     theora theoradec theoraenc vorbis vorbisenc
     vorbisfile vpx x264)
-  if(EXISTS ${LIBDIR}/ffmpeg/lib/libaom.a)
+  if(EXISTS ${LIBDIR}/ffmpeg/lib/libx265.a OR EXISTS ${LIBDIR}/x265/lib/libx265.a)
+    list(APPEND FFMPEG_FIND_COMPONENTS x265)
+  endif()
+  if(EXISTS ${LIBDIR}/ffmpeg/lib/libaom.a OR EXISTS ${LIBDIR}/aom/lib/libaom.a)
     list(APPEND FFMPEG_FIND_COMPONENTS aom)
   endif()
   if(NOT WITH_APPLE_CROSSPLATFORM)
