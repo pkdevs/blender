@@ -3250,6 +3250,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                         identifier:nil
                            handler:^(__kindof UIAction *action) {
                              self->_mode_button.title = title;
+                             self->_mode_button.image = action.image;
+                             self->_mode_button.accessibilityValue = title;
                              WM_apple_ios_ui_command_enqueue((int)command);
                            }];
 }
@@ -3287,9 +3289,23 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 
   NSString *title = [self modeTitleForIdentifier:mode];
+  UIImage *image = nil;
+  for (UIAction *action in _mode_button.menu.children) {
+    if ([action.title isEqualToString:title]) {
+      image = action.image;
+      break;
+    }
+  }
+  if (image == nil) {
+    image = blenderIOSIcon([@"mode." stringByAppendingString:mode ?: @"objectmode"], nil);
+  }
   if (![_mode_button.title isEqualToString:title]) {
     _mode_button.title = title;
   }
+  if (_mode_button.image != image) {
+    _mode_button.image = image;
+  }
+  _mode_button.accessibilityValue = title;
 }
 
 - (UIAction *)viewportShadingActionWithTitle:(NSString *)title
@@ -3927,6 +3943,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
            ]];
   button.menu = mode_menu;
   button.menuRepresentation = mode_menu;
+  button.image = ((UIAction *)mode_menu.children.firstObject).image;
+  button.accessibilityValue = button.title;
   return button;
 }
 
