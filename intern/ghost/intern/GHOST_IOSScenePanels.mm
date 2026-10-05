@@ -143,7 +143,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   return result;
 }
 
-@interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate,
+@interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate, UICollectionViewDelegate,
                                    UISearchBarDelegate, UITextFieldDelegate,
                                    UIColorPickerViewControllerDelegate, UIPopoverPresentationControllerDelegate,
                                    UIContextMenuInteractionDelegate>
@@ -165,10 +165,14 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSMutableDictionary *_expandedPanels;
   UIScrollView *_tabsScroll;
   UIStackView *_tabsStack;
-  UITableView *_tree;
+  UICollectionView *_tree;
+  UICollectionViewDiffableDataSource<NSString *, NSString *> *_treeDataSource;
+  NSDictionary *_nodesByKey;
+  UILabel *_hierarchyStatus;
+  BOOL _multipleSelection;
   UISearchBar *_search;
   NSMutableSet *_collapsed;
-  NSArray *_nodes, *_rows, *_schema;
+  NSArray *_nodes, *_schema;
   NSDictionary *_snapshot;
   NSString *_objectID;
   NSMutableDictionary *_controls;
@@ -255,20 +259,53 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     _search.delegate = self;
     _search.accessibilityIdentifier = @"blender.hierarchy.search";
     [_hierarchy.contentView addSubview:_search];
-    _tree = [[[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain] autorelease];
+    __block GHOSTIOSScenePanels *owner = self;
+    UICollectionLayoutListConfiguration *list = [[[UICollectionLayoutListConfiguration alloc]
+        initWithAppearance:UICollectionLayoutListAppearanceSidebar] autorelease];
+    list.backgroundColor = UIColor.clearColor;
+    list.trailingSwipeActionsConfigurationProvider = ^UISwipeActionsConfiguration *(NSIndexPath *path) {
+      return [owner hierarchySwipeActionsAtIndexPath:path];
+    };
+    _tree = [[[UICollectionView alloc] initWithFrame:CGRectZero
+        collectionViewLayout:[UICollectionViewCompositionalLayout layoutWithListConfiguration:list]] autorelease];
     _tree.backgroundColor = UIColor.clearColor;
-    _tree.separatorStyle = UITableViewCellSeparatorStyleNone;
-    _tree.rowHeight = 44;
-    _tree.dataSource = self;
     _tree.delegate = self;
+    _tree.allowsMultipleSelection = YES;
     _tree.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
+    _tree.accessibilityIdentifier = @"blender.hierarchy.outline";
+    [_tree registerClass:UICollectionViewListCell.class forCellWithReuseIdentifier:@"node"];
+    _treeDataSource = [[UICollectionViewDiffableDataSource alloc] initWithCollectionView:_tree
+        cellProvider:^UICollectionViewCell *(UICollectionView *view, NSIndexPath *path, NSString *key) {
+      UICollectionViewListCell *cell = [view dequeueReusableCellWithReuseIdentifier:@"node" forIndexPath:path];
+      [owner configureHierarchyCell:cell key:key];
+      return cell;
+    }];
+    UICollectionViewDiffableDataSourceSectionSnapshotHandlers *handlers =
+        [[[UICollectionViewDiffableDataSourceSectionSnapshotHandlers alloc] init] autorelease];
+    handlers.willExpandItemHandler = ^(NSString *key) {
+      if (!owner->_search.text.length) { [owner->_collapsed removeObject:key]; }
+      GHOSTIOSScenePanels *panels = owner;
+      dispatch_async(dispatch_get_main_queue(), ^{ [panels synchronizeHierarchySelection]; });
+    };
+    handlers.willCollapseItemHandler = ^(NSString *key) {
+      if (!owner->_search.text.length) { [owner->_collapsed addObject:key]; }
+    };
+    _treeDataSource.sectionSnapshotHandlers = handlers;
     [_hierarchy.contentView addSubview:_tree];
+    _hierarchyStatus = [self label:@"" style:UIFontTextStyleFootnote];
+    _hierarchyStatus.textColor = UIColor.systemRedColor;
+    _hierarchyStatus.hidden = YES;
+    [_hierarchy.contentView addSubview:_hierarchyStatus];
   }
   return self;
 }
 
 - (void)dealloc
 {
+  _tree.delegate = nil;
+  _tree.dataSource = nil;
+  [_treeDataSource release];
+  [_nodesByKey release];
   [_inspector removeFromSuperview];
   [_hierarchy removeFromSuperview];
   [_icon release];
@@ -292,7 +329,6 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_selectedTab release];
   [_expandedPanels release];
   [_nodes release];
-  [_rows release];
   [_schema release];
   [_snapshot release];
   [_objectID release];
@@ -425,7 +461,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   _hierarchy.center = CGPointMake(rect.origin.x + 12 + width / 2, rect.origin.y + 12 + height / 2);
   _inspector.center = CGPointMake(CGRectGetMaxX(rect) - 12 - width / 2, rect.origin.y + 12 + height / 2);
   _search.frame = CGRectMake(4, 52, width - 8, 52);
-  _tree.frame = CGRectMake(0, 106, width, MAX(0, height - 106));
+  CGFloat statusHeight = _hierarchyStatus.hidden ? 0 : 60;
+  _tree.frame = CGRectMake(0, 106, width, MAX(0, height - 106 - statusHeight));
+  _hierarchyStatus.frame = CGRectMake(16, height - statusHeight, width - 32, statusHeight);
 }
 
 - (void)send:(NSDictionary *)request
@@ -1301,17 +1339,13 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     _nodes = [nodes copy];
     [self rebuildRows];
   }
+  else if ([nodes isKindOfClass:NSArray.class]) {
+    [self synchronizeHierarchySelection];
+  }
   NSString *error = snapshot[@"error"] ?: @"";
-  if (error.length) {
-    UILabel *message = [self label:error style:UIFontTextStyleFootnote];
-    message.textColor = UIColor.systemRedColor;
-    message.frame = CGRectMake(0, 0, _tree.bounds.size.width, 72);
-    message.textAlignment = NSTextAlignmentCenter;
-    _tree.tableFooterView = message;
-  }
-  else {
-    _tree.tableFooterView = nil;
-  }
+  _hierarchyStatus.text = error;
+  _hierarchyStatus.hidden = !error.length;
+  [self layoutInRect:_layoutRect];
   if (!_showInspector || !snapshot[@"inspector"]) {
     return;
   }
@@ -1427,6 +1461,12 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (void)rebuildRows
 {
   NSString *query = _search.text ?: @"";
+  NSDictionary *previous = [[_nodesByKey retain] autorelease];
+  NSMutableDictionary *nodes = [NSMutableDictionary dictionary];
+  for (NSDictionary *node in _nodes) { nodes[node[@"key"]] = node; }
+  [_nodesByKey release];
+  _nodesByKey = [nodes copy];
+  [_collapsed intersectSet:[NSSet setWithArray:nodes.allKeys]];
   NSMutableSet *matches = [NSMutableSet set];
   if (query.length) {
     for (NSDictionary *node in _nodes) {
@@ -1434,35 +1474,71 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         NSString *key = node[@"key"];
         while (key.length) {
           [matches addObject:key];
-          key = [key stringByDeletingLastPathComponent];
-          if ([key isEqual:@"/"]) {
-            break;
-          }
+          key = nodes[key][@"parent"];
         }
       }
     }
   }
-  NSMutableArray *rows = [NSMutableArray array];
-  NSMutableSet *hidden = [NSMutableSet set];
+  NSDiffableDataSourceSectionSnapshot<NSString *> *outline =
+      [[[NSDiffableDataSourceSectionSnapshot alloc] init] autorelease];
+  NSMutableSet *included = [NSMutableSet set];
+  NSMutableArray *expanded = [NSMutableArray array];
   for (NSDictionary *node in _nodes) {
-    if (query.length) {
-      if ([matches containsObject:node[@"key"]]) {
-        [rows addObject:node];
-      }
-    }
-    else if ([hidden containsObject:node[@"parent"]]) {
-      [hidden addObject:node[@"key"]];
-    }
-    else {
-      [rows addObject:node];
-      if ([_collapsed containsObject:node[@"key"]]) {
-        [hidden addObject:node[@"key"]];
-      }
+    NSString *key = node[@"key"];
+    if (query.length && ![matches containsObject:key]) { continue; }
+    NSString *parent = [included containsObject:node[@"parent"]] ? node[@"parent"] : nil;
+    [outline appendItems:@[key] intoParentItem:parent];
+    [included addObject:key];
+    if (query.length || ![_collapsed containsObject:key]) {
+      [expanded addObject:key];
     }
   }
-  [_rows release];
-  _rows = [rows copy];
-  [_tree reloadData];
+  [outline expandItems:expanded];
+  NSDiffableDataSourceSectionSnapshot *current = [_treeDataSource snapshotForSection:@"scene"];
+  BOOL topologyChanged = ![current.items isEqual:outline.items] ||
+                         ![current.expandedItems isEqual:outline.expandedItems];
+  for (NSString *key in outline.items) {
+    if (topologyChanged) { break; }
+    NSString *oldParent = [current parentOfChildItem:key] ?: @"";
+    NSString *newParent = [outline parentOfChildItem:key] ?: @"";
+    topologyChanged = ![oldParent isEqual:newParent];
+  }
+  if (topologyChanged || !_treeDataSource.snapshot.numberOfSections) {
+    [_treeDataSource applySnapshot:outline toSection:@"scene"
+        animatingDifferences:previous != nil && !UIAccessibilityIsReduceMotionEnabled()
+        completion:^{ [self synchronizeHierarchySelection]; }];
+  }
+  /* Value changes must not rebuild the outline or interrupt disclosure animations. */
+  for (NSIndexPath *path in _tree.indexPathsForVisibleItems) {
+    NSString *key = [_treeDataSource itemIdentifierForIndexPath:path];
+    if (nodes[key] && (topologyChanged || ![previous[key] isEqual:nodes[key]])) {
+      [self configureHierarchyCell:(UICollectionViewListCell *)[_tree cellForItemAtIndexPath:path] key:key];
+    }
+  }
+  [self synchronizeHierarchySelection];
+}
+
+- (NSArray *)hierarchyRows
+{
+  NSMutableArray *rows = [NSMutableArray array];
+  for (NSString *key in [_treeDataSource snapshotForSection:@"scene"].visibleItems) {
+    if (_nodesByKey[key]) { [rows addObject:_nodesByKey[key]]; }
+  }
+  return rows;
+}
+
+- (void)synchronizeHierarchySelection
+{
+  for (NSIndexPath *path in _tree.indexPathsForSelectedItems) {
+    NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:path]];
+    if (![node[@"selected"] boolValue]) { [_tree deselectItemAtIndexPath:path animated:NO]; }
+  }
+  for (NSDictionary *node in [self hierarchyRows]) {
+    if ([node[@"selected"] boolValue]) {
+      NSIndexPath *path = [_treeDataSource indexPathForItemIdentifier:node[@"key"]];
+      if (path) { [_tree selectItemAtIndexPath:path animated:NO scrollPosition:UICollectionViewScrollPositionNone]; }
+    }
+  }
 }
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText
@@ -1479,12 +1555,12 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     }
     return [(NSArray *)_formSections[section] count];
   }
-  return _rows.count;
+  return 0;
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
 {
-  return tableView == _form ? _formSections.count : 1;
+  return tableView == _form ? _formSections.count : 0;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
@@ -1576,29 +1652,34 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     ]];
     return cell;
   }
-  UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"node"];
-  if (!cell) {
-    cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"node"] autorelease];
-  }
-  NSDictionary *node = _rows[indexPath.row];
+  return nil;
+}
+
+- (void)configureHierarchyCell:(UICollectionViewListCell *)cell key:(NSString *)key
+{
+  NSDictionary *node = _nodesByKey[key];
   BOOL collection = [node[@"kind"] isEqual:@"collection"];
-  UIListContentConfiguration *content = [UIListContentConfiguration cellConfiguration];
+  UIListContentConfiguration *content = [cell defaultContentConfiguration];
   content.text = node[@"name"];
-  content.textProperties.numberOfLines = 1;
-  content.textProperties.font = [UIFont systemFontOfSize:15 weight:[node[@"active"] boolValue] ? UIFontWeightSemibold : UIFontWeightRegular];
-  content.textProperties.color = [node[@"enabled"] boolValue] ? UIColor.labelColor : UIColor.secondaryLabelColor;
+  content.textProperties.numberOfLines = 2;
+  if ([node[@"active"] boolValue]) {
+    content.textProperties.font = [UIFont fontWithDescriptor:
+        [content.textProperties.font.fontDescriptor fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitBold]
+        size:0];
+  }
+  if (![node[@"enabled"] boolValue]) { content.textProperties.color = UIColor.secondaryLabelColor; }
   content.image = _icon(node[@"icon"]) ?: [UIImage systemImageNamed:collection ? @"folder" : @"cube"];
   content.imageProperties.maximumSize = CGSizeMake(22, 22);
-  content.imageProperties.tintColor = [node[@"active"] boolValue] ? _overlay.tintColor : UIColor.secondaryLabelColor;
-  const CGFloat indent = MIN(6, [node[@"depth"] integerValue]) * 12;
-  content.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(0, 40 + indent, 0, 12);
   cell.contentConfiguration = content;
-  cell.indentationLevel = 0;
-  cell.backgroundColor = [node[@"selected"] boolValue] ? [_overlay.tintColor colorWithAlphaComponent:0.14] : UIColor.clearColor;
   cell.accessibilityIdentifier = [@"blender.hierarchy." stringByAppendingString:node[@"id"]];
   cell.accessibilityValue = [node[@"active"] boolValue] ? @"Active" : @"";
   __block GHOSTIOSScenePanels *owner = self;
-  cell.accessoryView = nil;
+  NSMutableArray *accessories = [NSMutableArray array];
+  if ([[_treeDataSource snapshotForSection:@"scene"] snapshotOfParentItem:key includingParentItem:NO].items.count) {
+    UICellAccessoryOutlineDisclosure *disclosure = [[[UICellAccessoryOutlineDisclosure alloc] init] autorelease];
+    disclosure.style = UICellAccessoryOutlineDisclosureStyleCell;
+    [accessories addObject:disclosure];
+  }
   if (!collection && [node[@"hidden"] boolValue]) {
     UIButton *accessory = [UIButton buttonWithType:UIButtonTypeSystem];
     accessory.tintColor = UIColor.secondaryLabelColor;
@@ -1608,40 +1689,18 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     [accessory addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
       [owner send:@{@"action": @"visibility", @"id": node[@"id"], @"value": @NO}];
     }] forControlEvents:UIControlEventTouchUpInside];
-    cell.accessoryView = accessory;
+    [accessories addObject:[[[UICellAccessoryCustomView alloc] initWithCustomView:accessory
+        placement:UICellAccessoryPlacementTrailing] autorelease]];
   }
-  [[cell.contentView viewWithTag:9002] removeFromSuperview];
-  if (collection || [node[@"children"] boolValue]) {
-    UIButton *disclosure = [UIButton buttonWithType:UIButtonTypeSystem];
-    UIImageSymbolConfiguration *size = [UIImageSymbolConfiguration configurationWithPointSize:9 weight:UIImageSymbolWeightSemibold];
-    [disclosure setImage:[UIImage systemImageNamed:[_collapsed containsObject:node[@"key"]] ? @"arrowtriangle.right.fill" : @"arrowtriangle.down.fill"
-                               withConfiguration:size]
-               forState:UIControlStateNormal];
-    disclosure.tag = 9002;
-    disclosure.tintColor = UIColor.secondaryLabelColor;
-    disclosure.accessibilityLabel = @"Expand or collapse children";
-    [disclosure addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
-      [owner toggleNode:node];
-    }] forControlEvents:UIControlEventTouchUpInside];
-    disclosure.translatesAutoresizingMaskIntoConstraints = NO;
-    [cell.contentView addSubview:disclosure];
-    [NSLayoutConstraint activateConstraints:@[
-      [disclosure.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:indent],
-      [disclosure.centerYAnchor constraintEqualToAnchor:cell.contentView.centerYAnchor],
-      [disclosure.widthAnchor constraintEqualToConstant:40],
-      [disclosure.heightAnchor constraintEqualToConstant:44],
-    ]];
-  }
-  return cell;
+  cell.accessories = accessories;
 }
 
-- (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView
-    trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath
+- (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)indexPath
 {
-  if (tableView == _form || ![_rows[indexPath.row][@"kind"] isEqual:@"object"]) {
+  NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
+  if (![node[@"kind"] isEqual:@"object"]) {
     return nil;
   }
-  NSDictionary *node = _rows[indexPath.row];
   const BOOL hidden = [node[@"hidden"] boolValue];
   __block GHOSTIOSScenePanels *owner = self;
   UIContextualAction *action = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal
@@ -1655,30 +1714,51 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   return actions;
 }
 
-- (void)toggleNode:(NSDictionary *)node
+- (BOOL)collectionView:(UICollectionView *)collectionView shouldSelectItemAtIndexPath:(NSIndexPath *)indexPath
 {
-  NSString *key = node[@"key"];
-  if ([_collapsed containsObject:key]) {
-    [_collapsed removeObject:key];
-  }
-  else {
-    [_collapsed addObject:key];
-  }
-  [self rebuildRows];
+  NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
+  return [node[@"kind"] isEqual:@"object"] && [node[@"enabled"] boolValue];
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath
 {
-  if (tableView == _form) {
-    return;
+  if (![self collectionView:collectionView shouldSelectItemAtIndexPath:indexPath]) { return; }
+  NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
+  if (!_multipleSelection) {
+    for (NSIndexPath *other in collectionView.indexPathsForSelectedItems) {
+      if (![other isEqual:indexPath]) { [collectionView deselectItemAtIndexPath:other animated:YES]; }
+    }
   }
-  NSDictionary *node = _rows[indexPath.row];
-  [tableView deselectRowAtIndexPath:indexPath animated:YES];
-  if ([node[@"kind"] isEqual:@"collection"]) {
-    [self toggleNode:node];
+  [self send:@{@"action": @"select", @"id": node[@"id"], @"extend": @(_multipleSelection), @"value": @YES}];
+}
+
+- (BOOL)collectionView:(UICollectionView *)collectionView shouldDeselectItemAtIndexPath:(NSIndexPath *)indexPath
+{
+  /* An ordinary tap on an already-selected object still makes it the active object. */
+  if (!_multipleSelection) { [self collectionView:collectionView didSelectItemAtIndexPath:indexPath]; }
+  return _multipleSelection;
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didDeselectItemAtIndexPath:(NSIndexPath *)indexPath
+{
+  NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
+  if (_multipleSelection && [node[@"kind"] isEqual:@"object"]) {
+    [self send:@{@"action": @"select", @"id": node[@"id"], @"extend": @YES, @"value": @NO}];
   }
-  else if ([node[@"enabled"] boolValue]) {
-    [self send:@{@"action": @"select", @"id": node[@"id"]}];
-  }
+}
+
+- (BOOL)collectionView:(UICollectionView *)collectionView shouldBeginMultipleSelectionInteractionAtIndexPath:(NSIndexPath *)indexPath
+{
+  return [self collectionView:collectionView shouldSelectItemAtIndexPath:indexPath];
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didBeginMultipleSelectionInteractionAtIndexPath:(NSIndexPath *)indexPath
+{
+  _multipleSelection = YES;
+}
+
+- (void)collectionViewDidEndMultipleSelectionInteraction:(UICollectionView *)collectionView
+{
+  _multipleSelection = NO;
 }
 @end

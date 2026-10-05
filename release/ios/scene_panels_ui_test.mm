@@ -54,16 +54,28 @@ int main()
         @{@"key": @"/c1/o8", @"parent": @"/c1", @"id": @"8", @"kind": @"object", @"depth": @1, @"name": @"Camera", @"icon": @"CAMERA", @"enabled": @YES},
       ]};
     [panels updateSnapshot:model];
-    UITableView *tree = [panels valueForKey:@"_tree"];
-    NSCAssert([tree.dataSource tableView:tree numberOfRowsInSection:0] == 3, @"Hierarchy rows");
-    [tree.delegate tableView:tree didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
-    NSCAssert([tree.dataSource tableView:tree numberOfRowsInSection:0] == 1, @"Collapse collection");
+    UICollectionView *tree = [panels valueForKey:@"_tree"];
+    UICollectionViewDiffableDataSource *dataSource = [panels valueForKey:@"_treeDataSource"];
+    NSCAssert([tree isKindOfClass:UICollectionView.class] && [tree numberOfItemsInSection:0] == 3, @"Native outline rows");
+    [tree layoutIfNeeded];
+    UICollectionViewListCell *root = (UICollectionViewListCell *)[tree cellForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];
+    NSCAssert([root isKindOfClass:UICollectionViewListCell.class] &&
+              [root.accessories.firstObject isKindOfClass:UICellAccessoryOutlineDisclosure.class], @"System disclosure accessory");
+    NSCAssert([tree.indexPathsForSelectedItems containsObject:[NSIndexPath indexPathForItem:1 inSection:0]], @"Blender selection uses native selected state");
+    NSDiffableDataSourceSectionSnapshot *outline = [dataSource snapshotForSection:@"scene"];
+    dataSource.sectionSnapshotHandlers.willCollapseItemHandler(@"/c1");
+    [outline collapseItems:@[@"/c1"]];
+    [dataSource applySnapshot:outline toSection:@"scene" animatingDifferences:NO];
+    NSCAssert([tree numberOfItemsInSection:0] == 1, @"Collapse collection");
     UISearchBar *search = [panels valueForKey:@"_search"];
     search.text = @"camera";
     [search.delegate searchBar:search textDidChange:search.text];
-    NSCAssert([tree.dataSource tableView:tree numberOfRowsInSection:0] == 2, @"Search reveals ancestors");
-    [tree.delegate tableView:tree didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:1 inSection:0]];
+    NSCAssert([tree numberOfItemsInSection:0] == 2, @"Search reveals ancestors");
+    [tree.delegate collectionView:tree didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:1 inSection:0]];
     NSCAssert([request[@"action"] isEqual:@"select"] && [request[@"id"] isEqual:@"8"], @"Selection queued");
+    search.text = @"";
+    [search.delegate searchBar:search textDidChange:search.text];
+    NSCAssert([tree numberOfItemsInSection:0] == 1, @"Search preserves collapsed branches");
     NSDictionary *controls = [panels valueForKey:@"_controls"];
     UITextField *field = controls[@"object.location.0"];
     NSNumberFormatter *formatter = [[[NSNumberFormatter alloc] init] autorelease];
