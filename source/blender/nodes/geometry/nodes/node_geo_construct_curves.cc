@@ -110,7 +110,7 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
       },
       std::logical_and<>());
   if (!sizes_greater_zero) {
-    params.error_message_add(NodeWarningType::Error, "Curve sizes must be at least 1");
+    params.error_message_add(NodeWarningType::Error, "Curve sizes must be greater than zero");
     BKE_id_free_ex(nullptr, curves_id, LIB_ID_FREE_NO_MAIN, false);
     return nullptr;
   }
