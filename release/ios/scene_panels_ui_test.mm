@@ -329,6 +329,49 @@ int main()
     [oldMode performWithSender:nil target:nil];
     NSCAssert(request == beforeModeRepeat, @"A stale heading menu cannot change another object's mode");
     [mode release];
+    NSDictionary *fastA = @{@"key": @"fast.a", @"label": @"Amount", @"type": @"FLOAT", @"value": @1, @"editable": @YES};
+    NSDictionary *fastB = @{@"key": @"fast.b", @"label": @"Count", @"type": @"INT", @"value": @2, @"editable": @YES};
+    NSMutableDictionary *fastInspector = [@{@"id": @"fast-object", @"name": @"Properties", @"tab": @"FAST",
+      @"tabs": @[@{@"id": @"FAST", @"title": @"Fast", @"icon": @"OBJECT_DATA"}],
+      @"sections": @[@{@"id": @"a", @"title": @"First", @"open": @YES, @"properties": @[fastA]},
+                     @{@"id": @"b", @"title": @"Second", @"open": @NO, @"properties": @[]}]} mutableCopy];
+    lockModel[@"inspector"] = [[fastInspector copy] autorelease];
+    [panels updateSnapshot:lockModel];
+    UITextField *fastField = [panels valueForKey:@"_controls"][@"fast.a"];
+    UIButton *secondHeader = (UIButton *)[form.delegate tableView:form viewForHeaderInSection:1];
+    [secondHeader sendActionsForControlEvents:UIControlEventTouchUpInside];
+    fastInspector[@"sections"] = @[@{@"id": @"a", @"title": @"First", @"open": @YES, @"properties": @[fastA]},
+                                    @{@"id": @"b", @"title": @"Second", @"open": @YES, @"properties": @[fastB]}];
+    lockModel[@"inspector"] = [[fastInspector copy] autorelease];
+    [panels updateSnapshot:lockModel];
+    NSCAssert([panels valueForKey:@"_controls"][@"fast.a"] == fastField && [form numberOfRowsInSection:1] == 1,
+              @"Opening another section preserves existing controls");
+    UIButton *firstHeader = (UIButton *)[form.delegate tableView:form viewForHeaderInSection:0];
+    [firstHeader sendActionsForControlEvents:UIControlEventTouchUpInside];
+    NSCAssert([form numberOfRowsInSection:0] == 0, @"Collapse happens locally without an engine round trip");
+    fastInspector[@"sections"] = @[@{@"id": @"a", @"title": @"First", @"open": @NO, @"properties": @[]},
+                                    @{@"id": @"b", @"title": @"Second", @"open": @YES, @"properties": @[fastB]}];
+    lockModel[@"inspector"] = [[fastInspector copy] autorelease];
+    [panels updateSnapshot:lockModel];
+    [firstHeader sendActionsForControlEvents:UIControlEventTouchUpInside];
+    NSCAssert([form numberOfRowsInSection:0] == 1 && [panels valueForKey:@"_controls"][@"fast.a"] == fastField,
+              @"Cached sections reopen immediately with the same controls");
+    NSMutableDictionary *disabledA = [[fastA mutableCopy] autorelease];
+    disabledA[@"editable"] = @NO;
+    disabledA[@"value"] = @4;
+    fastInspector[@"sections"] = @[@{@"id": @"a", @"title": @"First", @"open": @YES, @"properties": @[disabledA]},
+                                    @{@"id": @"b", @"title": @"Second", @"open": @YES, @"properties": @[fastB]}];
+    lockModel[@"inspector"] = [[fastInspector copy] autorelease];
+    [panels updateSnapshot:lockModel];
+    NSCAssert([panels valueForKey:@"_controls"][@"fast.a"] == fastField && !fastField.enabled,
+              @"Value and availability changes update controls in place");
+    [UIView setAnimationsEnabled:YES];
+    for (int i = 0; i < 10; i++) {
+      [firstHeader sendActionsForControlEvents:UIControlEventTouchUpInside];
+    }
+    NSCAssert([form numberOfRowsInSection:0] == 1, @"Rapid animated toggles leave consistent table state");
+    [UIView setAnimationsEnabled:NO];
+    [fastInspector release];
     [lockProperty release];
     [panels layoutInRect:CGRectMake(0, 60, 390, 600)];
     NSCAssert(!(panels.inspectorButton.selected && panels.hierarchyButton.selected), @"Phone panels do not overlap");

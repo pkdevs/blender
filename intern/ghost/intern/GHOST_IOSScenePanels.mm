@@ -175,6 +175,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSMutableDictionary *_sliders;
   NSMutableDictionary *_lockIndicators;
   NSMutableDictionary *_groupHeadings;
+  NSMutableDictionary *_sectionViewCache;
+  NSMutableDictionary *_disclosureButtons;
   uint64_t _sequence;
   BOOL _showInspector, _showHierarchy;
   CGRect _layoutRect;
@@ -193,6 +195,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     _sliders = [[NSMutableDictionary alloc] init];
     _lockIndicators = [[NSMutableDictionary alloc] init];
     _groupHeadings = [[NSMutableDictionary alloc] init];
+    _sectionViewCache = [[NSMutableDictionary alloc] init];
+    _disclosureButtons = [[NSMutableDictionary alloc] init];
     _expandedPanels = [[NSMutableDictionary alloc] init];
     _inspectorButton = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"sidebar.right"]
         style:UIBarButtonItemStylePlain target:self action:@selector(toggleInspector:)];
@@ -277,6 +281,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_sliders release];
   [_lockIndicators release];
   [_groupHeadings release];
+  [_sectionViewCache release];
+  [_disclosureButtons release];
   [_formSections release];
   [_headerControls release];
   [_menuProvider release];
@@ -335,19 +341,24 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)animatePanel:(UIView *)panel visible:(BOOL)visible
 {
+  CGAffineTransform hiddenTransform = UIAccessibilityIsReduceMotionEnabled() ? CGAffineTransformIdentity :
+      CGAffineTransformConcat(CGAffineTransformMakeTranslation(panel == _hierarchy ? -14 : 14, 0),
+                              CGAffineTransformMakeScale(0.98, 0.98));
+  panel.userInteractionEnabled = visible;
   if (visible) {
     [_overlay bringSubviewToFront:panel];
     if (panel.hidden) {
       panel.alpha = 0;
-      panel.transform = CGAffineTransformMakeTranslation(panel == _hierarchy ? -12 : 12, 0);
+      panel.transform = hiddenTransform;
     }
     panel.hidden = NO;
   }
-  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.22
-      delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.28
+      delay:0 usingSpringWithDamping:0.9 initialSpringVelocity:0
+      options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
       animations:^{
         panel.alpha = visible ? 1 : 0;
-        panel.transform = CGAffineTransformIdentity;
+        panel.transform = visible ? CGAffineTransformIdentity : hiddenTransform;
       } completion:^(BOOL finished) {
         if (finished && panel.alpha == 0) {
           panel.hidden = YES;
@@ -409,8 +420,10 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   }
   const CGFloat width = MIN(336, MAX(0, rect.size.width - 24));
   const CGFloat height = MIN(620, MAX(0, rect.size.height - 24));
-  _hierarchy.frame = CGRectMake(rect.origin.x + 12, rect.origin.y + 12, width, height);
-  _inspector.frame = CGRectMake(CGRectGetMaxX(rect) - width - 12, rect.origin.y + 12, width, height);
+  /* Frame is undefined while transformed; layout must not disturb the presentation animation. */
+  _hierarchy.bounds = _inspector.bounds = CGRectMake(0, 0, width, height);
+  _hierarchy.center = CGPointMake(rect.origin.x + 12 + width / 2, rect.origin.y + 12 + height / 2);
+  _inspector.center = CGPointMake(CGRectGetMaxX(rect) - 12 - width / 2, rect.origin.y + 12 + height / 2);
   _search.frame = CGRectMake(4, 52, width - 8, 52);
   _tree.frame = CGRectMake(0, 106, width, MAX(0, height - 106));
 }
@@ -451,9 +464,51 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   return label;
 }
 
-- (void)rebuildInspector:(NSDictionary *)inspector
+- (NSDictionary *)shapeForProperty:(NSDictionary *)property
 {
-  [self closeColorPicker];
+  NSMutableDictionary *shape = [[property mutableCopy] autorelease];
+  for (NSString *key in @[@"value", @"exposure", @"editable"]) {
+    [shape removeObjectForKey:key];
+  }
+  if (shape[@"animation"]) {
+    shape[@"animation"] = @YES;
+  }
+  for (NSString *key in @[@"lock", @"group_menu"]) {
+    if (shape[key]) {
+      shape[key] = [self shapeForProperty:shape[key]];
+    }
+  }
+  if (shape[@"options"]) {
+    NSMutableArray *options = [NSMutableArray array];
+    for (NSDictionary *option in shape[@"options"]) {
+      NSMutableDictionary *item = [[option mutableCopy] autorelease];
+      [item removeObjectForKey:@"checked"];
+      [options addObject:item];
+    }
+    shape[@"options"] = options;
+  }
+  return shape;
+}
+
+- (NSArray *)shapeForSection:(NSDictionary *)section
+{
+  NSMutableArray *shape = [NSMutableArray arrayWithObjects:section[@"id"] ?: section[@"title"], section[@"title"], nil];
+  for (NSDictionary *property in section[@"properties"]) {
+    [shape addObject:[self shapeForProperty:property]];
+  }
+  return shape;
+}
+
+- (void)rebuildInspector:(NSDictionary *)inspector preservingSections:(BOOL)preserve
+{
+  if (!preserve) {
+    [self closeColorPicker];
+    [_sectionViewCache removeAllObjects];
+    [_disclosureButtons removeAllObjects];
+  }
+  NSArray *oldIdentifiers = [[_sectionIdentifiers copy] autorelease];
+  NSMutableIndexSet *changed = [NSMutableIndexSet indexSet];
+  NSMutableDictionary *nextCache = [NSMutableDictionary dictionary];
   [_headerControls release];
   _headerControls = [[NSMutableArray alloc] init];
   [_formSections removeAllObjects];
@@ -463,12 +518,14 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_sliders removeAllObjects];
   [_lockIndicators removeAllObjects];
   [_groupHeadings removeAllObjects];
-  _status = [self label:@"" style:UIFontTextStyleFootnote];
-  _status.textColor = UIColor.systemRedColor;
-  _status.hidden = YES;
-  _status.frame = CGRectMake(0, 0, _form.bounds.size.width, 44);
-  _status.textAlignment = NSTextAlignmentCenter;
-  _form.tableFooterView = _status;
+  if (!_status) {
+    _status = [self label:@"" style:UIFontTextStyleFootnote];
+    _status.textColor = UIColor.systemRedColor;
+    _status.hidden = YES;
+    _status.frame = CGRectMake(0, 0, _form.bounds.size.width, 44);
+    _status.textAlignment = NSTextAlignmentCenter;
+    _form.tableFooterView = _status;
+  }
   if (!inspector) {
     _form.backgroundView = [self label:@"No active object" style:UIFontTextStyleBody];
     ((UILabel *)_form.backgroundView).textAlignment = NSTextAlignmentCenter;
@@ -482,7 +539,28 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSString *objectID = inspector[@"id"];
   for (NSDictionary *section in inspector[@"sections"]) {
     [titles addObject:section[@"title"]];
-    [identifiers addObject:section[@"id"] ?: section[@"title"]];
+    NSString *sectionID = section[@"id"] ?: section[@"title"];
+    [identifiers addObject:sectionID];
+    NSArray *shape = [self shapeForSection:section];
+    NSDictionary *cached = _sectionViewCache[sectionID];
+    NSArray *maps = @[_controls, _sliders, _lockIndicators, _groupHeadings];
+    NSArray *mapKeys = @[@"controls", @"sliders", @"locks", @"headings"];
+    if ([cached[@"shape"] isEqual:shape]) {
+      [_formSections addObject:cached[@"rows"]];
+      [_headerControls addObject:cached[@"header"]];
+      for (NSUInteger i = 0; i < maps.count; i++) {
+        [maps[i] addEntriesFromDictionary:cached[mapKeys[i]]];
+      }
+      nextCache[sectionID] = cached;
+      continue;
+    }
+    [changed addIndex:identifiers.count - 1];
+    for (UIView *row in cached[@"rows"]) { [row endEditing:YES]; }
+    [_disclosureButtons removeObjectForKey:sectionID];
+    if (_colorButton && [cached[@"controls"] allValues] &&
+        [[cached[@"controls"] allValues] containsObject:_colorButton]) {
+      [self closeColorPicker];
+    }
     NSMutableArray *sectionRows = [NSMutableArray array];
     [_formSections addObject:sectionRows];
     UIStackView *headerControls = [[[UIStackView alloc] init] autorelease];
@@ -696,12 +774,35 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         [sectionRows addObject:content];
       }
     }
+    NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary:
+        @{@"shape": shape, @"rows": sectionRows, @"header": headerControls}];
+    for (NSUInteger i = 0; i < maps.count; i++) {
+      NSMutableDictionary *entries = [NSMutableDictionary dictionary];
+      for (NSDictionary *property in section[@"properties"]) {
+        NSString *key = [self keyForProperty:property];
+        if (maps[i][key]) {
+          entries[key] = maps[i][key];
+        }
+      }
+      record[mapKeys[i]] = entries;
+    }
+    nextCache[sectionID] = record;
   }
+  [_sectionViewCache setDictionary:nextCache];
   [_sectionTitles release];
   _sectionTitles = [titles copy];
   [_sectionIdentifiers release];
   _sectionIdentifiers = [identifiers copy];
-  [_form reloadData];
+  for (NSString *identifier in [[_disclosureButtons.allKeys copy] autorelease]) {
+    if (![_sectionIdentifiers containsObject:identifier]) { [_disclosureButtons removeObjectForKey:identifier]; }
+  }
+  if (preserve && [oldIdentifiers isEqual:_sectionIdentifiers]) {
+    [_form reloadSections:changed withRowAnimation:UIAccessibilityIsReduceMotionEnabled() ?
+        UITableViewRowAnimationNone : UITableViewRowAnimationFade];
+  }
+  else {
+    [_form reloadData];
+  }
 }
 
 - (void)openColorPicker:(GHOSTIOSColorButton *)button
@@ -1144,11 +1245,51 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   });
 }
 
+- (NSDictionary *)snapshotKeepingCollapsedContents:(NSDictionary *)snapshot
+{
+  NSDictionary *inspector = snapshot[@"inspector"];
+  NSDictionary *previous = _snapshot[@"inspector"];
+  if (!inspector || ![inspector[@"id"] isEqual:previous[@"id"]]) {
+    return snapshot;
+  }
+  NSMutableArray *sections = [NSMutableArray array];
+  for (NSDictionary *section in inspector[@"sections"]) {
+    NSDictionary *old = nil;
+    if (section[@"open"] && ![section[@"open"] boolValue]) {
+      for (NSDictionary *candidate in previous[@"sections"]) {
+        if ([candidate[@"id"] isEqual:section[@"id"]]) { old = candidate; break; }
+      }
+    }
+    if (old) {
+      NSMutableArray *properties = [NSMutableArray array];
+      for (NSDictionary *property in old[@"properties"]) {
+        if (![property[@"header"] boolValue] || property[@"section"]) {
+          [properties addObject:property];
+        }
+      }
+      [properties insertObjects:section[@"properties"] atIndexes:
+          [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, [section[@"properties"] count])]];
+      NSMutableDictionary *merged = [[section mutableCopy] autorelease];
+      merged[@"properties"] = properties;
+      [sections addObject:merged];
+    }
+    else {
+      [sections addObject:section];
+    }
+  }
+  NSMutableDictionary *mergedInspector = [[inspector mutableCopy] autorelease];
+  mergedInspector[@"sections"] = sections;
+  NSMutableDictionary *merged = [[snapshot mutableCopy] autorelease];
+  merged[@"inspector"] = mergedInspector;
+  return merged;
+}
+
 - (void)updateSnapshot:(NSDictionary *)snapshot
 {
   if (![snapshot isKindOfClass:NSDictionary.class] || [snapshot[@"ack"] unsignedLongLongValue] < _sequence) {
     return;
   }
+  snapshot = [self snapshotKeepingCollapsedContents:snapshot];
   if ([_snapshot isEqual:snapshot]) {
     return;
   }
@@ -1181,44 +1322,17 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   }
   NSMutableArray *schema = [NSMutableArray array];
   for (NSDictionary *section in inspector[@"sections"]) {
-    [schema addObject:section[@"title"]];
-    [schema addObject:section[@"open"] ?: @YES];
-    for (NSDictionary *property in section[@"properties"]) {
-      NSMutableDictionary *shape = [[property mutableCopy] autorelease];
-      [shape removeObjectForKey:@"value"];
-      [shape removeObjectForKey:@"exposure"];
-      if (shape[@"group_menu"]) {
-        NSMutableDictionary *menuShape = [[shape[@"group_menu"] mutableCopy] autorelease];
-        [menuShape removeObjectForKey:@"value"];
-        NSMutableArray *options = [NSMutableArray array];
-        for (NSDictionary *option in menuShape[@"options"]) {
-          NSMutableDictionary *optionShape = [[option mutableCopy] autorelease];
-          [optionShape removeObjectForKey:@"checked"];
-          [options addObject:optionShape];
-        }
-        menuShape[@"options"] = options;
-        shape[@"group_menu"] = menuShape;
-      }
-      if (shape[@"animation"]) {
-        /* Keyframe/frame changes update menu contents without replacing the active controls. */
-        shape[@"animation"] = @YES;
-      }
-      if (shape[@"lock"]) {
-        NSMutableDictionary *lockShape = [[shape[@"lock"] mutableCopy] autorelease];
-        [lockShape removeObjectForKey:@"value"];
-        shape[@"lock"] = lockShape;
-      }
-      [schema addObject:shape];
-    }
+    [schema addObject:[self shapeForSection:section]];
   }
   if (![_objectID isEqual:inspector[@"id"]] || ![_schema isEqual:schema]) {
+    BOOL preserve = [_objectID isEqual:inspector[@"id"]];
     /* Commit to the original ID before replacing the controls on a selection change. */
-    [_inspector endEditing:YES];
+    if (!preserve) { [_inspector endEditing:YES]; }
     [_objectID release];
     _objectID = [inspector[@"id"] copy];
     [_schema release];
     _schema = [schema copy];
-    [self rebuildInspector:inspector];
+    [self rebuildInspector:inspector preservingSections:preserve];
   }
   _inspectorTitle.text = inspector[@"name"] ?: @"Properties";
   _status.text = snapshot[@"error"] ?: @"";
@@ -1229,6 +1343,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       UIControl *control = _controls[[self keyForProperty:property]];
       GHOSTIOSPropertySlider *slider = _sliders[[self keyForProperty:property]];
       id value = property[@"value"];
+      control.enabled = [property[@"editable"] boolValue];
+      slider.enabled = control.enabled;
       UILabel *heading = _groupHeadings[[self keyForProperty:property]];
       if (heading) {
         for (NSDictionary *option in property[@"group_menu"][@"options"]) {
@@ -1277,8 +1393,16 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       else if ([control isKindOfClass:UISwitch.class]) {
         ((UISwitch *)control).on = [value boolValue];
       }
-      else if ([property[@"type"] isEqual:@"ENUM"] && ![control.accessibilityValue isEqual:value]) {
+      else if ([property[@"type"] isEqual:@"ENUM"]) {
         UIButton *button = (UIButton *)control;
+        NSArray *options = property[@"options"];
+        BOOL unchanged = [control.accessibilityValue isEqual:value] && button.menu.children.count == options.count;
+        for (NSUInteger i = 0; unchanged && i < options.count; i++) {
+          NSDictionary *option = options[i];
+          BOOL checked = option[@"checked"] ? [option[@"checked"] boolValue] : [value isEqual:option[@"value"]];
+          unchanged = (((UIAction *)button.menu.children[i]).state == UIMenuElementStateOn) == checked;
+        }
+        if (unchanged) { continue; }
         control.accessibilityValue = value;
         NSMutableArray *actions = [NSMutableArray array];
         NSString *objectID = inspector[@"id"];
@@ -1378,7 +1502,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   UIButton *header = [UIButton buttonWithType:UIButtonTypeSystem];
   UIButtonConfiguration *configuration = [UIButtonConfiguration plainButtonConfiguration];
   configuration.title = _sectionTitles[section];
-  configuration.image = [UIImage systemImageNamed:expanded ? @"chevron.down" : @"chevron.right"];
+  configuration.image = [UIImage systemImageNamed:@"chevron.right"];
   configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:11 weight:UIImageSymbolWeightSemibold];
   configuration.imagePadding = 8;
   configuration.baseForegroundColor = UIColor.labelColor;
@@ -1386,17 +1510,35 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   header.configuration = configuration;
   header.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
   header.accessibilityValue = expanded ? @"Expanded" : @"Collapsed";
+  header.imageView.transform = CGAffineTransformMakeRotation(expanded ? M_PI_2 : 0);
+  _disclosureButtons[identifier] = header;
   __block GHOSTIOSScenePanels *owner = self;
   [header addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
     [owner->_inspector endEditing:YES];
-    NSMutableSet *open = owner->_expandedPanels[owner->_selectedTab];
-    if ([open containsObject:identifier]) {
-      [open removeObject:identifier];
+    NSMutableSet *open = owner->_expandedPanels[owner->_selectedTab ?: @"OBJECT"];
+    NSInteger currentSection = [owner->_sectionIdentifiers indexOfObject:identifier];
+    if (currentSection == NSNotFound || !open) { return; }
+    BOOL closing = [open containsObject:identifier];
+    NSInteger count = [owner->_formSections[currentSection] count];
+    NSMutableArray *paths = [NSMutableArray array];
+    for (NSInteger row = 0; row < count; row++) {
+      [paths addObject:[NSIndexPath indexPathForRow:row inSection:currentSection]];
     }
-    else {
-      [open addObject:identifier];
-    }
-    [owner->_form reloadData];
+    UIButton *disclosure = owner->_disclosureButtons[identifier];
+    disclosure.accessibilityValue = closing ? @"Collapsed" : @"Expanded";
+    [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
+        delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+        animations:^{ disclosure.imageView.transform = CGAffineTransformMakeRotation(closing ? 0 : M_PI_2); }
+        completion:nil];
+    [owner->_form performBatchUpdates:^{
+      if (closing) { [open removeObject:identifier]; }
+      else { [open addObject:identifier]; }
+      if (paths.count) {
+        UITableViewRowAnimation animation = UIAccessibilityIsReduceMotionEnabled() ? UITableViewRowAnimationNone : UITableViewRowAnimationFade;
+        if (closing) { [owner->_form deleteRowsAtIndexPaths:paths withRowAnimation:animation]; }
+        else { [owner->_form insertRowsAtIndexPaths:paths withRowAnimation:animation]; }
+      }
+    } completion:nil];
     [owner requestProperties];
   }] forControlEvents:UIControlEventTouchUpInside];
   UIStackView *switches = _headerControls[section];
