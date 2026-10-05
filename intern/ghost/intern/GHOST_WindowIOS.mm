@@ -4196,7 +4196,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                                       command:[spec[@"command"] integerValue]]];
     }
     UIBarButtonItem *view = [[[UIBarButtonItem alloc]
-        initWithImage:blenderIOSCommandIcon(GHOST_IOS_UI_COMMAND_FRAME_SELECTED, @"viewfinder")
+        initWithImage:[UIImage systemImageNamed:@"eye"]
                  menu:[UIMenu menuWithTitle:@"View" children:actions]] autorelease];
     view.title = @"View";
     view.accessibilityLabel = @"View";
