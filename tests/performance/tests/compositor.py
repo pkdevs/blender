@@ -49,6 +49,11 @@ class CompositorTest(api.Test):
     def use_device(self):
         return True
 
+    def supported_device_types(self):
+        return [
+            "CPU", "METAL", "VULKAN", "OPENGL",
+        ]
+
     def run(self, env, device_id, gpu_backend):
         tokens = device_id.split('_')
         device_type = tokens[0]
