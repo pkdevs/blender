@@ -14,7 +14,7 @@ int decodeFromFile(const char *filename, ktxTexture2 **newTex)
   }
 
   /* Because KHR_texture_basisu requires ETC1S or UASTC encoding,
-   * A transcode is always necessary for glTF usage. */
+   * a transcode is always necessary for glTF usage. */
 
   if (ktxTexture2_NeedsTranscoding(*newTex)) {
     result = ktxTexture2_TranscodeBasis(*newTex, KTX_TTF_RGBA32, 0);
@@ -48,7 +48,7 @@ int getImageInfo(ktxTexture2 *texture, unsigned int *width, unsigned int *height
 
   *width = texture->baseWidth;
   *height = texture->baseHeight;
-  *dataSize = ktxTexture_GetDataSize(ktxTexture(texture));
+  *dataSize = ktxTexture_GetImageSize(ktxTexture(texture), 0);
 
   return KTX_SUCCESS;
 }
@@ -69,12 +69,17 @@ int getImageDataFloat(ktxTexture2 *texture, float *destination, size_t destinati
     return KTX_UNSUPPORTED_FEATURE;
   }
 
-  const ktx_size_t dataSize = ktxTexture_GetDataSize(ktxTexture(texture));
+  const ktx_size_t dataSize = ktxTexture_GetImageSize(ktxTexture(texture), 0);
   if (destinationSize < dataSize * sizeof(float)) {
     return KTX_INVALID_VALUE;
   }
 
-  const ktx_uint8_t *src = ktxTexture_GetData(ktxTexture(texture));
+  /* Retrieve the offset of the highest resolution mip level, first array layer, and first face */
+  ktx_size_t offset;
+  if (ktxTexture_GetImageOffset(ktxTexture(texture), 0, 0, 0, &offset) != KTX_SUCCESS) {
+    return KTX_INVALID_OPERATION;
+  }
+  const ktx_uint8_t *src = ktxTexture_GetData(ktxTexture(texture)) + offset;
   const ktx_uint32_t rowPitch = ktxTexture_GetRowPitch(ktxTexture(texture), 0);
   const ktx_uint32_t height = texture->baseHeight;
 
