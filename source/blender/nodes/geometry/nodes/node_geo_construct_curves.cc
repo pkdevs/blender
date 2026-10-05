@@ -41,6 +41,21 @@ static bool validate_inputs(GeoNodeExecParams &params,
                             const List<int> &curve_offsets_list)
 {
   const int points_num = positions_list.size();
+  const int curves_num = curve_offsets_list.size() - 1;
+  if (points_num < 1) {
+    params.error_message_add(NodeWarningType::Error, "Number of points must be greater than zero");
+    return false;
+  }
+  if (curves_num < 1) {
+    params.error_message_add(NodeWarningType::Error, "Number of curve offsets must be at least 2");
+    return false;
+  }
+  if (points_num < curves_num) {
+    params.error_message_add(
+        NodeWarningType::Error,
+        "Number of curves must be less than or equal to the number of points");
+    return false;
+  }
   const std::variant<Span<int>, const int *> offset_values = curve_offsets_list.values();
   if (const Span<int> *curve_offsets = std::get_if<Span<int>>(&offset_values)) {
     if (curve_offsets->first() != 0) {
@@ -76,18 +91,16 @@ static bool validate_inputs(GeoNodeExecParams &params,
     }
     return true;
   }
+  /* In this case the offsets are a single value. */
   params.error_message_add(NodeWarningType::Error, "Number of curve offsets must be at least 2");
   return false;
 }
 
-static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
-                                                const List<float3> &positions_list,
+static Curves *create_curves_from_topology_info(const List<float3> &positions_list,
                                                 const List<int> &curve_offsets_list)
 {
-  if (!validate_inputs(params, positions_list, curve_offsets_list)) {
-    return nullptr;
-  }
   const int points_num = positions_list.size();
+  BLI_assert(points_num > 0);
   /* Curve offsets are shared with the list data. So don't create the offsets array here. */
   Curves *curves_id = bke::curves_new_nomain(bke::curves_new_no_attributes(points_num, 0));
   bke::CurvesGeometry &curves = curves_id->geometry.wrap();
@@ -119,6 +132,7 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
   BLI_assert(curve_offset_data != nullptr);
 
   const int curves_num = curve_offsets_list.size() - 1;
+  BLI_assert(curves_num > 0);
   curves.attribute_storage.wrap().resize(AttrDomain::Curve, curves_num);
   /* Share the offset data with the list to avoid copying it. */
   implicit_sharing::copy_shared_pointer(
@@ -128,6 +142,7 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
       &curves.runtime->curve_offsets_sharing_info);
   curves.curve_num = curves_num;
 
+  /* Create poly curves by default. */
   curves.fill_curve_types(CURVE_TYPE_POLY);
 
   return curves_id;
@@ -135,35 +150,23 @@ static Curves *create_curves_from_topology_info(GeoNodeExecParams &params,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  const GListPtr positions_list = params.extract_input<GListPtr>("Positions"_ustr);
-  const GListPtr curve_offsets_list = params.extract_input<GListPtr>("Curve Offsets"_ustr);
-  if (!positions_list) {
+  const GListPtr positions_glist = params.extract_input<GListPtr>("Positions"_ustr);
+  const GListPtr curve_offsets_glist = params.extract_input<GListPtr>("Curve Offsets"_ustr);
+  if (!positions_glist || !curve_offsets_glist) {
     /* Empty Curves. */
     params.set_default_remaining_outputs();
     return;
   }
-  if (positions_list->size() < 1) {
-    params.error_message_add(NodeWarningType::Error, "Number of points must be greater than zero");
-    params.set_default_remaining_outputs();
-    return;
-  }
-  if (!curve_offsets_list || curve_offsets_list->size() < 2) {
-    params.error_message_add(NodeWarningType::Error, "Number of curve offsets must be at least 2");
-    params.set_default_remaining_outputs();
-    return;
-  }
-  if (positions_list->size() < curve_offsets_list->size() - 1) {
-    params.error_message_add(
-        NodeWarningType::Error,
-        "Number of curves must be less than or equal to the number of points");
+  BLI_assert(positions_glist->cpp_type().is<float3>());
+  BLI_assert(curve_offsets_glist->cpp_type().is<int>());
+  const List<float3> &positions_list = positions_glist->typed<float3>();
+  const List<int> &curve_offsets_list = curve_offsets_glist->typed<int>();
+  if (!validate_inputs(params, positions_list, curve_offsets_list)) {
     params.set_default_remaining_outputs();
     return;
   }
   if (params.output_is_required("Curves"_ustr)) {
-    BLI_assert(positions_list->cpp_type().is<float3>());
-    BLI_assert(curve_offsets_list->cpp_type().is<int>());
-    Curves *curves = create_curves_from_topology_info(
-        params, positions_list->typed<float3>(), curve_offsets_list->typed<int>());
+    Curves *curves = create_curves_from_topology_info(positions_list, curve_offsets_list);
     params.set_output("Curves"_ustr, GeometrySet::from_curves(curves));
   }
 }
