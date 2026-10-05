@@ -747,8 +747,9 @@ std::optional<std::string> WM_prop_pystring_assign(bContext *C,
 
 PointerRNA WM_operator_properties_create_ptr(wmOperatorType *ot)
 {
+  wmWindowManager *wm = G_MAIN->wm.first();
   /* Set the ID so the context can be accessed: see #STRUCT_NO_CONTEXT_WITHOUT_OWNER_ID. */
-  return RNA_pointer_create_discrete(&G_MAIN->wm.first()->id, ot->srna, nullptr);
+  return RNA_pointer_create_discrete(wm ? &wm->id : nullptr, ot->srna, nullptr);
 }
 
 PointerRNA WM_operator_properties_create(const char *opstring)
@@ -758,8 +759,9 @@ PointerRNA WM_operator_properties_create(const char *opstring)
   if (ot) {
     return WM_operator_properties_create_ptr(ot);
   }
+  wmWindowManager *wm = G_MAIN->wm.first();
   /* Set the ID so the context can be accessed: see #STRUCT_NO_CONTEXT_WITHOUT_OWNER_ID. */
-  return RNA_pointer_create_discrete(&G_MAIN->wm.first()->id, RNA_OperatorProperties, nullptr);
+  return RNA_pointer_create_discrete(wm ? &wm->id : nullptr, RNA_OperatorProperties, nullptr);
 }
 
 void WM_operator_properties_alloc(PointerRNA **ptr, IDProperty **properties, const char *opstring)
@@ -1315,8 +1317,9 @@ IDProperty *WM_operator_last_properties_ensure_idprops(wmOperatorType *ot)
 
 void WM_operator_last_properties_ensure(wmOperatorType *ot, PointerRNA *ptr)
 {
+  wmWindowManager *wm = G_MAIN->wm.first();
   IDProperty *props = WM_operator_last_properties_ensure_idprops(ot);
-  *ptr = RNA_pointer_create_discrete(&G_MAIN->wm.first()->id, ot->srna, props);
+  *ptr = RNA_pointer_create_discrete(wm ? &wm->id : nullptr, ot->srna, props);
 }
 
 ID *WM_operator_drop_load_path(bContext *C, wmOperator *op, const short idcode)
@@ -1335,7 +1338,7 @@ ID *WM_operator_drop_load_path(bContext *C, wmOperator *op, const short idcode)
     errno = 0;
 
     if (idcode == ID_IM) {
-      id = reinterpret_cast<ID *>(BKE_image_load_exists(bmain, filepath, &exists));
+      id = reinterpret_cast<ID *>(BKE_image_load_exists(bmain, filepath, true, &exists));
     }
     else {
       BLI_assert_unreachable();
@@ -1434,7 +1437,7 @@ static ui::Block *wm_block_create_redo(bContext *C, ARegion *region, void *arg_o
                         ui::BLOCK_POPUP);
 
   /* If register is not enabled, the operator gets freed on #OPERATOR_FINISHED
-   * ui_apply_but_funcs_after calls #ED_undo_operator_repeate_cb and crashes. */
+   * ui_apply_but_funcs_after calls #ED_undo_operator_repeat_cb and crashes. */
   BLI_assert(op->type->flag & OPTYPE_REGISTER);
 
   block_func_handle_set(block, wm_block_redo_cb, arg_op);
@@ -2239,6 +2242,22 @@ static std::string wm_call_menu_get_name(wmOperatorType *ot, PointerRNA *ptr)
                 CTX_IFACE_(ot->translation_context, ot->name);
 }
 
+static std::string wm_call_menu_get_description(bContext * /*C*/,
+                                                wmOperatorType * /*ot*/,
+                                                PointerRNA *ptr)
+{
+  char idname[BKE_ST_MAXNAME];
+  RNA_string_get(ptr, "name", idname);
+  MenuType *mt = WM_menutype_find(idname, true);
+  if (!mt) {
+    return "";
+  }
+  if (!mt->description) {
+    return "";
+  }
+  return CTX_IFACE_(mt->translation_context, mt->description);
+}
+
 static void WM_OT_call_menu(wmOperatorType *ot)
 {
   ot->name = "Call Menu";
@@ -2248,6 +2267,7 @@ static void WM_OT_call_menu(wmOperatorType *ot)
   ot->exec = wm_call_menu_exec;
   ot->poll = WM_operator_winactive;
   ot->get_name = wm_call_menu_get_name;
+  ot->get_description = wm_call_menu_get_description;
 
   ot->flag = OPTYPE_INTERNAL;
 
