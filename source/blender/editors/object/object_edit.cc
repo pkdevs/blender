@@ -1296,6 +1296,8 @@ void motion_paths_recalc(bContext *C, Scene *scene, const Span<Object *> objects
 
   Depsgraph *depsgraph = animviz_depsgraph_build(bmain, scene, view_layer, targets);
 
+  DEG_disable_visibility_optimization(depsgraph);  // Show motion path even if object is hidden
+
   animviz_calc_motionpaths(depsgraph, scene, targets, BKE_scene_frame_get(scene));
 
   /* Tag objects for copy-on-eval - so paths will draw/redraw
@@ -2387,8 +2389,7 @@ static void move_to_collection_menu_draw(Menu *menu,
   layout.operator_context_set(wm::OpCallContext::InvokeDefault);
 
   if (!is_scene_collection) {
-    PointerRNA op_ptr = layout.op(
-        ot, is_move ? IFACE_("Move Inside") : IFACE_("Link Inside"), ICON_NONE);
+    PointerRNA op_ptr = layout.op(ot, is_move ? "Move Inside" : "Link Inside", ICON_NONE);
     RNA_int_set(&op_ptr, "collection_uid", collection->id.session_uid);
     layout.separator();
   }
