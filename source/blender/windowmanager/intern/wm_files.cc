@@ -14,6 +14,8 @@
 #include <cstddef>
 #include <cstring>
 #include <fcntl.h> /* For open flags (#O_BINARY, #O_RDONLY). */
+#include <string>
+#include <vector>
 
 #ifdef WIN32
 /* Need to include windows.h so _WIN32_IE is defined. */
@@ -106,6 +108,9 @@
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
 #  include "GHOST_IOSDocumentPicker.hh"
+#  include "GHOST_IOSDialog.hh"
+#  include "WM_apple_ios.hh"
+#  include <memory>
 #endif
 #include "ED_image.hh"
 #include "ED_outliner.hh"
@@ -4110,7 +4115,9 @@ void WM_OT_clear_recent_files(wmOperatorType *ot)
 static void wm_block_autorun_warning_ignore(bContext *C, void *arg_block, void * /*arg*/)
 {
   wmWindow *win = CTX_wm_window(C);
-  UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  if (arg_block) {
+    UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  }
 
   /* Free the data as it's no longer needed. */
   wm_test_autorun_revert_action_set(nullptr, nullptr);
@@ -4120,7 +4127,9 @@ static void wm_block_autorun_warning_reload_with_scripts(bContext *C, uiBlock *b
 {
   wmWindow *win = CTX_wm_window(C);
 
-  UI_popup_block_close(C, win, block);
+  if (block) {
+    UI_popup_block_close(C, win, block);
+  }
 
   /* Save user preferences for permanent execution. */
   if ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) {
@@ -4138,7 +4147,9 @@ static void wm_block_autorun_warning_enable_scripts(bContext *C, uiBlock *block)
   wmWindow *win = CTX_wm_window(C);
   Main *bmain = CTX_data_main(C);
 
-  UI_popup_block_close(C, win, block);
+  if (block) {
+    UI_popup_block_close(C, win, block);
+  }
 
   /* Save user preferences for permanent execution. */
   if ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) {
@@ -4338,7 +4349,43 @@ void wm_test_autorun_warning(bContext *C)
 
     wmWindow *prevwin = CTX_wm_window(C);
     CTX_wm_window_set(C, win);
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    GHOST_IOSDialog dialog;
+    dialog.title = RPT_("For security reasons, automatic execution of Python scripts "
+                        "in this file was disabled:");
+    dialog.message = G.autoexec_fail;
+    dialog.message += "\n\n";
+    dialog.message += RPT_("This may lead to unexpected behavior");
+    dialog.toggles = {{RPT_("Permanently allow execution of scripts"),
+                       (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0}};
+    dialog.actions = {{IFACE_("Ignore"), GHOST_IOSDialogRole::Cancel},
+                      {IFACE_("Allow Execution")}};
+    dialog.preferred_action = 0;
+    auto ignore = [](bContext *context) {
+      wm_block_autorun_warning_ignore(context, nullptr, nullptr);
+    };
+    WM_apple_ios_dialog_begin(
+        C, dialog,
+        [ignore](bContext *context, int action, uint64_t toggles) {
+          if (action != 1) {
+            ignore(context);
+            return;
+          }
+          PointerRNA preferences = RNA_pointer_create_discrete(
+              nullptr, &RNA_PreferencesFilePaths, &U);
+          PropertyRNA *property = RNA_struct_find_property(&preferences, "use_scripts_auto_execute");
+          RNA_property_boolean_set(&preferences, property, bool(toggles & 1));
+          RNA_property_update(context, &preferences, property);
+          if (BKE_main_blendfile_path_from_global()[0] && CTX_wm_manager(context)->file_saved) {
+            wm_block_autorun_warning_reload_with_scripts(context, nullptr);
+          }
+          else {
+            wm_block_autorun_warning_enable_scripts(context, nullptr);
+          }
+        }, ignore, "autorun_warning_popup");
+#else
     UI_popup_block_invoke(C, block_create_autorun_warning, nullptr, nullptr);
+#endif
     CTX_wm_window_set(C, prevwin);
   }
 }
@@ -4393,13 +4440,9 @@ static void wm_free_operator_properties_callback(void *user_data)
 
 static const char *save_file_overwrite_dialog_name = "save_file_overwrite_popup";
 
-static void file_overwrite_detailed_info_show(uiLayout *parent_layout, Main *bmain)
+static std::vector<std::string> file_overwrite_detailed_info(Main *bmain)
 {
-  uiLayout *layout = &parent_layout->column(true);
-  /* Trick to make both lines of text below close enough to look like they are part of a same
-   * block. */
-  layout->scale_y_set(0.70f);
-
+  std::vector<std::string> messages;
   if (bmain->has_forward_compatibility_issues) {
     char writer_ver_str[16];
     char current_ver_str[16];
@@ -4424,26 +4467,39 @@ static void file_overwrite_detailed_info_show(uiLayout *parent_layout, Main *bma
     SNPRINTF(message_line2,
              RPT_("Saving it with this Blender (%s) may cause loss of data."),
              current_ver_str);
-    layout->label(message_line1, ICON_NONE);
-    layout->label(message_line2, ICON_NONE);
+    messages.emplace_back(message_line1);
+    messages.emplace_back(message_line2);
   }
 
   if (bmain->is_asset_edit_file) {
     if (bmain->has_forward_compatibility_issues) {
-      layout->separator(1.4f);
+      messages.emplace_back("");
     }
 
-    layout->label(RPT_("This file is managed by the Blender asset system. It can only be"),
-                  ICON_NONE);
-    layout->label(RPT_("saved as a new, regular file."), ICON_NONE);
+    messages.emplace_back(RPT_("This file is managed by the Blender asset system. It can only be"));
+    messages.emplace_back(RPT_("saved as a new, regular file."));
   }
 
   if (bmain->colorspace.is_missing_opencolorio_config) {
-    layout->label(
-        RPT_("Displays, views or color spaces in this file were missing and have been changed."),
-        ICON_NONE);
-    layout->label(RPT_("Saving it with this OpenColorIO configuration may cause loss of data."),
-                  ICON_NONE);
+    messages.emplace_back(
+        RPT_("Displays, views or color spaces in this file were missing and have been changed."));
+    messages.emplace_back(
+        RPT_("Saving it with this OpenColorIO configuration may cause loss of data."));
+  }
+  return messages;
+}
+
+static void file_overwrite_detailed_info_show(uiLayout *parent_layout, Main *bmain)
+{
+  uiLayout *layout = &parent_layout->column(true);
+  layout->scale_y_set(0.70f);
+  for (const std::string &message : file_overwrite_detailed_info(bmain)) {
+    if (message.empty()) {
+      layout->separator(1.4f);
+    }
+    else {
+      layout->label(message, ICON_NONE);
+    }
   }
 }
 
@@ -4472,7 +4528,9 @@ static void save_file_overwrite_confirm(bContext *C, void *arg_block, void *arg_
 
   /* Needs to be done after stealing the callback data above, otherwise it would cause a
    * use-after-free. */
-  UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  if (arg_block) {
+    UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  }
 
   PointerRNA operator_propptr = {};
   PointerRNA *operator_propptr_p = &operator_propptr;
@@ -4500,7 +4558,9 @@ static void save_file_overwrite_confirm_button(uiBlock *block, wmGenericCallback
 static void save_file_overwrite_saveas(bContext *C, void *arg_block, void * /*arg_data*/)
 {
   wmWindow *win = CTX_wm_window(C);
-  UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  if (arg_block) {
+    UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  }
 
   WM_operator_name_call(
       C, "WM_OT_save_as_mainfile", blender::wm::OpCallContext::InvokeDefault, nullptr, nullptr);
@@ -4611,6 +4671,36 @@ static uiBlock *block_create_save_file_overwrite_dialog(bContext *C, ARegion *re
 
 void wm_save_file_overwrite_dialog(bContext *C, wmOperator *op)
 {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  Main *bmain = CTX_data_main(C);
+  auto callback = std::shared_ptr<wmGenericCallback>(
+      MEM_callocN<wmGenericCallback>(__func__), WM_generic_callback_free);
+  callback->user_data = IDP_CopyProperty(op->properties);
+  callback->free_user_data = wm_free_operator_properties_callback;
+  GHOST_IOSDialog dialog;
+  dialog.title = bmain->is_asset_edit_file ? RPT_("Save as a new file?") :
+                                           RPT_("Overwrite file?");
+  dialog.message = BLI_path_basename(BKE_main_blendfile_path(bmain));
+  for (const std::string &line : file_overwrite_detailed_info(bmain)) {
+    dialog.message += "\n" + line;
+  }
+  dialog.actions = {{IFACE_("Cancel"), GHOST_IOSDialogRole::Cancel}, {IFACE_("Save As...")}};
+  if (!bmain->is_asset_edit_file) {
+    dialog.actions.push_back({IFACE_("Overwrite"), GHOST_IOSDialogRole::Destructive});
+  }
+  dialog.preferred_action = 1;
+  WM_apple_ios_dialog_begin(
+      C, dialog,
+      [callback](bContext *context, int action, uint64_t) {
+        if (action == 1) {
+          save_file_overwrite_saveas(context, nullptr, nullptr);
+        }
+        else if (action == 2) {
+          save_file_overwrite_confirm(context, nullptr, callback.get());
+        }
+      }, {}, save_file_overwrite_dialog_name);
+  return;
+#endif
   if (!UI_popup_block_name_exists(CTX_wm_screen(C), save_file_overwrite_dialog_name)) {
     wmGenericCallback *callback = MEM_callocN<wmGenericCallback>(__func__);
     callback->exec = nullptr;
@@ -4644,7 +4734,9 @@ static void wm_block_file_close_discard(bContext *C, void *arg_block, void *arg_
    * the popup might be closed by the callback, which will lead
    * to a crash. */
   wmWindow *win = CTX_wm_window(C);
-  UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  if (arg_block) {
+    UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  }
 
   callback->exec(C, callback->user_data);
   WM_generic_callback_free(callback);
@@ -4658,14 +4750,24 @@ static void wm_block_file_close_save(bContext *C, void *arg_block, void *arg_dat
   bool execute_callback = true;
 
   wmWindow *win = CTX_wm_window(C);
-  UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  if (arg_block) {
+    UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
+  }
 
   int modified_images_count = ED_image_save_all_modified_info(CTX_data_main(C), nullptr);
   if (modified_images_count > 0 && save_images_when_file_is_closed) {
     if (ED_image_should_save_modified(bmain)) {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+      ReportList reports;
+      BKE_reports_init(&reports, RPT_STORE);
+      execute_callback = ED_image_save_all_modified(C, &reports);
+      WM_reports_from_reports_move(wm, &reports);
+      BKE_reports_free(&reports);
+#else
       ReportList *reports = CTX_wm_reports(C);
-      ED_image_save_all_modified(C, reports);
+      execute_callback = ED_image_save_all_modified(C, reports);
       WM_report_banner_show(wm, win);
+#endif
     }
     else {
       execute_callback = false;
@@ -4693,7 +4795,7 @@ static void wm_block_file_close_save(bContext *C, void *arg_block, void *arg_dat
     else {
       const wmOperatorStatus status = WM_operator_name_call(
           C, "WM_OT_save_mainfile", blender::wm::OpCallContext::ExecDefault, nullptr, nullptr);
-      if (status & OPERATOR_CANCELLED) {
+      if (!(status & OPERATOR_FINISHED)) {
         execute_callback = false;
       }
     }
@@ -4930,6 +5032,63 @@ static uiBlock *block_create__close_file_dialog(bContext *C, ARegion *region, vo
 
 void wm_close_file_dialog(bContext *C, wmGenericCallback *post_action)
 {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  auto callback = std::shared_ptr<wmGenericCallback>(post_action, WM_generic_callback_free);
+  Main *bmain = CTX_data_main(C);
+  const char *path = BKE_main_blendfile_path(bmain);
+  const bool needs_overwrite_confirm = BKE_main_needs_overwrite_confirm(bmain);
+  GHOST_IOSDialog dialog;
+  dialog.title = RPT_("Save changes before closing?");
+  dialog.message = path[0] ? BLI_path_basename(path) : std::string(DATA_("Untitled")) + ".blend";
+  if (needs_overwrite_confirm) {
+    for (const std::string &line : file_overwrite_detailed_info(bmain)) {
+      dialog.message += "\n" + line;
+    }
+  }
+  ReportList reports;
+  BKE_reports_init(&reports, RPT_STORE);
+  const uint images = ED_image_save_all_modified_info(bmain, &reports);
+  LISTBASE_FOREACH (Report *, report, &reports.list) {
+    dialog.message += "\n\n";
+    dialog.message += report->message;
+  }
+  BKE_reports_free(&reports);
+  const int image_toggle = images ? int(dialog.toggles.size()) : -1;
+  if (images) {
+    dialog.toggles.push_back(
+        {fmt::format(fmt::runtime(IFACE_("Save {} modified image(s)")), images),
+         bool(save_images_when_file_is_closed)});
+  }
+  const bool catalogs = AS_asset_library_has_any_unsaved_catalogs();
+  const int catalog_toggle = catalogs ? int(dialog.toggles.size()) : -1;
+  if (catalogs) {
+    dialog.toggles.push_back(
+        {IFACE_("Save modified asset catalogs"),
+         blender::ed::asset::catalogs_get_save_catalogs_when_file_is_saved()});
+  }
+  dialog.actions = {{IFACE_("Cancel"), GHOST_IOSDialogRole::Cancel},
+                    {IFACE_("Don't Save"), GHOST_IOSDialogRole::Destructive},
+                    {needs_overwrite_confirm ? IFACE_("Save As...") : IFACE_("Save")}};
+  dialog.preferred_action = 2;
+  WM_apple_ios_dialog_begin(
+      C, dialog,
+      [callback, image_toggle, catalog_toggle](bContext *context, int action, uint64_t toggles) {
+        if (action == 1) {
+          wm_block_file_close_discard(context, nullptr, callback.get());
+        }
+        else if (action == 2) {
+          if (image_toggle >= 0) {
+            save_images_when_file_is_closed = bool(toggles & (uint64_t(1) << image_toggle));
+          }
+          if (catalog_toggle >= 0) {
+            blender::ed::asset::catalogs_set_save_catalogs_when_file_is_saved(
+                bool(toggles & (uint64_t(1) << catalog_toggle)));
+          }
+          wm_block_file_close_save(context, nullptr, callback.get());
+        }
+      }, {}, close_file_dialog_name);
+  return;
+#endif
   if (!UI_popup_block_name_exists(CTX_wm_screen(C), close_file_dialog_name)) {
     UI_popup_block_invoke(
         C, block_create__close_file_dialog, post_action, free_post_file_close_action);
