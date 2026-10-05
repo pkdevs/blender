@@ -1986,6 +1986,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   BOOL _finger_tool_enabled;
   GHOSTIOSPencilMenu *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
+  UISegmentedControl *_mesh_select_control;
   NSMutableArray *_mesh_select_buttons;
   NSMutableArray *_toolbar_buttons;
   NSMutableArray *_action_buttons;
@@ -3753,12 +3754,14 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                        systemImage:(NSString *)systemImage
                                              value:(NSString *)value
 {
-  UIAction *action = [self settingsActionWithTitle:title
-                                       systemImage:systemImage
-                                           setting:@"mesh_select_mode"
-                                             value:value];
+  UIImage *image = blenderIOSIcon([@"mesh." stringByAppendingString:value], systemImage);
+  UIAction *action = [UIAction actionWithTitle:title image:image identifier:value
+                                     handler:^(__kindof UIAction *selected) {
+    [self setMeshSelectModeValue:value];
+    WM_apple_ios_ui_setting_enqueue("mesh_select_mode", value.UTF8String);
+  }];
   UIBarButtonItem *button = [[[UIBarButtonItem alloc] initWithPrimaryAction:action] autorelease];
-  button.image = blenderIOSIcon([@"mesh." stringByAppendingString:value], systemImage);
+  button.image = image;
   button.accessibilityLabel = title;
   button.accessibilityIdentifier = value;
   button.identifier = [@"blender.mesh." stringByAppendingString:value];
@@ -3778,7 +3781,29 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                menu:nil] autorelease];
   compact.title = @"Selection Mode";
   compact.accessibilityLabel = compact.title;
-  _mesh_select_group = [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact items:items];
+  NSMutableArray *actions = [NSMutableArray array];
+  for (UIBarButtonItem *button in items) {
+    [actions addObject:button.primaryAction];
+  }
+  _mesh_select_control = [[[UISegmentedControl alloc] initWithFrame:CGRectMake(0, 0, 144, 44)
+                                                         actions:actions] autorelease];
+  _mesh_select_control.accessibilityLabel = @"Mesh Selection Mode";
+  _mesh_select_control.accessibilityIdentifier = @"blender.mesh-selection";
+  _mesh_select_control.momentary = NO;
+  [NSLayoutConstraint activateConstraints:@[
+    [_mesh_select_control.widthAnchor constraintEqualToConstant:144],
+    [_mesh_select_control.heightAnchor constraintEqualToConstant:44],
+  ]];
+  UIBarButtonItem *control = [[[UIBarButtonItem alloc]
+      initWithCustomView:_mesh_select_control] autorelease];
+  control.identifier = @"blender.mesh-selection";
+  control.hidesSharedBackground = YES;
+  if (@available(iOS 27.0, *)) {
+    control.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
+    compact.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
+  }
+  _mesh_select_group = [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact
+                                                                      items:@[control]];
   _mesh_select_group.hidden = YES;
   [self setMeshSelectModeValue:@"VERT"];
   return _mesh_select_group;
@@ -3794,6 +3819,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)setMeshSelectModeValue:(NSString *)value
 {
+  NSUInteger index = [@[@"VERT", @"EDGE", @"FACE"] indexOfObject:value ?: @""];
+  if (index == NSNotFound) {
+    return;
+  }
+  _mesh_select_control.selectedSegmentIndex = index;
   if ([_mesh_select_group.representativeItem.accessibilityValue isEqualToString:value]) {
     return;
   }
@@ -3813,6 +3843,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _mesh_select_group.representativeItem.menu = menu;
   _mesh_select_group.representativeItem.accessibilityValue = value;
   _mesh_select_group.menuRepresentation = menu;
+  _mesh_select_group.barButtonItems.firstObject.menuRepresentation = menu;
 }
 
 - (UIBarButtonItem *)viewportShadingButton
@@ -3954,21 +3985,25 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self setViewportShadingValue:@"solid"];
 
   /* Real bar items provide UIKit with actions and menu representations for overflow.
-   * Keep Undo reachable; allow context groups to collapse before entering overflow. */
-  _top_bar_item.leadingItemGroups = @[ _mode_button.creatingFixedGroup ];
+   * Group scene actions beside Mode; keep viewport shading on the trailing side. */
+  _top_bar_item.leadingItemGroups = @[
+    _mode_button.creatingFixedGroup,
+    [self meshSelectModeControlGroup],
+    _actions_button.creatingFixedGroup,
+    _undo_button.creatingFixedGroup,
+  ];
   if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
     _finger_input_button = [self fingerInputButton];
     [self setFingerInputMode:YES];
-    _top_bar_item.leadingItemGroups =
-        @[ _mode_button.creatingFixedGroup, _finger_input_button.creatingFixedGroup ];
+    _top_bar_item.leadingItemGroups = [_top_bar_item.leadingItemGroups
+        arrayByAddingObject:_finger_input_button.creatingFixedGroup];
   }
-  _top_bar_item.centerItemGroups =
-      @[ [self meshSelectModeControlGroup], [self topSettingsControlGroup] ];
-  _top_bar_item.trailingItemGroups =
-      @[ _actions_button.creatingFixedGroup, _viewport_shading_button.creatingFixedGroup ];
-  _top_bar_item.pinnedTrailingGroup = _undo_button.creatingFixedGroup;
+  _top_bar_item.centerItemGroups = @[ [self topSettingsControlGroup] ];
+  _top_bar_item.trailingItemGroups = @[];
+  _top_bar_item.pinnedTrailingGroup = _viewport_shading_button.creatingFixedGroup;
   if (@available(iOS 27.0, *)) {
     _mode_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
+    _undo_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
     _viewport_shading_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
     _actions_button.visibilityPriority = UIBarButtonItemVisibilityPriorityLow;
   }
