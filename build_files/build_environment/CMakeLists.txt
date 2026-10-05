@@ -216,6 +216,34 @@ include(cmake/spirv-reflect.cmake)
 include(cmake/pybind11.cmake)
 include(cmake/nanobind.cmake)
 include(cmake/manifold.cmake)
+
+if(WITH_APPLE_CROSSPLATFORM)
+  # Runtime libraries used by the iOS app. Host compilers and unsupported desktop
+  # backends are intentionally not part of this target.
+  add_custom_target(apple_runtime_dependencies DEPENDS
+    external_python
+    external_numpy
+    external_zstd
+    external_openimageio
+    external_alembic
+    external_freetype
+    external_opensubdiv
+    external_fftw
+    external_gmp
+    external_haru
+    external_potrace
+    external_sse2neon
+    external_embree
+    external_openpgl
+    external_openimagedenoise
+    openvdb
+    external_ffmpeg
+    external_sndfile
+    external_materialx
+    external_manifold
+  )
+endif()
+
 # Keep these last.
 include(cmake/deps_html.cmake)
 include(cmake/cve_check.cmake)

@@ -102,10 +102,11 @@ add_dependencies(
   external_tbb
   external_zlib
   external_blosc
-  external_python
-  external_numpy
-  external_nanobind
 )
+
+if(NOT WITH_APPLE_CROSSPLATFORM)
+  add_dependencies(openvdb external_python external_numpy external_nanobind)
+endif()
 
 if(WIN32)
   if(BLENDER_PLATFORM_ARM)

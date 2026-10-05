@@ -118,7 +118,6 @@ unset(ODIN_PATCH_COMMAND)
 add_dependencies(
   external_openimagedenoise
   external_tbb
-  external_ispc
 )
 
 # Only require host python
@@ -126,6 +125,7 @@ if(NOT WITH_APPLE_CROSSPLATFORM)
   add_dependencies(
     external_openimagedenoise
     external_python
+    external_ispc
   )
 endif()
 

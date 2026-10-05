@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-if(NOT WIN32)
+if(NOT WIN32 AND NOT WITH_APPLE_CROSSPLATFORM)
 
   if(WITH_APPLE_CROSSPLATFORM)
     # Building for non-local architecture.
