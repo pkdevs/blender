@@ -31,6 +31,11 @@ find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
 list(APPEND ZLIB_LIBRARIES ${BZIP2_LIBRARIES})
 
+# USD libraries found via the pxrConfig.cmake have the OpenPGL target as dependency
+if(WITH_USD)
+  find_package(OpenGL REQUIRED)
+endif()
+
 if(WITH_OPENAL)
   find_package(OpenAL REQUIRED)
 endif()
