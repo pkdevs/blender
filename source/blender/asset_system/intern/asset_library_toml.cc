@@ -131,13 +131,23 @@ void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
     }
   }
 
-  /* Set library identifier if is not already set. */
-  if (toml_find_item_in_section(asset_lib_toml_value, "library", "uuid") == nullptr) {
-    asset_lib_toml_value["library"]["uuid"] = UUID(BLI_uuid_generate_random()).str();
+  /* Set library identifier if is not already set, ensure its type is string. */
+  if (const toml::value *uuid_value = toml_find_item_in_section(
+          asset_lib_toml_value, "library", "uuid");
+      !uuid_value || uuid_value->is_string())
+  {
+    /* Ensure library section. */
+    if (const toml::value *lib_value = toml_find_item(asset_lib_toml_value, "library");
+        !lib_value || !lib_value->is_table())
+    {
+      asset_lib_toml_value["library"] = toml::table{};
+    }
+    toml::table &library_table = asset_lib_toml_value["library"].as_table();
+    library_table["uuid"] = UUID(BLI_uuid_generate_random()).str();
     /* Copy general library information to the .toml file. */
-    asset_lib_toml_value["library"]["name"] = custom_library.name;
+    library_table["name"] = custom_library.name;
     if (custom_library.remote_url[0]) {
-      asset_lib_toml_value["library"]["remote_url"] = custom_library.remote_url;
+      library_table["remote_url"] = custom_library.remote_url;
     }
     std::string toml_as_string = toml::format(asset_lib_toml_value, TOML_SPEC_VERSION);
     FILE *file_handle = BLI_fopen(blender_asset_lib_toml_path, "w");
