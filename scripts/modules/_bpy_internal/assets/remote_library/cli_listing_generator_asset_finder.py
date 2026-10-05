@@ -203,16 +203,22 @@ def list_assets(blendfile_version_info: FileVersionInfo,
 
 
 def _get_asset_dependencies(datablock: bpy.types.ID) -> set[bpy.types.ID]:
+    "Return a set of all IDs recursively referenced by the datablock"
     dependency_map: dict[bpy.types.ID, set[bpy.types.ID]] = bpy.data.user_map()
+    deps_of_datablock: set[bpy.types.ID] = set()
 
-    def get_asset_dependencies_recursive(id: bpy.types.ID) -> set[bpy.types.ID]:
-        items: set[bpy.types.ID] = set()
+    def get_asset_dependencies_recursive(visit_id: bpy.types.ID) -> set[bpy.types.ID]:
         for key, users in dependency_map.items():
-            if id in users:
-                items.add(key)
-                items |= get_asset_dependencies_recursive(key)
-        return items
-    return get_asset_dependencies_recursive(datablock)
+            if visit_id not in users:
+                continue
+            if key in deps_of_datablock:
+                continue
+            deps_of_datablock.add(key)
+            get_asset_dependencies_recursive(key)
+
+    get_asset_dependencies_recursive(datablock)
+
+    return deps_of_datablock
 
 
 def _find_assets(
@@ -232,7 +238,7 @@ def _find_assets(
             continue
         asset_dependencies: set[bpy.types.ID] = _get_asset_dependencies(datablock)
         files = [blendfile_relpath]
-        asset_dependencias_filenames = set()
+        asset_deps_filenames: set[str] = set()
 
         def visit_path_fn(owner_id: bpy.types.ID, path: str, meta):
             absolute_path = Path(bpy.path.abspath(path, library=owner_id.library))
@@ -242,13 +248,13 @@ def _find_assets(
             bl_version = owner_id.version if isinstance(owner_id, bpy.types.Library) else None
             dependencies.add(DependencyFile(absolute_path, bl_version))
 
-            asset_dependencias_filenames.add(absolute_path.relative_to(asset_library_root).as_posix())
+            asset_deps_filenames.add(absolute_path.relative_to(asset_library_root).as_posix())
 
         bpy.data.file_path_foreach(visit_path_fn, subset=asset_dependencies, flags={
             'RESOLVE_TOKEN', 'EXPAND_TOKENS', 'EXPAND_SEQUENCES', 'EXPAND_CACHES'})
 
-        asset_dependencias_filenames.remove(blendfile_relpath)
-        files.extend(asset_dependencias_filenames)
+        asset_deps_filenames.remove(blendfile_relpath)
+        files.extend(asset_deps_filenames)
 
         thumbnail_path = _thumbnail_path(datablock, thumbnail_dir)
         if thumbnail_path and should_write_thumbnails:
