@@ -32,10 +32,8 @@ class NativeSettingsStripTest(unittest.TestCase):
         device = os.environ.get("IOS_TEST_SIMULATOR_UDID", candidates[0]["udid"])
         root = Path(__file__).resolve().parents[2]
         source = (root / "intern/ghost/intern/GHOST_WindowIOS.mm").read_text()
-        start = source.index("@interface GHOSTIOSNavigationBar")
-        view_class = source[start:source.index("\n@end", source.index("@implementation", start)) + 5]
-        start = source.index("@interface GHOSTIOSNavigationController")
-        view_class += source[start:source.index("\n@end", source.index("@implementation", start)) + 5]
+        start = source.index("@interface GHOSTIOSPassThroughOverlayView")
+        view_class = source[start:source.index("/* GHOSTUIWindow interface.", start)]
         start = source.index("enum GHOSTIOSUICommand")
         command_enum = source[start:source.index("};", start) + 2]
         methods = []
@@ -49,6 +47,8 @@ class NativeSettingsStripTest(unittest.TestCase):
                           "- (void)setMeshSelectModeVisible:",
                           "- (void)setMeshSelectModeValue:",
                           "- (UIAction *)modeActionWithTitle:",
+                          "- (NSString *)modeTitleForIdentifier:",
+                          "- (void)setModePickerTitleForMode:",
                           "- (UIAction *)viewportShadingActionWithTitle:",
                           "- (void)setViewportShadingValue:",
                           "- (UIBarButtonItem *)viewportShadingButton\n",
@@ -59,23 +59,42 @@ class NativeSettingsStripTest(unittest.TestCase):
                           "- (void)setFingerInputMode:",
                           "- (UIBarButtonItem *)fingerInputButton\n",
                           "- (void)updateAxisConstraintButton:",
+                          "- (void)updateAxisConstraintsWithActions:",
                           "- (UIButton *)actionButtonWithTitle:",
+                          "- (void)rebuildActionStripWithActions:",
+                          "- (void)installActionStripToggle\n",
+                          "- (void)toggleActionStrip:",
+                          "- (void)setActionsCollapsed:",
                           "- (void)installActionStripLayout\n",
                           "- (void)updatePhoneActionStripLayout\n",
                           "- (CGFloat)expandedToolbarWidth\n",
                           "- (void)installNativeTopBar\n"):
             start = source.rindex(signature)
             methods.append(source[start:source.index("\n}", start) + 2])
+        start = source.index("  _action_rail =")
+        action_setup = source[start:source.index("  NSArray *view_pie_specs", start)]
+        start = source.index("  NSLayoutConstraint *action_content_width =")
+        action_width = source[start:source.index("  [NSLayoutConstraint activateConstraints:", start)]
+        start = source.index("    [_action_scroll.leadingAnchor")
+        action_constraints = source[start:source.index("\n  [self layoutViewPie];", start)]
+        methods.append("- (void)installTestActionStrip\n{\n" + action_setup + action_width +
+                       "  [NSLayoutConstraint activateConstraints:@[\n" + action_constraints + "\n}")
+        start = source.index("    UIBarButtonItem *view =")
+        view_button = source[start:source.index("    _top_bar_item.trailingItemGroups", start)]
+        methods.append("- (UIBarButtonItem *)testPhoneViewButton:(NSArray *)actions\n{\n" +
+                       view_button + "  return view;\n}")
         harness = r'''
 #import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
 #include <cmath>
 #include <initializer_list>
 #define UNUSED_VARS(...) ((void)0)
 static NSMutableArray *queued;
+static NSInteger lastCommand = -1;
 static UIImage *blenderIOSIcon(NSString *, NSString *) { return [UIImage systemImageNamed:@"cube"]; }
 static UIImage *blenderIOSCommandIcon(NSInteger, NSString *) { return [UIImage systemImageNamed:@"cube"]; }
 static UIImage *blenderIOSActionIcon(NSString *, NSString *, NSString *) { return nil; }
-extern "C" void WM_apple_ios_ui_command_enqueue(int) {}
+extern "C" void WM_apple_ios_ui_command_enqueue(int command) { lastCommand = command; }
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *) {}
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *setting, const char *value) {
   [queued addObject:@[[NSString stringWithUTF8String:setting], [NSString stringWithUTF8String:value]]];
@@ -97,9 +116,19 @@ static BOOL fingerTool;
   UIBarButtonItem *_mode_button, *_actions_button, *_viewport_shading_button, *_undo_button;
   UIBarButtonItem *_finger_input_button;
   BOOL _finger_tool_enabled;
-  UIView *_action_rail, *_tool_rail, *_view_gizmo_hotspot;
+  UIView *_tool_rail, *_view_gizmo_hotspot;
+  GHOSTIOSPassThroughVisualEffectView *_action_rail;
+  UIScrollView *_action_scroll;
+  UIStackView *_action_stack;
+  UIView *_action_group;
+  UIButton *_action_toggle;
+  NSLayoutConstraint *_action_expanded_width_constraint, *_action_collapsed_width_constraint;
+  NSLayoutConstraint *_action_toggle_width_constraint, *_action_toggle_trailing_constraint;
+  BOOL _actions_collapsed;
+  NSUInteger _action_transition_generation;
   NSLayoutConstraint *_action_phone_bottom_constraint, *_action_phone_trailing_constraint;
   UIBarButtonItemGroup *_top_settings_group, *_mesh_select_group;
+  UISegmentedControl *_mesh_select_control;
   NSDictionary *_top_settings_values;
   NSMutableArray *_mesh_select_buttons;
   NSMutableArray *_action_buttons;
@@ -171,6 +200,19 @@ static void runChecks() {
     [testWindow makeKeyAndVisible];
     [UIView setAnimationsEnabled:NO];
     UINavigationItem *item = builder->_top_bar_item;
+    UIAction *viewAction = [builder viewportShadingActionWithTitle:@"Frame Selected"
+        systemImage:@"viewfinder" command:GHOST_IOS_UI_COMMAND_FRAME_SELECTED];
+    UIBarButtonItem *viewButton = [builder testPhoneViewButton:@[viewAction]];
+    NSCAssert(viewButton.image.isSymbolImage &&
+              [viewButton.image isEqual:[UIImage systemImageNamed:@"eye"]],
+              @"Phone View button does not use the native eye symbol");
+    NSCAssert([viewButton.accessibilityLabel isEqual:@"View"] &&
+              [viewButton.menu.title isEqual:@"View"] &&
+              [viewButton.menu.children.firstObject.title isEqual:viewAction.title],
+              @"Changing the View icon changed its menu or accessible name");
+    checkMenu((UIMenu *)viewButton.menuRepresentation, viewButton.menu);
+    invoke((UIAction *)viewButton.menu.children.firstObject);
+    NSCAssert(lastCommand == GHOST_IOS_UI_COMMAND_FRAME_SELECTED, @"View command dispatch changed");
     NSCAssert(item.style == UINavigationItemStyleEditor, @"Missing native editor overflow");
     // Render the real axis controls on a hosted UIKit surface in both appearances.
     builder->_action_buttons = [NSMutableArray array];
@@ -221,6 +263,40 @@ static void runChecks() {
     }
     [axisPanel removeFromSuperview];
     [builder->_action_buttons removeAllObjects];
+    NSArray *modeIdentifiers = @[@"objectmode", @"mesh_edit", @"sculpt_mode",
+                                @"vertexpaint", @"weightpaint", @"imagepaint"];
+    const NSInteger modeCommands[] = {GHOST_IOS_UI_COMMAND_SET_MODE_OBJECT,
+        GHOST_IOS_UI_COMMAND_SET_MODE_EDIT, GHOST_IOS_UI_COMMAND_SET_MODE_SCULPT,
+        GHOST_IOS_UI_COMMAND_SET_MODE_VERTEX_PAINT, GHOST_IOS_UI_COMMAND_SET_MODE_WEIGHT_PAINT,
+        GHOST_IOS_UI_COMMAND_SET_MODE_TEXTURE_PAINT};
+    UIMenu *modeMenu = builder->_mode_button.menu;
+    NSCAssert(builder->_mode_button.image == ((UIAction *)modeMenu.children.firstObject).image,
+              @"Initial mode picker does not use the Object Mode menu icon");
+    for (NSUInteger i = 0; i < modeIdentifiers.count; i++) {
+      UIAction *action = (UIAction *)modeMenu.children[i];
+      [builder setModePickerTitleForMode:modeIdentifiers[i]];
+      NSCAssert(action.image != nil && builder->_mode_button.image == action.image &&
+                [builder->_mode_button.title isEqual:action.title] &&
+                [builder->_mode_button.accessibilityValue isEqual:action.title],
+                @"Mode snapshot did not synchronize the menu icon and accessible name");
+      [builder setModePickerTitleForMode:@"objectmode"];
+      invoke(action);
+      NSCAssert(builder->_mode_button.image == action.image && lastCommand == modeCommands[i],
+                @"Mode menu tap did not update the icon immediately and dispatch its command");
+    }
+    for (NSString *alias in @[@"curve_edit", @"armature_edit", @"edit_mesh", @"sculpt", @"texturepaint"]) {
+      [builder setModePickerTitleForMode:alias];
+      for (UIAction *action in modeMenu.children) {
+        if ([action.title isEqual:builder->_mode_button.title]) {
+          NSCAssert(builder->_mode_button.image == action.image, @"Mode alias lost its Blender icon");
+        }
+      }
+    }
+    [builder setModePickerTitleForMode:@"posemode"];
+    NSCAssert(builder->_mode_button.image != nil &&
+              [builder->_mode_button.accessibilityValue isEqual:@"Pose Mode"], @"Pose icon missing");
+    [builder setModePickerTitleForMode:@"objectmode"];
+    NSCAssert(builder->_mode_button.menu == modeMenu, @"Mode updates rebuilt the open menu");
     if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
       NSCAssert(builder->_finger_input_button != nil && fingerTool, @"Phone tool input missing");
       invoke((UIAction *)builder->_finger_input_button.menu.children[1]);
@@ -228,8 +304,15 @@ static void runChecks() {
       invoke((UIAction *)builder->_finger_input_button.menu.children[0]);
       NSCAssert(fingerTool, @"Tool mode not restored");
     }
-    NSCAssert(item.pinnedTrailingGroup.barButtonItems.firstObject == builder->_undo_button,
-              @"Undo must remain available outside overflow");
+    NSArray *leading = @[builder->_mode_button, builder->_mesh_select_group.barButtonItems.firstObject,
+                        builder->_actions_button, builder->_undo_button];
+    for (NSUInteger i = 0; i < leading.count; i++) {
+      NSCAssert(item.leadingItemGroups[i].barButtonItems.firstObject == leading[i],
+                @"Mesh selection must immediately follow Mode, before Actions and Undo");
+    }
+    NSCAssert(item.pinnedTrailingGroup.barButtonItems.firstObject ==
+              builder->_viewport_shading_button, @"Shading must stay on the trailing side");
+    NSCAssert(item.trailingItemGroups.count == 0, @"Scene actions must not remain on the right");
     UIBarButtonItemGroup *strip = builder->_top_settings_group;
     NSCAssert(strip.hidden && builder->_mesh_select_group.hidden, @"Initial context groups visible");
     [builder setTopSettingsVisible:YES animated:NO];
@@ -319,13 +402,17 @@ static void runChecks() {
     [builder setMeshSelectModeVisible:YES animated:NO];
     UIBarButtonItemGroup *mesh = builder->_mesh_select_group;
     NSCAssert(!mesh.hidden, @"Mesh selection did not appear");
+    UISegmentedControl *segments = builder->_mesh_select_control;
+    NSCAssert(mesh.barButtonItems.count == 1 && mesh.barButtonItems.firstObject.customView == segments &&
+              segments.numberOfSegments == 3 && !segments.momentary,
+              @"Mesh selector is not one persistent native segmented control");
     for (NSString *value in @[@"VERT", @"EDGE", @"FACE", @"VERT"]) {
       [builder setMeshSelectModeValue:value];
       UIMenu *menu = mesh.representativeItem.menu;
       checkMenu((UIMenu *)mesh.menuRepresentation, menu);
       NSUInteger selected = 0;
-      for (NSUInteger i = 0; i < mesh.barButtonItems.count; i++) {
-        UIBarButtonItem *button = mesh.barButtonItems[i];
+      for (NSUInteger i = 0; i < builder->_mesh_select_buttons.count; i++) {
+        UIBarButtonItem *button = builder->_mesh_select_buttons[i];
         UIAction *action = (UIAction *)menu.children[i];
         NSCAssert(((UIAction *)button.menuRepresentation).state == action.state,
                   @"Individual overflow lost selection state");
@@ -335,16 +422,26 @@ static void runChecks() {
           NSCAssert([button.accessibilityIdentifier isEqual:value], @"Wrong selection");
           NSCAssert(mesh.representativeItem.image == button.image, @"Wrong compact icon");
         }
-        invoke(action);
-        NSArray *expected = @[@"mesh_select_mode", button.accessibilityIdentifier];
-        NSCAssert([queued.lastObject isEqual:expected], @"Wrong compact selection dispatch");
-        invoke(button.primaryAction);
-        NSCAssert([queued.lastObject isEqual:expected], @"Wrong expanded selection dispatch");
       }
       NSCAssert(selected == 1, @"Selection not exclusive");
+      NSCAssert((segments.selectedSegmentIndex == [@[@"VERT", @"EDGE", @"FACE"] indexOfObject:value]),
+                @"Native indicator did not follow Blender's state");
       [builder setMeshSelectModeValue:value];
       NSCAssert(mesh.representativeItem.menu == menu, @"Unchanged snapshot rebuilt selection menu");
     }
+    for (NSUInteger i = 0; i < 3; i++) {
+      UIAction *action = [segments actionForSegmentAtIndex:i];
+      NSCAssert(action.image != nil && action.title.length > 0, @"Segment lost icon or accessible name");
+      invoke(action);
+      NSCAssert(segments.selectedSegmentIndex == i, @"Selection did not update immediately");
+      NSCAssert(([queued.lastObject isEqual:@[@"mesh_select_mode", action.identifier]]),
+                @"Native segment did not dispatch the correct mode");
+      invoke((UIAction *)mesh.representativeItem.menu.children[(i + 1) % 3]);
+      NSCAssert(segments.selectedSegmentIndex == (i + 1) % 3, @"Overflow selection not synchronized");
+    }
+    NSInteger lastSegment = segments.selectedSegmentIndex;
+    [builder setMeshSelectModeValue:@""];
+    NSCAssert(segments.selectedSegmentIndex == lastSegment, @"Invalid snapshot cleared selection");
     for (UIUserInterfaceStyle style : {UIUserInterfaceStyleLight, UIUserInterfaceStyleDark}) {
       builder.view.overrideUserInterfaceStyle = style;
       [builder setTopSettingsVisible:NO animated:NO];
@@ -385,8 +482,23 @@ static void runChecks() {
         if (width == 1194) {
           NSCAssert(!strip.displayingRepresentativeItem && !mesh.displayingRepresentativeItem,
                     @"Wide bar did not expand its groups");
-          NSCAssert([builder->_top_bar hitTest:CGPointMake(280, 28) withEvent:nil] == nil,
-                    @"Empty toolbar space blocks viewport gestures");
+          NSMutableArray *controls = [NSMutableArray array];
+          collectControls(builder->_top_bar, controls);
+          BOOL checkedEmptySpace = NO;
+          for (CGFloat x = 24; x < width - 24; x += 12) {
+            CGPoint point = CGPointMake(x, 28);
+            BOOL nearControl = NO;
+            for (UIView *control in controls) {
+              CGRect rect = [control convertRect:control.bounds toView:builder->_top_bar];
+              nearControl |= CGRectContainsPoint(CGRectInset(rect, -24, -24), point);
+            }
+            if (!nearControl) {
+              NSCAssert([builder->_top_bar hitTest:point withEvent:nil] == nil,
+                        @"Empty toolbar space blocks viewport gestures");
+              checkedEmptySpace = YES;
+            }
+          }
+          NSCAssert(checkedEmptySpace, @"Wide toolbar has no usable viewport gesture gap");
         }
         checkControls(builder->_top_bar);
         if (width == 320 || width == 466 || width == 669 || width == 834 || width == 1194) {
@@ -404,17 +516,22 @@ static void runChecks() {
         }
       }
     }
-    if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
-      builder->_action_rail = [[[UIView alloc] init] autorelease];
-      builder->_action_rail.translatesAutoresizingMaskIntoConstraints = NO;
+    {
       builder->_tool_rail = [[[UIView alloc] init] autorelease];
       builder->_view_gizmo_hotspot = [[[UIView alloc] init] autorelease];
-      for (UIView *view in @[builder->_action_rail, builder->_tool_rail, builder->_view_gizmo_hotspot]) {
+      for (UIView *view in @[builder->_tool_rail, builder->_view_gizmo_hotspot]) {
         [builder.view addSubview:view];
       }
-      [builder installActionStripLayout];
+      [builder installTestActionStrip];
+      NSMutableArray *actions = [NSMutableArray array];
+      for (NSUInteger i = 0; i < 12; i++) {
+        [actions addObject:@{@"title": [NSString stringWithFormat:@"Action %lu", i],
+            @"symbol": @"", @"operator": @"MESH_OT_select_all"}];
+      }
+      [builder rebuildActionStripWithActions:actions];
       for (CGSize size : {CGSizeMake(466, 678), CGSizeMake(678, 466),
-                           CGSizeMake(669, 951), CGSizeMake(951, 669), CGSizeMake(320, 568)}) {
+                           CGSizeMake(669, 951), CGSizeMake(951, 669), CGSizeMake(320, 568),
+                           CGSizeMake(599, 800), CGSizeMake(600, 800), CGSizeMake(601, 800)}) {
         for (BOOL expanded : {NO, YES}) {
           builder.view.frame = CGRectMake(0, 0, size.width, size.height);
           [builder.view layoutIfNeeded];
@@ -427,12 +544,124 @@ static void runChecks() {
           [builder updatePhoneActionStripLayout];
           [builder.view layoutIfNeeded];
           CGRect lane = builder->_action_rail.frame;
+          NSCAssert(std::abs(CGRectGetMaxY(safe) - CGRectGetMaxY(lane) - 6.0) < 0.01,
+                    @"Phone shortcut lane jumped away from the bottom edge");
           NSCAssert(CGRectContainsRect(safe, lane) && lane.size.width >= 44,
                     @"Phone shortcut lane clipped or unusable");
           NSCAssert(!CGRectIntersectsRect(lane, builder->_tool_rail.frame), @"Shortcuts cover tools");
           NSCAssert(!CGRectIntersectsRect(lane, builder->_view_gizmo_hotspot.frame), @"Shortcuts cover gizmo");
+          for (BOOL collapsed : {YES, NO, YES, NO}) {
+            [builder setActionsCollapsed:collapsed animated:NO];
+            [builder.view layoutIfNeeded];
+            UIButton *toggle = builder->_action_toggle;
+            CGRect toggleFrame = [toggle convertRect:toggle.bounds toView:builder.view];
+            NSCAssert(CGRectContainsRect(lane, toggleFrame) && toggleFrame.size.width >= 44,
+                      @"Quick actions toggle clipped or too small to tap");
+            NSCAssert(builder->_action_scroll.userInteractionEnabled == !collapsed &&
+                      builder->_action_scroll.accessibilityElementsHidden == collapsed,
+                      @"Hidden quick actions can still receive input or accessibility focus");
+            if (collapsed) {
+              NSCAssert([toggle.configuration.title isEqual:@"Actions"] &&
+                        toggle.configuration.image == nil && toggleFrame.size.width <= 97,
+                        @"Collapsed actions are not a compact text-only pill");
+              [builder rebuildActionStripWithActions:actions];
+              NSCAssert(builder->_actions_collapsed && builder->_action_scroll.alpha == 0,
+                        @"Blender snapshot reopened the collapsed actions");
+              CGRect pill = [toggle convertRect:toggle.bounds toView:builder->_action_rail];
+              for (CGFloat x = 4; x < lane.size.width - 4; x += 8) {
+                CGPoint empty = CGPointMake(x, 28);
+                if (!CGRectContainsPoint(CGRectInset(pill, -2, -2), empty)) {
+                  NSCAssert([builder->_action_rail hitTest:empty withEvent:nil] == nil,
+                            @"Collapsed row blocks viewport input outside its pill");
+                }
+              }
+            } else {
+              NSCAssert(toggle.configuration.image != nil && toggle.configuration.title == nil,
+                        @"Expanded actions lost the close icon");
+              NSCAssert(builder->_action_scroll.bounds.size.width >= 44,
+                        @"Close control consumed the scrolling lane");
+              [builder->_action_scroll setContentOffset:CGPointMake(80, 0) animated:NO];
+              [builder->_action_scroll layoutIfNeeded];
+              CAGradientLayer *fade = (CAGradientLayer *)builder->_action_scroll.layer.mask;
+              NSCAssert([fade isKindOfClass:CAGradientLayer.class] &&
+                        CGRectEqualToRect(fade.frame, builder->_action_scroll.bounds),
+                        @"Action fade is not attached to the visible scrolling window");
+              NSCAssert(CGColorGetAlpha((CGColorRef)fade.colors.firstObject) == 0 &&
+                        CGColorGetAlpha((CGColorRef)fade.colors.lastObject) == 0,
+                        @"Overflowing actions do not fade at both scrolling edges");
+              NSCAssert(CGRectEqualToRect(toggleFrame,
+                  [toggle convertRect:toggle.bounds toView:builder.view]), @"Close control scrolled away");
+            }
+          }
+          if (size.width == 466 || size.width == 951) {
+            for (BOOL collapsed : {YES, NO}) {
+              [builder setActionsCollapsed:collapsed animated:NO];
+              UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc]
+                  initWithBounds:CGRectMake(0, size.height - 180, size.width, 180)] autorelease];
+              UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+                [builder.view drawViewHierarchyInRect:builder.view.bounds afterScreenUpdates:YES];
+              }];
+              NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
+                  NSUserDomainMask, YES).firstObject;
+              NSString *filename = [NSString stringWithFormat:@"quick-actions-%.0f-%d-%d.png",
+                  size.width, expanded, collapsed];
+              [UIImagePNGRepresentation(image) writeToFile:[documents stringByAppendingPathComponent:filename]
+                                                atomically:YES];
+            }
+          }
         }
       }
+      [builder setActionsCollapsed:YES animated:NO];
+      [builder rebuildActionStripWithActions:@[]];
+      NSCAssert(builder->_action_rail.hidden, @"Empty actions left an empty floating control");
+      [builder rebuildActionStripWithActions:actions];
+      NSCAssert(!builder->_action_rail.hidden && builder->_actions_collapsed,
+                @"Action availability did not preserve the collapsed state");
+      [builder->_action_toggle sendActionsForControlEvents:UIControlEventTouchUpInside];
+      NSCAssert(!builder->_actions_collapsed, @"Tapping Actions did not expand the row");
+      for (BOOL atEnd : {NO, YES}) {
+        UIScrollView *scroll = builder->_action_scroll;
+        [scroll setContentOffset:CGPointMake(atEnd ? scroll.contentSize.width - scroll.bounds.size.width : 0, 0)
+                        animated:NO];
+        [scroll layoutIfNeeded];
+        CAGradientLayer *fade = (CAGradientLayer *)scroll.layer.mask;
+        NSCAssert(CGColorGetAlpha((CGColorRef)fade.colors.firstObject) == (atEnd ? 0 : 1) &&
+                  CGColorGetAlpha((CGColorRef)fade.colors.lastObject) == (atEnd ? 1 : 0),
+                  @"A scroll boundary fades its fully visible action");
+      }
+      [builder rebuildActionStripWithActions:[actions subarrayWithRange:NSMakeRange(0, 4)]];
+      for (CGFloat width : {834.0, 1194.0}) {
+        builder.view.frame = CGRectMake(0, 0, width, 800);
+        [builder.view layoutIfNeeded];
+        CGRect safe = builder.view.safeAreaLayoutGuide.layoutFrame;
+        builder->_tool_rail.frame = CGRectMake(CGRectGetMinX(safe) + 14,
+            CGRectGetMaxY(safe) - 76, 64, 64);
+        builder->_view_gizmo_hotspot.frame = CGRectMake(CGRectGetMaxX(safe) - 118,
+            CGRectGetMaxY(safe) - 124, 112, 112);
+        [builder updatePhoneActionStripLayout];
+        for (BOOL collapsed : {YES, NO}) {
+          [builder setActionsCollapsed:collapsed animated:NO];
+          [builder.view layoutIfNeeded];
+          CGRect group = [builder->_action_group convertRect:builder->_action_group.bounds
+                                                     toView:builder.view];
+          NSCAssert(std::abs(CGRectGetMidX(group) - CGRectGetMidX(builder.view.bounds)) < 0.5,
+                    @"Quick actions are centered in the leftover lane rather than the viewport");
+        }
+      }
+      [builder rebuildActionStripWithActions:[actions subarrayWithRange:NSMakeRange(0, 1)]];
+      [builder.view layoutIfNeeded];
+      [builder->_action_scroll layoutIfNeeded];
+      CAGradientLayer *fade = (CAGradientLayer *)builder->_action_scroll.layer.mask;
+      NSCAssert(CGColorGetAlpha((CGColorRef)fade.colors.firstObject) == 1 &&
+                CGColorGetAlpha((CGColorRef)fade.colors.lastObject) == 1,
+                @"Actions that fit are needlessly faded");
+      [builder->_action_toggle sendActionsForControlEvents:UIControlEventTouchUpInside];
+      NSCAssert(builder->_actions_collapsed, @"Tapping the close icon did not collapse the row");
+      [UIView setAnimationsEnabled:YES];
+      [builder setActionsCollapsed:NO animated:YES];
+      [builder setActionsCollapsed:YES animated:YES];
+      [builder rebuildActionStripWithActions:[actions subarrayWithRange:NSMakeRange(0, 4)]];
+      [builder setActionsCollapsed:NO animated:YES];
     }
     // Exercise the real phone container, including Duo's system-managed vertical bar.
     StripTest *phone = [[[StripTest alloc] init] autorelease];
@@ -450,6 +679,9 @@ static void runChecks() {
     [phone setTopSettingsVisible:YES animated:NO];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
       @try {
+        NSCAssert(!builder->_actions_collapsed && !builder->_action_scroll.hidden &&
+                  builder->_action_scroll.alpha == 1.0 && builder->_action_scroll.userInteractionEnabled,
+                  @"Interrupted collapse completion hid the reopened quick actions");
         [testWindow layoutIfNeeded];
         NSCAssert(phone->_top_bar_height_constraint == nil, @"Phone bar still manually sized");
         NSCAssert(navigation.navigationBar == phone->_top_bar, @"Not the system navigation bar");
@@ -457,8 +689,10 @@ static void runChecks() {
         CGRect content = [phone.view convertRect:phone.view.bounds toView:testWindow];
         NSCAssert(CGRectEqualToRect(content, testWindow.bounds), @"Viewport does not fill the Duo display");
         BOOL landscape = [NSProcessInfo.processInfo.environment[@"TOOLBAR_ORIENTATION"] isEqual:@"landscape"];
-        NSCAssert((testWindow.bounds.size.width > testWindow.bounds.size.height) == landscape,
-                  @"Simulator did not enter the requested orientation");
+        if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
+          NSCAssert((testWindow.bounds.size.width > testWindow.bounds.size.height) == landscape,
+                    @"Simulator did not enter the requested orientation");
+        }
         fprintf(stderr, "Duo window=%s content=%s safe=%s bar=%s\n",
             NSStringFromCGRect(testWindow.bounds).UTF8String,
             NSStringFromCGRect(phone.view.frame).UTF8String,
@@ -498,9 +732,11 @@ static void runChecks() {
   UIWindowSceneGeometryPreferencesIOS *geometry = [[[UIWindowSceneGeometryPreferencesIOS alloc]
       initWithInterfaceOrientations:landscape ? UIInterfaceOrientationMaskLandscapeRight :
                                                UIInterfaceOrientationMaskPortrait] autorelease];
-  [(UIWindowScene *)scene requestGeometryUpdateWithPreferences:geometry errorHandler:^(NSError *error) {
-    fprintf(stderr, "FAIL: orientation %s\n", error.description.UTF8String);
-  }];
+  if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
+    [(UIWindowScene *)scene requestGeometryUpdateWithPreferences:geometry errorHandler:^(NSError *error) {
+      fprintf(stderr, "FAIL: orientation %s\n", error.description.UTF8String);
+    }];
+  }
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
     @try { runChecks(); }
     @catch (NSException *error) { fprintf(stderr, "FAIL: %s\n", error.description.UTF8String); exit(1); }
@@ -551,6 +787,7 @@ int main(int argc, char **argv) {
                 "xcrun", "--sdk", "iphonesimulator", "clang++", "-std=c++17", "-fblocks", "-fno-objc-arc",
                 "-isysroot", sdk.stdout.strip(), "-target", f"{os.uname().machine}-apple-ios26.0-simulator",
                 "-framework", "UIKit", "-framework", "Foundation", "-framework", "CoreGraphics",
+                "-framework", "QuartzCore",
                 str(source_file), "-o", str(executable),
             ], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
