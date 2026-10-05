@@ -5,6 +5,7 @@
 /* Harness for test_ipad_pencil.py. Production methods replace the markers below. */
 #import <UIKit/UIKit.h>
 #include <cassert>
+#include <atomic>
 #include <cmath>
 #include <vector>
 
@@ -38,8 +39,8 @@ static const GHOST_TabletData GHOST_TABLET_DATA_NONE;
 using GHOST_SystemHandle = void *;
 static uint64_t GHOST_GetMilliSeconds(GHOST_SystemHandle) { return 1000; }
 class GHOST_WindowIOS {
-  int32_t pointer_position_[2] = {};
-  bool pointer_position_valid_ = false;
+  std::atomic<uint64_t> pointer_position_{0};
+  std::atomic<bool> pointer_position_valid_{false};
  public:
   UIView *view = nil;
   UIView *getView() { return view; }
@@ -182,6 +183,8 @@ static UIPencilPreferredAction squeezeAction = UIPencilPreferredActionShowContex
   UITouch *current_pencil_touch;
   GHOST_TabletData tablet_data;
   bool pencil_button_active, last_tap_with_pencil;
+  bool pencil_navigation_pending;
+  CGPoint pencil_navigation_start;
   bool finger_tool_enabled;
   GHOSTIOSPencilMenu *pencil_context_menu;
   UIView *hit_view;
@@ -341,21 +344,52 @@ int main()
     assert(navigationHover);
     system.clear();
 
-    // Pencil bypasses the finger-only navigation overlay, including a tap without prior hover.
+    hover.state = UIGestureRecognizerStateEnded;
+    [window handleNavigationTap:(id)hover];
+    assert(system.events.size() == 3 && system.events[0]->x == 1600);
+    assert(system.events[1]->type == GHOST_kEventButtonDown);
+    assert(system.events[1]->tablet.Active == GHOST_kTabletModeStylus);
+    assert(system.events[2]->type == GHOST_kEventButtonUp && system.events[2]->tablet.Pressure == 0);
+    assert(window->tablet_data.Active == GHOST_TABLET_DATA_NONE.Active);
+    hover.state = UIGestureRecognizerStateChanged;
+    system.clear();
+
+    // Navigation alone defers down until tap/drag; a stationary hold never clicks an axis.
     UIView *navigation = [[[UIView alloc] init] autorelease];
     navigation.accessibilityIdentifier = @"blender.viewport.navigation";
     TestTouch *axisTap = touch(navigation, CGPointMake(780, 1100));
     assert([window touchBeganInBlenderViewport:(id)axisTap]);
     send(window, axisTap);
-    assert(system.events.size() == 2 && system.events[1]->type == GHOST_kEventButtonDown);
+    assert(system.events.empty() && window->pencil_navigation_pending);
+    axisTap.phase = UITouchPhaseEnded;
+    send(window, axisTap);
     assert(system.events[0]->tablet.Active == GHOST_kTabletModeStylus);
     assert(system.events[1]->tablet.Active == GHOST_kTabletModeStylus);
     assert(system.events[1]->tablet.Pressure > 0.0f); // Absolute input, never cursor-warp emulation.
-    axisTap.phase = UITouchPhaseEnded;
-    send(window, axisTap);
     assert(system.events.size() == 4 && system.events[3]->type == GHOST_kEventButtonUp);
     assert(system.events[3]->tablet.Active == GHOST_kTabletModeStylus && !navigationHover);
     assert(system.events[3]->tablet.Pressure == 0.0f);
+    system.clear();
+    axisTap.phase = UITouchPhaseBegan;
+    send(window, axisTap);
+    [window cancelPencilStroke]; // Native hold claims the touch.
+    axisTap.phase = UITouchPhaseMoved;
+    send(window, axisTap);
+    axisTap.phase = UITouchPhaseEnded;
+    send(window, axisTap);
+    assert(system.events.empty() && !window->pencil_navigation_pending);
+
+    axisTap.phase = UITouchPhaseBegan;
+    send(window, axisTap);
+    axisTap.phase = UITouchPhaseMoved;
+    axisTap.point = CGPointMake(810, 1140);
+    send(window, axisTap);
+    assert(!window->pencil_navigation_pending && window->pencil_button_active);
+    assert(system.events[0]->x == 1560 && system.events[0]->y == 2200);
+    assert(system.events[1]->type == GHOST_kEventButtonDown);
+    axisTap.phase = UITouchPhaseEnded;
+    send(window, axisTap);
+    assert(system.events.back()->type == GHOST_kEventButtonUp);
     system.clear();
     axisTap.type = UITouchTypeDirect;
     assert(![window touchBeganInBlenderViewport:(id)axisTap]);

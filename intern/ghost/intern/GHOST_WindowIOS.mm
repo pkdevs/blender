@@ -513,6 +513,8 @@ typedef struct UserInputEvent {
   UITouch *current_pencil_touch;
   GHOST_TabletData tablet_data;
   bool pencil_button_active;
+  bool pencil_navigation_pending;
+  CGPoint pencil_navigation_start;
   bool last_tap_with_pencil;
   bool finger_tool_enabled;
   GHOSTIOSPencilMenu *pencil_context_menu;
@@ -547,6 +549,8 @@ typedef struct UserInputEvent {
 
 /* Blender event generation. */
 - (void)generateUserInputEvents:(const UserInputEvent &)event_info;
+- (void)cancelPencilStroke;
+- (void)handleNavigationTap:(UITapGestureRecognizer *)gesture;
 
 /* Gesture recognizers. */
 - (void)registerGestureRecognizers;
@@ -1003,6 +1007,7 @@ typedef struct UserInputEvent {
     [self generateUserInputEvents:event_info];
   }
   pencil_button_active = false;
+  pencil_navigation_pending = false;
   current_pencil_touch = nil;
   tablet_data = GHOST_TABLET_DATA_NONE;
 }
@@ -1051,10 +1056,31 @@ typedef struct UserInputEvent {
           [self cancelPencilStroke];
           WM_apple_ios_ui_navigation_hover_set(false);
           current_pencil_touch = touch;
-          pencil_button_active = true;
-          [self sendPencilButtonEvent:touch isDown:YES];
+          /* Only the navigation hotspot waits to distinguish a tap from a hold.
+           * Viewport tools still receive Pencil-down immediately. */
+          pencil_navigation_pending = [touch.view.accessibilityIdentifier
+              isEqualToString:@"blender.viewport.navigation"];
+          pencil_navigation_start = [touch preciseLocationInView:window->getView()];
+          pencil_button_active = !pencil_navigation_pending;
+          if (pencil_button_active) {
+            [self sendPencilButtonEvent:touch isDown:YES];
+          }
           break;
         case UITouchPhaseMoved:
+          if (touch == current_pencil_touch && pencil_navigation_pending) {
+            CGPoint point = [touch preciseLocationInView:window->getView()];
+            if (hypot(point.x - pencil_navigation_start.x,
+                      point.y - pencil_navigation_start.y) > 10.0) {
+              pencil_navigation_pending = false;
+              pencil_button_active = true;
+              [self updateTabletDataFromPencilTouch:touch];
+              CGPoint start = window->scalePointToWindow(pencil_navigation_start);
+              UserInputEvent down(&start, nullptr, nullptr, true);
+              down.add_event(UserInputEvent::EventTypes::CURSOR_MOVE);
+              down.add_event(UserInputEvent::EventTypes::LEFT_BUTTON_DOWN);
+              [self generateUserInputEvents:down];
+            }
+          }
           if (touch == current_pencil_touch && pencil_button_active) {
             NSArray<UITouch *> *samples = [event coalescedTouchesForTouch:touch];
             if (samples.count == 0) {
@@ -1067,10 +1093,15 @@ typedef struct UserInputEvent {
           break;
         case UITouchPhaseEnded:
           if (touch == current_pencil_touch) {
+            if (pencil_navigation_pending) {
+              [self sendPencilButtonEvent:touch isDown:YES];
+              pencil_button_active = true;
+            }
             if (pencil_button_active) {
               [self sendPencilButtonEvent:touch isDown:NO];
             }
             pencil_button_active = false;
+            pencil_navigation_pending = false;
             current_pencil_touch = nil;
             tablet_data = GHOST_TABLET_DATA_NONE;
           }
@@ -1086,6 +1117,28 @@ typedef struct UserInputEvent {
     }
   }
   [super sendEvent:event];
+}
+
+- (void)handleNavigationTap:(UITapGestureRecognizer *)gesture
+{
+  if (!window || gesture.state != UIGestureRecognizerStateEnded) {
+    return;
+  }
+  CGPoint location = [gesture locationInView:window->getView()];
+  CGPoint point = window->scalePointToWindow(location);
+  tablet_data = GHOST_TABLET_DATA_NONE;
+  /* Axis picking needs an absolute event, including a finger tap without hover. */
+  tablet_data.Active = GHOST_kTabletModeStylus;
+  tablet_data.Pressure = 1.0f;
+  UserInputEvent event(&point, nullptr, nullptr, true);
+  event.add_event(UserInputEvent::EventTypes::CURSOR_MOVE);
+  event.add_event(UserInputEvent::EventTypes::LEFT_BUTTON_DOWN);
+  [self generateUserInputEvents:event];
+  tablet_data.Pressure = 0.0f;
+  UserInputEvent up(&point, nullptr, nullptr, true);
+  up.add_event(UserInputEvent::EventTypes::LEFT_BUTTON_UP);
+  [self generateUserInputEvents:up];
+  tablet_data = GHOST_TABLET_DATA_NONE;
 }
 
 - (void)handleTap:(GHOSTUITapGestureRecognizer *)sender
@@ -2062,6 +2115,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   BOOL _actions_collapsed;
   NSUInteger _action_transition_generation;
   UIView *_view_gizmo_hotspot;
+  UIView *_view_gizmo_feedback;
+  NSArray *_view_gizmo_geometry;
+  UISelectionFeedbackGenerator *_view_gizmo_selection_feedback;
+  UIImpactFeedbackGenerator *_view_gizmo_open_feedback;
+  BOOL _view_gizmo_hovered;
+  BOOL _view_gizmo_pressed;
   NSMutableArray *_view_pie_buttons;
   NSTimer *_toolbar_refresh_timer;
   NSArray *_native_menubar_items;
@@ -2178,6 +2237,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)dealloc
 {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+  [_renderer release];
+  [_view_gizmo_geometry release];
+  [_view_gizmo_selection_feedback release];
+  [_view_gizmo_open_feedback release];
   _pencil_menu.delegate = nil;
   [_pencil_menu release];
   [_toolbar_refresh_timer invalidate];
@@ -3364,6 +3428,13 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   [self refreshNativeMenuBar];
   NSDictionary *model = [self toolbarModel];
+  NSArray *navigation_geometry = model[@"navigationGizmo"];
+  if ([navigation_geometry isKindOfClass:NSArray.class] && navigation_geometry.count == 3 &&
+      ![_view_gizmo_geometry isEqual:navigation_geometry]) {
+    [_view_gizmo_geometry release];
+    _view_gizmo_geometry = [navigation_geometry copy];
+    [self layoutViewPie];
+  }
   NSArray *tools = model[@"tools"];
   NSArray *actions = model[@"actions"];
   NSString *mode = model[@"mode"];
@@ -3415,6 +3486,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (void)viewDidLayoutSubviews
 {
   [super viewDidLayoutSubviews];
+  [self layoutToolbarLabel];
+  [self layoutViewPie];
   [self updateMTKViewDrawableScale];
   [self updateToolbarHeightForCurrentState];
   if (_top_bar_height_constraint) {
@@ -3622,7 +3695,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
   button.tintColor = UIColor.labelColor;
-  button.translatesAutoresizingMaskIntoConstraints = NO;
+  button.translatesAutoresizingMaskIntoConstraints = YES;
   button.accessibilityLabel = title;
   button.tag = command;
 
@@ -3652,10 +3725,6 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   button.transform = CGAffineTransformConcat(CGAffineTransformMakeTranslation(56.0, 56.0),
                                              CGAffineTransformMakeScale(0.72, 0.72));
 
-  [NSLayoutConstraint activateConstraints:@[
-    [button.heightAnchor constraintEqualToConstant:44.0],
-  ]];
-
   [button setNeedsUpdateConfiguration];
   [_view_pie_buttons addObject:button];
   return button;
@@ -3673,6 +3742,100 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [previous_hover_button setNeedsUpdateConfiguration];
   _view_pie_hover_button.selected = YES;
   [_view_pie_hover_button setNeedsUpdateConfiguration];
+  if (hoverButton) {
+    [_view_gizmo_selection_feedback selectionChanged];
+  }
+}
+
+- (void)updateViewGizmoFeedback
+{
+  const BOOL active = _view_pie_visible;
+  const BOOL highlighted = active || _view_gizmo_hovered || _view_gizmo_pressed;
+  _view_gizmo_feedback.layer.borderColor =
+      [UIColor.labelColor colorWithAlphaComponent:active ? 0.5 : 0.2].CGColor;
+  _view_gizmo_feedback.backgroundColor =
+      [UIColor.labelColor colorWithAlphaComponent:active ? 0.12 : 0.05];
+  _view_gizmo_hotspot.accessibilityValue = active ? @"View menu open" : nil;
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0.0 : 0.22
+                        delay:0.0
+       usingSpringWithDamping:0.78
+        initialSpringVelocity:0.0
+                      options:UIViewAnimationOptionBeginFromCurrentState |
+                              UIViewAnimationOptionAllowUserInteraction
+                   animations:^{
+                     self->_view_gizmo_feedback.alpha = highlighted ? 1.0 : 0.0;
+                     CGFloat scale = active ? 1.08 : (self->_view_gizmo_pressed ? 0.94 : 1.0);
+                     self->_view_gizmo_feedback.transform = CGAffineTransformMakeScale(scale, scale);
+                   }
+                   completion:nil];
+}
+
+- (void)handleViewGizmoHover:(UIHoverGestureRecognizer *)gesture
+{
+  BOOL hovered = gesture.state == UIGestureRecognizerStateBegan ||
+                 gesture.state == UIGestureRecognizerStateChanged;
+  if (_view_gizmo_hovered == hovered) {
+    return;
+  }
+  _view_gizmo_hovered = hovered;
+  [self updateViewGizmoFeedback];
+}
+
+- (void)handleViewGizmoPress:(UIControl *)control
+{
+  _view_gizmo_pressed = YES;
+  [_view_gizmo_open_feedback prepare];
+  [self updateViewGizmoFeedback];
+}
+
+- (void)handleViewGizmoRelease:(UIControl *)control
+{
+  _view_gizmo_pressed = NO;
+  [self updateViewGizmoFeedback];
+}
+
+- (void)cancelViewGizmoInteraction
+{
+  [self hideToolbarLabelAnimated:NO];
+  _view_gizmo_hovered = NO;
+  _view_gizmo_pressed = NO;
+  [self setViewPieVisible:NO animated:NO];
+}
+
+- (void)layoutViewPie
+{
+  CGRect viewport = _overlay_view.bounds;
+  CGFloat radius = _view_gizmo_geometry ? [_view_gizmo_geometry[2] doubleValue] * viewport.size.width : 40;
+  CGPoint center = _view_gizmo_geometry ?
+      CGPointMake([_view_gizmo_geometry[0] doubleValue] * viewport.size.width,
+                  [_view_gizmo_geometry[1] doubleValue] * viewport.size.height) :
+      CGPointMake(CGRectGetMaxX(viewport) - 50, CGRectGetMaxY(viewport) - 50);
+  CGFloat target_radius = MAX(44.0, radius + 10.0);
+  _view_gizmo_hotspot.bounds = CGRectMake(0, 0, target_radius * 2, target_radius * 2);
+  _view_gizmo_hotspot.center = center;
+  _view_gizmo_feedback.bounds = CGRectMake(0, 0, (radius + 2) * 2, (radius + 2) * 2);
+  _view_gizmo_feedback.center = CGPointMake(target_radius, target_radius);
+  _view_gizmo_feedback.layer.cornerRadius = radius + 2;
+  CGRect safe = _overlay_view.safeAreaLayoutGuide.layoutFrame;
+  if (CGRectIsEmpty(safe)) {
+    return;
+  }
+  const BOOL compact = safe.size.height < 540.0 || safe.size.width < 430.0;
+  CGFloat gap = CGRectGetMaxX(safe) - CGRectGetMinX(_view_gizmo_hotspot.frame);
+  const CGFloat trailing[] = {gap + 16, gap + 26, gap + 42, gap + 42, gap + 16, 20, 20, 20};
+  const CGFloat bottom[] = {12, 72, 132, 192, 244, 304, 364, 424};
+  CGFloat width = MIN(180.0, (safe.size.width - 36.0) / 2.0);
+  CGFloat base = MIN(136.0, MAX(68.0, safe.size.height - 300.0));
+  for (NSUInteger i = 0; i < _view_pie_buttons.count; i++) {
+    UIButton *button = _view_pie_buttons[i];
+    CGFloat x = compact ? 12.0 + (i % 2) * (width + 12.0) : trailing[i];
+    CGFloat y = compact ? base + (i / 2) * 52.0 : bottom[i];
+    CGFloat w = compact ? width : MIN(180.0, [button sizeThatFits:CGSizeMake(180, 44)].width);
+    /* Bounds/center remain stable while the reveal transform is animating. */
+    button.bounds = CGRectMake(0, 0, w, 44);
+    button.center = CGPointMake(CGRectGetMaxX(safe) - x - w / 2.0,
+                               CGRectGetMaxY(safe) - y - 22.0);
+  }
 }
 
 - (UIButton *)viewPieButtonAtGestureLocation:(UIGestureRecognizer *)gesture
@@ -3694,34 +3857,45 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (void)setViewPieVisible:(BOOL)visible animated:(BOOL)animated
 {
   _view_pie_visible = visible;
+  if (!visible) {
+    [self setViewPieHoverButton:nil];
+  }
+  [self updateViewGizmoFeedback];
   if (visible) {
+    [self layoutViewPie];
     for (UIButton *button in _view_pie_buttons) {
+      if (button.hidden) {
+        CGPoint hub = _view_gizmo_hotspot.center;
+        button.transform = CGAffineTransformConcat(
+            CGAffineTransformMakeTranslation((hub.x - button.center.x) * 0.18,
+                                             (hub.y - button.center.y) * 0.18),
+            CGAffineTransformMakeScale(0.82, 0.82));
+      }
       button.hidden = NO;
     }
   }
 
   void (^applyVisibility)(void) = ^{
-    NSUInteger index = 0;
     for (UIButton *button in self->_view_pie_buttons) {
       button.alpha = visible ? 1.0 : 0.0;
-      CGFloat travel = visible ? 0.0 : 56.0 + (CGFloat)index * 2.0;
-      button.transform = CGAffineTransformConcat(CGAffineTransformMakeTranslation(travel, travel),
-                                                 CGAffineTransformMakeScale(visible ? 1.0 : 0.72,
-                                                                            visible ? 1.0 : 0.72));
-      index++;
+      CGPoint hub = self->_view_gizmo_hotspot.center;
+      CGFloat travel = visible ? 0.0 : 0.18;
+      button.transform = CGAffineTransformConcat(
+          CGAffineTransformMakeTranslation((hub.x - button.center.x) * travel,
+                                           (hub.y - button.center.y) * travel),
+          CGAffineTransformMakeScale(visible ? 1.0 : 0.82, visible ? 1.0 : 0.82));
     }
   };
 
   void (^finishVisibility)(BOOL) = ^(BOOL finished) {
-    if (!visible) {
-      [self setViewPieHoverButton:nil];
+    if (!visible && !self->_view_pie_visible) {
       for (UIButton *button in self->_view_pie_buttons) {
         button.hidden = YES;
       }
     }
   };
 
-  if (!animated) {
+  if (!animated || UIAccessibilityIsReduceMotionEnabled()) {
     applyVisibility();
     finishVisibility(YES);
     return;
@@ -3752,7 +3926,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 
   if (gesture.state == UIGestureRecognizerStateEnded) {
-    UIButton *button = [self viewPieButtonAtGestureLocation:gesture] ?: _view_pie_hover_button;
+    UIButton *button = [self viewPieButtonAtGestureLocation:gesture];
     if (button != nil) {
       WM_apple_ios_ui_command_enqueue((int)button.tag);
     }
@@ -3763,6 +3937,31 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   if (gesture.state == UIGestureRecognizerStateCancelled ||
       gesture.state == UIGestureRecognizerStateFailed)
   {
+    [self setViewPieVisible:NO animated:YES];
+  }
+}
+
+- (void)handleViewGizmoHold:(UILongPressGestureRecognizer *)gesture
+{
+  if (gesture.state == UIGestureRecognizerStateBegan) {
+    /* Consume the pending Pencil tap before it can become a Blender click. */
+    [(GHOSTUIWindow *)_view.window cancelPencilStroke];
+    [self setViewPieVisible:YES animated:YES];
+    [_view_gizmo_open_feedback impactOccurred];
+    [_view_gizmo_selection_feedback prepare];
+  }
+  else if (gesture.state == UIGestureRecognizerStateChanged) {
+    [self setViewPieHoverButton:[self viewPieButtonAtGestureLocation:gesture]];
+  }
+  else if (gesture.state == UIGestureRecognizerStateEnded) {
+    UIButton *button = [self viewPieButtonAtGestureLocation:gesture];
+    if (button) {
+      WM_apple_ios_ui_command_enqueue((int)button.tag);
+    }
+    [self setViewPieVisible:NO animated:YES];
+  }
+  else if (gesture.state == UIGestureRecognizerStateCancelled ||
+           gesture.state == UIGestureRecognizerStateFailed) {
     [self setViewPieVisible:NO animated:YES];
   }
 }
@@ -4407,44 +4606,28 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSArray *view_pie_specs = @[
     @{@"title" : @"Frame All",
       @"symbol" : @"rectangle.expand.vertical",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_ALL),
-      @"trailing" : @(-214.0),
-      @"bottom" : @(-12.0)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_ALL)},
     @{@"title" : @"Frame Selected",
       @"symbol" : @"viewfinder",
-      @"command" : @(GHOST_IOS_UI_COMMAND_FRAME_SELECTED),
-      @"trailing" : @(-206.0),
-      @"bottom" : @(-72.0)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_FRAME_SELECTED)},
     @{@"title" : @"Camera",
       @"symbol" : @"camera",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_CAMERA),
-      @"trailing" : @(-178.0),
-      @"bottom" : @(-132.0)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_CAMERA)},
     @{@"title" : @"Perspective",
       @"symbol" : @"cube.transparent",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_PERSP_ORTHO),
-      @"trailing" : @(-136.0),
-      @"bottom" : @(-192.0)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_PERSP_ORTHO)},
     @{@"title" : @"Local View",
       @"symbol" : @"scope",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_LOCAL),
-      @"trailing" : @(-70.0),
-      @"bottom" : @(-244.0)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_LOCAL)},
     @{@"title" : @"Front",
       @"symbol" : @"arrow.up.square",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_FRONT),
-      @"trailing" : @(-20.0),
-      @"bottom" : @(-304.0)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_FRONT)},
     @{@"title" : @"Right",
       @"symbol" : @"arrow.right.square",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_RIGHT),
-      @"trailing" : @(-20.0),
-      @"bottom" : @(-364.0)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_RIGHT)},
     @{@"title" : @"Top",
       @"symbol" : @"arrow.down.to.line.square",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_TOP),
-      @"trailing" : @(-20.0),
-      @"bottom" : @(-424.0)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_TOP)},
   ];
 
   for (NSDictionary *spec in view_pie_specs) {
@@ -4470,12 +4653,47 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
         arrayByAddingObject:view.creatingFixedGroup];
   }
 
-  _view_gizmo_hotspot = [[[UIView alloc] initWithFrame:CGRectZero] autorelease];
-  _view_gizmo_hotspot.translatesAutoresizingMaskIntoConstraints = NO;
+  UIButton *gizmo_control = [UIButton buttonWithType:UIButtonTypeCustom];
+  _view_gizmo_hotspot = gizmo_control;
+  _view_gizmo_hotspot.translatesAutoresizingMaskIntoConstraints = YES;
   _view_gizmo_hotspot.backgroundColor = UIColor.clearColor;
   _view_gizmo_hotspot.accessibilityIdentifier = @"blender.viewport.navigation";
-  _view_gizmo_hotspot.userInteractionEnabled = !phone;
+  _view_gizmo_hotspot.accessibilityLabel = @"View navigation";
   [_overlay_view addSubview:_view_gizmo_hotspot];
+  _view_gizmo_selection_feedback = [[UISelectionFeedbackGenerator
+      feedbackGeneratorForView:_view_gizmo_hotspot] retain];
+  _view_gizmo_open_feedback = [[UIImpactFeedbackGenerator
+      feedbackGeneratorWithStyle:UIImpactFeedbackStyleSoft forView:_view_gizmo_hotspot] retain];
+  _view_gizmo_feedback = [[[UIView alloc] initWithFrame:CGRectMake(14, 14, 84, 84)] autorelease];
+  _view_gizmo_feedback.userInteractionEnabled = NO;
+  _view_gizmo_feedback.layer.cornerRadius = 42;
+  _view_gizmo_feedback.layer.borderWidth = 1;
+  _view_gizmo_feedback.alpha = 0;
+  [_view_gizmo_hotspot addSubview:_view_gizmo_feedback];
+  [gizmo_control addTarget:self action:@selector(handleViewGizmoPress:)
+          forControlEvents:UIControlEventTouchDown];
+  [gizmo_control addTarget:self action:@selector(handleViewGizmoRelease:)
+          forControlEvents:UIControlEventTouchUpInside |
+                           UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+
+  UIHoverGestureRecognizer *view_gizmo_hover = [[UIHoverGestureRecognizer alloc]
+      initWithTarget:self action:@selector(handleViewGizmoHover:)];
+  [_view_gizmo_hotspot addGestureRecognizer:view_gizmo_hover];
+  [view_gizmo_hover release];
+
+  UILongPressGestureRecognizer *view_gizmo_hold = [[UILongPressGestureRecognizer alloc]
+      initWithTarget:self action:@selector(handleViewGizmoHold:)];
+  view_gizmo_hold.minimumPressDuration = 0.32;
+  view_gizmo_hold.allowableMovement = 10.0;
+  view_gizmo_hold.allowedTouchTypes = @[ @(UITouchTypeDirect), @(UITouchTypePencil) ];
+  [_view_gizmo_hotspot addGestureRecognizer:view_gizmo_hold];
+
+  UITapGestureRecognizer *view_gizmo_tap = [[UITapGestureRecognizer alloc]
+      initWithTarget:self action:@selector(handleViewGizmoTap:)];
+  view_gizmo_tap.allowedTouchTypes = @[ @(UITouchTypeDirect) ];
+  [view_gizmo_tap requireGestureRecognizerToFail:view_gizmo_hold];
+  [_view_gizmo_hotspot addGestureRecognizer:view_gizmo_tap];
+  [view_gizmo_tap release];
 
   UIPanGestureRecognizer *view_gizmo_drag = [[UIPanGestureRecognizer alloc]
       initWithTarget:self
@@ -4484,8 +4702,13 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   view_gizmo_drag.allowedTouchTypes = @[ @(UITouchTypeDirect) ];
   view_gizmo_drag.cancelsTouchesInView = YES;
   view_gizmo_drag.delegate = self;
+  [view_gizmo_drag requireGestureRecognizerToFail:view_gizmo_hold];
   [_view_gizmo_hotspot addGestureRecognizer:view_gizmo_drag];
   [view_gizmo_drag release];
+  [view_gizmo_hold release];
+  [NSNotificationCenter.defaultCenter addObserver:self
+      selector:@selector(cancelViewGizmoInteraction)
+      name:UIApplicationWillResignActiveNotification object:nil];
 
   UILayoutGuide *safe_area = _overlay_view.safeAreaLayoutGuide;
   /* The radial view is frontmost and passes through when the palette is closed. */
@@ -4551,28 +4774,22 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     [_action_stack.heightAnchor constraintEqualToAnchor:_action_scroll.frameLayoutGuide.heightAnchor
                                              constant:-12.0],
 
-    [_view_gizmo_hotspot.trailingAnchor constraintEqualToAnchor:safe_area.trailingAnchor
-                                                       constant:-6.0],
-    [_view_gizmo_hotspot.bottomAnchor constraintEqualToAnchor:safe_area.bottomAnchor constant:-12.0],
-    [_view_gizmo_hotspot.widthAnchor constraintEqualToConstant:112.0],
-    [_view_gizmo_hotspot.heightAnchor constraintEqualToConstant:112.0],
   ]];
   [self installActionStripLayout];
 
-  for (NSUInteger i = 0; i < _view_pie_buttons.count; i++) {
-    UIButton *button = _view_pie_buttons[i];
-    NSDictionary *spec = view_pie_specs[i];
-    [NSLayoutConstraint activateConstraints:@[
-      [button.trailingAnchor constraintEqualToAnchor:safe_area.trailingAnchor
-                                            constant:[spec[@"trailing"] doubleValue]],
-      [button.bottomAnchor constraintEqualToAnchor:safe_area.bottomAnchor
-                                          constant:[spec[@"bottom"] doubleValue]],
-    ]];
-  }
+  [self layoutViewPie];
+}
+
+- (void)handleViewGizmoTap:(UITapGestureRecognizer *)gesture
+{
+  [(GHOSTUIWindow *)_view.window handleNavigationTap:gesture];
 }
 
 - (void)handleOverlayCommand:(UIButton *)sender
 {
+  if ([_view_pie_buttons containsObject:sender]) {
+    [self setViewPieVisible:NO animated:YES];
+  }
   WM_apple_ios_ui_command_enqueue((int)sender.tag);
 }
 

@@ -77,6 +77,7 @@ class IPadPencilTest(unittest.TestCase):
             "- (CGPoint)getScaledPencilPoint:",
             "- (void)sendPencilCursorEvent:",
             "- (void)sendPencilButtonEvent:",
+            "- (void)handleNavigationTap:",
             "- (void)cancelPencilStroke\n",
             "- (void)setFingerToolEnabled:",
             "- (void)sendEvent:",
