@@ -271,14 +271,45 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
         [toggle sendActionsForControlEvents:UIControlEventValueChanged];
       }
     }
-    NSArray *rows = [panels valueForKey:@"_rows"];
-    UITableView *tree = [panels valueForKey:@"_tree"];
+    UICollectionView *tree = [panels valueForKey:@"_tree"];
+    UICollectionViewDiffableDataSource *treeData = [panels valueForKey:@"_treeDataSource"];
+    if ([action isEqual:@"hierarchy_search"]) {
+      UISearchBar *search = [panels valueForKey:@"_search"];
+      search.text = request[@"value"];
+      [search.delegate searchBar:search textDidChange:search.text];
+    }
+    if ([action isEqual:@"hierarchy_expand"]) {
+      NSString *key = request[@"key"];
+      NSDiffableDataSourceSectionSnapshot *outline = [treeData snapshotForSection:@"scene"];
+      if ([request[@"value"] boolValue]) {
+        treeData.sectionSnapshotHandlers.willExpandItemHandler(key);
+        [outline expandItems:@[key]];
+      }
+      else {
+        treeData.sectionSnapshotHandlers.willCollapseItemHandler(key);
+        [outline collapseItems:@[key]];
+      }
+      [treeData applySnapshot:outline toSection:@"scene" animatingDifferences:NO];
+    }
+    NSArray *rows = [panels valueForKey:@"hierarchyRows"];
     if ([action isEqual:@"select"]) {
       NSUInteger index = [rows indexOfObjectPassingTest:^BOOL(NSDictionary *row, NSUInteger index, BOOL *stop) {
         return [row[@"id"] isEqual:request[@"id"]];
       }];
       if (index != NSNotFound) {
-        [tree.delegate tableView:tree didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:index inSection:0]];
+        NSIndexPath *path = [NSIndexPath indexPathForItem:index inSection:0];
+        if ([request[@"extend"] boolValue]) {
+          [tree.delegate collectionView:tree didBeginMultipleSelectionInteractionAtIndexPath:path];
+        }
+        if (request[@"value"] && ![request[@"value"] boolValue]) {
+          [tree deselectItemAtIndexPath:path animated:NO];
+          [tree.delegate collectionView:tree didDeselectItemAtIndexPath:path];
+        }
+        else {
+          [tree selectItemAtIndexPath:path animated:NO scrollPosition:UICollectionViewScrollPositionNone];
+          [tree.delegate collectionView:tree didSelectItemAtIndexPath:path];
+        }
+        [tree.delegate collectionViewDidEndMultipleSelectionInteraction:tree];
       }
     }
     if ([action isEqual:@"property"]) {
@@ -333,6 +364,12 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     UIView *left = [panels valueForKey:@"_inspector"];
     UIView *right = [panels valueForKey:@"_hierarchy"];
     NSMutableDictionary *sectionRows = [NSMutableDictionary dictionary];
+    NSMutableArray *selectedObjects = [NSMutableArray array];
+    NSDictionary *nodesByKey = [panels valueForKey:@"_nodesByKey"];
+    for (NSIndexPath *path in tree.indexPathsForSelectedItems) {
+      NSString *identifier = nodesByKey[[treeData itemIdentifierForIndexPath:path]][@"id"];
+      if (identifier) { [selectedObjects addObject:identifier]; }
+    }
     UITableView *form = [panels valueForKey:@"_form"];
     NSArray *sectionIDs = [panels valueForKey:@"_sectionIdentifiers"];
     for (NSUInteger i = 0; i < sectionIDs.count; i++) {
@@ -341,6 +378,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
       @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities,
       @"switches": switches,
+      @"hierarchyClass": NSStringFromClass(tree.class), @"selectedObjects": selectedObjects,
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
       @"sliders": sliderValues,

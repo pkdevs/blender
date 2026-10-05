@@ -44,6 +44,38 @@ def tests():
     state = ui()
     check(state['inspector'] and state['hierarchy'], 'Both floating panels open on iPad')
     check(len(state['rows']) >= 4, 'Real Blender hierarchy appears')
+    check(state['hierarchyClass'] == 'UICollectionView', 'Hierarchy uses the native sidebar outline view')
+    root = state['rows'][0]['key']
+    ui(action='hierarchy_expand', key=root, value=False)
+    yield 0.3
+    check(len(ui()['rows']) == 1, 'Native outline collapses descendants')
+    ui(action='hierarchy_search', value='camera')
+    yield 0.3
+    check(any(row['name'] == 'Camera' for row in ui()['rows']), 'Search reveals objects inside collapsed branches')
+    ui(action='hierarchy_search', value='')
+    yield 0.3
+    check(len(ui()['rows']) == 1, 'Clearing search restores the original collapsed outline')
+    ui(action='hierarchy_expand', key=root, value=True)
+    yield 0.3
+    cube_id = str(bpy.data.objects['Cube'].session_uid)
+    camera_id = str(bpy.data.objects['Camera'].session_uid)
+    check(cube_id in ui()['selectedObjects'], 'Re-expanding the native outline restores Blender selection')
+    ui(action='select', id=camera_id)
+    yield 0.7
+    ui(action='select', id=cube_id, extend=True)
+    yield 0.7
+    check(set(ui()['selectedObjects']) == {cube_id, camera_id} and
+          bpy.context.active_object == bpy.data.objects['Cube'] and
+          bpy.data.objects['Camera'].select_get(), 'Native multi-selection updates Blender and keeps both rows selected')
+    ui(action='select', id=cube_id, extend=True, value=False)
+    yield 0.7
+    check(ui()['selectedObjects'] == [camera_id] and bpy.context.active_object == bpy.data.objects['Camera'],
+          'Native deselection preserves the remaining active object')
+    ui(action='select', id=cube_id)
+    yield 0.7
+    check(ui()['selectedObjects'] == [cube_id] and not bpy.data.objects['Camera'].select_get(),
+          'Ordinary native selection replaces the selected objects')
+    state = ui()
     check(state['right'][0] < state['left'][0], 'Hierarchy is left and Properties is right')
     check({'OBJECT', 'SCENE', 'DATA'}.issubset({tab['id'] for tab in state['tabs']}),
           'Blender Properties context tabs are projected')
