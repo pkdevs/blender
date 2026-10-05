@@ -228,9 +228,10 @@ void transform_shuffle_vertical(ListBaseT<Strip> *seqbasep,
     for (const int i : strips.index_range()) {
       strips[i]->channel_set(orig_channels[i] + delta);
     }
-    if (std::ranges::all_of(strips, [&](Strip *strip) {
-          return shuffle_channel_is_free(scene, seqbasep, channels, strip);
-        }))
+    if (std::ranges::all_of(strips,
+                            [&](Strip *strip) {
+                              return shuffle_channel_is_free(scene, seqbasep, channels, strip);
+                            }))
     {
       return;
     }
