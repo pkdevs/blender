@@ -180,6 +180,9 @@ bool set_property(bContext *C, Button &but, int index, const DictionaryValue &re
       float minimum, maximum;
       RNA_property_float_range(ptr, prop, &minimum, &maximum);
       const float value = std::clamp(float(numeric), minimum, maximum);
+      if (request.lookup_dict("slider") && value == (array ? RNA_property_float_get_index(ptr, prop, index) : RNA_property_float_get(ptr, prop))) {
+        return true;
+      }
       if (array) {
         RNA_property_float_set_index(ptr, prop, index, value);
       }
@@ -195,6 +198,9 @@ bool set_property(bContext *C, Button &but, int index, const DictionaryValue &re
       int minimum, maximum;
       RNA_property_int_range(ptr, prop, &minimum, &maximum);
       const int value = int(std::clamp(numeric, double(minimum), double(maximum)));
+      if (request.lookup_dict("slider") && value == (array ? RNA_property_int_get_index(ptr, prop, index) : RNA_property_int_get(ptr, prop))) {
+        return true;
+      }
       if (array) {
         RNA_property_int_set_index(ptr, prop, index, value);
       }
@@ -327,6 +333,15 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
   field.append_int("editable", RNA_property_editable(ptr, prop) &&
       !(but.flag & (BUT_DISABLED | BUT_INACTIVE)));
   field.append_str("icon", icon_name(button_icon(&but)));
+  if (but.type == ButtonType::NumSlider && ELEM(type, PROP_INT, PROP_FLOAT) &&
+      std::isfinite(but.softmin) && std::isfinite(but.softmax) && but.softmax > but.softmin) {
+    auto slider = field.append_dict("slider");
+    slider->append_double("min", but.softmin);
+    slider->append_double("max", but.softmax);
+    const PropertyScaleType scale = button_scale_type(&but);
+    slider->append_str("scale", scale == PROP_SCALE_LOG && but.softmin > 0 ? "LOG" :
+                                scale == PROP_SCALE_CUBIC ? "CUBIC" : "LINEAR");
+  }
   switch (type) {
     case PROP_BOOLEAN:
       field.append_str("type", "BOOLEAN");
