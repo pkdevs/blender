@@ -49,6 +49,55 @@ def tests():
           'Blender Properties context tabs are projected')
     check(state['expanded'] == [state['sections'][0]], 'Only the first Blender panel starts expanded')
     check('object.location.0' in state['fields'], 'Native inspector exposes the active object transform')
+    def transform_fields():
+        return next(section['properties'] for section in ui()['properties']['sections']
+                    if section['id'] == 'OBJECT_PT_transform')
+
+    transforms = transform_fields()
+    check(not any(item.get('property') in {'lock_location', 'lock_rotation', 'lock_scale'}
+                  for item in transforms), 'Transform locks do not create separate toggle rows')
+    for name, lock_name in [('location', 'lock_location'), ('rotation_euler', 'lock_rotation'),
+                            ('scale', 'lock_scale')]:
+        fields = [item for item in transforms if item.get('property') == name]
+        check(len(fields) == 3 and all(item['lock']['property'] == lock_name and
+              item['lock']['index'] == item['index'] for item in fields),
+              name + ' fields carry their own Blender axis locks')
+    location_x = next(item for item in transforms if item.get('property') == 'location' and item['index'] == 0)
+    check(ui(action='lock_menu', key=location_x['key'])['lockMenu'] == 'Lock',
+          'Native property menu offers Lock for an unlocked axis')
+    ui(action='property_lock', key=location_x['key'])
+    yield 1.0
+    check(tuple(bpy.data.objects['Cube'].lock_location) == (True, False, False),
+          'Native Lock action changes only the corresponding Blender axis')
+    check(ui(action='lock_menu', key=location_x['key'])['lockMenu'] == 'Unlock',
+          'Native property menu updates to Unlock after the snapshot arrives')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_undo')
+    yield 1.0
+    check(not any(bpy.data.objects['Cube'].lock_location), 'Native property locking is undoable')
+    engine.WM_apple_ios_ui_operator_enqueue(b'ED_OT_redo')
+    yield 1.0
+    check(bpy.data.objects['Cube'].lock_location[0], 'Native property locking is redoable')
+    ui(action='property_lock', key=location_x['key'])
+    yield 1.0
+    check(not any(bpy.data.objects['Cube'].lock_location), 'Native Unlock action clears the Blender lock')
+    for mode, prop in [('QUATERNION', 'rotation_quaternion'), ('AXIS_ANGLE', 'rotation_axis_angle')]:
+        bpy.data.objects['Cube'].rotation_mode = mode
+        yield 1.0
+        fields = [item for item in transform_fields() if item.get('property') == prop]
+        check(len(fields) == 4 and all(item['lock']['property'] ==
+              ('lock_rotation_w' if item['index'] == 0 else 'lock_rotation') and
+              item['lock'].get('index', -1) == item['index'] - 1 for item in fields),
+              mode + ' rotation locks map W and XYZ correctly')
+        first = next(item for item in fields if item['index'] == 0)
+        ui(action='property_lock', key=first['key'])
+        yield 1.0
+        check(bpy.data.objects['Cube'].lock_rotation_w and not any(bpy.data.objects['Cube'].lock_rotation),
+              mode + ' native W lock leaves XYZ independent')
+        ui(action='property_lock', key=first['key'])
+        yield 1.0
+        check(not bpy.data.objects['Cube'].lock_rotation_w, mode + ' native W unlock works')
+    bpy.data.objects['Cube'].rotation_mode = 'XYZ'
+    yield 1.0
     camera = bpy.data.objects['Camera']
     ui(action='select', id=str(camera.session_uid))
     yield 1.0

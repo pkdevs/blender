@@ -171,6 +171,18 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       }
     }
     NSDictionary *controls = [panels valueForKey:@"_controls"];
+    NSString *lockMenuTitle = @"";
+    if ([action isEqual:@"property_lock"] || [action isEqual:@"lock_menu"]) {
+      UITextField *field = controls[request[@"key"]];
+      if ([field isKindOfClass:UITextField.class]) {
+        UIMenu *menu = [field.delegate textField:field editMenuForCharactersInRanges:@[] suggestedActions:@[]];
+        UIAction *item = (UIAction *)menu.children.firstObject;
+        lockMenuTitle = item.title ?: @"";
+        if ([action isEqual:@"property_lock"] && [item isKindOfClass:UIAction.class]) {
+          [item performWithSender:field target:nil];
+        }
+      }
+    }
     if ([action hasPrefix:@"slider_"]) {
       UISlider *slider = [panels valueForKey:@"_sliders"][request[@"key"]];
       if ([action isEqual:@"slider_begin"]) {
@@ -273,6 +285,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
       @"sliders": sliderValues,
+      @"lockMenu": lockMenuTitle,
       @"tabs": [panels valueForKey:@"_tabs"] ?: @[],
       @"properties": [panels valueForKey:@"_snapshot"][@"inspector"] ?: @{},
       @"colorPicker": @([[panels valueForKey:@"_colorPicker"] isKindOfClass:UIColorPickerViewController.class]),
