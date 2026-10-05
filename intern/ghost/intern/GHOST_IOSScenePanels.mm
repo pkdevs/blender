@@ -620,6 +620,10 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         _sliders[key] = slider;
       }
       if ([property[@"header"] boolValue] && [control isKindOfClass:UISwitch.class]) {
+        if (property[@"animation"]) {
+          [control addInteraction:[[[UIContextMenuInteraction alloc] initWithDelegate:self] autorelease]];
+          control.accessibilityHint = @"Touch and hold for property actions.";
+        }
         [control setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
         [control setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
         [(property[@"section"] ? innerHeading : headerControls) addArrangedSubview:control];
@@ -639,9 +643,11 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         [indicator.heightAnchor constraintEqualToConstant:12].active = YES;
         [row insertArrangedSubview:indicator atIndex:1];
         _lockIndicators[key] = indicator;
+      }
+      if (property[@"lock"] || property[@"animation"]) {
         row.accessibilityIdentifier = key;
         [row addInteraction:[[[UIContextMenuInteraction alloc] initWithDelegate:self] autorelease]];
-        control.accessibilityHint = @"Touch and hold for Lock or Unlock.";
+        control.accessibilityHint = @"Touch and hold for property actions.";
       }
       if (vector) {
         label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
@@ -886,12 +892,51 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   return action;
 }
 
+- (NSArray<UIMenuElement *> *)menuActionsForProperty:(NSDictionary *)property
+{
+  NSMutableArray *items = [NSMutableArray array];
+  UIAction *lock = [self lockActionForProperty:property];
+  if (lock) {
+    [items addObject:lock];
+  }
+  NSString *key = [self keyForProperty:property];
+  NSString *objectID = _objectID;
+  __block GHOSTIOSScenePanels *owner = self;
+  for (NSDictionary *entry in property[@"animation"]) {
+    NSString *identifier = entry[@"id"];
+    UIAction *action = [UIAction actionWithTitle:entry[@"title"] image:_icon(entry[@"icon"])
+        identifier:[@"blender.property.animation." stringByAppendingString:identifier]
+        handler:^(__kindof UIAction *selected) {
+      NSDictionary *current = [owner propertyForKey:key];
+      if (![owner->_objectID isEqual:objectID]) {
+        return;
+      }
+      for (NSDictionary *available in current[@"animation"]) {
+        if ([available[@"id"] isEqual:identifier]) {
+          [owner->_inspector endEditing:YES];
+          NSMutableDictionary *request = [[current mutableCopy] autorelease];
+          request[@"action"] = @"animation";
+          request[@"animation_action"] = identifier;
+          request[@"id"] = objectID;
+          [owner send:request];
+          break;
+        }
+      }
+    }];
+    [items addObject:action];
+  }
+  return items;
+}
+
 - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
                        configurationForMenuAtLocation:(CGPoint)location
 {
   NSString *key = interaction.view.accessibilityIdentifier;
+  if ([key hasPrefix:@"blender.property."]) {
+    key = [key substringFromIndex:@"blender.property.".length];
+  }
   NSDictionary *property = [self propertyForKey:key];
-  if (!property[@"lock"]) {
+  if (!property[@"lock"] && ![property[@"animation"] count]) {
     return nil;
   }
   NSString *objectID = _objectID;
@@ -902,9 +947,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       return nil;
     }
     NSDictionary *current = [owner propertyForKey:key];
-    UIAction *action = [owner lockActionForProperty:current];
+    NSArray *actions = [owner menuActionsForProperty:current];
     NSString *title = current[@"group"] ? [NSString stringWithFormat:@"%@ %@", current[@"group"], current[@"label"]] : current[@"label"];
-    return action ? [UIMenu menuWithTitle:title children:@[action]] : nil;
+    return actions.count ? [UIMenu menuWithTitle:title children:actions] : nil;
   }];
 }
 
@@ -913,11 +958,11 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
                 suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions
 {
   NSDictionary *property = [self propertyForKey:[self keyForProperty:((GHOSTIOSPropertyField *)textField).descriptor]];
-  UIAction *lock = [self lockActionForProperty:property];
-  if (!lock) {
+  NSArray *actions = [self menuActionsForProperty:property];
+  if (!actions.count) {
     return [UIMenu menuWithChildren:suggestedActions];
   }
-  NSMutableArray *items = [NSMutableArray arrayWithObject:lock];
+  NSMutableArray *items = [NSMutableArray arrayWithArray:actions];
   [items addObjectsFromArray:suggestedActions];
   return [UIMenu menuWithChildren:items];
 }
@@ -1089,6 +1134,10 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       NSMutableDictionary *shape = [[property mutableCopy] autorelease];
       [shape removeObjectForKey:@"value"];
       [shape removeObjectForKey:@"exposure"];
+      if (shape[@"animation"]) {
+        /* Keyframe/frame changes update menu contents without replacing the active controls. */
+        shape[@"animation"] = @YES;
+      }
       if (shape[@"lock"]) {
         NSMutableDictionary *lockShape = [[shape[@"lock"] mutableCopy] autorelease];
         [lockShape removeObjectForKey:@"value"];

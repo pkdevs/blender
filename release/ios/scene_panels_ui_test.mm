@@ -232,12 +232,59 @@ int main()
     NSCAssert([unlockAction.title isEqual:@"Unlock"], @"Locked properties offer Unlock");
     [unlockAction performWithSender:lockField target:nil];
     NSCAssert(![request[@"value"] boolValue], @"Unlock queues the inverse lock value");
+    lockProperty[@"native"] = @YES;
+    lockProperty[@"animation"] = @[@{@"id": @"insert_single", @"title": @"Insert Single Keyframe", @"icon": @"KEY_HLT"}];
+    lockModel[@"ack"] = [panels valueForKey:@"_sequence"];
+    [panels updateSnapshot:lockModel];
+    UITextField *keyField = [panels valueForKey:@"_controls"][@"location-x"];
+    UIMenu *keyMenu = [keyField.delegate textField:keyField editMenuForCharactersInRanges:@[] suggestedActions:@[]];
+    NSCAssert(keyMenu.children.count == 2, @"Native property menu combines lock and animation actions");
+    UIAction *insertAction = (UIAction *)keyMenu.children.lastObject;
+    [insertAction performWithSender:keyField target:nil];
+    NSCAssert([setting isEqual:@"native_properties_edit"] &&
+              [request[@"animation_action"] isEqual:@"insert_single"] &&
+              [request[@"key"] isEqual:@"location-x"], @"Keying queues the exact native property and scope");
+    lockProperty[@"animation"] = @[
+      @{@"id": @"insert_single", @"title": @"Replace Single Keyframe", @"icon": @"KEY_HLT"},
+      @{@"id": @"delete_single", @"title": @"Delete Single Keyframe", @"icon": @"KEY_DEHLT"}];
+    lockModel[@"ack"] = [panels valueForKey:@"_sequence"];
+    [panels updateSnapshot:lockModel];
+    NSCAssert([panels valueForKey:@"_controls"][@"location-x"] == keyField,
+              @"Keyframe changes do not rebuild the property controls");
+    keyMenu = [keyField.delegate textField:keyField editMenuForCharactersInRanges:@[] suggestedActions:@[]];
+    NSCAssert(keyMenu.children.count == 3 && [keyMenu.children[1].title isEqual:@"Replace Single Keyframe"],
+              @"Native menu reflects the latest Blender animation state");
+    UIAction *deleteAction = (UIAction *)keyMenu.children.lastObject;
+    lockProperty[@"animation"] = @[@{@"id": @"insert_single", @"title": @"Insert Single Keyframe", @"icon": @"KEY_HLT"}];
+    [panels updateSnapshot:lockModel];
+    NSDictionary *beforeUnavailable = request;
+    [deleteAction performWithSender:keyField target:nil];
+    NSCAssert(request == beforeUnavailable, @"No-longer-available keyframe actions are ignored");
     NSDictionary *beforeStaleMenu = request;
     lockModel[@"ack"] = [panels valueForKey:@"_sequence"];
     lockModel[@"inspector"] = @{@"id": @"other-object", @"name": @"Properties", @"sections": @[]};
     [panels updateSnapshot:lockModel];
     [lockAction performWithSender:nil target:nil];
     NSCAssert(request == beforeStaleMenu, @"A stale menu cannot change the newly selected object");
+    [insertAction performWithSender:nil target:nil];
+    NSCAssert(request == beforeStaleMenu, @"A stale animation menu cannot key a different object");
+    NSArray *scalarAnimation = @[@{@"id": @"insert_all", @"title": @"Insert Keyframe", @"icon": @"KEY_HLT"}];
+    lockModel[@"inspector"] = @{@"id": @"animated-object", @"name": @"Properties",
+      @"sections": @[@{@"id": @"animated", @"title": @"Animated", @"open": @YES, @"properties": @[
+        @{@"key": @"amount", @"label": @"Amount", @"type": @"FLOAT", @"value": @1, @"editable": @YES, @"animation": scalarAnimation},
+        @{@"key": @"enabled", @"label": @"Enabled", @"type": @"BOOLEAN", @"value": @YES, @"header": @YES, @"editable": @YES, @"animation": scalarAnimation},
+        @{@"key": @"color", @"label": @"Color", @"type": @"COLOR", @"value": @[@1, @0, @0], @"editable": @YES, @"animation": scalarAnimation}]}]};
+    [panels updateSnapshot:lockModel];
+    for (NSString *propertyKey in @[@"amount", @"enabled", @"color"]) {
+      UIControl *control = [panels valueForKey:@"_controls"][propertyKey];
+      UIView *source = [propertyKey isEqual:@"enabled"] ? control : control.superview;
+      UIContextMenuInteraction *menuInteraction = nil;
+      for (id item in source.interactions) {
+        if ([item isKindOfClass:UIContextMenuInteraction.class]) { menuInteraction = item; }
+      }
+      NSCAssert(menuInteraction && [menuInteraction.delegate contextMenuInteraction:menuInteraction configurationForMenuAtLocation:CGPointZero],
+                @"Animation-only fields, header switches and color swatches support native context menus");
+    }
     [lockProperty release];
     [panels layoutInRect:CGRectMake(0, 60, 390, 600)];
     NSCAssert(!(panels.inspectorButton.selected && panels.hierarchyButton.selected), @"Phone panels do not overlap");
