@@ -8,6 +8,7 @@
 #include "BLI_serialize.hh"
 #include "ED_undo.hh"
 #include "RNA_access.hh"
+#include "RNA_enum_types.hh"
 #include "UI_interface_layout.hh"
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -233,6 +234,15 @@ void project(bContext *C,
     item->append_int("submenu", submenu);
     item->append_int("action", action);
     item->append_str("operator", but.optype ? but.optype->idname : "");
+    /* Preserve the layout's icon, not a guess based on the operator. Enum choices
+     * and submenus can have different artwork even when their command is shared. */
+    const int icon = ui_but_icon(&but);
+    const char *icon_name = nullptr;
+    if (!ELEM(icon, ICON_NONE, ICON_BLANK1) &&
+        RNA_enum_identifier(rna_enum_icon_items, icon, &icon_name))
+    {
+      item->append_str("icon", icon_name);
+    }
     if (MenuType *child = UI_but_menutype_get(&but)) {
       item->append_str("menu", child->idname);
     }
