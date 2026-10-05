@@ -52,6 +52,18 @@ class CLIArguments:
     page_size: int
 
 
+def _get_unique_files(files: list[api_models.FileV1]) -> list[api_models.FileV1]:
+    """Return a new sub-list of with each unique file entry in the list"""
+    unique_paths: set[str] = set()
+    unique_files: list[api_models.FileV1] = []
+    for file in files:
+        if file.path in unique_paths:
+            continue
+        unique_paths.add(file.path)
+        unique_files.append(file)
+    return unique_files
+
+
 def cli_main(arguments_raw: argparse.Namespace) -> None:
     """Generate the index for the passed-on-the-CLI asset library path."""
 
@@ -94,16 +106,10 @@ def cli_main(arguments_raw: argparse.Namespace) -> None:
     _sort_assets(assets)
 
     # Remove duplicate file entries
-    unique_paths: set[str] = set()
-    unique_files: list[api_models.FileV1] = []
-    for file in files:
-        if file.path in unique_paths:
-            continue
-        unique_paths.add(file.path)
-        unique_files.append(file)
+    files = _get_unique_files(files)
 
     # Write the listing index and the pages:
-    asset_index_pages = pagination.paginate_asset_list(assets, unique_files, arguments.page_size)
+    asset_index_pages = pagination.paginate_asset_list(assets, files, arguments.page_size)
     index_path = _write_json_files(arguments, asset_index_pages)
 
     # Write the top-level meta file:
