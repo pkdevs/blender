@@ -437,7 +437,7 @@ struct HandleButtonData {
   /**
    * Input hint drawn faded, empty when there is none.
    */
-  std::string button_edit_hint_get;
+  std::string text_edit_hint;
 
   /* Only used for autocomplete hinting. */
   int64_t text_edit_hint_replace_start = 0;
@@ -3728,12 +3728,11 @@ const wmIMEData *button_ime_data_get(Button *but)
 std::optional<ButtonEditHint> button_edit_hint_get(const Button &but)
 {
   const HandleButtonData *data = but.semi_modal_state ? but.semi_modal_state : but.active;
-  if (data == nullptr || data->button_edit_hint_get.empty()) {
+  if (data == nullptr || data->text_edit_hint.empty()) {
     return std::nullopt;
   }
-  return ButtonEditHint{data->button_edit_hint_get,
-                        data->text_edit_hint_replace_start,
-                        data->text_edit_hint_replace_end};
+  return ButtonEditHint{
+      data->text_edit_hint, data->text_edit_hint_replace_start, data->text_edit_hint_replace_end};
 }
 
 /* Currently there are property subtypes that are not considered "units", so handle them
@@ -3761,7 +3760,7 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
   const std::optional<StringRef> subtype_hint = button_edit_unit_hint_get_from_prop_subtype(
       subtype);
   if (!button_is_unit(but) && !subtype_hint.has_value()) {
-    data->button_edit_hint_get.clear();
+    data->text_edit_hint.clear();
     return;
   }
 
@@ -3771,13 +3770,13 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
   if (unit_type != PROP_NONE) {
     /* If the string contains the unit already, don't add it as a hint. */
     if (BKE_unit_string_contains_unit(data->text_edit.edit_string, unit_type)) {
-      data->button_edit_hint_get.clear();
+      data->text_edit_hint.clear();
       return;
     }
 
     /* If the expression we're entering is not valid, don't show the hint. */
     if (!BPY_string_compile_check(data->text_edit.edit_string)) {
-      data->button_edit_hint_get.clear();
+      data->text_edit_hint.clear();
       return;
     }
 
@@ -3797,24 +3796,24 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
     const StringRefNull str(data->text_edit.edit_string);
     BLI_assert(!name_short.empty());
     if (str.find(name_short) != StringRef::not_found) {
-      data->button_edit_hint_get.clear();
+      data->text_edit_hint.clear();
       return;
     }
 
     /* If the expression we're entering is not valid, don't show the hint. */
     if (!BPY_string_compile_check(data->text_edit.edit_string)) {
-      data->button_edit_hint_get.clear();
+      data->text_edit_hint.clear();
       return;
     }
   }
 
   if (name_short.empty()) {
-    data->button_edit_hint_get.clear();
+    data->text_edit_hint.clear();
     return;
   }
 
   /* Add a space before the short unit name. */
-  data->button_edit_hint_get = " " + name_short;
+  data->text_edit_hint = " " + name_short;
   data->text_edit_hint_replace_start = data->text_edit_hint_replace_end = int64_t(
       strlen(data->text_edit.edit_string));
 }
@@ -3877,9 +3876,9 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
   const int64_t name_end = span->one_after_last();
   const bool has_closing_brace = name_end < int64_t(text.size()) && text[name_end] == '}';
 
-  data->button_edit_hint_get = name.substr(typed.size());
+  data->text_edit_hint = name.substr(typed.size());
   if (!has_closing_brace) {
-    data->button_edit_hint_get += "}";
+    data->text_edit_hint += "}";
   }
   data->text_edit_hint_replace_start = cursor;
   data->text_edit_hint_replace_end = name_end;
@@ -3888,7 +3887,7 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
 static void button_edit_hint_refresh(bContext *C, Button *but, HandleButtonData *data)
 {
   button_edit_unit_hint_refresh(C, but, data);
-  if (data->button_edit_hint_get.empty()) {
+  if (data->text_edit_hint.empty()) {
     button_edit_template_variable_hint_refresh(but, data);
   }
 }
