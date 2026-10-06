@@ -178,6 +178,8 @@ elseif(APPLE AND NOT WITH_GHOST_X11)
         intern/GHOST_IOSScenePanels.mm
         intern/GHOST_IOSRedoStrip.hh
         intern/GHOST_IOSRedoStrip.mm
+        intern/GHOST_IOSTimeline.hh
+        intern/GHOST_IOSTimeline.mm
         GHOST_IOSDocumentPicker.hh
         intern/GHOST_IOSDocumentPicker.mm
         GHOST_IOSDialog.hh

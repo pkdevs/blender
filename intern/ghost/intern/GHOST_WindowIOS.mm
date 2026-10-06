@@ -42,6 +42,7 @@
 extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 #import "GHOST_IOSScenePanels.hh"
 #import "GHOST_IOSRedoStrip.hh"
+#import "GHOST_IOSTimeline.hh"
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
@@ -60,6 +61,7 @@ extern "C" void WM_apple_ios_ui_navigation_hover_set(bool active);
 extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y);
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json();
 extern "C" char *WM_apple_ios_ui_panels_take_json();
+extern "C" char *WM_apple_ios_ui_timeline_take_json();
 extern "C" void WM_apple_ios_ui_toolbar_free_json(char *json);
 
 enum GHOSTIOSUICommand {
@@ -2193,6 +2195,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIBarButtonItem *_finger_input_button;
   GHOSTIOSScenePanels *_scene_panels;
   GHOSTIOSRedoStrip *_redo_strip;
+  GHOSTIOSTimeline *_timeline;
   BOOL _finger_tool_enabled;
   GHOSTIOSPencilMenu *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
@@ -2401,6 +2404,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   [_scene_panels release];
   [_redo_strip release];
+  [_timeline release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
@@ -3128,7 +3132,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)refreshScenePanelsFromBlender
 {
-  /* The mailbox returns immediately when unchanged, including while Blender is busy. */
+  /* The mailboxes return immediately when unchanged, including while Blender is busy. */
+  if (char *timeline = WM_apple_ios_ui_timeline_take_json()) {
+    NSData *data = [NSData dataWithBytes:timeline length:strlen(timeline)];
+    WM_apple_ios_ui_toolbar_free_json(timeline);
+    [_timeline updateSnapshot:[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]];
+  }
   char *json = WM_apple_ios_ui_panels_take_json();
   if (!json) {
     return;
@@ -3727,11 +3736,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   CGRect panel_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
   const CGRect bar_rect = [_top_bar convertRect:_top_bar.bounds toView:_overlay_view];
   const CGFloat panel_top = MAX(CGRectGetMinY(panel_rect), CGRectGetMaxY(bar_rect));
-  const CGFloat panel_bottom = MIN(CGRectGetMaxY(panel_rect) - 64,
+  CGFloat panel_bottom = MIN(CGRectGetMaxY(panel_rect) - 64,
       CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame));
-  panel_rect.origin.y = panel_top;
-  panel_rect.size.height = MAX(0, panel_bottom - panel_top);
-  [_scene_panels layoutInRect:panel_rect];
   [self layoutViewPie];
   [self updateRedoPillLayout:NO];
   CGRect redo_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
@@ -3745,6 +3751,16 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   else {
     redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
   }
+  /* The timeline floats in the bottom lane between the rails, above the quick actions. */
+  [_timeline layoutInRect:CGRectMake(redo_left, panel_top, MAX(0, redo_right - redo_left),
+                                     MAX(0, redo_bottom - panel_top))];
+  if (_timeline.visible) {
+    redo_bottom -= _timeline.height + 8;
+    panel_bottom = MIN(panel_bottom, redo_bottom);
+  }
+  panel_rect.origin.y = panel_top;
+  panel_rect.size.height = MAX(0, panel_bottom - panel_top);
+  [_scene_panels layoutInRect:panel_rect];
   _redo_lane_rect = CGRectMake(redo_left, panel_top + 8,
       MAX(0, redo_right - redo_left), MAX(60, redo_bottom - panel_top - 8));
   _redo_lane_wide = redo_rect.size.width >= 700;
@@ -4753,7 +4769,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _top_bar_item.centerItemGroups = @[ [self topSettingsControlGroup] ];
   _top_bar_item.trailingItemGroups = @[
     [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:nil
-        items:@[_scene_panels.hierarchyButton, _scene_panels.inspectorButton]],
+        items:@[_scene_panels.hierarchyButton, _timeline.button, _scene_panels.inspectorButton]],
   ];
   _viewport_shading_button.sharesBackground = NO;
   _top_bar_item.pinnedTrailingGroup = _viewport_shading_button.creatingFixedGroup;
@@ -4817,6 +4833,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                                     @"icon": property[@"icon"] ?: @"",
                                     @"route": route},
                                    property[@"menu"]);
+  };
+  _timeline = [[GHOSTIOSTimeline alloc] initWithOverlay:_overlay_view];
+  __block UIView *timeline_host = self.view;
+  _timeline.visibilityDidChange = ^{
+    [timeline_host setNeedsLayout];
   };
   [self installNativeTopBar];
   _pencil_menu = [[GHOSTIOSPencilMenu alloc] initWithFrame:_overlay_view.bounds];
