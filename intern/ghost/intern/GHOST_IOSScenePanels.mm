@@ -966,7 +966,18 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       UILabel *label = [self label:property[@"label"] style:UIFontTextStyleBody];
       UIControl *control;
       NSString *kind = property[@"type"];
-      if ([kind isEqual:@"OPERATOR"] || [kind isEqual:@"MENU"]) {
+      if ([kind isEqual:@"OPERATOR"] && [property[@"checkbox"] boolValue]) {
+        /* Blender draws some toggle operators as checkboxes; run the operator from a switch. */
+        UISwitch *toggle = [[[UISwitch alloc] init] autorelease];
+        toggle.on = [property[@"value"] boolValue];
+        [toggle addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+          NSMutableDictionary *request = [[property mutableCopy] autorelease];
+          request[@"id"] = objectID;
+          [owner send:request];
+        }] forControlEvents:UIControlEventValueChanged];
+        control = toggle;
+      }
+      else if ([kind isEqual:@"OPERATOR"] || [kind isEqual:@"MENU"]) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
         UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
         config.title = property[@"label"];

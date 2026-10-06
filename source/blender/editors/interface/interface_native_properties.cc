@@ -1188,6 +1188,11 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           field->append_str("label", but.str.empty() ? WM_operatortype_name(but.optype, but.opptr) : but.str);
           field->append_str("key", key);
           field->append_str("icon", icon_name(button_icon(&but)));
+          if (ELEM(button_icon(&but), ICON_CHECKBOX_HLT, ICON_CHECKBOX_DEHLT)) {
+            /* A toggle operator drawn as a checkbox (e.g. Dyntopo): native UI shows a switch. */
+            field->append_int("checkbox", 1);
+            field->append_int("value", button_icon(&but) == ICON_CHECKBOX_HLT);
+          }
           field->append_int("editable", !(but.flag & (BUT_DISABLED | BUT_INACTIVE)) && but.optype->exec);
           field->append_str("panel", candidate.id);
           field->append_str("tab", tab_id);
