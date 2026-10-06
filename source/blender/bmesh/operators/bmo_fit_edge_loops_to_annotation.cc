@@ -166,14 +166,14 @@ static void calculate_verts(const StrokeData &stroke_data,
   if (method == TO_ANNOTATION_PROJECT) {
     for (const int i : IndexRange(verts_num)) {
       BMVert *v = r_chain.verts[i];
-      float3 vert_co = float3(v->co);
-      float3 intersection_best = vert_co;
+      const float3 v_co = float3(v->co);
+      float3 intersection_best = v_co;
       float dist_sq_best = FLT_MAX;
       bool has_best = false;
 
       auto check_intersection_fn = [&](const float3 &ray_dir) {
-        float3 ray_end = vert_co + ray_dir * ray_length;
-        float3 ray_start = vert_co - ray_dir * ray_length;
+        float3 ray_end = v_co + ray_dir * ray_length;
+        float3 ray_start = v_co - ray_dir * ray_length;
 
         for (const int j : IndexRange(stroke_data.points.size() - 1)) {
           float3 stroke_seg_start = stroke_data.points[j];
@@ -196,7 +196,7 @@ static void calculate_verts(const StrokeData &stroke_data,
               if (dist_to_start <= dist_seg + segment_epsilon &&
                   dist_to_end <= dist_seg + segment_epsilon)
               {
-                float dist_sq_test = math::distance_squared(vert_co, closest_on_stroke);
+                float dist_sq_test = math::distance_squared(v_co, closest_on_stroke);
                 if (dist_sq_test < dist_sq_best) {
                   dist_sq_best = dist_sq_test;
                   intersection_best = closest_on_stroke;
@@ -211,9 +211,9 @@ static void calculate_verts(const StrokeData &stroke_data,
       BMIter iter;
       BMEdge *e;
       BM_ITER_ELEM (e, &iter, v, BM_EDGES_OF_VERT) {
-        BMVert *v2 = BM_edge_other_vert(e, v);
+        BMVert *v_other = BM_edge_other_vert(e, v);
         if (!BM_elem_flag_test(e, BM_ELEM_TAG)) {
-          float3 ray_dir = math::normalize(float3(v2->co) - float3(v->co));
+          float3 ray_dir = math::normalize(float3(v_other->co) - float3(v->co));
           check_intersection_fn(ray_dir);
         }
       }
@@ -227,7 +227,7 @@ static void calculate_verts(const StrokeData &stroke_data,
       }
 
       if (has_best) {
-        float3 new_co = math::interpolate(vert_co, intersection_best, factor);
+        float3 new_co = math::interpolate(v_co, intersection_best, factor);
         if (lock_x) {
           new_co.x = vert_co.x;
         }
