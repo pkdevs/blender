@@ -57,13 +57,18 @@ def check(ok, name):
 
 
 def tests():
-    ui(action='inspector')
-    yield 0.8
-    ui(action='tab', id='MODIFIER')
-    yield 0.8
-    state = ui()
-    add = next(p for section in state['properties']['sections'] for p in section['properties']
-               if p.get('menu') == 'OBJECT_MT_modifier_add')
+    if not ui()['inspector']:
+        ui(action='inspector')
+    add = None
+    for _ in range(60):
+        ui(action='tab', id='MODIFIER')
+        yield 0.25
+        state = ui()
+        add = next((p for section in state['properties'].get('sections', [])
+                    for p in section['properties'] if p.get('menu') == 'OBJECT_MT_modifier_add'), None)
+        if add:
+            break
+    check(add is not None, 'Native modifier panel finishes loading')
     check(add['type'] == 'MENU' and add['tab'] == 'MODIFIER',
           'Blender call-menu button is projected as a native Properties menu')
     check(state['nativeMenus'][add['key']]['primary'] and state['nativeMenus'][add['key']]['icon'],
@@ -108,20 +113,59 @@ def tests():
             check(len(bpy.context.object.modifiers) == count,
                   f'{title} Undo {repeat + 1} safely retires its native property panels')
 
+    yield from menu(bevel['route'], True)
+    yield 0.6
+    state = ui()
+    section = next(s for s in state['properties']['sections']
+                   if any(p.get('property') == 'show_viewport' for p in s['properties']))
+    headers = [p for p in section['properties'] if p.get('header')]
+    check(len(headers) == 1 and headers[0]['property'] == 'show_viewport',
+          'Collapsed modifier has exactly one viewport enable switch in its header')
+    check(state['sectionRows'][section['id']] == 0,
+          'Collapsed modifier hides its body options')
+    ui(action='section', id=section['id'])
+    yield 0.6
+    state = ui()
+    expanded = next(s for s in state['properties']['sections'] if s['id'] == section['id'])
+    options = {p.get('property'): p for p in expanded['properties']}
+    check(all(name in options and not options[name].get('header')
+              for name in ('show_render', 'show_in_editmode')),
+          'Expanded modifier exposes Render and Edit Mode as body controls')
+    key = headers[0]['key']
+    for enabled in (False, True):
+        ui(action='toggle', key=key, value=enabled)
+        yield 0.6
+        check(bpy.context.object.modifiers[-1].show_viewport == enabled,
+              f'Header switch sets actual modifier viewport visibility to {enabled}')
+        check(ui()['switches'][key]['enabled'],
+              'Viewport enable switch remains usable while the modifier is disabled')
+    ui(action='section', id=section['id'])
+    yield 0.6
+    check(ui()['sectionRows'][section['id']] == 0 and key in ui()['switches'],
+          'Closing the modifier hides its body but retains the enable switch')
+
     cube = bpy.context.object
-    cube.select_set(False)
     camera = bpy.data.objects['Camera']
-    camera.select_set(True)
-    bpy.context.view_layer.objects.active = camera
+    ui(action='hierarchy')
+    yield 0.7
+    ui(action='select', id=str(camera.session_uid))
+    yield 0.7
+    check(bpy.context.object == camera, 'Native hierarchy activates the unsupported camera object')
+    modifier_count = len(cube.modifiers)
     yield from menu(bevel['route'], True)
     yield 0.3
-    check(not camera.modifiers, 'Stale modifier route cannot add a modifier to an unsupported object')
-    camera.select_set(False)
-    cube.select_set(True)
-    bpy.context.view_layer.objects.active = cube
+    check(not camera.modifiers and len(cube.modifiers) == modifier_count,
+          'Stale modifier route cannot add a modifier to an unsupported object')
+    ui(action='select', id=str(cube.session_uid))
     yield 0.7
-    ui(action='tab', id='MODIFIER')
-    yield 0.5
+    check(bpy.context.object == cube, 'Native hierarchy restores the mesh object')
+    ui(action='hierarchy')
+    for _ in range(40):
+        ui(action='tab', id='MODIFIER')
+        yield 0.25
+        if add['key'] in ui()['nativeMenus']:
+            break
+    check(add['key'] in ui()['nativeMenus'], 'Native modifier menu returns after restoring the mesh object')
     ui(action='native_menu_open', key=add['key'])
     report.update(passed=True, stage='native-menu-open')
 
