@@ -1,2 +1,3 @@
 Referenced by issue #49450, replace OpenGL legacy matrix stacks
 Referenced by pull request #164657, Fix: Typo in type qualifier for gpu_matrix checkmat function
+Referenced by commit 4047d046943c33537bd78b42c919c43177da2f4c, Fix: Typo in type qualifier for gpu_matrix checkmat function
