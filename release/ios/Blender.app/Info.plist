@@ -88,7 +88,7 @@
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
+	<string>${IOS_BUNDLE_VERSION}</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
