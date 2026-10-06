@@ -657,9 +657,13 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     content.navigationItem.rightBarButtonItem = [[[UIBarButtonItem alloc]
         initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(dismissToolSettings)] autorelease];
     _toolPopoverController = [[UINavigationController alloc] initWithRootViewController:content];
-    _toolPopoverController.preferredContentSize = CGSizeMake(360, 420);
   }
   [_toolPopoverPanels updateSnapshot:_snapshot];
+  /* Fit the popover to the few settings a tool has rather than a fixed sheet. */
+  UITableView *form = _toolPopoverPanels->_form;
+  form.frame = CGRectMake(0, 0, 320, 1000);
+  [form layoutIfNeeded];
+  _toolPopoverController.preferredContentSize = CGSizeMake(320, MIN(420.0, MAX(88.0, form.contentSize.height)));
   _toolPopoverController.modalPresentationStyle = UIModalPresentationPopover;
   _toolPopoverController.popoverPresentationController.barButtonItem = button;
   [presenter presentViewController:_toolPopoverController animated:YES completion:nil];
