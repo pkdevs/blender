@@ -221,8 +221,20 @@ static void calculate_verts(const StrokeData &stroke_data,
       BM_ITER_ELEM (e, &iter, v, BM_EDGES_OF_VERT) {
         BMVert *v_other = BM_edge_other_vert(e, v);
         if (!BM_elem_flag_test(e, BM_ELEM_TAG)) {
-          float3 ray_dir = math::normalize(float3(v_other->co) - float3(v->co));
-          check_intersection_fn(ray_dir);
+          bool shares_face = false;
+          BMIter iter2;
+          BMEdge *e2;
+          BM_ITER_ELEM (e2, &iter2, v, BM_EDGES_OF_VERT) {
+            if (BM_elem_flag_test(e2, BM_ELEM_TAG) && BM_edge_share_face_check(e, e2)) {
+              shares_face = true;
+              break;
+            }
+          }
+
+          if (shares_face) {
+            float3 ray_dir = math::normalize(float3(v_other->co) - float3(v->co));
+            check_intersection_fn(ray_dir);
+          }
         }
       }
 
