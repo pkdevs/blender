@@ -351,7 +351,6 @@ static bool treesort_alpha_ob(const tTreeSort &x1, const tTreeSort &x2)
   return outliner_treesort_tiebreak(a_is_ob, x1.name, b_is_ob, x2.name);
 }
 
-/* A #CollectionObject together with the collection that owns it (and so stores its sort index). */
 struct SortCob {
   Collection *owner = nullptr;
   CollectionObject *cob = nullptr;
@@ -374,9 +373,7 @@ static SortCob find_sort_cob(const OutlinerSortMaps &sort_maps, Collection *coll
 
 /* The sort index of a child is stored in its #CollectionObject, so a child is foreign when that
  * #CollectionObject belongs to a different library than the collection it is shown in. Such
- * children can't be reordered and are grouped after the other children. Comparing against the
- * collection's library (rather than against local data) keeps the order the same when the whole
- * hierarchy is linked into another file. */
+ * children can't be reordered and are grouped after the other children. */
 static bool is_foreign_child(ID *id, Collection *collection, const OutlinerSortMaps &sort_maps)
 {
   const Library *owner_lib = id->lib;

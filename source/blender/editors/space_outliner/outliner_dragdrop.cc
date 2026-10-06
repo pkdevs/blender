@@ -1169,7 +1169,7 @@ static Collection *collection_parent_from_ID(ID *id)
   return nullptr;
 }
 
-/* A child shown under a parent object stores its sort index in its #CollectionObject, so it can
+/* A child shown under a parent object stores its sort index in its #CollectionObject. It can
  * only be reordered when that #CollectionObject belongs to the same library as the collection it
  * is shown in. */
 static bool is_foreign_child(Main *bmain, Scene *scene, Collection *collection, Object *ob)
