@@ -11,6 +11,7 @@
 
 #include "kernel/geom/attribute.h"
 #include "kernel/geom/curve.h"
+#include "kernel/geom/gsplat.h"
 #include "kernel/geom/motion_triangle.h"
 #include "kernel/geom/object.h"
 #include "kernel/geom/point.h"
@@ -574,7 +575,7 @@ ccl_device bool attribute_bump_map_normal(KernelGlobals kg,
         kg, Ng, sd->object, sd->object_flag, sd->prim, sd->u, sd->v, sd->du, sd->dv, f.dx, f.dy);
   }
   else {
-    assert(sd->type & PRIMITIVE_MOTION_TRIANGLE);
+    kernel_assert(sd->type & PRIMITIVE_MOTION_TRIANGLE);
     f.val = motion_triangle_smooth_normal(
         kg, Ng, sd->object, sd->prim, sd->time, sd->u, sd->v, sd->du, sd->dv, f.dx, f.dy);
   }
@@ -1264,7 +1265,7 @@ ccl_device_inline bool osl_shared_get_object_standard_attribute(KernelGlobals kg
 #ifdef __POINTCLOUD__
   /* Point Attributes */
   if (name == DeviceStrings::u_is_point) {
-    const float f = (sd->type & PRIMITIVE_POINT) != 0;
+    const float f = (sd->type & PRIMITIVE_ANY_POINT) != 0;
     return set_attribute(f, type, derivatives, val);
   }
   if (name == DeviceStrings::u_point_radius) {
@@ -1299,6 +1300,13 @@ ccl_device_inline bool osl_shared_get_object_standard_attribute(KernelGlobals kg
     }
     return set_attribute(f, type, derivatives, val);
   }
+#if defined(__GSPLATS__)
+  /* Gaussian splats attributes. */
+  if (sd->type & PRIMITIVE_GSPLAT && name == DeviceStrings::u_geom_radiance) {
+    const float3 radiance = gsplat_radiance(kg, *sd);
+    return set_attribute(radiance, type, derivatives, val);
+  }
+#endif
   return osl_shared_get_background_attribute(kg, sg, sd, name, type, derivatives, val);
 }
 

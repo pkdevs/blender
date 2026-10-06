@@ -72,36 +72,7 @@ template<typename T> struct union_t {
   }
 };
 
-/* Array syntax compatibility. */
-/* clang-format off */
-#define float_array(...) { __VA_ARGS__ }
-#define float2_array(...) { __VA_ARGS__ }
-#define float3_array(...) { __VA_ARGS__ }
-#define float4_array(...) { __VA_ARGS__ }
-#define int_array(...) { __VA_ARGS__ }
-#define int2_array(...) { __VA_ARGS__ }
-#define int3_array(...) { __VA_ARGS__ }
-#define int4_array(...) { __VA_ARGS__ }
-#define uint_array(...) { __VA_ARGS__ }
-#define uint2_array(...) { __VA_ARGS__ }
-#define uint3_array(...) { __VA_ARGS__ }
-#define uint4_array(...) { __VA_ARGS__ }
-#define bool_array(...) { __VA_ARGS__ }
-#define bool2_array(...) { __VA_ARGS__ }
-#define bool3_array(...) { __VA_ARGS__ }
-#define bool4_array(...) { __VA_ARGS__ }
-/* clang-format on */
-
 /** \} */
-
-/* Use to suppress `-Wimplicit-fallthrough` (in place of `break`). */
-#ifndef ATTR_FALLTHROUGH
-#  ifdef __GNUC__
-#    define ATTR_FALLTHROUGH __attribute__((fallthrough))
-#  else
-#    define ATTR_FALLTHROUGH ((void)0)
-#  endif
-#endif
 
 /* GLSL main function must return void. C++ need to return int.
  * Inject real main (C++) inside the GLSL main definition. */
@@ -175,7 +146,8 @@ template<typename VertFn,
          typename FragFn,
          typename ConstT1 = NoConstants,
          typename ConstT2 = NoConstants,
-         typename ConstT3 = NoConstants>
+         typename ConstT3 = NoConstants,
+         typename ConstT4 = NoConstants>
 struct PipelineGraphic {
   VertFn vert;
   FragFn frag;
@@ -183,6 +155,7 @@ struct PipelineGraphic {
   ConstT1 c1;
   ConstT2 c2;
   ConstT3 c3;
+  ConstT4 c4;
 
   PipelineGraphic(VertFn vert, FragFn frag) : vert(vert), frag(frag), c1({}), c2({}), c3({}) {}
   PipelineGraphic(VertFn vert, FragFn frag, ConstT1 c1)
@@ -195,6 +168,10 @@ struct PipelineGraphic {
   }
   PipelineGraphic(VertFn vert, FragFn frag, ConstT1 c1, ConstT2 c2, ConstT3 c3)
       : vert(vert), frag(frag), c1(c1), c2(c2), c3(c3)
+  {
+  }
+  PipelineGraphic(VertFn vert, FragFn frag, ConstT1 c1, ConstT2 c2, ConstT3 c3, ConstT4 c4)
+      : vert(vert), frag(frag), c1(c1), c2(c2), c3(c3), c4(c4)
   {
   }
 };
@@ -229,6 +206,21 @@ struct PipelineCompute {
   {
   }
 };
+
+#ifndef FLT_MAX
+#  define FLT_MAX uintBitsToFloat(0x7F7FFFFFu)
+#  define FLT_MIN uintBitsToFloat(0x00800000u)
+#  define FLT_EPSILON 1.192092896e-07F
+#endif
+#ifndef SHRT_MAX
+#  define SHRT_MAX 0x00007FFF
+#  define INT_MAX 0x7FFFFFFF
+#  define USHRT_MAX 0x0000FFFFu
+#  define UINT_MAX 0xFFFFFFFFu
+#endif
+#ifndef NAN_FLT
+#  define NAN_FLT uintBitsToFloat(0x7FC00000u)
+#endif
 
 #include "GPU_shader_shared_utils.hh"
 
