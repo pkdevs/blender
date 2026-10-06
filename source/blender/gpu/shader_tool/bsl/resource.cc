@@ -14,20 +14,6 @@ namespace bsl {
 
 using namespace blender::gpu::shader::parser::ast;
 
-string ParsedAttribute::parse_condition() const
-{
-  if (!condition.is_valid()) {
-    return "";
-  }
-  string str;
-  for (LocalVar node : condition.children_of_type<LocalVar>()) {
-    str += "int " + string(node.str()) + " = ";
-    str += "ShaderCreateInfo::find_constant(constants, \"" + string(node.str()) + "\"); ";
-  }
-  str += "return " + string(condition.str()) + ";";
-  return str;
-}
-
 Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
 {
   struct AttributeDescriptor {
@@ -83,6 +69,7 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
         {"clip_control",                            {ResourceTableType::ENTRY_POINT,    ResourceType::CLIP_CONTROL,            0}},
         {"clip_distance",                           {ResourceTableType::ENTRY_POINT,    ResourceType::CLIP_DISTANCES,          0}},
         {"front_facing",                            {ResourceTableType::ENTRY_POINT,    ResourceType::FRONT_FACING,            0}},
+        {"bary_coord",                              {ResourceTableType::ENTRY_POINT,    ResourceType::BARY_COORD,              0}},
         {"global_invocation_id",                    {ResourceTableType::ENTRY_POINT,    ResourceType::GLOBAL_INVOCATION_ID,    0}},
         {"in",                                      {ResourceTableType::ENTRY_POINT,    ResourceType::IN,                      0}},
         {"instance_id",                             {ResourceTableType::ENTRY_POINT,    ResourceType::INSTANCE_ID,             0}},
