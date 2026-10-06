@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2024 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -38,7 +38,7 @@ static void template_filepath_buttons(const bContext * /* C */,
            path_data.path_prop,
            RNA_NO_INDEX,
            0,
-           ITEM_R_NO_AUTO_OPERATIONS,
+           ITEM_R_PATH_NO_OPEN_BUTTON,
            std::nullopt,
            ICON_NONE,
            placeholder);

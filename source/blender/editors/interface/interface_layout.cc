@@ -1224,7 +1224,7 @@ static Button *item_with_label(Layout *layout,
       }
     }
 
-    if ((flag & ITEM_R_NO_AUTO_OPERATIONS) == 0) {
+    if ((flag & ITEM_R_PATH_NO_OPEN_BUTTON) == 0) {
       /* #BUTTONS_OT_file_browse calls #context_active_but_prop_get_filebrowser. */
       uiDefIconButO(block,
                     ButtonType::But,

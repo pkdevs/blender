@@ -2149,7 +2149,7 @@ void RNA_api_ui_layout(StructRNA *srna)
                                   "with a Filepath or Dirpath subtype.");
   api_ui_item_rna_common(func);
   prop = RNA_def_string(func,
-                        "select",
+                        "open",
                         nullptr,
                         0,
                         "",
