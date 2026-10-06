@@ -1214,8 +1214,8 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  TreeElement *collection_te = outliner_data_from_tree_element_and_parents(is_collection_element,
-                                                                           te);
+  const TreeElement *collection_te = outliner_data_from_tree_element_and_parents(
+      is_collection_element, te);
   Collection *to_collection = outliner_collection_from_tree_element(collection_te);
 
   if (!ID_IS_EDITABLE(to_collection) || ID_IS_OVERRIDE_LIBRARY(to_collection)) {
@@ -1296,7 +1296,6 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
           return false;
         }
       }
-      te = collection_te;
       insert_type = TE_INSERT_INTO;
     }
   }
@@ -1588,7 +1587,9 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
   }
 
   int insert_index = items.size();
-  if (space_outliner->sort_method == SO_SORT_CUSTOM) {
+  if (space_outliner->sort_method == SO_SORT_CUSTOM &&
+      ELEM(data.insert_type, TE_INSERT_BEFORE, TE_INSERT_AFTER))
+  {
     auto is_relative = [&](const std::variant<Object *, Collection *> &item) {
       if (is_object_element(data.te)) {
         return std::holds_alternative<Object *>(item) &&
