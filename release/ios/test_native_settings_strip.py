@@ -49,6 +49,7 @@ class NativeSettingsStripTest(unittest.TestCase):
                           "- (UIAction *)modeActionWithTitle:",
                           "- (NSString *)modeTitleForIdentifier:",
                           "- (void)setModePickerTitleForMode:",
+                          "- (void)setModePickerModes:",
                           "- (UIAction *)viewportShadingActionWithTitle:",
                           "- (void)setViewportShadingValue:",
                           "- (UIBarButtonItem *)viewportShadingButton\n",
@@ -124,6 +125,8 @@ static BOOL fingerTool;
   GHOSTIOSScenePanels *_scene_panels;
   GHOSTIOSRedoStrip *_redo_strip;
   GHOSTIOSTimeline *_timeline;
+  NSArray *_mode_items;
+  NSString *_object_mode;
   GHOSTIOSNavigationBar *_top_bar;
   UINavigationItem *_top_bar_item;
   NSLayoutConstraint *_top_bar_height_constraint;
@@ -320,6 +323,28 @@ static void runChecks() {
               [builder->_mode_button.accessibilityValue isEqual:@"Pose Mode"], @"Pose icon missing");
     [builder setModePickerTitleForMode:@"objectmode"];
     NSCAssert(builder->_mode_button.menu == modeMenu, @"Mode updates rebuilt the open menu");
+    NSArray *pencilModes = @[
+      @{@"id": @"OBJECT", @"label": @"Object Mode", @"icon": @"OBJECT_DATAMODE"},
+      @{@"id": @"EDIT", @"label": @"Edit Mode", @"icon": @"EDITMODE_HLT"},
+      @{@"id": @"PAINT_GREASE_PENCIL", @"label": @"Draw Mode", @"icon": @"GREASEPENCIL"},
+    ];
+    [builder setModePickerModes:pencilModes current:@"PAINT_GREASE_PENCIL"];
+    UIMenu *pencilMenu = builder->_mode_button.menu;
+    NSCAssert(pencilMenu.children.count == 3 && [builder->_mode_button.title isEqual:@"Draw Mode"] &&
+              ((UIAction *)pencilMenu.children[2]).state == UIMenuElementStateOn &&
+              ((UIAction *)pencilMenu.children[0]).state == UIMenuElementStateOff,
+              @"Mode picker lists the active object's own modes and marks the current one");
+    [builder setModePickerModes:[[pencilModes copy] autorelease] current:@"PAINT_GREASE_PENCIL"];
+    NSCAssert(builder->_mode_button.menu == pencilMenu, @"Unchanged mode lists keep the presented menu");
+    [queued removeAllObjects];
+    invoke((UIAction *)pencilMenu.children[1]);
+    NSCAssert([queued.lastObject isEqual:(@[@"object_mode", @"EDIT"])] &&
+              [builder->_mode_button.title isEqual:@"Edit Mode"],
+              @"Choosing a mode sends Blender's mode identifier");
+    [builder setModePickerModes:@[@{@"id": @"OBJECT", @"label": @"Object Mode", @"icon": @"OBJECT_DATAMODE"}]
+                        current:@"OBJECT"];
+    NSCAssert(builder->_mode_button.menu.children.count == 1 && [builder->_mode_button.title isEqual:@"Object Mode"],
+              @"Objects without other modes only offer Object Mode");
     if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
       NSCAssert(builder->_finger_input_button != nil && fingerTool, @"Phone tool input missing");
       invoke((UIAction *)builder->_finger_input_button.menu.children[1]);

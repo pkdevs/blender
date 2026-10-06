@@ -2240,6 +2240,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UINavigationItem *_top_bar_item;
   NSLayoutConstraint *_top_bar_height_constraint;
   UIBarButtonItem *_mode_button;
+  /* Blender's mode list for the active object, and its current mode identifier. */
+  NSArray *_mode_items;
+  NSString *_object_mode;
   UIBarButtonItem *_actions_button;
   UIBarButtonItem *_viewport_shading_button;
   UIBarButtonItem *_undo_button;
@@ -2473,6 +2476,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   [_scene_panels release];
   [_redo_strip release];
+  [_mode_items release];
+  [_object_mode release];
   [_timeline release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
@@ -3809,7 +3814,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     mesh_select_mode = @"";
   }
 
-  [self setModePickerTitleForMode:mode];
+  if ([model[@"modes"] isKindOfClass:NSArray.class] && [model[@"modes"] count]) {
+    [self setModePickerModes:model[@"modes"] current:model[@"objectMode"]];
+  }
+  else {
+    [self setModePickerTitleForMode:mode];
+  }
   [self setViewportShadingValue:model[@"shading"]];
   [self setUndoAvailable:model[@"canUndo"]];
   [self setMeshSelectModeValue:mesh_select_mode];
@@ -3983,6 +3993,64 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                              self->_mode_button.accessibilityValue = title;
                              WM_apple_ios_ui_command_enqueue((int)command);
                            }];
+}
+
+/* Lists the same context-dependent modes as Blender's header (OBJECT_OT_mode_set), so
+ * Grease Pencil, curves, armatures and other object types get their own modes. */
+- (void)setModePickerModes:(NSArray *)modes current:(NSString *)current
+{
+  if (_mode_button == nil) {
+    return;
+  }
+  if (![current isKindOfClass:NSString.class]) {
+    current = @"OBJECT";
+  }
+  if ([_mode_items isEqualToArray:modes] && [_object_mode isEqualToString:current]) {
+    return;
+  }
+  [_mode_items release];
+  _mode_items = [modes copy];
+  [_object_mode release];
+  _object_mode = [current copy];
+
+  NSMutableArray *actions = [NSMutableArray array];
+  UIAction *selected = nil;
+  for (NSDictionary *item in modes) {
+    if (![item isKindOfClass:NSDictionary.class] || ![item[@"id"] isKindOfClass:NSString.class]) {
+      continue;
+    }
+    NSString *identifier = item[@"id"];
+    NSString *icon = [item[@"icon"] isKindOfClass:NSString.class] ? item[@"icon"] : @"";
+    UIImage *image = icon.length ?
+        [[UIImage imageNamed:[@"blender." stringByAppendingString:icon.lowercaseString]]
+            imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] : nil;
+    NSString *title = [item[@"label"] length] ? item[@"label"] : identifier;
+    UIAction *action = [UIAction actionWithTitle:title
+                                           image:image
+                                      identifier:[@"blender.mode." stringByAppendingString:identifier]
+                                         handler:^(__kindof UIAction *sender) {
+                                           self->_mode_button.title = sender.title;
+                                           self->_mode_button.image = sender.image;
+                                           self->_mode_button.accessibilityValue = sender.title;
+                                           WM_apple_ios_ui_setting_enqueue("object_mode",
+                                                                           identifier.UTF8String);
+                                         }];
+    if ([identifier isEqualToString:current]) {
+      action.state = UIMenuElementStateOn;
+      selected = action;
+    }
+    [actions addObject:action];
+  }
+  if (!actions.count) {
+    return;
+  }
+  UIMenu *menu = [UIMenu menuWithTitle:@"Mode" children:actions];
+  _mode_button.menu = menu;
+  _mode_button.menuRepresentation = menu;
+  UIAction *shown = selected ?: actions.firstObject;
+  _mode_button.title = shown.title;
+  _mode_button.image = shown.image;
+  _mode_button.accessibilityValue = shown.title;
 }
 
 - (NSString *)modeTitleForIdentifier:(NSString *)mode
