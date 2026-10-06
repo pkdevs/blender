@@ -1226,7 +1226,7 @@ static BMO_FlagSet bmo_enum_fit_edge_loops_to_annotation_method[] = {
     {0, nullptr}};
 
 /*
- * To Annotation.
+ * Fit Edge Loops To Annotation.
  *
  * Stretches selected vertices to the active stroke
  */
