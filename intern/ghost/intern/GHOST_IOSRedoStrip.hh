@@ -9,4 +9,7 @@
 - (void)updateSnapshot:(NSDictionary *)snapshot;
 - (void)layoutInRect:(CGRect)rect;
 @property(nonatomic, readonly) UIView *view;
+@property(nonatomic, readonly) UIButton *collapsedButton;
+@property(nonatomic, readonly) CGFloat collapsedWidth;
+@property(nonatomic, copy) void (^presentationDidChange)(BOOL animated);
 @end

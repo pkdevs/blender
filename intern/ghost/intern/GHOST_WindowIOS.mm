@@ -2158,6 +2158,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSLayoutConstraint *_action_collapsed_width_constraint;
   NSLayoutConstraint *_action_toggle_width_constraint;
   NSLayoutConstraint *_action_toggle_trailing_constraint;
+  NSLayoutConstraint *_action_scroll_trailing_constraint;
+  NSLayoutConstraint *_redo_pill_width_constraint;
+  NSLayoutConstraint *_redo_pill_min_width_constraint;
   BOOL _actions_collapsed;
   NSUInteger _action_transition_generation;
   UIView *_view_gizmo_hotspot;
@@ -2367,6 +2370,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_collapsed_width_constraint release];
   [_action_toggle_width_constraint release];
   [_action_toggle_trailing_constraint release];
+  [_action_scroll_trailing_constraint release];
+  [_redo_pill_width_constraint release];
+  [_redo_pill_min_width_constraint release];
   [_view_pie_buttons release];
   [super dealloc];
 }
@@ -3281,8 +3287,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                                               key:key]];
   }
 
-  _action_rail.hidden = _action_buttons.count == 0;
-  _action_rail.alpha = _action_buttons.count == 0 ? 0.0 : 1.0;
+  _action_rail.hidden = _action_buttons.count == 0 && !_redo_strip.collapsedWidth;
+  _action_rail.alpha = _action_rail.hidden ? 0.0 : 1.0;
   [self updateAxisConstraintsWithActions:actions];
   [_action_scroll setContentOffset:CGPointZero animated:NO];
 }
@@ -3303,6 +3309,18 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_toggle addTarget:self action:@selector(toggleActionStrip:)
           forControlEvents:UIControlEventTouchUpInside];
   [_action_group addSubview:_action_toggle];
+  UIButton *redo_pill = _redo_strip.collapsedButton;
+  redo_pill.translatesAutoresizingMaskIntoConstraints = NO;
+  [_action_group addSubview:redo_pill];
+  _redo_pill_width_constraint = [[redo_pill.widthAnchor constraintEqualToConstant:0] retain];
+  _redo_pill_width_constraint.priority = UILayoutPriorityDefaultHigh - 1;
+  _redo_pill_min_width_constraint = [[redo_pill.widthAnchor constraintGreaterThanOrEqualToConstant:0] retain];
+  _action_scroll_trailing_constraint = [[_action_scroll.trailingAnchor
+      constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
+  __block GHOST_IOSViewController *owner = self;
+  _redo_strip.presentationDidChange = ^(BOOL animated) {
+    [owner updateRedoPillLayout:animated];
+  };
 
   _action_expanded_width_constraint = [[_action_group.widthAnchor
       constraintEqualToAnchor:_action_stack.widthAnchor constant:60.0] retain];
@@ -3312,8 +3330,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _action_collapsed_width_constraint.priority = UILayoutPriorityDefaultHigh;
   _action_toggle_width_constraint = [[_action_toggle.widthAnchor
       constraintEqualToConstant:44.0] retain];
+  _action_toggle_width_constraint.priority = UILayoutPriorityRequired - 1;
   _action_toggle_trailing_constraint = [[_action_toggle.trailingAnchor
-      constraintEqualToAnchor:_action_group.trailingAnchor] retain];
+      constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
   NSLayoutConstraint *center = [_action_group.centerXAnchor
       constraintEqualToAnchor:_overlay_view.centerXAnchor];
   center.priority = UILayoutPriorityRequired - 2;
@@ -3329,8 +3348,35 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     [_action_toggle.leadingAnchor constraintEqualToAnchor:_action_group.leadingAnchor],
     [_action_toggle.centerYAnchor constraintEqualToAnchor:_action_group.centerYAnchor],
     [_action_toggle.heightAnchor constraintEqualToConstant:44.0],
+    _redo_pill_width_constraint,
+    _redo_pill_min_width_constraint,
+    _action_scroll_trailing_constraint,
+    [redo_pill.trailingAnchor constraintEqualToAnchor:_action_group.trailingAnchor],
+    [redo_pill.centerYAnchor constraintEqualToAnchor:_action_group.centerYAnchor],
+    [redo_pill.heightAnchor constraintEqualToConstant:44.0],
   ]];
   [self setActionsCollapsed:NO animated:NO];
+}
+
+- (void)updateRedoPillLayout:(BOOL)animated
+{
+  [_action_rail layoutIfNeeded];
+  const CGFloat width = _redo_strip.collapsedWidth;
+  if (_redo_pill_width_constraint.constant == width) { return; }
+  const CGFloat reserved = width ? width + 8 : 0;
+  _redo_pill_width_constraint.constant = width;
+  _redo_pill_min_width_constraint.constant = width ? 44 : 0;
+  _action_scroll_trailing_constraint.constant = width ? -8 : 0;
+  _action_toggle_trailing_constraint.constant = width ? -8 : 0;
+  _action_toggle_width_constraint.constant = _actions_collapsed ? (width ? 80 : 96) : 44;
+  _action_collapsed_width_constraint.constant = 96 + reserved;
+  _action_expanded_width_constraint.constant = 60 + reserved;
+  _action_rail.hidden = _action_buttons.count == 0 && !width;
+  _action_rail.alpha = _action_rail.hidden ? 0 : 1;
+  [UIView animateWithDuration:animated && !UIAccessibilityIsReduceMotionEnabled() ? 0.3 : 0
+      delay:0 usingSpringWithDamping:0.86 initialSpringVelocity:0
+      options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+      animations:^{ [self->_action_rail layoutIfNeeded]; } completion:nil];
 }
 
 - (void)toggleActionStrip:(UIButton *)sender
@@ -3350,17 +3396,20 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _action_toggle_trailing_constraint.active = NO;
   _action_expanded_width_constraint.active = !collapsed;
   _action_collapsed_width_constraint.active = collapsed;
-  _action_toggle_width_constraint.active = !collapsed;
+  _action_toggle_width_constraint.constant = collapsed ? (_redo_strip.collapsedWidth ? 80 : 96) : 44;
+  _action_toggle_width_constraint.active = YES;
   _action_toggle_trailing_constraint.active = collapsed;
 
   UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
   configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
   configuration.title = collapsed ? @"Actions" : nil;
+  configuration.titleLineBreakMode = NSLineBreakByTruncatingTail;
   configuration.image = collapsed ? nil : [UIImage systemImageNamed:@"xmark"];
   configuration.preferredSymbolConfigurationForImage =
       [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold];
   configuration.contentInsets = NSDirectionalEdgeInsetsMake(8, 10, 8, 10);
   _action_toggle.configuration = configuration;
+  _action_toggle.titleLabel.numberOfLines = 1;
   _action_toggle.accessibilityLabel = collapsed ? @"Show Quick Actions" : @"Hide Quick Actions";
   _action_toggle.accessibilityValue = collapsed ? @"Collapsed" : @"Expanded";
   _action_toggle.toolTip = _action_toggle.accessibilityLabel;
@@ -3532,6 +3581,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   panel_rect.size.height = MAX(0, panel_bottom - panel_top);
   [_scene_panels layoutInRect:panel_rect];
   [self layoutViewPie];
+  [self updateRedoPillLayout:NO];
   CGRect redo_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
   const CGFloat redo_left = MAX(CGRectGetMinX(redo_rect) + 12, CGRectGetMaxX(_tool_rail.frame) + 12);
   CGFloat redo_right = CGRectGetMaxX(redo_rect) - 12;
@@ -4844,8 +4894,6 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
     [_action_scroll.leadingAnchor constraintEqualToAnchor:_action_group.leadingAnchor
                                                 constant:48.0],
-    [_action_scroll.trailingAnchor constraintEqualToAnchor:_action_group.trailingAnchor
-                                                 constant:0.0],
     [_action_scroll.topAnchor constraintEqualToAnchor:_action_rail.contentView.topAnchor
                                             constant:0.0],
     [_action_scroll.bottomAnchor constraintEqualToAnchor:_action_rail.contentView.bottomAnchor

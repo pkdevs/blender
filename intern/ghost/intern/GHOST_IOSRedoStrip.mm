@@ -33,8 +33,9 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   CAGradientLayer *_fadeMask;
   UIStackView *_stack;
   UIButton *_done;
+  UIButton *_collapsedButton;
   NSDictionary *_snapshot;
-  NSString *_dismissedID;
+  NSString *_collapsedID;
   NSString *_lastError;
   NSArray *_shape;
   NSMutableDictionary *_controls;
@@ -92,15 +93,28 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     UIButtonConfiguration *configuration = [UIButtonConfiguration plainButtonConfiguration];
     configuration.image = [UIImage systemImageNamed:@"checkmark"];
     _done.configuration = configuration;
-    _done.accessibilityLabel = @"Done Adjusting Last Operation";
+    _done.accessibilityLabel = @"Collapse Last Operation";
     _done.accessibilityIdentifier = @"blender.redo.done";
     [_done addTarget:self action:@selector(dismiss:) forControlEvents:UIControlEventTouchUpInside];
     [_rail.contentView addSubview:_done];
+    _collapsedButton = [[UIButton buttonWithType:UIButtonTypeSystem] retain];
+    _collapsedButton.configuration = [UIButtonConfiguration glassButtonConfiguration];
+    _collapsedButton.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    _collapsedButton.tintColor = UIColor.labelColor;
+    _collapsedButton.accessibilityIdentifier = @"blender.redo.collapsed";
+    _collapsedButton.hidden = YES;
+    [_collapsedButton addTarget:self action:@selector(expand:) forControlEvents:UIControlEventTouchUpInside];
   }
   return self;
 }
 
 - (UIView *)view { return _rail; }
+- (UIButton *)collapsedButton { return _collapsedButton; }
+- (CGFloat)collapsedWidth
+{
+  if (![_snapshot[@"id"] isEqual:_collapsedID] || ![_snapshot[@"properties"] count]) { return 0; }
+  return MIN(136, MAX(72, [_collapsedButton sizeThatFits:CGSizeMake(CGFLOAT_MAX, 44)].width));
+}
 
 - (void)dealloc
 {
@@ -112,7 +126,10 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   [_rail removeFromSuperview];
   [_rail release];
   [_snapshot release];
-  [_dismissedID release];
+  [_collapsedButton removeFromSuperview];
+  [_collapsedButton release];
+  [_collapsedID release];
+  [_presentationDidChange release];
   [_lastError release];
   [_shape release];
   [_controls release];
@@ -148,7 +165,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 - (void)sendProperty:(NSDictionary *)property value:(id)value operation:(NSString *)operation
 {
   if (value && !property) { return; }
-  if (![operation isEqual:_snapshot[@"id"]] || [operation isEqual:_dismissedID]) { return; }
+  if (![operation isEqual:_snapshot[@"id"]]) { return; }
   NSMutableDictionary *request = [NSMutableDictionary dictionaryWithDictionary:
       @{@"id": operation, @"sequence": @(++_sequence)}];
   if (property) {
@@ -165,10 +182,44 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 - (void)dismiss:(id)sender
 {
   [_rail endEditing:YES];
-  [self sendProperty:nil value:nil operation:_snapshot[@"id"]];
-  [_dismissedID release];
-  _dismissedID = [_snapshot[@"id"] copy];
+  [_collapsedID release];
+  _collapsedID = [_snapshot[@"id"] copy];
+  _collapsedButton.hidden = NO;
+  if (_presentationDidChange) { _presentationDidChange(YES); }
   [self setVisible:NO];
+}
+
+- (void)expand:(id)sender
+{
+  if (!self.collapsedWidth) { return; }
+  [_collapsedID release];
+  _collapsedID = nil;
+  _collapsedButton.hidden = YES;
+  if (_presentationDidChange) { _presentationDidChange(YES); }
+  [self setVisible:YES];
+}
+
+- (void)updateCollapsedTitle
+{
+  NSDictionary *shortNames = @{
+    @"TRANSFORM_OT_translate": @"Move", @"TRANSFORM_OT_rotate": @"Rotate",
+    @"TRANSFORM_OT_resize": @"Scale", @"MESH_OT_extrude_region_move": @"Extrude",
+    @"MESH_OT_extrude_context_move": @"Extrude", @"MESH_OT_extrude_faces_move": @"Extrude",
+    @"MESH_OT_duplicate_move": @"Duplicate", @"OBJECT_OT_duplicate_move": @"Duplicate",
+    @"OBJECT_OT_duplicate_move_linked": @"Duplicate Linked",
+  };
+  UIButtonConfiguration *config = _collapsedButton.configuration;
+  NSString *title = shortNames[_snapshot[@"operator"] ?: @""] ?: _snapshot[@"title"];
+  if ([config.title isEqual:title]) { return; }
+  config.title = title;
+  config.titleLineBreakMode = NSLineBreakByTruncatingTail;
+  config.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+  config.contentInsets = NSDirectionalEdgeInsetsMake(8, 12, 8, 12);
+  _collapsedButton.configuration = config;
+  _collapsedButton.titleLabel.numberOfLines = 1;
+  _collapsedButton.accessibilityLabel = [NSString stringWithFormat:@"Adjust %@", _snapshot[@"title"]];
+  _collapsedButton.accessibilityHint = @"Show last operation controls";
+  _collapsedButton.toolTip = _collapsedButton.accessibilityLabel;
 }
 
 - (void)setVisible:(BOOL)visible
@@ -399,11 +450,14 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 
 - (void)updateSnapshot:(NSDictionary *)snapshot
 {
+  const CGFloat previousWidth = self.collapsedWidth;
   if (![snapshot isKindOfClass:NSDictionary.class]) {
     [_snapshot release]; _snapshot = nil;
     _scrubField = nil;
     _scroll.scrollEnabled = YES;
     [self setVisible:NO];
+    _collapsedButton.hidden = YES;
+    if (previousWidth && _presentationDidChange) { _presentationDidChange(NO); }
     return;
   }
   BOOL changedOperation = ![_snapshot[@"id"] isEqual:snapshot[@"id"]];
@@ -418,6 +472,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     [_colorPicker dismissViewControllerAnimated:YES completion:nil];
   }
   [_snapshot release]; _snapshot = [snapshot copy];
+  [self updateCollapsedTitle];
   _sequence = MAX(_sequence, [snapshot[@"ack"] unsignedLongLongValue]);
   NSMutableArray *shape = [NSMutableArray array];
   for (NSDictionary *property in snapshot[@"properties"]) {
@@ -487,7 +542,10 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
       button.menu = [UIMenu menuWithTitle:property[@"label"] children:actions];
     }
   }
-  [self setVisible:![snapshot[@"id"] isEqual:_dismissedID] && [snapshot[@"properties"] count] > 0];
+  const CGFloat collapsedWidth = self.collapsedWidth;
+  _collapsedButton.hidden = !collapsedWidth;
+  [self setVisible:!collapsedWidth && [snapshot[@"properties"] count] > 0];
+  if (previousWidth != collapsedWidth && _presentationDidChange) { _presentationDidChange(NO); }
   if ([snapshot[@"error"] length]) {
     _done.accessibilityHint = snapshot[@"error"];
     NSString *identity = [NSString stringWithFormat:@"%@:%@:%@", snapshot[@"id"], snapshot[@"ack"], snapshot[@"error"]];
