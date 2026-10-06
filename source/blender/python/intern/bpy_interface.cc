@@ -565,8 +565,32 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
     pystatus_exit_on_error(status);
 
     if (!has_python_executable) {
+#  ifdef WITH_APPLE_CROSSPLATFORM
+      /* Framework extension loaders resolve their paths relative to the app executable. */
+      PyObject *executable = PyUnicode_DecodeFSDefault(BKE_appdir_program_path());
+      PySys_SetObject("executable", executable);
+      Py_DECREF(executable);
+#  else
       PySys_SetObject("executable", Py_None);
+#  endif
     }
+#  ifdef WITH_APPLE_CROSSPLATFORM
+    /* Our embedded Python uses the Darwin ABI. Enable its iOS framework loader too,
+     * so signed extensions can live in the application's Frameworks directory. */
+    if (PyRun_SimpleString(
+            "import sys, _imp, importlib._bootstrap_external as _bootstrap_external\n"
+            "sys.path_hooks.insert(0, _bootstrap_external.FileFinder.path_hook(\n"
+            "    (_bootstrap_external.AppleFrameworkLoader,\n"
+            "     [s.replace('.so', '.fwork') for s in _imp.extension_suffixes()]),\n"
+            "    *_bootstrap_external._get_supported_file_loaders()))\n"
+            "sys.path_importer_cache.clear()\n"
+            "del _bootstrap_external\n") != 0)
+    {
+      PyErr_Print();
+      fprintf(stderr, "Unable to initialize iOS Python framework loading\n");
+      exit(EXIT_FAILURE);
+    }
+#  endif
   }
 
 #  ifdef WITH_FLUID
