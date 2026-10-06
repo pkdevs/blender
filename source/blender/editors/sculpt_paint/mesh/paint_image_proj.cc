@@ -434,6 +434,9 @@ struct ProjPaintState {
   bool is_shared_user;
 
   ProjPaintImage *projImages;
+  /* Number of ProjPaintImages currently allocated, usually equal to `image_tot` except when
+   * building new tiles. */
+  int proj_images_num;
   /** cavity amount for vertices. */
   float *cavities;
 
@@ -4437,6 +4440,15 @@ static void project_paint_build_proj_ima(ProjPaintState *ps,
   ProjPaintImage *projIma;
   PrepareImageEntry *entry;
 
+  const int used_images_count = BLI_listbase_count(used_images);
+  if (ps->projImages) {
+    /* Release the existing buffers */
+    int i;
+    for (i = 0, projIma = ps->projImages; i < ps->proj_images_num; i++, projIma++) {
+      BKE_image_release_ibuf(projIma->ima, projIma->ibuf, nullptr);
+    }
+  }
+
   /* build an array of images we use */
   projIma = ps->projImages = static_cast<ProjPaintImage *>(
       BLI_memarena_alloc(arena, sizeof(ProjPaintImage) * ps->image_tot));
@@ -4464,6 +4476,8 @@ static void project_paint_build_proj_ima(ProjPaintState *ps,
     projIma->valid = static_cast<bool **>(BLI_memarena_alloc(arena, size));
     memset(projIma->valid, 0, size);
   }
+  ps->proj_images_num = used_images_count;
+  BLI_assert(ps->proj_images_num == ps->image_tot);
 }
 
 static void project_paint_prepare_all_faces(ProjPaintState *ps,
@@ -4669,7 +4683,7 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
   }
 
   /* Build an array of images we use. */
-  if (ps->is_shared_user == false) {
+  if (ps->is_shared_user == false || BLI_listbase_count(&used_images) > ps->proj_images_num) {
     project_paint_build_proj_ima(ps, arena, &used_images);
   }
 
