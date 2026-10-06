@@ -954,11 +954,6 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
             layout.operator("asset.assets_download", icon='DOWNLOAD')
             layout.separator()
 
-        layout.operator("asset.library_refresh", icon='FILE_REFRESH')
-        layout.operator("asset.library_reload_listing", text="Refresh Remote Listing")
-
-        layout.separator()
-
         sub = layout.column()
         sub.operator_context = 'EXEC_DEFAULT'
         sub.operator("asset.clear", text="Clear Asset").set_fake_user = False
@@ -968,6 +963,24 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
 
         layout.operator("asset.open_containing_blend_file", icon='FILE_BLEND')
         layout.operator("asset.browse_containing_blend_file")
+
+        layout.separator()
+
+        layout.operator("asset.library_refresh", icon='FILE_REFRESH')
+        layout.operator("asset.library_reload_listing", text="Refresh Remote Listing")
+
+        layout.separator()
+
+        active_asset = context.asset
+        user_library = active_asset.owner_asset_library.user_library if active_asset else None
+        extension_id = user_library.extension_id if user_library else ""
+        row = layout.row()
+        row.enabled = bool(extension_id)
+        row.operator(
+            "extensions.userpref_show_package",
+            text="View Extension...",
+            icon='EXTENSION',
+        ).extension_id = extension_id
 
         layout.separator()
 
