@@ -30,7 +30,7 @@
 #include "asset_catalog_collection.hh"
 #include "asset_catalog_definition_file.hh"  // IWYU pragma: keep
 #include "asset_library_service.hh"
-#include "asset_library_toml.hh"
+#include "asset_library_config.hh"
 #include "essentials_library.hh"
 #include "on_disk_library.hh"
 #include "preferences_on_disk_library.hh"

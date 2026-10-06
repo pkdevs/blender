@@ -21,7 +21,7 @@
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
 
-#include "asset_library_toml.hh"
+#include "asset_library_config.hh"
 
 namespace blender::asset_system {
 
