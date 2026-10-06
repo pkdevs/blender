@@ -286,6 +286,11 @@ static std::optional<float3> sample_mesh_attribute_color(ViewContext &vc,
         return sampled_color.xyz();
       }
     }
+    else if (color_attribute.domain == bke::AttrDomain::Point) {
+      return color::color_vert_get(
+                 faces, corner_verts, vert_to_face_map, colors, color_attribute.domain, vert)
+          .xyz();
+    }
   }
   return std::nullopt;
 }
