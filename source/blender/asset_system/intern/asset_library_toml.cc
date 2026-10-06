@@ -53,7 +53,7 @@ static const toml::value &default_asset_lib_config_get()
 
 )_delim_";
     toml::result default_result = toml::try_parse_str(default_str, TOML_SPEC_VERSION);
-    if (!default_result.is_ok()) {
+    if (default_result.is_err()) {
       asset_lib_config_print_errors(default_result.unwrap_err());
       return toml::value();
     }
@@ -62,7 +62,7 @@ static const toml::value &default_asset_lib_config_get()
   return value;
 }
 
-static const toml::value *toml_find_item(const toml::value &data, StringRef key)
+static const toml::value *toml_find_item(const toml::value &data, const StringRef key)
 {
   BLI_assert(!key.is_empty());
 
@@ -114,20 +114,20 @@ void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
 
   if (BLI_exists(blender_asset_lib_toml_path)) {
     toml::result file_result = toml::try_parse(blender_asset_lib_toml_path, TOML_SPEC_VERSION);
-    if (file_result.is_ok()) {
-      asset_lib_toml_value = file_result.unwrap();
-    }
-    else {
+    if (!file_result.is_err()) {
       custom_library.runtime->invalid_uuid = "Broken Asset Library Config File";
       asset_lib_config_print_errors(file_result.unwrap_err());
       return;
+    }
+    else {
+      asset_lib_toml_value = file_result.unwrap();
     }
   }
 
   /* Set library identifier if is not already set, ensure its type is string. */
   if (const toml::value *uuid_value = toml_find_item_in_section(
           asset_lib_toml_value, "library", "uuid");
-      !uuid_value || uuid_value->is_string())
+      !uuid_value || !uuid_value->is_string())
   {
     /* Ensure library section. */
     if (const toml::value *lib_value = toml_find_item(asset_lib_toml_value, "library");

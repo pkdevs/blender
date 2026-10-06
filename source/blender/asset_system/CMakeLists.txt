@@ -57,9 +57,6 @@ set(SRC
   intern/library_types/remote_library.hh
   intern/library_types/runtime_library.hh
   intern/utils.hh
-
-  # Without these files listed, they aren't known to CMake.
-  ../../../extern/toml11/toml.hpp
 )
 
 set(LIB
