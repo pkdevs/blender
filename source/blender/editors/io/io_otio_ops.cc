@@ -34,6 +34,7 @@
 
 #  include "ED_fileselect.hh"
 #  include "ED_object.hh"
+#  include "ED_sequencer.hh"
 
 #  include "WM_api.hh"
 #  include "WM_types.hh"
@@ -172,13 +173,22 @@ static wmOperatorStatus wm_otio_import_exec(bContext *C, wmOperator *op)
     }
   }
 
-  if (scene && scene != CTX_data_sequencer_scene(C)) {
-    if (WorkSpace *workspace = CTX_wm_workspace(C)) {
-      workspace->sequencer_scene = scene;
+  if (scene) {
+    wmWindow *win = CTX_wm_window(C);
+    WorkSpace *workspace = CTX_wm_workspace(C);
+    if (win && workspace && CTX_wm_space_seq(C)) {
+      if (scene != workspace->sequencer_scene) {
+        workspace->sequencer_scene = scene;
+        WM_window_set_active_scene(CTX_data_main(C), C, win, scene);
+        ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+      }
     }
-    WM_window_set_active_scene(CTX_data_main(C), C, CTX_wm_window(C), scene);
-    BKE_reportf(
-        op->reports, RPT_WARNING, TIP_("Active scene changed to '%s'"), scene->id.name + 2);
+    else {
+      BKE_reportf(op->reports,
+                  RPT_INFO,
+                  TIP_("Imported OTIO timeline into scene '%s'"),
+                  scene->id.name + 2);
+    }
   }
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
 
