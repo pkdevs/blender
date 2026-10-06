@@ -1265,7 +1265,7 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     }
   }
 
-  Collection *target_collection = to_collection;
+  const Collection *target_collection = to_collection;
   if (ELEM(insert_type, TE_INSERT_BEFORE, TE_INSERT_AFTER)) {
     target_collection = nullptr;
     for (const TreeElement *te_parent =
