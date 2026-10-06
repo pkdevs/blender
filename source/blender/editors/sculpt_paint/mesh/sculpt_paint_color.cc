@@ -109,17 +109,6 @@ static float4 color_vert_get(const OffsetIndices<int> faces,
   return to_float(colors_typed[vert]);
 }
 
-template<typename T> static float4 color_corner_get(const GSpan color_attribute, int corner_index)
-{
-  float4 r_color;
-  to_static_color_type(color_attribute.type(), [&](auto dummy) {
-    using T = decltype(dummy);
-    const T *colors_typed = static_cast<const T *>(color_attribute.data());
-    r_color = to_float(colors_typed[corner_index]);
-  });
-  return r_color;
-}
-
 template<typename T>
 static void color_vert_set(const OffsetIndices<int> faces,
                            const Span<int> corner_verts,
@@ -165,12 +154,13 @@ float4 color_vert_get(const OffsetIndices<int> faces,
 
 float4 color_corner_get(const GSpan color_attribute, int corner_index)
 {
-  float4 color;
+  float4 r_color;
   to_static_color_type(color_attribute.type(), [&](auto dummy) {
     using T = decltype(dummy);
-    color = color_corner_get<T>(color_attribute, corner_index);
+    const T *colors_typed = static_cast<const T *>(color_attribute.data());
+    r_color = to_float(colors_typed[corner_index]);
   });
-  return color;
+  return r_color;
 }
 
 void color_vert_set(const OffsetIndices<int> faces,
