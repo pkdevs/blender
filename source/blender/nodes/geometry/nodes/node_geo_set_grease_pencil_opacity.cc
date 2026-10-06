@@ -36,6 +36,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .static_items(rna_enum_node_grease_pencil_stroke_type_items)
       .optional_label();
   b.add_input<decl::Float>("Opacity"_ustr)
+      .subtype(PROP_FACTOR)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
