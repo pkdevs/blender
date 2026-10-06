@@ -112,8 +112,6 @@ template<typename T> class List {
   using generic_type = GList;
   using DataVariant = std::variant<GList::ArrayData, GList::SingleData>;
 
-  using DataVariant = std::variant<GList::ArrayData, GList::SingleData>;
-
  private:
   /**
    * #List<T> just stores a #GList. This makes converting between the two types easy.
