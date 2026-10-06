@@ -4,11 +4,13 @@
 
 #import "GHOST_IOSScenePanels.hh"
 #import "GHOST_IOSTheme.hh"
+#import "GHOST_IOSNumericInput.hh"
 
 @interface GHOSTIOSScenePanels (PropertyHeadingTests)
 - (NSArray<UIMenuElement *> *)groupMenuActionsForProperty:(NSDictionary *)property;
 - (void)beginNumberScrub:(UITextField *)field;
 - (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation;
+- (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation vertical:(CGFloat)vertical;
 - (void)finishNumberScrub:(UITextField *)field;
 - (void)cancelNumberScrub;
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture;
@@ -179,6 +181,9 @@ static void testPairedProperties(UIView *overlay)
 
 static void testNumberScrubbing(UIView *overlay)
 {
+  NSCAssert(GHOSTIOSNumberSensitivity(-10000) == 16 &&
+            GHOSTIOSNumberSensitivity(10000) == 1.0 / 16,
+            @"Precision is bounded even when dragging far from the field");
   GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
       icon:^UIImage *(NSString *name) { return nil; }] autorelease];
   [panels layoutInRect:CGRectMake(0, 70, 1194, 680)];
@@ -203,6 +208,17 @@ static void testNumberScrubbing(UIView *overlay)
     hasPan |= [gesture.name isEqual:@"blender.number.scrub"];
   }
   NSCAssert(hasPan, @"Non-slider numeric fields have a scrub gesture");
+  NSCAssert(field.borderStyle == UITextBorderStyleRoundedRect &&
+            [field.backgroundColor isEqual:UIColor.tertiarySystemFillColor], @"Numbers use native filled text fields");
+  NSString *capture = NSProcessInfo.processInfo.environment[@"BLENDER_NUMBER_FIELD_CAPTURE"];
+  if (capture.length) {
+    UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc]
+        initWithBounds:overlay.bounds] autorelease];
+    UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+      [overlay.layer renderInContext:context.CGContext];
+    }];
+    [UIImagePNGRepresentation(image) writeToFile:capture atomically:YES];
+  }
   NumberTestPan *pan = [[[NumberTestPan alloc] init] autorelease];
   pan.name = @"blender.number.scrub";
   [field addGestureRecognizer:pan];
@@ -239,6 +255,30 @@ static void testNumberScrubbing(UIView *overlay)
             [request[@"phase"] isEqual:@"cancel"] && [request[@"value"] doubleValue] == 1.75,
             @"Cancelled drags restore Blender and the field");
   [panels beginNumberScrub:field];
+  NSCAssert(field.layer.borderWidth > 0, @"Active scrubbing has visible focus feedback");
+  [panels changeNumberScrub:field translation:10 vertical:0];
+  [panels changeNumberScrub:field translation:10 vertical:80];
+  NSCAssert(fabs([[numbers numberFromString:field.text] doubleValue] - 1.85) < 1e-9,
+            @"Vertical movement changes sensitivity without jumping the value");
+  [panels changeNumberScrub:field translation:30 vertical:80];
+  NSCAssert(fabs([[numbers numberFromString:field.text] doubleValue] - 1.95) < 1e-9,
+            @"Dragging downward halves scrub sensitivity");
+  [panels changeNumberScrub:field translation:30 vertical:-80];
+  [panels changeNumberScrub:field translation:40 vertical:-80];
+  NSCAssert(fabs([[numbers numberFromString:field.text] doubleValue] - 2.15) < 1e-9,
+            @"Dragging upward doubles scrub sensitivity without reinterpreting previous motion");
+  [panels changeNumberScrub:field translation:40 vertical:0];
+  [panels changeNumberScrub:field translation:50 vertical:0];
+  NSCAssert(fabs([[numbers numberFromString:field.text] doubleValue] - 2.25) < 1e-9,
+            @"Returning to the original height restores normal sensitivity without a jump");
+  [panels changeNumberScrub:field translation:NAN vertical:0];
+  [panels changeNumberScrub:field translation:60 vertical:INFINITY];
+  NSCAssert(fabs([[numbers numberFromString:field.text] doubleValue] - 2.25) < 1e-9,
+            @"Invalid gesture coordinates cannot corrupt the numeric accumulator");
+  [panels cancelNumberScrub];
+  NSCAssert(field.layer.borderWidth == 0 && field.borderStyle == UITextBorderStyleRoundedRect,
+            @"Ending a scrub restores native idle field styling");
+  [panels beginNumberScrub:field];
   [panels finishNumberScrub:field];
   NSCAssert([request[@"phase"] isEqual:@"cancel"], @"Zero-distance drags do not create undo entries");
   [panels beginNumberScrub:field];
@@ -261,6 +301,12 @@ static void testNumberScrubbing(UIView *overlay)
   NSCAssert([field.text isEqual:@"8"], @"Reversing at a limit responds immediately");
   [panels finishNumberScrub:field];
   NSCAssert([request[@"value"] intValue] == 8, @"Integer scrubs commit integral values");
+  [panels beginNumberScrub:field];
+  for (int x = 1; x <= 20; x++) {
+    [panels changeNumberScrub:field translation:x vertical:320];
+  }
+  NSCAssert([field.text isEqual:@"9"], @"Fine integer adjustments accumulate fractional substeps");
+  [panels cancelNumberScrub];
   property[@"type"] = @"FLOAT";
   property[@"dragStep"] = @1;
   property[@"angle"] = @YES;

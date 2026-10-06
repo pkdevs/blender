@@ -2,6 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #import "GHOST_IOSRedoStrip.hh"
+#import "GHOST_IOSNumericInput.hh"
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
 #include <cmath>
@@ -60,6 +61,8 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   GHOSTIOSRedoField *_scrubField;
   CGPoint _scrubStart;
   double _scrubValue;
+  double _scrubCurrentValue;
+  CGFloat _scrubTranslation;
   NSString *_scrubInteraction;
   CFTimeInterval _scrubPreviewTime;
   UIImage *(^_icon)(NSString *);
@@ -359,6 +362,14 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
       field.returnKeyType = UIReturnKeyDone;
       field.keyboardType = [type isEqual:@"STRING"] ? UIKeyboardTypeDefault : UIKeyboardTypeNumbersAndPunctuation;
       field.autocorrectionType = UITextAutocorrectionTypeNo;
+      if (![type isEqual:@"STRING"]) {
+        field.font = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleBody]
+            scaledFontForFont:[UIFont monospacedDigitSystemFontOfSize:15 weight:UIFontWeightRegular]];
+        field.adjustsFontForContentSizeCategory = YES;
+        field.adjustsFontSizeToFitWidth = YES;
+        field.minimumFontSize = 12;
+        GHOSTIOSNumberFieldAppearance(field, false);
+      }
       [field addTarget:self action:@selector(commitField:) forControlEvents:UIControlEventEditingDidEnd];
       if (property[@"dragStep"]) {
         UILongPressGestureRecognizer *scrub = [[[UILongPressGestureRecognizer alloc]
@@ -391,6 +402,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 - (void)commitField:(GHOSTIOSRedoField *)field
 {
   if (field == _scrubField) { return; }
+  if (![field.descriptor[@"type"] isEqual:@"STRING"]) { GHOSTIOSNumberFieldAppearance(field, false); }
   if ([field.text isEqual:field.originalText]) { return; }
   id value = field.text ?: @"";
   if (![field.descriptor[@"type"] isEqual:@"STRING"]) {
@@ -451,15 +463,23 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     _scrubField = field;
     _scrubStart = [gesture locationInView:_overlay];
     _scrubValue = [field.descriptor[@"value"] doubleValue];
+    _scrubCurrentValue = _scrubValue;
+    _scrubTranslation = 0;
     [_scrubInteraction release]; _scrubInteraction = [NSUUID.UUID.UUIDString copy];
     _scrubPreviewTime = 0;
-    field.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.18];
+    GHOSTIOSNumberFieldAppearance(field, true);
     _scroll.scrollEnabled = NO;
   }
   else if (_scrubField == field) {
-    double value = _scrubValue + ([gesture locationInView:_overlay].x - _scrubStart.x) *
-                                [field.descriptor[@"dragStep"] doubleValue];
-    value = fmax([field.descriptor[@"min"] doubleValue], fmin([field.descriptor[@"max"] doubleValue], value));
+    CGPoint point = [gesture locationInView:_overlay];
+    if (!std::isfinite(point.x) || !std::isfinite(point.y)) { return; }
+    const double translation = point.x - _scrubStart.x;
+    _scrubCurrentValue += (translation - _scrubTranslation) * [field.descriptor[@"dragStep"] doubleValue] *
+                         GHOSTIOSNumberSensitivity(point.y - _scrubStart.y);
+    _scrubCurrentValue = fmax([field.descriptor[@"min"] doubleValue],
+                             fmin([field.descriptor[@"max"] doubleValue], _scrubCurrentValue));
+    _scrubTranslation = translation;
+    double value = _scrubCurrentValue;
     if ([field.descriptor[@"type"] isEqual:@"INT"]) { value = round(value); }
     NSNumberFormatter *format = [[[NSNumberFormatter alloc] init] autorelease];
     format.numberStyle = NSNumberFormatterDecimalStyle;
@@ -475,7 +495,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
         gesture.state == UIGestureRecognizerStateFailed) {
       _scrubField = nil;
       _scroll.scrollEnabled = YES;
-      field.backgroundColor = UIColor.tertiarySystemFillColor;
+      GHOSTIOSNumberFieldAppearance(field, false);
       const BOOL ended = gesture.state == UIGestureRecognizerStateEnded;
       [self sendProperty:field.descriptor value:@(ended ? value : _scrubValue) operation:field.operationID
             interaction:_scrubInteraction phase:ended ? @"end" : @"cancel"];
@@ -491,6 +511,9 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 
 - (void)textFieldDidBeginEditing:(UITextField *)field
 {
+  if (![[(GHOSTIOSRedoField *)field descriptor][@"type"] isEqual:@"STRING"]) {
+    GHOSTIOSNumberFieldAppearance(field, false);
+  }
   ((GHOSTIOSRedoField *)field).originalText = field.text;
   [_scroll scrollRectToVisible:[field convertRect:field.bounds toView:_stack] animated:YES];
 }

@@ -110,6 +110,26 @@ int main()
     [strip scrubNumber:press];
     NSCAssert([requests.lastObject[@"phase"] isEqual:@"end"] && [requests.lastObject[@"value"] doubleValue] == 4.1,
               @"Final precise value is sent even inside the preview throttle interval");
+    NSCAssert(field.borderStyle == UITextBorderStyleRoundedRect, @"Redo numbers use the same native field style");
+    press.testPoint = CGPointZero;
+    press.testState = UIGestureRecognizerStateBegan;
+    [strip scrubNumber:press];
+    press.testState = UIGestureRecognizerStateChanged;
+    press.testPoint = CGPointMake(20, 80);
+    [strip scrubNumber:press];
+    NSNumberFormatter *formatter = [[[NSNumberFormatter alloc] init] autorelease];
+    formatter.numberStyle = NSNumberFormatterDecimalStyle;
+    NSCAssert(fabs([[formatter numberFromString:field.text] doubleValue] - 4.2) < 1e-9,
+              @"Downward redo scrubbing provides finer adjustments");
+    press.testPoint = CGPointMake(20, -80);
+    [strip scrubNumber:press];
+    NSCAssert(fabs([[formatter numberFromString:field.text] doubleValue] - 4.2) < 1e-9,
+              @"Changing redo sensitivity cannot jump the value");
+    press.testPoint = CGPointMake(30, -80);
+    press.testState = UIGestureRecognizerStateEnded;
+    [strip scrubNumber:press];
+    NSCAssert(fabs([requests.lastObject[@"value"] doubleValue] - 4.4) < 1e-9,
+              @"Upward redo scrubbing provides coarser adjustments and an exact final value");
     NSUInteger count = requests.count;
     field.text = @"nan";
     [strip commitField:field];

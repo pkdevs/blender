@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #import "GHOST_IOSScenePanels.hh"
+#import "GHOST_IOSNumericInput.hh"
 #import <QuartzCore/QuartzCore.h>
 #include <cfloat>
 #include <cmath>
@@ -833,7 +834,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         field.returnKeyType = UIReturnKeyDone;
         field.keyboardType = [kind isEqual:@"STRING"] ? UIKeyboardTypeDefault : UIKeyboardTypeNumbersAndPunctuation;
         if (![kind isEqual:@"STRING"]) {
-          field.font = [UIFont monospacedDigitSystemFontOfSize:15 weight:UIFontWeightRegular];
+          field.font = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleBody]
+              scaledFontForFont:[UIFont monospacedDigitSystemFontOfSize:15 weight:UIFontWeightRegular]];
+          GHOSTIOSNumberFieldAppearance(field, false);
           UIToolbar *accessory = [[[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, 320, 44)] autorelease];
           UIStepper *stepper = [[[UIStepper alloc] init] autorelease];
           stepper.accessibilityIdentifier = [self keyForProperty:property];
@@ -858,7 +861,6 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
             pan.delegate = self;
             [field addGestureRecognizer:pan];
             [_form.panGestureRecognizer requireGestureRecognizerToFail:pan];
-            field.layer.cornerRadius = 6;
           }
         }
         [field addTarget:self action:@selector(commitField:) forControlEvents:UIControlEventEditingDidEnd];
@@ -1473,12 +1475,19 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   field.scrubTranslation = 0;
   field.interactionID = NSUUID.UUID.UUIDString;
   field.lastPreview = 0;
-  field.backgroundColor = [_overlay.tintColor colorWithAlphaComponent:0.12];
+  GHOSTIOSNumberFieldAppearance(field, true);
 }
 
 - (void)changeNumberScrub:(GHOSTIOSPropertyField *)field translation:(CGFloat)translation
 {
-  if (field != _scrubField || !field.scrubbing || !std::isfinite(translation)) { return; }
+  [self changeNumberScrub:field translation:translation vertical:0];
+}
+
+- (void)changeNumberScrub:(GHOSTIOSPropertyField *)field translation:(CGFloat)translation
+                 vertical:(CGFloat)vertical
+{
+  if (field != _scrubField || !field.scrubbing || !std::isfinite(translation) ||
+      !std::isfinite(vertical)) { return; }
   if (!field.enabled || _controls[[self keyForProperty:field.descriptor]] != field ||
       ![field.objectID isEqual:_objectID]) {
     [self cancelNumberScrub];
@@ -1487,7 +1496,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   double step = field.descriptor[@"dragStep"] ? [field.descriptor[@"dragStep"] doubleValue] :
       [field.descriptor[@"type"] isEqual:@"INT"] ? 0.5 : 0.01;
   if ([field.descriptor[@"angle"] boolValue]) { step *= M_PI / 180.0; }
-  double value = field.scrubValue + (translation - field.scrubTranslation) * step;
+  /* Integrate horizontal movement so changing precision never reinterprets earlier motion. */
+  double value = field.scrubValue +
+      (translation - field.scrubTranslation) * step * GHOSTIOSNumberSensitivity(vertical);
   double minimum = field.descriptor[@"min"] ? [field.descriptor[@"min"] doubleValue] : -DBL_MAX;
   double maximum = field.descriptor[@"max"] ? [field.descriptor[@"max"] doubleValue] : DBL_MAX;
   field.scrubValue = fmin(maximum, fmax(minimum, value));
@@ -1508,7 +1519,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       [field.objectID isEqual:_objectID];
   double value = [field.descriptor[@"type"] isEqual:@"INT"] ? round(field.scrubValue) : field.scrubValue;
   field.scrubbing = NO;
-  field.backgroundColor = UIColor.clearColor;
+  GHOSTIOSNumberFieldAppearance(field, false);
   if (valid) {
     [self previewProperty:field.descriptor object:field.objectID value:@(value)
              interaction:field.interactionID phase:value != field.scrubStart ? @"end" : @"cancel"];
@@ -1532,7 +1543,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   _scrubField.scrubValue = _scrubField.scrubStart;
   [self displayNumberScrub:_scrubField];
   _scrubField.scrubbing = NO;
-  _scrubField.backgroundColor = UIColor.clearColor;
+  GHOSTIOSNumberFieldAppearance(_scrubField, false);
   [_scrubField release];
   _scrubField = nil;
 }
@@ -1545,7 +1556,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     [pan setTranslation:CGPointZero inView:_overlay];
   }
   else if (pan.state == UIGestureRecognizerStateChanged || pan.state == UIGestureRecognizerStateEnded) {
-    [self changeNumberScrub:field translation:[pan translationInView:_overlay].x];
+    CGPoint translation = [pan translationInView:_overlay];
+    [self changeNumberScrub:field translation:translation.x vertical:translation.y];
     if (pan.state == UIGestureRecognizerStateEnded) { [self finishNumberScrub:field]; }
   }
   else if (pan.state == UIGestureRecognizerStateCancelled || pan.state == UIGestureRecognizerStateFailed) {
@@ -1556,6 +1568,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (void)commitField:(GHOSTIOSPropertyField *)field
 {
   if (field.scrubbing) { return; }
+  if (![field.descriptor[@"type"] isEqual:@"STRING"]) { GHOSTIOSNumberFieldAppearance(field, false); }
   if ([field.text isEqual:field.originalText]) {
     return;
   }
@@ -1592,6 +1605,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)textFieldDidBeginEditing:(UITextField *)field
 {
+  if (![[(GHOSTIOSPropertyField *)field descriptor][@"type"] isEqual:@"STRING"]) {
+    GHOSTIOSNumberFieldAppearance(field, false);
+  }
   if ([field.inputAccessoryView isKindOfClass:UIToolbar.class]) {
     UIToolbar *bar = (UIToolbar *)field.inputAccessoryView;
     UIStepper *stepper = (UIStepper *)bar.items.firstObject.customView;
@@ -1732,6 +1748,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       }
       else if ([control isKindOfClass:GHOSTIOSPropertyField.class]) {
         GHOSTIOSPropertyField *field = (GHOSTIOSPropertyField *)control;
+        if (![property[@"type"] isEqual:@"STRING"]) {
+          GHOSTIOSNumberFieldAppearance(field, field.scrubbing);
+        }
         if (field.scrubbing && !field.enabled) {
           [self cancelNumberScrub];
         }
