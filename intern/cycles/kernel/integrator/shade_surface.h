@@ -16,6 +16,8 @@
 #include "kernel/geom/motion_triangle.h"
 #include "kernel/geom/triangle.h"
 
+#include "kernel/integrator/mnee.h"
+
 #include "kernel/integrator/guiding.h"
 #include "kernel/integrator/shadow_linking.h"
 #include "kernel/integrator/subsurface.h"
@@ -118,8 +120,7 @@ ccl_device_forceinline bool integrate_surface_holdout(KernelGlobals kg,
 // ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
 //                                                        IntegratorState state,
 //                                                        const ccl_private ShaderData *sd,
-//                                                        ccl_global float *ccl_restrict
-//                                                            render_buffer)
+//                                                        ccl_global float *ccl_restrict render_buffer)
 // {
 //   const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
 //   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
@@ -201,17 +202,11 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
 
     triangle_light_sample_from_intersection(kg, state, sd, &ls, &ref);
 
-    /*
-     * Weizhen explicitly assigned:
-     *   ls.pdf = nee_pdf;
-     *
-     * Modern Cycles hides this inside light_sample_mis_weight_forward_surface().
-     * For ReSTIR reservoir insertion we still need the actual NEE pdf for this
-     * surface light sample, so keep this explicit calculation.
-     */
+    // !!!(Tri): Weizhen explicitly assigned: ls.pdf = nee_pdf
     ls.pdf = light_sample_pdf_surface(kg, state, path_visibility, path_flag, sd);
 
-    if (INTEGRATOR_STATE(state, path, bounce) == 1) {
+    if (INTEGRATOR_STATE(state, path, bounce) == 1 &&
+        !INTEGRATOR_STATE(state, path, restir_di_disabled)) {
       film_add_reservoir_di(kg, state, L, ls, ref, rng_state, render_buffer); //
     }
     else {
@@ -756,11 +751,14 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_write_restir_di(
     ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
+
+  // INTEGRATOR_STATE_WRITE(state, path, restir_di_disabled) = true; // TODO(Tri): Clear on exit?
 // !!!: to write the fresh initial-candidates reservoir, unconditionally clobbering whichever slot is "current" for this iteration parity.
 // !!!: Nothing about this write path checks or preserves what was there from the previous sample
 // !!!: not designed to survive across samples, only across spatial iterations within one sample.
   /* Write to fresh initial-candidates reservoir and trace shadow ray later. */
-  film_write_pass_reservoir(kg, state, reservoir, render_buffer); 
+  film_write_pass_reservoir(kg, state, reservoir, render_buffer);
+
   return SHADER_EVAL_OK;
 }
 
@@ -774,7 +772,8 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_shade_indirect(
     IntegratorState state,
     ccl_private ShaderData *sd,
     ccl_private const RNGState *rng_state,
-    ccl_private Reservoir *reservoir)
+    ccl_private Reservoir *reservoir,
+    const bool is_direct_light)
 {
   reservoir_finalize(reservoir);
   bsdf_eval_mul(&reservoir->radiance, reservoir->total_weight);
@@ -784,13 +783,24 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_shade_indirect(
   // }
 
   int mnee_vertex_count = 0;
-  integrate_direct_light_create_shadow_path<false>(kg,
-                                                   state,
-                                                   rng_state,
-                                                   sd,
-                                                   &reservoir->light,
-                                                   &reservoir->radiance,
-                                                   mnee_vertex_count);
+
+  if (is_direct_light) {
+    integrate_direct_light_create_shadow_path<true>(kg,
+                                                    state,
+                                                    rng_state,
+                                                    sd,
+                                                    &reservoir->light,
+                                                    &reservoir->radiance,
+                                                    mnee_vertex_count);
+  } else {
+    integrate_direct_light_create_shadow_path<false>(kg,
+                                                     state,
+                                                     rng_state,
+                                                     sd,
+                                                     &reservoir->light,
+                                                     &reservoir->radiance,
+                                                     mnee_vertex_count);
+  }
   return SHADER_EVAL_OK;
 }
 
@@ -831,7 +841,8 @@ ccl_device
                           IntegratorState state,
                           ccl_private ShaderData *sd,
                           ccl_private const RNGState *rng_state,
-                          ccl_global float *ccl_restrict render_buffer)
+                          ccl_global float *ccl_restrict render_buffer,
+                          const bool is_sss_exit)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_INITIAL_RESAMPLING);
 
@@ -850,13 +861,17 @@ ccl_device
     return integrate_surface_nee_legacy(kg, state, sd, rng_state, render_buffer);
   }
 
+  // if (is_sss_exit) {
+  //   INTEGRATOR_STATE_WRITE(state, path, restir_di_disabled) = true;
+  // }
+
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
 
   /* Use Resampled Importance Sampling for direct illumination based on Talbot, Justin F.
    * Importance resampling for global illumination. Brigham Young University, 2005. */
   const bool is_direct_light = light_is_direct_illumination(state);
-  const bool use_restir_di = is_direct_light;
+  const bool use_restir_di = is_direct_light && !is_sss_exit;
 
 // TODO(Tri): Handle MNEE
 // #if 0
@@ -1020,23 +1035,6 @@ ccl_device
   }
 
   /* TODO(weizhen): write reconnection vertex. Treat as rough if at least one closure is rough. */
-/*
-1. Add hit-point position + normal (and probably the reconnection-vertex's local BSDF sample info) to `GlobalReservoir`'s persisted buffer, mirroring `PackedGIReservoir`.
-2. Implement reconnection: reconstruct the new edge from the current pixel to that hit point, recompute its Jacobian (same family as the DI `jacobian_solid_angle_to_area` work, but over a full reflected path segment rather than a direct light connection), check visibility, reject or down-weight when the reconnection vertex is behind a near-specular bounce.
-3. Add the roughness/distance gating (`LocalStrategy`) that decides when reconnection is even attempted versus skipped.
-4. Random replay as the fallback for the specular case — this is the expensive one, since it needs a way to re-derive or persist enough of the RNG state to regenerate the same path deterministically from a different starting pixel, which Cycles' current RNG scheme (seeded per-pixel/per-sample, not per-path-independent-of-pixel) isn't obviously set up for.
-
-What I'd actually do:
-- Fold the "Shift mapping" TODO into the existing `GlobalReservoir`/reconnection-vertex TODO 
-  rather than tracking it separately — it's the same blocker, and merging them avoids the PR 
-  looking like it has two open unknowns when it has one.
-- Explicitly flag in the PR description that GI spatial/temporal reuse currently combines reservoirs 
-  **without** a reconnection shift, so any reviewer looking closely at GI quality knows that's a 
-  known, named limitation rather than an undiagnosed bug — this matters because without it, GI 
-  reuse across pixels is probably introducing bias of its own right now, silently, the same category 
-  of problem you spent this whole session hunting down for DI.
-
-*/
 
   /*
    * The selected light and reference remain paired inside Reservoir.
@@ -1047,10 +1045,21 @@ What I'd actually do:
     return integrate_surface_nee_write_restir_di(kg, state, &reservoir, render_buffer);
   }
   else {
-    return integrate_surface_nee_shade_indirect(kg, state, sd, rng_state, &reservoir);
+    return integrate_surface_nee_shade_indirect(
+      kg, state, sd, rng_state, &reservoir, is_direct_light); // !!!(Tri): 
   }
 }
 
+
+
+
+
+
+
+
+
+
+// TODO(Tri): Subsurface
 /* Path tracing: bounce off or through surface with new direction. */
 ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
     KernelGlobals kg,
@@ -1066,6 +1075,9 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
   float3 rand_bsdf = path_state_rng_3D(kg, rng_state, PRNG_SURFACE_BSDF);
   const ccl_private ShaderClosure *sc = surface_shader_bsdf_bssrdf_pick(sd, &rand_bsdf);
+  /* The entry then loses ReSTIR only on paths that actually go to the exit, which is proportional
+   * to the SSS weight.*/
+  // const bool will_enter_sss = sc && CLOSURE_IS_BSSRDF(sc->type); // !!!(Tri): Unused
 
 #ifdef __SUBSURFACE__
   /* BSSRDF closure, we schedule subsurface intersection kernel. */
@@ -1154,7 +1166,17 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   const Spectrum bsdf_weight = bsdf_eval_sum(&bsdf_eval) / bsdf_pdf;
   INTEGRATOR_STATE_WRITE(state, path, throughput) *= bsdf_weight;
 
+// >>> ReSTIR
   integrate_write_pass_diffuse_glossy(kg, state, &bsdf_eval);
+// >>> Legacy
+  // if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+  //   if (INTEGRATOR_STATE(state, path, bounce) == 0) {
+  //     INTEGRATOR_STATE_WRITE(state, path, pass_diffuse_weight) = bsdf_eval_pass_diffuse_weight(
+  //         &bsdf_eval);
+  //     INTEGRATOR_STATE_WRITE(state, path, pass_glossy_weight) = bsdf_eval_pass_glossy_weight(
+  //         &bsdf_eval);
+  //   }
+// <<<
 
   /* Update path state */
   if (!(label & LABEL_TRANSPARENT)) {
@@ -1355,9 +1377,16 @@ ccl_device int integrate_surface(KernelGlobals kg,
 
 #ifdef __SUBSURFACE__
     if (path_flag & PATH_RAY_SUBSURFACE) {
+// ccl_debug_printf("SSS exit reached: bounce=%d tbg=%d flag=%u\n",
+//                   (int)INTEGRATOR_STATE(state, path, bounce),
+//                   (int)((path_flag & PATH_RAY_TRANSPARENT_BACKGROUND) != 0), path_flag);
+
+      // film_write_restir_sss_exit(kg, state, &sd, render_buffer);
+      is_sss_exit_primary = film_write_restir_sss_exit(kg, state, &sd, render_buffer);
+
       /* When coming from inside subsurface scattering, setup a diffuse
        * closure to perform lighting at the exit point. */
-      subsurface_shader_data_setup(kg, &sd); // !!!
+      subsurface_shader_data_setup(kg, &sd);
       INTEGRATOR_STATE_WRITE(state, path, flag) &= ~PATH_RAY_SUBSURFACE;
     }
     else
@@ -1374,6 +1403,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
       /* Write emission. */
       if (sd.flag & SD_EMISSION) {
         integrate_surface_emission(kg, state, &sd, &rng_state, render_buffer);
+        // integrate_surface_emission(kg, state, &sd, render_buffer); // Old
       }
 
       /* Perform path termination. Most paths have already been terminated in
@@ -1405,8 +1435,15 @@ ccl_device int integrate_surface(KernelGlobals kg,
     /* Direct light. */
     PROFILING_EVENT(PROFILING_SHADE_SURFACE_DIRECT_LIGHT);
     // !!!: reference for triangle emitters is populated in integrate_surface_emission()
+
+    const bool is_sss_exit = (path_flag & PATH_RAY_SUBSURFACE) != 0;
+    /* Simply means "this path is past an SSS exit". */
+    if (is_sss_exit) {
+      INTEGRATOR_STATE_WRITE(state, path, restir_di_disabled) = true;
+    }
+
     const ShaderEvalResult result = integrate_surface_nee<node_feature_mask>(
-        kg, state, &sd, &rng_state, render_buffer);
+        kg, state, &sd, &rng_state, render_buffer, is_sss_exit);
 
     if (result == SHADER_EVAL_CACHE_MISS) {
       return LABEL_CACHE_MISS;
