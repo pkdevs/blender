@@ -2654,10 +2654,19 @@ IDNewNameResult BKE_id_rename(Main &bmain, ID &id, StringRefNull name, const IDN
     DEG_id_tag_update(&id, ID_RECALC_SYNC_TO_EVAL);
     switch (id.id_type()) {
       case ID_OB: {
-        Object &ob = reinterpret_cast<Object &>(id);
-        if (ob.type == OB_MBALL) {
-          DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
-        }
+        /* Geometry evaluation sometimes orders objects and collections by name to get
+         * deterministic behavior (e.g. the Collection Info node). Therefore, renaming requires
+         * tagging the depsgraph. Also tag the transform so that it has an effect on all objects,
+         * not just those which have geometry.
+         *
+         * Additionally, metaball objects also rely on the object name for grouping. */
+        DEG_id_tag_update(&id, ID_RECALC_GEOMETRY | ID_RECALC_TRANSFORM);
+        break;
+      }
+      case ID_GR: {
+        /* Geometry evaluation sometimes orders collection children by name to get deterministic
+         * behavior. */
+        DEG_id_tag_update(&id, ID_RECALC_GEOMETRY);
         break;
       }
       default:
