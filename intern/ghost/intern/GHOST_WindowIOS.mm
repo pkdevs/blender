@@ -104,6 +104,8 @@ enum GHOSTIOSUICommand {
  * tool artwork retains its colors, while interface icons use UIKit template tinting. */
 static UIImage *blenderIOSIcon(NSString *key, NSString *systemImage)
 {
+  const BOOL selected_tool = [key hasPrefix:@"selected.tool."];
+  if (selected_tool) { key = [key substringFromIndex:@"selected.".length]; }
   static NSDictionary *icons = nil;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -120,7 +122,8 @@ static UIImage *blenderIOSIcon(NSString *key, NSString *systemImage)
   }
   NSString *prefix = [key hasPrefix:@"tool."] ? @"blender.tool." : @"blender.";
   if (name && [key hasPrefix:@"tool."]) {
-    UIImage *colored = [UIImage imageNamed:[@"blender.tool.color." stringByAppendingString:name]];
+    NSString *colored_prefix = selected_tool ? @"blender.tool.selected." : @"blender.tool.color.";
+    UIImage *colored = [UIImage imageNamed:[colored_prefix stringByAppendingString:name]];
     if (colored) {
       return [colored imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
     }
@@ -2587,9 +2590,15 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (UIImage *)toolbarImageForTool:(NSDictionary *)tool mode:(NSString *)mode
 {
+  return [self toolbarImageForTool:tool mode:mode selected:NO];
+}
+
+- (UIImage *)toolbarImageForTool:(NSDictionary *)tool mode:(NSString *)mode selected:(BOOL)selected
+{
   NSString *icon = tool[@"icon"];
   if ([icon isKindOfClass:NSString.class]) {
-    UIImage *colored = [UIImage imageNamed:[@"blender.tool.color." stringByAppendingString:icon]];
+    NSString *prefix = selected ? @"blender.tool.selected." : @"blender.tool.color.";
+    UIImage *colored = [UIImage imageNamed:[prefix stringByAppendingString:icon]];
     if (colored) {
       return [colored imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
     }
@@ -2600,10 +2609,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
   }
   NSString *toolIdentifier = tool[@"id"];
-  image = blenderIOSIcon([NSString stringWithFormat:@"tool.%@.%@", mode, toolIdentifier], nil);
+  NSString *prefix = selected ? @"selected.tool." : @"tool.";
+  image = blenderIOSIcon([NSString stringWithFormat:@"%@%@.%@", prefix, mode, toolIdentifier], nil);
   if (image == nil) {
     NSString *symbol = tool[@"symbol"];
-    image = blenderIOSIcon([@"tool." stringByAppendingString:toolIdentifier],
+    image = blenderIOSIcon([prefix stringByAppendingString:toolIdentifier],
                            symbol.length ? symbol : nil);
   }
   return image ?: [UIImage systemImageNamed:@"questionmark.circle"];
@@ -2615,8 +2625,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   button.accessibilityLabel = title;
   button.accessibilityIdentifier = tool[@"id"];
   UIImage *image = [self toolbarImageForTool:tool mode:mode];
-  UIImage *selected_image = [image imageWithTintColor:UIColor.whiteColor
-                                      renderingMode:UIImageRenderingModeAlwaysOriginal];
+  UIImage *selected_image = [self toolbarImageForTool:tool mode:mode selected:YES];
   NSArray *children = tool[@"children"];
   const BOOL grouped = children.count > 1;
   [button viewWithTag:9001].hidden = !grouped;
@@ -2636,7 +2645,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                               [UIButtonConfiguration plainButtonConfiguration];
     configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
     configuration.baseBackgroundColor = updated_button.selected ? UIColor.systemBlueColor : nil;
-    configuration.title = shows_text ? title : nil;
+    configuration.automaticallyUpdateForSelection = NO;
+    configuration.attributedTitle = shows_text ? [[[NSAttributedString alloc]
+        initWithString:title attributes:@{NSForegroundColorAttributeName: configuration.baseForegroundColor}]
+        autorelease] : nil;
     configuration.image = updated_button.selected ? selected_image : image;
     ((UIImageView *)[updated_button viewWithTag:9001]).tintColor =
         updated_button.selected ? UIColor.whiteColor : UIColor.secondaryLabelColor;

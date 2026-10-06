@@ -206,6 +206,7 @@ def export_catalog(source, manifest, output):
     expected = {f"{asset}.imageset" for asset, _, _ in variants}
     colored = sorted((source / 'icons').glob('*.dat'))
     expected.update(f'blender.tool.color.{path.stem}.imageset' for path in colored)
+    expected.update(f'blender.tool.selected.{path.stem}.imageset' for path in colored)
     for stale in output.glob("blender.*.imageset"):
         if stale.name not in expected:
             shutil.rmtree(stale)
@@ -242,7 +243,15 @@ def export_catalog(source, manifest, output):
             'info': info,
             'properties': {'preserves-vector-representation': True, 'template-rendering-intent': 'original'},
         }, indent=2) + '\n')
-    print(f"Exported {len(variants)} template and {len(colored)} colored Blender assets to {output}")
+        selected = output / f'blender.tool.selected.{path.stem}.imageset'
+        selected.mkdir(exist_ok=True)
+        (selected / 'icon.pdf').write_bytes((image_set / 'dark.pdf').read_bytes())
+        (selected / 'Contents.json').write_text(json.dumps({
+            'images': [{'filename': 'icon.pdf', 'idiom': 'universal'}],
+            'info': info,
+            'properties': {'preserves-vector-representation': True, 'template-rendering-intent': 'original'},
+        }, indent=2) + '\n')
+    print(f"Exported {len(variants)} template, {len(colored)} colored, and {len(colored)} selection Blender assets to {output}")
 
 
 if __name__ == "__main__":

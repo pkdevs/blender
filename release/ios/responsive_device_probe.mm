@@ -811,6 +811,12 @@ extern "C" char *blender_device_probe_tool_colors()
         entry[@"original"] = @(image.renderingMode == UIImageRenderingModeAlwaysOriginal);
         entry[@"template"] = @(templateImage);
         entry[@"white"] = @([foreground isEqual:UIColor.whiteColor]);
+        NSAttributedString *title = button.titleLabel.attributedText;
+        UIColor *textColor = title.length ? [title attribute:NSForegroundColorAttributeName
+                                                    atIndex:0 effectiveRange:nil] : nil;
+        CGFloat red = 0, green = 0, blue = 0, alpha = 0;
+        [(textColor ?: button.titleLabel.textColor) getRed:&red green:&green blue:&blue alpha:&alpha];
+        entry[@"titleWhite"] = @(red > 0.99 && green > 0.99 && blue > 0.99 && alpha > 0.99);
         entry[@"id"] = button.accessibilityIdentifier ?: @"";
         entry[@"selected"] = @(button.selected);
         NSMutableArray *group = [NSMutableArray array];

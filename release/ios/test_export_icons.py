@@ -97,9 +97,16 @@ class ExportIconsTest(unittest.TestCase):
             interface_names = set(mapping.values()) | {
                 path.stem for path in (release / "datafiles/icons_svg").glob("*.svg")}
             colored = list((release / 'datafiles/icons').glob('*.dat'))
-            self.assertEqual(len(list(output.glob("*.imageset"))), len(interface_names) + len(tool_names) + len(colored))
+            self.assertEqual(len(list(output.glob("*.imageset"))), len(interface_names) + len(tool_names) + 2 * len(colored))
             for imageset in output.glob("*.imageset"):
                 contents = json.loads((imageset / "Contents.json").read_text())
+                if imageset.name.startswith('blender.tool.selected.'):
+                    self.assertEqual(contents['properties']['template-rendering-intent'], 'original')
+                    self.assertTrue(contents['properties']['preserves-vector-representation'])
+                    self.assertEqual(contents['images'], [{'filename': 'icon.pdf', 'idiom': 'universal'}])
+                    normal = output / imageset.name.replace('blender.tool.selected.', 'blender.tool.color.')
+                    self.assertEqual((imageset / 'icon.pdf').read_bytes(), (normal / 'dark.pdf').read_bytes())
+                    continue
                 if imageset.name.startswith('blender.tool.color.'):
                     self.assertEqual(contents['properties']['template-rendering-intent'], 'original')
                     self.assertTrue(contents['properties']['preserves-vector-representation'])

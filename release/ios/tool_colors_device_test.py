@@ -38,7 +38,10 @@ def check(ok, message):
 
 
 def tests():
-    decode(toolbar(4, 0))
+    state = decode(toolbar(4, 0))
+    move_index = next(i for i, tool in enumerate(state['tools']) if tool['id'] == 'builtin.move')
+    decode(toolbar(1, move_index))
+    yield 0.5
     for name, style in [('light', 1), ('dark', 2)]:
         decode(theme(style))
         yield 1.0
@@ -50,17 +53,17 @@ def tests():
         check(all(item['original'] for _, item in colored), name + ': colors bypass template tint')
         group = [g for i in images for g in i['group']]
         check(group and all(g['original'] and g['visible'] for g in group), name + ': grouped artwork original')
-        index, original = colored[0]
+        index, original = next((i, item) for i, item in colored if item['id'] == 'builtin.cursor')
         decode(toolbar(1, index))
         immediate = decode(colors())[index]
-        check(immediate['selected'] and immediate['white'] and immediate['colored'] == 0,
-              name + ': selected artwork is white immediately after the tap')
+        check(immediate['selected'] and immediate['original'] and immediate['colored'] > 20,
+              name + ': selected artwork retains color immediately after the tap')
+        check(immediate['titleWhite'], name + ': tool name is white immediately after the tap')
         yield 1.0
         selected = decode(colors())[index]
         report[name + '_selected'] = selected
-        check(selected['selected'] and selected['original'] and selected['white'] and
-              selected['visible'] > 0 and selected['colored'] == 0,
-              name + ': selected tool is white on blue')
+        check(selected['selected'] and selected['original'] and selected['visible'] > 0 and selected['colored'] > 20,
+              name + ': selected tool retains Blender colors on blue')
         other_index = next(i for i, _ in colored if i != index)
         decode(toolbar(1, other_index))
         yield 1.0
@@ -70,6 +73,10 @@ def tests():
         report['stage'] = name
         yield 12.0
     light = {i['id']: i for i in report['light']}
+    check(report['light_selected']['sum'] == report['dark_selected']['sum'],
+          'Selected artwork uses the same light variant in both appearances')
+    check(report['light_selected']['sum'] == next(i['sum'] for i in report['dark'] if i['id'] == 'builtin.cursor'),
+          'Selected artwork matches Blender original light artwork')
     check(any(i['sum'] != light[i['id']]['sum'] for i in report['dark'] if i['id'] in light),
           'Artwork adapts to appearance')
     bpy.ops.object.mode_set(mode='EDIT')
