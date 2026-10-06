@@ -52,6 +52,7 @@
 #include "ED_space_api.hh"
 #include "ED_transform.hh"
 #include "ED_undo.hh"
+#include "ED_view3d_pencil_hover.hh"
 
 #include "GPU_matrix.hh"
 
@@ -470,6 +471,7 @@ static void view3d_main_region_init(wmWindowManager *wm, ARegion *region)
 
 static void view3d_main_region_exit(wmWindowManager *wm, ARegion *region)
 {
+  ED_view3d_pencil_hover_clear(region);
   ED_view3d_stop_render_preview(wm, region);
 }
 
@@ -514,6 +516,7 @@ static void view3d_widgets()
 /* type callback, not region itself */
 static void view3d_main_region_free(ARegion *region)
 {
+  ED_view3d_pencil_hover_clear(region);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
   if (rv3d) {
@@ -1630,6 +1633,7 @@ void ED_spacetype_view3d()
   art->regionid = RGN_TYPE_WINDOW;
   art->keymapflag = ED_KEYMAP_GIZMO | ED_KEYMAP_TOOL | ED_KEYMAP_GPENCIL;
   art->draw = view3d_main_region_draw;
+  ED_region_draw_cb_activate(art, ED_view3d_pencil_hover_draw, nullptr, REGION_DRAW_POST_VIEW);
   art->init = view3d_main_region_init;
   art->exit = view3d_main_region_exit;
   art->free = view3d_main_region_free;
