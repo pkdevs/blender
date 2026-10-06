@@ -6899,15 +6899,11 @@ bScreen *ED_screen_animation_no_scrub(const wmWindowManager *wm)
   return nullptr;
 }
 
-bool ED_screen_has_animation_editor(const wmWindowManager *wm)
+bool ED_screen_has_animation_editor(const bScreen *screen)
 {
-  for (wmWindow &win : wm->windows) {
-    const bScreen *screen = WM_window_get_active_screen(&win);
-
-    for (const ScrArea &area : screen->areabase) {
-      if (ELEM(area.spacetype, SPACE_ACTION, SPACE_GRAPH, SPACE_NLA, SPACE_SEQ)) {
-        return true;
-      }
+  for (const ScrArea &area : screen->areabase) {
+    if (ELEM(area.spacetype, SPACE_ACTION, SPACE_GRAPH, SPACE_NLA, SPACE_SEQ)) {
+      return true;
     }
   }
 

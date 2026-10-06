@@ -603,11 +603,7 @@ void ED_screen_scrubbing_disable(bContext &C,
 wmWindow *ED_window_animation_playing_no_scrub(const wmWindowManager *wm);
 bScreen *ED_screen_animation_playing(const wmWindowManager *wm);
 bScreen *ED_screen_animation_no_scrub(const wmWindowManager *wm);
-/**
- * Check whether any window's active screen shows an animation editor
- * (Timeline/Dope Sheet, Graph Editor, NLA or Sequencer).
- */
-bool ED_screen_has_animation_editor(const wmWindowManager *wm);
+bool ED_screen_has_animation_editor(const bScreen *screen);
 
 /**
  * Find the scene that is currently playing in a window/screen.

@@ -316,7 +316,7 @@ void template_running_jobs(Layout *layout, bContext *C)
     }
   }
 
-  if (ED_screen_animation_no_scrub(wm) && !ED_screen_has_animation_editor(wm)) {
+  if (ED_screen_animation_no_scrub(wm) && !ED_screen_has_animation_editor(CTX_wm_screen(C))) {
     Button *but = uiDefIconTextBut(block,
                                    ButtonType::But,
                                    ICON_PAUSE,
