@@ -237,6 +237,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   NSArray *_sectionIdentifiers, *_tabs;
   NSString *_selectedTab;
   NSMutableDictionary *_expandedPanels;
+  /* Per tab: sub-panel id -> @YES/@NO once the user toggles it. */
+  NSMutableDictionary *_subpanelStates;
   UIScrollView *_tabsScroll;
   UIStackView *_tabsStack;
   UICollectionView *_tree;
@@ -289,6 +291,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     _sectionViewCache = [[NSMutableDictionary alloc] init];
     _disclosureButtons = [[NSMutableDictionary alloc] init];
     _expandedPanels = [[NSMutableDictionary alloc] init];
+    _subpanelStates = [[NSMutableDictionary alloc] init];
     /* Blender's own editor-type icons, as in the area header's editor menu. */
     _inspectorButton = [[UIBarButtonItem alloc]
         initWithImage:_icon(@"PROPERTIES") ?: [UIImage systemImageNamed:@"sidebar.right"]
@@ -432,6 +435,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [_tabs release];
   [_selectedTab release];
   [_expandedPanels release];
+  [_subpanelStates release];
   [_nodes release];
   [_schema release];
   [_snapshot release];
@@ -888,16 +892,46 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     NSString *innerSection = nil;
     UIStackView *innerHeading = nil;
     for (NSDictionary *property in section[@"properties"]) {
-      if (property[@"section"] && ![innerSection isEqual:property[@"section"]]) {
-        innerSection = property[@"section"];
-        UILabel *heading = [self label:innerSection style:UIFontTextStyleSubheadline];
-        heading.textColor = UIColor.secondaryLabelColor;
+      NSString *subpanel = property[@"subpanel"] ?: property[@"section"];
+      if (property[@"section"] && ![innerSection isEqual:subpanel]) {
+        innerSection = subpanel;
+        UIView *heading;
+        if ([property[@"type"] isEqual:@"SUBPANEL"]) {
+          const BOOL open = [property[@"open"] boolValue];
+          UIButton *disclosure = blenderDisclosureButton(property[@"section"],
+              [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline], UIColor.secondaryLabelColor,
+              12 * MAX(0, [property[@"depth"] integerValue] - 1), open);
+          disclosure.accessibilityIdentifier = [@"blender.subpanel." stringByAppendingString:subpanel];
+          [disclosure addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+            [owner->_form endEditing:YES];
+            [owner cancelNumberScrub];
+            NSString *tab = owner->_selectedTab ?: @"OBJECT";
+            NSMutableDictionary *states = owner->_subpanelStates[tab];
+            if (!states) {
+              states = [NSMutableDictionary dictionary];
+              owner->_subpanelStates[tab] = states;
+            }
+            const BOOL opening = ![(states[subpanel] ?: property[@"open"]) boolValue];
+            states[subpanel] = @(opening);
+            blenderSetDisclosureExpanded((UIButton *)action.sender, opening);
+            [owner requestProperties];
+          }] forControlEvents:UIControlEventTouchUpInside];
+          heading = disclosure;
+        }
+        else {
+          UILabel *label = [self label:property[@"section"] style:UIFontTextStyleSubheadline];
+          label.textColor = UIColor.secondaryLabelColor;
+          heading = label;
+        }
         [heading.heightAnchor constraintGreaterThanOrEqualToConstant:36].active = YES;
         innerHeading = [[[UIStackView alloc] initWithArrangedSubviews:@[heading]] autorelease];
         innerHeading.alignment = UIStackViewAlignmentCenter;
         innerHeading.spacing = 8;
         [heading setContentCompressionResistancePriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
         [sectionRows addObject:innerHeading];
+      }
+      if ([property[@"type"] isEqual:@"SUBPANEL"]) {
+        continue;
       }
       NSString *group = property[@"group"];
       const BOOL vector = group.length > 0;
@@ -1324,6 +1358,10 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   NSSet *expanded = _expandedPanels[_selectedTab ?: @"OBJECT"];
   if (expanded) {
     state[@"expanded"] = expanded.allObjects;
+  }
+  NSDictionary *subpanels = _subpanelStates[_selectedTab ?: @"OBJECT"];
+  if (subpanels.count) {
+    state[@"subpanels"] = subpanels;
   }
   NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
   NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];

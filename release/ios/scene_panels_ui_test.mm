@@ -26,9 +26,15 @@
 
 static NSString *setting;
 static NSDictionary *request;
+static NSDictionary *propertiesState;
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *key, const char *value)
 {
   setting = [NSString stringWithUTF8String:key];
+  if ([setting isEqual:@"native_properties_state"]) {
+    [propertiesState release];
+    propertiesState = [[NSJSONSerialization JSONObjectWithData:[[NSString stringWithUTF8String:value]
+        dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil] retain];
+  }
   if ([setting isEqual:@"native_panel_edit"] || [setting isEqual:@"native_properties_edit"]) {
     request = [NSJSONSerialization JSONObjectWithData:[[NSString stringWithUTF8String:value]
         dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
@@ -529,6 +535,39 @@ int main()
               @"Nested panel is an inline section with its own header switch");
     NSCAssert([form.dataSource numberOfSectionsInTableView:form] == 1,
               @"Only outermost panels are table sections");
+    UIButton *outerDisclosure = [panels valueForKey:@"_disclosureButtons"][@"outer"];
+    header.frame = CGRectMake(0, 0, 320, 44);
+    [header layoutIfNeeded];
+    UIView *chevron = [outerDisclosure viewWithTag:0x6368];
+    NSCAssert(chevron && CGSizeEqualToSize(chevron.bounds.size, CGSizeMake(14, 14)) &&
+              fabs(chevron.frame.size.width - chevron.frame.size.height) < 0.01 &&
+              [outerDisclosure.accessibilityValue isEqual:@"Expanded"],
+              @"Open disclosure chevron rotates without stretching: %@ %@",
+              NSStringFromCGRect(chevron.frame), NSStringFromCGRect(chevron.bounds));
+    NSDictionary *subpanelMarker = @{@"type": @"SUBPANEL", @"section": @"Subfeature",
+      @"subpanel": @"outer.sub", @"open": @NO, @"depth": @1};
+    NSMutableDictionary *subpanelInner = [[innerToggle mutableCopy] autorelease];
+    subpanelInner[@"subpanel"] = @"outer.sub";
+    NSMutableDictionary *subpanelModel = [[acknowledged mutableCopy] autorelease];
+    subpanelModel[@"inspector"] = @{@"id": @"header-test", @"name": @"Properties",
+      @"sections": @[@{@"id": @"outer", @"title": @"Feature", @"open": @YES,
+        @"properties": @[outerToggle, property, subpanelMarker, subpanelInner]}]};
+    [panels updateSnapshot:subpanelModel];
+    content = [panels valueForKey:@"_formSections"][0];
+    UIStackView *subpanelHeading = content.count == 2 ? content[1] : nil;
+    UIButton *subpanelDisclosure = (UIButton *)subpanelHeading.arrangedSubviews.firstObject;
+    NSCAssert([subpanelDisclosure isKindOfClass:UIButton.class] &&
+              [subpanelDisclosure.accessibilityIdentifier isEqual:@"blender.subpanel.outer.sub"] &&
+              [subpanelDisclosure.accessibilityValue isEqual:@"Collapsed"] &&
+              [[panels valueForKey:@"_controls"][@"inner.enable"] isDescendantOfView:subpanelHeading],
+              @"Collapsed sub-panel keeps a disclosure header with its enable switch");
+    [subpanelDisclosure sendActionsForControlEvents:UIControlEventTouchUpInside];
+    NSCAssert([propertiesState[@"subpanels"][@"outer.sub"] isEqual:@YES] &&
+              [subpanelDisclosure.accessibilityValue isEqual:@"Expanded"],
+              @"Tapping a sub-panel header requests it open: %@", propertiesState);
+    [subpanelDisclosure sendActionsForControlEvents:UIControlEventTouchUpInside];
+    NSCAssert([propertiesState[@"subpanels"][@"outer.sub"] isEqual:@NO],
+              @"Tapping again collapses the sub-panel: %@", propertiesState);
     NSDictionary *rgba = @{@"key": @"object.color", @"label": @"Color", @"type": @"COLOR",
       @"native": @YES, @"alpha": @YES, @"editable": @YES, @"value": @[@0.5, @0.25, @0.75, @0.4]};
     NSDictionary *rgb = @{@"key": @"light.color", @"label": @"Light Color", @"type": @"COLOR",

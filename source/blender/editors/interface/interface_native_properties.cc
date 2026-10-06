@@ -895,6 +895,8 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   result.append_str("id", identity);
   auto sections = result.append_array("sections");
   const ArrayValue *expanded = query->lookup_array("expanded");
+  /* Sub-panel disclosure overrides keyed by panel id; absent ids use the panel type default. */
+  const DictionaryValue *subpanel_states = query->lookup_dict("subpanels");
   const auto requested_panel = query->lookup_str("panel");
   const auto requested_key = query->lookup_str("key");
   bool applied = false;
@@ -902,6 +904,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   PointerRNA *operator_properties = nullptr;
   std::unique_ptr<bContextStore> operator_context;
   std::set<std::string> open_panels;
+  /* Whether each candidate's body is visible, so nested sub-panels follow their parent. */
+  std::map<std::string, bool> visible_panels;
+  std::map<std::string, int> panel_depths;
   std::map<std::string, std::string> outer_panels;
   std::map<std::string, std::shared_ptr<ArrayValue>> outer_fields;
   struct Candidate {
@@ -938,11 +943,28 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     if (!is_outer && outer.empty()) {
       continue;
     }
+    /* Properties tabs give every sub-panel its own disclosure; viewport popovers keep them
+     * flattened into the outer panel. */
+    const bool collapsible_subpanel = !is_outer && !viewport;
+    if (collapsible_subpanel && !execute && !visible_panels[candidate.parent]) {
+      continue;
+    }
+    bool subpanel_open = !(pt.flag & PANEL_TYPE_DEFAULT_CLOSED);
+    if (collapsible_subpanel && subpanel_states) {
+      if (const std::shared_ptr<Value> *state = subpanel_states->lookup(candidate.id)) {
+        if (const BooleanValue *flag = (*state)->as_boolean_value()) {
+          subpanel_open = flag->value();
+        }
+      }
+    }
     const bool open = is_outer ? (expanded ? std::any_of(expanded->elements().begin(), expanded->elements().end(),
-        [&](const auto &item) { return item->as_string_value() && item->as_string_value()->value() == candidate.id; }) : viewport || sections->elements().is_empty()) : open_panels.count(outer) != 0;
-    if (open) {
+        [&](const auto &item) { return item->as_string_value() && item->as_string_value()->value() == candidate.id; }) : viewport || sections->elements().is_empty()) :
+        open_panels.count(outer) != 0 && (!collapsible_subpanel || subpanel_open);
+    if (open && is_outer) {
       open_panels.insert(outer);
     }
+    visible_panels[candidate.id] = open;
+    panel_depths[candidate.id] = is_outer ? 0 : panel_depths[candidate.parent] + 1;
     std::string panel_title = pt.label;
     if (candidate.instance && !pt.parent) {
       if (PointerRNA *data = panel_custom_data_get(candidate.instance)) {
@@ -968,13 +990,21 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       auto field = fields->append_dict();
       if (!is_outer) {
         field->append_str("section", panel_title);
+        field->append_str("subpanel", candidate.id);
       }
       return field;
     };
+    if (collapsible_subpanel && !execute) {
+      /* Disclosure row for the sub-panel, emitted even when collapsed so it can be reopened. */
+      auto field = append_field();
+      field->append_str("type", "SUBPANEL");
+      field->append_int("open", open);
+      field->append_int("depth", panel_depths[candidate.id]);
+    }
     const bool target_panel = requested_panel && *requested_panel == candidate.id;
     const bool instance_container = !candidate.instance &&
         ELEM(tab_id, "MODIFIER", "CONSTRAINT", "BONE_CONSTRAINT", "SHADERFX");
-    if ((!execute && !open && !is_outer && !instance_container) ||
+    if ((!execute && !open && !is_outer && !instance_container && !collapsible_subpanel) ||
         (execute && !target_panel && !instance_container && !shading)) {
       continue;
     }
