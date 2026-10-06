@@ -373,7 +373,79 @@ bool animate_property(bContext *C, Button &but, int index, const std::string &ac
   return false;
 }
 
-void project_property(bContext *C, Button &but, int index, DictionaryValue &field)
+struct PropertyPair {
+  std::string key;
+  std::string title;
+  std::string component;
+};
+
+std::map<Button *, PropertyPair> property_pairs(const Block &block)
+{
+  std::map<Button *, PropertyPair> pairs;
+  Button *previous = nullptr;
+  for (const auto &button : block.buttons) {
+    Button &but = *button;
+    if (!but.rnaprop || !but.rnapoin.data || (but.flag & UI_HIDDEN) ||
+        button_is_decorator(&but)) {
+      continue;
+    }
+    const bool scalar = ELEM(RNA_property_type(but.rnaprop), PROP_INT, PROP_FLOAT) &&
+                        !RNA_property_array_check(but.rnaprop);
+    if (scalar && previous && previous->rnapoin.data == but.rnapoin.data &&
+        previous->rnapoin.type == but.rnapoin.type &&
+        RNA_property_type(previous->rnaprop) == RNA_property_type(but.rnaprop)) {
+      const std::string first = RNA_property_identifier(previous->rnaprop);
+      const std::string second = RNA_property_identifier(but.rnaprop);
+      for (const auto &suffix : {std::pair{"_x", "_y"}, {"_u", "_v"},
+                                 {"_min", "_max"}, {"_start", "_end"}}) {
+        if (!StringRef(first).endswith(suffix.first)) {
+          continue;
+        }
+        const std::string stem = first.substr(0, first.size() - strlen(suffix.first));
+        if (second != stem + suffix.second) {
+          continue;
+        }
+        /* Separate scalar properties only form a pair when Blender groups them in an
+         * aligned layout. Capture this before block_end() frees the layout tree. */
+        bool aligned = false;
+        for (Layout *a = previous->layout; a && !aligned; a = a->parent()) {
+          if (!a->align()) {
+            continue;
+          }
+          for (Layout *b = but.layout; b; b = b->parent()) {
+            if (a == b) {
+              aligned = true;
+              break;
+            }
+          }
+        }
+        const std::string first_name = RNA_property_ui_name(previous->rnaprop);
+        const std::string second_name = RNA_property_ui_name(but.rnaprop);
+        size_t common = 0;
+        while (common < first_name.size() && common < second_name.size() &&
+               first_name[common] == second_name[common]) {
+          common++;
+        }
+        /* Split at a word boundary, not midway through a translated label. */
+        while (common && first_name[common - 1] != ' ') {
+          common--;
+        }
+        if (aligned && common > 1 && common < first_name.size() && common < second_name.size()) {
+          const std::string key = property_key(*previous, -1);
+          const std::string title = first_name.substr(0, common - 1);
+          pairs[previous] = {key, title, first_name.substr(common)};
+          pairs[&but] = {key, title, second_name.substr(common)};
+        }
+        break;
+      }
+    }
+    previous = scalar && !pairs.count(&but) ? &but : nullptr;
+  }
+  return pairs;
+}
+
+void project_property(bContext *C, Button &but, int index, DictionaryValue &field,
+                      const PropertyPair *pair = nullptr)
 {
   PointerRNA *ptr = &but.rnapoin;
   PropertyRNA *prop = but.rnaprop;
@@ -413,13 +485,19 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
     return;
   }
   std::string title = RNA_property_ui_name(prop);
-  if (array && length <= 4) {
+  if (pair) {
+    title = pair->component;
+    field.append_str("group", pair->title);
+    field.append_str("group_key", pair->key);
+  }
+  else if (array && length <= 4) {
     const bool color = ELEM(RNA_property_subtype(prop), PROP_COLOR, PROP_COLOR_GAMMA);
     const char *axes = color ? "RGBA" : length == 4 ? "WXYZ" : "XYZW";
     title = std::string(1, axes[index]);
     field.append_str("group", ELEM(std::string(RNA_property_identifier(prop)),
                                    "rotation_euler", "rotation_quaternion", "rotation_axis_angle") ?
                                   "Rotation" : RNA_property_ui_name(prop));
+    field.append_str("group_key", property_key(but, -1));
   }
   field.append_str("label", title);
   field.append_str("key", property_key(but, index));
@@ -706,6 +784,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         body.prop(&ptr, "type", eUI_Item_Flag(0), "Shading", ICON_NONE);
       }
     }
+    const auto pairs = property_pairs(*block);
     block_end(C, block);
     for (const auto &button : block->buttons) {
       /* Icon templates keep their RNA target in callback data, not in the button itself. */
@@ -865,7 +944,8 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
             continue;
           }
           auto field = append_field();
-          project_property(C, but, index, *field);
+          const auto pair = pairs.find(&but);
+          project_property(C, but, index, *field, pair == pairs.end() ? nullptr : &pair->second);
           if (const auto found = field_modes.find(key); found != field_modes.end()) {
             auto mode = field->append_dict("group_menu");
             project_property(C, *found->second, -1, *mode);
