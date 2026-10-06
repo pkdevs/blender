@@ -1921,30 +1921,24 @@ struct UserTooltip_Store {
 
 static std::string user_tooltip_func(bContext * /*C*/, void *argN, const StringRef /*tip*/)
 {
-  UserTooltip_Store *arg = static_cast<UserTooltip_Store *>(argN);
+  const UserTooltip_Store *arg = static_cast<UserTooltip_Store *>(argN);
   const bool has_fake_user = arg->has_fake_user;
   const bool is_linked = arg->is_linked;
   const int real_users = arg->real_users;
 
-  std::string tip;
-
   if (has_fake_user) {
-    tip = is_linked ? TIP_("Item is protected from deletion") :
-                      TIP_("Click to remove protection from deletion");
-  }
-  else {
-    if (real_users) {
-      tip = is_linked ? TIP_("Item is not protected from deletion") :
-                        TIP_("Click to add protection from deletion");
-    }
-    else {
-      tip = is_linked ?
-                TIP_("Item has no users and will be removed") :
-                TIP_("Item has no users and will be removed.\nClick to protect from deletion");
-    }
+    return is_linked ? TIP_("Item is protected from deletion") :
+                       TIP_("Click to remove protection from deletion");
   }
 
-  return tip;
+  if (real_users) {
+    return is_linked ? TIP_("Item is not protected from deletion") :
+                       TIP_("Click to add protection from deletion");
+  }
+
+  return is_linked ?
+             TIP_("Item has no users and will be removed") :
+             TIP_("Item has no users and will be removed.\nClick to protect from deletion");
 }
 
 static void outliner_draw_userbuts(ui::Block *block,
