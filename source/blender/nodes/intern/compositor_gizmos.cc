@@ -1777,6 +1777,10 @@ static void gizmo_node_transform_prop_matrix_set(const wmGizmo *gz,
   gizmo_node_bbox_update(transform_group);
 }
 
+/* For transform gizmos, the image at a node's input is queried from the evaluation log, because
+ * neither the node's input sockets nor the final #ImBuf describe it individually. When two
+ * translate nodes are chained for example, #ImBuf::display_offset holds the combined result of
+ * both nodes, whereas each gizmo needs the result of its node alone. */
 static float2 gizmo_input_dims_from_log(const SpaceNode &snode,
                                         const bNode &node,
                                         const float2 &fallback)
