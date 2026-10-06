@@ -121,6 +121,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       else {
         decl.structure_type(StructureType::Dynamic);
       }
+      decl.compositor_realization_mode(CompositorInputRealizationMode::None);
     }
     panel.add_input<decl::Extend>(""_ustr, "__extend__"_ustr)
         .custom_draw(socket_items::ui::draw_extend_socket_fn<EvaluateClosureInputItemsAccessor>());
