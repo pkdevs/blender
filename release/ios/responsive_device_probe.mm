@@ -29,6 +29,7 @@
 - (void)sendProperty:(NSDictionary *)property value:(id)value operation:(NSString *)operation;
 - (void)commitField:(UITextField *)field;
 - (void)dismiss:(id)sender;
+- (void)scrubNumber:(UILongPressGestureRecognizer *)gesture;
 @end
 
 @interface BlenderPencilProbeHover : UIHoverGestureRecognizer
@@ -166,6 +167,23 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
     UIView *rail = [strip valueForKey:@"view"];
     NSDictionary *snapshot = [strip valueForKey:@"_snapshot"];
     NSDictionary *controls = [strip valueForKey:@"_controls"];
+    if ([request[@"action"] hasPrefix:@"scrub_"]) {
+      UIView *field = controls[request[@"key"]];
+      if (field) {
+        BlenderGizmoProbeHold *hold = objc_getAssociatedObject(field, @selector(scrubNumber:));
+        if (!hold) {
+          hold = [BlenderGizmoProbeHold new];
+          objc_setAssociatedObject(field, @selector(scrubNumber:), hold, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+          [field addGestureRecognizer:hold];
+        }
+        NSString *action = request[@"action"];
+        hold.probePoint = CGPointMake([request[@"translation"] doubleValue], 0);
+        hold.probeState = [action isEqual:@"scrub_begin"] ? UIGestureRecognizerStateBegan :
+                          [action isEqual:@"scrub_finish"] ? UIGestureRecognizerStateEnded :
+                          [action isEqual:@"scrub_cancel"] ? UIGestureRecognizerStateCancelled : UIGestureRecognizerStateChanged;
+        [strip scrubNumber:hold];
+      }
+    }
     if ([request[@"action"] isEqual:@"done"]) {
       [strip dismiss:[strip valueForKey:@"_done"]];
     }

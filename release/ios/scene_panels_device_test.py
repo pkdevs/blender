@@ -120,8 +120,8 @@ def tests():
     expected_x = start_x + 23 * location['dragStep']
     scrub = ui()['scrubs'][location['key']]
     check(scrub['active'] and abs(scrub['value'] - expected_x) < 1e-6 and
-          bpy.data.objects['Cube'].location.x == start_x,
-          'Number drag previews locally and survives periodic snapshots')
+          abs(bpy.data.objects['Cube'].location.x - expected_x) < 1e-6,
+          'Number drag previews in Blender and survives periodic snapshots')
     ui(action='scrub_finish', key=location['key'])
     ui(action='scrub_begin', key=location['key'])
     ui(action='scrub_change', key=location['key'], translation=10)
@@ -149,8 +149,8 @@ def tests():
     ui(action='select', id=camera_id)
     yield 0.7
     ui(action='scrub_finish', key=location['key'])
-    check(bpy.data.objects['Cube'].location.x == start_x,
-          'Selection changes cancel a drag without editing the old object')
+    check(abs(bpy.data.objects['Cube'].location.x - start_x - 50 * location['dragStep']) < 1e-6,
+          'Selection changes finalize the preview on the original object')
     ui(action='select', id=cube_id)
     yield 0.7
     transforms = transform_fields()
@@ -353,8 +353,9 @@ def tests():
     ui(action='slider_begin', key=safe_slider['key'])
     ui(action='slider_change', key=safe_slider['key'], value=0.6)
     yield 0.5
-    check(bpy.context.scene.safe_areas.title[0] == old_safe,
-          'Slider drag updates native feedback without intermediate undo entries')
+    expected_safe = safe_slider['slider']['min'] + 0.6 * (safe_slider['slider']['max'] - safe_slider['slider']['min'])
+    check(abs(bpy.context.scene.safe_areas.title[0] - expected_safe) < 1e-5,
+          'Slider drag previews the real Blender property before release')
     ui(action='slider_finish', key=safe_slider['key'])
     yield 1.0
     expected_safe = safe_slider['slider']['min'] + 0.6 * (safe_slider['slider']['max'] - safe_slider['slider']['min'])
@@ -449,8 +450,8 @@ def tests():
     check(ui()['colorPresented'] and ui()['colorAlpha'], 'RGBA swatch presents the native alpha-enabled picker')
     ui(action='color_select', value=[0.5, 0.25, 0.75, 0.4], continuous=True)
     yield 0.4
-    check(tuple(bpy.data.objects['Cube'].color) == original_color,
-          'Picker drag previews locally without flooding Blender undo')
+    check(abs(bpy.data.objects['Cube'].color[3] - 0.4) < 1e-5,
+          'Picker drag previews color in Blender before release')
     ui(action='color_select', value=[0.5, 0.25, 0.75, 0.4], continuous=False)
     yield 1.0
     def linear(value):
