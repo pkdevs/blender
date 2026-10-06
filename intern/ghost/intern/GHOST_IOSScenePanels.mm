@@ -2126,13 +2126,16 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       else if ([property[@"type"] isEqual:@"ENUM"]) {
         if ([control isKindOfClass:UISegmentedControl.class]) {
           UISegmentedControl *segments = (UISegmentedControl *)control;
-          segments.selectedSegmentIndex = UISegmentedControlNoSegment;
+          NSInteger selected = UISegmentedControlNoSegment;
           for (NSUInteger i = 0; i < [property[@"options"] count]; i++) {
             if ([property[@"options"][i][@"value"] isEqual:value]) {
-              segments.selectedSegmentIndex = i;
+              selected = i;
               segments.accessibilityValue = property[@"options"][i][@"label"];
             }
           }
+          /* Reassigning the same segment, or clearing it first, restarts the selection
+           * and cuts off UIKit's sliding transition when Blender acknowledges the edit. */
+          if (segments.selectedSegmentIndex != selected) { segments.selectedSegmentIndex = selected; }
           continue;
         }
         UIButton *button = (UIButton *)control;
