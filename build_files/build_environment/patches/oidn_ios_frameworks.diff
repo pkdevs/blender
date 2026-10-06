@@ -1,0 +1,31 @@
+--- a/core/module.cpp
++++ b/core/module.cpp
+@@ -3,6 +3,10 @@
+ 
+ #include "module.h"
+ #include "context.h"
++
++#if defined(__APPLE__)
++  #include <TargetConditionals.h>
++#endif
+ 
+ #if !defined(_WIN32)
+   #include <dlfcn.h>
+@@ -46,7 +50,16 @@
+   #endif
+   #endif
+ 
+-    const Path path = modulePathPrefix + Path(filename.begin(), filename.end());
++    Path path = modulePathPrefix + Path(filename.begin(), filename.end());
++  #if defined(__APPLE__) && TARGET_OS_IPHONE
++    // Distribution builds package every module as a sibling framework.
++    // Keep the original lookup for development bundles with loose libraries.
++    if (modulePathPrefix.find(".framework/") != Path::npos)
++    {
++      const std::string frameworkName = OIDN_LIBRARY_NAME "_" + name + SHARED_POSTFIX;
++      path = modulePathPrefix + "../" + frameworkName + ".framework/" + frameworkName;
++    }
++  #endif
+ 
+     // Load the module
+   #if defined(_WIN32)

@@ -92,6 +92,14 @@ set(OIDN_PATCH_COMMAND
   ${PATCH_DIR}/oidn.diff
 )
 
+if(WITH_APPLE_CROSSPLATFORM)
+  set(OIDN_PATCH_COMMAND ${OIDN_PATCH_COMMAND} &&
+    ${PATCH_CMD} --verbose -p 1 -N -d
+    ${BUILD_DIR}/openimagedenoise/src/external_openimagedenoise <
+    ${PATCH_DIR}/oidn_ios_frameworks.diff
+  )
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # Replace `attrib.memoryType` with `attrib.type`.
   # See: https://github.com/ROCm/HIP/pull/2164
