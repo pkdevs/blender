@@ -7,35 +7,36 @@
 /** \file
  * \ingroup bli
  *
- * Straight Skeleton computation for 2D polygons with holes.
+ * Straight Skeleton computation for 2D Planar Straight Line Graphs (PSLGs).
  *
- * The straight skeleton of a polygon is a geometric structure where each edge of
- * the skeleton is equidistant from two boundary edges of the input polygon.
- * As an inset amount increases, the boundary of the polygon moves inward parallel
- * to itself (the outer polygon moves inward, while hole polygons move outward into
- * the interior domain), and the skeleton records the trace of vertices under this motion.
+ * The straight skeleton of a PSLG is a geometric structure where each edge of
+ * the skeleton is equidistant from two boundary edges of the input geometry.
+ * As an inset amount increases, the boundary edges move parallel to themselves
+ * at unit speed, and the skeleton records the trace of vertices under this motion.
  *
  * Input
  * -----
- * The input is a set of 2D vertices, and either:
- *   - A single outer polygon oriented counter-clockwise (CCW), and any number of hole
- *     polygons each oriented clockwise (CW); OR
- *   - An open polyline (#StraightSkeletonInput::edge_chain) of at least 2 vertices.
+ * The input is a Planar Straight Line Graph (PSLG) consisting of:
+ *   - 2D vertices (#StraightSkeletonInput::vert).
+ *   - Closed faces (#StraightSkeletonInput::face_offsets,
+ *     #StraightSkeletonInput::face_vert_indices).
+ *   - Optional wire edges (#StraightSkeletonInput::edge).
+ *
+ * Wavefront propagation direction is controlled by #StraightSkeletonInput::direction:
+ *   - #PropagationDirection::Inside  - propagates into interior domains (solid faces).
+ *   - #PropagationDirection::Outside - propagates into exterior domains (bounding box & holes).
+ *   - #PropagationDirection::Both    - propagates into both inside and outside domains.
  *
  * Vertices are given as 2D coordinates (double precision). Callers working in 3D
  * should project to the polygon plane before calling.
  *
  * Offset and Segments
  * -------------------
- * #StraightSkeletonInput::offset controls the inward/outward offset distance:
- *   - When left at infinity (the default for closed polygons), the complete straight
- *     skeleton (full roof tiling) is returned.
- *   - When set to a finite positive value d, a closed polygon is inset up to distance d,
- *     clipped at height t = d (clamped to maximum collapse time). When an edge chain is
- *     supplied, it is offset by distance d into a surrounding offset band.
- *   - When set to a finite negative value d, a closed polygon is outset (exterior offset
- *     advancing on the CW side of the outer polygon, and on the CCW side of inner holes)
- *     by distance |d|. Negative offset is a no-op for an edge chain.
+ * #StraightSkeletonInput::offset controls the offset distance:
+ *   - When left at infinity (the default), the complete straight skeleton is computed.
+ *   - When set to a finite positive value d, wavefronts are clipped at distance d.
+ *   Negative offset values are no longer accepted; use #PropagationDirection::Outside or
+ *   #PropagationDirection::Both instead.
  *
  * #StraightSkeletonInput::segments divides the effective offset range into that many
  * equal-width bands. Band 0 is the outermost ring (adjacent to the input boundary);
@@ -52,8 +53,8 @@
  *     corresponds to output vertex v, or -1 if v is a new skeleton vertex.
  *   - #StraightSkeletonOutput::edge_orig[e]  - index of the input boundary edge that
  *     corresponds to output edge e, or -1 if e is a skeleton edge.
- *   - #StraightSkeletonOutput::face_orig[f]  - index of the input face (0 for outer polygon,
- *     or hole index + 1) from which output face f was derived.
+ *   - #StraightSkeletonOutput::face_orig[f]  - index of the input face in #face_offsets
+ *     from which output face f was derived, or -1 for bounding box faces.
  *   - #StraightSkeletonOutput::face_band[f]  - zero-based band index of output face f.
  *
  * Epsilon
@@ -100,11 +101,8 @@ enum class PropagationDirection : uint8_t {
  * Supports arbitrary Planar Straight Line Graphs (PSLGs) consisting of:
  *   - 2D vertices (#vert).
  *   - Optional wire edges (#edge) representing standalone lines, open chains, or networks.
- *   - Optional closed faces (#face_offsets, #face_vert_indices). Faces can have arbitrary
+ *   - Closed faces (#face_offsets, #face_vert_indices). Faces can have arbitrary
  *     winding (CW or CCW); nesting and even-odd polarity are determined automatically.
- *
- * For backward compatibility, legacy inputs (#outer_polygon, #hole_offsets, #hole_vert_indices,
- * and #edge_chain) are also accepted.
  */
 class StraightSkeletonInput {
  public:
@@ -137,32 +135,15 @@ class StraightSkeletonInput {
    */
   double bbox_expansion_pct{10.0};
 
-  /* --- Legacy Inputs (for backward compatibility) --- */
-
-  /** Vertex indices in #vert of the outer boundary polygon, oriented CCW. */
-  Span<int> outer_polygon;
-
-  /** Per-hole vertex ranges into #hole_vert_indices. */
-  OffsetIndices<int> hole_offsets;
-
-  /** Concatenated list of vertex indices in #vert for all hole polygons (each oriented CW). */
-  Span<int> hole_vert_indices;
-
-  /**
-   * Vertex indices in #vert of an open polyline (edge chain) to offset.
-   * When #edge_chain is provided, #offset must be a finite positive distance.
-   */
-  Span<int> edge_chain;
-
   /** Coincidence threshold. Pass 0.0 to use the default (1e-8). */
   double epsilon{0.0};
 
   /**
-   * Inward or outward offset distance for polygon offsetting.
+   * Offset distance.
    *
    * - `infinity` (default): the full straight skeleton is computed.
-   * - A finite positive value `d`: the polygon or chain is inset until d is reached.
-   * - A finite negative value `d`: the polygon is outset until |d| is reached.
+   * - A finite positive value `d`: wavefronts advance until d is reached.
+   * Negative offset values are no longer accepted; use #direction instead.
    */
   double offset{std::numeric_limits<double>::infinity()};
 
@@ -247,7 +228,7 @@ class StraightSkeletonOutput {
  * \{ */
 
 /**
- * Compute the straight skeleton of the polygon with holes described by \a input,
+ * Compute the straight skeleton of the Planar Straight Line Graph (PSLG) described by \a input,
  * optionally clipped and subdivided into offset bands.
  */
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input);

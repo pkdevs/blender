@@ -7834,14 +7834,17 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
     }
 
     /* Build the StraightSkeletonInput for this face. */
-    Vector<int> outer_polygon(corners_num);
+    const Array<int> face_offsets_data = {0, corners_num};
+    Vector<int> face_vert_indices(corners_num);
     for (const int i : IndexRange(corners_num)) {
-      outer_polygon[i] = i;
+      face_vert_indices[i] = i;
     }
 
     straightskeleton::StraightSkeletonInput skel_input;
     skel_input.vert = verts_2d.as_span();
-    skel_input.outer_polygon = outer_polygon.as_span();
+    skel_input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+    skel_input.face_vert_indices = face_vert_indices.as_span();
+    skel_input.direction = straightskeleton::PropagationDirection::Inside;
     skel_input.offset = inset_amount;
     skel_input.segments = std::max(1, params.segments);
 

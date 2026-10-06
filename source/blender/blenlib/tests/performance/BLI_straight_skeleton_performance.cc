@@ -234,18 +234,12 @@ inline void write_debug_svg(const char *test_name,
 
   /* Identify input boundary edges to distinguish from straight skeleton internal edges. */
   Set<std::pair<int, int>> input_boundary_edges;
-  const int n_outer = int(input.outer_polygon.size());
-  for (int k = 0; k < n_outer; k++) {
-    const int u = input.outer_polygon[k];
-    const int v = input.outer_polygon[(k + 1) % n_outer];
-    input_boundary_edges.add({std::min(u, v), std::max(u, v)});
-  }
-  for (const int h : IndexRange(input.hole_offsets.size())) {
-    const IndexRange r = input.hole_offsets[h];
-    const int n_h = int(r.size());
-    for (int k = 0; k < n_h; k++) {
-      const int u = input.hole_vert_indices[r[k]];
-      const int v = input.hole_vert_indices[r[(k + 1) % n_h]];
+  for (const int fi : input.face_offsets.index_range()) {
+    const IndexRange r = input.face_offsets[fi];
+    const int n_f = int(r.size());
+    for (int k = 0; k < n_f; k++) {
+      const int u = input.face_vert_indices[r[k]];
+      const int v = input.face_vert_indices[r[(k + 1) % n_f]];
       input_boundary_edges.add({std::min(u, v), std::max(u, v)});
     }
   }
@@ -387,19 +381,15 @@ inline void write_debug_svg(const char *test_name,
 
 struct GeneratedPolygon {
   Array<double2> vert;
-  Vector<int> outer_polygon;
-  Vector<int> hole_offsets_buf;
-  Vector<int> hole_vert_indices;
+  Vector<int> face_offsets_data;
+  Vector<int> face_vert_indices;
 
   StraightSkeletonInput to_input() const
   {
     StraightSkeletonInput input;
     input.vert = vert.as_span();
-    input.outer_polygon = outer_polygon.as_span();
-    if (!hole_offsets_buf.is_empty()) {
-      input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
-      input.hole_vert_indices = hole_vert_indices.as_span();
-    }
+    input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+    input.face_vert_indices = face_vert_indices.as_span();
     return input;
   }
 };
@@ -411,11 +401,12 @@ static GeneratedPolygon make_circle(const int n, const double radius = 100.0)
 {
   GeneratedPolygon geom;
   geom.vert.reinitialize(n);
-  geom.outer_polygon.reserve(n);
+  geom.face_offsets_data = {0, n};
+  geom.face_vert_indices.reserve(n);
   for (const int i : IndexRange(n)) {
     const double theta = (2.0 * M_PI * double(i)) / double(n);
     geom.vert[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
-    geom.outer_polygon.append(i);
+    geom.face_vert_indices.append(i);
   }
   return geom;
 }
@@ -432,7 +423,8 @@ static GeneratedPolygon make_subdivided_square(const int n, const double half_si
 
   GeneratedPolygon geom;
   geom.vert.reinitialize(total_verts_num);
-  geom.outer_polygon.reserve(total_verts_num);
+  geom.face_offsets_data = {0, total_verts_num};
+  geom.face_vert_indices.reserve(total_verts_num);
 
   const double l = half_size;
   int idx = 0;
@@ -441,7 +433,7 @@ static GeneratedPolygon make_subdivided_square(const int n, const double half_si
   for (const int k : IndexRange(segments_per_side)) {
     const double x = -l + (2.0 * l * double(k)) / double(segments_per_side);
     geom.vert[idx] = double2(x, -l);
-    geom.outer_polygon.append(idx);
+    geom.face_vert_indices.append(idx);
     idx++;
   }
 
@@ -449,7 +441,7 @@ static GeneratedPolygon make_subdivided_square(const int n, const double half_si
   for (const int k : IndexRange(segments_per_side)) {
     const double y = -l + (2.0 * l * double(k)) / double(segments_per_side);
     geom.vert[idx] = double2(l, y);
-    geom.outer_polygon.append(idx);
+    geom.face_vert_indices.append(idx);
     idx++;
   }
 
@@ -457,7 +449,7 @@ static GeneratedPolygon make_subdivided_square(const int n, const double half_si
   for (const int k : IndexRange(segments_per_side)) {
     const double x = l - (2.0 * l * double(k)) / double(segments_per_side);
     geom.vert[idx] = double2(x, l);
-    geom.outer_polygon.append(idx);
+    geom.face_vert_indices.append(idx);
     idx++;
   }
 
@@ -465,7 +457,7 @@ static GeneratedPolygon make_subdivided_square(const int n, const double half_si
   for (const int k : IndexRange(segments_per_side)) {
     const double y = l - (2.0 * l * double(k)) / double(segments_per_side);
     geom.vert[idx] = double2(-l, y);
-    geom.outer_polygon.append(idx);
+    geom.face_vert_indices.append(idx);
     idx++;
   }
 
@@ -486,23 +478,21 @@ static GeneratedPolygon make_circle_with_holes(const int n,
 
   GeneratedPolygon geom;
   geom.vert.reinitialize(total_verts_num);
-  geom.outer_polygon.reserve(n);
+  geom.face_offsets_data.append(0);
+  geom.face_offsets_data.append(n);
+  geom.face_vert_indices.reserve(total_verts_num);
 
   /* Outer circle (CCW). */
   for (const int i : IndexRange(n)) {
     const double theta = (2.0 * M_PI * double(i)) / double(n);
     geom.vert[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
-    geom.outer_polygon.append(i);
+    geom.face_vert_indices.append(i);
   }
 
   /* Holes centered at half-radius. */
   const double r_mid = radius * 0.5;
   const double d_adj = 2.0 * r_mid * std::sin(M_PI / double(n));
   const double r_hole = std::min(0.35 * r_mid, 0.35 * d_adj);
-
-  geom.hole_offsets_buf.reserve(n + 1);
-  geom.hole_offsets_buf.append(0);
-  geom.hole_vert_indices.reserve(n * hole_verts_num);
 
   int v_idx = n;
   for (const int j : IndexRange(n)) {
@@ -514,10 +504,10 @@ static GeneratedPolygon make_circle_with_holes(const int n,
     for (const int k : IndexRange(hole_verts_num)) {
       const double alpha = (-2.0 * M_PI * double(k)) / double(hole_verts_num);
       geom.vert[v_idx] = center + double2(r_hole * std::cos(alpha), r_hole * std::sin(alpha));
-      geom.hole_vert_indices.append(v_idx);
+      geom.face_vert_indices.append(v_idx);
       v_idx++;
     }
-    geom.hole_offsets_buf.append(int(geom.hole_vert_indices.size()));
+    geom.face_offsets_data.append(int(geom.face_vert_indices.size()));
   }
 
   return geom;
@@ -567,11 +557,12 @@ static GeneratedPolygon make_koch_snowflake(const int iterations, const double r
   const int total_verts_num = int(current_pts.size());
   GeneratedPolygon geom;
   geom.vert.reinitialize(total_verts_num);
-  geom.outer_polygon.reserve(total_verts_num);
+  geom.face_offsets_data = {0, total_verts_num};
+  geom.face_vert_indices.reserve(total_verts_num);
 
   for (const int i : IndexRange(total_verts_num)) {
     geom.vert[i] = current_pts[i];
-    geom.outer_polygon.append(i);
+    geom.face_vert_indices.append(i);
   }
 
   return geom;

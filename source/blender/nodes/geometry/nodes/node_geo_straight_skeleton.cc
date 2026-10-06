@@ -111,7 +111,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .optional_label();
   b.add_input<decl::Float>("Distance"_ustr)
       .default_value(1.0f)
-      .description("Inset (positive) or outset (negative) offset distance")
+      .min(0.0f)
+      .description("Offset distance")
       .usage_inference(
           [](const socket_usage_inference::SocketUsageParams &params) -> std::optional<bool> {
             return params.menu_input_may_be("Mode"_ustr, int(StraightSkeletonMode::Offset));
@@ -272,11 +273,24 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
     }
     const bool is_closed = cyclic[curve_idx];
     if (is_closed && pts.size() >= 3) {
+      const int face_start = int(face_vert_indices.size());
       for (const int p : pts) {
         const int local_idx = get_or_add_vert(p);
-        face_vert_indices.append(local_idx);
+        if (face_vert_indices.size() == face_start || face_vert_indices.last() != local_idx) {
+          face_vert_indices.append(local_idx);
+        }
       }
-      face_offsets_data.append(int(face_vert_indices.size()));
+      if (face_vert_indices.size() > face_start + 1 &&
+          face_vert_indices.last() == face_vert_indices[face_start])
+      {
+        face_vert_indices.pop_last();
+      }
+      if (face_vert_indices.size() - face_start >= 3) {
+        face_offsets_data.append(int(face_vert_indices.size()));
+      }
+      else {
+        face_vert_indices.resize(face_start);
+      }
     }
     else {
       int prev_local = -1;
@@ -721,7 +735,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   const double offset = (mode == StraightSkeletonMode::FullSkeleton) ?
                             std::numeric_limits<double>::infinity() :
-                            double(distance);
+                            math::max(0.0, double(distance));
 
   const AttributeFilter &attribute_filter = params.get_attribute_filter("Mesh"_ustr);
   const std::optional<std::string> distance_attr_id =

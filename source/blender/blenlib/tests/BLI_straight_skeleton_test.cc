@@ -213,27 +213,6 @@ inline void write_debug_svg(const char *test_name,
 
   /* Identify input boundary edges to distinguish from straight skeleton internal edges. */
   Set<std::pair<int, int>> input_boundary_edges;
-  const int n_outer = int(input.outer_polygon.size());
-  for (int k = 0; k < n_outer; k++) {
-    const int u = input.outer_polygon[k];
-    const int v = input.outer_polygon[(k + 1) % n_outer];
-    input_boundary_edges.add({std::min(u, v), std::max(u, v)});
-  }
-  for (const int h : IndexRange(input.hole_offsets.size())) {
-    const IndexRange r = input.hole_offsets[h];
-    const int n_h = int(r.size());
-    for (int k = 0; k < n_h; k++) {
-      const int u = input.hole_vert_indices[r[k]];
-      const int v = input.hole_vert_indices[r[(k + 1) % n_h]];
-      input_boundary_edges.add({std::min(u, v), std::max(u, v)});
-    }
-  }
-  const int n_chain = int(input.edge_chain.size());
-  for (int k = 0; k < n_chain - 1; k++) {
-    const int u = input.edge_chain[k];
-    const int v = input.edge_chain[k + 1];
-    input_boundary_edges.add({std::min(u, v), std::max(u, v)});
-  }
   for (const int2 &e : input.edge) {
     input_boundary_edges.add({std::min(e[0], e[1]), std::max(e[0], e[1])});
   }
@@ -400,9 +379,8 @@ static StraightSkeletonInput make_test_input()
  */
 struct InputStorage {
   Array<double2> vert;
-  Vector<int> outer_polygon;
-  Vector<int> hole_offsets_buf;
-  Vector<int> hole_vert_indices;
+  Vector<int> face_offsets_data;
+  Vector<int> face_vert_indices;
 };
 
 static StraightSkeletonInput fill_input_from_string(const char *spec, InputStorage &r_storage)
@@ -415,9 +393,9 @@ static StraightSkeletonInput fill_input_from_string(const char *spec, InputStora
   hdrss >> verts_num >> faces_num;
 
   r_storage.vert.reinitialize(verts_num);
-  r_storage.outer_polygon.clear();
-  r_storage.hole_offsets_buf.clear();
-  r_storage.hole_vert_indices.clear();
+  r_storage.face_offsets_data.clear();
+  r_storage.face_offsets_data.append(0);
+  r_storage.face_vert_indices.clear();
 
   int i = 0;
   while (i < verts_num && getline(ss, line)) {
@@ -432,32 +410,17 @@ static StraightSkeletonInput fill_input_from_string(const char *spec, InputStora
   while (i < faces_num && getline(ss, line)) {
     std::istringstream fss(line);
     int v;
-    if (i == 0) {
-      while (fss >> v) {
-        r_storage.outer_polygon.append(v);
-      }
+    while (fss >> v) {
+      r_storage.face_vert_indices.append(v);
     }
-    else {
-      const int hole_idx = i - 1;
-      if (r_storage.hole_offsets_buf.is_empty()) {
-        r_storage.hole_offsets_buf.resize(faces_num); /* faces_num - 1 holes + 1 */
-        r_storage.hole_offsets_buf[0] = 0;
-      }
-      while (fss >> v) {
-        r_storage.hole_vert_indices.append(v);
-      }
-      r_storage.hole_offsets_buf[hole_idx + 1] = int(r_storage.hole_vert_indices.size());
-    }
+    r_storage.face_offsets_data.append(int(r_storage.face_vert_indices.size()));
     i++;
   }
 
   StraightSkeletonInput input = make_test_input();
   input.vert = r_storage.vert.as_span();
-  input.outer_polygon = r_storage.outer_polygon.as_span();
-  if (!r_storage.hole_offsets_buf.is_empty()) {
-    input.hole_offsets = OffsetIndices<int>(r_storage.hole_offsets_buf.as_span());
-    input.hole_vert_indices = r_storage.hole_vert_indices.as_span();
-  }
+  input.face_offsets = OffsetIndices<int>(r_storage.face_offsets_data.as_span());
+  input.face_vert_indices = r_storage.face_vert_indices.as_span();
   return input;
 }
 
@@ -1041,14 +1004,12 @@ TEST(straight_skeleton, OffsetSquarePartial)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
   Array<int> face_verts = {0, 1, 2, 3};
-
-  InputStorage storage;
-  storage.vert = verts;
-  storage.outer_polygon.extend(face_verts.as_span());
+  const Array<int> face_offsets_data = {0, 4};
 
   StraightSkeletonInput input = make_test_input();
-  input.vert = storage.vert.as_span();
-  input.outer_polygon = storage.outer_polygon.as_span();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_verts.as_span();
   input.offset = 1.0;
   input.segments = 1;
   input.label = "OffsetSquarePartial";
@@ -1091,14 +1052,12 @@ TEST(straight_skeleton, OffsetSquareCollapse)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
   Array<int> face_verts = {0, 1, 2, 3};
-
-  InputStorage storage;
-  storage.vert = verts;
-  storage.outer_polygon.extend(face_verts.as_span());
+  const Array<int> face_offsets_data = {0, 4};
 
   StraightSkeletonInput input = make_test_input();
-  input.vert = storage.vert.as_span();
-  input.outer_polygon = storage.outer_polygon.as_span();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_verts.as_span();
   input.offset = 5.0;
   input.segments = 1;
   input.label = "OffsetSquareCollapse";
@@ -1132,14 +1091,12 @@ TEST(straight_skeleton, OffsetSquareExcess)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
   Array<int> face_verts = {0, 1, 2, 3};
-
-  InputStorage storage;
-  storage.vert = verts;
-  storage.outer_polygon.extend(face_verts.as_span());
+  const Array<int> face_offsets_data = {0, 4};
 
   StraightSkeletonInput input = make_test_input();
-  input.vert = storage.vert.as_span();
-  input.outer_polygon = storage.outer_polygon.as_span();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_verts.as_span();
   input.offset = 10.0; /* Exceeds max_collapse_time = 5, clamped. */
   input.segments = 1;
   input.label = "OffsetSquareExcess";
@@ -1173,14 +1130,12 @@ TEST(straight_skeleton, OffsetRectangle)
 {
   Array<double2> verts = {{0.0, 0.0}, {20.0, 0.0}, {20.0, 10.0}, {0.0, 10.0}};
   Array<int> face_verts = {0, 1, 2, 3};
-
-  InputStorage storage;
-  storage.vert = verts;
-  storage.outer_polygon.extend(face_verts.as_span());
+  const Array<int> face_offsets_data = {0, 4};
 
   StraightSkeletonInput input = make_test_input();
-  input.vert = storage.vert.as_span();
-  input.outer_polygon = storage.outer_polygon.as_span();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_verts.as_span();
   input.offset = 2.0;
   input.segments = 1;
   input.label = "OffsetRectangle";
@@ -1215,14 +1170,12 @@ TEST(straight_skeleton, OffsetLShape)
 {
   Array<double2> verts = {{0.0, 0.0}, {4.0, 0.0}, {4.0, 2.0}, {2.0, 2.0}, {2.0, 4.0}, {0.0, 4.0}};
   Array<int> face_verts = {0, 1, 2, 3, 4, 5};
-
-  InputStorage storage;
-  storage.vert = verts;
-  storage.outer_polygon.extend(face_verts.as_span());
+  const Array<int> face_offsets_data = {0, 6};
 
   StraightSkeletonInput input = make_test_input();
-  input.vert = storage.vert.as_span();
-  input.outer_polygon = storage.outer_polygon.as_span();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_verts.as_span();
   input.offset = 0.5;
   input.segments = 1;
   input.label = "OffsetLShape";
@@ -1253,14 +1206,12 @@ TEST(straight_skeleton, OffsetSquare_TwoBands)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
   Array<int> face_verts = {0, 1, 2, 3};
-
-  InputStorage storage;
-  storage.vert = verts;
-  storage.outer_polygon.extend(face_verts.as_span());
+  const Array<int> face_offsets_data = {0, 4};
 
   StraightSkeletonInput input = make_test_input();
-  input.vert = storage.vert.as_span();
-  input.outer_polygon = storage.outer_polygon.as_span();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_verts.as_span();
   input.offset = 2.0;
   input.segments = 2;
   input.label = "OffsetSquare_TwoBands";
@@ -1322,14 +1273,12 @@ TEST(straight_skeleton, FullSkeletonWithSegments)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
   Array<int> face_verts = {0, 1, 2, 3};
-
-  InputStorage storage;
-  storage.vert = verts;
-  storage.outer_polygon.extend(face_verts.as_span());
+  const Array<int> face_offsets_data = {0, 4};
 
   StraightSkeletonInput input = make_test_input();
-  input.vert = storage.vert.as_span();
-  input.outer_polygon = storage.outer_polygon.as_span();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_verts.as_span();
   /* Default input.offset = infinity; segments = 2 divides the full skeleton into 2 bands. */
   input.segments = 2;
   input.label = "FullSkeletonWithSegments";
@@ -1785,16 +1734,18 @@ TEST(straight_skeleton, Circle64)
   const int n = 64;
   const double radius = 100.0;
   Array<double2> verts(n);
-  Vector<int> outer_polygon(n);
+  Vector<int> face_vert_indices(n);
   for (const int i : IndexRange(n)) {
     const double theta = (2.0 * M_PI * double(i)) / double(n);
     verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
-    outer_polygon[i] = i;
+    face_vert_indices[i] = i;
   }
+  const Array<int> face_offsets_data = {0, n};
 
   StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
-  input.outer_polygon = outer_polygon.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
   input.label = "Circle64";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
@@ -1825,24 +1776,22 @@ TEST(straight_skeleton, CircleWithHoles6)
   const int total_verts_num = n + n * hole_verts_num;
 
   Array<double2> verts(total_verts_num);
-  Vector<int> outer_polygon;
-  outer_polygon.reserve(n);
+  Vector<int> face_offsets_data;
+  face_offsets_data.reserve(n + 2);
+  face_offsets_data.append(0);
+  face_offsets_data.append(n);
+  Vector<int> face_vert_indices;
+  face_vert_indices.reserve(total_verts_num);
 
   for (const int i : IndexRange(n)) {
     const double theta = (2.0 * M_PI * double(i)) / double(n);
     verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
-    outer_polygon.append(i);
+    face_vert_indices.append(i);
   }
 
   const double r_mid = radius * 0.5;
   const double d_adj = 2.0 * r_mid * std::sin(M_PI / double(n));
   const double r_hole = std::min(0.35 * r_mid, 0.35 * d_adj);
-
-  Vector<int> hole_offsets_buf;
-  hole_offsets_buf.reserve(n + 1);
-  hole_offsets_buf.append(0);
-  Vector<int> hole_vert_indices;
-  hole_vert_indices.reserve(n * hole_verts_num);
 
   int v_idx = n;
   for (const int j : IndexRange(n)) {
@@ -1852,17 +1801,16 @@ TEST(straight_skeleton, CircleWithHoles6)
     for (const int k : IndexRange(hole_verts_num)) {
       const double alpha = (-2.0 * M_PI * double(k)) / double(hole_verts_num);
       verts[v_idx] = center + double2(r_hole * std::cos(alpha), r_hole * std::sin(alpha));
-      hole_vert_indices.append(v_idx);
+      face_vert_indices.append(v_idx);
       v_idx++;
     }
-    hole_offsets_buf.append(int(hole_vert_indices.size()));
+    face_offsets_data.append(int(face_vert_indices.size()));
   }
 
   StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
-  input.outer_polygon = outer_polygon.as_span();
-  input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
-  input.hole_vert_indices = hole_vert_indices.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
   input.label = "CircleWithHoles6";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
@@ -1880,24 +1828,22 @@ TEST(straight_skeleton, CircleWithHoles24)
   const int total_verts_num = n + n * hole_verts_num;
 
   Array<double2> verts(total_verts_num);
-  Vector<int> outer_polygon;
-  outer_polygon.reserve(n);
+  Vector<int> face_offsets_data;
+  face_offsets_data.reserve(n + 2);
+  face_offsets_data.append(0);
+  face_offsets_data.append(n);
+  Vector<int> face_vert_indices;
+  face_vert_indices.reserve(total_verts_num);
 
   for (const int i : IndexRange(n)) {
     const double theta = (2.0 * M_PI * double(i)) / double(n);
     verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
-    outer_polygon.append(i);
+    face_vert_indices.append(i);
   }
 
   const double r_mid = radius * 0.5;
   const double d_adj = 2.0 * r_mid * std::sin(M_PI / double(n));
   const double r_hole = std::min(0.35 * r_mid, 0.35 * d_adj);
-
-  Vector<int> hole_offsets_buf;
-  hole_offsets_buf.reserve(n + 1);
-  hole_offsets_buf.append(0);
-  Vector<int> hole_vert_indices;
-  hole_vert_indices.reserve(n * hole_verts_num);
 
   int v_idx = n;
   for (const int j : IndexRange(n)) {
@@ -1907,17 +1853,16 @@ TEST(straight_skeleton, CircleWithHoles24)
     for (const int k : IndexRange(hole_verts_num)) {
       const double alpha = (-2.0 * M_PI * double(k)) / double(hole_verts_num);
       verts[v_idx] = center + double2(r_hole * std::cos(alpha), r_hole * std::sin(alpha));
-      hole_vert_indices.append(v_idx);
+      face_vert_indices.append(v_idx);
       v_idx++;
     }
-    hole_offsets_buf.append(int(hole_vert_indices.size()));
+    face_offsets_data.append(int(face_vert_indices.size()));
   }
 
   StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
-  input.outer_polygon = outer_polygon.as_span();
-  input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
-  input.hole_vert_indices = hole_vert_indices.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
   input.label = "CircleWithHoles24";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
@@ -1936,24 +1881,22 @@ TEST(straight_skeleton, CircleWithHoles48)
   const int total_verts_num = n + n * hole_verts_num;
 
   Array<double2> verts(total_verts_num);
-  Vector<int> outer_polygon;
-  outer_polygon.reserve(n);
+  Vector<int> face_offsets_data;
+  face_offsets_data.reserve(n + 2);
+  face_offsets_data.append(0);
+  face_offsets_data.append(n);
+  Vector<int> face_vert_indices;
+  face_vert_indices.reserve(total_verts_num);
 
   for (const int i : IndexRange(n)) {
     const double theta = (2.0 * M_PI * double(i)) / double(n);
     verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
-    outer_polygon.append(i);
+    face_vert_indices.append(i);
   }
 
   const double r_mid = radius * 0.5;
   const double d_adj = 2.0 * r_mid * std::sin(M_PI / double(n));
   const double r_hole = std::min(0.35 * r_mid, 0.35 * d_adj);
-
-  Vector<int> hole_offsets_buf;
-  hole_offsets_buf.reserve(n + 1);
-  hole_offsets_buf.append(0);
-  Vector<int> hole_vert_indices;
-  hole_vert_indices.reserve(n * hole_verts_num);
 
   int v_idx = n;
   for (const int j : IndexRange(n)) {
@@ -1963,17 +1906,16 @@ TEST(straight_skeleton, CircleWithHoles48)
     for (const int k : IndexRange(hole_verts_num)) {
       const double alpha = (-2.0 * M_PI * double(k)) / double(hole_verts_num);
       verts[v_idx] = center + double2(r_hole * std::cos(alpha), r_hole * std::sin(alpha));
-      hole_vert_indices.append(v_idx);
+      face_vert_indices.append(v_idx);
       v_idx++;
     }
-    hole_offsets_buf.append(int(hole_vert_indices.size()));
+    face_offsets_data.append(int(face_vert_indices.size()));
   }
 
   StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
-  input.outer_polygon = outer_polygon.as_span();
-  input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
-  input.hole_vert_indices = hole_vert_indices.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
   input.label = "CircleWithHoles48";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
@@ -1991,24 +1933,22 @@ TEST(straight_skeleton, CircleWithHoles96)
   const int total_verts_num = n + n * hole_verts_num;
 
   Array<double2> verts(total_verts_num);
-  Vector<int> outer_polygon;
-  outer_polygon.reserve(n);
+  Vector<int> face_offsets_data;
+  face_offsets_data.reserve(n + 2);
+  face_offsets_data.append(0);
+  face_offsets_data.append(n);
+  Vector<int> face_vert_indices;
+  face_vert_indices.reserve(total_verts_num);
 
   for (const int i : IndexRange(n)) {
     const double theta = (2.0 * M_PI * double(i)) / double(n);
     verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
-    outer_polygon.append(i);
+    face_vert_indices.append(i);
   }
 
   const double r_mid = radius * 0.5;
   const double d_adj = 2.0 * r_mid * std::sin(M_PI / double(n));
   const double r_hole = std::min(0.35 * r_mid, 0.35 * d_adj);
-
-  Vector<int> hole_offsets_buf;
-  hole_offsets_buf.reserve(n + 1);
-  hole_offsets_buf.append(0);
-  Vector<int> hole_vert_indices;
-  hole_vert_indices.reserve(n * hole_verts_num);
 
   int v_idx = n;
   for (const int j : IndexRange(n)) {
@@ -2018,17 +1958,16 @@ TEST(straight_skeleton, CircleWithHoles96)
     for (const int k : IndexRange(hole_verts_num)) {
       const double alpha = (-2.0 * M_PI * double(k)) / double(hole_verts_num);
       verts[v_idx] = center + double2(r_hole * std::cos(alpha), r_hole * std::sin(alpha));
-      hole_vert_indices.append(v_idx);
+      face_vert_indices.append(v_idx);
       v_idx++;
     }
-    hole_offsets_buf.append(int(hole_vert_indices.size()));
+    face_offsets_data.append(int(face_vert_indices.size()));
   }
 
   StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
-  input.outer_polygon = outer_polygon.as_span();
-  input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
-  input.hole_vert_indices = hole_vert_indices.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
   input.label = "CircleWithHoles96";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
@@ -2568,436 +2507,46 @@ TEST(straight_skeleton, DiamondStarSplit)
 }
 
 /* -------------------------------------------------------------------- */
-/** \name Edge Chain Tests
+/** \name Zero / Negative Offset Tests
  * \{ */
 
-TEST(straight_skeleton, EdgeChain_SingleSegment)
+TEST(straight_skeleton, NegativeOrZeroOffset_NoOp)
 {
-  const Array<double2> verts = {double2(0.0, 0.0), double2(10.0, 0.0)};
-  const Array<int> chain = {0, 1};
+  const Array<double2> verts = {
+      double2(0.0, 0.0), double2(10.0, 0.0), double2(10.0, 10.0), double2(0.0, 10.0)};
+  const Array<int> face_offsets_data = {0, 4};
+  const Array<int> face_vert_indices = {0, 1, 2, 3};
 
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = 2.0;
-  input.segments = 1;
-  input.label = "EdgeChain_SingleSegment";
-  input.full_verification = true;
+  /* Negative offset: no-op. */
+  {
+    StraightSkeletonInput input = make_test_input();
+    input.vert = verts.as_span();
+    input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+    input.face_vert_indices = face_vert_indices.as_span();
+    input.offset = -2.0;
 
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets().size(), 4);
-  /* (10 + 2*2) * (2*2) = 14 * 4 = 56.0. */
-  EXPECT_NEAR(total_faces_area(output), 56.0, 1e-5);
-  for (const int b : output.face_band) {
-    EXPECT_EQ(b, 0);
+    const StraightSkeletonOutput output = straight_skeleton_calc(input);
+    EXPECT_TRUE(output.is_valid);
+    EXPECT_EQ(output.face_offsets().size(), 0);
+    EXPECT_EQ(output.vert.size(), 0);
   }
-}
 
-TEST(straight_skeleton, EdgeChain_SingleSegment_TwoBands)
-{
-  const Array<double2> verts = {double2(0.0, 0.0), double2(10.0, 0.0)};
-  const Array<int> chain = {0, 1};
+  /* Zero offset: no-op. */
+  {
+    StraightSkeletonInput input = make_test_input();
+    input.vert = verts.as_span();
+    input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+    input.face_vert_indices = face_vert_indices.as_span();
+    input.offset = 0.0;
 
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = 2.0;
-  input.segments = 2;
-  input.label = "EdgeChain_SingleSegment_TwoBands";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets().size(), 8);
-  EXPECT_NEAR(total_faces_area(output), 56.0, 1e-5);
-
-  int band0_count = 0;
-  int band1_count = 0;
-  for (const int b : output.face_band) {
-    if (b == 0) {
-      band0_count++;
-    }
-    else if (b == 1) {
-      band1_count++;
-    }
+    const StraightSkeletonOutput output = straight_skeleton_calc(input);
+    EXPECT_TRUE(output.is_valid);
+    EXPECT_EQ(output.face_offsets().size(), 0);
+    EXPECT_EQ(output.vert.size(), 0);
   }
-  EXPECT_EQ(band0_count, 4);
-  EXPECT_EQ(band1_count, 4);
-}
-
-TEST(straight_skeleton, EdgeChain_LShape)
-{
-  const Array<double2> verts = {double2(0.0, 10.0), double2(0.0, 0.0), double2(10.0, 0.0)};
-  const Array<int> chain = {0, 1, 2};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = 2.0;
-  input.segments = 1;
-  input.label = "EdgeChain_LShape";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets().size(), 6);
-  EXPECT_NEAR(total_faces_area(output), 96.0, 1e-4);
-}
-
-TEST(straight_skeleton, EdgeChain_NegativeOffset_NoOp)
-{
-  const Array<double2> verts = {double2(0.0, 0.0), double2(10.0, 0.0)};
-  const Array<int> chain = {0, 1};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = -2.0;
-  input.label = "EdgeChain_NegativeOffset_NoOp";
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  EXPECT_EQ(output.face_offsets().size(), 0);
-  EXPECT_EQ(output.vert.size(), 0);
-}
-
-TEST(straight_skeleton, EdgeChain_InfiniteOffset_NoOp)
-{
-  const Array<double2> verts = {double2(0.0, 0.0), double2(10.0, 0.0)};
-  const Array<int> chain = {0, 1};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = std::numeric_limits<double>::infinity();
-  input.label = "EdgeChain_InfiniteOffset_NoOp";
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  EXPECT_EQ(output.face_offsets().size(), 0);
-  EXPECT_EQ(output.vert.size(), 0);
 }
 
 /** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Negative Offset (Polygon Outset) Tests
- * \{ */
-
-TEST(straight_skeleton, NegativeOffset_Square)
-{
-  const Array<double2> verts = {
-      double2(0.0, 0.0), double2(10.0, 0.0), double2(10.0, 10.0), double2(0.0, 10.0)};
-  const Array<int> outer = {0, 1, 2, 3};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.outer_polygon = outer.as_span();
-  input.offset = -2.0;
-  input.segments = 1;
-  input.label = "NegativeOffset_Square";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets().size(), 4);
-  /* Outset expands from [0, 10]^2 to [-2, 12]^2. Frame area = 14*14 - 100 = 96.0. */
-  EXPECT_NEAR(total_faces_area(output), 96.0, 1e-4);
-  for (const int b : output.face_band) {
-    EXPECT_EQ(b, 0);
-  }
-}
-
-TEST(straight_skeleton, NegativeOffset_Square_ThreeBands)
-{
-  const Array<double2> verts = {
-      double2(0.0, 0.0), double2(10.0, 0.0), double2(10.0, 10.0), double2(0.0, 10.0)};
-  const Array<int> outer = {0, 1, 2, 3};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.outer_polygon = outer.as_span();
-  input.offset = -3.0;
-  input.segments = 3;
-  input.label = "NegativeOffset_Square_ThreeBands";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets().size(), 12);
-  /* Outset expands to [-3, 13]^2. Frame area = 16*16 - 100 = 156.0. */
-  EXPECT_NEAR(total_faces_area(output), 156.0, 1e-4);
-
-  Array<int> band_counts(3, 0);
-  for (const int b : output.face_band) {
-    if (b >= 0 && b < 3) {
-      band_counts[b]++;
-    }
-  }
-  EXPECT_EQ(band_counts[0], 4);
-  EXPECT_EQ(band_counts[1], 4);
-  EXPECT_EQ(band_counts[2], 4);
-}
-
-TEST(straight_skeleton, NegativeOffset_SquareWithHole)
-{
-  const Array<double2> verts = {
-      /* Outer square (CCW). */
-      double2(0.0, 0.0),
-      double2(10.0, 0.0),
-      double2(10.0, 10.0),
-      double2(0.0, 10.0),
-      /* Hole (CW). */
-      double2(4.0, 4.0),
-      double2(4.0, 6.0),
-      double2(6.0, 6.0),
-      double2(6.0, 4.0),
-  };
-  const Array<int> outer = {0, 1, 2, 3};
-  const Array<int> hole_indices = {4, 5, 6, 7};
-  const Array<int> hole_offsets_data = {0, 4};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.outer_polygon = outer.as_span();
-  input.hole_vert_indices = hole_indices.as_span();
-  input.hole_offsets = OffsetIndices<int>(hole_offsets_data.as_span());
-  input.offset = -1.0;
-  input.segments = 1;
-  input.label = "NegativeOffset_SquareWithHole";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  /* Outer frame: [-1, 11]^2 \ [0, 10]^2 = 144 - 100 = 44.0.
-   * Hole frame: [4, 6]^2 \ [5, 5]^2 = 4 - 0 = 4.0.
-   * Total face area = 48.0. */
-  EXPECT_NEAR(total_faces_area(output), 48.0, 1e-4);
-}
-
-TEST(straight_skeleton, NegativeOffset_InvalidInfinite)
-{
-  const Array<double2> verts = {
-      double2(0.0, 0.0), double2(10.0, 0.0), double2(10.0, 10.0), double2(0.0, 10.0)};
-  const Array<int> outer = {0, 1, 2, 3};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.outer_polygon = outer.as_span();
-  input.offset = -std::numeric_limits<double>::infinity();
-  input.label = "NegativeOffset_InvalidInfinite";
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  EXPECT_EQ(output.face_offsets().size(), 0);
-  EXPECT_EQ(output.vert.size(), 0);
-}
-
-TEST(straight_skeleton, EdgeChain_ThreeSegments_Collinear)
-{
-  const Array<double2> verts = {double2(0.0, 0.0), double2(5.0, 0.0), double2(10.0, 0.0)};
-  const Array<int> chain = {0, 1, 2};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = 2.0;
-  input.segments = 1;
-  input.label = "EdgeChain_ThreeSegments_Collinear";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets().size(), 6);
-  EXPECT_NEAR(total_faces_area(output), 56.0, 1e-4);
-}
-
-TEST(straight_skeleton, EdgeChain_LShape_ThreeBands)
-{
-  const Array<double2> verts = {double2(0.0, 10.0), double2(0.0, 0.0), double2(10.0, 0.0)};
-  const Array<int> chain = {0, 1, 2};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = 3.0;
-  input.segments = 3;
-  input.label = "EdgeChain_LShape_ThreeBands";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets().size(), 18);
-  EXPECT_NEAR(total_faces_area(output), 156.0, 1e-4);
-
-  Array<int> band_counts(3, 0);
-  for (const int b : output.face_band) {
-    if (b >= 0 && b < 3) {
-      band_counts[b]++;
-    }
-  }
-  EXPECT_EQ(band_counts[0], 6);
-  EXPECT_EQ(band_counts[1], 6);
-  EXPECT_EQ(band_counts[2], 6);
-}
-
-TEST(straight_skeleton, NegativeOffset_LShape)
-{
-  const Array<double2> verts = {
-      double2(0.0, 0.0),
-      double2(10.0, 0.0),
-      double2(10.0, 5.0),
-      double2(5.0, 5.0),
-      double2(5.0, 10.0),
-      double2(0.0, 10.0),
-  };
-  const Array<int> outer = {0, 1, 2, 3, 4, 5};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.outer_polygon = outer.as_span();
-  input.offset = -2.0;
-  input.segments = 1;
-  input.label = "NegativeOffset_LShape";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets().size(), 6);
-  /* Outset expands from domain area 75 to area 171. Frame area = 171 - 75 = 96.0. */
-  EXPECT_NEAR(total_faces_area(output), 96.0, 1e-4);
-}
-
-TEST(straight_skeleton, EdgeChain_RectilinearSpiralSplit)
-{
-  const Array<double2> verts = {
-      double2(0.0, 0.0),
-      double2(6.0, 0.0),
-      double2(6.0, 6.0),
-      double2(2.0, 6.0),
-      double2(2.0, 2.0),
-      double2(4.0, 2.0),
-  };
-  const Array<int> chain = {0, 1, 2, 3, 4, 5};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = 1.5;
-  input.segments = 1;
-  input.label = "EdgeChain_RectilinearSpiralSplit";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_GT(output.events_processed_num, 0);
-  EXPECT_EQ(output.face_offsets().size(), 12);
-  EXPECT_NEAR(total_faces_area(output), 68.0, 1e-4);
-  for (const int b : output.face_band) {
-    EXPECT_EQ(b, 0);
-  }
-}
-
-TEST(straight_skeleton, EdgeChain_RectilinearSpiral_TwoBands)
-{
-  const Array<double2> verts = {
-      double2(0.0, 0.0),
-      double2(6.0, 0.0),
-      double2(6.0, 6.0),
-      double2(2.0, 6.0),
-      double2(2.0, 2.0),
-      double2(4.0, 2.0),
-  };
-  const Array<int> chain = {0, 1, 2, 3, 4, 5};
-
-  StraightSkeletonInput input;
-  input.vert = verts.as_span();
-  input.edge_chain = chain.as_span();
-  input.offset = 1.5;
-  input.segments = 2;
-  input.label = "EdgeChain_RectilinearSpiral_TwoBands";
-  input.full_verification = true;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  EXPECT_TRUE(output.is_valid);
-  EXPECT_GT(output.events_processed_num, 0);
-  EXPECT_NEAR(total_faces_area(output), 68.0, 1e-4);
-
-  int band0_count = 0;
-  int band1_count = 0;
-  for (const int b : output.face_band) {
-    if (b == 0) {
-      band0_count++;
-    }
-    else if (b == 1) {
-      band1_count++;
-    }
-  }
-  EXPECT_GT(band0_count, 0);
-  EXPECT_GT(band1_count, 0);
-}
-
-TEST(straight_skeleton, MutualExclusionValidation)
-{
-  const Array<double2> verts = {
-      double2(0.0, 0.0), double2(10.0, 0.0), double2(10.0, 10.0), double2(0.0, 10.0)};
-  const Array<int> poly = {0, 1, 2, 3};
-  const Array<int> chain = {0, 1, 2};
-
-  /* Both outer_polygon and edge_chain provided: invalid. */
-  {
-    StraightSkeletonInput input;
-    input.vert = verts.as_span();
-    input.outer_polygon = poly.as_span();
-    input.edge_chain = chain.as_span();
-    input.offset = 1.0;
-    const StraightSkeletonOutput output = straight_skeleton_calc(input);
-    EXPECT_EQ(output.face_offsets().size(), 0);
-  }
-
-  /* Neither provided: invalid. */
-  {
-    StraightSkeletonInput input;
-    input.vert = verts.as_span();
-    input.offset = 1.0;
-    const StraightSkeletonOutput output = straight_skeleton_calc(input);
-    EXPECT_EQ(output.face_offsets().size(), 0);
-  }
-
-  /* edge_chain with hole: invalid. */
-  {
-    const Array<int> hole_indices = {0, 1, 2};
-    const Array<int> hole_offsets_data = {0, 3};
-    StraightSkeletonInput input;
-    input.vert = verts.as_span();
-    input.edge_chain = chain.as_span();
-    input.hole_vert_indices = hole_indices.as_span();
-    input.hole_offsets = OffsetIndices<int>(hole_offsets_data.as_span());
-    input.offset = 1.0;
-    const StraightSkeletonOutput output = straight_skeleton_calc(input);
-    EXPECT_EQ(output.face_offsets().size(), 0);
-  }
-}
 
 TEST(straight_skeleton, PSLG_ArbitraryWindingHoles)
 {
@@ -3232,6 +2781,117 @@ TEST(straight_skeleton, PSLG_MultipleDisjointIslands)
     const bool p2_sq1 = (p2.x <= 15.0);
     EXPECT_EQ(p1_sq1, p2_sq1);
   }
+}
+
+TEST(straight_skeleton, PSLG_MultipleDisjointIslands_Both)
+{
+  /* Two separate 10x10 squares separated by 20 units in X with Both direction.
+   * Tests inward/outward decoupling and deterministic component merging. */
+  const Array<double2> verts = {
+      /* Square 1 */
+      double2(0.0, 0.0),
+      double2(10.0, 0.0),
+      double2(10.0, 10.0),
+      double2(0.0, 10.0),
+      /* Square 2 */
+      double2(30.0, 0.0),
+      double2(40.0, 0.0),
+      double2(40.0, 10.0),
+      double2(30.0, 10.0),
+  };
+  const Array<int> face_offsets_data = {0, 4, 8};
+  const Array<int> face_vert_indices = {0, 1, 2, 3, 4, 5, 6, 7};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Both;
+  input.offset = 1.0;
+  input.bbox_expansion_pct = 20.0;
+  input.label = "PSLG_MultipleDisjointIslands_Both";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_TRUE(output.is_valid);
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_GT(output.face_offsets().size(), 8);
+  EXPECT_GT(output.edge.size(), 0);
+
+  /* Verify original input vertices 0..7 are preserved at the front of output.vert. */
+  ASSERT_GE(output.vert.size(), 8);
+  for (int i = 0; i < 8; i++) {
+    EXPECT_DOUBLE_EQ(output.vert[i].x, verts[i].x);
+    EXPECT_DOUBLE_EQ(output.vert[i].y, verts[i].y);
+    EXPECT_DOUBLE_EQ(output.vert_time[i], 0.0);
+  }
+}
+
+TEST(straight_skeleton, PSLG_SquareWithHole_Both)
+{
+  /* Square [0, 10] x [0, 10] with square hole [3, 7] x [3, 7].
+   * In Both mode, three disjoint regions are roofed:
+   * 1. The solid frame [0, 10]^2 \ [3, 7]^2 (area = 84.0)
+   * 2. The interior of the hole [3, 7]^2 (area = 16.0)
+   * 3. The exterior domain from [0, 10]^2 outward to the bounding box.
+   * Total area inside the [0, 10]^2 boundary must equal 100.0 (no missing faces!). */
+  const Array<double2> verts = {
+      /* Outer square (CCW) */
+      double2(0.0, 0.0),
+      double2(10.0, 0.0),
+      double2(10.0, 10.0),
+      double2(0.0, 10.0),
+      /* Hole (CW) */
+      double2(3.0, 7.0),
+      double2(7.0, 7.0),
+      double2(7.0, 3.0),
+      double2(3.0, 3.0),
+  };
+  const Array<int> face_offsets_data = {0, 4, 8};
+  const Array<int> face_vert_indices = {0, 1, 2, 3, 4, 5, 6, 7};
+
+  StraightSkeletonInput input = make_test_input();
+  input.vert = verts.as_span();
+  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+  input.face_vert_indices = face_vert_indices.as_span();
+  input.direction = PropagationDirection::Both;
+  input.offset = std::numeric_limits<double>::infinity();
+  input.bbox_expansion_pct = 20.0;
+  input.label = "PSLG_SquareWithHole_Both";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_TRUE(output.is_valid);
+  EXPECT_FALSE(output.hit_max_events);
+
+  /* Calculate area of all faces whose vertices lie inside [0, 10] x [0, 10]. */
+  const OffsetIndices<int> faces = output.face_offsets();
+  double interior_area = 0.0;
+  for (const int fi : faces.index_range()) {
+    Vector<double2> poly;
+    bool all_inside_square = true;
+    for (const int idx : faces[fi]) {
+      const double2 &p = output.vert[output.face_vert_indices[idx]];
+      poly.append(p);
+      if (p.x < -1e-4 || p.x > 10.0 + 1e-4 || p.y < -1e-4 || p.y > 10.0 + 1e-4) {
+        all_inside_square = false;
+      }
+    }
+    if (all_inside_square) {
+      double poly_area = 0.0;
+      for (int i = 0; i < poly.size(); i++) {
+        const double2 &p1 = poly[i];
+        const double2 &p2 = poly[(i + 1) % poly.size()];
+        poly_area += math::cross(p1, p2);
+      }
+      interior_area += std::abs(0.5 * poly_area);
+    }
+  }
+
+  /* Must cover exactly 100.0 (solid 84.0 + hole interior 16.0 = 100.0). */
+  EXPECT_NEAR(interior_area, 100.0, 1e-3);
 }
 
 /**
