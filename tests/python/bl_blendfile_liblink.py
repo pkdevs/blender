@@ -500,7 +500,7 @@ class TestBlendLibAppendCollectionInstances(TestBlendLibLinkHelper):
         for item in expected_list:
             self.assertTrue(item in actual_list, f"Could not find {item}")
 
-    def test_dependency_instatiation(self):
+    def test_dependency_instantiation(self):
         # Append collection instances (see issue #154707)
         self.reset_blender()
 
