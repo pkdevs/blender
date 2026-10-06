@@ -9808,10 +9808,8 @@ static void rna_def_space_project(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "active_section", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_project_categories_items);
-  RNA_def_property_enum_funcs(prop,
-                              "rna_SpaceProject_active_section_get",
-                              "rna_SpaceProject_active_section_set",
-                              nullptr);
+  RNA_def_property_enum_funcs(
+      prop, "rna_SpaceProject_active_section_get", "rna_SpaceProject_active_section_set", nullptr);
   RNA_def_property_ui_text(prop, "Active Section", "Choose the category of options to display");
 }
 
