@@ -4683,6 +4683,28 @@ static const EnumPropertyItem *rna_NodeShaderVectTransform_space_itemf(bContext 
       });
 }
 
+static void rna_NodeShaderLightAccumulationAOV_aov_name_visit_for_search(
+    const bContext *C,
+    PointerRNA * /*ptr*/,
+    PropertyRNA * /*prop*/,
+    const char * /*edit_text*/,
+    FunctionRef<void(StringPropertySearchVisitParams)> visit_fn)
+{
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  if (!scene || !view_layer) {
+    return;
+  }
+
+  for (ViewLayerAOV &aov : view_layer->aovs) {
+    if (aov.type == AOV_TYPE_COLOR) {
+      StringPropertySearchVisitParams visit_params{};
+      visit_params.text = aov.name;
+      visit_fn(visit_params);
+    }
+  }
+}
+
 }  // namespace blender
 
 #else
@@ -6870,6 +6892,10 @@ static void def_sh_light_accumulation_aov(BlenderRNA * /*brna*/, StructRNA *srna
   RNA_def_property_string_sdna(prop, nullptr, "name");
   RNA_def_property_ui_text(prop, "Name", "Name of the AOV that this output writes to");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+  RNA_def_property_string_search_func(
+      prop,
+      "rna_NodeShaderLightAccumulationAOV_aov_name_visit_for_search",
+      PROP_STRING_SEARCH_SUGGESTION);
 
   RNA_def_struct_sdna_from(srna, "bNode", nullptr);
 }
