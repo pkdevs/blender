@@ -267,6 +267,13 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     UIBarButtonItem *inspector = [panels valueForKey:@"inspectorButton"];
     UIBarButtonItem *hierarchy = [panels valueForKey:@"hierarchyButton"];
     NSString *action = request[@"action"];
+    UIButton *hierarchyAdd = [panels valueForKey:@"_hierarchyAdd"];
+    if ([action isEqual:@"hierarchy_add_open"]) {
+      [hierarchyAdd performPrimaryAction];
+    }
+    if ([action isEqual:@"hierarchy_new_collection"]) {
+      [(UIAction *)hierarchyAdd.menu.children.firstObject performWithSender:hierarchyAdd target:nil];
+    }
     NSMutableArray *swipeActions = [NSMutableArray array];
     if ([action isEqual:@"hierarchy_swipe"]) {
       UICollectionViewDiffableDataSource *source = [panels valueForKey:@"_treeDataSource"];
@@ -583,6 +590,8 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"swipeActions": swipeActions,
       @"shadingPresented": @(((UIViewController *)[scenePanels valueForKey:@"_shadingController"]).presentingViewController != nil),
       @"hierarchyClass": NSStringFromClass(tree.class), @"selectedObjects": selectedObjects,
+      @"hierarchyAdd": @{@"primary": @(hierarchyAdd.showsMenuAsPrimaryAction),
+          @"frame": rectValues([hierarchyAdd convertRect:hierarchyAdd.bounds toView:blenderController().view])},
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
       @"sliders": sliderValues,
