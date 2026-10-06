@@ -639,7 +639,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   if (!_toolPopoverController) {
     UIViewController *content = [[[UIViewController alloc] init] autorelease];
     content.title = @"Tool Settings";
-    content.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
+    /* Let the popover's own glass show through, matching the inspector and rails. */
+    content.view.backgroundColor = UIColor.clearColor;
     _toolPopoverPanels = [[GHOSTIOSScenePanels alloc] initWithOverlay:content.view icon:_icon];
     _toolPopoverPanels->_selectedTab = [@"TOOL" copy];
     _toolPopoverPanels.menuProvider = self.menuProvider;
@@ -684,7 +685,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   if (!_shadingController) {
     UIViewController *content = [[[UIViewController alloc] init] autorelease];
     content.title = @"Viewport Shading";
-    content.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
+    /* Let the popover's own glass show through, matching the inspector and rails. */
+    content.view.backgroundColor = UIColor.clearColor;
     _shadingPanels = [[GHOSTIOSScenePanels alloc] initWithOverlay:content.view icon:_icon];
     _shadingPanels->_shadingOnly = YES;
     _shadingPanels->_selectedTab = [@"SHADING" copy];
