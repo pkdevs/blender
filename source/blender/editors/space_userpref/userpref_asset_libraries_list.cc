@@ -97,14 +97,8 @@ void AssetLibraryListItem::build_row(ui::Layout &row)
 
   if (library.user_library) {
     row.label(label_, is_remote_library ? ICON_INTERNET : ICON_DISK_DRIVE);
-
-    if (project_library) {
-      row.active_set(false);
-      ui::Layout &sub = row.row(true);
-      /* Draw text grayed out. */
-      sub.alignment_set(ui::LayoutAlign::Right);
-      sub.label(IFACE_("Project Defined"), ICON_NONE);
-    }
+    /* Disable row if asset library is project defined. */
+    row.enabled_set(!project_library);
   }
   else {
     row.label(label_, ICON_NONE);
@@ -122,7 +116,7 @@ void AssetLibraryListItem::build_row(ui::Layout &row)
     row.label("", ICON_STATUS_ERROR);
   }
 
-  if (library.user_library && !project_library) {
+  if (library.user_library) {
     PointerRNA ptr = RNA_pointer_create_discrete(
         nullptr, RNA_UserAssetLibrary, library.user_library);
     row.prop(&ptr,
