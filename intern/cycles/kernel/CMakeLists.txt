@@ -111,7 +111,6 @@ set(SRC_KERNEL_SVM_HEADERS
   svm/voronoi.h
   svm/wave.h
   svm/white_noise.h
-  svm/vertex_color.h
 )
 
 if(WITH_CYCLES_OSL)
@@ -314,6 +313,7 @@ set(SRC_UTIL_HEADERS
   ../util/types_float3.h
   ../util/types_float4.h
   ../util/types_float8.h
+  ../util/types_gpu_compressed.h
   ../util/types_image.h
   ../util/types_int2.h
   ../util/types_int3.h
