@@ -531,7 +531,11 @@ void ntreeExecGPUNodes(bNodeTreeExec *exec,
     }
 
     do_it = false;
-    /* for groups, only execute outputs for edited group */
+    /* Only execute the current output.
+     * SH_NODE_LIGHT_ACCUMULATION_AOV is a special case, since at this point it's no longer an
+     * actual output, and acts as a regular (non output) node instead
+     * (see `ntree_shader_setup_custom_lighting_zone`).
+     */
     if (node->typeinfo->nclass == NODE_CLASS_OUTPUT &&
         node->type_legacy != SH_NODE_LIGHT_ACCUMULATION_AOV)
     {
