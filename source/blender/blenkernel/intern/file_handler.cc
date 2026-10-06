@@ -201,10 +201,10 @@ std::string FileHandlerType::label_with_extensions() const
   return std::string(label) + " (" + extensions + ")";
 }
 
-std::string FileHandlerType::filter_glob_from_extensions() const
+std::optional<std::string> FileHandlerType::filter_glob_from_extensions() const
 {
   if (file_extensions.is_empty()) {
-    return "";
+    return std::nullopt;
   }
 
   std::string filter_glob;
