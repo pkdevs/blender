@@ -35,6 +35,12 @@ static void template_filepath_buttons(const bContext * /* C */,
 {
   Layout &row = layout.row(true);
 
+  if (layout.use_property_split()) {
+    PropertySplitWrapper split = uiItemPropertySplitWrapperCreate(&row);
+    split.label_column->label(text ? *text : RNA_property_ui_name(path_data.path_prop), ICON_NONE);
+    text = "";
+  }
+
   row.prop(&path_data.ptr,
            path_data.path_prop,
            RNA_NO_INDEX,

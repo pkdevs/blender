@@ -66,6 +66,17 @@ class COLLECTION_PT_importer(CollectionButtonsPanel, Panel):
     bl_label = "Importer"
 
     def draw(self, context):
+        if context.collection.importer:
+            import bpy
+            layout = self.layout
+            layout.use_property_split = True
+            layout.template_filepath(context.collection.importer, "filepath")
+            layout.template_filepath(context.collection.importer, "filepath", text="")
+            layout.template_filepath(context.collection.importer, "filepath", filter_glob="*.usd")
+            layout.template_filepath(context.collection.importer, "filepath", placeholder="Test.usd")
+            layout.prop(context.collection, "name")
+            layout.prop(bpy.data.objects[0], "shadow_terminator_normal_offset")
+
         del context
         layout = self.layout
 
