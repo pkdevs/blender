@@ -214,6 +214,10 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   BOOL _shadingOnly;
   GHOSTIOSScenePanels *_shadingPanels;
   UINavigationController *_shadingController;
+  BOOL _toolInline;
+  GHOSTIOSScenePanels *_toolPanels, *_toolPopoverPanels;
+  UIBarButtonItemGroup *_toolGroup;
+  UINavigationController *_toolPopoverController;
 }
 
 @synthesize menuProvider = _menuProvider;
@@ -335,6 +339,11 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (void)dealloc
 {
   _shadingController.presentationController.delegate = nil;
+  [_toolPanels release];
+  [_toolPopoverController dismissViewControllerAnimated:NO completion:nil];
+  [_toolPopoverController release];
+  [_toolPopoverPanels release];
+  [_toolGroup release];
   _shadingController.popoverPresentationController.delegate = nil;
   [_shadingPanels release];
   [_shadingController release];
@@ -522,6 +531,74 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [self applyVisibility];
 }
 
+- (UIBarButtonItemGroup *)updateToolSettings:(NSDictionary *)settings acknowledgement:(NSNumber *)ack
+{
+  if (!_toolPanels) {
+    _toolPanels = [[GHOSTIOSScenePanels alloc] initWithOverlay:_overlay icon:_icon];
+    _toolPanels->_toolInline = YES;
+    _toolPanels->_showInspector = YES;
+    _toolPanels->_selectedTab = [@"TOOL" copy];
+    _toolPanels.menuProvider = self.menuProvider;
+  }
+  if (![_toolPanels->_objectID isEqual:settings[@"id"]]) { [self hideToolSettings]; }
+  NSDictionary *snapshot = @{@"inspector": settings ?: @{}, @"ack": ack ?: @0};
+  [_toolPanels updateSnapshot:snapshot];
+  [_toolPanels->_toolPopoverPanels updateSnapshot:snapshot];
+  return _toolPanels->_toolGroup;
+}
+
+- (void)hideToolSettings
+{
+  GHOSTIOSScenePanels *panels = _toolInline ? self : _toolPanels;
+  if (!panels) { return; }
+  for (UIControl *control in panels->_controls.allValues) { [control endEditing:YES]; }
+  [panels cancelNumberScrub];
+  [panels closeColorPicker];
+  [panels dismissToolSettings];
+}
+
+- (void)presentToolSettings:(UIBarButtonItem *)button
+{
+  UIViewController *presenter = _overlay.window.rootViewController;
+  if (!presenter || presenter.presentedViewController) { return; }
+  if (!_toolPopoverController) {
+    UIViewController *content = [[[UIViewController alloc] init] autorelease];
+    content.title = @"Tool Settings";
+    content.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
+    _toolPopoverPanels = [[GHOSTIOSScenePanels alloc] initWithOverlay:content.view icon:_icon];
+    _toolPopoverPanels->_selectedTab = [@"TOOL" copy];
+    _toolPopoverPanels.menuProvider = self.menuProvider;
+    _toolPopoverPanels->_showInspector = YES;
+    [_toolPopoverPanels->_inspector removeFromSuperview];
+    UITableView *form = _toolPopoverPanels->_form;
+    [form removeFromSuperview];
+    [content.view addSubview:form];
+    [NSLayoutConstraint activateConstraints:@[
+      [form.leadingAnchor constraintEqualToAnchor:content.view.leadingAnchor],
+      [form.trailingAnchor constraintEqualToAnchor:content.view.trailingAnchor],
+      [form.topAnchor constraintEqualToAnchor:content.view.safeAreaLayoutGuide.topAnchor],
+      [form.bottomAnchor constraintEqualToAnchor:content.view.bottomAnchor],
+    ]];
+    content.navigationItem.rightBarButtonItem = [[[UIBarButtonItem alloc]
+        initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(dismissToolSettings)] autorelease];
+    _toolPopoverController = [[UINavigationController alloc] initWithRootViewController:content];
+    _toolPopoverController.preferredContentSize = CGSizeMake(360, 420);
+  }
+  [_toolPopoverPanels updateSnapshot:_snapshot];
+  _toolPopoverController.modalPresentationStyle = UIModalPresentationPopover;
+  _toolPopoverController.popoverPresentationController.barButtonItem = button;
+  [presenter presentViewController:_toolPopoverController animated:YES completion:nil];
+}
+
+- (void)dismissToolSettings
+{
+  if (!_toolPopoverPanels) { return; }
+  [_toolPopoverPanels->_form endEditing:YES];
+  [_toolPopoverPanels cancelNumberScrub];
+  [_toolPopoverPanels closeColorPicker];
+  [_toolPopoverController dismissViewControllerAnimated:YES completion:nil];
+}
+
 - (void)presentShadingFrom:(UIBarButtonItem *)button controller:(UIViewController *)controller
 {
   if (_shadingController.presentingViewController || controller.presentedViewController) { return; }
@@ -577,7 +654,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)layoutInRect:(CGRect)rect
 {
-  if (_shadingOnly) { return; }
+  if (_shadingOnly || _toolInline || [_selectedTab isEqual:@"TOOL"]) { return; }
   _layoutRect = rect;
   if (rect.size.width < 700 && _showInspector && _showHierarchy) {
     _showHierarchy = NO;
@@ -768,7 +845,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       NSString *group = property[@"group"];
       const BOOL vector = group.length > 0;
       UIStackView *vectorRow = nil;
-      if (vector) {
+      if (vector && !_toolInline) {
         NSString *identity = property[@"group_key"] ?: [NSString stringWithFormat:@"%@.%@", property[@"owner"], property[@"property"]];
         NSString *groupKey = [NSString stringWithFormat:@"%@.%@.%@", property[@"panel"] ?: @"", innerSection ?: @"", identity];
         vectorRow = vectors[groupKey];
@@ -811,7 +888,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         }
         else {
           [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
-            [owner send:property];
+            NSMutableDictionary *request = [[property mutableCopy] autorelease];
+            request[@"id"] = objectID;
+            [owner send:request];
           }] forControlEvents:UIControlEventTouchUpInside];
         }
         control = button;
@@ -925,6 +1004,32 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         [slider.heightAnchor constraintGreaterThanOrEqualToConstant:32].active = YES;
         _sliders[key] = slider;
       }
+      if (_toolInline) {
+        UIControl *inlineControl = slider ?: control;
+        const BOOL toggle = [inlineControl isKindOfClass:UISwitch.class];
+        label.text = property[@"toolbar_label"] ?: label.text;
+        label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption2];
+        label.textColor = UIColor.secondaryLabelColor;
+        label.numberOfLines = 1;
+        label.textAlignment = NSTextAlignmentCenter;
+        label.adjustsFontSizeToFitWidth = YES;
+        label.minimumScaleFactor = 0.8;
+        UIStackView *column = [[[UIStackView alloc] initWithArrangedSubviews:@[label, inlineControl]] autorelease];
+        column.axis = toggle ? UILayoutConstraintAxisHorizontal : UILayoutConstraintAxisVertical;
+        column.alignment = UIStackViewAlignmentCenter;
+        column.spacing = 0;
+        CGFloat width = [kind isEqual:@"COLOR"] ? 52 : toggle ? 160 :
+                        [kind isEqual:@"ENUM"] ? 140 : 112;
+        [column.widthAnchor constraintEqualToConstant:width].active = YES;
+        [column.heightAnchor constraintEqualToConstant:40].active = YES;
+        [label.widthAnchor constraintLessThanOrEqualToConstant:width - (toggle ? 60 : 8)].active = YES;
+        if (!toggle) {
+          [inlineControl.widthAnchor constraintEqualToConstant:[kind isEqual:@"COLOR"] ? 36 : width - 8].active = YES;
+          [inlineControl.heightAnchor constraintEqualToConstant:26].active = YES;
+        }
+        [sectionRows addObject:column];
+        continue;
+      }
       if ([property[@"header"] boolValue] && [control isKindOfClass:UISwitch.class]) {
         if (property[@"animation"]) {
           [control addInteraction:[[[UIContextMenuInteraction alloc] initWithDelegate:self] autorelease]];
@@ -1014,7 +1119,22 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   for (NSString *identifier in [[_disclosureButtons.allKeys copy] autorelease]) {
     if (![_sectionIdentifiers containsObject:identifier]) { [_disclosureButtons removeObjectForKey:identifier]; }
   }
-  if (preserve && [oldIdentifiers isEqual:_sectionIdentifiers]) {
+  if (_toolInline) {
+    NSMutableArray *items = [NSMutableArray array];
+    for (NSArray *rows in _formSections) {
+      for (UIView *row in rows) {
+        [items addObject:[[[UIBarButtonItem alloc] initWithCustomView:row] autorelease]];
+      }
+    }
+    UIBarButtonItem *compact = [[[UIBarButtonItem alloc] initWithImage:
+        _icon(@"TOOL_SETTINGS") ?: [UIImage systemImageNamed:@"slider.horizontal.3"]
+        style:UIBarButtonItemStylePlain target:self action:@selector(presentToolSettings:)] autorelease];
+    compact.accessibilityLabel = @"Tool Settings";
+    [_toolGroup release];
+    _toolGroup = [[UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact items:items] retain];
+    _toolGroup.hidden = items.count == 0;
+  }
+  else if (preserve && [oldIdentifiers isEqual:_sectionIdentifiers]) {
     [_form reloadSections:changed withRowAnimation:UIAccessibilityIsReduceMotionEnabled() ?
         UITableViewRowAnimationNone : UITableViewRowAnimationFade];
   }
@@ -1142,6 +1262,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 - (void)requestProperties
 {
+  if ([_selectedTab isEqual:@"TOOL"]) { return; }
   NSMutableDictionary *state = [NSMutableDictionary dictionaryWithObject:_selectedTab ?: @"OBJECT" forKey:@"tab"];
   NSSet *expanded = _expandedPanels[_selectedTab ?: @"OBJECT"];
   if (expanded) {
@@ -1211,7 +1332,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   }
 }
 
-- (void)finishNumber:(id)sender { [_form endEditing:YES]; }
+- (void)finishNumber:(id)sender { [_overlay endEditing:YES]; }
 
 - (NSDictionary *)propertyForKey:(NSString *)key
 {
@@ -1652,6 +1773,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     stepper.value = [[formatter numberFromString:field.text] doubleValue];
   }
   dispatch_async(dispatch_get_main_queue(), ^{
+    if (self->_toolInline) { return; }
     [self->_inspectorScroll scrollRectToVisible:[field convertRect:field.bounds toView:self->_inspectorScroll]
                                      animated:YES];
   });

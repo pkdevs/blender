@@ -18,4 +18,6 @@
 - (void)dismiss;
 - (void)presentShadingFrom:(UIBarButtonItem *)button controller:(UIViewController *)controller;
 - (void)dismissShading;
+- (UIBarButtonItemGroup *)updateToolSettings:(NSDictionary *)settings acknowledgement:(NSNumber *)ack;
+- (void)hideToolSettings;
 @end

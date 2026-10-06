@@ -2409,6 +2409,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_signature release];
   [_actions_menu_items release];
   [_top_settings_values release];
+  [_top_settings_group release];
   [_native_menubar_items release];
   [_active_tool_identifier release];
   [_actions_edit_menu_interaction release];
@@ -3634,7 +3635,15 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 
   [self setActiveToolbarToolIdentifier:active_tool];
-  [self setTopSettingsVisible:[self isTransformToolIdentifier:active_tool] animated:YES];
+  BOOL transform = [self isTransformToolIdentifier:active_tool];
+  UIBarButtonItemGroup *tool_group = [_scene_panels updateToolSettings:model[@"toolSettings"]
+      acknowledgement:model[@"propertiesAck"]];
+  [self setTopSettingsVisible:transform animated:YES];
+  UIBarButtonItemGroup *settings_group = transform || !tool_group ? _top_settings_group : tool_group;
+  if (_top_bar_item.centerItemGroups.firstObject != settings_group) {
+    [_scene_panels hideToolSettings];
+    _top_bar_item.centerItemGroups = @[settings_group];
+  }
   NSString *action_signature = [self actionSignatureForActions:actions];
   if (_action_signature == nil || ![_action_signature isEqualToString:action_signature]) {
     [_action_signature release];
@@ -4315,13 +4324,13 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                                                 menu:menu] autorelease];
   compact.title = @"Transform Settings";
   compact.accessibilityLabel = compact.title;
-  _top_settings_group = [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact
+  _top_settings_group = [[UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact
                                                                          items:@[
                                                                            orientation_button,
                                                                            pivot_button,
                                                                            snap_button,
                                                                            proportional_button
-                                                                         ]];
+                                                                         ]] retain];
   _top_settings_group.menuRepresentation = menu;
   _top_settings_group.hidden = YES;
   return _top_settings_group;

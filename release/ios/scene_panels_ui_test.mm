@@ -328,6 +328,42 @@ static void testNumberScrubbing(UIView *overlay)
   [panels dismiss];
 }
 
+static void testToolSettings(UIView *overlay)
+{
+  GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
+      icon:^UIImage *(NSString *name) { return nil; }] autorelease];
+  [panels hideToolSettings];
+  NSDictionary *toggle = @{@"key": @"stabilize", @"property": @"use_stabilizer", @"label": @"Stabilize",
+      @"type": @"BOOLEAN", @"editable": @YES, @"value": @NO, @"tab": @"TOOL", @"native": @YES};
+  NSDictionary *radius = @{@"key": @"radius", @"label": @"Radius", @"type": @"INT",
+      @"editable": @YES, @"value": @35, @"min": @1, @"max": @200, @"dragStep": @1};
+  NSMutableDictionary *settings = [[@{@"id": @"TOOL:annotate", @"tab": @"TOOL", @"name": @"Tool Settings",
+      @"sections": @[@{@"id": @"active", @"title": @"Annotate", @"open": @YES,
+          @"properties": @[toggle, radius]}]} mutableCopy] autorelease];
+  UIBarButtonItemGroup *group = [panels updateToolSettings:[[settings copy] autorelease] acknowledgement:@999999];
+  NSCAssert(group.barButtonItems.count == 2 && !group.hidden && group.representativeItem,
+            @"Active tool properties have inline controls and a compact representative");
+  id toolPanels = [panels valueForKey:@"_toolPanels"];
+  UISwitch *control = [toolPanels valueForKey:@"_controls"][@"stabilize"];
+  control.on = YES;
+  [control sendActionsForControlEvents:UIControlEventValueChanged];
+  NSCAssert([setting isEqual:@"native_properties_edit"] && [request[@"tab"] isEqual:@"TOOL"] &&
+            [request[@"id"] isEqual:@"TOOL:annotate"] && [request[@"value"] boolValue],
+            @"Inline controls enqueue edits for the original active tool");
+  NSMutableDictionary *on = [[toggle mutableCopy] autorelease];
+  on[@"value"] = @YES;
+  settings[@"sections"] = @[@{@"id": @"active", @"title": @"Annotate", @"open": @YES,
+      @"properties": @[on, radius]}];
+  NSCAssert([panels updateToolSettings:[[settings copy] autorelease] acknowledgement:@999999] == group,
+            @"Changing values preserves the native glass group and controls");
+  settings[@"id"] = @"TOOL:eraser";
+  settings[@"sections"] = @[@{@"id": @"active", @"title": @"Eraser", @"open": @YES,
+      @"properties": @[radius]}];
+  group = [panels updateToolSettings:[[settings copy] autorelease] acknowledgement:@999999];
+  NSCAssert(group.barButtonItems.count == 1, @"Switching tools replaces the applicable controls");
+  [panels hideToolSettings];
+}
+
 static void testNativePanelMenu(UIView *overlay)
 {
   GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
@@ -770,6 +806,7 @@ int main()
     testPairedProperties(controller.view);
     testNumberScrubbing(controller.view);
     testNativePanelMenu(controller.view);
+    testToolSettings(controller.view);
     testHierarchySwipes(controller.view);
     testShadingPopover(controller);
     NSLog(@"PASS: floating scene panels, search, selection, native fields, async ownership, responsive layout");
