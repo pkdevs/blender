@@ -10,7 +10,7 @@ namespace blender::compositor {
 
 static void register_cpp_types()
 {
-  BLI_CPP_TYPE_REGISTER(compositor::ClosurePtr, CPPTypeFlags::None);
+  BLI_CPP_TYPE_REGISTER(ClosurePtr, CPPTypeFlags::None);
 }
 
 void init()
