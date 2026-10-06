@@ -1151,12 +1151,17 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       Button &but = *button;
       /* Keep only viewport enablement in modifier headers. Other display options belong
        * inside the expanded native panel. */
+      const bool header_operator = header_buttons.count(&but) && but.optype && !(but.flag & UI_HIDDEN);
+      if (header_operator && StringRef(but.optype->idname).endswith("_set_active")) {
+        /* Native headers show which item is active as state, not as a button. */
+        continue;
+      }
       const bool header_toggle = header_buttons.count(&but) && but.rnaprop &&
                                 RNA_property_type(but.rnaprop) == PROP_BOOLEAN &&
                                 !RNA_property_array_check(but.rnaprop) &&
                                 (!RNA_struct_is_a(but.rnapoin.type, RNA_Modifier) ||
                                  STREQ(RNA_property_identifier(but.rnaprop), "show_viewport"));
-      if (!execute && !open && !header_toggle) {
+      if (!execute && !open && !header_toggle && !header_operator) {
         continue;
       }
       MenuType *menu = button_menutype_get(&but);
@@ -1208,6 +1213,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
             field->append_int("value", button_icon(&but) == ICON_CHECKBOX_HLT);
           }
           field->append_int("editable", !(but.flag & (BUT_DISABLED | BUT_INACTIVE)) && but.optype->exec);
+          if (header_operator) {
+            field->append_int("header", 1);
+          }
           field->append_str("panel", candidate.id);
           field->append_str("tab", tab_id);
           field->append_int("native", 1);
