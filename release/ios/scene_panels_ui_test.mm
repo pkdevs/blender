@@ -350,8 +350,25 @@ static void testToolSettings(UIView *overlay)
       @"sections": @[@{@"id": @"active", @"title": @"Annotate", @"open": @YES,
           @"properties": @[toggle, radius]}]} mutableCopy] autorelease];
   UIBarButtonItemGroup *group = [panels updateToolSettings:[[settings copy] autorelease] acknowledgement:@999999];
-  NSCAssert(group.barButtonItems.count == 2 && !group.hidden && group.representativeItem,
-            @"Active tool properties have inline controls and a compact representative");
+  UIScrollView *strip = (UIScrollView *)group.barButtonItems.firstObject.customView;
+  NSCAssert(group.barButtonItems.count == 1 && [strip isKindOfClass:UIScrollView.class] &&
+            [strip.subviews.firstObject isKindOfClass:UIStackView.class] &&
+            ((UIStackView *)strip.subviews.firstObject).arrangedSubviews.count == 2 &&
+            !group.hidden && group.representativeItem,
+            @"Active tool properties share one scrolling strip with a compact representative");
+  NSDictionary *dyntopo = @{@"key": @"SCULPT_OT_dynamic_topology_toggle::0", @"label": @"Dyntopo",
+      @"type": @"OPERATOR", @"checkbox": @YES, @"value": @NO, @"editable": @YES, @"tab": @"TOOL"};
+  NSMutableDictionary *sculpt = [[settings mutableCopy] autorelease];
+  sculpt[@"id"] = @"TOOL:sculpt";
+  sculpt[@"sections"] = @[@{@"id": @"sculpt", @"title": @"Sculpt", @"open": @YES,
+                            @"properties": @[radius, dyntopo]}];
+  [panels updateToolSettings:sculpt acknowledgement:@999999];
+  id sculptPanels = [panels valueForKey:@"_toolPanels"];
+  UISwitch *dyntopoSwitch = [sculptPanels valueForKey:@"_controls"][@"SCULPT_OT_dynamic_topology_toggle::0"];
+  NSCAssert([dyntopoSwitch isKindOfClass:UISwitch.class] && !dyntopoSwitch.on,
+            @"Checkbox operators such as Dyntopo appear as native switches");
+  [panels hideToolSettings];
+  group = [panels updateToolSettings:[[settings copy] autorelease] acknowledgement:@999999];
   id toolPanels = [panels valueForKey:@"_toolPanels"];
   UISwitch *control = [toolPanels valueForKey:@"_controls"][@"stabilize"];
   control.on = YES;

@@ -449,7 +449,8 @@ typedef struct UserInputEvent {
 {
   UIView *hit = [super hitTest:point withEvent:event];
   for (UIView *view = hit; view && view != self; view = view.superview) {
-    if ([view isKindOfClass:UIControl.class]) {
+    /* Scroll views let the tool settings strip be swiped from between its controls. */
+    if ([view isKindOfClass:UIControl.class] || [view isKindOfClass:UIScrollView.class]) {
       return hit;
     }
   }

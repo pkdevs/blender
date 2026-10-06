@@ -271,6 +271,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   GHOSTIOSScenePanels *_shadingPanels;
   UINavigationController *_shadingController;
   BOOL _toolInline;
+  NSLayoutConstraint *_toolStripWidth;
+  CGFloat _toolStripContentWidth;
   GHOSTIOSScenePanels *_toolPanels, *_toolPopoverPanels;
   UIBarButtonItemGroup *_toolGroup;
   UINavigationController *_toolPopoverController;
@@ -404,6 +406,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [_toolPopoverController release];
   [_toolPopoverPanels release];
   [_toolGroup release];
+  [_toolStripWidth release];
   _shadingController.popoverPresentationController.delegate = nil;
   [_shadingPanels release];
   [_shadingController release];
@@ -604,8 +607,19 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   if (![_toolPanels->_objectID isEqual:settings[@"id"]]) { [self hideToolSettings]; }
   NSDictionary *snapshot = @{@"inspector": settings ?: @{}, @"ack": ack ?: @0};
   [_toolPanels updateSnapshot:snapshot];
+  [_toolPanels updateToolStripWidth];
   [_toolPanels->_toolPopoverPanels updateSnapshot:snapshot];
   return _toolPanels->_toolGroup;
+}
+
+- (void)updateToolStripWidth
+{
+  /* Leave room for the bar's leading and trailing items; the strip scrolls for the rest. */
+  const CGFloat available = MAX(160.0, _overlay.bounds.size.width - 620.0);
+  const CGFloat width = MIN(_toolStripContentWidth, available);
+  if (_toolStripWidth && fabs(_toolStripWidth.constant - width) > 0.5) {
+    _toolStripWidth.constant = width;
+  }
 }
 
 - (void)hideToolSettings
@@ -1252,18 +1266,54 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     if (![_sectionIdentifiers containsObject:identifier]) { [_disclosureButtons removeObjectForKey:identifier]; }
   }
   if (_toolInline) {
-    NSMutableArray *items = [NSMutableArray array];
+    /* All controls share one strip that scrolls sideways when the bar is too narrow, so
+     * every setting stays reachable inline. */
+    UIStackView *strip = [[[UIStackView alloc] init] autorelease];
+    strip.axis = UILayoutConstraintAxisHorizontal;
+    strip.alignment = UIStackViewAlignmentCenter;
+    strip.spacing = 6;
+    strip.translatesAutoresizingMaskIntoConstraints = NO;
     for (NSArray *rows in _formSections) {
       for (UIView *row in rows) {
-        [items addObject:[[[UIBarButtonItem alloc] initWithCustomView:row] autorelease]];
+        [strip addArrangedSubview:row];
       }
+    }
+    NSMutableArray *items = [NSMutableArray array];
+    if (strip.arrangedSubviews.count) {
+      UIScrollView *scroll = [[[UIScrollView alloc] init] autorelease];
+      scroll.accessibilityIdentifier = @"blender.tool-settings.strip";
+      scroll.showsHorizontalScrollIndicator = NO;
+      scroll.delaysContentTouches = NO;
+      scroll.clipsToBounds = YES;
+      [scroll addSubview:strip];
+      const CGFloat content = [strip systemLayoutSizeFittingSize:UILayoutFittingCompressedSize].width;
+      [_toolStripWidth release];
+      _toolStripWidth = [[scroll.widthAnchor constraintEqualToConstant:content] retain];
+      _toolStripContentWidth = content;
+      [NSLayoutConstraint activateConstraints:@[
+        [strip.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [strip.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [strip.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [strip.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [strip.heightAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.heightAnchor],
+        [scroll.heightAnchor constraintEqualToConstant:40],
+        _toolStripWidth,
+      ]];
+      [self updateToolStripWidth];
+      [items addObject:[[[UIBarButtonItem alloc] initWithCustomView:scroll] autorelease]];
     }
     UIBarButtonItem *compact = [[[UIBarButtonItem alloc] initWithImage:
         _icon(@"TOOL_SETTINGS") ?: [UIImage systemImageNamed:@"slider.horizontal.3"]
         style:UIBarButtonItemStylePlain target:self action:@selector(presentToolSettings:)] autorelease];
     compact.accessibilityLabel = @"Tool Settings";
-    [_toolGroup release];
-    _toolGroup = [[UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact items:items] retain];
+    /* Keep one group installed in the bar: replacing it on every rebuild makes the bar
+     * re-measure from scratch and fall back to the compact item. */
+    if (!_toolGroup) {
+      _toolGroup = [[UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact items:items] retain];
+    }
+    else {
+      _toolGroup.barButtonItems = items;
+    }
     _toolGroup.hidden = items.count == 0;
   }
   else if (preserve && [oldIdentifiers isEqual:_sectionIdentifiers]) {
