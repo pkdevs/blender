@@ -40,11 +40,6 @@
 namespace blender {
 
 static const EnumPropertyItem prop_method_items[] = {
-    {TO_ANNOTATION_PROJECT,
-     "PROJECT",
-     0,
-     "Project",
-     "Project vertices onto the stroke using vertex normals and connected edges"},
     {TO_ANNOTATION_SPREAD,
      "SPREAD",
      0,
@@ -56,6 +51,12 @@ static const EnumPropertyItem prop_method_items[] = {
      0,
      "Spread Evenly",
      "Distribute vertices at regular distances along the full stroke "},
+    {TO_ANNOTATION_PROJECT,
+     "PROJECT",
+     0,
+     "Project",
+     "Project vertices onto the stroke using vertex normals and connected edges. "
+     "Requires more exact annotation placement, otherwise it may do nothing"},
     {0, nullptr},
 };
 

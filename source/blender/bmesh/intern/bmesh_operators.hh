@@ -180,9 +180,9 @@ enum CurveClampElevation {
 
 /* Methods for determining the way to stretch vertices to an annotation. */
 enum ToAnnotationMethod {
-  TO_ANNOTATION_PROJECT = 0,
-  TO_ANNOTATION_SPREAD = 1,
-  TO_ANNOTATION_SPREAD_EVENLY = 2
+  TO_ANNOTATION_SPREAD = 0,
+  TO_ANNOTATION_SPREAD_EVENLY = 1,
+  TO_ANNOTATION_PROJECT = 2
 };
 
 /**

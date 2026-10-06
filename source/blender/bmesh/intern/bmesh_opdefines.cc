@@ -1220,9 +1220,9 @@ static BMOpDefine bmo_scale_def = {
 };
 
 static BMO_FlagSet bmo_enum_fit_edge_loops_to_annotation_method[] = {
-    {TO_ANNOTATION_PROJECT, "PROJECT"},
     {TO_ANNOTATION_SPREAD, "SPREAD"},
     {TO_ANNOTATION_SPREAD_EVENLY, "SPREAD_EVENLY"},
+    {TO_ANNOTATION_PROJECT, "PROJECT"},
     {0, nullptr}};
 
 /*
