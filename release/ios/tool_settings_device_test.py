@@ -54,6 +54,17 @@ def check(ok, title):
 
 
 def tests():
+    yield from tool('builtin.select_box')
+    mode = fields()['mode']
+    check(mode.get('expand') and {'SELECT_SET', 'SELECT_EXTEND'} <= {o['icon'] for o in mode['options']},
+          'Selection mode is published as Blender\'s expanded icon row')
+    ui(action='enum', key=mode['key'], value='ADD')
+    yield 0.7
+    current = bpy.context.workspace.tools.from_space_view3d_mode(bpy.context.mode, create=False)
+    check(current.operator_properties('view3d.select_box').mode == 'ADD',
+          'Native selection mode segments edit the active tool')
+    ui(action='enum', key=mode['key'], value='SET')
+    yield 0.5
     yield from tool('builtin.annotate')
     props = fields()
     check({'annotation_stroke_placement_view3d', 'use_stabilizer', 'stabilizer_radius',

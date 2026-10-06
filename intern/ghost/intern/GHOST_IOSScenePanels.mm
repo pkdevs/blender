@@ -1015,6 +1015,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
         control = toggle;
       }
       else if ([kind isEqual:@"ENUM"]) {
+        const BOOL toolRow = [_selectedTab isEqual:@"TOOL"] && [property[@"expand"] boolValue] &&
+                             [property[@"options"] count] > 1 && [property[@"options"] count] <= 6;
         if (_shadingOnly && [property[@"property"] isEqual:@"type"]) {
           NSMutableArray *items = [NSMutableArray array];
           for (NSDictionary *option in property[@"options"]) {
@@ -1029,6 +1031,17 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
           }] forControlEvents:UIControlEventValueChanged];
           control = segments;
           label.hidden = YES;
+        }
+        else if (toolRow) {
+          /* Blender's icon-only rows (e.g. selection mode) become a glass button showing the
+           * current choice's icon, with a standard single-selection menu. */
+          UIButtonConfiguration *config = [UIButtonConfiguration glassButtonConfiguration];
+          config.indicator = UIButtonConfigurationIndicatorPopup;
+          config.contentInsets = NSDirectionalEdgeInsetsMake(2, 8, 2, 8);
+          UIButton *button = [UIButton buttonWithConfiguration:config primaryAction:nil];
+          button.showsMenuAsPrimaryAction = YES;
+          button.accessibilityLabel = property[@"toolbar_label"] ?: property[@"label"];
+          control = button;
         }
         else {
           UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -2070,11 +2083,20 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
           action.state = option[@"checked"] ? ([option[@"checked"] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff) :
                                               ([value isEqual:option[@"value"]] ? UIMenuElementStateOn : UIMenuElementStateOff);
           if (action.state == UIMenuElementStateOn) {
-            [button setTitle:option[@"label"] forState:UIControlStateNormal];
+            if (button.configuration.indicator == UIButtonConfigurationIndicatorPopup) {
+              UIButtonConfiguration *config = button.configuration;
+              config.image = _icon(option[@"icon"]);
+              config.title = config.image ? nil : option[@"label"];
+              button.configuration = config;
+            }
+            else {
+              [button setTitle:option[@"label"] forState:UIControlStateNormal];
+            }
           }
           [actions addObject:action];
         }
-        button.menu = [UIMenu menuWithTitle:property[@"label"] children:actions];
+        button.menu = [UIMenu menuWithTitle:property[@"toolbar_label"] ?: property[@"label"] image:nil identifier:nil
+                                    options:UIMenuOptionsSingleSelection children:actions];
         button.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
       }
     }

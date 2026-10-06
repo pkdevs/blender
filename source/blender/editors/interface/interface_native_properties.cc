@@ -1231,6 +1231,10 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           auto field = append_field();
           const auto pair = pairs.find(&but);
           project_property(C, but, index, *field, pair == pairs.end() ? nullptr : &pair->second);
+          if (but.type == ButtonType::Row && RNA_property_type(but.rnaprop) == PROP_ENUM) {
+            /* Authored as an expanded row (e.g. selection mode), not a dropdown. */
+            field->append_int("expand", 1);
+          }
           if (const auto found = tool_labels.find(&but); found != tool_labels.end()) {
             std::string label = found->second;
             while (!label.empty() && ELEM(label.back(), ':', ' ')) {
