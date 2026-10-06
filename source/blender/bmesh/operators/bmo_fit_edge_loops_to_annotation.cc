@@ -172,14 +172,14 @@ static void calculate_verts(const StrokeData &stroke_data,
   if (method == TO_ANNOTATION_PROJECT) {
     for (const int i : IndexRange(verts_num)) {
       BMVert *v = r_chain.verts[i];
-      const float3 v_co = float3(v->co);
-      float3 intersection_best = v_co;
+      const float3 v_co_best = float3(v->co);
+      float3 intersection_best = v_co_best;
       float dist_sq_best = FLT_MAX;
       bool has_best = false;
 
       auto check_intersection_fn = [&](const float3 &ray_dir) {
-        float3 ray_end = v_co + ray_dir * ray_length;
-        float3 ray_start = v_co - ray_dir * ray_length;
+        float3 ray_end = v_co_best + ray_dir * ray_length;
+        float3 ray_start = v_co_best - ray_dir * ray_length;
 
         for (const int j : IndexRange(stroke_data.points.size() - 1)) {
           float3 stroke_seg_start = stroke_data.points[j];
@@ -195,7 +195,7 @@ static void calculate_verts(const StrokeData &stroke_data,
                                     closest_on_stroke) != 0)
           {
             if (math::distance_squared(closest_on_ray, closest_on_stroke) <
-                max_ray_distance * max_ray_distance)
+                math::square(max_ray_distance))
             {
               float dist_seg = math::distance(stroke_seg_start, stroke_seg_end);
               float dist_to_start = math::distance(stroke_seg_start, closest_on_stroke);
@@ -204,7 +204,7 @@ static void calculate_verts(const StrokeData &stroke_data,
               if (dist_to_start <= dist_seg + segment_epsilon &&
                   dist_to_end <= dist_seg + segment_epsilon)
               {
-                float dist_sq_test = math::distance_squared(v_co, closest_on_stroke);
+                float dist_sq_test = math::distance_squared(v_co_best, closest_on_stroke);
                 if (dist_sq_test < dist_sq_best) {
                   dist_sq_best = dist_sq_test;
                   intersection_best = closest_on_stroke;
@@ -235,15 +235,15 @@ static void calculate_verts(const StrokeData &stroke_data,
       }
 
       if (has_best) {
-        float3 new_co = math::interpolate(v_co, intersection_best, factor);
+        float3 new_co = math::interpolate(v_co_best, intersection_best, factor);
         if (lock_x) {
-          new_co.x = v_co.x;
+          new_co.x = v_co_best.x;
         }
         if (lock_y) {
-          new_co.y = v_co.y;
+          new_co.y = v_co_best.y;
         }
         if (lock_z) {
-          new_co.z = v_co.z;
+          new_co.z = v_co_best.z;
         }
         copy_v3_v3(v->co, new_co);
       }
@@ -303,9 +303,9 @@ void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
       continue;
     }
 
-    StrokeData *best_stroke = nullptr;
-    float3 fallback_points[2];
-    StrokeData fallback_stroke;
+    StrokeData *stroke_best = nullptr;
+    float3 points_fallback[2];
+    StrokeData stroke_fallback;
 
     /* If there are no annotation strokes drawn, the vertices are moved
      * onto a line between the first and last vertex. */
@@ -313,12 +313,12 @@ void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
       float3 chain_start_co = float3(chain.verts.first()->co);
       float3 chain_end_co = float3(chain.verts.last()->co);
 
-      fallback_points[0] = chain_start_co;
-      fallback_points[1] = chain_end_co;
-      fallback_stroke.points = Span<float3>(fallback_points, 2);
-      fallback_stroke.accumulated_lengths = {math::distance(chain_start_co, chain_end_co)};
+      points_fallback[0] = chain_start_co;
+      points_fallback[1] = chain_end_co;
+      stroke_fallback.points = Span<float3>(points_fallback, 2);
+      stroke_fallback.accumulated_lengths = {math::distance(chain_start_co, chain_end_co)};
 
-      best_stroke = &fallback_stroke;
+      stroke_best = &stroke_fallback;
     }
     else {
       int best_index = -1;
@@ -338,10 +338,10 @@ void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
       }
 
       strokes[best_index].use_count++;
-      best_stroke = &strokes[best_index];
+      stroke_best = &strokes[best_index];
     }
 
-    float forward_dist = calculate_alignment_distance(chain, *best_stroke, method);
+    float forward_dist = calculate_alignment_distance(chain, *stroke_best, method);
 
     ToAnnotationChain reversed_chain = chain;
     std::reverse(reversed_chain.verts.begin(), reversed_chain.verts.end());
@@ -349,11 +349,11 @@ void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
     reversed_chain.accumulated_lengths.clear();
     calculate_chain_lengths(reversed_chain);
 
-    float reversed_dist = calculate_alignment_distance(reversed_chain, *best_stroke, method);
+    float reversed_dist = calculate_alignment_distance(reversed_chain, *stroke_best, method);
     if (reversed_dist < forward_dist) {
       chain = std::move(reversed_chain);
     }
-    calculate_verts(*best_stroke, method, factor, lock_x, lock_y, lock_z, chain);
+    calculate_verts(*stroke_best, method, factor, lock_x, lock_y, lock_z, chain);
   }
 }
 
