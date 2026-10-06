@@ -19,6 +19,7 @@
 - (void)setToolRailDockedLeftCenter:(BOOL)docked animated:(BOOL)animated;
 - (void)beginNumberScrub:(UITextField *)field;
 - (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation;
+- (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation vertical:(CGFloat)vertical;
 - (void)finishNumberScrub:(UITextField *)field;
 - (void)cancelNumberScrub;
 - (void)dismissShading;
@@ -177,7 +178,7 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
           [field addGestureRecognizer:hold];
         }
         NSString *action = request[@"action"];
-        hold.probePoint = CGPointMake([request[@"translation"] doubleValue], 0);
+        hold.probePoint = CGPointMake([request[@"translation"] doubleValue], [request[@"vertical"] doubleValue]);
         hold.probeState = [action isEqual:@"scrub_begin"] ? UIGestureRecognizerStateBegan :
                           [action isEqual:@"scrub_finish"] ? UIGestureRecognizerStateEnded :
                           [action isEqual:@"scrub_cancel"] ? UIGestureRecognizerStateCancelled : UIGestureRecognizerStateChanged;
@@ -350,7 +351,8 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       UITextField *field = controls[request[@"key"]];
       if ([action isEqual:@"scrub_begin"]) { [panels beginNumberScrub:field]; }
       else if ([action isEqual:@"scrub_change"]) {
-        [panels changeNumberScrub:field translation:[request[@"translation"] doubleValue]];
+        [panels changeNumberScrub:field translation:[request[@"translation"] doubleValue]
+                         vertical:[request[@"vertical"] doubleValue]];
       }
       else if ([action isEqual:@"scrub_finish"]) { [panels finishNumberScrub:field]; }
       else if ([action isEqual:@"scrub_cancel"]) { [panels cancelNumberScrub]; }
