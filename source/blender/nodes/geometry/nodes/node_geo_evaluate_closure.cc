@@ -321,24 +321,26 @@ class EvaluateClosureOperation : public NodeOperation {
         continue;
       }
 
-      const bNodeSocket *matching_input = bke::node_find_enabled_output_socket(
+      Result &result = this->get_result(output->identifier);
+      if (!result.should_compute()) {
+        continue;
+      }
+
+      const bNodeSocket *matching_input = bke::node_find_enabled_input_socket(
           const_cast<bNode &>(this->node()), output->name);
       if (!matching_input) {
         continue;
       }
 
       Result &input = this->get_input(matching_input->identifier);
-      Result &result = this->get_result(matching_input->identifier);
-      if (result.should_compute()) {
-        result.share_data(input);
-      }
+      result.share_data(input);
     }
 
     this->allocate_default_remaining_outputs();
   }
 
   /* Setup the reference count of each of the outputs of the given zone tree operation of the given
-   * closure. This is either 0 or depending on whether a corresponding output with the same name
+   * closure. This is either 0 or 1 depending on whether a corresponding output with the same name
    * exists in the evaluate node and is needed. If no corresponding output exists, the zone output
    * will not be used. */
   void set_reference_counts(ZoneTreeOperation &zone_tree_operation,

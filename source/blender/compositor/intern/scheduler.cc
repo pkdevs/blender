@@ -67,7 +67,7 @@ static bool has_viewer_node(const bNodeTree &node_group,
     const ComputeContext *zone_viewer_compute_context =
         bke::compositor::get_zone_viewer_compute_context(
             *group_node, nullptr, compute_context, compute_context_cache);
-    if (zone_viewer_compute_context) {
+    if (!zone_viewer_compute_context) {
       continue;
     }
 
