@@ -320,16 +320,16 @@ void template_running_jobs(Layout *layout, bContext *C)
     Button *but = uiDefIconTextBut(block,
                                    ButtonType::But,
                                    ICON_PAUSE,
-                                   IFACE_("Stop Playback"),
+                                   IFACE_("Pause Animation"),
                                    0,
                                    0,
-                                   UI_UNIT_X * 5.0f,
+                                   UI_UNIT_X * 6.0f,
                                    UI_UNIT_Y,
                                    nullptr,
-                                   TIP_("Stop animation playback"));
+                                   TIP_("Pause animation, stopping at the current frame"));
     button_func_set(but, [](bContext &C) {
       WM_operator_name_call(
-          &C, "SCREEN_OT_animation_play", wm::OpCallContext::InvokeScreen, nullptr, nullptr);
+          &C, "SCREEN_OT_animation_pause", wm::OpCallContext::InvokeScreen, nullptr, nullptr);
     });
   }
 
