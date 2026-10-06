@@ -1,2 +1,2 @@
 Referenced by issue #151629, VSE: Adjustment layer set to replace can lead to crash
-Referenced by issue #161440, Use `Tab` to switch into compound strip will frequently cause crash
+Referenced by issue #161440, Crash when prefetching the a meta strip's frames under certain conditions
