@@ -225,11 +225,20 @@ int main() {
               [((UIButton *)controller->_toolbar_buttons[0]).configuration.baseForegroundColor
                  isEqual:UIColor.labelColor], @"Selection appearance must update before returning");
     UIButton *selectedButton = controller->_toolbar_buttons[1];
+    UIView *selection = nil;
+    for (UIView *view in controller->_tool_stack.subviews) {
+      if ([view.accessibilityIdentifier isEqual:@"blender.toolbar.selection"]) { selection = view; }
+    }
+    NSCAssert(selection && !selection.hidden && CGRectEqualToRect(selection.frame, selectedButton.frame),
+              @"One shared glass selection must track the selected tool");
+    NSCAssert(!selection.userInteractionEnabled, @"Selection background must not intercept tool taps");
     NSCAssert(!selectedButton.configuration.automaticallyUpdateForSelection &&
               [[selectedButton.configuration.attributedTitle attribute:NSForegroundColorAttributeName
                                                                 atIndex:0 effectiveRange:nil] isEqual:UIColor.whiteColor],
               @"Tool name must use explicit white text without a selection tint transition");
     [controller setActiveToolbarToolIdentifier:@"tool.0"];
+    NSCAssert(CGRectEqualToRect(selection.frame, ((UIButton *)controller->_toolbar_buttons[0]).frame),
+              @"Selection background did not move to the next tool");
     TestPan *handlePan = [[[TestPan alloc] init] autorelease];
     [controller->_tool_drag_handle addGestureRecognizer:handlePan];
     TestPress *press = [[[TestPress alloc] init] autorelease];
@@ -293,6 +302,7 @@ int main() {
     [controller.view layoutIfNeeded];
     NSCAssert(![controller isToolbarListVisible] && controller->_tool_drag_handle.hidden,
               @"Handle did not collapse both list modes");
+    NSCAssert(selection.hidden, @"Compact toolbar must not leave a selection highlight behind");
     NSCAssert(controller->_tool_rail.bounds.size.height == 64 && !controller->_tool_scroll.scrollEnabled,
               @"Collapsed geometry or scrolling incorrect");
     NSCAssert([controller gestureRecognizerShouldBegin:press], @"Compact press-and-slide picker lost");

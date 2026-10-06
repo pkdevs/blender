@@ -385,6 +385,62 @@ typedef struct UserInputEvent {
 
 @end
 
+@interface GHOSTIOSToolStackView : GHOSTIOSPassThroughStackView {
+  UIButton *_selection;
+  UIButton *_selectionTarget;
+}
+@end
+
+@implementation GHOSTIOSToolStackView
+- (instancetype)initWithFrame:(CGRect)frame
+{
+  if ((self = [super initWithFrame:frame])) {
+    _selection = [UIButton buttonWithType:UIButtonTypeSystem];
+    _selection.userInteractionEnabled = NO;
+    _selection.isAccessibilityElement = NO;
+    _selection.accessibilityIdentifier = @"blender.toolbar.selection";
+    _selection.hidden = YES;
+    UIButtonConfiguration *configuration = [UIButtonConfiguration prominentGlassButtonConfiguration];
+    configuration.baseBackgroundColor = UIColor.systemBlueColor;
+    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    configuration.automaticallyUpdateForSelection = NO;
+    _selection.configuration = configuration;
+    [self insertSubview:_selection atIndex:0];
+  }
+  return self;
+}
+- (void)layoutSubviews
+{
+  [super layoutSubviews];
+  UIButton *target = nil;
+  for (UIView *view in self.arrangedSubviews) {
+    if ([view isKindOfClass:UIButton.class] && ((UIButton *)view).selected && !view.hidden) {
+      target = (UIButton *)view;
+      break;
+    }
+  }
+  if (!target) {
+    _selection.hidden = YES;
+    [_selection.layer removeAllAnimations];
+    _selectionTarget = nil;
+    return;
+  }
+  const BOOL animate = !_selection.hidden && _selectionTarget != target &&
+                       !UIAccessibilityIsReduceMotionEnabled();
+  _selectionTarget = target;
+  _selection.hidden = NO;
+  [self sendSubviewToBack:_selection];
+  if (animate) {
+    [UIView animateWithDuration:0.16 delay:0 usingSpringWithDamping:0.9 initialSpringVelocity:0
+        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+        animations:^{ self->_selection.frame = target.frame; } completion:nil];
+  }
+  else if (!CGRectEqualToRect(_selection.frame, target.frame)) {
+    _selection.frame = target.frame;
+  }
+}
+@end
+
 @interface GHOSTIOSNavigationBar : UINavigationBar
 @end
 
@@ -2639,12 +2695,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     const BOOL is_emphasized = [self isToolbarListVisible] &&
                                (updated_button.selected ||
                                 updated_button == self->_toolbar_hover_button);
-    UIButtonConfiguration *configuration = updated_button.selected ?
-                                              [UIButtonConfiguration prominentGlassButtonConfiguration] : is_emphasized ?
+    UIButtonConfiguration *configuration = is_emphasized && !updated_button.selected ?
                                               [UIButtonConfiguration glassButtonConfiguration] :
                                               [UIButtonConfiguration plainButtonConfiguration];
     configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
-    configuration.baseBackgroundColor = updated_button.selected ? UIColor.systemBlueColor : nil;
     configuration.automaticallyUpdateForSelection = NO;
     configuration.attributedTitle = shows_text ? [[[NSAttributedString alloc]
         initWithString:title attributes:@{NSForegroundColorAttributeName: configuration.baseForegroundColor}]
@@ -2996,6 +3050,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
       [button setNeedsUpdateConfiguration];
       button.alpha = (list_visible || is_active) ? 1.0 : 0.0;
     }
+    [_tool_stack setNeedsLayout];
   };
 
   void (^finishCompact)(void) = ^{
@@ -4731,7 +4786,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _tool_scroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
   [_tool_rail.contentView addSubview:_tool_scroll];
 
-  _tool_stack = [[GHOSTIOSPassThroughStackView alloc] initWithFrame:CGRectZero];
+  _tool_stack = [[GHOSTIOSToolStackView alloc] initWithFrame:CGRectZero];
   _tool_stack.axis = UILayoutConstraintAxisVertical;
   _tool_stack.alignment = UIStackViewAlignmentFill;
   _tool_stack.distribution = UIStackViewDistributionEqualSpacing;
