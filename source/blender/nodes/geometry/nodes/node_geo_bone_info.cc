@@ -41,7 +41,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   {
     auto &p = b.add_panel("Envelope"_ustr).default_closed(true);
-    p.add_output<decl::Float>("Envelope"_ustr)
+    p.add_output<decl::Float>("Envelope Distance"_ustr)
         .description("Original envelope distance to the bone");
     p.add_output<decl::Float>("Radius Head"_ustr)
         .description("Original radius of the head of the bone");
@@ -93,9 +93,9 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
         bNode &node = params.add_node("GeometryNodeBoneInfo"_ustr);
         params.update_and_connect_available_socket(node, "Rest Length"_ustr);
       });
-      params.add_item(IFACE_("Envelope"), [](LinkSearchOpParams &params) {
+      params.add_item(IFACE_("Envelope Distance"), [](LinkSearchOpParams &params) {
         bNode &node = params.add_node("GeometryNodeBoneInfo"_ustr);
-        params.update_and_connect_available_socket(node, "Envelope"_ustr);
+        params.update_and_connect_available_socket(node, "Envelope Distance"_ustr);
       });
       params.add_item(IFACE_("Radius Head"), [](LinkSearchOpParams &params) {
         bNode &node = params.add_node("GeometryNodeBoneInfo"_ustr);
@@ -230,7 +230,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Rest Pose"_ustr, values.rest_pose);
   params.set_output("Rest Length"_ustr, values.rest_length);
   params.set_output("Exists"_ustr, true);
-  params.set_output("Envelope"_ustr, values.envelope);
+  params.set_output("Envelope Distance"_ustr, values.envelope);
   params.set_output("Radius Head"_ustr, values.radius_head);
   params.set_output("Radius Tail"_ustr, values.radius_tail);
 }
@@ -313,7 +313,7 @@ class BoneInfoOperation : public compositor::NodeOperation {
       exists_result.set_single_value(true);
     }
 
-    compositor::Result &envelope_result = this->get_result("Envelope");
+    compositor::Result &envelope_result = this->get_result("Envelope Distance");
     if (envelope_result.should_compute()) {
       envelope_result.allocate_single_value();
       envelope_result.set_single_value(values.envelope);
