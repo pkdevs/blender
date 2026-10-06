@@ -17,6 +17,8 @@
 			</array>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
 			<key>LSIsAppleDefaultForType</key>
 			<true/>
 			<key>LSItemContentTypes</key>
