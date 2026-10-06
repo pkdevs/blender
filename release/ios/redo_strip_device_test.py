@@ -12,6 +12,9 @@ probe = ctypes.CDLL(str(Path(bpy.app.binary_path).parent / 'Frameworks/Responsiv
 query = probe.blender_device_probe_redo
 query.argtypes = [ctypes.c_char_p]
 query.restype = ctypes.c_void_p
+actions_query = probe.blender_device_probe_quick_actions
+actions_query.argtypes = [ctypes.c_int]
+actions_query.restype = ctypes.c_void_p
 engine = ctypes.CDLL(None)
 enqueue = engine.WM_apple_ios_ui_operator_enqueue
 enqueue.argtypes = [ctypes.c_char_p]
@@ -40,6 +43,14 @@ def check(ok, label):
     assert not state['snapshot'].get('error'), label + ': ' + str(state)
     assert ok, label + ': ' + str(state)
     report['checks'].append(label)
+
+
+def actions(taps=0):
+    ptr = actions_query(taps)
+    try:
+        return json.loads(ctypes.string_at(ptr))
+    finally:
+        free(ptr)
 
 
 def prop(name, index=None):
@@ -80,9 +91,34 @@ def tests():
     yield 8.0
     ui(action='done')
     yield 0.5
-    check(not ui()['visible'] and len(bpy.data.objects) == count, 'Checkmark dismisses without undoing the operation')
+    state = ui()
+    check(not state['visible'] and state['collapsed'] and state['pillTitle'] == 'Add Cube' and
+          len(bpy.data.objects) == count, 'Checkmark collapses to an operator pill without undoing')
+    check(state['actionsScrollFrame'][0] + state['actionsScrollFrame'][2] + 7 <= state['pillFrame'][0],
+          'Operator pill has a reserved area outside scrolling Actions')
     yield 0.8
-    check(not ui()['visible'], 'Engine snapshots do not reopen a dismissed operation')
+    check(not ui()['visible'] and ui()['collapsed'], 'Engine snapshots preserve collapsed state')
+    actions(1)
+    yield 0.5
+    state = ui()
+    toggle, pill = state['actionsToggleFrame'], state['pillFrame']
+    check(actions()['collapsed'] and abs(pill[0] - toggle[0] - toggle[2] - 8) < 1 and
+          abs(pill[1] - toggle[1]) < 1, 'Actions and operator pills sit side by side on the same baseline')
+    report['stage'] = 'collapsed'
+    yield 5.0
+    ui(action='expand')
+    yield 0.5
+    check(ui()['visible'] and not ui()['collapsed'] and ui()['snapshot']['id'] == identity and
+          prop('size')['value'] == 3, 'Tapping the operator pill restores the same adjusted operation')
+    ui(action='edit', key=prop('size')['key'], value=3.5)
+    yield 1.0
+    check(abs(bpy.context.object.dimensions.x - 3.5) < 1e-5 and len(bpy.data.objects) == count,
+          'Reopened controls still adjust real geometry without adding an object')
+    ui(action='edit', key=prop('size')['key'], value=3)
+    yield 1.0
+    ui(action='done')
+    actions(1)
+    yield 0.5
     enqueue(b'ED_OT_undo')
     yield 1.0
     check(len(bpy.data.objects) == count - 1, 'One Undo removes the whole adjusted operation, not an intermediate edit')
@@ -137,6 +173,10 @@ def tests():
     mesh = bmesh.from_edit_mesh(bpy.context.object.data)
     check(abs(max(v.co.z for v in mesh.verts) - before_z - 3) < 1e-5 and len(mesh.verts) == vertex_count,
           'Macro adjustment redoes the whole extrusion without duplicating geometry')
+    ui(action='done')
+    actions(1)
+    yield 0.5
+    check(ui()['collapsed'] and ui()['pillTitle'] == 'Extrude', 'Macro pill uses a shortened operator name')
     report['passed'] = True
     report['stage'] = 'extrude'
 

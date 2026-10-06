@@ -6,6 +6,7 @@
 @interface GHOSTIOSRedoStrip (Testing)
 - (void)commitField:(UITextField *)field;
 - (void)dismiss:(id)sender;
+- (void)expand:(id)sender;
 @end
 
 static NSMutableArray *requests;
@@ -81,13 +82,28 @@ int main()
     UIButton *done = [strip valueForKey:@"_done"];
     NSCAssert([[done actionsForTarget:strip forControlEvent:UIControlEventTouchUpInside] containsObject:@"dismiss:"], @"Checkmark routes to dismissal");
     [strip dismiss:done];
-    NSCAssert(strip.view.hidden && [requests.lastObject[@"action"] isEqual:@"dismiss"], @"Checkmark dismisses immediately without engine wait");
+    NSCAssert(strip.view.hidden && !strip.collapsedButton.hidden && requests.count == count,
+              @"Checkmark collapses locally without dismissing the Blender operation");
+    NSCAssert([strip.collapsedButton.configuration.title isEqual:@"Add Cube"] &&
+              strip.collapsedWidth >= 72 && strip.collapsedWidth <= 136, @"Compact pill names the operator");
     [strip updateSnapshot:model];
-    NSCAssert(strip.view.hidden, @"Queued old snapshot cannot reopen dismissed strip");
+    NSCAssert(strip.view.hidden && !strip.collapsedButton.hidden, @"Snapshots preserve collapsed state");
+    [strip updateSnapshot:nil];
+    NSCAssert(strip.collapsedButton.hidden && strip.collapsedWidth == 0, @"Unavailable operation hides its pill");
+    [strip updateSnapshot:model];
+    NSCAssert(strip.view.hidden && !strip.collapsedButton.hidden, @"Temporary unavailability preserves collapse preference");
+    [strip expand:strip.collapsedButton];
+    NSCAssert(!strip.view.hidden && strip.collapsedButton.hidden && requests.count == count,
+              @"Pill restores controls without re-executing the operator");
+    [strip dismiss:done];
     [field retain];
     model[@"id"] = @"2";
+    model[@"operator"] = @"MESH_OT_extrude_region_move";
+    model[@"title"] = @"Extrude Region and Move";
     [strip updateSnapshot:model];
     NSCAssert(!strip.view.hidden, @"A new operation reopens the strip");
+    NSCAssert(strip.collapsedButton.hidden && [strip.collapsedButton.configuration.title isEqual:@"Extrude"],
+              @"Long macro name uses a concise pill title");
     count = requests.count;
     field.text = @"12";
     [strip commitField:field];

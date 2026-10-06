@@ -169,6 +169,10 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
     if ([request[@"action"] isEqual:@"done"]) {
       [strip dismiss:[strip valueForKey:@"_done"]];
     }
+    else if ([request[@"action"] isEqual:@"expand"]) {
+      UIButton *pill = [strip valueForKey:@"collapsedButton"];
+      [pill sendActionsForControlEvents:UIControlEventTouchUpInside];
+    }
     else if ([request[@"action"] isEqual:@"edit"]) {
       UIControl *control = controls[request[@"key"]];
       if ([control isKindOfClass:UITextField.class]) {
@@ -199,8 +203,17 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
       presented = presented.presentedViewController;
     }
     NSString *alert = [presented isKindOfClass:UIAlertController.class] ? presented.title : nil;
+    UIButton *pill = [strip valueForKey:@"collapsedButton"];
+    UIView *actions = [controller valueForKey:@"_action_group"];
+    UIView *scroll = [controller valueForKey:@"_action_scroll"];
+    UIView *toggle = [controller valueForKey:@"_action_toggle"];
     NSDictionary *state = @{@"snapshot": snapshot ?: @{}, @"visible": @(!rail.hidden && rail.alpha > 0),
                             @"frame": rectValues(rail.frame), @"controls": frames,
+                            @"collapsed": @(!pill.hidden), @"pillTitle": pill.configuration.title ?: @"",
+                            @"pillFrame": rectValues([pill convertRect:pill.bounds toView:controller.view]),
+                            @"actionsFrame": rectValues([actions convertRect:actions.bounds toView:controller.view]),
+                            @"actionsScrollFrame": rectValues([scroll convertRect:scroll.bounds toView:controller.view]),
+                            @"actionsToggleFrame": rectValues([toggle convertRect:toggle.bounds toView:controller.view]),
                             @"alert": alert ?: @""};
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
