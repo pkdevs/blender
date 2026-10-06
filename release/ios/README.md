@@ -3,6 +3,30 @@ Buildbot Configuration
 
 Files used by Buildbot's `package-code-binaires` step for the darwin platform.
 
+## Source and Dependency Baseline
+
+The native iOS interface is integrated with the official Blender `ios` branch at
+`a1de44dd54af75a4c8c4a29a5fed2a1334a87446`, based on Blender 5.1.2. The previous
+native interface used a Blender 5.0 alpha base.
+
+Build the application, runtime libraries and macOS code generators from matching
+versions. The older iOS precompiled-library checkout is not sufficient for this
+source: in particular, this baseline needs Python 3.13, NumPy 2.3, fmt 12 and the
+updated image, geometry and rendering libraries.
+
+For an iOS-configured `build_files/build_environment` build, the
+`apple_runtime_dependencies` target builds the app's runtime dependencies without
+the unsupported desktop compiler backends. Set `HARVEST_TARGET` outside the source
+checkout. With CMake 4, set `CMAKE_POLICY_VERSION_MINIMUM=3.5` for dependencies that
+still declare older policy versions.
+
+The host dependency build must provide Python 3.13 with Cython and Meson. Host
+tools (`makesdna`, `makesrna`, `datatoc`, `msgfmt` and `shader_tool`) must also come
+from the current source. Set `CROSSCOMPILE_TOOLDIR` when configuring the app to use
+a separate host-tool build directory, and set `LIBDIR` to the rebuilt iOS
+libraries. Keep device and simulator library/build directories separate: both
+use ARM64, but their binaries are not interchangeable.
+
 ## Native UI Threading
 
 The iOS port has three independent execution paths:
@@ -81,7 +105,7 @@ the scene is saved before replacing or relaunching an existing device install.
 `responsive_device_probe.mm` is a test-only dylib, not part of the application
 target. Compile it with the iPhoneOS SDK using `clang++ -arch arm64
 -miphoneos-version-min=26.0 -std=c++17 -fobjc-arc -dynamiclib -framework UIKit
--framework Foundation -framework QuartzCore`. Place the resulting
+-framework Foundation -framework QuartzCore -framework CoreGraphics`. Place the resulting
 `ResponsiveDeviceProbe.dylib` in `Frameworks` inside a temporary copy of the app,
 sign the dylib and that app with the same development identity, and install it
 on an explicitly approved test device. Prefer a separate QA bundle identifier

@@ -27,8 +27,8 @@ class IPadOrbitTest(unittest.TestCase):
         rotate = (ROOT / "source/blender/editors/space_view3d/view3d_navigate_view_rotate.cc").read_text()
         events = (ROOT / "source/blender/windowmanager/intern/wm_event_system.cc").read_text()
         dna = (ROOT / "source/blender/makesdna/DNA_view3d_types.h").read_text()
-        start = dna.index("typedef struct View3D_Runtime {")
-        runtime = dna[start:dna.index("} View3D_Runtime;", start) + len("} View3D_Runtime;")]
+        start = dna.index("struct View3D_Runtime {")
+        runtime = dna[start:dna.index("\n};", start) + len("\n};")]
         harness = r'''
 #include <cassert>
 #include <cstdint>
@@ -40,6 +40,7 @@ using wmOperatorStatus = int;
 using eV3D_OpEvent = int;
 struct bContext {};
 struct PointerRNA {};
+struct RegionView3D;
 ''' + runtime + r'''
 struct RegionView3D { bool is_persp = true; };
 struct View3D { View3D_Runtime runtime{}; };

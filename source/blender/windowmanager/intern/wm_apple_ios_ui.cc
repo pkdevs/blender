@@ -14,6 +14,7 @@
 #include "BKE_screen.hh"
 
 #include "BLI_listbase.h"
+#include "BLI_serialize.hh"
 #include "GHOST_IOSMessageQueue.hh"
 
 #include "DNA_object_types.h"
@@ -27,6 +28,7 @@
 #include "ED_screen.hh"
 #include "ED_transform.hh"
 #include "ED_view3d.hh"
+#include "ED_view3d_pencil_hover.hh"
 
 #include "RNA_access.hh"
 
@@ -41,6 +43,7 @@
 #include "WM_types.hh"
 
 #include "wm_event_system.hh"
+#include "wm_gizmo_wmapi.hh"
 #include "wm_window.hh"
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
@@ -49,9 +52,11 @@
 #endif
 
 #include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -60,8 +65,13 @@
 
 namespace blender::ui {
 std::string native_menu_query(bContext *C, const std::string &request, bool execute);
+std::string native_properties_query(bContext *C, const std::string &request, bool execute);
+std::string native_operator_redo_query(bContext *C, const std::string &request, bool execute);
+void native_properties_interaction_finish(bContext *C);
+std::string native_properties_menu_query(bContext *C, const std::string &request, bool execute);
 }
 
+namespace blender {
 namespace {
 
 enum class IOSUICommand {
@@ -142,8 +152,22 @@ std::map<uint64_t, std::string> ios_menu_results;
 std::atomic<uint64_t> ios_menu_next_identifier{0};
 bool ios_ui_layout_ready = false;
 bool ios_ui_gizmo_refresh_pending = true;
+int ios_panels_visible = 0;
+std::chrono::steady_clock::time_point ios_panels_next_snapshot;
+std::string ios_panels_json = "null";
+std::string ios_properties_state = "{\"tab\":\"OBJECT\"}";
+std::string ios_shading_state = "{\"tab\":\"SHADING\"}";
+std::string ios_properties_error;
+int64_t ios_panels_sequence = 0;
 std::atomic<bool> ios_navigation_hover_active{false};
 std::atomic<bool> ios_navigation_redraw_pending{false};
+struct IOSPencilHoverRequest {
+  bool active = false;
+  int x = 0, y = 0;
+};
+GHOST_IOSLatest<IOSPencilHoverRequest> ios_hover_requests;
+GHOST_IOSLatest<std::string> ios_hover_snapshot;
+IOSPencilHoverRequest ios_hover_request;
 
 struct IOSActionItem {
   const char *title;
@@ -156,6 +180,7 @@ struct IOSActionItem {
 };
 
 GHOST_IOSLatest<std::string> ios_toolbar_snapshot;
+GHOST_IOSLatest<std::string> ios_panels_snapshot;
 std::string ios_toolbar_json =
     "{\"mode\":\"objectmode\",\"active\":\"builtin.select_box\",\"tools\":[]}";
 
@@ -199,7 +224,8 @@ wmOperator *ios_constraint_operator(wmWindow *win)
     return nullptr;
   }
 
-  LISTBASE_FOREACH (wmEventHandler *, handler_base, &win->modalhandlers) {
+  for (wmEventHandler &handler_base_item : win->runtime->modalhandlers) {
+    wmEventHandler *handler_base = &handler_base_item;
     if (handler_base->type != WM_HANDLER_TYPE_OP) {
       continue;
     }
@@ -308,7 +334,8 @@ ScrArea *ios_find_view3d_area(bScreen *screen)
 
   ScrArea *best_area = nullptr;
   int best_area_size = -1;
-  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+  for (ScrArea &area_item : screen->areabase) {
+    ScrArea *area = &area_item;
     if (area->spacetype != SPACE_VIEW3D) {
       continue;
     }
@@ -327,7 +354,8 @@ ARegion *ios_find_window_region(ScrArea *area)
     return nullptr;
   }
 
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+  for (ARegion &region_item : area->regionbase) {
+    ARegion *region = &region_item;
     if (region->regiontype == RGN_TYPE_WINDOW) {
       return region;
     }
@@ -424,7 +452,8 @@ bool ios_undo_available(bContext *C)
     return false;
   }
   /* Undo must not invalidate data owned by an in-progress tool or navigation operation. */
-  LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
+  for (wmEventHandler &handler_item : win->runtime->modalhandlers) {
+    wmEventHandler *handler = &handler_item;
     if (handler->type == WM_HANDLER_TYPE_OP) {
       return false;
     }
@@ -459,8 +488,7 @@ void ios_operator_call_with_enum_property(bContext *C,
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, prop_name, prop_value);
   ios_operator_call(C, op_name, &props);
   WM_operator_properties_free(&props);
@@ -468,13 +496,12 @@ void ios_operator_call_with_enum_property(bContext *C,
 
 void ios_mode_set(bContext *C, const char *mode)
 {
-  PointerRNA props;
   wmOperatorType *ot = WM_operatortype_find("OBJECT_OT_mode_set", false);
   if (ot == nullptr) {
     return;
   }
 
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "mode", mode);
   RNA_boolean_set(&props, "toggle", false);
   if (WM_operator_name_poll(C, "OBJECT_OT_mode_set")) {
@@ -490,8 +517,7 @@ void ios_view_axis(bContext *C, const char *axis_type)
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "type", axis_type);
   RNA_boolean_set(&props, "align_active", false);
   RNA_boolean_set(&props, "relative", false);
@@ -506,8 +532,7 @@ void ios_view_orbit(bContext *C, const char *direction)
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "type", direction);
   ios_operator_call(C, "VIEW3D_OT_view_orbit", &props);
   WM_operator_properties_free(&props);
@@ -520,8 +545,7 @@ void ios_view_roll_angle(bContext *C, const float angle)
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "type", "ANGLE");
   RNA_float_set(&props, "angle", angle);
   if (WM_operator_name_poll(C, "VIEW3D_OT_view_roll")) {
@@ -723,8 +747,7 @@ void ios_mesh_select_mode_set(bContext *C, const std::string &value)
     return;
   }
 
-  PointerRNA props;
-  WM_operator_properties_create_ptr(&props, ot);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
   RNA_enum_set_identifier(C, &props, "type", value.c_str());
   RNA_enum_set_identifier(C, &props, "action", "ENABLE");
   RNA_boolean_set(&props, "use_extend", false);
@@ -737,6 +760,77 @@ void ios_mesh_select_mode_set(bContext *C, const std::string &value)
 
 void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
 {
+  bool preview = false;
+  if (command.setting == "native_redo_edit") {
+    ui::native_operator_redo_query(C, command.value, true);
+    return;
+  }
+  if (command.setting == "native_shading_state") {
+    ios_shading_state = command.value;
+    ios_panels_next_snapshot = {};
+    return;
+  }
+  if (command.setting == "native_shading_visible") {
+    ios_panels_visible = (ios_panels_visible & ~4) | (command.value == "1" ? 4 : 0);
+    ios_panels_next_snapshot = {};
+    return;
+  }
+  if (command.setting == "native_properties_state") {
+    ios_properties_state = command.value;
+    ios_panels_next_snapshot = {};
+    return;
+  }
+  if (command.setting == "native_properties_edit" || command.setting == "native_panel_edit") {
+    std::istringstream stream(command.value);
+    auto value = io::serialize::JsonFormatter().deserialize(stream);
+    if (const auto *request = value ? value->as_dictionary_value() : nullptr) {
+      ios_panels_sequence = request->lookup_int("sequence").value_or(ios_panels_sequence);
+      preview = request->lookup_str("phase").value_or("") == "update";
+    }
+    ios_properties_error.clear();
+  }
+  if (command.setting == "native_properties_edit") {
+    /* Local controls already show the drag value. Keep expensive full-panel snapshots
+     * on their normal cadence while evaluation and viewport redraw run live. */
+    if (!preview) { ios_panels_next_snapshot = {}; }
+    if (wmWindow *window = CTX_wm_window(C)) {
+      for (wmEventHandler &handler : window->runtime->modalhandlers) {
+        if (handler.type == WM_HANDLER_TYPE_OP) {
+          ios_properties_error = "Finish the current operation before editing properties.";
+          return;
+        }
+      }
+    }
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    if (WM_apple_ios_dialog_active(CTX_wm_window(C))) {
+      ios_properties_error = "Finish the current dialog before editing properties.";
+      return;
+    }
+#endif
+    ios_properties_error = ui::native_properties_query(C, command.value, true);
+    return;
+  }
+  if (command.setting == "native_panels") {
+    ios_panels_next_snapshot = {};
+    ios_panels_visible = (ios_panels_visible & 4) | (command.value == "3" ? 3 : command.value == "2" ? 2 :
+                         command.value == "1" ? 1 : 0);
+    return;
+  }
+#ifdef WITH_PYTHON
+  if (command.setting == "native_panel_edit") {
+    ios_panels_next_snapshot = {};
+    const char *imports[] = {"bpy", "bl_ui", nullptr};
+    bool blocked = false;
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    blocked = WM_apple_ios_dialog_active(CTX_wm_window(C));
+#endif
+    const std::string expression = "bl_ui.native_panels.apply_json(bpy.context, \"" +
+                                   ios_json_escape(command.value) + "\", " +
+                                   (blocked ? "True" : "False") + ")";
+    BPY_run_string_eval(C, imports, expression.c_str());
+    return;
+  }
+#endif
   if (command.setting == "constraint_axis") {
     const int axis = command.value == "X" ? 0 : command.value == "Y" ? 1 :
                     command.value == "Z" ? 2 : -1;
@@ -948,6 +1042,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   bToolRef *active_tool = has_view3d_context ? WM_toolsystem_ref_from_context(C) : nullptr;
   const char *active_tool_id = active_tool ? active_tool->idname : "builtin.select_box";
   std::string tools_json = "[]";
+  std::string panels_json = "null";
 #ifdef WITH_PYTHON
   if (has_view3d_context) {
     const char *imports[] = {"bpy", "bl_ui", nullptr};
@@ -959,7 +1054,50 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
                                 &result))
     {
       tools_json = result;
-      MEM_freeN(result);
+      MEM_delete(result);
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (ios_panels_visible && now >= ios_panels_next_snapshot) {
+      /* Scene projection follows the native refresh cadence, not the viewport frame rate. */
+      ios_panels_next_snapshot = now + std::chrono::milliseconds(250);
+      const std::string expression = "bl_ui.native_panels.snapshot_json(bpy.context, " +
+                                     std::to_string(ios_panels_visible & 2) + ")";
+      result = nullptr;
+      if (BPY_run_string_as_string(C, imports, expression.c_str(), nullptr, &result)) {
+        ios_panels_json = result;
+        MEM_delete(result);
+      }
+      using namespace io::serialize;
+      std::istringstream base_stream(ios_panels_json);
+      auto base = JsonFormatter().deserialize(base_stream);
+      DictionaryValue merged;
+      if (const auto *dictionary = base ? base->as_dictionary_value() : nullptr) {
+        for (const auto &item : dictionary->elements()) {
+          if (item.first != "ack" && (item.first != "error" || ios_properties_error.empty())) {
+            merged.append(item.first, item.second);
+          }
+        }
+      }
+      merged.append_int("ack", ios_panels_sequence);
+      if (!ios_properties_error.empty()) {
+        merged.append_str("error", ios_properties_error);
+      }
+      if (ios_panels_visible & 1) {
+        std::istringstream properties_stream(ui::native_properties_query(C, ios_properties_state, false));
+        auto properties = JsonFormatter().deserialize(properties_stream);
+        if (properties) {
+          merged.append("inspector", std::move(properties));
+        }
+      }
+      if (ios_panels_visible & 4) {
+        std::istringstream shading_stream(ui::native_properties_query(C, ios_shading_state, false));
+        auto shading = JsonFormatter().deserialize(shading_stream);
+        if (shading) { merged.append("shading", std::move(shading)); }
+      }
+      std::ostringstream merged_stream;
+      JsonFormatter().serialize(merged_stream, merged);
+      ios_panels_json = merged_stream.str();
+      ios_panels_snapshot.publish(ios_panels_json);
     }
   }
 #endif
@@ -987,6 +1125,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
                         "," + std::to_string(radius / width) + "]";
     }
   }
+  const std::string redo_json = has_view3d_context ? ui::native_operator_redo_query(C, "", false) :
+                                                     "null";
   ios_context_pop(C, context_store);
 
   std::string json = "{\"mode\":\"";
@@ -1001,10 +1141,14 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += can_undo ? "true" : "false";
   json += ",\"settings\":";
   json += settings_json;
+  json += ",\"redo\":";
+  json += redo_json;
   json += ",\"navigationGizmo\":";
   json += navigation_json;
   json += ",\"tools\":";
   json += tools_json;
+  json += ",\"panels\":";
+  json += panels_json;
   json += ",\"actions\":[";
 
   bool needs_comma = false;
@@ -1081,6 +1225,23 @@ extern "C" void WM_apple_ios_ui_command_enqueue(int command)
   ios_ui_messages.push(IOSUICommand(command));
 }
 
+extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y)
+{
+  ios_hover_requests.publish({active, x, y});
+}
+
+bool WM_apple_ios_pencil_hover_active()
+{
+  return ios_hover_request.active;
+}
+
+extern "C" char *WM_apple_ios_ui_pencil_hover_copy_json()
+{
+  static std::string snapshot = "{}";
+  ios_hover_snapshot.take(snapshot);
+  return strdup(snapshot.c_str());
+}
+
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name)
 {
   if (op_name == nullptr || op_name[0] == '\0') {
@@ -1147,6 +1308,19 @@ extern "C" char *WM_apple_ios_ui_toolbar_copy_json()
   }
   std::memcpy(json_copy, ios_toolbar_json.c_str(), ios_toolbar_json.size() + 1);
   return json_copy;
+}
+
+extern "C" char *WM_apple_ios_ui_panels_take_json()
+{
+  std::string json;
+  if (!ios_panels_snapshot.take(json)) {
+    return nullptr;
+  }
+  char *copy = static_cast<char *>(std::malloc(json.size() + 1));
+  if (copy) {
+    std::memcpy(copy, json.c_str(), json.size() + 1);
+  }
+  return copy;
 }
 
 extern "C" void WM_apple_ios_ui_toolbar_free_json(char *json)
@@ -1294,7 +1468,8 @@ static void ios_ui_dispatch_operator(bContext *C, IOSOperatorCommand &command)
   wmWindow *win = CTX_wm_window(C);
   bool ready = win && CTX_wm_area(C) && CTX_wm_region(C);
   if (ready && command.has_position) {
-    LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
+    for (wmEventHandler &handler_item : win->runtime->modalhandlers) {
+      wmEventHandler *handler = &handler_item;
       if (handler->type == WM_HANDLER_TYPE_OP) {
         ready = false;
         break;
@@ -1304,11 +1479,11 @@ static void ios_ui_dispatch_operator(bContext *C, IOSOperatorCommand &command)
       /* Allow the queued Pencil cancellation/release to reach the modal handler. */
       ios_ui_messages.push(command);
     }
-    if (ready && win->eventstate) {
+    if (ready && win->runtime->eventstate) {
       int x = command.x, y = command.y;
       wm_cursor_position_from_ghost_client_coords(win, &x, &y);
-      win->eventstate->xy[0] = x;
-      win->eventstate->xy[1] = y;
+      win->runtime->eventstate->xy[0] = x;
+      win->runtime->eventstate->xy[1] = y;
     }
   }
   if (ready) {
@@ -1324,7 +1499,8 @@ static void ios_ui_dispatch_menu(bContext *C, IOSMenuRequest &request)
   wmWindow *win = CTX_wm_window(C);
   bool ready = true;
   if (win && request.has_position) {
-    LISTBASE_FOREACH (wmEventHandler *, handler, &win->modalhandlers) {
+    for (wmEventHandler &handler_item : win->runtime->modalhandlers) {
+      wmEventHandler *handler = &handler_item;
       if (handler->type == WM_HANDLER_TYPE_OP) {
         ready = false;
         break;
@@ -1335,15 +1511,15 @@ static void ios_ui_dispatch_menu(bContext *C, IOSMenuRequest &request)
       ios_context_pop(C, context_store);
       return;
     }
-    if (ready && win->eventstate) {
+    if (ready && win->runtime->eventstate) {
       int x = request.x, y = request.y;
       wm_cursor_position_from_ghost_client_coords(win, &x, &y);
-      win->eventstate->xy[0] = x;
-      win->eventstate->xy[1] = y;
+      win->runtime->eventstate->xy[0] = x;
+      win->runtime->eventstate->xy[1] = y;
     }
   }
   if (ready && win && CTX_wm_area(C) && CTX_wm_region(C)) {
-    result = blender::ui::native_menu_query(C, request.route, request.execute);
+    result = blender::ui::native_properties_menu_query(C, request.route, request.execute);
   }
   ios_context_pop(C, context_store);
   if (!request.execute) {
@@ -1354,7 +1530,24 @@ static void ios_ui_dispatch_menu(bContext *C, IOSMenuRequest &request)
 static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
 {
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  if (WM_apple_ios_dialog_active(CTX_wm_window(C))) {
+  const auto *setting = std::get_if<IOSSettingCommand>(&message);
+  const auto *menu = std::get_if<IOSMenuRequest>(&message);
+  if ((!menu || menu->execute) && (!setting || (setting->setting != "native_properties_edit" &&
+                   setting->setting != "native_properties_state" &&
+                   setting->setting != "native_shading_state" &&
+                   setting->setting != "native_panels" &&
+                   setting->setting != "native_shading_visible"))) {
+    const IOSContextStore context_store = ios_context_push_view3d(C);
+    ui::native_properties_interaction_finish(C);
+    ios_context_pop(C, context_store);
+  }
+  const bool panel_message = setting && (setting->setting == "native_panels" ||
+                                         setting->setting == "native_shading_state" ||
+                                         setting->setting == "native_shading_visible" ||
+                                         setting->setting == "native_panel_edit" ||
+                                         setting->setting == "native_properties_state" ||
+                                         setting->setting == "native_properties_edit");
+  if (WM_apple_ios_dialog_active(CTX_wm_window(C)) && !panel_message) {
     if (const auto *request = std::get_if<IOSMenuRequest>(&message)) {
       if (!request->execute) {
         ios_menu_completed.push({request->identifier, "[]"});
@@ -1420,9 +1613,68 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     ios_context_pop(C, context_store);
   }
 
-  for (IOSUIMessage &message : ios_ui_messages.take()) {
+  auto supersedes_preview = [](const IOSUIMessage &previous, const IOSUIMessage &next) {
+    const auto *a = std::get_if<IOSSettingCommand>(&previous);
+    const auto *b = std::get_if<IOSSettingCommand>(&next);
+    if (!a || !b || a->setting != b->setting ||
+        (a->setting != "native_properties_edit" && a->setting != "native_redo_edit")) {
+      return false;
+    }
+    std::istringstream a_stream(a->value), b_stream(b->value);
+    auto a_value = io::serialize::JsonFormatter().deserialize(a_stream);
+    auto b_value = io::serialize::JsonFormatter().deserialize(b_stream);
+    const auto *a_request = a_value ? a_value->as_dictionary_value() : nullptr;
+    const auto *b_request = b_value ? b_value->as_dictionary_value() : nullptr;
+    return a_request && b_request && a_request->lookup_str("phase").value_or("") == "update" &&
+           !a_request->lookup_str("interaction").value_or("").is_empty() &&
+           a_request->lookup_str("interaction") == b_request->lookup_str("interaction") &&
+           a_request->lookup_str("id") == b_request->lookup_str("id") &&
+           a_request->lookup_str("key") == b_request->lookup_str("key");
+  };
+  for (IOSUIMessage &message : ios_ui_messages.take_coalesced(supersedes_preview)) {
     ios_ui_dispatch(C, message);
+  }
+
+  const bool hover_changed = ios_hover_requests.take(ios_hover_request);
+  {
+    const IOSContextStore context_store = ios_context_push_view3d(C);
+    ARegion *region = CTX_wm_region(C);
+    wmWindow *window = CTX_wm_window(C);
+    if (hover_changed && window) {
+      /* Removing a cursor needs a frame even when no mesh hover target changed. */
+      WM_paint_cursor_tag_redraw(window, region);
+      if (bScreen *screen = WM_window_get_active_screen(window)) {
+        screen->do_draw_gesture = true;
+      }
+    }
+    bool active = ios_hover_request.active && window && region;
+    if (active) {
+      for (wmEventHandler &handler : window->runtime->modalhandlers) {
+        if (handler.type == WM_HANDLER_TYPE_OP || handler.type == WM_HANDLER_TYPE_UI) {
+          active = false;
+          break;
+        }
+      }
+      if (region->runtime->gizmo_map && wm_gizmomap_highlight_get(region->runtime->gizmo_map)) {
+        active = false;
+      }
+    }
+    int mval[2] = {ios_hover_request.x, ios_hover_request.y};
+    if (window && region) {
+      wm_cursor_position_from_ghost_client_coords(window, &mval[0], &mval[1]);
+      mval[0] -= region->winrct.xmin;
+      mval[1] -= region->winrct.ymin;
+    }
+    ED_view3d_pencil_hover_update(C, active, mval);
+    const View3DPencilHover hit = ED_view3d_pencil_hover_get(region);
+    ios_hover_snapshot.publish("{\"object\":" + std::to_string(hit.object_uid) +
+                               ",\"kind\":" + std::to_string(hit.kind) +
+                               ",\"index\":" + std::to_string(hit.index) +
+                               ",\"cursorVisible\":" + (ios_hover_request.active ? "true" : "false") + "}");
+    ios_context_pop(C, context_store);
   }
 
   ios_toolbar_build(C);
 }
+
+}  // namespace blender

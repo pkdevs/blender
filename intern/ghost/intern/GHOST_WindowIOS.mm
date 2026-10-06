@@ -8,7 +8,6 @@
 #include "GHOST_ContextIOS.hh"
 #include "GHOST_SystemIOS.hh"
 
-#include "GHOST_C-api.h"
 #include "GHOST_Debug.hh"
 #include "GHOST_EventButton.hh"
 #include "GHOST_EventCursor.hh"
@@ -41,6 +40,8 @@
 #endif
 
 extern "C" void WM_apple_ios_ui_command_enqueue(int command);
+#import "GHOST_IOSScenePanels.hh"
+#import "GHOST_IOSRedoStrip.hh"
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
@@ -56,7 +57,9 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *setting, const char 
 extern "C" void WM_apple_ios_ui_tool_set_by_id(const char *tool_id);
 extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle);
 extern "C" void WM_apple_ios_ui_navigation_hover_set(bool active);
+extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y);
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json();
+extern "C" char *WM_apple_ios_ui_panels_take_json();
 extern "C" void WM_apple_ios_ui_toolbar_free_json(char *json);
 
 enum GHOSTIOSUICommand {
@@ -98,9 +101,11 @@ enum GHOSTIOSUICommand {
 
 /* Semantic keys in release/ios/blender_icons.json select Blender artwork without
  * conflating SF Symbols reused for different tools. UIImage caches the assets;
- * template rendering leaves appearance/contrast/disabled-state tinting to UIKit. */
+ * tool artwork retains its colors, while interface icons use UIKit template tinting. */
 static UIImage *blenderIOSIcon(NSString *key, NSString *systemImage)
 {
+  const BOOL selected_tool = [key hasPrefix:@"selected.tool."];
+  if (selected_tool) { key = [key substringFromIndex:@"selected.".length]; }
   static NSDictionary *icons = nil;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -116,6 +121,13 @@ static UIImage *blenderIOSIcon(NSString *key, NSString *systemImage)
     name = icons[[@"symbol." stringByAppendingString:systemImage]];
   }
   NSString *prefix = [key hasPrefix:@"tool."] ? @"blender.tool." : @"blender.";
+  if (name && [key hasPrefix:@"tool."]) {
+    NSString *colored_prefix = selected_tool ? @"blender.tool.selected." : @"blender.tool.color.";
+    UIImage *colored = [UIImage imageNamed:[colored_prefix stringByAppendingString:name]];
+    if (colored) {
+      return [colored imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+  }
   UIImage *image = name ? [UIImage imageNamed:[prefix stringByAppendingString:name]] : nil;
   if (image != nil) {
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
@@ -371,6 +383,62 @@ typedef struct UserInputEvent {
   return hit_view == self ? nil : hit_view;
 }
 
+@end
+
+@interface GHOSTIOSToolStackView : GHOSTIOSPassThroughStackView {
+  UIButton *_selection;
+  UIButton *_selectionTarget;
+}
+@end
+
+@implementation GHOSTIOSToolStackView
+- (instancetype)initWithFrame:(CGRect)frame
+{
+  if ((self = [super initWithFrame:frame])) {
+    _selection = [UIButton buttonWithType:UIButtonTypeSystem];
+    _selection.userInteractionEnabled = NO;
+    _selection.isAccessibilityElement = NO;
+    _selection.accessibilityIdentifier = @"blender.toolbar.selection";
+    _selection.hidden = YES;
+    UIButtonConfiguration *configuration = [UIButtonConfiguration prominentGlassButtonConfiguration];
+    configuration.baseBackgroundColor = UIColor.systemBlueColor;
+    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    configuration.automaticallyUpdateForSelection = NO;
+    _selection.configuration = configuration;
+    [self insertSubview:_selection atIndex:0];
+  }
+  return self;
+}
+- (void)layoutSubviews
+{
+  [super layoutSubviews];
+  UIButton *target = nil;
+  for (UIView *view in self.arrangedSubviews) {
+    if ([view isKindOfClass:UIButton.class] && ((UIButton *)view).selected && !view.hidden) {
+      target = (UIButton *)view;
+      break;
+    }
+  }
+  if (!target) {
+    _selection.hidden = YES;
+    [_selection.layer removeAllAnimations];
+    _selectionTarget = nil;
+    return;
+  }
+  const BOOL animate = !_selection.hidden && _selectionTarget != target &&
+                       !UIAccessibilityIsReduceMotionEnabled();
+  _selectionTarget = target;
+  _selection.hidden = NO;
+  [self sendSubviewToBack:_selection];
+  if (animate) {
+    [UIView animateWithDuration:0.16 delay:0 usingSpringWithDamping:0.9 initialSpringVelocity:0
+        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+        animations:^{ self->_selection.frame = target.frame; } completion:nil];
+  }
+  else if (!CGRectEqualToRect(_selection.frame, target.frame)) {
+    _selection.frame = target.frame;
+  }
+}
 @end
 
 @interface GHOSTIOSNavigationBar : UINavigationBar
@@ -814,7 +882,7 @@ typedef struct UserInputEvent {
         case UserInputEvent::EventTypes::CURSOR_MOVE:
           window->updatePointerPosition(event_info.location.x, event_info.location.y);
           system->pushEvent(
-              new GHOST_EventCursor(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
+              std::make_unique<GHOST_EventCursor>(system->getMilliSeconds(),
                                     GHOST_kEventCursorMove,
                                     window,
                                     event_info.location.x,
@@ -823,7 +891,7 @@ typedef struct UserInputEvent {
           break;
         case UserInputEvent::EventTypes::ORBIT_GESTURE:
           system->pushEvent(
-              new GHOST_EventTrackpad(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
+              std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
                                       window,
                                       GHOST_kTrackpadEventRotate,
                                       event_info.location.x,
@@ -835,64 +903,59 @@ typedef struct UserInputEvent {
                                       event_info.gesture_id));
           break;
         case UserInputEvent::EventTypes::PAN_GESTURE:
-          system->pushEvent(
-              new GHOST_EventTrackpad(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
-                                      window,
-                                      GHOST_kTrackpadEventScroll,
-                                      event_info.location.x,
-                                      event_info.location.y,
-                                      event_info.translation.x,
-                                      event_info.translation.y,
-                                      false,
-                                      1));
+          system->pushEvent(std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
+                                                                  window,
+                                                                  GHOST_kTrackpadEventScroll,
+                                                                  event_info.location.x,
+                                                                  event_info.location.y,
+                                                                  event_info.translation.x,
+                                                                  event_info.translation.y,
+                                                                  false,
+                                                                  1));
           break;
         case UserInputEvent::EventTypes::PAN_GESTURE_TWO_FINGERS:
-          system->pushEvent(
-              new GHOST_EventTrackpad(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
-                                      window,
-                                      GHOST_kTrackpadEventScroll,
-                                      event_info.location.x,
-                                      event_info.location.y,
-                                      event_info.translation.x,
-                                      event_info.translation.y,
-                                      true,
-                                      2));
+          system->pushEvent(std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
+                                                                  window,
+                                                                  GHOST_kTrackpadEventScroll,
+                                                                  event_info.location.x,
+                                                                  event_info.location.y,
+                                                                  event_info.translation.x,
+                                                                  event_info.translation.y,
+                                                                  true,
+                                                                  2));
           break;
         case UserInputEvent::EventTypes::LEFT_BUTTON_DOWN:
-          system->pushEvent(
-              new GHOST_EventButton(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
-                                    GHOST_kEventButtonDown,
-                                    window,
-                                    GHOST_kButtonMaskLeft,
-                                    tablet_data));
+          system->pushEvent(std::make_unique<GHOST_EventButton>(system->getMilliSeconds(),
+                                                                GHOST_kEventButtonDown,
+                                                                window,
+                                                                GHOST_kButtonMaskLeft,
+                                                                tablet_data));
           break;
         case UserInputEvent::EventTypes::LEFT_BUTTON_UP:
-          system->pushEvent(
-              new GHOST_EventButton(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
-                                    GHOST_kEventButtonUp,
-                                    window,
-                                    GHOST_kButtonMaskLeft,
-                                    tablet_data));
+          system->pushEvent(std::make_unique<GHOST_EventButton>(system->getMilliSeconds(),
+                                                                GHOST_kEventButtonUp,
+                                                                window,
+                                                                GHOST_kButtonMaskLeft,
+                                                                tablet_data));
           break;
         case UserInputEvent::EventTypes::PINCH_GESTURE:
-          system->pushEvent(
-              new GHOST_EventTrackpad(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
-                                      window,
-                                      GHOST_kTrackpadEventMagnify,
-                                      event_info.location.x,
-                                      event_info.location.y,
-                                      event_info.distance,
-                                      0,
-                                      false,
-                                      2));
+          system->pushEvent(std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
+                                                                  window,
+                                                                  GHOST_kTrackpadEventMagnify,
+                                                                  event_info.location.x,
+                                                                  event_info.location.y,
+                                                                  event_info.distance,
+                                                                  0,
+                                                                  false,
+                                                                  2));
           break;
         case UserInputEvent::EventTypes::CANCEL_TOOL:
-          system->pushEvent(new GHOST_EventKey(system->getMilliSeconds(),
+          system->pushEvent(std::make_unique<GHOST_EventKey>(system->getMilliSeconds(),
                                                GHOST_kEventKeyDown,
                                                window,
                                                GHOST_kKeyEsc,
                                                false));
-          system->pushEvent(new GHOST_EventKey(system->getMilliSeconds(),
+          system->pushEvent(std::make_unique<GHOST_EventKey>(system->getMilliSeconds(),
                                                GHOST_kEventKeyUp,
                                                window,
                                                GHOST_kKeyEsc,
@@ -1025,6 +1088,7 @@ typedef struct UserInputEvent {
 
 - (void)cancelPencilStroke
 {
+  WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
   if (pencil_button_active) {
     /* Cancel the modal tool before releasing, so interruption does not commit it.
      * Do not dereference UITouch here: UIKit may already have retired the touch. */
@@ -1061,6 +1125,7 @@ typedef struct UserInputEvent {
     }
     for (UITouch *touch in event.allTouches) {
       if (touch.phase == UITouchPhaseBegan) {
+        WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
         [self stopOrbitMomentum];
       }
       if (touch.type == UITouchTypeDirect && pencil_context_menu.active) {
@@ -1201,8 +1266,8 @@ typedef struct UserInputEvent {
   touch_point.x *= scale;
   touch_point.y *= scale;
 
-  system->pushEvent(new GHOST_Event(
-      GHOST_GetMilliSeconds((GHOST_SystemHandle)system), GHOST_kEventTwoFingerTap, window));
+  system->pushEvent(
+      std::make_unique<GHOST_Event>(system->getMilliSeconds(), GHOST_kEventTwoFingerTap, window));
 }
 
 - (void)handleTap3F:(GHOSTUITapGestureRecognizer *)sender
@@ -1216,8 +1281,8 @@ typedef struct UserInputEvent {
   touch_point.x *= scale;
   touch_point.y *= scale;
 
-  system->pushEvent(new GHOST_Event(
-      GHOST_GetMilliSeconds((GHOST_SystemHandle)system), GHOST_kEventThreeFingerTap, window));
+  system->pushEvent(std::make_unique<GHOST_Event>(
+      system->getMilliSeconds(), GHOST_kEventThreeFingerTap, window));
 }
 
 - (void)handleTap4F:(GHOSTUITapGestureRecognizer *)sender
@@ -1231,8 +1296,8 @@ typedef struct UserInputEvent {
   touch_point.x *= scale;
   touch_point.y *= scale;
 
-  system->pushEvent(new GHOST_Event(
-      GHOST_GetMilliSeconds((GHOST_SystemHandle)system), GHOST_kEventFourFingerTap, window));
+  system->pushEvent(
+      std::make_unique<GHOST_Event>(system->getMilliSeconds(), GHOST_kEventFourFingerTap, window));
 }
 
 - (void)handlePan:(GHOSTUIPanGestureRecognizer *)sender
@@ -1400,7 +1465,7 @@ typedef struct UserInputEvent {
     return;
   }
 
-  system->pushEvent(new GHOST_EventTouch(
+  system->pushEvent(std::make_unique<GHOST_EventTouch>(
       system->getMilliSeconds(), window, ghostEventType, location.x, location.y));
 }
 
@@ -1412,13 +1477,16 @@ typedef struct UserInputEvent {
       ![self isBlenderPencilInputView:[self hitTest:[sender locationInView:(UIView *)self] withEvent:nil]])
   {
     WM_apple_ios_ui_navigation_hover_set(false);
+    WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
     return;
   }
   if ([pencil_context_menu handlePencilHover:sender]) {
     WM_apple_ios_ui_navigation_hover_set(false);
+    WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
     return;
   }
   if (pencil_button_active) {
+    WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
     return;
   }
   if (sender.state == UIGestureRecognizerStateBegan ||
@@ -1430,6 +1498,11 @@ typedef struct UserInputEvent {
     tablet_data.Active = GHOST_kTabletModeStylus;
     tablet_data.Pressure = 0.0f;
     CGPoint hover_point = [sender getScaledTouchPoint:window];
+    UIView *hit = [self hitTest:[sender locationInView:self] withEvent:nil];
+    WM_apple_ios_ui_pencil_hover_set(
+        ![hit.accessibilityIdentifier isEqualToString:@"blender.viewport.navigation"],
+        hover_point.x,
+        hover_point.y);
     /* Add cursor move event. */
     UserInputEvent event_info(&hover_point, nullptr, nullptr, true);
     event_info.add_event(UserInputEvent::EventTypes::CURSOR_MOVE);
@@ -1441,6 +1514,7 @@ typedef struct UserInputEvent {
   {
     WM_apple_ios_ui_navigation_hover_set(false);
     tablet_data = GHOST_TABLET_DATA_NONE;
+    WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
   }
 }
 
@@ -1618,12 +1692,8 @@ typedef struct UserInputEvent {
      This event should cause ui_textedit_end() to be called which will
      hide the keyboard.
      */
-    system->pushEvent(new GHOST_EventKey(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
-                                         GHOST_kEventKeyDown,
-                                         window,
-                                         GHOST_kKeyEnter,
-                                         false,
-                                         nullptr));
+    system->pushEvent(std::make_unique<GHOST_EventKey>(
+        system->getMilliSeconds(), GHOST_kEventKeyDown, window, GHOST_kKeyEnter, false, nullptr));
   }
   else {
     IOS_INPUT_LOG(@"Ignoring handleKeyboardReturn %@", text_field.text);
@@ -1658,12 +1728,12 @@ typedef struct UserInputEvent {
     bool push_edits_back_to_blender = false;
 
     if (push_edits_back_to_blender) {
-      system->pushEvent(new GHOST_EventKey(GHOST_GetMilliSeconds((GHOST_SystemHandle)system),
-                                           GHOST_kEventKeyDown,
-                                           window,
-                                           GHOST_kKeyTextEdit,
-                                           false,
-                                           nullptr));
+      system->pushEvent(std::make_unique<GHOST_EventKey>(system->getMilliSeconds(),
+                                                         GHOST_kEventKeyDown,
+                                                         window,
+                                                         GHOST_kKeyTextEdit,
+                                                         false,
+                                                         nullptr));
     }
   }
 }
@@ -2120,6 +2190,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIBarButtonItem *_viewport_shading_button;
   UIBarButtonItem *_undo_button;
   UIBarButtonItem *_finger_input_button;
+  GHOSTIOSScenePanels *_scene_panels;
+  GHOSTIOSRedoStrip *_redo_strip;
   BOOL _finger_tool_enabled;
   GHOSTIOSPencilMenu *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
@@ -2145,6 +2217,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSLayoutConstraint *_action_collapsed_width_constraint;
   NSLayoutConstraint *_action_toggle_width_constraint;
   NSLayoutConstraint *_action_toggle_trailing_constraint;
+  NSLayoutConstraint *_action_scroll_trailing_constraint;
+  NSLayoutConstraint *_redo_pill_width_constraint;
+  NSLayoutConstraint *_redo_pill_min_width_constraint;
   BOOL _actions_collapsed;
   NSUInteger _action_transition_generation;
   UIView *_view_gizmo_hotspot;
@@ -2156,6 +2231,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   BOOL _view_gizmo_pressed;
   NSMutableArray *_view_pie_buttons;
   NSTimer *_toolbar_refresh_timer;
+  NSTimer *_panels_refresh_timer;
   NSArray *_native_menubar_items;
   uint64_t _native_menubar_request;
   NSString *_toolbar_signature;
@@ -2233,6 +2309,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                                           userInfo:nil
                                                            repeats:YES];
   [self refreshToolbarFromBlender];
+  _panels_refresh_timer = [NSTimer timerWithTimeInterval:1.0 / 60.0 target:self
+      selector:@selector(refreshScenePanelsFromBlender) userInfo:nil repeats:YES];
+  [NSRunLoop.mainRunLoop addTimer:_panels_refresh_timer forMode:NSRunLoopCommonModes];
   _actions_edit_menu_interaction = [[UIEditMenuInteraction alloc] initWithDelegate:self];
   [_view addInteraction:_actions_edit_menu_interaction];
 
@@ -2305,6 +2384,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self cancelViewGizmoInteraction];
   [_toolbar_refresh_timer invalidate];
   _toolbar_refresh_timer = nil;
+  [_panels_refresh_timer invalidate];
+  _panels_refresh_timer = nil;
   _pencil_menu.delegate = nil;
   [_renderer detach];
   _view.delegate = nil;
@@ -2313,6 +2394,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)dealloc
 {
+  [_scene_panels release];
+  [_redo_strip release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
@@ -2321,6 +2404,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _pencil_menu.delegate = nil;
   [_pencil_menu release];
   [_toolbar_refresh_timer invalidate];
+  [_panels_refresh_timer invalidate];
   [_toolbar_signature release];
   [_action_signature release];
   [_actions_menu_items release];
@@ -2345,6 +2429,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_collapsed_width_constraint release];
   [_action_toggle_width_constraint release];
   [_action_toggle_trailing_constraint release];
+  [_action_scroll_trailing_constraint release];
+  [_redo_pill_width_constraint release];
+  [_redo_pill_min_width_constraint release];
   [_view_pie_buttons release];
   [super dealloc];
 }
@@ -2469,7 +2556,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
   button.tag = command;
-  button.tintColor = UIColor.labelColor;
+  button.tintColor = UIColor.systemBlueColor;
   button.accessibilityLabel = title;
   button.translatesAutoresizingMaskIntoConstraints = NO;
 
@@ -2559,17 +2646,30 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (UIImage *)toolbarImageForTool:(NSDictionary *)tool mode:(NSString *)mode
 {
+  return [self toolbarImageForTool:tool mode:mode selected:NO];
+}
+
+- (UIImage *)toolbarImageForTool:(NSDictionary *)tool mode:(NSString *)mode selected:(BOOL)selected
+{
   NSString *icon = tool[@"icon"];
+  if ([icon isKindOfClass:NSString.class]) {
+    NSString *prefix = selected ? @"blender.tool.selected." : @"blender.tool.color.";
+    UIImage *colored = [UIImage imageNamed:[prefix stringByAppendingString:icon]];
+    if (colored) {
+      return [colored imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+  }
   UIImage *image = [icon isKindOfClass:NSString.class] ?
       [UIImage imageNamed:[@"blender.tool." stringByAppendingString:icon]] : nil;
   if (image) {
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
   }
   NSString *toolIdentifier = tool[@"id"];
-  image = blenderIOSIcon([NSString stringWithFormat:@"tool.%@.%@", mode, toolIdentifier], nil);
+  NSString *prefix = selected ? @"selected.tool." : @"tool.";
+  image = blenderIOSIcon([NSString stringWithFormat:@"%@%@.%@", prefix, mode, toolIdentifier], nil);
   if (image == nil) {
     NSString *symbol = tool[@"symbol"];
-    image = blenderIOSIcon([@"tool." stringByAppendingString:toolIdentifier],
+    image = blenderIOSIcon([prefix stringByAppendingString:toolIdentifier],
                            symbol.length ? symbol : nil);
   }
   return image ?: [UIImage systemImageNamed:@"questionmark.circle"];
@@ -2581,6 +2681,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   button.accessibilityLabel = title;
   button.accessibilityIdentifier = tool[@"id"];
   UIImage *image = [self toolbarImageForTool:tool mode:mode];
+  UIImage *selected_image = [self toolbarImageForTool:tool mode:mode selected:YES];
   NSArray *children = tool[@"children"];
   const BOOL grouped = children.count > 1;
   [button viewWithTag:9001].hidden = !grouped;
@@ -2594,11 +2695,17 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     const BOOL is_emphasized = [self isToolbarListVisible] &&
                                (updated_button.selected ||
                                 updated_button == self->_toolbar_hover_button);
-    UIButtonConfiguration *configuration = is_emphasized ?
+    UIButtonConfiguration *configuration = is_emphasized && !updated_button.selected ?
                                               [UIButtonConfiguration glassButtonConfiguration] :
                                               [UIButtonConfiguration plainButtonConfiguration];
-    configuration.title = shows_text ? title : nil;
-    configuration.image = image;
+    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
+    configuration.automaticallyUpdateForSelection = NO;
+    configuration.attributedTitle = shows_text ? [[[NSAttributedString alloc]
+        initWithString:title attributes:@{NSForegroundColorAttributeName: configuration.baseForegroundColor}]
+        autorelease] : nil;
+    configuration.image = updated_button.selected ? selected_image : image;
+    ((UIImageView *)[updated_button viewWithTag:9001]).tintColor =
+        updated_button.selected ? UIColor.whiteColor : UIColor.secondaryLabelColor;
     configuration.imagePlacement = NSDirectionalRectEdgeLeading;
     configuration.imagePadding = shows_text ? 10.0 : 0.0;
     configuration.contentInsets = shows_text ?
@@ -2673,6 +2780,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _active_tool_identifier = [toolIdentifier copy];
 
   [self updateToolbarVisibilityAnimated:NO];
+  /* Resolve selection artwork in this event, before UIKit's glass transition. */
+  [UIView performWithoutAnimation:^{
+    for (UIButton *button in self->_toolbar_buttons) {
+      [button updateConfiguration];
+    }
+  }];
 }
 
 - (CGFloat)expandedToolbarHeight
@@ -2937,6 +3050,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
       [button setNeedsUpdateConfiguration];
       button.alpha = (list_visible || is_active) ? 1.0 : 0.0;
     }
+    [_tool_stack setNeedsLayout];
   };
 
   void (^finishCompact)(void) = ^{
@@ -2989,6 +3103,19 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _toolbar_expanded = expanded;
   [self hideToolbarLabelAnimated:NO];
   [self updateToolbarVisibilityAnimated:animated];
+}
+
+- (void)refreshScenePanelsFromBlender
+{
+  /* The mailbox returns immediately when unchanged, including while Blender is busy. */
+  char *json = WM_apple_ios_ui_panels_take_json();
+  if (!json) {
+    return;
+  }
+  NSData *data = [NSData dataWithBytes:json length:strlen(json)];
+  WM_apple_ios_ui_toolbar_free_json(json);
+  NSDictionary *snapshot = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+  [_scene_panels updateSnapshot:snapshot];
 }
 
 - (NSDictionary *)toolbarModel
@@ -3132,7 +3259,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 {
   UNUSED_VARS(systemImage);
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-  button.tintColor = UIColor.labelColor;
+  button.tintColor = UIColor.systemBlueColor;
   button.accessibilityLabel = title;
   button.accessibilityIdentifier = opName;
   button.accessibilityValue = propertyName;
@@ -3237,8 +3364,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                                               key:key]];
   }
 
-  _action_rail.hidden = _action_buttons.count == 0;
-  _action_rail.alpha = _action_buttons.count == 0 ? 0.0 : 1.0;
+  _action_rail.hidden = _action_buttons.count == 0 && !_redo_strip.collapsedWidth;
+  _action_rail.alpha = _action_rail.hidden ? 0.0 : 1.0;
   [self updateAxisConstraintsWithActions:actions];
   [_action_scroll setContentOffset:CGPointZero animated:NO];
 }
@@ -3259,6 +3386,18 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_toggle addTarget:self action:@selector(toggleActionStrip:)
           forControlEvents:UIControlEventTouchUpInside];
   [_action_group addSubview:_action_toggle];
+  UIButton *redo_pill = _redo_strip.collapsedButton;
+  redo_pill.translatesAutoresizingMaskIntoConstraints = NO;
+  [_action_group addSubview:redo_pill];
+  _redo_pill_width_constraint = [[redo_pill.widthAnchor constraintEqualToConstant:0] retain];
+  _redo_pill_width_constraint.priority = UILayoutPriorityDefaultHigh - 1;
+  _redo_pill_min_width_constraint = [[redo_pill.widthAnchor constraintGreaterThanOrEqualToConstant:0] retain];
+  _action_scroll_trailing_constraint = [[_action_scroll.trailingAnchor
+      constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
+  __block GHOST_IOSViewController *owner = self;
+  _redo_strip.presentationDidChange = ^(BOOL animated) {
+    [owner updateRedoPillLayout:animated];
+  };
 
   _action_expanded_width_constraint = [[_action_group.widthAnchor
       constraintEqualToAnchor:_action_stack.widthAnchor constant:60.0] retain];
@@ -3268,8 +3407,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _action_collapsed_width_constraint.priority = UILayoutPriorityDefaultHigh;
   _action_toggle_width_constraint = [[_action_toggle.widthAnchor
       constraintEqualToConstant:44.0] retain];
+  _action_toggle_width_constraint.priority = UILayoutPriorityRequired - 1;
   _action_toggle_trailing_constraint = [[_action_toggle.trailingAnchor
-      constraintEqualToAnchor:_action_group.trailingAnchor] retain];
+      constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
   NSLayoutConstraint *center = [_action_group.centerXAnchor
       constraintEqualToAnchor:_overlay_view.centerXAnchor];
   center.priority = UILayoutPriorityRequired - 2;
@@ -3285,8 +3425,35 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     [_action_toggle.leadingAnchor constraintEqualToAnchor:_action_group.leadingAnchor],
     [_action_toggle.centerYAnchor constraintEqualToAnchor:_action_group.centerYAnchor],
     [_action_toggle.heightAnchor constraintEqualToConstant:44.0],
+    _redo_pill_width_constraint,
+    _redo_pill_min_width_constraint,
+    _action_scroll_trailing_constraint,
+    [redo_pill.trailingAnchor constraintEqualToAnchor:_action_group.trailingAnchor],
+    [redo_pill.centerYAnchor constraintEqualToAnchor:_action_group.centerYAnchor],
+    [redo_pill.heightAnchor constraintEqualToConstant:44.0],
   ]];
   [self setActionsCollapsed:NO animated:NO];
+}
+
+- (void)updateRedoPillLayout:(BOOL)animated
+{
+  [_action_rail layoutIfNeeded];
+  const CGFloat width = _redo_strip.collapsedWidth;
+  if (_redo_pill_width_constraint.constant == width) { return; }
+  const CGFloat reserved = width ? width + 8 : 0;
+  _redo_pill_width_constraint.constant = width;
+  _redo_pill_min_width_constraint.constant = width ? 44 : 0;
+  _action_scroll_trailing_constraint.constant = width ? -8 : 0;
+  _action_toggle_trailing_constraint.constant = width ? -8 : 0;
+  _action_toggle_width_constraint.constant = _actions_collapsed ? (width ? 80 : 96) : 44;
+  _action_collapsed_width_constraint.constant = 96 + reserved;
+  _action_expanded_width_constraint.constant = 60 + reserved;
+  _action_rail.hidden = _action_buttons.count == 0 && !width;
+  _action_rail.alpha = _action_rail.hidden ? 0 : 1;
+  [UIView animateWithDuration:animated && !UIAccessibilityIsReduceMotionEnabled() ? 0.3 : 0
+      delay:0 usingSpringWithDamping:0.86 initialSpringVelocity:0
+      options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+      animations:^{ [self->_action_rail layoutIfNeeded]; } completion:nil];
 }
 
 - (void)toggleActionStrip:(UIButton *)sender
@@ -3306,17 +3473,20 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _action_toggle_trailing_constraint.active = NO;
   _action_expanded_width_constraint.active = !collapsed;
   _action_collapsed_width_constraint.active = collapsed;
-  _action_toggle_width_constraint.active = !collapsed;
+  _action_toggle_width_constraint.constant = collapsed ? (_redo_strip.collapsedWidth ? 80 : 96) : 44;
+  _action_toggle_width_constraint.active = YES;
   _action_toggle_trailing_constraint.active = collapsed;
 
   UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
   configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
   configuration.title = collapsed ? @"Actions" : nil;
+  configuration.titleLineBreakMode = NSLineBreakByTruncatingTail;
   configuration.image = collapsed ? nil : [UIImage systemImageNamed:@"xmark"];
   configuration.preferredSymbolConfigurationForImage =
       [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold];
   configuration.contentInsets = NSDirectionalEdgeInsetsMake(8, 10, 8, 10);
   _action_toggle.configuration = configuration;
+  _action_toggle.titleLabel.numberOfLines = 1;
   _action_toggle.accessibilityLabel = collapsed ? @"Show Quick Actions" : @"Hide Quick Actions";
   _action_toggle.accessibilityValue = collapsed ? @"Collapsed" : @"Expanded";
   _action_toggle.toolTip = _action_toggle.accessibilityLabel;
@@ -3420,6 +3590,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self updateViewportLoadingIndicator];
   [self refreshNativeMenuBar];
   NSDictionary *model = [self toolbarModel];
+  [_redo_strip updateSnapshot:model[@"redo"]];
   NSArray *navigation_geometry = model[@"navigationGizmo"];
   if ([navigation_geometry isKindOfClass:NSArray.class] && navigation_geometry.count == 3 &&
       ![_view_gizmo_geometry isEqual:navigation_geometry]) {
@@ -3478,8 +3649,31 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (void)viewDidLayoutSubviews
 {
   [super viewDidLayoutSubviews];
-  [self layoutToolbarLabel];
+  CGRect panel_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
+  const CGRect bar_rect = [_top_bar convertRect:_top_bar.bounds toView:_overlay_view];
+  const CGFloat panel_top = MAX(CGRectGetMinY(panel_rect), CGRectGetMaxY(bar_rect));
+  const CGFloat panel_bottom = MIN(CGRectGetMaxY(panel_rect) - 64,
+      CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame));
+  panel_rect.origin.y = panel_top;
+  panel_rect.size.height = MAX(0, panel_bottom - panel_top);
+  [_scene_panels layoutInRect:panel_rect];
   [self layoutViewPie];
+  [self updateRedoPillLayout:NO];
+  CGRect redo_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
+  const CGFloat redo_left = MAX(CGRectGetMinX(redo_rect) + 12, CGRectGetMaxX(_tool_rail.frame) + 12);
+  CGFloat redo_right = CGRectGetMaxX(redo_rect) - 12;
+  CGFloat redo_bottom = MIN(CGRectGetMinY(_action_rail.frame) - 8,
+                           CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame) - 8);
+  if (redo_rect.size.width < 700) {
+    redo_bottom = MIN(redo_bottom, CGRectGetMinY(_view_gizmo_hotspot.frame) - 8);
+  }
+  else {
+    redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
+  }
+  redo_rect = CGRectMake(redo_left, panel_top + 8,
+      MAX(0, redo_right - redo_left), MAX(60, redo_bottom - panel_top - 8));
+  [_redo_strip layoutInRect:redo_rect];
+  [self layoutToolbarLabel];
   [self updateMTKViewDrawableScale];
   [self updateToolbarHeightForCurrentState];
   if (_top_bar_height_constraint) {
@@ -3665,7 +3859,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 
   NSMutableArray *actions = [NSMutableArray array];
-  for (UIAction *item in _viewport_shading_button.menu.children) {
+  UIMenu *menu = (UIMenu *)_viewport_shading_button.menuRepresentation;
+  for (UIAction *item in menu.children) {
     UIAction *action = [[item copy] autorelease];
     const BOOL selected = action.identifier.integerValue == command.integerValue;
     action.state = selected ? UIMenuElementStateOn : UIMenuElementStateOff;
@@ -3675,9 +3870,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     }
     [actions addObject:action];
   }
-  _viewport_shading_button.menu =
-      [_viewport_shading_button.menu menuByReplacingChildren:actions];
-  _viewport_shading_button.menuRepresentation = _viewport_shading_button.menu;
+  _viewport_shading_button.menuRepresentation =
+      [menu menuByReplacingChildren:actions];
   _viewport_shading_button.tag = command.integerValue;
 }
 
@@ -3686,7 +3880,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                               command:(NSInteger)command
 {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-  button.tintColor = UIColor.labelColor;
+  button.tintColor = UIColor.systemBlueColor;
   button.translatesAutoresizingMaskIntoConstraints = YES;
   button.accessibilityLabel = title;
   button.tag = command;
@@ -3697,8 +3891,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
   button.configurationUpdateHandler = ^(UIButton *updated_button) {
     UIButtonConfiguration *configuration = updated_button.selected ?
-                                              [UIButtonConfiguration glassButtonConfiguration] :
+                                              [UIButtonConfiguration prominentGlassButtonConfiguration] :
                                               [UIButtonConfiguration clearGlassButtonConfiguration];
+    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.systemBlueColor;
+    configuration.baseBackgroundColor = updated_button.selected ? UIColor.systemBlueColor : nil;
     configuration.title = title;
     configuration.image = image;
     configuration.imagePlacement = NSDirectionalRectEdgeLeading;
@@ -4313,6 +4509,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _mesh_select_group.barButtonItems.firstObject.menuRepresentation = menu;
 }
 
+- (void)showViewportShading:(UIBarButtonItem *)button
+{
+  [_scene_panels presentShadingFrom:button controller:self];
+}
+
 - (UIBarButtonItem *)viewportShadingButton
 {
   UIBarButtonItem *button = [[[UIBarButtonItem alloc]
@@ -4339,6 +4540,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                           command:GHOST_IOS_UI_COMMAND_SET_VIEWPORT_RENDERED],
            ]];
   button.menuRepresentation = button.menu;
+  button.menu = nil;
+  button.target = self;
+  button.action = @selector(showViewportShading:);
   return button;
 }
 
@@ -4442,7 +4646,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     _top_bar.translatesAutoresizingMaskIntoConstraints = NO;
     _top_bar_item = [[UINavigationItem alloc] initWithTitle:@""];
   }
-  _top_bar.tintColor = UIColor.labelColor;
+  _top_bar.tintColor = UIColor.systemBlueColor;
   _top_bar.accessibilityIdentifier = @"blender.top-toolbar";
   _top_bar_item.style = UINavigationItemStyleEditor;
 
@@ -4468,7 +4672,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
         arrayByAddingObject:_finger_input_button.creatingFixedGroup];
   }
   _top_bar_item.centerItemGroups = @[ [self topSettingsControlGroup] ];
-  _top_bar_item.trailingItemGroups = @[];
+  _top_bar_item.trailingItemGroups = @[
+    [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:nil
+        items:@[_scene_panels.hierarchyButton, _scene_panels.inspectorButton]],
+  ];
+  _viewport_shading_button.sharesBackground = NO;
   _top_bar_item.pinnedTrailingGroup = _viewport_shading_button.creatingFixedGroup;
   if (@available(iOS 27.0, *)) {
     _mode_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
@@ -4510,6 +4718,25 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self.view addSubview:_overlay_view];
 
   _mesh_select_buttons = [[NSMutableArray alloc] init];
+  _redo_strip = [[GHOSTIOSRedoStrip alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
+    if (!name.length) { return nil; }
+    return [[UIImage imageNamed:[@"blender." stringByAppendingString:name.lowercaseString]]
+        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  }];
+  _scene_panels = [[GHOSTIOSScenePanels alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
+    if (!name.length) {
+      return nil;
+    }
+    return [[UIImage imageNamed:[@"blender." stringByAppendingString:name.lowercaseString]]
+        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  }];
+  _scene_panels.menuProvider = ^UIMenu *(NSDictionary *property) {
+    return blenderIOSNativeSubmenu(@{@"title": property[@"label"],
+                                    @"icon": property[@"icon"] ?: @"",
+                                    @"route": @{@"root": property[@"menu"], @"path": @[],
+                                                @"propertiesTab": property[@"tab"]}},
+                                   property[@"menu"]);
+  };
   [self installNativeTopBar];
   _pencil_menu = [[GHOSTIOSPencilMenu alloc] initWithFrame:_overlay_view.bounds];
   _pencil_menu.delegate = self;
@@ -4559,7 +4786,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _tool_scroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
   [_tool_rail.contentView addSubview:_tool_scroll];
 
-  _tool_stack = [[GHOSTIOSPassThroughStackView alloc] initWithFrame:CGRectZero];
+  _tool_stack = [[GHOSTIOSToolStackView alloc] initWithFrame:CGRectZero];
   _tool_stack.axis = UILayoutConstraintAxisVertical;
   _tool_stack.alignment = UIStackViewAlignmentFill;
   _tool_stack.distribution = UIStackViewDistributionEqualSpacing;
@@ -4744,8 +4971,6 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
     [_action_scroll.leadingAnchor constraintEqualToAnchor:_action_group.leadingAnchor
                                                 constant:48.0],
-    [_action_scroll.trailingAnchor constraintEqualToAnchor:_action_group.trailingAnchor
-                                                 constant:0.0],
     [_action_scroll.topAnchor constraintEqualToAnchor:_action_rail.contentView.topAnchor
                                             constant:0.0],
     [_action_scroll.bottomAnchor constraintEqualToAnchor:_action_rail.contentView.bottomAnchor
@@ -5058,9 +5283,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     return;
   }
 
-  const uint64_t time = GHOST_GetMilliSeconds((GHOST_SystemHandle)system);
-  system->pushEvent(new GHOST_EventKey(time, GHOST_kEventKeyDown, _ghost_window, key, false, nullptr));
-  system->pushEvent(new GHOST_EventKey(time, GHOST_kEventKeyUp, _ghost_window, key, false, nullptr));
+  const uint64_t time = system->getMilliSeconds();
+  system->pushEvent(std::make_unique<GHOST_EventKey>(time, GHOST_kEventKeyDown, _ghost_window, key, false, nullptr));
+  system->pushEvent(std::make_unique<GHOST_EventKey>(time, GHOST_kEventKeyUp, _ghost_window, key, false, nullptr));
 }
 
 - (void)handleGesture:(UIGestureRecognizer *)gestureRecognizer
@@ -5282,7 +5507,7 @@ void GHOST_WindowIOS::publishGeometry(CGSize size)
   }
   if (drawable_size_.exchange(packed) != packed) {
     system_ios_->pushEvent(
-        new GHOST_Event(system_ios_->getMilliSeconds(), GHOST_kEventWindowSize, this));
+        std::make_unique<GHOST_Event>(system_ios_->getMilliSeconds(), GHOST_kEventWindowSize, this));
   }
 }
 
@@ -5299,7 +5524,7 @@ void *GHOST_WindowIOS::getOSWindow() const
   return (void *)uiview_;
 }
 
-GHOST_TSuccess GHOST_WindowIOS::swapBuffers()
+GHOST_TSuccess GHOST_WindowIOS::swapBufferRelease()
 {
   deferred_swap_buffers_count = 1;
   return GHOST_kSuccess;
@@ -5328,7 +5553,7 @@ void GHOST_WindowIOS::flushDeferredSwapBuffers()
                    deferred_swap_buffers_count);
 
     GHOST_ContextIOS *context = reinterpret_cast<GHOST_ContextIOS *>(getContext());
-    if (context->swapBuffers() == GHOST_kSuccess) {
+    if (context->swapBufferRelease() == GHOST_kSuccess) {
       deferred_swap_buffers_count = 0;
     }
   }

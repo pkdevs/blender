@@ -142,10 +142,14 @@ def steps():
     yield 0.5
     with bpy.context.temp_override(**viewport()):
         bpy.ops.wm.open_mainfile('INVOKE_DEFAULT')
-    yield 1.5
+    picker_deadline = time.monotonic() + 10
+    while snapshot()['presented'] != 'UIDocumentPickerViewController' and time.monotonic() < picker_deadline:
+        yield 0.1
     check(snapshot()['presented'] == 'UIDocumentPickerViewController', 'Open uses native Files picker')
     check(probe.blender_device_probe_cancel_picker(), 'Native Files picker cancels without loading')
-    yield 0.8
+    dismissal_deadline = time.monotonic() + 10
+    while snapshot()['presented'] and time.monotonic() < dismissal_deadline:
+        yield 0.1
     check(not snapshot()['presented'], 'Cancelled Files picker leaves no modal UI')
     bpy.context.scene['deep_qa_marker'] = 'modified'
     bpy.ops.wm.open_mainfile(filepath=str(path), load_ui=False)

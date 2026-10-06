@@ -23,6 +23,7 @@
 #  include <memory>
 #  include <string>
 
+namespace blender {
 namespace {
 struct Request {
   uint64_t id;
@@ -71,7 +72,8 @@ wmEventHandler_UI *find_handler(bContext *C, const Request &request)
   if (!wm || BLI_findindex(&wm->windows, request.window) == -1) {
     return nullptr;
   }
-  LISTBASE_FOREACH (wmEventHandler *, base, &request.window->modalhandlers) {
+  for (wmEventHandler &base_item : request.window->runtime->modalhandlers) {
+    wmEventHandler *base = &base_item;
     if (base->type == WM_HANDLER_TYPE_UI) {
       auto *handler = reinterpret_cast<wmEventHandler_UI *>(base);
       if (handler->handle_fn == handle && handler->user_data == &request) {
@@ -103,7 +105,7 @@ bool WM_apple_ios_dialog_begin(bContext *C,
                                const char *key)
 {
   wmWindow *win = CTX_wm_window(C);
-  if (!win || !win->ghostwin) {
+  if (!win || !win->runtime->ghostwin) {
     return false;
   }
   if (key && key[0]) {
@@ -118,8 +120,8 @@ bool WM_apple_ios_dialog_begin(bContext *C,
       Request{id, win, key ? key : "", std::move(complete), std::move(cancel)});
   Request *data = request.get();
   requests.emplace(id, std::move(request));
-  WM_event_add_ui_handler(C, &win->modalhandlers, handle, removed, data, eWM_EventHandlerFlag(0));
-  if (!GHOST_ios_dialog_begin(win->ghostwin, id, dialog, completed)) {
+  WM_event_add_ui_handler(C, &win->runtime->modalhandlers, handle, removed, data, eWM_EventHandlerFlag(0));
+  if (!GHOST_ios_dialog_begin(win->runtime->ghostwin, id, dialog, completed)) {
     /* Deliver cancellation in a later engine iteration, after invoke returns. */
     completed(id, -1, 0);
   }
@@ -168,7 +170,7 @@ void WM_apple_ios_dialog_flush(bContext *C)
     auto request = std::move(it->second);
     requests.erase(it);
     WM_event_remove_ui_handler(
-        &request->window->modalhandlers, handle, removed, request.get(), false);
+        &request->window->runtime->modalhandlers, handle, removed, request.get(), false);
     GHOST_ios_dialog_cancel(result.id);
     /* Remove ownership before execution: an operator may load a file or close its window. */
     if (result.action < 0) {
@@ -185,14 +187,15 @@ void WM_apple_ios_dialog_flush(bContext *C)
 
 void WM_apple_ios_reports(wmWindow *win, ReportList *reports, int minimum_level)
 {
-  if (!win || !win->ghostwin || !reports) {
+  if (!win || !win->runtime->ghostwin || !reports) {
     return;
   }
   GHOST_IOSDialog dialog;
   dialog.title = RPT_("Report");
   int severity = 0;
   BKE_reports_lock(reports);
-  LISTBASE_FOREACH (Report *, report, &reports->list) {
+  for (Report &report_item : reports->list) {
+    Report *report = &report_item;
     if (report->type < minimum_level) {
       continue;
     }
@@ -209,8 +212,10 @@ void WM_apple_ios_reports(wmWindow *win, ReportList *reports, int minimum_level)
   if (!dialog.message.empty()) {
     dialog.actions.push_back({IFACE_("OK")});
     dialog.preferred_action = 0;
-    GHOST_ios_dialog_begin(win->ghostwin, ++next_request, dialog, nullptr);
+    GHOST_ios_dialog_begin(win->runtime->ghostwin, ++next_request, dialog, nullptr);
   }
 }
+
+}  // namespace blender
 
 #endif

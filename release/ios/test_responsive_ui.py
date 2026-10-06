@@ -30,10 +30,11 @@ class ResponsiveUITest(unittest.TestCase):
         harness = r'''
 #include "GHOST_IOSMessageQueue.hh"
 #include <cassert>
+#include <cstring>
 #include <map>
 #include <string>
 #include <variant>
-''' + state + r'''
+''' + state + source[source.index('struct IOSPencilHoverRequest'):source.index('struct IOSActionItem')] + r'''
 struct bContext {};
 struct IOSContextStore {};
 static std::vector<std::string> executed;
@@ -68,6 +69,12 @@ int main() {
   const std::vector<std::string> expected{
       "property", "setting", "roll", "menu", "operator", "tool", "mode", "pencil"};
   assert(executed == expected);
+  for (int i = 0; i < 1000; i++) WM_apple_ios_ui_pencil_hover_set(true, i, i + 1);
+  IOSPencilHoverRequest hover;
+  assert(ios_hover_requests.take(hover) && hover.active && hover.x == 999 && hover.y == 1000);
+  WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
+  assert(ios_hover_requests.take(hover) && !hover.active);
+  assert(ios_ui_messages.take().empty());
 }
 '''
         with tempfile.TemporaryDirectory() as directory:

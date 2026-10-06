@@ -90,18 +90,17 @@ class GHOST_SystemIOS : public GHOST_ISystem {
  public:
   GHOST_WindowIOS *current_active_window_ = nullptr;
   std::vector<GHOST_Rect> sizes;
-  std::vector<GHOST_Event *> events;
+  std::vector<std::unique_ptr<const GHOST_Event>> events;
   int getMilliSeconds() { return 0; }
-  void pushEvent(GHOST_Event *event) {
+  void pushEvent(std::unique_ptr<const GHOST_Event> event) {
     NSCAssert(event->type == GHOST_kEventWindowSize, @"Wrong resize event");
-    events.push_back(event);
+    events.push_back(std::move(event));
   }
   void dispatchEvents() {
-    for (GHOST_Event *event : events) {
+    for (const auto &event : events) {
       GHOST_Rect bounds;
       event->window->getClientBounds(bounds);
       sizes.push_back(bounds);
-      delete event;
     }
     events.clear();
   }

@@ -53,6 +53,20 @@ int main()
   auto events = queue.take();
   assert(!events[0].alive->load() && events[1].alive->load());
 
+  struct Edit { int token, value; bool preview; };
+  GHOST_IOSMessageQueue<Edit> edits;
+  for (int i = 0; i < 1000; ++i) { edits.push({1, i, true}); }
+  edits.push({1, 1000, false});
+  edits.push({2, 0, false});
+  edits.push({1, 1001, true});
+  edits.push({1, 1002, true});
+  auto reduced = edits.take_coalesced([](const Edit &a, const Edit &b) {
+    return a.preview && a.token == b.token;
+  });
+  assert(reduced.size() == 3);
+  assert(reduced[0].value == 1000 && !reduced[0].preview);
+  assert(reduced[1].token == 2 && reduced[2].value == 1002);
+
   GHOST_IOSLatest<std::unique_ptr<int>> latest;
   std::atomic<bool> done{false};
   std::thread publisher([&] {

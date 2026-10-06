@@ -5,11 +5,14 @@
 import json
 from pathlib import Path
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
-from export_icons import SVG, export_catalog, geometry_template, svg_template, vco_triangles
+from export_icons import (SVG, export_catalog, geometry_color_pdf, geometry_template,
+                          invert_lightness, svg_template, vco_color_triangles, vco_triangles)
 
 
 class ExportIconsTest(unittest.TestCase):
@@ -55,6 +58,26 @@ class ExportIconsTest(unittest.TestCase):
         self.assertEqual(root[-1].attrib["mask"], "url(#artwork)")
         self.assertEqual(root[-1].attrib["fill"], "#000")
 
+    def test_color_geometry_and_blender_lightness_adjustment(self):
+        data = b'VCO\x00\xff\xff\x00\x00' + bytes((0, 0, 255, 0, 0, 255))
+        colors = ((63, 128, 255, 255), (255, 0, 0, 255), (0, 255, 0, 255))
+        data += bytes(value for color in colors for value in color)
+        self.assertEqual(next(vco_color_triangles(data))[1], colors)
+        self.assertEqual(invert_lightness(colors[0]), (0, 65, 192, 255))
+        self.assertEqual(invert_lightness((229, 229, 229, 128)), (26, 26, 26, 128))
+        for color in colors:
+            self.assertEqual(invert_lightness(invert_lightness(color)), color)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'color.dat'
+            path.write_bytes(data)
+            pdf = geometry_color_pdf(path)
+            self.assertTrue(pdf.startswith(b'%PDF-1.4'))
+            self.assertIn(b'/ShadingType 4', pdf)
+            self.assertIn(bytes((0, 0, 0, 63, 128, 255)), pdf)
+            self.assertIn(bytes((0, 0, 0, 0, 65, 192)), geometry_color_pdf(path, light=True))
+            xref = int(pdf.split(b'startxref\n')[1].splitlines()[0])
+            self.assertEqual(pdf[xref:xref + 4], b'xref')
+
     def test_complete_catalog_and_toolbar_coverage(self):
         release = Path(__file__).resolve().parents[1]
         manifest = release / "ios" / "blender_icons.json"
@@ -73,9 +96,24 @@ class ExportIconsTest(unittest.TestCase):
             tool_names.update(path.stem for path in (release / "datafiles/icons").glob("*.dat"))
             interface_names = set(mapping.values()) | {
                 path.stem for path in (release / "datafiles/icons_svg").glob("*.svg")}
-            self.assertEqual(len(list(output.glob("*.imageset"))), len(interface_names) + len(tool_names))
+            colored = list((release / 'datafiles/icons').glob('*.dat'))
+            self.assertEqual(len(list(output.glob("*.imageset"))), len(interface_names) + len(tool_names) + 2 * len(colored))
             for imageset in output.glob("*.imageset"):
                 contents = json.loads((imageset / "Contents.json").read_text())
+                if imageset.name.startswith('blender.tool.selected.'):
+                    self.assertEqual(contents['properties']['template-rendering-intent'], 'original')
+                    self.assertTrue(contents['properties']['preserves-vector-representation'])
+                    self.assertEqual(contents['images'], [{'filename': 'icon.pdf', 'idiom': 'universal'}])
+                    normal = output / imageset.name.replace('blender.tool.selected.', 'blender.tool.color.')
+                    self.assertEqual((imageset / 'icon.pdf').read_bytes(), (normal / 'dark.pdf').read_bytes())
+                    continue
+                if imageset.name.startswith('blender.tool.color.'):
+                    self.assertEqual(contents['properties']['template-rendering-intent'], 'original')
+                    self.assertTrue(contents['properties']['preserves-vector-representation'])
+                    self.assertEqual(contents['images'][1]['appearances'], [{'appearance': 'luminosity', 'value': 'dark'}])
+                    self.assertTrue((imageset / 'light.pdf').read_bytes().startswith(b'%PDF-'))
+                    self.assertTrue((imageset / 'dark.pdf').read_bytes().startswith(b'%PDF-'))
+                    continue
                 self.assertEqual(contents["properties"]["template-rendering-intent"], "template")
                 self.assertTrue(contents["properties"]["preserves-vector-representation"])
                 expected_size = "36" if imageset.name.startswith("blender.tool.") else "24"
@@ -92,6 +130,34 @@ class ExportIconsTest(unittest.TestCase):
             stale.mkdir()
             export_catalog(release / "datafiles", manifest, output)
             self.assertFalse(stale.exists())
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'Requires Apple CoreGraphics')
+    def test_colored_pdf_rendering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            geometry = root / 'triangle.dat'
+            geometry.write_bytes(b'VCO\x00\xff\xff\x00\x00' + bytes((0, 0, 255, 0, 0, 255)) +
+                                 bytes((63, 128, 255, 255)) * 3)
+            dark, light, smooth, alpha = [root / (name + '.pdf') for name in ('dark', 'light', 'smooth', 'alpha')]
+            dark.write_bytes(geometry_color_pdf(geometry))
+            light.write_bytes(geometry_color_pdf(geometry, light=True))
+            geometry.write_bytes(geometry.read_bytes()[:14] +
+                                 bytes((255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255)))
+            smooth.write_bytes(geometry_color_pdf(geometry))
+            geometry.write_bytes(geometry.read_bytes()[:14] + bytes((229, 229, 229, 128)) * 3)
+            alpha.write_bytes(geometry_color_pdf(geometry))
+            renderer = Path(__file__).with_name('icon_pdf_render_test.swift')
+            output = subprocess.check_output(['xcrun', 'swift', str(renderer), str(dark), str(light),
+                                              str(smooth), str(alpha)], text=True, timeout=60)
+            values = json.loads(output)
+            for value in values:
+                self.assertEqual((value['width'], value['height']), (36, 36))
+                self.assertGreater(value['transparent'], 1000)
+            self.assertEqual(values[0]['opaqueColors'], [0x3F80FF])
+            self.assertEqual(values[1]['opaqueColors'], [0x0041C0])
+            self.assertGreater(len(values[2]['opaqueColors']), 100)
+            self.assertGreater(values[3]['translucent'], 1000)
+            self.assertFalse(values[3]['opaqueColors'])
 
 
 if __name__ == "__main__":

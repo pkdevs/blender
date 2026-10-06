@@ -25,6 +25,7 @@
 #  include <string>
 #  include <vector>
 
+namespace blender {
 namespace {
 struct Request {
   wmOperator *op;
@@ -62,8 +63,10 @@ void completed(uint64_t id, const char *const *paths, int count, const char *err
 
 bool operator_is_live(bContext *C, const wmOperator *op)
 {
-  LISTBASE_FOREACH (wmWindow *, win, &CTX_wm_manager(C)->windows) {
-    LISTBASE_FOREACH (wmEventHandler *, base, &win->modalhandlers) {
+  for (wmWindow &win_item : CTX_wm_manager(C)->windows) {
+    wmWindow *win = &win_item;
+    for (wmEventHandler &base_item : win->runtime->modalhandlers) {
+      wmEventHandler *base = &base_item;
       if (base->type == WM_HANDLER_TYPE_OP) {
         auto *handler = reinterpret_cast<wmEventHandler_Op *>(base);
         if (handler->is_fileselect && handler->op == op) {
@@ -123,7 +126,7 @@ bool WM_apple_ios_fileselect_begin(bContext *C, wmOperator *op)
   }
   const uint64_t id = ++next_request;
   requests.emplace(id, Request{op, mode, ""});
-  if (!GHOST_ios_document_picker_begin(CTX_wm_window(C)->ghostwin, id, mode, op->type->name,
+  if (!GHOST_ios_document_picker_begin(CTX_wm_window(C)->runtime->ghostwin, id, mode, op->type->name,
                                       initial.c_str(), types.c_str(), string(op, "filter_glob").c_str(),
                                       mode == GHOST_IOSDocumentMode::Open &&
                                           RNA_struct_find_property(op->ptr, "files"),
@@ -283,5 +286,7 @@ wmOperatorStatus WM_apple_ios_fileselect_exec(bContext *C, wmOperator *op)
   }
   return op->type->exec(C, op);
 }
+
+}  // namespace blender
 
 #endif

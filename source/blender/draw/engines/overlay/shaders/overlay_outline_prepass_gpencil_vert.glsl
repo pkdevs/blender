@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_outline_info.hh"
+#include "infos/overlay_outline_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_outline_prepass_gpencil)
 
@@ -14,6 +14,9 @@ VERTEX_SHADER_CREATE_INFO(overlay_outline_prepass_gpencil)
 
 uint outline_colorid_get()
 {
+  if (is_hovered) {
+    return 2u;
+  }
   eObjectInfoFlag ob_flag = drw_object_infos().flag;
   bool is_active = flag_test(ob_flag, OBJECT_ACTIVE);
 
@@ -45,6 +48,7 @@ void main()
                                unused_strength,
                                unused_uv,
                                gp_interp_flat.sspos,
+                               gp_interp_flat.sspos_adj,
                                gp_interp_flat.aspect,
                                gp_interp_noperspective.thickness,
                                gp_interp_noperspective.hardness);

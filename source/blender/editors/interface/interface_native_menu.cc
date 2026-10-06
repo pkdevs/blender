@@ -27,20 +27,20 @@ std::string encode(const Value &value)
   return stream.str();
 }
 
-std::string label(const uiBut &but)
+std::string label(const Button &but)
 {
   return but.drawstr.substr(
-      0, (but.flag & UI_BUT_HAS_SEP_CHAR) ? but.drawstr.find(UI_SEP_CHAR) : std::string::npos);
+      0, (but.flag & BUT_HAS_SEP_CHAR) ? but.drawstr.find(UI_SEP_CHAR) : std::string::npos);
 }
 
 /* Validate the whole route again at activation. Never keep RNA pointers, buttons, or
  * list indices across UIKit callbacks, undo, file loads, or add-on registration. */
-std::string identity(bContext *C, uiBut &but)
+std::string identity(bContext *C, Button &but)
 {
   ArrayValue key;
   key.append_str(label(but));
   key.append_int(int(but.type));
-  if (MenuType *mt = UI_but_menutype_get(&but)) {
+  if (MenuType *mt = button_menutype_get(&but)) {
     key.append_str(mt->idname);
   }
   if (but.optype) {
@@ -79,7 +79,7 @@ struct Invocation {
     }
   }
 
-  void capture(uiBut &but)
+  void capture(Button &but)
   {
     title = label(but);
     if (but.context) {
@@ -133,12 +133,12 @@ struct Invocation {
   }
 };
 
-bool is_submenu(uiBut &but)
+bool is_submenu(Button &but)
 {
-  return UI_but_menutype_get(&but) || (but.menu_create_func && !UI_but_paneltype_get(&but));
+  return button_menutype_get(&but) || (but.menu_create_func && !button_paneltype_get(&but));
 }
 
-bool is_action(uiBut &but)
+bool is_action(Button &but)
 {
   return but.optype ||
          (but.rnaprop && ELEM(RNA_property_type(but.rnaprop), PROP_BOOLEAN, PROP_ENUM));
@@ -146,7 +146,7 @@ bool is_action(uiBut &but)
 
 void project(bContext *C,
              MenuType *mt,
-             uiBut *parent,
+             Button *parent,
              const std::string &root,
              const ArrayValue &path,
              int depth,
@@ -165,8 +165,8 @@ void project(bContext *C,
     return;
   }
   /* Detached blocks cannot replace visible regions' blocks or survive a file load. */
-  uiBlock *block = UI_block_begin(C, nullptr, __func__, EmbossType::Emboss);
-  uiLayout &layout = block_layout(block,
+  Block *block = block_begin(C, nullptr, __func__, EmbossType::Emboss);
+  Layout &layout = block_layout(block,
                                   LayoutDirection::Vertical,
                                   LayoutType::Menu,
                                   0,
@@ -174,25 +174,25 @@ void project(bContext *C,
                                   200,
                                   0,
                                   UI_MENU_PADDING,
-                                  UI_style_get_dpi());
+                                  style_get_dpi());
   layout.operator_context_set(wm::OpCallContext::InvokeRegionWin);
   if (parent && parent->context) {
     layout.context_copy(parent->context);
   }
-  UI_block_flag_enable(block, UI_BLOCK_SHOW_SHORTCUT_ALWAYS);
+  block_flag_enable(block, BLOCK_SHOW_SHORTCUT_ALWAYS);
   if (mt) {
-    UI_menutype_draw(C, mt, &layout);
+    menutype_draw(C, mt, &layout);
   }
   else if (parent && parent->menu_create_func) {
     parent->menu_create_func(C, &layout, parent->poin);
   }
-  UI_block_end(C, block);
+  block_end(C, block);
 
   for (const auto &button : block->buttons) {
-    uiBut &but = *button;
+    Button &but = *button;
     const bool submenu = is_submenu(but);
     const bool action = is_action(but);
-    const bool disabled = but.flag & (UI_BUT_DISABLED | UI_BUT_INACTIVE);
+    const bool disabled = but.flag & (BUT_DISABLED | BUT_INACTIVE);
     if (depth < path.elements().size()) {
       const StringValue *step = path.elements()[depth]->as_string_value();
       if (!step || identity(C, but) != step->value()) {
@@ -203,7 +203,7 @@ void project(bContext *C,
           invocation->capture(but);
         }
         else if (submenu) {
-          project(C, UI_but_menutype_get(&but), &but, root, path, depth + 1, result, invocation);
+          project(C, button_menutype_get(&but), &but, root, path, depth + 1, result, invocation);
         }
       }
       break;
@@ -211,13 +211,13 @@ void project(bContext *C,
     if (invocation) {
       continue;
     }
-    if (ELEM(but.type, ButType::Sepr, ButType::SeprLine)) {
+    if (ELEM(but.type, ButtonType::Sepr, ButtonType::SeprLine)) {
       result.append_dict()->append_int("separator", 1);
       continue;
     }
     std::string title = label(but);
     if (title.empty()) {
-      if (MenuType *child = UI_but_menutype_get(&but)) {
+      if (MenuType *child = button_menutype_get(&but)) {
         title = child->label;
       }
     }
@@ -230,20 +230,20 @@ void project(bContext *C,
     auto item = result.append_dict();
     item->append_str("title", title);
     item->append_int("disabled", disabled || (!submenu && !action));
-    item->append_int("checked", action && but.rnaprop && ui_but_is_pushed(&but));
+    item->append_int("checked", action && but.rnaprop && button_is_pushed(&but));
     item->append_int("submenu", submenu);
     item->append_int("action", action);
     item->append_str("operator", but.optype ? but.optype->idname : "");
     /* Preserve the layout's icon, not a guess based on the operator. Enum choices
      * and submenus can have different artwork even when their command is shared. */
-    const int icon = ui_but_icon(&but);
+    const int icon = button_icon(&but);
     const char *icon_name = nullptr;
     if (!ELEM(icon, ICON_NONE, ICON_BLANK1) &&
         RNA_enum_identifier(rna_enum_icon_items, icon, &icon_name))
     {
       item->append_str("icon", icon_name);
     }
-    if (MenuType *child = UI_but_menutype_get(&but)) {
+    if (MenuType *child = button_menutype_get(&but)) {
       item->append_str("menu", child->idname);
     }
     auto route = item->append_dict("route");
@@ -254,7 +254,7 @@ void project(bContext *C,
     }
     steps->append_str(identity(C, but));
   }
-  UI_block_free(nullptr, block);
+  block_free(nullptr, block);
   CTX_store_set(C, previous);
 }
 }  // namespace
@@ -340,8 +340,7 @@ std::string native_menu_query(bContext *C, const std::string &request, const boo
     else if (execute && path->elements().size() == 1) {
       const StringValue *step = path->elements()[0]->as_string_value();
       if (step && step->value() == "panel") {
-        PointerRNA properties;
-        WM_operator_properties_create(&properties, "WM_OT_call_panel");
+        PointerRNA properties = WM_operator_properties_create("WM_OT_call_panel");
         RNA_string_set(&properties, "name", resolved.c_str());
         WM_operator_name_call(C, "WM_OT_call_panel", wm::OpCallContext::InvokeRegionWin,
                               &properties, nullptr);

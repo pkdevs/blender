@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_outline_info.hh"
+#include "infos/overlay_outline_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_outline_prepass_curves)
 
@@ -15,6 +15,9 @@ VERTEX_SHADER_CREATE_INFO(overlay_outline_prepass_curves)
 
 uint outline_colorid_get()
 {
+  if (is_hovered) {
+    return 2u;
+  }
   eObjectInfoFlag ob_flag = drw_object_infos().flag;
   bool is_active = flag_test(ob_flag, OBJECT_ACTIVE);
 
@@ -30,6 +33,11 @@ uint outline_colorid_get()
 
   return 0u;
 }
+
+#if defined(GPU_NVIDIA) && defined(GPU_OPENGL)
+/* WORKAROUND: Fix legacy driver compiler issue (see #148472). */
+#  define const
+#endif
 
 void main()
 {

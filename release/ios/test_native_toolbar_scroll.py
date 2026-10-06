@@ -50,7 +50,9 @@ class NativeToolbarScrollTest(unittest.TestCase):
             "- (void)handleToolbarPressSelectGesture:",
             "- (void)layoutToolbarLabel\n", "- (void)hideToolbarLabelAnimated:",
             "- (void)showToolbarLabelForButton:", "- (void)handleToolbarHover:",
-            "- (UIImage *)toolbarImageForTool:", "- (void)configureToolbarButton:",
+            "- (UIImage *)toolbarImageForTool:(NSDictionary *)tool mode:(NSString *)mode\n",
+            "- (UIImage *)toolbarImageForTool:(NSDictionary *)tool mode:(NSString *)mode selected:",
+            "- (void)configureToolbarButton:",
             "- (UIMenu *)toolbarMenuForTool:", "- (NSString *)toolbarSignatureForTools:",
             "- (void)rebuildToolbarWithTools:",
         )
@@ -65,7 +67,10 @@ class NativeToolbarScrollTest(unittest.TestCase):
 #define UNUSED_VARS(...) ((void)0)
 static int toolCalls;
 static NSString *lastTool;
-static UIImage *blenderIOSIcon(NSString *, NSString *) { return [UIImage systemImageNamed:@"cube"]; }
+static UIImage *blenderIOSIcon(NSString *, NSString *) {
+  return [[UIImage systemImageNamed:@"cube"] imageWithTintColor:UIColor.systemRedColor
+                                               renderingMode:UIImageRenderingModeAlwaysOriginal];
+}
 static void WM_apple_ios_ui_tool_set_by_id(const char *tool) {
   toolCalls++;
   lastTool = [NSString stringWithUTF8String:tool];
@@ -171,6 +176,24 @@ int main() {
     [window addSubview:controller.view];
     CountingOverlay *overlay = (CountingOverlay *)controller.view;
     CountingGlass *glass = (CountingGlass *)controller->_tool_rail;
+    UIButton *iconButton = controller->_toolbar_buttons[0];
+    for (UIUserInterfaceStyle style : {UIUserInterfaceStyleLight, UIUserInterfaceStyleDark}) {
+      UITraitCollection *traits = [UITraitCollection traitCollectionWithUserInterfaceStyle:style];
+      [traits performAsCurrentTraitCollection:^{
+        for (BOOL selected : {YES, NO, YES}) {
+          iconButton.selected = selected;
+          iconButton.configurationUpdateHandler(iconButton);
+          NSCAssert(iconButton.configuration.image.renderingMode == UIImageRenderingModeAlwaysOriginal,
+                    @"Selection artwork must not wait for a template tint transition");
+          if (selected) {
+            NSCAssert([iconButton.configuration.baseForegroundColor isEqual:UIColor.whiteColor],
+                      @"Selected icon is not white");
+            NSCAssert([((UIImageView *)[iconButton viewWithTag:9001]).tintColor isEqual:UIColor.whiteColor],
+                      @"Selected group indicator is not white");
+          }
+        }
+      }];
+    }
     NSCAssert(glass.effect != nil, @"Tool glass missing at installation");
     NSUInteger layouts = overlay.layoutRequests, effects = glass.effectAssignments;
     NSString *active = controller->_active_tool_identifier;
@@ -195,6 +218,27 @@ int main() {
     railPan.testState = UIGestureRecognizerStateEnded;
     [controller handleToolbarDockPan:railPan];
     NSCAssert([controller isToolbarListVisible], @"Upward compact drag did not expand");
+    [controller setToolbarExpanded:YES animated:NO];
+    [controller setActiveToolbarToolIdentifier:@"tool.1"];
+    NSCAssert([((UIButton *)controller->_toolbar_buttons[1]).configuration.baseForegroundColor
+                 isEqual:UIColor.whiteColor] &&
+              [((UIButton *)controller->_toolbar_buttons[0]).configuration.baseForegroundColor
+                 isEqual:UIColor.labelColor], @"Selection appearance must update before returning");
+    UIButton *selectedButton = controller->_toolbar_buttons[1];
+    UIView *selection = nil;
+    for (UIView *view in controller->_tool_stack.subviews) {
+      if ([view.accessibilityIdentifier isEqual:@"blender.toolbar.selection"]) { selection = view; }
+    }
+    NSCAssert(selection && !selection.hidden && CGRectEqualToRect(selection.frame, selectedButton.frame),
+              @"One shared glass selection must track the selected tool");
+    NSCAssert(!selection.userInteractionEnabled, @"Selection background must not intercept tool taps");
+    NSCAssert(!selectedButton.configuration.automaticallyUpdateForSelection &&
+              [[selectedButton.configuration.attributedTitle attribute:NSForegroundColorAttributeName
+                                                                atIndex:0 effectiveRange:nil] isEqual:UIColor.whiteColor],
+              @"Tool name must use explicit white text without a selection tint transition");
+    [controller setActiveToolbarToolIdentifier:@"tool.0"];
+    NSCAssert(CGRectEqualToRect(selection.frame, ((UIButton *)controller->_toolbar_buttons[0]).frame),
+              @"Selection background did not move to the next tool");
     TestPan *handlePan = [[[TestPan alloc] init] autorelease];
     [controller->_tool_drag_handle addGestureRecognizer:handlePan];
     TestPress *press = [[[TestPress alloc] init] autorelease];
@@ -258,6 +302,7 @@ int main() {
     [controller.view layoutIfNeeded];
     NSCAssert(![controller isToolbarListVisible] && controller->_tool_drag_handle.hidden,
               @"Handle did not collapse both list modes");
+    NSCAssert(selection.hidden, @"Compact toolbar must not leave a selection highlight behind");
     NSCAssert(controller->_tool_rail.bounds.size.height == 64 && !controller->_tool_scroll.scrollEnabled,
               @"Collapsed geometry or scrolling incorrect");
     NSCAssert([controller gestureRecognizerShouldBegin:press], @"Compact press-and-slide picker lost");

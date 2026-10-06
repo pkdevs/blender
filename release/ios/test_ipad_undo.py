@@ -26,11 +26,13 @@ class IPadUndoTest(unittest.TestCase):
 #include <cassert>
 #include <cstring>
 #include <vector>
+#include <functional>
 #define STREQ(a, b) (std::strcmp(a, b) == 0)
 #define LISTBASE_FOREACH(type, name, list) for (type name : *(list))
 enum { WM_HANDLER_TYPE_OP = 1, WM_HANDLER_TYPE_UI = 2 };
 struct wmEventHandler { int type; };
-struct wmWindow { std::vector<wmEventHandler *> modalhandlers; };
+struct WindowRuntime { std::vector<std::reference_wrapper<wmEventHandler>> modalhandlers; };
+struct wmWindow { WindowRuntime *runtime; };
 struct bContext { wmWindow *win; bool history; };
 namespace blender::wm { enum class OpCallContext { InvokeRegionWin }; }
 static int calls = 0;
@@ -44,7 +46,8 @@ static void WM_operator_name_call(bContext *, const char *name, blender::wm::OpC
 }
 ''' + "\n".join(methods) + r'''
 int main() {
-  wmWindow win;
+  WindowRuntime runtime;
+  wmWindow win{&runtime};
   bContext C{&win, false};
   assert(!ios_undo_available(&C));
   ios_operator_invoke(&C, "ED_OT_undo");
@@ -54,16 +57,16 @@ int main() {
   ios_operator_invoke(&C, "ED_OT_undo");
   assert(calls == 1);
   wmEventHandler tool{WM_HANDLER_TYPE_OP};
-  win.modalhandlers.push_back(&tool);
+  win.runtime->modalhandlers.push_back(std::ref(tool));
   assert(!ios_undo_available(&C));
   // History was available when the UI snapshot was made, but a tool began before dispatch.
   ios_operator_invoke(&C, "ED_OT_undo");
   assert(calls == 1);
   ios_operator_invoke(&C, "OTHER_OT_operator");
   assert(calls == 2);
-  win.modalhandlers.clear();
+  win.runtime->modalhandlers.clear();
   wmEventHandler ui{WM_HANDLER_TYPE_UI};
-  win.modalhandlers.push_back(&ui);
+  win.runtime->modalhandlers.push_back(std::ref(ui));
   assert(ios_undo_available(&C));
   C.history = false;
   ios_operator_invoke(&C, "ED_OT_undo");

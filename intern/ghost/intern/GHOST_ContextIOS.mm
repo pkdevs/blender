@@ -32,7 +32,7 @@ GHOST_ContextIOS::~GHOST_ContextIOS()
   [device_ release];
 }
 
-GHOST_TSuccess GHOST_ContextIOS::swapBuffers()
+GHOST_TSuccess GHOST_ContextIOS::swapBufferRelease()
 {
   return metalSwapBuffers();
 }

@@ -461,9 +461,9 @@ int main()
       NSCAssert(button.tag == command, @"Shading state did not follow Blender");
       NSString *key = [NSString stringWithFormat:@"command.%ld", (long)command];
       NSCAssert([button.image isEqual:icons[key]], @"Wrong selected shading icon");
-      checkMenu((UIMenu *)button.menuRepresentation, button.menu);
+      NSCAssert(button.menu == nil && button.action == @selector(showViewportShading:), @"Shading opens the native controls popover");
       NSUInteger selectedCount = 0;
-      for (UIAction *action in button.menu.children) {
+      for (UIAction *action in ((UIMenu *)button.menuRepresentation).children) {
         if (action.state == UIMenuElementStateOn) {
           selectedCount++;
           NSCAssert(action.identifier.integerValue == command, @"Wrong shading checkmark");
@@ -475,13 +475,13 @@ int main()
         NSCAssert(queuedCommand == action.identifier.integerValue, @"Wrong shading command dispatched");
       }
       NSCAssert(selectedCount == 1, @"Missing/duplicate shading checkmarks");
-      UIMenu *menu = button.menu;
+      UIMenuElement *menu = button.menuRepresentation;
       [builder setViewportShadingValue:modes[i]];
-      NSCAssert(button.menu == menu, @"Unchanged state unnecessarily rebuilt menu");
+      NSCAssert(button.menuRepresentation == menu, @"Unchanged state unnecessarily rebuilt menu");
       [builder setViewportShadingValue:@"invalid"];
       [builder setViewportShadingValue:nil];
       [builder setViewportShadingValue:(id)@42];
-      NSCAssert(button.menu == menu, @"Invalid snapshot changed shading state");
+      NSCAssert(button.menuRepresentation == menu, @"Invalid snapshot changed shading state");
     }
     for (NSString *op in @[@"OBJECT_OT_select_all", @"MESH_OT_select_all"]) {
       for (NSString *value in @[@"SELECT", @"DESELECT", @"INVERT"]) {

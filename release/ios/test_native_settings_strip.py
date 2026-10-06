@@ -63,6 +63,7 @@ class NativeSettingsStripTest(unittest.TestCase):
                           "- (UIButton *)actionButtonWithTitle:",
                           "- (void)rebuildActionStripWithActions:",
                           "- (void)installActionStripToggle\n",
+                          "- (void)updateRedoPillLayout:",
                           "- (void)toggleActionStrip:",
                           "- (void)setActionsCollapsed:",
                           "- (void)installActionStripLayout\n",
@@ -85,6 +86,13 @@ class NativeSettingsStripTest(unittest.TestCase):
                        view_button + "  return view;\n}")
         harness = r'''
 #import <UIKit/UIKit.h>
+#import "GHOST_IOSScenePanels.hh"
+#import "GHOST_IOSRedoStrip.hh"
+#define GHOST_IOSViewController StripTest
+@interface GHOSTIOSRedoStrip (Testing)
+- (void)dismiss:(id)sender;
+- (void)expand:(id)sender;
+@end
 #import <QuartzCore/QuartzCore.h>
 #include <cmath>
 #include <initializer_list>
@@ -110,6 +118,8 @@ static BOOL fingerTool;
 @interface StripTest : UIViewController {
 @public
   UIView *_overlay_view;
+  GHOSTIOSScenePanels *_scene_panels;
+  GHOSTIOSRedoStrip *_redo_strip;
   GHOSTIOSNavigationBar *_top_bar;
   UINavigationItem *_top_bar_item;
   NSLayoutConstraint *_top_bar_height_constraint;
@@ -124,6 +134,8 @@ static BOOL fingerTool;
   UIButton *_action_toggle;
   NSLayoutConstraint *_action_expanded_width_constraint, *_action_collapsed_width_constraint;
   NSLayoutConstraint *_action_toggle_width_constraint, *_action_toggle_trailing_constraint;
+  NSLayoutConstraint *_action_scroll_trailing_constraint, *_redo_pill_width_constraint;
+  NSLayoutConstraint *_redo_pill_min_width_constraint;
   BOOL _actions_collapsed;
   NSUInteger _action_transition_generation;
   NSLayoutConstraint *_action_phone_bottom_constraint, *_action_phone_trailing_constraint;
@@ -195,6 +207,8 @@ static void runChecks() {
     StripTest *builder = [[[StripTest alloc] init] autorelease];
     testWindow.rootViewController = builder;
     builder->_overlay_view = builder.view;
+    builder->_scene_panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:builder.view
+        icon:^UIImage *(NSString *) { return nil; }] autorelease];
     builder->_mesh_select_buttons = [NSMutableArray array];
     [builder installNativeTopBar];
     [testWindow makeKeyAndVisible];
@@ -312,7 +326,11 @@ static void runChecks() {
     }
     NSCAssert(item.pinnedTrailingGroup.barButtonItems.firstObject ==
               builder->_viewport_shading_button, @"Shading must stay on the trailing side");
-    NSCAssert(item.trailingItemGroups.count == 0, @"Scene actions must not remain on the right");
+    NSArray *panelButtons = @[builder->_scene_panels.hierarchyButton, builder->_scene_panels.inspectorButton];
+    NSCAssert(item.trailingItemGroups.count == 1 &&
+              [item.trailingItemGroups[0].barButtonItems isEqual:panelButtons] &&
+              !builder->_viewport_shading_button.sharesBackground,
+              @"Panel toggles must share a separate trailing group");
     UIBarButtonItemGroup *strip = builder->_top_settings_group;
     NSCAssert(strip.hidden && builder->_mesh_select_group.hidden, @"Initial context groups visible");
     [builder setTopSettingsVisible:YES animated:NO];
@@ -522,6 +540,8 @@ static void runChecks() {
       for (UIView *view in @[builder->_tool_rail, builder->_view_gizmo_hotspot]) {
         [builder.view addSubview:view];
       }
+      builder->_redo_strip = [[[GHOSTIOSRedoStrip alloc] initWithOverlay:builder.view
+          icon:^UIImage *(NSString *) { return nil; }] autorelease];
       [builder installTestActionStrip];
       NSMutableArray *actions = [NSMutableArray array];
       for (NSUInteger i = 0; i < 12; i++) {
@@ -648,6 +668,61 @@ static void runChecks() {
                     @"Quick actions are centered in the leftover lane rather than the viewport");
         }
       }
+      NSDictionary *redo = @{@"id": @"redo-layout", @"title": @"Duplicate Linked", @"ack": @0,
+          @"properties": @[@{@"key": @"distance", @"type": @"FLOAT", @"label": @"Distance",
+                              @"value": @1, @"editable": @YES}]};
+      [builder->_redo_strip updateSnapshot:redo];
+      NSCAssert(builder->_redo_strip.view.hidden && !builder->_redo_strip.collapsedButton.hidden,
+                @"First redo snapshot starts collapsed beside Actions without user intervention");
+      [builder->_redo_strip.collapsedButton sendActionsForControlEvents:UIControlEventTouchUpInside];
+      NSCAssert(!builder->_redo_strip.view.hidden && builder->_redo_strip.collapsedButton.hidden,
+                @"Actual pill button action expands the redo controls");
+      UIButton *redoDone = [builder->_redo_strip valueForKey:@"_done"];
+      [redoDone sendActionsForControlEvents:UIControlEventTouchUpInside];
+      NSCAssert(builder->_redo_strip.view.hidden && !builder->_redo_strip.collapsedButton.hidden,
+                @"Actual checkmark action collapses the redo controls back beside Actions");
+      for (CGFloat width : {393.0, 466.0, 744.0, 1194.0}) {
+        builder.view.frame = CGRectMake(0, 0, width, 800);
+        [builder.view layoutIfNeeded];
+        CGRect safe = builder.view.safeAreaLayoutGuide.layoutFrame;
+        builder->_tool_rail.frame = CGRectMake(CGRectGetMinX(safe) + 14, CGRectGetMaxY(safe) - 76, 64, 64);
+        builder->_view_gizmo_hotspot.frame = CGRectMake(CGRectGetMaxX(safe) - 118, CGRectGetMaxY(safe) - 124, 112, 112);
+        [builder updatePhoneActionStripLayout];
+        [builder.view layoutIfNeeded];
+        [builder updateRedoPillLayout:NO];
+        for (BOOL collapsed : {YES, NO}) {
+          [builder setActionsCollapsed:collapsed animated:NO];
+          [builder.view layoutIfNeeded];
+          UIButton *pill = builder->_redo_strip.collapsedButton;
+          CGRect pillFrame = [pill convertRect:pill.bounds toView:builder.view];
+          CGRect toggle = [builder->_action_toggle convertRect:builder->_action_toggle.bounds toView:builder.view];
+          CGRect scroll = [builder->_action_scroll convertRect:builder->_action_scroll.bounds toView:builder.view];
+          NSCAssert(CGRectContainsRect(builder->_action_rail.frame, pillFrame) && pillFrame.size.width >= 44,
+                    @"Redo pill is clipped or too small to tap");
+          NSCAssert(CGRectGetMaxX(toggle) <= CGRectGetMinX(pillFrame) - 7 &&
+                    CGRectGetMaxX(scroll) <= CGRectGetMinX(pillFrame) - 7,
+                    @"Redo pill overlaps Actions toggle or scrolling controls");
+          NSCAssert(std::abs(CGRectGetMidY(toggle) - CGRectGetMidY(pillFrame)) < 0.5,
+                    @"Collapsed pills do not share a baseline");
+          NSCAssert(pill.titleLabel.frame.size.height <= 28 &&
+                    builder->_action_toggle.titleLabel.frame.size.height <= 28,
+                    @"Compact pill labels wrapped outside their controls");
+          UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc]
+              initWithSize:builder.view.bounds.size] autorelease];
+          UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+            [builder.view drawViewHierarchyInRect:builder.view.bounds afterScreenUpdates:YES];
+          }];
+          NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
+              NSUserDomainMask, YES).firstObject;
+          NSString *filename = [NSString stringWithFormat:@"redo-pill-%.0f-%@.png", width,
+              collapsed ? @"collapsed" : @"expanded"];
+          [UIImagePNGRepresentation(image) writeToFile:[documents stringByAppendingPathComponent:filename]
+                                            atomically:YES];
+        }
+      }
+      [builder->_redo_strip expand:nil];
+      NSCAssert(builder->_redo_pill_width_constraint.constant == 0, @"Reopening did not release reserved Actions space");
+      [builder->_redo_strip updateSnapshot:nil];
       [builder rebuildActionStripWithActions:[actions subarrayWithRange:NSMakeRange(0, 1)]];
       [builder.view layoutIfNeeded];
       [builder->_action_scroll layoutIfNeeded];
@@ -673,6 +748,8 @@ static void runChecks() {
     testWindow.rootViewController = navigation;
     phone.view.backgroundColor = UIColor.systemTealColor;
     phone->_overlay_view = phone.view;
+    phone->_scene_panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:phone.view
+        icon:^UIImage *(NSString *) { return nil; }] autorelease];
     phone->_mesh_select_buttons = [NSMutableArray array];
     [phone installNativeTopBar];
     [phone setMeshSelectModeVisible:YES animated:NO];
@@ -788,6 +865,9 @@ int main(int argc, char **argv) {
                 "-isysroot", sdk.stdout.strip(), "-target", f"{os.uname().machine}-apple-ios26.0-simulator",
                 "-framework", "UIKit", "-framework", "Foundation", "-framework", "CoreGraphics",
                 "-framework", "QuartzCore",
+                "-I", str(root / "intern/ghost/intern"),
+                str(root / "intern/ghost/intern/GHOST_IOSScenePanels.mm"),
+                str(root / "intern/ghost/intern/GHOST_IOSRedoStrip.mm"),
                 str(source_file), "-o", str(executable),
             ], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
