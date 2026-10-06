@@ -443,9 +443,6 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(tui.wcol_state.error);
   }
 
-  if (!USER_VERSION_ATLEAST(503, 5)) {
-    FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
-  }
 
   if (!USER_VERSION_ATLEAST(503, 19)) {
     /* Alpha is now used, but was hardcoded to be opaque before. */
@@ -456,6 +453,10 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(tui.wcol_state.info);
   }
 
+
+  if (!USER_VERSION_ATLEAST(503, 27)) {
+    FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
+  }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
