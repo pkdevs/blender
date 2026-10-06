@@ -646,6 +646,7 @@ static const CGFloat GHOSTIOSRedoStripRadius = 20;
     if (!std::isfinite(point.x) || !std::isfinite(point.y)) { return; }
     const double translation = point.x - _scrubStart.x;
     _scrubCurrentValue += (translation - _scrubTranslation) * [field.descriptor[@"dragStep"] doubleValue] *
+                         ([field.descriptor[@"angle"] boolValue] ? GHOSTIOSAngleScrubScale : 1.0) *
                          GHOSTIOSNumberSensitivity(point.y - _scrubStart.y);
     _scrubCurrentValue = fmax([field.descriptor[@"min"] doubleValue],
                              fmin([field.descriptor[@"max"] doubleValue], _scrubCurrentValue));

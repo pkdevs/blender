@@ -323,8 +323,8 @@ static void testNumberScrubbing(UIView *overlay)
   property[@"value"] = @0;
   field = apply();
   [panels beginNumberScrub:field];
-  [panels changeNumberScrub:field translation:90];
-  NSCAssert([field.text isEqual:@"90"], @"Angles scrub in displayed degrees");
+  [panels changeNumberScrub:field translation:9];
+  NSCAssert([field.text isEqual:@"90"], @"Angles scrub in displayed degrees, ten times faster");
   [panels finishNumberScrub:field];
   NSCAssert(fabs([request[@"value"] doubleValue] - M_PI_2) < 1e-9, @"Angles commit radians to Blender");
   property[@"editable"] = @NO;

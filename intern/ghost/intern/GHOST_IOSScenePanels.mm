@@ -1844,7 +1844,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   }
   double step = field.descriptor[@"dragStep"] ? [field.descriptor[@"dragStep"] doubleValue] :
       [field.descriptor[@"type"] isEqual:@"INT"] ? 0.5 : 0.01;
-  if ([field.descriptor[@"angle"] boolValue]) { step *= M_PI / 180.0; }
+  if ([field.descriptor[@"angle"] boolValue]) { step *= GHOSTIOSAngleScrubScale * M_PI / 180.0; }
   /* Integrate horizontal movement so changing precision never reinterprets earlier motion. */
   double value = field.scrubValue +
       (translation - field.scrubTranslation) * step * GHOSTIOSNumberSensitivity(vertical);

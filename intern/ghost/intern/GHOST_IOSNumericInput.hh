@@ -13,6 +13,9 @@ static inline double GHOSTIOSNumberSensitivity(double vertical)
   return std::exp2(fmin(4.0, fmax(-4.0, -vertical / 80.0)));
 }
 
+/* Rotation values cover a much larger range than distances; scrub them faster. */
+static const double GHOSTIOSAngleScrubScale = 10.0;
+
 static inline void GHOSTIOSNumberFieldAppearance(UITextField *field, bool scrubbing)
 {
   const bool active = field.isFirstResponder || scrubbing;
