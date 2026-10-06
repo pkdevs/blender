@@ -63,7 +63,7 @@ static const toml::value &default_asset_lib_config_get()
   return value;
 }
 
-static const toml::value *toml_find_item(const toml::value &data, const StringRef key)
+static toml::value *toml_find_item(toml::value &data, const StringRef key)
 {
   BLI_assert(!key.is_empty());
 
@@ -72,8 +72,8 @@ static const toml::value *toml_find_item(const toml::value &data, const StringRe
     return nullptr;
   }
 
-  const toml::table &data_table = data.as_table();
-  toml::table::const_iterator iter = data_table.find(key);
+  toml::table &data_table = data.as_table();
+  toml::table::iterator iter = data_table.find(key);
   if (iter == data_table.end()) {
     /* The key does not exist. */
     return nullptr;
@@ -81,23 +81,8 @@ static const toml::value *toml_find_item(const toml::value &data, const StringRe
   return &iter->second;
 }
 
-static const toml::value *toml_find_item_in_section(const toml::value &root,
-                                                    StringRef section_name,
-                                                    StringRef item_key)
-{
-  BLI_assert(!section_name.is_empty());
-  BLI_assert(!item_key.is_empty());
-
-  const toml::value *section_value = toml_find_item(root, section_name);
-  if (!section_value || !section_value->is_table()) {
-    /* The named section is not a table. */
-    return nullptr;
-  }
-  /* Search item in the section. */
-  return toml_find_item(*section_value, item_key);
-}
-
-static ReadingResult<toml::value> user_asset_library_read_config_file(
+/** Read the Asset Library Configutation file. */
+static ReadingResult<toml::value> user_asset_library_config_read_file(
     bUserAssetLibrary &custom_library)
 {
   char blender_asset_lib_toml_path[FILE_MAX];
@@ -116,11 +101,13 @@ static ReadingResult<toml::value> user_asset_library_read_config_file(
     }
     return ReadingResult<toml::value>::Success(file_result.unwrap());
   }
+  /* No file found, load an empty Asset Library Configuration. */
   return ReadingResult<toml::value>::Success(default_asset_lib_config_get());
 }
 
-static ReadingResult<> user_asset_library_write_config_file(bUserAssetLibrary &custom_library,
-                                                            toml::value asset_lib_toml_value)
+/** Write the Asset Library Configutation file. */
+static ReadingResult<> user_asset_library_config_write_file(bUserAssetLibrary &custom_library,
+                                                            toml::value asset_lib_config)
 {
   char blender_asset_lib_toml_path[FILE_MAX];
 
@@ -129,13 +116,46 @@ static ReadingResult<> user_asset_library_write_config_file(bUserAssetLibrary &c
                 custom_library.resolved_dirpath,
                 BLENDER_ASSET_LIB_TOML_FILENAME);
 
-  std::string toml_as_string = toml::format(asset_lib_toml_value, TOML_SPEC_VERSION);
+  std::string toml_as_string = toml::format(asset_lib_config, TOML_SPEC_VERSION);
   FILE *file_handle = BLI_fopen(blender_asset_lib_toml_path, "w");
   if (file_handle == nullptr) {
     return ReadingResult<>::Failure(N_("Error while writing asset library configuration file."));
   }
   fputs(toml_as_string.c_str(), file_handle);
   fclose(file_handle);
+  return ReadingResult<>::Success();
+}
+
+/** Sets a new UUID in the Asset Library Configuration if the value is missing. */
+static ReadingResult<> user_asset_library_config_file_uuid_ensure(
+    bUserAssetLibrary &custom_library, toml::value &asset_lib_config)
+{
+  /* Ensure library section. */
+  if (const toml::value *lib_value = toml_find_item(asset_lib_config, "library");
+      !lib_value || !lib_value->is_table())
+  {
+    /* Raise error if the config `[library]` field is set but is not a table. */
+    if (lib_value && !lib_value->is_table()) {
+      return ReadingResult<>::Failure(
+          N_("Configuration file entry [\"library\"] was not a table value."));
+    }
+    asset_lib_config["library"] = toml::table{};
+  }
+
+  toml::value &library_value = *toml_find_item(asset_lib_config, "library");
+
+  if (const toml::value *uuid_value = toml_find_item(library_value, "uuid");
+      !uuid_value || !uuid_value->is_string())
+  {
+    /* Raise error if the config `[library][uuid]` field is set but is not a string. */
+    if (uuid_value && !uuid_value->is_string()) {
+      return ReadingResult<>::Failure(
+          N_("Configuration file entry [\"library\"][\"uuid\"] was not a table value."));
+    }
+
+    library_value["uuid"] = UUID(BLI_uuid_generate_random()).str();
+    return user_asset_library_config_write_file(custom_library, asset_lib_config);
+  }
   return ReadingResult<>::Success();
 }
 
@@ -146,51 +166,29 @@ static ReadingResult<> user_asset_library_uuid_ensure_imlp(bUserAssetLibrary &cu
   custom_library.runtime->uuid = BLI_uuid_nil();
   custom_library.runtime->invalid_uuid.clear();
 
-  ReadingResult<toml::value> read_result = user_asset_library_read_config_file(custom_library);
+  ReadingResult<toml::value> read_result = user_asset_library_config_read_file(custom_library);
   if (read_result.is_failure()) {
     return read_result.without_success_value();
   }
 
-  toml::value asset_lib_toml_value = *read_result;
-  ReadingResult<> success_result = ReadingResult<>::Success();
+  toml::value asset_lib_config_value = *read_result;
 
-  /* Set library identifier if is not already set, ensure its type is string. */
-  if (const toml::value *uuid_value = toml_find_item_in_section(
-          asset_lib_toml_value, "library", "uuid");
-      !uuid_value || !uuid_value->is_string())
+  if (ReadingResult<> ensure_uuid_config_result = user_asset_library_config_file_uuid_ensure(
+          custom_library, asset_lib_config_value);
+      ensure_uuid_config_result.is_failure())
   {
-    if (uuid_value && !uuid_value->is_string()) {
-      success_result.warnings.append(
-          N_("Configuration file entry [\"library\"][\"uuid\"] is not a string value."));
-    }
-    /* Ensure library section. */
-    if (const toml::value *lib_value = toml_find_item(asset_lib_toml_value, "library");
-        !lib_value || !lib_value->is_table())
-    {
-      if (lib_value && !lib_value->is_table()) {
-        success_result.warnings.append(
-            N_("Configuration file entry [\"library\"] is not a table value."));
-      }
-      asset_lib_toml_value["library"] = toml::table{};
-    }
-    asset_lib_toml_value["library"]["uuid"] = UUID(BLI_uuid_generate_random()).str();
-    ReadingResult<> write_result = user_asset_library_write_config_file(custom_library,
-                                                                        asset_lib_toml_value);
-    if (write_result.is_failure()) {
-      return write_result;
-    }
+    return ensure_uuid_config_result;
   }
 
   bUUID lib_uuid;
-  std::string uuid_str =
-      toml_find_item_in_section(asset_lib_toml_value, "library", "uuid")->as_string();
+  std::string uuid_str = asset_lib_config_value["library"]["uuid"].as_string();
   if (!BLI_uuid_parse_string(&lib_uuid, uuid_str.c_str())) {
     custom_library.runtime->invalid_uuid = uuid_str;
     return ReadingResult<>::Failure(N_("Illformed asset library UUID."));
   }
 
   custom_library.runtime->uuid = lib_uuid;
-  return success_result;
+  return ReadingResult<>::Success();
 }
 
 void user_asset_library_uuid_ensure(bUserAssetLibrary &user_library, ReportList *reports)
