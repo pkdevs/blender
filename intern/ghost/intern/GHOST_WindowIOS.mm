@@ -3545,7 +3545,14 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   configuration.preferredSymbolConfigurationForImage =
       [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold];
   configuration.contentInsets = NSDirectionalEdgeInsetsMake(8, 10, 8, 10);
-  _action_toggle.configuration = configuration;
+  /* Dissolve between the title and close icon instead of snapping mid-spring. */
+  [UIView transitionWithView:_action_toggle
+                    duration:animate ? 0.22 : 0.0
+                     options:UIViewAnimationOptionTransitionCrossDissolve |
+                             UIViewAnimationOptionBeginFromCurrentState |
+                             UIViewAnimationOptionAllowUserInteraction
+                  animations:^{ self->_action_toggle.configuration = configuration; }
+                  completion:nil];
   _action_toggle.titleLabel.numberOfLines = 1;
   _action_toggle.accessibilityLabel = collapsed ? @"Show Quick Actions" : @"Hide Quick Actions";
   _action_toggle.accessibilityValue = collapsed ? @"Collapsed" : @"Expanded";
