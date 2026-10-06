@@ -63,6 +63,13 @@
 
 namespace blender {
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+namespace ui {
+void native_redo_operator_register(bContext *C, wmOperator *op);
+void native_redo_operator_free(wmOperator *op);
+}  // namespace ui
+#endif
+
 /* ****************************************************** */
 
 static void window_manager_free_data(ID *id)
@@ -251,6 +258,9 @@ IDTypeInfo IDType_ID_WM = {
 
 void WM_operator_free(wmOperator *op)
 {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  ui::native_redo_operator_free(op);
+#endif
 
 #ifdef WITH_PYTHON
   if (op->py_instance) {
@@ -328,6 +338,9 @@ void wm_operator_register(bContext *C, wmOperator *op)
   int tot = 0;
 
   BLI_addtail(&wm->runtime->operators, op);
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  ui::native_redo_operator_register(C, op);
+#endif
 
   /* Only count registered operators. */
   while (op) {

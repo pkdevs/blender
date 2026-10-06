@@ -5,9 +5,10 @@
 /** Native Properties projects the registered Blender panels and their RNA controls. */
 #include "BKE_animsys.h"
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_main.hh"
-#include "BKE_screen.hh"
 #include "BKE_scene.hh"
+#include "BKE_screen.hh"
 #include "BLI_listbase.h"
 #include "BLI_serialize.hh"
 #include "DNA_ID.h"
@@ -24,8 +25,10 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 #include "interface_intern.hh"
+#include "wm_event_system.hh"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <map>
 #include <set>
@@ -116,7 +119,11 @@ bool is_color(PointerRNA *ptr, PropertyRNA *prop)
          ELEM(RNA_property_array_length(ptr, prop), 3, 4);
 }
 
-bool set_property(bContext *C, Button &but, int index, const DictionaryValue &request)
+bool set_property(bContext *C,
+                  Button &but,
+                  int index,
+                  const DictionaryValue &request,
+                  const bool push_undo = true)
 {
   PointerRNA *ptr = &but.rnapoin;
   PropertyRNA *prop = but.rnaprop;
@@ -282,7 +289,7 @@ bool set_property(bContext *C, Button &but, int index, const DictionaryValue &re
       return false;
   }
   RNA_property_update(C, ptr, prop);
-  if (ptr->owner_id && RNA_struct_undo_check(ptr->type)) {
+  if (push_undo && ptr->owner_id && RNA_struct_undo_check(ptr->type)) {
     ED_undo_push(C, RNA_property_ui_name(prop));
   }
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
@@ -612,6 +619,144 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
   }
 }
 }  // namespace
+
+namespace {
+/* Engine-owned identity, invalidated before the operator's memory can be reused. */
+wmOperator *native_redo_operator = nullptr;
+uint64_t native_redo_generation = 0;
+bool native_redo_dismissed = false;
+int64_t native_redo_ack = 0;
+std::string native_redo_error;
+std::string native_redo_snapshot = "null";
+std::chrono::steady_clock::time_point native_redo_next_snapshot;
+}  // namespace
+
+void native_redo_operator_register(bContext *C, wmOperator *op)
+{
+  if ((op->type->flag & (OPTYPE_REGISTER | OPTYPE_UNDO)) != (OPTYPE_REGISTER | OPTYPE_UNDO)) {
+    return;
+  }
+  native_redo_operator = CTX_wm_view3d(C) ? op : nullptr;
+  ++native_redo_generation;
+  native_redo_dismissed = false;
+  native_redo_error.clear();
+  native_redo_next_snapshot = {};
+}
+
+void native_redo_operator_free(wmOperator *op)
+{
+  if (native_redo_operator == op) {
+    native_redo_operator = nullptr;
+    native_redo_next_snapshot = {};
+  }
+}
+
+void native_redo_operator_clear()
+{
+  native_redo_operator = nullptr;
+  native_redo_next_snapshot = {};
+}
+
+std::string native_operator_redo_query(bContext *C, const std::string &json, bool execute)
+{
+  wmOperator *op = WM_operator_last_redo(C);
+  if (!op || op != native_redo_operator || native_redo_dismissed || !CTX_wm_view3d(C) ||
+      !CTX_wm_region(C))
+  {
+    return "null";
+  }
+  auto query_value = execute ? decode(json) : nullptr;
+  const auto *query = query_value ? query_value->as_dictionary_value() : nullptr;
+  const std::string identity = std::to_string(native_redo_generation);
+  if (execute) {
+    if (!query || query->lookup_str("id").value_or("") != identity) {
+      return "null";
+    }
+    native_redo_ack = query->lookup_int("sequence").value_or(native_redo_ack);
+    native_redo_next_snapshot = {};
+    native_redo_error.clear();
+    if (query->lookup_str("action").value_or("") == "dismiss") {
+      native_redo_dismissed = true;
+      return "null";
+    }
+  }
+  bool enabled = !G.moving && WM_operator_repeat_check(C, op) && WM_operator_poll(C, op->type) &&
+                 WM_operator_check_ui_enabled(C, op->type->name);
+  if (wmWindow *window = CTX_wm_window(C)) {
+    for (wmEventHandler &handler : window->runtime->modalhandlers) {
+      if (handler.type == WM_HANDLER_TYPE_OP || handler.type == WM_HANDLER_TYPE_UI) {
+        enabled = false;
+        break;
+      }
+    }
+  }
+  if (!enabled) {
+    return "null";
+  }
+  const auto now = std::chrono::steady_clock::now();
+  if (!execute && now < native_redo_next_snapshot) {
+    return native_redo_snapshot;
+  }
+  DictionaryValue result;
+  result.append_str("id", identity);
+  result.append_str("title", WM_operatortype_name(op->type, op->ptr));
+  result.append_str("operator", op->type->idname);
+  result.append_int("ack", native_redo_ack);
+  auto fields = result.append_array("properties");
+  Block *block = block_begin(C, nullptr, "native_operator_redo", EmbossType::Emboss);
+  Layout &layout = block_layout(
+      block, LayoutDirection::Vertical, LayoutType::Panel, 0, 0, 320, 20, 0, style_get_dpi());
+  /* Uses the actual operator UI, including macros and poll_property visibility. */
+  template_operator_redo_properties(&layout, C);
+  const auto pairs = property_pairs(*block);
+  block_end(C, block);
+  std::set<std::string> seen;
+  bool applied = false;
+  for (const auto &button : block->buttons) {
+    Button &but = *button;
+    if (!but.rnaprop || !but.rnapoin.data || (but.flag & UI_HIDDEN) ||
+        !RNA_struct_is_a(but.rnapoin.type, RNA_OperatorProperties) ||
+        !ELEM(RNA_property_type(but.rnaprop),
+              PROP_BOOLEAN,
+              PROP_INT,
+              PROP_FLOAT,
+              PROP_STRING,
+              PROP_ENUM))
+    {
+      continue;
+    }
+    const int length = RNA_property_array_length(&but.rnapoin, but.rnaprop);
+    const bool color = is_color(&but.rnapoin, but.rnaprop);
+    const int begin = !color && length ? std::max(0, but.rnaindex) : -1;
+    const int end = !color && length && but.rnaindex < 0 ? length : begin + 1;
+    for (int index = begin; index < end; ++index) {
+      const std::string key = property_key(but, index);
+      if (!seen.insert(key).second) {
+        continue;
+      }
+      if (execute && query->lookup_str("key").value_or("") == key) {
+        applied = set_property(C, but, index, *query, false);
+      }
+      else if (!execute) {
+        auto field = fields->append_dict();
+        const auto pair = pairs.find(&but);
+        project_property(C, but, index, *field, pair == pairs.end() ? nullptr : &pair->second);
+      }
+    }
+  }
+  block_free(C, block);
+  if (execute) {
+    if (!applied || !ED_undo_operator_repeat(C, op)) {
+      native_redo_error = "This operation could not be adjusted.";
+    }
+    /* Rebuild from the executed operator, whose check callback may change its UI. */
+    return native_operator_redo_query(C, "", false);
+  }
+  result.append_str("error", native_redo_error);
+  native_redo_snapshot = fields->elements().is_empty() ? "null" : encode(result);
+  native_redo_next_snapshot = now + std::chrono::milliseconds(200);
+  return native_redo_snapshot;
+}
 
 std::string native_properties_query(bContext *C, const std::string &json, bool execute)
 {

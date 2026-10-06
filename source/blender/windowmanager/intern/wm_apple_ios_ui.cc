@@ -66,6 +66,7 @@
 namespace blender::ui {
 std::string native_menu_query(bContext *C, const std::string &request, bool execute);
 std::string native_properties_query(bContext *C, const std::string &request, bool execute);
+std::string native_operator_redo_query(bContext *C, const std::string &request, bool execute);
 std::string native_properties_menu_query(bContext *C, const std::string &request, bool execute);
 }
 
@@ -758,6 +759,10 @@ void ios_mesh_select_mode_set(bContext *C, const std::string &value)
 
 void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
 {
+  if (command.setting == "native_redo_edit") {
+    ui::native_operator_redo_query(C, command.value, true);
+    return;
+  }
   if (command.setting == "native_shading_state") {
     ios_shading_state = command.value;
     ios_panels_next_snapshot = {};
@@ -1115,6 +1120,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
                         "," + std::to_string(radius / width) + "]";
     }
   }
+  const std::string redo_json = has_view3d_context ? ui::native_operator_redo_query(C, "", false) :
+                                                     "null";
   ios_context_pop(C, context_store);
 
   std::string json = "{\"mode\":\"";
@@ -1129,6 +1136,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += can_undo ? "true" : "false";
   json += ",\"settings\":";
   json += settings_json;
+  json += ",\"redo\":";
+  json += redo_json;
   json += ",\"navigationGizmo\":";
   json += navigation_json;
   json += ",\"tools\":";

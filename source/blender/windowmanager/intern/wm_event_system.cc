@@ -98,6 +98,12 @@
 
 namespace blender {
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+namespace ui {
+void native_redo_operator_clear();
+}
+#endif
+
 /**
  * When a gizmo is highlighted and uses click/drag events,
  * this prevents mouse button press events from being passed through to other key-maps
@@ -1366,6 +1372,9 @@ static void wm_operator_finished(bContext *C,
 #endif
     }
     else if (hud_status == CLEAR) {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+      ui::native_redo_operator_clear();
+#endif
       ui::ED_area_type_hud_clear(wm, nullptr);
     }
     else {
