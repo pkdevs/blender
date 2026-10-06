@@ -2615,6 +2615,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   button.accessibilityLabel = title;
   button.accessibilityIdentifier = tool[@"id"];
   UIImage *image = [self toolbarImageForTool:tool mode:mode];
+  UIImage *selected_image = [image imageWithTintColor:UIColor.whiteColor
+                                      renderingMode:UIImageRenderingModeAlwaysOriginal];
   NSArray *children = tool[@"children"];
   const BOOL grouped = children.count > 1;
   [button viewWithTag:9001].hidden = !grouped;
@@ -2635,7 +2637,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
     configuration.baseBackgroundColor = updated_button.selected ? UIColor.systemBlueColor : nil;
     configuration.title = shows_text ? title : nil;
-    configuration.image = image;
+    configuration.image = updated_button.selected ? selected_image : image;
+    ((UIImageView *)[updated_button viewWithTag:9001]).tintColor =
+        updated_button.selected ? UIColor.whiteColor : UIColor.secondaryLabelColor;
     configuration.imagePlacement = NSDirectionalRectEdgeLeading;
     configuration.imagePadding = shows_text ? 10.0 : 0.0;
     configuration.contentInsets = shows_text ?
@@ -2710,6 +2714,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _active_tool_identifier = [toolIdentifier copy];
 
   [self updateToolbarVisibilityAnimated:NO];
+  /* Resolve selection artwork in this event, before UIKit's glass transition. */
+  [UIView performWithoutAnimation:^{
+    for (UIButton *button in self->_toolbar_buttons) {
+      [button updateConfiguration];
+    }
+  }];
 }
 
 - (CGFloat)expandedToolbarHeight

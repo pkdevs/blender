@@ -52,10 +52,21 @@ def tests():
         check(group and all(g['original'] and g['visible'] for g in group), name + ': grouped artwork original')
         index, original = colored[0]
         decode(toolbar(1, index))
+        immediate = decode(colors())[index]
+        check(immediate['selected'] and immediate['white'] and immediate['colored'] == 0,
+              name + ': selected artwork is white immediately after the tap')
         yield 1.0
         selected = decode(colors())[index]
-        check(selected['selected'] and selected['original'] and selected['colored'] > 20,
-              name + ': selected tool retains colors')
+        report[name + '_selected'] = selected
+        check(selected['selected'] and selected['original'] and selected['white'] and
+              selected['visible'] > 0 and selected['colored'] == 0,
+              name + ': selected tool is white on blue')
+        other_index = next(i for i, _ in colored if i != index)
+        decode(toolbar(1, other_index))
+        yield 1.0
+        deselected = decode(colors())[index]
+        check(not deselected['selected'] and deselected['original'] and deselected['colored'] > 20,
+              name + ': deselected tool restores Blender colors')
         report['stage'] = name
         yield 12.0
     light = {i['id']: i for i in report['light']}

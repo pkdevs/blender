@@ -802,7 +802,15 @@ extern "C" char *blender_device_probe_tool_colors()
     NSMutableArray *images = [NSMutableArray array];
     [controller.traitCollection performAsCurrentTraitCollection:^{
       for (UIButton *button in [controller valueForKey:@"_toolbar_buttons"]) {
-        NSMutableDictionary *entry = [toolImageColors(button.configuration.image ?: button.currentImage) mutableCopy];
+        UIImage *image = button.configuration.image ?: button.currentImage;
+        const BOOL templateImage = image.renderingMode == UIImageRenderingModeAlwaysTemplate;
+        UIColor *foreground = button.configuration.baseForegroundColor ?: button.tintColor;
+        UIImage *displayed = templateImage ? [image imageWithTintColor:foreground
+                                                        renderingMode:UIImageRenderingModeAlwaysOriginal] : image;
+        NSMutableDictionary *entry = [toolImageColors(displayed) mutableCopy];
+        entry[@"original"] = @(image.renderingMode == UIImageRenderingModeAlwaysOriginal);
+        entry[@"template"] = @(templateImage);
+        entry[@"white"] = @([foreground isEqual:UIColor.whiteColor]);
         entry[@"id"] = button.accessibilityIdentifier ?: @"";
         entry[@"selected"] = @(button.selected);
         NSMutableArray *group = [NSMutableArray array];
