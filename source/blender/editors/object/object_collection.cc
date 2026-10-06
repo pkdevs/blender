@@ -529,11 +529,25 @@ static Collection *collection_importer_add_ensure(bContext *C,
     BKE_report(op->reports, RPT_ERROR, "Could not find an active collection");
     return nullptr;
   }
+
+  /* Exec after the file browser runs without poll, and the active collection may have changed
+   * while the file browser was open. */
+  if (!ID_IS_EDITABLE(&collection->id) || ID_IS_OVERRIDE_LIBRARY(&collection->id)) {
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Collection '%s' is linked or overridden",
+                BKE_id_name(collection->id));
+    return nullptr;
+  }
   if (collection->importer) {
     if (StringRef(collection->importer->fh_idname) == fh->idname) {
       return collection;
     }
-    BKE_report(op->reports, RPT_ERROR, "The active collection already have another importer");
+    BKE_report(op->reports, RPT_ERROR, "The active collection already has another importer");
+    return nullptr;
+  }
+  if (!BKE_collection_is_empty(collection)) {
+    BKE_report(op->reports, RPT_ERROR, "Collection needs to be empty");
     return nullptr;
   }
 
@@ -584,7 +598,7 @@ static wmOperatorStatus collection_importer_add_exec(bContext *C, wmOperator *op
     }
     IDProperty *import_properties = collection_importer->import_properties;
     IDProperty *filepath_property = bke::idprop::create("filepath", filepath).release();
-    IDP_AddToGroup(import_properties, filepath_property);
+    IDP_ReplaceInGroup(import_properties, filepath_property);
   }
 
   collection_importer_add_tag_update(C, *collection);
