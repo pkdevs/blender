@@ -18,6 +18,7 @@
 
 #include "GPU_immediate.hh"
 #include "GPU_immediate_util.hh"
+#include "GPU_matrix.hh"
 #include "GPU_state.hh"
 
 #include "ED_grease_pencil.hh"
@@ -97,6 +98,10 @@ void grease_pencil_cursor_draw(PaintCursorContext &pcontext)
   float3 color(1.0f);
   const int2 mval = pcontext.mval;
 
+  float roll = 0.0f;
+  float aspect = 1.0f;
+  bool is_square = false;
+
   if (pcontext.mode == PaintMode::GPencil) {
     /* Hide the cursor while drawing. */
     if (grease_pencil->runtime->is_drawing_stroke) {
@@ -168,6 +173,16 @@ void grease_pencil_cursor_draw(PaintCursorContext &pcontext)
       if ((gp_style) && ((brush->flag & BRUSH_SMOOTH_STROKE) == 0) &&
           (brush->gpencil_brush_type == GPAINT_BRUSH_TYPE_DRAW))
       {
+        roll = gp_style->alignment_rotation;
+
+        if (gp_style->mode != GP_MATERIAL_MODE_LINE) {
+          aspect = brush->gpencil_settings->aspect_ratio[0] /
+                   math::max(brush->gpencil_settings->aspect_ratio[1], 1e-8f);
+        }
+
+        if (gp_style->mode == GP_MATERIAL_MODE_SQUARE) {
+          is_square = true;
+        }
 
         const bool use_vertex_color = ed::sculpt_paint::greasepencil::brush_using_vertex_color(
             pcontext.scene->toolsettings->gp_paint, brush);
@@ -192,14 +207,48 @@ void grease_pencil_cursor_draw(PaintCursorContext &pcontext)
     IMB_colormanagement_scene_linear_to_srgb_v3(color, color);
   }
 
+  float2 size = float2(pcontext.pixel_radius);
+
+  if (aspect <= 1.0) {
+    size.x *= aspect;
+  }
+  else {
+    size.y /= aspect;
+  }
+
+  if (roll != 0.0f) {
+    GPU_matrix_push();
+    GPU_matrix_translate_2f(mval.x, mval.y);
+    GPU_matrix_rotate_2d(-RAD2DEG(roll));
+    GPU_matrix_translate_2f(-mval.x, -mval.y);
+  }
+
+  /* Dark color for contrast on light backgrounds (e.g. gray on white) */
+  const float3 darkcolor = color * 0.40f;
+
   GPU_line_width(1.0f);
   /* Inner Ring: Color from UI panel */
   immUniformColor4f(color.x, color.y, color.z, 0.8f);
-  imm_draw_circle_wire_2d(pcontext.pos, mval.x, mval.y, pcontext.pixel_radius, 32);
+  if (is_square) {
+    imm_draw_box_wire_2d(
+        pcontext.pos, mval.x - size.x, mval.y - size.y, mval.x + size.x, mval.y + size.y);
+  }
+  else {
+    imm_draw_circle_wire_aspect_2d(pcontext.pos, mval.x, mval.y, size.x, size.y, 32);
+  }
 
-  /* Outer Ring: Dark color for contrast on light backgrounds (e.g. gray on white) */
-  const float3 darkcolor = color * 0.40f;
+  /* Outer Ring. */
   immUniformColor4f(darkcolor[0], darkcolor[1], darkcolor[2], 0.8f);
-  imm_draw_circle_wire_2d(pcontext.pos, mval.x, mval.y, pcontext.pixel_radius + 1, 32);
+  if (is_square) {
+    imm_draw_box_wire_2d(
+        pcontext.pos, mval.x - size.x, mval.y - size.y, mval.x + size.x, mval.y + size.y);
+  }
+  else {
+    imm_draw_circle_wire_aspect_2d(pcontext.pos, mval.x, mval.y, size.x + 1, size.y + 1, 32);
+  }
+
+  if (roll != 0.0f) {
+    GPU_matrix_pop();
+  }
 }
 }  // namespace blender::ed::sculpt_paint
