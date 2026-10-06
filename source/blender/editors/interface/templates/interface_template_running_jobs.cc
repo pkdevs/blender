@@ -316,11 +316,11 @@ void template_running_jobs(Layout *layout, bContext *C)
     }
   }
 
-  if (ED_screen_animation_no_scrub(wm)) {
+  if (ED_screen_animation_no_scrub(wm) && !ED_screen_has_animation_editor(wm)) {
     Button *but = uiDefIconTextBut(block,
                                    ButtonType::But,
-                                   ICON_STATUS_ERROR_FILLED,
-                                   IFACE_("Anim Player"),
+                                   ICON_PAUSE,
+                                   IFACE_("Stop Playback"),
                                    0,
                                    0,
                                    UI_UNIT_X * 5.0f,
