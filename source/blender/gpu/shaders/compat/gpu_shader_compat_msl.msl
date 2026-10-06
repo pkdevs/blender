@@ -95,6 +95,9 @@ float4 texelFetchExtend(sampler2DDepth samp, int2 texel, int lvl)
   return texelFetch(samp, texel, lvl);
 }
 
+#define bitfieldInsertAssign(base, value, offset, bits) \
+  base = insert_bits(base, value, offset, bits)
+
 /* Resource accessor. */
 #define specialization_constant_get(create_info, _res) _res
 #define shared_variable_get(create_info, _res) _res
@@ -129,5 +132,9 @@ float4 texelFetchExtend(sampler2DDepth samp, int2 texel, int lvl)
 #define gpu_dfdx(x) dFdx(x)
 #define gpu_dfdy(x) dFdy(x)
 #define gpu_fwidth(x) fwidth(x)
+
+#ifndef NAN_FLT
+#  define NAN_FLT uintBitsToFloat(0x7FC00000u)
+#endif
 
 #define static constant static

@@ -18,6 +18,7 @@
 
 #include "BLT_translation.hh"
 
+#include "BKE_animsys.hh"
 #include "BKE_sound.hh"
 
 #include "strip_time.hh"
@@ -197,9 +198,7 @@ bool edit_move_strip_to_seqbase(Scene *scene,
   relations_invalidate_cache(scene, strip);
 
   /* Update meta. */
-  if (transform_test_overlap(scene, dst_seqbase, strip)) {
-    transform_seqbase_shuffle(dst_seqbase, strip, scene);
-  }
+  transform_shuffle_vertical(dst_seqbase, {strip}, scene);
 
   return true;
 }
@@ -455,7 +454,7 @@ Strip *edit_strip_split(Main *bmain,
    * strips to seqbase, for lookup cache to work correctly. */
   Strip *strip_rename = right_strip;
   for (; strip_rename; strip_rename = strip_rename->next) {
-    ensure_unique_name(*bmain, strip_rename, scene);
+    ensure_unique_name(strip_rename, scene, {});
   }
 
   /* Split strips. */

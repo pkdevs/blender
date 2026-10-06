@@ -1380,7 +1380,7 @@ static Image *image_open_single(Main *bmain,
   Image *ima = nullptr;
 
   errno = 0;
-  ima = BKE_image_load_exists_in_lib(bmain, owner_library, range->filepath, &exists);
+  ima = BKE_image_load_exists_in_lib(bmain, owner_library, range->filepath, true, &exists);
 
   if (!ima) {
     BKE_reportf(op->reports,
@@ -2962,10 +2962,10 @@ static wmOperatorStatus image_flip_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  ED_image_undo_push_end();
-
   IMB_partial_update_mark_full(ibuf);
   IMB_mark_dirty(ibuf);
+
+  ED_image_undo_push_end();
 
   DEG_id_tag_update(&ima->id, ID_RECALC_EDITORS);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
@@ -3030,10 +3030,10 @@ static wmOperatorStatus image_rotate_orthogonal_exec(bContext *C, wmOperator *op
     return OPERATOR_CANCELLED;
   }
 
-  ED_image_undo_push_end();
-
   IMB_partial_update_mark_full(ibuf);
   IMB_mark_dirty(ibuf);
+
+  ED_image_undo_push_end();
 
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
@@ -3289,10 +3289,10 @@ static wmOperatorStatus image_invert_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  ED_image_undo_push_end();
-
   IMB_partial_update_mark_full(ibuf);
   IMB_mark_dirty(ibuf);
+
+  ED_image_undo_push_end();
 
   DEG_id_tag_update(&ima->id, ID_RECALC_EDITORS);
 

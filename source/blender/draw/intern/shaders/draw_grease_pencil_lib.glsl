@@ -16,11 +16,11 @@ SHADER_LIBRARY_CREATE_INFO(draw_gpencil)
 #include "draw_object_infos_lib.glsl"
 #include "draw_view_lib.glsl"
 
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_math_matrix_transform_lib.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 #ifndef DRW_GPENCIL_INFO
 #  error Missing additional info draw_gpencil
@@ -659,8 +659,8 @@ float4 gpencil_vertex(float4 viewport_res,
       x *= out_aspect.x;
       y *= out_aspect.y;
 
-      /* Invert for vertex shader. */
-      out_aspect.xy = 1.0f / out_aspect.xy;
+      /* The aspect has been applied in the vertex shader, don't apply in the fragment. */
+      out_aspect.xy = float2(1.0f);
 
       out_ndc.xy += (x * x_axis + y * y_axis) * viewport_res.zw * clamped_thickness;
       out_sspos_0.xy = ss1.xy + x_axis * 0.5f;

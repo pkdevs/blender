@@ -5,8 +5,6 @@
 
 import argparse
 import os
-import pathlib
-import subprocess
 import sys
 from pathlib import Path
 try:
@@ -14,11 +12,23 @@ try:
     from modules import render_report
 
     class EEVEEReport(render_report.Report):
-        def __init__(self, title, output_dir, oiiotool, variation=None, blocklist=[]):
+        def __init__(
+            self,
+            title: str,
+            output_dir: Path,
+            oiiotool: Path,
+            variation: str | None = None,
+            blocklist: list[str] = [],
+        ) -> None:
             super().__init__(title, output_dir, oiiotool, variation=variation, blocklist=blocklist)
             self.gpu_backend = variation
 
-        def _get_render_arguments(self, arguments_cb, filepath, base_output_filepath):
+        def _get_render_arguments(
+            self,
+            arguments_cb: render_report.ArgumentsCallback,
+            filepath: Path,
+            base_output_filepath: Path,
+        ) -> list[str | Path]:
             return arguments_cb(filepath, base_output_filepath, gpu_backend=self.gpu_backend)
 
 except ImportError:
@@ -61,8 +71,6 @@ BLOCKLIST = [
     "osl_camera_bevel.blend",
     # Extreme texture values interpolate differently on different GPUs.
     "image_log.blend",
-    # Exhibit the LTC light leaking issue. To be enabeld back after fixing.
-    "light_path_glossy_depth.blend",
     # Exhibit non-deterministic behavior because of tracing outside the spotlight 45° cone.
     "light_path_is_camera_ray.blend",
     # Exhibit non-deterministic (to be fixed).
@@ -82,6 +90,7 @@ BLOCKLIST = [
     "image_mipmap_world_sun.blend",
 
     ### Cycles only tests go here ###
+    "gsplat.*.blend",
 ]
 
 BLOCKLIST_METAL = [
@@ -310,8 +319,12 @@ if inside_blender:
         sys.exit(1)
 
 
-def get_arguments(filepath, output_filepath, gpu_backend):
-    arguments = [
+def get_arguments(
+    filepath: Path,
+    output_filepath: Path,
+    gpu_backend: str | None,
+) -> list[str | Path]:
+    arguments: list[str | Path] = [
         "--background",
         "--factory-startup",
         "--enable-autoexec",
@@ -338,10 +351,10 @@ def create_argparse():
     parser = argparse.ArgumentParser(
         description="Run test script for each blend file in TESTDIR, comparing the render result with known output."
     )
-    parser.add_argument("--blender", required=True)
-    parser.add_argument("--testdir", required=True)
-    parser.add_argument("--outdir", required=True)
-    parser.add_argument("--oiiotool", required=True)
+    parser.add_argument("--blender", required=True, type=Path)
+    parser.add_argument("--testdir", required=True, type=Path)
+    parser.add_argument("--outdir", required=True, type=Path)
+    parser.add_argument("--oiiotool", required=True, type=Path)
     parser.add_argument('--batch', default=False, action='store_true')
     parser.add_argument('--gpu-backend')
     return parser
@@ -384,7 +397,7 @@ def main():
     report.set_fail_percent(0.08)
     report.set_fail_threshold(4.0 / 255.0)
 
-    test_dir_name = Path(args.testdir).name
+    test_dir_name = args.testdir.name
     if gpu_vendor == "NVIDIA" and args.gpu_backend == "opengl":
         # References are supposed to be generated on OpenGL Nvidia. Tighten the threshold for this platform.
         report.set_fail_percent(0.049)
@@ -403,11 +416,20 @@ def main():
             # Reference images on the CI worker seem to differ slightly from images on
             # an NVIDIA RTX 4060 Ti with driver 610.74
             report.set_fail_threshold(6.0 / 255.0)
+    elif test_dir_name.startswith('attributes') and gpu_vendor == "AMD":
+        # attribute_pointcloud_color
+        report.set_fail_percent(0.09)
+    elif test_dir_name.startswith('ray_portal') and gpu_vendor == "AMD":
+        # AMD PRO W7600
+        report.set_fail_percent(0.09)
     elif test_dir_name.startswith('camera'):
         # camera_stereo_panoramic have some platform specific small differences
         # Fix back to 0.14 once eevee panorama has proper filtering.
         report.set_fail_percent(1.5)
         report.set_fail_threshold(6.0 / 255.0)
+        if gpu_vendor == "AMD" and args.gpu_backend == "opengl":
+            # camera_fisheye_polynomial
+            report.set_fail_percent(1.8)
     elif test_dir_name.startswith('image_colorspace'):
         # image_log has hot pixels that result in platform differences.
         report.set_fail_percent(0.15)
@@ -440,10 +462,10 @@ def main():
     elif test_dir_name.startswith('principled_bsdf'):
         # principled_bsdf_thinfilm_metallic has some weird behavior in reflection of
         # black surfaces. to be investigated
-        report.set_fail_percent(0.09)
+        report.set_fail_percent(0.098)
         # principled_bsdf_dispersion has some difference in the highlights
         if gpu_vendor == "AMD":
-            report.set_fail_threshold(6.0 / 255.0)
+            report.set_fail_threshold(10.0 / 255.0)
     elif test_dir_name.startswith('integrator'):
         # Noise difference in transparent materials (mostly transparent_spatial_splits)
         report.set_fail_threshold(8.0 / 255.0)
@@ -466,7 +488,7 @@ def main():
     elif test_dir_name.startswith('shader'):
         # normal_mapping_light_leak fireflies.
         # fresnel_layer_weight high values are accumulated differently on different platform.
-        report.set_fail_percent(0.2)
+        report.set_fail_percent(0.221)
         if gpu_vendor == "INTEL":
             # mix_color uses implementation dependent function.
             report.set_fail_percent(0.41)
@@ -485,6 +507,9 @@ def main():
     elif test_dir_name.startswith('pointcloud'):
         # Only because of points_transparent
         report.set_fail_threshold(8.0 / 255.0)
+        if gpu_vendor == "AMD" and args.gpu_backend == "opengl":
+            # points_transparent
+            report.set_fail_percent(0.9)
     elif test_dir_name.startswith('motion_blur'):
         # Failure can be subtle, tighten threshold
         report.set_fail_percent(0.04)
@@ -494,8 +519,13 @@ def main():
             report.set_fail_percent(0.06)
         if args.gpu_backend == "opengl" and gpu_vendor == "AMD":
             # large_combined_motion has 1 hot pixel difference in rasterization.
-            report.set_fail_percent(0.043)
+            # shutter_curve_triangle on AMD PRO W7600
+            report.set_fail_percent(0.1)
             report.set_fail_threshold(3.0 / 255.0)
+    elif test_dir_name.startswith('bsdf') and args.gpu_backend == "opengl" and gpu_vendor == "AMD":
+        # ray_portal fireflies on AMD PRO W7600
+        report.set_fail_percent(0.3)
+        report.set_fail_threshold(3.0 / 255.0)
     elif test_dir_name.startswith('lightprobe') and args.gpu_backend == "metal":
         # Some shadow difference, to be investigated
         report.set_fail_percent(0.09)

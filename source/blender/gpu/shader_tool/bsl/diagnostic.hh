@@ -115,6 +115,24 @@ enum class Diag {
   AutoTypeNestedInitializer,
   AutoTypeCannotBeDeduced,
 
+  BitFieldNotIntegral,
+  BitFieldSizeNegative,
+  BitFieldSizeTooLarge,
+  BitFieldSizeNull,
+  BitFieldNotSingleDeclarator,
+
+  CapacityArrayDimensionMismatch,
+  CapacityArrayImplicitSize,
+
+  ConditionAttributeDeclaredHere,
+  ConditionAttributeMultiple,
+  ConditionAttributeNotChecked,
+  ConditionAttributeNotOnResource,
+  ConditionAttributeUnsupported,
+
+  CompilationConstantRedefinition,
+  CompilationConstantPreviousDecl,
+
   ConstexprDivisionByZero,
   ConstexprGlobalNonStatic,
   ConstexprIfConditionNotConstexpr,
@@ -122,7 +140,8 @@ enum class Diag {
   ConstexprShiftNegative,
   ConstexprShiftTooLarge,
   ConstexprVarMustBeInitializedByConstantExpr,
-  ConstexprVarMustBeIntOrUint,
+  ConstexprVarMustBeInitializedByCorrectType,
+  ConstexprVarMustBeValidType,
   ConstexprVarMustNotBeArray,
 
   ResourceTableDeclarationAlreadyOfType,
@@ -166,6 +185,7 @@ enum class Diag {
 
   InvalidBinaryOperands,
   InvalidExprTypeChecker,
+  InvalidExprTypeCodegen,
   InvalidInlinedFunctionLocation,
   InvalidNumberLiteral,
   InvalidResourceTypeForResourceTableClass,
@@ -173,8 +193,6 @@ enum class Diag {
   InvalidUnaryArgumentType,
 
   MissingParameterForCall,
-
-  MultipleConditionAttributes,
 
   OperatorCalledIsNotFunction,
   OperatorTokenInvalid,
@@ -295,10 +313,24 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Only entry points can use 'out' attribute";
     case Diag::AutoTypeCannotBeDeduced:
       return "Cannot deduce actual type for variable '{}' with type 'auto'";
+    case Diag::BitFieldNotIntegral:
+      return "Bit-field has non-integral type '{}'";
+    case Diag::BitFieldSizeNegative:
+      return "Width of bit-field ({} bits) is negative";
+    case Diag::BitFieldSizeTooLarge:
+      return "Width of bit-field ({} bits) exceeds the width of its type";
+    case Diag::BitFieldSizeNull:
+      return "Width of bit-field is zero";
+    case Diag::BitFieldNotSingleDeclarator:
+      return "Bitfields must have single declarator";
     case Diag::AutoTypeMultipleExpressions:
       return "Initializer for variable '{}' with type 'auto' contains multiple expressions";
     case Diag::AutoTypeNestedInitializer:
       return "Cannot deduce type for variable '{}' with type 'auto' from nested initializer list";
+    case Diag::CapacityArrayDimensionMismatch:
+      return "Runtime capacity can only be specified for one dimensional array";
+    case Diag::CapacityArrayImplicitSize:
+      return "Runtime capacity requires the array to be sized to its maximum size";
     case Diag::CompilerErrorADLOnTypesNotAllowed:
       return "Cannot use ADL on types";
     case Diag::CompilerErrorMemberFuncNoClass:
@@ -319,8 +351,12 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Shift count {} >= width of type 32";
     case Diag::ConstexprVarMustBeInitializedByConstantExpr:
       return "Constexpr variable '{}' must be initialized by a constant expression";
-    case Diag::ConstexprVarMustBeIntOrUint:
-      return "Constexpr variable must be of type 'int', 'uint', 'bool' or 'float'";
+    case Diag::ConstexprVarMustBeInitializedByCorrectType:
+      return "Constexpr variable '{}' must be initialized by a constant expression of type '{}' "
+             "but got '{}'";
+    case Diag::ConstexprVarMustBeValidType:
+      return "Constexpr variable must be scalar or vector of type 'int', 'uint', 'bool' or "
+             "'float'";
     case Diag::ConstexprVarMustNotBeArray:
       return "Array variables cannot be constexpr";
     case Diag::EmptyClassNotSupportedInBuffer:
@@ -384,6 +420,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Cannot inline recursive call";
     case Diag::InvalidBinaryOperands:
       return "Invalid operands to binary expression ('{}' {} '{}')";
+    case Diag::InvalidExprTypeCodegen:
+      return "Invalid expression in codegen";
     case Diag::InvalidExprTypeChecker:
       return "Invalid expression in type checker";
     case Diag::InvalidInlinedFunctionLocation:
@@ -398,8 +436,20 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Invalid argument type '{0}' to unary expression ({0}'{1}')";
     case Diag::MissingParameterForCall:
       return "Missing parameter for call to '{}'";
-    case Diag::MultipleConditionAttributes:
+    case Diag::ConditionAttributeDeclaredHere:
+      return "Condition declared here";
+    case Diag::ConditionAttributeMultiple:
       return "Only one condition attribute is allowed";
+    case Diag::ConditionAttributeNotChecked:
+      return "Access to conditional resource '{}' is not guarded by any static check";
+    case Diag::ConditionAttributeNotOnResource:
+      return "Condition attribute is only allowed on resources declaration";
+    case Diag::ConditionAttributeUnsupported:
+      return "Condition attribute is not compatible with resource type '{}'";
+    case Diag::CompilationConstantRedefinition:
+      return "Redefinition of compilation constant '{}'";
+    case Diag::CompilationConstantPreviousDecl:
+      return "Previous definition is here";
     case Diag::NonConstVariableInExpr:
       return "Read of non-const variable is not allowed in a {}";
     case Diag::NoteDeclarationUnionRequested:
@@ -512,7 +562,7 @@ static inline std::string_view diagnostic_message_get(Diag diag)
     case Diag::UnknownClassInstantiation:
       return "Compiler error: Can't find class symbol";
     case Diag::UnknownFunction:
-      return "Unknown function name";
+      return "Unknown function name '{}'";
     case Diag::UnknownIdentifier:
       return "Use of undeclared identifier '{}'";
     case Diag::UnknownMember:
