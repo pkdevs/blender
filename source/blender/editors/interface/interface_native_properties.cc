@@ -968,12 +968,21 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     visible_panels[candidate.id] = open;
     panel_depths[candidate.id] = is_outer ? 0 : panel_depths[candidate.parent] + 1;
     std::string panel_title = pt.label;
+    bool panel_active = false;
     if (candidate.instance && !pt.parent) {
       if (PointerRNA *data = panel_custom_data_get(candidate.instance)) {
         char *name = RNA_struct_name_get_alloc(data, nullptr, 0, nullptr);
         if (name) {
           panel_title = name;
           MEM_delete(name);
+        }
+        /* Modifiers (is_active) and constraints (active) mark the stack's active item. */
+        for (const char *identifier : {"is_active", "active"}) {
+          PropertyRNA *prop = RNA_struct_find_property(data, identifier);
+          if (prop && RNA_property_type(prop) == PROP_BOOLEAN) {
+            panel_active = RNA_property_boolean_get(data, prop);
+            break;
+          }
         }
       }
     }
@@ -982,6 +991,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       section->append_str("id", candidate.id);
       section->append_str("title", panel_title);
       section->append_int("open", open);
+      if (panel_active) {
+        section->append_int("active", 1);
+      }
       outer_fields[outer] = section->append_array("properties");
     }
     auto fields = outer_fields[outer];
