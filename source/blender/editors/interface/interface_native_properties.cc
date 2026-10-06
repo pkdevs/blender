@@ -86,6 +86,9 @@ struct PropertiesContext {
 
   ~PropertiesContext()
   {
+    /* Instanced modifier/constraint panels can start window-level animation handlers.
+     * Retire those handlers and timers before freeing their temporary panels. */
+    panels_free_instanced(C, region);
     CTX_wm_area_set(C, previous_area);
     CTX_wm_region_set(C, previous_region);
     BKE_screen_area_free(&area);
@@ -1072,8 +1075,14 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       if (!execute && !open && !header_toggle) {
         continue;
       }
-      if (!execute) {
-        if (MenuType *menu = button_menutype_get(&but)) {
+      MenuType *menu = button_menutype_get(&but);
+      if (!menu && but.optype && but.opptr && STREQ(but.optype->idname, "WM_OT_call_menu")) {
+        /* Some panel menus are expressed as operators, including Add Modifier. */
+        const std::string name = RNA_string_get(but.opptr, "name");
+        menu = WM_menutype_find(name.c_str(), true);
+      }
+      if (menu) {
+        if (!execute && !(but.flag & UI_HIDDEN)) {
           auto field = append_field();
           field->append_str("type", "MENU");
           field->append_str("label", but.str.empty() ? menu->label : but.str);
@@ -1082,8 +1091,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           field->append_str("tab", tab_id);
           field->append_str("icon", icon_name(button_icon(&but)));
           field->append_int("editable", !(but.flag & (BUT_DISABLED | BUT_INACTIVE)));
-          continue;
         }
+        /* Menu activation belongs to UIKit, never to a Blender popup operator. */
+        continue;
       }
       if (but.optype && !(but.flag & UI_HIDDEN)) {
         if (shading && STREQ(but.optype->idname, "SCREEN_OT_userpref_show")) {

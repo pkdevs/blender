@@ -310,8 +310,12 @@ std::string native_menu_query(bContext *C, const std::string &request, const boo
   }
   const char *context_id = native_context_menu_id(C);
   const std::string resolved = *root == "context" ? (context_id ? context_id : "") : *root;
+  /* Properties requests reconstruct a detached Properties editor before arriving here.
+   * Its registered panel menus use the same poll and route validation as viewport menus. */
+  const bool properties_menu = CTX_wm_space_properties(C) &&
+                               WM_menutype_find(resolved.c_str(), true);
   if (!ELEM(resolved, "TOPBAR_MT_editor_menus", "VIEW3D_MT_editor_menus") &&
-      (!context_id || resolved != context_id))
+      (!context_id || resolved != context_id) && !properties_menu)
   {
     return encode(result);
   }
