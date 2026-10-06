@@ -27,6 +27,69 @@ a separate host-tool build directory, and set `LIBDIR` to the rebuilt iOS
 libraries. Keep device and simulator library/build directories separate: both
 use ARM64, but their binaries are not interchangeable.
 
+## TestFlight Distribution
+
+The native interface targets iOS/iPadOS 27.0 for external testing. Use the stable
+Xcode 27.0 installation for the distribution build; the Xcode 27.1 simulator used
+by some development tests is not a runtime requirement. The optional 27.1 toolbar
+compression preference is guarded at both compile time and runtime.
+
+Configure a separate device build with the matching libraries and host tools
+described above, and these additional CMake settings:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer cmake \
+  -S . -B ../build_native_ipados_testflight -G Xcode \
+  -DWITH_APPLE_CROSSPLATFORM=ON -DAPPLE_TARGET_DEVICE=ios \
+  -DIOS_MIN_DEPLOYMENT_TARGET=27.0 -DIOS_BUNDLE_VERSION=1 \
+  -DLIBDIR=/path/to/ios/libraries \
+  -DCROSSCOMPILE_TOOLDIR=/path/to/matching/host/tools \
+  -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=YOUR_TEAM_ID \
+  -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Automatic \
+  -DCMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER=com.williamreynish.blender \
+  -DWITH_INSTALL_COPYRIGHT=ON
+```
+
+Increment `IOS_BUNDLE_VERSION` for each upload. It controls `CFBundleVersion`
+independently of the Blender version. Confirm the generated app's
+`MinimumOSVersion` is 27.0 and validate on 27.0 before inviting testers.
+
+Package the device app using `prepare_testflight.py`. It copies the input app,
+turns native libraries into individual frameworks, rewrites load paths and adds
+Python `.fwork` markers. It rejects simulator binaries, libraries requiring a
+newer OS, unconverted Python bundles and test probes. OpenImageDenoise must be
+built with `oidn_ios_frameworks.diff` so its Metal module resolves as a framework.
+Existing NumPy Mach-O bundles must first be relinked as dynamic libraries with
+`relink_python_extensions.py`, using the matching Meson build directory.
+
+```sh
+python3 release/ios/relink_python_extensions.py /path/to/numpy/build /path/to/replacements/numpy
+python3 release/ios/prepare_testflight.py /path/to/Blender.app /path/to/prepared/Blender.app \
+  --replacement-directory /path/to/replacements
+python3 release/ios/archive_testflight.py /path/to/prepared/Blender.app /path/to/Blender.xcarchive \
+  --profile /path/to/profile.mobileprovision --identity SIGNING_IDENTITY \
+  --dsym /path/to/Blender.app.dSYM
+```
+
+The archive is locally signed with the supplied profile. Export it using
+`xcodebuild -exportArchive -allowProvisioningUpdates`, an export options plist
+with `method=app-store-connect`, `signingStyle=automatic` and the developer team.
+Use `destination=export` for a local distribution package or `destination=upload`
+for App Store Connect. Set `manageAppVersionAndBuildNumber=false` to preserve the
+configured build number. Distribution signing requires the account's appropriate
+certificate or Xcode cloud signing access.
+
+Run `test_testflight_packaging.py` for packaging checks. Before uploading, install
+a separately signed QA copy on a 27.0 device and run `testflight_device_test.py`
+with factory startup. This checks packaged NumPy imports, OpenImageDenoise module
+loading, saving and rendering without touching a user's scene.
+
+See [Apple's bundle layout requirements](https://developer.apple.com/documentation/bundleresources/placing-content-in-a-bundle)
+and [Python's iOS packaging instructions](https://docs.python.org/3.13/using/ios.html).
+The first external TestFlight build requires Apple's beta review; invite colleagues
+after approval. Each uploaded build expires after 90 days. See
+[TestFlight distribution](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/).
+
 ## Native UI Threading
 
 The iOS port has three independent execution paths:
