@@ -48,7 +48,8 @@ class StringRef;
  */
 class StringRefBase {
  protected:
-  const char *data_; /* May be nullptr when used in StringRef. */
+  /* May be nullptr when used in StringRef. */
+  const char *data_;
   int64_t size_;
 
   constexpr StringRefBase(const char *data, int64_t size);
