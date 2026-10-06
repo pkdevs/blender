@@ -4359,9 +4359,17 @@ static int do_but_textedit(
           retval = WM_UI_HANDLER_BREAK;
         }
         else if (inbox == false && !data->is_semi_modal) {
-          /* if searchbox, click outside will cancel */
+          /* If searchbox, click outside will cancel, unless the search box only offers
+           * suggestions while editing (e.g. path-template variables). Then the typed text is
+           * committed as-is, without applying the highlighted suggestion. */
           if (data->searchbox) {
-            data->cancel = data->escapecancel = true;
+            const ButtonSearch *but_search = static_cast<const ButtonSearch *>(but);
+            if (but_search->keep_editing_after_apply) {
+              searchbox_hide(data->searchbox);
+            }
+            else {
+              data->cancel = data->escapecancel = true;
+            }
           }
 #ifdef WITH_INPUT_IME
           else if (is_ime_composing && !ime_data->composite.empty() &&
