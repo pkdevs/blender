@@ -1230,6 +1230,11 @@ extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y)
   ios_hover_requests.publish({active, x, y});
 }
 
+bool WM_apple_ios_pencil_hover_active()
+{
+  return ios_hover_request.active;
+}
+
 extern "C" char *WM_apple_ios_ui_pencil_hover_copy_json()
 {
   static std::string snapshot = "{}";
@@ -1630,11 +1635,18 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     ios_ui_dispatch(C, message);
   }
 
-  ios_hover_requests.take(ios_hover_request);
+  const bool hover_changed = ios_hover_requests.take(ios_hover_request);
   {
     const IOSContextStore context_store = ios_context_push_view3d(C);
     ARegion *region = CTX_wm_region(C);
     wmWindow *window = CTX_wm_window(C);
+    if (hover_changed && window) {
+      /* Removing a cursor needs a frame even when no mesh hover target changed. */
+      WM_paint_cursor_tag_redraw(window, region);
+      if (bScreen *screen = WM_window_get_active_screen(window)) {
+        screen->do_draw_gesture = true;
+      }
+    }
     bool active = ios_hover_request.active && window && region;
     if (active) {
       for (wmEventHandler &handler : window->runtime->modalhandlers) {
@@ -1657,7 +1669,8 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     const View3DPencilHover hit = ED_view3d_pencil_hover_get(region);
     ios_hover_snapshot.publish("{\"object\":" + std::to_string(hit.object_uid) +
                                ",\"kind\":" + std::to_string(hit.kind) +
-                               ",\"index\":" + std::to_string(hit.index) + "}");
+                               ",\"index\":" + std::to_string(hit.index) +
+                               ",\"cursorVisible\":" + (ios_hover_request.active ? "true" : "false") + "}");
     ios_context_pop(C, context_store);
   }
 

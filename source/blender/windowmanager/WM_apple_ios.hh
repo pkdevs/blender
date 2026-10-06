@@ -15,6 +15,7 @@ struct wmWindow;
 struct ReportList;
 
 /* Engine-thread API. UIKit exchanges only owned values and request identifiers. */
+bool WM_apple_ios_pencil_hover_active();
 bool WM_apple_ios_dialog_begin(bContext *C,
                                const GHOST_IOSDialog &dialog,
                                std::function<void(bContext *, int, uint64_t)> complete,

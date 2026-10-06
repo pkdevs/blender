@@ -23,6 +23,9 @@
 #include "BLI_utildefines.h"
 
 #include "WM_api.hh"
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+#  include "WM_apple_ios.hh"
+#endif
 #include "WM_types.hh"
 
 #include "wm.hh"
@@ -588,6 +591,11 @@ void wm_gesture_draw(wmWindow *win)
       wm_gesture_draw_rect(gt);
     }
     else if (gt->type == WM_GESTURE_CIRCLE) {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+      if (!WM_apple_ios_pencil_hover_active()) {
+        continue;
+      }
+#endif
       wm_gesture_draw_circle(gt);
     }
     else if (gt->type == WM_GESTURE_CROSS_RECT) {
