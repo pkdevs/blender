@@ -1125,14 +1125,14 @@ void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
     iter_shader_to_rgba_depth_count(localtree, output, max_depth);
   }
   for (bNode &node : localtree->nodes) {
-    if (ELEM(node.type_legacy, SH_NODE_OUTPUT_AOV)) {
+    if (node.type_legacy == SH_NODE_OUTPUT_AOV) {
       iter_shader_to_rgba_depth_count(localtree, &node, max_depth);
     }
   }
   for (int depth = max_depth; depth >= 0; depth--) {
     ntreeExecGPUNodes(exec, mat, output, &depth);
     for (bNode &node : localtree->nodes) {
-      if (ELEM(node.type_legacy, SH_NODE_OUTPUT_AOV)) {
+      if (node.type_legacy == SH_NODE_OUTPUT_AOV) {
         ntreeExecGPUNodes(exec, mat, &node, &depth);
       }
     }
