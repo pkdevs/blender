@@ -1619,7 +1619,7 @@ static bool show_transform_gizmo(const SpaceNode &snode)
 
   node_tree->ensure_topology_cache();
   for (bNodeSocket &input : node->inputs) {
-    if (STR_ELEM(input.name, "X", "Y", "Angle", "Scale") && input.is_directly_linked()) {
+    if (STR_ELEM(input.identifier, "X", "Y", "Angle", "Scale") && input.is_directly_linked()) {
       return false;
     }
   }
@@ -2012,7 +2012,7 @@ static bool show_scale_gizmo(const SpaceNode &snode)
 
   node_tree->ensure_topology_cache();
   for (bNodeSocket &input : node->inputs) {
-    if (STR_ELEM(input.name, "X", "Y", "Type") && input.is_directly_linked()) {
+    if (STR_ELEM(input.identifier, "X", "Y", "Type") && input.is_directly_linked()) {
       return false;
     }
   }
