@@ -561,6 +561,25 @@ int main()
               [outerDisclosure.accessibilityValue isEqual:@"Expanded"],
               @"Open disclosure chevron rotates without stretching: %@ %@",
               NSStringFromCGRect(chevron.frame), NSStringFromCGRect(chevron.bounds));
+    NSDictionary *removeOperator = @{@"key": @"OBJECT_OT_modifier_remove::1", @"label": @"Remove Modifier",
+      @"type": @"OPERATOR", @"icon": @"X", @"header": @YES, @"native": @YES, @"editable": @YES};
+    NSMutableDictionary *modifierModel = [[acknowledged mutableCopy] autorelease];
+    modifierModel[@"inspector"] = @{@"id": @"header-test", @"name": @"Properties",
+      @"sections": @[@{@"id": @"modifier", @"title": @"Subdivision", @"open": @YES, @"active": @YES,
+        @"properties": @[outerToggle, property, removeOperator]}]};
+    [panels updateSnapshot:modifierModel];
+    header = [form.delegate tableView:form viewForHeaderInSection:0];
+    UIButton *remove = [panels valueForKey:@"_controls"][@"OBJECT_OT_modifier_remove::1"];
+    content = [panels valueForKey:@"_formSections"][0];
+    NSCAssert([remove isDescendantOfView:header] && ![content containsObject:remove] && content.count == 1,
+              @"Header operators sit in the panel header, not among its properties");
+    NSCAssert(remove.configuration.image && !remove.configuration.title.length &&
+              [remove.accessibilityLabel containsString:@"Remove Modifier"],
+              @"Icon-only header operators keep their operator name for accessibility");
+    NSCAssert([[panels valueForKey:@"_disclosureButtons"][@"modifier"] accessibilityValue].length &&
+              [[[panels valueForKey:@"_disclosureButtons"][@"modifier"] accessibilityValue] containsString:@"Active"],
+              @"The active stack item is shown as header state");
+    [panels updateSnapshot:headerModel];
     NSDictionary *subpanelMarker = @{@"type": @"SUBPANEL", @"section": @"Subfeature",
       @"subpanel": @"outer.sub", @"open": @NO, @"depth": @1};
     NSMutableDictionary *subpanelInner = [[innerToggle mutableCopy] autorelease];

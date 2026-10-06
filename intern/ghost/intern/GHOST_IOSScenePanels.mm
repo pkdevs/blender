@@ -1204,6 +1204,23 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
         [sectionKeys addObject:[@"property:" stringByAppendingString:[self keyForProperty:property]]];
         continue;
       }
+      if ([property[@"header"] boolValue] && [kind isEqual:@"OPERATOR"] && ![property[@"checkbox"] boolValue]) {
+        /* Header operators such as Remove are compact icon buttons beside the header switches. */
+        UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+        config.image = _icon(property[@"icon"]);
+        config.title = config.image ? nil : property[@"label"];
+        config.baseForegroundColor = UIColor.secondaryLabelColor;
+        config.contentInsets = NSDirectionalEdgeInsetsMake(4, 4, 4, 4);
+        ((UIButton *)control).configuration = config;
+        if (config.image) {
+          [control.widthAnchor constraintEqualToConstant:36].active = YES;
+        }
+        [control.heightAnchor constraintEqualToConstant:36].active = YES;
+        [control setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+        [control setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+        [(property[@"section"] ? innerHeading : headerControls) addArrangedSubview:control];
+        continue;
+      }
       if ([property[@"header"] boolValue] && [control isKindOfClass:UISwitch.class]) {
         if (property[@"animation"]) {
           [control addInteraction:[[[UIContextMenuInteraction alloc] initWithDelegate:self] autorelease]];
