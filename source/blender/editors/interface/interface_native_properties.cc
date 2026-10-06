@@ -14,6 +14,7 @@
 #include "DNA_ID.h"
 #include "DNA_object_types.h"
 #include "DNA_space_types.h"
+#include "DNA_workspace_types.h"
 #include "ED_buttons.hh"
 #include "ED_undo.hh"
 #include "IMB_colormanagement.hh"
@@ -24,6 +25,7 @@
 #include "UI_interface_layout.hh"
 #include "WM_api.hh"
 #include "WM_types.hh"
+#include "WM_toolsystem.hh"
 #include "interface_intern.hh"
 #include "wm_event_system.hh"
 
@@ -825,19 +827,22 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     }
   }
   const bool shading = query->lookup_str("tab").value_or("") == "SHADING";
+  const bool tool_settings = query->lookup_str("tab").value_or("") == "TOOL";
+  const bool viewport = shading || tool_settings;
   std::unique_ptr<PropertiesContext> properties_context;
-  if (!shading) {
+  if (!viewport) {
     properties_context = std::make_unique<PropertiesContext>(C);
   }
   else if (!CTX_wm_view3d(C)) {
     return "{}";
   }
-  ARegion *panel_region = shading ? CTX_wm_region(C) : properties_context->region;
-  ARegionType *panel_region_type = shading ?
-      BKE_regiontype_from_id(CTX_wm_area(C)->type, RGN_TYPE_HEADER) : panel_region->runtime->type;
-  std::string tab_id = shading ? "SHADING" : "OBJECT";
+  ARegion *panel_region = viewport ? CTX_wm_region(C) : properties_context->region;
+  ARegionType *panel_region_type = viewport ?
+      BKE_regiontype_from_id(CTX_wm_area(C)->type, tool_settings ? RGN_TYPE_UI : RGN_TYPE_HEADER) :
+      panel_region->runtime->type;
+  std::string tab_id = tool_settings ? "TOOL" : shading ? "SHADING" : "OBJECT";
   auto tab_items = result.append_array("tabs");
-  if (!shading) {
+  if (!viewport) {
     PropertiesContext &context = *properties_context;
     PointerRNA space_ptr = RNA_pointer_create_discrete(nullptr, RNA_SpaceProperties, context.space);
     PropertyRNA *tab_prop = RNA_struct_find_property(&space_ptr, "context");
@@ -875,9 +880,19 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     panel_context = "particle";
   }
   result.append_str("tab", tab_id);
-  result.append_str("name", shading ? "Viewport Shading" : "Properties");
+  result.append_str("name", tool_settings ? "Tool Settings" : shading ? "Viewport Shading" : "Properties");
   Object *object = CTX_data_active_object(C);
-  result.append_str("id", tab_id + ":" + std::to_string(object ? object->id.session_uid : 0));
+  std::string identity = tab_id + ":" + std::to_string(object ? object->id.session_uid : 0);
+  if (tool_settings) {
+    const bToolRef *tool = WM_toolsystem_ref_from_context(C);
+    if (!tool) { return execute ? "The active tool is no longer available." : "{}"; }
+    identity += ":" + std::string(tool->idname) + ":" + CTX_data_mode_string(C);
+    result.append_str("tool", tool->idname);
+    if (execute && query->lookup_str("id").value_or("") != identity) {
+      return "The active tool has changed.";
+    }
+  }
+  result.append_str("id", identity);
   auto sections = result.append_array("sections");
   const ArrayValue *expanded = query->lookup_array("expanded");
   const auto requested_panel = query->lookup_str("panel");
@@ -899,6 +914,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   std::vector<Candidate> candidates;
   std::set<Panel *> instances;
   for (PanelType &pt : panel_region_type->paneltypes) {
+    if (tool_settings && !STREQ(pt.idname, "VIEW3D_PT_active_tool")) {
+      continue;
+    }
     if (shading && !STREQ(pt.idname, "VIEW3D_PT_shading") &&
         !STREQ(pt.parent_id, "VIEW3D_PT_shading")) {
       continue;
@@ -910,7 +928,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   for (size_t candidate_index = 0; candidate_index < candidates.size(); candidate_index++) {
     const Candidate candidate = candidates[candidate_index];
     PanelType &pt = *candidate.type;
-    if (!pt.draw || (!shading && !candidate.instance && panel_context != pt.context) ||
+    if (!pt.draw || (!viewport && !candidate.instance && panel_context != pt.context) ||
         ((pt.flag & PANEL_TYPE_NO_HEADER) && !pt.label[0]) || !panel_poll(C, &pt)) {
       continue;
     }
@@ -921,7 +939,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       continue;
     }
     const bool open = is_outer ? (expanded ? std::any_of(expanded->elements().begin(), expanded->elements().end(),
-        [&](const auto &item) { return item->as_string_value() && item->as_string_value()->value() == candidate.id; }) : shading || sections->elements().is_empty()) : open_panels.count(outer) != 0;
+        [&](const auto &item) { return item->as_string_value() && item->as_string_value()->value() == candidate.id; }) : viewport || sections->elements().is_empty()) : open_panels.count(outer) != 0;
     if (open) {
       open_panels.insert(outer);
     }
@@ -988,6 +1006,24 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       }
     }
     const auto pairs = property_pairs(*block);
+    std::map<Button *, std::string> tool_labels;
+    if (tool_settings) {
+      /* Split property layouts put the authored caption in a preceding label. An enum
+       * button's own text is its selected value, not the property caption. */
+      Button *previous = nullptr;
+      for (const auto &button : block->buttons) {
+        if (button->rnaprop && !RNA_property_array_check(button->rnaprop)) {
+          if (previous && previous->type == ButtonType::Label &&
+              (previous->drawflag & BUT_TEXT_RIGHT)) {
+            tool_labels[button.get()] = previous->str;
+          }
+          else if (RNA_property_type(button->rnaprop) != PROP_ENUM && !button->str.empty()) {
+            tool_labels[button.get()] = button->str;
+          }
+        }
+        previous = button.get();
+      }
+    }
     block_end(C, block);
     for (const auto &button : block->buttons) {
       /* Icon templates keep their RNA target in callback data, not in the button itself. */
@@ -1160,6 +1196,13 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           auto field = append_field();
           const auto pair = pairs.find(&but);
           project_property(C, but, index, *field, pair == pairs.end() ? nullptr : &pair->second);
+          if (const auto found = tool_labels.find(&but); found != tool_labels.end()) {
+            std::string label = found->second;
+            while (!label.empty() && ELEM(label.back(), ':', ' ')) {
+              label.pop_back();
+            }
+            field->append_str("toolbar_label", label);
+          }
           if (const auto found = field_modes.find(key); found != field_modes.end()) {
             auto mode = field->append_dict("group_menu");
             project_property(C, *found->second, -1, *mode);
@@ -1201,7 +1244,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         self(self, &child, id);
       }
     };
-    if (!candidate.instance && !shading) {
+    if (!candidate.instance && !viewport) {
       for (Panel &instance : panel_region->panels) {
         add_instance(add_instance, &instance, "");
       }
@@ -1237,7 +1280,7 @@ std::string native_properties_menu_query(bContext *C, const std::string &json, b
     return "[]";
   }
   const auto tab = request->lookup_str("propertiesTab");
-  if (!tab) {
+  if (!tab || *tab == "TOOL") {
     return native_menu_query(C, json, execute);
   }
   PropertiesContext context(C);

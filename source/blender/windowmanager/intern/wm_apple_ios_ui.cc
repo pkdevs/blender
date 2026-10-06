@@ -1106,6 +1106,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
                                                 std::vector<IOSActionItem>();
   const bool can_undo = has_view3d_context && ios_undo_available(C);
   const std::string settings_json = ios_transform_settings_json(scene, mode);
+  const std::string tool_settings_json = has_view3d_context ?
+      ui::native_properties_query(C, "{\"tab\":\"TOOL\"}", false) : "{}";
   std::string navigation_json = "null";
   if (has_view3d_context) {
     const wmWindow *win = CTX_wm_window(C);
@@ -1141,6 +1143,9 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += can_undo ? "true" : "false";
   json += ",\"settings\":";
   json += settings_json;
+  json += ",\"toolSettings\":";
+  json += tool_settings_json;
+  json += ",\"propertiesAck\":" + std::to_string(ios_panels_sequence);
   json += ",\"redo\":";
   json += redo_json;
   json += ",\"navigationGizmo\":";
