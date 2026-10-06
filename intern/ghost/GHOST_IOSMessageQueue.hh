@@ -51,6 +51,21 @@ template<typename T> class GHOST_IOSMessageQueue {
     }
     return result;
   }
+
+  /** Replace adjacent previews only. Final edits and unrelated commands remain barriers. */
+  template<typename Supersedes> std::vector<T> take_coalesced(Supersedes supersedes)
+  {
+    std::vector<T> result;
+    for (T &value : take()) {
+      if (!result.empty() && supersedes(result.back(), value)) {
+        result.back() = std::move(value);
+      }
+      else {
+        result.push_back(std::move(value));
+      }
+    }
+    return result;
+  }
 };
 
 /** Single-consumer latest-value mailbox. Superseded snapshots are reclaimed without

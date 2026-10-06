@@ -119,6 +119,27 @@ bool is_color(PointerRNA *ptr, PropertyRNA *prop)
          ELEM(RNA_property_array_length(ptr, prop), 3, 4);
 }
 
+struct NativePropertyInteraction {
+  std::string token;
+  std::string undo_name;
+  std::string closed_token;
+};
+NativePropertyInteraction native_property_interaction;
+
+void finish_property_interaction(bContext *C)
+{
+  auto &interaction = native_property_interaction;
+  if (interaction.token.empty()) {
+    return;
+  }
+  if (!interaction.undo_name.empty()) {
+    ED_undo_push(C, interaction.undo_name.c_str());
+  }
+  interaction.closed_token = std::move(interaction.token);
+  interaction.token.clear();
+  interaction.undo_name.clear();
+}
+
 bool set_property(bContext *C,
                   Button &but,
                   int index,
@@ -289,8 +310,24 @@ bool set_property(bContext *C,
       return false;
   }
   RNA_property_update(C, ptr, prop);
-  if (push_undo && ptr->owner_id && RNA_struct_undo_check(ptr->type)) {
-    ED_undo_push(C, RNA_property_ui_name(prop));
+  if (push_undo) {
+    const bool undo = ptr->owner_id && RNA_struct_undo_check(ptr->type);
+    const auto phase = request.lookup_str("phase").value_or("");
+    const std::string token = request.lookup_str("interaction").value_or("");
+    if (!token.empty() && phase == "update") {
+      native_property_interaction.token = token;
+      native_property_interaction.undo_name = undo ? RNA_property_ui_name(prop) : "";
+    }
+    else {
+      if (undo && phase != "cancel") {
+        ED_undo_push(C, RNA_property_ui_name(prop));
+      }
+      if (!token.empty()) {
+        native_property_interaction.closed_token = token;
+        native_property_interaction.token.clear();
+        native_property_interaction.undo_name.clear();
+      }
+    }
   }
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
   return true;
@@ -631,6 +668,11 @@ std::string native_redo_snapshot = "null";
 std::chrono::steady_clock::time_point native_redo_next_snapshot;
 }  // namespace
 
+void native_properties_interaction_finish(bContext *C)
+{
+  finish_property_interaction(C);
+}
+
 void native_redo_operator_register(bContext *C, wmOperator *op)
 {
   if ((op->type->flag & (OPTYPE_REGISTER | OPTYPE_UNDO)) != (OPTYPE_REGISTER | OPTYPE_UNDO)) {
@@ -765,6 +807,19 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   const auto *query = query_value ? query_value->as_dictionary_value() : nullptr;
   if (!query || !CTX_data_scene(C)) {
     return "{}";
+  }
+  if (execute) {
+    const std::string token = query->lookup_str("interaction").value_or("");
+    if (!token.empty() && token == native_property_interaction.closed_token) {
+      return "";
+    }
+    if (token != native_property_interaction.token) {
+      finish_property_interaction(C);
+    }
+    if (query->lookup_str("phase").value_or("") == "cancel" &&
+        native_property_interaction.token.empty()) {
+      return "";
+    }
   }
   const bool shading = query->lookup_str("tab").value_or("") == "SHADING";
   std::unique_ptr<PropertiesContext> properties_context;

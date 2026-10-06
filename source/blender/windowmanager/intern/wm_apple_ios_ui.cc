@@ -67,6 +67,7 @@ namespace blender::ui {
 std::string native_menu_query(bContext *C, const std::string &request, bool execute);
 std::string native_properties_query(bContext *C, const std::string &request, bool execute);
 std::string native_operator_redo_query(bContext *C, const std::string &request, bool execute);
+void native_properties_interaction_finish(bContext *C);
 std::string native_properties_menu_query(bContext *C, const std::string &request, bool execute);
 }
 
@@ -759,6 +760,7 @@ void ios_mesh_select_mode_set(bContext *C, const std::string &value)
 
 void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
 {
+  bool preview = false;
   if (command.setting == "native_redo_edit") {
     ui::native_operator_redo_query(C, command.value, true);
     return;
@@ -783,11 +785,14 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     auto value = io::serialize::JsonFormatter().deserialize(stream);
     if (const auto *request = value ? value->as_dictionary_value() : nullptr) {
       ios_panels_sequence = request->lookup_int("sequence").value_or(ios_panels_sequence);
+      preview = request->lookup_str("phase").value_or("") == "update";
     }
     ios_properties_error.clear();
   }
   if (command.setting == "native_properties_edit") {
-    ios_panels_next_snapshot = {};
+    /* Local controls already show the drag value. Keep expensive full-panel snapshots
+     * on their normal cadence while evaluation and viewport redraw run live. */
+    if (!preview) { ios_panels_next_snapshot = {}; }
     if (wmWindow *window = CTX_wm_window(C)) {
       for (wmEventHandler &handler : window->runtime->modalhandlers) {
         if (handler.type == WM_HANDLER_TYPE_OP) {
@@ -1521,6 +1526,16 @@ static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
 {
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
   const auto *setting = std::get_if<IOSSettingCommand>(&message);
+  const auto *menu = std::get_if<IOSMenuRequest>(&message);
+  if ((!menu || menu->execute) && (!setting || (setting->setting != "native_properties_edit" &&
+                   setting->setting != "native_properties_state" &&
+                   setting->setting != "native_shading_state" &&
+                   setting->setting != "native_panels" &&
+                   setting->setting != "native_shading_visible"))) {
+    const IOSContextStore context_store = ios_context_push_view3d(C);
+    ui::native_properties_interaction_finish(C);
+    ios_context_pop(C, context_store);
+  }
   const bool panel_message = setting && (setting->setting == "native_panels" ||
                                          setting->setting == "native_shading_state" ||
                                          setting->setting == "native_shading_visible" ||
@@ -1593,7 +1608,25 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     ios_context_pop(C, context_store);
   }
 
-  for (IOSUIMessage &message : ios_ui_messages.take()) {
+  auto supersedes_preview = [](const IOSUIMessage &previous, const IOSUIMessage &next) {
+    const auto *a = std::get_if<IOSSettingCommand>(&previous);
+    const auto *b = std::get_if<IOSSettingCommand>(&next);
+    if (!a || !b || a->setting != b->setting ||
+        (a->setting != "native_properties_edit" && a->setting != "native_redo_edit")) {
+      return false;
+    }
+    std::istringstream a_stream(a->value), b_stream(b->value);
+    auto a_value = io::serialize::JsonFormatter().deserialize(a_stream);
+    auto b_value = io::serialize::JsonFormatter().deserialize(b_stream);
+    const auto *a_request = a_value ? a_value->as_dictionary_value() : nullptr;
+    const auto *b_request = b_value ? b_value->as_dictionary_value() : nullptr;
+    return a_request && b_request && a_request->lookup_str("phase").value_or("") == "update" &&
+           !a_request->lookup_str("interaction").value_or("").is_empty() &&
+           a_request->lookup_str("interaction") == b_request->lookup_str("interaction") &&
+           a_request->lookup_str("id") == b_request->lookup_str("id") &&
+           a_request->lookup_str("key") == b_request->lookup_str("key");
+  };
+  for (IOSUIMessage &message : ios_ui_messages.take_coalesced(supersedes_preview)) {
     ios_ui_dispatch(C, message);
   }
 
