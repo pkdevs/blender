@@ -109,7 +109,6 @@ void register_node_type_sh_light_accumulation_aov()
                          "NodeShaderLightAccumulationAOV",
                          node_free_standard_storage,
                          node_copy_standard_storage);
-  // TODO: Should filter the Shader Output
   ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
   ntype.gpu_fn = file_ns::node_shader_gpu_light_accumulation_aov;
   // ntype.materialx_fn = file_ns::node_shader_materialx;
