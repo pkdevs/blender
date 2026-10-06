@@ -11,7 +11,6 @@
 #include "eevee_nodetree_vert_lib.bsl.hh"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
-#include "eevee_sampling_shared.hh" /* TODO(fclem): Remove. Needed because of fragment shader. */
 #include "eevee_surf_common.bsl.hh"
 #include "eevee_velocity.bsl.hh"
 
@@ -101,7 +100,7 @@ struct GeomPointCloud {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = ls_pt.P * ob_infos.orco_mul + ob_infos.orco_add;
 
-  ShadingData sd = init_globals(uni, interp, view, true, float4(0));
+  ShadingData sd = init_globals(pipe, uni, interp, view, true, float4(0));
   init_globals_pointcloud(pointcloud_interp, sd);
 
   attrib_load(PointCloudPoint{ls_pt.P, ws_pt.point_id, lP_orco});

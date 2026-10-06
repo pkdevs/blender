@@ -11,7 +11,6 @@
 #include "eevee_nodetree_vert_lib.bsl.hh"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
-#include "eevee_sampling_shared.hh" /* TODO(fclem): Remove. Needed because of fragment shader. */
 #include "eevee_surf_common.bsl.hh"
 #include "eevee_velocity.bsl.hh"
 
@@ -74,7 +73,7 @@ namespace eevee {
   }
 
   /* Gaussian splats typically do an alpha cut off. The original paper used 1/255
-   * as a threshold, which persists in te fitted data. */
+   * as a threshold, which persists in the fitted data. */
   float opacity = shape.get_opacity(gs.id);
   if (opacity < (1.0f / 255.0f)) {
     out_position = float4(NAN_FLT);
@@ -108,7 +107,7 @@ namespace eevee {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = gs.mean * ob_infos.orco_mul + ob_infos.orco_add;
 
-  [[maybe_unused]] ShadingData sd = init_globals(uni, interp, view, true, float4(0));
+  [[maybe_unused]] ShadingData sd = init_globals(pipe, uni, interp, view, true, float4(0));
 
   attrib_load(PointCloudPoint{gs.mean, int(gs.id), lP_orco});
 
