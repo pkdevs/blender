@@ -8,17 +8,27 @@
  * iPad shell glue for the native UIKit overlay.
  */
 
+#include "AS_asset_catalog.hh"
+#include "AS_asset_library.hh"
+#include "AS_asset_representation.hh"
+
+#include "BKE_appdir.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
+#include "BKE_paint.hh"
+#include "BKE_preview_image.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 
+#include "BLI_fileops.h"
 #include "BLI_listbase.h"
+#include "BLI_path_utils.hh"
 #include "BLI_serialize.hh"
 #include "GHOST_IOSMessageQueue.hh"
 
 #include "DEG_depsgraph.hh"
 
+#include "DNA_asset_types.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_scene_types.h"
@@ -27,10 +37,16 @@
 #include "DNA_windowmanager_types.h"
 #include "DNA_workspace_types.h"
 
+#include "ED_asset.hh"
+#include "ED_asset_menu_utils.hh"
+#include "../asset/ED_asset_shelf.hh"
 #include "ED_screen.hh"
 #include "ED_transform.hh"
 #include "ED_view3d.hh"
 #include "ED_view3d_pencil_hover.hh"
+
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "RNA_access.hh"
 
@@ -58,6 +74,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <sstream>
 #include <string>
@@ -132,6 +149,10 @@ struct IOSSettingCommand {
   std::string value;
 };
 
+struct IOSBrushCommand {
+  std::string key;
+};
+
 struct IOSMenuRequest {
   uint64_t identifier;
   std::string route;
@@ -146,7 +167,8 @@ using IOSUIMessage = std::variant<IOSUICommand,
                                   IOSSettingCommand,
                                   std::string,
                                   float,
-                                  IOSMenuRequest>;
+                                  IOSMenuRequest,
+                                  IOSBrushCommand>;
 /* A single inbox preserves ordering across tools, settings, operators and menus. */
 GHOST_IOSMessageQueue<IOSUIMessage> ios_ui_messages;
 GHOST_IOSMessageQueue<std::pair<uint64_t, std::string>> ios_menu_completed;
@@ -1052,6 +1074,192 @@ void ios_tool_set_by_id(bContext *C, const std::string &tool_id)
   ios_context_pop(C, context_store);
 }
 
+/* -------------------------------------------------------------------- */
+/** \name Native Brush Rail
+ *
+ * Projects the brush asset shelf of the current paint mode. Filtering, ordering of the asset
+ * list, the active brush and activation all go through the shelf type, so the native rail lists
+ * the same brushes as Blender's own asset shelf popup (without its per-tool filter).
+ * \{ */
+
+std::string ios_brushes_json = "null";
+std::chrono::steady_clock::time_point ios_brushes_next_snapshot;
+/* Session-lifetime PNG copies of brush previews, keyed like #ios_brush_key(). An empty path means
+ * the asset has no usable preview. */
+std::map<std::string, std::string> ios_brush_preview_paths;
+
+const AssetShelfType *ios_brush_shelf_type(const eContextObjectMode mode)
+{
+  /* Extend this mapping to project the brushes of other paint modes. */
+  switch (mode) {
+    case CTX_MODE_SCULPT:
+      return ed::asset::shelf::type_find_from_idname("VIEW3D_AST_brush_sculpt");
+    default:
+      return nullptr;
+  }
+}
+
+std::string ios_brush_key(const AssetWeakReference &reference)
+{
+  std::string key = std::to_string(reference.asset_library_type);
+  key += ":";
+  key += reference.asset_library_identifier ? reference.asset_library_identifier : "";
+  key += ":";
+  key += reference.relative_asset_identifier ? reference.relative_asset_identifier : "";
+  return key;
+}
+
+/** Write the asset's preview to a PNG UIKit can load. Reading a deferred preview is blocking. */
+std::string ios_brush_preview_write(asset_system::AssetRepresentation &asset,
+                                    const std::string &key)
+{
+  asset.ensure_previewable();
+  PreviewImage *preview = asset.get_preview();
+  if (preview == nullptr) {
+    return "";
+  }
+  BKE_previewimg_ensure(preview, ICON_SIZE_PREVIEW);
+  const uint8_t *pixels = reinterpret_cast<const uint8_t *>(preview->rect[ICON_SIZE_PREVIEW]);
+  const unsigned int width = preview->w[ICON_SIZE_PREVIEW];
+  const unsigned int height = preview->h[ICON_SIZE_PREVIEW];
+  if (pixels == nullptr || width == 0 || height == 0) {
+    return "";
+  }
+
+  char directory[FILE_MAX];
+  BLI_path_join(directory, sizeof(directory), BKE_tempdir_session(), "brush_previews");
+  if (!BLI_dir_create_recursive(directory)) {
+    return "";
+  }
+  char filepath[FILE_MAX];
+  const std::string filename = std::to_string(std::hash<std::string>{}(key)) + ".png";
+  BLI_path_join(filepath, sizeof(filepath), directory, filename.c_str());
+
+  ImBuf *ibuf = IMB_allocFromBuffer(pixels, nullptr, width, height, 4);
+  if (ibuf == nullptr) {
+    return "";
+  }
+  /* Previews are premultiplied, PNG is not. */
+  IMB_unpremultiply_alpha(ibuf);
+  ibuf->ftype = IMB_FTYPE_PNG;
+  ibuf->planes = 32;
+  const bool saved = IMB_save_image(ibuf, filepath, IB_byte_data);
+  IMB_freeImBuf(ibuf);
+  return saved ? filepath : "";
+}
+
+std::string ios_brushes_build_json(bContext *C, const eContextObjectMode mode)
+{
+  const AssetShelfType *shelf_type = ios_brush_shelf_type(mode);
+  Paint *paint = BKE_paint_get_active_from_context(C);
+  if (shelf_type == nullptr || paint == nullptr) {
+    return "null";
+  }
+
+  const AssetLibraryReference library_ref = asset_system::all_library_reference();
+  ed::asset::list::storage_fetch(&library_ref, C);
+  if (!ed::asset::list::is_loaded(&library_ref)) {
+    /* Keep the previous list while the asset libraries are (re)loading. */
+    return ios_brushes_json == "null" ? "{\"loading\":true,\"items\":[]}" : ios_brushes_json;
+  }
+
+  struct BrushItem {
+    std::string key;
+    std::string name;
+    std::string catalog;
+    std::string preview;
+  };
+  std::vector<BrushItem> items;
+  /* Blocking preview reads are spread over several snapshots. */
+  int preview_budget = 4;
+  ed::asset::list::iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
+    if (!ed::asset::shelf::type_asset_poll(*shelf_type, asset)) {
+      return true;
+    }
+    BrushItem item;
+    item.key = ios_brush_key(asset.make_weak_reference());
+    item.name = asset.get_name();
+    if (const asset_system::AssetCatalog *catalog =
+            asset.owner_asset_library().catalog_service().find_catalog(
+                asset.get_metadata().catalog_id))
+    {
+      item.catalog = catalog->path.str();
+    }
+    auto preview = ios_brush_preview_paths.find(item.key);
+    if (preview == ios_brush_preview_paths.end() && preview_budget > 0) {
+      preview_budget--;
+      preview = ios_brush_preview_paths.emplace(item.key, ios_brush_preview_write(asset, item.key))
+                    .first;
+    }
+    if (preview != ios_brush_preview_paths.end()) {
+      item.preview = preview->second;
+    }
+    items.push_back(std::move(item));
+    return true;
+  });
+  /* Group by catalog like the shelf's catalog tabs; uncatalogued brushes go last. */
+  std::stable_sort(items.begin(), items.end(), [](const BrushItem &a, const BrushItem &b) {
+    if (a.catalog.empty() != b.catalog.empty()) {
+      return b.catalog.empty();
+    }
+    return a.catalog < b.catalog;
+  });
+
+  const std::string active = paint->brush_asset_reference ?
+                                 ios_brush_key(*paint->brush_asset_reference) :
+                                 "";
+  std::string json = "{\"shelf\":\"";
+  json += ios_json_escape(shelf_type->idname);
+  json += "\",\"active\":\"";
+  json += ios_json_escape(active);
+  json += "\",\"pending\":";
+  json += preview_budget == 0 ? "true" : "false";
+  json += ",\"items\":[";
+  for (size_t i = 0; i < items.size(); i++) {
+    const BrushItem &item = items[i];
+    if (i > 0) {
+      json += ",";
+    }
+    const std::string catalog_name = item.catalog.substr(item.catalog.rfind('/') + 1);
+    json += "{\"id\":\"" + ios_json_escape(item.key) + "\",\"title\":\"" +
+            ios_json_escape(item.name) + "\",\"catalog\":\"" +
+            ios_json_escape(catalog_name) + "\",\"preview\":\"" +
+            ios_json_escape(item.preview) + "\"}";
+  }
+  json += "]}";
+  return json;
+}
+
+void ios_brush_activate(bContext *C, const std::string &key)
+{
+  const IOSContextStore context_store = ios_context_push_view3d(C);
+  const AssetShelfType *shelf_type = CTX_wm_area(C) && CTX_wm_region(C) ?
+                                         ios_brush_shelf_type(CTX_data_mode_enum(C)) :
+                                         nullptr;
+  wmOperatorType *ot = shelf_type ?
+                           WM_operatortype_find(shelf_type->activate_operator.c_str(), true) :
+                           nullptr;
+  if (ot) {
+    const AssetLibraryReference library_ref = asset_system::all_library_reference();
+    ed::asset::list::iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
+      if (ios_brush_key(asset.make_weak_reference()) != key) {
+        return true;
+      }
+      /* Same call as activating an item of the asset shelf. */
+      PointerRNA props = WM_operator_properties_create_ptr(ot);
+      ed::asset::operator_asset_reference_props_set(asset, props);
+      WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeRegionWin, &props, nullptr);
+      WM_operator_properties_free(&props);
+      return false;
+    });
+  }
+  ios_context_pop(C, context_store);
+  /* Publish the new active brush with the next snapshot. */
+  ios_brushes_next_snapshot = {};
+}
+
+/** \} */
+
 std::string ios_toolbar_build_json_for_context(bContext *C)
 {
   const IOSContextStore context_store = ios_context_push_view3d(C);
@@ -1171,6 +1379,20 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   }
   const std::string redo_json = has_view3d_context ? ui::native_operator_redo_query(C, "", false) :
                                                      "null";
+  if (!has_view3d_context) {
+    ios_brushes_json = "null";
+  }
+  else if (const auto now = std::chrono::steady_clock::now(); now >= ios_brushes_next_snapshot) {
+    /* Asset polling runs Python per brush, so follow the native refresh cadence. */
+    ios_brushes_next_snapshot = now + std::chrono::milliseconds(250);
+    ios_brushes_json = ios_brushes_build_json(C, mode);
+    if (ios_brushes_json.find("\"pending\":true") != std::string::npos ||
+        ios_brushes_json.find("\"loading\":true") != std::string::npos)
+    {
+      /* Keep loading previews without waiting for the native cadence. */
+      ios_brushes_next_snapshot = now + std::chrono::milliseconds(30);
+    }
+  }
   ios_context_pop(C, context_store);
 
   std::string json = "{\"mode\":\"";
@@ -1194,6 +1416,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += navigation_json;
   json += ",\"tools\":";
   json += tools_json;
+  json += ",\"brushes\":";
+  json += ios_brushes_json;
   json += ",\"panels\":";
   json += panels_json;
   json += ",\"actions\":[";
@@ -1353,6 +1577,15 @@ extern "C" void WM_apple_ios_ui_tool_set_by_id(const char *tool_id)
   }
 
   ios_ui_messages.push(std::string(tool_id));
+}
+
+extern "C" void WM_apple_ios_ui_brush_activate(const char *brush_id)
+{
+  if (brush_id == nullptr || brush_id[0] == '\0') {
+    return;
+  }
+
+  ios_ui_messages.push(IOSBrushCommand{brush_id});
 }
 
 extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle)
@@ -1649,6 +1882,9 @@ static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
         }
         else if constexpr (std::is_same_v<T, IOSMenuRequest>) {
           ios_ui_dispatch_menu(C, command);
+        }
+        else if constexpr (std::is_same_v<T, IOSBrushCommand>) {
+          ios_brush_activate(C, command.key);
         }
         else {
           const IOSContextStore context_store = ios_context_push_view3d(C);
