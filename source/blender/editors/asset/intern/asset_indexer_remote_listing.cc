@@ -109,8 +109,8 @@ struct AssetLibraryMeta {
   /** Map of API version string ("v1", "v2", ...) to path relative to root directory. */
   Map<std::string, asset_system::URLWithHash> api_versions;
 
-  static ReadingResult<AssetLibraryMeta> read(const StringRefNull root_dirpath,
-                                              std::optional<Timestamp> ignore_before_timestamp);
+  static asset_system::ReadingResult<AssetLibraryMeta> read(
+      const StringRefNull root_dirpath, std::optional<Timestamp> ignore_before_timestamp);
 };
 
 /**
@@ -133,7 +133,7 @@ std::optional<bool> file_older_than_timestamp(const char *filepath, Timestamp ti
 /**
  * \return the supported API versions read from the `_asset-library-meta.json` file.
  */
-ReadingResult<AssetLibraryMeta> AssetLibraryMeta::read(
+asset_system::ReadingResult<AssetLibraryMeta> AssetLibraryMeta::read(
     const StringRefNull root_dirpath, const std::optional<Timestamp> ignore_before_timestamp)
 {
   char filepath[FILE_MAX];
@@ -143,38 +143,38 @@ ReadingResult<AssetLibraryMeta> AssetLibraryMeta::read(
                 asset_system::REMOTE_LIBRARY_TOP_META_FILE_NAME.c_str());
 
   if (!BLI_exists(filepath)) {
-    return ReadingResult<AssetLibraryMeta>::Failure(
+    return asset_system::ReadingResult<AssetLibraryMeta>::Failure(
         fmt::format(N_("file does not exist: {:s}"), filepath));
   }
 
   if (ignore_before_timestamp) {
     std::optional<bool> is_older = file_older_than_timestamp(filepath, *ignore_before_timestamp);
     if (!is_older) {
-      return ReadingResult<AssetLibraryMeta>::Failure(
+      return asset_system::ReadingResult<AssetLibraryMeta>::Failure(
           fmt::format(N_("file does not exist: {:s}"), filepath));
     }
     if (*is_older) {
-      return ReadingResult<AssetLibraryMeta>::Failure(
+      return asset_system::ReadingResult<AssetLibraryMeta>::Failure(
           fmt::format(N_("file is too old: {:s}"), filepath));
     }
   }
 
   const std::unique_ptr<Value> contents = read_contents(filepath);
   if (!contents) {
-    return ReadingResult<AssetLibraryMeta>::Failure(
+    return asset_system::ReadingResult<AssetLibraryMeta>::Failure(
         fmt::format(N_("file does not contain JSON: {:s}"), filepath));
   }
 
   const DictionaryValue *root = contents->as_dictionary_value();
   if (!root) {
-    return ReadingResult<AssetLibraryMeta>::Failure(
+    return asset_system::ReadingResult<AssetLibraryMeta>::Failure(
         fmt::format(N_("file is not a JSON dictionary: {:s}"), filepath));
   }
 
   const DictionaryValue *entries = root->lookup_dict("api_versions");
   BLI_assert(entries != nullptr);
   if (entries == nullptr) {
-    return ReadingResult<AssetLibraryMeta>::Failure(
+    return asset_system::ReadingResult<AssetLibraryMeta>::Failure(
         fmt::format(N_("no API versions defined: {:s}"), filepath));
   }
 
@@ -203,7 +203,7 @@ ReadingResult<AssetLibraryMeta> AssetLibraryMeta::read(
     library_meta.api_versions.add(version.first, std::move(*url_with_hash));
   }
 
-  return ReadingResult<AssetLibraryMeta>::Success(std::move(library_meta));
+  return asset_system::ReadingResult<AssetLibraryMeta>::Success(std::move(library_meta));
 }
 
 /** \} */
@@ -216,7 +216,8 @@ struct ApiVersionInfo {
   std::string listing_hash;
 };
 
-static ReadingResult<ApiVersionInfo> choose_api_version(const AssetLibraryMeta &library_meta)
+static asset_system::ReadingResult<ApiVersionInfo> choose_api_version(
+    const AssetLibraryMeta &library_meta)
 {
   /* API versions this version of Blender can handle, in descending order (most preferred to least
    * preferred order). */
@@ -229,11 +230,11 @@ static ReadingResult<ApiVersionInfo> choose_api_version(const AssetLibraryMeta &
             version_str))
     {
       ApiVersionInfo version_info{version_nr, url_with_hash->url, url_with_hash->hash};
-      return ReadingResult<ApiVersionInfo>::Success(std::move(version_info));
+      return asset_system::ReadingResult<ApiVersionInfo>::Success(std::move(version_info));
     }
   }
 
-  return ReadingResult<ApiVersionInfo>::Failure(
+  return asset_system::ReadingResult<ApiVersionInfo>::Failure(
       N_("remote does not offer an API version supported by this version of Blender"));
 }
 
@@ -244,16 +245,16 @@ bool read_remote_listing(const StringRefNull root_dirpath,
                          const RemoteListingWaitForPagesFn wait_fn,
                          const std::optional<Timestamp> ignore_before_timestamp)
 {
-  /* This actually does the work, and returns a ReadingResult. It's implemented as a lambda
-   * function, to be able to use early returns on error. */
+  /* This actually does the work, and returns a  asset_system::ReadingResult. It's implemented as a
+   * lambda function, to be able to use early returns on error. */
   auto get_result = [&]() {
-    const ReadingResult<AssetLibraryMeta> meta = AssetLibraryMeta::read(root_dirpath,
-                                                                        ignore_before_timestamp);
+    const asset_system::ReadingResult<AssetLibraryMeta> meta = AssetLibraryMeta::read(
+        root_dirpath, ignore_before_timestamp);
     if (!meta.is_success()) {
       return meta.without_success_value();
     }
 
-    const ReadingResult<ApiVersionInfo> api_version_info = choose_api_version(*meta);
+    const asset_system::ReadingResult<ApiVersionInfo> api_version_info = choose_api_version(*meta);
     if (!api_version_info.is_success()) {
       return api_version_info.without_success_value();
     }
@@ -266,11 +267,11 @@ bool read_remote_listing(const StringRefNull root_dirpath,
       default:
         /* choose_api_version() should not have chosen this version. */
         BLI_assert_unreachable();
-        return ReadingResult<>::Failure(N_("internal error, please report a bug"));
+        return asset_system::ReadingResult<>::Failure(N_("internal error, please report a bug"));
     }
   };
 
-  const ReadingResult<> result = get_result();
+  const asset_system::ReadingResult<> result = get_result();
 
   /* Get these messages up-stream. The last call to BKE_report(f) will be the one shown in the
    * status bar. The rest are just printed to the terminal and gathered at the Info editor. */

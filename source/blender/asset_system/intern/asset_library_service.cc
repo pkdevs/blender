@@ -9,7 +9,9 @@
 #include <memory>
 
 #include "BKE_blender.hh"
+#include "BKE_main.hh"
 #include "BKE_preferences.h"
+#include "BKE_wm_runtime.hh"
 
 #include "BLI_fileops.hh"  // IWYU pragma: keep
 #include "BLI_path_utils.hh"
@@ -18,6 +20,7 @@
 
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
+#include "DNA_windowmanager_types.h"
 
 #include "CLG_log.h"
 
@@ -108,8 +111,10 @@ AssetLibrary *AssetLibraryService::get_asset_library(
       if (!custom_library) {
         return nullptr;
       }
+      ReportList *reports = bmain && bmain->wm.first() ? &bmain->wm.first()->runtime->reports :
+                                                         nullptr;
       if (custom_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
-        user_asset_library_uuid_ensure(*custom_library);
+        user_asset_library_uuid_ensure(*custom_library, reports);
         if (is_online_essentials_url(custom_library->remote_url)) {
           return this->get_online_essentials_asset_library();
         }
@@ -120,7 +125,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
       if (root_path.empty()) {
         return nullptr;
       }
-      user_asset_library_uuid_ensure(*custom_library);
+      user_asset_library_uuid_ensure(*custom_library, reports);
       AssetLibrary *library = this->get_asset_library_on_disk_custom_preferences(custom_library);
       library->may_override_import_method_ = true;
 

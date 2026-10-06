@@ -43,9 +43,9 @@ using namespace blender::io::serialize;
  * \{ */
 
 struct AssetLibraryListingPageV1 {
-  static ReadingResult<> read_asset_entries(const StringRefNull listing_root_dirpath,
-                                            const StringRefNull filepath,
-                                            RemoteListingEntryProcessFn process_fn);
+  static asset_system::ReadingResult<> read_asset_entries(const StringRefNull listing_root_dirpath,
+                                                          const StringRefNull filepath,
+                                                          RemoteListingEntryProcessFn process_fn);
 };
 
 /**
@@ -72,29 +72,30 @@ static std::optional<int> blender_version_from_string(const blender::StringRef s
   return major * 100 + minor;
 }
 
-static ReadingResult<bool> blender_version_matches(const DictionaryValue &asset_dictionary)
+static asset_system::ReadingResult<bool> blender_version_matches(
+    const DictionaryValue &asset_dictionary)
 {
   const DictionaryValue *bl_versions_dict = asset_dictionary.lookup_dict("bl_versions");
   if (!bl_versions_dict) {
-    return ReadingResult<bool>::Failure(
+    return asset_system::ReadingResult<bool>::Failure(
         N_("could not read asset Blender versions, 'bl_versions' field not set"));
   }
 
   /* Check the 'min' field. */
   const std::optional<StringRef> min_opt = bl_versions_dict->lookup_str("min");
   if (!min_opt) {
-    return ReadingResult<bool>::Failure(
+    return asset_system::ReadingResult<bool>::Failure(
         N_("could not read asset Blender versions, 'bl_versions.min' field not set"));
   }
 
   const std::optional<int> bl_version_min = blender_version_from_string(*min_opt);
   if (!bl_version_min) {
-    return ReadingResult<bool>::Failure(
+    return asset_system::ReadingResult<bool>::Failure(
         N_("could not read asset Blender versions, 'bl_versions.min' field not in X.Y notation"));
   }
   if (BLENDER_VERSION < *bl_version_min) {
     /* This Blender version is older than what the asset needs, so skip it. */
-    return ReadingResult<bool>::Success(false);
+    return asset_system::ReadingResult<bool>::Success(false);
   }
 
   /* Check the 'until' field. */
@@ -102,18 +103,18 @@ static ReadingResult<bool> blender_version_matches(const DictionaryValue &asset_
   if (!until_opt) {
     /* Fine to be missing, this field is optional. If it is not there, the asset has no maximum
      * version. */
-    return ReadingResult<bool>::Success(true);
+    return asset_system::ReadingResult<bool>::Success(true);
   }
 
   const std::optional<int> bl_version_until = blender_version_from_string(*until_opt);
   if (!bl_version_until) {
-    return ReadingResult<bool>::Failure(
+    return asset_system::ReadingResult<bool>::Failure(
         N_("could not read asset Blender versions, 'bl_versions.min' field not in X.Y notation"));
   }
-  return ReadingResult<bool>::Success(BLENDER_VERSION < *bl_version_until);
+  return asset_system::ReadingResult<bool>::Success(BLENDER_VERSION < *bl_version_until);
 }
 
-static ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionary(
+static asset_system::ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionary(
     const DictionaryValue &dictionary,
     const Map<std::string, RemoteListingFileEntry> &file_path_to_entry_map)
 {
@@ -121,21 +122,22 @@ static ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionar
 
   /* Check the min/until Blender versions first. If the current Blender doesn't match, the entire
    * asset can be ignored. */
-  ReadingResult<bool> version_check = blender_version_matches(dictionary);
+  asset_system::ReadingResult<bool> version_check = blender_version_matches(dictionary);
   if (!version_check.is_success()) {
-    return ReadingResult<RemoteListingAssetEntry>::Failure(
+    return asset_system::ReadingResult<RemoteListingAssetEntry>::Failure(
         std::move(version_check.failure_reason));
   }
   if (!*version_check) {
     /* Return an empty entry, to indicate to the caller a successfully parsed entry that didn't
      * yield an asset. */
-    return ReadingResult<RemoteListingAssetEntry>::Success(RemoteListingAssetEntry{});
+    return asset_system::ReadingResult<RemoteListingAssetEntry>::Success(
+        RemoteListingAssetEntry{});
   }
 
   /* 'id': name of the asset. Required string. */
   const std::optional<StringRefNull> asset_name_opt = dictionary.lookup_str("name");
   if (!asset_name_opt) {
-    return ReadingResult<RemoteListingAssetEntry>::Failure(
+    return asset_system::ReadingResult<RemoteListingAssetEntry>::Failure(
         N_("could not read asset name, 'name' field not set"));
   }
   const StringRefNull asset_name = *asset_name_opt;
@@ -152,19 +154,20 @@ static ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionar
                  N_("could not read type of asset '%s': 'id_type' field is not a valid type (%s)"),
                  asset_name.c_str(),
                  idtype_name->c_str());
-      return ReadingResult<RemoteListingAssetEntry>::Success(RemoteListingAssetEntry{});
+      return asset_system::ReadingResult<RemoteListingAssetEntry>::Success(
+          RemoteListingAssetEntry{});
     }
     listing_entry.idcode = BKE_idtype_idcode_from_name(normalized_name);
   }
   else {
-    return ReadingResult<RemoteListingAssetEntry>::Failure(
+    return asset_system::ReadingResult<RemoteListingAssetEntry>::Failure(
         fmt::format(N_("could not read type of asset '{:s}', 'type' field not set"), asset_name));
   }
 
   /* 'files': required list of strings. */
   if (const ArrayValue *file_paths = dictionary.lookup_array("files")) {
     if (file_paths->elements().is_empty()) {
-      return ReadingResult<RemoteListingAssetEntry>::Failure(
+      return asset_system::ReadingResult<RemoteListingAssetEntry>::Failure(
           fmt::format(N_("asset '{:s}' has no files"), asset_name));
     }
     for (const std::shared_ptr<Value> &file_path_element : file_paths->elements()) {
@@ -172,7 +175,7 @@ static ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionar
 
       const io::serialize::StringValue *file_path_string = file_path_element->as_string_value();
       if (!file_path_string) {
-        return ReadingResult<RemoteListingAssetEntry>::Failure(fmt::format(
+        return asset_system::ReadingResult<RemoteListingAssetEntry>::Failure(fmt::format(
             N_("asset '{:s}' has a non-string entry in its 'files' list"), asset_name));
       }
       file.path = file_path_string->value();
@@ -189,7 +192,7 @@ static ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionar
         file.size_in_bytes = file_entry->size_in_bytes;
       }
       else {
-        return ReadingResult<RemoteListingAssetEntry>::Failure(
+        return asset_system::ReadingResult<RemoteListingAssetEntry>::Failure(
             fmt::format(N_("asset '{:s}' references unknown file '{:s}'"), asset_name, file.path));
       }
 
@@ -197,7 +200,7 @@ static ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionar
     }
   }
   else {
-    return ReadingResult<RemoteListingAssetEntry>::Failure(
+    return asset_system::ReadingResult<RemoteListingAssetEntry>::Failure(
         fmt::format(N_("asset '{:s}' has no 'files' field"), asset_name));
   }
 
@@ -213,10 +216,10 @@ static ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionar
                                                 BKE_asset_metadata_create();
   listing_entry.datablock_info.free_asset_data = true;
 
-  return ReadingResult<RemoteListingAssetEntry>::Success(std::move(listing_entry));
+  return asset_system::ReadingResult<RemoteListingAssetEntry>::Success(std::move(listing_entry));
 }
 
-static ReadingResult<RemoteListingFileEntry> listing_file_from_asset_dictionary(
+static asset_system::ReadingResult<RemoteListingFileEntry> listing_file_from_asset_dictionary(
     const DictionaryValue &dictionary)
 {
   RemoteListingFileEntry file_entry{};
@@ -226,7 +229,7 @@ static ReadingResult<RemoteListingFileEntry> listing_file_from_asset_dictionary(
     file_entry.local_path = *path;
   }
   else {
-    return ReadingResult<RemoteListingFileEntry>::Failure(
+    return asset_system::ReadingResult<RemoteListingFileEntry>::Failure(
         N_("Error reading asset listing file entry, skipping. Reason: found a file without 'path' "
            "field"));
   }
@@ -236,7 +239,7 @@ static ReadingResult<RemoteListingFileEntry> listing_file_from_asset_dictionary(
     file_entry.download_url.hash = *hash;
   }
   else {
-    return ReadingResult<RemoteListingFileEntry>::Failure(fmt::format(
+    return asset_system::ReadingResult<RemoteListingFileEntry>::Failure(fmt::format(
         N_("Error reading asset listing file entry, skipping. Reason: found a file ({:s}) without "
            "'hash' field"),
         file_entry.local_path.c_str()));
@@ -247,7 +250,7 @@ static ReadingResult<RemoteListingFileEntry> listing_file_from_asset_dictionary(
     file_entry.size_in_bytes = *size_in_bytes;
   }
   else {
-    return ReadingResult<RemoteListingFileEntry>::Failure(fmt::format(
+    return asset_system::ReadingResult<RemoteListingFileEntry>::Failure(fmt::format(
         N_("Error reading asset listing file entry, skipping. Reason: found a file ({:s}) without "
            "'size_in_bytes' field"),
         file_entry.local_path.c_str()));
@@ -258,17 +261,18 @@ static ReadingResult<RemoteListingFileEntry> listing_file_from_asset_dictionary(
    * an empty string to indicate "no URL". */
   file_entry.download_url.url = dictionary.lookup_str("url").value_or("");
 
-  return ReadingResult<RemoteListingFileEntry>::Success(std::move(file_entry));
+  return asset_system::ReadingResult<RemoteListingFileEntry>::Success(std::move(file_entry));
 }
 
-static ReadingResult<> listing_entries_from_root(const StringRefNull listing_root_dirpath,
-                                                 const DictionaryValue &value,
-                                                 const RemoteListingEntryProcessFn process_fn)
+static asset_system::ReadingResult<> listing_entries_from_root(
+    const StringRefNull listing_root_dirpath,
+    const DictionaryValue &value,
+    const RemoteListingEntryProcessFn process_fn)
 {
   const ArrayValue *assets = value.lookup_array("assets");
   BLI_assert(assets != nullptr);
   if (assets == nullptr) {
-    return ReadingResult<>::Failure(N_("no assets listed"));
+    return asset_system::ReadingResult<>::Failure(N_("no assets listed"));
   }
 
   /* Build a mapping from local file path to its file info. */
@@ -276,21 +280,21 @@ static ReadingResult<> listing_entries_from_root(const StringRefNull listing_roo
   BLI_assert(files != nullptr);
   if (files == nullptr) {
     /* The 'files' section is mandatory in the OpenAPI schema. */
-    return ReadingResult<>::Failure(
+    return asset_system::ReadingResult<>::Failure(
         N_("error reading asset listing, page file has no files section"));
   }
 
   Vector<std::string> warnings;
   Map<std::string, RemoteListingFileEntry> path_to_file_info;
   for (const std::shared_ptr<Value> &file_element : files->elements()) {
-    ReadingResult<RemoteListingFileEntry> file_result = listing_file_from_asset_dictionary(
-        *file_element->as_dictionary_value());
+    asset_system::ReadingResult<RemoteListingFileEntry> file_result =
+        listing_file_from_asset_dictionary(*file_element->as_dictionary_value());
     if (file_result.is_failure()) {
       warnings.append(std::move(file_result.failure_reason));
       continue;
     }
     if (file_result.is_cancelled()) {
-      return ReadingResult<>::Cancelled();
+      return asset_system::ReadingResult<>::Cancelled();
     }
     BLI_assert(file_result.is_success());
     RemoteListingFileEntry &file_entry = *file_result;
@@ -306,8 +310,9 @@ static ReadingResult<> listing_entries_from_root(const StringRefNull listing_roo
 
   /* Convert the assets into RemoteListingAssetEntry objects. */
   for (const std::shared_ptr<Value> &asset_element : assets->elements()) {
-    ReadingResult<RemoteListingAssetEntry> result = listing_entry_from_asset_dictionary(
-        *asset_element->as_dictionary_value(), path_to_file_info);
+    asset_system::ReadingResult<RemoteListingAssetEntry> result =
+        listing_entry_from_asset_dictionary(*asset_element->as_dictionary_value(),
+                                            path_to_file_info);
     if (result.is_failure()) {
       if (!result.failure_reason.empty()) {
         warnings.append(std::move(result.failure_reason));
@@ -330,32 +335,34 @@ static ReadingResult<> listing_entries_from_root(const StringRefNull listing_roo
     }
 
     if (!process_fn(entry)) {
-      return ReadingResult<>::Cancelled();
+      return asset_system::ReadingResult<>::Cancelled();
     }
   }
 
-  ReadingResult<> overall_result = ReadingResult<>::Success();
+  asset_system::ReadingResult<> overall_result = asset_system::ReadingResult<>::Success();
   overall_result.warnings.extend(std::move(warnings));
   return overall_result;
 }
 
-ReadingResult<> AssetLibraryListingPageV1::read_asset_entries(
+asset_system::ReadingResult<> AssetLibraryListingPageV1::read_asset_entries(
     const StringRefNull listing_root_dirpath,
     const StringRefNull filepath,
     const RemoteListingEntryProcessFn process_fn)
 {
   if (!BLI_exists(filepath.c_str())) {
-    return ReadingResult<>::Failure(fmt::format(N_("file does not exist: {:s}"), filepath));
+    return asset_system::ReadingResult<>::Failure(
+        fmt::format(N_("file does not exist: {:s}"), filepath));
   }
 
   const std::unique_ptr<Value> contents = read_contents(filepath);
   if (!contents) {
-    return ReadingResult<>::Failure(fmt::format(N_("file is empty: {:s}"), filepath));
+    return asset_system::ReadingResult<>::Failure(
+        fmt::format(N_("file is empty: {:s}"), filepath));
   }
 
   const DictionaryValue *root = contents->as_dictionary_value();
   if (!root) {
-    return ReadingResult<>::Failure(
+    return asset_system::ReadingResult<>::Failure(
         fmt::format(N_("file is not a JSON dictionary: {:s}"), filepath));
   }
 
@@ -428,10 +435,11 @@ std::optional<AssetLibraryListingV1> AssetLibraryListingV1::read(
 
 /** \} */
 
-ReadingResult<> read_remote_listing_v1(const StringRefNull listing_root_dirpath,
-                                       const RemoteListingEntryProcessFn process_fn,
-                                       const RemoteListingWaitForPagesFn wait_fn,
-                                       const std::optional<Timestamp> ignore_before_timestamp)
+asset_system::ReadingResult<> read_remote_listing_v1(
+    const StringRefNull listing_root_dirpath,
+    const RemoteListingEntryProcessFn process_fn,
+    const RemoteListingWaitForPagesFn wait_fn,
+    const std::optional<Timestamp> ignore_before_timestamp)
 {
   /* Version 1 asset indices are always stored in this path by RemoteAssetListingDownloader. */
   constexpr const char *asset_index_relpath = "_v1/asset-index.processed.json";
@@ -446,7 +454,7 @@ ReadingResult<> read_remote_listing_v1(const StringRefNull listing_root_dirpath,
     std::optional<bool> is_older = file_older_than_timestamp(asset_index_abspath,
                                                              *ignore_before_timestamp);
     if (!is_older) {
-      return ReadingResult<>::Failure(
+      return asset_system::ReadingResult<>::Failure(
           fmt::format(N_("Couldn't find index file {:s}"), asset_index_abspath));
     }
     /* TODO the .processed.json file doesn't get touched by the downloader to indicate it's up to
@@ -461,7 +469,7 @@ ReadingResult<> read_remote_listing_v1(const StringRefNull listing_root_dirpath,
   const std::optional<AssetLibraryListingV1> listing = AssetLibraryListingV1::read(
       asset_index_abspath);
   if (!listing) {
-    return ReadingResult<>::Failure(
+    return asset_system::ReadingResult<>::Failure(
         fmt::format(N_("Couldn't read V1 listing from {:s}"), asset_index_abspath));
   }
 
@@ -490,7 +498,7 @@ ReadingResult<> read_remote_listing_v1(const StringRefNull listing_root_dirpath,
         }
       }
 
-      ReadingResult page_result = AssetLibraryListingPageV1::read_asset_entries(
+      asset_system::ReadingResult page_result = AssetLibraryListingPageV1::read_asset_entries(
           listing_root_dirpath, filepath, process_fn);
       done_pages.add(page_path);
       if (page_result.is_cancelled()) {
@@ -520,12 +528,12 @@ ReadingResult<> read_remote_listing_v1(const StringRefNull listing_root_dirpath,
       break;
     }
     if (!wait_fn()) {
-      return ReadingResult<>::Cancelled();
+      return asset_system::ReadingResult<>::Cancelled();
     }
   }
 
   /* Return a success, with all the warnings. */
-  ReadingResult<> result = ReadingResult<>::Success();
+  asset_system::ReadingResult<> result = asset_system::ReadingResult<>::Success();
   result.warnings.extend(std::move(warnings));
   return result;
 }
