@@ -70,6 +70,80 @@ ccl_device_inline void film_write_restir_reprojection_surface_pass( // !!!: Runs
   film_overwrite_pass_float(ptr,   1.0f); /* is_valid */
 }
 
+// MARK: - Subsurface Scattering
+
+ccl_device_inline void film_write_restir_surface_data(KernelGlobals kg,
+                                                      const ccl_private ShaderData *sd,
+                                                      const uint32_t path_flag,
+                                                      ccl_global float *ccl_restrict buffer)
+{
+  ccl_global float *ptr = buffer + kernel_data.film.pass_surface_data;
+  film_overwrite_pass_float(ptr++, (float)path_flag);
+  film_overwrite_pass_float(ptr++, sd->u);
+  film_overwrite_pass_float(ptr++, sd->v);
+  film_overwrite_pass_float(ptr++, (float)sd->type);
+  film_overwrite_pass_float(ptr++, (float)sd->object);
+  film_overwrite_pass_float(ptr++, (float)sd->prim);
+  film_overwrite_pass_float(ptr++, (float)sd->lcg_state);
+  /* Needed to reconstruct shader_setup_object_transforms()'s time 
+   * when this pixel is later *re-shaded* as temporal-frame history. */
+  film_overwrite_pass_float(ptr,   sd->time);
+
+  // !!!(Tri): Ensure Correctness; ReprojectionSurface must describe the SAME hit as SURFACE_DATA.
+  if (kernel_data.integrator.use_temporal) {
+    film_write_restir_reprojection_surface_pass(kg, sd, buffer);
+  }
+}
+
+/* Persist the SSS exit vertex of a primary-hit path for ReSTIR DI.
+ * Layout: (is_exit, backfacing, throughput.rgb, N.xyz).
+ * Must be called BEFORE subsurface_shader_data_setup() since it clears the closure flags. */
+ccl_device_inline void film_write_restir_sss_exit(KernelGlobals kg,
+                                                  ConstIntegratorState state,
+                                                  const ccl_private ShaderData *sd,
+                                                  ccl_global float *ccl_restrict render_buffer)
+{
+  if (!kernel_data.integrator.use_restir) {
+    return;
+  }
+
+  if (kernel_data.film.pass_restir_sss_exit == PASS_UNUSED) {
+    return;
+  }
+
+  /* Primary vertex only, and same gating as film_write_data_passes(). */
+  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+  if (INTEGRATOR_STATE(state, path, bounce) != 0 ||
+      !(path_flag & PATH_RAY_TRANSPARENT_BACKGROUND) || // !!!(Tri)
+      (path_flag & PATH_RAY_SHADOW_CATCHER_PASS))
+  {
+    return;
+  }
+
+  /* Same normal that subsurface_shader_data_setup() will use for the diffuse closure. */
+  float3 N = sd->N;
+  if (sd->flag & SD_HAS_BSSRDF_BUMP) {
+    N = surface_shader_bssrdf_normal(sd);
+  }
+
+  // TODO(Tri): Compress?
+  const float3 T = spectrum_to_rgb(INTEGRATOR_STATE(state, path, throughput));
+
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+  ccl_global float *ptr = buffer + kernel_data.film.pass_restir_sss_exit;
+
+  film_overwrite_pass_float(ptr++, 1.0f);
+  film_overwrite_pass_float(ptr++, (sd->flag & SD_BACKFACING) ? 1.0f : 0.0f);
+  film_overwrite_pass_float(ptr++, T.x);
+  film_overwrite_pass_float(ptr++, T.y);
+  film_overwrite_pass_float(ptr++, T.z);
+  film_overwrite_pass_float(ptr++, N.x);
+  film_overwrite_pass_float(ptr++, N.y);
+  film_overwrite_pass_float(ptr,   N.z);
+
+ccl_debug_printf("SSS_EXIT WRITTEN px=%u\n", INTEGRATOR_STATE(state, path, render_pixel_index));
+}
+
 ccl_device_inline void film_write_data_passes(KernelGlobals kg,
                                               IntegratorState state,
                                               const ccl_private ShaderData *sd,
@@ -119,23 +193,7 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
     // !!!: SURFACE_DATA gets overwritten on every sample for a pixel until PATH_RAY_SINGLE_PASS_DONE gets set
     /* Store first-hit receiver data for later ReSTIR surface reconstruction. */
     if (flag & PASSMASK(SURFACE_DATA)) {
-      ccl_global float *ptr = buffer + kernel_data.film.pass_surface_data;
-      film_overwrite_pass_float(ptr++, (float)path_flag);
-
-      film_overwrite_pass_float(ptr++, sd->u);
-      film_overwrite_pass_float(ptr++, sd->v);
-      film_overwrite_pass_float(ptr++, (float)sd->type);
-      film_overwrite_pass_float(ptr++, (float)sd->object);
-      film_overwrite_pass_float(ptr++, (float)sd->prim);
-      film_overwrite_pass_float(ptr++, (float)sd->lcg_state);
-      /* Needed to reconstruct shader_setup_object_transforms()'s time 
-       * when this pixel is later *re-shaded* as temporal-frame history. */
-      film_overwrite_pass_float(ptr, sd->time);
-
-      /* ReprojectionSurface must describe the SAME hit as SURFACE_DATA. */
-      if (kernel_data.integrator.use_temporal) {
-        film_write_restir_reprojection_surface_pass(kg, sd, buffer);
-      }
+      film_write_restir_surface_data(kg, sd, path_flag, buffer);
     }
 
     if (!(sd->flag & (SD_TRANSPARENT | SD_RAY_PORTAL)) ||

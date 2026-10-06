@@ -900,6 +900,12 @@ ccl_device_inline void film_clear_pass_reservoir(KernelGlobals kg,
   /* Set sd.type to zero. */
   ptr = buffer + kernel_data.film.pass_surface_data + 3;
   film_overwrite_pass_float(ptr, 0.0f);
+
+  /* Clear the SSS exit marker. The rest is only valid when is_exit == 1. */
+  if (kernel_data.film.pass_restir_sss_exit != PASS_UNUSED) {
+    ptr = buffer + kernel_data.film.pass_restir_sss_exit;
+    film_overwrite_pass_float(ptr, 0.0f);
+  }
 }
 
 // MARK: - 

@@ -784,6 +784,17 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
 
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
 
+if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ONLY; 24% 360
+  const ccl_global float *p = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+                              kernel_data.film.pass_restir_sss_exit;
+
+  ccl_debug_printf("FINALEVAL px=%u offset=%d stride=%d is_exit=%f sd_type=%f\n",
+      render_pixel_index, kernel_data.film.pass_restir_sss_exit, kernel_data.film.pass_stride,
+      (double)p[0],
+      (double)(pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+                kernel_data.film.pass_surface_data)[3]);
+}
+
   const bool read_prev = INTEGRATOR_STATE(state, path, spatial_iteration) % 2;
 
   const bool reservoir_ok = integrator_restir_unpack_reservoir(
@@ -791,12 +802,41 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
   const bool shader_ok = integrator_restir_unpack_shader(
       kg, &current, render_pixel_index, render_buffer);
 
+
+if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ONLY
+  ccl_debug_printf("FINALEVAL px=%u reservoir_ok=%d shader_ok=%d\n",
+                    render_pixel_index, (int)reservoir_ok, (int)shader_ok);
+}
+
+
   if (!reservoir_ok || !shader_ok) {
     integrator_path_next(state,
                          DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
                          DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION); // !!!
     return;
   }
+
+// { // !!!: DEBUG ONLY; To see if the the SSS exit pass is written
+//   // const ccl_global float *p = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+//   //                             kernel_data.film.pass_restir_sss_exit;
+//   // if (p[0] > 0.0f) { // path_flag
+//   //   ccl_debug_printf("SSS_EXIT px=%u bf=%f T=(%f,%f,%f) N=(%f,%f,%f)\n\n", render_pixel_index,
+//   //       (double)p[1], (double)p[2], (double)p[3], (double)p[4],
+//   //       (double)p[5], (double)p[6], (double)p[7]);
+//   // } else {
+//   //   ccl_debug_printf("SSS_EXIT failed! p[0]=%f\n\n", (double)p[0]);
+//   // }
+//   if (render_pixel_index == 0) {
+//     ccl_debug_printf("SSS pass offset=%d stride=%d\n",
+//                      kernel_data.film.pass_restir_sss_exit, kernel_data.film.pass_stride);
+//   }
+//   const ccl_global float *p = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+//                               kernel_data.film.pass_restir_sss_exit;
+//   if (p[0] > 0.0f) {
+//     ccl_debug_printf("SSS_EXIT HIT px=%u N=(%f,%f,%f)\n", render_pixel_index,
+//                      (double)p[5], (double)p[6], (double)p[7]);
+//   }
+// }
 
   shader_data_setup_from_restir(kg, state, &current, render_buffer); // !!!: 
 

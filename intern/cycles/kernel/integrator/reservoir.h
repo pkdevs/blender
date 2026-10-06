@@ -528,7 +528,7 @@ ccl_debug_printf( // Accepted candidates
     "flags=%u\n"
     "object=%d\n"
     "prim=%d\n"
-    "param=(%f,%f)\n"
+    "param=(%f,%f)\n" // !!!: Always zero?
     "M=%f\n"
     "=== === === === === ===\n",
     (double)reservoir->total_weight,
