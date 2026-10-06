@@ -173,4 +173,53 @@ def apply_json(context, payload, blocked=False):
         _error = str(error)
 
 
-classes = (WM_OT_native_panel_edit,)
+class VIEW3D_PT_native_sculpt_settings(bpy.types.Panel):
+    """Key sculpt settings for the native iPadOS top bar."""
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tool"
+    bl_label = "Sculpt"
+
+    @classmethod
+    def poll(cls, context):
+        # Only the native projection draws this, from the viewport's main region.
+        # Blender's own UI draws side-bar panels in the 'UI' region and never polls true.
+        region = context.region
+        return (context.mode == 'SCULPT' and context.sculpt_object is not None and
+                region is not None and region.type == 'WINDOW')
+
+    def draw(self, context):
+        from bl_ui.properties_paint_common import UnifiedPaintPanel
+
+        layout = self.layout
+        settings = UnifiedPaintPanel.paint_settings(context)
+        brush = settings.brush if settings else None
+        if brush is not None:
+            ups = settings.unified_paint_settings
+            size_owner = ups if ups.use_unified_size else brush
+            size_prop = "unprojected_size" if size_owner.use_locked_size == 'SCENE' else "size"
+            layout.prop(size_owner, size_prop, text="Radius", slider=True)
+            strength_owner = ups if ups.use_unified_strength else brush
+            layout.prop(strength_owner, "strength", text="Strength", slider=True)
+            if brush.sculpt_capabilities.has_direction:
+                layout.prop(brush, "direction", text="Direction")
+
+        obj = context.sculpt_object
+        dyntopo = obj.use_dynamic_topology_sculpting
+        layout.operator(
+            "sculpt.dynamic_topology_toggle",
+            text="Dyntopo",
+            icon='CHECKBOX_HLT' if dyntopo else 'CHECKBOX_DEHLT',
+        )
+        if dyntopo:
+            sculpt = context.tool_settings.sculpt
+            if sculpt.detail_type_method in {'CONSTANT', 'MANUAL'}:
+                layout.prop(sculpt, "constant_detail_resolution", text="Detail", slider=True)
+            elif sculpt.detail_type_method == 'BRUSH':
+                layout.prop(sculpt, "detail_percent", text="Detail", slider=True)
+            else:
+                layout.prop(sculpt, "detail_size", text="Detail", slider=True)
+        layout.prop(obj, "use_mesh_mirror_x", text="Mirror X")
+
+
+classes = (WM_OT_native_panel_edit, VIEW3D_PT_native_sculpt_settings)

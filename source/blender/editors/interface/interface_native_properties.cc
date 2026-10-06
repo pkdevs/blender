@@ -919,7 +919,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   std::vector<Candidate> candidates;
   std::set<Panel *> instances;
   for (PanelType &pt : panel_region_type->paneltypes) {
-    if (tool_settings && !STREQ(pt.idname, "VIEW3D_PT_active_tool")) {
+    if (tool_settings && !STREQ(pt.idname, "VIEW3D_PT_active_tool") &&
+        !STREQ(pt.idname, "VIEW3D_PT_native_sculpt_settings"))
+    {
       continue;
     }
     if (shading && !STREQ(pt.idname, "VIEW3D_PT_shading") &&
