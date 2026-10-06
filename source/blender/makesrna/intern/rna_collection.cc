@@ -641,6 +641,18 @@ static void rna_CollectionImport_filepath_set(PointerRNA *ptr, const char *value
   }
 }
 
+static std::optional<std::string> rna_CollectionImport_filepath_filter(const bContext * /*C*/,
+                                                                       PointerRNA *ptr,
+                                                                       PropertyRNA * /*prop*/)
+{
+  const CollectionImport *data = reinterpret_cast<CollectionImport *>(ptr->data);
+  const bke::FileHandlerType *fh = bke::file_handler_find(data->fh_idname);
+  if (!fh) {
+    return std::nullopt;
+  }
+  return fh->filter_glob_from_extensions();
+}
+
 static const char *rna_CollectionExport_filepath_value_from_idprop(CollectionExport *data)
 {
   if (IDProperty *group = data->export_properties) {
@@ -927,6 +939,7 @@ static void rna_def_collection_importer_data(BlenderRNA *brna)
                                 "rna_CollectionImport_filepath_get",
                                 "rna_CollectionImport_filepath_length",
                                 "rna_CollectionImport_filepath_set");
+  RNA_def_property_string_filepath_filter_func(prop, "rna_CollectionImport_filepath_filter");
   RNA_def_property_string_maxlength(prop, FILE_MAX);
   RNA_def_property_ui_text(prop, "File Path", "The file path used for importing");
   RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
