@@ -1686,6 +1686,16 @@ void ios_ui_apply_viewport_preferences(bContext *C)
       v3d->gizmo_flag &= ~(V3D_GIZMO_HIDE | V3D_GIZMO_HIDE_NAVIGATE);
       v3d->overlay.flag |= V3D_OVERLAY_HIDE_CURSOR;
     }
+    /* Brushes are picked from the native brush rail. The shelf shows itself again whenever a
+     * brush mode creates its shelf (`DEFAULT_VISIBLE`), so keep it hidden here. */
+    for (ARegion &shelf_region : area->regionbase) {
+      if (ELEM(shelf_region.regiontype, RGN_TYPE_ASSET_SHELF, RGN_TYPE_ASSET_SHELF_HEADER) &&
+          !(shelf_region.flag & RGN_FLAG_HIDDEN))
+      {
+        shelf_region.flag |= RGN_FLAG_HIDDEN;
+        ED_region_visibility_change_update(C, area, &shelf_region);
+      }
+    }
     ARegion *region = ios_find_window_region(area);
     if (refresh_gizmo_map && region != nullptr && region->runtime->gizmo_map != nullptr) {
       WM_gizmomap_reinit(region->runtime->gizmo_map);
