@@ -299,13 +299,13 @@ void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
     /* If there are no annotation strokes drawn, the vertices are moved
      * onto a line between the first and last vertex. */
     if (strokes.is_empty()) {
-      float3 start_co = float3(chain.verts.first()->co);
-      float3 end_co = float3(chain.verts.last()->co);
+      float3 chain_start_co = float3(chain.verts.first()->co);
+      float3 chain_end_co = float3(chain.verts.last()->co);
 
-      fallback_points[0] = start_co;
-      fallback_points[1] = end_co;
+      fallback_points[0] = chain_start_co ;
+      fallback_points[1] = chain_end_co;
       fallback_stroke.points = Span<float3>(fallback_points, 2);
-      fallback_stroke.accumulated_lengths = {math::distance(start_co, end_co)};
+      fallback_stroke.accumulated_lengths = {math::distance(chain_start_co , chain_end_co)};
 
       best_stroke = &fallback_stroke;
     }
