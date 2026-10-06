@@ -35,7 +35,7 @@ ccl_device_forceinline void fill_cubic_weights(float3 w[4], float3 t)
 }
 
 /* -------------------------------------------------------------------- */
-/** Return the sample position for stochastical one-tap sampling.
+/** Return the sample position for stochastic one-tap sampling.
  * From "Stochastic Texture Filtering": https://arxiv.org/abs/2305.05810
  * \{ */
 ccl_device_inline float3 interp_tricubic_stochastic(const float3 P, ccl_private float3 &rand)
@@ -181,8 +181,8 @@ __attribute__((noinline))
 ccl_device_noinline
 #  endif
 OutT kernel_image_interp_nanovdb(const ccl_global KernelImageInfo &info,
-                                     float3 P,
-                                     const InterpolationType interp)
+                                 float3 P,
+                                 const InterpolationType interp)
 {
   ccl_global nanovdb::NanoGrid<T> *const grid = (ccl_global nanovdb::NanoGrid<T> *)info.data;
 
@@ -202,16 +202,17 @@ OutT kernel_image_interp_nanovdb(const ccl_global KernelImageInfo &info,
 
 ccl_device float4 kernel_image_interp_3d(KernelGlobals kg,
                                          ccl_private ShaderData *sd,
-                                         const int id,
+                                         const int image_texture_id,
                                          float3 P,
                                          InterpolationType interp,
                                          const bool stochastic)
 {
 #ifdef WITH_NANOVDB
-  const ccl_global KernelImageInfo &info = kernel_data_fetch(image_info, id);
+  const ccl_global KernelImageTexture &tex = kernel_data_fetch(image_textures, image_texture_id);
+  const ccl_global KernelImageInfo &info = kernel_data_fetch(image_info, tex.image_info_id);
 
-  if (info.use_transform_3d) {
-    P = transform_point(&info.transform_3d, P);
+  if (tex.use_transform_3d) {
+    P = transform_point(&tex.transform_3d, P);
   }
 
   InterpolationType interpolation = (interp == INTERPOLATION_NONE) ?
@@ -249,7 +250,7 @@ ccl_device float4 kernel_image_interp_3d(KernelGlobals kg,
 #else
   (void)kg;
   (void)sd;
-  (void)id;
+  (void)image_texture_id;
   (void)P;
   (void)interp;
   (void)stochastic;

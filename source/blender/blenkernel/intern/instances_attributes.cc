@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_instances.hh"
 
 #include "attribute_storage_access.hh"
@@ -108,6 +112,7 @@ static constexpr AttributeAccessorFunctions get_instances_accessor_functions()
       };
       AttributeIter iter(attribute.name(), attribute.domain(), attribute.data_type(), get_fn);
       iter.is_builtin = builtin_attributes().contains(attribute.name());
+      iter.storage_type = attribute.storage_type();
       iter.accessor = &accessor;
       fn(iter);
       if (iter.is_stopped()) {
@@ -174,6 +179,20 @@ static constexpr AttributeAccessorFunctions get_instances_accessor_functions()
       }
     }
     return true;
+  };
+  fn.rename = [](void *owner,
+                 const Map<StringRef, StringRef> &name_map,
+                 bool overwrite) -> Set<StringRef> {
+    Instances &instances = *static_cast<Instances *>(owner);
+    return rename_attributes(
+        instances.attribute_storage(),
+        name_map,
+        overwrite,
+        builtin_attributes(),
+        array_storage_required(),
+        [&](const bke::AttrDomain /*domain*/) { return instances.instances_num(); },
+        std::nullopt,
+        {});
   };
   fn.assign_data = [](void *owner, StringRef name, const AttributeInit &initializer) {
     Instances &instances = *static_cast<Instances *>(owner);

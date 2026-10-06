@@ -15,15 +15,13 @@ namespace blender {
 
 struct Curves;
 
-#define ABC_CURVE_RESOLUTION_U_PROPNAME "blender:resolution"
-
 namespace io::alembic {
 
 class AbcCurveReader final : public AbcObjectReader {
   Alembic::AbcGeom::ICurvesSchema m_curves_schema;
 
  public:
-  AbcCurveReader(const Alembic::Abc::IObject &object, ImportSettings &settings);
+  AbcCurveReader(const AbcReaderConstructorArgs &args);
 
   bool valid() const override;
   bool accepts_object_type(const Alembic::AbcCoreAbstract::ObjectHeader &alembic_header,
@@ -34,13 +32,11 @@ class AbcCurveReader final : public AbcObjectReader {
 
   void read_geometry(bke::GeometrySet &geometry_set,
                      const Alembic::Abc::ISampleSelector &sample_sel,
-                     int read_flag,
-                     const char *velocity_name,
-                     float velocity_scale,
+                     const AbcReadGeometryParams &read_params,
                      const char **r_err_str) override;
 
   void read_curves_sample(Curves *curves_id,
-                          bool use_interpolation,
+                          const AbcReadGeometryParams &read_params,
                           const Alembic::AbcGeom::ICurvesSchema &schema,
                           const Alembic::Abc::ISampleSelector &sample_selector);
 };

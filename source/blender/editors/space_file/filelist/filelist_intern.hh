@@ -11,12 +11,15 @@
 #include <cstdint>
 #include <memory>
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_map.hh"
 
 #include "DNA_listBase.h"
 #include "DNA_space_enums.h"
 #include "DNA_space_types.h"
+
+#include "IMB_thumbs.hh"
+
 struct BlendHandle;
 namespace blender {
 
@@ -27,7 +30,6 @@ using FileUID = uint32_t;
 struct AssetLibraryReference;
 struct FileDirEntry;
 struct FileIndexerType;
-struct GHash;
 struct ID;
 struct PreviewImage;
 struct ThreadQueue;
@@ -65,7 +67,7 @@ struct FileListInternEntry {
    * take care of that.
    */
   struct {
-    /** When showing local IDs (FILE_MAIN, FILE_MAIN_ASSET), the ID this file entry represents. */
+    /** When showing local IDs (#FILE_MAIN_ASSET), the ID this file entry represents. */
     ID *id = nullptr;
 
     /* For the few file types that have the preview already in memory. For others, there's delayed
@@ -85,7 +87,7 @@ struct FileListInternEntry {
   /* See #FILE_ENTRY_BLENDERLIB_NO_PREVIEW. */
   bool blenderlib_has_no_preview = false;
 
-  /** Defined in BLI_fileops.h */
+  /** Defined in BLI_fileops.hh */
   eFileAttributes attributes = eFileAttributes(0);
   BLI_stat_t st = {0};
 
@@ -144,6 +146,7 @@ struct FileListEntryCache {
   /* Previews handling. */
   TaskPool *previews_pool = nullptr;
   ThreadQueue *previews_done = nullptr;
+  ThumbCancellationToken previews_cancel_token;
   /** Counter for previews that are not fully loaded and ready to display yet. So includes all
    * previews either in `previews_pool` or `previews_done`. #filelist_cache_previews_update() makes
    * previews in `preview_done` ready for display, so the counter is decremented there. */
@@ -175,7 +178,6 @@ struct FileListEntryPreviewTaskData {
 struct FileListFilter {
   uint64_t filter;
   uint64_t filter_id;
-  char filter_glob[FILE_MAXFILE];
   char filter_search[66]; /* + 2 for heading/trailing implicit '*' wildcards. */
   short flags;
 
@@ -189,6 +191,8 @@ enum {
   FLF_HIDE_PARENT = 1 << 2,
   FLF_HIDE_LIB_DIR = 1 << 3,
   FLF_ASSETS_ONLY = 1 << 4,
+  FLF_ASSETS_HIDE_ONLINE = 1 << 5,
+  FLF_ASSETS_HIDE_OFFLINE = 1 << 6,
 };
 
 struct FileListReadJob;
@@ -227,6 +231,9 @@ struct FileList {
    */
   GHash *selection_state;
 
+  /** Extension glob, see #filelist_setglob. */
+  char filter_glob[FILE_MAXFILE];
+
   short max_recursion;
   short recursion_level;
 
@@ -242,6 +249,10 @@ struct FileList {
                        char dirpath[FILE_MAX_LIBEXTRA],
                        const bool do_change);
 
+  /** Called from the main thread when starting the job. */
+  void (*start_job_fn)(FileListReadJob *job_params);
+  /** Called from the main thread in regular intervals. */
+  void (*timer_step_fn)(FileListReadJob *job_params);
   /** Fill `filelist` (to be called by read job). */
   void (*read_job_fn)(FileListReadJob *job_params, bool *stop, bool *do_update, float *progress);
 
@@ -268,6 +279,9 @@ enum {
   /** Trigger a call to #AS_asset_library_load() to update asset catalogs (won't reload the actual
    * assets) */
   FL_RELOAD_ASSET_LIBRARY = 1 << 7,
+  FL_ASSETS_INCLUDE_ONLINE = 1 << 8,
+  /** #FileList.filter_glob changed, re-tag entries instead of reading the directory again. */
+  FL_NEED_RESET_GLOB = 1 << 9,
 };
 
 /** #FileList.tags */
@@ -280,6 +294,9 @@ enum FileListTags {
   FILELIST_TAGS_APPLY_FUZZY_SEARCH = (1 << 1),
   /** The file list type is not thread-safe. */
   FILELIST_TAGS_NO_THREADS = (1 << 2),
+  /** The file list is owned by the #ED_asset_list.hh API (global storage to load and store assets
+   * globally), not the Asset Browser. */
+  FILELIST_TAGS_FROM_GLOBAL_ASSET_LIST = 1 << 3,
 };
 
 enum class SpecialFileImages {
@@ -292,6 +309,10 @@ enum class SpecialFileImages {
 
 void filelist_cache_clear(FileListEntryCache *cache, size_t new_size);
 
+FileUID filelist_uid_generate(FileList *filelist);
+
+const char *fileentry_uiname(const char *root, FileListInternEntry *entry, char *buff);
+
 bool filelist_intern_entry_is_main_file(const FileListInternEntry *intern_entry);
 
 void prepare_filter_asset_library(const FileList *filelist, FileListFilter *filter);
@@ -300,12 +321,31 @@ void prepare_filter_asset_library(const FileList *filelist, FileListFilter *filt
 bool is_filtered_file(FileListInternEntry *file, const char * /*root*/, FileListFilter *filter);
 bool is_filtered_asset(FileListInternEntry *file, FileListFilter *filter);
 bool is_filtered_lib(FileListInternEntry *file, const char *root, FileListFilter *filter);
-bool is_filtered_main(FileListInternEntry *file, const char * /*dir*/, FileListFilter *filter);
 bool is_filtered_main_assets(FileListInternEntry *file,
                              const char * /*dir*/,
                              FileListFilter *filter);
 bool is_filtered_asset_library(FileListInternEntry *file,
                                const char *root,
                                FileListFilter *filter);
+
+bool filelist_checkdir_dir(const FileList * /*filelist*/,
+                           char dirpath[FILE_MAX_LIBEXTRA],
+                           const bool do_change);
+bool filelist_checkdir_lib(const FileList * /*filelist*/,
+                           char dirpath[FILE_MAX_LIBEXTRA],
+                           const bool do_change);
+
+/** Set or clear #FILE_TYPE_OPERATOR on `entry`, from `filter_glob` matching it. */
+void filelist_entry_glob_tag(FileListInternEntry *entry, const char *filter_glob);
+/** Apply #FileList.filter_glob to the entries already read. */
+void filelist_reset_glob(FileList *filelist);
+
+void filelist_set_readjob_directories(FileList *filelist);
+void filelist_set_readjob_library(FileList *filelist);
+void filelist_set_readjob_on_disk_asset_library(FileList *filelist);
+void filelist_set_readjob_remote_asset_library(FileList *filelist);
+void filelist_set_readjob_current_file_asset_library(FileList *filelist);
+void filelist_set_readjob_essentials_asset_library(FileList *filelist);
+void filelist_set_readjob_all_asset_library(FileList *filelist);
 
 }  // namespace blender

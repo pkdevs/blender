@@ -13,7 +13,7 @@
 
 #include <Python.h>
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "GPU_context.hh"
 #include "GPU_uniform_buffer.hh"
@@ -31,7 +31,7 @@ namespace blender {
 
 static int pygpu_uniformbuffer_valid_check(BPyGPUUniformBuf *bpygpu_ub)
 {
-  if (UNLIKELY(bpygpu_ub->ubo == nullptr)) {
+  if (bpygpu_ub->ubo == nullptr) [[unlikely]] {
     PyErr_SetString(PyExc_ReferenceError,
 #ifdef BPYGPU_USE_GPUOBJ_FREE_METHOD
                     "GPU uniform buffer was freed, no further access is valid");
@@ -46,7 +46,7 @@ static int pygpu_uniformbuffer_valid_check(BPyGPUUniformBuf *bpygpu_ub)
 
 #define BPYGPU_UNIFORMBUF_CHECK_OBJ(bpygpu) \
   { \
-    if (UNLIKELY(pygpu_uniformbuffer_valid_check(bpygpu) == -1)) { \
+    if (pygpu_uniformbuffer_valid_check(bpygpu) == -1) [[unlikely]] { \
       return nullptr; \
     } \
   } \
@@ -111,7 +111,10 @@ PyDoc_STRVAR(
     pygpu_uniformbuffer_update_doc,
     ".. method:: update(data)\n"
     "\n"
-    "   Update the data of the uniform buffer object.\n");
+    "   Update the data of the uniform buffer object.\n"
+    "\n"
+    "   :param data: Data to fill the buffer.\n"
+    "   :type data: Buffer\n");
 static PyObject *pygpu_uniformbuffer_update(BPyGPUUniformBuf *self, PyObject *obj)
 {
   BPYGPU_UNIFORMBUF_CHECK_OBJ(self);
@@ -171,12 +174,14 @@ static PyMethodDef pygpu_uniformbuffer__tp_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     pygpu_uniformbuffer__tp_doc,
-    ".. class:: GPUUniformBuf(data)\n"
+    ".. class:: GPUUniformBuf\n"
     "\n"
-    "   This object gives access to off uniform buffers.\n"
+    "   This object gives access to uniform buffers.\n"
     "\n"
-    "   :arg data: Data to fill the buffer.\n"
-    "   :type data: object exposing buffer interface\n");
+    "   .. method:: __init__(data)\n"
+    "\n"
+    "      :param data: Data to fill the buffer.\n"
+    "      :type data: Buffer\n");
 PyTypeObject BPyGPUUniformBuf_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "GPUUniformBuf",

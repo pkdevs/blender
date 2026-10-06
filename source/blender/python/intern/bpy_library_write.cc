@@ -13,7 +13,7 @@
 #include <cstddef>
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_blendfile.hh"
 #include "BKE_global.hh"
@@ -40,7 +40,7 @@ PyDoc_STRVAR(
     /* Wrap. */
     bpy_lib_write_doc,
     ".. method:: write(filepath, datablocks, *, "
-    "path_remap=False, fake_user=False, compress=False)\n"
+    "path_remap='NONE', fake_user=False, compress=False)\n"
     "\n"
     "   Write data-blocks into a blend file.\n"
     "\n"
@@ -48,11 +48,11 @@ PyDoc_STRVAR(
     "\n"
     "      Indirectly referenced data-blocks will be expanded and written too.\n"
     "\n"
-    "   :arg filepath: The path to write the blend-file.\n"
+    "   :param filepath: The path to write the blend-file.\n"
     "   :type filepath: str | bytes\n"
-    "   :arg datablocks: set of data-blocks.\n"
+    "   :param datablocks: set of data-blocks.\n"
     "   :type datablocks: set[:class:`bpy.types.ID`]\n"
-    "   :arg path_remap: Optionally remap paths when writing the file:\n"
+    "   :param path_remap: Optionally remap paths when writing the file:\n"
     "\n"
     "      - ``NONE`` No path manipulation (default).\n"
     "      - ``RELATIVE`` Remap paths that are already relative to the new location.\n"
@@ -60,9 +60,9 @@ PyDoc_STRVAR(
     "      - ``ABSOLUTE`` Make all paths absolute on writing.\n"
     "\n"
     "   :type path_remap: str\n"
-    "   :arg fake_user: When True, data-blocks will be written with fake-user flag enabled.\n"
+    "   :param fake_user: When True, data-blocks will be written with fake-user flag enabled.\n"
     "   :type fake_user: bool\n"
-    "   :arg compress: When True, write a compressed blend file.\n"
+    "   :param compress: When True, write a compressed blend file.\n"
     "   :type compress: bool\n");
 static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *kw)
 {
@@ -93,7 +93,7 @@ static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *
   static _PyArg_Parser _parser = {
       "O&" /* `filepath` */
       "O!" /* `datablocks` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `path_remap` */
       "O&" /* `fake_user` */
       "O&" /* `compress` */
@@ -128,7 +128,12 @@ static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *
   STRNCPY(filepath_abs, filepath_data.value);
   Py_XDECREF(filepath_data.value_coerce);
 
-  BLI_path_abs(filepath_abs, BKE_main_blendfile_path_from_global());
+  const bool was_relative = BLI_path_abs(filepath_abs, BKE_main_blendfile_path_from_global());
+  if (!was_relative) {
+    /* If this was a blendfile-relative path, it's been made absolute now. However, BLI_path_abs()
+     * doesn't turn normal relative paths into absolute ones, so that still has to happen. */
+    BLI_path_abs_from_cwd(filepath_abs, sizeof(filepath_abs));
+  }
 
   PartialWriteContext partial_write_ctx{*bmain_src};
   const PartialWriteContext::IDAddOptions add_options{

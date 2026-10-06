@@ -9,8 +9,9 @@
 #include <algorithm>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_action_types.h"
 #include "DNA_screen_types.h"
@@ -37,6 +38,20 @@ namespace blender {
 
 namespace ed::outliner {
 
+bool outliner_treesort_tiebreak(bool a_is_object,
+                                const char *a_name,
+                                bool b_is_object,
+                                const char *b_name)
+{
+  if (a_is_object != b_is_object) {
+    return !a_is_object;
+  }
+  if (!a_is_object) {
+    return false;
+  }
+  return BLI_strcasecmp_natural(a_name, b_name) < 0;
+}
+
 /* -------------------------------------------------------------------- */
 /** \name Tree View Context
  * \{ */
@@ -47,13 +62,15 @@ void outliner_viewcontext_init(const bContext *C, TreeViewContext *tvc)
   /* Workspace. */
   tvc->workspace = CTX_wm_workspace(C);
 
+  tvc->bmain = CTX_data_main(C);
+
   /* Scene level. */
   tvc->scene = CTX_data_scene(C);
   tvc->view_layer = CTX_data_view_layer(C);
   tvc->layer_collection = CTX_data_layer_collection(C);
 
   /* Objects. */
-  BKE_view_layer_synced_ensure(tvc->scene, tvc->view_layer);
+  BKE_view_layer_synced_ensure(*tvc->bmain, tvc->scene, tvc->view_layer);
   tvc->obact = BKE_view_layer_active_object_get(tvc->view_layer);
   if (tvc->obact != nullptr) {
     tvc->ob_edit = OBEDIT_FROM_OBACT(tvc->obact);
@@ -80,9 +97,7 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
         return &te_iter;
       }
 
-      if (BLI_listbase_is_empty(&te_iter.subtree) ||
-          !TSELEM_OPEN(TREESTORE(&te_iter), space_outliner))
-      {
+      if (te_iter.subtree.is_empty() || !TSELEM_OPEN(TREESTORE(&te_iter), space_outliner)) {
         /* No need for recursion. */
         continue;
       }
@@ -110,7 +125,7 @@ static TreeElement *outliner_find_item_at_x_in_row_recursive(const TreeElement *
                                                              float view_co_x,
                                                              bool *r_is_merged_icon)
 {
-  TreeElement *child_te = static_cast<TreeElement *>(parent_te->subtree.first);
+  TreeElement *child_te = parent_te->subtree.first();
 
   while (child_te) {
     const bool over_element = (view_co_x > child_te->xs) && (view_co_x < child_te->xend);
@@ -295,7 +310,7 @@ bool outliner_tree_traverse(const SpaceOutliner *space_outliner,
                             TreeTraversalFunc func,
                             void *customdata)
 {
-  for (TreeElement *te = static_cast<TreeElement *>(tree->first), *te_next; te; te = te_next) {
+  for (TreeElement *te = tree->first(), *te_next; te; te = te_next) {
     TreeTraversalAction func_retval = TRAVERSE_CONTINUE;
     /* in case te is freed in callback */
     TreeStoreElem *tselem = TREESTORE(te);
@@ -364,6 +379,9 @@ float outliner_right_columns_width(const SpaceOutliner *space_outliner)
       }
       ATTR_FALLTHROUGH;
     case SO_SCENES:
+      if (space_outliner->flag & SO_USERS_COLUMN) {
+        num_columns++;
+      }
       if (space_outliner->show_restrict_flags & SO_RESTRICT_SELECT) {
         num_columns++;
       }
@@ -483,6 +501,7 @@ using namespace blender::ed::outliner;
 Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
 {
   ARegion *region = CTX_wm_region(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -492,12 +511,12 @@ Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
 
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
-  te = outliner_find_item_at_y(space_outliner, &space_outliner->tree, view_mval[1]);
+  te = outliner_find_item_at_y(space_outliner, &space_outliner->runtime->tree, view_mval[1]);
   if (te) {
     TreeStoreElem *tselem = TREESTORE(te);
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
       Object *ob = id_cast<Object *>(tselem->id);
-      BKE_view_layer_synced_ensure(scene, view_layer);
+      BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
       base = (te->directdata) ? static_cast<Base *>(te->directdata) :
                                 BKE_view_layer_base_find(view_layer, ob);
     }
@@ -514,7 +533,8 @@ bool ED_outliner_give_rna_under_cursor(bContext *C, const int mval[2], PointerRN
   float view_mval[2];
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
-  TreeElement *te = outliner_find_item_at_y(space_outliner, &space_outliner->tree, view_mval[1]);
+  TreeElement *te = outliner_find_item_at_y(
+      space_outliner, &space_outliner->runtime->tree, view_mval[1]);
   if (!te) {
     return false;
   }

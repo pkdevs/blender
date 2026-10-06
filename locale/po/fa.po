@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'bd8d088b2702')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'c02032f9693d')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-26 11:28+0000\n"
+"POT-Creation-Date: 2026-10-05 07:25+0000\n"
 "PO-Revision-Date: 2025-11-19 06:24+0000\n"
 "Last-Translator: \"M. Amin Taheri\" <amintaheri2001@gmail.com>\n"
 "Language-Team: Persian <https://translate.blender.org/projects/blender-ui/ui/fa/>\n"
@@ -1140,6 +1140,18 @@ msgid "Area width"
 msgstr "ﻪﻘﻄﻨﻣ ﯼﺎﻨﻬﭘ"
 
 
+msgid "Link"
+msgstr "ﺪﻧﻮﯿﭘ"
+
+
+msgid "Append"
+msgstr "ﻥﺩﻭﺰﻓﺍ"
+
+
+msgid "Pack"
+msgstr "ﻪﺘﺴﺑ"
+
+
 msgid "Full Path"
 msgstr "ﻞﻣﺎﮐ ﺮﯿﺴﻣ"
 
@@ -1234,6 +1246,10 @@ msgstr "ﮓﻧﺭ ﯼﺎﻀﻓ"
 
 msgid "Particles"
 msgstr "ﺕﺍﺭﺫ"
+
+
+msgid "Path"
+msgstr "ﺮﯿﺴﻣ"
 
 
 msgid "Blender RNA"
@@ -1426,6 +1442,10 @@ msgstr "ﮓﻧﺭ"
 
 msgid "Saturation"
 msgstr "ﻉﺎﺒﺷﺍ"
+
+
+msgid "Both"
+msgstr "ﻭﺩ ﺮﻫ"
 
 
 msgctxt "File browser"
@@ -1649,10 +1669,6 @@ msgid "Gamma"
 msgstr "ﺎﻣﺎﮔ"
 
 
-msgid "View"
-msgstr "ﺶﯾﺎﻤﻧ"
-
-
 msgid "Color mapping settings"
 msgstr "ﯽﮕﻧﺭ ﺖﺷﺎﮕﻧ ﺕﺎﻤﯿﻈﻨﺗ"
 
@@ -1663,46 +1679,6 @@ msgstr "ﺩﻮﺷ ﻁﻮﻠﺨﻣ ﯽﺟﻭﺮﺧ ﺖﻓﺎﺑ ﮓﻧﺭ ﺎﺑ 
 
 msgid "Blend Factor"
 msgstr "ﻁﻮﻠﺨﻣ ﺭﻮﺘﮐﺎﻓ"
-
-
-msgid "Blend Type"
-msgstr "ﻁﻮﻠﺨﻣ ﻉﻮﻧ"
-
-
-msgid "Mix"
-msgstr "ﻁﻮﻠﺨﻣ"
-
-
-msgid "Darken"
-msgstr "ﮏﯾﺭﺎﺗ"
-
-
-msgid "Lighten"
-msgstr "ﻦﺷﻭﺭ"
-
-
-msgid "Screen"
-msgstr "ﻩﺩﺮﭘ"
-
-
-msgid "Overlay"
-msgstr "ﻢﻬﯾﻭﺭ"
-
-
-msgid "Soft Light"
-msgstr "ﻢﯾﻼ﻿ﻣ ﺭﻮﻧ"
-
-
-msgid "Linear Light"
-msgstr "ﯽﻄﺧ ﺭﻮﻧ"
-
-
-msgid "Difference"
-msgstr "ﺕﻭﺎﻔﺗ"
-
-
-msgid "Divide"
-msgstr "ﻢﯿﺴﻘﺗ"
 
 
 msgid "Brightness"
@@ -2061,6 +2037,10 @@ msgid "Plane"
 msgstr "ﻪﺤﻔﺻ"
 
 
+msgid "View"
+msgstr "ﺶﯾﺎﻤﻧ"
+
+
 msgid "Render"
 msgstr "ﺭﺪﻧﺭ"
 
@@ -2258,6 +2238,10 @@ msgid "The highest power of 'x' for this polynomial (number of coefficients - 1)
 msgstr "(ﮏﯾ ﯼﺎﻬﻨﻣ ﺎﻫ‌ﺐﯾﺮﺿ ﺩﺍﺪﻌﺗ) ﯼﺍ‌ﻪﻠﻤﺟﺪﻨﭼ ﺭﺩ x ﻥِﺍﻮﺗ ﻦﯾﺮﺗﻻ﻿ﺎﺑ"
 
 
+msgid "Blend Type"
+msgstr "ﻁﻮﻠﺨﻣ ﻉﻮﻧ"
+
+
 msgid "Frame"
 msgstr "ﻢﯾﺮﻓ"
 
@@ -2337,16 +2321,8 @@ msgid "Operator"
 msgstr "ﻞﻣﺎﻋ"
 
 
-msgid "Link"
-msgstr "ﺪﻧﻮﯿﭘ"
-
-
-msgid "Append"
-msgstr "ﻥﺩﻭﺰﻓﺍ"
-
-
-msgid "Pack"
-msgstr "ﻪﺘﺴﺑ"
+msgid "Unassigned"
+msgstr "ﻩﺪﺸﻧ ﺭﺍﺬﮔﺍﻭ"
 
 
 msgid "Matrix"
@@ -2405,6 +2381,14 @@ msgid "Radial"
 msgstr "ﯽﻋﺎﻌﺷ"
 
 
+msgid "Dynamic"
+msgstr "ﺎﯾﻮﭘ"
+
+
+msgid "Single"
+msgstr "ﯽﮑﺗ"
+
+
 msgid "Window"
 msgstr "ﻩﺮﺠﻨﭘ"
 
@@ -2415,6 +2399,10 @@ msgstr "ﺭﺍﺰﺑﺍ"
 
 msgid "Ping Pong"
 msgstr "ﮓﻨﭘ ﮓﻨﯿﭘ"
+
+
+msgid "Divide"
+msgstr "ﻢﯿﺴﻘﺗ"
 
 
 msgid "Local Matrix"
@@ -2468,10 +2456,6 @@ msgstr "ﯽﻠﺤﻣ"
 
 msgid "Global"
 msgstr "ﯽﻧﺎﻬﺟ"
-
-
-msgid "Dynamic"
-msgstr "ﺎﯾﻮﭘ"
 
 
 msgid "Add Color"
@@ -2628,6 +2612,10 @@ msgid "Paint"
 msgstr "ﮓﻧﺭ"
 
 
+msgid "Use Unified Strength"
+msgstr "ﺪﺤﺘﻣ ﺖﻣﻭﺎﻘﻣ ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
+
+
 msgctxt "Unit"
 msgid "Velocity Unit"
 msgstr "ﺖﻋﺮﺳ ﯼﺎﮑﯾ"
@@ -2656,10 +2644,6 @@ msgstr "ﺩﺎﻌﺑﺍ"
 
 msgid "Path Duration"
 msgstr "ﺮﯿﺴﻣ ﻝﻮﻃ"
-
-
-msgid "Path"
-msgstr "ﺮﯿﺴﻣ"
 
 
 msgid "Text on Curve"
@@ -3026,12 +3010,44 @@ msgid "Keying Sets"
 msgstr "ﺪﯿﻠﮐ ﯼﺎﻫ‌ﻪﻋﻮﻤﺠﻣ"
 
 
+msgid "Mix"
+msgstr "ﻁﻮﻠﺨﻣ"
+
+
+msgid "Difference"
+msgstr "ﺕﻭﺎﻔﺗ"
+
+
 msgid "Max Angle"
 msgstr "ﻪﯾﻭﺍﺯ ﻪﻨﯿﺸﯿﺑ"
 
 
 msgid "Min Angle"
 msgstr "ﻪﯾﻭﺍﺯ ﻞﻗﺍﺪﺣ"
+
+
+msgid "Darken"
+msgstr "ﮏﯾﺭﺎﺗ"
+
+
+msgid "Lighten"
+msgstr "ﻦﺷﻭﺭ"
+
+
+msgid "Screen"
+msgstr "ﻩﺩﺮﭘ"
+
+
+msgid "Overlay"
+msgstr "ﻢﻬﯾﻭﺭ"
+
+
+msgid "Soft Light"
+msgstr "ﻢﯾﻼ﻿ﻣ ﺭﻮﻧ"
+
+
+msgid "Linear Light"
+msgstr "ﯽﻄﺧ ﺭﻮﻧ"
 
 
 msgctxt "FreestyleLineStyle"
@@ -3078,48 +3094,52 @@ msgid "Mix"
 msgstr "ﻁﻮﻠﺨﻣ"
 
 
-msgid "Import"
-msgstr "ﻥﺩﺮﮐ ﺩﺭﺍﻭ"
-
-
-msgid "Math"
-msgstr "ﯽﺿﺎﯾﺭ"
-
-
-msgid "UV"
-msgstr "UV"
-
-
-msgid "Apply"
-msgstr "ﻝﺎﻤﻋﺍ"
-
-
-msgid "Convert"
-msgstr "ﻞﯾﺪﺒﺗ"
-
-
-msgid "Add Image"
-msgstr "ﺮﯾﻮﺼﺗ ﻥﺩﺮﮐ‌ﻪﻓﺎﺿﺍ"
-
-
-msgid "Relations"
-msgstr "ﻂﺑﺍﻭﺭ"
-
-
-msgid "Layout"
-msgstr "ﺡﺮﻃ"
-
-
-msgid "Tracking"
-msgstr "ﯽﺑﺎﯾﺩﺭ"
+msgid "Pivot Point"
+msgstr "ﺶﺧﺮﭼ ﻪﻄﻘﻧ"
 
 
 msgid "Mirror"
 msgstr "ﻪﻨﯾﺁ"
 
 
-msgid "Pivot Point"
-msgstr "ﺶﺧﺮﭼ ﻪﻄﻘﻧ"
+msgid "Apply"
+msgstr "ﻝﺎﻤﻋﺍ"
+
+
+msgid "Tracking"
+msgstr "ﯽﺑﺎﯾﺩﺭ"
+
+
+msgid "UV"
+msgstr "UV"
+
+
+msgid "Convert"
+msgstr "ﻞﯾﺪﺒﺗ"
+
+
+msgid "Math"
+msgstr "ﯽﺿﺎﯾﺭ"
+
+
+msgid "Import"
+msgstr "ﻥﺩﺮﮐ ﺩﺭﺍﻭ"
+
+
+msgid "Linked"
+msgstr "ﻂﺒﺗﺮﻣ"
+
+
+msgid "Relations"
+msgstr "ﻂﺑﺍﻭﺭ"
+
+
+msgid "Add Image"
+msgstr "ﺮﯾﻮﺼﺗ ﻥﺩﺮﮐ‌ﻪﻓﺎﺿﺍ"
+
+
+msgid "Layout"
+msgstr "ﺡﺮﻃ"
 
 
 msgid "Key"
@@ -3274,10 +3294,6 @@ msgid "Flat"
 msgstr "ﺖﺨﺗ"
 
 
-msgid "Use Channel"
-msgstr "ﻝﺎﻧﺎﮐ ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
-
-
 msgid "Default Weight A"
 msgstr "A ﺽﺮﻓ ﺶﯿﭘ ﻥﺯﻭ"
 
@@ -3360,10 +3376,6 @@ msgstr "ﻮﮕﻟﺍ ﻖﺑﺎﻄﺗ"
 
 msgid "Previous frame"
 msgstr "ﯽﻠﺒﻗ ﻢﯾﺮﻓ"
-
-
-msgid "Double"
-msgstr "ﯽﯾﺎﺗﻭﺩ"
 
 
 msgid "Use Red Channel"
@@ -3487,10 +3499,6 @@ msgid "Mirror"
 msgstr "ﺏﺎﺗﺯﺎﺑ"
 
 
-msgid "Single"
-msgstr "ﯽﮑﺗ"
-
-
 msgid "Fill Type"
 msgstr "ﻥﺩﺮﮐ ﺮﭘ ﻉﻮﻧ"
 
@@ -3501,6 +3509,11 @@ msgstr "ﯽﺷ ﺕﺎﻋﻼ﻿ﻃﺍ"
 
 msgid "Points to Curves"
 msgstr "ﺎﻫ‌ﯽﻨﺤﻨﻣ ﻪﺑ ﻁﺎﻘﻧ"
+
+
+msgctxt "Volume"
+msgid "Float"
+msgstr "ﺭﻭﺎﻨﺷ"
 
 
 msgid "Add Shader"
@@ -3569,10 +3582,6 @@ msgstr "ﻩﺮﮔ ﯽﺟﻭﺮﺧ"
 
 msgid "Value to Normal"
 msgstr "ﯼﺩﺎﻋ ﺖﻟﺎﺣ ﻪﺑ ﺭﺍﺪﻘﻣ"
-
-
-msgid "Linked"
-msgstr "ﻂﺒﺗﺮﻣ"
 
 
 msgid "Object Constraints"
@@ -3687,6 +3696,10 @@ msgstr "ﺭﻮﯾﺍﺭﺩ ﻑﺬﺣ"
 
 msgid "Flip Names"
 msgstr "ﺎﻫ‌ﻢﺳﺍ ﯼﺯﺎﺳ‌ﻪﻨﯾﺮﻗ"
+
+
+msgid "Search"
+msgstr "ﻮﺠﺘﺴﺟ"
 
 
 msgid "(undocumented operator)"
@@ -3885,10 +3898,6 @@ msgstr "ﻥﺩﺮﮐ‌ﺯﺎﺑ"
 
 msgid "Play"
 msgstr "ﺶﺨﭘ"
-
-
-msgid "Both"
-msgstr "ﻭﺩ ﺮﻫ"
 
 
 msgid "Flat"
@@ -4316,12 +4325,12 @@ msgid "Restrict"
 msgstr "ﻥﺩﺮﮐ ﺩﻭﺪﺤﻣ"
 
 
-msgid "Transform Orientations"
-msgstr "ﻞﮑﺷ ﺮﯿﯿﻐﺗ ﺖﻬﺟ"
-
-
 msgid "Motion Tracking"
 msgstr "ﺖﮐﺮﺣ ﯽﺑﺎﯾﺩﺭ"
+
+
+msgid "Transform Orientations"
+msgstr "ﻞﮑﺷ ﺮﯿﯿﻐﺗ ﺖﻬﺟ"
 
 
 msgid "Bone Constraints"
@@ -4641,10 +4650,6 @@ msgid "Lock Borders"
 msgstr "ﺯﺮﻣ ﻥﺩﺮﮐ ﻞﻔﻗ"
 
 
-msgid "Use Unified Strength"
-msgstr "ﺪﺤﺘﻣ ﺖﻣﻭﺎﻘﻣ ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
-
-
 msgid "Unit System"
 msgstr "ﺪﺣﺍﻭ ﻢﺘﺴﯿﺳ"
 
@@ -4661,11 +4666,6 @@ msgid "Face Angles"
 msgstr "ﺢﻄﺳ ﯼﺎﯾﺍﻭﺯ"
 
 
-msgctxt "Volume"
-msgid "Float"
-msgstr "ﺭﻭﺎﻨﺷ"
-
-
 msgid "Error Message"
 msgstr "ﺎﻄﺧ ﻡﺎﻐﯿﭘ"
 
@@ -4674,8 +4674,8 @@ msgid "Use linear progression"
 msgstr "ﯽﻄﺧ ﺖﻓﺮﺸﯿﭘ ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
 
 
-msgid "Search"
-msgstr "ﻮﺠﺘﺴﺟ"
+msgid "Cancel"
+msgstr "ﻑﺍﺮﺼﻧﺍ"
 
 
 msgctxt "WindowManager"
@@ -4733,6 +4733,11 @@ msgid "Credits"
 msgstr "ﺕﺍﺭﺎﺒﺘﻋﺍ"
 
 
+msgctxt "Operator"
+msgid "Search..."
+msgstr "...ﻮﺠﺘﺴﺟ"
+
+
 msgid "Extrapolate"
 msgstr "ﻥﺩﺮﮐ ﺱﺎﯿﻗ"
 
@@ -4747,11 +4752,6 @@ msgstr "ﻩﺪﺸﻧ ﺺﺨﺸﻣ"
 
 msgid "Auto Normalize"
 msgstr "ﺭﺎﮐﺩﻮﺧ ﯼﺯﺎﺳ ﯼﺩﺎﻋ"
-
-
-msgctxt "Operator"
-msgid "Search..."
-msgstr "...ﻮﺠﺘﺴﺟ"
 
 
 msgid "Priority"
@@ -4807,13 +4807,13 @@ msgid "Back"
 msgstr "ﺖﺸﮔﺯﺎﺑ"
 
 
+msgid ".blend Files"
+msgstr "blend. ﻞﯾﺎﻓ"
+
+
 msgctxt "Operator"
 msgid "New Folder"
 msgstr "ﺪﯾﺪﺟ ﻪﺷﻮﭘ"
-
-
-msgid ".blend Files"
-msgstr "blend. ﻞﯾﺎﻓ"
 
 
 msgid "Drivers:"
@@ -4903,10 +4903,6 @@ msgid "Out"
 msgstr "ﯽﺟﻭﺮﺧ"
 
 
-msgid "Cancel"
-msgstr "ﻑﺍﺮﺼﻧﺍ"
-
-
 msgid "Nothing selected"
 msgstr "ﻩﺪﺸﻧ ﺏﺎﺨﺘﻧﺍ ﺰﯿﭼ ﭻﯿﻫ"
 
@@ -4970,7 +4966,7 @@ msgstr "ﺪﯿﯾﺄﺗ"
 
 
 msgid "Value: {}"
-msgstr "{} :ﺭﺍﺪﻘﻣ"
+msgstr "‬{}‪ :ﺭﺍﺪﻘﻣ"
 
 
 msgid "Delete the active position"
@@ -4995,14 +4991,6 @@ msgstr "ﻪﺘﺨﯾﺭ ﻥﻭﺮﯿﺑ ﺵﺮﺘﺴﮔ"
 
 msgid "Reset Curve"
 msgstr "ﯽﻨﺤﻨﻣ ﯽﻧﺎﺸﻧﺯﺎﺑ"
-
-
-msgid "H"
-msgstr "H"
-
-
-msgid "S"
-msgstr "S"
 
 
 msgid "Zoom in"
@@ -5126,7 +5114,7 @@ msgstr "ﺩﺮﮐ ﻑﺬﺣ ﺍﺭ ﺩﺭﺍﺩ ﻢﺴﺟ ﻪﭽﻧﺁ ﺯﺍ �
 
 
 msgid "Cannot add more than %i UV maps"
-msgstr "ﺩﺮﮐ ﻪﻓﺎﺿﺍ UV ﻪﺸﻘﻧ i% ﺯﺍ ﺶﯿﺑ ﻥﺍﻮﺗ‌ﯽﻤﻧ"
+msgstr "ﺩﺮﮐ ﻪﻓﺎﺿﺍ UV ﻪﺸﻘﻧ %i‬‪ ﺯﺍ ﺶﯿﺑ ﻥﺍﻮﺗ‌ﯽﻤﻧ"
 
 
 msgid "%d %s mirrored, %d failed"
@@ -5155,10 +5143,6 @@ msgstr "؟ﺩﻮﺷ ﻑﺬﺣ ﯽﺑﺎﺨﺘﻧﺍ ﻝﺎﺑﺎﺘﻣ ﺮﺻﺎ
 
 msgid "Loading Asset Libraries"
 msgstr "ﯽﯾﺍﺭﺍﺩ ﯼﺎﻫ‌ﻪﻧﺎﺨﺑﺎﺘﮐ ﯼﺮﯿﮔﺭﺎﺑ"
-
-
-msgid "Unassigned"
-msgstr "ﻩﺪﺸﻧ ﺭﺍﺬﮔﺍﻭ"
 
 
 msgid "Delete selected objects?"
@@ -5364,8 +5348,16 @@ msgid "Uniformity"
 msgstr "ﻥﺎﺴﮑﯾ"
 
 
+msgid "S"
+msgstr "S"
+
+
 msgid "Old"
 msgstr "ﯽﻤﯾﺪﻗ"
+
+
+msgid "H"
+msgstr "H"
 
 
 msgid "Blender File View"

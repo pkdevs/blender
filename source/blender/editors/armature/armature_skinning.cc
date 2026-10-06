@@ -14,8 +14,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_string_utils.hh"
 
 #include "BKE_action.hh"
@@ -272,13 +272,8 @@ static void envelope_bone_weighting(Object *ob,
   }
 }
 
-static void add_verts_to_dgroups(ReportList *reports,
-                                 Depsgraph *depsgraph,
-                                 Scene * /*scene*/,
-                                 Object *ob,
-                                 Object *par,
-                                 int heat,
-                                 const bool mirror)
+static void add_verts_to_dgroups(
+    ReportList *reports, Scene * /*scene*/, Object *ob, Object *par, int heat, const bool mirror)
 {
   /* This functions implements the automatic computation of vertex group
    * weights, either through envelopes or using a heat equilibrium.
@@ -321,8 +316,7 @@ static void add_verts_to_dgroups(ReportList *reports,
   }
   BKE_pose_channels_hash_ensure(par->pose);
   /* count the number of skinnable bones */
-  numbones = bone_looper(
-      ob, static_cast<Bone *>(arm->bonebase.first), &looper_data, bone_skinnable_cb);
+  numbones = bone_looper(ob, arm->bonebase.first(), &looper_data, bone_skinnable_cb);
 
   if (numbones == 0) {
     return;
@@ -336,16 +330,16 @@ static void add_verts_to_dgroups(ReportList *reports,
    * and fill it with all of the skinnable bones */
   bonelist = MEM_new_array_zeroed<Bone *>(numbones, "bonelist");
   looper_data.list = bonelist;
-  bone_looper(ob, static_cast<Bone *>(arm->bonebase.first), &looper_data, bone_skinnable_cb);
+  bone_looper(ob, arm->bonebase.first(), &looper_data, bone_skinnable_cb);
 
   /* create an array of pointers to the deform groups that
    * correspond to the skinnable bones (creating them
-   * as necessary. */
+   * as necessary). */
   dgrouplist = MEM_new_array_zeroed<bDeformGroup *>(numbones, "dgrouplist");
   dgroupflip = MEM_new_array_zeroed<bDeformGroup *>(numbones, "dgroupflip");
 
   looper_data.list = dgrouplist;
-  bone_looper(ob, static_cast<Bone *>(arm->bonebase.first), &looper_data, dgroup_skinnable_cb);
+  bone_looper(ob, arm->bonebase.first(), &looper_data, dgroup_skinnable_cb);
 
   /* create an array of root and tip positions transformed into
    * global coords */
@@ -366,7 +360,7 @@ static void add_verts_to_dgroups(ReportList *reports,
         if ((par->pose) && (pchan = BKE_pose_channel_find_name(par->pose, bone->name))) {
           if (bone->segments > 1) {
             segments = bone->segments;
-            BKE_pchan_bbone_spline_setup(pchan, true, false, bbone_array);
+            BKE_pchan_bbone_spline_setup({pchan, bone}, *arm, true, false, bbone_array);
             bbone = bbone_array;
           }
         }
@@ -418,17 +412,7 @@ static void add_verts_to_dgroups(ReportList *reports,
   mesh = id_cast<Mesh *>(ob->data);
   verts.reinitialize(mesh->verts_num);
 
-  if (wpmode) {
-    /* if in weight paint mode, use final verts from evaluated mesh */
-    const Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
-    const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
-    if (mesh_eval) {
-      BKE_mesh_foreach_mapped_vert_coords_get(
-          mesh_eval, reinterpret_cast<float (*)[3]>(verts.data()), mesh->verts_num);
-      vertsfilled = 1;
-    }
-  }
-  else if (BKE_modifiers_findby_type(ob, eModifierType_Subsurf)) {
+  if (BKE_modifiers_findby_type(ob, eModifierType_Subsurf)) {
     /* Is subdivision-surface on? Lets use the verts on the limit surface then.
      * = same amount of vertices as mesh, but vertices moved to the
      * subdivision-surfaced position, like for 'optimal'. */
@@ -490,7 +474,7 @@ static void add_verts_to_dgroups(ReportList *reports,
 }
 
 void ED_object_vgroup_calc_from_armature(ReportList *reports,
-                                         Depsgraph *depsgraph,
+                                         Depsgraph * /* depsgraph */,
                                          Scene *scene,
                                          Object *ob,
                                          Object *par,
@@ -508,8 +492,7 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
     /* Traverse the bone list, trying to create empty vertex
      * groups corresponding to the bone.
      */
-    defbase_add = bone_looper(
-        ob, static_cast<Bone *>(arm->bonebase.first), nullptr, vgroup_add_unique_bone_cb);
+    defbase_add = bone_looper(ob, arm->bonebase.first(), nullptr, vgroup_add_unique_bone_cb);
 
     if (defbase_add) {
       /* It's possible there are DWeights outside the range of the current
@@ -522,7 +505,7 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
      * that are populated with the vertices for which the
      * bone is closest.
      */
-    add_verts_to_dgroups(reports, depsgraph, scene, ob, par, (mode == ARM_GROUPS_AUTO), mirror);
+    add_verts_to_dgroups(reports, scene, ob, par, (mode == ARM_GROUPS_AUTO), mirror);
   }
 }
 

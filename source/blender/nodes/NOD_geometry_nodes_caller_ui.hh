@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 namespace blender {
@@ -17,8 +21,8 @@ struct Layout;
 
 namespace nodes {
 
-namespace geo_eval_log {
-class GeoTreeLog;
+namespace eval_log {
+class NodeTreeLog;
 }
 
 void draw_geometry_nodes_modifier_ui(const bContext &C,
@@ -28,7 +32,7 @@ void draw_geometry_nodes_modifier_ui(const bContext &C,
 void draw_geometry_nodes_operator_redo_ui(const bContext &C,
                                           wmOperator &op,
                                           bNodeTree &tree,
-                                          geo_eval_log::GeoTreeLog *tree_log);
+                                          eval_log::NodeTreeLog *tree_log);
 
 }  // namespace nodes
 }  // namespace blender

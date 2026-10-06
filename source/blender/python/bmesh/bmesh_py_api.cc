@@ -36,9 +36,9 @@ namespace blender {
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_bm_new_doc,
-    ".. method:: new(*, use_operators=True)\n"
+    ".. function:: new(*, use_operators=True)\n"
     "\n"
-    "   :arg use_operators: Support calling operators in :mod:`bmesh.ops` (uses some "
+    "   :param use_operators: Support calling operators in :mod:`bmesh.ops` (uses some "
     "extra memory per vert/edge/face).\n"
     "   :type use_operators: bool\n"
     "   :return: Return a new, empty BMesh.\n"
@@ -50,8 +50,14 @@ static PyObject *bpy_bm_new(PyObject * /*self*/, PyObject *args, PyObject *kw)
 
   bool use_operators = true;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kw, "|$O&:new", const_cast<char **>(kwlist), PyC_ParseBool, &use_operators))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kw,
+                                   "|$" /* Optional, keyword only arguments. */
+                                   "O&" /* `use_operators` */
+                                   ":new",
+                                   const_cast<char **>(kwlist),
+                                   PyC_ParseBool,
+                                   &use_operators))
   {
     return nullptr;
   }
@@ -67,17 +73,16 @@ static PyObject *bpy_bm_new(PyObject * /*self*/, PyObject *args, PyObject *kw)
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_bm_from_edit_mesh_doc,
-    ".. method:: from_edit_mesh(mesh)\n"
+    ".. function:: from_edit_mesh(mesh)\n"
     "\n"
     "   Return a BMesh from this mesh, currently the mesh must already be in editmode.\n"
     "\n"
-    "   :arg mesh: The editmode mesh.\n"
+    "   :param mesh: The editmode mesh.\n"
     "   :type mesh: :class:`bpy.types.Mesh`\n"
     "   :return: the BMesh associated with this mesh.\n"
     "   :rtype: :class:`bmesh.types.BMesh`\n");
 static PyObject *bpy_bm_from_edit_mesh(PyObject * /*self*/, PyObject *value)
 {
-  BMesh *bm;
   Mesh *mesh = static_cast<Mesh *>(PyC_RNA_AsPointer(value, "Mesh"));
 
   if (mesh == nullptr) {
@@ -89,7 +94,7 @@ static PyObject *bpy_bm_from_edit_mesh(PyObject * /*self*/, PyObject *value)
     return nullptr;
   }
 
-  bm = mesh->runtime->edit_mesh->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
 
   return BPy_BMesh_CreatePyObject(bm, BPY_BMFLAG_IS_WRAPPED);
 }
@@ -99,16 +104,16 @@ void EDBM_update_extern(Mesh *mesh, const bool do_tessface, const bool is_destru
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_bm_update_edit_mesh_doc,
-    ".. method:: update_edit_mesh(mesh, *, loop_triangles=True, destructive=True)\n"
+    ".. function:: update_edit_mesh(mesh, *, loop_triangles=True, destructive=True)\n"
     "\n"
     "   Update the mesh after changes to the BMesh in editmode,\n"
     "   optionally recalculating n-gon tessellation.\n"
     "\n"
-    "   :arg mesh: The editmode mesh.\n"
+    "   :param mesh: The editmode mesh.\n"
     "   :type mesh: :class:`bpy.types.Mesh`\n"
-    "   :arg loop_triangles: Option to recalculate n-gon tessellation.\n"
+    "   :param loop_triangles: Option to recalculate n-gon tessellation.\n"
     "   :type loop_triangles: bool\n"
-    "   :arg destructive: Use when geometry has been added or removed.\n"
+    "   :param destructive: Use when geometry has been added or removed.\n"
     "   :type destructive: bool\n");
 static PyObject *bpy_bm_update_edit_mesh(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
@@ -120,7 +125,11 @@ static PyObject *bpy_bm_update_edit_mesh(PyObject * /*self*/, PyObject *args, Py
 
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kw,
-                                   "O|$O&O&:update_edit_mesh",
+                                   "O"  /* `mesh` */
+                                   "|$" /* Optional, keyword only arguments. */
+                                   "O&" /* `loop_triangles` */
+                                   "O&" /* `destructive` */
+                                   ":update_edit_mesh",
                                    const_cast<char **>(kwlist),
                                    &py_me,
                                    PyC_ParseBool,
@@ -186,7 +195,7 @@ static PyMethodDef BPy_BM_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     BPy_BM_doc,
-    "This module provides access to blenders bmesh data structures.\n"
+    "This module provides access to Blender's bmesh data structures.\n"
     "\n"
     ".. include:: include__bmesh.rst\n");
 static PyModuleDef BPy_BM_module_def = {

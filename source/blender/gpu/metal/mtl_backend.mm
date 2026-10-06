@@ -8,7 +8,7 @@
 
 #include <cstring>
 
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 #include "BKE_global.hh"
 
@@ -16,15 +16,18 @@
 #include "mtl_backend.hh"
 #include "mtl_batch.hh"
 #include "mtl_context.hh"
+#include "mtl_debug.hh"
 #include "mtl_framebuffer.hh"
 #include "mtl_immediate.hh"
 #include "mtl_index_buffer.hh"
 #include "mtl_query.hh"
+#include "mtl_ray_tracing.hh"
 #include "mtl_shader.hh"
 #include "mtl_storage_buffer.hh"
 #include "mtl_texture_pool.hh"
 #include "mtl_uniform_buffer.hh"
 #include "mtl_vertex_buffer.hh"
+#include "mtl_work_in_flight.hh"
 
 #include "gpu_capabilities_private.hh"
 #include "gpu_platform_private.hh"
@@ -35,6 +38,8 @@
 #include <sys/sysctl.h>
 
 namespace blender::gpu {
+
+static CLG_LogRef LOG = {"gpu.metal"};
 
 /* Global per-thread AutoReleasePool. */
 thread_local NSAutoreleasePool *g_autoreleasepool = nil;
@@ -54,10 +59,6 @@ void MTLBackend::delete_resources()
   MEM_delete(compiler_);
 }
 
-void MTLBackend::samplers_update() {
-  /* Placeholder -- Handled in MTLContext. */
-};
-
 Context *MTLBackend::context_alloc(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context)
 {
   return new MTLContext(ghost_window, ghost_context);
@@ -71,6 +72,11 @@ Batch *MTLBackend::batch_alloc()
 Fence *MTLBackend::fence_alloc()
 {
   return new MTLFence();
+};
+
+WorkInFlight *MTLBackend::work_in_flight_alloc(unsigned int max_in_flight)
+{
+  return new MTLWorkInFlight(max_in_flight);
 };
 
 FrameBuffer *MTLBackend::framebuffer_alloc(const char *name)
@@ -105,10 +111,12 @@ Texture *MTLBackend::texture_alloc(const char *name)
 
 TexturePool *MTLBackend::texturepool_alloc()
 {
-  if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
-    return new TexturePoolImpl();
-  }
-  return new MTLTexturePool();
+  /* #162556: Temporarily disabled MTLTexturePool as metal texture views
+   * do not support `update_sub`, while other backends do. */
+  // if (GCaps.texture_pool_workaround) {
+  return new TexturePoolImpl();
+  // }
+  // return new MTLTexturePool(); */
 }
 
 UniformBuf *MTLBackend::uniformbuf_alloc(size_t size, const char *name)
@@ -124,6 +132,16 @@ StorageBuf *MTLBackend::storagebuf_alloc(size_t size, GPUUsageType usage, const 
 VertBuf *MTLBackend::vertbuf_alloc()
 {
   return new MTLVertBuf();
+}
+
+TopLevelAS *MTLBackend::tlas_alloc(const char *name)
+{
+  return new MTLTopLevelAS(name);
+}
+
+BottomLevelAS *MTLBackend::blas_alloc(const char *name)
+{
+  return new MTLBottomLevelAS(name);
 }
 
 void MTLBackend::render_begin()
@@ -211,7 +229,7 @@ void MTLBackend::platform_init(MTLContext *ctx)
   const char *renderer = "Metal API";
   const char *version = "1.2";
   if (G.debug & G_DEBUG_GPU) {
-    printf("METAL API - DETECTED GPU: %s\n", vendor);
+    CLOG_INFO(&LOG, "METAL API - DETECTED GPU: %s", vendor);
   }
 
   /* macOS is the only supported platform, but check to ensure we are not building with Metal
@@ -245,11 +263,12 @@ void MTLBackend::platform_init(MTLContext *ctx)
     device = GPU_DEVICE_SOFTWARE;
     driver = GPU_DRIVER_SOFTWARE;
   }
-  else if (G.debug & G_DEBUG_GPU) {
-    printf("Warning: Could not find a matching GPU name. Things may not behave as expected.\n");
-    printf("Detected configuration:\n");
-    printf("Vendor: %s\n", vendor);
-    printf("Renderer: %s\n", renderer);
+  else {
+    CLOG_WARN(&LOG,
+              "Could not find a matching GPU name. Things may not behave as expected. Detected "
+              "configuration: Vendor: %s, Renderer: %s",
+              vendor,
+              renderer);
   }
 
   GPUArchitectureType architecture_type = (mtl_device.hasUnifiedMemory &&
@@ -266,6 +285,9 @@ void MTLBackend::platform_init(MTLContext *ctx)
            renderer,
            version,
            architecture_type);
+
+  GPG.devices.append(
+      {.identifier = "METAL", .index = 0, .vendor_id = 0, .device_id = 0, .name = renderer});
 
   /* UUID is not supported on Metal. */
   GPG.device_uuid.reinitialize(0);
@@ -379,22 +401,13 @@ bool MTLBackend::metal_is_supported()
 {
   /* Device compatibility information using Metal Feature-set tables.
    * See: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf */
+  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
 
-  NSOperatingSystemVersion version = [[NSProcessInfo processInfo] operatingSystemVersion];
-
-  /* Metal Viewport requires macOS Version 10.15 onward. */
-  bool supported_os_version = version.majorVersion >= 11 ||
-                              (version.majorVersion == 10 ? version.minorVersion >= 15 : false);
-  if (!supported_os_version) {
-    printf(
-        "OS Version too low to run minimum required metal version. Required at least 10.15, got "
-        "%ld.%ld \n",
-        (long)version.majorVersion,
-        (long)version.minorVersion);
+  /* #163272: MTLCreateSystemDefaultDevice() may return nil in sandboxed or non-GUI contexts. */
+  if (device == nil) {
+    CLOG_WARN(&LOG, "Could not initialize Metal: no default Metal device available.");
     return false;
   }
-
-  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
 
   /* Debug: Enable low power GPU with Environment Var: METAL_FORCE_INTEL. */
   static const char *forceIntelStr = getenv("METAL_FORCE_INTEL");
@@ -417,24 +430,23 @@ bool MTLBackend::metal_is_supported()
                                supports_barycentric_whitelist(device);
   bool supported_metal_version = [device supportsFamily:MTLGPUFamilyMac2];
 
-  bool result = supports_argument_buffers_tier2 && supports_barycentrics && supported_os_version &&
+  bool result = supports_argument_buffers_tier2 && supports_barycentrics &&
                 supported_metal_version;
 
-  if (G.debug & G_DEBUG_GPU) {
-    if (!supports_argument_buffers_tier2) {
-      printf("[Metal] Device does not support argument buffers tier 2\n");
-    }
-    if (!supports_barycentrics) {
-      printf("[Metal] Device does not support barycentrics coordinates\n");
-    }
-    if (!supported_metal_version) {
-      printf("[Metal] Device does not support metal 2.2 or higher\n");
-    }
+  if (!supports_argument_buffers_tier2) {
+    CLOG_DEBUG(&LOG, "Device does not support argument buffers tier 2");
+  }
+  if (!supports_barycentrics) {
+    CLOG_DEBUG(&LOG, "Device does not support barycentrics coordinates");
+  }
+  if (!supported_metal_version) {
+    CLOG_DEBUG(&LOG, "Device does not support metal 2.2 or higher");
+  }
 
-    if (result) {
-      printf("Device with name %s supports metal minimum requirements\n",
-             [[device name] UTF8String]);
-    }
+  if (G.debug & G_DEBUG_GPU && result) {
+    CLOG_INFO(&LOG,
+              "Device with name %s supports metal minimum requirements",
+              [[device name] UTF8String]);
   }
 
   return result;
@@ -482,6 +494,13 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   }
 #endif
 
+  /* Ray queries require macOS 13. */
+  MTLBackend::capabilities.supports_ray_tracing = [device supportsRaytracing];
+  GCaps.ray_query_support = MTLBackend::capabilities.supports_ray_tracing;
+
+  /* Vertex pipeline stores and atomics support. */
+  GCaps.vertex_pipeline_stores_and_atomics_support = true;
+
   /** Identify support for tile inputs. */
   const bool is_tile_based_arch = (GPU_platform_architecture() == GPU_ARCHITECTURE_TBDR);
   if (is_tile_based_arch) {
@@ -507,14 +526,8 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   GCaps.max_textures = (MTLBackend::capabilities.supports_family_mac1) ?
                            128 :
                            (([device supportsFamily:MTLGPUFamilyApple4]) ? 96 : 31);
-  if (GCaps.max_textures <= 32) {
-    BLI_assert(false);
-  }
-  GCaps.max_samplers = (MTLBackend::capabilities.supports_argument_buffers_tier2) ? 1024 : 16;
-
-  GCaps.max_textures_vert = GCaps.max_textures;
-  GCaps.max_textures_geom = 0; /* N/A geometry shaders not supported. */
-  GCaps.max_textures_frag = GCaps.max_textures;
+  /* Hardcoded limit due to ShaderInterface::enabled_tex_mask_. */
+  GCaps.max_textures = std::min(GCaps.max_textures, 64);
 
   GCaps.max_images = GCaps.max_textures;
 
@@ -531,8 +544,14 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   /* Feature support */
   GCaps.mem_stats_support = false;
   GCaps.hdr_viewport_support = true;
+  GCaps.multi_viewport_support = true;
 
   GCaps.geometry_shader_support = false;
+
+  /* Apple GPUs can write to an sRGB texture as a storage image directly, with the hardware doing
+   * the sRGB conversion. Use this for sRGB mipmap generation instead of a temporary non-sRGB
+   * texture. */
+  GCaps.srgb_write_direct_support = true;
 
   /* Compile shaders on performance cores but leave one free so UI is still responsive.
    * Also respect command line option to reduce number of threads. */
@@ -583,6 +602,11 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
     MTLBackend::capabilities.supports_texture_gather = false;
     MTLBackend::capabilities.supports_texture_atomics = false;
     MTLBackend::capabilities.supports_native_tile_inputs = false;
+    GCaps.texture_pool_workaround = true;
+  }
+
+  if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
+    GCaps.texture_pool_workaround = true;
   }
 }
 

@@ -14,17 +14,18 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_build_config.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_threads.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_build_config.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #if OS_WINDOWS
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
+#include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_report.hh"
 
@@ -260,7 +261,7 @@ wmJob *WM_jobs_get(wmWindowManager *wm,
   return wm_job;
 }
 
-bool WM_jobs_test(const wmWindowManager *wm, const void *owner, int job_type)
+bool WM_jobs_progress_test(const wmWindowManager *wm, const void *owner, int job_type)
 {
   /* Job can be running or about to run (suspended). */
   for (wmJob &wm_job : wm->runtime->jobs) {
@@ -297,7 +298,7 @@ static void wm_jobs_update_progress_bars(wmWindowManager *wm)
   float jobs_progress = 0;
 
   for (wmJob &wm_job : wm->runtime->jobs) {
-    if (wm_job.threads.first && !wm_job.ready) {
+    if (wm_job.threads.first() && !wm_job.ready) {
       if (wm_job.flag & WM_JOB_PROGRESS) {
         /* Accumulate global progress for running jobs. */
         jobs_progress++;
@@ -575,7 +576,7 @@ static void wm_job_free(wmWindowManager *wm, wmJob *wm_job)
   WM_job_main_thread_lock_release(wm_job);
   BLI_ticket_mutex_free(wm_job->main_thread_mutex);
 
-  BLI_assert(BLI_listbase_is_empty(&wm_job->worker_status.reports->list));
+  BLI_assert(wm_job->worker_status.reports->list.is_empty());
   BKE_reports_free(wm_job->worker_status.reports);
   MEM_delete(wm_job->worker_status.reports);
   MEM_delete(wm_job);
@@ -621,7 +622,7 @@ void WM_jobs_kill_all(wmWindowManager *wm)
 {
   wmJob *wm_job;
 
-  while ((wm_job = static_cast<wmJob *>(wm->runtime->jobs.first))) {
+  while ((wm_job = wm->runtime->jobs.first())) {
     wm_jobs_kill_job(wm, wm_job);
   }
 
@@ -697,13 +698,30 @@ void wm_jobs_timer_end(wmWindowManager *wm, wmTimer *wt)
   }
 }
 
+static void wm_job_update(wmWindowManager *wm, wmJob &job)
+{
+  if (job.update) {
+    job.update(job.run_customdata);
+  }
+
+  if (job.note) {
+    WM_event_add_notifier_ex(wm, job.win, job.note, nullptr);
+  }
+
+  if (job.flag & WM_JOB_PROGRESS) {
+    WM_event_add_notifier_ex(wm, job.win, NC_WM | ND_JOB, nullptr);
+  }
+
+  job.worker_status.do_update = false;
+}
+
 void wm_jobs_timer(wmWindowManager *wm, wmTimer *wt)
 {
   wmJob *wm_job = static_cast<wmJob *>(BLI_findptr(&wm->runtime->jobs, wt, offsetof(wmJob, wt)));
 
   if (wm_job) {
     /* Running threads. */
-    if (wm_job->threads.first) {
+    if (wm_job->threads.first()) {
       /* Let threads get temporary lock over main thread if needed. */
       wm_job_main_thread_yield(wm_job);
 
@@ -711,69 +729,8 @@ void wm_jobs_timer(wmWindowManager *wm, wmTimer *wt)
         wm_job->timer_step(wm_job->run_customdata);
       }
 
-      /* Always call note and update when ready. */
-      if (wm_job->worker_status.do_update || wm_job->ready) {
-        if (wm_job->update) {
-          wm_job->update(wm_job->run_customdata);
-        }
-        if (wm_job->note) {
-          WM_event_add_notifier_ex(wm, wm_job->win, wm_job->note, nullptr);
-        }
-
-        if (wm_job->flag & WM_JOB_PROGRESS) {
-          WM_event_add_notifier_ex(wm, wm_job->win, NC_WM | ND_JOB, nullptr);
-        }
-        wm_job->worker_status.do_update = false;
-      }
-
-      if (wm_job->ready) {
-        wm_job_end(wm, wm_job);
-
-        /* Free owned data. */
-        wm_job->run_free(wm_job->run_customdata);
-        wm_job->run_customdata = nullptr;
-        wm_job->run_free = nullptr;
-
-#if 0
-        if (wm_job->stop) {
-          printf("job ready but stopped %s\n", wm_job->name);
-        }
-        else {
-          printf("job finished %s\n", wm_job->name);
-        }
-#endif
-
-        if (G.debug & G_DEBUG_JOBS) {
-          printf("Job '%s' finished in %f seconds\n",
-                 wm_job->name,
-                 BLI_time_now_seconds() - wm_job->start_time);
-        }
-
-        wm_job->running = false;
-
-        WM_job_main_thread_lock_release(wm_job);
-        BLI_threadpool_end(&wm_job->threads);
-        WM_job_main_thread_lock_acquire(wm_job);
-
-        if (wm_job->endnote) {
-          WM_event_add_notifier_ex(wm, wm_job->win, wm_job->endnote, nullptr);
-        }
-
-        WM_event_add_notifier_ex(wm, wm_job->win, NC_WM | ND_JOB, nullptr);
-
-        /* New job added for wm_job? */
-        if (wm_job->customdata) {
-          // printf("job restarted with new data %s\n", wm_job->name);
-          WM_jobs_start(wm, wm_job);
-        }
-        else {
-          WM_event_timer_remove(wm, wm_job->win, wm_job->wt);
-          wm_job->wt = nullptr;
-
-          /* Remove wm_job. */
-          wm_job_free(wm, wm_job);
-          wm_job = nullptr;
-        }
+      if (wm_job->worker_status.do_update) {
+        wm_job_update(wm, *wm_job);
       }
     }
     else if (wm_job->suspended) {
@@ -790,24 +747,88 @@ void wm_jobs_timer(wmWindowManager *wm, wmTimer *wt)
   wm_jobs_update_progress_bars(wm);
 }
 
-bool WM_jobs_has_running(const wmWindowManager *wm)
+void wm_jobs_handle_finished(const bContext *C)
 {
-  for (const wmJob &wm_job : wm->runtime->jobs) {
-    if (wm_job.running) {
-      return true;
+  wmWindowManager *wm = CTX_wm_manager(C);
+  for (wmJob &job : wm->runtime->jobs.items_reversed_mutable()) {
+    if (!job.threads.first()) {
+      continue;
+    }
+
+    /* Let threads get temporary lock over main thread if needed. */
+    wm_job_main_thread_yield(&job);
+
+    /* Job not yet finished. */
+    if (!job.ready) {
+      continue;
+    }
+
+    wm_job_update(wm, job);
+    wm_job_end(wm, &job);
+
+    /* Free owned data. */
+    job.run_free(job.run_customdata);
+    job.run_customdata = nullptr;
+    job.run_free = nullptr;
+
+    if (G.debug & G_DEBUG_JOBS) {
+      printf(
+          "Job '%s' finished in %f seconds\n", job.name, BLI_time_now_seconds() - job.start_time);
+    }
+
+    job.running = false;
+
+    WM_job_main_thread_lock_release(&job);
+    BLI_threadpool_end(&job.threads);
+    WM_job_main_thread_lock_acquire(&job);
+
+    if (job.endnote) {
+      WM_event_add_notifier_ex(wm, job.win, job.endnote, nullptr);
+    }
+
+    WM_event_add_notifier_ex(wm, job.win, NC_WM | ND_JOB, nullptr);
+
+    /* New job added for wm_job? */
+    if (job.customdata) {
+      // printf("job restarted with new data %s\n", job.name);
+      WM_jobs_start(wm, &job);
+    }
+    else {
+      WM_event_timer_remove(wm, job.win, job.wt);
+      job.wt = nullptr;
+
+      /* Remove wm_job. */
+      wm_job_free(wm, &job);
     }
   }
 
-  return false;
+  /* Update progress bars in windows. */
+  wm_jobs_update_progress_bars(wm);
 }
 
-bool WM_jobs_has_running_type(const wmWindowManager *wm, int job_type)
+bool WM_jobs_has_running(const wmWindowManager *window_manager,
+                         const void *owner,
+                         const eWM_JobType type,
+                         const eWM_JobFlag exclude_flags)
 {
-  for (wmJob &wm_job : wm->runtime->jobs) {
-    if (wm_job.running && wm_job.job_type == job_type) {
+  for (const wmJob &job : window_manager->runtime->jobs) {
+    if (owner && job.owner != owner) {
+      continue;
+    }
+
+    if (!ELEM(type, WM_JOB_TYPE_ANY, job.job_type)) {
+      continue;
+    }
+
+    if (job.flag & exclude_flags) {
+      continue;
+    }
+
+    if (job.running || job.suspended) {
       return true;
     }
   }
+
   return false;
 }
 

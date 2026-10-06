@@ -1,45 +1,23 @@
 # SPDX-FileCopyrightText: 2026 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later */
+"""
+blender -b --factory-startup --python tests/python/sculpt_paint/face_set_test.py -- --testdir tests/files/sculpting
+"""
 
 __all__ = (
     "main",
 )
 
-import math
-import unittest
-import sys
-import pathlib
 import numpy as np
+import os
+import pathlib
+import sys
+import unittest
 
 import bpy
 
-"""
-blender -b --factory-startup --python tests/python/sculpt_paint/face_set_test.py -- --testdir tests/files/sculpting
-"""
-
 args = None
-
-
-def set_view3d_context_override(context_override):
-    """
-    Set context override to become the first viewport in the active workspace
-
-    The ``context_override`` is expected to be a copy of an actual current context
-    obtained by `context.copy()`
-    """
-
-    for area in context_override["screen"].areas:
-        if area.type != 'VIEW_3D':
-            continue
-        for space in area.spaces:
-            if space.type != 'VIEW_3D':
-                continue
-            for region in area.regions:
-                if region.type != 'WINDOW':
-                    continue
-                context_override["area"] = area
-                context_override["region"] = region
 
 
 def get_attribute_data(
@@ -157,6 +135,21 @@ class ChangeVisibilityTest(unittest.TestCase):
             attribute_size=1,
             attribute_type=np.bool)
         self.assertEqual(np.count_nonzero(hidden_faces), 0, "No faces should be hidden")
+
+
+class ChangeVisibilityLooseGeometryTest(unittest.TestCase):
+    """
+    Test that the internal mesh .hide attributes are all correctly initialized
+    """
+
+    def setUp(self):
+        bpy.ops.wm.open_mainfile(filepath=str(args.testdir / "cube-face-set-loose-geom.blend"), load_ui=False)
+        bpy.ops.ed.undo_push()
+
+    def test_hide_results_in_valid_mesh(self):
+        bpy.ops.sculpt.face_set_change_visibility(mode='HIDE_ACTIVE', active_face_set=2)
+        mesh = bpy.context.active_object.data
+        self.assertFalse(mesh.validate(verbose=True))
 
 
 def main():

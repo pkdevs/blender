@@ -15,7 +15,17 @@
 #include "bpy.hh" /* own include */
 #include "bpy_capi_utils.hh"
 
+#include "../generic/py_capi_utils.hh"
+
 #include "WM_api.hh"
+
+#ifdef _WIN32
+#  include <cstdio>
+
+#  include "BLI_winstuff.hh"
+#else
+#  include <cstdlib>
+#endif
 
 namespace blender {
 
@@ -42,6 +52,30 @@ static PyObject *bpy_atexit(PyObject * /*self*/, PyObject * /*args*/, PyObject *
 
   WM_exit_ex(C, do_python_exit, do_user_exit_actions);
 
+#if !defined(WITH_PYTHON_MODULE) && defined(_WIN32) && defined(_M_ARM64)
+  /* Force immediate exit without e.g. heap cleanup that may deadlock on Windows ARM.
+   * In general, using exit() is unsafe in multithreaded applications and not recommended
+   * to be used at all. But tests use it, and there's nothing stopping user Python
+   * code from using it either.
+   *
+   * For scripts that want to exit Blender, the quit operator `bpy.ops.wm.quit_blender()`
+   * should be used instead. See pull request #155169 for details. */
+  std::optional<int> exit_code = PyC_ExceptionSystemExitCode();
+  BLI_assert(exit_code.has_value());
+  if (exit_code.has_value()) {
+    /* Flush Python & C streams as terminating skips the flushing otherwise
+     * performed by `Py_FinalizeEx` & the CRT at exit, see: #161830. */
+    PyC_StdFilesFlush();
+    fflush(stdout);
+    fflush(stderr);
+#  ifdef _WIN32
+    TerminateProcess(GetCurrentProcess(), exit_code.value_or(0));
+#  else
+    std::_Exit(exit_code.value_or(0));
+#  endif
+  }
+#endif
+
   Py_RETURN_NONE;
 }
 
@@ -66,7 +100,8 @@ static PyMethodDef meth_bpy_atexit = {
 #  endif
 #endif
 
-static PyObject *func_bpy_atregister = nullptr; /* borrowed reference, `atexit` holds. */
+/** Owned reference, `atexit` holds its own. */
+static PyObject *func_bpy_atregister = nullptr;
 
 static void atexit_func_call(const char *func_name, PyObject *atexit_func_arg)
 {
@@ -97,7 +132,6 @@ static void atexit_func_call(const char *func_name, PyObject *atexit_func_arg)
 
 void BPY_atexit_register()
 {
-  /* atexit module owns this new function reference */
   BLI_assert(func_bpy_atregister == nullptr);
 
   func_bpy_atregister = static_cast<PyObject *>(PyCFunction_New(&meth_bpy_atexit, nullptr));
@@ -109,7 +143,7 @@ void BPY_atexit_unregister()
   BLI_assert(func_bpy_atregister != nullptr);
 
   atexit_func_call("unregister", func_bpy_atregister);
-  func_bpy_atregister = nullptr; /* don't really need to set but just in case */
+  Py_CLEAR(func_bpy_atregister);
 }
 
 }  // namespace blender

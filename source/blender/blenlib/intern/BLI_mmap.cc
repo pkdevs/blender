@@ -6,9 +6,9 @@
  * \ingroup bli
  */
 
-#include "BLI_mmap.h"
-#include "BLI_assert.h"
-#include "BLI_fileops.h"
+#include "BLI_mmap.hh"
+#include "BLI_assert.hh"
+#include "BLI_fileops.hh"
 #include "BLI_mutex.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_vector.hh"
@@ -23,7 +23,7 @@
 #  include <sys/mman.h> /* For `mmap`. */
 #  include <unistd.h>   /* For `write`. */
 #else
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include <io.h> /* For `_get_osfhandle`. */
 #endif
 
@@ -371,8 +371,13 @@ BLI_mmap_file *BLI_mmap_open(int fd)
   static std::atomic_size_t id_counter = 0;
 
   void *memory, *handle = nullptr;
-  const size_t length = BLI_lseek(fd, 0, SEEK_END);
-  if (UNLIKELY(length == size_t(-1))) {
+  /* It's important not to use `BLI_lseek` here because in case we fail to use MMAP and returning
+   * nullptr, the calling function is not closing the file using the file descriptor means next
+   * time the file is read the file-pointer is still pointing to the end. This is not an issue for
+   * blender but it throws off the virtual file-system when blender is running on the
+   * render-network. See PR !155823 for details. */
+  const size_t length = BLI_file_descriptor_size(fd);
+  if (length == size_t(-1)) [[unlikely]] {
     return nullptr;
   }
 

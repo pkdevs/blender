@@ -35,22 +35,24 @@
  * \note A pass can be recorded once and resubmitted any number of time. This can be a good
  * optimization for passes that are always the same for each frame. The only thing to be aware of
  * is the life time of external resources. If a pass contains draw-calls with non default
- * #ResourceIndex (not 0) or a reference to any non static resources
+ * #ResourceID (not 0) or a reference to any non static resources
  * (#gpu::Batch, #PushConstant ref, #ResourceBind ref) it will have to be re-recorded
  * if any of these reference becomes invalid.
  */
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_listbase_wrapper.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 
 #include "GPU_batch.hh"
 #include "GPU_debug.hh"
 #include "GPU_index_buffer.hh"
 #include "GPU_material.hh"
 #include "GPU_pass.hh"
+#include "GPU_ray_tracing.hh"
 
 #include "DRW_gpu_wrapper.hh"
 
@@ -205,7 +207,7 @@ class PassBase {
    * Clear each color attachment with different values. Span needs to be appropriately sized.
    * IMPORTANT: The source is dereference on pass submission.
    */
-  void clear_multi(Span<float4> colors);
+  void clear_multi(Span<double4> colors);
 
   /**
    * Reminders:
@@ -248,7 +250,8 @@ class PassBase {
    */
   void material_set(Manager &manager,
                     GPUMaterial *material,
-                    bool deferred_texture_loading = false);
+                    bool deferred_texture_loading = false,
+                    GPUSamplerFiltering anisotropic_filtering = GPU_SAMPLER_FILTERING_DEFAULT);
 
   /**
    * Record a draw call.
@@ -259,14 +262,14 @@ class PassBase {
             uint instance_len = -1,
             uint vertex_len = -1,
             uint vertex_first = -1,
-            ResourceIndexRange res_index = {},
+            ResourceIDRange res_id = {},
             uint custom_id = 0);
 
   /**
    * Shorter version for the common case.
    * \note Implemented in derived class. Not a virtual function to avoid indirection.
    */
-  void draw(gpu::Batch *batch, ResourceIndexRange res_index, uint custom_id = 0);
+  void draw(gpu::Batch *batch, ResourceIDRange res_id, uint custom_id = 0);
 
   /**
    * Record a procedural draw call. Geometry is **NOT** source from a gpu::Batch.
@@ -276,7 +279,7 @@ class PassBase {
                        uint instance_len,
                        uint vertex_len,
                        uint vertex_first = -1,
-                       ResourceIndexRange res_index = {},
+                       ResourceIDRange res_id = {},
                        uint custom_id = 0);
 
   /**
@@ -298,7 +301,7 @@ class PassBase {
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,
-                   ResourceIndexRange res_index = {},
+                   ResourceIDRange res_id = {},
                    uint custom_id = 0);
 
   /**
@@ -309,7 +312,7 @@ class PassBase {
                    GPUPrimType primitive_type,
                    uint primitive_len,
                    uint instance_len,
-                   ResourceIndexRange res_index = {},
+                   ResourceIDRange res_id = {},
                    uint custom_id = 0);
 
   /**
@@ -318,10 +321,10 @@ class PassBase {
    */
   void draw_indirect(gpu::Batch *batch,
                      StorageBuffer<DrawCommand, true> &indirect_buffer,
-                     ResourceIndex res_index = {0});
+                     ResourceID res_id = {0});
   void draw_procedural_indirect(GPUPrimType primitive,
                                 StorageBuffer<DrawCommand, true> &indirect_buffer,
-                                ResourceIndex res_index = {0});
+                                ResourceID res_id = {0});
 
   /**
    * Record a compute dispatch call.
@@ -383,6 +386,8 @@ class PassBase {
   void bind_ssbo(const char *name, gpu::IndexBuf **buffer);
   void bind_ssbo(int slot, gpu::IndexBuf *buffer);
   void bind_ssbo(int slot, gpu::IndexBuf **buffer);
+  void bind_tlas(const char *name, gpu::TopLevelAS *tlas);
+  void bind_tlas(int slot, gpu::TopLevelAS *tlas);
   void bind_ubo(const char *name, gpu::UniformBuf *buffer);
   void bind_ubo(const char *name, gpu::UniformBuf **buffer);
   void bind_ubo(int slot, gpu::UniformBuf *buffer);
@@ -439,6 +444,11 @@ class PassBase {
   void specialize_constant(gpu::Shader *shader, const char *name, const int *data);
   void specialize_constant(gpu::Shader *shader, const char *name, const uint *data);
   void specialize_constant(gpu::Shader *shader, const char *name, const bool *data);
+
+  void texture_copy(gpu::Texture *src, gpu::Texture *dst);
+  void texture_copy(gpu::Texture **src, gpu::Texture **dst);
+  void texture_copy(gpu::Texture **src, gpu::Texture *dst);
+  void texture_copy(gpu::Texture *src, gpu::Texture **dst);
 
   /**
    * Custom resource binding.
@@ -594,7 +604,7 @@ class PassSortable : public PassMain {
   void sort()
   {
     if (sorted_ == false) {
-      std::sort(headers_.begin(), headers_.end(), [&](Header &a, Header &b) {
+      std::ranges::sort(headers_, [&](Header &a, Header &b) {
         BLI_assert(a.type == Type::SubPass && b.type == Type::SubPass);
         float a_val = sorting_values_[a.index];
         float b_val = sorting_values_[b.index];
@@ -646,7 +656,8 @@ template<class T> inline command::Undetermined &PassBase<T>::create_command(comm
            Type::Dispatch,
            Type::DispatchIndirect,
            Type::Draw,
-           Type::DrawIndirect))
+           Type::DrawIndirect,
+           Type::TextureCopy))
   {
     is_empty_ = false;
   }
@@ -663,7 +674,7 @@ inline void PassBase<T>::clear(GPUFrameBufferBits planes,
   create_command(command::Type::Clear).clear = {uint8_t(planes), stencil, depth, color};
 }
 
-template<class T> inline void PassBase<T>::clear_multi(Span<float4> colors)
+template<class T> inline void PassBase<T>::clear_multi(Span<double4> colors)
 {
   create_command(command::Type::ClearMulti).clear_multi = {colors.data(),
                                                            static_cast<int>(colors.size())};
@@ -814,6 +825,8 @@ template<class T> void PassBase<T>::submit(command::RecordingState &state) const
       case command::Type::StencilSet:
         commands_[header.index].stencil_set.execute();
         break;
+      case command::Type::TextureCopy:
+        commands_[header.index].texture_copy.execute();
     }
   }
 
@@ -894,7 +907,7 @@ inline void PassBase<T>::draw(gpu::Batch *batch,
                               uint instance_len,
                               uint vertex_len,
                               uint vertex_first,
-                              ResourceIndexRange res_index,
+                              ResourceIDRange res_id,
                               uint custom_id)
 {
   if (instance_len == 0 || vertex_len == 0) {
@@ -908,7 +921,7 @@ inline void PassBase<T>::draw(gpu::Batch *batch,
                                  instance_len,
                                  vertex_len,
                                  vertex_first,
-                                 res_index,
+                                 res_id,
                                  custom_id,
                                  GPU_PRIM_NONE,
                                  0);
@@ -916,9 +929,9 @@ inline void PassBase<T>::draw(gpu::Batch *batch,
 }
 
 template<class T>
-inline void PassBase<T>::draw(gpu::Batch *batch, ResourceIndexRange res_index, uint custom_id)
+inline void PassBase<T>::draw(gpu::Batch *batch, ResourceIDRange res_id, uint custom_id)
 {
-  this->draw(batch, -1, -1, -1, res_index, custom_id);
+  this->draw(batch, -1, -1, -1, res_id, custom_id);
 }
 
 template<class T>
@@ -928,7 +941,7 @@ inline void PassBase<T>::draw_expand(gpu::Batch *batch,
                                      uint instance_len,
                                      uint vertex_len,
                                      uint vertex_first,
-                                     ResourceIndexRange res_index,
+                                     ResourceIDRange res_id,
                                      uint custom_id)
 {
   if (instance_len == 0 || vertex_len == 0 || primitive_len == 0) {
@@ -941,7 +954,7 @@ inline void PassBase<T>::draw_expand(gpu::Batch *batch,
                                  instance_len,
                                  vertex_len,
                                  vertex_first,
-                                 res_index,
+                                 res_id,
                                  custom_id,
                                  primitive_type,
                                  primitive_len);
@@ -953,11 +966,10 @@ inline void PassBase<T>::draw_expand(gpu::Batch *batch,
                                      GPUPrimType primitive_type,
                                      uint primitive_len,
                                      uint instance_len,
-                                     ResourceIndexRange res_index,
+                                     ResourceIDRange res_id,
                                      uint custom_id)
 {
-  this->draw_expand(
-      batch, primitive_type, primitive_len, instance_len, -1, -1, res_index, custom_id);
+  this->draw_expand(batch, primitive_type, primitive_len, instance_len, -1, -1, res_id, custom_id);
 }
 
 template<class T>
@@ -965,15 +977,11 @@ inline void PassBase<T>::draw_procedural(GPUPrimType primitive,
                                          uint instance_len,
                                          uint vertex_len,
                                          uint vertex_first,
-                                         ResourceIndexRange res_index,
+                                         ResourceIDRange res_id,
                                          uint custom_id)
 {
-  this->draw(procedural_batch_get(primitive),
-             instance_len,
-             vertex_len,
-             vertex_first,
-             res_index,
-             custom_id);
+  this->draw(
+      procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, res_id, custom_id);
 }
 
 /** \} */
@@ -985,19 +993,17 @@ inline void PassBase<T>::draw_procedural(GPUPrimType primitive,
 template<class T>
 inline void PassBase<T>::draw_indirect(gpu::Batch *batch,
                                        StorageBuffer<DrawCommand, true> &indirect_buffer,
-                                       ResourceIndex res_index)
+                                       ResourceID res_id)
 {
   BLI_assert(shader_);
-  create_command(Type::DrawIndirect).draw_indirect = {batch, &indirect_buffer, res_index};
+  create_command(Type::DrawIndirect).draw_indirect = {batch, &indirect_buffer, res_id};
 }
 
 template<class T>
 inline void PassBase<T>::draw_procedural_indirect(
-    GPUPrimType primitive,
-    StorageBuffer<DrawCommand, true> &indirect_buffer,
-    ResourceIndex res_index)
+    GPUPrimType primitive, StorageBuffer<DrawCommand, true> &indirect_buffer, ResourceID res_id)
 {
-  this->draw_indirect(procedural_batch_get(primitive), indirect_buffer, res_index);
+  this->draw_indirect(procedural_batch_get(primitive), indirect_buffer, res_id);
 }
 
 /** \} */
@@ -1136,7 +1142,8 @@ inline void PassBase<T>::subpass_transition(GPUAttachmentState depth_attachment,
 template<class T>
 inline void PassBase<T>::material_set(Manager &manager,
                                       GPUMaterial *material,
-                                      bool deferred_texture_loading)
+                                      bool deferred_texture_loading,
+                                      GPUSamplerFiltering anisotropic_filtering)
 {
   GPUPass *gpupass = GPU_material_get_pass(material);
   shader_set(GPU_pass_shader_get(gpupass));
@@ -1149,29 +1156,36 @@ inline void PassBase<T>::material_set(Manager &manager,
       const bool use_tile_mapping = tex->tiled_mapping_name[0];
       ImageUser *iuser = tex->iuser_available ? &tex->iuser : nullptr;
 
-      ImageGPUTextures gputex;
-      if (deferred_texture_loading) {
-        gputex = BKE_image_get_gpu_material_texture_try(tex->ima, iuser, use_tile_mapping);
-      }
-      else {
-        gputex = BKE_image_get_gpu_material_texture(tex->ima, iuser, use_tile_mapping);
+      /* Try to get image textures, will return null if not loaded yet. */
+      ImageGPUTextures gputex = BKE_image_acquire_gpu_material_texture(
+          tex->ima, iuser, use_tile_mapping, deferred_texture_loading);
+
+      GPUSamplerState sampler_state = tex->sampler_state;
+      /* If any anisotropic filtering is requested, reset it to the scene setting. */
+      if (sampler_state.filtering & GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE) {
+        sampler_state.disable_filtering_flag(GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK);
+        sampler_state.enable_filtering_flag(anisotropic_filtering);
       }
 
-      if (*gputex.texture == nullptr) {
-        /* Texture not yet loaded. Register a reference inside the draw pass.
-         * The texture will be acquired once it is created. */
-        bind_texture(tex->sampler_name, gputex.texture, tex->sampler_state);
-        if (gputex.tile_mapping) {
-          bind_texture(tex->tiled_mapping_name, gputex.tile_mapping, tex->sampler_state);
+      if (gputex.texture == nullptr && deferred_texture_loading) {
+        /* Texture not yet loaded, add to deferred list and bind by reference.
+         * The pointer will be filled in later by #Manager::load_deferred_textures. */
+        Manager::DeferredTexture &deferred = manager.add_texture_deferred(
+            tex->ima, iuser, use_tile_mapping);
+        bind_texture(tex->sampler_name, &deferred.texture, sampler_state);
+        if (gputex.need_tile_mapping) {
+          bind_texture(tex->tiled_mapping_name, &deferred.tile_mapping, sampler_state);
         }
       }
       else {
-        /* Texture is loaded. Acquire. */
-        manager.acquire_texture(*gputex.texture);
-        bind_texture(tex->sampler_name, *gputex.texture, tex->sampler_state);
+        /* Texture is loaded, bind by value. */
+        if (gputex.texture) {
+          bind_texture(tex->sampler_name, gputex.texture, sampler_state);
+          manager.hold_texture(gputex.texture);
+        }
         if (gputex.tile_mapping) {
-          manager.acquire_texture(*gputex.tile_mapping);
-          bind_texture(tex->tiled_mapping_name, *gputex.tile_mapping, tex->sampler_state);
+          bind_texture(tex->tiled_mapping_name, gputex.tile_mapping, sampler_state);
+          manager.hold_texture(gputex.tile_mapping);
         }
       }
     }
@@ -1248,6 +1262,12 @@ template<class T> inline void PassBase<T>::bind_ssbo(const char *name, gpu::Inde
 {
   BLI_assert(buffer != nullptr);
   this->bind_ssbo(GPU_shader_get_ssbo_binding(shader_, name), buffer);
+}
+
+template<class T> inline void PassBase<T>::bind_tlas(const char *name, gpu::TopLevelAS *tlas)
+{
+  BLI_assert(tlas != nullptr);
+  this->bind_tlas(GPU_shader_get_tlas_binding(shader_, name), tlas);
 }
 
 template<class T> inline void PassBase<T>::bind_ubo(const char *name, gpu::UniformBuf *buffer)
@@ -1342,6 +1362,12 @@ template<class T> inline void PassBase<T>::bind_ssbo(int slot, gpu::IndexBuf **b
   BLI_assert(buffer != nullptr);
   create_command(Type::ResourceBind).resource_bind = {
       slot, buffer, ResourceBind::Type::IndexAsStorageBuf};
+}
+
+template<class T> inline void PassBase<T>::bind_tlas(int slot, gpu::TopLevelAS *tlas)
+{
+  BLI_assert(tlas != nullptr);
+  create_command(Type::ResourceBind).resource_bind = {slot, tlas};
 }
 
 template<class T> inline void PassBase<T>::bind_ubo(int slot, gpu::UniformBuf *buffer)
@@ -1633,6 +1659,33 @@ inline void PassBase<T>::specialize_constant(gpu::Shader *shader,
 {
   create_command(Type::SpecializeConstant).specialize_constant = {
       shader, GPU_shader_get_constant(shader, constant_name), constant_value};
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Resource bind Implementation
+ * \{ */
+
+template<class T> inline void PassBase<T>::texture_copy(gpu::Texture *src, gpu::Texture *dst)
+{
+  create_command(Type::TextureCopy).texture_copy = {
+      .src = src, .dst = dst, .src_is_ref = false, .dst_is_ref = false};
+}
+template<class T> inline void PassBase<T>::texture_copy(gpu::Texture **src, gpu::Texture **dst)
+{
+  create_command(Type::TextureCopy).texture_copy = {
+      .src_ref = src, .dst_ref = dst, .src_is_ref = true, .dst_is_ref = true};
+}
+template<class T> inline void PassBase<T>::texture_copy(gpu::Texture **src, gpu::Texture *dst)
+{
+  create_command(Type::TextureCopy).texture_copy = {
+      .src_ref = src, .dst = dst, .src_is_ref = true, .dst_is_ref = false};
+}
+template<class T> inline void PassBase<T>::texture_copy(gpu::Texture *src, gpu::Texture **dst)
+{
+  create_command(Type::TextureCopy).texture_copy = {
+      .src = src, .dst_ref = dst, .src_is_ref = false, .dst_is_ref = true};
 }
 
 /** \} */

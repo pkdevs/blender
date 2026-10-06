@@ -15,10 +15,10 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_array_utils.h"
-#include "BLI_listbase.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_context.hh"
@@ -154,8 +154,7 @@ static void *undoarm_from_editarm(UndoArmature *uarm, bArmature *arm)
   uarm->undo_size = 0;
   for (EditBone &ebone : uarm->ebones) {
     uarm->undo_size += sizeof(EditBone);
-    uarm->undo_size += sizeof(BoneCollectionReference) *
-                       BLI_listbase_count(&ebone.bone_collections);
+    uarm->undo_size += sizeof(BoneCollectionReference) * ebone.bone_collections.count();
   }
   /* Size of the bone collections + the size of the pointers to those
    * bone collections in the bone collection array. */
@@ -173,9 +172,10 @@ static void undoarm_free_data(UndoArmature *uarm)
 
 static Object *editarm_object_from_context(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit && obedit->type == OB_ARMATURE) {
     bArmature *arm = id_cast<bArmature *>(obedit->data);
@@ -221,7 +221,7 @@ static bool armature_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_
    * outside of this list will be moved out of edit-mode when reading back undo steps. */
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(scene, view_layer);
+  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(*bmain, scene, view_layer);
 
   us->scene_ref.ptr = scene;
   us->elems = MEM_new_array_zeroed<ArmatureUndoStep_Elem>(objects.size(), __func__);
@@ -276,7 +276,7 @@ static void armature_undosys_step_decode(
 
   /* The first element is always active */
   ED_undo_object_set_active_or_warn(
-      scene, view_layer, us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
+      *bmain, scene, view_layer, us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
 
   /* Check after setting active (unless undoing into another scene). */
   BLI_assert(armature_undosys_poll(C) || (scene != CTX_data_scene(C)));
@@ -312,7 +312,7 @@ static void armature_undosys_foreach_ID_ref(UndoStep *us_p,
 
 void ED_armature_undosys_type(UndoType *ut)
 {
-  ut->name = "Edit Armature";
+  ut->identifier = "EDIT_ARMATURE";
   ut->poll = armature_undosys_poll;
   ut->step_encode = armature_undosys_step_encode;
   ut->step_decode = armature_undosys_step_decode;
@@ -320,7 +320,7 @@ void ED_armature_undosys_type(UndoType *ut)
 
   ut->step_foreach_ID_ref = armature_undosys_foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(ArmatureUndoStep);
 }

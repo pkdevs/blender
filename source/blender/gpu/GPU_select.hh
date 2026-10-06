@@ -9,7 +9,7 @@
 #pragma once
 
 #include "BLI_span.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_vector.hh"
 
 namespace blender {
@@ -57,10 +57,8 @@ void GPU_select_begin(GPUSelectBuffer *buffer, const rcti *input, GPUSelectMode 
  * Initialize and provide buffer for results.
  * Uses the new Select-Next engine if enabled.
  */
-void GPU_select_begin_next(GPUSelectBuffer *buffer,
-                           const rcti *input,
-                           GPUSelectMode mode,
-                           int oldhits);
+void GPU_select_begin_next(
+    GPUSelectBuffer *buffer, const rcti *input, int radius, GPUSelectMode mode, int oldhits);
 /**
  * Loads a new selection id and ends previous query, if any.
  * In second pass of selection it also returns
@@ -94,6 +92,11 @@ void GPU_select_cache_end();
  * Note that comparing depth as uint is fine.
  */
 const GPUSelectResult *GPU_select_buffer_near(const Span<GPUSelectResult> hit_results);
+/**
+ * Compare result of `GPU_select`: #GPUSelectResult,
+ * Needed for stable sorting, so cycling through all items near the cursor behaves predictably.
+ */
+int gpu_select_buffer_depth_id_cmp(const void *sel_a_p, const void *sel_b_p);
 uint GPU_select_buffer_remove_by_id(MutableSpan<GPUSelectResult> hit_results, uint select_id);
 /**
  * Part of the solution copied from `rect_subregion_stride_calc`.

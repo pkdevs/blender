@@ -2,15 +2,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup animrig
+ */
+
 #pragma once
 
 #include "ANIM_evaluation.hh"
-struct Action;
-struct Layer;
+
 namespace blender {
 
+struct Action;
+struct Layer;
 struct AnimationEvalContext;
 struct PointerRNA;
+
 namespace animrig::internal {
 
 /**

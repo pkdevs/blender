@@ -18,15 +18,15 @@
 #include "DNA_action_types.h"
 #include "DNA_node_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -84,8 +84,8 @@ struct MenuSearch_Item {
   StringRef drawstr;
   StringRef drawwstr_full;
   int icon = 0;
-  int state = 0;
   float weight = 0.0f;
+  int64_t state = 0; /**  Used to store #ButtonFlag values. */
 
   MenuSearch_Parent *menu_parent = nullptr;
   MenuType *mt = nullptr;
@@ -399,7 +399,7 @@ static void menu_items_from_all_operators(bContext *C, MenuSearch_Data *data)
     }
   }
 
-  std::sort(operator_items.begin(), operator_items.end(), menu_item_sort_by_drawstr_full);
+  std::ranges::sort(operator_items, menu_item_sort_by_drawstr_full);
 
   data->items.extend(operator_items);
 }
@@ -621,7 +621,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
     break
 
       if (area != nullptr) {
-        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+        SpaceLink *sl = area->spacedata.first_as<SpaceLink>();
         switch (eSpace_Type(area->spacetype)) {
           SPACE_MENU_MAP(SPACE_VIEW3D, "VIEW3D_MT_editor_menus");
           SPACE_MENU_MAP(SPACE_GRAPH, "GRAPH_MT_editor_menus");
@@ -646,6 +646,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
           SPACE_MENU_NOP(SPACE_STATUSBAR);
           SPACE_MENU_NOP(SPACE_TOPBAR);
           SPACE_MENU_NOP(SPACE_SPREADSHEET);
+          SPACE_MENU_NOP(SPACE_PROJECT);
         }
       }
       for (int i = 0; i < idname_array_len; i++) {
@@ -691,20 +692,21 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
 
       block_end(C, block);
 
-      for (const int i : block->buttons.index_range()) {
-        const std::unique_ptr<Button> &but = block->buttons[i];
+      for (const int i : block->buttons_ptrs.index_range()) {
+        const std::unique_ptr<Button> &but = block->buttons_ptrs[i];
         MenuType *mt_from_but = nullptr;
         /* Support menu titles with dynamic from initial labels
          * (used by edit-mesh context menu). */
         if (but->type == ButtonType::Label) {
 
           /* Check if the label is the title. */
-          const std::unique_ptr<Button> *but_test = block->buttons.begin() + i - 1;
-          while (but_test >= block->buttons.begin() && (*but_test)->type == ButtonType::Sepr) {
+          const std::unique_ptr<Button> *but_test = block->buttons_ptrs.begin() + i - 1;
+          while (but_test >= block->buttons_ptrs.begin() && (*but_test)->type == ButtonType::Sepr)
+          {
             but_test--;
           }
 
-          if (but_test < block->buttons.begin()) {
+          if (but_test < block->buttons_ptrs.begin()) {
             menu_display_name_map.add(mt, scope.allocator().copy_string(but->drawstr).c_str());
           }
         }
@@ -740,7 +742,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
               /* Detect empty string, fall back to menu name. */
               const char *drawstr = but->drawstr.c_str();
               int drawstr_len = drawstr_sep - but->drawstr.c_str();
-              if (UNLIKELY(drawstr_len == 0)) {
+              if (drawstr_len == 0) [[unlikely]] {
                 drawstr = CTX_IFACE_(mt_from_but->translation_context, mt_from_but->label);
                 drawstr_len = strlen(drawstr);
                 if (drawstr[0] == '\0') {
@@ -755,7 +757,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
             }
             else {
               const char *drawstr = but->drawstr.c_str();
-              if (UNLIKELY(drawstr[0] == '\0')) {
+              if (drawstr[0] == '\0') [[unlikely]] {
                 drawstr = CTX_IFACE_(mt_from_but->translation_context, mt_from_but->label);
                 if (drawstr[0] == '\0') {
                   drawstr_is_empty = true;
@@ -820,14 +822,9 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
             menu_parent->drawstr = scope.allocator().copy_string(but->drawstr);
             menu_parent->parent = current_menu.self_as_parent;
 
-            for (const std::unique_ptr<Button> &sub_but : sub_block->buttons) {
-              menu_items_from_ui_create_item_from_button(data,
-                                                         scope,
-                                                         mt,
-                                                         sub_but.get(),
-                                                         wm_context,
-                                                         menu_parent,
-                                                         ignored_operator_idnames);
+            for (Button &sub_but : sub_block->buttons()) {
+              menu_items_from_ui_create_item_from_button(
+                  data, scope, mt, &sub_but, wm_context, menu_parent, ignored_operator_idnames);
             }
           }
 
@@ -909,7 +906,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
   /* Finally sort menu items.
    *
    * NOTE: we might want to keep the in-menu order, for now sort all. */
-  std::sort(data->items.begin(), data->items.end(), menu_item_sort_by_drawstr_full);
+  std::ranges::sort(data->items, menu_item_sort_by_drawstr_full);
 
   if (include_all_areas) {
     CTX_wm_area_set(C, area_init);
@@ -1035,10 +1032,10 @@ static void menu_search_update_fn(const bContext * /*C*/,
  * a separate context menu just for the search, however this is fairly involved.
  * \{ */
 
-static bool ui_search_menu_create_context_menu(bContext *C,
-                                               void *arg,
-                                               void *active,
-                                               const wmEvent *event)
+static bool search_menu_create_context_menu(bContext *C,
+                                            void *arg,
+                                            void *active,
+                                            const wmEvent *event)
 {
   MenuSearch_Data *data = static_cast<MenuSearch_Data *>(arg);
   MenuSearch_Item *item = static_cast<MenuSearch_Item *>(active);
@@ -1079,7 +1076,7 @@ static bool ui_search_menu_create_context_menu(bContext *C,
 /** \name Tooltip
  * \{ */
 
-static ARegion *ui_search_menu_create_tooltip(
+static ARegion *search_menu_create_tooltip(
     bContext *C, ARegion *region, const rcti * /*item_rect*/, void *arg, void *active)
 {
   MenuSearch_Data *data = static_cast<MenuSearch_Data *>(arg);
@@ -1154,8 +1151,8 @@ void button_func_menu_search(Button *but, const char *single_menu_idname)
                          menu_search_exec_fn,
                          nullptr);
 
-  button_func_search_set_context_menu(but, ui_search_menu_create_context_menu);
-  button_func_search_set_tooltip(but, ui_search_menu_create_tooltip);
+  button_func_search_set_context_menu(but, search_menu_create_context_menu);
+  button_func_search_set_tooltip(but, search_menu_create_tooltip);
   button_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
 }
 

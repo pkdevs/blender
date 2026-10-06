@@ -10,12 +10,12 @@
  * Used for 3D View
  */
 
-#include "BLI_array_utils.h"
+#include "BLI_array_utils_c.hh"
 #include "BLI_bounds.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
 
 #include "DNA_armature_types.h"
 #include "DNA_lattice_types.h"
@@ -67,6 +67,10 @@
 #include "transform_snap.hh"
 
 namespace blender::ed::transform {
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Gizmo Group Defines
+ * \{ */
 
 static wmGizmoGroupType *g_GGT_xform_gizmo = nullptr;
 static wmGizmoGroupType *g_GGT_xform_gizmo_context = nullptr;
@@ -165,6 +169,8 @@ struct GizmoGroup {
 
   wmGizmo *gizmos[MAN_AXIS_LAST];
 };
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Utilities
@@ -431,7 +437,11 @@ static void gizmo_get_axis_constraint(const int axis_idx, bool r_axis[3])
   }
 }
 
-/* **************** Preparation Stuff **************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Bounds Calculation
+ * \{ */
 
 static void reset_tw_center(TransformBounds *tbounds)
 {
@@ -493,9 +503,11 @@ static void protectflag_to_drawflags(short protectflag, short *drawflags)
 }
 
 /* Similar to #transform_object_deform_pose_armature_get but does not check visibility. */
-static Object *gizmo_3d_transform_space_object_get(Scene *scene, ViewLayer *view_layer)
+static Object *gizmo_3d_transform_space_object_get(const Main &bmain,
+                                                   Scene *scene,
+                                                   ViewLayer *view_layer)
 {
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   if (ob && ob->mode & OB_MODE_WEIGHT_PAINT) {
     /* It is assumed that when the object is in Weight Paint mode, it is not in Edit mode. So we
@@ -540,15 +552,16 @@ static int gizmo_3d_foreach_selected(const bContext *C,
       };
 
   ScrArea *area = CTX_wm_area(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   /* TODO(sergey): This function is used from operator's modal() and from gizmo's refresh().
    * Is it fine to possibly evaluate dependency graph here? */
   Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   int a, totsel = 0;
 
-  Object *ob = gizmo_3d_transform_space_object_get(scene, view_layer);
+  Object *ob = gizmo_3d_transform_space_object_get(*bmain, scene, view_layer);
 
   if (Object *obedit = OBEDIT_FROM_OBACT(ob)) {
 
@@ -556,7 +569,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
   { \
     invert_m4_m4(obedit->runtime->world_to_object.ptr(), obedit->object_to_world().ptr()); \
     Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode( \
-        scene, view_layer, CTX_wm_view3d(C)); \
+        *bmain, scene, view_layer, CTX_wm_view3d(C)); \
     for (Object *ob_iter : objects) { \
       const bool use_mat_local = (ob_iter != obedit);
 
@@ -568,9 +581,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
     ob = obedit;
     if (obedit->type == OB_MESH) {
       FOREACH_EDIT_OBJECT_BEGIN (ob_iter, use_mat_local) {
-        BMEditMesh *em_iter = BKE_editmesh_from_object(ob_iter);
-        BMesh *bm = em_iter->bm;
-
+        BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob_iter);
         if (bm->totvertsel == 0) {
           continue;
         }
@@ -646,7 +657,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
               mat_local, obedit->world_to_object().ptr(), ob_iter->object_to_world().ptr());
         }
 
-        Nurb *nu = static_cast<Nurb *>(nurbs->first);
+        Nurb *nu = nurbs->first();
         while (nu) {
           if (nu->type == CU_BEZIER) {
             bezt = nu->bezt;
@@ -853,7 +864,8 @@ static int gizmo_3d_foreach_selected(const bContext *C,
   else if (ob && (ob->mode & OB_MODE_POSE)) {
     invert_m4_m4(ob->runtime->world_to_object.ptr(), ob->object_to_world().ptr());
 
-    Vector<Object *> objects = BKE_object_pose_array_get(scene, view_layer, v3d);
+    const Main *bmain = CTX_data_main(C);
+    Vector<Object *> objects = BKE_object_pose_array_get(*bmain, scene, view_layer, v3d);
 
     for (Object *ob_iter : objects) {
       const bool use_mat_local = (ob_iter != ob);
@@ -889,7 +901,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
       }
     }
   }
-  else if (ob && (ob->mode & OB_MODE_ALL_PAINT)) {
+  else if (ob && (ob->mode & OB_MODE_ALL_PAINT_MESH)) {
     if (ob->mode & OB_MODE_SCULPT) {
       totsel = 1;
       run_coord_with_matrix(
@@ -919,9 +931,10 @@ static int gizmo_3d_foreach_selected(const bContext *C,
     }
   }
   else {
+    const Main *bmain = CTX_data_main(C);
 
     /* We need the one selected object, if its not active. */
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     {
       Base *base = BKE_view_layer_active_base_get(view_layer);
       ob = base ? base->object : nullptr;
@@ -983,10 +996,11 @@ int calc_gizmo_stats(const bContext *C,
                      TransformBounds *tbounds,
                      RegionView3D *rv3d)
 {
+  const Main *bmain = CTX_data_main(C);
   ScrArea *area = CTX_wm_area(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   int totsel = 0;
 
   const int pivot_point = scene->toolsettings->transform_pivot_point;
@@ -994,7 +1008,7 @@ int calc_gizmo_stats(const bContext *C,
                                  (params->orientation_index - 1) :
                                  BKE_scene_orientation_get_index(scene, SCE_ORIENT_DEFAULT);
 
-  Object *ob = gizmo_3d_transform_space_object_get(scene, view_layer);
+  Object *ob = gizmo_3d_transform_space_object_get(*bmain, scene, view_layer);
   Object *obedit = OBEDIT_FROM_OBACT(ob);
 
   tbounds->use_matrix_space = false;
@@ -1005,7 +1019,7 @@ int calc_gizmo_stats(const bContext *C,
   if (ob) {
     float mat[3][3];
     calc_orientation_from_type_ex(
-        scene, view_layer, v3d, rv3d, ob, obedit, orient_index, pivot_point, mat);
+        *bmain, scene, view_layer, v3d, rv3d, ob, obedit, orient_index, pivot_point, mat);
     copy_m3_m3(tbounds->axis, mat);
   }
 
@@ -1018,15 +1032,16 @@ int calc_gizmo_stats(const bContext *C,
   }
 
   if (params->use_local_axis && (ob && ob->mode & (OB_MODE_EDIT | OB_MODE_POSE))) {
+    const float4x4 &ob_mat = ob->object_to_world();
     float diff_mat[3][3];
-    copy_m3_m4(diff_mat, ob->object_to_world().ptr());
+    copy_m3_m4(diff_mat, ob_mat.ptr());
     normalize_m3(diff_mat);
     invert_m3(diff_mat);
     mul_m3_m3_pre(tbounds->axis, diff_mat);
     normalize_m3(tbounds->axis);
 
     tbounds->use_matrix_space = true;
-    copy_m4_m4(tbounds->matrix_space, ob->object_to_world().ptr());
+    copy_m4_m4(tbounds->matrix_space, ob_mat.ptr());
   }
 
   const auto gizmo_3d_tbounds_calc_fn = [&](const float3 &co) { calc_tw_center(tbounds, co); };
@@ -1043,12 +1058,13 @@ int calc_gizmo_stats(const bContext *C,
     mul_v3_fl(tbounds->center, 1.0f / float(totsel)); /* Centroid! */
 
     if (obedit || (ob && (ob->mode & (OB_MODE_POSE | OB_MODE_SCULPT)))) {
+      const float4x4 &ob_mat = ob->object_to_world();
       if (ob->mode & OB_MODE_POSE) {
-        invert_m4_m4(ob->runtime->world_to_object.ptr(), ob->object_to_world().ptr());
+        invert_m4_m4(ob->runtime->world_to_object.ptr(), ob_mat.ptr());
       }
-      mul_m4_v3(ob->object_to_world().ptr(), tbounds->center);
-      mul_m4_v3(ob->object_to_world().ptr(), tbounds->min);
-      mul_m4_v3(ob->object_to_world().ptr(), tbounds->max);
+      mul_m4_v3(ob_mat.ptr(), tbounds->center);
+      mul_m4_v3(ob_mat.ptr(), tbounds->min);
+      mul_m4_v3(ob_mat.ptr(), tbounds->max);
     }
   }
 
@@ -1068,6 +1084,12 @@ int calc_gizmo_stats(const bContext *C,
 
   return totsel;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Gizmo Placement
+ * \{ */
 
 static void gizmo_get_idot(const RegionView3D *rv3d, float r_idot[3])
 {
@@ -1090,11 +1112,12 @@ static bool gizmo_3d_calc_pos(const bContext *C,
       copy_v3_v3(r_pivot_pos, scene->cursor.location);
       return true;
     case V3D_AROUND_ACTIVE: {
+      const Main *bmain = CTX_data_main(C);
       ViewLayer *view_layer = CTX_data_view_layer(C);
-      BKE_view_layer_synced_ensure(scene, view_layer);
+      BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
       Object *ob = BKE_view_layer_active_object_get(view_layer);
       if (ob != nullptr) {
-        if ((ob->mode & OB_MODE_ALL_SCULPT) && ob->runtime->sculpt_session) {
+        if ((ob->mode & OB_MODE_SCULPT) && ob->runtime->sculpt_session) {
           SculptSession *ss = ob->runtime->sculpt_session;
           copy_v3_v3(r_pivot_pos, ss->pivot_pos);
           return true;
@@ -1193,6 +1216,12 @@ static void gizmo_line_range(const int twtype, const short axis_type, float *r_s
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Message Bus Subscription
+ * \{ */
+
 void gizmo_xform_message_subscribe(wmGizmoGroup *gzgroup,
                                    wmMsgBus *mbus,
                                    Scene *scene,
@@ -1280,7 +1309,7 @@ void gizmo_xform_message_subscribe(wmGizmoGroup *gzgroup,
   }
 
   PointerRNA view3d_ptr = RNA_pointer_create_discrete(
-      &screen->id, RNA_SpaceView3D, area->spacedata.first);
+      &screen->id, RNA_SpaceView3D, area->spacedata.first_);
 
   if (type_fn == VIEW3D_GGT_xform_gizmo) {
     GizmoGroup *ggd = static_cast<GizmoGroup *>(gzgroup->customdata);
@@ -1309,6 +1338,12 @@ void gizmo_xform_message_subscribe(wmGizmoGroup *gzgroup,
   WM_msg_subscribe_rna_anon_prop(mbus, EditBone, lock, &msg_sub_value_gz_tag_refresh);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Gizmo
+ * \{ */
+
 static void gizmo_3d_dial_matrixbasis_calc(const ARegion *region,
                                            const float axis[3],
                                            const float center_global[3],
@@ -1334,12 +1369,6 @@ static void gizmo_3d_dial_matrixbasis_calc(const ARegion *region,
   r_mat_basis[2][3] = 0.0f;
   r_mat_basis[3][3] = 1.0f;
 }
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Transform Gizmo
- * \{ */
 
 /** Scale of the two-axis planes. */
 #define MAN_AXIS_SCALE_PLANE_SCALE 0.7f
@@ -1967,7 +1996,7 @@ static void WIDGETGROUP_gizmo_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   GizmoGroup *ggd = static_cast<GizmoGroup *>(gzgroup->customdata);
   Scene *scene = CTX_data_scene(C);
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
   TransformBounds tbounds;
 
@@ -2227,7 +2256,7 @@ static bool WIDGETGROUP_gizmo_poll_generic(View3D *v3d)
 static bool WIDGETGROUP_gizmo_poll_context(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   if (!WIDGETGROUP_gizmo_poll_generic(v3d)) {
     return false;
   }
@@ -2256,7 +2285,7 @@ static bool WIDGETGROUP_gizmo_poll_tool(const bContext *C, wmGizmoGroupType *gzg
   }
 
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   if (!WIDGETGROUP_gizmo_poll_generic(v3d)) {
     return false;
   }
@@ -2327,6 +2356,10 @@ void VIEW3D_GGT_xform_gizmo_context(wmGizmoGroupType *gzgt)
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Gizmo Model from Constraint & Mode
+ * \{ */
 
 static wmGizmoGroup *gizmogroup_xform_find(TransInfo *t)
 {
@@ -2488,10 +2521,18 @@ void transform_gizmo_3d_model_from_constraint_and_mode_restore(TransInfo *t)
   MAN_ITER_AXES_END;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Pivot Position
+ * \{ */
+
 bool calc_pivot_pos(const bContext *C, const short pivot_type, float r_pivot_pos[3])
 {
   Scene *scene = CTX_data_scene(C);
   return gizmo_3d_calc_pos(C, scene, nullptr, pivot_type, r_pivot_pos);
 }
+
+/** \} */
 
 }  // namespace blender::ed::transform

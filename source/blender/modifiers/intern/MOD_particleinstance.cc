@@ -8,13 +8,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_color.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rand.h"
-#include "BLI_utildefines.h"
+#include "BLI_color_types.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -350,11 +350,12 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     }
 
     /* set vertices coordinates */
+
+    vert_interp.copy(0, p_skip * totvert, totvert);
+
     for (k = 0; k < totvert; k++) {
       ParticleKey state;
       int vindex = p_skip * totvert + k;
-
-      vert_interp.copy(k, vindex, 1);
 
       if (vert_part_index != nullptr) {
         vert_part_index[vindex] = p;
@@ -480,11 +481,13 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
       (*edge)[1] += p_skip * totvert;
     }
 
+    face_interp.copy(0, p_skip * faces_num, faces_num);
+    corner_interp.copy(0, p_skip * totloop, totloop);
+
     /* create faces and loops */
     for (k = 0; k < faces_num; k++) {
       const IndexRange in_face = orig_faces[k];
 
-      face_interp.copy(k, p_skip * faces_num + k, 1);
       const int dst_face_start = in_face.start() + p_skip * totloop;
       face_offsets[p_skip * faces_num + k] = dst_face_start;
 
@@ -493,7 +496,6 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
         int dst_corner_i = dst_face_start;
         int j = in_face.size();
 
-        corner_interp.copy(in_face.start(), dst_face_start, j);
         for (; j; j--, orig_corner_i++, dst_corner_i++) {
           corner_verts[dst_corner_i] = orig_corner_verts[orig_corner_i] + (p_skip * totvert);
           corner_edges[dst_corner_i] = orig_corner_edges[orig_corner_i] + (p_skip * totedge);
@@ -541,7 +543,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   layout.use_property_split_set(true);
 
   layout.prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  if (!RNA_pointer_is_null(&particle_obj_ptr)) {
+  if (particle_obj_ptr) {
     layout.prop_search(ptr,
                        "particle_system",
                        &particle_obj_ptr,

@@ -4,10 +4,10 @@
 
 #include "testing/testing.h"
 
-#include "BLI_math_base.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_rotation_legacy.hh"
 #include "BLI_math_vector.hh"
 
@@ -259,7 +259,7 @@ static void test_sin_cos_from_fraction_symmetry(const int range)
     coords.append_unchecked(sin_cos_fl);
   }
   /* Sort, then count unique items. */
-  std::sort(coords.begin(), coords.end(), [](const float2 &a, const float2 &b) {
+  std::ranges::sort(coords, [](const float2 &a, const float2 &b) {
     float delta = b[0] - a[0];
     if (delta == 0.0f) {
       delta = b[1] - a[1];

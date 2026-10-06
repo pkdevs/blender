@@ -6,8 +6,9 @@
  * \ingroup gpu
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
+#include "GPU_texture.hh"
 #include "vk_backend.hh"
 #include "vk_common.hh"
 
@@ -141,6 +142,10 @@ std::string to_gpu_format_string(VkFormat format)
     return STRINGIFY(blender_enum);
   switch (format) {
     GPU_TEXTURE_TARGET_FORMAT_EXPAND(CASE)
+
+    case VK_FORMAT_UNDEFINED:
+      return "UNDEFINED";
+
     default:
       BLI_assert_unreachable();
       break;
@@ -603,39 +608,37 @@ VkComponentSwizzle to_vk_component_swizzle(const char swizzle)
   return VK_COMPONENT_SWIZZLE_IDENTITY;
 }
 
-template<typename T> void copy_color(T dst[4], const T *src)
-{
-  dst[0] = src[0];
-  dst[1] = src[1];
-  dst[2] = src[2];
-  dst[3] = src[3];
-}
-
-VkClearColorValue to_vk_clear_color_value(const eGPUDataFormat format, const void *data)
+VkClearColorValue to_vk_clear_color_value(const eGPUDataFormat format, const double4 data)
 {
   VkClearColorValue result = {{0.0f}};
   switch (format) {
-    /* All float-like formats (i.e. everything except literal int/uint go
+    /* All float-like formats (i.e. everything except literal int/uint) go
      * into VkClearColorValue float color fields. */
     case GPU_DATA_FLOAT:
     case GPU_DATA_HALF_FLOAT:
     case GPU_DATA_UBYTE:
     case GPU_DATA_10_11_11_REV:
     case GPU_DATA_2_10_10_10_REV: {
-      const float *float_data = static_cast<const float *>(data);
-      copy_color<float>(result.float32, float_data);
+      result.float32[0] = float(data[0]);
+      result.float32[1] = float(data[1]);
+      result.float32[2] = float(data[2]);
+      result.float32[3] = float(data[3]);
       break;
     }
 
     case GPU_DATA_INT: {
-      const int32_t *int_data = static_cast<const int32_t *>(data);
-      copy_color<int32_t>(result.int32, int_data);
+      result.int32[0] = int32_t(data[0]);
+      result.int32[1] = int32_t(data[1]);
+      result.int32[2] = int32_t(data[2]);
+      result.int32[3] = int32_t(data[3]);
       break;
     }
 
     case GPU_DATA_UINT: {
-      const uint32_t *uint_data = static_cast<const uint32_t *>(data);
-      copy_color<uint32_t>(result.uint32, uint_data);
+      result.uint32[0] = uint32_t(data[0]);
+      result.uint32[1] = uint32_t(data[1]);
+      result.uint32[2] = uint32_t(data[2]);
+      result.uint32[3] = uint32_t(data[3]);
       break;
     }
     case GPU_DATA_UINT_24_8_DEPRECATED: {
@@ -828,14 +831,39 @@ VkDescriptorType to_vk_descriptor_type(const shader::ShaderCreateInfo::Resource 
       return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     case shader::ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
       return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case shader::ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
+      return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
   }
   BLI_assert_unreachable();
   return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 }
 
+bool vk_need_extended_usage_for_storage_image(const eGPUTextureUsage usage,
+                                              const GPUTextureFormatFlag format_flag)
+{
+  /* sRGB textures are not directly writable as storage images. These need EXTENDED_USAGE to bind
+   * them as another format. Compressed formats have no storage capable format to bind as. */
+  return (usage & GPU_TEXTURE_USAGE_FORMAT_VIEW) && (format_flag & GPU_FORMAT_SRGB) &&
+         !(format_flag & GPU_FORMAT_COMPRESSED);
+}
+
+VkFormat vk_extended_usage_storage_image_format(const VkFormat format)
+{
+  /* sRGB textures are bound as UNORM 8 for storage images. */
+  switch (format) {
+    case VK_FORMAT_R8G8B8_SRGB:
+      return VK_FORMAT_R8G8B8_UNORM;
+    case VK_FORMAT_R8G8B8A8_SRGB:
+      return VK_FORMAT_R8G8B8A8_UNORM;
+    default:
+      break;
+  }
+  return format;
+}
+
 VkImageCreateFlags to_vk_image_create(const GPUTextureType texture_type,
                                       const GPUTextureFormatFlag format_flag,
-                                      const eGPUTextureUsage usage)
+                                      eGPUTextureUsage usage)
 {
   VkImageCreateFlags result = 0;
 
@@ -846,6 +874,17 @@ VkImageCreateFlags to_vk_image_create(const GPUTextureType texture_type,
   /* sRGB textures needs to be mutable as they can be used as non-sRGB frame-buffer attachments. */
   if (usage & GPU_TEXTURE_USAGE_ATTACHMENT && format_flag & GPU_FORMAT_SRGB) {
     result |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+  }
+
+  if (usage & GPU_TEXTURE_USAGE_FORMAT_VIEW) {
+    result |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+  }
+
+  /* The image's own format does not support storage usage, so it is bound as a storage image
+   * through a view with a different format. EXTENDED_USAGE lets the image keep the storage usage,
+   * by deferring the check to the view. The mutable format lets the view reinterpret the data. */
+  if (vk_need_extended_usage_for_storage_image(usage, format_flag)) {
+    result |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT;
   }
 
   return result;
@@ -889,8 +928,11 @@ VkImageUsageFlags to_vk_image_usage(const eGPUTextureUsage usage,
   }
 
   /* Disable some usages based on the given format flag to support more devices. */
-  if (format_flag & GPU_FORMAT_SRGB) {
-    /* NVIDIA devices don't create SRGB textures when it storage bit is set. */
+  if (format_flag & GPU_FORMAT_SRGB &&
+      !vk_need_extended_usage_for_storage_image(usage, format_flag))
+  {
+    /* NVIDIA devices don't create SRGB textures when the storage bit is set and
+     * EXTENDED_USAGE is not enabled. */
     result &= ~VK_IMAGE_USAGE_STORAGE_BIT;
   }
   if (format_flag & (GPU_FORMAT_DEPTH | GPU_FORMAT_STENCIL)) {

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_attribute_storage.hh"
 #include "BKE_grease_pencil.hh"
 
@@ -91,6 +95,7 @@ static AttributeAccessorFunctions get_grease_pencil_accessor_functions()
       };
       AttributeIter iter(attribute.name(), attribute.domain(), attribute.data_type(), get_fn);
       iter.is_builtin = builtin_attributes().contains(attribute.name());
+      iter.storage_type = attribute.storage_type();
       iter.accessor = &accessor;
       fn(iter);
       if (iter.is_stopped()) {
@@ -158,6 +163,20 @@ static AttributeAccessorFunctions get_grease_pencil_accessor_functions()
       }
     }
     return true;
+  };
+  fn.rename = [](void *owner,
+                 const Map<StringRef, StringRef> &name_map,
+                 bool overwrite) -> Set<StringRef> {
+    GreasePencil &grease_pencil = *static_cast<GreasePencil *>(owner);
+    return rename_attributes(
+        grease_pencil.attribute_storage.wrap(),
+        name_map,
+        overwrite,
+        builtin_attributes(),
+        array_storage_required(),
+        [&](const bke::AttrDomain domain) { return get_domain_size(owner, domain); },
+        std::nullopt,
+        {});
   };
   fn.assign_data = [](void *owner, StringRef name, const AttributeInit &initializer) {
     GreasePencil &grease_pencil = *static_cast<GreasePencil *>(owner);

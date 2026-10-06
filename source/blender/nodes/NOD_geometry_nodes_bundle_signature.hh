@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BLI_vector_set.hh"
@@ -18,7 +22,7 @@ struct BundleSignature {
     const bke::bNodeSocketType *type = nullptr;
     NodeSocketInterfaceStructureType structure_type;
 
-    BLI_STRUCT_EQUALITY_OPERATORS_3(Item, key, type, structure_type);
+    friend bool operator==(const Item &a, const Item &b) = default;
   };
 
   struct ItemKeyGetter {
@@ -60,7 +64,7 @@ struct LinkedBundleSignatures {
 
 NodeSocketInterfaceStructureType get_structure_type_for_bundle_signature(
     const bNodeSocket &socket,
-    const NodeSocketInterfaceStructureType stored_structure_type,
-    const bool allow_auto_structure_type);
+    NodeSocketInterfaceStructureType stored_structure_type,
+    bool allow_auto_structure_type);
 
 }  // namespace blender::nodes

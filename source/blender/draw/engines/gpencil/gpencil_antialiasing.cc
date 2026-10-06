@@ -6,8 +6,8 @@
  * \ingroup draw
  */
 
-#include "BLI_rand.h"
-#include "BLI_smaa_textures.h"
+#include "BLI_rand_c.hh"
+#include "BLI_smaa_textures.hh"
 
 #include "DNA_scene_types.h"
 #include "DRW_render.hh"
@@ -54,8 +54,8 @@ void Instance::antialiasing_init()
 
   {
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-    this->smaa_edge_tx.acquire(size, gpu::TextureFormat::UNORM_8_8, usage);
-    this->smaa_weight_tx.acquire(size, gpu::TextureFormat::UNORM_8_8_8_8, usage);
+    this->smaa_edge_tx.acquire_2d(size, gpu::TextureFormat::UNORM_8_8, usage);
+    this->smaa_weight_tx.acquire_2d(size, gpu::TextureFormat::UNORM_8_8_8_8, usage);
 
     this->smaa_edge_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(this->smaa_edge_tx));
     this->smaa_weight_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(this->smaa_weight_tx));
@@ -122,7 +122,7 @@ void Instance::antialiasing_draw(Manager &manager)
 
   if (this->need_grease_pencil_pass) {
     GPU_framebuffer_bind(this->gpencil_pass_fb);
-    GPU_framebuffer_clear(this->gpencil_pass_fb, GPU_COLOR_BIT, float4(0, 0, 0, 0), 0, 0);
+    GPU_framebuffer_clear(this->gpencil_pass_fb, GPU_COLOR_BIT, {0, 0, 0, 0}, 0, 0);
     manager.submit(this->smaa_resolve_ps);
   }
 

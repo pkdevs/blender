@@ -17,8 +17,8 @@
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -83,7 +83,7 @@ static int datadropper_init(bContext *C, wmOperator *op)
 
   Button *but = context_active_but_prop_get(C, &ddr->ptr, &ddr->prop, &index_dummy);
 
-  if ((ddr->ptr.data == nullptr) || (ddr->prop == nullptr) ||
+  if (!ddr->ptr || (ddr->prop == nullptr) ||
       (RNA_property_editable(&ddr->ptr, ddr->prop) == false) ||
       (RNA_property_type(ddr->prop) != PROP_POINTER))
   {
@@ -174,7 +174,7 @@ static void datadropper_id_sample_pt(
               id = ob->data;
             }
             else {
-              SNPRINTF_UTF8(ddr->name, "Incompatible, expected a %s", ddr->idcode_name);
+              SNPRINTF_UTF8(ddr->name, RPT_("Incompatible, expected a %s"), ddr->idcode_name);
             }
           }
 

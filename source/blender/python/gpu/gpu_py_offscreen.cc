@@ -14,7 +14,7 @@
 
 #include <Python.h>
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_global.hh"
 #include "BKE_lib_id.hh" /* For #BKE_id_is_in_global_main. */
@@ -59,7 +59,7 @@ static const PyC_StringEnumItems pygpu_framebuffer_color_texture_formats[] = {
 
 static int pygpu_offscreen_valid_check(BPyGPUOffScreen *py_ofs)
 {
-  if (UNLIKELY(py_ofs->ofs == nullptr)) {
+  if (py_ofs->ofs == nullptr) [[unlikely]] {
     PyErr_SetString(PyExc_ReferenceError,
 #ifdef BPYGPU_USE_GPUOBJ_FREE_METHOD
                     "GPU offscreen was freed, no further access is valid"
@@ -74,7 +74,7 @@ static int pygpu_offscreen_valid_check(BPyGPUOffScreen *py_ofs)
 
 #define BPY_GPU_OFFSCREEN_CHECK_OBJ(bpygpu) \
   { \
-    if (UNLIKELY(pygpu_offscreen_valid_check(bpygpu) == -1)) { \
+    if (pygpu_offscreen_valid_check(bpygpu) == -1) [[unlikely]] { \
       return nullptr; \
     } \
   } \
@@ -167,9 +167,13 @@ static PyMethodDef pygpu_offscreen_stack_context__tp_methods[] = {
 #  endif
 #endif
 
-static PyTypeObject PyGPUOffscreenStackContext_Type = {
+PyDoc_STRVAR(
+    /* Wrap. */
+    pygpu_offscreen_stack_context__tp_doc,
+    "Context manager for off-screen framebuffer binding.");
+PyTypeObject PyGPUOffscreenStackContext_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
-    /*tp_name*/ "GPUFrameBufferStackContext",
+    /*tp_name*/ "OffScreenStackContext",
     /*tp_basicsize*/ sizeof(OffScreenStackContext),
     /*tp_itemsize*/ 0,
     /*tp_dealloc*/ reinterpret_cast<destructor>(pygpu_offscreen_stack_context__tp_dealloc),
@@ -188,7 +192,7 @@ static PyTypeObject PyGPUOffscreenStackContext_Type = {
     /*tp_setattro*/ nullptr,
     /*tp_as_buffer*/ nullptr,
     /*tp_flags*/ Py_TPFLAGS_DEFAULT,
-    /*tp_doc*/ nullptr,
+    /*tp_doc*/ pygpu_offscreen_stack_context__tp_doc,
     /*tp_traverse*/ nullptr,
     /*tp_clear*/ nullptr,
     /*tp_richcompare*/ nullptr,
@@ -224,7 +228,10 @@ PyDoc_STRVAR(
     pygpu_offscreen_bind_doc,
     ".. method:: bind()\n"
     "\n"
-    "   Context manager to ensure balanced bind calls, even in the case of an error.\n");
+    "   Context manager to ensure balanced bind calls, even in the case of an error.\n"
+    "\n"
+    "   :return: A context manager for the off-screen binding.\n"
+    "   :rtype: :class:`gpu.types.OffScreenStackContext`\n");
 static PyObject *pygpu_offscreen_bind(BPyGPUOffScreen *self)
 {
   OffScreenStackContext *ret = PyObject_New(OffScreenStackContext,
@@ -234,7 +241,12 @@ static PyObject *pygpu_offscreen_bind(BPyGPUOffScreen *self)
   ret->is_explicitly_bound = false;
   Py_INCREF(self);
 
-  pygpu_offscreen_stack_context_enter(ret);
+  PyObject *enter_ret = pygpu_offscreen_stack_context_enter(ret);
+  if (enter_ret == nullptr) [[unlikely]] {
+    Py_DECREF(ret);
+    return nullptr;
+  }
+  Py_DECREF(enter_ret);
   ret->is_explicitly_bound = true;
 
   return reinterpret_cast<PyObject *>(ret);
@@ -247,7 +259,7 @@ PyDoc_STRVAR(
     "\n"
     "   Unbind the offscreen object.\n"
     "\n"
-    "   :arg restore: Restore the OpenGL state, can only be used when the state has been "
+    "   :param restore: Restore the OpenGL state, can only be used when the state has been "
     "saved before.\n"
     "   :type restore: bool\n");
 static PyObject *pygpu_offscreen_unbind(BPyGPUOffScreen *self, PyObject *args, PyObject *kwds)
@@ -258,7 +270,7 @@ static PyObject *pygpu_offscreen_unbind(BPyGPUOffScreen *self, PyObject *args, P
 
   static const char *_keywords[] = {"restore", nullptr};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `restore` */
       ":unbind",
       _keywords,
@@ -293,7 +305,7 @@ static PyObject *pygpu_offscreen__tp_new(PyTypeObject * /*self*/, PyObject *args
   static _PyArg_Parser _parser = {
       "i"  /* `width` */
       "i"  /* `height` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `format` */
       ":GPUOffScreen.__new__",
       _keywords,
@@ -373,21 +385,21 @@ PyDoc_STRVAR(
     "\n"
     "   Draw the 3d viewport in the offscreen object.\n"
     "\n"
-    "   :arg scene: Scene to draw.\n"
+    "   :param scene: Scene to draw.\n"
     "   :type scene: :class:`bpy.types.Scene`\n"
-    "   :arg view_layer: View layer to draw.\n"
+    "   :param view_layer: View layer to draw.\n"
     "   :type view_layer: :class:`bpy.types.ViewLayer`\n"
-    "   :arg view3d: 3D View to get the drawing settings from.\n"
+    "   :param view3d: 3D View to get the drawing settings from.\n"
     "   :type view3d: :class:`bpy.types.SpaceView3D`\n"
-    "   :arg region: Region of the 3D View (required as temporary draw target).\n"
+    "   :param region: Region of the 3D View (required as temporary draw target).\n"
     "   :type region: :class:`bpy.types.Region`\n"
-    "   :arg view_matrix: View Matrix (e.g. ``camera.matrix_world.inverted()``).\n"
+    "   :param view_matrix: View Matrix (e.g. ``camera.matrix_world.inverted()``).\n"
     "   :type view_matrix: :class:`mathutils.Matrix`\n"
-    "   :arg projection_matrix: Projection Matrix (e.g. ``camera.calc_matrix_camera(...)``).\n"
+    "   :param projection_matrix: Projection Matrix (e.g. ``camera.calc_matrix_camera(...)``).\n"
     "   :type projection_matrix: :class:`mathutils.Matrix`\n"
-    "   :arg do_color_management: Color manage the output.\n"
+    "   :param do_color_management: Color manage the output.\n"
     "   :type do_color_management: bool\n"
-    "   :arg draw_background: Draw background.\n"
+    "   :param draw_background: Draw background.\n"
     "   :type draw_background: bool\n");
 static PyObject *pygpu_offscreen_draw_view3d(BPyGPUOffScreen *self, PyObject *args, PyObject *kwds)
 {
@@ -423,7 +435,7 @@ static PyObject *pygpu_offscreen_draw_view3d(BPyGPUOffScreen *self, PyObject *ar
       "O"  /* `region` */
       "O&" /* `view_matrix` */
       "O&" /* `projection_matrix` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `do_color_management` */
       "O&" /* `draw_background` */
       ":draw_view3d",
@@ -480,6 +492,7 @@ static PyObject *pygpu_offscreen_draw_view3d(BPyGPUOffScreen *self, PyObject *ar
                            eDrawType(v3d->shading.type),
                            v3d,
                            region,
+                           nullptr,
                            GPU_offscreen_width(self->ofs),
                            GPU_offscreen_height(self->ofs),
                            reinterpret_cast<const float (*)[4]>(py_mat_view->matrix),
@@ -593,21 +606,18 @@ static PyMethodDef pygpu_offscreen__tp_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     pygpu_offscreen__tp_doc,
-    ".. class:: GPUOffScreen(width, height, *, format='RGBA8')\n"
+    ".. class:: GPUOffScreen\n"
     "\n"
     "   This object gives access to off screen buffers.\n"
     "\n"
-    "   :arg width: Horizontal dimension of the buffer.\n"
-    "   :type width: int\n"
-    "   :arg height: Vertical dimension of the buffer.\n"
-    "   :type height: int\n"
-    "   :arg format: Internal data format inside GPU memory for color attachment "
-    "texture. Possible values are:\n"
-    "      ``RGBA8``,\n"
-    "      ``RGBA16``,\n"
-    "      ``RGBA16F``,\n"
-    "      ``RGBA32F``.\n"
-    "   :type format: str\n");
+    "   .. method:: __init__(width, height, *, format='RGBA8')\n"
+    "\n"
+    "      :param width: Horizontal dimension of the buffer.\n"
+    "      :type width: int\n"
+    "      :param height: Vertical dimension of the buffer.\n"
+    "      :type height: int\n"
+    "      :param format: Internal data format inside GPU memory for color attachment texture.\n"
+    "      :type format: Literal['RGBA8', 'RGBA16', 'RGBA16F', 'RGBA32F']\n");
 PyTypeObject BPyGPUOffScreen_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "GPUOffScreen",

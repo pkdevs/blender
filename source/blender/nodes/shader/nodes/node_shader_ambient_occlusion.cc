@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -15,11 +19,11 @@ namespace nodes::node_shader_ambient_occlusion_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({1.0f, 1.0f, 1.0f, 1.0f});
-  b.add_input<decl::Float>("Distance").default_value(1.0f).min(0.0f).max(1000.0f);
-  b.add_input<decl::Vector>("Normal").min(-1.0f).max(1.0f).hide_value();
-  b.add_output<decl::Color>("Color");
-  b.add_output<decl::Float>("AO");
+  b.add_input<decl::Color>("Color"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Float>("Distance"_ustr).default_value(1.0f).min(0.0f).max(1000.0f);
+  b.add_input<decl::Vector>("Normal"_ustr).min(-1.0f).max(1.0f).hide_value();
+  b.add_output<decl::Color>("Color"_ustr);
+  b.add_output<decl::Float>("AO"_ustr);
 }
 
 static void node_shader_buts_ambient_occlusion(ui::Layout &layout,
@@ -38,7 +42,7 @@ static int node_shader_gpu_ambient_occlusion(GPUMaterial *mat,
                                              GPUNodeStack *out)
 {
   if (!in[2].link) {
-    GPU_link(mat, "world_normals_get", &in[2].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[2].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_AO);
@@ -52,7 +56,9 @@ static int node_shader_gpu_ambient_occlusion(GPUMaterial *mat,
                         in,
                         out,
                         GPU_constant(&inverted),
-                        GPU_constant(&f_samples));
+                        GPU_constant(&f_samples),
+                        GPU_kernel_globals(),
+                        GPU_shading_data());
 }
 
 static void node_shader_init_ambient_occlusion(bNodeTree * /*ntree*/, bNode *node)
@@ -87,7 +93,7 @@ void register_node_type_sh_ambient_occlusion()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeAmbientOcclusion", SH_NODE_AMBIENT_OCCLUSION);
+  sh_node_type_base(&ntype, "ShaderNodeAmbientOcclusion"_ustr, SH_NODE_AMBIENT_OCCLUSION);
   ntype.ui_name = "Ambient Occlusion";
   ntype.ui_description =
       "Compute how much the hemisphere above the shading point is occluded, for example to add "

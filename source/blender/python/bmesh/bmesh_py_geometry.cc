@@ -22,14 +22,14 @@ namespace blender {
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_bm_geometry_intersect_face_point_doc,
-    ".. method:: intersect_face_point(face, point)\n"
+    ".. function:: intersect_face_point(face, point)\n"
     "\n"
     "   Tests if the projection of a point is inside a face (using the face's normal).\n"
     "\n"
-    "   :arg face: The face to test.\n"
+    "   :param face: The face to test.\n"
     "   :type face: :class:`bmesh.types.BMFace`\n"
-    "   :arg point: The point to test.\n"
-    "   :type point: float triplet\n"
+    "   :param point: The 3D point to test.\n"
+    "   :type point: tuple[float, float, float] | Sequence[float]\n"
     "   :return: True when the projection of the point is in the face.\n"
     "   :rtype: bool\n");
 static PyObject *bpy_bm_geometry_intersect_face_point(BPy_BMFace * /*self*/, PyObject *args)
@@ -39,7 +39,14 @@ static PyObject *bpy_bm_geometry_intersect_face_point(BPy_BMFace * /*self*/, PyO
   float point[3];
   bool ret;
 
-  if (!PyArg_ParseTuple(args, "O!O:intersect_face_point", &BPy_BMFace_Type, &py_face, &py_point)) {
+  if (!PyArg_ParseTuple(args,
+                        "O!" /* `face` */
+                        "O"  /* `point` */
+                        ":intersect_face_point",
+                        &BPy_BMFace_Type,
+                        &py_face,
+                        &py_point))
+  {
     return nullptr;
   }
 

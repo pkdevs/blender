@@ -2,15 +2,20 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw_engine
+ */
+
 #include "../eevee/eevee_lut.hh" /* TODO: find somewhere to share blue noise Table. */
 
 #include "BKE_studiolight.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "GPU_batch_utils.hh"
+#include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
 #include "draw_common_c.hh"
@@ -25,15 +30,15 @@ static bool get_matcap_tx(Texture &matcap_tx, StudioLight &studio_light)
                                   STUDIOLIGHT_MATCAP_SPECULAR_GPUTEXTURE);
   ImBuf *matcap_diffuse = studio_light.matcap_diffuse.ibuf;
   ImBuf *matcap_specular = studio_light.matcap_specular.ibuf;
-  if (matcap_diffuse && matcap_diffuse->float_buffer.data) {
+  if (matcap_diffuse && matcap_diffuse->float_data()) {
     int layers = 1;
-    float *buffer = matcap_diffuse->float_buffer.data;
+    const float *buffer = matcap_diffuse->float_data();
     Vector<float> combined_buffer;
 
-    if (matcap_specular && matcap_specular->float_buffer.data) {
+    if (matcap_specular && matcap_specular->float_data()) {
       int size = matcap_diffuse->x * matcap_diffuse->y * 4;
-      combined_buffer.extend(matcap_diffuse->float_buffer.data, size);
-      combined_buffer.extend(matcap_specular->float_buffer.data, size);
+      combined_buffer.extend(matcap_diffuse->float_data(), size);
+      combined_buffer.extend(matcap_specular->float_data(), size);
       buffer = combined_buffer.begin();
       layers++;
     }
@@ -113,6 +118,7 @@ void SceneResources::init(const SceneState &scene_state, const DRWContext *ctx)
 
   world_buf.viewport_size = ctx->viewport_size_get();
   world_buf.viewport_size_inv = 1.0f / world_buf.viewport_size;
+  world_buf.xray_mode = scene_state.xray_mode;
   world_buf.xray_alpha = shading.xray_alpha;
   world_buf.background_color = scene_state.background_color;
   world_buf.object_outline_color = float4(float3(shading.object_outline_color), 1.0f);
@@ -120,7 +126,10 @@ void SceneResources::init(const SceneState &scene_state, const DRWContext *ctx)
   world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
 
   StudioLight *studio_light = nullptr;
-  if (U.edit_studio_light) {
+  if (U.edit_studio_light && shading.light == V3D_LIGHTING_STUDIO) {
+    /* Do not use this for MATCAP.
+     * matcap is also stored as StudioLight data but it needs its selected matcap texture loaded
+     * through the normal matcap path. */
     studio_light = BKE_studiolight_studio_edit_get();
   }
   else {
@@ -184,12 +193,10 @@ void SceneResources::init(const SceneState &scene_state, const DRWContext *ctx)
 
   clip_planes_buf.push_update();
 
-  missing_tx.ensure_2d(gpu::TextureFormat::UNORM_8_8_8_8,
-                       int2(1),
-                       GPU_TEXTURE_USAGE_SHADER_READ,
-                       float4(1.0f, 0.0f, 1.0f, 1.0f));
-  missing_texture.gpu.texture = &missing_tx;
-  missing_texture.name = "Missing Texture";
+  if (missing_texture.gpu.texture == nullptr) {
+    missing_texture.gpu.texture = GPU_texture_create_error(2, false);
+    missing_texture.name = "Missing Texture";
+  }
 
   dummy_texture_tx.ensure_2d(gpu::TextureFormat::UNORM_8_8_8_8,
                              int2(1),

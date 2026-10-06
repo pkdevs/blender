@@ -11,8 +11,8 @@
 #include "doublearea.h"
 #include "flip_avoiding_line_search.h"
 
-#include "BLI_assert.h"
-#include "BLI_math_base.h" /* M_PI */
+#include "BLI_assert.hh"
+#include "BLI_math_base_c.hh" /* M_PI */
 
 #include <vector>
 
@@ -188,7 +188,7 @@ static inline void grad(const Eigen::PlainObjectBase<DerivedV> &V,
  * Inputs:
  *   A  3 by 3 matrix to be decomposed
  * Outputs:
- *   R  3 by 3 rotation matrix part of decomposition (**always rotataion**)
+ *   R  3 by 3 rotation matrix part of decomposition (**always rotation**)
  *   T  3 by 3 stretch matrix part of decomposition
  *   U  3 by 3 left-singular vectors
  *   S  3 by 1 singular values
@@ -208,8 +208,8 @@ static inline void polar_svd(const Eigen::PlainObjectBase<DerivedA> &A,
                              Eigen::PlainObjectBase<DerivedV> &V)
 {
   using namespace std;
-  Eigen::JacobiSVD<DerivedA> svd;
-  svd.compute(A, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  Eigen::JacobiSVD<DerivedA, Eigen::ComputeFullU | Eigen::ComputeFullV> svd;
+  svd.compute(A);
   U = svd.matrixU();
   V = svd.matrixV();
   S = svd.singularValues();

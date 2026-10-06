@@ -15,7 +15,6 @@
 #include "BLI_math_basis_types.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_struct_equality_utils.hh"
 
 namespace blender::math {
 
@@ -78,6 +77,18 @@ template<typename T> struct QuaternionBase {
   explicit operator VecBase<T, 4>() const
   {
     return {this->w, this->x, this->y, this->z};
+  }
+
+  /** C-style pointer dereference. */
+
+  operator const T *() const
+  {
+    return reinterpret_cast<const T *>(this);
+  }
+
+  operator T *()
+  {
+    return reinterpret_cast<T *>(this);
   }
 
   /**
@@ -158,11 +169,16 @@ template<typename T> struct QuaternionBase {
     return {-a.w, -a.x, -a.y, -a.z};
   }
 
-  BLI_STRUCT_EQUALITY_OPERATORS_4(QuaternionBase, w, x, y, z)
+  friend bool operator==(const QuaternionBase &a, const QuaternionBase &b) = default;
 
-  uint64_t hash() const
+  constexpr uint64_t hash() const
   {
     return VecBase<T, 4>(*this).hash();
+  }
+
+  void hash_unique(UniqueHashBytes &hash) const
+  {
+    return VecBase<T, 4>(*this).hash_unique(hash);
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const QuaternionBase &rot)
@@ -262,8 +278,7 @@ template<typename T> struct DualQuaternionBase {
     return dq;
   }
 
-  BLI_STRUCT_EQUALITY_OPERATORS_5(
-      DualQuaternionBase, quat, trans, quat_weight, scale_weight, scale)
+  friend bool operator==(const DualQuaternionBase &a, const DualQuaternionBase &b) = default;
 
   friend std::ostream &operator<<(std::ostream &stream, const DualQuaternionBase &rot)
   {

@@ -12,7 +12,7 @@
 
 #include "BLI_map.hh"
 #include "BLI_span.hh"
-#include "BLI_time.h"
+#include "BLI_time.hh"
 #include "BLI_vector.hh"
 
 #include "GPU_capabilities.hh"
@@ -49,8 +49,10 @@ struct GPUPass {
 
   uint64_t compilation_timestamp = 0;
 
-  /** Hint that an optimized variant of this pass should be created.
-   *  Based on a complexity heuristic from pass code generation. */
+  /**
+   * Hint that an optimized variant of this pass should be created.
+   * Based on a complexity heuristic from pass code generation.
+   */
   bool should_optimize = false;
   bool is_optimization_pass = false;
 
@@ -342,11 +344,7 @@ static bool gpu_pass_validate(GPUCodegenCreateInfo *create_info)
   }
 
   /* Validate against GPU limit. */
-  if ((samplers_len > GPU_max_textures_frag()) || (samplers_len > GPU_max_textures_vert())) {
-    return false;
-  }
-
-  return (samplers_len * 2 <= GPU_max_textures());
+  return samplers_len <= GPU_max_textures();
 }
 
 GPUPass *GPU_generate_pass(GPUMaterial *material,
@@ -372,7 +370,7 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
 
   GPUCodegen codegen(material, graph, debug_name);
   codegen.generate_graphs();
-  codegen.generate_cryptomatte();
+  codegen.generate_material_props();
 
   GPUPass *pass = nullptr;
 

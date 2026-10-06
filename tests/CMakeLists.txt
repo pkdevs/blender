@@ -40,7 +40,7 @@ set(TEST_PYTHON_EXE_EXTRA_ARGS "")
 
 # Check if this a Blender managed Python installation, if so, don't add `*.pyc` files.
 if(DEFINED LIBDIR)
-  path_is_prefix(LIBDIR TEST_PYTHON_EXE _is_prefix)
+  cmake_path(IS_PREFIX LIBDIR "${TEST_PYTHON_EXE}" NORMALIZE _is_prefix)
   if(_is_prefix)
     # Keep the Python in Blender's SVN LIBDIR pristine, to avoid conflicts on updating.
     set(TEST_PYTHON_EXE_EXTRA_ARGS "-B")
@@ -54,7 +54,21 @@ endif()
 # Standard Blender arguments for running tests.
 # Specify exit code so that if a Python script error happens, the test fails.
 set(TEST_BLENDER_EXE_PARAMS
-  --background --factory-startup --debug-memory --debug-exit-on-error --python-exit-code 1
+  --background
+  --console-crash-handler
+  --factory-startup
+  --debug-memory
+  --debug-exit-on-error
+  --python-exit-code 1
+)
+
+# The `TEST_BLENDER_EXE_PARAMS` list might be edited in some cases (see e.g. `add_blender_test_allow_error`).
+# This will break in case a parameter contains a `;` that should remain literal,
+# instead of being interpreted as a list item separator by CMake.
+# So this additional variable is always added after `TEST_BLENDER_EXE_PARAMS`, always as-is.
+set(TEST_BLENDER_EXE_PARAMS_NO_THUMB
+  # Python expression to disable thumbnails creation on blend-file saving.
+  --python-expr [=[import bpy\;bpy.context.preferences.filepaths.file_preview_type='NONE']=]
 )
 
 # Python CTests

@@ -15,9 +15,9 @@
 #include "BKE_grease_pencil.hh"
 #include "BKE_library.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -290,11 +290,13 @@ static void draw_keylist_block_standard(const DrawKeylistUIData *ctx,
                                         const ActKeyColumn *ab,
                                         float ypos)
 {
+  /* The bar needs to be an odd number of pixels high for proper alignment. */
+  const int height = int(0.45f * (ctx->icon_size)) * 2 - 1;
   rctf box;
   box.xmin = ab->cfra;
   box.xmax = ab->next->cfra;
-  box.ymin = ypos - ctx->half_icon_size;
-  box.ymax = ypos + ctx->half_icon_size;
+  box.ymin = round(ypos - (float(height) * 0.5f));
+  box.ymax = box.ymin + height;
 
   ui::draw_roundbox_4fv(&box, true, 3.0f, (ab->block.sel) ? ctx->sel_color : ctx->unsel_color);
 }
@@ -687,7 +689,7 @@ void ED_channel_list_free(ChannelDrawList *channel_list)
   for (ChannelListElement &elem : channel_list->channels) {
     ED_keylist_free(elem.keylist);
   }
-  BLI_freelistN(&channel_list->channels);
+  channel_list->channels.free_no_destruct();
   MEM_delete(channel_list);
 }
 

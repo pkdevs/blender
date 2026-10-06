@@ -7,12 +7,15 @@
 #include "BKE_grease_pencil.hh"
 #include "BKE_scene.hh"
 
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "DNA_grease_pencil_types.h"
 #include "DNA_scene_types.h"
+
+#include "BKE_curves.hh"
+#include "GEO_resample_curves.hh"
 
 #include "grease_pencil_io.hh"
 #include "grease_pencil_io_intern.hh"
@@ -43,19 +46,23 @@ class PDFExporter : public GreasePencilExporter {
   bool create_document();
   bool add_page(Scene &scene);
 
-  void write_stroke_to_polyline(const float4x4 &transform,
-                                const Span<float3> positions,
-                                const bool cyclic,
-                                const ColorGeometry4f &color,
-                                const float opacity,
-                                std::optional<float> width);
+  void write_path(const float4x4 &transform,
+                  Span<float3> positions,
+                  const OffsetIndices<int> points_by_curve,
+                  const Span<int> shape,
+                  const VArray<bool> &cyclic,
+                  const VArray<int8_t> &types,
+                  const ColorGeometry4f &color,
+                  const float opacity,
+                  std::optional<float> width,
+                  std::optional<float> miter_limit_angle);
   bool write_to_file(StringRefNull filepath);
 };
 
 bool PDFExporter::export_scene(Scene &scene, StringRefNull filepath)
 {
   bool result = false;
-  Object &ob_eval = *DEG_get_evaluated(context_.depsgraph, params_.object);
+  Object *ob_eval = DEG_get_evaluated(context_.depsgraph, params_.object);
 
   if (!create_document()) {
     return false;
@@ -74,16 +81,21 @@ bool PDFExporter::export_scene(Scene &scene, StringRefNull filepath)
     case ExportParams::FrameMode::Selected: {
       case ExportParams::FrameMode::Scene:
         const bool only_selected = (params_.frame_mode == ExportParams::FrameMode::Selected);
-        if (only_selected && ob_eval.type != OB_GREASE_PENCIL) {
+        if (only_selected && (!ob_eval || ob_eval->type != OB_GREASE_PENCIL)) {
           /* For exporting "Selected Frames", the active object is required to be a grease pencil
            * object, from which we will read selected frames from. */
           break;
         }
         const int orig_frame = scene.r.cfra;
         for (int frame_number = scene.r.sfra; frame_number <= scene.r.efra; frame_number++) {
-          GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob_eval.data);
-          if (only_selected && !this->is_selected_frame(grease_pencil, frame_number)) {
-            continue;
+          if (only_selected) {
+            if (!ob_eval) {
+              break;
+            }
+            GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob_eval->data);
+            if (!this->is_selected_frame(grease_pencil, frame_number)) {
+              continue;
+            }
           }
 
           scene.r.cfra = frame_number;
@@ -132,7 +144,22 @@ void PDFExporter::export_grease_pencil_objects(const int frame_number)
         continue;
       }
 
-      export_grease_pencil_layer(*ob_eval, *layer, *drawing);
+      const bke::CurvesGeometry &curves = drawing->strokes();
+      if (curves.has_curve_with_type(
+              {CURVE_TYPE_CATMULL_ROM, CURVE_TYPE_BEZIER, CURVE_TYPE_NURBS}))
+      {
+        IndexMaskMemory memory;
+        const IndexMask non_poly_selection = curves.indices_for_curve_type(CURVE_TYPE_POLY, memory)
+                                                 .complement(curves.curves_range(), memory);
+        Drawing export_drawing;
+        export_drawing.strokes_for_write() = geometry::resample_to_evaluated(curves,
+                                                                             non_poly_selection);
+        export_drawing.tag_topology_changed();
+        export_grease_pencil_layer(*ob_eval, *layer, export_drawing);
+      }
+      else {
+        export_grease_pencil_layer(*ob_eval, *layer, *drawing);
+      }
     }
   }
 }
@@ -145,20 +172,32 @@ void PDFExporter::export_grease_pencil_layer(const Object &object,
 
   const float4x4 layer_to_world = layer.to_world_space(object);
 
-  auto write_stroke = [&](const Span<float3> positions,
-                          const Span<float3> /*positions_left*/,
-                          const Span<float3> /*positions_right*/,
-                          const bool cyclic,
-                          const int8_t /*type*/,
-                          const ColorGeometry4f &color,
-                          const float opacity,
-                          const std::optional<float> width,
-                          const bool /*round_cap*/,
-                          const bool /*is_outline*/) {
-    write_stroke_to_polyline(layer_to_world, positions, cyclic, color, opacity, width);
+  auto write_shape = [&](const Span<float3> positions,
+                         const Span<float3> /*positions_left*/,
+                         const Span<float3> /*positions_right*/,
+                         const OffsetIndices<int> points_by_curve,
+                         const Span<int> shape,
+                         const VArray<bool> &cyclic,
+                         const VArray<int8_t> &types,
+                         const ColorGeometry4f &color,
+                         const float opacity,
+                         const std::optional<float> width,
+                         const std::optional<float> miter_limit_angle,
+                         const bool /*round_cap*/,
+                         const bool /*is_outline*/) {
+    write_path(layer_to_world,
+               positions,
+               points_by_curve,
+               shape,
+               cyclic,
+               types,
+               color,
+               opacity,
+               width,
+               miter_limit_angle);
   };
 
-  foreach_stroke_in_layer(object, layer, drawing, write_stroke);
+  foreach_shape_in_layer(object, layer, drawing, write_shape);
 }
 
 bool PDFExporter::create_document()
@@ -181,7 +220,7 @@ constexpr double default_pdf_ppi = 72.0;
 bool PDFExporter::add_page(Scene &scene)
 {
   page_ = HPDF_AddPage(pdf_);
-  if (!pdf_) {
+  if (!page_) {
     std::cout << "error: cannot create PdfPage\n";
     return false;
   }
@@ -208,15 +247,34 @@ bool PDFExporter::add_page(Scene &scene)
   return true;
 }
 
-void PDFExporter::write_stroke_to_polyline(const float4x4 &transform,
-                                           const Span<float3> positions,
-                                           const bool cyclic,
-                                           const ColorGeometry4f &color,
-                                           const float opacity,
-                                           const std::optional<float> width)
+void PDFExporter::write_path(const float4x4 &transform,
+                             const Span<float3> positions,
+                             const OffsetIndices<int> points_by_curve,
+                             const Span<int> shape,
+                             const VArray<bool> &cyclic,
+                             const VArray<int8_t> & /*types*/,
+                             const ColorGeometry4f &color,
+                             const float opacity,
+                             std::optional<float> width,
+                             std::optional<float> miter_limit_angle)
 {
+  if (miter_limit_angle) {
+    if (*miter_limit_angle <= GP_STROKE_MITER_ANGLE_ROUND) {
+      HPDF_Page_SetLineJoin(page_, HPDF_ROUND_JOIN);
+    }
+    else if (*miter_limit_angle >= GP_STROKE_MITER_ANGLE_BEVEL) {
+      HPDF_Page_SetLineJoin(page_, HPDF_BEVEL_JOIN);
+    }
+    else {
+      /* Convert the Miter angle to the Miter limit. */
+      const float miter_limit = 1.0f / math::sin(*miter_limit_angle / 2.0f);
+
+      HPDF_Page_SetLineJoin(page_, HPDF_MITER_JOIN);
+      HPDF_Page_SetMiterLimit(page_, miter_limit);
+    }
+  }
+
   if (width) {
-    HPDF_Page_SetLineJoin(page_, HPDF_ROUND_JOIN);
     HPDF_Page_SetLineWidth(page_, std::max(*width, 1.0f));
   }
 
@@ -245,17 +303,22 @@ void PDFExporter::write_stroke_to_polyline(const float4x4 &transform,
     HPDF_Page_SetExtGState(page_, gstate);
   }
 
-  for (const int i : positions.index_range()) {
-    const float2 screen_co = this->project_to_screen(transform, positions[i]);
-    if (i == 0) {
-      HPDF_Page_MoveTo(page_, screen_co.x, screen_co.y);
+  for (const int curve_i : shape) {
+    const IndexRange points = points_by_curve[curve_i];
+    const Span<float3> curve_pos = positions.slice(points);
+
+    for (const int i : curve_pos.index_range()) {
+      const float2 screen_co = this->project_to_screen(transform, curve_pos[i]);
+      if (i == 0) {
+        HPDF_Page_MoveTo(page_, screen_co.x, screen_co.y);
+      }
+      else {
+        HPDF_Page_LineTo(page_, screen_co.x, screen_co.y);
+      }
     }
-    else {
-      HPDF_Page_LineTo(page_, screen_co.x, screen_co.y);
+    if (cyclic[curve_i]) {
+      HPDF_Page_ClosePath(page_);
     }
-  }
-  if (cyclic) {
-    HPDF_Page_ClosePath(page_);
   }
 
   if (width) {

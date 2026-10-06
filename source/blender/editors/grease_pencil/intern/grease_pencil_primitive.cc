@@ -381,7 +381,7 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
       const float2 offset = control_points[control_point_first] - center;
       for (const int i : new_positions.index_range()) {
         const float t = i / float(new_points_num);
-        const float a = t * math::numbers::pi * 2.0f;
+        const float a = t * std::numbers::pi * 2.0f;
         new_positions[i] = offset * float2(sinf(a), cosf(a)) + center;
       }
       return;
@@ -493,6 +493,7 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
 
   const ToolSettings *ts = ptd.vc.scene->toolsettings;
   const GP_Sculpt_Settings *gset = &ts->gp_sculpt;
+  const Paint &paint = ts->gp_paint->paint;
 
   /* Screen-space length along curve used as randomization parameter. */
   Array<float> lengths(new_points_num);
@@ -507,13 +508,14 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
 
     const float radius = ed::greasepencil::radius_from_input_sample(ptd.vc.rv3d,
                                                                     ptd.region,
+                                                                    paint,
                                                                     ptd.brush,
                                                                     pressure,
                                                                     positions_3d[point],
                                                                     ptd.placement.to_world_space(),
                                                                     ptd.settings);
     const float opacity = ed::greasepencil::opacity_from_input_sample(
-        pressure, ptd.brush, ptd.settings);
+        pressure, paint, ptd.brush, ptd.settings);
 
     if (point == 0) {
       lengths[point] = 0.0f;
@@ -597,6 +599,22 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   cyclic.finish();
   curve_attributes_to_skip.add("cyclic");
 
+  if ((ptd.settings->flag2 & GP_BRUSH_USE_STROKE) == 0) {
+    bke::SpanAttributeWriter<bool> hide_stroke = attributes.lookup_or_add_for_write_span<bool>(
+        "hide_stroke", bke::AttrDomain::Curve);
+    hide_stroke.span[target_curve_index] = true;
+    curve_attributes_to_skip.add("hide_stroke");
+    hide_stroke.finish();
+  }
+  if (ptd.use_fill) {
+    bke::SpanAttributeWriter<int> fill_id = attributes.lookup_or_add_for_write_span<int>(
+        "fill_id", bke::AttrDomain::Curve);
+    /* TODO: Use the first available ID. */
+    fill_id.span[target_curve_index] = target_curve_index + 1;
+    curve_attributes_to_skip.add("fill_id");
+    fill_id.finish();
+  }
+
   if (bke::SpanAttributeWriter<float> softness = attributes.lookup_or_add_for_write_span<float>(
           "softness", bke::AttrDomain::Curve))
   {
@@ -627,11 +645,8 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   }
 
   if (ptd.use_fill && (ptd.fill_opacity < 1.0f || attributes.contains("fill_opacity"))) {
-    if (bke::SpanAttributeWriter<float> fill_opacities =
-            attributes.lookup_or_add_for_write_span<float>(
-                "fill_opacity",
-                bke::AttrDomain::Curve,
-                bke::AttributeInitVArray(VArray<float>::from_single(1.0f, curves.curves_num()))))
+    if (bke::SpanAttributeWriter fill_opacities = attributes.lookup_or_add_for_write_span<float>(
+            "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f)))
     {
       fill_opacities.span[target_curve_index] = ptd.fill_opacity;
       fill_opacities.finish();
@@ -720,10 +735,8 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
                                                        wmOperator *op,
                                                        const wmEvent *event)
 {
-  const wmOperatorStatus retval = ed::greasepencil::grease_pencil_draw_operator_invoke(
-      C, op, false);
-  if (retval != OPERATOR_RUNNING_MODAL) {
-    return retval;
+  if (!ed::greasepencil::grease_pencil_draw_operator_begin(C, op, false)) {
+    return OPERATOR_CANCELLED;
   }
 
   /* If in tools region, wait till we get to the main (3D-space)
@@ -807,27 +820,26 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
   Material *material = BKE_grease_pencil_object_material_ensure_from_brush(
       CTX_data_main(C), vc.obact, ptd.brush);
   ptd.material_index = BKE_object_material_index_get(vc.obact, material);
-  ptd.use_fill = (material->gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0;
+  ptd.use_fill = (ptd.settings->flag2 & GP_BRUSH_USE_FILL) != 0;
 
   const bool use_vertex_color = (vc.scene->toolsettings->gp_paint->mode ==
                                  GPPAINT_FLAG_USE_VERTEXCOLOR);
   if (use_vertex_color) {
     ColorGeometry4f color_base;
-    copy_v3_v3(color_base, ptd.brush->color);
+    copy_v3_v3(color_base, BKE_brush_color_get(paint, ptd.brush));
     color_base.a = ptd.settings->vertex_factor;
-    ptd.vertex_color = ELEM(ptd.settings->vertex_mode, GPPAINT_MODE_STROKE, GPPAINT_MODE_BOTH) ?
+
+    ptd.vertex_color = (ptd.settings->flag2 & GP_BRUSH_USE_STROKE) ?
                            std::make_optional(color_base) :
                            std::nullopt;
-    ptd.fill_color = ELEM(ptd.settings->vertex_mode, GPPAINT_MODE_FILL, GPPAINT_MODE_BOTH) ?
-                         std::make_optional(color_base) :
-                         std::nullopt;
+    ptd.fill_color = ptd.use_fill ? std::make_optional(color_base) : std::nullopt;
   }
   else {
     ptd.vertex_color = std::nullopt;
     ptd.fill_color = std::nullopt;
   }
 
-  ptd.fill_opacity = ptd.brush->alpha;
+  ptd.fill_opacity = BKE_brush_alpha_get(paint, ptd.brush);
   ptd.softness = 1.0 - ptd.settings->hardness;
 
   ptd.texture_space = ed::greasepencil::calculate_texture_space(
@@ -912,7 +924,7 @@ static void grease_pencil_primitive_exit(bContext *C, wmOperator *op, const bool
 static float2 snap_diagonals(float2 p)
 {
   using namespace math;
-  return sign(p) * float2(1.0f / numbers::sqrt2) * length(p);
+  return sign(p) * float2(1.0f / std::numbers::sqrt2) * length(p);
 }
 
 /* Using Chebyshev distance instead of Euclidean. */

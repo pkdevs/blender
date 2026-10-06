@@ -73,14 +73,14 @@
 #include "DNA_modifier_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_span.hh"
 #include "BLI_task.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
@@ -98,6 +98,7 @@
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -433,24 +434,21 @@ class MultiresBaker {
   {
     const int64_t pixel = int64_t(ibuf.x) * coord.y + coord.x;
 
-    if (ibuf.float_buffer.data) {
+    if (ibuf.float_data()) {
       /* TODO(sergey): Properly tackle ibuf.channels. */
       BLI_assert(ibuf.channels == 4);
-      float *rrgbf = ibuf.float_buffer.data + pixel * 4;
+      float *rrgbf = ibuf.float_data_for_write() + pixel * 4;
       rrgbf[0] = value[0];
       rrgbf[1] = value[1];
       rrgbf[2] = value[2];
       rrgbf[3] = 1.0f;
-      ibuf.userflags |= IB_RECT_INVALID;
     }
 
-    if (ibuf.byte_buffer.data) {
-      uchar *rrgb = ibuf.byte_buffer.data + pixel * 4;
+    if (ibuf.byte_data()) {
+      uchar *rrgb = ibuf.byte_data_for_write() + pixel * 4;
       unit_float_to_uchar_clamp_v3(rrgb, value);
       rrgb[3] = 255;
     }
-
-    ibuf.userflags |= IB_DISPLAY_BUFFER_INVALID;
   }
 };
 
@@ -598,7 +596,7 @@ static void rasterize_half(const MultiresBaker &baker,
   const int y1 = y1_in >= h ? h : y1_in;
 
   for (int y = y0; y < y1; y++) {
-    /*-b(x-x0) + a(y-y0) = 0 */
+    /* `-b(x-x0) + a(y-y0) = 0`. */
     float x_l = s_stable ? (s0.x + (((s1.x - s0.x) * (y - s0.y)) / (s1.y - s0.y))) : s0.x;
     float x_r = l_stable ? (l0.x + (((l1.x - l0.x) * (y - l0.y)) / (l1.y - l0.y))) : l0.x;
     if (is_mid_right) {
@@ -1538,21 +1536,23 @@ static void bake_ibuf_normalize_displacement(ImBuf &ibuf,
 
   /* TODO(sergey): Look into multi-threading this loop. */
   const size_t ibuf_pixel_count = IMB_get_pixel_count(&ibuf);
+  uchar *byte_data = ibuf.byte_data_for_write();
+  float *float_data = ibuf.float_data_for_write();
   for (size_t i = 0; i < ibuf_pixel_count; i++) {
     if (*current_mask == FILTER_MASK_USED) {
       const float normalized_displacement = (*current_displacement + max_distance) /
                                             (max_distance * 2);
 
-      if (ibuf.float_buffer.data) {
+      if (float_data) {
         /* TODO(sergey): Properly tackle ibuf.channels. */
         BLI_assert(ibuf.channels == 4);
-        float *fp = ibuf.float_buffer.data + int64_t(i) * 4;
+        float *fp = float_data + int64_t(i) * 4;
         fp[0] = fp[1] = fp[2] = normalized_displacement;
         fp[3] = 1.0f;
       }
 
-      if (ibuf.byte_buffer.data) {
-        uchar *cp = ibuf.byte_buffer.data + int64_t(i) * 4;
+      if (byte_data) {
+        uchar *cp = byte_data + int64_t(i) * 4;
         cp[0] = cp[1] = cp[2] = unit_float_to_uchar_clamp(normalized_displacement);
         cp[3] = 255;
       }
@@ -1571,7 +1571,7 @@ static void bake_ibuf_filter(ImBuf &ibuf,
                              const float2 uv_offset)
 {
   /* NOTE: Must check before filtering. */
-  const bool is_new_alpha = (ibuf.planes != R_IMF_PLANES_RGBA) && BKE_imbuf_alpha_test(&ibuf);
+  const bool is_new_alpha = !ibuf.can_contain_alpha() && BKE_imbuf_alpha_test(&ibuf);
 
   if (margin) {
     switch (margin_type) {
@@ -1581,7 +1581,8 @@ static void bake_ibuf_filter(ImBuf &ibuf,
                                                 margin,
                                                 &bake_level_mesh,
                                                 bake_level_mesh.active_uv_map_name(),
-                                                uv_offset);
+                                                uv_offset,
+                                                false);
         break;
       }
       default:
@@ -1594,10 +1595,10 @@ static void bake_ibuf_filter(ImBuf &ibuf,
 
   /* If the bake results in new alpha then change the image setting. */
   if (is_new_alpha) {
-    ibuf.planes = R_IMF_PLANES_RGBA;
+    ibuf.color_mode = ImColorMode::RGBA;
   }
   else {
-    if (margin && ibuf.planes != R_IMF_PLANES_RGBA) {
+    if (margin && !ibuf.can_contain_alpha()) {
       /* Clear alpha added by filtering. */
       IMB_rectfill_alpha(&ibuf, 1.0f);
     }
@@ -1629,12 +1630,8 @@ static void finish_images(MultiresBakeRender &bake,
                      bake.bake_margin_type,
                      baked_ibuf.uv_offset);
 
-    ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-    BKE_image_mark_dirty(image, ibuf);
-
-    if (ibuf->float_buffer.data) {
-      ibuf->userflags |= IB_RECT_INVALID;
-    }
+    IMB_partial_update_mark_full(ibuf);
+    IMB_mark_dirty(ibuf);
 
     BKE_image_release_ibuf(image, ibuf, nullptr);
     DEG_id_tag_update(&image->id, 0);

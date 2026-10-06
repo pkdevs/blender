@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
@@ -10,6 +14,8 @@
 #include "DNA_customdata_types.h"
 
 #include "DEG_depsgraph_query.hh"
+
+#include "ED_node.hh"
 
 #include "RNA_access.hh"
 
@@ -22,7 +28,7 @@ namespace nodes::node_shader_uvmap_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("UV");
+  b.add_output<decl::Vector>("UV"_ustr);
 }
 
 static void node_shader_buts_uvmap(ui::Layout &layout, bContext *C, PointerRNA *ptr)
@@ -30,8 +36,7 @@ static void node_shader_buts_uvmap(ui::Layout &layout, bContext *C, PointerRNA *
   layout.prop(ptr, "from_instancer", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 
   if (!RNA_boolean_get(ptr, "from_instancer")) {
-    PointerRNA obptr = CTX_data_pointer_get(C, "active_object");
-    Object *object = static_cast<Object *>(obptr.data);
+    Object *object = ed::space_node::get_space_editor_object(C);
 
     if (object && object->type == OB_MESH) {
       Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
@@ -44,7 +49,7 @@ static void node_shader_buts_uvmap(ui::Layout &layout, bContext *C, PointerRNA *
       }
     }
 
-    layout.prop(ptr, "uv_map", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_GROUP_UVS);
+    layout.prop(ptr, "uv_map", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_GROUP_UVS);
   }
 }
 
@@ -94,7 +99,7 @@ void register_node_type_sh_uvmap()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeUVMap", SH_NODE_UVMAP);
+  sh_node_type_base(&ntype, "ShaderNodeUVMap"_ustr, SH_NODE_UVMAP);
   ntype.ui_name = "UV Map";
   ntype.ui_description =
       "Retrieve a UV map from the geometry, or the default fallback if none is specified";
@@ -102,7 +107,7 @@ void register_node_type_sh_uvmap()
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::node_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_uvmap;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Middle);
+  ntype.default_width = bke::NodeWidth::_160;
   ntype.initfunc = file_ns::node_shader_init_uvmap;
   bke::node_type_storage(
       ntype, "NodeShaderUVMap", node_free_standard_storage, node_copy_standard_storage);

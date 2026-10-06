@@ -12,11 +12,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_noise.h"
-#include "BLI_rand.h"
-#include "BLI_stack.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_noise_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_stack_c.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_customdata.hh"
@@ -248,7 +248,7 @@ static void alter_co(BMVert *v,
 
   copy_v3_v3(co, v->co);
 
-  if (UNLIKELY(params->use_sphere)) { /* subdivide sphere */
+  if (params->use_sphere) [[unlikely]] { /* subdivide sphere */
     normalize_v3_length(co, params->smooth);
   }
   else if (params->use_smooth) {
@@ -1297,6 +1297,18 @@ void bmo_subdivide_edges_exec(BMesh *bm, BMOperator *op)
   }
 
   BM_data_layer_free_n(bm, &bm->vdata, CD_SHAPEKEY, params.shape_info.tmpkey);
+
+  /* Vertex creases should not be interpolated when subdividing edges.
+   * See: #154814. */
+  const int cd_vert_crease_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, "crease_vert");
+  if (cd_vert_crease_offset != -1) {
+    BM_ITER_MESH (v, &viter, bm, BM_VERTS_OF_MESH) {
+      if (BMO_vert_flag_test(bm, v, ELE_INNER)) {
+        BM_ELEM_CD_SET_FLOAT(v, cd_vert_crease_offset, 0.0f);
+      }
+    }
+  }
 
   BLI_stack_free(facedata);
 

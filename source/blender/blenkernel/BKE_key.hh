@@ -51,10 +51,15 @@ void key_curve_normal_weights(float t, float data[4], KeyInterpolationType type)
 /**
  * Returns key coordinates (+ tilt) when key applied, NULL otherwise.
  *
+ * \param keys_to_process: If provided, only evaluate the keys at indices set to true.
  * \param obdata: if given, also update that geometry with the result of the shape keys evaluation.
  */
-float *BKE_key_evaluate_object_ex(
-    Object *ob, int *r_totelem, float *arr, size_t arr_size, ID *obdata);
+float *BKE_key_evaluate_object_ex(Object *ob,
+                                  int *r_totelem,
+                                  float *arr,
+                                  size_t arr_size,
+                                  std::optional<Span<bool>> keys_to_process,
+                                  ID *obdata);
 float *BKE_key_evaluate_object(Object *ob, int *r_totelem);
 
 /**
@@ -206,6 +211,7 @@ void BKE_keyblock_curve_data_set_with_mat4(Key *key,
  */
 void BKE_keyblock_data_set(Key *key, int shape_index, const void *data);
 
+void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newname);
 /** \} */
 
 }  // namespace blender

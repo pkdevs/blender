@@ -7,10 +7,10 @@
  * \brief lower level node drawing for nodes (boarders, headers etc), also node layout.
  */
 
-#include "BLI_color.hh"
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
+#include "BLI_color_types.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
 
 #include "DNA_node_types.h"
 #include "DNA_screen_types.h"
@@ -62,6 +62,7 @@
 #include "IMB_imbuf_types.hh"
 
 #include "NOD_geometry.hh"
+#include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_socket.hh"
@@ -75,7 +76,9 @@ namespace ed::space_node {
 /* Default flags for Layout::prop(). Name is kept short since this is used a lot in this file. */
 #define DEFAULT_FLAGS ui::ITEM_R_SPLIT_EMPTY_NAME
 
-/* ****************** SOCKET BUTTON DRAW FUNCTIONS ***************** */
+/* -------------------------------------------------------------------- */
+/** \name Socket Button Draw Callbacks
+ * \{ */
 
 static void node_socket_button_label(bContext * /*C*/,
                                      ui::Layout *layout,
@@ -86,7 +89,11 @@ static void node_socket_button_label(bContext * /*C*/,
   layout->label(text, ICON_NONE);
 }
 
-/* ****************** BUTTON CALLBACKS FOR ALL TREES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for All Trees
+ * \{ */
 
 static void node_buts_mix_rgb(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
@@ -162,7 +169,7 @@ static void node_buts_normal(ui::Layout &layout, bContext * /*C*/, PointerRNA *p
 {
   bNode *node = static_cast<bNode *>(ptr->data);
   /* first output stores normal */
-  bNodeSocket *output = static_cast<bNodeSocket *>(node->outputs.first);
+  bNodeSocket *output = node->outputs.first();
   PointerRNA sockptr = RNA_pointer_create_discrete(ptr->owner_id, RNA_NodeSocket, output);
 
   layout.prop(&sockptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
@@ -193,6 +200,12 @@ static void node_buts_combsep_color(ui::Layout &layout, bContext * /*C*/, Pointe
 {
   layout.prop(ptr, "mode", DEFAULT_FLAGS, "", ICON_NONE);
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Node Resize Direction
+ * \{ */
 
 NodeResizeDirection node_get_resize_direction(const SpaceNode &snode,
                                               const bNode *node,
@@ -252,7 +265,11 @@ NodeResizeDirection node_get_resize_direction(const SpaceNode &snode,
   return dir;
 }
 
-/* ****************** BUTTON CALLBACKS FOR COMMON NODES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for Common Nodes
+ * \{ */
 
 static void node_draw_buttons_group(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
@@ -278,7 +295,11 @@ static void node_common_set_butfunc(bke::bNodeType *ntype)
   }
 }
 
-/* ****************** BUTTON CALLBACKS FOR SHADER NODES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for Shader Nodes
+ * \{ */
 
 static void node_buts_image_user(ui::Layout &layout,
                                  bContext *C,
@@ -331,7 +352,12 @@ static void node_buts_image_user(ui::Layout &layout,
     ui::Layout &split = layout.split(0.33f, true);
     PointerRNA colorspace_settings_ptr = RNA_pointer_get(imaptr, "colorspace_settings");
     split.label(IFACE_("Color Space"), ICON_NONE);
-    split.prop(&colorspace_settings_ptr, "name", DEFAULT_FLAGS, "", ICON_NONE);
+    split.prop_with_menu(&colorspace_settings_ptr,
+                         "name",
+                         DEFAULT_FLAGS,
+                         "",
+                         ICON_NONE,
+                         "UI_MT_color_space_select");
 
     if (image->source != IMA_SRC_GENERATED) {
       ui::Layout &split_2 = layout.split(0.33f, true);
@@ -475,14 +501,18 @@ static void node_shader_set_butfunc(bke::bNodeType *ntype)
   }
 }
 
-/* ****************** BUTTON CALLBACKS FOR COMPOSITE NODES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for Composite Nodes
+ * \{ */
 
 static void node_buts_image_views(ui::Layout &layout,
                                   bContext * /*C*/,
                                   PointerRNA *ptr,
                                   PointerRNA *imaptr)
 {
-  if (!imaptr->data) {
+  if (!*imaptr) {
     return;
   }
 
@@ -643,7 +673,11 @@ static void node_composit_set_butfunc(bke::bNodeType *ntype)
   }
 }
 
-/* ****************** BUTTON CALLBACKS FOR TEXTURE NODES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for Texture Nodes
+ * \{ */
 
 static void node_texture_buts_bricks(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
@@ -770,6 +804,9 @@ static void node_texture_buts_proc(ui::Layout &layout, bContext * /*C*/, Pointer
       col.prop(&tex_ptr, "color_mode", DEFAULT_FLAGS, "", ICON_NONE);
       break;
     }
+    case TEX_NOISE:
+    case TEX_IMAGE:
+      break;
   }
 }
 
@@ -849,6 +886,8 @@ static void node_texture_set_butfunc(bke::bNodeType *ntype)
   }
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Init Draw Callbacks For All Tree Types
  *
@@ -896,7 +935,7 @@ static void node_socket_undefined_draw(bContext * /*C*/,
                                        PointerRNA * /*node_ptr*/,
                                        StringRef /*text*/)
 {
-  layout->label(IFACE_("Undefined Socket Type"), ICON_ERROR);
+  layout->label(IFACE_("Undefined Socket Type"), ICON_STATUS_ERROR);
 }
 
 static void node_socket_undefined_draw_color(bContext * /*C*/,
@@ -924,12 +963,16 @@ static void node_socket_undefined_interface_draw(ID * /*id*/,
                                                  bContext * /*C*/,
                                                  ui::Layout *layout)
 {
-  layout->label(IFACE_("Undefined Socket Type"), ICON_ERROR);
+  layout->label(IFACE_("Undefined Socket Type"), ICON_STATUS_ERROR);
 }
 
 /** \} */
 
 }  // namespace ed::space_node
+
+/* -------------------------------------------------------------------- */
+/** \name Init Draw Callbacks
+ * \{ */
 
 void ED_node_init_butfuncs()
 {
@@ -970,7 +1013,13 @@ void ED_init_custom_node_socket_type(bke::bNodeSocketType *stype)
   stype->draw = ed::space_node::node_socket_button_label;
 }
 
+/** \} */
+
 namespace ed::space_node {
+
+/* -------------------------------------------------------------------- */
+/** \name Standard Socket Colors
+ * \{ */
 
 static const float virtual_node_socket_color[4] = {0.2, 0.2, 0.2, 1.0};
 
@@ -999,7 +1048,8 @@ static const float std_node_socket_colors[][4] = {
     {0, 0, 0, 1},            /* SOCK_SCENE */
     {0, 0, 0, 1},            /* SOCK_TEXT_ID */
     {0, 0, 0, 1},            /* SOCK_MASK */
-    {0, 0, 0, 1},            /* SOCK_SOUND */
+    {0.39, 0.34, 0.26, 1},   /* SOCK_SOUND */
+    {0.36, 0.47, 0.61, 1.0}, /* SOCK_INT_VECTOR */
 };
 
 void std_node_socket_colors_get(int socket_type, float *r_color)
@@ -1027,19 +1077,26 @@ static void std_node_socket_color_simple_fn(const bke::bNodeSocketType *type, fl
 using SocketColorFn = void (*)(bContext *C, PointerRNA *ptr, PointerRNA *node_ptr, float *r_color);
 /* Callbacks for all built-in socket types. */
 static const SocketColorFn std_node_socket_color_funcs[] = {
-    std_node_socket_color_fn<SOCK_FLOAT>,    std_node_socket_color_fn<SOCK_VECTOR>,
-    std_node_socket_color_fn<SOCK_RGBA>,     std_node_socket_color_fn<SOCK_SHADER>,
-    std_node_socket_color_fn<SOCK_BOOLEAN>,  nullptr /* UNUSED. */,
-    std_node_socket_color_fn<SOCK_INT>,      std_node_socket_color_fn<SOCK_STRING>,
-    std_node_socket_color_fn<SOCK_OBJECT>,   std_node_socket_color_fn<SOCK_IMAGE>,
-    std_node_socket_color_fn<SOCK_GEOMETRY>, std_node_socket_color_fn<SOCK_COLLECTION>,
-    std_node_socket_color_fn<SOCK_TEXTURE>,  std_node_socket_color_fn<SOCK_MATERIAL>,
-    std_node_socket_color_fn<SOCK_ROTATION>, std_node_socket_color_fn<SOCK_MENU>,
-    std_node_socket_color_fn<SOCK_MATRIX>,   std_node_socket_color_fn<SOCK_BUNDLE>,
-    std_node_socket_color_fn<SOCK_CLOSURE>,  std_node_socket_color_fn<SOCK_FONT>,
-    std_node_socket_color_fn<SOCK_SCENE>,    std_node_socket_color_fn<SOCK_TEXT_ID>,
-    std_node_socket_color_fn<SOCK_MASK>,     std_node_socket_color_fn<SOCK_SOUND>,
+    std_node_socket_color_fn<SOCK_FLOAT>,      std_node_socket_color_fn<SOCK_VECTOR>,
+    std_node_socket_color_fn<SOCK_RGBA>,       std_node_socket_color_fn<SOCK_SHADER>,
+    std_node_socket_color_fn<SOCK_BOOLEAN>,    nullptr /* UNUSED. */,
+    std_node_socket_color_fn<SOCK_INT>,        std_node_socket_color_fn<SOCK_STRING>,
+    std_node_socket_color_fn<SOCK_OBJECT>,     std_node_socket_color_fn<SOCK_IMAGE>,
+    std_node_socket_color_fn<SOCK_GEOMETRY>,   std_node_socket_color_fn<SOCK_COLLECTION>,
+    std_node_socket_color_fn<SOCK_TEXTURE>,    std_node_socket_color_fn<SOCK_MATERIAL>,
+    std_node_socket_color_fn<SOCK_ROTATION>,   std_node_socket_color_fn<SOCK_MENU>,
+    std_node_socket_color_fn<SOCK_MATRIX>,     std_node_socket_color_fn<SOCK_BUNDLE>,
+    std_node_socket_color_fn<SOCK_CLOSURE>,    std_node_socket_color_fn<SOCK_FONT>,
+    std_node_socket_color_fn<SOCK_SCENE>,      std_node_socket_color_fn<SOCK_TEXT_ID>,
+    std_node_socket_color_fn<SOCK_MASK>,       std_node_socket_color_fn<SOCK_SOUND>,
+    std_node_socket_color_fn<SOCK_INT_VECTOR>,
 };
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Standard Socket Drawing
+ * \{ */
 
 static bool socket_needs_attribute_search(bNode &node, bNodeSocket &socket)
 {
@@ -1086,6 +1143,17 @@ static bool socket_needs_volume_grid_search(const bNode &node, const bNodeSocket
   return socket.runtime->declaration->is_volume_grid_name;
 }
 
+static bool socket_needs_bundle_type_search(const bNode &node, const bNodeSocket &socket)
+{
+  if (node.type_legacy == NODE_COMBINE_BUNDLE) {
+    return socket.name == nodes::Bundle::type_item_name.ustr();
+  }
+  if (node.is_type("NodeGetNestedBundlePaths"_ustr)) {
+    return socket.name == StringRef("Bundle Type");
+  }
+  return false;
+}
+
 static void draw_gizmo_pin_icon(ui::Layout *layout, PointerRNA *socket_ptr)
 {
   layout->prop(socket_ptr, "pin_gizmo", UI_ITEM_NONE, "", ICON_GIZMO);
@@ -1101,7 +1169,8 @@ static void draw_node_socket_name_editable(ui::Layout *layout,
       layout->emboss_set(ui::EmbossType::None);
       layout->prop((&sock->runtime->declaration->socket_name_rna->owner),
                    sock->runtime->declaration->socket_name_rna->property_name,
-                   UI_ITEM_NONE,
+                   ui::ITEM_R_TEXT_BUT_LABEL_STYLE |
+                       (sock->in_out == SOCK_OUT ? ui::ITEM_R_TEXT_RIGHT : UI_ITEM_NONE),
                    "",
                    ICON_NONE);
       return;
@@ -1192,7 +1261,9 @@ static void std_node_socket_draw(
           ui::Layout *column = &layout->column(false);
           {
             ui::Layout *row = &column->row(true);
-            draw_node_socket_name_editable(row, sock, label_or_empty);
+            if (!optional_label) {
+              draw_node_socket_name_editable(row, sock, label_or_empty);
+            }
             if (has_gizmo) {
               draw_gizmo_pin_icon(row, ptr);
               gizmo_handled = true;
@@ -1202,11 +1273,28 @@ static void std_node_socket_draw(
         }
       }
       break;
+    case SOCK_INT_VECTOR:
+      if (socket_decl && socket_decl->compact) {
+        template_component_menu(layout, ptr, "default_value", label_or_empty);
+      }
+      else {
+        ui::Layout *column = &layout->column(false);
+        {
+          ui::Layout *row = &column->row(true);
+          if (!optional_label) {
+            draw_node_socket_name_editable(row, sock, label_or_empty);
+          }
+        }
+        column->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
+      }
+      break;
     case SOCK_ROTATION: {
       ui::Layout *column = &layout->column(false);
       {
         ui::Layout *row = &column->row(true);
-        draw_node_socket_name_editable(row, sock, label_or_empty);
+        if (!optional_label) {
+          draw_node_socket_name_editable(row, sock, label_or_empty);
+        }
         if (has_gizmo) {
           draw_gizmo_pin_icon(row, ptr);
           gizmo_handled = true;
@@ -1224,7 +1312,7 @@ static void std_node_socket_draw(
         layout->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
       }
       else {
-        ui::Layout *row = &layout->split(0.4f, false);
+        ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
         ui::Layout *label_layout = &row->column(true);
         label_layout->label(label, ICON_NONE);
         ui::Layout *color_layout = &row->column(true);
@@ -1244,7 +1332,7 @@ static void std_node_socket_draw(
           node_geometry_add_attribute_search_button(*C, *node, *ptr, *layout, label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           node_geometry_add_attribute_search_button(*C, *node, *ptr, *row);
         }
@@ -1254,7 +1342,7 @@ static void std_node_socket_draw(
           node_geometry_add_layer_search_button(*C, *node, *ptr, *layout, label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           node_geometry_add_layer_search_button(*C, *node, *ptr, *row);
         }
@@ -1264,9 +1352,19 @@ static void std_node_socket_draw(
           node_geometry_add_volume_grid_search_button(*C, *node, *ptr, *layout, label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           node_geometry_add_volume_grid_search_button(*C, *node, *ptr, *row);
+        }
+      }
+      else if (socket_needs_bundle_type_search(*node, *sock)) {
+        if (optional_label) {
+          node_bundle_type_add_string_search_button(*C, *node, *ptr, *layout, label);
+        }
+        else {
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
+          row->label(label, ICON_NONE);
+          node_bundle_type_add_string_search_button(*C, *node, *ptr, *row);
         }
       }
       else {
@@ -1281,7 +1379,7 @@ static void std_node_socket_draw(
                        label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           row->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
         }
@@ -1293,7 +1391,7 @@ static void std_node_socket_draw(
           sock->default_value_typed<bNodeSocketValueMenu>();
       if (default_value->enum_items) {
         if (default_value->enum_items->items.is_empty()) {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           row->label(IFACE_("No Items"), ICON_NONE);
         }
@@ -1305,7 +1403,7 @@ static void std_node_socket_draw(
           if (optional_label) {
             if (expanded) {
               /* Use a single space for the name to work around a bug. Also see
-               * #ui_item_enum_expand_exec. */
+               * #item_enum_expand_exec. */
               layout->prop(ptr, "default_value", ui::ITEM_R_EXPAND, " ", ICON_NONE);
             }
             else {
@@ -1313,11 +1411,11 @@ static void std_node_socket_draw(
             }
           }
           else {
-            ui::Layout &row = layout->split(0.4f, false);
+            ui::Layout &row = layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
             row.label(label, ICON_NONE);
             if (expanded) {
               /* Use a single space for the name to work around a bug. Also see
-               * #ui_item_enum_expand_exec. */
+               * #item_enum_expand_exec. */
               row.row(true).prop(ptr, "default_value", ui::ITEM_R_EXPAND, " ", ICON_NONE);
             }
             else {
@@ -1327,7 +1425,7 @@ static void std_node_socket_draw(
         }
       }
       else if (default_value->has_conflict()) {
-        layout->label(IFACE_("Menu Error"), ICON_ERROR);
+        layout->label(IFACE_("Menu Error"), ICON_STATUS_ERROR);
       }
       else {
         layout->label(IFACE_("Menu Undefined"), ICON_QUESTION);
@@ -1339,8 +1437,7 @@ static void std_node_socket_draw(
     case SOCK_MATERIAL:
     case SOCK_SCENE:
     case SOCK_TEXT_ID:
-    case SOCK_MASK:
-    case SOCK_SOUND: {
+    case SOCK_MASK: {
       if (optional_label) {
         layout->prop(ptr,
                      RNA_struct_find_property(ptr, "default_value"),
@@ -1360,7 +1457,18 @@ static void std_node_socket_draw(
                      label,
                      ICON_NONE);
       }
-
+      break;
+    }
+    case SOCK_SOUND: {
+      if (optional_label) {
+        template_id(layout, C, ptr, "default_value", nullptr, "SOUND_OT_open", nullptr);
+      }
+      else {
+        /* 0.3 is consistent with image sockets. */
+        ui::Layout *row = &layout->split(0.3f, false);
+        row->label(label, ICON_NONE);
+        template_id(row, C, ptr, "default_value", nullptr, "SOUND_OT_open", nullptr);
+      }
       break;
     }
     case SOCK_FONT: {
@@ -1425,7 +1533,7 @@ static void std_node_socket_interface_draw(ID *id,
 
   const bke::bNodeSocketType *typeinfo = interface_socket->socket_typeinfo();
   BLI_assert(typeinfo != nullptr);
-  eNodeSocketDatatype type = eNodeSocketDatatype(typeinfo->type);
+  eNodeSocketDatatype type = typeinfo->type;
 
   ui::Layout *col = &layout->column(false);
 
@@ -1447,6 +1555,19 @@ static void std_node_socket_interface_draw(ID *id,
       break;
     }
     case SOCK_VECTOR: {
+      col->prop(&ptr, "subtype", DEFAULT_FLAGS, IFACE_("Subtype"), ICON_NONE);
+      col->prop(&ptr,
+                "dimensions",
+                DEFAULT_FLAGS,
+                CTX_IFACE_(BLT_I18NCONTEXT_ID_TEXTURE, "Dimensions"),
+                ICON_NONE);
+      col->prop(&ptr, "default_value", ui::ITEM_R_EXPAND, IFACE_("Default"), ICON_NONE);
+      ui::Layout *sub = &col->column(true);
+      sub->prop(&ptr, "min_value", DEFAULT_FLAGS, IFACE_("Min"), ICON_NONE);
+      sub->prop(&ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), ICON_NONE);
+      break;
+    }
+    case SOCK_INT_VECTOR: {
       col->prop(&ptr, "subtype", DEFAULT_FLAGS, IFACE_("Subtype"), ICON_NONE);
       col->prop(&ptr,
                 "dimensions",
@@ -1500,8 +1621,12 @@ static void std_node_socket_interface_draw(ID *id,
   col = &layout->column(false);
 
   const bNodeTree *node_tree = reinterpret_cast<const bNodeTree *>(id);
-  if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT && node_tree->type == NTREE_GEOMETRY) {
-    if (ELEM(type, SOCK_INT, SOCK_VECTOR, SOCK_MATRIX)) {
+  if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT &&
+      ELEM(node_tree->type, NTREE_GEOMETRY, NTREE_COMPOSIT))
+  {
+    if (ELEM(type, SOCK_INT, SOCK_FLOAT, SOCK_VECTOR, SOCK_MATRIX) ||
+        (node_tree->type == NTREE_GEOMETRY && type == SOCK_OBJECT))
+    {
       col->prop(&ptr, "default_input", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
     }
   }
@@ -1515,15 +1640,18 @@ static void std_node_socket_interface_draw(ID *id,
     sub->prop(&ptr, "hide_value", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
   }
 
-  if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT && node_tree->type == NTREE_GEOMETRY) {
-    if (type == SOCK_BOOLEAN) {
-      col->prop(&ptr, "layer_selection_field", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
-    }
-    ui::Layout *sub = &col->column(false);
-    sub->active_set(!is_layer_selection_field(*interface_socket));
-    sub->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
-    if (nodes::socket_type_supports_fields(type) || nodes::socket_type_supports_grids(type)) {
+  if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT) {
+    if (node_tree->type == NTREE_GEOMETRY) {
+      if (type == SOCK_BOOLEAN) {
+        col->prop(&ptr, "layer_selection_field", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+      }
+      ui::Layout *sub = &col->column(false);
+      sub->active_set(!is_layer_selection_field(*interface_socket));
+      sub->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
       sub->prop(&ptr, "structure_type", DEFAULT_FLAGS, IFACE_("Shape"), ICON_NONE);
+    }
+    else if (node_tree->type == NTREE_COMPOSIT) {
+      col->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
     }
   }
 }
@@ -1542,7 +1670,13 @@ static void node_socket_virtual_draw_color_simple(const bke::bNodeSocketType * /
   copy_v4_v4(r_color, virtual_node_socket_color);
 }
 
+/** \} */
+
 }  // namespace ed::space_node
+
+/* -------------------------------------------------------------------- */
+/** \name Socket Type Init
+ * \{ */
 
 void ED_init_standard_node_socket_type(bke::bNodeSocketType *stype)
 {
@@ -1578,9 +1712,13 @@ void ED_node_type_draw_color(const char *idname, float *r_color)
   copy_v4_v4(r_color, std_node_socket_colors[typeinfo->type]);
 }
 
+/** \} */
+
 namespace ed::space_node {
 
-/* ************** Generic drawing ************** */
+/* -------------------------------------------------------------------- */
+/** \name Generic Drawing
+ * \{ */
 
 void draw_nodespace_back_pix(const bContext &C,
                              ARegion &region,
@@ -1624,12 +1762,13 @@ void draw_nodespace_back_pix(const bContext &C,
 
   void *lock;
   Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
-  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
+  ImBuf *ibuf = BKE_image_acquire_ibuf_gpu(ima, nullptr, &lock);
   if (ibuf) {
     /* somehow the offset has to be calculated inverse */
     wmOrtho2_region_pixelspace(&region);
-    const float2 offset = ibuf->flags & IB_has_display_window ? float2(ibuf->display_offset) :
-                                                                float2(0.0f);
+    const float2 offset = flag_is_set(ibuf->flags, ImBufFlags::HasDisplayWindow) ?
+                              float2(ibuf->display_offset) :
+                              float2(0.0f);
     const float offset_x = snode.xof + offset.x * snode.zoom;
     const float offset_y = snode.yof + offset.y * snode.zoom;
     const float x = (region.winx - snode.zoom * ibuf->x) / 2 + offset_x;
@@ -1638,35 +1777,14 @@ void draw_nodespace_back_pix(const bContext &C,
     /** \note draw selected info on backdrop
      */
     if (snode.edittree) {
-      bNode *node = static_cast<bNode *>(snode.edittree->nodes.first);
-      const rctf *viewer_border = &snode.nodetree->viewer_border;
+      bNode *node = snode.edittree->nodes.first();
       while (node) {
-        if (node->flag & NODE_SELECT) {
+        if (node->is_selected()) {
           if (node->typeinfo->draw_backdrop) {
             node->typeinfo->draw_backdrop(&snode, ibuf, node, x, y);
           }
         }
         node = node->next;
-      }
-
-      if ((snode.nodetree->flag & NTREE_VIEWER_BORDER) &&
-          viewer_border->xmin < viewer_border->xmax && viewer_border->ymin < viewer_border->ymax)
-      {
-        rcti pixel_border;
-        BLI_rcti_init(&pixel_border,
-                      x + snode.zoom * viewer_border->xmin * ibuf->x,
-                      x + snode.zoom * viewer_border->xmax * ibuf->x,
-                      y + snode.zoom * viewer_border->ymin * ibuf->y,
-                      y + snode.zoom * viewer_border->ymax * ibuf->y);
-
-        uint pos = GPU_vertformat_attr_add(
-            immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
-        immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-        immUniformThemeColor(TH_ACTIVE);
-
-        immDrawBorderCorners(pos, &pixel_border, 1.0f, 1.0f);
-
-        immUnbindProgram();
       }
     }
   }
@@ -1727,10 +1845,10 @@ static std::array<float2, 4> node_link_bezier_points(const bNodeLink &link)
 
 static bool node_link_draw_is_visible(const View2D &v2d, const std::array<float2, 4> &points)
 {
-  if (min_ffff(points[0].x, points[1].x, points[2].x, points[3].x) > v2d.cur.xmax) {
+  if (std::min({points[0].x, points[1].x, points[2].x, points[3].x}) > v2d.cur.xmax) {
     return false;
   }
-  if (max_ffff(points[0].x, points[1].x, points[2].x, points[3].x) < v2d.cur.xmin) {
+  if (std::max({points[0].x, points[1].x, points[2].x, points[3].x}) < v2d.cur.xmin) {
     return false;
   }
   return true;
@@ -1757,6 +1875,8 @@ void node_link_bezier_points_evaluated(const bNodeLink &link,
                                 NODE_LINK_RESOL,
                                 sizeof(float2));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Node Socket Drawing
@@ -2190,7 +2310,7 @@ static bool node_link_is_field_link(const SpaceNode &snode, const bNodeLink &lin
   if (!link.fromsock) {
     return false;
   }
-  if (!nodes::socket_type_supports_fields(eNodeSocketDatatype(link.fromsock->type))) {
+  if (!nodes::socket_type_supports_fields(link.fromsock->type)) {
     /* Normally, StructureType::Dynamic would result in dashed links. We override that for socket
      * types we know currently can't be used as fields. */
     return false;
@@ -2231,7 +2351,7 @@ static NodeLinkDrawConfig nodelink_get_draw_config(const bContext &C,
 
   draw_config.dim_factor = selected ? 1.0f : node_link_dim_factor(v2d, link);
 
-  bTheme *btheme = ui::theme::theme_get();
+  const bTheme *btheme = ui::theme::theme_get();
   draw_config.dash_alpha = btheme->space_node.dash_alpha;
 
   const bool field_link = node_link_is_field_link(snode, link);
@@ -2418,6 +2538,8 @@ void node_draw_link_dragged(const bContext &C,
   /* End marker fill. */
   node_draw_link_end_markers(link, draw_config, points, false);
 }
+
+/** \} */
 
 }  // namespace ed::space_node
 

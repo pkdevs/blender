@@ -14,10 +14,11 @@
 #define PY_SSIZE_T_CLEAN
 
 #include <Python.h>
+#include <optional>
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
@@ -44,6 +45,7 @@
 #include "bpy_rna.hh"
 #include "bpy_rna_data.hh"
 #include "bpy_rna_gizmo.hh"
+#include "bpy_rna_id_collection.hh"
 #include "bpy_rna_types_capi.hh"
 #include "bpy_utils_previews.hh"
 #include "bpy_utils_units.hh"
@@ -108,11 +110,11 @@ PyDoc_STRVAR(
     "\n"
     "   Returns a list of paths to external files referenced by the loaded .blend file.\n"
     "\n"
-    "   :arg absolute: When true the paths returned are made absolute.\n"
+    "   :param absolute: When true the paths returned are made absolute.\n"
     "   :type absolute: bool\n"
-    "   :arg packed: When true include file paths for packed data.\n"
+    "   :param packed: When true include file paths for packed data.\n"
     "   :type packed: bool\n"
-    "   :arg local: When true skip linked library paths.\n"
+    "   :param local: When true skip linked library paths.\n"
     "   :type local: bool\n"
     "   :return: path list.\n"
     "   :rtype: list[str]\n");
@@ -127,7 +129,7 @@ static PyObject *bpy_blend_paths(PyObject * /*self*/, PyObject *args, PyObject *
 
   static const char *_keywords[] = {"absolute", "packed", "local", nullptr};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `absolute` */
       "O&" /* `packed` */
       "O&" /* `local` */
@@ -178,9 +180,9 @@ PyDoc_STRVAR(
     "   Flip a name between left/right sides, useful for \n"
     "   mirroring bone names.\n"
     "\n"
-    "   :arg name: Bone name to flip.\n"
+    "   :param name: Bone name to flip.\n"
     "   :type name: str\n"
-    "   :arg strip_digits: Whether to remove ``.###`` suffix.\n"
+    "   :param strip_digits: Whether to remove ``.###`` suffix.\n"
     "   :type strip_digits: bool\n"
     "   :return: The flipped name.\n"
     "   :rtype: str\n");
@@ -234,7 +236,7 @@ static PyObject *bpy_user_resource(PyObject * /*self*/, PyObject *args, PyObject
   static const char *_keywords[] = {"type", "path", nullptr};
   static _PyArg_Parser _parser = {
       "O&" /* `type` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `path` */
       ":user_resource",
       _keywords,
@@ -267,9 +269,9 @@ PyDoc_STRVAR(
     "\n"
     "   Return a system resource path.\n"
     "\n"
-    "   :arg type: string in ['DATAFILES', 'SCRIPTS', 'EXTENSIONS', 'PYTHON'].\n"
+    "   :param type: string in ['DATAFILES', 'SCRIPTS', 'EXTENSIONS', 'PYTHON'].\n"
     "   :type type: str\n"
-    "   :arg path: Optional subdirectory.\n"
+    "   :param path: Optional subdirectory.\n"
     "   :type path: str | bytes\n");
 static PyObject *bpy_system_resource(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
@@ -287,7 +289,7 @@ static PyObject *bpy_system_resource(PyObject * /*self*/, PyObject *args, PyObje
   static const char *_keywords[] = {"type", "path", nullptr};
   static _PyArg_Parser _parser = {
       "O&" /* `type` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `path` */
       ":system_resource",
       _keywords,
@@ -313,48 +315,69 @@ static PyObject *bpy_system_resource(PyObject * /*self*/, PyObject *args, PyObje
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_resource_path_doc,
-    ".. function:: resource_path(type, *, major=bpy.app.version[0], minor=bpy.app.version[1])\n"
+    ".. function:: resource_path(type, *, major=None, minor=None)\n"
     "\n"
     "   Return the base path for storing system files.\n"
     "\n"
-    "   :arg type: string in ['USER', 'LOCAL', 'SYSTEM'].\n"
-    "   :type type: str\n"
-    "   :arg major: major version, defaults to current.\n"
-    "   :type major: int\n"
-    "   :arg minor: minor version, defaults to current.\n"
-    "   :type minor: int\n"
+    "   :param type: The resource type.\n"
+    "   :type type: Literal['USER', 'LOCAL', 'SYSTEM', 'SYSTEM_LIBS']\n"
+    "   :param major: Major version. None (the default) uses ``bpy.app.version[0]``.\n"
+    "   :type major: int | None\n"
+    "   :param minor: Minor version. None (the default) uses ``bpy.app.version[1]``.\n"
+    "   :type minor: int | None\n"
     "   :return: the resource path (not necessarily existing).\n"
-    "   :rtype: str\n");
+    "   :rtype: str\n"
+    "\n"
+    "   .. note::\n"
+    "\n"
+    "      ``SYSTEM_LIBS`` mirrors ``SYSTEM`` "
+    "but resolves to the directory for architecture-dependent libraries "
+    "(typically under ``/usr/lib/...`` rather than ``/usr/share/...``). "
+    "It is an empty string on builds without a separate library directory, "
+    "such as portable builds and the Python module.\n");
 static PyObject *bpy_resource_path(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
   const PyC_StringEnumItems type_items[] = {
       {BLENDER_RESOURCE_PATH_USER, "USER"},
       {BLENDER_RESOURCE_PATH_LOCAL, "LOCAL"},
       {BLENDER_RESOURCE_PATH_SYSTEM, "SYSTEM"},
+      {BLENDER_RESOURCE_PATH_SYSTEM_LIBS, "SYSTEM_LIBS"},
       {0, nullptr},
   };
   PyC_StringEnum type = {type_items};
 
-  int major = BLENDER_VERSION / 100, minor = BLENDER_VERSION % 100;
+  std::optional<int> major;
+  std::optional<int> minor;
 
   static const char *_keywords[] = {"type", "major", "minor", nullptr};
   static _PyArg_Parser _parser = {
       "O&" /* `type` */
-      "|$" /* Optional keyword only arguments. */
-      "i"  /* `major` */
-      "i"  /* `minor` */
+      "|$" /* Optional, keyword only arguments. */
+      "O&" /* `major` */
+      "O&" /* `minor` */
       ":resource_path",
       _keywords,
       nullptr,
   };
-  if (!_PyArg_ParseTupleAndKeywordsFast(
-          args, kw, &_parser, PyC_ParseStringEnum, &type, &major, &minor))
+  if (!_PyArg_ParseTupleAndKeywordsFast(args,
+                                        kw,
+                                        &_parser,
+                                        PyC_ParseStringEnum,
+                                        &type,
+                                        PyC_ParseOptionalInt,
+                                        &major,
+                                        PyC_ParseOptionalInt,
+                                        &minor))
   {
     return nullptr;
   }
 
+  /* `None` (or missing) selects the current Blender version. */
+  const int version = major.value_or(BLENDER_VERSION / 100) * 100 +
+                      minor.value_or(BLENDER_VERSION % 100);
+
   const std::optional<std::string> path = BKE_appdir_resource_path_id_with_version(
-      type.value_found, false, (major * 100) + minor);
+      type.value_found, false, version);
 
   return PyC_UnicodeFromStdStr(path.value_or(""));
 }
@@ -367,11 +390,11 @@ PyDoc_STRVAR(
     "\n"
     "   Test if the script should be considered trusted.\n"
     "\n"
-    "   :arg code: The code to test.\n"
+    "   :param code: The code to test.\n"
     "   :type code: code\n"
-    "   :arg namespace: The namespace of values which are allowed.\n"
-    "   :type namespace: dict[str, Any]\n"
-    "   :arg verbose: Print the reason for considering insecure to the ``stderr``.\n"
+    "   :param namespace: The namespace of values which are allowed.\n"
+    "   :type namespace: dict[str, Any] | None\n"
+    "   :param verbose: Print the reason for considering insecure to the ``stderr``.\n"
     "   :type verbose: bool\n"
     "   :return: True when the script is considered trusted.\n"
     "   :rtype: bool\n");
@@ -379,12 +402,13 @@ static PyObject *bpy_driver_secure_code_test(PyObject * /*self*/, PyObject *args
 {
   PyObject *py_code;
   PyObject *py_namespace = nullptr;
+  PyC_TypeOrNone py_namespace_or_none = {&PyDict_Type, &py_namespace};
   bool verbose = false;
   static const char *_keywords[] = {"code", "namespace", "verbose", nullptr};
   static _PyArg_Parser _parser = {
-      "O!" /* `expression` */
-      "|$" /* Optional keyword only arguments. */
-      "O!" /* `namespace` */
+      "O!" /* `code` */
+      "|$" /* Optional, keyword only arguments. */
+      "O&" /* `namespace` */
       "O&" /* `verbose` */
       ":driver_secure_code_test",
       _keywords,
@@ -395,8 +419,8 @@ static PyObject *bpy_driver_secure_code_test(PyObject * /*self*/, PyObject *args
                                         &_parser,
                                         &PyCode_Type,
                                         &py_code,
-                                        &PyDict_Type,
-                                        &py_namespace,
+                                        PyC_ParseTypeOrNone,
+                                        &py_namespace_or_none,
                                         PyC_ParseBool,
                                         &verbose))
   {
@@ -412,7 +436,7 @@ PyDoc_STRVAR(
     "\n"
     "   Simple string escaping function used for animation paths.\n"
     "\n"
-    "   :arg string: text\n"
+    "   :param string: text\n"
     "   :type string: str\n"
     "   :return: The escaped string.\n"
     "   :rtype: str\n");
@@ -452,7 +476,7 @@ PyDoc_STRVAR(
     "   Simple string un-escape function used for animation paths.\n"
     "   This performs the reverse of :func:`escape_identifier`.\n"
     "\n"
-    "   :arg string: text\n"
+    "   :param string: text\n"
     "   :type string: str\n"
     "   :return: The un-escaped string.\n"
     "   :rtype: str\n");
@@ -620,7 +644,7 @@ static PyObject *bpy_wm_capabilities(PyObject *self)
       const eWM_CapabilitiesFlag flag = WM_capabilities_flag();
 
 #define SetFlagItem(x) \
-  PyDict_SetItemString(result, STRINGIFY(x), PyBool_FromLong((WM_CAPABILITY_##x) & flag));
+  PyDict_SetItemString(result, STRINGIFY(x), ((WM_CAPABILITY_##x) & flag) ? Py_True : Py_False);
 
       /* Only exposed flags which are used, by Blender's built-in scripts
        * since this is a private API. */
@@ -767,6 +791,7 @@ void BPy_init_modules(bContext *C)
   PyObject *bpy_types = BPY_rna_types();
   PyModule_AddObject(bpy_types, "GeometrySet", BPyInit_geometry_set_type());
   PyModule_AddObject(bpy_types, "InlineShaderNodes", BPyInit_inline_shader_nodes_type());
+  PyModule_AddObject(bpy_types, "BlendDataPathMeta", BPyInit_blend_data_path_meta_type());
   PyModule_AddObject(mod, "types", bpy_types);
 
   /* Needs to be first so `_bpy_types` can run. */
@@ -805,7 +830,7 @@ void BPy_init_modules(bContext *C)
   PyModule_AddObject(mod, "context", reinterpret_cast<PyObject *>(bpy_context_module));
 
   /* Register methods and property get/set for RNA types. */
-  BPY_rna_types_extend_capi();
+  BPY_rna_types_extend_capi(bpy_types);
 
 #define PYMODULE_ADD_METHOD(mod, meth) \
   PyModule_AddObject(mod, (meth)->ml_name, (PyObject *)PyCFunction_New(meth, mod))

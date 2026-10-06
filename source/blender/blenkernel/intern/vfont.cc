@@ -16,12 +16,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -137,7 +137,7 @@ static void vfont_foreach_path(ID *id, BPathForeachPathData *bpath_data)
 static void vfont_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   VFont *vf = id_cast<VFont *>(id);
-  const bool is_undo = BLO_write_is_undo(writer);
+  const bool is_undo = writer->is_undo();
 
   /* Clean up, important in undo case to reduce false detection of changed datablocks. */
   vf->data = nullptr;
@@ -165,34 +165,35 @@ static void vfont_blend_read_data(BlendDataReader *reader, ID *id)
 }
 
 IDTypeInfo IDType_ID_VF = {
-    /*id_code*/ VFont::id_type,
-    /*id_filter*/ FILTER_ID_VF,
-    /*dependencies_id_types*/ 0,
-    /*main_listbase_index*/ INDEX_ID_VF,
-    /*struct_size*/ sizeof(VFont),
-    /*name*/ "Font",
-    /*name_plural*/ N_("fonts"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_VFONT,
-    /*flags*/ IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = VFont::id_type,
+    .id_filter = FILTER_ID_VF,
+    .dependencies_id_types = 0,
+    .main_listbase_index = INDEX_ID_VF,
+    .struct_size = sizeof(VFont),
+    .name = "Font",
+    .name_plural = N_("fonts"),
+    .translation_context = BLT_I18NCONTEXT_ID_VFONT,
+    .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ vfont_init_data,
-    /*copy_data*/ vfont_copy_data,
-    /*free_data*/ vfont_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ nullptr,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ vfont_foreach_path,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = vfont_init_data,
+    .copy_data = vfont_copy_data,
+    .free_data = vfont_free_data,
+    .make_local = nullptr,
+    .foreach_id = nullptr,
+    .foreach_cache = nullptr,
+    .foreach_path = vfont_foreach_path,
+    .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ vfont_blend_write,
-    /*blend_read_data*/ vfont_blend_read_data,
-    /*blend_read_after_liblink*/ nullptr,
+    .blend_write = vfont_blend_write,
+    .blend_read_data = vfont_blend_read_data,
+    .blend_read_after_liblink = nullptr,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 /** \} */
@@ -250,8 +251,8 @@ void BKE_vfont_data_free(VFont *vfont)
           continue;
         }
 
-        while (che->nurbsbase.first) {
-          Nurb *nu = static_cast<Nurb *>(che->nurbsbase.first);
+        while (che->nurbsbase.first()) {
+          Nurb *nu = che->nurbsbase.first();
           if (nu->bezt) {
             MEM_delete(nu->bezt);
           }

@@ -6,8 +6,8 @@
  * \ingroup modifiers
  */
 
-#include "BLI_math_matrix.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -169,7 +169,7 @@ static void waveModifier_do(WaveModifierData *wmd,
 
   Tex *tex_target = wmd->texture;
   if (mesh != nullptr && tex_target != nullptr) {
-    tex_co = MEM_new_array_uninitialized<float[3]>(size_t(verts_num), __func__);
+    tex_co = MEM_new_array_zeroed<float[3]>(size_t(verts_num), __func__);
     MOD_get_texture_coords(
         reinterpret_cast<MappingInfoModifierData *>(wmd), ctx, ob, mesh, vertexCos, tex_co);
 
@@ -373,9 +373,7 @@ static void texture_panel_draw(const bContext *C, Panel *panel)
   if (texture_coords == MOD_DISP_MAP_OBJECT) {
     col.prop(ptr, "texture_coords_object", UI_ITEM_NONE, IFACE_("Object"), ICON_NONE);
     PointerRNA texture_coords_obj_ptr = RNA_pointer_get(ptr, "texture_coords_object");
-    if (!RNA_pointer_is_null(&texture_coords_obj_ptr) &&
-        (RNA_enum_get(&texture_coords_obj_ptr, "type") == OB_ARMATURE))
-    {
+    if (texture_coords_obj_ptr && (RNA_enum_get(&texture_coords_obj_ptr, "type") == OB_ARMATURE)) {
       PointerRNA texture_coords_obj_data_ptr = RNA_pointer_get(&texture_coords_obj_ptr, "data");
       col.prop_search(ptr,
                       "texture_coords_bone",

@@ -28,10 +28,12 @@ enum class CoordinatesType : uint8_t {
  */
 class ImageCoordinatesKey {
  public:
-  int2 size;
-  CoordinatesType type;
+  const int2 data_size;
+  const int2 display_size;
+  const int2 data_offset;
+  const CoordinatesType type;
 
-  ImageCoordinatesKey(const int2 &size, const CoordinatesType type);
+  ImageCoordinatesKey(const Domain &domain, const CoordinatesType type);
 
   uint64_t hash() const;
 };
@@ -42,12 +44,13 @@ bool operator==(const ImageCoordinatesKey &a, const ImageCoordinatesKey &b);
  * Image Coordinates.
  *
  * A cached resource that computes and caches a result containing the coordinates of the pixels of
- * an image with the given size. */
+ * an image with the given domain. The transformations of the domain are ignored to improve cache
+ * hits, the caller is expected to restore the transformation if needed. */
 class ImageCoordinates : public CachedResource {
  public:
   Result result;
 
-  ImageCoordinates(Context &context, const int2 &size, const CoordinatesType type);
+  ImageCoordinates(Context &context, const Domain &domain, const CoordinatesType type);
 
   ~ImageCoordinates();
 
@@ -71,7 +74,7 @@ class ImageCoordinatesContainer : CachedResourceContainer {
    * the container, if one exists, return it, otherwise, return a newly created one and add it to
    * the container. In both cases, tag the cached resource as needed to keep it cached for the next
    * evaluation. */
-  Result &get(Context &context, const int2 &size, const CoordinatesType type);
+  Result &get(Context &context, const Domain &domain, const CoordinatesType type);
 };
 
 }  // namespace blender::compositor

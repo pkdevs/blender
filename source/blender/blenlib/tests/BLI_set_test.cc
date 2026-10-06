@@ -8,13 +8,13 @@
 #include "testing/testing.h"
 
 #include "BLI_exception_safety_test_utils.hh"
-#include "BLI_ghash.h"
-#include "BLI_rand.h"
+#include "BLI_ghash.hh"
+#include "BLI_rand_c.hh"
 #include "BLI_set.hh"
 #include "BLI_timeit.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -278,6 +278,22 @@ TEST(set, Remove)
   EXPECT_EQ(set.size(), 4);
 }
 
+TEST(set, AddRemoveSameHash)
+{
+  Set<int> set;
+  set.add(0);
+  set.add(1 << 16);
+  EXPECT_TRUE(set.contains(0));
+  EXPECT_TRUE(set.contains(1 << 16));
+  set.remove(0);
+  EXPECT_FALSE(set.contains(0));
+  EXPECT_TRUE(set.contains(1 << 16));
+  set.add(1 << 16);
+  EXPECT_TRUE(set.contains(1 << 16));
+  set.remove(1 << 16);
+  EXPECT_FALSE(set.contains(1 << 16));
+}
+
 struct Type1 {
   uint32_t value;
 };
@@ -298,13 +314,13 @@ static bool operator==(const Type2 &a, const Type1 &b)
 }  // namespace tests
 
 /* This has to be defined in ::blender namespace. */
-template<> struct DefaultHash<tests::Type1> {
-  uint32_t operator()(const tests::Type1 &value) const
+template<> struct DefaultHash<blender::tests::Type1> {
+  uint32_t operator()(const blender::tests::Type1 &value) const
   {
     return value.value;
   }
 
-  uint32_t operator()(const tests::Type2 &value) const
+  uint32_t operator()(const blender::tests::Type2 &value) const
   {
     return value.value;
   }

@@ -8,16 +8,19 @@
 
 #include <fmt/format.h>
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLO_readfile.hh"
 
+#include "BLT_date_string.hh"
+#include "BLT_lang.hh"
 #include "BLT_translation.hh"
 
+#include "BKE_autoexec.hh"
 #include "BKE_blendfile.hh"
 #include "BKE_global.hh"
 #include "BKE_main.hh"
@@ -51,7 +54,7 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
   tooltip_text_field_add(tip, {}, {}, TIP_STYLE_SPACER, TIP_LC_NORMAL);
 
   if (!BLI_exists(path)) {
-    tooltip_text_field_add(tip, N_("File Not Found"), {}, TIP_STYLE_NORMAL, TIP_LC_ALERT);
+    tooltip_text_field_add(tip, TIP_("File Not Found"), {}, TIP_STYLE_NORMAL, TIP_LC_ALERT);
     return;
   }
 
@@ -62,7 +65,7 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
   if (thumb) {
     /* Look for version in existing thumbnail if available. */
     IMB_metadata_get_field(
-        thumb->metadata, "Thumb::Blender::Version", version_str, sizeof(version_str));
+        thumb->metadata(), "Thumb::Blender::Version", version_str, sizeof(version_str));
   }
 
   eFileAttributes attributes = BLI_file_attributes(path);
@@ -82,20 +85,19 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
 
   BLI_stat_t status;
   if (BLI_stat(path, &status) != -1) {
-    char date_str[FILELIST_DIRENTRY_DATE_LEN], time_st[FILELIST_DIRENTRY_TIME_LEN];
-    bool is_today, is_yesterday;
-    std::string day_string;
-    BLI_filelist_entry_datetime_to_string(
-        nullptr, int64_t(status.st_mtime), false, time_st, date_str, &is_today, &is_yesterday);
-    if (is_today || is_yesterday) {
-      day_string = (is_today ? N_("Today") : N_("Yesterday")) + std::string(" ");
-    }
+    const tm mod_time = date_string::localtime_safe(status.st_mtime);
+    const time_t ts_now = time(nullptr);
+    const tm now = date_string::localtime_safe(ts_now);
+    const char *lang = BLT_lang_get();
+    std::string modified_s = date_string::datetime(mod_time,
+                                                   lang,
+                                                   date_string::DateFormat(U.date_format),
+                                                   date_string::TimeFormat(U.time_format),
+                                                   &now,
+                                                   TIP_("Today"),
+                                                   TIP_("Yesterday"));
     tooltip_text_field_add(tip,
-                           fmt::format("{}: {}{}{}",
-                                       N_("Modified"),
-                                       day_string,
-                                       (is_today || is_yesterday) ? "" : date_str,
-                                       (is_today || is_yesterday) ? time_st : ""),
+                           fmt::format(fmt::runtime(TIP_("Modified: {}")), modified_s),
                            {},
                            TIP_STYLE_NORMAL,
                            TIP_LC_NORMAL);
@@ -103,8 +105,11 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
     if (status.st_size > 0) {
       char size[16];
       BLI_filelist_entry_size_to_string(nullptr, status.st_size, false, size);
-      tooltip_text_field_add(
-          tip, fmt::format("{}: {}", N_("Size"), size), {}, TIP_STYLE_NORMAL, TIP_LC_NORMAL);
+      tooltip_text_field_add(tip,
+                             fmt::format(fmt::runtime(TIP_("Size: {}")), size),
+                             {},
+                             TIP_STYLE_NORMAL,
+                             TIP_LC_NORMAL);
     }
   }
 
@@ -151,6 +156,14 @@ int template_recent_files(Layout *layout, int rows)
                                 UI_ITEM_NONE);
     RNA_string_set(&ptr, "filepath", recent.filepath);
     RNA_boolean_set(&ptr, "display_file_selector", false);
+    RNA_boolean_set(&ptr,
+                    "use_scripts",
+                    BKE_autoexec_default_trust_source(recent.filepath,
+                                                      {
+                                                          .skip_overrides = false,
+                                                          .canonicalize = true,
+                                                          .strip_filename = true,
+                                                      }));
 
     Block *block = layout->block();
     Button *but = button_last(block);

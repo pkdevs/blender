@@ -22,7 +22,7 @@
 #include "BKE_scene.hh"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
 
@@ -132,7 +132,7 @@ filter_supported_objects(Depsgraph *depsgraph, const OBJExportParams &export_par
         break;
       case OB_CURVES_LEGACY: {
         Curve *curve = id_cast<Curve *>(object->data);
-        Nurb *nurb{static_cast<Nurb *>(curve->nurb.first)};
+        Nurb *nurb{curve->nurb.first()};
         if (!nurb) {
           /* An empty curve. Not yet supported to export these as meshes. */
           if (export_params.export_curves_as_nurbs) {
@@ -363,7 +363,7 @@ void export_frame(Depsgraph *depsgraph, const OBJExportParams &export_params, co
 
 bool append_frame_to_filename(const char *filepath,
                               const int frame,
-                              char r_filepath_with_frames[1024])
+                              char r_filepath_with_frames[FILE_MAX])
 {
   BLI_strncpy(r_filepath_with_frames, filepath, FILE_MAX);
   BLI_path_extension_strip(r_filepath_with_frames);

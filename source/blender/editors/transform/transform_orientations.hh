@@ -1,6 +1,3 @@
-struct TransInfo;
-namespace blender {
-
 /* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
@@ -11,8 +8,12 @@ namespace blender {
 
 #pragma once
 
+struct TransInfo;
+namespace blender {
+
 struct bContext;
 struct bPoseChannel;
+struct Main;
 struct Object;
 struct Scene;
 struct TransformOrientation;
@@ -81,7 +82,8 @@ enum {
  *
  * \param v3d: The 3D viewport or null.
  */
-int getTransformOrientation_ex(const Scene *scene,
+int getTransformOrientation_ex(const Main &bmain,
+                               const Scene *scene,
                                ViewLayer *view_layer,
                                const View3D *v3d,
                                Object *ob,

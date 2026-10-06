@@ -223,7 +223,7 @@ struct PTCacheUndo {
   struct ParticleData *particles;
   KDTree3d *emitter_field;
   float *emitter_cosnos;
-  int psys_flag;
+  eParticleSystem_Flag psys_flag;
 
   /* cache stuff */
   ListBaseT<PTCacheMem> mem_cache;
@@ -318,6 +318,15 @@ void BKE_ptcache_id_time(PTCacheID *pid,
 int BKE_ptcache_object_reset(struct Scene *scene, struct Object *ob, int mode);
 
 void BKE_ptcache_update_info(PTCacheID *pid);
+
+/**
+ * Obtain the file path for this ptcache.
+ *
+ * \param dirname: pointer to write the cache path to, should be at least MAX_PTCACHE_PATH bytes
+ * (see pointcache.cc, at the moment of writing this is equal to FILE_MAX).
+ * \returns: `strlen(dirname)`.
+ */
+int BKE_ptcache_path(PTCacheID *pid, char *dirname);
 
 /*********** General cache reading/writing ******************/
 

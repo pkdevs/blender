@@ -126,7 +126,7 @@ bNode &version_node_add_empty(bNodeTree &ntree, const char *idname);
  * See also #bNodeType for more details.
  */
 bNode &version_node_add_unknown(bNodeTree &ntree,
-                                bke::bNodeType &node_type,
+                                bke::bNodeType &ntype,
                                 const char *idname,
                                 const int16_t legacy_type,
                                 const std::string &ui_name,
@@ -153,6 +153,16 @@ bNodeLink &version_node_add_link(
     bNodeTree &ntree, bNode &node_a, bNodeSocket &socket_a, bNode &node_b, bNodeSocket &socket_b);
 
 /**
+ * Returns true if the node has valid storage data.
+ * If the node does not have storage data then the node type is set to "Undefined" to prevent
+ * further access and the function returns false.
+ *
+ * Storage can get lost when saving nodes in older versions and then loading such files may contain
+ * nodes where storage is expected but does not exist (#154086).
+ */
+bool version_node_ensure_storage_or_invalidate(bNode &node);
+
+/**
  * Adjust animation data for newly added node sockets.
  *
  * Node sockets are addressed by their index (in their RNA path, and thus FCurves/drivers), and
@@ -177,6 +187,13 @@ void version_node_socket_index_animdata(
     int socket_index_offset,
     int total_number_of_sockets);
 
+void version_node_socket_index_animdata(Main *bmain,
+                                        int node_tree_type,
+                                        const char *node_idname,
+                                        int socket_index_orig,
+                                        int socket_index_offset,
+                                        int total_number_of_sockets);
+
 /**
  * Replace the ID name of all nodes in the tree with the given type with the new name.
  */
@@ -187,6 +204,8 @@ void version_node_id(bNodeTree *ntree, int node_type, const char *new_name);
  */
 void version_node_socket_id_delim(bNodeSocket *socket);
 
+void version_node_socket_identifier_set(bNodeSocket &socket, StringRefNull identifier);
+
 bNodeSocket *version_node_add_socket_if_not_exist(bNodeTree *ntree,
                                                   bNode *node,
                                                   int in_out,
@@ -196,6 +215,15 @@ bNodeSocket *version_node_add_socket_if_not_exist(bNodeTree *ntree,
                                                   const char *name);
 
 void version_node_tree_clear_interface(bNodeTree &ntree);
+
+/**
+ * Change socket identifiers so that everything after the separator is removed for available
+ * sockets.
+ */
+void version_socket_identifier_suffixes_for_dynamic_types(
+    const ListBaseT<bNodeSocket> &sockets,
+    const char *separator,
+    const std::optional<int> total = std::nullopt);
 
 /**
  * The versioning code generally expects `SOCK_IS_LINKED` to be set correctly. This function

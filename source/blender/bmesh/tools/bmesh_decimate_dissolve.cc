@@ -10,10 +10,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_heap.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include <algorithm>
+
+#include "BLI_heap.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_customdata.hh"
 
@@ -379,7 +381,7 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
         }
       }
 
-      if (UNLIKELY(f_new == nullptr)) {
+      if (f_new == nullptr) [[unlikely]] {
         BLI_heap_node_value_update(eheap, enode_top, COST_INVALID);
       }
     }
@@ -387,7 +389,7 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
     /* prepare for cleanup */
     BM_mesh_elem_index_ensure(bm, BM_VERT);
     vert_reverse_lookup = MEM_new_array_uninitialized<int>(bm->totvert, __func__);
-    copy_vn_i(vert_reverse_lookup, bm->totvert, -1);
+    std::fill_n(vert_reverse_lookup, bm->totvert, -1);
     for (i = 0; i < vinput_len; i++) {
       BMVert *v = vinput_arr[i];
       vert_reverse_lookup[BM_elem_index_get(v)] = i;
@@ -458,7 +460,7 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
 
     for (i = 0; i < vinput_len; i++) {
       BMVert *v = vinput_arr[i];
-      if (LIKELY(v != nullptr)) {
+      if (v != nullptr) [[likely]] {
         const float cost = bm_vert_edge_face_angle(v, delimit, &delimit_data);
         vheap_table[i] = BLI_heap_insert(vheap, cost, v);
         BM_elem_index_set(v, i); /* set dirty */
@@ -535,7 +537,7 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
         }
       }
 
-      if (UNLIKELY(e_new == nullptr)) {
+      if (e_new == nullptr) [[unlikely]] {
         BLI_heap_node_value_update(vheap, vnode_top, COST_INVALID);
       }
     }

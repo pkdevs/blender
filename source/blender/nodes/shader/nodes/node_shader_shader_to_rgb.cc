@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 namespace blender {
@@ -10,9 +14,9 @@ namespace nodes::node_shader_shader_to_rgb_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Shader>("Shader");
-  b.add_output<decl::Color>("Color");
-  b.add_output<decl::Float>("Alpha");
+  b.add_input<decl::Shader>("Shader"_ustr);
+  b.add_output<decl::Color>("Color"_ustr);
+  b.add_output<decl::Float>("Alpha"_ustr);
 }
 
 static int node_shader_gpu_shadertorgb(GPUMaterial *mat,
@@ -23,7 +27,8 @@ static int node_shader_gpu_shadertorgb(GPUMaterial *mat,
 {
   GPU_material_flag_set(mat, GPU_MATFLAG_SHADER_TO_RGBA);
 
-  return GPU_stack_link(mat, node, "node_shader_to_rgba", in, out);
+  return GPU_stack_link(
+      mat, node, "node_shader_to_rgba", in, out, GPU_kernel_globals(), GPU_shading_data());
 }
 
 }  // namespace nodes::node_shader_shader_to_rgb_cc
@@ -35,7 +40,7 @@ void register_node_type_sh_shadertorgb()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeShaderToRGB", SH_NODE_SHADERTORGB);
+  sh_node_type_base(&ntype, "ShaderNodeShaderToRGB"_ustr, SH_NODE_SHADERTORGB);
   ntype.ui_name = "Shader to RGB";
   ntype.ui_description =
       "Convert rendering effect (such as light and shadow) to color. Typically used for "

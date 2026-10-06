@@ -24,31 +24,44 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
       .hide_value()
       .compositor_realization_mode(CompositorInputRealizationMode::None)
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Float>("X").default_value(0.0f).min(-10000.0f).max(10000.0f);
-  b.add_input<decl::Float>("Y").default_value(0.0f).min(-10000.0f).max(10000.0f);
-  b.add_input<decl::Float>("Angle").default_value(0.0f).min(-10000.0f).max(10000.0f).subtype(
-      PROP_ANGLE);
-  b.add_input<decl::Float>("Scale").default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
+  b.add_input<decl::Float>("X"_ustr)
+      .default_value(0.0f)
+      .subtype(PROP_PIXEL)
+      .min(-10000.0f)
+      .max(10000.0f);
+  b.add_input<decl::Float>("Y"_ustr)
+      .default_value(0.0f)
+      .subtype(PROP_PIXEL)
+      .min(-10000.0f)
+      .max(10000.0f);
+  b.add_input<decl::Float>("Angle"_ustr)
+      .default_value(0.0f)
+      .min(-10000.0f)
+      .max(10000.0f)
+      .subtype(PROP_ANGLE);
+  b.add_input<decl::Float>("Scale"_ustr).default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
 
-  PanelDeclarationBuilder &sampling_panel = b.add_panel("Sampling").default_closed(true);
-  sampling_panel.add_input<decl::Menu>("Interpolation")
+  PanelDeclarationBuilder &sampling_panel = b.add_panel("Sampling"_ustr).default_closed(true);
+  sampling_panel.add_input<decl::Menu>("Interpolation"_ustr)
       .default_value(CMP_NODE_INTERPOLATION_BILINEAR)
       .static_items(rna_enum_node_compositor_interpolation_items)
       .optional_label()
       .description("Interpolation method");
-  sampling_panel.add_input<decl::Menu>("Extension X")
+  sampling_panel.add_input<decl::Menu>("Extension X"_ustr)
       .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
       .static_items(rna_enum_node_compositor_extension_items)
       .optional_label()
       .description("The extension mode applied to the X axis");
-  sampling_panel.add_input<decl::Menu>("Extension Y")
+  sampling_panel.add_input<decl::Menu>("Extension Y"_ustr)
       .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
       .static_items(rna_enum_node_compositor_extension_items)
       .optional_label()
@@ -66,7 +79,11 @@ using namespace blender::compositor;
 
 class TransformOperation : public NodeOperation {
  public:
-  using NodeOperation::NodeOperation;
+  TransformOperation(Context &context, const bNode &node) : NodeOperation(context, node)
+  {
+    InputDescriptor &image_descriptor = this->get_input_descriptor("Image");
+    image_descriptor.skip_type_conversion = true;
+  }
 
   void execute() override
   {
@@ -79,6 +96,7 @@ class TransformOperation : public NodeOperation {
 
     const Result &input = this->get_input("Image");
     Result &output = this->get_result("Image");
+    output.set_type(input.type());
     output.share_data(input);
     output.transform(transformation);
     output.get_realization_options().interpolation = this->get_interpolation();
@@ -95,9 +113,10 @@ class TransformOperation : public NodeOperation {
         return Interpolation::Nearest;
       case CMP_NODE_INTERPOLATION_BILINEAR:
         return Interpolation::Bilinear;
-      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
       case CMP_NODE_INTERPOLATION_BICUBIC:
         return Interpolation::Bicubic;
+      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
+        return Interpolation::Anisotropic;
     }
 
     return Interpolation::Nearest;
@@ -145,7 +164,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeTransform", CMP_NODE_TRANSFORM);
+  cmp_node_type_base(&ntype, "CompositorNodeTransform"_ustr, CMP_NODE_TRANSFORM);
   ntype.ui_name = "Transform";
   ntype.ui_description = "Scale, translate and rotate an image";
   ntype.enum_name_legacy = "TRANSFORM";

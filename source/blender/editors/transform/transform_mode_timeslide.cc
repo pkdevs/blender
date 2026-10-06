@@ -11,10 +11,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_nla.hh"
+#include "BKE_scene.hh"
 #include "BKE_unit.hh"
 
 #include "ED_screen.hh"
@@ -68,7 +69,7 @@ static void applyTimeSlideValue(TransInfo *t, float sval, float cval)
 
   /* Set value for drawing black line. */
   if (t->spacetype == SPACE_ACTION) {
-    SpaceAction *saction = static_cast<SpaceAction *>(t->area->spacedata.first);
+    SpaceAction *saction = t->area->spacedata.first_as<SpaceAction>();
     saction->timeslide = cval;
   }
 
@@ -163,7 +164,7 @@ static void initTimeSlide(TransInfo *t, wmOperator * /*op*/)
 {
   /* This tool is only really available in the Action Editor. */
   if (t->spacetype == SPACE_ACTION) {
-    SpaceAction *saction = static_cast<SpaceAction *>(t->area->spacedata.first);
+    SpaceAction *saction = t->area->spacedata.first_as<SpaceAction>();
 
     /* Set flag for drawing stuff. */
     saction->flag |= SACTION_MOVING;
@@ -202,8 +203,8 @@ static void initTimeSlide(TransInfo *t, wmOperator * /*op*/)
 
     if (min == max) {
       /* Just use the current frame ranges. */
-      min = float(PSFRA);
-      max = float(PEFRA);
+      min = float(scene->playback_start());
+      max = float(scene->playback_end());
     }
 
     range[0] = min;
@@ -236,6 +237,7 @@ TransModeInfo TransMode_timeslide = {
     /*snap_distance_fn*/ nullptr,
     /*snap_apply_fn*/ nullptr,
     /*draw_fn*/ nullptr,
+    /*status_fn*/ nullptr,
 };
 
 }  // namespace blender::ed::transform

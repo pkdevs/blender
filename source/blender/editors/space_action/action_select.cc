@@ -14,8 +14,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -25,6 +25,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
@@ -485,9 +486,7 @@ static void box_select_elem(
     case ANIMTYPE_MASKDATABLOCK: {
       Mask *mask = static_cast<Mask *>(ale->data);
       MaskLayer *masklay;
-      for (masklay = static_cast<MaskLayer *>(mask->masklayers.first); masklay;
-           masklay = masklay->next)
-      {
+      for (masklay = mask->masklayers.first(); masklay; masklay = masklay->next) {
         ED_masklayer_frames_select_box(masklay, xmin, xmax, sel_data->selectmode);
       }
       break;
@@ -565,9 +564,7 @@ static void box_select_action(bAnimContext *ac,
   const float channel_step = ANIM_UI_get_channel_step();
 
   /* loop over data, doing box select */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-       ale = ale->next, ymax -= channel_step)
-  {
+  for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step) {
     /* get new vertical minimum extent of channel */
     float ymin = ymax - channel_step;
 
@@ -576,8 +573,13 @@ static void box_select_action(bAnimContext *ac,
       /* if channel is mapped in NLA, apply correction */
       if (ANIM_nla_mapping_allowed(ale)) {
         sel_data.ked.iterflags &= ~(KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP);
-        sel_data.ked.f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
-        sel_data.ked.f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+        const float f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
+        const float f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+
+        /* Make sure f1 & f2 are in order (e.g. in case of NLASTRIP_FLAG_REVERSE). Note: will still
+         * fail for the Summary (since that is excluded from NLA remapping). */
+        sel_data.ked.f1 = math::min(f1, f2);
+        sel_data.ked.f2 = math::max(f1, f2);
       }
       else {
         sel_data.ked.iterflags |= (KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP); /* for summary tracks */
@@ -617,7 +619,16 @@ static wmOperatorStatus actkeys_box_select_invoke(bContext *C,
     }
   }
 
-  return WM_gesture_box_invoke(C, op, event);
+  /* `SPACE_ACTION` clamps view at draw-time (foot-gun, draw code should probably be
+   * read-only...), so prevent panning past that. We shouldn't limit horizontal range to
+   * `tot`, however, because for timelines it is the scene playback range. */
+  const wmOperatorStatus opstatus = WM_gesture_box_invoke(C, op, event);
+  wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
+  if (gesture->edge_pan_data && ac.region) {
+    gesture->edge_pan_data->limit.ymin = ac.region->v2d.tot.ymin;
+    gesture->edge_pan_data->limit.ymax = ac.region->v2d.tot.ymax;
+  }
+  return opstatus;
 }
 
 static wmOperatorStatus actkeys_box_select_exec(bContext *C, wmOperator *op)
@@ -684,7 +695,7 @@ void ACTION_OT_select_box(wmOperatorType *ot)
   ot->modal = WM_gesture_box_modal;
   ot->cancel = WM_gesture_box_cancel;
 
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
 
   /* flags */
   ot->flag = OPTYPE_UNDO;
@@ -761,9 +772,7 @@ static void region_select_elem(RegionSelectData *sel_data, bAnimListElem *ale, b
     case ANIMTYPE_MASKDATABLOCK: {
       Mask *mask = static_cast<Mask *>(ale->data);
       MaskLayer *masklay;
-      for (masklay = static_cast<MaskLayer *>(mask->masklayers.first); masklay;
-           masklay = masklay->next)
-      {
+      for (masklay = mask->masklayers.first(); masklay; masklay = masklay->next) {
         ED_masklayer_frames_select_region(
             &sel_data->ked, masklay, sel_data->mode, sel_data->selectmode);
       }
@@ -851,9 +860,7 @@ static void region_select_action_keys(bAnimContext *ac,
   const float channel_step = ANIM_UI_get_channel_step();
 
   /* loop over data, doing region select */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-       ale = ale->next, ymax -= channel_step)
-  {
+  for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step) {
     /* get new vertical minimum extent of channel */
     const float ymin = ymax - channel_step;
 
@@ -868,8 +875,13 @@ static void region_select_action_keys(bAnimContext *ac,
      */
     if (ANIM_nla_mapping_allowed(ale)) {
       sel_data.ked.iterflags &= ~(KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP);
-      sel_data.ked.f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
-      sel_data.ked.f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+      const float f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
+      const float f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+
+      /* Make sure f1 & f2 are in order (e.g. in case of NLASTRIP_FLAG_REVERSE). Note: will still
+       * fail for the Summary (since that is excluded from NLA remapping). */
+      sel_data.ked.f1 = math::min(f1, f2);
+      sel_data.ked.f2 = math::max(f1, f2);
     }
     else {
       sel_data.ked.iterflags |= (KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP); /* for summary tracks */
@@ -950,7 +962,7 @@ void ACTION_OT_select_lasso(wmOperatorType *ot)
   ot->invoke = WM_gesture_lasso_invoke;
   ot->modal = WM_gesture_lasso_modal;
   ot->exec = actkeys_lassoselect_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
   ot->cancel = WM_gesture_lasso_cancel;
 
   /* flags */
@@ -1017,7 +1029,7 @@ void ACTION_OT_select_circle(wmOperatorType *ot)
   ot->invoke = WM_gesture_circle_invoke;
   ot->modal = WM_gesture_circle_modal;
   ot->exec = action_circle_select_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
   ot->cancel = WM_gesture_circle_cancel;
   ot->get_name = ED_select_circle_get_name;
 
@@ -1228,8 +1240,8 @@ static void columnselect_action_keys(bAnimContext *ac, short mode)
   }
 
   /* free elements */
-  BLI_freelistN(&ked.cfra_elem_list);
-  BLI_freelistN(&ked.time_marker_list);
+  ked.cfra_elem_list.free_no_destruct();
+  ked.time_marker_list.free_no_destruct();
 
   ANIM_animdata_update(ac, &anim_data);
   ANIM_animdata_freelist(&anim_data);
@@ -1833,8 +1845,8 @@ static void actkeys_mselect_column(bAnimContext *ac, eEditKeyframes_Select selec
   }
 
   /* free elements */
-  BLI_freelistN(&ked.cfra_elem_list);
-  BLI_freelistN(&ked.time_marker_list);
+  ked.cfra_elem_list.free_no_destruct();
+  ked.time_marker_list.free_no_destruct();
 
   ANIM_animdata_update(ac, &anim_data);
   ANIM_animdata_freelist(&anim_data);
@@ -2095,7 +2107,7 @@ void ACTION_OT_clickselect(wmOperatorType *ot)
   ot->description = "Select keyframes by clicking on them";
 
   /* callbacks */
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
   ot->exec = actkeys_clickselect_exec;
   ot->invoke = WM_generic_select_invoke;
   ot->modal = WM_generic_select_modal;
@@ -2137,6 +2149,81 @@ void ACTION_OT_clickselect(wmOperatorType *ot)
                          "Only Channel",
                          "Select all the keyframes in the channel under the mouse");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Select by Keyframe Type operator
+ * \{ */
+
+static wmOperatorStatus select_by_type_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
+  const eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
+                                    ANIMFILTER_NODUPLIS | ANIMFILTER_FOREDIT |
+                                    ANIMFILTER_FCURVESONLY);
+  ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
+  const eBezTriple_KeyframeType key_type = eBezTriple_KeyframeType(RNA_enum_get(op->ptr, "type"));
+  const bool extend = RNA_boolean_get(op->ptr, "extend");
+  for (bAnimListElem &elem : anim_data) {
+    FCurve *fcurve = static_cast<FCurve *>(elem.data);
+    if (!fcurve->bezt) {
+      continue;
+    }
+    for (int i = 0; i < fcurve->totvert; i++) {
+      BezTriple &key = fcurve->bezt[i];
+      if (BEZKEYTYPE(&key) == key_type) {
+        BEZT_SEL_ALL(&key);
+      }
+      else if (!extend) {
+        BEZT_DESEL_ALL(&key);
+      }
+    }
+  }
+
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_SELECTED, nullptr);
+  ANIM_animdata_freelist(&anim_data);
+
+  return OPERATOR_FINISHED;
+}
+
+static bool select_by_type_poll(bContext *C)
+{
+  return ED_operator_graphedit_active(C) || ED_operator_action_active(C);
+}
+
+void ACTION_OT_select_by_type(wmOperatorType *ot)
+{
+  ot->name = "Select by Type";
+  ot->idname = "ACTION_OT_select_by_type";
+  ot->description = "Select all keyframes of the given type";
+
+  ot->exec = select_by_type_exec;
+  ot->poll = select_by_type_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  PropertyRNA *prop = RNA_def_boolean(ot->srna,
+                                      "extend",
+                                      true,
+                                      "Extend Selection",
+                                      "Keeps the current selection and adds the given type to it. "
+                                      "If disabled, only keys of the type will be selected");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  RNA_def_enum(ot->srna,
+               "type",
+               rna_enum_beztriple_keyframe_type_items,
+               0,
+               "Type",
+               "The type of keyframe to select");
 }
 
 /** \} */

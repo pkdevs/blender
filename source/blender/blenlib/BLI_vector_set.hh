@@ -312,6 +312,11 @@ class VectorSet {
     return Span<Key>(keys_, this->size());
   }
 
+  friend bool operator==(const VectorSet &a, const VectorSet &b)
+  {
+    return a.as_span() == b.as_span();
+  }
+
   /**
    * Get a Span referencing the keys vector. The referenced memory buffer is only valid as
    * long as the vector set is not changed.
@@ -883,6 +888,7 @@ class VectorSet {
         Key *dst = keys_ + index;
         new (dst) Key(std::forward<ForwardKey>(key));
         BLI_assert(hash_(*dst) == hash);
+        BLI_assert(is_equal_(*dst, *dst));
         slot.occupy(index, hash);
         occupied_and_removed_slots_++;
         return;
@@ -901,6 +907,7 @@ class VectorSet {
         Key *dst = keys_ + index;
         new (dst) Key(std::forward<ForwardKey>(key));
         BLI_assert(hash_(*dst) == hash);
+        BLI_assert(is_equal_(*dst, *dst));
         slot.occupy(index, hash);
         occupied_and_removed_slots_++;
         return true;
@@ -922,6 +929,7 @@ class VectorSet {
         Key *dst = keys_ + index;
         new (dst) Key(std::forward<ForwardKey>(key));
         BLI_assert(hash_(*dst) == hash);
+        BLI_assert(is_equal_(*dst, *dst));
         slot.occupy(index, hash);
         occupied_and_removed_slots_++;
         return true;
@@ -978,6 +986,7 @@ class VectorSet {
         Key *dst = keys_ + index;
         new (dst) Key(std::forward<ForwardKey>(key));
         BLI_assert(hash_(*dst) == hash);
+        BLI_assert(is_equal_(*dst, *dst));
         slot.occupy(index, hash);
         occupied_and_removed_slots_++;
         return index;

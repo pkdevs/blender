@@ -27,37 +27,37 @@ static const EnumPropertyItem operation_items[] = {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Menu>("Operation")
+  b.add_input<decl::Menu>("Operation"_ustr)
       .default_value(CMP_NODE_MASKTYPE_ADD)
       .static_items(operation_items)
       .optional_label();
-  b.add_input<decl::Float>("Mask")
+  b.add_input<decl::Float>("Mask"_ustr)
       .subtype(PROP_FACTOR)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Value")
+  b.add_input<decl::Float>("Value"_ustr)
       .subtype(PROP_FACTOR)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Vector>("Position")
+  b.add_input<decl::Vector>("Position"_ustr)
       .subtype(PROP_FACTOR)
       .dimensions(2)
       .default_value({0.5f, 0.5f})
       .min(-0.5f)
       .max(1.5f);
-  b.add_input<decl::Vector>("Size")
+  b.add_input<decl::Vector>("Size"_ustr)
       .subtype(PROP_FACTOR)
       .dimensions(2)
       .default_value({0.2f, 0.1f})
       .min(0.0f)
       .max(1.0f);
-  b.add_input<decl::Float>("Rotation").subtype(PROP_ANGLE);
+  b.add_input<decl::Float>("Rotation"_ustr).subtype(PROP_ANGLE);
 
-  b.add_output<decl::Float>("Mask").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Mask"_ustr).structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;
@@ -139,10 +139,12 @@ class EllipseMaskOperation : public NodeOperation {
     GPU_shader_uniform_1f(shader, "sin_angle", std::sin(get_angle()));
 
     const Result &input_mask = get_input("Mask");
-    input_mask.bind_as_texture(shader, "base_mask_tx");
+    gpu::Texture *base_mask_texture = input_mask.bind_as_texture_or_single_value(shader,
+                                                                                 "base_mask_tx");
 
     const Result &value = get_input("Value");
-    value.bind_as_texture(shader, "mask_value_tx");
+    gpu::Texture *value_mask_texture = value.bind_as_texture_or_single_value(shader,
+                                                                             "mask_value_tx");
 
     Result &output_mask = get_result("Mask");
     output_mask.allocate_texture(domain);
@@ -150,8 +152,8 @@ class EllipseMaskOperation : public NodeOperation {
 
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
-    input_mask.unbind_as_texture();
-    value.unbind_as_texture();
+    input_mask.unbind_as_texture_or_single_value(base_mask_texture);
+    value.unbind_as_texture_or_single_value(value_mask_texture);
     output_mask.unbind_as_image();
     GPU_shader_unbind();
   }
@@ -248,7 +250,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeEllipseMask", CMP_NODE_MASK_ELLIPSE);
+  cmp_node_type_base(&ntype, "CompositorNodeEllipseMask"_ustr, CMP_NODE_MASK_ELLIPSE);
   ntype.ui_name = "Ellipse Mask";
   ntype.ui_description =
       "Create elliptical mask suitable for use as a simple matte or vignette mask";

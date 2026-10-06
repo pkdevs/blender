@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup eevee
+ */
+
 #include "DNA_lightprobe_types.h"
 
 #include "BKE_global.hh"
@@ -227,31 +231,30 @@ void VolumeProbeModule::set_view(View & /*view*/)
   int world_grid_index = 0;
   {
     /* Stable sorting of grids. */
-    std::sort(
-        grid_loaded.begin(), grid_loaded.end(), [](const VolumeProbe *a, const VolumeProbe *b) {
-          float volume_a = math::determinant(float3x3(a->object_to_world));
-          float volume_b = math::determinant(float3x3(b->object_to_world));
-          if (volume_a != volume_b) {
-            /* Smallest first. */
-            return volume_a < volume_b;
-          }
-          /* Volumes are identical. Any arbitrary criteria can be used to sort them.
-           * Use position to avoid unstable result caused by depsgraph non deterministic eval
-           * order. This could also become a priority parameter. */
-          float3 _a = a->object_to_world.location();
-          float3 _b = b->object_to_world.location();
-          if (_a.x != _b.x) {
-            return _a.x < _b.x;
-          }
-          if (_a.y != _b.y) {
-            return _a.y < _b.y;
-          }
-          if (_a.z != _b.z) {
-            return _a.z < _b.z;
-          }
-          /* Fallback to memory address, since there's no good alternative. */
-          return a < b;
-        });
+    std::ranges::sort(grid_loaded, [](const VolumeProbe *a, const VolumeProbe *b) {
+      float volume_a = math::determinant(float3x3(a->object_to_world));
+      float volume_b = math::determinant(float3x3(b->object_to_world));
+      if (volume_a != volume_b) {
+        /* Smallest first. */
+        return volume_a < volume_b;
+      }
+      /* Volumes are identical. Any arbitrary criteria can be used to sort them.
+       * Use position to avoid unstable result caused by depsgraph non deterministic eval
+       * order. This could also become a priority parameter. */
+      float3 _a = a->object_to_world.location();
+      float3 _b = b->object_to_world.location();
+      if (_a.x != _b.x) {
+        return _a.x < _b.x;
+      }
+      if (_a.y != _b.y) {
+        return _a.y < _b.y;
+      }
+      if (_a.z != _b.z) {
+        return _a.z < _b.z;
+      }
+      /* Fallback to memory address, since there's no good alternative. */
+      return a < b;
+    });
 
     /* Insert grids in UBO in sorted order. */
     int grids_len = 0;
@@ -293,6 +296,7 @@ void VolumeProbeModule::set_view(View & /*view*/)
     grid_upload_ps_.bind_ssbo("bricks_infos_buf", &bricks_infos_buf_);
     grid_upload_ps_.push_constant("grid_index", world_grid_index);
     grid_upload_ps_.bind_image("irradiance_atlas_img", &irradiance_atlas_tx_);
+    grid_upload_ps_.bind_texture("irradiance_atlas_tx", &irradiance_atlas_tx_);
     /* Sync with extraction. */
     grid_upload_ps_.barrier(GPU_BARRIER_SHADER_STORAGE);
     /* Only upload one brick. */
@@ -1237,11 +1241,13 @@ void IrradianceBake::surfels_create(const Object &probe_object)
 void IrradianceBake::surfels_lights_eval()
 {
   /* Use the last setup view. This should work since the view is orthographic. */
-  /* TODO(fclem): Remove this. It is only present to avoid crash inside `shadows.set_view` */
+  /* TODO(fclem): Remove this. It is only present to avoid crash inside `shadows.render` */
   inst_.render_buffers.acquire(int2(1));
   inst_.hiz_buffer.set_source(&inst_.render_buffers.depth_tx);
-  inst_.lights.set_view(view_z_, grid_pixel_extent_.xy());
   inst_.shadows.set_view(view_z_, grid_pixel_extent_.xy());
+  inst_.uniform_data.data.push_update();
+  inst_.lights.set_view(view_z_, grid_pixel_extent_.xy());
+  inst_.shadows.render(view_z_, grid_pixel_extent_.xy());
   if (GPU_type_matches(GPU_DEVICE_ANY, GPU_OS_MAC, GPU_DRIVER_ANY)) {
     /* There seems to be a synchronization issue with shadow rendering pass. If not waiting, the
      * surfels are lit without shadows. Waiting for sync here shouldn't be a huge bottleneck

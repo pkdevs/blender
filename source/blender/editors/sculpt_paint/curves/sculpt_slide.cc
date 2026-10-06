@@ -5,7 +5,7 @@
 #include "sculpt_intern.hh"
 
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
 
@@ -13,7 +13,7 @@
 
 #include "BKE_attribute_math.hh"
 #include "BKE_brush.hh"
-#include "BKE_bvhutils.hh"
+#include "BKE_bvh.hh"
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_mesh.hh"
@@ -104,7 +104,7 @@ struct SlideOperationExecutor {
   Span<int> surface_corner_verts_eval_;
   Span<int3> surface_corner_tris_eval_;
   VArraySpan<float2> surface_uv_map_eval_;
-  bke::BVHTreeFromMesh surface_bvh_eval_;
+  const bke::bvh::Tree *surface_bvh_eval_ = nullptr;
 
   VArray<float> curve_factors_;
   IndexMaskMemory selected_curve_memory_;
@@ -193,7 +193,7 @@ struct SlideOperationExecutor {
       report_missing_uv_map_on_evaluated_surface(stroke_extension.reports);
       return;
     }
-    surface_bvh_eval_ = surface_eval_->bvh_corner_tris();
+    surface_bvh_eval_ = &surface_eval_->bvh_tris();
 
     if (stroke_extension.is_first) {
       self_->initial_brush_pos_re_ = brush_pos_re_;
@@ -225,13 +225,14 @@ struct SlideOperationExecutor {
     const Vector<float4x4> brush_transforms = get_symmetry_brush_transforms(
         eCurvesSymmetryType(curves_id_orig_->symmetry));
     const float brush_radius_re = brush_radius_base_re_ * brush_radius_factor_;
-    const std::optional<CurvesBrush3D> brush_3d = sample_curves_surface_3d_brush(*ctx_.depsgraph,
-                                                                                 *ctx_.region,
-                                                                                 *ctx_.v3d,
-                                                                                 transforms_,
-                                                                                 surface_bvh_eval_,
-                                                                                 brush_pos_re_,
-                                                                                 brush_radius_re);
+    const std::optional<CurvesBrush3D> brush_3d = sample_curves_surface_3d_brush(
+        *ctx_.depsgraph,
+        *ctx_.region,
+        *ctx_.v3d,
+        transforms_,
+        *surface_bvh_eval_,
+        brush_pos_re_,
+        brush_radius_re);
     if (!brush_3d.has_value()) {
       return;
     }
@@ -241,36 +242,67 @@ struct SlideOperationExecutor {
 
     const ReverseUVSampler reverse_uv_sampler_orig{surface_uv_map_orig_,
                                                    surface_corner_tris_orig_};
-    for (const float4x4 &brush_transform : brush_transforms) {
+
+    /* Pre-pass: Determine which symmetry brush is closest to each curve root. */
+    Array<int> best_brush(curves_orig_->curves_num(), -1);
+    Array<float> min_dist_sq(curves_orig_->curves_num(), FLT_MAX);
+    const float brush_radius_sq_cu = pow2f(brush_3d->radius_cu);
+    const Span<int> offsets = curves_orig_->offsets();
+
+    for (const int brush_i : brush_transforms.index_range()) {
+      const float3 brush_pos_cu = math::transform_point(brush_transforms[brush_i],
+                                                        brush_3d->position_cu);
+      curve_selection_.foreach_segment([&](const IndexMaskSegment segment) {
+        for (const int curve_i : segment) {
+          const int first_point_i = offsets[curve_i];
+          const float3 old_pos_cu = self_->initial_deformed_positions_cu_[first_point_i];
+          const float dist_sq = math::distance_squared(old_pos_cu, brush_pos_cu);
+
+          if (dist_sq <= brush_radius_sq_cu && dist_sq < min_dist_sq[curve_i]) {
+            min_dist_sq[curve_i] = dist_sq;
+            best_brush[curve_i] = brush_i;
+          }
+        }
+      });
+    }
+
+    /* Main-pass: Gather curves per brush based on the pre-pass result. */
+    for (const int brush_i : brush_transforms.index_range()) {
       self_->slide_info_.append_as();
       SlideInfo &slide_info = self_->slide_info_.last();
-      slide_info.brush_transform = brush_transform;
-      this->find_curves_to_slide(math::transform_point(brush_transform, brush_3d->position_cu),
-                                 brush_3d->radius_cu,
-                                 reverse_uv_sampler_orig,
-                                 slide_info.curves_to_slide);
+      slide_info.brush_transform = brush_transforms[brush_i];
+      this->find_curves_to_slide(
+          math::transform_point(brush_transforms[brush_i], brush_3d->position_cu),
+          brush_3d->radius_cu,
+          reverse_uv_sampler_orig,
+          slide_info.curves_to_slide,
+          best_brush,
+          brush_i);
     }
   }
 
   void find_curves_to_slide(const float3 &brush_pos_cu,
                             const float brush_radius_cu,
                             const ReverseUVSampler &reverse_uv_sampler_orig,
-                            Vector<SlideCurveInfo> &r_curves_to_slide)
+                            Vector<SlideCurveInfo> &r_curves_to_slide,
+                            const Span<int> best_brush,
+                            const int brush_i)
   {
     const Span<float2> surface_uv_coords = *curves_orig_->surface_uv_coords();
-    const float brush_radius_sq_cu = pow2f(brush_radius_cu);
 
     const Span<int> offsets = curves_orig_->offsets();
     curve_selection_.foreach_segment([&](const IndexMaskSegment segment) {
       for (const int curve_i : segment) {
-        const int first_point_i = offsets[curve_i];
-        const float3 old_pos_cu = self_->initial_deformed_positions_cu_[first_point_i];
-        const float dist_to_brush_sq_cu = math::distance_squared(old_pos_cu, brush_pos_cu);
-        if (dist_to_brush_sq_cu > brush_radius_sq_cu) {
-          /* Root point is too far away from curve center. */
+        /* Skip if this curve was claimed by a closer symmetry brush. */
+        if (best_brush[curve_i] != brush_i) {
           continue;
         }
-        const float dist_to_brush_cu = std::sqrt(dist_to_brush_sq_cu);
+
+        const int first_point_i = offsets[curve_i];
+        const float3 old_pos_cu = self_->initial_deformed_positions_cu_[first_point_i];
+
+        /* Compute the falloff based on the distance to the brush. */
+        const float dist_to_brush_cu = math::distance(old_pos_cu, brush_pos_cu);
         const float radius_falloff = BKE_brush_curve_strength(
             brush_, dist_to_brush_cu, brush_radius_cu);
 
@@ -428,25 +460,16 @@ struct SlideOperationExecutor {
     float best_dist_sq_su = FLT_MAX;
     int best_tri_index_eval;
     float3 best_hit_pos_su;
-    BLI_bvhtree_ray_cast_all_cpp(
-        *surface_bvh_eval_.tree,
-        ray_start_su,
-        ray_direction_su,
-        0.0f,
-        FLT_MAX,
-        [&](const int tri_index, const BVHTreeRay &ray, BVHTreeRayHit &hit) {
-          surface_bvh_eval_.raycast_callback(&surface_bvh_eval_, tri_index, &ray, &hit);
-          if (hit.index < 0) {
-            return;
-          }
-          const float3 hit_pos_su = hit.co;
-          const float dist_sq_su = math::distance_squared(hit_pos_su, point_su);
-          if (dist_sq_su < best_dist_sq_su) {
-            best_dist_sq_su = dist_sq_su;
-            best_hit_pos_su = hit_pos_su;
-            best_tri_index_eval = hit.index;
-          }
-        });
+    const bke::bvh::Ray ray(ray_start_su, ray_direction_su);
+    surface_bvh_eval_->ray_intersect_all(ray, [&](const bke::bvh::RayHit &hit) {
+      const float3 hit_pos_su = hit.position(ray);
+      const float dist_sq_su = math::distance_squared(hit_pos_su, point_su);
+      if (dist_sq_su < best_dist_sq_su) {
+        best_dist_sq_su = dist_sq_su;
+        best_hit_pos_su = hit_pos_su;
+        best_tri_index_eval = hit.index;
+      }
+    });
 
     if (best_dist_sq_su == FLT_MAX) {
       return false;

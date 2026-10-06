@@ -12,8 +12,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_base.h"
-#include "BLI_string.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -25,7 +25,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
@@ -35,6 +35,7 @@
 #include "BKE_nla.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
+#include "BKE_scene_context.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -81,8 +82,9 @@ static KeyingSet *keyingset_get_from_op_with_error(wmOperator *op,
 
 static wmOperatorStatus delete_key_using_keying_set(bContext *C, wmOperator *op, KeyingSet *ks);
 
-/* ******************************************* */
-/* Animation Data Validation */
+/* -------------------------------------------------------------------- */
+/** \name Public API
+ * \{ */
 
 void update_autoflags_fcurve(FCurve *fcu, bContext *C, ReportList *reports, PointerRNA *ptr)
 {
@@ -90,13 +92,13 @@ void update_autoflags_fcurve(FCurve *fcu, bContext *C, ReportList *reports, Poin
   PropertyRNA *prop;
   int old_flag = fcu->flag;
 
-  if ((ptr->owner_id == nullptr) && (ptr->data == nullptr)) {
+  if (!*ptr) {
     BKE_report(reports, RPT_ERROR, "No RNA pointer available to retrieve values for this F-curve");
     return;
   }
 
   /* try to get property we should be affecting */
-  if (RNA_path_resolve_property(ptr, fcu->rna_path, &tmp_ptr, &prop) == false) {
+  if (RNA_path_resolve_property(ptr, fcu->rna_path_parsed(), &tmp_ptr, &prop) == false) {
     /* property not found... */
     const char *idname = (ptr->owner_id) ? ptr->owner_id->name : RPT_("<No ID pointer>");
 
@@ -105,7 +107,7 @@ void update_autoflags_fcurve(FCurve *fcu, bContext *C, ReportList *reports, Poin
                 "Could not update flags for this F-curve, as RNA path is invalid for the given ID "
                 "(ID = %s, path = %s)",
                 idname,
-                fcu->rna_path);
+                fcu->rna_path().c_str());
     return;
   }
 
@@ -117,8 +119,6 @@ void update_autoflags_fcurve(FCurve *fcu, bContext *C, ReportList *reports, Poin
     WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
   }
 }
-
-/* ------------------------- Insert Key API ------------------------- */
 
 void ED_keyframes_add(FCurve *fcu, int num_keys_to_add)
 {
@@ -137,15 +137,18 @@ void ED_keyframes_add(FCurve *fcu, int num_keys_to_add)
   /* Iterate over the new keys to update their settings. */
   while (num_keys_to_add--) {
     /* Defaults, ignoring user-preference gives predictable results for API. */
-    bezt->f1 = bezt->f2 = bezt->f3 = SELECT;
+    bezt->f1 = bezt->f2 = bezt->f3 = BEZT_FLAG_SELECT;
     bezt->ipo = BEZT_IPO_BEZ;
     bezt->h1 = bezt->h2 = HD_AUTO_ANIM;
     bezt++;
   }
 }
 
-/* ******************************************* */
-/* KEYFRAME MODIFICATION */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Keyframe Modification Utilities
+ * \{ */
 
 /* mode for commonkey_modifykey */
 enum {
@@ -172,12 +175,49 @@ static bool modify_key_op_poll(bContext *C)
   return true;
 }
 
-/* Insert Key Operator ------------------------ */
+/* Fill the list with items depending on the mode of the context. */
+static bool get_selection(bContext *C, Vector<PointerRNA> *r_selection)
+{
+  const eContextObjectMode context_mode = CTX_data_mode_enum(C);
+  ScrArea *area = CTX_wm_area(C);
+
+  if (area && area->spacetype == SPACE_SEQ) {
+    VectorSet<Strip *> strips = ed::vse::selected_strips_from_context(C);
+    for (Strip *strip : strips) {
+      const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+      Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+      PointerRNA ptr;
+      ptr = RNA_pointer_create_discrete(&scene->id, RNA_Strip, strip);
+      r_selection->append(ptr);
+    }
+    return true;
+  }
+
+  switch (context_mode) {
+    case CTX_MODE_OBJECT: {
+      CTX_data_selected_objects(C, r_selection);
+      break;
+    }
+    case CTX_MODE_POSE: {
+      CTX_data_selected_pose_bones(C, r_selection);
+      break;
+    }
+    default:
+      return false;
+  }
+
+  return true;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Insert Key Operator
+ * \{ */
 
 static wmOperatorStatus insert_key_with_keyingset(bContext *C, wmOperator *op, KeyingSet *ks)
 {
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -241,7 +281,6 @@ static wmOperatorStatus insert_key_with_keyingset(bContext *C, wmOperator *op, K
 
 static Vector<RNAPath> construct_rna_paths(PointerRNA *ptr)
 {
-  eRotationModes rotation_mode;
   Vector<RNAPath> paths;
 
   if (ptr->type == RNA_Strip || RNA_struct_is_a(ptr->type, RNA_Strip)) {
@@ -263,15 +302,8 @@ static Vector<RNAPath> construct_rna_paths(PointerRNA *ptr)
     return paths;
   }
 
-  if (ptr->type == RNA_PoseBone) {
-    bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr->data);
-    rotation_mode = eRotationModes(pchan->rotmode);
-  }
-  else if (ptr->type == RNA_Object) {
-    Object *ob = static_cast<Object *>(ptr->data);
-    rotation_mode = eRotationModes(ob->rotmode);
-  }
-  else {
+  std::optional<eRotationModes> rotation_mode = animrig::get_rotation_mode_from_rna_pointer(*ptr);
+  if (!rotation_mode.has_value()) {
     /* Pointer type not supported. */
     return paths;
   }
@@ -281,7 +313,7 @@ static Vector<RNAPath> construct_rna_paths(PointerRNA *ptr)
     paths.append({"location"});
   }
   if (insert_channel_flags & USER_ANIM_KEY_CHANNEL_ROTATION) {
-    switch (rotation_mode) {
+    switch (rotation_mode.value()) {
       case ROT_MODE_QUAT:
         paths.append({"rotation_quaternion"});
         break;
@@ -312,40 +344,6 @@ static Vector<RNAPath> construct_rna_paths(PointerRNA *ptr)
   return paths;
 }
 
-/* Fill the list with items depending on the mode of the context. */
-static bool get_selection(bContext *C, Vector<PointerRNA> *r_selection)
-{
-  const eContextObjectMode context_mode = CTX_data_mode_enum(C);
-  ScrArea *area = CTX_wm_area(C);
-
-  if (area && area->spacetype == SPACE_SEQ) {
-    VectorSet<Strip *> strips = ed::vse::selected_strips_from_context(C);
-    for (Strip *strip : strips) {
-      const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-      Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
-      PointerRNA ptr;
-      ptr = RNA_pointer_create_discrete(&scene->id, RNA_Strip, strip);
-      r_selection->append(ptr);
-    }
-    return true;
-  }
-
-  switch (context_mode) {
-    case CTX_MODE_OBJECT: {
-      CTX_data_selected_objects(C, r_selection);
-      break;
-    }
-    case CTX_MODE_POSE: {
-      CTX_data_selected_pose_bones(C, r_selection);
-      break;
-    }
-    default:
-      return false;
-  }
-
-  return true;
-}
-
 static wmOperatorStatus insert_key(bContext *C, wmOperator *op)
 {
   Vector<PointerRNA> selection;
@@ -361,8 +359,7 @@ static wmOperatorStatus insert_key(bContext *C, wmOperator *op)
   }
 
   Main *bmain = CTX_data_main(C);
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   const float scene_frame = BKE_scene_frame_get(scene);
 
   const eInsertKeyFlags insert_key_flags = animrig::get_keyframing_flags(scene);
@@ -419,8 +416,7 @@ static wmOperatorStatus insert_key_exec(bContext *C, wmOperator *op)
 {
   ANIM_deselect_keys_in_animation_editors(C);
 
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -472,8 +468,7 @@ static wmOperatorStatus keyframe_insert_with_keyingset_exec(bContext *C, wmOpera
 {
   ANIM_deselect_keys_in_animation_editors(C);
 
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -509,17 +504,20 @@ void ANIM_OT_keyframe_insert_by_name(wmOperatorType *ot)
   ot->prop = prop;
 }
 
-/* Insert Key Operator (With Menu) ------------------------ */
-/* This operator checks if a menu should be shown for choosing the KeyingSet to use,
- * then calls the menu if necessary before
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Insert Key Operator (With Menu)
+ *
+ * This operator checks if a menu should be shown for choosing the KeyingSet to use,
+ * then calls the menu if necessary before.
+ * \{ */
 
 static wmOperatorStatus insert_key_menu_invoke(bContext *C,
                                                wmOperator *op,
                                                const wmEvent * /*event*/)
 {
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -607,12 +605,15 @@ void ANIM_OT_keyframe_insert_menu(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
-/* Delete Key Operator ------------------------ */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Key Operator (Keying Sets)
+ * \{ */
 
 static wmOperatorStatus delete_key_exec(bContext *C, wmOperator *op)
 {
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -626,8 +627,7 @@ static wmOperatorStatus delete_key_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus delete_key_using_keying_set(bContext *C, wmOperator *op, KeyingSet *ks)
 {
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -722,10 +722,11 @@ void ANIM_OT_keyframe_delete_by_name(wmOperatorType *ot)
   ot->prop = prop;
 }
 
-/* Delete Key Operator ------------------------ */
-/* NOTE: Although this version is simpler than the more generic version for KeyingSets,
- * it is more useful for animators working in the 3D view.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Remove Animation Operator (3D View)
+ * \{ */
 
 /* While in pose mode, the selection of bones has to be considered. */
 static bool can_delete_fcurve(FCurve *fcu, Object *ob)
@@ -733,17 +734,17 @@ static bool can_delete_fcurve(FCurve *fcu, Object *ob)
   bool can_delete = false;
   /* in pose mode, only delete the F-Curve if it belongs to a selected bone */
   if (ob->mode & OB_MODE_POSE) {
-    if (fcu->rna_path) {
-      /* Get bone-name, and check if this bone is selected. */
-      bPoseChannel *pchan = nullptr;
-      char bone_name[sizeof(pchan->name)];
-      if (BLI_str_quoted_substr(fcu->rna_path, "pose.bones[", bone_name, sizeof(bone_name))) {
-        pchan = BKE_pose_channel_find_name(ob->pose, bone_name);
-        /* Delete if bone is selected. */
-        if ((pchan) && (pchan->bone)) {
-          if (pchan->flag & POSE_SELECTED) {
-            can_delete = true;
-          }
+    const StringRefNull rna_path = fcu->rna_path();
+    /* Get bone-name, and check if this bone is selected. */
+    bPoseChannel *pchan = nullptr;
+    char bone_name[sizeof(pchan->name)];
+    if (BLI_str_quoted_substr(rna_path.c_str(), "pose.bones[", bone_name, sizeof(bone_name))) {
+      pchan = BKE_pose_channel_find_name(ob->pose, bone_name);
+      /* Delete if bone is selected. */
+      if ((pchan) && (pchan->bone_get(*ob))) {
+        /* TODO(Sybren): use bone_is_selected() to avoid treating invisible bone as selected. */
+        if (pchan->flag & POSE_SELECTED) {
+          can_delete = true;
         }
       }
     }
@@ -771,7 +772,7 @@ static wmOperatorStatus clear_anim_v3d_exec(bContext *C, wmOperator * /*op*/)
 
       Action &action = dna_action->wrap();
       Vector<FCurve *> fcurves_to_delete;
-      foreach_fcurve_in_action_slot(action, adt->slot_handle, [&](FCurve &fcurve) {
+      foreach_fcurve_in_action_slot_editable(action, adt->slot_handle, [&](FCurve &fcurve) {
         if (can_delete_fcurve(&fcurve, ob)) {
           fcurves_to_delete.append(&fcurve);
         }
@@ -830,6 +831,12 @@ void ANIM_OT_keyframe_clear_v3d(wmOperatorType *ot)
   WM_operator_properties_confirm_or_exec(ot);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Video Sequencer Utilities
+ * \{ */
+
 static Vector<std::string> get_selected_strips_rna_paths(Vector<PointerRNA> &selection)
 {
   Vector<std::string> selected_strips_rna_paths;
@@ -854,9 +861,14 @@ static void invalidate_strip_caches(Vector<PointerRNA> selection, Scene *scene)
 
 static bool fcurve_belongs_to_strip(const FCurve &fcurve, const std::string &strip_path)
 {
-  return fcurve.rna_path &&
-         std::strncmp(fcurve.rna_path, strip_path.c_str(), strip_path.length()) == 0;
+  return std::strncmp(fcurve.rna_path().c_str(), strip_path.c_str(), strip_path.length()) == 0;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Remove Animation Operator (Video Sequencer)
+ * \{ */
 
 static wmOperatorStatus clear_anim_vse_exec(bContext *C, wmOperator *op)
 {
@@ -885,7 +897,7 @@ static wmOperatorStatus clear_anim_vse_exec(bContext *C, wmOperator *op)
 
   Action &action = dna_action->wrap();
   Vector<FCurve *> fcurves_to_delete;
-  foreach_fcurve_in_action_slot(action, adt->slot_handle, [&](FCurve &fcurve) {
+  foreach_fcurve_in_action_slot_editable(action, adt->slot_handle, [&](FCurve &fcurve) {
     for (const std::string &strip_path : selected_strips_rna_paths) {
       if (fcurve_belongs_to_strip(fcurve, strip_path)) {
         fcurves_to_delete.append(&fcurve);
@@ -945,6 +957,12 @@ void ANIM_OT_keyframe_clear_vse(wmOperatorType *ot)
   WM_operator_properties_confirm_or_exec(ot);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Key Utilities
+ * \{ */
+
 static bool can_delete_key(FCurve *fcu, Object *ob, ReportList *reports)
 {
   /* don't touch protected F-Curves */
@@ -952,7 +970,7 @@ static bool can_delete_key(FCurve *fcu, Object *ob, ReportList *reports)
     BKE_reportf(reports,
                 RPT_WARNING,
                 "Not deleting keyframe for locked F-Curve '%s', object '%s'",
-                fcu->rna_path,
+                fcu->rna_path().c_str(),
                 ob->id.name + 2);
     return false;
   }
@@ -968,17 +986,19 @@ static bool can_delete_key(FCurve *fcu, Object *ob, ReportList *reports)
 
     /* Get bone-name, and check if this bone is selected. */
     char bone_name[sizeof(pchan->name)];
-    if (!BLI_str_quoted_substr(fcu->rna_path, "pose.bones[", bone_name, sizeof(bone_name))) {
+    if (!BLI_str_quoted_substr(
+            fcu->rna_path().c_str(), "pose.bones[", bone_name, sizeof(bone_name)))
+    {
       return false;
     }
     pchan = BKE_pose_channel_find_name(ob->pose, bone_name);
 
     /* skip if bone is not selected */
-    if ((pchan) && (pchan->bone)) {
+    if ((pchan) && (pchan->bone_get(*ob))) {
       bArmature *arm = id_cast<bArmature *>(ob->data);
 
       /* Only selected bones should be affected. */
-      if (!animrig::bone_is_selected(arm, pchan)) {
+      if (!animrig::bone_is_selected(arm, {pchan, pchan->bone_get(*ob)})) {
         return false;
       }
     }
@@ -994,12 +1014,18 @@ static bool can_delete_scene_key(FCurve *fcu, Scene *scene, wmOperator *op)
     BKE_reportf(op->reports,
                 RPT_WARNING,
                 "Not deleting keyframe for locked F-Curve '%s', scene '%s'",
-                fcu->rna_path,
+                fcu->rna_path().c_str(),
                 scene->id.name + 2);
     return false;
   }
   return true;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Key Operator (Video Sequencer)
+ * \{ */
 
 static wmOperatorStatus delete_key_vse_without_keying_set(bContext *C, wmOperator *op)
 {
@@ -1032,7 +1058,7 @@ static wmOperatorStatus delete_key_vse_without_keying_set(bContext *C, wmOperato
   VectorSet<std::string> modified_strips;
   Vector<FCurve *> modified_fcurves;
 
-  foreach_fcurve_in_action_slot(action, adt->slot_handle, [&](FCurve &fcurve) {
+  foreach_fcurve_in_action_slot_editable(action, adt->slot_handle, [&](FCurve &fcurve) {
     std::string changed_strip;
     for (const std::string &strip_path : selected_strips_rna_paths) {
       if (fcurve_belongs_to_strip(fcurve, strip_path)) {
@@ -1135,6 +1161,15 @@ void ANIM_OT_keyframe_delete_vse(wmOperatorType *ot)
   WM_operator_properties_confirm_or_exec(ot);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Key Operator (3D View)
+ *
+ * \note Although this version is simpler than the more generic version for KeyingSets,
+ * it is more useful for animators working in the 3D view.
+ * \{ */
+
 static wmOperatorStatus delete_key_v3d_without_keying_set(bContext *C, wmOperator *op)
 {
   using namespace blender::animrig;
@@ -1160,7 +1195,7 @@ static wmOperatorStatus delete_key_v3d_without_keying_set(bContext *C, wmOperato
 
       Action &action = act->wrap();
       Vector<FCurve *> modified_fcurves;
-      foreach_fcurve_in_action_slot(action, adt->slot_handle, [&](FCurve &fcurve) {
+      foreach_fcurve_in_action_slot_editable(action, adt->slot_handle, [&](FCurve &fcurve) {
         if (!can_delete_key(&fcurve, ob, op->reports)) {
           return;
         }
@@ -1261,14 +1296,17 @@ void ANIM_OT_keyframe_delete_v3d(wmOperatorType *ot)
   WM_operator_properties_confirm_or_exec(ot);
 }
 
-/* Insert Key Button Operator ------------------------ */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Insert Key Button Operator
+ * \{ */
 
 static wmOperatorStatus insert_key_button_exec(bContext *C, wmOperator *op)
 {
   using namespace blender::animrig;
   Main *bmain = CTX_data_main(C);
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -1290,7 +1328,7 @@ static wmOperatorStatus insert_key_button_exec(bContext *C, wmOperator *op)
     return (OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH);
   }
 
-  if ((ptr.owner_id && ptr.data && prop) && RNA_property_anim_editable(&ptr, prop)) {
+  if ((ptr && ptr.has_owner_id() && prop) && RNA_property_anim_editable(&ptr, prop)) {
     if (ptr.type == RNA_NlaStrip) {
       /* Handle special properties for NLA Strips, whose F-Curves are stored on the
        * strips themselves. These are stored separately or else the properties will
@@ -1300,16 +1338,21 @@ static wmOperatorStatus insert_key_button_exec(bContext *C, wmOperator *op)
       FCurve *fcu = BKE_fcurve_find(&strip->fcurves, RNA_property_identifier(prop), index);
 
       if (fcu) {
-        changed = insert_keyframe_direct(op->reports,
-                                         ptr,
-                                         prop,
-                                         fcu,
-                                         &anim_eval_context,
-                                         eBezTriple_KeyframeType(ts->keyframe_type),
-                                         nullptr,
-                                         eInsertKeyFlags(0));
+        const SingleKeyingResult result = insert_keyframe_direct(
+            ptr,
+            *prop,
+            *fcu,
+            anim_eval_context.eval_time,
+            eBezTriple_KeyframeType(ts->keyframe_type),
+            eInsertKeyFlags{});
+        changed = result == SingleKeyingResult::SUCCESS;
+        if (result != SingleKeyingResult::SUCCESS) {
+          generate_single_keying_result_report(result, op->reports);
+        }
       }
       else {
+        /* This special case exists because we have to allow drivers and clearing the
+         * PROP_ANIMATABLE flag from the properties would prevent that. */
         BKE_report(op->reports,
                    RPT_ERROR,
                    "This property cannot be animated as it will not get updated correctly");
@@ -1326,16 +1369,17 @@ static wmOperatorStatus insert_key_button_exec(bContext *C, wmOperator *op)
       if (fcu && driven) {
         const float driver_frame = evaluate_driver_from_rna_pointer(
             &anim_eval_context, &ptr, prop, fcu);
-        AnimationEvalContext remapped_context = BKE_animsys_eval_context_construct(
-            CTX_data_depsgraph_pointer(C), driver_frame);
-        changed = insert_keyframe_direct(op->reports,
-                                         ptr,
-                                         prop,
-                                         fcu,
-                                         &remapped_context,
-                                         eBezTriple_KeyframeType(ts->keyframe_type),
-                                         nullptr,
-                                         INSERTKEY_NOFLAGS);
+        const SingleKeyingResult result = insert_keyframe_direct(
+            ptr,
+            *prop,
+            *fcu,
+            driver_frame,
+            eBezTriple_KeyframeType(ts->keyframe_type),
+            INSERTKEY_NOFLAGS);
+        changed = result == SingleKeyingResult::SUCCESS;
+        if (result != SingleKeyingResult::SUCCESS) {
+          generate_single_keying_result_report(result, op->reports);
+        }
       }
     }
     else {
@@ -1423,12 +1467,15 @@ void ANIM_OT_keyframe_insert_button(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "all", true, "All", "Insert a keyframe for all element of the array");
 }
 
-/* Delete Key Button Operator ------------------------ */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Key Button Operator
+ * \{ */
 
 static wmOperatorStatus delete_key_button_exec(bContext *C, wmOperator *op)
 {
-  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
-  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -1445,7 +1492,7 @@ static wmOperatorStatus delete_key_button_exec(bContext *C, wmOperator *op)
     return (OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH);
   }
 
-  if (ptr.owner_id && ptr.data && prop) {
+  if (ptr && ptr.has_owner_id() && prop) {
     if (BKE_nlastrip_has_curves_for_property(&ptr, prop)) {
       /* Handle special properties for NLA Strips, whose F-Curves are stored on the
        * strips themselves. These are stored separately or else the properties will
@@ -1462,7 +1509,7 @@ static wmOperatorStatus delete_key_button_exec(bContext *C, wmOperator *op)
               RPT_WARNING,
               "Not deleting keyframe for locked F-Curve for NLA Strip influence on %s - %s '%s'",
               strip->name,
-              BKE_idtype_idcode_to_name(GS(id->name)),
+              BKE_idtype_idcode_to_name(id->id_type()),
               id->name + 2);
         }
         else {
@@ -1533,7 +1580,11 @@ void ANIM_OT_keyframe_delete_button(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "all", true, "All", "Delete keyframes from all elements of the array");
 }
 
-/* Clear Key Button Operator ------------------------ */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Clear Key Button Operator
+ * \{ */
 
 static wmOperatorStatus clear_key_button_exec(bContext *C, wmOperator *op)
 {
@@ -1549,7 +1600,7 @@ static wmOperatorStatus clear_key_button_exec(bContext *C, wmOperator *op)
     return (OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH);
   }
 
-  if (ptr.owner_id && ptr.data && prop) {
+  if (ptr && ptr.has_owner_id() && prop) {
     if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       RNAPath rna_path = {*path, std::nullopt, index};
       if (all) {
@@ -1596,10 +1647,11 @@ void ANIM_OT_keyframe_clear_button(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "all", true, "All", "Clear keyframes from all elements of the array");
 }
 
-/* ******************************************* */
-/* KEYFRAME DETECTION */
+/** \} */
 
-/* --------------- API/Per-Datablock Handling ------------------- */
+/* -------------------------------------------------------------------- */
+/** \name Internal Utilities
+ * \{ */
 
 bool fcurve_is_changed(PointerRNA ptr,
                        PropertyRNA *prop,
@@ -1619,10 +1671,6 @@ bool fcurve_is_changed(PointerRNA ptr,
 
   return !compare_ff_relative(fcurve_val, cur_val, FLT_EPSILON, 64);
 }
-
-/* -------------------------------------------------------------------- */
-/** \name Internal Utilities
- * \{ */
 
 /** Use for insert/delete key-frame. */
 static KeyingSet *keyingset_get_from_op_with_error(wmOperator *op, PropertyRNA *prop, Scene *scene)

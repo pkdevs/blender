@@ -37,7 +37,7 @@ namespace blender::ed::transform {
 /**
  * \note Small arrays / data-structures should be stored copied for faster memory access.
  */
-struct SnapSouceCustomData {
+struct SnapSourceCustomData {
   TransModeInfo *mode_info_prev;
   void *customdata_mode_prev;
 
@@ -56,7 +56,7 @@ static void snapsource_end(TransInfo *t)
   t->modifiers &= ~MOD_EDIT_SNAP_SOURCE;
 
   /* Restore. */
-  SnapSouceCustomData *customdata = static_cast<SnapSouceCustomData *>(t->custom.mode.data);
+  SnapSourceCustomData *customdata = static_cast<SnapSourceCustomData *>(t->custom.mode.data);
   t->mode_info = customdata->mode_info_prev;
   t->custom.mode.data = customdata->customdata_mode_prev;
 
@@ -80,7 +80,7 @@ static void snapsource_confirm(TransInfo *t)
   t->tsnap.source_type = t->tsnap.target_type;
   t->tsnap.status |= SNAP_SOURCE_FOUND;
 
-  SnapSouceCustomData *customdata = static_cast<SnapSouceCustomData *>(t->custom.mode.data);
+  SnapSourceCustomData *customdata = static_cast<SnapSourceCustomData *>(t->custom.mode.data);
   t->tsnap.mode = customdata->snap_mode_confirm;
 
   float2 mval;
@@ -183,7 +183,7 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
     transform_mode_init(t, nullptr, TFM_TRANSLATION);
   }
 
-  SnapSouceCustomData *customdata = MEM_new_zeroed<SnapSouceCustomData>(__func__);
+  SnapSourceCustomData *customdata = MEM_new_zeroed<SnapSourceCustomData>(__func__);
   customdata->mode_info_prev = t->mode_info;
 
   customdata->target_operation_prev = t->tsnap.target_operation;
@@ -222,8 +222,9 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
   }
 
   if (t->data_type == &TransConvertType_Mesh) {
-    ed::transform::snap_object_context_set_editmesh_callbacks(
-        t->tsnap.object_context, nullptr, nullptr, nullptr, nullptr);
+    /* The snap source can be placed anywhere, including on the geometry being transformed. */
+    ed::transform::snap_object_context_set_editmesh_target(
+        t->tsnap.object_context, ed::transform::SnapEditMeshTarget::Visible);
   }
 
 #ifdef RESET_TRANSFORMATION
@@ -272,6 +273,7 @@ TransModeInfo TransMode_snapsource = {
     /*snap_distance_fn*/ nullptr,
     /*snap_apply_fn*/ nullptr,
     /*draw_fn*/ nullptr,
+    /*status_fn*/ nullptr,
 };
 
 }  // namespace blender::ed::transform

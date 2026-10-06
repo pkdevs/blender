@@ -1107,7 +1107,7 @@ class CLIP_PT_proxy(CLIP_PT_clip_view_panel, Panel):
     bl_space_type = 'CLIP_EDITOR'
     bl_region_type = 'UI'
     bl_category = "Footage"
-    bl_label = "Proxy/Timecode"
+    bl_label = "Proxy"
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw_header(self, context):
@@ -1149,16 +1149,7 @@ class CLIP_PT_proxy(CLIP_PT_clip_view_panel, Panel):
         if clip.use_proxy_custom_directory:
             col.prop(clip.proxy, "directory")
 
-        col.operator(
-            "clip.rebuild_proxy",
-            text="Build Proxy / Timecode" if clip.source == 'MOVIE'
-            else "Build Proxy"
-        )
-
-        if clip.source == 'MOVIE':
-            col2 = col.column()
-            col2.prop(clip.proxy, "timecode", text="Timecode Index")
-
+        col.operator("clip.rebuild_proxy", text="Build Proxy")
         col.separator()
 
         col.prop(sc.clip_user, "proxy_render_size", text="Proxy Size")
@@ -1224,11 +1215,16 @@ class CLIP_PT_tools_mask_tools(MASK_PT_tools, Panel):
 # --- end mask ---
 
 
-class CLIP_PT_footage(CLIP_PT_clip_view_panel, Panel):
+class CLIP_PT_footage(Panel):
     bl_space_type = 'CLIP_EDITOR'
     bl_region_type = 'UI'
     bl_category = "Footage"
     bl_label = "Footage Settings"
+
+    @classmethod
+    def poll(cls, context):
+        sc = context.space_data
+        return sc.view == 'CLIP'
 
     def draw(self, context):
         layout = self.layout
@@ -1237,9 +1233,12 @@ class CLIP_PT_footage(CLIP_PT_clip_view_panel, Panel):
 
         sc = context.space_data
 
-        col = layout.column()
-        col.template_movieclip(sc, "clip", compact=True)
-        col.template_movieclip_information(sc, "clip", sc.clip_user)
+        if not sc.clip:
+            layout.label(text="No active movie clip", icon='STATUS_INFO')
+        else:
+            col = layout.column()
+            col.template_movieclip(sc, "clip", compact=True)
+            col.template_movieclip_information(sc, "clip", sc.clip_user)
 
 
 class CLIP_PT_animation(CLIP_PT_clip_view_panel, Panel):

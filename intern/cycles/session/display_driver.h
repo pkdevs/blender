@@ -5,6 +5,7 @@
 #pragma once
 
 #include "util/half.h"
+#include "util/math_int2.h"
 #include "util/types.h"
 #include "util/vector.h"
 
@@ -117,6 +118,7 @@ class DisplayDriver {
     }
   };
 
+  virtual void reset() {}
   virtual void next_tile_begin() = 0;
 
   /* Update the render from the rendering thread.

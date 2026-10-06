@@ -4,6 +4,8 @@
 
 #include "scene/image_sky.h"
 
+#include "util/image_metadata.h"
+
 #include "sky_nishita.h"
 
 CCL_NAMESPACE_BEGIN
@@ -25,7 +27,9 @@ SkyLoader::SkyLoader(const bool multiple_scattering,
 
 SkyLoader::~SkyLoader() = default;
 
-bool SkyLoader::load_metadata(ImageMetaData &metadata)
+bool SkyLoader::load_metadata(ImageMetaData &metadata,
+                              const ImageLoaderParams & /*params*/,
+                              Progress & /*progress*/)
 {
   metadata.width = 512;
   metadata.height = 256;
@@ -73,9 +77,13 @@ string SkyLoader::name() const
   return "sky_multiple_scattering";
 }
 
-bool SkyLoader::equals(const ImageLoader & /*other*/) const
+bool SkyLoader::equals(const ImageLoader &other) const
 {
-  return false;
+  const SkyLoader &other_sky = (const SkyLoader &)other;
+  return multiple_scattering == other_sky.multiple_scattering &&
+         sun_elevation == other_sky.sun_elevation && altitude == other_sky.altitude &&
+         air_density == other_sky.air_density && aerosol_density == other_sky.aerosol_density &&
+         ozone_density == other_sky.ozone_density;
 }
 
 CCL_NAMESPACE_END

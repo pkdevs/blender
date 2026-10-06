@@ -110,8 +110,6 @@ void blf_font_draw__wrap(FontBLF *font, const char *str, size_t str_len, ResultB
  */
 void blf_draw_svg_icon(FontBLF *font,
                        uint icon_id,
-                       float x,
-                       float y,
                        float size,
                        const float color[4] = nullptr,
                        float outline_alpha = 1.0f,
@@ -135,7 +133,7 @@ Vector<StringRef> blf_font_string_wrap(FontBLF *font,
  * Use fixed column width, but an UTF8 character may occupy multiple columns.
  */
 int blf_font_draw_mono(
-    FontBLF *font, const char *str, size_t str_len, int cwidth, int tab_columns);
+    FontBLF *font, const char *str, size_t str_len, int char_width, int tab_columns);
 void blf_font_draw_buffer(FontBLF *font, const char *str, size_t str_len, ResultBLF *r_info);
 void blf_font_draw_buffer__wrap(FontBLF *font, const char *str, size_t str_len, ResultBLF *r_info);
 size_t blf_font_width_to_strlen(
@@ -170,6 +168,12 @@ void blf_font_boundbox_foreach_glyph(
     size_t str_len,
     bool (*user_fn)(const char *str, size_t str_step_ofs, const rcti *bounds, void *user_data),
     void *user_data);
+
+void blf_font_info_foreach_glyph(
+    FontBLF *font,
+    const char *str,
+    size_t str_len,
+    FunctionRef<void(int index, size_t byte_offset, int byte_len, int advance_x)> callback);
 
 size_t blf_str_offset_from_cursor_position(FontBLF *font,
                                            const char *str,
@@ -230,7 +234,8 @@ bool blf_character_to_curves(FontBLF *font,
                              ListBaseT<Nurb> *nurbsbase,
                              const float scale,
                              bool use_fallback,
-                             float *r_advance);
+                             float *r_advance,
+                             rctf *r_bounds);
 
 }  // namespace blender
 

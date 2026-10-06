@@ -15,8 +15,8 @@
 #define DNA_GENFILE_VERSIONING_MACROS
 
 #include "BKE_idprop.hh"
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_brush_types.h"
@@ -45,12 +45,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BKE_anim_visualization.h"
@@ -85,6 +85,8 @@
 
 #include "readfile.hh"
 
+#include "versioning_common.hh"
+
 namespace blender {
 
 /** Without empty statements, clang-format fails (tested with v12 & v15). */
@@ -98,7 +100,7 @@ static void do_versions_nodetree_image_default_alpha_output(bNodeTree *ntree)
   for (bNode &node : ntree->nodes) {
     if (ELEM(node.type_legacy, CMP_NODE_IMAGE, CMP_NODE_R_LAYERS)) {
       /* default Image output value should have 0 alpha */
-      bNodeSocket *sock = static_cast<bNodeSocket *>(node.outputs.first);
+      bNodeSocket *sock = node.outputs.first();
       (static_cast<bNodeSocketValueRGBA *>(sock->default_value))->value[3] = 0.0f;
     }
   }
@@ -109,45 +111,55 @@ static void do_versions_nodetree_convert_angle(bNodeTree *ntree)
   for (bNode &node : ntree->nodes) {
     if (node.type_legacy == CMP_NODE_ROTATE) {
       /* Convert degrees to radians. */
-      bNodeSocket *sock = static_cast<bNodeSocket *>(node.inputs.first)->next;
+      bNodeSocket *sock = node.inputs.first()->next;
       (static_cast<bNodeSocketValueFloat *>(sock->default_value))->value = DEG2RADF(
           ((bNodeSocketValueFloat *)sock->default_value)->value);
     }
     else if (node.type_legacy == CMP_NODE_DBLUR) {
-      /* Convert degrees to radians. */
-      NodeDBlurData *ndbd = static_cast<NodeDBlurData *>(node.storage);
-      ndbd->angle = DEG2RADF(ndbd->angle);
-      ndbd->spin = DEG2RADF(ndbd->spin);
+      if (version_node_ensure_storage_or_invalidate(node)) {
+        /* Convert degrees to radians. */
+        NodeDBlurData *ndbd = static_cast<NodeDBlurData *>(node.storage);
+        ndbd->angle = DEG2RADF(ndbd->angle);
+        ndbd->spin = DEG2RADF(ndbd->spin);
+      }
     }
     else if (node.type_legacy == CMP_NODE_DEFOCUS) {
-      /* Convert degrees to radians. */
-      NodeDefocus *nqd = static_cast<NodeDefocus *>(node.storage);
-      /* XXX DNA char to float conversion seems to map the char value
-       * into the [0.0f, 1.0f] range. */
-      nqd->rotation = DEG2RADF(nqd->rotation * 255.0f);
+      if (version_node_ensure_storage_or_invalidate(node)) {
+        /* Convert degrees to radians. */
+        NodeDefocus *nqd = static_cast<NodeDefocus *>(node.storage);
+        /* XXX DNA char to float conversion seems to map the char value
+         * into the [0.0f, 1.0f] range. */
+        nqd->rotation = DEG2RADF(nqd->rotation * 255.0f);
+      }
     }
     else if (node.type_legacy == CMP_NODE_CHROMA_MATTE) {
-      /* Convert degrees to radians. */
-      NodeChroma *ndc = static_cast<NodeChroma *>(node.storage);
-      ndc->t1 = DEG2RADF(ndc->t1);
-      ndc->t2 = DEG2RADF(ndc->t2);
+      if (version_node_ensure_storage_or_invalidate(node)) {
+        /* Convert degrees to radians. */
+        NodeChroma *ndc = static_cast<NodeChroma *>(node.storage);
+        ndc->t1 = DEG2RADF(ndc->t1);
+        ndc->t2 = DEG2RADF(ndc->t2);
+      }
     }
     else if (node.type_legacy == CMP_NODE_GLARE) {
-      /* Convert degrees to radians. */
-      NodeGlare *ndg = static_cast<NodeGlare *>(node.storage);
-      /* XXX DNA char to float conversion seems to map the char value
-       * into the [0.0f, 1.0f] range. */
-      ndg->angle_ofs = DEG2RADF(ndg->angle_ofs * 255.0f);
+      if (version_node_ensure_storage_or_invalidate(node)) {
+        /* Convert degrees to radians. */
+        NodeGlare *ndg = static_cast<NodeGlare *>(node.storage);
+        /* XXX DNA char to float conversion seems to map the char value
+         * into the [0.0f, 1.0f] range. */
+        ndg->angle_ofs = DEG2RADF(ndg->angle_ofs * 255.0f);
+      }
     }
     /* XXX TexMapping struct is used by other nodes too (at least node_composite_mapValue),
      *     but not the rot part...
      */
     else if (node.type_legacy == SH_NODE_MAPPING) {
-      /* Convert degrees to radians. */
-      TexMapping *tmap = static_cast<TexMapping *>(node.storage);
-      tmap->rot[0] = DEG2RADF(tmap->rot[0]);
-      tmap->rot[1] = DEG2RADF(tmap->rot[1]);
-      tmap->rot[2] = DEG2RADF(tmap->rot[2]);
+      if (version_node_ensure_storage_or_invalidate(node)) {
+        /* Convert degrees to radians. */
+        TexMapping *tmap = static_cast<TexMapping *>(node.storage);
+        tmap->rot[0] = DEG2RADF(tmap->rot[0]);
+        tmap->rot[1] = DEG2RADF(tmap->rot[1]);
+        tmap->rot[2] = DEG2RADF(tmap->rot[2]);
+      }
     }
   }
 }
@@ -178,7 +190,7 @@ static void do_versions_image_settings_2_60(Scene *sce)
 
   /* we know no data loss happens here, the old values were in char range */
   imf->imtype = char(rd->imtype);
-  imf->planes = char(rd->planes);
+  imf->color_mode = ImColorMode(rd->color_mode);
   imf->compress = char(rd->quality);
   imf->quality = char(rd->quality);
 
@@ -328,6 +340,9 @@ static bNodeSocket *ntreeCompositOutputFileAddSocket(bNodeTree *ntree,
                                                      const char *name,
                                                      const ImageFormatData *im_format)
 {
+  if (!version_node_ensure_storage_or_invalidate(*node)) {
+    return nullptr;
+  }
   NodeCompositorFileOutput *nimf = static_cast<NodeCompositorFileOutput *>(node->storage);
   bNodeSocket *sock = bke::node_add_static_socket(
       *ntree, *node, SOCK_IN, SOCK_RGBA, PROP_NONE, "", name);
@@ -378,7 +393,7 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
        * checks when adding new sockets.
        * sock->storage is expected to contain path info in ntreeCompositOutputFileAddSocket.
        */
-      BLI_listbase_clear(&node.inputs);
+      node.inputs.clear_no_delete();
 
       node.storage = nimf;
 
@@ -408,6 +423,9 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
         SNPRINTF_UTF8(sockpath, "%s_Image", filename);
         bNodeSocket *sock = ntreeCompositOutputFileAddSocket(
             ntree, &node, sockpath, &nimf->format);
+        if (!sock) {
+          continue;
+        }
         /* XXX later do_versions copies path from socket name, need to set this explicitly */
         STRNCPY_UTF8(sock->name, sockpath);
         if (old_image->link) {
@@ -417,6 +435,9 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
 
         SNPRINTF_UTF8(sockpath, "%s_Z", filename);
         sock = ntreeCompositOutputFileAddSocket(ntree, &node, sockpath, &nimf->format);
+        if (!sock) {
+          continue;
+        }
         /* XXX later do_versions copies path from socket name, need to set this explicitly */
         STRNCPY_UTF8(sock->name, sockpath);
         if (old_z->link) {
@@ -427,6 +448,9 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
       else {
         bNodeSocket *sock = ntreeCompositOutputFileAddSocket(
             ntree, &node, filename, &nimf->format);
+        if (!sock) {
+          continue;
+        }
         /* XXX later do_versions copies path from socket name, need to set this explicitly */
         STRNCPY_UTF8(sock->name, filename);
         if (old_image->link) {
@@ -442,24 +466,26 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
       }
     }
     else if (node.type_legacy == CMP_NODE_OUTPUT_MULTI_FILE__DEPRECATED) {
-      NodeCompositorFileOutput *nimf = static_cast<NodeCompositorFileOutput *>(node.storage);
+      if (version_node_ensure_storage_or_invalidate(node)) {
+        NodeCompositorFileOutput *nimf = static_cast<NodeCompositorFileOutput *>(node.storage);
 
-      /* #CMP_NODE_OUTPUT_MULTI_FILE has been re-declared as #CMP_NODE_OUTPUT_FILE. */
-      node.type_legacy = CMP_NODE_OUTPUT_FILE;
+        /* #CMP_NODE_OUTPUT_MULTI_FILE has been re-declared as #CMP_NODE_OUTPUT_FILE. */
+        node.type_legacy = CMP_NODE_OUTPUT_FILE;
 
-      /* initialize the node-wide image format from render data, if available */
-      if (sce) {
-        nimf->format = sce->r.im_format;
+        /* initialize the node-wide image format from render data, if available */
+        if (sce) {
+          nimf->format = sce->r.im_format;
+        }
+
+        /* transfer render format toggle to node format toggle */
+        for (bNodeSocket &sock : node.inputs) {
+          NodeImageMultiFileSocket *simf = static_cast<NodeImageMultiFileSocket *>(sock.storage);
+          simf->use_node_format = simf->use_render_format;
+        }
+
+        /* we do have preview now */
+        node.flag |= NODE_PREVIEW;
       }
-
-      /* transfer render format toggle to node format toggle */
-      for (bNodeSocket &sock : node.inputs) {
-        NodeImageMultiFileSocket *simf = static_cast<NodeImageMultiFileSocket *>(sock.storage);
-        simf->use_node_format = simf->use_render_format;
-      }
-
-      /* we do have preview now */
-      node.flag |= NODE_PREVIEW;
     }
   }
 }
@@ -1004,6 +1030,9 @@ static StringRefNull node_socket_get_static_idname(bNodeSocket *sock)
     case SOCK_SHADER: {
       return *bke::node_static_socket_type(SOCK_SHADER, PROP_NONE);
     }
+    default: {
+      return "";
+    }
   }
   return "";
 }
@@ -1024,6 +1053,8 @@ static void do_versions_nodetree_customnodes(bNodeTree *ntree, int /*is_group*/)
         break;
       case NTREE_TEXTURE:
         STRNCPY(ntree->idname, "TextureNodeTree");
+        break;
+      default:
         break;
     }
 
@@ -1074,7 +1105,7 @@ static void do_versions_nodetree_customnodes(bNodeTree *ntree, int /*is_group*/)
   {
     for (bNode &node : ntree->nodes) {
       for (bNodeSocket &sock : node.inputs) {
-        STRNCPY_UTF8(sock.identifier, sock.name);
+        version_node_socket_identifier_set(sock, sock.name);
         BLI_uniquename(&node.inputs,
                        &sock,
                        "socket",
@@ -1083,7 +1114,7 @@ static void do_versions_nodetree_customnodes(bNodeTree *ntree, int /*is_group*/)
                        sizeof(sock.identifier));
       }
       for (bNodeSocket &sock : node.outputs) {
-        STRNCPY_UTF8(sock.identifier, sock.name);
+        version_node_socket_identifier_set(sock, sock.name);
         BLI_uniquename(&node.outputs,
                        &sock,
                        "socket",
@@ -1119,24 +1150,28 @@ static void do_versions_nodetree_customnodes(bNodeTree *ntree, int /*is_group*/)
  * but this keeps settings comparable. */
 static void color_balance_node_cdl_from_lgg(bNode *node)
 {
-  NodeColorBalance *n = static_cast<NodeColorBalance *>(node->storage);
+  if (version_node_ensure_storage_or_invalidate(*node)) {
+    NodeColorBalance *n = static_cast<NodeColorBalance *>(node->storage);
 
-  for (int c = 0; c < 3; c++) {
-    n->slope[c] = (2.0f - n->lift[c]) * n->gain[c];
-    n->offset[c] = (n->lift[c] - 1.0f) * n->gain[c];
-    n->power[c] = (n->gamma[c] != 0.0f) ? 1.0f / n->gamma[c] : 1000000.0f;
+    for (int c = 0; c < 3; c++) {
+      n->slope[c] = (2.0f - n->lift[c]) * n->gain[c];
+      n->offset[c] = (n->lift[c] - 1.0f) * n->gain[c];
+      n->power[c] = (n->gamma[c] != 0.0f) ? 1.0f / n->gamma[c] : 1000000.0f;
+    }
   }
 }
 
 static void color_balance_node_lgg_from_cdl(bNode *node)
 {
-  NodeColorBalance *n = static_cast<NodeColorBalance *>(node->storage);
+  if (version_node_ensure_storage_or_invalidate(*node)) {
+    NodeColorBalance *n = static_cast<NodeColorBalance *>(node->storage);
 
-  for (int c = 0; c < 3; c++) {
-    float d = n->slope[c] + n->offset[c];
-    n->lift[c] = (d != 0.0f ? n->slope[c] + 2.0f * n->offset[c] / d : 0.0f);
-    n->gain[c] = d;
-    n->gamma[c] = (n->power[c] != 0.0f) ? 1.0f / n->power[c] : 1000000.0f;
+    for (int c = 0; c < 3; c++) {
+      float d = n->slope[c] + n->offset[c];
+      n->lift[c] = (d != 0.0f ? n->slope[c] + 2.0f * n->offset[c] / d : 0.0f);
+      n->gain[c] = d;
+      n->gamma[c] = (n->power[c] != 0.0f) ? 1.0f / n->power[c] : 1000000.0f;
+    }
   }
 }
 
@@ -1165,7 +1200,7 @@ static bool strip_colorbalance_update_cb(Strip *strip, void * /*user_data*/)
 
 static bool strip_set_alpha_mode_cb(Strip *strip, void * /*user_data*/)
 {
-  enum { SEQ_MAKE_PREMUL = (1 << 6) };
+  constexpr eStripFlag SEQ_MAKE_PREMUL = eStripFlag(1 << 6);
   if (strip->flag & SEQ_MAKE_PREMUL) {
     strip->alpha_mode = SEQ_ALPHA_STRAIGHT;
   }
@@ -1196,12 +1231,12 @@ static bNodeSocket *version_make_socket_stub(const char *idname,
   bNodeSocket *socket = MEM_new<bNodeSocket>(__func__);
   socket->runtime = MEM_new<bke::bNodeSocketRuntime>(__func__);
   STRNCPY_UTF8(socket->idname, idname);
-  socket->type = int(type);
-  socket->in_out = int(in_out);
+  socket->type = type;
+  socket->in_out = in_out;
 
   socket->limit = (in_out == SOCK_IN ? 1 : 0xFFF);
 
-  STRNCPY_UTF8(socket->identifier, identifier);
+  version_node_socket_identifier_set(*socket, identifier);
   STRNCPY_UTF8(socket->name, name);
   socket->storage = nullptr;
   socket->flag |= SOCK_COLLAPSED;
@@ -1255,7 +1290,7 @@ static bNode *version_add_group_in_out_node(bNodeTree *ntree, const int type)
      * These are stubs for links, full typeinfo is defined later. */
     for (bNodeSocket &tree_socket : *ntree_socket_list) {
       bNodeSocket *node_socket = version_make_socket_stub(tree_socket.idname,
-                                                          eNodeSocketDatatype(tree_socket.type),
+                                                          tree_socket.type,
                                                           socket_in_out,
                                                           tree_socket.identifier,
                                                           tree_socket.name,
@@ -1282,7 +1317,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         /* there are files with invalid audio_channels value, the real cause
          * is unknown, but we fix it here anyway to avoid crashes */
         if (sce.r.ffcodecdata.audio_channels == 0) {
-          sce.r.ffcodecdata.audio_channels = 2;
+          sce.r.ffcodecdata.audio_channels = eFFMpegAudioChannels(2);
         }
 
         if (sce.nodetree) {
@@ -1332,10 +1367,12 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
       if (ntree->type == NTREE_SHADER) {
         for (bNode &node : ntree->nodes) {
           if (node.type_legacy == SH_NODE_MAPPING) {
-            TexMapping *tex_mapping = static_cast<TexMapping *>(node.storage);
-            tex_mapping->projx = PROJ_X;
-            tex_mapping->projy = PROJ_Y;
-            tex_mapping->projz = PROJ_Z;
+            if (version_node_ensure_storage_or_invalidate(node)) {
+              TexMapping *tex_mapping = static_cast<TexMapping *>(node.storage);
+              tex_mapping->projx = PROJ_X;
+              tex_mapping->projy = PROJ_Y;
+              tex_mapping->projz = PROJ_Z;
+            }
           }
         }
       }
@@ -1397,10 +1434,8 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
           clip.aspy = 1.0f;
         }
 
-        clip.proxy.build_tc_flag = IMB_TC_RECORD_RUN;
-
         if (clip.proxy.build_size_flag == 0) {
-          clip.proxy.build_size_flag = IMB_PROXY_25;
+          clip.proxy.build_size_flag = MCLIP_PROXY_SIZE_25;
         }
 
         if (clip.proxy.quality == 0) {
@@ -1412,7 +1447,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         }
 
         MovieTrackingTrack *track = static_cast<MovieTrackingTrack *>(
-            clip.tracking.tracks_legacy.first);
+            clip.tracking.tracks_legacy.first());
         while (track) {
           if (track->minimum_correlation == 0.0f) {
             track->minimum_correlation = 0.75f;
@@ -1464,7 +1499,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
   else if (bmain->versionfile == 260 && bmain->subversionfile == 6) {
     for (Object &ob : bmain->objects) {
       if (is_zero_v3(ob.dscale)) {
-        copy_vn_fl(ob.dscale, 3, 1.0f);
+        std::fill_n(ob.dscale, 3, 1.0f);
       }
     }
   }
@@ -1519,15 +1554,13 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
       for (MovieClip &clip : bmain->movieclips) {
         MovieTracking *tracking = &clip.tracking;
         MovieTrackingObject *tracking_object = static_cast<MovieTrackingObject *>(
-            tracking->objects.first);
-
-        clip.proxy.build_tc_flag |= IMB_TC_RECORD_RUN_NO_GAPS;
+            tracking->objects.first());
 
         if (!tracking->settings.object_distance) {
           tracking->settings.object_distance = 1.0f;
         }
 
-        if (BLI_listbase_is_empty(&tracking->objects)) {
+        if (tracking->objects.is_empty()) {
           BKE_tracking_object_add(tracking, "Camera");
         }
 
@@ -1564,7 +1597,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         ups->size = ts->sculpt_paint_unified_size;
         ups->unprojected_size = ts->sculpt_paint_unified_unprojected_radius;
         ups->alpha = ts->sculpt_paint_unified_alpha;
-        ups->flag = ts->sculpt_paint_settings;
+        ups->flag = eUnifiedPaintSettingsFlags(ts->sculpt_paint_settings);
       }
     }
   }
@@ -1595,7 +1628,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
             DynamicPaintModifierData *pmd = reinterpret_cast<DynamicPaintModifierData *>(&md);
             if (pmd->canvas) {
               DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(
-                  pmd->canvas->surfaces.first);
+                  pmd->canvas->surfaces.first());
               for (; surface; surface = static_cast<DynamicPaintSurface *>(surface->next)) {
                 surface->color_dry_threshold = 1.0f;
                 surface->influence_scale = 1.0f;
@@ -1728,7 +1761,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
       ToolSettings *ts = scene.toolsettings;
       if (ts) {
         ts->unified_paint_settings.weight = ts->vgroup_weight;
-        ts->unified_paint_settings.flag |= UNIFIED_PAINT_WEIGHT;
+        ts->unified_paint_settings.flag |= UNIFIED_PAINT_WEIGHT_DEPRECATED;
       }
     }
 
@@ -1841,7 +1874,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         if (md.type == eModifierType_Fluid) {
           FluidModifierData *fmd = reinterpret_cast<FluidModifierData *>(&md);
           if ((fmd->type & MOD_FLUID_TYPE_DOMAIN) && fmd->domain) {
-            int maxres = max_iii(fmd->domain->res[0], fmd->domain->res[1], fmd->domain->res[2]);
+            int maxres = std::max({fmd->domain->res[0], fmd->domain->res[1], fmd->domain->res[2]});
             fmd->domain->scale = fmd->domain->dx * maxres;
             fmd->domain->dx = 1.0f / fmd->domain->scale;
           }
@@ -1855,10 +1888,12 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
       if (ntree->type == NTREE_SHADER) {
         for (bNode &node : ntree->nodes) {
           if (ELEM(node.type_legacy, SH_NODE_TEX_IMAGE, SH_NODE_TEX_ENVIRONMENT)) {
-            NodeTexImage *tex = static_cast<NodeTexImage *>(node.storage);
+            if (version_node_ensure_storage_or_invalidate(node)) {
+              NodeTexImage *tex = static_cast<NodeTexImage *>(node.storage);
 
-            tex->iuser.frames = 1;
-            tex->iuser.sfra = 1;
+              tex->iuser.frames = 1;
+              tex->iuser.sfra = 1;
+            }
           }
         }
       }
@@ -1873,9 +1908,11 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         if (ntree->type == NTREE_COMPOSIT) {
           for (bNode &node : ntree->nodes) {
             if (node.type_legacy == CMP_NODE_DEFOCUS) {
-              NodeDefocus *data = static_cast<NodeDefocus *>(node.storage);
-              if (data->maxblur == 0.0f) {
-                data->maxblur = 16.0f;
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodeDefocus *data = static_cast<NodeDefocus *>(node.storage);
+                if (data->maxblur == 0.0f) {
+                  data->maxblur = 16.0f;
+                }
               }
             }
           }
@@ -1911,7 +1948,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 263, 11)) {
     for (MovieClip &clip : bmain->movieclips) {
       MovieTrackingTrack *track = static_cast<MovieTrackingTrack *>(
-          clip.tracking.tracks_legacy.first);
+          clip.tracking.tracks_legacy.first());
       while (track) {
         do_versions_affine_tracker_track(track);
 
@@ -1942,10 +1979,12 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
       if (ntree->type == NTREE_COMPOSIT) {
         for (bNode &node : ntree->nodes) {
           if (node.type_legacy == CMP_NODE_KEYING) {
-            NodeKeyingData *data = static_cast<NodeKeyingData *>(node.storage);
+            if (version_node_ensure_storage_or_invalidate(node)) {
+              NodeKeyingData *data = static_cast<NodeKeyingData *>(node.storage);
 
-            if (data->despill_balance == 0.0f) {
-              data->despill_balance = 0.5f;
+              if (data->despill_balance == 0.0f) {
+                data->despill_balance = 0.5f;
+              }
             }
           }
         }
@@ -2051,7 +2090,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       if (ob.pose) {
         if (ob.pose->avs.path_step == 0) {
-          animviz_settings_init(&ob.pose->avs);
+          bke::animviz::settings_init(&ob.pose->avs);
         }
       }
     }
@@ -2198,7 +2237,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
             }
             case SPACE_SEQ: {
               SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(&sl);
-              sseq->flag |= SEQ_PREVIEW_SHOW_GPENCIL;
+              sseq->preview_overlay.flag |= SEQ_PREVIEW_SHOW_GPENCIL;
               break;
             }
             case SPACE_IMAGE: {
@@ -2244,7 +2283,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
             blo_do_versions_newlibadr(fd, &tex.id, ID_IS_LINKED(&tex), tex.ima));
 
         if (image && (image->flag & IMA_DO_PREMUL) == 0) {
-          enum { IMA_IGNORE_ALPHA = (1 << 12) };
+          constexpr eImage_Flag IMA_IGNORE_ALPHA = eImage_Flag(1 << 12);
           image->flag |= IMA_IGNORE_ALPHA;
         }
       }
@@ -2407,11 +2446,11 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
       // const float offsety = 0.0f;
 
       if (create_io_nodes) {
-        if (ntree->inputs_legacy.first) {
+        if (ntree->inputs_legacy.first()) {
           input_node = version_add_group_in_out_node(ntree, NODE_GROUP_INPUT);
         }
 
-        if (ntree->outputs_legacy.first) {
+        if (ntree->outputs_legacy.first()) {
           output_node = version_add_group_in_out_node(ntree, NODE_GROUP_OUTPUT);
         }
       }
@@ -2420,8 +2459,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
        * If the fromnode/tonode pointers are nullptr, this means a link from/to
        * the ntree interface sockets, which need to be redirected to new interface nodes.
        */
-      for (link = static_cast<bNodeLink *>(ntree->links.first); link != nullptr; link = next_link)
-      {
+      for (link = ntree->links.first(); link != nullptr; link = next_link) {
         bool free_link = false;
         next_link = link->next;
 
@@ -2485,8 +2523,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       bNodeLink *link, *next_link;
 
-      for (link = static_cast<bNodeLink *>(ntree->links.first); link != nullptr; link = next_link)
-      {
+      for (link = ntree->links.first(); link != nullptr; link = next_link) {
         next_link = link->next;
         if (link->fromnode == nullptr || link->tonode == nullptr) {
           bke::node_remove_link(ntree, *link);
@@ -2510,7 +2547,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
 #define BRUSH_TEXTURE_OVERLAY (1 << 21)
 
     for (Brush &brush : bmain->brushes) {
-      brush.overlay_flags = 0;
+      brush.overlay_flags = eOverlayFlags{};
       if (brush.flag & BRUSH_TEXTURE_OVERLAY) {
         brush.overlay_flags |= (BRUSH_OVERLAY_PRIMARY | BRUSH_OVERLAY_CURSOR);
       }
@@ -2615,7 +2652,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_NODE) {
             SpaceNode *snode = reinterpret_cast<SpaceNode *>(&sl);
-            bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.last);
+            bNodeTreePath *path = snode->treepath.last();
             if (!path) {
               continue;
             }
@@ -2666,7 +2703,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 268, 2)) {
-#define BRUSH_FIXED (1 << 6)
+    constexpr eBrushFlags BRUSH_FIXED = eBrushFlags(1 << 6);
     for (Brush &brush : bmain->brushes) {
       brush.flag &= ~BRUSH_FIXED;
 
@@ -2787,19 +2824,21 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
       if (ntree->type == NTREE_COMPOSIT) {
         for (bNode &node : ntree->nodes) {
           if (node.type_legacy == CMP_NODE_COLORBALANCE) {
-            NodeColorBalance *n = static_cast<NodeColorBalance *>(node.storage);
-            if (node.custom1 == 0) {
-              /* LGG mode stays the same, just init CDL settings */
-              color_balance_node_cdl_from_lgg(&node);
-            }
-            else if (node.custom1 == 1) {
-              /* CDL previously used same variables as LGG, copy them over
-               * and then sync LGG for comparable results in both modes.
-               */
-              copy_v3_v3(n->offset, n->lift);
-              copy_v3_v3(n->power, n->gamma);
-              copy_v3_v3(n->slope, n->gain);
-              color_balance_node_lgg_from_cdl(&node);
+            if (version_node_ensure_storage_or_invalidate(node)) {
+              NodeColorBalance *n = static_cast<NodeColorBalance *>(node.storage);
+              if (node.custom1 == 0) {
+                /* LGG mode stays the same, just init CDL settings */
+                color_balance_node_cdl_from_lgg(&node);
+              }
+              else if (node.custom1 == 1) {
+                /* CDL previously used same variables as LGG, copy them over
+                 * and then sync LGG for comparable results in both modes.
+                 */
+                copy_v3_v3(n->offset, n->lift);
+                copy_v3_v3(n->power, n->gamma);
+                copy_v3_v3(n->slope, n->gain);
+                color_balance_node_lgg_from_cdl(&node);
+              }
             }
           }
         }
@@ -2908,16 +2947,22 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         if (ntree->type == NTREE_COMPOSIT) {
           for (bNode &node : ntree->nodes) {
             if (node.type_legacy == CMP_NODE_BOKEHIMAGE) {
-              NodeBokehImage *n = static_cast<NodeBokehImage *>(node.storage);
-              n->angle = DEG2RADF(n->angle);
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodeBokehImage *n = static_cast<NodeBokehImage *>(node.storage);
+                n->angle = DEG2RADF(n->angle);
+              }
             }
             if (node.type_legacy == CMP_NODE_MASK_BOX) {
-              NodeBoxMask *n = static_cast<NodeBoxMask *>(node.storage);
-              n->rotation = DEG2RADF(n->rotation);
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodeBoxMask *n = static_cast<NodeBoxMask *>(node.storage);
+                n->rotation = DEG2RADF(n->rotation);
+              }
             }
             if (node.type_legacy == CMP_NODE_MASK_ELLIPSE) {
-              NodeEllipseMask *n = static_cast<NodeEllipseMask *>(node.storage);
-              n->rotation = DEG2RADF(n->rotation);
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodeEllipseMask *n = static_cast<NodeEllipseMask *>(node.storage);
+                n->rotation = DEG2RADF(n->rotation);
+              }
             }
           }
         }
@@ -2993,7 +3038,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
           if (space_link.spacetype == SPACE_IMAGE) {
             ListBaseT<ARegion> *lb;
 
-            if (&space_link == area.spacedata.first) {
+            if (&space_link == area.spacedata.first_) {
               lb = &area.regionbase;
             }
             else {

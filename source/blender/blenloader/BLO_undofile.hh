@@ -9,7 +9,7 @@
  * External write-file function prototypes.
  */
 
-#include "BLI_filereader.h"
+#include "BLI_filereader.hh"
 #include "BLI_implicit_sharing.hh"
 #include "BLI_map.hh"
 
@@ -38,12 +38,16 @@ struct MemFileChunk {
   size_t size;
   /** When true, this chunk doesn't own the memory, it's shared with a previous #MemFileChunk */
   bool is_identical;
-  /** When true, this chunk is also identical to the one in the next step (used by undo code to
+  /**
+   * When true, this chunk is also identical to the one in the next step (used by undo code to
    * detect unchanged IDs).
-   * Defined when writing the next step (i.e. last undo step has those always false). */
+   * Defined when writing the next step (i.e. last undo step has those always false).
+   */
   bool is_identical_future;
-  /** Session UID of the ID being currently written (MAIN_ID_SESSION_UID_UNSET when not writing
-   * ID-related data). Used to find matching chunks in previous memundo step. */
+  /**
+   * Session UID of the ID being currently written (MAIN_ID_SESSION_UID_UNSET when not writing
+   * ID-related data). Used to find matching chunks in previous memundo step.
+   */
   uint id_session_uid;
 };
 
@@ -55,12 +59,6 @@ struct MemFile {
    * without making a copy. This is faster and requires less memory.
    */
   MemFileSharedStorage *shared_storage;
-
-  /**
-   * Partial storage of the WriteData's generated stable pointers data, to be re-used when writing
-   * the next undo step.
-   */
-  WriteDataStableAddressIDs *stable_address_ids;
 };
 
 struct MemFileWriteData {

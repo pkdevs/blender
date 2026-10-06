@@ -9,6 +9,8 @@
 
 #include <memory>
 
+#include "BKE_paint.hh"
+
 #include "BLI_array.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_set.hh"
@@ -33,10 +35,9 @@ struct BMeshNode;
 namespace ed::sculpt_paint::auto_mask {
 
 struct Settings {
-  /* eAutomasking_flag. */
-  int flags;
+  eAutomasking_flag flags;
   int initial_face_set;
-  int initial_island_nr;
+  std::array<int, PAINT_SYMM_AREAS> initial_island_nr = {-1, -1, -1, -1, -1, -1, -1, -1};
 
   float cavity_factor;
   int cavity_blur_steps;
@@ -106,20 +107,20 @@ const Cache *active_cache_get(const SculptSession &ss);
  * data is also stored at the vertex level prior to the stroke starting.
  */
 std::unique_ptr<Cache> cache_init(const Depsgraph &depsgraph,
-                                  const Sculpt &sd,
+                                  const Paint &paint,
                                   const Brush *brush,
                                   Object &ob);
 
 /** If the FilterCache#automask cache doesn't exist, create and return it. */
-Cache &filter_cache_ensure(const Depsgraph &depsgraph, const Sculpt &sd, Object &ob);
+Cache &filter_cache_ensure(const Depsgraph &depsgraph, const Paint &paint, Object &ob);
 /** If the StrokeCache#automask cache doesn't exist, create and return it. */
 Cache &stroke_cache_ensure(const Depsgraph &depsgraph,
-                           const Sculpt &sd,
+                           const Paint &paint,
                            const Brush *brush,
                            Object &ob);
 
 bool mode_enabled(const Sculpt &sd, const Brush *br, eAutomasking_flag mode);
-bool is_enabled(const Sculpt &sd, const Object &object, const Brush *br);
+bool is_enabled(const Paint &paint, const Object &object, const Brush *br);
 
 /**
  * Calculate all auto-masking influence on each vertex.
@@ -137,6 +138,7 @@ inline void calc_vert_factors(const Depsgraph &depsgraph,
                               Span<int> verts,
                               MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   if (cache) {
     calc_vert_factors(depsgraph, object, *cache, node, verts, factors);
   }
@@ -178,15 +180,19 @@ inline void calc_vert_factors(const Depsgraph &depsgraph,
 
 /**
  * Calculate all auto-masking influence on each face.
+ *
+ * TODO: This method is a bit odd, we interpolate the value across the vertices, even for cases
+ * that could be calculated on a per-face basis. Additionally, it is only used for the face set
+ * brush. Evaluate whether this specialization is needed.
  */
-void calc_face_factors(const Depsgraph &depsgraph,
-                       const Object &object,
-                       OffsetIndices<int> faces,
-                       Span<int> corner_verts,
-                       const Cache &automasking,
-                       const bke::pbvh::MeshNode &node,
-                       Span<int> face_indices,
-                       MutableSpan<float> factors);
+void calc_interpolated_face_factors(const Depsgraph &depsgraph,
+                                    const Object &object,
+                                    OffsetIndices<int> faces,
+                                    Span<int> corner_verts,
+                                    const Cache &automasking,
+                                    const bke::pbvh::MeshNode &node,
+                                    Span<int> face_indices,
+                                    MutableSpan<float> factors);
 
 }  // namespace ed::sculpt_paint::auto_mask
 

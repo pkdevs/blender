@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
@@ -19,8 +23,8 @@ namespace nodes::node_shader_tex_environment_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Vector").hide_value();
-  b.add_output<decl::Color>("Color").no_muted_links();
+  b.add_input<decl::Vector>("Vector"_ustr).hide_value();
+  b.add_output<decl::Color>("Color"_ustr).no_muted_links();
 }
 
 static void node_shader_init_tex_environment(bNodeTree * /*ntree*/, bNode *node)
@@ -48,7 +52,11 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
   bNode *node_original = node->runtime->original ? node->runtime->original : node;
   NodeTexImage *tex_original = static_cast<NodeTexImage *>(node_original->storage);
   ImageUser *iuser = &tex_original->iuser;
-  GPUSamplerState sampler = {GPU_SAMPLER_FILTERING_LINEAR | GPU_SAMPLER_FILTERING_ANISOTROPIC,
+  /* Setting the GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE enables anisotropic filtering. The
+   * exact number of samples are being determined at bind time by the engine.
+   * See #blender::draw::PassBase<T>::material_set */
+  GPUSamplerState sampler = {GPU_SAMPLER_FILTERING_LINEAR |
+                                 GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE,
                              GPU_SAMPLER_EXTEND_MODE_REPEAT,
                              GPU_SAMPLER_EXTEND_MODE_REPEAT};
   /* TODO(@fclem): For now assume mipmap is always enabled. */
@@ -63,7 +71,7 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
   }
 
   if (!in[0].link) {
-    GPU_link(mat, "node_tex_coord_position", &in[0].link);
+    GPU_link(mat, "node_tex_coord_position", GPU_shading_data(), &in[0].link);
     node_shader_gpu_bump_tex_coord(mat, node, &in[0].link);
   }
 
@@ -77,7 +85,7 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
     /* Force the highest mipmap and don't do anisotropic filtering.
      * This is to fix the artifact caused by derivatives discontinuity. */
     sampler.disable_filtering_flag(GPU_SAMPLER_FILTERING_MIPMAP |
-                                   GPU_SAMPLER_FILTERING_ANISOTROPIC);
+                                   GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK);
   }
   else {
     GPU_link(mat, "node_tex_environment_mirror_ball", in[0].link, &in[0].link);
@@ -106,9 +114,15 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
   }
 
   /* Sample texture with correct interpolation. */
-  GPU_link(mat, gpu_fn, in[0].link, GPU_image(mat, ima, iuser, sampler), &out[0].link, &outalpha);
+  GPU_link(mat,
+           gpu_fn,
+           in[0].link,
+           GPU_image(mat, ima, iuser, sampler),
+           GPU_kernel_globals(),
+           &out[0].link,
+           &outalpha);
 
-  if (out[0].hasoutput && ima) {
+  if (out[0].hasoutput && out[0].link && ima) {
     if (ELEM(ima->alpha_mode, IMA_ALPHA_IGNORE, IMA_ALPHA_CHANNEL_PACKED) ||
         IMB_colormanagement_space_name_is_data(ima->colorspace_settings.name))
     {
@@ -189,7 +203,7 @@ void register_node_type_sh_tex_environment()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeTexEnvironment", SH_NODE_TEX_ENVIRONMENT);
+  sh_node_type_base(&ntype, "ShaderNodeTexEnvironment"_ustr, SH_NODE_TEX_ENVIRONMENT);
   ntype.ui_name = "Environment Texture";
   ntype.ui_description =
       "Sample an image file as an environment texture. Typically used to light the scene with the "
@@ -202,7 +216,7 @@ void register_node_type_sh_tex_environment()
       ntype, "NodeTexEnvironment", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::node_shader_gpu_tex_environment;
   ntype.labelfunc = node_image_label;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Large);
+  ntype.default_width = bke::NodeWidth::_240;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
   bke::node_register_type(ntype);

@@ -63,8 +63,8 @@ BlenderSession::BlenderSession(blender::RenderEngine &b_engine,
       b_rv3d(nullptr),
       width(0),
       height(0),
+      pixelsize(1.0f),
       preview_osl(preview_osl),
-      python_thread_state(nullptr),
       use_developer_ui(b_userpref.experimental.use_cycles_debug &&
                        (b_userpref.flag & blender::USER_DEVELOPER_UI) != 0)
 {
@@ -97,8 +97,8 @@ BlenderSession::BlenderSession(blender::RenderEngine &b_engine,
       b_rv3d(b_rv3d),
       width(width),
       height(height),
+      pixelsize(blender::U.pixelsize),
       preview_osl(false),
-      python_thread_state(nullptr),
       use_developer_ui(b_userpref.experimental.use_cycles_debug &&
                        (b_userpref.flag & blender::USER_DEVELOPER_UI) != 0)
 {
@@ -117,10 +117,9 @@ BlenderSession::~BlenderSession()
 void BlenderSession::create_session()
 {
   const SessionParams session_params = BlenderSync::get_session_params(
-      b_engine, b_userpref, *b_scene, background);
+      b_engine, b_userpref, *b_scene, background, pixelsize);
   const SceneParams scene_params = BlenderSync::get_scene_params(
-      *b_scene, background, use_developer_ui);
-  const bool session_pause = BlenderSync::get_session_pause(*b_scene, background);
+      b_userpref, *b_data, *b_scene, background, use_developer_ui);
 
   /* reset status/progress */
   last_status = "";
@@ -132,7 +131,7 @@ void BlenderSession::create_session()
   session = make_unique<Session>(session_params, scene_params);
   session->progress.set_update_callback([this] { tag_redraw(); });
   session->progress.set_cancel_callback([this] { test_cancel(); });
-  session->set_pause(session_pause);
+  session->set_pause(view_paused);
 
   /* create scene */
   scene = session->scene.get();
@@ -142,7 +141,7 @@ void BlenderSession::create_session()
   sync = make_unique<BlenderSync>(
       b_engine, *b_data, *b_scene, scene, !background, use_developer_ui, session->progress);
   if (b_v3d) {
-    sync->sync_view(b_v3d, b_rv3d, width, height);
+    sync->sync_view(b_depsgraph, b_v3d, b_rv3d, width, height);
   }
   else {
     sync->sync_camera(*b_render, width, height, "");
@@ -204,9 +203,9 @@ void BlenderSession::reset_session(blender::Main &b_data, blender::Depsgraph &b_
   }
 
   const SessionParams session_params = BlenderSync::get_session_params(
-      b_engine, b_userpref, *b_scene, background);
+      b_engine, b_userpref, *b_scene, background, pixelsize);
   const SceneParams scene_params = BlenderSync::get_scene_params(
-      *b_scene, background, use_developer_ui);
+      b_userpref, b_data, *b_scene, background, use_developer_ui);
 
   if (scene->params.modified(scene_params) || session->params.modified(session_params) ||
       (this->b_render->mode & blender::R_PERSISTENT_DATA) == 0)
@@ -352,14 +351,14 @@ void BlenderSession::render(blender::Depsgraph &b_depsgraph_)
 
   /* get buffer parameters */
   const SessionParams session_params = BlenderSync::get_session_params(
-      b_engine, b_userpref, *b_scene, background);
+      b_engine, b_userpref, *b_scene, background, pixelsize);
   BufferParams buffer_params = BlenderSync::get_buffer_params(
       b_v3d, b_rv3d, scene->camera, width, height);
 
   /* temporary render result to find needed passes and views */
   blender::RenderResult *b_rr = RE_engine_begin_result(
       &b_engine, 0, 0, 1, 1, b_view_layer.name, nullptr);
-  blender::RenderLayer *b_rlay = static_cast<blender::RenderLayer *>(b_rr->layers.first);
+  blender::RenderLayer *b_rlay = b_rr->layers.first();
 
   {
     const thread_scoped_lock lock(draw_state_.mutex);
@@ -372,7 +371,7 @@ void BlenderSession::render(blender::Depsgraph &b_depsgraph_)
   /* Compute render passes and film settings. */
   sync->sync_render_passes(*b_rlay, b_view_layer);
 
-  const int num_views = BLI_listbase_count(&b_rr->views);
+  const int num_views = b_rr->views.count();
 
   for (const auto [view_index, b_view] : b_rr->views.enumerate()) {
     b_rview_name = b_view.name;
@@ -399,7 +398,6 @@ void BlenderSession::render(blender::Depsgraph &b_depsgraph_)
                     b_rv3d,
                     width,
                     height,
-                    &python_thread_state,
                     session_params.denoise_device);
 
     /* At the moment we only free if we are not doing multi-view
@@ -678,7 +676,7 @@ void BlenderSession::bake(blender::Depsgraph &b_depsgraph_,
 
   /* Get session parameters. */
   const SessionParams session_params = BlenderSync::get_session_params(
-      b_engine, b_userpref, *b_scene, background);
+      b_engine, b_userpref, *b_scene, background, pixelsize);
 
   /* Initialize bake manager, before we load the baking kernels. */
   scene->bake_manager->set_baking(scene, true);
@@ -697,7 +695,6 @@ void BlenderSession::bake(blender::Depsgraph &b_depsgraph_,
                   b_rv3d,
                   width,
                   height,
-                  &python_thread_state,
                   session_params.denoise_device);
 
   /* Save the current state of the denoiser, as it might be disabled by the pass configuration
@@ -778,10 +775,9 @@ void BlenderSession::synchronize(blender::Depsgraph &b_depsgraph_)
 
   /* on session/scene parameter changes, we recreate session entirely */
   const SessionParams session_params = BlenderSync::get_session_params(
-      b_engine, b_userpref, *b_scene, background);
+      b_engine, b_userpref, *b_scene, background, pixelsize);
   const SceneParams scene_params = BlenderSync::get_scene_params(
-      *b_scene, background, use_developer_ui);
-  const bool session_pause = BlenderSync::get_session_pause(*b_scene, background);
+      b_userpref, *b_data, *b_scene, background, use_developer_ui);
 
   if (session->params.modified(session_params) || scene->params.modified(scene_params)) {
     free_session();
@@ -793,14 +789,13 @@ void BlenderSession::synchronize(blender::Depsgraph &b_depsgraph_)
   /* increase samples and render time, but never decrease */
   session->set_samples(session_params.samples);
   session->set_time_limit(session_params.time_limit);
-  session->set_pause(session_pause);
 
   /* copy recalc flags, outside of mutex so we can decide to do the real
    * synchronization at a later time to not block on running updates */
   sync->sync_recalc(b_depsgraph_, b_screen, b_v3d, b_rv3d);
 
   /* don't do synchronization if on pause */
-  if (session_pause) {
+  if (view_paused) {
     tag_update();
     return;
   }
@@ -821,11 +816,10 @@ void BlenderSession::synchronize(blender::Depsgraph &b_depsgraph_)
                   b_rv3d,
                   width,
                   height,
-                  &python_thread_state,
                   session_params.denoise_device);
 
   if (b_rv3d) {
-    sync->sync_view(b_v3d, b_rv3d, width, height);
+    sync->sync_view(b_depsgraph, b_v3d, b_rv3d, width, height);
   }
   else {
     sync->sync_camera(*b_render, width, height, "");
@@ -874,7 +868,12 @@ void BlenderSession::draw(blender::bScreen &b_screen, blender::SpaceImage &space
 
     Scene *scene = session->scene.get();
 
-    const thread_scoped_lock lock(scene->mutex);
+    /* Only try to lock, so the user interface stays responsive while
+     * the session thread holds the mutex. */
+    const thread_scoped_lock lock(scene->mutex, std::try_to_lock);
+    if (!lock) {
+      return;
+    }
 
     const Pass *pass = Pass::find(scene->passes, b_display_pass->name);
     if (!pass) {
@@ -897,18 +896,28 @@ void BlenderSession::draw(blender::bScreen &b_screen, blender::SpaceImage &space
   session->draw();
 }
 
+void BlenderSession::view_pause(const bool pause)
+{
+  view_paused = pause;
+  session->set_pause(pause);
+}
+
 void BlenderSession::view_draw(const int w, const int h)
 {
-  /* pause in redraw in case update is not being called due to final render */
-  session->set_pause(BlenderSync::get_session_pause(*b_scene, background));
+  /* Update navigating state. */
+  const bool dimensions_changed = (width != w || height != h || pixelsize != blender::U.pixelsize);
+  const bool is_navigating = region_view3d_navigating_or_transforming(b_rv3d) ||
+                             dimensions_changed;
+  session->set_navigating(is_navigating);
 
   /* before drawing, we verify camera and viewport size changes, because
    * we do not get update callbacks for those, we must detect them here */
   if (session->ready_to_reset()) {
     bool reset = false;
 
-    /* if dimensions changed, reset */
-    if (width != w || height != h) {
+    /* If dimensions changed, reset. We need to check pixel size here because
+     * it's only valid during drawing, as it can change per window. */
+    if (dimensions_changed) {
       if (start_resize_time == 0.0) {
         /* don't react immediately to resizes to avoid flickery resizing
          * of the viewport, and some window managers changing the window
@@ -922,6 +931,7 @@ void BlenderSession::view_draw(const int w, const int h)
       else {
         width = w;
         height = h;
+        pixelsize = blender::U.pixelsize;
         reset = true;
       }
     }
@@ -933,7 +943,7 @@ void BlenderSession::view_draw(const int w, const int h)
     else {
       /* update camera from 3d view */
 
-      sync->sync_view(b_v3d, b_rv3d, width, height);
+      sync->sync_view(b_depsgraph, b_v3d, b_rv3d, width, height);
 
       if (scene->camera->is_modified()) {
         reset = true;
@@ -945,12 +955,10 @@ void BlenderSession::view_draw(const int w, const int h)
     /* reset if requested */
     if (reset) {
       const SessionParams session_params = BlenderSync::get_session_params(
-          b_engine, b_userpref, *b_scene, background);
+          b_engine, b_userpref, *b_scene, background, pixelsize);
       const BufferParams buffer_params = BlenderSync::get_buffer_params(
           b_v3d, b_rv3d, scene->camera, width, height);
-      const bool session_pause = BlenderSync::get_session_pause(*b_scene, background);
-
-      if (session_pause == false) {
+      if (view_paused == false) {
         session->reset(session_params, buffer_params);
         start_resize_time = 0.0;
       }

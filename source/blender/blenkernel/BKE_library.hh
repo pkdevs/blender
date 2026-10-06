@@ -52,7 +52,7 @@ struct LibraryRuntime {
    * Use #BKE_library_filepath_set() rather than setting `filepath`
    * directly and it will be kept in sync - campbell
    */
-  char filepath_abs[1024] = "";
+  char filepath_abs[/*FILE_MAX*/ 1024] = "";
 
   /** Set for indirectly linked libraries, used in the outliner and while reading. */
   Library *parent = nullptr;
@@ -93,8 +93,11 @@ Library *search_filepath_abs(ListBaseT<Library> *libraries, StringRef filepath_a
  * Pack given linked ID, and all the related hierarchy.
  *
  * Will set final embedded ID into each ID::newid pointers.
+ *
+ * \returns The whole set of _linked_ IDs that were made packed linked (_not_ the packed linked IDs
+ * themselves, but rather their sources).
  */
-void pack_linked_id_hierarchy(Main &bmain, ID &root_id);
+Set<ID *> pack_linked_id_hierarchy(Main &bmain, ID &root_id);
 
 /**
  * Cleanup references to removed/deleted archive libraries in their archive parent.
@@ -114,6 +117,8 @@ void main_cleanup_parent_archives(Main &bmain);
  */
 Library *ensure_archive_library(
     Main &bmain, ID &id, Library &reference_library, const IDHash &id_deep_hash, bool &is_new);
+
+Library *create_external_archive_library(Main &bmain, Library &external_library);
 
 };  // namespace bke::library
 

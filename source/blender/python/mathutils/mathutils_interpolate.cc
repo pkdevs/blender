@@ -11,7 +11,7 @@
 #include "mathutils.hh"
 #include "mathutils_interpolate.hh"
 
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 
 namespace blender {
 
@@ -30,11 +30,11 @@ PyDoc_STRVAR(
     "\n"
     "   Calculate barycentric weights for a point on a polygon.\n"
     "\n"
-    "   :arg veclist: Sequence of 3D positions.\n"
+    "   :param veclist: Sequence of 3D positions.\n"
     "   :type veclist: Sequence[Sequence[float]]\n"
-    "   :arg pt: 2D or 3D position.\n"
+    "   :param pt: 2D or 3D position.\n"
     "   :type pt: Sequence[float]\n"
-    "   :return: list of per-vector weights.\n"
+    "   :return: A list of weights, one per vertex in *veclist*.\n"
     "   :rtype: list[float]\n");
 static PyObject *M_Interpolate_poly_3d_calc(PyObject * /*self*/, PyObject *args)
 {
@@ -45,7 +45,13 @@ static PyObject *M_Interpolate_poly_3d_calc(PyObject * /*self*/, PyObject *args)
   PyObject *point, *veclist, *ret;
   int i;
 
-  if (!PyArg_ParseTuple(args, "OO:poly_3d_calc", &veclist, &point)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `veclist` */
+                        "O" /* `pt` */
+                        ":poly_3d_calc",
+                        &veclist,
+                        &point))
+  {
     return nullptr;
   }
 

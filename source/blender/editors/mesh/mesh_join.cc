@@ -10,9 +10,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_vector.hh"
 #include "BLI_virtual_array.hh"
 
@@ -270,6 +270,55 @@ static void join_shape_keys(Main *bmain,
   }
 }
 
+static bool try_join_single_value_attribute(const Span<const Object *> objects_to_join,
+                                            const StringRef name,
+                                            const bke::AttrDomain domain,
+                                            const bke::AttrType data_type,
+                                            bke::MutableAttributeAccessor dst_attributes)
+{
+  if (data_type == bke::AttrType::String) {
+    return false;
+  }
+  const auto get_single_value = [&](const Object &object) {
+    const Mesh &src_mesh = *id_cast<const Mesh *>(object.data);
+    const bke::AttributeAccessor attributes = src_mesh.attributes();
+    const GVArray src = *attributes.lookup_or_default(name, domain, data_type);
+    const CommonVArrayInfo info = src.common_info();
+    if (info.type != CommonVArrayInfo::Type::Single) {
+      return GPointer();
+    }
+    return GPointer(src.type(), info.data);
+  };
+  const GPointer first_value = get_single_value(*objects_to_join.first());
+  if (!first_value) {
+    return false;
+  }
+  const bool all_equal = threading::parallel_reduce(
+      objects_to_join.index_range().drop_front(1),
+      8,
+      true,
+      [&](const IndexRange range, bool value) {
+        if (!value) {
+          return false;
+        }
+        for (const int i : range) {
+          const GPointer value = get_single_value(*objects_to_join[i]);
+          if (!value) {
+            return false;
+          }
+          if (!value.type()->is_equal(value.get(), first_value.get())) {
+            return false;
+          }
+        }
+        return true;
+      },
+      std::logical_and<bool>());
+  if (!all_equal) {
+    return false;
+  }
+  return dst_attributes.add(name, domain, data_type, bke::AttributeInitValue(first_value));
+}
+
 static void join_generic_attributes(const Span<const Object *> objects_to_join,
                                     const VectorSet<std::string> &all_vertex_group_names,
                                     const OffsetIndices<int> vert_ranges,
@@ -309,31 +358,18 @@ static void join_generic_attributes(const Span<const Object *> objects_to_join,
 
   bke::MutableAttributeAccessor dst_attributes = dst_mesh.attributes_for_write();
 
-  const Set<StringRefNull> attribute_names = dst_attributes.all_ids();
   for (const int attr_i : names.index_range()) {
     const StringRef name = names[attr_i];
     const bke::AttrDomain domain = kinds[attr_i].domain;
     const bke::AttrType data_type = kinds[attr_i].data_type;
-    if (const std::optional<bke::AttributeMetaData> meta_data = dst_attributes.lookup_meta_data(
-            name))
+
+    if (try_join_single_value_attribute(objects_to_join, name, domain, data_type, dst_attributes))
     {
-      if (meta_data->domain != domain || meta_data->data_type != data_type) {
-        AttributeOwner owner = AttributeOwner::from_id(&dst_mesh.id);
-        geometry::convert_attribute(
-            owner, dst_attributes, name, meta_data->domain, meta_data->data_type, nullptr);
-      }
+      continue;
     }
-    else {
-      dst_attributes.add(name, domain, data_type, bke::AttributeInitConstruct());
-    }
-  }
 
-  for (const int attr_i : names.index_range()) {
-    const StringRef name = names[attr_i];
-    const bke::AttrDomain domain = kinds[attr_i].domain;
-    const bke::AttrType data_type = kinds[attr_i].data_type;
-
-    bke::GSpanAttributeWriter dst = dst_attributes.lookup_for_write_span(name);
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_span(
+        name, domain, data_type);
     for (const int i : objects_to_join.index_range()) {
       const Mesh &src_mesh = *id_cast<const Mesh *>(objects_to_join[i]->data);
       const bke::AttributeAccessor src_attributes = src_mesh.attributes();
@@ -384,7 +420,7 @@ static VectorSet<Material *> join_materials(const Span<const Object *> objects_t
 
   bke::MutableAttributeAccessor dst_attributes = dst_mesh.attributes_for_write();
   if (materials.size() <= 1) {
-    dst_attributes.remove("material_index");
+    BLI_assert(!dst_attributes.contains("material_index"));
     return materials;
   }
 
@@ -443,10 +479,12 @@ static void join_face_sets(const Span<const Object *> objects_to_join,
                            const OffsetIndices<int> face_ranges,
                            Mesh &dst_mesh)
 {
-  if (std::none_of(objects_to_join.begin(), objects_to_join.end(), [](const Object *object) {
-        const Mesh &mesh = *id_cast<const Mesh *>(object->data);
-        return mesh.attributes().contains(".sculpt_face_set");
-      }))
+  if (std::none_of(objects_to_join.begin(),
+                   objects_to_join.end(),
+                   [](const Object *object) {
+                     const Mesh &mesh = *id_cast<const Mesh *>(object->data);
+                     return mesh.attributes().contains(".sculpt_face_set");
+                   }))
   {
     return;
   }
@@ -575,7 +613,7 @@ wmOperatorStatus join_objects_exec(bContext *C, wmOperator *op)
                                        face_ranges.total_size(),
                                        corner_ranges.total_size());
   BKE_mesh_copy_parameters_for_eval(dst_mesh, active_mesh);
-  BLI_freelistN(&dst_mesh->vertex_group_names);
+  dst_mesh->vertex_group_names.free_no_destruct();
   MEM_SAFE_DELETE(dst_mesh->mat);
   dst_mesh->totcol = 0;
 
@@ -653,10 +691,20 @@ wmOperatorStatus join_objects_exec(bContext *C, wmOperator *op)
 
   /* Copy multires data to the out-of-main mesh. */
   if (get_multires_modifier(scene, active_object, true)) {
-    if (std::any_of(objects_to_join.begin(), objects_to_join.end(), [](const Object *object) {
-          const Mesh &src_mesh = *id_cast<const Mesh *>(object->data);
-          return CustomData_has_layer(&src_mesh.corner_data, CD_MDISPS);
-        }))
+    for (const int i : objects_to_join.index_range().drop_front(1)) {
+      Object &src_object = *objects_to_join[i];
+      multiresModifier_prepare_join(depsgraph, scene, &src_object, active_object);
+      if (MultiresModifierData *mmd = get_multires_modifier(scene, &src_object, true)) {
+        object::iter_other(
+            bmain, &src_object, true, object::multires_update_totlevels, &mmd->totlvl);
+      }
+    }
+    if (std::any_of(objects_to_join.begin(),
+                    objects_to_join.end(),
+                    [](const Object *object) {
+                      const Mesh &src_mesh = *id_cast<const Mesh *>(object->data);
+                      return CustomData_has_layer(&src_mesh.corner_data, CD_MDISPS);
+                    }))
     {
       MDisps *dst = static_cast<MDisps *>(CustomData_add_layer(
           &dst_mesh->corner_data, CD_MDISPS, CD_CONSTRUCT, dst_mesh->corners_num));
@@ -668,10 +716,12 @@ wmOperatorStatus join_objects_exec(bContext *C, wmOperator *op)
         }
       }
     }
-    if (std::any_of(objects_to_join.begin(), objects_to_join.end(), [](const Object *object) {
-          const Mesh &src_mesh = *id_cast<const Mesh *>(object->data);
-          return CustomData_has_layer(&src_mesh.corner_data, CD_GRID_PAINT_MASK);
-        }))
+    if (std::any_of(objects_to_join.begin(),
+                    objects_to_join.end(),
+                    [](const Object *object) {
+                      const Mesh &src_mesh = *id_cast<const Mesh *>(object->data);
+                      return CustomData_has_layer(&src_mesh.corner_data, CD_GRID_PAINT_MASK);
+                    }))
     {
       GridPaintMask *dst = static_cast<GridPaintMask *>(CustomData_add_layer(
           &dst_mesh->corner_data, CD_GRID_PAINT_MASK, CD_CONSTRUCT, dst_mesh->corners_num));
@@ -682,14 +732,6 @@ wmOperatorStatus join_objects_exec(bContext *C, wmOperator *op)
               CD_GRID_PAINT_MASK, src, &dst[corner_ranges[i].first()], src_mesh.corners_num);
         }
       }
-    }
-  }
-  for (const int i : objects_to_join.index_range().drop_front(1)) {
-    Object &src_object = *objects_to_join[i];
-    multiresModifier_prepare_join(depsgraph, scene, &src_object, active_object);
-    if (MultiresModifierData *mmd = get_multires_modifier(scene, &src_object, true)) {
-      object::iter_other(
-          bmain, &src_object, true, object::multires_update_totlevels, &mmd->totlvl);
     }
   }
 

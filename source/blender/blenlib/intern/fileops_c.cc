@@ -20,9 +20,9 @@
 #include <zstd.h>
 
 #ifdef WIN32
-#  include "BLI_fileops_types.h"
+#  include "BLI_fileops_types.hh"
 #  include "BLI_string_utils.hh"
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include "utf_winfunc.hh"
 #  include "utfconv.hh"
 #  include <io.h>
@@ -43,11 +43,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_sys_types.h" /* For `intptr_t` support. */
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_sys_types.hh" /* For `intptr_t` support. */
+#include "BLI_utildefines.hh"
 
 namespace blender {
 
@@ -127,7 +127,7 @@ int64_t BLI_read(int fd, void *buf, size_t nbytes)
       return nbytes_read;
     }
 
-    if (UNLIKELY(nbytes_read > nbytes)) {
+    if (nbytes_read > nbytes) [[unlikely]] {
       /* Badly behaving LIBC, reading more bytes than requested should never happen.
        * Possibly an invalid internal state/corruption, only check to prevent an eternal loop. */
       BLI_assert_unreachable();
@@ -373,7 +373,7 @@ static bool dir_create_recursive(const char *dirname, const int len)
     if (dirname[0] && !BLI_path_is_win32_drive_only(dirname))
 #endif
     {
-      const int mode = BLI_exists(dirname);
+      const int mode = BLI_file_stat_mode(dirname);
       if (mode != 0) {
         if (!S_ISDIR(mode)) {
           ret = false;
@@ -415,7 +415,7 @@ static bool dir_create_recursive(const char *dirname, const int len)
 
 bool BLI_dir_create_recursive(const char *dirname)
 {
-  const int mode = BLI_exists(dirname);
+  const int mode = BLI_file_stat_mode(dirname);
   if (mode != 0) {
     /* The file exists, either it's a directory (ok), or not,
      * in which case this function can't do anything useful
@@ -1267,7 +1267,7 @@ int BLI_delete_soft(const char *filepath, const char **r_error_message)
   errno = 0;
 
   int pid = fork();
-  if (UNLIKELY(pid == -1)) {
+  if (pid == -1) [[unlikely]] {
     *r_error_message = errno ? strerror(errno) : "unable to fork process";
     return -1;
   }

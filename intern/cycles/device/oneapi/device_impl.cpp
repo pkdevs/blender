@@ -38,7 +38,13 @@ extern "C" void rtcSetDeviceSYCLDevice(RTCDevice device, const sycl::device sycl
 
 CCL_NAMESPACE_BEGIN
 
-static std::vector<sycl::device> available_sycl_devices(bool *multiple_dgpus_detected);
+struct SyclDeviceEntry {
+  sycl::device device;
+  bool meets_driver_requirement;
+};
+
+static std::vector<SyclDeviceEntry> available_sycl_devices(
+    bool *multiple_level_zero_platforms_detected);
 static int parse_driver_build_version(const sycl::device &device);
 
 static void queue_error_cb(const char *message, void *user_ptr)
@@ -62,6 +68,8 @@ OneapiDevice::OneapiDevice(const DeviceInfo &info, Stats &stats, Profiler &profi
 
   oneapi_set_error_cb(queue_error_cb, &oneapi_error_string_);
 
+  bool multiple_level_zero_platforms_detected = false;
+
   bool is_finished_ok = create_queue(device_queue_,
                                      info.num,
 #  ifdef WITH_EMBREE_GPU
@@ -69,7 +77,26 @@ OneapiDevice::OneapiDevice(const DeviceInfo &info, Stats &stats, Profiler &profi
 #  else
                                      nullptr,
 #  endif
-                                     &is_several_intel_dgpu_devices_detected);
+                                     &multiple_level_zero_platforms_detected);
+
+  /* Currently, multiple level zero is indicating that there are several different Intel
+   * drivers in the system (for example, Intel(R) 11th - 14th Gen Processor Graphics Driver
+   * (legacy) for iGPU and Intel(R) Arc(TM) Graphics Driver for dGPU). In such cases, copy
+   * extension is not working correctly and would lead to crashes, as reported in the Blender bug
+   * report #155964, so in order to ensure functionality we are disabling this extension on such
+   * configuration - in the future, this workaround can be removed, then minimal supported
+   * driver version would be high enough to include all Driver versions with the future fix.
+   */
+  if (multiple_level_zero_platforms_detected) {
+    use_intel_copy_optimization = false;
+  }
+
+#  ifdef SYCL_EXT_ONEAPI_COPY_OPTIMIZE
+  if (!use_intel_copy_optimization) {
+    LOG_TRACE << "oneAPI copy optimization extension may have issues on the detected "
+                 "configuration, it will be disabled to avoid crashes.";
+  }
+#  endif
 
   if (is_finished_ok == false) {
     set_error("oneAPI queue initialization error: got runtime exception \"" +
@@ -146,7 +173,8 @@ bool OneapiDevice::check_peer_access(Device * /*peer_device*/)
   return false;
 }
 
-bool OneapiDevice::can_use_hardware_raytracing_for_features(const uint requested_features) const
+bool OneapiDevice::can_use_hardware_raytracing_for_features(
+    const uint64_t requested_features) const
 {
   /* MNEE and Ray-trace kernels work correctly with Hardware Ray-tracing starting with Embree 4.1.
    */
@@ -158,7 +186,7 @@ bool OneapiDevice::can_use_hardware_raytracing_for_features(const uint requested
 #  endif
 }
 
-BVHLayoutMask OneapiDevice::get_bvh_layout_mask(const uint requested_features) const
+BVHLayoutMask OneapiDevice::get_bvh_layout_mask(const uint64_t requested_features) const
 {
   return (use_hardware_raytracing &&
           can_use_hardware_raytracing_for_features(requested_features)) ?
@@ -208,23 +236,26 @@ void OneapiDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
 
 size_t OneapiDevice::get_free_mem() const
 {
-  /* Accurate: Use device info, which is practically useful only on dGPU.
-   * This is because for non-discrete GPUs, all GPU memory allocations would
-   * be in the RAM, thus having the same performance for device and host pointers,
-   * so there is no need to be very accurate about what would end where. */
-  const sycl::device &device = reinterpret_cast<sycl::queue *>(device_queue_)->get_device();
-  const bool is_integrated_gpu = device.get_info<sycl::info::device::host_unified_memory>();
-  if (device.has(sycl::aspect::ext_intel_free_memory) && is_integrated_gpu == false) {
-    return device.get_info<sycl::ext::intel::info::device::free_memory>();
-  }
+  size_t free_memory = 0;
+
   /* Estimate: Capacity - in use. */
-  if (device_mem_in_use < max_memory_on_device_) {
-    return max_memory_on_device_ - device_mem_in_use;
+  const size_t resident_memory = stats.mem_used - map_host_used;
+  if (resident_memory < max_memory_on_device_) {
+    free_memory = max_memory_on_device_ - resident_memory;
   }
-  return 0;
+
+  /* Accurate: Use device info.
+   * Some drivers don't update free memory promptly after allocations, so we
+   * clamp to previous estimate to avoid over-reporting. */
+  const sycl::device &device = reinterpret_cast<sycl::queue *>(device_queue_)->get_device();
+  if (device.has(sycl::aspect::ext_intel_free_memory)) {
+    free_memory = min(device.get_info<sycl::ext::intel::info::device::free_memory>(), free_memory);
+  }
+
+  return free_memory;
 }
 
-bool OneapiDevice::load_kernels(const uint requested_features)
+bool OneapiDevice::load_kernels(const uint64_t requested_features)
 {
   assert(device_queue_);
 
@@ -268,15 +299,13 @@ bool OneapiDevice::load_kernels(const uint requested_features)
   return is_finished_ok;
 }
 
-void OneapiDevice::reserve_private_memory(const uint kernel_features)
+void OneapiDevice::reserve_private_memory(const uint64_t kernel_features)
 {
   size_t free_before = get_free_mem();
 
   /* Use the biggest kernel for estimation. */
   const DeviceKernel test_kernel = (kernel_features & KERNEL_FEATURE_NODE_RAYTRACE) ?
                                        DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE :
-                                   (kernel_features & KERNEL_FEATURE_MNEE) ?
-                                       DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE :
                                        DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE;
 
   {
@@ -340,7 +369,7 @@ bool OneapiDevice::shared_alloc(void *&shared_pointer, const size_t size)
   return shared_pointer != nullptr;
 }
 
-void OneapiDevice::shared_free(void *shared_pointer)
+void OneapiDevice::shared_free(void *shared_pointer, const size_t /*size*/)
 {
   usm_free(device_queue_, shared_pointer);
 }
@@ -383,9 +412,7 @@ void *OneapiDevice::host_alloc(const MemoryType type, const size_t size)
   void *host_pointer = GPUDevice::host_alloc(type, size);
 
 #  ifdef SYCL_EXT_ONEAPI_COPY_OPTIMIZE
-  /* This extension is not working fully correctly with several
-   * Intel dGPUs present in the system, so it would be turned off in such cases. */
-  if (is_several_intel_dgpu_devices_detected == false && host_pointer) {
+  if (use_intel_copy_optimization && host_pointer) {
     /* Import host_pointer into USM memory for faster host<->device data transfers. */
     if (type == MEM_READ_WRITE || type == MEM_READ_ONLY) {
       sycl::queue *queue = reinterpret_cast<sycl::queue *>(device_queue_);
@@ -404,7 +431,7 @@ void *OneapiDevice::host_alloc(const MemoryType type, const size_t size)
 void OneapiDevice::host_free(const MemoryType type, void *host_pointer, const size_t size)
 {
 #  ifdef SYCL_EXT_ONEAPI_COPY_OPTIMIZE
-  if (is_several_intel_dgpu_devices_detected == false) {
+  if (use_intel_copy_optimization) {
     if (type == MEM_READ_WRITE || type == MEM_READ_ONLY) {
       sycl::queue *queue = reinterpret_cast<sycl::queue *>(device_queue_);
       /* This API is properly implemented only in Level-Zero backend at the moment and we don't
@@ -428,22 +455,18 @@ void OneapiDevice::mem_alloc(device_memory &mem)
     assert(!"mem_alloc not supported for global memory.");
   }
   else {
-    if (mem.name) {
-      LOG_TRACE << "OneapiDevice::mem_alloc: \"" << mem.name << "\", "
-                << string_human_readable_number(mem.memory_size()) << " bytes. ("
-                << string_human_readable_size(mem.memory_size()) << ")";
-    }
+    LOG_TRACE << "OneapiDevice::mem_alloc: \"" << mem.log_name() << "\", "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ")";
     generic_alloc(mem);
   }
 }
 
 void OneapiDevice::mem_copy_to(device_memory &mem)
 {
-  if (mem.name) {
-    LOG_TRACE << "OneapiDevice::mem_copy_to: \"" << mem.name << "\", "
-              << string_human_readable_number(mem.memory_size()) << " bytes. ("
-              << string_human_readable_size(mem.memory_size()) << ")";
-  }
+  LOG_TRACE << "OneapiDevice::mem_copy_to: \"" << mem.log_name() << "\", "
+            << string_human_readable_number(mem.memory_size()) << " bytes. ("
+            << string_human_readable_size(mem.memory_size()) << ")";
 
   /* After getting runtime errors we need to avoid performing oneAPI runtime operations
    * because the associated GPU context may be in an invalid state at this point. */
@@ -467,11 +490,9 @@ void OneapiDevice::mem_copy_to(device_memory &mem)
 
 void OneapiDevice::mem_move_to_host(device_memory &mem)
 {
-  if (mem.name) {
-    LOG_TRACE << "OneapiDevice::mem_move_to_host: \"" << mem.name << "\", "
-              << string_human_readable_number(mem.memory_size()) << " bytes. ("
-              << string_human_readable_size(mem.memory_size()) << ")";
-  }
+  LOG_TRACE << "OneapiDevice::mem_move_to_host: \"" << mem.log_name() << "\", "
+            << string_human_readable_number(mem.memory_size()) << " bytes. ("
+            << string_human_readable_size(mem.memory_size()) << ")";
 
   /* After getting runtime errors we need to avoid performing oneAPI runtime operations
    * because the associated GPU context may be in an invalid state at this point. */
@@ -493,21 +514,19 @@ void OneapiDevice::mem_move_to_host(device_memory &mem)
 }
 
 void OneapiDevice::mem_copy_from(
-    device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem)
+    device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem, void *host_pointer)
 {
   if (mem.type == MEM_IMAGE_TEXTURE) {
     assert(!"mem_copy_from not supported for images.");
   }
-  else if (mem.host_pointer) {
+  else if (host_pointer) {
     const size_t size = (w > 0 || h > 0 || elem > 0) ? (elem * w * h) : mem.memory_size();
     const size_t offset = elem * y * w;
 
-    if (mem.name) {
-      LOG_TRACE << "OneapiDevice::mem_copy_from: \"" << mem.name << "\" object of "
-                << string_human_readable_number(mem.memory_size()) << " bytes. ("
-                << string_human_readable_size(mem.memory_size()) << ") from offset " << offset
-                << " data " << size << " bytes";
-    }
+    LOG_TRACE << "OneapiDevice::mem_copy_from: \"" << mem.log_name() << "\" object of "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ") from offset " << offset
+              << " data " << size << " bytes";
 
     /* After getting runtime errors we need to avoid performing oneAPI runtime operations
      * because the associated GPU context may be in an invalid state at this point. */
@@ -519,7 +538,7 @@ void OneapiDevice::mem_copy_from(
 
     assert(size != 0);
     if (mem.device_pointer) {
-      char *shifted_host = reinterpret_cast<char *>(mem.host_pointer) + offset;
+      char *shifted_host = reinterpret_cast<char *>(host_pointer) + offset;
       char *shifted_device = reinterpret_cast<char *>(mem.device_pointer) + offset;
       bool is_finished_ok = usm_memcpy(device_queue_, shifted_host, shifted_device, size);
       if (is_finished_ok == false) {
@@ -530,13 +549,22 @@ void OneapiDevice::mem_copy_from(
   }
 }
 
+void OneapiDevice::mem_copy_from(
+    device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem)
+{
+  mem_copy_from(mem, y, w, h, elem, mem.host_pointer);
+}
+
+void OneapiDevice::mem_copy_from(device_memory &mem)
+{
+  mem_copy_from(mem, 0, 0, 0, 0);
+}
+
 void OneapiDevice::mem_zero(device_memory &mem)
 {
-  if (mem.name) {
-    LOG_TRACE << "OneapiDevice::mem_zero: \"" << mem.name << "\", "
-              << string_human_readable_number(mem.memory_size()) << " bytes. ("
-              << string_human_readable_size(mem.memory_size()) << ")\n";
-  }
+  LOG_TRACE << "OneapiDevice::mem_zero: \"" << mem.log_name() << "\", "
+            << string_human_readable_number(mem.memory_size()) << " bytes. ("
+            << string_human_readable_size(mem.memory_size()) << ")";
 
   /* After getting runtime errors we need to avoid performing oneAPI runtime operations
    * because the associated GPU context may be in an invalid state at this point. */
@@ -562,11 +590,9 @@ void OneapiDevice::mem_zero(device_memory &mem)
 
 void OneapiDevice::mem_free(device_memory &mem)
 {
-  if (mem.name) {
-    LOG_TRACE << "OneapiDevice::mem_free: \"" << mem.name << "\", "
-              << string_human_readable_number(mem.device_size) << " bytes. ("
-              << string_human_readable_size(mem.device_size) << ")\n";
-  }
+  LOG_TRACE << "OneapiDevice::mem_free: \"" << mem.log_name() << "\", "
+            << string_human_readable_number(mem.device_size) << " bytes. ("
+            << string_human_readable_size(mem.device_size) << ")";
 
   if (mem.type == MEM_GLOBAL) {
     global_free(mem);
@@ -638,17 +664,15 @@ void OneapiDevice::const_copy_to(const char *name, void *host, const size_t size
 
 void OneapiDevice::global_alloc(device_memory &mem)
 {
-  assert(mem.name);
-
   size_t size = mem.memory_size();
-  LOG_TRACE << "OneapiDevice::global_alloc \"" << mem.name << "\" object "
+  LOG_TRACE << "OneapiDevice::global_alloc \"" << mem.log_name() << "\" object "
             << string_human_readable_number(size) << " bytes. ("
             << string_human_readable_size(size) << ")";
 
   generic_alloc(mem);
   generic_copy_to(mem);
 
-  set_global_memory(device_queue_, kg_memory_, mem.name, (void *)mem.device_pointer);
+  set_global_memory(device_queue_, kg_memory_, mem.global_name(), (void *)mem.device_pointer);
 
   usm_memcpy(device_queue_, kg_memory_device_, kg_memory_, kg_memory_size_);
 }
@@ -689,7 +713,9 @@ static sycl::ext::oneapi::experimental::image_descriptor image_desc(const device
       channel_type = sycl::image_channel_type::fp16;
       break;
     default:
+      channel_type = sycl::image_channel_type::unorm_int8;
       assert(0);
+      break;
   }
 
   sycl::ext::oneapi::experimental::image_descriptor param;
@@ -784,7 +810,7 @@ void OneapiDevice::image_alloc(device_image &mem)
       desc = sycl::ext::oneapi::experimental::image_descriptor(
           {mem.data_width, mem.data_height, 0}, mem.data_elements, channel_type);
 
-      LOG_DEBUG << "Array 2D/3D allocate: " << mem.name << ", "
+      LOG_DEBUG << "Array 2D/3D allocate: " << mem.log_name() << ", "
                 << string_human_readable_number(mem.memory_size()) << " bytes. ("
                 << string_human_readable_size(mem.memory_size()) << ")";
 
@@ -853,12 +879,13 @@ void OneapiDevice::image_alloc(device_image &mem)
     {
       /* Update image info. */
       thread_scoped_lock lock(image_info_mutex);
-      const uint slot = mem.slot;
-      if (slot >= image_info.size()) {
-        /* Allocate some slots in advance, to reduce amount of re-allocations. */
-        image_info.resize(slot + 128);
+      const uint image_info_id = mem.image_info_id;
+      if (image_info_id >= image_info.size()) {
+        /* Geometric growth to amortize reallocation cost. */
+        const size_t new_size = max(size_t(image_info_id) + 128, image_info.size() * 2);
+        image_info.host_only_resize(new_size);
       }
-      image_info[slot] = tex_info;
+      image_info[image_info_id] = tex_info;
       need_image_info = true;
     }
   }
@@ -922,7 +949,7 @@ void OneapiDevice::image_free(device_image &mem)
           (sycl::ext::oneapi::experimental::image_mem_handle::raw_handle_type)cmem.array};
 
       try {
-        /* We have allocated only standard image, so we also deallocate only them. */
+        /* We have allocated only standard images, so we also deallocate only them. */
         sycl::ext::oneapi::experimental::free_image_mem(
             imgHandle, sycl::ext::oneapi::experimental::image_type::standard, *queue);
       }
@@ -1027,29 +1054,28 @@ void OneapiDevice::check_usm(SyclQueue *queue_, const void *usm_ptr, bool allow_
 bool OneapiDevice::create_queue(SyclQueue *&external_queue,
                                 const int device_index,
                                 void *embree_device_pointer,
-                                bool *is_several_intel_dgpu_devices_detected_pointer)
+                                bool *multiple_level_zero_platforms_detected_pointer)
 {
   bool finished_correct = true;
-  *is_several_intel_dgpu_devices_detected_pointer = false;
+  *multiple_level_zero_platforms_detected_pointer = false;
 
   try {
-    std::vector<sycl::device> devices = available_sycl_devices(
-        is_several_intel_dgpu_devices_detected_pointer);
+    std::vector<SyclDeviceEntry> devices = available_sycl_devices(
+        multiple_level_zero_platforms_detected_pointer);
+
     if (device_index < 0 || device_index >= devices.size()) {
       return false;
     }
 
-    sycl::queue *created_queue = nullptr;
-    if (*is_several_intel_dgpu_devices_detected_pointer == false) {
-      created_queue = new sycl::queue(devices[device_index], sycl::property::queue::in_order());
+    if (devices[device_index].meets_driver_requirement == false) {
+      oneapi_error_string_ = "The device driver is too old.";
+      LOG_ERROR << "Internal error: The SYCL device does not meet minimum driver requirement, but "
+                   "it was used anyway. Please report a bug.";
+      return false;
     }
-    else {
-      sycl::context device_context(devices[device_index]);
-      created_queue = new sycl::queue(
-          device_context, devices[device_index], sycl::property::queue::in_order());
-      LOG_TRACE << "Separate context was generated for the new queue, as several available SYCL "
-                   "devices were detected";
-    }
+
+    sycl::queue *created_queue = new sycl::queue(devices[device_index].device,
+                                                 sycl::property::queue::in_order());
     external_queue = reinterpret_cast<SyclQueue *>(created_queue);
 
 #  ifdef WITH_EMBREE_GPU
@@ -1063,7 +1089,7 @@ bool OneapiDevice::create_queue(SyclQueue *&external_queue,
             "\"intel-level-zero-gpu-raytracing\" to enable it or disable Embree on GPU.";
       }
       else {
-        rtcSetDeviceSYCLDevice(*device_object_ptr, devices[device_index]);
+        rtcSetDeviceSYCLDevice(*device_object_ptr, devices[device_index].device);
       }
     }
 #  else
@@ -1241,7 +1267,8 @@ void OneapiDevice::set_global_memory(SyclQueue *queue_,
 
 /* This macro will change global ptr of KernelGlobals via name matching. */
 #  define KERNEL_DATA_ARRAY(type, name) \
-    else if (#name == matched_name) { \
+    else if (#name == matched_name) \
+    { \
       globals->__##name = (type *)memory_device_pointer; \
       return; \
     }
@@ -1253,7 +1280,8 @@ void OneapiDevice::set_global_memory(SyclQueue *queue_,
   }
   KERNEL_DATA_ARRAY(KernelData, data)
 #  include "kernel/data_arrays.h"
-  else {
+  else
+  {
     std::cerr << "Can't found global/constant memory with name \"" << matched_name << "\"!"
               << std::endl;
     assert(false);
@@ -1305,6 +1333,7 @@ void OneapiDevice::get_adjusted_global_and_local_sizes(SyclQueue *queue,
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE:
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK:
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_DEDICATED_LIGHT:
+    case DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE:
       preferred_work_group_size = preferred_work_group_size_intersect;
       break;
 
@@ -1313,7 +1342,6 @@ void OneapiDevice::get_adjusted_global_and_local_sizes(SyclQueue *queue,
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE:
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
@@ -1363,6 +1391,11 @@ void OneapiDevice::get_adjusted_global_and_local_sizes(SyclQueue *queue,
 
 /* Compute-runtime (ie. NEO) version is what gets returned by sycl/L0 on Windows
  * since Windows driver 101.3268. */
+/* IMPORTANT: ocloc 101.8424 (compute-runtime version 36246) generates
+ * AoT binaries that have been manually verified compatible down to
+ * driver 101.8306 by Intel, matching lowest_supported_driver_version_win.
+ * If ocloc is upgraded again in future, this compatibility must be re-verified
+ * or the minimum version bumped. */
 static const int lowest_supported_driver_version_win = 1018306;
 #  ifdef _WIN32
 /* For Windows driver 101.8331, compute-runtime version is 35716.
@@ -1370,7 +1403,15 @@ static const int lowest_supported_driver_version_win = 1018306;
  * This information is returned by `ocloc query OCL_DRIVER_VERSION`. */
 static const int lowest_supported_driver_version_neo = 35716;
 #  else
-static const int lowest_supported_driver_version_neo = 34666;
+/* For Linux, according to Blender version file
+ * build_files\build_environment\cmake\versions.cmake we
+ * at the moment are using Intel Graphics Compiler v2.30.1.
+ * According to the Intel Linux Driver releases page:
+ * https://github.com/intel/compute-runtime/releases the first driver
+ * which supports this IGC version is 26.09.37435.1, which you can
+ * confirm by checking "Additional components revisions used in build"
+ * section. Thus, this version is our minimal one. */
+static const int lowest_supported_driver_version_neo = 37435;
 #  endif
 
 int parse_driver_build_version(const sycl::device &device)
@@ -1417,15 +1458,16 @@ int parse_driver_build_version(const sycl::device &device)
   return driver_build_version;
 }
 
-std::vector<sycl::device> available_sycl_devices(bool *multiple_dgpus_detected = nullptr)
+std::vector<SyclDeviceEntry> available_sycl_devices(
+    bool *multiple_level_zero_platforms_detected = nullptr)
 {
-  std::vector<sycl::device> available_devices;
+  std::vector<SyclDeviceEntry> available_devices;
   bool allow_all_devices = false;
   if (getenv("CYCLES_ONEAPI_ALL_DEVICES") != nullptr) {
     allow_all_devices = true;
   }
 
-  int level_zero_dgpu_counter = 0;
+  int level_zero_platform_counter = 0;
   try {
     const std::vector<sycl::platform> &oneapi_platforms = sycl::platform::get_platforms();
 
@@ -1437,19 +1479,17 @@ std::vector<sycl::device> available_sycl_devices(bool *multiple_dgpus_detected =
         continue;
       }
 
+      if (platform.get_backend() == sycl::backend::ext_oneapi_level_zero) {
+        level_zero_platform_counter++;
+      }
+
       const std::vector<sycl::device> &oneapi_devices =
           (allow_all_devices) ? platform.get_devices(sycl::info::device_type::all) :
                                 platform.get_devices(sycl::info::device_type::gpu);
 
       for (const sycl::device &device : oneapi_devices) {
         bool filter_out = false;
-
-        if (platform.get_backend() == sycl::backend::ext_oneapi_level_zero && device.is_gpu() &&
-            device.get_info<sycl::info::device::host_unified_memory>() == false  // dGPU
-        )
-        {
-          level_zero_dgpu_counter++;
-        }
+        bool meets_driver_requirement = true;
 
         if (!allow_all_devices) {
           /* For now we support all Intel(R) Arc(TM) devices and likely any future GPU,
@@ -1500,7 +1540,7 @@ std::vector<sycl::device> available_sycl_devices(bool *multiple_dgpus_detected =
                                                               lowest_supported_driver_version_win :
                                                               lowest_supported_driver_version_neo;
               if (driver_build_version < lowest_supported_driver_version) {
-                filter_out = true;
+                meets_driver_requirement = false;
 
                 LOG_WARNING << "Driver version for device \""
                             << device.get_info<sycl::info::device::name>()
@@ -1519,8 +1559,8 @@ std::vector<sycl::device> available_sycl_devices(bool *multiple_dgpus_detected =
         /* The order of adding devices is not important, as both duplicated GPUs are fully
          * functional and performant, so we can pick up the first one we find. */
         if (!filter_out) {
-          for (const sycl::device &already_available_device : available_devices) {
-            std::array<sycl::device, 2> devices = {already_available_device, device};
+          for (const SyclDeviceEntry &available_entry : available_devices) {
+            std::array<sycl::device, 2> devices = {available_entry.device, device};
             std::vector<sycl::ext::intel::info::device::uuid::return_type> uuids;
             for (int i = 0; i < 2; i++) {
               /* As this is an Intel-specific enumeration issue - we are collecting Intel UUID
@@ -1557,7 +1597,7 @@ std::vector<sycl::device> available_sycl_devices(bool *multiple_dgpus_detected =
         }
 
         if (!filter_out) {
-          available_devices.push_back(device);
+          available_devices.push_back(SyclDeviceEntry{device, meets_driver_requirement});
         }
       }
     }
@@ -1566,8 +1606,8 @@ std::vector<sycl::device> available_sycl_devices(bool *multiple_dgpus_detected =
     LOG_WARNING << "An error has been encountered while enumerating SYCL devices: " << e.what();
   }
 
-  if (multiple_dgpus_detected) {
-    *multiple_dgpus_detected = level_zero_dgpu_counter > 1;
+  if (multiple_level_zero_platforms_detected) {
+    *multiple_level_zero_platforms_detected = level_zero_platform_counter > 1;
   }
 
   return available_devices;
@@ -1581,10 +1621,10 @@ void OneapiDevice::architecture_information(const SyclDevice *device,
       reinterpret_cast<const sycl::device *>(device)
           ->get_info<sycl::ext::oneapi::experimental::info::device::architecture>();
 
-#  define FILL_ARCH_INFO(architecture_code, is_arch_optimised) \
+#  define FILL_ARCH_INFO(architecture_code, is_arch_optimized) \
     case sycl::ext::oneapi::experimental::architecture ::architecture_code: \
       name = #architecture_code; \
-      is_optimized = is_arch_optimised; \
+      is_optimized = is_arch_optimized; \
       break;
 
   /* List of architectures that have been optimized by Intel and Blender developers.
@@ -1650,8 +1690,10 @@ char *OneapiDevice::device_capabilities()
 {
   std::stringstream capabilities;
 
-  const std::vector<sycl::device> &oneapi_devices = available_sycl_devices();
-  for (const sycl::device &device : oneapi_devices) {
+  const std::vector<SyclDeviceEntry> &entries = available_sycl_devices();
+  for (const SyclDeviceEntry &entry : entries) {
+    const sycl::device &device = entry.device;
+
     const std::string &name = device.get_info<sycl::info::device::name>();
 
     capabilities << std::string("\t") << name << "\n";
@@ -1659,13 +1701,15 @@ char *OneapiDevice::device_capabilities()
                  << device.get_platform().get_info<sycl::info::platform::name>() << "\n";
 
     string arch_name;
-    bool is_optimised_for_arch;
+    bool is_optimized_for_arch;
     architecture_information(
-        reinterpret_cast<const SyclDevice *>(&device), arch_name, is_optimised_for_arch);
+        reinterpret_cast<const SyclDevice *>(&device), arch_name, is_optimized_for_arch);
     capabilities << "\t\tsycl::info::device::architecture\t\t\t";
     capabilities << arch_name << "\n";
     capabilities << "\t\tsycl::info::device::is_cycles_optimized\t\t\t";
-    capabilities << is_optimised_for_arch << "\n";
+    capabilities << is_optimized_for_arch << "\n";
+    capabilities << "\t\tsycl::info::device::meets_driver_requirement\t\t\t";
+    capabilities << entry.meets_driver_requirement << "\n";
 
 #  define WRITE_ATTR(attribute_name, attribute_variable) \
     capabilities << "\t\tsycl::info::device::" #attribute_name "\t\t\t" << attribute_variable \
@@ -1765,8 +1809,10 @@ char *OneapiDevice::device_capabilities()
 void OneapiDevice::iterate_devices(OneAPIDeviceIteratorCallback cb, void *user_ptr)
 {
   int num = 0;
-  std::vector<sycl::device> devices = available_sycl_devices();
-  for (sycl::device &device : devices) {
+  std::vector<SyclDeviceEntry> entries = available_sycl_devices();
+  for (const SyclDeviceEntry &entry : entries) {
+    const sycl::device &device = entry.device;
+
     const std::string &platform_name =
         device.get_platform().get_info<sycl::info::platform::name>();
     std::string name = device.get_info<sycl::info::device::name>();
@@ -1783,9 +1829,9 @@ void OneapiDevice::iterate_devices(OneAPIDeviceIteratorCallback cb, void *user_p
     std::string id = "ONEAPI_" + platform_name + "_" + name;
 
     string arch_name;
-    bool is_optimised_for_arch;
+    bool is_optimized_for_arch;
     architecture_information(
-        reinterpret_cast<const SyclDevice *>(&device), arch_name, is_optimised_for_arch);
+        reinterpret_cast<const SyclDevice *>(&device), arch_name, is_optimized_for_arch);
 
     if (device.has(sycl::aspect::ext_intel_pci_address)) {
       id.append("_" + device.get_info<sycl::ext::intel::info::device::pci_address>());
@@ -1795,7 +1841,8 @@ void OneapiDevice::iterate_devices(OneAPIDeviceIteratorCallback cb, void *user_p
          num,
          hwrt_support,
          oidn_support,
-         is_optimised_for_arch,
+         is_optimized_for_arch,
+         entry.meets_driver_requirement,
          user_ptr);
     num++;
   }

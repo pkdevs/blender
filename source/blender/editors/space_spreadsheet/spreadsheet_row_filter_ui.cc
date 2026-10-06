@@ -6,9 +6,9 @@
 #include <fmt/format.h>
 #include <sstream>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
@@ -97,6 +97,14 @@ static std::string value_string(const SpreadsheetRowFilter &row_filter,
       result.precision(3);
       result << std::fixed << "(" << row_filter.value_float3[0] << ", "
              << row_filter.value_float3[1] << ", " << row_filter.value_float3[2] << ")";
+      return result.str();
+    }
+    case SPREADSHEET_VALUE_TYPE_FLOAT4: {
+      std::ostringstream result;
+      result.precision(3);
+      result << std::fixed << "(" << row_filter.value_float4[0] << ", "
+             << row_filter.value_float4[1] << ", " << row_filter.value_float4[2] << ", "
+             << row_filter.value_float4[3] << ")";
       return result.str();
     }
     case SPREADSHEET_VALUE_TYPE_BOOL:
@@ -254,6 +262,13 @@ static void spreadsheet_filter_panel_draw(const bContext *C, Panel *panel)
         layout.prop(filter_ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       }
       break;
+    case SPREADSHEET_VALUE_TYPE_FLOAT4:
+      layout.prop(filter_ptr, "operation", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      layout.prop(filter_ptr, "value_float4", UI_ITEM_NONE, IFACE_("Value"), ICON_NONE);
+      if (operation == SPREADSHEET_ROW_FILTER_EQUAL) {
+        layout.prop(filter_ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      }
+      break;
     case SPREADSHEET_VALUE_TYPE_BOOL:
       layout.prop(filter_ptr, "value_boolean", UI_ITEM_NONE, IFACE_("Value"), ICON_NONE);
       break;
@@ -275,7 +290,7 @@ static void spreadsheet_filter_panel_draw(const bContext *C, Panel *panel)
     case SPREADSHEET_VALUE_TYPE_QUATERNION:
     case SPREADSHEET_VALUE_TYPE_FLOAT4X4:
     case SPREADSHEET_VALUE_TYPE_BUNDLE_ITEM:
-      layout.label(IFACE_("Unsupported column type"), ICON_ERROR);
+      layout.label(IFACE_("Unsupported column type"), ICON_STATUS_ERROR);
       break;
   }
 }
@@ -311,7 +326,7 @@ static void spreadsheet_row_filters_layout(const bContext *C, Panel *panel)
   }
   else {
     /* Assuming there's only one group of instanced panels, update the custom data pointers. */
-    Panel *panel_iter = static_cast<Panel *>(region->panels.first);
+    Panel *panel_iter = region->panels.first();
     for (SpreadsheetRowFilter &row_filter : *row_filters) {
 
       /* Move to the next instanced panel corresponding to the next filter. */

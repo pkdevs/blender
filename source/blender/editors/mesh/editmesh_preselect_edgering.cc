@@ -10,8 +10,8 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_stack.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_stack_c.hh"
 
 #include "GPU_immediate.hh"
 #include "GPU_matrix.hh"
@@ -257,7 +257,7 @@ static void view3d_preselect_mesh_edgering_update_edges_from_edge(
            BMW_MASK_NOP,
            BMW_FLAG_TEST_HIDDEN,
            BMW_NIL_LAY,
-           BMW_DELIMIT_NONE);
+           BMW_DELIMIT_EDGE_RING_NGONS);
 
   edge_stack = BLI_stack_new(sizeof(BMEdge *), __func__);
 

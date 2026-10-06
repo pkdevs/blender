@@ -26,6 +26,9 @@ class Background : Overlay {
 
   gpu::FrameBuffer *framebuffer_ref_ = nullptr;
 
+  /* Padded bbox vertices. */
+  std::array<float4, 8> bbox_;
+
  public:
   void begin_sync(Resources &res, const State &state) final
   {
@@ -80,12 +83,14 @@ class Background : Overlay {
     bg_ps_.framebuffer_set(&framebuffer_ref_);
 
     if ((state.clipping_plane_count != 0) && (state.rv3d) && (state.rv3d->clipbb)) {
-      Span<float3> bbox(reinterpret_cast<float3 *>(state.rv3d->clipbb->vec[0]), 8);
+      for (int i : IndexRange(8)) {
+        bbox_[i] = state.rv3d->clipbb->vec[i];
+      }
 
       bg_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA | DRW_STATE_CULL_BACK);
       bg_ps_.shader_set(res.shaders->background_clip_bound.get());
       bg_ps_.push_constant("ucolor", res.theme.colors.clipping_border);
-      bg_ps_.push_constant("boundbox", bbox.data(), 8);
+      bg_ps_.push_constant("boundbox", bbox_.data(), 8);
       bg_ps_.draw(res.shapes.cube_solid.get());
     }
 
@@ -101,8 +106,7 @@ class Background : Overlay {
     bg_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
     if (state.vignette_enabled) {
-      const float vignette_aperture = state.v3d ? state.v3d->vignette_aperture : 1.0f;
-      const float vignette_falloff = 0.15f;
+      const float vignette_aperture = state.v3d ? state.v3d->xr_vignette_aperture : 1.0f;
 
       bg_vignette_ps_.init();
       bg_vignette_ps_.framebuffer_set(&framebuffer_ref_);
@@ -117,7 +121,6 @@ class Background : Overlay {
       bg_vignette_ps_.push_constant("bg_type", background_type);
       bg_vignette_ps_.push_constant("vignette_enabled", true);
       bg_vignette_ps_.push_constant("vignette_aperture", vignette_aperture);
-      bg_vignette_ps_.push_constant("vignette_falloff", vignette_falloff);
       bg_vignette_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
     }
   }

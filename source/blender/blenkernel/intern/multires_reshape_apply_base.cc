@@ -13,7 +13,7 @@
 #include "DNA_mesh_types.h"
 
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_mesh.hh"
 #include "BKE_multires.hh"
@@ -23,6 +23,9 @@ namespace blender {
 
 void multires_reshape_apply_base_update_mesh_coords(MultiresReshapeContext *reshape_context)
 {
+  /* The original grids give the displacement to apply to the base mesh. */
+  BLI_assert(reshape_context->orig.mdisps != nullptr);
+
   Mesh *base_mesh = reshape_context->base_mesh;
   MutableSpan<float3> base_positions = base_mesh->vert_positions_for_write();
   /* Update the context in case the vertices were duplicated. */
@@ -133,6 +136,17 @@ void multires_reshape_apply_base_refit_base_mesh(MultiresReshapeContext *reshape
    * Probably this is possible to do in the loop above, but this is rather tricky because
    * we don't know all needed vertices' coordinates there yet. */
   base_mesh->tag_positions_changed();
+}
+
+void multires_reshape_apply_base_update_shape_key(MultiresReshapeContext *reshape_context)
+{
+  Mesh *base_mesh = reshape_context->base_mesh;
+  MutableSpan<float3> base_positions = base_mesh->vert_positions_for_write();
+  if (reshape_context->basis_shape_key) {
+    MutableSpan<float3> basis_key_data((float3 *)reshape_context->basis_shape_key->data,
+                                       base_positions.size());
+    basis_key_data.copy_from(base_positions);
+  }
 }
 
 void multires_reshape_apply_base_refine_from_base(MultiresReshapeContext *reshape_context)

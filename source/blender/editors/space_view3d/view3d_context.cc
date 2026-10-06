@@ -53,9 +53,10 @@ int view3d_context(const bContext *C, const char *member, bContextDataResult *re
      * without showing the object.
      *
      * See #85532 for alternatives that were considered. */
+    const Main *bmain = CTX_data_main(C);
     const Scene *scene = CTX_data_scene(C);
     ViewLayer *view_layer = CTX_data_view_layer(C);
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Base *base = BKE_view_layer_active_base_get(view_layer);
     if (base) {
       Object *ob = base->object;
@@ -114,7 +115,7 @@ bool ED_view3d_context_user_region(bContext *C, View3D **r_v3d, ARegion **r_regi
 
   if (area && area->spacetype == SPACE_VIEW3D) {
     ARegion *region = CTX_wm_region(C);
-    View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+    View3D *v3d = area->spacedata.first_as<View3D>();
 
     if (region) {
       RegionView3D *rv3d;

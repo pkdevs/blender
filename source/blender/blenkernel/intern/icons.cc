@@ -17,19 +17,20 @@
 #include "DNA_ID.h"
 #include "DNA_gpencil_legacy_types.h"
 
-#include "BLI_fileops.h"
-#include "BLI_linklist_lockfree.h"
+#include "BLI_fileops.hh"
+#include "BLI_linklist_lockfree.hh"
 #include "BLI_map.hh"
 #include "BLI_mutex.hh"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_span.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh" /* only for G.background test */
 #include "BKE_icons.hh"
 #include "BKE_preview_image.hh"
 #include "BKE_studiolight.h"
 
-#include "BLI_sys_types.h" /* for intptr_t support */
+#include "BLI_sys_types.hh" /* for intptr_t support */
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
@@ -408,6 +409,85 @@ ImBuf *BKE_icon_imbuf_get_buffer(int icon_id)
   return static_cast<ImBuf *>(icon->obj);
 }
 
+bool BKE_icon_is_imbuf(const int icon_id)
+{
+  const Icon *icon = icon_ghash_lookup(icon_id);
+  if (!icon) {
+    CLOG_ERROR(&LOG, "no icon for icon ID: %d", icon_id);
+    return false;
+  }
+  return icon->obj_type == ICON_DATA_IMBUF;
+}
+
+static IconBufferRef construct_icon_buffer(const int width,
+                                           const int height,
+                                           const int channels,
+                                           const uint8_t *buffer)
+{
+  BLI_assert(buffer != nullptr);
+  BLI_assert(width >= 0);
+  BLI_assert(height >= 0);
+  BLI_assert(channels >= 0);
+
+  return IconBufferRef{
+      .width = width,
+      .height = height,
+      .channels = channels,
+      .buffer = Span(buffer, width * height * channels),
+  };
+}
+
+static std::optional<IconBufferRef> icon_buffer_from_preview(const PreviewImage *preview,
+                                                             const eIconSizes size)
+{
+  if (!preview->rect[size]) {
+    return std::nullopt;
+  }
+
+  const int num_channels = 4; /* #PreviewImage always has 4 color channels. */
+  return construct_icon_buffer(preview->w[size],
+                               preview->h[size],
+                               num_channels,
+                               reinterpret_cast<uint8_t *>(preview->rect[size]));
+}
+
+std::optional<IconBufferRef> BKE_icon_get_buffer(const int icon_id, const eIconSizes size)
+{
+  const Icon *icon = icon_ghash_lookup(icon_id);
+  if (!icon) {
+    CLOG_ERROR(&LOG, "no icon for icon ID: %d", icon_id);
+    return std::nullopt;
+  }
+
+  switch (icon->obj_type) {
+    case ICON_DATA_IMBUF: {
+      const ImBuf *ibuf = static_cast<ImBuf *>(icon->obj);
+      if (!ibuf->byte_data()) {
+        return std::nullopt;
+      }
+      return construct_icon_buffer(ibuf->x, ibuf->y, ibuf->channels, ibuf->byte_data());
+    }
+    case ICON_DATA_ID: {
+      const ID *id = static_cast<ID *>(icon->obj);
+      if (PreviewImage *preview = BKE_previewimg_id_get(id)) {
+        return icon_buffer_from_preview(preview, size);
+      }
+      break;
+    }
+    case ICON_DATA_PREVIEW: {
+      if (const PreviewImage *preview = static_cast<PreviewImage *>(icon->obj)) {
+        if (!BKE_previewimg_is_finished(preview, size)) {
+          return std::nullopt;
+        }
+        return icon_buffer_from_preview(preview, size);
+      }
+      break;
+    }
+  }
+
+  return std::nullopt;
+}
+
 Icon *BKE_icon_get(const int icon_id)
 {
   BLI_assert(BLI_thread_is_main());
@@ -492,7 +572,7 @@ bool BKE_icon_delete_unmanaged(const int icon_id)
 
   Icon *icon = gIcons.pop_default(icon_id, nullptr);
   if (icon) {
-    if (UNLIKELY(icon->flag & ICON_FLAG_MANAGED)) {
+    if (icon->flag & ICON_FLAG_MANAGED) [[unlikely]] {
       gIcons.add(icon_id, icon);
       return false;
     }
@@ -520,7 +600,7 @@ int BKE_icon_geom_ensure(Icon_Geom *geom)
   geom->icon_id = get_next_free_id();
 
   icon_create(geom->icon_id, ICON_DATA_GEOM, geom);
-  /* Not managed for now, we may want this to be configurable per icon). */
+  /* Not managed for now, we may want this to be configurable per icon. */
 
   return geom->icon_id;
 }

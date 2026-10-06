@@ -11,11 +11,11 @@
  * All functions are designed to be usable by RNA / the Python API.
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "GHOST_Xr-api.hh"
 
@@ -50,8 +50,8 @@ static void action_set_destroy(void *val)
 
   MEM_SAFE_DELETE(action_set->name);
 
-  BLI_freelistN(&action_set->active_modal_actions);
-  BLI_freelistN(&action_set->active_haptic_actions);
+  action_set->active_modal_actions.free_no_destruct();
+  action_set->active_haptic_actions.free_no_destruct();
 
   MEM_delete(action_set);
 }
@@ -59,7 +59,7 @@ static void action_set_destroy(void *val)
 static wmXrActionSet *action_set_find(wmXrData *xr, const char *action_set_name)
 {
   return static_cast<wmXrActionSet *>(
-      GHOST_XrGetActionSetCustomdata(xr->runtime->context, action_set_name));
+      GHOST_XrGetActionSetCustomdata(xr->runtime->ghost_context, action_set_name));
 }
 
 static wmXrAction *action_create(const char *action_name,
@@ -79,7 +79,7 @@ static wmXrAction *action_create(const char *action_name,
   action->name = BLI_strdup(action_name);
   action->type = type;
 
-  const uint count = uint(BLI_listbase_count(user_paths));
+  const uint count = uint(user_paths->count());
   action->count_subaction_paths = count;
 
   action->subaction_paths = MEM_new_array_uninitialized<char *>(count, "XrAction_SubactionPaths");
@@ -162,7 +162,7 @@ static void action_destroy(void *val)
 static wmXrAction *action_find(wmXrData *xr, const char *action_set_name, const char *action_name)
 {
   return static_cast<wmXrAction *>(
-      GHOST_XrGetActionCustomdata(xr->runtime->context, action_set_name, action_name));
+      GHOST_XrGetActionCustomdata(xr->runtime->ghost_context, action_set_name, action_name));
 }
 
 bool WM_xr_action_set_create(wmXrData *xr, const char *action_set_name)
@@ -178,7 +178,7 @@ bool WM_xr_action_set_create(wmXrData *xr, const char *action_set_name)
   info.customdata_free_fn = action_set_destroy;
   info.customdata = action_set;
 
-  if (!GHOST_XrCreateActionSet(xr->runtime->context, &info)) {
+  if (!GHOST_XrCreateActionSet(xr->runtime->ghost_context, &info)) {
     return false;
   }
 
@@ -200,13 +200,13 @@ void WM_xr_action_set_destroy(wmXrData *xr, const char *action_set_name)
       action_set->controller_grip_action = action_set->controller_aim_action = nullptr;
     }
 
-    BLI_freelistN(&action_set->active_modal_actions);
-    BLI_freelistN(&action_set->active_haptic_actions);
+    action_set->active_modal_actions.free_no_destruct();
+    action_set->active_haptic_actions.free_no_destruct();
 
     session_state->active_action_set = nullptr;
   }
 
-  GHOST_XrDestroyActionSet(xr->runtime->context, action_set_name);
+  GHOST_XrDestroyActionSet(xr->runtime->ghost_context, action_set_name);
 }
 
 bool WM_xr_action_create(wmXrData *xr,
@@ -241,7 +241,7 @@ bool WM_xr_action_create(wmXrData *xr,
                                      action_flag,
                                      haptic_flag);
 
-  const uint count = uint(BLI_listbase_count(user_paths));
+  const uint count = uint(user_paths->count());
 
   char **subaction_paths = MEM_new_array_zeroed<char *>(count, "XrAction_SubactionPathPointers");
 
@@ -277,7 +277,8 @@ bool WM_xr_action_create(wmXrData *xr,
       break;
   }
 
-  const bool success = GHOST_XrCreateActions(xr->runtime->context, action_set_name, 1, &info);
+  const bool success = GHOST_XrCreateActions(
+      xr->runtime->ghost_context, action_set_name, 1, &info);
 
   MEM_delete(subaction_paths);
 
@@ -321,7 +322,7 @@ void WM_xr_action_destroy(wmXrData *xr, const char *action_set_name, const char 
     }
   }
 
-  GHOST_XrDestroyActions(xr->runtime->context, action_set_name, 1, &action_name);
+  GHOST_XrDestroyActions(xr->runtime->ghost_context, action_set_name, 1, &action_name);
 }
 
 bool WM_xr_action_binding_create(wmXrData *xr,
@@ -334,8 +335,8 @@ bool WM_xr_action_binding_create(wmXrData *xr,
                                  const eXrAxisFlag *axis_flags,
                                  const wmXrPose *poses)
 {
-  const uint count = uint(BLI_listbase_count(user_paths));
-  BLI_assert(count == uint(BLI_listbase_count(component_paths)));
+  const uint count = uint(user_paths->count());
+  BLI_assert(count == uint(component_paths->count()));
 
   GHOST_XrActionBindingInfo *binding_infos = MEM_new_array_zeroed<GHOST_XrActionBindingInfo>(
       count, "XrActionBinding_Infos");
@@ -372,7 +373,7 @@ bool WM_xr_action_binding_create(wmXrData *xr,
   profile_info.bindings = binding_infos;
 
   const bool success = GHOST_XrCreateActionBindings(
-      xr->runtime->context, action_set_name, 1, &profile_info);
+      xr->runtime->ghost_context, action_set_name, 1, &profile_info);
 
   MEM_delete(subaction_paths);
   MEM_delete(binding_infos);
@@ -386,7 +387,7 @@ void WM_xr_action_binding_destroy(wmXrData *xr,
                                   const char *profile_path)
 {
   GHOST_XrDestroyActionBindings(
-      xr->runtime->context, action_set_name, 1, &action_name, &profile_path);
+      xr->runtime->ghost_context, action_set_name, 1, &action_name, &profile_path);
 }
 
 bool WM_xr_active_action_set_set(wmXrData *xr, const char *action_set_name, bool delayed)
@@ -407,8 +408,8 @@ bool WM_xr_active_action_set_set(wmXrData *xr, const char *action_set_name, bool
     /* Clear any active modal/haptic actions. */
     wmXrActionSet *active_action_set = xr->runtime->session_state.active_action_set;
     if (active_action_set) {
-      BLI_freelistN(&active_action_set->active_modal_actions);
-      BLI_freelistN(&active_action_set->active_haptic_actions);
+      active_action_set->active_modal_actions.free_no_destruct();
+      active_action_set->active_haptic_actions.free_no_destruct();
     }
   }
 
@@ -518,7 +519,7 @@ bool WM_xr_haptic_action_apply(wmXrData *xr,
                                const float *frequency,
                                const float *amplitude)
 {
-  return GHOST_XrApplyHapticAction(xr->runtime->context,
+  return GHOST_XrApplyHapticAction(xr->runtime->ghost_context,
                                    action_set_name,
                                    action_name,
                                    subaction_path,
@@ -534,7 +535,8 @@ void WM_xr_haptic_action_stop(wmXrData *xr,
                               const char *action_name,
                               const char *subaction_path)
 {
-  GHOST_XrStopHapticAction(xr->runtime->context, action_set_name, action_name, subaction_path);
+  GHOST_XrStopHapticAction(
+      xr->runtime->ghost_context, action_set_name, action_name, subaction_path);
 }
 
 /** \} */ /* XR-Action API. */

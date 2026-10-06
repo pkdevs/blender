@@ -19,8 +19,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_world_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_icons.hh"
 #include "BKE_idtype.hh"
@@ -59,7 +59,7 @@ static void world_free_data(ID *id)
   GPU_material_free(&wrld->gpumaterial);
 
   BKE_icon_id_delete(id_cast<ID *>(wrld));
-  BKE_previewimg_free(&wrld->preview);
+  BKE_previewimg_id_free(&wrld->id);
 
   MEM_SAFE_DELETE(wrld->lightgroup);
 }
@@ -70,7 +70,7 @@ static void world_init_data(ID *id)
   INIT_DEFAULT_STRUCT_AFTER(wrld, id);
 
   wrld->nodetree = bke::node_tree_add_tree_embedded(
-      nullptr, &wrld->id, "World Nodetree", ntreeType_Shader->idname);
+      nullptr, &wrld->id, "World Nodetree", ntreeType_Shader->idname.ref());
 }
 
 /**
@@ -112,7 +112,7 @@ static void world_copy_data(Main *bmain,
     }
   }
 
-  BLI_listbase_clear(&wrld_dst->gpumaterial);
+  wrld_dst->gpumaterial.clear_no_delete();
 
   if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0) {
     BKE_previewimg_id_copy(&wrld_dst->id, &wrld_src->id);
@@ -150,7 +150,7 @@ static void world_blend_write(BlendWriter *writer, ID *id, const void *id_addres
 
   /* Clean up runtime data, important in undo case to reduce false detection of changed
    * datablocks. */
-  BLI_listbase_clear(&wrld->gpumaterial);
+  wrld->gpumaterial.clear_no_delete();
   wrld->last_update = 0;
 
   /* Set deprecated #use_nodes for forward compatibility. */
@@ -163,9 +163,9 @@ static void world_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   /* nodetree is integral part of world, no libdata */
   if (wrld->nodetree) {
     BLO_Write_IDBuffer temp_embedded_id_buffer{wrld->nodetree->id, writer};
-    writer->write_struct_at_address_cast<bNodeTree>(wrld->nodetree, temp_embedded_id_buffer.get());
-    bke::node_tree_blend_write(writer,
-                               reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get()));
+    bNodeTree *temp_ntree = reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get());
+    writer->write_embedded_id_struct(wrld->nodetree, temp_ntree);
+    bke::node_tree_blend_write(writer, temp_ntree);
   }
 
   BKE_previewimg_blend_write(writer, wrld->preview);
@@ -181,40 +181,41 @@ static void world_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_struct(reader, PreviewImage, &wrld->preview);
   BKE_previewimg_blend_read(reader, wrld->preview);
-  BLI_listbase_clear(&wrld->gpumaterial);
+  wrld->gpumaterial.clear_no_delete();
 
   BLO_read_struct(reader, LightgroupMembership, &wrld->lightgroup);
 }
 
 IDTypeInfo IDType_ID_WO = {
-    /*id_code*/ World::id_type,
-    /*id_filter*/ FILTER_ID_WO,
-    /*dependencies_id_types*/ FILTER_ID_TE,
-    /*main_listbase_index*/ INDEX_ID_WO,
-    /*struct_size*/ sizeof(World),
-    /*name*/ "World",
-    /*name_plural*/ N_("worlds"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_WORLD,
-    /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = World::id_type,
+    .id_filter = FILTER_ID_WO,
+    .dependencies_id_types = FILTER_ID_TE,
+    .main_listbase_index = INDEX_ID_WO,
+    .struct_size = sizeof(World),
+    .name = "World",
+    .name_plural = N_("worlds"),
+    .translation_context = BLT_I18NCONTEXT_ID_WORLD,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ world_init_data,
-    /*copy_data*/ world_copy_data,
-    /*free_data*/ world_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ world_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ world_foreach_working_space_color,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = world_init_data,
+    .copy_data = world_copy_data,
+    .free_data = world_free_data,
+    .make_local = nullptr,
+    .foreach_id = world_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = world_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ world_blend_write,
-    /*blend_read_data*/ world_blend_read_data,
-    /*blend_read_after_liblink*/ nullptr,
+    .blend_write = world_blend_write,
+    .blend_read_data = world_blend_read_data,
+    .blend_read_after_liblink = nullptr,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 World *BKE_world_add(Main *bmain, const char *name)

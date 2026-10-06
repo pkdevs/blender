@@ -6,7 +6,7 @@
  * \ingroup texnodes
  */
 
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "node_texture_util.hh"
 #include "node_util.hh"
 
@@ -96,7 +96,7 @@ void register_node_type_tex_separate_color()
 {
   static bke::bNodeType ntype;
 
-  tex_node_type_base(&ntype, "TextureNodeSeparateColor", TEX_NODE_SEPARATE_COLOR);
+  tex_node_type_base(&ntype, "TextureNodeSeparateColor"_ustr, TEX_NODE_SEPARATE_COLOR);
   ntype.ui_name = "Separate Color";
   ntype.enum_name_legacy = "SEPARATE_COLOR";
   ntype.nclass = NODE_CLASS_OP_COLOR;

@@ -52,7 +52,7 @@ PyDoc_STRVAR(
     "\n"
     "   Create an inlined shader node tree from a material.\n"
     "\n"
-    "   :arg material: The material to inline the node tree of.\n"
+    "   :param material: The material to inline the node tree of.\n"
     "   :type material: bpy.types.Material\n");
 static BPy_InlineShaderNodes *BPy_InlineShaderNodes_static_from_material(PyObject * /*self*/,
                                                                          PyObject *args,
@@ -60,7 +60,13 @@ static BPy_InlineShaderNodes *BPy_InlineShaderNodes_static_from_material(PyObjec
 {
   static const char *kwlist[] = {"material", nullptr};
   PyObject *py_material;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", const_cast<char **>(kwlist), &py_material)) {
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O" /* `material` */
+                                   ":from_material",
+                                   const_cast<char **>(kwlist),
+                                   &py_material))
+  {
     return nullptr;
   }
   ID *material_id = nullptr;
@@ -90,7 +96,7 @@ PyDoc_STRVAR(
     "\n"
     "   Create an inlined shader node tree from a light.\n"
     "\n"
-    "   :arg light: The light to online the node tree of.\n"
+    "   :param light: The light to online the node tree of.\n"
     "   :type light: bpy.types.Light\n");
 static BPy_InlineShaderNodes *BPy_InlineShaderNodes_static_from_light(PyObject * /*self*/,
                                                                       PyObject *args,
@@ -98,7 +104,13 @@ static BPy_InlineShaderNodes *BPy_InlineShaderNodes_static_from_light(PyObject *
 {
   static const char *kwlist[] = {"light", nullptr};
   PyObject *py_light;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", const_cast<char **>(kwlist), &py_light)) {
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O" /* `light` */
+                                   ":from_light",
+                                   const_cast<char **>(kwlist),
+                                   &py_light))
+  {
     return nullptr;
   }
   ID *light_id = nullptr;
@@ -127,7 +139,7 @@ PyDoc_STRVAR(
     "\n"
     "   Create an inlined shader node tree from a world.\n"
     "\n"
-    "   :arg world: The world to inline the node tree of.\n"
+    "   :param world: The world to inline the node tree of.\n"
     "   :type world: bpy.types.World\n");
 static BPy_InlineShaderNodes *BPy_InlineShaderNodes_static_from_world(PyObject * /*self*/,
                                                                       PyObject *args,
@@ -135,7 +147,13 @@ static BPy_InlineShaderNodes *BPy_InlineShaderNodes_static_from_world(PyObject *
 {
   static const char *kwlist[] = {"world", nullptr};
   PyObject *py_world;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", const_cast<char **>(kwlist), &py_world)) {
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O" /* `world` */
+                                   ":from_world",
+                                   const_cast<char **>(kwlist),
+                                   &py_world))
+  {
     return nullptr;
   }
   ID *world_id = nullptr;

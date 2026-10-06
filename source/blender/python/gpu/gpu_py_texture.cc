@@ -13,8 +13,8 @@
 
 #include <Python.h>
 
-#include "BLI_math_base.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_image_types.h"
 
@@ -22,6 +22,7 @@
 #include "GPU_texture.hh"
 
 #include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 
 #include "../generic/py_capi_utils.hh"
 #include "../generic/python_compat.hh" /* IWYU pragma: keep. */
@@ -30,6 +31,55 @@
 #include "gpu_py_buffer.hh"
 
 #include "gpu_py_texture.hh" /* own include */
+
+/* Docstring Literal type for texture formats. */
+
+#define PYDOC_TEX_FORMAT_LITERAL \
+  "Literal[" \
+  "'RGBA8UI', " \
+  "'RGBA8I', " \
+  "'RGBA8', " \
+  "'RGBA32UI', " \
+  "'RGBA32I', " \
+  "'RGBA32F', " \
+  "'RGBA16UI', " \
+  "'RGBA16I', " \
+  "'RGBA16F', " \
+  "'RGBA16', " \
+  "'RG8UI', " \
+  "'RG8I', " \
+  "'RG8', " \
+  "'RG32UI', " \
+  "'RG32I', " \
+  "'RG32F', " \
+  "'RG16UI', " \
+  "'RG16I', " \
+  "'RG16F', " \
+  "'RG16', " \
+  "'R8UI', " \
+  "'R8I', " \
+  "'R8', " \
+  "'R32UI', " \
+  "'R32I', " \
+  "'R32F', " \
+  "'R16UI', " \
+  "'R16I', " \
+  "'R16F', " \
+  "'R16', " \
+  "'R11F_G11F_B10F', " \
+  "'DEPTH32F_STENCIL8', " \
+  "'DEPTH24_STENCIL8', " \
+  "'SRGB8_A8', " \
+  "'RGB16F', " \
+  "'SRGB8_A8_DXT1', " \
+  "'SRGB8_A8_DXT3', " \
+  "'SRGB8_A8_DXT5', " \
+  "'RGBA8_DXT1', " \
+  "'RGBA8_DXT3', " \
+  "'RGBA8_DXT5', " \
+  "'DEPTH_COMPONENT32F', " \
+  "'DEPTH_COMPONENT24', " \
+  "'DEPTH_COMPONENT16']"
 
 namespace blender {
 
@@ -95,7 +145,7 @@ const PyC_StringEnumItems pygpu_textureextendmode_items[] = {
 
 static int pygpu_texture_valid_check(BPyGPUTexture *bpygpu_tex)
 {
-  if (UNLIKELY(bpygpu_tex->tex == nullptr)) {
+  if (bpygpu_tex->tex == nullptr) [[unlikely]] {
     PyErr_SetString(PyExc_ReferenceError,
 #ifdef BPYGPU_USE_GPUOBJ_FREE_METHOD
                     "GPU texture was freed, no further access is valid"
@@ -111,7 +161,7 @@ static int pygpu_texture_valid_check(BPyGPUTexture *bpygpu_tex)
 
 #define BPYGPU_TEXTURE_CHECK_OBJ(bpygpu) \
   { \
-    if (UNLIKELY(pygpu_texture_valid_check(bpygpu) == -1)) { \
+    if (pygpu_texture_valid_check(bpygpu) == -1) [[unlikely]] { \
       return nullptr; \
     } \
   } \
@@ -124,7 +174,7 @@ static int pygpu_texture_valid_check(BPyGPUTexture *bpygpu_tex)
  * \{ */
 
 #define BPYGPU_TEXTURE_EXTEND_MODE_ARG_DOC \
-  "   :arg extend_mode: the specified extent mode.\n" \
+  "   :param extend_mode: the specified extent mode.\n" \
   "   :type extend_mode: Literal['EXTEND', 'REPEAT', 'MIRRORED_REPEAT', 'CLAMP_TO_BORDER']\n";
 
 static PyObject *pygpu_texture__tp_new(PyTypeObject * /*self*/, PyObject *args, PyObject *kwds)
@@ -138,16 +188,17 @@ static PyObject *pygpu_texture__tp_new(PyTypeObject * /*self*/, PyObject *args, 
   PyC_StringEnum pygpu_textureformat = {pygpu_textureformat_items,
                                         int(gpu::TextureFormat::UNORM_8_8_8_8)};
   BPyGPUBuffer *pybuffer_obj = nullptr;
+  PyC_TypeOrNone pybuffer_or_none = PyC_TYPE_OR_NONE_INIT(&BPyGPU_BufferType, &pybuffer_obj);
   char err_out[256] = "unknown error. See console";
 
   static const char *_keywords[] = {"size", "layers", "is_cubemap", "format", "data", nullptr};
   static _PyArg_Parser _parser = {
       "O"  /* `size` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "i"  /* `layers` */
       "p"  /* `is_cubemap` */
       "O&" /* `format` */
-      "O!" /* `data` */
+      "O&" /* `data` */
       ":GPUTexture.__new__",
       _keywords,
       nullptr,
@@ -160,8 +211,8 @@ static PyObject *pygpu_texture__tp_new(PyTypeObject * /*self*/, PyObject *args, 
                                         &is_cubemap,
                                         PyC_ParseStringEnum,
                                         &pygpu_textureformat,
-                                        &BPyGPU_BufferType,
-                                        &pybuffer_obj))
+                                        PyC_ParseTypeOrNone,
+                                        &pybuffer_or_none))
   {
     return nullptr;
   }
@@ -426,7 +477,7 @@ PyDoc_STRVAR(
     "\n"
     "   Set texture filter usage.\n"
     "\n"
-    "   :arg use_filter: If set to true, the texture will use linear interpolation between "
+    "   :param use_filter: If set to true, the texture will use linear interpolation between "
     "neighboring texels.\n"
     "   :type use_filter: bool\n");
 static PyObject *pygpu_texture_filter_mode(BPyGPUTexture *self, PyObject *value)
@@ -449,10 +500,10 @@ PyDoc_STRVAR(
     "\n"
     "   Set texture filter and mip-map usage.\n"
     "\n"
-    "   :arg use_mipmap: If set to true, the texture will use mip-mapping as anti-aliasing "
+    "   :param use_mipmap: If set to true, the texture will use mip-mapping as anti-aliasing "
     "method.\n"
     "   :type use_mipmap: bool\n"
-    "   :arg use_filter: If set to true, the texture will use linear interpolation between "
+    "   :param use_filter: If set to true, the texture will use linear interpolation between "
     "neighboring texels.\n"
     "   :type use_filter: bool\n");
 static PyObject *pygpu_texture_mipmap_mode(BPyGPUTexture *self, PyObject *args, PyObject *kwds)
@@ -463,7 +514,7 @@ static PyObject *pygpu_texture_mipmap_mode(BPyGPUTexture *self, PyObject *args, 
   bool use_filter = true;
   static const char *_keywords[] = {"use_mipmap", "use_filter"};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "b"  /* `use_mipmap` */
       "b"  /* `use_filter` */
       ":mipmap_mode",
@@ -486,7 +537,7 @@ PyDoc_STRVAR(
     "\n"
     "   Set anisotropic filter usage. This only has effect if mipmapping is enabled.\n"
     "\n"
-    "   :arg use_anisotropic: If set to true, the texture will use anisotropic filtering.\n"
+    "   :param use_anisotropic: If set to true, the texture will use anisotropic filtering.\n"
     "   :type use_anisotropic: bool\n");
 static PyObject *pygpu_texture_anisotropic_filter(BPyGPUTexture *self, PyObject *value)
 {
@@ -508,13 +559,12 @@ PyDoc_STRVAR(
     "\n"
     "   Fill texture with specific value.\n"
     "\n"
-    "   :arg format: The format that describes the content of a single item.\n"
-    "      Possible values are ``FLOAT``, ``INT``, ``UINT``, ``UBYTE``, ``UINT_24_8`` & "
-    "``10_11_11_REV``.\n"
+    "   :param format: The format that describes the content of a single item.\n"
     "      ``UINT_24_8`` is deprecated, use ``FLOAT`` instead.\n"
-    "   :type format: str\n"
-    "   :arg value: Sequence each representing the value to fill. Sizes 1..4 are supported.\n"
-    "   :type value: Sequence[float]\n");
+    "   :type format: " PYDOC_DATAFORMAT_LITERAL
+    "\n"
+    "   :param value: Sequence each representing the value to fill. Sizes 1..4 are supported.\n"
+    "   :type value: Sequence[float] | Sequence[int]\n");
 static PyObject *pygpu_texture_clear(BPyGPUTexture *self, PyObject *args, PyObject *kwds)
 {
   BPYGPU_TEXTURE_CHECK_OBJ(self);
@@ -593,7 +643,9 @@ PyDoc_STRVAR(
     ".. method:: read()\n"
     "\n"
     "   Creates a buffer with the value of all pixels.\n"
-    "\n");
+    "\n"
+    "   :return: The Buffer with the read pixels.\n"
+    "   :rtype: :class:`gpu.types.Buffer`\n");
 static PyObject *pygpu_texture_read(BPyGPUTexture *self)
 {
   BPYGPU_TEXTURE_CHECK_OBJ(self);
@@ -634,11 +686,22 @@ static PyObject *pygpu_texture_read(BPyGPUTexture *self)
   }
 
   void *buf = GPU_texture_read(self->tex, best_data_format, 0);
-  const Py_ssize_t shape[3] = {GPU_texture_height(self->tex),
-                               GPU_texture_width(self->tex),
-                               Py_ssize_t(GPU_texture_component_len(tex_format))};
-
-  int shape_len = (shape[2] == 1) ? 2 : 3;
+  const Py_ssize_t component_len = GPU_texture_component_len(tex_format);
+  Py_ssize_t shape[4];
+  int shape_len;
+  if (GPU_texture_dimensions(self->tex) == 3) {
+    shape[0] = GPU_texture_depth(self->tex);
+    shape[1] = GPU_texture_height(self->tex);
+    shape[2] = GPU_texture_width(self->tex);
+    shape[3] = component_len;
+    shape_len = (component_len == 1) ? 3 : 4;
+  }
+  else {
+    shape[0] = GPU_texture_height(self->tex);
+    shape[1] = GPU_texture_width(self->tex);
+    shape[2] = component_len;
+    shape_len = (component_len == 1) ? 2 : 3;
+  }
   return reinterpret_cast<PyObject *>(
       BPyGPU_Buffer_CreatePyObject(best_data_format, shape, shape_len, buf));
 }
@@ -751,65 +814,26 @@ static PyMethodDef pygpu_texture__tp_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     pygpu_texture__tp_doc,
-    ".. class:: GPUTexture(size, *, layers=0, is_cubemap=False, format='RGBA8', "
-    "data=None)\n"
+    ".. class:: GPUTexture\n"
     "\n"
     "   This object gives access to GPU textures.\n"
     "\n"
-    "   :arg size: Dimensions of the texture 1D, 2D, 3D or cubemap.\n"
-    "   :type size: int | Sequence[int]\n"
-    "   :arg layers: Number of layers in texture array or number of cubemaps in cubemap array\n"
-    "   :type layers: int\n"
-    "   :arg is_cubemap: Indicates the creation of a cubemap texture.\n"
-    "   :type is_cubemap: bool\n"
-    "   :arg format: Internal data format inside GPU memory. Possible values are:\n"
-    "      ``RGBA8UI``,\n"
-    "      ``RGBA8I``,\n"
-    "      ``RGBA8``,\n"
-    "      ``RGBA32UI``,\n"
-    "      ``RGBA32I``,\n"
-    "      ``RGBA32F``,\n"
-    "      ``RGBA16UI``,\n"
-    "      ``RGBA16I``,\n"
-    "      ``RGBA16F``,\n"
-    "      ``RGBA16``,\n"
-    "      ``RG8UI``,\n"
-    "      ``RG8I``,\n"
-    "      ``RG8``,\n"
-    "      ``RG32UI``,\n"
-    "      ``RG32I``,\n"
-    "      ``RG32F``,\n"
-    "      ``RG16UI``,\n"
-    "      ``RG16I``,\n"
-    "      ``RG16F``,\n"
-    "      ``RG16``,\n"
-    "      ``R8UI``,\n"
-    "      ``R8I``,\n"
-    "      ``R8``,\n"
-    "      ``R32UI``,\n"
-    "      ``R32I``,\n"
-    "      ``R32F``,\n"
-    "      ``R16UI``,\n"
-    "      ``R16I``,\n"
-    "      ``R16F``,\n"
-    "      ``R16``,\n"
-    "      ``R11F_G11F_B10F``,\n"
-    "      ``DEPTH32F_STENCIL8``,\n"
-    "      ``DEPTH24_STENCIL8`` (deprecated, use ``DEPTH32F_STENCIL8``),\n"
-    "      ``SRGB8_A8``,\n"
-    "      ``RGB16F``,\n"
-    "      ``SRGB8_A8_DXT1``,\n"
-    "      ``SRGB8_A8_DXT3``,\n"
-    "      ``SRGB8_A8_DXT5``,\n"
-    "      ``RGBA8_DXT1``,\n"
-    "      ``RGBA8_DXT3``,\n"
-    "      ``RGBA8_DXT5``,\n"
-    "      ``DEPTH_COMPONENT32F``,\n"
-    "      ``DEPTH_COMPONENT24``, (deprecated, use ``DEPTH_COMPONENT32F``),\n"
-    "      ``DEPTH_COMPONENT16``.\n"
-    "   :type format: str\n"
-    "   :arg data: Buffer object to fill the texture.\n"
-    "   :type data: :class:`gpu.types.Buffer`\n");
+    "   .. method:: __init__(size, *, layers=0, is_cubemap=False, format='RGBA8', data=None)\n"
+    "\n"
+    "      :param size: Dimensions of the texture 1D, 2D, 3D or cubemap.\n"
+    "      :type size: int | Sequence[int]\n"
+    "      :param layers: Number of layers in texture array or number of cubemaps in cubemap "
+    "array\n"
+    "      :type layers: int\n"
+    "      :param is_cubemap: Indicates the creation of a cubemap texture.\n"
+    "      :type is_cubemap: bool\n"
+    "      :param format: Internal data format inside GPU memory.\n"
+    "         ``DEPTH24_STENCIL8`` is deprecated, use ``DEPTH32F_STENCIL8``.\n"
+    "         ``DEPTH_COMPONENT24`` is deprecated, use ``DEPTH_COMPONENT32F``.\n"
+    "      :type format: " PYDOC_TEX_FORMAT_LITERAL
+    "\n"
+    "      :param data: Buffer object to fill the texture.\n"
+    "      :type data: :class:`gpu.types.Buffer` | None\n");
 PyTypeObject BPyGPUTexture_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "GPUTexture",
@@ -879,7 +903,7 @@ PyDoc_STRVAR(
     "   Note: Colors read from the texture will be in scene linear color space and have "
     "premultiplied or straight alpha matching the image alpha mode.\n"
     "\n"
-    "   :arg image: The Image data-block.\n"
+    "   :param image: The Image data-block.\n"
     "   :type image: :class:`bpy.types.Image`\n"
     "   :return: The GPUTexture used by the image.\n"
     "   :rtype: :class:`gpu.types.GPUTexture`\n");
@@ -892,9 +916,13 @@ static PyObject *pygpu_texture_from_image(PyObject * /*self*/, PyObject *arg)
 
   ImageUser iuser;
   BKE_imageuser_default(&iuser);
-  gpu::Texture *tex = BKE_image_get_gpu_texture(ima, &iuser);
+  gpu::Texture *tex = BKE_image_acquire_gpu_texture(ima, &iuser);
 
-  return BPyGPUTexture_CreatePyObject(tex, true);
+  PyObject *result = BPyGPUTexture_CreatePyObject(tex, true);
+  if (tex) {
+    GPU_texture_free(tex);
+  }
+  return result;
 }
 
 static PyMethodDef pygpu_texture__m_methods[] = {
@@ -940,7 +968,7 @@ int bpygpu_ParseTexture(PyObject *o, void *p)
     return 0;
   }
 
-  if (UNLIKELY(pygpu_texture_valid_check((BPyGPUTexture *)o) == -1)) {
+  if (pygpu_texture_valid_check((BPyGPUTexture *)o) == -1) [[unlikely]] {
     return 0;
   }
 

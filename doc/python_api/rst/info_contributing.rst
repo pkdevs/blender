@@ -81,11 +81,11 @@ below, and it will be included automatically.
 
 Example files are located in ``doc/python_api/examples/`` and are matched by filename:
 
-- ``module.N.py`` matches a module (e.g., ``gpu.1.py``).
-- ``module.ClassName.N.py`` matches a class (e.g., ``bpy.types.Operator.1.py``).
-- ``module.ClassName.method.N.py`` matches a method (e.g., ``bpy.types.Operator.invoke.1.py``).
-- ``module.ClassName.attribute.N.py`` matches an attribute (e.g., ``bpy.types.Scene.frame_start.1.py``).
-- ``module.member.N.py`` matches a module member (e.g., ``bpy.context.object.1.py``).
+- ``module.N.py`` matches a module (e.g., ``gpu.0.py``).
+- ``module.ClassName.N.py`` matches a class (e.g., ``bpy.types.Operator.0.py``).
+- ``module.ClassName.method.N.py`` matches a method (e.g., ``bpy.types.Operator.invoke.0.py``).
+- ``module.ClassName.attribute.N.py`` matches an attribute (e.g., ``bpy.types.Scene.frame_start.0.py``).
+- ``module.member.N.py`` matches a module member (e.g., ``bpy.context.object.0.py``).
 
 Multiple examples are supported, where ``N`` allows them to be ordered sequentially.
 
@@ -131,7 +131,7 @@ Each example file should follow this structure:
 Important Notes
 ~~~~~~~~~~~~~~~
 
-- The file must start with double triple-quotes ``"""`` (single-quoted doc-strings aren't recognized).
+- The file must start with triple double-quotes ``"""`` (single-quoted doc-strings aren't recognized).
 - Use section header underlines with ``+`` characters for the title.
 - Everything after the doc-string is included as code in the documentation.
 - To add additional code-blocks with text in between, add new files.

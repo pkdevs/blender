@@ -9,8 +9,8 @@
 #include "BLI_index_range.hh"
 #include "BLI_map.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
@@ -545,19 +545,19 @@ static void panel_draw(const bContext *C, Panel *panel)
     row = &layout.row(false);
     row->use_property_split_set(false);
 
-    ui::template_list(row,
-                      const_cast<bContext *>(C),
-                      "MOD_UL_grease_pencil_time_modifier_segments",
-                      "",
-                      ptr,
-                      "segments",
-                      ptr,
-                      "segment_active_index",
-                      nullptr,
-                      3,
-                      10,
-                      0,
-                      ui::TEMPLATE_LIST_FLAG_NONE);
+    ui::template_uilist(row,
+                        const_cast<bContext *>(C),
+                        "MOD_UL_grease_pencil_time_modifier_segments",
+                        "",
+                        ptr,
+                        "segments",
+                        ptr,
+                        "segment_active_index",
+                        nullptr,
+                        3,
+                        10,
+                        0,
+                        ui::TEMPLATE_LIST_FLAG_NONE);
 
     col = &row->column(false);
 
@@ -652,8 +652,7 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
 
   modifier::greasepencil::read_influence_data(reader, &tmd->influence);
 
-  BLO_read_struct_array(
-      reader, GreasePencilTimeModifierSegment, tmd->segments_num, &tmd->segments_array);
+  BLO_read_array_and_validate_size(reader, &tmd->segments_array, &tmd->segments_num);
 }
 
 ModifierTypeInfo modifierType_GreasePencilTime = {

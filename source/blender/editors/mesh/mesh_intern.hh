@@ -10,20 +10,25 @@
 
 #pragma once
 
+#include <cstdarg>
+
+#include "BLI_array.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
 struct bContext;
 struct BMEditMesh;
+struct BMesh;
 struct BMEdge;
 struct BMElem;
 struct BMFace;
 struct BMVert;
 struct BMOperator;
 struct EnumPropertyItem;
-struct LinkNode;
+struct Main;
 struct Object;
 struct Scene;
 struct wmGizmoGroupType;
@@ -42,17 +47,24 @@ struct ViewLayer;
  * the BMEditMesh structure. */
 
 /** Calls a bmesh op, reporting errors to the user, etc. */
-bool EDBM_op_callf(BMEditMesh *em, wmOperator *op, const char *fmt, ...);
-bool EDBM_op_call_and_selectf(BMEditMesh *em,
+bool EDBM_op_callf(BMesh *bm, wmOperator *op, const char *fmt, ...);
+bool EDBM_op_call_and_selectf(BMesh *bm,
                               wmOperator *op,
                               const char *select_slot_out,
                               bool select_extend,
                               const char *fmt,
                               ...);
+/** A `va_list` version of #EDBM_op_call_and_selectf. */
+bool EDBM_op_vcall_and_selectf(BMesh *bm,
+                               wmOperator *op,
+                               const char *select_slot_out,
+                               bool select_extend,
+                               const char *fmt,
+                               va_list list);
 /**
  * Same as above, but doesn't report errors.
  */
-bool EDBM_op_call_silentf(BMEditMesh *em, const char *fmt, ...);
+bool EDBM_op_call_silentf(BMesh *bm, const char *fmt, ...);
 
 /**
  * These next two functions are the split version of EDBM_op_callf, so you can
@@ -60,7 +72,7 @@ bool EDBM_op_call_silentf(BMEditMesh *em, const char *fmt, ...);
  *
  * execute the operator with #BMO_op_exec.
  */
-bool EDBM_op_init(BMEditMesh *em, BMOperator *bmop, wmOperator *op, const char *fmt, ...);
+bool EDBM_op_init(BMesh *bm, BMOperator *bmop, wmOperator *op, const char *fmt, ...);
 
 /**
  * Cleans up after a bmesh operator.
@@ -69,9 +81,9 @@ bool EDBM_op_init(BMEditMesh *em, BMOperator *bmop, wmOperator *op, const char *
  * - False on error (the mesh must not be changed).
  * - True on success, executes and finishes a #BMesh operator.
  */
-bool EDBM_op_finish(BMEditMesh *em, BMOperator *bmop, wmOperator *op, bool do_report);
+bool EDBM_op_finish(BMesh *bm, BMOperator *bmop, wmOperator *op, bool do_report);
 
-void EDBM_stats_update(BMEditMesh *em);
+void EDBM_stats_update(BMesh *bm);
 
 /**
  * Poll call for mesh operators requiring a view3d context.
@@ -85,12 +97,17 @@ BMElem *EDBM_elem_from_selectmode(BMEditMesh *em, BMVert *eve, BMEdge *eed, BMFa
  *
  * Intended for use with operators.
  */
-int EDBM_elem_to_index_any(BMEditMesh *em, BMElem *ele);
-BMElem *EDBM_elem_from_index_any(BMEditMesh *em, uint index);
+int EDBM_elem_to_index_any(BMesh *bm, BMElem *ele);
+BMElem *EDBM_elem_from_index_any(BMesh *bm, uint index);
 
-int EDBM_elem_to_index_any_multi(
-    const Scene *scene, ViewLayer *view_layer, BMEditMesh *em, BMElem *ele, int *r_object_index);
-BMElem *EDBM_elem_from_index_any_multi(const Scene *scene,
+int EDBM_elem_to_index_any_multi(const Main &bmain,
+                                 const Scene *scene,
+                                 ViewLayer *view_layer,
+                                 BMEditMesh *em,
+                                 BMElem *ele,
+                                 int *r_object_index);
+BMElem *EDBM_elem_from_index_any_multi(const Main &bmain,
+                                       const Scene *scene,
                                        ViewLayer *view_layer,
                                        uint object_index,
                                        uint elem_index,
@@ -107,6 +124,7 @@ void MESH_OT_primitive_grid_add(wmOperatorType *ot);
 void MESH_OT_primitive_monkey_add(wmOperatorType *ot);
 void MESH_OT_primitive_uv_sphere_add(wmOperatorType *ot);
 void MESH_OT_primitive_ico_sphere_add(wmOperatorType *ot);
+void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot);
 
 /* *** `editmesh_add_gizmo.cc` *** */
 
@@ -124,6 +142,22 @@ wmKeyMap *bevel_modal_keymap(wmKeyConfig *keyconf);
 /* *** `editmesh_bisect.cc` *** */
 
 void MESH_OT_bisect(wmOperatorType *ot);
+
+/* *** `editmesh_circularize.cc` *** */
+
+void MESH_OT_circularize(wmOperatorType *ot);
+
+/* *** `editmesh_curve_edge_loops_between_selected.cc` *** */
+
+void MESH_OT_curve_edge_loops_between_selected(wmOperatorType *ot);
+
+/* *** `editmesh_flatten.cc` *** */
+
+void MESH_OT_flatten(wmOperatorType *ot);
+
+/* *** `editmesh_relax_edge_loops.cc` *** */
+
+void MESH_OT_relax_edge_loops(wmOperatorType *ot);
 
 /* *** `editmesh_extrude.cc` *** */
 
@@ -173,8 +207,11 @@ void MESH_OT_knife_project(wmOperatorType *ot);
 /**
  * \param use_tag: When set, tag all faces inside the polylines.
  */
-void EDBM_mesh_knife(
-    ViewContext *vc, Span<Object *> objects, LinkNode *polys, bool use_tag, bool cut_through);
+void EDBM_mesh_knife(ViewContext *vc,
+                     Span<Object *> objects,
+                     Span<Array<float2>> polys,
+                     bool use_tag,
+                     bool cut_through);
 
 wmKeyMap *knifetool_modal_keymap(wmKeyConfig *keyconf);
 
@@ -194,6 +231,7 @@ void MESH_OT_select_similar_region(wmOperatorType *ot);
 void MESH_OT_select_mode(wmOperatorType *ot);
 void MESH_OT_select_edge_loop_multi(wmOperatorType *ot);
 void MESH_OT_select_edge_ring_multi(wmOperatorType *ot);
+void MESH_OT_select_boundary_loop_multi(wmOperatorType *ot);
 void MESH_OT_loop_select(wmOperatorType *ot);
 void MESH_OT_edgering_select(wmOperatorType *ot);
 void MESH_OT_select_all(wmOperatorType *ot);
@@ -218,6 +256,9 @@ void MESH_OT_region_to_loop(wmOperatorType *ot);
 void MESH_OT_loop_to_region(wmOperatorType *ot);
 void MESH_OT_select_by_attribute(wmOperatorType *ot);
 void MESH_OT_shortest_path_select(wmOperatorType *ot);
+
+/* *** editmesh_space_evenly.cc *** */
+void MESH_OT_space_edge_loops_evenly(wmOperatorType *ot);
 
 extern EnumPropertyItem *corner_type_items;
 
@@ -306,6 +347,7 @@ void MESH_OT_mark_freestyle_face(wmOperatorType *ot);
 void MESH_OT_uv_texture_add(wmOperatorType *ot);
 void MESH_OT_uv_texture_remove(wmOperatorType *ot);
 void MESH_OT_customdata_mask_clear(wmOperatorType *ot);
+void MESH_OT_customdata_face_sets_clear(wmOperatorType *ot);
 void MESH_OT_customdata_skin_add(wmOperatorType *ot);
 void MESH_OT_customdata_skin_clear(wmOperatorType *ot);
 void MESH_OT_customdata_custom_splitnormals_add(wmOperatorType *ot);

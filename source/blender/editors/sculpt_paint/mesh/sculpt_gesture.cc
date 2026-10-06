@@ -12,16 +12,16 @@
 
 #include "DNA_vec_types.h"
 
-#include "BLI_bitmap_draw_2d.h"
+#include "BLI_bitmap_draw_2d.hh"
 #include "BLI_lasso_2d.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 #include "BKE_object_types.hh"
@@ -75,7 +75,7 @@ static void init_common(bContext *C, const wmOperator *op, GestureData &gesture_
   gesture_data.ss = object.runtime->sculpt_session;
 
   /* Symmetry. */
-  gesture_data.symm = ePaintSymmetryFlags(SCULPT_mesh_symmetry_xyz_get(object));
+  gesture_data.symm = ePaintSymmetryFlags(mesh_symmetry_xyz_get(object));
 
   /* View Normal. */
   const float3x3 view_inv(float4x4(gesture_data.vc.rv3d->viewinv));
@@ -469,6 +469,6 @@ void apply(bContext &C, GestureData &gesture_data, wmOperator &op)
 
   operation->end(C, gesture_data);
 
-  SCULPT_tag_update_overlays(&C);
+  tag_update_overlays(&C);
 }
 }  // namespace blender::ed::sculpt_paint::gesture

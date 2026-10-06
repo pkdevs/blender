@@ -10,10 +10,10 @@
 
 #include "BKE_curves.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_grease_pencil.hh"
@@ -470,22 +470,22 @@ static bool curves_geometry_is_equal(const bke::CurvesGeometry &curves_a,
   const AttributeAccessor attributes_a = curves_a.attributes();
   const AttributeAccessor attributes_b = curves_b.attributes();
 
-  const Set<StringRefNull> ids_a = attributes_a.all_ids();
-  const Set<StringRefNull> ids_b = attributes_b.all_ids();
-  if (ids_a != ids_b) {
+  const Set<StringRefNull> names_a = attributes_a.all_names();
+  const Set<StringRefNull> names_b = attributes_b.all_names();
+  if (names_a != names_b) {
     return false;
   }
 
-  for (const StringRef id : ids_a) {
-    GAttributeReader attrs_a = attributes_a.lookup(id);
-    GAttributeReader attrs_b = attributes_b.lookup(id);
+  for (const StringRef name : names_a) {
+    GAttributeReader attrs_a = attributes_a.lookup(name);
+    GAttributeReader attrs_b = attributes_b.lookup(name);
 
     if (attributes_varrays_not_equal(attrs_a, attrs_b)) {
       return false;
     }
 
     if (attributes_varrays_span_data_equal(attrs_a, attrs_b)) {
-      return true;
+      continue;
     }
 
     bool attributes_are_equal = true;
@@ -703,15 +703,26 @@ bool grease_pencil_paste_keyframes(bAnimContext *ac,
 
   const int offset = calculate_offset(offset_mode, ac->scene->r.cfra, clipboard);
 
-  const int filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_NODUPLIS |
-                      ANIMFILTER_FOREDIT | ANIMFILTER_SEL);
-  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
-
-  ANIM_animdata_filter(
-      ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
-
   /* Check if single channel in buffer (disregard names if so). */
   const bool from_single_channel = clipboard.copy_buffer.size() == 1;
+  bool match_names = !from_single_channel;
+
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
+  /* Only paste into selected layers. */
+  int filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_NODUPLIS |
+                ANIMFILTER_FOREDIT | ANIMFILTER_SEL);
+  ANIM_animdata_filter(
+      ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
+  if (anim_data.is_empty()) {
+    /* If no layers are selected at all, make even unselected layers "targets" for pasting. */
+    filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_NODUPLIS |
+              ANIMFILTER_FOREDIT);
+    ANIM_animdata_filter(
+        ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
+    /* In this case, always match names though (otherwise we would paste from a single channel into
+     * all others). */
+    match_names = true;
+  }
 
   for (bAnimListElem &ale : anim_data) {
     /* Only deal with GPlayers (case of calls from general dope-sheet). */
@@ -721,7 +732,7 @@ bool grease_pencil_paste_keyframes(bAnimContext *ac,
     GreasePencil *grease_pencil = reinterpret_cast<GreasePencil *>(ale.id);
     Layer &layer = *reinterpret_cast<Layer *>(ale.data);
     const std::string layer_name = layer.name();
-    if (!from_single_channel && !clipboard.copy_buffer.contains(layer_name)) {
+    if (match_names && !clipboard.copy_buffer.contains(layer_name)) {
       continue;
     }
     const KeyframeClipboard::LayerBufferItem layer_buffer =

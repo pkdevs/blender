@@ -11,11 +11,11 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -30,11 +30,11 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
+#include "BKE_annotations.h"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
-#include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
 #include "BKE_nla.hh"
 #include "BKE_report.hh"
@@ -71,6 +71,7 @@ namespace blender {
  * 2) that the set of markers being shown are the scene markers, not the list we're merging
  * 3) that the mode will have an active action available
  * 4) that there are some selected markers
+ * 5) that the markers are not locked
  */
 static bool act_markers_make_local_poll(bContext *C)
 {
@@ -87,21 +88,29 @@ static bool act_markers_make_local_poll(bContext *C)
   }
 
   /* 3) */
+  const Main *bmain = CTX_data_main(C);
   bAction *active_action = ANIM_active_action_from_area(
-      CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_area(C));
+      *bmain, CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_area(C));
   if (!active_action) {
     return false;
   }
 
   /* 4) */
-  return ED_markers_get_first_selected(ED_context_get_markers(C)) != nullptr;
+  if (ED_markers_get_first_selected(ED_context_get_markers(C)) == nullptr) {
+    return false;
+  }
+
+  /* 5) */
+  ToolSettings *ts = CTX_data_tool_settings(C);
+  return !ts->lock_markers;
 }
 
 static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*op*/)
 {
   ListBaseT<TimeMarker> *markers = ED_context_get_markers(C);
+  const Main *bmain = CTX_data_main(C);
   bAction *act = ANIM_active_action_from_area(
-      CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_area(C));
+      *bmain, CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_area(C));
 
   TimeMarker *marker, *markern = nullptr;
 
@@ -111,7 +120,7 @@ static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*
   }
 
   /* migrate markers */
-  for (marker = static_cast<TimeMarker *>(markers->first); marker; marker = markern) {
+  for (marker = markers->first(); marker; marker = markern) {
     markern = marker->next;
 
     /* move if marker is selected */
@@ -136,9 +145,9 @@ static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*
 void ACTION_OT_markers_make_local(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Make Markers Local";
+  ot->name = "Convert to Pose Markers";
   ot->idname = "ACTION_OT_markers_make_local";
-  ot->description = "Move selected scene markers to the active Action as local 'pose' markers";
+  ot->description = "Move selected scene markers to the active action as pose markers";
 
   /* callbacks */
   ot->exec = act_markers_make_local_exec;
@@ -164,7 +173,7 @@ static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const
   /* Get data to filter, from Action or Dope-sheet. */
   /* XXX: what is sel doing here?!
    *      Commented it, was breaking things (eg. the "auto preview range" tool). */
-  filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE /*| ANIMFILTER_SEL */ |
+  filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE /* | ANIMFILTER_SEL */ |
             ANIMFILTER_NODUPLIS);
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, eAnimCont_Types(ac->datatype));
 
@@ -173,7 +182,7 @@ static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const
   *max = -999999999.0f;
 
   /* check if any channels to set range with */
-  if (anim_data.first) {
+  if (anim_data.first_) {
     /* go through channels, finding max extents */
     for (bAnimListElem &ale : anim_data) {
       if (ale.datatype == ALE_GPFRAME) {
@@ -336,9 +345,7 @@ static bool actkeys_channels_get_selected_extents(bAnimContext *ac, float *r_min
   /* loop through all channels, finding the first one that's selected */
   float ymax = ANIM_UI_get_first_channel_top(&ac->region->v2d);
   const float channel_step = ANIM_UI_get_channel_step();
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-       ale = ale->next, ymax -= channel_step)
-  {
+  for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step) {
     const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 
     /* must be selected... */
@@ -458,7 +465,7 @@ void ACTION_OT_view_all(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = actkeys_viewall_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
 
   /* flags */
   ot->flag = 0;
@@ -473,7 +480,7 @@ void ACTION_OT_view_selected(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = actkeys_viewsel_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
 
   /* flags */
   ot->flag = 0;
@@ -802,10 +809,10 @@ static void insert_gpencil_key(bAnimContext *ac,
   Scene *scene = ac->scene;
   bGPdata *gpd = id_cast<bGPdata *>(ale->id);
   bGPDlayer *gpl = static_cast<bGPDlayer *>(ale->data);
-  BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, add_frame_mode);
+  BKE_annotations_layer_frame_get(gpl, scene->r.cfra, add_frame_mode);
   /* Check if the gpd changes to tag only once. */
   if (gpd != *gpd_old) {
-    BKE_gpencil_tag(gpd);
+    BKE_annotations_tag(gpd);
     *gpd_old = gpd;
   }
 }
@@ -880,7 +887,7 @@ static void insert_fcurve_key(bAnimContext *ac,
     CombinedKeyingResult result = insert_keyframes(ac->bmain,
                                                    &id_rna_pointer,
                                                    channel_group,
-                                                   {{fcu->rna_path, {}, fcu->array_index}},
+                                                   {{fcu->rna_path(), {}, fcu->array_index}},
                                                    std::nullopt,
                                                    anim_eval_context,
                                                    eBezTriple_KeyframeType(ts->keyframe_type),
@@ -901,7 +908,7 @@ static void insert_fcurve_key(bAnimContext *ac,
     const float curval = evaluate_fcurve(fcu, cfra);
     KeyframeSettings settings = get_keyframe_settings(true);
     settings.keyframe_type = eBezTriple_KeyframeType(ts->keyframe_type);
-    insert_vert_fcurve(fcu, {cfra, curval}, settings, eInsertKeyFlags(0));
+    insert_vert_fcurve(fcu, {cfra, curval}, settings, eInsertKeyFlags{});
   }
 
   ale->update |= ANIM_UPDATE_DEFAULT;
@@ -1055,7 +1062,7 @@ static bool duplicate_action_keys(bAnimContext *ac)
           static_cast<GreasePencilLayer *>(ale.data)->wrap());
     }
     else if (ale.type == ANIMTYPE_MASKLAYER) {
-      changed |= ED_masklayer_frames_duplicate(static_cast<MaskLayer *>(ale.data));
+      changed |= ED_masklayer_frames_duplicate(ac->bmain, static_cast<MaskLayer *>(ale.data));
     }
     else {
       BLI_assert(0);
@@ -1141,7 +1148,7 @@ static bool delete_action_keys(bAnimContext *ac)
       }
     }
     else if (ale.type == ANIMTYPE_MASKLAYER) {
-      changed = ED_masklayer_frames_delete(static_cast<MaskLayer *>(ale.data));
+      changed = ED_masklayer_frames_delete(ac->bmain, static_cast<MaskLayer *>(ale.data));
     }
     else {
       FCurve *fcu = static_cast<FCurve *>(ale.key_data);
@@ -1286,6 +1293,19 @@ static wmOperatorStatus actkeys_clean_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
+static std::string actkeys_clean_get_description(bContext * /*C*/,
+                                                 wmOperatorType * /*ot*/,
+                                                 PointerRNA *ptr)
+{
+  /* Custom description based on the 'channels' property */
+  if (RNA_boolean_get(ptr, "channels")) {
+    return TIP_("Simplify F-Curves and remove empty or redundant channels.");
+  }
+
+  /* Use the default description in the other case. */
+  return "";
+}
+
 void ACTION_OT_clean(wmOperatorType *ot)
 {
   /* identifiers */
@@ -1295,6 +1315,7 @@ void ACTION_OT_clean(wmOperatorType *ot)
 
   /* API callbacks. */
   // ot->invoke =  /* XXX we need that number popup for this! */
+  ot->get_description = actkeys_clean_get_description;
   ot->exec = actkeys_clean_exec;
   ot->poll = ED_operator_action_active;
 
@@ -1428,7 +1449,7 @@ static void setexpo_action_keys(bAnimContext *ac, short mode)
 
     if (mode >= 0) {
       /* just set mode setting */
-      fcu->extend = mode;
+      fcu->extend = eFCurve_Extend(mode);
     }
     else {
       /* shortcuts for managing Cycles F-Modifiers to make it easier to toggle cyclic animation
@@ -1445,7 +1466,7 @@ static void setexpo_action_keys(bAnimContext *ac, short mode)
         /* remove all the modifiers fitting this description */
         FModifier *fcm, *fcn = nullptr;
 
-        for (fcm = static_cast<FModifier *>(fcu->modifiers.first); fcm; fcm = fcn) {
+        for (fcm = fcu->modifiers.first(); fcm; fcm = fcn) {
           fcn = fcm->next;
 
           if (fcm->type == FMODIFIER_TYPE_CYCLES) {
@@ -1969,8 +1990,8 @@ static void snap_action_keys(bAnimContext *ac, short mode)
 
   ked.scene = ac->scene;
   if (mode == ACTKEYS_SNAP_NEAREST_MARKER) {
-    ked.time_marker_list.first = (ac->markers) ? ac->markers->first : nullptr;
-    ked.time_marker_list.last = (ac->markers) ? ac->markers->last : nullptr;
+    ked.time_marker_list.first_ = (ac->markers) ? ac->markers->first_ : nullptr;
+    ked.time_marker_list.last_ = (ac->markers) ? ac->markers->last() : nullptr;
   }
 
   /* snap keyframes */
@@ -2064,16 +2085,17 @@ static const EnumPropertyItem prop_actkeys_mirror_types[] = {
      0,
      "By Times Over Current Frame",
      "Flip times of selected keyframes using the current frame as the mirror line"},
-    {ACTKEYS_MIRROR_XAXIS,
-     "XAXIS",
-     0,
-     "By Values Over Zero Value",
-     "Flip values of selected keyframes (i.e. negative values become positive, and vice versa)"},
     {ACTKEYS_MIRROR_MARKER,
      "MARKER",
      0,
      "By Times Over First Selected Marker",
      "Flip times of selected keyframes using the first selected marker as the reference point"},
+    RNA_ENUM_ITEM_SEPR,
+    {ACTKEYS_MIRROR_XAXIS,
+     "XAXIS",
+     0,
+     "By Values Over Zero Value",
+     "Flip values of selected keyframes (i.e. negative values become positive, and vice versa)"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 

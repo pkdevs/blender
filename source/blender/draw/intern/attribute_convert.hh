@@ -8,7 +8,7 @@
 
 #include "BLI_color_types.hh"
 #include "BLI_generic_span.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_quaternion_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
@@ -149,6 +149,16 @@ template<> struct AttributeConverter<math::Quaternion> {
   static VBOType convert(const math::Quaternion &value)
   {
     return float4(value.w, value.x, value.y, value.z);
+  }
+};
+template<> struct AttributeConverter<float4> {
+  using VBOType = float4;
+  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_F32;
+  static constexpr int gpu_component_len = 4;
+  static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_FLOAT;
+  static VBOType convert(const float4 &value)
+  {
+    return value;
   }
 };
 

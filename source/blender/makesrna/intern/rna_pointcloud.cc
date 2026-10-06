@@ -6,6 +6,8 @@
  * \ingroup RNA
  */
 
+#include "DNA_pointcloud_types.h"
+
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
@@ -13,11 +15,29 @@
 
 #include "BKE_attribute.h"
 
+namespace blender {
+
+const EnumPropertyItem rna_enum_pointcloud_type_items[] = {
+    {int(PointCloudType::Points),
+     "POINTS",
+     0,
+     "Points",
+     "Simple point cloud represented by points with position and radius"},
+    {int(PointCloudType::GSplat),
+     "GAUSSIAN_SPLAT",
+     0,
+     "3D Gaussian Splat",
+     "A point cloud that represents the original 3D Gaussian Splats technique"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+}
+
 #ifdef RNA_RUNTIME
 
 #  include <fmt/format.h>
 
-#  include "BLI_math_vector.h"
+#  include "BLI_math_vector_c.hh"
 #  include "BLI_virtual_array.hh"
 
 #  include "BKE_customdata.hh"
@@ -125,6 +145,11 @@ static void rna_PointCloud_update_data(Main * /*bmain*/, Scene * /*scene*/, Poin
   }
 }
 
+static void rna_PointCloud_resize(PointCloud *pointcloud, const int size)
+{
+  pointcloud_resize(*pointcloud, size);
+}
+
 }  // namespace blender
 
 #else
@@ -161,6 +186,8 @@ static void rna_def_pointcloud(BlenderRNA *brna)
 {
   StructRNA *srna;
   PropertyRNA *prop;
+  FunctionRNA *func;
+  PropertyRNA *parm;
 
   srna = RNA_def_struct(brna, "PointCloud", "ID");
   RNA_def_struct_ui_text(srna, "Point Cloud", "Point cloud data-block");
@@ -180,6 +207,9 @@ static void rna_def_pointcloud(BlenderRNA *brna)
                                     nullptr,
                                     nullptr);
   RNA_def_property_ui_text(prop, "Points", "");
+  func = RNA_def_function(srna, "resize", "rna_PointCloud_resize");
+  parm = RNA_def_int(func, "size", 0, 0, INT_MAX, "Size", "New number of points", 0, INT_MAX);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   /* materials */
   prop = RNA_def_property(srna, "materials", PROP_COLLECTION, PROP_NONE);
@@ -198,6 +228,12 @@ static void rna_def_pointcloud(BlenderRNA *brna)
                                     "rna_IDMaterials_assign_int");
 
   rna_def_attributes_common(srna, AttributeOwnerType::PointCloud);
+
+  /* Type. */
+  prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_pointcloud_type_items);
+  RNA_def_property_ui_text(prop, "Type", "Representation type of the pointcloud");
+  RNA_def_property_update(prop, 0, "rna_PointCloud_update_data");
 
   /* common */
   rna_def_animdata_common(srna);

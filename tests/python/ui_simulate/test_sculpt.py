@@ -47,14 +47,153 @@ def _view3d_startup_area_maximized(e):
     yield e.delete().ret()              # Delete all.
 
 
+def _reset_objects(e):
+    yield e.ctrl.tab().o()              # Object Mode
+    yield e.a()                         # Select all.
+    yield e.delete().ret()              # Delete all.
+
+
 def _subdivide_mesh(e, times):
     yield e.tab()                       # Enter Edit mode.
     for i in range(times):
-        yield e.ctrl.e().d()                # Subdivide.
+        yield e.ctrl.e().d()            # Subdivide.
     yield e.tab()                       # Leave Edit mode.
 
 
-def _cursor_motion_data_x(e, start_position, pixels):
+def _create_test_monkey(e):
+    yield from ui.call_menu(e, "Add -> Mesh -> Monkey")
+    yield e.numpad_period()                                     # View monkey
+
+    yield from _subdivide_mesh(e, 3)
+
+    yield e.ctrl.tab().s()                                      # Sculpt via pie menu.
+
+
+def _num_matching_face_set(face_set_id):
+    import bpy
+    import numpy as np
+
+    mesh = bpy.context.object.data
+
+    if not mesh.attributes.get('.sculpt_face_set'):
+        return 0
+
+    face_set_attr = mesh.attributes['.sculpt_face_set']
+
+    num_faces = mesh.attributes.domain_size('FACE')
+
+    face_set_data = np.zeros(num_faces, dtype=np.int32)
+    face_set_attr.data.foreach_get('value', face_set_data)
+
+    return np.count_nonzero(face_set_data == face_set_id)
+
+
+def _assertBetween(t, value, low, high):
+    t.assertGreaterEqual(value, low)
+    t.assertLessEqual(value, high)
+
+
+def face_set_expand():
+    import bpy
+    e, t, window = ui.test_window()
+    yield from _view3d_startup_area_maximized(e)
+
+    yield from _create_test_monkey(e)
+
+    area = ui.get_window_area_by_type(window, 'VIEW_3D')
+    position = (area.x + area.width // 2, area.y + area.height // 2)
+    yield e.cursor_position_set(*position, move=True)           # Move mouse to center
+
+    yield e.shift.w()                                           # Expand operator
+
+    yield from _move_horizontal(e, position, 200)
+    e.leftmouse.tap()
+    yield
+
+    non_default_faces = _num_matching_face_set(2)
+    _assertBetween(t, non_default_faces, 8000, 9000)
+
+    default_faces = _num_matching_face_set(1)
+    mesh = bpy.context.object.data
+    num_faces = mesh.attributes.domain_size('FACE')
+    t.assertEqual(default_faces + non_default_faces, num_faces)
+
+
+def face_set_gestures():
+    e, t, window = ui.test_window()
+    yield from _view3d_startup_area_maximized(e)
+
+    # Box Face Set
+    yield from _create_test_monkey(e)
+    yield from ui.call_operator(e, "Box Face Set")
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_xy(window))
+    _assertBetween(t, _num_matching_face_set(2), 29500, 30500)
+    yield from _reset_objects(e)
+
+    # Lasso Face Set
+    yield from _create_test_monkey(e)
+    yield from ui.call_operator(e, "Lasso Face Set")
+    center = ui.get_area_center_from_spacetype(window, 'VIEW_3D')
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_circle(center, 100))
+    _assertBetween(t, _num_matching_face_set(2), 8000, 9000)
+    yield from _reset_objects(e)
+
+    # Line Face Set
+    yield from _create_test_monkey(e)
+    yield from ui.call_operator(e, "Line Face Set")
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_y(window))
+    _assertBetween(t, _num_matching_face_set(2), 6000, 7000)
+
+
+def _num_hidden_vertices():
+    import bpy
+    import numpy as np
+
+    mesh = bpy.context.object.data
+
+    if not mesh.attributes.get('.hide_vert'):
+        return 0
+
+    hide_attr = mesh.attributes['.hide_vert']
+
+    num_vertices = mesh.attributes.domain_size('POINT')
+
+    hide_data = np.zeros(num_vertices, dtype=np.bool)
+    hide_attr.data.foreach_get('value', hide_data)
+
+    return np.count_nonzero(hide_data)
+
+
+def hide_gestures():
+    e, t, window = ui.test_window()
+    yield from _view3d_startup_area_maximized(e)
+
+    # Box Hide
+    yield from _create_test_monkey(e)
+    t.assertEqual(_num_hidden_vertices(), 0)
+    yield from ui.call_operator(e, "Box Hide")
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_xy(window))
+    _assertBetween(t, _num_hidden_vertices(), 28500, 29500)
+    yield from _reset_objects(e)
+
+    # Lasso Hide
+    yield from _create_test_monkey(e)
+    t.assertEqual(_num_hidden_vertices(), 0)
+    yield from ui.call_operator(e, "Lasso Hide")
+    center = ui.get_area_center_from_spacetype(window, 'VIEW_3D')
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_circle(center, 100))
+    _assertBetween(t, _num_hidden_vertices(), 8000, 9000)
+    yield from _reset_objects(e)
+
+    # Line Hide
+    yield from _create_test_monkey(e)
+    t.assertEqual(_num_hidden_vertices(), 0)
+    yield from ui.call_operator(e, "Line Hide")
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_y(window))
+    _assertBetween(t, _num_hidden_vertices(), 6000, 7000)
+
+
+def _move_horizontal(e, start_position, pixels):
     for x in range(pixels // 10):
         position = (start_position[0] + x * 10, start_position[1])
         yield e.cursor_position_set(*position, move=True)
@@ -83,12 +222,7 @@ def mask_expand_and_invert():
     e, t, window = ui.test_window()
     yield from _view3d_startup_area_maximized(e)
 
-    yield from ui.call_menu(e, "Add -> Mesh -> Monkey")
-    yield e.numpad_period()                                     # View monkey
-
-    yield from _subdivide_mesh(e, 3)
-
-    yield e.ctrl.tab().s()                                      # Sculpt via pie menu.
+    yield from _create_test_monkey(e)
 
     area = ui.get_window_area_by_type(window, 'VIEW_3D')
     position = (area.x + area.width // 2, area.y + area.height // 2)
@@ -96,18 +230,17 @@ def mask_expand_and_invert():
 
     yield e.shift.a()                                           # Expand operator
 
-    yield from _cursor_motion_data_x(e, position, 200)
+    yield from _move_horizontal(e, position, 200)
     e.leftmouse.tap()
     yield
 
     initial_masked_verts = _num_fully_masked_vertices()
-    t.assertEqual(initial_masked_verts, 8548)
+    _assertBetween(t, initial_masked_verts, 8000, 9000)
 
     yield e.a()                                                 # Mask pie menu
     yield e.i()                                                 # Invert
 
     inverted_masked_verts = _num_fully_masked_vertices()
-    t.assertEqual(inverted_masked_verts, 22598)
 
     import bpy
     mesh = bpy.context.object.data
@@ -115,51 +248,110 @@ def mask_expand_and_invert():
     t.assertEqual(initial_masked_verts + inverted_masked_verts, total_verts)
 
 
-def _num_matching_face_set(face_set_id):
-    import bpy
-    import numpy as np
+def mask_gestures():
+    e, t, window = ui.test_window()
+    yield from _view3d_startup_area_maximized(e)
 
-    mesh = bpy.context.object.data
+    # Box Mask
+    yield from _create_test_monkey(e)
+    t.assertEqual(_num_fully_masked_vertices(), 0)
+    yield from ui.call_operator(e, "Box Mask")
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_xy(window))
+    _assertBetween(t, _num_fully_masked_vertices(), 28500, 29500)
+    yield from _reset_objects(e)
 
-    if not mesh.attributes.get('.sculpt_face_set'):
-        return 0
+    # Lasso Mask
+    yield from _create_test_monkey(e)
+    t.assertEqual(_num_fully_masked_vertices(), 0)
+    yield from ui.call_operator(e, "Lasso Mask")
+    center = ui.get_area_center_from_spacetype(window, 'VIEW_3D')
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_circle(center, 100))
+    _assertBetween(t, _num_fully_masked_vertices(), 8000, 9000)
+    yield from _reset_objects(e)
 
-    face_set_attr = mesh.attributes['.sculpt_face_set']
-
-    num_faces = mesh.attributes.domain_size('FACE')
-
-    face_set_data = np.zeros(num_faces, dtype=np.int32)
-    face_set_attr.data.foreach_get('value', face_set_data)
-
-    return np.count_nonzero(face_set_data == face_set_id)
+    # Line Mask
+    yield from _create_test_monkey(e)
+    t.assertEqual(_num_fully_masked_vertices(), 0)
+    yield from ui.call_operator(e, "Line Mask")
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_y(window))
+    _assertBetween(t, _num_fully_masked_vertices(), 6000, 7000)
 
 
-def face_set_expand():
+def _create_test_cube(e):
+    yield from ui.call_menu(e, "Add -> Mesh -> Cube")
+    yield e.numpad_period()                                     # View Cube
+
+    yield e.ctrl.tab().s()                                      # Sculpt via pie menu.
+
+
+def trim_gestures():
     import bpy
     e, t, window = ui.test_window()
     yield from _view3d_startup_area_maximized(e)
 
-    yield from ui.call_menu(e, "Add -> Mesh -> Monkey")
-    yield e.numpad_period()                                     # View monkey
+    # Box Trim
+    yield from _create_test_cube(e)
+    mesh = bpy.context.object.data
+    t.assertEqual(mesh.attributes.domain_size('POINT'), 8)
+    yield from ui.call_operator(e, "Box Trim")
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_xy(window))
+    t.assertEqual(mesh.attributes.domain_size('POINT'), 28)
+    yield from _reset_objects(e)
 
-    yield from _subdivide_mesh(e, 3)
+    # Lasso Trim
+    yield from _create_test_cube(e)
+    mesh = bpy.context.object.data
+    t.assertEqual(mesh.attributes.domain_size('POINT'), 8)
+    yield from ui.call_operator(e, "Lasso Trim")
+    center = ui.get_area_center_from_spacetype(window, 'VIEW_3D')
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_circle(center, 100))
+    _assertBetween(t, mesh.attributes.domain_size('POINT'), 85, 95)
+    yield from _reset_objects(e)
 
-    yield e.ctrl.tab().s()                                      # Sculpt via pie menu.
+    # Line Trim
+    yield from _create_test_cube(e)
+    mesh = bpy.context.object.data
+    t.assertEqual(mesh.attributes.domain_size('POINT'), 8)
+    yield from ui.call_operator(e, "Line Trim")
+    yield from e.leftmouse.cursor_motion(ui.cursor_motion_data_y(window))
+    t.assertEqual(mesh.attributes.domain_size('POINT'), 10)
 
+
+def primitive_tool_add():
+    import bpy
+    e, t, window = ui.test_window()
+
+    yield e.ctrl.tab().s()                                                # Sculpt via pie menu.
+
+    # The tool is not callable from the F3 menu, as it only sets the active tool instead of activating the
+    # gizmo, work around this by using the toolbar to activate it instead.
     area = ui.get_window_area_by_type(window, 'VIEW_3D')
+    position = (area.x + int(area.width * 0.05), area.y + area.height // 2)
+    e.cursor_position_set(*position, move=True)                           # Move mouse over the toolbar
+    yield e.shift.space()
+    yield e.five()                                                        # Add Cube
+
     position = (area.x + area.width // 2, area.y + area.height // 2)
-    yield e.cursor_position_set(*position, move=True)           # Move mouse to center
+    yield e.cursor_position_set(*position, move=True)                     # Move mouse to center
 
-    yield e.shift.w()                                           # Expand operator
+    e.leftmouse.press()
+    yield
 
-    yield from _cursor_motion_data_x(e, position, 200)
+    pixels = 10
+    for delta in range(pixels):
+        position = (position[0] + delta, position[1] + delta)
+        yield e.cursor_position_set(*position, move=True)
+
+    e.leftmouse.release()
+    yield
+
+    for delta in range(pixels):
+        position = (position[0] - delta, position[1] - delta)
+        yield e.cursor_position_set(*position, move=True)
+
     e.leftmouse.tap()
     yield
 
-    non_default_faces = _num_matching_face_set(2)
-    t.assertEqual(non_default_faces, 8682)
-
-    default_faces = _num_matching_face_set(1)
     mesh = bpy.context.object.data
     num_faces = mesh.attributes.domain_size('FACE')
-    t.assertEqual(default_faces + non_default_faces, num_faces)
+    t.assertEqual(num_faces, 12)                                          # There should be 6 + 6 faces

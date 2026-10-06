@@ -15,7 +15,6 @@
 #  error WIN32 only!
 #endif  // WIN32
 
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 #include "GHOST_SystemPaths.hh"
@@ -52,7 +51,7 @@ class GHOST_SystemPathsWin32 : public GHOST_SystemPaths {
 
   /**
    * Determine a special ("well known") and easy to reach user directory.
-   * \return If successfull, a string containing the user directory path (eg `~/Documents/`).
+   * \return If successful, a string containing the user directory path (eg `~/Documents/`).
    */
   std::optional<std::string> getUserSpecialDir(GHOST_TUserSpecialDirTypes type) const override;
 

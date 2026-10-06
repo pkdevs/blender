@@ -6,7 +6,7 @@
 #include "DNA_listBase.h"
 
 #include "BLI_math_vector_types.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
@@ -25,7 +25,7 @@ struct Nurb;
 struct CharTrans {
   float2 offset;
   float rotate;
-  short linenr, charnr;
+  short linenr, charnr, wordnr;
 
   uint do_break : 1;
   uint is_overflow : 1;

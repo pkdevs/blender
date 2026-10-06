@@ -50,10 +50,10 @@ static bool check_point_in_stroke(bGPDstroke *stroke, float x, float y)
 /* Check whether point is inside any stroke of grease pencil layer. */
 static bool check_point_in_layer(bGPDlayer *layer, float x, float y)
 {
-  bGPDframe *frame = static_cast<bGPDframe *>(layer->frames.first);
+  bGPDframe *frame = layer->frames.first();
 
   while (frame) {
-    bGPDstroke *stroke = static_cast<bGPDstroke *>(frame->strokes.first);
+    bGPDstroke *stroke = frame->strokes.first();
 
     while (stroke) {
       if (check_point_in_stroke(stroke, x, y)) {
@@ -101,9 +101,9 @@ static void detect_retrieve_libmv_features(MovieTracking *tracking,
     if (ok) {
       MovieTrackingTrack *track = BKE_tracking_track_add(
           tracking, tracksbase, xu, yu, framenr, width, height);
-      track->flag |= SELECT;
-      track->pat_flag |= SELECT;
-      track->search_flag |= SELECT;
+      track->flag |= TRACK_SELECT;
+      track->pat_flag |= TRACK_SELECT;
+      track->search_flag |= TRACK_SELECT;
     }
   }
 }
@@ -118,11 +118,11 @@ static void run_configured_detector(MovieTracking *tracking,
 {
   libmv_Features *features = nullptr;
 
-  if (ibuf->float_buffer.data) {
-    features = libmv_detectFeaturesFloat(ibuf->float_buffer.data, ibuf->x, ibuf->y, 4, options);
+  if (ibuf->float_data()) {
+    features = libmv_detectFeaturesFloat(ibuf->float_data(), ibuf->x, ibuf->y, 4, options);
   }
-  else if (ibuf->byte_buffer.data) {
-    features = libmv_detectFeaturesByte(ibuf->byte_buffer.data, ibuf->x, ibuf->y, 4, options);
+  else if (ibuf->byte_data()) {
+    features = libmv_detectFeaturesByte(ibuf->byte_data(), ibuf->x, ibuf->y, 4, options);
   }
 
   if (features != nullptr) {

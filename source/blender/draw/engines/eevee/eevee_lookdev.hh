@@ -53,6 +53,7 @@ using draw::View;
  * \{ */
 struct LookdevParameters {
   std::string hdri;
+  std::string working_space;
   float rot_z = 0.0f;
   float background_opacity = 0.0f;
   float intensity = 1.0f;
@@ -158,6 +159,7 @@ class LookdevModule {
   float3 sphere_position_;
 
   rcti visible_rect_;
+  bool is_camera_view_ = false;
 
   /* Dummy textures: required to reuse forward mesh shader and avoid another shader variation. */
   Texture dummy_cryptomatte_tx_;

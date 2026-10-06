@@ -17,14 +17,14 @@
 #include "DNA_world_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_context.hh"
@@ -70,9 +70,10 @@ static void shader_get_from_context(const bContext *C,
                                     ID **r_from)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (snode->shaderfrom == SNODE_SHADER_OBJECT) {
@@ -158,8 +159,8 @@ static bool shader_validate_link(eNodeSocketDatatype from, eNodeSocketDatatype t
   if (from == SOCK_SHADER) {
     return to == SOCK_SHADER;
   }
-  if (ELEM(to, SOCK_BUNDLE, SOCK_CLOSURE, SOCK_MENU) ||
-      ELEM(from, SOCK_BUNDLE, SOCK_CLOSURE, SOCK_MENU))
+  if (ELEM(to, SOCK_BUNDLE, SOCK_CLOSURE, SOCK_MENU, SOCK_STRING) ||
+      ELEM(from, SOCK_BUNDLE, SOCK_CLOSURE, SOCK_MENU, SOCK_STRING))
   {
     return from == to;
   }
@@ -178,7 +179,8 @@ static bool shader_node_tree_socket_type_valid(bke::bNodeTreeType * /*ntreetype*
                                                                SOCK_SHADER,
                                                                SOCK_BUNDLE,
                                                                SOCK_CLOSURE,
-                                                               SOCK_MENU);
+                                                               SOCK_MENU,
+                                                               SOCK_STRING);
 }
 
 bke::bNodeTreeType *ntreeType_Shader;
@@ -188,11 +190,12 @@ void register_node_tree_type_sh()
   bke::bNodeTreeType *tt = ntreeType_Shader = MEM_new<bke::bNodeTreeType>(__func__);
 
   tt->type = NTREE_SHADER;
-  tt->idname = "ShaderNodeTree";
-  tt->group_idname = "ShaderNodeGroup";
+  tt->idname = "ShaderNodeTree"_ustr;
+  tt->group_idname = "ShaderNodeGroup"_ustr;
   tt->ui_name = N_("Shader Editor");
   tt->ui_icon = ICON_NODE_MATERIAL;
   tt->ui_description = N_("Edit materials, lights, and world shading using nodes");
+  tt->asset_catalog_path_prefix = "Shading";
 
   tt->foreach_nodeclass = foreach_nodeclass;
   tt->localize = localize;
@@ -287,6 +290,7 @@ static bNodeSocket *ntree_shader_node_output_get(bNode *node, int n)
   return reinterpret_cast<bNodeSocket *>(BLI_findlink(&node->outputs, n));
 }
 
+/* TODO: should be migrated to shader_nodes_inline.c See !153704. */
 static void ntree_shader_unlink_script_nodes(bNodeTree *ntree)
 {
   /* To avoid more trouble in the node tree processing (especially inside
@@ -479,7 +483,9 @@ static bool ntree_weight_tree_tag_nodes(bNode *fromnode, bNode *tonode, void *us
     fromnode->runtime->tmp_flag = *node_count;
     *node_count += (fromnode->type_legacy == SH_NODE_MIX_SHADER) ? 4 : 1;
   }
-  return to_node_from_weight_tree;
+  /* Note: We do not continue recursing after a shader-to-rgb node as they get processed
+   * independently/ */
+  return to_node_from_weight_tree && fromnode->type_legacy != SH_NODE_SHADERTORGB;
 }
 
 /* Invert evaluation order of the weight tree (add & mix closure nodes) to feed the closure nodes
@@ -685,15 +691,13 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
             case SH_NODE_EEVEE_SPECULAR:
             case SH_NODE_EMISSION:
             case SH_NODE_HOLDOUT:
+            case SH_NODE_LIGHT_ACCUMULATION:
             case SH_NODE_SUBSURFACE_SCATTERING:
             case SH_NODE_VOLUME_ABSORPTION:
             case SH_NODE_VOLUME_PRINCIPLED:
             case SH_NODE_VOLUME_SCATTER:
             case SH_NODE_VOLUME_COEFFICIENTS:
               fromsock = ntree_shader_node_find_input(fromnode, "Weight");
-              /* Make "weight" sockets available so that links to it are available as well and are
-               * not ignored in other places. */
-              fromsock->flag &= ~SOCK_UNAVAIL;
               if (fromsock->link) {
                 ntree_weight_tree_merge_weight(ntree, fromnode, fromsock, &tonode, &tosock);
               }
@@ -706,7 +710,6 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
           /* Manually add the link to the socket to avoid calling:
            * `BKE_ntree_update(G.main, oop)`. */
           fromsock->link = &bke::node_add_link(*ntree, *fromnode, *fromsock, *tonode, *tosock);
-          BLI_assert(fromsock->link);
         }
       }
     }
@@ -972,6 +975,99 @@ static void ntree_shader_pruned_unused(bNodeTree *ntree, bNode *output_node)
   }
 }
 
+static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
+{
+  /* Safeguard to not emit a LIGHT_ITER_INTERNAL_INPUT without a LIGHT_ITER_INTERNAL_OUTPUT raising
+   * an assert in the shader dead code optimization. */
+  bool has_light_accumulation = false;
+  for (bNode &node : ntree->nodes) {
+    if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+      has_light_accumulation = true;
+      break;
+    }
+  }
+
+  if (!has_light_accumulation) {
+    return;
+  }
+
+  bNode *zone_input = nullptr;
+  bNode *zone_output = nullptr;
+
+  auto ensure_nodes = [&]() {
+    if (!zone_input) {
+      zone_input = bke::node_add_static_node(nullptr, *ntree, SH_NODE_LIGHT_ITER_INTERNAL_INPUT);
+      zone_output = bke::node_add_static_node(nullptr, *ntree, SH_NODE_LIGHT_ITER_INTERNAL_OUTPUT);
+      zone_input->custom3 = *reinterpret_cast<float *>(&zone_output->identifier);
+    }
+  };
+
+  Map<bNodeSocket *, bNodeSocket *> accumulation_out_to_zone_out;
+
+  for (bNode &node : ntree->nodes) {
+    if (ELEM(node.type_legacy,
+             SH_NODE_LIGHT_ACCUMULATION,
+             SH_NODE_LIGHT_INFO,
+             SH_NODE_LIGHT_EVALUATION,
+             SH_NODE_SHADOW_RAYCAST) ||
+        (node.type_legacy == SH_NODE_ATTRIBUTE &&
+         static_cast<NodeShaderAttribute *>(node.storage)->type == SHD_ATTRIBUTE_LIGHT) ||
+        (node.type_legacy == SH_NODE_VECT_TRANSFORM &&
+         ELEM(SHD_VECT_TRANSFORM_SPACE_LIGHT,
+              static_cast<NodeShaderVectTransform *>(node.storage)->convert_from,
+              static_cast<NodeShaderVectTransform *>(node.storage)->convert_to)))
+    {
+      ensure_nodes();
+      /* Connect LightIndex socket */
+      bke::node_add_link(*ntree,
+                         *zone_input,
+                         *ntree_shader_node_output_get(zone_input, 0),
+                         node,
+                         *ntree_shader_node_input_get(&node, 0));
+
+      if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+        /* Connect accumulation result to the zone output node.
+         * Create one zone IO for each Light Accumulation node. */
+        bke::node_add_static_socket(
+            *ntree, *zone_input, SOCK_IN, SOCK_SHADER, PROP_NONE, "ShaderZoneIO", "ShaderZoneIO");
+        bke::node_add_static_socket(
+            *ntree, *zone_input, SOCK_OUT, SOCK_SHADER, PROP_NONE, "ShaderZoneIO", "ShaderZoneIO");
+        bNodeSocket *socket_in = bke::node_add_static_socket(
+            *ntree, *zone_output, SOCK_IN, SOCK_SHADER, PROP_NONE, "ShaderZoneIO", "ShaderZoneIO");
+        bNodeSocket *socket_out = bke::node_add_static_socket(*ntree,
+                                                              *zone_output,
+                                                              SOCK_OUT,
+                                                              SOCK_SHADER,
+                                                              PROP_NONE,
+                                                              "ShaderZoneIO",
+                                                              "ShaderZoneIO");
+
+        bNodeSocket &accumulation_out = *ntree_shader_node_output_get(&node, 0);
+        bke::node_add_link(*ntree, node, accumulation_out, *zone_output, *socket_in);
+        accumulation_out_to_zone_out.add(&accumulation_out, socket_out);
+      }
+    }
+  }
+
+  Vector<bNodeLink *> links_to_remove;
+  for (bNodeLink &link : ntree->links) {
+    if (link.fromnode->type_legacy == SH_NODE_LIGHT_ACCUMULATION &&
+        link.tonode->type_legacy != SH_NODE_LIGHT_ITER_INTERNAL_OUTPUT)
+    {
+      bke::node_add_link(*ntree,
+                         *zone_output,
+                         *accumulation_out_to_zone_out.lookup(link.fromsock),
+                         *link.tonode,
+                         *link.tosock);
+      links_to_remove.append(&link);
+    }
+  }
+
+  for (bNodeLink *link : links_to_remove) {
+    bke::node_remove_link(ntree, *link);
+  }
+}
+
 void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
 {
   bNodeTreeExec *exec;
@@ -987,6 +1083,7 @@ void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
     if (output != nullptr) {
       ntree_shader_shader_to_rgba_branches(localtree);
       ntree_shader_weight_tree_invert(localtree, output);
+      ntree_shader_setup_custom_lighting_zone(localtree);
     }
   }
 

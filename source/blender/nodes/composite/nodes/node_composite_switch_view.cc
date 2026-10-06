@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DNA_node_types.h"
 
@@ -19,7 +19,7 @@ namespace blender::nodes::node_composite_switch_view_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>(N_("Image")).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
 
   const bNode *node = b.node_or_null();
   if (node == nullptr) {
@@ -34,20 +34,18 @@ static void node_declare(NodeDeclarationBuilder &b)
       if (srv.viewflag & SCE_VIEW_DISABLE) {
         continue;
       }
-      b.add_input<decl::Color>(srv.name)
+      b.add_input<decl::Color>(UString(srv.name))
           .default_value({0.0f, 0.0f, 0.0f, 1.0f})
           .structure_type(StructureType::Dynamic);
     }
   }
 }
 
-static void node_init(const bContext *C, PointerRNA *ptr)
+static void node_init_api(const bContext *C, PointerRNA *node_ptr)
 {
   Scene *scene = CTX_data_scene(C);
-  bNode *node = (bNode *)ptr->data;
-
-  /* store scene for dynamic declaration */
-  node->id = reinterpret_cast<ID *>(scene);
+  bNode *node = node_ptr->data_as<bNode>();
+  node->id = id_cast<ID *>(scene);
   id_us_plus(node->id);
 }
 
@@ -82,13 +80,13 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeSwitchView", CMP_NODE_SWITCH_VIEW);
+  cmp_node_type_base(&ntype, "CompositorNodeSwitchView"_ustr, CMP_NODE_SWITCH_VIEW);
   ntype.ui_name = "Switch View";
   ntype.ui_description = "Combine the views (left and right) into a single stereo 3D output";
   ntype.enum_name_legacy = "VIEWSWITCH";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = node_declare;
-  ntype.initfunc_api = node_init;
+  ntype.initfunc_api = node_init_api;
   ntype.get_compositor_operation = get_compositor_operation;
 
   bke::node_register_type(ntype);

@@ -31,22 +31,21 @@ static const EnumPropertyItem type_items[] = {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Menu>("Type")
+  b.add_input<decl::Menu>("Type"_ustr)
       .default_value(compositor::DistortionType::Undistort)
       .static_items(type_items)
       .optional_label();
 
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
 }
 
-static void node_init(const bContext *C, PointerRNA *ptr)
+static void node_init_api(const bContext *C, PointerRNA *node_ptr)
 {
-  bNode *node = static_cast<bNode *>(ptr->data);
+  bNode *node = node_ptr->data_as<bNode>();
   Scene *scene = CTX_data_scene(C);
-
   node->id = id_cast<ID *>(scene->clip);
   id_us_plus(node->id);
 }
@@ -143,7 +142,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeMovieDistortion", CMP_NODE_MOVIEDISTORTION);
+  cmp_node_type_base(&ntype, "CompositorNodeMovieDistortion"_ustr, CMP_NODE_MOVIEDISTORTION);
   ntype.ui_name = "Movie Distortion";
   ntype.ui_description =
       "Remove lens distortion from footage, using motion tracking camera lens settings";
@@ -151,7 +150,7 @@ static void node_register()
   ntype.nclass = NODE_CLASS_DISTORT;
   ntype.declare = node_declare;
   ntype.draw_buttons = node_draw_buttons;
-  ntype.initfunc_api = node_init;
+  ntype.initfunc_api = node_init_api;
   ntype.get_compositor_operation = get_compositor_operation;
 
   bke::node_register_type(ntype);

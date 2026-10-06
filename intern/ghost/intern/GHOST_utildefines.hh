@@ -5,27 +5,14 @@
 /** \file
  * \ingroup GHOST
  *
- * Utility defines (avoid depending on `BLI_utildefines.h`).
+ * Utility defines (avoid depending on `BLI_utildefines.hh`).
  */
 
 #pragma once
 
+#include <cstddef>
+
 #include "GHOST_utildefines_variadic.hh"
-
-/* -------------------------------------------------------------------- */
-/** \name Branch Prediction Macros
- * \{ */
-
-/* hints for branch prediction, only use in code that runs a _lot_ where */
-#ifdef __GNUC__
-#  define LIKELY(x) __builtin_expect(!!(x), 1)
-#  define UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-#  define LIKELY(x) (x)
-#  define UNLIKELY(x) (x)
-#endif
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Array Unpacking Macros
@@ -47,13 +34,11 @@
  * \{ */
 
 /* Assuming a static array. */
-#if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && !defined(__INTEL_COMPILER)
-#  define ARRAY_SIZE(arr) \
-    ((sizeof(struct { int isnt_array : ((const void *)&(arr) == &(arr)[0]); }) * 0) + \
-     (sizeof(arr) / sizeof(*(arr))))
-#else
-#  define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(*(arr)))
-#endif
+template<class T, size_t N> constexpr size_t ARRAY_SIZE(const T (&arg)[N]) noexcept
+{
+  (void)arg;
+  return N;
+}
 
 /** \} */
 

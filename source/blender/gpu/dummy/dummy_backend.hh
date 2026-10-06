@@ -34,7 +34,6 @@ class DummyBackend : public GPUBackend {
   }
   void init_resources() override {}
   void delete_resources() override {}
-  void samplers_update() override {}
   void compute_dispatch(int /*groups_x_len*/, int /*groups_y_len*/, int /*groups_z_len*/) override
   {
   }
@@ -49,6 +48,10 @@ class DummyBackend : public GPUBackend {
     return new DummyBatch;
   }
   Fence *fence_alloc() override
+  {
+    return nullptr;
+  }
+  WorkInFlight *work_in_flight_alloc(unsigned int /*max_in_flight*/) override
   {
     return nullptr;
   }
@@ -93,6 +96,14 @@ class DummyBackend : public GPUBackend {
   VertBuf *vertbuf_alloc() override
   {
     return new DummyVertexBuffer;
+  }
+  TopLevelAS *tlas_alloc(const char * /*name*/) override
+  {
+    return nullptr;
+  }
+  BottomLevelAS *blas_alloc(const char * /*name*/) override
+  {
+    return nullptr;
   }
   void shader_cache_dir_clear_old() override {}
   void render_begin() override {}

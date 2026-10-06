@@ -19,6 +19,7 @@ else()
   set(OIDN_EXTRA_ARGS
     ${OIDN_EXTRA_ARGS}
     -DOIDN_DEVICE_CPU=ON
+    -DOIDN_DEVICE_CUDA=ON
     -DLEVEL_ZERO_ROOT=${LIBDIR}/level-zero
   )
 
@@ -28,12 +29,18 @@ else()
       ${OIDN_EXTRA_ARGS}
       -DOIDN_DEVICE_SYCL=ON
       -DOIDN_DEVICE_SYCL_AOT=OFF
-      -DOIDN_DEVICE_CUDA=ON
       -DOIDN_DEVICE_HIP=ON)
-  elseif(UNIX)
+  endif()
+
+  if(BLENDER_PLATFORM_ARM)
+    # Target ARMv8.2-A with dot product and half float.
+    # There is no -march=armv8.2-a+dotprod+fp16+lse flag for ISPC, so we target
+    # a CPU with the same features. Otherwise ISPC will do something similar to
+    # -march=native and results depend on the current processor.
     set(OIDN_EXTRA_ARGS
       ${OIDN_EXTRA_ARGS}
-      -DOIDN_DEVICE_CUDA=ON)
+      "-DISPC_FLAGS_RELEASE:STRING=-O3 --cpu=cortex-a78"
+    )
   endif()
 endif()
 

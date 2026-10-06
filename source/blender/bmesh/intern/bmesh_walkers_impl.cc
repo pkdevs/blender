@@ -10,7 +10,7 @@
 
 #include <cstring>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_customdata.hh"
 
@@ -123,7 +123,7 @@ static void bmw_VertShellWalker_begin(BMWalker *walker, void *data)
   BMEdge *e;
   BMVert *v;
 
-  if (UNLIKELY(h == nullptr)) {
+  if (h == nullptr) [[unlikely]] {
     return;
   }
 
@@ -252,7 +252,7 @@ static void bmw_LoopShellWalker_begin(BMWalker *walker, void *data)
   BMIter iter;
   BMHeader *h = static_cast<BMHeader *>(data);
 
-  if (UNLIKELY(h == nullptr)) {
+  if (h == nullptr) [[unlikely]] {
     return;
   }
 
@@ -416,7 +416,7 @@ static void bmw_LoopShellWireWalker_begin(BMWalker *walker, void *data)
 {
   BMHeader *h = static_cast<BMHeader *>(data);
 
-  if (UNLIKELY(h == nullptr)) {
+  if (h == nullptr) [[unlikely]] {
     return;
   }
 
@@ -728,6 +728,8 @@ static void *bmw_IslandboundWalker_step(BMWalker *walker)
   return owalk.curloop;
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Island Walker
  *
@@ -845,6 +847,62 @@ static bool bm_edge_is_single(BMEdge *e)
 {
   return (BM_edge_is_boundary(e) && (e->l->f->len > 4) &&
           (BM_edge_is_boundary(e->l->next->e) || BM_edge_is_boundary(e->l->prev->e)));
+}
+
+static bool bmw_EdgeLoopWalker_delimit_by_mark(
+    BMWalker *walker, BMVert *v, BMEdge *e, BMLoop *l, bool (*edge_mark_check_fn)(const BMEdge *))
+{
+  /* When starting on a mark, stop when the next edge does not have the mark.
+   * Otherwise, stop when any edge connected to the next vert has the mark. */
+  if (edge_mark_check_fn(e)) {
+    if (!edge_mark_check_fn(l->e) &&
+        !((walker->flag & BMW_FLAG_TEST_HIDDEN) && BM_elem_flag_test(l->e, BM_ELEM_HIDDEN)) &&
+        !BM_edge_is_wire(l->e))
+    {
+      return true;
+    }
+  }
+  else {
+    BMIter eiter;
+    BMEdge *e_other;
+    BM_ITER_ELEM (e_other, &eiter, v, BM_EDGES_OF_VERT) {
+      if (edge_mark_check_fn(e_other) &&
+          !((walker->flag & BMW_FLAG_TEST_HIDDEN) && BM_elem_flag_test(e_other, BM_ELEM_HIDDEN)) &&
+          !BM_edge_is_wire(e_other))
+      {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+static bool bmw_EdgeLoopWalker_delimit_mark_check(BMWalker *walker,
+                                                  BMVert *v,
+                                                  BMEdge *e,
+                                                  BMLoop *l)
+{
+  if ((walker->delimit & BMW_DELIMIT_EDGE_MARK_SEAM) &&
+      bmw_EdgeLoopWalker_delimit_by_mark(
+          walker,
+          v,
+          e,
+          l,
+          [](const BMEdge *e) -> bool { return BM_elem_flag_test(e, BM_ELEM_SEAM); }))
+  {
+    return true;
+  }
+  if ((walker->delimit & BMW_DELIMIT_EDGE_MARK_SHARP) &&
+      bmw_EdgeLoopWalker_delimit_by_mark(
+          walker,
+          v,
+          e,
+          l,
+          [](const BMEdge *e) -> bool { return !BM_elem_flag_test(e, BM_ELEM_SMOOTH); }))
+  {
+    return true;
+  }
+  return false;
 }
 
 static void bmw_EdgeLoopWalker_begin(BMWalker *walker, void *data)
@@ -1078,6 +1136,10 @@ static void *bmw_EdgeLoopWalker_step(BMWalker *walker)
       l = nullptr;
     }
 
+    if (l && bmw_EdgeLoopWalker_delimit_mark_check(walker, v, e, l)) {
+      l = nullptr;
+    }
+
     if (l != nullptr) {
       if (l != e->l && bmw_mask_check_edge(walker, l->e) && !walker->visit_set->contains(l->e)) {
         lwalk = static_cast<BMwEdgeLoopWalker *>(BMW_state_add(walker));
@@ -1099,21 +1161,23 @@ static void *bmw_EdgeLoopWalker_step(BMWalker *walker)
 
     vert_edge_tot = BM_vert_edge_count_nonwire(v);
 
-    /* Check if any delimits should stop the step. */
-    bool has_delimit = false;
+    /* Check if any corner delimits should stop the step. */
+    bool has_corner_delimit = false;
     if ((walker->delimit & BMW_DELIMIT_EDGE_LOOP_INNER_CORNERS) != 0) {
       if (vert_edge_tot > 3) {
-        has_delimit = true;
+        has_corner_delimit = true;
       }
     }
-    if ((walker->delimit & BMW_DELIMIT_EDGE_LOOP_OUTER_CORNERS) != 0) {
+    if ((walker->delimit & BMW_DELIMIT_EDGE_LOOP_OUTER_CORNERS) != 0 &&
+        has_corner_delimit == false)
+    {
       if (vert_edge_tot == 2 && bm_edge_is_single(e) == false) {
-        has_delimit = true;
+        has_corner_delimit = true;
       }
     }
 
     /* Find next boundary edge in the fan. */
-    if (has_delimit == false) {
+    if (has_corner_delimit == false) {
       do {
         l = BM_loop_other_edge_loop(l, v);
         if (BM_edge_is_manifold(l->e)) {
@@ -1127,6 +1191,10 @@ static void *bmw_EdgeLoopWalker_step(BMWalker *walker)
           break;
         }
       } while (true);
+    }
+
+    if (l && bmw_EdgeLoopWalker_delimit_mark_check(walker, v, e, l)) {
+      l = nullptr;
     }
 
     /* Stop at delimiting n-gons here so that Rewind picks the correct edge to start from. */
@@ -1413,10 +1481,14 @@ static void bmw_EdgeringWalker_begin(BMWalker *walker, void *data)
 
   /* Add both sides so both directions are walked. */
   if (lwalk->l->radial_next != lwalk->l) {
-    BMwEdgeringWalker *lwalk_alt = static_cast<BMwEdgeringWalker *>(BMW_state_add(walker));
-    lwalk_alt->l = lwalk->l->radial_next;
-    lwalk_alt->wireedge = nullptr;
-    lwalk_alt->no_calc = false;
+    /* When `no_calc` is true, the walker hit a delimiting edge and can't step further,
+     * so add the alt walker to traverse the ring in the opposite direction. See #157860. */
+    if (lwalk->no_calc || (delimit_ngon ? (lwalk->l->f->len != 4) : (lwalk->l->f->len % 2 != 0))) {
+      BMwEdgeringWalker *lwalk_alt = static_cast<BMwEdgeringWalker *>(BMW_state_add(walker));
+      lwalk_alt->l = lwalk->l->radial_next;
+      lwalk_alt->wireedge = nullptr;
+      lwalk_alt->no_calc = false;
+    }
   }
 }
 
@@ -1456,7 +1528,7 @@ static void *bmw_EdgeringWalker_step(BMWalker *walker)
     /* Walker won't traverse to a non-manifold edge, but may
      * be started on one, and should not traverse *away* from
      * a non-manifold edge (non-manifold edges are never in an
-     * edge ring with manifold edges. */
+     * edge ring with manifold edges). */
     return e;
   }
 
@@ -1780,7 +1852,7 @@ static void *bmw_NonManifoldedgeWalker_step(BMWalker *walker)
 
     /* If `lwalk.lastv` can't be walked along, start walking in the opposite direction
      * on the initial edge, do this at most one time during this walk operation. */
-    if (UNLIKELY(pass == 1)) {
+    if (pass == 1) [[unlikely]] {
       e = lwalk->start;
       v = lwalk->startv;
     }
@@ -1819,6 +1891,10 @@ static void *bmw_NonManifoldedgeWalker_step(BMWalker *walker)
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Walker Type Definitions
+ * \{ */
 
 static const BMWalker bmw_VertShellWalker_Type = {
     /*begin_htype*/ BM_VERT | BM_EDGE,
@@ -1907,7 +1983,7 @@ static const BMWalker bmw_EdgeLoopWalker_Type = {
     /*valid_mask*/ 0, /* Could add flags here but so far none are used. */
                       /*delimit_supported*/
     (BMW_DELIMIT_EDGE_LOOP_INNER_CORNERS | BMW_DELIMIT_EDGE_LOOP_OUTER_CORNERS |
-     BMW_DELIMIT_EDGE_LOOP_NGONS),
+     BMW_DELIMIT_EDGE_LOOP_NGONS | BMW_DELIMIT_EDGE_MARK_SEAM | BMW_DELIMIT_EDGE_MARK_SHARP),
 };
 
 static const BMWalker bmw_FaceLoopWalker_Type = {

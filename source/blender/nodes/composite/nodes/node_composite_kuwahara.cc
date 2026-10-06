@@ -6,7 +6,6 @@
 
 #include "BLI_math_base.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_numbers.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -40,30 +39,33 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Float>("Size")
+  b.add_input<decl::Float>("Size"_ustr)
       .default_value(6.0f)
+      .subtype(PROP_PIXEL)
       .min(0.0f)
       .description("The size of the filter in pixels")
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Menu>("Type")
+  b.add_input<decl::Menu>("Type"_ustr)
       .default_value(CMP_NODE_KUWAHARA_ANISOTROPIC)
       .static_items(type_items)
       .optional_label();
 
-  b.add_input<decl::Int>("Uniformity")
+  b.add_input<decl::Int>("Uniformity"_ustr)
       .default_value(4)
       .min(0)
       .usage_by_single_menu(CMP_NODE_KUWAHARA_ANISOTROPIC)
       .description(
           "Controls the uniformity of the direction of the filter. Higher values produces more "
           "uniform directions");
-  b.add_input<decl::Float>("Sharpness")
+  b.add_input<decl::Float>("Sharpness"_ustr)
       .default_value(1.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -72,7 +74,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           "Controls the sharpness of the filter. 0 means completely smooth while 1 means "
           "completely sharp");
-  b.add_input<decl::Float>("Eccentricity")
+  b.add_input<decl::Float>("Eccentricity"_ustr)
       .default_value(1.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -81,7 +83,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           "Controls how directional the filter is. 0 means the filter is completely "
           "omnidirectional while 2 means it is maximally directed along the edges of the image");
-  b.add_input<decl::Bool>("High Precision")
+  b.add_input<decl::Bool>("High Precision"_ustr)
       .default_value(false)
       .usage_by_single_menu(CMP_NODE_KUWAHARA_CLASSIC)
       .description(
@@ -400,6 +402,16 @@ class ConvertKuwaharaOperation : public NodeOperation {
     return "compositor_kuwahara_anisotropic_variable_size";
   }
 
+  static float radial_falloff(float x)
+  {
+    /* We know x is in [0..1] range, and the Gaussian falloff
+     * function we want is `exp(-PI * x)`. This approximates
+     * it with a polynomial. */
+    return 0.99963078f +
+           x * (-3.12538948f +
+                x * (4.76244166f + x * (-4.41057815f + x * (2.39937989f + x * (-0.58256130f)))));
+  }
+
   void execute_anisotropic_cpu(const Result &structure_tensor)
   {
     const float eccentricity = this->compute_eccentricity();
@@ -509,7 +521,7 @@ class ConvertKuwaharaOperation : public NodeOperation {
        * later in the code. */
       const int number_of_sectors = 8;
       float sector_center_overlap_parameter = 2.0f / radius;
-      float sector_envelope_angle = ((3.0f / 2.0f) * math::numbers::pi_v<float>) /
+      float sector_envelope_angle = ((3.0f / 2.0f) * std::numbers::pi_v<float>) /
                                     number_of_sectors;
       float cross_sector_overlap_parameter = (sector_center_overlap_parameter +
                                               math::cos(sector_envelope_angle)) /
@@ -520,10 +532,12 @@ class ConvertKuwaharaOperation : public NodeOperation {
        * next code section. */
       float4 weighted_mean_of_squared_color_of_sectors[8];
       float4 weighted_mean_of_color_of_sectors[8];
-      float sum_of_weights_of_sectors[8];
+      /* Opposite sectors have equal total weights because each sample is paired.
+       * Share the weight sum between sectors [i] and [i+4]. */
+      float sum_of_weights_of_sectors[4];
 
       /* The center pixel (0, 0) is exempt from the main loop below for reasons that are explained
-       * in the first if statement in the loop, so we need to accumulate its color, squared color,
+       * in the first row's lower bound, so we need to accumulate its color, squared color,
        * and weight separately first. Luckily, the zero coordinates of the center pixel zeros out
        * most of the complex computations below, and it can easily be shown that the weight for the
        * center pixel in all sectors is simply (1 / number_of_sectors). */
@@ -535,6 +549,8 @@ class ConvertKuwaharaOperation : public NodeOperation {
       for (int i = 0; i < number_of_sectors; i++) {
         weighted_mean_of_squared_color_of_sectors[i] = weighted_center_color_squared;
         weighted_mean_of_color_of_sectors[i] = weighted_center_color;
+      }
+      for (int i = 0; i < number_of_sectors / 2; i++) {
         sum_of_weights_of_sectors[i] = center_weight;
       }
 
@@ -543,19 +559,10 @@ class ConvertKuwaharaOperation : public NodeOperation {
        * window to only the upper two quadrants, and compute each two mirrored pixels at the same
        * time using the same weight as an optimization. */
       for (int j = 0; j <= ellipse_bounds.y; j++) {
-        for (int i = -ellipse_bounds.x; i <= ellipse_bounds.x; i++) {
-          /* Since we compute each two mirrored pixels at the same time, we need to also exempt the
-           * pixels whose x coordinates are negative and their y coordinates are zero, that's
-           * because those are mirrored versions of the pixels whose x coordinates are positive and
-           * their y coordinates are zero, and we don't want to compute and accumulate them twice.
-           * Moreover, we also need to exempt the center pixel with zero coordinates for the same
-           * reason, however, since the mirror of the center pixel is itself, it need to be
-           * accumulated separately, hence why we did that in the code section just before this
-           * loop. */
-          if (j == 0 && i <= 0) {
-            continue;
-          }
-
+        /* On the first row, negative offsets are covered by the mirrored samples, and the center
+         * pixel was accumulated separately above. */
+        int lower_bound = j == 0 ? 1 : -ellipse_bounds.x;
+        for (int i = lower_bound; i <= ellipse_bounds.x; i++) {
           /* Map the pixels of the ellipse into a unit disk, exempting any points that are not part
            * of the ellipse or disk. */
           float2 disk_point = inverse_ellipse_matrix * float2(i, j);
@@ -587,7 +594,7 @@ class ConvertKuwaharaOperation : public NodeOperation {
 
           /* Then we rotate the disk point by 45 degrees, which is a simple expression involving a
            * constant as can be demonstrated by applying a 45 degree rotation matrix. */
-          float2 rotated_disk_point = (1.0f / math::numbers::sqrt2) *
+          float2 rotated_disk_point = (1.0f / std::numbers::sqrt2) *
                                       float2(disk_point.x - disk_point.y,
                                              disk_point.x + disk_point.y);
 
@@ -612,8 +619,7 @@ class ConvertKuwaharaOperation : public NodeOperation {
           float sector_weights_sum = sector_weights[0] + sector_weights[1] + sector_weights[2] +
                                      sector_weights[3] + sector_weights[4] + sector_weights[5] +
                                      sector_weights[6] + sector_weights[7];
-          float radial_gaussian_weight = math::exp(-math::numbers::pi *
-                                                   disk_point_length_squared) /
+          float radial_gaussian_weight = radial_falloff(disk_point_length_squared) /
                                          sector_weights_sum;
 
           /* Load the color of the pixel and its mirrored pixel and compute their square. */
@@ -624,17 +630,20 @@ class ConvertKuwaharaOperation : public NodeOperation {
 
           for (int k = 0; k < number_of_sectors; k++) {
             float weight = sector_weights[k] * radial_gaussian_weight;
+            /* Skip zero weight sectors. */
+            if (weight == 0.0f) {
+              continue;
+            }
+            sum_of_weights_of_sectors[k % (number_of_sectors / 2)] += weight;
 
             /* Accumulate the pixel to each of the sectors multiplied by the sector weight. */
             int upper_index = k;
-            sum_of_weights_of_sectors[upper_index] += weight;
             weighted_mean_of_color_of_sectors[upper_index] += upper_color * weight;
             weighted_mean_of_squared_color_of_sectors[upper_index] += upper_color_squared * weight;
 
             /* Accumulate the mirrored pixel to each of the sectors multiplied by the sector
              * weight. */
             int lower_index = (k + number_of_sectors / 2) % number_of_sectors;
-            sum_of_weights_of_sectors[lower_index] += weight;
             weighted_mean_of_color_of_sectors[lower_index] += lower_color * weight;
             weighted_mean_of_squared_color_of_sectors[lower_index] += lower_color_squared * weight;
           }
@@ -646,8 +655,9 @@ class ConvertKuwaharaOperation : public NodeOperation {
       float sum_of_weights = 0.0f;
       float4 weighted_sum = float4(0.0f);
       for (int i = 0; i < number_of_sectors; i++) {
-        weighted_mean_of_color_of_sectors[i] /= sum_of_weights_of_sectors[i];
-        weighted_mean_of_squared_color_of_sectors[i] /= sum_of_weights_of_sectors[i];
+        float sector_weight_sum = sum_of_weights_of_sectors[i % (number_of_sectors / 2)];
+        weighted_mean_of_color_of_sectors[i] /= sector_weight_sum;
+        weighted_mean_of_squared_color_of_sectors[i] /= sector_weight_sum;
 
         float4 color_mean = weighted_mean_of_color_of_sectors[i];
         float4 squared_color_mean = weighted_mean_of_squared_color_of_sectors[i];
@@ -833,7 +843,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeKuwahara", CMP_NODE_KUWAHARA);
+  cmp_node_type_base(&ntype, "CompositorNodeKuwahara"_ustr, CMP_NODE_KUWAHARA);
   ntype.ui_name = "Kuwahara";
   ntype.ui_description =
       "Apply smoothing filter that preserves edges, for stylized and painterly effects";
@@ -844,7 +854,7 @@ static void node_register()
   bke::node_type_storage(
       ntype, "NodeKuwaharaData", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = get_compositor_operation;
-  bke::node_type_size(ntype, 150, 140, NODE_DEFAULT_MAX_WIDTH);
+  ntype.default_width = bke::NodeWidth::_160;
 
   bke::node_register_type(ntype);
 }

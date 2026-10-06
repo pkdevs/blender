@@ -20,14 +20,10 @@ uint outline_colorid_get()
   if (is_transform) {
     return 0u; /* theme.colors.transform */
   }
-  else if (is_active) {
+  if (is_active) {
     return 3u; /* theme.colors.active */
   }
-  else {
-    return 1u; /* theme.colors.object_select */
-  }
-
-  return 0u;
+  return 1u; /* theme.colors.object_select */
 }
 
 void main()
@@ -44,8 +40,11 @@ void main()
                                unused_color,
                                unused_strength,
                                unused_uv,
-                               gp_interp_flat.sspos,
-                               gp_interp_flat.sspos_adj,
+                               gp_interp_flat.sspos_0,
+                               gp_interp_flat.sspos_1,
+                               gp_interp_flat.sspos_2,
+                               gp_interp_flat.sspos_3,
+                               gp_interp_flat.point_length,
                                gp_interp_flat.aspect,
                                gp_interp_noperspective.thickness,
                                gp_interp_noperspective.hardness);

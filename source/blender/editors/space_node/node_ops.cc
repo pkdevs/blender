@@ -40,6 +40,7 @@ void node_operatortypes()
   WM_operatortype_append(NODE_OT_view_selected);
 
   WM_operatortype_append(NODE_OT_mute_toggle);
+  WM_operatortype_append(NODE_OT_comment_edit);
   WM_operatortype_append(NODE_OT_collapse_toggle);
   WM_operatortype_append(NODE_OT_preview_toggle);
   WM_operatortype_append(NODE_OT_options_toggle);
@@ -98,7 +99,6 @@ void node_operatortypes()
 
   WM_operatortype_append(NODE_OT_new_node_tree);
   WM_operatortype_append(NODE_OT_new_compositing_node_group);
-  WM_operatortype_append(NODE_OT_duplicate_compositing_node_group);
   WM_operatortype_append(NODE_OT_duplicate_compositing_modifier_node_group);
   WM_operatortype_append(NODE_OT_new_compositor_sequencer_node_group);
 
@@ -120,6 +120,8 @@ void node_operatortypes()
   WM_operatortype_append(NODE_OT_cryptomatte_layer_remove);
 
   WM_operatortype_append(NODE_OT_sockets_sync);
+
+  WM_operatortype_append(NODE_OT_link_drag_operation_test);
 
   for (bke::bNodeType *ntype : bke::node_types_get()) {
     if (ntype->register_operators) {
@@ -242,6 +244,12 @@ void ED_operatormacros_node()
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   WM_operatortype_macro_define(ot, "NODE_OT_clipboard_copy");
   WM_operatortype_macro_define(ot, "NODE_OT_delete_reconnect");
+
+  ot = WM_operatortype_append_macro("NODE_OT_duplicate_compositing_node_group",
+                                    "New Compositing Node Group",
+                                    "Duplicate the currently assigned compositing node group.",
+                                    OPTYPE_UNDO | OPTYPE_REGISTER);
+  WM_operatortype_macro_define(ot, "SCENE_OT_duplicate_compositor_effect_node_group");
 }
 
 }  // namespace blender

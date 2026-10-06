@@ -5,20 +5,18 @@
 #include "libocio_display.hh"
 #include "OCIO_display.hh"
 
-#if defined(WITH_OPENCOLORIO)
+#include "BLI_index_range.hh"
 
-#  include "BLI_index_range.hh"
+#include "OCIO_config.hh"
 
-#  include "OCIO_config.hh"
+#include "CLG_log.h"
 
-#  include "CLG_log.h"
+#include "../opencolorio.hh"
 
-#  include "../opencolorio.hh"
-
-#  include "error_handling.hh"
-#  include "libocio_config.hh"
-#  include "libocio_cpu_processor.hh"
-#  include "libocio_display_processor.hh"
+#include "error_handling.hh"
+#include "libocio_config.hh"
+#include "libocio_cpu_processor.hh"
+#include "libocio_display_processor.hh"
 
 namespace blender {
 
@@ -114,10 +112,12 @@ LibOCIODisplay::LibOCIODisplay(const int index, const LibOCIOConfig &config) : c
 
     /* Detect if view is HDR, through encoding of display colorspace. */
     bool view_is_hdr = false;
+    bool view_is_data = false;
     if (ocio_display_colorspace) {
       StringRefNull encoding = ocio_display_colorspace->getEncoding();
       view_is_hdr = encoding == "hdr-video" || encoding == "edr-video";
       is_hdr_ |= view_is_hdr;
+      view_is_data = ocio_display_colorspace->isData();
     }
 
     /* Detect if display emulation is supported. */
@@ -134,8 +134,8 @@ LibOCIODisplay::LibOCIODisplay(const int index, const LibOCIOConfig &config) : c
         (ocio_display_colorspace) ? static_cast<const LibOCIOColorSpace *>(config.get_color_space(
                                         ocio_display_colorspace->getName())) :
                                     nullptr;
-    StringRefNull display_interop_id = (display_colorspace) ? display_colorspace->interop_id() :
-                                                              "";
+    const StringRef display_interop_id = interop_id_drop_namespace(
+        (display_colorspace) ? display_colorspace->interop_id() : "");
 
     if (!display_interop_id.is_empty()) {
       if (display_interop_id.endswith("_rec709_display") ||
@@ -190,13 +190,14 @@ LibOCIODisplay::LibOCIODisplay(const int index, const LibOCIOConfig &config) : c
                      view_name,
                      view_description,
                      view_is_hdr,
+                     view_is_data,
                      view_support_emulation,
                      gamut,
                      transfer_function,
                      display_colorspace);
   }
 
-  /* Detect untonemppaed view transform. */
+  /* Detect untonemapped view transform. */
   if (untonemapped_view_ == nullptr) {
     /* Use Blender config and ACES config naming conventions. */
     for (const LibOCIOView &view : views_) {
@@ -311,5 +312,3 @@ void LibOCIODisplay::clear_caches()
 
 }  // namespace ocio
 }  // namespace blender
-
-#endif

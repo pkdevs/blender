@@ -27,10 +27,10 @@
 #    include "BPY_extern.hh"
 #  endif
 
-#  include "BLI_iterator.h"
-#  include "BLI_math_matrix.h"
-#  include "BLI_math_vector.h"
-#  include "BLI_string.h"
+#  include "BLI_iterator.hh"
+#  include "BLI_math_matrix_c.hh"
+#  include "BLI_math_vector_c.hh"
+#  include "BLI_string.hh"
 
 #  include "DNA_scene_types.h"
 
@@ -55,7 +55,8 @@ struct RNA_DepsgraphIterator {
 #  ifdef WITH_PYTHON
   /**
    * Store the Python instance so the #BPy_StructRNA can be set as invalid iteration is completed.
-   * Otherwise accessing from Python (e.g. console auto-complete) crashes, see: #100286. */
+   * Otherwise accessing from Python (e.g. console auto-complete) crashes, see: #100286.
+   */
   void *py_instance;
 #  endif
 };
@@ -67,14 +68,6 @@ void **rna_DepsgraphIterator_instance(PointerRNA *ptr)
   return &di->py_instance;
 }
 #  endif
-
-/* Temporary hack for Cycles until it is changed to work with the C API directly. */
-extern "C" DupliObject *rna_hack_DepsgraphObjectInstance_dupli_object_get(PointerRNA *ptr)
-{
-  RNA_DepsgraphIterator *di = static_cast<RNA_DepsgraphIterator *>(ptr->data);
-  DEGObjectIterData *deg_iter = static_cast<DEGObjectIterData *>(di->iter.data);
-  return deg_iter->dupli_object_current;
-}
 
 static PointerRNA rna_DepsgraphObjectInstance_object_get(PointerRNA *ptr)
 {

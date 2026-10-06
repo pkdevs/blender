@@ -1017,7 +1017,7 @@ Node *Octree::patchSplit(Node *newnode,
 
 #ifdef IN_DEBUG_MODE
   dc_printf("Return from PATCHSPLIT with \n");
-  dc_printf("Rings gourp 1:\n");
+  dc_printf("Rings group 1:\n");
   printPaths(nrings1);
   dc_printf("Rings group 2:\n");
   printPaths(nrings2);
@@ -1123,7 +1123,7 @@ Node *Octree::patchSplitSingle(Node *newnode,
 
 #ifdef IN_DEBUG_MODE
   dc_printf("Return from PATCHSPLITSINGLE with \n");
-  dc_printf("Rings gourp 1:\n");
+  dc_printf("Rings group 1:\n");
   printPaths(nrings1);
   dc_printf("Rings group 2:\n");
   printPaths(nrings2);
@@ -2183,7 +2183,8 @@ void Octree::countIntersection(Node *node, int height, int &nedge, int &ncell, i
 /* from http://eigen.tuxfamily.org/bz/show_bug.cgi?id=257 */
 static void pseudoInverse(const Eigen::Matrix3f &a, Eigen::Matrix3f &result, float tolerance)
 {
-  Eigen::JacobiSVD<Eigen::Matrix3f> svd = a.jacobiSvd(Eigen::ComputeFullU | Eigen::ComputeFullV);
+  const int Options = Eigen::ComputeFullU | Eigen::ComputeFullV;
+  Eigen::JacobiSVD<Eigen::Matrix3f, Options> svd = a.jacobiSvd<Options>();
 
   result = svd.matrixV() *
            Eigen::Vector3f((svd.singularValues().array().abs() > tolerance)

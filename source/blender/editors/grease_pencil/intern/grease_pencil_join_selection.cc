@@ -150,6 +150,9 @@ void reverse_points_of(bke::CurvesGeometry &dst_curves, const IndexRange points_
     if (iter.data_type == bke::AttrType::String) {
       return;
     }
+    if (iter.storage_type == bke::AttrStorageType::Single) {
+      return;
+    }
 
     bke::GSpanAttributeWriter attribute = attributes.lookup_for_write_span(iter.name);
     bke::attribute_math::to_static_type(attribute.span.type(), [&]<typename T>() {
@@ -550,6 +553,8 @@ wmOperatorStatus grease_pencil_join_selection_exec(bContext *C, wmOperator *op)
     remove_selected_points(ranges_selected);
   }
 
+  const int tmp_curves_num = tmp_curves.curves_num();
+  const int tmp_points_num = tmp_curves.points_num();
   append_strokes_from(std::move(tmp_curves), dst_curves);
 
   if (active_layer_behavior != ActiveLayerBehavior::JoinStrokes) {
@@ -557,10 +562,10 @@ wmOperatorStatus grease_pencil_join_selection_exec(bContext *C, wmOperator *op)
         dst_curves, selection_domain, bke::AttrType::Bool);
 
     if (selection_domain == bke::AttrDomain::Curve) {
-      ed::curves::fill_selection_true(selection.span.take_back(tmp_curves.curves_num()));
+      ed::curves::fill_selection_true(selection.span.take_back(tmp_curves_num));
     }
     else {
-      ed::curves::fill_selection_true(selection.span.take_back(tmp_curves.points_num()));
+      ed::curves::fill_selection_true(selection.span.take_back(tmp_points_num));
     }
     selection.finish();
   }

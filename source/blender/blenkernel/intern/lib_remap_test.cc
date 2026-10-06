@@ -3,20 +3,14 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "testing/testing.h"
 
-#include "CLG_log.h"
-
-#include "GHOST_ISystemPaths.hh"
-
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 
-#include "RNA_define.hh"
-
-#include "BKE_appdir.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_remap.hh"
@@ -28,14 +22,13 @@
 
 #include "NOD_defaults.hh"
 
-#include "IMB_imbuf.hh"
-
 namespace blender {
 
 using namespace blender::bke::id;
 
 namespace bke::tests {
 
+namespace {
 class TestData {
  public:
   Main *bmain = nullptr;
@@ -69,31 +62,7 @@ class TestData {
   }
 };
 
-class LibRemapTest : public ::testing::Test {
-
- protected:
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_idtype_init();
-    RNA_init();
-    bke::node_system_init();
-    BKE_appdir_init();
-    IMB_init();
-    BKE_materials_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    BKE_materials_exit();
-    bke::node_system_exit();
-    RNA_exit();
-    IMB_exit();
-    BKE_appdir_exit();
-    GHOST_ISystemPaths::dispose();
-    CLG_exit();
-  }
-};
+class LibRemapTest : public BlenderGTestBase {};
 
 class MaterialTestData : public TestData {
  public:
@@ -134,6 +103,7 @@ class MeshObjectTestData : public MeshTestData {
     this->object->data = id_cast<ID *>(this->mesh);
   }
 };
+}  // namespace
 
 /* -------------------------------------------------------------------- */
 /** \name Embedded IDs

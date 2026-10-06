@@ -14,8 +14,8 @@
 
 #include <Python.h>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "bmesh.hh"
 
@@ -31,14 +31,14 @@ PyDoc_STRVAR(
     bpy_bmeditselseq_active_doc,
     "The last selected element or None (read-only).\n"
     "\n"
-    ":type: :class:`bmesh.types.BMVert`, "
-    ":class:`bmesh.types.BMEdge` or :class:`bmesh.types.BMFace`\n");
+    ":type: :class:`bmesh.types.BMVert` | "
+    ":class:`bmesh.types.BMEdge` | :class:`bmesh.types.BMFace` | None\n");
 static PyObject *bpy_bmeditselseq_active_get(BPy_BMEditSelSeq *self, void * /*closure*/)
 {
   BMEditSelection *ese;
   BPY_BM_CHECK_OBJ(self);
 
-  if ((ese = static_cast<BMEditSelection *>(self->bm->selected.last))) {
+  if ((ese = self->bm->selected.last())) {
     return BPy_BMElem_CreatePyObject(self->bm, &ese->ele->head);
   }
 
@@ -85,7 +85,10 @@ PyDoc_STRVAR(
     bpy_bmeditselseq_add_doc,
     ".. method:: add(element)\n"
     "\n"
-    "   Add an element to the selection history (no action taken if its already added).\n");
+    "   Add an element to the selection history (no action taken if its already added).\n"
+    "\n"
+    "   :param element: The element to add.\n"
+    "   :type element: :class:`BMVert` | :class:`BMEdge` | :class:`BMFace`\n");
 static PyObject *bpy_bmeditselseq_add(BPy_BMEditSelSeq *self, BPy_BMElem *value)
 {
   const char *error_prefix = "select_history.add(...)";
@@ -111,7 +114,10 @@ PyDoc_STRVAR(
     bpy_bmeditselseq_remove_doc,
     ".. method:: remove(element)\n"
     "\n"
-    "   Remove an element from the selection history.\n");
+    "   Remove an element from the selection history.\n"
+    "\n"
+    "   :param element: The element to remove.\n"
+    "   :type element: :class:`BMVert` | :class:`BMEdge` | :class:`BMFace`\n");
 static PyObject *bpy_bmeditselseq_remove(BPy_BMEditSelSeq *self, BPy_BMElem *value)
 {
   const char *error_prefix = "select_history.remove(...)";
@@ -142,7 +148,10 @@ PyDoc_STRVAR(
     "\n"
     "   Discard an element from the selection history.\n"
     "\n"
-    "   Like remove but doesn't raise an error when the elements not in the selection list.\n");
+    "   Like remove but doesn't raise an error when the element is not in the selection list.\n"
+    "\n"
+    "   :param element: The element to discard.\n"
+    "   :type element: :class:`BMVert` | :class:`BMEdge` | :class:`BMFace`\n");
 static PyObject *bpy_bmeditselseq_discard(BPy_BMEditSelSeq *self, BPy_BMElem *value)
 {
   const char *error_prefix = "select_history.discard()";
@@ -210,7 +219,7 @@ static Py_ssize_t bpy_bmeditselseq_length(BPy_BMEditSelSeq *self)
 {
   BPY_BM_CHECK_INT(self);
 
-  return BLI_listbase_count(&self->bm->selected);
+  return self->bm->selected.count();
 }
 
 static PyObject *bpy_bmeditselseq_subscript_int(BPy_BMEditSelSeq *self, Py_ssize_t keynum)
@@ -248,7 +257,7 @@ static PyObject *bpy_bmeditselseq_subscript_slice(BPy_BMEditSelSeq *self,
   list = PyList_New(0);
 
   /* First loop up-until the start. */
-  for (ese = static_cast<BMEditSelection *>(self->bm->selected.first); ese; ese = ese->next) {
+  for (ese = self->bm->selected.first(); ese; ese = ese->next) {
     if (count == start) {
       break;
     }
@@ -281,7 +290,7 @@ static PyObject *bpy_bmeditselseq_subscript(BPy_BMEditSelSeq *self, PyObject *ke
     PySliceObject *key_slice = reinterpret_cast<PySliceObject *>(key);
     Py_ssize_t step = 1;
 
-    if (key_slice->step != Py_None && !_PyEval_SliceIndex(key, &step)) {
+    if (key_slice->step != Py_None && !_PyEval_SliceIndex(key_slice->step, &step)) {
       return nullptr;
     }
     if (step != 1) {
@@ -328,11 +337,13 @@ static PyObject *bpy_bmeditselseq_subscript(BPy_BMEditSelSeq *self, PyObject *ke
 
 static int bpy_bmeditselseq_contains(BPy_BMEditSelSeq *self, PyObject *value)
 {
-  BPy_BMElem *value_bm_ele;
-
   BPY_BM_CHECK_INT(self);
 
-  value_bm_ele = reinterpret_cast<BPy_BMElem *>(value);
+  if (!BPy_BMElem_Check(value)) {
+    return 0;
+  }
+
+  BPy_BMElem *value_bm_ele = reinterpret_cast<BPy_BMElem *>(value);
   if (value_bm_ele->bm == self->bm) {
     return BM_select_history_check(self->bm, value_bm_ele->ele);
   }
@@ -369,7 +380,7 @@ static PyObject *bpy_bmeditselseq_iter(BPy_BMEditSelSeq *self)
 
   BPY_BM_CHECK_OBJ(self);
   py_iter = reinterpret_cast<BPy_BMEditSelIter *>(BPy_BMEditSelIter_CreatePyObject(self->bm));
-  py_iter->ese = static_cast<BMEditSelection *>(self->bm->selected.first);
+  py_iter->ese = self->bm->selected.first();
   return reinterpret_cast<PyObject *>(py_iter);
 }
 
@@ -431,6 +442,7 @@ void BPy_BM_init_types_select()
   BPy_BMEditSelSeq_Type.tp_iter = reinterpret_cast<getiterfunc>(bpy_bmeditselseq_iter);
 
   /* Only 1 iterator so far. */
+  BPy_BMEditSelIter_Type.tp_iter = PyObject_SelfIter;
   BPy_BMEditSelIter_Type.tp_iternext = reinterpret_cast<iternextfunc>(bpy_bmeditseliter_next);
 
   BPy_BMEditSelSeq_Type.tp_dealloc = nullptr;   //(destructor)bpy_bmeditselseq_dealloc;

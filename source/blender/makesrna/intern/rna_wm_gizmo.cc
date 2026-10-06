@@ -25,9 +25,9 @@
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 #  include "BLI_string_utils.hh"
 
 #  include "WM_api.hh"
@@ -240,7 +240,7 @@ static wmGizmo *rna_GizmoProperties_find_operator(PointerRNA *ptr)
 #  endif
 
   /* We could try workaround this lookup, but not trivial. */
-  for (bScreen *screen = static_cast<bScreen *>(G_MAIN->screens.first); screen;
+  for (bScreen *screen = G_MAIN->screens.first(); screen;
        screen = static_cast<bScreen *>(screen->id.next))
   {
     IDProperty *properties = static_cast<IDProperty *>(ptr->data);
@@ -387,6 +387,7 @@ RNA_GIZMO_GENERIC_FLAG_RW_DEF(flag_use_operator_tool_properties,
                               WM_GIZMO_OPERATOR_TOOL_INIT);
 RNA_GIZMO_GENERIC_FLAG_RW_DEF(flag_use_event_handle_all, flag, WM_GIZMO_EVENT_HANDLE_ALL);
 RNA_GIZMO_GENERIC_FLAG_NEG_RW_DEF(flag_use_tooltip, flag, WM_GIZMO_NO_TOOLTIP);
+RNA_GIZMO_GENERIC_FLAG_RW_DEF(flag_use_undo, flag, WM_GIZMO_NEEDS_UNDO);
 
 /* wmGizmo.state */
 RNA_GIZMO_FLAG_RO_DEF(state_is_highlight, state, WM_GIZMO_STATE_HIGHLIGHT);
@@ -613,9 +614,8 @@ static void rna_GizmoGroup_gizmo_remove(wmGizmoGroup *gzgroup, bContext *C, wmGi
 
 static void rna_GizmoGroup_gizmo_clear(wmGizmoGroup *gzgroup, bContext *C)
 {
-  while (gzgroup->gizmos.first) {
-    WM_gizmo_unlink(
-        &gzgroup->gizmos, gzgroup->parent_gzmap, static_cast<wmGizmo *>(gzgroup->gizmos.first), C);
+  while (gzgroup->gizmos.first()) {
+    WM_gizmo_unlink(&gzgroup->gizmos, gzgroup->parent_gzmap, gzgroup->gizmos.first(), C);
   }
 }
 
@@ -992,6 +992,7 @@ static void rna_def_gizmos(BlenderRNA *brna, PropertyRNA *cprop)
   parm = RNA_def_string(func, "type", "Type", 0, "", "Gizmo identifier"); /* optional */
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "gizmo", "Gizmo", "", "New gizmo");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_GizmoGroup_gizmo_remove");
@@ -1311,6 +1312,14 @@ static void rna_def_gizmo(BlenderRNA *brna, PropertyRNA *cprop)
       prop, "rna_Gizmo_flag_use_tooltip_get", "rna_Gizmo_flag_use_tooltip_set");
   RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Use Tooltip", "Use tooltips when hovering over this gizmo");
+  /* No update needed. */
+
+  /* WM_GIZMO_NEEDS_UNDO */
+  prop = RNA_def_property(srna, "use_undo", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(
+      prop, "rna_Gizmo_flag_use_undo_get", "rna_Gizmo_flag_use_undo_set");
+  RNA_def_property_boolean_default(prop, false);
+  RNA_def_property_ui_text(prop, "Use Undo", "Push an undo step after each use of the gizmo");
   /* No update needed. */
 
   /* wmGizmo.state (readonly) */

@@ -21,7 +21,11 @@ namespace blender {
 static PyObject *AUD_getSoundFromPointer(PyObject * /*self*/, PyObject *args)
 {
   PyObject *res = nullptr;
-  if (PyArg_Parse(args, "O:_sound_from_pointer", &res)) {
+  if (PyArg_Parse(args,
+                  "O" /* `pointer` */
+                  ":_sound_from_pointer",
+                  &res))
+  {
     if (res) {
       AUD_Sound sound = BKE_sound_get_factory(PyLong_AsVoidPtr(res));
       if (sound) {
@@ -42,7 +46,7 @@ static PyMethodDef meth_sound_from_pointer[] = {
      METH_O,
      "_sound_from_pointer(pointer)\n\n"
      "Returns the corresponding :class:`Factory` object.\n\n"
-     ":arg pointer: The pointer to the bSound object as long.\n"
+     ":param pointer: The pointer to the bSound object as long.\n"
      ":type pointer: long\n"
      ":return: The corresponding :class:`Factory` object.\n"
      ":rtype: :class:`Factory`"}};

@@ -14,14 +14,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -37,11 +37,13 @@
 #include "DNA_object_types.h"
 
 #include "BKE_anim_data.hh"
+#include "BKE_animsys.hh"
 #include "BKE_attribute.hh"
 #include "BKE_curve.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_global.hh"
 #include "BKE_idtype.hh"
 #include "BKE_key.hh"
 #include "BKE_lattice.hh"
@@ -70,9 +72,7 @@ static void shapekey_copy_data(Main * /*bmain*/,
   BLI_duplicatelist(&key_dst->block, &key_src->block);
 
   KeyBlock *kb_dst, *kb_src;
-  for (kb_src = static_cast<KeyBlock *>(key_src->block.first),
-      kb_dst = static_cast<KeyBlock *>(key_dst->block.first);
-       kb_dst;
+  for (kb_src = key_src->block.first(), kb_dst = key_dst->block.first(); kb_dst;
        kb_src = kb_src->next, kb_dst = kb_dst->next)
   {
     if (kb_dst->data) {
@@ -116,7 +116,7 @@ static ID **shapekey_owner_pointer_get(ID *id, const bool debug_relationship_ass
 static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Key *key = id_cast<Key *>(id);
-  const bool is_undo = BLO_write_is_undo(writer);
+  const bool is_undo = writer->is_undo();
 
   /* Write LibData. */
   writer->write_id_struct(id_address, key);
@@ -124,15 +124,18 @@ static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_add
 
   /* Direct data. */
   for (KeyBlock &kb : key->block) {
-    KeyBlock tmp_kb = kb;
     /* Do not store actual geometry data in case this is a library override ID. */
     if (ID_IS_OVERRIDE_LIBRARY(key) && !is_undo) {
-      tmp_kb.totelem = 0;
-      tmp_kb.data = nullptr;
+      writer->write_struct(&kb, [](BlendStructWriter<KeyBlock> &struct_writer) {
+        struct_writer.shallow_data.totelem = 0;
+        struct_writer.shallow_data.data = nullptr;
+      });
     }
-    writer->write_struct_at_address(&kb, &tmp_kb);
-    if (tmp_kb.data != nullptr) {
-      BLO_write_raw(writer, tmp_kb.totelem * key->elemsize, tmp_kb.data);
+    else {
+      writer->write_struct(&kb);
+      if (kb.data != nullptr) {
+        writer->write_raw(kb.totelem * key->elemsize, kb.data);
+      }
     }
   }
 }
@@ -150,7 +153,8 @@ static void shapekey_blend_read_data(BlendDataReader *reader, ID *id)
   BLO_read_struct(reader, KeyBlock, &key->refkey);
 
   for (KeyBlock &kb : key->block) {
-    BLO_read_data_address(reader, &kb.data);
+    BLO_read_array_and_validate_size(
+        reader, reinterpret_cast<std::byte **>(&kb.data), &kb.totelem, key->elemsize);
 
     /* NOTE: This is endianness-sensitive. */
     /* Keyblock data would need specific endian switching depending of the exact type of data it
@@ -161,43 +165,44 @@ static void shapekey_blend_read_data(BlendDataReader *reader, ID *id)
 static void shapekey_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *id)
 {
   /* ShapeKeys should always only be linked indirectly through their user ID (mesh, Curve etc.), or
-   * be fully local data. */
-  BLI_assert((id->tag & ID_TAG_EXTERN) == 0);
+   * be fully local data, or part of linked packed data. */
+  BLI_assert((id->tag & ID_TAG_EXTERN) == 0 || ID_IS_PACKED(id));
   UNUSED_VARS_NDEBUG(id);
 }
 
 IDTypeInfo IDType_ID_KE = {
-    /*id_code*/ Key::id_type,
-    /*id_filter*/ FILTER_ID_KE,
+    .id_code = Key::id_type,
+    .id_filter = FILTER_ID_KE,
     /* Warning! key->from, could be more types in future? */
-    /*dependencies_id_types*/ FILTER_ID_ME | FILTER_ID_CU_LEGACY | FILTER_ID_LT,
-    /*main_listbase_index*/ INDEX_ID_KE,
-    /*struct_size*/ sizeof(Key),
-    /*name*/ "Key",
-    /*name_plural*/ N_("shape_keys"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_SHAPEKEY,
-    /*flags*/ IDTYPE_FLAGS_NO_LIBLINKING,
-    /*asset_type_info*/ nullptr,
+    .dependencies_id_types = FILTER_ID_ME | FILTER_ID_CU_LEGACY | FILTER_ID_LT,
+    .main_listbase_index = INDEX_ID_KE,
+    .struct_size = sizeof(Key),
+    .name = "Key",
+    .name_plural = N_("shape_keys"),
+    .translation_context = BLT_I18NCONTEXT_ID_SHAPEKEY,
+    .flags = IDTYPE_FLAGS_NO_LIBLINKING,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ nullptr,
-    /*copy_data*/ shapekey_copy_data,
-    /*free_data*/ shapekey_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ shapekey_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
+    .init_data = nullptr,
+    .copy_data = shapekey_copy_data,
+    .free_data = shapekey_free_data,
+    .make_local = nullptr,
+    .foreach_id = shapekey_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     /* A bit weird, due to shape-keys not being strictly speaking embedded data... But they also
      * share a lot with those (non linkable, only ever used by one owner ID, etc.). */
-    /*owner_pointer_get*/ shapekey_owner_pointer_get,
+    .owner_pointer_get = shapekey_owner_pointer_get,
 
-    /*blend_write*/ shapekey_blend_write,
-    /*blend_read_data*/ shapekey_blend_read_data,
-    /*blend_read_after_liblink*/ shapekey_blend_read_after_liblink,
+    .blend_write = shapekey_blend_write,
+    .blend_read_data = shapekey_blend_read_data,
+    .blend_read_after_liblink = shapekey_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 #define KEY_MODE_DUMMY 0 /* Use where mode isn't checked for. */
@@ -276,7 +281,7 @@ void BKE_key_sort(Key *key)
   KeyBlock *kb;
 
   /* Locate the key which is out of position. */
-  for (kb = static_cast<KeyBlock *>(key->block.first); kb; kb = kb->next) {
+  for (kb = key->block.first(); kb; kb = kb->next) {
     if ((kb->next) && (kb->pos > kb->next->pos)) {
       break;
     }
@@ -297,7 +302,7 @@ void BKE_key_sort(Key *key)
   }
 
   /* New rule; first key is refkey, this to match drawing channels... */
-  key->refkey = static_cast<KeyBlock *>(key->block.first);
+  key->refkey = key->block.first();
 }
 
 /**************** do the key ****************/
@@ -436,8 +441,8 @@ static bool get_keys_for_absolute_eval(float eval_time,
                                        KeyBlock *r_target_keys[4],
                                        float r_weights[4])
 {
-  KeyBlock *firstkey = static_cast<KeyBlock *>(keyblocks->first);
-  KeyBlock *lastkey = static_cast<KeyBlock *>(keyblocks->last);
+  KeyBlock *firstkey = keyblocks->first();
+  KeyBlock *lastkey = keyblocks->last();
   eval_time = clamp_f(eval_time, firstkey->pos, lastkey->pos);
 
   r_target_keys[0] = r_target_keys[1] = r_target_keys[2] = r_target_keys[3] = firstkey;
@@ -531,16 +536,16 @@ static char *key_block_get_data(Key *key, KeyBlock *actkb, KeyBlock *kb, char **
     if (GS(key->from->name) == ID_ME) {
 
       Mesh *mesh = id_cast<Mesh *>(key->from);
+      const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
 
-      if (mesh->runtime->edit_mesh && mesh->runtime->edit_mesh->bm->totvert == kb->totelem) {
+      if (mesh->runtime->edit_mesh && bm->totvert == kb->totelem) {
         int a = 0;
         float (*co)[3];
-        co = MEM_new_array_uninitialized<float[3]>(size_t(mesh->runtime->edit_mesh->bm->totvert),
-                                                   "key_block_get_data");
+        co = MEM_new_array_uninitialized<float[3]>(size_t(bm->totvert), "key_block_get_data");
 
         BMVert *eve;
         BMIter iter;
-        BM_ITER_MESH (eve, &iter, mesh->runtime->edit_mesh->bm, BM_VERTS_OF_MESH) {
+        BM_ITER_MESH (eve, &iter, const_cast<BMesh *>(bm), BM_VERTS_OF_MESH) {
           copy_v3_v3(co[a], eve->co);
           a++;
         }
@@ -558,8 +563,8 @@ static char *key_block_get_data(Key *key, KeyBlock *actkb, KeyBlock *kb, char **
 /**
  * Move the point in `r_targets` along the vector of ab by a factor of `weight`.
  *
- * \param start_index points to the x value in the flat float array. Indices of +1 and +2 from this
- * are accessed.
+ * \param start_index: points to the x value in the flat float array.
+ * Indices of +1 and +2 from this are accessed.
  */
 static void add_weighted_vector(
     const int start_index, const float weight, const float *a, const float *b, float *r_target)
@@ -620,8 +625,9 @@ static void copy_key_float3(
 /**
  * Copy the shapekey data of `source` into the output array of `r_target`.
  *
- * \param weights is a float array of size `vertex_count`. It determines how much of `source` is
- * blended into the result. The base for it is the reference key. If this is passed as a nullptr,
+ * \param weights: is a float array of size `vertex_count`.
+ * It determines how much of `source` is blended into the result.
+ * The base for it is the reference key. If this is passed as a nullptr,
  * `source` is copied at full weight.
  */
 static void copy_key_float3_weighted(const int vertex_count,
@@ -668,12 +674,13 @@ static void copy_key_float3_weighted(const int vertex_count,
 /**
  * Shapekey evaluation for data of 3 floats (Vector3).
  *
- * \param target_data is the float array into which the result of the evaluation is written.
- * \param per_keyblock_weights is a 2d array which gives a per KeyBlock per Vertex weight. Can be a
- * nullptr.
+ * \param per_keyblock_weights: is a 2d array which gives a per KeyBlock per Vertex weight. Can be
+ * \param target_data: is the float array into which the result of the evaluation is written.
+ * a nullptr.
  */
 static void key_evaluate_relative_float3(Key *key,
                                          KeyBlock *active_keyblock,
+                                         const std::optional<Span<bool>> keys_to_process,
                                          const int vertex_count,
                                          float **per_keyblock_weights,
                                          float *target_data)
@@ -686,6 +693,9 @@ static void key_evaluate_relative_float3(Key *key,
   for (std::pair<int, KeyBlock &> enumerator : key->block.enumerate()) {
     KeyBlock &kb = enumerator.second;
     if (&kb == key->refkey) {
+      continue;
+    }
+    if (keys_to_process && !(*keys_to_process)[enumerator.first]) {
       continue;
     }
     /* No difference in vertex count allowed. */
@@ -789,14 +799,15 @@ static float *get_weights_array(Object *ob, const char *vgroup, WeightsArrayCach
   int totvert = 0;
 
   /* Gather dvert and totvert. */
-  BMEditMesh *em = nullptr;
+  const BMesh *bm = nullptr;
   if (ob->type == OB_MESH) {
     Mesh *mesh = id_cast<Mesh *>(ob->data);
     dvert = mesh->deform_verts().data();
     totvert = mesh->verts_num;
 
-    if (mesh->runtime->edit_mesh && mesh->runtime->edit_mesh->bm->totvert == totvert) {
-      em = mesh->runtime->edit_mesh.get();
+    const BMesh *bm_test = BKE_editmesh_bmesh_get(mesh);
+    if (bm_test && bm_test->totvert == totvert) {
+      bm = bm_test;
     }
   }
   else if (ob->type == OB_LATTICE) {
@@ -829,12 +840,12 @@ static float *get_weights_array(Object *ob, const char *vgroup, WeightsArrayCach
 
     weights = MEM_new_array_uninitialized<float>(size_t(totvert), "weights");
 
-    if (em) {
+    if (bm) {
       int i;
-      const int cd_dvert_offset = CustomData_get_offset(&em->bm->vdata, CD_MDEFORMVERT);
+      const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
       BMIter iter;
       BMVert *eve;
-      BM_ITER_MESH_INDEX (eve, &iter, em->bm, BM_VERTS_OF_MESH, i) {
+      BM_ITER_MESH_INDEX (eve, &iter, const_cast<BMesh *>(bm), BM_VERTS_OF_MESH, i) {
         dvert = static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(eve, cd_dvert_offset));
         weights[i] = BKE_defvert_find_weight(dvert, defgrp_index);
       }
@@ -892,7 +903,11 @@ static void keyblock_free_per_block_weights(Key *key,
   MEM_delete(per_keyblock_weights);
 }
 
-static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
+static void do_mesh_key(Object *ob,
+                        Key *key,
+                        const std::optional<Span<bool>> keys_to_process,
+                        char *out,
+                        const int tot)
 {
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
@@ -901,7 +916,7 @@ static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
     float **per_keyblock_weights;
     per_keyblock_weights = keyblock_get_per_block_weights(ob, key, &cache);
     key_evaluate_relative_float3(
-        key, actkb, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
+        key, actkb, keys_to_process, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
     keyblock_free_per_block_weights(key, per_keyblock_weights, &cache);
   }
   else {
@@ -920,12 +935,17 @@ static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
   }
 }
 
-static void do_curve_key(Object *ob, Key *key, char *out, const int tot)
+static void do_curve_key(Object *ob,
+                         Key *key,
+                         const std::optional<Span<bool>> keys_to_process,
+                         char *out,
+                         const int tot)
 {
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
   if (key->type == KEY_RELATIVE) {
-    key_evaluate_relative_float3(key, actkb, tot, nullptr, reinterpret_cast<float *>(out));
+    key_evaluate_relative_float3(
+        key, actkb, keys_to_process, tot, nullptr, reinterpret_cast<float *>(out));
   }
   else {
     const float ctime_scaled = key->ctime / 100.0f;
@@ -943,7 +963,11 @@ static void do_curve_key(Object *ob, Key *key, char *out, const int tot)
   }
 }
 
-static void do_latt_key(Object *ob, Key *key, char *out, const int tot)
+static void do_latt_key(Object *ob,
+                        Key *key,
+                        const std::optional<Span<bool>> keys_to_process,
+                        char *out,
+                        const int tot)
 {
   Lattice *lt = id_cast<Lattice *>(ob->data);
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
@@ -952,7 +976,7 @@ static void do_latt_key(Object *ob, Key *key, char *out, const int tot)
     float **per_keyblock_weights;
     per_keyblock_weights = keyblock_get_per_block_weights(ob, key, nullptr);
     key_evaluate_relative_float3(
-        key, actkb, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
+        key, actkb, keys_to_process, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
     keyblock_free_per_block_weights(key, per_keyblock_weights, nullptr);
   }
   else {
@@ -982,13 +1006,17 @@ static void keyblock_data_convert_to_curve(const float *fp,
                                            ListBaseT<Nurb> *nurb,
                                            const int totpoint);
 
-float *BKE_key_evaluate_object_ex(
-    Object *ob, int *r_totelem, float *arr, size_t arr_size, ID *obdata)
+float *BKE_key_evaluate_object_ex(Object *ob,
+                                  int *r_totelem,
+                                  float *arr,
+                                  size_t arr_size,
+                                  const std::optional<Span<bool>> keys_to_process,
+                                  ID *obdata)
 {
   Key *key = BKE_key_from_object(ob);
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
-  if (key == nullptr || BLI_listbase_is_empty(&key->block)) {
+  if (key == nullptr || key->block.is_empty()) {
     return nullptr;
   }
 
@@ -1040,7 +1068,7 @@ float *BKE_key_evaluate_object_ex(
     }
 
     if (kb == nullptr) {
-      kb = static_cast<KeyBlock *>(key->block.first);
+      kb = key->block.first();
       ob->shapenr = 1;
     }
 
@@ -1058,16 +1086,16 @@ float *BKE_key_evaluate_object_ex(
   }
   else {
     if (ob->type == OB_MESH) {
-      do_mesh_key(ob, key, out, tot);
+      do_mesh_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_LATTICE) {
-      do_latt_key(ob, key, out, tot);
+      do_latt_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_CURVES_LEGACY) {
-      do_curve_key(ob, key, out, tot);
+      do_curve_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_SURF) {
-      do_curve_key(ob, key, out, tot);
+      do_curve_key(ob, key, keys_to_process, out, tot);
     }
   }
 
@@ -1108,7 +1136,7 @@ float *BKE_key_evaluate_object_ex(
 
 float *BKE_key_evaluate_object(Object *ob, int *r_totelem)
 {
-  return BKE_key_evaluate_object_ex(ob, r_totelem, nullptr, 0, nullptr);
+  return BKE_key_evaluate_object_ex(ob, r_totelem, nullptr, 0, std::nullopt, nullptr);
 }
 
 int BKE_keyblock_element_count_from_shape(const Key *key, const int shape_index)
@@ -1295,7 +1323,7 @@ KeyBlock *BKE_keyblock_add(Key *key, const char *name)
 {
   float curpos = -0.1;
 
-  KeyBlock *kb = static_cast<KeyBlock *>(key->block.last);
+  KeyBlock *kb = key->block.last();
   if (kb) {
     curpos = kb->pos;
   }
@@ -1304,7 +1332,7 @@ KeyBlock *BKE_keyblock_add(Key *key, const char *name)
   BLI_addtail(&key->block, kb);
   kb->type = KEY_LINEAR;
 
-  const int tot = BLI_listbase_count(&key->block);
+  const int tot = key->block.count();
   if (name) {
     STRNCPY_UTF8(kb->name, name);
   }
@@ -1502,7 +1530,7 @@ int BKE_keyblock_curve_element_count(const ListBaseT<Nurb> *nurb)
   const Nurb *nu;
   int tot = 0;
 
-  nu = static_cast<const Nurb *>(nurb->first);
+  nu = nurb->first();
   while (nu) {
     if (nu->bezt) {
       tot += KEYELEM_ELEM_LEN_BEZTRIPLE * nu->pntsu;
@@ -1601,7 +1629,7 @@ void BKE_keyblock_convert_from_curve(const Curve *cu, KeyBlock *kb, const ListBa
 
 static void keyblock_data_convert_to_curve(const float *fp, ListBaseT<Nurb> *nurb, int totpoint)
 {
-  for (Nurb *nu = static_cast<Nurb *>(nurb->first); nu && totpoint > 0; nu = nu->next) {
+  for (Nurb *nu = nurb->first(); nu && totpoint > 0; nu = nu->next) {
     if (nu->bezt != nullptr) {
       BezTriple *bezt = nu->bezt;
       for (int i = nu->pntsu; i && (totpoint -= KEYELEM_ELEM_LEN_BEZTRIPLE) >= 0;
@@ -1772,7 +1800,7 @@ bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
   /* We swap 'org' element with its previous/next neighbor (depending on direction of the move)
    * repeatedly, until we reach final position.
    * This allows us to only loop on the list once! */
-  for (kb = static_cast<KeyBlock *>(rev ? key->block.last : key->block.first),
+  for (kb = static_cast<KeyBlock *>(rev ? key->block.last() : key->block.first()),
       i = (rev ? totkey - 1 : 0);
        kb;
        kb = (rev ? kb->prev : kb->next), rev ? i-- : i++)
@@ -1823,7 +1851,7 @@ bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
   }
 
   /* First key is always refkey, matches interface and BKE_key_sort. */
-  key->refkey = static_cast<KeyBlock *>(key->block.first);
+  key->refkey = key->block.first();
 
   return true;
 }
@@ -1834,7 +1862,7 @@ bool BKE_keyblock_is_basis(const Key *key, const int index)
   int i;
 
   if (key->type == KEY_RELATIVE) {
-    for (i = 0, kb = static_cast<const KeyBlock *>(key->block.first); kb; i++, kb = kb->next) {
+    for (i = 0, kb = key->block.first(); kb; i++, kb = kb->next) {
       if ((i != index) && (kb->relative == index)) {
         return true;
       }
@@ -1850,7 +1878,7 @@ std::optional<Array<bool>> BKE_keyblock_get_dependent_keys(const Key *key, const
     return std::nullopt;
   }
 
-  const int count = BLI_listbase_count(&key->block);
+  const int count = key->block.count();
 
   if (index < 0 || index >= count) {
     return std::nullopt;
@@ -1885,4 +1913,29 @@ std::optional<Array<bool>> BKE_keyblock_get_dependent_keys(const Key *key, const
   return marked;
 }
 
+void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newname)
+{
+  char oldname[sizeof(kb->name)];
+
+  /* Make a copy of the old name first. */
+  STRNCPY(oldname, kb->name);
+  /* Copy the new name into the name slot. */
+  STRNCPY_UTF8(kb->name, newname);
+
+  /* Make sure the name is truly unique. */
+  BLI_uniquename(&key->block,
+                 kb,
+                 CTX_DATA_(BLT_I18NCONTEXT_ID_SHAPEKEY, "Key"),
+                 '.',
+                 offsetof(KeyBlock, name),
+                 sizeof(kb->name));
+
+  /* Fix all the animation data which may link to this. */
+  BKE_animdata_fix_paths(key->id,
+                         "key_blocks",
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(kb->name),
+                         /*verify_paths=*/true,
+                         bmain);
+}
 }  // namespace blender

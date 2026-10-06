@@ -86,7 +86,7 @@ static PyObject *pygpu_max_textures_vert_get(PyObject * /*self*/)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
 
-  return PyLong_FromLong(GPU_max_textures_vert());
+  return PyLong_FromLong(GPU_max_textures());
 }
 
 PyDoc_STRVAR(
@@ -103,7 +103,7 @@ static PyObject *pygpu_max_textures_geom_get(PyObject * /*self*/)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
 
-  return PyLong_FromLong(GPU_max_textures_geom());
+  return PyLong_FromLong(GPU_max_textures());
 }
 
 PyDoc_STRVAR(
@@ -120,7 +120,7 @@ static PyObject *pygpu_max_textures_frag_get(PyObject * /*self*/)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
 
-  return PyLong_FromLong(GPU_max_textures_frag());
+  return PyLong_FromLong(GPU_max_textures());
 }
 
 PyDoc_STRVAR(
@@ -247,7 +247,7 @@ PyDoc_STRVAR(
     "   Get supported extensions in the current context.\n"
     "\n"
     "   :return: Extensions.\n"
-    "   :rtype: tuple[str]\n");
+    "   :rtype: tuple[str, ...]\n");
 static PyObject *pygpu_extensions_get(PyObject * /*self*/)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
@@ -318,7 +318,7 @@ PyDoc_STRVAR(
     pygpu_hdr_support_get_doc,
     ".. function:: hdr_support_get()\n"
     "\n"
-    "  Return whether GPU backend supports High Dynamic range for viewport.\n"
+    "   Return whether GPU backend supports High Dynamic range for viewport.\n"
     "\n"
     "   :return: HDR support available.\n"
     "   :rtype: bool\n");
@@ -336,7 +336,7 @@ PyDoc_STRVAR(
     "\n"
     "   Get maximum number of work groups that may be dispatched to a compute shader.\n"
     "\n"
-    "   :arg index: Index of the dimension.\n"
+    "   :param index: Index of the dimension.\n"
     "   :type index: int\n"
     "   :return: Maximum number of work groups for the queried dimension.\n"
     "   :rtype: int\n");
@@ -345,7 +345,11 @@ static PyObject *pygpu_max_work_group_count_get(PyObject * /*self*/, PyObject *a
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
 
   int index;
-  if (!PyArg_ParseTuple(args, "i", &index)) {
+  if (!PyArg_ParseTuple(args,
+                        "i" /* `index` */
+                        ":max_work_group_count_get",
+                        &index))
+  {
     return nullptr;
   }
 
@@ -361,7 +365,7 @@ PyDoc_STRVAR(
     "\n"
     "   Get maximum size of a work group that may be dispatched to a compute shader.\n"
     "\n"
-    "   :arg index: Index of the dimension.\n"
+    "   :param index: Index of the dimension.\n"
     "   :type index: int\n"
     "   :return: Maximum size of a work group for the queried dimension.\n"
     "   :rtype: int\n");
@@ -370,13 +374,33 @@ static PyObject *pygpu_max_work_group_size_get(PyObject * /*self*/, PyObject *ar
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
 
   int index;
-  if (!PyArg_ParseTuple(args, "i", &index)) {
+  if (!PyArg_ParseTuple(args,
+                        "i" /* `index` */
+                        ":max_work_group_size_get",
+                        &index))
+  {
     return nullptr;
   }
 
   const int max_work_group_size = GPU_max_work_group_size(index);
 
   return PyLong_FromLong(max_work_group_size);
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    pygpu_ray_query_support_get_doc,
+    ".. function:: ray_query_support_get()\n"
+    "\n"
+    "   Return whether GPU and the current backend supports Ray Queries (Hardware Raytracing).\n"
+    "\n"
+    "   :return: ray_query support available.\n"
+    "   :rtype: bool\n");
+static PyObject *pygpu_ray_query_support_get(PyObject * /*self*/)
+{
+  BPYGPU_IS_INIT_OR_ERROR_OBJ;
+
+  return PyBool_FromLong(GPU_ray_query_support());
 }
 
 /** \} */
@@ -477,6 +501,10 @@ static PyMethodDef pygpu_capabilities__tp_methods[] = {
         METH_VARARGS,
         pygpu_max_work_group_size_get_doc,
     },
+    {"ray_query_support_get",
+     reinterpret_cast<PyCFunction>(pygpu_ray_query_support_get),
+     METH_NOARGS,
+     pygpu_ray_query_support_get_doc},
     {nullptr, nullptr, 0, nullptr},
 };
 

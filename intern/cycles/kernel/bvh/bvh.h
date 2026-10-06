@@ -10,6 +10,7 @@
 #include "kernel/bvh/util.h"
 
 #include "kernel/geom/curve_intersect.h"
+#include "kernel/geom/gsplat_intersect.h"
 #include "kernel/geom/motion_triangle_intersect.h"
 #include "kernel/geom/object.h"
 #include "kernel/geom/point_intersect.h"
@@ -117,24 +118,42 @@ ccl_device_intersect void scene_intersect_shadow_all(KernelGlobals kg,
                                                      const uint visibility,
                                                      const uint max_transparent_hits,
                                                      ccl_private uint *num_recorded_hits,
-                                                     ccl_private float *throughput)
+                                                     ccl_private float3 *throughput)
 {
 #  if !defined(__KERNEL_OPTIX__)
   /* OptiX does not perform well with conditional trace calls, so it handles the validity of the
    * ray in the scene_intersect_shadow_all_optix(). */
   if (!intersection_ray_valid(ray)) {
     *num_recorded_hits = 0;
-    *throughput = 1.0f;
+    *throughput = one_float3();
     return;
   }
 #  endif
+
+  BVHShadowAllPayload payload;
+
+  /* A bit of a tricky initialization:
+   * - Some backends require extra ray information for custom motion blur intersection.
+   * - Some backends utilize registers to pass commonly accessed data to the trace calls. */
+#  if !defined(__KERNEL_OPTIX__)
+  BVH_PAYLOAD_BASE(payload).ray_self = ray->self;
+  BVH_PAYLOAD_BASE(payload).ray_visibility = visibility;
+#    if defined(__KERNEL_HIPRT__)
+  BVH_PAYLOAD_BASE(payload).ray_time = ray->time;
+#    endif
+#  endif
+
+  payload.state = state;
+  payload.max_transparent_hits = max_transparent_hits;
+  payload.max_record_isect_t = ray->tmax;
 
 #  ifdef __EMBREE__
   IF_USING_EMBREE
   {
     if (kernel_data.device_bvh) {
-      kernel_embree_intersect_shadow_all(
-          kg, state, ray, visibility, max_transparent_hits, num_recorded_hits, throughput);
+      kernel_embree_intersect_shadow_all(kg, ray, payload);
+      *num_recorded_hits = payload.num_recorded_hits;
+      *throughput = payload.throughput;
       return;
     }
   }
@@ -142,23 +161,6 @@ ccl_device_intersect void scene_intersect_shadow_all(KernelGlobals kg,
 
   IF_NOT_USING_EMBREE
   {
-    BVHShadowAllPayload payload;
-
-    /* A bit of a tricky initialization:
-     * - Some backends require extra ray information for custom motion blur intersection.
-     * - Some backends utilize registers to pass commonly accessed data to the trace calls. */
-#  if !defined(__KERNEL_OPTIX__)
-    BVH_PAYLOAD_BASE(payload).ray_self = ray->self;
-    BVH_PAYLOAD_BASE(payload).ray_visibility = visibility;
-#    if defined(__KERNEL_HIPRT__)
-    BVH_PAYLOAD_BASE(payload).ray_time = ray->time;
-#    endif
-#  endif
-
-    payload.state = state;
-    payload.max_transparent_hits = max_transparent_hits;
-    payload.max_record_isect_t = ray->tmax;
-
 #  if defined(__BVH2__)
     scene_intersect_shadow_all_bvh2(kg, ray, payload);
 #  elif defined(__KERNEL_HIPRT__)

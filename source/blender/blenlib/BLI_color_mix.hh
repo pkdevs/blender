@@ -9,9 +9,9 @@
  */
 
 #include "BLI_color_types.hh"
-#include "BLI_math_base.h"
-#include "BLI_math_color.h"
-#include "BLI_sys_types.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_sys_types.hh"
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
@@ -1021,6 +1021,8 @@ BLI_INLINE Color BLI_mix_colors(const IMB_BlendMode tool,
       return mix_colordodge<Color, Traits>(a, b, alpha);
     case IMB_BLEND_COLORBURN:
       return mix_colorburn<Color, Traits>(a, b, alpha);
+    case IMB_BLEND_LINEARBURN:
+      return mix_linearburn<Color, Traits>(a, b, alpha);
     case IMB_BLEND_DIFFERENCE:
       return mix_difference<Color, Traits>(a, b, alpha);
     case IMB_BLEND_SCREEN:

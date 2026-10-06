@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 #pragma once
 
 #include "BLI_index_mask.hh"
@@ -180,6 +184,10 @@ void do_rotate_brush(const Depsgraph &depsgraph,
                      const Sculpt &sd,
                      Object &object,
                      const IndexMask &node_mask);
+void do_scene_project_brush(const Depsgraph &depsgraph,
+                            const Sculpt &sd,
+                            Object &object,
+                            const IndexMask &node_mask);
 /** Smooth positions with neighboring vertices. */
 void do_smooth_brush(const Depsgraph &depsgraph,
                      const Sculpt &sd,

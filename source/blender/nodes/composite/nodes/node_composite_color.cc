@@ -16,7 +16,7 @@ namespace blender::nodes::node_composite_color_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Color")
+  b.add_output<decl::Color>("Color"_ustr)
       .default_value({0.5f, 0.5f, 0.5f, 1.0f})
       .custom_draw([](CustomSocketDrawParams &params) {
         params.layout.alignment_set(ui::LayoutAlign::Expand);
@@ -42,7 +42,7 @@ class RGBOperation : public NodeOperation {
     Result &result = get_result("Color");
     result.allocate_single_value();
 
-    const bNodeSocket *socket = static_cast<const bNodeSocket *>(node().outputs.first);
+    const bNodeSocket *socket = node().outputs.first();
     Color color = Color(static_cast<const bNodeSocketValueRGBA *>(socket->default_value)->value);
 
     result.set_single_value(color);
@@ -58,13 +58,12 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeRGB", CMP_NODE_RGB);
+  cmp_node_type_base(&ntype, "CompositorNodeRGB"_ustr, CMP_NODE_RGB);
   ntype.ui_name = "Color";
   ntype.ui_description = "A color picker";
   ntype.enum_name_legacy = "RGB";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = node_declare;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Default);
   ntype.get_compositor_operation = get_compositor_operation;
 
   bke::node_register_type(ntype);

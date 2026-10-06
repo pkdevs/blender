@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #define DNA_DEPRECATED_ALLOW
 
 #include <optional>
@@ -46,6 +50,7 @@ std::optional<AttrType> custom_data_type_to_attr_type(const eCustomDataType data
     case CD_TESSLOOPNORMAL:
     case CD_FREESTYLE_EDGE:
     case CD_FREESTYLE_FACE:
+    case CD_MVERT_SKIN:
       return std::nullopt;
 
     /* These types are only used for #BMesh. */
@@ -62,7 +67,6 @@ std::optional<AttrType> custom_data_type_to_attr_type(const eCustomDataType data
 
     /* Custom data on vertices. */
     case CD_MDEFORMVERT:
-    case CD_MVERT_SKIN:
     case CD_ORCO:
     case CD_CLOTH_ORCO:
       return std::nullopt;
@@ -101,6 +105,8 @@ std::optional<AttrType> custom_data_type_to_attr_type(const eCustomDataType data
       return AttrType::ColorFloat;
     case CD_PROP_FLOAT3:
       return AttrType::Float3;
+    case CD_PROP_FLOAT4:
+      return AttrType::Float4;
     case CD_PROP_FLOAT2:
       return AttrType::Float2;
     case CD_PROP_BOOL:
@@ -158,15 +164,13 @@ static void attribute_legacy_convert_customdata_to_storage(
     array_data.data = attribute.array_data;
     array_data.size = attribute.array_size;
     array_data.sharing_info = ImplicitSharingPtr<>(attribute.sharing_info);
-    if (Attribute *attr = storage.lookup(attribute.name)) {
-      attr->assign_data(std::move(array_data));
+    if (storage.lookup(attribute.name)) {
+      storage.remove(attribute.name);
     }
-    else {
-      storage.add(storage.unique_name_calc(attribute.name),
-                  attribute.domain,
-                  attribute.type,
-                  std::move(array_data));
-    }
+    storage.add(storage.unique_name_calc(attribute.name),
+                attribute.domain,
+                attribute.type,
+                std::move(array_data));
   }
 
   for (const auto &[domain, custom_data] : domains.items()) {
@@ -205,6 +209,8 @@ std::optional<eCustomDataType> attr_type_to_custom_data_type(const AttrType attr
       return CD_PROP_FLOAT2;
     case AttrType::Float3:
       return CD_PROP_FLOAT3;
+    case AttrType::Float4:
+      return CD_PROP_FLOAT4;
     case AttrType::Float4x4:
       return CD_PROP_FLOAT4X4;
     case AttrType::ColorByte:
@@ -346,9 +352,9 @@ void LegacyMeshInterpolator::copy(const int src_index, const int dst_index, cons
   }
   CustomData_copy_data(&cd_src_, &cd_dst_, src_index, dst_index, count);
   for (const int i : attrs_src_.index_range()) {
-    const GVArray &src = attrs_src_[i];
+    const GVArraySpan &src = attrs_src_[i];
     GMutableSpan dst = attrs_dst_[i];
-    src.materialize_compressed(IndexRange(src_index, count), dst[dst_index]);
+    src.type().copy_construct_compressed(src.data(), dst[dst_index], IndexRange(src_index, count));
   }
 }
 
@@ -364,13 +370,16 @@ void LegacyMeshInterpolator::mix(Span<int> src_indices,
                     dst_index);
   for (const int attr_index : attrs_src_.index_range()) {
     attribute_math::to_static_type(attrs_src_[attr_index].type(), [&]<typename T>() {
-      const VArray src = attrs_src_[attr_index].typed<T>();
-      MutableSpan dst = attrs_dst_[attr_index].typed<T>();
-      attribute_math::DefaultMixer<T> mixer(dst.slice(dst_index, 1));
-      for (const int i : src_indices.index_range()) {
-        mixer.mix_in(0, src[src_indices[i]], weights ? (*weights)[i] : 1.0f);
+      if constexpr (!std::is_void_v<bke::attribute_math::DefaultMixer<T>>) {
+        const Span src = attrs_src_[attr_index].typed<T>();
+        MutableSpan dst = attrs_dst_[attr_index].typed<T>();
+        if (weights) {
+          dst[dst_index] = attribute_math::mix_indices(src, src_indices, *weights);
+        }
+        else {
+          dst[dst_index] = attribute_math::mix_indices(src, src_indices);
+        }
       }
-      mixer.finalize();
     });
   }
 }

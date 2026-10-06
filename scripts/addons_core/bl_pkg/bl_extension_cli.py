@@ -105,7 +105,7 @@ class subcmd_utils:
             *,
             use_local: bool,
     ) -> list[tuple[int, str]] | str:
-        # Takes a terse lists of package names and expands to repo index and name list,
+        # Takes a terse list of package names and expands to repo index and pkg_id list,
         # returning an error string if any can't be resolved.
         from . import repo_cache_store_ensure
         from .bl_extension_ops import extension_repos_read
@@ -327,7 +327,7 @@ class subcmd_pkg:
         try:
             bpy.ops.extensions.package_upgrade_all()
         except RuntimeError:
-            return False  # The error will have been printed.
+            return False  # The error was reported (and printed) by the operator.
         return True
 
     @staticmethod
@@ -359,10 +359,11 @@ class subcmd_pkg:
         try:
             bpy.ops.extensions.package_install_marked(enable_on_install=enable_on_install)
         except RuntimeError:
-            return False  # The error will have been printed.
+            return False  # The error was reported (and printed) by the operator.
 
         if not no_prefs:
-            if enable_on_install:
+            # Enabling add-ons & registering asset libraries changes the preferences.
+            if bpy.context.preferences.is_dirty:
                 blender_preferences_write()
 
         return True
@@ -387,7 +388,7 @@ class subcmd_pkg:
         try:
             bpy.ops.extensions.package_uninstall_marked()
         except RuntimeError:
-            return False  # The error will have been printed.
+            return False  # The error was reported (and printed) by the operator.
 
         if not no_prefs:
             blender_preferences_write()
@@ -414,13 +415,14 @@ class subcmd_pkg:
                 enable_on_install=enable_on_install,
             )
         except RuntimeError:
-            return False  # The error will have been printed.
+            return False  # The error was reported (and printed) by the operator.
         except Exception as ex:
             sys.stderr.write(str(ex))
             sys.stderr.write("\n")
 
         if not no_prefs:
-            if enable_on_install:
+            # Enabling add-ons & registering asset libraries changes the preferences.
+            if bpy.context.preferences.is_dirty:
                 blender_preferences_write()
 
         return True
@@ -456,6 +458,48 @@ class subcmd_repo:
         return True
 
     @staticmethod
+    def info(
+            *,
+            repo_id: str,
+            sync: bool,
+    ) -> bool:
+        from .bl_extension_ops import extension_repos_read
+        from .cli.blender_ext import (
+            pkg_repo_data_as_info_lines,
+            repo_pkginfo_from_local_or_none,
+        )
+
+        if sync:
+            if not subcmd_utils.sync():
+                return False
+
+        repos_module_map = {repo.module: repo for repo in extension_repos_read()}
+        repo = repos_module_map.get(repo_id)
+        if repo is None:
+            sys.stderr.write("Repository: \"{:s}\" not found in [{:s}]\n".format(
+                repo_id,
+                ", ".join(["\"{:s}\"".format(x) for x in sorted(repos_module_map.keys())])
+            ))
+            return False
+
+        if not repo.remote_url:
+            sys.stderr.write("Repository: \"{:s}\" is local, it has no listing\n".format(repo_id))
+            return False
+
+        # Use the listing from the last "sync", never access the network.
+        if isinstance(result := repo_pkginfo_from_local_or_none(local_dir=repo.directory), str):
+            sys.stderr.write("Repository: \"{:s}\" listing unavailable, run \"sync\" first ({:s})\n".format(
+                repo_id,
+                result,
+            ))
+            return False
+
+        for line in pkg_repo_data_as_info_lines(result):
+            print(line)
+
+        return True
+
+    @staticmethod
     def add(
             *,
             name: str,
@@ -470,7 +514,7 @@ class subcmd_repo:
     ) -> bool:
         from bpy import context
 
-        # This could be allowed the Python API doesn't prevent it.
+        # This could be allowed, the Python API doesn't prevent it.
         # However this is not going to do what the user would expect so disallow it.
         if url:
             if source == 'SYSTEM':
@@ -574,7 +618,7 @@ def generic_arg_no_prefs(subparse: argparse.ArgumentParser) -> None:
         help=(
             "Treat the user-preferences as read-only,\n"
             "preventing updates for operations that would otherwise modify them.\n"
-            "This means removing extensions or repositories for example, wont update the user-preferences."
+            "This means removing extensions or repositories for example, won't update the user-preferences."
         ),
     )
 
@@ -663,7 +707,7 @@ def cli_extension_args_sync(subparsers: "argparse._SubParsersAction[argparse.Arg
 
 
 def cli_extension_args_upgrade(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
-    # Implement "update".
+    # Implement "upgrade".
     subparse = subparsers.add_parser(
         "update",
         help="Upgrade any outdated packages.",
@@ -768,6 +812,28 @@ def cli_extension_args_repo_list(subparsers: "argparse._SubParsersAction[argpars
     )
 
 
+def cli_extension_args_repo_info(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    # Implement "repo-info".
+    subparse = subparsers.add_parser(
+        "repo-info",
+        help="Show repository information.",
+        description=(
+            "Show high level information about a repository,\n"
+            "using the listing downloaded by the last \"sync\"."
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    generic_arg_sync(subparse)
+    generic_arg_package_repo_id_positional(subparse)
+
+    subparse.set_defaults(
+        func=lambda args: subcmd_repo.info(
+            repo_id=args.repo_id,
+            sync=args.sync,
+        ),
+    )
+
+
 def cli_extension_args_repo_add(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     # Implement "repo-add".
     subparse = subparsers.add_parser(
@@ -799,7 +865,7 @@ def cli_extension_args_repo_add(subparsers: "argparse._SubParsersAction[argparse
         default="",
         help=(
             "The directory where the repository stores local files (optional).\n"
-            "When omitted a directory in the users directory is automatically selected."
+            "When omitted a directory in the user's directory is automatically selected."
         ),
     )
     subparse.add_argument(
@@ -911,6 +977,7 @@ def cli_extension_args_extra(subparsers: "argparse._SubParsersAction[argparse.Ar
 
     # Preference commands.
     cli_extension_args_repo_list(subparsers)
+    cli_extension_args_repo_info(subparsers)
     cli_extension_args_repo_add(subparsers)
     cli_extension_args_repo_remove(subparsers)
 

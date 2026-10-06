@@ -71,6 +71,37 @@ REPO_LOCAL_PRIVATE_DIR = ".blender_ext"
 
 URL_KNOWN_PREFIX = ("http://", "https://", "file://")
 
+# Extension types supported by this version of Blender.
+# Unknown types are skipped, allowing repositories to contain future extension types.
+PKG_MANIFEST_TYPE_SUPPORTED = {"add-on", "asset-library", "theme"}
+
+# Authentication methods accepted in the `[asset_library.auth]` sub-table.
+PKG_MANIFEST_ASSET_LIBRARY_AUTH_METHODS = {"TOKEN"}
+
+# Keys accepted in the `[permissions]` table for each extension type.
+# Only add-ons run their own code, asset libraries may include assets which run scripts (drivers for example).
+PKG_MANIFEST_PERMISSIONS_BY_TYPE = {
+    "add-on": {"files", "network", "clipboard", "camera", "microphone"},
+    "asset-library": {"scripts"},
+    "theme": set(),
+}
+
+
+def pkg_manifest_skip_for_future_compat(item: dict[str, Any]) -> bool:
+    """
+    Return True if this item should be skipped for forward compatibility.
+
+    This allows repositories to contain extensions for future Blender versions
+    without causing errors in older versions.
+    Items with unknown types are silently skipped rather than treated as invalid.
+    """
+    # NOTE: this currently checks the type but it is intended for any future changes
+    # we don't want to hard fail on.
+    if (value := item.get("type")) is not None:
+        return value not in PKG_MANIFEST_TYPE_SUPPORTED
+    return False
+
+
 MESSAGE_TYPES = {
     # Status report about what is being done.
     'STATUS',
@@ -294,6 +325,7 @@ class CleanupPathsContext:
 class PkgRepoData(NamedTuple):
     version: str
     blocklist: list[dict[str, Any]]
+    assetlib_auth_method: str
     data: list[dict[str, Any]]
 
 
@@ -378,6 +410,8 @@ class PkgManifest(NamedTuple):
     tags: list[str] | None = None
     platforms: list[str] | None = None
     wheels: list[str] | None = None
+    # Sub-table required when `type == "asset-library"`.
+    asset_library: dict[str, Any] | None = None
 
 
 class PkgManifest_Archive(NamedTuple):
@@ -673,7 +707,7 @@ def build_paths_expand_iter(
             filepath = filepath.replace("/", "\\")
 
         # Avoid `os.path.join(path, filepath)` because `path` is ignored `filepath` is an absolute path.
-        # In the contest of declaring build paths we *never* want to reference an absolute directory
+        # In the context of declaring build paths we *never* want to reference an absolute directory
         # such as `C:\path` or `/tmp/path`.
         yield (
             "{:s}{:s}{:s}".format(path_strip, os.sep, filepath.lstrip(os.sep)),
@@ -1053,7 +1087,7 @@ def zipfile_make_root_directory(
         filename = member.filename
         if not filename.startswith(root_dir):
             continue
-        # Ensure the path is not _ony_ the directory (can happen for some ZIP files).
+        # Ensure the path is not _only_ the directory (can happen for some ZIP files).
         if not (filename := filename[len(root_dir):]):
             continue
 
@@ -1120,6 +1154,10 @@ class PathPatternMatch:
     @staticmethod
     def _pattern_match_as_regex_single(pattern: str) -> str:
         from fnmatch import translate
+
+        # `fnmatch.translate` appends an end-of-string anchor: `\Z` on Python 3.13 and earlier,
+        # `\z` on 3.14+. Both are equivalent.
+        translate_end_anchor = "\\z" if sys.version_info >= (3, 14) else "\\Z"
 
         # Special case: `!` literal prefix, needed to avoid this being handled as negation.
         if pattern.startswith("\\!"):
@@ -1191,7 +1229,7 @@ class PathPatternMatch:
             #
             # - Always adds an "end-of-string" match which isn't desired here.
             #
-            elem_regex = translate(pattern_split[i]).removesuffix("\\Z")
+            elem_regex = translate(pattern_split[i]).removesuffix(translate_end_anchor)
             # Don't match newlines.
             if elem_regex.startswith("(?s:"):
                 elem_regex = "(?:" + elem_regex[4:]
@@ -1222,7 +1260,7 @@ class PathPatternMatch:
             pattern = "\\A" + pattern
 
         if only_directory:
-            # Ensure this only ever matches a directly.
+            # Ensure this only ever matches a directory.
             pattern = pattern + "[\\n/]"
         else:
             # Ensure this isn't part of a longer string.
@@ -1348,7 +1386,7 @@ def url_retrieve_to_data_iter(
         )
 
 
-# See `url_retrieve_to_data_iter` doc-string.
+# See `url_retrieve_to_data_iter` docstring.
 def url_retrieve_to_filepath_iter(
         url: str,
         filepath: str,
@@ -1373,7 +1411,7 @@ def url_retrieve_to_filepath_iter(
             yield len(block)
 
 
-# See `url_retrieve_to_data_iter` doc-string.
+# See `url_retrieve_to_data_iter` docstring.
 def filepath_retrieve_to_filepath_iter(
         filepath_src: str,
         filepath: str,
@@ -1418,7 +1456,7 @@ def url_retrieve_to_data_iter_or_filesystem(
         )
 
 
-# See `url_retrieve_to_data_iter` doc-string.
+# See `url_retrieve_to_data_iter` docstring.
 def url_retrieve_to_filepath_iter_or_filesystem(
         url: str,
         filepath: str,
@@ -1534,7 +1572,11 @@ def pkg_manifest_tags_load_valid_map_from_python(
         return "Python evaluation error ({:s})".format(str(ex))
 
     result = {}
-    for key, key_extension_type in (("addons", "add-on"), ("themes", "theme")):
+    for key, key_extension_type in (
+            ("addons", "add-on"),
+            ("asset_libraries", "asset-library"),
+            ("themes", "theme"),
+    ):
         if (value := data.get(key)) is None:
             return "missing key \"{:s}\"".format(key)
         if not isinstance(value, set):
@@ -1561,7 +1603,7 @@ def pkg_manifest_tags_load_valid_map_from_json(
         return "JSON must contain a dict not a {:s}".format(str(type(data)))
 
     result = {}
-    for key in ("add-on", "theme"):
+    for key in ("add-on", "asset-library", "theme"):
         if (value := data.get(key)) is None:
             return "missing key \"{:s}\"".format(key)
         if not isinstance(value, list):
@@ -1600,6 +1642,32 @@ def pkg_manifest_tags_valid_or_error(
 
 
 # -----------------------------------------------------------------------------
+# Manifest Validation (Permissions)
+
+
+def pkg_manifest_permissions_valid_or_error(
+        manifest_type: str,
+        manifest_permissions: dict[str, str],
+) -> str | None:
+    assert PKG_MANIFEST_PERMISSIONS_BY_TYPE.keys() == PKG_MANIFEST_TYPE_SUPPORTED
+
+    valid_permissions = PKG_MANIFEST_PERMISSIONS_BY_TYPE[manifest_type]
+    if not valid_permissions:
+        if manifest_permissions:
+            return "no permissions are supported for type = \"{:s}\"".format(manifest_type)
+        return None
+
+    for permission in manifest_permissions:
+        if permission not in valid_permissions:
+            return "key \"{:s}\" must be one of ({:s}) for type = \"{:s}\"".format(
+                permission,
+                ", ".join(sorted(valid_permissions)),
+                manifest_type,
+            )
+    return None
+
+
+# -----------------------------------------------------------------------------
 # Manifest Validation (Generic Callbacks)
 #
 # NOTE: regarding the `strict` argument, this was added because we may want to tighten
@@ -1609,7 +1677,7 @@ def pkg_manifest_tags_valid_or_error(
 # - When building packages.
 # - When validating packages from the command line.
 #
-# However manifests from severs that don't adhere to strict rules are not prevented from loading.
+# However manifests from servers that don't adhere to strict rules are not prevented from loading.
 
 # pylint: disable-next=useless-return
 def pkg_manifest_validate_field_nop(
@@ -1707,9 +1775,9 @@ def pkg_manifest_validate_field_idname(value: str, strict: bool) -> str | None:
 def pkg_manifest_validate_field_type(value: str, strict: bool) -> str | None:
     _ = strict
     # NOTE: add "keymap" in the future.
-    value_expected = {"add-on", "theme"}
+    value_expected = PKG_MANIFEST_TYPE_SUPPORTED
     if value not in value_expected:
-        return "Expected to be one of [{:s}], found {!r}".format(", ".join(value_expected), value)
+        return "Expected to be one of [{:s}], found {!r}".format(", ".join(sorted(value_expected)), value)
     return None
 
 
@@ -1749,6 +1817,65 @@ def pkg_manifest_validate_field_tagline(value: str, strict: bool) -> str | None:
     return None
 
 
+def pkg_manifest_validate_field_remote_url(value: Any, strict: bool) -> str | None:
+    if not isinstance(value, str):
+        return "must be a string, not a {:s}".format(type(value).__name__)
+    if not value:
+        return "must be a non-empty string"
+    if not value.startswith(("http://", "https://")):
+        return "expected URL to start with \"http://\" or \"https://\", found {!r}".format(value)
+    _ = strict
+    return None
+
+
+def pkg_manifest_validate_field_asset_library_auth(value: Any, strict: bool) -> str | None:
+    if not isinstance(value, dict):
+        return "must be a table, not a {:s}".format(type(value).__name__)
+
+    # Report every problem at once, so a manifest doesn't need repeat fix & re-validate cycles.
+    errors = []
+
+    required = value.get("required")
+    if required is None:
+        errors.append("missing \"required\"")
+    elif not isinstance(required, bool):
+        errors.append("\"required\" must be a boolean, not a {:s}".format(type(required).__name__))
+
+    auth_method = value.get("auth_method")
+    if auth_method is None:
+        errors.append("missing \"auth_method\"")
+    elif not isinstance(auth_method, str):
+        errors.append("\"auth_method\" must be a string, not a {:s}".format(type(auth_method).__name__))
+    elif strict and (auth_method not in PKG_MANIFEST_ASSET_LIBRARY_AUTH_METHODS):
+        # NOTE: only check the method when building, an extension built by a newer version of
+        # Blender may use a method this version doesn't know of, which must not prevent installing it.
+        errors.append("\"auth_method\" must be one of ({:s}), found {!r}".format(
+            ", ".join(sorted(PKG_MANIFEST_ASSET_LIBRARY_AUTH_METHODS)),
+            auth_method,
+        ))
+
+    if errors:
+        return ", ".join(errors)
+    return None
+
+
+def pkg_manifest_validate_field_asset_library(value: dict[str, Any], strict: bool) -> str | None:
+    # The `[asset_library]` sub-table. Schema presence (required-for-type) is enforced by
+    # `subcmd_author.build`; here we validate shape whenever the field is set.
+
+    if (remote_url := value.get("remote_url")) is None:
+        return "missing \"remote_url\""
+    if (err := pkg_manifest_validate_field_remote_url(remote_url, strict)) is not None:
+        return "\"remote_url\": {:s}".format(err)
+
+    # The `[asset_library.auth]` sub-table is optional, when absent authentication is unsupported.
+    if (auth := value.get("auth")) is not None:
+        if (err := pkg_manifest_validate_field_asset_library_auth(auth, strict)) is not None:
+            return "\"auth\": {:s}".format(err)
+
+    return None
+
+
 def pkg_manifest_validate_field_copyright(
         value: list[str],
         strict: bool,
@@ -1770,7 +1897,7 @@ def pkg_manifest_validate_field_copyright(
             if not year_valid:
                 return "at index {:d} must be a number or two numbers separated by \"-\"".format(i)
             if not name.strip():
-                return "at index {:d} name may not be empty".format(i)
+                return "at index {:d} copyright name must be non-empty".format(i)
         return None
     else:
         return pkg_manifest_validate_field_any_list_of_non_empty_strings(value, strict)
@@ -1785,15 +1912,6 @@ def pkg_manifest_validate_field_permissions(
         ),
         strict: bool,
 ) -> str | None:
-
-    keys_valid = {
-        "files",
-        "network",
-        "clipboard",
-        "camera",
-        "microphone",
-    }
-
     if strict:
         # A list may be passed in when not-strict.
         if not isinstance(value, dict):
@@ -1803,8 +1921,6 @@ def pkg_manifest_validate_field_permissions(
             # Validate the key.
             if not isinstance(item_key, str):
                 return "key \"{:s}\" must be a string not a {:s}".format(str(item_key), str(type(item_key)))
-            if item_key not in keys_valid:
-                return "value of \"{:s}\" must be a value in {!r}".format(item_key, tuple(keys_valid))
 
             # Validate the value.
             if not isinstance(item_value, str):
@@ -1824,7 +1940,7 @@ def pkg_manifest_validate_field_permissions(
             # Historic beta convention, keep for compatibility.
             for i, item in enumerate(value):
                 if not isinstance(item, str):
-                    return "Expected item at index {:d} to be an int not a {:s}".format(i, str(type(item)))
+                    return "Expected item at index {:d} to be a string not a {:s}".format(i, str(type(item)))
         else:
             # The caller doesn't allow this.
             assert False, "internal error, disallowed type"
@@ -1882,14 +1998,14 @@ def pkg_manifest_validate_field_wheels(
 
     for wheel in value:
         if "\"" in wheel:
-            return "wheel paths most not contain quotes, found {!r}".format(wheel)
+            return "wheel paths must not contain quotes, found {!r}".format(wheel)
         if "\\" in wheel:
             return "wheel paths must use forward slashes, found {!r}".format(wheel)
 
         if (error := pkg_manifest_validate_field_any_non_empty_string_stripped_no_control_chars(
                 wheel, True,
         )) is not None:
-            return "wheel paths detected: {:s}, found {!r}".format(error, wheel)
+            return "wheel path error: {:s}, found {!r}".format(error, wheel)
 
         wheel_filename = os.path.basename(wheel)
         if not wheel_filename.lower().endswith(".whl"):
@@ -1965,6 +2081,7 @@ pkg_manifest_known_keys_and_types: tuple[
     ("tags", list, pkg_manifest_validate_field_any_non_empty_list_of_non_empty_strings),
     ("platforms", list, pkg_manifest_validate_field_any_non_empty_list_of_non_empty_strings),
     ("wheels", list, pkg_manifest_validate_field_wheels),
+    ("asset_library", dict, pkg_manifest_validate_field_asset_library),
 )
 
 # Keep in sync with `PkgManifest_Archive`.
@@ -2049,6 +2166,11 @@ def pkg_manifest_is_valid_or_error_impl(
     if error_list:
         assert all_errors
         return error_list
+
+    # The accepted permissions depend on the type.
+    if strict and isinstance(permissions := data.get("permissions"), dict):
+        if (error_msg := pkg_manifest_permissions_valid_or_error(data["type"], permissions)) is not None:
+            return ["key \"permissions\" invalid: {:s}".format(error_msg)]
 
     return None
 
@@ -2237,8 +2359,8 @@ def python_versions_from_wheel_python_tag(python_tag: str) -> set[tuple[int] | t
             versions.add(version)
         else:
             return (
-                "wheel filename version prefix failed to be extracted "
-                "found \"{:s}\" int \"{:s}\", expected a value in ({:s})"
+                "wheel filename version prefix not recognized, "
+                "found \"{:s}\" in \"{:s}\", expected a value in ({:s})"
             ).format(
                 version_prefix,
                 python_tag,
@@ -2269,7 +2391,7 @@ def python_versions_from_wheel_abi_tag(
 
 def python_versions_from_wheel(wheel_filename: str) -> set[tuple[int] | tuple[int, int]] | str:
     """
-    Extract a set of Python versions from a list of wheels or return an error string.
+    Extract a set of Python versions from a wheel or return an error string.
     """
     wheel_filename_split = wheel_filename.split("-")
 
@@ -2425,10 +2547,14 @@ def repository_filter_skip(
     reporting errors if the user attempts to install an extension which isn't compatible with their system.
     """
 
+    # Skip unknown extension types (allows repositories to contain future extension types).
+    if pkg_manifest_skip_for_future_compat(item):
+        return True
+
     if (platforms := item.get("platforms")) is not None:
         if not isinstance(platforms, list):
             # Possibly noisy, but this should *not* be happening on a regular basis.
-            error_fn(TypeError("platforms is not a list, found a: {:s}".format(str(type(platforms)))))
+            error_fn(TypeError("platforms is not a list, found: {:s}".format(str(type(platforms)))))
         elif platforms and (filter_platform not in platforms):
             if skip_message_fn is not None:
                 skip_message_fn("This platform ({:s}) isn't one of ({:s})".format(
@@ -2441,7 +2567,7 @@ def repository_filter_skip(
         if (python_versions := item.get("python_versions")) is not None:
             if not isinstance(python_versions, list):
                 # Possibly noisy, but this should *not* be happening on a regular basis.
-                error_fn(TypeError("python_versions is not a list, found a: {:s}".format(str(type(python_versions)))))
+                error_fn(TypeError("python_versions is not a list, found: {:s}".format(str(type(python_versions)))))
             elif python_versions:
                 ok = True
                 python_versions_as_set: set[str] = set()
@@ -2552,7 +2678,7 @@ def python_version_parse_or_error(version: str) -> tuple[int, int, int] | str:
 
 def blender_version_parse_any_or_error(version: Any) -> tuple[int, int, int] | str:
     if not isinstance(version, str):
-        return "blender version should be a string, found a: {:s}".format(str(type(version)))
+        return "blender version should be a string, found: {:s}".format(str(type(version)))
 
     result = blender_version_parse_or_error(version)
     assert isinstance(result, (tuple, str))
@@ -2566,7 +2692,7 @@ def url_request_headers_create(*, accept_json: bool, user_agent: str, access_tok
         headers["Accept"] = "application/json"
 
     if user_agent:
-        # Typically: `Blender/4.2.0 (Linux x84_64; cycle=alpha)`.
+        # Typically: `Blender/4.2.0 (Linux x86_64; cycle=alpha)`.
         headers["User-Agent"] = user_agent
 
     if access_token:
@@ -2618,6 +2744,10 @@ def repo_json_is_valid_or_error(filepath: str) -> str | None:
             return "Expected key at index {:d} to be an identifier, \"{:s}\" failed: {:s}".format(
                 i, pkg_idname, error_msg,
             )
+
+        # Skip unknown extension types (allows repositories to contain future extension types).
+        if pkg_manifest_skip_for_future_compat(item):
+            continue
 
         if (error_msg := pkg_manifest_is_valid_or_error(item, from_repo=True, strict=False)) is not None:
             return "Error at index {:d}: {:s}".format(i, error_msg)
@@ -3068,6 +3198,10 @@ def pkg_repo_data_from_json_or_error(json_data: dict[str, Any]) -> PkgRepoData |
         if not isinstance(item, dict):
             return "expected \"blocklist\" contain dictionary items"
 
+    # An unknown method is intentionally not an error, newer servers may use methods this client doesn't know of.
+    if not isinstance((assetlib_auth_method := json_data.get("assetlib_auth_method", "PER_LIBRARY")), str):
+        return "expected \"assetlib_auth_method\" to be a string"
+
     if not isinstance((data := json_data.get("data", [])), list):
         return "expected \"data\" to be a list"
     for item in data:
@@ -3077,6 +3211,7 @@ def pkg_repo_data_from_json_or_error(json_data: dict[str, Any]) -> PkgRepoData |
     result_new = PkgRepoData(
         version=version,
         blocklist=blocklist,
+        assetlib_auth_method=assetlib_auth_method,
         data=data,
     )
     return result_new
@@ -3086,6 +3221,94 @@ def repo_pkginfo_from_local_or_none(*, local_dir: str) -> PkgRepoData | str:
     if isinstance((result := repo_pkginfo_from_local_as_dict_or_error(local_dir=local_dir)), str):
         return result
     return pkg_repo_data_from_json_or_error(result)
+
+
+def repo_pkginfo_from_remote_url_or_none(
+        msglog: MessageLogger,
+        *,
+        remote_url: str,
+        online_user_agent: str,
+        access_token: str,
+        timeout_in_seconds: float,
+        demote_connection_errors_to_status: bool,
+        error_prefix: str,
+) -> PkgRepoData | None:
+    """
+    Download the repository listing, reporting any error via ``msglog``.
+    """
+    # Validate arguments.
+    if (error := remote_url_validate_or_error(remote_url)) is not None:
+        msglog.fatal_error(error)
+        return None
+
+    remote_json_url = remote_url_get(remote_url)
+
+    try:
+        result = io.BytesIO()
+        for block in url_retrieve_to_data_iter_or_filesystem(
+                remote_json_url,
+                headers=url_request_headers_create(
+                    accept_json=True,
+                    user_agent=online_user_agent,
+                    access_token=access_token,
+                ),
+                chunk_size=CHUNK_SIZE_DEFAULT,
+                timeout_in_seconds=timeout_in_seconds,
+                retrieve_info=DataRetrieveInfo(),  # Unused.
+        ):
+            result.write(block)
+
+    except (Exception, KeyboardInterrupt) as ex:
+        msg = url_retrieve_exception_as_message(ex, prefix=error_prefix, url=remote_json_url)
+        if demote_connection_errors_to_status and url_retrieve_exception_is_connectivity(ex):
+            msglog.status(msg)
+        else:
+            msglog.fatal_error(msg)
+        return None
+
+    result_bytes = result.getvalue()
+    del result
+
+    try:
+        result_dict = json.loads(result_bytes)
+    except Exception as ex:
+        msglog.fatal_error("error loading JSON {:s}".format(str(ex)))
+        return None
+
+    if isinstance((repo_gen_dict := pkg_repo_data_from_json_or_error(result_dict)), str):
+        msglog.fatal_error("unexpected contents in JSON {:s}".format(repo_gen_dict))
+        return None
+
+    return repo_gen_dict
+
+
+def pkg_repo_data_as_info_lines(repo_gen_dict: PkgRepoData) -> list[str]:
+    """
+    High level repository information, one line per value.
+    """
+    # A package split by platform has an entry for each platform, count unique ID's.
+    pkg_type_from_id: dict[str, str] = {}
+    for elem in repo_gen_dict.data:
+        # Skip unknown types, as accessing the listing does.
+        if pkg_manifest_skip_for_future_compat(elem):
+            continue
+        pkg_type_from_id.setdefault(elem.get("id", ""), elem.get("type", ""))
+
+    # Only count the types in use, so types added in the future are included.
+    pkg_type_count: dict[str, int] = {}
+    for pkg_type in pkg_type_from_id.values():
+        pkg_type_count[pkg_type] = pkg_type_count.get(pkg_type, 0) + 1
+
+    lines = [
+        "version: {:s}".format(repo_gen_dict.version),
+        "blocklist: {:d}".format(len(repo_gen_dict.blocklist)),
+        "packages: {:d}".format(len(pkg_type_from_id)),
+    ]
+    for pkg_type, pkg_type_len in sorted(pkg_type_count.items()):
+        lines.append("  {:s}: {:d}".format(pkg_type, pkg_type_len))
+    lines.append("assetlib_auth_method: {:s}".format(repo_gen_dict.assetlib_auth_method))
+
+    return lines
 
 
 def url_has_known_prefix(path: str) -> bool:
@@ -3183,7 +3406,7 @@ def generic_arg_package_valid_tags(subparse: argparse.ArgumentParser) -> None:
             "The contents must be a dictionary of lists where the ``key`` matches the extension type.\n"
             "\n"
             "For example:\n"
-            "   ``{\"add-ons\": [\"Example\", \"Another\"], \"theme\": [\"Other\", \"Tags\"]}``\n"
+            "   ``{\"add-on\": [\"Example\", \"Another\"], \"asset-library\": [\"Wildlife\"], \"theme\": [\"Other\", \"Tags\"]}``\n"
             "\n"
             "To disable validating tags, pass in an empty path ``--valid-tags=\"\"``."
         ),
@@ -3211,10 +3434,27 @@ def generic_arg_server_generate_repo_config(subparse: argparse.ArgumentParser) -
             "   id = \"my_example_package\"\n"
             "   reason = \"Explanation for why this extension was blocked\"\n"
             "   [[blocklist]]\n"
-            "   id = \"other_extenison\"\n"
+            "   id = \"other_extension\"\n"
             "   reason = \"Another reason for why this is blocked\"\n"
             "\n"
         ),
+    )
+
+
+def generic_arg_server_generate_assetlib_auth_method(subparse: argparse.ArgumentParser) -> None:
+    subparse.add_argument(
+        "--assetlib-auth-method",
+        dest="assetlib_auth_method",
+        type=str,
+        choices=('PER_LIBRARY', 'FROM_REPOSITORY'),
+        default='PER_LIBRARY',
+        help=(
+            "How asset libraries provided by this repository's extensions authenticate:\n"
+            "\n"
+            "- PER_LIBRARY: Each asset library uses its own access token (default).\n"
+            "- FROM_REPOSITORY: Asset libraries use the access token of this repository.\n"
+        ),
+        required=False,
     )
 
 
@@ -3401,7 +3641,7 @@ def generic_arg_package_source_dir(subparse: argparse.ArgumentParser) -> None:
         help=(
             "The package source directory containing a ``{:s}`` manifest.\n"
             "\n"
-            "Default's to the current directory."
+            "Defaults to the current directory."
         ).format(PKG_MANIFEST_FILENAME_TOML),
     )
 
@@ -3415,7 +3655,7 @@ def generic_arg_package_output_dir(subparse: argparse.ArgumentParser) -> None:
         help=(
             "The package output directory.\n"
             "\n"
-            "Default's to the current directory."
+            "Defaults to the current directory."
         ),
     )
 
@@ -3718,6 +3958,7 @@ class subcmd_server:
             *,
             repo_dir: str,
             repo_config_filepath: str,
+            assetlib_auth_method: str,
             html: bool,
             html_template: str,
     ) -> bool:
@@ -3762,6 +4003,7 @@ class subcmd_server:
         repo_gen_dict = {
             "version": "v1",
             "blocklist": [] if repo_config is None else repo_config.blocklist,
+            "assetlib_auth_method": assetlib_auth_method,
             "data": repo_data,
         }
 
@@ -3796,6 +4038,9 @@ class subcmd_server:
 
             # Don't include these in the server listing.
             wheels: list[str] = manifest_dict.pop("wheels", [])
+            # `[asset_library]` is intentionally never exposed in `index.json`: the
+            # full manifest table is only available after the archive is downloaded.
+            manifest_dict.pop("asset_library", None)
 
             # Extract the `python_versions` from wheels.
             python_versions_final: list[tuple[int] | tuple[int, int]] = []
@@ -3890,50 +4135,16 @@ class subcmd_client:
             demote_connection_errors_to_status: bool,
     ) -> bool:
 
-        # Validate arguments.
-        if (error := remote_url_validate_or_error(remote_url)) is not None:
-            msglog.fatal_error(error)
+        if (repo_gen_dict := repo_pkginfo_from_remote_url_or_none(
+                msglog,
+                remote_url=remote_url,
+                online_user_agent=online_user_agent,
+                access_token=access_token,
+                timeout_in_seconds=timeout_in_seconds,
+                demote_connection_errors_to_status=demote_connection_errors_to_status,
+                error_prefix="list",
+        )) is None:
             return False
-
-        remote_json_url = remote_url_get(remote_url)
-
-        # TODO: validate JSON content.
-        try:
-            result = io.BytesIO()
-            for block in url_retrieve_to_data_iter_or_filesystem(
-                    remote_json_url,
-                    headers=url_request_headers_create(
-                        accept_json=True,
-                        user_agent=online_user_agent,
-                        access_token=access_token,
-                    ),
-                    chunk_size=CHUNK_SIZE_DEFAULT,
-                    timeout_in_seconds=timeout_in_seconds,
-                    retrieve_info=DataRetrieveInfo(),  # Unused.
-            ):
-                result.write(block)
-
-        except (Exception, KeyboardInterrupt) as ex:
-            msg = url_retrieve_exception_as_message(ex, prefix="list", url=remote_json_url)
-            if demote_connection_errors_to_status and url_retrieve_exception_is_connectivity(ex):
-                msglog.status(msg)
-            else:
-                msglog.fatal_error(msg)
-            return False
-
-        result_bytes = result.getvalue()
-        del result
-
-        try:
-            result_dict = json.loads(result_bytes)
-        except Exception as ex:
-            msglog.fatal_error("error loading JSON {:s}".format(str(ex)))
-            return False
-
-        if isinstance((repo_gen_dict := pkg_repo_data_from_json_or_error(result_dict)), str):
-            msglog.fatal_error("unexpected contents in JSON {:s}".format(repo_gen_dict))
-            return False
-        del result_dict
 
         items: list[dict[str, Any]] = repo_gen_dict.data
         items.sort(key=lambda elem: elem.get("id", ""))
@@ -3943,6 +4154,36 @@ class subcmd_client:
             request_exit |= msglog.status(
                 "{:s}({:s}): {:s}".format(elem.get("id"), elem.get("version"), elem.get("name")),
             )
+            if request_exit:
+                return False
+
+        return True
+
+    @staticmethod
+    def repo_info(
+            msglog: MessageLogger,
+            *,
+            remote_url: str,
+            online_user_agent: str,
+            access_token: str,
+            timeout_in_seconds: float,
+            demote_connection_errors_to_status: bool,
+    ) -> bool:
+
+        if (repo_gen_dict := repo_pkginfo_from_remote_url_or_none(
+                msglog,
+                remote_url=remote_url,
+                online_user_agent=online_user_agent,
+                access_token=access_token,
+                timeout_in_seconds=timeout_in_seconds,
+                demote_connection_errors_to_status=demote_connection_errors_to_status,
+                error_prefix="repo-info",
+        )) is None:
+            return False
+
+        request_exit = False
+        for line in pkg_repo_data_as_info_lines(repo_gen_dict):
+            request_exit |= msglog.status(line)
             if request_exit:
                 return False
 
@@ -4012,7 +4253,7 @@ class subcmd_client:
 
                 manifest = pkg_manifest_from_zipfile_and_validate(zip_fh, archive_subdir, strict=False)
                 if isinstance(manifest, str):
-                    msglog.error("Failed to load manifest from: {:s}".format(manifest))
+                    msglog.error("Failed to load manifest: {:s} from {:s}".format(manifest, filepath_archive))
                     return False
 
                 if manifest_compare is not None:
@@ -4114,7 +4355,7 @@ class subcmd_client:
             try:
                 os.rename(filepath_local_pkg_temp, filepath_local_pkg)
             except Exception as ex:
-                msglog.error("Failed to rename directory, causing unexpected removal \"{:s}\": {:s}".format(
+                msglog.error("Failed to rename directory for \"{:s}\": {:s}".format(
                     manifest.id,
                     str(ex),
                 ))
@@ -4583,6 +4824,24 @@ class subcmd_author:
                     "Error in TOML \"{:s}\" contains reserved value: [build.generated]".format(pkg_manifest_filepath),
                 )
                 return False
+
+        # The framework validates the `[asset_library]` shape, the requirement that it's
+        # present for asset libraries and absent for other types is checked here.
+        if manifest.type == "asset-library":
+            if manifest.asset_library is None:
+                msglog.fatal_error(
+                    "Error in TOML \"{:s}\" [asset_library] table is required for type = \"asset-library\"".format(
+                        pkg_manifest_filepath,
+                    ),
+                )
+                return False
+        elif manifest.asset_library is not None:
+            msglog.fatal_error(
+                "Error in TOML \"{:s}\" [asset_library] requires type = \"asset-library\" (found {!r})".format(
+                    pkg_manifest_filepath, manifest.type,
+                ),
+            )
+            return False
 
         # Always include wheels & manifest.
         build_paths_extra = (
@@ -5113,6 +5372,7 @@ def unregister():
             MessageLogger(msg_fn_no_done),
             repo_dir=repo_dir,
             repo_config_filepath="",
+            assetlib_auth_method='PER_LIBRARY',
             html=True,
             html_template="",
         ):
@@ -5174,6 +5434,7 @@ def argparse_create_server_generate(
 
     generic_arg_repo_dir(subparse)
     generic_arg_server_generate_repo_config(subparse)
+    generic_arg_server_generate_assetlib_auth_method(subparse)
     generic_arg_server_generate_html(subparse)
     generic_arg_server_generate_html_template(subparse)
     if args_internal:
@@ -5184,6 +5445,7 @@ def argparse_create_server_generate(
             msglog_from_args(args),
             repo_dir=args.repo_dir,
             repo_config_filepath=args.repo_config,
+            assetlib_auth_method=args.assetlib_auth_method,
             html=args.html,
             html_template=args.html_template,
         ),
@@ -5212,6 +5474,34 @@ def argparse_create_client_list(subparsers: "argparse._SubParsersAction[argparse
 
     subparse.set_defaults(
         func=lambda args: subcmd_client.list_packages(
+            msglog_from_args(args),
+            remote_url=args.remote_url,
+            online_user_agent=args.online_user_agent,
+            access_token=args.access_token,
+            timeout_in_seconds=args.timeout,
+            demote_connection_errors_to_status=args.demote_connection_errors_to_status,
+        ),
+    )
+
+
+def argparse_create_client_repo_info(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    subparse = subparsers.add_parser(
+        "repo-info",
+        help="Show repository information.",
+        description="Show high level information about a repository.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+
+    generic_arg_remote_url(subparse)
+    generic_arg_online_user_agent(subparse)
+    generic_arg_access_token(subparse)
+
+    generic_arg_output_type(subparse)
+    generic_arg_timeout(subparse)
+    generic_arg_demote_connection_failure_to_status(subparse)
+
+    subparse.set_defaults(
+        func=lambda args: subcmd_client.repo_info(
             msglog_from_args(args),
             remote_url=args.remote_url,
             online_user_agent=args.online_user_agent,
@@ -5530,6 +5820,7 @@ def argparse_create(
     if args_internal:
         # Queries.
         argparse_create_client_list(subparsers)
+        argparse_create_client_repo_info(subparsers)
 
         # Manipulating Actions.
         argparse_create_client_sync(subparsers)

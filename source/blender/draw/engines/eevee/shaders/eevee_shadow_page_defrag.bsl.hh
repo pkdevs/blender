@@ -19,9 +19,8 @@
  */
 
 #pragma once
-#pragma create_info
 
-#include "draw_shader_shared.hh"
+#include "draw_command_shared.hh"
 #include "eevee_shadow_page_ops.bsl.hh"
 
 namespace eevee::shadow {

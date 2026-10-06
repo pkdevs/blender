@@ -7,7 +7,7 @@
 #include "kernel/film/light_passes.h"
 
 #include "kernel/integrator/path_state.h"
-
+#include "kernel/integrator/state_flow.h"
 #include "kernel/light/light.h"
 #include "kernel/light/sample.h"
 
@@ -16,9 +16,8 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device_inline void integrate_light_forward(KernelGlobals kg,
-                                               IntegratorState state,
-                                               ccl_global float *ccl_restrict render_buffer)
+ccl_device_inline ShaderEvalResult integrate_light_forward(
+    KernelGlobals kg, IntegratorState state, ccl_global float *ccl_restrict render_buffer)
 {
   /* Setup light sample. */
   Intersection isect ccl_optional_struct_init;
@@ -29,6 +28,7 @@ ccl_device_inline void integrate_light_forward(KernelGlobals kg,
   const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
   const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
   const float ray_time = INTEGRATOR_STATE(state, ray, time);
+  const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
 
@@ -38,36 +38,41 @@ ccl_device_inline void integrate_light_forward(KernelGlobals kg,
   const LightEval light_eval = light_eval_from_intersection(
       kg, &isect, ray_P, ray_D, N, path_flag);
   if (light_eval.eval_fac == 0.0f) {
-    return;
+    return SHADER_EVAL_EMPTY;
   }
 
   /* Use visibility flag to skip lights. */
 #ifdef __PASSES__
   {
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, isect.prim);
-    if (!is_light_shader_visible_to_path(klight->shader_id, path_flag)) {
-      return;
+    if (!is_light_shader_visible_to_path(klight->shader_id, path_visibility, path_flag)) {
+      return SHADER_EVAL_EMPTY;
     }
   }
 #endif
 
   /* Evaluate light shader. */
-  const Spectrum shader_eval = light_sample_shader_eval_forward(
-      kg, state, isect.prim, ray_P, ray_D, isect.t, ray_time);
+  Spectrum shader_eval;
+  const ShaderEvalResult eval_result = light_sample_shader_eval_forward(
+      kg, state, isect.prim, ray_P, ray_D, isect.t, ray_time, shader_eval);
+  if (eval_result == SHADER_EVAL_CACHE_MISS) {
+    return SHADER_EVAL_CACHE_MISS;
+  }
   const float3 eval = shader_eval * light_eval.eval_fac;
   if (is_zero(eval)) {
-    return;
+    return SHADER_EVAL_EMPTY;
   }
 
   /* MIS weighting. */
   const float mis_weight = light_sample_mis_weight_forward_lamp(
-      kg, state, path_flag, isect.prim, light_eval.pdf, ray_P);
+      kg, state, path_visibility, path_flag, isect.object, light_eval.pdf, ray_P);
 
   /* Write to render buffer. */
   guiding_record_surface_emission(kg, state, eval, mis_weight);
   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, isect.prim);
   film_write_surface_emission(
       kg, state, eval, mis_weight, render_buffer, object_lightgroup(kg, klight->object_id));
+  return SHADER_EVAL_OK;
 }
 
 /* Evaluate light shader at intersection in forward path tracing. */
@@ -77,7 +82,11 @@ ccl_device void integrator_shade_light_forward(KernelGlobals kg,
 {
   PROFILING_INIT(kg, PROFILING_SHADE_LIGHT_SETUP);
 
-  integrate_light_forward(kg, state, render_buffer);
+  const ShaderEvalResult result = integrate_light_forward(kg, state, render_buffer);
+  if (result == SHADER_EVAL_CACHE_MISS) {
+    integrator_path_cache_miss(state, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD);
+    return;
+  }
 
   /* TODO: we could get stuck in an infinite loop if there are precision issues
    * and the same light is hit again.
@@ -103,7 +112,7 @@ ccl_device void integrator_shade_light_forward(KernelGlobals kg,
    * scene geometry. */
 }
 
-ccl_device bool integrate_light_nee(KernelGlobals kg, IntegratorShadowState state)
+ccl_device ShaderEvalResult integrate_light_nee(KernelGlobals kg, IntegratorShadowState state)
 {
   /* Read intersection and ray. */
   Ray ray ccl_optional_struct_init;
@@ -111,10 +120,40 @@ ccl_device bool integrate_light_nee(KernelGlobals kg, IntegratorShadowState stat
   integrator_state_read_shadow_ray_self(state, &ray);
 
   Intersection isect = {};
-  isect.object = ray.self.light_object;
-  isect.prim = ray.self.light_prim;
-  isect.type = kernel_data_fetch(objects, isect.object).primitive_type;
-  isect.t = ray.tmax;
+
+#ifdef __SHADOW_LINKING__
+  const bool is_shadow_linking = INTEGRATOR_STATE(state, shadow_path, flag) &
+                                 PATH_RAY_SHADOW_FOR_LIGHT_LINKING;
+
+  if (is_shadow_linking) {
+    /* Shadow linking stores the intersection in the shadow state,
+     * so it can be used directly. This can be any type of primitive. */
+    integrator_state_read_shadow_light_isect(state, &isect);
+  }
+  else
+#endif
+  {
+    /* NEE sampling from shade_surface only does lights and triangles. Here we
+     * have to recover the triangle UV from the ray, since the shadow state
+     * isect is used by shadow ray intersection and we want to save memory. */
+    isect.object = ray.self.light_object;
+    isect.prim = ray.self.light_prim;
+    isect.type = kernel_data_fetch(objects, isect.object).primitive_type;
+    isect.t = ray.tmax;
+
+    if (isect.type & PRIMITIVE_TRIANGLE) {
+      /* Triangles. */
+      const float2 uv = triangle_light_uv(kg, isect.object, isect.prim, ray.time, ray.P, ray.D);
+      isect.u = uv.x;
+      isect.v = uv.y;
+    }
+    else {
+      /* No NEE sampling for curves, points, etc. */
+      kernel_assert(isect.type == PRIMITIVE_LAMP);
+      isect.u = 0.0f;
+      isect.v = 0.0f;
+    }
+  }
 
   kernel_assert(isect.object != OBJECT_NONE);
   kernel_assert(isect.prim != PRIM_NONE);
@@ -134,7 +173,12 @@ ccl_device bool integrate_light_nee(KernelGlobals kg, IntegratorShadowState stat
 
     if (light_type == LIGHT_BACKGROUND) {
       /* Background light. */
-      shader_setup_from_background(kg, emission_sd, ray.P, ray.D, ray.time);
+#ifdef __RAY_DIFFERENTIALS__
+      const float ray_dD = background_light_clamp_dD(kg, ray.dD);
+#else
+      const float ray_dD = 0.0f;
+#endif
+      shader_setup_from_background(kg, emission_sd, ray.P, ray.D, ray_dD, ray.time);
       is_background = true;
     }
     else {
@@ -162,12 +206,6 @@ ccl_device bool integrate_light_nee(KernelGlobals kg, IntegratorShadowState stat
     }
   }
   else {
-    /* Triangles.
-     * Compute UV on demand so we don't have to store it in integrator state. */
-    const float2 uv = triangle_light_uv(kg, isect.object, isect.prim, ray.time, ray.P, ray.D);
-    isect.u = uv.x;
-    isect.v = uv.y;
-
     shader_setup_from_ray(kg, emission_sd, &ray, &isect);
   }
 
@@ -178,7 +216,11 @@ ccl_device bool integrate_light_nee(KernelGlobals kg, IntegratorShadowState stat
   /* No proper path flag, we're evaluating this for all closures. that's
    * weak but we'd have to do multiple evaluations otherwise. */
   surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
-      kg, state, emission_sd, nullptr, PATH_RAY_EMISSION);
+      kg, state, emission_sd, nullptr, PATH_RAY_VISIBILITY_NONE, PATH_RAY_EMISSION);
+
+  if (emission_sd->runtime_flag & SR_CACHE_MISS) {
+    return SHADER_EVAL_CACHE_MISS;
+  }
 
   /* Evaluate emission closures. */
   eval = (is_background) ? surface_shader_background(emission_sd) :
@@ -192,17 +234,17 @@ ccl_device bool integrate_light_nee(KernelGlobals kg, IntegratorShadowState stat
     const float rand_terminate = path_state_rng_light_termination(kg, &rng_state);
     const float bsdf_eval_average = INTEGRATOR_STATE(state, shadow_path, bsdf_eval_average);
     if (light_sample_terminate(kg, eval, bsdf_eval_average, rand_terminate)) {
-      return false;
+      return SHADER_EVAL_EMPTY;
     }
   }
   else if (is_zero(eval)) {
-    return false;
+    return SHADER_EVAL_EMPTY;
   }
 
   /* Update throughput. */
   INTEGRATOR_STATE(state, shadow_path, throughput) *= eval;
 
-  return true;
+  return SHADER_EVAL_OK;
 }
 
 /* Evaluate light shader for next event estimation, after shade_surface and shade_volume and before
@@ -213,13 +255,19 @@ ccl_device void integrator_shade_light_nee(KernelGlobals kg,
 {
   PROFILING_INIT(kg, PROFILING_SHADE_LIGHT_SETUP);
 
-  if (!integrate_light_nee(kg, state)) {
-    integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE);
-    return;
-  }
+  const ShaderEvalResult result = integrate_light_nee(kg, state);
 
-  integrator_shadow_path_next(
-      state, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE, DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW);
+  if (result == SHADER_EVAL_CACHE_MISS) {
+    integrator_shadow_path_cache_miss(state, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE);
+  }
+  else if (result == SHADER_EVAL_EMPTY) {
+    integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE);
+  }
+  else {
+    integrator_shadow_path_next(state,
+                                DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE,
+                                DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW);
+  }
 }
 
 CCL_NAMESPACE_END

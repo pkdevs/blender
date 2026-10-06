@@ -34,12 +34,9 @@ else()
 endif()
 
 if(WITH_CYCLES_STANDALONE AND WITH_CYCLES_STANDALONE_GUI)
-  list(APPEND INC_SYS
-    ${SDL2_INCLUDE_DIRS}
-  )
   list(APPEND LIB
     bf::dependencies::epoxy
-    ${SDL2_LIBRARIES}
+    bf::dependencies::optional::sdl
   )
 endif()
 
@@ -61,6 +58,13 @@ cycles_external_libraries_append(LIB)
 
 include_directories(${INC})
 include_directories(SYSTEM ${INC_SYS})
+
+if(APPLE AND NOT CYCLES_STANDALONE_REPOSITORY)
+  set(app_output_dir Blender.app/Contents/MacOS)
+  set(app_install_dir Blender.app/Contents/MacOS)
+else()
+  set(app_install_dir ${CMAKE_INSTALL_PREFIX})
+endif()
 
 # Application build targets
 
@@ -128,11 +132,16 @@ if(WITH_CYCLES_STANDALONE)
 
   install(
     TARGETS cycles
-    DESTINATION ${CMAKE_INSTALL_PREFIX})
+    DESTINATION ${app_install_dir})
+
+  if(DEFINED app_output_dir)
+    set_target_properties(cycles
+      PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${app_output_dir}")
+  endif()
 
   add_test(
     NAME cycles_version
-    COMMAND ${CMAKE_INSTALL_PREFIX}/$<TARGET_FILE_NAME:cycles> --version)
+    COMMAND $<TARGET_FILE:cycles> --version)
 endif()
 
 if(WITH_CYCLES_PRECOMPUTE)
@@ -143,9 +152,23 @@ if(WITH_CYCLES_PRECOMPUTE)
   add_executable(cycles_precompute ${SRC} ${INC} ${INC_SYS})
   unset(SRC)
 
-  target_link_libraries(cycles_precompute PRIVATE ${LIB})
+  target_link_libraries(cycles_precompute
+    PRIVATE cycles_util
+    PRIVATE bf::dependencies::openimageio
+    PRIVATE bf::dependencies::optional::tbb
+    PRIVATE bf::dependencies::optional::osl)
+
+  if(NOT CYCLES_STANDALONE_REPOSITORY)
+    target_link_libraries(cycles_precompute
+      PRIVATE bf::intern::guardedalloc)
+  endif()
+
+  if(DEFINED app_output_dir)
+    set_target_properties(cycles_precompute
+      PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${app_output_dir}")
+  endif()
 
   install(
     TARGETS cycles_precompute
-    DESTINATION ${CMAKE_INSTALL_PREFIX})
+    DESTINATION ${app_install_dir})
 endif()

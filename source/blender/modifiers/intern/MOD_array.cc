@@ -12,10 +12,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
 
 #include "BLT_translation.hh"
@@ -47,7 +47,7 @@
 
 #include "DEG_depsgraph.hh"
 
-#include "GEO_mesh_merge_by_distance.hh"
+#include "GEO_mesh_merge_verts.hh"
 
 namespace blender {
 
@@ -352,25 +352,25 @@ static void mesh_merge_transform(Mesh *result,
   index_orig = static_cast<int *>(
       CustomData_get_layer_for_write(&result->vert_data, CD_ORIGINDEX, result->verts_num));
   if (index_orig) {
-    copy_vn_i(index_orig + cap_verts_index, cap_nverts, ORIGINDEX_NONE);
+    std::fill_n(index_orig + cap_verts_index, cap_nverts, ORIGINDEX_NONE);
   }
 
   index_orig = static_cast<int *>(
       CustomData_get_layer_for_write(&result->edge_data, CD_ORIGINDEX, result->edges_num));
   if (index_orig) {
-    copy_vn_i(index_orig + cap_edges_index, cap_nedges, ORIGINDEX_NONE);
+    std::fill_n(index_orig + cap_edges_index, cap_nedges, ORIGINDEX_NONE);
   }
 
   index_orig = static_cast<int *>(
       CustomData_get_layer_for_write(&result->face_data, CD_ORIGINDEX, result->faces_num));
   if (index_orig) {
-    copy_vn_i(index_orig + cap_faces_index, cap_nfaces, ORIGINDEX_NONE);
+    std::fill_n(index_orig + cap_faces_index, cap_nfaces, ORIGINDEX_NONE);
   }
 
   index_orig = static_cast<int *>(
       CustomData_get_layer_for_write(&result->corner_data, CD_ORIGINDEX, result->corners_num));
   if (index_orig) {
-    copy_vn_i(index_orig + cap_loops_index, cap_nloops, ORIGINDEX_NONE);
+    std::fill_n(index_orig + cap_loops_index, cap_nloops, ORIGINDEX_NONE);
   }
 }
 
@@ -461,9 +461,10 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
   }
 
   if (amd->offset_type & MOD_ARR_OFF_RELATIVE) {
-    const Bounds<float3> bounds = *mesh->bounds_min_max();
-    for (j = 3; j--;) {
-      offset[3][j] += amd->scale[j] * (bounds.max[j] - bounds.min[j]);
+    if (const std::optional<Bounds<float3>> bounds = mesh->bounds_min_max()) {
+      for (j = 3; j--;) {
+        offset[3][j] += amd->scale[j] * (bounds->max[j] - bounds->min[j]);
+      }
     }
   }
 
@@ -567,7 +568,7 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
   if (use_merge) {
     /* Will need full_doubles_map for handling merge */
     full_doubles_map = MEM_new_array_uninitialized<int>(size_t(result_nverts), __func__);
-    copy_vn_i(full_doubles_map, result_nverts, -1);
+    std::fill_n(full_doubles_map, result_nverts, -1);
   }
 
   /* copy customdata to original geometry */
@@ -845,9 +846,15 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
       }
     }
     if (tot_doubles > 0) {
+      /* Vertex merging expects un-merged vertices to point at themselves rather than being -1. */
+      for (i = 0; i < result_nverts; i++) {
+        if (full_doubles_map[i] == -1) {
+          full_doubles_map[i] = i;
+        }
+      }
       Mesh *tmp = result;
       result = geometry::mesh_merge_verts(
-          *tmp, MutableSpan<int>{full_doubles_map, result->verts_num}, tot_doubles, false);
+          *tmp, Span<int>{full_doubles_map, result->verts_num}, tot_doubles, false);
       BKE_id_free(nullptr, tmp);
     }
     MEM_delete(full_doubles_map);

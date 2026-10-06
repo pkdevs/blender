@@ -10,11 +10,11 @@ So far, no work has been done to make Blender's Python integration thread safe,
 so until it's properly supported, it's best not make use of this.
 
 Note that some modules in the Python standard library may use threads as well.
-An example is the `multiprocessing.Queue <https://docs.python.org/3/library/multiprocessing.html#multiprocessing.Queue>`_
-class.
+An example is the
+`multiprocessing.Queue <https://docs.python.org/3/library/multiprocessing.html#multiprocessing.Queue>`_ class.
 
 Python threading with Blender only works properly when the threads finish up
-before the script does, for example by using ``threading.join()``. In other
+before the script does, for example by using ``threading.Thread.join()``. In other
 words, they can only be used while the main Blender thread is blocked from
 running.
 
@@ -53,7 +53,8 @@ Here is an example of threading supported by Blender:
    threads = [
       threading.Thread(
          name="thread-{}".format(index),
-         target=lambda: download(url),
+         target=download,
+         args=(url,),
       )
       for index, url in enumerate(urls)
    ]
@@ -71,7 +72,7 @@ Here is an example of threading supported by Blender:
    # It's now safe to use bpy again since all threads have finished.
    print("Threads all done, now Blender can continue")
 
-This an example of an **unsupported** case, where a timer which runs many times
+This is an example of an **unsupported** case, using a timer that runs many times
 a second:
 
 .. code-block:: python
@@ -80,7 +81,7 @@ a second:
 
    def my_timer():
          t = Timer(0.1, my_timer)
-         t.setDaemon(True)
+         t.daemon = True
          t.start()
          print("Running...")
 

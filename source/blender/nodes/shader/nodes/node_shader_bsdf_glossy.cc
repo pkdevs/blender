@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 #include "UI_interface_layout.hh"
@@ -13,22 +17,25 @@ namespace nodes::node_shader_bsdf_glossy_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({0.8f, 0.8f, 0.8f, 1.0f});
-  b.add_input<decl::Float>("Roughness")
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
+  b.add_input<decl::Color>("Color"_ustr).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  b.add_input<decl::Float>("Roughness"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Float>("Anisotropy").default_value(0.0f).min(-1.0f).max(1.0f);
-  b.add_input<decl::Float>("Rotation")
+  b.add_input<decl::Float>("Anisotropy"_ustr).default_value(0.0f).min(-1.0f).max(1.0f);
+  b.add_input<decl::Float>("Rotation"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Vector>("Normal").hide_value();
-  b.add_input<decl::Vector>("Tangent").hide_value();
-  b.add_input<decl::Float>("Weight").available(false);
-  b.add_output<decl::Shader>("BSDF");
+  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_input<decl::Vector>("Tangent"_ustr).hide_value();
+  b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Shader>("BSDF"_ustr);
 }
 
 static void node_shader_buts_glossy(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -48,7 +55,7 @@ static int node_shader_gpu_bsdf_glossy(GPUMaterial *mat,
                                        GPUNodeStack *out)
 {
   if (!in[4].link) {
-    GPU_link(mat, "world_normals_get", &in[4].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[4].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY);
@@ -59,7 +66,14 @@ static int node_shader_gpu_bsdf_glossy(GPUMaterial *mat,
 
   float use_multi_scatter = (node->custom1 == SHD_GLOSSY_MULTI_GGX) ? 1.0f : 0.0f;
 
-  return GPU_stack_link(mat, node, "node_bsdf_glossy", in, out, GPU_constant(&use_multi_scatter));
+  return GPU_stack_link(mat,
+                        node,
+                        "node_bsdf_glossy",
+                        in,
+                        out,
+                        GPU_constant(&use_multi_scatter),
+                        GPU_kernel_globals(),
+                        GPU_shading_data());
 }
 
 NODE_SHADER_MATERIALX_BEGIN
@@ -101,7 +115,7 @@ void register_node_type_sh_bsdf_glossy()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeBsdfAnisotropic", SH_NODE_BSDF_GLOSSY);
+  sh_node_type_base(&ntype, "ShaderNodeBsdfAnisotropic"_ustr, SH_NODE_BSDF_GLOSSY);
   ntype.ui_name = "Glossy BSDF";
   ntype.ui_description =
       "Reflection with microfacet distribution, used for materials such as metal or mirrors";
@@ -111,7 +125,7 @@ void register_node_type_sh_bsdf_glossy()
   ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.add_ui_poll = object_shader_nodes_poll;
   ntype.draw_buttons = file_ns::node_shader_buts_glossy;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Middle);
+  ntype.default_width = bke::NodeWidth::_160;
   ntype.initfunc = file_ns::node_shader_init_glossy;
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_glossy;
   ntype.materialx_fn = file_ns::node_shader_materialx;
@@ -120,7 +134,7 @@ void register_node_type_sh_bsdf_glossy()
 
   /* Needed to preserve API compatibility with older versions which had separate
    * Glossy and Anisotropic nodes. */
-  bke::node_register_alias(ntype, "ShaderNodeBsdfGlossy");
+  bke::node_register_alias(ntype, "ShaderNodeBsdfGlossy"_ustr);
 }
 
 }  // namespace blender

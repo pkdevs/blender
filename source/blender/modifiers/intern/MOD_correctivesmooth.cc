@@ -8,10 +8,12 @@
  * Method of smoothing deformation, also known as 'delta-mush'.
  */
 
+#include <algorithm>
+
 #include "BLI_math_base.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -24,6 +26,7 @@
 
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_mesh_wrapper.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -42,11 +45,11 @@
 // #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "BLI_time.h"
-#  include "BLI_time_utildefines.h"
+#  include "BLI_time.hh"
+#  include "BLI_time_utildefines.hh"
 #endif
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -359,7 +362,7 @@ static void smooth_verts(CorrectiveSmoothModifierData *csmd,
                        smooth_weights);
     }
     else {
-      copy_vn_fl(smooth_weights, int(vertexCos.size()), 1.0f);
+      std::fill_n(smooth_weights, int(vertexCos.size()), 1.0f);
     }
 
     if (csmd->flag & MOD_CORRECTIVESMOOTH_PIN_BOUNDARY) {
@@ -382,7 +385,7 @@ static bool calc_tangent_loop(const float v_dir_prev[3],
                               const float v_dir_next[3],
                               float r_tspace[3][3])
 {
-  if (UNLIKELY(compare_v3v3(v_dir_prev, v_dir_next, FLT_EPSILON * 10.0f))) {
+  if (compare_v3v3(v_dir_prev, v_dir_next, FLT_EPSILON * 10.0f)) [[unlikely]] {
     /* As there are no weights, the value doesn't matter just initialize it. */
     unit_m3(r_tspace);
     return false;
@@ -425,7 +428,7 @@ static void calc_tangent_spaces(const Mesh *mesh,
   Span<int> corner_verts = mesh->corner_verts();
 
   if (r_tangent_weights_per_vertex != nullptr) {
-    copy_vn_fl(r_tangent_weights_per_vertex, int(mvert_num), 0.0f);
+    std::fill_n(r_tangent_weights_per_vertex, int(mvert_num), 0.0f);
   }
 
   for (const int64_t i : faces.index_range()) {
@@ -527,7 +530,7 @@ static void calc_deltas(CorrectiveSmoothModifierData *csmd,
 
   calc_tangent_spaces(mesh, smooth_vertex_coords, tangent_spaces, nullptr, nullptr);
 
-  copy_vn_fl(&csmd->delta_cache.deltas[0][0], int(corner_verts.size()) * 3, 0.0f);
+  std::fill_n(&csmd->delta_cache.deltas[0][0], int(corner_verts.size()) * 3, 0.0f);
 
   for (l_index = 0; l_index < corner_verts.size(); l_index++) {
     const int v_index = corner_verts[l_index];
@@ -535,7 +538,7 @@ static void calc_deltas(CorrectiveSmoothModifierData *csmd,
     sub_v3_v3v3(delta, rest_coords[v_index], smooth_vertex_coords[v_index]);
 
     float imat[3][3];
-    if (UNLIKELY(!invert_m3_m3(imat, tangent_spaces[l_index]))) {
+    if (!invert_m3_m3(imat, tangent_spaces[l_index])) [[unlikely]] {
       transpose_m3_m3(imat, tangent_spaces[l_index]);
     }
     mul_v3_m3v3(csmd->delta_cache.deltas[l_index], imat, delta);
@@ -596,7 +599,7 @@ static void correctivesmooth_modifier_do(ModifierData *md,
     }
   }
 
-  if (UNLIKELY(use_only_smooth)) {
+  if (use_only_smooth) [[unlikely]] {
     smooth_verts(csmd, mesh, dvert, defgrp_index, vertexCos);
     return;
   }
@@ -626,7 +629,7 @@ static void correctivesmooth_modifier_do(ModifierData *md,
       goto error;
     }
     else {
-      const int me_numVerts = (em) ? em->bm->totvert : (id_cast<Mesh *>(ob->data))->verts_num;
+      const int me_numVerts = BKE_mesh_wrapper_vert_len(mesh);
 
       if (me_numVerts != vertexCos.size()) {
         BKE_modifier_set_error(ob,
@@ -655,7 +658,8 @@ static void correctivesmooth_modifier_do(ModifierData *md,
     }
     else {
       if (em) {
-        rest_coords_alloc = BKE_editmesh_vert_coords_alloc_orco(em);
+        const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
+        rest_coords_alloc = BKE_editmesh_vert_coords_alloc_orco(bm);
         rest_coords = rest_coords_alloc;
       }
       else {
@@ -704,7 +708,7 @@ static void correctivesmooth_modifier_do(ModifierData *md,
     for (const int64_t l_index : corner_verts.index_range()) {
       const int v_index = corner_verts[l_index];
       const float weight = tangent_weights[l_index] / tangent_weights_per_vertex[v_index];
-      if (UNLIKELY(!(weight > 0.0f))) {
+      if (!(weight > 0.0f)) [[unlikely]] {
         /* Catches zero & divide by zero. */
         continue;
       }
@@ -776,34 +780,35 @@ static void panel_register(ARegionType *region_type)
 
 static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierData *md)
 {
-  CorrectiveSmoothModifierData csmd = *reinterpret_cast<const CorrectiveSmoothModifierData *>(md);
-  const bool is_undo = BLO_write_is_undo(writer);
-
-  if (ID_IS_OVERRIDE_LIBRARY(id_owner) && !is_undo) {
+  const CorrectiveSmoothModifierData *csmd =
+      reinterpret_cast<const CorrectiveSmoothModifierData *>(md);
+  const bool is_undo = writer->is_undo();
+  const bool without_bind_data = ID_IS_OVERRIDE_LIBRARY(id_owner) && !is_undo &&
+                                 (md->flag & eModifierFlag_OverrideLibrary_Local) == 0;
+  if (without_bind_data) {
+    /* Modifier coming from linked data cannot be bound from an override, so we can remove all
+     * binding data, can save a significant amount of memory. */
     BLI_assert(!ID_IS_LINKED(id_owner));
-    const bool is_local = (md->flag & eModifierFlag_OverrideLibrary_Local) != 0;
-    if (!is_local) {
-      /* Modifier coming from linked data cannot be bound from an override, so we can remove all
-       * binding data, can save a significant amount of memory. */
-      csmd.bind_coords_num = 0;
-      csmd.bind_coords = nullptr;
-      csmd.bind_coords_sharing_info = nullptr;
-    }
+    writer->write_struct(csmd, [](BlendStructWriter<CorrectiveSmoothModifierData> &struct_writer) {
+      struct_writer.shallow_data.bind_coords_num = 0;
+      struct_writer.shallow_data.bind_coords = nullptr;
+      struct_writer.shallow_data.bind_coords_sharing_info = nullptr;
+    });
+    return;
   }
 
-  if (csmd.bind_coords != nullptr) {
-    BLO_write_shared(writer,
-                     csmd.bind_coords,
-                     sizeof(float[3]) * csmd.bind_coords_num,
-                     csmd.bind_coords_sharing_info,
-                     [&]() {
-                       BLO_write_float3_array(writer,
-                                              csmd.bind_coords_num,
-                                              reinterpret_cast<const float *>(csmd.bind_coords));
-                     });
+  if (csmd->bind_coords != nullptr) {
+    writer->write_shared(csmd->bind_coords,
+                         sizeof(float[3]) * csmd->bind_coords_num,
+                         csmd->bind_coords_sharing_info,
+                         [&]() {
+                           writer->write_float3_array(
+                               csmd->bind_coords_num,
+                               reinterpret_cast<const float *>(csmd->bind_coords));
+                         });
   }
 
-  writer->write_struct_at_address(md, &csmd);
+  writer->write_struct(csmd);
 }
 
 static void blend_read(BlendDataReader *reader, ModifierData *md)
@@ -812,9 +817,9 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
 
   if (csmd->bind_coords) {
     csmd->bind_coords_sharing_info = BLO_read_shared(reader, &csmd->bind_coords, [&]() {
-      BLO_read_float3_array(
-          reader, int(csmd->bind_coords_num), reinterpret_cast<float **>(&csmd->bind_coords));
-      return implicit_sharing::info_for_mem_free(csmd->bind_coords);
+      BLO_read_array_and_validate_size(
+          reader, reinterpret_cast<float **>(&csmd->bind_coords), &csmd->bind_coords_num, 3);
+      return csmd->bind_coords ? implicit_sharing::info_for_mem_free(csmd->bind_coords) : nullptr;
     });
   }
 

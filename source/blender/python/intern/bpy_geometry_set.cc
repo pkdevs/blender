@@ -94,7 +94,7 @@ PyDoc_STRVAR(
     "   Create a geometry set from the evaluated geometry of an evaluated object.\n"
     "   Typically, it's more convenient to use :func:`bpy.types.Object.evaluated_geometry`.\n"
     "\n"
-    "   :arg evaluated_object: The evaluated object to create a geometry set from.\n"
+    "   :param evaluated_object: The evaluated object to create a geometry set from.\n"
     "   :type evaluated_object: bpy.types.Object\n");
 static BPy_GeometrySet *BPy_GeometrySet_static_from_evaluated_object(PyObject * /*self*/,
                                                                      PyObject *args,
@@ -102,8 +102,12 @@ static BPy_GeometrySet *BPy_GeometrySet_static_from_evaluated_object(PyObject * 
 {
   static const char *kwlist[] = {"evaluated_object", nullptr};
   PyObject *py_evaluated_object;
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O", const_cast<char **>(kwlist), &py_evaluated_object))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O" /* `evaluated_object` */
+                                   ":from_evaluated_object",
+                                   const_cast<char **>(kwlist),
+                                   &py_evaluated_object))
   {
     return nullptr;
   }
@@ -125,10 +129,7 @@ static BPy_GeometrySet *BPy_GeometrySet_static_from_evaluated_object(PyObject * 
     PyErr_SetString(PyExc_TypeError, "Expected an evaluated object");
     return nullptr;
   }
-  const bool is_instance_collection = evaluated_object->type == OB_EMPTY &&
-                                      evaluated_object->instance_collection;
-  const bool valid_object_type = OB_TYPE_IS_GEOMETRY(evaluated_object->type) ||
-                                 is_instance_collection;
+  const bool valid_object_type = DEG_object_has_geometry_component(evaluated_object);
   if (!valid_object_type) {
     const char *ob_type_name = "<unknown>";
     RNA_enum_name_from_value(rna_enum_object_type_items, evaluated_object->type, &ob_type_name);
@@ -146,11 +147,15 @@ static BPy_GeometrySet *BPy_GeometrySet_static_from_evaluated_object(PyObject * 
     return nullptr;
   }
 
+  const bool is_instance_collection = evaluated_object->type == OB_EMPTY &&
+                                      evaluated_object->instance_collection;
   GeometrySet geometry;
   if (is_instance_collection) {
-    bke::Instances *instances = new bke::Instances();
-    instances->add_new_reference(bke::InstanceReference{*evaluated_object->instance_collection});
-    instances->add_instance(0, float4x4::identity());
+    bke::Instances *instances = new bke::Instances(1);
+    const int handle = instances->add_new_reference(
+        bke::InstanceReference{*evaluated_object->instance_collection});
+    instances->reference_handles_for_write().first() = handle;
+    instances->transforms_for_write().first() = float4x4::identity();
     geometry.replace_instances(instances);
   }
   else {
@@ -193,7 +198,7 @@ static PyObject *BPy_GeometrySet_get_instances_pointcloud(BPy_GeometrySet *self)
   }
   if (self->instances_pointcloud == nullptr) {
     const int instances_num = instances->instances_num();
-    PointCloud *pointcloud = BKE_pointcloud_new_nomain(instances_num);
+    PointCloud *pointcloud = BKE_pointcloud_new_nomain(PointCloudType::Points, instances_num);
     bke::gather_attributes(instances->attributes(),
                            bke::AttrDomain::Instance,
                            bke::AttrDomain::Point,
@@ -259,7 +264,7 @@ PyDoc_STRVAR(
     ":type: str\n");
 static PyObject *BPy_GeometrySet_get_name(BPy_GeometrySet *self, void * /*closure*/)
 {
-  return PyC_UnicodeFromStdStr(self->geometry.name);
+  return PyC_UnicodeFromStdStr(self->geometry.name());
 }
 
 static int BPy_GeometrySet_set_name(BPy_GeometrySet *self, PyObject *value, void * /*closure*/)
@@ -269,7 +274,7 @@ static int BPy_GeometrySet_set_name(BPy_GeometrySet *self, PyObject *value, void
     return -1;
   }
   const char *name = PyUnicode_AsUTF8(value);
-  self->geometry.name = name;
+  self->geometry.set_name(name);
   return 0;
 }
 

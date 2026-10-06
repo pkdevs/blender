@@ -5,6 +5,13 @@
 set(ABSEIL_EXTRA_ARGS
 )
 
+if(WIN32)
+  set(ABSEIL_EXTRA_ARGS
+    ${ABSEIL_EXTRA_ARGS}
+    -DCMAKE_DEBUG_POSTFIX=_d
+  )
+endif()
+
 ExternalProject_Add(external_abseil
   URL file://${PACKAGE_DIR}/${ABSEIL_FILE}
   URL_HASH ${ABSEIL_HASH_TYPE}=${ABSEIL_HASH}
@@ -19,3 +26,18 @@ ExternalProject_Add(external_abseil
 
   INSTALL_DIR ${LIBDIR}/abseil
 )
+
+if(WIN32)
+  ExternalProject_Add_Step(external_abseil after_install
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      ${LIBDIR}/abseil/
+      ${HARVEST_TARGET}/abseil
+    COMMAND ${CMAKE_COMMAND} -E remove_directory
+      ${HARVEST_TARGET}/abseil/lib/pkgconfig
+    DEPENDEES install
+  )
+else()
+  harvest(external_abseil abseil/include abseil/include "*.h")
+  harvest(external_abseil abseil/lib/cmake/absl abseil/lib/cmake/absl "*.cmake")
+  harvest(external_abseil abseil/lib abseil/lib "*.a")
+endif()

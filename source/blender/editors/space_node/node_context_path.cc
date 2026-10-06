@@ -7,11 +7,12 @@
  * \brief Node breadcrumbs drawing
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_node_types.h"
 
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_material.hh"
 #include "BKE_object.hh"
@@ -88,7 +89,7 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
 {
 
   for (const auto [i, path_item] : snode.treepath.enumerate()) {
-    if (skip_base && &path_item == snode.treepath.first) {
+    if (skip_base && &path_item == snode.treepath.first_) {
       continue;
     }
     if (path_item.nodetree == nullptr) {
@@ -106,7 +107,7 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
       icon = ICON_ASSET_MANAGER;
     }
 
-    if (&path_item != snode.treepath.last) {
+    if (&path_item != snode.treepath.last()) {
       /* We don't need to add handle function to last node-tree. */
       ui::context_path_add_generic(
           path, *RNA_NodeTree, path_item.nodetree, icon, tree_path_handle_func(i));
@@ -171,50 +172,51 @@ static void get_context_path_node_compositor(const bContext &C,
 {
   if (snode.flag & SNODE_PIN) {
     context_path_add_node_tree_and_node_groups(snode, path);
+    return;
   }
-  else {
-    if (snode.node_tree_sub_type == SNODE_COMPOSITOR_SEQUENCER) {
-      Scene *sequencer_scene = CTX_data_sequencer_scene(&C);
-      if (!sequencer_scene) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
+
+  if (snode.node_tree_sub_type == SNODE_COMPOSITOR_SEQUENCER) {
+    bool skip_base = false;
+    Scene *sequencer_scene = CTX_data_sequencer_scene(&C);
+    if (sequencer_scene) {
       ui::context_path_add_generic(path, *RNA_Scene, sequencer_scene, ICON_SCENE);
-      Editing *ed = seq::editing_get(sequencer_scene);
-      if (!ed) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
       Strip *strip = seq::select_active_get(sequencer_scene);
-      if (!strip) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
+      if (strip) {
+        ui::context_path_add_generic(path, *RNA_Strip, strip, ICON_SEQ_STRIP);
+        bNodeTree *node_group = nullptr;
+        if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
+          CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
+          node_group = comp_data->node_group;
+        }
+        else {
+          StripModifierData *smd = seq::modifier_get_active(strip);
+          if (smd && smd->type == eSeqModifierType_Compositor) {
+            SequencerCompositorModifierData *scmd =
+                reinterpret_cast<SequencerCompositorModifierData *>(smd);
+            node_group = scmd->node_group;
+          }
+        }
+
+        if (node_group != nullptr) {
+          context_path_add_top_level_shader_node_tree(snode, path, *RNA_NodeTree, node_group);
+          skip_base = true;
+        }
       }
-      ui::context_path_add_generic(path, *RNA_Strip, strip, ICON_SEQ_STRIP_DUPLICATE);
-      StripModifierData *smd = seq::modifier_get_active(strip);
-      if (!smd) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      if (smd->type != eSeqModifierType_Compositor) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      SequencerCompositorModifierData *scmd = reinterpret_cast<SequencerCompositorModifierData *>(
-          smd);
-      if (scmd->node_group == nullptr) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      context_path_add_top_level_shader_node_tree(snode, path, *RNA_NodeTree, scmd->node_group);
-      context_path_add_node_tree_and_node_groups(snode, path, true);
     }
-    else {
-      Scene *scene = CTX_data_scene(&C);
-      ui::context_path_add_generic(path, *RNA_Scene, scene);
-      context_path_add_node_tree_and_node_groups(snode, path);
-    }
+    context_path_add_node_tree_and_node_groups(snode, path, skip_base);
+    return;
   }
+
+  Scene *scene = CTX_data_scene(&C);
+  ui::context_path_add_generic(path, *RNA_Scene, scene);
+  SceneCompositorEffect *effect = bke::compositor::get_active_effect(*scene);
+  if (!effect) {
+    context_path_add_node_tree_and_node_groups(snode, path);
+    return;
+  }
+
+  ui::context_path_add_generic(path, *RNA_SceneCompositorEffect, effect, ICON_NODE_COMPOSITING);
+  context_path_add_node_tree_and_node_groups(snode, path);
 }
 
 static void get_context_path_node_geometry(const bContext &C,

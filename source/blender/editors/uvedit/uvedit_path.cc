@@ -11,9 +11,9 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_linklist.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_linklist.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -164,8 +164,7 @@ static int mouse_mesh_uv_shortest_path_vert(Scene *scene,
                                             const float aspect_y,
                                             const BMUVOffsets &offsets)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   int flush = 0;
 
   UserData_UV user_data = {};
@@ -283,8 +282,7 @@ static int mouse_mesh_uv_shortest_path_edge(Scene *scene,
                                             const float aspect_y,
                                             const BMUVOffsets &offsets)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   int flush = 0;
 
   UserData_UV user_data = {};
@@ -398,8 +396,7 @@ static int mouse_mesh_uv_shortest_path_face(Scene *scene,
                                             const float aspect_y,
                                             const BMUVOffsets &offsets)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   int flush = 0;
 
   UserData_UV user_data = {};
@@ -532,7 +529,7 @@ static bool uv_shortest_path_pick_ex(Scene *scene,
   if (ok) {
     if (flush != 0) {
       const bool select = (flush == 1);
-      BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
       if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
         ED_uvedit_select_sync_flush(scene->toolsettings, bm, select);
       }
@@ -560,6 +557,7 @@ static wmOperatorStatus uv_shortest_path_pick_invoke(bContext *C,
                                                      wmOperator *op,
                                                      const wmEvent *event)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
   const char uv_selectmode = ED_uvedit_select_mode_get(scene);
@@ -578,7 +576,7 @@ static wmOperatorStatus uv_shortest_path_pick_invoke(bContext *C,
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   float co[2];
 
@@ -611,8 +609,7 @@ static wmOperatorStatus uv_shortest_path_pick_invoke(bContext *C,
   if (hit_found) {
     /* This may not be the active object. */
     Object *obedit = hit.ob;
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
     /* Respond to the hit. */
@@ -689,7 +686,7 @@ static wmOperatorStatus uv_shortest_path_pick_invoke(bContext *C,
       }
 
       const int object_index = ed::object::object_in_mode_to_index(
-          scene, view_layer, OB_MODE_EDIT, obedit);
+          *bmain, scene, view_layer, OB_MODE_EDIT, obedit);
       BLI_assert(object_index != -1);
       RNA_int_set(op->ptr, "object_index", object_index);
       RNA_int_set(op->ptr, "index", index);
@@ -703,6 +700,7 @@ static wmOperatorStatus uv_shortest_path_pick_invoke(bContext *C,
 static wmOperatorStatus uv_shortest_path_pick_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -715,13 +713,12 @@ static wmOperatorStatus uv_shortest_path_pick_exec(bContext *C, wmOperator *op)
   }
 
   Object *obedit = ed::object::object_in_mode_from_index(
-      scene, view_layer, OB_MODE_EDIT, object_index);
+      *bmain, scene, view_layer, OB_MODE_EDIT, object_index);
   if (obedit == nullptr) {
     return OPERATOR_CANCELLED;
   }
 
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
   BMElem *ele_src, *ele_dst;
@@ -811,6 +808,7 @@ void UV_OT_shortest_path_pick(wmOperatorType *ot)
 static wmOperatorStatus uv_shortest_path_select_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   const char uv_selectmode = ED_uvedit_select_mode_get(scene);
   bool found_valid_elements = false;
@@ -819,9 +817,9 @@ static wmOperatorStatus uv_shortest_path_select_exec(bContext *C, wmOperator *op
 
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
   for (Object *obedit : objects) {
-    BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
@@ -876,7 +874,7 @@ void UV_OT_shortest_path_select(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Select Shortest Path";
   ot->idname = "UV_OT_shortest_path_select";
-  ot->description = "Selected shortest path between two vertices/edges/faces";
+  ot->description = "Select shortest path between two vertices/edges/faces";
 
   /* API callbacks. */
   ot->exec = uv_shortest_path_select_exec;
