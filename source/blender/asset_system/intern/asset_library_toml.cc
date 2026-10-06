@@ -28,16 +28,10 @@ constexpr toml::spec TOML_SPEC_VERSION = toml::spec::v(1, 1, 0);
 /* -------------------------------------------------------------------- */
 /** \name Blender Asset Library TOML Configuration
  * @code{.unparsed}
- * # Example blender_asset_lib.toml configuration file
- * title = "Asset Library Config"
- * name = "Blender"
+ * # Blender Asset Library Configuration file
  *
  * [library]
- * # Name of the library when registered; informational only.
- * name = "Asset Library Name"
  * uuid = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
- * # # Optional: Link to the remote library if this library is hosted online; informational only.
- * # remore_url = "url"
  * @endcode
  * \{ */
 
@@ -53,8 +47,7 @@ static const toml::value &default_asset_lib_config_get()
 {
   static toml::value value = []() -> toml::value {
     const StringRef default_str = R"_delim_(
-title = "Asset Library Config"
-name = "Blender"
+# Blender Asset Library Configuration file
 
 [library]
 
@@ -144,11 +137,6 @@ void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
     }
     toml::table &library_table = asset_lib_toml_value["library"].as_table();
     library_table["uuid"] = UUID(BLI_uuid_generate_random()).str();
-    /* Copy general library information to the .toml file. */
-    library_table["name"] = custom_library.name;
-    if (custom_library.remote_url[0]) {
-      library_table["remote_url"] = custom_library.remote_url;
-    }
     std::string toml_as_string = toml::format(asset_lib_toml_value, TOML_SPEC_VERSION);
     FILE *file_handle = BLI_fopen(blender_asset_lib_toml_path, "w");
     if (file_handle == nullptr) {
