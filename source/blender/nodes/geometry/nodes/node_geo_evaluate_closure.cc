@@ -6,6 +6,7 @@
 #include "UI_resources.hh"
 
 #include "NOD_geo_closure.hh"
+#include "NOD_geometry_nodes_closure_location.hh"
 #include "NOD_geometry_nodes_closure_signature.hh"
 #include "NOD_socket_items_blend.hh"
 #include "NOD_socket_items_ops.hh"
@@ -13,6 +14,8 @@
 #include "NOD_socket_search_link.hh"
 #include "NOD_sync_sockets.hh"
 
+#include "BKE_compute_context_cache.hh"
+#include "BKE_compute_contexts.hh"
 #include "BKE_idprop.hh"
 #include "BKE_node_tree_reference_lifetimes.hh"
 
@@ -288,8 +291,17 @@ class EvaluateClosureOperation : public NodeOperation {
       return;
     }
 
+    const ClosureSourceLocation closure_source_location{&closure->zone.output_node()->owner_tree(),
+                                                        closure->zone.output_node()->identifier,
+                                                        closure->compute_context.hash(),
+                                                        &closure->compute_context};
+    const bke::EvaluateClosureComputeContext &evaluate_closure_context =
+        this->context().compute_context_cache().for_evaluate_closure(&this->get_compute_context(),
+                                                                     this->node().identifier,
+                                                                     &this->node().owner_tree(),
+                                                                     closure_source_location);
     ZoneTreeOperation *zone_tree_operation = new ZoneTreeOperation(
-        this->context(), closure->zone, closure->compute_context);
+        this->context(), closure->zone, evaluate_closure_context);
     this->set_reference_counts(*zone_tree_operation, closure);
     Vector<std::unique_ptr<Result>> inputs = this->map_inputs(*zone_tree_operation, closure);
     Vector<std::unique_ptr<Result>> captured_values = this->map_captured_values(
