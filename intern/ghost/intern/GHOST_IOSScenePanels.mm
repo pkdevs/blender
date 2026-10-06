@@ -235,9 +235,12 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     _sectionViewCache = [[NSMutableDictionary alloc] init];
     _disclosureButtons = [[NSMutableDictionary alloc] init];
     _expandedPanels = [[NSMutableDictionary alloc] init];
-    _inspectorButton = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"sidebar.right"]
+    /* Blender's own editor-type icons, as in the area header's editor menu. */
+    _inspectorButton = [[UIBarButtonItem alloc]
+        initWithImage:_icon(@"PROPERTIES") ?: [UIImage systemImageNamed:@"sidebar.right"]
         style:UIBarButtonItemStylePlain target:self action:@selector(toggleInspector:)];
-    _hierarchyButton = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"list.bullet.indent"]
+    _hierarchyButton = [[UIBarButtonItem alloc]
+        initWithImage:_icon(@"OUTLINER") ?: [UIImage systemImageNamed:@"list.bullet.indent"]
         style:UIBarButtonItemStylePlain target:self action:@selector(toggleHierarchy:)];
     _inspectorButton.title = _inspectorButton.accessibilityLabel = @"Properties";
     _hierarchyButton.title = _hierarchyButton.accessibilityLabel = @"Hierarchy";
