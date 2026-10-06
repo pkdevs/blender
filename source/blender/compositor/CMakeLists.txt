@@ -32,6 +32,7 @@ set(SRC
   COM_domain.hh
   COM_group_node_operation.hh
   COM_implicit_input_operation.hh
+  COM_init.hh
   COM_input_descriptor.hh
   COM_meta_data.hh
   COM_multi_function_procedure_operation.hh
@@ -66,6 +67,7 @@ set(SRC
   intern/domain.cc
   intern/group_node_operation.cc
   intern/implicit_input_operation.cc
+  intern/init.cc
   intern/meta_data.cc
   intern/multi_function_procedure_operation.cc
   intern/node_group_operation.cc
