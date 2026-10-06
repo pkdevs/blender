@@ -43,6 +43,7 @@
 #include "SEQ_time.hh"
 
 #include "IO_otio.hh"
+#include "otio_import.hh"
 #include "otio_metadata.hh"
 
 #include "opentimelineio/anyVector.h"
@@ -152,7 +153,7 @@ class OTIOTest : public BlendfileLoadingBaseTest {
 
   SerializableObject::Retainer<Timeline> read_otio()
   {
-    return dynamic_cast<Timeline *>(Timeline::from_json_file(otio_path));
+    return dynamic_cast<Timeline *>(read_otio_file_with_workarounds(otio_path.c_str()));
   }
 
   void write_otio(Timeline *timeline)

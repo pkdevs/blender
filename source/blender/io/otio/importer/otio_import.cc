@@ -530,7 +530,7 @@ static void workaround_marker_v2_upgrade(serialize::Value &value)
  * Reads the file as JSON first so it can be patched before OpenTimelineIO parses it. Falls back to
  * reading it directly when Blender's JSON parser can't handle the file.
  */
-static SerializableObject *read_otio_file_with_workarounds(
+SerializableObject *read_otio_file_with_workarounds(
     const char *filepath, opentimelineio::OPENTIMELINEIO_VERSION_NS::ErrorStatus *error_status)
 {
   const std::shared_ptr<serialize::Value> value = serialize::read_json_file(filepath);
