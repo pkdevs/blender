@@ -43,6 +43,15 @@ python3 -m unittest discover -s release/ios -p 'test_export_icons.py'
   dynamic `UIColor.labelColor`, not a baked light/dark RGB color. UIKit handles
   appearance, increased contrast, and control-state tinting.
 
+The floating tool palette prefers separate `blender.tool.color.*` assets, including
+its grouped-tool menus. These preserve the original VCO vertex colors, opacity,
+and smooth color interpolation using PDF triangle-mesh shading. Vector PDF is
+used because SVG does not have a CoreSVG-compatible Gouraud triangle primitive.
+Light and dark asset variants follow Blender's own HSL lightness inversion for
+light toolbars. UIKit renders these as original artwork, so the app's blue
+selection highlight does not recolor them. Icons without colored tool artwork
+continue to use the template fallback; other menus and controls stay monochrome.
+
 All bundled SVG interface icons and vector-triangle tool icons are exported.
 Add semantic mappings to the manifest for native controls that need named aliases. Missing
 sources or unsupported SVG constructs fail the export instead of silently
