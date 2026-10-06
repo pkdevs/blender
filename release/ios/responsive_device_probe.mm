@@ -719,6 +719,11 @@ extern "C" char *blender_device_probe_toolbar_label(int action, int index)
     UILabel *label = [controller valueForKey:@"_toolbar_label"];
     UIView *bubble = [controller valueForKey:@"_toolbar_label_bubble"];
     UIView *rail = [controller valueForKey:@"_tool_rail"];
+    UIStackView *stack = [controller valueForKey:@"_tool_stack"];
+    UIView *selection = nil;
+    for (UIView *view in stack.subviews) {
+      if ([view.accessibilityIdentifier isEqual:@"blender.toolbar.selection"]) { selection = view; }
+    }
     NSMutableArray *tools = [NSMutableArray array];
     for (UIButton *b in buttons) {
       [tools addObject:@{@"id": b.accessibilityIdentifier ?: @"", @"name": b.accessibilityLabel ?: @""}];
@@ -731,6 +736,12 @@ extern "C" char *blender_device_probe_toolbar_label(int action, int index)
       @"label": label.text ?: @"", @"alpha": @(bubble.alpha),
       @"rail": rectValues([rail convertRect:rail.bounds toView:controller.view]),
       @"bubble": rectValues(bubble.frame), @"viewport": rectValues(controller.view.bounds),
+      @"selection": rectValues(selection.frame),
+      @"selectionPresentation": rectValues(selection.layer.presentationLayer ?
+                                              selection.layer.presentationLayer.frame : selection.frame),
+      @"selectionHidden": @(selection.hidden),
+      @"selectionAnimations": selection.layer.animationKeys ?: @[],
+      @"selectionIdentity": @((uintptr_t)(__bridge void *)selection),
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strndup((const char *)json.bytes, json.length);
