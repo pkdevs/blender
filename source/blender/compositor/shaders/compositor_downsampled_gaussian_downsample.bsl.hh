@@ -13,7 +13,7 @@ struct Resources {
   [[compilation_constant]] const bool virtual_padding;
 
   [[push_constant]] int2 source_size;
-  [[push_constant]] int2 source_offset;
+  [[push_constant, condition(virtual_padding)]] int2 source_offset;
   [[push_constant]] int2 source_padding;
   [[push_constant]] int2 destination_size;
   [[push_constant]] int2 destination_padding;

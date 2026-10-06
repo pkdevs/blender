@@ -6,6 +6,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_span.hh"
 
 #include "GPU_shader.hh"
 #include "GPU_state.hh"
@@ -59,7 +60,7 @@ namespace blender::compositor {
 
 static constexpr float max_working_sigma = 6.0f;
 /* Bilinear-paired taps on each side of the center; their 24 pixels cover four sigma at
- * max_working_sigma. Must match the size of the taps array in the filter shader. */
+ * max_working_sigma. Must match the size of the tap arrays in the filter shader. */
 static constexpr int max_tap_pairs = 12;
 
 static void bind_as_bilinear_texture(gpu::Shader *shader, const Result &input, const char *name)
@@ -175,8 +176,8 @@ static DownsampledImage downsample(Context &context,
 static void gaussian_axis_gpu(Context &context,
                               const Result &input,
                               const int axis,
-                              const float4 *taps,
-                              const int tap_count,
+                              const Span<float> tap_weights,
+                              const Span<float> tap_offsets,
                               const float center_weight,
                               Result &output)
 {
@@ -188,9 +189,11 @@ static void gaussian_axis_gpu(Context &context,
   uv_step[axis] = 1.0f / size[axis];
   GPU_shader_uniform_2fv(shader, "uv_step", uv_step);
   GPU_shader_uniform_1f(shader, "center_weight", center_weight);
-  GPU_shader_uniform_1i(shader, "tap_count", tap_count);
-  GPU_shader_uniform_4fv_array(
-      shader, "taps", max_tap_pairs, reinterpret_cast<const float (*)[4]>(taps));
+  GPU_shader_uniform_1i(shader, "tap_count", tap_weights.size());
+  if (!tap_weights.is_empty()) {
+    GPU_shader_uniform_1f_array(shader, "tap_weights", tap_weights.size(), tap_weights.data());
+    GPU_shader_uniform_1f_array(shader, "tap_offsets", tap_offsets.size(), tap_offsets.data());
+  }
   bind_as_bilinear_texture(shader, input, "input_tx");
   output.bind_as_image(shader, "output_img");
   compute_dispatch_threads_at_least(shader, size);
@@ -201,21 +204,16 @@ static void gaussian_axis_gpu(Context &context,
 
 static void gaussian_axis_cpu(const Result &input,
                               const int axis,
-                              const float *weights,
-                              const int tap_count,
+                              const Span<float> weights,
                               const float center_weight,
                               Result &output)
 {
   /* Same logic as GPU, except we don't use bilinear paired taps. */
 
   const int2 size = input.domain().data_size;
-  int weight_count = 2 * tap_count;
-  while (weight_count > 0 && weights[weight_count - 1] == 0.0f) {
-    weight_count--;
-  }
   parallel_for(size, [&](const int2 texel) {
     float4 color = float4(input.load_pixel<Color>(texel)) * center_weight;
-    for (int i = 1; i <= weight_count; i++) {
+    for (int i = 1; i <= weights.size(); i++) {
       int2 negative = texel;
       int2 positive = texel;
       negative[axis] = math::max(0, texel[axis] - i);
@@ -241,11 +239,12 @@ static Result gaussian_axis(Context &context,
 
   /* Downsampling stops at one logical pixel, so at radius above 18x the image size the
    * working sigma can exceed max_working_sigma, and the kernel is truncated to max_tap_pairs. */
-  float4 taps[max_tap_pairs] = {};
+  float tap_weights[max_tap_pairs] = {};
+  float tap_offsets[max_tap_pairs] = {};
   float weights[2 * max_tap_pairs] = {};
   /* Note: clamp before integer conversion; a radius coming from a socket can exceed the UI range.
    */
-  const int tap_count = int(std::ceil(math::min(float(max_tap_pairs), 2.0f * sigma)));
+  int tap_count = int(std::ceil(math::min(float(max_tap_pairs), 2.0f * sigma)));
   /* Gaussian kernel, with a smoothstep taper towards zero over the last sigma. */
   const auto weight = [sigma](const int i) {
     const float x = i / sigma;
@@ -262,24 +261,35 @@ static Result gaussian_axis(Context &context,
     /* Calculate bilinear sample placement: one sample at `i + b / (a + b)`, weighted by `a + b`.
      * However a and b both can be zero near the tapered kernel tail. */
     const float w = a + b;
-    taps[j] = float4(w > 0.0f ? i + b / w : i, w, 0.0f, 0.0f);
+    tap_offsets[j] = w > 0.0f ? i + b / w : i;
+    tap_weights[j] = w;
     sum += 2.0f * w;
   }
-  for (float4 &tap : taps) {
-    tap.y /= sum;
+  int weight_count = 2 * tap_count;
+  while (weight_count > 0 && weights[weight_count - 1] == 0.0f) {
+    weight_count--;
+  }
+  tap_count = (weight_count + 1) / 2;
+  for (float &w : tap_weights) {
+    w /= sum;
   }
   for (float &w : weights) {
     w /= sum;
   }
   const float center_weight = 1.0f / sum;
-  const int2 size = input.domain().data_size;
   output.allocate_texture(input.domain());
 
   if (context.use_gpu()) {
-    gaussian_axis_gpu(context, input, axis, taps, tap_count, center_weight, output);
+    gaussian_axis_gpu(context,
+                      input,
+                      axis,
+                      Span<float>(tap_weights, tap_count),
+                      Span<float>(tap_offsets, tap_count),
+                      center_weight,
+                      output);
   }
   else {
-    gaussian_axis_cpu(input, axis, weights, tap_count, center_weight, output);
+    gaussian_axis_cpu(input, axis, Span<float>(weights, weight_count), center_weight, output);
   }
   return output;
 }
@@ -494,10 +504,10 @@ static void do_blur(Context &context,
       input_padding);
   Result horizontal = gaussian_axis(
       context, working.image, working_sigma(sigma.x, working.size.x, size.x), 0);
+  working.image.release();
   Result filtered = gaussian_axis(
       context, horizontal, working_sigma(sigma.y, working.size.y, size.y), 1);
   horizontal.release();
-  working.image.release();
   if (working.size == size) {
     output.share_data(filtered);
   }
