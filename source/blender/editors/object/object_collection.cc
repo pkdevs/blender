@@ -985,12 +985,8 @@ static wmOperatorStatus collection_importer_make_local_exec(bContext *C, wmOpera
     return OPERATOR_FINISHED;
   }
 
-  /* Make each ID associated with the external archive library */
-  for (ID &id_iter : MainAllIDsIterator(*bmain)) {
-    if (id_iter.lib == external_archive_lib) {
-      BKE_lib_id_make_local(bmain, &id_iter, LIB_ID_MAKELOCAL_FORCE_LOCAL);
-    }
-  }
+  /* Make local every ID associated with the external archive library */
+  BKE_library_make_local(bmain, external_archive_lib, nullptr, false, false, false);
 
   /* Remove external archive library and the main external library too if it's now empty. */
   Library *external_library = external_archive_lib->archive_parent_library;
