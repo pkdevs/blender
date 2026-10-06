@@ -310,9 +310,9 @@ class EvaluateClosureOperation : public NodeOperation {
     this->write_outputs(zone_tree_operation, closure);
   }
 
-  /* Write a default value for each of the needed outputs, if an input with the same name as the
-   * output exists, the output shares the value of that input, otherwise, the output is default
-   * initialized. */
+  /* Write a default value for each of the needed outputs, if an input with the same name and type
+   * as the output exists, the output shares the value of that input, otherwise, the output is
+   * default initialized. */
   void write_default_outputs()
   {
     for (const bNodeSocket *output : this->node().output_sockets()) {
@@ -332,6 +332,10 @@ class EvaluateClosureOperation : public NodeOperation {
       }
 
       Result &input = this->get_input(matching_input->identifier);
+      if (input.type() != result.type()) {
+        continue;
+      }
+
       result.share_data(input);
     }
 
@@ -433,11 +437,18 @@ class EvaluateClosureOperation : public NodeOperation {
       }
 
       Result &evaluate_node_result = this->get_result(evaluate_node_output->identifier);
-      if (evaluate_node_result.should_compute()) {
-        Result &zone_tree_result = zone_tree_operation.get_result(zone_output->identifier);
-        evaluate_node_result.share_data(zone_tree_result);
-        zone_tree_result.release();
+      if (!evaluate_node_result.should_compute()) {
+        continue;
       }
+
+      Result &zone_tree_result = zone_tree_operation.get_result(zone_output->identifier);
+      if (zone_tree_result.type() != evaluate_node_result.type()) {
+        zone_tree_result.release();
+        continue;
+      }
+
+      evaluate_node_result.share_data(zone_tree_result);
+      zone_tree_result.release();
     }
 
     this->allocate_default_remaining_outputs();
