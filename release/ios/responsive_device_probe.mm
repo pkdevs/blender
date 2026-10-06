@@ -194,8 +194,14 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
       UIView *control = controls[key];
       frames[key] = rectValues([control convertRect:control.bounds toView:controller.view]);
     }
+    UIViewController *presented = controller.view.window.rootViewController;
+    while (presented.presentedViewController) {
+      presented = presented.presentedViewController;
+    }
+    NSString *alert = [presented isKindOfClass:UIAlertController.class] ? presented.title : nil;
     NSDictionary *state = @{@"snapshot": snapshot ?: @{}, @"visible": @(!rail.hidden && rail.alpha > 0),
-                            @"frame": rectValues(rail.frame), @"controls": frames};
+                            @"frame": rectValues(rail.frame), @"controls": frames,
+                            @"alert": alert ?: @""};
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
   });

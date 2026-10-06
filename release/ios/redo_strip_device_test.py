@@ -17,6 +17,8 @@ enqueue = engine.WM_apple_ios_ui_operator_enqueue
 enqueue.argtypes = [ctypes.c_char_p]
 setting = engine.WM_apple_ios_ui_setting_enqueue
 setting.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+command = engine.WM_apple_ios_ui_command_enqueue
+command.argtypes = [ctypes.c_int]
 free = ctypes.CDLL('/usr/lib/libSystem.B.dylib').free
 free.argtypes = [ctypes.c_void_p]
 report = {'checks': []}
@@ -33,7 +35,10 @@ def ui(**request):
 
 
 def check(ok, label):
-    assert ok, label + ': ' + str(ui())
+    state = ui()
+    assert not state.get('alert'), label + ': ' + str(state)
+    assert not state['snapshot'].get('error'), label + ': ' + str(state)
+    assert ok, label + ': ' + str(state)
     report['checks'].append(label)
 
 
@@ -106,19 +111,20 @@ def tests():
     yield 0.3
     area = next(a for a in bpy.context.screen.areas if a.type == 'VIEW_3D')
     region = next(r for r in area.regions if r.type == 'WINDOW')
-    with bpy.context.temp_override(area=area, region=region):
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
+    command(1)
     yield 0.5
+    import bmesh
+    original_faces = len(bmesh.from_edit_mesh(bpy.context.object.data).faces)
     enqueue(b'MESH_OT_subdivide')
     yield 1.0
     check(ui()['visible'] and ui()['snapshot']['operator'] == 'MESH_OT_subdivide', 'Edit Mode operator exposes its own controls')
     ui(action='edit', key=prop('number_cuts')['key'], value=2)
     yield 1.0
-    check(prop('number_cuts')['value'] == 2, 'Edit Mode adjustment executes and publishes current state')
+    check(prop('number_cuts')['value'] == 2 and
+          len(bmesh.from_edit_mesh(bpy.context.object.data).faces) == original_faces * 9,
+          'Edit Mode adjustment replaces subdivision with the requested topology')
     check(not any(r.type == 'HUD' and r.width > 1 and r.height > 1 for r in area.regions),
           'Desktop redo panel does not appear beneath the native strip')
-    import bmesh
     before_z = max(v.co.z for v in bmesh.from_edit_mesh(bpy.context.object.data).verts)
     with bpy.context.temp_override(area=area, region=region):
         bpy.ops.mesh.extrude_region_move('EXEC_DEFAULT', True, TRANSFORM_OT_translate={'value': (0, 0, 1)})
