@@ -331,13 +331,25 @@ class TestCollectionImport(CollectionIOTestBase):
             self.assertEqual(len(bpy.data.collections[coll_A].all_objects), 4)
             self.assertEqual(len(bpy.data.collections[coll_B].all_objects), 1)
 
+            self.assertEqual(len(bpy.data.libraries), 4)
+            self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 2)
+            self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 2)
+
             self.clear_collection_importer(coll_A)
             self.assertEqual(len(bpy.data.collections[coll_A].all_objects), 0)
             self.assertEqual(len(bpy.data.collections[coll_B].all_objects), 1)
 
+            self.assertEqual(len(bpy.data.libraries), 3)
+            self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 2)
+            self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 1)
+
             self.clear_collection_importer(coll_B)
             self.assertEqual(len(bpy.data.collections[coll_A].all_objects), 0)
             self.assertEqual(len(bpy.data.collections[coll_B].all_objects), 0)
+
+            self.assertEqual(len(bpy.data.libraries), 2)
+            self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 2)
+            self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 0)
 
         # No errors should happen when clearing an already empty collection
         self.clear_collection_importer(coll_A)

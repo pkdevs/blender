@@ -914,7 +914,7 @@ static void COLLECTION_OT_importer_import(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static void collection_importer_clear_ids(Main *bmain, const Library *external_archive_lib)
+static void collection_importer_clear_ids(Main *bmain, Library *external_archive_lib)
 {
   Set<ID *> ids_to_delete;
   for (ID &id_iter : MainAllIDsIterator(*bmain)) {
@@ -922,6 +922,7 @@ static void collection_importer_clear_ids(Main *bmain, const Library *external_a
       ids_to_delete.add(&id_iter);
     }
   }
+  ids_to_delete.add(&external_archive_lib->id);
   BKE_id_multi_delete(bmain, ids_to_delete);
 }
 
@@ -934,19 +935,14 @@ static wmOperatorStatus collection_importer_clear_exec(bContext *C, wmOperator *
     return OPERATOR_CANCELLED;
   }
 
-  const Library *external_archive_lib = data->runtime->archive_library;
+  Library *external_archive_lib = data->runtime->archive_library;
   if (!external_archive_lib) {
     /* It is ok to clear a collection which hasn't been imported yet. */
     return OPERATOR_FINISHED;
   }
 
-  /* Clear all imported data from the external archive library and remove it from its parent
-   * library. */
+  /* Clear all imported data, including the external archive library itself. */
   collection_importer_clear_ids(bmain, external_archive_lib);
-
-  Library *external_library = external_archive_lib->archive_parent_library;
-  external_library->runtime->archived_libraries.remove_if(
-      [&](const Library *lib) { return lib == external_archive_lib; });
 
   data->runtime->archive_library = nullptr;
 
@@ -992,16 +988,13 @@ static wmOperatorStatus collection_importer_make_local_exec(bContext *C, wmOpera
     }
   }
 
-  /* Remove external archive library from its parent. */
+  /* Remove external archive library and the main external library too if it's now empty. */
   Library *external_library = external_archive_lib->archive_parent_library;
-  external_library->runtime->archived_libraries.remove_if(
-      [&](const Library *lib) { return lib == external_archive_lib; });
-  BKE_id_delete(bmain, external_archive_lib);
-
-  /* Remove the external library itself if it is now empty. */
+  BKE_id_delete(bmain, &external_archive_lib->id);
   if (external_library->runtime->archived_libraries.is_empty()) {
-    BKE_id_delete(bmain, external_library);
+    BKE_id_delete(bmain, &external_library->id);
   }
+
   BKE_collection_importer_free_data(data);
   MEM_delete(data);
 
