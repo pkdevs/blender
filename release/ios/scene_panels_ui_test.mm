@@ -216,8 +216,9 @@ static void testNumberScrubbing(UIView *overlay)
   NSDictionary *before = request;
   [panels beginNumberScrub:field];
   [panels changeNumberScrub:field translation:25];
-  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.75 && request == before,
-            @"Drag previews smoothly without engine commands");
+  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.75 &&
+            [request[@"phase"] isEqual:@"update"] && [request[@"value"] doubleValue] == 1.75,
+            @"Dragging sends a live Blender preview before release");
   apply();
   NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.75, @"Snapshots do not erase an active drag");
   [panels finishNumberScrub:field];
@@ -234,16 +235,19 @@ static void testNumberScrubbing(UIView *overlay)
   [panels changeNumberScrub:field translation:-50];
   NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.25, @"Leftward drags decrease the number");
   [panels cancelNumberScrub];
-  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.75 && request == before, @"Cancelled drags restore without an edit");
+  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 1.75 &&
+            [request[@"phase"] isEqual:@"cancel"] && [request[@"value"] doubleValue] == 1.75,
+            @"Cancelled drags restore Blender and the field");
   [panels beginNumberScrub:field];
   [panels finishNumberScrub:field];
-  NSCAssert(request == before, @"Zero-distance drags do not create undo entries");
+  NSCAssert([request[@"phase"] isEqual:@"cancel"], @"Zero-distance drags do not create undo entries");
   [panels beginNumberScrub:field];
   [panels changeNumberScrub:field translation:100];
   property[@"value"] = @7;
   apply();
   [panels finishNumberScrub:field];
-  NSCAssert([field.text isEqual:@"7"] && request == before, @"External changes cancel stale scrubs");
+  NSCAssert([[numbers numberFromString:field.text] doubleValue] == 2.75 && [request[@"phase"] isEqual:@"end"],
+            @"Snapshots cannot interrupt an in-flight live scrub");
   property[@"type"] = @"INT";
   property[@"dragStep"] = @0.5;
   property[@"min"] = @0;
@@ -420,14 +424,17 @@ int main()
     NSDictionary *beforeColor = request;
     UIColor *chosen = [UIColor colorWithRed:0.2 green:0.4 blue:0.6 alpha:0.3];
     [picker.delegate colorPickerViewController:picker didSelectColor:chosen continuously:YES];
-    NSCAssert(request == beforeColor, @"Continuous color preview does not flood engine or undo");
+    NSCAssert(request != beforeColor && [request[@"phase"] isEqual:@"update"], @"Color changes preview in Blender while dragging");
+    beforeColor = request;
+    [picker.delegate colorPickerViewController:picker didSelectColor:chosen continuously:YES];
+    NSCAssert(request == beforeColor, @"Color previews are rate limited");
     [picker.delegate colorPickerViewController:picker didSelectColor:chosen continuously:NO];
     NSCAssert([setting isEqual:@"native_properties_edit"] && [request[@"key"] isEqual:@"object.color"] &&
               [request[@"value"] count] == 4 && fabs([request[@"value"][3] doubleValue] - 0.3) < 1e-5,
               @"Completed color gesture commits all components atomically");
     [panels performSelector:NSSelectorFromString(@"closeColorPicker")];
     NSMutableDictionary *sliderModel = [[acknowledged mutableCopy] autorelease];
-    sliderModel[@"ack"] = @3;
+    sliderModel[@"ack"] = [panels valueForKey:@"_sequence"];
     NSMutableArray *sliderProperties = [NSMutableArray array];
     for (NSDictionary *spec in @[
       @{@"key": @"factor", @"type": @"FLOAT", @"value": @0.25, @"min": @0, @"max": @1, @"scale": @"LINEAR"},
@@ -454,7 +461,8 @@ int main()
     [panels performSelector:NSSelectorFromString(@"beginSlider:") withObject:slider];
     slider.value = 0.7;
     [panels performSelector:NSSelectorFromString(@"changeSlider:") withObject:slider];
-    NSCAssert(request == beforeSlide, @"Dragging previews locally without intermediate undo steps");
+    NSCAssert([request[@"phase"] isEqual:@"update"] && fabs([request[@"value"] doubleValue] - 0.7) < 1e-6,
+              @"Slider sends live previews before release");
     UITextField *factorField = [panels valueForKey:@"_controls"][@"factor"];
     NSCAssert(fabs([[formatter numberFromString:factorField.text] doubleValue] - 0.7) < 1e-9,
               @"Slider feedback hides floating-point representation noise");
@@ -466,7 +474,9 @@ int main()
     slider.value = 0.1;
     [panels performSelector:NSSelectorFromString(@"changeSlider:") withObject:slider];
     [panels performSelector:NSSelectorFromString(@"cancelSlider:") withObject:slider];
-    NSCAssert(request == beforeSlide && fabs(slider.value - 0.25) < 1e-6, @"Cancel restores the snapshot without an edit");
+    NSCAssert([request[@"phase"] isEqual:@"cancel"] && fabs(slider.value - 0.7) < 1e-6,
+              @"Cancel restores the gesture's starting value");
+    beforeSlide = request;
     [panels performSelector:NSSelectorFromString(@"beginSlider:") withObject:slider];
     [panels performSelector:NSSelectorFromString(@"finishSlider:") withObject:slider];
     NSCAssert(request == beforeSlide, @"Touching a slider without dragging does not create an edit");

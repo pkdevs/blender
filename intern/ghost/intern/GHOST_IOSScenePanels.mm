@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #import "GHOST_IOSScenePanels.hh"
+#import <QuartzCore/QuartzCore.h>
 #include <cfloat>
 #include <cmath>
 
@@ -22,6 +23,8 @@ static NSString *blenderNativePropertyLabel(NSDictionary *property)
 @property(nonatomic) double scrubStart;
 @property(nonatomic) double scrubValue;
 @property(nonatomic) CGFloat scrubTranslation;
+@property(nonatomic, copy) NSString *interactionID;
+@property(nonatomic) CFTimeInterval lastPreview;
 @end
 @implementation GHOSTIOSPropertyField
 - (CGRect)textRectForBounds:(CGRect)bounds { return CGRectInset(bounds, 8, 0); }
@@ -31,6 +34,7 @@ static NSString *blenderNativePropertyLabel(NSDictionary *property)
   [_descriptor release];
   [_objectID release];
   [_originalText release];
+  [_interactionID release];
   [super dealloc];
 }
 @end
@@ -40,6 +44,9 @@ static NSString *blenderNativePropertyLabel(NSDictionary *property)
 @property(nonatomic, copy) NSString *objectID;
 @property(nonatomic) BOOL editing;
 @property(nonatomic) BOOL changed;
+@property(nonatomic, copy) NSString *interactionID;
+@property(nonatomic) double startValue;
+@property(nonatomic) CFTimeInterval lastPreview;
 - (double)propertyValue;
 - (void)setPropertyValue:(double)value;
 @end
@@ -77,6 +84,7 @@ static NSString *blenderNativePropertyLabel(NSDictionary *property)
 {
   [_descriptor release];
   [_objectID release];
+  [_interactionID release];
   [super dealloc];
 }
 @end
@@ -199,6 +207,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   GHOSTIOSColorButton *_colorButton;
   BOOL _colorPending;
   GHOSTIOSPropertyField *_scrubField;
+  NSString *_colorInteraction;
+  CFTimeInterval _colorPreviewTime;
   BOOL _shadingOnly;
   GHOSTIOSScenePanels *_shadingPanels;
   UINavigationController *_shadingController;
@@ -325,6 +335,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_shadingPanels release];
   [_shadingController release];
   [_scrubField release];
+  [_colorInteraction release];
   _tree.delegate = nil;
   _tree.dataSource = nil;
   [_treeDataSource release];
@@ -428,6 +439,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (void)applyVisibility
 {
   if (!_showInspector) {
+    for (GHOSTIOSPropertySlider *slider in _sliders.allValues) {
+      if (slider.editing) { [self finishSlider:slider]; }
+    }
     [self cancelNumberScrub];
     [self closeColorPicker];
   }
@@ -513,6 +527,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (void)dismissShading
 {
   if (!_shadingPanels || !_shadingPanels->_showInspector) { return; }
+  for (GHOSTIOSPropertySlider *slider in _shadingPanels->_sliders.allValues) {
+    if (slider.editing) { [_shadingPanels finishSlider:slider]; }
+  }
   [_shadingPanels cancelNumberScrub];
   [_shadingPanels closeColorPicker];
   [_shadingPanels->_form endEditing:YES];
@@ -569,6 +586,18 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [self send:request];
 }
 
+- (void)previewProperty:(NSDictionary *)property object:(NSString *)objectID value:(id)value
+            interaction:(NSString *)interaction phase:(NSString *)phase
+{
+  NSMutableDictionary *request = [[property mutableCopy] autorelease];
+  request[@"action"] = @"property";
+  request[@"id"] = objectID;
+  request[@"value"] = value;
+  request[@"interaction"] = interaction;
+  request[@"phase"] = phase;
+  [self send:request];
+}
+
 - (UILabel *)label:(NSString *)text style:(UIFontTextStyle)style
 {
   UILabel *label = [[[UILabel alloc] init] autorelease];
@@ -617,6 +646,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (void)rebuildInspector:(NSDictionary *)inspector preservingSections:(BOOL)preserve
 {
   if (!preserve) {
+    for (GHOSTIOSPropertySlider *slider in _sliders.allValues) {
+      if (slider.editing) { [self finishSlider:slider]; }
+    }
     [self closeColorPicker];
     [_sectionViewCache removeAllObjects];
     [_disclosureButtons removeAllObjects];
@@ -989,7 +1021,12 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   NSArray *components = blenderNativeColorComponents(_colorButton.well.selectedColor,
                                                      _colorButton.well.supportsAlpha);
   if (components) {
-    [self editProperty:_colorButton.descriptor object:_colorButton.objectID value:components];
+    if (_colorInteraction) {
+      [self previewProperty:_colorButton.descriptor object:_colorButton.objectID value:components
+               interaction:_colorInteraction phase:@"end"];
+      [_colorInteraction release]; _colorInteraction = nil;
+    }
+    else { [self editProperty:_colorButton.descriptor object:_colorButton.objectID value:components]; }
   }
 }
 
@@ -1025,6 +1062,20 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   _colorPending = YES;
   if (!continuously) {
     [self commitColor];
+  }
+  else {
+    if (!_colorInteraction) {
+      _colorInteraction = [NSUUID.UUID.UUIDString copy];
+      _colorPreviewTime = 0;
+    }
+    if (CACurrentMediaTime() - _colorPreviewTime >= 1.0 / 60.0) {
+      NSArray *components = blenderNativeColorComponents(color, _colorButton.well.supportsAlpha);
+      if (components) {
+        [self previewProperty:_colorButton.descriptor object:_colorButton.objectID value:components
+                 interaction:_colorInteraction phase:@"update"];
+        _colorPreviewTime = CACurrentMediaTime();
+      }
+    }
   }
 }
 
@@ -1296,6 +1347,9 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [_form endEditing:YES];
   slider.editing = YES;
   slider.changed = NO;
+  slider.interactionID = NSUUID.UUID.UUIDString;
+  slider.startValue = slider.propertyValue;
+  slider.lastPreview = 0;
 }
 
 - (void)changeSlider:(GHOSTIOSPropertySlider *)slider
@@ -1307,6 +1361,11 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   slider.changed = YES;
   [slider setPropertyValue:value];
   [self displaySliderValue:slider value:value];
+  if (slider.editing && CACurrentMediaTime() - slider.lastPreview >= 1.0 / 60.0) {
+    [self previewProperty:slider.descriptor object:slider.objectID value:@(value)
+             interaction:slider.interactionID phase:@"update"];
+    slider.lastPreview = CACurrentMediaTime();
+  }
   if (!slider.editing) {
     /* Accessibility adjustments are complete edits without touch-down/up events. */
     [self finishSlider:slider];
@@ -1317,15 +1376,35 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 {
   slider.editing = NO;
   if (_sliders[[self keyForProperty:slider.descriptor]] != slider || !slider.enabled || !slider.changed) {
+    slider.interactionID = nil;
     return;
   }
   slider.changed = NO;
   double value = slider.propertyValue;
-  [self editProperty:slider.descriptor object:slider.objectID value:@(value)];
+  if (slider.interactionID) {
+    [self previewProperty:slider.descriptor object:slider.objectID value:@(value)
+             interaction:slider.interactionID phase:value == slider.startValue ? @"cancel" : @"end"];
+    slider.interactionID = nil;
+  }
+  else { [self editProperty:slider.descriptor object:slider.objectID value:@(value)]; }
+  NSMutableDictionary *updated = [[slider.descriptor mutableCopy] autorelease];
+  updated[@"value"] = @(value);
+  slider.descriptor = updated;
+  ((GHOSTIOSPropertyField *)_controls[[self keyForProperty:updated]]).descriptor = updated;
 }
 
 - (void)cancelSlider:(GHOSTIOSPropertySlider *)slider
 {
+  if (slider.interactionID) {
+    [self previewProperty:slider.descriptor object:slider.objectID value:@(slider.startValue)
+             interaction:slider.interactionID phase:@"cancel"];
+    slider.interactionID = nil;
+    [slider setPropertyValue:slider.startValue];
+    [self displaySliderValue:slider value:slider.startValue];
+    slider.editing = NO;
+    slider.changed = NO;
+    return;
+  }
   slider.editing = NO;
   slider.changed = NO;
   if (_sliders[[self keyForProperty:slider.descriptor]] != slider) {
@@ -1353,6 +1432,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   formatter.usesGroupingSeparator = NO;
   formatter.maximumFractionDigits = 6;
   field.text = [formatter stringFromNumber:@(stepper.value)];
+  [self commitField:(GHOSTIOSPropertyField *)field];
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer
@@ -1391,6 +1471,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   field.scrubbing = YES;
   field.scrubStart = field.scrubValue = [field.descriptor[@"value"] doubleValue];
   field.scrubTranslation = 0;
+  field.interactionID = NSUUID.UUID.UUIDString;
+  field.lastPreview = 0;
   field.backgroundColor = [_overlay.tintColor colorWithAlphaComponent:0.12];
 }
 
@@ -1411,6 +1493,12 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   field.scrubValue = fmin(maximum, fmax(minimum, value));
   field.scrubTranslation = translation;
   [self displayNumberScrub:field];
+  if (CACurrentMediaTime() - field.lastPreview >= 1.0 / 60.0) {
+    const double preview = [field.descriptor[@"type"] isEqual:@"INT"] ? round(field.scrubValue) : field.scrubValue;
+    [self previewProperty:field.descriptor object:field.objectID value:@(preview)
+             interaction:field.interactionID phase:@"update"];
+    field.lastPreview = CACurrentMediaTime();
+  }
 }
 
 - (void)finishNumberScrub:(GHOSTIOSPropertyField *)field
@@ -1421,12 +1509,14 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   double value = [field.descriptor[@"type"] isEqual:@"INT"] ? round(field.scrubValue) : field.scrubValue;
   field.scrubbing = NO;
   field.backgroundColor = UIColor.clearColor;
-  if (valid && value != field.scrubStart) {
-    [self editProperty:field.descriptor object:field.objectID value:@(value)];
+  if (valid) {
+    [self previewProperty:field.descriptor object:field.objectID value:@(value)
+             interaction:field.interactionID phase:value != field.scrubStart ? @"end" : @"cancel"];
     NSMutableDictionary *updated = [[field.descriptor mutableCopy] autorelease];
     updated[@"value"] = @(value);
     field.descriptor = updated;
   }
+  field.interactionID = nil;
   [_scrubField release];
   _scrubField = nil;
 }
@@ -1434,6 +1524,11 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (void)cancelNumberScrub
 {
   if (!_scrubField) { return; }
+  if (_scrubField.interactionID) {
+    [self previewProperty:_scrubField.descriptor object:_scrubField.objectID value:@(_scrubField.scrubStart)
+             interaction:_scrubField.interactionID phase:@"cancel"];
+    _scrubField.interactionID = nil;
+  }
   _scrubField.scrubValue = _scrubField.scrubStart;
   [self displayNumberScrub:_scrubField];
   _scrubField.scrubbing = NO;
@@ -1482,6 +1577,10 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   if (![value isEqual:field.descriptor[@"value"]]) {
     [self editProperty:field.descriptor object:field.objectID value:value];
     [_sliders[[self keyForProperty:field.descriptor]] setPropertyValue:[value doubleValue]];
+    NSMutableDictionary *updated = [[field.descriptor mutableCopy] autorelease];
+    updated[@"value"] = value;
+    field.descriptor = updated;
+    field.originalText = field.text;
   }
 }
 
@@ -1633,9 +1732,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       }
       else if ([control isKindOfClass:GHOSTIOSPropertyField.class]) {
         GHOSTIOSPropertyField *field = (GHOSTIOSPropertyField *)control;
-        double tolerance = [property[@"type"] isEqual:@"INT"] ? 0 :
-            4 * FLT_EPSILON * fmax(fabs([value doubleValue]), fabs(field.scrubStart));
-        if (field.scrubbing && (!field.enabled || fabs([value doubleValue] - field.scrubStart) > tolerance)) {
+        if (field.scrubbing && !field.enabled) {
           [self cancelNumberScrub];
         }
         if (!field.isFirstResponder && !slider.editing && !field.scrubbing) {
