@@ -161,6 +161,7 @@ template<int D> VecBase<float, D> mix(VecOp<float, D>, VecOp<float, D>, VecOp<fl
 template<typename T, int D> VecBase<T, D> mix(VecOp<T, D>, VecOp<T, D>, VecOp<bool, D>) RET;
 
 #define select(A, B, C) mix(A, B, C)
+#define saturate(a) clamp(a, 0.0f, 1.0f)
 
 VecBase<float, 3> cross(VecOp<float, 3>, VecOp<float, 3>) RET;
 template<int D> float dot(VecOp<float, D>, VecOp<float, D>) RET;
@@ -173,10 +174,10 @@ template<int D> VecBase<int, D> floatBitsToInt(VecOp<float, D>) RET;
 template<int D> VecBase<uint, D> floatBitsToUint(VecOp<float, D>) RET;
 template<int D> VecBase<float, D> intBitsToFloat(VecOp<int, D>) RET;
 template<int D> VecBase<float, D> uintBitsToFloat(VecOp<uint, D>) RET;
-int floatBitsToInt(float) RET;
-uint floatBitsToUint(float) RET;
-float intBitsToFloat(int) RET;
-float uintBitsToFloat(uint) RET;
+constexpr int floatBitsToInt(float) RET;
+constexpr uint floatBitsToUint(float) RET;
+constexpr float intBitsToFloat(int) RET;
+constexpr float uintBitsToFloat(uint) RET;
 
 /* Matrix compare operators. */
 #define EQ_OP(type, ...) \
