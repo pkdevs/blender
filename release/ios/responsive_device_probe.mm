@@ -26,6 +26,9 @@
 - (void)handleToolbarHover:(UIHoverGestureRecognizer *)gesture;
 - (void)handleHover:(UIHoverGestureRecognizer *)gesture;
 - (void)cancelPencilStroke;
+- (void)sendProperty:(NSDictionary *)property value:(id)value operation:(NSString *)operation;
+- (void)commitField:(UITextField *)field;
+- (void)dismiss:(id)sender;
 @end
 
 @interface BlenderPencilProbeHover : UIHoverGestureRecognizer
@@ -149,6 +152,54 @@ static UIViewController *blenderController()
 static NSArray *rectValues(CGRect rect)
 {
   return @[ @(rect.origin.x), @(rect.origin.y), @(rect.size.width), @(rect.size.height) ];
+}
+
+extern "C" char *blender_device_probe_redo(const char *request_json)
+{
+  NSString *json = request_json ? [NSString stringWithUTF8String:request_json] : @"{}";
+  NSDictionary *request = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+                                                         options:0 error:nil];
+  __block char *result = nullptr;
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    UIViewController *controller = blenderController();
+    id strip = [controller valueForKey:@"_redo_strip"];
+    UIView *rail = [strip valueForKey:@"view"];
+    NSDictionary *snapshot = [strip valueForKey:@"_snapshot"];
+    NSDictionary *controls = [strip valueForKey:@"_controls"];
+    if ([request[@"action"] isEqual:@"done"]) {
+      [strip dismiss:[strip valueForKey:@"_done"]];
+    }
+    else if ([request[@"action"] isEqual:@"edit"]) {
+      UIControl *control = controls[request[@"key"]];
+      if ([control isKindOfClass:UITextField.class]) {
+        UITextField *field = (UITextField *)control;
+        field.text = [request[@"value"] isKindOfClass:NSNumber.class] ?
+            [NSNumberFormatter localizedStringFromNumber:request[@"value"] numberStyle:NSNumberFormatterDecimalStyle] : request[@"value"];
+        [strip commitField:field];
+      }
+      else if ([control isKindOfClass:UISwitch.class]) {
+        ((UISwitch *)control).on = [request[@"value"] boolValue];
+        [control sendActionsForControlEvents:UIControlEventValueChanged];
+      }
+      else if ([control isKindOfClass:UISlider.class]) {
+        ((UISlider *)control).value = [request[@"value"] floatValue];
+        [control sendActionsForControlEvents:UIControlEventValueChanged];
+      }
+      else {
+        [strip sendProperty:[strip propertyForKey:request[@"key"]] value:request[@"value"] operation:snapshot[@"id"]];
+      }
+    }
+    NSMutableDictionary *frames = [NSMutableDictionary dictionary];
+    for (NSString *key in controls) {
+      UIView *control = controls[key];
+      frames[key] = rectValues([control convertRect:control.bounds toView:controller.view]);
+    }
+    NSDictionary *state = @{@"snapshot": snapshot ?: @{}, @"visible": @(!rail.hidden && rail.alpha > 0),
+                            @"frame": rectValues(rail.frame), @"controls": frames};
+    NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
+    result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
+  });
+  return result;
 }
 
 static UIViewController *blenderPresentedController()
