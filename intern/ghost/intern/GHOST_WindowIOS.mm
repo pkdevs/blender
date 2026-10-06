@@ -41,6 +41,7 @@
 
 extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 #import "GHOST_IOSScenePanels.hh"
+#import "GHOST_IOSRedoStrip.hh"
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
@@ -2131,6 +2132,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIBarButtonItem *_undo_button;
   UIBarButtonItem *_finger_input_button;
   GHOSTIOSScenePanels *_scene_panels;
+  GHOSTIOSRedoStrip *_redo_strip;
   BOOL _finger_tool_enabled;
   GHOSTIOSPencilMenu *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
@@ -2331,6 +2333,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (void)dealloc
 {
   [_scene_panels release];
+  [_redo_strip release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
@@ -3461,6 +3464,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self updateViewportLoadingIndicator];
   [self refreshNativeMenuBar];
   NSDictionary *model = [self toolbarModel];
+  [_redo_strip updateSnapshot:model[@"redo"]];
   NSArray *navigation_geometry = model[@"navigationGizmo"];
   if ([navigation_geometry isKindOfClass:NSArray.class] && navigation_geometry.count == 3 &&
       ![_view_gizmo_geometry isEqual:navigation_geometry]) {
@@ -3527,8 +3531,22 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   panel_rect.origin.y = panel_top;
   panel_rect.size.height = MAX(0, panel_bottom - panel_top);
   [_scene_panels layoutInRect:panel_rect];
-  [self layoutToolbarLabel];
   [self layoutViewPie];
+  CGRect redo_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
+  const CGFloat redo_left = MAX(CGRectGetMinX(redo_rect) + 12, CGRectGetMaxX(_tool_rail.frame) + 12);
+  CGFloat redo_right = CGRectGetMaxX(redo_rect) - 12;
+  CGFloat redo_bottom = MIN(CGRectGetMinY(_action_rail.frame) - 8,
+                           CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame) - 8);
+  if (redo_rect.size.width < 700) {
+    redo_bottom = MIN(redo_bottom, CGRectGetMinY(_view_gizmo_hotspot.frame) - 8);
+  }
+  else {
+    redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
+  }
+  redo_rect = CGRectMake(redo_left, panel_top + 8,
+      MAX(0, redo_right - redo_left), MAX(60, redo_bottom - panel_top - 8));
+  [_redo_strip layoutInRect:redo_rect];
+  [self layoutToolbarLabel];
   [self updateMTKViewDrawableScale];
   [self updateToolbarHeightForCurrentState];
   if (_top_bar_height_constraint) {
@@ -4573,6 +4591,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self.view addSubview:_overlay_view];
 
   _mesh_select_buttons = [[NSMutableArray alloc] init];
+  _redo_strip = [[GHOSTIOSRedoStrip alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
+    if (!name.length) { return nil; }
+    return [[UIImage imageNamed:[@"blender." stringByAppendingString:name.lowercaseString]]
+        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  }];
   _scene_panels = [[GHOSTIOSScenePanels alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
     if (!name.length) {
       return nil;
