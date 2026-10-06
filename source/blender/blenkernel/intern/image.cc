@@ -4578,7 +4578,13 @@ static int image_get_multiview_index(Image *ima, ImageUser *iuser)
 void BKE_image_populate_cache_from_autosave(Image *ima)
 {
   if (!(ima->flag & IMA_AUTOSAVE_TEMPPACK)) {
-    return;
+    if (BLI_listbase_count(&ima->autosave_packedfiles) == 0) {
+      /* Logically, this shouldn't happen but avoid returning early and leaving the file in an
+       * invalid state if we encounter this situation. */
+    }
+    else {
+      return;
+    }
   }
 
   std::scoped_lock lock(ima->runtime->cache_mutex);
