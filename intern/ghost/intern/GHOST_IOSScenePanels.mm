@@ -238,6 +238,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   NSMutableDictionary *_headerContainers;
   NSMutableArray *_headerControls;
   NSArray *_sectionTitles;
+  /* Sections for the active item of a stack, such as the active modifier. */
+  NSSet *_activeSections;
   NSArray *_sectionIdentifiers, *_tabs;
   NSString *_selectedTab;
   NSMutableDictionary *_expandedPanels;
@@ -442,6 +444,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [_headerControls release];
   [_menuProvider release];
   [_sectionTitles release];
+  [_activeSections release];
   [_sectionIdentifiers release];
   [_tabs release];
   [_selectedTab release];
@@ -839,7 +842,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 
 - (NSArray *)shapeForSection:(NSDictionary *)section
 {
-  NSMutableArray *shape = [NSMutableArray arrayWithObjects:section[@"id"] ?: section[@"title"], section[@"title"], nil];
+  NSMutableArray *shape = [NSMutableArray arrayWithObjects:section[@"id"] ?: section[@"title"], section[@"title"],
+                           section[@"active"] ?: @0, nil];
   for (NSDictionary *property in section[@"properties"]) {
     [shape addObject:[self shapeForProperty:property]];
   }
@@ -866,6 +870,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [_formRowKeys removeAllObjects];
   NSMutableArray *titles = [NSMutableArray array];
   NSMutableArray *identifiers = [NSMutableArray array];
+  NSMutableSet *actives = [NSMutableSet set];
   [_controls removeAllObjects];
   [_sliders removeAllObjects];
   [_lockIndicators removeAllObjects];
@@ -894,6 +899,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     [titles addObject:section[@"title"]];
     NSString *sectionID = section[@"id"] ?: section[@"title"];
     [identifiers addObject:sectionID];
+    if ([section[@"active"] boolValue]) { [actives addObject:sectionID]; }
     NSArray *shape = [self shapeForSection:section];
     NSDictionary *cached = _sectionViewCache[sectionID];
     NSArray *maps = @[_controls, _sliders, _lockIndicators, _groupHeadings];
@@ -1291,6 +1297,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   }
   [_sectionTitles release];
   _sectionTitles = [titles copy];
+  [_activeSections release];
+  _activeSections = [actives copy];
   [_sectionIdentifiers release];
   _sectionIdentifiers = [identifiers copy];
   for (NSString *identifier in [[_disclosureButtons.allKeys copy] autorelease]) {
@@ -2431,7 +2439,12 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 {
   NSString *identifier = _sectionIdentifiers[section];
   BOOL expanded = !_selectedTab || [_expandedPanels[_selectedTab] containsObject:identifier];
-  UIButton *header = blenderDisclosureButton(_sectionTitles[section], nil, UIColor.labelColor, 12, expanded);
+  const BOOL active = [_activeSections containsObject:identifier];
+  UIButton *header = blenderDisclosureButton(_sectionTitles[section], nil,
+      active ? _form.tintColor : UIColor.labelColor, 12, expanded);
+  if (active) {
+    header.accessibilityValue = [header.accessibilityValue stringByAppendingString:@", Active"];
+  }
   _disclosureButtons[identifier] = header;
   __block GHOSTIOSScenePanels *owner = self;
   [header addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
