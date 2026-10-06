@@ -2509,6 +2509,33 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   ]];
 }
 
+- (void)toggleHierarchyItem:(NSString *)key
+{
+  NSDiffableDataSourceSectionSnapshot *outline = [[[_treeDataSource snapshotForSection:@"scene"] copy] autorelease];
+  const BOOL expand = ![outline isExpanded:key];
+  if (expand) { [outline expandItems:@[key]]; }
+  else { [outline collapseItems:@[key]]; }
+  if (!_search.text.length) {
+    if (expand) { [_collapsed removeObject:key]; }
+    else { [_collapsed addObject:key]; }
+  }
+  [_treeDataSource applySnapshot:outline toSection:@"scene"
+      animatingDifferences:!UIAccessibilityIsReduceMotionEnabled()
+      completion:^{ [self synchronizeHierarchySelection]; }];
+  NSIndexPath *path = [_treeDataSource indexPathForItemIdentifier:key];
+  UICollectionViewListCell *cell = path ? (UICollectionViewListCell *)[_tree cellForItemAtIndexPath:path] : nil;
+  for (UICellAccessory *accessory in cell.accessories) {
+    if ([accessory isKindOfClass:UICellAccessoryCustomView.class] &&
+        ((UICellAccessoryCustomView *)accessory).placement == UICellAccessoryPlacementLeading) {
+      UIButton *disclosure = (UIButton *)((UICellAccessoryCustomView *)accessory).customView;
+      disclosure.accessibilityLabel = expand ? @"Collapse" : @"Expand";
+      [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.2 animations:^{
+        disclosure.imageView.transform = expand ? CGAffineTransformMakeRotation(M_PI_2) : CGAffineTransformIdentity;
+      }];
+    }
+  }
+}
+
 - (void)configureHierarchyCell:(UICollectionViewListCell *)cell key:(NSString *)key
 {
   NSDictionary *node = _nodesByKey[key];
@@ -2542,11 +2569,32 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   cell.accessibilityValue = [node[@"active"] boolValue] ? @"Active" : @"";
   __block GHOSTIOSScenePanels *owner = self;
   NSMutableArray *accessories = [NSMutableArray array];
-  if ([[_treeDataSource snapshotForSection:@"scene"] snapshotOfParentItem:key includingParentItem:NO].items.count) {
-    UICellAccessoryOutlineDisclosure *disclosure = [[[UICellAccessoryOutlineDisclosure alloc] init] autorelease];
-    disclosure.style = UICellAccessoryOutlineDisclosureStyleCell;
-    [accessories addObject:disclosure];
+  /* UIKit's outline disclosure is always trailing; an outliner reads its disclosure on the
+   * left, like Blender and Finder. Leaves keep an empty slot so names stay aligned. */
+  NSDiffableDataSourceSectionSnapshot *outline = [_treeDataSource snapshotForSection:@"scene"];
+  UIButton *disclosure = [UIButton buttonWithType:UIButtonTypeSystem];
+  disclosure.frame = CGRectMake(0, 0, 20, 32);
+  [disclosure.widthAnchor constraintEqualToConstant:20].active = YES;
+  if ([outline snapshotOfParentItem:key includingParentItem:NO].items.count) {
+    const BOOL expanded = [outline isExpanded:key];
+    UIImageSymbolConfiguration *symbol = [UIImageSymbolConfiguration
+        configurationWithPointSize:12 weight:UIImageSymbolWeightSemibold];
+    [disclosure setImage:[UIImage systemImageNamed:@"chevron.right" withConfiguration:symbol]
+                forState:UIControlStateNormal];
+    disclosure.tintColor = UIColor.secondaryLabelColor;
+    disclosure.imageView.transform = expanded ? CGAffineTransformMakeRotation(M_PI_2) : CGAffineTransformIdentity;
+    disclosure.accessibilityLabel = expanded ? @"Collapse" : @"Expand";
+    disclosure.accessibilityIdentifier = [@"blender.hierarchy.disclosure." stringByAppendingString:node[@"id"]];
+    [disclosure addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+      [owner toggleHierarchyItem:key];
+    }] forControlEvents:UIControlEventTouchUpInside];
   }
+  else {
+    disclosure.userInteractionEnabled = NO;
+    disclosure.isAccessibilityElement = NO;
+  }
+  [accessories addObject:[[[UICellAccessoryCustomView alloc] initWithCustomView:disclosure
+      placement:UICellAccessoryPlacementLeading] autorelease]];
   if (!collection && [node[@"hidden"] boolValue]) {
     UIButton *accessory = [UIButton buttonWithType:UIButtonTypeSystem];
     accessory.tintColor = UIColor.secondaryLabelColor;
