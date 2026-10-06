@@ -297,7 +297,8 @@ void PrefetchJob::free_gpu()
 
 static void seq_prefetch_update_area(PrefetchJob *pfjob)
 {
-  int cfra = math::max(pfjob->scene->r.cfra - before_playhead_frames, pfjob->timeline_start);
+  const int offset = pfjob->is_playing ? 0 : before_playhead_frames;
+  int cfra = math::max(pfjob->scene->r.cfra - offset, pfjob->timeline_start);
 
   /* rebase */
   if (cfra > pfjob->cfra) {
@@ -571,7 +572,7 @@ static bool seq_prefetch_must_skip_frame(PrefetchJob *pfjob)
 
 static bool seq_prefetch_need_suspend(PrefetchJob *pfjob)
 {
-  return seq_prefetch_is_cache_full(pfjob->scene) || pfjob->is_scrubbing || pfjob->is_playing ||
+  return seq_prefetch_is_cache_full(pfjob->scene) || pfjob->is_scrubbing ||
          (pfjob->num_frames_prefetched >= pfjob->timeline_length);
 }
 
