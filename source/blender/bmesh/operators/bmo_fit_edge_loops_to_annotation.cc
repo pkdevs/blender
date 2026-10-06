@@ -5,7 +5,7 @@
 /** \file
  * \ingroup bmesh
  *
- * Stretches selected vertices to the active stroke
+ * Stretches selected vertices to the active stroke.
  */
 
 #include "BLI_listbase.hh"
@@ -172,14 +172,14 @@ static void calculate_verts(const StrokeData &stroke_data,
   if (method == TO_ANNOTATION_PROJECT) {
     for (const int i : IndexRange(verts_num)) {
       BMVert *v = r_chain.verts[i];
-      const float3 v_co_best = float3(v->co);
-      float3 intersection_best = v_co_best;
+      const float3 v_co = float3(v->co);
+      float3 v_co_best = v_co;
       float dist_sq_best = FLT_MAX;
       bool has_best = false;
 
       auto check_intersection_fn = [&](const float3 &ray_dir) {
-        float3 ray_end = v_co_best + ray_dir * ray_length;
-        float3 ray_start = v_co_best - ray_dir * ray_length;
+        float3 ray_end = v_co + ray_dir * ray_length;
+        float3 ray_start = v_co - ray_dir * ray_length;
 
         for (const int j : IndexRange(stroke_data.points.size() - 1)) {
           float3 stroke_seg_start = stroke_data.points[j];
@@ -204,10 +204,10 @@ static void calculate_verts(const StrokeData &stroke_data,
               if (dist_to_start <= dist_seg + segment_epsilon &&
                   dist_to_end <= dist_seg + segment_epsilon)
               {
-                float dist_sq_test = math::distance_squared(v_co_best, closest_on_stroke);
+                float dist_sq_test = math::distance_squared(v_co, closest_on_stroke);
                 if (dist_sq_test < dist_sq_best) {
                   dist_sq_best = dist_sq_test;
-                  intersection_best = closest_on_stroke;
+                  v_co_best = closest_on_stroke;
                   has_best = true;
                 }
               }
@@ -235,15 +235,15 @@ static void calculate_verts(const StrokeData &stroke_data,
       }
 
       if (has_best) {
-        float3 new_co = math::interpolate(v_co_best, intersection_best, factor);
+        float3 new_co = math::interpolate(v_co, v_co_best, factor);
         if (lock_x) {
-          new_co.x = v_co_best.x;
+          new_co.x = v_co.x;
         }
         if (lock_y) {
-          new_co.y = v_co_best.y;
+          new_co.y = v_co.y;
         }
         if (lock_z) {
-          new_co.z = v_co_best.z;
+          new_co.z = v_co.z;
         }
         copy_v3_v3(v->co, new_co);
       }
@@ -321,24 +321,25 @@ void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
       stroke_best = &stroke_fallback;
     }
     else {
-      int best_index = -1;
-      int best_use_count = INT_MAX;
-      float best_dist_sq = FLT_MAX;
+      int index_best = -1;
+      int use_count_best = INT_MAX;
+      float dist_sq_best = FLT_MAX;
 
       for (const int i : strokes.index_range()) {
         const int use_count = strokes[i].use_count;
-        const float dist_sq = math::distance_squared(chain.center, strokes[i].center);
+        const float dist_sq_test = math::distance_squared(chain.center, strokes[i].center);
 
-        if (use_count < best_use_count || (use_count == best_use_count && dist_sq < best_dist_sq))
+        if (use_count < use_count_best ||
+            (use_count == use_count_best && dist_sq_test < dist_sq_best))
         {
-          best_use_count = use_count;
-          best_dist_sq = dist_sq;
-          best_index = i;
+          use_count_best = use_count;
+          dist_sq_best = dist_sq_test;
+          index_best = i;
         }
       }
 
-      strokes[best_index].use_count++;
-      stroke_best = &strokes[best_index];
+      strokes[index_best].use_count++;
+      stroke_best = &strokes[index_best];
     }
 
     float forward_dist = calculate_alignment_distance(chain, *stroke_best, method);

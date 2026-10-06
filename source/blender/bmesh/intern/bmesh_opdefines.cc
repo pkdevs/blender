@@ -1228,7 +1228,7 @@ static BMO_FlagSet bmo_enum_fit_edge_loops_to_annotation_method[] = {
 /*
  * Fit Edge Loops To Annotation.
  *
- * Stretches selected vertices to the active stroke
+ * Stretches selected vertices to the active stroke.
  */
 static BMOpDefine bmo_fit_edge_loops_to_annotation_def = {
     /*opname*/ "fit_edge_loops_to_annotation",
