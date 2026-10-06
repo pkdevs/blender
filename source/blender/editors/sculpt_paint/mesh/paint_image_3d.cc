@@ -1498,7 +1498,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
   MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
 
   node_mask.foreach_index(
-      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
+      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], false); });
 
   for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
     modified.as_mutable_span().fill(0);
@@ -1534,7 +1534,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
 
   node_mask.foreach_index([&](const int i) {
     bke::pbvh::pixels::mark_image_dirty(
-        nodes[i], pixel_nodes[i], *image_data.image, image_data.image_buffers);
+        nodes[i], pixel_nodes[i],  image_data.image_buffers);
   });
 }
 }  // namespace ed::sculpt_paint::image
