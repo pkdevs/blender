@@ -1758,16 +1758,19 @@ static void gizmo_node_transform_prop_matrix_set(const wmGizmo *gz,
   float eul[3];
 
   /* Rotation can't be extracted from matrix when the gizmo width or height is zero. */
+  bNodeSocketValueFloat *rotation = rotation_input->default_value_typed<bNodeSocketValueFloat>();
   if (size[0] != 0 and size[1] != 0) {
-    mat4_to_eul(eul, matrix);
-    rotation_input->default_value_typed<bNodeSocketValueFloat>()->value = eul[2];
+    /* Take angle closest to the current angle. */
+    const float oldrot[3] = {0.0f, 0.0f, rotation->value};
+    mat4_to_compatible_eulO(eul, oldrot, EULER_ORDER_XYZ, matrix);
+    rotation->value = eul[2];
   }
 
   const float scale = size[0];
   scale_input->default_value_typed<bNodeSocketValueFloat>()->value = scale;
 
-  const float rotation = rotation_input->default_value_typed<bNodeSocketValueFloat>()->value;
-  const float2 transformed_offset = node_gizmo_transformed_offset(offset, float2(scale), rotation);
+  const float2 transformed_offset = node_gizmo_transformed_offset(
+      offset, float2(scale), rotation->value);
   x_input->default_value_typed<bNodeSocketValueFloat>()->value = loc[0] - transformed_offset.x;
   y_input->default_value_typed<bNodeSocketValueFloat>()->value = loc[1] - transformed_offset.y;
 
