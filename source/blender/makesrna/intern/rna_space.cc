@@ -9780,6 +9780,20 @@ static void rna_def_space_spreadsheet(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SPREADSHEET, nullptr);
 }
 
+enum ProjectCategoryTabs : short {
+  General = 0,
+  Variables = 1,
+  AssetLibrary = 2,
+};
+
+static const EnumPropertyItem rna_enum_project_categories_items[] = {
+    {ProjectCategoryTabs::General, "GENERAL", 0, "General", ""},
+    {ProjectCategoryTabs::Variables, "VARIABLES", 0, "Variables", ""},
+    RNA_ENUM_ITEM_SEPR,
+    {ProjectCategoryTabs::AssetLibrary, "ASSET_LIBRARY", 0, "Asset Libraries", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void rna_def_space_project(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -9793,11 +9807,11 @@ static void rna_def_space_project(BlenderRNA *brna)
   PropertyRNA *prop;
 
   prop = RNA_def_property(srna, "active_section", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, rna_enum_region_panel_category_items);
+  RNA_def_property_enum_items(prop, rna_enum_project_categories_items);
   RNA_def_property_enum_funcs(prop,
                               "rna_SpaceProject_active_section_get",
                               "rna_SpaceProject_active_section_set",
-                              "rna_SpaceProject_active_section_itemf");
+                              nullptr);
   RNA_def_property_ui_text(prop, "Active Section", "Choose the category of options to display");
 }
 
