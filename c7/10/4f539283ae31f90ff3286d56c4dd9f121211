@@ -1,3 +1,4 @@
 Referenced by issue #134948, Face orientation depends on pivot type
 Referenced by commit 0013db5aef66efddf6c45b0f2abccbbe6cd9ab12, Fix #134948: face orientation depends on pivot type (for a single face)
 Referenced by commit 0dc36d3b8fff3c5d10dc53069370c2250562651b, Fix #148777: regression in BMFace.calc_tangent_edge_pair()
+Referenced by issue #130489, Normals calculated incorrectly for multiple face selection
