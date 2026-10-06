@@ -3903,7 +3903,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                               command:(NSInteger)command
 {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-  button.tintColor = UIColor.systemBlueColor;
+  button.tintColor = UIColor.labelColor;
+  /* The pills float over the always-dark viewport, whatever the app's appearance. */
+  button.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
   button.translatesAutoresizingMaskIntoConstraints = YES;
   button.accessibilityLabel = title;
   button.tag = command;
@@ -3915,8 +3917,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   button.configurationUpdateHandler = ^(UIButton *updated_button) {
     UIButtonConfiguration *configuration = updated_button.selected ?
                                               [UIButtonConfiguration prominentGlassButtonConfiguration] :
-                                              [UIButtonConfiguration clearGlassButtonConfiguration];
-    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.systemBlueColor;
+                                              [UIButtonConfiguration glassButtonConfiguration];
+    /* Regular glass rather than clear: the grid and objects behind clear glass swamp the label. */
+    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
     configuration.baseBackgroundColor = updated_button.selected ? UIColor.systemBlueColor : nil;
     configuration.title = title;
     configuration.image = image;
