@@ -410,6 +410,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 {
   _shadingController.presentationController.delegate = nil;
   [_toolPanels release];
+  _toolPopoverController.presentationController.delegate = nil;
   [_toolPopoverController dismissViewControllerAnimated:NO completion:nil];
   [_toolPopoverController release];
   [_toolPopoverPanels release];
@@ -678,6 +679,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   _toolPopoverController.preferredContentSize = CGSizeMake(320, MIN(420.0, MAX(88.0, form.contentSize.height)));
   _toolPopoverController.modalPresentationStyle = UIModalPresentationPopover;
   _toolPopoverController.popoverPresentationController.barButtonItem = button;
+  _toolPopoverController.presentationController.delegate = self;
   [presenter presentViewController:_toolPopoverController animated:YES completion:nil];
 }
 
@@ -1564,8 +1566,20 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [self closeColorPicker];
 }
 
+- (void)presentationControllerWillDismiss:(UIPresentationController *)presentationController
+{
+  /* Resign the keyboard while the field is still in the popover's window. Otherwise UIKit
+   * re-attaches its input accessory after the popover is gone and throws on the constraint. */
+  [presentationController.presentedViewController.view endEditing:YES];
+}
+
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController
 {
+  if (presentationController.presentedViewController == _toolPopoverController) {
+    [_toolPopoverPanels cancelNumberScrub];
+    [_toolPopoverPanels closeColorPicker];
+    return;
+  }
   if (presentationController.presentedViewController == _shadingController) {
     [self dismissShading];
     return;
