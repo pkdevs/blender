@@ -309,6 +309,15 @@ bool outliner_treesort_tiebreak(bool a_is_object,
                                 bool b_is_object,
                                 const char *b_name);
 
+/**
+ * A child shown under a parent object stores its sort index in its #CollectionObject, so it is
+ * foreign when \a owner, the collection holding that #CollectionObject, belongs to a different
+ * library than \a collection it is shown in.
+ */
+bool outliner_is_foreign_child(const ID &id,
+                               const Collection *owner,
+                               const Collection &collection);
+
 /* `outliner_draw.cc` */
 
 /**

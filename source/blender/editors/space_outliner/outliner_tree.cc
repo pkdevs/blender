@@ -368,19 +368,14 @@ static std::pair<Collection *, CollectionObject *> find_sort_cob(const OutlinerS
   return sort_maps.object_to_any_cob_map.lookup_default(ob, {});
 }
 
-/* The sort index of a child is stored in its #CollectionObject, so a child is foreign when that
- * #CollectionObject belongs to a different library than the collection it is shown in. Such
- * children can't be reordered and are grouped after the other children. */
-static bool is_foreign_child(ID *id, Collection *collection, const OutlinerSortMaps &sort_maps)
+static const Collection *find_sort_owner(const OutlinerSortMaps &sort_maps,
+                                         Collection *collection,
+                                         ID *id)
 {
-  const Library *owner_lib = id->lib;
-  if (GS(id->name) == ID_OB) {
-    Collection *owner = find_sort_cob(sort_maps, collection, id_cast<Object *>(id)).first;
-    if (owner != nullptr) {
-      owner_lib = owner->id.lib;
-    }
+  if (GS(id->name) != ID_OB) {
+    return nullptr;
   }
-  return owner_lib != collection->id.lib;
+  return find_sort_cob(sort_maps, collection, id_cast<Object *>(id)).first;
 }
 
 static std::optional<bool> treesort_linked_child(const tTreeSort &x1,
@@ -388,8 +383,10 @@ static std::optional<bool> treesort_linked_child(const tTreeSort &x1,
                                                  Collection *collection,
                                                  const OutlinerSortMaps &sort_maps)
 {
-  const bool x1_foreign = is_foreign_child(x1.id, collection, sort_maps);
-  const bool x2_foreign = is_foreign_child(x2.id, collection, sort_maps);
+  const bool x1_foreign = outliner_is_foreign_child(
+      *x1.id, find_sort_owner(sort_maps, collection, x1.id), *collection);
+  const bool x2_foreign = outliner_is_foreign_child(
+      *x2.id, find_sort_owner(sort_maps, collection, x2.id), *collection);
   if (x1_foreign != x2_foreign) {
     return x2_foreign;
   }
@@ -668,7 +665,10 @@ static void outliner_sort_custom(Main *bmain,
       int index = 0;
       for (tTreeSort element : tear_vec) {
         if (element.idcode == ID_OB) {
-          if (is_parented_object && is_foreign_child(element.id, collection, sort_maps)) {
+          if (is_parented_object &&
+              outliner_is_foreign_child(
+                  *element.id, find_sort_owner(sort_maps, collection, element.id), *collection))
+          {
             continue;
           }
           Object *ob = reinterpret_cast<Object *>(element.id);

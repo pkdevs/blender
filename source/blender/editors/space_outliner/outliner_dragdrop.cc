@@ -1169,16 +1169,12 @@ static Collection *collection_parent_from_ID(ID *id)
   return nullptr;
 }
 
-/* A child shown under a parent object stores its sort index in its #CollectionObject. It can
- * only be reordered when that #CollectionObject belongs to the same library as the collection it
- * is shown in. */
-static bool is_foreign_child(Main *bmain, Scene *scene, Collection *collection, Object *ob)
+static bool is_foreign_object(Main *bmain, Scene *scene, Collection *collection, Object *ob)
 {
-  Collection *owner = BKE_collection_object_find_in(*collection, *ob) ?
-                          collection :
-                          BKE_collection_object_find(bmain, scene, nullptr, ob);
-  const Library *owner_lib = owner ? owner->id.lib : ob->id.lib;
-  return owner_lib != collection->id.lib;
+  const Collection *owner = BKE_collection_object_find_in(*collection, *ob) ?
+                                collection :
+                                BKE_collection_object_find(bmain, scene, nullptr, ob);
+  return outliner_is_foreign_child(ob->id, owner, *collection);
 }
 
 /* Dropping before or after a child shown under a parent object only reorders the children, so
@@ -1192,7 +1188,7 @@ static bool can_reorder_parented_children(bContext *C,
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   if (is_object_element(te) &&
-      is_foreign_child(bmain, scene, collection, id_cast<Object *>(TREESTORE(te)->id)))
+      is_foreign_object(bmain, scene, collection, id_cast<Object *>(TREESTORE(te)->id)))
   {
     return false;
   }
@@ -1202,7 +1198,7 @@ static bool can_reorder_parented_children(bContext *C,
       return false;
     }
     Object *object = id_cast<Object *>(drag_id.id);
-    if (object->parent != parent_ob || is_foreign_child(bmain, scene, collection, object)) {
+    if (object->parent != parent_ob || is_foreign_object(bmain, scene, collection, object)) {
       return false;
     }
   }
@@ -1512,7 +1508,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
       for (TreeElement &te : parent_te->subtree) {
         if (te.idcode == ID_OB) {
           Object *ob = id_cast<Object *>(TREESTORE(&te)->id);
-          if (!is_foreign_child(bmain, scene, data.to, ob)) {
+          if (!is_foreign_object(bmain, scene, data.to, ob)) {
             items.append(ob);
           }
         }

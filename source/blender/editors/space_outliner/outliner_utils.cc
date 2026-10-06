@@ -14,6 +14,7 @@
 #include "BLI_utildefines.hh"
 
 #include "DNA_action_types.h"
+#include "DNA_collection_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
@@ -50,6 +51,12 @@ bool outliner_treesort_tiebreak(bool a_is_object,
     return false;
   }
   return BLI_strcasecmp_natural(a_name, b_name) < 0;
+}
+
+bool outliner_is_foreign_child(const ID &id, const Collection *owner, const Collection &collection)
+{
+  const Library *owner_lib = owner ? owner->id.lib : id.lib;
+  return owner_lib != collection.id.lib;
 }
 
 /* -------------------------------------------------------------------- */
