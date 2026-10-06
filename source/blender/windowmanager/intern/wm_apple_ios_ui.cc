@@ -28,6 +28,7 @@
 #include "ED_screen.hh"
 #include "ED_transform.hh"
 #include "ED_view3d.hh"
+#include "ED_view3d_pencil_hover.hh"
 
 #include "RNA_access.hh"
 
@@ -42,6 +43,7 @@
 #include "WM_types.hh"
 
 #include "wm_event_system.hh"
+#include "wm_gizmo_wmapi.hh"
 #include "wm_window.hh"
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
@@ -157,6 +159,13 @@ std::string ios_properties_error;
 int64_t ios_panels_sequence = 0;
 std::atomic<bool> ios_navigation_hover_active{false};
 std::atomic<bool> ios_navigation_redraw_pending{false};
+struct IOSPencilHoverRequest {
+  bool active = false;
+  int x = 0, y = 0;
+};
+GHOST_IOSLatest<IOSPencilHoverRequest> ios_hover_requests;
+GHOST_IOSLatest<std::string> ios_hover_snapshot;
+IOSPencilHoverRequest ios_hover_request;
 
 struct IOSActionItem {
   const char *title;
@@ -1202,6 +1211,18 @@ extern "C" void WM_apple_ios_ui_command_enqueue(int command)
   ios_ui_messages.push(IOSUICommand(command));
 }
 
+extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y)
+{
+  ios_hover_requests.publish({active, x, y});
+}
+
+extern "C" char *WM_apple_ios_ui_pencil_hover_copy_json()
+{
+  static std::string snapshot = "{}";
+  ios_hover_snapshot.take(snapshot);
+  return strdup(snapshot.c_str());
+}
+
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name)
 {
   if (op_name == nullptr || op_name[0] == '\0') {
@@ -1565,6 +1586,37 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
 
   for (IOSUIMessage &message : ios_ui_messages.take()) {
     ios_ui_dispatch(C, message);
+  }
+
+  ios_hover_requests.take(ios_hover_request);
+  {
+    const IOSContextStore context_store = ios_context_push_view3d(C);
+    ARegion *region = CTX_wm_region(C);
+    wmWindow *window = CTX_wm_window(C);
+    bool active = ios_hover_request.active && window && region;
+    if (active) {
+      for (wmEventHandler &handler : window->runtime->modalhandlers) {
+        if (handler.type == WM_HANDLER_TYPE_OP || handler.type == WM_HANDLER_TYPE_UI) {
+          active = false;
+          break;
+        }
+      }
+      if (region->runtime->gizmo_map && wm_gizmomap_highlight_get(region->runtime->gizmo_map)) {
+        active = false;
+      }
+    }
+    int mval[2] = {ios_hover_request.x, ios_hover_request.y};
+    if (window && region) {
+      wm_cursor_position_from_ghost_client_coords(window, &mval[0], &mval[1]);
+      mval[0] -= region->winrct.xmin;
+      mval[1] -= region->winrct.ymin;
+    }
+    ED_view3d_pencil_hover_update(C, active, mval);
+    const View3DPencilHover hit = ED_view3d_pencil_hover_get(region);
+    ios_hover_snapshot.publish("{\"object\":" + std::to_string(hit.object_uid) +
+                               ",\"kind\":" + std::to_string(hit.kind) +
+                               ",\"index\":" + std::to_string(hit.index) + "}");
+    ios_context_pop(C, context_store);
   }
 
   ios_toolbar_build(C);

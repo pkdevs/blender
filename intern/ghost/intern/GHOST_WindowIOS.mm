@@ -56,6 +56,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *setting, const char 
 extern "C" void WM_apple_ios_ui_tool_set_by_id(const char *tool_id);
 extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle);
 extern "C" void WM_apple_ios_ui_navigation_hover_set(bool active);
+extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y);
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json();
 extern "C" char *WM_apple_ios_ui_panels_take_json();
 extern "C" void WM_apple_ios_ui_toolbar_free_json(char *json);
@@ -1027,6 +1028,7 @@ typedef struct UserInputEvent {
 
 - (void)cancelPencilStroke
 {
+  WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
   if (pencil_button_active) {
     /* Cancel the modal tool before releasing, so interruption does not commit it.
      * Do not dereference UITouch here: UIKit may already have retired the touch. */
@@ -1063,6 +1065,7 @@ typedef struct UserInputEvent {
     }
     for (UITouch *touch in event.allTouches) {
       if (touch.phase == UITouchPhaseBegan) {
+        WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
         [self stopOrbitMomentum];
       }
       if (touch.type == UITouchTypeDirect && pencil_context_menu.active) {
@@ -1414,13 +1417,16 @@ typedef struct UserInputEvent {
       ![self isBlenderPencilInputView:[self hitTest:[sender locationInView:(UIView *)self] withEvent:nil]])
   {
     WM_apple_ios_ui_navigation_hover_set(false);
+    WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
     return;
   }
   if ([pencil_context_menu handlePencilHover:sender]) {
     WM_apple_ios_ui_navigation_hover_set(false);
+    WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
     return;
   }
   if (pencil_button_active) {
+    WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
     return;
   }
   if (sender.state == UIGestureRecognizerStateBegan ||
@@ -1432,6 +1438,11 @@ typedef struct UserInputEvent {
     tablet_data.Active = GHOST_kTabletModeStylus;
     tablet_data.Pressure = 0.0f;
     CGPoint hover_point = [sender getScaledTouchPoint:window];
+    UIView *hit = [self hitTest:[sender locationInView:self] withEvent:nil];
+    WM_apple_ios_ui_pencil_hover_set(
+        ![hit.accessibilityIdentifier isEqualToString:@"blender.viewport.navigation"],
+        hover_point.x,
+        hover_point.y);
     /* Add cursor move event. */
     UserInputEvent event_info(&hover_point, nullptr, nullptr, true);
     event_info.add_event(UserInputEvent::EventTypes::CURSOR_MOVE);
@@ -1443,6 +1454,7 @@ typedef struct UserInputEvent {
   {
     WM_apple_ios_ui_navigation_hover_set(false);
     tablet_data = GHOST_TABLET_DATA_NONE;
+    WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
   }
 }
 
