@@ -1069,9 +1069,13 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     std::set<std::string> seen;
     for (const auto &button : block->buttons) {
       Button &but = *button;
+      /* Keep only viewport enablement in modifier headers. Other display options belong
+       * inside the expanded native panel. */
       const bool header_toggle = header_buttons.count(&but) && but.rnaprop &&
                                 RNA_property_type(but.rnaprop) == PROP_BOOLEAN &&
-                                !RNA_property_array_check(but.rnaprop);
+                                !RNA_property_array_check(but.rnaprop) &&
+                                (!RNA_struct_is_a(but.rnapoin.type, RNA_Modifier) ||
+                                 STREQ(RNA_property_identifier(but.rnaprop), "show_viewport"));
       if (!execute && !open && !header_toggle) {
         continue;
       }
