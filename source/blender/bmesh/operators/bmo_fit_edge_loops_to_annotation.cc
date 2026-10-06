@@ -167,9 +167,9 @@ static void calculate_verts(const StrokeData &stroke_data,
     for (const int i : IndexRange(verts_num)) {
       BMVert *v = r_chain.verts[i];
       float3 vert_co = float3(v->co);
-      float3 best_intersection = vert_co;
-      float best_dist_sq = FLT_MAX;
-      bool found_intersection = false;
+      float3 intersection_best = vert_co;
+      float dist_sq_best = FLT_MAX;
+      bool has_best = false;
 
       auto check_intersection_fn = [&](const float3 &ray_dir) {
         float3 ray_end = vert_co + ray_dir * ray_length;
@@ -196,11 +196,11 @@ static void calculate_verts(const StrokeData &stroke_data,
               if (dist_to_start <= dist_seg + segment_epsilon &&
                   dist_to_end <= dist_seg + segment_epsilon)
               {
-                float dist_sq = math::distance_squared(vert_co, closest_on_stroke);
-                if (dist_sq < best_dist_sq) {
-                  best_dist_sq = dist_sq;
-                  best_intersection = closest_on_stroke;
-                  found_intersection = true;
+                float dist_sq_test = math::distance_squared(vert_co, closest_on_stroke);
+                if (dist_sq_test < dist_sq_best) {
+                  dist_sq_best = dist_sq_test;
+                  intersection_best = closest_on_stroke;
+                  has_best = true;
                 }
               }
             }
@@ -218,7 +218,7 @@ static void calculate_verts(const StrokeData &stroke_data,
         }
       }
 
-      if (!found_intersection) {
+      if (!has_best) {
         float3 ray_dir = float3(v->no);
         if (math::length_squared(ray_dir) > math::square(normal_length_epsilon)) {
           ray_dir = math::normalize(ray_dir);
@@ -226,8 +226,8 @@ static void calculate_verts(const StrokeData &stroke_data,
         }
       }
 
-      if (found_intersection) {
-        float3 new_co = math::interpolate(vert_co, best_intersection, factor);
+      if (has_best) {
+        float3 new_co = math::interpolate(vert_co, intersection_best, factor);
         if (lock_x) {
           new_co.x = vert_co.x;
         }
@@ -302,10 +302,10 @@ void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
       float3 chain_start_co = float3(chain.verts.first()->co);
       float3 chain_end_co = float3(chain.verts.last()->co);
 
-      fallback_points[0] = chain_start_co ;
+      fallback_points[0] = chain_start_co;
       fallback_points[1] = chain_end_co;
       fallback_stroke.points = Span<float3>(fallback_points, 2);
-      fallback_stroke.accumulated_lengths = {math::distance(chain_start_co , chain_end_co)};
+      fallback_stroke.accumulated_lengths = {math::distance(chain_start_co, chain_end_co)};
 
       best_stroke = &fallback_stroke;
     }
