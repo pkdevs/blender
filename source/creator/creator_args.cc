@@ -2957,6 +2957,18 @@ static bool handle_load_file(bContext *C, const char *filepath_arg, const bool l
   STRNCPY(filepath, filepath_arg);
   BLI_path_canonicalize_native(filepath, sizeof(filepath));
 
+  // TODO:, for project support, we probably want to be able to load folders still
+  // in background mode. Sergey suggested that perhaps we could guard this early
+  // exit behind if we are rendering or not.
+  if (!G.background && BLI_is_dir(filepath)) {
+    std::string project_root_path = BKE_is_path_inside_blender_project(filepath);
+    if (project_root_path != "") {
+      bke::BKE_blender_project_init_from_root_path(G_MAIN, project_root_path);
+      printf("Opened project with root path: %s\n", project_root_path.c_str());
+      return true;
+    }
+  }
+
   /* Load the file. */
   ReportList reports;
   BKE_reports_init(&reports, RPT_PRINT | RPT_STORE);
