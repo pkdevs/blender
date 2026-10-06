@@ -9786,7 +9786,7 @@ enum ProjectCategoryTabs : short {
   AssetLibrary = 2,
 };
 
-static const EnumPropertyItem rna_enum_project_categories_items[] = {
+static const EnumPropertyItem rna_enum_project_section_items[] = {
     {ProjectCategoryTabs::General, "GENERAL", 0, "General", ""},
     {ProjectCategoryTabs::Variables, "VARIABLES", 0, "Variables", ""},
     RNA_ENUM_ITEM_SEPR,
@@ -9807,7 +9807,7 @@ static void rna_def_space_project(BlenderRNA *brna)
   PropertyRNA *prop;
 
   prop = RNA_def_property(srna, "active_section", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, rna_enum_project_categories_items);
+  RNA_def_property_enum_items(prop, rna_enum_project_section_items);
   RNA_def_property_enum_funcs(
       prop, "rna_SpaceProject_active_section_get", "rna_SpaceProject_active_section_set", nullptr);
   RNA_def_property_ui_text(prop, "Active Section", "Choose the category of options to display");
