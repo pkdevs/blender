@@ -198,23 +198,6 @@ struct AssetLibraryListItem : public AssetLibraryListItemCommon {
                (library.user_library->flag & ASSET_LIBRARY_DISABLED) ? ICON_CHECKBOX_DEHLT :
                                                                        ICON_CHECKBOX_HLT);
     }
-
-    if (library.user_library && !(library.user_library->flag & ASSET_LIBRARY_DISABLED) &&
-        is_remote_library && !library.user_library->remote_url[0])
-    {
-      row.label("", ICON_STATUS_ERROR);
-    }
-
-    if (library.user_library) {
-      PointerRNA ptr = RNA_pointer_create_discrete(
-          nullptr, RNA_UserAssetLibrary, library.user_library);
-      row.prop(&ptr,
-               "enabled",
-               UI_ITEM_NONE,
-               "",
-               (library.user_library->flag & ASSET_LIBRARY_DISABLED) ? ICON_CHECKBOX_DEHLT :
-                                                                       ICON_CHECKBOX_HLT);
-    }
   }
 
   void on_activate(bContext & /*C*/) override
