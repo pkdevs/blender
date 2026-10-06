@@ -24,6 +24,30 @@
 - (void)dismissShading;
 - (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)path leading:(BOOL)leading;
 - (void)handleToolbarHover:(UIHoverGestureRecognizer *)gesture;
+- (void)handleHover:(UIHoverGestureRecognizer *)gesture;
+- (void)cancelPencilStroke;
+@end
+
+@interface BlenderPencilProbeHover : UIHoverGestureRecognizer
+@property(nonatomic) CGPoint windowPoint;
+@property(nonatomic) UIGestureRecognizerState probeState;
+@property(nonatomic, weak) UIWindow *probeWindow;
+@end
+@implementation BlenderPencilProbeHover
+- (UIGestureRecognizerState)state
+{
+  return self.probeState;
+}
+- (CGPoint)locationInView:(UIView *)view
+{
+  return [self.probeWindow convertPoint:self.windowPoint toView:view];
+}
+- (CGPoint)getScaledTouchPoint:(void *)window
+{
+  auto scale = (CGPoint(*)(id, SEL, void *))class_getMethodImplementation(
+      NSClassFromString(@"GHOSTUIHoverGestureRecognizer"), _cmd);
+  return scale(self, _cmd, window);
+}
 @end
 
 @interface BlenderToolbarProbeHover : UIHoverGestureRecognizer
@@ -624,6 +648,25 @@ extern "C" char *blender_device_probe_toolbar_label(int action, int index)
     result = strndup((const char *)json.bytes, json.length);
   });
   return result;
+}
+
+extern "C" void blender_device_probe_pencil_hover(int phase, double x, double y)
+{
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    UIView *view = blenderController().view;
+    UIWindow *window = view.window;
+    if (phase == 2) {
+      [window cancelPencilStroke];
+      return;
+    }
+    BlenderPencilProbeHover *hover = [BlenderPencilProbeHover new];
+    hover.probeWindow = window;
+    hover.windowPoint = [view
+        convertPoint:CGPointMake(x * view.bounds.size.width, (1 - y) * view.bounds.size.height)
+              toView:window];
+    hover.probeState = phase ? UIGestureRecognizerStateChanged : UIGestureRecognizerStateEnded;
+    [window handleHover:hover];
+  });
 }
 
 static NSDictionary *toolImageColors(UIImage *image)

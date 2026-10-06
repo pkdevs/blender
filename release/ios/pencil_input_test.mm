@@ -15,6 +15,13 @@
 #define UNUSED_VARS(...) ((void)0)
 #define FALSE false
 static bool navigationHover;
+static bool viewportHover;
+static CGPoint viewportHoverPoint;
+static void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y)
+{
+  viewportHover = active;
+  viewportHoverPoint = CGPointMake(x, y);
+}
 static void WM_apple_ios_ui_navigation_hover_set(bool active) { navigationHover = active; }
 enum {
   GHOST_kTabletModeStylus = 1,
@@ -342,6 +349,7 @@ int main()
     assert(system.events.size() == 1 && system.events[0]->type == GHOST_kEventCursorMove);
     assert(system.events[0]->x == 1600 && system.events[0]->tablet.Pressure == 0.0f);
     assert(navigationHover);
+    assert(viewportHover && viewportHoverPoint.x == 1600 && viewportHoverPoint.y == 1800);
     system.clear();
 
     hover.state = UIGestureRecognizerStateEnded;
@@ -396,15 +404,18 @@ int main()
     window->hit_view = navigation;
     [window handleHover:hover];
     assert(navigationHover && system.events.size() == 1);
+    assert(!viewportHover);  // Navigation hover cannot highlight scene geometry beneath it.
     system.clear();
     window->hit_view = toolbar;
     [window handleHover:hover];
     assert(!navigationHover && system.events.empty());
+    assert(!viewportHover);  // Native controls exclude the viewport.
     window->hit_view = navigation;
     [window handleHover:hover];
     hover.state = UIGestureRecognizerStateEnded;
     [window handleHover:hover];
     assert(!navigationHover); // Lifting out of hover range must shrink the axis again.
+    assert(!viewportHover);
     hover.state = UIGestureRecognizerStateChanged;
     window->hit_view = nil;
     system.clear();
@@ -415,6 +426,7 @@ int main()
       send(window, stroke);
       [window handleHover:hover];
       assert(system.events.size() == 2); // Hover cannot move an active stroke.
+      assert(!viewportHover);
       stroke.phase = UITouchPhaseMoved;
       stroke.point = CGPointMake(130, 240);
       send(window, stroke); // Non-coalesced move fallback.
