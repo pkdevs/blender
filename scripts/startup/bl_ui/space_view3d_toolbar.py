@@ -1081,6 +1081,10 @@ class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
 
         layout.prop(sculpt, "use_symmetry_feather", text="Feather")
         layout.prop(mesh, "radial_symmetry", text="Radial")
+        layout.prop(mesh, "use_radial_symmetry", text="Radial")
+        col = layout.column()
+        col.active = mesh.use_radial_symmetry
+        col.prop(mesh, "radial_symmetry", text="Count")
         layout.prop(sculpt, "tile_offset", text="Tile Offset")
 
         layout.separator()
@@ -1164,6 +1168,10 @@ class VIEW3D_PT_tools_weightpaint_symmetry(Panel, View3DPaintPanel):
         col = layout.column()
         col.active = not mesh.use_mirror_vertex_groups
         col.prop(mesh, "radial_symmetry", text="Radial")
+        layout.prop(mesh, "use_radial_symmetry", text="Radial")
+        col = layout.column()
+        col.active = mesh.use_radial_symmetry
+        col.prop(mesh, "radial_symmetry", text="Count")
 
         row = layout.row()
         row.active = mesh.use_mirror_vertex_groups
@@ -1246,6 +1254,10 @@ class VIEW3D_PT_tools_vertexpaint_symmetry(Panel, View3DPaintPanel):
 
         col = layout.column()
         col.prop(mesh, "radial_symmetry", text="Radial")
+        layout.prop(mesh, "use_radial_symmetry", text="Radial")
+        col = layout.column()
+        col.active = mesh.use_radial_symmetry
+        col.prop(mesh, "radial_symmetry", text="Count")
 
 
 class VIEW3D_PT_tools_vertexpaint_symmetry_for_topbar(Panel):
@@ -1319,6 +1331,10 @@ class VIEW3D_PT_tools_imagepaint_symmetry(Panel, View3DPaintPanel):
             row.prop(image_paint, "tile_z", text="Z", toggle=True)
 
             layout.prop(image_paint, "use_symmetry_feather", text="Feather")
+            layout.prop(mesh, "use_radial_symmetry", text="Radial")
+            col = layout.column()
+            col.active = mesh.use_radial_symmetry
+            col.prop(mesh, "radial_symmetry", text="Count")
             layout.prop(mesh, "radial_symmetry", text="Radial")
             layout.prop(image_paint, "tile_offset", text="Tile Offset")
 
