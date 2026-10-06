@@ -114,17 +114,18 @@ static wmOperatorStatus edbm_fit_edge_loops_to_annotation_exec(bContext *C, wmOp
     for (const Vector<float3> &points : all_points) {
       stroke_data.append(points);
     }
-    if (!EDBM_op_callf(em,
-                       op,
-                       "fit_edge_loops_to_annotation geom=%he factor=%f method=%i strokes=%p lock_x=%b "
-                       "lock_y=%b lock_z=%b",
-                       BM_ELEM_SELECT,
-                       factor,
-                       method,
-                       &stroke_data,
-                       lock[0],
-                       lock[1],
-                       lock[2]))
+    if (!EDBM_op_callf(
+            em,
+            op,
+            "fit_edge_loops_to_annotation geom=%he factor=%f method=%i strokes=%p lock_x=%b "
+            "lock_y=%b lock_z=%b",
+            BM_ELEM_SELECT,
+            factor,
+            method,
+            &stroke_data,
+            lock[0],
+            lock[1],
+            lock[2]))
     {
       continue;
     }
@@ -178,8 +179,7 @@ void MESH_OT_fit_edge_loops_to_annotation(wmOperatorType *ot)
   ot->description = "Stretch selected vertices to active stroke";
   ot->idname = "MESH_OT_to_fit_edge_loops_to_annotation";
 
-  ot->exec = edbm_fit_edge_loops_to_annotation_exec
-  ot->poll = ED_operator_editmesh;
+  ot->exec = edbm_fit_edge_loops_to_annotation_exec ot->poll = ED_operator_editmesh;
   ot->ui = edbm_fit_edge_loops_to_annotation_ui;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
