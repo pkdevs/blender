@@ -25,7 +25,7 @@ class Closure;
 
 using ClosurePtr = ImplicitSharingPtr<Closure>;
 
-/* The representation of closures in the compositor/ */
+/* The representation of closures in the compositor. */
 class Closure : public ImplicitSharingMixin {
  public:
   /* The zone that this operation represents. */

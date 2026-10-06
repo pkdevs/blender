@@ -214,7 +214,7 @@ void add_depsgraph_relations(Scene &scene,
  * the owner tree or zone. If the node does not lie inside a zone, the given compute context is
  * simply returned. The compute context is assumed to be that of a viewer node, so compute contexts
  * will be constructed using inspection index for repeat zone for instance. If the node lies inside
- * a context that does no support viewers, like closures, nullptr is returned. */
+ * a context that does not support viewers, like closures, nullptr is returned. */
 const ComputeContext *get_zone_viewer_compute_context(
     const bNode &node,
     const bke::bNodeTreeZone *zone,
