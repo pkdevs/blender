@@ -99,7 +99,7 @@ enum GHOSTIOSUICommand {
 
 /* Semantic keys in release/ios/blender_icons.json select Blender artwork without
  * conflating SF Symbols reused for different tools. UIImage caches the assets;
- * template rendering leaves appearance/contrast/disabled-state tinting to UIKit. */
+ * tool artwork retains its colors, while interface icons use UIKit template tinting. */
 static UIImage *blenderIOSIcon(NSString *key, NSString *systemImage)
 {
   static NSDictionary *icons = nil;
@@ -117,6 +117,12 @@ static UIImage *blenderIOSIcon(NSString *key, NSString *systemImage)
     name = icons[[@"symbol." stringByAppendingString:systemImage]];
   }
   NSString *prefix = [key hasPrefix:@"tool."] ? @"blender.tool." : @"blender.";
+  if (name && [key hasPrefix:@"tool."]) {
+    UIImage *colored = [UIImage imageNamed:[@"blender.tool.color." stringByAppendingString:name]];
+    if (colored) {
+      return [colored imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+  }
   UIImage *image = name ? [UIImage imageNamed:[prefix stringByAppendingString:name]] : nil;
   if (image != nil) {
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
@@ -2561,6 +2567,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (UIImage *)toolbarImageForTool:(NSDictionary *)tool mode:(NSString *)mode
 {
   NSString *icon = tool[@"icon"];
+  if ([icon isKindOfClass:NSString.class]) {
+    UIImage *colored = [UIImage imageNamed:[@"blender.tool.color." stringByAppendingString:icon]];
+    if (colored) {
+      return [colored imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+  }
   UIImage *image = [icon isKindOfClass:NSString.class] ?
       [UIImage imageNamed:[@"blender.tool." stringByAppendingString:icon]] : nil;
   if (image) {
