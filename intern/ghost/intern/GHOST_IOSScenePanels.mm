@@ -8,6 +8,12 @@
 
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 
+static NSString *blenderNativePropertyLabel(NSDictionary *property)
+{
+  return [property[@"group"] length] ?
+      [NSString stringWithFormat:@"%@ %@", property[@"group"], property[@"label"]] : property[@"label"];
+}
+
 @interface GHOSTIOSPropertyField : UITextField
 @property(nonatomic, retain) NSDictionary *descriptor;
 @property(nonatomic, copy) NSString *objectID;
@@ -694,7 +700,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       const BOOL vector = group.length > 0;
       UIStackView *vectorRow = nil;
       if (vector) {
-        NSString *groupKey = [NSString stringWithFormat:@"%@.%@.%@", innerSection ?: @"", property[@"owner"], property[@"property"]];
+        NSString *identity = property[@"group_key"] ?: [NSString stringWithFormat:@"%@.%@", property[@"owner"], property[@"property"]];
+        NSString *groupKey = [NSString stringWithFormat:@"%@.%@.%@", property[@"panel"] ?: @"", innerSection ?: @"", identity];
         vectorRow = vectors[groupKey];
         if (!vectorRow) {
           vectorRow = [[[UIStackView alloc] init] autorelease];
@@ -798,7 +805,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
           UIToolbar *accessory = [[[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, 320, 44)] autorelease];
           UIStepper *stepper = [[[UIStepper alloc] init] autorelease];
           stepper.accessibilityIdentifier = [self keyForProperty:property];
-          stepper.accessibilityLabel = [NSString stringWithFormat:@"Adjust %@ %@", section[@"title"], property[@"label"]];
+          stepper.accessibilityLabel = [NSString stringWithFormat:@"Adjust %@ %@", section[@"title"], blenderNativePropertyLabel(property)];
           double factor = [property[@"angle"] boolValue] ? 180.0 / M_PI : 1;
           stepper.minimumValue = MAX(-1e12, [property[@"min"] doubleValue] * factor);
           stepper.maximumValue = MIN(1e12, [property[@"max"] doubleValue] * factor);
@@ -826,7 +833,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         control = field;
       }
       control.enabled = [property[@"editable"] boolValue];
-      control.accessibilityLabel = [NSString stringWithFormat:@"%@ %@", section[@"title"], property[@"label"]];
+      control.accessibilityLabel = [NSString stringWithFormat:@"%@ %@", section[@"title"], blenderNativePropertyLabel(property)];
       NSString *key = [self keyForProperty:property];
       control.accessibilityIdentifier = [@"blender.property." stringByAppendingString:key];
       _controls[key] = control;
@@ -1611,7 +1618,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
       if (property[@"lock"]) {
         BOOL locked = [property[@"lock"][@"value"] boolValue];
         ((UIImageView *)_lockIndicators[[self keyForProperty:property]]).alpha = locked ? 1 : 0;
-        control.accessibilityLabel = [NSString stringWithFormat:@"%@ %@%@", section[@"title"], property[@"label"], locked ? @", Locked" : @""];
+        control.accessibilityLabel = [NSString stringWithFormat:@"%@ %@%@", section[@"title"], blenderNativePropertyLabel(property), locked ? @", Locked" : @""];
       }
       if (slider && !slider.editing && !control.isFirstResponder) {
         slider.descriptor = property;
