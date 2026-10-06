@@ -169,6 +169,60 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
                                    UIContextMenuInteractionDelegate, UIGestureRecognizerDelegate>
 @end
 
+static const NSInteger blenderDisclosureChevronTag = 0x6368;
+
+/* Panel disclosure header. Only a fixed-frame glyph inside an untransformed, constrained
+ * container rotates: layout passes over a transformed view resize it and stretch the glyph. */
+static UIButton *blenderDisclosureButton(NSString *title, UIFont *font, UIColor *color, CGFloat indent, BOOL expanded)
+{
+  UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+  UIButtonConfiguration *configuration = [UIButtonConfiguration plainButtonConfiguration];
+  configuration.title = title;
+  configuration.baseForegroundColor = color;
+  if (font) {
+    configuration.titleTextAttributesTransformer = ^NSDictionary *(NSDictionary *attributes) {
+      NSMutableDictionary *result = [[attributes mutableCopy] autorelease];
+      result[NSFontAttributeName] = font;
+      return result;
+    };
+  }
+  configuration.contentInsets = NSDirectionalEdgeInsetsMake(8, indent + 20, 8, 12);
+  button.configuration = configuration;
+  button.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
+  button.accessibilityValue = expanded ? @"Expanded" : @"Collapsed";
+  const CGFloat size = 14;
+  UIView *container = [[[UIView alloc] init] autorelease];
+  container.userInteractionEnabled = NO;
+  container.translatesAutoresizingMaskIntoConstraints = NO;
+  UIImageView *chevron = [[[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"
+      withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:11 weight:UIImageSymbolWeightSemibold]]] autorelease];
+  chevron.frame = CGRectMake(0, 0, size, size);
+  chevron.autoresizingMask = UIViewAutoresizingNone;
+  chevron.contentMode = UIViewContentModeCenter;
+  chevron.tintColor = color;
+  chevron.tag = blenderDisclosureChevronTag;
+  chevron.transform = CGAffineTransformMakeRotation(expanded ? M_PI_2 : 0);
+  [container addSubview:chevron];
+  [button addSubview:container];
+  [NSLayoutConstraint activateConstraints:@[
+    [container.widthAnchor constraintEqualToConstant:size],
+    [container.heightAnchor constraintEqualToConstant:size],
+    [container.leadingAnchor constraintEqualToAnchor:button.leadingAnchor constant:indent + 1],
+    [container.centerYAnchor constraintEqualToAnchor:button.centerYAnchor],
+  ]];
+  return button;
+}
+
+static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
+{
+  button.accessibilityValue = expanded ? @"Expanded" : @"Collapsed";
+  UIView *chevron = [button viewWithTag:blenderDisclosureChevronTag];
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
+      delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+      animations:^{ chevron.transform = CGAffineTransformMakeRotation(expanded ? M_PI_2 : 0); }
+      completion:nil];
+}
+
 @implementation GHOSTIOSScenePanels {
   UIView *_overlay;
   UIImage *(^_icon)(NSString *);
@@ -2095,18 +2149,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   }
   NSString *identifier = _sectionIdentifiers[section];
   BOOL expanded = !_selectedTab || [_expandedPanels[_selectedTab] containsObject:identifier];
-  UIButton *header = [UIButton buttonWithType:UIButtonTypeSystem];
-  UIButtonConfiguration *configuration = [UIButtonConfiguration plainButtonConfiguration];
-  configuration.title = _sectionTitles[section];
-  configuration.image = [UIImage systemImageNamed:@"chevron.right"];
-  configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:11 weight:UIImageSymbolWeightSemibold];
-  configuration.imagePadding = 8;
-  configuration.baseForegroundColor = UIColor.labelColor;
-  configuration.contentInsets = NSDirectionalEdgeInsetsMake(8, 12, 8, 12);
-  header.configuration = configuration;
-  header.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
-  header.accessibilityValue = expanded ? @"Expanded" : @"Collapsed";
-  header.imageView.transform = CGAffineTransformMakeRotation(expanded ? M_PI_2 : 0);
+  UIButton *header = blenderDisclosureButton(_sectionTitles[section], nil, UIColor.labelColor, 12, expanded);
   _disclosureButtons[identifier] = header;
   __block GHOSTIOSScenePanels *owner = self;
   [header addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
@@ -2121,12 +2164,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
     for (NSInteger row = 0; row < count; row++) {
       [paths addObject:[NSIndexPath indexPathForRow:row inSection:currentSection]];
     }
-    UIButton *disclosure = owner->_disclosureButtons[identifier];
-    disclosure.accessibilityValue = closing ? @"Collapsed" : @"Expanded";
-    [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
-        delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-        animations:^{ disclosure.imageView.transform = CGAffineTransformMakeRotation(closing ? 0 : M_PI_2); }
-        completion:nil];
+    blenderSetDisclosureExpanded(owner->_disclosureButtons[identifier], !closing);
     [owner->_form performBatchUpdates:^{
       if (closing) { [open removeObject:identifier]; }
       else { [open addObject:identifier]; }
