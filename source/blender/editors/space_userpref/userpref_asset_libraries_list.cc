@@ -118,6 +118,7 @@ void AssetLibraryProject::build_row(ui::Layout &row)
     row.label(project->get_name(), ICON_PROJECT);
   }
 }
+
 bUserAssetLibrary *ED_userpref_asset_library_active_get()
 {
   const Vector<AnyAssetLibraryDefinition> libraries = userpref_ui_asset_libraries();
@@ -143,83 +144,88 @@ static bool asset_library_repo_is_disabled(const AnyAssetLibraryDefinition &libr
          (library.extension_repo->flag & USER_EXTENSION_REPO_FLAG_DISABLED);
 }
 
-void AssetLibraryListItem::build_row(ui::Layout &row)
-{
-  const bool is_remote_library = library.user_library &&
-                                 (library.user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL);
-  const bool project_library = library.user_library &&
-                               (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED);
+struct AssetLibraryListItem : public AssetLibraryListItemCommon {
 
-  /* Draw grayed out, the "enabled" setting stays editable, it just has no effect. */
-  if (asset_library_repo_is_disabled(library)) {
-    row.active_set(false);
-  }
+  using AssetLibraryListItemCommon::AssetLibraryListItemCommon;
 
-  if (library.user_library) {
-    int icon = is_remote_library ? ICON_INTERNET : ICON_DISK_DRIVE;
-    if (BKE_preferences_asset_library_owner_get(library.user_library) ==
-        bUserAssetLibraryOwner::Extension)
-    {
-      icon = ICON_EXTENSION;
+  void build_row(ui::Layout &row) override
+  {
+    const bool is_remote_library = library.user_library &&
+                                   (library.user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL);
+    const bool project_library = library.user_library &&
+                                 (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED);
+
+    /* Draw grayed out, the "enabled" setting stays editable, it just has no effect. */
+    if (asset_library_repo_is_disabled(library)) {
+      row.active_set(false);
     }
-    row.label(label_, icon);
 
-    /* Disable row if asset library is project defined. */
-    row.enabled_set(!project_library);
+    if (library.user_library) {
+      int icon = is_remote_library ? ICON_INTERNET : ICON_DISK_DRIVE;
+      if (BKE_preferences_asset_library_owner_get(library.user_library) ==
+          bUserAssetLibraryOwner::Extension)
+      {
+        icon = ICON_EXTENSION;
+      }
+      row.label(label_, icon);
+
+      /* Disable row if asset library is project defined. */
+      row.enabled_set(!project_library);
+    }
+    else {
+      row.label(label_, ICON_NONE);
+
+      ui::Layout &sub = row.row(true);
+      /* Draw text grayed out. */
+      sub.active_set(false);
+      sub.alignment_set(ui::LayoutAlign::Right);
+      sub.label(IFACE_("Built-In"), ICON_NONE);
+    }
+
+    if (library.user_library && !(library.user_library->flag & ASSET_LIBRARY_DISABLED) &&
+        is_remote_library && !library.user_library->remote_url[0])
+    {
+      row.label("", ICON_STATUS_ERROR);
+    }
+
+    if (library.user_library) {
+      PointerRNA ptr = RNA_pointer_create_discrete(
+          nullptr, RNA_UserAssetLibrary, library.user_library);
+      row.prop(&ptr,
+               "enabled",
+               UI_ITEM_NONE,
+               "",
+               (library.user_library->flag & ASSET_LIBRARY_DISABLED) ? ICON_CHECKBOX_DEHLT :
+                                                                       ICON_CHECKBOX_HLT);
+    }
+
+    if (library.user_library && !(library.user_library->flag & ASSET_LIBRARY_DISABLED) &&
+        is_remote_library && !library.user_library->remote_url[0])
+    {
+      row.label("", ICON_STATUS_ERROR);
+    }
+
+    if (library.user_library) {
+      PointerRNA ptr = RNA_pointer_create_discrete(
+          nullptr, RNA_UserAssetLibrary, library.user_library);
+      row.prop(&ptr,
+               "enabled",
+               UI_ITEM_NONE,
+               "",
+               (library.user_library->flag & ASSET_LIBRARY_DISABLED) ? ICON_CHECKBOX_DEHLT :
+                                                                       ICON_CHECKBOX_HLT);
+    }
   }
-  else {
-    row.label(label_, ICON_NONE);
 
-    ui::Layout &sub = row.row(true);
-    /* Draw text grayed out. */
-    sub.active_set(false);
-    sub.alignment_set(ui::LayoutAlign::Right);
-    sub.label(IFACE_("Built-In"), ICON_NONE);
-  }
-
-  if (library.user_library && !(library.user_library->flag & ASSET_LIBRARY_DISABLED) &&
-      is_remote_library && !library.user_library->remote_url[0])
+  void on_activate(bContext & /*C*/) override
   {
-    row.label("", ICON_STATUS_ERROR);
+    U.active_asset_library = index_in_list;
   }
-
-  if (library.user_library) {
-    PointerRNA ptr = RNA_pointer_create_discrete(
-        nullptr, RNA_UserAssetLibrary, library.user_library);
-    row.prop(&ptr,
-             "enabled",
-             UI_ITEM_NONE,
-             "",
-             (library.user_library->flag & ASSET_LIBRARY_DISABLED) ? ICON_CHECKBOX_DEHLT :
-                                                                     ICON_CHECKBOX_HLT);
-  }
-
-  if (library.user_library && !(library.user_library->flag & ASSET_LIBRARY_DISABLED) &&
-      is_remote_library && !library.user_library->remote_url[0])
+  std::optional<bool> should_be_active() const override
   {
-    row.label("", ICON_STATUS_ERROR);
+    return U.active_asset_library == index_in_list;
   }
-
-  if (library.user_library) {
-    PointerRNA ptr = RNA_pointer_create_discrete(
-        nullptr, RNA_UserAssetLibrary, library.user_library);
-    row.prop(&ptr,
-             "enabled",
-             UI_ITEM_NONE,
-             "",
-             (library.user_library->flag & ASSET_LIBRARY_DISABLED) ? ICON_CHECKBOX_DEHLT :
-                                                                     ICON_CHECKBOX_HLT);
-  }
-}
-
-void AssetLibraryListItem::on_activate(bContext & /*C*/)
-{
-  U.active_asset_library = index_in_list;
-}
-std::optional<bool> AssetLibraryListItem::should_be_active() const
-{
-  return U.active_asset_library == index_in_list;
-}
+};
 
 /** The collapsible row grouping the libraries of an extension repository. */
 struct AssetLibraryRepoItem : public AssetLibraryListItem {

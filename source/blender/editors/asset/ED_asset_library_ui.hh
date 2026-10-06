@@ -12,6 +12,8 @@
 
 namespace blender {
 
+struct AssetLibraryListItem;
+
 struct AnyAssetLibraryDefinition {
   eAssetLibraryType type;
   bUserAssetLibrary *user_library;
@@ -35,15 +37,6 @@ struct AssetLibraryListItemCommon : public ui::AbstractTreeViewItem {
 
   bool supports_renaming() const override;
   bool rename(const bContext &C, StringRefNull new_name) override;
-};
-
-struct AssetLibraryListItem : public AssetLibraryListItemCommon {
-  /* Use the constructor from AssetLibraryListItemCommon. */
-  using AssetLibraryListItemCommon::AssetLibraryListItemCommon;
-
-  void build_row(ui::Layout &row) override;
-  void on_activate(bContext & /*C*/) override;
-  std::optional<bool> should_be_active() const override;
 };
 
 struct AssetLibraryProject : public ui::AbstractTreeViewItem {
