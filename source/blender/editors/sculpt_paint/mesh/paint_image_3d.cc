@@ -1494,6 +1494,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
   PixelData &pixel_data = *pbvh.pixels_;
   const std::optional<KDTreeData> &tree_data = pbvh.pixels_->tree_data;
   if (!tree_data.has_value()) {
+    return;
   }
   MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
 
