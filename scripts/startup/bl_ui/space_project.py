@@ -329,7 +329,7 @@ class PROJECT_PT_variables(Panel):
             col = layout.column()
             col.use_property_split = True
             col.alignment = 'LEFT'
-            col.separator(factor=1)
+            col.separator()
 
             col.prop(var, "type")
             if var.type == 'STRING':
