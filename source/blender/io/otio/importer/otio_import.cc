@@ -168,9 +168,7 @@ static void place_strip(StripImportContext &ctx,
   if (auto *item = dynamic_cast<Item *>(&object); item && !item->enabled()) {
     strip->flag |= SEQ_MUTE;
   }
-  if (seq::transform_test_overlap(ctx.scene, &seqbase, strip)) {
-    seq::transform_seqbase_shuffle(&seqbase, strip, ctx.scene);
-  }
+  seq::transform_shuffle_vertical(&seqbase, {strip}, ctx.scene);
   ctx.strip_metadata.append({strip, &object});
 }
 

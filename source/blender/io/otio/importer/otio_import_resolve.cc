@@ -27,6 +27,7 @@
 
 #include "otio_import_resolve.hh"
 #include "otio_metadata.hh"
+#include "otio_resolve.hh"
 
 namespace blender::io::otio {
 
@@ -154,29 +155,24 @@ static Vector<double2> add_fades(const Span<double2> keyframes,
   return faded;
 }
 
-static void copy_number(AnyDictionary &dst,
-                        const char *property,
+static void copy_number(AnyDictionary &properties,
+                        const StringRef rna_path,
                         const AnyDictionary &effect,
                         const std::string &id,
                         const int start_frame,
                         const double factor)
 {
-  if (std::optional<std::any> value = animated_number(
-          effect, id, start_frame, [&](const double value) { return value * factor; }))
-  {
-    dst[property] = *value;
+  std::optional<std::any> value = animated_number(
+      effect, id, start_frame, [&](const double value) { return value * factor; });
+  if (!value) {
+    return;
   }
-}
-
-static const char *blend_type_from_composite_mode(const int64_t mode)
-{
-  static const char *blend_types[] = {
-      "ALPHA_OVER", "ADD",        "SUBTRACT",    "DIFFERENCE",   "MULTIPLY",    "SCREEN",
-      "OVERLAY",    "HARD_LIGHT", "SOFT_LIGHT",  "DARKEN",       "LIGHTEN",     "DODGE",
-      "BURN",       "EXCLUSION",  "HUE",         "SATURATION",   "COLOR",       "VALUE",
-      nullptr,      "ADD",        "LINEAR_BURN", "LINEAR_LIGHT", "VIVID_LIGHT", "PIN_LIGHT",
-  };
-  return mode >= 0 && mode < int64_t(std::size(blend_types)) ? blend_types[mode] : nullptr;
+  const int64_t dot = rna_path.find('.');
+  if (dot == StringRef::not_found) {
+    properties[rna_path] = *value;
+    return;
+  }
+  ensure_dictionary(properties, rna_path.substr(0, dot))[rna_path.substr(dot + 1)] = *value;
 }
 
 static void add_effect_properties(const AnyDictionary &effect,
@@ -190,34 +186,33 @@ static void add_effect_properties(const AnyDictionary &effect,
     return;
   }
 
-  const bool has_media = strip.data && strip.data->stripdata &&
-                         strip.data->stripdata->orig_width > 0;
-  const float2 media_size = has_media ? float2(strip.data->stripdata->orig_width,
-                                               strip.data->stripdata->orig_height) :
-                                        float2(scene.r.xsch, scene.r.ysch);
-  const float2 fit_scale = strip.data && strip.data->transform ?
-                               float2(strip.data->transform->scale_x,
-                                      strip.data->transform->scale_y) :
-                               float2(1.0f);
+  ResolveUnits units(scene, strip);
+  if (strip.data && strip.data->transform) {
+    units.fit_scale = float2(strip.data->transform->scale_x, strip.data->transform->scale_y);
+  }
   const int start_frame = strip.left_handle();
 
+  for (const ResolveNumber &number : resolve_numbers()) {
+    if (number.effect == *name) {
+      copy_number(properties,
+                  number.rna_path,
+                  effect,
+                  number.parameter,
+                  start_frame,
+                  units.to_blender(number.unit));
+    }
+  }
+
   if (*name == "Transform") {
-    AnyDictionary transform;
-    copy_number(transform, "scale_x", effect, "transformationZoomX", start_frame, fit_scale.x);
-    copy_number(transform, "scale_y", effect, "transformationZoomY", start_frame, fit_scale.y);
-    copy_number(transform, "offset_x", effect, "transformationPan", start_frame, scene.r.xsch);
-    copy_number(transform, "offset_y", effect, "transformationTilt", start_frame, scene.r.ysch);
-    copy_number(
-        transform, "rotation", effect, "transformationRotationAngle", start_frame, M_PI / 180.0);
     const AnyVector *anchor = std::any_cast<AnyVector>(
         parameter(effect, "transformationAnchorPoint"));
     if (anchor && anchor->size() == 2) {
-      const double2 offset(to_number((*anchor)[0]).value_or(0.0),
-                           to_number((*anchor)[1]).value_or(0.0));
-      const double2 origin = 0.5 + offset * double(scene.r.ysch) / double2(media_size * fit_scale);
-      transform["origin"] = AnyVector{origin.x, origin.y};
+      const float2 offset(to_number((*anchor)[0]).value_or(0.0),
+                          to_number((*anchor)[1]).value_or(0.0));
+      const float2 origin = 0.5f + offset * units.anchor_to_origin();
+      ensure_dictionary(properties, "transform")["origin"] = AnyVector{double(origin.x),
+                                                                       double(origin.y)};
     }
-    properties["transform"] = transform;
     if (const std::any *flip_x = parameter(effect, "transformationFlipX")) {
       properties["use_flip_x"] = *flip_x;
     }
@@ -225,21 +220,10 @@ static void add_effect_properties(const AnyDictionary &effect,
       properties["use_flip_y"] = *flip_y;
     }
   }
-  else if (*name == "Cropping") {
-    AnyDictionary crop;
-    copy_number(crop, "min_x", effect, "cropLeft", start_frame, media_size.x);
-    copy_number(crop, "max_x", effect, "cropRight", start_frame, media_size.x);
-    copy_number(crop, "min_y", effect, "cropBottom", start_frame, media_size.y);
-    copy_number(crop, "max_y", effect, "cropTop", start_frame, media_size.y);
-    properties["crop"] = crop;
-  }
   else if (*name == "Composite") {
-    copy_number(properties, "blend_alpha", effect, "opacity", start_frame, 0.01);
     const std::any *mode = parameter(effect, "composite mode");
     const int64_t *mode_value = mode ? std::any_cast<int64_t>(mode) : nullptr;
-    if (const char *blend_type = mode_value ? blend_type_from_composite_mode(*mode_value) :
-                                              nullptr)
-    {
+    if (const char *blend_type = mode_value ? resolve_blend_type(*mode_value) : nullptr) {
       properties["blend_type"] = std::string(blend_type);
     }
   }
@@ -256,12 +240,6 @@ static void add_effect_properties(const AnyDictionary &effect,
       volume = add_fades(volume, start_frame, strip.right_handle(&scene), fade_in, fade_out);
     }
     properties["volume"] = volume.size() == 1 ? std::any(volume[0].y) : keyframes_value(volume);
-  }
-  else if (*name == "Fairlight Clip Pan") {
-    copy_number(properties, "pan", effect, "pan", start_frame, 0.01);
-  }
-  else if (*name == "Edge Wipe") {
-    copy_number(properties, "angle", effect, "angle", start_frame, M_PI / 180.0);
   }
   else if (*name == "Solid Color") {
     const std::any *color = parameter(effect, "color");
