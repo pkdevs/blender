@@ -83,8 +83,9 @@ int main()
       UIButton *done = [strip valueForKey:@"_done"];
       NSCAssert(CGRectContainsRect(rect, strip.view.frame) && strip.view.frame.size.height == 60,
                 @"Thin strip fits iPad and compact phone bounds");
-      NSCAssert(CGRectGetMaxX(scroll.frame) <= CGRectGetMinX(done.frame) && CGRectGetMaxX(done.frame) <= strip.view.bounds.size.width,
-                @"Fixed checkmark never overlaps scrolling controls");
+      NSCAssert(CGRectGetMinX(done.frame) >= 0 && CGRectGetMaxX(done.frame) <= CGRectGetMinX(scroll.frame) &&
+                CGRectGetMaxX(scroll.frame) <= strip.view.bounds.size.width,
+                @"Leading close control never overlaps scrolling controls");
     }
     field.text = [NSNumberFormatter localizedStringFromNumber:@3.5 numberStyle:NSNumberFormatterDecimalStyle];
     NSCAssert([[field actionsForTarget:strip forControlEvent:UIControlEventEditingDidEnd] containsObject:@"commitField:"], @"Field commits when editing ends");
@@ -147,10 +148,10 @@ int main()
     [strip commitField:field];
     NSCAssert(requests.count == count, @"Invalid numbers never reach Blender");
     UIButton *done = [strip valueForKey:@"_done"];
-    NSCAssert([[done actionsForTarget:strip forControlEvent:UIControlEventTouchUpInside] containsObject:@"dismiss:"], @"Checkmark routes to dismissal");
+    NSCAssert([[done actionsForTarget:strip forControlEvent:UIControlEventTouchUpInside] containsObject:@"dismiss:"], @"Close control routes to dismissal");
     [strip dismiss:done];
     NSCAssert(strip.view.hidden && !strip.collapsedButton.hidden && requests.count == count,
-              @"Checkmark collapses locally without dismissing the Blender operation");
+              @"Close control collapses locally without dismissing the Blender operation");
     NSCAssert([strip.collapsedButton.configuration.title isEqual:@"Add Cube"] &&
               strip.collapsedWidth >= 72 && strip.collapsedWidth <= 136, @"Compact pill names the operator");
     [strip updateSnapshot:model];

@@ -135,6 +135,8 @@ static BOOL fingerTool;
   NSLayoutConstraint *_action_expanded_width_constraint, *_action_collapsed_width_constraint;
   NSLayoutConstraint *_action_toggle_width_constraint, *_action_toggle_trailing_constraint;
   NSLayoutConstraint *_action_group_leading_constraint, *_action_group_center_constraint;
+  CGRect _redo_lane_rect;
+  BOOL _redo_lane_wide;
   NSLayoutConstraint *_action_scroll_trailing_constraint, *_redo_pill_width_constraint;
   NSLayoutConstraint *_redo_pill_min_width_constraint;
   BOOL _actions_collapsed;

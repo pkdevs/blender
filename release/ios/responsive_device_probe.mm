@@ -226,7 +226,30 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
     UIView *actions = [controller valueForKey:@"_action_group"];
     UIView *scroll = [controller valueForKey:@"_action_scroll"];
     UIView *toggle = [controller valueForKey:@"_action_toggle"];
+    if ([request[@"capture"] isKindOfClass:NSString.class]) {
+      /* Captures in-flight animations as shown by the render server. */
+      UIWindow *window = controller.view.window;
+      UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
+      format.scale = 1;
+      UIImage *image = [[[UIGraphicsImageRenderer alloc] initWithBounds:window.bounds format:format]
+          imageWithActions:^(UIGraphicsImageRendererContext *) {
+            [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:NO];
+          }];
+      NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+      [UIImagePNGRepresentation(image) writeToFile:[documents stringByAppendingPathComponent:
+          [request[@"capture"] stringByAppendingString:@".png"]] atomically:YES];
+    }
+    CALayer *root = controller.view.layer.presentationLayer ?: controller.view.layer;
+    CALayer *pillLayer = pill.layer.presentationLayer ?: pill.layer;
+    CALayer *railLayer = rail.layer.presentationLayer ?: rail.layer;
     NSDictionary *state = @{@"snapshot": snapshot ?: @{}, @"visible": @(!rail.hidden && rail.alpha > 0),
+                            @"pillAlpha": @(pill.alpha), @"railAlpha": @(rail.alpha),
+                            @"pillPresentation": rectValues([pillLayer convertRect:pillLayer.bounds toLayer:root]),
+                            @"railPresentation": rectValues([railLayer convertRect:railLayer.bounds toLayer:root]),
+                            @"togglePresentation": rectValues([(toggle.layer.presentationLayer ?: toggle.layer)
+                                convertRect:toggle.layer.bounds toLayer:root]),
+                            @"railPresentationAlpha": @(railLayer.opacity), @"pillPresentationAlpha": @(pillLayer.opacity),
+                            @"viewWidth": @(controller.view.bounds.size.width),
                             @"frame": rectValues(rail.frame), @"controls": frames,
                             @"collapsed": @(!pill.hidden), @"pillTitle": pill.configuration.title ?: @"",
                             @"pillFrame": rectValues([pill convertRect:pill.bounds toView:controller.view]),

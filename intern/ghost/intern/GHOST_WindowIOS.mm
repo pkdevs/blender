@@ -2220,6 +2220,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSLayoutConstraint *_action_toggle_trailing_constraint;
   NSLayoutConstraint *_action_group_leading_constraint;
   NSLayoutConstraint *_action_group_center_constraint;
+  CGRect _redo_lane_rect;
+  BOOL _redo_lane_wide;
   NSLayoutConstraint *_action_scroll_trailing_constraint;
   NSLayoutConstraint *_redo_pill_width_constraint;
   NSLayoutConstraint *_redo_pill_min_width_constraint;
@@ -3459,11 +3461,35 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self setActionsCollapsed:NO animated:NO];
 }
 
+- (void)layoutRedoStrip
+{
+  CGRect rect = _redo_lane_rect;
+  if (_redo_lane_wide) {
+    /* Share the pills' row, starting after Actions, so the strip grows sideways
+     * out of its own pill and never crosses another control. */
+    const CGRect row = [_action_rail convertRect:_action_rail.bounds toView:_overlay_view];
+    const CGRect group = [_action_group convertRect:_action_group.bounds toView:_overlay_view];
+    const CGFloat left = _action_rail.hidden ? CGRectGetMinX(rect) :
+                                               MAX(CGRectGetMinX(rect), CGRectGetMaxX(group) + 8);
+    const CGFloat top = MIN(CGRectGetMidY(row) - 30,
+                            CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame) - 68);
+    rect = CGRectMake(left, top, MAX(0, CGRectGetMaxX(rect) - left), 60);
+  }
+  [_redo_strip layoutInRect:rect centerX:CGRectGetMidX(_overlay_view.bounds)];
+}
+
 - (void)updateRedoPillLayout:(BOOL)animated
 {
   [_action_rail layoutIfNeeded];
+  /* Only one of the two may be open: opening the strip folds the quick actions. */
+  if (_redo_strip.expanded && !_actions_collapsed) {
+    [self setActionsCollapsed:YES animated:animated];
+  }
   const CGFloat width = _redo_strip.collapsedWidth;
-  if (_redo_pill_width_constraint.constant == width) { return; }
+  if (_redo_pill_width_constraint.constant == width) {
+    [self layoutRedoStrip];
+    return;
+  }
   const CGFloat reserved = width ? width + 8 : 0;
   _redo_pill_width_constraint.constant = width;
   _redo_pill_min_width_constraint.constant = width ? 44 : 0;
@@ -3478,11 +3504,17 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
       delay:0 usingSpringWithDamping:0.86 initialSpringVelocity:0
       options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
       animations:^{ [self->_action_rail layoutIfNeeded]; } completion:nil];
+  /* Model frames are final here, so the strip targets its settled row position. */
+  [self layoutRedoStrip];
 }
 
 - (void)toggleActionStrip:(UIButton *)sender
 {
   [self setActionsCollapsed:!_actions_collapsed animated:YES];
+  if (!_actions_collapsed && _redo_strip.expanded) {
+    /* Fold the strip after the actions settle so it lands on the pill's new slot. */
+    [_redo_strip collapse];
+  }
 }
 
 - (void)setActionsCollapsed:(BOOL)collapsed animated:(BOOL)animated
@@ -3706,9 +3738,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   else {
     redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
   }
-  redo_rect = CGRectMake(redo_left, panel_top + 8,
+  _redo_lane_rect = CGRectMake(redo_left, panel_top + 8,
       MAX(0, redo_right - redo_left), MAX(60, redo_bottom - panel_top - 8));
-  [_redo_strip layoutInRect:redo_rect];
+  _redo_lane_wide = redo_rect.size.width >= 700;
+  [self layoutRedoStrip];
   [self layoutToolbarLabel];
   [self updateMTKViewDrawableScale];
   [self updateToolbarHeightForCurrentState];
