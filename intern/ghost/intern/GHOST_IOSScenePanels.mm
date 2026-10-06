@@ -189,6 +189,7 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   UICollectionViewDiffableDataSource<NSString *, NSString *> *_treeDataSource;
   NSDictionary *_nodesByKey;
   UILabel *_hierarchyStatus;
+  UIButton *_hierarchyAdd;
   BOOL _multipleSelection;
   UISearchBar *_search;
   NSMutableSet *_collapsed;
@@ -214,6 +215,8 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   GHOSTIOSScenePanels *_shadingPanels;
   UINavigationController *_shadingController;
 }
+
+@synthesize menuProvider = _menuProvider;
 
 - (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage *(^)(NSString *))icon
 {
@@ -377,6 +380,17 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 - (UIBarButtonItem *)inspectorButton { return _inspectorButton; }
 - (UIBarButtonItem *)hierarchyButton { return _hierarchyButton; }
 
+- (void)setMenuProvider:(UIMenu *(^)(NSDictionary *))provider
+{
+  if (_menuProvider == provider) { return; }
+  [_menuProvider release];
+  _menuProvider = [provider copy];
+  UIMenu *objects = provider ? provider(@{@"label": @"Add Object",
+      @"menu": @"VIEW3D_MT_add", @"icon": @"OBJECT_DATA"}) : nil;
+  UIAction *collection = (UIAction *)_hierarchyAdd.menu.children.firstObject;
+  _hierarchyAdd.menu = [UIMenu menuWithChildren:objects ? @[collection, objects] : @[collection]];
+}
+
 - (UIVisualEffectView *)panelWithTitle:(NSString *)title close:(SEL)selector
 {
   UIVisualEffectView *panel = [[[UIVisualEffectView alloc]
@@ -398,10 +412,32 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   [close addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];
   close.translatesAutoresizingMaskIntoConstraints = NO;
   [panel.contentView addSubview:close];
+  UIView *titleTrailing = close;
+  if (selector == @selector(toggleHierarchy:)) {
+    _hierarchyAdd = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_hierarchyAdd setImage:[UIImage systemImageNamed:@"plus"] forState:UIControlStateNormal];
+    _hierarchyAdd.accessibilityLabel = @"Add Collection or Object";
+    _hierarchyAdd.accessibilityIdentifier = @"blender.hierarchy.add";
+    _hierarchyAdd.showsMenuAsPrimaryAction = YES;
+    __block GHOSTIOSScenePanels *owner = self;
+    UIAction *collection = [UIAction actionWithTitle:@"New Collection"
+        image:_icon(@"OUTLINER_COLLECTION") identifier:@"blender.hierarchy.newCollection"
+        handler:^(__kindof UIAction *action) { [owner promptNewCollection]; }];
+    _hierarchyAdd.menu = [UIMenu menuWithChildren:@[collection]];
+    _hierarchyAdd.translatesAutoresizingMaskIntoConstraints = NO;
+    [panel.contentView addSubview:_hierarchyAdd];
+    [NSLayoutConstraint activateConstraints:@[
+      [_hierarchyAdd.trailingAnchor constraintEqualToAnchor:close.leadingAnchor],
+      [_hierarchyAdd.centerYAnchor constraintEqualToAnchor:close.centerYAnchor],
+      [_hierarchyAdd.widthAnchor constraintEqualToConstant:44],
+      [_hierarchyAdd.heightAnchor constraintEqualToConstant:44],
+    ]];
+    titleTrailing = _hierarchyAdd;
+  }
   [NSLayoutConstraint activateConstraints:@[
     [label.leadingAnchor constraintEqualToAnchor:panel.contentView.leadingAnchor constant:16],
     [label.centerYAnchor constraintEqualToAnchor:close.centerYAnchor],
-    [label.trailingAnchor constraintLessThanOrEqualToAnchor:close.leadingAnchor constant:-8],
+    [label.trailingAnchor constraintLessThanOrEqualToAnchor:titleTrailing.leadingAnchor constant:-8],
     [close.topAnchor constraintEqualToAnchor:panel.contentView.topAnchor constant:5],
     [close.trailingAnchor constraintEqualToAnchor:panel.contentView.trailingAnchor constant:-5],
     [close.widthAnchor constraintEqualToConstant:44], [close.heightAnchor constraintEqualToConstant:44],
@@ -2066,6 +2102,36 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
         placement:UICellAccessoryPlacementTrailing] autorelease]];
   }
   cell.accessories = accessories;
+}
+
+- (void)promptNewCollection
+{
+  UIViewController *presenter = _overlay.window.rootViewController;
+  while (presenter.presentedViewController) { presenter = presenter.presentedViewController; }
+  if (!presenter || presenter.isBeingDismissed || [presenter isKindOfClass:UIAlertController.class]) {
+    return;
+  }
+  UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"New Collection"
+      message:nil preferredStyle:UIAlertControllerStyleAlert];
+  [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+    field.text = @"Collection";
+    field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    field.accessibilityLabel = @"Collection name";
+  }];
+  __block GHOSTIOSScenePanels *owner = self;
+  __block UIAlertController *prompt = alert;
+  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+  UIAlertAction *create = [UIAlertAction actionWithTitle:@"Create" style:UIAlertActionStyleDefault
+      handler:^(UIAlertAction *action) {
+        [owner send:@{@"action": @"collection_new", @"value": prompt.textFields.firstObject.text ?: @""}];
+      }];
+  [alert addAction:create];
+  [alert.textFields.firstObject addAction:[UIAction actionWithHandler:^(__kindof UIAction *event) {
+    create.enabled = [((UITextField *)event.sender).text
+        stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length > 0;
+  }] forControlEvents:UIControlEventEditingChanged];
+  [presenter presentViewController:alert animated:YES completion:nil];
 }
 
 - (BOOL)sendHierarchyAction:(NSString *)action node:(NSDictionary *)node value:(id)value

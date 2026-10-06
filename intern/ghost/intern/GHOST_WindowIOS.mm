@@ -4731,10 +4731,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
         imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
   }];
   _scene_panels.menuProvider = ^UIMenu *(NSDictionary *property) {
+    NSMutableDictionary *route = [NSMutableDictionary dictionaryWithDictionary:
+        @{@"root": property[@"menu"], @"path": @[]}];
+    if (property[@"tab"]) { route[@"propertiesTab"] = property[@"tab"]; }
     return blenderIOSNativeSubmenu(@{@"title": property[@"label"],
                                     @"icon": property[@"icon"] ?: @"",
-                                    @"route": @{@"root": property[@"menu"], @"path": @[],
-                                                @"propertiesTab": property[@"tab"]}},
+                                    @"route": route},
                                    property[@"menu"]);
   };
   [self installNativeTopBar];

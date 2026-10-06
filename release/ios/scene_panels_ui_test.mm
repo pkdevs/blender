@@ -336,7 +336,22 @@ static void testNativePanelMenu(UIView *overlay)
   UIMenu *menu = [UIMenu menuWithTitle:@"Add Modifier" children:@[
       [UIAction actionWithTitle:@"Bevel" image:nil identifier:nil handler:^(UIAction *action) {}]]];
   panels.menuProvider = ^UIMenu *(NSDictionary *property) { provided = property; return menu; };
+  NSCAssert([provided[@"menu"] isEqual:@"VIEW3D_MT_add"] && !provided[@"tab"],
+            @"Hierarchy objects come from Blender's viewport Add menu, not Properties");
   [panels layoutInRect:CGRectMake(0, 70, 1194, 680)];
+  UIButton *add = [panels valueForKey:@"_hierarchyAdd"];
+  NSCAssert(add.showsMenuAsPrimaryAction && add.menu.children.count == 2 &&
+            [add.accessibilityIdentifier isEqual:@"blender.hierarchy.add"],
+            @"Hierarchy has an accessible native plus menu");
+  UIAction *collection = (UIAction *)add.menu.children.firstObject;
+  NSCAssert([collection.title isEqual:@"New Collection"] && collection.image,
+            @"New Collection uses a Blender icon");
+  UIView *hierarchy = [panels valueForKey:@"_hierarchy"];
+  [hierarchy layoutIfNeeded];
+  UILabel *title = [hierarchy viewWithTag:100];
+  NSCAssert(add.bounds.size.width == 44 && add.bounds.size.height == 44 &&
+            CGRectGetMaxX(title.frame) <= CGRectGetMinX(add.frame),
+            @"Hierarchy title leaves a full-size plus target without overlap");
   tap(panels.inspectorButton);
   NSDictionary *property = @{@"key": @"OBJECT_MT_modifier_add", @"menu": @"OBJECT_MT_modifier_add",
       @"type": @"MENU", @"label": @"Add Modifier", @"icon": @"ADD", @"tab": @"MODIFIER", @"editable": @YES};
