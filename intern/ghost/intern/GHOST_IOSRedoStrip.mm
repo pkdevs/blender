@@ -39,7 +39,8 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 }
 @end
 
-@interface GHOSTIOSRedoStrip () <UITextFieldDelegate, UIColorPickerViewControllerDelegate, UIScrollViewDelegate>
+@interface GHOSTIOSRedoStrip () <UITextFieldDelegate, UIColorPickerViewControllerDelegate, UIScrollViewDelegate,
+                                 UIGestureRecognizerDelegate>
 @end
 
 @implementation GHOSTIOSRedoStrip {
@@ -543,10 +544,16 @@ static const CGFloat GHOSTIOSRedoStripRadius = 20;
       }
       [field addTarget:self action:@selector(commitField:) forControlEvents:UIControlEventEditingDidEnd];
       if (property[@"dragStep"]) {
-        UILongPressGestureRecognizer *scrub = [[[UILongPressGestureRecognizer alloc]
+        /* A sideways drag on a number scrubs it, as in the Properties panel. The strip only
+         * scrolls once the scrub declines, so drag from labels and gaps to scroll. */
+        UIPanGestureRecognizer *scrub = [[[UIPanGestureRecognizer alloc]
             initWithTarget:self action:@selector(scrubNumber:)] autorelease];
-        scrub.minimumPressDuration = 0.25;
+        scrub.name = @"blender.number.scrub";
+        scrub.maximumNumberOfTouches = 1;
+        scrub.allowedTouchTypes = @[@(UITouchTypeDirect), @(UITouchTypeStylus)];
+        scrub.delegate = self;
         [field addGestureRecognizer:scrub];
+        [_scroll.panGestureRecognizer requireGestureRecognizerToFail:scrub];
       }
       control = field;
     }
@@ -625,7 +632,16 @@ static const CGFloat GHOSTIOSRedoStripRadius = 20;
   slider.interactionID = nil;
 }
 
-- (void)scrubNumber:(UILongPressGestureRecognizer *)gesture
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer
+{
+  if (![recognizer.name isEqual:@"blender.number.scrub"]) { return YES; }
+  GHOSTIOSRedoField *field = (GHOSTIOSRedoField *)recognizer.view;
+  const CGPoint velocity = [(UIPanGestureRecognizer *)recognizer velocityInView:field];
+  return field.enabled && !field.isFirstResponder && [field.operationID isEqual:_snapshot[@"id"]] &&
+         fabs(velocity.x) > fabs(velocity.y) * 1.2;
+}
+
+- (void)scrubNumber:(UIGestureRecognizer *)gesture
 {
   GHOSTIOSRedoField *field = (GHOSTIOSRedoField *)gesture.view;
   if (gesture.state == UIGestureRecognizerStateBegan) {

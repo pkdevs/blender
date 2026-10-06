@@ -7,20 +7,23 @@
 - (void)commitField:(UITextField *)field;
 - (void)dismiss:(id)sender;
 - (void)expand:(id)sender;
-- (void)scrubNumber:(UILongPressGestureRecognizer *)gesture;
+- (void)scrubNumber:(UIGestureRecognizer *)gesture;
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture;
 - (void)beginSlider:(UISlider *)slider;
 - (void)changeSlider:(UISlider *)slider;
 - (void)finishSlider:(UISlider *)slider;
 - (void)cancelSlider:(UISlider *)slider;
 @end
 
-@interface RedoTestPress : UILongPressGestureRecognizer
+@interface RedoTestPress : UIPanGestureRecognizer
 @property(nonatomic) UIGestureRecognizerState testState;
 @property(nonatomic) CGPoint testPoint;
+@property(nonatomic) CGPoint testVelocity;
 @end
 @implementation RedoTestPress
 - (UIGestureRecognizerState)state { return _testState; }
 - (CGPoint)locationInView:(UIView *)view { return _testPoint; }
+- (CGPoint)velocityInView:(UIView *)view { return _testVelocity; }
 @end
 
 static NSMutableArray *requests;
@@ -109,8 +112,19 @@ int main()
     [strip cancelSlider:factor];
     NSCAssert([requests.lastObject[@"phase"] isEqual:@"cancel"] && [requests.lastObject[@"value"] doubleValue] == 0.75,
               @"Slider cancellation restores the original operator value");
+    UIPanGestureRecognizer *installed = nil;
+    for (UIGestureRecognizer *gesture in field.gestureRecognizers) {
+      if ([gesture.name isEqual:@"blender.number.scrub"]) { installed = (UIPanGestureRecognizer *)gesture; }
+    }
+    NSCAssert([installed isKindOfClass:UIPanGestureRecognizer.class] && installed.delegate == (id)strip,
+              @"Redo numbers scrub from an immediate drag, not a long press");
     RedoTestPress *press = [[[RedoTestPress alloc] init] autorelease];
+    press.name = @"blender.number.scrub";
     [field addGestureRecognizer:press];
+    press.testVelocity = CGPointMake(300, 40);
+    NSCAssert([strip gestureRecognizerShouldBegin:press], @"Sideways drags on a number scrub it");
+    press.testVelocity = CGPointMake(40, 300);
+    NSCAssert(![strip gestureRecognizerShouldBegin:press], @"Other drags fall through to the strip");
     press.testState = UIGestureRecognizerStateBegan;
     [strip scrubNumber:press];
     press.testPoint = CGPointMake(50, 0);
