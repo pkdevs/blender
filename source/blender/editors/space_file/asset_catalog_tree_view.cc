@@ -593,7 +593,9 @@ bool AssetCatalogDropTarget::has_droppable_asset(const wmDrag &drag, const char 
     }
   }
 
-  *r_disabled_hint = RPT_("Only editable assets can be moved between catalogs");
+  *r_disabled_hint = RPT_(
+      "Only assets from the current file or asset system files (.asset.blend) can be moved "
+      "between catalogs");
   return false;
 }
 
