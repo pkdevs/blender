@@ -407,6 +407,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     NSMutableDictionary *values = [NSMutableDictionary dictionary];
     NSMutableDictionary *fieldIdentities = [NSMutableDictionary dictionary];
+    NSMutableDictionary *fieldFrames = [NSMutableDictionary dictionary];
     NSMutableDictionary *scrubs = [NSMutableDictionary dictionary];
     NSMutableDictionary *switches = [NSMutableDictionary dictionary];
     NSMutableDictionary *sliderValues = [NSMutableDictionary dictionary];
@@ -429,6 +430,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
         NSString *semantic = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
         values[semantic] = ((UITextField *)control).text ?: @"";
         fieldIdentities[semantic] = [NSString stringWithFormat:@"%p", control];
+        fieldFrames[key] = rectValues([control convertRect:[control bounds] toView:blenderController().view]);
         scrubs[key] = @{@"active": [control valueForKey:@"scrubbing"],
                         @"value": [control valueForKey:@"scrubValue"]};
       }
@@ -448,7 +450,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       sectionRows[sectionIDs[i]] = @([form numberOfRowsInSection:i]);
     }
     NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
-      @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities,
+      @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities, @"fieldFrames": fieldFrames,
       @"switches": switches,
       @"scrubs": scrubs,
       @"swipeActions": swipeActions,

@@ -130,6 +130,53 @@ static void testShadingPopover(UIViewController *controller)
             @"Closing stops shading snapshot requests");
 }
 
+static void testPairedProperties(UIView *overlay)
+{
+  GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
+      icon:^UIImage *(NSString *name) { return nil; }] autorelease];
+  tap(panels.inspectorButton);
+  NSMutableArray *properties = [NSMutableArray array];
+  for (NSString *key in @[@"aspect_x", @"aspect_y", @"percentage", @"other_x", @"other_y"]) {
+    NSMutableDictionary *field = [NSMutableDictionary dictionaryWithDictionary:
+        @{@"key": key, @"property": key, @"owner": @"data", @"label": key,
+          @"type": @"FLOAT", @"value": @1, @"min": @0, @"max": @100,
+          @"editable": @YES, @"native": @YES}];
+    if (![key isEqual:@"percentage"]) {
+      field[@"group"] = @"Aspect";
+      field[@"group_key"] = [key hasPrefix:@"aspect"] ? @"first" : @"second";
+      field[@"label"] = [key hasSuffix:@"x"] ? @"X" : @"Y";
+    }
+    [properties addObject:field];
+  }
+  [panels updateSnapshot:@{@"ack": @99999, @"inspector": @{@"id": @"pairs", @"name": @"Pairs",
+      @"sections": @[@{@"id": @"format", @"title": @"Format", @"open": @YES,
+                       @"properties": properties}]}}];
+  UITableView *form = [panels valueForKey:@"_form"];
+  NSDictionary *controls = [panels valueForKey:@"_controls"];
+  NSCAssert([form numberOfRowsInSection:0] == 3, @"Two distinct pairs and an independent percentage row");
+  for (NSNumber *width in @[@1194, @390, @320]) {
+    [panels layoutInRect:CGRectMake(0, 70, width.doubleValue, 680)];
+    [overlay layoutIfNeeded];
+    [form layoutIfNeeded];
+    UITextField *x = controls[@"aspect_x"], *y = controls[@"aspect_y"];
+    CGRect a = [x convertRect:x.bounds toView:overlay];
+    CGRect b = [y convertRect:y.bounds toView:overlay];
+    NSCAssert(fabs(a.origin.y - b.origin.y) < 1 && CGRectGetMaxX(a) <= CGRectGetMinX(b) &&
+              a.size.width > 60 && b.size.width > 60, @"Paired values fit side by side on tablet and phone");
+  }
+  UITextField *y = controls[@"aspect_y"];
+  NSCAssert([y.accessibilityLabel containsString:@"Aspect Y"], @"VoiceOver includes the component group name");
+  y.text = @"2";
+  for (id target in y.allTargets) {
+    for (NSString *action in [y actionsForTarget:target forControlEvent:UIControlEventEditingDidEnd]) {
+      [target performSelector:NSSelectorFromString(action) withObject:y];
+    }
+  }
+  NSCAssert([request[@"key"] isEqual:@"aspect_y"] && [request[@"value"] doubleValue] == 2,
+            @"Paired fields retain independent RNA edit identities: %@", request);
+  [panels dismiss];
+}
+
 static void testNumberScrubbing(UIView *overlay)
 {
   GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
@@ -622,6 +669,7 @@ int main()
     NSCAssert(panels.hierarchyButton.selected && !panels.inspectorButton.selected, @"Phone switches floating panel");
     [panels dismiss];
     NSCAssert(!panels.hierarchyButton.selected && !panels.inspectorButton.selected, @"Temporary panels dismiss");
+    testPairedProperties(controller.view);
     testNumberScrubbing(controller.view);
     testHierarchySwipes(controller.view);
     testShadingPopover(controller);
