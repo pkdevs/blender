@@ -379,10 +379,9 @@ class ShaderNodesInliner {
             continue;
           }
           for (const bNodeSocket *socket : node->input_sockets()) {
-            if (StringRefNull(socket->name).startswith("Internal")) {
-              continue;
+            if (socket->is_available()) {
+              output_sockets.append({tree.context, socket});
             }
-            output_sockets.append({tree.context, socket});
           }
         }
       }
