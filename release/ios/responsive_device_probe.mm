@@ -264,9 +264,18 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     if ([request[@"action"] isEqual:@"shading_close"]) { [scenePanels dismissShading]; }
     if ([request[@"scope"] isEqual:@"shading"]) { panels = [scenePanels valueForKey:@"_shadingPanels"]; }
+    if ([request[@"scope"] isEqual:@"tool"]) { panels = [scenePanels valueForKey:@"_toolPanels"]; }
     UIBarButtonItem *inspector = [panels valueForKey:@"inspectorButton"];
     UIBarButtonItem *hierarchy = [panels valueForKey:@"hierarchyButton"];
     NSString *action = request[@"action"];
+    if ([action isEqual:@"tool_popover"]) {
+      UIBarButtonItemGroup *group = [panels valueForKey:@"_toolGroup"];
+      [group.representativeItem.target performSelector:group.representativeItem.action
+                                           withObject:group.representativeItem];
+    }
+    if ([action isEqual:@"tool_popover_close"]) {
+      [panels performSelector:NSSelectorFromString(@"dismissToolSettings")];
+    }
     UIButton *hierarchyAdd = [panels valueForKey:@"_hierarchyAdd"];
     if ([action isEqual:@"hierarchy_add_open"]) {
       [hierarchyAdd performPrimaryAction];
@@ -374,7 +383,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       UIView *control = controls[request[@"key"]];
       UITableView *form = [panels valueForKey:@"_form"];
       NSArray *sections = [panels valueForKey:@"_formSections"];
-      for (NSUInteger section = 0; section < sections.count; section++) {
+      for (NSUInteger section = 0; section < MIN(sections.count, (NSUInteger)form.numberOfSections); section++) {
         NSArray *rows = sections[section];
         for (NSUInteger row = 0; row < rows.count; row++) {
           if ([control isDescendantOfView:rows[row]] && [form numberOfRowsInSection:section] > row) {
@@ -436,7 +445,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       UIControl *button = controls[request[@"key"]];
       UITableView *form = [panels valueForKey:@"_form"];
       NSArray *sections = [panels valueForKey:@"_formSections"];
-      for (NSUInteger section = 0; section < sections.count; section++) {
+      for (NSUInteger section = 0; section < MIN(sections.count, (NSUInteger)form.numberOfSections); section++) {
         NSArray *rows = sections[section];
         for (NSUInteger row = 0; row < rows.count; row++) {
           if ([button isDescendantOfView:rows[row]]) {
@@ -580,7 +589,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     UITableView *form = [panels valueForKey:@"_form"];
     NSArray *sectionIDs = [panels valueForKey:@"_sectionIdentifiers"];
-    for (NSUInteger i = 0; i < sectionIDs.count; i++) {
+    for (NSUInteger i = 0; i < MIN(sectionIDs.count, (NSUInteger)form.numberOfSections); i++) {
       sectionRows[sectionIDs[i]] = @([form numberOfRowsInSection:i]);
     }
     NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
@@ -589,6 +598,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"scrubs": scrubs,
       @"swipeActions": swipeActions,
       @"shadingPresented": @(((UIViewController *)[scenePanels valueForKey:@"_shadingController"]).presentingViewController != nil),
+      @"toolPresented": @(((UIViewController *)[panels valueForKey:@"_toolPopoverController"]).presentingViewController != nil),
       @"hierarchyClass": NSStringFromClass(tree.class), @"selectedObjects": selectedObjects,
       @"hierarchyAdd": @{@"primary": @(hierarchyAdd.showsMenuAsPrimaryAction),
           @"frame": rectValues([hierarchyAdd convertRect:hierarchyAdd.bounds toView:blenderController().view])},
