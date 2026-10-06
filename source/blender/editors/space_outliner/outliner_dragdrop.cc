@@ -1181,6 +1181,34 @@ static bool is_foreign_child(Main *bmain, Scene *scene, Collection *collection, 
   return owner_lib != collection->id.lib;
 }
 
+/* Dropping before or after a child shown under a parent object only reorders the children, so
+ * the hovered and dragged objects must all be reorderable children of that parent. */
+static bool can_reorder_parented_children(bContext *C,
+                                          const wmDrag *drag,
+                                          TreeElement *te,
+                                          const TreeElement *parent_te,
+                                          Collection *collection)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  if (is_object_element(te) &&
+      is_foreign_child(bmain, scene, collection, id_cast<Object *>(TREESTORE(te)->id)))
+  {
+    return false;
+  }
+  const Object *parent_ob = id_cast<Object *>(TREESTORE(parent_te)->id);
+  for (const wmDragID &drag_id : drag->ids) {
+    if (GS(drag_id.id->name) != ID_OB) {
+      return false;
+    }
+    Object *object = id_cast<Object *>(drag_id.id);
+    if (object->parent != parent_ob || is_foreign_child(bmain, scene, collection, object)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], CollectionDrop *data)
 {
   /* Get collection to drop into. */
@@ -1190,8 +1218,8 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  const TreeElement *collection_te = outliner_data_from_tree_element_and_parents(
-      is_collection_element, te);
+  TreeElement *collection_te = outliner_data_from_tree_element_and_parents(is_collection_element,
+                                                                           te);
   Collection *to_collection = outliner_collection_from_tree_element(collection_te);
 
   if (!ID_IS_EDITABLE(to_collection) || ID_IS_OVERRIDE_LIBRARY(to_collection)) {
@@ -1261,27 +1289,19 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
   if (ELEM(insert_type, TE_INSERT_BEFORE, TE_INSERT_AFTER)) {
     const TreeElement *parent_te = outliner_find_parent_element(
         &space_outliner->runtime->tree, nullptr, te);
-    if (parent_te != nullptr && parent_te->idcode == ID_OB) {
-      Main *bmain = CTX_data_main(C);
-      Scene *scene = CTX_data_scene(C);
-      if (is_object_element(te) &&
-          is_foreign_child(bmain, scene, to_collection, id_cast<Object *>(TREESTORE(te)->id)))
-      {
+    if (parent_te != nullptr && parent_te->idcode == ID_OB &&
+        !can_reorder_parented_children(C, drag, te, parent_te, to_collection))
+    {
+      if (!ID_IS_EDITABLE(to_collection) || ID_IS_OVERRIDE_LIBRARY(to_collection)) {
         return false;
       }
-      const Object *parent_ob = id_cast<Object *>(TREESTORE(parent_te)->id);
       for (const wmDragID &drag_id : drag->ids) {
-        if (GS(drag_id.id->name) == ID_OB) {
-          Object *object = id_cast<Object *>(drag_id.id);
-          if (object->parent != parent_ob || is_foreign_child(bmain, scene, to_collection, object))
-          {
-            return false;
-          }
-        }
-        else {
+        if (drag_id.from_parent == &to_collection->id) {
           return false;
         }
       }
+      te = collection_te;
+      insert_type = TE_INSERT_INTO;
     }
   }
 

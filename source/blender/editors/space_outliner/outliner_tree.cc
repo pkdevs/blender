@@ -351,17 +351,14 @@ static bool treesort_alpha_ob(const tTreeSort &x1, const tTreeSort &x2)
   return outliner_treesort_tiebreak(a_is_ob, x1.name, b_is_ob, x2.name);
 }
 
-struct SortCob {
-  Collection *owner = nullptr;
-  CollectionObject *cob = nullptr;
-};
-
 struct OutlinerSortMaps {
   Map<std::pair<Collection *, Object *>, CollectionObject *> collection_and_object_to_cob_map;
-  Map<Object *, SortCob> object_to_any_cob_map;
+  Map<Object *, std::pair<Collection *, CollectionObject *>> object_to_any_cob_map;
 };
 
-static SortCob find_sort_cob(const OutlinerSortMaps &sort_maps, Collection *collection, Object *ob)
+static std::pair<Collection *, CollectionObject *> find_sort_cob(const OutlinerSortMaps &sort_maps,
+                                                                 Collection *collection,
+                                                                 Object *ob)
 {
   if (CollectionObject *cob = sort_maps.collection_and_object_to_cob_map.lookup_default(
           {collection, ob}, nullptr))
@@ -378,9 +375,9 @@ static bool is_foreign_child(ID *id, Collection *collection, const OutlinerSortM
 {
   const Library *owner_lib = id->lib;
   if (GS(id->name) == ID_OB) {
-    const SortCob sort_cob = find_sort_cob(sort_maps, collection, id_cast<Object *>(id));
-    if (sort_cob.owner != nullptr) {
-      owner_lib = sort_cob.owner->id.lib;
+    Collection *owner = find_sort_cob(sort_maps, collection, id_cast<Object *>(id)).first;
+    if (owner != nullptr) {
+      owner_lib = owner->id.lib;
     }
   }
   return owner_lib != collection->id.lib;
@@ -422,7 +419,7 @@ static int get_sort_index(const tTreeSort &x,
 {
   if (x.idcode == ID_OB) {
     Object *ob = reinterpret_cast<Object *>(x.id);
-    CollectionObject *cob = find_sort_cob(sort_maps, collection, ob).cob;
+    CollectionObject *cob = find_sort_cob(sort_maps, collection, ob).second;
     if (cob) {
       int sort_idx = is_parented_object ? cob->parented_sort_index : cob->sort_index;
       if (sort_idx >= 0) {
@@ -675,7 +672,7 @@ static void outliner_sort_custom(Main *bmain,
             continue;
           }
           Object *ob = reinterpret_cast<Object *>(element.id);
-          CollectionObject *cob = find_sort_cob(sort_maps, collection, ob).cob;
+          CollectionObject *cob = find_sort_cob(sort_maps, collection, ob).second;
           if (cob != nullptr) {
             if (is_parented_object) {
               cob->parented_sort_index = index++;
