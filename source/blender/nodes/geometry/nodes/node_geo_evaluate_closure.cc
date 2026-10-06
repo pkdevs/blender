@@ -300,15 +300,14 @@ class EvaluateClosureOperation : public NodeOperation {
                                                                      this->node().identifier,
                                                                      &this->node().owner_tree(),
                                                                      closure_source_location);
-    ZoneTreeOperation *zone_tree_operation = new ZoneTreeOperation(
+    ZoneTreeOperation zone_tree_operation = ZoneTreeOperation(
         this->context(), closure->zone, evaluate_closure_context);
-    this->set_reference_counts(*zone_tree_operation, closure);
-    Vector<std::unique_ptr<Result>> inputs = this->map_inputs(*zone_tree_operation, closure);
+    this->set_reference_counts(zone_tree_operation, closure);
+    Vector<std::unique_ptr<Result>> inputs = this->map_inputs(zone_tree_operation, closure);
     Vector<std::unique_ptr<Result>> captured_values = this->map_captured_values(
-        *zone_tree_operation, closure);
-    zone_tree_operation->evaluate();
-    this->write_outputs(*zone_tree_operation, closure);
-    delete zone_tree_operation;
+        zone_tree_operation, closure);
+    zone_tree_operation.evaluate();
+    this->write_outputs(zone_tree_operation, closure);
   }
 
   /* Write a default value for each of the needed outputs, if an input with the same name as the
