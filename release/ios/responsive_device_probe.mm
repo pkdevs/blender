@@ -624,6 +624,66 @@ extern "C" char *blender_device_probe_toolbar_label(int action, int index)
   return result;
 }
 
+static NSDictionary *toolImageColors(UIImage *image)
+{
+  unsigned char pixels[64 * 64 * 4] = {};
+  CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+  CGContextRef context = CGBitmapContextCreate(pixels, 64, 64, 8, 64 * 4, space,
+                                              kCGImageAlphaPremultipliedLast);
+  UIGraphicsPushContext(context);
+  /* UIImageView resolves dynamic assets; direct bitmap drawing needs the same resolution. */
+  UIImage *resolved = [image.imageAsset imageWithTraitCollection:UITraitCollection.currentTraitCollection] ?: image;
+  [resolved drawInRect:CGRectMake(0, 0, 64, 64)];
+  UIGraphicsPopContext();
+  int colored = 0, visible = 0;
+  unsigned long sum = 0;
+  for (int i = 0; i < 64 * 64; i++) {
+    const unsigned char *p = pixels + i * 4;
+    visible += p[3] > 16;
+    colored += p[3] > 16 && MAX(MAX(p[0], p[1]), p[2]) - MIN(MIN(p[0], p[1]), p[2]) > 24;
+    sum += p[0] + p[1] + p[2];
+  }
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return @{@"original": @(image.renderingMode == UIImageRenderingModeAlwaysOriginal),
+           @"colored": @(colored), @"visible": @(visible), @"sum": @(sum)};
+}
+
+static void toolMenuColors(UIMenu *menu, NSMutableArray *images)
+{
+  for (UIMenuElement *item in menu.children) {
+    if ([item isKindOfClass:UIAction.class]) {
+      [images addObject:toolImageColors(((UIAction *)item).image)];
+    }
+    else if ([item isKindOfClass:UIMenu.class]) {
+      toolMenuColors((UIMenu *)item, images);
+    }
+  }
+}
+
+extern "C" char *blender_device_probe_tool_colors()
+{
+  __block char *result = nullptr;
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    UIViewController *controller = blenderController();
+    NSMutableArray *images = [NSMutableArray array];
+    [controller.traitCollection performAsCurrentTraitCollection:^{
+      for (UIButton *button in [controller valueForKey:@"_toolbar_buttons"]) {
+        NSMutableDictionary *entry = [toolImageColors(button.configuration.image ?: button.currentImage) mutableCopy];
+        entry[@"id"] = button.accessibilityIdentifier ?: @"";
+        entry[@"selected"] = @(button.selected);
+        NSMutableArray *group = [NSMutableArray array];
+        toolMenuColors(button.menu, group);
+        entry[@"group"] = group;
+        [images addObject:entry];
+      }
+    }];
+    NSData *json = [NSJSONSerialization dataWithJSONObject:images options:0 error:nil];
+    result = strndup((const char *)json.bytes, json.length);
+  });
+  return result;
+}
+
 extern "C" char *blender_device_probe_quick_actions(int taps)
 {
   __block char *result = nullptr;
