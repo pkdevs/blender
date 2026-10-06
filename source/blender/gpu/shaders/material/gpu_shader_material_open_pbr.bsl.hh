@@ -24,7 +24,7 @@ float openpbr_specular_ior(const Specular specular, const Coat coat)
   return openpbr_modulate_ior(specular.weight, specular_ior);
 }
 
-float3 openpbr_eval_translucent([[resource_table]] KernelGlobals &kg,
+float3 openpbr_eval_translucent(KernelGlobals &kg,
                                 ShadingData &sd,
                                 float3 weight,
                                 [[maybe_unused]] const Specular specular,
@@ -58,13 +58,13 @@ float3 openpbr_eval_translucent([[resource_table]] KernelGlobals &kg,
   }
 
   weight = openpbr_eval_translucent(
-      sd, weight, transmission.weight, R, T, N, specular, thin_walled, reflection_data);
+      kg, sd, weight, transmission.weight, R, T, N, specular, thin_walled, reflection_data);
 #endif
 
   return weight;
 }
 
-float3 openpbr_eval_gloss([[resource_table]] const KernelGlobals &kg,
+float3 openpbr_eval_gloss(const KernelGlobals &kg,
                           ShadingData &sd,
                           const float3 weight,
                           const Specular specular,
@@ -82,7 +82,7 @@ float3 openpbr_eval_gloss([[resource_table]] const KernelGlobals &kg,
   reflection_data.N = N;
   reflection_data.roughness = specular.roughness;
   reflection_data.color += weight * reflectance * specular.tint;
-  closure_eval(sd, reflection_data);
+  closure_eval(kg, sd, reflection_data);
 
   /* Attenuate lower layers */
   return weight * max(1.0f - reflectance, 0.0f);
@@ -131,7 +131,7 @@ void node_bsdf_open_pbr(const float float_weight,                             //
                         const float3 geometry_tangent,                        // #39
                         const float3 geometry_coat_normal,                    // #40
                         const float3 /*geometry_coat_tangent*/,               // #41
-                        [[resource_table]] KernelGlobals &kg,
+                        KernelGlobals &kg,
                         ShadingData &sd,
                         Closure &result)
 {
@@ -217,17 +217,18 @@ void node_bsdf_open_pbr(const float float_weight,                             //
   ClosureDiffuse diffuse_data;
   ClosureReflection reflection_data;
 
-  weight = openpbr_eval_transparency(sd, weight, geometry_opacity);
-  weight = openpbr_eval_fuzz(sd, weight, coat, fuzz, N, V, diffuse_data);
+  weight = openpbr_eval_transparency(kg, sd, weight, geometry_opacity);
+  weight = openpbr_eval_fuzz(kg, sd, weight, coat, fuzz, N, V, diffuse_data);
   weight = openpbr_eval_coat(kg, sd, weight, coat, V);
-  weight = openpbr_eval_emission(sd, weight, emission_color.rgb, emission_luminance);
+  weight = openpbr_eval_emission(kg, sd, weight, emission_color.rgb, emission_luminance);
   weight = openpbr_eval_metal(
       kg, weight, weighted_base_color, specular, base_metalness, NV, multiggx, reflection_data);
   weight = openpbr_eval_translucent(
       kg, sd, weight, specular, transmission, N, NV, geometry_thin_walled, reflection_data);
   weight = openpbr_eval_gloss(kg, sd, weight, specular, N, NV, reflection_data);
-  weight = openpbr_eval_subsurface(sd, weight, subsurface, geometry_thin_walled, N, diffuse_data);
-  openpbr_eval_diffuse(sd, weight, weighted_base_color, N, diffuse_data);
+  weight = openpbr_eval_subsurface(
+      kg, sd, weight, subsurface, geometry_thin_walled, N, diffuse_data);
+  openpbr_eval_diffuse(kg, sd, weight, weighted_base_color, N, diffuse_data);
 
   /* TODO(fclem): EEVEE implementation leaking. */
   result = CLOSURE_DEFAULT;
