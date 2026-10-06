@@ -82,6 +82,11 @@ static void measure_positions(const Span<float3> positions,
       positions, false, r_accumulated_lengths.as_mutable_span());
 }
 
+static bool is_total_length_valid(const Span<float> accumulated_lengths)
+{
+  return accumulated_lengths.last() > 0.0f;
+}
+
 static void calculate_chain_lengths(ToAnnotationChain &chain)
 {
   const int verts_num = chain.verts.size();
@@ -294,6 +299,9 @@ void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
 
   for (ToAnnotationChain &chain : chains) {
     calculate_chain_lengths(chain);
+    if (!is_total_length_valid(chain.accumulated_lengths)) {
+      continue;
+    }
 
     StrokeData *best_stroke = nullptr;
     float3 fallback_points[2];
