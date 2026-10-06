@@ -328,6 +328,33 @@ static void testNumberScrubbing(UIView *overlay)
   [panels dismiss];
 }
 
+static void testNativePanelMenu(UIView *overlay)
+{
+  GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
+      icon:^UIImage *(NSString *name) { return [UIImage systemImageNamed:@"plus"]; }] autorelease];
+  __block NSDictionary *provided = nil;
+  UIMenu *menu = [UIMenu menuWithTitle:@"Add Modifier" children:@[
+      [UIAction actionWithTitle:@"Bevel" image:nil identifier:nil handler:^(UIAction *action) {}]]];
+  panels.menuProvider = ^UIMenu *(NSDictionary *property) { provided = property; return menu; };
+  [panels layoutInRect:CGRectMake(0, 70, 1194, 680)];
+  tap(panels.inspectorButton);
+  NSDictionary *property = @{@"key": @"OBJECT_MT_modifier_add", @"menu": @"OBJECT_MT_modifier_add",
+      @"type": @"MENU", @"label": @"Add Modifier", @"icon": @"ADD", @"tab": @"MODIFIER", @"editable": @YES};
+  [panels updateSnapshot:@{@"inspector": @{@"id": @"99", @"name": @"Properties", @"tab": @"MODIFIER",
+      @"sections": @[@{@"id": @"DATA_PT_modifiers", @"title": @"Modifiers", @"open": @YES,
+                       @"properties": @[property]}]}}];
+  UIButton *button = [panels valueForKey:@"_controls"][@"OBJECT_MT_modifier_add"];
+  NSCAssert(button.showsMenuAsPrimaryAction && [button.menu.title isEqual:menu.title] &&
+            button.menu.children.count == 1 && button.configuration.image,
+            @"Add Modifier presents a native icon-bearing menu as its primary action: %@ / %@", button, provided);
+  NSCAssert([provided[@"menu"] isEqual:@"OBJECT_MT_modifier_add"] &&
+            [provided[@"tab"] isEqual:@"MODIFIER"], @"Native menu retains Blender's Properties context");
+  NSDictionary *before = request;
+  [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+  NSCAssert(request == before, @"Menu button does not enqueue a Blender popup operator");
+  [panels dismiss];
+}
+
 int main()
 {
   @autoreleasepool {
@@ -727,6 +754,7 @@ int main()
     NSCAssert(!panels.hierarchyButton.selected && !panels.inspectorButton.selected, @"Temporary panels dismiss");
     testPairedProperties(controller.view);
     testNumberScrubbing(controller.view);
+    testNativePanelMenu(controller.view);
     testHierarchySwipes(controller.view);
     testShadingPopover(controller);
     NSLog(@"PASS: floating scene panels, search, selection, native fields, async ownership, responsive layout");

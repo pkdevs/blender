@@ -328,6 +328,12 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       }
     }
     NSDictionary *controls = [panels valueForKey:@"_controls"];
+    if ([action isEqual:@"native_menu_open"]) {
+      UIButton *button = controls[request[@"key"]];
+      if ([button isKindOfClass:UIButton.class] && button.showsMenuAsPrimaryAction) {
+        [button performPrimaryAction];
+      }
+    }
     if ([action isEqual:@"enum"]) {
       NSDictionary *property = [panels propertyForKey:request[@"key"]];
       UIControl *control = controls[request[@"key"]];
@@ -525,12 +531,19 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     NSMutableDictionary *scrubs = [NSMutableDictionary dictionary];
     NSMutableDictionary *switches = [NSMutableDictionary dictionary];
     NSMutableDictionary *sliderValues = [NSMutableDictionary dictionary];
+    NSMutableDictionary *nativeMenus = [NSMutableDictionary dictionary];
     for (NSString *key in [panels valueForKey:@"_sliders"]) {
       UISlider *slider = [panels valueForKey:@"_sliders"][key];
       sliderValues[key] = @{@"value": @(slider.value), @"enabled": @(slider.enabled)};
     }
     for (NSString *key in controls) {
       id control = controls[key];
+      if ([control isKindOfClass:UIButton.class] && ((UIButton *)control).menu) {
+        UIButton *button = control;
+        nativeMenus[key] = @{@"primary": @(button.showsMenuAsPrimaryAction),
+                             @"icon": @(button.configuration.image != nil),
+                             @"title": button.configuration.title ?: @""};
+      }
       if ([control isKindOfClass:UISwitch.class]) {
         UISwitch *toggle = control;
         UIWindow *window = toggle.window;
@@ -573,6 +586,7 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
       @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
       @"sliders": sliderValues,
+      @"nativeMenus": nativeMenus,
       @"lockMenu": lockMenuTitle,
       @"propertyMenu": propertyMenu,
       @"groupMenu": groupMenu,
