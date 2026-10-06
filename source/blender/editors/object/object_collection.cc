@@ -942,7 +942,11 @@ static wmOperatorStatus collection_importer_clear_exec(bContext *C, wmOperator *
   }
 
   /* Clear all imported data, including the external archive library itself. */
+  Library *external_library = external_archive_lib->archive_parent_library;
   collection_importer_clear_ids(bmain, external_archive_lib);
+  if (external_library->runtime->archived_libraries.is_empty()) {
+    BKE_id_delete(bmain, &external_library->id);
+  }
 
   data->runtime->archive_library = nullptr;
 
