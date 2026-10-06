@@ -1219,7 +1219,7 @@ static BMOpDefine bmo_scale_def = {
     /*type_flag*/ (BMO_OPTYPE_FLAG_NORMALS_CALC),
 };
 
-static BMO_FlagSet bmo_enum_to_annotation_method[] = {
+static BMO_FlagSet bmo_enum_fit_edge_loops_to_annotation_method[] = {
     {TO_ANNOTATION_PROJECT, "PROJECT"},
     {TO_ANNOTATION_SPREAD, "SPREAD"},
     {TO_ANNOTATION_SPREAD_EVENLY, "SPREAD_EVENLY"},
@@ -1230,8 +1230,8 @@ static BMO_FlagSet bmo_enum_to_annotation_method[] = {
  *
  * Stretches selected vertices to the active stroke
  */
-static BMOpDefine bmo_to_annotation_def = {
-    /*opname*/ "to_annotation",
+static BMOpDefine bmo_fit_edge_loops_to_annotation_def = {
+    /*opname*/ "fit_edge_loops_to_annotation",
     /*slot_types_in*/
     {
         /* Input geometry. */
@@ -1242,7 +1242,7 @@ static BMOpDefine bmo_to_annotation_def = {
         {"method",
          BMO_OP_SLOT_INT,
          to_subtype_union(BMO_OP_SLOT_SUBTYPE_INT_ENUM),
-         bmo_enum_to_annotation_method},
+         bmo_enum_fit_edge_loops_to_annotation_method},
         /* Array of annotation strokes to project onto (ignored if None). */
         {"strokes", BMO_OP_SLOT_PTR, to_subtype_union(BMO_OP_SLOT_SUBTYPE_PTR_STRUCT)},
         /* Lock X axis editing. */
@@ -1256,7 +1256,7 @@ static BMOpDefine bmo_to_annotation_def = {
     /*slot_types_out*/
     {{{'\0'}}},
     /*init*/ nullptr,
-    /*exec*/ bmo_to_annotation_exec,
+    /*exec*/ bmo_fit_edge_loops_to_annotation_exec,
     /*type_flag*/
     (BMO_OPTYPE_FLAG_NORMALS_CALC),
 };
@@ -3164,7 +3164,7 @@ const BMOpDefine *bmo_opdefines[] = {
     &bmo_bisect_plane_def,
     &bmo_space_edge_loops_evenly_def,
     &bmo_symmetrize_def,
-    &bmo_to_annotation_def,
+    &bmo_fit_edge_loops_to_annotation_def,
     &bmo_transform_def,
     &bmo_translate_def,
     &bmo_triangle_fill_def,

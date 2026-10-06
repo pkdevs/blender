@@ -59,7 +59,7 @@ static const EnumPropertyItem prop_method_items[] = {
     {0, nullptr},
 };
 
-static wmOperatorStatus edbm_to_annotation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus edbm_fit_edge_loops_to_annotation_exec(bContext *C, wmOperator *op)
 {
   const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
@@ -116,7 +116,7 @@ static wmOperatorStatus edbm_to_annotation_exec(bContext *C, wmOperator *op)
     }
     if (!EDBM_op_callf(em,
                        op,
-                       "to_annotation geom=%he factor=%f method=%i strokes=%p lock_x=%b "
+                       "fit_edge_loops_to_annotation geom=%he factor=%f method=%i strokes=%p lock_x=%b "
                        "lock_y=%b lock_z=%b",
                        BM_ELEM_SELECT,
                        factor,
@@ -155,7 +155,7 @@ static wmOperatorStatus edbm_to_annotation_exec(bContext *C, wmOperator *op)
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
-static void edbm_to_annotation_ui(bContext * /*C*/, wmOperator *op)
+static void edbm_fit_edge_loops_to_annotation_ui(bContext * /*C*/, wmOperator *op)
 {
   /* A custom UI function is needed to draw the axis locks (X/Y/Z) as a row of toggle buttons. */
   ui::Layout &layout = *op->layout;
@@ -172,15 +172,15 @@ static void edbm_to_annotation_ui(bContext * /*C*/, wmOperator *op)
   lock_row.prop(op->ptr, lock_prop, 2, 0, ui::ITEM_R_TOGGLE, "Z", ICON_NONE);
 }
 
-void MESH_OT_to_annotation(wmOperatorType *ot)
+void MESH_OT_fit_edge_loops_to_annotation(wmOperatorType *ot)
 {
-  ot->name = "To Annotation";
+  ot->name = "Fit Edge Loops To Annotation";
   ot->description = "Stretch selected vertices to active stroke";
-  ot->idname = "MESH_OT_to_annotation";
+  ot->idname = "MESH_OT_to_fit_edge_loops_to_annotation";
 
-  ot->exec = edbm_to_annotation_exec;
+  ot->exec = edbm_fit_edge_loops_to_annotation_exec
   ot->poll = ED_operator_editmesh;
-  ot->ui = edbm_to_annotation_ui;
+  ot->ui = edbm_fit_edge_loops_to_annotation_ui;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 

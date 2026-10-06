@@ -263,7 +263,7 @@ static void calculate_verts(const StrokeData &stroke_data,
   }
 }
 
-void bmo_to_annotation_exec(BMesh *bm, BMOperator *op)
+void bmo_fit_edge_loops_to_annotation_exec(BMesh *bm, BMOperator *op)
 {
   const float factor = BMO_slot_float_get(op->slots_in, "factor");
   const int method = BMO_slot_int_get(op->slots_in, "method");
