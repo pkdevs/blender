@@ -1129,15 +1129,32 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
         label.textAlignment = NSTextAlignmentCenter;
         label.adjustsFontSizeToFitWidth = YES;
         label.minimumScaleFactor = 0.8;
-        UIStackView *column = [[[UIStackView alloc] initWithArrangedSubviews:@[label, inlineControl]] autorelease];
-        column.axis = toggle ? UILayoutConstraintAxisHorizontal : UILayoutConstraintAxisVertical;
+        UIView *columnControl = inlineControl;
+        if (toggle) {
+          /* Caption above a compact switch, like the other inline columns. */
+          inlineControl.transform = CGAffineTransformMakeScale(0.7, 0.7);
+          UIView *holder = [[[UIView alloc] init] autorelease];
+          inlineControl.translatesAutoresizingMaskIntoConstraints = NO;
+          [holder addSubview:inlineControl];
+          [NSLayoutConstraint activateConstraints:@[
+            [holder.widthAnchor constraintEqualToConstant:40],
+            [holder.heightAnchor constraintEqualToConstant:24],
+            [inlineControl.centerXAnchor constraintEqualToAnchor:holder.centerXAnchor],
+            [inlineControl.centerYAnchor constraintEqualToAnchor:holder.centerYAnchor],
+          ]];
+          columnControl = holder;
+        }
+        UIStackView *column = [[[UIStackView alloc] initWithArrangedSubviews:@[label, columnControl]] autorelease];
+        column.axis = UILayoutConstraintAxisVertical;
         column.alignment = UIStackViewAlignmentCenter;
         column.spacing = 0;
-        CGFloat width = [kind isEqual:@"COLOR"] ? 52 : toggle ? 160 :
-                        [kind isEqual:@"ENUM"] ? 140 : 112;
+        const BOOL iconMenu = [inlineControl isKindOfClass:UIButton.class] &&
+                              ((UIButton *)inlineControl).configuration.indicator == UIButtonConfigurationIndicatorPopup;
+        CGFloat width = [kind isEqual:@"COLOR"] ? 52 : toggle ? 72 : iconMenu ? 72 :
+                        [kind isEqual:@"ENUM"] ? 108 : [kind isEqual:@"OPERATOR"] ? 96 : 104;
         [column.widthAnchor constraintEqualToConstant:width].active = YES;
         [column.heightAnchor constraintEqualToConstant:40].active = YES;
-        [label.widthAnchor constraintLessThanOrEqualToConstant:width - (toggle ? 60 : 8)].active = YES;
+        [label.widthAnchor constraintLessThanOrEqualToConstant:width - 4].active = YES;
         if (!toggle) {
           [inlineControl.widthAnchor constraintEqualToConstant:[kind isEqual:@"COLOR"] ? 36 : width - 8].active = YES;
           [inlineControl.heightAnchor constraintEqualToConstant:26].active = YES;
