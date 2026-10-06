@@ -313,12 +313,21 @@ std::vector<IOSActionItem> ios_action_items_for_tool(bContext *C,
     return items;
   }
 
-  if (mode == CTX_MODE_SCULPT || mode == CTX_MODE_PAINT_TEXTURE || mode == CTX_MODE_PAINT_VERTEX ||
-      mode == CTX_MODE_PAINT_WEIGHT)
-  {
-    ios_action_add_operator(C, items, "Undo", "ED_OT_undo", "arrow.uturn.backward");
-    ios_action_add_operator(C, items, "Redo", "ED_OT_redo", "arrow.uturn.forward");
-    ios_action_add_operator(C, items, "Frame", "VIEW3D_OT_view_selected", "viewfinder");
+  /* Undo lives in the top bar and framing in the navigation gizmo, so brush modes only get
+   * whole-mesh operations that otherwise need a menu. */
+  if (mode == CTX_MODE_SCULPT) {
+    ios_action_add_operator(
+        C, items, "Invert Mask", "PAINT_OT_mask_flood_fill", "circle.lefthalf.filled", "mode", "INVERT");
+    ios_action_add_operator(
+        C, items, "Clear Mask", "PAINT_OT_mask_flood_fill", "circle.dashed", "mode", "VALUE");
+    ios_action_add_operator(
+        C, items, "Reveal", "PAINT_OT_hide_show_all", "eye", "action", "SHOW");
+    ios_action_add_operator(C,
+                            items,
+                            "Symmetrize",
+                            "SCULPT_OT_symmetrize",
+                            "arrow.left.and.right.righttriangle.left.righttriangle.right");
+    ios_action_add_operator(C, items, "Remesh", "OBJECT_OT_voxel_remesh", "square.grid.3x3");
     return items;
   }
 
