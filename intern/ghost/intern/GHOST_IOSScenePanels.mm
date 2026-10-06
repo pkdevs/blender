@@ -2160,14 +2160,22 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   if (tableView == _form) {
     UITableViewCell *cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil] autorelease];
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    cell.backgroundColor = UIColor.secondarySystemGroupedBackgroundColor;
     UIView *row = _formSections[indexPath.section][indexPath.row];
+    /* The shading mode picker is already a pill; a grouped card around it nests the shape. */
+    const BOOL bare = _shadingOnly && [_formSections[indexPath.section] count] == 1 &&
+                      [row isKindOfClass:UIStackView.class] &&
+                      [[(UIStackView *)row arrangedSubviews] indexOfObjectPassingTest:
+                          ^BOOL(UIView *view, NSUInteger, BOOL *) {
+                            return [view isKindOfClass:UISegmentedControl.class];
+                          }] != NSNotFound;
+    cell.backgroundColor = bare ? UIColor.clearColor : UIColor.secondarySystemGroupedBackgroundColor;
+    const CGFloat inset = bare ? 0 : 12;
     [row removeFromSuperview];
     row.translatesAutoresizingMaskIntoConstraints = NO;
     [cell.contentView addSubview:row];
     [NSLayoutConstraint activateConstraints:@[
-      [row.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:12],
-      [row.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-12],
+      [row.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:inset],
+      [row.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-inset],
       [row.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:2],
       [row.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-2],
     ]];

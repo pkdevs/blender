@@ -113,6 +113,9 @@ static void testShadingPopover(UIViewController *controller)
             segments.selectedSegmentIndex == 1, @"Shading modes use the native segmented control");
   UITableView *form = [shading valueForKey:@"_form"];
   NSCAssert(!form.backgroundView, @"First snapshot replaces the loading indicator");
+  UITableViewCell *modeCell = [form.dataSource tableView:form cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+  NSCAssert([modeCell.backgroundColor isEqual:UIColor.clearColor],
+            @"The shading mode pill is not nested inside a grouped card");
   segments.selectedSegmentIndex = 2;
   [segments sendActionsForControlEvents:UIControlEventValueChanged];
   NSCAssert([request[@"tab"] isEqual:@"SHADING"] && [request[@"value"] isEqual:@"MATERIAL"] &&
