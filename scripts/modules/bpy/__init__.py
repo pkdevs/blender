@@ -63,6 +63,18 @@ def main():
         "bpy.types": types,
     })
 
+    # Denormals are flushed to zero on all threads, which makes numpy (before 2.4)
+    # warn when it computes `finfo` for a type. Remove once numpy 2.4+ is shipped.
+    # See #164118 for more info.
+    if not app.module:
+        import warnings
+        warnings.filterwarnings(
+            "ignore",
+            message="The value of the smallest subnormal for",
+            category=UserWarning,
+            module=r"numpy\._core\.getlimits",
+        )
+
     # Initializes Python classes.
     # (good place to run a profiler or trace).
     # Postpone loading `extensions` scripts (add-ons & app-templates),
