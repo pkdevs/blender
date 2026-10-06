@@ -265,8 +265,7 @@ class Generator(base_generate.BaseGenerator):
 
         # Remove all bones from the generated rig armature.
         bpy.ops.object.mode_set(mode='EDIT')
-        for bone in obj.data.edit_bones:
-            obj.data.edit_bones.remove(bone)
+        obj.data.edit_bones.clear()
         bpy.ops.object.mode_set(mode='OBJECT')
 
         # Remove all bone collections from the target armature.
