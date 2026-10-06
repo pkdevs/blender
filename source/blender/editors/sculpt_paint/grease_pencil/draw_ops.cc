@@ -2285,10 +2285,8 @@ static wmOperatorStatus grease_pencil_erase_lasso_exec(bContext *C, wmOperator *
           [&](const int curve) {
             Bounds<float2> bounds = *bounds::min_max(
                 screen_space_positions.as_span().slice(points_by_curve[curve]));
-            /* Pad to avoid empty bounds from horizontal, vertical
-             * and single-point strokes, as such bounds would otherwise always fail the
-             * intersection test.
-             */
+            /* Pad to avoid empty bounds from horizontal, vertical and single-point strokes, as
+             * such bounds would otherwise always fail the intersection test. */
             bounds.pad(1);
             screen_space_curve_bounds[curve] = bounds;
           },
