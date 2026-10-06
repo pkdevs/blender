@@ -256,6 +256,7 @@ set(SRC
   nodes/node_geo_sdf_grid_mean_curvature.cc
   nodes/node_geo_sdf_grid_median.cc
   nodes/node_geo_sdf_grid_offset.cc
+  nodes/node_geo_sdf_grid_to_density.cc
   nodes/node_geo_self_object.cc
   nodes/node_geo_separate_bundle.cc
   nodes/node_geo_separate_components.cc

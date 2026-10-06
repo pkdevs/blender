@@ -11385,6 +11385,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeSDFGridMeanCurvature");
   define("GeometryNode", "GeometryNodeSDFGridMedian");
   define("GeometryNode", "GeometryNodeSDFGridOffset");
+  define("GeometryNode", "GeometryNodeSDFGridToDensity");
   define("GeometryNode", "GeometryNodeSelfObject");
   define("GeometryNode", "GeometryNodeSeparateComponents");
   define("GeometryNode", "GeometryNodeSeparateGeometry");
