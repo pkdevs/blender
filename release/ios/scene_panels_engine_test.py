@@ -104,4 +104,21 @@ other_scene.collection.objects.link(camera)
 edit(camera, 'delete')
 check(camera.name in other_scene.objects and camera.name not in bpy.context.scene.objects,
       'Delete respects Blender scene-local unlinking')
+parent = bpy.context.view_layer.active_layer_collection
+edit(cube, 'collection_new', value='  Native Collection  ')
+collection = bpy.data.collections.get('Native Collection')
+check(collection and collection.name in parent.collection.children and
+      bpy.context.collection == collection, 'New collection is nested and becomes the active destination')
+bpy.ops.mesh.primitive_cube_add()
+check(bpy.context.object.name in collection.objects, 'New objects use the newly created collection')
+count = len(bpy.data.collections)
+edit(cube, 'collection_new', value='   ')
+check(len(bpy.data.collections) == count and state()['error'], 'Blank collection names are rejected')
+bpy.ops.object.mode_set(mode='EDIT')
+edit(cube, 'collection_new', value='Not Added')
+check(len(bpy.data.collections) == count and state()['error'], 'Collection creation is guarded in Edit Mode')
+bpy.ops.object.mode_set(mode='OBJECT')
+edit(cube, 'collection_new', value='Native Collection')
+check(len(bpy.data.collections) == count + 1 and bpy.context.collection.name != collection.name,
+      'Blender assigns unique collection names')
 print('PASS: native scene panels ' + json.dumps(checks))

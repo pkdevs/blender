@@ -86,9 +86,24 @@ class WM_OT_native_panel_edit(bpy.types.Operator):
         try:
             request = json.loads(self.request)
             obj = next((obj for obj in context.view_layer.objects if _uid(obj) == request.get('id')), None)
-            if obj is None:
+            if request.get('action') == 'collection_new':
+                name = request.get('value')
+                parent = context.view_layer.active_layer_collection
+                if context.mode != 'OBJECT' or not parent.collection.is_editable or parent.exclude:
+                    raise ValueError("A collection cannot be added here in the current mode.")
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError("Enter a collection name.")
+                collection = bpy.data.collections.new(name.strip())
+                try:
+                    parent.collection.children.link(collection)
+                except Exception:
+                    bpy.data.collections.remove(collection)
+                    raise
+                context.view_layer.update()
+                context.view_layer.active_layer_collection = parent.children[collection.name]
+            elif obj is None:
                 raise ValueError("This object is no longer in the current view layer.")
-            if request.get('action') == 'select':
+            elif request.get('action') == 'select':
                 if context.mode != 'OBJECT' or obj.hide_select or not obj.visible_get():
                     raise ValueError("This object cannot be selected in the current mode.")
                 selected = bool(request.get('value', True))
