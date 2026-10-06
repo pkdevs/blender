@@ -159,6 +159,18 @@ static ReadingResult<> user_asset_library_config_file_uuid_ensure(
   return ReadingResult<>::Success();
 }
 
+static ReadingResult<> user_asset_library_parse_uuid(bUserAssetLibrary &custom_library,
+                                                     toml::value &asset_lib_config)
+{
+  bUUID lib_uuid;
+  std::string uuid_str = asset_lib_config["library"]["uuid"].as_string();
+  if (!BLI_uuid_parse_string(&lib_uuid, uuid_str.c_str())) {
+    custom_library.runtime->invalid_uuid = uuid_str;
+    return ReadingResult<>::Failure(N_("Illformed asset library UUID."));
+  }
+  custom_library.runtime->uuid = lib_uuid;
+}
+
 static ReadingResult<> user_asset_library_uuid_ensure_imlp(bUserAssetLibrary &custom_library)
 {
   BLI_assert(!(custom_library.flag & ASSET_LIBRARY_PROJECT_DEFINED));
@@ -180,15 +192,7 @@ static ReadingResult<> user_asset_library_uuid_ensure_imlp(bUserAssetLibrary &cu
     return ensure_uuid_config_result;
   }
 
-  bUUID lib_uuid;
-  std::string uuid_str = asset_lib_config_value["library"]["uuid"].as_string();
-  if (!BLI_uuid_parse_string(&lib_uuid, uuid_str.c_str())) {
-    custom_library.runtime->invalid_uuid = uuid_str;
-    return ReadingResult<>::Failure(N_("Illformed asset library UUID."));
-  }
-
-  custom_library.runtime->uuid = lib_uuid;
-  return ReadingResult<>::Success();
+  return user_asset_library_parse_uuid(custom_library, asset_lib_config_value);
 }
 
 void user_asset_library_uuid_ensure(bUserAssetLibrary &user_library, ReportList *reports)
