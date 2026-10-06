@@ -570,7 +570,11 @@ void exporter_main(bContext *C, const OTIOExportParams &params)
   add_foreign_metadata(scene->id.properties, *timeline);
 
   opentimelineio::OPENTIMELINEIO_VERSION_NS::ErrorStatus error_status;
-  if (!timeline->to_json_file(params.filepath, &error_status)) {
+  /* Some versions of editors like DaVinci Resolve will abort import of the entire timeline if
+   * there is at least one newer Marker.3 object; for better compatibility, write older schema
+   * instead. */
+  const schema_version_map schema_version_targets = {{"Marker", 2}};
+  if (!timeline->to_json_file(params.filepath, &error_status, &schema_version_targets)) {
     CLOG_ERROR(&LOG,
                "Failed to write OTIO file '%s': %s",
                params.filepath,
