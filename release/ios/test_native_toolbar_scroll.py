@@ -139,6 +139,11 @@ static void WM_apple_ios_ui_tool_set_by_id(const char *tool) {
   NSUInteger _toolbar_label_generation;
   BOOL _toolbar_label_transient;
   BOOL _toolbar_expanded, _tool_rail_docked_left_center, _toolbar_press_select_active;
+  /* The brush rail is covered by brush_rail_device_test.py; it stays empty here. */
+  UIView *_brush_rail;
+  UIButton *_brush_drag_handle;
+  NSMutableArray *_brush_buttons;
+  BOOL _brush_rail_expanded;
 }
 @end
 @implementation ToolbarTest
@@ -167,6 +172,9 @@ static void WM_apple_ios_ui_tool_set_by_id(const char *tool) {
   [self setActiveToolbarToolIdentifier:@"tool.0"];
   return self;
 }
+- (void)installBrushRail {}
+- (BOOL)isBrushListVisible { return NO; }
+- (void)updateBrushRailGeometry {}
 ''' + "\n".join(methods) + r'''
 @end
 int main() {

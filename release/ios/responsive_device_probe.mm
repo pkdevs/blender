@@ -17,6 +17,8 @@
 - (void)handleViewGizmoHold:(UILongPressGestureRecognizer *)gesture;
 - (void)cancelViewGizmoInteraction;
 - (void)setToolRailDockedLeftCenter:(BOOL)docked animated:(BOOL)animated;
+- (void)setBrushRailDockedLeftCenter:(BOOL)docked animated:(BOOL)animated;
+- (void)setBrushRailExpanded:(BOOL)expanded animated:(BOOL)animated;
 - (void)beginNumberScrub:(UITextField *)field;
 - (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation;
 - (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation vertical:(CGFloat)vertical;
@@ -805,6 +807,89 @@ extern "C" char *blender_device_probe_toolbar_label(int action, int index)
       @"selectionHidden": @(selection.hidden),
       @"selectionAnimations": selection.layer.animationKeys ?: @[],
       @"selectionIdentity": @((uintptr_t)(__bridge void *)selection),
+    };
+    NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
+    result = strndup((const char *)json.bytes, json.length);
+  });
+  return result;
+}
+
+/** Brush rail state. Actions: 0 inspect, 1 tap brush `index`, 2 dock as a list, 3 expand with
+ * names, 4 collapse to the compact rail. */
+extern "C" char *blender_device_probe_brush_rail(int action, int index)
+{
+  __block char *result = nullptr;
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    UIViewController *controller = blenderController();
+    NSArray<UIButton *> *buttons = [controller valueForKey:@"_brush_buttons"];
+    UIButton *button = index >= 0 && index < buttons.count ? buttons[index] : nil;
+    if (action == 1) {
+      [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+    }
+    else if (action == 2 || action == 3) {
+      [controller setBrushRailDockedLeftCenter:YES animated:NO];
+      [controller setBrushRailExpanded:action == 3 animated:NO];
+    }
+    else if (action == 4) {
+      [controller setBrushRailExpanded:NO animated:NO];
+      [controller setBrushRailDockedLeftCenter:NO animated:NO];
+    }
+    [controller.view layoutIfNeeded];
+    UIView *rail = [controller valueForKey:@"_brush_rail"];
+    UIView *tool_rail = [controller valueForKey:@"_tool_rail"];
+    /* The top bar's tool settings strip, searched from the window. */
+    __block UIScrollView *strip = nil;
+    __block void (^find)(UIView *) = nil;
+    void (^search)(UIView *) = ^(UIView *view) {
+      if ([view.accessibilityIdentifier isEqual:@"blender.tool-settings.strip"] && view.window) {
+        strip = (UIScrollView *)view;
+      }
+      for (UIView *child in view.subviews) {
+        find(child);
+      }
+    };
+    find = search;
+    search(controller.view.window);
+    NSMutableArray *brushes = [NSMutableArray array];
+    for (UIButton *b in buttons) {
+      /* A circular crop leaves the image corners transparent and its center opaque. */
+      UIImage *image = b.configuration.image;
+      CGImageRef cg = image.CGImage;
+      uint8_t corner[4] = {}, center[4] = {};
+      if (cg) {
+        CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+        for (int i = 0; i < 2; i++) {
+          uint8_t *pixel = i ? center : corner;
+          CGContextRef context = CGBitmapContextCreate(
+              pixel, 1, 1, 8, 4, space, kCGImageAlphaPremultipliedLast);
+          const CGFloat w = CGImageGetWidth(cg), h = CGImageGetHeight(cg);
+          CGContextDrawImage(context, i ? CGRectMake(-w / 2, -h / 2, w, h) : CGRectMake(0, 0, w, h),
+                             cg);
+          CGContextRelease(context);
+        }
+        CGColorSpaceRelease(space);
+      }
+      [brushes addObject:@{
+        @"id": b.accessibilityIdentifier ?: @"", @"name": b.accessibilityLabel ?: @"",
+        @"visible": @(!b.hidden && b.alpha > 0.05), @"selected": @(b.selected),
+        @"image": @[@(image.size.width), @(image.size.height)],
+        @"cornerAlpha": @(corner[3]), @"centerAlpha": @(center[3]),
+        @"frame": rectValues([b convertRect:b.bounds toView:controller.view]),
+      }];
+    }
+    NSDictionary *state = @{
+      @"available": [controller valueForKey:@"_brush_rail_available"],
+      @"hidden": @(rail.hidden), @"alpha": @(rail.alpha),
+      @"active": [controller valueForKey:@"_active_brush_identifier"] ?: @"",
+      @"expanded": [controller valueForKey:@"_brush_rail_expanded"],
+      @"docked": [controller valueForKey:@"_brush_rail_docked_left_center"],
+      @"brushes": brushes,
+      @"rail": rectValues([rail convertRect:rail.bounds toView:controller.view]),
+      @"toolRail": rectValues([tool_rail convertRect:tool_rail.bounds toView:controller.view]),
+      @"viewport": rectValues(controller.view.bounds),
+      @"strip": strip ? @{@"frame": rectValues([strip convertRect:strip.bounds toView:nil]),
+                          @"content": @(strip.contentSize.width),
+                          @"window": @(strip.window.bounds.size.width)} : NSNull.null,
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strndup((const char *)json.bytes, json.length);

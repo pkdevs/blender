@@ -151,6 +151,7 @@ static BOOL fingerTool;
 @end
 @implementation StripTest
 - (void)handleActionButton:(UIButton *)button {}
+- (void)installBrushRailLayout {}
 - (void)updateActionsButtonMenu {
   _actions_button.menu = [UIMenu menuWithTitle:@"Actions" children:@[
     [UIAction actionWithTitle:@"Move" image:nil identifier:nil handler:^(UIAction *) {}]]];
