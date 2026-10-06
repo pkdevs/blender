@@ -1260,17 +1260,17 @@ void Drawing::tag_positions_changed(const IndexMask &changed_curves)
   /* Fills cache needs to be up-to-date. */
   this->runtime->fill_cache.tag_dirty();
 
-  if (this->runtime->triangle_cache.data().has_value()) {
+  if (const std::optional<TriangleCache> src_triangle_cache = this->runtime->triangle_cache.data())
+  {
     /* Copy the triangle data. */
-    const TriangleCache &src_triangle_cache = *this->runtime->triangle_cache.data();
-    const Array<int> src_triangle_offsets(src_triangle_cache.triangle_offsets.as_span());
-    const Array<int3> src_triangles_data(src_triangle_cache.triangles.as_span());
+    const Array<int> src_triangle_offsets(src_triangle_cache->triangle_offsets.as_span());
+    const Array<int3> src_triangles_data(src_triangle_cache->triangles.as_span());
     const GroupedSpan<int3> src_triangles(src_triangle_offsets.as_span(),
                                           src_triangles_data.as_span());
     const Array<int> src_intersection_point_offsets(
-        src_triangle_cache.intersection_point_offsets.as_span());
+        src_triangle_cache->intersection_point_offsets.as_span());
     const Array<float3> src_intersection_points_data(
-        src_triangle_cache.intersection_points.as_span());
+        src_triangle_cache->intersection_points.as_span());
     const GroupedSpan<float3> src_intersection_points(src_intersection_point_offsets.as_span(),
                                                       src_intersection_points_data.as_span());
 
@@ -1340,17 +1340,17 @@ void Drawing::tag_topology_changed(const IndexMask &changed_curves)
   /* Fills cache needs to be up-to-date. */
   this->runtime->fill_cache.tag_dirty();
 
-  if (this->runtime->triangle_cache.data().has_value()) {
+  if (const std::optional<TriangleCache> src_triangle_cache = this->runtime->triangle_cache.data())
+  {
     /* Copy the triangle data. */
-    const TriangleCache &src_triangle_cache = *this->runtime->triangle_cache.data();
-    const Array<int> src_triangle_offsets(src_triangle_cache.triangle_offsets.as_span());
-    const Array<int3> src_triangles_data(src_triangle_cache.triangles.as_span());
+    const Array<int> src_triangle_offsets(src_triangle_cache->triangle_offsets.as_span());
+    const Array<int3> src_triangles_data(src_triangle_cache->triangles.as_span());
     const GroupedSpan<int3> src_triangles(src_triangle_offsets.as_span(),
                                           src_triangles_data.as_span());
     const Array<int> src_intersection_point_offsets(
-        src_triangle_cache.intersection_point_offsets.as_span());
+        src_triangle_cache->intersection_point_offsets.as_span());
     const Array<float3> src_intersection_points_data(
-        src_triangle_cache.intersection_points.as_span());
+        src_triangle_cache->intersection_points.as_span());
     const GroupedSpan<float3> src_intersection_points(src_intersection_point_offsets.as_span(),
                                                       src_intersection_points_data.as_span());
 
