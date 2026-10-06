@@ -110,6 +110,7 @@ template<typename T> class List {
  public:
   using base_type = T;
   using generic_type = GList;
+  using DataVariant = std::variant<GList::ArrayData, GList::SingleData>;
 
   using DataVariant = std::variant<GList::ArrayData, GList::SingleData>;
 
@@ -128,7 +129,7 @@ template<typename T> class List {
     requires std::is_same_v<typename ContainerT::value_type, T>
   static ListPtr<T> from_container(ContainerT &&container);
 
-  /** This is implicitly cast to #GField which is always valid. */
+  /** This is implicitly cast to #GList which is always valid. */
   operator const GList &() const;
 
   DataVariant &data();
