@@ -274,7 +274,8 @@ BMVert *EDBM_vert_find_nearest_ex(ViewContext *vc,
                                   bool use_select_bias,
                                   bool use_cycle,
                                   Span<Base *> bases,
-                                  uint *r_base_index);
+                                  uint *r_base_index,
+                                  bool update_cycle = true);
 BMVert *EDBM_vert_find_nearest(ViewContext *vc, float *dist_px_manhattan_p);
 
 BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
@@ -284,7 +285,8 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
                                   bool use_cycle,
                                   BMEdge **r_eed_zbuf,
                                   Span<Base *> bases,
-                                  uint *r_base_index);
+                                  uint *r_base_index,
+                                  bool update_cycle = true);
 BMEdge *EDBM_edge_find_nearest(ViewContext *vc, float *dist_px_manhattan_p);
 
 /**
@@ -302,7 +304,8 @@ BMFace *EDBM_face_find_nearest_ex(ViewContext *vc,
                                   bool use_cycle,
                                   BMFace **r_efa_zbuf,
                                   Span<Base *> bases,
-                                  uint *r_base_index);
+                                  uint *r_base_index,
+                                  bool update_cycle = true);
 BMFace *EDBM_face_find_nearest(ViewContext *vc, float *dist_px_manhattan_p);
 
 bool EDBM_unified_findnearest(ViewContext *vc,
@@ -310,7 +313,8 @@ bool EDBM_unified_findnearest(ViewContext *vc,
                               int *r_base_index,
                               BMVert **r_eve,
                               BMEdge **r_eed,
-                              BMFace **r_efa);
+                              BMFace **r_efa,
+                              bool preselect = false);
 
 bool EDBM_unified_findnearest_from_raycast(ViewContext *vc,
                                            Span<Base *> bases,

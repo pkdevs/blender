@@ -441,7 +441,8 @@ BMVert *EDBM_vert_find_nearest_ex(ViewContext *vc,
                                   const bool use_select_bias,
                                   bool use_cycle,
                                   const Span<Base *> bases,
-                                  uint *r_base_index)
+                                  uint *r_base_index,
+                                  const bool update_cycle)
 {
   uint base_index = 0;
 
@@ -531,9 +532,11 @@ BMVert *EDBM_vert_find_nearest_ex(ViewContext *vc,
     return nullptr;
   }
 
-  prev_select.index = hit->index;
-  prev_select.elem = hit->vert;
-  prev_select.bm = prev_select_bm;
+  if (update_cycle) {
+    prev_select.index = hit->index;
+    prev_select.elem = hit->vert;
+    prev_select.bm = prev_select_bm;
+  }
 
   return hit->vert;
 }
@@ -671,7 +674,8 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
                                   bool use_cycle,
                                   BMEdge **r_eed_zbuf,
                                   const Span<Base *> bases,
-                                  uint *r_base_index)
+                                  uint *r_base_index,
+                                  const bool update_cycle)
 {
   uint base_index = 0;
 
@@ -790,9 +794,11 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
     *r_dist_center_px_manhattan = hit->dist_center_px_manhattan;
   }
 
-  prev_select.index = hit->index;
-  prev_select.elem = hit->edge;
-  prev_select.bm = prev_select_bm;
+  if (update_cycle) {
+    prev_select.index = hit->index;
+    prev_select.elem = hit->edge;
+    prev_select.bm = prev_select_bm;
+  }
 
   return hit->edge;
 }
@@ -884,7 +890,8 @@ BMFace *EDBM_face_find_nearest_ex(ViewContext *vc,
                                   bool use_cycle,
                                   BMFace **r_efa_zbuf,
                                   const Span<Base *> bases,
-                                  uint *r_base_index)
+                                  uint *r_base_index,
+                                  const bool update_cycle)
 {
   uint base_index = 0;
 
@@ -1009,9 +1016,11 @@ BMFace *EDBM_face_find_nearest_ex(ViewContext *vc,
     *r_dist_center = hit->dist;
   }
 
-  prev_select.index = hit->index;
-  prev_select.elem = hit->face;
-  prev_select.bm = prev_select_bm;
+  if (update_cycle) {
+    prev_select.index = hit->index;
+    prev_select.elem = hit->face;
+    prev_select.bm = prev_select_bm;
+  }
 
   return hit->face;
 }
@@ -1038,11 +1047,12 @@ static bool unified_findnearest(ViewContext *vc,
                                 int *r_base_index,
                                 BMVert **r_eve,
                                 BMEdge **r_eed,
-                                BMFace **r_efa)
+                                BMFace **r_efa,
+                                const bool preselect = false)
 {
   BMEditMesh *em = vc->em;
 
-  const bool use_cycle = !WM_cursor_test_motion_and_update(vc->mval);
+  const bool use_cycle = !preselect && !WM_cursor_test_motion_and_update(vc->mval);
   const float dist_init = ED_view3d_select_dist_px();
   /* Since edges select lines, we give dots advantage of ~20 pix. */
   const float dist_margin = (dist_init / 2);
@@ -1073,8 +1083,16 @@ static bool unified_findnearest(ViewContext *vc,
 
     uint base_index = 0;
     BMFace *efa_zbuf = nullptr;
-    BMFace *efa_test = EDBM_face_find_nearest_ex(
-        vc, &dist, dist_center_p, true, true, use_cycle, &efa_zbuf, bases, &base_index);
+    BMFace *efa_test = EDBM_face_find_nearest_ex(vc,
+                                                 &dist,
+                                                 dist_center_p,
+                                                 true,
+                                                 !preselect,
+                                                 use_cycle,
+                                                 &efa_zbuf,
+                                                 bases,
+                                                 &base_index,
+                                                 !preselect);
 
     if (efa_test && dist_center_p) {
       dist = min_ff(dist_margin, dist_center);
@@ -1095,8 +1113,15 @@ static bool unified_findnearest(ViewContext *vc,
 
     uint base_index = 0;
     BMEdge *eed_zbuf = nullptr;
-    BMEdge *eed_test = EDBM_edge_find_nearest_ex(
-        vc, &dist, dist_center_p, true, use_cycle, &eed_zbuf, bases, &base_index);
+    BMEdge *eed_test = EDBM_edge_find_nearest_ex(vc,
+                                                 &dist,
+                                                 dist_center_p,
+                                                 !preselect,
+                                                 use_cycle,
+                                                 &eed_zbuf,
+                                                 bases,
+                                                 &base_index,
+                                                 !preselect);
 
     if (eed_test && dist_center_p) {
       dist = min_ff(dist_margin, dist_center);
@@ -1113,7 +1138,8 @@ static bool unified_findnearest(ViewContext *vc,
 
   if ((dist > 0.0f) && (em->selectmode & SCE_SELECT_VERTEX)) {
     uint base_index = 0;
-    BMVert *eve_test = EDBM_vert_find_nearest_ex(vc, &dist, true, use_cycle, bases, &base_index);
+    BMVert *eve_test = EDBM_vert_find_nearest_ex(
+        vc, &dist, !preselect, use_cycle, bases, &base_index, !preselect);
 
     if (eve_test) {
       hit.v.base_index = base_index;
@@ -1171,9 +1197,10 @@ bool EDBM_unified_findnearest(ViewContext *vc,
                               int *r_base_index,
                               BMVert **r_eve,
                               BMEdge **r_eed,
-                              BMFace **r_efa)
+                              BMFace **r_efa,
+                              const bool preselect)
 {
-  return unified_findnearest(vc, bases, r_base_index, r_eve, r_eed, r_efa);
+  return unified_findnearest(vc, bases, r_base_index, r_eve, r_eed, r_efa, preselect);
 }
 
 /** \} */
