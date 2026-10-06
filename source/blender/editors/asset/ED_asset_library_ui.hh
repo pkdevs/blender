@@ -27,6 +27,20 @@ struct AssetLibraryListItemCommon : public ui::AbstractTreeViewItem {
   bool rename(const bContext &C, StringRefNull new_name) override;
 };
 
+struct AssetLibraryListItem : public AssetLibraryListItemCommon {
+  /* Use the constructor from AssetLibraryListItemCommon. */
+  using AssetLibraryListItemCommon::AssetLibraryListItemCommon;
+
+  void build_row(ui::Layout &row) override;
+  void on_activate(bContext & /*C*/) override;
+  std::optional<bool> should_be_active() const override;
+};
+
+struct AssetLibraryProject : public ui::AbstractTreeViewItem {
+  AssetLibraryProject() {};
+  void build_row(ui::Layout &row) override;
+};
+
 template<typename AssetLibraryListItemType> struct AssetLibraryList : public ui::AbstractTreeView {
   Vector<AnyAssetLibraryDefinition> libraries;
 
@@ -35,9 +49,20 @@ template<typename AssetLibraryListItemType> struct AssetLibraryList : public ui:
   void build_tree() override
   {
     this->is_flat_ = true;
-
+    AssetLibraryProject *project_group = nullptr;
     int i = 0;
     for (const AnyAssetLibraryDefinition &library : libraries) {
+      if constexpr (std::is_same_v<AssetLibraryListItemType, AssetLibraryListItem>) {
+        const bool project_library = library.user_library &&
+                                     (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED);
+        if (project_library) {
+          if (!project_group) {
+            project_group = &add_tree_item<AssetLibraryProject>();
+          }
+          project_group->add_tree_item<AssetLibraryListItemType>(library, i++);
+          continue;
+        }
+      }
       add_tree_item<AssetLibraryListItemType>(library, i++);
     }
   }

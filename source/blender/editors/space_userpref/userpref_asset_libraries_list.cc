@@ -6,6 +6,7 @@
  * \ingroup spuserpref
  */
 
+#include "BKE_blender_project.hh"
 #include "BKE_global.hh"
 
 #include "BLI_listbase.hh"
@@ -79,65 +80,67 @@ std::optional<int> userpref_ui_asset_libraries_index_from_user_library(
   return std::nullopt;
 }
 
-struct AssetLibraryListItem : public AssetLibraryListItemCommon {
+void AssetLibraryProject::build_row(ui::Layout &row)
+{
+  bke::BlenderProject *project = BKE_blender_project_get(G_MAIN);
+  if (project) {
+    row.label(project->get_name(), ICON_PROJECT);
+  }
+}
 
-  /* Use the constructor from AssetLibraryListItemCommon. */
-  using AssetLibraryListItemCommon::AssetLibraryListItemCommon;
+void AssetLibraryListItem::build_row(ui::Layout &row)
+{
+  const bool is_remote_library = library.user_library &&
+                                 (library.user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL);
+  const bool project_library = library.user_library &&
+                               (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED);
 
-  void build_row(ui::Layout &row) override
-  {
-    const bool is_remote_library = library.user_library &&
-                                   (library.user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL);
-    const bool project_library = library.user_library &&
-                                 (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED);
+  if (library.user_library) {
+    row.label(label_, is_remote_library ? ICON_INTERNET : ICON_DISK_DRIVE);
 
-    if (library.user_library) {
-      row.label(label_, is_remote_library ? ICON_INTERNET : ICON_DISK_DRIVE);
-
-      if (project_library) {
-        row.active_set(false);
-        ui::Layout &sub = row.row(true);
-        /* Draw text grayed out. */
-        sub.alignment_set(ui::LayoutAlign::Right);
-        sub.label(IFACE_("Project Defined"), ICON_NONE);
-      }
-    }
-    else {
-      row.label(label_, ICON_NONE);
-
+    if (project_library) {
+      row.active_set(false);
       ui::Layout &sub = row.row(true);
       /* Draw text grayed out. */
-      sub.active_set(false);
       sub.alignment_set(ui::LayoutAlign::Right);
-      sub.label(IFACE_("Built-In"), ICON_NONE);
-    }
-
-    if (library.user_library && library.user_library->is_enabled() && is_remote_library &&
-        !library.user_library->remote_url[0])
-    {
-      row.label("", ICON_STATUS_ERROR);
-    }
-
-    if (library.user_library && !project_library) {
-      PointerRNA ptr = RNA_pointer_create_discrete(
-          nullptr, RNA_UserAssetLibrary, library.user_library);
-      row.prop(&ptr,
-               "enabled",
-               UI_ITEM_NONE,
-               "",
-               library.user_library->is_enabled() ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT);
+      sub.label(IFACE_("Project Defined"), ICON_NONE);
     }
   }
+  else {
+    row.label(label_, ICON_NONE);
 
-  void on_activate(bContext & /*C*/) override
+    ui::Layout &sub = row.row(true);
+    /* Draw text grayed out. */
+    sub.active_set(false);
+    sub.alignment_set(ui::LayoutAlign::Right);
+    sub.label(IFACE_("Built-In"), ICON_NONE);
+  }
+
+  if (library.user_library && library.user_library->is_enabled() && is_remote_library &&
+      !library.user_library->remote_url[0])
   {
-    U.active_asset_library = index_in_list;
+    row.label("", ICON_STATUS_ERROR);
   }
-  std::optional<bool> should_be_active() const override
-  {
-    return U.active_asset_library == index_in_list;
+
+  if (library.user_library && !project_library) {
+    PointerRNA ptr = RNA_pointer_create_discrete(
+        nullptr, RNA_UserAssetLibrary, library.user_library);
+    row.prop(&ptr,
+             "enabled",
+             UI_ITEM_NONE,
+             "",
+             library.user_library->is_enabled() ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT);
   }
-};
+}
+
+void AssetLibraryListItem::on_activate(bContext & /*C*/)
+{
+  U.active_asset_library = index_in_list;
+}
+std::optional<bool> AssetLibraryListItem::should_be_active() const
+{
+  return U.active_asset_library == index_in_list;
+}
 
 void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
 {
