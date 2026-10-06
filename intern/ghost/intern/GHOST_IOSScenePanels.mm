@@ -232,6 +232,10 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   UIScrollView *_inspectorScroll;
   UITableView *_form;
   NSMutableArray *_formSections;
+  /* Stable identity per row, parallel to _formSections, so updates animate by meaning. */
+  NSMutableArray *_formRowKeys;
+  /* Section id -> persistent header container, refilled in place when controls change. */
+  NSMutableDictionary *_headerContainers;
   NSMutableArray *_headerControls;
   NSArray *_sectionTitles;
   NSArray *_sectionIdentifiers, *_tabs;
@@ -330,6 +334,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       [_tabsStack.heightAnchor constraintEqualToAnchor:_tabsScroll.frameLayoutGuide.heightAnchor],
     ]];
     _formSections = [[NSMutableArray alloc] init];
+    _formRowKeys = [[NSMutableArray alloc] init];
+    _headerContainers = [[NSMutableDictionary alloc] init];
     _form = [[[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStyleInsetGrouped] autorelease];
     _form.dataSource = self;
     _form.delegate = self;
@@ -431,6 +437,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [_sectionViewCache release];
   [_disclosureButtons release];
   [_formSections release];
+  [_formRowKeys release];
+  [_headerContainers release];
   [_headerControls release];
   [_menuProvider release];
   [_sectionTitles release];
@@ -849,11 +857,13 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     [_disclosureButtons removeAllObjects];
   }
   NSArray *oldIdentifiers = [[_sectionIdentifiers copy] autorelease];
-  NSMutableIndexSet *changed = [NSMutableIndexSet indexSet];
+  NSArray *oldRows = [[_formSections copy] autorelease];
+  NSArray *oldRowKeys = [[_formRowKeys copy] autorelease];
   NSMutableDictionary *nextCache = [NSMutableDictionary dictionary];
   [_headerControls release];
   _headerControls = [[NSMutableArray alloc] init];
   [_formSections removeAllObjects];
+  [_formRowKeys removeAllObjects];
   NSMutableArray *titles = [NSMutableArray array];
   NSMutableArray *identifiers = [NSMutableArray array];
   [_controls removeAllObjects];
@@ -873,6 +883,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     ((UILabel *)_form.backgroundView).textAlignment = NSTextAlignmentCenter;
     [_sectionTitles release];
     _sectionTitles = nil;
+    [_headerContainers removeAllObjects];
     [_form reloadData];
     return;
   }
@@ -889,6 +900,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     NSArray *mapKeys = @[@"controls", @"sliders", @"locks", @"headings"];
     if ([cached[@"shape"] isEqual:shape]) {
       [_formSections addObject:cached[@"rows"]];
+      [_formRowKeys addObject:cached[@"keys"]];
       [_headerControls addObject:cached[@"header"]];
       for (NSUInteger i = 0; i < maps.count; i++) {
         [maps[i] addEntriesFromDictionary:cached[mapKeys[i]]];
@@ -896,7 +908,6 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       nextCache[sectionID] = cached;
       continue;
     }
-    [changed addIndex:identifiers.count - 1];
     for (UIView *row in cached[@"rows"]) { [row endEditing:YES]; }
     [_disclosureButtons removeObjectForKey:sectionID];
     if (_colorButton && [cached[@"controls"] allValues] &&
@@ -905,6 +916,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     }
     NSMutableArray *sectionRows = [NSMutableArray array];
     [_formSections addObject:sectionRows];
+    NSMutableArray *sectionKeys = [NSMutableArray array];
+    [_formRowKeys addObject:sectionKeys];
     UIStackView *headerControls = [[[UIStackView alloc] init] autorelease];
     headerControls.spacing = 8;
     [_headerControls addObject:headerControls];
@@ -949,6 +962,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
         innerHeading.spacing = 8;
         [heading setContentCompressionResistancePriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
         [sectionRows addObject:innerHeading];
+        [sectionKeys addObject:[@"heading:" stringByAppendingString:subpanel ?: @""]];
       }
       if ([property[@"type"] isEqual:@"SUBPANEL"]) {
         continue;
@@ -981,6 +995,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
           vectorGroup.axis = UILayoutConstraintAxisVertical;
           vectorGroup.spacing = 0;
           [sectionRows addObject:vectorGroup];
+          [sectionKeys addObject:[@"vector:" stringByAppendingString:groupKey]];
         }
       }
       UILabel *label = [self label:property[@"label"] style:UIFontTextStyleBody];
@@ -1180,6 +1195,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
           [inlineControl.heightAnchor constraintEqualToConstant:26].active = YES;
         }
         [sectionRows addObject:column];
+        [sectionKeys addObject:[@"property:" stringByAppendingString:[self keyForProperty:property]]];
         continue;
       }
       if ([property[@"header"] boolValue] && [control isKindOfClass:UISwitch.class]) {
@@ -1244,10 +1260,19 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       }
       else {
         [sectionRows addObject:content];
+        [sectionKeys addObject:[@"property:" stringByAppendingString:[self keyForProperty:property]]];
+      }
+    }
+    NSCountedSet *seen = [NSCountedSet set];
+    for (NSUInteger i = 0; i < sectionKeys.count; i++) {
+      [seen addObject:sectionKeys[i]];
+      if ([seen countForObject:sectionKeys[i]] > 1) {
+        sectionKeys[i] = [NSString stringWithFormat:@"%@#%lu", sectionKeys[i],
+                          (unsigned long)[seen countForObject:sectionKeys[i]]];
       }
     }
     NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary:
-        @{@"shape": shape, @"rows": sectionRows, @"header": headerControls}];
+        @{@"shape": shape, @"rows": sectionRows, @"keys": sectionKeys, @"header": headerControls}];
     for (NSUInteger i = 0; i < maps.count; i++) {
       NSMutableDictionary *entries = [NSMutableDictionary dictionary];
       for (NSDictionary *property in section[@"properties"]) {
@@ -1322,13 +1347,97 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     }
     _toolGroup.hidden = items.count == 0;
   }
-  else if (preserve && [oldIdentifiers isEqual:_sectionIdentifiers]) {
-    [_form reloadSections:changed withRowAnimation:UIAccessibilityIsReduceMotionEnabled() ?
-        UITableViewRowAnimationNone : UITableViewRowAnimationFade];
+  else if (preserve) {
+    [self updateFormFromSections:oldIdentifiers rows:oldRows keys:oldRowKeys];
   }
   else {
+    [_headerContainers removeAllObjects];
     [_form reloadData];
   }
+}
+
+/* Animate from the previous form to the rebuilt one by row identity: only rows that
+ * appear or disappear animate, persisting rows take their new controls in place. A
+ * positional reload would cross-fade unrelated rows, e.g. below an opened sub-panel. */
+- (void)updateFormFromSections:(NSArray *)oldIDs rows:(NSArray *)oldRows keys:(NSArray *)oldKeys
+{
+  NSSet *expanded = _expandedPanels[_selectedTab ?: @"OBJECT"];
+  NSArray *(^visible)(NSString *, NSArray *) = ^NSArray *(NSString *sectionID, NSArray *keys) {
+    return expanded && ![expanded containsObject:sectionID] ? @[] : (keys ?: @[]);
+  };
+  NSMutableArray *commonOld = [NSMutableArray array], *commonNew = [NSMutableArray array];
+  for (NSString *identifier in oldIDs) {
+    if ([_sectionIdentifiers containsObject:identifier]) { [commonOld addObject:identifier]; }
+  }
+  for (NSString *identifier in _sectionIdentifiers) {
+    if ([oldIDs containsObject:identifier]) { [commonNew addObject:identifier]; }
+  }
+  if (oldIDs.count != oldRows.count || oldIDs.count != oldKeys.count || ![commonOld isEqual:commonNew] ||
+      [_form hasUncommittedUpdates]) {
+    [_headerContainers removeAllObjects];
+    [_form reloadData];
+    return;
+  }
+  NSMutableIndexSet *deletedSections = [NSMutableIndexSet indexSet];
+  NSMutableIndexSet *insertedSections = [NSMutableIndexSet indexSet];
+  NSMutableArray *deletedRows = [NSMutableArray array], *insertedRows = [NSMutableArray array];
+  NSMutableArray *moves = [NSMutableArray array];
+  for (NSUInteger section = 0; section < oldIDs.count; section++) {
+    if (![_sectionIdentifiers containsObject:oldIDs[section]]) { [deletedSections addIndex:section]; }
+  }
+  for (NSUInteger section = 0; section < _sectionIdentifiers.count; section++) {
+    NSString *identifier = _sectionIdentifiers[section];
+    const NSUInteger oldSection = [oldIDs indexOfObject:identifier];
+    if (oldSection == NSNotFound) {
+      [insertedSections addIndex:section];
+      [_headerContainers removeObjectForKey:identifier];
+      continue;
+    }
+    NSArray *before = visible(identifier, oldKeys[oldSection]);
+    NSArray *after = visible(identifier, _formRowKeys[section]);
+    for (NSUInteger row = 0; row < before.count; row++) {
+      const NSUInteger next = [after indexOfObject:before[row]];
+      NSIndexPath *from = [NSIndexPath indexPathForRow:row inSection:oldSection];
+      if (next == NSNotFound) {
+        [deletedRows addObject:from];
+        continue;
+      }
+      UIView *previous = oldRows[oldSection][row];
+      UIView *current = _formSections[section][next];
+      if (previous != current) {
+        UITableViewCell *cell = [_form cellForRowAtIndexPath:from];
+        if (cell) { [self installRow:current inCell:cell section:section]; }
+      }
+      if (row != next) {
+        [moves addObject:@[from, [NSIndexPath indexPathForRow:next inSection:section]]];
+      }
+    }
+    for (NSUInteger row = 0; row < after.count; row++) {
+      if (![before containsObject:after[row]]) {
+        [insertedRows addObject:[NSIndexPath indexPathForRow:row inSection:section]];
+      }
+    }
+    UIView *container = _headerContainers[identifier];
+    if (container) { [self fillHeader:container section:section]; }
+  }
+  for (NSString *identifier in [[_headerContainers.allKeys copy] autorelease]) {
+    if (![_sectionIdentifiers containsObject:identifier]) { [_headerContainers removeObjectForKey:identifier]; }
+  }
+  if (!deletedSections.count && !insertedSections.count && !deletedRows.count && !insertedRows.count &&
+      !moves.count) {
+    return;
+  }
+  const UITableViewRowAnimation animation = UIAccessibilityIsReduceMotionEnabled() ?
+      UITableViewRowAnimationNone : UITableViewRowAnimationFade;
+  [_form performBatchUpdates:^{
+    [self->_form deleteSections:deletedSections withRowAnimation:animation];
+    [self->_form insertSections:insertedSections withRowAnimation:animation];
+    [self->_form deleteRowsAtIndexPaths:deletedRows withRowAnimation:animation];
+    [self->_form insertRowsAtIndexPaths:insertedRows withRowAnimation:animation];
+    for (NSArray *move in moves) {
+      [self->_form moveRowAtIndexPath:move[0] toIndexPath:move[1]];
+    }
+  } completion:nil];
 }
 
 - (void)openColorPicker:(GHOSTIOSColorButton *)button
@@ -2295,6 +2404,32 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     return nil;
   }
   NSString *identifier = _sectionIdentifiers[section];
+  UIView *container = _headerContainers[identifier];
+  if (!container) {
+    container = [[[UIView alloc] init] autorelease];
+    _headerContainers[identifier] = container;
+  }
+  [self fillHeader:container section:section];
+  return container;
+}
+
+- (void)fillHeader:(UIView *)container section:(NSInteger)section
+{
+  for (UIView *view in [[container.subviews copy] autorelease]) { [view removeFromSuperview]; }
+  UIView *content = [self headerContentForSection:section];
+  content.translatesAutoresizingMaskIntoConstraints = NO;
+  [container addSubview:content];
+  [NSLayoutConstraint activateConstraints:@[
+    [content.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+    [content.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+    [content.topAnchor constraintEqualToAnchor:container.topAnchor],
+    [content.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
+  ]];
+}
+
+- (UIView *)headerContentForSection:(NSInteger)section
+{
+  NSString *identifier = _sectionIdentifiers[section];
   BOOL expanded = !_selectedTab || [_expandedPanels[_selectedTab] containsObject:identifier];
   UIButton *header = blenderDisclosureButton(_sectionTitles[section], nil, UIColor.labelColor, 12, expanded);
   _disclosureButtons[identifier] = header;
@@ -2345,28 +2480,33 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   if (tableView == _form) {
     UITableViewCell *cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil] autorelease];
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    UIView *row = _formSections[indexPath.section][indexPath.row];
-    /* The shading mode picker is already a pill; a grouped card around it nests the shape. */
-    const BOOL bare = _shadingOnly && [_formSections[indexPath.section] count] == 1 &&
-                      [row isKindOfClass:UIStackView.class] &&
-                      [[(UIStackView *)row arrangedSubviews] indexOfObjectPassingTest:
-                          ^BOOL(UIView *view, NSUInteger, BOOL *) {
-                            return [view isKindOfClass:UISegmentedControl.class];
-                          }] != NSNotFound;
-    cell.backgroundColor = bare ? UIColor.clearColor : UIColor.secondarySystemGroupedBackgroundColor;
-    const CGFloat inset = bare ? 0 : 12;
-    [row removeFromSuperview];
-    row.translatesAutoresizingMaskIntoConstraints = NO;
-    [cell.contentView addSubview:row];
-    [NSLayoutConstraint activateConstraints:@[
-      [row.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:inset],
-      [row.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-inset],
-      [row.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:2],
-      [row.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-2],
-    ]];
+    [self installRow:_formSections[indexPath.section][indexPath.row] inCell:cell section:indexPath.section];
     return cell;
   }
   return nil;
+}
+
+- (void)installRow:(UIView *)row inCell:(UITableViewCell *)cell section:(NSInteger)section
+{
+  for (UIView *view in [[cell.contentView.subviews copy] autorelease]) { [view removeFromSuperview]; }
+  /* The shading mode picker is already a pill; a grouped card around it nests the shape. */
+  const BOOL bare = _shadingOnly && [_formSections[section] count] == 1 &&
+                    [row isKindOfClass:UIStackView.class] &&
+                    [[(UIStackView *)row arrangedSubviews] indexOfObjectPassingTest:
+                        ^BOOL(UIView *view, NSUInteger, BOOL *) {
+                          return [view isKindOfClass:UISegmentedControl.class];
+                        }] != NSNotFound;
+  cell.backgroundColor = bare ? UIColor.clearColor : UIColor.secondarySystemGroupedBackgroundColor;
+  const CGFloat inset = bare ? 0 : 12;
+  [row removeFromSuperview];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+  [cell.contentView addSubview:row];
+  [NSLayoutConstraint activateConstraints:@[
+    [row.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:inset],
+    [row.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-inset],
+    [row.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:2],
+    [row.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-2],
+  ]];
 }
 
 - (void)configureHierarchyCell:(UICollectionViewListCell *)cell key:(NSString *)key

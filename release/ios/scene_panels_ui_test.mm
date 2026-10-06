@@ -540,11 +540,11 @@ int main()
         @"properties": @[outerToggle, property, innerToggle]}]};
     [panels updateSnapshot:headerModel];
     UITableView *form = [panels valueForKey:@"_form"];
-    UIStackView *header = (UIStackView *)[form.delegate tableView:form viewForHeaderInSection:0];
+    UIView *header = [form.delegate tableView:form viewForHeaderInSection:0];
     controls = [panels valueForKey:@"_controls"];
     UISwitch *outerSwitch = controls[@"outer.enable"];
     UISwitch *innerSwitch = controls[@"inner.enable"];
-    NSCAssert([header isKindOfClass:UIStackView.class] && [outerSwitch isDescendantOfView:header],
+    NSCAssert([header.subviews.firstObject isKindOfClass:UIStackView.class] && [outerSwitch isDescendantOfView:header],
               @"Outer enable switch belongs to header, not contents");
     NSCAssert(outerSwitch.on && !innerSwitch.on, @"Header switches reflect live Blender state");
     NSArray *content = [panels valueForKey:@"_formSections"][0];
@@ -585,6 +585,52 @@ int main()
     [subpanelDisclosure sendActionsForControlEvents:UIControlEventTouchUpInside];
     NSCAssert([propertiesState[@"subpanels"][@"outer.sub"] isEqual:@NO],
               @"Tapping again collapses the sub-panel: %@", propertiesState);
+    {
+      /* Opening a sub-panel inserts only its children; rows around it keep their cells
+       * instead of cross-fading into whatever now sits at their old position. */
+      NSMutableDictionary *after = [[property mutableCopy] autorelease];
+      after[@"key"] = @"outer.after";
+      after[@"label"] = @"After";
+      NSMutableDictionary *child = [[property mutableCopy] autorelease];
+      child[@"key"] = @"inner.amount";
+      child[@"label"] = @"Amount";
+      child[@"section"] = @"Subfeature";
+      child[@"subpanel"] = @"outer.sub";
+      NSMutableDictionary *openMarker = [[subpanelMarker mutableCopy] autorelease];
+      openMarker[@"open"] = @YES;
+      NSMutableDictionary *closedModel = [[acknowledged mutableCopy] autorelease];
+      closedModel[@"inspector"] = @{@"id": @"header-test", @"name": @"Properties",
+        @"sections": @[@{@"id": @"outer", @"title": @"Feature", @"open": @YES,
+          @"properties": @[outerToggle, property, subpanelMarker, subpanelInner, after]}]};
+      [panels updateSnapshot:closedModel];
+      [form layoutIfNeeded];
+      NSArray *closedKeys = [panels valueForKey:@"_formRowKeys"][0];
+      NSCAssert(closedKeys.count == 3, @"Closed sub-panel rows: %@", closedKeys);
+      UITableViewCell *afterCell = [form cellForRowAtIndexPath:[NSIndexPath indexPathForRow:2 inSection:0]];
+      UITableViewCell *firstCell = [form cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+      NSCAssert(afterCell && firstCell, @"Form rows are on screen");
+      NSMutableDictionary *openModel = [[acknowledged mutableCopy] autorelease];
+      openModel[@"inspector"] = @{@"id": @"header-test", @"name": @"Properties",
+        @"sections": @[@{@"id": @"outer", @"title": @"Feature", @"open": @YES,
+          @"properties": @[outerToggle, property, openMarker, subpanelInner, child, after]}]};
+      [panels updateSnapshot:openModel];
+      [form layoutIfNeeded];
+      NSArray *openKeys = [panels valueForKey:@"_formRowKeys"][0];
+      NSCAssert(openKeys.count == 4 && [form numberOfRowsInSection:0] == 4 &&
+                [openKeys[3] isEqual:closedKeys[2]], @"Open sub-panel rows: %@", openKeys);
+      NSCAssert([form cellForRowAtIndexPath:[NSIndexPath indexPathForRow:3 inSection:0]] == afterCell &&
+                [form cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]] == firstCell,
+                @"Rows outside the sub-panel keep their cells while it opens");
+      NSCAssert([[panels valueForKey:@"_controls"][@"outer.after"] isDescendantOfView:afterCell] &&
+                [[panels valueForKey:@"_controls"][@"inner.amount"] isDescendantOfView:
+                    [form cellForRowAtIndexPath:[NSIndexPath indexPathForRow:2 inSection:0]]],
+                @"Persisting rows show their refreshed controls; the child is inserted in place");
+      [panels updateSnapshot:closedModel];
+      [form layoutIfNeeded];
+      NSCAssert([form numberOfRowsInSection:0] == 3 &&
+                [form cellForRowAtIndexPath:[NSIndexPath indexPathForRow:2 inSection:0]] == afterCell,
+                @"Closing removes only the sub-panel's children");
+    }
     NSDictionary *rgba = @{@"key": @"object.color", @"label": @"Color", @"type": @"COLOR",
       @"native": @YES, @"alpha": @YES, @"editable": @YES, @"value": @[@0.5, @0.25, @0.75, @0.4]};
     NSDictionary *rgb = @{@"key": @"light.color", @"label": @"Light Color", @"type": @"COLOR",
@@ -821,7 +867,8 @@ int main()
     lockModel[@"inspector"] = [[fastInspector copy] autorelease];
     [panels updateSnapshot:lockModel];
     UITextField *fastField = [panels valueForKey:@"_controls"][@"fast.a"];
-    UIButton *secondHeader = (UIButton *)[form.delegate tableView:form viewForHeaderInSection:1];
+    [form.delegate tableView:form viewForHeaderInSection:1];
+    UIButton *secondHeader = [panels valueForKey:@"_disclosureButtons"][@"b"];
     [secondHeader sendActionsForControlEvents:UIControlEventTouchUpInside];
     fastInspector[@"sections"] = @[@{@"id": @"a", @"title": @"First", @"open": @YES, @"properties": @[fastA]},
                                     @{@"id": @"b", @"title": @"Second", @"open": @YES, @"properties": @[fastB]}];
@@ -829,7 +876,8 @@ int main()
     [panels updateSnapshot:lockModel];
     NSCAssert([panels valueForKey:@"_controls"][@"fast.a"] == fastField && [form numberOfRowsInSection:1] == 1,
               @"Opening another section preserves existing controls");
-    UIButton *firstHeader = (UIButton *)[form.delegate tableView:form viewForHeaderInSection:0];
+    [form.delegate tableView:form viewForHeaderInSection:0];
+    UIButton *firstHeader = [panels valueForKey:@"_disclosureButtons"][@"a"];
     [firstHeader sendActionsForControlEvents:UIControlEventTouchUpInside];
     NSCAssert([form numberOfRowsInSection:0] == 0, @"Collapse happens locally without an engine round trip");
     fastInspector[@"sections"] = @[@{@"id": @"a", @"title": @"First", @"open": @NO, @"properties": @[]},

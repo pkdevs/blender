@@ -353,9 +353,8 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       NSArray *identifiers = [panels valueForKey:@"_sectionIdentifiers"];
       NSUInteger index = [identifiers indexOfObject:request[@"id"]];
       if (index != NSNotFound) {
-        UIView *view = [form.delegate tableView:form viewForHeaderInSection:index];
-        UIButton *header = [view isKindOfClass:UIButton.class] ? (UIButton *)view :
-                            (UIButton *)((UIStackView *)view).arrangedSubviews.firstObject;
+        [form.delegate tableView:form viewForHeaderInSection:index];
+        UIButton *header = [panels valueForKey:@"_disclosureButtons"][request[@"id"]];
         [header sendActionsForControlEvents:UIControlEventTouchUpInside];
       }
     }
