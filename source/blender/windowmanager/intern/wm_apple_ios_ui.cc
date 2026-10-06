@@ -39,6 +39,7 @@
 
 #include "ED_asset.hh"
 #include "ED_asset_menu_utils.hh"
+#include "ED_object.hh"
 #include "../asset/ED_asset_shelf.hh"
 #include "ED_screen.hh"
 #include "ED_transform.hh"
@@ -49,6 +50,7 @@
 #include "IMB_imbuf_types.hh"
 
 #include "RNA_access.hh"
+#include "RNA_enum_types.hh"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern_run.hh"
@@ -546,6 +548,30 @@ void ios_mode_set(bContext *C, const char *mode)
   WM_operator_properties_free(&props);
 }
 
+/** Modes the active object supports, as listed by Blender's own header mode menu.
+ * Filter directly: `OBJECT_OT_mode_set` items read through owner-less operator properties
+ * are resolved without context, which lists every mode for every object type. */
+std::string ios_object_modes_json(bContext *C)
+{
+  const Object *active = CTX_data_active_object(C);
+  std::string json = "[";
+  for (const EnumPropertyItem *item = rna_enum_object_mode_items; item->identifier; item++) {
+    if (!item->identifier[0] ||
+        !(active ? ed::object::mode_compat_test(active, eObjectMode(item->value)) :
+                   item->value == OB_MODE_OBJECT))
+    {
+      continue;
+    }
+    const char *icon = nullptr;
+    RNA_enum_identifier(rna_enum_icon_items, item->icon, &icon);
+    json += json.size() > 1 ? "," : "";
+    json += "{\"id\":\"" + ios_json_escape(item->identifier) + "\",\"label\":\"" +
+            ios_json_escape(item->name ? item->name : item->identifier) + "\",\"icon\":\"" +
+            ios_json_escape(icon ? icon : "") + "\"}";
+  }
+  return json + "]";
+}
+
 void ios_view_axis(bContext *C, const char *axis_type)
 {
   wmOperatorType *ot = WM_operatortype_find("VIEW3D_OT_view_axis", false);
@@ -867,6 +893,10 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     return;
   }
 #endif
+  if (command.setting == "object_mode") {
+    ios_mode_set(C, command.value.c_str());
+    return;
+  }
   if (command.setting == "constraint_axis") {
     const int axis = command.value == "X" ? 0 : command.value == "Y" ? 1 :
                     command.value == "Z" ? 2 : -1;
@@ -1286,6 +1316,14 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
         break;
     }
   }
+  std::string object_modes_json = "[]";
+  const char *object_mode = "OBJECT";
+  if (has_view3d_context) {
+    object_modes_json = ios_object_modes_json(C);
+    if (const Object *active = CTX_data_active_object(C)) {
+      RNA_enum_identifier(rna_enum_object_mode_items, active->mode, &object_mode);
+    }
+  }
   const std::string mesh_select_mode = mode == CTX_MODE_EDIT_MESH ?
                                            ios_mesh_select_mode_string(tool_settings) :
                                            "";
@@ -1399,7 +1437,11 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += ios_json_escape(mode_string ? mode_string : "objectmode");
   json += "\",\"shading\":\"";
   json += shading;
-  json += "\",\"meshSelectMode\":\"";
+  json += "\",\"objectMode\":\"";
+  json += ios_json_escape(object_mode);
+  json += "\",\"modes\":";
+  json += object_modes_json;
+  json += ",\"meshSelectMode\":\"";
   json += ios_json_escape(mesh_select_mode);
   json += "\",\"active\":\"";
   json += ios_json_escape(active_tool_id ? active_tool_id : "");
