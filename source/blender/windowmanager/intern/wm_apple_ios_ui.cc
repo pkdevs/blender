@@ -17,6 +17,8 @@
 #include "BLI_serialize.hh"
 #include "GHOST_IOSMessageQueue.hh"
 
+#include "DEG_depsgraph.hh"
+
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_scene_types.h"
@@ -51,6 +53,7 @@
 #  include "WM_apple_ios.hh"
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -181,6 +184,8 @@ struct IOSActionItem {
 
 GHOST_IOSLatest<std::string> ios_toolbar_snapshot;
 GHOST_IOSLatest<std::string> ios_panels_snapshot;
+GHOST_IOSLatest<std::string> ios_timeline_snapshot;
+std::string ios_timeline_json;
 std::string ios_toolbar_json =
     "{\"mode\":\"objectmode\",\"active\":\"builtin.select_box\",\"tools\":[]}";
 
@@ -888,6 +893,34 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     ios_mesh_select_mode_set(C, command.value);
     WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
   }
+
+  if (command.setting == "timeline_frame") {
+    /* Match SCREEN_OT_frame_offset: scrubbing lands on whole frames. */
+    scene->r.cfra = std::min(std::atoi(command.value.c_str()), int(MAXFRAME));
+    FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
+    scene->r.subframe = 0.0f;
+    ED_areas_do_frame_follow(C, false);
+    DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
+    WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+    return;
+  }
+
+  if (command.setting == "timeline") {
+    if (command.value == "play") {
+      ios_operator_call(C, "SCREEN_OT_animation_play");
+      return;
+    }
+    const bool jump = command.value == "start" || command.value == "end";
+    const char *op_name = jump ? "SCREEN_OT_frame_jump" : "SCREEN_OT_keyframe_jump";
+    wmOperatorType *ot = WM_operatortype_find(op_name, false);
+    if (ot == nullptr || (!jump && command.value != "prev_key" && command.value != "next_key")) {
+      return;
+    }
+    PointerRNA props = WM_operator_properties_create_ptr(ot);
+    RNA_boolean_set(&props, jump ? "end" : "next", command.value == "end" || command.value == "next_key");
+    ios_operator_call(C, op_name, &props);
+    WM_operator_properties_free(&props);
+  }
 }
 
 void ios_command_execute(bContext *C, IOSUICommand command)
@@ -1191,10 +1224,29 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   return json;
 }
 
+void ios_timeline_build(bContext *C)
+{
+  const Scene *scene = CTX_data_scene(C);
+  const wmWindowManager *wm = CTX_wm_manager(C);
+  if (scene == nullptr || wm == nullptr) {
+    return;
+  }
+  /* Playback changes the frame every redraw; publish only what UIKit has not seen. */
+  std::string json = "{\"frame\":" + std::to_string(scene->r.cfra) +
+                     ",\"start\":" + std::to_string(PSFRA) + ",\"end\":" + std::to_string(PEFRA) +
+                     ",\"preview\":" + ((scene->r.flag & SCER_PRV_RANGE) ? "true" : "false") +
+                     ",\"playing\":" + (ED_screen_animation_playing(wm) ? "true" : "false") + "}";
+  if (json != ios_timeline_json) {
+    ios_timeline_json = json;
+    ios_timeline_snapshot.publish(std::move(json));
+  }
+}
+
 void ios_toolbar_build(bContext *C)
 {
   std::string json = ios_toolbar_build_json_for_context(C);
   ios_toolbar_snapshot.publish(std::move(json));
+  ios_timeline_build(C);
 }
 
 std::string ios_json_escape(const std::string &value)
@@ -1328,6 +1380,19 @@ extern "C" char *WM_apple_ios_ui_panels_take_json()
 {
   std::string json;
   if (!ios_panels_snapshot.take(json)) {
+    return nullptr;
+  }
+  char *copy = static_cast<char *>(std::malloc(json.size() + 1));
+  if (copy) {
+    std::memcpy(copy, json.c_str(), json.size() + 1);
+  }
+  return copy;
+}
+
+extern "C" char *WM_apple_ios_ui_timeline_take_json()
+{
+  std::string json;
+  if (!ios_timeline_snapshot.take(json)) {
     return nullptr;
   }
   char *copy = static_cast<char *>(std::malloc(json.size() + 1));
@@ -1630,6 +1695,9 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
   auto supersedes_preview = [](const IOSUIMessage &previous, const IOSUIMessage &next) {
     const auto *a = std::get_if<IOSSettingCommand>(&previous);
     const auto *b = std::get_if<IOSSettingCommand>(&next);
+    if (a && b && a->setting == "timeline_frame" && b->setting == "timeline_frame") {
+      return true;
+    }
     if (!a || !b || a->setting != b->setting ||
         (a->setting != "native_properties_edit" && a->setting != "native_redo_edit")) {
       return false;
