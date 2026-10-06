@@ -66,6 +66,7 @@ static wmOperatorStatus wm_otio_export_exec(bContext *C, wmOperator *op)
 
   OTIOExportParams export_params;
   RNA_string_get(op->ptr, "filepath", export_params.filepath);
+  export_params.use_resolve_metadata = RNA_boolean_get(op->ptr, "use_resolve_metadata");
   export_params.reports = op->reports;
 
   OTIO_export(C, export_params);
@@ -129,6 +130,13 @@ void WM_OT_otio_export(wmOperatorType *ot)
 
   PropertyRNA *prop = RNA_def_string(ot->srna, "filter_glob", "*.otio", 0, "", "");
   RNA_def_property_flag(prop, PROP_HIDDEN);
+
+  RNA_def_boolean(ot->srna,
+                  "use_resolve_metadata",
+                  false,
+                  "Export DaVinci Resolve Metadata",
+                  "Write additional metadata so DaVinci Resolve can recreate generated strips, "
+                  "transforms, blending, audio levels and more");
 }
 
 }  // namespace blender

@@ -52,6 +52,7 @@
 #include "opentimelineio/transition.h"
 
 #include "otio_export.hh"
+#include "otio_export_resolve.hh"
 #include "otio_metadata.hh"
 
 namespace blender::io::otio {
@@ -65,6 +66,7 @@ struct StripExportContext {
   double fps;
   int unsupported_scene_strips = 0;
   int unsupported_image_sequences = 0;
+  Map<const Strip *, int64_t> resolve_link_groups;
 };
 
 struct PlacedItem {
@@ -249,8 +251,12 @@ static SerializableObject::Retainer<MediaReference> media_reference(StripExportC
       }
       return image_sequence_reference(ctx, strip);
 
-    case STRIP_TYPE_COLOR:
     case STRIP_TYPE_ADJUSTMENT:
+      if (ctx.params.use_resolve_metadata) {
+        return new MissingReference(strip.name + 2);
+      }
+      [[fallthrough]];
+    case STRIP_TYPE_COLOR:
     case STRIP_TYPE_TEXT:
     case STRIP_TYPE_ADD:
     case STRIP_TYPE_SUB:
@@ -258,9 +264,12 @@ static SerializableObject::Retainer<MediaReference> media_reference(StripExportC
     case STRIP_TYPE_ALPHAOVER:
     case STRIP_TYPE_ALPHAUNDER:
     case STRIP_TYPE_COLORMIX: {
-      return new GeneratorReference(strip.name + 2,
-                                    strip_type_identifier(ctx, strip),
-                                    frame_range(ctx, 0, media_length(ctx, strip)));
+      const TimeRange available_range = frame_range(ctx, 0, media_length(ctx, strip));
+      if (ctx.params.use_resolve_metadata && ELEM(strip.type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT)) {
+        return resolve_generator_reference(strip, available_range);
+      }
+      return new GeneratorReference(
+          strip.name + 2, strip_type_identifier(ctx, strip), available_range);
     }
 
     case STRIP_TYPE_SCENE:
@@ -349,6 +358,9 @@ static SerializableObject::Retainer<Clip> strip_to_clip(StripExportContext &ctx,
   auto clip = SerializableObject::Retainer<Clip>(
       new Clip(strip.name + 2, reference, frame_range(ctx, source_start, duration)));
   add_strip_data(ctx, editing, strip, *clip);
+  if (ctx.params.use_resolve_metadata) {
+    resolve_add_clip_data(*ctx.scene, strip, ctx.resolve_link_groups, *clip);
+  }
   return clip;
 }
 
@@ -454,6 +466,9 @@ static void add_transition(const StripExportContext &ctx,
                      frames(ctx, in_offset),
                      frames(ctx, out_offset)));
   add_strip_metadata(ctx, transition, *otio_transition);
+  if (ctx.params.use_resolve_metadata) {
+    resolve_add_transition_data(*ctx.scene, transition, *otio_transition);
+  }
 
   const int cut = from->end;
   channel_items[input1->channel].video.append({&transition, cut, cut, otio_transition.value});
@@ -476,6 +491,9 @@ static SerializableObject::Retainer<Track> build_track(const StripExportContext 
   AnyDictionary data;
   data["channel"] = int64_t(channel_index);
   track->metadata()["blender"] = data;
+  if (ctx.params.use_resolve_metadata) {
+    resolve_add_track_data(channel, *track);
+  }
 
   int cursor = origin;
   for (PlacedItem &item : items) {
@@ -546,6 +564,9 @@ void exporter_main(bContext *C, const OTIOExportParams &params)
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *editing = seq::editing_get(scene);
   StripExportContext ctx{bmain, scene, params, scene->frames_per_second()};
+  if (params.use_resolve_metadata) {
+    ctx.resolve_link_groups = resolve_link_groups(editing->seqbase);
+  }
 
   int origin = scene->r.sfra;
   for (const Strip &strip : editing->seqbase) {
@@ -568,6 +589,9 @@ void exporter_main(bContext *C, const OTIOExportParams &params)
   data["subversion"] = int64_t(BLENDER_FILE_SUBVERSION);
   timeline->metadata()["blender"] = data;
   add_foreign_metadata(scene->id.properties, *timeline);
+  if (params.use_resolve_metadata) {
+    resolve_add_timeline_metadata(*timeline);
+  }
 
   opentimelineio::OPENTIMELINEIO_VERSION_NS::ErrorStatus error_status;
   /* Some versions of editors like DaVinci Resolve will abort import of the entire timeline if

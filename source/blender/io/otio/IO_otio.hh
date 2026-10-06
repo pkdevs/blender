@@ -17,6 +17,7 @@ struct ReportList;
 
 struct OTIOExportParams {
   char filepath[FILE_MAX] = "";
+  bool use_resolve_metadata = false;
 
   ReportList *reports = nullptr;
 };

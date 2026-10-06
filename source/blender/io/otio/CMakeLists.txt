@@ -17,11 +17,15 @@ set(INC_SYS
 set(SRC
   IO_otio.cc
   exporter/otio_export.cc
+  exporter/otio_export_resolve.cc
   intern/otio_metadata.cc
+  intern/otio_resolve.cc
 
   IO_otio.hh
   exporter/otio_export.hh
+  exporter/otio_export_resolve.hh
   intern/otio_metadata.hh
+  intern/otio_resolve.hh
 )
 
 set(LIB
