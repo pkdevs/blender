@@ -64,8 +64,13 @@ def tests():
     enqueue(b'MESH_OT_primitive_cube_add')
     yield 1.5
     state = ui()
-    check(state['visible'] and state['snapshot']['operator'] == 'MESH_OT_primitive_cube_add',
-          'Native Add Cube automatically opens its actual redo properties')
+    check(not state['visible'] and state['collapsed'] and
+          state['snapshot']['operator'] == 'MESH_OT_primitive_cube_add',
+          'Native Add Cube starts as a collapsed redo pill')
+    ui(action='expand')
+    yield 0.3
+    state = ui()
+    check(state['visible'] and not state['collapsed'], 'Tapping Add Cube opens its actual redo properties')
     check(state['frame'][3] == 60 and state['frame'][2] > 300, 'Strip is thin and fits the physical iPad')
     check(all(name in {p['property'] for p in state['snapshot']['properties']}
               for name in ['size', 'location', 'rotation']), 'Actual operator layout exposes dimensions and transform components')
@@ -128,7 +133,10 @@ def tests():
           abs(bpy.context.object.location.x - 2) < 1e-5, 'Redo restores the final adjusted result')
     enqueue(b'MESH_OT_primitive_cylinder_add')
     yield 1.5
-    check(ui()['visible'] and ui()['snapshot']['id'] != identity, 'Next operator opens a fresh strip')
+    check(not ui()['visible'] and ui()['collapsed'] and ui()['snapshot']['id'] != identity,
+          'Next operator starts as a fresh collapsed pill')
+    ui(action='expand')
+    yield 0.3
     new_identity = ui()['snapshot']['id']
     before = tuple(bpy.context.object.dimensions)
     setting(b'native_redo_edit', json.dumps({'id': identity, 'key': uv['key'], 'value': True}).encode())
@@ -153,7 +161,10 @@ def tests():
     original_faces = len(bmesh.from_edit_mesh(bpy.context.object.data).faces)
     enqueue(b'MESH_OT_subdivide')
     yield 1.0
-    check(ui()['visible'] and ui()['snapshot']['operator'] == 'MESH_OT_subdivide', 'Edit Mode operator exposes its own controls')
+    check(ui()['collapsed'] and ui()['snapshot']['operator'] == 'MESH_OT_subdivide',
+          'Edit Mode operator defaults to its own collapsed pill')
+    ui(action='expand')
+    yield 0.3
     ui(action='edit', key=prop('number_cuts')['key'], value=2)
     yield 1.0
     check(prop('number_cuts')['value'] == 2 and
@@ -167,6 +178,9 @@ def tests():
     yield 1.0
     check(ui()['snapshot']['operator'] == 'MESH_OT_extrude_region_move' and prop('value', 2)['value'] == 1,
           'Macro operators expose the transform child properties')
+    check(ui()['collapsed'], 'Macro operator does not inherit the previous expanded strip')
+    ui(action='expand')
+    yield 0.3
     vertex_count = len(bmesh.from_edit_mesh(bpy.context.object.data).verts)
     ui(action='edit', key=prop('value', 2)['key'], value=3)
     yield 1.0

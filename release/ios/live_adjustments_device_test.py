@@ -129,6 +129,8 @@ def tests():
 
     enqueue(b'MESH_OT_primitive_cube_add')
     yield 1.0
+    ui('redo', action='expand')
+    yield 0.3
     redo = ui('redo')['snapshot']
     size = next(p for p in redo['properties'] if p['property'] == 'size')
     count = len(bpy.data.objects)

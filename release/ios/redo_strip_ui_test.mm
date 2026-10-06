@@ -43,6 +43,8 @@ int main()
     requests = [NSMutableArray array];
     GHOSTIOSRedoStrip *strip = [[[GHOSTIOSRedoStrip alloc] initWithOverlay:controller.view
         icon:^UIImage *(NSString *name) { return [UIImage systemImageNamed:@"cube"]; }] autorelease];
+    [controller.view addSubview:strip.collapsedButton];
+    strip.collapsedButton.frame = CGRectMake(520, 760, 136, 44);
     NSDictionary *number = @{@"key": @"size", @"property": @"size", @"type": @"FLOAT", @"label": @"Size",
         @"value": @2, @"min": @0, @"max": @100, @"editable": @YES, @"dragStep": @0.01};
     NSDictionary *toggle = @{@"key": @"uv", @"type": @"BOOLEAN", @"label": @"Generate UVs", @"value": @YES, @"editable": @YES};
@@ -56,7 +58,17 @@ int main()
     [strip updateSnapshot:nil];
     NSCAssert(strip.view.hidden, @"No strip before an adjustable operation");
     [strip updateSnapshot:model];
-    NSCAssert(!strip.view.hidden, @"Operation opens strip");
+    NSCAssert(strip.view.hidden && !strip.collapsedButton.hidden && strip.collapsedWidth > 0,
+              @"New operations start as a collapsed pill");
+    NSCAssert([[strip.collapsedButton actionsForTarget:strip forControlEvent:UIControlEventTouchUpInside]
+                  containsObject:@"expand:"], @"Pill is wired to expansion");
+    [strip expand:strip.collapsedButton];
+    NSCAssert(!strip.view.hidden && strip.collapsedButton.hidden, @"Tapping the pill opens the controls");
+    [strip updateSnapshot:model];
+    NSCAssert(!strip.view.hidden, @"Same-operation updates preserve explicit expansion");
+    [strip updateSnapshot:nil];
+    [strip updateSnapshot:model];
+    NSCAssert(!strip.view.hidden, @"Temporary unavailability preserves explicit expansion");
     NSDictionary *controls = [strip valueForKey:@"_controls"];
     UITextField *field = controls[@"size"];
     NSCAssert([field isKindOfClass:UITextField.class] && [controls[@"uv"] isKindOfClass:UISwitch.class] &&
@@ -156,14 +168,23 @@ int main()
     model[@"operator"] = @"MESH_OT_extrude_region_move";
     model[@"title"] = @"Extrude Region and Move";
     [strip updateSnapshot:model];
-    NSCAssert(!strip.view.hidden, @"A new operation reopens the strip");
-    NSCAssert(strip.collapsedButton.hidden && [strip.collapsedButton.configuration.title isEqual:@"Extrude"],
+    NSCAssert(strip.view.hidden && !strip.collapsedButton.hidden, @"A new operation stays collapsed");
+    NSCAssert([strip.collapsedButton.configuration.title isEqual:@"Extrude"],
               @"Long macro name uses a concise pill title");
     count = requests.count;
     field.text = @"12";
     [strip commitField:field];
     NSCAssert(requests.count == count, @"Retired controls cannot edit or dismiss a new operation");
     [field release];
+    [strip expand:strip.collapsedButton];
+    model[@"id"] = @"3";
+    [strip updateSnapshot:model];
+    NSCAssert(strip.view.hidden && !strip.collapsedButton.hidden,
+              @"A new operation defaults to a pill even when the previous one was expanded");
+    model[@"id"] = @"2";
+    [strip updateSnapshot:model];
+    NSCAssert(strip.view.hidden && !strip.collapsedButton.hidden,
+              @"Returning to an older operator cannot restore an obsolete expanded state");
     [strip updateSnapshot:nil];
     NSCAssert(strip.view.hidden, @"Unavailable operation hides strip");
     NSLog(@"PASS: native redo strip controls, asynchronous edits, dismissal, stale identity, and compact layout");

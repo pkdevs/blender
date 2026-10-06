@@ -51,7 +51,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   UIButton *_done;
   UIButton *_collapsedButton;
   NSDictionary *_snapshot;
-  NSString *_collapsedID;
+  NSString *_expandedID;
   NSString *_lastError;
   NSArray *_shape;
   NSMutableDictionary *_controls;
@@ -133,7 +133,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 - (UIButton *)collapsedButton { return _collapsedButton; }
 - (CGFloat)collapsedWidth
 {
-  if (![_snapshot[@"id"] isEqual:_collapsedID] || ![_snapshot[@"properties"] count]) { return 0; }
+  if ([_snapshot[@"id"] isEqual:_expandedID] || ![_snapshot[@"properties"] count]) { return 0; }
   return MIN(136, MAX(72, [_collapsedButton sizeThatFits:CGSizeMake(CGFLOAT_MAX, 44)].width));
 }
 
@@ -150,7 +150,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   [_snapshot release];
   [_collapsedButton removeFromSuperview];
   [_collapsedButton release];
-  [_collapsedID release];
+  [_expandedID release];
   [_presentationDidChange release];
   [_lastError release];
   [_shape release];
@@ -214,9 +214,9 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 - (void)dismiss:(id)sender
 {
   [_rail endEditing:YES];
-  [_collapsedID release];
-  _collapsedID = [_snapshot[@"id"] copy];
-  _collapsedButton.hidden = NO;
+  [_expandedID release];
+  _expandedID = nil;
+  _collapsedButton.hidden = !self.collapsedWidth;
   if (_presentationDidChange) { _presentationDidChange(YES); }
   [self setVisible:NO];
 }
@@ -224,8 +224,8 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 - (void)expand:(id)sender
 {
   if (!self.collapsedWidth) { return; }
-  [_collapsedID release];
-  _collapsedID = nil;
+  [_expandedID release];
+  _expandedID = [_snapshot[@"id"] copy];
   _collapsedButton.hidden = YES;
   if (_presentationDidChange) { _presentationDidChange(YES); }
   [self setVisible:YES];
@@ -571,6 +571,10 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   }
   BOOL changedOperation = ![_snapshot[@"id"] isEqual:snapshot[@"id"]];
   if (changedOperation) {
+    /* Expansion belongs only to the operation the user explicitly opened. */
+    if (![_expandedID isEqual:snapshot[@"id"]]) {
+      [_expandedID release]; _expandedID = nil;
+    }
     /* Retiring fields must not commit against a newly published operation. */
     [_snapshot release]; _snapshot = nil;
     [_rail endEditing:YES];

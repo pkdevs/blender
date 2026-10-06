@@ -76,6 +76,8 @@ def tests():
 
     enqueue(b'MESH_OT_primitive_cube_add')
     yield 1.0
+    ui('redo', action='expand')
+    yield 0.3
     prop = next(p for p in ui('redo')['snapshot']['properties'] if p['property'] == 'size')
     count = len(bpy.data.objects)
     step = prop['dragStep']

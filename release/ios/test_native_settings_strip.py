@@ -672,7 +672,15 @@ static void runChecks() {
           @"properties": @[@{@"key": @"distance", @"type": @"FLOAT", @"label": @"Distance",
                               @"value": @1, @"editable": @YES}]};
       [builder->_redo_strip updateSnapshot:redo];
-      [builder->_redo_strip dismiss:nil];
+      NSCAssert(builder->_redo_strip.view.hidden && !builder->_redo_strip.collapsedButton.hidden,
+                @"First redo snapshot starts collapsed beside Actions without user intervention");
+      [builder->_redo_strip.collapsedButton sendActionsForControlEvents:UIControlEventTouchUpInside];
+      NSCAssert(!builder->_redo_strip.view.hidden && builder->_redo_strip.collapsedButton.hidden,
+                @"Actual pill button action expands the redo controls");
+      UIButton *redoDone = [builder->_redo_strip valueForKey:@"_done"];
+      [redoDone sendActionsForControlEvents:UIControlEventTouchUpInside];
+      NSCAssert(builder->_redo_strip.view.hidden && !builder->_redo_strip.collapsedButton.hidden,
+                @"Actual checkmark action collapses the redo controls back beside Actions");
       for (CGFloat width : {393.0, 466.0, 744.0, 1194.0}) {
         builder.view.frame = CGRectMake(0, 0, width, 800);
         [builder.view layoutIfNeeded];
