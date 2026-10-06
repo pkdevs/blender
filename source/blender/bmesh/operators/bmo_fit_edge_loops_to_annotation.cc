@@ -69,15 +69,15 @@ static void measure_positions(const Span<float3> positions,
                               float3 &r_center,
                               Vector<float> &r_accumulated_lengths)
 {
-  const int num_points = positions.size();
+  const int points_num = positions.size();
 
   r_center = float3(0.0f);
-  for (const int i : IndexRange(num_points)) {
+  for (const int i : IndexRange(points_num)) {
     r_center += positions[i];
   }
-  r_center /= float(num_points);
+  r_center /= float(points_num);
 
-  r_accumulated_lengths.resize(num_points - 1);
+  r_accumulated_lengths.resize(points_num - 1);
   length_parameterize::accumulate_lengths<float3>(
       positions, false, r_accumulated_lengths.as_mutable_span());
 }
@@ -113,13 +113,14 @@ static void sample_stroke_positions(const StrokeData &stroke_data,
         stroke_data.accumulated_lengths, true, segment_indices, factors);
   }
   else {
-    const float chain_total = chain.accumulated_lengths.last();
-    const float stroke_total = stroke_data.accumulated_lengths.last();
+    const float chain_length_total = chain.accumulated_lengths.last();
+    const float stroke_length_total = stroke_data.accumulated_lengths.last();
 
     Array<float> sample_lengths(verts_num);
     for (const int i : IndexRange(verts_num)) {
-      float sample_factor = (i == 0) ? 0.0f : chain.accumulated_lengths[i - 1] / chain_total;
-      sample_lengths[i] = sample_factor * stroke_total;
+      float sample_factor = (i == 0) ? 0.0f :
+                                       chain.accumulated_lengths[i - 1] / chain_length_total;
+      sample_lengths[i] = sample_factor * stroke_length_total;
     }
 
     length_parameterize::sample_at_lengths(
@@ -188,7 +189,9 @@ static void calculate_verts(const StrokeData &stroke_data,
                                     closest_on_ray,
                                     closest_on_stroke) != 0)
           {
-            if (math::distance(closest_on_ray, closest_on_stroke) < max_ray_distance) {
+            if (math::distance_squared(closest_on_ray, closest_on_stroke) <
+                max_ray_distance * max_ray_distance)
+            {
               float dist_seg = math::distance(stroke_seg_start, stroke_seg_end);
               float dist_to_start = math::distance(stroke_seg_start, closest_on_stroke);
               float dist_to_end = math::distance(stroke_seg_end, closest_on_stroke);
@@ -229,13 +232,13 @@ static void calculate_verts(const StrokeData &stroke_data,
       if (has_best) {
         float3 new_co = math::interpolate(v_co, intersection_best, factor);
         if (lock_x) {
-          new_co.x = vert_co.x;
+          new_co.x = v_co.x;
         }
         if (lock_y) {
-          new_co.y = vert_co.y;
+          new_co.y = v_co.y;
         }
         if (lock_z) {
-          new_co.z = vert_co.z;
+          new_co.z = v_co.z;
         }
         copy_v3_v3(v->co, new_co);
       }
@@ -247,16 +250,16 @@ static void calculate_verts(const StrokeData &stroke_data,
 
     for (const int i : IndexRange(verts_num)) {
       BMVert *v = r_chain.verts[i];
-      float3 old_co = float3(v->co);
-      float3 new_co = math::interpolate(old_co, stroke_positions[i], factor);
+      const float3 v_co = float3(v->co);
+      float3 new_co = math::interpolate(v_co, stroke_positions[i], factor);
       if (lock_x) {
-        new_co.x = old_co.x;
+        new_co.x = v_co.x;
       }
       if (lock_y) {
-        new_co.y = old_co.y;
+        new_co.y = v_co.y;
       }
       if (lock_z) {
-        new_co.z = old_co.z;
+        new_co.z = v_co.z;
       }
       copy_v3_v3(v->co, new_co);
     }
