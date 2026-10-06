@@ -421,7 +421,9 @@ static void point_with_symmetry_draw(const PaintMode paint_mode,
       }
 
       /* Radial Symmetry. */
-      if((mesh->symmetry & ME_RADIAL_SYMMETRY) && !(mesh->editflag & ME_EDIT_MIRROR_VERTEX_GROUPS)){
+      if((mesh->symmetry & ME_RADIAL_SYMMETRY) && 
+        !(paint_mode == PaintMode::Weight && (mesh->editflag & ME_EDIT_MIRROR_VERTEX_GROUPS)))
+      {
         for (char raxis = 0; raxis < 3; raxis++) {
           for (int r = 1; r < mesh->radial_symmetry[raxis]; r++) {
             float angle = 2 * M_PI * r / mesh->radial_symmetry[int(raxis)];
