@@ -2218,6 +2218,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSLayoutConstraint *_action_collapsed_width_constraint;
   NSLayoutConstraint *_action_toggle_width_constraint;
   NSLayoutConstraint *_action_toggle_trailing_constraint;
+  NSLayoutConstraint *_action_group_leading_constraint;
+  NSLayoutConstraint *_action_group_center_constraint;
   NSLayoutConstraint *_action_scroll_trailing_constraint;
   NSLayoutConstraint *_redo_pill_width_constraint;
   NSLayoutConstraint *_redo_pill_min_width_constraint;
@@ -2431,6 +2433,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_collapsed_width_constraint release];
   [_action_toggle_width_constraint release];
   [_action_toggle_trailing_constraint release];
+  [_action_group_leading_constraint release];
+  [_action_group_center_constraint release];
   [_action_scroll_trailing_constraint release];
   [_redo_pill_width_constraint release];
   [_redo_pill_min_width_constraint release];
@@ -3385,6 +3389,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_action_scroll setContentOffset:CGPointZero animated:NO];
 }
 
+/* Fixed so the Actions pill never resizes as the redo pill comes and goes. */
+static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
+
 - (void)installActionStripToggle
 {
   _action_group = [[[GHOSTIOSPassThroughOverlayView alloc] init] autorelease];
@@ -3418,20 +3425,22 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
       constraintEqualToAnchor:_action_stack.widthAnchor constant:60.0] retain];
   _action_expanded_width_constraint.priority = UILayoutPriorityDefaultHigh;
   _action_collapsed_width_constraint = [[_action_group.widthAnchor
-      constraintEqualToConstant:96.0] retain];
+      constraintEqualToConstant:GHOSTIOSActionsPillWidth] retain];
   _action_collapsed_width_constraint.priority = UILayoutPriorityDefaultHigh;
   _action_toggle_width_constraint = [[_action_toggle.widthAnchor
       constraintEqualToConstant:44.0] retain];
   _action_toggle_width_constraint.priority = UILayoutPriorityRequired - 1;
   _action_toggle_trailing_constraint = [[_action_toggle.trailingAnchor
       constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
-  NSLayoutConstraint *center = [_action_group.centerXAnchor
-      constraintEqualToAnchor:_overlay_view.centerXAnchor];
-  center.priority = UILayoutPriorityRequired - 2;
-  NSLayoutConstraint *minimum_width = [_action_group.widthAnchor constraintGreaterThanOrEqualToConstant:92.0];
+  /* Expanded controls center on the viewport; collapsed pills rest bottom-leading. */
+  _action_group_leading_constraint = [[_action_group.leadingAnchor
+      constraintEqualToAnchor:_action_rail.contentView.leadingAnchor] retain];
+  _action_group_center_constraint = [[_action_group.centerXAnchor
+      constraintEqualToAnchor:_overlay_view.centerXAnchor] retain];
+  _action_group_center_constraint.priority = UILayoutPriorityRequired - 2;
+  NSLayoutConstraint *minimum_width = [_action_group.widthAnchor constraintGreaterThanOrEqualToConstant:GHOSTIOSActionsPillWidth];
   minimum_width.priority = UILayoutPriorityRequired - 1;
   [NSLayoutConstraint activateConstraints:@[
-    center,
     minimum_width,
     [_action_group.leadingAnchor constraintGreaterThanOrEqualToAnchor:_action_rail.contentView.leadingAnchor],
     [_action_group.trailingAnchor constraintLessThanOrEqualToAnchor:_action_rail.contentView.trailingAnchor],
@@ -3460,8 +3469,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _redo_pill_min_width_constraint.constant = width ? 44 : 0;
   _action_scroll_trailing_constraint.constant = width ? -8 : 0;
   _action_toggle_trailing_constraint.constant = width ? -8 : 0;
-  _action_toggle_width_constraint.constant = _actions_collapsed ? (width ? 80 : 96) : 44;
-  _action_collapsed_width_constraint.constant = 96 + reserved;
+  _action_toggle_width_constraint.constant = _actions_collapsed ? GHOSTIOSActionsPillWidth : 44;
+  _action_collapsed_width_constraint.constant = GHOSTIOSActionsPillWidth + reserved;
   _action_expanded_width_constraint.constant = 60 + reserved;
   _action_rail.hidden = _action_buttons.count == 0 && !width;
   _action_rail.alpha = _action_rail.hidden ? 0 : 1;
@@ -3486,9 +3495,13 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _action_collapsed_width_constraint.active = NO;
   _action_toggle_width_constraint.active = NO;
   _action_toggle_trailing_constraint.active = NO;
+  _action_group_leading_constraint.active = NO;
+  _action_group_center_constraint.active = NO;
+  _action_group_leading_constraint.active = collapsed;
+  _action_group_center_constraint.active = !collapsed;
   _action_expanded_width_constraint.active = !collapsed;
   _action_collapsed_width_constraint.active = collapsed;
-  _action_toggle_width_constraint.constant = collapsed ? (_redo_strip.collapsedWidth ? 80 : 96) : 44;
+  _action_toggle_width_constraint.constant = collapsed ? GHOSTIOSActionsPillWidth : 44;
   _action_toggle_width_constraint.active = YES;
   _action_toggle_trailing_constraint.active = collapsed;
 

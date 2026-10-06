@@ -134,6 +134,7 @@ static BOOL fingerTool;
   UIButton *_action_toggle;
   NSLayoutConstraint *_action_expanded_width_constraint, *_action_collapsed_width_constraint;
   NSLayoutConstraint *_action_toggle_width_constraint, *_action_toggle_trailing_constraint;
+  NSLayoutConstraint *_action_group_leading_constraint, *_action_group_center_constraint;
   NSLayoutConstraint *_action_scroll_trailing_constraint, *_redo_pill_width_constraint;
   NSLayoutConstraint *_redo_pill_min_width_constraint;
   BOOL _actions_collapsed;
@@ -664,8 +665,10 @@ static void runChecks() {
           [builder.view layoutIfNeeded];
           CGRect group = [builder->_action_group convertRect:builder->_action_group.bounds
                                                      toView:builder.view];
-          NSCAssert(std::abs(CGRectGetMidX(group) - CGRectGetMidX(builder.view.bounds)) < 0.5,
-                    @"Quick actions are centered in the leftover lane rather than the viewport");
+          NSCAssert(collapsed ?
+                    std::abs(CGRectGetMinX(group) - CGRectGetMinX(builder->_action_rail.frame)) < 0.5 :
+                    std::abs(CGRectGetMidX(group) - CGRectGetMidX(builder.view.bounds)) < 0.5,
+                    @"Quick actions are not centered when expanded and bottom-leading when collapsed");
         }
       }
       NSDictionary *redo = @{@"id": @"redo-layout", @"title": @"Duplicate Linked", @"ack": @0,
