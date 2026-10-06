@@ -369,12 +369,13 @@ static void draw_import_properties(bContext *C,
   /* NOTE: This property is used as an alternative to the `filepath` property of `op->ptr`.
    * This property is a wrapper to access that property, see the `CollectionExport::filepath`
    * code comments for details. */
+  const std::optional<std::string> filter_glob = fh->filter_glob_from_extensions();
   template_filepath(&col,
                     C,
                     &importer_ptr,
                     "filepath",
                     nullptr,
-                    fh->filter_glob_from_extensions().c_str(),
+                    filter_glob ? filter_glob->c_str() : nullptr,
                     IFACE_("Select a file..."));
 
   template_operator_property_buts_draw_single(
