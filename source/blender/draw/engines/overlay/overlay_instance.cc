@@ -660,7 +660,11 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
     motion_paths.object_sync(manager, ob_ref, resources, state);
     origins.object_sync(manager, ob_ref, resources, state);
 
-    if (object_is_selected(ob_ref) && !in_edit_paint_mode) {
+    const View3DPencilHover hover = ED_view3d_pencil_hover_get(state.region);
+    const bool hovered = hover.kind == 1 &&
+                         hover.object_uid ==
+                             DEG_get_original(ob_ref.object)->id.session_uid;
+    if ((object_is_selected(ob_ref) || hovered) && !in_edit_paint_mode) {
       outline.object_sync(manager, ob_ref, resources, state);
     }
   }

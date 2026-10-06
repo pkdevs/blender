@@ -17,6 +17,8 @@
 #include "DNA_space_types.h"
 #include "DNA_world_types.h"
 
+#include "DEG_depsgraph_query.hh"
+#include "ED_view3d_pencil_hover.hh"
 #include "GPU_matrix.hh"
 
 #include "DRW_gpu_wrapper.hh"
@@ -925,6 +927,13 @@ struct Resources : public select::SelectMap {
 
   const float4 &object_wire_color(const ObjectRef &ob_ref, const State &state) const
   {
+    const View3DPencilHover hover = ED_view3d_pencil_hover_get(state.region);
+    if (hover.kind == 1 &&
+        hover.object_uid == DEG_get_original(ob_ref.object)->id.session_uid)
+    {
+      static const float4 color(0.012f, 0.36f, 0.97f, 1.0f);
+      return color;
+    }
     ThemeColorID theme_id = object_wire_theme_id(ob_ref, state);
     return object_wire_color(ob_ref, theme_id);
   }

@@ -242,6 +242,9 @@ void main()
   else if (color_id == 3u) {
     frag_color = theme.colors.active_object;
   }
+  else if (color_id == 2u) {
+    frag_color = float4(0.012f, 0.36f, 0.97f, 1.0f);
+  }
   else {
     frag_color = theme.colors.transform;
   }

@@ -14,6 +14,9 @@ VERTEX_SHADER_CREATE_INFO(overlay_outline_prepass_gpencil)
 
 uint outline_colorid_get()
 {
+  if (is_hovered) {
+    return 2u;
+  }
   eObjectInfoFlag ob_flag = drw_object_infos().flag;
   bool is_active = flag_test(ob_flag, OBJECT_ACTIVE);
 
