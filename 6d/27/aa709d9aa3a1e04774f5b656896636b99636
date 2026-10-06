@@ -1,1 +1,2 @@
 Referenced by pull request #160558, WIP: Fix #139593: Workbench: Duplicated vertices create shadow artifact
+Referenced by commit 8a6495000c2b57f31fe72dd7136db2d9ed5126e5, Fix #148108: Workbench: Shadow Overlay broken on overlapping vertices
