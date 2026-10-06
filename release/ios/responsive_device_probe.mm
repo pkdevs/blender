@@ -741,6 +741,11 @@ extern "C" char *blender_device_probe_toolbar_label(int action, int index)
       [controller setToolbarExpanded:action == 4 animated:NO];
       [controller.view layoutIfNeeded];
     }
+    else if (action == 5) {
+      [controller setToolbarExpanded:NO animated:NO];
+      [controller setToolRailDockedLeftCenter:NO animated:NO];
+      [controller.view layoutIfNeeded];
+    }
     else if (action == 1) {
       [button sendActionsForControlEvents:UIControlEventTouchUpInside];
     }

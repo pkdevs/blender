@@ -38,6 +38,7 @@ class NativeToolbarScrollTest(unittest.TestCase):
         constraints = source[start:source.index("\n    [_action_scroll.leadingAnchor", start)]
         signatures = (
             "- (UIButton *)toolbarButtonWithTitle:", "- (BOOL)isToolbarListVisible\n",
+            "- (void)updateToolbarMenuAvailabilityForButton:",
             "- (void)setActiveToolbarToolIdentifier:", "- (CGFloat)expandedToolbarHeight\n",
             "- (void)updateToolbarHeightForCurrentState\n", "- (CGFloat)expandedToolbarWidth\n",
             "- (CGFloat)toolRailBottomDockCenterY\n", "- (CGFloat)toolRailCenterDockCenterY\n",
@@ -323,8 +324,14 @@ int main() {
               @"Toolbar separator was lost");
     TestPress *groupPress = [[[TestPress alloc] init] autorelease];
     [groupButton addGestureRecognizer:groupPress];
-    NSCAssert(![controller gestureRecognizerShouldBegin:groupPress],
-              @"Compact picker stole the group hold gesture");
+    NSCAssert([controller gestureRecognizerShouldBegin:groupPress] &&
+              !groupButton.contextMenuInteractionEnabled,
+              @"Holding a compact grouped tool must open the press-and-slide picker");
+    [controller setToolRailDockedLeftCenter:YES animated:NO];
+    NSCAssert(![controller gestureRecognizerShouldBegin:groupPress] &&
+              groupButton.contextMenuInteractionEnabled,
+              @"An open toolbar list must keep the group hold menu");
+    [controller setToolRailDockedLeftCenter:NO animated:NO];
     [controller setToolbarExpanded:YES animated:NO];
     NSCAssert(![controller gestureRecognizerShouldBegin:groupPress] &&
               ![controller gestureRecognizerShouldBegin:railPan], @"Grouped toolbar breaks scrolling");
@@ -366,6 +373,15 @@ int main() {
                 [controller->_toolbar_label.text isEqualToString:@"Move"], @"Missing tap label");
     }
     [controller setToolbarExpanded:NO animated:NO];
+    [controller setToolRailDockedLeftCenter:NO animated:NO];
+    int beforeTap = toolCalls;
+    [controller handleToolbarToolButton:controller->_toolbar_buttons[1]];
+    NSCAssert(toolCalls == beforeTap && controller->_toolbar_expanded,
+              @"Tapping the collapsed toolbar must open it without changing tools");
+    [controller handleToolbarToolButton:controller->_toolbar_buttons[0]];
+    NSCAssert(toolCalls == beforeTap + 1 && ![controller isToolbarListVisible],
+              @"Picking from a tap-opened toolbar must select the tool and close it");
+    [controller setToolRailDockedLeftCenter:YES animated:NO];
     TestToolHover *hover = [TestToolHover new];
     UIButton *move = controller->_toolbar_buttons[1];
     [controller.view layoutIfNeeded];

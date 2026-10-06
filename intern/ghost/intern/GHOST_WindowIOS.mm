@@ -2689,6 +2689,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [button viewWithTag:9001].hidden = !grouped;
   button.accessibilityHint = grouped ? @"Touch and hold for related tools" : nil;
   button.menu = grouped ? [self toolbarMenuForTool:tool mode:mode] : nil;
+  /* Assigning a menu re-enables its hold interaction. */
+  [self updateToolbarMenuAvailabilityForButton:button];
   button.showsMenuAsPrimaryAction = NO;
   button.preferredMenuElementOrder = UIContextMenuConfigurationElementOrderFixed;
 
@@ -2764,6 +2766,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
                                      options:UIMenuOptionsDisplayInline children:actions]];
   }
   return [UIMenu menuWithTitle:@"" image:nil identifier:tool[@"group"] options:0 children:sections];
+}
+
+- (void)updateToolbarMenuAvailabilityForButton:(UIButton *)button
+{
+  button.contextMenuInteractionEnabled = button.menu != nil && [self isToolbarListVisible] &&
+                                         !_toolbar_press_select_active;
 }
 
 - (BOOL)isToolbarListVisible
@@ -2921,7 +2929,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
       [_toolbar_buttons containsObject:gestureRecognizer.view])
   {
     /* Group flyouts use UIButton's native hold menu; scrolling owns a moving touch. */
-    return !_toolbar_expanded && ((UIButton *)gestureRecognizer.view).menu == nil;
+    /* Holding a closed rail always opens it for press-drag-release selection; group menus
+     * only take over the hold once the rail is already showing its list. */
+    return !_toolbar_expanded && !((UIButton *)gestureRecognizer.view).contextMenuInteractionEnabled;
   }
   if (gestureRecognizer.view == _tool_drag_handle) {
     CGPoint velocity = [(UIPanGestureRecognizer *)gestureRecognizer velocityInView:_overlay_view];
@@ -3022,6 +3032,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (void)updateToolbarVisibilityAnimated:(BOOL)animated
 {
   const BOOL list_visible = [self isToolbarListVisible];
+  for (UIButton *button in _toolbar_buttons) {
+    [self updateToolbarMenuAvailabilityForButton:button];
+  }
   void (^prepareExpanded)(void) = ^{
     for (UIButton *button in _toolbar_buttons) {
       button.hidden = NO;
@@ -5028,9 +5041,18 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   if (![tool_id isKindOfClass:[NSString class]] || tool_id.length == 0) {
     return;
   }
+  if (![self isToolbarListVisible]) {
+    /* A tap on the collapsed rail opens it to pick a different tool. */
+    [self setToolbarExpanded:YES animated:YES];
+    return;
+  }
 
   [self setActiveToolbarToolIdentifier:tool_id];
   WM_apple_ios_ui_tool_set_by_id(tool_id.UTF8String);
+  if (_toolbar_expanded && !_tool_rail_docked_left_center) {
+    /* Opened by a tap: picking closes it again. A docked list stays open. */
+    [self setToolbarExpanded:NO animated:YES];
+  }
   [self showToolbarLabelForButton:sender transient:YES];
 }
 
