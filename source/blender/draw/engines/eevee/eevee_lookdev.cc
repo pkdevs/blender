@@ -213,7 +213,7 @@ bool LookdevWorld::sync(const LookdevParameters &new_parameters)
 
 LookdevModule::LookdevModule(Instance &inst) : inst_(inst) {}
 
-draw::Mesh *LookdevModule::sphere_get(const SphereLOD level_of_detail)
+draw::Batch *LookdevModule::sphere_get(const SphereLOD level_of_detail)
 {
   BLI_assert(level_of_detail >= SphereLOD::LOW && level_of_detail < SphereLOD::MAX);
 
@@ -288,7 +288,7 @@ draw::Mesh *LookdevModule::sphere_get(const SphereLOD level_of_detail)
     }
   }
 
-  sphere_lod_[level_of_detail] = make_mesh(
+  sphere_lod_[level_of_detail] = make_batch(
       GPU_batch_create_ex(GPU_PRIM_TRIS, vbo, nullptr, GPU_BATCH_OWNS_VBO));
   return sphere_lod_[level_of_detail].get();
 }
@@ -390,7 +390,7 @@ void LookdevModule::sync()
   model_m4 = math::scale(model_m4, float3(this->sphere_radius_));
 
   ResourceHandleRange handle = inst_.manager->resource_handle(model_m4);
-  draw::Mesh *geom = sphere_get(calc_level_of_detail(viewport_scale));
+  draw::Batch *geom = sphere_get(calc_level_of_detail(viewport_scale));
 
   sync_pass(spheres_[0].pass, geom, inst_.materials.metallic_mat, handle);
   sync_pass(spheres_[1].pass, geom, inst_.materials.diffuse_mat, handle);
@@ -398,7 +398,7 @@ void LookdevModule::sync()
 }
 
 void LookdevModule::sync_pass(PassSimple &pass,
-                              draw::Mesh *geom,
+                              draw::Batch *geom,
                               blender::Material *mat,
                               ResourceHandleRange res_handle)
 {

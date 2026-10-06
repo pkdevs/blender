@@ -199,7 +199,7 @@ struct CurvesEvalCache {
   std::array<bool, GPU_MAX_ATTR> attributes_point_domain;
 
   /* --- Procedural Drawcalls. --- */
-  std::array<MeshPtr, MAX_FACE_PER_SEGMENT> batch;
+  std::array<BatchPtr, MAX_FACE_PER_SEGMENT> batch;
 
   void ensure_attribute(struct CurvesModule &module,
                         const bke::CurvesGeometry &curves,
@@ -220,11 +220,11 @@ struct CurvesEvalCache {
                                        int face_per_segment);
 
   /* Sets r_over_limit to true if reaching hardware limit for the number of segments. */
-  Mesh *batch_get(int evaluated_point_count,
-                  int curve_count,
-                  int face_per_segment,
-                  bool use_cyclic,
-                  bool &r_over_limit);
+  Batch *batch_get(int evaluated_point_count,
+                   int curve_count,
+                   int face_per_segment,
+                   bool use_cyclic,
+                   bool &r_over_limit);
 
   void discard_attributes();
   void clear();

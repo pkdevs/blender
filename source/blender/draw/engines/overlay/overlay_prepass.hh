@@ -166,7 +166,7 @@ class Prepass : Overlay {
                                        res.select_id(ob_ref, part->omat << 16) :
                                        res.select_id(ob_ref);
 
-            Mesh *geom = DRW_cache_particles_get_hair(ob, &psys, nullptr);
+            Batch *geom = DRW_cache_particles_get_hair(ob, &psys, nullptr);
             if (res.is_selection()) {
               /* Conservative shader needs expanded draw-call. */
               mesh_ps_->draw_expand(geom, GPU_PRIM_TRIS, 1, 1, handle, select_id.get());
@@ -227,8 +227,8 @@ class Prepass : Overlay {
     }
 
     /* At most one of these is set. geom_list is only filled for material slot selection. */
-    Mesh *geom_single = nullptr;
-    Span<Mesh *> geom_list;
+    Batch *geom_single = nullptr;
+    Span<Batch *> geom_list;
 
     ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
 

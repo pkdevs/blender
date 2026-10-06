@@ -39,9 +39,9 @@ class DrawCommandBuf;
 class DrawMultiBuf;
 
 /**
- * Return a persistent #Mesh for procedural \a primitive draws.
+ * Return a persistent #Batch for procedural \a primitive draws.
  */
-Mesh *procedural_draw_mesh_get(GPUPrimType primitive);
+Batch *procedural_batch_get(GPUPrimType primitive);
 
 /* -------------------------------------------------------------------- */
 /** \name Recording State
@@ -377,7 +377,7 @@ struct SpecializeConstant {
 };
 
 struct Draw {
-  Mesh *mesh;
+  Batch *batch;
   uint32_t instance_len : 24;
   uint32_t expand_prim_type : 4; /* #GPUPrimType */
   uint32_t expand_prim_len : 4;
@@ -387,7 +387,7 @@ struct Draw {
 
   Draw() = default;
 
-  Draw(Mesh *mesh,
+  Draw(Batch *batch,
        uint instance_len,
        uint vertex_len,
        uint vertex_first,
@@ -395,10 +395,10 @@ struct Draw {
        uint expanded_prim_len,
        ResourceID res_id)
   {
-    BLI_assert(mesh != nullptr);
+    BLI_assert(batch != nullptr);
     BLI_assert(expanded_prim_type <= 15);
     BLI_assert(expanded_prim_len <= 15);
-    this->mesh = mesh;
+    this->batch = batch;
     this->res_id = res_id;
     this->instance_len = min_uu(instance_len, (1 << 24) - 1);
     this->vertex_len = vertex_len;
@@ -417,7 +417,7 @@ struct Draw {
 };
 
 struct DrawMulti {
-  Mesh *mesh;
+  Batch *batch;
   DrawMultiBuf *multi_draw_buf;
   uint group_first;
   uint uuid;
@@ -427,7 +427,7 @@ struct DrawMulti {
 };
 
 struct DrawIndirect {
-  Mesh *mesh;
+  Batch *batch;
   gpu::StorageBuf **indirect_buf;
   ResourceID res_id;
 
@@ -576,7 +576,7 @@ class DrawCommandBuf {
 
   void append_draw(Vector<Header, 0> &headers,
                    Vector<Undetermined, 0> &commands,
-                   Mesh *mesh,
+                   Batch *batch,
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,
@@ -585,7 +585,7 @@ class DrawCommandBuf {
                    GPUPrimType expanded_prim_type,
                    uint16_t expanded_prim_len)
   {
-    BLI_assert(mesh != nullptr);
+    BLI_assert(batch != nullptr);
     vertex_first = vertex_first != -1 ? vertex_first : 0;
     instance_len = instance_len != -1 ? instance_len : 1;
 
@@ -595,7 +595,7 @@ class DrawCommandBuf {
     for (auto res_id : id_range.id_range()) {
       int64_t index = commands.append_and_get_index({});
       headers.append({Type::Draw, uint(index)});
-      commands[index].draw = {mesh,
+      commands[index].draw = {batch,
                               instance_len,
                               vertex_len,
                               vertex_first,
@@ -629,10 +629,10 @@ class DrawCommandBuf {
  * `DrawGroup` as a container. This is done automatically for any successive commands with the
  * same state.
  *
- * A `DrawGroup` is the combination of a `Mesh` (VBO state) and a `command::DrawMulti`
+ * A `DrawGroup` is the combination of a `Batch` (VBO state) and a `command::DrawMulti`
  * (Pipeline State).
  *
- * Inside each `DrawGroup` all instances of a same `Mesh` is merged into a single
+ * Inside each `DrawGroup` all instances of a same `Batch` is merged into a single
  * indirect command.
  *
  * To support this arbitrary reordering, we only need to know the offset of all the commands for a
@@ -659,9 +659,9 @@ class DrawMultiBuf {
   using DrawCommandBuf = StorageArrayBuffer<DrawCommand, 16, true>;
   using ResourceIdBuf = StorageArrayBuffer<uint, 128, true>;
 
-  using DrawGroupKey = std::pair<uint, Mesh *>;
+  using DrawGroupKey = std::pair<uint, Batch *>;
   using DrawGroupMap = Map<DrawGroupKey, uint>;
-  /** Maps a DrawMulti command and a draw mesh to their unique DrawGroup command. */
+  /** Maps a DrawMulti command and a draw batch to their unique DrawGroup command. */
   DrawGroupMap group_ids_;
 
   /** DrawGroup Command heap. Uploaded to GPU for sorting. */
@@ -697,7 +697,7 @@ class DrawMultiBuf {
 
   void append_draw(Vector<Header, 0> &headers,
                    Vector<Undetermined, 0> &commands,
-                   Mesh *mesh,
+                   Batch *batch,
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,
@@ -706,7 +706,7 @@ class DrawMultiBuf {
                    GPUPrimType expanded_prim_type,
                    uint16_t expanded_prim_len)
   {
-    BLI_assert(mesh != nullptr);
+    BLI_assert(batch != nullptr);
     /* Custom draw-calls cannot be batched and will produce one group per draw. */
     const bool custom_group = ((vertex_first != 0 && vertex_first != -1) || vertex_len != -1);
 
@@ -718,12 +718,12 @@ class DrawMultiBuf {
     if (headers.is_empty() || headers.last().type != Type::DrawMulti) {
       uint index = commands.append_and_get_index({});
       headers.append({Type::DrawMulti, index});
-      commands[index].draw_multi = {mesh, this, uint(-1), header_id_counter_++};
+      commands[index].draw_multi = {batch, this, uint(-1), header_id_counter_++};
     }
 
     DrawMulti &cmd = commands.last().draw_multi;
 
-    uint &group_id = group_ids_.lookup_or_add(DrawGroupKey(cmd.uuid, mesh), uint(-1));
+    uint &group_id = group_ids_.lookup_or_add(DrawGroupKey(cmd.uuid, batch), uint(-1));
 
     bool inverted = id_range.has_inverted_handedness();
 
@@ -746,7 +746,7 @@ class DrawMultiBuf {
         group.back_facing_counter = 0;
         group.desc.vertex_len = vertex_len;
         group.desc.vertex_first = vertex_first;
-        group.desc.mesh = mesh;
+        group.desc.batch = batch;
         group.desc.expand_prim_type = expanded_prim_type;
         group.desc.expand_prim_len = expanded_prim_len;
         BLI_assert_msg(expanded_prim_len < (1 << 3),

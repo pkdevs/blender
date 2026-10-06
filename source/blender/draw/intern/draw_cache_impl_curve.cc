@@ -313,12 +313,12 @@ struct CurveBatchCache {
   } ibo;
 
   struct {
-    Mesh *curves;
-    Mesh *curves_viewer_attribute;
+    Batch *curves;
+    Batch *curves_viewer_attribute;
     /* control handles and vertices */
-    Mesh *edit_edges;
-    Mesh *edit_verts;
-    Mesh *edit_normals;
+    Batch *edit_edges;
+    Batch *edit_verts;
+    Batch *edit_normals;
   } batch;
 
   /* settings to determine if cache is invalid */
@@ -435,7 +435,7 @@ static void curve_batch_cache_clear(Curve *cu)
     GPU_INDEXBUF_DISCARD_SAFE(ibo[i]);
   }
   for (int i = 0; i < sizeof(cache->batch) / sizeof(void *); i++) {
-    Mesh **mesh = reinterpret_cast<Mesh **>(&cache->batch);
+    Batch **mesh = reinterpret_cast<Batch **>(&cache->batch);
     MEM_SAFE_DELETE(mesh[i]);
   }
 }
@@ -800,31 +800,31 @@ static void curve_create_edit_data_and_handles(CurveRenderData *rdata,
 /** \name Public Object/Curve API
  * \{ */
 
-Mesh *DRW_curve_batch_cache_get_wire_edge(Curve *cu)
+Batch *DRW_curve_batch_cache_get_wire_edge(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.curves);
 }
 
-Mesh *DRW_curve_batch_cache_get_wire_edge_viewer_attribute(Curve *cu)
+Batch *DRW_curve_batch_cache_get_wire_edge_viewer_attribute(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.curves_viewer_attribute);
 }
 
-Mesh *DRW_curve_batch_cache_get_normal_edge(Curve *cu)
+Batch *DRW_curve_batch_cache_get_normal_edge(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.edit_normals);
 }
 
-Mesh *DRW_curve_batch_cache_get_edit_edges(Curve *cu)
+Batch *DRW_curve_batch_cache_get_edit_edges(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.edit_edges);
 }
 
-Mesh *DRW_curve_batch_cache_get_edit_verts(Curve *cu)
+Batch *DRW_curve_batch_cache_get_edit_verts(Curve *cu)
 {
   CurveBatchCache *cache = curve_batch_cache_get(cu);
   return DRW_batch_request(&cache->batch.edit_verts);
@@ -845,39 +845,39 @@ void DRW_curve_batch_cache_create_requested(Object *ob, const Scene *scene)
 
   /* Init batches and request VBOs & IBOs */
   if (cache->batch.curves &&
-      DRW_batch_requested(cache->batch.curves->batch_get(), GPU_PRIM_LINE_STRIP))
+      DRW_batch_requested(cache->batch.curves->gpu_batch(), GPU_PRIM_LINE_STRIP))
   {
-    DRW_ibo_request(cache->batch.curves->batch_get(), &cache->ibo.curves_lines);
-    DRW_vbo_request(cache->batch.curves->batch_get(), &cache->ordered.curves_pos);
+    DRW_ibo_request(cache->batch.curves->gpu_batch(), &cache->ibo.curves_lines);
+    DRW_vbo_request(cache->batch.curves->gpu_batch(), &cache->ordered.curves_pos);
   }
   if (cache->batch.curves_viewer_attribute &&
-      DRW_batch_requested(cache->batch.curves_viewer_attribute->batch_get(), GPU_PRIM_LINE_STRIP))
+      DRW_batch_requested(cache->batch.curves_viewer_attribute->gpu_batch(), GPU_PRIM_LINE_STRIP))
   {
-    DRW_ibo_request(cache->batch.curves_viewer_attribute->batch_get(), &cache->ibo.curves_lines);
-    DRW_vbo_request(cache->batch.curves_viewer_attribute->batch_get(), &cache->ordered.curves_pos);
-    DRW_vbo_request(cache->batch.curves_viewer_attribute->batch_get(),
+    DRW_ibo_request(cache->batch.curves_viewer_attribute->gpu_batch(), &cache->ibo.curves_lines);
+    DRW_vbo_request(cache->batch.curves_viewer_attribute->gpu_batch(), &cache->ordered.curves_pos);
+    DRW_vbo_request(cache->batch.curves_viewer_attribute->gpu_batch(),
                     &cache->ordered.attr_viewer);
   }
 
   /* Edit mode */
   if (cache->batch.edit_edges &&
-      DRW_batch_requested(cache->batch.edit_edges->batch_get(), GPU_PRIM_LINES))
+      DRW_batch_requested(cache->batch.edit_edges->gpu_batch(), GPU_PRIM_LINES))
   {
-    DRW_ibo_request(cache->batch.edit_edges->batch_get(), &cache->ibo.edit_lines);
-    DRW_vbo_request(cache->batch.edit_edges->batch_get(), &cache->edit.pos);
-    DRW_vbo_request(cache->batch.edit_edges->batch_get(), &cache->edit.data);
+    DRW_ibo_request(cache->batch.edit_edges->gpu_batch(), &cache->ibo.edit_lines);
+    DRW_vbo_request(cache->batch.edit_edges->gpu_batch(), &cache->edit.pos);
+    DRW_vbo_request(cache->batch.edit_edges->gpu_batch(), &cache->edit.data);
   }
   if (cache->batch.edit_verts &&
-      DRW_batch_requested(cache->batch.edit_verts->batch_get(), GPU_PRIM_POINTS))
+      DRW_batch_requested(cache->batch.edit_verts->gpu_batch(), GPU_PRIM_POINTS))
   {
-    DRW_ibo_request(cache->batch.edit_verts->batch_get(), &cache->ibo.edit_verts);
-    DRW_vbo_request(cache->batch.edit_verts->batch_get(), &cache->edit.pos);
-    DRW_vbo_request(cache->batch.edit_verts->batch_get(), &cache->edit.data);
+    DRW_ibo_request(cache->batch.edit_verts->gpu_batch(), &cache->ibo.edit_verts);
+    DRW_vbo_request(cache->batch.edit_verts->gpu_batch(), &cache->edit.pos);
+    DRW_vbo_request(cache->batch.edit_verts->gpu_batch(), &cache->edit.data);
   }
   if (cache->batch.edit_normals &&
-      DRW_batch_requested(cache->batch.edit_normals->batch_get(), GPU_PRIM_LINES))
+      DRW_batch_requested(cache->batch.edit_normals->gpu_batch(), GPU_PRIM_LINES))
   {
-    DRW_vbo_request(cache->batch.edit_normals->batch_get(), &cache->edit.curves_nor);
+    DRW_vbo_request(cache->batch.edit_normals->gpu_batch(), &cache->edit.curves_nor);
   }
 
 #ifdef DRW_DEBUG_MESH_CACHE_REQUEST
@@ -928,8 +928,8 @@ void DRW_curve_batch_cache_create_requested(Object *ob, const Scene *scene)
 #ifndef NDEBUG
   /* Make sure all requested batches have been setup. */
   for (int i = 0; i < sizeof(cache->batch) / sizeof(void *); i++) {
-    Mesh *mesh = reinterpret_cast<Mesh **>(&cache->batch)[i];
-    BLI_assert(mesh == nullptr || !DRW_batch_requested(mesh->batch_get(), (GPUPrimType)0));
+    Batch *mesh = reinterpret_cast<Batch **>(&cache->batch)[i];
+    BLI_assert(mesh == nullptr || !DRW_batch_requested(mesh->gpu_batch(), (GPUPrimType)0));
   }
 #endif
 }

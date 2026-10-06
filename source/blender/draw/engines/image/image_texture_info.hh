@@ -44,7 +44,7 @@ struct TextureInfo : NonCopyable {
    * `pos` (2xI32) is relative to the origin of the space.
    * `uv` (2xF32) reflect the uv bounds.
    */
-  MeshPtr batch;
+  BatchPtr batch;
 
   /**
    * \brief GPU Texture for a partial region of the image editor.

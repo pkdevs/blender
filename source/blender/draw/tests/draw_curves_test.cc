@@ -82,8 +82,8 @@ static void test_draw_curves_lib()
     pass.bind_ssbo("result_pos_buf", result_pos);
     pass.bind_ssbo("result_indices_buf", result_idx);
     /* The test owns the batch; wrap it without ownership for command recording. */
-    Mesh mesh(batch_ribbon, false);
-    pass.draw(&mesh);
+    Batch batch(batch_ribbon, false);
+    pass.draw(&batch);
     pass.barrier(GPU_BARRIER_BUFFER_UPDATE);
 
     manager.submit(pass);
@@ -153,8 +153,8 @@ static void test_draw_curves_lib()
     pass.bind_ssbo("result_pos_buf", result_pos);
     pass.bind_ssbo("result_indices_buf", result_idx);
     /* The test owns the batch; wrap it without ownership for command recording. */
-    Mesh mesh(batch_cylinder, false);
-    pass.draw(&mesh);
+    Batch batch(batch_cylinder, false);
+    pass.draw(&batch);
     pass.barrier(GPU_BARRIER_BUFFER_UPDATE);
 
     manager.submit(pass);

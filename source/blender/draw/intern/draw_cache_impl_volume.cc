@@ -49,11 +49,11 @@ struct VolumeBatchCache {
   /* Wireframe */
   struct {
     gpu::VertBuf *pos_nor_in_order;
-    Mesh *batch;
+    Batch *batch;
   } face_wire;
 
   /* Surface for selection */
-  Mesh *selection_surface;
+  Batch *selection_surface;
 
   /* settings to determine if cache is invalid */
   bool is_dirty;
@@ -193,7 +193,7 @@ static void drw_volume_wireframe_cb(
 
   if (volume->display.wireframe_type == VOLUME_WIREFRAME_POINTS) {
     /* Create batch. */
-    cache->face_wire.batch = MEM_new<Mesh>(
+    cache->face_wire.batch = MEM_new<Batch>(
         __func__, GPU_batch_create(GPU_PRIM_POINTS, cache->face_wire.pos_nor_in_order, nullptr));
   }
   else {
@@ -206,16 +206,16 @@ static void drw_volume_wireframe_cb(
     gpu::IndexBuf *ibo = GPU_indexbuf_build(&elb);
 
     /* Create batch. */
-    cache->face_wire.batch = MEM_new<Mesh>(
+    cache->face_wire.batch = MEM_new<Batch>(
         __func__,
         GPU_batch_create_ex(
             GPU_PRIM_LINES, cache->face_wire.pos_nor_in_order, ibo, GPU_BATCH_OWNS_INDEX));
   }
 
-  GPU_batch_vertbuf_add(cache->face_wire.batch->batch_get(), vbo_wiredata, true);
+  GPU_batch_vertbuf_add(cache->face_wire.batch->gpu_batch(), vbo_wiredata, true);
 }
 
-Mesh *DRW_volume_batch_cache_get_wireframes_face(Volume *volume)
+Batch *DRW_volume_batch_cache_get_wireframes_face(Volume *volume)
 {
   if (volume->display.wireframe_type == VOLUME_WIREFRAME_NONE) {
     return nullptr;
@@ -266,13 +266,13 @@ static void drw_volume_selection_surface_cb(
   }
   gpu::IndexBuf *ibo_surface = GPU_indexbuf_build(&elb);
 
-  cache->selection_surface = MEM_new<Mesh>(
+  cache->selection_surface = MEM_new<Batch>(
       __func__,
       GPU_batch_create_ex(
           GPU_PRIM_TRIS, vbo_surface, ibo_surface, GPU_BATCH_OWNS_VBO | GPU_BATCH_OWNS_INDEX));
 }
 
-Mesh *DRW_volume_batch_cache_get_selection_surface(Volume *volume)
+Batch *DRW_volume_batch_cache_get_selection_surface(Volume *volume)
 {
   VolumeBatchCache *cache = volume_batch_cache_get(volume);
   if (cache->selection_surface == nullptr) {

@@ -27,19 +27,19 @@ gpu::VertBuf *hair_pos_buffer_get(Scene *scene,
                                   ParticleSystem *psys,
                                   ModifierData *md);
 
-Mesh *hair_sub_pass_setup(PassMain::Sub &sub_ps,
-                          const Scene *scene,
-                          const ObjectRef &ob_ref,
-                          ParticleSystem *psys,
-                          ModifierData *md,
-                          GPUMaterial *gpu_material = nullptr);
+Batch *hair_sub_pass_setup(PassMain::Sub &sub_ps,
+                           const Scene *scene,
+                           const ObjectRef &ob_ref,
+                           ParticleSystem *psys,
+                           ModifierData *md,
+                           GPUMaterial *gpu_material = nullptr);
 
-Mesh *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
-                          const Scene *scene,
-                          const ObjectRef &ob_ref,
-                          ParticleSystem *psys,
-                          ModifierData *md,
-                          GPUMaterial *gpu_material = nullptr);
+Batch *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
+                           const Scene *scene,
+                           const ObjectRef &ob_ref,
+                           ParticleSystem *psys,
+                           ModifierData *md,
+                           GPUMaterial *gpu_material = nullptr);
 
 /** Curves. */
 
@@ -48,41 +48,41 @@ Mesh *hair_sub_pass_setup(PassSimple::Sub &sub_ps,
  */
 gpu::VertBuf *curves_pos_buffer_get(Object *object);
 
-Mesh *curves_sub_pass_setup(PassMain::Sub &ps,
-                            const Scene *scene,
-                            Object *ob,
-                            const char *&r_error,
-                            GPUMaterial *gpu_material = nullptr);
+Batch *curves_sub_pass_setup(PassMain::Sub &ps,
+                             const Scene *scene,
+                             Object *ob,
+                             const char *&r_error,
+                             GPUMaterial *gpu_material = nullptr);
 
-Mesh *curves_sub_pass_setup(PassSimple::Sub &ps,
-                            const Scene *scene,
-                            Object *ob,
-                            const char *&r_error,
-                            GPUMaterial *gpu_material = nullptr);
+Batch *curves_sub_pass_setup(PassSimple::Sub &ps,
+                             const Scene *scene,
+                             Object *ob,
+                             const char *&r_error,
+                             GPUMaterial *gpu_material = nullptr);
 
 /* Point cloud. */
 
-Mesh *pointcloud_sub_pass_setup(PassMain::Sub &sub_ps,
-                                const ObjectRef &ob_ref,
-                                const ResourceHandleRange &res_handle,
-                                GPUMaterial *gpu_material = nullptr);
+Batch *pointcloud_sub_pass_setup(PassMain::Sub &sub_ps,
+                                 const ObjectRef &ob_ref,
+                                 const ResourceHandleRange &res_handle,
+                                 GPUMaterial *gpu_material = nullptr);
 
-Mesh *pointcloud_sub_pass_setup(PassSimple::Sub &sub_ps,
-                                const ObjectRef &ob_ref,
-                                const ResourceHandleRange &res_handle,
-                                GPUMaterial *gpu_material = nullptr);
+Batch *pointcloud_sub_pass_setup(PassSimple::Sub &sub_ps,
+                                 const ObjectRef &ob_ref,
+                                 const ResourceHandleRange &res_handle,
+                                 GPUMaterial *gpu_material = nullptr);
 
 /* GSplats. */
 
-Mesh *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
-                            const ObjectRef &ob_ref,
-                            const ResourceHandleRange &res_handle,
-                            GPUMaterial *gpu_material = nullptr);
+Batch *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
+                             const ObjectRef &ob_ref,
+                             const ResourceHandleRange &res_handle,
+                             GPUMaterial *gpu_material = nullptr);
 
-Mesh *gsplat_sub_pass_setup(PassSimple::Sub &sub_ps,
-                            const ObjectRef &ob_ref,
-                            const ResourceHandleRange &res_handle,
-                            GPUMaterial *gpu_material = nullptr);
+Batch *gsplat_sub_pass_setup(PassSimple::Sub &sub_ps,
+                             const ObjectRef &ob_ref,
+                             const ResourceHandleRange &res_handle,
+                             GPUMaterial *gpu_material = nullptr);
 
 /** Volume. */
 

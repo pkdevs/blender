@@ -90,7 +90,7 @@ void DRW_vertbuf_create_wiredata(gpu::VertBuf *vbo, const int vert_len)
  * is presented to render engines as a separate object).
  * \{ */
 
-Mesh *DRW_cache_object_all_edges_get(Object *ob)
+Batch *DRW_cache_object_all_edges_get(Object *ob)
 {
   switch (ob->type) {
     case OB_MESH:
@@ -101,7 +101,7 @@ Mesh *DRW_cache_object_all_edges_get(Object *ob)
   }
 }
 
-Mesh *DRW_cache_object_edge_detection_get(Object *ob, bool *r_is_manifold)
+Batch *DRW_cache_object_edge_detection_get(Object *ob, bool *r_is_manifold)
 {
   switch (ob->type) {
     case OB_MESH:
@@ -111,7 +111,7 @@ Mesh *DRW_cache_object_edge_detection_get(Object *ob, bool *r_is_manifold)
   }
 }
 
-Mesh *DRW_cache_object_face_wireframe_get(const Scene *scene, Object *ob)
+Batch *DRW_cache_object_face_wireframe_get(const Scene *scene, Object *ob)
 {
   switch (ob->type) {
     case OB_MESH:
@@ -128,7 +128,7 @@ Mesh *DRW_cache_object_face_wireframe_get(const Scene *scene, Object *ob)
   }
 }
 
-Mesh *DRW_cache_object_loose_edges_get(Object *ob)
+Batch *DRW_cache_object_loose_edges_get(Object *ob)
 {
   switch (ob->type) {
     case OB_MESH:
@@ -138,7 +138,7 @@ Mesh *DRW_cache_object_loose_edges_get(Object *ob)
   }
 }
 
-Mesh *DRW_cache_object_surface_get(Object *ob)
+Batch *DRW_cache_object_surface_get(Object *ob)
 {
   switch (ob->type) {
     case OB_MESH:
@@ -158,8 +158,8 @@ gpu::BottomLevelAS *DRW_cache_object_surface_blas_get(Object *ob)
   }
 }
 
-Span<Mesh *> DRW_cache_object_surface_material_get(Object *ob,
-                                                   const Span<const GPUMaterial *> materials)
+Span<Batch *> DRW_cache_object_surface_material_get(Object *ob,
+                                                    const Span<const GPUMaterial *> materials)
 {
   switch (ob->type) {
     case OB_MESH:
@@ -175,39 +175,39 @@ Span<Mesh *> DRW_cache_object_surface_material_get(Object *ob,
 /** \name Meshes
  * \{ */
 
-Mesh *DRW_cache_mesh_all_verts_get(Object *ob)
+Batch *DRW_cache_mesh_all_verts_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_all_verts(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_paint_overlay_verts_get(Object *ob)
+Batch *DRW_cache_mesh_paint_overlay_verts_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_paint_overlay_verts(
       DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_all_edges_get(Object *ob)
+Batch *DRW_cache_mesh_all_edges_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_all_edges(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_loose_edges_get(Object *ob)
+Batch *DRW_cache_mesh_loose_edges_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_loose_edges(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_edge_detection_get(Object *ob, bool *r_is_manifold)
+Batch *DRW_cache_mesh_edge_detection_get(Object *ob, bool *r_is_manifold)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_edge_detection(
       DRW_object_get_data_for_drawing<blender::Mesh>(*ob), r_is_manifold);
 }
 
-Mesh *DRW_cache_mesh_surface_get(Object *ob)
+Batch *DRW_cache_mesh_surface_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
@@ -222,78 +222,78 @@ gpu::BottomLevelAS *DRW_cache_mesh_surface_blas_get(Object *ob)
       DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_paint_overlay_surface_get(Object *ob)
+Batch *DRW_cache_mesh_paint_overlay_surface_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_paint_overlay_surface(
       DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_paint_overlay_edges_get(Object *ob)
+Batch *DRW_cache_mesh_paint_overlay_edges_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_paint_overlay_edges(
       DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Span<Mesh *> DRW_cache_mesh_surface_shaded_get(Object *ob,
-                                               const Span<const GPUMaterial *> materials)
+Span<Batch *> DRW_cache_mesh_surface_shaded_get(Object *ob,
+                                                const Span<const GPUMaterial *> materials)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_shaded(
       *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob), materials);
 }
 
-Span<Mesh *> DRW_cache_mesh_surface_texpaint_get(Object *ob)
+Span<Batch *> DRW_cache_mesh_surface_texpaint_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_texpaint(
       *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_surface_texpaint_single_get(Object *ob)
+Batch *DRW_cache_mesh_surface_texpaint_single_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_texpaint_single(
       *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_surface_vertpaint_get(Object *ob)
+Batch *DRW_cache_mesh_surface_vertpaint_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_vertpaint(
       *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_surface_sculptcolors_get(Object *ob)
+Batch *DRW_cache_mesh_surface_sculptcolors_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_sculpt(
       *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_surface_weights_get(Object *ob)
+Batch *DRW_cache_mesh_surface_weights_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_weights(
       DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_face_wireframe_get(Object *ob)
+Batch *DRW_cache_mesh_face_wireframe_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_wireframes_face(
       DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_surface_mesh_analysis_get(Object *ob)
+Batch *DRW_cache_mesh_surface_mesh_analysis_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_edit_mesh_analysis(
       DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 }
 
-Mesh *DRW_cache_mesh_surface_viewer_attribute_get(Object *ob)
+Batch *DRW_cache_mesh_surface_viewer_attribute_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_viewer_attribute(
@@ -306,28 +306,28 @@ Mesh *DRW_cache_mesh_surface_viewer_attribute_get(Object *ob)
 /** \name Curve
  * \{ */
 
-Mesh *DRW_cache_curve_edge_wire_get(Object *ob)
+Batch *DRW_cache_curve_edge_wire_get(Object *ob)
 {
   BLI_assert(ob->type == OB_CURVES_LEGACY);
   Curve &cu = DRW_object_get_data_for_drawing<Curve>(*ob);
   return DRW_curve_batch_cache_get_wire_edge(&cu);
 }
 
-Mesh *DRW_cache_curve_edge_wire_viewer_attribute_get(Object *ob)
+Batch *DRW_cache_curve_edge_wire_viewer_attribute_get(Object *ob)
 {
   BLI_assert(ob->type == OB_CURVES_LEGACY);
   Curve &cu = DRW_object_get_data_for_drawing<Curve>(*ob);
   return DRW_curve_batch_cache_get_wire_edge_viewer_attribute(&cu);
 }
 
-Mesh *DRW_cache_curve_edge_normal_get(Object *ob)
+Batch *DRW_cache_curve_edge_normal_get(Object *ob)
 {
   BLI_assert(ob->type == OB_CURVES_LEGACY);
   Curve &cu = DRW_object_get_data_for_drawing<Curve>(*ob);
   return DRW_curve_batch_cache_get_normal_edge(&cu);
 }
 
-Mesh *DRW_cache_curve_edge_overlay_get(Object *ob)
+Batch *DRW_cache_curve_edge_overlay_get(Object *ob)
 {
   BLI_assert(ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF));
 
@@ -335,7 +335,7 @@ Mesh *DRW_cache_curve_edge_overlay_get(Object *ob)
   return DRW_curve_batch_cache_get_edit_edges(&cu);
 }
 
-Mesh *DRW_cache_curve_vert_overlay_get(Object *ob)
+Batch *DRW_cache_curve_vert_overlay_get(Object *ob)
 {
   BLI_assert(ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF));
 
@@ -349,7 +349,7 @@ Mesh *DRW_cache_curve_vert_overlay_get(Object *ob)
 /** \name Font
  * \{ */
 
-Mesh *DRW_cache_text_edge_wire_get(Object *ob)
+Batch *DRW_cache_text_edge_wire_get(Object *ob)
 {
   BLI_assert(ob->type == OB_FONT);
   Curve &cu = DRW_object_get_data_for_drawing<Curve>(*ob);
@@ -362,7 +362,7 @@ Mesh *DRW_cache_text_edge_wire_get(Object *ob)
 /** \name Surface
  * \{ */
 
-Mesh *DRW_cache_surf_edge_wire_get(Object *ob)
+Batch *DRW_cache_surf_edge_wire_get(Object *ob)
 {
   BLI_assert(ob->type == OB_SURF);
   Curve &cu = DRW_object_get_data_for_drawing<Curve>(*ob);
@@ -375,7 +375,7 @@ Mesh *DRW_cache_surf_edge_wire_get(Object *ob)
 /** \name Lattice
  * \{ */
 
-Mesh *DRW_cache_lattice_verts_get(Object *ob)
+Batch *DRW_cache_lattice_verts_get(Object *ob)
 {
   BLI_assert(ob->type == OB_LATTICE);
 
@@ -383,7 +383,7 @@ Mesh *DRW_cache_lattice_verts_get(Object *ob)
   return DRW_lattice_batch_cache_get_all_verts(&lt);
 }
 
-Mesh *DRW_cache_lattice_wire_get(Object *ob, bool use_weight)
+Batch *DRW_cache_lattice_wire_get(Object *ob, bool use_weight)
 {
   BLI_assert(ob->type == OB_LATTICE);
 
@@ -397,7 +397,7 @@ Mesh *DRW_cache_lattice_wire_get(Object *ob, bool use_weight)
   return DRW_lattice_batch_cache_get_all_edges(&lt, use_weight, actdef);
 }
 
-Mesh *DRW_cache_lattice_vert_overlay_get(Object *ob)
+Batch *DRW_cache_lattice_vert_overlay_get(Object *ob)
 {
   BLI_assert(ob->type == OB_LATTICE);
 
@@ -411,7 +411,7 @@ Mesh *DRW_cache_lattice_vert_overlay_get(Object *ob)
 /** \name PointCloud
  * \{ */
 
-Mesh *DRW_cache_pointcloud_vert_overlay_get(Object *ob)
+Batch *DRW_cache_pointcloud_vert_overlay_get(Object *ob)
 {
   BLI_assert(ob->type == OB_POINTCLOUD);
   return DRW_pointcloud_batch_cache_get_edit_dots(ob);
@@ -423,7 +423,7 @@ Mesh *DRW_cache_pointcloud_vert_overlay_get(Object *ob)
 /** \name GSplat
  * \{ */
 
-Mesh *DRW_cache_gsplat_vert_overlay_get(Object *ob)
+Batch *DRW_cache_gsplat_vert_overlay_get(Object *ob)
 {
   BLI_assert(ob->type == OB_POINTCLOUD);
   return DRW_gsplat_batch_cache_get_edit_dots(ob);
@@ -435,13 +435,13 @@ Mesh *DRW_cache_gsplat_vert_overlay_get(Object *ob)
 /** \name Volume
  * \{ */
 
-Mesh *DRW_cache_volume_face_wireframe_get(Object *ob)
+Batch *DRW_cache_volume_face_wireframe_get(Object *ob)
 {
   BLI_assert(ob->type == OB_VOLUME);
   return DRW_volume_batch_cache_get_wireframes_face(&DRW_object_get_data_for_drawing<Volume>(*ob));
 }
 
-Mesh *DRW_cache_volume_selection_surface_get(Object *ob)
+Batch *DRW_cache_volume_selection_surface_get(Object *ob)
 {
   BLI_assert(ob->type == OB_VOLUME);
   return DRW_volume_batch_cache_get_selection_surface(
@@ -454,34 +454,34 @@ Mesh *DRW_cache_volume_selection_surface_get(Object *ob)
 /** \name Particles
  * \{ */
 
-Mesh *DRW_cache_particles_get_hair(Object *object, ParticleSystem *psys, ModifierData *md)
+Batch *DRW_cache_particles_get_hair(Object *object, ParticleSystem *psys, ModifierData *md)
 {
   return DRW_particles_batch_cache_get_hair(object, psys, md);
 }
 
-Mesh *DRW_cache_particles_get_dots(Object *object, ParticleSystem *psys)
+Batch *DRW_cache_particles_get_dots(Object *object, ParticleSystem *psys)
 {
   return DRW_particles_batch_cache_get_dots(object, psys);
 }
 
-Mesh *DRW_cache_particles_get_edit_strands(Object *object,
-                                           ParticleSystem *psys,
-                                           PTCacheEdit *edit,
-                                           bool use_weight)
+Batch *DRW_cache_particles_get_edit_strands(Object *object,
+                                            ParticleSystem *psys,
+                                            PTCacheEdit *edit,
+                                            bool use_weight)
 {
   return DRW_particles_batch_cache_get_edit_strands(object, psys, edit, use_weight);
 }
 
-Mesh *DRW_cache_particles_get_edit_inner_points(Object *object,
-                                                ParticleSystem *psys,
-                                                PTCacheEdit *edit)
+Batch *DRW_cache_particles_get_edit_inner_points(Object *object,
+                                                 ParticleSystem *psys,
+                                                 PTCacheEdit *edit)
 {
   return DRW_particles_batch_cache_get_edit_inner_points(object, psys, edit);
 }
 
-Mesh *DRW_cache_particles_get_edit_tip_points(Object *object,
-                                              ParticleSystem *psys,
-                                              PTCacheEdit *edit)
+Batch *DRW_cache_particles_get_edit_tip_points(Object *object,
+                                               ParticleSystem *psys,
+                                               PTCacheEdit *edit)
 {
   return DRW_particles_batch_cache_get_edit_tip_points(object, psys, edit);
 }

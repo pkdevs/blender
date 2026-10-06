@@ -29,11 +29,11 @@ namespace blender {
     (flag |= DRW_ibo_requested(ibo) ? (value) : 0)
 #endif
 
-inline draw::Mesh *DRW_batch_request(draw::Mesh **mesh)
+inline draw::Batch *DRW_batch_request(draw::Batch **mesh)
 {
   /* XXX TODO(fclem): We are writing to batch cache here. Need to make this thread safe. */
   if (*mesh == nullptr) {
-    *mesh = MEM_new<draw::Mesh>(__func__, GPU_batch_calloc());
+    *mesh = MEM_new<draw::Batch>(__func__, GPU_batch_calloc());
   }
   return *mesh;
 }

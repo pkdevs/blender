@@ -56,11 +56,11 @@ struct GreasePencilBatchCache {
   /** Indices in material order, then stroke order with fill first. */
   gpu::IndexBuf *ibo;
   /** Batches */
-  Mesh *geom_batch;
-  Mesh *lines_batch;
-  Mesh *edit_points;
-  Mesh *edit_lines;
-  Mesh *edit_handles;
+  Batch *geom_batch;
+  Batch *lines_batch;
+  Batch *edit_points;
+  Batch *edit_lines;
+  Batch *edit_handles;
 
   /* Crazy-space point positions for original points. */
   gpu::VertBuf *edit_points_pos;
@@ -709,15 +709,15 @@ static void grease_pencil_weight_batch_ensure(Object &object,
   cache->edit_points_indices = GPU_indexbuf_build_ex(&points_builder, 0, INT_MAX, false);
 
   /* Create the batches. */
-  cache->edit_points = MEM_new<Mesh>(
+  cache->edit_points = MEM_new<Batch>(
       __func__,
       GPU_batch_create(GPU_PRIM_POINTS, cache->edit_points_pos, cache->edit_points_indices));
-  GPU_batch_vertbuf_add(cache->edit_points->batch_get(), cache->edit_points_selection, false);
+  GPU_batch_vertbuf_add(cache->edit_points->gpu_batch(), cache->edit_points_selection, false);
 
-  cache->edit_lines = MEM_new<Mesh>(
+  cache->edit_lines = MEM_new<Batch>(
       __func__,
       GPU_batch_create(GPU_PRIM_LINE_STRIP, cache->edit_line_pos, cache->edit_line_indices));
-  GPU_batch_vertbuf_add(cache->edit_lines->batch_get(), cache->edit_line_selection, false);
+  GPU_batch_vertbuf_add(cache->edit_lines->gpu_batch(), cache->edit_line_selection, false);
 
   /* Allow creation of buffer texture. */
   GPU_vertbuf_use(cache->edit_points_pos);
@@ -1138,23 +1138,23 @@ static void grease_pencil_edit_batch_ensure(Object &object,
   cache->edit_handles_ibo = GPU_indexbuf_build_ex(&handles_builder, 0, INT_MAX, false);
 
   /* Create the batches */
-  cache->edit_points = MEM_new<Mesh>(
+  cache->edit_points = MEM_new<Batch>(
       __func__,
       GPU_batch_create(GPU_PRIM_POINTS, cache->edit_points_pos, cache->edit_points_indices));
-  GPU_batch_vertbuf_add(cache->edit_points->batch_get(), cache->edit_points_selection, false);
-  GPU_batch_vertbuf_add(cache->edit_points->batch_get(), cache->edit_points_vflag, false);
-  GPU_batch_vertbuf_add(cache->edit_points->batch_get(), cache->edit_points_info, false);
+  GPU_batch_vertbuf_add(cache->edit_points->gpu_batch(), cache->edit_points_selection, false);
+  GPU_batch_vertbuf_add(cache->edit_points->gpu_batch(), cache->edit_points_vflag, false);
+  GPU_batch_vertbuf_add(cache->edit_points->gpu_batch(), cache->edit_points_info, false);
 
-  cache->edit_lines = MEM_new<Mesh>(
+  cache->edit_lines = MEM_new<Batch>(
       __func__,
       GPU_batch_create(GPU_PRIM_LINE_STRIP, cache->edit_line_pos, cache->edit_line_indices));
-  GPU_batch_vertbuf_add(cache->edit_lines->batch_get(), cache->edit_line_selection, false);
+  GPU_batch_vertbuf_add(cache->edit_lines->gpu_batch(), cache->edit_line_selection, false);
 
-  cache->edit_handles = MEM_new<Mesh>(
+  cache->edit_handles = MEM_new<Batch>(
       __func__, GPU_batch_create(GPU_PRIM_LINES, cache->edit_points_pos, cache->edit_handles_ibo));
-  GPU_batch_vertbuf_add(cache->edit_handles->batch_get(), cache->edit_points_info, false);
-  GPU_batch_vertbuf_add(cache->edit_handles->batch_get(), cache->edit_points_rad, false);
-  GPU_batch_vertbuf_add(cache->edit_handles->batch_get(), cache->edit_points_selection, false);
+  GPU_batch_vertbuf_add(cache->edit_handles->gpu_batch(), cache->edit_points_info, false);
+  GPU_batch_vertbuf_add(cache->edit_handles->gpu_batch(), cache->edit_points_rad, false);
+  GPU_batch_vertbuf_add(cache->edit_handles->gpu_batch(), cache->edit_points_selection, false);
 
   /* Allow creation of buffer texture. */
   GPU_vertbuf_use(cache->edit_points_pos);
@@ -1822,8 +1822,8 @@ static void grease_pencil_geom_batch_ensure(Object &object,
   /* Finish the IBO. */
   cache->ibo = GPU_indexbuf_build_ex(&ibo, 0, INT_MAX, false);
   /* Create the batches */
-  cache->geom_batch = MEM_new<Mesh>(__func__,
-                                    GPU_batch_create(GPU_PRIM_TRIS, cache->vbo, cache->ibo));
+  cache->geom_batch = MEM_new<Batch>(__func__,
+                                     GPU_batch_create(GPU_PRIM_TRIS, cache->vbo, cache->ibo));
   /* Allow creation of buffer texture. */
   GPU_vertbuf_use(cache->vbo);
   GPU_vertbuf_use(cache->vbo_col);
@@ -1914,7 +1914,7 @@ static void grease_pencil_wire_batch_ensure(Object &object,
 
   gpu::IndexBuf *ibo = GPU_indexbuf_build_ex(&elb, 0, max_index, true);
 
-  cache->lines_batch = MEM_new<Mesh>(
+  cache->lines_batch = MEM_new<Batch>(
       __func__, GPU_batch_create_ex(GPU_PRIM_LINE_STRIP, cache->vbo, ibo, GPU_BATCH_OWNS_INDEX));
 
   cache->is_dirty = false;
@@ -1954,7 +1954,7 @@ void DRW_grease_pencil_batch_cache_free(GreasePencil *grease_pencil)
   grease_pencil->runtime->batch_cache = nullptr;
 }
 
-Mesh *DRW_cache_grease_pencil_get(const Scene *scene, Object *ob)
+Batch *DRW_cache_grease_pencil_get(const Scene *scene, Object *ob)
 {
   GreasePencil &grease_pencil = DRW_object_get_data_for_drawing<GreasePencil>(*ob);
   GreasePencilBatchCache *cache = grease_pencil_batch_cache_get(grease_pencil);
@@ -1963,7 +1963,7 @@ Mesh *DRW_cache_grease_pencil_get(const Scene *scene, Object *ob)
   return cache->geom_batch;
 }
 
-Mesh *DRW_cache_grease_pencil_edit_points_get(const Scene *scene, Object *ob)
+Batch *DRW_cache_grease_pencil_edit_points_get(const Scene *scene, Object *ob)
 {
   GreasePencil &grease_pencil = DRW_object_get_data_for_drawing<GreasePencil>(*ob);
   GreasePencilBatchCache *cache = grease_pencil_batch_cache_get(grease_pencil);
@@ -1973,7 +1973,7 @@ Mesh *DRW_cache_grease_pencil_edit_points_get(const Scene *scene, Object *ob)
   return cache->edit_points;
 }
 
-Mesh *DRW_cache_grease_pencil_edit_lines_get(const Scene *scene, Object *ob)
+Batch *DRW_cache_grease_pencil_edit_lines_get(const Scene *scene, Object *ob)
 {
   GreasePencil &grease_pencil = DRW_object_get_data_for_drawing<GreasePencil>(*ob);
   GreasePencilBatchCache *cache = grease_pencil_batch_cache_get(grease_pencil);
@@ -1983,7 +1983,7 @@ Mesh *DRW_cache_grease_pencil_edit_lines_get(const Scene *scene, Object *ob)
   return cache->edit_lines;
 }
 
-Mesh *DRW_cache_grease_pencil_edit_handles_get(const Scene *scene, Object *ob)
+Batch *DRW_cache_grease_pencil_edit_handles_get(const Scene *scene, Object *ob)
 {
   GreasePencil &grease_pencil = DRW_object_get_data_for_drawing<GreasePencil>(*ob);
   GreasePencilBatchCache *cache = grease_pencil_batch_cache_get(grease_pencil);
@@ -2011,7 +2011,7 @@ gpu::VertBuf *DRW_cache_grease_pencil_color_buffer_get(const Scene *scene, Objec
   return cache->vbo_col;
 }
 
-Mesh *DRW_cache_grease_pencil_weight_points_get(const Scene *scene, Object *ob)
+Batch *DRW_cache_grease_pencil_weight_points_get(const Scene *scene, Object *ob)
 {
   GreasePencil &grease_pencil = DRW_object_get_data_for_drawing<GreasePencil>(*ob);
   GreasePencilBatchCache *cache = grease_pencil_batch_cache_get(grease_pencil);
@@ -2021,7 +2021,7 @@ Mesh *DRW_cache_grease_pencil_weight_points_get(const Scene *scene, Object *ob)
   return cache->edit_points;
 }
 
-Mesh *DRW_cache_grease_pencil_weight_lines_get(const Scene *scene, Object *ob)
+Batch *DRW_cache_grease_pencil_weight_lines_get(const Scene *scene, Object *ob)
 {
   GreasePencil &grease_pencil = DRW_object_get_data_for_drawing<GreasePencil>(*ob);
   GreasePencilBatchCache *cache = grease_pencil_batch_cache_get(grease_pencil);
@@ -2031,7 +2031,7 @@ Mesh *DRW_cache_grease_pencil_weight_lines_get(const Scene *scene, Object *ob)
   return cache->edit_lines;
 }
 
-Mesh *DRW_cache_grease_pencil_face_wireframe_get(const Scene *scene, Object *ob)
+Batch *DRW_cache_grease_pencil_face_wireframe_get(const Scene *scene, Object *ob)
 {
   GreasePencil &grease_pencil = DRW_object_get_data_for_drawing<GreasePencil>(*ob);
   GreasePencilBatchCache *cache = grease_pencil_batch_cache_get(grease_pencil);

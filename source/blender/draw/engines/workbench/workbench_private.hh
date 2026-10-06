@@ -279,7 +279,7 @@ struct SceneResources {
   Texture dummy_tile_data_tx = {"dummy_tile_data"};
   Texture dummy_tile_array_tx = {"dummy_tile_array"};
 
-  MeshPtr volume_cube_batch;
+  BatchPtr volume_cube_batch;
 
   ~SceneResources()
   {

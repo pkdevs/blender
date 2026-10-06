@@ -120,7 +120,7 @@ class VolumeModule {
   /* Must be set to false on every event that makes the history invalid to sample. */
   bool valid_history_ = false;
 
-  MeshPtr cube_batch_ = make_mesh(GPU_batch_unit_cube());
+  BatchPtr cube_batch_ = make_batch(GPU_batch_unit_cube());
 
  public:
   VolumeModule(Instance &inst, VolumesInfoData &data) : inst_(inst), data_(data)
@@ -150,7 +150,7 @@ class VolumeModule {
     return data_.tex_size;
   }
 
-  draw::Mesh *unit_cube_batch_get()
+  draw::Batch *unit_cube_batch_get()
   {
     return cube_batch_.get();
   }

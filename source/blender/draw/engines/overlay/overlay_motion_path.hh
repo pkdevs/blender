@@ -32,11 +32,11 @@ class MotionPath : Overlay {
   PassSimple::Sub *vert_ps_ = nullptr;
 
   /**
-   * Non-owning #Mesh wrappers around the motion path batches.
+   * Non-owning #Batch wrappers around the motion path batches.
    *
    * The motion path batches are owned by the motion path data.
    */
-  Vector<MeshPtr> motion_path_draw_meshes_;
+  Vector<BatchPtr> motion_path_batches_;
 
  public:
   void begin_sync(Resources &res, const State &state) final
@@ -100,7 +100,7 @@ class MotionPath : Overlay {
     }
     GPU_framebuffer_bind(framebuffer);
     manager.submit(motion_path_ps_, view);
-    motion_path_draw_meshes_.clear();
+    motion_path_batches_.clear();
   }
 
  private:
@@ -187,9 +187,9 @@ class MotionPath : Overlay {
       sub.push_constant("custom_color_post", color_post);
       sub.push_constant("camera_object_persinv", camera_matrix);
 
-      motion_path_draw_meshes_.append(make_mesh_borrowed(mpath_batch_points_get(mpath)));
+      motion_path_batches_.append(make_batch_borrowed(mpath_batch_points_get(mpath)));
       /* Only draw the required range. */
-      sub.draw_expand(motion_path_draw_meshes_.last().get(),
+      sub.draw_expand(motion_path_batches_.last().get(),
                       GPU_PRIM_TRIS,
                       2,
                       1,
@@ -209,9 +209,9 @@ class MotionPath : Overlay {
       sub.push_constant("custom_color_post", color_post);
       sub.push_constant("camera_object_persinv", camera_matrix);
 
-      motion_path_draw_meshes_.append(make_mesh_borrowed(mpath_batch_points_get(mpath)));
+      motion_path_batches_.append(make_batch_borrowed(mpath_batch_points_get(mpath)));
       /* Only draw the required range. */
-      sub.draw(motion_path_draw_meshes_.last().get(), 1, frame_range.size(), start_index);
+      sub.draw(motion_path_batches_.last().get(), 1, frame_range.size(), start_index);
     }
 
     /* Draw frame numbers at each frame-step value. */

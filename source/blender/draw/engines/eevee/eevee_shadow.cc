@@ -676,7 +676,7 @@ void ShadowModule::begin_sync()
   update_casters_ = true;
 
   if (box_batch_ == nullptr) {
-    box_batch_ = make_mesh(GPU_batch_unit_cube());
+    box_batch_ = make_batch(GPU_batch_unit_cube());
   }
 
   {
