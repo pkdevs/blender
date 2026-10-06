@@ -204,9 +204,7 @@ static void rna_Armature_edit_bone_clear(bArmature *arm, ReportList *reports)
     return;
   }
 
-  /* Frees every EditBone (including IDProperties) and resets the listbase. */
   ED_armature_ebone_listbase_free(arm->edbo, true);
-
   arm->act_edbone = nullptr;
 }
 
