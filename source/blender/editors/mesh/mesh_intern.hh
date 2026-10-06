@@ -224,9 +224,9 @@ void MESH_OT_loopcut(wmOperatorType *ot);
 void MESH_OT_rip(wmOperatorType *ot);
 void MESH_OT_rip_edge(wmOperatorType *ot);
 
-/* *** `editmesh_to_annotation.cc` *** */
+/* *** `editmesh_fit_edge_loops_to_annotation.cc` *** */
 
-void MESH_OT_to_annotation(wmOperatorType *ot);
+void MESH_OT_fit_edge_loops_to_annotation(wmOperatorType *ot);
 
 /* *** editmesh_select.cc *** */
 

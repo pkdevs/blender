@@ -31,7 +31,7 @@
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
 
-#include "BKE_gpencil_legacy.h"
+#include "BKE_annotations.h"
 #include "DNA_gpencil_legacy_types.h"
 #include "ED_gpencil_legacy.hh"
 
@@ -75,12 +75,12 @@ static wmOperatorStatus edbm_fit_edge_loops_to_annotation_exec(bContext *C, wmOp
   bool changed_multi = false;
 
   bGPdata *gpd = ED_annotation_data_get_active(C);
-  bGPDlayer *gpl = gpd ? BKE_gpencil_layer_active_get(gpd) : nullptr;
+  bGPDlayer *gpl = gpd ? BKE_annotations_layer_active_get(gpd) : nullptr;
   bGPDframe *gpf = gpl ? gpl->actframe : nullptr;
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
 
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     Vector<Vector<float3>> all_points;
     if (gpf) {
@@ -115,7 +115,7 @@ static wmOperatorStatus edbm_fit_edge_loops_to_annotation_exec(bContext *C, wmOp
       stroke_data.append(points);
     }
     if (!EDBM_op_callf(
-            em,
+            bm,
             op,
             "fit_edge_loops_to_annotation geom=%he factor=%f method=%i strokes=%p lock_x=%b "
             "lock_y=%b lock_z=%b",
@@ -144,7 +144,7 @@ static wmOperatorStatus edbm_fit_edge_loops_to_annotation_exec(bContext *C, wmOp
       gps_next = gps->next;
       if (gps->totpoints >= 2 && (gps->flag & GP_STROKE_3DSPACE)) {
         BLI_remlink(&gpf->strokes, gps);
-        BKE_gpencil_free_stroke(gps);
+        BKE_annotations_free_stroke(gps);
         deleted = true;
       }
     }
@@ -177,9 +177,10 @@ void MESH_OT_fit_edge_loops_to_annotation(wmOperatorType *ot)
 {
   ot->name = "Fit Edge Loops To Annotation";
   ot->description = "Stretch selected vertices to active stroke";
-  ot->idname = "MESH_OT_to_fit_edge_loops_to_annotation";
+  ot->idname = "MESH_OT_fit_edge_loops_to_annotation";
 
-  ot->exec = edbm_fit_edge_loops_to_annotation_exec ot->poll = ED_operator_editmesh;
+  ot->exec = edbm_fit_edge_loops_to_annotation_exec;
+  ot->poll = ED_operator_editmesh;
   ot->ui = edbm_fit_edge_loops_to_annotation_ui;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
