@@ -23,6 +23,21 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 }
 @end
 
+@interface GHOSTIOSRedoSlider : UISlider
+@property(nonatomic, copy) NSDictionary *descriptor;
+@property(nonatomic, copy) NSString *operationID;
+@property(nonatomic, copy) NSString *interactionID;
+@property(nonatomic) double startValue;
+@property(nonatomic) CFTimeInterval lastPreview;
+@end
+@implementation GHOSTIOSRedoSlider
+- (void)dealloc
+{
+  [_descriptor release]; [_operationID release]; [_interactionID release];
+  [super dealloc];
+}
+@end
+
 @interface GHOSTIOSRedoStrip () <UITextFieldDelegate, UIColorPickerViewControllerDelegate, UIScrollViewDelegate>
 @end
 
@@ -45,10 +60,13 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   GHOSTIOSRedoField *_scrubField;
   CGPoint _scrubStart;
   double _scrubValue;
+  NSString *_scrubInteraction;
+  CFTimeInterval _scrubPreviewTime;
   UIImage *(^_icon)(NSString *);
   UIColorPickerViewController *_colorPicker;
   NSDictionary *_colorProperty;
   NSString *_colorOperationID;
+  CFTimeInterval _colorPreviewTime;
 }
 
 - (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage *(^)(NSString *))icon
@@ -123,6 +141,7 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
   [_colorPicker release];
   [_colorProperty release];
   [_colorOperationID release];
+  [_scrubInteraction release];
   [_rail removeFromSuperview];
   [_rail release];
   [_snapshot release];
@@ -164,10 +183,20 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 
 - (void)sendProperty:(NSDictionary *)property value:(id)value operation:(NSString *)operation
 {
+  [self sendProperty:property value:value operation:operation interaction:nil phase:nil];
+}
+
+- (void)sendProperty:(NSDictionary *)property value:(id)value operation:(NSString *)operation
+         interaction:(NSString *)interaction phase:(NSString *)phase
+{
   if (value && !property) { return; }
   if (![operation isEqual:_snapshot[@"id"]]) { return; }
   NSMutableDictionary *request = [NSMutableDictionary dictionaryWithDictionary:
       @{@"id": operation, @"sequence": @(++_sequence)}];
+  if (interaction) {
+    request[@"interaction"] = interaction;
+    request[@"phase"] = phase;
+  }
   if (property) {
     request[@"key"] = property[@"key"];
     request[@"value"] = value;
@@ -305,15 +334,16 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
       if ([type isEqual:@"ENUM"]) { width = 148; }
     }
     else if (property[@"slider"]) {
-      UISlider *slider = [[[UISlider alloc] init] autorelease];
+      GHOSTIOSRedoSlider *slider = [[[GHOSTIOSRedoSlider alloc] init] autorelease];
+      slider.descriptor = property;
+      slider.operationID = operation;
       slider.minimumValue = [property[@"slider"][@"min"] floatValue];
       slider.maximumValue = [property[@"slider"][@"max"] floatValue];
-      slider.continuous = NO;
-      [slider addAction:[UIAction actionWithHandler:^(UIAction *action) {
-        double value = ((UISlider *)action.sender).value;
-        if ([type isEqual:@"INT"]) { value = round(value); }
-        [owner sendProperty:[owner propertyForKey:key] value:@(value) operation:operation];
-      }] forControlEvents:UIControlEventValueChanged];
+      slider.continuous = YES;
+      [slider addTarget:self action:@selector(beginSlider:) forControlEvents:UIControlEventTouchDown];
+      [slider addTarget:self action:@selector(changeSlider:) forControlEvents:UIControlEventValueChanged];
+      [slider addTarget:self action:@selector(finishSlider:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
+      [slider addTarget:self action:@selector(cancelSlider:) forControlEvents:UIControlEventTouchCancel];
       control = slider;
       width = 148;
     }
@@ -375,7 +405,41 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     value = @([field.descriptor[@"angle"] boolValue] ? number * M_PI / 180.0 : number);
   }
   [self sendProperty:field.descriptor value:value operation:field.operationID];
+  NSMutableDictionary *updated = [[field.descriptor mutableCopy] autorelease];
+  updated[@"value"] = value;
+  field.descriptor = updated;
   field.originalText = field.text;
+}
+
+- (void)beginSlider:(GHOSTIOSRedoSlider *)slider
+{
+  slider.interactionID = NSUUID.UUID.UUIDString;
+  slider.startValue = slider.value;
+  slider.lastPreview = 0;
+}
+- (void)changeSlider:(GHOSTIOSRedoSlider *)slider
+{
+  if (slider.interactionID && CACurrentMediaTime() - slider.lastPreview < 1.0 / 60.0) { return; }
+  double value = [slider.descriptor[@"type"] isEqual:@"INT"] ? round(slider.value) : slider.value;
+  [self sendProperty:slider.descriptor value:@(value) operation:slider.operationID
+        interaction:slider.interactionID phase:@"update"];
+  slider.lastPreview = CACurrentMediaTime();
+}
+- (void)finishSlider:(GHOSTIOSRedoSlider *)slider
+{
+  if (!slider.interactionID) { return; }
+  double value = [slider.descriptor[@"type"] isEqual:@"INT"] ? round(slider.value) : slider.value;
+  [self sendProperty:slider.descriptor value:@(value) operation:slider.operationID
+        interaction:slider.interactionID phase:@"end"];
+  slider.interactionID = nil;
+}
+- (void)cancelSlider:(GHOSTIOSRedoSlider *)slider
+{
+  if (!slider.interactionID) { return; }
+  slider.value = slider.startValue;
+  [self sendProperty:slider.descriptor value:@(slider.startValue) operation:slider.operationID
+        interaction:slider.interactionID phase:@"cancel"];
+  slider.interactionID = nil;
 }
 
 - (void)scrubNumber:(UILongPressGestureRecognizer *)gesture
@@ -387,6 +451,8 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     _scrubField = field;
     _scrubStart = [gesture locationInView:_overlay];
     _scrubValue = [field.descriptor[@"value"] doubleValue];
+    [_scrubInteraction release]; _scrubInteraction = [NSUUID.UUID.UUIDString copy];
+    _scrubPreviewTime = 0;
     field.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.18];
     _scroll.scrollEnabled = NO;
   }
@@ -400,13 +466,25 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     format.usesGroupingSeparator = NO;
     format.maximumFractionDigits = 4;
     field.text = [format stringFromNumber:@([field.descriptor[@"angle"] boolValue] ? value * 180 / M_PI : value)];
+    if (gesture.state == UIGestureRecognizerStateChanged && CACurrentMediaTime() - _scrubPreviewTime >= 1.0 / 60.0) {
+      [self sendProperty:field.descriptor value:@(value) operation:field.operationID
+            interaction:_scrubInteraction phase:@"update"];
+      _scrubPreviewTime = CACurrentMediaTime();
+    }
     if (gesture.state == UIGestureRecognizerStateEnded || gesture.state == UIGestureRecognizerStateCancelled ||
         gesture.state == UIGestureRecognizerStateFailed) {
       _scrubField = nil;
       _scroll.scrollEnabled = YES;
       field.backgroundColor = UIColor.tertiarySystemFillColor;
-      if (gesture.state == UIGestureRecognizerStateEnded) { [self commitField:field]; }
+      const BOOL ended = gesture.state == UIGestureRecognizerStateEnded;
+      [self sendProperty:field.descriptor value:@(ended ? value : _scrubValue) operation:field.operationID
+            interaction:_scrubInteraction phase:ended ? @"end" : @"cancel"];
+      NSMutableDictionary *updated = [[field.descriptor mutableCopy] autorelease];
+      updated[@"value"] = @(ended ? value : _scrubValue);
+      field.descriptor = updated;
+      if (ended) { field.originalText = field.text; }
       else { field.text = field.originalText; }
+      [_scrubInteraction release]; _scrubInteraction = nil;
     }
   }
 }
@@ -445,7 +523,15 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
 
 - (void)colorPickerViewController:(UIColorPickerViewController *)picker didSelectColor:(UIColor *)color continuously:(BOOL)continuously
 {
-  if (!continuously) { [self colorPickerViewControllerDidFinish:picker]; }
+  if (!continuously || CACurrentMediaTime() - _colorPreviewTime >= 1.0 / 60.0) {
+    CGFloat r, g, b, a;
+    if ([color getRed:&r green:&g blue:&b alpha:&a]) {
+      NSArray *value = picker.supportsAlpha ? @[@(r), @(g), @(b), @(a)] : @[@(r), @(g), @(b)];
+      [self sendProperty:_colorProperty value:value operation:_colorOperationID
+            interaction:[@"color:" stringByAppendingString:_colorOperationID] phase:continuously ? @"update" : @"end"];
+      _colorPreviewTime = CACurrentMediaTime();
+    }
+  }
 }
 
 - (void)updateSnapshot:(NSDictionary *)snapshot
@@ -489,7 +575,8 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *, const char *);
     UIControl *control = _controls[key];
     control.enabled = [property[@"editable"] boolValue];
     if ([_pending[key] unsignedLongLongValue] > [snapshot[@"ack"] unsignedLongLongValue] ||
-        control.isFirstResponder || control == _scrubField || control.tracking) { continue; }
+        control.isFirstResponder || control == _scrubField || control.tracking ||
+        ([control isKindOfClass:GHOSTIOSRedoSlider.class] && ((GHOSTIOSRedoSlider *)control).interactionID)) { continue; }
     [_pending removeObjectForKey:key];
     id value = property[@"value"];
     if ([control isKindOfClass:GHOSTIOSRedoField.class]) {

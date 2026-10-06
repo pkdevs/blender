@@ -7,6 +7,20 @@
 - (void)commitField:(UITextField *)field;
 - (void)dismiss:(id)sender;
 - (void)expand:(id)sender;
+- (void)scrubNumber:(UILongPressGestureRecognizer *)gesture;
+- (void)beginSlider:(UISlider *)slider;
+- (void)changeSlider:(UISlider *)slider;
+- (void)finishSlider:(UISlider *)slider;
+- (void)cancelSlider:(UISlider *)slider;
+@end
+
+@interface RedoTestPress : UILongPressGestureRecognizer
+@property(nonatomic) UIGestureRecognizerState testState;
+@property(nonatomic) CGPoint testPoint;
+@end
+@implementation RedoTestPress
+- (UIGestureRecognizerState)state { return _testState; }
+- (CGPoint)locationInView:(UIView *)view { return _testPoint; }
 @end
 
 static NSMutableArray *requests;
@@ -73,8 +87,29 @@ int main()
     NSCAssert([requests.lastObject[@"key"] isEqual:@"uv"] && ![requests.lastObject[@"value"] boolValue], @"Native switch queues real property value");
     UISlider *factor = controls[@"factor"];
     factor.value = 0.75;
-    [factor sendActionsForControlEvents:UIControlEventValueChanged];
+    [strip changeSlider:factor];
     NSCAssert([requests.lastObject[@"key"] isEqual:@"factor"] && [requests.lastObject[@"value"] doubleValue] == 0.75, @"Native slider queues adjustment");
+    [strip beginSlider:factor];
+    factor.value = 0.6;
+    [strip changeSlider:factor];
+    NSCAssert([requests.lastObject[@"phase"] isEqual:@"update"], @"Slider previews while held");
+    [strip cancelSlider:factor];
+    NSCAssert([requests.lastObject[@"phase"] isEqual:@"cancel"] && [requests.lastObject[@"value"] doubleValue] == 0.75,
+              @"Slider cancellation restores the original operator value");
+    RedoTestPress *press = [[[RedoTestPress alloc] init] autorelease];
+    [field addGestureRecognizer:press];
+    press.testState = UIGestureRecognizerStateBegan;
+    [strip scrubNumber:press];
+    press.testPoint = CGPointMake(50, 0);
+    press.testState = UIGestureRecognizerStateChanged;
+    [strip scrubNumber:press];
+    NSCAssert([requests.lastObject[@"phase"] isEqual:@"update"] && [requests.lastObject[@"value"] doubleValue] == 4,
+              @"Number scrub updates the operator before release");
+    press.testPoint = CGPointMake(60, 0);
+    press.testState = UIGestureRecognizerStateEnded;
+    [strip scrubNumber:press];
+    NSCAssert([requests.lastObject[@"phase"] isEqual:@"end"] && [requests.lastObject[@"value"] doubleValue] == 4.1,
+              @"Final precise value is sent even inside the preview throttle interval");
     NSUInteger count = requests.count;
     field.text = @"nan";
     [strip commitField:field];
