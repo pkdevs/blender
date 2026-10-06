@@ -3039,7 +3039,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
   if (gestureRecognizer.view == _tool_drag_handle) {
     CGPoint velocity = [(UIPanGestureRecognizer *)gestureRecognizer velocityInView:_overlay_view];
-    return [self isToolbarListVisible] && velocity.y > fabs(velocity.x);
+    /* Down collapses. Up docks a temporarily opened rail at the higher position. */
+    return [self isToolbarListVisible] &&
+           (velocity.y > fabs(velocity.x) ||
+            (!_tool_rail_docked_left_center && -velocity.y > fabs(velocity.x)));
   }
   if (gestureRecognizer.view == _tool_rail &&
       [gestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]])
@@ -3104,16 +3107,33 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (void)handleToolbarHandlePan:(UIPanGestureRecognizer *)gesture
 {
   CGPoint translation = [gesture translationInView:_overlay_view];
+  /* A temporarily opened rail sits at the bottom dock and follows the finger up toward the
+   * higher dock; a docked rail only resists a downward pull. */
+  const BOOL can_raise = !_tool_rail_docked_left_center;
+  const CGFloat raise_distance = MAX(0.0, [self toolRailBottomDockCenterY] - [self toolRailCenterDockCenterY]);
   if (gesture.state == UIGestureRecognizerStateChanged) {
-    _tool_rail.transform = CGAffineTransformMakeTranslation(0.0, MIN(32.0, MAX(0.0, translation.y * 0.3)));
+    const CGFloat offset = translation.y < 0.0 && can_raise ?
+                               MAX(-raise_distance, translation.y) :
+                               MIN(32.0, MAX(0.0, translation.y * 0.3));
+    _tool_rail.transform = CGAffineTransformMakeTranslation(0.0, offset);
   }
   else if (gesture.state == UIGestureRecognizerStateEnded ||
            gesture.state == UIGestureRecognizerStateCancelled ||
            gesture.state == UIGestureRecognizerStateFailed)
   {
     CGPoint velocity = [gesture velocityInView:_overlay_view];
-    if (gesture.state == UIGestureRecognizerStateEnded &&
-        (translation.y > 36.0 || (translation.y > 8.0 && velocity.y > 420.0)))
+    if (gesture.state == UIGestureRecognizerStateEnded && can_raise && raise_distance > 0.0 &&
+        (-translation.y > raise_distance * 0.5 || (translation.y < -8.0 && velocity.y < -420.0)))
+    {
+      /* Keep the list open, now as the docked rail rather than a temporary peek. */
+      [self hideToolbarLabelAnimated:YES];
+      _toolbar_press_select_active = NO;
+      _toolbar_expanded = NO;
+      [self setToolbarHoverButton:nil];
+      [self setToolRailDockedLeftCenter:YES animated:YES];
+    }
+    else if (gesture.state == UIGestureRecognizerStateEnded &&
+             (translation.y > 36.0 || (translation.y > 8.0 && velocity.y > 420.0)))
     {
       [self collapseToolbarFromHandle:gesture];
     }
