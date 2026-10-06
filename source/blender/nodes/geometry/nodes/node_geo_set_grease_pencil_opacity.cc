@@ -42,11 +42,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .evaluated_geometry_field();
 }
 
-static void set_grease_pencil_color(GeometrySet &geometry_set,
-                                    const AttrDomain domain,
-                                    const StringRef opacity_attr,
-                                    const Field<bool> &selection,
-                                    const Field<float> &opacity_field)
+static void set_grease_pencil_opacity(GeometrySet &geometry_set,
+                                      const AttrDomain domain,
+                                      const StringRef opacity_attr,
+                                      const Field<bool> &selection,
+                                      const Field<float> &opacity_field)
 {
   using namespace bke::greasepencil;
 
@@ -90,18 +90,12 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<float> opacity_field = params.extract_input<Field<float>>("Opacity"_ustr);
 
   if (ELEM(mode, GEO_NODE_GREASE_PENCIL_STROKE, GEO_NODE_GREASE_PENCIL_BOTH)) {
-    set_grease_pencil_color(geometry_set,
-                            AttrDomain::Point,
-                            "opacity",
-                            selection,
-                            opacity_field);
+    set_grease_pencil_opacity(
+        geometry_set, AttrDomain::Point, "opacity", selection, opacity_field);
   }
   if (ELEM(mode, GEO_NODE_GREASE_PENCIL_FILL, GEO_NODE_GREASE_PENCIL_BOTH)) {
-    set_grease_pencil_color(geometry_set,
-                            AttrDomain::Curve,
-                            "fill_opacity",
-                            selection,
-                            opacity_field);
+    set_grease_pencil_opacity(
+        geometry_set, AttrDomain::Curve, "fill_opacity", selection, opacity_field);
   }
 
   params.set_output("Grease Pencil"_ustr, std::move(geometry_set));
