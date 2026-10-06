@@ -379,8 +379,7 @@ class ShaderNodesInliner {
             continue;
           }
           for (const bNodeSocket *socket : node->input_sockets()) {
-            if (StringRefNull("LightAccumulation") == socket->name) {
-              /* TODO: Find a cleaner solution. */
+            if (StringRefNull(socket->name).startswith("Internal")) {
               continue;
             }
             output_sockets.append({tree.context, socket});

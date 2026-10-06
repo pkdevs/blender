@@ -28,11 +28,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
-  b.add_input<decl::Color>("LightAccumulation"_ustr).available(is_gpu_internal);
+  b.add_input<decl::Color>("Internal_LightAccumulation"_ustr).available(is_gpu_internal);
 
   b.add_input<decl::Color>("Light"_ustr).default_value({0.0f, 0.0f, 0.0f, 1.0f}).hide_value();
 
-  b.add_output<decl::Color>("Result"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Color>("Internal_Result"_ustr).available(is_gpu_internal);
 }
 
 static BIFIconID aov_icon(const ViewLayer *view_layer, PointerRNA *ptr)
