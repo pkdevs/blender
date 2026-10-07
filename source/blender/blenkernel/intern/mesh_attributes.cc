@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_math_quaternion.hh"
 #include "BLI_virtual_array.hh"
@@ -13,7 +17,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "FN_multi_function_builder.hh"
 

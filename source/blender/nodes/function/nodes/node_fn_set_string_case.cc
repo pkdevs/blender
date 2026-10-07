@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_node_runtime.hh"
@@ -11,6 +11,7 @@
 #include "NOD_socket_search_link.hh"
 
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 namespace blender::nodes::node_fn_set_string_case_cc {
 
@@ -20,8 +21,16 @@ enum class Case {
 };
 
 static const EnumPropertyItem case_items[] = {
-    {int(Case::Uppercase), "UPPERCASE", 0, "Uppercase", "Convert all characters to uppercase"},
-    {int(Case::Lowercase), "LOWERCASE", 0, "Lowercase", "Convert all characters to lowercase"},
+    {int(Case::Uppercase),
+     "UPPERCASE",
+     0,
+     N_("Uppercase"),
+     N_("Convert all characters to uppercase")},
+    {int(Case::Lowercase),
+     "LOWERCASE",
+     0,
+     N_("Lowercase"),
+     N_("Convert all characters to lowercase")},
     {},
 };
 
@@ -105,7 +114,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_cmp_node_type_base(&ntype, "FunctionNodeSetStringCase"_ustr);
+  common_node_type_base(&ntype, "FunctionNodeSetStringCase"_ustr);
   ntype.ui_name = "Set String Case";
   ntype.ui_description = "Convert the case of a string";
   ntype.nclass = NODE_CLASS_CONVERTER;
