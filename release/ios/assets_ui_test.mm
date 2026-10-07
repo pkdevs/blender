@@ -25,12 +25,6 @@ extern "C" void WM_apple_ios_ui_asset_drag(int phase, const char *asset_id, int 
 - (CGPoint)locationInView:(UIView *)view { return self.location; }
 @end
 
-@interface GHOSTIOSAssets (Testing)
-- (void)setLibrary:(NSString *)library;
-- (void)setType:(NSString *)type catalog:(NSString *)catalog;
-- (void)setBlenderMode:(NSString *)mode;
-- (NSArray<NSString *> *)libraries;
-@end
 
 static UIView *find(UIView *root, NSString *identifier)
 {
@@ -99,54 +93,6 @@ int main()
         @"catalog": @"Furniture", @"description": @"Dining table", @"author": @"", @"tags": @[], @"preview": @""};
     NSDictionary *brass = @{@"id": @"brass", @"name": @"Brass", @"type": @"Material", @"library": @"Essentials",
         @"catalog": @"Metals", @"description": @"", @"author": @"", @"tags": @[@"metal"], @"preview": @""};
-    [assets updateSnapshot:@{@"items": @[chair, table, brass]}];
-    NSCAssert([names(grid) isEqual:(@[@"Chair", @"Table", @"Brass"])] && empty.hidden,
-              @"Every published asset is listed: %@", names(grid));
-
-    UISearchTextField *search = (UISearchTextField *)find(assets.view, @"blender.assets.search");
-    search.text = @"WOOD";
-    [search sendActionsForControlEvents:UIControlEventEditingChanged];
-    NSCAssert([names(grid) isEqual:@[@"Chair"]], @"Search matches tags, ignoring case");
-    search.text = @"furniture dining";
-    [search sendActionsForControlEvents:UIControlEventEditingChanged];
-    NSCAssert([names(grid) isEqual:@[@"Table"]], @"Every word must match the catalog or description");
-    search.text = @"nothing";
-    [search sendActionsForControlEvents:UIControlEventEditingChanged];
-    NSCAssert(names(grid).count == 0 && !empty.hidden && [empty.text containsString:@"nothing"],
-              @"An empty search says what found nothing");
-    search.text = @"";
-    [search sendActionsForControlEvents:UIControlEventEditingChanged];
-
-    [assets setBlenderMode:@"objectmode"];
-    NSCAssert([names(grid) isEqual:(@[@"Chair", @"Table"])], @"Object Mode starts on objects");
-    [assets setBlenderMode:@"sculpt"];
-    NSCAssert([names(grid) isEqual:(@[@"Chair", @"Table", @"Brass"])], @"Other modes list everything");
-    [assets setBlenderMode:@"objectmode"];
-    [assets setType:nil catalog:nil];
-
-    [assets setLibrary:@"Essentials"];
-    NSCAssert([names(grid) isEqual:(@[@"Chair", @"Brass"])], @"Library filter");
-    [assets setType:@"Material" catalog:nil];
-    NSCAssert([names(grid) isEqual:@[@"Brass"]], @"Type filter");
-    [assets setLibrary:nil];
-    [assets setType:nil catalog:@"Furniture"];
-    NSCAssert([names(grid) isEqual:(@[@"Chair", @"Table"])], @"A catalog shows its children too");
-    [assets setType:nil catalog:nil];
-
-    /* Modifiers from the bundled Starter library, which leads the Library menu. */
-    NSDictionary *scatter = @{@"id": @"scatter", @"name": @"Scatter on Surface", @"type": @"Modifier",
-        @"library": @"Starter", @"catalog": @"Generate", @"description": @"", @"author": @"",
-        @"tags": @[@"scatter"], @"preview": @""};
-    [assets updateSnapshot:@{@"items": @[chair, table, brass, scatter]}];
-    NSCAssert([[assets libraries] isEqual:(@[@"Starter", @"Essentials", @"Props"])],
-              @"The Starter library is listed first: %@", [assets libraries]);
-    [assets setType:@"Modifier" catalog:nil];
-    NSCAssert([names(grid) isEqual:@[@"Scatter on Surface"]], @"Modifier type filter");
-    [grid.delegate collectionView:grid didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];
-    NSCAssert([sent.lastObject isEqual:(@[@"drag", @4, @"scatter", @0, @0])], @"Tapping a modifier adds it");
-    [assets setType:nil catalog:nil];
-
-    /* Catalog chips: the pane starts on the Starter primitives. */
     NSDictionary *(^starter)(NSString *, NSString *) = ^(NSString *name, NSString *catalog) {
       return @{@"id": name, @"name": name, @"type": @"Object", @"library": @"Starter",
                @"catalog": catalog, @"description": @"", @"author": @"", @"tags": @[],
@@ -155,41 +101,56 @@ int main()
     NSDictionary *building = starter(@"Building", @"Objects/Architecture");
     NSDictionary *cube = starter(@"Cube", @"Objects/Primitives");
     NSDictionary *plane = starter(@"Plane", @"Objects/Primitives");
-    [assets updateSnapshot:@{@"items": @[chair, building, cube, plane]}];
-    [assets setLibrary:nil];
-    NSCAssert([names(grid) isEqual:(@[@"Cube", @"Plane"])],
+    NSDictionary *scatter = @{@"id": @"scatter", @"name": @"Scatter on Surface", @"type": @"Modifier",
+        @"library": @"Starter", @"catalog": @"Generate", @"description": @"", @"author": @"",
+        @"tags": @[@"scatter"], @"preview": @""};
+    [assets updateSnapshot:@{@"items": @[chair, table, brass, building, cube, plane, scatter]}];
+    NSCAssert([names(grid) isEqual:(@[@"Cube", @"Plane"])] && empty.hidden,
               @"The pane starts on the primitives: %@", names(grid));
+
+    /* One row of categories: objects by catalog name, across libraries, then other types. */
     UIView *chips = find(assets.view, @"blender.assets.catalogs");
     NSMutableArray *titles = [NSMutableArray array];
     for (UIView *chip in ((UIStackView *)chips.subviews.firstObject).arrangedSubviews) {
       [titles addObject:chip.accessibilityLabel];
     }
-    NSCAssert([titles isEqual:(@[@"All", @"Architecture", @"Primitives", @"Seating"])],
-              @"Chips list every catalog: %@", titles);
-    NSCAssert(((UIButton *)find(assets.view, @"blender.assets.catalog.Primitives")).selected,
-              @"The shown catalog's chip is selected");
-    UIButton *architecture = (UIButton *)find(assets.view, @"blender.assets.catalog.Architecture");
-    [architecture sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
-    NSCAssert([names(grid) isEqual:@[@"Building"]] && architecture.selected,
-              @"A chip shows its catalog");
-    [assets setBlenderMode:@"sculpt"];
-    NSCAssert([names(grid) isEqual:@[@"Building"]], @"A picked catalog survives a mode change");
-    [(UIButton *)find(assets.view, @"blender.assets.catalog.All")
-        sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
-    NSCAssert(names(grid).count == 4, @"All lists every catalog: %@", names(grid));
-    [assets setLibrary:nil];
-    search.text = @"build";
-    [search sendActionsForControlEvents:UIControlEventEditingChanged];
-    NSCAssert([names(grid) isEqual:@[@"Building"]], @"Searching looks through every catalog");
-    search.text = @"";
-    [search sendActionsForControlEvents:UIControlEventEditingChanged];
-    NSCAssert([names(grid) isEqual:(@[@"Cube", @"Plane"])], @"Clearing the search goes back");
-    [assets setType:nil catalog:nil];
-    [assets updateSnapshot:@{@"items": @[chair, table, brass]}];
+    NSCAssert([titles isEqual:(@[@"Architecture", @"Furniture", @"Primitives", @"Seating",
+                                 @"Materials", @"Modifiers"])],
+              @"Chips list the categories: %@", titles);
+    UIButton *(^chip)(NSString *) = ^(NSString *title) {
+      return (UIButton *)find(assets.view, [@"blender.assets.category." stringByAppendingString:title]);
+    };
+    NSCAssert(chip(@"Primitives").selected, @"The shown category's chip is selected");
+    [chip(@"Architecture") sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
+    NSCAssert([names(grid) isEqual:@[@"Building"]] && chip(@"Architecture").selected &&
+              !chip(@"Primitives").selected, @"A chip shows its category");
 
+    UISearchTextField *search = (UISearchTextField *)find(assets.view, @"blender.assets.search");
+    search.text = @"WOOD";
+    [search sendActionsForControlEvents:UIControlEventEditingChanged];
+    NSCAssert([names(grid) isEqual:@[@"Chair"]] && !chip(@"Architecture").selected,
+              @"Search looks through every category, matching tags and ignoring case");
+    search.text = @"furniture dining";
+    [search sendActionsForControlEvents:UIControlEventEditingChanged];
+    NSCAssert([names(grid) isEqual:@[@"Table"]], @"Every word must match the catalog or description");
+    search.text = @"nothing";
+    [search sendActionsForControlEvents:UIControlEventEditingChanged];
+    NSCAssert(names(grid).count == 0 && !empty.hidden && [empty.text containsString:@"nothing"],
+              @"An empty search says what found nothing");
+    [chip(@"Seating") sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
+    NSCAssert([names(grid) isEqual:@[@"Chair"]] && search.text.length == 0,
+              @"Picking a category clears the search");
+
+    [chip(@"Modifiers") sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
+    NSCAssert([names(grid) isEqual:@[@"Scatter on Surface"]], @"Other types have a category each");
+    [grid.delegate collectionView:grid didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];
+    NSCAssert([sent.lastObject isEqual:(@[@"drag", @4, @"scatter", @0, @0])], @"Tapping a modifier adds it");
+    [chip(@"Materials") sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
     [sent removeAllObjects];
-    [grid.delegate collectionView:grid didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:2 inSection:0]];
+    [grid.delegate collectionView:grid didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];
     NSCAssert([sent.lastObject isEqual:(@[@"drag", @4, @"brass", @0, @0])], @"Tapping adds the asset: %@", sent);
+    [assets updateSnapshot:@{@"items": @[chair, table, brass]}];
+    NSCAssert([names(grid) isEqual:@[@"Brass"]], @"The picked category stays while it exists");
 
     /* Drag the chair from the pane into the viewport and drop it. */
     UIDragItem *item = [[[UIDragItem alloc] initWithItemProvider:[[[NSItemProvider alloc] init] autorelease]] autorelease];
