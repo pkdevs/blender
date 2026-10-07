@@ -1026,7 +1026,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     return;
   }
   const CGFloat width = MIN(336, MAX(0, rect.size.width - 24));
-  const CGFloat height = MIN(620, MAX(0, rect.size.height - 24));
+  /* Use all the height there is, so portrait and tall windows show more rows. */
+  const CGFloat height = MAX(0, rect.size.height - 24);
   /* Frame is undefined while transformed; layout must not disturb the presentation animation. */
   _hierarchy.bounds = _inspector.bounds = CGRectMake(0, 0, width, height);
   _hierarchy.center = CGPointMake(rect.origin.x + 12 + width / 2, rect.origin.y + 12 + height / 2);

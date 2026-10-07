@@ -555,6 +555,13 @@ int main()
     UIView *hierarchy = [panels valueForKey:@"_hierarchy"];
     NSCAssert(CGRectContainsRect(safe, inspector.frame) && CGRectContainsRect(safe, hierarchy.frame) &&
               !CGRectIntersectsRect(inspector.frame, hierarchy.frame), @"iPad floating bounds");
+    const CGRect portrait = CGRectMake(0, 70, 1024, 1180);
+    [panels layoutInRect:portrait];
+    NSCAssert(fabs(inspector.bounds.size.height - (portrait.size.height - 24)) < 0.5 &&
+              fabs(hierarchy.bounds.size.height - (portrait.size.height - 24)) < 0.5 &&
+              CGRectContainsRect(portrait, inspector.frame) && CGRectContainsRect(portrait, hierarchy.frame),
+              @"Panels use the full height in portrait: %@", NSStringFromCGRect(inspector.frame));
+    [panels layoutInRect:safe];
     NSDictionary *property = @{@"owner": @"object", @"ownerID": @"7", @"property": @"location", @"index": @0,
                                @"label": @"X", @"type": @"FLOAT", @"value": @1.5, @"editable": @YES};
     NSDictionary *model = @{@"ack": @0, @"error": @"", @"inspector": @{@"id": @"7", @"name": @"Cube",
