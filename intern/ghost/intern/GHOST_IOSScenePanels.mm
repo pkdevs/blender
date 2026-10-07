@@ -482,6 +482,9 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   BOOL _toolInline;
   NSLayoutConstraint *_toolStripWidth;
   CGFloat _toolStripContentWidth;
+  /* Shown when the strip cannot fit every setting; opens the full tool settings list. */
+  UIButton *_toolStripMore;
+  BOOL _toolStripRemeasurePending;
   GHOSTIOSScenePanels *_toolPanels, *_toolPopoverPanels;
   UIBarButtonItemGroup *_toolGroup;
   UINavigationController *_toolPopoverController;
@@ -619,6 +622,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [_toolPopoverPanels release];
   [_toolGroup release];
   [_toolStripWidth release];
+  [_toolStripMore release];
   _shadingController.popoverPresentationController.delegate = nil;
   [_shadingPanels release];
   [_shadingController release];
@@ -828,13 +832,64 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   return _toolPanels->_toolGroup;
 }
 
+/* The free gap between the bar's controls on either side of the strip. Before the strip is
+ * on screen, estimate the room the bar's leading and trailing items leave. */
+- (CGFloat)availableToolStripWidth
+{
+  UIView *row = _toolStripMore.superview;
+  UIView *bar = row.superview;
+  while (bar && ![bar isKindOfClass:UINavigationBar.class]) {
+    bar = bar.superview;
+  }
+  if (!row.window || !bar) {
+    return MAX(160.0, _overlay.bounds.size.width - 620.0);
+  }
+  const CGRect frame = [row convertRect:row.bounds toView:bar];
+  CGFloat left = CGRectGetMinX(bar.bounds), right = CGRectGetMaxX(bar.bounds);
+  NSMutableArray<UIView *> *pending = [NSMutableArray arrayWithObject:bar];
+  while (pending.count) {
+    UIView *view = pending.lastObject;
+    [pending removeLastObject];
+    if (view == row || view.hidden || view.alpha < 0.01) {
+      continue;
+    }
+    const CGRect other = [view convertRect:view.bounds toView:bar];
+    if ([view isKindOfClass:UIControl.class] && other.size.width < bar.bounds.size.width / 2) {
+      if (CGRectGetMidX(other) < CGRectGetMidX(frame)) {
+        left = MAX(left, CGRectGetMaxX(other));
+      }
+      else {
+        right = MIN(right, CGRectGetMinX(other));
+      }
+      continue;
+    }
+    [pending addObjectsFromArray:view.subviews];
+  }
+  return MAX(160.0, right - left - 24.0);
+}
+
 - (void)updateToolStripWidth
 {
-  /* Leave room for the bar's leading and trailing items; the strip scrolls for the rest. */
-  const CGFloat available = MAX(160.0, _overlay.bounds.size.width - 620.0);
-  const CGFloat width = MIN(_toolStripContentWidth, available);
+  /* Fill the room the bar leaves between its other items; the strip scrolls for the rest. */
+  const CGFloat available = [self availableToolStripWidth];
+  /* When settings are cut off, the strip still scrolls and a trailing button opens them all. */
+  const BOOL overflow = _toolStripContentWidth > available + 0.5;
+  const CGFloat width = overflow ? available - 36.0 : _toolStripContentWidth;
+  _toolStripMore.hidden = !overflow;
   if (_toolStripWidth && fabs(_toolStripWidth.constant - width) > 0.5) {
     _toolStripWidth.constant = width;
+    /* The bar measures custom views when it lays out; make it measure again, then check the
+     * gap once more, since the bar may move its other items to fit the new width. */
+    [_toolStripMore.superview.superview setNeedsLayout];
+    if (!_toolStripRemeasurePending) {
+      _toolStripRemeasurePending = YES;
+      GHOSTIOSScenePanels *owner = [self retain];
+      dispatch_async(dispatch_get_main_queue(), ^{
+        owner->_toolStripRemeasurePending = NO;
+        [owner updateToolStripWidth];
+        [owner release];
+      });
+    }
   }
 }
 
@@ -848,7 +903,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [panels dismissToolSettings];
 }
 
-- (void)presentToolSettings:(UIBarButtonItem *)button
+- (void)presentToolSettings:(id)sender
 {
   UIViewController *presenter = _overlay.window.rootViewController;
   if (!presenter || presenter.presentedViewController) { return; }
@@ -882,7 +937,15 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [form layoutIfNeeded];
   _toolPopoverController.preferredContentSize = CGSizeMake(320, MIN(420.0, MAX(88.0, form.contentSize.height)));
   _toolPopoverController.modalPresentationStyle = UIModalPresentationPopover;
-  _toolPopoverController.popoverPresentationController.barButtonItem = button;
+  /* Opened from the compact bar item, or from the strip's overflow button. */
+  UIPopoverPresentationController *popover = _toolPopoverController.popoverPresentationController;
+  if ([sender isKindOfClass:UIBarButtonItem.class]) {
+    popover.barButtonItem = sender;
+  }
+  else {
+    popover.sourceView = sender;
+    popover.sourceRect = [sender bounds];
+  }
   _toolPopoverController.presentationController.delegate = self;
   [presenter presentViewController:_toolPopoverController animated:YES completion:nil];
 }
@@ -952,6 +1015,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 
 - (void)layoutInRect:(CGRect)rect
 {
+  /* The top bar's room for tool settings changes with rotation and window size. */
+  [_toolPanels updateToolStripWidth];
   if (_shadingOnly || _toolInline || [_selectedTab isEqual:@"TOOL"]) { return; }
   _layoutRect = rect;
   if (rect.size.width < 700 && _showInspector && _showHierarchy) {
@@ -1585,8 +1650,20 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
         [scroll.heightAnchor constraintEqualToConstant:40],
         _toolStripWidth,
       ]];
+      [_toolStripMore release];
+      _toolStripMore = [[UIButton systemButtonWithImage:[UIImage systemImageNamed:@"ellipsis"]
+                                                 target:self
+                                                 action:@selector(presentToolSettings:)] retain];
+      _toolStripMore.accessibilityIdentifier = @"blender.tool-settings.more";
+      _toolStripMore.accessibilityLabel = @"More Tool Settings";
+      [_toolStripMore.widthAnchor constraintEqualToConstant:32].active = YES;
+      UIStackView *row = [[[UIStackView alloc] initWithArrangedSubviews:@[scroll, _toolStripMore]]
+          autorelease];
+      row.axis = UILayoutConstraintAxisHorizontal;
+      row.alignment = UIStackViewAlignmentCenter;
+      row.spacing = 4;
       [self updateToolStripWidth];
-      [items addObject:[[[UIBarButtonItem alloc] initWithCustomView:scroll] autorelease]];
+      [items addObject:[[[UIBarButtonItem alloc] initWithCustomView:row] autorelease]];
     }
     UIBarButtonItem *compact = [[[UIBarButtonItem alloc] initWithImage:
         _icon(@"TOOL_SETTINGS") ?: [UIImage systemImageNamed:@"slider.horizontal.3"]

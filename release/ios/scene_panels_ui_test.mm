@@ -419,7 +419,22 @@ static void testToolSettings(UIView *overlay)
       @"sections": @[@{@"id": @"active", @"title": @"Annotate", @"open": @YES,
           @"properties": @[toggle, radius]}]} mutableCopy] autorelease];
   UIBarButtonItemGroup *group = [panels updateToolSettings:[[settings copy] autorelease] acknowledgement:@999999];
-  UIScrollView *strip = (UIScrollView *)group.barButtonItems.firstObject.customView;
+  UIStackView *stripRow = (UIStackView *)group.barButtonItems.firstObject.customView;
+  UIScrollView *strip = (UIScrollView *)stripRow.arrangedSubviews.firstObject;
+  UIButton *more = (UIButton *)stripRow.arrangedSubviews.lastObject;
+  NSCAssert([more.accessibilityIdentifier isEqual:@"blender.tool-settings.more"] &&
+            [[more actionsForTarget:[panels valueForKey:@"_toolPanels"]
+                    forControlEvent:UIControlEventTouchUpInside] containsObject:@"presentToolSettings:"],
+            @"Tool settings strip has an overflow button that opens every setting");
+  id stripPanels = [panels valueForKey:@"_toolPanels"];
+  const CGFloat fitted = [[stripPanels valueForKey:@"_toolStripContentWidth"] doubleValue];
+  [stripPanels setValue:@5000 forKey:@"_toolStripContentWidth"];
+  [stripPanels performSelector:@selector(updateToolStripWidth)];
+  NSCAssert(!more.hidden && [[stripPanels valueForKey:@"_toolStripWidth"] constant] < 5000,
+            @"Settings wider than the bar narrow the strip and show the overflow button");
+  [stripPanels setValue:@(fitted) forKey:@"_toolStripContentWidth"];
+  [stripPanels performSelector:@selector(updateToolStripWidth)];
+  NSCAssert(more.hidden, @"Settings that fit hide the overflow button");
   NSCAssert(group.barButtonItems.count == 1 && [strip isKindOfClass:UIScrollView.class] &&
             [strip.subviews.firstObject isKindOfClass:UIStackView.class] &&
             ((UIStackView *)strip.subviews.firstObject).arrangedSubviews.count == 2 &&
