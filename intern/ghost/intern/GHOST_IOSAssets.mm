@@ -17,11 +17,12 @@ enum {
   GHOSTIOSAssetAdd = 4,
 };
 
-static const CGFloat kAssetsHeight = 250.0;
-static const CGFloat kAssetsCompactHeight = 222.0;
+static const CGFloat kAssetsHeight = 212.0;
+static const CGFloat kAssetsCompactHeight = 184.0;
 static const CGFloat kAssetsMaxWidth = 1600.0;
 static const CGFloat kAssetTile = 96.0;
-/* The category the pane opens on: the Starter library's basic shapes. */
+/* The pane opens on the Starter library's basic shapes. */
+static NSString *const kAssetsStartType = @"Object";
 static NSString *const kAssetsStartCategory = @"Primitives";
 
 /* Data-block types Blender publishes, with their Blender icon and a readable plural. */
@@ -139,16 +140,15 @@ static NSString *blenderAssetAddTitle(NSString *type)
   UIBarButtonItem *_button;
   UIVisualEffectView *_panel;
   UISearchTextField *_search;
-  UIScrollView *_chips;
-  UIStackView *_chipStack;
-  NSArray<NSString *> *_categories; /* The chips' titles. */
+  UIButton *_typeButton;
+  UIButton *_categoryButton;
   UICollectionView *_grid;
   UILabel *_emptyLabel;
   UIDropInteraction *_dropInteraction;
   NSArray<NSDictionary *> *_items;
   NSArray<NSDictionary *> *_filtered;
-  NSString *_category;      /* The picked category; nil until one is picked. */
-  NSString *_shownCategory; /* The category the grid shows; nil while searching. */
+  NSString *_type;     /* Shown type: "Object", "Material", ... */
+  NSString *_category; /* Shown catalog name within the type; nil for all of them. */
   NSCache<NSString *, UIImage *> *_thumbnails;
   BOOL _loading;
   BOOL _visible;
@@ -200,23 +200,17 @@ static NSString *blenderAssetAddTitle(NSString *type)
     close.accessibilityLabel = @"Hide Assets";
     [close addTarget:self action:@selector(toggle:) forControlEvents:UIControlEventTouchUpInside];
 
+    _type = [kAssetsStartType copy];
+    _category = [kAssetsStartCategory copy];
+    _typeButton = [[self menuButton:kAssetsStartType identifier:@"blender.assets.type"] retain];
+    _categoryButton = [[self menuButton:kAssetsStartCategory
+                             identifier:@"blender.assets.category"] retain];
+
     UIStackView *header = [[[UIStackView alloc]
-        initWithArrangedSubviews:@[_search, close]] autorelease];
+        initWithArrangedSubviews:@[_typeButton, _categoryButton, _search, close]] autorelease];
     header.alignment = UIStackViewAlignmentCenter;
     header.spacing = 8;
     header.translatesAutoresizingMaskIntoConstraints = NO;
-
-    /* Catalogs as a row of chips, so a library's categories are one tap away. */
-    _chipStack = [[UIStackView alloc] init];
-    _chipStack.axis = UILayoutConstraintAxisHorizontal;
-    _chipStack.spacing = 6;
-    _chipStack.translatesAutoresizingMaskIntoConstraints = NO;
-    _chips = [[UIScrollView alloc] init];
-    _chips.translatesAutoresizingMaskIntoConstraints = NO;
-    _chips.showsHorizontalScrollIndicator = NO;
-    _chips.alwaysBounceHorizontal = YES;
-    _chips.accessibilityIdentifier = @"blender.assets.catalogs";
-    [_chips addSubview:_chipStack];
 
     UICollectionViewFlowLayout *layout = [[[UICollectionViewFlowLayout alloc] init] autorelease];
     layout.scrollDirection = UICollectionViewScrollDirectionHorizontal;
@@ -243,7 +237,6 @@ static NSString *blenderAssetAddTitle(NSString *type)
     _grid.backgroundView = _emptyLabel;
 
     [_panel.contentView addSubview:header];
-    [_panel.contentView addSubview:_chips];
     [_panel.contentView addSubview:_grid];
     [NSLayoutConstraint activateConstraints:@[
       [header.leadingAnchor constraintEqualToAnchor:_panel.contentView.leadingAnchor constant:14],
@@ -252,18 +245,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
       [header.heightAnchor constraintEqualToConstant:40],
       [_grid.leadingAnchor constraintEqualToAnchor:_panel.contentView.leadingAnchor],
       [_grid.trailingAnchor constraintEqualToAnchor:_panel.contentView.trailingAnchor],
-      [_chips.leadingAnchor constraintEqualToAnchor:_panel.contentView.leadingAnchor],
-      [_chips.trailingAnchor constraintEqualToAnchor:_panel.contentView.trailingAnchor],
-      [_chips.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:8],
-      [_chips.heightAnchor constraintEqualToConstant:32],
-      [_chipStack.leadingAnchor constraintEqualToAnchor:_chips.contentLayoutGuide.leadingAnchor
-                                               constant:14],
-      [_chipStack.trailingAnchor constraintEqualToAnchor:_chips.contentLayoutGuide.trailingAnchor
-                                                constant:-14],
-      [_chipStack.topAnchor constraintEqualToAnchor:_chips.contentLayoutGuide.topAnchor],
-      [_chipStack.bottomAnchor constraintEqualToAnchor:_chips.contentLayoutGuide.bottomAnchor],
-      [_chipStack.heightAnchor constraintEqualToAnchor:_chips.frameLayoutGuide.heightAnchor],
-      [_grid.topAnchor constraintEqualToAnchor:_chips.bottomAnchor constant:6],
+      [_grid.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:10],
       [_grid.bottomAnchor constraintEqualToAnchor:_panel.contentView.bottomAnchor constant:-8],
     ]];
 
@@ -280,16 +262,15 @@ static NSString *blenderAssetAddTitle(NSString *type)
   [_panel release];
   [_button release];
   [_search release];
-  [_chips release];
-  [_chipStack release];
-  [_categories release];
+  [_typeButton release];
+  [_categoryButton release];
   [_grid release];
   [_emptyLabel release];
   [_dropInteraction release];
   [_items release];
   [_filtered release];
+  [_type release];
   [_category release];
-  [_shownCategory release];
   [_thumbnails release];
   [_clientPoint release];
   [_selection release];
@@ -337,108 +318,133 @@ static NSString *blenderAssetAddTitle(NSString *type)
   [self applyFilters];
 }
 
-/* Objects and collections are grouped by their catalog's name, merging libraries; other
- * assets by their type. */
+/* Catalogs are browsed by name, merging libraries. */
 static NSString *blenderAssetCategory(NSDictionary *item)
 {
-  NSString *type = item[@"type"];
-  if ([type isEqual:@"Object"] || [type isEqual:@"Collection"]) {
-    NSString *catalog = item[@"catalog"];
-    return [catalog isKindOfClass:NSString.class] && catalog.length ? catalog.lastPathComponent :
-                                                                      @"Objects";
-  }
-  for (NSArray<NSString *> *entry in blenderAssetTypes()) {
-    if ([entry[0] isEqual:type]) {
-      return entry[2];
-    }
-  }
-  return type ?: @"";
+  NSString *catalog = item[@"catalog"];
+  return [catalog isKindOfClass:NSString.class] && catalog.length ? catalog.lastPathComponent : nil;
 }
 
-- (void)setCategory:(NSString *)category
+- (UIButton *)menuButton:(NSString *)title identifier:(NSString *)identifier
 {
+  UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
+  configuration.title = title;
+  configuration.indicator = UIButtonConfigurationIndicatorPopup;
+  configuration.titleLineBreakMode = NSLineBreakByTruncatingTail;
+  UIButton *button = [UIButton buttonWithConfiguration:configuration primaryAction:nil];
+  button.showsMenuAsPrimaryAction = YES;
+  button.accessibilityIdentifier = identifier;
+  [button.widthAnchor constraintLessThanOrEqualToConstant:200].active = YES;
+  [button setContentCompressionResistancePriority:UILayoutPriorityDefaultHigh
+                                          forAxis:UILayoutConstraintAxisHorizontal];
+  return button;
+}
+
+- (void)setType:(NSString *)type category:(NSString *)category
+{
+  [_type release];
+  _type = [type copy];
   [_category release];
   _category = [category copy];
-  if (_search.text.length) {
-    _search.text = @"";
-  }
   [self applyFilters];
 }
 
-- (UIButton *)chipWithTitle:(NSString *)title
+- (void)setTitle:(NSString *)title ofButton:(UIButton *)button
 {
-  __block GHOSTIOSAssets *owner = self;
-  UIButton *chip = [UIButton
-      buttonWithConfiguration:[UIButtonConfiguration glassButtonConfiguration]
-                primaryAction:[UIAction actionWithTitle:title image:nil identifier:nil
-                                                handler:^(__kindof UIAction *) {
-                                                  [owner setCategory:title];
-                                                }]];
-  chip.accessibilityLabel = title;
-  chip.accessibilityIdentifier = [@"blender.assets.category." stringByAppendingString:title];
-  return chip;
+  UIButtonConfiguration *configuration = button.configuration;
+  if (![configuration.title isEqual:title]) {
+    configuration.title = title;
+    button.configuration = configuration;
+  }
 }
 
-- (void)updateCategories
+/* Types present, the shown type's categories, and menus to pick them. */
+- (NSArray<NSString *> *)updateMenusSearching:(BOOL)searching
 {
-  /* Object categories by name, then the other types. */
-  NSMutableSet *objects = [NSMutableSet set];
-  NSMutableSet *present = [NSMutableSet set];
+  NSMutableSet *types = [NSMutableSet set];
+  NSMutableSet *categories = [NSMutableSet set];
   for (NSDictionary *item in _items) {
-    NSString *category = blenderAssetCategory(item);
-    [([item[@"type"] isEqual:@"Object"] || [item[@"type"] isEqual:@"Collection"] ? objects :
-                                                                                present)
-        addObject:category];
+    [types addObject:item[@"type"] ?: @""];
   }
-  NSMutableArray *categories = [[[objects.allObjects
+  if (![types containsObject:_type] && types.count) {
+    /* Nothing of that type: show the first type there is. */
+    for (NSArray<NSString *> *entry in blenderAssetTypes()) {
+      if ([types containsObject:entry[0]]) {
+        [self setType:entry[0] category:nil];
+        return nil;
+      }
+    }
+  }
+  for (NSDictionary *item in _items) {
+    if ([item[@"type"] isEqual:_type] && blenderAssetCategory(item)) {
+      [categories addObject:blenderAssetCategory(item)];
+    }
+  }
+  NSMutableArray *sorted = [[[categories.allObjects
       sortedArrayUsingSelector:@selector(localizedStandardCompare:)] mutableCopy] autorelease];
+  /* The basic shapes lead, as the place to start. */
+  if ([sorted containsObject:kAssetsStartCategory]) {
+    [sorted removeObject:kAssetsStartCategory];
+    [sorted insertObject:kAssetsStartCategory atIndex:0];
+  }
+  if (_category && types.count && ![categories containsObject:_category]) {
+    [_category release];
+    _category = nil;
+  }
+
+  __block GHOSTIOSAssets *owner = self;
+  NSMutableArray *typeActions = [NSMutableArray array];
+  NSString *typeTitle = _type;
   for (NSArray<NSString *> *entry in blenderAssetTypes()) {
-    if ([present containsObject:entry[2]]) {
-      [categories addObject:entry[2]];
+    if (![types containsObject:entry[0]]) {
+      continue;
+    }
+    NSString *type = entry[0];
+    UIAction *action = [UIAction actionWithTitle:entry[2] image:GHOSTIOSBlenderIcon(entry[1], NO)
+                                      identifier:nil handler:^(__kindof UIAction *) {
+                                        [owner setType:type category:nil];
+                                      }];
+    action.state = [_type isEqual:type] ? UIMenuElementStateOn : UIMenuElementStateOff;
+    [typeActions addObject:action];
+    if ([_type isEqual:type]) {
+      typeTitle = type;
     }
   }
-  if ([categories isEqual:_categories]) {
-    return;
-  }
-  [_categories release];
-  _categories = [categories copy];
-  for (UIView *chip in _chipStack.arrangedSubviews) {
-    [chip removeFromSuperview];
-  }
-  for (NSString *category in categories) {
-    [_chipStack addArrangedSubview:[self chipWithTitle:category]];
-  }
-  [self updateChips];
-}
+  _typeButton.menu = [UIMenu menuWithTitle:@"" image:nil identifier:nil
+                                   options:UIMenuOptionsSingleSelection
+                                  children:typeActions];
+  [self setTitle:typeTitle ofButton:_typeButton];
 
-- (void)showCategory:(NSString *)category
-{
-  if (category == _shownCategory || [category isEqual:_shownCategory]) {
-    return;
+  /* A search looks through every category of the type. */
+  NSString *shown = searching ? nil : _category;
+  UIAction *all = [UIAction actionWithTitle:@"All Categories" image:nil identifier:nil
+                                    handler:^(__kindof UIAction *) {
+                                      [owner setType:owner->_type category:nil];
+                                    }];
+  all.state = shown ? UIMenuElementStateOff : UIMenuElementStateOn;
+  NSMutableArray *categoryActions = [NSMutableArray array];
+  for (NSString *category in sorted) {
+    UIAction *action = [UIAction actionWithTitle:category image:nil identifier:nil
+                                         handler:^(__kindof UIAction *) {
+                                           [owner setType:owner->_type category:category];
+                                         }];
+    action.state = [shown isEqual:category] ? UIMenuElementStateOn : UIMenuElementStateOff;
+    [categoryActions addObject:action];
   }
-  [_shownCategory release];
-  _shownCategory = [category copy];
-  [self updateChips];
-}
-
-- (void)updateChips
-{
-  for (UIButton *chip in _chipStack.arrangedSubviews) {
-    const BOOL shown = [chip.accessibilityLabel isEqual:_shownCategory];
-    UIButtonConfiguration *configuration =
-        shown ? [UIButtonConfiguration prominentGlassButtonConfiguration] :
-                [UIButtonConfiguration glassButtonConfiguration];
-    configuration.title = chip.accessibilityLabel;
-    configuration.buttonSize = UIButtonConfigurationSizeSmall;
-    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
-    chip.configuration = configuration;
-    chip.selected = shown;
-    chip.accessibilityTraits = shown ? UIAccessibilityTraitButton | UIAccessibilityTraitSelected :
-                                       UIAccessibilityTraitButton;
-    if (shown) {
-      [_chips scrollRectToVisible:[chip convertRect:chip.bounds toView:_chips] animated:YES];
-    }
-  }
+  _categoryButton.menu = [UIMenu
+      menuWithTitle:@""
+              image:nil
+         identifier:nil
+            options:UIMenuOptionsSingleSelection
+           children:@[
+             [UIMenu menuWithTitle:@"" image:nil identifier:nil
+                           options:UIMenuOptionsDisplayInline children:@[ all ]],
+             [UIMenu menuWithTitle:@"" image:nil identifier:nil
+                           options:UIMenuOptionsDisplayInline children:categoryActions],
+           ]];
+  [self setTitle:shown ?: @"All Categories" ofButton:_categoryButton];
+  _categoryButton.hidden = sorted.count == 0;
+  return sorted;
 }
 
 - (BOOL)item:(NSDictionary *)item matches:(NSArray<NSString *> *)terms
@@ -473,19 +479,15 @@ static NSString *blenderAssetCategory(NSDictionary *item)
       [terms addObject:term];
     }
   }
-  [self updateCategories];
-  /* One category at a time, starting on the primitives; a search looks through them all. */
-  NSString *category = nil;
-  if (terms.count == 0) {
-    category = [_categories containsObject:_category]          ? _category :
-               [_categories containsObject:kAssetsStartCategory] ? kAssetsStartCategory :
-                                                                  _categories.firstObject;
+  if (![self updateMenusSearching:terms.count != 0]) {
+    /* The type changed, which filtered again. */
+    return;
   }
-  [self showCategory:category];
-
+  NSString *category = terms.count ? nil : _category;
   NSMutableArray *filtered = [NSMutableArray array];
   for (NSDictionary *item in _items) {
-    if ((!category || [blenderAssetCategory(item) isEqual:category]) &&
+    if ([item[@"type"] isEqual:_type] &&
+        (!category || [blenderAssetCategory(item) isEqual:category]) &&
         [self item:item matches:terms])
     {
       [filtered addObject:item];
@@ -590,12 +592,14 @@ static NSString *blenderAssetCategory(NSDictionary *item)
                                               handler:^(__kindof UIAction *) { [owner addItem:item]; }]];
         if ([item[@"catalog"] length]) {
           NSString *category = blenderAssetCategory(item);
+          NSString *type = item[@"type"];
           [children addObject:[UIAction
                                   actionWithTitle:[NSString stringWithFormat:@"Show %@", category]
                                             image:[UIImage systemImageNamed:@"square.grid.2x2"]
                                        identifier:nil
                                           handler:^(__kindof UIAction *) {
-                                            [owner setCategory:category];
+                                            owner->_search.text = @"";
+                                            [owner setType:type category:category];
                                           }]];
         }
         NSString *subtitle = [item[@"catalog"] length] ?
