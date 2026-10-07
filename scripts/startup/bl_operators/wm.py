@@ -3605,7 +3605,7 @@ class WM_MT_splash(Menu):
 
         if found_recent:
             if found_other:
-                col2_title.label(text="More Recent Files" if found_project else "Recent Files")
+                col2_title.label(text="Other Recent Files" if found_project else "Recent Files")
             col_more = col2.column()
             col_more.operator_context = 'INVOKE_DEFAULT'
             more_props = col_more.operator("wm.search_single_menu", text="More...", icon='VIEWZOOM')
