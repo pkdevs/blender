@@ -764,7 +764,12 @@ static void node_geo_exec(GeoNodeExecParams params)
         FieldEvaluator evaluator(context, mesh->verts_num);
         evaluator.add(group_index);
         evaluator.evaluate();
-        mesh_masks = IndexMask::from_group_ids(evaluator.get_evaluated<int>(0), memory, mesh_ids);
+        const VArray<int> group_ids = evaluator.get_evaluated<int>(0);
+        mesh_masks = IndexMask::from_group_ids(group_ids, memory);
+        mesh_ids.reserve(mesh_masks.size());
+        for (const IndexMask &mask : mesh_masks) {
+          mesh_ids.add_new(group_ids[mask.first()]);
+        }
       }
 
       if (curves && !curves->is_empty()) {
@@ -772,8 +777,12 @@ static void node_geo_exec(GeoNodeExecParams params)
         FieldEvaluator evaluator(context, curves->curves_num());
         evaluator.add(group_index);
         evaluator.evaluate();
-        curve_masks = IndexMask::from_group_ids(
-            evaluator.get_evaluated<int>(0), memory, curve_ids);
+        const VArray<int> group_ids = evaluator.get_evaluated<int>(0);
+        curve_masks = IndexMask::from_group_ids(group_ids, memory);
+        curve_ids.reserve(curve_masks.size());
+        for (const IndexMask &mask : curve_masks) {
+          curve_ids.add_new(group_ids[mask.first()]);
+        }
       }
 
       VectorSet<int> all_group_ids = mesh_ids;
@@ -882,12 +891,11 @@ static void node_geo_exec(GeoNodeExecParams params)
         FieldEvaluator evaluator(layer_context, curves.curves_num());
         evaluator.add(group_index);
         evaluator.evaluate();
-        VectorSet<int> curve_ids;
-        Vector<IndexMask> curve_masks = IndexMask::from_group_ids(
-            evaluator.get_evaluated<int>(0), memory, curve_ids);
+        const VArray<int> group_ids = evaluator.get_evaluated<int>(0);
+        Vector<IndexMask> curve_masks = IndexMask::from_group_ids(group_ids, memory);
 
-        Array<GroupResult> layer_results(curve_ids.size());
-        for (int i = 0; i < curve_ids.size(); i++) {
+        Array<GroupResult> layer_results(curve_masks.size());
+        for (const int i : curve_masks.index_range()) {
           calc_curve_group(curves,
                            curve_masks[i],
                            mode,
