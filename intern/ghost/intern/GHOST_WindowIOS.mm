@@ -3854,7 +3854,6 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   NSArray *actions = model[@"actions"];
   NSString *mode = model[@"mode"];
   NSString *mesh_select_mode = model[@"meshSelectMode"];
-  [_assets setBlenderMode:mode];
   NSString *active_tool = model[@"active"];
   if (![tools isKindOfClass:[NSArray class]]) {
     return;
