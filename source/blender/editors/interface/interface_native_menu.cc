@@ -5,6 +5,7 @@
 /** Native menus are projections of Blender layouts, not a second command registry. */
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
+#include "BLT_translation.hh"
 #include "BLI_serialize.hh"
 #include "ED_undo.hh"
 #include "RNA_access.hh"
@@ -318,6 +319,30 @@ std::string native_menu_query(bContext *C, const std::string &request, const boo
       (!context_id || resolved != context_id) && !properties_menu)
   {
     return encode(result);
+  }
+  if (*root == "context" && path->elements().is_empty() && !execute) {
+    /* Name the radial menu as Blender titles the context menu. Edit Mesh's menu has no label of
+     * its own, so it uses the mode name instead (e.g. "Mesh"). */
+    std::string heading;
+    if (MenuType *mt = WM_menutype_find(resolved.c_str(), true)) {
+      heading = CTX_IFACE_(mt->translation_context, mt->label);
+    }
+    else if (PanelType *pt = WM_paneltype_find(resolved.c_str(), true)) {
+      heading = CTX_IFACE_(pt->translation_context, pt->label);
+    }
+    const char *mode_name = nullptr;
+    if (heading.empty() &&
+        RNA_enum_name(rna_enum_context_mode_items, CTX_data_mode_enum(C), &mode_name))
+    {
+      heading = IFACE_(mode_name);
+      const std::string suffix = " Edit";
+      if (heading.size() > suffix.size() && heading.ends_with(suffix)) {
+        heading.resize(heading.size() - suffix.size());
+      }
+    }
+    if (!heading.empty()) {
+      result.append_dict()->append_str("heading", heading);
+    }
   }
   if (MenuType *mt = WM_menutype_find(resolved.c_str(), true)) {
     Invocation invocation;
