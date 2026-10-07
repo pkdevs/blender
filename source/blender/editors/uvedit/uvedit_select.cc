@@ -2548,7 +2548,10 @@ static int uv_select_edgering(Scene *scene, Object *obedit, UvNearestHit *hit, c
  * \{ */
 
 /**
- * Check if the face linked through `l_vert_step` should be blocked by the delimit mode.
+ * Check if propagation through `l_vert_step` to `f_dst` should be blocked.
+ *
+ * Faces must share a UV-connected edge, while the delimit mode can further
+ * restrict propagation.
  *
  * \param f_src: The current face (source of the flood-fill step).
  * \param l_vert_step: A loop of `f_src`; the candidate face is linked through `l_vert_step->v`.
@@ -2558,7 +2561,8 @@ static int uv_select_edgering(Scene *scene, Object *obedit, UvNearestHit *hit, c
  */
 static bool uv_select_linked_delimit_check(const BMFace *f_src,
                                            const BMLoop *l_vert_step,
-                                           const BMFace *f_dst,
+                                           BMFace *f_dst,
+                                           const int cd_loop_uv_offset,
                                            const UVDelimitMode delimit_mode)
 {
   /* Material is a face property, check independently of edges. */
@@ -2566,32 +2570,29 @@ static bool uv_select_linked_delimit_check(const BMFace *f_src,
     return true;
   }
 
-  /* Check edge-based delimiters on the two edges of `f_src` incident on `l_vert_step->v`.
-   * These are the only edges that can be shared with `f_dst`
-   * since the faces are linked through this vertex. */
-  constexpr UVDelimitMode edge_delimit = UVDelimitMode::Seam | UVDelimitMode::Sharp;
-  if (bool(delimit_mode & edge_delimit)) {
-    const BMEdge *edges[] = {l_vert_step->e, l_vert_step->prev->e};
-    bool has_valid_edge = false;
-    for (const BMEdge *e : edges) {
-      if (!BM_edge_in_face(e, f_dst)) {
-        continue;
-      }
-      if (bool(delimit_mode & UVDelimitMode::Seam) && BM_elem_flag_test(e, BM_ELEM_SEAM)) {
-        continue;
-      }
-      if (bool(delimit_mode & UVDelimitMode::Sharp) && !BM_elem_flag_test(e, BM_ELEM_SMOOTH)) {
-        continue;
-      }
-      has_valid_edge = true;
-      break;
+  const BMLoop *loops[] = {l_vert_step, l_vert_step->prev};
+  for (const BMLoop *l_src : loops) {
+    BMEdge *e = l_src->e;
+    const BMLoop *l_dst = BM_face_edge_share_loop(f_dst, e);
+    if (l_dst == nullptr) {
+      continue;
     }
-    if (!has_valid_edge) {
-      return true;
+
+    if (!BM_loop_uv_share_edge_check(l_src, l_dst, cd_loop_uv_offset)) {
+      continue;
     }
+
+    if (bool(delimit_mode & UVDelimitMode::Seam) && BM_elem_flag_test(e, BM_ELEM_SEAM)) {
+      continue;
+    }
+    if (bool(delimit_mode & UVDelimitMode::Sharp) && !BM_elem_flag_test(e, BM_ELEM_SMOOTH)) {
+      continue;
+    }
+
+    return false;
   }
 
-  return false;
+  return true;
 }
 
 static void uv_select_linked_multi(const Scene *scene,
@@ -2646,12 +2647,8 @@ static void uv_select_linked_multi(const Scene *scene,
 
     BM_mesh_elem_table_ensure(bm, BM_FACE); /* we can use this too */
 
-    /* NOTE: we had 'use winding' so we don't consider overlapping islands as connected, see #44320
-     * this made *every* projection split the island into front/back islands.
-     * Keep 'use_winding' to false, see: #50970.
-     *
-     * Better solve this by having a delimit option for select-linked operator,
-     * keeping island-select working as is. */
+    /* Coincident UVs in the vertex map can belong to separate islands.
+     * UV edge connectivity is validated during the flood fill below. */
     UvVertMap *vmap = BM_uv_vert_map_create(bm, !uv_select_sync, true);
     if (vmap == nullptr) {
       continue;
@@ -2762,11 +2759,9 @@ static void uv_select_linked_multi(const Scene *scene,
             break;
           }
           if (!flag[iterv->face_index]) {
-            if (delimit_mode != UVDelimitMode(0)) {
-              BMFace *iterv_f = BM_face_at_index(bm, iterv->face_index);
-              if (uv_select_linked_delimit_check(efa, l, iterv_f, delimit_mode)) {
-                continue;
-              }
+            BMFace *iterv_f = BM_face_at_index(bm, iterv->face_index);
+            if (uv_select_linked_delimit_check(efa, l, iterv_f, offsets.uv, delimit_mode)) {
+              continue;
             }
             flag[iterv->face_index] = 1;
             stack[stacksize] = iterv->face_index;
@@ -3007,6 +3002,8 @@ struct UVSelectLinkedHelper : NonCopyable, NonMovable {
       return false;
     }
 
+    const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
+
     /* Flood-fill to find and tag all linked faces. */
     int stack_len = 0;
     stack_[stack_len++] = face_index;
@@ -3038,6 +3035,10 @@ struct UVSelectLinkedHelper : NonCopyable, NonMovable {
             break;
           }
           if (!face_is_tagged_[iterv->face_index]) {
+            BMFace *f_dst = BM_face_at_index(bm, iterv->face_index);
+            if (uv_select_linked_delimit_check(efa, l, f_dst, offsets.uv, UVDelimitMode(0))) {
+              continue;
+            }
             face_is_tagged_[iterv->face_index] = true;
             stack_[stack_len++] = iterv->face_index;
           }
