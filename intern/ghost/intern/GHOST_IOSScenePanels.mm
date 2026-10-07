@@ -295,6 +295,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   NSArray *_sectionTitles;
   /* Sections for the active item of a stack, such as the active modifier. */
   NSSet *_activeSections;
+  NSSet *_headerlessSections;
   NSArray *_sectionIdentifiers, *_tabs;
   NSString *_selectedTab;
   NSMutableDictionary *_expandedPanels;
@@ -501,6 +502,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [_menuProvider release];
   [_sectionTitles release];
   [_activeSections release];
+  [_headerlessSections release];
   [_sectionIdentifiers release];
   [_tabs release];
   [_selectedTab release];
@@ -928,6 +930,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   NSMutableArray *titles = [NSMutableArray array];
   NSMutableArray *identifiers = [NSMutableArray array];
   NSMutableSet *actives = [NSMutableSet set];
+  NSMutableSet *headerless = [NSMutableSet set];
   [_controls removeAllObjects];
   [_sliders removeAllObjects];
   [_lockIndicators removeAllObjects];
@@ -957,6 +960,11 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     NSString *sectionID = section[@"id"] ?: section[@"title"];
     [identifiers addObject:sectionID];
     if ([section[@"active"] boolValue]) { [actives addObject:sectionID]; }
+    if ([section[@"header_hidden"] boolValue]) {
+      /* Blender draws these without a header, so they stay open and are not collapsible. */
+      [headerless addObject:sectionID];
+      [_expandedPanels[_selectedTab ?: @"OBJECT"] addObject:sectionID];
+    }
     NSArray *shape = [self shapeForSection:section];
     NSDictionary *cached = _sectionViewCache[sectionID];
     NSArray *maps = @[_controls, _sliders, _lockIndicators, _groupHeadings];
@@ -1374,6 +1382,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   _sectionTitles = [titles copy];
   [_activeSections release];
   _activeSections = [actives copy];
+  [_headerlessSections release];
+  _headerlessSections = [headerless copy];
   [_sectionIdentifiers release];
   _sectionIdentifiers = [identifiers copy];
   for (NSString *identifier in [[_disclosureButtons.allKeys copy] autorelease]) {
@@ -2501,6 +2511,9 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     return nil;
   }
   NSString *identifier = _sectionIdentifiers[section];
+  if ([_headerlessSections containsObject:identifier]) {
+    return nil;
+  }
   UIView *container = _headerContainers[identifier];
   if (!container) {
     container = [[[UIView alloc] init] autorelease];
@@ -2574,7 +2587,10 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
 {
-  return tableView == _form ? 44 : 0;
+  if (tableView != _form) {
+    return 0;
+  }
+  return [_headerlessSections containsObject:_sectionIdentifiers[section]] ? 8 : 44;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath

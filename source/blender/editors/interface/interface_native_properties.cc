@@ -959,7 +959,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         }
       }
     }
-    const bool open = is_outer ? (expanded ? std::any_of(expanded->elements().begin(), expanded->elements().end(),
+    /* Header-less panels (e.g. Add Modifier above the stack) cannot be collapsed. */
+    const bool header_hidden = is_outer && (pt.flag & PANEL_TYPE_NO_HEADER);
+    const bool open = header_hidden ? true : is_outer ? (expanded ? std::any_of(expanded->elements().begin(), expanded->elements().end(),
         [&](const auto &item) { return item->as_string_value() && item->as_string_value()->value() == candidate.id; }) : viewport || sections->elements().is_empty()) :
         open_panels.count(outer) != 0 && (!collapsible_subpanel || subpanel_open);
     if (open && is_outer) {
@@ -991,6 +993,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       section->append_str("id", candidate.id);
       section->append_str("title", panel_title);
       section->append_int("open", open);
+      if (header_hidden) {
+        section->append_int("header_hidden", 1);
+      }
       if (panel_active) {
         section->append_int("active", 1);
       }
