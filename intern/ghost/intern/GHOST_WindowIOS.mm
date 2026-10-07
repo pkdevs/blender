@@ -2227,7 +2227,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   return sections;
 }
 
-@interface GHOST_IOSViewController : UIViewController <UIEditMenuInteractionDelegate,
+@interface GHOST_IOSViewController : UIViewController <UIContextMenuInteractionDelegate,
                                                        GHOSTIOSPencilMenuDelegate,
                                                        UIGestureRecognizerDelegate>
 
@@ -2243,7 +2243,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   GHOST_WindowIOS *_ghost_window;
   GHOST_IOSMetalRenderer *_renderer;
   UIActivityIndicatorView *_viewport_loading_indicator;
-  UIEditMenuInteraction *_actions_edit_menu_interaction;
+  UIContextMenuInteraction *_actions_context_menu_interaction;
+  UIView *_actions_menu_anchor;
   GHOSTIOSPassThroughOverlayView *_overlay_view;
   GHOSTIOSNavigationBar *_top_bar;
   UINavigationItem *_top_bar_item;
@@ -2402,20 +2403,20 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   _panels_refresh_timer = [NSTimer timerWithTimeInterval:1.0 / 60.0 target:self
       selector:@selector(refreshScenePanelsFromBlender) userInfo:nil repeats:YES];
   [NSRunLoop.mainRunLoop addTimer:_panels_refresh_timer forMode:NSRunLoopCommonModes];
-  _actions_edit_menu_interaction = [[UIEditMenuInteraction alloc] initWithDelegate:self];
-  [_view addInteraction:_actions_edit_menu_interaction];
-
-  UILongPressGestureRecognizer *actions_menu_press = [[UILongPressGestureRecognizer alloc]
-      initWithTarget:self
-              action:@selector(handleActionsMenuPress:)];
-  actions_menu_press.minimumPressDuration = 0.42;
-  actions_menu_press.allowableMovement = 12.0;
-  actions_menu_press.cancelsTouchesInView = YES;
-  actions_menu_press.allowedTouchTypes = @[ @(UITouchTypeDirect) ];
-  actions_menu_press.delegate = self;
-  actions_menu_press.enabled = UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPhone;
-  [_view addGestureRecognizer:actions_menu_press];
-  [actions_menu_press release];
+  if (UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPhone) {
+    /* A context menu opens straight into the full list, unlike the edit menu's compact bar. */
+    NSArray *recognizers_before = [[_view.gestureRecognizers copy] autorelease];
+    _actions_context_menu_interaction = [[UIContextMenuInteraction alloc] initWithDelegate:self];
+    [_view addInteraction:_actions_context_menu_interaction];
+    for (UIGestureRecognizer *recognizer in _view.gestureRecognizers) {
+      if (![recognizers_before containsObject:recognizer]) {
+        /* Finger holds only: a resting Pencil keeps drawing and sculpting. */
+        recognizer.allowedTouchTypes = @[ @(UITouchTypeDirect), @(UITouchTypeIndirectPointer) ];
+      }
+    }
+    _actions_menu_anchor = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 1.0, 1.0)];
+    _actions_menu_anchor.backgroundColor = UIColor.clearColor;
+  }
   [self setNeedsUpdateOfHomeIndicatorAutoHidden];
 }
 
@@ -2506,7 +2507,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_top_settings_group release];
   [_native_menubar_items release];
   [_active_tool_identifier release];
-  [_actions_edit_menu_interaction release];
+  [_actions_context_menu_interaction release];
+  [_actions_menu_anchor release];
   [_top_bar release];
   [_top_bar_item release];
   [_mesh_select_buttons release];
@@ -2625,36 +2627,49 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }, nil);
 }
 
-- (UIMenu *)editMenuInteraction:(UIEditMenuInteraction *)interaction
-           menuForConfiguration:(UIEditMenuConfiguration *)configuration
-               suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions
+- (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+                       configurationForMenuAtLocation:(CGPoint)location
 {
-  UIMenu *menu = [self nativeBlenderContextMenu];
-  return menu.children.count == 0 ? nil : menu;
+  /* Only a hold on the viewport itself, not on the native controls above it. */
+  if (_pencil_menu.active || [_view hitTest:location withEvent:nil] != _view) {
+    return nil;
+  }
+  __block __typeof(self) owner = self;
+  return [UIContextMenuConfiguration
+      configurationWithIdentifier:[NSValue valueWithCGPoint:location]
+                  previewProvider:nil
+                   actionProvider:^UIMenu *(NSArray<UIMenuElement *> *suggested_actions) {
+                     UIMenu *menu = [owner nativeBlenderContextMenu];
+                     return menu.children.count == 0 ? nil : menu;
+                   }];
 }
 
-- (CGRect)editMenuInteraction:(UIEditMenuInteraction *)interaction
-    targetRectForConfiguration:(UIEditMenuConfiguration *)configuration
+- (UITargetedPreview *)actionsMenuPreviewForConfiguration:(UIContextMenuConfiguration *)configuration
 {
-  const CGPoint point = configuration.sourcePoint;
-  return CGRectMake(point.x, point.y, 1.0, 1.0);
+  /* Anchor the menu at the touch with an invisible preview, so the viewport doesn't lift. */
+  const CGPoint location = [(NSValue *)configuration.identifier CGPointValue];
+  UIPreviewParameters *parameters = [[[UIPreviewParameters alloc] init] autorelease];
+  parameters.backgroundColor = UIColor.clearColor;
+  parameters.shadowPath = [UIBezierPath bezierPath];
+  UIPreviewTarget *target = [[[UIPreviewTarget alloc] initWithContainer:_view
+                                                                 center:location] autorelease];
+  return [[[UITargetedPreview alloc] initWithView:_actions_menu_anchor
+                                       parameters:parameters
+                                           target:target] autorelease];
 }
 
-- (void)handleActionsMenuPress:(UILongPressGestureRecognizer *)gesture
+- (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+                                configuration:(UIContextMenuConfiguration *)configuration
+     highlightPreviewForItemWithIdentifier:(id<NSCopying>)identifier
 {
-  if (gesture.state != UIGestureRecognizerStateBegan || _pencil_menu.active) {
-    return;
-  }
+  return [self actionsMenuPreviewForConfiguration:configuration];
+}
 
-  UIMenu *menu = [self nativeBlenderContextMenu];
-  if (menu.children.count == 0) {
-    return;
-  }
-
-  const CGPoint location = [gesture locationInView:_view];
-  UIEditMenuConfiguration *configuration =
-      [UIEditMenuConfiguration configurationWithIdentifier:nil sourcePoint:location];
-  [_actions_edit_menu_interaction presentEditMenuWithConfiguration:configuration];
+- (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+                                configuration:(UIContextMenuConfiguration *)configuration
+       dismissalPreviewForItemWithIdentifier:(id<NSCopying>)identifier
+{
+  return [self actionsMenuPreviewForConfiguration:configuration];
 }
 
 - (UIButton *)overlayButtonWithTitle:(NSString *)title
@@ -3016,18 +3031,6 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
 
   [self setToolRailDockedLeftCenter:dock_left_center animated:YES];
-}
-
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
-{
-  if (gestureRecognizer.view == _view &&
-      [gestureRecognizer isKindOfClass:UILongPressGestureRecognizer.class])
-  {
-    /* Ancestor recognizers also see touches on native controls. Only a press
-     * starting on the viewport itself belongs to the viewport context menu. */
-    return touch.type == UITouchTypeDirect && touch.view == _view && !_pencil_menu.active;
-  }
-  return YES;
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer

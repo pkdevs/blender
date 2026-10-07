@@ -41,8 +41,9 @@ class NativeContextMenuTest(unittest.TestCase):
         radial_start = source.index("- (NSArray<NSDictionary *> *)radialItemsFromBlenderMenu:")
         radial_method = source[radial_start:source.index("\n}\n", radial_start) + 2]
         for signature in (
-                "- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:",
-                "- (void)handleActionsMenuPress:", "- (UIMenu *)nativeBlenderContextMenu\n"):
+                "- (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction\n"
+                "                       configurationForMenuAtLocation:",
+                "- (UIMenu *)nativeBlenderContextMenu\n"):
             start = source.rindex(signature)
             method += source[start:source.index("\n}", start) + 2]
         enum_start = source.index("enum GHOSTIOSUICommand")
@@ -148,36 +149,14 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
   [super setEnabled:enabled];
 }
 @end
-@interface MenuTestTouch : NSObject
-@property(nonatomic, retain) UIView *view;
-@property(nonatomic) UITouchType type;
-@end
-@implementation MenuTestTouch
-@end
 @interface MenuTestPencilMenu : NSObject
 @property(nonatomic) BOOL active;
 @end
 @implementation MenuTestPencilMenu
 @end
-@interface MenuTestPress : UILongPressGestureRecognizer
-@property(nonatomic) UIGestureRecognizerState testState;
-@end
-@implementation MenuTestPress
-- (UIGestureRecognizerState)state { return self.testState; }
-- (CGPoint)locationInView:(UIView *)view { return CGPointMake(120, 240); }
-@end
-@interface MenuTestInteraction : NSObject
-@property(nonatomic) NSUInteger presentations;
-@end
-@implementation MenuTestInteraction
-- (void)presentEditMenuWithConfiguration:(UIEditMenuConfiguration *)configuration {
-  self.presentations++;
-}
-@end
 @interface MenuTest : NSObject {
   UIView *_view;
   MenuTestPencilMenu *_pencil_menu;
-  MenuTestInteraction *_actions_edit_menu_interaction;
   UIBarButtonItem *_viewport_shading_button;
   UIBarButtonItem *_undo_button;
   UIBarButtonItem *_actions_button;
@@ -193,7 +172,6 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
 @property(nonatomic, retain) UIBarButtonItem *actionsControl;
 @property(nonatomic, retain) UIView *viewport;
 @property(nonatomic, retain) MenuTestPencilMenu *pencilMenu;
-@property(nonatomic, retain) MenuTestInteraction *editInteraction;
 @end
 @implementation MenuTest
 @synthesize shadingButton = _viewport_shading_button;
@@ -201,7 +179,6 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
 @synthesize actionsControl = _actions_button;
 @synthesize viewport = _view;
 @synthesize pencilMenu = _pencil_menu;
-@synthesize editInteraction = _actions_edit_menu_interaction;
 @synthesize menuRoots = _native_menubar_items;
 - (instancetype)init {
   self = [super init];
@@ -372,49 +349,17 @@ int main()
     NSCAssert(actions.enabled && actions.menu.children.count == 1, @"Menu did not recover with context");
     builder.viewport = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, 834, 1210)] autorelease];
     builder.pencilMenu = [[[MenuTestPencilMenu alloc] init] autorelease];
-    builder.editInteraction = [[[MenuTestInteraction alloc] init] autorelease];
-    MenuTestPress *viewportPress = [[[MenuTestPress alloc] init] autorelease];
-    [builder.viewport addGestureRecognizer:viewportPress];
-    MenuTestTouch *touch = [[[MenuTestTouch alloc] init] autorelease];
-    touch.type = UITouchTypeDirect;
-    touch.view = builder.viewport;
-    NSCAssert([builder gestureRecognizer:viewportPress shouldReceiveTouch:(id)touch],
-              @"Bare viewport long press stopped working");
-    UIView *overlay = [[[UIView alloc] initWithFrame:builder.viewport.bounds] autorelease];
-    [builder.viewport addSubview:overlay];
     UIButton *tool = [UIButton buttonWithType:UIButtonTypeSystem];
-    [tool setTitle:@"Move" forState:UIControlStateNormal];
-    [overlay addSubview:tool];
-    UIScrollView *scroll = [[[UIScrollView alloc] init] autorelease];
-    [overlay addSubview:scroll];
-    for (UIView *hit in @[tool, tool.titleLabel, scroll, overlay]) {
-      touch.view = hit;
-      NSCAssert(![builder gestureRecognizer:viewportPress shouldReceiveTouch:(id)touch],
-                @"Viewport long press stole a native-control touch: %@", hit);
-    }
-    MenuTestPress *toolPress = [[[MenuTestPress alloc] init] autorelease];
-    [tool addGestureRecognizer:toolPress];
-    touch.view = tool;
-    NSCAssert([builder gestureRecognizer:toolPress shouldReceiveTouch:(id)touch],
-              @"Native tool press-and-slide was disabled");
-    touch.view = builder.viewport;
-    touch.type = UITouchTypePencil;
-    NSCAssert(![builder gestureRecognizer:viewportPress shouldReceiveTouch:(id)touch],
-              @"Pencil accepted by finger context-menu gesture");
-    touch.type = UITouchTypeDirect;
+    tool.frame = CGRectMake(20, 20, 80, 44);
+    [builder.viewport addSubview:tool];
+    NSCAssert([builder contextMenuInteraction:nil configurationForMenuAtLocation:CGPointMake(120, 240)],
+              @"Bare viewport hold stopped opening the menu");
+    NSCAssert(![builder contextMenuInteraction:nil configurationForMenuAtLocation:CGPointMake(40, 40)],
+              @"Viewport menu stole a hold on a native control");
     builder.pencilMenu.active = YES;
-    NSCAssert(![builder gestureRecognizer:viewportPress shouldReceiveTouch:(id)touch],
-              @"Viewport press competed with active radial menu");
-    viewportPress.testState = UIGestureRecognizerStateBegan;
-    [builder handleActionsMenuPress:viewportPress];
-    NSCAssert(builder.editInteraction.presentations == 0,
-              @"In-flight viewport press opened a menu after radial menu opened");
+    NSCAssert(![builder contextMenuInteraction:nil configurationForMenuAtLocation:CGPointMake(120, 240)],
+              @"Viewport menu competed with active radial menu");
     builder.pencilMenu.active = NO;
-    [builder handleActionsMenuPress:viewportPress];
-    NSCAssert(builder.editInteraction.presentations == 1, @"Valid viewport press did not open menu");
-    viewportPress.testState = UIGestureRecognizerStateChanged;
-    [builder handleActionsMenuPress:viewportPress];
-    NSCAssert(builder.editInteraction.presentations == 1, @"Long press presented multiple times");
     actions.menu = nil;
     [builder updateActionsButtonMenu];
     NSCAssert(actions.menu.children.count == 1, @"Missing menu was not restored");
