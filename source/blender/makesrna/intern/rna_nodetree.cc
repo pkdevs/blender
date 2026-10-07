@@ -613,6 +613,11 @@ const EnumPropertyItem rna_enum_node_grease_pencil_stroke_type_items[] = {
      ICON_GP_DRAW_FILL,
      "Fill",
      "Set the color and opacity for the stroke fills"},
+    {GEO_NODE_GREASE_PENCIL_BOTH,
+     "BOTH",
+     ICON_GP_DRAW_BOTH,
+     "Both",
+     "Set the color and opacity for stroke points and fills together"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -646,6 +651,14 @@ static const EnumPropertyItem rna_enum_shader_attribute_type_items[] = {
      0,
      "Light",
      "The attribute is associated with the Light that is being rendered"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static const EnumPropertyItem rna_enum_shader_vect_transform_space_items[] = {
+    {SHD_VECT_TRANSFORM_SPACE_WORLD, "WORLD", 0, "World", ""},
+    {SHD_VECT_TRANSFORM_SPACE_OBJECT, "OBJECT", 0, "Object", ""},
+    {SHD_VECT_TRANSFORM_SPACE_CAMERA, "CAMERA", 0, "Camera", ""},
+    {SHD_VECT_TRANSFORM_SPACE_LIGHT, "LIGHT", 0, "Light", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -4308,14 +4321,16 @@ static int rna_NodeConvertColorSpace_from_interop_id_get(PointerRNA *ptr)
 {
   bNode *node = ptr->data_as<bNode>();
   NodeConvertColorSpace *node_storage = static_cast<NodeConvertColorSpace *>(node->storage);
-  return IMB_colormanagement_colorspace_get_interop_id_index(node_storage->from_color_space);
+  return IMB_colormanagement_colorspace_get_interop_id_index(node_storage->from_color_space,
+                                                             node_storage->from_interop_id);
 }
 
 static void rna_NodeConvertColorSpace_from_interop_id_set(PointerRNA *ptr, int value)
 {
-  if (value != -1) {
-    rna_NodeConvertColorSpace_from_color_space_set(ptr, value);
-  }
+  bNode *node = ptr->data_as<bNode>();
+  NodeConvertColorSpace *node_storage = static_cast<NodeConvertColorSpace *>(node->storage);
+  IMB_colormanagement_colorspace_interop_id_set(
+      node_storage->from_color_space, node_storage->from_interop_id, value);
 }
 
 static int rna_NodeConvertColorSpace_to_color_space_get(PointerRNA *ptr)
@@ -4341,14 +4356,16 @@ static int rna_NodeConvertColorSpace_to_interop_id_get(PointerRNA *ptr)
 {
   bNode *node = ptr->data_as<bNode>();
   NodeConvertColorSpace *node_storage = static_cast<NodeConvertColorSpace *>(node->storage);
-  return IMB_colormanagement_colorspace_get_interop_id_index(node_storage->to_color_space);
+  return IMB_colormanagement_colorspace_get_interop_id_index(node_storage->to_color_space,
+                                                             node_storage->to_interop_id);
 }
 
 static void rna_NodeConvertColorSpace_to_interop_id_set(PointerRNA *ptr, int value)
 {
-  if (value != -1) {
-    rna_NodeConvertColorSpace_to_color_space_set(ptr, value);
-  }
+  bNode *node = ptr->data_as<bNode>();
+  NodeConvertColorSpace *node_storage = static_cast<NodeConvertColorSpace *>(node->storage);
+  IMB_colormanagement_colorspace_interop_id_set(
+      node_storage->to_color_space, node_storage->to_interop_id, value);
 }
 
 static void rna_reroute_node_socket_type_set(PointerRNA *ptr, const char *value)
@@ -4637,6 +4654,32 @@ static const EnumPropertyItem *rna_NodeShaderAttribute_type_itemf(bContext *C,
   return itemf_function_check(
       rna_enum_shader_attribute_type_items, [&](const EnumPropertyItem *item) {
         return supports_light_attributes || item->value != SHD_ATTRIBUTE_LIGHT;
+      });
+}
+
+static const EnumPropertyItem *rna_NodeShaderVectTransform_space_itemf(bContext *C,
+                                                                       PointerRNA * /*ptr*/,
+                                                                       PropertyRNA * /*prop*/,
+                                                                       bool *r_free)
+{
+  if (C == nullptr) {
+    return rna_enum_shader_vect_transform_space_items;
+  }
+
+  Scene *scene = CTX_data_scene(C);
+  SpaceNode *space_node = CTX_wm_space_node(C);
+
+  if (scene == nullptr || space_node == nullptr) {
+    return rna_enum_shader_vect_transform_space_items;
+  }
+
+  *r_free = true;
+
+  bool supports_light_transform = !STREQ(CTX_data_scene(C)->r.engine, RE_engine_id_CYCLES) &&
+                                  CTX_wm_space_node(C)->shaderfrom == SNODE_SHADER_OBJECT;
+  return itemf_function_check(
+      rna_enum_shader_vect_transform_space_items, [&](const EnumPropertyItem *item) {
+        return supports_light_transform || item->value != SHD_VECT_TRANSFORM_SPACE_LIGHT;
       });
 }
 
@@ -6230,13 +6273,6 @@ static void def_sh_vect_transform(BlenderRNA * /*brna*/, StructRNA *srna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
-  static const EnumPropertyItem prop_vect_space_items[] = {
-      {SHD_VECT_TRANSFORM_SPACE_WORLD, "WORLD", 0, "World", ""},
-      {SHD_VECT_TRANSFORM_SPACE_OBJECT, "OBJECT", 0, "Object", ""},
-      {SHD_VECT_TRANSFORM_SPACE_CAMERA, "CAMERA", 0, "Camera", ""},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
   PropertyRNA *prop;
 
   RNA_def_struct_sdna_from(srna, "NodeShaderVectTransform", "storage");
@@ -6248,12 +6284,14 @@ static void def_sh_vect_transform(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_update(prop, 0, "rna_Node_update");
 
   prop = RNA_def_property(srna, "convert_from", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, prop_vect_space_items);
+  RNA_def_property_enum_items(prop, rna_enum_shader_vect_transform_space_items);
+  RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_NodeShaderVectTransform_space_itemf");
   RNA_def_property_ui_text(prop, "Convert From", "Space to convert from");
   RNA_def_property_update(prop, 0, "rna_Node_update");
 
   prop = RNA_def_property(srna, "convert_to", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, prop_vect_space_items);
+  RNA_def_property_enum_items(prop, rna_enum_shader_vect_transform_space_items);
+  RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_NodeShaderVectTransform_space_itemf");
   RNA_def_property_ui_text(prop, "Convert To", "Space to convert to");
   RNA_def_property_update(prop, 0, "rna_Node_update");
 }
@@ -11147,6 +11185,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeClusterByDistance");
   define("GeometryNode", "GeometryNodeCollectionChildren");
   define("GeometryNode", "GeometryNodeCollectionInfo");
+  define("GeometryNode", "GeometryNodeConstructCurves");
   define("GeometryNode", "GeometryNodeConvexHull");
   define("GeometryNode", "GeometryNodeCornersOfEdge");
   define("GeometryNode", "GeometryNodeCornersOfFace");
@@ -11200,6 +11239,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeGetAttributeNames");
   define("GeometryNode", "GeometryNodeGetGeometryBundle");
   define("GeometryNode", "GeometryNodeGetGeometryComponent");
+  define("GeometryNode", "GeometryNodeGetGridNames");
   define("GeometryNode", "GeometryNodeGetNamedGrid");
   define("GeometryNode", "GeometryNodeGizmoDial");
   define("GeometryNode", "GeometryNodeGizmoLinear");
