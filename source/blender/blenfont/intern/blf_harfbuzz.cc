@@ -14,9 +14,9 @@
 #  include <harfbuzz/hb.h>
 #endif
 
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_lang.hh"
@@ -77,6 +77,7 @@ static void blf_font_otf_feature_set(blender::Vector<hb_feature_t> &features,
   }
   features.append({tag, value, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END});
 }
+#endif
 
 FeatureSet blf_font_otf_features_base()
 {
@@ -104,6 +105,7 @@ FeatureSet blf_font_otf_features_default()
   return features;
 }
 
+#ifdef WITH_HARFBUZZ
 bool ShapingData::load_from_cache(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len)
 {
   const CachedString *cached = gc->shaping_cache.lookup_ptr(str);
@@ -355,6 +357,20 @@ ShapingData::ShapingData(FontBLF *font,
   }
 }
 
+#else
+
+/* Fallback when Harfbuzz is not available, legacy layout only. */
+ShapingData::ShapingData(FontBLF *font,
+                         GlyphCacheBLF *gc,
+                         const char *str,
+                         size_t len,
+                         std::optional<FeatureSet> /*features*/)
+{
+  legacy_layout(font, gc, str, len);
+}
+
+#endif
+
 void ShapingData::draw(const ft_pix pen_y, ResultBLF *r_info)
 {
   for (const ShapedGlyph &glyph : this->glyphs) {
@@ -456,20 +472,6 @@ void ShapingData::offset_to_glyph_bounds(size_t str_offset, rcti *r_glyph_bounds
   }
   std::memset(r_glyph_bounds, 0, sizeof(rcti));
 }
-
-#else
-
-/* Fallback when Harfbuzz is not available, legacy layout only. */
-ShapingData::ShapingData(FontBLF *font,
-                         GlyphCacheBLF *gc,
-                         const char *str,
-                         size_t len,
-                         blender::Vector<hb_feature_t> * /*features*/)
-{
-  legacy_layout(font, gc, str, len);
-}
-
-#endif
 
 /** \} */
 
