@@ -14,7 +14,8 @@ static const CGFloat kTimelineMaxWidth = 760.0;
   UIView *_overlay;
   UIBarButtonItem *_button;
   UIVisualEffectView *_panel;
-  UIButton *_play, *_jumpStart, *_jumpEnd;
+  UIButton *_play, *_jumpStart, *_jumpEnd, *_record;
+  BOOL _recording;
   UISlider *_slider;
   UILabel *_startLabel, *_endLabel, *_frameLabel;
   NSDictionary *_snapshot;
@@ -44,6 +45,12 @@ static const CGFloat kTimelineMaxWidth = 760.0;
     _panel.hidden = YES;
     _panel.alpha = 0;
 
+    _record = [self transportButton:@"record.circle" label:@"Auto Keying" command:@"autokey"];
+    __block GHOSTIOSTimeline *recorder = self;
+    [_record addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+      /* Show the new state at once; Blender's snapshot confirms it. */
+      [recorder setRecording:!recorder->_recording];
+    }] forControlEvents:UIControlEventTouchUpInside];
     UIButton *start = _jumpStart = [self transportButton:@"backward.end.fill" label:@"Jump to Start" command:@"start"];
     UIButton *previous = [self transportButton:@"backward.frame.fill" label:@"Previous Keyframe" command:@"prev_key"];
     _play = [self transportButton:@"play.fill" label:@"Play" command:@"play"];
@@ -79,7 +86,7 @@ static const CGFloat kTimelineMaxWidth = 760.0;
                                                  forAxis:UILayoutConstraintAxisHorizontal];
 
     UIStackView *transport = [[[UIStackView alloc]
-        initWithArrangedSubviews:@[start, previous, _play, next, end]] autorelease];
+        initWithArrangedSubviews:@[_record, start, previous, _play, next, end]] autorelease];
     transport.spacing = 0;
     UIStackView *row = [[[UIStackView alloc]
         initWithArrangedSubviews:@[transport, _startLabel, _slider, _endLabel, _frameLabel]] autorelease];
@@ -96,7 +103,8 @@ static const CGFloat kTimelineMaxWidth = 760.0;
       [row.bottomAnchor constraintEqualToAnchor:_panel.contentView.bottomAnchor],
     ]];
     [_overlay addSubview:_panel];
-    [self updateSnapshot:@{@"frame": @1, @"start": @1, @"end": @250, @"playing": @NO}];
+    [transport setCustomSpacing:4 afterView:_record];
+    [self updateSnapshot:@{@"frame": @1, @"start": @1, @"end": @250, @"playing": @NO, @"autokey": @NO}];
   }
   return self;
 }
@@ -170,6 +178,17 @@ static const CGFloat kTimelineMaxWidth = 760.0;
   [_play setImage:[UIImage systemImageNamed:playing ? @"pause.fill" : @"play.fill"]
          forState:UIControlStateNormal];
   _play.accessibilityLabel = playing ? @"Pause" : @"Play";
+  [self setRecording:[snapshot[@"autokey"] boolValue]];
+}
+
+- (void)setRecording:(BOOL)recording
+{
+  _recording = recording;
+  [_record setImage:[UIImage systemImageNamed:recording ? @"record.circle.fill" : @"record.circle"]
+           forState:UIControlStateNormal];
+  _record.tintColor = recording ? UIColor.systemRedColor : UIColor.labelColor;
+  _record.accessibilityValue = recording ? @"On" : @"Off";
+  _record.accessibilityTraits = UIAccessibilityTraitButton | (recording ? UIAccessibilityTraitSelected : 0);
 }
 
 - (void)beginScrub:(UISlider *)slider
