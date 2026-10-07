@@ -1,5 +1,6 @@
 {
  "modules": [
+  "primitives",
   "shapes",
   "hardware",
   "architecture",
@@ -14,6 +15,149 @@
   "modifiers"
  ],
  "assets": [
+  {
+   "name": "Plane",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "plane",
+    "primitive",
+    "floor",
+    "square",
+    "flat",
+    "basic"
+   ],
+   "description": "A flat square on the ground, with subdivisions you can change at any time.",
+   "module": "primitives"
+  },
+  {
+   "name": "Grid",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "grid",
+    "primitive",
+    "plane",
+    "subdivided",
+    "displace",
+    "basic"
+   ],
+   "description": "A finely subdivided flat grid, ready for displacement, sculpting or cloth.",
+   "module": "primitives"
+  },
+  {
+   "name": "Cube",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "cube",
+    "box",
+    "primitive",
+    "block",
+    "basic"
+   ],
+   "description": "A box whose width, depth, height and subdivisions stay editable after you drop it.",
+   "module": "primitives"
+  },
+  {
+   "name": "UV Sphere",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "sphere",
+    "ball",
+    "uv sphere",
+    "primitive",
+    "round",
+    "basic"
+   ],
+   "description": "A sphere made of rings and segments, with a radius and resolution you can change.",
+   "module": "primitives"
+  },
+  {
+   "name": "Ico Sphere",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "sphere",
+    "icosphere",
+    "ico",
+    "primitive",
+    "triangles",
+    "basic"
+   ],
+   "description": "A sphere made of even triangles, with no poles, which sculpts and deforms evenly.",
+   "module": "primitives"
+  },
+  {
+   "name": "Cylinder",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "cylinder",
+    "column",
+    "tube",
+    "primitive",
+    "round",
+    "basic"
+   ],
+   "description": "A round column with flat caps, with editable radius, height and resolution.",
+   "module": "primitives"
+  },
+  {
+   "name": "Cone",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "cone",
+    "pyramid",
+    "primitive",
+    "taper",
+    "basic"
+   ],
+   "description": "A cone, or a truncated cone when the top radius is above zero.",
+   "module": "primitives"
+  },
+  {
+   "name": "Torus",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "torus",
+    "donut",
+    "ring",
+    "primitive",
+    "round",
+    "basic"
+   ],
+   "description": "A ring with a round cross section, with editable radii and resolution.",
+   "module": "primitives"
+  },
+  {
+   "name": "Circle",
+   "kind": "object",
+   "catalog": "Objects/Primitives",
+   "file": "starter_objects.blend",
+   "tags": [
+    "circle",
+    "disc",
+    "disk",
+    "primitive",
+    "round",
+    "flat",
+    "basic"
+   ],
+   "description": "A flat filled disc on the ground, with an editable radius and number of vertices.",
+   "module": "primitives"
+  },
   {
    "name": "Star",
    "kind": "object",
