@@ -39,8 +39,11 @@ struct AssetLibraryListItemCommon : public ui::AbstractTreeViewItem {
   bool rename(const bContext &C, StringRefNull new_name) override;
 };
 
-struct AssetLibraryProject : public ui::AbstractTreeViewItem {
-  AssetLibraryProject() {};
+/**
+ * Group view item that contains all the asset libraries from the project.
+ */
+struct AssetLibraryProjectHeading : public ui::AbstractTreeViewItem {
+  AssetLibraryProjectHeading() = default;
   void build_row(ui::Layout &row) override;
 };
 
@@ -59,7 +62,7 @@ struct AssetLibraryList : public ui::AbstractTreeView {
   {
     /* Group the libraries of an extension repository under its row. */
     AssetLibraryRepoItemType *repo_parent = nullptr;
-    AssetLibraryProject *project_group = nullptr;
+    AssetLibraryProjectHeading *project_group = nullptr;
 
     int i = 0;
     for (const AnyAssetLibraryDefinition &library : libraries) {
@@ -76,7 +79,7 @@ struct AssetLibraryList : public ui::AbstractTreeView {
                                      (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED);
         if (project_library) {
           if (!project_group) {
-            project_group = &add_tree_item<AssetLibraryProject>();
+            project_group = &add_tree_item<AssetLibraryProjectHeading>();
           }
           parent = project_group;
         }

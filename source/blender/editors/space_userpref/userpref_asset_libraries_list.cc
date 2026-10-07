@@ -111,7 +111,7 @@ static std::optional<int> userpref_ui_asset_libraries_index_from_user_library(
   return std::nullopt;
 }
 
-void AssetLibraryProject::build_row(ui::Layout &row)
+void AssetLibraryProjectHeading::build_row(ui::Layout &row)
 {
   bke::BlenderProject *project = BKE_blender_project_get(G_MAIN);
   if (project) {
