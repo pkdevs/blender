@@ -160,16 +160,30 @@ def tests():
                 evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
                 polygons = len(evaluated.data.polygons) if evaluated.type == "MESH" else 1
                 ok = polygons > 0 and all(m.node_group for m in obj.modifiers if m.type == "NODES")
-            check(ok, f"Object '{name}' drops into the scene and evaluates")
+                # Placed by the drop's snap target at full size, never collapsed to nothing.
+                ok = ok and all(abs(v - 1.0) < 1e-4 for v in obj.scale) and \
+                    max(evaluated.dimensions) > 0.001
+            check(ok, f"Object '{name}' drops into the scene at full size and evaluates")
+            if not ok:
+                report.setdefault("object_failures", []).append({
+                    "asset": name,
+                    "added": [(o.name, o.type, [round(v, 3) for v in o.scale],
+                               [round(v, 3) for v in o.location])
+                              for o in new_ids(bpy.data.objects, before)]})
             for obj in new_ids(bpy.data.objects, before):
                 bpy.data.objects.remove(obj)
 
-    # Materials: tap to apply to the active object.
+    # Materials: tap to apply to the active object. The first material with packed images takes
+    # a moment to load, so wait for each drop rather than a fixed time.
     for filename, names in contents.items():
         for name in names["materials"]:
             select_cube()
             drag(ASSET_ADD, key(filename, "Material", name), 0, 0)
-            yield 0.5
+            for _ in range(40):
+                yield 0.1
+                materials = [slot.material.name for slot in cube.material_slots if slot.material]
+                if any(m.startswith(name) for m in materials):
+                    break
             materials = [slot.material.name for slot in cube.material_slots if slot.material]
             check(any(m.startswith(name) for m in materials),
                   f"Material '{name}' drops onto the active object ({materials})")
@@ -226,8 +240,10 @@ def tests():
     if Calibrate.seen:
         scale = Calibrate.seen[0][0] / 100.0
         report["client_scale"] = scale
-        center_x = region.x + region.width * 0.5
-        center_y = region.y + region.height * 0.5
+        # Release away from the middle, where the world origin projects: a drop that ignored the
+        # release point would land there.
+        center_x = region.x + region.width * 0.5 + 180
+        center_y = region.y + region.height * 0.5 - 90
         before = set(bpy.data.objects)
         x, y = to_client(window, scale, center_x - 200, center_y)
         drag(ASSET_DRAG_BEGIN, box, x, y)
@@ -244,10 +260,13 @@ def tests():
             # The drop lands where the finger lifted: project the object back to the screen.
             point = view3d_utils.location_3d_to_region_2d(region, area.spaces.active.region_3d,
                                                          added[0].location)
+            target = (center_x - region.x, center_y - region.y)
+            check(all(abs(v - 1.0) < 1e-4 for v in added[0].scale), "The dragged asset keeps its size")
             if point is not None:
-                report["drop_screen_offset"] = [point.x - region.width * 0.5, point.y - region.height * 0.5]
-                check(abs(point.x - region.width * 0.5) < 40 and abs(point.y - region.height * 0.5) < 40,
-                      f"The dropped asset lands under the release point ({point.x:.0f}, {point.y:.0f})")
+                report["drop_screen_offset"] = [point.x - target[0], point.y - target[1]]
+                check(abs(point.x - target[0]) < 30 and abs(point.y - target[1]) < 30,
+                      f"The dropped asset lands under the release point ({point.x:.0f}, "
+                      f"{point.y:.0f} for {target[0]:.0f}, {target[1]:.0f})")
         for obj in new_ids(bpy.data.objects, before):
             bpy.data.objects.remove(obj)
 
