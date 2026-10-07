@@ -10,22 +10,60 @@
 #include <cstring>
 
 #include "BLI_path_utils.hh"
-
 #include "BLI_string_ref.hh"
+
+#include "BLT_translation.hh"
+
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
 #include "rna_internal.hh"
 
-#ifdef RNA_RUNTIME
+#include "IMB_colormanagement.hh"
 
-#  include "IMB_colormanagement.hh"
+namespace blender {
+
+static const EnumPropertyItem rna_enum_ocio_config_source_items[] = {
+    {int(ColorManagedConfigSource::EnvBlenderOCIO),
+     "BLENDER_OCIO",
+     0,
+     "BLENDER_OCIO environment variable",
+     "The BLENDER_OCIO environment variable"},
+    {int(ColorManagedConfigSource::EnvOCIO),
+     "OCIO",
+     0,
+     "OCIO environment variable",
+     "The OCIO environment variable"},
+    {int(ColorManagedConfigSource::Project),
+     "PROJECT",
+     0,
+     "Project",
+     "The active project's OpenColorIO configuration setting"},
+    {int(ColorManagedConfigSource::Blender),
+     "BLENDER",
+     0,
+     "Blender",
+     "The OpenColorIO configuration bundled with Blender"},
+    {int(ColorManagedConfigSource::Fallback),
+     "FALLBACK",
+     0,
+     "Fallback",
+     "The built-in fallback configuration, if loading other configurations failed"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+}  // namespace blender
+
+#ifdef RNA_RUNTIME
 
 #  include "DNA_windowmanager_types.h"
 
+#  include "BKE_blender_project.hh"
 #  include "BKE_global.hh"
 #  include "BKE_main.hh"
 #  include "BKE_mesh.hh"
+
+namespace blender {
 
 /* all the list begin functions are added manually here, Main is not in SDNA */
 
@@ -50,16 +88,16 @@ static void rna_Main_use_autopack_set(PointerRNA * /*ptr*/, bool value)
 
 static bool rna_Main_is_saved_get(PointerRNA *ptr)
 {
-  const Main *bmain = (Main *)ptr->data;
+  const Main *bmain = static_cast<Main *>(ptr->data);
   return (bmain->filepath[0] != '\0');
 }
 
 static bool rna_Main_is_dirty_get(PointerRNA *ptr)
 {
   /* XXX, not totally nice to do it this way, should store in main ? */
-  Main *bmain = (Main *)ptr->data;
+  Main *bmain = static_cast<Main *>(ptr->data);
   wmWindowManager *wm;
-  if ((wm = static_cast<wmWindowManager *>(bmain->wm.first))) {
+  if ((wm = bmain->wm.first())) {
     return !wm->file_saved;
   }
 
@@ -68,13 +106,13 @@ static bool rna_Main_is_dirty_get(PointerRNA *ptr)
 
 static void rna_Main_filepath_get(PointerRNA *ptr, char *value)
 {
-  Main *bmain = (Main *)ptr->data;
+  Main *bmain = static_cast<Main *>(ptr->data);
   strcpy(value, bmain->filepath);
 }
 
 static int rna_Main_filepath_length(PointerRNA *ptr)
 {
-  Main *bmain = (Main *)ptr->data;
+  Main *bmain = static_cast<Main *>(ptr->data);
   return strlen(bmain->filepath);
 }
 
@@ -88,8 +126,23 @@ static void rna_Main_filepath_set(PointerRNA *ptr, const char *value)
 
 static PointerRNA rna_Main_colorspace_get(PointerRNA *ptr)
 {
-  Main *bmain = (Main *)ptr->data;
-  return PointerRNA(nullptr, &RNA_BlendFileColorspace, &bmain->colorspace);
+  Main *bmain = static_cast<Main *>(ptr->data);
+  return PointerRNA(nullptr, RNA_BlendFileColorspace, &bmain->colorspace);
+}
+
+static void rna_MainColorspace_ocio_config_path_get(PointerRNA * /*ptr*/, char *value)
+{
+  strcpy(value, IMB_colormanagement_config_path_get().c_str());
+}
+
+static int rna_MainColorspace_ocio_config_path_length(PointerRNA * /*ptr*/)
+{
+  return IMB_colormanagement_config_path_get().size();
+}
+
+static int rna_MainColorspace_ocio_config_source_get(PointerRNA * /*ptr*/)
+{
+  return int(IMB_colormanagement_config_source_get());
 }
 
 static int rna_MainColorspace_working_space_get(PointerRNA *ptr)
@@ -136,6 +189,23 @@ static bool rna_MainColorspace_is_missing_opencolorio_config_get(PointerRNA *ptr
 {
   MainColorspace *colorspace = ptr->data_as<MainColorspace>();
   return colorspace->is_missing_opencolorio_config;
+}
+
+static bool rna_MainColorspace_is_failed_opencolorio_config_get(PointerRNA *ptr)
+{
+  MainColorspace *colorspace = ptr->data_as<MainColorspace>();
+  return colorspace->is_failed_opencolorio_config;
+}
+
+static PointerRNA rna_Main_blender_project_get(PointerRNA *ptr)
+{
+  Main *bmain = reinterpret_cast<Main *>(ptr->data);
+
+  /* Needs to be the `write_callback` variant instead of `read_callback` because
+   * `RNA_pointer_create_discrete()` expects a non-const pointer. */
+  return BKE_blender_project_write_callback(bmain, [&](bke::BlenderProject *project) {
+    return RNA_pointer_create_discrete(nullptr, RNA_BlenderProject, project);
+  });
 }
 
 #  define RNA_MAIN_LISTBASE_FUNCS_DEF(_listbase_name) \
@@ -189,10 +259,49 @@ RNA_MAIN_LISTBASE_FUNCS_DEF(worlds)
 
 static void rna_Main_version_get(PointerRNA *ptr, int *value)
 {
-  Main *bmain = (Main *)ptr->data;
+  Main *bmain = static_cast<Main *>(ptr->data);
   value[0] = bmain->versionfile / 100;
   value[1] = bmain->versionfile % 100;
   value[2] = bmain->subversionfile;
+}
+
+static int rna_iterator_BlendData_all_ids_length(PointerRNA *ptr)
+{
+  Main &bmain = *static_cast<Main *>(ptr->data);
+
+  MainAllIDsIterator internal_iter{bmain};
+  return int(internal_iter.size());
+}
+
+static void rna_iterator_BlendData_all_ids_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+  Main &bmain = *static_cast<Main *>(ptr->data);
+
+  iter->parent = *ptr;
+  MainAllIDsIterator *internal_iter = MEM_new<MainAllIDsIterator>(__func__, bmain);
+  iter->internal.custom = internal_iter;
+  iter->valid = (*internal_iter != internal_iter->end());
+}
+
+static void rna_iterator_BlendData_all_ids_next(CollectionPropertyIterator *iter)
+{
+  MainAllIDsIterator *internal_iter = static_cast<MainAllIDsIterator *>(iter->internal.custom);
+  (*internal_iter)++;
+  iter->valid = (*internal_iter != internal_iter->end());
+}
+
+static void rna_iterator_BlendData_all_ids_end(CollectionPropertyIterator *iter)
+{
+  MainAllIDsIterator *internal_iter = static_cast<MainAllIDsIterator *>(iter->internal.custom);
+  MEM_delete(internal_iter);
+  iter->internal.custom = nullptr;
+}
+
+static PointerRNA rna_iterator_BlendData_all_ids_get(CollectionPropertyIterator *iter)
+{
+  MainAllIDsIterator *internal_iter = static_cast<MainAllIDsIterator *>(iter->internal.custom);
+  ID &id = **internal_iter;
+  return RNA_id_pointer_create(&id);
 }
 
 #  ifdef UNIT_TEST
@@ -200,14 +309,18 @@ static void rna_Main_version_get(PointerRNA *ptr, int *value)
 static PointerRNA rna_Test_test_get(PointerRNA *ptr)
 {
   PointerRNA ret = *ptr;
-  ret.type = &RNA_Test;
+  ret.type = RNA_Test;
 
   return ret;
 }
 
 #  endif
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 /* local convenience types */
 using CollectionDefFunc = void(BlenderRNA *brna, PropertyRNA *cprop);
@@ -239,6 +352,7 @@ static void rna_def_main_colorspace(BlenderRNA *brna)
                            "Working Space",
                            "Color space used for all scene linear colors in this file, and "
                            "for compositing, shader and geometry nodes processing");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_enum_funcs(prop,
                               "rna_MainColorspace_working_space_get",
                               nullptr,
@@ -264,6 +378,31 @@ static void rna_def_main_colorspace(BlenderRNA *brna)
                            "Missing OpenColorIO Configuration",
                            "A color space, view or display was not found, which likely means the "
                            "OpenColorIO config used to create this blend file is missing");
+
+  prop = RNA_def_property(srna, "is_failed_opencolorio_config", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_boolean_funcs(
+      prop, "rna_MainColorspace_is_failed_opencolorio_config_get", nullptr);
+  RNA_def_property_ui_text(
+      prop, "Failed OpenColorIO Configuration", "The requested OpenColorIO config failed to load");
+
+  prop = RNA_def_property(srna, "ocio_config_path", PROP_STRING, PROP_FILEPATH);
+  RNA_def_property_string_maxlength(prop, FILE_MAX);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_MainColorspace_ocio_config_path_get",
+                                "rna_MainColorspace_ocio_config_path_length",
+                                nullptr);
+  RNA_def_property_ui_text(prop,
+                           "OpenColorIO Configuration",
+                           "File path or URI of the OpenColorIO configuration currently in use");
+
+  prop = RNA_def_property(srna, "ocio_config_source", PROP_ENUM, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_enum_items(prop, rna_enum_ocio_config_source_items);
+  RNA_def_property_enum_funcs(prop, "rna_MainColorspace_ocio_config_source_get", nullptr, nullptr);
+  RNA_def_property_ui_text(
+      prop, "OpenColorIO Configuration Source", "Where the OpenColorIO configuration came from");
 }
 
 void RNA_def_main(BlenderRNA *brna)
@@ -582,6 +721,32 @@ void RNA_def_main(BlenderRNA *brna)
       "Color Space",
       "Information about the color space used for data-blocks in a blend file");
 
+  prop = RNA_def_property(srna, "all_ids", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_clear_flag(prop, PROPOVERRIDE_NO_COMPARISON);
+  RNA_def_property_struct_type(prop, "ID");
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_iterator_BlendData_all_ids_begin",
+                                    "rna_iterator_BlendData_all_ids_next",
+                                    "rna_iterator_BlendData_all_ids_end",
+                                    "rna_iterator_BlendData_all_ids_get",
+                                    "rna_iterator_BlendData_all_ids_length",
+                                    nullptr,
+                                    nullptr,
+                                    nullptr);
+  RNA_def_property_ui_text(
+      prop,
+      "All Data-Blocks",
+      "Read-only list of all IDs listed in Blender data-base. Warning: Order is not guaranteed "
+      "and should be considered an internal implementation detail");
+
+  prop = RNA_def_property(srna, "project", PROP_POINTER, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_struct_type(prop, "BlenderProject");
+  RNA_def_property_pointer_funcs(prop, "rna_Main_blender_project_get", nullptr, nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "Project", "The currently active Blender project, if any");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_EDITOR_PREFERENCES);
+
   RNA_api_main(srna);
 
 #  ifdef UNIT_TEST
@@ -596,5 +761,7 @@ void RNA_def_main(BlenderRNA *brna)
 
 #  endif
 }
+
+}  // namespace blender
 
 #endif

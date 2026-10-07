@@ -5,11 +5,17 @@
 #include <fmt/format.h>
 
 #include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_type_conversions.hh"
 
 #include "BLO_read_write.hh"
 
+#include "DNA_collection_types.h"
+#include "DNA_image_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_object_types.h"
+#include "DNA_sound_types.h"
+#include "DNA_vfont_types.h"
 
 #include "NOD_geo_viewer.hh"
 #include "NOD_node_extra_info.hh"
@@ -22,6 +28,7 @@
 #include "UI_resources.hh"
 
 #include "ED_node.hh"
+#include "ED_outliner.hh"
 #include "ED_viewer_path.hh"
 
 #include "RNA_enum_types.hh"
@@ -29,52 +36,139 @@
 
 #include "GEO_foreach_geometry.hh"
 
+#include "DEG_depsgraph_query.hh"
+
 #include "node_geometry_util.hh"
 
-namespace blender::nodes::node_geo_viewer_cc {
+namespace blender {
+
+namespace nodes::node_geo_viewer_cc {
 
 NODE_STORAGE_FUNCS(NodeGeometryViewer)
 
-static void draw_float(uiLayout &layout, const float value)
+static void draw_float(ui::Layout &layout, const float value)
 {
   const std::string label = fmt::format("{:.5f}", value);
   layout.label(label, ICON_NONE);
 }
-static void draw_int(uiLayout &layout, const int value)
+static void draw_int(ui::Layout &layout, const int value)
 {
   const std::string label = fmt::format("{}", value);
   layout.label(label, ICON_NONE);
 }
-static void draw_bool(uiLayout &layout, const bool value)
+static void draw_bool(ui::Layout &layout, const bool value)
 {
   layout.label(value ? IFACE_("True") : IFACE_("False"), ICON_NONE);
 }
-static void draw_vector(uiLayout &layout, const float3 &value)
+static void draw_vector(ui::Layout &layout, const float3 &value)
 {
-  uiLayout &col = layout.column(true);
+  ui::Layout &col = layout.column(true);
   col.label(fmt::format("{}: {:.5f}", IFACE_("X"), value.x), ICON_NONE);
   col.label(fmt::format("{}: {:.5f}", IFACE_("Y"), value.y), ICON_NONE);
   col.label(fmt::format("{}: {:.5f}", IFACE_("Z"), value.z), ICON_NONE);
 }
-static void draw_color(uiLayout &layout, const ColorGeometry4f &value)
+static void draw_color(ui::Layout &layout, const ColorGeometry4f &value)
 {
-  uiLayout &col = layout.column(true);
+  ui::Layout &col = layout.column(true);
   col.label(fmt::format("{}: {:.5f}", CTX_IFACE_(BLT_I18NCONTEXT_COLOR, "R"), value.r), ICON_NONE);
   col.label(fmt::format("{}: {:.5f}", CTX_IFACE_(BLT_I18NCONTEXT_COLOR, "G"), value.g), ICON_NONE);
   col.label(fmt::format("{}: {:.5f}", CTX_IFACE_(BLT_I18NCONTEXT_COLOR, "B"), value.b), ICON_NONE);
   col.label(fmt::format("{}: {:.5f}", CTX_IFACE_(BLT_I18NCONTEXT_COLOR, "A"), value.a), ICON_NONE);
 }
-static void draw_string(uiLayout &layout, const StringRef value)
+static void draw_string(ui::Layout &layout, const StringRef value)
 {
   /* The node doesn't get wider than that anyway. */
   const int max_display_length = 200;
   layout.label(value.substr(0, max_display_length), ICON_NONE);
 }
+
+static void draw_empty_data_block(ui::Layout &layout)
+{
+  layout.label(IFACE_("(None)"), ICON_NONE);
+}
+
+static void draw_data_block(ui::Layout &layout, const ID *id)
+{
+  if (!id) {
+    draw_empty_data_block(layout);
+    return;
+  }
+  const int icon = ED_outliner_icon_from_id(*id);
+  layout.label(BKE_id_name(*id), icon);
+}
+
+static bool draw_gpointer(CustomSocketDrawParams &params, const GPointer value)
+{
+  if (value.is_type<float>()) {
+    draw_float(params.layout, *value.get<float>());
+    return true;
+  }
+  if (value.is_type<float3>()) {
+    draw_vector(params.layout, *value.get<float3>());
+    return true;
+  }
+  if (value.is_type<int>()) {
+    draw_int(params.layout, *value.get<int>());
+    return true;
+  }
+  if (value.is_type<bool>()) {
+    draw_bool(params.layout, *value.get<bool>());
+    return true;
+  }
+  if (value.is_type<std::string>()) {
+    draw_string(params.layout, *value.get<std::string>());
+    return true;
+  }
+  if (value.is_type<ColorGeometry4f>()) {
+    draw_color(params.layout, *value.get<ColorGeometry4f>());
+    return true;
+  }
+  if (value.is_type<Object *>()) {
+    draw_data_block(params.layout, id_cast<const ID *>(*value.get<Object *>()));
+    return true;
+  }
+  if (value.is_type<Collection *>()) {
+    const Collection *collection = *value.get<Collection *>();
+    /* Using original collection because changing the color tag does not cause the eval copy to
+     * be updated. */
+    const Collection *orig_collection = DEG_get_original(collection);
+    if (orig_collection) {
+      const StringRefNull name = BKE_id_name(orig_collection->id);
+      int icon = ED_outliner_icon_from_id(orig_collection->id);
+      if (orig_collection->color_tag != COLLECTION_COLOR_NONE) {
+        icon = int(ICON_COLLECTION_COLOR_01) + int(orig_collection->color_tag);
+      }
+      params.layout.label(name, icon);
+    }
+    else {
+      draw_empty_data_block(params.layout);
+    }
+    return true;
+  }
+  if (value.is_type<Image *>()) {
+    draw_data_block(params.layout, id_cast<const ID *>(*value.get<Image *>()));
+    return true;
+  }
+  if (value.is_type<Material *>()) {
+    draw_data_block(params.layout, id_cast<const ID *>(*value.get<Material *>()));
+    return true;
+  }
+  if (value.is_type<VFont *>()) {
+    draw_data_block(params.layout, id_cast<const ID *>(*value.get<VFont *>()));
+    return true;
+  }
+  if (value.is_type<bSound *>()) {
+    draw_data_block(params.layout, id_cast<const ID *>(*value.get<bSound *>()));
+    return true;
+  }
+  return false;
+}
+
 static bool draw_from_viewer_log_value(CustomSocketDrawParams &params,
-                                       geo_eval_log::GeoTreeLog &tree_log)
+                                       eval_log::NodeTreeLog &tree_log)
 {
   tree_log.ensure_viewer_node_logs();
-  geo_eval_log::ViewerNodeLog *viewer_log = tree_log.viewer_node_logs.lookup_default(
+  eval_log::ViewerNodeLog *viewer_log = tree_log.viewer_node_logs.lookup_default(
       params.node.identifier, nullptr);
   if (!viewer_log) {
     return false;
@@ -82,7 +176,7 @@ static bool draw_from_viewer_log_value(CustomSocketDrawParams &params,
   const int socket_index = params.socket.index();
   const auto &storage = *static_cast<NodeGeometryViewer *>(params.node.storage);
   const NodeGeometryViewerItem &viewer_item = storage.items[socket_index];
-  const geo_eval_log::ViewerNodeLog::Item *item_log = viewer_log->items.lookup_key_ptr_as(
+  const eval_log::ViewerNodeLog::Item *item_log = viewer_log->items.lookup_key_ptr_as(
       viewer_item.identifier);
   if (!item_log) {
     return false;
@@ -91,36 +185,13 @@ static bool draw_from_viewer_log_value(CustomSocketDrawParams &params,
   if (!value.is_single()) {
     return false;
   }
-  const GPointer single_value = value.get_single_ptr();
-  if (single_value.is_type<float>()) {
-    draw_float(params.layout, *single_value.get<float>());
-    return true;
-  }
-  if (single_value.is_type<float3>()) {
-    draw_vector(params.layout, *single_value.get<float3>());
-    return true;
-  }
-  if (single_value.is_type<int>()) {
-    draw_int(params.layout, *single_value.get<int>());
-    return true;
-  }
-  if (single_value.is_type<bool>()) {
-    draw_bool(params.layout, *single_value.get<bool>());
-    return true;
-  }
-  if (single_value.is_type<std::string>()) {
-    draw_string(params.layout, *single_value.get<std::string>());
-    return true;
-  }
-  if (single_value.is_type<ColorGeometry4f>()) {
-    draw_color(params.layout, *single_value.get<ColorGeometry4f>());
-    return true;
-  }
-  return false;
+  const GPointer single_value = value.get();
+  return draw_gpointer(params, single_value);
 }
+
 static bool draw_generic_value_log(CustomSocketDrawParams &params, const GPointer &value)
 {
-  const CPPType &value_type = *params.socket.typeinfo->base_cpp_type;
+  const CPPType &value_type = *value.type();
   const CPPType &socket_base_cpp_type = *params.socket.typeinfo->base_cpp_type;
   const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
   if (value_type != socket_base_cpp_type) {
@@ -132,46 +203,27 @@ static bool draw_generic_value_log(CustomSocketDrawParams &params, const GPointe
   conversions.convert_to_uninitialized(
       value_type, socket_base_cpp_type, value.get(), socket_value);
   BLI_SCOPED_DEFER([&]() { socket_base_cpp_type.destruct(socket_value); });
-  switch (params.socket.type) {
-    case SOCK_INT:
-      draw_int(params.layout, *static_cast<int *>(socket_value));
-      return true;
-    case SOCK_FLOAT:
-      draw_float(params.layout, *static_cast<float *>(socket_value));
-      return true;
-    case SOCK_VECTOR:
-      draw_vector(params.layout, *static_cast<float3 *>(socket_value));
-      return true;
-    case SOCK_RGBA:
-      draw_color(params.layout, *static_cast<ColorGeometry4f *>(socket_value));
-      return true;
-    case SOCK_BOOLEAN:
-      draw_bool(params.layout, *static_cast<bool *>(socket_value));
-      return true;
-    default:
-      return false;
-  }
-  return false;
+  return draw_gpointer(params, {socket_base_cpp_type, socket_value});
 }
+
 static bool draw_from_socket_log_value(CustomSocketDrawParams &params,
-                                       geo_eval_log::GeoTreeLog &tree_log)
+                                       eval_log::NodeTreeLog &tree_log)
 {
   tree_log.ensure_socket_values();
-  geo_eval_log::ValueLog *value_log = tree_log.find_socket_value_log(params.socket);
+  eval_log::ValueLog *value_log = tree_log.find_socket_value_log(params.socket);
   if (!value_log) {
     return false;
   }
-  if (const auto *generic_value_log = dynamic_cast<const geo_eval_log::GenericValueLog *>(
-          value_log))
-  {
+  if (const auto *generic_value_log = dynamic_cast<const eval_log::GenericValueLog *>(value_log)) {
     return draw_generic_value_log(params, generic_value_log->value);
   }
-  if (const auto *string_value_log = dynamic_cast<const geo_eval_log::StringLog *>(value_log)) {
+  if (const auto *string_value_log = dynamic_cast<const eval_log::StringLog *>(value_log)) {
     draw_string(params.layout, string_value_log->value);
     return true;
   }
   return false;
 }
+
 static void draw_input_socket(CustomSocketDrawParams &params)
 {
   SpaceNode *snode = CTX_wm_space_node(&params.C);
@@ -185,9 +237,9 @@ static void draw_input_socket(CustomSocketDrawParams &params)
     params.draw_standard(params.layout);
     return;
   }
-  const geo_eval_log::ContextualGeoTreeLogs geo_tree_logs =
-      geo_eval_log::GeoNodesLog::get_contextual_tree_logs(*snode);
-  geo_eval_log::GeoTreeLog *tree_log = geo_tree_logs.get_main_tree_log(params.node);
+  const eval_log::ContextualNodeTreeLogs tree_logs =
+      eval_log::NodesEvalLog::get_contextual_tree_logs(*snode);
+  eval_log::NodeTreeLog *tree_log = tree_logs.get_main_tree_log(params.node);
   if (!tree_log) {
     params.draw_standard(params.layout);
     return;
@@ -213,64 +265,59 @@ static void node_declare(NodeDeclarationBuilder &b)
     return;
   }
 
-  b.add_default_layout();
-
   const NodeGeometryViewer &storage = node_storage(*node);
+
+  bool has_geometry_input = false;
+  bool has_potential_attribute_input = false;
   for (const int i : IndexRange(storage.items_num)) {
     const NodeGeometryViewerItem &item = storage.items[i];
-    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
-    const StringRef name = item.name ? item.name : "";
+    const eNodeSocketDatatype socket_type = item.socket_type;
+    if (socket_type == SOCK_GEOMETRY) {
+      has_geometry_input = true;
+    }
+    else if (socket_type_supports_attributes(socket_type)) {
+      has_potential_attribute_input = true;
+    }
+  }
+
+  if (has_geometry_input && has_potential_attribute_input) {
+    b.add_layout([](ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr) {
+      layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
+    });
+  }
+
+  for (const int i : IndexRange(storage.items_num)) {
+    const NodeGeometryViewerItem &item = storage.items[i];
+    const eNodeSocketDatatype socket_type = item.socket_type;
+    const UString name = item.name ? UString(item.name) : ""_ustr;
     const std::string identifier = GeoViewerItemsAccessor::socket_identifier_for_item(item);
-    auto &input_decl = b.add_input(socket_type, name, identifier)
+    auto &input_decl = b.add_input(socket_type, name, UString(identifier))
                            .socket_name_ptr(
-                               &tree->id, GeoViewerItemsAccessor::item_srna, &item, "name");
-    if (socket_type_supports_fields(socket_type)) {
-      input_decl.field_on_all();
+                               &tree->id, *GeoViewerItemsAccessor::item_srna, &item, "name");
+    if (socket_type_supports_attributes(socket_type)) {
+      input_decl.evaluated_geometry_field();
     }
     input_decl.structure_type(StructureType::Dynamic);
     input_decl.custom_draw([](CustomSocketDrawParams &params) { draw_input_socket(params); });
   }
 
-  b.add_input<decl::Extend>("", "__extend__").structure_type(StructureType::Dynamic);
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr).structure_type(StructureType::Dynamic);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryViewer *data = MEM_callocN<NodeGeometryViewer>(__func__);
+  NodeGeometryViewer *data = MEM_new<NodeGeometryViewer>(__func__);
   data->data_type_legacy = CD_PROP_FLOAT;
-  data->domain = int8_t(AttrDomain::Auto);
+  data->domain = int8_t(bke::AttrDomainSelection::Auto);
   node->storage = data;
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  const bNode &node = *ptr->data_as<bNode>();
-  const NodeGeometryViewer &storage = node_storage(node);
-
-  bool has_geometry_input = false;
-  bool has_potential_field_input = false;
-  for (const int i : IndexRange(storage.items_num)) {
-    const NodeGeometryViewerItem &item = storage.items[i];
-    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
-    if (socket_type == SOCK_GEOMETRY) {
-      has_geometry_input = true;
-    }
-    else if (socket_type_supports_fields(socket_type)) {
-      has_potential_field_input = true;
-    }
-  }
-
-  if (has_geometry_input && has_potential_field_input) {
-    layout->prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
-  }
-}
-
-static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
+static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
   bNode &node = *ptr->data_as<bNode>();
   bNodeTree &ntree = *reinterpret_cast<bNodeTree *>(ptr->owner_id);
 
-  if (uiLayout *panel = layout->panel(C, "viewer_items", false, IFACE_("Viewer Items"))) {
+  if (ui::Layout *panel = layout.panel(C, "viewer_items", false, IFACE_("Viewer Items"))) {
     socket_items::ui::draw_items_list_with_operators<GeoViewerItemsAccessor>(
         C, panel, ntree, node);
     socket_items::ui::draw_active_item_props<GeoViewerItemsAccessor>(
@@ -288,10 +335,10 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   const bNodeSocket &other_socket = params.other_socket();
   if (other_socket.in_out == SOCK_OUT) {
     params.add_item(IFACE_("Value"), [](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeViewer");
+      bNode &node = params.add_node("GeometryNodeViewer"_ustr);
       const auto *item = socket_items::add_item_with_socket_type_and_name<GeoViewerItemsAccessor>(
           params.node_tree, node, params.socket.typeinfo->type, params.socket.name);
-      params.update_and_connect_available_socket(node, item->name);
+      params.update_and_connect_available_socket(node, UString(item->name));
       SpaceNode *snode = CTX_wm_space_node(&params.C);
       Main *bmain = CTX_data_main(&params.C);
       ed::viewer_path::activate_geometry_node(*bmain, *snode, node);
@@ -304,7 +351,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
  * Evaluates the first field after for each geometry as ".viewer" attribute. This attribute is used
  * by drawing code.
  */
-static void log_viewer_attribute(const bNode &node, geo_eval_log::ViewerNodeLog &r_log)
+static void log_viewer_attribute(const bNode &node, eval_log::ViewerNodeLog &r_log)
 {
   const auto &storage = *static_cast<NodeGeometryViewer *>(node.storage);
   const StringRef viewer_attribute_name = ".viewer";
@@ -313,29 +360,29 @@ static void log_viewer_attribute(const bNode &node, geo_eval_log::ViewerNodeLog 
     const bNodeSocket &bsocket = node.input_socket(i);
     const NodeGeometryViewerItem &item = storage.items[i];
     const bke::bNodeSocketType &type = *bsocket.typeinfo;
+    const bke::SocketValueVariant &value = r_log.items.lookup_key_as(item.identifier).value;
 
-    if (type.type == SOCK_GEOMETRY) {
+    if (type.type == SOCK_GEOMETRY && value.is_single()) {
       last_geometry_identifier = item.identifier;
       continue;
     }
     if (!last_geometry_identifier) {
       continue;
     }
-    if (!socket_type_supports_fields(type.type)) {
+    if (!socket_type_supports_attributes(type.type)) {
       continue;
     }
     /* Changing the `value` field doesn't change the hash or equality of the item. */
     GMutablePointer geometry_ptr = const_cast<bke::SocketValueVariant &>(
                                        r_log.items.lookup_key_as(*last_geometry_identifier).value)
-                                       .get_single_ptr();
+                                       .get();
     GeometrySet &geometry = *geometry_ptr.get<GeometrySet>();
-    const bke::SocketValueVariant &value = r_log.items.lookup_key_as(item.identifier).value;
-    if (!(value.is_single() || value.is_context_dependent_field())) {
+    if (!(value.is_single() || value.is_field())) {
       continue;
     }
-    const GField field = value.get<GField>();
-    const AttrDomain domain_or_auto = AttrDomain(storage.domain);
-    if (domain_or_auto == AttrDomain::Instance) {
+    const GField field = value.copy_as<GField>();
+    const auto domain_or_auto = bke::AttrDomainSelection(storage.domain);
+    if (domain_or_auto == bke::AttrDomainSelection::Instance) {
       if (geometry.has_instances()) {
         bke::GeometryComponent &component =
             geometry.get_component_for_write<bke::InstancesComponent>();
@@ -355,8 +402,8 @@ static void log_viewer_attribute(const bNode &node, geo_eval_log::ViewerNodeLog 
             continue;
           }
           bke::GeometryComponent &component = geometry.get_component_for_write(type);
-          AttrDomain used_domain = domain_or_auto;
-          if (domain_or_auto == AttrDomain::Auto) {
+          AttrDomain used_domain;
+          if (domain_or_auto == bke::AttrDomainSelection::Auto) {
             if (const std::optional<AttrDomain> domain = bke::try_detect_field_domain(component,
                                                                                       field))
             {
@@ -366,18 +413,21 @@ static void log_viewer_attribute(const bNode &node, geo_eval_log::ViewerNodeLog 
               used_domain = AttrDomain::Point;
             }
           }
+          else {
+            used_domain = bke::AttrDomain(domain_or_auto);
+          }
           bke::try_capture_field_on_geometry(component, viewer_attribute_name, used_domain, field);
         }
       });
     }
-    /* Avoid overriding the viewer attribute with other fields.*/
+    /* Avoid overriding the viewer attribute with other fields. */
     last_geometry_identifier.reset();
   }
 }
 
 static void geo_viewer_node_log_impl(const bNode &node,
                                      const Span<bke::SocketValueVariant *> input_values,
-                                     geo_eval_log::ViewerNodeLog &r_log)
+                                     eval_log::ViewerNodeLog &r_log)
 {
   const auto &storage = *static_cast<NodeGeometryViewer *>(node.storage);
   for (const int i : IndexRange(storage.items_num)) {
@@ -388,9 +438,7 @@ static void geo_viewer_node_log_impl(const bNode &node,
     const NodeGeometryViewerItem &item = storage.items[i];
 
     bke::SocketValueVariant &value = *input_values[i];
-    if (value.is_single() && value.get_single_ptr().is_type<bke::GeometrySet>()) {
-      value.get_single_ptr().get<bke::GeometrySet>()->ensure_owns_direct_data();
-    }
+    value.ensure_owns_direct_data();
     r_log.items.add_new({item.identifier, item.name, std::move(value)});
   }
   log_viewer_attribute(node, r_log);
@@ -401,20 +449,20 @@ static void node_extra_info(NodeExtraInfoParams &params)
   SpaceNode *snode = CTX_wm_space_node(&params.C);
   if (snode) {
     if (std::optional<ed::space_node::ObjectAndModifier> object_and_modifier =
-            ed::space_node::get_modifier_for_node_editor(*snode))
+            ed::space_node::get_geometry_nodes_modifier_for_node_editor(*snode))
     {
       const NodesModifierData &nmd = *object_and_modifier->nmd;
       nmd.node_group->ensure_topology_cache();
       if (!(nmd.modifier.mode & eModifierMode_Realtime)) {
         NodeExtraInfoRow row;
-        row.icon = ICON_ERROR;
+        row.icon = ICON_STATUS_ERROR;
         row.text = TIP_("Modifier disabled");
         row.tooltip = TIP_("The viewer does not work because the modifier is disabled");
         params.rows.append(std::move(row));
       }
       else if (!nmd.node_group->group_output_node()) {
         NodeExtraInfoRow row;
-        row.icon = ICON_ERROR;
+        row.icon = ICON_STATUS_ERROR;
         row.text = TIP_("Missing output");
         row.tooltip = TIP_(
             "The viewer does not work because the node group used by the modifier has no output");
@@ -425,7 +473,7 @@ static void node_extra_info(NodeExtraInfoParams &params)
   const auto data_type = eCustomDataType(node_storage(params.node).data_type_legacy);
   if (ELEM(data_type, CD_PROP_QUATERNION, CD_PROP_FLOAT4X4)) {
     NodeExtraInfoRow row;
-    row.icon = ICON_INFO;
+    row.icon = ICON_STATUS_INFO;
     row.text = TIP_("No color overlay");
     row.tooltip = TIP_(
         "Rotation values can only be displayed with the text overlay in the 3D view");
@@ -441,15 +489,13 @@ static void node_operators()
 static void node_free_storage(bNode *node)
 {
   socket_items::destruct_array<GeoViewerItemsAccessor>(*node);
-  MEM_freeN(node->storage);
+  MEM_delete(static_cast<NodeGeometryViewer *>(node->storage));
 }
 
 static void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const bNode *src_node)
 {
   const NodeGeometryViewer &src_storage = node_storage(*src_node);
-  auto *dst_storage = MEM_mallocN<NodeGeometryViewer>(__func__);
-  *dst_storage = src_storage;
-  dst_node->storage = dst_storage;
+  dst_node->storage = MEM_new<NodeGeometryViewer>(__func__, dna::shallow_copy(src_storage));
 
   socket_items::copy_array<GeoViewerItemsAccessor>(*src_node, *dst_node);
 }
@@ -477,18 +523,16 @@ static void node_blend_read(bNodeTree & /*tree*/, bNode &node, BlendDataReader &
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeViewer", GEO_NODE_VIEWER);
+  geo_node_type_base(&ntype, "GeometryNodeViewer"_ustr, GEO_NODE_VIEWER);
   ntype.ui_name = "Viewer";
   ntype.ui_description = "Display the input data in the Spreadsheet Editor";
   ntype.enum_name_legacy = "VIEWER";
   ntype.nclass = NODE_CLASS_OUTPUT;
-  blender::bke::node_type_storage(
-      ntype, "NodeGeometryViewer", node_free_storage, node_copy_storage);
+  bke::node_type_storage(ntype, "NodeGeometryViewer", node_free_storage, node_copy_storage);
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
-  ntype.draw_buttons = node_layout;
   ntype.draw_buttons_ex = node_layout_ex;
   ntype.insert_link = node_insert_link;
   ntype.gather_link_search_ops = node_gather_link_searches;
@@ -497,20 +541,20 @@ static void node_register()
   ntype.get_extra_info = node_extra_info;
   ntype.blend_write_storage_content = node_blend_write;
   ntype.blend_data_read_storage_content = node_blend_read;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_geo_viewer_cc
+}  // namespace nodes::node_geo_viewer_cc
 
-namespace blender::nodes {
+namespace nodes {
 
-StructRNA *GeoViewerItemsAccessor::item_srna = &RNA_NodeGeometryViewerItem;
+StructRNA **GeoViewerItemsAccessor::item_srna = &RNA_NodeGeometryViewerItem;
 
 void GeoViewerItemsAccessor::blend_write_item(BlendWriter *writer,
                                               const NodeGeometryViewerItem &item)
 {
-  BLO_write_string(writer, item.name);
+  writer->write_string(item.name);
 }
 
 void GeoViewerItemsAccessor::blend_read_data_item(BlendDataReader *reader,
@@ -521,9 +565,10 @@ void GeoViewerItemsAccessor::blend_read_data_item(BlendDataReader *reader,
 
 void geo_viewer_node_log(const bNode &node,
                          const Span<bke::SocketValueVariant *> input_values,
-                         geo_eval_log::ViewerNodeLog &r_log)
+                         eval_log::ViewerNodeLog &r_log)
 {
   node_geo_viewer_cc::geo_viewer_node_log_impl(node, input_values, r_log);
 }
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

@@ -16,8 +16,8 @@
 
 #include "BKE_context.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -26,8 +26,6 @@
 #include "transform_mode.hh"
 
 #include "ED_sequencer.hh"
-
-#include "SEQ_time.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -78,16 +76,17 @@ static void InputSpringDelta(TransInfo *t, MouseInput *mi, const double mval[2],
 }
 
 /** Callback for #INPUT_TRACKBALL. */
-static void InputTrackBall(TransInfo * /*t*/,
-                           MouseInput *mi,
-                           const double mval[2],
-                           float output[3])
+static void InputTrackBall(TransInfo *t, MouseInput *mi, const double mval[2], float output[3])
 {
   output[0] = float(mi->imval[1] - mval[1]);
   output[1] = float(mval[0] - mi->imval[0]);
 
   output[0] *= mi->factor;
   output[1] *= mi->factor;
+
+  if (t->flag & T_VIEW_NEGATIVE) {
+    negate_v2(output);
+  }
 }
 
 /** Callback for #INPUT_HORIZONTAL_RATIO. */
@@ -178,7 +177,7 @@ struct InputAngle_Data {
 };
 
 /** Callback for #INPUT_ANGLE. */
-static void InputAngle(TransInfo * /*t*/, MouseInput *mi, const double mval[2], float output[3])
+static void InputAngle(TransInfo *t, MouseInput *mi, const double mval[2], float output[3])
 {
   InputAngle_Data *data = static_cast<InputAngle_Data *>(mi->data);
   float dir_prev[2], dir_curr[2], mi_center[2];
@@ -191,6 +190,10 @@ static void InputAngle(TransInfo * /*t*/, MouseInput *mi, const double mval[2], 
     float dphi = angle_normalized_v2v2(dir_prev, dir_curr);
 
     if (cross_v2v2(dir_prev, dir_curr) > 0.0f) {
+      dphi = -dphi;
+    }
+
+    if (t->flag & T_VIEW_NEGATIVE) {
       dphi = -dphi;
     }
 
@@ -229,7 +232,7 @@ void setCustomPoints(TransInfo * /*t*/,
 {
   int *data;
 
-  mi->data = MEM_reallocN(mi->data, sizeof(int[4]));
+  mi->data = MEM_realloc_uninitialized(mi->data, sizeof(int[4]));
 
   data = static_cast<int *>(mi->data);
 
@@ -317,9 +320,7 @@ static int transform_seq_slide_cursor_get(TransInfo *t)
     Strip *strip1 = strips[0];
     Strip *strip2 = strips[1];
 
-    if (seq::time_left_handle_frame_get(scene, strip1) >
-        seq::time_left_handle_frame_get(scene, strip2))
-    {
+    if (strip1->left_handle() > strip2->left_handle()) {
       SWAP(Strip *, strip1, strip2);
     }
 
@@ -327,9 +328,7 @@ static int transform_seq_slide_cursor_get(TransInfo *t)
       return WM_CURSOR_NSEW_SCROLL;
     }
 
-    if (seq::time_right_handle_frame_get(scene, strip1) !=
-        seq::time_left_handle_frame_get(scene, strip2))
-    {
+    if (strip1->right_handle(scene) != strip2->left_handle()) {
       return WM_CURSOR_NSEW_SCROLL;
     }
 
@@ -377,7 +376,7 @@ void initMouseInputMode(TransInfo *t, MouseInput *mi, MouseInputMode mode)
       InputAngle_Data *data;
       mi->use_virtual_mval = false;
       mi->precision_factor = 1.0f / 30.0f;
-      data = MEM_callocN<InputAngle_Data>("angle accumulator");
+      data = MEM_new_zeroed<InputAngle_Data>("angle accumulator");
       data->mval_prev[0] = mi->imval[0];
       data->mval_prev[1] = mi->imval[1];
       mi->data = data;
@@ -448,7 +447,7 @@ void initMouseInputMode(TransInfo *t, MouseInput *mi, MouseInputMode mode)
       }
       /* Only use special cursor, when tweaking strips with mouse. */
       if (t->mode == TFM_SEQ_SLIDE) {
-        if (transform_mode_edge_seq_slide_use_restore_handle_selection(t)) {
+        if ((t->flag & T_MODAL) && transform_mode_edge_seq_slide_use_restore_handle_selection(t)) {
           WM_cursor_modal_set(win, transform_seq_slide_cursor_get(t));
         }
         else {
@@ -483,7 +482,7 @@ void initMouseInputMode(TransInfo *t, MouseInput *mi, MouseInputMode mode)
   /* If we've allocated new data, free the old data
    * less hassle than checking before every alloc above. */
   if (mi_data_prev && (mi_data_prev != mi->data)) {
-    MEM_freeN(mi_data_prev);
+    MEM_delete_void(mi_data_prev);
   }
 }
 

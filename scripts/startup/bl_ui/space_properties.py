@@ -10,12 +10,13 @@ from bpy.app.translations import (
 )
 
 
-tab_list = [
+tabs_attr_infos = (
     ("show_properties_tool", "Tool", 'TOOL_SETTINGS'),
     ("show_properties_render", "Render", 'SCENE'),
     ("show_properties_output", "Output", 'OUTPUT'),
-    ("show_properties_view_layer", "View Layer", 'RENDERLAYERS'),
     ("show_properties_scene", "Scene", 'SCENE_DATA'),
+    ("show_properties_view_layer", "View Layer", 'RENDERLAYERS'),
+    ("show_properties_compositor", "Compositor & Effects", 'NODE_COMPOSITING'),
     ("show_properties_world", "World", 'WORLD'),
     ("show_properties_collection", "Collection", 'GROUP'),
     ("show_properties_object", "Object", 'OBJECT_DATA'),
@@ -29,9 +30,9 @@ tab_list = [
     ("show_properties_bone_constraints", "Bone Constraints", 'CONSTRAINT_BONE'),
     ("show_properties_material", "Material", 'MATERIAL'),
     ("show_properties_texture", "Texture", 'TEXTURE'),
-    ("show_properties_strip", "Strip", 'SEQ_SEQUENCER'),
+    ("show_properties_strip", "Strip", 'SEQ_STRIP'),
     ("show_properties_strip_modifier", "Strip Modifiers", 'SEQ_STRIP_MODIFIER'),
-]
+)
 
 
 class PROPERTIES_HT_header(Header):
@@ -39,7 +40,7 @@ class PROPERTIES_HT_header(Header):
 
     @staticmethod
     def _search_poll(space):
-        return any(getattr(space, tab_info[0]) for tab_info in tab_list)
+        return any(getattr(space, tab_info[0]) for tab_info in tabs_attr_infos)
 
     def draw(self, context):
         layout = self.layout
@@ -69,7 +70,7 @@ class PROPERTIES_HT_header(Header):
 
 
 def has_hidden_tabs(space):
-    return not all(getattr(space, tab_info[0]) for tab_info in tab_list)
+    return not all(getattr(space, tab_info[0]) for tab_info in tabs_attr_infos)
 
 
 class PROPERTIES_PT_navigation_bar(Panel):
@@ -101,7 +102,7 @@ class PROPERTIES_PT_navigation_bar(Panel):
         sub.scale_x = 0.8
         sub.scale_y = 0.8
         sub.separator(factor=0.7)
-        sub.popover(panel="PROPERTIES_PT_visibility", text="")
+        sub.popover(panel="PROPERTIES_PT_visibility", text="", direction='HORIZONTAL')
         sub.active = has_hidden_tabs(view)
 
 
@@ -167,7 +168,7 @@ class PropertiesAnimationMixin:
             class_list = [c.__name__ for c in cls.mro()]
             print("PropertiesAnimationMixin: no animatable data-block, this is a bug "
                   "in one of these classes: {!r}".format(class_list))
-            layout.label(text="No animatable data-block, please report as bug", icon='ERROR')
+            layout.label(text="No animatable data-block, please report as bug", icon='STATUS_ERROR')
             return
 
         anim.draw_action_and_slot_selector_for_id(layout, animated_id)
@@ -186,7 +187,7 @@ class PROPERTIES_PT_visibility(Panel):
 
         col = layout.column(align=True)
         col.label(text="Visible Tabs")
-        for prop, name, icon in tab_list:
+        for prop, name, icon in tabs_attr_infos:
             row = col.row(align=True)
             row.label(text=iface_(name), icon=icon)
             row.prop(space, prop, text="")

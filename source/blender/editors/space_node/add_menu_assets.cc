@@ -2,13 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup spnode
+ */
+
 #include "AS_asset_catalog.hh"
 #include "AS_asset_catalog_tree.hh"
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
 
 #include "BLI_multi_value_map.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_space_types.h"
 
@@ -52,7 +56,8 @@ static asset::AssetItemTree build_catalog_tree(const bContext &C, const bNodeTre
   };
   const AssetLibraryReference library = asset_system::all_library_reference();
   asset_system::all_library_reload_catalogs_if_dirty();
-  return asset::build_filtered_all_catalog_tree(library, C, type_filter, meta_data_filter);
+  return asset::build_filtered_all_catalog_tree(
+      library, C, type_filter, meta_data_filter, node_tree.typeinfo->asset_catalog_path_prefix);
 }
 
 /**
@@ -171,13 +176,12 @@ static void node_catalog_assets_draw(const bContext *C, Menu *menu)
   }
   asset::AssetItemTree &tree = *snode.runtime->assets_for_menu;
 
-  const std::optional<blender::StringRefNull> menu_path = CTX_data_string_get(
-      C, "asset_catalog_path");
+  const std::optional<StringRefNull> menu_path = CTX_data_string_get(C, "asset_catalog_path");
   if (!menu_path) {
     return;
   }
 
-  const std::optional<blender::StringRefNull> operator_id = CTX_data_string_get(C, "operator_id");
+  const std::optional<StringRefNull> operator_id = CTX_data_string_get(C, "operator_id");
   if (!operator_id) {
     return;
   }
@@ -192,7 +196,7 @@ static void node_catalog_assets_draw(const bContext *C, Menu *menu)
     return;
   }
 
-  uiLayout *layout = menu->layout;
+  ui::Layout *layout = menu->layout;
   bool add_separator = true;
 
   for (const asset_system::AssetRepresentation *asset : assets) {
@@ -200,12 +204,8 @@ static void node_catalog_assets_draw(const bContext *C, Menu *menu)
       layout->separator();
       add_separator = false;
     }
-    PointerRNA op_ptr = layout->op(*operator_id,
-                                   IFACE_(asset->get_name()),
-                                   ICON_NONE,
-                                   wm::OpCallContext::InvokeRegionWin,
-                                   UI_ITEM_NONE);
-    asset::operator_asset_reference_props_set(*asset, op_ptr);
+    ed::asset::draw_asset_menu_item(
+        asset, *operator_id, wm::OpCallContext::InvokeRegionWin, *layout);
   }
 
   const Set<StringRef> all_builtin_menus = get_builtin_menus(edit_tree->type);
@@ -230,7 +230,7 @@ static void node_unassigned_assets_draw(const bContext *C, Menu *menu)
     return;
   }
 
-  const std::optional<blender::StringRefNull> operator_id = CTX_data_string_get(C, "operator_id");
+  const std::optional<StringRefNull> operator_id = CTX_data_string_get(C, "operator_id");
   if (!operator_id) {
     return;
   }
@@ -242,19 +242,15 @@ static void node_unassigned_assets_draw(const bContext *C, Menu *menu)
   }
   asset::AssetItemTree &tree = *snode.runtime->assets_for_menu;
   for (const asset_system::AssetRepresentation *asset : tree.unassigned_assets) {
-    PointerRNA op_ptr = menu->layout->op(*operator_id,
-                                         IFACE_(asset->get_name()),
-                                         ICON_NONE,
-                                         wm::OpCallContext::InvokeRegionWin,
-                                         UI_ITEM_NONE);
-    asset::operator_asset_reference_props_set(*asset, op_ptr);
+    asset::draw_asset_menu_item(
+        asset, *operator_id, wm::OpCallContext::InvokeRegionWin, *menu->layout);
   }
 }
 
 static void root_catalogs_draw(const bContext *C, Menu *menu, const StringRefNull operator_id)
 {
   SpaceNode &snode = *CTX_wm_space_node(C);
-  uiLayout *layout = menu->layout;
+  ui::Layout *layout = menu->layout;
   const bNodeTree *edit_tree = snode.edittree;
   if (!edit_tree) {
     return;
@@ -273,7 +269,7 @@ static void root_catalogs_draw(const bContext *C, Menu *menu, const StringRefNul
   layout->separator();
 
   if (!loading_finished) {
-    layout->label(IFACE_("Loading Asset Libraries"), ICON_INFO);
+    layout->label(IFACE_("Loading Asset Libraries"), ICON_STATUS_INFO);
   }
 
   const Set<StringRef> all_builtin_menus = get_builtin_menus(edit_tree->type);
@@ -351,10 +347,10 @@ MenuType swap_root_catalogs_menu_type()
   return type;
 }
 
-void ui_template_node_asset_menu_items(uiLayout &layout,
+void ui_template_node_asset_menu_items(ui::Layout &layout,
                                        const bContext &C,
                                        const StringRef catalog_path,
-                                       const NodeAssetMenuOperatorType operator_type)
+                                       const ui::NodeAssetMenuOperatorType operator_type)
 {
   SpaceNode &snode = *CTX_wm_space_node(&C);
   if (snode.runtime->assets_for_menu == nullptr) {
@@ -369,14 +365,14 @@ void ui_template_node_asset_menu_items(uiLayout &layout,
   StringRef operator_id;
 
   switch (operator_type) {
-    case NodeAssetMenuOperatorType::Swap:
+    case ui::NodeAssetMenuOperatorType::Swap:
       operator_id = "NODE_OT_swap_group_asset";
       break;
     default:
       operator_id = "NODE_OT_add_group_asset";
   }
 
-  uiLayout *col = &layout.column(false);
+  ui::Layout *col = &layout.column(false);
   col->context_string_set("asset_catalog_path", item->catalog_path().str());
   col->context_string_set("operator_id", operator_id);
   col->menu_contents("NODE_MT_node_catalog_assets");

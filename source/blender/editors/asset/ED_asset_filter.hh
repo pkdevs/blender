@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "DNA_listBase.h"
 
 #include "BLI_function_ref.hh"
@@ -19,20 +21,23 @@
 #include "AS_asset_catalog_path.hh"
 #include "AS_asset_catalog_tree.hh"
 
+namespace blender {
+
 struct AssetLibraryReference;
 struct AssetMetaData;
+struct AssetTag;
 struct bContext;
-namespace blender::asset_system {
+namespace asset_system {
 class AssetLibrary;
 class AssetRepresentation;
-}  // namespace blender::asset_system
+}  // namespace asset_system
 
-namespace blender::ed::asset {
+namespace ed::asset {
 
 struct AssetFilterSettings {
   /** Tags to match against. These are newly allocated, and compared against the
    * #AssetMetaData.tags. */
-  ListBase tags;     /* AssetTag */
+  ListBaseT<AssetTag> tags;
   uint64_t id_types; /* rna_enum_id_type_filter_items */
 };
 
@@ -49,7 +54,7 @@ struct AssetFilterSettings {
  * Otherwise returns false (mismatch).
  */
 bool filter_matches_asset(const AssetFilterSettings *filter,
-                          const blender::asset_system::AssetRepresentation &asset);
+                          const asset_system::AssetRepresentation &asset);
 
 struct AssetItemTree {
   asset_system::AssetCatalogTree catalogs;
@@ -64,11 +69,13 @@ struct AssetItemTree {
 asset_system::AssetCatalogTree build_filtered_catalog_tree(
     const asset_system::AssetLibrary &library,
     const AssetLibraryReference &library_ref,
-    blender::FunctionRef<bool(const asset_system::AssetRepresentation &)> is_asset_visible_fn);
+    FunctionRef<bool(const asset_system::AssetRepresentation &)> is_asset_visible_fn);
 AssetItemTree build_filtered_all_catalog_tree(
     const AssetLibraryReference &library_ref,
     const bContext &C,
     const AssetFilterSettings &filter_settings,
-    FunctionRef<bool(const AssetMetaData &)> meta_data_filter = {});
+    FunctionRef<bool(const AssetMetaData &)> meta_data_filter = {},
+    const std::optional<StringRef> skip_prefix = std::nullopt);
 
-}  // namespace blender::ed::asset
+}  // namespace ed::asset
+}  // namespace blender

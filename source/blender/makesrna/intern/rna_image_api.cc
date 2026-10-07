@@ -22,19 +22,24 @@
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_math_base.h"
-#  include "BLI_string.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_base_c.hh"
+#  include "BLI_string.hh"
 
 #  include "BKE_context.hh"
 #  include "BKE_image.hh"
 #  include "BKE_image_format.hh"
+#  include "BKE_image_gpu.hh"
 #  include "BKE_image_save.hh"
 #  include "BKE_library.hh"
 #  include "BKE_main.hh"
+
 #  include "BKE_report.hh"
 #  include "BKE_scene.hh"
+#  include "GPU_texture.hh"
 
 #  include "IMB_imbuf.hh"
+#  include "IMB_partial_update.hh"
 
 #  include "DNA_image_types.h"
 #  include "DNA_scene_types.h"
@@ -42,6 +47,8 @@
 #  include "MEM_guardedalloc.h"
 
 #  include "WM_api.hh"
+
+namespace blender {
 
 static void rna_ImagePackedFile_save(ImagePackedFile *imapf, Main *bmain, ReportList *reports)
 {
@@ -127,20 +134,7 @@ static void rna_Image_save(Image *image,
 static void rna_Image_pack(
     Image *image, Main *bmain, bContext *C, ReportList *reports, const char *data, int data_len)
 {
-  BKE_image_free_packedfiles(image);
-
-  if (data) {
-    char *data_dup = MEM_malloc_arrayN<char>(size_t(data_len), __func__);
-    memcpy(data_dup, data, size_t(data_len));
-    BKE_image_packfiles_from_mem(reports, image, data_dup, size_t(data_len));
-  }
-  else if (BKE_image_is_dirty(image)) {
-    BKE_image_memorypack(image);
-  }
-  else {
-    BKE_image_packfiles(reports, image, ID_BLEND_PATH(bmain, &image->id));
-  }
-
+  BKE_image_packfile_ensure(bmain, image, reports, data, data_len);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, image);
 }
 
@@ -180,12 +174,11 @@ static void rna_Image_update(Image *image, ReportList *reports)
     return;
   }
 
-  if (ibuf->byte_buffer.data) {
+  if (ibuf->byte_data()) {
     IMB_byte_from_float(ibuf);
   }
 
-  ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  BKE_image_partial_update_mark_full_update(image);
+  IMB_partial_update_mark_full(ibuf);
 
   BKE_image_release_ibuf(image, ibuf, nullptr);
 }
@@ -207,7 +200,6 @@ static void rna_Image_scale(
     BKE_reportf(reports, RPT_ERROR, "Image '%s' failed to load image buffer", image->id.name + 2);
     return;
   }
-  BKE_image_partial_update_mark_full_update(image);
   WM_main_add_notifier(NC_IMAGE | NA_EDITED, image);
 }
 
@@ -223,7 +215,7 @@ static int rna_Image_gl_load(
     BKE_image_multilayer_index(image->rr, &iuser);
   }
 
-  blender::gpu::Texture *tex = BKE_image_get_gpu_texture(image, &iuser);
+  gpu::Texture *tex = BKE_image_acquire_gpu_texture(image, &iuser);
 
   if (tex == nullptr) {
     BKE_reportf(reports, RPT_ERROR, "Failed to load image texture '%s'", image->id.name + 2);
@@ -231,26 +223,22 @@ static int rna_Image_gl_load(
     return 0x0502; /* GL_INVALID_OPERATION */
   }
 
+  GPU_texture_free(tex);
+
   return 0; /* GL_NO_ERROR */
 }
 
 static int rna_Image_gl_touch(
     Image *image, ReportList *reports, int frame, int layer_index, int pass_index)
 {
-  int error = 0; /* GL_NO_ERROR */
-
-  BKE_image_tag_time(image);
-
-  if (image->gputexture[TEXTARGET_2D][0] == nullptr) {
-    error = rna_Image_gl_load(image, reports, frame, layer_index, pass_index);
-  }
-
-  return error;
+  /* Load tags as well, so this is the same and effectively was already since the
+   * initial implementation. */
+  return rna_Image_gl_load(image, reports, frame, layer_index, pass_index);
 }
 
 static void rna_Image_gl_free(Image *image)
 {
-  BKE_image_free_gputextures(image);
+  BKE_image_free_gpu_texture_caches(image);
 
   /* Remove the no-collect flag, image is available for garbage collection again. */
   image->flag &= ~IMA_NOCOLLECT;
@@ -266,7 +254,11 @@ static void rna_Image_buffers_free(Image *image)
   BKE_image_free_buffers_ex(image, true);
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_api_image_packed_file(StructRNA *srna)
 {
@@ -391,7 +383,7 @@ void RNA_api_image(StructRNA *srna)
               INT_MAX);
   /* return value */
   parm = RNA_def_int(
-      func, "error", 0, -INT_MAX, INT_MAX, "Error", "OpenGL error value", -INT_MAX, INT_MAX);
+      func, "error", 0, INT_MIN, INT_MAX, "Error", "OpenGL error value", INT_MIN, INT_MAX);
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "gl_load", "rna_Image_gl_load");
@@ -423,7 +415,7 @@ void RNA_api_image(StructRNA *srna)
               INT_MAX);
   /* return value */
   parm = RNA_def_int(
-      func, "error", 0, -INT_MAX, INT_MAX, "Error", "OpenGL error value", -INT_MAX, INT_MAX);
+      func, "error", 0, INT_MIN, INT_MAX, "Error", "OpenGL error value", INT_MIN, INT_MAX);
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "gl_free", "rna_Image_gl_free");
@@ -451,5 +443,7 @@ void RNA_api_image(StructRNA *srna)
 
   /* TODO: pack/unpack, maybe should be generic functions? */
 }
+
+}  // namespace blender
 
 #endif

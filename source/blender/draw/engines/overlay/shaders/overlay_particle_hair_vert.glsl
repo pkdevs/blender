@@ -14,14 +14,14 @@ VERTEX_SHADER_CREATE_INFO(overlay_particle_hair)
 #include "draw_object_infos_lib.glsl"
 #include "draw_view_clipping_lib.glsl"
 #include "draw_view_lib.glsl"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 #include "overlay_common_lib.glsl"
 #include "select_lib.glsl"
 
 /* TODO(fclem): Deduplicate wireframe color. */
 
-void wire_color_get(out float3 rim_col, out float3 wire_col)
+void wire_color_get(float3 &rim_col, float3 &wire_col)
 {
   eObjectInfoFlag ob_flag = drw_object_infos().flag;
   bool is_selected = flag_test(ob_flag, OBJECT_SELECTED);
@@ -58,7 +58,7 @@ float3 hsv_to_rgb(float3 hsv)
   return ((nrgb - 1.0f) * hsv.y + 1.0f) * hsv.z;
 }
 
-void wire_object_color_get(out float3 rim_col, out float3 wire_col)
+void wire_object_color_get(float3 &rim_col, float3 &wire_col)
 {
   ObjectInfos info = drw_object_infos();
   bool is_selected = flag_test(info.flag, OBJECT_SELECTED);

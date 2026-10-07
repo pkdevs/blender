@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <fcntl.h>
 #ifndef WIN32
 #  include <unistd.h>
@@ -19,7 +23,7 @@
 #include "BKE_main.hh"
 
 #include "BLI_fileops.hh"
-#include "BLI_mmap.h"
+#include "BLI_mmap.hh"
 #include "BLI_mutex.hh"
 #include "BLI_set.hh"
 
@@ -27,12 +31,12 @@ namespace blender::bke::id_hash {
 
 static std::optional<Vector<char>> read_file(const StringRefNull path)
 {
-  blender::fstream stream{path.c_str(), std::ios_base::in | std::ios_base::binary};
+  fstream stream{path.c_str(), std::ios_base::in | std::ios_base::binary};
   stream.seekg(0, std::ios_base::end);
   const int64_t size = stream.tellg();
   stream.seekg(0, std::ios_base::beg);
 
-  blender::Vector<char> buffer(size);
+  Vector<char> buffer(size);
   stream.read(buffer.data(), size);
   if (stream.bad()) {
     return std::nullopt;
@@ -103,6 +107,10 @@ static std::optional<XXH128_hash_t> get_source_file_hash(const ID &id, DeepHashE
     r_errors.missing_files.add_as(path);
     return std::nullopt;
   }
+  else if ((id.tag & ID_TAG_MISSING) != 0) {
+    r_errors.missing_from_files.add_as(path);
+    return std::nullopt;
+  }
 
   std::lock_guard lock(mutex);
   if (const CachedFileHash *cached_hash = cache.lookup_ptr_as(path)) {
@@ -111,9 +119,13 @@ static std::optional<XXH128_hash_t> get_source_file_hash(const ID &id, DeepHashE
     }
   }
 
-  if (stat.st_mtime != id.runtime->src_blend_modifification_time) {
-    r_errors.updated_files.add_as(path);
-    return std::nullopt;
+  /* The modification time may not be set if the data-block is added as linked data as part of
+   * versioning (e.g. in #do_versions_after_setup). */
+  if (id.runtime->src_blend_modifification_time != 0) {
+    if (stat.st_mtime != id.runtime->src_blend_modifification_time) {
+      r_errors.updated_files.add_as(path);
+      return std::nullopt;
+    }
   }
 
   if (const std::optional<XXH128_hash_t> hash = compute_file_hash(path)) {
@@ -173,10 +185,10 @@ static void compute_deep_hash_recursive(const Main &bmain,
       const_cast<ID *>(&id),
       [&](LibraryIDLinkCallbackData *cb_data) {
         if (cb_data->cb_flag & IDWALK_CB_LOOPBACK) {
-          /* Loopback pointer (e.g. from a shapekey to its owner geometry ID, or from a collection
-           * to its parents) should always be ignored, as they do not represent an actual
-           * dependency. The dependency relationship should already have been processed from the
-           * owner to its dependency anyway (if applicable). */
+          /* Loop-back pointer (e.g. from a shape-key to its owner geometry ID, or from a
+           * collection to its parents) should always be ignored, as they do not represent an
+           * actual dependency. The dependency relationship should already have been
+           * processed from the owner to its dependency anyway (if applicable). */
           return IDWALK_RET_NOP;
         }
         if (cb_data->cb_flag & (IDWALK_CB_EMBEDDED | IDWALK_CB_EMBEDDED_NOT_OWNING)) {
@@ -244,7 +256,9 @@ IDHashResult compute_linked_id_deep_hashes(const Main &bmain, Span<const ID *> i
   for (const ID *id : ids) {
     compute_deep_hash_recursive(bmain, *id, current_stack, hashes, errors);
   }
-  if (!errors.missing_files.is_empty() || !errors.updated_files.is_empty()) {
+  if (!errors.missing_files.is_empty() || !errors.missing_from_files.is_empty() ||
+      !errors.updated_files.is_empty())
+  {
     return errors;
   }
   return ValidDeepHashes{hashes};

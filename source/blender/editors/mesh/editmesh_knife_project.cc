@@ -9,9 +9,10 @@
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_array.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_types.hh"
+#include "BLI_vector.hh"
 
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
@@ -28,8 +29,6 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
-#include "MEM_guardedalloc.h"
-
 #include "WM_types.hh"
 
 #include "ED_mesh.hh"
@@ -38,9 +37,11 @@
 
 #include "mesh_intern.hh" /* own include */
 
-using blender::Vector;
+namespace blender {
 
-static LinkNode *knifeproject_poly_from_object(const bContext *C, Object *ob, LinkNode *polys)
+static void knifeproject_poly_from_object(const bContext *C,
+                                          Object *ob,
+                                          Vector<Array<float2>> &polys)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ARegion *region = CTX_wm_region(C);
@@ -62,31 +63,30 @@ static LinkNode *knifeproject_poly_from_object(const bContext *C, Object *ob, Li
   }
 
   if (mesh_eval) {
-    ListBase nurbslist = {nullptr, nullptr};
+    ListBaseT<Nurb> nurbslist = {nullptr, nullptr};
 
     BKE_mesh_to_curve_nurblist(mesh_eval, &nurbslist, 0); /* wire */
     BKE_mesh_to_curve_nurblist(mesh_eval, &nurbslist, 1); /* boundary */
 
-    const blender::float4x4 projmat = ED_view3d_ob_project_mat_get(
+    const float4x4 projmat = ED_view3d_ob_project_mat_get(
         static_cast<RegionView3D *>(region->regiondata), ob);
 
-    if (nurbslist.first) {
-      LISTBASE_FOREACH (Nurb *, nu, &nurbslist) {
-        if (nu->bp) {
+    if (nurbslist.first_) {
+      for (Nurb &nu : nurbslist) {
+        if (nu.bp) {
           int a;
           BPoint *bp;
-          bool is_cyclic = (nu->flagu & CU_NURB_CYCLIC) != 0;
-          float (*mval)[2] = static_cast<float (*)[2]>(
-              MEM_mallocN(sizeof(*mval) * (nu->pntsu + is_cyclic), __func__));
+          bool is_cyclic = (nu.flagu & CU_NURB_CYCLIC) != 0;
+          Array<float2> mval(nu.pntsu + is_cyclic);
 
-          for (bp = nu->bp, a = 0; a < nu->pntsu; a++, bp++) {
-            copy_v2_v2(mval[a], ED_view3d_project_float_v2_m4(region, bp->vec, projmat));
+          for (bp = nu.bp, a = 0; a < nu.pntsu; a++, bp++) {
+            mval[a] = ED_view3d_project_float_v2_m4(region, bp->vec, projmat);
           }
           if (is_cyclic) {
-            copy_v2_v2(mval[a], mval[0]);
+            mval[a] = mval[0];
           }
 
-          BLI_linklist_prepend(&polys, mval);
+          polys.append(std::move(mval));
         }
       }
     }
@@ -94,11 +94,9 @@ static LinkNode *knifeproject_poly_from_object(const bContext *C, Object *ob, Li
     BKE_nurbList_free(&nurbslist);
 
     if (mesh_eval_needs_free) {
-      BKE_id_free(nullptr, (ID *)mesh_eval);
+      BKE_id_free(nullptr, id_cast<ID *>(const_cast<Mesh *>(mesh_eval)));
     }
   }
-
-  return polys;
 }
 
 static wmOperatorStatus knifeproject_exec(bContext *C, wmOperator *op)
@@ -106,17 +104,17 @@ static wmOperatorStatus knifeproject_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   const bool cut_through = RNA_boolean_get(op->ptr, "cut_through");
 
-  LinkNode *polys = nullptr;
+  Vector<Array<float2>> polys;
 
   CTX_DATA_BEGIN (C, Object *, ob, selected_objects) {
     if (BKE_object_is_in_editmode(ob)) {
       continue;
     }
-    polys = knifeproject_poly_from_object(C, ob, polys);
+    knifeproject_poly_from_object(C, ob, polys);
   }
   CTX_DATA_END;
 
-  if (polys == nullptr) {
+  if (polys.is_empty()) {
     BKE_report(op->reports,
                RPT_ERROR,
                "No other selected objects have wire or boundary edges to use for projection");
@@ -126,25 +124,24 @@ static wmOperatorStatus knifeproject_exec(bContext *C, wmOperator *op)
   ViewContext vc = em_setup_viewcontext(C);
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      vc.scene, vc.view_layer, vc.v3d);
+      *vc.bmain, vc.scene, vc.view_layer, vc.v3d);
 
   EDBM_mesh_knife(&vc, objects, polys, true, cut_through);
 
   for (Object *obedit : objects) {
     ED_view3d_viewcontext_init_object(&vc, obedit);
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     /* select only tagged faces */
-    BM_mesh_elem_hflag_disable_all(em->bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
+    BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
 
-    EDBM_selectmode_disable(scene, em, SCE_SELECT_VERTEX, SCE_SELECT_EDGE);
+    EDBM_selectmode_disable(scene, em, bm, SCE_SELECT_VERTEX, SCE_SELECT_EDGE);
 
-    BM_mesh_elem_hflag_enable_test(em->bm, BM_FACE, BM_ELEM_SELECT, true, false, BM_ELEM_TAG);
+    BM_mesh_elem_hflag_enable_test(bm, BM_FACE, BM_ELEM_SELECT, true, false, BM_ELEM_TAG);
 
-    BM_mesh_select_mode_flush(em->bm);
+    BM_mesh_select_mode_flush(bm);
   }
-
-  BLI_linklist_freeN(polys);
 
   return OPERATOR_FINISHED;
 }
@@ -170,3 +167,5 @@ void MESH_OT_knife_project(wmOperatorType *ot)
                   "Cut Through",
                   "Cut through all faces, not just visible ones");
 }
+
+}  // namespace blender

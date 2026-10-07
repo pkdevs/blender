@@ -5,7 +5,6 @@
 
 #include "usd_armature_utils.hh"
 #include "usd_blend_shape_utils.hh"
-#include "usd_hash_types.hh"
 #include "usd_hierarchy_iterator.hh"
 #include "usd_skel_convert.hh"
 #include "usd_skel_root_utils.hh"
@@ -30,10 +29,12 @@
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
+
+#include "WM_types.hh"
 
 namespace blender::io::usd {
 
@@ -58,6 +59,7 @@ bool USDHierarchyIterator::mark_as_weak_export(const Object *object) const
     case OB_MESH:
     case OB_MBALL:
     case OB_FONT:
+    case OB_SURF:
       return !params_.export_meshes;
     case OB_CAMERA:
       return !params_.export_cameras;
@@ -137,8 +139,16 @@ USDExporterContext USDHierarchyIterator::create_usd_export_context(const Hierarc
   const std::string export_file_path = root_layer->GetRealPath();
   auto get_time_code = [this]() { return this->export_time_; };
 
-  USDExporterContext exporter_context = USDExporterContext{
-      bmain_, depsgraph_, stage_, path, get_time_code, params_, export_file_path, nullptr};
+  USDExporterContext exporter_context = USDExporterContext{bmain_,
+                                                           depsgraph_,
+                                                           stage_,
+                                                           path,
+                                                           get_time_code,
+                                                           params_,
+                                                           export_file_path,
+                                                           nullptr,
+                                                           nullptr,
+                                                           this};
 
   /* Provides optional skel mapping hook. Now it's been used in USDPointInstancerWriter for write
    * base layer. */
@@ -274,6 +284,9 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_data_writer(const Hierarch
 
   switch (context->object->type) {
     case OB_MESH:
+    case OB_SURF:
+      /* NURBS surfaces are tessellated to a mesh during depsgraph evaluation,
+       * so they can be written through the standard mesh writer. */
       if (usd_export_context.export_params.export_meshes) {
         if (params_.use_instancing && use_point_instancing) {
           USDExporterContext mesh_context = create_point_instancer_context(context,
@@ -371,7 +384,6 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_data_writer(const Hierarch
       break;
 
     case OB_EMPTY:
-    case OB_SURF:
     case OB_SPEAKER:
     case OB_LIGHTPROBE:
     case OB_LATTICE:
@@ -443,6 +455,30 @@ void USDHierarchyIterator::add_usd_skel_export_mapping(const Object *obj, const 
   }
 }
 
+const Map<pxr::SdfPath, Vector<ID *>> &USDHierarchyIterator::get_exported_prim_map() const
+{
+  return exported_prim_map_;
+}
+
+pxr::UsdStageRefPtr USDHierarchyIterator::get_stage() const
+{
+  return stage_;
+}
+
+void USDHierarchyIterator::add_to_prim_map(const pxr::SdfPath &usd_path, const ID *id) const
+{
+  if (!id) {
+    return;
+  }
+  ID *local_id = BKE_libblock_find_name(bmain_, GS(id->name), id->name + 2);
+  if (local_id) {
+    Vector<ID *> &id_list = exported_prim_map_.lookup_or_add_default(usd_path);
+    if (!id_list.contains(local_id)) {
+      id_list.append(local_id);
+    }
+  }
+}
+
 USDExporterContext USDHierarchyIterator::create_point_instancer_context(
     const HierarchyContext *context, const USDExporterContext &export_context) const
 {
@@ -461,7 +497,8 @@ USDExporterContext USDHierarchyIterator::create_point_instancer_context(
           export_context.export_params,
           export_context.export_file_path,
           export_context.export_image_fn,
-          export_context.add_skel_mapping_fn};
+          export_context.add_skel_mapping_fn,
+          export_context.hierarchy_iterator};
 }
 
 }  // namespace blender::io::usd

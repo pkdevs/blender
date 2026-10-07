@@ -94,8 +94,7 @@ ccl_device bool ray_disk_intersect(const float3 ray_P,
   const float3 vp = ray_P - disk_P;
   const float dp = dot(vp, disk_N);
   const float cos_angle = dot(disk_N, -ray_D);
-  if (dp * cos_angle > 0.f)  // front of light
-  {
+  if (dp * cos_angle > 0.f) {  // front of light
     const float t = dp / cos_angle;
     if (t < 0.f) { /* Ray points away from the light. */
       return false;
@@ -219,6 +218,34 @@ ccl_device_forceinline bool ray_triangle_intersect(const float3 ray_P,
   *isect_v = min(V * rcp_uvw, 1.0f);
   *isect_t = t;
   return true;
+}
+
+ccl_device_forceinline float2 ray_triangle_uv(const float3 ray_P,
+                                              const float3 ray_D,
+                                              const float3 tri_a,
+                                              const float3 tri_b,
+                                              const float3 tri_c)
+{
+  /* Matches ray_triangle-intersect, for an intersection known to exist. */
+
+  /* Calculate vertices relative to ray origin. */
+  const float3 v0 = tri_a - ray_P;
+  const float3 v1 = tri_b - ray_P;
+  const float3 v2 = tri_c - ray_P;
+
+  /* Calculate triangle edges. */
+  const float3 e0 = v2 - v0;
+  const float3 e1 = v0 - v1;
+  const float3 e2 = v1 - v2;
+
+  /* Compute barycentric coordinates. */
+  const float U = ray_triangle_dot(ray_triangle_cross(e0, v2 + v0), ray_D);
+  const float V = ray_triangle_dot(ray_triangle_cross(e1, v0 + v1), ray_D);
+  const float W = ray_triangle_dot(ray_triangle_cross(e2, v1 + v2), ray_D);
+  const float UVW = U + V + W;
+
+  const float rcp_uvw = (fabsf(UVW) < 1e-18f) ? 0.0f : ray_triangle_reciprocal(UVW);
+  return make_float2(clamp(U * rcp_uvw, 0.0f, 1.0f), clamp(V * rcp_uvw, 0.0f, 1.0f));
 }
 
 ccl_device_forceinline bool ray_triangle_intersect_self(const float3 ray_P,
@@ -392,7 +419,7 @@ ccl_device_inline bool ray_infinite_cylinder_intersect(const float3 P,
   return valid && !t_range->is_empty();
 }
 
-/* *
+/**
  * Find the ray segment inside a single-sided cone.
  *
  * \param axis: a unit-length direction around which the cone has a circular symmetry

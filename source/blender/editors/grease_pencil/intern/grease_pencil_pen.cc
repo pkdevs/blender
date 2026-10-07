@@ -38,7 +38,9 @@
 
 #include "UI_resources.hh"
 
-namespace blender::ed::greasepencil {
+namespace blender {
+
+namespace ed::greasepencil {
 
 class GreasePencilPenToolOperation : public curves::pen_tool::PenToolOperation {
  public:
@@ -48,12 +50,12 @@ class GreasePencilPenToolOperation : public curves::pen_tool::PenToolOperation {
   /* Helper class to project screen space coordinates to 3D. */
   DrawingPlacement placement;
 
-  float3 project(const float2 &screen_co) const
+  float3 project(const float2 &screen_co) const override
   {
     return this->placement.project(screen_co);
   }
 
-  IndexMask all_selected_points(const int curves_index, IndexMaskMemory &memory) const
+  IndexMask all_selected_points(const int curves_index, IndexMaskMemory &memory) const override
   {
     const MutableDrawingInfo &info = this->drawings[curves_index];
     return ed::greasepencil::retrieve_editable_and_all_selected_points(
@@ -64,7 +66,8 @@ class GreasePencilPenToolOperation : public curves::pen_tool::PenToolOperation {
         memory);
   }
 
-  IndexMask visible_bezier_handle_points(const int curves_index, IndexMaskMemory &memory) const
+  IndexMask visible_bezier_handle_points(const int curves_index,
+                                         IndexMaskMemory &memory) const override
   {
     const MutableDrawingInfo &info = this->drawings[curves_index];
     return ed::greasepencil::retrieve_visible_bezier_handle_points(
@@ -75,52 +78,57 @@ class GreasePencilPenToolOperation : public curves::pen_tool::PenToolOperation {
         memory);
   }
 
-  IndexMask editable_curves(const int curves_index, IndexMaskMemory &memory) const
+  IndexMask editable_curves(const int curves_index, IndexMaskMemory &memory) const override
   {
     const MutableDrawingInfo &info = this->drawings[curves_index];
     return ed::greasepencil::retrieve_editable_strokes(
         *this->vc.obact, info.drawing, info.layer_index, memory);
   }
 
-  void tag_curve_changed(const int curves_index) const
+  void tag_curve_changed(const int curves_index) const override
   {
     const MutableDrawingInfo &info = this->drawings[curves_index];
     info.drawing.tag_topology_changed();
   }
 
-  bke::CurvesGeometry &get_curves(const int curves_index) const
+  bke::CurvesGeometry &get_curves(const int curves_index) const override
   {
     const MutableDrawingInfo &info = this->drawings[curves_index];
     return info.drawing.strokes_for_write();
   }
 
-  IndexRange curves_range() const
+  IndexRange curves_range() const override
   {
     return this->drawings.index_range();
   }
 
-  void single_point_attributes(bke::CurvesGeometry &curves, const int curves_index) const
+  void single_point_attributes(bke::CurvesGeometry &curves, const int curves_index) const override
   {
     const MutableDrawingInfo &info = this->drawings[curves_index];
     info.drawing.opacities_for_write().last() = 1.0f;
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-    bke::SpanAttributeWriter<float> aspect_ratios = attributes.lookup_or_add_for_write_span<float>(
-        "aspect_ratio",
-        bke::AttrDomain::Curve,
-        bke::AttributeInitVArray(VArray<float>::from_single(0.0f, curves.curves_num())));
-    aspect_ratios.span.last() = 1.0f;
-    aspect_ratios.finish();
+    if (bke::SpanAttributeWriter aspect_ratios = attributes.lookup_for_write_span<float>(
+            "aspect_ratio"))
+    {
+      aspect_ratios.span.last() = 1.0f;
+      aspect_ratios.finish();
+    }
 
-    bke::SpanAttributeWriter<float> u_scales = attributes.lookup_or_add_for_write_span<float>(
-        "u_scale",
-        bke::AttrDomain::Curve,
-        bke::AttributeInitVArray(VArray<float>::from_single(0.0f, curves.curves_num())));
-    u_scales.span.last() = 1.0f;
-    u_scales.finish();
+    if (bke::SpanAttributeWriter u_scales = attributes.lookup_for_write_span<float>("u_scale")) {
+      u_scales.span.last() = 1.0f;
+      u_scales.finish();
+    }
+
+    if (bke::SpanAttributeWriter fill_opacities = attributes.lookup_for_write_span<float>(
+            "fill_opacity"))
+    {
+      fill_opacities.span.last() = 1.0f;
+      fill_opacities.finish();
+    }
   }
 
-  bool can_create_new_curve(wmOperator *op) const
+  bool can_create_new_curve(wmOperator *op) const override
   {
     if (!this->grease_pencil->has_active_layer()) {
       BKE_report(op->reports, RPT_ERROR, "No active Grease Pencil layer");
@@ -160,7 +168,7 @@ class GreasePencilPenToolOperation : public curves::pen_tool::PenToolOperation {
     return true;
   }
 
-  void update_view(bContext *C) const
+  void update_view(bContext *C) const override
   {
     GreasePencil *grease_pencil = this->grease_pencil;
 
@@ -172,14 +180,14 @@ class GreasePencilPenToolOperation : public curves::pen_tool::PenToolOperation {
 
   std::optional<wmOperatorStatus> initialize(bContext *C,
                                              wmOperator *op,
-                                             const wmEvent * /*event*/)
+                                             const wmEvent * /*event*/) override
   {
     if (this->vc.scene->toolsettings->gpencil_selectmode_edit != GP_SELECTMODE_POINT) {
       BKE_report(op->reports, RPT_ERROR, "Selection Mode must be Points");
       return OPERATOR_CANCELLED;
     }
 
-    GreasePencil *grease_pencil = static_cast<GreasePencil *>(this->vc.obact->data);
+    GreasePencil *grease_pencil = id_cast<GreasePencil *>(this->vc.obact->data);
     this->grease_pencil = grease_pencil;
     View3D *view3d = CTX_wm_view3d(C);
 
@@ -309,15 +317,17 @@ static void GREASE_PENCIL_OT_pen(wmOperatorType *ot)
   curves::pen_tool::pen_tool_common_props(ot);
 }
 
-}  // namespace blender::ed::greasepencil
+}  // namespace ed::greasepencil
 
 void ED_operatortypes_grease_pencil_pen()
 {
-  WM_operatortype_append(blender::ed::greasepencil::GREASE_PENCIL_OT_pen);
+  WM_operatortype_append(ed::greasepencil::GREASE_PENCIL_OT_pen);
 }
 
 void ED_grease_pencil_pentool_modal_keymap(wmKeyConfig *keyconf)
 {
-  wmKeyMap *keymap = blender::ed::curves::pen_tool::ensure_keymap(keyconf);
+  wmKeyMap *keymap = ed::curves::pen_tool::ensure_keymap(keyconf);
   WM_modalkeymap_assign(keymap, "GREASE_PENCIL_OT_pen");
 }
+
+}  // namespace blender

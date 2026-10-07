@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <fmt/format.h>
 
 #include "BLI_bounds.hh"
@@ -20,6 +24,8 @@
 #include "BKE_object_types.hh"
 #include "BKE_subdiv_modifier.hh"
 #include "BKE_volume.hh"
+
+#include "NOD_geometry_nodes_bundle.hh"
 
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
@@ -117,19 +123,10 @@ GeometryComponent &GeometrySet::get_component_for_write(GeometryComponent::Type 
     /* If the component did not exist before, create a new one. */
     component_ptr = GeometryComponent::create(component_type);
   }
-  else if (component_ptr->is_mutable()) {
-    /* If the referenced component is already mutable, return it directly. */
-    component_ptr->tag_ensured_mutable();
-  }
-  else {
-    /* If the referenced component is shared, make a copy. The copy is not shared and is
-     * therefore mutable. */
-    component_ptr = component_ptr->copy();
-  }
-  return const_cast<GeometryComponent &>(*component_ptr);
+  return component_ptr.ensure_mutable_inplace();
 }
 
-GeometryComponent *GeometrySet::get_component_ptr(GeometryComponent::Type type)
+GeometryComponent *GeometrySet::get_component_for_write_ptr(GeometryComponent::Type type)
 {
   if (this->has(type)) {
     return &this->get_component_for_write(type);
@@ -214,8 +211,8 @@ std::optional<Bounds<float3>> GeometrySet::compute_boundbox_without_instances(
 std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set)
 {
   Vector<std::string> parts;
-  if (!geometry_set.name.empty()) {
-    parts.append(fmt::format("\"{}\"", geometry_set.name));
+  if (!geometry_set.name().is_empty()) {
+    parts.append(fmt::format("\"{}\"", geometry_set.name()));
   }
   if (const Mesh *mesh = geometry_set.get_mesh()) {
     parts.append(std::to_string(mesh->verts_num) + " verts");
@@ -462,6 +459,13 @@ GeometrySet GeometrySet::from_instances(Instances *instances, GeometryOwnershipT
   return geometry_set;
 }
 
+GeometrySet GeometrySet::from_instances(std::unique_ptr<Instances> instances)
+{
+  GeometrySet geometry_set;
+  geometry_set.replace_instances(instances.release(), GeometryOwnershipType::Owned);
+  return geometry_set;
+}
+
 GeometrySet GeometrySet::from_grease_pencil(GreasePencil *grease_pencil,
                                             GeometryOwnershipType ownership)
 {
@@ -557,31 +561,31 @@ void GeometrySet::replace_grease_pencil(GreasePencil *grease_pencil,
 
 Mesh *GeometrySet::get_mesh_for_write()
 {
-  MeshComponent *component = this->get_component_ptr<MeshComponent>();
+  MeshComponent *component = this->get_component_for_write_ptr<MeshComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
 PointCloud *GeometrySet::get_pointcloud_for_write()
 {
-  PointCloudComponent *component = this->get_component_ptr<PointCloudComponent>();
+  PointCloudComponent *component = this->get_component_for_write_ptr<PointCloudComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
 Volume *GeometrySet::get_volume_for_write()
 {
-  VolumeComponent *component = this->get_component_ptr<VolumeComponent>();
+  VolumeComponent *component = this->get_component_for_write_ptr<VolumeComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
 Curves *GeometrySet::get_curves_for_write()
 {
-  CurveComponent *component = this->get_component_ptr<CurveComponent>();
+  CurveComponent *component = this->get_component_for_write_ptr<CurveComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
 Instances *GeometrySet::get_instances_for_write()
 {
-  InstancesComponent *component = this->get_component_ptr<InstancesComponent>();
+  InstancesComponent *component = this->get_component_for_write_ptr<InstancesComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
@@ -617,7 +621,7 @@ GizmoEditHints *GeometrySet::get_gizmo_edit_hints_for_write()
 
 GreasePencil *GeometrySet::get_grease_pencil_for_write()
 {
-  GreasePencilComponent *component = this->get_component_ptr<GreasePencilComponent>();
+  GreasePencilComponent *component = this->get_component_for_write_ptr<GreasePencilComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
@@ -718,44 +722,6 @@ void GeometrySet::GatheredAttributes::add(const StringRef name, const AttributeD
   }
 }
 
-void GeometrySet::gather_attributes_for_propagation(
-    const Span<GeometryComponent::Type> component_types,
-    const GeometryComponent::Type dst_component_type,
-    bool include_instances,
-    const AttributeFilter &attribute_filter,
-    GatheredAttributes &r_attributes) const
-{
-  this->attribute_foreach(
-      component_types,
-      include_instances,
-      [&](const StringRef attribute_id,
-          const AttributeMetaData &meta_data,
-          const GeometryComponent &component) {
-        if (component.attributes()->is_builtin(attribute_id)) {
-          if (!attribute_is_builtin_on_component_type(dst_component_type, attribute_id)) {
-            /* Don't propagate built-in attributes that are not built-in on the destination
-             * component. */
-            return;
-          }
-        }
-        if (meta_data.data_type == AttrType::String) {
-          /* Propagating string attributes is not supported yet. */
-          return;
-        }
-        if (attribute_filter.allow_skip(attribute_id)) {
-          return;
-        }
-
-        AttrDomain domain = meta_data.domain;
-        if (dst_component_type != GeometryComponent::Type::Instance &&
-            domain == AttrDomain::Instance) {
-          domain = AttrDomain::Point;
-        }
-
-        r_attributes.add(attribute_id, AttributeDomainAndType{domain, meta_data.data_type});
-      });
-}
-
 static void gather_component_types_recursive(const GeometrySet &geometry_set,
                                              const bool include_instances,
                                              const bool ignore_empty,
@@ -788,6 +754,62 @@ Vector<GeometryComponent::Type> GeometrySet::gather_component_types(const bool i
   Vector<GeometryComponent::Type> types;
   gather_component_types_recursive(*this, include_instances, ignore_empty, types);
   return types;
+}
+
+bool GeometrySet::has_bundle() const
+{
+  return bundle_;
+}
+
+const nodes::Bundle *GeometrySet::bundle() const
+{
+  return bundle_.get();
+}
+
+const nodes::BundlePtr &GeometrySet::bundle_ptr() const
+{
+  return bundle_;
+}
+
+nodes::BundlePtr &GeometrySet::bundle_ptr()
+{
+  return bundle_;
+}
+
+nodes::Bundle &GeometrySet::bundle_for_write()
+{
+  if (!bundle_) {
+    bundle_ = nodes::Bundle::create();
+  }
+  return bundle_.ensure_mutable_inplace();
+}
+
+void GeometrySet::copy_bundle_from(const GeometrySet &other)
+{
+  bundle_ = other.bundle_;
+}
+
+void GeometrySet::merge_bundle_from(const GeometrySet &other)
+{
+  if (!other.has_bundle()) {
+    return;
+  }
+  if (bundle_) {
+    this->bundle_for_write().merge(*other.bundle());
+  }
+  else {
+    this->copy_bundle_from(other);
+  }
+}
+
+void GeometrySet::set_name(std::string name)
+{
+  name_ = std::move(name);
+}
+
+StringRefNull GeometrySet::name() const
+{
+  return name_;
 }
 
 bool object_has_geometry_set_instances(const Object &object)

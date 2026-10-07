@@ -11,16 +11,21 @@
 
 #include "BKE_lib_query.hh" /* For LibraryForeachIDCallbackFlag enum. */
 
-struct RigidBodyOb;
-struct RigidBodyWorld;
 struct rbDynamicsWorld;
 
+namespace blender {
+
+struct RigidBodyOb;
+struct RigidBodyWorld;
 struct Collection;
 struct Depsgraph;
 struct Main;
 struct Object;
 struct ReportList;
 struct Scene;
+
+enum eRigidBodyCon_Type : short;
+enum eRigidBodyOb_Type : short;
 
 /* -------------------------------------------------------------------- */
 /** \name Memory Management
@@ -81,13 +86,13 @@ struct RigidBodyWorld *BKE_rigidbody_create_world(struct Scene *scene);
  */
 struct RigidBodyOb *BKE_rigidbody_create_object(struct Scene *scene,
                                                 struct Object *ob,
-                                                short type);
+                                                eRigidBodyOb_Type type);
 /**
  * Add rigid body constraint to the specified object.
  */
 struct RigidBodyCon *BKE_rigidbody_create_constraint(struct Scene *scene,
                                                      struct Object *ob,
-                                                     short type);
+                                                     eRigidBodyCon_Type type);
 
 /**
  * Ensure newly set collections' objects all have required data.
@@ -115,7 +120,7 @@ void BKE_rigidbody_world_groups_relink(struct RigidBodyWorld *rbw);
  * Runtime data.
  */
 void BKE_rigidbody_world_init_runtime(struct RigidBodyWorld *rbw);
-struct rbDynamicsWorld *BKE_rigidbody_world_physics(struct RigidBodyWorld *rbw);
+rbDynamicsWorld *BKE_rigidbody_world_physics(struct RigidBodyWorld *rbw);
 
 /**
  * 'validate' (i.e. make new or replace old) Physics-Engine objects.
@@ -153,7 +158,7 @@ struct RigidBodyWorld *BKE_rigidbody_get_world(struct Scene *scene);
 bool BKE_rigidbody_add_object(struct Main *bmain,
                               struct Scene *scene,
                               struct Object *ob,
-                              int type,
+                              eRigidBodyOb_Type type,
                               struct ReportList *reports);
 void BKE_rigidbody_ensure_local_object(struct Main *bmain, struct Object *ob);
 void BKE_rigidbody_remove_object(struct Main *bmain,
@@ -237,3 +242,5 @@ void BKE_rigidbody_object_sync_transforms(struct Depsgraph *depsgraph,
                                           struct Object *ob);
 
 /** \} */
+
+}  // namespace blender

@@ -73,14 +73,14 @@
 #include "DNA_modifier_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_span.hh"
 #include "BLI_task.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
@@ -98,12 +98,15 @@
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "DEG_depsgraph.hh"
 
 #include "RE_texture_margin.h"
 
-namespace blender::render {
+namespace blender {
+
+namespace render {
 namespace {
 
 namespace subdiv = bke::subdiv;
@@ -234,8 +237,7 @@ struct MeshArrays {
   {
     bke::AttributeAccessor attributes = mesh.attributes();
 
-    const StringRef active_uv_map = CustomData_get_active_layer_name(&mesh.corner_data,
-                                                                     CD_PROP_FLOAT2);
+    const StringRef active_uv_map = mesh.active_uv_map_name();
     vert_positions = mesh.vert_positions();
     vert_normals = mesh.vert_normals();
 
@@ -432,24 +434,21 @@ class MultiresBaker {
   {
     const int64_t pixel = int64_t(ibuf.x) * coord.y + coord.x;
 
-    if (ibuf.float_buffer.data) {
+    if (ibuf.float_data()) {
       /* TODO(sergey): Properly tackle ibuf.channels. */
       BLI_assert(ibuf.channels == 4);
-      float *rrgbf = ibuf.float_buffer.data + pixel * 4;
+      float *rrgbf = ibuf.float_data_for_write() + pixel * 4;
       rrgbf[0] = value[0];
       rrgbf[1] = value[1];
       rrgbf[2] = value[2];
       rrgbf[3] = 1.0f;
-      ibuf.userflags |= IB_RECT_INVALID;
     }
 
-    if (ibuf.byte_buffer.data) {
-      uchar *rrgb = ibuf.byte_buffer.data + pixel * 4;
+    if (ibuf.byte_data()) {
+      uchar *rrgb = ibuf.byte_data_for_write() + pixel * 4;
       unit_float_to_uchar_clamp_v3(rrgb, value);
       rrgb[3] = 255;
     }
-
-    ibuf.userflags |= IB_DISPLAY_BUFFER_INVALID;
   }
 };
 
@@ -597,7 +596,7 @@ static void rasterize_half(const MultiresBaker &baker,
   const int y1 = y1_in >= h ? h : y1_in;
 
   for (int y = y0; y < y1; y++) {
-    /*-b(x-x0) + a(y-y0) = 0 */
+    /* `-b(x-x0) + a(y-y0) = 0`. */
     float x_l = s_stable ? (s0.x + (((s1.x - s0.x) * (y - s0.y)) / (s1.y - s0.y))) : s0.x;
     float x_r = l_stable ? (l0.x + (((l1.x - l0.x) * (y - l0.y)) / (l1.y - l0.y))) : l0.x;
     if (is_mid_right) {
@@ -1058,7 +1057,7 @@ static Array<GridCoord> get_subdivided_corner_grid_coords(subdiv::Subdiv &subdiv
                                      const int /*num_edges*/,
                                      const int num_corners,
                                      const int /*num_faces*/,
-                                     const int * /*subdiv_face_offset*/) -> bool {
+                                     const Span<int> /*subdiv_face_offset*/) -> bool {
     SubdividedCornerGridCoordData *data = static_cast<SubdividedCornerGridCoordData *>(
         context->user_data);
     data->corner_grid_coords.reinitialize(num_corners);
@@ -1074,7 +1073,7 @@ static Array<GridCoord> get_subdivided_corner_grid_coords(subdiv::Subdiv &subdiv
                             const int coarse_face_index,
                             const int coarse_corner,
                             const int subdiv_corner_index,
-                            const int /*subdiv_vertex_index*/,
+                            const int /*subdiv_vert_index*/,
                             const int /*subdiv_edge_index*/) {
     SubdividedCornerGridCoordData *data = static_cast<SubdividedCornerGridCoordData *>(
         context->user_data);
@@ -1109,7 +1108,7 @@ static void rasterize_subdivided_face(const MultiresBaker &baker,
 {
   const IndexRange &face = mesh_arrays.faces[face_index];
 
-  /* This code operates with mesh with at leats one subdivision level applied. Such mesh only has
+  /* This code operates with mesh with at least one subdivision level applied. Such mesh only has
    * quad faces as per how subdivision works. */
   BLI_assert(face.size() == 4);
 
@@ -1123,15 +1122,15 @@ static void rasterize_subdivided_face(const MultiresBaker &baker,
 
   for (int i = 0; i < 4; ++i) {
     const int corner = face[i];
-    const int vertex = mesh_arrays.corner_verts[corner];
+    const int vert = mesh_arrays.corner_verts[corner];
 
     BLI_assert(corner_grid_coords[corner].grid_index == quad.grid_index);
     quad.grid_uvs[i] = corner_grid_coords[corner].uv;
 
     quad.tex_uvs[i] = mesh_arrays.uv_map[corner] - tile.uv_offset;
-    quad.positions[i] = mesh_arrays.vert_positions[vertex];
+    quad.positions[i] = mesh_arrays.vert_positions[vert];
     if (!quad.is_flat) {
-      quad.normals[i] = mesh_arrays.vert_normals[vertex];
+      quad.normals[i] = mesh_arrays.vert_normals[vert];
     }
 
     if (quad.has_uv_tangents) {
@@ -1314,7 +1313,7 @@ static Array<GridCoord> get_highres_mesh_loop_grid_coords(
                                      const int /*num_edges*/,
                                      const int num_corners,
                                      const int /*num_faces*/,
-                                     const int * /*subdiv_face_offset*/) -> bool {
+                                     const Span<int> /*subdiv_face_offset*/) -> bool {
     HighresCornerGridCoordData *data = static_cast<HighresCornerGridCoordData *>(
         context->user_data);
     data->corner_grid_coords.reinitialize(num_corners);
@@ -1330,7 +1329,7 @@ static Array<GridCoord> get_highres_mesh_loop_grid_coords(
                             const int bake_level_face_index,
                             const int /*bake_level_corner*/,
                             const int highres_corner_index,
-                            const int /*highres_vertex_index*/,
+                            const int /*highres_vert_index*/,
                             const int /*highres_edge_index*/) {
     HighresCornerGridCoordData *data = static_cast<HighresCornerGridCoordData *>(
         context->user_data);
@@ -1488,10 +1487,10 @@ static void bake_images(MultiresBakeRender &bake,
                         MultiresBakeResult &result)
 {
   for (Image *image : bake.images) {
-    LISTBASE_FOREACH (ImageTile *, image_tile, &image->tiles) {
+    for (ImageTile &image_tile : image->tiles) {
       ImageUser iuser;
       BKE_imageuser_default(&iuser);
-      iuser.tile = image_tile->tile_number;
+      iuser.tile = image_tile.tile_number;
 
       ImBuf *ibuf = BKE_image_acquire_ibuf(image, &iuser, nullptr);
       if (ibuf && ibuf->x > 0 && ibuf->y > 0) {
@@ -1500,14 +1499,14 @@ static void bake_images(MultiresBakeRender &bake,
         BakedImBuf &baked_ibuf = result.baked_ibufs.last();
         baked_ibuf.image = image;
         baked_ibuf.ibuf = ibuf;
-        baked_ibuf.uv_offset = get_tile_uv(*image, *image_tile);
+        baked_ibuf.uv_offset = get_tile_uv(*image, image_tile);
 
         ExtraBuffers &extra_buffers = baked_ibuf.extra_buffers;
         extra_buffers.mask_buffer.reinitialize(int64_t(ibuf->y) * ibuf->x);
         extra_buffers.mask_buffer.fill(FILTER_MASK_NULL);
 
         bake_single_image(
-            bake, bake_level_mesh, subdiv_ccg, *image, *image_tile, *ibuf, extra_buffers, result);
+            bake, bake_level_mesh, subdiv_ccg, *image, image_tile, *ibuf, extra_buffers, result);
       }
     }
   }
@@ -1537,21 +1536,23 @@ static void bake_ibuf_normalize_displacement(ImBuf &ibuf,
 
   /* TODO(sergey): Look into multi-threading this loop. */
   const size_t ibuf_pixel_count = IMB_get_pixel_count(&ibuf);
+  uchar *byte_data = ibuf.byte_data_for_write();
+  float *float_data = ibuf.float_data_for_write();
   for (size_t i = 0; i < ibuf_pixel_count; i++) {
     if (*current_mask == FILTER_MASK_USED) {
       const float normalized_displacement = (*current_displacement + max_distance) /
                                             (max_distance * 2);
 
-      if (ibuf.float_buffer.data) {
+      if (float_data) {
         /* TODO(sergey): Properly tackle ibuf.channels. */
         BLI_assert(ibuf.channels == 4);
-        float *fp = ibuf.float_buffer.data + int64_t(i) * 4;
+        float *fp = float_data + int64_t(i) * 4;
         fp[0] = fp[1] = fp[2] = normalized_displacement;
         fp[3] = 1.0f;
       }
 
-      if (ibuf.byte_buffer.data) {
-        uchar *cp = ibuf.byte_buffer.data + int64_t(i) * 4;
+      if (byte_data) {
+        uchar *cp = byte_data + int64_t(i) * 4;
         cp[0] = cp[1] = cp[2] = unit_float_to_uchar_clamp(normalized_displacement);
         cp[3] = 255;
       }
@@ -1570,15 +1571,18 @@ static void bake_ibuf_filter(ImBuf &ibuf,
                              const float2 uv_offset)
 {
   /* NOTE: Must check before filtering. */
-  const bool is_new_alpha = (ibuf.planes != R_IMF_PLANES_RGBA) && BKE_imbuf_alpha_test(&ibuf);
+  const bool is_new_alpha = !ibuf.can_contain_alpha() && BKE_imbuf_alpha_test(&ibuf);
 
   if (margin) {
     switch (margin_type) {
       case R_BAKE_ADJACENT_FACES: {
-        const char *active_uv_map = CustomData_get_active_layer_name(&bake_level_mesh.corner_data,
-                                                                     CD_PROP_FLOAT2);
-        RE_generate_texturemargin_adjacentfaces(
-            &ibuf, mask.data(), margin, &bake_level_mesh, active_uv_map, uv_offset);
+        RE_generate_texturemargin_adjacentfaces(&ibuf,
+                                                mask.data(),
+                                                margin,
+                                                &bake_level_mesh,
+                                                bake_level_mesh.active_uv_map_name(),
+                                                uv_offset,
+                                                false);
         break;
       }
       default:
@@ -1591,10 +1595,10 @@ static void bake_ibuf_filter(ImBuf &ibuf,
 
   /* If the bake results in new alpha then change the image setting. */
   if (is_new_alpha) {
-    ibuf.planes = R_IMF_PLANES_RGBA;
+    ibuf.color_mode = ImColorMode::RGBA;
   }
   else {
-    if (margin && ibuf.planes != R_IMF_PLANES_RGBA) {
+    if (margin && !ibuf.can_contain_alpha()) {
       /* Clear alpha added by filtering. */
       IMB_rectfill_alpha(&ibuf, 1.0f);
     }
@@ -1626,12 +1630,8 @@ static void finish_images(MultiresBakeRender &bake,
                      bake.bake_margin_type,
                      baked_ibuf.uv_offset);
 
-    ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-    BKE_image_mark_dirty(image, ibuf);
-
-    if (ibuf->float_buffer.data) {
-      ibuf->userflags |= IB_RECT_INVALID;
-    }
+    IMB_partial_update_mark_full(ibuf);
+    IMB_mark_dirty(ibuf);
 
     BKE_image_release_ibuf(image, ibuf, nullptr);
     DEG_id_tag_update(&image->id, 0);
@@ -1697,7 +1697,7 @@ static Mesh *create_bake_level_mesh(const Mesh &base_mesh,
 /** \} */
 
 }  // namespace
-}  // namespace blender::render
+}  // namespace render
 
 void RE_multires_bake_images(MultiresBakeRender &bake)
 {
@@ -1725,3 +1725,5 @@ void RE_multires_bake_images(MultiresBakeRender &bake)
     BKE_id_free(nullptr, bake_level_mesh);
   }
 }
+
+}  // namespace blender

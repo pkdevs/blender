@@ -7,11 +7,13 @@
  * \ingroup imbuf
  */
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Alpha-under
@@ -19,7 +21,6 @@
 
 void IMB_alpha_under_color_float(float *rect_float, int x, int y, float backcol[3])
 {
-  using namespace blender;
   threading::parallel_for(IndexRange(int64_t(x) * y), 32 * 1024, [&](const IndexRange i_range) {
     float *pix = rect_float + i_range.first() * 4;
     for ([[maybe_unused]] const int i : i_range) {
@@ -33,7 +34,6 @@ void IMB_alpha_under_color_float(float *rect_float, int x, int y, float backcol[
 
 void IMB_alpha_under_color_byte(uchar *rect, int x, int y, const float backcol[3])
 {
-  using namespace blender;
   threading::parallel_for(IndexRange(int64_t(x) * y), 32 * 1024, [&](const IndexRange i_range) {
     uchar *pix = rect + i_range.first() * 4;
     for ([[maybe_unused]] const int i : i_range) {
@@ -60,3 +60,5 @@ void IMB_alpha_under_color_byte(uchar *rect, int x, int y, const float backcol[3
 }
 
 /** \} */
+
+}  // namespace blender

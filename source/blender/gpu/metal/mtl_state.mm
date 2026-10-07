@@ -6,8 +6,8 @@
  * \ingroup gpu
  */
 
-#include "BLI_math_base.h"
-#include "BLI_math_bits.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_bits.hh"
 
 #include "GPU_framebuffer.hh"
 
@@ -91,17 +91,12 @@ void MTLStateManager::set_state(const GPUState &state)
   if (changed.culling_test != 0) {
     set_backface_culling((GPUFaceCullTest)state.culling_test);
   }
-  if (changed.logic_op_xor != 0) {
-    set_logic_op(state.logic_op_xor);
-  }
+
   if (changed.invert_facing != 0) {
     set_facing(state.invert_facing);
   }
   if (changed.provoking_vert != 0) {
     set_provoking_vert((GPUProvokingVertex)state.provoking_vert);
-  }
-  if (changed.shadow_bias != 0) {
-    set_shadow_bias(state.shadow_bias);
   }
 
   /* TODO remove (Following GLState). */
@@ -113,19 +108,6 @@ void MTLStateManager::set_state(const GPUState &state)
   }
 
   current_ = state;
-}
-
-void MTLStateManager::mtl_depth_range(float near, float far)
-{
-  BLI_assert(context_);
-  BLI_assert(near >= 0.0 && near < 1.0);
-  BLI_assert(far > 0.0 && far <= 1.0);
-  MTLContextGlobalShaderPipelineState &pipeline_state = context_->pipeline_state;
-  MTLContextDepthStencilState &ds_state = pipeline_state.depth_stencil_state;
-
-  ds_state.depth_range_near = near;
-  ds_state.depth_range_far = far;
-  pipeline_state.dirty_flags |= MTL_PIPELINE_STATE_VIEWPORT_FLAG;
 }
 
 void MTLStateManager::set_mutable_state(const GPUStateMutable &state)
@@ -141,11 +123,6 @@ void MTLStateManager::set_mutable_state(const GPUStateMutable &state)
   if (changed.line_width != 0) {
     pipeline_state.line_width = state.line_width;
     pipeline_state.dirty_flags |= MTL_PIPELINE_STATE_PSO_FLAG;
-  }
-
-  if (float_as_uint(changed.depth_range[0]) != 0 || float_as_uint(changed.depth_range[1]) != 0) {
-    /* TODO remove, should modify the projection matrix instead. */
-    mtl_depth_range(state.depth_range[0], state.depth_range[1]);
   }
 
   if (changed.stencil_compare_mask != 0 || changed.stencil_reference != 0 ||
@@ -367,11 +344,6 @@ void MTLStateManager::set_clip_distances(const int new_dist_len, const int old_d
   }
 }
 
-void MTLStateManager::set_logic_op(const bool /*enable*/)
-{
-  /* NOTE(Metal): Logic Operations not directly supported. */
-}
-
 void MTLStateManager::set_facing(const bool invert)
 {
   /* Check Current Context. */
@@ -411,32 +383,6 @@ void MTLStateManager::set_provoking_vert(const GPUProvokingVertex /*vert*/)
    * shading, to ensure consistent results with OpenGL. */
 }
 
-void MTLStateManager::set_shadow_bias(const bool enable)
-{
-  /* Check Current Context. */
-  BLI_assert(context_);
-  MTLContextGlobalShaderPipelineState &pipeline_state = context_->pipeline_state;
-  MTLContextDepthStencilState &ds_state = pipeline_state.depth_stencil_state;
-
-  /* Apply State. */
-  if (enable) {
-    ds_state.depth_bias_enabled_for_lines = true;
-    ds_state.depth_bias_enabled_for_tris = true;
-    ds_state.depth_bias = 2.0f;
-    ds_state.depth_slope_scale = 1.0f;
-  }
-  else {
-    ds_state.depth_bias_enabled_for_lines = false;
-    ds_state.depth_bias_enabled_for_tris = false;
-    ds_state.depth_bias = 0.0f;
-    ds_state.depth_slope_scale = 0.0f;
-  }
-
-  /* Mark Dirty - Ensure context updates depth-stencil state between draws. */
-  pipeline_state.dirty_flags |= MTL_PIPELINE_STATE_DEPTHSTENCIL_FLAG;
-  pipeline_state.dirty = true;
-}
-
 void MTLStateManager::set_blend(const GPUBlend value)
 {
   /**
@@ -474,6 +420,9 @@ void MTLStateManager::set_blend(const GPUBlend value)
       dst_alpha = MTLBlendFactorOne;
       break;
     }
+    /* Factors are not use in min or max mode, but avoid uninitialized values. */;
+    case GPU_BLEND_MIN:
+    case GPU_BLEND_MAX:
     case GPU_BLEND_SUBTRACT:
     case GPU_BLEND_ADDITIVE_PREMULT: {
       /* Let alpha accumulate. */
@@ -532,13 +481,28 @@ void MTLStateManager::set_blend(const GPUBlend value)
       dst_alpha = MTLBlendFactorOneMinusSourceAlpha;
       break;
     }
+    case GPU_BLEND_TRANSPARENCY: {
+      src_rgb = MTLBlendFactorOne;
+      dst_rgb = MTLBlendFactorSourceAlpha;
+      src_alpha = MTLBlendFactorZero;
+      dst_alpha = MTLBlendFactorSourceAlpha;
+      break;
+    }
   }
 
   /* Check Current Context. */
   BLI_assert(context_);
   MTLContextGlobalShaderPipelineState &pipeline_state = context_->pipeline_state;
 
-  if (value == GPU_BLEND_SUBTRACT) {
+  if (value == GPU_BLEND_MIN) {
+    pipeline_state.rgb_blend_op = MTLBlendOperationMin;
+    pipeline_state.alpha_blend_op = MTLBlendOperationMin;
+  }
+  else if (value == GPU_BLEND_MAX) {
+    pipeline_state.rgb_blend_op = MTLBlendOperationMax;
+    pipeline_state.alpha_blend_op = MTLBlendOperationMax;
+  }
+  else if (value == GPU_BLEND_SUBTRACT) {
     pipeline_state.rgb_blend_op = MTLBlendOperationReverseSubtract;
     pipeline_state.alpha_blend_op = MTLBlendOperationReverseSubtract;
   }
@@ -632,13 +596,6 @@ void MTLFence::wait()
 /** \name Texture State Management
  * \{ */
 
-void MTLStateManager::texture_unpack_row_length_set(uint len)
-{
-  /* Set source image row data stride when uploading image data to the GPU. */
-  MTLContext *ctx = MTLContext::get();
-  ctx->pipeline_state.unpack_row_length = len;
-}
-
 void MTLStateManager::texture_bind(Texture *tex_, GPUSamplerState sampler_type, int unit)
 {
   BLI_assert(tex_);
@@ -691,7 +648,14 @@ void MTLStateManager::image_bind(Texture *tex_, int unit)
   MTLContext *ctx = MTLContext::get();
   if (unit >= 0) {
     ctx->texture_bind(mtl_tex, unit, true);
-    image_formats[unit] = TextureWriteFormat(tex_->format_get());
+    /* An sRGB texture bound as a storage image is written as UNORM: the hardware does the sRGB
+     * encode/decode. TextureWriteFormat has no sRGB entry, use UNORM instead to avoid adding
+     * a bunch of complexity elsewhere. */
+    TextureFormat format = tex_->format_get();
+    if (format == TextureFormat::SRGBA_8_8_8_8) {
+      format = TextureFormat::UNORM_8_8_8_8;
+    }
+    image_formats[unit] = TextureWriteFormat(format);
   }
 }
 

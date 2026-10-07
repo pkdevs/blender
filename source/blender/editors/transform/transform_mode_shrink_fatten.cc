@@ -9,7 +9,8 @@
 #include <cstdlib>
 #include <fmt/format.h>
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utils.hh"
 #include "BLI_task.hh"
 
 #include "BKE_report.hh"
@@ -49,7 +50,6 @@ enum eShrinkFattenMode {
 struct ShrinkFattenCustomData {
   const wmKeyMapItem *kmi;
   eShrinkFattenMode mode;
-  wmOperator *op;
   bool use_alt_press_to_disable;
 };
 
@@ -81,7 +81,7 @@ static eRedrawFlag shrinkfatten_handleEvent(TransInfo *t, const wmEvent *event)
     custom_data->mode = use_even_thickness ? EVEN_THICKNESS_ON : EVEN_THICKNESS_OFF;
     return TREDRAW_HARD;
   }
-  else if (kmi && event->type == kmi->type && event->val == kmi->val) {
+  if (kmi && event->type == kmi->type && event->val == kmi->val) {
     /* Allows the "Even Thickness" effect to be enabled as a toggle. */
     custom_data->mode = custom_data->mode == EVEN_THICKNESS_ON ? EVEN_THICKNESS_OFF :
                                                                  EVEN_THICKNESS_ON;
@@ -98,7 +98,6 @@ static void applyShrinkFatten(TransInfo *t)
   float distance;
   fmt::memory_buffer str;
   const UnitSettings &unit = t->scene->unit;
-  ShrinkFattenCustomData *custom_data = static_cast<ShrinkFattenCustomData *>(t->custom.mode.data);
 
   distance = t->values[0] + t->values_modal_offset[0];
 
@@ -119,9 +118,10 @@ static void applyShrinkFatten(TransInfo *t)
     /* Default header print. */
     if (unit.system != USER_UNIT_NONE) {
       char unit_str[64];
+      const int precision = t->modifiers & MOD_PRECISION ? 6 : 4;
       BKE_unit_value_as_string_scaled(
-          unit_str, sizeof(unit_str), distance, -4, B_UNIT_LENGTH, unit, true);
-      fmt::format_to(fmt::appender(str), "{}", unit_str);
+          unit_str, sizeof(unit_str), distance, precision * -1, B_UNIT_LENGTH, unit, true, true);
+      fmt::format_to(fmt::appender(str), "{}", BLI_string_pad_number_sign(unit_str).c_str());
     }
     else {
       fmt::format_to(fmt::appender(str), "{:.4f}", distance);
@@ -150,32 +150,32 @@ static void applyShrinkFatten(TransInfo *t)
   recalc_data(t);
 
   ED_area_status_text(t->area, fmt::to_string(str).c_str());
+}
 
-  if (custom_data->op) {
-    WorkspaceStatus status(t->context);
+static void shrink_fatten_status(TransInfo *t)
+{
+  if (t->keymap == nullptr) {
+    return;
+  }
+  const wmKeyMap &keymap = *t->keymap;
 
-    status.opmodal(IFACE_("Confirm"), custom_data->op->type, TFM_MODAL_CONFIRM);
-    status.opmodal(IFACE_("Cancel"), custom_data->op->type, TFM_MODAL_CANCEL);
-    status.opmodal(
-        IFACE_("Snap"), custom_data->op->type, TFM_MODAL_SNAP_TOGGLE, t->modifiers & MOD_SNAP);
-    status.opmodal(IFACE_("Snap Invert"),
-                   custom_data->op->type,
-                   TFM_MODAL_SNAP_INV_ON,
-                   t->modifiers & MOD_SNAP_INVERT);
-    status.opmodal(IFACE_("Precision"),
-                   custom_data->op->type,
-                   TFM_MODAL_PRECISION,
-                   t->modifiers & MOD_PRECISION);
-    status.opmodal(IFACE_("Even Thickness"),
-                   custom_data->op->type,
-                   TFM_MODAL_RESIZE,
-                   custom_data->mode == EVEN_THICKNESS_ON);
-    status.item(IFACE_("Even Thickness Invert"), ICON_EVENT_ALT);
+  ShrinkFattenCustomData *custom_data = static_cast<ShrinkFattenCustomData *>(t->custom.mode.data);
+  WorkspaceStatus status(t->context);
 
-    if (t->proptext[0]) {
-      status.opmodal({}, custom_data->op->type, TFM_MODAL_PROPSIZE_UP);
-      status.opmodal(IFACE_("Proportional Size"), custom_data->op->type, TFM_MODAL_PROPSIZE_DOWN);
-    }
+  status.modal_keymap(IFACE_("Confirm"), keymap, TFM_MODAL_CONFIRM);
+  status.modal_keymap(IFACE_("Cancel"), keymap, TFM_MODAL_CANCEL);
+  status.modal_keymap(IFACE_("Snap"), keymap, TFM_MODAL_SNAP_TOGGLE, t->modifiers & MOD_SNAP);
+  status.modal_keymap(
+      IFACE_("Snap Invert"), keymap, TFM_MODAL_SNAP_INV_ON, t->modifiers & MOD_SNAP_INVERT);
+  status.modal_keymap(
+      IFACE_("Precision"), keymap, TFM_MODAL_PRECISION, t->modifiers & MOD_PRECISION);
+  status.modal_keymap(
+      IFACE_("Even Thickness"), keymap, TFM_MODAL_RESIZE, custom_data->mode == EVEN_THICKNESS_ON);
+  status.item(IFACE_("Even Thickness Invert"), ICON_EVENT_ALT);
+
+  if (t->proptext[0]) {
+    status.modal_keymap({}, keymap, TFM_MODAL_PROPSIZE_UP);
+    status.modal_keymap(IFACE_("Proportional Size"), keymap, TFM_MODAL_PROPSIZE_DOWN);
   }
 }
 
@@ -199,8 +199,7 @@ static void initShrinkFatten(TransInfo *t, wmOperator *op)
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_type[0] = B_UNIT_LENGTH;
 
-  ShrinkFattenCustomData *custom_data = static_cast<ShrinkFattenCustomData *>(
-      MEM_callocN(sizeof(*custom_data), __func__));
+  ShrinkFattenCustomData *custom_data = MEM_new_zeroed<ShrinkFattenCustomData>(__func__);
   t->custom.mode.data = custom_data;
   t->custom.mode.free_cb = [](TransInfo *t, TransDataContainer *, TransCustomData *custom_data) {
     ShrinkFattenCustomData *data = static_cast<ShrinkFattenCustomData *>(custom_data->data);
@@ -208,7 +207,7 @@ static void initShrinkFatten(TransInfo *t, wmOperator *op)
     /* WORKAROUND: Use #T_ALT_TRANSFORM to indicate the value of the "use_even_offset" property in
      * `saveTransform`. */
     SET_FLAG_FROM_TEST(t->flag, data->mode == EVEN_THICKNESS_ON, T_ALT_TRANSFORM);
-    MEM_freeN(data);
+    MEM_delete(data);
     custom_data->data = nullptr;
   };
 
@@ -218,12 +217,15 @@ static void initShrinkFatten(TransInfo *t, wmOperator *op)
   }
 
   if (op) {
-    custom_data->op = op;
-    PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_even_offset");
-    if (RNA_property_is_set(op->ptr, prop) && RNA_property_boolean_get(op->ptr, prop)) {
-      /* TODO: Check if the Alt button is already pressed. */
-      custom_data->mode = EVEN_THICKNESS_ON;
-      custom_data->use_alt_press_to_disable = true;
+    if (PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_even_offset")) {
+      if (RNA_property_is_set(op->ptr, prop) && RNA_property_boolean_get(op->ptr, prop)) {
+        /* TODO: Check if the Alt button is already pressed. */
+        custom_data->mode = EVEN_THICKNESS_ON;
+        custom_data->use_alt_press_to_disable = true;
+      }
+    }
+    else {
+      BLI_assert(STREQ(op->idname, "TRANSFORM_OT_transform"));
     }
   }
 }
@@ -239,6 +241,7 @@ TransModeInfo TransMode_shrinkfatten = {
     /*snap_distance_fn*/ nullptr,
     /*snap_apply_fn*/ nullptr,
     /*draw_fn*/ nullptr,
+    /*status_fn*/ shrink_fatten_status,
 };
 
 }  // namespace blender::ed::transform

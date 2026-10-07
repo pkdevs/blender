@@ -29,7 +29,7 @@ if(WIN32)
 elseif(UNIX)
   set(USD_PLATFORM_FLAGS
     # Workaround USD not linking correctly with static Python library, where it would embed
-    # part of the interpret in the USD library. Allow undefined Python symbols and replace
+    # part of the interpreter in the USD library. Allow undefined Python symbols and replace
     # Python library with TBB so it doesn't complain about missing library.
     # NOTE(@ideasman42): Setting the root is needed, without this an older version of Python
     # is detected from the system. Referencing the root-directory may remove the need
@@ -151,7 +151,11 @@ ExternalProject_Add(external_usd
     ${CMAKE_COMMAND} -E remove ${BUILD_DIR}/usd/src/external_usd/pxr/imaging/hgiVulkan/vk_mem_alloc.h &&
     ${PATCH_CMD} -p 1 -d
       ${BUILD_DIR}/usd/src/external_usd <
-      ${PATCH_DIR}/usd_storm_vulkan.diff
+      ${PATCH_DIR}/usd_storm_vulkan.diff &&
+    ${PATCH_CMD} -p 1 -d
+      ${BUILD_DIR}/usd/src/external_usd <
+      ${PATCH_DIR}/usd_vulkan_headless_3931.diff
+
   CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${LIBDIR}/usd
     -Wno-dev
@@ -174,7 +178,7 @@ add_dependencies(
   external_vulkan_utility_libraries
   external_shaderc
   external_spirv_reflect
-  openvdb
+  external_openvdb
 )
 
 # Since USD 21.11 the libraries are prefixed with "usd_",
@@ -201,8 +205,8 @@ if(WIN32)
   if(BUILD_MODE STREQUAL Debug)
     ExternalProject_Add_Step(external_usd after_install
       COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${LIBDIR}/usd/lib/python
-        ${HARVEST_TARGET}/usd/lib/debug/python
+        ${LIBDIR}/usd/lib/site-packages
+        ${HARVEST_TARGET}/usd/lib/debug/site-packages
       COMMAND ${CMAKE_COMMAND} -E copy
         ${LIBDIR}/usd/lib/usd_ms_d.dll
         ${HARVEST_TARGET}/usd/lib/usd_ms_d.dll
@@ -219,7 +223,7 @@ else()
   harvest(external_usd usd/lib/usd usd/lib/usd "*")
   harvest_rpath_python(
     external_usd
-    usd/lib/python/pxr
+    usd/lib/python${PYTHON_SHORT_VERSION}/site-packages/pxr
     python/lib/python${PYTHON_SHORT_VERSION}/site-packages/pxr
     "*"
   )

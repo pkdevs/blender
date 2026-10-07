@@ -8,15 +8,18 @@
  * \ingroup bmesh
  */
 
+#include "BLI_enum_flags.hh"
 #include "BLI_string_ref.hh"
 
 #include "bmesh.hh"
+
+namespace blender {
 
 /**
  * \return Whether attributes with the given name are stored in special flags or fields in BMesh
  * rather than in the regular custom data blocks.
  */
-bool BM_attribute_stored_in_bmesh_builtin(blender::StringRef name);
+bool BM_attribute_stored_in_bmesh_builtin(StringRef name);
 
 struct CustomData_MeshMasks;
 struct Main;
@@ -92,14 +95,9 @@ void BM_mesh_bm_to_me(struct Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMe
 void BM_mesh_bm_to_me_for_eval(BMesh &bm, Mesh &mesh, const CustomData_MeshMasks *cd_mask_extra);
 
 /**
- * A version of #BM_mesh_bm_to_me_for_eval but copying data layers and Mesh attributes is optional.
- * It also allows shape-keys but don't re-assigns shape-key indices.
- *
- * \param mask: Custom data masks to control which layers are copied.
- * If nullptr, no layer data is copied.
- * \param add_mesh_attributes: If true, adds mesh attributes during the conversion.
+ * A version of #BM_mesh_bm_to_me_for_eval but only copies positions, topology, and the selection
+ * and visibility attributes (not including UV selection).
  */
-void BM_mesh_bm_to_me_compact(BMesh &bm,
-                              Mesh &mesh,
-                              const CustomData_MeshMasks *mask,
-                              bool add_mesh_attributes);
+void BM_mesh_bm_to_me_only_select_and_hide(BMesh &bm, Mesh &mesh);
+
+}  // namespace blender

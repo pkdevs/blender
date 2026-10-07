@@ -7,8 +7,8 @@ bl_info = {
     # This is now displayed as the maintainer, so show the foundation.
     # "author": "Campbell Barton, Bastien Montagne, Jens Restemeier, @Mysteryem", # Original Authors
     "author": "Blender Foundation",
-    "version": (5, 14, 0),
-    "blender": (4, 5, 0),
+    "version": (5, 15, 0),
+    "blender": (5, 0, 0),
     "location": "File > Import-Export",
     "description": "FBX IO meshes, UVs, vertex colors, materials, textures, cameras, lamps and actions",
     "warning": "",
@@ -29,6 +29,7 @@ if "bpy" in locals():
 
 
 import bpy
+from bpy.app.translations import pgettext_iface as iface_
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -261,7 +262,7 @@ def import_panel_transform(layout, operator):
         body.prop(operator, "decal_offset")
         row = body.row()
         row.prop(operator, "bake_space_transform")
-        row.label(text="", icon='ERROR')
+        row.label(text="", icon='STATUS_ERROR')
         body.prop(operator, "use_prepost_rot")
 
         import_panel_transform_orientation(body, operator)
@@ -277,11 +278,13 @@ def import_panel_transform_orientation(layout, operator):
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")
 
+
 def import_panel_materials(layout, operator):
     header, body = layout.panel("FBX_import_material", default_closed=True)
     header.label(text="Materials")
     if body:
         body.prop(operator, "mtl_name_collision_mode")
+
 
 def import_panel_animation(layout, operator):
     header, body = layout.panel("FBX_import_animation", default_closed=True)
@@ -304,6 +307,7 @@ def import_panel_armature(layout, operator):
         sub.enabled = not operator.automatic_bone_orientation
         sub.prop(operator, "primary_bone_axis")
         sub.prop(operator, "secondary_bone_axis")
+
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ExportFBX(bpy.types.Operator, ExportHelper):
@@ -347,7 +351,10 @@ class ExportFBX(bpy.types.Operator, ExportHelper):
     )
     apply_unit_scale: BoolProperty(
         name="Apply Unit",
-        description="Take into account current Blender units settings (if unset, raw Blender Units values are used as-is)",
+        description=(
+            "Take into account current Blender units settings "
+            "(if unset, raw Blender Units values are used as-is)"
+        ),
         default=True,
     )
     apply_scale_options: EnumProperty(
@@ -388,7 +395,7 @@ class ExportFBX(bpy.types.Operator, ExportHelper):
                ('LIGHT', "Lamp", ""),
                ('ARMATURE', "Armature", "WARNING: not supported in dupli/group instances"),
                ('MESH', "Mesh", ""),
-               ('OTHER', "Other", "Other geometry types, like curve, metaball, etc. (converted to meshes)"),
+               ('OTHER', "Other", "Other geometry types, like curve, meta-ball, etc. (converted to meshes)"),
                ),
         description="Which kind of object to export",
         default={'EMPTY', 'CAMERA', 'LIGHT', 'ARMATURE', 'MESH', 'OTHER'},
@@ -658,7 +665,7 @@ def export_panel_transform(layout, operator):
         body.prop(operator, "use_space_transform")
         row = body.row()
         row.prop(operator, "bake_space_transform")
-        row.label(text="", icon='ERROR')
+        row.label(text="", icon='STATUS_ERROR')
 
 
 def export_panel_geometry(layout, operator):
@@ -668,9 +675,9 @@ def export_panel_geometry(layout, operator):
         body.prop(operator, "mesh_smooth_type")
         body.prop(operator, "use_subsurf")
         body.prop(operator, "use_mesh_modifiers")
-        #sub = body.row()
+        # sub = body.row()
         # sub.enabled = operator.use_mesh_modifiers and False  # disabled in 2.8...
-        #sub.prop(operator, "use_mesh_modifiers_render")
+        # sub.prop(operator, "use_mesh_modifiers_render")
         body.prop(operator, "use_mesh_edges")
         body.prop(operator, "use_triangles")
         sub = body.row()
@@ -707,11 +714,14 @@ def export_panel_animation(layout, operator):
 
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportFBX.bl_idname, text="FBX (.fbx) (Legacy)")
+    self.layout.operator(
+        ImportFBX.bl_idname,
+        text=bpy.types.FileHandler.label_with_extensions("IO_FH_fbx") + " " + iface_("(Legacy)"))
 
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportFBX.bl_idname, text="FBX (.fbx)")
+    self.layout.operator(
+        ExportFBX.bl_idname, text=bpy.types.FileHandler.label_with_extensions("IO_FH_fbx"))
 
 
 classes = (

@@ -10,9 +10,9 @@
 #include <cstdio>
 #include <cstring>
 
-#include "BLI_dynstr.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_dynstr.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "DNA_ID.h"
 
@@ -21,7 +21,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name IDProp Repr
@@ -192,13 +194,13 @@ static void idp_repr_fn_recursive(ReprState *state, const IDProperty *prop)
     }
     case IDP_GROUP: {
       STR_APPEND_STR("{");
-      LISTBASE_FOREACH (const IDProperty *, subprop, &prop->data.group) {
-        if (subprop != prop->data.group.first) {
+      for (const IDProperty &subprop : prop->data.group) {
+        if (&subprop != prop->data.group.first()) {
           STR_APPEND_STR(", ");
         }
-        STR_APPEND_STR_QUOTE(subprop->name);
+        STR_APPEND_STR_QUOTE(subprop.name);
         STR_APPEND_STR(": ");
-        idp_repr_fn_recursive(state, subprop);
+        idp_repr_fn_recursive(state, &subprop);
       }
       STR_APPEND_STR("}");
       break;
@@ -261,7 +263,7 @@ void IDP_print(const IDProperty *prop)
   char *repr = IDP_reprN(prop, nullptr);
   printf("IDProperty(%p): ", prop);
   puts(repr);
-  MEM_freeN(repr);
+  MEM_delete(repr);
 }
 
 const char *IDP_type_str(const eIDPropertyType type, const short sub_type)
@@ -314,3 +316,5 @@ const char *IDP_type_str(const IDProperty *prop)
 }
 
 /** \} */
+
+}  // namespace blender

@@ -6,8 +6,6 @@
  * \ingroup GHOST
  */
 
-#define _USE_MATH_DEFINES
-
 #include "GHOST_Wintab.hh"
 
 GHOST_Wintab *GHOST_Wintab::loadWintabUnsafe(HWND hwnd)
@@ -72,7 +70,7 @@ GHOST_Wintab *GHOST_Wintab::loadWintabUnsafe(HWND hwnd)
 
   /* Build Wintab context. */
 
-  LOGCONTEXT lc = {0};
+  LOGCONTEXT lc = {{0}};
   if (!info(WTI_DEFSYSCTX, 0, &lc)) {
     return nullptr;
   }
@@ -92,10 +90,10 @@ GHOST_Wintab *GHOST_Wintab::loadWintabUnsafe(HWND hwnd)
   const int maxQueue = 500;
   /* < 0 should realistically never happen, but given we cast to size_t later on better safe than
    * sorry. */
-  int queueSize = max(0, queueSizeGet(hctx.get()));
+  int queueSize = std::max(0, queueSizeGet(hctx.get()));
 
   while (queueSize < maxQueue) {
-    int testSize = min(queueSize + 16, maxQueue);
+    int testSize = std::min(queueSize + 16, maxQueue);
     if (queueSizeSet(hctx.get(), testSize)) {
       queueSize = testSize;
     }
@@ -156,24 +154,20 @@ static int access_violation_exception_filter(unsigned int code, LPEXCEPTION_POIN
 
 GHOST_Wintab *GHOST_Wintab::loadWintab(HWND hwnd)
 {
-  /* The only way to get the current handler is by seting a new one. */
+  /* The only way to get the current handler is by setting a new one. */
   LPTOP_LEVEL_EXCEPTION_FILTER current_filter = SetUnhandledExceptionFilter(nullptr);
   SetUnhandledExceptionFilter(current_filter);
 
   /* __except and __finally cannot be used together, as such a second nested __try block is needed.
    */
-  __try
-  {
-    __try
-    {
+  __try {
+    __try {
       return GHOST_Wintab::loadWintabUnsafe(hwnd);
     }
-    __except (access_violation_exception_filter(GetExceptionCode(), GetExceptionInformation()))
-    {
+    __except (access_violation_exception_filter(GetExceptionCode(), GetExceptionInformation())) {
     }
   }
-  __finally
-  {
+  __finally {
     /* Restore our handler in case the Wintab driver replaced it. Huion's driver is known to do
      * this.
      */
@@ -297,7 +291,7 @@ void GHOST_Wintab::leaveRange()
 
 void GHOST_Wintab::remapCoordinates()
 {
-  LOGCONTEXT lc = {0};
+  LOGCONTEXT lc = {{0}};
 
   if (fp_info_(WTI_DEFSYSCTX, 0, &lc)) {
     extractCoordinates(lc, tablet_coord_, system_coord_);
@@ -517,6 +511,13 @@ bool GHOST_Wintab::trustCoordinates()
 
 bool GHOST_Wintab::testCoordinates(int sysX, int sysY, int wtX, int wtY)
 {
+  /* Some (faulty) drivers can report (WTInfoA) that the tablet extent is
+   * zero. This will cause divide by zero in mapWintabToSysCoordinates. #150560 */
+  if (tablet_coord_.x.ext == 0 || tablet_coord_.y.ext == 0) {
+    coord_trusted_ = false;
+    return false;
+  }
+
   mapWintabToSysCoordinates(wtX, wtY, wtX, wtY);
 
   /* Allow off by one pixel tolerance in case of rounding error. */
@@ -593,12 +594,12 @@ void GHOST_Wintab::printContextDebugInfo()
          ::GetSystemMetrics(SM_CYVIRTUALSCREEN));
 
   auto printContextRanges = [](LOGCONTEXT &lc) {
-    printf("lcInOrgX: %d, lcInOrgY: %d, lcInExtX: %d, lcInExtY: %d\n",
+    printf("lcInOrgX: %ld, lcInOrgY: %ld, lcInExtX: %ld, lcInExtY: %ld\n",
            lc.lcInOrgX,
            lc.lcInOrgY,
            lc.lcInExtX,
            lc.lcInExtY);
-    printf("lcOutOrgX: %d, lcOutOrgY: %d, lcOutExtX: %d, lcOutExtY: %d\n",
+    printf("lcOutOrgX: %ld, lcOutOrgY: %ld, lcOutExtX: %ld, lcOutExtY: %ld\n",
            lc.lcOutOrgX,
            lc.lcOutOrgY,
            lc.lcOutExtX,
@@ -659,7 +660,7 @@ void GHOST_Wintab::printContextDebugInfo()
     AXIS axis_x, axis_y;
     fp_info_(WTI_DEVICES + i, DVC_X, &axis_x);
     fp_info_(WTI_DEVICES + i, DVC_Y, &axis_y);
-    printf("WTI_DEVICES %u axis_x org: %d, axis_y org: %d axis_x ext: %d, axis_y ext: %d\n",
+    printf("WTI_DEVICES %u axis_x org: %ld, axis_y org: %ld axis_x ext: %ld, axis_y ext: %ld\n",
            i,
            axis_x.axMin,
            axis_y.axMin,

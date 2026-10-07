@@ -4,69 +4,25 @@
 
 #pragma once
 
-#include <pxr/base/vt/array.h>
-#include <pxr/imaging/hd/sceneDelegate.h>
+namespace blender {
 
-#include "BLI_set.hh"
+struct Object;
 
-#include "DNA_particle_types.h"
+namespace io::hydra {
 
-#include "material.hh"
-#include "object.hh"
+struct BObjectInfo;
+struct EmittedObject;
+struct PopulateContext;
 
-namespace blender::io::hydra {
+/* Emit a curves object as an Rprim. */
+void emit_curves_object(PopulateContext &ctx, const BObjectInfo &info, EmittedObject &emitted);
+/* Emit a curves instancer prototype. */
+void emit_curves_proto(PopulateContext &ctx, const BObjectInfo &info);
 
-class CurvesData : public ObjectData {
- protected:
-  pxr::VtIntArray curve_vertex_counts_;
-  pxr::VtVec3fArray vertices_;
-  pxr::VtVec2fArray uvs_;
-  pxr::VtFloatArray widths_;
+/* Emit particular hair as an Rprim. */
+void emit_hair_for_object(PopulateContext &ctx, Object *object, EmittedObject &emitted);
+/* Emit a hair instancer prototype. */
+void emit_hair_proto(PopulateContext &ctx, Object *source);
 
-  MaterialData *mat_data_ = nullptr;
-
- public:
-  CurvesData(HydraSceneDelegate *scene_delegate,
-             const Object *object,
-             pxr::SdfPath const &prim_id);
-
-  void init() override;
-  void insert() override;
-  void remove() override;
-  void update() override;
-
-  pxr::VtValue get_data(pxr::TfToken const &key) const override;
-  pxr::SdfPath material_id() const override;
-  void available_materials(Set<pxr::SdfPath> &paths) const override;
-
-  pxr::HdBasisCurvesTopology topology() const;
-  pxr::HdPrimvarDescriptorVector primvar_descriptors(pxr::HdInterpolation interpolation) const;
-
- protected:
-  void write_materials() override;
-  virtual void write_curves();
-};
-
-class HairData : public CurvesData {
- private:
-  ParticleSystem *particle_system_;
-
- public:
-  HairData(HydraSceneDelegate *scene_delegate,
-           const Object *object,
-           pxr::SdfPath const &prim_id,
-           ParticleSystem *particle_system);
-
-  static bool is_supported(const ParticleSystem *particle_system);
-  static bool is_visible(HydraSceneDelegate *scene_delegate,
-                         Object *object,
-                         ParticleSystem *particle_system);
-
-  void update() override;
-
- protected:
-  void write_transform() override;
-  void write_curves() override;
-};
-
-}  // namespace blender::io::hydra
+}  // namespace io::hydra
+}  // namespace blender

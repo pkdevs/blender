@@ -2,10 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_common_color_utils.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
+#include "gpu_shader_common_color_utils.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 
+[[node]]
 void node_composite_color_correction(float4 color,
                                      float mask,
                                      float master_saturation,
@@ -30,11 +31,11 @@ void node_composite_color_correction(float4 color,
                                      float shadows_offset,
                                      float start_midtones,
                                      float end_midtones,
-                                     float apply_on_red,
-                                     float apply_on_green,
-                                     float apply_on_blue,
+                                     bool apply_on_red,
+                                     bool apply_on_green,
+                                     bool apply_on_blue,
                                      const float3 luminance_coefficients,
-                                     out float4 result)
+                                     float4 &result)
 {
   constexpr float margin = 0.10f;
   constexpr float margin_divider = 0.5f / margin;
@@ -86,10 +87,14 @@ void node_composite_color_correction(float4 color,
 
   float3 corrected = luma + saturation * (color.rgb - luma);
   corrected = 0.5f + (corrected - 0.5f) * contrast;
-  corrected = fallback_pow(corrected * gain + offset, inverse_gamma, corrected);
+  corrected = corrected * gain + offset;
+
+  /* Don't allow colors to go negative (or more negative than before) to keep them in gamut. */
+  corrected = max(min(color.xyz(), float3(0.0f)), corrected);
+
+  corrected = fallback_pow(corrected, inverse_gamma, corrected);
   corrected = mix(color.rgb, corrected, min(mask, 1.0f));
 
-  float3 enabled_channels = float3(apply_on_red, apply_on_green, apply_on_blue);
-  result.rgb = mix(corrected, color.rgb, equal(enabled_channels, float3(0.0f)));
+  result.rgb = mix(color.rgb, corrected, bool3(apply_on_red, apply_on_green, apply_on_blue));
   result.a = color.a;
 }

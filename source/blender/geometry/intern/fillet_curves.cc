@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include "BKE_attribute_math.hh"
 #include "BKE_curves.hh"
 #include "BKE_curves_utils.hh"
@@ -10,6 +14,8 @@
 #include "BLI_task.hh"
 
 #include "GEO_fillet_curves.hh"
+
+#include <cfloat>
 
 namespace blender::geometry {
 
@@ -20,16 +26,18 @@ static void duplicate_fillet_point_data(const OffsetIndices<int> src_points_by_c
                                         const GSpan src,
                                         GMutableSpan dst)
 {
-  curve_selection.foreach_index(GrainSize(512), [&](const int curve_i) {
-    const IndexRange src_points = src_points_by_curve[curve_i];
-    const IndexRange dst_points = dst_points_by_curve[curve_i];
-    const IndexRange offsets_range = bke::curves::per_curve_point_offsets_range(src_points,
-                                                                                curve_i);
-    bke::attribute_math::gather_to_groups(all_point_offsets.slice(offsets_range),
-                                          IndexRange(src_points.size()),
-                                          src.slice(src_points),
-                                          dst.slice(dst_points));
-  });
+  curve_selection.foreach_index(
+      [&](const int curve_i) {
+        const IndexRange src_points = src_points_by_curve[curve_i];
+        const IndexRange dst_points = dst_points_by_curve[curve_i];
+        const IndexRange offsets_range = bke::curves::per_curve_point_offsets_range(src_points,
+                                                                                    curve_i);
+        bke::attribute_math::gather_to_groups(all_point_offsets.slice(offsets_range),
+                                              IndexRange(src_points.size()),
+                                              src.slice(src_points),
+                                              dst.slice(dst_points));
+      },
+      exec_mode::grain_size(512));
 }
 
 static void calculate_result_offsets(const OffsetIndices<int> src_points_by_curve,
@@ -43,37 +51,40 @@ static void calculate_result_offsets(const OffsetIndices<int> src_points_by_curv
 {
   /* Fill the offsets array with the curve point counts, then accumulate them to form offsets. */
   offset_indices::copy_group_sizes(src_points_by_curve, unselected, dst_curve_offsets);
-  selection.foreach_index(GrainSize(512), [&](const int curve_i) {
-    const IndexRange src_points = src_points_by_curve[curve_i];
-    const IndexRange offsets_range = bke::curves::per_curve_point_offsets_range(src_points,
-                                                                                curve_i);
+  selection.foreach_index(
+      [&](const int curve_i) {
+        const IndexRange src_points = src_points_by_curve[curve_i];
+        const IndexRange offsets_range = bke::curves::per_curve_point_offsets_range(src_points,
+                                                                                    curve_i);
 
-    MutableSpan<int> point_offsets = dst_point_offsets.slice(offsets_range);
-    MutableSpan<int> point_counts = point_offsets.drop_back(1);
+        MutableSpan<int> point_offsets = dst_point_offsets.slice(offsets_range);
+        MutableSpan<int> point_counts = point_offsets.drop_back(1);
 
-    counts.materialize_compressed(src_points, point_counts);
-    for (int &count : point_counts) {
-      /* Make sure the number of cuts is greater than zero and add one for the existing point. */
-      count = std::max(count, 0) + 1;
-    }
-    if (!cyclic[curve_i]) {
-      /* Endpoints on non-cyclic curves cannot be filleted. */
-      point_counts.first() = 1;
-      point_counts.last() = 1;
-    }
-    /* Implicitly "deselect" points with zero radius. */
-    devirtualize_varray(radii, [&](const auto radii) {
-      for (const int i : IndexRange(src_points.size())) {
-        if (radii[src_points[i]] == 0.0f) {
-          point_counts[i] = 1;
+        counts.materialize_compressed(src_points, point_counts);
+        for (int &count : point_counts) {
+          /* Make sure the number of cuts is greater than zero and add one for the existing point.
+           */
+          count = std::max(count, 0) + 1;
         }
-      }
-    });
+        if (!cyclic[curve_i]) {
+          /* Endpoints on non-cyclic curves cannot be filleted. */
+          point_counts.first() = 1;
+          point_counts.last() = 1;
+        }
+        /* Implicitly "deselect" points with zero radius. */
+        devirtualize_varray(radii, [&](const auto radii) {
+          for (const int i : IndexRange(src_points.size())) {
+            if (radii[src_points[i]] == 0.0f) {
+              point_counts[i] = 1;
+            }
+          }
+        });
 
-    offset_indices::accumulate_counts_to_offsets(point_offsets);
+        offset_indices::accumulate_counts_to_offsets(point_offsets);
 
-    dst_curve_offsets[curve_i] = point_offsets.last();
-  });
+        dst_curve_offsets[curve_i] = point_offsets.last();
+      },
+      exec_mode::grain_size(512));
   offset_indices::accumulate_counts_to_offsets(dst_curve_offsets);
 }
 
@@ -244,6 +255,43 @@ static void calculate_fillet_positions(const Span<float3> src_positions,
 }
 
 /**
+ * Return the type for `handle`. Keep it aligned if recalculating it from `other_handle` preserves
+ * its position. Otherwise, use a free handle to preserve the circular arc constructed by the
+ * fillet.
+ */
+static HandleType fillet_handle_type(const float3 &position,
+                                     const float3 &handle,
+                                     const float3 &other_handle)
+{
+  const float3 handle_offset = handle - position;
+  const float3 other_direction = math::normalize(other_handle - position);
+  if (math::is_zero(other_direction) || math::is_zero(handle_offset)) {
+    return BEZIER_HANDLE_ALIGN;
+  }
+  if (math::dot(handle_offset, other_direction) >= 0.0f) {
+    return BEZIER_HANDLE_FREE;
+  }
+  const float length = math::length(handle_offset);
+  const float3 aligned_handle = position - other_direction * length;
+  /* Allow rounding when reconstructing the handle, including cancellation near zero after
+   * translation. Use a floating-point error bound rather than a scene-space epsilon.
+   * gamma(12) bounds the accumulated relative error of the reconstruction operations. */
+  constexpr double unit_roundoff = FLT_EPSILON / 2.0;
+  constexpr double relative_error = 12 * unit_roundoff / (1 - 12 * unit_roundoff);
+  /* All components must agree within the rounding bound to preserve the handle's 3D position.
+   * A mismatch on any axis means alignment would change the circular arc. */
+  for (const int axis : IndexRange(3)) {
+    const double rounding_bound = relative_error * length +
+                                  unit_roundoff * (std::abs(double(position[axis])) +
+                                                   std::abs(double(handle[axis])));
+    if (std::abs(double(aligned_handle[axis]) - handle[axis]) > rounding_bound) {
+      return BEZIER_HANDLE_FREE;
+    }
+  }
+  return BEZIER_HANDLE_ALIGN;
+}
+
+/**
  * Set handles for the "Bezier" mode where we rely on setting the inner handles to approximate a
  * circular arc. The outer (previous and next) handles outside the result fillet segment are set
  * to vector handles.
@@ -298,13 +346,15 @@ static void calculate_bezier_handles_bezier_mode(const Span<float3> src_handles_
       dst_types_l[i_dst_a] = BEZIER_HANDLE_VECTOR;
       dst_types_r[i_dst_b] = BEZIER_HANDLE_VECTOR;
 
-      /* The inner handles are aligned with the aligned with the outer vector
-       * handles, but have a specific length to best approximate a circle. */
+      /* Preserve the original corner's arc tangents. Alignment is only valid when the outer
+       * vector handles provide the opposite direction (or no direction for coincident points). */
       const float handle_length = (4.0f / 3.0f) * radius * std::tan(angle / 4.0f);
       dst_handles_r[i_dst_a] = arc_start - prev_dir * handle_length;
       dst_handles_l[i_dst_b] = arc_end - next_dir * handle_length;
-      dst_types_r[i_dst_a] = BEZIER_HANDLE_ALIGN;
-      dst_types_l[i_dst_b] = BEZIER_HANDLE_ALIGN;
+      dst_types_r[i_dst_a] = fillet_handle_type(
+          arc_start, dst_handles_r[i_dst_a], dst_handles_l[i_dst_a]);
+      dst_types_l[i_dst_b] = fillet_handle_type(
+          arc_end, dst_handles_l[i_dst_b], dst_handles_r[i_dst_b]);
     }
   });
 }
@@ -419,79 +469,81 @@ static bke::CurvesGeometry fillet_curves(const bke::CurvesGeometry &src_curves,
     dst_handles_r = dst_curves.handle_positions_right_for_write();
   }
 
-  curve_selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment segment) {
-    Array<float3> directions;
-    Array<float> angles;
-    Array<float> radii;
-    Array<float> input_radii_buffer;
+  curve_selection.foreach_segment(
+      [&](const IndexMaskSegment segment) {
+        Array<float3> directions;
+        Array<float> angles;
+        Array<float> radii;
+        Array<float> input_radii_buffer;
 
-    for (const int curve_i : segment) {
-      const IndexRange src_points = src_points_by_curve[curve_i];
-      const IndexRange offsets_range = bke::curves::per_curve_point_offsets_range(src_points,
-                                                                                  curve_i);
-      const OffsetIndices<int> offsets(all_point_offsets.slice(offsets_range));
-      const IndexRange dst_points = dst_points_by_curve[curve_i];
-      const Span<float3> src_positions = positions.slice(src_points);
+        for (const int curve_i : segment) {
+          const IndexRange src_points = src_points_by_curve[curve_i];
+          const IndexRange offsets_range = bke::curves::per_curve_point_offsets_range(src_points,
+                                                                                      curve_i);
+          const OffsetIndices<int> offsets(all_point_offsets.slice(offsets_range));
+          const IndexRange dst_points = dst_points_by_curve[curve_i];
+          const Span<float3> src_positions = positions.slice(src_points);
 
-      directions.reinitialize(src_points.size());
-      calculate_directions(src_positions, directions);
+          directions.reinitialize(src_points.size());
+          calculate_directions(src_positions, directions);
 
-      angles.reinitialize(src_points.size());
-      calculate_angles(directions, angles);
+          angles.reinitialize(src_points.size());
+          calculate_angles(directions, angles);
 
-      radii.reinitialize(src_points.size());
-      if (limit_radius) {
-        input_radii_buffer.reinitialize(src_points.size());
-        radius_input.materialize_compressed(src_points, input_radii_buffer);
-        limit_radii(src_positions, angles, input_radii_buffer, cyclic[curve_i], radii);
-      }
-      else {
-        radius_input.materialize_compressed(src_points, radii);
-      }
+          radii.reinitialize(src_points.size());
+          if (limit_radius) {
+            input_radii_buffer.reinitialize(src_points.size());
+            radius_input.materialize_compressed(src_points, input_radii_buffer);
+            limit_radii(src_positions, angles, input_radii_buffer, cyclic[curve_i], radii);
+          }
+          else {
+            radius_input.materialize_compressed(src_points, radii);
+          }
 
-      calculate_fillet_positions(positions.slice(src_points),
-                                 angles,
-                                 radii,
-                                 directions,
-                                 offsets,
-                                 dst_positions.slice(dst_points));
+          calculate_fillet_positions(positions.slice(src_points),
+                                     angles,
+                                     radii,
+                                     directions,
+                                     offsets,
+                                     dst_positions.slice(dst_points));
 
-      if (src_curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
-        if (use_bezier_mode) {
-          calculate_bezier_handles_bezier_mode(src_handles_l.slice(src_points),
-                                               src_handles_r.slice(src_points),
-                                               src_types_l.slice(src_points),
-                                               src_types_r.slice(src_points),
-                                               angles,
-                                               radii,
-                                               directions,
-                                               offsets,
-                                               dst_positions.slice(dst_points),
-                                               dst_handles_l.slice(dst_points),
-                                               dst_handles_r.slice(dst_points),
-                                               dst_types_l.slice(dst_points),
-                                               dst_types_r.slice(dst_points));
+          if (src_curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+            if (use_bezier_mode) {
+              calculate_bezier_handles_bezier_mode(src_handles_l.slice(src_points),
+                                                   src_handles_r.slice(src_points),
+                                                   src_types_l.slice(src_points),
+                                                   src_types_r.slice(src_points),
+                                                   angles,
+                                                   radii,
+                                                   directions,
+                                                   offsets,
+                                                   dst_positions.slice(dst_points),
+                                                   dst_handles_l.slice(dst_points),
+                                                   dst_handles_r.slice(dst_points),
+                                                   dst_types_l.slice(dst_points),
+                                                   dst_types_r.slice(dst_points));
+            }
+            else {
+              calculate_bezier_handles_poly_mode(src_handles_l.slice(src_points),
+                                                 src_handles_r.slice(src_points),
+                                                 src_types_l.slice(src_points),
+                                                 src_types_r.slice(src_points),
+                                                 offsets,
+                                                 dst_positions.slice(dst_points),
+                                                 dst_handles_l.slice(dst_points),
+                                                 dst_handles_r.slice(dst_points),
+                                                 dst_types_l.slice(dst_points),
+                                                 dst_types_r.slice(dst_points));
+            }
+          }
         }
-        else {
-          calculate_bezier_handles_poly_mode(src_handles_l.slice(src_points),
-                                             src_handles_r.slice(src_points),
-                                             src_types_l.slice(src_points),
-                                             src_types_r.slice(src_points),
-                                             offsets,
-                                             dst_positions.slice(dst_points),
-                                             dst_handles_l.slice(dst_points),
-                                             dst_handles_r.slice(dst_points),
-                                             dst_types_l.slice(dst_points),
-                                             dst_types_r.slice(dst_points));
-        }
-      }
-    }
-  });
+      },
+      exec_mode::grain_size(512));
 
   for (auto &attribute : bke::retrieve_attributes_for_transfer(
            src_attributes,
            dst_attributes,
-           ATTR_DOMAIN_MASK_POINT,
+           {bke::AttrDomain::Point},
            bke::attribute_filter_with_skip_ref(attribute_filter,
                                                {"position",
                                                 "handle_type_left",
@@ -520,6 +572,7 @@ static bke::CurvesGeometry fillet_curves(const bke::CurvesGeometry &src_curves,
     bke::curves::nurbs::update_custom_knot_modes(
         dst_curves.curves_range(), NURBS_KNOT_MODE_NORMAL, NURBS_KNOT_MODE_NORMAL, dst_curves);
   }
+  dst_curves.calculate_bezier_auto_handles();
   return dst_curves;
 }
 

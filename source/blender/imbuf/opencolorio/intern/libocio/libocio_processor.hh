@@ -4,18 +4,16 @@
 
 #pragma once
 
-#if defined(WITH_OPENCOLORIO)
+#include "BLI_string_ref.hh"
 
-#  include "BLI_string_ref.hh"
-
-#  include "../opencolorio.hh"
+#include "../opencolorio.hh"
 
 namespace blender::ocio {
 
 class LibOCIOConfig;
 
 /**
- * Create OpenColorIO processor between frames.
+ * Create OpenColorIO processor between color spaces.
  * If the processor can not be created returns nullptr.
  *
  * The silent version does not print any errors if the processor creation has failed.
@@ -29,6 +27,15 @@ OCIO_NAMESPACE::ConstProcessorRcPtr create_ocio_processor_silent(
     StringRefNull from_colorspace,
     StringRefNull to_colorspace);
 
-}  // namespace blender::ocio
+/**
+ * Create OpenColorIO processor that converts between color spaces in different
+ * configs, through standard interchange roles.
+ * If the processor can not be created returns nullptr.
+ */
+OCIO_NAMESPACE::ConstProcessorRcPtr create_ocio_processor_between_configs(
+    const OCIO_NAMESPACE::ConstConfigRcPtr &from_config,
+    StringRefNull from_colorspace,
+    const OCIO_NAMESPACE::ConstConfigRcPtr &to_config,
+    StringRefNull to_colorspace);
 
-#endif
+}  // namespace blender::ocio

@@ -17,11 +17,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name String Duplicate/Copy
@@ -31,7 +33,7 @@ char *BLI_strdupn(const char *str, const size_t len)
 {
   BLI_assert_msg(BLI_strnlen(str, len) == len, "strlen(str) must be greater or equal to 'len'!");
 
-  char *n = MEM_malloc_arrayN<char>(len + 1, "strdup");
+  char *n = MEM_new_array_uninitialized<char>(len + 1, "strdup");
   memcpy(n, str, len);
   n[len] = '\0';
 
@@ -55,7 +57,7 @@ char *BLI_strdupcat(const char *__restrict str1, const char *__restrict str2)
   const size_t str2_len = strlen(str2) + 1;
   char *str, *s;
 
-  str = MEM_calloc_arrayN<char>(str1_len + str2_len, "strdupcat");
+  str = MEM_new_array_zeroed<char>(str1_len + str2_len, "strdupcat");
   s = str;
 
   memcpy(s, str1, str1_len); /* NOLINT: bugprone-not-null-terminated-result */
@@ -223,30 +225,33 @@ size_t BLI_snprintf_rlen(char *__restrict dst,
   return n;
 }
 
-char *BLI_sprintfN_with_buffer(
-    char *fixed_buf, size_t fixed_buf_size, size_t *result_len, const char *__restrict format, ...)
+char *BLI_sprintfN_with_buffer(char *fixed_buf,
+                               size_t fixed_buf_maxncpy,
+                               size_t *result_len,
+                               const char *__restrict format,
+                               ...)
 {
   va_list args;
   va_start(args, format);
-  int retval = vsnprintf(fixed_buf, fixed_buf_size, format, args);
+  int retval = vsnprintf(fixed_buf, fixed_buf_maxncpy, format, args);
   va_end(args);
-  if (UNLIKELY(retval < 0)) {
+  if (retval < 0) [[unlikely]] {
     /* Return an empty string as there was an error there is no valid output. */
     *result_len = 0;
-    if (UNLIKELY(fixed_buf_size == 0)) {
-      return MEM_calloc_arrayN<char>(1, __func__);
+    if (fixed_buf_maxncpy == 0) [[unlikely]] {
+      return MEM_new_array_zeroed<char>(1, __func__);
     }
     *fixed_buf = '\0';
     return fixed_buf;
   }
   *result_len = size_t(retval);
-  if (size_t(retval) < fixed_buf_size) {
+  if (size_t(retval) < fixed_buf_maxncpy) {
     return fixed_buf;
   }
 
   /* `retval` doesn't include null terminator. */
   const size_t size = size_t(retval) + 1;
-  char *result = MEM_malloc_arrayN<char>(size, __func__);
+  char *result = MEM_new_array_uninitialized<char>(size, __func__);
   va_start(args, format);
   retval = vsnprintf(result, size, format, args);
   va_end(args);
@@ -256,32 +261,32 @@ char *BLI_sprintfN_with_buffer(
 }
 
 char *BLI_vsprintfN_with_buffer(char *fixed_buf,
-                                size_t fixed_buf_size,
+                                size_t fixed_buf_maxncpy,
                                 size_t *result_len,
                                 const char *__restrict format,
                                 va_list args)
 {
   va_list args_copy;
   va_copy(args_copy, args);
-  int retval = vsnprintf(fixed_buf, fixed_buf_size, format, args_copy);
+  int retval = vsnprintf(fixed_buf, fixed_buf_maxncpy, format, args_copy);
   va_end(args_copy);
-  if (UNLIKELY(retval < 0)) {
+  if (retval < 0) [[unlikely]] {
     /* Return an empty string as there was an error there is no valid output. */
     *result_len = 0;
-    if (UNLIKELY(fixed_buf_size == 0)) {
-      return MEM_calloc_arrayN<char>(1, __func__);
+    if (fixed_buf_maxncpy == 0) [[unlikely]] {
+      return MEM_new_array_zeroed<char>(1, __func__);
     }
     *fixed_buf = '\0';
     return fixed_buf;
   }
   *result_len = size_t(retval);
-  if (size_t(retval) < fixed_buf_size) {
+  if (size_t(retval) < fixed_buf_maxncpy) {
     return fixed_buf;
   }
 
   /* `retval` doesn't include null terminator. */
   const size_t size = size_t(retval) + 1;
-  char *result = MEM_malloc_arrayN<char>(size, __func__);
+  char *result = MEM_new_array_uninitialized<char>(size, __func__);
   retval = vsnprintf(result, size, format, args);
   BLI_assert(size_t(retval + 1) == size);
   UNUSED_VARS_NDEBUG(retval);
@@ -301,7 +306,7 @@ char *BLI_sprintfN(const char *__restrict format, ...)
     return result;
   }
   size_t size = result_len + 1;
-  result = MEM_malloc_arrayN<char>(size, __func__);
+  result = MEM_new_array_uninitialized<char>(size, __func__);
   memcpy(result, fixed_buf, size);
   return result;
 }
@@ -316,7 +321,7 @@ char *BLI_vsprintfN(const char *__restrict format, va_list args)
     return result;
   }
   size_t size = result_len + 1;
-  result = MEM_calloc_arrayN<char>(size, __func__);
+  result = MEM_new_array_zeroed<char>(size, __func__);
   memcpy(result, fixed_buf, size);
   return result;
 }
@@ -327,14 +332,15 @@ char *BLI_vsprintfN(const char *__restrict format, va_list args)
 /** \name String Escape/Un-Escape
  * \{ */
 
-size_t BLI_str_escape(char *__restrict dst, const char *__restrict src, const size_t dst_maxncpy)
+size_t BLI_str_escape(char *__restrict dst, StringRef src, const size_t dst_maxncpy)
 {
   BLI_assert(dst_maxncpy != 0);
   BLI_string_debug_size(dst, dst_maxncpy);
 
-  size_t len = 0;
-  for (; (len < dst_maxncpy) && (*src != '\0'); dst++, src++, len++) {
-    char c = *src;
+  size_t dst_len = 0;
+  int64_t src_idx = 0;
+  for (; (dst_len < dst_maxncpy) && (src_idx < src.size()); src_idx++, dst++, dst_len++) {
+    char c = src[src_idx];
     if (ELEM(c, '\\', '"') ||                       /* Use as-is. */
         ((c == '\t') && ((void)(c = 't'), true)) || /* Tab. */
         ((c == '\n') && ((void)(c = 'n'), true)) || /* Newline. */
@@ -343,26 +349,26 @@ size_t BLI_str_escape(char *__restrict dst, const char *__restrict src, const si
         ((c == '\b') && ((void)(c = 'b'), true)) || /* Backspace. */
         ((c == '\f') && ((void)(c = 'f'), true)))   /* Form-feed. */
     {
-      if (UNLIKELY(len + 1 >= dst_maxncpy)) {
+      if (dst_len + 1 >= dst_maxncpy) [[unlikely]] {
         /* Not enough space to escape. */
         break;
       }
       *dst++ = '\\';
-      len++;
+      dst_len++;
     }
     *dst = c;
   }
   *dst = '\0';
 
-  return len;
+  return dst_len;
 }
 
-std::string BLI_str_escape(const char *str)
+std::string BLI_str_escape(StringRef str)
 {
-  if (!str) {
+  if (str.is_empty()) {
     return {};
   }
-  const size_t max_result_size = strlen(str) * 2 + 1;
+  const size_t max_result_size = size_t(str.size()) * 2 + 1;
   std::string result;
   result.resize(max_result_size);
   const size_t result_size = BLI_str_escape(result.data(), str, max_result_size);
@@ -404,7 +410,7 @@ size_t BLI_str_unescape_ex(char *__restrict dst,
   bool is_complete = true;
   const size_t max_strlen = dst_maxncpy - 1; /* Account for trailing zero byte. */
   for (const char *src_end = src + src_maxncpy; (src < src_end) && *src; src++) {
-    if (UNLIKELY(len == max_strlen)) {
+    if (len == max_strlen) [[unlikely]] {
       is_complete = false;
       break;
     }
@@ -463,7 +469,7 @@ bool BLI_str_quoted_substr_range(const char *__restrict str,
     return false;
   }
   const size_t prefix_len = strlen(prefix);
-  if (UNLIKELY(prefix_len == 0)) {
+  if (prefix_len == 0) [[unlikely]] {
     BLI_assert_msg(0,
                    "Zero length prefix passed in, "
                    "caller must prevent this from happening!");
@@ -474,12 +480,12 @@ bool BLI_str_quoted_substr_range(const char *__restrict str,
                  "caller must prevent this from happening!");
 
   str_start += prefix_len;
-  if (UNLIKELY(*str_start != '\"')) {
+  if (*str_start != '\"') [[unlikely]] {
     return false;
   }
   str_start += 1;
   const char *str_end = BLI_str_escape_find_quote(str_start);
-  if (UNLIKELY(str_end == nullptr)) {
+  if (str_end == nullptr) [[unlikely]] {
     return false;
   }
 
@@ -509,10 +515,10 @@ char *BLI_str_quoted_substrN(const char *__restrict str, const char *__restrict 
     return nullptr;
   }
   const size_t escaped_len = size_t(end_match_ofs - start_match_ofs);
-  char *result = MEM_malloc_arrayN<char>(escaped_len + 1, __func__);
+  char *result = MEM_new_array_uninitialized<char>(escaped_len + 1, __func__);
   const size_t unescaped_len = BLI_str_unescape(result, str + start_match_ofs, escaped_len);
   if (unescaped_len != escaped_len) {
-    result = MEM_reallocN(result, sizeof(char) * (unescaped_len + 1));
+    result = MEM_realloc_uninitialized(result, sizeof(char) * (unescaped_len + 1));
   }
   return result;
 }
@@ -567,7 +573,7 @@ char *BLI_strcasestr(const char *s, const char *find)
     } while (BLI_strncasecmp(s, find, len) != 0);
     s--;
   }
-  return ((char *)s);
+  return (const_cast<char *>(s));
 }
 
 int BLI_string_max_possible_word_count(const int str_len)
@@ -631,7 +637,7 @@ char *BLI_strncasestr(const char *s, const char *find, size_t len)
     }
     s--;
   }
-  return ((char *)s);
+  return (const_cast<char *>(s));
 }
 
 int BLI_strcasecmp(const char *s1, const char *s2)
@@ -1013,7 +1019,8 @@ int BLI_str_rstrip_digits(char *str)
 {
   int totstrip = 0;
   int str_len = int(strlen(str));
-  while (str_len > 0 && isdigit(str[--str_len])) {
+  while (str_len > 0 && isdigit(str[str_len - 1])) {
+    --str_len;
     str[str_len] = '\0';
     totstrip++;
   }
@@ -1343,3 +1350,5 @@ void BLI_string_debug_size_after_nil(char *str, size_t str_maxncpy)
 #endif /* WITH_STRSIZE_DEBUG */
 
 /** \} */
+
+}  // namespace blender

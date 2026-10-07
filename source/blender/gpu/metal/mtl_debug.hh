@@ -9,7 +9,7 @@
 #pragma once
 
 #include "BKE_global.hh"
-#include "BLI_system.h"
+#include "BLI_system.hh"
 #include "CLG_log.h"
 
 /** Options for organizing Metal GPU debug captures. */
@@ -17,9 +17,6 @@
  * the RenderCommandEncoder, but will not display in the trace.
  * Use -1 for unlimited. */
 #define METAL_DEBUG_CAPTURE_MAX_NESTED_GROUPS -1
-
-/* Whether empty debug groups should be hidden. */
-#define METAL_DEBUG_CAPTURE_HIDE_EMPTY 0
 
 namespace blender::gpu::debug {
 

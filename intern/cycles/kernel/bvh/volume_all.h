@@ -24,12 +24,11 @@ ccl_device
 #else
 ccl_device_inline
 #endif
-    uint
-    BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals kg,
-                                const ccl_private Ray *ray,
-                                Intersection *isect_array,
-                                const uint max_hits,
-                                const uint visibility)
+    uint BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals kg,
+                                     const ccl_private Ray *ray,
+                                     Intersection *isect_array,
+                                     const uint max_hits,
+                                     const uint visibility)
 {
   /* todo:
    * - test if pushing distance on the stack helps (for non shadow rays)
@@ -126,17 +125,16 @@ ccl_device_inline
             case PRIMITIVE_TRIANGLE: {
               /* intersect ray against primitive */
               for (; prim_addr < prim_addr2; prim_addr++) {
-                kernel_assert(kernel_data_fetch(prim_type, prim_addr) == type);
+                kernel_assert((kernel_data_fetch(prim_type, prim_addr) & PRIMITIVE_ALL) ==
+                              (type & PRIMITIVE_ALL));
                 /* only primitives from volume object */
                 const int prim_object = (object == OBJECT_NONE) ?
                                             kernel_data_fetch(prim_object, prim_addr) :
                                             object;
                 const int prim = kernel_data_fetch(prim_index, prim_addr);
-                if (intersection_skip_self(ray->self, prim_object, prim)) {
-                  continue;
-                }
-                int object_flag = kernel_data_fetch(object_flag, prim_object);
-                if ((object_flag & SD_OBJECT_HAS_VOLUME) == 0) {
+                if (bvh_volume_anyhit_triangle_filter<false>(
+                        kg, prim_object, prim, ray->self, visibility))
+                {
                   continue;
                 }
                 hit = triangle_intersect(kg,
@@ -165,17 +163,16 @@ ccl_device_inline
             case PRIMITIVE_MOTION_TRIANGLE: {
               /* intersect ray against primitive */
               for (; prim_addr < prim_addr2; prim_addr++) {
-                kernel_assert(kernel_data_fetch(prim_type, prim_addr) == type);
+                kernel_assert((kernel_data_fetch(prim_type, prim_addr) & PRIMITIVE_ALL) ==
+                              (type & PRIMITIVE_ALL));
                 /* only primitives from volume object */
                 const int prim_object = (object == OBJECT_NONE) ?
                                             kernel_data_fetch(prim_object, prim_addr) :
                                             object;
                 const int prim = kernel_data_fetch(prim_index, prim_addr);
-                if (intersection_skip_self(ray->self, prim_object, prim)) {
-                  continue;
-                }
-                int object_flag = kernel_data_fetch(object_flag, prim_object);
-                if ((object_flag & SD_OBJECT_HAS_VOLUME) == 0) {
+                if (bvh_volume_anyhit_triangle_filter<false>(
+                        kg, prim_object, prim, ray->self, visibility))
+                {
                   continue;
                 }
                 hit = motion_triangle_intersect(kg,
@@ -210,7 +207,7 @@ ccl_device_inline
         else {
           /* instance push */
           object = kernel_data_fetch(prim_object, -prim_addr - 1);
-          int object_flag = kernel_data_fetch(object_flag, object);
+          const uint object_flag = kernel_data_fetch(object_flag, object);
           if (object_flag & SD_OBJECT_HAS_VOLUME) {
 #if BVH_FEATURE(BVH_MOTION)
             bvh_instance_motion_push(kg, object, ray, &P, &dir, &idir);

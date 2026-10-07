@@ -38,20 +38,16 @@ class SimpleOperation : public Operation {
 
  protected:
   /* Simple operations don't need input processors, so override with an empty implementation. */
-  void add_and_evaluate_input_processors() override;
+  void evaluate_input_processors() override;
 
   /* Get a reference to the input result of the operation, this essentially calls the super
    * get_result method with the input identifier of the operation. */
   Result &get_input();
 
-  /* Switch the result mapped to the input with the given result, this essentially calls the super
-   * switch_result_mapped_to_input method with the input identifier of the operation. */
-  void switch_result_mapped_to_input(Result *result);
-
   /* Populate the result of the operation, this essentially calls the super populate_result method
    * with the output identifier of the operation and sets the initial reference count of the result
    * to 1, since the result of an operation is guaranteed to have a single user. */
-  void populate_result(Result result);
+  void populate_result(ResultType type);
 
   /* Declare the descriptor of the input of the operation to be the given descriptor, this
    * essentially calls the super declare_input_descriptor method with the input identifier of the

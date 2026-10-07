@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
@@ -13,19 +17,21 @@
 
 #include "DEG_depsgraph_query.hh"
 
-namespace blender::nodes::node_shader_tex_image_cc {
+namespace blender {
+
+namespace nodes::node_shader_tex_image_cc {
 
 static void sh_node_tex_image_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Vector>("Vector").implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD);
-  b.add_output<decl::Color>("Color").no_muted_links();
-  b.add_output<decl::Float>("Alpha").no_muted_links();
+  b.add_input<decl::Vector>("Vector"_ustr).default_input_type(NODE_DEFAULT_INPUT_POSITION_FIELD);
+  b.add_output<decl::Color>("Color"_ustr).no_muted_links();
+  b.add_output<decl::Float>("Alpha"_ustr).no_muted_links();
 }
 
 static void node_shader_init_tex_image(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeTexImage *tex = MEM_callocN<NodeTexImage>(__func__);
+  NodeTexImage *tex = MEM_new<NodeTexImage>(__func__);
   BKE_texture_mapping_default(&tex->base.tex_mapping, TEXMAP_TYPE_POINT);
   BKE_texture_colormapping_default(&tex->base.color_mapping);
   BKE_imageuser_default(&tex->iuser);
@@ -39,13 +45,13 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
                                      GPUNodeStack *in,
                                      GPUNodeStack *out)
 {
-  Image *ima = (Image *)node->id;
-  NodeTexImage *tex = (NodeTexImage *)node->storage;
+  Image *ima = id_cast<Image *>(node->id);
+  NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
 
   /* We get the image user from the original node, since GPU image keeps
    * a pointer to it and the dependency refreshes the original. */
   bNode *node_original = node->runtime->original ? node->runtime->original : node;
-  NodeTexImage *tex_original = (NodeTexImage *)node_original->storage;
+  NodeTexImage *tex_original = static_cast<NodeTexImage *>(node_original->storage);
   ImageUser *iuser = &tex_original->iuser;
 
   if (!ima) {
@@ -85,8 +91,11 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
 
   if (tex->interpolation != SHD_INTERP_CLOSEST) {
     /* TODO(fclem): For now assume mipmap is always enabled. */
-    sampler_state.filtering = GPU_SAMPLER_FILTERING_ANISOTROPIC | GPU_SAMPLER_FILTERING_LINEAR |
-                              GPU_SAMPLER_FILTERING_MIPMAP;
+    /* Setting the GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE enables anisotropic filtering. The
+     * exact number of samples are being determined at bind time by the engine.
+     * See #blender::draw::PassBase<T>::material_set */
+    sampler_state.filtering = GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE |
+                              GPU_SAMPLER_FILTERING_LINEAR | GPU_SAMPLER_FILTERING_MIPMAP;
   }
   const bool use_cubic = ELEM(tex->interpolation, SHD_INTERP_CUBIC, SHD_INTERP_SMART);
 
@@ -106,7 +115,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
     switch (tex->projection) {
       case SHD_PROJ_FLAT: {
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
-        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image);
+        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image, GPU_kernel_globals());
         break;
       }
       case SHD_PROJ_BOX: {
@@ -114,9 +123,22 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
         GPUNodeLink *vnor, *wnor, *col1, *col2, *col3;
         GPUNodeLink *blend = GPU_uniform(&tex->projection_blend);
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
-        GPU_link(mat, "world_normals_get", &vnor);
-        GPU_link(mat, "normal_transform_world_to_object", vnor, &wnor);
-        GPU_link(mat, gpu_node_name, in[0].link, wnor, gpu_image, &col1, &col2, &col3);
+        GPU_link(mat, "world_normals_get", GPU_shading_data(), &vnor);
+        GPU_link(mat,
+                 "normal_transform_world_to_object",
+                 vnor,
+                 GPU_kernel_globals(),
+                 GPU_shading_data(),
+                 &wnor);
+        GPU_link(mat,
+                 gpu_node_name,
+                 in[0].link,
+                 wnor,
+                 gpu_image,
+                 GPU_kernel_globals(),
+                 &col1,
+                 &col2,
+                 &col3);
         GPU_link(mat, "tex_box_blend", wnor, col1, col2, col3, blend, &out[0].link, &out[1].link);
         break;
       }
@@ -127,7 +149,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
         GPU_link(mat, "point_texco_remap_square", *texco, texco);
         GPU_link(mat, "point_map_to_sphere", *texco, texco);
-        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image);
+        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image, GPU_kernel_globals());
         break;
       }
       case SHD_PROJ_TUBE: {
@@ -137,13 +159,13 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
         GPU_link(mat, "point_texco_remap_square", *texco, texco);
         GPU_link(mat, "point_map_to_tube", *texco, texco);
-        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image);
+        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image, GPU_kernel_globals());
         break;
       }
     }
   }
 
-  if (out[0].hasoutput) {
+  if (out[0].hasoutput && out[0].link) {
     if (ELEM(ima->alpha_mode, IMA_ALPHA_IGNORE, IMA_ALPHA_CHANNEL_PACKED) ||
         IMB_colormanagement_space_name_is_data(ima->colorspace_settings.name))
     {
@@ -273,27 +295,29 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_tex_image_cc
+}  // namespace nodes::node_shader_tex_image_cc
 
 void register_node_type_sh_tex_image()
 {
-  namespace file_ns = blender::nodes::node_shader_tex_image_cc;
+  namespace file_ns = nodes::node_shader_tex_image_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeTexImage", SH_NODE_TEX_IMAGE);
+  sh_node_type_base(&ntype, "ShaderNodeTexImage"_ustr, SH_NODE_TEX_IMAGE);
   ntype.ui_name = "Image Texture";
   ntype.ui_description = "Sample an image file as a texture";
   ntype.enum_name_legacy = "TEX_IMAGE";
   ntype.nclass = NODE_CLASS_TEXTURE;
   ntype.declare = file_ns::sh_node_tex_image_declare;
   ntype.initfunc = file_ns::node_shader_init_tex_image;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeTexImage", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::node_shader_gpu_tex_image;
   ntype.labelfunc = node_image_label;
-  blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Large);
+  ntype.default_width = bke::NodeWidth::_240;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

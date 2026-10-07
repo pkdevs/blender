@@ -6,9 +6,9 @@
  * \ingroup edtransform
  */
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 
 #include "BKE_unit.hh"
@@ -18,6 +18,7 @@
 #include "UI_interface.hh"
 
 #include "BLT_translation.hh"
+#include "RNA_access.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
@@ -84,7 +85,6 @@ static void transdata_elem_shear(const TransInfo *t,
 
 struct ShearCustomData {
   bool update_status_bar;
-  wmOperator *op;
 };
 
 static void initShear_mouseInputMode(TransInfo *t)
@@ -104,6 +104,12 @@ static void initShear_mouseInputMode(TransInfo *t)
       if (t->center2d[0] > t->mouse.imval[0]) {
         dir_flip = !dir_flip;
       }
+    }
+
+    /* A flipped view applies to this orientation,
+     * so the input direction must be flipped to match. */
+    if (t->flag & T_VIEW_NEGATIVE) {
+      dir_flip = !dir_flip;
     }
   }
 
@@ -254,8 +260,10 @@ static bool clip_uv_transform_shear(const TransInfo *t, float *vec, float *vec_i
 static void apply_shear(TransInfo *t)
 {
   float value = t->values[0] + t->values_modal_offset[0];
-  transform_snap_increment(t, &value);
-  applyNumInput(&t->num, &value);
+  float angle = atanf(value);
+  transform_snap_increment(t, &angle);
+  applyNumInput(&t->num, &angle);
+  value = tanf(angle);
   t->values_final[0] = value;
 
   apply_shear_value(t, value);
@@ -281,41 +289,46 @@ static void apply_shear(TransInfo *t)
     SNPRINTF_UTF8(str, IFACE_("Shear: %s %s"), c, t->proptext);
   }
   else {
+    const float angle_deg = RAD2DEGF(angle);
     /* Default header print. */
-    SNPRINTF_UTF8(str, IFACE_("Shear: %.3f %s"), value, t->proptext);
+    SNPRINTF_UTF8(str, IFACE_("Shear: %.3f° %s"), angle_deg, t->proptext);
   }
 
   ED_area_status_text(t->area, str);
+}
+
+static void shear_status(TransInfo *t)
+{
+  if (t->keymap == nullptr) {
+    return;
+  }
+  const wmKeyMap &keymap = *t->keymap;
 
   ShearCustomData *custom_data = static_cast<ShearCustomData *>(t->custom.mode.data);
-  if (custom_data->op && custom_data->update_status_bar) {
-    custom_data->update_status_bar = false;
+  if (!custom_data->update_status_bar) {
+    return;
+  }
+  custom_data->update_status_bar = false;
 
-    WorkspaceStatus status(t->context);
+  WorkspaceStatus status(t->context);
 
-    status.opmodal(IFACE_("Confirm"), custom_data->op->type, TFM_MODAL_CONFIRM);
-    status.opmodal(IFACE_("Cancel"), custom_data->op->type, TFM_MODAL_CANCEL);
+  status.modal_keymap(IFACE_("Confirm"), keymap, TFM_MODAL_CONFIRM);
+  status.modal_keymap(IFACE_("Cancel"), keymap, TFM_MODAL_CANCEL);
 
-    status.item_bool({}, t->orient_axis_ortho == (t->orient_axis + 1) % 3, ICON_EVENT_X);
-    status.item_bool({}, t->orient_axis_ortho == (t->orient_axis + 2) % 3, ICON_EVENT_Y);
-    status.item(IFACE_("Shear Axis"), ICON_NONE);
-    status.item(IFACE_("Swap Axes"), ICON_MOUSE_MMB);
+  status.item_bool({}, t->orient_axis_ortho == (t->orient_axis + 1) % 3, ICON_EVENT_X);
+  status.item_bool({}, t->orient_axis_ortho == (t->orient_axis + 2) % 3, ICON_EVENT_Y);
+  status.item(IFACE_("Shear Axis"), ICON_NONE);
+  status.item(IFACE_("Swap Axes"), ICON_MOUSE_MMB);
 
-    status.opmodal(
-        IFACE_("Snap"), custom_data->op->type, TFM_MODAL_SNAP_TOGGLE, t->modifiers & MOD_SNAP);
-    status.opmodal(IFACE_("Snap Invert"),
-                   custom_data->op->type,
-                   TFM_MODAL_SNAP_INV_ON,
-                   t->modifiers & MOD_SNAP_INVERT);
-    status.opmodal(IFACE_("Precision"),
-                   custom_data->op->type,
-                   TFM_MODAL_PRECISION,
-                   t->modifiers & MOD_PRECISION);
+  status.modal_keymap(IFACE_("Snap"), keymap, TFM_MODAL_SNAP_TOGGLE, t->modifiers & MOD_SNAP);
+  status.modal_keymap(
+      IFACE_("Snap Invert"), keymap, TFM_MODAL_SNAP_INV_ON, t->modifiers & MOD_SNAP_INVERT);
+  status.modal_keymap(
+      IFACE_("Precision"), keymap, TFM_MODAL_PRECISION, t->modifiers & MOD_PRECISION);
 
-    if (t->proptext[0]) {
-      status.opmodal({}, custom_data->op->type, TFM_MODAL_PROPSIZE_UP);
-      status.opmodal(IFACE_("Proportional Size"), custom_data->op->type, TFM_MODAL_PROPSIZE_DOWN);
-    }
+  if (t->proptext[0]) {
+    status.modal_keymap({}, keymap, TFM_MODAL_PROPSIZE_UP);
+    status.modal_keymap(IFACE_("Proportional Size"), keymap, TFM_MODAL_PROPSIZE_DOWN);
   }
 }
 
@@ -332,24 +345,24 @@ static void initShear(TransInfo *t, wmOperator *op)
 
   t->idx_max = 0;
   t->num.idx_max = 0;
-  t->increment[0] = 0.1f;
-  t->increment_precision = 0.1f;
+  initSnapAngleIncrements(t);
 
-  copy_v3_fl(t->num.val_inc, t->increment[0]);
+  copy_v3_fl(t->num.val_inc, t->increment[0] * t->increment_precision);
   t->num.unit_sys = t->scene->unit.system;
-  t->num.unit_type[0] = B_UNIT_NONE; /* Don't think we have any unit here? */
+  t->num.unit_use_radians = (t->scene->unit.system_rotation == USER_UNIT_ROT_RADIANS);
+  t->num.unit_type[0] = B_UNIT_ROTATION;
 
-  ShearCustomData *custom_data = static_cast<ShearCustomData *>(
-      MEM_callocN(sizeof(*custom_data), __func__));
+  ShearCustomData *custom_data = MEM_new_zeroed<ShearCustomData>(__func__);
   t->custom.mode.data = custom_data;
   t->custom.mode.free_cb = [](TransInfo *, TransDataContainer *, TransCustomData *custom_data) {
-    MEM_freeN(custom_data->data);
+    MEM_delete(static_cast<ShearCustomData *>(custom_data->data));
     custom_data->data = nullptr;
   };
 
   custom_data->update_status_bar = true;
-  custom_data->op = op;
 
+  const float angle = RNA_float_get(op->ptr, "angle");
+  t->values[0] = tanf(angle);
   transform_mode_default_modal_orientation_set(t, V3D_ORIENT_VIEW);
 }
 
@@ -364,6 +377,7 @@ TransModeInfo TransMode_shear = {
     /*snap_distance_fn*/ nullptr,
     /*snap_apply_fn*/ nullptr,
     /*draw_fn*/ nullptr,
+    /*status_fn*/ shear_status,
 };
 
 }  // namespace blender::ed::transform

@@ -16,7 +16,7 @@
 #include "DNA_collection_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -27,6 +27,7 @@
 
 #include "intern/builder/deg_builder.h"
 
+#include "intern/depsgraph_relation.hh"
 #include "intern/node/deg_node.hh"
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_id.hh"
@@ -34,49 +35,45 @@
 
 namespace blender::deg {
 
-bool DepsgraphRelationBuilder::build_layer_collection(LayerCollection *layer_collection)
+void DepsgraphRelationBuilder::build_layer_collections(LayerCollection *layer_collection,
+                                                       const ComponentKey &parent_hierarchy_key)
 {
   const int hide_flag = (graph_->mode == DAG_EVAL_VIEWPORT) ? COLLECTION_HIDE_VIEWPORT :
                                                               COLLECTION_HIDE_RENDER;
 
   Collection *collection = layer_collection->collection;
 
-  const bool is_collection_hidden = collection->flag & hide_flag;
-  const bool is_layer_collection_excluded = layer_collection->flag & LAYER_COLLECTION_EXCLUDE;
-
-  if (is_collection_hidden || is_layer_collection_excluded) {
-    return false;
+  if (collection->flag & hide_flag) {
+    return;
   }
 
-  build_collection(layer_collection, collection);
+  /* Exclude is not inherited: an excluded layer is skipped but its children are still built. */
+  ComponentKey child_hierarchy_key = parent_hierarchy_key;
+  if ((layer_collection->flag & LAYER_COLLECTION_EXCLUDE) == 0) {
+    build_collection(layer_collection, collection);
 
-  const ComponentKey collection_hierarchy_key{&collection->id, NodeType::HIERARCHY};
-
-  LISTBASE_FOREACH (
-      LayerCollection *, child_layer_collection, &layer_collection->layer_collections)
-  {
-    if (build_layer_collection(child_layer_collection)) {
-      Collection *child_collection = child_layer_collection->collection;
-      const ComponentKey child_collection_hierarchy_key{&child_collection->id,
-                                                        NodeType::HIERARCHY};
-      add_relation(
-          collection_hierarchy_key, child_collection_hierarchy_key, "Collection hierarchy");
-    }
+    /* A collection that is linked multiple times can end up with the same parent hierarchy key
+     * more than once, for example when linked directly into the scene as well as under an
+     * excluded collection. Check for an existing relation to avoid duplicates. */
+    const ComponentKey collection_hierarchy_key{&collection->id, NodeType::HIERARCHY};
+    add_relation(parent_hierarchy_key,
+                 collection_hierarchy_key,
+                 "Collection hierarchy",
+                 RELATION_CHECK_BEFORE_ADD);
+    child_hierarchy_key = collection_hierarchy_key;
   }
 
-  return true;
+  for (LayerCollection &child : layer_collection->layer_collections) {
+    build_layer_collections(&child, child_hierarchy_key);
+  }
 }
 
 void DepsgraphRelationBuilder::build_view_layer_collections(ViewLayer *view_layer)
 {
   const ComponentKey scene_hierarchy_key{&scene_->id, NodeType::HIERARCHY};
 
-  LISTBASE_FOREACH (LayerCollection *, layer_collection, &view_layer->layer_collections) {
-    if (build_layer_collection(layer_collection)) {
-      Collection *collection = layer_collection->collection;
-      const ComponentKey collection_hierarchy_key{&collection->id, NodeType::HIERARCHY};
-      add_relation(scene_hierarchy_key, collection_hierarchy_key, "Scene -> Collection hierarchy");
-    }
+  for (LayerCollection &layer_collection : view_layer->layer_collections) {
+    build_layer_collections(&layer_collection, scene_hierarchy_key);
   }
 }
 
@@ -96,14 +93,14 @@ void DepsgraphRelationBuilder::build_view_layer(Scene *scene,
 {
   /* Setup currently building context. */
   scene_ = scene;
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain_, scene, view_layer);
   /* Scene objects. */
   /* NOTE: Nodes builder requires us to pass evaluated base because it's being
    * passed to the evaluation functions. During relations builder we only
    * do nullptr-pointer check of the base, so it's fine to pass original one. */
-  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-    if (need_pull_base_into_graph(base)) {
-      build_object_from_view_layer_base(base->object);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+    if (need_pull_base_into_graph(&base)) {
+      build_object_from_view_layer_base(base.object);
     }
   }
 
@@ -122,13 +119,17 @@ void DepsgraphRelationBuilder::build_view_layer(Scene *scene,
   if (scene->world != nullptr) {
     build_world(scene->world);
   }
+  /* Cache file. */
+  for (CacheFile &cachefile : bmain_->cachefiles) {
+    build_cachefile(&cachefile);
+  }
   /* Masks. */
-  LISTBASE_FOREACH (Mask *, mask, &bmain_->masks) {
-    build_mask(mask);
+  for (Mask &mask : bmain_->masks) {
+    build_mask(&mask);
   }
   /* Movie clips. */
-  LISTBASE_FOREACH (MovieClip *, clip, &bmain_->movieclips) {
-    build_movieclip(clip);
+  for (MovieClip &clip : bmain_->movieclips) {
+    build_movieclip(&clip);
   }
   /* Material override. */
   if (view_layer->mat_override != nullptr) {
@@ -139,8 +140,8 @@ void DepsgraphRelationBuilder::build_view_layer(Scene *scene,
     build_world(view_layer->world_override);
   }
   /* Freestyle linesets. */
-  LISTBASE_FOREACH (FreestyleLineSet *, fls, &view_layer->freestyle_config.linesets) {
-    build_freestyle_lineset(fls);
+  for (FreestyleLineSet &fls : view_layer->freestyle_config.linesets) {
+    build_freestyle_lineset(&fls);
   }
   /* Scene parameters, compositor and such. */
   build_scene_compositor(scene);

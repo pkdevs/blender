@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "infos/compositor_bokeh_blur_variable_size_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_bokeh_blur_variable_size)
+
 #include "gpu_shader_compositor_texture_utilities.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 
 /* Given the texel in the range [-radius, radius] in both axis, load the appropriate weight from
  * the weights texture, where the given texel (0, 0) corresponds the center of weights texture.

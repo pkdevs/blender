@@ -15,7 +15,10 @@ namespace blender::gpu::render_graph {
 /**
  * Information stored inside the render graph node. See `VKRenderGraphNode`.
  */
-struct VKSynchronizationData {};
+struct VKSynchronizationData {
+  /** Reset the tracked image layout to VK_IMAGE_LAYOUT_UNDEFINED after the barrier. */
+  bool reset_layout_to_undefined;
+};
 
 /**
  * Information needed to add a node to the render graph.
@@ -24,12 +27,22 @@ struct VKSynchronizationCreateInfo {
   VkImage vk_image;
   VkImageLayout vk_image_layout;
   VkImageAspectFlags vk_image_aspect;
+  /** Access flags the synchronization node waits for. */
+  VkAccessFlags vk_access_flags;
+  /**
+   * Reset the tracked image layout to VK_IMAGE_LAYOUT_UNDEFINED after the barrier.
+   * Used for aliased images (texture pool). When the memory is reused by another alias, the image
+   * contents become undefined, so the next access must transition from an undefined layout.
+   * The vk_image_layout field cannot be used for this directly, as VK_IMAGE_LAYOUT_UNDEFINED may
+   * only ever be used as oldLayout, not newLayout (i.e., the transition target layout).
+   */
+  bool reset_layout_to_undefined = false;
 };
 
 class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
                                                 VKSynchronizationCreateInfo,
                                                 VKSynchronizationData,
-                                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                                                 VKResourceType::IMAGE | VKResourceType::BUFFER> {
  public:
   /**
@@ -42,20 +55,20 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
   template<typename Node, typename Storage>
   static void set_node_data(Node &node, Storage & /* storage */, const CreateInfo &create_info)
   {
-    UNUSED_VARS(create_info);
-    node.synchronization = {};
+    node.synchronization = {create_info.reset_layout_to_undefined};
   }
 
   /**
    * Extract read/write resource dependencies from `create_info` and add them to `node_links`.
    */
   void build_links(VKResourceStateTracker &resources,
-                   VKRenderGraphNodeLinks &node_links,
+                   VKRenderGraphLinks &links,
                    const CreateInfo &create_info) override
   {
     ResourceWithStamp resource = resources.get_image_and_increase_stamp(create_info.vk_image);
-    node_links.outputs.append(
-        {resource, VK_ACCESS_NONE, create_info.vk_image_layout, create_info.vk_image_aspect});
+    links.images.append({{resource, create_info.vk_access_flags},
+                         create_info.vk_image_layout,
+                         create_info.vk_image_aspect});
   }
 
   /**
@@ -63,6 +76,7 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
    */
   void build_commands(VKCommandBufferInterface &command_buffer,
                       Data &data,
+                      Span<uint8_t> /*storage_push_constants*/,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
     UNUSED_VARS(command_buffer, data);

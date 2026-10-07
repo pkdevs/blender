@@ -21,6 +21,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #include <cassert>
+#include <mutex>
 #include <vector>
 
 static const MTLPixelFormat METAL_FRAMEBUFFERPIXEL_FORMAT_EDR = MTLPixelFormatRGBA16Float;
@@ -121,6 +122,10 @@ GHOST_ContextMTL::GHOST_ContextMTL(const GHOST_ContextParams &context_params,
 
 GHOST_ContextMTL::~GHOST_ContextMTL()
 {
+  /* Multiple threads can release their own context at the same time. */
+  static std::mutex mutex;
+  std::scoped_lock lock(mutex);
+
   metalFree();
 
   if (owns_metal_device_) {
@@ -213,6 +218,12 @@ void GHOST_ContextMTL::metalRegisterPresentCallback(void (*callback)(
   this->contextPresentCallback = callback;
 }
 
+void GHOST_ContextMTL::metalRegisterXrBlitCallback(
+    void (*callback)(id<MTLTexture>, int, int, int, int))
+{
+  this->xrBlitCallback = callback;
+}
+
 GHOST_TSuccess GHOST_ContextMTL::initializeDrawingContext()
 {
   @autoreleasepool {
@@ -275,8 +286,10 @@ void GHOST_ContextMTL::metalInit()
                       texture2d<float> t [[texture(0)]]) {
 
         /* Final blit should ensure alpha is 1.0. This resolves
-         * rendering artifacts for blitting of final back-buffer. */
+         * rendering artifacts for blitting of final back-buffer.
+         * Also clamp the RGB values to avoid artifacts. */
         float4 out_tex = t.sample(s, v.texCoord);
+        out_tex.rgb = min(out_tex.rgb, 16384.0);
         out_tex.a = 1.0;
         return out_tex;
       }
@@ -311,20 +324,6 @@ void GHOST_ContextMTL::metalInit()
           "GHOST_ContextMTL::metalInit: newRenderPipelineStateWithDescriptor:error: failed!");
     }
 
-    /* Create a render pipeline to composite things rendered with Metal on top
-     * of the frame-buffer contents. Uses the same vertex and fragment shader
-     * as the blit above, but with alpha blending enabled. */
-    desc.label = @"Metal Overlay";
-    desc.colorAttachments[0].blendingEnabled = YES;
-    desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
-    desc.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-
-    if (error) {
-      ghost_fatal_error_dialog(
-          "GHOST_ContextMTL::metalInit: newRenderPipelineStateWithDescriptor:error: failed (when "
-          "creating the Metal overlay pipeline)!");
-    }
-
     [desc.fragmentFunction release];
     [desc.vertexFunction release];
   }
@@ -353,10 +352,9 @@ void GHOST_ContextMTL::metalInitFramebuffer()
 void GHOST_ContextMTL::metalUpdateFramebuffer()
 {
   @autoreleasepool {
-    const NSRect bounds = [metal_view_ bounds];
-    const NSSize backingSize = [metal_view_ convertSizeToBacking:bounds.size];
-    const size_t width = size_t(backingSize.width);
-    const size_t height = size_t(backingSize.height);
+    const NSSize drawableSize = metal_layer_.drawableSize;
+    const size_t width = size_t(drawableSize.width);
+    const size_t height = size_t(drawableSize.height);
 
     if (default_framebuffer_metal_texture_[current_swapchain_index].texture &&
         default_framebuffer_metal_texture_[current_swapchain_index].texture.width == width &&

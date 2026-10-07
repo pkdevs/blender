@@ -30,9 +30,7 @@ class Origins : Overlay {
 
   void begin_sync(Resources & /*res*/, const State &state) final
   {
-    const bool is_paint_mode = (state.object_mode &
-                                (OB_MODE_ALL_PAINT | OB_MODE_ALL_PAINT_GPENCIL |
-                                 OB_MODE_SCULPT_CURVES)) != 0;
+    const bool is_paint_mode = (state.object_mode & (OB_MODE_ALL_PAINT)) != 0;
     enabled_ = state.is_space_v3d() && !is_paint_mode && state.show_object_origins();
     point_buf_.clear();
   }
@@ -53,7 +51,8 @@ class Origins : Overlay {
 
     const Object *ob = ob_ref.object;
     const bool is_library = ID_REAL_USERS(&ob->id) > 1 || ID_IS_LINKED(ob);
-    BKE_view_layer_synced_ensure(state.scene, (ViewLayer *)state.view_layer);
+    BKE_view_layer_synced_ensure(
+        *DEG_get_bmain(state.depsgraph), state.scene, const_cast<ViewLayer *>(state.view_layer));
     const float4 location = float4(ob->object_to_world().location(), 0.0f);
 
     if (ob == BKE_view_layer_active_object_get(state.view_layer)) {

@@ -6,7 +6,7 @@
  * \ingroup draw
  */
 
-#include "BLI_bitmap.h"
+#include "BLI_bitmap.hh"
 #include "atomic_ops.h"
 
 #include "MEM_guardedalloc.h"
@@ -67,7 +67,7 @@ gpu::IndexBufPtr extract_lines_paint_mask(const MeshRenderData &mr)
     }
   });
 
-  MEM_freeN(select_map);
+  MEM_delete(select_map);
   return gpu::IndexBufPtr(GPU_indexbuf_build_ex(&builder, 0, max_index, true));
 }
 
@@ -132,7 +132,7 @@ gpu::IndexBufPtr extract_lines_paint_mask_subdiv(const MeshRenderData &mr,
     }
   });
 
-  MEM_freeN(select_map);
+  MEM_delete(select_map);
   return gpu::IndexBufPtr(GPU_indexbuf_build_ex(&builder, 0, max_index, true));
 }
 

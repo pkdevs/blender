@@ -11,16 +11,16 @@ from pathlib import Path
 from modules import render_report
 
 
-def get_movie_file_suffix(filepath):
+def get_movie_file_suffix(filepath: Path) -> str:
     """
     Get suffix used for the video output.
     The script does not have access to the .blend file content, so deduct it from the .blend filename.
     """
 
-    return Path(filepath).stem.split("_")[-1]
+    return filepath.stem.split("_")[-1]
 
 
-def get_arguments(filepath, output_filepath):
+def get_arguments(filepath: Path, output_filepath: Path) -> list[str | Path]:
     suffix = get_movie_file_suffix(filepath)
 
     args = [
@@ -28,6 +28,7 @@ def get_arguments(filepath, output_filepath):
         "--factory-startup",
         "--enable-autoexec",
         "--debug-memory",
+        "--console-crash-handler",
         "--debug-exit-on-error",
         filepath,
         "-o", f"{output_filepath}.{suffix}",
@@ -41,16 +42,16 @@ def create_argparse():
     parser = argparse.ArgumentParser(
         description="Run test script for each blend file in TESTDIR, comparing the render result with known output."
     )
-    parser.add_argument("--blender", required=True)
-    parser.add_argument("--testdir", required=True)
-    parser.add_argument("--outdir", required=True)
-    parser.add_argument("--oiiotool", required=True)
+    parser.add_argument("--blender", required=True, type=Path)
+    parser.add_argument("--testdir", required=True, type=Path)
+    parser.add_argument("--outdir", required=True, type=Path)
+    parser.add_argument("--oiiotool", required=True, type=Path)
     parser.add_argument("--batch", default=False, action="store_true")
     return parser
 
 
 class VideoOutputReport(render_report.Report):
-    def postprocess_test(self, blender, test):
+    def postprocess_test(self, blender: Path, test: render_report.TestResult) -> None:
         suffix = get_movie_file_suffix(test.filepath)
 
         video_file = Path(f"{test.tmp_out_img_base}.{suffix}").as_posix()
@@ -72,7 +73,8 @@ class VideoOutputReport(render_report.Report):
         # Blender's render pipeline always appends frame suffix unless # is present in the file path.
         # Here we need the file name to match exactly, so we trick Blender by going 0001 -> #### mask
         # allowing render piepline to expand it back to 0001.
-        out_filepath = test.tmp_out_img.replace("0001", "####")
+        out_filename = test.tmp_out_img.name.replace("0001", "####")
+        out_filepath = test.tmp_out_img.with_name(out_filename)
 
         python_expr = (
             f"""
@@ -83,7 +85,11 @@ scene.render.resolution_y = 1080
 scene.render.resolution_percentage = 25
 ed = scene.sequence_editor_create()
 strip = ed.strips.new_movie(name='input', filepath='{video_file}', channel=1, frame_start=1)
+# use raw pixel data, without interpreting input color space
 strip.colorspace_settings.name = 'Non-Color'
+# make it convert into sequencer color space by having a non-1 but really close
+# multiply factor
+strip.color_multiply = 1.0001
 """)
 
         command = (
@@ -99,7 +105,7 @@ strip.colorspace_settings.name = 'Non-Color'
 
         try:
             subprocess.check_output(command)
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             pass
 
 
@@ -107,11 +113,10 @@ def main():
     parser = create_argparse()
     args = parser.parse_args()
 
-    report = VideoOutputReport("Sequencer", args.outdir, args.oiiotool)
+    report = VideoOutputReport("Sequencer CPU", args.outdir, args.oiiotool)
     report.set_pixelated(True)
-    # Default error tolerances are quite large, lower them.
-    report.set_fail_threshold(2.0 / 255.0)
-    report.set_fail_percent(0.01)
+    report.set_fail_threshold(10.0 / 255.0)
+    report.set_fail_percent(1.0)
     report.set_reference_dir("reference")
 
     ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)

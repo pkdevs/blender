@@ -30,6 +30,7 @@ from mathutils import Vector
 
 from bpy.app.translations import pgettext_iface as iface_
 
+
 class SegmentEntry(NamedTuple):
     org: str                 # ORG bone
     org_idx: int             # Index in the ORG chain
@@ -958,6 +959,7 @@ class BaseLimbRig(BaseRig):
             name='B-Bone Segments',
             default=10,
             min=1,
+            max=32,
             description='Number of B-Bone segments'
         )
 

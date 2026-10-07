@@ -3,8 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "node_geometry_util.hh"
+#include "shader/node_shader_util.hh"
 
 #include "BKE_node_tree_reference_lifetimes.hh"
+
+#include "BLI_stack.hh"
 
 #include "NOD_node_extra_info.hh"
 #include "NOD_rna_define.hh"
@@ -18,7 +21,9 @@
 #include "COM_node_operation.hh"
 #include "COM_result.hh"
 
-namespace blender::nodes::node_geo_enable_output_cc {
+namespace blender {
+
+namespace nodes::node_geo_enable_output_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
@@ -26,7 +31,9 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.allow_any_socket_order();
 
   b.add_default_layout();
-  b.add_input<decl::Bool>("Enable").default_value(false).structure_type(StructureType::Single);
+  b.add_input<decl::Bool>("Enable"_ustr)
+      .default_value(false)
+      .structure_type(StructureType::Single);
 
   const bNode *node = b.node_or_null();
   if (!node) {
@@ -34,30 +41,18 @@ static void node_declare(NodeDeclarationBuilder &b)
   }
   const eNodeSocketDatatype data_type = eNodeSocketDatatype(node->custom1);
 
-  auto &input_value = b.add_input(data_type, "Value").hide_value();
-  auto &output_value = b.add_output(data_type, "Value").align_with_previous();
-
-  if (nodes::socket_type_supports_fields(data_type)) {
-    input_value.supports_field();
-  }
-
-  if (bke::node_tree_reference_lifetimes::can_contain_referenced_data(data_type)) {
-    output_value.propagate_all();
-  }
-
-  if (bke::node_tree_reference_lifetimes::can_contain_reference(data_type)) {
-    output_value.reference_pass_all();
-  }
-
-  input_value.structure_type(StructureType::Dynamic);
-  output_value.structure_type(StructureType::Dynamic);
+  b.add_input(data_type, "Value"_ustr).hide_value().structure_type(StructureType::Dynamic);
+  b.add_output(data_type, "Value"_ustr)
+      .align_with_previous()
+      .inferred_structure_type()
+      .propagate_all();
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  layout->use_property_split_set(true);
-  layout->use_property_decorate_set(false);
-  layout->prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+  layout.prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 class LazyFunctionForEnableOutputNode : public LazyFunction {
@@ -67,6 +62,7 @@ class LazyFunctionForEnableOutputNode : public LazyFunction {
   LazyFunctionForEnableOutputNode(const bNode &node, MutableSpan<int> r_lf_index_by_bsocket)
       : node_(node)
   {
+    debug_name_ = node.name;
     r_lf_index_by_bsocket[node.input_socket(0).index_in_tree()] = inputs_.append_and_get_index_as(
         "Enable", CPPType::get<SocketValueVariant>());
     r_lf_index_by_bsocket[node.input_socket(1).index_in_tree()] = inputs_.append_and_get_index_as(
@@ -82,7 +78,7 @@ class LazyFunctionForEnableOutputNode : public LazyFunction {
       set_default_remaining_node_outputs(params, node_);
       return;
     }
-    const bool keep = enable_variant.get<bool>();
+    const bool keep = enable_variant.copy_as<bool>();
     if (!keep) {
       set_default_remaining_node_outputs(params, node_);
       return;
@@ -110,7 +106,7 @@ class EnableOutputOperation : public NodeOperation {
 
   void execute() override
   {
-    const bool keep = this->get_input("Enable").get_single_value_default<bool>(true);
+    const bool keep = this->get_input("Enable").get_single_value_default<bool>();
     Result &output = this->get_result("Value");
     if (keep) {
       const Result &input = this->get_input("Value");
@@ -122,9 +118,52 @@ class EnableOutputOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *node_get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new EnableOutputOperation(context, node);
+}
+
+static const bNodeSocket *get_passthrough_socket(const bNodeSocket &query_input)
+{
+  const bNode &node = query_input.owner_node();
+  switch (node.type_legacy) {
+    case GEO_NODE_SWITCH:
+    case GEO_NODE_INDEX_SWITCH:
+    case GEO_NODE_MENU_SWITCH: {
+      if (query_input.index() == 0) {
+        return nullptr;
+      }
+      return &node.output_socket(0);
+    }
+  }
+  return nullptr;
+}
+
+static bool is_linked_to_group_output(const bNodeSocket &value_output_socket)
+{
+  Stack<const bNodeSocket *> outputs_to_check;
+  outputs_to_check.push(&value_output_socket);
+  Set<const bNodeSocket *> visited_sockets;
+
+  while (!outputs_to_check.is_empty()) {
+    const bNodeSocket &output_socket = *outputs_to_check.pop();
+    if (!visited_sockets.add(&output_socket)) {
+      continue;
+    }
+    for (const bNodeSocket *target_socket : output_socket.logically_linked_sockets()) {
+      const bNode &target_node = target_socket->owner_node();
+      if (target_node.is_group_output()) {
+        return true;
+      }
+      const bNodeSocket *passthrough_socket = get_passthrough_socket(*target_socket);
+      if (!passthrough_socket) {
+        continue;
+      }
+      BLI_assert(passthrough_socket->is_output());
+      outputs_to_check.push(passthrough_socket);
+    }
+  }
+  return false;
 }
 
 static void node_extra_info(NodeExtraInfoParams &params)
@@ -134,16 +173,13 @@ static void node_extra_info(NodeExtraInfoParams &params)
   if (!output_socket.is_directly_linked()) {
     return;
   }
-  for (const bNodeSocket *target_socket : output_socket.logically_linked_sockets()) {
-    const bNode &target_node = target_socket->owner_node();
-    if (!target_node.is_group_output() && !target_node.is_reroute()) {
-      NodeExtraInfoRow row;
-      row.text = RPT_("Invalid Output Link");
-      row.tooltip = TIP_("This node should be linked to the group output node");
-      row.icon = ICON_ERROR;
-      params.rows.append(std::move(row));
-      return;
-    }
+  if (!is_linked_to_group_output(output_socket)) {
+    NodeExtraInfoRow row;
+    row.text = RPT_("Invalid Output Link");
+    row.tooltip = TIP_(
+        "This node should be linked to the group output node, optionally through switch nodes.");
+    row.icon = ICON_STATUS_ERROR;
+    params.rows.append(std::move(row));
   }
 }
 
@@ -154,7 +190,7 @@ static const EnumPropertyItem *data_type_items_callback(bContext * /*C*/,
 {
   *r_free = true;
   const bNodeTree &ntree = *reinterpret_cast<bNodeTree *>(ptr->owner_id);
-  blender::bke::bNodeTreeType *ntree_type = ntree.typeinfo;
+  bke::bNodeTreeType *ntree_type = ntree.typeinfo;
   return enum_items_filter(
       rna_enum_node_socket_data_type_items, [&](const EnumPropertyItem &item) -> bool {
         bke::bNodeSocketType *socket_type = bke::node_socket_type_find_static(item.value);
@@ -179,14 +215,14 @@ static const bNodeSocket *node_internally_linked_input(const bNodeTree & /*tree*
                                                        const bNodeSocket &output_socket)
 {
   /* Internal links should always map corresponding input and output sockets. */
-  return node.input_by_identifier(output_socket.identifier);
+  return node.input_by_identifier(output_socket.identifier_ustr());
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_cmp_node_type_base(&ntype, "NodeEnableOutput");
+  common_node_type_base(&ntype, "NodeEnableOutput"_ustr);
   ntype.ui_name = "Enable Output";
   ntype.ui_description = "Either pass through the input value or output the fallback value";
   ntype.nclass = NODE_CLASS_INTERFACE;
@@ -194,18 +230,18 @@ static void node_register()
   ntype.initfunc = node_init;
   ntype.draw_buttons = node_layout;
   ntype.declare = node_declare;
-  ntype.get_compositor_operation = node_get_compositor_operation;
+  ntype.get_compositor_operation = get_compositor_operation;
   ntype.get_extra_info = node_extra_info;
   ntype.internally_linked_input = node_internally_linked_input;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_geo_enable_output_cc
+}  // namespace nodes::node_geo_enable_output_cc
 
-namespace blender::nodes {
+namespace nodes {
 
 std::unique_ptr<LazyFunction> get_enable_output_node_lazy_function(
     const bNode &node, GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info)
@@ -215,4 +251,5 @@ std::unique_ptr<LazyFunction> get_enable_output_node_lazy_function(
       node, own_lf_graph_info.mapping.lf_index_by_bsocket);
 }
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

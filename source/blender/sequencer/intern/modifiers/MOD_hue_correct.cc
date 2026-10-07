@@ -6,7 +6,7 @@
  * \ingroup sequencer
  */
 
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 
 #include "BKE_colortools.hh"
 
@@ -15,18 +15,22 @@
 #include "DNA_curve_enums.h"
 #include "DNA_sequence_types.h"
 
+#include "PRF_profile.hh"
+
 #include "SEQ_modifier.hh"
+#include "SEQ_render.hh"
 
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
 
 #include "modifier.hh"
+#include "render.hh"
 
 namespace blender::seq {
 
 static void hue_correct_init_data(StripModifierData *smd)
 {
-  HueCorrectModifierData *hcmd = (HueCorrectModifierData *)smd;
+  HueCorrectModifierData *hcmd = reinterpret_cast<HueCorrectModifierData *>(smd);
   int c;
 
   BKE_curvemapping_set_defaults(&hcmd->curve_mapping, 1, 0.0f, 0.0f, 1.0f, 1.0f, HD_AUTO);
@@ -45,15 +49,15 @@ static void hue_correct_init_data(StripModifierData *smd)
 
 static void hue_correct_free_data(StripModifierData *smd)
 {
-  HueCorrectModifierData *hcmd = (HueCorrectModifierData *)smd;
+  HueCorrectModifierData *hcmd = reinterpret_cast<HueCorrectModifierData *>(smd);
 
   BKE_curvemapping_free_data(&hcmd->curve_mapping);
 }
 
 static void hue_correct_copy_data(StripModifierData *target, StripModifierData *smd)
 {
-  HueCorrectModifierData *hcmd = (HueCorrectModifierData *)smd;
-  HueCorrectModifierData *hcmd_target = (HueCorrectModifierData *)target;
+  HueCorrectModifierData *hcmd = reinterpret_cast<HueCorrectModifierData *>(smd);
+  HueCorrectModifierData *hcmd_target = reinterpret_cast<HueCorrectModifierData *>(target);
 
   BKE_curvemapping_copy_data(&hcmd_target->curve_mapping, &hcmd->curve_mapping);
 }
@@ -104,28 +108,35 @@ struct HueCorrectApplyOp {
   }
 };
 
-static void hue_correct_apply(ModifierApplyContext &context, StripModifierData *smd, ImBuf *mask)
+static void hue_correct_apply(ModifierApplyContext &context, StripModifierData *smd)
 {
-  HueCorrectModifierData *hcmd = (HueCorrectModifierData *)smd;
+  PRF_scope_with_name("SeqModHueCorrect", ProfileCategory::Draw);
+  ensure_ibuf_is_sequencer_space(context.render_data.scene, context.result.image, false);
+  ImBuf *mask = modifier_render_mask_input(context, *smd);
+
+  HueCorrectModifierData *hcmd = reinterpret_cast<HueCorrectModifierData *>(smd);
 
   BKE_curvemapping_init(&hcmd->curve_mapping);
 
   HueCorrectApplyOp op;
   op.curve_mapping = &hcmd->curve_mapping;
-  apply_modifier_op(op, context.image, mask, context.transform);
+  apply_modifier_op(op, context.result.image, mask, context.transform);
+  if (mask != nullptr) {
+    IMB_freeImBuf(mask);
+  }
 }
 
 static void hue_correct_panel_draw(const bContext *C, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
-  PointerRNA *ptr = UI_panel_custom_data_get(panel);
+  ui::Layout &layout = *panel->layout;
+  PointerRNA *ptr = ui::panel_custom_data_get(panel);
 
-  uiTemplateCurveMapping(layout, ptr, "curve_mapping", 'h', false, false, false, false, false);
+  template_curve_mapping(&layout, ptr, "curve_mapping", 'h', false, false, false, false, false);
 
-  if (uiLayout *mask_input_layout = layout->panel_prop(
+  if (ui::Layout *mask_input_layout = layout.panel_prop(
           C, ptr, "open_mask_input_panel", IFACE_("Mask Input")))
   {
-    draw_mask_input_type_settings(C, mask_input_layout, ptr);
+    draw_mask_input_type_settings(C, *mask_input_layout, ptr);
   }
 }
 

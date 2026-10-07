@@ -18,10 +18,12 @@
 
 #include "BLI_vector.hh"
 
+namespace blender {
+
 struct ID;
 struct Scene;
 
-namespace blender::deg {
+namespace deg {
 
 struct Depsgraph;
 struct OperationNode;
@@ -71,6 +73,8 @@ enum class NodeType {
   GEOMETRY,
   /* Sequencer Component (Scene Only) */
   SEQUENCER,
+  /* Compositor Component (Scene Only) */
+  COMPOSITOR,
   /* Component which contains all operations needed for layer collections
    * evaluation. */
   LAYER_COLLECTIONS,
@@ -177,7 +181,9 @@ struct Node {
    * have relationships between these nodes. */
   using Relations = Vector<Relation *>;
 
-  std::string name;   /* Identifier - mainly for debugging purposes. */
+  /* Identifier to differentiate multiple nodes of the same type, can be an empty string. For bones
+   * this matches the bone name. */
+  std::string name;
   NodeType type;      /* Structural type of node. */
   Relations inlinks;  /* Nodes which this one depends on. */
   Relations outlinks; /* Nodes which depend on this one. */
@@ -221,4 +227,5 @@ struct Node {
 
 void deg_register_base_depsnodes();
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

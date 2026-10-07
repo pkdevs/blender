@@ -6,7 +6,7 @@
 
 #include "BLI_bit_group_vector.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender::bits::tests {
 
@@ -46,6 +46,30 @@ TEST(bit_group_vector, CopyConstruct)
       EXPECT_EQ(span[j].test(), copy_span[j].test());
     }
   }
+}
+
+TEST(bit_group_vector, foreachAnd)
+{
+  BitGroupVector<> groups(3, 4);
+  groups.all_bits().set_all();
+
+  BitVector<> mask{Span<bool>{false, false, true, false}};
+  groups.foreach_and(mask);
+
+  EXPECT_FALSE(groups[0][0].test());
+  EXPECT_FALSE(groups[0][1].test());
+  EXPECT_TRUE(groups[0][2].test());
+  EXPECT_FALSE(groups[0][3].test());
+
+  EXPECT_FALSE(groups[1][0].test());
+  EXPECT_FALSE(groups[1][1].test());
+  EXPECT_TRUE(groups[1][2].test());
+  EXPECT_FALSE(groups[1][3].test());
+
+  EXPECT_FALSE(groups[2][0].test());
+  EXPECT_FALSE(groups[2][1].test());
+  EXPECT_TRUE(groups[2][2].test());
+  EXPECT_FALSE(groups[2][3].test());
 }
 
 }  // namespace blender::bits::tests

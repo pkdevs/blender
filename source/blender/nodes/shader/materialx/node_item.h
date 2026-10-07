@@ -11,7 +11,7 @@
 namespace blender::nodes::materialx {
 
 /**
- * This class serves as abstraction from MateralX API. It implements arithmetic operations,
+ * This class serves as abstraction from MaterialX API. It implements arithmetic operations,
  * conversions between different types, adding new nodes, setting inputs, etc.
  * All work should be done via this class instead of using MaterialX API directly.
  */
@@ -27,10 +27,10 @@ class NodeItem {
     /* Value types */
     String,
     Filename,
-    Boolean,
-    Integer,
 
     /* Arithmetic types. NOTE: Ordered by type cast */
+    Boolean,
+    Integer,
     Float,
     Vector2,
     Vector3,

@@ -8,15 +8,20 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_kdopbvh.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 
+#include "BKE_bvhutils.hh"
+
 #include "ED_transform_snap_object_context.hh"
+
+namespace blender {
 
 #define MAX_CLIPPLANE_LEN 6
 
@@ -24,36 +29,56 @@
   (SCE_SNAP_TO_EDGE | SCE_SNAP_TO_EDGE_ENDPOINT | SCE_SNAP_TO_EDGE_MIDPOINT | \
    SCE_SNAP_TO_EDGE_PERPENDICULAR)
 
-struct BMEdge;
-struct BMFace;
-struct BMVert;
 struct Depsgraph;
 struct ID;
-struct ListBase;
+struct Mesh;
 struct Object;
 struct RegionView3D;
 struct Scene;
 struct View3D;
 
-namespace blender::ed::transform {
+namespace ed::transform {
+
+/** Lazy access to the BVH trees of the mesh elements that can be snapped to. */
+class SnapTargetTrees {
+ public:
+  virtual ~SnapTargetTrees() = default;
+
+  /** Triangles of the snappable faces, using indices into #Mesh::corner_tris. */
+  virtual bke::BVHTreeFromMesh &corner_tris() = 0;
+  /** Snappable edges that aren't used by any snappable face. */
+  virtual bke::BVHTreeFromMesh &loose_edges() = 0;
+  /** Snappable vertices that aren't used by any snappable edge. */
+  virtual bke::BVHTreeFromMesh &loose_verts() = 0;
+};
+
+/** The trees cached on an evaluated mesh, skipping hidden elements when requested. */
+class SnapTargetTreesMesh : public SnapTargetTrees {
+  const Mesh &mesh_;
+  bool skip_hidden_;
+  std::optional<bke::BVHTreeFromMesh> corner_tris_;
+  std::optional<bke::BVHTreeFromMesh> loose_edges_;
+  std::optional<bke::BVHTreeFromMesh> loose_verts_;
+
+ public:
+  SnapTargetTreesMesh(const Mesh &mesh, const bool skip_hidden)
+      : mesh_(mesh), skip_hidden_(skip_hidden)
+  {
+  }
+
+  bke::BVHTreeFromMesh &corner_tris() override;
+  bke::BVHTreeFromMesh &loose_edges() override;
+  bke::BVHTreeFromMesh &loose_verts() override;
+};
 
 struct SnapObjectContext {
-  Scene *scene;
-
   struct SnapCache {
     virtual ~SnapCache() = default;
   };
   Map<const ID *, std::unique_ptr<SnapCache>> editmesh_caches;
 
-  /* Filter data, returns true to check this value. */
-  struct {
-    struct {
-      bool (*test_vert_fn)(BMVert *, void *user_data);
-      bool (*test_edge_fn)(BMEdge *, void *user_data);
-      bool (*test_face_fn)(BMFace *, void *user_data);
-      void *user_data;
-    } edit_mesh;
-  } callbacks;
+  /* Which elements of meshes in edit-mode are valid snap targets. */
+  SnapEditMeshTarget editmesh_target = SnapEditMeshTarget::Visible;
 
   struct {
     /* Compare with #RegionView3D::persmat to update. */
@@ -87,7 +112,7 @@ struct SnapObjectContext {
     /* Read/write. */
     uint object_index;
     /* List of #SnapObjectHitDepth (caller must free). */
-    ListBase *hit_list;
+    ListBaseT<SnapObjectHitDepth> *hit_list;
 
     eSnapOcclusionTest occlusion_test_edit;
 
@@ -133,7 +158,7 @@ struct RayCastAll_Data {
   uint ob_uuid;
 
   /* Output data. */
-  ListBase *hit_list;
+  ListBaseT<SnapObjectHitDepth> *hit_list;
 };
 
 class SnapData {
@@ -175,6 +200,8 @@ class SnapData {
   virtual void get_vert_co(const int /*index*/, const float ** /*r_co*/) {};
   virtual void get_edge_verts_index(const int /*index*/, int /*r_v_index*/[2]) {};
   virtual void copy_vert_no(const int /*index*/, float /*r_no*/[3]) {};
+  virtual void get_face_center(const int /*face_index*/, float3 & /*r_center*/) {};
+  virtual void copy_face_no(const int /*face_index*/, float /*r_no*/[3]) {};
 };
 
 /* `transform_snap_object.cc` */
@@ -198,6 +225,13 @@ void cb_snap_edge(void *userdata,
                   const int clip_plane_len,
                   BVHTreeNearest *nearest);
 
+void cb_snap_face_midpoint(void *userdata,
+                           int face_index,
+                           const DistProjectedAABBPrecalc *precalc,
+                           const float (*clip_plane)[4],
+                           int clip_plane_len,
+                           BVHTreeNearest *nearest);
+
 bool nearest_world_tree(SnapObjectContext *sctx,
                         const BVHTree *tree,
                         BVHTree_NearestPointCallback nearest_cb,
@@ -216,6 +250,10 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
                        const Object *ob_eval,
                        const float4x4 &obmat,
                        bool is_object_active);
+
+/* `transform_snap_object_lattice.cc` */
+
+eSnapMode snapLattice(SnapObjectContext *sctx, const Object *ob_eval, const float4x4 &obmat);
 
 /* `transform_snap_object_camera.cc` */
 
@@ -239,13 +277,25 @@ eSnapMode snap_object_editmesh(SnapObjectContext *sctx,
 
 /* `transform_snap_object_mesh.cc` */
 
+/** Snap to the elements of an evaluated mesh. */
 eSnapMode snap_object_mesh(SnapObjectContext *sctx,
                            const Object *ob_eval,
                            const ID *id,
                            const float4x4 &obmat,
                            eSnapMode snap_to_flag,
-                           bool skip_hidden,
-                           bool is_editmesh = false);
+                           bool skip_hidden);
+
+/**
+ * Snap to the elements in \a trees, which may be a subset of the elements of \a id.
+ * Used for the mesh converted from a mesh in edit-mode.
+ */
+eSnapMode snap_object_mesh(SnapObjectContext *sctx,
+                           const Object *ob_eval,
+                           const ID *id,
+                           const float4x4 &obmat,
+                           eSnapMode snap_to_flag,
+                           SnapTargetTrees &trees,
+                           bool is_editmesh);
 
 eSnapMode snap_polygon_mesh(SnapObjectContext *sctx,
                             const Object *ob_eval,
@@ -261,4 +311,5 @@ eSnapMode snap_edge_points_mesh(SnapObjectContext *sctx,
                                 float dist_px_sq_orig,
                                 int edge_index);
 
-}  // namespace blender::ed::transform
+}  // namespace ed::transform
+}  // namespace blender
