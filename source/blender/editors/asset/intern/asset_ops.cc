@@ -1887,7 +1887,7 @@ static wmOperatorStatus external_asset_rename_exec(bContext *C, wmOperator *op)
   if (asset_lib_ref) {
     asset::list::clear(&*asset_lib_ref, C);
   }
-  WM_main_add_notifier(NC_SPACE | ND_SPACE_FILE_LIST, nullptr);
+  WM_main_add_notifier(NC_ASSET | NA_EDITED, nullptr);
   return OPERATOR_FINISHED;
 }
 
