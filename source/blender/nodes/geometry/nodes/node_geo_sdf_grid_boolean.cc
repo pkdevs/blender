@@ -81,18 +81,12 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->custom1 = int16_t(Operation::Difference);
 }
 
-using ErrorFn = FunctionRef<void(StringRef message)>;
-static bool validate_sdf_grid(const openvdb::FloatGrid &grid, ErrorFn error_fn)
+static std::optional<std::string> validate_sdf_grid(const openvdb::FloatGrid &grid)
 {
-  if (!(grid.background() > 0.0f)) {
-    error_fn("Expected outside background value > 0");
-    return false;
+  if (grid.background() <= 0.0f) {
+    return "SDF background value must be greater than zero";
   }
-  if (!(-grid.background() < 0.0f)) {
-    error_fn("Expected inside background value < 0");
-    return false;
-  }
-  return true;
+  return std::nullopt;
 }
 
 /* The first valid operand is used to define the output grid. */
@@ -124,11 +118,8 @@ static void node_geo_exec(GeoNodeExecParams params)
 
     bke::VolumeTreeAccessToken tree_token;
     openvdb::FloatGrid &grid = primary.grid_for_write(tree_token);
-    if (!validate_sdf_grid(grid,
-                           [&](const StringRef message) {
-                             params.error_message_add(NodeWarningType::Error, "Grid: " + message);
-                           }))
-    {
+    if (std::optional error = validate_sdf_grid(grid)) {
+      params.error_message_add(NodeWarningType::Warning, TIP_("Grid: " + (*error)));
       params.set_default_remaining_outputs();
       return;
     }
@@ -147,12 +138,8 @@ static void node_geo_exec(GeoNodeExecParams params)
         result ? geometry::resample_sdf_grid_if_necessary(
                      operand, tree_token, result->grid.transform(), resampled_storage) :
                  operand.grid_for_write(tree_token);
-    if (!validate_sdf_grid(grid,
-                           [&](const StringRef message) {
-                             params.error_message_add(NodeWarningType::Warning,
-                                                      "Grid 2: " + message);
-                           }))
-    {
+    if (std::optional error = validate_sdf_grid(grid)) {
+      params.error_message_add(NodeWarningType::Warning, TIP_("Grid 2: " + (*error)));
       continue;
     }
 
@@ -171,7 +158,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         }
       }
       catch (const openvdb::Exception & /*ex*/) {
-        params.error_message_add(NodeWarningType::Error, "OpenVDB error");
+        params.error_message_add(NodeWarningType::Error, TIP_("OpenVDB error"));
         params.set_default_remaining_outputs();
         return;
       }
