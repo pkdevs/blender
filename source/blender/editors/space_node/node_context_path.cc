@@ -132,6 +132,7 @@ static void navigate_menu_create(bContext *C, ui::Layout *layout, void *arg)
     if (!node_group_is_enterable(*group_node)) {
       continue;
     }
+    /* When a group is used multiple times, the menu enters the first node found. */
     if (visited_groups.add(id_cast<bNodeTree *>(group_node->id))) {
       group_nodes.append(group_node);
     }
