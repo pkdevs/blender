@@ -1390,9 +1390,14 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   if (operator_type) {
     const bContextStore *previous = CTX_store_get(C);
     CTX_store_set(C, operator_context.get());
-    if (WM_operator_poll_context(C, operator_type, wm::OpCallContext::ExecDefault)) {
-      applied = WM_operator_name_call_ptr(C, operator_type, wm::OpCallContext::ExecDefault,
-                                         operator_properties, nullptr) & OPERATOR_FINISHED;
+    /* Panel buttons such as a modifier's delete button name their target only through the
+     * context store, which the operator reads in invoke (as a click in Blender would). */
+    const wm::OpCallContext call = operator_context && operator_type->invoke ?
+                                       wm::OpCallContext::InvokeDefault :
+                                       wm::OpCallContext::ExecDefault;
+    if (WM_operator_poll_context(C, operator_type, call)) {
+      applied = WM_operator_name_call_ptr(C, operator_type, call, operator_properties, nullptr) &
+                OPERATOR_FINISHED;
     }
     CTX_store_set(C, previous);
     if (operator_properties) {
