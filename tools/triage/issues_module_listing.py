@@ -159,6 +159,7 @@ def get_activity_since_yesterday(severity: str) -> None:
 
     label = f"Severity/{severity}"
     issues_json = gitea_json_issues_search(
+        repo="blender/blender",
         type="issues",
         since=yesterday.isoformat(),
         state="all",
