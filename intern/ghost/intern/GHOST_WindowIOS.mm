@@ -3398,6 +3398,29 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (void)updateAxisConstraintsWithActions:(NSArray *)actions
 {
   for (UIButton *button in _action_buttons) {
+    if ([button.accessibilityIdentifier hasPrefix:@"blender.action."]) {
+      /* Toggles such as X-Ray show their state as a filled button. */
+      for (NSDictionary *action in actions) {
+        if ([action isKindOfClass:NSDictionary.class] && [action[@"action"] isKindOfClass:NSString.class] &&
+            [button.accessibilityIdentifier isEqualToString:
+                [@"blender.action." stringByAppendingString:action[@"action"]]])
+        {
+          const BOOL selected = [action[@"selected"] respondsToSelector:@selector(boolValue)] &&
+                                [action[@"selected"] boolValue];
+          if (button.selected != selected) {
+            button.selected = selected;
+            UIButtonConfiguration *configuration = button.configuration;
+            configuration.baseBackgroundColor = selected ? UIColor.systemBlueColor : nil;
+            configuration.baseForegroundColor = selected ? UIColor.whiteColor : nil;
+            button.configuration = configuration;
+            button.accessibilityTraits = selected ? UIAccessibilityTraitButton | UIAccessibilityTraitSelected :
+                                                    UIAccessibilityTraitButton;
+          }
+          break;
+        }
+      }
+      continue;
+    }
     NSString *axis = button.accessibilityHint;
     if (![@[@"X", @"Y", @"Z"] containsObject:axis ?: @""]) {
       continue;
@@ -3471,7 +3494,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     if (![action isKindOfClass:[NSDictionary class]]) {
       continue;
     }
-    for (NSString *json_key in @[ @"title", @"operator", @"property", @"value", @"key" ]) {
+    for (NSString *json_key in @[ @"title", @"action", @"operator", @"property", @"value", @"key" ]) {
       NSString *value = action[json_key];
       if ([value isKindOfClass:[NSString class]]) {
         [signature appendString:@"|"];
@@ -3501,6 +3524,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     NSString *property = action[@"property"];
     NSString *value = action[@"value"];
     NSString *key = action[@"key"];
+    NSString *action_id = [action[@"action"] isKindOfClass:NSString.class] ? action[@"action"] : @"";
+    NSString *icon = [action[@"icon"] isKindOfClass:NSString.class] ? action[@"icon"] : @"";
     if (![title isKindOfClass:[NSString class]] || ![symbol isKindOfClass:[NSString class]] ||
         title.length == 0)
     {
@@ -3521,12 +3546,23 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     if (op_name.length == 0 && key.length == 0) {
       continue;
     }
-    [_action_stack addArrangedSubview:[self actionButtonWithTitle:title
-                                                      systemImage:symbol
-                                                         operator:op_name
-                                                         property:property
-                                                            value:value
-                                                              key:key]];
+    UIButton *button = [self actionButtonWithTitle:title
+                                       systemImage:symbol
+                                          operator:op_name
+                                          property:property
+                                             value:value
+                                               key:key];
+    if (action_id.length) {
+      /* Chosen by `bl_ui.native_actions`, which also runs it by this identifier. */
+      button.accessibilityIdentifier = [@"blender.action." stringByAppendingString:action_id];
+      if (icon.length) {
+        UIButtonConfiguration *configuration = button.configuration;
+        configuration.image = GHOSTIOSBlenderIcon(icon, NO);
+        configuration.imagePadding = configuration.image ? 5.0 : 0.0;
+        button.configuration = configuration;
+      }
+    }
+    [_action_stack addArrangedSubview:button];
   }
 
   _action_rail.hidden = _action_buttons.count == 0 && !_redo_strip.collapsedWidth;
@@ -6200,6 +6236,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 - (void)handleActionButton:(UIButton *)sender
 {
   NSString *op_name = sender.accessibilityIdentifier;
+  if ([op_name hasPrefix:@"blender.action."]) {
+    WM_apple_ios_ui_setting_enqueue("native_action",
+                                    [op_name substringFromIndex:@"blender.action.".length].UTF8String);
+    return;
+  }
   NSString *property = sender.accessibilityValue;
   NSString *value = sender.restorationIdentifier;
   NSString *key = sender.accessibilityHint;
