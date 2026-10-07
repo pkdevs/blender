@@ -116,6 +116,13 @@ int main()
     search.text = @"";
     [search sendActionsForControlEvents:UIControlEventEditingChanged];
 
+    [assets setBlenderMode:@"objectmode"];
+    NSCAssert([names(grid) isEqual:(@[@"Chair", @"Table"])], @"Object Mode starts on objects");
+    [assets setBlenderMode:@"sculpt"];
+    NSCAssert([names(grid) isEqual:(@[@"Chair", @"Table", @"Brass"])], @"Other modes list everything");
+    [assets setBlenderMode:@"objectmode"];
+    [assets setType:nil catalog:nil];
+
     [assets setLibrary:@"Essentials"];
     NSCAssert([names(grid) isEqual:(@[@"Chair", @"Brass"])], @"Library filter");
     [assets setType:@"Material" catalog:nil];
