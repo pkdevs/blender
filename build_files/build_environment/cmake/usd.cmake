@@ -209,9 +209,11 @@ if(WIN32)
       DEPENDEES install
     )
 else()
-  harvest(external_usd usd/include usd/include "*.h")
-  harvest(external_usd usd/include usd/include "*.hpp")
-  harvest_rpath_lib(external_usd usd/lib usd/lib "libusd_ms${SHAREDLIBEXT}")
+  harvest(external_usd usd/cmake/pxrTargets.cmake usd/cmake/pxrTargets.cmake)
+  harvest(external_usd usd/cmake/pxrTargets-release.cmake usd/cmake/pxrTargets-release.cmake)
+  harvest(external_usd usd/pxrConfig.cmake usd/pxrConfig.cmake)
+  harvest(external_usd usd/include usd/include "*")
+  harvest_rpath_lib(external_usd usd/lib usd/lib "*${SHAREDLIBEXT}*")
   harvest(external_usd usd/lib/usd usd/lib/usd "*")
   harvest_rpath_python(
     external_usd
