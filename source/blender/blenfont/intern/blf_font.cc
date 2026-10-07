@@ -668,7 +668,7 @@ size_t blf_font_width_to_strlen(
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
   ShapingData text(font, gc, str, str_len);
   blf_glyph_cache_release(font);
-  return text.width_to_strlen(width, r_width);
+  return text.width_to_strlen(width, BLI_strnlen(str, str_len), r_width);
 }
 
 size_t blf_font_width_to_rstrlen(
@@ -684,7 +684,7 @@ size_t blf_font_width_to_rstrlen(
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
   ShapingData text(font, gc, str, str_len);
   blf_glyph_cache_release(font);
-  return text.width_to_rstrlen(width, r_width);
+  return text.width_to_rstrlen(width, BLI_strnlen(str, str_len), r_width);
 }
 
 /** \} */
@@ -702,6 +702,7 @@ static void blf_font_boundbox_ex(FontBLF *font,
                                  ft_pix pen_y)
 {
   if (!str[0] || !str_len) {
+    BLI_rcti_init(r_box, 0, 0, 0, 0);
     return;
   }
 
@@ -863,7 +864,19 @@ size_t blf_str_offset_from_cursor_position(FontBLF *font,
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
   ShapingData text(font, gc, str, str_len);
   blf_glyph_cache_release(font);
-  return text.offset_from_cursor_position(location_x);
+
+  size_t r_offset = text.offset_from_cursor_position(location_x);
+  if (r_offset == size_t(-1)) {
+    /* We are to the right of the string, so return position of null terminator. */
+    r_offset = BLI_strnlen(str, str_len);
+  }
+  else if (BLI_str_utf8_char_width_or_error(&str[r_offset]) == 0) {
+    /* This is a combining character, so move to previous visible valid char. */
+    int offset = int(r_offset);
+    BLI_str_cursor_step_prev_utf8(str, int(str_len), &offset);
+    r_offset = size_t(offset);
+  }
+  return r_offset;
 }
 
 struct StrOffsetToGlyphBounds_Data {
@@ -903,50 +916,38 @@ int blf_str_offset_to_cursor(FontBLF *font,
   ShapingData text(font, gc, str, str_len);
   blf_glyph_cache_release(font);
 
-  int64_t index = 0;
+  /* Find the glyph starting at the offset and the glyph before it, skipping combining marks
+   * which sit on their base. */
+  const ShapedGlyph *at = nullptr;
+  const ShapedGlyph *before = nullptr;
   for (const ShapedGlyph &glyph : text.glyphs) {
-    if (glyph.index_utf8 >= str_offset) {
-      break;
+    if (glyph.is_combining()) {
+      continue;
     }
-    index++;
+    if (glyph.index_utf8 == str_offset) {
+      if (at == nullptr) {
+        at = &glyph;
+      }
+    }
+    else if (glyph.index_utf8 < str_offset &&
+             (before == nullptr || glyph.index_utf8 > before->index_utf8))
+    {
+      before = &glyph;
+    }
   }
+
   ft_pix cursor = 0;
-
-  /* Right edge of the previous character, if available. */
-  rcti prev = {0};
-  if (index > 0) {
-    prev = text.glyphs[index - 1].bounds;
+  if (at) {
+    /* Left edge of the character at the offset, centered so the cursor obscures less. */
+    cursor = at->bounds.xmin - half_width;
   }
-
-  /* Left edge of the next character, if available. */
-  rcti next = {0};
-  if (index < text.glyphs.size()) {
-    next = text.glyphs[index].bounds;
-  }
-
-  if ((prev.xmax == prev.xmin) && next.xmax) {
-    /* Nothing (or a space) to the left, so align to right character.
-     * Just a touch left of it so obscures less. */
-    cursor = next.xmin - half_width;
-  }
-  else if ((prev.xmax != prev.xmin) && !next.xmax) {
-    /* End of string, so align to last character. At glyph edge
-     * so half of cursor width can be in the advance space. */
-    cursor = prev.xmax;
-  }
-  else if (prev.xmax && next.xmax) {
-    /* Between two characters, so use the center. */
-    if (next.xmin >= prev.xmax || next.xmin == next.xmax) {
-      cursor = (prev.xmax + next.xmin) / 2 - half_width;
-    }
-    else {
-      /* A nicer center if reversed order - RTL. */
-      cursor = (next.xmax + prev.xmin) / 2 - half_width;
-    }
+  else if (before) {
+    /* End of the string, right edge of the previous character. The cursor starts at the glyph
+     * edge so half of its width can be in the advance space. */
+    cursor = before->bounds.xmax;
   }
   else {
-    /* Fallback: position at end of text */
-    cursor = BLI_rcti_size_x(&text.bounds) + half_width;
+    cursor = -half_width;
   }
 
   return ft_pix_to_int(cursor);

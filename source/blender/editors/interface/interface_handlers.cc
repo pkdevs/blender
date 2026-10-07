@@ -3569,7 +3569,14 @@ static bool textedit_delete(Button *but,
         int pos = but->pos;
         int step;
 
-        BLI_str_cursor_step_utf8(str, len, &pos, direction, jump, true);
+        const char *str_prev = BLI_str_find_prev_char_utf8(str + but->pos, str);
+        if (jump == STRCUR_JUMP_NONE && BLI_str_utf8_char_width_or_error(str_prev) == 0) {
+          /* Remove combining marks (such as Hebrew niqqud) one at a time. */
+          pos = int(str_prev - str);
+        }
+        else {
+          BLI_str_cursor_step_utf8(str, len, &pos, direction, jump, true);
+        }
         step = but->pos - pos;
         memmove(&str[but->pos - step], &str[but->pos], (len + 1) - but->pos);
         but->pos -= step;

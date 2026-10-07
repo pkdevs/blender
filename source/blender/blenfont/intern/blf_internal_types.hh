@@ -252,6 +252,7 @@ struct ShapedGlyph {
   rcti bounds = {};      /* String-relative shaped bounds in ft_pix. */
   size_t index_utf8 = 0; /* Maps back original UTF-8 string byte offsets. */
   rcti integer_bounds() const;
+  bool is_combining() const;
 };
 
 #ifndef WITH_HARFBUZZ
@@ -271,8 +272,8 @@ struct ShapingData {
 
   void draw(const ft_pix pen_y, ResultBLF *r_info = nullptr);
   int draw_mono(const int tab_columns);
-  size_t width_to_strlen(const int width, int *r_width = nullptr) const;
-  size_t width_to_rstrlen(const int width, int *r_width = nullptr) const;
+  size_t width_to_strlen(const int width, size_t str_len, int *r_width = nullptr) const;
+  size_t width_to_rstrlen(const int width, size_t str_len, int *r_width = nullptr) const;
   void boundbox(ft_pix pen_y, rcti *r_box, ResultBLF *r_info = nullptr) const;
   size_t offset_from_cursor_position(int location_x) const;
   void offset_to_glyph_bounds(size_t str_offset, rcti *r_glyph_bounds) const;

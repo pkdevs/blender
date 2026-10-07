@@ -14,6 +14,9 @@
 #  include <harfbuzz/hb.h>
 #endif
 
+#include <algorithm>
+
+#include "BLI_array.hh"
 #include "BLI_rect.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
@@ -36,6 +39,11 @@ rcti ShapedGlyph::integer_bounds() const
   r.ymin = ft_pix_to_int_floor(bounds.ymin);
   r.ymax = ft_pix_to_int_ceil(bounds.ymax);
   return r;
+}
+
+bool ShapedGlyph::is_combining() const
+{
+  return BLI_wcwidth_or_error(char32_t(g->c)) == 0;
 }
 
 void ShapingData::legacy_layout(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len)
@@ -400,41 +408,85 @@ int ShapingData::draw_mono(const int tab_columns)
   return columns;
 }
 
-size_t ShapingData::width_to_strlen(const int width, int *r_width) const
-{
-  size_t len = this->glyphs.last().index_utf8;
-  int w = ft_pix_to_int(BLI_rcti_size_x(&this->bounds));
+/** A character with its combining marks, in logical order. */
+struct LogicalChar {
+  size_t offset;
+  /** Horizontal space taken up, in ft_pix. */
+  ft_pix advance;
+  /** Right edge of the ink relative to the start of the character, in ft_pix. */
+  ft_pix ink_right;
+};
 
-  for (const ShapedGlyph &glyph : this->glyphs) {
-    if (glyph.bounds.xmax > ft_pix_from_int(width)) {
-      len = glyph.index_utf8;
-      w = ft_pix_to_int(glyph.bounds.xmax);
+/**
+ * Group glyphs into characters sorted by string offset. Glyphs are in visual order, which differs
+ * from the logical order inside right-to-left runs.
+ */
+static Vector<LogicalChar> logical_chars(const ShapingData &text)
+{
+  const Span<ShapedGlyph> glyphs = text.glyphs;
+  Array<int64_t> order(glyphs.size());
+  for (const int64_t i : glyphs.index_range()) {
+    order[i] = i;
+  }
+  std::stable_sort(order.begin(), order.end(), [&](const int64_t a, const int64_t b) {
+    return glyphs[a].index_utf8 < glyphs[b].index_utf8;
+  });
+
+  Vector<LogicalChar> chars;
+  ft_pix start = 0;
+  for (const int64_t i : order) {
+    const ShapedGlyph &glyph = glyphs[i];
+    /* The pen advance is the distance to the visually next glyph. */
+    const ft_pix next_x = (i + 1 < glyphs.size()) ? glyphs[i + 1].bounds.xmin : text.bounds.xmax;
+    const ft_pix advance = next_x - glyph.bounds.xmin;
+    if (chars.is_empty() || (!glyph.is_combining() && glyph.index_utf8 != chars.last().offset)) {
+      chars.append({glyph.index_utf8, 0, 0});
+      start = glyph.bounds.xmin;
+    }
+    LogicalChar &c = chars.last();
+    c.advance += advance;
+    c.ink_right = std::max(c.ink_right, glyph.bounds.xmax - start);
+  }
+  return chars;
+}
+
+size_t ShapingData::width_to_strlen(const int width, const size_t str_len, int *r_width) const
+{
+  const ft_pix width_max = ft_pix_from_int(width);
+  ft_pix pen = 0;
+  size_t len = str_len;
+  for (const LogicalChar &c : logical_chars(*this)) {
+    /* Include the whole advance like #blf_font_width does, along with any ink overhanging it. */
+    if (pen + std::max(c.advance, c.ink_right) > width_max) {
+      len = c.offset;
       break;
     }
+    pen += c.advance;
   }
 
   if (r_width) {
-    *r_width = w;
+    *r_width = ft_pix_to_int(pen);
   }
 
   return len;
 }
 
-size_t ShapingData::width_to_rstrlen(const int width, int *r_width) const
+size_t ShapingData::width_to_rstrlen(const int width, const size_t str_len, int *r_width) const
 {
-  size_t len = this->glyphs.last().index_utf8;
-  int w = ft_pix_to_int(BLI_rcti_size_x(&this->bounds));
-
-  for (const ShapedGlyph &glyph : this->glyphs) {
-    if (glyph.bounds.xmin > (BLI_rcti_size_x(&this->bounds) - ft_pix_from_int(width))) {
-      len = glyph.index_utf8;
-      w = ft_pix_to_int(BLI_rcti_size_x(&this->bounds) - glyph.bounds.xmin);
+  const Vector<LogicalChar> chars = logical_chars(*this);
+  const ft_pix width_max = ft_pix_from_int(width);
+  ft_pix pen = 0;
+  size_t len = chars.is_empty() ? str_len : 0;
+  for (int64_t i = chars.size() - 1; i >= 0; i--) {
+    if (pen + chars[i].advance > width_max) {
+      len = (i + 1 < chars.size()) ? chars[i + 1].offset : str_len;
       break;
     }
+    pen += chars[i].advance;
   }
 
   if (r_width) {
-    *r_width = w;
+    *r_width = ft_pix_to_int(pen);
   }
 
   return len;
@@ -455,17 +507,20 @@ void ShapingData::boundbox(ft_pix pen_y, rcti *r_box, ResultBLF *r_info) const
 size_t ShapingData::offset_from_cursor_position(int location_x) const
 {
   for (const ShapedGlyph &glyph : this->glyphs) {
+    if (glyph.is_combining()) {
+      continue;
+    }
     if (ft_pix_from_int(location_x) < ((glyph.bounds.xmin + glyph.bounds.xmax) / 2)) {
       return glyph.index_utf8;
     }
   }
-  return this->glyphs.is_empty() ? 0 : this->glyphs.last().index_utf8 + 1;
+  return this->glyphs.is_empty() ? 0 : size_t(-1);
 }
 
 void ShapingData::offset_to_glyph_bounds(size_t str_offset, rcti *r_glyph_bounds) const
 {
   for (const ShapedGlyph &glyph : this->glyphs) {
-    if (glyph.index_utf8 >= str_offset) {
+    if (glyph.index_utf8 == str_offset) {
       *r_glyph_bounds = glyph.integer_bounds();
       return;
     }
