@@ -466,7 +466,7 @@ enum eNodeProxy_Flag : char {
 };
 
 /* Conductive fresnel types */
-enum eNodeConducetiveFresnel_Type : short {
+enum eNodeConductiveFresnel_Type : short {
   SHD_PHYSICAL_CONDUCTOR = 0,
   SHD_CONDUCTOR_F82 = 1,
 };
