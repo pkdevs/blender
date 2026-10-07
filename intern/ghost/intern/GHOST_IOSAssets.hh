@@ -19,6 +19,9 @@
 @property(nonatomic, copy) CGPoint (^clientPoint)(CGPoint point);
 @property(nonatomic, copy) void (^visibilityDidChange)(void);
 - (void)updateSnapshot:(NSDictionary *)snapshot;
+/* Blender's interaction mode ("objectmode", "sculpt", ...). Until a type is picked, the pane
+ * lists objects in Object Mode and everything in other modes. */
+- (void)setBlenderMode:(NSString *)mode;
 /* Places the pane along the bottom edge of rect. */
 - (void)layoutInRect:(CGRect)rect;
 - (void)toggle:(id)sender;

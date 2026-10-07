@@ -147,6 +147,8 @@ static NSString *blenderAssetAddTitle(NSString *type)
   NSString *_library; /* nil: all libraries. */
   NSString *_type;    /* nil: all types. */
   NSString *_catalog; /* nil: all catalogs; otherwise a catalog path and its children. */
+  NSString *_mode;
+  BOOL _typeChosen; /* The type was picked in the menu, rather than following the mode. */
   NSCache<NSString *, UIImage *> *_thumbnails;
   BOOL _loading;
   BOOL _visible;
@@ -268,6 +270,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
   [_library release];
   [_type release];
   [_catalog release];
+  [_mode release];
   [_thumbnails release];
   [_clientPoint release];
   [_selection release];
@@ -358,6 +361,22 @@ static NSString *blenderAssetAddTitle(NSString *type)
   [self applyFilters];
 }
 
+- (void)setBlenderMode:(NSString *)mode
+{
+  if (![mode isKindOfClass:NSString.class] || [mode isEqual:_mode]) {
+    return;
+  }
+  [_mode release];
+  _mode = [mode copy];
+  if (_typeChosen) {
+    return;
+  }
+  NSString *type = [mode isEqual:@"objectmode"] ? @"Object" : nil;
+  if (type != _type && ![type isEqual:_type]) {
+    [self setType:type catalog:_catalog];
+  }
+}
+
 - (void)setType:(NSString *)type catalog:(NSString *)catalog
 {
   [_type release];
@@ -399,6 +418,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
   NSMutableArray *types = [NSMutableArray array];
   UIAction *any = [UIAction actionWithTitle:@"All Types" image:nil identifier:nil
                                     handler:^(__kindof UIAction *) {
+                                      owner->_typeChosen = YES;
                                       [owner setType:nil catalog:owner->_catalog];
                                     }];
   any.state = _type ? UIMenuElementStateOff : UIMenuElementStateOn;
@@ -424,6 +444,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
     NSString *type = entry[0];
     UIAction *action = [UIAction actionWithTitle:entry[2] image:GHOSTIOSBlenderIcon(entry[1], NO)
                                       identifier:nil handler:^(__kindof UIAction *) {
+                                        owner->_typeChosen = YES;
                                         [owner setType:type catalog:owner->_catalog];
                                       }];
     action.state = [_type isEqual:type] ? UIMenuElementStateOn : UIMenuElementStateOff;
