@@ -1275,7 +1275,7 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
   if (ELEM(insert_type, TE_INSERT_BEFORE, TE_INSERT_AFTER)) {
     target_collection = nullptr;
     for (const TreeElement *te_parent =
-             outliner_find_parent_element(&space_outliner->runtime->tree, nullptr, te);
+             outliner_find_parent_element(space_outliner->runtime->tree, nullptr, te);
          te_parent != nullptr;
          te_parent = te_parent->parent)
     {
