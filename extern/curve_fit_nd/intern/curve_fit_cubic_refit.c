@@ -1618,9 +1618,10 @@ int curve_fit_cubic_to_points_refit_db(
 			}
 		}
 
-		if (is_cyclic == false && knots_len > 1) {
-			corner_index_array[c_index++] = k_index;
-			k_index++;
+		/* Always include the last knot, even for a single knot (where it's also the first),
+		 * callers rely on both end-points being present so the array is filled in. */
+		if (is_cyclic == false) {
+			corner_index_array[c_index++] = knots_len_remaining - 1;
 		}
 
 		assert(c_index == *r_corner_index_len);
