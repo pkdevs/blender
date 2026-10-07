@@ -1,0 +1,1 @@
+Referenced by issue #164863, 4.5/5.2/5.3 regression: Linked objects without overrides can be keyframed, leading to crashes
