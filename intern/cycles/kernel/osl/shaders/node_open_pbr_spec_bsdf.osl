@@ -132,8 +132,7 @@ BSDF_T openpbr_gloss(color specular_color,
   /* In thin_walled mode we need to counter the implicit IOR inversion of the glossy layer
    * on top of the diffuse base. */
   float ior = backfacing() && thin_walled ? 1.0 / specular_ior : specular_ior;
-  float thinfilm_ior = (backfacing() && thin_walled > 0) ? thin_film.ior * specular_ior :
-                                                           thin_film.ior;
+  float thinfilm_ior = backfacing() && thin_walled ? thin_film.ior * specular_ior : thin_film.ior;
   BSDF_T F_dielectric_film = dielectric_bsdf(N,
                                              T,
                                              specular_color,
