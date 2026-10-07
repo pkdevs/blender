@@ -170,6 +170,46 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
                                    UIContextMenuInteractionDelegate, UIGestureRecognizerDelegate>
 @end
 
+/* Horizontal strip whose edges fade out where more content is scrolled out of view. */
+@interface GHOSTIOSFadingScrollView : UIScrollView
+@end
+
+@implementation GHOSTIOSFadingScrollView
+
+- (void)layoutSubviews
+{
+  [super layoutSubviews];
+  const CGFloat width = self.bounds.size.width;
+  const CGFloat hidden_leading = self.contentOffset.x + self.adjustedContentInset.left;
+  const CGFloat hidden_trailing = self.contentSize.width + self.adjustedContentInset.right -
+                                  self.contentOffset.x - width;
+  if (width <= 0 || (hidden_leading <= 0.5 && hidden_trailing <= 0.5)) {
+    self.layer.mask = nil;
+    return;
+  }
+  CAGradientLayer *mask = [self.layer.mask isKindOfClass:CAGradientLayer.class] ?
+                              (CAGradientLayer *)self.layer.mask : nil;
+  if (!mask) {
+    mask = [CAGradientLayer layer];
+    mask.startPoint = CGPointMake(0, 0.5);
+    mask.endPoint = CGPointMake(1, 0.5);
+    self.layer.mask = mask;
+  }
+  /* Fade in proportion to how much is hidden, so the edge clears as the end is reached. */
+  const CGFloat fade = MIN(32.0, width / 4);
+  const CGFloat leading = MIN(fade, MAX(0, hidden_leading)) / width;
+  const CGFloat trailing = MIN(fade, MAX(0, hidden_trailing)) / width;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  mask.frame = self.bounds;
+  id opaque = (id)UIColor.blackColor.CGColor, clear = (id)UIColor.clearColor.CGColor;
+  mask.colors = @[leading > 0 ? clear : opaque, opaque, opaque, trailing > 0 ? clear : opaque];
+  mask.locations = @[@0, @(leading), @(1 - trailing), @1];
+  [CATransaction commit];
+}
+
+@end
+
 static const NSInteger blenderDisclosureChevronTag = 0x6368;
 
 /* Disclosure chevron. Only a fixed-frame glyph inside an untransformed, constrained
@@ -331,7 +371,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     _inspector.accessibilityIdentifier = @"blender.inspector.panel";
     _hierarchy.accessibilityIdentifier = @"blender.hierarchy.panel";
     _inspectorTitle = (UILabel *)[_inspector.contentView viewWithTag:100];
-    _tabsScroll = [[[UIScrollView alloc] init] autorelease];
+    _tabsScroll = [[[GHOSTIOSFadingScrollView alloc] init] autorelease];
     _tabsScroll.showsHorizontalScrollIndicator = NO;
     _tabsScroll.translatesAutoresizingMaskIntoConstraints = NO;
     [_inspector.contentView addSubview:_tabsScroll];

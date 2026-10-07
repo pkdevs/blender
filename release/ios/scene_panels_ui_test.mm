@@ -904,6 +904,27 @@ int main()
     [oldMode performWithSender:nil target:nil];
     NSCAssert(request == beforeModeRepeat, @"A stale heading menu cannot change another object's mode");
     [mode release];
+    UIScrollView *fading = [[[NSClassFromString(@"GHOSTIOSFadingScrollView") alloc]
+        initWithFrame:CGRectMake(0, 0, 200, 44)] autorelease];
+    fading.contentSize = CGSizeMake(600, 44);
+    [fading layoutIfNeeded];
+    CAGradientLayer *fadeMask = (CAGradientLayer *)fading.layer.mask;
+    NSCAssert([fadeMask isKindOfClass:CAGradientLayer.class] &&
+              fadeMask.colors[0] == (id)UIColor.blackColor.CGColor &&
+              fadeMask.colors[3] == (id)UIColor.clearColor.CGColor,
+              @"Tab strip fades only toward the edge with more tabs");
+    fading.contentOffset = CGPointMake(200, 0);
+    [fading layoutIfNeeded];
+    NSCAssert(fadeMask.colors[0] == (id)UIColor.clearColor.CGColor &&
+              fadeMask.colors[3] == (id)UIColor.clearColor.CGColor &&
+              CGRectEqualToRect(fadeMask.frame, fading.bounds), @"Both edges fade mid-scroll");
+    fading.contentOffset = CGPointMake(400, 0);
+    [fading layoutIfNeeded];
+    NSCAssert(fadeMask.colors[3] == (id)UIColor.blackColor.CGColor, @"The last tab is not faded at the end");
+    fading.contentSize = CGSizeMake(150, 44);
+    fading.contentOffset = CGPointZero;
+    [fading layoutIfNeeded];
+    NSCAssert(fading.layer.mask == nil, @"Strips that fit are not masked");
     NSDictionary *fastA = @{@"key": @"fast.a", @"label": @"Amount", @"type": @"FLOAT", @"value": @1, @"editable": @YES};
     NSDictionary *fastB = @{@"key": @"fast.b", @"label": @"Count", @"type": @"INT", @"value": @2, @"editable": @YES};
     NSMutableDictionary *fastInspector = [@{@"id": @"fast-object", @"name": @"Properties", @"tab": @"FAST",
