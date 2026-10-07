@@ -1356,7 +1356,7 @@ enum SolidifyModifierMode : char {
 };
 
 /** #SolidifyModifierData.nonmanifold_offset_mode */
-enum SolifyModifierNonManifoldOffsetMode : char {
+enum SolidifyModifierNonManifoldOffsetMode : char {
   MOD_SOLIDIFY_NONMANIFOLD_OFFSET_MODE_FIXED = 0,
   MOD_SOLIDIFY_NONMANIFOLD_OFFSET_MODE_EVEN = 1,
   MOD_SOLIDIFY_NONMANIFOLD_OFFSET_MODE_CONSTRAINTS = 2,
@@ -1390,7 +1390,7 @@ struct SolidifyModifierData {
   SolidifyModifierMode mode = MOD_SOLIDIFY_MODE_EXTRUDE;
 
   /** Variables for #MOD_SOLIDIFY_MODE_NONMANIFOLD. */
-  SolifyModifierNonManifoldOffsetMode nonmanifold_offset_mode =
+  SolidifyModifierNonManifoldOffsetMode nonmanifold_offset_mode =
       MOD_SOLIDIFY_NONMANIFOLD_OFFSET_MODE_CONSTRAINTS;
   SolidifyModifierNonManifoldBoundaryMode nonmanifold_boundary_mode =
       MOD_SOLIDIFY_NONMANIFOLD_BOUNDARY_MODE_NONE;
