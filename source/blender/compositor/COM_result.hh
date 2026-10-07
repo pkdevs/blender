@@ -31,6 +31,7 @@
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_menu_value.hh"
 
+#include "COM_closure.hh"
 #include "COM_domain.hh"
 #include "COM_meta_data.hh"
 
@@ -73,6 +74,7 @@ enum class ResultType : uint8_t {
   Text,
   Mask,
   Bundle,
+  Closure,
 };
 
 /* The precision of the data. CPU data is always stored using full precision at the moment. */
@@ -83,7 +85,7 @@ enum class ResultPrecision : uint8_t {
 
 /* The type of storage used to hold the result data. */
 enum class ResultStorageType : uint8_t {
-  /* Stored as a single value in an #std::varient of all types. */
+  /* Stored as a single value in an #std::variant of all types. */
   SingleValue,
   /* Stored as an image in a #gpu::Texture on the GPU. */
   GPUImage,
@@ -179,7 +181,8 @@ class Result {
                Scene *,
                Text *,
                Mask *,
-               nodes::BundlePtr>
+               nodes::BundlePtr,
+               ClosurePtr>
       single_value_ = std::monostate{};
   /* The domain of the result. This only matters if the result was not a single value. See the
    * discussion in COM_domain.hh for more information. */
@@ -362,7 +365,7 @@ class Result {
   /* Returns true if this result should be computed and false otherwise. The result should be
    * computed if its reference count is not zero, that is, its result is used by at least one
    * operation. */
-  bool should_compute();
+  bool should_compute() const;
 
   /* Returns a reference to the derived resources of the result, which is allocated if it was not
    * allocated already. */
@@ -732,22 +735,33 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
         break;
       case Interpolation::Anisotropic:
         BLI_assert(type_ == ResultType::Color);
-        const float2 x_gradient = jacobian.has_value() ? jacobian.value()[0] :
-                                                         float2(1.0f / size.x, 0.0f);
-        const float2 y_gradient = jacobian.has_value() ? jacobian.value()[1] :
-                                                         float2(0.0f, 1.0f / size.y);
-        EWASamplingData sampling_data = EWASamplingData{*this, extension_mode_x, extension_mode_y};
-        BLI_ewa_filter(size.x,
-                       size.y,
-                       false,
-                       true,
-                       coordinates,
-                       x_gradient,
-                       y_gradient,
-                       sample_ewa_read_callback,
-                       &sampling_data,
-                       output,
-                       extension_mode_x == Extension::Clip && extension_mode_y == Extension::Clip);
+        if (jacobian.has_value()) {
+          EWASamplingData sampling_data = EWASamplingData{
+              *this, extension_mode_x, extension_mode_y};
+          BLI_ewa_filter(size.x,
+                         size.y,
+                         false,
+                         true,
+                         coordinates,
+                         jacobian.value()[0],
+                         jacobian.value()[1],
+                         sample_ewa_read_callback,
+                         &sampling_data,
+                         output,
+                         extension_mode_x == Extension::Clip &&
+                             extension_mode_y == Extension::Clip);
+        }
+        else {
+          math::interpolate_bilinear_wrapmode_fl(buffer,
+                                                 output,
+                                                 size.x,
+                                                 size.y,
+                                                 sizeof(T) / sizeof(float),
+                                                 texel_coordinates.x - 0.5f,
+                                                 texel_coordinates.y - 0.5f,
+                                                 wrap_mode_x,
+                                                 wrap_mode_y);
+        }
         break;
     }
 

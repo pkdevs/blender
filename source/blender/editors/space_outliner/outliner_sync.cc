@@ -87,7 +87,7 @@ void ED_outliner_select_sync_flag_outliners(const bContext *C)
   Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
 
-  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen;
+  for (bScreen *screen = bmain->screens.first(); screen;
        screen = static_cast<bScreen *>(screen->id.next))
   {
     for (ScrArea &area : screen->areabase) {
@@ -525,6 +525,10 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
         else {
           tselem->flag &= ~(TSE_ACTIVE | TSE_SELECTED);
         }
+      }
+      else {
+        /* Deselect collections when syncing non collection data-block, see: !164069 */
+        tselem->flag &= ~(TSE_ACTIVE | TSE_SELECTED);
       }
     }
     else {
