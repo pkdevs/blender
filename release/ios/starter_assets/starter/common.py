@@ -10,6 +10,8 @@ Conventions every object asset follows:
   placed by their origin onto the surface under the finger, so they sit on it.
 - Sizes are real-world meters, defaults sized like the real thing (a mug is ~0.1 m).
 - Defaults stay under 50k triangles and evaluate quickly, so they're fluid on an iPad.
+- Every dimension and count that shapes the object has a gizmo in the viewport (see the gizmo
+  helpers below), so it can be reshaped by dragging, not only by typing numbers.
 """
 
 import math
@@ -40,7 +42,11 @@ def object_group(name):
 
 
 def rest_on_ground(tree, geometry):
-    """Move geometry so it's centered on X/Y with its lowest point at Z = 0."""
+    """Move geometry so it's centered on X/Y with its lowest point at Z = 0.
+
+    Gizmos made so far are joined in first, so they move with the geometry.
+    """
+    geometry = tree.with_gizmos(geometry)
     bounds = tree.n("GeometryNodeBoundBox", Geometry=geometry)
     low = tree.out(bounds, "Min")
     high = tree.out(bounds, "Max")
@@ -53,6 +59,73 @@ def rest_on_ground(tree, geometry):
 
 
 RADIANS = math.pi / 180.0
+
+
+# -----------------------------------------------------------------------------
+# Gizmos. Positions are in the generator's own space, before `rest_on_ground()`.
+
+AXES = {"X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0), "Z": (0.0, 0.0, 1.0),
+        "-X": (-1.0, 0.0, 0.0), "-Y": (0.0, -1.0, 0.0), "-Z": (0.0, 0.0, -1.0)}
+
+
+def _offset(tree, origin, axis, distance):
+    """origin + axis * distance, with any of them sockets."""
+    return tree.vmath("ADD", origin, tree.vmath("SCALE", AXES[axis], scale=distance))
+
+
+def size_gizmo(tree, size, axis, origin=(0.0, 0.0, 0.0), centered=True, color=None):
+    """An arrow at the end of a length along `axis` that drags that end.
+
+    `size` is a float group input (or a Separate XYZ output of a vector one). When `centered`,
+    the length extends both ways from `origin`, so dragging one end changes it twice as much.
+    """
+    color = color or axis[-1]
+    reach = tree.math("MULTIPLY", size, 0.5) if centered else tree.math("MULTIPLY", size, 1.0)
+    return tree.linear_gizmo(reach, _offset(tree, origin, axis, reach), AXES[axis], color=color)
+
+
+def vector_size_gizmos(tree, size, origin=(0.0, 0.0, 0.0), centered="XYZ"):
+    """`size_gizmo()` for each component of a vector size input."""
+    for axis, component in zip("XYZ", tree.separate(size)):
+        size_gizmo(tree, component, axis, origin, centered=axis in centered)
+
+
+def radius_gizmo(tree, radius, axis="X", origin=(0.0, 0.0, 0.0), color="PRIMARY"):
+    """An arrow on the rim of a circle or sphere that drags its radius."""
+    return tree.linear_gizmo(tree.math("MULTIPLY", radius, 1.0),
+                             _offset(tree, origin, axis, radius), AXES[axis], color=color)
+
+
+def count_gizmo(tree, count, step, axis, origin=(0.0, 0.0, 0.0), extra=0.0, color="SECONDARY"):
+    """A box handle that adds one to `count` for every `step` it's dragged along `axis`.
+
+    It sits at origin + axis * (count * step + extra), at the end of what the count builds, so
+    pulling out the end of a staircase or the top of a building adds steps or floors.
+    """
+    value = tree.math("MULTIPLY", count, step)
+    position = _offset(tree, origin, axis, tree.math("ADD", value, extra))
+    return tree.linear_gizmo(value, position, AXES[axis], color=color, style="BOX")
+
+
+def density_gizmo(tree, count, length, axis, origin=(0.0, 0.0, 0.0), color="SECONDARY"):
+    """A box handle just past the end of a centered length that subdivides it: dragging it by
+    one spacing adds one division, so the resolution follows the finger."""
+    spacing = tree.math("DIVIDE", length, tree.math("MAXIMUM", count, 1.0))
+    value = tree.math("MULTIPLY", count, spacing)
+    position = _offset(tree, origin, axis, tree.math("MULTIPLY", length, 0.62))
+    return tree.linear_gizmo(value, position, AXES[axis], color=color, style="BOX")
+
+
+def resolution_gizmo(tree, count, position, up="Z", per_turn=32.0, color="SECONDARY"):
+    """A dial: one full turn adds `per_turn` to a resolution such as segments or rings."""
+    value = tree.math("MULTIPLY", count, math.tau / per_turn)
+    return tree.dial_gizmo(value, position, AXES[up], radius=0.6, color=color)
+
+
+def angle_gizmo(tree, angle, position, up="Z", color="PRIMARY"):
+    """A dial that turns an angle input (in radians) by as much as it's turned."""
+    return tree.dial_gizmo(tree.math("MULTIPLY", angle, 1.0), position, AXES[up], radius=0.8,
+                           color=color)
 
 
 # -----------------------------------------------------------------------------
