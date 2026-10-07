@@ -273,8 +273,11 @@ void DNA_sdna_alias_data_ensure(struct SDNA *sdna);
  */
 void DNA_sdna_alias_data_ensure_structs_map(struct SDNA *sdna);
 
-/* For versioning, avoid verbosity selecting between with/without alias versions of functions. */
-#ifdef DNA_GENFILE_VERSIONING_MACROS
+/* Legacy macros with less verbosity for versioning. Note: this can't be used reliably in newer
+ * Blender versions because it checks the SDNA written to .blend files but that may only contain
+ * partial SDNA to safe space. */
+#ifdef DNA_GENFILE_VERSIONING_MACROS_LEGACY
+/* Don't use in new code, see comment above. */
 #  define DNA_struct_exists(sdna, str) DNA_struct_exists_with_alias(sdna.get(), str)
 #  define DNA_struct_member_exists(sdna, stype, vartype, name) \
     DNA_struct_member_exists_with_alias(sdna.get(), stype, vartype, name)
