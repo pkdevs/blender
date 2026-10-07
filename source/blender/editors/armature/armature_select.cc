@@ -1467,6 +1467,7 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
 
   for (Object *ob : objects) {
     bArmature *arm = id_cast<bArmature *>(ob->data);
+    bool changed = false;
 
     ED_armature_edit_deselect_all_visible(ob);
 
@@ -1479,29 +1480,28 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
       const bool select = is_deform == (mode == BoneDeform::DEFORM);
       if (select) {
         ED_armature_ebone_select_set(&ebone, true);
+        changed = true;
       }
+    }
+
+    if (changed) {
+      WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
+      DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
     }
   }
 
-  for (Object *ob : objects) {
-    WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
-    DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
-  }
   return OPERATOR_FINISHED;
 }
 
 void ARMATURE_OT_select_deform(wmOperatorType *ot)
 {
-  /* identifiers */
   ot->name = "Select Deform Bones";
   ot->idname = "ARMATURE_OT_select_deform";
   ot->description = "Select bones the have the deform option enabled (or disabled)";
 
-  /* API callbacks. */
   ot->exec = armature_select_deform_exec;
   ot->poll = ED_operator_editarmature;
 
-  /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   static const EnumPropertyItem deform_items[] = {
