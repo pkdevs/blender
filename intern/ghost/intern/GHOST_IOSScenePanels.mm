@@ -1144,6 +1144,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
             UIPanGestureRecognizer *pan = [[[UIPanGestureRecognizer alloc]
                 initWithTarget:self action:@selector(scrubNumber:)] autorelease];
             pan.name = @"blender.number.scrub";
+            GHOSTIOSNumberFieldInstallHover(field);
             pan.maximumNumberOfTouches = 1;
             pan.allowedTouchTypes = @[@(UITouchTypeDirect), @(UITouchTypeStylus)];
             pan.delegate = self;
@@ -2017,6 +2018,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   field.scrubValue = fmin(maximum, fmax(minimum, value));
   field.scrubTranslation = translation;
   [self displayNumberScrub:field];
+  GHOSTIOSNumberScrubIndicatorUpdate(field, vertical);
   if (CACurrentMediaTime() - field.lastPreview >= 1.0 / 60.0) {
     const double preview = [field.descriptor[@"type"] isEqual:@"INT"] ? round(field.scrubValue) : field.scrubValue;
     [self previewProperty:field.descriptor object:field.objectID value:@(preview)

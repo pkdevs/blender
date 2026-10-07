@@ -554,6 +554,7 @@ static const CGFloat GHOSTIOSRedoStripRadius = 20;
         scrub.delegate = self;
         [field addGestureRecognizer:scrub];
         [_scroll.panGestureRecognizer requireGestureRecognizerToFail:scrub];
+        GHOSTIOSNumberFieldInstallHover(field);
       }
       control = field;
     }
@@ -667,6 +668,7 @@ static const CGFloat GHOSTIOSRedoStripRadius = 20;
     _scrubCurrentValue = fmax([field.descriptor[@"min"] doubleValue],
                              fmin([field.descriptor[@"max"] doubleValue], _scrubCurrentValue));
     _scrubTranslation = translation;
+    GHOSTIOSNumberScrubIndicatorUpdate(field, point.y - _scrubStart.y);
     double value = _scrubCurrentValue;
     if ([field.descriptor[@"type"] isEqual:@"INT"]) { value = round(value); }
     NSNumberFormatter *format = [[[NSNumberFormatter alloc] init] autorelease];

@@ -16,15 +16,13 @@ static inline double GHOSTIOSNumberSensitivity(double vertical)
 /* Rotation values cover a much larger range than distances; scrub them faster. */
 static const double GHOSTIOSAngleScrubScale = 10.0;
 
-static inline void GHOSTIOSNumberFieldAppearance(UITextField *field, bool scrubbing)
-{
-  const bool active = field.isFirstResponder || scrubbing;
-  field.borderStyle = UITextBorderStyleRoundedRect;
-  field.backgroundColor = active ? [field.tintColor colorWithAlphaComponent:0.12] :
-                                   UIColor.tertiarySystemFillColor;
-  field.layer.cornerRadius = 8;
-  field.layer.cornerCurve = kCACornerCurveContinuous;
-  field.layer.borderWidth = active ? 1.5 : 0;
-  field.layer.borderColor = field.tintColor.CGColor;
-  field.textColor = field.enabled ? UIColor.labelColor : UIColor.tertiaryLabelColor;
-}
+/* Rounded number-field look: tinted while editing or scrubbing, softly filled under a
+ * hovering Pencil or pointer. Scrubbing also shows the drag-sensitivity indicator. */
+void GHOSTIOSNumberFieldAppearance(UITextField *field, bool scrubbing);
+
+/* Show left/right chevrons and a hover fill while a Pencil or pointer hovers the field. */
+void GHOSTIOSNumberFieldInstallHover(UITextField *field);
+
+/* Update the sensitivity indicator during a scrub; `vertical` is the drag's vertical offset
+ * from where it began, as passed to #GHOSTIOSNumberSensitivity. */
+void GHOSTIOSNumberScrubIndicatorUpdate(UITextField *field, double vertical);
