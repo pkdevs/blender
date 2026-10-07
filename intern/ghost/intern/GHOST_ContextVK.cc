@@ -586,6 +586,15 @@ struct GHOST_InstanceVK {
       device.extensions.disable(VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME);
     }
 
+    /* Disable ray query & acceleration structure extensions in debug mode since they prevent
+     * capture replay in renderdoc on this specific driver.
+     */
+    const bool is_radv_driver = device.device_driver_properties.driverID == VK_DRIVER_ID_MESA_RADV;
+    if (is_radv_driver && is_debug) {
+      device.extensions.disable(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+      device.extensions.disable(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+    }
+
 #ifdef _WIN32
     /* Intel 7th to 10th Gen Processor iGPUs show a black screen at application startup when using
      * VK_EXT_vertex_input_dynamic_state. The used driver version for these iGPUs is 101.2xxx or
