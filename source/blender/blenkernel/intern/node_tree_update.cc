@@ -1007,8 +1007,7 @@ class NodeTreeMainUpdater {
       for (const UString idname : {"ShaderNodeOutputMaterial"_ustr,
                                    "ShaderNodeOutputLight"_ustr,
                                    "ShaderNodeOutputWorld"_ustr,
-                                   "ShaderNodeOutputAOV"_ustr,
-                                   "ShaderNodeLightAccumulationAOV"_ustr})
+                                   "ShaderNodeOutputAOV"_ustr})
       {
         const Span<const bNode *> nodes = ntree.nodes_by_type(idname);
         if (!nodes.is_empty()) {
@@ -1537,11 +1536,7 @@ class NodeTreeMainUpdater {
       if (node->type_legacy == SH_NODE_SHADERTORGB) {
         node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::ShaderToRGB);
       }
-      else if (ELEM(node->type_legacy,
-                    SH_NODE_LIGHT_ACCUMULATION,
-                    SH_NODE_OUTPUT_AOV,
-                    SH_NODE_LIGHT_ACCUMULATION_AOV))
-      {
+      else if (ELEM(node->type_legacy, SH_NODE_LIGHT_ACCUMULATION, SH_NODE_OUTPUT_AOV)) {
         /* AOVs support Light Accumulation. */
         node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::LightAccumulation);
       }

@@ -56,7 +56,6 @@ void register_node_type_sh_hue_sat();
 void register_node_type_sh_invert();
 void register_node_type_sh_layer_weight();
 void register_node_type_sh_light_accumulation();
-void register_node_type_sh_light_accumulation_aov();
 void register_node_type_sh_light_evaluation();
 void register_node_type_sh_light_falloff();
 void register_node_type_sh_light_info();

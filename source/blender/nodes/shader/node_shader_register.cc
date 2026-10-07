@@ -58,7 +58,6 @@ void register_shader_nodes()
   register_node_type_sh_invert();
   register_node_type_sh_layer_weight();
   register_node_type_sh_light_accumulation();
-  register_node_type_sh_light_accumulation_aov();
   register_node_type_sh_light_evaluation();
   register_node_type_sh_light_falloff();
   register_node_type_sh_light_info();

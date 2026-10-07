@@ -531,14 +531,8 @@ void ntreeExecGPUNodes(bNodeTreeExec *exec,
     }
 
     do_it = false;
-    /* Only execute the current output.
-     * SH_NODE_LIGHT_ACCUMULATION_AOV is a special case, since at this point it's no longer an
-     * actual output, and acts as a regular (non output) node instead
-     * (see `ntree_shader_setup_custom_lighting_zone`).
-     */
-    if (node->typeinfo->nclass == NODE_CLASS_OUTPUT &&
-        node->type_legacy != SH_NODE_LIGHT_ACCUMULATION_AOV)
-    {
+    /* Only execute the current output. */
+    if (node->typeinfo->nclass == NODE_CLASS_OUTPUT) {
       if ((output_node != nullptr) && (node == output_node)) {
         do_it = true;
       }
@@ -627,11 +621,8 @@ void search_link_ops_for_shader_bsdf_node(nodes::GatherLinkSearchOpParams &param
 
 void search_link_ops_for_shader_material_lighting_node(nodes::GatherLinkSearchOpParams &params)
 {
-  static Set<UString> skip_socket_identifiers = {"LightIndex"_ustr,
-                                                 "ShaderZoneIO"_ustr,
-                                                 "Weight"_ustr,
-                                                 "Internal_LightAccumulation"_ustr,
-                                                 "Internal_Result"_ustr};
+  static Set<UString> skip_socket_identifiers = {
+      "LightIndex"_ustr, "ShaderZoneIO"_ustr, "Weight"_ustr};
   nodes::search_filtered_link_ops_for_basic_node(params, skip_socket_identifiers);
 }
 
