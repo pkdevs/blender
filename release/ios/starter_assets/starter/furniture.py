@@ -8,8 +8,8 @@ import math
 
 import bpy
 
-from .common import (RADIANS, generator_object, object_group, palette, rest_on_ground,
-                     simple_material)
+from .common import (AXES, RADIANS, count_gizmo, generator_object, object_group, palette,
+                     radius_gizmo, resolution_gizmo, rest_on_ground, simple_material, size_gizmo)
 from .registry import asset
 
 CATALOG = "Objects/Furniture and Props"
@@ -258,6 +258,20 @@ def table():
         (plate, leg_length)], 32, level=2, creases=(1, 2, 8, 9))
     legs = _index_switch(tree, "GEOMETRY", style, [legs, legs, pedestal])
 
+    top_mid = tree.xyz(0.0, 0.0, sub(height, mul(top, 0.5)))
+    size_gizmo(tree, length, "X", origin=top_mid)
+    size_gizmo(tree, width, "Y", origin=top_mid)
+    size_gizmo(tree, height, "Z", centered=False)
+    # The top keeps its upper face and grows down, so its arrow points down from the underside.
+    tree.linear_gizmo(mul(top, 1.0), tree.xyz(0.0, mul(width, -0.5), leg_length), AXES["-Z"])
+    # Corner legs keep their outer faces, so the inner face of a front leg moves with the drag;
+    # the pedestal's column grows outward.
+    leg_z = mul(leg_length, 0.5)
+    tree.linear_gizmo(mul(leg, 1.0), _index_switch(tree, "VECTOR", style, [
+        tree.xyz(sub(half_x, mul(leg, 0.5)), mul(half_y, -1.0), leg_z)] * 2 + [
+        tree.xyz(column, 0.0, leg_z)]), _index_switch(tree, "VECTOR", style, [
+            AXES["-X"], AXES["-X"], AXES["X"]]))
+
     mesh = tree.smooth(tree.join(board, legs), angle=35 * RADIANS)
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
@@ -326,6 +340,14 @@ def chair():
     pad = tree.transform(pad, translation=tree.xyz(0.0, -0.005, add(seat_height, 0.018)))
     pad = tree.material(tree.smooth(pad), cushion_material)
 
+    size_gizmo(tree, seat, "X", origin=tree.xyz(0.0, 0.0, seat_bottom))
+    tree.linear_gizmo(mul(seat_height, 1.0), tree.xyz(0.0, mul(seat, -0.5), seat_height),
+                      AXES["Z"], color="Z")
+    tree.linear_gizmo(mul(back_height, 1.0), tree.xyz(0.0, half, back_top), AXES["Z"], color="Z")
+    # The legs keep their outer faces, so the inner face of a front leg moves with the drag.
+    tree.linear_gizmo(mul(leg, 1.0), tree.xyz(sub(half, mul(leg, 0.5)), mul(half, -1.0),
+                                              mul(seat_bottom, 0.6)), AXES["-X"])
+
     mesh = tree.join(wood, _switch(tree, has_cushion, None, pad))
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Chair", tree)
@@ -381,6 +403,20 @@ def shelf():
     dividers = _instance(tree, divider_points, divider)
     back = _box(tree, tree.xyz(inner_w, 0.006, sub(height, plinth)),
                 tree.xyz(0.0, sub(mul(depth, 0.5), 0.003), mul(add(height, plinth), 0.5)))
+
+    front = mul(depth, -0.5)
+    size_gizmo(tree, width, "X", origin=tree.xyz(0.0, 0.0, mul(height, 0.5)))
+    size_gizmo(tree, height, "Z", centered=False)
+    size_gizmo(tree, depth, "-Y", origin=tree.xyz(mul(width, 0.25), 0.0, height))
+    # Rows and columns divide the case, so their handles sit at its top and right end and move
+    # one row or column per spacing.
+    count_gizmo(tree, rows, pitch, "Z", origin=tree.xyz(mul(width, -0.25), front, 0.0),
+                extra=add(board, plinth))
+    count_gizmo(tree, columns, column_pitch, "X",
+                origin=tree.xyz(add(mul(half_w, -1.0), mul(board, 0.5)), front, plinth * 0.5))
+    # The bottom board sits on the plinth and grows up.
+    tree.linear_gizmo(mul(board, 1.0), tree.xyz(mul(width, 0.25), front, add(plinth, board)),
+                      AXES["Z"])
 
     mesh = tree.join(sides, top, bottom, kick, shelves, dividers,
                      _switch(tree, has_back, None, back))
@@ -456,6 +492,15 @@ def crate():
     floor = _store(tree, floor, "tint", mul(_random(tree, -0.15, 0.05, seed, 7), wear),
                    domain="INSTANCE")
 
+    size_gizmo(tree, sx, "X", origin=tree.xyz(0.0, 0.0, mul(sz, 0.5)))
+    size_gizmo(tree, sy, "Y", origin=tree.xyz(0.0, 0.0, mul(sz, 0.5)))
+    size_gizmo(tree, sz, "Z", centered=False)
+    count_gizmo(tree, planks, add(plank_h, gap), "Z",
+                origin=tree.xyz(mul(sx, 0.25), mul(sy, -0.5), 0.0), extra=mul(gap, -1.0))
+    # The first gap's top rises by gap / planks as the planks get thinner, so scale the drag.
+    tree.linear_gizmo(div(gap, planks), tree.xyz(mul(sx, -0.25), mul(sy, -0.5),
+                                                 add(plank_h, gap)), AXES["Z"])
+
     mesh = tree.realize(tree.join(sides, posts, floor))
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
@@ -522,6 +567,17 @@ def barrel():
                    Fill_Caps=True).outputs[0]
     rings = tree.material(tree.smooth(rings, angle=40 * RADIANS), hoop_material)
 
+    size_gizmo(tree, height, "Z", centered=False)
+    radius_gizmo(tree, radius, origin=tree.xyz(0.0, 0.0, height))
+    tree.linear_gizmo(mul(bulge, 1.0), tree.xyz(0.0, mul(add(radius, bulge), -1.0),
+                                                mul(height, 0.5)), AXES["-Y"])
+    resolution_gizmo(tree, staves, tree.xyz(0.0, 0.0, mul(height, 0.5)), per_turn=20.0)
+    # Hoops spread over the barrel; one more per spacing dragged up from the top one.
+    hoop_spacing = div(mul(height, 0.86), tree.math("MAXIMUM", hoops, 1.0))
+    tree.linear_gizmo(mul(hoops, hoop_spacing),
+                      tree.xyz(mul(add(radius, mul(bulge, 0.25)), -1.0), 0.0, mul(height, 0.93)),
+                      AXES["Z"], color="SECONDARY", style="BOX")
+
     tree.output(rest_on_ground(tree, tree.join(body, rings)))
     return generator_object("Barrel", tree)
 
@@ -570,6 +626,13 @@ def bottle():
     cork = tree.transform(cork, translation=tree.xyz(0.0, 0.0, sub(height, 0.022)))
     cork = tree.material(tree.smooth(cork, angle=40 * RADIANS), cork_material)
 
+    size_gizmo(tree, height, "Z", centered=False)
+    radius_gizmo(tree, radius, origin=tree.xyz(0.0, 0.0, mul(body_top, 0.5)))
+    # A longer neck lowers the shoulder.
+    tree.linear_gizmo(mul(neck, 1.0), tree.xyz(mul(neck_radius, -1.0), 0.0, neck_base),
+                      AXES["-Z"])
+    radius_gizmo(tree, neck_radius, "Y", origin=tree.xyz(0.0, 0.0, sub(height, mul(neck, 0.5))))
+
     tree.output(rest_on_ground(tree, tree.join(glass, _switch(tree, has_cork, None, cork))))
     return generator_object("Bottle", tree)
 
@@ -606,6 +669,12 @@ def mug():
     section = tree.transform(section, scale=tree.xyz(0.0065, mul(wall, 1.6), 1.0))
     handle = tree.n("GeometryNodeCurveToMesh", Curve=arc, Profile_Curve=section,
                     Fill_Caps=True).outputs[0]
+
+    tree.linear_gizmo(mul(height, 1.0), tree.xyz(0.0, mul(radius, -1.0), height), AXES["Z"],
+                      color="Z")
+    radius_gizmo(tree, radius, "-X", origin=tree.xyz(0.0, 0.0, mul(height, 0.5)))
+    # The wall grows inward from the outside, so its arrow points in from the inner rim.
+    tree.linear_gizmo(mul(wall, 1.0), tree.xyz(0.0, inner, height), AXES["-Y"])
 
     mesh = tree.join(body, _switch(tree, has_handle, None, handle))
     mesh = tree.material(tree.smooth(mesh), material)
@@ -652,6 +721,17 @@ def vase():
     for r, z in reversed(outer[1:]):
         rings.append((sub(r, wall), z))
     rings.append((sub(mul(mul(radius, foot), 0.9), wall), wall * 2.0))
+    size_gizmo(tree, height, "Z", centered=False)
+    radius_gizmo(tree, radius, origin=tree.xyz(0.0, 0.0, belly_z))
+    # Shape factors are fractions of the height or the belly radius, so scale them to meters.
+    tree.linear_gizmo(mul(belly, height), tree.xyz(mul(radius, -1.0), 0.0, belly_z), AXES["Z"])
+    tree.linear_gizmo(mul(neck, radius), tree.xyz(0.0, mul(radius, neck), neck_z), AXES["Y"])
+    tree.linear_gizmo(mul(lip, radius), tree.xyz(0.0, mul(mul(radius, lip), -1.0), height),
+                      AXES["-Y"])
+    tree.linear_gizmo(mul(foot, radius), tree.xyz(mul(mul(radius, foot), -1.0), 0.0, 0.008),
+                      AXES["-X"])
+    resolution_gizmo(tree, smoothness, tree.xyz(0.0, 0.0, mul(belly_z, 0.5)), per_turn=4.0)
+
     mesh = _lathe(tree, rings, 24, level=smoothness)
     mesh = tree.material(tree.smooth(mesh), material)
     tree.output(rest_on_ground(tree, mesh))
@@ -704,7 +784,13 @@ def book_stack():
     color = _index_switch(tree, "RGBA", pick, [(*c, 1.0) for c in colors])
     books = _store(tree, books, "cover_color", color, data_type="FLOAT_COLOR",
                    domain="INSTANCE")
-    tree.output(rest_on_ground(tree, tree.realize(books)))
+    books = tree.realize(books)
+    # Books average 35 mm thick; the handle rides on top of the stack.
+    _, _, stack_top = tree.separate(tree.out(tree.n("GeometryNodeBoundBox", Geometry=books),
+                                             "Max"))
+    tree.linear_gizmo(mul(count, 0.035), tree.xyz(0.0, 0.0, stack_top), AXES["Z"],
+                      color="SECONDARY", style="BOX")
+    tree.output(rest_on_ground(tree, books))
     return generator_object("Book Stack", tree)
 
 
@@ -716,8 +802,8 @@ def lamp():
     add, sub, mul, div = _ops(tree)
     styles = ("Desk", "Floor")
     style = _menu_index(tree, tree.menu("Style", styles), styles)
-    height_input = tree.input("Height", "FLOAT", 0.0, min=0.0, max=3.0, subtype="DISTANCE",
-                              description="Overall height, or 0 for the style's usual height")
+    extra = tree.input("Extra Height", "FLOAT", 0.0, min=-0.3, max=2.5, subtype="DISTANCE",
+                       description="Added to the style's usual height")
     shade_size = tree.input("Shade Size", "FLOAT", 1.0, min=0.3, max=3.0,
                             description="Size of the shade relative to the style's usual one")
     material = tree.input("Material", "MATERIAL", palette("Starter Brass"))
@@ -729,9 +815,9 @@ def lamp():
     def pick(desk, floor, data_type="FLOAT"):
         return _index_switch(tree, data_type, style, [desk, floor])
 
-    height = _switch(tree, tree.math("GREATER_THAN", height_input, 0.0), pick(0.55, 1.6),
-                     height_input, "FLOAT")
+    # An offset rather than a height, so each style keeps its own and the gizmo can drag it.
     shade_h = mul(pick(0.21, 0.3), shade_size)
+    height = tree.math("MAXIMUM", add(pick(0.55, 1.6), extra), add(shade_h, 0.15))
     bottom_r = mul(pick(0.165, 0.22), shade_size)
     top_r = mul(pick(0.12, 0.17), shade_size)
     shade_z = sub(height, shade_h)
@@ -782,6 +868,10 @@ def lamp():
     metal = tree.join(base, stem, socket, wires, rod)
     metal = tree.material(tree.smooth(metal, angle=40 * RADIANS), material)
 
+    size_gizmo(tree, extra, "Z", origin=tree.xyz(0.0, 0.0, sub(height, extra)), centered=False)
+    tree.linear_gizmo(mul(shade_size, pick(0.165, 0.22)), tree.xyz(bottom_r, 0.0, shade_z),
+                      AXES["X"])
+
     tree.output(rest_on_ground(tree, tree.join(metal, shade, bulb)))
     return generator_object("Lamp", tree)
 
@@ -826,6 +916,12 @@ def coin_stack():
                       _random(tree, 0.0, 2.0 * math.pi, seed, 5))
     points = _points(tree, count, position)
     coins = _instance(tree, points, coin, rotation=rotation)
+    stack = mul(count, thickness)
+    count_gizmo(tree, count, thickness, "Z")
+    # Thicker coins raise the top of the stack by the change times the count.
+    tree.linear_gizmo(mul(thickness, count), tree.xyz(mul(radius, -1.0), 0.0, stack), AXES["Z"],
+                      color="Z")
+    radius_gizmo(tree, radius, origin=tree.xyz(0.0, 0.0, mul(stack, 0.5)))
     tree.output(rest_on_ground(tree, coins))
     return generator_object("Coin Stack", tree)
 
@@ -940,5 +1036,6 @@ def dice():
         shaped.append(tree.material(tree.smooth(mesh, angle=30 * RADIANS), material))
     die = _index_switch(tree, "GEOMETRY", kind, [shaped[0], six] + shaped[1:])
     die = tree.transform(die, scale=tree.xyz(size, size, size))
+    size_gizmo(tree, size, "Z", origin=tree.xyz(0.0, 0.0, mul(size, -0.5)), centered=False)
     tree.output(rest_on_ground(tree, die))
     return generator_object("Dice", tree)
