@@ -65,11 +65,17 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
     -fsycl-max-parallel-link-jobs=${SYCL_OFFLINE_COMPILER_PARALLEL_JOBS}
     --offload-compress
     --offload-compression-level=19
+    # Hardware ray tracing kernels such as intersect_* make Embree calls
+    # that rely on intel_* functions defined at the intel-graphics-compiler
+    # level. In an earlier compilation stage, DPC++ warns about these
+    # functions being potentially missing.
+    # These warnings are fine to ignore, so we silence them with
+    # the compiler option below.
+    -Wno-sycl-undefined-func-in-image
     -shared
     -DWITH_ONEAPI
     -O2
     -ffast-math
-    -D__KERNEL_LOCAL_ATOMIC_SORT__
     -o"${cycles_kernel_oneapi_lib}"
     -I"${CMAKE_CURRENT_SOURCE_DIR}/../../.."
   )
@@ -136,7 +142,7 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
       -DWITH_NANOVDB)
   endif()
 
-  if(WITH_CYCLES_EMBREE AND EMBREE_SYCL_SUPPORT)
+  if(WITH_EMBREE AND EMBREE_SYCL_SUPPORT)
     list(APPEND sycl_compiler_flags
       -DWITH_EMBREE
       -DWITH_EMBREE_GPU

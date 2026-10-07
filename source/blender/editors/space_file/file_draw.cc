@@ -128,6 +128,8 @@ void ED_file_path_button(bScreen *screen,
 
   button_func_complete_set(but, autocomplete_directory, nullptr);
   button_funcN_set(but, file_directory_enter_handle, nullptr, but);
+  /* Keep editing after Tab completes a directory. */
+  button_flag_enable(but, ui::BUT_TEXTEDIT_AUTOCOMPLETE_KEEP_ACTIVE);
 
   /* TODO: directory editing is non-functional while a library is loaded
    * until this is properly supported just disable it. */
@@ -304,7 +306,7 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
     }
     else if (file->typeflag & FILE_TYPE_FTFONT) {
       float color[4];
-      bTheme *btheme = ui::theme::theme_get();
+      const bTheme *btheme = ui::theme::theme_get();
       rgba_uchar_to_float(color, btheme->tui.wcol_tooltip.text);
       thumb = IMB_font_preview(file->redirection_path ? file->redirection_path : full_path,
                                512 * UI_SCALE_FAC,
@@ -314,9 +316,9 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
     }
 
     const time_t file_time = (time_t)file->time;
-    const std::tm mod_time = *std::localtime(&file_time);
+    const std::tm mod_time = date_string::localtime_safe(file_time);
     const time_t ts_now = time(nullptr);
-    const std::tm now = *std::localtime(&ts_now);
+    const std::tm now = date_string::localtime_safe(ts_now);
     const char *lang = BLT_lang_get();
     std::string modified_s = blender::date_string::datetime(mod_time,
                                                             lang,
@@ -1081,7 +1083,7 @@ static void file_draw_indicator_icons(const FileList *files,
       /* This on-disk asset no longer matches the asset listing it was downloaded from. */
       ui::icon_draw_ex(icon_x,
                        icon_y,
-                       ICON_ERROR,
+                       ICON_STATUS_WARNING_FILLED,
                        1.0f / UI_SCALE_FAC,
                        1.0f,
                        0.0f,
@@ -1311,9 +1313,9 @@ static const char *filelist_get_details_column_string(
       if (!(file->typeflag & FILE_TYPE_BLENDERLIB) && !FILENAME_IS_CURRPAR(file->relpath)) {
         if (file->draw_data.datetime_str[0] == '\0' || update_stat_strings) {
           const time_t file_time = (time_t)file->time;
-          const std::tm mod_time = *std::localtime(&file_time);
+          const std::tm mod_time = date_string::localtime_safe(file_time);
           const time_t ts_now = time(nullptr);
-          const std::tm now = *std::localtime(&ts_now);
+          const std::tm now = date_string::localtime_safe(ts_now);
           const char *lang = BLT_lang_get();
           std::string modified_s =
               compact ? date_string::date(mod_time, lang, date_string::DateFormat(U.date_format)) :
@@ -1507,6 +1509,10 @@ void file_draw_list(const bContext *C, ARegion *region)
   }
 
   BLF_batch_draw_begin();
+
+  /* Default text color, used for the empty/not-ready message and column headers when the
+   * per-file loop below does not run (empty directory, no search matches, still loading). */
+  ui::theme::get_color_4ubv(TH_TEXT, text_col);
 
   const bool filelist_loading = !filelist_is_ready(files);
 
@@ -1808,7 +1814,8 @@ void file_draw_banner(const bContext *C, const SpaceFile *sfile, ARegion *region
 static void file_draw_invalid_asset_library_hint(const bContext *C,
                                                  const SpaceFile *sfile,
                                                  ARegion *region,
-                                                 FileAssetSelectParams *asset_params)
+                                                 FileAssetSelectParams *asset_params,
+                                                 bool is_project_library)
 {
   char library_ui_path[FILE_MAX_LIBEXTRA];
   file_path_to_ui_path(asset_params->base_params.dir, library_ui_path, sizeof(library_ui_path));
@@ -1837,7 +1844,7 @@ static void file_draw_invalid_asset_library_hint(const bContext *C,
   sy -= line_height * 2.2f;
 
   {
-    ui::icon_draw(sx, sy - UI_UNIT_Y, ICON_INFO);
+    ui::icon_draw(sx, sy - UI_UNIT_Y, ICON_STATUS_INFO);
 
     const char *suggestion = RPT_(
         "Asset Libraries are local directories that can contain .blend files with assets inside.\n"
@@ -1846,7 +1853,13 @@ static void file_draw_invalid_asset_library_hint(const bContext *C,
         sx + UI_UNIT_X, sy, suggestion, width - UI_UNIT_X, line_height, text_col, nullptr, &sy);
 
     ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
-    wmOperatorType *ot = WM_operatortype_find("SCREEN_OT_userpref_show", false);
+    wmOperatorType *ot;
+    if (is_project_library) {
+      ot = WM_operatortype_find("SCREEN_OT_project_settings_show", false);
+    }
+    else {
+      ot = WM_operatortype_find("SCREEN_OT_userpref_show", false);
+    }
     ui::Button *but = uiDefIconTextButO_ptr(block,
                                             ui::ButtonType::But,
                                             ot,
@@ -1859,7 +1872,12 @@ static void file_draw_invalid_asset_library_hint(const bContext *C,
                                             UI_UNIT_Y,
                                             std::nullopt);
     PointerRNA *but_opptr = button_operator_ptr_ensure(but);
-    RNA_enum_set(but_opptr, "section", USER_SECTION_ASSETS);
+    if (is_project_library) {
+      RNA_string_set(but_opptr, "section", "Asset Libraries");
+    }
+    else {
+      RNA_enum_set(but_opptr, "section", USER_SECTION_ASSETS);
+    }
 
     block_end(C, block);
     block_draw(C, block);
@@ -2034,7 +2052,7 @@ static void file_draw_asset_library_remote_loading_failed_hint(const bContext *C
   {
     uiDefIconTextBut(block,
                      ui::ButtonType::Label,
-                     ICON_CANCEL,
+                     ICON_STATUS_ERROR_FILLED,
                      "Asset Library Download Failed",
                      sx,
                      sy - heading_height,
@@ -2092,9 +2110,9 @@ static void file_draw_invalid_library_hint(const bContext * /*C*/,
       continue;
     }
 
-    int icon = ICON_INFO;
+    int icon = ICON_STATUS_INFO;
     if (report_type > RPT_WARNING) {
-      icon = ICON_ERROR;
+      icon = ICON_STATUS_WARNING_FILLED;
     }
     ui::icon_draw(sx, sy - UI_UNIT_Y, icon);
 
@@ -2110,7 +2128,7 @@ static void file_draw_invalid_library_hint(const bContext * /*C*/,
   }
 }
 
-static const bUserAssetLibrary *assetlib_as_remote_library(
+static const bUserAssetLibrary *assetlib_ref_as_library(
     const AssetLibraryReference &asset_library_ref)
 {
   if (asset_library_ref.type != ASSET_LIBRARY_CUSTOM) {
@@ -2123,12 +2141,66 @@ static const bUserAssetLibrary *assetlib_as_remote_library(
     return nullptr;
   }
 
-  const bool is_remote_lib = library->flag & ASSET_LIBRARY_USE_REMOTE_URL;
-  if (!is_remote_lib) {
-    return nullptr;
+  return library;
+}
+
+static bool show_asset_library_message(const bContext *C,
+                                       const SpaceFile *sfile,
+                                       ARegion *region,
+                                       const auto setup_view)
+{
+  FileAssetSelectParams *asset_params = ED_fileselect_get_asset_params(sfile);
+
+  const bUserAssetLibrary *library = assetlib_ref_as_library(asset_params->asset_library_ref);
+
+  if (!library) {
+    /* We do not need to draw or check for any error in non user defined asset libraries.
+     * This is because we do not expect the paths to ever be invalid for these.
+     */
+    return false;
   }
 
-  return library;
+  const bool is_remote_library = library->flag & ASSET_LIBRARY_USE_REMOTE_URL;
+  const bool is_project_library = library->flag & ASSET_LIBRARY_PROJECT_DEFINED;
+
+  if (is_remote_library) {
+    /* With remote libraries, there may be already-downloaded assets available that should be
+     * displayed. Don't show the "internet access required" hint until done loading, and only if
+     * there are no already-downloaded assets to display. */
+    if (!filelist_is_ready(sfile->files) || !filelist_files_num_entries(sfile->files)) {
+      return false;
+    }
+
+    const bool is_online_allowed = G.f & G_FLAG_INTERNET_ALLOW;
+    const bool was_choice_made = U.extension_flag & USER_EXTENSION_FLAG_ONLINE_ACCESS_HANDLED;
+    if (!is_online_allowed && !was_choice_made) {
+      setup_view();
+      file_draw_asset_library_internet_access_required_hint(C, sfile, region);
+      return true;
+    }
+    if (RemoteLibraryLoadingStatus::status(library->remote_url) ==
+        RemoteLibraryLoadingStatus::Failure)
+    {
+      setup_view();
+      file_draw_asset_library_remote_loading_failed_hint(C, sfile, region, library);
+      return true;
+    }
+  }
+
+  const bool is_on_disk_library = !ELEM(asset_params->asset_library_ref.type,
+                                        ASSET_LIBRARY_LOCAL,
+                                        ASSET_LIBRARY_ALL) &&
+                                  !is_remote_library;
+
+  /* Check if the asset library exists. */
+  if (is_on_disk_library && !filelist_is_dir(sfile->files, asset_params->base_params.dir)) {
+    setup_view();
+    file_draw_invalid_asset_library_hint(C, sfile, region, asset_params, is_project_library);
+    return true;
+  }
+
+  /* We didn't draw any messages. */
+  return false;
 }
 
 bool file_draw_hint_if_invalid(const bContext *C, const SpaceFile *sfile, ARegion *region)
@@ -2143,48 +2215,8 @@ bool file_draw_hint_if_invalid(const bContext *C, const SpaceFile *sfile, ARegio
     ui::view2d_view_ortho(&region->v2d);
   };
 
-  if (is_asset_browser) {
-    FileAssetSelectParams *asset_params = ED_fileselect_get_asset_params(sfile);
-
-    const bUserAssetLibrary *remote_library = assetlib_as_remote_library(
-        asset_params->asset_library_ref);
-    const bool is_remote_library = remote_library != nullptr;
-
-    if (is_remote_library) {
-      /* With remote libraries, there may be already-downloaded assets available that should be
-       * displayed. Don't show the "internet access required" hint until done loading, and only if
-       * there are no already-downloaded assets to display. */
-      if (!filelist_is_ready(sfile->files) || !filelist_files_num_entries(sfile->files)) {
-        return false;
-      }
-
-      const bool is_online_allowed = G.f & G_FLAG_INTERNET_ALLOW;
-      const bool was_choice_made = U.extension_flag & USER_EXTENSION_FLAG_ONLINE_ACCESS_HANDLED;
-      if (!is_online_allowed && !was_choice_made) {
-        setup_view();
-        file_draw_asset_library_internet_access_required_hint(C, sfile, region);
-        return true;
-      }
-      if (RemoteLibraryLoadingStatus::status(remote_library->remote_url) ==
-          RemoteLibraryLoadingStatus::Failure)
-      {
-        setup_view();
-        file_draw_asset_library_remote_loading_failed_hint(C, sfile, region, remote_library);
-        return true;
-      }
-    }
-
-    const bool is_on_disk_library = !ELEM(asset_params->asset_library_ref.type,
-                                          ASSET_LIBRARY_LOCAL,
-                                          ASSET_LIBRARY_ALL) &&
-                                    !is_remote_library;
-
-    /* Check if the asset library exists. */
-    if (is_on_disk_library && !filelist_is_dir(sfile->files, asset_params->base_params.dir)) {
-      setup_view();
-      file_draw_invalid_asset_library_hint(C, sfile, region, asset_params);
-      return true;
-    }
+  if (is_asset_browser && show_asset_library_message(C, sfile, region, setup_view)) {
+    return true;
   }
 
   /* Check if the blendfile library is valid (has entries). */
