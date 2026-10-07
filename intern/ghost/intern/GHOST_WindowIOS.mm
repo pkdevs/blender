@@ -65,6 +65,7 @@ extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y);
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json();
 extern "C" char *WM_apple_ios_ui_panels_take_json();
 extern "C" char *WM_apple_ios_ui_timeline_take_json();
+extern "C" void WM_apple_ios_ui_bottom_tray_set(float fraction);
 extern "C" char *WM_apple_ios_ui_assets_take_json();
 extern "C" void WM_apple_ios_ui_toolbar_free_json(char *json);
 
@@ -2315,6 +2316,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSLayoutConstraint *_tool_rail_bottom_constraint;
   NSLayoutConstraint *_tool_rail_center_y_constraint;
   NSLayoutConstraint *_action_phone_bottom_constraint;
+  /* The open asset pane is a tray along the bottom; these controls sit on top of it. */
+  NSLayoutConstraint *_action_bottom_constraint;
+  CGFloat _bottom_tray;
   NSLayoutConstraint *_action_phone_trailing_constraint;
   UIButton *_toolbar_hover_button;
   UIVisualEffectView *_toolbar_label_bubble;
@@ -3916,9 +3920,23 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 {
   [super viewDidLayoutSubviews];
   CGRect panel_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
+  /* The open asset pane is a tray along the bottom edge. The quick actions, the Adjust pill, the
+   * collapsed tool rail and the navigation gizmo move up onto it, so nothing leaves a gap below. */
+  const CGFloat tray = _assets.visible ? _assets.height + 8 : 0;
+  if (fabs(tray - _bottom_tray) > 0.5) {
+    _bottom_tray = tray;
+    _action_bottom_constraint.constant = -6.0 - tray;
+    [self updateBrushRailGeometry];
+    [self.view setNeedsLayout];
+  }
+  const CGFloat window_height = _overlay_view.bounds.size.height;
+  if (window_height > 0) {
+    const CGFloat tray_top = CGRectGetMaxY(panel_rect) - 6 - (tray > 0 ? _assets.height : 0);
+    WM_apple_ios_ui_bottom_tray_set(tray > 0 ? float((window_height - tray_top) / window_height) : 0.0f);
+  }
   const CGRect bar_rect = [_top_bar convertRect:_top_bar.bounds toView:_overlay_view];
   const CGFloat panel_top = MAX(CGRectGetMinY(panel_rect), CGRectGetMaxY(bar_rect));
-  CGFloat panel_bottom = MIN(CGRectGetMaxY(panel_rect) - 64,
+  CGFloat panel_bottom = MIN(CGRectGetMaxY(panel_rect) - 64 - _bottom_tray,
       CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame));
   [self layoutViewPie];
   [self updateRedoPillLayout:NO];
@@ -3935,32 +3953,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   else {
     redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
   }
-  /* The asset pane floats at the bottom, above the quick actions, and the timeline above it.
-   * It spans the full width unless a rail or the navigation gizmo actually reaches down into
-   * its band; the lane above is narrowed by things that may sit far higher up. */
-  {
-    const CGFloat band_top = redo_bottom - _assets.height;
-    auto overlaps = [&](UIView *view) {
-      return view && !view.hidden && view.alpha > 0 && CGRectGetMaxY(view.frame) > band_top &&
-             CGRectGetMinY(view.frame) < redo_bottom;
-    };
-    CGFloat assets_left = CGRectGetMinX(redo_rect) + 12;
-    for (UIView *rail in @[_tool_rail, _brush_rail]) {
-      if (overlaps(rail)) {
-        assets_left = MAX(assets_left, CGRectGetMaxX(rail.frame) + 12);
-      }
-    }
-    CGFloat assets_right = CGRectGetMaxX(redo_rect) - 12;
-    if (overlaps(_view_gizmo_hotspot)) {
-      assets_right = MIN(assets_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
-    }
-    [_assets layoutInRect:CGRectMake(assets_left, panel_top, MAX(0, assets_right - assets_left),
-                                     MAX(0, redo_bottom - panel_top))];
-  }
-  if (_assets.visible) {
-    redo_bottom -= _assets.height + 8;
-    panel_bottom = MIN(panel_bottom, redo_bottom);
-  }
+  /* The asset pane spans the full width along the bottom edge; everything else sits above it. */
+  [_assets layoutInRect:CGRectMake(CGRectGetMinX(redo_rect) + 12, panel_top,
+                                   MAX(0, redo_rect.size.width - 24),
+                                   MAX(0, CGRectGetMaxY(redo_rect) - 6 - panel_top))];
   /* The timeline floats in the bottom lane between the rails, above the quick actions. */
   [_timeline layoutInRect:CGRectMake(redo_left, panel_top, MAX(0, redo_right - redo_left),
                                      MAX(0, redo_bottom - panel_top))];
@@ -3994,7 +3990,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* Folding or rotating a phone should narrow the scrolling lane, not lift it
    * into the viewport. Reserve the actual gizmo footprint beside the lane. */
   CGRect safe = _overlay_view.safeAreaLayoutGuide.layoutFrame;
-  _action_phone_bottom_constraint.constant = -6.0;
+  _action_phone_bottom_constraint.constant = -6.0 - _bottom_tray;
   _action_phone_trailing_constraint.constant =
       -MAX(12.0, CGRectGetMaxX(safe) - CGRectGetMinX(_view_gizmo_hotspot.frame) + 12.0);
 }
@@ -4014,6 +4010,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [_action_rail.leadingAnchor constraintEqualToAnchor:_tool_rail.trailingAnchor constant:12.0],
     [_action_rail.heightAnchor constraintEqualToConstant:56.0],
   ]];
+  _action_bottom_constraint = bottom;
   if (phone) {
     _action_phone_bottom_constraint = bottom;
     _action_phone_trailing_constraint = trailing;
@@ -5512,7 +5509,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     /* The tool rail owns the column alone, with its own docking constraints. */
     _brush_rail_height_constraint.constant = 0.0;
     _brush_rail_bottom_constraint.constant = 0.0;
-    _tool_rail_bottom_constraint.constant = -12.0;
+    _tool_rail_bottom_constraint.constant = -12.0 - _bottom_tray;
+    _tool_rail_center_y_constraint.constant = -_bottom_tray / 2;
     _tool_rail_center_y_constraint.active = NO;
     _tool_rail_bottom_constraint.active = !_tool_rail_docked_left_center;
     _tool_rail_center_y_constraint.active = _tool_rail_docked_left_center;
@@ -5525,6 +5523,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     if (safe_height <= 0.0) {
       safe_height = self.view.bounds.size.height;
     }
+    /* The rails share the column above the open asset pane. */
+    safe_height = MAX(0.0, safe_height - _bottom_tray);
     const CGFloat column = MAX(2 * compact, safe_height - top_inset - bottom_inset - gap);
     const CGFloat max_list = [self expandedToolbarHeight];
     const BOOL tool_list = [self isToolbarListVisible];
@@ -5547,7 +5547,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     _tool_rail_center_y_constraint.active = NO;
     _tool_rail_bottom_constraint.active = YES;
     _tool_rail_bottom_constraint.constant =
-        -(centered ? MAX(bottom_inset, (safe_height - group) / 2) : bottom_inset);
+        -(centered ? MAX(bottom_inset, (safe_height - group) / 2) : bottom_inset) - _bottom_tray;
   }
   _brush_drag_handle.hidden = !list_visible;
   _brush_drag_handle_height_constraint.constant = list_visible ? 44.0 : 0.0;

@@ -153,6 +153,8 @@ static BOOL fingerTool;
   BOOL _actions_collapsed;
   NSUInteger _action_transition_generation;
   NSLayoutConstraint *_action_phone_bottom_constraint, *_action_phone_trailing_constraint;
+  NSLayoutConstraint *_action_bottom_constraint;
+  CGFloat _bottom_tray;
   UIBarButtonItemGroup *_top_settings_group, *_mesh_select_group;
   UISegmentedControl *_mesh_select_control;
   NSDictionary *_top_settings_values;
