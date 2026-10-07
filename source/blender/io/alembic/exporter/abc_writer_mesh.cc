@@ -51,6 +51,7 @@ using Alembic::AbcGeom::OInt32Property;
 using Alembic::AbcGeom::ON3fGeomParam;
 using Alembic::AbcGeom::OPolyMesh;
 using Alembic::AbcGeom::OPolyMeshSchema;
+using Alembic::AbcGeom::OStringProperty;
 using Alembic::AbcGeom::OSubD;
 using Alembic::AbcGeom::OSubDSchema;
 using Alembic::AbcGeom::OV2fGeomParam;
@@ -58,7 +59,7 @@ using Alembic::AbcGeom::UInt32ArraySample;
 
 namespace io::alembic {
 
-/* NOTE: Alembic's polygon winding order is clockwise, to match with Renderman. */
+/* NOTE: Alembic's polygon winding order is clockwise, to match with RenderMan. */
 
 static void get_topology(Mesh *mesh,
                          std::vector<int32_t> &face_verts,
@@ -137,9 +138,22 @@ void ABCGenericMeshWriter::create_alembic_objects(const HierarchyContext *contex
     abc_poly_mesh_ = OPolyMesh(args_.abc_parent, args_.abc_name, timesample_index_);
     abc_poly_mesh_schema_ = abc_poly_mesh_.getSchema();
 
-    OCompoundProperty typeContainer = abc_poly_mesh_.getSchema().getUserProperties();
-    OBoolProperty type(typeContainer, "meshtype");
+    abc_custom_data_container_ = abc_poly_mesh_.getSchema().getUserProperties();
+    OBoolProperty type(abc_custom_data_container_, "meshtype");
     type.set(subsurf_modifier_ == nullptr);
+  }
+
+  if (context->object->data->id_type() == ID_ME) {
+    Mesh *mesh = id_cast<Mesh *>(context->object->data);
+    if (mesh->active_color_attribute && mesh->default_color_attribute) {
+      OStringProperty active_color_attribute(abc_custom_data_container_,
+                                             ABC_ACTIVE_COLOR_ATTRIBUTE_PROPNAME);
+      active_color_attribute.set(mesh->active_color_attribute);
+
+      OStringProperty default_color_attribute(abc_custom_data_container_,
+                                              ABC_DEFAULT_COLOR_ATTRIBUTE_PROPNAME);
+      default_color_attribute.set(mesh->default_color_attribute);
+    }
   }
 }
 
@@ -522,7 +536,7 @@ void ABCGenericMeshWriter::get_geo_groups(Object *object,
   for (const int i : material_indices.index_range()) {
     short mnr = material_indices[i];
 
-    Material *mat = BKE_object_material_get(object, mnr + 1);
+    Material *mat = BKE_object_material_get_eval(object, mnr + 1);
 
     if (!mat) {
       continue;
@@ -539,7 +553,7 @@ void ABCGenericMeshWriter::get_geo_groups(Object *object,
   }
 
   if (geo_groups.empty()) {
-    Material *mat = BKE_object_material_get(object, 1);
+    Material *mat = BKE_object_material_get_eval(object, 1);
 
     std::string name = (mat) ? args_.hierarchy_iterator->get_id_name(&mat->id) : "default";
 
@@ -553,7 +567,7 @@ void ABCGenericMeshWriter::get_geo_groups(Object *object,
   }
 }
 
-/* NOTE: Alembic's polygon winding order is clockwise, to match with Renderman. */
+/* NOTE: Alembic's polygon winding order is clockwise, to match with RenderMan. */
 
 static void get_topology(Mesh *mesh,
                          std::vector<int32_t> &face_verts,
