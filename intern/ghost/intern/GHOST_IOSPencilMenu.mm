@@ -5,11 +5,71 @@
 #import "GHOST_IOSPencilMenu.hh"
 
 #include <cmath>
+#include <vector>
+
+/* Pills sit on up to two concentric elliptical rings around the Pencil. */
+static const CGFloat pill_height = 30.0;
+static const CGFloat pill_gap = 6.0;
+static const NSUInteger inner_slots_max = 12;
+static const NSUInteger outer_slots = 16;
+
+struct PencilRing {
+  NSUInteger slots = 0;
+  CGFloat radius_x = 0, radius_y = 0, phase = 0;
+};
+
+static CGPoint ring_point(const PencilRing &ring, NSUInteger slot, CGPoint center)
+{
+  const double angle = -M_PI_2 + ring.phase + slot * 2.0 * M_PI / ring.slots;
+  return CGPointMake(center.x + cos(angle) * ring.radius_x, center.y + sin(angle) * ring.radius_y);
+}
+
+static CGRect pill_rect(CGPoint center, CGSize pill)
+{
+  return CGRectMake(center.x - pill.width / 2, center.y - pill.height / 2, pill.width, pill.height);
+}
+
+/* Smallest ring of `slots` pills with the given aspect that overlaps neither itself nor
+ * `obstacles` (relative to the menu center), starting the search at `start`. */
+static PencilRing solve_ring(NSUInteger slots, CGFloat aspect, CGFloat phase, CGSize pill,
+                             const std::vector<CGRect> &obstacles, CGFloat start)
+{
+  PencilRing ring;
+  ring.slots = slots;
+  ring.phase = phase;
+  for (CGFloat scale = start; scale < 2000.0; scale += 2.0) {
+    ring.radius_x = scale * aspect;
+    ring.radius_y = scale;
+    std::vector<CGRect> rects;
+    bool clear = true;
+    for (NSUInteger i = 0; i < slots && clear; i++) {
+      const CGRect rect = CGRectInset(pill_rect(ring_point(ring, i, CGPointZero), pill),
+                                      -pill_gap / 2, -pill_gap / 2);
+      for (const CGRect &other : rects) {
+        clear = clear && !CGRectIntersectsRect(rect, other);
+      }
+      for (const CGRect &other : obstacles) {
+        clear = clear && !CGRectIntersectsRect(rect, other);
+      }
+      rects.push_back(rect);
+    }
+    if (clear) {
+      return ring;
+    }
+  }
+  return ring;
+}
+
+static CGSize ring_extent(const PencilRing &ring, CGSize pill)
+{
+  return CGSizeMake(2 * ring.radius_x + pill.width, 2 * ring.radius_y + pill.height);
+}
 
 @implementation GHOSTIOSPencilMenu {
   NSArray<NSDictionary *> *_items;
   NSMutableArray<UIButton *> *_buttons;
   NSMutableArray<NSDictionary *> *_history;
+  NSString *_title;
   UIVisualEffectView *_centerView;
   UILabel *_centerLabel;
   UISelectionFeedbackGenerator *_feedback;
@@ -17,7 +77,9 @@
   CGPoint _lastPencilPoint;
   CGPoint _anchor;
   CGPoint _center;
-  CGFloat _radiusX, _radiusY;
+  PencilRing _inner, _outer;
+  NSUInteger _perPage;
+  NSMutableArray<NSNumber *> *_slots;
   CGSize _layoutSize;
   NSInteger _selected;
   NSUInteger _page;
@@ -39,6 +101,8 @@
     self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _selected = NSNotFound;
     _buttons = [[NSMutableArray alloc] init];
+    _slots = [[NSMutableArray alloc] init];
+    _perPage = inner_slots_max;
     _history = [[NSMutableArray alloc] init];
     _feedback = [[UISelectionFeedbackGenerator alloc] init];
     _centerView = [[UIVisualEffectView alloc] initWithEffect:
@@ -63,7 +127,9 @@
 {
   [_items release];
   [_buttons release];
+  [_slots release];
   [_history release];
+  [_title release];
   [_centerView release];
   [_centerLabel release];
   [_feedback release];
@@ -86,10 +152,21 @@
     _centerLabel.text = _loading ? @"Loading..." : @"No Context Actions";
     return;
   }
-  _centerLabel.text = _selected == NSNotFound ?
-      [NSString stringWithFormat:@"%lu / %lu", (unsigned long)_page + 1,
-          (unsigned long)((_items.count + 6) / 7)] :
-      _buttons[_selected].accessibilityLabel;
+  if (_selected != NSNotFound) {
+    _centerLabel.text = _buttons[_selected].accessibilityLabel;
+    return;
+  }
+  /* The menu's name; a menu with several pages adds which page is showing. */
+  NSString *title = _title.length ? _title : @"Actions";
+  _centerLabel.text = [self pageCount] > 1 ?
+      [NSString stringWithFormat:@"%@\n%lu / %lu", title, (unsigned long)_page + 1,
+          (unsigned long)[self pageCount]] :
+      title;
+}
+
+- (NSUInteger)pageCount
+{
+  return MAX((NSUInteger)1, (_items.count + _perPage - 1) / _perPage);
 }
 
 - (void)selectIndex:(NSInteger)index
@@ -128,31 +205,80 @@
   }
   [_buttons removeAllObjects];
 
+  [_slots removeAllObjects];
   CGRect available = UIEdgeInsetsInsetRect(self.bounds, self.safeAreaInsets);
   available = CGRectInset(available, 12.0, 12.0);
-  const CGFloat width = MIN(92.0, MAX(70.0, (available.size.width - 16.0) / 4.0));
-  const CGFloat height = 70.0;
-  _radiusX = MIN(140.0, (available.size.width - width) / 2.0);
-  _radiusY = MIN(128.0, (available.size.height - height) / 2.0);
-  _center = CGPointMake(
-      MAX(CGRectGetMinX(available) + _radiusX + width / 2.0,
-          MIN(_anchor.x, CGRectGetMaxX(available) - _radiusX - width / 2.0)),
-      MAX(CGRectGetMinY(available) + _radiusY + height / 2.0,
-          MIN(_anchor.y, CGRectGetMaxY(available) - _radiusY - height / 2.0)));
 
-  const NSUInteger start = _page * 7;
-  const NSUInteger count = MIN((NSUInteger)7, _items.count - start);
-  const BOOL paged = _items.count > 7;
-  for (NSUInteger i = 0; i < count + (paged ? 1 : 0); i++) {
-    const BOOL more = i == count;
+  /* One pill width per menu, fitted to the longest title, keeps the rings regular. */
+  UIFont *font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+  CGFloat title_width = 0;
+  for (NSDictionary *item in _items) {
+    title_width = MAX(title_width, ceil([item[@"title"] sizeWithAttributes:@{NSFontAttributeName: font}].width));
+  }
+  const CGSize pill = CGSizeMake(MIN(132.0, MAX(88.0, title_width + 54.0)), pill_height);
+  const CGRect center_rect = CGRectMake(-53 - pill_gap, -22 - pill_gap, 106 + 2 * pill_gap, 44 + 2 * pill_gap);
+  auto fits = [&](CGSize extent) {
+    return extent.width <= available.size.width && extent.height <= available.size.height;
+  };
+
+  /* The widest ring that fits: 12 clock positions, fewer in small windows, and a taller ring
+   * when the window is narrow. */
+  PencilRing inner;
+  CGFloat aspect = 1.8;
+  bool found = false;
+  for (NSUInteger slots : {inner_slots_max, (NSUInteger)10, (NSUInteger)8, (NSUInteger)6}) {
+    for (CGFloat candidate : {1.8, 1.4, 1.0, 0.7, 0.5, 0.35}) {
+      inner = solve_ring(slots, candidate, 0, pill, {center_rect}, 40.0);
+      if (fits(ring_extent(inner, pill))) {
+        aspect = candidate;
+        found = true;
+        break;
+      }
+    }
+    if (found) {
+      break;
+    }
+  }
+  const NSUInteger inner_capacity = inner.slots;
+  std::vector<CGRect> inner_rects{center_rect};
+  for (NSUInteger i = 0; i < inner.slots; i++) {
+    inner_rects.push_back(CGRectInset(pill_rect(ring_point(inner, i, CGPointZero), pill), -pill_gap / 2, -pill_gap / 2));
+  }
+  /* A second ring sits between the inner pills, half a step around. */
+  PencilRing outer = solve_ring(outer_slots, aspect, M_PI / outer_slots, pill, inner_rects, inner.radius_y + pill_height);
+  const NSUInteger capacity = inner_capacity + (fits(ring_extent(outer, pill)) ? outer_slots : 0);
+  const BOOL paged = _items.count > capacity;
+  _perPage = paged ? capacity - 1 : capacity;
+
+  const NSUInteger start = _page * _perPage;
+  const NSUInteger count = MIN(_perPage, _items.count - MIN(start, _items.count));
+  const NSUInteger shown = count + (paged ? 1 : 0);
+  if (shown <= inner_capacity) {
+    /* Small menus stay compact: no more inner slots than needed, but at least eight. */
+    const NSUInteger slots = MIN(inner_capacity, MAX(shown, (NSUInteger)8));
+    if (slots != inner.slots) {
+      PencilRing compact = solve_ring(slots, aspect, 0, pill, {center_rect}, 40.0);
+      if (fits(ring_extent(compact, pill))) {
+        inner = compact;
+      }
+    }
+  }
+  _inner = inner;
+  _outer = shown > inner.slots ? outer : PencilRing();
+  const CGSize extent = _outer.slots ? ring_extent(_outer, pill) : ring_extent(_inner, pill);
+  _center = CGPointMake(
+      MAX(CGRectGetMinX(available) + extent.width / 2.0,
+          MIN(_anchor.x, CGRectGetMaxX(available) - extent.width / 2.0)),
+      MAX(CGRectGetMinY(available) + extent.height / 2.0,
+          MIN(_anchor.y, CGRectGetMaxY(available) - extent.height / 2.0)));
+
+  for (NSUInteger i = 0; i < shown; i++) {
+    const BOOL more = paged && i == count;
     NSDictionary *item = more ? nil : _items[start + i];
     NSString *title = more ? @"More" : item[@"title"];
     UIImage *icon = more ? [UIImage systemImageNamed:@"ellipsis"] : item[@"image"];
     const BOOL destructive = [item[@"destructive"] boolValue];
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-    button.titleLabel.numberOfLines = 2;
-    button.titleLabel.adjustsFontSizeToFitWidth = YES;
-    button.titleLabel.minimumScaleFactor = 0.75;
     /* Raw Pencil routing owns selection and release, including More. UIKit must
      * not also dispatch the same lift as a second button activation. */
     button.userInteractionEnabled = NO;
@@ -163,25 +289,30 @@
     button.enabled = ![item[@"disabled"] boolValue];
     button.accessibilityValue = [item[@"checked"] boolValue] ? @"On" : nil;
     button.tag = more ? -1 : (NSInteger)(start + i);
+    const BOOL checked = [item[@"checked"] boolValue];
     button.tintColor = destructive ? UIColor.systemRedColor : UIColor.labelColor;
     button.configurationUpdateHandler = ^(UIButton *updated) {
       UIButtonConfiguration *config = updated.selected ?
           [UIButtonConfiguration prominentGlassButtonConfiguration] :
           [UIButtonConfiguration glassButtonConfiguration];
       config.title = title;
-      config.subtitle = [item[@"checked"] boolValue] ? @"On" : nil;
       config.image = icon;
-      config.imagePlacement = NSDirectionalRectEdgeTop;
-      config.imagePadding = icon ? 3.0 : 0.0;
-      config.contentInsets = NSDirectionalEdgeInsetsMake(5.0, 5.0, 5.0, 5.0);
+      config.imagePlacement = NSDirectionalRectEdgeLeading;
+      config.imagePadding = icon ? 6.0 : 0.0;
+      config.preferredSymbolConfigurationForImage =
+          [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightMedium];
+      config.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 10.0, 0.0, 12.0);
       config.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
-      config.titleAlignment = UIButtonConfigurationTitleAlignmentCenter;
-      config.titleLineBreakMode = NSLineBreakByWordWrapping;
+      config.titleLineBreakMode = NSLineBreakByTruncatingTail;
       config.titleTextAttributesTransformer = ^NSDictionary *(NSDictionary *incoming) {
         NSMutableDictionary *attributes = [[incoming mutableCopy] autorelease];
-        attributes[NSFontAttributeName] = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+        attributes[NSFontAttributeName] = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
         return attributes;
       };
+      if (checked && !updated.selected && !destructive) {
+        /* An active toggle reads as tinted, as checked items do in iOS menus. */
+        config.baseForegroundColor = UIColor.systemBlueColor;
+      }
       if (updated.selected || destructive) {
         config.baseForegroundColor = updated.selected ? UIColor.whiteColor : UIColor.systemRedColor;
         config.baseBackgroundColor = destructive ? UIColor.systemRedColor : UIColor.systemBlueColor;
@@ -189,12 +320,13 @@
       updated.configuration = config;
     };
     [button addTarget:self action:@selector(activateButton:) forControlEvents:UIControlEventTouchUpInside];
-    /* Keep More in the north-west slot so it doesn't move between pages. */
-    const NSUInteger slot = more ? 7 : i;
-    const double angle = -M_PI_2 + slot * M_PI_4;
-    button.bounds = CGRectMake(0, 0, width, height);
-    button.center = CGPointMake(_center.x + cos(angle) * _radiusX,
-                                _center.y + sin(angle) * _radiusY);
+    /* The inner ring fills clockwise from the top, then the outer ring. More keeps the inner
+     * ring's last slot, just left of the top, so it doesn't move between pages. */
+    const BOOL outer_ring = !more && i >= _inner.slots - (paged ? 1 : 0);
+    const NSUInteger slot = more ? _inner.slots - 1 : outer_ring ? i - (_inner.slots - (paged ? 1 : 0)) : i;
+    [_slots addObject:@((outer_ring ? 1000 : 0) + slot)];
+    button.bounds = CGRectMake(0, 0, pill.width, pill.height);
+    button.center = ring_point(outer_ring ? _outer : _inner, slot, _center);
     [self addSubview:button];
     [_buttons addObject:button];
     [button setNeedsUpdateConfiguration];
@@ -233,11 +365,13 @@
   _page = 0;
   _menuVisible = YES;
   [_history removeAllObjects];
-  [self loadItemsForRoute:@{@"root": @"context", @"path": @[]}];
+  [self loadItemsForRoute:@{@"root": @"context", @"path": @[]} title:nil];
 }
 
-- (void)loadItemsForRoute:(NSDictionary *)route
+- (void)loadItemsForRoute:(NSDictionary *)route title:(NSString *)title
 {
+  [_title release];
+  _title = [title copy];
   const NSUInteger generation = ++_requestGeneration;
   _loading = YES;
   [self selectIndex:NSNotFound];
@@ -251,11 +385,23 @@
           return;
         }
         NSMutableArray *page = [NSMutableArray array];
+        NSMutableArray *actions = [NSMutableArray array];
+        for (NSDictionary *item in items) {
+          if ([item[@"heading"] isKindOfClass:NSString.class]) {
+            if (!self->_title.length) {
+              [self->_title release];
+              self->_title = [item[@"heading"] copy];
+            }
+          }
+          else {
+            [actions addObject:item];
+          }
+        }
         if (self->_history.count) {
           [page addObject:@{@"title": @"Back", @"back": @YES,
                             @"image": [UIImage systemImageNamed:@"chevron.backward"]}];
         }
-        [page addObjectsFromArray:items ?: @[]];
+        [page addObjectsFromArray:actions];
         [self->_items release];
         self->_items = [page copy];
         self->_loading = NO;
@@ -286,14 +432,22 @@
       break;
     }
   }
-  if (hit == NSNotFound) {
-    const CGFloat dx = (point.x - _center.x) / _radiusX;
-    const CGFloat dy = (point.y - _center.y) / _radiusY;
+  if (hit == NSNotFound && _inner.slots) {
+    /* Between pills, the direction picks the slot and the distance picks the ring. */
+    const CGFloat dx = (point.x - _center.x) / _inner.radius_x;
+    const CGFloat dy = (point.y - _center.y) / _inner.radius_y;
     const CGFloat distance = hypot(dx, dy);
-    if (distance >= 0.65 && distance <= 1.45) {
-      const NSInteger slot = (NSInteger(lround((atan2(dy, dx) + M_PI_2) / M_PI_4)) + 8) % 8;
-      for (NSUInteger i = 0; i < _buttons.count; i++) {
-        if ((_buttons[i].tag < 0 ? 7 : NSInteger(i)) == slot) {
+    const CGFloat outer_distance = _outer.slots ? _outer.radius_y / _inner.radius_y : 0;
+    const BOOL outer_ring = _outer.slots && distance > (1.0 + outer_distance) / 2.0;
+    const CGFloat limit = _outer.slots ? outer_distance + 0.35 : 1.45;
+    if (distance >= 0.6 && distance <= limit) {
+      const PencilRing &ring = outer_ring ? _outer : _inner;
+      const double step = 2.0 * M_PI / ring.slots;
+      const NSInteger slot = (NSInteger(lround((atan2(dy, dx) + M_PI_2 - ring.phase) / step)) +
+                              NSInteger(ring.slots)) % NSInteger(ring.slots);
+      const NSInteger key = (outer_ring ? 1000 : 0) + slot;
+      for (NSUInteger i = 0; i < _slots.count; i++) {
+        if (_slots[i].integerValue == key) {
           hit = i;
           break;
         }
@@ -323,7 +477,7 @@
     return;
   }
   if (button.tag < 0) {
-    _page = (_page + 1) % ((_items.count + 6) / 7);
+    _page = (_page + 1) % [self pageCount];
     [self buildPageAnimated:NO];
     return;
   }
@@ -335,12 +489,14 @@
     [_items release];
     _items = [parent[@"items"] copy];
     _page = [parent[@"page"] unsignedIntegerValue];
+    [_title release];
+    _title = [parent[@"title"] copy];
     [self buildPageAnimated:NO];
     return;
   }
   if ([item[@"submenu"] boolValue]) {
-    [_history addObject:@{@"items": _items, @"page": @(_page)}];
-    [self loadItemsForRoute:item[@"route"]];
+    [_history addObject:@{@"items": _items, @"page": @(_page), @"title": _title ?: @""}];
+    [self loadItemsForRoute:item[@"route"] title:item[@"title"]];
     return;
   }
   [self dismiss];

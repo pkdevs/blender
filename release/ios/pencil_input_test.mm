@@ -141,8 +141,8 @@ struct GHOST_SystemIOS {
     completion(self.items);
     return;
   }
-  NSMutableArray *items = [NSMutableArray array];
-  for (int i = 0; i < 18; ++i) {
+  NSMutableArray *items = [NSMutableArray arrayWithObject:@{@"heading": @"Object"}];
+  for (int i = 0; i < 40; ++i) {
     [items addObject:@{@"title": [NSString stringWithFormat:@"Action %d", i],
                       @"operator": [NSString stringWithFormat:@"TEST_OT_%d", i],
                       @"image": [UIImage systemImageNamed:@"cube"]}];
@@ -483,8 +483,18 @@ int main()
     assert(menu.active && menu.menuVisible && system.events.empty());
     assert([menu hitTest:CGPointMake(20, 20) withEvent:nil] == menu);
     NSArray<UIButton *> *buttons = [menu valueForKey:@"buttons"];
-    assert(buttons.count == 8 && buttons.lastObject.tag == -1);
+    // Two rings hold a page; a longer menu ends the page with More.
+    const NSUInteger perPage = [[menu valueForKey:@"perPage"] unsignedIntegerValue];
+    assert(perPage == 27 && buttons.count == perPage + 1 && buttons.lastObject.tag == -1);
+    for (UIButton *button in buttons) {
+      // Short pills with the icon in front of the title.
+      assert(button.bounds.size.height == 30 && button.bounds.size.width > button.bounds.size.height * 2);
+      assert(button.configuration.imagePlacement == NSDirectionalRectEdgeLeading);
+    }
     assert(!buttons[0].userInteractionEnabled);
+    // The center names the menu, and the page when there are several.
+    UILabel *centerLabel = [menu valueForKey:@"centerLabel"];
+    assert([centerLabel.text isEqual:@"Object\n1 / 2"]);
     select(buttons[0]);
     assert(!menu.active && !menu.menuVisible && system.events.empty());
     assert([menu hitTest:CGPointMake(20, 20) withEvent:nil] == nil);
@@ -531,9 +541,10 @@ int main()
     buttons = [menu valueForKey:@"buttons"];
     select(buttons.lastObject);
     buttons = [menu valueForKey:@"buttons"];
-    assert(menu.menuVisible && menu.active && buttons[0].tag == 7);
+    assert(menu.menuVisible && menu.active && buttons[0].tag == (NSInteger)perPage);
     select(buttons[0]);
-    assert(menuDelegate.choices == 3 && [menuDelegate.chosen isEqual:@"TEST_OT_7"]);
+    NSString *pageChoice = [NSString stringWithFormat:@"TEST_OT_%lu", (unsigned long)perPage];
+    assert(menuDelegate.choices == 3 && [menuDelegate.chosen isEqual:pageChoice]);
     assert(system.events.empty());
 
     // Closing during a menu contact swallows its remaining motion and release.
@@ -653,10 +664,12 @@ int main()
     NSDictionary *submenuRoute = @{@"root": @"VIEW3D_MT_object_context_menu", @"path": @[@"origin"]};
     NSDictionary *leafRoute = @{@"root": submenuRoute[@"root"], @"path": @[@"origin", @"cursor"]};
     NSMutableArray *rootItems = [NSMutableArray array];
-    for (int i = 0; i < 7; i++) {
+    for (NSUInteger i = 0; i < perPage; i++) {
       [rootItems addObject:@{@"title": @"Disabled", @"disabled": @YES}];
     }
     [rootItems addObject:@{@"title": @"Set Origin", @"submenu": @YES, @"route": submenuRoute}];
+    // One more than a full page, so Set Origin opens the second page.
+    [rootItems addObject:@{@"title": @"Disabled", @"disabled": @YES}];
     menuDelegate.pending(rootItems);
     buttons = [menu valueForKey:@"buttons"];
     pen = touch(menu, buttons[0].center);
@@ -666,7 +679,7 @@ int main()
     pen.phase = UITouchPhaseEnded;
     send(window, pen);
     buttons = [menu valueForKey:@"buttons"];
-    assert(buttons[0].tag == 7);
+    assert(buttons[0].tag == (NSInteger)perPage);
     select(buttons[0]);
     assert(menu.active && menu.menuVisible && menuDelegate.choices == 3);
     assert([menuDelegate.requestedRoute isEqual:submenuRoute]);
@@ -675,10 +688,12 @@ int main()
     menuDelegate.pending(children);
     buttons = [menu valueForKey:@"buttons"];
     assert(buttons.count == 2 && [buttons[0].accessibilityIdentifier isEqual:@"blender.pencil.back"]);
+    // A single-page submenu shows its own name without page numbers.
+    assert([[[menu valueForKey:@"centerLabel"] text] isEqual:@"Set Origin"]);
     assert([buttons[1].accessibilityValue isEqual:@"On"]);
     select(buttons[0]);
     buttons = [menu valueForKey:@"buttons"];
-    assert(buttons[0].tag == 7); // Back restores the parent page.
+    assert(buttons[0].tag == (NSInteger)perPage); // Back restores the parent page.
     select(buttons[0]);
     menuDelegate.pending(children);
     buttons = [menu valueForKey:@"buttons"];

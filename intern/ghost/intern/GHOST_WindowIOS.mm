@@ -2546,6 +2546,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     if (![source isKindOfClass:NSDictionary.class]) {
       continue;
     }
+    if ([source[@"heading"] isKindOfClass:NSString.class]) {
+      /* The menu's own name, shown in the radial menu's center. */
+      [items addObject:@{@"heading": source[@"heading"]}];
+      continue;
+    }
     NSString *op = source[@"operator"];
     NSString *title = source[@"title"];
     if (![title isKindOfClass:NSString.class] || !title.length ||
