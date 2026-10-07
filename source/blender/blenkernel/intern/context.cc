@@ -1312,7 +1312,7 @@ const char *CTX_wm_operator_poll_msg_get(bContext *C, bool *r_free)
   if (!C->wm.operator_poll_msg.has_value()) {
     return nullptr;
   }
-  return IFACE_(C->wm.operator_poll_msg.c_str());
+  return IFACE_(C->wm.operator_poll_msg->c_str());
 }
 
 /* data context */
