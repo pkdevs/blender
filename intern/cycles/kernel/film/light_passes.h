@@ -1033,7 +1033,7 @@ ccl_device_inline void film_add_reservoir_di(
     ccl_private const RNGState *rng_state,
     ccl_global float *ccl_restrict render_buffer)
 {
-  const bool use_restir = kernel_data.integrator.use_restir;
+  // const bool use_restir = kernel_data.integrator.use_restir;
 
   /* TODO(weizhen): This might not work correctly with path guiding because
    * the value was assigned using `mis_pdf` instead of `bsdf_pdf`. */
@@ -1049,20 +1049,32 @@ ccl_device_inline void film_add_reservoir_di(
 
   restir_unpack_reservoir(kg, &reservoir, buffer);
 
-  /* The caller supplies the persistent reference together with LightSample.
-   * Forward light intersections may contain canonical emitter parameters that
-   * cannot be recovered exactly from LightSample after its u/v fields were
-   * removed. In particular, reconstructing the reference here using 
-   * `light_reference_from_sample()` would duplicate per-light 
-   * parameterization logic and would reject light types not supported
-   * by `light_reference_from_sample()`. */
+  /* The caller must supply the persistent reference together with LightSample. */
   if (!light_reference_is_valid(&candidate_reference)) {
     return;
   }
 
   const float geometry_term = ls.jacobian_solid_angle_to_area();
-  const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) *
-                                bsdf_pdf * L * geometry_term;
+  Spectrum path_throughput = INTEGRATOR_STATE(state, path, throughput);
+
+  if (kernel_data.film.pass_restir_sss_exit != PASS_UNUSED) {
+    const ccl_global float *rec = film_pass_pixel_render_buffer(kg, state, render_buffer) +
+                                  kernel_data.film.pass_restir_sss_exit;
+for (size_t i = 0; i < 4; ++i) { // !!!: DEBUG ONLY; unsafe
+  ccl_debug_printf("film_add_reservoir_di() rec[%d]=%f\n\n", i, (double)rec[i]);
+}
+
+    if (rec[0] > 0.0f) {
+      path_throughput = safe_divide_color(
+          path_throughput, rgb_to_spectrum(make_float3(rec[2], rec[3], rec[4])));
+
+// !!!(Tri): Only runs when a BSDF-sampled bounce from the exit hits an emitter.
+ccl_debug_printf("film_add_reservoir_di() path_throughput=(%f,%f,%f)\n\n",
+  (double)path_throughput.x, (double)path_throughput.y, (double)path_throughput.z);
+    }
+  }
+
+  const Spectrum contribution = path_throughput * bsdf_pdf * L * geometry_term;
 
   /* TODO(weizhen): Handle diffuse/glossy pass decomposition properly. */
   BsdfEval radiance;
@@ -1077,11 +1089,6 @@ ccl_device_inline void film_add_reservoir_di(
   /* M must still be 1 here (After integrate_surface_nee): unpacked from the NEE pass's reservoir. */
   kernel_assert(reservoir.M == 1);
 
-/*
- * because film_write_pass_reservoir() writes only the serialized reference, weight, and luminance, 
- * the Reservoir must contain the candidate reference selected by reservoir_add_sample(). 
- * The function must therefore receive the candidate reference explicitly
- */
   film_write_pass_reservoir(kg, state, &reservoir, render_buffer);
 }
 

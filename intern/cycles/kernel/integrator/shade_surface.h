@@ -842,7 +842,8 @@ ccl_device
                           ccl_private ShaderData *sd,
                           ccl_private const RNGState *rng_state,
                           ccl_global float *ccl_restrict render_buffer,
-                          const bool is_sss_exit)
+                          const bool is_sss_exit,
+                          const bool is_sss_exit_primary)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_INITIAL_RESAMPLING);
 
@@ -868,10 +869,33 @@ ccl_device
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
 
+  // const bool use_restir_di = is_direct_light && !is_sss_exit;
+
   /* Use Resampled Importance Sampling for direct illumination based on Talbot, Justin F.
    * Importance resampling for global illumination. Brigham Young University, 2005. */
   const bool is_direct_light = light_is_direct_illumination(state);
-  const bool use_restir_di = is_direct_light && !is_sss_exit;
+
+  /* The BSSRDF exit will own the pixel's reservoir, so shade this entry immediately. NEE and the
+   * bounce read the same PRNG_SURFACE_BSDF dimensions, so we can peek at the closure pick. */
+  bool will_enter_sss = false;
+
+#ifdef __SUBSURFACE__
+  if (is_direct_light && !is_sss_exit && (sd->flag & SD_BSSRDF)) {
+    float3 rand_peek = path_state_rng_3D(kg, rng_state, PRNG_SURFACE_BSDF);
+    const ccl_private ShaderClosure *sc = surface_shader_bsdf_bssrdf_pick(sd, &rand_peek);
+    will_enter_sss = CLOSURE_IS_BSSRDF(sc->type);
+  }
+#endif
+
+  const bool use_restir_di = is_direct_light && !will_enter_sss &&
+                             (!is_sss_exit || is_sss_exit_primary);
+
+  if (will_enter_sss) {
+    /* Invalidate the entry for spatial/temporal reuse. The exit re-validates the pixel. */
+    ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+
+    film_overwrite_pass_float(buffer + kernel_data.film.pass_surface_data + 3, 0.0f);
+  }
 
 // TODO(Tri): Handle MNEE
 // #if 0
@@ -1375,6 +1399,8 @@ ccl_device int integrate_surface(KernelGlobals kg,
     RNGState rng_state;
     path_state_rng_load(state, &rng_state);
 
+    bool is_sss_exit_primary = false;
+
 #ifdef __SUBSURFACE__
     if (path_flag & PATH_RAY_SUBSURFACE) {
 // ccl_debug_printf("SSS exit reached: bounce=%d tbg=%d flag=%u\n",
@@ -1438,12 +1464,12 @@ ccl_device int integrate_surface(KernelGlobals kg,
 
     const bool is_sss_exit = (path_flag & PATH_RAY_SUBSURFACE) != 0;
     /* Simply means "this path is past an SSS exit". */
-    if (is_sss_exit) {
+    if (is_sss_exit && !is_sss_exit_primary) {
       INTEGRATOR_STATE_WRITE(state, path, restir_di_disabled) = true;
     }
 
     const ShaderEvalResult result = integrate_surface_nee<node_feature_mask>(
-        kg, state, &sd, &rng_state, render_buffer, is_sss_exit);
+        kg, state, &sd, &rng_state, render_buffer, is_sss_exit, is_sss_exit_primary);
 
     if (result == SHADER_EVAL_CACHE_MISS) {
       return LABEL_CACHE_MISS;

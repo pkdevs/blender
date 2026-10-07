@@ -98,26 +98,24 @@ ccl_device_inline void film_write_restir_surface_data(KernelGlobals kg,
 /* Persist the SSS exit vertex of a primary-hit path for ReSTIR DI.
  * Layout: (is_exit, backfacing, throughput.rgb, N.xyz).
  * Must be called BEFORE subsurface_shader_data_setup() since it clears the closure flags. */
-ccl_device_inline void film_write_restir_sss_exit(KernelGlobals kg,
+ccl_device_inline bool film_write_restir_sss_exit(KernelGlobals kg,
                                                   ConstIntegratorState state,
                                                   const ccl_private ShaderData *sd,
                                                   ccl_global float *ccl_restrict render_buffer)
 {
-  if (!kernel_data.integrator.use_restir) {
-    return;
-  }
-
-  if (kernel_data.film.pass_restir_sss_exit == PASS_UNUSED) {
-    return;
+  if (!kernel_data.integrator.use_restir ||
+      kernel_data.film.pass_restir_sss_exit == PASS_UNUSED)
+  {
+    return false;
   }
 
   /* Primary vertex only, and same gating as film_write_data_passes(). */
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   if (INTEGRATOR_STATE(state, path, bounce) != 0 ||
-      !(path_flag & PATH_RAY_TRANSPARENT_BACKGROUND) || // !!!(Tri)
+      !(path_flag & PATH_RAY_TRANSPARENT_BACKGROUND) ||
       (path_flag & PATH_RAY_SHADOW_CATCHER_PASS))
   {
-    return;
+    return false;
   }
 
   /* Same normal that subsurface_shader_data_setup() will use for the diffuse closure. */
@@ -142,6 +140,23 @@ ccl_device_inline void film_write_restir_sss_exit(KernelGlobals kg,
   film_overwrite_pass_float(ptr,   N.z);
 
 ccl_debug_printf("SSS_EXIT WRITTEN px=%u\n", INTEGRATOR_STATE(state, path, render_pixel_index));
+
+  /* The exit now owns this pixel's DI slot: drop anything the entry may have left. */
+  film_overwrite_pass_float(buffer + kernel_data.film.pass_restir_reservoir + 6, 0.0f);
+
+  /* SURFACE_DATA must describe the exit, without the subsurface-internal flags. */
+  const uint32_t surface_flag = path_flag & ~(PATH_RAY_SUBSURFACE |
+                                              PATH_RAY_SUBSURFACE_DISK |
+                                              PATH_RAY_SUBSURFACE_RANDOM_WALK |
+                                              PATH_RAY_SUBSURFACE_BACKFACING);
+  film_write_restir_surface_data(kg, sd, surface_flag, buffer);
+
+  // !!!(Tri): No cross-frame reuse for exit points (they are random per sample).
+  if (kernel_data.integrator.use_temporal) {
+    film_overwrite_pass_float(buffer + kernel_data.film.pass_restir_reprojection_surface + 6,
+                              0.0f);
+  }
+  return true;
 }
 
 ccl_device_inline void film_write_data_passes(KernelGlobals kg,

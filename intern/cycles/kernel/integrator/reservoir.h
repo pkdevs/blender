@@ -418,6 +418,8 @@ struct SpatialReservoir {
   uint32_t path_flag;
   ShaderData sd;
   uint3 pixel_index;
+
+  bool is_sss_exit; // !!!(Tri): See if can be ommited?
 };
 
 ccl_device_inline void spatial_reservoir_init(KernelGlobals kg,
@@ -427,6 +429,8 @@ ccl_device_inline void spatial_reservoir_init(KernelGlobals kg,
   spatial_reservoir->path_flag = 0;
   spatial_reservoir->sd = {};
   spatial_reservoir->pixel_index = make_uint3(-1, -1, -1);
+
+  spatial_reservoir->is_sss_exit = false;
 }
 
 ccl_device_inline bool spatial_reservoir_is_empty(

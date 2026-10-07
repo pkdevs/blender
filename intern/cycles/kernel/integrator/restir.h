@@ -50,6 +50,30 @@ struct SpatialResampling {
   }
 };
 
+ccl_device_forceinline ccl_global float *pixel_render_buffer(
+    KernelGlobals kg, uint32_t render_pixel_index, ccl_global float *ccl_restrict render_buffer)
+{
+  const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
+                                        kernel_data.film.pass_stride;
+  return render_buffer + render_buffer_offset;
+}
+
+// TODO(Tri): Move elsewhere?
+ccl_device_inline const ccl_global float *restir_sss_exit_record(
+    KernelGlobals kg, const uint32_t px, ccl_global float *ccl_restrict render_buffer)
+{
+  if (kernel_data.film.pass_restir_sss_exit == PASS_UNUSED) {
+    return nullptr;
+  }
+
+  const ccl_global float *rec = pixel_render_buffer(kg, px, render_buffer) +
+                                kernel_data.film.pass_restir_sss_exit;
+
+  return (rec[0] > 0.0f) ? rec : nullptr;
+}
+
+// MARK: - 
+
 /* Reconstruct the minimal ShaderData state required to rebuild the
  * complete surface using shader_setup_from_restir().
  *
@@ -91,14 +115,6 @@ ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *s
   return sd->type; // !!!: a 0 type can mean that there was no valid surface intersection stored for this pixel.
 }
 
-ccl_device_forceinline ccl_global float *pixel_render_buffer(
-    KernelGlobals kg, uint32_t render_pixel_index, ccl_global float *ccl_restrict render_buffer)
-{
-  const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
-                                        kernel_data.film.pass_stride;
-  return render_buffer + render_buffer_offset;
-}
-
 ccl_device_inline bool integrator_restir_unpack_shader(KernelGlobals kg,
                                                        ccl_private SpatialReservoir *reservoir,
                                                        uint32_t render_pixel_index,
@@ -108,7 +124,11 @@ ccl_device_inline bool integrator_restir_unpack_shader(KernelGlobals kg,
   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
   ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
                                    kernel_data.film.pass_surface_data;
-  return integrator_restir_unpack_shader(&reservoir->sd, &reservoir->path_flag, buffer);
+
+  const bool ok = integrator_restir_unpack_shader(&reservoir->sd, &reservoir->path_flag, buffer);
+
+  reservoir->is_sss_exit = (restir_sss_exit_record(kg, render_pixel_index, render_buffer) != nullptr);
+  return ok;
 }
 
 ccl_device_inline bool integrator_restir_unpack_shader(KernelGlobals kg,
@@ -192,6 +212,35 @@ ccl_device_inline void ray_setup(KernelGlobals kg,
   }
 }
 
+/* Rebuild an SSS exit point: geometry from (object, prim, u, v), a synthetic ray along the
+ * geometric normal, and the diffuse closure that subsurface_shader_data_setup() creates. */
+ccl_device_inline void shader_setup_sss_exit_from_restir(KernelGlobals kg,
+                                                         ccl_private ShaderData *ccl_restrict sd,
+                                                         const ccl_global float *rec)
+{
+  shader_setup_geometry_from_restir(kg, sd);
+
+  const bool backfacing = rec[1] > 0.5f;
+  Ray ray = {};
+  ray.D = backfacing ? sd->Ng : -sd->Ng; /* Ng is still unflipped here. */
+  ray.P = sd->P - ray.D;
+  ray.tmin = 0.0f;
+  ray.tmax = FLT_MAX;
+  ray.time = sd->time;
+#ifdef __RAY_DIFFERENTIALS__
+  ray.dP = 0.0f;
+  ray.dD = 0.0f;
+#endif
+  shader_setup_finish_from_restir(kg, &ray, sd);
+
+  const float3 N = make_float3(rec[5], rec[6], rec[7]);
+  sd->N = N;
+  sd->flag &= ~SD_CLOSURE_FLAGS;
+  sd->num_closure = 0;
+  sd->num_closure_left = kernel_data.max_closures;
+  bsdf_diffuse_setup(sd, N, one_spectrum());
+}
+
 ccl_device_forceinline void shader_data_setup_from_restir(KernelGlobals kg,
                                                           IntegratorState state,
                                                           ccl_private SpatialReservoir *reservoir,
@@ -200,6 +249,15 @@ ccl_device_forceinline void shader_data_setup_from_restir(KernelGlobals kg,
 {
   Ray ray;
   ray_setup(kg, state, &ray, reservoir->pixel_index);
+
+  const uint32_t px = (reservoir->pixel_index.z == UINT_MAX) ?
+                          INTEGRATOR_STATE(state, path, render_pixel_index) :
+                          reservoir->pixel_index.z;
+
+  if (const ccl_global float *rec = restir_sss_exit_record(kg, px, render_buffer)) {
+    shader_setup_sss_exit_from_restir(kg, &reservoir->sd, rec);
+    return;
+  }
 
   PROFILING_INIT(kg, PROFILING_RESTIR_SURFACE_DATA_SETUP);
   shader_setup_from_restir(kg, &ray, &reservoir->sd);
@@ -314,7 +372,8 @@ ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg,
   if (integrator_restir_unpack_shader(kg, neighbor, pixel_index.z, render_buffer)) {
     integrator_restir_unpack_reservoir(
         kg, &neighbor->reservoir, pixel_index.z, render_buffer, read_prev);
-    return resampling->is_valid_neighbor(&current->sd, &neighbor->sd);
+    return resampling->is_valid_neighbor(&current->sd, &neighbor->sd) &&
+           current->is_sss_exit == neighbor->is_sss_exit;
   }
 
   return false;
@@ -342,6 +401,7 @@ ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg, // !!!: GI
 
   if (integrator_restir_unpack_shader(kg, &neighbor->sd, pixel_index.z, render_buffer)) {
     integrator_restir_unpack_reservoir(kg, neighbor, pixel_index.z, render_buffer, read_prev);
+    // TODO(Tri): is_sss_exit in GI as well?
     return resampling->is_valid_neighbor(&current->sd, &neighbor->sd);
   }
 
@@ -784,16 +844,16 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
 
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
 
-if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ONLY; 24% 360
-  const ccl_global float *p = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-                              kernel_data.film.pass_restir_sss_exit;
+// if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ONLY; 24% 360
+//   const ccl_global float *p = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+//                               kernel_data.film.pass_restir_sss_exit;
 
-  ccl_debug_printf("FINALEVAL px=%u offset=%d stride=%d is_exit=%f sd_type=%f\n",
-      render_pixel_index, kernel_data.film.pass_restir_sss_exit, kernel_data.film.pass_stride,
-      (double)p[0],
-      (double)(pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-                kernel_data.film.pass_surface_data)[3]);
-}
+//   ccl_debug_printf("FINALEVAL px=%u offset=%d stride=%d is_exit=%f sd_type=%f\n",
+//       render_pixel_index, kernel_data.film.pass_restir_sss_exit, kernel_data.film.pass_stride,
+//       (double)p[0],
+//       (double)(pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+//                 kernel_data.film.pass_surface_data)[3]);
+// }
 
   const bool read_prev = INTEGRATOR_STATE(state, path, spatial_iteration) % 2;
 
@@ -803,10 +863,10 @@ if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ON
       kg, &current, render_pixel_index, render_buffer);
 
 
-if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ONLY
-  ccl_debug_printf("FINALEVAL px=%u reservoir_ok=%d shader_ok=%d\n",
-                    render_pixel_index, (int)reservoir_ok, (int)shader_ok);
-}
+// if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ONLY
+//   ccl_debug_printf("FINALEVAL px=%u reservoir_ok=%d shader_ok=%d\n",
+//                     render_pixel_index, (int)reservoir_ok, (int)shader_ok);
+// }
 
 
   if (!reservoir_ok || !shader_ok) {
@@ -815,28 +875,6 @@ if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ON
                          DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION); // !!!
     return;
   }
-
-// { // !!!: DEBUG ONLY; To see if the the SSS exit pass is written
-//   // const ccl_global float *p = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-//   //                             kernel_data.film.pass_restir_sss_exit;
-//   // if (p[0] > 0.0f) { // path_flag
-//   //   ccl_debug_printf("SSS_EXIT px=%u bf=%f T=(%f,%f,%f) N=(%f,%f,%f)\n\n", render_pixel_index,
-//   //       (double)p[1], (double)p[2], (double)p[3], (double)p[4],
-//   //       (double)p[5], (double)p[6], (double)p[7]);
-//   // } else {
-//   //   ccl_debug_printf("SSS_EXIT failed! p[0]=%f\n\n", (double)p[0]);
-//   // }
-//   if (render_pixel_index == 0) {
-//     ccl_debug_printf("SSS pass offset=%d stride=%d\n",
-//                      kernel_data.film.pass_restir_sss_exit, kernel_data.film.pass_stride);
-//   }
-//   const ccl_global float *p = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-//                               kernel_data.film.pass_restir_sss_exit;
-//   if (p[0] > 0.0f) {
-//     ccl_debug_printf("SSS_EXIT HIT px=%u N=(%f,%f,%f)\n", render_pixel_index,
-//                      (double)p[5], (double)p[6], (double)p[7]);
-//   }
-// }
 
   shader_data_setup_from_restir(kg, state, &current, render_buffer); // !!!: 
 
@@ -859,17 +897,25 @@ if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ON
 
   bsdf_eval_mul(&current.reservoir.radiance, current.reservoir.total_weight); // !!!: DI Blackout?
 
+  /* Restore the exit's throughput and visibility. Restore only runs when a record exists. */
+  if (const ccl_global float *rec = restir_sss_exit_record(kg, render_pixel_index, render_buffer)) {
+    INTEGRATOR_STATE_WRITE(state, path, throughput) = rgb_to_spectrum(
+        make_float3(rec[2], rec[3], rec[4]));
+
+    const PathRayVisibility vis = INTEGRATOR_STATE(state, path, visibility) &
+                                  ~PATH_RAY_VISIBILITY_CAMERA;
+
+    INTEGRATOR_STATE_WRITE(state, path, visibility) = vis;
+  }
+
+ccl_debug_printf("FINAL px=%u thr=(%f,%f,%f) rad=(%f,%f,%f)\n", render_pixel_index,
+  (double)INTEGRATOR_STATE(state, path, throughput).x, (double)INTEGRATOR_STATE(state, path, throughput).y, (double)INTEGRATOR_STATE(state, path, throughput).z,
+  (double)current.reservoir.radiance.sum.x, (double)current.reservoir.radiance.sum.y, (double)current.reservoir.radiance.sum.z);
+
   /* Load random number state. */
   RNGState rng_state;
   path_state_rng_load(state, &rng_state);
-  /*
-                      ┌──────────────► INTERSECT_SHADOW
-                      │                       │
-  FINAL_EVALUATION ───┤                       ▼
-                      │                 SHADE_SHADOW
-                      │
-                      └──────────────► RESTIR_PT_EVALUATION
-  */
+
   integrate_direct_light_create_shadow_path<true>(
       kg, state, &rng_state, &current.sd, &current.reservoir.light, &current.reservoir.radiance, 0);
 
@@ -878,6 +924,7 @@ if (render_pixel_index >= 2792 && render_pixel_index <= 2795) { // !!!: DEBUG ON
                        DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
 }
 
+// !!!: still compares only object/type, so exit and non-exit pixels can mix
 /* GI/PT spatial neighbor-combine step. */
 ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
                                             IntegratorState state,
