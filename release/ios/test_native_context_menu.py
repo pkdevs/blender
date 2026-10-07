@@ -125,6 +125,10 @@ static UIImage *blenderIOSIcon(NSString *key, NSString *fallback)
   }
   return icons[key];
 }
+static UIImage *GHOSTIOSBlenderIcon(NSString *name, BOOL themed)
+{
+  return nil;
+}
 static UIImage *blenderIOSCommandIcon(NSInteger command, NSString *fallback)
 {
   return blenderIOSIcon([NSString stringWithFormat:@"command.%ld", (long)command], fallback);
