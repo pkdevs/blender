@@ -72,7 +72,7 @@ int main()
     [controller.view addInteraction:assets.dropInteraction];
 
     NSCAssert([assets.button.accessibilityIdentifier isEqual:@"blender.assets"] &&
-              [assets.button.title isEqual:@"Assets"], @"Assets have an accessible toolbar toggle");
+              [assets.button.title isEqual:@"Add"], @"Assets have an accessible toolbar toggle");
     NSCAssert(assets.view.hidden && !assets.visible, @"The asset pane starts hidden");
     [assets.button.target performSelector:assets.button.action withObject:assets.button];
     NSCAssert(assets.visible && assets.button.selected && !assets.view.hidden && relayouts == 1 &&

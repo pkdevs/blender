@@ -170,10 +170,10 @@ static NSString *blenderAssetAddTitle(NSString *type)
     _filtered = [@[] retain];
     _thumbnails = [[NSCache alloc] init];
 
-    UIImage *icon = GHOSTIOSBlenderIcon(@"ASSET_MANAGER", NO);
-    _button = [[UIBarButtonItem alloc] initWithImage:icon ?: [UIImage systemImageNamed:@"square.grid.2x2"]
+    /* Adding things to the scene starts here. */
+    _button = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"plus"]
         style:UIBarButtonItemStylePlain target:self action:@selector(toggle:)];
-    _button.title = _button.accessibilityLabel = @"Assets";
+    _button.title = _button.accessibilityLabel = @"Add";
     _button.identifier = _button.accessibilityIdentifier = @"blender.assets";
 
     _panel = [[UIVisualEffectView alloc] initWithEffect:[UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular]];

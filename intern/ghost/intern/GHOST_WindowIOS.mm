@@ -5023,6 +5023,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
    * Group scene actions beside Mode; keep viewport shading on the trailing side. */
   _top_bar_item.leadingItemGroups = @[
     _mode_button.creatingFixedGroup,
+    _assets.button.creatingFixedGroup,
     [self meshSelectModeControlGroup],
     _actions_button.creatingFixedGroup,
     _undo_button.creatingFixedGroup,
@@ -5036,7 +5037,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _top_bar_item.centerItemGroups = @[ [self topSettingsControlGroup] ];
   _top_bar_item.trailingItemGroups = @[
     [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:nil
-        items:@[_scene_panels.hierarchyButton, _timeline.button, _assets.button,
+        items:@[_scene_panels.hierarchyButton, _timeline.button,
                  _scene_panels.inspectorButton]],
   ];
   _viewport_shading_button.sharesBackground = NO;
