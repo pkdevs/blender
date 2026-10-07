@@ -116,12 +116,18 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   std::optional<ResultData> result;
   if (operation == Operation::Difference) {
-    bke::VolumeGrid<float> primary = params.extract_input<bke::VolumeGrid<float>>("Grid 1");
+    bke::VolumeGrid<float> primary = params.extract_input<bke::VolumeGrid<float>>("Grid 1"_ustr);
+    if (!primary) {
+      params.set_default_remaining_outputs();
+      return;
+    }
+
     bke::VolumeTreeAccessToken tree_token;
     openvdb::FloatGrid &grid = primary.grid_for_write(tree_token);
-    if (!validate_sdf_grid(grid, [&](const StringRef message) {
-          params.error_message_add(NodeWarningType::Error, "Grid: " + message);
-        }))
+    if (!validate_sdf_grid(grid,
+                           [&](const StringRef message) {
+                             params.error_message_add(NodeWarningType::Error, "Grid: " + message);
+                           }))
     {
       params.set_default_remaining_outputs();
       return;
@@ -131,15 +137,21 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   for (bke::VolumeGrid<float> &operand : operands) {
+    if (!operand) {
+      continue;
+    }
+
     bke::VolumeTreeAccessToken tree_token;
     std::shared_ptr<openvdb::FloatGrid> resampled_storage;
     openvdb::FloatGrid &grid =
         result ? geometry::resample_sdf_grid_if_necessary(
                      operand, tree_token, result->grid.transform(), resampled_storage) :
                  operand.grid_for_write(tree_token);
-    if (!validate_sdf_grid(grid, [&](const StringRef message) {
-          params.error_message_add(NodeWarningType::Warning, "Grid 2: " + message);
-        }))
+    if (!validate_sdf_grid(grid,
+                           [&](const StringRef message) {
+                             params.error_message_add(NodeWarningType::Warning,
+                                                      "Grid 2: " + message);
+                           }))
     {
       continue;
     }
