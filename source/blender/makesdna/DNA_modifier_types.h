@@ -1575,7 +1575,7 @@ struct WarpModifierData {
 /* Defines common to all WeightVG modifiers. */
 
 /** #WeightVGEdit.edit_flags */
-enum WeigthVGEditModifierEditFlags : short {
+enum WeightVGEditModifierEditFlags : short {
   MOD_WVG_EDIT_WEIGHTS_NORMALIZE = (1 << 0),
   MOD_WVG_INVERT_FALLOFF = (1 << 1),
   MOD_WVG_EDIT_INVERT_VGROUP_MASK = (1 << 2),
@@ -1584,7 +1584,7 @@ enum WeigthVGEditModifierEditFlags : short {
   /** Remove vertices with lower weight than threshold from vgroup. */
   MOD_WVG_EDIT_REMFVG = (1 << 4),
 };
-ENUM_OPERATORS(WeigthVGEditModifierEditFlags);
+ENUM_OPERATORS(WeightVGEditModifierEditFlags);
 
 /** #WeightVGMixModifierData.mix_mode (how second vgroup's weights affect first ones). */
 enum WeightVGMixModifierMixMode : char {
@@ -1689,7 +1689,7 @@ struct WeightVGEditModifierData {
   /** Name of vertex group to edit. */
   char defgrp_name[/*MAX_VGROUP_NAME*/ 64] = "";
 
-  WeigthVGEditModifierEditFlags edit_flags = {};
+  WeightVGEditModifierEditFlags edit_flags = {};
   /** Using MOD_WVG_MAPPING_* defines. */
   WeightVGProximityFalloff falloff_type = MOD_WVG_MAPPING_NONE;
   /** Weight for vertices not in vgroup. */
