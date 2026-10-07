@@ -12,8 +12,8 @@ cables, chains) use their real sizes.
 
 import math
 
-from .common import (RADIANS, generator_object, object_group, palette, rest_on_ground,
-                     simple_material)
+from .common import (AXES, RADIANS, generator_object, object_group, palette, radius_gizmo,
+                     resolution_gizmo, rest_on_ground, simple_material, size_gizmo)
 from .registry import asset
 
 CATALOG = "Objects/Hardware"
@@ -209,6 +209,14 @@ def circle(tree, radius, resolution=48):
                   Radius=radius).outputs["Curve"]
 
 
+def pitch_gizmo(tree, pitch, radius, start, turns=3.5):
+    """A box on the -X side of a thread, `turns` turns above where it starts. Dragging it moves
+    that turn, spreading or packing the turns below it."""
+    value = tree.math("MULTIPLY", pitch, turns)
+    where = vector(tree, mul(tree, radius, -1.0), 0.0, add(tree, start, mul(tree, pitch, turns)))
+    tree.linear_gizmo(value, where, AXES["Z"], color="SECONDARY", style="BOX")
+
+
 def finish(tree, mesh, material, angle=40):
     """Smooth by `angle` (None keeps the parts' own shading), set the material, ground it."""
     if angle is not None:
@@ -316,6 +324,12 @@ def screw():
     thread = helix_thread(tree, core, depth, mul(tree, pitch, 0.75), pitch, mul(tree, tip, 0.12),
                           sub(tree, thread_top, mul(tree, pitch, 0.3)), scale=taper)
     shank = tree.smooth(tree.join(shank, thread), angle=40 * RADIANS)
+
+    # Length on top of the head, diameter on the thread, pitch on the far side of the thread.
+    size_gizmo(tree, length, "Z", centered=False)
+    radius_gizmo(tree, tree.math("MULTIPLY", diameter, 0.5),
+                 origin=vector(tree, 0.0, 0.0, mul(tree, length, 0.45)))
+    pitch_gizmo(tree, pitch, radius, mul(tree, tip, 0.12))
     finish(tree, tree.join(head, shank), material, angle=None)
     return generator_object("Screw", tree)
 
@@ -349,6 +363,17 @@ def bolt():
     thread = helix_thread(tree, core, depth, mul(tree, pitch, 0.9), pitch, mul(tree, end, 0.5),
                           thread_top)
     shank = tree.smooth(tree.join(shank, thread), angle=40 * RADIANS)
+
+    # Length on top of the head, diameter on the plain part of the shank, the threaded part's
+    # end on the front and the pitch at the far side of the thread.
+    tree.linear_gizmo(tree.math("MULTIPLY", length, 1.0),
+                      vector(tree, 0.0, 0.0, add(tree, length, head_height)), AXES["Z"],
+                      color="Z")
+    radius_gizmo(tree, tree.math("MULTIPLY", diameter, 0.5),
+                 origin=vector(tree, 0.0, 0.0, mul(tree, length, 0.85)))
+    tree.linear_gizmo(tree.math("MULTIPLY", threaded, length),
+                      vector(tree, 0.0, mul(tree, radius, -1.0), thread_top), AXES["Z"])
+    pitch_gizmo(tree, pitch, radius, mul(tree, end, 0.5))
     finish(tree, tree.join(head, shank), material, angle=None)
     return generator_object("Bolt", tree)
 
@@ -402,6 +427,12 @@ def nut():
     mesh = scale_radially(tree, mesh, div(tree, add(tree, hole, mul(tree, depth, wave)), hole),
                           in_hole)
     mesh = mill_polygon(tree, mesh, sides, flat, 0.0, height)
+
+    # Size on a flat (a hex nut has one facing +Y), the pitch inside the hole and the number
+    # of sides on a dial on top.
+    size_gizmo(tree, size, "Y", origin=vector(tree, 0.0, 0.0, mul(tree, height, 0.5)))
+    pitch_gizmo(tree, pitch, hole, 0.0, turns=4.0)
+    resolution_gizmo(tree, sides, vector(tree, 0.0, 0.0, height), per_turn=6.0)
     finish(tree, mesh, material, angle=30)
     return generator_object("Nut", tree)
 
@@ -415,6 +446,13 @@ def washer():
     outer = tree.input("Outer Radius", "FLOAT", 0.058, min=0.002, subtype="DISTANCE")
     thickness = tree.input("Thickness", "FLOAT", 0.006, min=0.0005, subtype="DISTANCE")
     material = tree.input("Material", "MATERIAL", palette("Starter Steel"))
+
+    # Outer and inner edges on opposite sides, thickness on top in between.
+    middle = vector(tree, 0.0, 0.0, mul(tree, thickness, 0.5))
+    radius_gizmo(tree, outer, origin=middle)
+    radius_gizmo(tree, inner, "-X", origin=middle)
+    size_gizmo(tree, thickness, "Z", centered=False,
+               origin=vector(tree, 0.0, mul(tree, add(tree, inner, outer), -0.5), 0.0))
 
     outer = tree.math("MAXIMUM", outer, add(tree, inner, mul(tree, thickness, 0.6)))
     edge = mul(tree, thickness, 0.22)
@@ -449,6 +487,15 @@ def gear():
     style = tree.menu("Style", ("Holes", "Solid"),
                       description="Lighten the web between hub and teeth with holes, or not")
     material = tree.input("Material", "MATERIAL", brass())
+
+    # Pitch radius and hole on opposite sides, thickness on the web between two holes, and the
+    # teeth on a dial at the front of the rim.
+    radius_gizmo(tree, radius, origin=vector(tree, 0.0, 0.0, mul(tree, thickness, 0.5)))
+    radius_gizmo(tree, hole, "-X", origin=vector(tree, 0.0, 0.0, thickness))
+    size_gizmo(tree, thickness, "Z", centered=False,
+               origin=vector(tree, 0.0, mul(tree, radius, 0.6), 0.0))
+    resolution_gizmo(tree, teeth, vector(tree, 0.0, mul(tree, radius, -1.0), thickness),
+                     per_turn=24.0)
 
     module = div(tree, mul(tree, radius, 2.0), teeth)
     per_tooth = len(GEAR_TOOTH)
@@ -504,6 +551,16 @@ def spring():
     wire = tree.input("Wire Thickness", "FLOAT", 0.01, min=0.0005, subtype="DISTANCE")
     height = tree.input("Height", "FLOAT", 0.25, min=0.005, subtype="DISTANCE")
     material = tree.input("Material", "MATERIAL", palette("Starter Steel"))
+
+    # Height on top, coil radius and wire on opposite sides, and the coils on a dial in the
+    # middle: turning it winds more turns in.
+    size_gizmo(tree, height, "Z", centered=False)
+    middle = vector(tree, 0.0, 0.0, mul(tree, height, 0.5))
+    radius_gizmo(tree, radius, origin=middle)
+    tree.linear_gizmo(tree.math("MULTIPLY", wire, 0.5),
+                      vector(tree, mul(tree, add(tree, radius, mul(tree, wire, 0.5)), -1.0),
+                             0.0, mul(tree, height, 0.5)), AXES["-X"])
+    resolution_gizmo(tree, coils, middle, per_turn=2.0)
 
     spiral = tree.n("GeometryNodeCurveSpiral", Resolution=32, Rotations=coils,
                     Start_Radius=radius, End_Radius=radius, Height=0.0).outputs[0]
@@ -574,6 +631,31 @@ def chain():
     alternate = mul(tree, tree.math("FLOORED_MODULO", i, 2.0), math.pi / 2)
     roll = add(tree, alternate, mul(tree, i, twist))
     points = tree.n("GeometryNodePoints", Count=count, Position=where).outputs[0]
+
+    def on_arc(s):
+        """Where the chain's center line is `s` along it, and which way it runs there."""
+        h = mul(tree, s, curvature)
+        return (tree.xyz(div(tree, tree.math("SINE", h), curvature),
+                         div(tree, sub(tree, 1.0, tree.math("COSINE", h)), curvature), 0.0),
+                tree.xyz(tree.math("COSINE", h), tree.math("SINE", h), 0.0))
+
+    # Each added link grows both ends by half a pitch: the count box sits on the +X end, the
+    # twist dial on the -X end. Link size and wire thickness are on the middle link, which
+    # lies flat; the bend dial is above it.
+    reach = add(tree, mul(tree, sub(tree, count, 1.0), mul(tree, pitch, 0.5)),
+                mul(tree, size, 0.5))
+    end, heading = on_arc(reach)
+    tree.linear_gizmo(tree.math("MULTIPLY", count, mul(tree, pitch, 0.5)), end, heading,
+                      color="SECONDARY", style="BOX")
+    start, heading = on_arc(mul(tree, reach, -1.0))
+    tree.dial_gizmo(tree.math("MULTIPLY", twist, 1.0), start, heading, radius=0.8)
+    tree.linear_gizmo(tree.math("MULTIPLY", size, 0.31),
+                      vector(tree, 0.0, mul(tree, width, 0.5), 0.0), AXES["Y"])
+    tree.linear_gizmo(tree.math("MULTIPLY", wire, mul(tree, size, 0.5)),
+                      vector(tree, 0.0, mul(tree, sub(tree, width, thickness), -0.5),
+                             mul(tree, thickness, 0.5)), AXES["Z"])
+    tree.dial_gizmo(tree.math("MULTIPLY", bend, 1.0), vector(tree, 0.0, 0.0, mul(tree, size, 0.6)),
+                    AXES["Z"], radius=0.8)
     links = tree.n("GeometryNodeInstanceOnPoints", Points=points, Instance=link,
                    Rotation=tree.xyz(roll, 0.0, heading)).outputs[0]
     finish(tree, tree.realize(links), material, angle=180)
@@ -626,6 +708,7 @@ def pipe():
     material = tree.input("Material", "MATERIAL", palette("Starter Copper"))
 
     inner = mul(tree, radius, 0.82)
+    bend_radius = bend
     # Keep bends within the shortest leg.
     bend = tree.math("MINIMUM", tree.math("MAXIMUM", bend, mul(tree, radius, 1.1)),
                      mul(tree, leg, 0.35))
@@ -670,6 +753,30 @@ def pipe():
                      Instance=tree.smooth(flange(tree, radius, inner), angle=40 * RADIANS),
                      Rotation=align).outputs[0]
     mesh = tree.join(tube, tree.realize(flanges))
+
+    # Leg length at the run's right end: grounding re-centers the run, so the end moves by half
+    # its width. The bend radius is at the start of the first bend, the flange spacing one
+    # spacing along the first leg, and the pipe radius on the side of the first leg.
+    def right_end(corners):
+        right = max(x for x, _, _ in corners)
+        heights = [z for x, _, z in corners if x == right]
+        return right, sum(heights) / len(heights)
+    ends = [right_end(corners) for corners in PIPE_RUNS.values()]
+    tree.linear_gizmo(
+        tree.math("MULTIPLY", leg, index_switch(tree, "FLOAT", shape_index,
+                                                [right * 0.5 for right, _ in ends])),
+        index_switch(tree, "VECTOR", shape_index,
+                     [vector(tree, mul(tree, leg, right), 0.0, mul(tree, leg, z))
+                      for right, z in ends]), AXES["X"], color="X")
+    corner = index_switch(tree, "FLOAT", shape_index,
+                          [corners[1][0] for corners in PIPE_RUNS.values()])
+    tree.linear_gizmo(tree.math("MULTIPLY", bend_radius, 1.0),
+                      vector(tree, sub(tree, mul(tree, leg, corner), bend), 0.0,
+                             mul(tree, radius, 2.0)), AXES["-X"])
+    tree.linear_gizmo(tree.math("MULTIPLY", spacing, 1.0),
+                      vector(tree, spacing, mul(tree, radius, 2.0), 0.0), AXES["X"],
+                      color="SECONDARY", style="BOX")
+    radius_gizmo(tree, radius, "-Y", origin=vector(tree, mul(tree, leg, 0.15), 0.0, 0.0))
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Pipe", tree)
@@ -737,5 +844,15 @@ def cable():
         ends.append(tree.transform(body, rotation=rotation,
                                    translation=vector(tree, mul(tree, half, side), 0.0, 0.0)))
     plugs = tree.smooth(tree.join(*ends), angle=40 * RADIANS)
+
+    # Length at the pronged plug. Slack at the other plug: grounding keeps the sagging middle on
+    # the floor, so more slack lifts the plugs; near the default it lifts them about half the
+    # length per unit of slack. Thickness on the side of the low point.
+    size_gizmo(tree, length, "X")
+    tree.linear_gizmo(tree.math("MULTIPLY", slack, mul(tree, length, 0.5)),
+                      vector(tree, mul(tree, half, -1.0), 0.0, 0.0), AXES["Z"])
+    tree.linear_gizmo(tree.math("MULTIPLY", thickness, 0.5),
+                      vector(tree, 0.0, mul(tree, thickness, -0.5), mul(tree, sag, -1.0)),
+                      AXES["-Y"])
     tree.output(rest_on_ground(tree, tree.join(wire, plugs)))
     return generator_object("Cable", tree)
