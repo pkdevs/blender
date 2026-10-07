@@ -1083,7 +1083,16 @@ static void writedata(
   bh.len = int64_t(len);
 
   if (wd->debug_dst) {
-    write_raw_data_in_debug_file(wd, len, address_id, data);
+    if (filecode == BLO_CODE_DNA1) {
+      const char *error_message = nullptr;
+      const std::unique_ptr<SDNA> sdna = DNA_sdna_from_data(
+          data, int(len), false, false, &error_message);
+      BLI_assert_msg(sdna, error_message ? error_message : "Failed to parse encoded SDNA");
+      DNA_sdna_print(*sdna, *wd->debug_dst);
+    }
+    else {
+      write_raw_data_in_debug_file(wd, len, address_id, data);
+    }
   }
 
   write_bhead(wd, bh);

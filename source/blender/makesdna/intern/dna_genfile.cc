@@ -874,6 +874,32 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
   return dst;
 }
 
+void DNA_sdna_print(const SDNA &sdna, std::ostream &stream)
+{
+  fmt::memory_buffer buf;
+  fmt::appender dst{buf};
+
+  fmt::format_to(dst, "<DNA>\n");
+  fmt::format_to(dst, "Types ({}):\n", sdna.types_num);
+  for (const int type_i : IndexRange(sdna.types_num)) {
+    fmt::format_to(dst, "  [{}] {} ({})\n", type_i, sdna.types[type_i], sdna.types_size[type_i]);
+  }
+
+  fmt::format_to(dst, "Structs ({}):\n", sdna.structs.size());
+  for (const int64_t struct_i : sdna.structs.index_range()) {
+    const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
+    fmt::format_to(dst, "  struct {} {{\n", sdna.types[sdna_struct.type_index]);
+    for (const int member_i : IndexRange(sdna_struct.members_num)) {
+      const SDNA_StructMember &member = sdna_struct.members[member_i];
+      fmt::format_to(
+          dst, "    {} {}\n", sdna.types[member.type_index], sdna.members[member.member_index]);
+    }
+    fmt::format_to(dst, "  }}\n");
+  }
+
+  stream << fmt::to_string(buf);
+}
+
 /* ******************** END READ DNA ********************** */
 
 /* ******************* HANDLE DNA ***************** */
