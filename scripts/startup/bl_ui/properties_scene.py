@@ -73,7 +73,7 @@ class SCENE_PT_scene_dynamic_override(SceneButtonsPanel, Panel):
 
         layout.template_ID(scene, "dynamic_override", new="dynamic_override.new")
 
-        self.layout.template_dynamic_override_tree()
+        self.layout.template_dynamic_override_tree(layout)
 
 
 class SCENE_PT_unit(SceneButtonsPanel, Panel):

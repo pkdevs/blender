@@ -40,13 +40,17 @@ class RNAPathViewItem;
 
 class DynamicOverrideTreeView : public AbstractTreeView {
  public:
-  explicit DynamicOverrideTreeView(DynamicOverride &dynoverride) : dynoverride_(dynoverride) {}
+  explicit DynamicOverrideTreeView(Layout &context_layout, DynamicOverride &dynoverride)
+      : context_layout_(context_layout), dynoverride_(dynoverride)
+  {
+  }
 
   void build_tree() override;
 
  private:
   void build_tree_rule(TreeViewOrItem &parent, DynamicOverrideRule &rule);
 
+  Layout &context_layout_;
   DynamicOverride &dynoverride_;
 };
 
@@ -175,20 +179,27 @@ class DynamicOverrideItemDragController : public AbstractViewItemDragController 
  */
 class RuleViewItem : public AbstractTreeViewItem {
  public:
-  RuleViewItem(DynamicOverride &dynoverride, DynamicOverrideRule &rule)
-      : dynoverride_(dynoverride), rule_(rule)
+  RuleViewItem(Layout &context_layout, DynamicOverride &dynoverride, DynamicOverrideRule &rule)
+      : context_layout_(context_layout), dynoverride_(dynoverride), rule_(rule)
   {
     this->label_ = rule_.name;
   }
 
   void build_row(Layout &row) override
   {
+    PointerRNA rule_ptr = RNA_pointer_create_id_subdata(
+        dynoverride_.id, RNA_DynamicOverrideRuleIDData, &rule_);
+
+    if (is_active()) {
+      context_layout_.context_ptr_set("dynamic_override_rule", &rule_ptr);
+    }
+
     build_rule_name(row);
 
     Layout &sub = row.row(true);
     sub.use_property_decorate_set(false);
 
-    build_rule_buttons(sub);
+    build_rule_buttons(sub, rule_ptr);
   }
 
   bool supports_collapsing() const override
@@ -216,6 +227,7 @@ class RuleViewItem : public AbstractTreeViewItem {
   void build_tree_rule_property(TreeViewOrItem &parent, DynamicOverrideRuleProperty &property);
 
  private:
+  Layout &context_layout_;
   DynamicOverride &dynoverride_;
   DynamicOverrideRule &rule_;
 
@@ -227,7 +239,7 @@ class RuleViewItem : public AbstractTreeViewItem {
     uiItemL_ex(&row, rule_.name, ICON_NONE, false, false);
   }
 
-  void build_rule_buttons(Layout &row)
+  void build_rule_buttons(Layout &row, PointerRNA &rule_ptr)
   {
     if (rule_.type != DynamicOverrideRuleType::IDData) {
       return;
@@ -235,9 +247,6 @@ class RuleViewItem : public AbstractTreeViewItem {
     if (rule_.target_filter.type != DynamicOverrideRuleTargetFilterType::IDSingle) {
       return;
     }
-
-    PointerRNA rule_ptr = RNA_pointer_create_id_subdata(
-        dynoverride_.id, RNA_DynamicOverrideRuleIDData, &rule_);
 
     PointerRNA rule_filter_ptr = RNA_pointer_create_with_parent(
         rule_ptr, RNA_DynamicOverrideRuleTargetFilterIDSingle, &rule_.target_filter);
@@ -266,10 +275,12 @@ class RuleViewItem : public AbstractTreeViewItem {
  */
 class RNAPathViewItem : public AbstractTreeViewItem {
  public:
-  RNAPathViewItem(DynamicOverride &dynoverride,
+  RNAPathViewItem(Layout &context_layout,
+                  DynamicOverride &dynoverride,
                   DynamicOverrideRule &rule,
                   const ParsedRNAPathRef rna_parsed_path)
-      : dynoverride_(dynoverride),
+      : context_layout_(context_layout),
+        dynoverride_(dynoverride),
         rule_(rule),
         rna_parsed_path_(rna_parsed_path),
         rna_path_(ParsedRNAPath<4>(rna_parsed_path_).to_string())
@@ -279,6 +290,12 @@ class RNAPathViewItem : public AbstractTreeViewItem {
 
   void build_row(Layout &row) override
   {
+    if (is_active()) {
+      PointerRNA rule_ptr = RNA_pointer_create_id_subdata(
+          dynoverride_.id, RNA_DynamicOverrideRuleIDData, &rule_);
+      context_layout_.context_ptr_set("dynamic_override_rule", &rule_ptr);
+    }
+
     build_rnapath_item_name(row);
 
     Layout &sub = row.row(true);
@@ -298,6 +315,7 @@ class RNAPathViewItem : public AbstractTreeViewItem {
   }
 
  private:
+  Layout &context_layout_;
   DynamicOverride &dynoverride_;
   DynamicOverrideRule &rule_;
   const ParsedRNAPathRef rna_parsed_path_;
@@ -341,10 +359,14 @@ class RNAPathViewItem : public AbstractTreeViewItem {
  */
 class PropertyViewItem : public AbstractTreeViewItem {
  public:
-  PropertyViewItem(DynamicOverride &dynoverride,
+  PropertyViewItem(Layout &context_layout,
+                   DynamicOverride &dynoverride,
                    DynamicOverrideRule &rule,
                    DynamicOverrideRuleProperty &property)
-      : dynoverride_(dynoverride), rule_(rule), property_(property)
+      : context_layout_(context_layout),
+        dynoverride_(dynoverride),
+        rule_(rule),
+        property_(property)
   {
     this->label_ = rna_path::to_string(rule_property_rna_path_parsed(property).last());
   }
@@ -361,15 +383,26 @@ class PropertyViewItem : public AbstractTreeViewItem {
 
   void build_row(Layout &row) override
   {
+    PointerRNA rule_ptr = RNA_pointer_create_id_subdata(
+        dynoverride_.id, RNA_DynamicOverrideRuleIDData, &rule_);
+    PointerRNA property_ptr = RNA_pointer_create_with_parent(
+        rule_ptr, RNA_DynamicOverrideRuleProperty, &property_);
+
+    if (is_active()) {
+      context_layout_.context_ptr_set("dynamic_override_rule", &rule_ptr);
+      context_layout_.context_ptr_set("dynamic_override_property", &property_ptr);
+    }
+
     build_property_name(row);
 
     Layout &sub = row.row(true);
     sub.use_property_decorate_set(false);
 
-    build_property_buttons(sub);
+    build_property_buttons(sub, rule_ptr, property_ptr);
   }
 
  private:
+  Layout &context_layout_;
   DynamicOverride &dynoverride_;
   DynamicOverrideRule &rule_;
   DynamicOverrideRuleProperty &property_;
@@ -379,13 +412,9 @@ class PropertyViewItem : public AbstractTreeViewItem {
     uiItemL_ex(&row, label_, ICON_NONE, false, false);
   }
 
-  void build_property_buttons(Layout &row)
+  void build_property_buttons(Layout &row, PointerRNA &rule_ptr, PointerRNA &property_ptr)
   {
     DynamicOverrideRuleIDData &iddata_rule = reinterpret_cast<DynamicOverrideRuleIDData &>(rule_);
-    PointerRNA rule_ptr = RNA_pointer_create_id_subdata(
-        dynoverride_.id, RNA_DynamicOverrideRuleIDData, &rule_);
-    PointerRNA property_ptr = RNA_pointer_create_with_parent(
-        rule_ptr, RNA_DynamicOverrideRuleProperty, &property_);
     PointerRNA override_values_ptr = RNA_pointer_create_with_parent(
         rule_ptr, rule_get_runtime_override_values_rna_struct(iddata_rule), &iddata_rule);
 
@@ -430,11 +459,12 @@ void RuleViewItem::build_tree_rule_property(TreeViewOrItem &parent_root,
         /* Add new treeview item to the current parent, if it does not exist yet. */
         [this, parent, rna_parsed_path_slice]() -> RNAPathViewItem * {
           return &parent->add_tree_item<RNAPathViewItem>(
-              this->dynoverride_, this->rule_, rna_parsed_path_slice);
+              this->context_layout_, this->dynoverride_, this->rule_, rna_parsed_path_slice);
         });
   }
 
-  parent->add_tree_item<PropertyViewItem>(this->dynoverride_, this->rule_, property);
+  parent->add_tree_item<PropertyViewItem>(
+      this->context_layout_, this->dynoverride_, this->rule_, property);
 }
 
 void DynamicOverrideTreeView::build_tree_rule(TreeViewOrItem &parent, DynamicOverrideRule &rule)
@@ -442,7 +472,8 @@ void DynamicOverrideTreeView::build_tree_rule(TreeViewOrItem &parent, DynamicOve
   if (rule.type != DynamicOverrideRuleType::IDData) {
     return;
   }
-  RuleViewItem &rule_item = parent.add_tree_item<RuleViewItem>(this->dynoverride_, rule);
+  RuleViewItem &rule_item = parent.add_tree_item<RuleViewItem>(
+      this->context_layout_, this->dynoverride_, rule);
 
   DynamicOverrideRuleIDData &rule_iddata = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
   for (DynamicOverrideRuleProperty &rule_prop : rule_iddata.properties) {
@@ -459,7 +490,7 @@ void DynamicOverrideTreeView::build_tree()
 
 }  // namespace dynoverride
 
-void template_dynamic_override_tree(Layout *layout, bContext *C)
+void template_dynamic_override_tree(Layout *layout, bContext *C, Layout *context_layout)
 {
   DynamicOverride *dynoverride = CTX_data_dynamic_override(C);
 
@@ -472,11 +503,20 @@ void template_dynamic_override_tree(Layout *layout, bContext *C)
   AbstractTreeView *tree_view = block_add_view(
       *block,
       "Dynamic Override Tree View",
-      std::make_unique<dynoverride::DynamicOverrideTreeView>(*dynoverride));
+      std::make_unique<dynoverride::DynamicOverrideTreeView>(*context_layout, *dynoverride));
   tree_view->set_context_menu_title("Dynamic Override");
   tree_view->set_default_rows(12);
 
   TreeViewBuilder::build_tree_view(*C, *tree_view, *layout);
+
+  const PointerRNA *rule_ptr = layout->context_ptr_get("dynamic_override_rule",
+                                                       RNA_DynamicOverrideRule);
+  if (rule_ptr) {
+    context_layout->label("YES", ICON_NONE);
+  }
+  else {
+    context_layout->label("NO", ICON_NONE);
+  }
 }
 
 }  // namespace blender::ui
