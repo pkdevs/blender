@@ -203,9 +203,67 @@ def paint(node, color):
         node.set("fill-opacity", f"{alpha:.3f}")
 
 
+def translation(node, ancestors):
+    """Summed translation of `node` and its ancestors; collection artwork is only translated."""
+    tx = ty = 0.0
+    for item in ancestors + [node]:
+        for kind, args in re.findall(r"(\w+)\s*\(([^)]*)\)", item.get("transform", "")):
+            values = [float(v) for v in re.split(r"[\s,]+", args.strip()) if v]
+            if kind == "translate":
+                tx, ty = tx + values[0], ty + (values[1] if len(values) > 1 else 0.0)
+            elif kind == "matrix" and len(values) == 6:
+                tx, ty = tx + values[4], ty + values[5]
+    return tx, ty
+
+
+def collection_artwork(root):
+    """Blender draws collection icons with a translucent black ring around the colored box and a
+    black handle on it. Drop the ring and cut the handle out of the box instead, so the icon
+    reads cleanly on light and dark backgrounds without an outline."""
+    painted = None
+    for parent in root.iter():
+        if parent.get("id", "").startswith("blender_collection"):
+            # The last painted path is the box body that the handle sits on.
+            def visit(node, chain):
+                nonlocal painted
+                if node.tag == "{%s}path" % SVG:
+                    painted = (node, chain)
+                for child in node:
+                    visit(child, chain + [node])
+            visit(parent, [])
+            break
+    if painted is None:
+        return
+    box, ancestors = painted
+    tx, ty = translation(box, [a for a in ancestors if a is not root])
+    handle = None
+    for parent in list(root.iter()):
+        for child in list(parent):
+            if parent.get("id", "").startswith("blender_") or child.get("id", "").startswith("blender_"):
+                continue
+            if child.tag != "{%s}path" % SVG:
+                continue
+            if child.get("id") == "handhold":
+                handle = child
+            parent.remove(child)
+    # Drop now-empty unpainted groups.
+    for parent in list(root.iter()):
+        for child in list(parent):
+            if child.tag == "{%s}g" % SVG and not len(child) and not child.get("id", "").startswith("blender_"):
+                parent.remove(child)
+    if handle is not None:
+        match = re.match(r"\s*m\s*(-?[\d.]+)[\s,]*(-?[\d.]+)(.*)", handle.get("d"), re.S | re.I)
+        if match:
+            x, y = float(match[1]) - tx, float(match[2]) - ty
+            box.set("d", box.get("d") + f" M{x:g} {y:g}" + match[3])
+            box.set("fill-rule", "evenodd")
+
+
 def svg_multicolor(path, theme):
     """Keep authored colors and fill `blender_*` groups with the theme, as Blender does."""
     root = svg_clean(path)
+    if path.stem == "outliner_collection" or path.stem.startswith("collection_color_"):
+        collection_artwork(root)
     for group in root.iter():
         name = group.get("id", "")
         color = resolve(theme, GROUP_COLORS[name]) if name in GROUP_COLORS else None

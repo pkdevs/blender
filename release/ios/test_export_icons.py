@@ -151,6 +151,15 @@ class ExportIconsTest(unittest.TestCase):
             dark = (output / "blender.multicolor.collection_color_01.imageset/dark.svg").read_text()
             self.assertIn("#ff383c", light)
             self.assertIn("#e2605b", dark)
+            # Collection icons drop Blender's black ring and cut the handle out of the box.
+            for name in ("outliner_collection", "collection_color_01"):
+                for variant in ("light", "dark"):
+                    root = ET.parse(output / f"blender.multicolor.{name}.imageset/{variant}.svg").getroot()
+                    paths = list(root.iter(f"{{{SVG}}}path"))
+                    self.assertTrue(paths and all(
+                        any(a.get("id", "").startswith("blender_collection") for a in root.iter() if path in list(a.iter()) and a is not path)
+                        for path in paths), f"{name} {variant} keeps unpainted outline shapes")
+                    self.assertTrue(any(path.get("fill-rule") == "evenodd" for path in paths))
             self.assertTrue((output / "blender.themed.outliner_ob_mesh.imageset").is_dir())
             self.assertFalse((output / "blender.themed.add.imageset").exists())
             stale = output / "blender.stale.imageset"
