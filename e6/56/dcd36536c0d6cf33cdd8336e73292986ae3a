@@ -1,1 +1,2 @@
 Referenced by issue #50970, UV island select won't select contiguous faces when the polygons UV data flips from positive to negative inside an island
+Referenced by pull request #164866, Fix: UV: Island selection treats stacked islands as connected
