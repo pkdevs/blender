@@ -728,6 +728,16 @@ void blo_do_versions_502(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     version_strip_modifier_show_preview_flag(*bmain);
   }
 
+  /* The random seed took over previously unused padding in #MaterialGPencilStyle, so it needs to
+   * be initialized for files written before the member existed. */
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 23)) {
+    for (Material &materials : bmain->materials) {
+      if (materials.gp_style != nullptr) {
+        materials.gp_style->random_noise_seed = 0;
+      }
+    }
+  }
+
   /* The ID member of the Viewer node is no longer initialized to the Viewer Image, so clear that
    * member. */
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 23)) {
