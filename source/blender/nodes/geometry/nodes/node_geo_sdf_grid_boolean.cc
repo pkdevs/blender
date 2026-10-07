@@ -81,6 +81,8 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->custom1 = int16_t(Operation::Difference);
 }
 
+#ifdef WITH_OPENVDB
+
 static std::optional<std::string> validate_sdf_grid(const openvdb::FloatGrid &grid)
 {
   if (grid.background() <= 0.0f) {
@@ -95,6 +97,8 @@ struct ResultData {
   bke::VolumeTreeAccessToken tree_token;
   openvdb::FloatGrid &grid;
 };
+
+#endif
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
