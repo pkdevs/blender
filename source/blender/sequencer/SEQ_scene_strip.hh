@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "BKE_scene.hh"
+
 /** \file
  * \ingroup sequencer
  */
