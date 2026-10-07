@@ -486,8 +486,35 @@ int main()
     NSCAssert([tree isKindOfClass:UICollectionView.class] && [tree numberOfItemsInSection:0] == 3, @"Native outline rows");
     [tree layoutIfNeeded];
     UICollectionViewListCell *root = (UICollectionViewListCell *)[tree cellForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];
-    NSCAssert([root isKindOfClass:UICollectionViewListCell.class] &&
-              [root.accessories.firstObject isKindOfClass:UICellAccessoryOutlineDisclosure.class], @"System disclosure accessory");
+    UIView *(^disclosureAt)(NSInteger) = ^UIView *(NSInteger item) {
+      UICollectionViewListCell *cell = (UICollectionViewListCell *)[tree cellForItemAtIndexPath:
+          [NSIndexPath indexPathForItem:item inSection:0]];
+      UICellAccessoryCustomView *slot = (UICellAccessoryCustomView *)cell.accessories.firstObject;
+      return [slot isKindOfClass:UICellAccessoryCustomView.class] &&
+             slot.placement == UICellAccessoryPlacementLeading ? slot.customView.subviews.firstObject : nil;
+    };
+    UIView *rootDisclosure = disclosureAt(0), *cubeSlot = disclosureAt(1), *cameraSlot = disclosureAt(2);
+    UIView *rootChevron = [rootDisclosure viewWithTag:0x6368];
+    NSCAssert([root isKindOfClass:UICollectionViewListCell.class] && rootChevron && cubeSlot && cameraSlot,
+              @"Hierarchy rows lead with a disclosure slot");
+    NSCAssert(CGSizeEqualToSize(rootChevron.bounds.size, CGSizeMake(14, 14)) &&
+              fabs(rootChevron.frame.size.width - rootChevron.frame.size.height) < 0.01,
+              @"Expanded hierarchy chevron rotates without stretching: %@", NSStringFromCGRect(rootChevron.frame));
+    const CGPoint chevronCenter = [rootChevron.superview convertPoint:rootChevron.center toView:rootDisclosure];
+    NSCAssert(fabs(chevronCenter.x - CGRectGetMidX(rootDisclosure.bounds)) < 0.5 &&
+              fabs(chevronCenter.y - CGRectGetMidY(rootDisclosure.bounds)) < 0.5,
+              @"Chevron is centered in its slot: %@ in %@", NSStringFromCGPoint(chevronCenter),
+              NSStringFromCGRect(rootDisclosure.bounds));
+    const CGRect cubeFrame = [cubeSlot convertRect:cubeSlot.bounds toView:tree];
+    const CGRect cameraFrame = [cameraSlot convertRect:cameraSlot.bounds toView:tree];
+    const CGRect rootFrame = [rootDisclosure convertRect:rootDisclosure.bounds toView:tree];
+    NSCAssert(CGSizeEqualToSize(rootFrame.size, cubeFrame.size) && CGSizeEqualToSize(cubeFrame.size, cameraFrame.size) &&
+              fabs(CGRectGetMinX(cubeFrame) - CGRectGetMinX(cameraFrame)) < 0.5 &&
+              fabs(CGRectGetMinX(cubeFrame) - CGRectGetMinX(rootFrame) - 16) < 0.5 &&
+              fabs(CGRectGetMidY(cubeFrame) - CGRectGetMidY([tree cellForItemAtIndexPath:
+                  [NSIndexPath indexPathForItem:1 inSection:0]].frame)) < 0.5,
+              @"Disclosure slots share one size, align per depth and center in their rows: %@ %@ %@",
+              NSStringFromCGRect(rootFrame), NSStringFromCGRect(cubeFrame), NSStringFromCGRect(cameraFrame));
     NSCAssert([tree.indexPathsForSelectedItems containsObject:[NSIndexPath indexPathForItem:1 inSection:0]], @"Blender selection uses native selected state");
     UICollectionViewListCell *selectedCell = (UICollectionViewListCell *)[tree cellForItemAtIndexPath:[NSIndexPath indexPathForItem:1 inSection:0]];
     selectedCell.configurationUpdateHandler(selectedCell, selectedCell.configurationState);

@@ -171,8 +171,40 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
 
 static const NSInteger blenderDisclosureChevronTag = 0x6368;
 
-/* Panel disclosure header. Only a fixed-frame glyph inside an untransformed, constrained
+/* Disclosure chevron. Only a fixed-frame glyph inside an untransformed, constrained
  * container rotates: layout passes over a transformed view resize it and stretch the glyph. */
+static UIView *blenderDisclosureGlyph(UIColor *color, BOOL expanded)
+{
+  const CGFloat size = 14;
+  UIView *container = [[[UIView alloc] init] autorelease];
+  container.userInteractionEnabled = NO;
+  container.translatesAutoresizingMaskIntoConstraints = NO;
+  UIImageView *chevron = [[[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"
+      withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:11 weight:UIImageSymbolWeightSemibold]]] autorelease];
+  chevron.frame = CGRectMake(0, 0, size, size);
+  chevron.autoresizingMask = UIViewAutoresizingNone;
+  chevron.contentMode = UIViewContentModeCenter;
+  chevron.tintColor = color;
+  chevron.tag = blenderDisclosureChevronTag;
+  chevron.transform = CGAffineTransformMakeRotation(expanded ? M_PI_2 : 0);
+  [container addSubview:chevron];
+  [NSLayoutConstraint activateConstraints:@[
+    [container.widthAnchor constraintEqualToConstant:size],
+    [container.heightAnchor constraintEqualToConstant:size],
+  ]];
+  return container;
+}
+
+static void blenderRotateDisclosure(UIView *owner, BOOL expanded)
+{
+  UIView *chevron = [owner viewWithTag:blenderDisclosureChevronTag];
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
+      delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+      animations:^{ chevron.transform = CGAffineTransformMakeRotation(expanded ? M_PI_2 : 0); }
+      completion:nil];
+}
+
+/* Panel disclosure header. */
 static UIButton *blenderDisclosureButton(NSString *title, UIFont *font, UIColor *color, CGFloat indent, BOOL expanded)
 {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -190,23 +222,9 @@ static UIButton *blenderDisclosureButton(NSString *title, UIFont *font, UIColor 
   button.configuration = configuration;
   button.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
   button.accessibilityValue = expanded ? @"Expanded" : @"Collapsed";
-  const CGFloat size = 14;
-  UIView *container = [[[UIView alloc] init] autorelease];
-  container.userInteractionEnabled = NO;
-  container.translatesAutoresizingMaskIntoConstraints = NO;
-  UIImageView *chevron = [[[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"
-      withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:11 weight:UIImageSymbolWeightSemibold]]] autorelease];
-  chevron.frame = CGRectMake(0, 0, size, size);
-  chevron.autoresizingMask = UIViewAutoresizingNone;
-  chevron.contentMode = UIViewContentModeCenter;
-  chevron.tintColor = color;
-  chevron.tag = blenderDisclosureChevronTag;
-  chevron.transform = CGAffineTransformMakeRotation(expanded ? M_PI_2 : 0);
-  [container addSubview:chevron];
+  UIView *container = blenderDisclosureGlyph(color, expanded);
   [button addSubview:container];
   [NSLayoutConstraint activateConstraints:@[
-    [container.widthAnchor constraintEqualToConstant:size],
-    [container.heightAnchor constraintEqualToConstant:size],
     [container.leadingAnchor constraintEqualToAnchor:button.leadingAnchor constant:indent + 1],
     [container.centerYAnchor constraintEqualToAnchor:button.centerYAnchor],
   ]];
@@ -216,11 +234,7 @@ static UIButton *blenderDisclosureButton(NSString *title, UIFont *font, UIColor 
 static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 {
   button.accessibilityValue = expanded ? @"Expanded" : @"Collapsed";
-  UIView *chevron = [button viewWithTag:blenderDisclosureChevronTag];
-  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
-      delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-      animations:^{ chevron.transform = CGAffineTransformMakeRotation(expanded ? M_PI_2 : 0); }
-      completion:nil];
+  blenderRotateDisclosure(button, expanded);
 }
 
 @implementation GHOSTIOSScenePanels {
@@ -2571,11 +2585,9 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   for (UICellAccessory *accessory in cell.accessories) {
     if ([accessory isKindOfClass:UICellAccessoryCustomView.class] &&
         ((UICellAccessoryCustomView *)accessory).placement == UICellAccessoryPlacementLeading) {
-      UIButton *disclosure = (UIButton *)((UICellAccessoryCustomView *)accessory).customView;
-      disclosure.accessibilityLabel = expand ? @"Collapse" : @"Expand";
-      [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.2 animations:^{
-        disclosure.imageView.transform = expand ? CGAffineTransformMakeRotation(M_PI_2) : CGAffineTransformIdentity;
-      }];
+      UIView *slotView = ((UICellAccessoryCustomView *)accessory).customView;
+      slotView.subviews.firstObject.accessibilityLabel = expand ? @"Collapse" : @"Expand";
+      blenderRotateDisclosure(slotView, expand);
     }
   }
 }
@@ -2616,17 +2628,30 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   /* UIKit's outline disclosure is always trailing; an outliner reads its disclosure on the
    * left, like Blender and Finder. Leaves keep an empty slot so names stay aligned. */
   NSDiffableDataSourceSectionSnapshot *outline = [_treeDataSource snapshotForSection:@"scene"];
+  /* The sidebar list ignores indentationLevel, so the leading slot carries the depth
+   * indent itself, with the chevron at its trailing edge just before the row's icon. */
+  cell.indentationLevel = 0;
+  const CGFloat indent = 16 * MAX(0, [node[@"depth"] integerValue]);
+  UIView *slotView = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, indent + 20, 28)] autorelease];
   UIButton *disclosure = [UIButton buttonWithType:UIButtonTypeSystem];
-  disclosure.frame = CGRectMake(0, 0, 20, 32);
-  [disclosure.widthAnchor constraintEqualToConstant:20].active = YES;
+  disclosure.translatesAutoresizingMaskIntoConstraints = NO;
+  [slotView addSubview:disclosure];
+  [NSLayoutConstraint activateConstraints:@[
+    [slotView.widthAnchor constraintEqualToConstant:indent + 20],
+    [slotView.heightAnchor constraintEqualToConstant:28],
+    [disclosure.widthAnchor constraintEqualToConstant:20],
+    [disclosure.heightAnchor constraintEqualToConstant:28],
+    [disclosure.trailingAnchor constraintEqualToAnchor:slotView.trailingAnchor],
+    [disclosure.centerYAnchor constraintEqualToAnchor:slotView.centerYAnchor],
+  ]];
   if ([outline snapshotOfParentItem:key includingParentItem:NO].items.count) {
     const BOOL expanded = [outline isExpanded:key];
-    UIImageSymbolConfiguration *symbol = [UIImageSymbolConfiguration
-        configurationWithPointSize:12 weight:UIImageSymbolWeightSemibold];
-    [disclosure setImage:[UIImage systemImageNamed:@"chevron.right" withConfiguration:symbol]
-                forState:UIControlStateNormal];
-    disclosure.tintColor = UIColor.secondaryLabelColor;
-    disclosure.imageView.transform = expanded ? CGAffineTransformMakeRotation(M_PI_2) : CGAffineTransformIdentity;
+    UIView *glyph = blenderDisclosureGlyph(UIColor.secondaryLabelColor, expanded);
+    [disclosure addSubview:glyph];
+    [NSLayoutConstraint activateConstraints:@[
+      [glyph.centerXAnchor constraintEqualToAnchor:disclosure.centerXAnchor],
+      [glyph.centerYAnchor constraintEqualToAnchor:disclosure.centerYAnchor],
+    ]];
     disclosure.accessibilityLabel = expanded ? @"Collapse" : @"Expand";
     disclosure.accessibilityIdentifier = [@"blender.hierarchy.disclosure." stringByAppendingString:node[@"id"]];
     [disclosure addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
@@ -2637,8 +2662,12 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     disclosure.userInteractionEnabled = NO;
     disclosure.isAccessibilityElement = NO;
   }
-  [accessories addObject:[[[UICellAccessoryCustomView alloc] initWithCustomView:disclosure
-      placement:UICellAccessoryPlacementLeading] autorelease]];
+  /* A fixed size keeps every row at one depth identical, so chevrons and names line up. */
+  UICellAccessoryCustomView *slot = [[[UICellAccessoryCustomView alloc] initWithCustomView:slotView
+      placement:UICellAccessoryPlacementLeading] autorelease];
+  slot.maintainsFixedSize = YES;
+  slot.reservedLayoutWidth = indent + 20;
+  [accessories addObject:slot];
   if (!collection && [node[@"hidden"] boolValue]) {
     UIButton *accessory = [UIButton buttonWithType:UIButtonTypeSystem];
     accessory.tintColor = UIColor.secondaryLabelColor;
