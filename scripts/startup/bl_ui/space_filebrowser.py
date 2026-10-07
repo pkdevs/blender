@@ -750,7 +750,9 @@ class ASSETBROWSER_MT_asset(Menu):
 
         layout.separator()
 
-        layout.operator("asset.external_asset_rename", text="Rename Asset...")
+        col = layout.column()
+        col.operator_context = 'INVOKE_REGION_WIN'
+        col.operator("asset.external_asset_rename", text="Rename Asset...")
 
         layout.separator()
 
