@@ -159,6 +159,21 @@ static float calculate_alignment_distance(const ToAnnotationChain &chain,
   return total_distance;
 }
 
+static bool edge_shares_face_with_tagged_edge(BMEdge *e, BMVert *v)
+{
+  BMLoop *l;
+  BMIter liter;
+
+  BM_ITER_ELEM (l, &liter, e, BM_LOOPS_OF_EDGE) {
+    BMLoop *l_other = BM_loop_other_edge_loop(l, v);
+    BMEdge *e_other = l_other->e;
+    if (BM_elem_flag_test(e_other, BM_ELEM_TAG)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static void calculate_verts(const StrokeData &stroke_data,
                             const int method,
                             const float factor,
@@ -221,17 +236,7 @@ static void calculate_verts(const StrokeData &stroke_data,
       BM_ITER_ELEM (e, &iter, v, BM_EDGES_OF_VERT) {
         BMVert *v_other = BM_edge_other_vert(e, v);
         if (!BM_elem_flag_test(e, BM_ELEM_TAG)) {
-          bool shares_face = false;
-          BMIter iter2;
-          BMEdge *e2;
-          BM_ITER_ELEM (e2, &iter2, v, BM_EDGES_OF_VERT) {
-            if (BM_elem_flag_test(e2, BM_ELEM_TAG) && BM_edge_share_face_check(e, e2)) {
-              shares_face = true;
-              break;
-            }
-          }
-
-          if (shares_face) {
+          if (edge_shares_face_with_tagged_edge(e, v)) {
             float3 ray_dir = math::normalize(float3(v_other->co) - float3(v->co));
             check_intersection_fn(ray_dir);
           }
