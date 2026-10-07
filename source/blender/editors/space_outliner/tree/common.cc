@@ -42,7 +42,8 @@ void outliner_make_object_parent_hierarchy(Vector<TreeElement *> *tree)
   /* build hierarchy */
   /* XXX also, set extents here... */
 
-  for (int index : tree->index_range()) {
+  int index = 0;
+  while (index < tree->size()) {
     TreeElement *te = (*tree)[index];
     TreeStoreElem *tselem = TREESTORE(te);
 
@@ -53,7 +54,9 @@ void outliner_make_object_parent_hierarchy(Vector<TreeElement *> *tree)
         TreeElement *tep = reinterpret_cast<TreeElement *>(ob->parent->id.newid);
         tep->subtree.append(te);
         te->parent = tep;
+        continue;
       }
+      index++;
     }
   }
 }

@@ -63,11 +63,13 @@ Vector<TreeElement *> TreeDisplayLibraries::build_tree(const TreeSourceData &sou
    *
    * Note: `List<T>` template is similar to non-mutable ListBaseT iteration so we need to
    * iterate over an actual copy of the original list here, to avoid missing some items. */
-  for (int index : tree.index_range()) {
+  int index = 0;
+  while (index < tree.size()) {
     TreeElement *ten = tree[index];
 
     if (ten == tree.first()) {
       /* First item is main, skip. */
+      index++;
       continue;
     }
 
@@ -75,6 +77,7 @@ Vector<TreeElement *> TreeDisplayLibraries::build_tree(const TreeSourceData &sou
     Library *lib = id_cast<Library *>(tselem->id);
     BLI_assert(!lib || (GS(lib->id.name) == ID_LI));
     if (!lib || !(lib->runtime->parent || lib->archive_parent_library)) {
+      index++;
       continue;
     }
 

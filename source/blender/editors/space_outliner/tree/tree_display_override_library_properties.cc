@@ -102,10 +102,13 @@ Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::add_library_contents
   }
 
   /* Remove ID base elements that turn out to be empty. */
-  for (TreeElement *te : tree) {
+  for (auto iter = tree.begin(); iter != tree.end();) {
+    TreeElement *te = *iter;
     if (te->subtree.is_empty()) {
       outliner_free_tree_element(te, &tree);
+      continue;
     }
+    iter++;
   }
 
   return tree;

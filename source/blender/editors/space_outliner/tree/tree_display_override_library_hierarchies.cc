@@ -66,14 +66,19 @@ Vector<TreeElement *> TreeDisplayOverrideLibraryHierarchies::build_tree(
   }
 
   /* Remove top level library elements again that don't contain any overrides. */
-  for (TreeElement *top_level_te : tree) {
+  int index = 0;
+  while (index < tree.size()) {
+    TreeElement *top_level_te = tree[index];
     if (top_level_te == current_file_te) {
+      index++;
       continue;
     }
 
     if (top_level_te->subtree.is_empty()) {
       outliner_free_tree_element(top_level_te, &tree);
+      continue;
     }
+    index++;
   }
 
   return tree;
