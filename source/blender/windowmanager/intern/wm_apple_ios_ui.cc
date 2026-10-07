@@ -59,6 +59,7 @@
 
 #include "UI_resources.hh"
 #include "RNA_enum_types.hh"
+#include "RNA_prototypes.hh"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern_run.hh"
@@ -998,6 +999,19 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   }
 
   if (command.setting == "timeline") {
+    if (command.value == "autokey") {
+      /* The timeline's record button: Blender's Auto Keying toggle. */
+      Scene *scene = CTX_data_scene(C);
+      if (scene == nullptr) {
+        return;
+      }
+      PointerRNA ptr = RNA_pointer_create_discrete(&scene->id, RNA_ToolSettings, scene->toolsettings);
+      PropertyRNA *prop = RNA_struct_find_property(&ptr, "use_keyframe_insert_auto");
+      RNA_property_boolean_set(&ptr, prop, !RNA_property_boolean_get(&ptr, prop));
+      RNA_property_update(C, &ptr, prop);
+      WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
+      return;
+    }
     if (command.value == "play") {
       ios_operator_call(C, "SCREEN_OT_animation_play");
       return;
@@ -1830,7 +1844,12 @@ void ios_timeline_build(bContext *C)
   std::string json = "{\"frame\":" + std::to_string(scene->r.cfra) +
                      ",\"start\":" + std::to_string(PSFRA) + ",\"end\":" + std::to_string(PEFRA) +
                      ",\"preview\":" + ((scene->r.flag & SCER_PRV_RANGE) ? "true" : "false") +
-                     ",\"playing\":" + (ED_screen_animation_playing(wm) ? "true" : "false") + "}";
+                     ",\"playing\":" + (ED_screen_animation_playing(wm) ? "true" : "false") +
+                     ",\"autokey\":" +
+                     ((scene->toolsettings && (scene->toolsettings->autokey_mode & AUTOKEY_ON)) ?
+                          "true" :
+                          "false") +
+                     "}";
   if (json != ios_timeline_json) {
     ios_timeline_json = json;
     ios_timeline_snapshot.publish(std::move(json));
