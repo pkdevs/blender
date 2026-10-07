@@ -6,6 +6,7 @@
  * \ingroup fbx
  */
 
+#include "BKE_armature.hh"
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_deform.hh"
@@ -22,11 +23,13 @@
 #include "BLI_math_color_c.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
+#include "BLI_string_utils.hh"
 #include "BLI_task.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
 
+#include "DNA_armature_types.h"
 #include "DNA_key_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
@@ -365,6 +368,20 @@ static void import_blend_shape_full_weights(const FbxElementMapping &mapping,
                                             Mesh *mesh,
                                             Object *obj)
 {
+  /* Even unweighted bones can deform the mesh if a mask uses their name. */
+  Set<std::string> bone_names;
+  for (const ModifierData &md : obj->modifiers) {
+    if (md.type != eModifierType_Armature) {
+      continue;
+    }
+    const Object *arm_obj = reinterpret_cast<const ArmatureModifierData &>(md).object;
+    if (arm_obj != nullptr) {
+      BKE_armature_foreach_bone(
+          *id_cast<const bArmature *>(arm_obj->data),
+          [&](int /*index*/, const Bone &bone) { bone_names.add(bone.name); });
+    }
+  }
+
   for (const ufbx_blend_deformer *fdeformer : fmesh->blend_deformers) {
     for (const ufbx_blend_channel *fchan : fdeformer->channels) {
       Key *key = mapping.el_to_shape_key.lookup_default(&fchan->element, nullptr);
@@ -397,14 +414,20 @@ static void import_blend_shape_full_weights(const FbxElementMapping &mapping,
         continue;
       }
 
-      int group_index = BKE_defgroup_name_index(&mesh->vertex_group_names, kb->name);
-      if (group_index < 0) {
-        BKE_object_defgroup_add_name(obj, kb->name);
-        group_index = BKE_defgroup_name_index(&mesh->vertex_group_names, kb->name);
-        if (group_index < 0) {
-          continue;
-        }
-      }
+      /* A new mask group avoids overwriting skin weights or other masks. */
+      char group_name[sizeof(kb->vgroup)];
+      STRNCPY_UTF8(group_name, kb->name);
+      BLI_uniquename_cb(
+          [&](const StringRefNull name) {
+            return bone_names.contains(name) ||
+                   BKE_defgroup_name_index(&mesh->vertex_group_names, name) != -1;
+          },
+          "Group",
+          '.',
+          group_name,
+          sizeof(group_name));
+      bDeformGroup *group = BKE_object_defgroup_add_name(obj, group_name);
+      const int group_index = BLI_findindex(&mesh->vertex_group_names, group);
 
       MutableSpan<MDeformVert> dverts = mesh->deform_verts_for_write();
       for (size_t i = 0; i < fchan->target_shape->num_offsets; i++) {
@@ -416,7 +439,7 @@ static void import_blend_shape_full_weights(const FbxElementMapping &mapping,
         }
       }
 
-      STRNCPY_UTF8(kb->vgroup, kb->name);
+      STRNCPY_UTF8(kb->vgroup, group->name);
     }
   }
 }
@@ -525,6 +548,7 @@ void import_meshes(Main &bmain,
     }
 
     const bool any_shapes = import_blend_shapes(bmain, mapping, fmesh, mesh);
+    bool import_shape_weights = any_shapes;
 
     /* Create objects that use this mesh. */
     for (const ufbx_node *node : fmesh->instances) {
@@ -601,8 +625,10 @@ void import_meshes(Main &bmain,
         }
       }
 
-      if (any_shapes) {
+      if (import_shape_weights) {
         import_blend_shape_full_weights(mapping, fmesh, mesh, obj);
+        /* The mesh owns the masks; importing per instance would duplicate them. */
+        import_shape_weights = false;
       }
 
       /* Assign materials. */

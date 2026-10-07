@@ -473,8 +473,6 @@ def blen_read_object_transform_do(transform_data):
     return (base_mat @ geom_mat, base_mat, geom_mat)
 
 
-# XXX This might be weak, now that we can add vertex-groups from both bones and shapes,
-#     name collisions become more likely, will have to make this more robust!!!
 def add_vgroup_to_objects(vg_indices, vg_weights, vg_name, objects):
     assert len(vg_indices) == len(vg_weights)
     if vg_indices:
@@ -1951,6 +1949,12 @@ def blen_read_shapes(fbx_tmpl, fbx_data, objects, me, scene):
     objects = list({node.bl_obj for node in objects})
     assert objects
 
+    # Retain bone names from every instance's armatures, including unweighted bones.
+    # So we can rename mask groups with the same name to avoid influence issues.
+    bone_names = {bone.name for obj in objects for mod in obj.modifiers
+                  if mod.type == 'ARMATURE' and mod.object is not None
+                  for bone in mod.object.data.bones}
+
     # Blender has a hard minimum and maximum shape key Value. If an imported shape key has a value outside this range it
     # will be clamped, and we'll print a warning message to the console.
     shape_key_values_in_range = True
@@ -2032,13 +2036,23 @@ def blen_read_shapes(fbx_tmpl, fbx_data, objects, me, scene):
 
         # Add vgroup if necessary.
         if vgweights is not None:
+            # A new mask group preserves skin weights and other masks.
+            # The objects share one mesh, so writing one updates for all of them.
+            vg = objects[0].vertex_groups.new(name=kb.name)
+            suffix_index = 1
+            while vg.name in bone_names:
+                suffix = ".%03d" % suffix_index
+                # Leave room for the suffix without splitting UTF-8 characters.
+                base = kb.name.encode('utf-8')[:63 - len(suffix)].decode('utf-8', 'ignore')
+                vg.name = base + suffix
+                suffix_index += 1
             # VertexGroup.add only allows sequences of int indices, but iterating the indices array directly would
             # produce numpy scalars of types such as np.int32. The underlying memoryview of the indices array, however,
             # does produce standard Python ints when iterated, so pass indices.data to add_vgroup_to_objects instead of
             # indices.
             # memoryviews tend to be faster to iterate than numpy arrays anyway, so vgweights.data is passed too.
-            add_vgroup_to_objects(indices.data, vgweights.data, kb.name, objects)
-            kb.vertex_group = kb.name
+            add_vgroup_to_objects(indices.data, vgweights.data, vg.name, objects[:1])
+            kb.vertex_group = vg.name
 
         bc_uuid_to_keyblocks.setdefault(bc_uuid, []).append(kb)
 
