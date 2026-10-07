@@ -8,8 +8,8 @@ import math
 
 import bpy
 
-from .common import RADIANS, generator_object, object_group, palette, rest_on_ground, \
-    simple_material
+from .common import RADIANS, generator_object, object_group, palette, resolution_gizmo, \
+    rest_on_ground, simple_material, size_gizmo
 from .registry import asset
 
 CATALOG = "Objects/Stylized"
@@ -156,6 +156,17 @@ def crystal_cluster():
     crystals = tree.smooth(crystals, smooth=False)
     crystals = tree.material(crystals, material)
 
+    # The rock grows with the height too, so scale the drag to keep the tip under the finger:
+    # the tip sits 1 + 0.9 * 0.045 above the rock's flat bottom per unit of height.
+    tree.linear_gizmo(tree.math("MULTIPLY", height, 1.0405),
+                      tree.xyz(0.0, 0.0, tree.math("ADD", height,
+                                                   tree.math("MULTIPLY", rock_height, 0.55))),
+                      (0.0, 0.0, 1.0))
+    # The rock's rim widens by 0.9 per unit of spread on both sides, so the edge follows 1:1.
+    tree.linear_gizmo(tree.math("MULTIPLY", spread, 0.9), tree.xyz(rock_radius, 0.0, 0.0),
+                      (1.0, 0.0, 0.0))
+    resolution_gizmo(tree, count, tree.xyz(0.0, tree.math("MULTIPLY", rock_radius, -1.0),
+                                           0.0), per_turn=24.0)
     tree.output(rest_on_ground(tree, tree.join(rock, crystals)))
     return generator_object("Crystal Cluster", tree)
 
@@ -251,6 +262,10 @@ def gem():
     stone = tree.transform(stone, scale=tree.xyz(half, half, half))
     stone = tree.smooth(stone, smooth=False)
     stone = tree.material(stone, material)
+    # Size is the width at the girdle, which sits at Z = 0.
+    size_gizmo(tree, size, "X", color="PRIMARY")
+    resolution_gizmo(tree, facets, tree.xyz(0.0, 0.0, tree.math("MULTIPLY", half, 0.38)),
+                     per_turn=16.0)
     tree.output(rest_on_ground(tree, stone))
     return generator_object("Gem", tree)
 
@@ -291,15 +306,17 @@ BITE_RADIUS = 0.0125
 BITES = ((-20.0, -0.011), (-20.0, 0.0), (-20.0, 0.011))
 
 
-def _bite_centers(major, minor):
+def _bite_centers(tree, major, minor):
+    """Bite sphere centers just inside the outer rim, which moves with the radius inputs."""
+    rim = tree.math("ADD", major, minor)
     centers = []
     for angle, along in BITES:
         a = angle * RADIANS
-        reach = major + minor + 0.0035
-        if along:
-            reach -= 0.004
-        centers.append((reach * math.cos(a) - along * math.sin(a),
-                        reach * math.sin(a) + along * math.cos(a), 0.003))
+        reach = tree.math("ADD", rim, 0.0035 - 0.004 if along else 0.0035)
+        centers.append(tree.xyz(
+            tree.math("SUBTRACT", tree.math("MULTIPLY", reach, math.cos(a)), along * math.sin(a)),
+            tree.math("ADD", tree.math("MULTIPLY", reach, math.sin(a)), along * math.cos(a)),
+            0.003))
     return centers
 
 
@@ -307,8 +324,11 @@ def _bite_centers(major, minor):
        "The classic donut with wavy icing, colorful sprinkles and an optional bite.",
        ("donut", "doughnut", "food", "sweet", "dessert", "stylized"), preview_view="top")
 def donut():
-    major, minor = 0.032, 0.0165
     tree = object_group("Donut")
+    major = tree.input("Radius", "FLOAT", 0.032, min=0.001, subtype="DISTANCE",
+                       description="Distance from the center to the middle of the dough ring")
+    minor = tree.input("Thickness", "FLOAT", 0.0165, min=0.001, subtype="DISTANCE",
+                       description="Radius of the dough ring's tube")
     icing_on = tree.input("Icing", "BOOL", True)
     sprinkles_on = tree.input("Sprinkles", "BOOL", True, description="Sprinkles on the icing")
     count = tree.input("Sprinkle Count", "INT", 140, min=0, max=600)
@@ -364,7 +384,7 @@ def donut():
                        domain="INSTANCE")
 
     # Bite: cut overlapping spheres out of the dough; trim the icing and sprinkles to match.
-    centers = _bite_centers(major, minor)
+    centers = _bite_centers(tree, major, minor)
     position = _position(tree)
     inside = None
     bitten_position = position
@@ -403,6 +423,17 @@ def donut():
     sprinkles = tree.smooth(sprinkles)
     sprinkles = _switch(tree, tree.math("MULTIPLY", sprinkles_on, icing_on), None, sprinkles)
     icing = _switch(tree, icing_on, None, icing)
+    # Radius on the outer rim, away from the bite: the rim moves 1:1 once re-centered.
+    tree.linear_gizmo(tree.math("MULTIPLY", major, 1.0),
+                      tree.xyz(tree.math("MULTIPLY", tree.math("ADD", major, minor), -1.0)),
+                      (-1.0, 0.0, 0.0))
+    # The tube is squashed to 0.82 and grows both ways, so its top rises 1.64 per unit of
+    # thickness above the fixed bottom.
+    top = tree.math("ADD", tree.math("MULTIPLY", minor, 0.82), 0.0026)
+    tree.linear_gizmo(tree.math("MULTIPLY", minor, 1.64), tree.xyz(0.0, major, top),
+                      (0.0, 0.0, 1.0), color="Z")
+    # A dial in the hole, on top of the icing.
+    resolution_gizmo(tree, count, tree.xyz(z=minor), per_turn=200.0)
     tree.output(rest_on_ground(tree, tree.join(dough, icing, sprinkles)))
     return generator_object("Donut", tree)
 
@@ -464,6 +495,13 @@ def balloon():
                      Radius=0.0015).outputs["Curve"]
     string = tree.n("GeometryNodeCurveToMesh", Curve=line, Profile_Curve=profile).outputs[0]
     string = tree.material(tree.smooth(string), string_material)
+
+    # The knot sits at the top of the string, so dragging it lengthens the string 1:1. The size
+    # arrow sits at the widest point of the body.
+    tree.linear_gizmo(tree.math("MULTIPLY", length, 1.0), tree.xyz(z=length), (0.0, 0.0, 1.0),
+                      color="SECONDARY")
+    size_gizmo(tree, size, "X", origin=tree.xyz(z=tree.math("ADD", length, tree.math(
+        "MULTIPLY", radius, 1.28))), color="PRIMARY")
 
     tree.output(rest_on_ground(tree, tree.join(body, string)))
     return generator_object("Balloon", tree)
