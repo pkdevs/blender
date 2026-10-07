@@ -2,6 +2,8 @@
 
 #include "blender_project_config.h"
 
+#include "CLG_log.h"
+
 #include "BLI_fileops.hh"
 #include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
@@ -22,7 +24,9 @@
 
 namespace blender::bke {
 
-constexpr toml::spec toml_version = toml::spec::v(1, 1, 0);
+static CLG_LogRef LOG = {"project.config"};
+
+constexpr toml::spec toml_version = toml::spec::v(1, 0, 0);
 const int project_schema_version = 1;
 
 static std::string toml_type_name(const toml::value &value)
@@ -103,7 +107,7 @@ struct TomlProjectVariable {
 
     if (this->type == ProjectVariableType::INT && !value.is_integer()) {
       std::string err = toml::format_error(
-          "Project Variable type and value missmatch",
+          "Project Variable type and value mismatch",
           value,
           "Actual and declared type of project variable \"value\" do not match. Got \"" +
               toml_type_name(value) + "\", expected an interger");
@@ -112,7 +116,7 @@ struct TomlProjectVariable {
     }
     if (this->type == ProjectVariableType::FLOAT && !value.is_floating()) {
       std::string err = toml::format_error(
-          "Project Variable type and value missmatch",
+          "Project Variable type and value mismatch",
           value,
           "Actual and declared type of project variable \"value\" do not match. Got \"" +
               toml_type_name(value) + "\", expected a float");
@@ -122,7 +126,7 @@ struct TomlProjectVariable {
     if (this->type == ProjectVariableType::STRING) {
       if (!value.is_string()) {
         std::string err = toml::format_error(
-            "Project Variable type and value missmatch",
+            "Project Variable type and value mismatch",
             value,
             "Actual and declared type of project variable \"value\" do not match. Got \"" +
                 toml_type_name(value) + "\", expected a string");
@@ -142,15 +146,14 @@ struct TomlProjectVariable {
         toml::value var = v.at("subtype");
         std::string err = toml::format_error("Invalid Project variable subtype",
                                              var,
-                                             "invalid value for \'type' expected \"NONE\" or "
+                                             "invalid value for \'subtype' expected \"NONE\" or "
                                              "\"FILEPATH\", but got \"" +
                                                  type + "\"");
 
         throw toml::type_error(err, var.location());
       }
-
-      this->description = toml::find_or(v, "description", "");
     }
+    this->description = toml::find_or(v, "description", "");
   }
 };
 
@@ -158,10 +161,9 @@ static void project_variable_add(BlenderProject *project, TomlProjectVariable pr
 {
   ProjectVariable *new_var = project->new_variable(project_variable.name, project_variable.type);
   /* Setup RNA relation to the project so that the variable knows which project it belongs to. */
-  PointerRNA variable = RNA_pointer_create_with_parent(
-      RNA_pointer_create_discrete(nullptr, RNA_BlenderProject, project),
-      RNA_ProjectVariable,
-      new_var);
+  RNA_pointer_create_with_parent(RNA_pointer_create_discrete(nullptr, RNA_BlenderProject, project),
+                                 RNA_ProjectVariable,
+                                 new_var);
 
   toml::value value = project_variable.value;
 
@@ -254,16 +256,22 @@ static void create_blender_project_from_toml(Main *bmain,
                                              std::string toml_path,
                                              std::string project_root_path)
 {
-  toml::value config_values = toml::parse(toml_path, toml_version);
-  int version = toml::get_or(config_values.at("schema_version"), 1);
+  /* This blender::fstream is needed to properly handle utf-8 paths on Windows. */
+  blender::fstream config_file(toml_path, std::ios::in | std::ios::binary);
+  if (!config_file.is_open()) {
+    throw std::system_error(errno, std::generic_category(), "Failed to open file: " + toml_path);
+  }
+
+  toml::value config_values = toml::parse(config_file, toml_path, toml_version);
+  toml::value schema_var = config_values.at("schema_version");
+  int version = schema_var.as_integer();
 
   if (version > project_schema_version) {
-    toml::value var = config_values.at("schema_version");
     std::string err = toml::format_error(
         "Too new project schema version!",
-        var,
+        schema_var,
         "expected a value equal or below: " + std::to_string(project_schema_version) + "\"");
-    throw toml::type_error(err, var.location());
+    throw toml::type_error(err, schema_var.location());
   }
 
   if (version < project_schema_version) {
@@ -271,7 +279,10 @@ static void create_blender_project_from_toml(Main *bmain,
   }
 
   auto project_name = toml::find<std::string>(config_values, "name");
-  BKE_blender_project_init(project_name, project_root_path);
+  if (!BKE_blender_project_init(project_name, project_root_path)) {
+    throw std::invalid_argument(
+        "Couldn't initalize the project because the project name was empty");
+  }
   BlenderProject *project = BKE_blender_project_get(bmain);
 
   if (config_values.contains("ocio_config")) {
@@ -294,6 +305,9 @@ static void create_blender_project_from_toml(Main *bmain,
   }
   // TODO: check if we didn't access any of the parsed toml variables
   // We need to build the toml lib with "TOML11_ENABLE_ACCESS_CHECK" to do this though.
+
+  /* Done loading, mark project as non dirty. */
+  project->is_dirty = false;
 }
 
 static toml::ordered_array project_variables_to_toml(BlenderProject *project)
@@ -334,6 +348,13 @@ static toml::ordered_array project_variables_to_toml(BlenderProject *project)
         BLI_assert_unreachable();
         break;
     }
+
+    StringRefNull description = project_variable->description_get();
+
+    if (!description.is_empty()) {
+      variable_data["description"] = std::string(description);
+    }
+
     toml_array.push_back(variable_data);
   }
   return toml_array;
@@ -369,11 +390,25 @@ static toml::ordered_array project_asset_libraries_to_toml()
 
 static toml::ordered_table create_toml_from_blender_project(BlenderProject *project)
 {
-  return toml::ordered_table{{"schema_version", project_schema_version},
-                             {"name", std::string(project->get_name())},
-                             {"ocio_config", std::string(project->get_ocio_config_path())},
-                             {"variables", project_variables_to_toml(project)},
-                             {"asset_libraries", project_asset_libraries_to_toml()}};
+  toml::ordered_table toml_table = {{"schema_version", project_schema_version},
+                                    {"name", std::string(project->get_name())}};
+
+  StringRefNull ocio_config_path = project->get_ocio_config_path();
+  if (!ocio_config_path.is_empty()) {
+    toml_table["description"] = std::string(ocio_config_path);
+  }
+
+  toml::ordered_array variables = project_variables_to_toml(project);
+  if (!variables.empty()) {
+    toml_table["variables"] = variables;
+  }
+
+  toml::ordered_array asset_libraries = project_asset_libraries_to_toml();
+  if (!asset_libraries.empty()) {
+    toml_table["asset_libraries"] = asset_libraries;
+  }
+
+  return toml_table;
 }
 
 bool BKE_blender_project_config_file_write(Main *bmain)
@@ -384,10 +419,14 @@ bool BKE_blender_project_config_file_write(Main *bmain)
 
   toml::ordered_table toml_config = create_toml_from_blender_project(project);
 
-  std::ofstream config_file(toml_path);
+  /* This blender::fstream is needed to properly handle utf-8 paths on Windows. */
+  blender::fstream config_file(toml_path, std::ios::out | std::ios::binary);
+  if (!config_file.is_open()) {
+    throw std::system_error(errno, std::generic_category(), "Failed to open file: " + toml_path);
+  }
   config_file << toml::format(toml::ordered_value(toml_config), toml_version);
-
-  return true;
+  config_file.close(); /* Flush to get all failures. */
+  return !config_file.fail();
 }
 
 bool BKE_blender_project_init_from_root_path(Main *bmain, std::string project_root_path)
@@ -409,10 +448,11 @@ bool BKE_blender_project_init_from_root_path(Main *bmain, std::string project_ro
   catch (const std::exception &e) {
     // TODO: print errors
     /* Delete any project and it's data. */
-    printf("Error loading project from toml: %s\n", e.what());
+    CLOG_ERROR(&LOG, "Failed loading project from toml: \n%s", e.what());
     BKE_blender_project_clear();
     return false;
   }
+  CLOG_INFO_NOCHECK(&LOG, "Opened project with root path: %s", project_root_path.c_str());
   return true;
 }
 

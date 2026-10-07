@@ -183,6 +183,9 @@ void ProjectVariable::value_set(float value)
 
 StringRefNull ProjectVariable::description_get() const
 {
+  if (this->ui_data->description == nullptr) {
+    return StringRefNull();
+  }
   return StringRefNull(this->ui_data->description);
 }
 
@@ -392,7 +395,7 @@ std::string ensure_is_valid_project_variable_name(StringRef name)
 
 std::string BKE_is_path_inside_blender_project(const char *path)
 {
-  char project_root_path[PATH_MAX];
+  char project_root_path[FILE_MAX];
   if (BLI_is_file(path)) {
     BLI_path_split_dir_part(path, project_root_path, sizeof(project_root_path));
   }
@@ -405,18 +408,22 @@ std::string BKE_is_path_inside_blender_project(const char *path)
   }
 
   bool found_project = false;
-  char project_root_path_test[PATH_MAX];
+  char project_root_path_test[FILE_MAX];
 
   /* Loop as long as project_root_path has a parent dir.
    * Stop if project_root_path contains a .blender_project folder.
    */
   do {
     STRNCPY(project_root_path_test, project_root_path);
-    BLI_path_append(project_root_path_test, PATH_MAX, ".blender_project");
+    BLI_path_append(project_root_path_test, FILE_MAX, ".blender_project");
     found_project = BLI_is_dir(project_root_path_test);
   } while (!found_project && BLI_path_parent_dir(project_root_path));
 
   if (found_project) {
+    /* Ensure that we don't have a trailing slash in the path.
+     * IE, we always return "/my/folder" and not "/my/folder/".
+     */
+    BLI_path_slash_rstrip(project_root_path);
     return project_root_path;
   }
   return "";
