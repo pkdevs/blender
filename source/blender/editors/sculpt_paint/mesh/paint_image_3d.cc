@@ -101,7 +101,8 @@ std::unique_ptr<ImageData> ImageData::init_mask_image(ImagePaintSettings &settin
 static void fetch_image_buffers(ImageData &image_data,
                                 bke::pbvh::Node & /*node*/,
                                 PixelNode &pixel_node,
-                                const bool is_mask_brush)
+                                const bool is_mask_brush,
+                                const bool generate_scratch_data)
 {
   PRF_scope(ProfileCategory::Editor);
   for (const UDIMTilePixels &tile : pixel_node.tiles) {
@@ -169,6 +170,20 @@ static void fetch_image_buffers(ImageData &image_data,
             tile.tile_number,
             MutableSpan(reinterpret_cast<uchar4 *>(buffer->byte_data_for_write()),
                         IMB_get_pixel_count(buffer)));
+      }
+
+      if (generate_scratch_data) {
+        const int64_t tiles_x = (buffer->x + scratch_tile_size - 1) >> scratch_tile_bits;
+        const int64_t tiles_y = (buffer->y + scratch_tile_size - 1) >> scratch_tile_bits;
+        image_data.scratch_data_pushed.lookup_or_add_cb(tile.tile_number, [&]() {
+          return Array<uint32_t>(tiles_x * tiles_y, 0);
+        });
+        image_data.scratch_color_data.lookup_or_add_cb(tile.tile_number, [&]() {
+          return Vector<Vector<float4>, 0>(tiles_x * tiles_y);
+        });
+        image_data.scratch_factor_data.lookup_or_add_cb(tile.tile_number, [&]() {
+          return Vector<Vector<float>, 0>(tiles_x * tiles_y);
+        });
       }
     }
   }
@@ -715,6 +730,38 @@ static void push_undo_tiles(ImageData &image_data,
     ED_image_paint_tile_push(
         undo_tiles, image_data.image, &image_buffer, &tile_user, tile_x, tile_y, nullptr, nullptr);
     pushed.store(1, std::memory_order_release);
+  }
+}
+
+static void allocate_scratch_tiles(ImageData &image_data,
+                                   const image::TileNumber tile_number,
+                                   ImBuf &image_buffer,
+                                   MutableSpan<uint32_t> tile_allocated,
+                                   const int img_x_start,
+                                   const int img_x_end,
+                                   const int img_y)
+{
+  const int tile_y = img_y >> scratch_tile_bits;
+  const int tile_x_start = img_x_start >> scratch_tile_bits;
+  const int tile_x_end = img_x_end >> scratch_tile_bits;
+  const int undo_tiles_x = (image_buffer.x + scratch_tile_size - 1) >>
+                           scratch_tile_bits;
+
+  for (int tile_x = tile_x_start; tile_x <= tile_x_end; tile_x++) {
+    const int tile_index = tile_y * undo_tiles_x + tile_x;
+    std::atomic_ref<uint32_t> allocated(tile_allocated[tile_index]);
+    /* This atomic load is free on x86_64, and cheap on arm64. */
+    if (allocated.load(std::memory_order_acquire)) {
+      continue;
+    }
+
+    Vector<Vector<float4>, 0> &tile_scratch_color = image_data.scratch_color_data.lookup(tile_number);
+    tile_scratch_color[tile_index].reinitialize(scratch_tile_size * scratch_tile_size);
+
+    Vector<Vector<float>, 0> &tile_scratch_factor = image_data.scratch_factor_data.lookup(tile_number);
+    tile_scratch_factor[tile_index].resize(scratch_tile_size * scratch_tile_size, 0);
+
+    allocated.store(1, std::memory_order_release);
   }
 }
 
@@ -1343,7 +1390,7 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                                                 PaintBlendSettings(paint, brush, is_inverted);
 
   node_mask.foreach_index([&](const int i) {
-    fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], is_mask_brush);
+    fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], is_mask_brush, false);
   });
 
   const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
@@ -1499,7 +1546,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
   MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
 
   node_mask.foreach_index(
-      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], false); });
+      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], false, true); });
 
   for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
     modified.as_mutable_span().fill(0);
