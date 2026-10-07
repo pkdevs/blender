@@ -9,8 +9,6 @@
 
 #include "NOD_eval_log.hh"
 
-#include "DEG_depsgraph_query.hh"
-
 #include "COM_bundle_item.hh"
 #include "COM_result.hh"
 #include "COM_utilities.hh"
