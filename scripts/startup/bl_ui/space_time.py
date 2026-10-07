@@ -269,7 +269,7 @@ class TIME_PT_playback(TimelinePanelButtons, Panel):
                 col.prop(
                     context.workspace,
                     "use_strip_scene_range_for_playback",
-                    text="Use Scene Strip Range for Playback")
+                    text="Use Scene Strip Range")
                 col = panel.column(heading="Sync")
                 col.prop(context.workspace, "use_scene_time_sync", text="Scene Time")
 
