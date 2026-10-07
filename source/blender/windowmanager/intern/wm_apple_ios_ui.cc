@@ -19,6 +19,7 @@
 #include "BKE_idprop.hh"
 #include "BKE_idtype.hh"
 #include "BKE_paint.hh"
+#include "BKE_preferences.h"
 #include "BKE_preview_image.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
@@ -1529,6 +1530,9 @@ bool ios_asset_add_location(bContext *C, const ID_Type type, int r_xy[2])
   return true;
 }
 
+/** Name of the bundled library of starter assets, in `datafiles/starter_assets`. */
+constexpr const char *IOS_STARTER_LIBRARY_NAME = "Starter";
+
 void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
 {
   const IOSContextStore context_store = ios_context_push_view3d(C);
@@ -1841,6 +1845,26 @@ std::string ios_json_escape(const std::string &value)
 }
 
 }  // namespace
+
+void WM_apple_ios_starter_library_ensure()
+{
+  const std::optional<std::string> path = BKE_appdir_folder_id(BLENDER_DATAFILES,
+                                                               "starter_assets");
+  if (!path) {
+    return;
+  }
+  bUserAssetLibrary *library = BKE_preferences_asset_library_find_by_name(
+      &U, IOS_STARTER_LIBRARY_NAME);
+  if (library == nullptr) {
+    library = BKE_preferences_asset_library_add(&U, IOS_STARTER_LIBRARY_NAME, path->c_str());
+  }
+  else if (!STREQ(library->dirpath, path->c_str())) {
+    /* The app's install location changes with every install and update. */
+    BKE_preferences_asset_library_path_set(library, path->c_str());
+  }
+  /* Dropping the same material twice reuses it rather than adding a copy. */
+  library->import_method = ASSET_IMPORT_APPEND_REUSE;
+}
 
 extern "C" void WM_apple_ios_ui_command_enqueue(int command)
 {

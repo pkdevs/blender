@@ -558,6 +558,10 @@ static void wm_init_userdef(Main *bmain)
   /* Update the temporary directory from the preferences or fall back to the system default. */
   BKE_tempdir_init(U.tempdir);
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  WM_apple_ios_starter_library_ensure();
+#endif
+
   /* Update input device preference. */
   WM_init_input_devices();
 

@@ -24,5 +24,10 @@ bool WM_apple_ios_dialog_begin(bContext *C,
 void WM_apple_ios_dialog_flush(bContext *C);
 bool WM_apple_ios_dialog_active(const wmWindow *win);
 void WM_apple_ios_reports(wmWindow *win, ReportList *reports, int minimum_level);
+/**
+ * Register the bundled "Starter" asset library, or refresh its path, since the app's install
+ * location changes with every install. Call after loading the preferences.
+ */
+void WM_apple_ios_starter_library_ensure();
 
 }  // namespace blender
