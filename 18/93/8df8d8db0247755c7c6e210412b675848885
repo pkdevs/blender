@@ -1,1 +1,2 @@
 Referenced by issue #164752, Texture Paint: Crash after painting a stroke with symmetry
+Referenced by pull request #164840, Fix #164752: Crash when Texture Painting UDIM with X-axis symmetry
