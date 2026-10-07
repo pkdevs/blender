@@ -165,8 +165,12 @@ int main()
               [sent[0] isEqual:(@[@"drag", @0, @"chair", @600, @400])] &&
               [sent[1] isEqual:(@[@"drag", @1, @"chair", @620, @420])],
               @"Entering the viewport starts Blender's drag, then moves it in client coordinates: %@", sent);
+    UIDragPreview *pill = item.previewProvider ? item.previewProvider() : nil;
+    NSCAssert(pill && pill.view.bounds.size.width > 100 && assets.view.alpha < 0.5,
+              @"Over the viewport the preview becomes a pill beside the finger and the pane fades");
     [drop dropInteraction:interaction performDrop:(id)session];
     [drop dropInteraction:interaction sessionDidEnd:(id)session];
+    NSCAssert(assets.view.alpha == 1.0, @"The pane comes back when the drag ends");
     NSCAssert([sent.lastObject isEqual:(@[@"drag", @2, @"chair", @620, @420])] && sent.count == 3,
               @"Releasing drops the asset where it is, without a cancel: %@", sent);
 
@@ -178,6 +182,9 @@ int main()
     session.location = CGPointMake(CGRectGetMidX(assets.view.frame), CGRectGetMidY(assets.view.frame));
     [drop dropInteraction:interaction sessionDidUpdate:(id)session];
     NSCAssert([sent.lastObject[1] isEqual:@3], @"Back over the pane cancels the viewport drag: %@", sent);
+    UIDragPreview *thumbnail = item.previewProvider ? item.previewProvider() : nil;
+    NSCAssert(thumbnail && thumbnail.view.bounds.size.width == 96 && assets.view.alpha == 1.0,
+              @"Back over the pane the thumbnail preview and the pane return");
     session.location = CGPointMake(300, 200);
     [drop dropInteraction:interaction sessionDidUpdate:(id)session];
     [drop dropInteraction:interaction sessionDidExit:(id)session];

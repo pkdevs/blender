@@ -34,6 +34,13 @@ static NSArray<NSArray<NSString *> *> *blenderAssetTypes()
   ];
 }
 
+/* Where a drop lands, shown in the drag preview over the viewport. */
+static NSString *blenderAssetDropHint(NSString *type)
+{
+  return [type isEqual:@"Material"] || [type isEqual:@"Modifier"] ? @"Drop on an object" :
+                                                                     @"Drop to place";
+}
+
 static UIImage *blenderAssetTypeIcon(NSString *type)
 {
   for (NSArray<NSString *> *entry in blenderAssetTypes()) {
@@ -145,7 +152,9 @@ static NSString *blenderAssetAddTitle(NSString *type)
   BOOL _visible;
   BOOL _dragging;
   BOOL _dropped;
+  BOOL _overViewport;
   CGPoint _dropPoint;
+  UISelectionFeedbackGenerator *_selection;
 }
 
 @synthesize clientPoint = _clientPoint;
@@ -261,6 +270,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
   [_catalog release];
   [_thumbnails release];
   [_clientPoint release];
+  [_selection release];
   [_visibilityDidChange release];
   [super dealloc];
 }
@@ -695,6 +705,99 @@ static NSString *blenderAssetAddTitle(NSString *type)
                              int(lround(client.y)));
 }
 
+/* Over the viewport the lifted thumbnail becomes a compact pill beside the finger, so the surface
+ * under it, and Blender's preview of where the asset lands, stay visible. */
+- (UIDragPreview *)pillPreviewForItem:(NSDictionary *)item
+{
+  const CGFloat height = 56.0, gap = 20.0, inset = 6.0;
+  UIImage *thumbnail = [self thumbnailForItem:item];
+  UIImageView *image = [[[UIImageView alloc] initWithImage:thumbnail ?: blenderAssetTypeIcon(item[@"type"])]
+      autorelease];
+  image.frame = CGRectMake(inset, inset, height - 2 * inset, height - 2 * inset);
+  image.contentMode = thumbnail ? UIViewContentModeScaleAspectFill : UIViewContentModeCenter;
+  image.tintColor = UIColor.secondaryLabelColor;
+  image.backgroundColor = UIColor.tertiarySystemFillColor;
+  image.layer.cornerRadius = (height - 2 * inset) / 2;
+  image.clipsToBounds = YES;
+  UILabel *name = [[[UILabel alloc] init] autorelease];
+  name.text = item[@"name"];
+  name.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+  name.textColor = UIColor.labelColor;
+  UILabel *hint = [[[UILabel alloc] init] autorelease];
+  hint.text = blenderAssetDropHint(item[@"type"]);
+  hint.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+  hint.textColor = UIColor.secondaryLabelColor;
+  [name sizeToFit];
+  [hint sizeToFit];
+  const CGFloat text_x = height + 4;
+  const CGFloat width = MIN(320.0, text_x + MAX(name.bounds.size.width, hint.bounds.size.width) + 20);
+  name.frame = CGRectMake(text_x, 8, width - text_x - 16, 22);
+  hint.frame = CGRectMake(text_x, 30, width - text_x - 16, 18);
+  UIView *pill = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, width, height)] autorelease];
+  pill.backgroundColor = UIColor.secondarySystemBackgroundColor;
+  [pill addSubview:image];
+  [pill addSubview:name];
+  [pill addSubview:hint];
+  /* The preview's center sits under the finger: place the pill in the upper left quarter. */
+  UIView *container = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, 2 * (width + gap),
+                                                                2 * (height + gap))] autorelease];
+  container.backgroundColor = UIColor.clearColor;
+  container.overrideUserInterfaceStyle = _panel.traitCollection.userInterfaceStyle;
+  [container addSubview:pill];
+  UIDragPreviewParameters *parameters = [[[UIDragPreviewParameters alloc] init] autorelease];
+  UIBezierPath *shape = [UIBezierPath bezierPathWithRoundedRect:pill.frame cornerRadius:height / 2];
+  parameters.visiblePath = shape;
+  parameters.shadowPath = shape;
+  parameters.backgroundColor = UIColor.clearColor;
+  return [[[UIDragPreview alloc] initWithView:container parameters:parameters] autorelease];
+}
+
+/* The thumbnail as it was lifted from the pane. */
+- (UIDragPreview *)thumbnailPreviewForItem:(NSDictionary *)item
+{
+  UIImage *thumbnail = [self thumbnailForItem:item];
+  UIImageView *image = [[[UIImageView alloc] initWithImage:thumbnail ?: blenderAssetTypeIcon(item[@"type"])]
+      autorelease];
+  image.frame = CGRectMake(0, 0, kAssetTile, kAssetTile);
+  image.contentMode = thumbnail ? UIViewContentModeScaleAspectFill : UIViewContentModeCenter;
+  image.backgroundColor = UIColor.tertiarySystemFillColor;
+  UIDragPreviewParameters *parameters = [[[UIDragPreviewParameters alloc] init] autorelease];
+  parameters.visiblePath = [UIBezierPath bezierPathWithRoundedRect:image.bounds cornerRadius:14];
+  parameters.backgroundColor = UIColor.clearColor;
+  return [[[UIDragPreview alloc] initWithView:image parameters:parameters] autorelease];
+}
+
+/* Crossing between the pane and the viewport: swap the preview, let the scene show through the
+ * pane, and give a light tick so the change is felt. */
+- (void)setOverViewport:(BOOL)over session:(id<UIDropSession>)session
+{
+  if (over == _overViewport) {
+    return;
+  }
+  _overViewport = over;
+  NSDictionary *item = [self assetForSession:session];
+  UIDragPreview *preview = item ? (over ? [self pillPreviewForItem:item] :
+                                          [self thumbnailPreviewForItem:item]) : nil;
+  if (preview) {
+    for (UIDragItem *drag_item in session.localDragSession.items) {
+      drag_item.previewProvider = ^UIDragPreview *() { return preview; };
+    }
+  }
+  if (over) {
+    if (!_selection) {
+      _selection = [[UISelectionFeedbackGenerator alloc] init];
+    }
+    [_selection selectionChanged];
+  }
+  UIView *panel = _panel;
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.2
+                        delay:0
+                      options:UIViewAnimationOptionBeginFromCurrentState |
+                              UIViewAnimationOptionAllowUserInteraction
+                   animations:^{ panel.alpha = over ? 0.35 : 1.0; }
+                   completion:nil];
+}
+
 - (BOOL)dropInteraction:(UIDropInteraction *)interaction canHandleSession:(id<UIDropSession>)session
 {
   return [self assetForSession:session] != nil;
@@ -703,12 +806,14 @@ static NSString *blenderAssetAddTitle(NSString *type)
 - (void)dropInteraction:(UIDropInteraction *)interaction sessionDidEnter:(id<UIDropSession>)session
 {
   _dropped = NO;
+  [_selection prepare];
 }
 
 - (UIDropProposal *)dropInteraction:(UIDropInteraction *)interaction
                    sessionDidUpdate:(id<UIDropSession>)session
 {
   const BOOL over = [self isOverViewport:session];
+  [self setOverViewport:over session:session];
   if (over && !_dragging) {
     /* Start Blender's drag where the asset enters the viewport, so it previews from there. */
     _dragging = YES;
@@ -735,10 +840,13 @@ static NSString *blenderAssetAddTitle(NSString *type)
   _dragging = NO;
   _dropPoint = [session locationInView:interaction.view];
   [self sendDrag:GHOSTIOSAssetDragDrop session:session];
+  [[[[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium] autorelease]
+      impactOccurred];
 }
 
 - (void)dropInteraction:(UIDropInteraction *)interaction sessionDidExit:(id<UIDropSession>)session
 {
+  [self setOverViewport:NO session:session];
   if (_dragging) {
     _dragging = NO;
     WM_apple_ios_ui_asset_drag(GHOSTIOSAssetDragCancel, nullptr, 0, 0);
@@ -751,6 +859,10 @@ static NSString *blenderAssetAddTitle(NSString *type)
     WM_apple_ios_ui_asset_drag(GHOSTIOSAssetDragCancel, nullptr, 0, 0);
   }
   _dragging = NO;
+  _overViewport = NO;
+  UIView *panel = _panel;
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
+                   animations:^{ panel.alpha = 1.0; }];
 }
 
 - (UITargetedDragPreview *)dropInteraction:(UIDropInteraction *)interaction
