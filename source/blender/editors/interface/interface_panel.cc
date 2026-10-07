@@ -2531,13 +2531,14 @@ const char *panel_category_active_get(ARegion *region, bool set_fallback)
   return nullptr;
 }
 
-void panel_category_add(ARegion *region, const char *name, int icon)
+void panel_category_add(ARegion *region, PanelType *pt)
 {
   PanelCategoryDyn *pc_dyn = MEM_new<PanelCategoryDyn>(__func__);
   BLI_addtail(&region->runtime->panels_category, pc_dyn);
 
-  STRNCPY_UTF8(pc_dyn->idname, name);
-  pc_dyn->icon = icon;
+  STRNCPY_UTF8(pc_dyn->idname, pt->category);
+  pc_dyn->icon = pt->icon;
+  pc_dyn->ui_flag = pt->flag;
 
   /* 'pc_dyn->rect' must be set on draw. */
 }

@@ -366,6 +366,9 @@ const EnumPropertyItem *rna_region_active_panel_category_itemf(const ARegion *re
   int totitems = 0;
 
   for (const auto [category_index, pc_dyn] : region->runtime->panels_category.enumerate()) {
+    if (pc_dyn.ui_flag & PANEL_TYPE_CATEGORY_SEPARATOR) {
+      RNA_enum_item_add_separator(&items, &totitems);
+    }
     item.value = category_index;
     item.identifier = pc_dyn.idname;
     item.name = pc_dyn.idname;

@@ -315,6 +315,7 @@ struct PanelCategoryDyn {
   struct PanelCategoryDyn *next = nullptr, *prev = nullptr;
   char idname[64] = "";
   int icon = 0;
+  int ui_flag = 0;
 };
 
 /** Region stack of active tabs. */

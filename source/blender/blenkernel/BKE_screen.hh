@@ -542,6 +542,7 @@ enum {
   PANEL_TYPE_INSTANCED = (1 << 4),
   /** Don't search panels with this type during property search. */
   PANEL_TYPE_NO_SEARCH = (1 << 7),
+  PANEL_TYPE_CATEGORY_SEPARATOR = (1 << 8),
 };
 
 struct LayoutPanelHeader {
