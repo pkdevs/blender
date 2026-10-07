@@ -44,6 +44,7 @@ class NativeScenePanelsTest(unittest.TestCase):
                 '-framework', 'UIKit', '-framework', 'Foundation', '-framework', 'QuartzCore',
                 '-framework', 'CoreGraphics', '-I', str(ROOT / 'intern/ghost/intern'),
                 str(ROOT / 'intern/ghost/intern/GHOST_IOSScenePanels.mm'),
+                str(ROOT / 'intern/ghost/intern/GHOST_IOSNumericInput.mm'),
                 str(ROOT / 'release/ios/scene_panels_ui_test.mm'), '-o', str(executable),
             ], text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

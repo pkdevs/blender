@@ -29,6 +29,7 @@ class NativeRedoStripTest(unittest.TestCase):
                 '-framework', 'CoreGraphics',
                 '-I', str(ROOT / 'intern/ghost/intern'),
                 str(ROOT / 'intern/ghost/intern/GHOST_IOSRedoStrip.mm'),
+                str(ROOT / 'intern/ghost/intern/GHOST_IOSNumericInput.mm'),
                 str(ROOT / 'release/ios/redo_strip_ui_test.mm'), '-o', str(executable),
             ], text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)

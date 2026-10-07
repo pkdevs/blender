@@ -908,6 +908,7 @@ int main(int argc, char **argv) {
                 str(root / "intern/ghost/intern/GHOST_IOSScenePanels.mm"),
                 str(root / "intern/ghost/intern/GHOST_IOSRedoStrip.mm"),
                 str(root / "intern/ghost/intern/GHOST_IOSTimeline.mm"),
+                str(root / "intern/ghost/intern/GHOST_IOSNumericInput.mm"),
                 str(source_file), "-o", str(executable),
             ], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
