@@ -2035,8 +2035,13 @@ static UIColor *blenderAnimationStateColor(NSString *state)
           item.selected = [item.accessibilityIdentifier isEqual:owner->_selectedTab];
         }
       }] forControlEvents:UIControlEventTouchUpInside];
+      /* Selected tabs draw a white glyph on the blue highlight, as iOS does; a colored glyph
+       * would vanish against it. */
+      UIImage *colored = configuration.image;
+      UIImage *glyph = GHOSTIOSBlenderIcon(tab[@"icon"], NO) ?: colored;
       button.configurationUpdateHandler = ^(UIButton *item) {
         UIButtonConfiguration *config = item.configuration;
+        config.image = item.selected ? glyph : colored;
         config.baseForegroundColor = item.selected ? UIColor.whiteColor : UIColor.secondaryLabelColor;
         config.background.backgroundColor = item.selected ? UIColor.systemBlueColor : UIColor.clearColor;
         config.background.cornerRadius = 8;
