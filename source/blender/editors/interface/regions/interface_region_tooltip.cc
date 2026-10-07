@@ -209,9 +209,9 @@ static void tooltip_region_draw_cb(const bContext * /*C*/, ARegion *region)
   theme::get_color_4fv(TH_INFO, active_color);
   color_blend_f3_f3(active_color, main_color, 1.0f - active_color[3]);
 
-  /* `alert_color` is red, push a bit toward text color. */
-  theme::get_color_3fv(TH_REDALERT, alert_color);
-  color_blend_f3_f3(alert_color, main_color, 0.3f);
+  /* `alert_color` is red, alpha as blend factor toward text color. */
+  theme::get_color_4fv(TH_REDALERT, alert_color);
+  color_blend_f3_f3(alert_color, main_color, 1.0f - alert_color[3]);
 
   /* Draw text. */
   BLF_size(data->fstyle.uifont_id, data->fstyle.points * UI_SCALE_FAC);
@@ -1116,7 +1116,12 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
   /* Enum field label & tip. */
   if (!enum_tip.empty()) {
     enum_tip = tooltip_with_period(enum_tip);
-    tooltip_text_field_add(*data, std::move(enum_tip), {}, TIP_STYLE_NORMAL, TIP_LC_VALUE, true);
+    tooltip_text_field_add(*data,
+                           std::move(enum_tip),
+                           {},
+                           TIP_STYLE_NORMAL,
+                           TIP_LC_VALUE,
+                           !enum_label.empty() && but_label.empty());
   }
 
   /* Operator shortcut. */
@@ -1190,7 +1195,8 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
                                fmt::format(fmt::runtime(TIP_("Radians: {}")), value),
                                {},
                                TIP_STYLE_NORMAL,
-                               TIP_LC_VALUE);
+                               TIP_LC_VALUE,
+                               true);
       }
     }
 
@@ -1200,7 +1206,8 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
                                fmt::format(fmt::runtime(TIP_("Expression: {}")), buf),
                                {},
                                TIP_STYLE_NORMAL,
-                               TIP_LC_VALUE);
+                               TIP_LC_VALUE,
+                               true);
       }
     }
 
@@ -1236,7 +1243,8 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
                                         "is not supported for this property."),
                                    {},
                                    TIP_STYLE_NORMAL,
-                                   TIP_LC_ALERT);
+                                   TIP_LC_ALERT,
+                                   true);
           }
         }
       }
@@ -1261,7 +1269,8 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
               for (const bke::path_templates::Error &error : errors) {
                 error_message += "\n  - " + BKE_path_template_error_to_string(error, path);
               }
-              tooltip_text_field_add(*data, error_message, {}, TIP_STYLE_NORMAL, TIP_LC_ALERT);
+              tooltip_text_field_add(
+                  *data, error_message, {}, TIP_STYLE_NORMAL, TIP_LC_ALERT, true);
             }
           }
         }
@@ -1293,7 +1302,8 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
     }
 
     if (disabled_msg && disabled_msg[0]) {
-      tooltip_text_field_add(*data, disabled_msg, {}, TIP_STYLE_NORMAL, TIP_LC_ALERT, true);
+      const std::string disabled_tip = tooltip_with_period(disabled_msg);
+      tooltip_text_field_add(*data, disabled_tip, {}, TIP_STYLE_NORMAL, TIP_LC_ALERT, true);
     }
     if (disabled_msg_free) {
       MEM_delete(disabled_msg_orig);
