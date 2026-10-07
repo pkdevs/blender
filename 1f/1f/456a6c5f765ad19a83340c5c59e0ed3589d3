@@ -1,1 +1,2 @@
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
+Referenced by issue #164818, Crash in temp_override after bpy.ops.ed.undo() called from Python during a VR (OpenXR) session
