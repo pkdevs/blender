@@ -4,11 +4,15 @@
 
 /** Native Properties projects the registered Blender panels and their RNA controls. */
 #include "BKE_animsys.h"
+#include "BKE_appdir.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
+#include "BKE_icons.hh"
+#include "BKE_studiolight.h"
 #include "BKE_main.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
+#include "BLI_array.hh"
 #include "BLI_listbase.h"
 #include "BLI_serialize.hh"
 #include "DNA_ID.h"
@@ -18,6 +22,8 @@
 #include "ED_buttons.hh"
 #include "ED_undo.hh"
 #include "IMB_colormanagement.hh"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
 #include "RNA_path.hh"
@@ -101,6 +107,43 @@ std::string icon_name(const int icon)
 {
   const char *name = nullptr;
   return RNA_enum_identifier(rna_enum_icon_items, icon, &name) ? name : "";
+}
+
+/**
+ * PNG of a studio light preview icon (MatCaps, HDRIs and studio lights in viewport shading),
+ * as `template_icon_view` shows them. Each is rendered once per session, so snapshots only
+ * carry a path.
+ */
+std::string preview_icon_path(const int icon_id)
+{
+  static std::map<int, std::string> rendered;
+  if (icon_id < BIFICONID_LAST_STATIC) {
+    return "";
+  }
+  if (const auto found = rendered.find(icon_id); found != rendered.end()) {
+    return found->second;
+  }
+  const Icon *icon = BKE_icon_get(icon_id);
+  if (!icon || icon->obj_type != ICON_DATA_STUDIOLIGHT || !icon->obj) {
+    return "";
+  }
+  Array<uint> pixels(STUDIOLIGHT_ICON_SIZE * STUDIOLIGHT_ICON_SIZE, 0);
+  BKE_studiolight_preview(pixels.data(), static_cast<StudioLight *>(icon->obj), icon->id_type);
+  ImBuf *ibuf = IMB_allocFromBuffer(reinterpret_cast<const uint8_t *>(pixels.data()),
+                                    nullptr,
+                                    STUDIOLIGHT_ICON_SIZE,
+                                    STUDIOLIGHT_ICON_SIZE,
+                                    4);
+  if (!ibuf) {
+    return "";
+  }
+  ibuf->planes = 32;
+  ibuf->ftype = IMB_FTYPE_PNG;
+  const std::string path = std::string(BKE_tempdir_session()) + "native_preview_" +
+                           std::to_string(icon_id) + ".png";
+  const bool saved = IMB_save_image(ibuf, path.c_str(), IB_byte_data);
+  IMB_freeImBuf(ibuf);
+  return rendered[icon_id] = saved ? path : "";
 }
 
 std::string property_key(const Button &but, int index)
@@ -619,6 +662,9 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
         option->append_str("value", item.identifier);
         option->append_str("label", item.name);
         option->append_str("icon", icon_name(item.icon));
+        if (const std::string preview = preview_icon_path(item.icon); !preview.empty()) {
+          option->append_str("preview", preview);
+        }
         const bool checked = (RNA_property_flag(prop) & PROP_ENUM_FLAG) ?
                                  (selected & item.value) != 0 : selected == item.value;
         option->append_int("checked", checked);

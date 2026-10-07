@@ -130,6 +130,56 @@ static void testShadingPopover(UIViewController *controller)
   snapshot();
   NSCAssert([shading valueForKey:@"_controls"][@"shading.type"] == segments && segments.selectedSegmentIndex == 3,
             @"External shading changes update the selector in place");
+  /* MatCaps and HDRIs come with Blender's rendered previews and show as a visual chooser. */
+  NSMutableArray *previews = [NSMutableArray array];
+  for (UIColor *color in @[UIColor.systemRedColor, UIColor.systemBlueColor]) {
+    UIImage *image = [[[[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(96, 96)] autorelease]
+        imageWithActions:^(UIGraphicsImageRendererContext *context) { [color setFill]; UIRectFill(CGRectMake(0, 0, 96, 96)); }];
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        [NSString stringWithFormat:@"native_preview_test_%lu.png", (unsigned long)previews.count]];
+    [UIImagePNGRepresentation(image) writeToFile:path atomically:YES];
+    [previews addObject:path];
+  }
+  NSDictionary *matcap = @{@"key": @"shading.studio_light", @"property": @"studio_light", @"type": @"ENUM",
+    @"label": @"Studio Light", @"tab": @"SHADING", @"native": @YES, @"editable": @YES, @"value": @"basic_1.exr",
+    @"options": @[@{@"value": @"basic_1.exr", @"label": @"basic_1.exr", @"preview": previews[0]},
+                  @{@"value": @"check_normal+y.exr", @"label": @"check_normal+y.exr", @"preview": previews[1]}]};
+  [form reloadData];
+  [form layoutIfNeeded];
+  [panels updateSnapshot:@{@"ack": @99999, @"shading": @{@"id": @"SHADING:1", @"tab": @"SHADING",
+    @"name": @"Viewport Shading", @"tabs": @[], @"sections": @[
+      @{@"id": @"shading", @"title": @"Shading", @"open": @YES,
+        @"properties": @[[[mode copy] autorelease], matcap]}]}}];
+  UIButton *chooser = [shading valueForKey:@"_controls"][@"shading.studio_light"];
+  NSCAssert([NSStringFromClass(chooser.class) isEqual:@"GHOSTIOSPreviewButton"] && chooser.configuration.image &&
+            [chooser.configuration.title isEqual:@"basic_1.exr"],
+            @"Preview enums show the current preview and name instead of a list of file names");
+  NSCAssert(!chooser.menu, @"Preview enums do not fall back to a text menu");
+  UICollectionViewController *grid = [[[NSClassFromString(@"GHOSTIOSPreviewGrid") alloc] init] autorelease];
+  [grid setValue:matcap[@"options"] forKey:@"options"];
+  [grid setValue:@"basic_1.exr" forKey:@"value"];
+  __block NSDictionary *chosen = nil;
+  [grid setValue:^(NSDictionary *option) { chosen = option; } forKey:@"choose"];
+  [grid.collectionView layoutIfNeeded];
+  NSCAssert([grid.collectionView numberOfItemsInSection:0] == 2, @"The grid shows every choice");
+  UICollectionViewCell *cell = [grid collectionView:grid.collectionView
+                             cellForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];
+  NSCAssert(((UIListContentConfiguration *)cell.contentConfiguration).image &&
+            (cell.accessibilityTraits & UIAccessibilityTraitSelected), @"Grid cells are previews with the current one marked");
+  [grid collectionView:grid.collectionView didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:1 inSection:0]];
+  NSCAssert([chosen[@"value"] isEqual:@"check_normal+y.exr"], @"Choosing a preview reports its value");
+  [chooser sendActionsForControlEvents:UIControlEventTouchUpInside];
+  UIViewController *top = controller;
+  while (top.presentedViewController) { top = top.presentedViewController; }
+  UINavigationController *navigation = [panels valueForKey:@"_shadingController"];
+  UIViewController *shown = [navigation.topViewController isKindOfClass:NSClassFromString(@"GHOSTIOSPreviewGrid")] ?
+      navigation.topViewController : ((UINavigationController *)top).topViewController;
+  NSCAssert([shown isKindOfClass:NSClassFromString(@"GHOSTIOSPreviewGrid")], @"Tapping the preview opens the grid");
+  [(UICollectionViewController *)shown collectionView:((UICollectionViewController *)shown).collectionView
+                             didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:1 inSection:0]];
+  NSCAssert([request[@"value"] isEqual:@"check_normal+y.exr"] && [request[@"tab"] isEqual:@"SHADING"] &&
+            [chooser.configuration.title isEqual:@"check_normal+y.exr"],
+            @"Choosing in the grid edits Blender's property and updates the preview at once");
   GHOSTIOSScenePanels *other = [[[GHOSTIOSScenePanels alloc] initWithOverlay:controller.view
       icon:^UIImage *(NSString *name) { return nil; }] autorelease];
   NSNumber *shadingSequence = request[@"sequence"];

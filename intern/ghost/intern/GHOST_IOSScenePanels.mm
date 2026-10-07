@@ -164,6 +164,153 @@ static NSArray *blenderNativeColorComponents(UIColor *color, BOOL alpha)
   return result;
 }
 
+/* Thumbnails Blender renders for preview enums (MatCaps, HDRIs, studio lights). */
+static UIImage *blenderPreviewImage(NSString *path)
+{
+  static NSCache *cache = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ cache = [[NSCache alloc] init]; });
+  if (![path isKindOfClass:NSString.class] || !path.length) { return nil; }
+  UIImage *image = [cache objectForKey:path];
+  if (!image && (image = [UIImage imageWithContentsOfFile:path])) {
+    [cache setObject:image forKey:path];
+  }
+  return image;
+}
+
+static BOOL blenderOptionsHavePreviews(NSArray *options)
+{
+  for (NSDictionary *option in options) {
+    if ([option[@"preview"] length]) { return YES; }
+  }
+  return NO;
+}
+
+/* Grid of previews, like Blender's template_icon_view popup. */
+@interface GHOSTIOSPreviewGrid : UICollectionViewController
+@property(nonatomic, copy) NSArray *options;
+@property(nonatomic, copy) NSString *value;
+@property(nonatomic, copy) void (^choose)(NSDictionary *option);
+@end
+
+@implementation GHOSTIOSPreviewGrid
+- (instancetype)init
+{
+  NSCollectionLayoutSize *size = [NSCollectionLayoutSize
+      sizeWithWidthDimension:[NSCollectionLayoutDimension absoluteDimension:88]
+             heightDimension:[NSCollectionLayoutDimension absoluteDimension:112]];
+  NSCollectionLayoutItem *item = [NSCollectionLayoutItem itemWithLayoutSize:size];
+  NSCollectionLayoutGroup *row = [NSCollectionLayoutGroup horizontalGroupWithLayoutSize:
+      [NSCollectionLayoutSize sizeWithWidthDimension:[NSCollectionLayoutDimension fractionalWidthDimension:1]
+                                     heightDimension:[NSCollectionLayoutDimension absoluteDimension:112]]
+      repeatingSubitem:item count:4];
+  row.interItemSpacing = [NSCollectionLayoutSpacing flexibleSpacing:8];
+  NSCollectionLayoutSection *section = [NSCollectionLayoutSection sectionWithGroup:row];
+  section.interGroupSpacing = 8;
+  section.contentInsets = NSDirectionalEdgeInsetsMake(12, 16, 16, 16);
+  if ((self = [super initWithCollectionViewLayout:[[[UICollectionViewCompositionalLayout alloc]
+                                                     initWithSection:section] autorelease]])) {
+    [self.collectionView registerClass:UICollectionViewCell.class forCellWithReuseIdentifier:@"preview"];
+    self.collectionView.backgroundColor = UIColor.clearColor;
+    self.collectionView.accessibilityIdentifier = @"blender.preview.grid";
+  }
+  return self;
+}
+- (void)dealloc
+{
+  [_options release];
+  [_value release];
+  [_choose release];
+  [super dealloc];
+}
+- (NSInteger)collectionView:(UICollectionView *)view numberOfItemsInSection:(NSInteger)section
+{
+  return self.options.count;
+}
+- (UICollectionViewCell *)collectionView:(UICollectionView *)view cellForItemAtIndexPath:(NSIndexPath *)path
+{
+  UICollectionViewCell *cell = [view dequeueReusableCellWithReuseIdentifier:@"preview" forIndexPath:path];
+  NSDictionary *option = self.options[path.item];
+  const BOOL current = [option[@"value"] isEqual:self.value];
+  UIListContentConfiguration *content = [UIListContentConfiguration cellConfiguration];
+  content.image = blenderPreviewImage(option[@"preview"]);
+  content.imageProperties.maximumSize = CGSizeMake(80, 80);
+  content.imageProperties.reservedLayoutSize = CGSizeMake(80, 80);
+  content.imageProperties.cornerRadius = 10;
+  content.text = option[@"label"];
+  content.textProperties.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption2];
+  content.textProperties.alignment = UIListContentTextAlignmentCenter;
+  content.textProperties.numberOfLines = 1;
+  content.textProperties.color = current ? cell.tintColor : UIColor.secondaryLabelColor;
+  content.axesPreservingSuperviewLayoutMargins = 0;
+  content.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(4, 4, 4, 4);
+  content.imageToTextPadding = 4;
+  cell.contentConfiguration = content;
+  UIBackgroundConfiguration *background = [UIBackgroundConfiguration clearConfiguration];
+  background.cornerRadius = 12;
+  background.strokeColor = current ? cell.tintColor : UIColor.clearColor;
+  background.strokeWidth = 2;
+  cell.backgroundConfiguration = background;
+  cell.accessibilityLabel = option[@"label"];
+  cell.accessibilityTraits = UIAccessibilityTraitButton | (current ? UIAccessibilityTraitSelected : 0);
+  return cell;
+}
+- (void)collectionView:(UICollectionView *)view didSelectItemAtIndexPath:(NSIndexPath *)path
+{
+  NSDictionary *option = self.options[path.item];
+  self.value = option[@"value"];
+  [view reloadData];
+  if (self.choose) { self.choose(option); }
+  if (self.navigationController.viewControllers.firstObject != self) {
+    [self.navigationController popViewControllerAnimated:YES];
+  }
+  else {
+    [self dismissViewControllerAnimated:YES completion:nil];
+  }
+}
+@end
+
+/* The current preview and its name; tapping opens the grid. */
+@interface GHOSTIOSPreviewButton : UIButton
+@property(nonatomic, retain) NSDictionary *descriptor;
+@property(nonatomic, copy) NSString *value;
+- (void)showValue:(NSString *)value options:(NSArray *)options;
+@end
+
+@implementation GHOSTIOSPreviewButton
+- (void)dealloc
+{
+  [_descriptor release];
+  [_value release];
+  [super dealloc];
+}
+- (void)showValue:(NSString *)value options:(NSArray *)options
+{
+  self.value = value;
+  NSDictionary *current = nil;
+  for (NSDictionary *option in options) {
+    if ([option[@"value"] isEqual:value]) { current = option; }
+  }
+  UIButtonConfiguration *config = self.configuration ?: [UIButtonConfiguration plainButtonConfiguration];
+  UIImage *preview = blenderPreviewImage(current[@"preview"]);
+  if (preview) {
+    UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(56, 56)] autorelease];
+    preview = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+      [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, 56, 56) cornerRadius:8] addClip];
+      [preview drawInRect:CGRectMake(0, 0, 56, 56)];
+    }];
+  }
+  config.image = [preview imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+  config.imagePadding = 12;
+  config.title = current[@"label"] ?: value;
+  config.baseForegroundColor = UIColor.labelColor;
+  config.contentInsets = NSDirectionalEdgeInsetsMake(4, 0, 4, 0);
+  self.configuration = config;
+  self.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
+  self.accessibilityValue = current[@"label"];
+}
+@end
+
 @interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate, UICollectionViewDelegate,
                                    UISearchBarDelegate, UITextFieldDelegate,
                                    UIColorPickerViewControllerDelegate, UIPopoverPresentationControllerDelegate,
@@ -1138,6 +1285,17 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
           control = segments;
           label.hidden = YES;
         }
+        else if (blenderOptionsHavePreviews(property[@"options"])) {
+          /* Blender shows these as a large preview (template_icon_view), not a list of names. */
+          GHOSTIOSPreviewButton *button = [GHOSTIOSPreviewButton buttonWithType:UIButtonTypeSystem];
+          button.descriptor = property;
+          button.accessibilityHint = @"Shows all choices as previews.";
+          [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+            [owner presentPreviewGrid:(GHOSTIOSPreviewButton *)action.sender object:objectID];
+          }] forControlEvents:UIControlEventTouchUpInside];
+          control = button;
+          label.hidden = YES;
+        }
         else if (toolRow) {
           /* Blender's icon-only rows (e.g. selection mode) become a glass button showing the
            * current choice's icon, with a standard single-selection menu. */
@@ -1331,6 +1489,10 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       if (![control isKindOfClass:UISwitch.class]) {
         if ([kind isEqual:@"COLOR"]) {
           [control.widthAnchor constraintEqualToConstant:44].active = YES;
+        }
+        else if ([control isKindOfClass:GHOSTIOSPreviewButton.class]) {
+          [control.widthAnchor constraintEqualToAnchor:row.widthAnchor].active = YES;
+          [control.heightAnchor constraintGreaterThanOrEqualToConstant:64].active = YES;
         }
         else if (!vector && ![kind isEqual:@"OPERATOR"] && ![kind isEqual:@"MENU"] &&
                  ![control isKindOfClass:UISegmentedControl.class]) {
@@ -1531,6 +1693,36 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       [self->_form moveRowAtIndexPath:move[0] toIndexPath:move[1]];
     }
   } completion:nil];
+}
+
+- (void)presentPreviewGrid:(GHOSTIOSPreviewButton *)button object:(NSString *)objectID
+{
+  NSDictionary *property = button.descriptor;
+  GHOSTIOSPreviewGrid *grid = [[[GHOSTIOSPreviewGrid alloc] init] autorelease];
+  grid.title = property[@"label"];
+  grid.options = property[@"options"];
+  grid.value = button.value;
+  __block GHOSTIOSScenePanels *owner = self;
+  grid.choose = ^(NSDictionary *option) {
+    [button showValue:option[@"value"] options:property[@"options"]];
+    [owner editProperty:property object:objectID value:option[@"value"]];
+  };
+  /* Inside the shading popover, push like a settings page; elsewhere use a popover. */
+  UIResponder *responder = button;
+  while (responder && ![responder isKindOfClass:UIViewController.class]) { responder = responder.nextResponder; }
+  UINavigationController *navigation = ((UIViewController *)responder).navigationController;
+  if (navigation) {
+    [navigation pushViewController:grid animated:YES];
+    return;
+  }
+  UIViewController *presenter = _overlay.window.rootViewController;
+  while (presenter.presentedViewController) { presenter = presenter.presentedViewController; }
+  UINavigationController *wrapper = [[[UINavigationController alloc] initWithRootViewController:grid] autorelease];
+  wrapper.modalPresentationStyle = UIModalPresentationPopover;
+  wrapper.preferredContentSize = CGSizeMake(420, 480);
+  wrapper.popoverPresentationController.sourceView = button;
+  wrapper.popoverPresentationController.sourceRect = button.bounds;
+  [presenter presentViewController:wrapper animated:YES completion:nil];
 }
 
 - (void)openColorPicker:(GHOSTIOSColorButton *)button
@@ -2354,6 +2546,14 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
           /* Reassigning the same segment, or clearing it first, restarts the selection
            * and cuts off UIKit's sliding transition when Blender acknowledges the edit. */
           if (segments.selectedSegmentIndex != selected) { segments.selectedSegmentIndex = selected; }
+          continue;
+        }
+        if ([control isKindOfClass:GHOSTIOSPreviewButton.class]) {
+          GHOSTIOSPreviewButton *preview = (GHOSTIOSPreviewButton *)control;
+          preview.descriptor = property;
+          if (![preview.value isEqual:value] || !preview.configuration.title) {
+            [preview showValue:value options:property[@"options"]];
+          }
           continue;
         }
         UIButton *button = (UIButton *)control;
