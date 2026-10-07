@@ -752,16 +752,17 @@ static std::unique_ptr<TooltipData> tooltip_data_from_tool(bContext *C,
      * returns to the previous tool when released.
      */
 
-    PointerRNA op_props = WM_operator_properties_create_ptr(but->optype);
-    RNA_string_set(&op_props, "name", tool_id);
-    RNA_boolean_set(&op_props, "hold", true);
-    const std::optional<std::string> shortcut = WM_key_event_operator_string(
-        C,
-        but->optype->idname,
-        wm::OpCallContext::InvokeRegionWin,
-        static_cast<IDProperty *>(op_props.data),
-        true);
-    WM_operator_properties_free(&op_props);
+    std::optional<std::string> shortcut;
+    if (wmOperatorType *ot_hold = WM_operatortype_find("WM_OT_tool_set_by_id_hold", false)) {
+      PointerRNA op_props = WM_operator_properties_create_ptr(ot_hold);
+      RNA_string_set(&op_props, "name", tool_id);
+      shortcut = WM_key_event_operator_string(C,
+                                              ot_hold->idname,
+                                              wm::OpCallContext::InvokeRegionWin,
+                                              static_cast<IDProperty *>(op_props.data),
+                                              true);
+      WM_operator_properties_free(&op_props);
+    }
 
     if (shortcut) {
       tooltip_text_field_add(*data,
