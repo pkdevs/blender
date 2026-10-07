@@ -28,6 +28,7 @@ extern "C" void WM_apple_ios_ui_asset_drag(int phase, const char *asset_id, int 
 @interface GHOSTIOSAssets (Testing)
 - (void)setLibrary:(NSString *)library;
 - (void)setType:(NSString *)type catalog:(NSString *)catalog;
+- (void)setBlenderMode:(NSString *)mode;
 - (NSArray<NSString *> *)libraries;
 @end
 
@@ -143,6 +144,46 @@ int main()
     NSCAssert([names(grid) isEqual:@[@"Scatter on Surface"]], @"Modifier type filter");
     [grid.delegate collectionView:grid didSelectItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];
     NSCAssert([sent.lastObject isEqual:(@[@"drag", @4, @"scatter", @0, @0])], @"Tapping a modifier adds it");
+    [assets setType:nil catalog:nil];
+
+    /* Catalog chips: the pane starts on the Starter primitives. */
+    NSDictionary *(^starter)(NSString *, NSString *) = ^(NSString *name, NSString *catalog) {
+      return @{@"id": name, @"name": name, @"type": @"Object", @"library": @"Starter",
+               @"catalog": catalog, @"description": @"", @"author": @"", @"tags": @[],
+               @"preview": @""};
+    };
+    NSDictionary *building = starter(@"Building", @"Objects/Architecture");
+    NSDictionary *cube = starter(@"Cube", @"Objects/Primitives");
+    NSDictionary *plane = starter(@"Plane", @"Objects/Primitives");
+    [assets updateSnapshot:@{@"items": @[chair, building, cube, plane]}];
+    [assets setLibrary:nil];
+    NSCAssert([names(grid) isEqual:(@[@"Cube", @"Plane"])],
+              @"The pane starts on the primitives: %@", names(grid));
+    UIView *chips = find(assets.view, @"blender.assets.catalogs");
+    NSMutableArray *titles = [NSMutableArray array];
+    for (UIView *chip in ((UIStackView *)chips.subviews.firstObject).arrangedSubviews) {
+      [titles addObject:chip.accessibilityLabel];
+    }
+    NSCAssert([titles isEqual:(@[@"All", @"Architecture", @"Primitives", @"Seating"])],
+              @"Chips list every catalog: %@", titles);
+    NSCAssert(((UIButton *)find(assets.view, @"blender.assets.catalog.Primitives")).selected,
+              @"The shown catalog's chip is selected");
+    UIButton *architecture = (UIButton *)find(assets.view, @"blender.assets.catalog.Architecture");
+    [architecture sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
+    NSCAssert([names(grid) isEqual:@[@"Building"]] && architecture.selected,
+              @"A chip shows its catalog");
+    [assets setBlenderMode:@"sculpt"];
+    NSCAssert([names(grid) isEqual:@[@"Building"]], @"A picked catalog survives a mode change");
+    [(UIButton *)find(assets.view, @"blender.assets.catalog.All")
+        sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
+    NSCAssert(names(grid).count == 4, @"All lists every catalog: %@", names(grid));
+    [assets setLibrary:nil];
+    search.text = @"build";
+    [search sendActionsForControlEvents:UIControlEventEditingChanged];
+    NSCAssert([names(grid) isEqual:@[@"Building"]], @"Searching looks through every catalog");
+    search.text = @"";
+    [search sendActionsForControlEvents:UIControlEventEditingChanged];
+    NSCAssert([names(grid) isEqual:(@[@"Cube", @"Plane"])], @"Clearing the search goes back");
     [assets setType:nil catalog:nil];
     [assets updateSnapshot:@{@"items": @[chair, table, brass]}];
 
