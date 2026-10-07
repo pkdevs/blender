@@ -38,13 +38,14 @@ dnf -y install scl-utils-build
 # Currently this is defined by the VFX platform (CY2023), see: https://vfxplatform.com
 dnf -y install gcc-toolset-14
 
-# For RHEL8 there is no aarch64 repo, instead use sbsa which works for device binaries.
-# For RHEL9 there is an aarch64 repo, and this fallback will no longer be needed.
+# There is aarch64 repository, but it does not contain native CUDA toolchain.
+# Use SSBA which works for device binaries (and it is also what the download page directs to
+# for the network installs).
 if [ "$ARCH" = "aarch64" ]; then
     CUDA_ARCH="sbsa"
 fi
 # Repository for CUDA (`nvcc`)
-dnf config-manager --add-repo http://developer.download.nvidia.com/compute/cuda/repos/rhel8/${CUDA_ARCH-x86_64}/cuda-rhel8.repo
+dnf config-manager --add-repo http://developer.download.nvidia.com/compute/cuda/repos/rhel9/${CUDA_ARCH-x86_64}/cuda-rhel9.repo
 # Version lock CUDA install/update candidates to 12.8
 dnf versionlock add 'cuda-*-12-8*'
 
@@ -204,7 +205,7 @@ if [ "$ARCH" != "aarch64" ]; then
     tee /etc/yum.repos.d/graphics-7.2.1.repo > /dev/null <<EOF
 [graphics-7.2.1]
 name=graphics-7.2.1
-baseurl=https://repo.radeon.com/graphics/7.2.1/el/8.10/main/x86_64/
+baseurl=https://repo.radeon.com/graphics/7.2.1/el/9.7/main/x86_64/
 enabled=1
 priority=50
 gpgcheck=1
@@ -214,7 +215,7 @@ EOF
     tee /etc/yum.repos.d/rocm-7.2.1.repo > /dev/null <<EOF
 [ROCm-7.2.1]
 name=ROCm-7.2.1
-baseurl=https://repo.radeon.com/rocm/el8/7.2.1/main
+baseurl=https://repo.radeon.com/rocm/el9/7.2.1/main
 enabled=1
 gpgcheck=1
 exclude=rock-dkms
