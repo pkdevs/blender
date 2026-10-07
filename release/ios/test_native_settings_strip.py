@@ -92,6 +92,7 @@ class NativeSettingsStripTest(unittest.TestCase):
 #import "GHOST_IOSScenePanels.hh"
 #import "GHOST_IOSRedoStrip.hh"
 #import "GHOST_IOSTimeline.hh"
+#import "GHOST_IOSIcons.hh"
 #define GHOST_IOSViewController StripTest
 @interface GHOSTIOSRedoStrip (Testing)
 - (void)dismiss:(id)sender;

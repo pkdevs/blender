@@ -41,6 +41,7 @@
 
 extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 #import "GHOST_IOSScenePanels.hh"
+#import "GHOST_IOSIcons.hh"
 #import "GHOST_IOSRedoStrip.hh"
 #import "GHOST_IOSTimeline.hh"
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
@@ -131,9 +132,16 @@ static UIImage *blenderIOSIcon(NSString *key, NSString *systemImage)
       return [colored imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
     }
   }
-  UIImage *image = name ? [UIImage imageNamed:[prefix stringByAppendingString:name]] : nil;
+  UIImage *image = nil;
+  if (name && [key hasPrefix:@"tool."]) {
+    image = [[UIImage imageNamed:[prefix stringByAppendingString:name]]
+        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  }
+  else if (name) {
+    image = GHOSTIOSBlenderIcon(name, NO);
+  }
   if (image != nil) {
-    return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    return image;
   }
   return systemImage ? [UIImage systemImageNamed:systemImage] : nil;
 }
@@ -2130,8 +2138,7 @@ static UIImage *blenderIOSMenuIcon(NSDictionary *item)
   {
     return nil;
   }
-  UIImage *image = [UIImage imageNamed:[@"blender." stringByAppendingString:name.lowercaseString]];
-  return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  return GHOSTIOSBlenderIcon(name, NO);
 }
 
 static NSArray *blenderIOSMenuResult(uint64_t identifier)
@@ -4021,9 +4028,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     }
     NSString *identifier = item[@"id"];
     NSString *icon = [item[@"icon"] isKindOfClass:NSString.class] ? item[@"icon"] : @"";
-    UIImage *image = icon.length ?
-        [[UIImage imageNamed:[@"blender." stringByAppendingString:icon.lowercaseString]]
-            imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] : nil;
+    UIImage *image = GHOSTIOSBlenderIcon(icon, NO);
     NSString *title = [item[@"label"] length] ? item[@"label"] : identifier;
     UIAction *action = [UIAction actionWithTitle:title
                                            image:image
@@ -5000,16 +5005,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
   _mesh_select_buttons = [[NSMutableArray alloc] init];
   _redo_strip = [[GHOSTIOSRedoStrip alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
-    if (!name.length) { return nil; }
-    return [[UIImage imageNamed:[@"blender." stringByAppendingString:name.lowercaseString]]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    return GHOSTIOSBlenderIcon(name, NO);
   }];
   _scene_panels = [[GHOSTIOSScenePanels alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
-    if (!name.length) {
-      return nil;
-    }
-    return [[UIImage imageNamed:[@"blender." stringByAppendingString:name.lowercaseString]]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    return GHOSTIOSBlenderIcon(name, NO);
   }];
   _scene_panels.menuProvider = ^UIMenu *(NSDictionary *property) {
     NSMutableDictionary *route = [NSMutableDictionary dictionaryWithDictionary:

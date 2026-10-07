@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #import "GHOST_IOSScenePanels.hh"
+#import "GHOST_IOSIcons.hh"
 #import "GHOST_IOSNumericInput.hh"
 #import <QuartzCore/QuartzCore.h>
 #include <cfloat>
@@ -1640,7 +1641,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     for (NSDictionary *tab in tabs) {
       UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
       UIButtonConfiguration *configuration = [UIButtonConfiguration plainButtonConfiguration];
-      configuration.image = _icon(tab[@"icon"]);
+      /* Blender colors object, modifier and data icons in the Properties tabs. */
+      configuration.image = GHOSTIOSBlenderIcon(tab[@"icon"], YES) ?: _icon(tab[@"icon"]);
       configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:22];
       configuration.contentInsets = NSDirectionalEdgeInsetsMake(10, 10, 10, 10);
       button.configuration = configuration;
@@ -2605,7 +2607,9 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
         size:0];
   }
   if (![node[@"enabled"] boolValue]) { content.textProperties.color = UIColor.secondaryLabelColor; }
-  content.image = _icon(node[@"icon"]) ?: [UIImage systemImageNamed:collection ? @"folder" : @"cube"];
+  /* As in Blender's Outliner, the hierarchy shows category icons in their theme colors. */
+  content.image = GHOSTIOSBlenderIcon(node[@"icon"], YES) ?: _icon(node[@"icon"]) ?:
+                  [UIImage systemImageNamed:collection ? @"folder" : @"cube"];
   content.imageProperties.maximumSize = CGSizeMake(22, 22);
   cell.contentConfiguration = content;
   cell.configurationUpdateHandler = ^(UICollectionViewCell *updated, UICellConfigurationState *state) {
