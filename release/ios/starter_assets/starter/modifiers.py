@@ -11,7 +11,8 @@ and generated amounts are capped so a large object never produces millions of el
 
 import math
 
-from .common import RADIANS, modifier_group, palette, simple_material
+from .common import (AXES, RADIANS, angle_gizmo, count_gizmo, density_gizmo, modifier_group,
+                     palette, resolution_gizmo, simple_material)
 from .registry import asset
 
 GENERATE = "Generate"
@@ -40,6 +41,36 @@ def largest_dimension(tree, geometry):
     size = tree.vmath("SUBTRACT", tree.out(bounds, "Max"), tree.out(bounds, "Min"))
     x, y, z = tree.separate(size)
     return tree.math("MAXIMUM", tree.math("MAXIMUM", tree.math("MAXIMUM", x, y), z), 1e-4)
+
+
+class Bounds:
+    """The geometry's bounding box, for placing gizmos on the object whatever its shape."""
+
+    def __init__(self, tree, geometry):
+        self.tree = tree
+        node = tree.n("GeometryNodeBoundBox", Geometry=geometry)
+        self.low = tree.out(node, "Min")
+        self.high = tree.out(node, "Max")
+        self.center = tree.vmath("SCALE", tree.vmath("ADD", self.low, self.high), scale=0.5)
+
+    def at(self, x=0.0, y=0.0, z=0.0):
+        """A point on the box: -1, 0 and 1 are its low side, middle and high side on each axis."""
+        half = self.tree.vmath("SCALE", self.tree.vmath("SUBTRACT", self.high, self.low),
+                               scale=0.5)
+        return self.tree.vmath("ADD", self.center,
+                               self.tree.vmath("MULTIPLY", half, (x, y, z)))
+
+
+def along(tree, origin, axis, distance):
+    """origin + axis * distance; `axis` is a name from AXES or a direction socket."""
+    direction = AXES[axis] if isinstance(axis, str) else axis
+    return tree.vmath("ADD", origin, tree.vmath("SCALE", direction, scale=distance))
+
+
+def arrow(tree, value, origin, axis, color="PRIMARY"):
+    """An arrow `value` away from `origin` along `axis`, dragging adds the distance to `value`."""
+    direction = AXES[axis] if isinstance(axis, str) else axis
+    return tree.linear_gizmo(value, along(tree, origin, axis, value), direction, color=color)
 
 
 def within(tree, value, largest, fraction):
@@ -196,6 +227,18 @@ def scatter_on_surface():
     instances = tree.n("GeometryNodeInstanceOnPoints", Points=points, Instance=instance,
                        Pick_Instance=True, Instance_Index=tree.out(pick, "Value"),
                        Rotation=rotation.outputs[0], Scale=scale).outputs[0]
+    # Gizmos: density is pulled out along X past the side, about one meter of drag per 200
+    # instances per square meter on a one meter object; the scales stand above the top.
+    bounds = Bounds(tree, geometry)
+    largest = largest_dimension(tree, geometry)
+    tree.linear_gizmo(tree.math("MULTIPLY", density, tree.math("DIVIDE", largest, 200.0)),
+                      along(tree, bounds.at(1.0, 0.0, 1.0), "X",
+                            tree.math("MULTIPLY", density, tree.math("DIVIDE", largest, 200.0))),
+                      AXES["X"], color="SECONDARY", style="BOX")
+    arrow(tree, tree.math("MULTIPLY", scale_min, tree.math("MULTIPLY", largest, 0.1)),
+          bounds.at(-0.5, 0.0, 1.0), "Z")
+    arrow(tree, tree.math("MULTIPLY", scale_max, tree.math("MULTIPLY", largest, 0.1)),
+          bounds.at(0.5, 0.0, 1.0), "Z")
     tree.output(add_to(tree, geometry, instances))
     tree.layout()
     return tree.nt
@@ -272,8 +315,9 @@ def fur():
 
     t = tree.out(tree.n("GeometryNodeSplineParameter"), "Factor")
     hair_normal = named(tree, "fur_normal", "FLOAT_VECTOR")
-    length = within(tree, length, largest_dimension(tree, geometry), 0.5)
-    hair_length = tree.math("MULTIPLY", length, named(tree, "fur_length"))
+    largest = largest_dimension(tree, geometry)
+    reach_limit = within(tree, length, largest, 0.5)
+    hair_length = tree.math("MULTIPLY", reach_limit, named(tree, "fur_length"))
     reach = tree.math("MULTIPLY", hair_length, t)
     straight = tree.vmath("ADD", named(tree, "fur_root", "FLOAT_VECTOR"),
                           tree.vmath("SCALE", hair_normal, scale=reach))
@@ -307,6 +351,23 @@ def fur():
     strands = tree.n("GeometryNodeCurveToMesh", Curve=hairs, Profile_Curve=profile,
                      Scale=taper).outputs[0]
     strands = tree.material(tree.smooth(strands), material)
+
+    # Gizmos at the tips of the hairs on top and on the sides, where they show.
+    bounds = Bounds(tree, geometry)
+    top = bounds.at(z=1.0)
+    tree.linear_gizmo(tree.math("MULTIPLY", length, 1.0), along(tree, top, "Z", reach_limit),
+                      AXES["Z"])
+    side_tip = along(tree, bounds.at(x=1.0), "X", reach_limit)
+    tree.linear_gizmo(tree.math("MULTIPLY", thickness, 0.5),
+                      along(tree, side_tip, "Y", tree.math("MULTIPLY", thickness, 0.5)),
+                      AXES["Y"], color="Y")
+    # One turn goes from straight to fully curled; at the tips on the -Y side.
+    tree.dial_gizmo(tree.math("MULTIPLY", curl, math.tau),
+                    along(tree, bounds.at(y=-1.0), "-Y", reach_limit), AXES["Y"], radius=0.6)
+    # Density pulls out of the -X side: across the whole object for 10000 hairs per square meter.
+    spread = tree.math("MULTIPLY", density, tree.math("DIVIDE", largest, 10000.0))
+    tree.linear_gizmo(spread, along(tree, bounds.at(x=-1.0), "-X", spread), AXES["-X"],
+                      color="SECONDARY", style="BOX")
     tree.output(add_to(tree, geometry, strands))
     tree.layout()
     return tree.nt
@@ -340,6 +401,12 @@ def radial_array():
     points = tree.n("GeometryNodeSetPosition", Geometry=points, Position=offset).outputs[0]
     copies = tree.n("GeometryNodeInstanceOnPoints", Points=points, Instance=geometry,
                     Rotation=rotation).outputs[0]
+    # The radius arrow sits at the first copy's origin; turning the dial around the axis by one
+    # turn adds twelve copies.
+    tree.linear_gizmo(tree.math("MULTIPLY", radius, 1.0),
+                      tree.vmath("SCALE", away, scale=radius), away)
+    tree.dial_gizmo(tree.math("MULTIPLY", count, math.tau / 12.0), (0.0, 0.0, 0.0), axis,
+                    radius=0.6, color="SECONDARY")
     tree.output(tree.realize(copies))
     tree.layout()
     return tree.nt
@@ -360,19 +427,39 @@ def tube_frame():
     material = tree.input("Material", "MATERIAL", palette("Starter Brass"))
 
     largest = largest_dimension(tree, geometry)
-    radius = within(tree, radius, largest, 0.02)
-    joint = within(tree, joint, largest, 0.04)
+    tube_radius = within(tree, radius, largest, 0.02)
+    joint_radius = within(tree, joint, largest, 0.04)
     profile = tree.n("GeometryNodeCurvePrimitiveCircle", Resolution=resolution,
-                     Radius=radius).outputs[0]
+                     Radius=tube_radius).outputs[0]
     curves = tree.n("GeometryNodeMeshToCurve", Mesh=geometry).outputs[0]
     tubes = tree.n("GeometryNodeCurveToMesh", Curve=curves, Profile_Curve=profile).outputs[0]
-    ball = tree.n("GeometryNodeMeshUVSphere", Segments=resolution, Radius=joint,
+    ball = tree.n("GeometryNodeMeshUVSphere", Segments=resolution, Radius=joint_radius,
                   Rings=tree.math("MAXIMUM", tree.math("FLOOR", tree.math(
                       "DIVIDE", resolution, 2.0)), 3.0)).outputs["Mesh"]
     vertices = tree.n("GeometryNodeMeshToPoints", Mesh=geometry, mode="VERTICES").outputs[0]
     balls = tree.n("GeometryNodeInstanceOnPoints", Points=vertices, Instance=ball,
-                   Selection=tree.compare("GREATER_THAN", joint, 0.0)).outputs[0]
+                   Selection=tree.compare("GREATER_THAN", joint_radius, 0.0)).outputs[0]
     frame = tree.join(tubes, tree.realize(balls))
+
+    # Gizmos on the frame itself: the joint size on the first vertex's ball, the tube radius
+    # on the middle of the last edge, both pointing out of the surface.
+    def sample(domain, index):
+        value = {}
+        for name, field in (("position", position(tree)), ("normal", normal(tree))):
+            value[name] = tree.n("GeometryNodeSampleIndex", Geometry=geometry,
+                                 data_type="FLOAT_VECTOR", domain=domain, Value=field,
+                                 Index=index).outputs[0]
+        return value["position"], value["normal"]
+
+    vertex, vertex_normal = sample("POINT", 0)
+    tree.linear_gizmo(tree.math("MULTIPLY", joint, 1.0),
+                      along(tree, vertex, vertex_normal, joint_radius), vertex_normal)
+    edges = tree.out(tree.n("GeometryNodeAttributeDomainSize", component="MESH",
+                            Geometry=geometry), "Edge Count")
+    middle, edge_normal = sample("EDGE", tree.math("SUBTRACT", edges, 1))
+    tree.linear_gizmo(tree.math("MULTIPLY", radius, 1.0),
+                      along(tree, middle, edge_normal, tube_radius), edge_normal)
+    resolution_gizmo(tree, resolution, Bounds(tree, geometry).at(z=1.0), per_turn=16.0)
     tree.output(tree.material(tree.smooth(frame), material))
     tree.layout()
     return tree.nt
@@ -419,6 +506,13 @@ def voxelize():
     cubes = tree.realize(tree.n("GeometryNodeInstanceOnPoints", Points=centers,
                                 Instance=cube).outputs[0])
     cubes = tree.smooth(cubes, False)
+
+    # Gizmos: pulling the end of the top edge by one voxel adds one across; the voxel size
+    # arrow stands one voxel out of the +Y side.
+    bounds = Bounds(tree, geometry)
+    count_gizmo(tree, resolution, tree.math("DIVIDE", largest, resolution), "X",
+                bounds.at(-1.0, 0.0, 1.0))
+    arrow(tree, tree.math("MULTIPLY", voxel_size, 1.0), bounds.at(y=1.0), "Y", color="Y")
     tree.output(keep_materials(tree, geometry, cubes))
     tree.layout()
     return tree.nt
@@ -435,7 +529,8 @@ def low_poly():
                         description="Facets across the object's largest side")
     seed = tree.input("Seed", "INT", 0, min=0)
 
-    cell = tree.math("DIVIDE", largest_dimension(tree, geometry), detail)
+    largest = largest_dimension(tree, geometry)
+    cell = tree.math("DIVIDE", largest, detail)
     # Cluster vertices on a grid shifted by the seed and move each to its cluster's average.
     shift = tree.vmath("SCALE", constant_random_vector(tree, seed), scale=cell)
     shifted = tree.vmath("ADD", position(tree), shift)
@@ -452,6 +547,9 @@ def low_poly():
     mesh = tree.n("GeometryNodeMergeByDistance", Geometry=mesh, Mode="All",
                   Distance=tree.math("MULTIPLY", cell, 0.001)).outputs[0]
     mesh = tree.n("GeometryNodeTriangulate", Mesh=mesh).outputs[0]
+    # Pulling the end of the top edge by one facet adds one facet across.
+    count_gizmo(tree, detail, tree.math("DIVIDE", largest, detail), "X",
+                Bounds(tree, geometry).at(-1.0, 0.0, 1.0))
     tree.output(tree.smooth(mesh, False))
     tree.layout()
     return tree.nt
@@ -480,16 +578,25 @@ def noise_displace():
 
     mesh = subdivide_to(tree, geometry, 5000, subdivisions)
     largest = largest_dimension(tree, geometry)
-    strength = within(tree, strength, largest, 0.25)
+    reach = within(tree, strength, largest, 0.25)
     coordinate = tree.vmath("ADD", tree.vmath("SCALE", position(tree),
                                               scale=tree.math("DIVIDE", scale, largest)),
                             constant_random_vector(tree, seed, -100.0, 100.0))
     noise = tree.n("ShaderNodeTexNoise", noise_dimensions="3D", Vector=coordinate, Scale=1.0,
                    Detail=detail, Roughness=0.55)
     amount = tree.math("MULTIPLY", tree.math("SUBTRACT", tree.out(noise, "Factor"), 0.5),
-                       tree.math("MULTIPLY", strength, 2.0))
+                       tree.math("MULTIPLY", reach, 2.0))
     mesh = tree.n("GeometryNodeSetPosition", Geometry=mesh,
                   Offset=tree.vmath("SCALE", normal(tree), scale=amount)).outputs[0]
+
+    # Gizmos: strength stands on top, scale is pulled out of the +X side like a density, and
+    # dials on the sides add detail (eight per turn) and subdivisions (four per turn).
+    bounds = Bounds(tree, geometry)
+    tree.linear_gizmo(tree.math("MULTIPLY", strength, 1.0),
+                      along(tree, bounds.at(z=1.0), "Z", reach), AXES["Z"])
+    density_gizmo(tree, scale, largest, "X", bounds.center)
+    resolution_gizmo(tree, detail, bounds.at(y=-1.0), per_turn=8.0, color="PRIMARY")
+    resolution_gizmo(tree, subdivisions, bounds.at(x=-1.0), per_turn=4.0)
     tree.output(mesh)
     tree.layout()
     return tree.nt
@@ -534,23 +641,31 @@ def snow_cover():
     shell = tree.n("GeometryNodeDeleteGeometry", Geometry=shell, domain="FACE",
                    Selection=tree.compare("LESS_THAN", named(tree, "snow"), 0.001)).outputs[0]
     largest = largest_dimension(tree, geometry)
-    thickness = within(tree, thickness, largest, 0.2)
+    depth_limit = within(tree, thickness, largest, 0.2)
     coordinate = tree.vmath("ADD", tree.vmath("SCALE", position(tree),
                                               scale=tree.math("DIVIDE", 4.0, largest)),
                             constant_random_vector(tree, seed, -100.0, 100.0))
     drift = tree.out(tree.n("ShaderNodeTexNoise", noise_dimensions="3D", Vector=coordinate,
                             Detail=2.0), "Factor")
-    depth = tree.math("MULTIPLY", tree.math("MULTIPLY", thickness, named(tree, "snow_depth")),
+    depth = tree.math("MULTIPLY", tree.math("MULTIPLY", depth_limit, named(tree, "snow_depth")),
                       tree.math("ADD", 0.5, drift))
     # Lift the shell off the surface a little, then extrude it up into a slab with sides,
     # which the subdivision rounds into soft drifts.
     shell = tree.n("GeometryNodeSetPosition", Geometry=shell,
                    Offset=tree.vmath("SCALE", normal(tree),
-                                     scale=tree.math("MULTIPLY", thickness, 0.03))).outputs[0]
+                                     scale=tree.math("MULTIPLY", depth_limit, 0.03))).outputs[0]
     shell = tree.n("GeometryNodeExtrudeMesh", Mesh=shell, mode="FACES", Individual=False,
                    Offset=tree.xyz(z=1.0), Offset_Scale=depth).outputs["Mesh"]
     shell = tree.n("GeometryNodeSubdivisionSurface", Mesh=shell, Level=1).outputs[0]
     shell = tree.material(tree.smooth(shell), material)
+
+    # Gizmos: the depth on top of the snow, the slope limit as a dial on the +X side turning
+    # around Y like a slope does, and the smoothness dial (ten per turn) on the -X side.
+    bounds = Bounds(tree, geometry)
+    tree.linear_gizmo(tree.math("MULTIPLY", thickness, 1.0),
+                      along(tree, bounds.at(z=1.0), "Z", depth_limit), AXES["Z"])
+    angle_gizmo(tree, limit, bounds.at(x=1.0, z=0.5), up="Y")
+    resolution_gizmo(tree, smoothness, bounds.at(x=-1.0, z=0.5), per_turn=10.0)
     tree.output(add_to(tree, geometry, shell))
     tree.layout()
     return tree.nt
