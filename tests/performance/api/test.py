@@ -44,8 +44,8 @@ class Test:
         """
         new_devices = []
         for device in devices:
-            device_type = device.type.replace("-RT", "")
-            found = any(d.type == device_type for d in new_devices)
+            device_id = device.id.replace("-RT", "", 1)
+            found = any(d.id == device_id for d in new_devices)
             if not found:
                 new_devices.append(device)
         return new_devices
