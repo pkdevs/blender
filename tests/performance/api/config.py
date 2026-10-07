@@ -273,6 +273,7 @@ class TestConfig:
                 supported_device_types = test.supported_device_types()
 
             devices = filter(lambda device: device.type in test.supported_device_types(), self.devices)
+            devices = test.remove_redundant_device_types(devices)
             if not devices:
                 devices = filter(lambda device: device.type == 'CPU', self.devices)
 
