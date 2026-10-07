@@ -214,6 +214,11 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
   if (use_denoise && denoiser_type == DENOISER_DLSS) {
     use_pixel_jitter = true;
+    use_adaptive_sampling = false;
+  }
+  const bool has_shadow_catcher = scene->has_shadow_catcher();
+  if (has_shadow_catcher) {
+    denoiser_upscale_factor = 1.0f;
   }
 
   KernelIntegrator *kintegrator = &dscene->data.integrator;
@@ -394,7 +399,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
     dscene->sample_pattern_lut.copy_to_device();
   }
 
-  kintegrator->has_shadow_catcher = scene->has_shadow_catcher();
+  kintegrator->has_shadow_catcher = has_shadow_catcher;
 
   if (use_pixel_jitter) {
     if (use_custom_pixel_jitter_sample) {
