@@ -25,6 +25,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
+#include "BLI_math_vector.h"
 #include "BLI_path_utils.hh"
 #include "BLI_serialize.hh"
 #include "GHOST_IOSMessageQueue.hh"
@@ -54,6 +55,8 @@
 #include "IMB_imbuf_types.hh"
 
 #include "RNA_access.hh"
+
+#include "UI_resources.hh"
 #include "RNA_enum_types.hh"
 
 #ifdef WITH_PYTHON
@@ -159,6 +162,22 @@ struct IOSBrushCommand {
   std::string key;
 };
 
+/** Native asset pane drags; see #ios_asset_drag. */
+enum IOSAssetDragPhase {
+  IOS_ASSET_DRAG_BEGIN,
+  IOS_ASSET_DRAG_MOVE,
+  IOS_ASSET_DRAG_DROP,
+  IOS_ASSET_DRAG_CANCEL,
+  /** Drop at the 3D cursor, or onto the active object for materials and node groups. */
+  IOS_ASSET_ADD,
+};
+
+struct IOSAssetDragCommand {
+  int phase = IOS_ASSET_DRAG_MOVE;
+  std::string key;
+  int x = 0, y = 0;
+};
+
 struct IOSMenuRequest {
   uint64_t identifier;
   std::string route;
@@ -174,7 +193,8 @@ using IOSUIMessage = std::variant<IOSUICommand,
                                   std::string,
                                   float,
                                   IOSMenuRequest,
-                                  IOSBrushCommand>;
+                                  IOSBrushCommand,
+                                  IOSAssetDragCommand>;
 /* A single inbox preserves ordering across tools, settings, operators and menus. */
 GHOST_IOSMessageQueue<IOSUIMessage> ios_ui_messages;
 GHOST_IOSMessageQueue<std::pair<uint64_t, std::string>> ios_menu_completed;
@@ -1428,6 +1448,141 @@ void ios_assets_build(bContext *C)
   }
 }
 
+asset_system::AssetRepresentation *ios_asset_find(const std::string &key)
+{
+  asset_system::AssetRepresentation *result = nullptr;
+  ed::asset::list::iterate(asset_system::all_library_reference(),
+                           [&](asset_system::AssetRepresentation &asset) {
+                             if (ios_brush_key(asset.make_weak_reference()) != key) {
+                               return true;
+                             }
+                             result = &asset;
+                             return false;
+                           });
+  return result;
+}
+
+/** Start a drag of \a asset, as the Asset Browser and asset shelf do. */
+void ios_asset_drag_start(bContext *C, asset_system::AssetRepresentation &asset)
+{
+  if (ID *local_id = asset.local_id()) {
+    WM_event_start_drag(C, ICON_NONE, WM_DRAG_ID, local_id, WM_DRAG_NOP);
+    return;
+  }
+  eAssetImportMethod import_method = asset.get_import_method().value_or(ASSET_IMPORT_PACK);
+  if (U.experimental.no_data_block_packing && import_method == ASSET_IMPORT_PACK) {
+    import_method = ASSET_IMPORT_APPEND_REUSE;
+  }
+  AssetImportSettings import_settings{};
+  import_settings.method = import_method;
+  import_settings.use_instance_collections = false;
+  WM_event_start_drag(C,
+                      ICON_NONE,
+                      WM_DRAG_ASSET,
+                      WM_drag_create_asset_data(&asset, import_settings),
+                      WM_DRAG_FREE_DATA);
+}
+
+/** Queue a pointer event at window coordinates \a xy, after the events already queued. */
+void ios_asset_drag_event(wmWindow *win, const int xy[2], const wmEventType type, const short val)
+{
+  wmEvent event = *win->runtime->eventstate;
+  event.type = type;
+  event.val = val;
+  event.flag = eWM_EventFlag(0);
+  event.custom = 0;
+  event.customdata = nullptr;
+  event.customdata_free = false;
+  copy_v2_v2_int(event.prev_xy, win->runtime->eventstate->xy);
+  copy_v2_v2_int(event.xy, xy);
+  copy_v2_v2_int(win->runtime->eventstate->xy, xy);
+  WM_event_add(win, &event);
+}
+
+/** Where tapping an asset adds it: the 3D cursor, or the active object for data it takes. */
+bool ios_asset_add_location(bContext *C, const ID_Type type, int r_xy[2])
+{
+  ARegion *region = CTX_wm_region(C);
+  Scene *scene = CTX_data_scene(C);
+  if (!region || region->regiontype != RGN_TYPE_WINDOW || !scene) {
+    return false;
+  }
+  float3 location = scene->cursor.location;
+  if (ELEM(type, ID_MA, ID_NT)) {
+    Object *object = CTX_data_active_object(C);
+    if (!object) {
+      WM_global_report(RPT_WARNING,
+                       type == ID_MA ? "Select an object to apply the material to" :
+                                       "Select an object to add the modifier to");
+      return false;
+    }
+    location = object->object_to_world().location();
+  }
+  float2 region_xy;
+  if (ED_view3d_project_float_global(region, location, region_xy, V3D_PROJ_TEST_NOP) !=
+      V3D_PROJ_RET_OK)
+  {
+    region_xy = float2(region->winx, region->winy) * 0.5f;
+  }
+  r_xy[0] = region->winrct.xmin + int(region_xy.x);
+  r_xy[1] = region->winrct.ymin + int(region_xy.y);
+  return true;
+}
+
+void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
+{
+  const IOSContextStore context_store = ios_context_push_view3d(C);
+  wmWindowManager *wm = CTX_wm_manager(C);
+  wmWindow *win = CTX_wm_window(C);
+  if (!win || !win->runtime->eventstate) {
+    ios_context_pop(C, context_store);
+    return;
+  }
+  const bool dragging = !BLI_listbase_is_empty(&wm->runtime->drags);
+  int xy[2] = {command.x, command.y};
+  if (command.phase != IOS_ASSET_ADD) {
+    wm_cursor_position_from_ghost_client_coords(win, &xy[0], &xy[1]);
+  }
+
+  switch (command.phase) {
+    case IOS_ASSET_DRAG_BEGIN:
+    case IOS_ASSET_ADD: {
+      asset_system::AssetRepresentation *asset = ios_asset_find(command.key);
+      if (!asset || dragging ||
+          (command.phase == IOS_ASSET_ADD &&
+           !ios_asset_add_location(C, asset->get_id_type(), xy)))
+      {
+        break;
+      }
+      ios_asset_drag_start(C, *asset);
+      ios_asset_drag_event(win, xy, MOUSEMOVE, KM_NOTHING);
+      if (command.phase == IOS_ASSET_ADD) {
+        ios_asset_drag_event(win, xy, LEFTMOUSE, KM_RELEASE);
+      }
+      break;
+    }
+    case IOS_ASSET_DRAG_MOVE:
+      if (dragging) {
+        ios_asset_drag_event(win, xy, MOUSEMOVE, KM_NOTHING);
+      }
+      break;
+    case IOS_ASSET_DRAG_DROP:
+      if (dragging) {
+        /* The release over a drop box becomes #EVT_DROP, as when releasing a dragged button. */
+        ios_asset_drag_event(win, xy, MOUSEMOVE, KM_NOTHING);
+        ios_asset_drag_event(win, xy, LEFTMOUSE, KM_RELEASE);
+      }
+      break;
+    case IOS_ASSET_DRAG_CANCEL:
+      if (dragging) {
+        /* Escape cancels a drag; queued, it also follows any pending moves. */
+        ios_asset_drag_event(win, win->runtime->eventstate->xy, EVT_ESCKEY, KM_PRESS);
+      }
+      break;
+  }
+  ios_context_pop(C, context_store);
+}
+
 /** \} */
 
 std::string ios_toolbar_build_json_for_context(bContext *C)
@@ -1771,6 +1926,15 @@ extern "C" void WM_apple_ios_ui_brush_activate(const char *brush_id)
   ios_ui_messages.push(IOSBrushCommand{brush_id});
 }
 
+/**
+ * Native asset pane drag: \a phase is a #IOSAssetDragPhase, \a x and \a y are GHOST client
+ * coordinates. \a asset_id is only needed to begin a drag or add an asset.
+ */
+extern "C" void WM_apple_ios_ui_asset_drag(int phase, const char *asset_id, int x, int y)
+{
+  ios_ui_messages.push(IOSAssetDragCommand{phase, asset_id ? asset_id : "", x, y});
+}
+
 extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle)
 {
   if (angle == 0.0f) {
@@ -2092,6 +2256,9 @@ static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
         else if constexpr (std::is_same_v<T, IOSBrushCommand>) {
           ios_brush_activate(C, command.key);
         }
+        else if constexpr (std::is_same_v<T, IOSAssetDragCommand>) {
+          ios_asset_drag(C, command);
+        }
         else {
           const IOSContextStore context_store = ios_context_push_view3d(C);
           if (CTX_wm_window(C) && CTX_wm_area(C) && CTX_wm_region(C)) {
@@ -2138,6 +2305,13 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     const auto *a = std::get_if<IOSSettingCommand>(&previous);
     const auto *b = std::get_if<IOSSettingCommand>(&next);
     if (a && b && a->setting == "timeline_frame" && b->setting == "timeline_frame") {
+      return true;
+    }
+    const auto *drag_a = std::get_if<IOSAssetDragCommand>(&previous);
+    const auto *drag_b = std::get_if<IOSAssetDragCommand>(&next);
+    if (drag_a && drag_b && drag_a->phase == IOS_ASSET_DRAG_MOVE &&
+        drag_b->phase == IOS_ASSET_DRAG_MOVE)
+    {
       return true;
     }
     if (!a || !b || a->setting != b->setting ||

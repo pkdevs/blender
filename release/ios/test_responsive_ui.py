@@ -48,6 +48,7 @@ static void ios_tool_set_by_id(bContext *, const std::string &id) { executed.pus
 static void ios_ui_dispatch_operator(bContext *, IOSOperatorCommand &c) { executed.push_back(c.op_name); }
 static void ios_ui_dispatch_menu(bContext *, IOSMenuRequest &c) { executed.push_back(c.route); }
 static void ios_brush_activate(bContext *, const std::string &key) { executed.push_back(key); }
+static void ios_asset_drag(bContext *, const IOSAssetDragCommand &c) { executed.push_back(c.key); }
 static void ios_setting_execute(bContext *, const IOSSettingCommand &c) { executed.push_back(c.setting); }
 static void ios_view_roll_angle(bContext *, float) { executed.push_back("roll"); }
 static void ios_operator_call_with_enum_property(bContext *, const char *op, const char *, const char *) {
@@ -66,10 +67,12 @@ int main() {
   tool[0] = 'X';
   WM_apple_ios_ui_command_enqueue(1);
   WM_apple_ios_ui_brush_activate("brush");
+  WM_apple_ios_ui_asset_drag(0, "asset", 4, 8);
   WM_apple_ios_ui_operator_at_position_enqueue("pencil", 15, 30);
   for (auto &message : ios_ui_messages.take()) ios_ui_dispatch(&C, message);
   const std::vector<std::string> expected{
-      "property", "setting", "roll", "menu", "operator", "tool", "mode", "brush", "pencil"};
+      "property", "setting", "roll", "menu", "operator", "tool", "mode", "brush", "asset",
+      "pencil"};
   assert(executed == expected);
   for (int i = 0; i < 1000; i++) WM_apple_ios_ui_pencil_hover_set(true, i, i + 1);
   IOSPencilHoverRequest hover;
