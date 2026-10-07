@@ -848,7 +848,6 @@ void blf_font_info_foreach_glyph(
   blf_glyph_cache_release(font);
 }
 
-
 size_t blf_str_offset_from_cursor_position(FontBLF *font,
                                            const char *str,
                                            size_t str_len,
