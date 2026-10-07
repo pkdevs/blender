@@ -615,6 +615,9 @@ static bool relative_convert_foreach_path_cb(BPathForeachPathData *bpath_data,
 
   data->summary.count_total++;
 
+  if (path_src[0] == '\0') {
+    return false; /* Empty, nothing to make relative. */
+  }
   if (BLI_path_is_rel(path_src)) {
     return false; /* Already relative. */
   }
@@ -766,7 +769,7 @@ static bool bpath_list_restore(BPathForeachPathData *bpath_data,
    * If this happens, there is a bug in caller code. */
   BLI_assert(!path_list->is_empty());
 
-  PathStore *path_store = static_cast<PathStore *>(path_list->first);
+  PathStore *path_store = path_list->first();
   const char *filepath = path_store->filepath;
   bool is_path_changed = false;
 

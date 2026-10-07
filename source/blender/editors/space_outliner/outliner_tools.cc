@@ -2666,7 +2666,7 @@ static void outliner_batch_delete_object_hierarchy_tag(
 
   /* Even though the object itself may not be deletable, some of its children may still be
    * deletable. */
-  for (Base *base_iter = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first);
+  for (Base *base_iter = BKE_view_layer_object_bases_get(view_layer)->first();
        base_iter != nullptr;
        base_iter = base_iter->next)
   {
@@ -3193,7 +3193,7 @@ static const EnumPropertyItem *outliner_id_operation_itemf(bContext *C,
       continue;
     }
     if (it->value == OUTLINER_IDOP_PACK) {
-      /* Include Pack operation in context menu just for tree elements that repsents image IDs. */
+      /* Include Pack operation in context menu just for tree elements that represent image IDs. */
       const SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
       const TreeElement *te = get_target_element(space_outliner);
       const TreeStoreElem *tselem = TREESTORE(te);

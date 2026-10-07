@@ -25,6 +25,8 @@
 
 #ifdef RNA_RUNTIME
 
+#  include <fmt/format.h>
+
 #  include "DNA_ID.h"
 
 #  include "BKE_dynamic_override.hh"

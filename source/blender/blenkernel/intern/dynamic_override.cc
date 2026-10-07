@@ -7,6 +7,7 @@
  * \ingroup bke
  */
 
+#include <fmt/format.h>
 #include <optional>
 
 #include "MEM_guardedalloc.h"
@@ -97,9 +98,8 @@ static void copy_data(Main * /*bmain*/,
   const DynamicOverride *dynoverride_src = id_cast<const DynamicOverride *>(id_src);
 
   BLI_duplicatelist(&dynoverride_dst->rules, &dynoverride_src->rules);
-  for (DynamicOverrideRule *
-           rule_dst = static_cast<DynamicOverrideRule *>(dynoverride_dst->rules.first),
-          *rule_src = static_cast<DynamicOverrideRule *>(dynoverride_src->rules.first);
+  for (DynamicOverrideRule *rule_dst = dynoverride_dst->rules.first(),
+                           *rule_src = dynoverride_src->rules.first();
        rule_dst;
        rule_dst = rule_dst->next, rule_src = rule_src->next)
   {
@@ -200,6 +200,7 @@ IDTypeInfo IDType_ID_OV = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = bke::dynoverride::blend_write,
@@ -263,11 +264,8 @@ static void rule_copy(DynamicOverrideRule &dynoverride_rule_dst,
       }
 
       BLI_duplicatelist(&rule_dst.properties, &rule_src.properties);
-      for (DynamicOverrideRuleProperty *
-               property_dst =
-                  static_cast<DynamicOverrideRuleProperty *>(rule_dst.properties.first),
-              *property_src =
-                  static_cast<DynamicOverrideRuleProperty *>(rule_src.properties.first);
+      for (DynamicOverrideRuleProperty *property_dst = rule_dst.properties.first(),
+                                       *property_src = rule_src.properties.first();
            property_dst;
            property_dst = property_dst->next, property_src = property_src->next)
       {
@@ -360,9 +358,10 @@ static void rule_write(BlendWriter &writer, DynamicOverrideRule &dynoverride_rul
       DynamicOverrideRuleIDData &rule = reinterpret_cast<DynamicOverrideRuleIDData &>(
           dynoverride_rule);
 
-      writer.write_struct(&rule, [](BlendStructWriter &struct_writer) -> void {
-        struct_writer.runtime_ptr(offsetof(DynamicOverrideRuleIDData, runtime));
-      });
+      writer.write_struct(&rule,
+                          [](BlendStructWriter<DynamicOverrideRuleIDData> &struct_writer) -> void {
+                            struct_writer.shallow_data.runtime = nullptr;
+                          });
 
       if (rule.override_values) {
         IDP_BlendWrite(&writer, rule.override_values);

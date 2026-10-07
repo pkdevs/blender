@@ -38,17 +38,19 @@ struct SymbolParser : NodeErrorHandler {
     }
 
     if (parent.type() == NodeType::FuncDecl) {
-      parse_function_return_type(scope, parent);
-      parse_function_arguments(scope, parent);
+      parse_function_return_type(scope, ast::FuncDecl(parent).return_type());
+      parse_function_arguments(scope, ast::FuncDecl(parent).arguments());
     }
     if (parent.type() == NodeType::ForLoop) {
       parse_loop_arguments(scope, parent);
     }
 
     int offset = 0;
+    int bitfield_offset = 0;
+    SymbolVariable *bitfield_base = nullptr;
 
     /* For enums, the value of the last declaration. */
-    ConstexprValue enum_last_val = -1;
+    ConstexprValue enum_last_val(-1);
 
     if (node.type() == NodeType::FuncDecl || node.type() == NodeType::ClassDecl ||
         node.type() == NodeType::LocalScope)
@@ -80,7 +82,7 @@ struct SymbolParser : NodeErrorHandler {
             parse_func_decl(scope, child, prefix);
             break;
           case NodeType::VarDecl:
-            parse_var_decl(scope, child, offset, prefix);
+            parse_var_decl(scope, child, offset, bitfield_offset, bitfield_base, prefix);
             break;
           case NodeType::StructuredBinding:
             parse_structured_binding(scope, child);
@@ -155,6 +157,7 @@ struct SymbolParser : NodeErrorHandler {
         SymbolClass *resolved = inst_scope.lookup_class(table, type_id).unwrap(this);
         /* IMPORTANT: Instantiate at argument declaration. Allow correct lookup. */
         scope.classes.emplace(id, resolved, arg.identifier().front());
+        scope.scopes.emplace(id, resolved);
       }
       else {
         IdQualified type = arg.type();
@@ -176,26 +179,25 @@ struct SymbolParser : NodeErrorHandler {
     }
   }
 
-  void parse_function_return_type(SymbolScope &scope, FuncDecl decl)
+  void parse_function_return_type(SymbolScope &scope, ast::IdType return_type)
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
-    fn_sym->return_type =
-        fn_sym->lookup_class(table, decl.return_type().identifier()).unwrap(this);
+    fn_sym->return_type = fn_sym->lookup_class(table, return_type.identifier()).unwrap(this);
 
     if (fn_sym->is_entry_point() && fn_sym->return_type != table.void_cls) {
-      error(decl.return_type(), Diag::EntryPointVoidReturn);
+      error(return_type, Diag::EntryPointVoidReturn);
     }
   }
 
   /* Create declaration for each function argument so name lookup will work with these.
    * Also create declaration for `this_`. */
-  void parse_function_arguments(SymbolScope &scope, FuncDecl decl)
+  void parse_function_arguments(SymbolScope &scope, FuncArgList arg_list)
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
     const bool is_entry_point = fn_sym->is_entry_point();
     const auto entry_point_type = fn_sym->entry_point_type;
 
-    for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
+    for (FuncArg arg : arg_list.children_of_type<FuncArg>()) {
       auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
       SymbolClass *type = scope.lookup_class(table, arg.type().identifier()).unwrap(this);
@@ -208,7 +210,7 @@ struct SymbolParser : NodeErrorHandler {
         error(var->loc.tok, Diag::Redefinition, var->identifier);
       }
       /* Register argument type for argument resolution. */
-      fn_sym->add_argument(type, arg.declarator().initial_value().expr());
+      fn_sym->add_argument(arg.type().is_const(), type, arg.declarator().initial_value().expr());
 
       switch (attr.res_type) {
         case ResourceType::BASE_INSTANCE:
@@ -247,7 +249,10 @@ struct SymbolParser : NodeErrorHandler {
         case ResourceType::FRAG_COORD:
           var->identifier = "gl_FragCoord";
           break;
-        case ResourceType::FRAG_STENCIL_REF:
+        case ResourceType::BARY_COORD:
+          var->identifier = "gpu_BaryCoord";
+          break;
+        case ResourceType::STENCIL_REF:
           var->identifier = "gl_FragStencilRefARB";
           break;
         case ResourceType::POINT_COORD:
@@ -345,6 +350,14 @@ struct SymbolParser : NodeErrorHandler {
       {
         error(arg, Diag::ResourceAttributesOnlyOnEntryPointArgs);
       }
+
+      if (!is_entry_point && attr.condition.is_valid()) {
+        error(arg, Diag::ConditionAttributeNotOnResource);
+      }
+
+      if (attr.condition.is_valid()) {
+        var->condition = attr.condition;
+      }
     }
 
     if (scope.parent != nullptr) {
@@ -354,7 +367,7 @@ struct SymbolParser : NodeErrorHandler {
         SymbolFunction *fn = it->second.second;
         if (fn->fn_type == SymbolFunction::MEMBER) {
           SymbolVariable *var = table.var_arena.alloc(
-              &scope, fn->parent_class(), decl.front(), "this_");
+              &scope, fn->parent_class(), arg_list.front(), "this_");
           scope.variable_emplace(var);
         }
       }
@@ -441,6 +454,7 @@ struct SymbolParser : NodeErrorHandler {
           }
         }
         SymbolVariable *var = table.var_arena.alloc(root, type, name, string(name.str()));
+        var->is_macro = true;
         root->variable_emplace(var);
       }
       /* TODO: Make a warning/error if this just defines a constant in global space without #if
@@ -509,7 +523,8 @@ struct SymbolParser : NodeErrorHandler {
       }
     }
     else {
-      sym->value = std::visit([](auto &&v) -> ConstexprValue { return v + 1; }, enum_last_val);
+      /* Note: Add unsigned to not change the type of the ConstexprValue. */
+      sym->value = enum_last_val + ConstexprValue(1u);
     }
 
     if (scope.variable_emplace(sym)) {
@@ -529,8 +544,12 @@ struct SymbolParser : NodeErrorHandler {
         error(sym->loc.tok, Diag::Redefinition, sym->identifier);
       }
     }
-    /* Set resolved identifier. */
-    sym->identifier = prefix + sym->identifier;
+    /* TODO(fclem): Not enabling this for non-class-enum to stay compatible with the older
+     * compiler. */
+    if (cls.is_enum_class()) {
+      /* Set resolved identifier. */
+      sym->identifier = prefix + sym->identifier;
+    }
   }
 
   SymbolClass *parse_class_decl(SymbolScope &scope,
@@ -587,8 +606,8 @@ struct SymbolParser : NodeErrorHandler {
       /* Create scalar constructor. */
       SymbolFunction *ctor = table.fun_arena.alloc(
           &scope, decl.front(), cls, cls->original, SymbolFunction::Type::GLOBAL);
-      ctor->add_argument(cls);
-      ctor->is_builtin = true;
+      ctor->add_argument(true, cls);
+      ctor->allow_vector_promotion = true;
       scope.function_emplace(ctor, true);
       ctor->identifier = prefix + ctor->identifier;
     }
@@ -612,8 +631,25 @@ struct SymbolParser : NodeErrorHandler {
 
   void parse_func_forward_decl(SymbolScope &scope, FuncForwardDecl decl)
   {
-    /* Record a function prototype. */
-    scope.function_prototypes.emplace_back(decl);
+    /* Treat the forward declaration as a standard function declaration to parse its signature. */
+    SymbolFunction *fn = table.fun_arena.alloc(&scope, table.err_cls, decl);
+    /* Mark as forward declared so it doesn't conflict with or replace the actual definition. */
+    fn->is_defined = false;
+
+    if (scope.poi) {
+      /* Functions inherit the point of instantiation of their class. */
+      fn->poi = scope.poi;
+    }
+    /* Emplace the function into the scope so it becomes available during function lookups. */
+    bool is_overload = scope.function_emplace(fn);
+    if (is_overload && fn->is_entry_point()) {
+      error(decl.identifier(), Diag::RedefinitionOfEntryPointFunction, decl.identifier().str());
+    }
+    /* Parse the return type and arguments to correctly populate matching criteria. */
+    parse_function_return_type(*fn, decl.return_type());
+    parse_function_arguments(*fn, decl.arguments());
+    /* Record as function prototype. */
+    scope.function_prototypes.emplace_back(decl, fn);
   }
 
   SymbolFunction *parse_func_decl(SymbolScope &scope,
@@ -625,21 +661,37 @@ struct SymbolParser : NodeErrorHandler {
   {
     /* Set return type to error type since we need to parse it after template argument
      * instantiation. */
-    SymbolFunction *fn = table.fun_arena.alloc(&scope, table.err_cls, func, suffix);
-    if (FuncForwardDecl fdecl = scope.lookup_function_forward_decl(func); fdecl.is_valid()) {
+    SymbolFunction *fn = nullptr;
+    if (auto [fdecl, fn_ptr] = scope.lookup_function_forward_decl(func); fdecl.is_valid()) {
+      fn = fn_ptr;
       /* Modify symbol location if it is forward declared. */
       fn->loc = fdecl.front();
+      fn->is_defined = true;
+      fn->decl = func;
+      /* Use attributes of the definition. */
+      fn->is_inline = func.attributes().contains_attr("force_inline");
+      /* Note: We discard the argument parsed by the forward declaration.
+       * They are parsed again by `parse_scope`. */
+      fn->variables.clear();
+      fn->arg_const.clear();
+      fn->arg_types.clear();
+      fn->arg_defaults.clear();
     }
+    else {
+      fn = table.fun_arena.alloc(&scope, table.err_cls, func, suffix);
+
+      bool is_overload = scope.function_emplace(fn);
+      if (is_overload && fn->is_entry_point()) {
+        error(func.identifier(), Diag::RedefinitionOfEntryPointFunction, func.identifier().str());
+      }
+    }
+
     if (poi) {
       fn->poi = poi;
     }
     else if (scope.poi) {
       /* Functions inherit the point of instantiation of their class. */
       fn->poi = scope.poi;
-    }
-    bool is_overload = scope.function_emplace(fn);
-    if (is_overload && fn->is_entry_point()) {
-      error(func.identifier(), Diag::RedefinitionOfEntryPointFunction, func.identifier().str());
     }
 
     parse_scope(*fn, func.body(), prefix + fn->identifier + ns_sep, temp);
@@ -910,7 +962,12 @@ struct SymbolParser : NodeErrorHandler {
     }
   }
 
-  void parse_var_decl(SymbolScope &scope, VarDecl var, int &offset, const std::string &prefix)
+  void parse_var_decl(SymbolScope &scope,
+                      VarDecl var,
+                      int &offset,
+                      int &bitfield_offset,
+                      SymbolVariable *&bitfield_base,
+                      const std::string &prefix)
   {
     IdQualified type_id = var.type().identifier();
     string_view type_id_str = type_id.str();
@@ -970,6 +1027,15 @@ struct SymbolParser : NodeErrorHandler {
       error(var, Diag::ResourceOutOfClassDeclaration);
     }
 
+    if (attr.condition.is_valid()) {
+      if (attr.res_type == ResourceType::NONE) {
+        error(var, Diag::ConditionAttributeNotOnResource);
+      }
+      else if (attr.res_type == ResourceType::SHARED) {
+        error(var, Diag::ConditionAttributeUnsupported, to_str(attr.res_type));
+      }
+    }
+
     const bool is_srt_local_ref = type->is_srt() && cls == nullptr;
 
     string anon_prefix;
@@ -986,6 +1052,7 @@ struct SymbolParser : NodeErrorHandler {
         error(decl, Diag::ReferenceMixedVarDecl);
         continue;
       }
+      ast::BitField bitfield = decl.bitfield();
 
       SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl, table);
       sym->res_type = attr.res_type;
@@ -999,6 +1066,19 @@ struct SymbolParser : NodeErrorHandler {
 
       if (is_srt_local_ref && !is_ref) {
         error(decl, Diag::ResourceTableMustBeReference);
+      }
+
+      /* Capacity attribute. */
+      if (attr.capacity.is_valid()) {
+        if (sym->array_dimensions != 1) {
+          error(decl, Diag::CapacityArrayDimensionMismatch);
+        }
+        /* TODO(fclem): Check that this references a single reachable compilation constant. */
+        sym->capacity_value = attr.capacity;
+      }
+
+      if (attr.condition.is_valid()) {
+        sym->condition = attr.condition;
       }
 
       /* Local References. */
@@ -1026,13 +1106,67 @@ struct SymbolParser : NodeErrorHandler {
       }
 
       if (cls) {
-        sym->set_offset(cls->is_union, offset);
+        if (sym->is_bitfield) {
+          if ((sym->type != table.int_cls && sym->type != table.uint_cls) ||
+              sym->array_dimensions != 0)
+          {
+            error(decl, Diag::BitFieldNotIntegral, sym->type->original);
+          }
+          ExpressionResult result =
+              table.expr_type_analysis(scope, bitfield.expr().child_first()).unwrap(this);
+          if (!result.is_constexpr()) {
+            error(decl, Diag::ExprNotIntegralConstant);
+          }
+          int len = result.value.comp_as<int>(0);
+          if (len > 32) {
+            error(decl, Diag::BitFieldSizeTooLarge, to_string(len));
+          }
+          else if (len == 0) {
+            error(decl, Diag::BitFieldSizeNull);
+          }
+          else if (len < 0) {
+            error(decl, Diag::BitFieldSizeNegative, to_string(len));
+          }
+          else {
+            if (bitfield_base && bitfield_offset + len <= 32 && !cls->is_union) {
+              /* Fits in existing bitfield. */
+              sym->bit_length = len;
+              sym->bit_offset = bitfield_offset;
+              bitfield_offset += len;
+            }
+            else {
+              /* Doesn't fit in existing bitfield or first in bitfield. Start a new bitfield. */
+              sym->bit_length = len;
+              sym->bit_offset = 0;
+              bitfield_offset = len;
+              bitfield_base = sym;
+            }
+          }
+        }
+        else {
+          /* Terminate any in progress bitfield. */
+          bitfield_base = nullptr;
+        }
+
+        if (sym->bit_offset != 0 && bitfield_base) {
+          /* Bitfield members copy their offset from the first bitfield member. */
+          sym->offset = bitfield_base->offset;
+        }
+        else {
+          sym->set_offset(cls->is_union, offset);
+        }
 
         /* Alias to the first, non-anonymous parent. */
         if (cls->is_anonymous) {
           if (named_parent->variable_emplace(sym)) {
             error(sym->loc.tok, Diag::Redefinition, sym->identifier);
           }
+        }
+
+        if (bitfield_base) {
+          /* Note: we mutate assignments into bitfieldInsert in a second pass. */
+          sym->identifier = bitfield_base->original + ".bitfieldExtract(" +
+                            to_string(sym->bit_offset) + ", " + to_string(sym->bit_length) + ")";
         }
 
         if (cls->is_anonymous || cls->is_union) {
@@ -1061,6 +1195,10 @@ struct SymbolParser : NodeErrorHandler {
       }
 
       if (sym->is_constexpr) {
+        if (sym->array_dimensions > 0) {
+          error(decl.array(), Diag::ConstexprVarMustNotBeArray);
+        }
+
         ExpressionResult result = initialize_constexpr(scope, sym->type, decl);
         /* For now demote constexpr if we couldn't deduce its value. */
         if (result.is_constexpr()) {
@@ -1121,10 +1259,14 @@ struct SymbolParser : NodeErrorHandler {
                                         SymbolClass *cls,
                                         Declarator decl)
   {
-    if (cls != table.int_cls && cls != table.uint_cls && cls != table.bool_cls &&
-        cls != table.float_cls)
+    if (cls != table.int_cls && cls != table.int2_cls && cls != table.int3_cls &&
+        cls != table.int4_cls && cls != table.uint_cls && cls != table.uint2_cls &&
+        cls != table.uint3_cls && cls != table.uint4_cls && cls != table.bool_cls &&
+        cls != table.bool2_cls && cls != table.bool3_cls && cls != table.bool4_cls &&
+        cls != table.float_cls && cls != table.float2_cls && cls != table.float3_cls &&
+        cls != table.float4_cls)
     {
-      error(decl, Diag::ConstexprVarMustBeIntOrUint);
+      error(decl, Diag::ConstexprVarMustBeValidType);
       return {table.err_cls};
     }
 
@@ -1136,9 +1278,17 @@ struct SymbolParser : NodeErrorHandler {
       result = eval_scalar_initializer_list(scope, cls, list);
     }
 
-    if (!result.is_constexpr()) {
+    if (result.type != cls) {
+      error(decl,
+            Diag::ConstexprVarMustBeInitializedByCorrectType,
+            decl.identifier().str(),
+            cls->original,
+            result.type->original);
+    }
+    else if (!result.is_constexpr()) {
       error(decl, Diag::ConstexprVarMustBeInitializedByConstantExpr, decl.identifier().str());
     }
+
     return result;
   }
 

@@ -103,7 +103,7 @@ void VKDevice::wait_for_timeline(TimelineValue timeline)
   }
   VkSemaphoreWaitInfo vk_semaphore_wait_info = {
       VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, nullptr, 0, 1, &vk_timeline_semaphore_, &timeline};
-  VkResult wait_result = functions.vkWaitSemaphores(
+  VkResult wait_result = functions.vkWaitSemaphoresKHR(
       vk_device_, &vk_semaphore_wait_info, UINT64_MAX);
   if (wait_result != VK_SUCCESS) {
     CLOG_ERROR(
@@ -189,7 +189,7 @@ void VKDevice::submission_runner(VKDevice *device)
 
       vk_command_buffer = command_buffers_unused.pop_last();
       command_buffer = std::make_optional<render_graph::VKCommandBufferWrapper>(
-          vk_command_buffer, device->functions, device->extensions_);
+          vk_command_buffer, device->functions, device->extensions_, device->workarounds_);
       command_buffer->begin_recording();
     }
 

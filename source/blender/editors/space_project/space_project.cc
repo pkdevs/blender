@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup spuserpref
+ */
+
 #include "BLI_listbase.hh"
 #include "BLI_string.hh"
 
@@ -180,7 +184,7 @@ void ED_spacetype_project()
   ARegionType *art;
 
   st->spaceid = SPACE_PROJECT;
-  STRNCPY(st->name, "Project Setup");
+  STRNCPY(st->name, "Project Settings");
 
   st->create = project_create;
   st->free = project_free;
