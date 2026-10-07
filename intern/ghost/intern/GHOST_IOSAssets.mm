@@ -19,7 +19,7 @@ enum {
 
 static const CGFloat kAssetsHeight = 212.0;
 static const CGFloat kAssetsCompactHeight = 184.0;
-static const CGFloat kAssetsMaxWidth = 1100.0;
+static const CGFloat kAssetsMaxWidth = 1600.0;
 static const CGFloat kAssetTile = 96.0;
 
 /* Data-block types Blender publishes, with their Blender icon and a readable plural. */

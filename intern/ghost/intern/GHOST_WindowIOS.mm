@@ -3939,10 +3939,28 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   else {
     redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
   }
-  /* The asset pane floats at the bottom of the lane between the rails, above the quick actions,
-   * and the timeline above it. */
-  [_assets layoutInRect:CGRectMake(redo_left, panel_top, MAX(0, redo_right - redo_left),
-                                   MAX(0, redo_bottom - panel_top))];
+  /* The asset pane floats at the bottom, above the quick actions, and the timeline above it.
+   * It spans the full width unless a rail or the navigation gizmo actually reaches down into
+   * its band; the lane above is narrowed by things that may sit far higher up. */
+  {
+    const CGFloat band_top = redo_bottom - _assets.height;
+    auto overlaps = [&](UIView *view) {
+      return view && !view.hidden && view.alpha > 0 && CGRectGetMaxY(view.frame) > band_top &&
+             CGRectGetMinY(view.frame) < redo_bottom;
+    };
+    CGFloat assets_left = CGRectGetMinX(redo_rect) + 12;
+    for (UIView *rail in @[_tool_rail, _brush_rail]) {
+      if (overlaps(rail)) {
+        assets_left = MAX(assets_left, CGRectGetMaxX(rail.frame) + 12);
+      }
+    }
+    CGFloat assets_right = CGRectGetMaxX(redo_rect) - 12;
+    if (overlaps(_view_gizmo_hotspot)) {
+      assets_right = MIN(assets_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
+    }
+    [_assets layoutInRect:CGRectMake(assets_left, panel_top, MAX(0, assets_right - assets_left),
+                                     MAX(0, redo_bottom - panel_top))];
+  }
   if (_assets.visible) {
     redo_bottom -= _assets.height + 8;
     panel_bottom = MIN(panel_bottom, redo_bottom);
