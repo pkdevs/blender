@@ -687,8 +687,14 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 
 - (UIVisualEffectView *)panelWithTitle:(NSString *)title close:(SEL)selector
 {
-  UIVisualEffectView *panel = [[[UIVisualEffectView alloc]
-      initWithEffect:[UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular]] autorelease];
+  UIGlassEffect *glass = [UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular];
+  /* Over Blender's dark viewport, untinted glass turns mid-grey even in light mode, which mutes
+   * the colored icons and text. A light tint keeps light mode light; dark mode stays untinted. */
+  glass.tintColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+    return traits.userInterfaceStyle == UIUserInterfaceStyleDark ? UIColor.clearColor :
+                                                                   [UIColor colorWithWhite:1 alpha:0.6];
+  }];
+  UIVisualEffectView *panel = [[[UIVisualEffectView alloc] initWithEffect:glass] autorelease];
   panel.layer.cornerRadius = 16;
   panel.clipsToBounds = YES;
   panel.hidden = YES;
