@@ -1523,7 +1523,10 @@ class NodeTreeMainUpdater {
         for (const bNodeSocket *linked_socket : socket->logically_linked_sockets()) {
           node->runtime->tmp_flag |= linked_socket->owner_node().runtime->tmp_flag;
           if (linked_socket->owner_node().type_legacy == SH_NODE_LIGHT_ACCUMULATION &&
-              ELEM(StringRefNull(linked_socket->name), "Diffuse Color", "Glossy Color"))
+              ELEM(StringRefNull(linked_socket->name),
+                   "Diffuse Color",
+                   "Glossy Color",
+                   "Transmission Color"))
           {
             node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::LightAccumulationColor);
           }
@@ -1554,13 +1557,24 @@ class NodeTreeMainUpdater {
         }
         break;
       case SH_NODE_ATTRIBUTE:
-        if (static_cast<NodeShaderAttribute *>(node.storage)->type != SHD_ATTRIBUTE_LIGHT) {
-          break;
-        }
-        ATTR_FALLTHROUGH;
+      case SH_NODE_VECT_TRANSFORM:
       case SH_NODE_LIGHT_INFO:
       case SH_NODE_LIGHT_EVALUATION:
       case SH_NODE_SHADOW_RAYCAST:
+        /* Attribute and Vector Transform nodes are only lighting nodes in light mode. */
+        if (node.type_legacy == SH_NODE_ATTRIBUTE &&
+            static_cast<NodeShaderAttribute *>(node.storage)->type != SHD_ATTRIBUTE_LIGHT)
+        {
+          break;
+        }
+        if (node.type_legacy == SH_NODE_VECT_TRANSFORM) {
+          const NodeShaderVectTransform *nodeprop = static_cast<NodeShaderVectTransform *>(
+              node.storage);
+          if (!ELEM(SHD_VECT_TRANSFORM_SPACE_LIGHT, nodeprop->convert_from, nodeprop->convert_to))
+          {
+            break;
+          }
+        }
         if (bool(flags & ShaderNodeAncestorFlags::ShaderMaterialOutput)) {
           if (!bool(flags & ShaderNodeAncestorFlags::LightAccumulation)) {
             return TIP_(
@@ -1569,7 +1583,10 @@ class NodeTreeMainUpdater {
           }
           if (bool(flags & ShaderNodeAncestorFlags::LightAccumulationColor) &&
               (link.tonode->type_legacy != SH_NODE_LIGHT_ACCUMULATION ||
-               ELEM(StringRefNull(link.tosock->name), "Diffuse Color", "Glossy Color")))
+               ELEM(StringRefNull(link.tosock->name),
+                    "Diffuse Color",
+                    "Glossy Color",
+                    "Transmission Color")))
           {
             return TIP_(
                 "Lighting nodes can't be connected to the Color sockets of a Light Accumulation "
@@ -1593,12 +1610,18 @@ class NodeTreeMainUpdater {
       fallback_zones = ntree.runtime->last_valid_zones.get();
     }
 
+    /* Clear the validity from the previous update first. The shader tagging below traverses the
+     * tree with an iterator that skips invalid links, so it would otherwise not see the links its
+     * own errors invalidated last time. */
+    for (bNodeLink &link : ntree.links) {
+      link.flag |= NODE_LINK_VALID;
+    }
+
     if (ntree.type == NTREE_SHADER) {
       this->shader_tree_tag_by_ancestor(ntree);
     }
 
     for (bNodeLink &link : ntree.links) {
-      link.flag |= NODE_LINK_VALID;
       if (!link.fromsock->is_available() || !link.tosock->is_available()) {
         link.flag &= ~NODE_LINK_VALID;
         continue;
@@ -2224,7 +2247,7 @@ class NodeTreeMainUpdater {
       if (bNodeTreeInterfaceSocket *toggle_socket = panel->header_toggle_socket()) {
         if (!STREQ(panel->name_, toggle_socket->name_)) {
           MEM_SAFE_DELETE(toggle_socket->name_);
-          toggle_socket->name() = BLI_strdup_null(panel->name_);
+          toggle_socket->name_ = BLI_strdup_null(panel->name_);
           changed = true;
         }
       }
