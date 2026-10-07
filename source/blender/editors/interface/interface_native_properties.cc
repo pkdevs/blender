@@ -389,6 +389,29 @@ struct PropertyAnimationAction {
   bool all;
 };
 
+/* Blender's widget animation colors: keyed on this frame, animated, changed from the
+ * animated value, or driven. Empty when the property has no animation data. */
+const char *property_animation_state(bContext *C, Button &but, int index)
+{
+  if (!RNA_property_path_from_ID_check(&but.rnapoin, but.rnaprop)) {
+    return "";
+  }
+  const int old_index = but.rnaindex, old_flag = but.flag, old_drawflag = but.drawflag;
+  but.rnaindex = index;
+  const AnimationEvalContext eval = BKE_animsys_eval_context_construct(
+      CTX_data_depsgraph_pointer(C), BKE_scene_frame_get(CTX_data_scene(C)));
+  button_anim_flag(&but, &eval);
+  const char *state = (but.flag & BUT_DRIVEN)               ? "DRIVEN" :
+                      (but.drawflag & BUT_ANIMATED_CHANGED) ? "CHANGED" :
+                      (but.flag & BUT_ANIMATED_KEY)         ? "KEYED" :
+                      (but.flag & BUT_ANIMATED)             ? "ANIMATED" :
+                                                              "";
+  but.rnaindex = old_index;
+  but.flag = old_flag;
+  but.drawflag = old_drawflag;
+  return state;
+}
+
 std::vector<PropertyAnimationAction> property_animation_actions(bContext *C, Button &but, int index)
 {
   if (!RNA_property_anim_editable(&but.rnapoin, but.rnaprop) ||
@@ -547,6 +570,9 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
   const bool array = RNA_property_array_check(prop);
   const int length = RNA_property_array_length(ptr, prop);
   const PropertyType type = RNA_property_type(prop);
+  if (const char *state = property_animation_state(C, but, index); state[0]) {
+    field.append_str("anim_state", state);
+  }
   const auto actions = property_animation_actions(C, but, index);
   if (!actions.empty()) {
     auto animation = field.append_array("animation");
