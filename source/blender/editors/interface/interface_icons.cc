@@ -1262,6 +1262,24 @@ void icon_ensure_deferred(const bContext *C, const int icon_id, const bool big)
   }
 }
 
+const uint8_t *icon_studiolight_preview(const bContext *C, const int icon_id)
+{
+  Icon *icon = BKE_icon_get(icon_id);
+  if (icon == nullptr || icon->obj_type != ICON_DATA_STUDIOLIGHT || icon->obj == nullptr) {
+    return nullptr;
+  }
+  /* The preview is rendered by a job; rendering it here as well could free the light's images
+   * while the job reads them. */
+  icon_ensure_deferred(C, icon_id, false);
+  const DrawInfo *di = icon_ensure_drawinfo(icon);
+  if (di == nullptr || di->type != ICON_TYPE_BUFFER || di->data.buffer.image == nullptr ||
+      WM_jobs_customdata_from_type(CTX_wm_manager(C), icon, WM_JOB_TYPE_STUDIOLIGHT))
+  {
+    return nullptr;
+  }
+  return di->data.buffer.image->rect;
+}
+
 bool icon_is_preview_deferred_loading(const int icon_id, const bool big)
 {
   const Icon *icon = BKE_icon_get(icon_id);

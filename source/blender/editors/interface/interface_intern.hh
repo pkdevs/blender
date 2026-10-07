@@ -1414,6 +1414,11 @@ void style_init();
 /* `interface_icons.cc` */
 
 void icon_ensure_deferred(const bContext *C, int icon_id, bool big);
+/**
+ * The pixels of a studio light icon (#STUDIOLIGHT_ICON_SIZE squared, RGBA bytes) once its
+ * preview job has finished, or null while it renders. Starts the job when needed.
+ */
+const uint8_t *icon_studiolight_preview(const bContext *C, int icon_id);
 /** Is \a icon_id a preview icon that is being loaded/rendered? */
 bool icon_is_preview_deferred_loading(int icon_id, bool big);
 int id_icon_get(const bContext *C, ID *id, bool big);
