@@ -8,7 +8,8 @@ import math
 
 import bpy
 
-from .common import RADIANS, generator_object, object_group, palette, rest_on_ground
+from .common import (AXES, RADIANS, count_gizmo, density_gizmo, generator_object, object_group,
+                     palette, radius_gizmo, resolution_gizmo, rest_on_ground, size_gizmo)
 from .nodes import Tree
 from .registry import asset
 
@@ -124,6 +125,20 @@ def _uv_sphere(tree, segments, rings, radius=1.0):
 
 def _group(tree, sub_tree, **inputs):
     return tree.n("GeometryNodeGroup", node_tree=sub_tree.nt, **inputs).outputs[0]
+
+
+def _arrow(tree, value, scale, axis, origin=(0.0, 0.0, 0.0), color="PRIMARY"):
+    """An arrow at origin + axis * value * scale. Natural shapes don't grow exactly with their
+    inputs, so `scale` is how far the part it sits on moves per unit, to make drags 1:1."""
+    reach = tree.math("MULTIPLY", value, scale)
+    position = tree.vmath("ADD", origin, tree.vmath("SCALE", AXES[axis], scale=reach))
+    return tree.linear_gizmo(reach, position, AXES[axis], color=color)
+
+
+def _factor_dial(tree, factor, position, up="Z", color="PRIMARY"):
+    """A dial for a 0-1 factor: half a turn sweeps its whole range."""
+    return tree.dial_gizmo(tree.math("MULTIPLY", factor, math.pi), position, AXES[up],
+                           radius=0.8, color=color)
 
 
 # -----------------------------------------------------------------------------
@@ -279,6 +294,15 @@ def rock():
     mesh = _group(tree, _rock_shape(), Size=size, Roughness=roughness, Cracks=cracks, Seed=seed,
                   Detail=detail)
     mesh = tree.material(mesh, material)
+    # The shape comes grounded; its tip is ~0.47 of the size out and its top ~0.38 up.
+    _arrow(tree, size, 0.47, "X", origin=tree.xyz(z=tree.math("MULTIPLY", size, 0.1)), color="X")
+    resolution_gizmo(tree, detail, tree.xyz(z=tree.math("MULTIPLY", size, 0.38)), per_turn=4.0)
+    side = tree.math("MULTIPLY", size, 0.37)
+    middle = tree.math("MULTIPLY", size, 0.19)
+    reach = tree.math("MULTIPLY", size, 0.3)
+    _arrow(tree, roughness, reach, "Y", origin=tree.xyz(0.0, side, middle))
+    _arrow(tree, cracks, reach, "-Y",
+           origin=tree.xyz(0.0, tree.math("MULTIPLY", side, -1.0), middle))
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Rock", tree)
 
@@ -325,6 +349,12 @@ def rock_cluster():
                    Rotation=_euler(tree, z=_random(tree, 0.0, 6.283, _seed(tree, seed, 4))),
                    Scale=tree.vmath("SCALE", stretch, scale=scale)).outputs[0]
     mesh = tree.material(tree.realize(rocks), material)
+
+    # Spread from the outer rocks' edge (they shrink, so that's about half of it), size from the top of the big middle rock.
+    _arrow(tree, spread, 0.5, "X", color="X")
+    _arrow(tree, size, 0.41, "Z", color="Z")
+    density_gizmo(tree, count, spread, "-Y")
+    _factor_dial(tree, variation, tree.xyz(tree.math("MULTIPLY", spread, -0.5)))
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Rock Cluster", tree)
 
@@ -412,6 +442,14 @@ def low_poly_tree():
         "MULTIPLY", height, 0.09)))
     foliage = tree.smooth(tree.material(foliage, leaves), False)
 
+    # The crown's top ends up ~1.09 of the height up. Branches go from 0.42 to 0.72 of the
+    # height, so each one adds about 0.06; the box sits by the top branch.
+    _arrow(tree, height, 1.09, "Z", color="Z")
+    count_gizmo(tree, count, tree.math("MULTIPLY", height, 0.06), "Z",
+                origin=tree.xyz(tree.math("MULTIPLY", height, 0.08), 0.0,
+                                tree.math("MULTIPLY", height, 0.42)))
+    resolution_gizmo(tree, density, tree.xyz(tree.math("MULTIPLY", height, -0.25), 0.0,
+                                             tree.math("MULTIPLY", height, 0.8)), per_turn=8.0)
     tree.output(rest_on_ground(tree, tree.join(wood, foliage)))
     return generator_object("Low-Poly Tree", tree)
 
@@ -468,6 +506,10 @@ def bush():
     floor = tree.math("MULTIPLY", radius, -0.62)
     mesh = _move(tree, mesh, tree.xyz(x, y, tree.math("MAXIMUM", z, floor)))
     mesh = tree.material(mesh, material)
+    # Lumps push the sides out to ~0.52 of the size.
+    _arrow(tree, size, 0.52, "X", color="X")
+    resolution_gizmo(tree, density, tree.xyz(z=tree.math("MULTIPLY", size, 0.41)),
+                     per_turn=800.0)
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Bush", tree)
 
@@ -524,6 +566,14 @@ def grass_patch():
     blades = _offset(tree, blades, tree.xyz(tree.math("MULTIPLY", bend, 0.8), 0.0,
                                             tree.math("MULTIPLY", bend, -0.35)))
     blades = tree.material(blades, material)
+
+    size_gizmo(tree, size, "X")
+    _arrow(tree, length, 1.0, "Z", color="Z")
+    # Wind from the tip of an average blade, which it bends sideways by 0.8 of the length.
+    _arrow(tree, wind, tree.math("MULTIPLY", length, 0.8), "X",
+           origin=tree.xyz(0.0, tree.math("MULTIPLY", size, -0.25), length))
+    resolution_gizmo(tree, density, tree.xyz(tree.math("MULTIPLY", size, -0.25)),
+                     per_turn=2000.0)
     tree.output(rest_on_ground(tree, tree.join(soil, blades)))
     return generator_object("Grass Patch", tree)
 
@@ -600,6 +650,12 @@ def flower():
     turn_head = tree.n("FunctionNodeAlignRotationToVector", axis="Z", Vector=facing).outputs[0]
     head = tree.transform(head, translation=top, rotation=turn_head)
 
+    # Petals reach ~1.95 of their length out from the middle of the head.
+    tree.linear_gizmo(tree.math("MULTIPLY", stem_height, 1.0), tree.vmath(
+        "ADD", top, tree.xyz(z=tree.math("MULTIPLY", petal_length, 1.2))), AXES["Z"], color="Z")
+    _arrow(tree, petal_length, 1.95, "X", origin=top)
+    resolution_gizmo(tree, petals, top, per_turn=16.0)
+
     tree.output(rest_on_ground(tree, tree.join(green, head)))
     return generator_object("Flower", tree)
 
@@ -658,6 +714,10 @@ def mushroom():
     spot_shapes = tree.material(tree.smooth(tree.realize(spot_shapes)), spot_material)
     cap = tree.join(cap, _switch(tree, "GEOMETRY", spots, None, spot_shapes))
     cap = tree.transform(cap, translation=tree.xyz(z=stem_height))
+
+    radius_gizmo(tree, cap_size, origin=tree.xyz(z=stem_height))
+    _arrow(tree, stem_height, 1.0, "Z", origin=tree.xyz(z=tree.math("MULTIPLY", cap_size, 0.7)),
+           color="Z")
 
     tree.output(rest_on_ground(tree, tree.join(stem, cap)))
     return generator_object("Mushroom", tree)
@@ -727,6 +787,15 @@ def terrain():
     mesh = _store(tree, mesh, "snow", snow)
     mesh = _store(tree, mesh, "rock", tree.math("SUBTRACT", 1.0, _smoothstep(tree, nz, 0.7, 0.88)))
     mesh = tree.material(tree.smooth(mesh), material)
+
+    half = tree.math("MULTIPLY", size, 0.5)
+    size_gizmo(tree, size, "X")
+    # The highest peak usually reaches ~0.84 of the height, near the middle.
+    _arrow(tree, height, 0.84, "Z", color="Z")
+    density_gizmo(tree, resolution, size, "-X")
+    # The snow line's handle sits at that height on a corner.
+    _arrow(tree, snow_line, height, "Z", origin=tree.xyz(half, half))
+    _factor_dial(tree, ridges, tree.xyz(0.0, tree.math("MULTIPLY", half, -1.0)))
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Terrain", tree)
 
@@ -791,6 +860,17 @@ def ocean():
     mesh = _store(tree, mesh, "foam", _smoothstep(tree, crest, tree.math(
         "SUBTRACT", 1.1, tree.math("MULTIPLY", choppiness, 0.25)), 1.6))
     mesh = tree.material(tree.smooth(mesh), material)
+
+    half = tree.math("MULTIPLY", size, 0.5)
+    size_gizmo(tree, size, "X")
+    # Crests and troughs both move, ~1.84 times the wave height apart; the troughs rest on the
+    # ground, so the arrow on the crests moves by all of it.
+    _arrow(tree, wave_height, 1.84, "Z", origin=tree.xyz(z=tree.math("MULTIPLY", wave_height,
+                                                                      -0.92)), color="Z")
+    density_gizmo(tree, resolution, size, "-X")
+    tree.dial_gizmo(tree.math("MULTIPLY", speed, 1.0), tree.xyz(0.0, tree.math(
+        "MULTIPLY", half, -1.0)), AXES["Z"], radius=0.8)
+    _factor_dial(tree, choppiness, tree.xyz(0.0, half))
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Ocean", tree)
 
@@ -860,6 +940,10 @@ def cloud():
     floor = tree.math("MULTIPLY", size, -0.1)
     mesh = _move(tree, mesh, tree.xyz(x, y, tree.math("MAXIMUM", z, floor)))
     mesh = tree.material(tree.smooth(mesh), material)
+    # The billows end ~0.43 of the size out; the heaped ones top out ~0.29 up.
+    _arrow(tree, size, 0.43, "X", origin=tree.xyz(z=tree.math("MULTIPLY", size, 0.05)), color="X")
+    _arrow(tree, puffiness, tree.math("MULTIPLY", size, 0.15), "Z",
+           origin=tree.xyz(z=tree.math("MULTIPLY", size, 0.22)))
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Cloud", tree)
 
@@ -942,5 +1026,12 @@ def planet():
     mesh = tree.material(mesh, ocean_material,
                          selection=tree.math("LESS_THAN", land_attribute, 0.5))
     mesh = tree.smooth(mesh)
+
+    radius_gizmo(tree, radius)
+    out = tree.math("MULTIPLY", radius, 1.2)
+    _factor_dial(tree, sea_level, tree.xyz(z=out))
+    resolution_gizmo(tree, continents, tree.xyz(0.0, tree.math("MULTIPLY", out, -1.0)), up="Y",
+                     per_turn=4.0, color="PRIMARY")
+    _factor_dial(tree, craters, tree.xyz(tree.math("MULTIPLY", out, -1.0)), up="X")
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Planet", tree)
