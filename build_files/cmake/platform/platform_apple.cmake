@@ -31,6 +31,13 @@ find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
 list(APPEND ZLIB_LIBRARIES ${BZIP2_LIBRARIES})
 
+# USD libraries found via the pxrConfig.cmake have the OpenPGL target as dependency
+# Since we disable finding system libraries (such as OpenGL) before we search for USD
+# we search for OpenGL now to already have the OpenGL target needed by USD.
+if(WITH_USD)
+  find_package(OpenGL REQUIRED)
+endif()
+
 if(WITH_OPENAL)
   find_package(OpenAL REQUIRED)
 endif()
@@ -90,6 +97,12 @@ endif()
 
 if(WITH_ALEMBIC)
   find_package(Alembic)
+endif()
+
+if(WITH_OPENSUBDIV)
+  set(OpenSubdiv_DIR ${LIBDIR}/opensubdiv/lib/cmake/OpenSubdiv)
+  find_package(OpenSubdiv REQUIRED CONFIG)
+  message("OpenSubdiv_FOUND = ${OpenSubdiv_FOUND}")
 endif()
 
 if(WITH_USD)
