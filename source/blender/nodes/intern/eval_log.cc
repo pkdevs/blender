@@ -112,17 +112,16 @@ GeometryInfoLog::GeometryInfoLog(const bke::GeometrySet &geometry_set)
    * attributes with the same name but different domains or data types on separate components. */
   Set<StringRef> names;
 
-  geometry_set.attribute_foreach(all_component_types,
-                                 true,
-                                 [&](const StringRef name,
-                                     const bke::AttributeMetaData &meta_data,
-                                     const bke::GeometryComponent & /*component*/) {
-                                   if (!bke::attribute_name_is_anonymous(name) && names.add(name))
-                                   {
-                                     this->attributes.append(
-                                         {name, meta_data.domain, meta_data.data_type});
-                                   }
-                                 });
+  geometry_set.attribute_foreach(
+      all_component_types,
+      true,
+      [&](const StringRef name,
+          const bke::AttributeMetaData &meta_data,
+          const bke::GeometryComponent & /*component*/) {
+        if (!bke::attribute_name_is_anonymous(name) && names.add(name)) {
+          this->attributes.append({name, meta_data.domain, meta_data.data_type});
+        }
+      });
 
   for (const bke::GeometryComponent *component : geometry_set.get_components()) {
     this->component_types.append(component->type());
@@ -434,23 +433,6 @@ const bke::GeometrySet *ViewerNodeLog::main_geometry() const
     }
   });
   return main_geometry_cache_ ? &*main_geometry_cache_ : nullptr;
-}
-
-static bool warning_is_propagated(const NodeWarningPropagation propagation,
-                                  const NodeWarningType warning_type)
-{
-  switch (propagation) {
-    case NODE_WARNING_PROPAGATION_ALL:
-      return true;
-    case NODE_WARNING_PROPAGATION_NONE:
-      return false;
-    case NODE_WARNING_PROPAGATION_ONLY_ERRORS:
-      return warning_type == NodeWarningType::Error;
-    case NODE_WARNING_PROPAGATION_ONLY_ERRORS_AND_WARNINGS:
-      return ELEM(warning_type, NodeWarningType::Error, NodeWarningType::Warning);
-  }
-  BLI_assert_unreachable();
-  return true;
 }
 
 void NodeTreeLog::ensure_node_warnings(const NodesModifierData &nmd)

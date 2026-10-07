@@ -59,6 +59,8 @@ class NODE_MT_gn_curve_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, path="Curve/Operations")
         self.draw_menu(layout, path="Curve/Primitives")
         self.draw_menu(layout, path="Curve/Topology")
+        layout.separator()
+        self.node_operator(layout, "GeometryNodeConstructCurves")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -595,6 +597,7 @@ class NODE_MT_gn_input_import_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeImportCSV", label="CSV (.csv)")
         self.node_operator(layout, "GeometryNodeImportOBJ", label="Wavefront (.obj)")
         self.node_operator(layout, "GeometryNodeImportPLY", label="Stanford PLY (.ply)")
+        self.node_operator(layout, "GeometryNodeImportSPZ", label="SPZ (.spz)")
         self.node_operator(layout, "GeometryNodeImportSTL", label="STL (.stl)")
         self.node_operator(layout, "GeometryNodeImportText", label="Text (.txt)")
         self.node_operator(layout, "GeometryNodeImportVDB", label="OpenVDB (.vdb)")
@@ -652,6 +655,9 @@ class NODE_MT_gn_point_base(node_add_menu.NodeMenu):
 
         layout.separator()
         self.node_operator(layout, "GeometryNodeSetPointRadius")
+
+        layout.separator()
+        self.node_operator(layout, "GeometryNodePointsSetType")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -984,6 +990,7 @@ class NODE_MT_gn_volume_read_base(node_add_menu.NodeMenu):
     def draw(self, context):
         del context
         layout = self.layout
+        self.node_operator(layout, "GeometryNodeGetGridNames")
         self.node_operator(layout, "GeometryNodeGetNamedGrid")
         self.node_operator(layout, "GeometryNodeGridInfo")
         self.node_operator(layout, "GeometryNodeInputVoxelIndex")
@@ -1019,6 +1026,7 @@ class NODE_MT_gn_volume_sample_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeGridDivergence")
         self.node_operator(layout, "GeometryNodeGridGradient")
         self.node_operator(layout, "GeometryNodeGridLaplacian")
+        self.node_operator(layout, "GeometryNodeGridSolvePoisson")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
 

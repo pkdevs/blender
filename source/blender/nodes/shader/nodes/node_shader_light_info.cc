@@ -33,7 +33,12 @@ static int node_shader_gpu_light_info(GPUMaterial *mat,
                                       GPUNodeStack *in,
                                       GPUNodeStack *out)
 {
-  return GPU_stack_link(mat, node, "node_light_info", in, out);
+  if (!in[0].link) {
+    /* Error: not linked to a light accumulation node */
+    return false;
+  }
+
+  return GPU_stack_link(mat, node, "node_light_info", in, out, GPU_kernel_globals());
 }
 
 }  // namespace nodes::node_shader_light_info_cc
