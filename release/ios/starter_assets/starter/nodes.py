@@ -53,6 +53,8 @@ class Tree:
         # Group menu inputs: identifier -> item names, and the one index each menu drives.
         self._menu_items = {}
         self._menu_indices = {}
+        # Gizmo outputs not yet joined into the result; see `with_gizmos()`.
+        self._gizmos = []
         if group_io:
             self.group_in = self.nodes.new("NodeGroupInput")
             self.group_out = self.nodes.new("NodeGroupOutput")
@@ -170,7 +172,41 @@ class Tree:
 
     def output(self, value, name=None):
         socket = self.group_out.inputs[name] if name else self.group_out.inputs[0]
+        if socket.type == "GEOMETRY" and name is None:
+            value = self.with_gizmos(value)
         self.set_input(socket, value)
+
+    # -------------------------------------------------------------------------
+    # Gizmos.
+    #
+    # A gizmo edits the group input its value comes from, so the value must lead back to a group
+    # input directly or through nodes Blender can invert: the first input of Math add, subtract,
+    # multiply or divide (the other input can be anything), Separate XYZ, Combine XYZ and their
+    # integer and vector counterparts. Integer inputs are rounded. Position and direction can be
+    # computed from anything; they're where the gizmo is drawn.
+
+    def linear_gizmo(self, value, position, direction, color="PRIMARY", style="ARROW"):
+        """An arrow along `direction`: dragging it by a distance adds that distance to `value`."""
+        node = self.n("GeometryNodeGizmoLinear", color_id=color, draw_style=style,
+                      Position=position, Direction=direction)
+        self.links.new(value, node.inputs["Value"])
+        self._gizmos.append(node.outputs[0])
+        return node
+
+    def dial_gizmo(self, value, position, up, radius=1.0, screen_space=True, color="PRIMARY"):
+        """A ring around `up`: turning it adds the angle, in radians, to `value`."""
+        node = self.n("GeometryNodeGizmoDial", color_id=color, Position=position, Up=up,
+                      Radius=radius, Screen_Space=screen_space)
+        self.links.new(value, node.inputs["Value"])
+        self._gizmos.append(node.outputs[0])
+        return node
+
+    def with_gizmos(self, geometry):
+        """Join the gizmos made so far into geometry, so they follow its later transforms."""
+        if not self._gizmos:
+            return geometry
+        gizmos, self._gizmos = self._gizmos, []
+        return self.join(geometry, *gizmos)
 
     # -------------------------------------------------------------------------
     # Nodes.
