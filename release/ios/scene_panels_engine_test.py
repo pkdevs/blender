@@ -121,4 +121,32 @@ bpy.ops.object.mode_set(mode='OBJECT')
 edit(cube, 'collection_new', value='Native Collection')
 check(len(bpy.data.collections) == count + 1 and bpy.context.collection.name != collection.name,
       'Blender assigns unique collection names')
+
+
+def collection_row(coll):
+    return next(row for row in state()['hierarchy'] if row['kind'] == 'collection' and row['id'] == str(coll.session_uid))
+
+
+def edit_collection(coll, action, **values):
+    panels.apply_json(bpy.context, json.dumps(dict(id=str(coll.session_uid), kind='collection', action=action,
+                                                 sequence=len(checks) + 1, **values)))
+
+
+check(collection_row(bpy.context.scene.collection)['actions'] == [],
+      'The scene collection cannot be hidden, renamed or deleted')
+check(collection_row(collection)['actions'] == ['visibility', 'rename', 'delete'], 'Collections offer swipe actions')
+edit_collection(collection, 'visibility', value=True)
+check(collection_row(collection)['hidden'] and
+      panels._layer_collection(bpy.context.view_layer.layer_collection, collection).hide_viewport,
+      'Hide uses the collection viewport toggle')
+edit_collection(collection, 'visibility', value=False)
+edit_collection(collection, 'rename', value='  Props  ')
+check(collection.name == 'Props', 'Rename a collection')
+inner = bpy.data.collections.new('Inner')
+collection.children.link(inner)
+contents = set(collection.objects)
+holder = parent.collection
+edit_collection(collection, 'delete')
+check('Props' not in bpy.data.collections and contents <= set(holder.objects) and inner.name in holder.children,
+      'Delete keeps objects and child collections in the parent, like the Outliner')
 print('PASS: native scene panels ' + json.dumps(checks))

@@ -27,6 +27,42 @@ def _object_actions(context, obj):
     return actions
 
 
+def _collection_actions(context, layer):
+    # The scene collection cannot be hidden, renamed or deleted, as in the Outliner.
+    if layer == context.view_layer.layer_collection:
+        return []
+    coll = layer.collection
+    actions = ['visibility']
+    if context.mode == 'OBJECT' and coll.is_editable and not coll.override_library:
+        actions += ['rename', 'delete']
+    return actions
+
+
+def _layer_collection(layer, coll):
+    if layer.collection == coll:
+        return layer
+    for child in layer.children:
+        found = _layer_collection(child, coll)
+        if found:
+            return found
+    return None
+
+
+def _delete_collection(context, coll):
+    """Remove a collection but keep its contents, like the Outliner's Delete: objects and child
+    collections move to every collection that held it, so nothing leaves the scene."""
+    parents = [c for c in bpy.data.collections if coll.name in c.children]
+    parents += [scene.collection for scene in bpy.data.scenes if coll.name in scene.collection.children]
+    for parent in parents:
+        for obj in coll.objects:
+            if obj.name not in parent.objects:
+                parent.objects.link(obj)
+        for child in coll.children:
+            if child.name not in parent.children:
+                parent.children.link(child)
+    bpy.data.collections.remove(coll)
+
+
 def _hierarchy(context):
     rows = []
     active = context.view_layer.objects.active
@@ -37,7 +73,8 @@ def _hierarchy(context):
         key = parent + "/c" + _uid(coll)
         rows.append({"key": key, "parent": parent, "depth": depth, "kind": "collection",
                      "id": _uid(coll), "name": coll.name, "icon": "OUTLINER_COLLECTION",
-                     "enabled": not layer.exclude, "active": False})
+                     "enabled": not layer.exclude, "active": False, "hidden": layer.hide_viewport,
+                     "actions": _collection_actions(context, layer)})
         members = {obj.name: obj for obj in coll.objects if obj.name in objects}
         children = {}
         for obj in members.values():
@@ -101,6 +138,23 @@ class WM_OT_native_panel_edit(bpy.types.Operator):
                     raise
                 context.view_layer.update()
                 context.view_layer.active_layer_collection = parent.children[collection.name]
+            elif request.get('kind') == 'collection':
+                coll = next((c for c in bpy.data.collections if _uid(c) == request.get('id')), None)
+                layer = coll and _layer_collection(context.view_layer.layer_collection, coll)
+                action = request.get('action')
+                if layer is None:
+                    raise ValueError("This collection is no longer in the current view layer.")
+                if action not in _collection_actions(context, layer):
+                    raise ValueError("This action is no longer available for this collection.")
+                if action == 'visibility':
+                    layer.hide_viewport = bool(request['value'])
+                elif action == 'rename':
+                    name = request.get('value')
+                    if not isinstance(name, str) or not name.strip():
+                        raise ValueError("Enter a collection name.")
+                    coll.name = name.strip()
+                else:
+                    _delete_collection(context, coll)
             elif obj is None:
                 raise ValueError("This object is no longer in the current view layer.")
             elif request.get('action') == 'select':

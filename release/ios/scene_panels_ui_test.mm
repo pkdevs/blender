@@ -87,6 +87,25 @@ static void testHierarchySwipes(UIView *overlay)
   NSCAssert(![panels hierarchySwipeActionsAtIndexPath:path leading:YES] &&
             [[panels hierarchySwipeActionsAtIndexPath:path leading:NO].actions[0].title isEqual:@"Show"],
             @"Unavailable actions disappear and hidden rows offer Show");
+  NSDictionary *scene = @{@"key": @"/c1", @"parent": @"", @"id": @"1", @"kind": @"collection",
+                          @"name": @"Scene Collection", @"enabled": @YES, @"depth": @0, @"actions": @[]};
+  NSDictionary *props = @{@"key": @"/c1/c2", @"parent": @"/c1", @"id": @"2", @"kind": @"collection",
+                          @"name": @"Props", @"enabled": @YES, @"depth": @1, @"hidden": @NO,
+                          @"actions": @[@"visibility", @"rename", @"delete"]};
+  [panels updateSnapshot:@{@"ack": @99999, @"hierarchy": @[scene, props]}];
+  NSCAssert(![panels hierarchySwipeActionsAtIndexPath:path leading:YES] &&
+            ![panels hierarchySwipeActionsAtIndexPath:path leading:NO],
+            @"The scene collection has no swipe actions, as in the Outliner");
+  NSIndexPath *child = [NSIndexPath indexPathForItem:1 inSection:0];
+  leading = [panels hierarchySwipeActionsAtIndexPath:child leading:YES];
+  trailing = [panels hierarchySwipeActionsAtIndexPath:child leading:NO];
+  NSCAssert(leading.actions.count == 1 && [leading.actions[0].title isEqual:@"Rename"] &&
+            [trailing.actions[0].title isEqual:@"Delete"] && [trailing.actions[1].title isEqual:@"Hide"],
+            @"Collections swipe to rename, delete and hide");
+  trailing.actions[1].handler(trailing.actions[1], overlay, ^(BOOL success) { completed = success; });
+  NSCAssert(completed && [request[@"action"] isEqual:@"visibility"] && [request[@"kind"] isEqual:@"collection"] &&
+            [request[@"id"] isEqual:@"2"] && [request[@"value"] boolValue],
+            @"Hiding a collection targets the collection, not an object with the same id");
   [panels dismiss];
 }
 

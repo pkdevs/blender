@@ -2930,14 +2930,15 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   slot.maintainsFixedSize = YES;
   slot.reservedLayoutWidth = indent + 20;
   [accessories addObject:slot];
-  if (!collection && [node[@"hidden"] boolValue]) {
+  if ([node[@"hidden"] boolValue]) {
     UIButton *accessory = [UIButton buttonWithType:UIButtonTypeSystem];
     accessory.tintColor = UIColor.secondaryLabelColor;
     accessory.frame = CGRectMake(0, 0, 44, 44);
     [accessory setImage:[UIImage systemImageNamed:@"eye.slash"] forState:UIControlStateNormal];
     accessory.accessibilityLabel = @"Show in viewport";
     [accessory addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
-      [owner send:@{@"action": @"visibility", @"id": node[@"id"], @"value": @NO}];
+      [owner send:@{@"action": @"visibility", @"id": node[@"id"], @"kind": node[@"kind"] ?: @"object",
+                    @"value": @NO}];
     }] forControlEvents:UIControlEventTouchUpInside];
     [accessories addObject:[[[UICellAccessoryCustomView alloc] initWithCustomView:accessory
         placement:UICellAccessoryPlacementTrailing] autorelease]];
@@ -2982,7 +2983,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     return NO;
   }
   NSMutableDictionary *request = [NSMutableDictionary dictionaryWithDictionary:
-      @{@"action": action, @"id": current[@"id"]}];
+      @{@"action": action, @"id": current[@"id"], @"kind": current[@"kind"] ?: @"object"}];
   if (value) { request[@"value"] = value; }
   [self send:request];
   return YES;
@@ -2999,9 +3000,14 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     return;
   }
   BOOL deleting = [action isEqual:@"delete"];
+  const BOOL collection = [current[@"kind"] isEqual:@"collection"];
+  NSString *message = collection ?
+      @"Its objects and collections move to the parent collection. You can undo this change." :
+      @"The object will be removed from this scene. You can undo this change.";
   UIAlertController *alert = [UIAlertController alertControllerWithTitle:
-      deleting ? [NSString stringWithFormat:@"Delete \"%@\"?", current[@"name"]] : @"Rename Object"
-      message:deleting ? @"The object will be removed from this scene. You can undo this change." : nil
+      deleting ? [NSString stringWithFormat:@"Delete \"%@\"?", current[@"name"]] :
+                 collection ? @"Rename Collection" : @"Rename Object"
+      message:deleting ? message : nil
       preferredStyle:UIAlertControllerStyleAlert];
   if (!deleting) {
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
@@ -3009,7 +3015,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       field.clearButtonMode = UITextFieldViewModeWhileEditing;
       field.autocapitalizationType = UITextAutocapitalizationTypeNone;
       field.autocorrectionType = UITextAutocorrectionTypeNo;
-      field.accessibilityLabel = @"Object name";
+      field.accessibilityLabel = collection ? @"Collection name" : @"Object name";
     }];
   }
   __block GHOSTIOSScenePanels *owner = self;
@@ -3033,7 +3039,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 - (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)indexPath leading:(BOOL)leading
 {
   NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
-  if (![node[@"kind"] isEqual:@"object"]) { return nil; }
+  if (![node[@"actions"] isKindOfClass:NSArray.class]) { return nil; }
   NSMutableArray *items = [NSMutableArray array];
   __block GHOSTIOSScenePanels *owner = self;
   for (NSString *identifier in leading ? @[@"duplicate", @"rename"] : @[@"delete", @"visibility"]) {
