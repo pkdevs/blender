@@ -61,3 +61,13 @@ Everything here is CC0. Downloaded sources live in `sources/` with a note of whe
 Blender Studio's [Human Base Meshes](https://www.blender.org/download/demo-files/), and scanned
 materials from [Poly Haven](https://polyhaven.com/license) and
 [ambientCG](https://docs.ambientcg.com/license/).
+
+## Testing
+
+- `release/ios/test_starter_library.py` validates the committed library with Blender and checks
+  the shipped files record no local paths.
+- `release/ios/test_native_assets.py` tests the native asset pane in the iOS Simulator.
+- `release/ios/assets_device_test.py` drops every Starter asset on an iPad through the asset
+  pane's entry point, plus a real drag and a cancelled one. Copy it into the app's Documents
+  directory and launch the app with `--factory-startup --python-expr` as its docstring shows;
+  results go to `Documents/assets-device-test.json`.
