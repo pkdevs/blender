@@ -285,6 +285,14 @@ def main():
                     problems.append(f"{label}: not centered on X/Y ({center.x:.3f}, {center.y:.3f})")
                 if largest > 60.0 or largest < 0.01:
                     problems.append(f"{label}: implausible size {largest:.3f} m")
+                hint = data.get("dimensions")
+                if hint is not None and getattr(hint, "typecode", "f") != "f":
+                    problems.append(f"{label}: dimensions hint must be a float array, "
+                                    f"not {hint.typecode!r}")
+                if hint is None or any(abs(a - b) > max(0.01, b * 0.02)
+                                       for a, b in zip(hint, size)):
+                    problems.append(f"{label}: dimensions hint {hint and list(hint)} doesn't match "
+                                    f"its size {[round(v, 3) for v in size]}; drops draw it")
             print(f"{label:42} {triangles:7d} tris {seconds * 1000:7.1f} ms")
             scene.collection.objects.unlink(id_data)
             for modifier in modifiers:
