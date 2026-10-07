@@ -8,6 +8,7 @@
 static char GHOSTIOSNumberHoveredKey;
 static char GHOSTIOSNumberScrubbingKey;
 static char GHOSTIOSNumberChevronsKey;
+static char GHOSTIOSNumberAnimationKey;
 
 static const CGFloat GHOSTIOSScrubGaugeHeight = 24;
 
@@ -231,9 +232,11 @@ void GHOSTIOSNumberFieldAppearance(UITextField *field, bool scrubbing)
                        [objc_getAssociatedObject(field, &GHOSTIOSNumberHoveredKey) boolValue];
   objc_setAssociatedObject(field, &GHOSTIOSNumberScrubbingKey, @(scrubbing), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   field.borderStyle = UITextBorderStyleRoundedRect;
-  field.backgroundColor = active  ? [field.tintColor colorWithAlphaComponent:0.12] :
-                          hovered ? [field.tintColor colorWithAlphaComponent:0.07] :
-                                    UIColor.tertiarySystemFillColor;
+  UIColor *animation = objc_getAssociatedObject(field, &GHOSTIOSNumberAnimationKey);
+  field.backgroundColor = active    ? [field.tintColor colorWithAlphaComponent:0.12] :
+                          animation ? [animation colorWithAlphaComponent:hovered ? 0.45 : 0.35] :
+                          hovered   ? [field.tintColor colorWithAlphaComponent:0.07] :
+                                      UIColor.tertiarySystemFillColor;
   field.layer.cornerRadius = 8;
   field.layer.cornerCurve = kCACornerCurveContinuous;
   field.layer.borderWidth = active ? 1.5 : hovered ? 1 : 0;
@@ -255,6 +258,17 @@ void GHOSTIOSNumberFieldAppearance(UITextField *field, bool scrubbing)
   else {
     [indicator hideForField:field];
   }
+}
+
+void GHOSTIOSNumberFieldSetAnimationColor(UITextField *field, UIColor *color)
+{
+  UIColor *current = objc_getAssociatedObject(field, &GHOSTIOSNumberAnimationKey);
+  if (current == color || [current isEqual:color]) {
+    return;
+  }
+  objc_setAssociatedObject(field, &GHOSTIOSNumberAnimationKey, color, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  GHOSTIOSNumberFieldAppearance(
+      field, [objc_getAssociatedObject(field, &GHOSTIOSNumberScrubbingKey) boolValue]);
 }
 
 void GHOSTIOSNumberScrubIndicatorUpdate(UITextField *field, double vertical)

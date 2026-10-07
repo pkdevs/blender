@@ -5,6 +5,7 @@
 #import "GHOST_IOSScenePanels.hh"
 #import "GHOST_IOSIcons.hh"
 #import "GHOST_IOSNumericInput.hh"
+#import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
 #include <cfloat>
 #include <cmath>
@@ -1088,7 +1089,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 - (NSDictionary *)shapeForProperty:(NSDictionary *)property
 {
   NSMutableDictionary *shape = [[property mutableCopy] autorelease];
-  for (NSString *key in @[@"value", @"exposure", @"editable"]) {
+  for (NSString *key in @[@"value", @"exposure", @"editable", @"anim_state"]) {
     [shape removeObjectForKey:key];
   }
   if (shape[@"animation"]) {
@@ -1119,6 +1120,54 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     [shape addObject:[self shapeForProperty:property]];
   }
   return shape;
+}
+
+/* Blender's widget colors for animated properties: yellow when keyed on this frame, green
+ * when animated, orange when changed from the animated value, purple when driven. */
+static UIColor *blenderAnimationStateColor(NSString *state)
+{
+  if ([state isEqual:@"KEYED"]) { return UIColor.systemYellowColor; }
+  if ([state isEqual:@"ANIMATED"]) { return UIColor.systemGreenColor; }
+  if ([state isEqual:@"CHANGED"]) { return UIColor.systemOrangeColor; }
+  if ([state isEqual:@"DRIVEN"]) { return UIColor.systemPurpleColor; }
+  return nil;
+}
+
+- (void)applyAnimationState:(NSString *)state control:(UIControl *)control slider:(UISlider *)slider
+{
+  if (!control) { return; }
+  UIColor *color = blenderAnimationStateColor(state);
+  static char stateKey;
+  NSString *previous = objc_getAssociatedObject(control, &stateKey);
+  if ([previous isEqual:state ?: @""]) { return; }
+  objc_setAssociatedObject(control, &stateKey, state ?: @"", OBJC_ASSOCIATION_COPY_NONATOMIC);
+  NSString *label = [control.accessibilityLabel componentsSeparatedByString:@", Keyframed"].firstObject;
+  label = [label componentsSeparatedByString:@", Animated"].firstObject;
+  label = [label componentsSeparatedByString:@", Driven"].firstObject;
+  control.accessibilityLabel = !color ? label : [label stringByAppendingString:
+      [state isEqual:@"KEYED"] ? @", Keyframed" : [state isEqual:@"DRIVEN"] ? @", Driven" : @", Animated"];
+  if (slider) {
+    slider.minimumTrackTintColor = color;
+  }
+  if ([control isKindOfClass:UITextField.class]) {
+    GHOSTIOSNumberFieldSetAnimationColor((UITextField *)control, color);
+  }
+  else if ([control isKindOfClass:UISwitch.class]) {
+    UISwitch *toggle = (UISwitch *)control;
+    toggle.onTintColor = color;
+    /* An unchecked keyed switch still reads as keyed, like Blender's yellow checkbox. */
+    toggle.backgroundColor = [color colorWithAlphaComponent:0.45];
+    toggle.layer.cornerRadius = toggle.bounds.size.height / 2 ?: 15.5;
+  }
+  else if ([control isKindOfClass:GHOSTIOSColorButton.class]) {
+    control.layer.borderColor = color.CGColor;
+    control.layer.borderWidth = color ? 2.5 : 0;
+  }
+  else {
+    control.backgroundColor = [color colorWithAlphaComponent:0.35];
+    control.layer.cornerRadius = 8;
+    control.layer.cornerCurve = kCACornerCurveContinuous;
+  }
 }
 
 - (void)rebuildInspector:(NSDictionary *)inspector preservingSections:(BOOL)preserve
@@ -2556,6 +2605,7 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
       id value = property[@"value"];
       control.enabled = [property[@"editable"] boolValue];
       slider.enabled = control.enabled;
+      [self applyAnimationState:property[@"anim_state"] control:control slider:slider];
       UILabel *heading = _groupHeadings[[self keyForProperty:property]];
       if (heading) {
         for (NSDictionary *option in property[@"group_menu"][@"options"]) {

@@ -20,6 +20,10 @@ static const double GHOSTIOSAngleScrubScale = 10.0;
  * hovering Pencil or pointer. Scrubbing also shows the drag-sensitivity indicator. */
 void GHOSTIOSNumberFieldAppearance(UITextField *field, bool scrubbing);
 
+/* Fill the field with Blender's animation state color (keyed, animated, driven, ...), or
+ * restore the normal fill with nil. */
+void GHOSTIOSNumberFieldSetAnimationColor(UITextField *field, UIColor *color);
+
 /* Show left/right chevrons and a hover fill while a Pencil or pointer hovers the field. */
 void GHOSTIOSNumberFieldInstallHover(UITextField *field);
 
