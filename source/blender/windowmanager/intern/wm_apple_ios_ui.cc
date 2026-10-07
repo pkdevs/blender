@@ -171,6 +171,8 @@ enum IOSAssetDragPhase {
   IOS_ASSET_DRAG_CANCEL,
   /** Drop at the 3D cursor, or onto the active object for materials and node groups. */
   IOS_ASSET_ADD,
+  /** Internal second step of #IOS_ASSET_ADD: release at window coordinates. */
+  IOS_ASSET_ADD_RELEASE,
 };
 
 struct IOSAssetDragCommand {
@@ -1533,6 +1535,25 @@ bool ios_asset_add_location(bContext *C, const ID_Type type, int r_xy[2])
 /** Name of the bundled library of starter assets, in `datafiles/starter_assets`. */
 constexpr const char *IOS_STARTER_LIBRARY_NAME = "Starter";
 
+/**
+ * Bring the drop's snap target up to date at window coordinates \a xy. Drops place objects with
+ * the snap data the viewport computes while drawing; a quick drag or a tap can be released before
+ * the viewport has drawn at that point.
+ */
+void ios_asset_drop_snap_update(bContext *C, const int xy[2])
+{
+  ARegion *region = CTX_wm_region(C);
+  if (!region || region->regiontype != RGN_TYPE_WINDOW || !CTX_wm_view3d(C)) {
+    return;
+  }
+  V3DSnapCursorState *state = ED_view3d_cursor_snap_state_active_get();
+  if (!state) {
+    return;
+  }
+  const int2 mval(xy[0] - region->winrct.xmin, xy[1] - region->winrct.ymin);
+  ED_view3d_cursor_snap_data_update(state, C, region, mval);
+}
+
 void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
 {
   const IOSContextStore context_store = ios_context_push_view3d(C);
@@ -1544,7 +1565,7 @@ void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
   }
   const bool dragging = !BLI_listbase_is_empty(&wm->runtime->drags);
   int xy[2] = {command.x, command.y};
-  if (command.phase != IOS_ASSET_ADD) {
+  if (!ELEM(command.phase, IOS_ASSET_ADD, IOS_ASSET_ADD_RELEASE)) {
     wm_cursor_position_from_ghost_client_coords(win, &xy[0], &xy[1]);
   }
 
@@ -1561,10 +1582,18 @@ void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
       ios_asset_drag_start(C, *asset);
       ios_asset_drag_event(win, xy, MOUSEMOVE, KM_NOTHING);
       if (command.phase == IOS_ASSET_ADD) {
-        ios_asset_drag_event(win, xy, LEFTMOUSE, KM_RELEASE);
+        /* Release on the next update, once the move has entered the drop box and its snap
+         * target exists, as when a finger lifts after a drag. */
+        ios_ui_messages.push(IOSAssetDragCommand{IOS_ASSET_ADD_RELEASE, "", xy[0], xy[1]});
       }
       break;
     }
+    case IOS_ASSET_ADD_RELEASE:
+      if (dragging) {
+        ios_asset_drop_snap_update(C, xy);
+        ios_asset_drag_event(win, xy, LEFTMOUSE, KM_RELEASE);
+      }
+      break;
     case IOS_ASSET_DRAG_MOVE:
       if (dragging) {
         ios_asset_drag_event(win, xy, MOUSEMOVE, KM_NOTHING);
@@ -1573,6 +1602,7 @@ void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
     case IOS_ASSET_DRAG_DROP:
       if (dragging) {
         /* The release over a drop box becomes #EVT_DROP, as when releasing a dragged button. */
+        ios_asset_drop_snap_update(C, xy);
         ios_asset_drag_event(win, xy, MOUSEMOVE, KM_NOTHING);
         ios_asset_drag_event(win, xy, LEFTMOUSE, KM_RELEASE);
       }
