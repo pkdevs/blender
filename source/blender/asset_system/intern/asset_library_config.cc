@@ -21,6 +21,8 @@
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
 
+#include "WM_api.hh"
+
 #include "asset_library_config.hh"
 
 namespace blender::asset_system {
@@ -166,53 +168,41 @@ static ReadingResult<> user_asset_library_parse_uuid(bUserAssetLibrary &custom_l
   std::string uuid_str = asset_lib_config["library"]["uuid"].as_string();
   if (!BLI_uuid_parse_string(&lib_uuid, uuid_str.c_str())) {
     custom_library.runtime->invalid_uuid = uuid_str;
-    return ReadingResult<>::Failure(N_("Illformed asset library UUID."));
+    return ReadingResult<>::Failure(N_("Invalid Asset Library UUID in configuration files."));
   }
   custom_library.runtime->uuid = lib_uuid;
+  return ReadingResult<>::Success();
 }
 
-static ReadingResult<> user_asset_library_uuid_ensure_imlp(bUserAssetLibrary &custom_library)
+void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
 {
   BLI_assert(!(custom_library.flag & ASSET_LIBRARY_PROJECT_DEFINED));
 
-  custom_library.runtime->uuid = BLI_uuid_nil();
-  custom_library.runtime->invalid_uuid.clear();
+  const ReadingResult<> result = [&]() {
+    custom_library.runtime->uuid = BLI_uuid_nil();
+    custom_library.runtime->invalid_uuid.clear();
 
-  ReadingResult<toml::value> read_result = user_asset_library_config_read_file(custom_library);
-  if (read_result.is_failure()) {
-    return read_result.without_success_value();
-  }
-
-  toml::value asset_lib_config_value = *read_result;
-
-  if (ReadingResult<> ensure_uuid_config_result = user_asset_library_config_file_uuid_ensure(
-          custom_library, asset_lib_config_value);
-      ensure_uuid_config_result.is_failure())
-  {
-    return ensure_uuid_config_result;
-  }
-
-  return user_asset_library_parse_uuid(custom_library, asset_lib_config_value);
-}
-
-void user_asset_library_uuid_ensure(bUserAssetLibrary &user_library, ReportList *reports)
-{
-  ReadingResult result = user_asset_library_uuid_ensure_imlp(user_library);
-  if (result.is_failure()) {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Asset Library '%s': %s",
-                user_library.name,
-                RPT_(result.failure_reason.c_str()));
-  }
-  else if (result.has_warnings()) {
-    for (const std::string &warning : result.warnings) {
-      BKE_reportf(reports,
-                  RPT_WARNING,
-                  "Asset Library '%s': %s",
-                  user_library.name,
-                  RPT_(warning.c_str()));
+    ReadingResult<toml::value> read_result = user_asset_library_config_read_file(custom_library);
+    if (read_result.is_failure()) {
+      return read_result.without_success_value();
     }
+
+    toml::value asset_lib_config_value = *read_result;
+
+    if (ReadingResult<> ensure_uuid_config_result = user_asset_library_config_file_uuid_ensure(
+            custom_library, asset_lib_config_value);
+        ensure_uuid_config_result.is_failure())
+    {
+      return ensure_uuid_config_result;
+    }
+
+    return user_asset_library_parse_uuid(custom_library, asset_lib_config_value);
+  }();
+  if (result.is_failure()) {
+    WM_global_reportf(RPT_ERROR,
+                      "Asset Library '%s': %s",
+                      custom_library.name,
+                      RPT_(result.failure_reason.c_str()));
   }
 }
 

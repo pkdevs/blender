@@ -29,8 +29,8 @@
 #include "all_library.hh"
 #include "asset_catalog_collection.hh"
 #include "asset_catalog_definition_file.hh"  // IWYU pragma: keep
-#include "asset_library_service.hh"
 #include "asset_library_config.hh"
+#include "asset_library_service.hh"
 #include "essentials_library.hh"
 #include "on_disk_library.hh"
 #include "preferences_on_disk_library.hh"
@@ -111,10 +111,8 @@ AssetLibrary *AssetLibraryService::get_asset_library(
       if (!custom_library) {
         return nullptr;
       }
-      ReportList *reports = bmain && bmain->wm.first() ? &bmain->wm.first()->runtime->reports :
-                                                         nullptr;
       if (custom_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
-        user_asset_library_uuid_ensure(*custom_library, reports);
+        user_asset_library_uuid_ensure(*custom_library);
         if (is_online_essentials_url(custom_library->remote_url)) {
           return this->get_online_essentials_asset_library();
         }
@@ -125,7 +123,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
       if (root_path.empty()) {
         return nullptr;
       }
-      user_asset_library_uuid_ensure(*custom_library, reports);
+      user_asset_library_uuid_ensure(*custom_library);
       AssetLibrary *library = this->get_asset_library_on_disk_custom_preferences(custom_library);
       library->may_override_import_method_ = true;
 

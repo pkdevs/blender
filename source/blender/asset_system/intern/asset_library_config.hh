@@ -19,7 +19,7 @@ namespace asset_system {
  * Read the Asset Library identifier (UUID) from the blender_asset_lib.toml library config file.
  * If the file is missing, a new UUID is assigned and the file is written to store it.
  */
-void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library, ReportList *reports);
+void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library);
 
 }  // namespace asset_system
 }  // namespace blender

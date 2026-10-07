@@ -6,7 +6,7 @@
  * \ingroup asset_system
  */
 
-#pragma once 
+#pragma once
 
 #include <string>
 #include <variant>
