@@ -774,12 +774,9 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
   TreeElement *te = outliner_find_item_at_y(
       space_outliner, space_outliner->runtime->tree, view_co);
 
-  if (!te) {
+  if (!te || !te->parent) {
     return nullptr;
   }
-
-  Vector<TreeElement *> &subtree = te->parent->subtree;
-  int index = subtree.first_index_of(te);
 
   bool (*callback_test)(TreeElement *);
   if ((space_outliner->outlinevis == SO_VIEW_LAYER) &&
@@ -802,9 +799,8 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
       return nullptr;
     }
 
-    if (index < subtree.size() - 1) {
-      index++;
-      te = subtree[index];
+    if (TreeElement *te_next = te->next()) {
+      te = te_next;
       continue;
     }
 
@@ -813,15 +809,12 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
     }
 
     while (te->parent) {
-      Vector<TreeElement *> &parent_subtree = te->parent->parent->subtree;
-      int index = parent_subtree.first_index_of(te->parent);
-      if (index < subtree.size() - 1) {
-        index++;
-        te = parent_subtree[index];
+      if (TreeElement *te_next = te->parent->next()) {
+        te = te_next;
         break;
       }
-      te = te->parent;
     }
+    te = te->parent;
   }
 
   return nullptr;
@@ -1088,24 +1081,24 @@ static bool outliner_element_is_collection_or_object(TreeElement *te)
 static TreeElement *outliner_extract_children_from_subtree(TreeElement *element,
                                                            Vector<TreeElement *> *parent_subtree)
 {
-  int index = parent_subtree->first_index_of(element);
-  TreeElement *te_next = index < parent_subtree->size() - 1 ? (*parent_subtree)[index + 1] :
-                                                              nullptr;
+  TreeElement *te_next = element->next();
 
   if (outliner_element_is_collection_or_object(element)) {
-    for (auto te = parent_subtree->rbegin(); te != parent_subtree->rend(); te++) {
+    TreeElement *te_prev = nullptr;
+    for (TreeElement *te = element->subtree.last(); te; te = te_prev) {
+      te_prev = te->prev();
 
-      if (!outliner_element_is_collection_or_object(*te)) {
+      if (!outliner_element_is_collection_or_object(te)) {
         continue;
       }
 
-      te_next = *te;
-      const int index = element->subtree.first_index_of(*te);
+      te_next = te;
+      const int index = element->subtree.first_index_of(te);
       element->subtree.remove(index);
 
       const int element_index = parent_subtree->first_index_of(element);
-      parent_subtree->insert(element_index, *te);
-      (*te)->parent = element->parent;
+      parent_subtree->insert(element_index, te);
+      te->parent = element->parent;
     }
   }
 
@@ -1124,7 +1117,12 @@ static int outliner_filter_subtree(SpaceOutliner *space_outliner,
   TreeElement *te_next;
   TreeStoreElem *tselem;
 
-  for (TreeElement *te : *tree) {
+  if (tree->is_empty()) {
+    return false;
+  }
+
+  for (TreeElement *te = tree->first(); te; te = te_next) {
+    te_next = te->next();
     if (outliner_element_visible_get(bmain, scene, view_layer, te, exclude_filter) == false) {
       /* Don't free the tree, but extract the children from the parent and add to this tree. */
       /* This also needs filtering the subtree prior (see #69246). */

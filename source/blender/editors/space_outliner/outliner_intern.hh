@@ -129,6 +129,34 @@ struct TreeElement {
   short xend;                /* Width of item display, for select. */
   const char *name;
   void *directdata; /* Armature Bones, Base, ... */
+
+  TreeElement *next()
+  {
+    if (!parent || parent->subtree.is_empty()) {
+      return nullptr;
+    }
+
+    const int index = parent->subtree.first_index_of(this);
+    if (index < parent->subtree.size() - 1) {
+      return parent->subtree[index + 1];
+    }
+
+    return nullptr;
+  }
+
+  TreeElement *prev()
+  {
+    if (!parent || parent->subtree.is_empty()) {
+      return nullptr;
+    }
+
+    const int index = parent->subtree.first_index_of(this);
+    if (index > 0) {
+      return parent->subtree[index - 1];
+    }
+
+    return nullptr;
+  }
 };
 
 struct TreeElementIcon {

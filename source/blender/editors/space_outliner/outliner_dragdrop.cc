@@ -277,30 +277,24 @@ static int outliner_get_insert_index(TreeElement *drag_te,
                                      TreeElementInsertType insert_type,
                                      ListBaseT<T> *listbase)
 {
-  int index = BLI_findindex(listbase, drop_te->directdata);
-
-  if (index < 0) {
-    /* Element not found. */
-    BLI_assert_unreachable();
-    return -1;
-  }
   /* Find the element to insert after. Null is the start of the list. */
   if (drag_te->index < drop_te->index) {
     if (insert_type == TE_INSERT_BEFORE) {
-      index--;
+      drop_te = drop_te->prev();
     }
   }
   else {
     if (insert_type == TE_INSERT_AFTER) {
-      index++;
+      drop_te = drop_te->next();
     }
   }
 
-  if (index < 0) {
+  if (drop_te == nullptr) {
     return 0;
   }
 
-  return index;
+  return BLI_findindex(listbase, drop_te->directdata);
+  ;
 }
 
 /** \} */
@@ -1388,28 +1382,20 @@ static std::string collection_drop_tooltip(bContext *C,
     /* Choose the tooltip text based on where the drop will go. */
     switch (data.insert_type) {
       case TE_INSERT_BEFORE: {
-        Span<TreeElement *> subtree = te->parent->subtree;
-        const int index = subtree.first_index(te);
-        if (index > 0) {
-          TreeElement *te_prev = subtree[index - 1];
-          if (target_is_object_row ? is_object_element(te_prev) :
-                                     outliner_is_collection_tree_element(te_prev))
-          {
-            return tooltip_between;
-          }
+        TreeElement *te_prev = te->prev();
+        if (te_prev && (target_is_object_row ? is_object_element(te_prev) :
+                                               outliner_is_collection_tree_element(te_prev)))
+        {
+          return tooltip_between;
         }
         return tooltip_before;
       }
       case TE_INSERT_AFTER: {
-        Span<TreeElement *> subtree = te->parent->subtree;
-        const int index = subtree.first_index(te);
-        if (index < subtree.size() - 1) {
-          TreeElement *te_next = subtree[index + 1];
-          if ((target_is_object_row ? is_object_element(te_next) :
-                                      outliner_is_collection_tree_element(te_next)))
-          {
-            return tooltip_between;
-          }
+        TreeElement *te_next = te->next();
+        if (te_next && (target_is_object_row ? is_object_element(te_next) :
+                                               outliner_is_collection_tree_element(te_next)))
+        {
+          return tooltip_between;
         }
         return tooltip_after;
       }

@@ -2161,16 +2161,11 @@ static TreeElement *outliner_find_rightmost_visible_child(SpaceOutliner *space_o
 /* Find previous visible element in the tree. */
 static TreeElement *outliner_find_previous_element(SpaceOutliner *space_outliner, TreeElement *te)
 {
-  if (te->parent) {
-    /* Use parent if at beginning of list */
-    Span<TreeElement *> subtree = te->parent->subtree;
-    const int index = subtree.first_index(te);
-    if (index > 0) {
-      te = outliner_find_rightmost_visible_child(space_outliner, subtree[index - 1]);
-    }
-    else {
-      te = te->parent;
-    }
+  if (TreeElement *te_prev = te->prev()) {
+    te = outliner_find_rightmost_visible_child(space_outliner, te_prev);
+  }
+  else if (te->parent) {
+    te = te->parent;
   }
 
   return te;
@@ -2181,12 +2176,9 @@ static TreeElement *outliner_element_find_successor_in_parents(TreeElement *te)
 {
   TreeElement *successor = te;
   while (successor->parent) {
-    if (TreeElement *te_parent = successor->parent->parent) {
-      const int index = te_parent->subtree.first_index_of(te);
-      if (index < te_parent->subtree.size() - 1) {
-        te = te_parent->subtree[index + 1];
-        break;
-      }
+    if (successor->parent->next()) {
+      te = successor->parent->next();
+      break;
     }
     successor = successor->parent;
   }
@@ -2201,6 +2193,9 @@ static TreeElement *outliner_find_next_element(SpaceOutliner *space_outliner, Tr
 
   if (TSELEM_OPEN(tselem, space_outliner) && !te->subtree.is_empty()) {
     te = static_cast<TreeElement *>(te->subtree.first());
+  }
+  else if (TreeElement *te_next = te->next()) {
+    te = te_next;
   }
   else {
     te = outliner_element_find_successor_in_parents(te);
