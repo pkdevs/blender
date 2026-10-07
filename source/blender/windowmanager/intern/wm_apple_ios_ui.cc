@@ -216,6 +216,9 @@ std::string ios_properties_error;
 int64_t ios_panels_sequence = 0;
 std::atomic<bool> ios_navigation_hover_active{false};
 std::atomic<bool> ios_navigation_redraw_pending{false};
+/** Height of the native bottom tray (the asset pane) as a fraction of the window height. */
+std::atomic<float> ios_bottom_tray{0.0f};
+extern "C" int WM_apple_ios_ui_bottom_tray_ymin(const wmWindow *win, const ARegion *region);
 struct IOSPencilHoverRequest {
   bool active = false;
   int x = 0, y = 0;
@@ -1667,7 +1670,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   if (has_view3d_context) {
     const wmWindow *win = CTX_wm_window(C);
     ARegion *region = CTX_wm_region(C);
-    const rcti *visible = ED_region_visible_rect(region);
+    rcti visible = *ED_region_visible_rect(region);
+    visible.ymin = std::max(visible.ymin, WM_apple_ios_ui_bottom_tray_ymin(win, region));
     const float width = WM_window_native_pixel_x(win);
     const float height = WM_window_native_pixel_y(win);
     const float radius = U.gizmo_size_navigate_v3d * 0.5f * U.scale_factor;
@@ -1676,9 +1680,9 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
       /* Match view3d_gizmo_navigate.cc, in normalized UIKit window coordinates.
        * The native shell can follow the last frame during asynchronous resizing. */
       navigation_json = "[" +
-                        std::to_string((region->winrct.xmin + visible->xmax - inset) / width) +
+                        std::to_string((region->winrct.xmin + visible.xmax - inset) / width) +
                         "," +
-                        std::to_string(1.0f - (region->winrct.ymin + visible->ymin + inset) / height) +
+                        std::to_string(1.0f - (region->winrct.ymin + visible.ymin + inset) / height) +
                         "," + std::to_string(radius / width) + "]";
     }
   }
@@ -2143,6 +2147,19 @@ extern "C" bool WM_apple_ios_ui_navigation_hover_active()
 extern "C" void WM_apple_ios_ui_navigation_redraw_request()
 {
   ios_navigation_redraw_pending.store(true);
+}
+
+extern "C" void WM_apple_ios_ui_bottom_tray_set(const float fraction)
+{
+  if (ios_bottom_tray.exchange(fraction) != fraction) {
+    ios_navigation_redraw_pending.store(true);
+  }
+}
+
+extern "C" int WM_apple_ios_ui_bottom_tray_ymin(const wmWindow *win, const ARegion *region)
+{
+  /* The navigation gizmo sits above the tray, in region pixels. */
+  return int(ios_bottom_tray.load() * WM_window_native_pixel_y(win)) - region->winrct.ymin;
 }
 
 static void ios_ui_dispatch_operator(bContext *C, IOSOperatorCommand &command)

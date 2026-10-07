@@ -29,6 +29,10 @@
 
 namespace blender {
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+extern "C" int WM_apple_ios_ui_bottom_tray_ymin(const wmWindow *win, const ARegion *region);
+#endif
+
 /* -------------------------------------------------------------------- */
 /** \name View3D Navigation Gizmo Group
  * \{ */
@@ -296,7 +300,15 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
     copy_v3_v3(navgroup->gz_array[GZ_INDEX_ROTATE]->matrix_offset[i], rv3d->viewmat[i]);
   }
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* Keep the gizmo above the native bottom tray (the asset pane) while it is open. */
+  rcti rect_visible_ios = *ED_region_visible_rect(region);
+  rect_visible_ios.ymin = std::max(rect_visible_ios.ymin,
+                                   WM_apple_ios_ui_bottom_tray_ymin(CTX_wm_window(C), region));
+  const rcti *rect_visible = &rect_visible_ios;
+#else
   const rcti *rect_visible = ED_region_visible_rect(region);
+#endif
 
   /* Ensure types match so bits are never lost on assignment. */
   CHECK_TYPE_PAIR(navgroup->state.rv3d.viewlock, rv3d->viewlock);
