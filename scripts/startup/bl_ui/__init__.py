@@ -11,6 +11,7 @@ if "bpy" in locals():
     del reload
 
 _modules = [
+    "native_actions",
     "native_panels",
     "anim",
     "asset_shelf",
