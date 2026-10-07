@@ -57,6 +57,25 @@
     return result; \
   }
 
+/* Binary function `op` on vector `a` and scalar `b`. */
+#define BLI_UNROLL_MATH_VEC_FUNC_VEC_SCALAR(op, a, b) \
+  if constexpr (Size == 4) { \
+    return VecBase<T, Size>(op(a.x, b), op(a.y, b), op(a.z, b), op(a.w, b)); \
+  } \
+  else if constexpr (Size == 3) { \
+    return VecBase<T, Size>(op(a.x, b), op(a.y, b), op(a.z, b)); \
+  } \
+  else if constexpr (Size == 2) { \
+    return VecBase<T, Size>(op(a.x, b), op(a.y, b)); \
+  } \
+  else { \
+    VecBase<T, Size> result; \
+    for (int i = 0; i < Size; i++) { \
+      result[i] = op(a[i], b); \
+    } \
+    return result; \
+  }
+
 /* Unary operator or function `op` on vector `a`. */
 #define BLI_UNROLL_MATH_VEC_OP_VEC(op, a) \
   if constexpr (Size == 4) { \

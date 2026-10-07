@@ -59,6 +59,12 @@ template<typename T, int Size>
   BLI_UNROLL_MATH_VEC_FUNC_VEC_VEC(math::min, a, b);
 }
 
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> min(const VecBase<T, Size> &a, const T &b)
+{
+  BLI_UNROLL_MATH_VEC_FUNC_VEC_SCALAR(math::min, a, b);
+}
+
 /**
  * Element-wise minimum of the passed vectors.
  */
@@ -88,6 +94,12 @@ template<typename T, int Size>
 [[nodiscard]] inline VecBase<T, Size> max(const VecBase<T, Size> &a, const VecBase<T, Size> &b)
 {
   BLI_UNROLL_MATH_VEC_FUNC_VEC_VEC(math::max, a, b);
+}
+
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> max(const VecBase<T, Size> &a, const T &b)
+{
+  BLI_UNROLL_MATH_VEC_FUNC_VEC_SCALAR(math::max, a, b);
 }
 
 /**
