@@ -31,6 +31,12 @@ struct Material;
 
 void BKE_cpp_types_init()
 {
+  static bool initialized = false;
+  if (initialized) {
+    return;
+  }
+  initialized = true;
+
   register_cpp_types();
 
   BLI_CPP_TYPE_REGISTER(bke::GeometrySet,
