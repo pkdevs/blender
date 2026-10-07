@@ -1,0 +1,155 @@
+# SPDX-FileCopyrightText: 2026 Blender Authors
+#
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+"""Build the Starter asset library.
+
+    blender --background --factory-startup --python build_starter_library.py -- \\
+        --output library [--only shapes materials] [--no-previews]
+
+Every asset is declared in a module under `starter/` with the `@asset` decorator. The build runs
+each builder, marks the result as an asset with its catalog and metadata, renders its preview,
+and writes one `.blend` file per kind of asset plus `blender_assets.cats.txt` and a manifest.
+`--only` builds a subset into a separate output folder (never over the full library).
+"""
+
+import argparse
+import importlib
+import json
+import os
+import sys
+import time
+
+import bpy
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+
+from starter import preview, registry  # noqa: E402
+
+MODULES = (
+    "shapes", "hardware", "architecture", "furniture", "nature", "stylized",
+    "sculpt", "humans", "scenes",
+    "materials", "scanned",
+    "modifiers",
+)
+
+
+def parse_args():
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--only", nargs="*", default=None, help="Asset modules to build")
+    parser.add_argument("--no-previews", action="store_true")
+    return parser.parse_args(argv)
+
+
+def load_modules(only):
+    loaded = []
+    for name in MODULES:
+        if only and name not in only:
+            continue
+        path = os.path.join(HERE, "starter", name + ".py")
+        if not os.path.exists(path):
+            if only:
+                raise SystemExit(f"No asset module starter/{name}.py")
+            continue
+        importlib.import_module("starter." + name)
+        loaded.append(name)
+    return loaded
+
+
+def restore_collection_previews(output, built):
+    """Writing copies data-blocks, and copying a collection drops its preview: put them back."""
+    previews = {id_data.name: list(id_data.preview.image_pixels_float)
+                for spec, id_data in built if spec.kind == "collection" and id_data.preview}
+    if not previews:
+        return
+    path = os.path.join(output, registry.KIND_FILES["collection"])
+    bpy.context.preferences.filepaths.save_version = 0
+    bpy.ops.wm.open_mainfile(filepath=path, load_ui=False)
+    for name, pixels in previews.items():
+        collection = bpy.data.collections[name]
+        collection.preview_ensure()
+        collection.preview.image_size = (preview.SIZE, preview.SIZE)
+        collection.preview.image_pixels_float = pixels
+    # The file also stores the session's UI; don't let it remember local folders.
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            for space in area.spaces:
+                if space.type == "FILE_BROWSER" and space.params:
+                    # Fixed-size buffers: fill them first so no old bytes remain after "//".
+                    space.params.directory = b"/" * 760
+                    space.params.directory = b"//"
+                    space.params.filename = "_" * 250
+                    space.params.filename = ""
+    bpy.ops.wm.save_mainfile(filepath=path, compress=True)
+
+
+def main():
+    args = parse_args()
+    output = os.path.abspath(args.output)
+    os.makedirs(output, exist_ok=True)
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+
+    modules = load_modules(args.only)
+    specs = [spec for spec in registry.ASSETS if spec.module.split(".")[-1] in modules]
+    names = [(spec.kind, spec.name) for spec in specs]
+    duplicates = {name for name in names if names.count(name) > 1}
+    if duplicates:
+        raise SystemExit(f"Duplicate asset names: {sorted(duplicates)}")
+
+    built = []
+    for spec in specs:
+        start = time.perf_counter()
+        id_data = spec.build()
+        if id_data is None:
+            raise SystemExit(f"{spec.name}: builder returned nothing")
+        id_data.name = spec.name
+        registry.mark(id_data, spec)
+        built.append((spec, id_data))
+        print(f"Built {spec.kind:10} {spec.name:28} {time.perf_counter() - start:6.2f} s")
+
+    if not args.no_previews:
+        for spec, id_data in built:
+            start = time.perf_counter()
+            preview.render(spec, id_data)
+            print(f"Preview {spec.name:28} {time.perf_counter() - start:6.2f} s")
+        preview.cleanup()
+
+    manifest = []
+    for kind, filename in registry.KIND_FILES.items():
+        ids = {id_data for spec, id_data in built if spec.kind == kind}
+        path = os.path.join(output, filename)
+        if not ids:
+            if os.path.exists(path):
+                os.remove(path)
+            continue
+        bpy.data.libraries.write(path, ids, fake_user=True, compress=True, path_remap="NONE")
+        print(f"Wrote {len(ids)} assets to {filename}")
+    for spec, id_data in built:
+        manifest.append({"name": spec.name, "kind": spec.kind, "catalog": spec.catalog,
+                         "file": registry.KIND_FILES[spec.kind], "tags": list(spec.tags),
+                         "description": spec.description, "module": spec.module.split(".")[-1]})
+    registry.write_catalog_file(os.path.join(output, "blender_assets.cats.txt"),
+                                [spec for spec, _ in built])
+    with open(os.path.join(output, "manifest.json"), "w", encoding="utf-8") as file:
+        json.dump({"modules": modules, "assets": manifest}, file, indent=1)
+    restore_collection_previews(output, built)
+    print(f"Starter library: {len(built)} assets in {output}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except SystemExit as error:
+        if error.code not in (0, None):
+            print(f"ERROR: {error}", file=sys.stderr)
+            sys.stdout.flush()
+            os._exit(1)
+        raise
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        sys.stdout.flush()
+        os._exit(1)
