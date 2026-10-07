@@ -1646,6 +1646,17 @@ static int arg_handle_debug_gpu_renderdoc_set(int /*argc*/,
   return 0;
 }
 
+static const char arg_handle_debug_gpu_no_hw_raytracing_set_doc[] =
+    "\n"
+    "\tForce disable hardware raytracing support (Vulkan only).";
+static int arg_handle_debug_gpu_no_hw_raytracing_set(int /*argc*/,
+                                                     const char ** /*argv*/,
+                                                     void * /*data*/)
+{
+  G.debug |= G_DEBUG_GPU_NO_HW_RAYTRACING;
+  return 0;
+}
+
 static const char arg_handle_debug_gpu_shader_debug_info_set_doc[] =
     "\n"
     "\tEnable shader debug info generation (Vulkan only).";
@@ -3300,6 +3311,11 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
                nullptr);
   BLI_args_add(
       ba, nullptr, "--debug-gpu-shader-no-dce", CB(arg_handle_debug_gpu_shader_no_dce), nullptr);
+  BLI_args_add(ba,
+               nullptr,
+               "--debug-gpu-no-hw-raytracing",
+               CB(arg_handle_debug_gpu_no_hw_raytracing_set),
+               nullptr);
   if (defs.with_renderdoc) {
     BLI_args_add(
         ba, nullptr, "--debug-gpu-renderdoc", CB(arg_handle_debug_gpu_renderdoc_set), nullptr);

@@ -150,7 +150,7 @@ struct Global {
    * - Command line arguments: `--debug`, `--debug-memory` ... etc.
    * - Python API: `bpy.app.debug`, `bpy.app.debug_memory` ... etc.
    */
-  int debug = 0;
+  int64_t debug = 0;
 
   /**
    * When true, various geometry processing algorithms randomize the order of elements (e.g.
@@ -403,6 +403,8 @@ enum {
   G_DEBUG_GPU_DEVICE_NO_FALLBACK = (1 << 30),
   /** Skip GPU backend support check and fail if the selected backend is not supported. */
   G_DEBUG_GPU_BACKEND_NO_FALLBACK = (1 << 31),
+  /** Disable hardware raytracing support at the GHOST level (Vulkan only). */
+  G_DEBUG_GPU_NO_HW_RAYTRACING = (int64_t(1) << 32),
 };
 
 #define G_DEBUG_ALL \
