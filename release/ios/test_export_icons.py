@@ -97,9 +97,16 @@ class ExportIconsTest(unittest.TestCase):
             interface_names = set(mapping.values()) | {
                 path.stem for path in (release / "datafiles/icons_svg").glob("*.svg")}
             colored = list((release / 'datafiles/icons').glob('*.dat'))
-            self.assertEqual(len(list(output.glob("*.imageset"))), len(interface_names) + len(tool_names) + 2 * len(colored))
+            themed = list(output.glob("blender.themed.*.imageset"))
+            multicolor = list(output.glob("blender.multicolor.*.imageset"))
+            self.assertEqual(len(list(output.glob("*.imageset"))),
+                             len(interface_names) + len(tool_names) + 2 * len(colored) + len(themed) + len(multicolor))
             for imageset in output.glob("*.imageset"):
                 contents = json.loads((imageset / "Contents.json").read_text())
+                if imageset.name.startswith(('blender.themed.', 'blender.multicolor.')):
+                    self.assertEqual(contents['properties']['template-rendering-intent'], 'original')
+                    self.assertEqual(contents['images'][1]['appearances'], [{'appearance': 'luminosity', 'value': 'dark'}])
+                    continue
                 if imageset.name.startswith('blender.tool.selected.'):
                     self.assertEqual(contents['properties']['template-rendering-intent'], 'original')
                     self.assertTrue(contents['properties']['preserves-vector-representation'])
@@ -126,6 +133,21 @@ class ExportIconsTest(unittest.TestCase):
                 enlarged.set("width", "24")
                 enlarged.set("height", "24")
                 self.assertEqual(ET.tostring(regular), ET.tostring(enlarged))
+            # Blender's dark and light themes color the same icons differently.
+            light = (output / "blender.themed.modifier.imageset/light.svg").read_text()
+            dark = (output / "blender.themed.modifier.imageset/dark.svg").read_text()
+            self.assertIn("#84b8ff", light)
+            self.assertIn("#74a2ff", dark)
+            self.assertNotIn("#74a2ff", light)
+            # Only the light theme outlines tinted icons (icon_border_intensity 0.7).
+            self.assertIn('opacity="0.700"', light)
+            self.assertNotIn('opacity="0.700"', dark)
+            light = (output / "blender.multicolor.collection_color_01.imageset/light.svg").read_text()
+            dark = (output / "blender.multicolor.collection_color_01.imageset/dark.svg").read_text()
+            self.assertIn("#dd473f", light)
+            self.assertIn("#e2605b", dark)
+            self.assertTrue((output / "blender.themed.outliner_ob_mesh.imageset").is_dir())
+            self.assertFalse((output / "blender.themed.add.imageset").exists())
             stale = output / "blender.stale.imageset"
             stale.mkdir()
             export_catalog(release / "datafiles", manifest, output)

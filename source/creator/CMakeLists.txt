@@ -1743,6 +1743,12 @@ elseif(APPLE)
       ${CMAKE_SOURCE_DIR}/release/datafiles/icons_svg/*.svg
       ${CMAKE_SOURCE_DIR}/release/datafiles/icons/*.dat
     )
+    # Icon classes and the theme colors Blender paints them with.
+    list(APPEND IOS_ICON_SOURCES
+      ${CMAKE_SOURCE_DIR}/source/blender/editors/include/UI_icons.hh
+      ${CMAKE_SOURCE_DIR}/release/datafiles/userdef/userdef_default_theme.c
+      ${CMAKE_SOURCE_DIR}/scripts/presets/interface_theme/Blender_Light.xml
+    )
     set_property(TARGET blender APPEND PROPERTY LINK_DEPENDS
       ${IOS_ICON_MANIFEST} ${IOS_ICON_EXPORTER} ${IOS_ICON_SOURCES}
     )

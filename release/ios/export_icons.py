@@ -7,19 +7,29 @@
 Uses only the Python standard library. SVG interface icons retain their alpha;
 VCO tool artwork is converted to SVG with luminance carrying its secondary detail.
 Colored toolbar variants retain the original mesh colors in vector PDFs.
+Icons that Blender colors through its theme get light and dark variants with the
+colors of Blender's default dark and light themes, mirroring interface_icons.cc:
+multicolor icons fill their `blender_*` groups, and object, modifier and other
+category icons are tinted as a whole where Blender tints them.
 The generated catalog is disposable and must live outside the source tree.
 """
 
 import argparse
+import copy
 import itertools
 import json
 from pathlib import Path
+import re
 import shutil
 import xml.etree.ElementTree as ET
 
 SVG = "http://www.w3.org/2000/svg"
 ET.register_namespace("", SVG)
 POINT_SIZE = 24
+ROOT = Path(__file__).resolve().parents[2]
+ICON_HEADER = ROOT / "source/blender/editors/include/UI_icons.hh"
+DARK_THEME = ROOT / "release/datafiles/userdef/userdef_default_theme.c"
+LIGHT_THEME = ROOT / "scripts/presets/interface_theme/Blender_Light.xml"
 TOOL_POINT_SIZE = 36
 
 
@@ -28,7 +38,7 @@ def element(name, attrs=None, parent=None):
     return ET.Element(tag, attrs or {}) if parent is None else ET.SubElement(parent, tag, attrs or {})
 
 
-def svg_template(path):
+def svg_clean(path):
     root = ET.parse(path).getroot()
     if "viewBox" not in root.attrib:
         width = float(root.attrib["width"].removesuffix("px"))
@@ -54,14 +64,194 @@ def svg_template(path):
         for key in list(node.attrib):
             if key.startswith("{"):
                 del node.attrib[key]
-            elif key in {"fill", "stroke", "stop-color", "color"}:
-                if node.attrib[key] not in {"none", "transparent", "inherit"}:
-                    node.set(key, "#000")
-    root.set("fill", "#000")
     root.set("width", str(POINT_SIZE))
     root.set("height", str(POINT_SIZE))
     root.set("preserveAspectRatio", "xMidYMid meet")
     return root
+
+
+def svg_template(path, color="#000"):
+    """One-color artwork: every painted part takes `color`, keeping its alpha."""
+    root = svg_clean(path)
+    for node in root.iter():
+        for key in ("fill", "stroke", "stop-color", "color"):
+            if key in node.attrib and node.attrib[key] not in {"none", "transparent", "inherit"}:
+                node.set(key, color)
+    root.set("fill", color)
+    return root
+
+
+def theme_color(value):
+    """`#rrggbb[aa]` to an SVG color and opacity."""
+    value = value.strip().lstrip("#")
+    if len(value) not in (6, 8):
+        raise ValueError(f"Invalid theme color: {value}")
+    alpha = int(value[6:8], 16) / 255 if len(value) == 8 else 1.0
+    return "#" + value[:6].lower(), alpha
+
+
+def dark_theme_values(path):
+    """Flatten the default theme initializer into `tui/icon_scene`-style paths."""
+    values, stack, counters = {}, [], [0]
+    token = re.compile(r"\.(\w+)\s*=\s*RGBA\(0x([0-9a-fA-F]{8})\)|\.(\w+)\s*=\s*\{|(\{)|(\})")
+    source = re.sub(r"/\*.*?\*/|//[^\n]*", "", path.read_text(), flags=re.S)
+    border = re.search(r"\.icon_border_intensity\s*=\s*([0-9.]+)", source)
+    values["tui/icon_border_intensity"] = border[1] if border else "0"
+    for match in token.finditer(source):
+        name, rgba, block, anonymous, close = match.groups()
+        if rgba:
+            values["/".join(stack[1:] + [name])] = "#" + rgba
+        elif block or anonymous:
+            stack.append(block or str(counters[-1]))
+            counters[-1] += 1
+            counters.append(0)
+        elif close and stack:
+            stack.pop()
+            counters.pop()
+    return values
+
+
+def light_theme_values(path):
+    """The same paths, read from Blender's light theme preset."""
+    theme = ET.parse(path).getroot().find("Theme")
+    values = {}
+
+    def read(prefix, node, names):
+        for name in names:
+            if node is not None and node.get(name):
+                values[f"{prefix}/{name}"] = node.get(name)
+
+    ui = theme.find("user_interface/ThemeUserInterface")
+    read("tui", ui, ("icon_scene", "icon_collection", "icon_object", "icon_object_data", "icon_modifier",
+                     "icon_shading", "icon_folder", "icon_autokey", "panel_text", "icon_border_intensity"))
+    read("tui/wcol_regular", ui.find("wcol_regular/ThemeWidgetColors"), ("inner",))
+    read("tui/wcol_state", ui.find("wcol_state/ThemeWidgetStateColors"), ("error", "warning", "info"))
+    read("space_view3d", theme.find("view_3d/ThemeView3D"), ("bevel", "crease", "seam", "sharp", "vertex_select"))
+    read("space_action", theme.find("dopesheet_editor/ThemeDopeSheet"),
+         ("anim_interpolation_linear", "anim_interpolation_constant", "anim_interpolation_other"))
+    read("space_properties", theme.find("properties/ThemeProperties/space/ThemeSpaceGeneric"), ("back",))
+    for index, item in enumerate(theme.findall("collection_color/ThemeCollectionColor")):
+        read(f"collection_color/{index}", item, ("color",))
+    return values
+
+
+# `blender_*` SVG group ids and the theme color Blender fills them with (interface_icons.cc).
+GROUP_COLORS = {
+    "blender_white": "#ffffffff", "blender_black": "#000000ff",
+    "blender_logo_orange": "#e87d0dff", "blender_logo_blue": "#265787ff",
+    "blender_selected": "tui/wcol_regular/inner", "blender_mesh_selected": "space_view3d/vertex_select",
+    "blender_back": "space_properties/back", "blender_text": "tui/panel_text",
+    "blender_red_alert": "tui/wcol_state/error", "blender_error": "tui/wcol_state/error",
+    "blender_warning": "tui/wcol_state/warning", "blender_info": "tui/wcol_state/info",
+    "blender_scene": "tui/icon_scene", "blender_collection": "tui/icon_collection",
+    **{f"blender_collection_color_{i + 1:02d}": f"collection_color/{i}/color" for i in range(8)},
+    "blender_object": "tui/icon_object", "blender_object_data": "tui/icon_object_data",
+    "blender_modifier": "tui/icon_modifier", "blender_shading": "tui/icon_shading",
+    "blender_folder": "tui/icon_folder", "blender_fund": "#cc3048ff", "blender_autokey": "tui/icon_autokey",
+    "blender_tool_add": "#75ffafff", "blender_tool_remove": "#f56b5bff", "blender_tool_select": "#ffb02bff",
+    "blender_tool_transform": "#d9aff5ff", "blender_tool_white": "#ffffffff", "blender_tool_red": "#d62d30ff",
+    "blender_bevel": "space_view3d/bevel", "blender_crease": "space_view3d/crease",
+    "blender_seam": "space_view3d/seam", "blender_sharp": "space_view3d/sharp",
+    "blender_ipo_linear": "space_action/anim_interpolation_linear",
+    "blender_ipo_constant": "space_action/anim_interpolation_constant",
+    "blender_ipo_other": "space_action/anim_interpolation_other",
+}
+# UI_icons.hh icon classes tinted as a whole with a theme color.
+CATEGORY_COLORS = {
+    "SCENE": "tui/icon_scene", "COLLECTION": "tui/icon_collection", "OBJECT": "tui/icon_object",
+    "OBJECT_DATA": "tui/icon_object_data", "MODIFIER": "tui/icon_modifier", "SHADING": "tui/icon_shading",
+    "FOLDER": "tui/icon_folder", "FUND": "#cc3048ff",
+}
+
+
+def resolve(theme, key):
+    return key if key.startswith("#") else theme.get(key)
+
+
+def icon_classes(header):
+    """Map icon file names to their UI_icons.hh class: COLOR, a category, or plain."""
+    classes = {}
+    for kind, name in re.findall(r"^DEF_ICON(?:_(\w+?))?\((\w+)\)", header.read_text(), flags=re.M):
+        classes[name.lower()] = kind
+    return classes
+
+
+def paint(node, color):
+    svg_color, alpha = theme_color(color)
+    node.set("fill", svg_color)
+    if alpha < 1:
+        node.set("fill-opacity", f"{alpha:.3f}")
+
+
+def svg_multicolor(path, theme):
+    """Keep authored colors and fill `blender_*` groups with the theme, as Blender does."""
+    root = svg_clean(path)
+    for group in root.iter():
+        name = group.get("id", "")
+        color = resolve(theme, GROUP_COLORS[name]) if name in GROUP_COLORS else None
+        if not color:
+            continue
+        for node in group.iter():
+            if "fill" in node.attrib and node.attrib["fill"] not in {"none", "transparent"}:
+                paint(node, color)
+    return root
+
+
+def transform_scale(transform):
+    """Uniform scale of an SVG transform list, to keep stroke widths in viewBox units."""
+    scale = 1.0
+    for kind, args in re.findall(r"(\w+)\s*\(([^)]*)\)", transform or ""):
+        values = [float(v) for v in re.split(r"[\s,]+", args.strip()) if v]
+        if kind == "matrix" and len(values) == 6:
+            scale *= abs(values[0] * values[3] - values[1] * values[2]) ** 0.5
+        elif kind == "scale" and values:
+            scale *= (abs(values[0] * (values[1] if len(values) > 1 else values[0]))) ** 0.5
+    return scale or 1.0
+
+
+def svg_themed(path, color, border):
+    """A category icon in its theme color. Like Blender's icon outline (`icon_border_intensity`),
+    a translucent black border about one 16 px icon pixel wide keeps pale colors readable."""
+    root = svg_template(path, color)
+    if border <= 0:
+        return root
+    width = float(root.get("viewBox").split()[2]) / 16
+    outline = element("g", {"opacity": f"{min(1.0, border):.3f}", "stroke-linejoin": "round"})
+    for child in list(root):
+        if child.tag != "{%s}defs" % SVG:
+            outline.append(copy.deepcopy(child))
+    shapes = {"path", "rect", "circle", "ellipse", "polygon", "polyline", "line"}
+
+    def outline_shapes(node, scale):
+        scale *= transform_scale(node.get("transform"))
+        if node.tag.split("}")[-1] in shapes and node.get("fill") != "none":
+            stroke = float(node.get("stroke-width", "0")) if node.get("stroke") not in (None, "none") else 0.0
+            node.set("stroke", "#000")
+            node.set("stroke-width", f"{stroke + 2 * width / scale:g}")
+        for key in ("fill", "color"):
+            if node.get(key) not in (None, "none", "transparent", "inherit"):
+                node.set(key, "#000")
+        for child in node:
+            outline_shapes(child, scale)
+
+    outline_shapes(outline, 1.0)
+    root.insert(0, outline)
+    return root
+
+
+def write_appearances(image_set, light, dark, info):
+    image_set.mkdir(exist_ok=True)
+    ET.ElementTree(light).write(image_set / "light.svg", encoding="utf-8", xml_declaration=True)
+    ET.ElementTree(dark).write(image_set / "dark.svg", encoding="utf-8", xml_declaration=True)
+    (image_set / "Contents.json").write_text(json.dumps({
+        "images": [
+            {"filename": "light.svg", "idiom": "universal"},
+            {"filename": "dark.svg", "idiom": "universal",
+             "appearances": [{"appearance": "luminosity", "value": "dark"}]},
+        ],
+        "info": info,
+        "properties": {"preserves-vector-representation": True, "template-rendering-intent": "original"},
+    }, indent=2) + "\n")
 
 
 def vco_color_triangles(data):
@@ -190,7 +380,7 @@ def geometry_template(path):
     return root
 
 
-def export_catalog(source, manifest, output):
+def export_catalog(source, manifest, output, header=ICON_HEADER, dark_theme=DARK_THEME, light_theme=LIGHT_THEME):
     mapping = json.loads(manifest.read_text())
     names = set(mapping.values())
     # Projected menus carry Blender icon names, including icons absent from the toolbar.
@@ -207,6 +397,18 @@ def export_catalog(source, manifest, output):
     colored = sorted((source / 'icons').glob('*.dat'))
     expected.update(f'blender.tool.color.{path.stem}.imageset' for path in colored)
     expected.update(f'blender.tool.selected.{path.stem}.imageset' for path in colored)
+    classes = icon_classes(header)
+    themes = {"light": light_theme_values(light_theme), "dark": dark_theme_values(dark_theme)}
+    for theme in themes.values():
+        missing = sorted({key for key in list(GROUP_COLORS.values()) + list(CATEGORY_COLORS.values())
+                          if not key.startswith("#") and key not in theme} - {"space_properties/back"})
+        if missing:
+            raise ValueError(f"Theme is missing icon colors: {missing}")
+    svgs = {path.stem: path for path in (source / "icons_svg").glob("*.svg")}
+    multicolor = sorted(name for name, kind in classes.items() if kind == "COLOR" and name in svgs)
+    themed = sorted(name for name, kind in classes.items() if kind in CATEGORY_COLORS and name in svgs)
+    expected.update(f"blender.multicolor.{name}.imageset" for name in multicolor)
+    expected.update(f"blender.themed.{name}.imageset" for name in themed)
     for stale in output.glob("blender.*.imageset"):
         if stale.name not in expected:
             shutil.rmtree(stale)
@@ -229,6 +431,16 @@ def export_catalog(source, manifest, output):
             "info": info,
             "properties": {"preserves-vector-representation": True, "template-rendering-intent": "template"},
         }, indent=2) + "\n")
+    for name in multicolor:
+        write_appearances(output / f"blender.multicolor.{name}.imageset",
+                          svg_multicolor(svgs[name], themes["light"]),
+                          svg_multicolor(svgs[name], themes["dark"]), info)
+    for name in themed:
+        key = CATEGORY_COLORS[classes[name]]
+        light, dark = ((svg_themed(svgs[name], theme_color(resolve(theme, key))[0],
+                                   float(theme.get("tui/icon_border_intensity", "0")))
+                        for theme in (themes["light"], themes["dark"])))
+        write_appearances(output / f"blender.themed.{name}.imageset", light, dark, info)
     for path in colored:
         image_set = output / f'blender.tool.color.{path.stem}.imageset'
         image_set.mkdir(exist_ok=True)
@@ -251,7 +463,8 @@ def export_catalog(source, manifest, output):
             'info': info,
             'properties': {'preserves-vector-representation': True, 'template-rendering-intent': 'original'},
         }, indent=2) + '\n')
-    print(f"Exported {len(variants)} template, {len(colored)} colored, and {len(colored)} selection Blender assets to {output}")
+    print(f"Exported {len(variants)} template, {len(multicolor)} multicolor, {len(themed)} themed, "
+          f"{len(colored)} colored, and {len(colored)} selection Blender assets to {output}")
 
 
 if __name__ == "__main__":
@@ -259,5 +472,8 @@ if __name__ == "__main__":
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1] / "datafiles")
     parser.add_argument("--manifest", type=Path, default=Path(__file__).with_name("blender_icons.json"))
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--icon-header", type=Path, default=ICON_HEADER)
+    parser.add_argument("--dark-theme", type=Path, default=DARK_THEME)
+    parser.add_argument("--light-theme", type=Path, default=LIGHT_THEME)
     args = parser.parse_args()
-    export_catalog(args.source, args.manifest, args.output)
+    export_catalog(args.source, args.manifest, args.output, args.icon_header, args.dark_theme, args.light_theme)
