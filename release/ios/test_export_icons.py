@@ -136,15 +136,20 @@ class ExportIconsTest(unittest.TestCase):
             # Blender's dark and light themes color the same icons differently.
             light = (output / "blender.themed.modifier.imageset/light.svg").read_text()
             dark = (output / "blender.themed.modifier.imageset/dark.svg").read_text()
-            self.assertIn("#84b8ff", light)
+            # Light mode uses the iOS system palette; dark mode keeps Blender's theme.
+            self.assertIn("#0088ff", light)
             self.assertIn("#74a2ff", dark)
             self.assertNotIn("#74a2ff", light)
-            # Only the light theme outlines tinted icons (icon_border_intensity 0.7).
-            self.assertIn('opacity="0.700"', light)
-            self.assertNotIn('opacity="0.700"', dark)
+            # Icons are not outlined, even where Blender's light theme draws an icon border.
+            for svg in (light, dark):
+                self.assertNotIn("stroke=\"#000\"", svg)
+                self.assertNotIn('opacity="0.700"', svg)
+            # Grey and white categories (scene, collection) follow the platform tint instead.
+            self.assertFalse((output / "blender.themed.scene.imageset").exists())
+            self.assertFalse((output / "blender.themed.group.imageset").exists())
             light = (output / "blender.multicolor.collection_color_01.imageset/light.svg").read_text()
             dark = (output / "blender.multicolor.collection_color_01.imageset/dark.svg").read_text()
-            self.assertIn("#dd473f", light)
+            self.assertIn("#ff383c", light)
             self.assertIn("#e2605b", dark)
             self.assertTrue((output / "blender.themed.outliner_ob_mesh.imageset").is_dir())
             self.assertFalse((output / "blender.themed.add.imageset").exists())

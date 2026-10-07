@@ -10,12 +10,14 @@ Colored toolbar variants retain the original mesh colors in vector PDFs.
 Icons that Blender colors through its theme get light and dark variants with the
 colors of Blender's default dark and light themes, mirroring interface_icons.cc:
 multicolor icons fill their `blender_*` groups, and object, modifier and other
-category icons are tinted as a whole where Blender tints them.
+category icons are tinted as a whole where Blender tints them. The light
+appearance replaces Blender's light theme icon colors with the iOS system
+palette. Icon outlines (`icon_border_intensity`) are not exported, and neutral
+grey or white category colors are left to the platform tint.
 The generated catalog is disposable and must live outside the source tree.
 """
 
 import argparse
-import copy
 import itertools
 import json
 from pathlib import Path
@@ -135,6 +137,24 @@ def light_theme_values(path):
     return values
 
 
+# Light appearance uses the iOS 27 system palette rather than Blender's light theme, whose pale
+# icon colors depend on an icon outline. Hues follow Blender's so icons keep their identity.
+IOS_LIGHT_COLORS = {
+    "tui/icon_scene": "#3c3c43ff", "tui/icon_collection": "#3c3c43ff",  # Secondary label.
+    "tui/icon_object": "#ff8d28ff",  # Orange.
+    "tui/icon_object_data": "#00c8b3ff",  # Mint.
+    "tui/icon_modifier": "#0088ffff",  # Blue.
+    "tui/icon_shading": "#ff2d55ff",  # Pink.
+    "tui/icon_folder": "#ac7f5eff",  # Brown.
+    "tui/icon_autokey": "#ff383cff",  # Red.
+    "tui/wcol_state/error": "#ff383cff", "tui/wcol_state/warning": "#ff8d28ff",
+    "tui/wcol_state/info": "#0088ffff",
+    # Collection color tags: red, orange, yellow, green, blue, violet, pink, brown.
+    **{f"collection_color/{i}/color": color for i, color in enumerate((
+        "#ff383cff", "#ff8d28ff", "#ffcc00ff", "#34c759ff",
+        "#0088ffff", "#6155f5ff", "#ff2d55ff", "#ac7f5eff"))},
+}
+
 # `blender_*` SVG group ids and the theme color Blender fills them with (interface_icons.cc).
 GROUP_COLORS = {
     "blender_white": "#ffffffff", "blender_black": "#000000ff",
@@ -197,46 +217,11 @@ def svg_multicolor(path, theme):
     return root
 
 
-def transform_scale(transform):
-    """Uniform scale of an SVG transform list, to keep stroke widths in viewBox units."""
-    scale = 1.0
-    for kind, args in re.findall(r"(\w+)\s*\(([^)]*)\)", transform or ""):
-        values = [float(v) for v in re.split(r"[\s,]+", args.strip()) if v]
-        if kind == "matrix" and len(values) == 6:
-            scale *= abs(values[0] * values[3] - values[1] * values[2]) ** 0.5
-        elif kind == "scale" and values:
-            scale *= (abs(values[0] * (values[1] if len(values) > 1 else values[0]))) ** 0.5
-    return scale or 1.0
-
-
-def svg_themed(path, color, border):
-    """A category icon in its theme color. Like Blender's icon outline (`icon_border_intensity`),
-    a translucent black border about one 16 px icon pixel wide keeps pale colors readable."""
-    root = svg_template(path, color)
-    if border <= 0:
-        return root
-    width = float(root.get("viewBox").split()[2]) / 16
-    outline = element("g", {"opacity": f"{min(1.0, border):.3f}", "stroke-linejoin": "round"})
-    for child in list(root):
-        if child.tag != "{%s}defs" % SVG:
-            outline.append(copy.deepcopy(child))
-    shapes = {"path", "rect", "circle", "ellipse", "polygon", "polyline", "line"}
-
-    def outline_shapes(node, scale):
-        scale *= transform_scale(node.get("transform"))
-        if node.tag.split("}")[-1] in shapes and node.get("fill") != "none":
-            stroke = float(node.get("stroke-width", "0")) if node.get("stroke") not in (None, "none") else 0.0
-            node.set("stroke", "#000")
-            node.set("stroke-width", f"{stroke + 2 * width / scale:g}")
-        for key in ("fill", "color"):
-            if node.get(key) not in (None, "none", "transparent", "inherit"):
-                node.set(key, "#000")
-        for child in node:
-            outline_shapes(child, scale)
-
-    outline_shapes(outline, 1.0)
-    root.insert(0, outline)
-    return root
+def neutral(color):
+    """Grey and white theme colors only mean "the icon color"; tinting follows the platform."""
+    svg_color, _ = theme_color(color)
+    channels = [int(svg_color[i:i + 2], 16) for i in (1, 3, 5)]
+    return max(channels) - min(channels) < 16
 
 
 def write_appearances(image_set, light, dark, info):
@@ -398,7 +383,8 @@ def export_catalog(source, manifest, output, header=ICON_HEADER, dark_theme=DARK
     expected.update(f'blender.tool.color.{path.stem}.imageset' for path in colored)
     expected.update(f'blender.tool.selected.{path.stem}.imageset' for path in colored)
     classes = icon_classes(header)
-    themes = {"light": light_theme_values(light_theme), "dark": dark_theme_values(dark_theme)}
+    themes = {"light": {**light_theme_values(light_theme), **IOS_LIGHT_COLORS},
+              "dark": dark_theme_values(dark_theme)}
     for theme in themes.values():
         missing = sorted({key for key in list(GROUP_COLORS.values()) + list(CATEGORY_COLORS.values())
                           if not key.startswith("#") and key not in theme} - {"space_properties/back"})
@@ -406,7 +392,8 @@ def export_catalog(source, manifest, output, header=ICON_HEADER, dark_theme=DARK
             raise ValueError(f"Theme is missing icon colors: {missing}")
     svgs = {path.stem: path for path in (source / "icons_svg").glob("*.svg")}
     multicolor = sorted(name for name, kind in classes.items() if kind == "COLOR" and name in svgs)
-    themed = sorted(name for name, kind in classes.items() if kind in CATEGORY_COLORS and name in svgs)
+    themed = sorted(name for name, kind in classes.items() if kind in CATEGORY_COLORS and name in svgs and
+                    not all(neutral(resolve(theme, CATEGORY_COLORS[kind])) for theme in themes.values()))
     expected.update(f"blender.multicolor.{name}.imageset" for name in multicolor)
     expected.update(f"blender.themed.{name}.imageset" for name in themed)
     for stale in output.glob("blender.*.imageset"):
@@ -437,9 +424,8 @@ def export_catalog(source, manifest, output, header=ICON_HEADER, dark_theme=DARK
                           svg_multicolor(svgs[name], themes["dark"]), info)
     for name in themed:
         key = CATEGORY_COLORS[classes[name]]
-        light, dark = ((svg_themed(svgs[name], theme_color(resolve(theme, key))[0],
-                                   float(theme.get("tui/icon_border_intensity", "0")))
-                        for theme in (themes["light"], themes["dark"])))
+        light, dark = (svg_template(svgs[name], theme_color(resolve(theme, key))[0])
+                       for theme in (themes["light"], themes["dark"]))
         write_appearances(output / f"blender.themed.{name}.imageset", light, dark, info)
     for path in colored:
         image_set = output / f'blender.tool.color.{path.stem}.imageset'
