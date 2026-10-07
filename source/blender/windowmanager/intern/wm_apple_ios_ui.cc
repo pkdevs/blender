@@ -13,8 +13,11 @@
 #include "AS_asset_representation.hh"
 
 #include "BKE_appdir.hh"
+#include "BKE_asset.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
+#include "BKE_idprop.hh"
+#include "BKE_idtype.hh"
 #include "BKE_paint.hh"
 #include "BKE_preview_image.hh"
 #include "BKE_scene.hh"
@@ -29,6 +32,7 @@
 #include "DEG_depsgraph.hh"
 
 #include "DNA_asset_types.h"
+#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_scene_types.h"
@@ -210,6 +214,11 @@ GHOST_IOSLatest<std::string> ios_toolbar_snapshot;
 GHOST_IOSLatest<std::string> ios_panels_snapshot;
 GHOST_IOSLatest<std::string> ios_timeline_snapshot;
 std::string ios_timeline_json;
+/* Native asset pane: listed only while shown. */
+bool ios_assets_visible = false;
+std::string ios_assets_json;
+std::chrono::steady_clock::time_point ios_assets_next_snapshot;
+GHOST_IOSLatest<std::string> ios_assets_snapshot;
 std::string ios_toolbar_json =
     "{\"mode\":\"objectmode\",\"active\":\"builtin.select_box\",\"tools\":[]}";
 
@@ -946,6 +955,14 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
   }
 
+  if (command.setting == "assets") {
+    /* The pane is listed only while shown; showing it publishes a fresh list. */
+    ios_assets_visible = command.value == "show";
+    ios_assets_json.clear();
+    ios_assets_next_snapshot = {};
+    return;
+  }
+
   if (command.setting == "timeline_frame") {
     /* Match SCREEN_OT_frame_offset: scrubbing lands on whole frames. */
     scene->r.cfra = std::min(std::atoi(command.value.c_str()), int(MAXFRAME));
@@ -1290,6 +1307,129 @@ void ios_brush_activate(bContext *C, const std::string &key)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Native Asset Pane
+ *
+ * Projects the assets of every library for the native asset pane. Dropping an asset into the
+ * viewport goes through Blender's own drag and drop: a native drag starts a regular asset drag
+ * and feeds it pointer moves and the release, so the viewport's drop boxes preview, snap, import
+ * and add the asset exactly as dragging it from Blender's Asset Browser does.
+ * \{ */
+
+/**
+ * Assets the viewport accepts as drops. Brushes have their own rail. Node groups are listed only
+ * when they are Geometry Nodes modifiers, the same check as Blender's Add Modifier menu.
+ */
+bool ios_asset_listed(const asset_system::AssetRepresentation &asset)
+{
+  const ID_Type type = asset.get_id_type();
+  if (ELEM(type, ID_OB, ID_GR, ID_MA, ID_WO)) {
+    return true;
+  }
+  if (type != ID_NT) {
+    return false;
+  }
+  const AssetMetaData &metadata = asset.get_metadata();
+  const IDProperty *tree_type = BKE_asset_metadata_idprop_find(&metadata, "type");
+  const IDProperty *traits = BKE_asset_metadata_idprop_find(&metadata,
+                                                           "geometry_node_asset_traits_flag");
+  return tree_type && IDP_int_get(tree_type) == NTREE_GEOMETRY && traits &&
+         (IDP_int_get(traits) & GEO_NODE_ASSET_MODIFIER);
+}
+
+/** The pane's type name: listed node groups are modifiers. */
+const char *ios_asset_type_name(const ID_Type type)
+{
+  return type == ID_NT ? "Modifier" : BKE_idtype_idcode_to_name(type);
+}
+
+std::string ios_asset_library_name(asset_system::AssetLibrary &library)
+{
+  switch (library.library_type()) {
+    case ASSET_LIBRARY_LOCAL:
+      return "Current File";
+    case ASSET_LIBRARY_ESSENTIALS:
+      return "Essentials";
+    default:
+      return library.name();
+  }
+}
+
+std::string ios_assets_build_json(bContext *C)
+{
+  const AssetLibraryReference library_ref = asset_system::all_library_reference();
+  ed::asset::list::storage_fetch(&library_ref, C);
+  if (!ed::asset::list::is_loaded(&library_ref)) {
+    /* Keep the previous list while the asset libraries are (re)loading. */
+    return ios_assets_json.empty() ? "{\"loading\":true,\"items\":[]}" : ios_assets_json;
+  }
+
+  std::string items;
+  /* Blocking preview reads are spread over several snapshots. */
+  int preview_budget = 6;
+  ed::asset::list::iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
+    if (!ios_asset_listed(asset)) {
+      return true;
+    }
+    const ID_Type type = asset.get_id_type();
+    const std::string key = ios_brush_key(asset.make_weak_reference());
+    const AssetMetaData &metadata = asset.get_metadata();
+    asset_system::AssetLibrary &library = asset.owner_asset_library();
+    std::string catalog;
+    if (const asset_system::AssetCatalog *found = library.catalog_service().find_catalog(
+            metadata.catalog_id))
+    {
+      catalog = found->path.str();
+    }
+    auto preview = ios_brush_preview_paths.find(key);
+    if (preview == ios_brush_preview_paths.end() && preview_budget > 0) {
+      preview_budget--;
+      preview = ios_brush_preview_paths.emplace(key, ios_brush_preview_write(asset, key)).first;
+    }
+    std::string tags;
+    for (const AssetTag &tag : metadata.tags) {
+      tags += tags.empty() ? "\"" : ",\"";
+      tags += ios_json_escape(tag.name) + "\"";
+    }
+    items += items.empty() ? "{" : ",{";
+    items += "\"id\":\"" + ios_json_escape(key) + "\",\"name\":\"" +
+             ios_json_escape(asset.get_name()) + "\",\"type\":\"" +
+             ios_json_escape(ios_asset_type_name(type)) + "\",\"library\":\"" +
+             ios_json_escape(ios_asset_library_name(library)) + "\",\"catalog\":\"" +
+             ios_json_escape(catalog) + "\",\"description\":\"" +
+             ios_json_escape(metadata.description ? metadata.description : "") +
+             "\",\"author\":\"" + ios_json_escape(metadata.author ? metadata.author : "") +
+             "\",\"tags\":[" + tags + "],\"preview\":\"" +
+             ios_json_escape(preview != ios_brush_preview_paths.end() ? preview->second : "") +
+             "\"}";
+    return true;
+  });
+  return std::string("{\"pending\":") + (preview_budget == 0 ? "true" : "false") +
+         ",\"items\":[" + items + "]}";
+}
+
+void ios_assets_build(bContext *C)
+{
+  if (!ios_assets_visible) {
+    return;
+  }
+  const auto now = std::chrono::steady_clock::now();
+  if (now < ios_assets_next_snapshot) {
+    return;
+  }
+  /* Asset lists change rarely; keep loading previews quickly while some are missing. */
+  std::string json = ios_assets_build_json(C);
+  const bool busy = json.find("\"pending\":true") != std::string::npos ||
+                    json.find("\"loading\":true") != std::string::npos;
+  ios_assets_next_snapshot = now + std::chrono::milliseconds(busy ? 40 : 500);
+  if (json != ios_assets_json) {
+    ios_assets_json = json;
+    ios_assets_snapshot.publish(std::move(json));
+  }
+}
+
+/** \} */
+
 std::string ios_toolbar_build_json_for_context(bContext *C)
 {
   const IOSContextStore context_store = ios_context_push_view3d(C);
@@ -1513,6 +1653,7 @@ void ios_toolbar_build(bContext *C)
   std::string json = ios_toolbar_build_json_for_context(C);
   ios_toolbar_snapshot.publish(std::move(json));
   ios_timeline_build(C);
+  ios_assets_build(C);
 }
 
 std::string ios_json_escape(const std::string &value)
@@ -1668,6 +1809,19 @@ extern "C" char *WM_apple_ios_ui_timeline_take_json()
 {
   std::string json;
   if (!ios_timeline_snapshot.take(json)) {
+    return nullptr;
+  }
+  char *copy = static_cast<char *>(std::malloc(json.size() + 1));
+  if (copy) {
+    std::memcpy(copy, json.c_str(), json.size() + 1);
+  }
+  return copy;
+}
+
+extern "C" char *WM_apple_ios_ui_assets_take_json()
+{
+  std::string json;
+  if (!ios_assets_snapshot.take(json)) {
     return nullptr;
   }
   char *copy = static_cast<char *>(std::malloc(json.size() + 1));
