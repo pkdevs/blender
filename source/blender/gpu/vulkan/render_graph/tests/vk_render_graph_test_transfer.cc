@@ -416,11 +416,10 @@ TEST_F(VKRenderGraphTestTransfer, copy_buffer_to_image_dispatch_read_aliased_ima
 
   EXPECT_EQ(6, log.size());
   EXPECT_EQ(
-      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, "
+      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, "
       "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
           endl() +
-          " - image_barrier(src_access_mask=VK_ACCESS_MEMORY_READ_BIT, "
-          "VK_ACCESS_MEMORY_WRITE_BIT, "
+          " - image_barrier(src_access_mask=, "
           "dst_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
           "old_layout=VK_IMAGE_LAYOUT_UNDEFINED, new_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, "
           "image=0x2, subresource_range=" +
@@ -512,11 +511,10 @@ TEST_F(VKRenderGraphTestTransfer, copy_buffer_to_image_synchronization_aliased_i
   EXPECT_EQ(5, log.size());
   /* First write: synchronizes against the aliased initial state. */
   EXPECT_EQ(
-      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, "
+      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, "
       "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
           endl() +
-          " - image_barrier(src_access_mask=VK_ACCESS_MEMORY_READ_BIT, "
-          "VK_ACCESS_MEMORY_WRITE_BIT, "
+          " - image_barrier(src_access_mask=, "
           "dst_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
           "old_layout=VK_IMAGE_LAYOUT_UNDEFINED, new_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, "
           "image=0x2, subresource_range=" +
@@ -579,6 +577,104 @@ TEST_F(VKRenderGraphTestTransfer, copy_buffer_to_image_synchronization_aliased_i
           endl() + "    x=0, y=0, z=0  , image_extent=" + endl() +
           "    width=64, height=64, depth=1  )" + endl() + ")",
       log[4]);
+}
+
+/**
+ * Test that checks if the command builder doesn't generate extra barriers to synchronize resources
+ * that have been used in the previous batch.
+ *
+ * The timeline semaphore synchronizes batches, so the command buffer A is completed and
+ * only then command buffer B executes. The specified wait stage is
+ * VK_PIPELINE_STAGE_ALL_COMMANDS_BIT. The semaphore defines a memory dependency.
+ *
+ * See:
+ * https://docs.vulkan.org/spec/latest/chapters/synchronization.html#synchronization-semaphores-waiting
+ */
+TEST_F(VKRenderGraphTestTransfer, copy_to_image_submit_copy_from_image)
+{
+  VKTrackedHandle<VkBuffer> buffer(1u);
+  VkHandle<VkImage> image(2u);
+
+  buffer.set_resource_handle(resources.add_buffer(buffer));
+  resources.add_image(image, false);
+
+  VKCopyBufferToImageNode::CreateInfo copy_buffer_to_image = {};
+  copy_buffer_to_image.node_data.src_buffer = buffer;
+  copy_buffer_to_image.node_data.dst_image = image;
+  copy_buffer_to_image.node_data.region.imageExtent.width = 64;
+  copy_buffer_to_image.node_data.region.imageExtent.height = 64;
+  copy_buffer_to_image.node_data.region.imageExtent.depth = 1;
+  copy_buffer_to_image.node_data.region.imageOffset.x = 0;
+  copy_buffer_to_image.node_data.region.imageOffset.y = 0;
+  copy_buffer_to_image.node_data.region.imageOffset.z = 0;
+  copy_buffer_to_image.node_data.region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  copy_buffer_to_image.node_data.region.imageSubresource.mipLevel = 0;
+  copy_buffer_to_image.node_data.region.imageSubresource.baseArrayLayer = 0;
+  copy_buffer_to_image.node_data.region.imageSubresource.layerCount = 1;
+  copy_buffer_to_image.vk_image_aspects = VK_IMAGE_ASPECT_COLOR_BIT;
+
+  render_graph->add_node(copy_buffer_to_image);
+  submit(render_graph, command_buffer);
+  VKCopyImageToBufferNode::CreateInfo copy_image_to_buffer = {};
+  copy_image_to_buffer.node_data.src_image = image;
+  copy_image_to_buffer.node_data.dst_buffer = buffer;
+  copy_image_to_buffer.node_data.region = copy_buffer_to_image.node_data.region;
+  copy_image_to_buffer.vk_image_aspects = VK_IMAGE_ASPECT_COLOR_BIT;
+  render_graph->add_node(copy_image_to_buffer);
+  submit(render_graph, command_buffer);
+
+  EXPECT_EQ(4, log.size());
+  EXPECT_EQ(
+      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, "
+      "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
+          endl() +
+          " - image_barrier(src_access_mask=, "
+          "dst_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
+          "old_layout=VK_IMAGE_LAYOUT_UNDEFINED, new_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, "
+          "image=0x2, subresource_range=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "
+          "base_array_layer=0, layer_count=4294967295  )" +
+          endl() + ")",
+      log[0]);
+  EXPECT_EQ(
+      "copy_buffer_to_image(src_buffer=0x1, dst_image=0x2, "
+      "src_image_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL" +
+          endl() +
+          " - region(buffer_offset=0, buffer_row_length=0, buffer_image_height=0, "
+          "image_subresource=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, mip_level=0, base_array_layer=0, "
+          "layer_count=1  , image_offset=" +
+          endl() + "    x=0, y=0, z=0  , image_extent=" + endl() +
+          "    width=64, height=64, depth=1  )" + endl() + ")",
+      log[1]);
+  EXPECT_EQ(
+      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, "
+      "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
+          endl() +
+          " - image_barrier(src_access_mask=, "
+          "dst_access_mask=VK_ACCESS_TRANSFER_READ_BIT, "
+          "old_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, "
+          "new_layout=VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, "
+          "image=0x2, subresource_range=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "
+          "base_array_layer=0, layer_count=4294967295  )" +
+          endl() + ")",
+      log[2]);
+  EXPECT_EQ(
+      "copy_image_to_buffer(src_image=0x2, "
+      "src_image_layout=VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buffer=0x1" +
+          endl() +
+          " - region(buffer_offset=0, buffer_row_length=0, buffer_image_height=0, "
+          "image_subresource=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, mip_level=0, base_array_layer=0, "
+          "layer_count=1  , image_offset=" +
+          endl() + "    x=0, y=0, z=0  , image_extent=" + endl() +
+          "    width=64, height=64, depth=1  )" + endl() + ")",
+      log[3]);
 }
 
 }  // namespace blender::gpu::render_graph

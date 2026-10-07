@@ -37,8 +37,10 @@ static VkImageLayout to_default_image_layout(VkImageAspectFlags aspect, bool use
 
 void VKCommandBuilder::build_nodes(VKRenderGraph &render_graph,
                                    VKCommandBufferInterface &command_buffer,
-                                   Span<NodeHandle> node_handles)
+                                   Span<NodeHandle> node_handles,
+                                   TimelineValue batch_timeline)
 {
+  timeline_value_ = batch_timeline;
   groups_init(render_graph, node_handles);
   groups_extract_barriers(
       render_graph, node_handles, command_buffer.use_dynamic_rendering_local_read);
@@ -659,7 +661,21 @@ void VKCommandBuilder::add_buffer_read_barriers(VKRenderGraph &render_graph,
         (resource_state.vk_access & link.vk_access_flags) == link.vk_access_flags &&
         (resource_state.vk_pipeline_stages & node_stages) == node_stages)
     {
+      resource_state.timeline_value = timeline_value_;
       /* Has already been covered in a previous call no need to add this one. */
+      continue;
+    }
+
+    /* The semaphore guarantees a memory dependency. Thus, we check if the resource has been used
+     * in the current batch and update the resource state.
+     *
+     * See
+     * https://docs.vulkan.org/spec/latest/chapters/synchronization.html#synchronization-semaphores-signaling.
+     */
+    if (resource_state.timeline_value < timeline_value_) {
+      resource_state.vk_access = link.vk_access_flags;
+      resource_state.vk_pipeline_stages = node_stages;
+      resource_state.timeline_value = timeline_value_;
       continue;
     }
 
@@ -697,6 +713,19 @@ void VKCommandBuilder::add_buffer_write_barriers(VKRenderGraph &render_graph,
         versioned_resource.handle);
     VKResourceBarrierState &resource_state = resource.barrier_state;
     const VkAccessFlags wait_access = resource_state.vk_access;
+
+    /* The semaphore guarantees a memory dependency. Thus, we check if the resource has been used
+     * in the current batch and update the resource state.
+     *
+     * See
+     * https://docs.vulkan.org/spec/latest/chapters/synchronization.html#synchronization-semaphores-signaling.
+     */
+    if (resource_state.timeline_value < timeline_value_) {
+      resource_state.vk_access = link.vk_access_flags;
+      resource_state.vk_pipeline_stages = node_stages;
+      resource_state.timeline_value = timeline_value_;
+      continue;
+    }
 
     r_barrier.src_stage_mask |= resource_state.vk_pipeline_stages;
     r_barrier.dst_stage_mask |= node_stages;
@@ -784,6 +813,7 @@ void VKCommandBuilder::add_image_read_barriers(VKRenderGraph &render_graph,
         (resource_state.vk_pipeline_stages & node_stages) == node_stages &&
         resource_state.image_layout == link.vk_image_layout)
     {
+      resource_state.timeline_value = timeline_value_;
       /* Has already been covered in previous barrier no need to add this one. */
       continue;
     }
@@ -817,6 +847,7 @@ void VKCommandBuilder::add_image_read_barriers(VKRenderGraph &render_graph,
         resource_state.vk_access |= link.vk_access_flags;
         resource_state.vk_pipeline_stages |= node_stages;
       }
+      resource_state.timeline_value = timeline_value_;
       if (wait_access != VK_ACCESS_NONE && (wait_access & ~link.vk_access_flags) != 0) {
         add_image_barrier(resource.image.vk_image,
                           r_barrier,
@@ -830,6 +861,32 @@ void VKCommandBuilder::add_image_read_barriers(VKRenderGraph &render_graph,
       continue;
     }
 
+    /* The semaphore guarantees a memory dependency. Thus, we check if the resource has been used
+     * in the current batch and update the resource state.
+     *
+     * See
+     * https://docs.vulkan.org/spec/latest/chapters/synchronization.html#synchronization-semaphores-signaling.
+     */
+    if (resource_state.timeline_value < timeline_value_) {
+      r_barrier.dst_stage_mask |= node_stages;
+      resource_state.vk_access = link.vk_access_flags;
+      resource_state.vk_pipeline_stages = node_stages;
+      resource_state.timeline_value = timeline_value_;
+      /* If image layouts are the same, skip the barrier. */
+      if (resource_state.image_layout == link.vk_image_layout) {
+        continue;
+      }
+      add_image_barrier(resource.image.vk_image,
+                        r_barrier,
+                        VK_ACCESS_NONE,
+                        link.vk_access_flags,
+                        resource_state.image_layout,
+                        link.vk_image_layout,
+                        link.vk_image_aspect,
+                        {});
+      resource_state.image_layout = link.vk_image_layout;
+      continue;
+    }
     VkAccessFlags wait_access = resource_state.vk_access;
 
     r_barrier.src_stage_mask |= resource_state.vk_pipeline_stages;
@@ -897,6 +954,7 @@ void VKCommandBuilder::add_image_write_barriers(VKRenderGraph &render_graph,
       r_barrier.dst_stage_mask |= node_stages;
       resource_state.vk_access = link.vk_access_flags;
       resource_state.vk_pipeline_stages = node_stages;
+      resource_state.timeline_value = timeline_value_;
       if (wait_access != VK_ACCESS_NONE && (wait_access & ~link.vk_access_flags) != 0) {
         add_image_barrier(resource.image.vk_image,
                           r_barrier,
@@ -907,6 +965,33 @@ void VKCommandBuilder::add_image_write_barriers(VKRenderGraph &render_graph,
                           link.vk_image_aspect,
                           {});
       }
+      continue;
+    }
+
+    /* The semaphore guarantees a memory dependency. Thus, we check if the resource has been used
+     * in the current batch and update the resource state.
+     *
+     * See
+     * https://docs.vulkan.org/spec/latest/chapters/synchronization.html#synchronization-semaphores-signaling.
+     */
+    if (resource_state.timeline_value < timeline_value_) {
+      r_barrier.dst_stage_mask |= node_stages;
+      resource_state.vk_access = link.vk_access_flags;
+      resource_state.vk_pipeline_stages = node_stages;
+      resource_state.timeline_value = timeline_value_;
+      /* If image layouts are the same, skip the barrier. */
+      if (resource_state.image_layout == link.vk_image_layout) {
+        continue;
+      }
+      add_image_barrier(resource.image.vk_image,
+                        r_barrier,
+                        VK_ACCESS_NONE,
+                        link.vk_access_flags,
+                        resource_state.image_layout,
+                        link.vk_image_layout,
+                        link.vk_image_aspect,
+                        {});
+      resource_state.image_layout = link.vk_image_layout;
       continue;
     }
 

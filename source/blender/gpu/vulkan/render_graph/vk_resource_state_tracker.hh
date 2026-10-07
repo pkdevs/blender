@@ -70,6 +70,8 @@ struct VKResourceBarrierState {
   VkPipelineStageFlags vk_pipeline_stages = VK_PIPELINE_STAGE_NONE;
   /** Last known image layout of an image resource. */
   VkImageLayout image_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  /** Last timeline semaphore value when the resource has been changed. */
+  TimelineValue timeline_value = 0;
 
   bool is_new_stamp() const
   {

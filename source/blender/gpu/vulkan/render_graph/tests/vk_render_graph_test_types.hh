@@ -617,10 +617,11 @@ template<typename VKObjectType> struct VKTrackedHandle {
 static inline void submit(std::unique_ptr<VKRenderGraph> &render_graph,
                           std::unique_ptr<CommandBufferLog> &command_buffer)
 {
+  static thread_local TimelineValue timeline_value = 0;
   VKScheduler scheduler;
   VKCommandBuilder command_builder;
   Span<render_graph::NodeHandle> node_handles = scheduler.select_nodes(*render_graph);
-  command_builder.build_nodes(*render_graph, *command_buffer, node_handles);
+  command_builder.build_nodes(*render_graph, *command_buffer, node_handles, timeline_value++);
 
   command_buffer->begin_recording();
   command_builder.record_commands(*render_graph, *command_buffer, node_handles);

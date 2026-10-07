@@ -175,6 +175,7 @@ class VKCommandBuilder {
   using Barriers = IndexRange;
   using BarrierIndex = int64_t;
 
+  TimelineValue timeline_value_;
   /** Per group store the indices of the nodes. */
   Vector<GroupNodes> group_nodes_;
   /** Barriers that will be recorded just before the commands of a group are recorded. */
@@ -197,7 +198,8 @@ class VKCommandBuilder {
    */
   void build_nodes(VKRenderGraph &render_graph,
                    VKCommandBufferInterface &command_buffer,
-                   Span<NodeHandle> node_handles);
+                   Span<NodeHandle> node_handles,
+                   TimelineValue batch_timeline);
 
   /**
    * Record commands of the nodes provided by the `node_handles` parameter. The commands are
