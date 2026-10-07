@@ -404,6 +404,8 @@ bool asset_edit_id_rename(Main &global_main,
   /* Brushes have their own rename logic, so renaming their files has more consequences than for
    * other assets. For now, just avoid renaming the blend files. This means renaming just the ID,
    * and then saving it into the library it came from. */
+  /* TODO: is this special case for brushes still needed? The
+   * #BKE_asset_weak_reference_foreach_main() should handle brush references correctly already. */
   if (id.id_type() == ID_BR) {
     const IDNewNameResult result = BKE_id_rename(
         global_main, id, new_name, IDNewNameMode::RenameExistingAlways);

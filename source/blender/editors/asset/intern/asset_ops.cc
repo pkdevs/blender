@@ -1897,7 +1897,6 @@ static wmOperatorStatus external_asset_rename_invoke(bContext *C,
 {
   const asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
   RNA_string_set(op->ptr, "new_name", asset->get_name().c_str());
-  /* TODO: add warning that this is not undo'able, and that it may break links. */
   return WM_operator_props_dialog_popup(C, op, 400, std::nullopt, IFACE_("Rename Asset"));
 }
 
