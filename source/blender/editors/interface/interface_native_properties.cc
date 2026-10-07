@@ -114,7 +114,7 @@ std::string icon_name(const int icon)
  * as `template_icon_view` shows them. Each is rendered once per session, so snapshots only
  * carry a path.
  */
-std::string preview_icon_path(const int icon_id)
+std::string preview_icon_path(const bContext *C, const int icon_id)
 {
   static std::map<int, std::string> rendered;
   if (icon_id < BIFICONID_LAST_STATIC) {
@@ -123,17 +123,14 @@ std::string preview_icon_path(const int icon_id)
   if (const auto found = rendered.find(icon_id); found != rendered.end()) {
     return found->second;
   }
-  const Icon *icon = BKE_icon_get(icon_id);
-  if (!icon || icon->obj_type != ICON_DATA_STUDIOLIGHT || !icon->obj) {
+  /* Studio light previews come from the icon's own preview job; until it finishes there is
+   * no preview, and a later snapshot picks it up. */
+  const uint8_t *pixels = icon_studiolight_preview(C, icon_id);
+  if (!pixels) {
     return "";
   }
-  Array<uint> pixels(STUDIOLIGHT_ICON_SIZE * STUDIOLIGHT_ICON_SIZE, 0);
-  BKE_studiolight_preview(pixels.data(), static_cast<StudioLight *>(icon->obj), icon->id_type);
-  ImBuf *ibuf = IMB_allocFromBuffer(reinterpret_cast<const uint8_t *>(pixels.data()),
-                                    nullptr,
-                                    STUDIOLIGHT_ICON_SIZE,
-                                    STUDIOLIGHT_ICON_SIZE,
-                                    4);
+  ImBuf *ibuf = IMB_allocFromBuffer(
+      pixels, nullptr, STUDIOLIGHT_ICON_SIZE, STUDIOLIGHT_ICON_SIZE, 4);
   if (!ibuf) {
     return "";
   }
@@ -691,7 +688,7 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
         option->append_str("value", item.identifier);
         option->append_str("label", item.name);
         option->append_str("icon", icon_name(item.icon));
-        if (const std::string preview = preview_icon_path(item.icon); !preview.empty()) {
+        if (const std::string preview = preview_icon_path(C, item.icon); !preview.empty()) {
           option->append_str("preview", preview);
         }
         const bool checked = (RNA_property_flag(prop) & PROP_ENUM_FLAG) ?
