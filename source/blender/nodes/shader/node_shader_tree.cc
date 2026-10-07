@@ -975,13 +975,29 @@ static void ntree_shader_pruned_unused(bNodeTree *ntree, bNode *output_node)
   }
 }
 
+static bool is_material_lighting_node(bNode &node)
+{
+  return ELEM(node.type_legacy,
+              SH_NODE_LIGHT_ACCUMULATION,
+              SH_NODE_LIGHT_ACCUMULATION_AOV,
+              SH_NODE_LIGHT_INFO,
+              SH_NODE_LIGHT_EVALUATION,
+              SH_NODE_SHADOW_RAYCAST) ||
+         (node.type_legacy == SH_NODE_ATTRIBUTE &&
+          static_cast<NodeShaderAttribute *>(node.storage)->type == SHD_ATTRIBUTE_LIGHT) ||
+         (node.type_legacy == SH_NODE_VECT_TRANSFORM &&
+          ELEM(SHD_VECT_TRANSFORM_SPACE_LIGHT,
+               static_cast<NodeShaderVectTransform *>(node.storage)->convert_from,
+               static_cast<NodeShaderVectTransform *>(node.storage)->convert_to));
+}
+
 static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
 {
   /* Safeguard to not emit a LIGHT_ITER_INTERNAL_INPUT without a LIGHT_ITER_INTERNAL_OUTPUT raising
    * an assert in the shader dead code optimization. */
   bool has_light_accumulation = false;
   for (bNode &node : ntree->nodes) {
-    if (ELEM(node.type_legacy, SH_NODE_LIGHT_ACCUMULATION, SH_NODE_LIGHT_ACCUMULATION_AOV)) {
+    if (is_material_lighting_node(node)) {
       has_light_accumulation = true;
       break;
     }
@@ -991,88 +1007,134 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
     return;
   }
 
-  bNode *zone_input = nullptr;
-  bNode *zone_output = nullptr;
+  bNode *zone_input = bke::node_add_static_node(
+      nullptr, *ntree, SH_NODE_LIGHT_ITER_INTERNAL_INPUT);
+  bNode *zone_output = bke::node_add_static_node(
+      nullptr, *ntree, SH_NODE_LIGHT_ITER_INTERNAL_OUTPUT);
+  zone_input->custom3 = *reinterpret_cast<float *>(&zone_output->identifier);
 
-  auto ensure_nodes = [&]() {
-    if (!zone_input) {
-      zone_input = bke::node_add_static_node(nullptr, *ntree, SH_NODE_LIGHT_ITER_INTERNAL_INPUT);
-      zone_output = bke::node_add_static_node(nullptr, *ntree, SH_NODE_LIGHT_ITER_INTERNAL_OUTPUT);
-      zone_input->custom3 = *reinterpret_cast<float *>(&zone_output->identifier);
+  bNodeSocket *zone_in_socket_in = nullptr;
+  bNodeSocket *zone_in_socket_out = nullptr;
+  bNodeSocket *zone_out_socket_in = nullptr;
+  bNodeSocket *zone_out_socket_out = nullptr;
+
+  auto add_zone_io = [&](eNodeSocketDatatype socket_type) {
+    zone_in_socket_in = bke::node_add_static_socket(
+        *ntree, *zone_input, SOCK_IN, socket_type, PROP_NONE, "LightZoneIO", "LightZoneIO");
+    zone_in_socket_out = bke::node_add_static_socket(
+        *ntree, *zone_input, SOCK_OUT, socket_type, PROP_NONE, "LightZoneIO", "LightZoneIO");
+    zone_out_socket_in = bke::node_add_static_socket(
+        *ntree, *zone_output, SOCK_IN, socket_type, PROP_NONE, "LightZoneIO", "LightZoneIO");
+    zone_out_socket_out = bke::node_add_static_socket(
+        *ntree, *zone_output, SOCK_OUT, socket_type, PROP_NONE, "LightZoneIO", "LightZoneIO");
+  };
+
+  auto is_light_accumulation_aov = [&](bNode &node) {
+    if (node.type_legacy != SH_NODE_OUTPUT_AOV) {
+      return false;
     }
+    bool has_lighting_inputs = false;
+    auto detect_lighting_node = [](bNode *node, bNode * /*to_node*/, void *userdata) -> bool {
+      if (is_material_lighting_node(*node)) {
+        *reinterpret_cast<bool *>(userdata) = true;
+        return false;
+      }
+      return true;
+    };
+    bke::node_chain_iterator_backwards(
+        ntree, &node, detect_lighting_node, &has_lighting_inputs, 0);
+    return has_lighting_inputs;
   };
 
   Map<bNodeSocket *, bNodeSocket *> accumulation_out_to_zone_out;
 
   for (bNode &node : ntree->nodes) {
-    if (ELEM(node.type_legacy,
-             SH_NODE_LIGHT_ACCUMULATION,
-             SH_NODE_LIGHT_ACCUMULATION_AOV,
-             SH_NODE_LIGHT_INFO,
-             SH_NODE_LIGHT_EVALUATION,
-             SH_NODE_SHADOW_RAYCAST) ||
-        (node.type_legacy == SH_NODE_ATTRIBUTE &&
-         static_cast<NodeShaderAttribute *>(node.storage)->type == SHD_ATTRIBUTE_LIGHT) ||
-        (node.type_legacy == SH_NODE_VECT_TRANSFORM &&
-         ELEM(SHD_VECT_TRANSFORM_SPACE_LIGHT,
-              static_cast<NodeShaderVectTransform *>(node.storage)->convert_from,
-              static_cast<NodeShaderVectTransform *>(node.storage)->convert_to)))
-    {
-      ensure_nodes();
-      if (node.type_legacy != SH_NODE_LIGHT_ACCUMULATION_AOV) {
-        /* Connect LightIndex socket */
-        bke::node_add_link(*ntree,
-                           *zone_input,
-                           *ntree_shader_node_output_get(zone_input, 0),
-                           node,
-                           *ntree_shader_node_input_get(&node, 0));
+    if (is_light_accumulation_aov(node)) {
+      bNodeLink *aov_link = ntree_shader_node_find_input(&node, "Color")->link;
+      bool color_aov = aov_link;
+      if (!color_aov) {
+        aov_link = ntree_shader_node_find_input(&node, "Value")->link;
       }
 
-      if (!ELEM(node.type_legacy, SH_NODE_LIGHT_ACCUMULATION, SH_NODE_LIGHT_ACCUMULATION_AOV)) {
-        continue;
-      }
+      add_zone_io(color_aov ? SOCK_RGBA : SOCK_FLOAT);
+      bNode *add_node = bke::node_add_static_node(nullptr, *ntree, SH_NODE_MIX);
+      NodeShaderMix &add_settings = *reinterpret_cast<NodeShaderMix *>(add_node->storage);
+      add_settings.data_type = color_aov ? SOCK_RGBA : SOCK_FLOAT;
+      add_settings.blend_type = MA_RAMP_ADD;
+      ntree_shader_node_find_input(add_node, "Factor_Float")
+          ->default_value_typed<blender::bNodeSocketValueFloat>()
+          ->value = 1.0f;
 
-      eNodeSocketDatatype socket_type = node.type_legacy == SH_NODE_LIGHT_ACCUMULATION ?
-                                            SOCK_SHADER :
-                                            SOCK_RGBA;
+      bke::node_add_link(
+          *ntree,
+          *zone_input,
+          *zone_in_socket_out,
+          *add_node,
+          *ntree_shader_node_find_input(add_node, color_aov ? "A_Color" : "A_Float"));
+      bke::node_add_link(
+          *ntree,
+          *add_node,
+          *ntree_shader_node_find_output(add_node, color_aov ? "Result_Color" : "Result_Float"),
+          *zone_output,
+          *zone_out_socket_in);
+      bke::node_add_link(
+          *ntree,
+          *aov_link->fromnode,
+          *aov_link->fromsock,
+          *add_node,
+          *ntree_shader_node_find_input(add_node, color_aov ? "B_Color" : "B_Float"));
+      aov_link->fromnode = zone_output;
+      aov_link->fromsock = zone_out_socket_out;
 
-      /* Connect accumulation result to the zone output node.
-       * Create one zone IO for each Light Accumulation node. */
-      /*bNodeSocket *zone_in_socket_in = */ bke::node_add_static_socket(
-          *ntree, *zone_input, SOCK_IN, socket_type, PROP_NONE, "LightZoneIO", "LightZoneIO");
-      bNodeSocket *zone_in_socket_out = bke::node_add_static_socket(
-          *ntree, *zone_input, SOCK_OUT, socket_type, PROP_NONE, "LightZoneIO", "LightZoneIO");
-      bNodeSocket *zone_out_socket_in = bke::node_add_static_socket(
-          *ntree, *zone_output, SOCK_IN, socket_type, PROP_NONE, "LightZoneIO", "LightZoneIO");
-      bNodeSocket *zone_out_socket_out = bke::node_add_static_socket(
-          *ntree, *zone_output, SOCK_OUT, socket_type, PROP_NONE, "LightZoneIO", "LightZoneIO");
+      continue;
+    }
 
-      if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
-        bNodeSocket &accumulation_out = *ntree_shader_node_output_get(&node, 0);
-        bke::node_add_link(*ntree, node, accumulation_out, *zone_output, *zone_out_socket_in);
-        accumulation_out_to_zone_out.add(&accumulation_out, zone_out_socket_out);
-      }
-      else {
-        /* Setup an actual AOV output outside the Light Zone loop,
-         * so the final setup looks like this:
-         * LightZoneInput.IO -> LightAccumulationAOV -> LightZoneOuput.IO -> AOV. */
-        bNodeSocket &accumulation_in = *ntree_shader_node_input_get(&node, 0);
-        bNodeSocket &accumulation_out = *ntree_shader_node_output_get(&node, 0);
+    if (!is_material_lighting_node(node)) {
+      continue;
+    }
 
-        bke::node_add_link(*ntree, *zone_input, *zone_in_socket_out, node, accumulation_in);
+    if (node.type_legacy != SH_NODE_LIGHT_ACCUMULATION_AOV) {
+      /* Connect LightIndex socket */
+      bke::node_add_link(*ntree,
+                         *zone_input,
+                         *ntree_shader_node_output_get(zone_input, 0),
+                         node,
+                         *ntree_shader_node_input_get(&node, 0));
+    }
 
-        bke::node_add_link(*ntree, node, accumulation_out, *zone_output, *zone_out_socket_in);
+    if (!ELEM(node.type_legacy, SH_NODE_LIGHT_ACCUMULATION, SH_NODE_LIGHT_ACCUMULATION_AOV)) {
+      continue;
+    }
 
-        bNode *aov_node = bke::node_add_static_node(nullptr, *ntree, SH_NODE_OUTPUT_AOV);
-        strcpy(static_cast<NodeShaderOutputAOV *>(aov_node->storage)->name,
-               static_cast<NodeShaderLightAccumulationAOV *>(node.storage)->name);
+    /* Connect accumulation result to the zone output node.
+     * Create one zone IO for each Light Accumulation node. */
+    add_zone_io(node.type_legacy == SH_NODE_LIGHT_ACCUMULATION ? SOCK_SHADER : SOCK_RGBA);
 
-        bke::node_add_link(*ntree,
-                           *zone_output,
-                           *zone_out_socket_out,
-                           *aov_node,
-                           *ntree_shader_node_input_get(aov_node, 0));
-      }
+    if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+      bNodeSocket &accumulation_out = *ntree_shader_node_output_get(&node, 0);
+      bke::node_add_link(*ntree, node, accumulation_out, *zone_output, *zone_out_socket_in);
+      accumulation_out_to_zone_out.add(&accumulation_out, zone_out_socket_out);
+    }
+    else {
+      /* Setup an actual AOV output outside the Light Zone loop,
+       * so the final setup looks like this:
+       * LightZoneInput.IO -> LightAccumulationAOV -> LightZoneOuput.IO -> AOV. */
+      bNodeSocket &accumulation_in = *ntree_shader_node_input_get(&node, 0);
+      bNodeSocket &accumulation_out = *ntree_shader_node_output_get(&node, 0);
+
+      bke::node_add_link(*ntree, *zone_input, *zone_in_socket_out, node, accumulation_in);
+
+      bke::node_add_link(*ntree, node, accumulation_out, *zone_output, *zone_out_socket_in);
+
+      bNode *aov_node = bke::node_add_static_node(nullptr, *ntree, SH_NODE_OUTPUT_AOV);
+      strcpy(static_cast<NodeShaderOutputAOV *>(aov_node->storage)->name,
+             static_cast<NodeShaderLightAccumulationAOV *>(node.storage)->name);
+
+      bke::node_add_link(*ntree,
+                         *zone_output,
+                         *zone_out_socket_out,
+                         *aov_node,
+                         *ntree_shader_node_input_get(aov_node, 0));
     }
   }
 
