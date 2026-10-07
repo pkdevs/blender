@@ -6,8 +6,8 @@
 
 import math
 
-from .common import (RADIANS, generator_object, object_group, palette, rest_on_ground,
-                     simple_material)
+from .common import (RADIANS, generator_object, object_group, palette, radius_gizmo,
+                     resolution_gizmo, rest_on_ground, simple_material, size_gizmo)
 from .registry import asset
 
 CATALOG = "Objects/Shapes"
@@ -51,6 +51,15 @@ def _revolve_rounded(tree, height, radius, bevel, segments, bevel_segments):
                         tree.math("MULTIPLY", r, tree.math("SINE", theta)), z)
     mesh = tree.n("GeometryNodeSetPosition", Geometry=grid, Position=position).outputs[0]
     return tree.n("GeometryNodeMergeByDistance", Geometry=mesh, Distance=1e-5).outputs[0]
+
+
+def _revolved_gizmos(tree, height, radius, segments):
+    """Height at the top, radius at the side and segments around the middle of a shape made
+    by `_revolve_rounded()`, which already starts at the ground."""
+    size_gizmo(tree, height, "Z", centered=False)
+    radius_gizmo(tree, radius, origin=tree.xyz(0.0, 0.0, tree.math("MULTIPLY", height, 0.5)))
+    resolution_gizmo(tree, segments, tree.xyz(0.0, 0.0, tree.math("MULTIPLY", height, 0.5)),
+                     per_turn=48.0)
 
 
 def _tube(tree, curve, thickness, resolution=16, caps=False):
@@ -109,9 +118,41 @@ def star():
     # Stand it up with a tip pointing up.
     mesh = tree.transform(mesh, rotation=(0.0, 0.0, 90 * RADIANS))
     mesh = tree.transform(mesh, rotation=(90 * RADIANS, 0.0, 0.0))
+    _star_gizmos(tree, points, outer, inner, depth, rim)
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Star", tree)
+
+
+def _star_gizmos(tree, points, outer, inner, depth, rim):
+    """Gizmos on the upright star: X across, Z up, its faces toward -Y."""
+    def corner(index):
+        """Direction to a corner, counting tips and inner corners from the top tip."""
+        angle = tree.math("ADD", tree.math("DIVIDE", index * math.pi, points), math.pi / 2)
+        return tree.math("COSINE", angle), tree.math("SINE", angle)
+
+    # With an odd number of points the star stands on two tips, with an even one on a tip, so
+    # its bottom is this far below the center, in radii. The top tip is pulled up by the radius
+    # plus that, so it follows the finger once the bottom rests on the ground.
+    odd = tree.math("FLOORED_MODULO", points, 2.0)
+    low_tips = _lerp(tree, odd, 1.0, tree.math("COSINE", tree.math("DIVIDE", math.pi, points)))
+    low = tree.math("MAXIMUM", low_tips, tree.math("MULTIPLY", inner, odd))
+    tree.linear_gizmo(tree.math("MULTIPLY", outer, tree.math("ADD", low, 1.0)),
+                      tree.xyz(0.0, 0.0, outer), (0.0, 0.0, 1.0))
+    # The inner corner beside the top tip, dragged out along its own direction.
+    cx, cz = corner(1.0)
+    inner_radius = tree.math("MULTIPLY", outer, inner)
+    tree.linear_gizmo(tree.math("MULTIPLY", inner, outer),
+                      tree.xyz(tree.math("MULTIPLY", cx, inner_radius), 0.0,
+                               tree.math("MULTIPLY", cz, inner_radius)), tree.xyz(cx, 0.0, cz))
+    # Thickness at the center, and at the next tip.
+    size_gizmo(tree, depth, "-Y", color="Y")
+    tx, tz = corner(2.0)
+    size_gizmo(tree, rim, "-Y", origin=tree.xyz(tree.math("MULTIPLY", tx, outer), 0.0,
+                                                 tree.math("MULTIPLY", tz, outer)), color="Y")
+    # Below the center, between the bottom tips.
+    resolution_gizmo(tree, points, tree.xyz(0.0, 0.0, tree.math("MULTIPLY", inner_radius, -0.5)),
+                     up="-Y", per_turn=8.0)
 
 
 def _rounded_axis(tree, coordinate, half, radius, segments):
@@ -142,8 +183,8 @@ def _rounded_axis(tree, coordinate, half, radius, segments):
 def rounded_box():
     tree = object_group("Rounded Box")
     size = tree.input("Size", "VECTOR", (1.0, 1.0, 1.0), min=0.001, subtype="XYZ")
-    radius = tree.input("Bevel", "FLOAT", 0.1, min=0.0, subtype="DISTANCE",
-                        description="Radius of the rounded edges")
+    bevel = tree.input("Bevel", "FLOAT", 0.1, min=0.0, subtype="DISTANCE",
+                       description="Radius of the rounded edges")
     segments = tree.input("Segments", "INT", 4, min=1, max=16)
     material = tree.input("Material", "MATERIAL",
                           simple_material("Starter Shape Clay", (0.4, 0.33, 0.28),
@@ -153,7 +194,7 @@ def rounded_box():
     half_x, half_y, half_z = (tree.math("MULTIPLY", s, 0.5) for s in (sx, sy, sz))
     # Keep the bevel inside the smallest half size.
     smallest = tree.math("MINIMUM", tree.math("MINIMUM", half_x, half_y), half_z)
-    radius = tree.math("MINIMUM", radius, tree.math("MULTIPLY", smallest, 0.999))
+    radius = tree.math("MINIMUM", bevel, tree.math("MULTIPLY", smallest, 0.999))
     count = tree.math("ADD", tree.math("MULTIPLY", segments, 2.0), 2.0)
     cube = tree.n("GeometryNodeMeshCube", Size=size, Vertices_X=count, Vertices_Y=count,
                   Vertices_Z=count).outputs["Mesh"]
@@ -171,6 +212,16 @@ def rounded_box():
     rounded = tree.out(tree.n("ShaderNodeMix", data_type="VECTOR", Factor=has_offset, A=mapped,
                               B=rounded), "Result")
     mesh = tree.n("GeometryNodeSetPosition", Geometry=cube, Position=rounded).outputs[0]
+    size_gizmo(tree, sx, "X")
+    size_gizmo(tree, sy, "Y")
+    size_gizmo(tree, sz, "Z", origin=tree.xyz(0.0, 0.0, tree.math("MULTIPLY", sz, -0.5)),
+               centered=False)
+    # Where the top face starts to round over its +X edge: pulling it in widens the round.
+    tree.linear_gizmo(tree.math("MULTIPLY", bevel, 1.0),
+                      tree.xyz(tree.math("SUBTRACT", half_x, radius), 0.0, half_z),
+                      (-1.0, 0.0, 0.0))
+    resolution_gizmo(tree, segments, tree.xyz(half_x, tree.math("MULTIPLY", half_y, -1.0),
+                                              half_z), per_turn=8.0)
     mesh = tree.smooth(mesh, angle=60 * RADIANS)
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
@@ -191,7 +242,13 @@ def capsule():
                        description="Number of rings in each rounded end")
     material = tree.input("Material", "MATERIAL", palette("Starter Blue"))
 
-    radius = tree.math("MINIMUM", radius, tree.math("MULTIPLY", length, 0.5))
+    _revolved_gizmos(tree, length, radius, segments)
+    # The rings of the top end, around its front.
+    end = tree.math("MINIMUM", radius, tree.math("MULTIPLY", length, 0.5))
+    resolution_gizmo(tree, rings, tree.xyz(0.0, tree.math("MULTIPLY", end, -1.0),
+                                           tree.math("SUBTRACT", length, end)),
+                     up="X", per_turn=12.0)
+    radius = end
     mesh = _revolve_rounded(tree, length, radius, radius, segments, rings)
     mesh = tree.smooth(mesh)
     mesh = tree.material(mesh, material)
@@ -216,9 +273,19 @@ def rounded_cylinder():
                                           roughness=0.4))
 
     # Keep the bevel inside the cylinder.
+    _revolved_gizmos(tree, height, radius, segments)
     limit = tree.math("MINIMUM", radius, tree.math("MULTIPLY", height, 0.5))
-    bevel = tree.math("MINIMUM", bevel, tree.math("MULTIPLY", limit, 0.999))
-    mesh = _revolve_rounded(tree, height, radius, bevel, segments, bevel_segments)
+    round_ = tree.math("MINIMUM", bevel, tree.math("MULTIPLY", limit, 0.999))
+    # Where the top starts to round over the rim: pulling it in widens the round.
+    tree.linear_gizmo(tree.math("MULTIPLY", bevel, 1.0),
+                      tree.xyz(tree.math("SUBTRACT", radius, round_), 0.0, height),
+                      (-1.0, 0.0, 0.0))
+    # Around the front of the rim, at the center of its rounding.
+    inset = tree.math("SUBTRACT", round_, radius)
+    resolution_gizmo(tree, bevel_segments, tree.xyz(0.0, inset,
+                                                    tree.math("SUBTRACT", height, round_)),
+                     up="X", per_turn=8.0)
+    mesh = _revolve_rounded(tree, height, radius, round_, segments, bevel_segments)
     mesh = tree.smooth(mesh, angle=30 * RADIANS)
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
@@ -257,6 +324,29 @@ def torus_knot():
     curve = tree.n("GeometryNodeSetPosition", Geometry=curve, Position=position).outputs[0]
     mesh = _tube(tree, curve, thickness, resolution=20)
     mesh = tree.transform(mesh, rotation=(90 * RADIANS, 0.0, 0.0))
+    # It stands in the XZ plane once turned up, with the torus axis along Y.
+    # Most knots reach further along +X than -X and get re-centered on the ground, so the arrow
+    # on the +X side moves by half the width: scale the drag by that to follow the finger.
+    x = tree.separate(tree.n("GeometryNodeInputPosition").outputs[0])[0]
+    span = tree.n("GeometryNodeAttributeStatistic", data_type="FLOAT", domain="POINT",
+                  Geometry=curve, Attribute=x)
+    width = tree.math("SUBTRACT", tree.out(span, "Max"), tree.out(span, "Min"))
+    tree.linear_gizmo(tree.math("MULTIPLY", size, tree.math("DIVIDE", width,
+                                                            tree.math("MULTIPLY", size, 2.0))),
+                      tree.xyz(tree.math("MULTIPLY_ADD", thickness, 0.5, tree.out(span, "Max"))),
+                      (1.0, 0.0, 0.0))
+    # The front of the tube, where the knot comes closest to -Y.
+    front = tree.math("DIVIDE", math.pi / 2, q)
+    front_ring = tree.math("MULTIPLY_ADD", minor, tree.math("COSINE", tree.math(
+        "MULTIPLY", q, front)), major)
+    front_angle = tree.math("MULTIPLY", p, front)
+    origin = tree.xyz(tree.math("MULTIPLY", front_ring, tree.math("COSINE", front_angle)),
+                      tree.math("MULTIPLY", minor, -1.0),
+                      tree.math("MULTIPLY", front_ring, tree.math("SINE", front_angle)))
+    size_gizmo(tree, thickness, "-Y", origin=origin, color="Y")
+    # P turns around the torus axis, Q around the tube.
+    resolution_gizmo(tree, p, tree.xyz(), up="-Y", per_turn=4.0)
+    resolution_gizmo(tree, q, tree.xyz(major), up="Z", per_turn=4.0)
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Torus Knot", tree)
@@ -302,6 +392,17 @@ def platonic_solid():
     })
     half = tree.math("MULTIPLY", size, 0.5)
     mesh = tree.transform(mesh, scale=tree.xyz(half, half, half))
+    # Each solid is centered on Z, its height a fraction of the size, so the top arrow drags the
+    # height and follows the finger once the solid rests on the ground.
+    height = tree.math("MULTIPLY", size, tree.switch(kind, "FLOAT", {
+        "Tetrahedron": 2.0 / 3.0,
+        "Cube": 1.0 / math.sqrt(3.0),
+        "Octahedron": 1.0 / math.sqrt(3.0),
+        "Dodecahedron": 0.794654,
+        "Icosahedron": 0.794654,
+    }))
+    tree.linear_gizmo(height, tree.xyz(0.0, 0.0, tree.math("MULTIPLY", height, 0.5)),
+                      (0.0, 0.0, 1.0), color="Z")
     mesh = tree.n("GeometryNodeSetShadeSmooth", Mesh=mesh, domain="FACE",
                   Shade_Smooth=smooth).outputs[0]
     mesh = tree.material(mesh, material)
@@ -325,6 +426,18 @@ def helix():
     curve = tree.n("GeometryNodeCurveSpiral", Resolution=32, Rotations=turns,
                    Start_Radius=radius, End_Radius=radius, Height=height).outputs[0]
     mesh = _tube(tree, curve, thickness, resolution=12, caps=True)
+    size_gizmo(tree, height, "Z", centered=False)
+    radius_gizmo(tree, radius, origin=tree.xyz(0.0, 0.0, tree.math("MULTIPLY", height, 0.5)))
+    # Inside the tube where the coil starts.
+    tree.linear_gizmo(tree.math("MULTIPLY", thickness, 0.5),
+                      tree.xyz(tree.math("MULTIPLY_ADD", thickness, -0.5, radius)),
+                      (-1.0, 0.0, 0.0), color="SECONDARY")
+    # At the end of the coil: a full turn of the dial adds a full turn of the coil.
+    end = tree.math("MULTIPLY", turns, math.tau)
+    tree.dial_gizmo(tree.math("MULTIPLY", turns, math.tau),
+                    tree.xyz(tree.math("MULTIPLY", radius, tree.math("COSINE", end)),
+                             tree.math("MULTIPLY", radius, tree.math("SINE", end)), height),
+                    (0.0, 0.0, 1.0), radius=0.6, color="SECONDARY")
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
     return generator_object("Helix", tree)
@@ -372,8 +485,19 @@ def heart():
     position = tree.xyz(tree.math("MULTIPLY", bulge, tree.math("MULTIPLY", depth, 0.5)),
                         tree.math("MULTIPLY", heart_x, scale),
                         tree.math("MULTIPLY", heart_y, scale))
-    mesh =tree.n("GeometryNodeSetPosition", Geometry=sphere.outputs["Mesh"],
+    mesh = tree.n("GeometryNodeSetPosition", Geometry=sphere.outputs["Mesh"],
                   Position=position).outputs[0]
+    # The heart is widest across its lobes, 4/32 of the size above its center.
+    lobes = tree.math("MULTIPLY", size, 4.0 / 32.0)
+    tree.linear_gizmo(tree.math("MULTIPLY", size, 0.5),
+                      tree.xyz(0.0, tree.math("MULTIPLY", size, 0.5), lobes), (0.0, 1.0, 0.0),
+                      color="Y")
+    size_gizmo(tree, depth, "X")
+    # On the left lobe where its rim stops rounding: pulling it in widens the rounding.
+    edge = tree.math("MULTIPLY_ADD", size, -0.5, rim)
+    tree.linear_gizmo(tree.math("MULTIPLY", roundness, tree.math("MULTIPLY", size, 0.3)),
+                      tree.xyz(tree.math("MULTIPLY", depth, 0.35), edge, lobes),
+                      (0.0, 1.0, 0.0))
     mesh = tree.smooth(mesh)
     mesh = tree.material(mesh, material)
     tree.output(rest_on_ground(tree, mesh))
@@ -387,8 +511,8 @@ def arrow():
     tree = object_group("Arrow")
     style = tree.menu("Style", ("Flat", "Round"))
     length = tree.input("Length", "FLOAT", 0.6, min=0.002, subtype="DISTANCE")
-    head = tree.input("Head Size", "FLOAT", 0.24, min=0.001, subtype="DISTANCE",
-                      description="Length of the arrowhead; it's a little wider than long")
+    head_size = tree.input("Head Size", "FLOAT", 0.24, min=0.001, subtype="DISTANCE",
+                           description="Length of the arrowhead; it's a little wider than long")
     thickness = tree.input("Thickness", "FLOAT", 0.1, min=0.0001, subtype="DISTANCE",
                            description="Width of the shaft")
     depth = tree.input("Depth", "FLOAT", 0.04, min=0.0001, subtype="DISTANCE",
@@ -397,7 +521,7 @@ def arrow():
                           simple_material("Starter Shape Amber", (0.9, 0.38, 0.0),
                                           roughness=0.35))
 
-    head = tree.math("MINIMUM", head, tree.math("MULTIPLY", length, 0.999))
+    head = tree.math("MINIMUM", head_size, tree.math("MULTIPLY", length, 0.999))
     neck = tree.math("SUBTRACT", length, head)
     shaft = tree.math("MULTIPLY", thickness, 0.5)
     wing = tree.math("MAXIMUM", tree.math("MULTIPLY", head, 0.6), shaft)
@@ -430,6 +554,22 @@ def arrow():
     cone = tree.transform(cone.outputs["Mesh"], rotation=along_x, translation=tree.xyz(
         tree.math("MULTIPLY_ADD", head, 0.5, neck)))
     round_ = tree.smooth(tree.join(rod, cone), angle=30 * RADIANS)
+
+    # The flat style sits on Z = 0, the round one is centered on it.
+    middle = tree.switch(style, "FLOAT", {"Flat": tree.math("MULTIPLY", depth, 0.5),
+                                          "Round": 0.0})
+    top = tree.switch(style, "FLOAT", {"Flat": depth, "Round": shaft})
+    tree.linear_gizmo(tree.math("MULTIPLY", length, 0.5), tree.xyz(length, 0.0, middle),
+                      (1.0, 0.0, 0.0), color="X")
+    # The back of the arrowhead: pulling it back makes the head longer.
+    tree.linear_gizmo(tree.math("MULTIPLY", head_size, 1.0), tree.xyz(neck, wing, middle),
+                      (-1.0, 0.0, 0.0))
+    tree.linear_gizmo(tree.math("MULTIPLY", thickness, 0.5),
+                      tree.xyz(tree.math("MULTIPLY", neck, 0.5), shaft, middle),
+                      (0.0, 1.0, 0.0), color="Y")
+    tree.linear_gizmo(tree.math("MULTIPLY", depth, 1.0),
+                      tree.xyz(tree.math("MULTIPLY", neck, 0.25), 0.0, top), (0.0, 0.0, 1.0),
+                      color="Z")
 
     mesh = tree.switch(style, "GEOMETRY", {"Flat": flat, "Round": round_})
     mesh = tree.material(mesh, material)
