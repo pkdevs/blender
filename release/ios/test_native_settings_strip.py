@@ -92,6 +92,7 @@ class NativeSettingsStripTest(unittest.TestCase):
 #import "GHOST_IOSScenePanels.hh"
 #import "GHOST_IOSRedoStrip.hh"
 #import "GHOST_IOSTimeline.hh"
+#import "GHOST_IOSAssets.hh"
 #import "GHOST_IOSIcons.hh"
 #define GHOST_IOSViewController StripTest
 @interface GHOSTIOSRedoStrip (Testing)
@@ -109,6 +110,7 @@ static UIImage *blenderIOSCommandIcon(NSInteger, NSString *) { return [UIImage s
 static UIImage *blenderIOSActionIcon(NSString *, NSString *, NSString *) { return nil; }
 extern "C" void WM_apple_ios_ui_command_enqueue(int command) { lastCommand = command; }
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *) {}
+extern "C" void WM_apple_ios_ui_asset_drag(int, const char *, int, int) {}
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *setting, const char *value) {
   [queued addObject:@[[NSString stringWithUTF8String:setting], [NSString stringWithUTF8String:value]]];
 }
@@ -126,6 +128,7 @@ static BOOL fingerTool;
   GHOSTIOSScenePanels *_scene_panels;
   GHOSTIOSRedoStrip *_redo_strip;
   GHOSTIOSTimeline *_timeline;
+  GHOSTIOSAssets *_assets;
   NSArray *_mode_items;
   NSString *_object_mode;
   GHOSTIOSNavigationBar *_top_bar;
@@ -223,6 +226,7 @@ static void runChecks() {
         icon:^UIImage *(NSString *) { return nil; }] autorelease];
     builder->_mesh_select_buttons = [NSMutableArray array];
     builder->_timeline = [[[GHOSTIOSTimeline alloc] initWithOverlay:builder.view] autorelease];
+    builder->_assets = [[[GHOSTIOSAssets alloc] initWithOverlay:builder.view] autorelease];
     [builder installNativeTopBar];
     [testWindow makeKeyAndVisible];
     [UIView setAnimationsEnabled:NO];
@@ -362,7 +366,7 @@ static void runChecks() {
     NSCAssert(item.pinnedTrailingGroup.barButtonItems.firstObject ==
               builder->_viewport_shading_button, @"Shading must stay on the trailing side");
     NSArray *panelButtons = @[builder->_scene_panels.hierarchyButton, builder->_timeline.button,
-                              builder->_scene_panels.inspectorButton];
+                              builder->_assets.button, builder->_scene_panels.inspectorButton];
     NSCAssert(item.trailingItemGroups.count == 1 &&
               [item.trailingItemGroups[0].barButtonItems isEqual:panelButtons] &&
               !builder->_viewport_shading_button.sharesBackground,
@@ -790,6 +794,7 @@ static void runChecks() {
         icon:^UIImage *(NSString *) { return nil; }] autorelease];
     phone->_mesh_select_buttons = [NSMutableArray array];
     phone->_timeline = [[[GHOSTIOSTimeline alloc] initWithOverlay:phone.view] autorelease];
+    phone->_assets = [[[GHOSTIOSAssets alloc] initWithOverlay:phone.view] autorelease];
     [phone installNativeTopBar];
     [phone setMeshSelectModeVisible:YES animated:NO];
     [phone setTopSettingsVisible:YES animated:NO];
@@ -908,6 +913,7 @@ int main(int argc, char **argv) {
                 str(root / "intern/ghost/intern/GHOST_IOSScenePanels.mm"),
                 str(root / "intern/ghost/intern/GHOST_IOSRedoStrip.mm"),
                 str(root / "intern/ghost/intern/GHOST_IOSTimeline.mm"),
+                str(root / "intern/ghost/intern/GHOST_IOSAssets.mm"),
                 str(root / "intern/ghost/intern/GHOST_IOSNumericInput.mm"),
                 str(source_file), "-o", str(executable),
             ], capture_output=True, text=True)

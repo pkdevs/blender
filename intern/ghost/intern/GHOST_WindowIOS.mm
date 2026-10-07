@@ -44,6 +44,7 @@ extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 #import "GHOST_IOSIcons.hh"
 #import "GHOST_IOSRedoStrip.hh"
 #import "GHOST_IOSTimeline.hh"
+#import "GHOST_IOSAssets.hh"
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
@@ -64,6 +65,7 @@ extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y);
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json();
 extern "C" char *WM_apple_ios_ui_panels_take_json();
 extern "C" char *WM_apple_ios_ui_timeline_take_json();
+extern "C" char *WM_apple_ios_ui_assets_take_json();
 extern "C" void WM_apple_ios_ui_toolbar_free_json(char *json);
 
 enum GHOSTIOSUICommand {
@@ -2257,6 +2259,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   GHOSTIOSScenePanels *_scene_panels;
   GHOSTIOSRedoStrip *_redo_strip;
   GHOSTIOSTimeline *_timeline;
+  GHOSTIOSAssets *_assets;
   BOOL _finger_tool_enabled;
   GHOSTIOSPencilMenu *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
@@ -2486,6 +2489,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_mode_items release];
   [_object_mode release];
   [_timeline release];
+  [_assets release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
@@ -3264,6 +3268,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     WM_apple_ios_ui_toolbar_free_json(timeline);
     [_timeline updateSnapshot:[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]];
   }
+  if (char *assets = WM_apple_ios_ui_assets_take_json()) {
+    NSData *data = [NSData dataWithBytes:assets length:strlen(assets)];
+    WM_apple_ios_ui_toolbar_free_json(assets);
+    [_assets updateSnapshot:[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]];
+  }
   char *json = WM_apple_ios_ui_panels_take_json();
   if (!json) {
     return;
@@ -3884,6 +3893,14 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   }
   else {
     redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
+  }
+  /* The asset pane floats at the bottom of the lane between the rails, above the quick actions,
+   * and the timeline above it. */
+  [_assets layoutInRect:CGRectMake(redo_left, panel_top, MAX(0, redo_right - redo_left),
+                                   MAX(0, redo_bottom - panel_top))];
+  if (_assets.visible) {
+    redo_bottom -= _assets.height + 8;
+    panel_bottom = MIN(panel_bottom, redo_bottom);
   }
   /* The timeline floats in the bottom lane between the rails, above the quick actions. */
   [_timeline layoutInRect:CGRectMake(redo_left, panel_top, MAX(0, redo_right - redo_left),
@@ -4960,7 +4977,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _top_bar_item.centerItemGroups = @[ [self topSettingsControlGroup] ];
   _top_bar_item.trailingItemGroups = @[
     [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:nil
-        items:@[_scene_panels.hierarchyButton, _timeline.button, _scene_panels.inspectorButton]],
+        items:@[_scene_panels.hierarchyButton, _timeline.button, _assets.button,
+                 _scene_panels.inspectorButton]],
   ];
   _viewport_shading_button.sharesBackground = NO;
   _top_bar_item.pinnedTrailingGroup = _viewport_shading_button.creatingFixedGroup;
@@ -5024,6 +5042,17 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _timeline.visibilityDidChange = ^{
     [timeline_host setNeedsLayout];
   };
+  _assets = [[GHOSTIOSAssets alloc] initWithOverlay:_overlay_view];
+  _assets.visibilityDidChange = ^{
+    [timeline_host setNeedsLayout];
+  };
+  /* Assets dragged out of the pane drop onto the viewport, which Blender draws in this view. */
+  __block GHOST_IOSViewController *assets_host = self;
+  _assets.clientPoint = ^CGPoint(CGPoint point) {
+    GHOST_WindowIOS *ghost_window = assets_host->_ghost_window;
+    return ghost_window ? ghost_window->scalePointToWindow(point) : point;
+  };
+  [self.view addInteraction:_assets.dropInteraction];
   [self installNativeTopBar];
   _pencil_menu = [[GHOSTIOSPencilMenu alloc] initWithFrame:_overlay_view.bounds];
   _pencil_menu.delegate = self;
