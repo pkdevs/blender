@@ -434,16 +434,16 @@ gpu::VertBuf *GSplatEvalCache::radiance_data_buf_get()
   return radiance_data_buf;
 }
 
-gpu::VertBuf *GSplatEvalCache::ellipses_comp_buf_get()
+gpu::VertBuf **GSplatEvalCache::ellipses_comp_buf_get()
 {
   DRW_vbo_request(nullptr, &ellipses_comp_buf);
-  return ellipses_comp_buf;
+  return &ellipses_comp_buf;
 }
 
-gpu::VertBuf *GSplatEvalCache::radiance_comp_buf_get()
+gpu::VertBuf **GSplatEvalCache::radiance_comp_buf_get()
 {
   DRW_vbo_request(nullptr, &radiance_comp_buf);
-  return radiance_comp_buf;
+  return &radiance_comp_buf;
 }
 
 gpu::UniformBuf *GSplatEvalCache::infos_buf_get()

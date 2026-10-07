@@ -107,9 +107,9 @@ gpu::Batch *draw_subpass_setup(PassT &sub_ps,
   sub_ps.bind_ubo("infos", is_empty ? module.dummy_ubo : cache.infos_buf_get());
   sub_ps.bind_texture("shape_data_tx", is_empty ? module.dummy_vbo : cache.shape_data_buf_get());
   sub_ps.bind_texture("ellipses_comp_tx",
-                      is_empty ? module.dummy_vbo : cache.ellipses_comp_buf_get());
+                      is_empty ? &module.dummy_vbo : cache.ellipses_comp_buf_get());
   sub_ps.bind_texture("radiance_comp_tx",
-                      is_empty ? module.dummy_vbo : cache.radiance_comp_buf_get());
+                      is_empty ? &module.dummy_vbo : cache.radiance_comp_buf_get());
 
   float2 viewport_size = DRW_context_get()->viewport_size_get();
   sub_ps.push_constant("viewport_size", viewport_size);
@@ -121,13 +121,16 @@ gpu::Batch *draw_subpass_setup(PassT &sub_ps,
       char sampler_name[32];
       drw_curves_get_attribute_sampler_name(gpu_attr.name, sampler_name);
 
+      gpu::VertBuf **attribute_buf = DRW_gsplat_evaluated_attribute(&pointcloud, gpu_attr.name);
       if (STREQ(gpu_attr.name, "radiance")) {
-        /* Radiance attribute is specifically for gsplat spherical harmonics output. */
+        /* If the "radiance" attribute is provided, we do not use spherical harmonics output,
+         * but instead use the provided attribute as a color directly. */
         sub_ps.bind_texture(sampler_name,
-                            is_empty ? module.dummy_vbo : cache.radiance_comp_buf_get());
+                            is_empty ?
+                                &module.dummy_vbo :
+                                (attribute_buf ? attribute_buf : cache.radiance_comp_buf_get()));
       }
       else {
-        gpu::VertBuf **attribute_buf = DRW_gsplat_evaluated_attribute(&pointcloud, gpu_attr.name);
         sub_ps.bind_texture(sampler_name,
                             (attribute_buf && !is_empty) ? attribute_buf : &module.dummy_vbo);
       }
