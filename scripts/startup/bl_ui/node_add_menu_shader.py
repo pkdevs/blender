@@ -210,6 +210,9 @@ class NODE_MT_shader_node_output_base(node_add_menu.NodeMenu):
             "ShaderNodeOutputWorld",
             poll=world_shader_nodes_poll(context),
         )
+        layout.separator()
+        self.node_operator(layout, "NodeEnableOutput")
+        self.node_operator_with_searchable_enum(context, layout, "GeometryNodeWarning", "warning_type")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -344,12 +347,12 @@ class NODE_MT_shader_node_shader_base(node_add_menu.NodeMenu):
         )
         self.node_operator(
             layout,
-            "ShaderNodeVolumeScatter",
+            "ShaderNodeVolumeCoefficients",
             poll=not object_light_shader_nodes_poll(context),
         )
         self.node_operator(
             layout,
-            "ShaderNodeVolumeCoefficients",
+            "ShaderNodeVolumeScatter",
             poll=not object_light_shader_nodes_poll(context),
         )
 

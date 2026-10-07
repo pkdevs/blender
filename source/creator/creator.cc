@@ -76,6 +76,8 @@
 
 #include "SEQ_modifier.hh"
 
+#include "COM_init.hh"
+
 #include "WM_api.hh"
 
 #include "RNA_define.hh"
@@ -496,6 +498,7 @@ int main(int argc,
 
   BKE_cpp_types_init();
   fn::multi_function::register_common_functions();
+  compositor::init();
   BKE_idtype_init();
   IDP_struct_type_init();
   BKE_modifier_init();
