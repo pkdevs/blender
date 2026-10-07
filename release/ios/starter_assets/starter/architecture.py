@@ -8,8 +8,9 @@ import math
 
 import bpy
 
-from .common import (RADIANS, generator_object, object_group, palette, rest_on_ground,
-                     simple_material)
+from .common import (RADIANS, angle_gizmo, count_gizmo, density_gizmo, generator_object,
+                     object_group, palette, resolution_gizmo, rest_on_ground, simple_material,
+                     size_gizmo)
 from .registry import asset
 
 CATALOG = "Objects/Architecture"
@@ -178,6 +179,12 @@ class _Builder:
         return generator_object(name, self.tree)
 
 
+def _arrow(b, value, position, direction, color="PRIMARY", style="ARROW"):
+    """A linear gizmo. `value` must come from a group input through +, -, * and / only."""
+    return b.tree.linear_gizmo(_raw(value), b.vec(*position), direction, color=color,
+                               style=style)
+
+
 def _input(tree, name, socket_type, default, **kwargs):
     return _F(tree, tree.input(name, socket_type, default, **kwargs))
 
@@ -282,6 +289,19 @@ def stairs():
          (across + half - e, at)])
     mesh = tree.switch(shape, "GEOMETRY", {"Straight": straight, "L-Shaped": l_shaped,
                                            "U-Shaped": u_shaped})
+
+    # Steps from a box at the top of the last step, rise from an arrow beside it: both move
+    # the top by what they add. Run from the far end of the first flight, width from its side.
+    top = steps * rise
+    end = tree.switch(shape, "VECTOR", {
+        "Straight": b.vec(0.0, (steps - 0.5) * run, top),
+        "L-Shaped": b.vec(half + (second - 0.5) * run, at + half, top),
+        "U-Shaped": b.vec(across, at - (second - 0.5) * run, top)})
+    tree.linear_gizmo(_raw(steps * rise), end, (0.0, 0.0, 1.0), color="SECONDARY", style="BOX")
+    tree.linear_gizmo(_raw(rise * steps), tree.vmath("ADD", end, (0.0, 0.0, 0.35)),
+                      (0.0, 0.0, 1.0), color="Z")
+    _arrow(b, run * first * 0.5, (0.0, first * run, 0.0), (0.0, 1.0, 0.0), color="Y")
+    _arrow(b, width * 0.5, (half, run * 0.5, rise), (1.0, 0.0, 0.0), color="X")
     return b.finish("Stairs", mesh)
 
 
@@ -325,6 +345,10 @@ def spiral_staircase():
         Height=_raw((steps - 1.0) * rise), Reverse=True).outputs[0]
     helix = tree.transform(helix, translation=b.vec(z=rise + RAIL_HEIGHT))
     rail = tree.join(tree.smooth(b.tube(helix, 0.025)), posts)
+    size_gizmo(tree, _raw(height), "Z", origin=b.vec(z=RAIL_HEIGHT), centered=False)
+    _arrow(b, radius, (radius, 0.0, rise), (1.0, 0.0, 0.0), color="X")
+    angle_gizmo(tree, _raw(turn), b.vec(z=height))
+    resolution_gizmo(tree, _raw(steps), b.vec(z=height * 0.5), per_turn=16.0)
     return b.finish("Spiral Staircase", tree.material(treads, material),
                     tree.material(column, frame_material),
                     b.when(railing, tree.material(rail, frame_material)))
@@ -406,6 +430,13 @@ def building():
             trim_material),
         tree.material(b.box(door_width, 0.24, door_height, 0.0, -half_d - 0.1,
                             door_height * 0.5), window_material))
+    # Floors from a box at the top corner (one floor per floor height dragged), floor height
+    # from an arrow at the other corner that grows every floor at once.
+    count_gizmo(tree, _raw(floors), _raw(story), "Z", origin=b.vec(-half_w, -half_d))
+    _arrow(b, story * floors, (half_w, -half_d, total), (0.0, 0.0, 1.0), color="Z")
+    size_gizmo(tree, _raw(width), "X", origin=b.vec(z=total * 0.5))
+    size_gizmo(tree, _raw(depth), "Y", origin=b.vec(z=total * 0.5))
+    _arrow(b, spacing, (spacing, -half_d - 0.3, story * 1.55), (1.0, 0.0, 0.0))
     return b.finish("Building", tree.material(body, material),
                     tree.material(tree.join(plinth, ledge, roof_box, bands), trim_material),
                     windows, entrance)
@@ -489,6 +520,18 @@ def wall():
                         tree.material(tree.join(piers(thickness - 0.012), trims),
                                       plaster_material))
     mesh = tree.switch(style, "GEOMETRY", {"Bricks": bricked, "Plain": plain})
+
+    size_gizmo(tree, _raw(length), "X", origin=b.vec(z=height * 0.5))
+    size_gizmo(tree, _raw(height), "Z", origin=b.vec(length * -0.35), centered=False)
+    size_gizmo(tree, _raw(thickness), "Y", origin=b.vec(length * -0.35, 0.0, height * 0.5))
+    density_gizmo(tree, _raw(openings), _raw(length), "-X", origin=b.vec(z=height * 0.5))
+    # On the first opening: its width from the side, its top, and its sill.
+    first = pitch * 0.5 - length * 0.5
+    front = thickness * -0.5
+    _arrow(b, opening_width * 0.5, (first + ow * 0.5, front, bottom + oh * 0.5),
+           (1.0, 0.0, 0.0), color="X")
+    _arrow(b, opening_height * 1.0, (first, front, top), (0.0, 0.0, 1.0), color="Z")
+    _arrow(b, sill * 1.0, (first, front, bottom), (0.0, 0.0, 1.0), color="SECONDARY")
     return b.finish("Wall", mesh)
 
 
@@ -527,6 +570,13 @@ def window():
                 (inner_w, depth * 0.7, bar)),
         b.box(width + 0.08, depth + 0.06, 0.035, 0.0, -0.03, -0.0175))
     glass = b.box(inner_w, 0.006, inner_h, z=height * 0.5)
+    size_gizmo(tree, _raw(width), "X", origin=b.vec(z=height * 0.5))
+    size_gizmo(tree, _raw(height), "Z", centered=False)
+    size_gizmo(tree, _raw(depth), "Y", origin=b.vec(width * 0.3, 0.0, f * 0.5))
+    density_gizmo(tree, _raw(panes_x), _raw(inner_w), "-X", origin=b.vec(z=height + 0.12))
+    density_gizmo(tree, _raw(panes_y), _raw(inner_h), "Z",
+                  origin=b.vec(-half_w - 0.12, 0.0, height * 0.5))
+    _arrow(b, frame * 1.0, (-half_w + f, 0.0, height * 0.5), (1.0, 0.0, 0.0))
     return b.finish("Window", tree.material(frame_mesh, material),
                     tree.material(glass, glass_material))
 
@@ -604,6 +654,8 @@ def door():
                                            "Glass": glazed})
     handles = tree.material(tree.smooth(_door_handles(b, width, t), angle=40 * RADIANS),
                             handle_material)
+    size_gizmo(tree, _raw(width), "X", origin=b.vec(fw * 0.5, 0.0, height * 0.5))
+    size_gizmo(tree, _raw(height), "Z", origin=b.vec(z=fw), centered=False)
     return b.finish("Door", leaf, tree.material(frame, frame_material), b.when(handle, handles))
 
 
@@ -661,6 +713,9 @@ def column():
         b.box(r * 2.4, r * 2.4, plate, z=plate * 0.5),
         b.box(r * 2.4, r * 2.4, plate, z=height - plate * 0.5))
     mesh = tree.switch(style, "GEOMETRY", {"Classical": classical, "Modern": modern})
+    size_gizmo(tree, _raw(height), "Z", centered=False)
+    _arrow(b, radius, (radius, 0.0, height * 0.5), (1.0, 0.0, 0.0), color="X")
+    resolution_gizmo(tree, _raw(flutes), b.vec(z=height * 0.3), per_turn=20.0)
     return b.finish("Column", tree.material(mesh, material))
 
 
@@ -735,6 +790,13 @@ def arch():
                    tree.material(plain, material))
     caps = tree.join(*[b.box(thickness + 0.1, depth + 0.1, impost, x * s, 0.0,
                              pier_top + impost * 0.5) for s in (-1.0, 1.0)])
+    # Span from the inside of a pier and thickness from its outside: either edge moves by what
+    # it's dragged once the arch is re-centered.
+    _arrow(b, span * 0.5, (inner, 0.0, spring * 0.5), (1.0, 0.0, 0.0))
+    _arrow(b, thickness * 1.0, (outer, 0.0, spring * 0.3), (1.0, 0.0, 0.0), color="X")
+    size_gizmo(tree, _raw(height), "Z", centered=False)
+    size_gizmo(tree, _raw(depth), "Y", origin=b.vec(-x, 0.0, spring * 0.5))
+    resolution_gizmo(tree, _raw(blocks), b.vec(z=spring), per_turn=12.0)
     return b.finish("Arch", ring, piers, tree.material(caps, material))
 
 
@@ -807,6 +869,11 @@ def roof():
             b.box(half_w * 2.0 - p * 2.0, half_d * 2.0 - p * 2.0, 0.02, z=slab_h + 0.01)),
             material))
     mesh = tree.switch(kind, "GEOMETRY", {"Gable": gable, "Hip": hip, "Flat": flat})
+    size_gizmo(tree, _raw(width), "X", origin=b.vec(overhang))
+    size_gizmo(tree, _raw(depth), "Y", origin=b.vec(0.0, overhang))
+    _arrow(b, overhang * 1.0, (-half_w, 0.0, 0.0), (-1.0, 0.0, 0.0))
+    tree.dial_gizmo(_raw(pitch * 1.0), b.vec(half_w, 0.0, rise * 0.5), (1.0, 0.0, 0.0),
+                    radius=0.8)
     return b.finish("Roof", mesh)
 
 
@@ -869,6 +936,13 @@ def fence():
                          for k in (0.3, 0.6, 0.9)])
     railed = tree.join(posts, boards)
     mesh = tree.switch(style, "GEOMETRY", {"Picket": picketed, "Rail": railed})
+    size_gizmo(tree, _raw(length), "X", origin=b.vec(z=height * 0.5))
+    size_gizmo(tree, _raw(height), "Z", origin=b.vec(length * -0.5), centered=False)
+    _arrow(b, spacing * 1.0, (length * -0.5 + spacing, -0.25, height * 0.5), (1.0, 0.0, 0.0),
+           color="SECONDARY")
+    # The third picket follows the finger.
+    _arrow(b, picket_spacing * 3.0, (picket_spacing * 3.0 - run * 0.5, front - 0.1, height * 0.8),
+           (1.0, 0.0, 0.0), color="SECONDARY")
     return b.finish("Fence", tree.material(mesh, material))
 
 
@@ -891,4 +965,7 @@ def ladder():
     gap = height / (rungs + 1.0)
     bars = b.boxes(rungs, (0.0, 0.0, (i + 1.0) * gap), (width + rail_w, 0.034, 0.034), kind="X")
     bars = tree.smooth(bars, angle=50 * RADIANS)
+    size_gizmo(tree, _raw(height), "Z", origin=b.vec(x), centered=False)
+    size_gizmo(tree, _raw(width), "X", origin=b.vec(rail_w * 0.5, 0.0, height * 0.5))
+    density_gizmo(tree, _raw(rungs), _raw(height), "Z", origin=b.vec(z=height * 0.5))
     return b.finish("Ladder", tree.material(tree.join(rails, bars), material))
