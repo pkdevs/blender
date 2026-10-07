@@ -45,13 +45,17 @@ Every asset must:
   - Rest on the ground: centered on X/Y, lowest point at Z = 0 (`rest_on_ground()`). Drops
     place an object's origin on the surface under the finger.
   - Use real-world sizes in meters.
+  - Have a gizmo for every size and count input, placed on the part it changes, so the object
+    can be reshaped in the viewport (the gizmo helpers in `starter/common.py`). A drag should
+    move the handle with the finger once the object is on the ground.
   - Stay under 50,000 triangles and 50 ms to re-evaluate at default inputs, so the iPad stays
     fluid.
 - **Materials:** be procedural (no image textures, except the Scanned catalog), work without UVs
   (object or generated coordinates), and expose their tweakable inputs through a shader node group
   in front of the Material Output, so they show in Properties.
 - **Modifiers:** be a Geometry Nodes group flagged as a modifier with a geometry input, that
-  visibly changes the object it's dropped on.
+  visibly changes the object it's dropped on. Its sizes and counts have gizmos too, placed on the
+  bounds of the object.
 
 `validate_starter_library.py` checks all of these that a script can check.
 
