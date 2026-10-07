@@ -105,7 +105,7 @@ class GreasePencilTest(api.Test):
 
     def supported_device_types(self):
         return [
-            "METAL", "VULKAN", "OPENGL"
+            "METAL", "METAL-RT", "VULKAN", "OPENGL"
         ]
 
     def use_background(self):
