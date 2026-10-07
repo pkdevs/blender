@@ -249,29 +249,6 @@ std::string ios_toolbar_json =
 std::string ios_json_escape(const std::string &value);
 
 
-bool ios_tool_id_starts_with(const char *tool_id, const char *prefix)
-{
-  return tool_id != nullptr && std::strncmp(tool_id, prefix, std::strlen(prefix)) == 0;
-}
-
-bool ios_tool_id_equals(const char *tool_id, const char *value)
-{
-  return tool_id != nullptr && std::strcmp(tool_id, value) == 0;
-}
-
-void ios_action_add_operator(bContext *C,
-                             std::vector<IOSActionItem> &items,
-                             const char *title,
-                             const char *op_name,
-                             const char *symbol,
-                             const char *prop_name = "",
-                             const char *prop_value = "")
-{
-  if (WM_operator_name_poll(C, op_name)) {
-    items.push_back({title, op_name, symbol, prop_name, prop_value, ""});
-  }
-}
-
 void ios_action_add_key(std::vector<IOSActionItem> &items,
                         const char *title,
                         const char *symbol,
@@ -300,18 +277,6 @@ wmOperator *ios_constraint_operator(wmWindow *win)
   return nullptr;
 }
 
-void ios_action_add_select_all(bContext *C,
-                               std::vector<IOSActionItem> &items,
-                               const eContextObjectMode mode,
-                               const char *title,
-                               const char *action,
-                               const char *symbol)
-{
-  const char *op_name = mode == CTX_MODE_EDIT_MESH ? "MESH_OT_select_all" :
-                                                   "OBJECT_OT_select_all";
-  ios_action_add_operator(C, items, title, op_name, symbol, "action", action);
-}
-
 std::vector<IOSActionItem> ios_action_items_for_tool(bContext *C,
                                                      const eContextObjectMode mode,
                                                      const char *active_tool_id)
@@ -329,70 +294,8 @@ std::vector<IOSActionItem> ios_action_items_for_tool(bContext *C,
     return items;
   }
 
-  if (ios_tool_id_starts_with(active_tool_id, "builtin.select")) {
-    ios_action_add_select_all(C, items, mode, "All", "SELECT", "checkmark.circle");
-    ios_action_add_select_all(C, items, mode, "None", "DESELECT", "circle");
-    ios_action_add_select_all(C, items, mode, "Invert", "INVERT", "arrow.up.arrow.down.circle");
-    ios_action_add_operator(C, items, "X-Ray", "VIEW3D_OT_toggle_xray", "square.2.layers.3d");
-
-    if (mode == CTX_MODE_EDIT_MESH) {
-      ios_action_add_operator(C, items, "More", "MESH_OT_select_more", "plus.circle");
-      ios_action_add_operator(C, items, "Less", "MESH_OT_select_less", "minus.circle");
-      ios_action_add_operator(C, items, "Linked", "MESH_OT_select_linked", "link.circle");
-      ios_action_add_operator(C, items, "Select Ring", "MESH_OT_edgering_select", "circle.hexagongrid");
-    }
-    return items;
-  }
-
-  if (ios_tool_id_equals(active_tool_id, "builtin.move") ||
-      ios_tool_id_equals(active_tool_id, "builtin.rotate") ||
-      ios_tool_id_equals(active_tool_id, "builtin.scale") ||
-      ios_tool_id_equals(active_tool_id, "builtin.transform"))
-  {
-    ios_action_add_operator(C, items, "Snap", "VIEW3D_OT_snap_selected_to_grid", "grid");
-    ios_action_add_operator(C, items, "Origin", "OBJECT_OT_origin_set", "scope");
-    ios_action_add_operator(C, items, "Apply", "OBJECT_OT_transform_apply", "checkmark");
-    ios_action_add_operator(C, items, "Clear", "OBJECT_OT_transforms_to_deltas", "arrow.counterclockwise");
-    return items;
-  }
-
-  if (ios_tool_id_equals(active_tool_id, "builtin.measure")) {
-    ios_action_add_operator(C, items, "Frame", "VIEW3D_OT_view_selected", "viewfinder");
-    ios_action_add_operator(C, items, "X-Ray", "VIEW3D_OT_toggle_xray", "square.2.layers.3d");
-    return items;
-  }
-
-  if (mode == CTX_MODE_EDIT_MESH &&
-      (ios_tool_id_equals(active_tool_id, "builtin.extrude") ||
-       ios_tool_id_equals(active_tool_id, "builtin.extrude_manifold") ||
-       ios_tool_id_equals(active_tool_id, "builtin.extrude_along_normals") ||
-       ios_tool_id_equals(active_tool_id, "builtin.extrude_individual")))
-  {
-    ios_action_add_operator(C, items, "Extrude", "VIEW3D_OT_edit_mesh_extrude_move_normal", "arrow.up.square");
-    ios_action_add_operator(C, items, "Inset", "MESH_OT_inset", "square.inset.filled");
-    ios_action_add_operator(C, items, "Bevel", "MESH_OT_bevel", "square.on.circle");
-    ios_action_add_operator(C, items, "Merge", "MESH_OT_merge", "arrow.triangle.merge");
-    return items;
-  }
-
-  /* Undo lives in the top bar and framing in the navigation gizmo, so brush modes only get
-   * whole-mesh operations that otherwise need a menu. */
-  if (mode == CTX_MODE_SCULPT) {
-    ios_action_add_operator(
-        C, items, "Invert Mask", "PAINT_OT_mask_flood_fill", "circle.lefthalf.filled", "mode", "INVERT");
-    ios_action_add_operator(
-        C, items, "Clear Mask", "PAINT_OT_mask_flood_fill", "circle.dashed", "mode", "VALUE");
-    ios_action_add_operator(
-        C, items, "Reveal", "PAINT_OT_hide_show_all", "eye", "action", "SHOW");
-    ios_action_add_operator(C,
-                            items,
-                            "Symmetrize",
-                            "SCULPT_OT_symmetrize",
-                            "arrow.left.and.right.righttriangle.left.righttriangle.right");
-    ios_action_add_operator(C, items, "Remesh", "OBJECT_OT_voxel_remesh", "square.grid.3x3");
-    return items;
-  }
-
+  /* Everything else comes from `bl_ui.native_actions`, queried with the toolbar snapshot. */
+  UNUSED_VARS(mode, active_tool_id);
   return items;
 }
 
@@ -912,6 +815,16 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     return;
   }
 #ifdef WITH_PYTHON
+  if (command.setting == "native_action") {
+    /* The button may predate a context change; `run` checks the action still applies. */
+    const bToolRef *tool = WM_toolsystem_ref_from_context(C);
+    const char *imports[] = {"bpy", "bl_ui", nullptr};
+    const std::string expression = "bl_ui.native_actions.run(bpy.context, \"" +
+                                   ios_json_escape(command.value) + "\", \"" +
+                                   ios_json_escape(tool ? tool->idname : "") + "\")";
+    BPY_run_string_eval(C, imports, expression.c_str());
+    return;
+  }
   if (command.setting == "native_panel_edit") {
     ios_panels_next_snapshot = {};
     const char *imports[] = {"bpy", "bl_ui", nullptr};
@@ -1674,6 +1587,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   const char *active_tool_id = active_tool ? active_tool->idname : "builtin.select_box";
   std::string tools_json = "[]";
   std::string panels_json = "null";
+  std::string quick_actions_json;
 #ifdef WITH_PYTHON
   if (has_view3d_context) {
     const char *imports[] = {"bpy", "bl_ui", nullptr};
@@ -1686,6 +1600,16 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
     {
       tools_json = result;
       MEM_delete(result);
+    }
+    if (!ios_constraint_operator(CTX_wm_window(C))) {
+      /* Quick actions for the mode, tool and selection, chosen by `bl_ui.native_actions`. */
+      const std::string expression = "bl_ui.native_actions.actions_json(bpy.context, \"" +
+                                     ios_json_escape(active_tool_id ? active_tool_id : "") + "\")";
+      result = nullptr;
+      if (BPY_run_string_as_string(C, imports, expression.c_str(), nullptr, &result)) {
+        quick_actions_json = result;
+        MEM_delete(result);
+      }
     }
     const auto now = std::chrono::steady_clock::now();
     if (ios_panels_visible && now >= ios_panels_next_snapshot) {
@@ -1805,6 +1729,10 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += ios_brushes_json;
   json += ",\"panels\":";
   json += panels_json;
+  if (actions.empty() && !quick_actions_json.empty()) {
+    json += ",\"actions\":" + quick_actions_json + "}";
+    return json;
+  }
   json += ",\"actions\":[";
 
   bool needs_comma = false;
