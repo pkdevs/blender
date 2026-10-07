@@ -1049,6 +1049,8 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
 
   for (bNode &node : ntree->nodes) {
     if (is_light_accumulation_aov(node)) {
+      /* Intercept the AOV input, and accumulate it inside the Light Zone through a Zone IO
+       * variable and a Mix (Add) node. */
       bNodeLink *aov_link = ntree_shader_node_find_input(&node, "Color")->link;
       bool color_aov = aov_link;
       if (!color_aov) {
