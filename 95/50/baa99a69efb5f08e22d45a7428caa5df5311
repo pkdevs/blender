@@ -1,2 +1,3 @@
 Referenced by commit bcb67bec44c797b68e9c445ef73115524fe8782e, Fix: error accessing UV_OT_unwrap.weight_group default value
 Referenced by commit a7adafb8fa6d9757c99e407403a9c5811d01bf8a, Fix #155106: blender_theme_as_c.py uses wrong header includes
+Referenced by issue #164821, Action strip extrapolation no longer works across actions that lack the relevant channels
