@@ -17,10 +17,12 @@ enum {
   GHOSTIOSAssetAdd = 4,
 };
 
-static const CGFloat kAssetsHeight = 212.0;
-static const CGFloat kAssetsCompactHeight = 184.0;
+static const CGFloat kAssetsHeight = 250.0;
+static const CGFloat kAssetsCompactHeight = 222.0;
 static const CGFloat kAssetsMaxWidth = 1600.0;
 static const CGFloat kAssetTile = 96.0;
+/* The catalog the pane opens on: the Starter library's basic shapes. */
+static NSString *const kAssetsStartCatalog = @"Objects/Primitives";
 
 /* Data-block types Blender publishes, with their Blender icon and a readable plural. */
 static NSArray<NSArray<NSString *> *> *blenderAssetTypes()
@@ -139,6 +141,9 @@ static NSString *blenderAssetAddTitle(NSString *type)
   UIButton *_libraryButton;
   UIButton *_filterButton;
   UISearchTextField *_search;
+  UIScrollView *_chips;
+  UIStackView *_chipStack;
+  NSArray<NSString *> *_categories; /* Catalog paths of the chips, in browsing order. */
   UICollectionView *_grid;
   UILabel *_emptyLabel;
   UIDropInteraction *_dropInteraction;
@@ -147,6 +152,9 @@ static NSString *blenderAssetAddTitle(NSString *type)
   NSString *_library; /* nil: all libraries. */
   NSString *_type;    /* nil: all types. */
   NSString *_catalog; /* nil: all catalogs; otherwise a catalog path and its children. */
+  /* A catalog was picked, rather than starting on the primitives. */
+  BOOL _catalogChosen;
+  NSString *_shownCatalog; /* The catalog the grid shows, picked or not. */
   NSString *_mode;
   BOOL _typeChosen; /* The type was picked in the menu, rather than following the mode. */
   NSCache<NSString *, UIImage *> *_thumbnails;
@@ -209,6 +217,18 @@ static NSString *blenderAssetAddTitle(NSString *type)
     header.spacing = 8;
     header.translatesAutoresizingMaskIntoConstraints = NO;
 
+    /* Catalogs as a row of chips, so a library's categories are one tap away. */
+    _chipStack = [[UIStackView alloc] init];
+    _chipStack.axis = UILayoutConstraintAxisHorizontal;
+    _chipStack.spacing = 6;
+    _chipStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _chips = [[UIScrollView alloc] init];
+    _chips.translatesAutoresizingMaskIntoConstraints = NO;
+    _chips.showsHorizontalScrollIndicator = NO;
+    _chips.alwaysBounceHorizontal = YES;
+    _chips.accessibilityIdentifier = @"blender.assets.catalogs";
+    [_chips addSubview:_chipStack];
+
     UICollectionViewFlowLayout *layout = [[[UICollectionViewFlowLayout alloc] init] autorelease];
     layout.scrollDirection = UICollectionViewScrollDirectionHorizontal;
     layout.itemSize = CGSizeMake(kAssetTile + 8, kAssetTile + 30);
@@ -234,6 +254,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
     _grid.backgroundView = _emptyLabel;
 
     [_panel.contentView addSubview:header];
+    [_panel.contentView addSubview:_chips];
     [_panel.contentView addSubview:_grid];
     [NSLayoutConstraint activateConstraints:@[
       [header.leadingAnchor constraintEqualToAnchor:_panel.contentView.leadingAnchor constant:14],
@@ -242,7 +263,18 @@ static NSString *blenderAssetAddTitle(NSString *type)
       [header.heightAnchor constraintEqualToConstant:40],
       [_grid.leadingAnchor constraintEqualToAnchor:_panel.contentView.leadingAnchor],
       [_grid.trailingAnchor constraintEqualToAnchor:_panel.contentView.trailingAnchor],
-      [_grid.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:10],
+      [_chips.leadingAnchor constraintEqualToAnchor:_panel.contentView.leadingAnchor],
+      [_chips.trailingAnchor constraintEqualToAnchor:_panel.contentView.trailingAnchor],
+      [_chips.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:8],
+      [_chips.heightAnchor constraintEqualToConstant:32],
+      [_chipStack.leadingAnchor constraintEqualToAnchor:_chips.contentLayoutGuide.leadingAnchor
+                                               constant:14],
+      [_chipStack.trailingAnchor constraintEqualToAnchor:_chips.contentLayoutGuide.trailingAnchor
+                                                constant:-14],
+      [_chipStack.topAnchor constraintEqualToAnchor:_chips.contentLayoutGuide.topAnchor],
+      [_chipStack.bottomAnchor constraintEqualToAnchor:_chips.contentLayoutGuide.bottomAnchor],
+      [_chipStack.heightAnchor constraintEqualToAnchor:_chips.frameLayoutGuide.heightAnchor],
+      [_grid.topAnchor constraintEqualToAnchor:_chips.bottomAnchor constant:6],
       [_grid.bottomAnchor constraintEqualToAnchor:_panel.contentView.bottomAnchor constant:-8],
     ]];
 
@@ -262,6 +294,9 @@ static NSString *blenderAssetAddTitle(NSString *type)
   [_libraryButton release];
   [_filterButton release];
   [_search release];
+  [_chips release];
+  [_chipStack release];
+  [_categories release];
   [_grid release];
   [_emptyLabel release];
   [_dropInteraction release];
@@ -270,6 +305,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
   [_library release];
   [_type release];
   [_catalog release];
+  [_shownCatalog release];
   [_mode release];
   [_thumbnails release];
   [_clientPoint release];
@@ -357,6 +393,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
   /* Catalogs belong to a library; keep only one that still exists there. */
   [_catalog release];
   _catalog = nil;
+  _catalogChosen = NO;
   [self updateMenus];
   [self applyFilters];
 }
@@ -373,18 +410,26 @@ static NSString *blenderAssetAddTitle(NSString *type)
   }
   NSString *type = [mode isEqual:@"objectmode"] ? @"Object" : nil;
   if (type != _type && ![type isEqual:_type]) {
-    [self setType:type catalog:_catalog];
+    [self setType:type];
   }
 }
 
-- (void)setType:(NSString *)type catalog:(NSString *)catalog
+/* Another type keeps the picked catalog while it has assets of that type. */
+- (void)setType:(NSString *)type
 {
   [_type release];
   _type = [type copy];
-  [_catalog release];
-  _catalog = [catalog copy];
   [self updateMenus];
   [self applyFilters];
+}
+
+/* Picks a type and a catalog; a nil catalog shows them all. */
+- (void)setType:(NSString *)type catalog:(NSString *)catalog
+{
+  [_catalog release];
+  _catalog = [catalog copy];
+  _catalogChosen = YES;
+  [self setType:type];
 }
 
 - (void)updateMenus
@@ -419,7 +464,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
   UIAction *any = [UIAction actionWithTitle:@"All Types" image:nil identifier:nil
                                     handler:^(__kindof UIAction *) {
                                       owner->_typeChosen = YES;
-                                      [owner setType:nil catalog:owner->_catalog];
+                                      [owner setType:nil];
                                     }];
   any.state = _type ? UIMenuElementStateOff : UIMenuElementStateOn;
   [types addObject:any];
@@ -445,7 +490,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
     UIAction *action = [UIAction actionWithTitle:entry[2] image:GHOSTIOSBlenderIcon(entry[1], NO)
                                       identifier:nil handler:^(__kindof UIAction *) {
                                         owner->_typeChosen = YES;
-                                        [owner setType:type catalog:owner->_catalog];
+                                        [owner setType:type];
                                       }];
     action.state = [_type isEqual:type] ? UIMenuElementStateOn : UIMenuElementStateOff;
     [types addObject:action];
@@ -455,7 +500,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
                                            handler:^(__kindof UIAction *) {
                                              [owner setType:owner->_type catalog:nil];
                                            }];
-  anyCatalog.state = _catalog ? UIMenuElementStateOff : UIMenuElementStateOn;
+  anyCatalog.state = _shownCatalog ? UIMenuElementStateOff : UIMenuElementStateOn;
   [catalogItems addObject:anyCatalog];
   NSArray *sorted = [catalogs.array sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
   for (NSString *path in sorted) {
@@ -466,7 +511,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
                                          handler:^(__kindof UIAction *) {
                                            [owner setType:owner->_type catalog:path];
                                          }];
-    action.state = [_catalog isEqual:path] ? UIMenuElementStateOn : UIMenuElementStateOff;
+    action.state = [_shownCatalog isEqual:path] ? UIMenuElementStateOn : UIMenuElementStateOff;
     [catalogItems addObject:action];
   }
   UIMenu *catalogMenu = [UIMenu menuWithTitle:@"Catalog" image:[UIImage systemImageNamed:@"folder"]
@@ -485,7 +530,7 @@ static NSString *blenderAssetAddTitle(NSString *type)
     }
   }
   UIButtonConfiguration *filter = _filterButton.configuration;
-  filter.title = _catalog ? _catalog.lastPathComponent : typeTitle;
+  filter.title = typeTitle;
   _filterButton.configuration = filter;
 }
 
@@ -496,12 +541,6 @@ static NSString *blenderAssetAddTitle(NSString *type)
   }
   if (_type && ![item[@"type"] isEqual:_type]) {
     return NO;
-  }
-  if (_catalog) {
-    NSString *path = item[@"catalog"];
-    if (![path isEqual:_catalog] && ![path hasPrefix:[_catalog stringByAppendingString:@"/"]]) {
-      return NO;
-    }
   }
   if (terms.count == 0) {
     return YES;
@@ -526,6 +565,69 @@ static NSString *blenderAssetAddTitle(NSString *type)
   return YES;
 }
 
+- (UIButton *)chipWithTitle:(NSString *)title catalog:(NSString *)catalog
+{
+  __block GHOSTIOSAssets *owner = self;
+  UIButton *chip = [UIButton
+      buttonWithConfiguration:[UIButtonConfiguration glassButtonConfiguration]
+                primaryAction:[UIAction actionWithTitle:title image:nil identifier:nil
+                                                handler:^(__kindof UIAction *) {
+                                                  [owner setType:owner->_type catalog:catalog];
+                                                }]];
+  chip.accessibilityLabel = title;
+  chip.accessibilityIdentifier = [@"blender.assets.catalog." stringByAppendingString:title];
+  return chip;
+}
+
+- (void)updateCategories:(NSArray<NSString *> *)categories
+{
+  if ([categories isEqual:_categories]) {
+    return;
+  }
+  [_categories release];
+  _categories = [categories copy];
+  for (UIView *chip in _chipStack.arrangedSubviews) {
+    [chip removeFromSuperview];
+  }
+  [_chipStack addArrangedSubview:[self chipWithTitle:@"All" catalog:nil]];
+  for (NSString *path in categories) {
+    [_chipStack addArrangedSubview:[self chipWithTitle:path.lastPathComponent catalog:path]];
+  }
+  [self updateChips];
+}
+
+- (void)showCatalog:(NSString *)catalog
+{
+  if (catalog == _shownCatalog || [catalog isEqual:_shownCatalog]) {
+    return;
+  }
+  [_shownCatalog release];
+  _shownCatalog = [catalog copy];
+  [self updateChips];
+  [self updateMenus];
+}
+
+- (void)updateChips
+{
+  NSArray *paths = [@[ @"" ] arrayByAddingObjectsFromArray:_categories ?: @[]];
+  [_chipStack.arrangedSubviews enumerateObjectsUsingBlock:^(UIButton *chip, NSUInteger i, BOOL *) {
+    const BOOL shown = i < paths.count && [paths[i] isEqual:_shownCatalog ?: @""];
+    UIButtonConfiguration *configuration =
+        shown ? [UIButtonConfiguration prominentGlassButtonConfiguration] :
+                [UIButtonConfiguration glassButtonConfiguration];
+    configuration.title = chip.accessibilityLabel;
+    configuration.buttonSize = UIButtonConfigurationSizeSmall;
+    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    chip.configuration = configuration;
+    chip.selected = shown;
+    chip.accessibilityTraits = shown ? UIAccessibilityTraitButton | UIAccessibilityTraitSelected :
+                                       UIAccessibilityTraitButton;
+    if (shown) {
+      [_chips scrollRectToVisible:[chip convertRect:chip.bounds toView:_chips] animated:YES];
+    }
+  }];
+}
+
 - (void)applyFilters
 {
   NSMutableArray *terms = [NSMutableArray array];
@@ -536,9 +638,48 @@ static NSString *blenderAssetAddTitle(NSString *type)
       [terms addObject:term];
     }
   }
-  NSMutableArray *filtered = [NSMutableArray array];
+  NSMutableArray *candidates = [NSMutableArray array];
   for (NSDictionary *item in _items) {
     if ([self item:item matches:terms]) {
+      [candidates addObject:item];
+    }
+  }
+  NSMutableSet *paths = [NSMutableSet set];
+  for (NSDictionary *item in candidates) {
+    if ([item[@"catalog"] length]) {
+      [paths addObject:item[@"catalog"]];
+    }
+  }
+  [self updateCategories:[paths.allObjects
+                             sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+                               return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];
+                             }]];
+
+  /* Start on the primitives when there are some. Searching looks through every catalog unless
+   * one was picked. */
+  NSString *catalog = _catalog;
+  if (_catalogChosen && catalog && ![paths containsObject:catalog]) {
+    BOOL parent = NO;
+    for (NSString *path in paths) {
+      parent = parent || [path hasPrefix:[catalog stringByAppendingString:@"/"]];
+    }
+    if (!parent) {
+      /* Nothing of this type or library there any more. */
+      _catalogChosen = NO;
+    }
+  }
+  if (!_catalogChosen) {
+    catalog = terms.count == 0 && [paths containsObject:kAssetsStartCatalog] ? kAssetsStartCatalog :
+                                                                               nil;
+  }
+  [self showCatalog:catalog.length ? catalog : nil];
+
+  NSMutableArray *filtered = [NSMutableArray array];
+  for (NSDictionary *item in candidates) {
+    NSString *path = item[@"catalog"];
+    if (!_shownCatalog || [path isEqual:_shownCatalog] ||
+        [path hasPrefix:[_shownCatalog stringByAppendingString:@"/"]])
+    {
       [filtered addObject:item];
     }
   }
