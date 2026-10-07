@@ -12,6 +12,7 @@
 #include "RNA_enum_types.hh"
 
 #include "DNA_screen_types.h"
+#include "DNA_space_types.h"
 
 #include "UI_interface.hh"
 #include "UI_interface_c.hh"
@@ -2645,6 +2646,20 @@ void RNA_api_ui_layout(StructRNA *srna)
   RNA_def_int(func, "rows", 6, 1, INT_MAX, "", "Maximum number of items to show", 1, INT_MAX);
   parm = RNA_def_int(func, "found", 0, 0, INT_MAX, "", "Number of items drawn", 0, INT_MAX);
   RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "template_recent_file", "template_recent_file");
+  RNA_def_function_ui_description(func, "Show a recently saved .blend file item");
+  parm = RNA_def_string(
+      func,
+      "operator",
+      nullptr,
+      0,
+      "",
+      "Identifier of the operator to call, taking a string \"filepath\" property");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string_file_path(
+      func, "filepath", nullptr, FILE_MAX, "", "Path of the .blend file to show a preview of");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna, "template_file_select_path", "template_file_select_path");
   RNA_def_function_ui_description(func,

@@ -2835,6 +2835,7 @@ void template_colormanaged_view_settings(Layout *layout,
                                          StringRefNull propname);
 
 int template_recent_files(Layout *layout, int rows);
+void template_recent_file(Layout *layout, StringRefNull opname, StringRefNull filepath);
 void template_file_select_path(Layout *layout, bContext *C, FileSelectParams *params);
 
 void template_asset_shelf_popover(

@@ -49,6 +49,9 @@ PROJECT_SCHEMA_VERSION = 1
 # Directory and file name where the project is read/written to disk.
 PROJECT_DIR = ".blender_project"
 PROJECT_CONFIG = "project.toml"
+PROJECT_RECENT_FILES_CONFIG = "recent_files.toml"
+
+PROJECT_RECENT_FILES_MAX = 10
 
 PROJECT_DEFAULT_NAME = "Untitled Project"
 ASSET_LIBRARY_DEFAULT_NAME = "Untitled Asset Library"
@@ -396,6 +399,7 @@ def find_and_load_project_for_blend_path(context, blend_path, report=None):
     if bpy.data.project is not None and os.path.normpath(root_path) == os.path.normpath(bpy.data.project.root_path):
         # We already have this project loaded, and we don't want to obliterate
         # local unsaved changes if auto-save isn't turned on.
+        add_recent_project_file(root_path, blend_path)
         return
 
     bpy.data.project_clear()
@@ -405,6 +409,8 @@ def find_and_load_project_for_blend_path(context, blend_path, report=None):
     bpy.data.project_init(config.name, str(root_path))
     config.populate_real(bpy.data.project)
     bpy.data.project.is_dirty = False
+
+    add_recent_project_file(root_path, blend_path)
 
 
 def find_project_root_from_blend_file_path(blend_path):
@@ -418,6 +424,72 @@ def find_project_root_from_blend_file_path(blend_path):
         if parent.joinpath(PROJECT_DIR).is_dir():
             return parent
     return None
+
+
+def read_recent_project_files(root_path):
+    """
+    Return the list of recently opened blend files for the project at
+    `root_path`, most recent first, as paths relative to the project root.
+
+    Returns an empty list if there is no recent-files config, or if it can't
+    be read/parsed.
+    """
+    import tomllib
+    from pathlib import Path
+
+    config_path = Path(root_path).joinpath(PROJECT_DIR, PROJECT_RECENT_FILES_CONFIG)
+    try:
+        with open(config_path, "rb") as f:
+            config_dict = tomllib.load(f)
+    except (FileNotFoundError, PermissionError, tomllib.TOMLDecodeError):
+        return []
+
+    files = config_dict.get("files")
+    if not isinstance(files, list):
+        return []
+    return [path for path in files if isinstance(path, str)]
+
+
+def write_recent_project_files(root_path, files):
+    """Write `files` (paths relative to the project root) as the project's recent-files list."""
+    import tomli_w
+    from pathlib import Path
+
+    root_path = Path(root_path)
+    config_dir_path = root_path.joinpath(PROJECT_DIR)
+    config_dir_path.mkdir(parents=True, exist_ok=True)
+
+    config_path = config_dir_path.joinpath(PROJECT_RECENT_FILES_CONFIG)
+    with config_path.open(mode='wt') as f:
+        f.write(tomli_w.dumps({"files": files}))
+
+
+def add_recent_project_file(root_path, blend_path):
+    """
+    Record `blend_path` as the most recently opened file of the project at
+    `root_path`.
+
+    Errors are logged but not raised, since failing to update the
+    recent-files list should never prevent opening or saving a blend file.
+    """
+    from pathlib import Path
+
+    root_path = Path(root_path)
+    try:
+        rel_path = Path(blend_path).relative_to(root_path).as_posix()
+    except ValueError:
+        return
+
+    files = read_recent_project_files(root_path)
+    if rel_path in files:
+        files.remove(rel_path)
+    files.insert(0, rel_path)
+    del files[PROJECT_RECENT_FILES_MAX:]
+
+    try:
+        write_recent_project_files(root_path, files)
+    except OSError as e:
+        logger.warning("Could not update recent files list for project at '{:s}': {:s}".format(str(root_path), str(e)))
 
 
 def read_project_toml_config(root_path, report=None):
@@ -573,6 +645,8 @@ class PROJECT_OT_NewProject(Operator):
         except ProjectSaveException:
             # Reporting is handled by `save_project()` call in the `try` block.
             return {'CANCELLED'}
+
+        add_recent_project_file(bpy.data.project.root_path, bpy.data.filepath)
 
         return {'FINISHED'}
 

@@ -594,6 +594,27 @@ class TOPBAR_MT_edit(Menu):
         layout.operator("screen.userpref_show", text="Preferences...", icon='PREFERENCES')
 
 
+class TOPBAR_MT_project_open_recent(Menu):
+    bl_label = "Open Recent"
+
+    def draw(self, _context):
+        from pathlib import Path
+        from bl_operators.project import read_recent_project_files
+
+        layout = self.layout
+
+        project = bpy.data.project
+        recent_files = read_recent_project_files(project.root_path) if project else []
+
+        if not recent_files:
+            layout.label(text="No Recent Files", translate=False)
+            return
+
+        root_path = Path(project.root_path)
+        for rel_path in recent_files:
+            layout.template_recent_file("project.open_blend_in_project", str(root_path.joinpath(rel_path)))
+
+
 class TOPBAR_MT_project(Menu):
     bl_label = "Project"
 
@@ -914,6 +935,7 @@ classes = (
     TOPBAR_MT_file_previews,
     TOPBAR_MT_edit,
     TOPBAR_MT_render,
+    TOPBAR_MT_project_open_recent,
     TOPBAR_MT_project,
     TOPBAR_MT_window,
     TOPBAR_MT_help,

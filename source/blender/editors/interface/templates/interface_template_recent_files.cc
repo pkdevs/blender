@@ -139,6 +139,37 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
   }
 }
 
+static PointerRNA template_recent_file_ex(Layout *layout,
+                                          StringRefNull opname,
+                                          StringRefNull filepath,
+                                          wm::OpCallContext context)
+{
+  const char *filepath_c = filepath.c_str();
+  const char *filename = BLI_path_basename(filepath_c);
+
+  PointerRNA ptr = layout->op(opname,
+                              filename,
+                              BKE_blendfile_extension_check(filename) ? ICON_FILE_BLEND :
+                                                                        ICON_FILE_BACKUP,
+                              context,
+                              UI_ITEM_NONE);
+  if (ptr.data == nullptr) {
+    return ptr;
+  }
+  RNA_string_set(&ptr, "filepath", filepath_c);
+
+  Block *block = layout->block();
+  Button *but = button_last(block);
+  button_func_tooltip_custom_set(
+      but, template_recent_files_tooltip_func, BLI_strdup(filepath_c), MEM_delete_void);
+  return ptr;
+}
+
+void template_recent_file(Layout *layout, StringRefNull opname, StringRefNull filepath)
+{
+  template_recent_file_ex(layout, opname, filepath, wm::OpCallContext::ExecDefault);
+}
+
 int template_recent_files(Layout *layout, int rows)
 {
   int i = 0;
@@ -147,28 +178,19 @@ int template_recent_files(Layout *layout, int rows)
       break;
     }
 
-    const char *filename = BLI_path_basename(recent.filepath);
-    PointerRNA ptr = layout->op("WM_OT_open_mainfile",
-                                filename,
-                                BKE_blendfile_extension_check(filename) ? ICON_FILE_BLEND :
-                                                                          ICON_FILE_BACKUP,
-                                wm::OpCallContext::InvokeDefault,
-                                UI_ITEM_NONE);
-    RNA_string_set(&ptr, "filepath", recent.filepath);
-    RNA_boolean_set(&ptr, "display_file_selector", false);
-    RNA_boolean_set(&ptr,
-                    "use_scripts",
-                    BKE_autoexec_default_trust_source(recent.filepath,
-                                                      {
-                                                          .skip_overrides = false,
-                                                          .canonicalize = true,
-                                                          .strip_filename = true,
-                                                      }));
-
-    Block *block = layout->block();
-    Button *but = button_last(block);
-    button_func_tooltip_custom_set(
-        but, template_recent_files_tooltip_func, BLI_strdup(recent.filepath), MEM_delete_void);
+    PointerRNA ptr = template_recent_file_ex(
+        layout, "WM_OT_open_mainfile", recent.filepath, wm::OpCallContext::InvokeDefault);
+    if (ptr.data) {
+      RNA_boolean_set(&ptr, "display_file_selector", false);
+      RNA_boolean_set(&ptr,
+                      "use_scripts",
+                      BKE_autoexec_default_trust_source(recent.filepath,
+                                                        {
+                                                            .skip_overrides = false,
+                                                            .canonicalize = true,
+                                                            .strip_filename = true,
+                                                        }));
+    }
     i++;
   }
 

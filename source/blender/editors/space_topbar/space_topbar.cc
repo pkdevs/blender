@@ -16,6 +16,7 @@
 
 #include "BLT_translation.hh"
 
+#include "BKE_blender_project.hh"
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
 #include "BKE_undo_system.hh"
@@ -188,9 +189,10 @@ static void topbar_header_region_message_subscribe(const wmRegionMessageSubscrib
       mbus, &workspace->id, workspace, WorkSpace, tools, &msg_sub_value_region_tag_redraw);
 }
 
-static void recent_files_menu_draw(const bContext *C, Menu *menu)
+static void recent_files_global_draw(const bContext *C,
+                                     ui::Layout &layout,
+                                     const StringRefNull menu_idname)
 {
-  ui::Layout &layout = *menu->layout;
   layout.operator_context_set(wm::OpCallContext::InvokeDefault);
   const bool is_menu_search = CTX_data_int_get(C, "is_menu_search").value_or(false);
   if (is_menu_search) {
@@ -202,13 +204,35 @@ static void recent_files_menu_draw(const bContext *C, Menu *menu)
       layout.separator();
       PointerRNA search_props = layout.op(
           "WM_OT_search_single_menu", IFACE_("More..."), ICON_VIEWZOOM);
-      RNA_string_set(&search_props, "menu_idname", "TOPBAR_MT_file_open_recent");
+      RNA_string_set(&search_props, "menu_idname", menu_idname.c_str());
       layout.op("WM_OT_clear_recent_files", IFACE_("Clear Recent Files List..."), ICON_TRASH);
     }
     else {
       layout.label(IFACE_("No Recent Files"), ICON_NONE);
     }
   }
+}
+
+static void recent_files_menu_draw(const bContext *C, Menu *menu)
+{
+  ui::Layout &layout = *menu->layout;
+  const bool in_project = BKE_blender_project_read_callback(
+      CTX_data_main(C), [](const bke::BlenderProject *project) { return project != nullptr; });
+  if (!in_project) {
+    recent_files_global_draw(C, layout, "TOPBAR_MT_file_open_recent");
+    return;
+  }
+
+  /* While in a project, list the project's recent files directly, and keep all other recent
+   * files in a sub-menu.  */
+  layout.menu_contents("TOPBAR_MT_project_open_recent");
+  layout.separator();
+  layout.menu("TOPBAR_MT_file_open_recent_global", IFACE_("Other Recent Files"), ICON_NONE);
+}
+
+static void recent_files_global_menu_draw(const bContext *C, Menu *menu)
+{
+  recent_files_global_draw(C, *menu->layout, "TOPBAR_MT_file_open_recent_global");
 }
 
 static void recent_files_menu_register()
@@ -220,6 +244,13 @@ static void recent_files_menu_register()
   STRNCPY_UTF8(mt->label, N_("Open Recent"));
   STRNCPY_UTF8(mt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
   mt->draw = recent_files_menu_draw;
+  WM_menutype_add(mt);
+
+  mt = MEM_new_zeroed<MenuType>("spacetype info menu recent files global");
+  STRNCPY_UTF8(mt->idname, "TOPBAR_MT_file_open_recent_global");
+  STRNCPY_UTF8(mt->label, N_("Other Recent Files"));
+  STRNCPY_UTF8(mt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
+  mt->draw = recent_files_global_menu_draw;
   WM_menutype_add(mt);
 }
 

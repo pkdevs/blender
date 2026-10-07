@@ -455,6 +455,9 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
         (single_menu_idname && STREQ(single_menu_idname, "TOPBAR_MT_file_open_recent")) ?
             nullptr :
             "TOPBAR_MT_file_open_recent",
+        (single_menu_idname && STREQ(single_menu_idname, "TOPBAR_MT_file_open_recent_global")) ?
+            nullptr :
+            "TOPBAR_MT_file_open_recent_global",
         /* Showing undo history is not helpful since users may accidentally undo
          * an action they intend to run. */
         "TOPBAR_MT_undo_history",
