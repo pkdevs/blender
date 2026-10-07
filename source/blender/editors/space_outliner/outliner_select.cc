@@ -2192,7 +2192,7 @@ static TreeElement *outliner_find_next_element(SpaceOutliner *space_outliner, Tr
   TreeStoreElem *tselem = TREESTORE(te);
 
   if (TSELEM_OPEN(tselem, space_outliner) && !te->subtree.is_empty()) {
-    te = static_cast<TreeElement *>(te->subtree.first());
+    te = te->subtree.first();
   }
   else if (TreeElement *te_next = te->next()) {
     te = te_next;

@@ -1129,9 +1129,6 @@ static int outliner_filter_subtree(SpaceOutliner *space_outliner,
       outliner_filter_subtree(
           space_outliner, bmain, scene, view_layer, &te->subtree, search_string, exclude_filter);
       te_next = outliner_extract_children_from_subtree(te, tree);
-      if (te_next == nullptr) {
-        break;
-      }
       continue;
     }
     if ((exclude_filter & SO_FILTER_SEARCH) == 0) {

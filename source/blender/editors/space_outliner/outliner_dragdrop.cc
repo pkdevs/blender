@@ -294,7 +294,6 @@ static int outliner_get_insert_index(TreeElement *drag_te,
   }
 
   return BLI_findindex(listbase, drop_te->directdata);
-  ;
 }
 
 /** \} */
