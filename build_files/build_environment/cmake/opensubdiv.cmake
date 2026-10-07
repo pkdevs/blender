@@ -65,7 +65,9 @@ if(WIN32)
   endif()
 else()
   harvest(external_opensubdiv opensubdiv/include opensubdiv/include "*.h")
-  harvest_rpath_lib(external_opensubdiv opensubdiv/lib opensubdiv/lib "*${SHAREDLIBEXT}*")
+  harvest(external_opensubdiv opensubdiv/lib opensubdiv/lib "*")
+  harvest_rpath_lib(external_opensubdiv opensubdiv/lib opensubdiv/lib "*.${SHAREDLIBEXT}")
+  harvest(external_opensubdiv opensubdiv/lib/cmake/OpenSubdiv opensubdiv/lib/cmake/opensubdiv "*.cmake")
 endif()
 
 add_dependencies(
