@@ -1,0 +1,1649 @@
+{
+ "modules": [
+  "shapes",
+  "hardware",
+  "architecture",
+  "furniture",
+  "nature",
+  "stylized",
+  "sculpt",
+  "humans",
+  "scenes",
+  "materials",
+  "scanned",
+  "modifiers"
+ ],
+ "assets": [
+  {
+   "name": "Star",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "star",
+    "shape",
+    "primitive",
+    "decoration",
+    "christmas"
+   ],
+   "description": "A faceted solid star with any number of points, standing upright on two of them.",
+   "module": "shapes"
+  },
+  {
+   "name": "Rounded Box",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "box",
+    "cube",
+    "rounded",
+    "bevel",
+    "blockout",
+    "primitive"
+   ],
+   "description": "A box with true rounded edges, the best starting point for blockouts and kitbashing.",
+   "module": "shapes"
+  },
+  {
+   "name": "Capsule",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "capsule",
+    "pill",
+    "primitive",
+    "rounded",
+    "collider"
+   ],
+   "description": "A pill-shaped capsule: a cylinder with hemispheres on both ends.",
+   "module": "shapes"
+  },
+  {
+   "name": "Rounded Cylinder",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "cylinder",
+    "rounded",
+    "bevel",
+    "primitive",
+    "blockout"
+   ],
+   "description": "A cylinder with smoothly rounded rims, like a puck, a can or a pedestal.",
+   "module": "shapes"
+  },
+  {
+   "name": "Torus Knot",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "knot",
+    "torus",
+    "trefoil",
+    "tube",
+    "math",
+    "primitive"
+   ],
+   "description": "A smooth tube winding around a torus, forming a (p, q) knot like the trefoil.",
+   "module": "shapes"
+  },
+  {
+   "name": "Platonic Solid",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "platonic",
+    "polyhedron",
+    "dice",
+    "geometry",
+    "math",
+    "primitive"
+   ],
+   "description": "One of the five regular polyhedra, from the tetrahedron to the icosahedron, resting on a face.",
+   "module": "shapes"
+  },
+  {
+   "name": "Helix",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "helix",
+    "spiral",
+    "spring",
+    "coil",
+    "tube"
+   ],
+   "description": "A round tube coiled into a helix, like a spring or a spiral ornament.",
+   "module": "shapes"
+  },
+  {
+   "name": "Heart",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "heart",
+    "love",
+    "valentine",
+    "shape",
+    "decoration"
+   ],
+   "description": "A puffy, rounded heart standing upright on its point.",
+   "module": "shapes"
+  },
+  {
+   "name": "Arrow",
+   "kind": "object",
+   "catalog": "Objects/Shapes",
+   "file": "starter_objects.blend",
+   "tags": [
+    "arrow",
+    "direction",
+    "pointer",
+    "sign",
+    "shape"
+   ],
+   "description": "A 3D arrow lying on the ground, flat like a floor marker or round like a gizmo.",
+   "module": "shapes"
+  },
+  {
+   "name": "Screw",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "screw",
+    "fastener",
+    "thread",
+    "hardware",
+    "metal"
+   ],
+   "description": "A wood screw with a real helical thread, a pointed tip and a flat, pan or hex head.",
+   "module": "hardware"
+  },
+  {
+   "name": "Bolt",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "bolt",
+    "fastener",
+    "thread",
+    "hex",
+    "hardware",
+    "metal"
+   ],
+   "description": "A hex bolt with a chamfered head and a helical thread along the end of its shank.",
+   "module": "hardware"
+  },
+  {
+   "name": "Nut",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "nut",
+    "hex nut",
+    "fastener",
+    "thread",
+    "hardware",
+    "metal"
+   ],
+   "description": "A hex nut with chamfered edges and a threaded hole, with any number of sides.",
+   "module": "hardware"
+  },
+  {
+   "name": "Washer",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "washer",
+    "ring",
+    "fastener",
+    "hardware",
+    "metal"
+   ],
+   "description": "A flat washer with softly rounded edges, to go under a nut or bolt head.",
+   "module": "hardware"
+  },
+  {
+   "name": "Gear",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "gear",
+    "cog",
+    "machine",
+    "mechanical",
+    "hardware",
+    "metal"
+   ],
+   "description": "A spur gear with involute-style teeth, a hub and an optional lightened web.",
+   "module": "hardware"
+  },
+  {
+   "name": "Spring",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "spring",
+    "coil",
+    "helix",
+    "mechanical",
+    "hardware",
+    "metal"
+   ],
+   "description": "A compression spring with closed, ground-flat ends so it stands on its own.",
+   "module": "hardware"
+  },
+  {
+   "name": "Chain",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "chain",
+    "links",
+    "metal",
+    "industrial",
+    "hardware"
+   ],
+   "description": "A chain of interlocking oval links lying in a gentle curve, with adjustable twist.",
+   "module": "hardware"
+  },
+  {
+   "name": "Pipe",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "pipe",
+    "plumbing",
+    "industrial",
+    "tube",
+    "flange",
+    "hardware"
+   ],
+   "description": "A run of hollow pipe with smooth bends and bolted flanges at the joints.",
+   "module": "hardware"
+  },
+  {
+   "name": "Cable",
+   "kind": "object",
+   "catalog": "Objects/Hardware",
+   "file": "starter_objects.blend",
+   "tags": [
+    "cable",
+    "wire",
+    "cord",
+    "plug",
+    "electric",
+    "hardware"
+   ],
+   "description": "A power cable sagging between two plugs, with adjustable slack and thickness.",
+   "module": "hardware"
+  },
+  {
+   "name": "Stairs",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "stairs",
+    "staircase",
+    "steps",
+    "architecture",
+    "building",
+    "interior"
+   ],
+   "description": "A flight of solid steps with a handrail, straight or turning at a landing.",
+   "module": "architecture"
+  },
+  {
+   "name": "Spiral Staircase",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "stairs",
+    "spiral",
+    "staircase",
+    "helix",
+    "architecture",
+    "interior"
+   ],
+   "description": "A spiral staircase of wedge treads winding around a central column, with a handrail.",
+   "module": "architecture"
+  },
+  {
+   "name": "Building",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "building",
+    "house",
+    "city",
+    "architecture",
+    "office",
+    "apartment",
+    "blockout"
+   ],
+   "description": "A multi-story building with a grid of windows, an entrance and a roof ledge.",
+   "module": "architecture"
+  },
+  {
+   "name": "Wall",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "wall",
+    "brick",
+    "masonry",
+    "architecture",
+    "building",
+    "blockout"
+   ],
+   "description": "A straight wall, plastered or bricked, with evenly spaced window or door openings.",
+   "module": "architecture"
+  },
+  {
+   "name": "Window",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "window",
+    "glass",
+    "frame",
+    "pane",
+    "architecture",
+    "building"
+   ],
+   "description": "A framed window with glass panes divided by mullions, standing on its sill.",
+   "module": "architecture"
+  },
+  {
+   "name": "Door",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "door",
+    "entrance",
+    "frame",
+    "interior",
+    "architecture",
+    "building"
+   ],
+   "description": "A door in its frame, with a paneled, flat or glazed leaf and lever handles.",
+   "module": "architecture"
+  },
+  {
+   "name": "Column",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "column",
+    "pillar",
+    "classical",
+    "greek",
+    "architecture",
+    "building"
+   ],
+   "description": "A column with a base and capital, classical with fluted shaft or modern and plain.",
+   "module": "architecture"
+  },
+  {
+   "name": "Arch",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "arch",
+    "archway",
+    "stone",
+    "gate",
+    "architecture",
+    "ruin"
+   ],
+   "description": "A round stone arch on two piers, built from wedge-shaped voussoirs and a keystone.",
+   "module": "architecture"
+  },
+  {
+   "name": "Roof",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "roof",
+    "gable",
+    "hip",
+    "house",
+    "architecture",
+    "building"
+   ],
+   "description": "A pitched or flat roof with overhanging eaves, to put on top of a building.",
+   "module": "architecture"
+  },
+  {
+   "name": "Fence",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "fence",
+    "picket",
+    "garden",
+    "yard",
+    "railing",
+    "outdoor"
+   ],
+   "description": "A straight run of fence, white pickets or horizontal rails between square posts.",
+   "module": "architecture"
+  },
+  {
+   "name": "Ladder",
+   "kind": "object",
+   "catalog": "Objects/Architecture",
+   "file": "starter_objects.blend",
+   "tags": [
+    "ladder",
+    "rungs",
+    "climb",
+    "wood",
+    "tool",
+    "construction"
+   ],
+   "description": "A straight wooden ladder with two rails and round rungs, standing upright.",
+   "module": "architecture"
+  },
+  {
+   "name": "Table",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "table",
+    "furniture",
+    "dining",
+    "desk",
+    "wood",
+    "interior"
+   ],
+   "description": "A wooden table with a rectangular or round top and straight, tapered or pedestal legs.",
+   "module": "furniture"
+  },
+  {
+   "name": "Chair",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "chair",
+    "seat",
+    "furniture",
+    "dining",
+    "wood",
+    "interior"
+   ],
+   "description": "A wooden dining chair with an optional slatted back and seat cushion.",
+   "module": "furniture"
+  },
+  {
+   "name": "Shelf",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "shelf",
+    "bookcase",
+    "bookshelf",
+    "storage",
+    "furniture",
+    "interior"
+   ],
+   "description": "A wooden bookcase with any number of shelves and compartments.",
+   "module": "furniture"
+  },
+  {
+   "name": "Crate",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "crate",
+    "box",
+    "wood",
+    "storage",
+    "container",
+    "prop"
+   ],
+   "description": "A slatted wooden crate with corner posts, a plank floor and adjustable wear.",
+   "module": "furniture"
+  },
+  {
+   "name": "Barrel",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "barrel",
+    "cask",
+    "keg",
+    "wood",
+    "container",
+    "prop"
+   ],
+   "description": "A staved wooden barrel bound with iron hoops, with a bulge you can adjust.",
+   "module": "furniture"
+  },
+  {
+   "name": "Bottle",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "bottle",
+    "glass",
+    "wine",
+    "drink",
+    "kitchen",
+    "prop"
+   ],
+   "description": "A hollow glass bottle with a long neck and an optional cork.",
+   "module": "furniture"
+  },
+  {
+   "name": "Mug",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "mug",
+    "cup",
+    "coffee",
+    "tea",
+    "kitchen",
+    "ceramic",
+    "prop"
+   ],
+   "description": "A glazed ceramic mug, hollow inside, with an optional handle.",
+   "module": "furniture"
+  },
+  {
+   "name": "Vase",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "vase",
+    "pottery",
+    "ceramic",
+    "decoration",
+    "flower",
+    "interior"
+   ],
+   "description": "A hollow turned vase whose belly, neck and lip are shaped with a few sliders.",
+   "module": "furniture"
+  },
+  {
+   "name": "Book Stack",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "book",
+    "books",
+    "stack",
+    "library",
+    "reading",
+    "prop",
+    "interior"
+   ],
+   "description": "A stack of hardcover books in assorted sizes and cover colors.",
+   "module": "furniture"
+  },
+  {
+   "name": "Lamp",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "lamp",
+    "light",
+    "shade",
+    "desk",
+    "floor",
+    "lighting",
+    "interior"
+   ],
+   "description": "A desk or floor lamp with a fabric shade and a glowing bulb.",
+   "module": "furniture"
+  },
+  {
+   "name": "Coin Stack",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "coin",
+    "coins",
+    "gold",
+    "money",
+    "treasure",
+    "prop"
+   ],
+   "description": "A leaning stack of gold coins with raised rims.",
+   "module": "furniture"
+  },
+  {
+   "name": "Dice",
+   "kind": "object",
+   "catalog": "Objects/Furniture and Props",
+   "file": "starter_objects.blend",
+   "tags": [
+    "dice",
+    "die",
+    "game",
+    "board game",
+    "tabletop",
+    "prop"
+   ],
+   "description": "A rounded game die with 4, 6, 8, 12 or 20 faces; the six-sided one has pips.",
+   "module": "furniture"
+  },
+  {
+   "name": "Rock",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "rock",
+    "stone",
+    "boulder",
+    "nature",
+    "terrain"
+   ],
+   "description": "A lumpy, faceted boulder with cracks and a flat underside that sits on the ground.",
+   "module": "nature"
+  },
+  {
+   "name": "Rock Cluster",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "rocks",
+    "stones",
+    "boulders",
+    "cluster",
+    "nature"
+   ],
+   "description": "A group of differently sized rocks huddled together on the ground.",
+   "module": "nature"
+  },
+  {
+   "name": "Low-Poly Tree",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "tree",
+    "low poly",
+    "stylized",
+    "plant",
+    "nature",
+    "forest"
+   ],
+   "description": "A stylized low-poly tree with a tapered trunk, a few branches and chunky leaf clumps.",
+   "module": "nature"
+  },
+  {
+   "name": "Bush",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "bush",
+    "shrub",
+    "plant",
+    "hedge",
+    "nature",
+    "garden"
+   ],
+   "description": "A round, leafy shrub made of hundreds of small leaves around a dense core.",
+   "module": "nature"
+  },
+  {
+   "name": "Grass Patch",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "grass",
+    "lawn",
+    "meadow",
+    "plant",
+    "nature",
+    "ground"
+   ],
+   "description": "A round patch of soil covered in grass blades that bend in the wind.",
+   "module": "nature"
+  },
+  {
+   "name": "Flower",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "flower",
+    "daisy",
+    "plant",
+    "garden",
+    "nature",
+    "petal"
+   ],
+   "description": "A single flower on a gently curved stem with two leaves and a ring of petals.",
+   "module": "nature"
+  },
+  {
+   "name": "Mushroom",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "mushroom",
+    "toadstool",
+    "fungus",
+    "fly agaric",
+    "nature",
+    "forest"
+   ],
+   "description": "A fairy-tale toadstool with a red, white-spotted cap on a stout white stem.",
+   "module": "nature"
+  },
+  {
+   "name": "Terrain",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "terrain",
+    "landscape",
+    "mountain",
+    "hills",
+    "snow",
+    "nature"
+   ],
+   "description": "A mountainous landscape tile with grassy valleys, rocky slopes and snowy peaks.",
+   "module": "nature"
+  },
+  {
+   "name": "Ocean",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "ocean",
+    "sea",
+    "water",
+    "waves",
+    "animated",
+    "nature"
+   ],
+   "description": "A square of open sea whose rolling waves move as the animation plays.",
+   "module": "nature"
+  },
+  {
+   "name": "Cloud",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "cloud",
+    "sky",
+    "weather",
+    "cartoon",
+    "stylized",
+    "nature"
+   ],
+   "description": "A puffy cartoon cloud with a flat underside, made of merged round billows.",
+   "module": "nature"
+  },
+  {
+   "name": "Planet",
+   "kind": "object",
+   "catalog": "Objects/Nature",
+   "file": "starter_objects.blend",
+   "tags": [
+    "planet",
+    "globe",
+    "world",
+    "earth",
+    "moon",
+    "space"
+   ],
+   "description": "A small world with continents, mountains, craters and oceans, shown as a globe.",
+   "module": "nature"
+  },
+  {
+   "name": "Crystal Cluster",
+   "kind": "object",
+   "catalog": "Objects/Stylized",
+   "file": "starter_objects.blend",
+   "tags": [
+    "crystal",
+    "gem",
+    "mineral",
+    "fantasy",
+    "rock",
+    "stylized"
+   ],
+   "description": "A cluster of faceted glowing crystals growing out of a rocky base.",
+   "module": "stylized"
+  },
+  {
+   "name": "Gem",
+   "kind": "object",
+   "catalog": "Objects/Stylized",
+   "file": "starter_objects.blend",
+   "tags": [
+    "gem",
+    "jewel",
+    "diamond",
+    "ruby",
+    "treasure",
+    "stylized"
+   ],
+   "description": "A large sparkling gemstone in brilliant, emerald or princess cut, standing on its point.",
+   "module": "stylized"
+  },
+  {
+   "name": "Donut",
+   "kind": "object",
+   "catalog": "Objects/Stylized",
+   "file": "starter_objects.blend",
+   "tags": [
+    "donut",
+    "doughnut",
+    "food",
+    "sweet",
+    "dessert",
+    "stylized"
+   ],
+   "description": "The classic donut with wavy icing, colorful sprinkles and an optional bite.",
+   "module": "stylized"
+  },
+  {
+   "name": "Balloon",
+   "kind": "object",
+   "catalog": "Objects/Stylized",
+   "file": "starter_objects.blend",
+   "tags": [
+    "balloon",
+    "party",
+    "birthday",
+    "toy",
+    "celebration",
+    "stylized"
+   ],
+   "description": "A shiny party balloon with a tied knot and a curly string that rests on the ground.",
+   "module": "stylized"
+  },
+  {
+   "name": "Sculpt Sphere",
+   "kind": "object",
+   "catalog": "Objects/Sculpt Bases",
+   "file": "starter_objects.blend",
+   "tags": [
+    "sphere",
+    "ball",
+    "sculpt",
+    "quad sphere",
+    "base mesh",
+    "clay"
+   ],
+   "description": "A quad sphere with evenly sized faces and no poles, ideal for sculpting and remeshing.",
+   "module": "sculpt"
+  },
+  {
+   "name": "Suzanne",
+   "kind": "object",
+   "catalog": "Objects/Sculpt Bases",
+   "file": "starter_objects.blend",
+   "tags": [
+    "suzanne",
+    "monkey",
+    "head",
+    "sculpt",
+    "base mesh",
+    "blender"
+   ],
+   "description": "Blender's monkey head, subdivided and smoothed into a dense mesh ready to sculpt.",
+   "module": "sculpt"
+  },
+  {
+   "name": "Human Male",
+   "kind": "object",
+   "catalog": "Objects/Human Bases",
+   "file": "starter_objects.blend",
+   "tags": [
+    "human",
+    "body",
+    "male",
+    "man",
+    "realistic",
+    "base mesh",
+    "character",
+    "sculpt"
+   ],
+   "description": "A realistic adult male body in an A-pose with clean quad topology, ready to sculpt.",
+   "module": "humans"
+  },
+  {
+   "name": "Human Female",
+   "kind": "object",
+   "catalog": "Objects/Human Bases",
+   "file": "starter_objects.blend",
+   "tags": [
+    "human",
+    "body",
+    "female",
+    "woman",
+    "realistic",
+    "base mesh",
+    "character",
+    "sculpt"
+   ],
+   "description": "A realistic adult female body in an A-pose with clean quad topology, ready to sculpt.",
+   "module": "humans"
+  },
+  {
+   "name": "Stylized Male",
+   "kind": "object",
+   "catalog": "Objects/Human Bases",
+   "file": "starter_objects.blend",
+   "tags": [
+    "human",
+    "body",
+    "male",
+    "stylized",
+    "cartoon",
+    "base mesh",
+    "character"
+   ],
+   "description": "A stylized male body with simplified forms, a base for cartoon and game characters.",
+   "module": "humans"
+  },
+  {
+   "name": "Stylized Female",
+   "kind": "object",
+   "catalog": "Objects/Human Bases",
+   "file": "starter_objects.blend",
+   "tags": [
+    "human",
+    "body",
+    "female",
+    "stylized",
+    "cartoon",
+    "base mesh",
+    "character"
+   ],
+   "description": "A stylized female body with simplified forms, a base for cartoon and game characters.",
+   "module": "humans"
+  },
+  {
+   "name": "Human Hand",
+   "kind": "object",
+   "catalog": "Objects/Human Bases",
+   "file": "starter_objects.blend",
+   "tags": [
+    "hand",
+    "human",
+    "fingers",
+    "anatomy",
+    "realistic",
+    "base mesh",
+    "sculpt"
+   ],
+   "description": "A realistic human hand with relaxed fingers, for sculpting hands and anatomy studies.",
+   "module": "humans"
+  },
+  {
+   "name": "Sculpt Head",
+   "kind": "object",
+   "catalog": "Objects/Sculpt Bases",
+   "file": "starter_objects.blend",
+   "tags": [
+    "head",
+    "bust",
+    "face",
+    "human",
+    "portrait",
+    "sculpt",
+    "base mesh"
+   ],
+   "description": "A neutral realistic human head and neck with eyes, the starting point for a bust.",
+   "module": "humans"
+  },
+  {
+   "name": "Studio Backdrop",
+   "kind": "collection",
+   "catalog": "Objects/Scenes",
+   "file": "starter_scenes.blend",
+   "tags": [
+    "studio",
+    "backdrop",
+    "cyclorama",
+    "lighting",
+    "camera",
+    "render",
+    "scene"
+   ],
+   "description": "A seamless curved backdrop with soft key, fill and rim lights and a camera framing a subject at its center.",
+   "module": "scenes"
+  },
+  {
+   "name": "Turntable",
+   "kind": "collection",
+   "catalog": "Objects/Scenes",
+   "file": "starter_scenes.blend",
+   "tags": [
+    "turntable",
+    "orbit",
+    "showcase",
+    "animation",
+    "camera",
+    "lighting",
+    "scene"
+   ],
+   "description": "A camera and soft lights that orbit a platform in front of a dark backdrop, looping every 120 frames.",
+   "module": "scenes"
+  },
+  {
+   "name": "Car Paint",
+   "kind": "material",
+   "catalog": "Materials/Hero",
+   "file": "starter_materials.blend",
+   "tags": [
+    "car paint",
+    "metallic",
+    "flakes",
+    "clear coat",
+    "automotive",
+    "glossy"
+   ],
+   "description": "Glossy metallic car paint with sparkling flakes under a deep clear coat.",
+   "module": "materials"
+  },
+  {
+   "name": "Holographic",
+   "kind": "material",
+   "catalog": "Materials/Hero",
+   "file": "starter_materials.blend",
+   "tags": [
+    "holographic",
+    "iridescent",
+    "rainbow",
+    "thin film",
+    "foil",
+    "sci-fi"
+   ],
+   "description": "Iridescent holographic foil, rainbow thin film swirling over dark polished metal.",
+   "module": "materials"
+  },
+  {
+   "name": "Marble",
+   "kind": "material",
+   "catalog": "Materials/Hero",
+   "file": "starter_materials.blend",
+   "tags": [
+    "marble",
+    "stone",
+    "veins",
+    "polished",
+    "luxury",
+    "countertop"
+   ],
+   "description": "Polished white marble with layered dark veins and a hint of translucency.",
+   "module": "materials"
+  },
+  {
+   "name": "Toon",
+   "kind": "material",
+   "catalog": "Materials/Hero",
+   "file": "starter_materials.blend",
+   "tags": [
+    "toon",
+    "cel",
+    "cartoon",
+    "anime",
+    "npr",
+    "stylized"
+   ],
+   "description": "Cel shaded cartoon look with crisp light bands, a highlight and a rim light.",
+   "module": "materials"
+  },
+  {
+   "name": "Sculpting Clay Warm",
+   "kind": "material",
+   "catalog": "Materials/Sculpt",
+   "file": "starter_materials.blend",
+   "tags": [
+    "clay",
+    "sculpt",
+    "matcap",
+    "matte",
+    "warm"
+   ],
+   "description": "Warm matte modeling clay that shows every form, with darkened creases.",
+   "module": "materials"
+  },
+  {
+   "name": "Sculpting Clay Grey",
+   "kind": "material",
+   "catalog": "Materials/Sculpt",
+   "file": "starter_materials.blend",
+   "tags": [
+    "clay",
+    "sculpt",
+    "grey",
+    "matte",
+    "neutral"
+   ],
+   "description": "Neutral grey matte clay for judging forms while sculpting, with darkened creases.",
+   "module": "materials"
+  },
+  {
+   "name": "Skin",
+   "kind": "material",
+   "catalog": "Materials/Sculpt",
+   "file": "starter_materials.blend",
+   "tags": [
+    "skin",
+    "subsurface",
+    "character",
+    "human",
+    "face"
+   ],
+   "description": "Soft translucent skin with natural tone variation, subtle redness and fine pores.",
+   "module": "materials"
+  },
+  {
+   "name": "Gold",
+   "kind": "material",
+   "catalog": "Materials/Metals",
+   "file": "starter_materials.blend",
+   "tags": [
+    "gold",
+    "metal",
+    "precious",
+    "jewelry",
+    "shiny"
+   ],
+   "description": "Polished yellow gold with subtle smudges and uneven polish.",
+   "module": "materials"
+  },
+  {
+   "name": "Copper",
+   "kind": "material",
+   "catalog": "Materials/Metals",
+   "file": "starter_materials.blend",
+   "tags": [
+    "copper",
+    "metal",
+    "warm",
+    "pipes",
+    "shiny"
+   ],
+   "description": "Warm polished copper with soft smudges and uneven polish.",
+   "module": "materials"
+  },
+  {
+   "name": "Chrome",
+   "kind": "material",
+   "catalog": "Materials/Metals",
+   "file": "starter_materials.blend",
+   "tags": [
+    "chrome",
+    "mirror",
+    "metal",
+    "reflective",
+    "shiny"
+   ],
+   "description": "Mirror-like chrome plating with faint smudges.",
+   "module": "materials"
+  },
+  {
+   "name": "Brushed Steel",
+   "kind": "material",
+   "catalog": "Materials/Metals",
+   "file": "starter_materials.blend",
+   "tags": [
+    "steel",
+    "brushed",
+    "anisotropic",
+    "metal",
+    "stainless",
+    "appliance"
+   ],
+   "description": "Brushed stainless steel with anisotropic highlights and fine streaks.",
+   "module": "materials"
+  },
+  {
+   "name": "Rust",
+   "kind": "material",
+   "catalog": "Materials/Metals",
+   "file": "starter_materials.blend",
+   "tags": [
+    "rust",
+    "corrosion",
+    "weathered",
+    "painted metal",
+    "grunge",
+    "worn"
+   ],
+   "description": "Painted metal eaten by rust, with chipped paint edges and bare metal showing through.",
+   "module": "materials"
+  },
+  {
+   "name": "Clear Glass",
+   "kind": "material",
+   "catalog": "Materials/Glass and Liquid",
+   "file": "starter_materials.blend",
+   "tags": [
+    "glass",
+    "clear",
+    "transparent",
+    "refraction",
+    "window"
+   ],
+   "description": "Perfectly clear glass with crisp reflections and refraction.",
+   "module": "materials"
+  },
+  {
+   "name": "Frosted Glass",
+   "kind": "material",
+   "catalog": "Materials/Glass and Liquid",
+   "file": "starter_materials.blend",
+   "tags": [
+    "glass",
+    "frosted",
+    "translucent",
+    "matte",
+    "sandblasted"
+   ],
+   "description": "Sandblasted frosted glass that blurs what's behind it into a soft glow.",
+   "module": "materials"
+  },
+  {
+   "name": "Ice",
+   "kind": "material",
+   "catalog": "Materials/Glass and Liquid",
+   "file": "starter_materials.blend",
+   "tags": [
+    "ice",
+    "frozen",
+    "cracks",
+    "bubbles",
+    "winter",
+    "cold"
+   ],
+   "description": "Cold blue ice with frosted cracks and trapped air bubbles inside.",
+   "module": "materials"
+  },
+  {
+   "name": "Water",
+   "kind": "material",
+   "catalog": "Materials/Glass and Liquid",
+   "file": "starter_materials.blend",
+   "tags": [
+    "water",
+    "liquid",
+    "ripples",
+    "pool",
+    "ocean",
+    "transparent"
+   ],
+   "description": "Clear water with a slight blue tint and gentle ripples on its surface.",
+   "module": "materials"
+  },
+  {
+   "name": "Wood",
+   "kind": "material",
+   "catalog": "Materials/Surfaces",
+   "file": "starter_materials.blend",
+   "tags": [
+    "wood",
+    "grain",
+    "rings",
+    "timber",
+    "oak",
+    "furniture"
+   ],
+   "description": "Oiled hardwood with growth rings on its end grain and long grain on its sides.",
+   "module": "materials"
+  },
+  {
+   "name": "Concrete",
+   "kind": "material",
+   "catalog": "Materials/Surfaces",
+   "file": "starter_materials.blend",
+   "tags": [
+    "concrete",
+    "cement",
+    "stone",
+    "architecture",
+    "urban",
+    "rough"
+   ],
+   "description": "Cast concrete with air pockets, mottled tone and weathered water stains.",
+   "module": "materials"
+  },
+  {
+   "name": "Ceramic Glaze",
+   "kind": "material",
+   "catalog": "Materials/Surfaces",
+   "file": "starter_materials.blend",
+   "tags": [
+    "ceramic",
+    "glaze",
+    "pottery",
+    "porcelain",
+    "glossy",
+    "kitchen"
+   ],
+   "description": "Glossy glazed ceramic whose glaze pools darker in hollows, with fine iron speckles.",
+   "module": "materials"
+  },
+  {
+   "name": "Velvet",
+   "kind": "material",
+   "catalog": "Materials/Surfaces",
+   "file": "starter_materials.blend",
+   "tags": [
+    "velvet",
+    "fabric",
+    "cloth",
+    "sheen",
+    "textile",
+    "plush"
+   ],
+   "description": "Plush velvet with a dark core and a bright soft sheen along its edges.",
+   "module": "materials"
+  },
+  {
+   "name": "Neon",
+   "kind": "material",
+   "catalog": "Materials/Light",
+   "file": "starter_materials.blend",
+   "tags": [
+    "neon",
+    "emission",
+    "glow",
+    "light",
+    "sign",
+    "bloom"
+   ],
+   "description": "Glowing neon tube with a white-hot core, saturated edges and a glassy sheen.",
+   "module": "materials"
+  },
+  {
+   "name": "Snowy Terrain",
+   "kind": "material",
+   "catalog": "Materials/Nature",
+   "file": "starter_materials.blend",
+   "tags": [
+    "terrain",
+    "snow",
+    "mountain",
+    "landscape",
+    "rock",
+    "grass"
+   ],
+   "description": "Mountain terrain with snow on high flat ground, grass below and rock on steep slopes.",
+   "module": "materials"
+  },
+  {
+   "name": "Red Brick Wall",
+   "kind": "material",
+   "catalog": "Materials/Scanned",
+   "file": "starter_materials.blend",
+   "tags": [
+    "brick",
+    "wall",
+    "red",
+    "masonry",
+    "scanned",
+    "exterior"
+   ],
+   "description": "Weathered red brick in running bond with deep mortar joints, scanned from a real wall.",
+   "module": "scanned"
+  },
+  {
+   "name": "Cobblestone",
+   "kind": "material",
+   "catalog": "Materials/Scanned",
+   "file": "starter_materials.blend",
+   "tags": [
+    "cobblestone",
+    "street",
+    "pavement",
+    "stone",
+    "floor",
+    "scanned"
+   ],
+   "description": "Rounded cobblestones with moss in the gaps, for old streets, courtyards and paths.",
+   "module": "scanned"
+  },
+  {
+   "name": "Tree Bark",
+   "kind": "material",
+   "catalog": "Materials/Scanned",
+   "file": "starter_materials.blend",
+   "tags": [
+    "bark",
+    "tree",
+    "wood",
+    "trunk",
+    "forest",
+    "nature",
+    "scanned"
+   ],
+   "description": "Deeply furrowed brown tree bark with knots, for trunks, branches and logs.",
+   "module": "scanned"
+  },
+  {
+   "name": "Worn Plaster",
+   "kind": "material",
+   "catalog": "Materials/Scanned",
+   "file": "starter_materials.blend",
+   "tags": [
+    "plaster",
+    "wall",
+    "worn",
+    "damaged",
+    "brick",
+    "stucco",
+    "weathered",
+    "scanned"
+   ],
+   "description": "Cracked, crumbling plaster that has fallen away to expose old brick underneath.",
+   "module": "scanned"
+  },
+  {
+   "name": "Plaid Fabric",
+   "kind": "material",
+   "catalog": "Materials/Scanned",
+   "file": "starter_materials.blend",
+   "tags": [
+    "fabric",
+    "cloth",
+    "woven",
+    "plaid",
+    "checkered",
+    "cotton",
+    "textile",
+    "scanned"
+   ],
+   "description": "Woven cotton in a soft windowpane plaid, for upholstery, cushions, blankets and clothes.",
+   "module": "scanned"
+  },
+  {
+   "name": "Rocky Ground",
+   "kind": "material",
+   "catalog": "Materials/Scanned",
+   "file": "starter_materials.blend",
+   "tags": [
+    "ground",
+    "rocks",
+    "stones",
+    "dirt",
+    "terrain",
+    "gravel",
+    "nature",
+    "scanned"
+   ],
+   "description": "Muddy ground scattered with stones and pebbles, for terrain, trails and riverbanks.",
+   "module": "scanned"
+  },
+  {
+   "name": "Scatter on Surface",
+   "kind": "modifier",
+   "catalog": "Generate",
+   "file": "starter_modifiers.blend",
+   "tags": [
+    "scatter",
+    "instance",
+    "distribute",
+    "collection",
+    "rocks",
+    "pebbles"
+   ],
+   "description": "Scatters a collection's objects over the surface, or small pebbles when none is chosen.",
+   "module": "modifiers"
+  },
+  {
+   "name": "Fur",
+   "kind": "modifier",
+   "catalog": "Generate",
+   "file": "starter_modifiers.blend",
+   "tags": [
+    "fur",
+    "hair",
+    "fuzz",
+    "grass",
+    "strands"
+   ],
+   "description": "Grows soft, clumpy fur over the surface, with its own fur material.",
+   "module": "modifiers"
+  },
+  {
+   "name": "Radial Array",
+   "kind": "modifier",
+   "catalog": "Generate",
+   "file": "starter_modifiers.blend",
+   "tags": [
+    "array",
+    "radial",
+    "circular",
+    "repeat",
+    "ring"
+   ],
+   "description": "Repeats the object in a ring around its origin, like a wreath or the petals of a flower.",
+   "module": "modifiers"
+  },
+  {
+   "name": "Tube Frame",
+   "kind": "modifier",
+   "catalog": "Generate",
+   "file": "starter_modifiers.blend",
+   "tags": [
+    "wireframe",
+    "lattice",
+    "tube",
+    "frame",
+    "edges",
+    "structure"
+   ],
+   "description": "Turns every edge into a tube and every vertex into a ball, for lattices and wireframes.",
+   "module": "modifiers"
+  },
+  {
+   "name": "Voxelize",
+   "kind": "modifier",
+   "catalog": "Generate",
+   "file": "starter_modifiers.blend",
+   "tags": [
+    "voxel",
+    "blocks",
+    "cubes",
+    "pixel",
+    "minecraft",
+    "remesh"
+   ],
+   "description": "Rebuilds the object's surface from little cubes, for a blocky, voxel-art look.",
+   "module": "modifiers"
+  },
+  {
+   "name": "Low Poly",
+   "kind": "modifier",
+   "catalog": "Generate",
+   "file": "starter_modifiers.blend",
+   "tags": [
+    "low poly",
+    "faceted",
+    "simplify",
+    "decimate",
+    "stylized",
+    "flat"
+   ],
+   "description": "Simplifies the object into large flat facets, for a stylized low-poly look.",
+   "module": "modifiers"
+  },
+  {
+   "name": "Noise Displace",
+   "kind": "modifier",
+   "catalog": "Deform",
+   "file": "starter_modifiers.blend",
+   "tags": [
+    "noise",
+    "displace",
+    "displacement",
+    "organic",
+    "rock",
+    "terrain"
+   ],
+   "description": "Pushes the surface in and out with layered noise, for rocks, terrain and organic shapes.",
+   "module": "modifiers"
+  },
+  {
+   "name": "Snow Cover",
+   "kind": "modifier",
+   "catalog": "Deform",
+   "file": "starter_modifiers.blend",
+   "tags": [
+    "snow",
+    "winter",
+    "cover",
+    "weather",
+    "christmas"
+   ],
+   "description": "Adds a soft layer of snow on the upward-facing parts of the object.",
+   "module": "modifiers"
+  }
+ ]
+}

@@ -1,0 +1,29 @@
+# This is an Asset Catalog Definition file for Blender.
+#
+# Empty lines and lines starting with `#` will be ignored.
+# The first non-ignored line should be the version indicator.
+# Other lines are of the format "UUID:catalog/path/for/assets:simple catalog name"
+
+VERSION 1
+
+f8ac28e1-6929-5704-b5b0-82bcdd7576bb:Deform:Deform
+4ae3877a-0d6d-5e5a-a098-d6c2abf7aae2:Generate:Generate
+6d7aa149-000b-5e3c-8da4-40f7aa742f44:Materials:Materials
+cb740a2d-f643-5294-9603-5721a634fbf1:Materials/Glass and Liquid:Materials-Glass and Liquid
+51a2b31d-f87f-5b50-aaf5-e5d9567779c6:Materials/Hero:Materials-Hero
+0d81bd98-b0d3-545f-8c6b-1665598e3578:Materials/Light:Materials-Light
+ded10da8-2b03-5c83-9a37-d8303c69c7be:Materials/Metals:Materials-Metals
+55513f52-f169-55d0-8dfc-1710d68b3385:Materials/Nature:Materials-Nature
+29c77a29-d330-53fa-9fe0-4aff561f945c:Materials/Scanned:Materials-Scanned
+948b6ac1-be72-5109-8caf-b6998e61912f:Materials/Sculpt:Materials-Sculpt
+bd3c5da2-bbad-5f58-b760-3e236c5e31b2:Materials/Surfaces:Materials-Surfaces
+3acd634c-9a67-566d-90fe-bfc5be6f14a5:Objects:Objects
+bdc30432-1cd7-5d76-8b32-e5351d2e7ddd:Objects/Architecture:Objects-Architecture
+4e2b7987-7ccd-5c3f-8255-200c6e96a9f6:Objects/Furniture and Props:Objects-Furniture and Props
+f118b005-4a23-5ae0-88ba-d0e12e41aae6:Objects/Hardware:Objects-Hardware
+b6611aa0-b406-5681-b806-c907c5957309:Objects/Human Bases:Objects-Human Bases
+16aadfd5-b2bb-5ab9-a7bd-d7a87391b95e:Objects/Nature:Objects-Nature
+0c9cce3c-09e8-55a7-943e-cbd2c7475085:Objects/Scenes:Objects-Scenes
+2e86b0aa-6ee9-55a8-bf58-4af956a1904c:Objects/Sculpt Bases:Objects-Sculpt Bases
+52b00b53-9c15-5d2f-983b-e54c306c7cb2:Objects/Shapes:Objects-Shapes
+e14ec80d-7a6f-573f-bc3d-29d085074ca8:Objects/Stylized:Objects-Stylized
