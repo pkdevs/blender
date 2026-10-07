@@ -537,10 +537,13 @@ std::map<Button *, PropertyPair> property_pairs(const Block &block)
 }
 
 void project_property(bContext *C, Button &but, int index, DictionaryValue &field,
-                      const PropertyPair *pair = nullptr)
+                      const PropertyPair *pair = nullptr, const std::string *layout_name = nullptr)
 {
   PointerRNA *ptr = &but.rnapoin;
   PropertyRNA *prop = but.rnaprop;
+  /* ID properties (e.g. Geometry Nodes inputs, "Socket_2") are only named by their layout. */
+  const std::string name = layout_name && !layout_name->empty() && RNA_property_is_idprop(prop) ?
+                               *layout_name : std::string(RNA_property_ui_name(prop));
   const bool array = RNA_property_array_check(prop);
   const int length = RNA_property_array_length(ptr, prop);
   const PropertyType type = RNA_property_type(prop);
@@ -562,7 +565,7 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
       IMB_colormanagement_scene_linear_to_srgb_v3(color, color);
     }
     field.append_str("type", "COLOR");
-    field.append_str("label", RNA_property_ui_name(prop));
+    field.append_str("label", name);
     field.append_str("key", property_key(but, -1));
     field.append_str("property", RNA_property_identifier(prop));
     field.append_str("owner", RNA_struct_is_a(ptr->type, RNA_Object) ? "object" : "data");
@@ -576,7 +579,7 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
     }
     return;
   }
-  std::string title = RNA_property_ui_name(prop);
+  std::string title = name;
   if (pair) {
     title = pair->component;
     field.append_str("group", pair->title);
@@ -588,7 +591,7 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
     title = std::string(1, axes[index]);
     field.append_str("group", ELEM(std::string(RNA_property_identifier(prop)),
                                    "rotation_euler", "rotation_quaternion", "rotation_axis_angle") ?
-                                  "Rotation" : RNA_property_ui_name(prop));
+                                  "Rotation" : name);
     field.append_str("group_key", property_key(but, -1));
   }
   field.append_str("label", title);
@@ -1102,18 +1105,38 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     }
     const auto pairs = property_pairs(*block);
     std::map<Button *, std::string> tool_labels;
-    if (tool_settings) {
+    std::map<PropertyRNA *, std::string> layout_names;
+    {
       /* Split property layouts put the authored caption in a preceding label. An enum
        * button's own text is its selected value, not the property caption. */
       Button *previous = nullptr;
       for (const auto &button : block->buttons) {
-        if (button->rnaprop && !RNA_property_array_check(button->rnaprop)) {
+        if (button->rnaprop) {
+          std::string caption;
           if (previous && previous->type == ButtonType::Label &&
               (previous->drawflag & BUT_TEXT_RIGHT)) {
-            tool_labels[button.get()] = previous->str;
+            caption = previous->str;
           }
-          else if (RNA_property_type(button->rnaprop) != PROP_ENUM && !button->str.empty()) {
-            tool_labels[button.get()] = button->str;
+          else if (RNA_property_type(button->rnaprop) != PROP_ENUM &&
+                   !RNA_property_array_check(button->rnaprop) && !button->str.empty()) {
+            caption = button->str;
+          }
+          while (!caption.empty() && ELEM(caption.back(), ':', ' ')) {
+            caption.pop_back();
+          }
+          if (!caption.empty()) {
+            if (!RNA_property_array_check(button->rnaprop)) {
+              tool_labels[button.get()] = caption;
+            }
+            /* A vector's first row carries the caption ("Offset X"); later rows only axes. */
+            if (!layout_names.count(button->rnaprop) && button->rnaindex <= 0) {
+              std::string name = caption;
+              if (RNA_property_array_check(button->rnaprop) && name.size() > 2 &&
+                  name[name.size() - 2] == ' ' && strchr("XYZW", name.back())) {
+                name.resize(name.size() - 2);
+              }
+              layout_names[button->rnaprop] = name;
+            }
           }
         }
         previous = button.get();
@@ -1303,17 +1326,16 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           }
           auto field = append_field();
           const auto pair = pairs.find(&but);
-          project_property(C, but, index, *field, pair == pairs.end() ? nullptr : &pair->second);
+          const auto layout_name = layout_names.find(but.rnaprop);
+          project_property(C, but, index, *field, pair == pairs.end() ? nullptr : &pair->second,
+                           layout_name == layout_names.end() ? nullptr : &layout_name->second);
           if (but.type == ButtonType::Row && RNA_property_type(but.rnaprop) == PROP_ENUM) {
             /* Authored as an expanded row (e.g. selection mode), not a dropdown. */
             field->append_int("expand", 1);
           }
-          if (const auto found = tool_labels.find(&but); found != tool_labels.end()) {
-            std::string label = found->second;
-            while (!label.empty() && ELEM(label.back(), ':', ' ')) {
-              label.pop_back();
-            }
-            field->append_str("toolbar_label", label);
+          if (const auto found = tool_labels.find(&but);
+              tool_settings && found != tool_labels.end()) {
+            field->append_str("toolbar_label", found->second);
           }
           if (const auto found = field_modes.find(key); found != field_modes.end()) {
             auto mode = field->append_dict("group_menu");
