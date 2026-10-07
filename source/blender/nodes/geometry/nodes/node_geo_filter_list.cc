@@ -34,11 +34,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("A field or list representing the values that will not be removed")
       .structure_type(StructureType::Dynamic);
   b.add_output(type, "Selection"_ustr)
-      .dependent_field({1})
+      .propagate_all({0})
       .structure_type(StructureType::List)
       .align_with_previous();
   b.add_output(type, "Inverted"_ustr)
-      .dependent_field({1})
+      .propagate_all({0})
       .structure_type(StructureType::List)
       .align_with_previous();
 }
@@ -106,7 +106,7 @@ static GListPtr filter_list(const GListPtr &list, const IndexMask &mask)
   return std::visit(
       [&]<typename T>(const T &src_data) {
         if constexpr (std::is_same_v<T, GList::ArrayData>) {
-          GArray<> dst_data(list_type, mask.size(), NoInitialization());
+          GArray<> dst_data(list_type, mask.size());
           array_utils::gather(GSpan(list_type, src_data.data, list->size()), mask, dst_data);
           return GList::from_garray(std::move(dst_data));
         }
@@ -140,7 +140,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   auto filter_value = params.extract_input<bke::SocketValueVariant>("Selection"_ustr);
   if (filter_value.is_single()) {
-    if (filter_value.get<bool>()) {
+    if (filter_value.ensure_type<bool>()) {
       output_lists(params, list, IndexMask(list->size()));
     }
     else {
@@ -155,7 +155,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     output_lists(params, list, field_evaluator.get_evaluated_as_mask(0));
   }
   else if (filter_value.is_list()) {
-    const GListPtr keep_list = filter_value.get<GListPtr>();
+    const GListPtr keep_list = *filter_value.get_if<GListPtr>();
     const VArray<bool> values = keep_list->varray().typed<bool>();
     if (values.size() < list->size()) {
       params.error_message_add(NodeWarningType::Error, "\"Selection\" list is too small");
@@ -163,7 +163,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       return;
     }
     IndexMaskMemory memory;
-    output_lists(params, list, IndexMask::from_bools(values, memory));
+    output_lists(params, list, IndexMask::from_bools(IndexRange(list->size()), values, memory));
   }
   else {
     params.error_message_add(NodeWarningType::Warning,

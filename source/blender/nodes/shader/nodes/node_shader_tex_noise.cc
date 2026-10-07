@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
@@ -27,13 +31,18 @@ static void sh_node_tex_noise_declare(NodeDeclarationBuilder &b)
   b.is_function_node();
 
   const int dimensions = b.node_or_null() ? node_storage(*b.node_or_null()).dimensions : 3;
+  const bool is_compositor = b.tree_or_null() && b.tree_or_null()->type == NTREE_COMPOSIT;
+  const NodeDefaultInputType default_input_type =
+      is_compositor ? NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES :
+                      NODE_DEFAULT_INPUT_POSITION_FIELD;
   b.add_input<decl::Vector>("Vector"_ustr)
-      .implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD)
+      .default_input_type(default_input_type)
       .available(dimensions != 1);
+
   b.add_input<decl::Float>("W"_ustr)
       .min(-1000.0f)
       .max(1000.0f)
-      .available(dimensions == 1 || dimensions == 4)
+      .available(ELEM(dimensions, 1, 4))
       .make_available([](bNode &node) {
         /* Default to 1 instead of 4, because it is much faster. */
         node_storage(node).dimensions = 1;
@@ -69,12 +78,13 @@ static void sh_node_tex_noise_declare(NodeDeclarationBuilder &b)
           "corresponds to larger scale for higher octaves");
 
   const eNodeNoiseTexture_Type noise_type = eNodeNoiseTexture_Type(
-      b.node_or_null() ? node_storage(*b.node_or_null()).type : SHD_NOISE_FBM);
+      b.node_or_null() ? eNodeNoiseTexture_Type(node_storage(*b.node_or_null()).type) :
+                         SHD_NOISE_FBM);
   b.add_input<decl::Float>("Offset"_ustr)
       .min(-1000.0f)
       .max(1000.0f)
       .default_value(0.0f)
-      .available(noise_type != SHD_NOISE_MULTIFRACTAL && noise_type != SHD_NOISE_FBM)
+      .available(!ELEM(noise_type, SHD_NOISE_MULTIFRACTAL, SHD_NOISE_FBM))
       .make_available([](bNode &node) { node_storage(node).type = SHD_NOISE_RIDGED_MULTIFRACTAL; })
       .description(
           "An added offset to each octave, determines the level where the highest octave will "
@@ -83,8 +93,7 @@ static void sh_node_tex_noise_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1000.0f)
       .default_value(1.0f)
-      .available(noise_type == SHD_NOISE_HYBRID_MULTIFRACTAL ||
-                 noise_type == SHD_NOISE_RIDGED_MULTIFRACTAL)
+      .available(ELEM(noise_type, SHD_NOISE_HYBRID_MULTIFRACTAL, SHD_NOISE_RIDGED_MULTIFRACTAL))
       .make_available([](bNode &node) { node_storage(node).type = SHD_NOISE_RIDGED_MULTIFRACTAL; })
       .description("An extra multiplier to tune the magnitude of octaves");
   b.add_input<decl::Float>("Distortion"_ustr)

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "BLT_translation.hh"
 
 #include "NOD_string_pattern.hh"
@@ -23,9 +27,9 @@ const EnumPropertyItem string_pattern_mode_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-std::optional<StringPattern> StringPattern::from_string(StringPatternMode mode,
-                                                        StringRef pattern,
-                                                        std::string &r_error)
+std::optional<StringPattern> StringPattern::from_str(StringPatternMode mode,
+                                                     StringRef pattern,
+                                                     std::string &r_error)
 {
   switch (mode) {
     case StringPatternMode::Exact: {

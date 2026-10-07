@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_anonymous_attribute_make.hh"
 #include "BKE_attribute_math.hh"
@@ -305,13 +305,13 @@ static void node_declare(NodeDeclarationBuilder &b)
     const UString identifier(SimulationItemsAccessor::socket_identifier_for_item(item));
     auto &input_decl = b.add_input(socket_type, name, identifier)
                            .socket_name_ptr(
-                               &node_tree->id, *SimulationItemsAccessor::item_srna, &item, "name");
-    auto &output_decl = b.add_output(socket_type, name, identifier).align_with_previous();
-    if (socket_type_supports_attributes(socket_type)) {
-      /* If it's below a geometry input it may be a field evaluated on that geometry. */
-      input_decl.supports_field().structure_type(StructureType::Dynamic);
-      output_decl.dependent_field({input_decl.index()});
-    }
+                               &node_tree->id, *SimulationItemsAccessor::item_srna, &item, "name")
+                           .structure_type(StructureType::Dynamic);
+    auto &output_decl = b.add_output(socket_type, name, identifier)
+                            .align_with_previous()
+                            .propagate_all({input_decl.index()})
+                            .inferred_structure_type({input_decl.index()})
+                            .structure_type(StructureType::Dynamic);
     if (socket_type == SOCK_BUNDLE) {
       dynamic_cast<decl::BundleBuilder &>(output_decl)
           .pass_through_input_index(input_decl.index());
@@ -456,11 +456,7 @@ class LazyFunctionForSimulationOutputNode final : public LazyFunction {
       return;
     }
     std::optional<FoundNestedNodeID> found_id = find_nested_node_id(user_data, node_.identifier);
-    if (!found_id) {
-      this->set_default_outputs(params);
-      return;
-    }
-    if (found_id->is_in_loop || found_id->is_in_closure) {
+    if (!found_id || found_id->is_in_loop || found_id->is_in_closure) {
       if (eval_log::NodeTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data)) {
         const StringRefNull message = TIP_("Simulation must not be in a loop or closure");
         tree_logger->node_warnings.append(*tree_logger->allocator,
@@ -530,11 +526,12 @@ class LazyFunctionForSimulationOutputNode final : public LazyFunction {
   {
     Vector<SocketValueVariant> output_values = get_output_values_from_bake_values(
         simulation_items_, compute_context, data_block_map, std::move(prev_bake_values));
-
     Vector<SocketValueVariant> next_values = get_output_values_from_bake_values(
         simulation_items_, compute_context, data_block_map, std::move(next_bake_values));
-    for (const int i : simulation_items_.index_range()) {
-      geometry::mix_socket_values(output_values[i], next_values[i], mix_factor);
+    if (mix_factor != 0.0f) {
+      for (const int i : simulation_items_.index_range()) {
+        geometry::mix_socket_values(output_values[i], next_values[i], mix_factor);
+      }
     }
     for (const int i : simulation_items_.index_range()) {
       params.set_output(i, std::move(output_values[i]));
@@ -569,7 +566,7 @@ class LazyFunctionForSimulationOutputNode final : public LazyFunction {
       /* Wait for skip input to be computed. */
       return;
     }
-    const bool skip = skip_variant->get<bool>();
+    const bool skip = skip_variant->copy_as<bool>();
 
     /* Instead of outputting the values directly, convert them to a bake state and then back.
      * This ensures that some geometry processing happens on the data consistently (e.g. removing
@@ -640,13 +637,13 @@ static void node_declare(NodeDeclarationBuilder &b)
     const UString identifier(SimulationItemsAccessor::socket_identifier_for_item(item));
     auto &input_decl = b.add_input(socket_type, name, identifier)
                            .socket_name_ptr(
-                               &tree->id, *SimulationItemsAccessor::item_srna, &item, "name");
-    auto &output_decl = b.add_output(socket_type, name, identifier).align_with_previous();
-    if (socket_type_supports_attributes(socket_type)) {
-      /* If it's below a geometry input it may be a field evaluated on that geometry. */
-      input_decl.supports_field().structure_type(StructureType::Dynamic);
-      output_decl.dependent_field({input_decl.index()});
-    }
+                               &tree->id, *SimulationItemsAccessor::item_srna, &item, "name")
+                           .structure_type(StructureType::Dynamic);
+    auto &output_decl = b.add_output(socket_type, name, identifier)
+                            .align_with_previous()
+                            .propagate_all({input_decl.index()})
+                            .inferred_structure_type({input_decl.index()})
+                            .structure_type(StructureType::Dynamic);
     if (socket_type == SOCK_BUNDLE) {
       dynamic_cast<decl::BundleBuilder &>(output_decl)
           .pass_through_input_index(input_decl.index());
@@ -711,7 +708,7 @@ static void node_extra_info(NodeExtraInfoParams &params)
   if (!ctx.is_bakeable_in_current_context) {
     NodeExtraInfoRow row;
     row.text = TIP_("Cannot bake in zone");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     params.rows.append(std::move(row));
   }
   if (ctx.is_baked) {

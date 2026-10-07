@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
@@ -25,15 +29,20 @@ NODE_STORAGE_FUNCS(NodeTexVoronoi)
 static void sh_node_tex_voronoi_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
+
   const int dimensions = b.node_or_null() ? node_storage(*b.node_or_null()).dimensions : 3;
+  const bool is_compositor = b.tree_or_null() && b.tree_or_null()->type == NTREE_COMPOSIT;
+  const NodeDefaultInputType default_input_type =
+      is_compositor ? NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES :
+                      NODE_DEFAULT_INPUT_POSITION_FIELD;
   b.add_input<decl::Vector>("Vector"_ustr)
-      .hide_value()
-      .implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD)
+      .default_input_type(default_input_type)
       .available(dimensions != 1);
+
   b.add_input<decl::Float>("W"_ustr)
       .min(-1000.0f)
       .max(1000.0f)
-      .available(dimensions == 1 || dimensions == 4)
+      .available(ELEM(dimensions, 1, 4))
       .make_available([](bNode &node) {
         /* Default to 1 instead of 4, because it is much faster. */
         node_storage(node).dimensions = 1;
@@ -95,8 +104,7 @@ static void sh_node_tex_voronoi_declare(NodeDeclarationBuilder &b)
       .available(feature != SHD_VORONOI_N_SPHERE_RADIUS);
   b.add_output<decl::Color>("Color"_ustr)
       .no_muted_links()
-      .available(feature != SHD_VORONOI_DISTANCE_TO_EDGE &&
-                 feature != SHD_VORONOI_N_SPHERE_RADIUS);
+      .available(!ELEM(feature, SHD_VORONOI_DISTANCE_TO_EDGE, SHD_VORONOI_N_SPHERE_RADIUS));
   b.add_output<decl::Vector>("Position"_ustr)
       .no_muted_links()
       .available(feature != SHD_VORONOI_DISTANCE_TO_EDGE &&

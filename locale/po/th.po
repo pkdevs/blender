@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'bc0a0ff2c0ce')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'c02032f9693d')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-18 11:20+0000\n"
+"POT-Creation-Date: 2026-10-05 07:25+0000\n"
 "PO-Revision-Date: 2026-03-19 12:41+0000\n"
 "Last-Translator: Banditer1483 <pleum.wongvarit@gmail.com>\n"
 "Language-Team: Thai <https://translate.blender.org/projects/blender-ui/ui/th/>\n"
@@ -1630,6 +1630,38 @@ msgid "Armatures active edit bone"
 msgstr "แก้ไขโครงกระดูกที่ใช้งานอยู่"
 
 
+msgid "Asset Library"
+msgstr "คลังสินทรัพย์"
+
+
+msgid "All Libraries"
+msgstr "คลังทั้งหมด"
+
+
+msgid "Show assets from all of the listed asset libraries"
+msgstr "แสดงเนื้อหาจากคลังเนื้อหาทั้งหมดที่ระบุไว้"
+
+
+msgid "Current File"
+msgstr "ไฟล์ปัจจุบัน"
+
+
+msgid "Show the assets currently available in this Blender session"
+msgstr "แสดงสินทรัพย์ที่มีอยู่ในช่วงสมัยของเบลนเดอร์นี้"
+
+
+msgid "Essentials"
+msgstr "รากแก่น"
+
+
+msgid "Custom"
+msgstr "กำหนดเอง"
+
+
+msgid "Show assets from the asset libraries configured in the Preferences"
+msgstr "แสดงเนื้อหาจากคลังเนื้อหาที่กำหนดค่าไว้ในส่วนการตั้งค่า"
+
+
 msgid "User Asset Libraries"
 msgstr "คลังสินทรัพย์ของผู้ใช้"
 
@@ -1710,6 +1742,10 @@ msgid "The type of license this asset is distributed under. An empty license nam
 msgstr "ประเภทของใบอนุญาตที่ใช้ในการเผยแพร่สินทรัพย์นี้ ชื่อใบอนุญาตที่ว่างเปล่าไม่ได้หมายความว่าสินทรัพย์นี้ปราศจากข้อกำหนดด้านใบอนุญาตเสมอไป โปรดติดต่อผู้สร้างหากต้องการคำชี้แจงเพิ่มเติม"
 
 
+msgid "Link"
+msgstr "เชื่อมโยง"
+
+
 msgid "Tags"
 msgstr "ป้ายระบุ"
 
@@ -1771,40 +1807,8 @@ msgid "Regions for quick access to assets"
 msgstr "บริเวณที่เข้าถึงสินทรัพย์ได้อย่างรวดเร็ว"
 
 
-msgid "Asset Library"
-msgstr "คลังสินทรัพย์"
-
-
 msgid "Choose the asset library to display assets from"
 msgstr "เลือกคลังสินทรัพย์เพื่อแสดงสินทรัพย์จาก"
-
-
-msgid "All Libraries"
-msgstr "คลังทั้งหมด"
-
-
-msgid "Show assets from all of the listed asset libraries"
-msgstr "แสดงเนื้อหาจากคลังเนื้อหาทั้งหมดที่ระบุไว้"
-
-
-msgid "Current File"
-msgstr "ไฟล์ปัจจุบัน"
-
-
-msgid "Show the assets currently available in this Blender session"
-msgstr "แสดงสินทรัพย์ที่มีอยู่ในช่วงสมัยของเบลนเดอร์นี้"
-
-
-msgid "Essentials"
-msgstr "รากแก่น"
-
-
-msgid "Custom"
-msgstr "กำหนดเอง"
-
-
-msgid "Show assets from the asset libraries configured in the Preferences"
-msgstr "แสดงเนื้อหาจากคลังเนื้อหาที่กำหนดค่าไว้ในส่วนการตั้งค่า"
 
 
 msgid "Activate Operator"
@@ -2331,56 +2335,28 @@ msgid "Point"
 msgstr "จุด"
 
 
-msgid "Attribute on point"
-msgstr "ลักษณะประจำบนจุด"
-
-
 msgid "Edge"
 msgstr "ขอบ"
-
-
-msgid "Attribute on mesh edge"
-msgstr "ลักษณะประจำบนขอบตาข่าย"
 
 
 msgid "Face"
 msgstr "หน้า"
 
 
-msgid "Attribute on mesh faces"
-msgstr "ลักษณะประจำบนหน้าตาข่าย"
-
-
 msgid "Face Corner"
 msgstr "มุมหน้า"
-
-
-msgid "Attribute on mesh face corner"
-msgstr "ลักษณะประจำที่มุมของหน้าตาข่าย"
 
 
 msgid "Spline"
 msgstr "ร่องสลัก"
 
 
-msgid "Attribute on spline"
-msgstr "ลักษณะประจำบนร่องสลัก"
-
-
 msgid "Instance"
 msgstr "กรณีตัวอย่าง"
 
 
-msgid "Attribute on instance"
-msgstr "ลักษณะประจำบนกรณีตัวอย่าง"
-
-
 msgid "Layer"
 msgstr "ชั้นภาพ"
-
-
-msgid "Attribute on Grease Pencil layer"
-msgstr "ลักษณะประจำบนชั้นภาพดินสอไขมัน"
 
 
 msgid "Is Internal"
@@ -3634,32 +3610,20 @@ msgid "A color space, view or display was not found, which likely means the Open
 msgstr "ไม่พบพื้นที่สี มุมมอง หรือการแสดงผล ซึ่งอาจหมายความว่าไฟล์การกำหนดค่า OpenColorIO ที่ใช้สร้างไฟล์ Blend นี้หายไป"
 
 
-msgid "Working Space"
-msgstr "พื้นที่ทำงาน"
+msgid "Blender"
+msgstr "Blender"
 
 
 msgid "Color space used for all scene linear colors in this file, and for compositing, shader and geometry nodes processing"
 msgstr "พื้นที่สีที่ใช้สำหรับสีเชิงเส้นทั้งหมดในฉากในไฟล์นี้ รวมถึงการประมวลผลโหนดการจัดองค์ประกอบภาพ เชเดอร์ และเรขาคณิต"
 
 
-msgid "Linear Rec.709"
-msgstr "ลิเนียร์ เรค.709"
-
-
 msgid "Linear BT.709 with illuminant D65 white point"
 msgstr "เส้นตรง BT.709 พร้อมแหล่งกำเนิดแสงจุดขาว D65"
 
 
-msgid "Linear Rec.2020"
-msgstr "ลิเนียร์ เรค.2020"
-
-
 msgid "Linear BT.2020 with illuminant D65 white point"
 msgstr "ไฟส่องสว่างแบบเส้นตรง BT.2020 พร้อมจุดสีขาว D65"
-
-
-msgid "ACEScg"
-msgstr "เอซีเอสซีจี"
 
 
 msgid "Linear AP1 with ACES white point"
@@ -3688,6 +3652,10 @@ msgstr "ตัวเลือกสำหรับการนำเข้าไ
 
 msgid "Only link data, instead of appending it"
 msgstr "เพียงแค่เชื่อมโยงข้อมูล ไม่ใช่เพิ่มข้อมูลต่อท้าย"
+
+
+msgid "Path"
+msgstr "เส้นทาง"
 
 
 msgid "Speed"
@@ -3807,16 +3775,8 @@ msgid "Status"
 msgstr "สถิติ"
 
 
-msgid "Display"
-msgstr "แสดง"
-
-
 msgid "Curve"
 msgstr "เส้นโค้ง"
-
-
-msgid "View"
-msgstr "มุมมอง"
 
 
 msgid "Brightness"
@@ -3938,6 +3898,10 @@ msgstr "พื้นผิว"
 
 msgid "Plane"
 msgstr "ระนาบ"
+
+
+msgid "View"
+msgstr "มุมมอง"
 
 
 msgid "Radius"
@@ -4159,10 +4123,6 @@ msgid "Show .blend files items (objects, materials, etc.)"
 msgstr "แสดงรายการในไฟล์ .blend (วัตถุ วัสดุ อื่น ๆ)"
 
 
-msgid "Link"
-msgstr "เชื่อมโยง"
-
-
 msgid "Matrix"
 msgstr "เมทริกซ์"
 
@@ -4380,10 +4340,6 @@ msgstr "ความละเอียด U"
 
 msgid "Resolution V"
 msgstr "ความละเอียด V"
-
-
-msgid "Path"
-msgstr "เส้นทาง"
 
 
 msgid "Font Bold"
@@ -4678,6 +4634,10 @@ msgid "Display Color"
 msgstr "สีที่แสดง"
 
 
+msgid "Display"
+msgstr "แสดง"
+
+
 msgid "Particle"
 msgstr "อนุภาค"
 
@@ -4885,10 +4845,6 @@ msgid "Shift"
 msgstr "เลื่อน"
 
 
-msgid "Release"
-msgstr "ปล่อย"
-
-
 msgid "Paths"
 msgstr "เส้นทาง"
 
@@ -4937,104 +4893,104 @@ msgid "Mix Color"
 msgstr "ผสมสี"
 
 
-msgid "Mirror"
-msgstr "กระจกสะท้อน"
-
-
-msgid "Snap"
-msgstr "ยึดติด"
-
-
-msgid "Local View"
-msgstr "มุมมองท้องถิ่น"
-
-
-msgid "Viewpoint"
-msgstr "จุดของมุมมอง"
-
-
-msgid "Math"
-msgstr "คณิตศาสตร์"
-
-
-msgid "Navigation"
-msgstr "การนำทาง"
-
-
-msgid "Align View"
-msgstr "จัดมุมมอง"
-
-
-msgid "Align View to Active"
-msgstr "จัดมุมมองไปยังที่วัตถุใช้งาน"
-
-
-msgid "View Regions"
-msgstr "ขอบเขตมุมมอง"
-
-
 msgid "Metaball"
 msgstr "เมตาบอล"
-
-
-msgid "Light"
-msgstr "แสง"
-
-
-msgid "Add Image"
-msgstr "เพิ่มภาพ"
-
-
-msgid "Import"
-msgstr "นำเข้า"
-
-
-msgid "Apply"
-msgstr "นำไปใช้"
-
-
-msgid "Track"
-msgstr "แทร็ค"
-
-
-msgid "UV"
-msgstr "UV"
-
-
-msgid "Hooks"
-msgstr "ตะขอ"
-
-
-msgid "Names"
-msgstr "ชื่อ"
-
-
-msgid "Face Data"
-msgstr "ข้อมูลด้าน"
-
-
-msgid "Merge"
-msgstr "ผสาน"
-
-
-msgid "Layout"
-msgstr "เค้าโครง"
-
-
-msgid "Keying"
-msgstr "คีย์"
-
-
-msgid "Pivot Point"
-msgstr "จุดหมุน"
 
 
 msgid "Proportional Editing Falloff"
 msgstr "แก้ไข"
 
 
+msgid "Snap"
+msgstr "ยึดติด"
+
+
+msgid "Pivot Point"
+msgstr "จุดหมุน"
+
+
+msgid "Local View"
+msgstr "มุมมองท้องถิ่น"
+
+
+msgid "Light"
+msgstr "แสง"
+
+
+msgid "Mirror"
+msgstr "กระจกสะท้อน"
+
+
+msgid "Apply"
+msgstr "นำไปใช้"
+
+
+msgid "Merge"
+msgstr "ผสาน"
+
+
 msgid "Mask Edit"
 msgstr "การแก้ไขหน้ากาก"
+
+
+msgid "Names"
+msgstr "ชื่อ"
+
+
+msgid "Hooks"
+msgstr "ตะขอ"
+
+
+msgid "UV"
+msgstr "UV"
+
+
+msgid "View Regions"
+msgstr "ขอบเขตมุมมอง"
+
+
+msgid "Math"
+msgstr "คณิตศาสตร์"
+
+
+msgid "Align View to Active"
+msgstr "จัดมุมมองไปยังที่วัตถุใช้งาน"
+
+
+msgid "Keying"
+msgstr "คีย์"
+
+
+msgid "Align View"
+msgstr "จัดมุมมอง"
+
+
+msgid "Navigation"
+msgstr "การนำทาง"
+
+
+msgid "Import"
+msgstr "นำเข้า"
+
+
+msgid "Viewpoint"
+msgstr "จุดของมุมมอง"
+
+
+msgid "Track"
+msgstr "แทร็ค"
+
+
+msgid "Face Data"
+msgstr "ข้อมูลด้าน"
+
+
+msgid "Add Image"
+msgstr "เพิ่มภาพ"
+
+
+msgid "Layout"
+msgstr "เค้าโครง"
 
 
 msgid "Zoom"
@@ -5062,8 +5018,8 @@ msgid "Add Modifier"
 msgstr "เพิ่มการปรับแต่ง"
 
 
-msgid "Blender"
-msgstr "Blender"
+msgid "Save & Load"
+msgstr "บันทึกและโหลด"
 
 
 msgid "System"
@@ -5104,10 +5060,6 @@ msgstr "ช่วยเหลือ"
 
 msgid "Presets"
 msgstr "รูปแบบล่วงหน้า"
-
-
-msgid "Save & Load"
-msgstr "บันทึกและโหลด"
 
 
 msgctxt "Operator"
@@ -5319,10 +5271,6 @@ msgstr "ผลลัพธ์"
 
 msgid "YCbCr"
 msgstr "YCbCr"
-
-
-msgid "To"
-msgstr "ไปยัง"
 
 
 msgid "RGB Curves"
@@ -6125,6 +6073,10 @@ msgid "Paste"
 msgstr "วาง"
 
 
+msgid "Movie"
+msgstr "ภาพยนตร์"
+
+
 msgid "Sound Name"
 msgstr "ชื่อเสียง"
 
@@ -6299,12 +6251,12 @@ msgid "Single Image"
 msgstr "ภาพเดี่ยว"
 
 
-msgid "Overlays"
-msgstr "วางซ้อน"
-
-
 msgid "View Lock"
 msgstr "ล็อกมุมมอง"
+
+
+msgid "Overlays"
+msgstr "วางซ้อน"
 
 
 msgid "Mask Display"
@@ -6325,6 +6277,10 @@ msgstr "เบ็ดเตล็ด"
 
 msgid "Movement"
 msgstr "การเคลื่อนไหว"
+
+
+msgid "Working Space"
+msgstr "พื้นที่ทำงาน"
 
 
 msgid "Shadows"
@@ -6386,11 +6342,6 @@ msgstr "อินเตอร์เฟสผู้ใช้"
 msgctxt "Operator"
 msgid "Measure"
 msgstr "วัดขนาด"
-
-
-msgctxt "Operator"
-msgid "Bone Size"
-msgstr "ขนาดกระดูก"
 
 
 msgctxt "Operator"
@@ -6836,6 +6787,14 @@ msgid "Error Message"
 msgstr "ข้อความแสดงข้อผิดพลาด"
 
 
+msgid "Release"
+msgstr "ปล่อย"
+
+
+msgid "Cancel"
+msgstr "ยกเลิก"
+
+
 msgctxt "WindowManager"
 msgid "User Interface"
 msgstr "อินเตอร์เฟสผู้ใช้"
@@ -6895,11 +6854,6 @@ msgid ":"
 msgstr ":"
 
 
-msgctxt "Operator"
-msgid "Report a Bug"
-msgstr "รายงานข้อผิดพลาด"
-
-
 msgid "Description:"
 msgstr "คำอธิบาย:"
 
@@ -6925,13 +6879,13 @@ msgid "Documentation"
 msgstr "เอกสาร"
 
 
+msgctxt "Operator"
+msgid "Report a Bug"
+msgstr "รายงานข้อผิดพลาด"
+
+
 msgid "File:"
 msgstr "ไฟล์:"
-
-
-msgctxt "Operator"
-msgid "Apply"
-msgstr "นำไปใช้"
 
 
 msgid "3D View"
@@ -7215,6 +7169,11 @@ msgstr "แสดง"
 
 
 msgctxt "Operator"
+msgid "Text"
+msgstr "ข้อความ"
+
+
+msgctxt "Operator"
 msgid "Fade"
 msgstr "จาง"
 
@@ -7254,18 +7213,8 @@ msgstr "ทั้งสองด้าน"
 
 
 msgctxt "Operator"
-msgid "Mask..."
-msgstr "หน้ากาก..."
-
-
-msgctxt "Operator"
 msgid "Color"
 msgstr "สี"
-
-
-msgctxt "Operator"
-msgid "Text"
-msgstr "ข้อความ"
 
 
 msgctxt "Operator"
@@ -7316,10 +7265,6 @@ msgstr "เส้นถัดไป"
 msgctxt "Operator"
 msgid "Next Word"
 msgstr "คำถัดไป"
-
-
-msgid "New Keyframe Type"
-msgstr "ชนิดคีย์เฟรมใหม่"
 
 
 msgctxt "Operator"
@@ -7409,11 +7354,6 @@ msgstr "ทั่วไป"
 
 msgid "More..."
 msgstr "เพิ่มเติม..."
-
-
-msgctxt "Operator"
-msgid "Alembic (.abc)"
-msgstr "Alembic (.abc)"
 
 
 msgctxt "Operator"
@@ -7763,6 +7703,11 @@ msgstr "ลบแผ่นผิว"
 
 
 msgctxt "Operator"
+msgid "Apply"
+msgstr "นำไปใช้"
+
+
+msgctxt "Operator"
 msgid "Apply Camera Image"
 msgstr "นำรูปของกล้องไปใช้"
 
@@ -7801,10 +7746,6 @@ msgid "Key %d"
 msgstr "คีย์ %d"
 
 
-msgid "Cancel"
-msgstr "ยกเลิก"
-
-
 msgctxt "Curve"
 msgid "CurvePath"
 msgstr "เส้นทางโค้ง"
@@ -7831,10 +7772,6 @@ msgid "OK"
 msgstr "ตกลง"
 
 
-msgid "Movie"
-msgstr "ภาพยนตร์"
-
-
 msgctxt "Operator"
 msgid "Click"
 msgstr "คลิก"
@@ -7850,10 +7787,6 @@ msgstr "ตั้งมุมมองใหม่"
 
 msgid "Reset Curve"
 msgstr "ตั้งค่าเส้นโค้งใหม่"
-
-
-msgid "S"
-msgstr "S"
 
 
 msgid "Zoom in"
@@ -8251,6 +8184,10 @@ msgstr "แทนที่อันดั้งเดิม"
 
 msgid "Val"
 msgstr "Val"
+
+
+msgid "S"
+msgstr "S"
 
 
 msgid "Old"

@@ -9,7 +9,7 @@
 #include "BLI_math_boolean.hh"
 #include "BLI_math_mpq.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 namespace blender {
 
@@ -424,7 +424,7 @@ void exactinit()
   splitter = 1.0;
   check = 1.0;
   /* Repeatedly divide `epsilon` by two until it is too small to add to
-   * one without causing round-off.  (Also check if the sum is equal to
+   * one without causing round-off. Also check if the sum is equal to
    * the previous sum, for machines that round up instead of using exact
    * rounding.  Not that this library will work on such machines anyway. */
   do {

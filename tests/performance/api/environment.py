@@ -17,6 +17,7 @@ from collections.abc import (
     Callable,
 )
 
+from .common import normalize_device_id
 from .config import TestConfig
 from .device import TestMachine
 
@@ -47,6 +48,7 @@ class TestEnvironment:
         self.cmake_executable = 'cmake'
         self.cmake_options = ['-DWITH_INTERNATIONAL=OFF', '-DWITH_BUILDINFO=OFF']
         self.log_file = None
+        self.echo_output = False
         self.machine = None
         self._title_cache = {}
         self._init_default_blender_executable()
@@ -89,7 +91,8 @@ class TestEnvironment:
                 print(f'Exists {self.build_dir}')
 
             print("Building")
-            self.build()
+            git_hash = self.resolve_git_hash('HEAD')
+            self.build(git_hash, self.install_dir)
 
         print('Done')
 
@@ -265,6 +268,8 @@ class TestEnvironment:
                 if line:
                     line_str = line.decode('utf-8', 'ignore')
                     lines.append(line_str)
+                    if self.echo_output and not silent:
+                        print(line_str, end='', flush=True)
                     if f:
                         f.write(line_str)
         except KeyboardInterrupt as e:
@@ -421,8 +426,9 @@ class TestEnvironment:
         device_id = device_str
         gpu_backend = 'default'
 
+        sanitized_str = normalize_device_id(device_str)
         for device in machine.devices:
-            if device.id == device_str or device.type == device_str:
+            if normalize_device_id(device.id) == sanitized_str or device.type == device_str:
                 device_id = device.id
                 gpu_backend = {
                     'VULKAN': 'vulkan',

@@ -23,6 +23,7 @@ struct SwsContext;
 #ifdef WITH_FFMPEG
 
 extern "C" {
+#  include <libavutil/pixfmt.h>
 #  include <libavutil/rational.h>
 }
 
@@ -31,7 +32,6 @@ extern "C" {
 namespace blender {
 
 struct IDProperty;
-struct MovieIndex;
 
 struct MovieReader {
   enum class State { Uninitialized, Failed, Valid };
@@ -67,6 +67,9 @@ struct MovieReader {
   AVFrame *pFrame_backup = nullptr;
   bool pFrame_backup_complete = false;
 
+  AVFrame *pFrameSW = nullptr;
+  AVPixelFormat src_pix_fmt = AV_PIX_FMT_NONE;
+
   int64_t cur_pts = 0;
   int64_t cur_key_frame_pts = 0;
   AVPacket *cur_packet = nullptr;
@@ -84,14 +87,11 @@ struct MovieReader {
   bool never_seek_decode_one_frame = false;
 #endif
 
-  char index_dir[768] = {};
+  char proxy_dir[768] = {};
 
   int proxies_tried = 0;
-  int indices_tried = 0;
 
   MovieReader *proxy_anim[IMB_PROXY_MAX_SLOT] = {};
-  MovieIndex *record_run = nullptr;
-  MovieIndex *no_gaps = nullptr;
 
   char colorspace[/*MAX_COLORSPACE_NAME*/ 64] = {};
   /** The maximum name from multi-view. */

@@ -6,14 +6,13 @@
  * \ingroup gpu
  */
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_global.hh"
 
 #include "mtl_backend.hh"
+#include "mtl_debug.hh"
 #include "mtl_texture_pool.hh"
-
-#include "CLG_log.h"
 
 #include "fmt/format.h"
 
@@ -31,11 +30,12 @@ static bool check_texture_format_compatability(TextureFormat src_format, Texture
 
   /* Metal's newTextureViewWithPixelFormat doesn't support aliasing on depth, stencil,
    * or compressed formats. */
-  GPUTextureFormatFlag format_flag = to_format_flag(src_format);
-  if (bool(format_flag & GPU_FORMAT_DEPTH_STENCIL)) {
+  GPUTextureFormatFlag src_format_flag = to_format_flag(src_format);
+  if (bool(src_format_flag & (GPU_FORMAT_DEPTH_STENCIL | GPU_FORMAT_COMPRESSED))) {
     return false;
   }
-  if (bool(format_flag & GPU_FORMAT_COMPRESSED)) {
+  GPUTextureFormatFlag dst_format_flag = to_format_flag(dst_format);
+  if (bool(dst_format_flag & (GPU_FORMAT_DEPTH_STENCIL | GPU_FORMAT_COMPRESSED))) {
     return false;
   }
 
@@ -289,7 +289,7 @@ void MTLTexturePool::reset(bool force_free)
 void MTLTexturePool::log_usage_data() const
 {
   int64_t total_texture_count = acquired_.size() + pool_.size();
-  CLOG_TRACE(&LOG,
+  CLOG_DEBUG(&LOG,
              "MTLTexturePool uses %ld textures (%ld consecutively)",
              static_cast<long>(total_texture_count),
              static_cast<long>(current_usage_data_.usage_count_max));

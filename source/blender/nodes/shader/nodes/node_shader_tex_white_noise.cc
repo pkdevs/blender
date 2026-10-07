@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 #include "BLI_noise.hh"
@@ -22,15 +26,20 @@ static void sh_node_tex_white_noise_declare(NodeDeclarationBuilder &b)
   b.is_function_node();
 
   const int dimensions = b.node_or_null() ? b.node_or_null()->custom1 : 3;
+  const bool is_compositor = b.tree_or_null() && b.tree_or_null()->type == NTREE_COMPOSIT;
+  const NodeDefaultInputType default_input_type =
+      is_compositor ? NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES :
+                      NODE_DEFAULT_INPUT_POSITION_FIELD;
   b.add_input<decl::Vector>("Vector"_ustr)
       .min(-10000.0f)
       .max(10000.0f)
-      .implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD)
+      .default_input_type(default_input_type)
       .available(dimensions != 1);
+
   b.add_input<decl::Float>("W"_ustr)
       .min(-10000.0f)
       .max(10000.0f)
-      .available(dimensions == 1 || dimensions == 4)
+      .available(ELEM(dimensions, 1, 4))
       .make_available([](bNode &node) {
         /* Default to 1 instead of 4, because it is faster. */
         node.custom1 = 1;

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 /**
@@ -19,7 +23,7 @@
 
 #include <optional>
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
 #include "BKE_node.hh"
@@ -104,7 +108,9 @@ template<typename Accessor> inline void clear(bNode &node)
   destruct_array<Accessor>(node);
   SocketItemsRef ref = Accessor::get_items_from_node(node);
   *ref.items_num = 0;
-  *ref.active_index = 0;
+  if (ref.active_index) {
+    *ref.active_index = 0;
+  }
 }
 
 /**

@@ -8,14 +8,14 @@
 
 #include <fmt/format.h>
 
-#include "BLI_assert.h"
-#include "BLI_fileops.h"
+#include "BLI_assert.hh"
+#include "BLI_fileops.hh"
 #include "BLI_hash_md5.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 #include "BLT_translation.hh"
 
@@ -23,6 +23,7 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_idprop.hh"
+#include "BKE_preferences.h"
 #include "BKE_report.hh"
 
 #ifdef WITH_PYTHON
@@ -47,14 +48,31 @@
 #include "AS_asset_representation.hh"
 #include "AS_essentials_library.hh"
 #include "AS_remote_library.hh"
+
 #include "remote_library.hh"
 
-static CLG_LogRef LOG = {"assets.remote_library"};
+static CLG_LogRef LOG = {"asset.remote_library"};
+
+/**
+ * An extension repository may define itself as the origin of an asset-libraries token.
+ * In this case, always use the token from the extensions repository.
+ *
+ * \note `_remote_asset_library_sync_all_periodic` in `bl_pkg/__init__.py`
+ * does the same for the startup sync, which doesn't run this script.
+ */
+#define AUTH_TOKEN_MAYBE_OVERRIDE_FROM_EXTENSIONS \
+  "from _bpy_internal.extensions.asset_library_query import token_from_asset_url\n" \
+  "if (auth_token_override := token_from_asset_url(library_url)) is not None:\n" \
+  "    auth_token = auth_token_override\n"
 
 namespace blender::asset_system {
 
 RemoteLibraryDefinitionRef::RemoteLibraryDefinitionRef(const bUserAssetLibrary &library_definition)
-    : remote_url(library_definition.remote_url), cache_dirpath(library_definition.dirpath)
+    : remote_url(library_definition.remote_url),
+      cache_dirpath(library_definition.dirpath),
+      auth_token(library_definition.auth_token ?
+                     std::optional<StringRefNull>(library_definition.auth_token) :
+                     std::nullopt)
 {
   BLI_assert((library_definition.flag & ASSET_LIBRARY_USE_REMOTE_URL) != 0);
 }
@@ -73,6 +91,12 @@ RemoteAssetLibrary::RemoteAssetLibrary(const eAssetLibraryType library_type,
     : AssetLibrary(library_type, is_read_only, name, root_path), remote_url_(remote_url)
 {
   may_override_import_method_ = false;
+}
+
+void RemoteAssetLibrary::force_remote_listing_download() const
+{
+  remote_library_request_download(
+      RemoteLibraryDefinitionRef{remote_url_, root_path(), auth_token()});
 }
 
 std::optional<eAssetImportMethod> RemoteAssetLibrary::import_method() const
@@ -139,7 +163,27 @@ bool PreferencesRemoteAssetLibrary::is_enabled() const
     return false;
   }
 
-  return (library_definition->flag & ASSET_LIBRARY_DISABLED) == 0;
+  return BKE_preferences_asset_library_is_available(&U, library_definition);
+}
+
+std::optional<StringRefNull> PreferencesRemoteAssetLibrary::auth_token() const
+{
+  const bUserAssetLibrary *library_definition = user_library_.user_asset_library();
+  if (library_definition == nullptr) {
+    return std::nullopt;
+  }
+
+  if (library_definition->auth_token == nullptr) {
+    return std::nullopt;
+  }
+
+  StringRefNull token(library_definition->auth_token);
+  if (token.is_empty()) {
+    return std::nullopt;
+  }
+
+  BLI_assert(library_definition->flag & ASSET_LIBRARY_USE_AUTH_TOKEN);
+  return token;
 }
 
 /** \} */
@@ -183,13 +227,17 @@ struct ProgressData {
    */
   Map<RequestIdentifier, std::string> req_to_full_urls;
 
-  /** Absolute URLs (see #req_to_full_urls) of all requested files mapped to their expected size on
+  /**
+   * Absolute URLs (see #req_to_full_urls) of all requested files mapped to their expected size on
    * disk. Files that are done downloading (successfully or not) are removed and added to
-   * #done_files below. */
+   * #done_files below.
+   */
   Map<std::string, FileProgress> requested_files;
-  /** Absolute URLs of files that are done downloading (successfully or not) mapped to their
+  /**
+   * Absolute URLs of files that are done downloading (successfully or not) mapped to their
    * expected size on disk. Will be cleared once all current requests are done. This way total
-   * progress reporting can include "done" assets, and progress bars fill up as expected. */
+   * progress reporting can include "done" assets, and progress bars fill up as expected.
+   */
   Map<std::string, FileProgress> done_files;
 };
 
@@ -404,11 +452,12 @@ void RemoteLibraryLoadingStatus::ping_asset_file_progress(const StringRef absolu
 static void ping_asset_file_done_impl(const bContext &C,
                                       const StringRef library_url,
                                       const StringRef absolute_file_url,
+                                      const StringRef local_file_abspath,
                                       const DownloadOutcome outcome)
 {
   wmWindowManager *wm = CTX_wm_manager(&C);
 
-  ed::asset::list::on_remote_assets_downloaded(*wm, library_url);
+  ed::asset::list::on_remote_assets_downloaded(*wm, library_url, local_file_abspath);
   ProgressTracker::file_finished(absolute_file_url, outcome);
 
   /* Redraw drags, they may show some "asset being downloaded" info. */
@@ -418,16 +467,23 @@ static void ping_asset_file_done_impl(const bContext &C,
 }
 
 void RemoteLibraryLoadingStatus::ping_asset_file_download_succeeded(
-    const bContext &C, const StringRef library_url, const StringRef absolute_file_url)
+    const bContext &C,
+    const StringRef library_url,
+    const StringRef absolute_file_url,
+    const StringRef local_file_abspath)
 {
-  ping_asset_file_done_impl(C, library_url, absolute_file_url, DownloadOutcome::Succeeded);
+  ping_asset_file_done_impl(
+      C, library_url, absolute_file_url, local_file_abspath, DownloadOutcome::Succeeded);
 }
 
-void RemoteLibraryLoadingStatus::ping_asset_file_download_failed(const bContext &C,
-                                                                 const StringRef library_url,
-                                                                 const StringRef absolute_file_url)
+void RemoteLibraryLoadingStatus::ping_asset_file_download_failed(
+    const bContext &C,
+    const StringRef library_url,
+    const StringRef absolute_file_url,
+    const StringRef local_file_abspath)
 {
-  ping_asset_file_done_impl(C, library_url, absolute_file_url, DownloadOutcome::Failed);
+  ping_asset_file_done_impl(
+      C, library_url, absolute_file_url, local_file_abspath, DownloadOutcome::Failed);
 }
 
 void RemoteLibraryLoadingStatus::ping_download_queue_done(const bContext &C)
@@ -591,7 +647,7 @@ void remote_library_request_download(const RemoteLibraryDefinitionRef &library_d
   }
 
   BLI_assert_msg(!is_online_essentials_url(library_definition.remote_url) ||
-                     library_definition.cache_dirpath == online_essentials_cache_directory_path(),
+                     is_online_essentials_dirpath(library_definition.cache_dirpath),
                  "The online essentials library must be downloaded to "
                  "online_essentials_cache_directory_path()");
 
@@ -612,14 +668,17 @@ void remote_library_request_download(const RemoteLibraryDefinitionRef &library_d
     std::string script =
         "import bl_pkg\n"
         "from pathlib import Path\n"
+        "\n" AUTH_TOKEN_MAYBE_OVERRIDE_FROM_EXTENSIONS
         "\n"
         "bl_pkg.remote_asset_library_sync(\n"
-        "    library_url, Path(library_path),\n"
+        "    library_url, auth_token, Path(library_path)\n"
         ")\n";
 
     std::unique_ptr locals = bke::idprop::create_group("locals");
     IDP_AddToGroup(locals.get(), IDP_NewString(library_definition.remote_url, "library_url"));
     IDP_AddToGroup(locals.get(), IDP_NewString(library_definition.cache_dirpath, "library_path"));
+    IDP_AddToGroup(locals.get(),
+                   IDP_NewString(library_definition.auth_token.value_or(""), "auth_token"));
 
     /* TODO: report errors in the UI somehow. */
     BPY_run_string_exec_with_locals(nullptr, script, *locals);
@@ -707,14 +766,16 @@ static std::optional<std::string> remote_library_request_asset_download_file(
   std::string script =
       "import _bpy_internal.assets.remote_library.asset_downloader as asset_dl\n"
       "from pathlib import Path\n"
+      "\n" AUTH_TOKEN_MAYBE_OVERRIDE_FROM_EXTENSIONS
       "\n"
       "_result = asset_dl.download_asset_file(\n"
-      "    library_url, Path(library_path),\n"
+      "    library_url, auth_token, Path(library_path),\n"
       "    asset_url, asset_hash, Path(dst_filepath),\n"
       ")\n";
 
   std::unique_ptr locals = bke::idprop::create_group("locals");
   IDP_AddToGroup(locals.get(), IDP_NewString(*library.remote_url(), "library_url"));
+  IDP_AddToGroup(locals.get(), IDP_NewString(library.auth_token().value_or(""), "auth_token"));
   IDP_AddToGroup(locals.get(), IDP_NewString(library.root_path(), "library_path"));
   IDP_AddToGroup(locals.get(), IDP_NewString(dst_filepath, "dst_filepath"));
   IDP_AddToGroup(locals.get(), IDP_NewString(asset_url.url, "asset_url"));
@@ -727,8 +788,14 @@ static std::optional<std::string> remote_library_request_asset_download_file(
           const_cast<bContext *>(&C), script, *locals, "_result");
 
   if (!abs_url_idptr) {
-    CLOG_ERROR(&LOG, "Failed to retrieve URL from downloader - bug in Python script");
-    BLI_assert_unreachable();
+    /* This can happen when there is a malicious asset listing, for example when asset file entries
+     * are constructed such that they overwrite Blender's local asset listing files. */
+    /* TODO: improve the error reporting. */
+    BKE_reportf(
+        reports,
+        RPT_ERROR,
+        "Could not queue the download of asset '%s', check the system console for more info",
+        asset_name.c_str());
     return std::nullopt;
   }
   BLI_SCOPED_DEFER([&] { IDP_FreeProperty(*abs_url_idptr); });
@@ -757,8 +824,8 @@ void remote_library_request_asset_download(const bContext &C,
     return;
   }
 
-  if (!asset.is_online()) {
-    BKE_report(reports, RPT_ERROR, "This is not an online asset and thus cannot be downloaded");
+  if (!asset.needs_download()) {
+    BKE_report(reports, RPT_ERROR, "This asset does not require downloading");
     return;
   }
 
@@ -793,7 +860,7 @@ void remote_library_request_asset_download(const bContext &C,
        *
        * Better to stop here, because if a dependency download couldn't be triggered, the main file
        * should not be downloaded either. Because, if that would work, we have a half-downloaded
-       * asset that Blender's asset browser doesn't know is broken). */
+       * asset that Blender's asset browser doesn't know is broken. */
       break;
     }
 
@@ -846,14 +913,16 @@ void remote_library_request_preview_download(const bContext &C,
     std::string script =
         "import _bpy_internal.assets.remote_library.asset_downloader as asset_dl\n"
         "from pathlib import Path\n"
+        "\n" AUTH_TOKEN_MAYBE_OVERRIDE_FROM_EXTENSIONS
         "\n"
         "asset_dl.download_preview(\n"
-        "    library_url, Path(library_path),\n"
+        "    library_url, auth_token, Path(library_path),\n"
         "    preview_url, preview_hash, Path(dst_filepath),\n"
         ")\n";
 
     std::unique_ptr locals = bke::idprop::create_group("locals");
     IDP_AddToGroup(locals.get(), IDP_NewString(*library_url, "library_url"));
+    IDP_AddToGroup(locals.get(), IDP_NewString(library.auth_token().value_or(""), "auth_token"));
     IDP_AddToGroup(locals.get(), IDP_NewString(library.root_path(), "library_path"));
     IDP_AddToGroup(locals.get(), IDP_NewString(*preview_url, "preview_url"));
     IDP_AddToGroup(locals.get(), IDP_NewString(*preview_hash, "preview_hash"));
@@ -1001,6 +1070,16 @@ std::string remote_library_asset_preview_path(const AssetRepresentation &asset)
 /* -------------------------------------------------------------------- */
 /** \name Other Free Functions
  * \{ */
+
+std::string remote_library_top_meta_file_path(const RemoteLibraryDefinitionRef &library)
+{
+  char filepath[FILE_MAX];
+  BLI_path_join(filepath,
+                sizeof(filepath),
+                library.cache_dirpath.c_str(),
+                asset_system::REMOTE_LIBRARY_TOP_META_FILE_NAME.c_str());
+  return filepath;
+}
 
 bool remote_library_url_ends_with_top_meta_file_name(const StringRef url)
 {

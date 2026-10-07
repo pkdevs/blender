@@ -8,8 +8,8 @@
 
 #include <fmt/format.h>
 
-#include "BLI_assert.h"
-#include "BLI_fileops.h"
+#include "BLI_assert.hh"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_serialize.hh"
 #include "BLI_set.hh"
@@ -25,7 +25,11 @@
 #include "CLG_log.h"
 
 #include "ED_asset_indexer.hh"
+
+#include "AS_remote_library.hh"
+
 #include "asset_index.hh"
+#include "asset_indexer_remote_file_status.hh"
 #include "asset_indexer_remote_listing.hh"
 
 static CLG_LogRef LOG = {"asset.remote_listing"};
@@ -39,7 +43,8 @@ using namespace blender::io::serialize;
  * \{ */
 
 struct AssetLibraryListingPageV1 {
-  static ReadingResult<> read_asset_entries(const StringRefNull filepath,
+  static ReadingResult<> read_asset_entries(const StringRefNull listing_root_dirpath,
+                                            const StringRefNull filepath,
                                             RemoteListingEntryProcessFn process_fn);
 };
 
@@ -128,23 +133,28 @@ static ReadingResult<RemoteListingAssetEntry> listing_entry_from_asset_dictionar
   }
 
   /* 'id': name of the asset. Required string. */
-  const std::optional<StringRef> asset_name_opt = dictionary.lookup_str("name");
+  const std::optional<StringRefNull> asset_name_opt = dictionary.lookup_str("name");
   if (!asset_name_opt) {
     return ReadingResult<RemoteListingAssetEntry>::Failure(
         N_("could not read asset name, 'name' field not set"));
   }
-  const StringRef asset_name = *asset_name_opt;
+  const StringRefNull asset_name = *asset_name_opt;
   asset_name.copy_utf8_truncated(listing_entry.datablock_info.name);
 
   /* 'type': data-block type, must match the #IDTypeInfo.name of the given type. required string.
    */
   if (const std::optional<StringRefNull> idtype_name = dictionary.lookup_str("id_type")) {
-    listing_entry.idcode = BKE_idtype_idcode_from_name_case_insensitive(idtype_name->c_str());
-    if (!BKE_idtype_idcode_is_valid(listing_entry.idcode)) {
-      return ReadingResult<RemoteListingAssetEntry>::Failure(fmt::format(
-          N_("could not read type of asset '{:s}': 'id_type' field is not a valid type"),
-          asset_name));
+    const char *normalized_name = BKE_idtype_name_normalize(idtype_name->c_str());
+    if (!normalized_name) {
+      /* This could actually be a new asset type that's not supported by this Blender. Just
+       * silently ignore it and continue. */
+      CLOG_DEBUG(&LOG,
+                 N_("could not read type of asset '%s': 'id_type' field is not a valid type (%s)"),
+                 asset_name.c_str(),
+                 idtype_name->c_str());
+      return ReadingResult<RemoteListingAssetEntry>::Success(RemoteListingAssetEntry{});
     }
+    listing_entry.idcode = BKE_idtype_idcode_from_name(normalized_name);
   }
   else {
     return ReadingResult<RemoteListingAssetEntry>::Failure(
@@ -251,7 +261,8 @@ static ReadingResult<RemoteListingFileEntry> listing_file_from_asset_dictionary(
   return ReadingResult<RemoteListingFileEntry>::Success(std::move(file_entry));
 }
 
-static ReadingResult<> listing_entries_from_root(const DictionaryValue &value,
+static ReadingResult<> listing_entries_from_root(const StringRefNull listing_root_dirpath,
+                                                 const DictionaryValue &value,
                                                  const RemoteListingEntryProcessFn process_fn)
 {
   const ArrayValue *assets = value.lookup_array("assets");
@@ -290,6 +301,9 @@ static ReadingResult<> listing_entries_from_root(const DictionaryValue &value,
     path_to_file_info.add_overwrite(local_path, std::move(file_entry));
   }
 
+  /* Store whether asset files match their listing's hash or not. */
+  FileStatusChecker file_status_checker(listing_root_dirpath);
+
   /* Convert the assets into RemoteListingAssetEntry objects. */
   for (const std::shared_ptr<Value> &asset_element : assets->elements()) {
     ReadingResult<RemoteListingAssetEntry> result = listing_entry_from_asset_dictionary(
@@ -306,6 +320,15 @@ static ReadingResult<> listing_entries_from_root(const DictionaryValue &value,
       continue;
     }
 
+    /* Check the up-to-dateness of the asset's files. */
+    /* TODO: this has to change when Blender starts supporting multi-file assets. */
+    {
+      const StringRef asset_file = entry.online_info.asset_file();
+      RemoteListingFileEntry *file_entry = path_to_file_info.lookup_ptr(asset_file);
+      BLI_assert_msg(file_entry, "Assets without file info should have been filtered out by now");
+      entry.remote_file_status = file_status_checker.remote_file_status(*file_entry);
+    }
+
     if (!process_fn(entry)) {
       return ReadingResult<>::Cancelled();
     }
@@ -317,7 +340,9 @@ static ReadingResult<> listing_entries_from_root(const DictionaryValue &value,
 }
 
 ReadingResult<> AssetLibraryListingPageV1::read_asset_entries(
-    const StringRefNull filepath, const RemoteListingEntryProcessFn process_fn)
+    const StringRefNull listing_root_dirpath,
+    const StringRefNull filepath,
+    const RemoteListingEntryProcessFn process_fn)
 {
   if (!BLI_exists(filepath.c_str())) {
     return ReadingResult<>::Failure(fmt::format(N_("file does not exist: {:s}"), filepath));
@@ -334,7 +359,7 @@ ReadingResult<> AssetLibraryListingPageV1::read_asset_entries(
         fmt::format(N_("file is not a JSON dictionary: {:s}"), filepath));
   }
 
-  return listing_entries_from_root(*root, process_fn);
+  return listing_entries_from_root(listing_root_dirpath, *root, process_fn);
 }
 
 /** \} */
@@ -465,8 +490,8 @@ ReadingResult<> read_remote_listing_v1(const StringRefNull listing_root_dirpath,
         }
       }
 
-      ReadingResult page_result = AssetLibraryListingPageV1::read_asset_entries(filepath,
-                                                                                process_fn);
+      ReadingResult page_result = AssetLibraryListingPageV1::read_asset_entries(
+          listing_root_dirpath, filepath, process_fn);
       done_pages.add(page_path);
       if (page_result.is_cancelled()) {
         return page_result;

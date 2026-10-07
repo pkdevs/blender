@@ -27,7 +27,8 @@ class GHOST_SystemCocoa : public GHOST_System {
   /**
    * Constructor.
    */
-  GHOST_SystemCocoa();
+  GHOST_SystemCocoa(bool background);
+  GHOST_SystemCocoa() : GHOST_SystemCocoa(true) {}
 
   /**
    * Destructor.
@@ -167,6 +168,14 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \return Indication of success.
    */
   GHOST_TSuccess getCursorPosition(int32_t &x, int32_t &y) const override;
+
+  /**
+   * \return the size of the cursor in logical pixels (before Hi-DPI scaling is applied).
+   *
+   * \warning On macOS the logical cursor size is *always* applied on top of hardware cursors,
+   * this should only be used for software-cursor display.
+   */
+  uint32_t getCursorPreferredLogicalSize() const override;
 
   /**
    * Updates the location of the cursor (location in screen coordinates).
@@ -344,6 +353,9 @@ class GHOST_SystemCocoa : public GHOST_System {
 
   /** Ignores window size messages (when window is dragged). */
   bool ignore_window_sized_messages_;
+
+  /** Background-mode, do not display the app icon in the macOS Dock. */
+  bool background_mode_;
 
   /** Temporarily ignore momentum scroll events */
   bool ignore_momentum_scroll_;

@@ -315,7 +315,6 @@ struct PanelCategoryDyn {
   struct PanelCategoryDyn *next = nullptr, *prev = nullptr;
   char idname[64] = "";
   int icon = 0;
-  rcti rect = {};
 };
 
 /** Region stack of active tabs. */
@@ -365,7 +364,7 @@ ENUM_OPERATORS(euiList_FilterFlag)
 
 /** #uiList.filter_sort_flag */
 enum euiList_FilterSortFlag : int {
-  /* Plain values (only one is valid at a time, once masked with UILST_FLT_SORT_MASK. */
+  /* Plain values (only one is valid at a time, once masked with UILST_FLT_SORT_MASK). */
   /** Just for sake of consistency. */
   /* UILST_FLT_SORT_INDEX = 0, */ /* UNUSED */
   UILST_FLT_SORT_ALPHA = 1,
@@ -778,6 +777,8 @@ enum eRegion_Flag : short {
   RGN_FLAG_POLL_FAILED = (1 << 10),
   RGN_FLAG_RESIZE_RESPECT_BUTTON_SECTIONS = (1 << 11),
   RGN_FLAG_INDICATE_OVERFLOW = (1 << 12),
+
+  RGN_FLAG_SEARCH_FILTER_SHOW = (1 << 13),
 };
 ENUM_OPERATORS(eRegion_Flag)
 

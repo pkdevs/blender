@@ -10,14 +10,9 @@
 
 #pragma once
 
-#include "infos/eevee_common_infos.hh"
-
-COMPUTE_SHADER_CREATE_INFO(draw_view)
-COMPUTE_SHADER_CREATE_INFO(draw_view_culling)
-COMPUTE_SHADER_CREATE_INFO(draw_object_infos)
-
-#include "draw_intersect_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "draw_intersect.bsl.hh"
+#include "draw_model.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 #include "eevee_defines.hh"
 #include "eevee_shadow_shared.hh"
@@ -25,9 +20,9 @@ COMPUTE_SHADER_CREATE_INFO(draw_object_infos)
 namespace eevee::shadow {
 
 struct ViewVisibility {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-  [[legacy_info]] ShaderCreateInfo draw_view_culling;
-  [[legacy_info]] ShaderCreateInfo draw_object_infos;
+  [[resource_table]] draw::ViewCulling view_culling;
+
+  [[resource_table]] draw::Infos infos;
 
   [[storage(0, read)]] const ObjectBounds (&bounds_buf)[];
   [[storage(1, read_write)]] uint (&visibility_buf)[];
@@ -37,8 +32,7 @@ struct ViewVisibility {
 
   bool shadow_linking_affects_caster(uint view_id, uint resource_id)
   {
-    const auto &infos_buf = buffer_get(draw_object_infos, drw_infos);
-    ObjectInfos object_infos = infos_buf[resource_id];
+    ObjectInfos object_infos = infos.get(resource_id);
     return bitmask64_test(render_view_buf[view_id].shadow_set_membership,
                           blocker_shadow_set_get(object_infos));
   }
@@ -47,7 +41,7 @@ struct ViewVisibility {
   {
     constexpr uint visibility_word_per_draw = uint(SHADOW_VIEW_MAX) / 32u;
     uint index = global_id.x * visibility_word_per_draw + (view_id / 32u);
-    visibility_buf[index] &= ~(1u << view_id);
+    visibility_buf[index] &= ~(1u << (view_id & 31u));
   }
 
   /* Returns true if visibility needs to be disabled. */
@@ -57,7 +51,7 @@ struct ViewVisibility {
       /* Object doesn't cast shadow from this light. */
       return true;
     }
-    if (drw_view_culling(view_id).bound_sphere.w == -1.0f) {
+    if (view_culling.get(view_id).bound_sphere.w == -1.0f) {
       /* View disabled. */
       return true;
     }
@@ -69,6 +63,8 @@ struct ViewVisibility {
 void comp_main([[resource_table]] ViewVisibility &srt,
                [[global_invocation_id]] const uint3 global_id)
 {
+  draw::ViewCulling &culling = srt.view_culling;
+
   if (int(global_id.x) >= srt.resource_len) {
     return;
   }
@@ -82,24 +78,24 @@ void comp_main([[resource_table]] ViewVisibility &srt,
                                    bounds.bounding_corners[3].xyz);
     Sphere bounding_sphere = shape_sphere(bounds.bounding_sphere.xyz, bounds.bounding_sphere.w);
     Sphere inscribed_sphere = shape_sphere(bounds.bounding_sphere.xyz,
-                                           bounds._inner_sphere_radius);
+                                           bounds.inner_sphere_radius());
 
     for (uint view_id = 0u; view_id < uint(SHADOW_VIEW_MAX); view_id++) {
       if (srt.non_culling_tests(view_id, global_id.x)) {
         srt.mask_visibility_bit(view_id, global_id);
       }
-      else if (drw_view_culling(view_id).bound_sphere.w == -1.0f) {
+      else if (culling.get(view_id).bound_sphere.w == -1.0f) {
         /* View disabled. */
         srt.mask_visibility_bit(view_id, global_id);
       }
-      else if (intersect_view(inscribed_sphere, view_id) == true) {
+      else if (culling.intersect_view(inscribed_sphere, view_id) == true) {
         /* Visible. */
       }
-      else if (intersect_view(bounding_sphere, view_id) == false) {
+      else if (culling.intersect_view(bounding_sphere, view_id) == false) {
         /* Not visible. */
         srt.mask_visibility_bit(view_id, global_id);
       }
-      else if (intersect_view(box, view_id) == false) {
+      else if (culling.intersect_view(box, view_id) == false) {
         /* Not visible. */
         srt.mask_visibility_bit(view_id, global_id);
       }
