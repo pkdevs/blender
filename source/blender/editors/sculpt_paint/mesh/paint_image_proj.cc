@@ -4585,7 +4585,51 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
     if (skip_tri || project_paint_clone_face_skip(ps, layer_clone, slot, tri_index)) {
       continue;
     }
-    if (is_face_paintable && tpage) {
+
+    if (!is_face_paintable || !tpage) {
+      continue;
+    }
+
+    /* We found a paintable face with a corresponding Image.
+     * Prepare this regardless of culling, because the used images are only stored once for the
+     * non-shared #ProjPaintState and then copied over to other symmetry passes with
+     * PROJ_PAINT_STATE_SHARED_MEMCPY. A culled face in this pass might still be non-culled in
+     * another pass, so consider all images (even if they might end up not being used at all). */
+    {
+      if (tpage_last != tpage || tile_last != tile) {
+        image_index = 0;
+        for (PrepareImageEntry *e = used_images.first(); e; e = e->next, image_index++) {
+          if (e->ima == tpage && e->iuser.tile == tile) {
+            break;
+          }
+        }
+
+        if (image_index == ps->image_tot) {
+          /* XXX get appropriate ImageUser instead */
+          ImageUser iuser;
+          BKE_imageuser_default(&iuser);
+          iuser.tile = tile;
+          iuser.framenr = tpage->lastframe;
+          if (BKE_image_has_ibuf(tpage, &iuser)) {
+            PrepareImageEntry *e = MEM_new<PrepareImageEntry>("PrepareImageEntry");
+            e->ima = tpage;
+            e->iuser = iuser;
+            BLI_addtail(&used_images, e);
+            ps->image_tot++;
+          }
+          else {
+            image_index = -1;
+          }
+        }
+
+        tpage_last = tpage;
+        tile_last = tile;
+      }
+    }
+
+    /* Now check if the face would be culled. Only if it is not, it will be added to the
+     * bucketFaces (see #project_paint_delayed_face_init() below). */
+    {
       ProjPaintFaceCoSS coSS;
       proj_paint_face_coSS_init(ps, corner_tris[tri_index], &coSS);
 
@@ -4597,7 +4641,6 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
       if (project_paint_winclip(ps, &coSS)) {
         continue;
       }
-
 #endif  // PROJ_DEBUG_WINCLIP
 
       /* Back-face culls individual triangles but mask normal will use face. */
@@ -4629,42 +4672,12 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
           }
         }
       }
+    }
 
-      if (tpage_last != tpage || tile_last != tile) {
-        image_index = 0;
-        for (PrepareImageEntry *e = used_images.first(); e; e = e->next, image_index++) {
-          if (e->ima == tpage && e->iuser.tile == tile) {
-            break;
-          }
-        }
-
-        if (image_index == ps->image_tot) {
-          /* XXX get appropriate ImageUser instead */
-          ImageUser iuser;
-          BKE_imageuser_default(&iuser);
-          iuser.tile = tile;
-          iuser.framenr = tpage->lastframe;
-          if (BKE_image_has_ibuf(tpage, &iuser)) {
-            PrepareImageEntry *e = MEM_new<PrepareImageEntry>("PrepareImageEntry");
-            e->ima = tpage;
-            e->iuser = iuser;
-            BLI_addtail(&used_images, e);
-            ps->image_tot++;
-          }
-          else {
-            image_index = -1;
-          }
-        }
-
-        tpage_last = tpage;
-        tile_last = tile;
-      }
-
-      if (image_index != -1) {
-        /* Initialize the faces screen pixels */
-        /* Add this to a list to initialize later */
-        project_paint_delayed_face_init(ps, corner_tris[tri_index], tri_index);
-      }
+    if (image_index != -1) {
+      /* Initialize the faces screen pixels */
+      /* Add this to a list to initialize later */
+      project_paint_delayed_face_init(ps, corner_tris[tri_index], tri_index);
     }
   }
 
