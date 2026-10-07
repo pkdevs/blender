@@ -811,7 +811,7 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
   for (const int64_t struct_i : IndexRange(structs_num)) {
     const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
     type_names.add(get_encoded_type_name(sdna_struct.type_index));
-    /* Only*/
+    /* Only add members for types that are actually used. */
     if (structs_to_write[struct_i]) {
       for (const int member_i : IndexRange(sdna_struct.members_num)) {
         type_names.add(get_encoded_type_name(sdna_struct.members[member_i].type_index));
