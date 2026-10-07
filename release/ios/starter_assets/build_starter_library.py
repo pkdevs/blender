@@ -31,7 +31,7 @@ sys.path.insert(0, HERE)
 from starter import preview, registry  # noqa: E402
 
 MODULES = (
-    "shapes", "hardware", "architecture", "furniture", "nature", "stylized",
+    "primitives", "shapes", "hardware", "architecture", "furniture", "nature", "stylized",
     "sculpt", "humans", "scenes",
     "materials", "scanned",
     "modifiers",
