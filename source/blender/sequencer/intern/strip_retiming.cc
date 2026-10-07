@@ -408,7 +408,7 @@ static void retiming_key_overlap(Scene *scene, Strip *strip)
   expand_strips(editing_get(scene), dependant, StripRelation::EffectChain);
   strips.add_multiple(dependant);
   dependant.remove(strip);
-  transform_handle_overlap(scene, seqbase, strips, dependant, true);
+  transform_handle_overlap(scene, seqbase, strips, true, dependant);
 }
 
 void retiming_reset(Scene *scene, Strip *strip)
@@ -951,7 +951,7 @@ void retiming_key_frame_set(const Scene *scene, Strip *strip, SeqRetimingKey *ke
   }
 
   const int frame_old = retiming_key_frame_get(scene, strip, key);
-  const int timeline_offset = (frame - frame_old);
+  const int timeline_offset = strip_retiming_clamp_offset(scene, strip, key, frame - frame_old);
 
   const float scene_fps = float(scene->frames_per_second());
   const float media_offset = timeline_offset * strip->media_playback_rate_factor(scene_fps);
@@ -973,8 +973,7 @@ void retiming_key_frame_set(const Scene *scene, Strip *strip, SeqRetimingKey *ke
     }
   }
   else {
-    strip_retiming_key_offset(
-        scene, strip, key, strip_retiming_clamp_offset(scene, strip, key, media_offset));
+    strip_retiming_key_offset(scene, strip, key, media_offset);
   }
 
   Span<Strip *> effects = lookup_effects_by_strip(scene->ed, strip);

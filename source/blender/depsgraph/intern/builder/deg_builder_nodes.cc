@@ -60,8 +60,8 @@
 #include "BKE_constraint.h"
 #include "BKE_curve.hh"
 #include "BKE_fcurve_driver.h"
-#include "BKE_gpencil_modifier_legacy.h"
 #include "BKE_grease_pencil.hh"
+#include "BKE_grease_pencil_modifiers.h"
 #include "BKE_idprop.hh"
 #include "BKE_image.hh"
 #include "BKE_key.hh"
@@ -810,19 +810,19 @@ void DepsgraphNodeBuilder::build_object(int base_index,
   /* Modifiers. */
   build_object_modifiers(object);
   /* Grease Pencil Modifiers. */
-  if (object->greasepencil_modifiers.first != nullptr) {
+  if (object->greasepencil_modifiers.first() != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
-    BKE_gpencil_modifiers_foreach_ID_link(object, modifier_walk, &data);
+    BKE_grease_pencil_modifiers_foreach_ID_link(object, modifier_walk, &data);
   }
   /* Shader FX. */
-  if (object->shader_fx.first != nullptr) {
+  if (object->shader_fx.first() != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
     BKE_shaderfx_foreach_ID_link(object, modifier_walk, &data);
   }
   /* Constraints. */
-  if (object->constraints.first != nullptr) {
+  if (object->constraints.first() != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
     BKE_constraints_id_loop(&object->constraints, constraint_walk, IDWALK_NOP, &data);
@@ -841,7 +841,7 @@ void DepsgraphNodeBuilder::build_object(int base_index,
    * pose for proxy. */
   build_animdata(&object->id);
   /* Particle systems. */
-  if (object->particlesystem.first != nullptr) {
+  if (object->particlesystem.first() != nullptr) {
     build_particle_systems(object, is_visible);
   }
   /* Force field Texture. */
@@ -1107,7 +1107,7 @@ void DepsgraphNodeBuilder::build_object_transform(Object *object)
         [ob_cow](blender::Depsgraph *depsgraph) { BKE_object_eval_parent(depsgraph, ob_cow); });
   }
   /* Object constraints. */
-  if (object->constraints.first != nullptr) {
+  if (object->constraints.first() != nullptr) {
     build_object_constraints(object);
   }
   /* Rest of transformation update. */
@@ -1290,7 +1290,7 @@ void DepsgraphNodeBuilder::build_animdata_nlastrip_targets(ListBaseT<NlaStrip> *
     if (strip.act != nullptr) {
       build_action(strip.act);
     }
-    else if (strip.strips.first != nullptr) {
+    else if (strip.strips.first() != nullptr) {
       build_animdata_nlastrip_targets(&strip.strips);
     }
   }
@@ -1642,7 +1642,8 @@ void DepsgraphNodeBuilder::build_rigidbody(Scene *scene)
    *    and/or not affected by the sim for instance).
    *
    * 3) "Pull Results" - grab the specific transforms applied for a specific
-   *    object - performed as part of object's transform-stack building. */
+   *    object - performed as part of object's transform-stack building.
+   */
 
   /* Create nodes --------------------------------------------------------- */
 
@@ -1714,8 +1715,7 @@ void DepsgraphNodeBuilder::build_rigidbody(Scene *scene)
 
 void DepsgraphNodeBuilder::build_particle_systems(Object *object, bool is_object_visible)
 {
-  /**
-   * Particle Systems Nodes
+  /* Particle Systems Nodes
    * ======================
    *
    * There are two types of nodes associated with representing

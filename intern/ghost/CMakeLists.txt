@@ -297,11 +297,6 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       add_definitions(-DHAVE_MEMFD_CREATE)
     endif()
 
-    check_symbol_exists(poll "poll.h" HAVE_POLL)
-    if(HAVE_POLL)
-      add_definitions(-DHAVE_POLL)
-    endif()
-
     list(APPEND SRC
       intern/GHOST_SystemWayland.cc
       intern/GHOST_WindowWayland.cc
@@ -419,6 +414,36 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       add_definitions(-DWITH_GHOST_WAYLAND_APP_ID=${WITH_GHOST_WAYLAND_APP_ID})
     endif()
 
+  endif()
+
+  # Not tied to a windowing back-end: the settings read over DBUS (currently the light/dark
+  # theme preference) come from the desktop, not from X11 or WAYLAND.
+  if(WITH_GHOST_DBUS)
+    list(APPEND INC_SYS
+      ${dbus_INCLUDE_DIRS}
+    )
+    list(APPEND SRC
+      intern/GHOST_SystemDBusUnix.cc
+
+      intern/GHOST_SystemDBusUnix.hh
+    )
+    add_definitions(-DWITH_GHOST_DBUS)
+
+    if(WITH_GHOST_DBUS_DYNLOAD)
+      # `libdbus` is loaded at runtime by `bf_intern_dbus_dynload`,
+      # `dbus_INCLUDE_DIRS` above is still needed for its type declarations.
+      list(APPEND INC_SYS
+        ../dbus_dynload/extern
+      )
+      list(APPEND LIB
+        bf_intern_dbus_dynload
+      )
+      add_definitions(-DWITH_GHOST_DBUS_DYNLOAD)
+    else()
+      list(APPEND LIB
+        ${dbus_LINK_LIBRARIES}
+      )
+    endif()
   endif()
 
   if(WITH_INPUT_NDOF)

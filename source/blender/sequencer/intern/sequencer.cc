@@ -146,6 +146,7 @@ Strip *strip_alloc(ListBaseT<Strip> *lb, int timeline_frame, int channel, StripT
   strip->type = type;
   strip->media_playback_rate = 0.0f;
   strip->speed_factor = 1.0f;
+  strip->strobe = 1.0f;
 
   if (strip->type == STRIP_TYPE_ADJUSTMENT) {
     strip->blend_mode = STRIP_BLEND_CROSS;
@@ -268,7 +269,7 @@ void seq_free_strip_recurse(Scene *scene, Strip *strip, const bool do_id_user)
 {
   Strip *istrip_next;
 
-  for (Strip *istrip = static_cast<Strip *>(strip->seqbase.first); istrip; istrip = istrip_next) {
+  for (Strip *istrip = strip->seqbase.first(); istrip; istrip = istrip_next) {
     istrip_next = istrip->next;
     seq_free_strip_recurse(scene, istrip, do_id_user);
   }
@@ -380,7 +381,9 @@ SequencerToolSettings *tool_settings_init()
   tool_settings->snap_flag = SEQ_SNAP_TO_ALL_CHANNEL_STRIPS;
   tool_settings->snap_distance = 15;
   tool_settings->overlap_mode = SEQ_OVERLAP_SHUFFLE;
-  tool_settings->pivot_point = V3D_AROUND_LOCAL_ORIGINS;
+  tool_settings->ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS |
+                               SEQ_RIPPLE_CLEAR_RANGES;
+  tool_settings->pivot_point = V3D_AROUND_CENTER_MEDIAN;
 
   return tool_settings;
 }
@@ -431,10 +434,22 @@ void tool_settings_fit_method_set(Scene *scene, eSeqImageFitMethod fit_method)
   tool_settings->fit_method = fit_method;
 }
 
+void tool_settings_overlap_mode_set(Scene *scene, eSeqOverlapMode overlap_mode)
+{
+  SequencerToolSettings *tool_settings = tool_settings_ensure(scene);
+  tool_settings->overlap_mode = overlap_mode;
+}
+
 eSeqOverlapMode tool_settings_overlap_mode_get(Scene *scene)
 {
   const SequencerToolSettings *tool_settings = tool_settings_ensure(scene);
   return eSeqOverlapMode(tool_settings->overlap_mode);
+}
+
+eSeqRippleFlag tool_settings_ripple_flag_get(Scene *scene)
+{
+  const SequencerToolSettings *tool_settings = tool_settings_ensure(scene);
+  return eSeqRippleFlag(tool_settings->ripple_flag);
 }
 
 int tool_settings_pivot_point_get(Scene *scene)
@@ -470,7 +485,7 @@ MetaStack *meta_stack_active_get(const Editing *ed)
     return nullptr;
   }
 
-  return static_cast<MetaStack *>(ed->metastack.last);
+  return ed->metastack.last();
 }
 
 void meta_stack_set(const Scene *scene, Strip *dst)
@@ -671,7 +686,7 @@ static Strip *strip_duplicate(StripDuplicateContext &ctx,
     strip_new->system_properties = IDP_CopyProperty_ex(strip->system_properties, ctx.copy_flag);
   }
 
-  if (strip_new->modifiers.first) {
+  if (strip_new->modifiers.first_) {
     strip_new->modifiers.clear_no_delete();
 
     modifier_list_copy(strip_new, strip, ctx.copy_flag);
@@ -897,7 +912,7 @@ static bool strip_write_data_cb(Strip *strip, void *userdata)
           break;
         case STRIP_TYPE_TEXT: {
           TextVars *text = static_cast<TextVars *>(strip->effectdata);
-          if (!BLO_write_is_undo(writer)) {
+          if (!writer->is_undo()) {
             /* Copy current text into legacy buffer. */
             STRNCPY_UTF8(text->text_legacy, text->text_ptr);
           }

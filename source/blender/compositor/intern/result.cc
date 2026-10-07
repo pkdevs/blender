@@ -19,6 +19,7 @@
 
 #include "BLT_translation.hh"
 
+#include "GPU_context.hh"
 #include "GPU_shader.hh"
 #include "GPU_state.hh"
 #include "GPU_texture.hh"
@@ -26,6 +27,7 @@
 
 #include "NOD_geometry_nodes_bundle.hh"
 
+#include "COM_closure.hh"
 #include "COM_context.hh"
 #include "COM_derived_resources.hh"
 #include "COM_domain.hh"
@@ -71,6 +73,7 @@ bool Result::is_single_value_only_type(ResultType type)
     case ResultType::Text:
     case ResultType::Mask:
     case ResultType::Bundle:
+    case ResultType::Closure:
       return true;
   }
 
@@ -124,6 +127,7 @@ gpu::TextureFormat Result::gpu_texture_format(ResultType type, ResultPrecision p
         case ResultType::Text:
         case ResultType::Mask:
         case ResultType::Bundle:
+        case ResultType::Closure:
           /* Single only types do not support GPU code path. */
           BLI_assert(Result::is_single_value_only_type(type));
           BLI_assert_unreachable();
@@ -173,6 +177,7 @@ gpu::TextureFormat Result::gpu_texture_format(ResultType type, ResultPrecision p
         case ResultType::Text:
         case ResultType::Mask:
         case ResultType::Bundle:
+        case ResultType::Closure:
           /* Single only types do not support GPU storage. */
           BLI_assert(Result::is_single_value_only_type(type));
           BLI_assert_unreachable();
@@ -211,6 +216,7 @@ eGPUDataFormat Result::gpu_data_format(ResultType type)
     case ResultType::Text:
     case ResultType::Mask:
     case ResultType::Bundle:
+    case ResultType::Closure:
       /* Single only types do not support GPU storage. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -407,6 +413,8 @@ const CPPType &Result::cpp_type(const ResultType type)
       return CPPType::get<Mask *>();
     case ResultType::Bundle:
       return CPPType::get<nodes::BundlePtr>();
+    case ResultType::Closure:
+      return CPPType::get<ClosurePtr>();
   }
 
   BLI_assert_unreachable();
@@ -458,6 +466,8 @@ const char *Result::type_name(const ResultType type)
       return "mask";
     case ResultType::Bundle:
       return "bundle";
+    case ResultType::Closure:
+      return "closure";
   }
 
   BLI_assert_unreachable();
@@ -647,6 +657,9 @@ void Result::allocate_single_value()
     case ResultType::Bundle:
       single_value_ = nodes::Bundle::create();
       break;
+    case ResultType::Closure:
+      single_value_ = ClosurePtr();
+      break;
   }
 }
 
@@ -724,6 +737,7 @@ Result Result::upload_to_gpu(const bool from_pool) const
     case ResultType::Text:
     case ResultType::Mask:
     case ResultType::Bundle:
+    case ResultType::Closure:
       /* Single only types do not support GPU. */
       break;
   }
@@ -817,6 +831,7 @@ Result Result::download_to_cpu() const
     case ResultType::Text:
     case ResultType::Mask:
     case ResultType::Bundle:
+    case ResultType::Closure:
       /* Single only types do not support GPU. */
       break;
   }
@@ -857,13 +872,26 @@ gpu::Texture *Result::bind_as_texture_or_single_value(gpu::Shader *shader,
   const gpu::TextureFormat format = this->get_gpu_texture_format();
   const eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL;
   gpu::Texture *single_value_texture = nullptr;
-  if (this->type() == ResultType::Float4x4) {
-    single_value_texture = gpu::TexturePool::get().acquire_texture_2d_array(
-        int2(1, 1), 4, 1, format, usage);
+
+  /* Texture pool does not work on Vulkan at the moment. */
+  if (GPU_backend_get_type() == GPU_BACKEND_VULKAN) {
+    if (this->type() == ResultType::Float4x4) {
+      single_value_texture = GPU_texture_create_2d_array(
+          __func__, 1, 1, 4, 1, format, usage, nullptr);
+    }
+    else {
+      single_value_texture = GPU_texture_create_2d(__func__, 1, 1, 1, format, usage, nullptr);
+    }
   }
   else {
-    single_value_texture = gpu::TexturePool::get().acquire_texture_2d(
-        int2(1, 1), 1, format, usage);
+    if (this->type() == ResultType::Float4x4) {
+      single_value_texture = gpu::TexturePool::get().acquire_texture_2d_array(
+          int2(1, 1), 4, 1, format, usage);
+    }
+    else {
+      single_value_texture = gpu::TexturePool::get().acquire_texture_2d(
+          int2(1, 1), 1, format, usage);
+    }
   }
 
   /* Upload the single value to the texture. */
@@ -909,6 +937,7 @@ gpu::Texture *Result::bind_as_texture_or_single_value(gpu::Shader *shader,
     case ResultType::Text:
     case ResultType::Mask:
     case ResultType::Bundle:
+    case ResultType::Closure:
       /* Single only types do not support GPU storage. */
       BLI_assert(Result::is_single_value_only_type(this->type()));
       BLI_assert_unreachable();
@@ -948,7 +977,14 @@ void Result::unbind_as_texture_or_single_value(gpu::Texture *single_value_textur
 
   BLI_assert(single_value_texture);
   GPU_texture_unbind(single_value_texture);
-  gpu::TexturePool::get().release_texture(single_value_texture);
+
+  /* Texture pool does not work on Vulkan at the moment. */
+  if (GPU_backend_get_type() == GPU_BACKEND_VULKAN) {
+    GPU_texture_free(single_value_texture);
+  }
+  else {
+    gpu::TexturePool::get().release_texture(single_value_texture);
+  }
 }
 
 void Result::unbind_as_image() const
@@ -1085,7 +1121,7 @@ void Result::free()
   }
 }
 
-bool Result::should_compute()
+bool Result::should_compute() const
 {
   return reference_count_ != 0;
 }
@@ -1174,6 +1210,7 @@ int64_t Result::channels_count() const
     case ResultType::Text:
     case ResultType::Mask:
     case ResultType::Bundle:
+    case ResultType::Closure:
       /* Single only types do not have channels. */
       BLI_assert(Result::is_single_value_only_type(type_));
       BLI_assert_unreachable();

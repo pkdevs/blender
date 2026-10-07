@@ -74,7 +74,7 @@ static void seqbase_unique_name(ListBaseT<Strip> *seqbasep, StripUniqueInfo *sui
 
 static bool seqbase_unique_name_recursive_fn(Strip *strip, void *arg_pt)
 {
-  if (strip->seqbase.first) {
+  if (strip->seqbase.first_) {
     seqbase_unique_name(&strip->seqbase, static_cast<StripUniqueInfo *>(arg_pt));
   }
   return true;
@@ -296,7 +296,7 @@ Strip *strip_from_strip_elem(ListBaseT<Strip> *seqbase, StripElem *se)
 {
   Strip *istrip;
 
-  for (istrip = static_cast<Strip *>(seqbase->first); istrip; istrip = istrip->next) {
+  for (istrip = seqbase->first(); istrip; istrip = istrip->next) {
     Strip *strip_found;
     if ((istrip->data && istrip->data->stripdata) &&
         ARRAY_HAS_ITEM(se, istrip->data->stripdata, istrip->content_length()))
@@ -411,7 +411,7 @@ void set_scale_to_fit(const Strip *strip,
   }
 }
 
-void ensure_unique_name(Main &bmain, Strip *strip, Scene *scene)
+void ensure_unique_name(Main &bmain, Strip *strip, Scene *scene, const DriverMap &driver_map)
 {
   char name[STRIP_NAME_MAXSTR];
 
@@ -425,7 +425,7 @@ void ensure_unique_name(Main &bmain, Strip *strip, Scene *scene)
                          old_infix,
                          new_infix,
                          /*verify_paths=*/false,
-                         bmain);
+                         driver_map);
   bke::dynoverride::fix_rna_paths_rename(bmain,
                                          scene->id,
                                          "sequence_editor.strips_all",
@@ -438,7 +438,7 @@ void ensure_unique_name(Main &bmain, Strip *strip, Scene *scene)
 
   if (strip->type == STRIP_TYPE_META) {
     for (Strip &strip_child : strip->seqbase) {
-      ensure_unique_name(bmain, &strip_child, scene);
+      ensure_unique_name(bmain, &strip_child, scene, driver_map);
     }
   }
 }

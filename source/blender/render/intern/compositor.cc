@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup render
+ */
+
 #include <cstring>
 #include <string>
 
@@ -16,6 +20,7 @@
 #include "DNA_node_types.h"
 
 #include "BKE_compositor.hh"
+#include "BKE_compute_context_cache.hh"
 #include "BKE_cryptomatte.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
@@ -64,8 +69,8 @@ class Context : public compositor::Context {
  private:
   /* Input data. */
   CompositorInputData input_data_;
-  /* The hash of the active compute context. */
-  const ComputeContextHash active_compute_context_hash_;
+  /* The compute context of the active viewer if one exists. */
+  const ComputeContext *viewer_compute_context_;
 
   /* Cached GPU and CPU passes that the compositor took ownership of. Those had their reference
    * count incremented when accessed and need to be freed/have their reference count decremented
@@ -77,11 +82,13 @@ class Context : public compositor::Context {
   bool gpu_supported_ = true;
 
  public:
-  Context(compositor::StaticCacheManager &cache_manager, const CompositorInputData &input_data)
-      : compositor::Context(cache_manager),
+  Context(compositor::StaticCacheManager &cache_manager,
+          bke::ComputeContextCache &compute_context_cache,
+          const CompositorInputData &input_data)
+      : compositor::Context(cache_manager, compute_context_cache),
         input_data_(input_data),
-        active_compute_context_hash_(
-            bke::compositor::compute_active_compute_context_hash(input_data_.scene))
+        viewer_compute_context_(bke::compositor::compute_viewer_compute_context(
+            input_data_.scene, compute_context_cache))
   {
   }
 
@@ -116,14 +123,14 @@ class Context : public compositor::Context {
            this->get_render_data().compositor_device == SCE_COMPOSITOR_DEVICE_GPU;
   }
 
-  const ComputeContextHash &get_active_compute_context_hash() const override
+  compositor::SideEffectOutputTypes needed_side_effect_output_types() const override
   {
-    return active_compute_context_hash_;
+    return input_data_.needed_side_effects_outputs;
   }
 
-  compositor::NodeGroupOutputTypes needed_outputs() const
+  const ComputeContext *viewer_compute_context() const override
   {
-    return input_data_.needed_outputs;
+    return viewer_compute_context_;
   }
 
   const RenderData &get_render_data() const override
@@ -194,6 +201,9 @@ class Context : public compositor::Context {
                       render_result->rectx * render_result->recty * 4 * sizeof(float));
         }
       }
+
+      /* Compositor output is scene linear, previous pixels were replaced. */
+      image_buffer->float_buffer.colorspace = nullptr;
 
       /* Free outdated GPU texture. */
       IMB_free_gpu_textures(image_buffer);
@@ -514,13 +524,14 @@ class Context : public compositor::Context {
       return this->get_invalid_pass();
     }
 
-    compositor::Result pass_data = compositor::Result(
-        *this, this->get_pass_data_type(render_pass), compositor::ResultPrecision::Full);
-
+    compositor::Result pass_data = this->create_result(this->get_pass_data_type(render_pass));
     if (this->use_gpu()) {
-      gpu::Texture *pass_texture = RE_pass_ensure_gpu_texture_cache(render, render_pass);
-      /* Don't assume render will keep pass data stored, add our own reference. */
-      GPU_texture_ref(pass_texture);
+      gpu::Texture *pass_texture = IMB_acquire_gpu_texture(
+          __func__,
+          render_pass->ibuf,
+          GPUTextureCreateFlags::HighBitDepth | GPUTextureCreateFlags::Premultiplied);
+      render->result_has_gpu_texture_caches = true;
+      pass_data.set_precision(compositor::Result::precision(GPU_texture_format(pass_texture)));
       pass_data.share_data(pass_texture);
       cached_gpu_passes_.append(pass_texture);
     }
@@ -533,8 +544,7 @@ class Context : public compositor::Context {
       cached_cpu_passes_.append(render_pass->ibuf);
     }
 
-    compositor::Result pass = compositor::Result(
-        *this, this->get_pass_type(render_pass), compositor::ResultPrecision::Full);
+    compositor::Result pass = this->create_result(this->get_pass_type(render_pass));
     if (pass.type() != pass_data.type()) {
       compositor::ConversionOperation conversion_operation(*this, pass_data.type(), pass.type());
       conversion_operation.map_input_to_result(&pass_data);
@@ -722,9 +732,8 @@ class Context : public compositor::Context {
     this->get_scene().runtime->compositor.nodes_evaluation_log =
         std::make_unique<nodes::eval_log::NodesEvalLog>();
 
-    const compositor::NodeGroupOutputTypes needed_outputs = this->needed_outputs();
     compositor::SceneCompositorEffectsOperation operation =
-        compositor::SceneCompositorEffectsOperation(*this, needed_outputs);
+        compositor::SceneCompositorEffectsOperation(*this);
     compositor::Result combined_pass = this->get_pass(&this->get_scene(), 0, RE_PASSNAME_COMBINED);
     operation.map_input_to_result(&combined_pass);
     operation.evaluate();
@@ -738,9 +747,9 @@ class Context : public compositor::Context {
 
     /* If the operation does not have a viewer output but one is needed, write the output as a
      * viewer. */
-    const bool needs_viewer_output = flag_is_set(needed_outputs,
-                                                 compositor::NodeGroupOutputTypes::ViewerNode);
-    if (!operation.has_viewer_output() && needs_viewer_output) {
+    const bool needs_viewer_output = flag_is_set(this->needed_side_effect_output_types(),
+                                                 compositor::SideEffectOutputTypes::ViewerNode);
+    if (!this->viewer_compute_context() && needs_viewer_output) {
       this->write_viewer(output_result);
     }
 
@@ -801,7 +810,8 @@ class Compositor {
 
   void execute(const CompositorInputData &input_data)
   {
-    Context context(cache_manager_, input_data);
+    bke::ComputeContextCache compute_context_cache;
+    Context context(cache_manager_, compute_context_cache, input_data);
 
     if (context.use_gpu()) {
       /* For main thread rendering in background mode, blocking rendering, or when we do not have a
@@ -863,7 +873,8 @@ class Compositor {
    * compositor, since it is much easier and safer. */
   bool needs_to_be_recreated(const CompositorInputData &input_data)
   {
-    Context context(cache_manager_, input_data);
+    bke::ComputeContextCache compute_context_cache;
+    Context context(cache_manager_, compute_context_cache, input_data);
     /* See last_evaluation_used_gpu_ and last_evaluation_precision_ for more information what how
      * they are different from the ones returned from the context. */
     return context.use_gpu() != last_evaluation_used_gpu_ ||

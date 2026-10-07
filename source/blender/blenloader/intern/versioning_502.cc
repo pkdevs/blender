@@ -8,6 +8,8 @@
 
 #define DNA_DEPRECATED_ALLOW
 
+#include <fmt/format.h>
+
 #include "NOD_geometry_nodes_srna.hh"
 
 #include "DNA_ID.h"
@@ -358,7 +360,7 @@ static void fix_single_point_curves_custom_knots(Main *bmain)
    * CU_NURB_CUSTOM was set alongside other flags and knotsu/knotsv was left null,
    * causing a crash when opening these files in newer versions. */
   for (Curve &cu : bmain->curves) {
-    for (Nurb *nu = static_cast<Nurb *>(cu.nurb.first); nu != nullptr; nu = nu->next) {
+    for (Nurb *nu = cu.nurb.first(); nu != nullptr; nu = nu->next) {
       if (nu->knotsu == nullptr && (nu->flagu & CU_NURB_CUSTOM)) {
         nu->flagu &= (CU_NURB_CYCLIC | CU_NURB_BEZIER | CU_NURB_ENDPOINT);
       }
@@ -662,7 +664,7 @@ void blo_do_versions_502(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       if (scene.toolsettings->sculpt) {
         Sculpt &sculpt = *scene.toolsettings->sculpt;
         MeshAutomaskingSettings *settings = MEM_new<MeshAutomaskingSettings>(__func__);
-        settings->flags = sculpt.automasking_flags;
+        settings->flags = eAutomasking_flag(sculpt.automasking_flags);
         settings->boundary_edges_propagation_steps =
             sculpt.automasking_boundary_edges_propagation_steps;
         settings->cavity_blur_steps = sculpt.automasking_cavity_blur_steps;
@@ -692,7 +694,7 @@ void blo_do_versions_502(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
 
       brush.mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>(__func__);
-      brush.mesh_automasking_settings->flags = brush.automasking_flags;
+      brush.mesh_automasking_settings->flags = eAutomasking_flag(brush.automasking_flags);
       brush.mesh_automasking_settings->boundary_edges_propagation_steps =
           brush.automasking_boundary_edges_propagation_steps;
       brush.mesh_automasking_settings->cavity_blur_steps = brush.automasking_cavity_blur_steps;
@@ -798,8 +800,8 @@ void blo_do_versions_502(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
           if (sl.spacetype != SPACE_SEQ) {
             continue;
           }
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
           ARegion *scrubbing_region = do_versions_add_region_if_not_found(
               regionbase, RGN_TYPE_SCRUBBING, "Scrubbing Region", RGN_TYPE_FOOTER);
           if (scrubbing_region) {
