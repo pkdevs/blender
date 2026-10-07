@@ -658,11 +658,11 @@ void interpolate_ewa_fl(const float *buffer,
   /* Scaling `dxt` / `dyt` by full resolution can cause overflow because of huge A/B/C and esp.
    * F values, scaling by aspect ratio alone does the opposite, so try something in between
    * instead. */
-  const float ff2 = float(width), ff = sqrtf(ff2), df = 1.0f / ff;
-  const float Ux = jacobian[0][0] * df;
-  const float Vx = jacobian[0][1] * df;
-  const float Uy = jacobian[1][0] * df;
-  const float Vy = jacobian[1][1] * df;
+  const float ff2 = float(width), ff = sqrtf(ff2), q = 1.0f / ff;
+  const float Ux = jacobian[0][0] * q;
+  const float Vx = jacobian[0][1] * q;
+  const float Uy = jacobian[1][0] * q;
+  const float Vy = jacobian[1][1] * q;
   float A = Vx * Vx + Vy * Vy;
   float B = -2.0f * (Ux * Vx + Uy * Vy);
   float C = Ux * Ux + Uy * Uy;
