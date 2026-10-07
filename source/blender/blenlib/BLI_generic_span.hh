@@ -96,6 +96,14 @@ class GSpan {
     return Span<T>(static_cast<const T *>(data_), size_);
   }
 
+  /** Get a typed span of a #cpp_type_util::BytesType. */
+  template<typename T> Span<T> typed_for_bytes() const
+  {
+    BLI_assert(size_ == 0 || type_ != nullptr);
+    BLI_assert(type_ == nullptr || type_->is_compatible_bytes_type<T>());
+    return Span<T>(static_cast<const T *>(data_), size_);
+  }
+
   GSpan slice(const int64_t start, int64_t size) const
   {
     BLI_assert(start >= 0);
@@ -221,6 +229,14 @@ class GMutableSpan {
   {
     BLI_assert(size_ == 0 || type_ != nullptr);
     BLI_assert(type_ == nullptr || type_->is<T>());
+    return MutableSpan<T>(static_cast<T *>(data_), size_);
+  }
+
+  /** Get a typed span of a #cpp_type_util::BytesType. */
+  template<typename T> MutableSpan<T> typed_for_bytes() const
+  {
+    BLI_assert(size_ == 0 || type_ != nullptr);
+    BLI_assert(type_ == nullptr || type_->is_compatible_bytes_type<T>());
     return MutableSpan<T>(static_cast<T *>(data_), size_);
   }
 

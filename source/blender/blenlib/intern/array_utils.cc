@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <functional>
 
 #include "BLI_array.hh"
@@ -85,6 +86,167 @@ void gather(const GSpan src,
             const exec_mode::Mode mode)
 {
   gather(GVArray::from_span(src), indices, dst, mode);
+}
+
+void gather(const GSpan src, const Span<int> indices, const IndexMask &dst_mask, GMutableSpan dst)
+{
+  BLI_assert(src.type() == dst.type());
+  BLI_assert(indices.size() >= dst_mask.min_array_size());
+  const CPPType &type = src.type();
+  if (type.to_static_bytes_type_try([&]<typename T>() {
+        gather(src.typed_for_bytes<T>(), indices, dst_mask, dst.typed_for_bytes<T>());
+      }))
+  {
+    return;
+  }
+  dst_mask.foreach_index([&](const int64_t i) { type.copy_assign(src[indices[i]], dst[i]); },
+                         exec_mode::grain_size(1024));
+}
+
+void gather(const GSpan src, const Span<int> indices, GMutableSpan dst)
+{
+  gather(src, indices, IndexRange(dst.size()), dst);
+}
+
+void gather(const GVArray &src,
+            const Span<int> indices,
+            const IndexMask &dst_mask,
+            GMutableSpan dst)
+{
+  BLI_assert(src.type() == dst.type());
+  BLI_assert(indices.size() >= dst_mask.min_array_size());
+  if (src.is_span()) {
+    gather(src.get_internal_span(), indices, dst_mask, dst);
+    return;
+  }
+  const CPPType &type = src.type();
+  if (src.is_single()) {
+    BUFFER_FOR_CPP_TYPE_VALUE(type, value);
+    src.get_internal_single_to_uninitialized(value);
+    type.fill_assign_indices(value, dst.data(), dst_mask);
+    type.destruct(value);
+    return;
+  }
+  dst_mask.foreach_index([&](const int64_t i) { src.get(indices[i], dst[i]); },
+                         exec_mode::grain_size(1024));
+}
+
+void gather(const GVArray &src, const Span<int> indices, GMutableSpan dst)
+{
+  gather(src, indices, IndexRange(dst.size()), dst);
+}
+
+void gather_group_to_group(const OffsetIndices<int> src_offsets,
+                           const OffsetIndices<int> dst_offsets,
+                           const IndexMask &selection,
+                           const GSpan src,
+                           GMutableSpan dst)
+{
+  BLI_assert(src.type() == dst.type());
+  if (src.type().to_static_bytes_type_try([&]<typename T>() {
+        gather_group_to_group(src_offsets,
+                              dst_offsets,
+                              selection,
+                              src.typed_for_bytes<T>(),
+                              dst.typed_for_bytes<T>());
+      }))
+  {
+    return;
+  }
+  selection.foreach_index(
+      [&](const int64_t src_i, const int64_t dst_i) {
+        dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[src_i]));
+      },
+      exec_mode::grain_size(512));
+}
+
+void gather_to_groups(const OffsetIndices<int> dst_offsets,
+                      const IndexMask &src_selection,
+                      const GSpan src,
+                      GMutableSpan dst)
+{
+  BLI_assert(src.type() == dst.type());
+  const CPPType &type = src.type();
+  if (type.to_static_bytes_type_try([&]<typename T>() {
+        gather_to_groups(
+            dst_offsets, src_selection, src.typed_for_bytes<T>(), dst.typed_for_bytes<T>());
+      }))
+  {
+    return;
+  }
+  src_selection.foreach_index(
+      [&](const int src_i, const int dst_i) {
+        const IndexRange dst_range = dst_offsets[dst_i];
+        type.fill_assign_n(src[src_i], dst.slice(dst_range).data(), dst_range.size());
+      },
+      exec_mode::grain_size(1024));
+}
+
+void gather_ranges_to_groups(const Span<IndexRange> src_ranges,
+                             const OffsetIndices<int> dst_offsets,
+                             const GSpan src,
+                             GMutableSpan dst)
+{
+  if (src.type().to_static_bytes_type_try([&]<typename T>() {
+        const Span<T> src_span = src.typed_for_bytes<T>();
+        MutableSpan<T> dst_span = dst.typed_for_bytes<T>();
+        threading::parallel_for(src_ranges.index_range(), 512, [&](const IndexRange range) {
+          for (const int i : range) {
+            dst_span.slice(dst_offsets[i]).copy_from(src_span.slice(src_ranges[i]));
+          }
+        });
+      }))
+  {
+    return;
+  }
+  threading::parallel_for(src_ranges.index_range(), 512, [&](const IndexRange range) {
+    for (const int i : range) {
+      dst.slice(dst_offsets[i]).copy_from(src.slice(src_ranges[i]));
+    }
+  });
+}
+
+void shift_left(GMutableSpan data, int src_begin, int src_end, int dst_begin)
+{
+  BLI_assert(dst_begin <= src_begin);
+  if (ELEM(src_begin, dst_begin, src_end)) {
+    return;
+  }
+  const CPPType &type = data.type();
+  const int64_t num = src_end - src_begin;
+  if (type.is_trivial) {
+    std::memmove(data[dst_begin], data[src_begin], num * type.size);
+    return;
+  }
+  /* Move in chunks that are small enough that the source and destination don't overlap. Chunks at
+   * the start are moved first, so that their values are moved before they are overwritten. */
+  const int64_t offset = src_begin - dst_begin;
+  for (int64_t start = 0; start < num; start += offset) {
+    const int64_t chunk_size = std::min(offset, num - start);
+    type.move_assign_n(data[src_begin + start], data[dst_begin + start], chunk_size);
+  }
+}
+
+void shift_right(GMutableSpan data, int src_begin, int src_end, int dst_end)
+{
+  BLI_assert(dst_end >= src_end);
+  if (ELEM(src_end, dst_end, src_begin)) {
+    return;
+  }
+  const CPPType &type = data.type();
+  const int64_t num = src_end - src_begin;
+  const int64_t dst_begin = dst_end - num;
+  if (type.is_trivial) {
+    std::memmove(data[dst_begin], data[src_begin], num * type.size);
+    return;
+  }
+  /* Same as #shift_left, but the chunks at the end are moved first. */
+  const int64_t offset = dst_end - src_end;
+  for (int64_t end = num; end > 0; end -= offset) {
+    const int64_t chunk_size = std::min(offset, end);
+    const int64_t start = end - chunk_size;
+    type.move_assign_n(data[src_begin + start], data[dst_begin + start], chunk_size);
+  }
 }
 
 void copy_group_to_group(const OffsetIndices<int> src_offsets,

@@ -327,6 +327,42 @@ inline void gather_to_groups(const OffsetIndices<int> dst_offsets,
       exec_mode::grain_size(1024));
 }
 
+void gather(GSpan src, Span<int> indices, const IndexMask &dst_mask, GMutableSpan dst);
+void gather(GSpan src, Span<int> indices, GMutableSpan dst);
+void gather(const GVArray &src, Span<int> indices, const IndexMask &dst_mask, GMutableSpan dst);
+void gather(const GVArray &src, Span<int> indices, GMutableSpan dst);
+
+/** Generic version of the #gather_group_to_group template above. */
+void gather_group_to_group(OffsetIndices<int> src_offsets,
+                           OffsetIndices<int> dst_offsets,
+                           const IndexMask &selection,
+                           GSpan src,
+                           GMutableSpan dst);
+
+/** Generic version of the #gather_to_groups template above. */
+void gather_to_groups(OffsetIndices<int> dst_offsets,
+                      const IndexMask &src_selection,
+                      GSpan src,
+                      GMutableSpan dst);
+
+/** Copy each range in \a src_ranges to the group in \a dst with the same index. */
+void gather_ranges_to_groups(Span<IndexRange> src_ranges,
+                             OffsetIndices<int> dst_offsets,
+                             GSpan src,
+                             GMutableSpan dst);
+
+/**
+ * Move elements from [src_begin, src_end) to a range starting at \a dst_begin.
+ * \a dst_begin must be <= \a src_begin.
+ */
+void shift_left(GMutableSpan data, int src_begin, int src_end, int dst_begin);
+
+/**
+ * Move elements from [src_begin, src_end) to a range ending at \a dst_end.
+ * \a dst_end must be >= \a src_end.
+ */
+void shift_right(GMutableSpan data, int src_begin, int src_end, int dst_end);
+
 /**
  * Copy the \a src data from the groups defined by \a src_offsets to the groups in \a dst defined
  * by \a dst_offsets. Groups to use are masked by \a selection, and it is assumed that the
