@@ -27,10 +27,6 @@ namespace {
   } \
   (void)0
 
-/* Helper functions such as frac() and wrap_*() are static members of this struct rather
- * than free functions. Some backends, such as oneAPI, include the image functions inside
- * a kernel context class, where free functions would become non-static members that the
- * static methods here cannot call. */
 template<typename TexT, typename OutT = float4> struct ImageInterpolator {
 
   static ccl_always_inline OutT zero()
