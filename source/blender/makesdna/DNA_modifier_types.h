@@ -9,8 +9,8 @@
 #pragma once
 
 #include "BLI_enum_flags.hh"
-#include "BLI_implicit_sharing.h"
-#include "BLI_math_constants.h"
+#include "BLI_implicit_sharing.hh"
+#include "BLI_math_constants.hh"
 #include "BLI_span.hh"
 
 #include "DNA_armature_types.h"
@@ -24,8 +24,8 @@
 namespace blender {
 
 struct NodesModifierRuntime;
-namespace bke {
-struct BVHTreeFromMesh;
+namespace bke::bvh {
+class Tree;
 }
 
 struct LineartModifierRuntime;
@@ -775,7 +775,6 @@ struct SmoothModifierData {
 
 /** #CastModifierData.flag */
 enum CastModifierFlag : short {
-  /* And what bout (1 << 0) flag? ;) */
   MOD_CAST_INVERT_VGROUP = (1 << 0),
   MOD_CAST_X = (1 << 1),
   MOD_CAST_Y = (1 << 2),
@@ -981,8 +980,11 @@ struct SurfaceModifierData_Runtime {
 
   struct Mesh *mesh = nullptr;
 
-  /** Bounding volume hierarchy of the mesh faces. */
-  bke::BVHTreeFromMesh *bvhtree = nullptr;
+  /**
+   * Bounding volume hierarchy of the mesh triangles, or of the edges when the mesh has no faces.
+   * Owned by #mesh's tree cache rather than by this struct.
+   */
+  const bke::bvh::Tree *bvhtree = nullptr;
 
   int cfra_prev = 0, verts_num = 0;
 };
@@ -1197,7 +1199,8 @@ ENUM_OPERATORS(ExplodeModifierFlag);
 struct ExplodeModifierData {
   ModifierData modifier;
 
-  int *facepa = nullptr;
+  /** Runtime pointer to `blender::Array<int, 0>`, or null. */
+  void *facepa = nullptr;
   ExplodeModifierFlag flag = eExplodeFlag_Unborn | eExplodeFlag_Alive | eExplodeFlag_Dead;
   short vgroup = 0;
   float protect = 0.0f;
@@ -1318,7 +1321,7 @@ struct SimpleDeformModifierData {
   /** Lock axis (for taper and stretch). */
   char axis = 0;
   /**
-   * Axis to perform the deform on (default is X, but can be overridden by origin.
+   * Axis to perform the deform on (default is X, but can be overridden by origin).
    */
   SimpleDeformModifierLockAxis deform_axis = {};
   SimpleDeformModifierFlag flag = {};
@@ -2539,12 +2542,6 @@ struct NodesModifierBake {
   int64_t bake_size = 0;
 };
 
-struct NodesModifierPanel {
-  /** ID of the corresponding panel from #bNodeTreeInterfacePanel::identifier. */
-  int id = 0;
-  NodesModifierPanelFlag flag = {};
-};
-
 struct NodesModifierData {
   ModifierData modifier;
   struct bNodeTree *node_group = nullptr;
@@ -2559,10 +2556,6 @@ struct NodesModifierData {
   char _pad[2] = {};
   int bakes_num = 0;
   NodesModifierBake *bakes = nullptr;
-
-  char _pad2[4] = {};
-  int panels_num = 0;
-  NodesModifierPanel *panels = nullptr;
 
   NodesModifierRuntime *runtime = nullptr;
 

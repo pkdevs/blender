@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector_set.hh"
 
@@ -13,9 +13,11 @@
 
 #include "GPU_debug.hh"
 
+#include "NOD_compositor_gizmos.hh"
 #include "NOD_eval_log.hh"
 
 #include "COM_algorithm_compute_preview.hh"
+#include "COM_bundle_item.hh"
 #include "COM_context.hh"
 #include "COM_input_descriptor.hh"
 #include "COM_node_operation.hh"
@@ -23,6 +25,7 @@
 #include "COM_result.hh"
 #include "COM_scheduler.hh"
 #include "COM_utilities.hh"
+#include "COM_utilities_node_tree_logging.hh"
 
 namespace blender::compositor {
 
@@ -33,8 +36,7 @@ NodeOperation::NodeOperation(Context &context, const bNode &node) : Operation(co
       continue;
     }
 
-    const ResultType result_type = get_node_socket_result_type(output);
-    populate_result(output->identifier, context.create_result(result_type));
+    populate_result(output->identifier, get_node_socket_result_type(output));
   }
 
   for (const bNodeSocket *input : this->node().input_sockets()) {
@@ -96,24 +98,9 @@ void NodeOperation::compute_results_reference_counts(const Schedule &schedule)
       continue;
     }
 
-    const int reference_count = number_of_inputs_linked_to_output_conditioned(
-        *output, [&](const bNodeSocket &input) {
-          return schedule.nodes.contains(&input.owner_node()) &&
-                 !schedule.unneeded_inputs.contains(&input);
-        });
-
+    const int reference_count = compute_output_reference_count(*output, schedule);
     this->get_result(output->identifier).set_reference_count(reference_count);
   }
-}
-
-void NodeOperation::set_instance_key(const bNodeInstanceKey &instance_key)
-{
-  instance_key_ = instance_key;
-}
-
-const bNodeInstanceKey &NodeOperation::get_instance_key() const
-{
-  return instance_key_;
 }
 
 void NodeOperation::set_compute_context(const ComputeContext &compute_context)
@@ -126,22 +113,64 @@ const ComputeContext &NodeOperation::get_compute_context() const
   return *compute_context_;
 }
 
-void NodeOperation::set_node_previews(Map<bNodeInstanceKey, bke::bNodePreview> *node_previews)
+void NodeOperation::add_warning(nodes::NodeWarningType type, std::string message)
 {
-  node_previews_ = node_previews;
+  nodes::eval_log::NodesEvalLog *log = this->context().nodes_evaluation_log();
+  if (!log) {
+    return;
+  }
+  nodes::eval_log::NodeTreeLogger &tree_logger = log->get_local_tree_logger(
+      this->get_compute_context());
+  tree_logger.node_warnings.append(*tree_logger.allocator,
+                                   {this->node().identifier, {type, message}});
 }
 
-Map<bNodeInstanceKey, bke::bNodePreview> *NodeOperation::get_node_previews()
+void NodeOperation::log_data()
 {
-  return node_previews_;
-}
+  nodes::eval_log::NodesEvalLog *log = this->context().nodes_evaluation_log();
+  if (!log) {
+    return;
+  }
+  nodes::eval_log::NodeTreeLogger &tree_logger = log->get_local_tree_logger(*compute_context_);
 
-void NodeOperation::compute_preview()
-{
-  if (node_previews_ && is_node_preview_needed(this->node())) {
-    const Result *result = get_preview_result();
-    if (result) {
-      compositor::compute_preview(context(), node_previews_, this->get_instance_key(), *result);
+  if (nodes::gizmos::node_has_gizmo(this->node())) {
+    tree_logger.evaluated_gizmo_nodes.append(*tree_logger.allocator, {node_.identifier});
+  }
+
+  /* Log input values. */
+  for (const bNodeSocket *input_socket : this->node().input_sockets()) {
+    if (!is_socket_available(input_socket)) {
+      continue;
+    }
+
+    const InputDescriptor &input_descriptor = this->get_input_descriptor(input_socket->identifier);
+    if (!input_socket->is_logically_linked() && !input_descriptor.implicit_input.has_value()) {
+      continue;
+    }
+
+    const Result &input = this->get_input(input_socket->identifier);
+    log_result(this->context(), tree_logger, *input_socket, input);
+  }
+
+  /* Log output values. */
+  for (const bNodeSocket *output_socket : this->node().output_sockets()) {
+    if (!is_socket_available(output_socket)) {
+      continue;
+    }
+
+    const Result &result = this->get_result(output_socket->identifier);
+    log_result(this->context(), tree_logger, *output_socket, result);
+  }
+
+  /* Log node preview if they are needed and the node group is active. */
+  const bool node_needs_preview = is_node_preview_needed(this->node());
+  const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
+                                               SideEffectOutputTypes::NodePreviews);
+  if (node_needs_preview && needs_node_previews) {
+    const Result *result = this->get_preview_result();
+    if (result && !result->is_single_value()) {
+      ImBuf *preview = compositor::compute_preview(this->context(), *result);
+      tree_logger.node_image_previews.append(*tree_logger.allocator, {node_.identifier, preview});
     }
   }
 }

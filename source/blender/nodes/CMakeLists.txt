@@ -53,6 +53,7 @@ set(INC
   intern
   shader
   texture
+  function/include
   geometry/include
   ../animrig
   ../compositor
@@ -85,10 +86,9 @@ set(SRC
   intern/geometry_nodes_gizmos.cc
   intern/geometry_nodes_lazy_function.cc
   intern/geometry_nodes_list.cc
-  intern/geometry_nodes_repeat_zone.cc
   intern/geometry_nodes_physics_bundles.cc
+  intern/geometry_nodes_repeat_zone.cc
   intern/geometry_nodes_srna.cc
-  intern/geometry_nodes_warning.cc
   intern/inverse_eval.cc
   intern/list_function_eval.cc
   intern/math_functions.cc
@@ -105,16 +105,21 @@ set(SRC
   intern/node_tree_defaults.cc
   intern/node_util.cc
   intern/partial_eval.cc
+  intern/scene_compositor_effect_inputs_srna.cc
   intern/shader_nodes_inline.cc
+  intern/socket_items_name_util.cc
   intern/socket_search_link.cc
   intern/socket_usage_inference.cc
   intern/socket_value_inference.cc
+  intern/string_pattern.cc
   intern/sync_sockets.cc
   intern/trace_values.cc
   intern/value_elem.cc
   intern/volume_grid_function_eval.cc
+  intern/warning.cc
 
   NOD_bundle_type.hh
+  NOD_bundle_type_fwd.hh
   NOD_caller_ui.hh
   NOD_common.hh
   NOD_composite.hh
@@ -143,7 +148,6 @@ set(SRC
   NOD_geometry_nodes_physics_bundles.hh
   NOD_geometry_nodes_srna.hh
   NOD_geometry_nodes_values.hh
-  NOD_geometry_nodes_warning.hh
   NOD_inverse_eval_params.hh
   NOD_inverse_eval_path.hh
   NOD_inverse_eval_run.hh
@@ -158,24 +162,29 @@ set(SRC
   NOD_partial_eval.hh
   NOD_register.hh
   NOD_rna_define.hh
+  NOD_scene_compositor_effect_inputs_srna.hh
   NOD_shader.h
   NOD_shader_nodes_inline.hh
+  NOD_shader_nodes_multi_function.hh
   NOD_socket.hh
   NOD_socket_declarations.hh
   NOD_socket_declarations_geometry.hh
   NOD_socket_items.hh
   NOD_socket_items_blend.hh
+  NOD_socket_items_name_util.hh
   NOD_socket_items_ops.hh
   NOD_socket_items_ui.hh
   NOD_socket_search_link.hh
   NOD_socket_usage_inference.hh
   NOD_socket_usage_inference_fwd.hh
   NOD_socket_value_inference.hh
+  NOD_string_pattern.hh
   NOD_sync_sockets.hh
   NOD_texture.h
   NOD_trace_values.hh
   NOD_value_elem.hh
   NOD_value_elem_eval.hh
+  NOD_warning.hh
   intern/list_function_eval.hh
   intern/node_common.h
   intern/node_exec.hh
@@ -230,6 +239,7 @@ if(WITH_GTESTS)
   set(TEST_SRC
     intern/geometry_nodes_bundle_tests.cc
     intern/node_iterator_tests.cc
+    intern/node_structure_type_inferencing_tests.cc
   )
   set(TEST_LIB
     ${LIB}

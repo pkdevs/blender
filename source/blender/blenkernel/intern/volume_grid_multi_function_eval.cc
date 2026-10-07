@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #ifdef WITH_OPENVDB
 
 #  include "DNA_customdata_types.h"
@@ -18,15 +22,6 @@
 #  include "FN_field_evaluation.hh"
 
 namespace blender::bke::volume_grid::multi_function_eval {
-
-static std::optional<VolumeGridType> cpp_type_to_grid_type(const CPPType &cpp_type)
-{
-  const std::optional<eCustomDataType> cd_type = bke::cpp_type_to_custom_data_type(cpp_type);
-  if (!cd_type) {
-    return std::nullopt;
-  }
-  return bke::custom_data_type_to_volume_grid_type(*cd_type);
-}
 
 /**
  * Call the multi-function in a batch on all active voxels in a leaf node.
@@ -211,7 +206,6 @@ BLI_NOINLINE static void process_leaf_node(const mf::MultiFunction &fn,
  *
  * \param fn: The multi-function to call.
  * \param input_values: All input values which may be grids, fields or single values.
- * \param input_grids: The input grids already extracted from #input_values.
  * \param output_grids: The output grids to be filled with the results of the multi-function. The
  *   topology of these grids is initialized already.
  * \param transform: The transform of all input and output grids.

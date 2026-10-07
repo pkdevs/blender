@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 #include "UI_interface_layout.hh"
@@ -104,7 +108,7 @@ static int node_shader_gpu_bsdf_metallic(GPUMaterial *mat,
   float use_complex_ior = (node->custom2 == SHD_PHYSICAL_CONDUCTOR) ? 1.0f : 0.0f;
 
   if (!in[7].link) {
-    GPU_link(mat, "world_normals_get", &in[7].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[7].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY);
@@ -125,7 +129,9 @@ static int node_shader_gpu_bsdf_metallic(GPUMaterial *mat,
                         in,
                         out,
                         GPU_constant(&use_multi_scatter),
-                        GPU_constant(&use_complex_ior));
+                        GPU_constant(&use_complex_ior),
+                        GPU_kernel_globals(),
+                        GPU_shading_data());
 }
 
 static void node_shader_update_metallic(bNodeTree *ntree, bNode *node)
@@ -202,7 +208,7 @@ void register_node_type_sh_bsdf_metallic()
   ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.add_ui_poll = object_shader_nodes_poll;
   ntype.draw_buttons = file_ns::node_shader_buts_metallic;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Large);
+  ntype.default_width = bke::NodeWidth::_240;
   ntype.initfunc = file_ns::node_shader_init_metallic;
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_metallic;
   ntype.updatefunc = file_ns::node_shader_update_metallic;
