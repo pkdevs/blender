@@ -561,15 +561,27 @@ void transform_normals(const float3x3 &transform, MutableSpan<float3> normals)
   if (is_similarity_transform(normal_transform)) {
     const float3x3 normalized_transform = math::normalize(normal_transform);
     threading::parallel_for(normals.index_range(), 1024, [&](const IndexRange range) {
-      for (float3 &normal : normals.slice(range)) {
-        normal = normalized_transform * normal;
+      /* Make local copies of the values for better code-gen in the hot loop below. */
+      const float3 x_axis = normalized_transform.x_axis();
+      const float3 y_axis = normalized_transform.y_axis();
+      const float3 z_axis = normalized_transform.z_axis();
+      float3 *data = normals.data();
+      for (const int64_t i : range) {
+        const float3 n = data[i];
+        data[i] = n.x * x_axis + n.y * y_axis + n.z * z_axis;
       }
     });
   }
   else {
     threading::parallel_for(normals.index_range(), 1024, [&](const IndexRange range) {
-      for (float3 &normal : normals.slice(range)) {
-        normal = math::normalize(normal_transform * normal);
+      /* Make local copies of the values for better code-gen in the hot loop below. */
+      const float3 x_axis = normal_transform.x_axis();
+      const float3 y_axis = normal_transform.y_axis();
+      const float3 z_axis = normal_transform.z_axis();
+      float3 *data = normals.data();
+      for (const int64_t i : range) {
+        const float3 n = data[i];
+        data[i] = math::normalize(n.x * x_axis + n.y * y_axis + n.z * z_axis);
       }
     });
   }
@@ -586,15 +598,29 @@ void transform_normals(Span<float3> src, const float3x3 &transform, MutableSpan<
   if (is_similarity_transform(normal_transform)) {
     const float3x3 normalized_transform = math::normalize(normal_transform);
     threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
-      for (const int i : range) {
-        dst[i] = normalized_transform * src[i];
+      /* Make local copies of the values for better code-gen in the hot loop below. */
+      const float3 x_axis = normalized_transform.x_axis();
+      const float3 y_axis = normalized_transform.y_axis();
+      const float3 z_axis = normalized_transform.z_axis();
+      const float3 *src_data = src.data();
+      float3 *dst_data = dst.data();
+      for (const int64_t i : range) {
+        const float3 n = src_data[i];
+        dst_data[i] = n.x * x_axis + n.y * y_axis + n.z * z_axis;
       }
     });
   }
   else {
     threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
-      for (const int i : range) {
-        dst[i] = math::normalize(normal_transform * src[i]);
+      /* Make local copies of the values for better code-gen in the hot loop below. */
+      const float3 x_axis = normal_transform.x_axis();
+      const float3 y_axis = normal_transform.y_axis();
+      const float3 z_axis = normal_transform.z_axis();
+      const float3 *src_data = src.data();
+      float3 *dst_data = dst.data();
+      for (const int64_t i : range) {
+        const float3 n = src_data[i];
+        dst_data[i] = math::normalize(n.x * x_axis + n.y * y_axis + n.z * z_axis);
       }
     });
   }
