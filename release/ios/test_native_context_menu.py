@@ -185,8 +185,8 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
   UIBarButtonItem *_viewport_shading_button;
   UIBarButtonItem *_undo_button;
   UIBarButtonItem *_actions_button;
-  NSArray *_actions_menu_items;
   NSArray *_native_menubar_items;
+  BOOL _desktop_interface;
   NSMutableArray *_action_buttons;
 }
 @property(nonatomic, retain) NSArray *items;
@@ -316,64 +316,52 @@ int main()
       NSCAssert([request[@"execute"] boolValue] && [route isEqual:expectedRoutes[i]],
                 @"Action lost its Blender route");
     }
-    // The 250 ms toolbar poll must not replace an unchanged, potentially presented menu.
+    // The ... button keeps the essentials; the iPadOS menu bar has every Blender menu.
     MenuCountingButton *actions = [[[MenuCountingButton alloc] init] autorelease];
     builder.actionsControl = actions;
-    NSMutableArray *roots = [NSMutableArray array];
-    for (NSString *title in @[@"File", @"Edit", @"Render", @"View", @"Select", @"Add", @"Object"]) {
-      [roots addObject:@{@"title": title, @"submenu": @YES,
-          @"route": @{@"root": @"VIEW3D_MT_editor_menus", @"path": @[title]}}];
-    }
-    builder.menuRoots = roots;
     [builder updateActionsButtonMenu];
     UIMenu *stableMenu = [[actions.menu retain] autorelease];
-    UIMenu *rootSection = (UIMenu *)stableMenu.children.firstObject;
-    NSCAssert(rootSection.children.count == 7, @"Full Blender menus missing from visible button");
-    UIMenu *addMenu = (UIMenu *)rootSection.children[5];
-    NSCAssert([addMenu.title isEqual:@"Add"] &&
-              [addMenu.children.firstObject isKindOfClass:UIDeferredMenuElement.class],
-              @"Add must load Blender's live object-creation commands");
+    NSMutableArray *essentials = [NSMutableArray array];
+    for (UIMenu *group in stableMenu.children) {
+      NSCAssert([group isKindOfClass:UIMenu.class] && (group.options & UIMenuOptionsDisplayInline),
+                @"Essentials are grouped in inline sections");
+      for (UIMenuElement *element in group.children) {
+        [essentials addObject:element.title];
+      }
+    }
+    NSCAssert([essentials isEqual:(@[@"New", @"Open…", @"Open Recent", @"Save", @"Save As…",
+                                     @"Switch to Desktop Interface"])],
+              @"The Actions button shows a short file menu and the interface switch: %@", essentials);
+    UIMenu *newMenu = (UIMenu *)((UIMenu *)stableMenu.children[0]).children[0];
+    NSCAssert([newMenu.children.firstObject isKindOfClass:UIDeferredMenuElement.class],
+              @"New loads Blender's own templates when opened");
+    for (UIMenu *group in stableMenu.children) {
+      for (UIMenuElement *element in group.children) {
+        NSCAssert(element.image && element.image.isSymbolImage,
+                  @"Essentials use iPadOS symbols, not Blender's file icons: %@", element.title);
+      }
+    }
     checkMenu((UIMenu *)actions.menuRepresentation, stableMenu);
     NSUInteger assignments = actions.menuAssignments;
-    NSArray *contextItems = builder.items;
-    builder.items = @[@{@"title": @"X", @"key": @"X"}];
-    [builder updateActionsButtonMenu];
-    NSCAssert(actions.menu == stableMenu && actions.menuAssignments == assignments,
-              @"Contextual shortcuts replaced the full Blender menu hierarchy");
-    builder.items = contextItems;
-    NSData *snapshot = [NSJSONSerialization dataWithJSONObject:builder.menuRoots options:0 error:nil];
-    for (NSUInteger tick = 0; tick < 100; tick++) {
-      // The bridge returns new containers every poll, even when their contents are unchanged.
-      builder.menuRoots = [NSJSONSerialization JSONObjectWithData:snapshot options:0 error:nil];
+    for (NSUInteger tick = 0; tick < 20; tick++) {
       [builder updateActionsButtonMenu];
-      NSCAssert(actions.menu == stableMenu && actions.menuAssignments == assignments,
-                @"Toolbar polling replaced the unchanged Actions menu");
     }
-    NSArray *originalItems = builder.menuRoots;
-    NSDictionary *meshRoute = @{@"root": @"VIEW3D_MT_editor_menus", @"path": @[@"Mesh"]};
-    builder.menuRoots = @[@{@"title": @"Mesh", @"operator": @"TEST_OT_menu", @"route": meshRoute}];
-    [builder updateActionsButtonMenu];
-    NSCAssert(actions.menu != stableMenu && actions.menuAssignments == assignments + 1,
-              @"Changed context did not replace the menu exactly once");
-    UIMenu *changedSection = (UIMenu *)actions.menu.children.firstObject;
-    UIAction *changedAction = (UIAction *)changedSection.children.firstObject;
-    NSCAssert([changedAction.title isEqual:@"Mesh"], @"Menu retained stale contents");
-    UIButton *changedTrigger = [UIButton buttonWithType:UIButtonTypeSystem];
-    [changedTrigger addAction:changedAction forControlEvents:UIControlEventTouchUpInside];
-    [changedTrigger sendActionsForControlEvents:UIControlEventTouchUpInside];
-    NSDictionary *submitted = [NSJSONSerialization JSONObjectWithData:
-        [menuRequests.lastObject[@"route"] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
-    NSCAssert([submitted isEqual:meshRoute] && [menuRequests.lastObject[@"execute"] boolValue],
-              @"Changed menu dispatched a stale route");
-    builder.menuRoots = @[separator];
-    [builder updateActionsButtonMenu];
-    NSCAssert(!actions.enabled && actions.menu.children.count == 0, @"Empty menu remained enabled");
-    assignments = actions.menuAssignments;
-    [builder updateActionsButtonMenu];
-    NSCAssert(actions.menuAssignments == assignments, @"Empty menu rebuilt on every poll");
-    builder.menuRoots = originalItems;
-    [builder updateActionsButtonMenu];
-    NSCAssert(actions.enabled && actions.menu.children.count == 1, @"Menu did not recover with context");
+    NSCAssert(actions.menu == stableMenu && actions.menuAssignments == assignments && actions.enabled,
+              @"Toolbar polling replaced the Actions menu");
+    [queued removeAllObjects];
+    [settings removeAllObjects];
+    for (UIMenu *group in stableMenu.children) {
+      for (UIMenuElement *element in group.children) {
+        if ([element isKindOfClass:UIAction.class]) {
+          UIButton *trigger = [UIButton buttonWithType:UIButtonTypeSystem];
+          [trigger addAction:(UIAction *)element forControlEvents:UIControlEventTouchUpInside];
+          [trigger sendActionsForControlEvents:UIControlEventTouchUpInside];
+        }
+      }
+    }
+    NSCAssert([queued isEqual:(@[@"WM_OT_open_mainfile", @"WM_OT_save_mainfile", @"WM_OT_save_as_mainfile"])] &&
+              [settings isEqual:(@[@[@"interface", @"desktop"]])],
+              @"Essentials run Blender's file operators and the interface switch: %@ %@", queued, settings);
     builder.viewport = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, 834, 1210)] autorelease];
     builder.pencilMenu = [[[MenuTestPencilMenu alloc] init] autorelease];
     builder.editInteraction = [[[MenuTestInteraction alloc] init] autorelease];
@@ -419,9 +407,15 @@ int main()
     viewportPress.testState = UIGestureRecognizerStateChanged;
     [builder handleActionsMenuPress:viewportPress];
     NSCAssert(builder.editInteraction.presentations == 1, @"Long press presented multiple times");
+    [builder setValue:@YES forKey:@"_desktop_interface"];
+    viewportPress.testState = UIGestureRecognizerStateBegan;
+    [builder handleActionsMenuPress:viewportPress];
+    NSCAssert(builder.editInteraction.presentations == 1,
+              @"Blender's own interface keeps its own context menus");
+    [builder setValue:@NO forKey:@"_desktop_interface"];
     actions.menu = nil;
     [builder updateActionsButtonMenu];
-    NSCAssert(actions.menu.children.count == 1, @"Missing menu was not restored");
+    NSCAssert(actions.menu.children.count == 3, @"Missing menu was not restored");
     builder.model = @{@"mode": @"objectmode", @"canUndo": @YES,
                       @"actions": @[@{@"title": @"Move", @"operator": @"TRANSFORM_OT_translate"},
                                     @{@"title": @"X", @"key": @"X"}]};
