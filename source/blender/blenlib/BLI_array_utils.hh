@@ -106,9 +106,7 @@ inline void copy(const Span<T> src,
                                              exec_mode_tag_for_copy(mode, sizeof(T)));
 }
 
-/**
- * Copy integers from a between two spans while adding an offset.
- */
+/** Copy integers from a between two spans while adding an offset. */
 void copy_ints_with_offset(Span<int> src,
                            int offset,
                            MutableSpan<int> dst,
