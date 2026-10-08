@@ -63,29 +63,23 @@ class CollectionIOTestBase(unittest.TestCase):
 
         bpy.context.view_layer.active_layer_collection = lc_target
 
-    def add_collection_importer(self, collection_name, importer_type, expect_error=False):
+    def add_collection_importer(self, collection_name, importer_type, expected_result={'FINISHED'}):
         self.set_active_collection(collection_name)
 
-        try:
-            res = bpy.ops.collection.importer_add(name=importer_type)
-            self.assertEqual(res, {'FINISHED'})
-            self.assertIsNotNone(
-                bpy.data.collections[collection_name].importer,
-                f"Failed to add {importer_type} importer on collection {collection_name}")
-        except RuntimeError as e:
-            self.assertTrue(expect_error, f"Unexpected error occurred: {e}")
+        res = bpy.ops.collection.importer_add(name=importer_type)
+        self.assertEqual(res, expected_result)
+        self.assertIsNotNone(
+            bpy.data.collections[collection_name].importer,
+            f"Failed to add {importer_type} importer on collection {collection_name}")
 
-    def remove_collection_importer(self, collection_name, expect_error=False):
+    def remove_collection_importer(self, collection_name, expected_result={'FINISHED'}):
         self.set_active_collection(collection_name)
 
-        try:
-            res = bpy.ops.collection.importer_remove()
-            self.assertEqual(res, {'FINISHED'})
-            self.assertIsNone(
-                bpy.data.collections[collection_name].importer,
-                f"Failed to remove importer on collection {collection_name}")
-        except RuntimeError as e:
-            self.assertTrue(expect_error, f"Unexpected error occurred: {e}")
+        res = bpy.ops.collection.importer_remove()
+        self.assertEqual(res, expected_result)
+        self.assertIsNone(
+            bpy.data.collections[collection_name].importer,
+            f"Failed to remove importer on collection {collection_name}")
 
     def reload_collection_importer(self, collection_name):
         self.set_active_collection(collection_name)
@@ -133,11 +127,13 @@ class TestCollectionImport(CollectionIOTestBase):
 
         self.add_collection_importer(coll_A, "IO_FH_usd")
         self.add_collection_importer(coll_B, "IO_FH_usd")
-        self.add_collection_importer(coll_B, "IO_FH_usd", expect_error=True)
+        with self.assertRaises(RuntimeError, msg=f"Adding a second importer to {coll_B} should fail"):
+            self.add_collection_importer(coll_B, "IO_FH_usd")
 
         self.remove_collection_importer(coll_A)
         self.remove_collection_importer(coll_B)
-        self.remove_collection_importer(coll_B, expect_error=True)
+        with self.assertRaises(RuntimeError, msg=f"Removing a non-existant importer from {coll_B} should fail"):
+            self.remove_collection_importer(coll_B, "IO_FH_usd")
 
     def test_import(self):
         # Validate basic import functionality.
@@ -182,6 +178,16 @@ class TestCollectionImport(CollectionIOTestBase):
         self.assertEqual(len(bpy.data.libraries), 4)
         self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 2)
         self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 2)
+
+        # Ensure remove works here as well
+        self.remove_collection_importer(coll_A)
+        self.assertEqual(len(bpy.data.libraries), 2)
+        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 1)
+        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 1)
+
+        self.remove_collection_importer(coll_B)
+        self.remove_collection_importer(coll_C)
+        self.assertEqual(len(bpy.data.libraries), 0)
 
     def test_import_multi(self):
         # Validate multiple importers all using the same external file.

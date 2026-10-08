@@ -679,6 +679,28 @@ static void COLLECTION_OT_importer_add(wmOperatorType *ot)
                   "Select the file relative to the blend file");
 }
 
+/* Removes all imported IDs from a collection including the external archive library and its parent
+ * library (when empty). */
+static void collection_importer_clear_ids(Main *bmain, Library *external_archive_lib)
+{
+  Library *external_library = external_archive_lib->archive_parent_library;
+
+  Set<ID *> ids_to_delete;
+  for (ID &id_iter : MainAllIDsIterator(*bmain)) {
+    if (id_iter.lib == external_archive_lib) {
+      ids_to_delete.add(&id_iter);
+    }
+  }
+
+  ids_to_delete.add(&external_archive_lib->id);
+  BKE_id_multi_delete(bmain, ids_to_delete);
+
+  /* Remove the parent archive library if that is now empty. */
+  if (external_library->runtime->archived_libraries.is_empty()) {
+    BKE_id_delete(bmain, &external_library->id);
+  }
+}
+
 static wmOperatorStatus collection_importer_remove_exec(bContext *C, wmOperator * /*op*/)
 {
   Collection *collection = CTX_data_collection(C);
@@ -686,6 +708,13 @@ static wmOperatorStatus collection_importer_remove_exec(bContext *C, wmOperator 
 
   if (!data) {
     return OPERATOR_CANCELLED;
+  }
+
+  /* Clear all imported data, including the chain of libraries, if an import has occurred. */
+  Library *external_archive_lib = data->runtime->archive_library;
+  if (external_archive_lib) {
+    Main *bmain = CTX_data_main(C);
+    collection_importer_clear_ids(bmain, external_archive_lib);
   }
 
   BKE_collection_importer_free_data(data);
@@ -914,21 +943,8 @@ static void COLLECTION_OT_importer_import(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static void collection_importer_clear_ids(Main *bmain, Library *external_archive_lib)
-{
-  Set<ID *> ids_to_delete;
-  for (ID &id_iter : MainAllIDsIterator(*bmain)) {
-    if (id_iter.lib == external_archive_lib) {
-      ids_to_delete.add(&id_iter);
-    }
-  }
-  ids_to_delete.add(&external_archive_lib->id);
-  BKE_id_multi_delete(bmain, ids_to_delete);
-}
-
 static wmOperatorStatus collection_importer_clear_exec(bContext *C, wmOperator * /*op*/)
 {
-  Main *bmain = CTX_data_main(C);
   const Collection *collection = CTX_data_collection(C);
   CollectionImport *data = collection->importer;
   if (!data) {
@@ -941,12 +957,9 @@ static wmOperatorStatus collection_importer_clear_exec(bContext *C, wmOperator *
     return OPERATOR_FINISHED;
   }
 
-  /* Clear all imported data, including the external archive library itself. */
-  Library *external_library = external_archive_lib->archive_parent_library;
+  /* Clear all imported data, including the chain of libraries. */
+  Main *bmain = CTX_data_main(C);
   collection_importer_clear_ids(bmain, external_archive_lib);
-  if (external_library->runtime->archived_libraries.is_empty()) {
-    BKE_id_delete(bmain, &external_library->id);
-  }
 
   data->runtime->archive_library = nullptr;
 
@@ -981,7 +994,8 @@ static wmOperatorStatus collection_importer_make_local_exec(bContext *C, wmOpera
 
   Library *external_archive_lib = data->runtime->archive_library;
   if (!external_archive_lib) {
-    /* It is ok to clear a collection which hasn't been imported yet. */
+    /* It is ok to clear a collection which hasn't been imported yet (e.g. if executing the Reload
+     * operator on an empty collection). */
     return OPERATOR_FINISHED;
   }
 
