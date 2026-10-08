@@ -3555,10 +3555,6 @@ class WM_MT_splash_project(Menu):
             layout.operator("project.close", text="Close")
         layout.operator("wm.clear_recent_projects", text="Clear Recent Projects List...")
 
-        layout.separator()
-
-        layout.prop(context.preferences, "use_project_remember")
-
 
 class WM_MT_splash(Menu):
     bl_label = "Splash"
