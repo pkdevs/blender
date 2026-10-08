@@ -1,3 +1,4 @@
 Referenced by pull request #162481, Fix: Ensure brush automasking settings are properly initialized
 Referenced by commit fb094cea2fde973a79e58e6d087e4f7c0ecc2e24, Fix: Ensure brush automasking settings are properly initialized
 Referenced by issue #163562, Memory leak with automasking
+Referenced by issue #164817, Auto masking cavity Not working.
