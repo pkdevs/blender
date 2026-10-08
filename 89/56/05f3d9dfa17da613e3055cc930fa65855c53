@@ -2,3 +2,4 @@ Referenced by pull request #164834, Refactor: Make bContext a non-trivial C++ st
 Referenced by pull request #164802, Fix: Collection Import: Importer added to wrong collection
 Referenced by commit 7450b80d9ecab862be3bdca6d879382f01d2626d, Refactor: Make bContext a non-trivial C++ struct.
 Referenced by pull request #164900, Fix: Collection importer poll messages not translated
+Referenced by commit 9bdd00152261e3dbe22d4f442cbb298d89740701, Fix: Collection importer poll messages not translated
