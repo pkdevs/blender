@@ -2524,6 +2524,119 @@ void WM_apple_ios_autosave_now(bContext *C)
 }
 
 /** The newest auto-save, with the name of its document; prunes month-old ones. */
+static std::string wm_autosave_newest(const std::string &folder, std::string *r_name)
+{
+  direntry *entries = nullptr;
+  const uint count = BLI_filelist_dir_contents(folder.c_str(), &entries);
+  std::string newest;
+  int64_t newest_time = 0;
+  const int64_t month_ago = int64_t(time(nullptr)) - 30 * 24 * 60 * 60;
+  for (uint i = 0; i < count; i++) {
+    const StringRef name = entries[i].relname;
+    if (S_ISDIR(entries[i].type) || !name.endswith("_autosave.blend")) {
+      continue;
+    }
+    if (entries[i].s.st_mtime < month_ago) {
+      BLI_delete(entries[i].path, false, false);
+      continue;
+    }
+    if (entries[i].s.st_mtime > newest_time) {
+      newest_time = entries[i].s.st_mtime;
+      newest = entries[i].path;
+      StringRef stem = name.drop_suffix(StringRef("_autosave.blend").size());
+      /* Drop the path hash, "_0123abcd". */
+      if (stem.size() > 9 && stem[stem.size() - 9] == '_') {
+        stem = stem.drop_suffix(9);
+      }
+      if (r_name) {
+        *r_name = stem;
+      }
+    }
+  }
+  BLI_filelist_free(entries, count);
+  return newest;
+}
+
+/* Restores the auto-save as Blender's Recover Auto Save does, keeping the document's own path.
+ * Blender marks it recovered, as unsaved, until the document is saved. */
+static void wm_autosave_restore(bContext *C, const std::string &autosave)
+{
+  wmOperatorType *ot = WM_operatortype_find("WM_OT_recover_auto_save", false);
+  PointerRNA props = WM_operator_properties_create_ptr(ot);
+  RNA_string_set(&props, "filepath", autosave.c_str());
+  WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props, nullptr);
+  WM_operator_properties_free(&props);
+}
+
+/** Only after a restore crashed: ask rather than crash again. */
+static void wm_autosave_offer_recovery(bContext *C, const std::string &folder)
+{
+  std::string newest_name;
+  const std::string newest = wm_autosave_newest(folder, &newest_name);
+  if (newest.empty()) {
+    return;
+  }
+  GHOST_IOSDialog dialog;
+  dialog.title = IFACE_("Recover Unsaved Work?");
+  dialog.message = newest_name == "untitled" ?
+                       std::string(IFACE_("Blender closed before your new file was saved.")) :
+                       fmt::format(fmt::runtime(IFACE_("Blender closed before \u201c{}\u201d was saved.")),
+                                   newest_name);
+  dialog.actions = {{IFACE_("Recover")}, {IFACE_("Discard"), GHOST_IOSDialogRole::Destructive}};
+  dialog.preferred_action = 0;
+  WM_apple_ios_dialog_begin(C, dialog, [newest](bContext *C, int action, uint64_t /*toggles*/) {
+    if (action != 0) {
+      BLI_delete(newest.c_str(), false, false);
+      return;
+    }
+    wm_autosave_restore(C, newest);
+  });
+}
+
+void WM_apple_ios_session_restore(bContext *C)
+{
+  static bool restored = false;
+  if (restored || CTX_wm_window(C) == nullptr) {
+    return;
+  }
+  restored = true;
+  const std::optional<std::string> folder = BKE_appdir_folder_id_create(BLENDER_USER_DATAFILES,
+                                                                        "autosave");
+  Main *bmain = CTX_data_main(C);
+  if (!folder || bmain == nullptr || BKE_main_blendfile_path(bmain)[0] != '\0') {
+    /* A document opened with the app takes precedence; its own auto-save continues on open. */
+    return;
+  }
+  /* Marks a restore in progress. Left behind only if restoring crashed Blender: then ask
+   * instead of crashing again on every launch. */
+  char marker[FILE_MAX];
+  BLI_path_join(marker, sizeof(marker), folder->c_str(), "restoring");
+  if (BLI_exists(marker)) {
+    BLI_delete(marker, false, false);
+    wm_autosave_offer_recovery(C, *folder);
+    return;
+  }
+  /* Continue the last session: its unsaved work if Blender was closed with any (saving removes
+   * the auto-save), otherwise the last document, as it was saved. */
+  const std::string newest = wm_autosave_newest(*folder, nullptr);
+  const RecentFile *recent = static_cast<const RecentFile *>(G.recent_files.first);
+  if (newest.empty() && (recent == nullptr || !BLI_exists(recent->filepath))) {
+    return;
+  }
+  BLI_file_touch(marker);
+  if (!newest.empty()) {
+    wm_autosave_restore(C, newest);
+  }
+  else {
+    wmOperatorType *ot = WM_operatortype_find("WM_OT_open_mainfile", false);
+    PointerRNA props = WM_operator_properties_create_ptr(ot);
+    RNA_string_set(&props, "filepath", recent->filepath);
+    WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props, nullptr);
+    WM_operator_properties_free(&props);
+  }
+  BLI_delete(marker, false, false);
+}
+
 #endif
 /** \} */
 

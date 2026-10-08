@@ -33,5 +33,10 @@ void WM_apple_ios_starter_library_ensure();
 void WM_apple_ios_autosave_ensure();
 /** Write the auto-save now, in any mode, when the app goes to the background. */
 void WM_apple_ios_autosave_now(bContext *C);
+/**
+ * Once per launch, continue the last session: work left unsaved when Blender was closed, or the
+ * last document. A document opened with the app takes precedence.
+ */
+void WM_apple_ios_session_restore(bContext *C);
 
 }  // namespace blender
