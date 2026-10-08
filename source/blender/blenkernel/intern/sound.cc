@@ -2718,6 +2718,19 @@ static void sound_recording_record_frame(const std::shared_ptr<bke::SoundRecordi
     for (const AUD_SequenceEntry &handle : audio.speaker_handles) {
       sound_hold_recorded_speaker_frame(handle, frame, 1);
     }
+    /* The Scene volume and the volume and pan of strips can keep a value of an earlier recording
+     * or playback before the first recorded frame. */
+    sound_hold_recorded_frame(audio.sound_scene->getAnimProperty(aud::AP_VOLUME), frame, 1);
+    if (scene_eval->ed != nullptr) {
+      seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
+        if (strip->runtime != nullptr && strip->runtime->scene_sound != nullptr) {
+          const AUD_SequenceEntry &handle = strip->runtime->scene_sound;
+          sound_hold_recorded_frame(handle->getAnimProperty(aud::AP_VOLUME), frame, 1);
+          sound_hold_recorded_frame(handle->getAnimProperty(aud::AP_PANNING), frame, 1);
+        }
+        return true;
+      });
+    }
   }
   sound_recording_attach(recording, scene_eval);
   const Vector<AUD_SequenceEntry> added = sound_recording_record_changes(*recording, frame);
