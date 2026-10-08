@@ -1464,12 +1464,11 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   const BoneDeform mode = BoneDeform(RNA_enum_get(op->ptr, "deform"));
+  bool changed = false;
 
   for (Object *ob : objects) {
     bArmature *arm = id_cast<bArmature *>(ob->data);
-    bool changed = false;
-
-    ED_armature_edit_deselect_all_visible(ob);
+    bool object_changed = false;
 
     for (EditBone &ebone : *arm->edbo) {
       if (!animrig::bone_is_visible(arm, &ebone)) {
@@ -1478,16 +1477,21 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
 
       const bool is_deform = !(ebone.flag & BONE_NO_DEFORM);
       const bool select = is_deform == (mode == BoneDeform::DEFORM);
-      if (select) {
-        ED_armature_ebone_select_set(&ebone, true);
-        changed = true;
+      const bool was_selected = (ebone.flag & BONE_SELECTED) != 0;
+      if (select != was_selected) {
+        ED_armature_ebone_select_set(&ebone, select);
+        object_changed = true;
       }
     }
 
-    if (changed) {
+    if (object_changed) {
+      changed = true;
       WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
       DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
     }
+  }
+  if (!changed) {
+    return OPERATOR_CANCELLED;
   }
 
   return OPERATOR_FINISHED;
