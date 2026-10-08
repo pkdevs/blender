@@ -4897,6 +4897,109 @@ static void draw_nodetree(const bContext &C, ARegion &region, bNodeTree &ntree)
   node_draw_nodetree(C, tree_draw_ctx, region, *snode, ntree, nodes, blocks);
 }
 
+/* -------------------------------------------------------------------- */
+/** \name View Controls
+ * \{ */
+
+// todo(habib): match drawing style of other editors
+// todo(habib): could move to common file to be reused by other editors
+static void view_controls_draw(const rcti &rect)
+{
+  const float rad = BLI_rcti_size_x(&rect) / 2.0f;
+
+  float background_color[4];
+  ui::theme::get_color_4fv(TH_HEADER, background_color);
+  background_color[3] = std::max(background_color[3], 0.3f);
+
+  float outline_color[4] = {
+      background_color[0], background_color[1], background_color[2], background_color[3]};
+  outline_color[3] = std::max(outline_color[3], 0.5f);
+
+  rctf rect_f;
+  BLI_rctf_rcti_copy(&rect_f, &rect);
+
+  // todo(habib): verify padding
+  BLI_rctf_pad(&rect_f, 0.0f, rad * 0.2f);
+
+  ui::draw_roundbox_corner_set(ui::CNR_ALL);
+  ui::draw_roundbox_4fv_ex(
+      &rect_f, background_color, nullptr, 1.0f, outline_color, U.pixelsize, rad);
+}
+
+static void draw_view_controls(const bContext &C, ARegion &region)
+{
+  SpaceNode &snode = *CTX_wm_space_node(&C);
+
+  const bNodeTreePath *path = snode.treepath.last();
+  if (path == nullptr || path->nodetree == nullptr) {
+    return;
+  }
+
+  if (snode.gizmo_flag & (SNODE_GIZMO_HIDE | SNODE_GIZMO_HIDE_NODES_NAVIGATE)) {
+    return;
+  }
+
+  wmOperatorType *ot_nodes_zoom = WM_operatortype_find("VIEW2D_OT_zoom", false);
+  wmOperatorType *ot_nodes_pan = WM_operatortype_find("VIEW2D_OT_pan", false);
+  BLI_assert(ot_nodes_zoom && ot_nodes_pan);
+
+  const int button_count = 2;
+  const int button_size = int(1.5f * UI_UNIT_X);
+  const int spacing = int(0.15f * UI_UNIT_Y);
+  const int margin = int(0.9f * UI_UNIT_X);
+
+  /* Put controls at top right. */
+  const rcti *visible = ED_region_visible_rect(&region);
+  const int panel_height = button_count * button_size + (button_count - 1) * spacing;
+  const int xmin = visible->xmax - margin - button_size;
+  const int ymin = visible->ymax - margin - panel_height;
+  const rcti panel_rect = {xmin, ymin, xmin + button_size, ymin + panel_height};
+
+  /* Use a regular UI block so the region UI handler provides hover/click and it is drawn last (on
+   * top of the nodes and their gizmos). */
+  ui::Block *block = ui::block_begin(&C, &region, "node_view_controls", ui::EmbossType::None);
+
+  // todo(habib): verify side effects for other node UI blocks
+  ui::block_flag_enable(block, ui::BLOCK_CLIP_EVENTS);
+  ui::block_bounds_set_explicit(
+      block, panel_rect.xmin, panel_rect.ymin, panel_rect.xmax, panel_rect.ymax);
+
+  const auto add_button =
+      [&](const int index, const int icon, const StringRef tooltip, wmOperatorType *ot) {
+        const int y = panel_rect.ymax - (index + 1) * button_size - index * spacing;
+        ui::Button *but = ui::uiDefIconButO_ptr(block,
+                                                ui::ButtonType::ButToggle,
+                                                ot,
+                                                wm::OpCallContext::InvokeDefault,
+                                                icon,
+                                                panel_rect.xmin,
+                                                y,
+                                                short(button_size),
+                                                short(button_size),
+                                                {});
+        ui::button_func_quick_tooltip_set(
+            but, [tooltip](const ui::Button * /*but*/) { return std::string(tooltip); });
+      };
+
+  add_button(0, ICON_VIEW_ZOOM, TIP_("Zoom in/out nodes"), ot_nodes_zoom);
+  add_button(1, ICON_VIEW_PAN, TIP_("Pan nodes"), ot_nodes_pan);
+
+  ui::block_end(&C, block);
+
+  // todo(habib): initial style, check other themes
+  GPU_matrix_push_projection();
+  GPU_matrix_push();
+  GPU_matrix_identity_set();
+  wmOrtho2_region_pixelspace(&region);
+  GPU_blend(GPU_BLEND_ALPHA);
+  view_controls_draw(panel_rect);
+  GPU_blend(GPU_BLEND_NONE);
+  GPU_matrix_pop();
+  GPU_matrix_pop_projection();
+
+  ui::block_draw(&C, block);
+}
+
 static void draw_background_color()
 {
   float color[3];
@@ -5111,6 +5214,8 @@ void node_draw_space(const bContext &C, ARegion &region)
   }
 
   ui::view2d_scrollers_draw(&v2d, nullptr);
+
+  draw_view_controls(C, region);
 }
 
 }  // namespace ed::space_node

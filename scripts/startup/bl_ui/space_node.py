@@ -248,13 +248,13 @@ class NODE_HT_header(Header):
             sub.active = snode.show_backdrop
             sub.prop(snode, "backdrop_channels", icon_only=True, text="")
 
-            # Gizmo toggle and popover.
-            row = layout.row(align=True)
-            row.prop(snode, "show_gizmo", icon='GIZMO', text="")
-            row.active = snode.node_tree is not None
-            sub = row.row(align=True)
-            sub.active = snode.show_gizmo and row.active
-            sub.popover(panel="NODE_PT_gizmo_display", text="")
+        # Gizmo toggle and popover.
+        row = layout.row(align=True)
+        row.prop(snode, "show_gizmo", icon='GIZMO', text="")
+        row.active = snode.node_tree is not None
+        sub = row.row(align=True)
+        sub.active = snode.show_gizmo and row.active
+        sub.popover(panel="NODE_PT_gizmo_display", text="")
 
         # Snap
         row = layout.row(align=True)
@@ -281,17 +281,19 @@ class NODE_PT_gizmo_display(Panel):
         snode = context.space_data
         is_compositor = snode.tree_type == 'CompositorNodeTree'
 
-        if not is_compositor:
-            return
-
         col = layout.column()
         col.label(text="Viewport Gizmos")
         col.separator()
 
         col.active = snode.show_gizmo
+        if is_compositor:
+            colsub = col.column()
+            colsub.active = snode.node_tree is not None and col.active
+            colsub.prop(snode, "show_gizmo_active_node", text="Active Node")
+
         colsub = col.column()
         colsub.active = snode.node_tree is not None and col.active
-        colsub.prop(snode, "show_gizmo_active_node", text="Active Node")
+        colsub.prop(snode, "show_gizmo_nodes_navigate", text="Navigate")
 
 
 class NODE_MT_editor_menus(Menu):

@@ -945,6 +945,7 @@ enum eSpaceNode_Gizmo_Flag : char {
   /** All gizmos. */
   SNODE_GIZMO_HIDE = (1 << 0),
   SNODE_GIZMO_HIDE_ACTIVE_NODE = (1 << 1),
+  SNODE_GIZMO_HIDE_NODES_NAVIGATE = (1 << 2),
 };
 ENUM_OPERATORS(eSpaceNode_Gizmo_Flag)
 
