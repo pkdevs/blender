@@ -231,6 +231,8 @@ struct IOSPencilHoverRequest {
 };
 GHOST_IOSLatest<IOSPencilHoverRequest> ios_hover_requests;
 GHOST_IOSLatest<std::string> ios_hover_snapshot;
+/* Window coordinates of the asset drag in progress. */
+int2 ios_asset_drag_xy(0);
 IOSPencilHoverRequest ios_hover_request;
 
 struct IOSActionItem {
@@ -1567,6 +1569,7 @@ void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
         break;
       }
       ios_asset_drag_start(C, *asset);
+      ios_asset_drag_xy = int2(xy[0], xy[1]);
       ios_asset_drag_event(win, xy, MOUSEMOVE, KM_NOTHING);
       if (command.phase == IOS_ASSET_ADD) {
         /* Release on the next update, once the move has entered the drop box and its snap
@@ -1583,6 +1586,7 @@ void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
       break;
     case IOS_ASSET_DRAG_MOVE:
       if (dragging) {
+        ios_asset_drag_xy = int2(xy[0], xy[1]);
         ios_asset_drag_event(win, xy, MOUSEMOVE, KM_NOTHING);
       }
       break;
@@ -2557,7 +2561,19 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
       mval[0] -= region->winrct.xmin;
       mval[1] -= region->winrct.ymin;
     }
-    ED_view3d_pencil_hover_update(C, active, mval);
+    /* Dragging a material or a modifier, the object it would drop on is highlighted as Pencil
+     * hover highlights it. */
+    const wmDrag *drag = window ? static_cast<const wmDrag *>(
+                                      CTX_wm_manager(C)->runtime->drags.first) :
+                                  nullptr;
+    const bool drag_to_object = drag && region &&
+                                (WM_drag_is_ID_type(drag, ID_MA) || WM_drag_is_ID_type(drag, ID_NT));
+    if (drag_to_object) {
+      active = true;
+      mval[0] = ios_asset_drag_xy.x - region->winrct.xmin;
+      mval[1] = ios_asset_drag_xy.y - region->winrct.ymin;
+    }
+    ED_view3d_pencil_hover_update(C, active, mval, drag_to_object);
     const View3DPencilHover hit = ED_view3d_pencil_hover_get(region);
     ios_hover_snapshot.publish("{\"object\":" + std::to_string(hit.object_uid) +
                                ",\"kind\":" + std::to_string(hit.kind) +
