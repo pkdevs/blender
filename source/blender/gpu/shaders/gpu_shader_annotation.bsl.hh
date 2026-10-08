@@ -5,7 +5,6 @@
 #pragma once
 
 #include "GPU_shader_shared.hh"
-#include "gpu_shader_utildefines_lib.glsl"
 
 #define GPENCIL_FLATCAP 1
 

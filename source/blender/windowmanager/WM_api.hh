@@ -1116,7 +1116,10 @@ wmOperatorStatus WM_operator_props_dialog_popup(
     bool show_icon = false);
 
 wmOperatorStatus WM_operator_redo_popup(bContext *C, wmOperator *op);
-wmOperatorStatus WM_operator_ui_popup(bContext *C, wmOperator *op, int width);
+/**
+ * \param auto_keymap: Assign accelerator keys to buttons.
+ */
+wmOperatorStatus WM_operator_ui_popup(bContext *C, wmOperator *op, int width, bool auto_keymap);
 
 /**
  * Can't be used as an invoke directly, needs message arg (can be NULL).
@@ -1201,23 +1204,35 @@ bool WM_operator_name_poll(bContext *C, const char *opstring);
 /**
  * Invokes operator in context.
  *
+ * \param reports: If not null, use the given ReportList to be used by the called operator,
+ * instead of creating a new one. Code will then assume that the reports are managed by the caller.
+ * Useful for operators called from within another operator e.g.
+ *
  * \param event: Optionally pass in an event to use when context uses one of the
  * `WM_OP_INVOKE_*` values. When left unset the #wmWindow.eventstate will be used,
  * this can cause problems for operators that read the events type - for example,
  * storing the key that was pressed so as to be able to detect its release.
  * In these cases it's necessary to forward the current event being handled.
  */
+wmOperatorStatus WM_operator_type_call_ptr_with_reports(bContext *C,
+                                                        wmOperatorType *ot,
+                                                        wm::OpCallContext context,
+                                                        PointerRNA *properties,
+                                                        ReportList *reports,
+                                                        const wmEvent *event);
+/** See #WM_operator_type_call_ptr_with_reports. */
 wmOperatorStatus WM_operator_name_call_ptr(bContext *C,
                                            wmOperatorType *ot,
                                            wm::OpCallContext context,
                                            PointerRNA *properties,
                                            const wmEvent *event);
-/** See #WM_operator_name_call_ptr. */
+/** See #WM_operator_type_call_ptr_with_reports. */
 wmOperatorStatus WM_operator_name_call(bContext *C,
                                        const char *opstring,
                                        wm::OpCallContext context,
                                        PointerRNA *properties,
                                        const wmEvent *event);
+/** See #WM_operator_type_call_ptr_with_reports. */
 wmOperatorStatus WM_operator_name_call_with_properties(bContext *C,
                                                        const char *opstring,
                                                        wm::OpCallContext context,
@@ -1989,10 +2004,12 @@ enum eWM_JobType {
   WM_JOB_TYPE_OBJECT_BAKE,
   WM_JOB_TYPE_FILESEL_READDIR,
   WM_JOB_TYPE_ASSET_LIBRARY_LOAD,
-  /** For the global asset list storage (#ED_asset_list.hh). Use a different job type from
+  /**
+   * For the global asset list storage (#ED_asset_list.hh). Use a different job type from
    * #WM_JOB_TYPE_ASSET_LIBRARY_LOAD (used by the asset browser) so the global storage loading can
    * happen independently of the asset browser loading. They would block each other if the type was
-   * the same. */
+   * the same.
+   */
   WM_JOB_TYPE_ASSET_LIBRARY_GLOBAL_LISTING_LOAD,
   WM_JOB_TYPE_CLIP_BUILD_PROXY,
   WM_JOB_TYPE_CLIP_TRACK_MARKERS,

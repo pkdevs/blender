@@ -19,9 +19,9 @@
 #include "BLI_rect.hh"
 #include "BLI_set.hh"
 
+#include "BKE_annotations.h"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
-#include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
@@ -459,8 +459,9 @@ static TransData *ActionFCurveToTransData(TransData *td,
 
   for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
     /* Only add selected keyframes (for now, proportional edit is not enabled). */
-    if (is_prop_edit || (bezt->f2 & SELECT)) { /* Note this MUST match #count_fcurve_keys(), so
-                                                  can't use #BEZT_ISSEL_ANY() macro. */
+
+    /* Note this check MUST match #count_fcurve_keys(), so can't use #BEZT_ISSEL_ANY() macro. */
+    if (is_prop_edit || (bezt->f2 & SELECT)) {
       /* Only add if on the right 'side' of the current frame. */
       if (FrameOnMouseSide(side, bezt->vec[1][0], cfra)) {
         TimeToTransData(td, td2d, bezt, ale, ypos);
@@ -1153,13 +1154,13 @@ static void posttrans_gpd_clean(bGPdata *gpd)
     bGPDframe *gpf, *gpfn;
     bool is_double = false;
 
-    BKE_gpencil_layer_frames_sort(&gpl, &is_double);
+    BKE_annotations_layer_frames_sort(&gpl, &is_double);
 
     if (is_double) {
       for (gpf = gpl.frames.first(); gpf; gpf = gpfn) {
         gpfn = gpf->next;
         if (gpfn && gpf->framenum == gpfn->framenum) {
-          BKE_gpencil_layer_frame_delete(&gpl, gpf);
+          BKE_annotations_layer_frame_delete(&gpl, gpf);
         }
       }
     }

@@ -280,6 +280,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     parser.language = Language::BSL;
     parser.parse(error_handler);
 
+    parse_draw_debug(parser, filename);
     parse_library_functions_ast(parser);
     lower_preprocessor_ast(parser);
 
@@ -296,8 +297,11 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     lower_trailing_comma_in_list_ast(parser);
     lower_assert_ast(parser, filename);
     lower_this_keyword(parser);
-
     parser.apply_mutations();
+
+    /* Lower string, assert, printf. */
+    lower_strings(parser);
+    lower_printf(parser);
 
     /* Linting phase. Detect valid syntax with invalid usage. */
     lint_reserved_tokens(parser);
@@ -314,10 +318,8 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     /* Lower class methods. */
     lower_method_forward_declaration(parser);
     lower_union_setters(parser);
+    lower_bitfield_setters(parser);
     lower_method_calls(parser, false);
-    /* Lower string, assert, printf. */
-    lower_strings(parser);
-    lower_printf(parser);
     /* Needs to be last. */
     lower_resource_macro_placeholder_ast(parser);
     lower_constructors(parser);
@@ -390,7 +392,9 @@ SourceProcessor::Result SourceProcessor::convert(metadata::Source external_sourc
     case Language::CPP:
       /* Should become BSL, but until the new compiler is fully working, fallback
        * to the legacy path. */
-      return convert_bsl_legacy(external_sources_symbols);
+      return (filename.starts_with("eevee_") || filename.starts_with("draw_")) ?
+                 convert_bsl() :
+                 convert_bsl_legacy(external_sources_symbols);
     case Language::BSL:
       return convert_bsl(); /* WIP */
     case Language::BLENDER_GLSL:
@@ -639,14 +643,6 @@ void SourceProcessor::parse_defines(Parser &parser)
 {
   parser().foreach_match<true>("#A", [&](const vector<Token> &tokens) {
     if (tokens[1].str() == "define") {
-      if (tokens[1].next().str().starts_with("LIGHT_STACK_SIZE_")) {
-        /* WORKAROUND: Avoid warning caused by EEVEE macro setup. */
-        return;
-      }
-      if (tokens[1].next().str() == "GBUFFER_LAYER_MAX") {
-        /* WORKAROUND: Avoid warning caused by EEVEE macro setup. */
-        return;
-      }
       if (tokens[1].next().str().starts_with("gather_")) {
         /* WORKAROUND: Avoid warning caused by EEVEE macro setup. */
         return;
@@ -786,10 +782,21 @@ void SourceProcessor::parse_includes(Parser &parser)
     }
     string_view dependency_name = str_view_exclusive(tokens[2]);
 
-    if (dependency_name.find("defines.hh") != string::npos) {
+    if (dependency_name.find("defines.hh") != string::npos ||
+        /* WORKAROUND(fclem): Only needed in EEVEE and overlays for now.
+         * Needs the file to be in the same folder. */
+        (dependency_name.ends_with(".bsl.hh") && filename.ends_with(".bsl.hh") &&
+         ((dependency_name.starts_with("eevee_") && filename.starts_with("eevee_")) ||
+          (dependency_name.starts_with("overlay_") && filename.starts_with("overlay_")))))
+    {
       /* Dependencies between create infos are not needed for reflections.
        * Only the dependencies on the defines are needed. */
-      metadata_.create_infos_dependencies.emplace_back(dependency_name);
+      if (dependency_name.ends_with(".bsl.hh")) {
+        metadata_.create_infos_dependencies.emplace_back(string(dependency_name) + ".info");
+      }
+      else {
+        metadata_.create_infos_dependencies.emplace_back(dependency_name);
+      }
     }
 
     if (dependency_name == "BLI_utildefines_variadic.hh") {
@@ -869,6 +876,10 @@ void SourceProcessor::lower_namesless_parameters(Parser &parser)
       if (arg.token_count() == 1 || arg.back().prev() == TokenType::Const || arg.back() == '&' ||
           arg.back() == '>')
       {
+        Token back = arg.back();
+        if (back == ']') {
+          back = back.scope().front().prev();
+        }
         /* Append a name for nameless argument. */
         parser.replace(arg.back().str_index_last_no_whitespace() + 1,
                        arg.back().str_index_last(),
@@ -885,7 +896,9 @@ void SourceProcessor::lower_namesless_parameters_ast(Parser &parser)
     for (FuncArg arg : fn.arguments().children_of_type<FuncArg>()) {
       if (!arg.identifier().is_valid()) {
         bool is_ref = arg.is_reference();
-        Token arg_back(is_ref ? arg.declarator().reference().back() : arg.back());
+        ast::ArrayDecl arr = arg.array();
+        Token arg_back(is_ref ? arg.declarator().reference().back() :
+                                (arr.is_valid() ? arr.front().prev() : arg.back()));
         /* Append a name for nameless argument. */
         parser.replace(arg_back.str_index_last_no_whitespace() + 1,
                        arg_back.str_index_last(),
@@ -1142,28 +1155,90 @@ void SourceProcessor::parse_library_functions(Parser &parser)
 
         fn_args.foreach_scope(ScopeType::FunctionArg, [&](Scope arg) {
           /* Note: There is no array support. */
-          const Token name = arg.back();
-          const Token type = name.prev() == '&' ? name.prev().prev() : name.prev();
-          string qualifier(type.prev().str());
-          if (qualifier != "out" && qualifier != "inout" && qualifier != "in") {
-            if (name.prev() == '&') {
-              qualifier = "out";
-            }
-            else if (qualifier != "const" && qualifier != "(" && qualifier != ",") {
-              report_error(type.prev(),
-                           "Unrecognized qualifier, expecting 'const', 'in', 'out' or 'inout'.");
-              qualifier = "in";
-            }
-            else {
-              qualifier = "in";
-            }
+          Token curr = arg.front();
+          /* Skip attribute. */
+          if (curr == '[') {
+            curr = curr.scope().back().next();
           }
-          fn.arguments.emplace_back(ArgumentFormat{metadata::Qualifier(hash(qualifier)),
-                                                   metadata::Type(hash(string(type.str())))});
+          /* Skip const. */
+          if (curr.str() == "const") {
+            curr = curr.next();
+          }
+          /* Parse qualifier. */
+          string qualifier = "in";
+          if (curr.str() == "in") {
+            qualifier = "in";
+            curr = curr.next();
+          }
+          else if (curr.str() == "out") {
+            qualifier = "out";
+            curr = curr.next();
+          }
+          /* Parse the type */
+          Token type_tok = curr;
+          string type = string(curr.str());
+          curr = curr.next();
+          /* Skip optional parenthesis. */
+          if (curr == '(') {
+            curr = curr.next();
+          }
+          /* Reference. */
+          if (curr == '&') {
+            qualifier = "out";
+          }
+
+          if (type == "ShadingData" || type == "KernelGlobals") {
+            /* They are technically inout, but we declare them at the end of the input list. */
+            qualifier = "in";
+          }
+
+          metadata::Qualifier qualifier_enum = metadata::Qualifier(hash(qualifier));
+          metadata::Type type_enum = metadata::Type(hash(type));
+
+          switch (qualifier_enum) {
+            case metadata::Qualifier::in:
+            case metadata::Qualifier::out:
+            case metadata::Qualifier::inout:
+              break;
+            default:
+              report_error(arg.front(), "Unknown qualifier '" + qualifier + "'");
+              break;
+          }
+
+          switch (type_enum) {
+            case metadata::Type::float1:
+            case metadata::Type::float2:
+            case metadata::Type::float3:
+            case metadata::Type::float4:
+            case metadata::Type::float3x3:
+            case metadata::Type::float4x4:
+            case metadata::Type::int1:
+            case metadata::Type::int2:
+            case metadata::Type::int3:
+            case metadata::Type::int4:
+            case metadata::Type::bool1:
+            case metadata::Type::sampler1DArray:
+            case metadata::Type::sampler2DArray:
+            case metadata::Type::sampler2D:
+            case metadata::Type::sampler3D:
+            case metadata::Type::Closure:
+            case metadata::Type::KernelGlobals:
+            case metadata::Type::ShadingData:
+              break;
+            default:
+              report_error(type_tok, "Invalid type for node function '" + type + "'");
+              break;
+          }
+
+          fn.arguments.emplace_back(ArgumentFormat{qualifier_enum, type_enum});
         });
 
         metadata_.functions.emplace_back(fn);
       });
+
+  if (error_handler.err.has_value()) {
+    throw ParserException();
+  }
 }
 
 void SourceProcessor::parse_library_functions_ast(Parser &parser)
@@ -1171,15 +1246,15 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
   using namespace metadata;
   for (FuncDecl func : parser.root().children_of_type<FuncDecl>()) {
     if (!func.attributes().contains_attr("node")) {
-      return;
+      continue;
     }
     if (func.return_type().str() != "void") {
       report_error(func.return_type(), "Expected void return type for node function");
-      return;
+      continue;
     }
     if (func.arguments().is_empty()) {
       report_error(func.identifier(), "Expected at least one argument for node function");
-      return;
+      continue;
     }
 
     FunctionFormat fn;
@@ -1191,26 +1266,81 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
                      "Array arguments are not supported in node functions.");
       }
 
-      Type type = Type(hash(string(arg.type().str())));
+      Type type = Type(hash(string(arg.type().identifier().str())));
       Qualifier qualifier;
       if (arg.is_reference() && !arg.is_const()) {
-        qualifier = Qualifier(hash("inout"));
+        qualifier = Qualifier::out;
       }
       else {
-        qualifier = Qualifier(hash("in"));
+        qualifier = Qualifier::in;
       }
+
+      if (type == Type::KernelGlobals || type == Type::ShadingData) {
+        /* They are technically inout, but we declare them at the end of the input list. */
+        qualifier = Qualifier::in;
+      }
+
+      [&](Type type) {
+        switch (type) {
+          case Type::float1:
+          case Type::float2:
+          case Type::float3:
+          case Type::float4:
+          case Type::float3x3:
+          case Type::float4x4:
+          case Type::int1:
+          case Type::int2:
+          case Type::int3:
+          case Type::int4:
+          case Type::bool1:
+          case Type::sampler1DArray:
+          case Type::sampler2DArray:
+          case Type::sampler2D:
+          case Type::sampler3D:
+          case Type::Closure:
+          case Type::KernelGlobals:
+          case Type::ShadingData:
+            return;
+        }
+        report_error(arg.type().identifier(),
+                     "Invalid type for node function '" + string(arg.type().identifier().str()) +
+                         "'");
+      }(type);
 
       fn.arguments.emplace_back(qualifier, type);
     }
     metadata_.functions.emplace_back(fn);
   }
+
+  if (error_handler.err.has_value()) {
+    throw ParserException();
+  }
+}
+
+void SourceProcessor::parse_draw_debug(Parser &parser, const string &filename)
+{
+  const bool skip_drw_debug = filename == "draw_debug_draw.bsl.hh" ||
+                              filename == "draw_debug_infos.hh" ||
+                              filename == "draw_debug_draw_display.bsl.hh" ||
+                              filename == "draw_shader_shared.hh";
+
+  if (skip_drw_debug) {
+    return;
+  }
+
+  for (auto fn : parser.root().descendants_of_type<FuncCall>()) {
+    if (fn.identifier().str().starts_with("drw_debug_")) {
+      metadata_.builtins.emplace_back(Builtin::drw_debug);
+      break;
+    }
+  }
 }
 
 void SourceProcessor::parse_builtins(const string &str, const string &filename, bool pure_glsl)
 {
-  const bool skip_drw_debug = filename == "draw_debug_draw_lib.glsl" ||
+  const bool skip_drw_debug = filename == "draw_debug_draw.bsl.hh" ||
                               filename == "draw_debug_infos.hh" ||
-                              filename == "draw_debug_draw_display_vert.glsl" ||
+                              filename == "draw_debug_draw_display.bsl.hh" ||
                               filename == "draw_shader_shared.hh";
   using namespace metadata;
   /* TODO: This can trigger false positive caused by disabled #if blocks. */
@@ -1240,7 +1370,6 @@ void SourceProcessor::parse_builtins(const string &str, const string &filename, 
   else {
     /* Assume blender GLSL or BSL. */
     tokens.emplace_back("drw_debug_");
-    tokens.emplace_back("printf");
 #ifdef WITH_GPU_SHADER_ASSERT
     tokens.emplace_back("assert");
 #endif

@@ -278,6 +278,9 @@ endif()
 
 if(WITH_CYCLES_DEVICE_ONEAPI)
   add_definitions(-DWITH_ONEAPI)
+  if(WITH_CYCLES_ONEAPI_SOFTWARE_TEXTURING)
+    add_definitions(-DWITH_CYCLES_ONEAPI_SOFTWARE_TEXTURING)
+  endif()
 endif()
 
 if(WITH_EMBREE)
@@ -309,6 +312,15 @@ endif()
 
 if(WITH_OPENIMAGEDENOISE)
   add_definitions(-DWITH_OPENIMAGEDENOISE)
+endif()
+
+if(WITH_DLSS)
+  find_package(DLSS)
+  if(DLSS_FOUND)
+    add_definitions(-DWITH_DLSS)
+  else()
+    set_and_warn_library_found("DLSS" DLSS_FOUND WITH_DLSS)
+  endif()
 endif()
 
 if(WITH_OPENVDB)

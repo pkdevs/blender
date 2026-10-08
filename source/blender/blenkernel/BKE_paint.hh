@@ -10,6 +10,8 @@
 
 #include <variant>
 
+#include "BKE_paint_types.hh"
+
 #include "BLI_array.hh"
 #include "BLI_bit_vector.hh"
 #include "BLI_enum_flags.hh"
@@ -174,7 +176,9 @@ PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref);
 
 Brush *BKE_paint_brush(Paint *paint);
 const Brush *BKE_paint_brush_for_read(const Paint *paint);
-Brush *BKE_paint_brush_from_essentials(Main *bmain, PaintMode paint_mode, const char *name);
+Brush *BKE_paint_brush_from_essentials(Main *bmain,
+                                       bke::paint::AssetCategory asset_category,
+                                       const char *name);
 
 /**
  * Check if brush \a brush may be set/activated for \a paint. Passing null for \a brush will return
@@ -210,9 +214,11 @@ bool BKE_paint_brush_set_essentials(Main *bmain, Paint *paint, const char *name)
 void BKE_paint_previous_asset_reference_set(Paint *paint,
                                             AssetWeakReference &&asset_weak_reference);
 void BKE_paint_previous_asset_reference_clear(Paint *paint);
+void BKE_paint_foreach_asset_weak_reference(Paint &paint,
+                                            FunctionRef<void(AssetWeakReference &weak_ref)> fn);
 
 std::optional<AssetWeakReference> BKE_paint_brush_type_default_reference(
-    PaintMode paint_mode, std::optional<int> brush_type);
+    bke::paint::AssetCategory asset_category, std::optional<int> brush_type);
 void BKE_paint_brushes_set_default_references(ToolSettings *ts);
 /**
  * Make sure the active brush asset is available as active brush, importing it if necessary. If
@@ -261,36 +267,36 @@ bool BKE_paint_always_hide_test(const Object *ob);
 /**
  * Returns whether any of the corners of the grid face whose inner corner is at (x, y) are hidden.
  */
-bool paint_is_grid_face_hidden(BoundedBitSpan grid_hidden, int gridsize, int x, int y);
+bool BKE_paint_is_grid_face_hidden(BoundedBitSpan grid_hidden, int gridsize, int x, int y);
 /**
  * Return true if all vertices in the face are visible, false otherwise.
  */
-bool paint_is_bmesh_face_hidden(const BMFace *f);
+bool BKE_paint_is_bmesh_face_hidden(const BMFace *f);
 
 /* Paint masks. */
 
-float paint_grid_paint_mask(const GridPaintMask *gpm, uint level, uint x, uint y);
+float BKE_paint_grid_paint_mask(const GridPaintMask *gpm, uint level, uint x, uint y);
 
 void BKE_paint_face_set_overlay_color_get(int face_set, int seed, uchar r_color[4]);
 
 /* Stroke related. */
 
 namespace bke::paint {
-bool supports_scene_size(PaintMode paint_mode);
-bool supports_symmetry_tiling(PaintMode paint_mode);
+bool supports_scene_size(PaintMode paint_mode, const Brush &brush);
+bool supports_symmetry_tiling(PaintMode paint_mode, const Brush &brush);
 }  // namespace bke::paint
 
 /* Random values are generated on each new stroke so each stroke
  * gets a different starting point in the perlin noise. */
-float3 seed_hsv_jitter();
+float3 BKE_paint_seed_hsv_jitter();
 
-bool paint_calculate_rake_rotation(Paint &paint,
-                                   const Brush &brush,
-                                   const float mouse_pos[2],
-                                   PaintMode paint_mode,
-                                   bool in_stroke,
-                                   bool is_first_dab);
-void paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation);
+bool BKE_paint_calculate_rake_rotation(Paint &paint,
+                                       const Brush &brush,
+                                       const float mouse_pos[2],
+                                       PaintMode paint_mode,
+                                       bool in_stroke,
+                                       bool is_first_dab);
+void BKE_paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation);
 
 namespace bke::paint {
 float3 stroke_get_average(const Paint *paint, const Object *ob);

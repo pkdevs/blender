@@ -180,6 +180,13 @@ static bool paint_brush_type_require_location(const Brush &brush, const PaintMod
 static bool paint_stroke_use_scene_spacing(const Brush &brush, const PaintMode mode)
 {
   switch (mode) {
+    case PaintMode::Texture3D:
+      if (!USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint) ||
+          !bke::brush::implements_3d_texture_paint(brush))
+      {
+        return false;
+      }
+      return brush.flag & BRUSH_SCENE_SPACING;
     case PaintMode::Sculpt:
       return brush.flag & BRUSH_SCENE_SPACING;
     default:
@@ -369,7 +376,9 @@ bool PaintStroke::update(bContext *C,
   else {
     /* curve strokes do their own rake calculation */
     if (brush.stroke_method != BRUSH_STROKE_CURVE) {
-      if (!paint_calculate_rake_rotation(*paint, brush, mouse_init, mode, true, !rake_started_)) {
+      if (!BKE_paint_calculate_rake_rotation(
+              *paint, brush, mouse_init, mode, true, !rake_started_))
+      {
         /* Not enough motion to define an angle. */
         if (!rake_started_) {
           is_dry_run = true;
@@ -600,16 +609,15 @@ static bool paint_smooth_stroke(const Brush &brush,
 
 static float paint_space_stroke_spacing(const ViewContext &vc,
                                         const Paint *paint,
+                                        const PaintMode paint_mode,
                                         const Brush *brush,
                                         float3 last_world_space_position,
                                         float zoom_2d,
                                         const float size_factor,
                                         const float pressure)
 {
-  const PaintMode mode = paint->runtime->paint_mode;
-
   float size_clamp = 0.0f;
-  if (paint_stroke_use_scene_spacing(*brush, mode)) {
+  if (paint_stroke_use_scene_spacing(*brush, paint_mode)) {
     const float3 last_object_space_position = math::transform_point(vc.obact->world_to_object(),
                                                                     last_world_space_position);
     size_clamp = object_space_radius_get(
@@ -641,16 +649,22 @@ static float paint_space_stroke_spacing(const ViewContext &vc,
    * the fact that brush can be scaled there. */
   spacing *= zoom_2d;
 
-  if (paint_stroke_use_scene_spacing(*brush, mode)) {
+  if (paint_stroke_use_scene_spacing(*brush, paint_mode)) {
     /* Low pressure on size (with tablets) can cause infinite recursion in paint_space_stroke(),
      * see #129853. */
-    return max_ff(FLT_EPSILON, size_clamp * spacing / 50.0f);
+
+    /* Calculates the 3D distance that one pixel of movement would cover in object space. Using
+     * FLT_MIN can cause long lag, see #160057. */
+    const float min_spacing = paint_calc_object_space_radius(
+        vc, math::transform_point(vc.obact->world_to_object(), last_world_space_position), 1.0f);
+    return max_ff(min_spacing, size_clamp * spacing / 50.0f);
   }
   return max_ff(zoom_2d, size_clamp * spacing / 50.0f);
 }
 
 static float paint_space_stroke_spacing_no_pressure(const ViewContext &vc,
                                                     const Paint *paint,
+                                                    const PaintMode paint_mode,
                                                     const Brush *brush,
                                                     float3 last_world_space_position,
                                                     float zoom_2d)
@@ -658,7 +672,7 @@ static float paint_space_stroke_spacing_no_pressure(const ViewContext &vc,
   /* Unlike many paint pressure curves, spacing assumes that a stroke without pressure (e.g. with
    * the mouse, or with the setting turned off) represents an input of 0.5, not 1.0. */
   return paint_space_stroke_spacing(
-      vc, paint, brush, last_world_space_position, zoom_2d, 1.0f, 0.5f);
+      vc, paint, paint_mode, brush, last_world_space_position, zoom_2d, 1.0f, 0.5f);
 }
 
 static float paint_stroke_overlapped_curve(const Brush &br, const float x, const float spacing)
@@ -710,6 +724,7 @@ static float paint_stroke_integrate_overlap(const Brush &br, const float factor)
 
 static float paint_space_stroke_spacing_variable(ViewContext &vc,
                                                  const Paint *paint,
+                                                 const PaintMode paint_mode,
                                                  const Brush *brush,
                                                  float3 last_world_space_position,
                                                  float zoom_2d,
@@ -723,8 +738,14 @@ static float paint_space_stroke_spacing_variable(ViewContext &vc,
     /* use pressure to modify size. set spacing so that at 100%, the circles
      * are aligned nicely with no overlap. for this the spacing needs to be
      * the average of the previous and next size. */
-    const float s = paint_space_stroke_spacing(
-        vc, paint, brush, last_world_space_position, zoom_2d, max_size_factor, pressure);
+    const float s = paint_space_stroke_spacing(vc,
+                                               paint,
+                                               paint_mode,
+                                               brush,
+                                               last_world_space_position,
+                                               zoom_2d,
+                                               max_size_factor,
+                                               pressure);
     const float q = s * pressure_delta / (2.0f * length);
     const float pressure_fac = (1.0f + q) / (1.0f - q);
 
@@ -733,17 +754,29 @@ static float paint_space_stroke_spacing_variable(ViewContext &vc,
         brush->curve_size, 0, last_pressure * pressure_fac);
 
     /* average spacing */
-    const float last_spacing = paint_space_stroke_spacing(
-        vc, paint, brush, last_world_space_position, zoom_2d, last_size_factor, pressure);
-    const float new_spacing = paint_space_stroke_spacing(
-        vc, paint, brush, last_world_space_position, zoom_2d, new_size_factor, pressure);
+    const float last_spacing = paint_space_stroke_spacing(vc,
+                                                          paint,
+                                                          paint_mode,
+                                                          brush,
+                                                          last_world_space_position,
+                                                          zoom_2d,
+                                                          last_size_factor,
+                                                          pressure);
+    const float new_spacing = paint_space_stroke_spacing(vc,
+                                                         paint,
+                                                         paint_mode,
+                                                         brush,
+                                                         last_world_space_position,
+                                                         zoom_2d,
+                                                         new_size_factor,
+                                                         pressure);
 
     return 0.5f * (last_spacing + new_spacing);
   }
 
   /* no size pressure */
   return paint_space_stroke_spacing(
-      vc, paint, brush, last_world_space_position, zoom_2d, 1.0f, pressure);
+      vc, paint, paint_mode, brush, last_world_space_position, zoom_2d, 1.0f, pressure);
 }
 
 /* For brushes with stroke spacing enabled, moves mouse in steps
@@ -788,11 +821,12 @@ int PaintStroke::space_stroke(bContext *C,
   float pressure = last_pressure_;
   float pressure_delta = final_pressure - last_pressure_;
   const float no_pressure_spacing = paint_space_stroke_spacing_no_pressure(
-      this->vc, &paint, &brush, last_world_space_position_, zoom_2d_);
+      this->vc, &paint, this->paint_mode, &brush, last_world_space_position_, zoom_2d_);
   int count = 0;
   while (length > 0.0f) {
     const float spacing = paint_space_stroke_spacing_variable(this->vc,
                                                               &paint,
+                                                              this->paint_mode,
                                                               &brush,
                                                               last_world_space_position_,
                                                               zoom_2d_,
@@ -845,8 +879,12 @@ static bool print_pressure_status_enabled()
 
 /**** Public API ****/
 
-PaintStroke::PaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
+PaintStroke::PaintStroke(bContext *C,
+                         wmOperator *op,
+                         const wmEvent *event,
+                         const PaintMode paint_mode)
 {
+  this->paint_mode = paint_mode;
   this->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   this->paint = BKE_paint_get_active_from_context(C);
   this->ups = &paint->unified_paint_settings;
@@ -1258,9 +1296,8 @@ bool PaintStroke::curve_end(bContext *C, wmOperator *op)
 
   Paint *paint = BKE_paint_get_active_from_context(C);
   bke::PaintRuntime *paint_runtime = paint->runtime;
-  const PaintMode mode = paint_runtime->paint_mode;
   const float no_pressure_spacing = paint_space_stroke_spacing_no_pressure(
-      this->vc, paint, this->brush, last_world_space_position_, zoom_2d_);
+      this->vc, paint, this->paint_mode, this->brush, last_world_space_position_, zoom_2d_);
   const PaintCurve *pc = br.paint_curve;
 
   if (!pc) {
@@ -1305,15 +1342,15 @@ bool PaintStroke::curve_end(bContext *C, wmOperator *op)
     for (int j = 0; j < PAINT_CURVE_NUM_SEGMENTS; j++) {
       if (do_rake) {
         const float rotation = atan2f(tangents[2 * j + 1], tangents[2 * j]) + float(0.5f * M_PI);
-        paint_update_brush_rake_rotation(*paint, br, rotation);
+        BKE_paint_update_brush_rake_rotation(*paint, br, rotation);
       }
 
       if (!stroke_started_) {
         last_pressure_ = 1.0;
         copy_v2_v2(this->last_mouse_position, data + 2 * j);
 
-        if (paint_stroke_use_scene_spacing(br, mode)) {
-          BLI_assert(mode != PaintMode::Texture2D);
+        if (paint_stroke_use_scene_spacing(br, this->paint_mode)) {
+          BLI_assert(this->paint_mode != PaintMode::Texture2D);
           std::optional<float3> hit_position = this->get_location(data + 2 * j, original_);
           stroke_over_mesh_ = hit_position.has_value();
           mul_m4_v3(this->vc.obact->object_to_world().ptr(), hit_position.value_or(float3(0.0f)));
@@ -1546,7 +1583,7 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
       {
         copy_v2_v2(paint_runtime.last_rake, this->last_mouse_position);
       }
-      paint_calculate_rake_rotation(*paint, *br, mouse, mode, true, true);
+      BKE_paint_calculate_rake_rotation(*paint, *br, mouse, mode, true, true);
     }
   }
   else if (first_modal ||

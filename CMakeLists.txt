@@ -311,6 +311,8 @@ option(WITH_MANIFOLD "Enable features depending on Manifold (Fast Robust Boolean
 
 option(WITH_OPENIMAGEDENOISE "Enable the OpenImageDenoise compositing node" ON)
 
+option(WITH_DLSS "Enable NVIDIA DLSS Ray Reconstruction support" OFF)
+
 option(WITH_OPENSUBDIV "Enable OpenSubdiv for surface subdivision" ON)
 
 option(WITH_POTRACE "Enable features relying on Potrace" ON)
@@ -473,6 +475,7 @@ option(WITH_IO_PLY "Enable PLY 3D file format support (*.ply)" ON)
 option(WITH_IO_STL "Enable STL 3D file format support (*.stl)" ON)
 option(WITH_IO_FBX "Enable FBX 3D file format support (*.fbx)" ON)
 option(WITH_IO_GREASE_PENCIL "Enable Grease Pencil file format IO (*.svg, *.pdf)" ON)
+option(WITH_IO_SPZ "Enable SPZ compressed 3D gaussian splats file format support (*.spz)" ON)
 
 # Sound output
 option(WITH_SDL_AUDIO "Enable SDL audio support" OFF)
@@ -525,6 +528,12 @@ mark_as_advanced(WITH_SYSTEM_GLOG)
 
 # Freestyle
 option(WITH_FREESTYLE "Enable Freestyle (advanced edges rendering)" ON)
+
+# Jolt Physics
+option(WITH_JOLT "Enable the Jolt Physics library" ON)
+
+# OpenTimelineIO
+option(WITH_OPENTIMELINEIO "Enable Video Sequencer OpenTimelineIO support" ON)
 
 # Libraries.
 if(UNIX AND NOT APPLE)
@@ -661,7 +670,7 @@ mark_as_advanced(CYCLES_TEST_DEVICES)
 mark_as_advanced(WITH_CYCLES_TEST_OSL)
 
 # NVIDIA CUDA & OptiX
-if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
+if(NOT APPLE)
   option(WITH_CYCLES_DEVICE_CUDA "Enable Cycles NVIDIA CUDA compute support" ON)
   option(WITH_CYCLES_DEVICE_OPTIX "Enable Cycles NVIDIA OptiX support" ON)
   mark_as_advanced(WITH_CYCLES_DEVICE_CUDA)
@@ -704,7 +713,8 @@ if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
   set(CYCLES_HIP_BINARIES_ARCH
     gfx1010 gfx1011 gfx1012
     gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1036
-    gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151 gfx1152
+    gfx1100 gfx1101 gfx1102 gfx1103
+    gfx1150 gfx1151 gfx1152 gfx1153
     gfx1200 gfx1201
     CACHE STRING "AMD HIP architectures to build binaries for"
   )
@@ -727,6 +737,10 @@ if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
 Enable Ahead-Of-Time compilation for Cycles oneAPI device"
     OFF
   )
+  option(WITH_CYCLES_ONEAPI_SOFTWARE_TEXTURING "\
+Use software texture lookup and interpolation instead of GPU hardware samplers"
+    OFF
+  )
 
   # https://www.intel.com/content/www/us/en/develop/documentation/oneapi-dpcpp-cpp-compiler-dev-guide-and-reference/top/compilation/ahead-of-time-compilation.html
   # The supported devices can be retrieved from `ocloc` output when running
@@ -740,6 +754,7 @@ oneAPI Intel GPU architectures to build binaries for"
 oneAPI targets to build AOT binaries for"
   )
 
+  mark_as_advanced(WITH_CYCLES_ONEAPI_SOFTWARE_TEXTURING)
   mark_as_advanced(CYCLES_ONEAPI_INTEL_BINARIES_ARCH)
   mark_as_advanced(CYCLES_ONEAPI_SYCL_TARGETS)
 endif()
@@ -1373,8 +1388,10 @@ if(UNIX AND NOT (APPLE OR HAIKU))
   set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_WAYLAND OFF)
   set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_X11 OFF)
   # Only the WAYLAND back-end currently reads desktop settings over DBUS.
-  set_and_warn_dependency(WITH_GHOST_WAYLAND WITH_GHOST_DBUS OFF)
-  set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_DBUS OFF)
+  if (DEFINED WITH_GHOST_DBUS)
+    set_and_warn_dependency(WITH_GHOST_WAYLAND WITH_GHOST_DBUS OFF)
+    set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_DBUS OFF)
+  endif()
 endif()
 set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_SDL OFF)
 
@@ -2553,16 +2570,18 @@ if(FIRST_RUN)
   info_cfg_option(WITH_INPUT_NDOF)
   info_cfg_option(WITH_INPUT_IME)
   info_cfg_option(WITH_INTERNATIONAL)
+  info_cfg_option(WITH_JOLT)
   info_cfg_option(WITH_MANIFOLD)
+  info_cfg_option(WITH_MATERIALX)
   info_cfg_option(WITH_OPENIMAGEDENOISE)
   info_cfg_option(WITH_OPENSUBDIV)
+  info_cfg_option(WITH_OPENTIMELINEIO)
   info_cfg_option(WITH_OPENVDB)
   info_cfg_option(WITH_POTRACE)
   info_cfg_option(WITH_PUGIXML)
   info_cfg_option(WITH_QUADRIFLOW)
   info_cfg_option(WITH_TBB)
   info_cfg_option(WITH_USD)
-  info_cfg_option(WITH_MATERIALX)
   info_cfg_option(WITH_XR_OPENXR)
 
   info_cfg_text("Compiler Options:")

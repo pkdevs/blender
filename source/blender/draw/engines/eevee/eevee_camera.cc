@@ -28,9 +28,11 @@
 
 namespace blender::eevee {
 
-/** Bitmask identifying which of the 6 cubemap faces (in `cubeface_mat()` order) are needed to
+/**
+ * Bitmask identifying which of the 6 cubemap faces (in `cubeface_mat()` order) are needed to
  * cover a given panoramic projection. `FRONT`/`BACK` alias the `NEG_Z`/`POS_Z` faces since those
- * are the primary and opposite view directions for all panoramic projections. */
+ * are the primary and opposite view directions for all panoramic projections.
+ */
 enum class PanoramicViewBits : uint32_t {
   POS_X = 1u << 0u,
   NEG_X = 1u << 1u,
@@ -328,13 +330,15 @@ void Camera::sync()
     const float fit_xratio = float(render_width) * inst_.scene->r.xasp;
     const float fit_yratio = float(render_height) * inst_.scene->r.yasp;
     const int sensor_fit = BKE_camera_sensor_fit(cam->sensor_fit, fit_xratio, fit_yratio);
+    const float sensor_size = BKE_camera_sensor_size(
+        cam->sensor_fit, cam->sensor_x, cam->sensor_y);
     if (sensor_fit == CAMERA_SENSOR_FIT_HOR) {
-      data.fisheye_sensor.x = cam->sensor_x;
-      data.fisheye_sensor.y = cam->sensor_x * fit_yratio / fit_xratio;
+      data.fisheye_sensor.x = sensor_size;
+      data.fisheye_sensor.y = sensor_size * fit_yratio / fit_xratio;
     }
     else {
-      data.fisheye_sensor.x = cam->sensor_y * fit_xratio / fit_yratio;
-      data.fisheye_sensor.y = cam->sensor_y;
+      data.fisheye_sensor.x = sensor_size * fit_xratio / fit_yratio;
+      data.fisheye_sensor.y = sensor_size;
     }
     is_camera_object_ = true;
   }

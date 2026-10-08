@@ -1312,7 +1312,7 @@ static void std_node_socket_draw(
         layout->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
       }
       else {
-        ui::Layout *row = &layout->split(0.4f, false);
+        ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
         ui::Layout *label_layout = &row->column(true);
         label_layout->label(label, ICON_NONE);
         ui::Layout *color_layout = &row->column(true);
@@ -1332,7 +1332,7 @@ static void std_node_socket_draw(
           node_geometry_add_attribute_search_button(*C, *node, *ptr, *layout, label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           node_geometry_add_attribute_search_button(*C, *node, *ptr, *row);
         }
@@ -1342,7 +1342,7 @@ static void std_node_socket_draw(
           node_geometry_add_layer_search_button(*C, *node, *ptr, *layout, label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           node_geometry_add_layer_search_button(*C, *node, *ptr, *row);
         }
@@ -1352,7 +1352,7 @@ static void std_node_socket_draw(
           node_geometry_add_volume_grid_search_button(*C, *node, *ptr, *layout, label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           node_geometry_add_volume_grid_search_button(*C, *node, *ptr, *row);
         }
@@ -1362,7 +1362,7 @@ static void std_node_socket_draw(
           node_bundle_type_add_string_search_button(*C, *node, *ptr, *layout, label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           node_bundle_type_add_string_search_button(*C, *node, *ptr, *row);
         }
@@ -1379,7 +1379,7 @@ static void std_node_socket_draw(
                        label);
         }
         else {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           row->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
         }
@@ -1391,7 +1391,7 @@ static void std_node_socket_draw(
           sock->default_value_typed<bNodeSocketValueMenu>();
       if (default_value->enum_items) {
         if (default_value->enum_items->items.is_empty()) {
-          ui::Layout *row = &layout->split(0.4f, false);
+          ui::Layout *row = &layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
           row->label(label, ICON_NONE);
           row->label(IFACE_("No Items"), ICON_NONE);
         }
@@ -1411,7 +1411,7 @@ static void std_node_socket_draw(
             }
           }
           else {
-            ui::Layout &row = layout->split(0.4f, false);
+            ui::Layout &row = layout->split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
             row.label(label, ICON_NONE);
             if (expanded) {
               /* Use a single space for the name to work around a bug. Also see
@@ -1779,7 +1779,7 @@ void draw_nodespace_back_pix(const bContext &C,
     if (snode.edittree) {
       bNode *node = snode.edittree->nodes.first();
       while (node) {
-        if (node->flag & NODE_SELECT) {
+        if (node->is_selected()) {
           if (node->typeinfo->draw_backdrop) {
             node->typeinfo->draw_backdrop(&snode, ibuf, node, x, y);
           }
@@ -2179,7 +2179,14 @@ static void nodelink_batch_draw(const SpaceNode &snode)
   ui::theme::get_color_4fv(TH_ACTIVE, node_link_data.colors[nodelink_get_color_id(TH_ACTIVE)]);
   ui::theme::get_color_4fv(TH_EDGE_SELECT,
                            node_link_data.colors[nodelink_get_color_id(TH_EDGE_SELECT)]);
-  ui::theme::get_color_4fv(TH_REDALERT, node_link_data.colors[nodelink_get_color_id(TH_REDALERT)]);
+
+  /* Ensure alert wires are visible regardless of alert's alpha. */
+  float alert_color[4];
+  ui::theme::get_color_4fv(TH_REDALERT, alert_color);
+  alert_color[3] = std::min(alert_color[3] + 0.6f, 0.8f);
+  ui::theme::get_color_blend_3f(TH_WIRE_INNER, TH_REDALERT, alert_color[3], alert_color);
+  copy_v4_v4(node_link_data.colors[nodelink_get_color_id(TH_REDALERT)], alert_color);
+
   node_link_data.aspect = snode.runtime->aspect;
   node_link_data.arrow_size = ARROW_SIZE;
 
@@ -2399,6 +2406,8 @@ static NodeLinkDrawConfig nodelink_get_draw_config(const bContext &C,
     ui::theme::get_color_4fv(th_col1, draw_config.start_color);
     ui::theme::get_color_4fv(th_col2, draw_config.end_color);
   }
+
+  draw_config.outline_color.a = 1.0f;
 
   /* Highlight links connected to selected nodes. */
   if (selected) {

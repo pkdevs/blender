@@ -39,6 +39,7 @@
 #include "COM_domain.hh"
 #include "COM_input_descriptor.hh"
 #include "COM_multi_function_procedure_operation.hh"
+#include "COM_node_tree_evaluator.hh"
 #include "COM_pixel_operation.hh"
 #include "COM_result.hh"
 #include "COM_scheduler.hh"
@@ -48,10 +49,10 @@ namespace blender::compositor {
 
 MultiFunctionProcedureOperation::MultiFunctionProcedureOperation(
     Context &context,
-    CompileState &compile_state,
+    NodeTreeEvaluator &node_tree_evaluator,
     const bool is_single_value,
     const ComputeContext &compute_context)
-    : PixelOperation(context, compile_state, compute_context, is_single_value),
+    : PixelOperation(context, node_tree_evaluator, compute_context, is_single_value),
       procedure_builder_(procedure_)
 {
   this->build_procedure();
@@ -105,7 +106,7 @@ void MultiFunctionProcedureOperation::execute()
 
 void MultiFunctionProcedureOperation::build_procedure()
 {
-  for (const bNode *node : compile_state_.get_pixel_compile_unit()) {
+  for (const bNode *node : node_tree_evaluator_.pixel_compile_unit()) {
     /* Get the multi-function of the node. */
     auto &multi_function_builder = *node_multi_functions_.lookup_or_add_cb(node, [&]() {
       return std::make_unique<nodes::NodeMultiFunctionBuilder>(*node, node->owner_tree());
@@ -162,7 +163,7 @@ Vector<mf::Variable *> MultiFunctionProcedureOperation::get_input_variables(
     const mf::ParamType parameter_type = multi_function.param_type(available_inputs_index);
     available_inputs_index++;
 
-    if (compile_state_.get_schedule().unneeded_inputs.contains(input)) {
+    if (node_tree_evaluator_.schedule().unneeded_inputs.contains(input)) {
       input_variables.append(this->get_default_value_variable(parameter_type.data_type()));
       continue;
     }
@@ -181,7 +182,7 @@ Vector<mf::Variable *> MultiFunctionProcedureOperation::get_input_variables(
     else {
       /* If the source node is part of the multi-function procedure operation, then the output has
        * an existing variable for it. */
-      if (compile_state_.get_pixel_compile_unit().contains(&output->owner_node())) {
+      if (node_tree_evaluator_.pixel_compile_unit().contains(&output->owner_node())) {
         input_variables.append(output_to_variable_map_.lookup(output));
       }
       else {
@@ -322,6 +323,7 @@ mf::Variable *MultiFunctionProcedureOperation::get_constant_input_variable(
       break;
     }
     case SOCK_BUNDLE:
+    case SOCK_CLOSURE:
       /* Not supported in multi-function nodes. */
       BLI_assert_unreachable();
       break;
@@ -379,7 +381,7 @@ mf::Variable *MultiFunctionProcedureOperation::get_multi_function_input_variable
   /* The output is a single value, so create a constant variable instead of declaring an input for
    * it, it follows that the result needs to be released since it will no longer be referenced by
    * the operation.*/
-  Result &result = compile_state_.get_result_from_output_socket(output_socket);
+  Result &result = node_tree_evaluator_.get_result_from_output_socket(output_socket);
   if (result.is_single_value()) {
     const mf::MultiFunction &constant_function =
         procedure_.construct_function<mf::CustomMF_GenericConstant>(
@@ -413,10 +415,10 @@ mf::Variable *MultiFunctionProcedureOperation::get_multi_function_input_variable
   const std::string input_identifier = "input" + std::to_string(input_index);
 
   /* Declare the input descriptor for this input and prefer to declare its type to be the same as
-   * the type of the output socket because doing type conversion in the multi-function procedure is
+   * the type of the output because doing type conversion in the multi-function procedure is
    * cheaper. */
   InputDescriptor input_descriptor = input_descriptor_from_input_socket(&input_socket);
-  input_descriptor.type = get_node_socket_result_type(&output_socket);
+  input_descriptor.type = result.type();
   declare_input_descriptor(input_identifier, input_descriptor);
 
   mf::Variable &variable = procedure_builder_.add_input_parameter(
@@ -448,10 +450,8 @@ void MultiFunctionProcedureOperation::assign_output_variables(const bNode &node,
   const bool node_needs_preview = is_node_preview_needed(node);
   const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
                                                SideEffectOutputTypes::NodePreviews);
-  const bool is_active_context = compute_context_.hash() ==
-                                 this->context().get_active_compute_context_hash();
   const bNodeSocket *preview_output = nullptr;
-  if (node_needs_preview && needs_node_previews && is_active_context && !is_single_value_) {
+  if (node_needs_preview && needs_node_previews && !is_single_value_) {
     preview_output = find_preview_output_socket(node);
   }
 
@@ -464,15 +464,12 @@ void MultiFunctionProcedureOperation::assign_output_variables(const bNode &node,
     mf::Variable *output_variable = variables[available_outputs_index];
     output_to_variable_map_.add_new(output, output_variable);
 
-    /* If any of the nodes linked to the output are not part of the multi-function procedure
-     * operation but are part of the execution schedule, then an output result needs to be
-     * populated for it. */
-    const bool is_operation_output = is_output_linked_to_input_conditioned(
-        *output, [&](const bNodeSocket &input) {
-          return compile_state_.get_schedule().nodes.contains(&input.owner_node()) &&
-                 !compile_state_.get_schedule().unneeded_inputs.contains(&input) &&
-                 !compile_state_.get_pixel_compile_unit().contains(&input.owner_node());
-        });
+    /* If the output is referenced by the schedule outside of the pixel compile unit, then an
+     * output result needs to be populated for it. */
+    const bool is_operation_output = compute_output_reference_count(
+                                         *output,
+                                         node_tree_evaluator_.schedule(),
+                                         &node_tree_evaluator_.pixel_compile_unit()) != 0;
 
     /* If the output is used as the node preview, then an output result needs to be populated for
      * it, and we additionally keep track of that output to later compute the previews from. */

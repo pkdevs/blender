@@ -80,8 +80,10 @@ class GList : public ImplicitSharingMixin {
   const CPPType &cpp_type() const;
   int64_t size() const;
 
-  /** Access values stored in the list. This is a variant because lists support different storage
-   * backends and more may be added in the future. */
+  /**
+   * Access values stored in the list. This is a variant because lists support different storage
+   * backends and more may be added in the future.
+   */
   std::variant<GSpan, GPointer> values() const;
   std::variant<GMutableSpan, GMutablePointer> values_for_write();
 
@@ -108,6 +110,7 @@ template<typename T> class List {
  public:
   using base_type = T;
   using generic_type = GList;
+  using DataVariant = std::variant<GList::ArrayData, GList::SingleData>;
 
  private:
   /**
@@ -124,8 +127,12 @@ template<typename T> class List {
     requires std::is_same_v<typename ContainerT::value_type, T>
   static ListPtr<T> from_container(ContainerT &&container);
 
-  /** This is implicitly cast to #GField which is always valid. */
+  /** This is implicitly cast to #GList which is always valid. */
   operator const GList &() const;
+
+  DataVariant &data();
+  const DataVariant &data() const;
+  int64_t size() const;
 
   /** Access the list as virtual array. */
   VArray<T> varray() const;
@@ -233,6 +240,26 @@ template<typename T> inline List<T> &GList::typed()
 }
 
 template<typename T> inline List<T>::List() : list_(CPPType::get<T>()) {}
+
+template<typename T> inline List<T>::operator const GList &() const
+{
+  return list_;
+}
+
+template<typename T> inline GList::DataVariant &List<T>::data()
+{
+  return list_.data();
+}
+
+template<typename T> inline const GList::DataVariant &List<T>::data() const
+{
+  return list_.data();
+}
+
+template<typename T> inline int64_t List<T>::size() const
+{
+  return list_.size();
+}
 
 template<typename T> inline VArray<T> List<T>::varray() const
 {
