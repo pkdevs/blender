@@ -208,9 +208,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet curves_geometry = params.extract_input<GeometrySet>("Curves"_ustr);
 
   Mesh *surface_mesh_orig = nullptr;
-  bool free_suface_mesh_orig = false;
+  bool free_surface_mesh_orig = false;
   BLI_SCOPED_DEFER([&]() {
-    if (free_suface_mesh_orig) {
+    if (free_surface_mesh_orig) {
       BKE_id_free(nullptr, surface_mesh_orig);
     }
   });
@@ -250,7 +250,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(&surface_object_data)) {
     surface_mesh_orig = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, &surface_object_data);
-    free_suface_mesh_orig = true;
+    free_surface_mesh_orig = true;
   }
   else {
     surface_mesh_orig = &surface_object_data;
