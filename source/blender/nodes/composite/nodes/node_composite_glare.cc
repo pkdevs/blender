@@ -1256,8 +1256,10 @@ class GlareOperation : public NodeOperation {
          * vector. */
         float4 neighbors[3];
         neighbors[0] = float4(read_result.sample_bilinear_zero<Color>(coordinates + vector));
-        neighbors[1] = float4(read_result.sample_bilinear_zero<Color>(coordinates + vector * 2.0f));
-        neighbors[2] = float4(read_result.sample_bilinear_zero<Color>(coordinates + vector * 3.0f));
+        neighbors[1] = float4(
+            read_result.sample_bilinear_zero<Color>(coordinates + vector * 2.0f));
+        neighbors[2] = float4(
+            read_result.sample_bilinear_zero<Color>(coordinates + vector * 3.0f));
 
         /* Attenuate the value of two of the channels for each of the neighbors by multiplying by
          * the color modulator. The particular channels for each neighbor were chosen to be
