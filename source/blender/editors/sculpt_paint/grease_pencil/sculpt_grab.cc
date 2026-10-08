@@ -112,6 +112,7 @@ void GrabOperation::foreach_grabbed_drawing(
         object,
         data.layer_index,
         data.frame_number,
+        i,
         data.multi_frame_falloff,
         *drawing);
     DeltaProjectionFunc projection_fn = get_screen_projection_fn(params, object_eval, layer);
@@ -171,6 +172,7 @@ void GrabOperation::on_stroke_begin(const bContext &C, const InputSample &start_
                                        layer,
                                        info.layer_index,
                                        info.frame_number,
+                                       i,
                                        info.multi_frame_falloff,
                                        info.drawing};
 

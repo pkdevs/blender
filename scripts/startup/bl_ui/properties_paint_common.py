@@ -2102,6 +2102,7 @@ def brush_basic_grease_pencil_weight_settings(layout, context, brush, *, compact
 def brush_basic_grease_pencil_vertex_settings(layout, context, brush, *, compact=False):
     if brush.gpencil_vertex_brush_type == 'DRAW':
         layout.prop(brush, "blend", text="Blend")
+        layout.prop(brush, "use_accumulate")
         layout.separator()
 
     unified_row = UnifiedPaintPanel.prop_unified(

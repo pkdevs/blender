@@ -106,6 +106,7 @@ struct GreasePencilStrokeParams {
   const bke::greasepencil::Layer &layer;
   int layer_index;
   int frame_number;
+  int drawing_i;
   float multi_frame_falloff;
   bke::greasepencil::Drawing &drawing;
 
@@ -118,6 +119,7 @@ struct GreasePencilStrokeParams {
                                                Object &object,
                                                int layer_index,
                                                int frame_number,
+                                               int drawing_i,
                                                float multi_frame_falloff,
                                                bke::greasepencil::Drawing &drawing);
 };

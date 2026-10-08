@@ -292,6 +292,7 @@ GreasePencilStrokeParams GreasePencilStrokeParams::from_context(
     Object &object,
     const int layer_index,
     const int frame_number,
+    const int drawing_i,
     const float multi_frame_falloff,
     bke::greasepencil::Drawing &drawing)
 {
@@ -308,6 +309,7 @@ GreasePencilStrokeParams GreasePencilStrokeParams::from_context(
           layer,
           layer_index,
           frame_number,
+          drawing_i,
           multi_frame_falloff,
           drawing};
 }
@@ -549,6 +551,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing_with_automask(
         object,
         info.layer_index,
         info.frame_number,
+        i,
         info.multi_frame_falloff,
         info.drawing);
 
@@ -593,6 +596,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing_with_automask(
         object,
         info.layer_index,
         info.frame_number,
+        i,
         info.multi_frame_falloff,
         info.drawing);
 
@@ -638,6 +642,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
                 object,
                 info.layer_index,
                 info.frame_number,
+                i,
                 info.multi_frame_falloff,
                 info.drawing);
             if (fn(params)) {
@@ -657,6 +662,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
           object,
           info.layer_index,
           info.frame_number,
+          i,
           info.multi_frame_falloff,
           info.drawing);
       if (fn(params)) {
@@ -699,6 +705,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
         object,
         info.layer_index,
         info.frame_number,
+        i,
         info.multi_frame_falloff,
         info.drawing);
 
@@ -772,6 +779,7 @@ void GreasePencilStrokeOperationCommon::init_auto_masking(const bContext &C,
         object,
         drawing_info.layer_index,
         drawing_info.frame_number,
+        drawing_i,
         drawing_info.multi_frame_falloff,
         drawing_info.drawing);
     automask_info.point_mask = point_mask_for_stroke_operation(
