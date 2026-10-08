@@ -20,6 +20,7 @@
 #include "DNA_space_types.h"
 #include "DNA_workspace_types.h"
 #include "ED_buttons.hh"
+#include "ED_node.hh"
 #include "ED_undo.hh"
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
@@ -562,8 +563,14 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
   PointerRNA *ptr = &but.rnapoin;
   PropertyRNA *prop = but.rnaprop;
   /* ID properties (e.g. Geometry Nodes inputs, "Socket_2") are only named by their layout. */
-  const std::string name = layout_name && !layout_name->empty() && RNA_property_is_idprop(prop) ?
-                               *layout_name : std::string(RNA_property_ui_name(prop));
+  /* Node socket values (e.g. material inputs) are all "default_value"; name them by socket. */
+  const bool socket_value = RNA_struct_is_a(ptr->type, RNA_NodeSocket) &&
+                            STREQ(RNA_property_identifier(prop), "default_value");
+  const std::string name =
+      layout_name && !layout_name->empty() && RNA_property_is_idprop(prop) ? *layout_name :
+      socket_value ? std::string(ed::space_node::node_socket_get_label(
+                         static_cast<const bNodeSocket *>(ptr->data))) :
+                     std::string(RNA_property_ui_name(prop));
   const bool array = RNA_property_array_check(prop);
   const int length = RNA_property_array_length(ptr, prop);
   const PropertyType type = RNA_property_type(prop);
