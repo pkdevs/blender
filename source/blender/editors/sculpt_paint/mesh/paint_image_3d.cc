@@ -175,7 +175,7 @@ static void fetch_image_buffers(ImageData &image_data,
       if (generate_scratch_data) {
         const int64_t tiles_x = (buffer->x + scratch_tile_size - 1) >> scratch_tile_bits;
         const int64_t tiles_y = (buffer->y + scratch_tile_size - 1) >> scratch_tile_bits;
-        image_data.scratch_data_pushed.lookup_or_add_cb(tile.tile_number, [&]() {
+        image_data.scratch_data_allocated.lookup_or_add_cb(tile.tile_number, [&]() {
           return Array<uint32_t>(tiles_x * tiles_y, 0);
         });
         image_data.scratch_color_data.lookup_or_add_cb(tile.tile_number, [&]() {
@@ -681,6 +681,7 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
 }
 
 struct PaintLocalData {
+  Vector<float4> averaged_pixels;
   Vector<float3> pixel_positions;
   Vector<float> distances;
   Vector<float> factors;
@@ -733,6 +734,19 @@ static void push_undo_tiles(ImageData &image_data,
   }
 }
 
+static IndexRange scratch_tiles_range(const int img_width, const int img_x_start, const int img_x_end, const int img_y)
+{
+  const int tile_y = img_y >> scratch_tile_bits;
+  const int tile_x_start = img_x_start >> scratch_tile_bits;
+  const int tile_x_end = img_x_end >> scratch_tile_bits;
+  const int scratch_tile_x = (img_width + scratch_tile_size - 1) >> scratch_tile_bits;
+
+  const int tile_start = tile_y * scratch_tile_x + tile_x_start;
+  const int tile_end = tile_y * scratch_tile_x + tile_x_end;
+
+  return IndexRange::from_begin_end_inclusive(tile_start, tile_end);
+}
+
 static void allocate_scratch_tiles(ImageData &image_data,
                                    const image::TileNumber tile_number,
                                    ImBuf &image_buffer,
@@ -744,11 +758,11 @@ static void allocate_scratch_tiles(ImageData &image_data,
   const int tile_y = img_y >> scratch_tile_bits;
   const int tile_x_start = img_x_start >> scratch_tile_bits;
   const int tile_x_end = img_x_end >> scratch_tile_bits;
-  const int undo_tiles_x = (image_buffer.x + scratch_tile_size - 1) >>
+  const int scratch_tile_x = (image_buffer.x + scratch_tile_size - 1) >>
                            scratch_tile_bits;
 
   for (int tile_x = tile_x_start; tile_x <= tile_x_end; tile_x++) {
-    const int tile_index = tile_y * undo_tiles_x + tile_x;
+    const int tile_index = tile_y * scratch_tile_x + tile_x;
     std::atomic_ref<uint32_t> allocated(tile_allocated[tile_index]);
     /* This atomic load is free on x86_64, and cheap on arm64. */
     if (allocated.load(std::memory_order_acquire)) {
@@ -756,10 +770,10 @@ static void allocate_scratch_tiles(ImageData &image_data,
     }
 
     Vector<Vector<float4>, 0> &tile_scratch_color = image_data.scratch_color_data.lookup(tile_number);
-    tile_scratch_color[tile_index].reinitialize(scratch_tile_size * scratch_tile_size);
+    tile_scratch_color[tile_index].reinitialize(scratch_tile_area);
 
     Vector<Vector<float>, 0> &tile_scratch_factor = image_data.scratch_factor_data.lookup(tile_number);
-    tile_scratch_factor[tile_index].resize(scratch_tile_size * scratch_tile_size, 0);
+    tile_scratch_factor[tile_index].resize(scratch_tile_area, 0);
 
     allocated.store(1, std::memory_order_release);
   }
@@ -1078,8 +1092,12 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
     const MutableSpan<uint32_t> undo_tile_pushed = image_data.undo_tile_pushed.lookup(
         tile_data.tile_number);
 
-    const MutableSpan<ModifiedRowSpan> modified_row_spans =
-        tile_data.pixel_row_run_scratch_data.modified_spans;
+    const MutableSpan<uint32_t> scratch_data_allocated = image_data.scratch_data_allocated.lookup(
+        tile_data.tile_number);
+    const MutableSpan<Vector<float4>> scratch_color_data = image_data.scratch_color_data.lookup(
+        tile_data.tile_number);
+    const MutableSpan<Vector<float>> scratch_factor_data = image_data.scratch_factor_data.lookup(
+        tile_data.tile_number);
 
     threading::EnumerableThreadSpecific<PaintLocalData> all_factor_tls;
 
@@ -1100,19 +1118,16 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         }
 
         /* Resize temporary data to match run size. */
+        tls.factors.resize(run_size);
         tls.pixel_positions.resize(run_size);
         tls.distances.resize(run_size);
+        tls.averaged_pixels.resize(run_size);
 
         /* TODO: Use this rather than the TLS entry */
+        const MutableSpan<float> factors = tls.factors;
         const MutableSpan<float3> positions = tls.pixel_positions;
         const MutableSpan<float> distances = tls.distances;
-
-        tile_data.pixel_row_run_scratch_data.color[run_i].resize(run_size);
-        tile_data.pixel_row_run_scratch_data.factor[run_i].resize(run_size);
-
-        const MutableSpan<float> factors = tile_data.pixel_row_run_scratch_data.factor[run_i];
-        const MutableSpan<float4> scratch_colors =
-            tile_data.pixel_row_run_scratch_data.color[run_i];
+        const MutableSpan<float4> averaged_pixels = tls.averaged_pixels;
 
         /* Tracking for active subset of run with nonzero factors. */
         int run_active_begin = -1;
@@ -1198,18 +1213,28 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         BLI_assert(run_active_begin >= 0 && run_active_size > 0 &&
                    run_active_begin + run_active_size <= run_size);
 #endif
-        modified_row_spans[run_i] = {.start = run_active_begin, .size = run_active_size};
-        MutableSpan<float4> scratch_run_buffer = scratch_colors.slice(run_active_begin,
+        MutableSpan<float4> scratch_run_buffer = averaged_pixels.slice(run_active_begin,
                                                                       run_active_size);
+
+        const int img_x_start = run_active_x;
+        const int img_x_end = run_active_x + run_active_size - 1;
+        const int img_y = run_y;
 
         /* Push undo tiles before we edit the pixels. */
         push_undo_tiles(image_data,
                         tile_data.tile_number,
                         *image_buffer,
                         undo_tile_pushed,
-                        run_active_x,
-                        run_active_x + run_active_size - 1,
-                        run_y);
+                        img_x_start,
+                        img_x_end,
+                        img_y);
+        allocate_scratch_tiles(image_data,
+                               tile_data.tile_number,
+                               *image_buffer,
+                               scratch_data_allocated,
+                               img_x_start,
+                               img_x_end,
+                               img_y);
 
         /* Blend pixels with computed factors. */
         average_pixels(run_active_begin,
@@ -1221,6 +1246,33 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
                        image_data.data_buffers,
                        tile_index_to_number,
                        scratch_run_buffer);
+
+        /* Write to the allocated tile buffer */
+        const int tile_img_x_start = run_active_x % scratch_tile_size;
+        const int tile_img_y = run_y % scratch_tile_size;
+
+        int tile_x_offset = tile_img_x_start;
+        int remaining_pixels = run_active_size;
+        int run_offset = 0;
+        for (const int scratch_tile_i :
+             scratch_tiles_range(image_buffer->x, img_x_start, img_x_end, img_y))
+        {
+          int tile_start = tile_x_offset + tile_img_y * scratch_tile_size;
+          int tile_size = math::min(remaining_pixels, scratch_tile_size);
+
+          const Span<float4> color_src = averaged_pixels.slice(run_offset, tile_size);
+          const MutableSpan<float4> color_dst =
+              scratch_color_data[scratch_tile_i].as_mutable_span().slice(tile_start, tile_size);
+          array_utils::copy(color_src, color_dst);
+
+          const Span<float> factor_src = factors.slice(run_offset, tile_size);
+          const MutableSpan<float> factor_dst = scratch_factor_data[scratch_tile_i].as_mutable_span().slice(tile_start, tile_size);
+          array_utils::copy(factor_src, factor_dst);
+
+          run_offset += tile_size;
+          remaining_pixels -= scratch_tile_size;
+          tile_x_offset = 0;
+        }
       }
     });
 
@@ -1552,12 +1604,28 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
     modified.as_mutable_span().fill(0);
   }
 
+  /* TODO: Alternatively, instead of clearing, we could completely reset on each daub */
+  /* Reinitialize all used tiles */
+  Set<image::TileNumber> tiles_to_reset;
   node_mask.foreach_index([&](const int i) {
     PixelNode &node = pixel_nodes[i];
     for (UDIMTilePixels &tile : node.tiles) {
-      tile.reset_scratch_data();
+      tiles_to_reset.add(tile.tile_number);
     }
   });
+  for (const image::TileNumber tile_number : tiles_to_reset) {
+    Span<uint32_t> data_allocated = image_data.scratch_data_allocated.lookup(tile_number);
+    Vector<Vector<float>, 0> &tile_factor_data = image_data.scratch_factor_data.lookup(
+        tile_number);
+    Vector<Vector<float4>, 0> &tile_color_data = image_data.scratch_color_data.lookup(
+        tile_number);
+    for (const int i : data_allocated.index_range()) {
+      if (data_allocated[i]) {
+        tile_color_data[i].reinitialize(scratch_tile_area);
+        tile_factor_data[i].reinitialize(scratch_tile_area);
+      }
+    }
+  }
 
   node_mask.foreach_index(
       [&](const int i) {

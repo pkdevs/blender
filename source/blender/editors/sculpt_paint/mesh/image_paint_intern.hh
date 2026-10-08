@@ -30,6 +30,7 @@ using BufferType = std::variant<std::monostate, MutableSpan<float4>, MutableSpan
 
 constexpr int scratch_tile_bits = 6;
 constexpr int scratch_tile_size = (1 << scratch_tile_bits);
+constexpr int scratch_tile_area = scratch_tile_size * scratch_tile_size;
 
 struct ImageData : NonCopyable {
   Image *image = nullptr;
@@ -46,7 +47,7 @@ struct ImageData : NonCopyable {
   /** Per seam tile modified state, to only do seam bleeding where needed. */
   Map<bke::image::TileNumber, Array<uint8_t>> seam_tile_modified = {};
 
-  Map<bke::image::TileNumber, Array<uint32_t>> scratch_data_pushed = {};
+  Map<bke::image::TileNumber, Array<uint32_t>> scratch_data_allocated = {};
   Map<bke::image::TileNumber, Vector<Vector<float4>, 0>> scratch_color_data = {};
   Map<bke::image::TileNumber, Vector<Vector<float>, 0>> scratch_factor_data = {};
 
