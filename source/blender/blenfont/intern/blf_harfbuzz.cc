@@ -46,9 +46,12 @@ bool ShapedGlyph::is_combining() const
   return BLI_wcwidth_or_error(char32_t(g->c)) == 0;
 }
 
-void ShapingData::legacy_layout(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len)
+void ShapingData::legacy_layout(FontBLF *font,
+                                GlyphCacheBLF *gc,
+                                const char *str,
+                                const size_t len)
 {
-  size_t char_count = BLI_strnlen_utf8(str, len);
+  const size_t char_count = BLI_strnlen_utf8(str, len);
   std::u32string str32(char_count + 1, 0);
   BLI_str_utf8_as_utf32(str32.data(), str, char_count + 1);
   this->bounds.xmin = INT_MAX;
@@ -58,7 +61,7 @@ void ShapingData::legacy_layout(FontBLF *font, GlyphCacheBLF *gc, const char *st
     GlyphBLF *g = blf_glyph_ensure(font, gc, codepoint);
     g = blf_glyph_ensure_subpixel(font, gc, g, this->bounds.xmax);
     if (g) {
-      rcti bounds = {this->bounds.xmax, this->bounds.xmax + g->box_xmax, 0, g->box_ymax};
+      const rcti bounds = {this->bounds.xmax, this->bounds.xmax + g->box_xmax, 0, g->box_ymax};
       this->glyphs.append({font, gc, g, bounds, offset});
       this->bounds.xmin = std::min(this->bounds.xmin, bounds.xmin + g->box_xmin);
       this->bounds.xmax += g->advance_x;
@@ -71,8 +74,8 @@ void ShapingData::legacy_layout(FontBLF *font, GlyphCacheBLF *gc, const char *st
 
 #ifdef WITH_HARFBUZZ
 static void blf_font_otf_feature_set(blender::Vector<hb_feature_t> &features,
-                                     hb_tag_t tag,
-                                     uint32_t value)
+                                     const hb_tag_t tag,
+                                     const uint32_t value)
 {
   for (hb_feature_t &feature : features) {
     if (feature.tag == tag) {
@@ -86,7 +89,7 @@ static void blf_font_otf_feature_set(blender::Vector<hb_feature_t> &features,
 
 FeatureSet blf_font_otf_features_base()
 {
-  static FeatureSet features = {
+  static const FeatureSet features = {
       {BLF_OTF_KERN, true},  /* Kerning. */
       {BLF_OTF_LOCL, true},  /* Localized Forms. */
       {BLF_OTF_LIGA, true},  /* Standard Ligatures. */
@@ -111,7 +114,10 @@ FeatureSet blf_font_otf_features_default()
 }
 
 #ifdef WITH_HARFBUZZ
-bool ShapingData::load_from_cache(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len)
+bool ShapingData::load_from_cache(FontBLF *font,
+                                  GlyphCacheBLF *gc,
+                                  const char *str,
+                                  const size_t len)
 {
   const CachedString *cached = gc->shaping_cache.lookup_ptr(str);
   if (cached == nullptr || cached->str_len != len) {
@@ -131,7 +137,7 @@ bool ShapingData::load_from_cache(FontBLF *font, GlyphCacheBLF *gc, const char *
 ShapingData::ShapingData(FontBLF *font,
                          GlyphCacheBLF *gc,
                          const char *str,
-                         size_t len,
+                         const size_t len,
                          std::optional<FeatureSet> features)
 {
   if (!str || !str[0] || !len) {
@@ -156,7 +162,7 @@ ShapingData::ShapingData(FontBLF *font,
   }
 
   /* Include space for null terminator. */
-  size_t char_count = BLI_strnlen_utf8(str, len);
+  const size_t char_count = BLI_strnlen_utf8(str, len);
   std::u32string str32(char_count + 1, 0);
 
   /* Convert entire input string into array of 32-bit code points. */
@@ -215,7 +221,7 @@ ShapingData::ShapingData(FontBLF *font,
     hb_buffer_set_cluster_level(hb_buf, HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS);
 
     blender::Vector<hb_feature_t> otf_features;
-    for (otf_feature &feature :
+    for (const otf_feature &feature :
          (features.has_value()) ? features.value() : blf_font_otf_features_default())
     {
       blf_font_otf_feature_set(otf_features, feature.tag, feature.value);
@@ -262,16 +268,16 @@ ShapingData::ShapingData(FontBLF *font,
                           uint(otf_features.size()));
 
     /* Unlikely. Drawing monospaced but changed mid-string to a proportional font. */
-    bool set_mono = segment_font != font && font->flags & BLF_MONOSPACED &&
-                    !(segment_font->flags & BLF_MONOSPACED);
+    const bool set_mono = segment_font != font && font->flags & BLF_MONOSPACED &&
+                          !(segment_font->flags & BLF_MONOSPACED);
     if (set_mono) {
       segment_font->flags |= BLF_MONOSPACED;
     }
 
-    int cwidth = std::max(gc->fixed_width, 1);
+    const int cwidth = std::max(gc->fixed_width, 1);
     uint glyph_count;
-    hb_glyph_info_t *hb_glyph_info = hb_buffer_get_glyph_infos(hb_buf, &glyph_count);
-    hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(hb_buf, nullptr);
+    const hb_glyph_info_t *hb_glyph_info = hb_buffer_get_glyph_infos(hb_buf, &glyph_count);
+    const hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(hb_buf, nullptr);
 
     /* Precompute mapping from UTF-32 codepoint index -> UTF-8 byte offset.
      * HarfBuzz may reorder glyphs and multiple glyphs can share the same cluster,
@@ -285,13 +291,10 @@ ShapingData::ShapingData(FontBLF *font,
 
     size_t glyph_str8_offset = 0;
     for (i = 0; i < glyph_count; i++) {
-      uint32_t glyph_id = hb_glyph_info[i].codepoint;
-      unsigned int cluster = hb_glyph_info[i].cluster;
-      if (cluster >= char_count) {
-        /* Safety clamp; cluster should normally be within range. */
-        cluster = unsigned(int(char_count) - 1);
-      }
-      char32_t codepoint = str32[cluster];
+      const uint32_t glyph_id = hb_glyph_info[i].codepoint;
+      /* Safety clamp; cluster should normally be within range. */
+      const uint32_t cluster = std::min(hb_glyph_info[i].cluster, uint32_t(char_count - 1));
+      const char32_t codepoint = str32[cluster];
       GlyphBLF *g = blf_glyph_ensure(segment_font, segment_gc, codepoint, glyph_id);
       const int advance = ((font->flags & BLF_MONOSPACED) ?
                                ft_pix_from_int(cwidth) * BLI_wcwidth_safe(codepoint) :
@@ -311,10 +314,10 @@ ShapingData::ShapingData(FontBLF *font,
 
       g = blf_glyph_ensure_subpixel(segment_font, segment_gc, g, this->bounds.xmax);
 
-      rcti bounds = {this->bounds.xmax + glyph_pos[i].x_offset,
-                     this->bounds.xmax + g->box_xmax + glyph_pos[i].x_offset,
-                     glyph_pos[i].y_offset,
-                     g->box_ymax + glyph_pos[i].y_offset};
+      const rcti bounds = {this->bounds.xmax + glyph_pos[i].x_offset,
+                           this->bounds.xmax + g->box_xmax + glyph_pos[i].x_offset,
+                           glyph_pos[i].y_offset,
+                           g->box_ymax + glyph_pos[i].y_offset};
 
       if (props.direction == HB_DIRECTION_RTL) {
         /* Purposely use glyph-ordered offsets to simplify editing for now. */
@@ -358,7 +361,7 @@ ShapingData::ShapingData(FontBLF *font,
                                 this->glyphs[i].index_utf8,
                                 this->glyphs[i].g->subpixel};
     }
-    gc->shaping_cache.add_new(str, cache_string);
+    gc->shaping_cache.add_new(str, std::move(cache_string));
   }
 }
 
@@ -368,7 +371,7 @@ ShapingData::ShapingData(FontBLF *font,
 ShapingData::ShapingData(FontBLF *font,
                          GlyphCacheBLF *gc,
                          const char *str,
-                         size_t len,
+                         const size_t len,
                          std::optional<FeatureSet> /*features*/)
 {
   legacy_layout(font, gc, str, len);
@@ -376,7 +379,7 @@ ShapingData::ShapingData(FontBLF *font,
 
 #endif
 
-void ShapingData::draw(const ft_pix pen_y, ResultBLF *r_info)
+void ShapingData::draw(const ft_pix pen_y, ResultBLF *r_info) const
 {
   for (const ShapedGlyph &glyph : this->glyphs) {
     const int x = ft_pix_to_int_floor(glyph.bounds.xmin);
@@ -390,7 +393,7 @@ void ShapingData::draw(const ft_pix pen_y, ResultBLF *r_info)
   }
 }
 
-int ShapingData::draw_mono(const int tab_columns)
+int ShapingData::draw_mono(const int tab_columns) const
 {
   int columns = 0;
   for (const ShapedGlyph &glyph : this->glyphs) {
@@ -534,20 +537,21 @@ void ShapingData::boundbox(const FontBLF *font,
   }
 }
 
-size_t ShapingData::offset_from_cursor_position(int location_x) const
+size_t ShapingData::offset_from_cursor_position(const int location_x) const
 {
+  const ft_pix location = ft_pix_from_int(location_x);
   for (const ShapedGlyph &glyph : this->glyphs) {
     if (glyph.is_combining()) {
       continue;
     }
-    if (ft_pix_from_int(location_x) < ((glyph.bounds.xmin + glyph.bounds.xmax) / 2)) {
+    if (location < ((glyph.bounds.xmin + glyph.bounds.xmax) / 2)) {
       return glyph.index_utf8;
     }
   }
   return this->glyphs.is_empty() ? 0 : size_t(-1);
 }
 
-void ShapingData::offset_to_glyph_bounds(size_t str_offset, rcti *r_glyph_bounds) const
+void ShapingData::offset_to_glyph_bounds(const size_t str_offset, rcti *r_glyph_bounds) const
 {
   for (const ShapedGlyph &glyph : this->glyphs) {
     if (glyph.index_utf8 == str_offset) {

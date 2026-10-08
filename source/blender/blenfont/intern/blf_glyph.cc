@@ -791,7 +791,7 @@ FontBLF *blf_font_script_ensure(FontBLF *font, const uint charcode)
     return font;
   }
   /* Not found in main font, so look in the others. */
-  int coverage_bit = blf_charcode_to_coverage_bit(charcode);
+  const int coverage_bit = blf_charcode_to_coverage_bit(charcode);
   for (int i = BLF_MAX_FONT - 1; i >= 0; i--) {
     FontBLF *f = global_font[i];
     if (!f || f == font || !(f->flags & BLF_DEFAULT)) {
@@ -919,7 +919,7 @@ static FT_GlyphSlot blf_glyph_load(FontBLF *font,
  */
 static bool blf_glyph_render_bitmap(FontBLF *font, FT_GlyphSlot glyph)
 {
-  int render_mode = FT_RENDER_MODE_LIGHT;
+  const int render_mode = FT_RENDER_MODE_LIGHT;
 
   /* Render the glyph curves to a bitmap. */
   FT_Error err = FT_Render_Glyph(glyph, FT_Render_Mode(render_mode));
@@ -1366,8 +1366,11 @@ FT_GlyphSlot blf_glyph_render_outline(FontBLF *settings_font,
   return blf_glyph_render(settings_font, glyph_font, glyph_index, charcode, 0, fixed_width, true);
 }
 
-GlyphBLF *blf_glyph_ensure(
-    FontBLF *font, GlyphCacheBLF *gc, const uint charcode, uint glyph_index, uint8_t subpixel)
+GlyphBLF *blf_glyph_ensure(FontBLF *font,
+                           GlyphCacheBLF *gc,
+                           const uint charcode,
+                           uint glyph_index,
+                           const uint8_t subpixel)
 {
   if (charcode < 32) {
     if (ELEM(charcode, '\n', '\r')) {

@@ -193,7 +193,7 @@ void blf_glyph_cache_clear(FontBLF *font);
 GlyphBLF *blf_glyph_ensure(
     FontBLF *font, GlyphCacheBLF *gc, uint charcode, uint glyph_index = 0, uint8_t subpixel = 0);
 
-FontBLF *blf_font_script_ensure(FontBLF *font, const uint charcode);
+FontBLF *blf_font_script_ensure(FontBLF *font, uint charcode);
 
 GlyphBLF *blf_glyph_ensure_subpixel(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, int32_t pen_x);
 

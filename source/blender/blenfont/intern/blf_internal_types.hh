@@ -203,14 +203,14 @@ struct ShapingCache {
     return data.lookup_ptr(key) != nullptr;
   }
 
-  void add_new(const std::string &key, CachedString &value)
+  void add_new(const std::string &key, CachedString &&value)
   {
     ++inserts;
 
     if (data.size() >= BLF_SHAPING_CACHE_SIZE) {
       uint32_t best_freq = std::numeric_limits<uint32_t>::max();
       const std::string *evict_key_ptr = nullptr;
-      for (auto item : data.items()) {
+      for (const auto item : data.items()) {
         const CachedString &v = item.value;
         const uint32_t f = v.freq;
         if (f < best_freq) {
@@ -274,10 +274,10 @@ struct ShapingData {
   bool load_from_cache(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len);
   void legacy_layout(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len);
 
-  void draw(const ft_pix pen_y, ResultBLF *r_info = nullptr);
-  int draw_mono(const int tab_columns);
-  size_t width_to_strlen(const int width, size_t str_len, int *r_width = nullptr) const;
-  size_t width_to_rstrlen(const int width, size_t str_len, int *r_width = nullptr) const;
+  void draw(ft_pix pen_y, ResultBLF *r_info = nullptr) const;
+  int draw_mono(int tab_columns) const;
+  size_t width_to_strlen(int width, size_t str_len, int *r_width = nullptr) const;
+  size_t width_to_rstrlen(int width, size_t str_len, int *r_width = nullptr) const;
   void boundbox(const FontBLF *font, ft_pix pen_y, rcti *r_box, ResultBLF *r_info = nullptr) const;
   size_t offset_from_cursor_position(int location_x) const;
   void offset_to_glyph_bounds(size_t str_offset, rcti *r_glyph_bounds) const;

@@ -382,7 +382,7 @@ int blf_font_draw_mono(FontBLF *font,
   blf_batch_draw_begin(font);
 
   ShapingData text(font, gc, str, str_len);
-  int columns = text.draw_mono(tab_columns);
+  const int columns = text.draw_mono(tab_columns);
 
   blf_batch_draw_end();
 
@@ -814,7 +814,7 @@ void blf_font_boundbox_foreach_glyph(FontBLF *font,
       /* Ignore combining marks. */
       continue;
     }
-    rcti bounds = glyph.integer_bounds();
+    const rcti bounds = glyph.integer_bounds();
     if (!user_fn(str, glyph.index_utf8, &bounds, user_data)) {
       break;
     }
@@ -1019,7 +1019,7 @@ static void blf_font_wrap_apply(FontBLF *font,
     const size_t i_curr = i;
     bool do_draw = false;
 
-    uint codepoint = BLI_str_utf8_as_unicode_step_safe(str, str_len, &i);
+    const uint codepoint = BLI_str_utf8_as_unicode_step_safe(str, str_len, &i);
     g = blf_glyph_ensure(font, gc, codepoint);
     if (g) {
       g = blf_glyph_ensure_subpixel(font, gc, g, pen_x);
