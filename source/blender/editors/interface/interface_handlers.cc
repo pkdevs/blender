@@ -3731,6 +3731,9 @@ std::optional<ButtonEditHint> button_edit_hint_get(const Button &but)
   if (data == nullptr || data->text_edit_hint.empty()) {
     return std::nullopt;
   }
+  if (but.selsta != but.selend) {
+    return std::nullopt;
+  }
   return ButtonEditHint{
       data->text_edit_hint, data->text_edit_hint_replace_start, data->text_edit_hint_replace_end};
 }
@@ -3818,7 +3821,7 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
       strlen(data->text_edit.edit_string));
 }
 
-std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64_t cursor)
+std::optional<IndexRange> template_variable_replace_range_at_cursor(StringRef text, int64_t cursor)
 {
   const int64_t open = text.substr(0, cursor).find_last_of("{}");
   if (open == StringRef::not_found || text[open] != '{') {
@@ -3851,7 +3854,7 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
   const StringRefNull text = data->text_edit.edit_string;
   const int64_t cursor = but->pos;
 
-  const std::optional<IndexRange> span = template_variable_span_at_cursor(text, cursor);
+  const std::optional<IndexRange> span = template_variable_replace_range_at_cursor(text, cursor);
   if (!span.has_value()) {
     return;
   }
@@ -4718,6 +4721,15 @@ static int do_but_textedit(
     }
 
     button_edit_hint_refresh(C, but, data);
+
+#ifdef WITH_INPUT_IME
+    if (win->runtime->ime_data_is_composing) {
+      if (data->searchbox && static_cast<const ButtonSearch *>(but)->hide_when_no_results) {
+        searchbox_hide(data->searchbox);
+      }
+      data->text_edit_hint.clear();
+    }
+#endif
   }
 
   if (changed || prev_pos != but->pos || (retval == WM_UI_HANDLER_BREAK)) {

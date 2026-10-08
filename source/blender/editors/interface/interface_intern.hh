@@ -979,7 +979,8 @@ struct ButtonEditHint {
  */
 std::optional<ButtonEditHint> button_edit_hint_get(const Button &but);
 
-std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64_t cursor);
+std::optional<IndexRange> template_variable_replace_range_at_cursor(StringRef text,
+                                                                    int64_t cursor);
 /**
  * Recover the bare variable name from a path-template search item's display text (the full
  * "{name}" expression), or nullopt if `item_text` isn't wrapped in braces as expected.

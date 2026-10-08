@@ -1137,7 +1137,7 @@ static void prop_variable_search_update_fn(
   const StringRefNull text = str;
   const int64_t cursor = search_items_cursor_pos(items);
 
-  const std::optional<IndexRange> span = template_variable_span_at_cursor(text, cursor);
+  const std::optional<IndexRange> span = template_variable_replace_range_at_cursor(text, cursor);
   if (!span.has_value()) {
     return;
   }
