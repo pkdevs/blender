@@ -79,7 +79,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       "selection_override",
       [](int depth_override, bool selection) { return depth_override == 0 ? false : selection; });
 
-  Field<bool> selection_field_overrided(FieldOperation::from(
+  Field<bool> selection_field_overridden(FieldOperation::from(
       selection_override, {depth_field_overridden, std::move(selection_field)}));
 
   const bke::Instances &instances = *geometry_set.get_instances();
@@ -87,7 +87,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   fn::FieldEvaluator evaluator(field_context, instances.instances_num());
 
   const int evaluated_depth_index = evaluator.add(depth_field_overridden);
-  evaluator.set_selection(selection_field_overrided);
+  evaluator.set_selection(selection_field_overridden);
   evaluator.evaluate();
 
   geometry::VariedDepthOptions varied_depth_option;
