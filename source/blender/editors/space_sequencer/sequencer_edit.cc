@@ -1860,7 +1860,9 @@ const EnumPropertyItem prop_split_side_types[] = {
 
 bool split_only_selected_get(wmOperator *op)
 {
-  if (RNA_struct_property_is_set(op->ptr, "ignore_selection")) {
+  if (RNA_struct_property_is_set(op->ptr, "ignore_selection") &&
+      !RNA_struct_property_is_set(op->ptr, "only_selected"))
+  {
     return !RNA_boolean_get(op->ptr, "ignore_selection");
   }
   return RNA_boolean_get(op->ptr, "only_selected");
