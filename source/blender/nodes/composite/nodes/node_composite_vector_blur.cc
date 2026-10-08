@@ -578,7 +578,7 @@ class VectorBlurOperation : public NodeOperation {
 
     GPU_shader_uniform_1f(shader, "shutter_speed", this->get_shutter());
 
-    gpu::Texture *max_tile_veloicty_texture = max_tile_velocity.bind_as_texture_or_single_value(
+    gpu::Texture *max_tile_velocity_texture = max_tile_velocity.bind_as_texture_or_single_value(
         shader, "input_tx");
 
     /* The shader assumes a maximum input size of 16k, and since the max tile velocity image is
@@ -594,7 +594,7 @@ class VectorBlurOperation : public NodeOperation {
     compute_dispatch_threads_at_least(shader, max_tile_velocity.domain().data_size);
 
     GPU_shader_unbind();
-    max_tile_velocity.unbind_as_texture_or_single_value(max_tile_veloicty_texture);
+    max_tile_velocity.unbind_as_texture_or_single_value(max_tile_velocity_texture);
     GPU_storagebuf_unbind(tile_indirection_buffer);
 
     return tile_indirection_buffer;
