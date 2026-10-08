@@ -1336,6 +1336,14 @@ static void menu_block_set_keyaccels(Block *block)
     return;
   }
 
+  /* Reserve "T" for "Timeline", "Texture Node Editor" gets no accelerator key. */
+  for (Button &but : block->buttons()) {
+    if (but.str == IFACE_("Timeline")) {
+      but.menu_key = 't';
+      menu_key_mask |= 1 << ('t' - 'a');
+    }
+  }
+
   for (int pass = 0; pass < 2; pass++) {
     /* 2 Passes: One for first letter only, second for any letter if the first pass fails.
      * Run first pass on all buttons so first word chars always get first priority. */
@@ -1352,7 +1360,7 @@ static void menu_block_set_keyaccels(Block *block)
 
                 /* For PIE-menus. */
                 ButtonType::Row) ||
-          (but.flag & UI_HIDDEN))
+          (but.flag & UI_HIDDEN) || but.str == IFACE_("Texture Node Editor"))
       {
         continue;
       }
