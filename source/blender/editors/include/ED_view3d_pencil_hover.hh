@@ -13,7 +13,11 @@ struct View3DPencilHover {
   int kind = 0;
   int index = -1;
 };
-void ED_view3d_pencil_hover_update(bContext *C, bool active, const int mval[2]);
+/* With \a objects_only, picks whole objects in any mode, as for a drag that drops on objects. */
+void ED_view3d_pencil_hover_update(bContext *C,
+                                   bool active,
+                                   const int mval[2],
+                                   bool objects_only = false);
 void ED_view3d_pencil_hover_clear(ARegion *region);
 View3DPencilHover ED_view3d_pencil_hover_get(const ARegion *region);
 void ED_view3d_pencil_hover_draw(const bContext *C, ARegion *region, void *customdata);

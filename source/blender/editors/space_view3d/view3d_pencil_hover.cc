@@ -34,6 +34,7 @@ struct HoverState {
   float4x4 view = float4x4::identity();
   uint64_t evaluation = 0;
   int mode = -1, selectmode = -1, xray = -1, shading = -1;
+  bool objects_only = false;
   uint32_t active_uid = 0;
   double last_pick = 0;
   /* Own coordinates, never BMesh pointers: topology edits and undo can free them. */
@@ -63,7 +64,10 @@ void ED_view3d_pencil_hover_clear(ARegion *region)
   hover = {};
 }
 
-void ED_view3d_pencil_hover_update(bContext *C, bool active, const int mval[2])
+void ED_view3d_pencil_hover_update(bContext *C,
+                                   bool active,
+                                   const int mval[2],
+                                   bool objects_only)
 {
   ARegion *region = CTX_wm_region(C);
   if (hover.region != region) {
@@ -73,7 +77,8 @@ void ED_view3d_pencil_hover_update(bContext *C, bool active, const int mval[2])
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
   Object *object = CTX_data_active_object(C);
   const int mode = object ? object->mode : OB_MODE_OBJECT;
-  if (!active || !region || !v3d || !rv3d || !ELEM(mode, OB_MODE_OBJECT, OB_MODE_EDIT) ||
+  if (!active || !region || !v3d || !rv3d ||
+      !(objects_only || ELEM(mode, OB_MODE_OBJECT, OB_MODE_EDIT)) ||
       G.moving || (rv3d->rflag & RV3D_NAVIGATING) || (v3d->flag2 & V3D_HIDE_OVERLAYS) ||
       mval[0] < 0 || mval[1] < 0 || mval[0] >= region->winx || mval[1] >= region->winy)
   {
@@ -86,6 +91,7 @@ void ED_view3d_pencil_hover_update(bContext *C, bool active, const int mval[2])
   const uint64_t evaluation = DEG_get_update_count(depsgraph);
   const uint32_t active_uid = object ? object->id.session_uid : 0;
   const bool same_context = hover.region == region && hover.mode == mode &&
+                            hover.objects_only == objects_only &&
                             hover.selectmode == selectmode && hover.xray == xray &&
                             hover.evaluation == evaluation && hover.shading == v3d->shading.type &&
                             hover.active_uid == active_uid &&
@@ -100,6 +106,7 @@ void ED_view3d_pencil_hover_update(bContext *C, bool active, const int mval[2])
   hover.region = region;
   hover.position = int2(mval);
   hover.mode = mode;
+  hover.objects_only = objects_only;
   hover.selectmode = selectmode;
   hover.xray = xray;
   hover.shading = v3d->shading.type;
@@ -113,7 +120,7 @@ void ED_view3d_pencil_hover_update(bContext *C, bool active, const int mval[2])
   hover.lines.clear();
   hover.triangles.clear();
 
-  if (mode == OB_MODE_OBJECT) {
+  if (mode == OB_MODE_OBJECT || objects_only) {
     if (Base *base = ED_view3d_give_base_under_cursor(C, mval)) {
       if (base->flag & BASE_SELECTABLE) {
         hover.hit = {base->object->id.session_uid, 1, -1};
