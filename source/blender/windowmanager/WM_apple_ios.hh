@@ -31,5 +31,7 @@ void WM_apple_ios_reports(wmWindow *win, ReportList *reports, int minimum_level)
 void WM_apple_ios_starter_library_ensure();
 /** Keep auto-save on: iOS ends apps without warning. Call after loading the preferences. */
 void WM_apple_ios_autosave_ensure();
+/** Write the auto-save now, in any mode, when the app goes to the background. */
+void WM_apple_ios_autosave_now(bContext *C);
 
 }  // namespace blender

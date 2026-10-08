@@ -11,7 +11,10 @@
 #include <chrono>
 #include <condition_variable>
 #include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <vector>
 
 #include "GHOST_Debug.hh"
 #include "GHOST_EventButton.hh"
@@ -47,6 +50,8 @@ static bContext *C = nullptr;
 /* Implemented in wm.cc. */
 void WM_main_loop_body(bContext *C);
 extern "C" void WM_apple_ios_ui_flush_commands(bContext *C);
+/* Implemented in wm_files.cc. */
+void WM_apple_ios_autosave_now(bContext *C);
 }  // namespace blender
 
 #include "GHOST_IOSDocumentPicker.hh"
@@ -62,6 +67,10 @@ static std::atomic<bool> engine_wakeup{false};
 static std::condition_variable engine_condition;
 static std::mutex engine_wait_mutex;
 static GHOST_IOSMessageQueue<std::function<void()>> engine_requests;
+/* Auto-save requested by UIKit when the app leaves the foreground; runs even while inactive. */
+static std::atomic<bool> engine_autosave_requested{false};
+static std::mutex engine_autosave_mutex;
+static std::vector<std::function<void()>> engine_autosave_done;
 
 void GHOST_ios_engine_wake()
 {
@@ -81,6 +90,37 @@ static void open_document(NSURL *url)
   GHOST_ios_engine_wake();
 }
 
+/** Ask the engine to write the auto-save now; `done` runs on the engine thread afterwards. */
+static void request_autosave(std::function<void()> done)
+{
+  {
+    std::lock_guard lock(engine_autosave_mutex);
+    engine_autosave_done.push_back(std::move(done));
+  }
+  engine_autosave_requested.store(true);
+  GHOST_ios_engine_wake();
+}
+
+static void run_engine_autosave()
+{
+  if (!engine_autosave_requested.exchange(false)) {
+    return;
+  }
+  if (C) {
+    @autoreleasepool {
+      blender::WM_apple_ios_autosave_now(C);
+    }
+  }
+  std::vector<std::function<void()>> done;
+  {
+    std::lock_guard lock(engine_autosave_mutex);
+    done.swap(engine_autosave_done);
+  }
+  for (std::function<void()> &callback : done) {
+    callback();
+  }
+}
+
 static void run_engine()
 {
   @autoreleasepool {
@@ -96,10 +136,13 @@ static void run_engine()
       else {
         /* UIKit signals without taking this lock. A bounded wait also covers a
          * notification racing the transition into sleep. */
-        engine_condition.wait_for(
-            lock, std::chrono::milliseconds(100), [] { return engine_active.load(); });
+        engine_condition.wait_for(lock, std::chrono::milliseconds(100), [] {
+          return engine_active.load() || engine_autosave_requested.load();
+        });
       }
     }
+    /* Runs in the background too: leaving the foreground is when work must be kept. */
+    run_engine_autosave();
     if (!engine_active.load()) {
       continue;
     }
@@ -219,6 +262,10 @@ void GHOST_ios_unregister_window(UIWindow *window)
   static bool started = false; /* UIKit-only startup state. */
   if (!started) {
     started = true;
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(applicationWillTerminate)
+                                               name:UIApplicationWillTerminateNotification
+                                             object:nil];
     self.window = [[[UIWindow alloc] initWithWindowScene:g_window_scene] autorelease];
     blenderIOSApplyTheme(self.window);
     self.window.rootViewController = [[[UIViewController alloc] init] autorelease];
@@ -255,6 +302,41 @@ void GHOST_ios_unregister_window(UIWindow *window)
 {
   engine_active.store(false);
   [[NSNotificationCenter defaultCenter] postNotificationName:@"BlenderSceneInactive" object:scene];
+}
+
+- (void)sceneDidEnterBackground:(UIScene *)scene
+{
+  UNUSED_VARS(scene);
+  /* iOS may end a background app at any moment without telling it. Keep the app running long
+   * enough to write the auto-save of any unsaved work. */
+  UIApplication *application = UIApplication.sharedApplication;
+  __block UIBackgroundTaskIdentifier task = UIBackgroundTaskInvalid;
+  void (^finish)(void) = ^{
+    if (task != UIBackgroundTaskInvalid) {
+      [application endBackgroundTask:task];
+      task = UIBackgroundTaskInvalid;
+    }
+  };
+  task = [application beginBackgroundTaskWithName:@"Blender Auto-Save" expirationHandler:finish];
+  void (^finish_copy)(void) = [[finish copy] autorelease];
+  [finish_copy retain];
+  request_autosave([finish_copy] {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      finish_copy();
+      [finish_copy release];
+    });
+  });
+}
+
+- (void)applicationWillTerminate
+{
+  /* Rare on iOS, but give the engine a moment to keep unsaved work before the process ends. */
+  auto written = std::make_shared<std::atomic<bool>>(false);
+  request_autosave([written] { written->store(true); });
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+  while (!written->load() && std::chrono::steady_clock::now() < deadline) {
+    [NSThread sleepForTimeInterval:0.02];
+  }
 }
 
 - (void)sceneDidDisconnect:(UIScene *)scene

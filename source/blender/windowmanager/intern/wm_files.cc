@@ -2511,6 +2511,19 @@ void WM_apple_ios_autosave_ensure()
   }
 }
 
+void WM_apple_ios_autosave_now(bContext *C)
+{
+  /* Unlike the timer, write in any mode: this may be the last chance before iOS ends the app. */
+  wmWindowManager *wm = CTX_wm_manager(C);
+  Main *bmain = CTX_data_main(C);
+  /* A recovered document has unsaved work even before it is edited again. */
+  if (wm == nullptr || bmain == nullptr || (wm->file_saved && !bmain->recovered)) {
+    return;
+  }
+  WM_autosave_write(wm, bmain);
+}
+
+/** The newest auto-save, with the name of its document; prunes month-old ones. */
 #endif
 /** \} */
 
