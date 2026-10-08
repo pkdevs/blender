@@ -276,6 +276,30 @@ def tests():
         drag(ASSET_DRAG_CANCEL, None, 0, 0)
         yield 0.5
         check(not new_ids(bpy.data.objects, before), "A cancelled drag adds nothing")
+
+        # Dragging a material highlights the object it would drop on, as Pencil hover does.
+        def hovered():
+            return json.loads(ctypes.string_at(hover_json()).decode()).get("object", 0)
+
+        hover_json = engine.WM_apple_ios_ui_pencil_hover_copy_json
+        hover_json.restype = ctypes.c_void_p
+        material = next((f, n) for f, names in contents.items() for n in names["materials"])
+        cube_point = view3d_utils.location_3d_to_region_2d(region, area.spaces.active.region_3d,
+                                                          cube.matrix_world.translation)
+        drag(ASSET_DRAG_BEGIN, key(material[0], "Material", material[1]),
+             *to_client(window, scale, region.x + 20, region.y + 20))
+        yield 0.3
+        drag(ASSET_DRAG_MOVE, None, *to_client(window, scale, region.x + cube_point.x, region.y + cube_point.y))
+        yield 0.5
+        check(hovered() == cube.session_uid, "Dragging a material over an object highlights it")
+        drag(ASSET_DRAG_MOVE, None, *to_client(window, scale, region.x + 20, region.y + 20))
+        yield 0.5
+        check(hovered() == 0, "Dragging a material off the object clears the highlight")
+        drag(ASSET_DRAG_MOVE, None, *to_client(window, scale, region.x + cube_point.x, region.y + cube_point.y))
+        yield 0.3
+        drag(ASSET_DRAG_CANCEL, None, 0, 0)
+        yield 0.5
+        check(hovered() == 0, "Ending the drag clears the highlight")
     bpy.utils.unregister_class(Calibrate)
 
     setting(b"assets", b"hide")
