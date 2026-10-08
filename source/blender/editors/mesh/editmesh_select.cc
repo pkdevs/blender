@@ -1456,7 +1456,7 @@ static wmOperatorStatus edbm_select_similar_region_exec(bContext *C, wmOperator 
   bool changed = false;
 
   /* Group variables. */
-  int (*group_index)[2];
+  int(*group_index)[2];
   int group_tot;
   int i;
 
@@ -3741,7 +3741,7 @@ bool EDBM_select_interior_faces(BMesh *bm)
   }
 
   /* Group variables. */
-  int (*fgroup_index)[2];
+  int(*fgroup_index)[2];
   int fgroup_len;
 
   int *fgroup_array = MEM_new_array_uninitialized<int>(bm->totface, __func__);
@@ -6526,6 +6526,124 @@ static int loop_find_regions(BMesh *bm, const bool selbigger)
   return count;
 }
 
+/**
+ * Convert face selection to outer boundary edge loops. The faces are deselected and, for each
+ * connected set of selected faces, the longest loop on its boundary is selected.
+ * \return true when edges of at least one loop were selected.
+ */
+static bool face_loop_to_edge_loop(BMesh *bm)
+{
+  if (bm->totfacesel > 0) {
+    return false;
+  }
+
+  /* Tag the boundary edges of the face selection. */
+  BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
+  BMIter iter;
+  BMEdge *e;
+  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+    if (BM_edge_face_count(e) > 2) {
+      continue;
+    }
+
+    int totsel = 0;
+    BMIter liter;
+    BMLoop *l;
+    BM_ITER_ELEM (l, &liter, e, BM_LOOPS_OF_EDGE) {
+      if (BM_elem_flag_test(l->f, BM_ELEM_SELECT)) {
+        totsel++;
+      }
+    }
+    if (totsel == 1) {
+      BM_elem_flag_enable(e, BM_ELEM_TAG);
+    }
+  }
+
+  /* Find the longest loops. */
+  Set<BMFace *> face_visited;
+  Vector<BMEdge *> loop_edges;
+  BMFace *f;
+  BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+    if (!BM_elem_flag_test(f, BM_ELEM_SELECT) || face_visited.contains(f)) {
+      continue;
+    }
+
+    /* Collect the boundary edges of this face loop while walking its faces. */
+    Set<BMEdge *> boundary_edges;
+    Vector<BMFace *> face_stack;
+    face_stack.append(f);
+    face_visited.add(f);
+    while (!face_stack.is_empty()) {
+      BMIter liter;
+      BMLoop *l;
+      BMFace *f_cur = face_stack.pop_last();
+      BM_ITER_ELEM (l, &liter, f_cur, BM_LOOPS_OF_FACE) {
+        if (BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
+          boundary_edges.add(l->e);
+          continue;
+        }
+        BMIter liter2;
+        BMLoop *l2;
+        BM_ITER_ELEM (l2, &liter2, l->e, BM_LOOPS_OF_EDGE) {
+          if (l2 != l && BM_elem_flag_test(l2->f, BM_ELEM_SELECT) && face_visited.add(l2->f)) {
+            face_stack.append(l2->f);
+          }
+        }
+      }
+    }
+
+    /* Find the loops on the boundary of the face loop (connected sets of its boundary
+     * edges) and keep the longest one. */
+    Set<BMEdge *> edge_visited;
+    Vector<BMEdge *> outer_loop;
+    for (BMEdge *e_edge : boundary_edges) {
+      if (edge_visited.contains(e_edge)) {
+        continue;
+      }
+
+      Vector<BMEdge *> loop;
+      loop.append(e_edge);
+      edge_visited.add(e_edge);
+      for (size_t loop_i = 0; loop_i < loop.size(); loop_i++) {
+        BMEdge *e_cur = loop[loop_i];
+        BMVert *verts[2] = {e_cur->v1, e_cur->v2};
+        for (BMVert *v : verts) {
+          BMIter liter;
+          BMEdge *e2;
+          BM_ITER_ELEM (e2, &liter, v, BM_EDGES_OF_VERT) {
+            if (boundary_edges.contains(e2) && edge_visited.add(e2)) {
+              loop.append(e2);
+            }
+          }
+        }
+      }
+
+      if (loop.size() > outer_loop.size()) {
+        outer_loop = std::move(loop);
+      }
+    }
+
+    for (BMEdge *e_loop : outer_loop) {
+      loop_edges.append(e_loop);
+    }
+  }
+
+  BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
+
+  if (loop_edges.is_empty()) {
+    return false;
+  }
+
+  /* Replace the face selection with the boundary loops. Note that selecting faces also
+   * selects their edges and verts, so clear those as well. */
+  BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_SELECT, false);
+  BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_SELECT, false);
+  for (BMEdge *e_loop : loop_edges) {
+    BM_edge_select_set(bm, e_loop, true);
+  }
+  return true;
+}
+
 static wmOperatorStatus edbm_loop_to_region_exec(bContext *C, wmOperator *op)
 {
   const bool select_bigger = RNA_boolean_get(op->ptr, "select_bigger");
@@ -6538,7 +6656,12 @@ static wmOperatorStatus edbm_loop_to_region_exec(bContext *C, wmOperator *op)
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
-    if (bm->totedgesel == 0) {
+
+    /* Convert face selection to outer boundary edge loops. */
+    if ((em->selectmode & SCE_SELECT_FACE) && !face_loop_to_edge_loop(bm)) {
+      continue;
+    }
+    if (!(em->selectmode & SCE_SELECT_EDGE) || bm->totedgesel == 0) {
       continue;
     }
 
@@ -6583,7 +6706,7 @@ void MESH_OT_loop_to_region(wmOperatorType *ot)
   /* Identifiers. */
   ot->name = "Select Loop Inner-Region";
   ot->idname = "MESH_OT_loop_to_region";
-  ot->description = "Select region of faces inside of a selected loop of edges";
+  ot->description = "Select region of faces inside of a selected loop of edges or faces";
 
   /* API callbacks. */
   ot->exec = edbm_loop_to_region_exec;
