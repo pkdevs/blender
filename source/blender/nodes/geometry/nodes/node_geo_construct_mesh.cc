@@ -2,7 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 
 #include "NOD_geometry_nodes_list.hh"
@@ -28,21 +27,159 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>("Mesh"_ustr);
 }
 
-static Mesh *create_mesh_from_lists(GeoNodeExecParams &params,
-                                    const List<float3> &positions_list,
+static bool validate_inputs(GeoNodeExecParams &params,
+                            const List<float3> &positions_list,
+                            const ListPtr<int> &corner_vertices_ptr,
+                            const ListPtr<int> &face_offsets_ptr)
+{
+  const int verts_num = positions_list.size();
+  if (verts_num < 1) {
+    params.error_message_add(NodeWarningType::Error, "Number of points must be greater than zero");
+    return false;
+  }
+  if (!corner_vertices_ptr && !face_offsets_ptr) {
+    /* Create mesh with only vertices. */
+    return true;
+  }
+  if (corner_vertices_ptr && !face_offsets_ptr) {
+    params.error_message_add(NodeWarningType::Error, "Number of faces must be greater than zero");
+    return false;
+  }
+  if (!corner_vertices_ptr && face_offsets_ptr) {
+    params.error_message_add(NodeWarningType::Error,
+                             "Number of corner vertices must be greater than zero");
+    return false;
+  }
+  const List<int> &corner_vertices_list = *corner_vertices_ptr;
+  const List<int> &face_offsets_list = *face_offsets_ptr;
+  const int corners_num = corner_vertices_list.size();
+  const int faces_num = face_offsets_list.size() - 1;
+  if (corners_num < 1) {
+    params.error_message_add(NodeWarningType::Error,
+                             "Number of corner vertices must be greater than zero");
+    return false;
+  }
+  if (faces_num < 1) {
+    params.error_message_add(NodeWarningType::Error, "Number of face offsets must be at least 2");
+    return false;
+  }
+  std::variant<Span<int>, const int *> face_offsets_values = face_offsets_list.values();
+  if (std::holds_alternative<const int *>(face_offsets_values)) {
+    params.error_message_add(NodeWarningType::Error, "Face offsets must contain different values");
+    return false;
+  }
+  const Span<int> face_offsets = std::get<Span<int>>(face_offsets_values);
+  if (face_offsets.first() != 0) {
+    params.error_message_add(NodeWarningType::Error, "First face offset must be zero");
+    return false;
+  }
+  if (face_offsets.last() != corners_num) {
+    params.error_message_add(
+        NodeWarningType::Error,
+        "Total number of face vertices must be equal to number of corner vertices");
+    return false;
+  }
+  const bool face_offsets_are_valid = threading::parallel_reduce(
+      face_offsets.drop_back(1).index_range(),
+      4096,
+      true,
+      [&](const IndexRange range, const bool face_offsets_are_valid) {
+        if (!face_offsets_are_valid) {
+          return false;
+        }
+        for (const int i : range) {
+          const int curr = face_offsets[i];
+          const int next = face_offsets[i + 1];
+          if (next <= curr) {
+            return false;
+          }
+          if (next - curr < 3) {
+            return false;
+          }
+        }
+        return true;
+      },
+      std::logical_and<>());
+  if (!face_offsets_are_valid) {
+    params.error_message_add(NodeWarningType::Error, "Face sizes must be greater than 2");
+    return false;
+  }
+  std::variant<Span<int>, const int *> corner_vertices_values = corner_vertices_list.values();
+  if (std::holds_alternative<const int *>(corner_vertices_values)) {
+    params.error_message_add(NodeWarningType::Error,
+                             "Corner vertices must contain different values");
+    return false;
+  }
+  const IndexRange verts_range(verts_num);
+  const OffsetIndices<int> faces(face_offsets, offset_indices::NoSortCheck());
+  const Span<int> corner_verts = std::get<Span<int>>(corner_vertices_values);
+  const bool corner_vertices_are_valid = threading::parallel_reduce(
+      faces.index_range(),
+      4096,
+      true,
+      [&](const IndexRange range, const bool corner_vertices_are_valid) {
+        if (!corner_vertices_are_valid) {
+          return false;
+        }
+        for (const int face_i : range) {
+          const IndexRange face = faces[face_i];
+          for (const int vert : corner_verts.slice(face)) {
+            if (!verts_range.contains(vert)) {
+              return false;
+            }
+          }
+        }
+        return true;
+      },
+      std::logical_and<>());
+  if (!corner_vertices_are_valid) {
+    params.error_message_add(NodeWarningType::Error,
+                             "Corner vertex indices must be within the number of positions");
+    return false;
+  }
+  const bool corner_vertices_are_unique = threading::parallel_reduce(
+      faces.index_range(),
+      4096,
+      true,
+      [&](const IndexRange range, const bool corner_vertices_are_unique) {
+        if (!corner_vertices_are_unique) {
+          return false;
+        }
+        for (const int face_i : range) {
+          Set<int, 16> set;
+          const IndexRange face = faces[face_i];
+          for (const int vert : corner_verts.slice(face)) {
+            if (!set.add(vert)) {
+              return false;
+            }
+          }
+        }
+        return true;
+      },
+      std::logical_and<>());
+  if (!corner_vertices_are_unique) {
+    params.error_message_add(NodeWarningType::Error,
+                             "Corner vertex indices must not repeat within a face");
+    return false;
+  }
+  return true;
+}
+
+static Mesh *create_mesh_from_lists(const List<float3> &positions_list,
                                     const ListPtr<int> &corner_vertices_list,
-                                    const ListPtr<int> &face_offset_list)
+                                    const ListPtr<int> &face_offsets_list)
 {
   const int verts_num = positions_list.size();
   const IndexRange verts(verts_num);
 
-  const int faces_num = face_offset_list ? face_offset_list->size() - 1 : 0;
+  const int faces_num = face_offsets_list ? face_offsets_list->size() - 1 : 0;
   const int corners_num = corner_vertices_list ? corner_vertices_list->size() : 0;
 
   Mesh *mesh = bke::mesh_new_no_attributes(verts_num, 0, faces_num, corners_num);
 
-  const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(&positions_list.data());
-  if (positions_array_data) {
+  if (const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(
+          &positions_list.data()))
+  {
     mesh->attributes_for_write().add<float3>(
         "position",
         bke::AttrDomain::Point,
@@ -57,79 +194,53 @@ static Mesh *create_mesh_from_lists(GeoNodeExecParams &params,
         bke::AttributeInitValue(*static_cast<const float3 *>(positions_single_value->value)));
   }
   else {
-    BLI_assert_unreachable();
+    mesh->attributes_for_write().add<float3>(
+        "position", bke::AttrDomain::Point, bke::AttributeInitVArray(positions_list.varray()));
   }
 
-  if (faces_num > 0) {
-    /* If there are faces, we expect corner vertices. */
-    BLI_assert(corner_vertices_list);
-    const auto *face_offset_data = std::get_if<nodes::GList::ArrayData>(&face_offset_list->data());
-    BLI_assert(face_offset_data != nullptr);
-
-    implicit_sharing::copy_shared_pointer(
-        static_cast<int *>(const_cast<void *>(face_offset_data->data)),
-        &(*face_offset_data->sharing_info),
-        &mesh->face_offset_indices,
-        &mesh->runtime->face_offsets_sharing_info);
-
-    const Span<int> face_offsets = mesh->face_offsets();
-    if (face_offsets.last() != corner_vertices_list->size()) {
-      params.error_message_add(
-          NodeWarningType::Error,
-          "Total number of face vertices must be equal to number of corner vertices");
-      BKE_id_free_ex(nullptr, mesh, LIB_ID_FREE_NO_MAIN, false);
-      return nullptr;
-    }
-
-    const bool sizes_greater_zero = threading::parallel_reduce(
-        face_offsets.drop_back(1).index_range(),
-        4096,
-        true,
-        [&](const IndexRange range, const bool sizes_greater_zero) {
-          if (!sizes_greater_zero) {
-            return false;
-          }
-          for (const int i : range) {
-            const int curr = face_offsets[i];
-            const int next = face_offsets[i + 1];
-            if (next <= curr) {
-              return false;
-            }
-          }
-          return true;
-        },
-        std::logical_and<>());
-    if (!sizes_greater_zero) {
-      params.error_message_add(NodeWarningType::Error, "Face sizes must be greater than zero");
-      BKE_id_free_ex(nullptr, mesh, LIB_ID_FREE_NO_MAIN, false);
-      return nullptr;
-    }
-
-    if (const auto *corner_vertices_array_data = std::get_if<nodes::GList::ArrayData>(
-            &corner_vertices_list->data()))
-    {
-      mesh->attributes_for_write().add<int>(
-          ".corner_vert",
-          bke::AttrDomain::Corner,
-          bke::AttributeInitShared(corner_vertices_array_data->data,
-                                   *corner_vertices_array_data->sharing_info));
-    }
-    else if (const auto *corner_vertices_single_value = std::get_if<nodes::GList::SingleData>(
-                 &corner_vertices_list->data()))
-    {
-      mesh->attributes_for_write().add<int>(
-          ".corner_vert",
-          bke::AttrDomain::Corner,
-          bke::AttributeInitValue(*static_cast<const int *>(corner_vertices_single_value->value)));
-    }
-    else {
-      BLI_assert_unreachable();
-    }
-
-    /* TODO: Error handling. */
-
-    bke::mesh_calc_edges(*mesh, false, false);
+  if (faces_num == 0) {
+    /* Only positions are needed. */
+    return mesh;
   }
+
+  /* If there are faces, we expect there to be corner vertices. */
+  BLI_assert(corner_vertices_list);
+  const List<int> &corner_vertices = *corner_vertices_list;
+  const List<int> &face_offsets = *face_offsets_list;
+
+  const auto *face_offset_data = std::get_if<nodes::GList::ArrayData>(&face_offsets.data());
+  BLI_assert(face_offset_data != nullptr);
+
+  implicit_sharing::copy_shared_pointer(
+      static_cast<int *>(const_cast<void *>(face_offset_data->data)),
+      &(*face_offset_data->sharing_info),
+      &mesh->face_offset_indices,
+      &mesh->runtime->face_offsets_sharing_info);
+
+  if (const auto *corner_vertices_array_data = std::get_if<nodes::GList::ArrayData>(
+          &corner_vertices.data()))
+  {
+    mesh->attributes_for_write().add<int>(
+        ".corner_vert",
+        bke::AttrDomain::Corner,
+        bke::AttributeInitShared(corner_vertices_array_data->data,
+                                 *corner_vertices_array_data->sharing_info));
+  }
+  else if (const auto *corner_vertices_single_value = std::get_if<nodes::GList::SingleData>(
+               &corner_vertices_list->data()))
+  {
+    mesh->attributes_for_write().add<int>(
+        ".corner_vert",
+        bke::AttrDomain::Corner,
+        bke::AttributeInitValue(*static_cast<const int *>(corner_vertices_single_value->value)));
+  }
+  else {
+    mesh->attributes_for_write().add<int>(".corner_vert",
+                                          bke::AttrDomain::Corner,
+                                          bke::AttributeInitVArray(corner_vertices.varray()));
+  }
+
+  bke::mesh_calc_edges(*mesh, false, false);
 
   return mesh;
 }
@@ -141,35 +252,15 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_default_remaining_outputs();
     return;
   }
-  if (positions_list->size() < 1) {
-    params.error_message_add(NodeWarningType::Error, "Number of points must be greater than zero");
-    params.set_default_remaining_outputs();
-    return;
-  }
-  const GListPtr corner_vertices_list = params.extract_input<GListPtr>("Corner Vertices"_ustr);
-  const GListPtr face_offsets_list = params.extract_input<GListPtr>("Face Offsets"_ustr);
-  if (corner_vertices_list && !face_offsets_list) {
-    params.error_message_add(NodeWarningType::Error, "Number of faces must be greater than zero");
-    params.set_default_remaining_outputs();
-    return;
-  }
-  if (face_offsets_list && face_offsets_list->size() < 2) {
-    params.error_message_add(NodeWarningType::Error, "Number of face offsets must be at least 2");
-    params.set_default_remaining_outputs();
-    return;
-  }
-  if (face_offsets_list && (!corner_vertices_list || corner_vertices_list->size() < 1)) {
-    params.error_message_add(NodeWarningType::Error,
-                             "Number of corner vertices must be greater than zero");
-    params.set_default_remaining_outputs();
-    return;
-  }
   if (params.output_is_required("Mesh"_ustr)) {
-    BLI_assert(positions_list->cpp_type().is<float3>());
-    BLI_assert(!corner_vertices_list || corner_vertices_list->cpp_type().is<int>());
-    BLI_assert(!face_offsets_list || face_offsets_list->cpp_type().is<int>());
-    Mesh *mesh = create_mesh_from_lists(params,
-                                        positions_list->typed<float3>(),
+    const List<float3> &positions = positions_list->typed<float3>();
+    const ListPtr<int> &corner_vertices = corner_vertices_list.typed<int>();
+    const ListPtr<int> &face_offsets = face_offsets_list.typed<int>();
+    if (!validate_inputs(params, positions, corner_vertices, face_offsets)) {
+      params.set_default_remaining_outputs();
+      return;
+    }
+    Mesh *mesh = create_mesh_from_lists(positions_list->typed<float3>(),
                                         corner_vertices_list.typed<int>(),
                                         face_offsets_list.typed<int>());
     params.set_output("Mesh"_ustr, GeometrySet::from_mesh(mesh));
