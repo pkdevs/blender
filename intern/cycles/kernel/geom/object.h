@@ -254,6 +254,29 @@ ccl_device_inline void object_inverse_dir_transform(KernelGlobals kg,
   *D = transform_direction(&tfm, *D);
 }
 
+/* Object scale */
+
+ccl_device_inline float3 object_scale(KernelGlobals kg, const ccl_private ShaderData *sd)
+{
+  if (sd->object == OBJECT_NONE) {
+    return make_float3(1.0f, 1.0f, 1.0f);
+  }
+
+#ifdef __OBJECT_MOTION__
+  if (sd->object_flag & SD_OBJECT_MOTION) {
+    return make_float3(len(transform_get_column(&sd->ob_tfm_motion, 0)),
+                       len(transform_get_column(&sd->ob_tfm_motion, 1)),
+                       len(transform_get_column(&sd->ob_tfm_motion, 2)));
+  }
+#endif
+
+  const Transform tfm = object_fetch_transform(kg, sd->object, OBJECT_TRANSFORM);
+
+  return make_float3(len(transform_get_column(&tfm, 0)),
+                     len(transform_get_column(&tfm, 1)),
+                     len(transform_get_column(&tfm, 2)));
+}
+
 /* Object center position */
 
 ccl_device_inline float3 object_location(KernelGlobals kg, const ccl_private ShaderData *sd)

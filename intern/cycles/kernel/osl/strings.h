@@ -44,6 +44,7 @@ OSL_DEVICE_STRING(u_raster, "raster", 7759263238610201778ull)
 OSL_DEVICE_STRING(u_colorsystem, "colorsystem", 1390623632464445670ull)
 
 OSL_DEVICE_STRING(u_object_location, "object:location", 7846190347358762897ull)
+OSL_DEVICE_STRING(u_object_scale, "object:scale", 2968212109870627398ull)
 OSL_DEVICE_STRING(u_object_color, "object:color", 12695623857059169556ull)
 OSL_DEVICE_STRING(u_object_alpha, "object:alpha", 11165053919428293151ull)
 OSL_DEVICE_STRING(u_object_index, "object:index", 6588325838217472556ull)

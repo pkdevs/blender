@@ -4712,6 +4712,7 @@ NODE_DEFINE(ObjectInfoNode)
   NodeType *type = NodeType::add("object_info", create, NodeType::SHADER);
 
   SOCKET_OUT_VECTOR(location, "Location");
+  SOCKET_OUT_VECTOR(scale, "Scale");
   SOCKET_OUT_COLOR(color, "Color");
   SOCKET_OUT_FLOAT(alpha, "Alpha");
   SOCKET_OUT_FLOAT(object_index, "Object Index");
@@ -4732,6 +4733,16 @@ void ObjectInfoNode::compile(SVMCompiler &compiler)
                       SVMNodeObjectInfo{
                           .info_type = NODE_INFO_OB_LOCATION,
                           .out_offset = compiler.output("Location"),
+                      });
+  }
+
+  out = output("Scale");
+  if (!out->links.empty()) {
+    compiler.add_node(this,
+                      NODE_OBJECT_INFO,
+                      SVMNodeObjectInfo{
+                          .info_type = NODE_INFO_OB_SCALE,
+                          .out_offset = compiler.output("Scale"),
                       });
   }
 

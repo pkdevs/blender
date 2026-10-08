@@ -17,6 +17,7 @@ namespace nodes::node_shader_object_info_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Vector>("Location"_ustr);
+  b.add_output<decl::Vector>("Scale"_ustr);
   b.add_output<decl::Color>("Color"_ustr);
   b.add_output<decl::Float>("Alpha"_ustr);
   b.add_output<decl::Float>("Object Index"_ustr);

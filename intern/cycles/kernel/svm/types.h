@@ -83,6 +83,7 @@ enum NodeGeometry : uint8_t {
 
 enum NodeObjectInfo : uint {
   NODE_INFO_OB_LOCATION,
+  NODE_INFO_OB_SCALE,
   NODE_INFO_OB_COLOR,
   NODE_INFO_OB_ALPHA,
   NODE_INFO_OB_INDEX,

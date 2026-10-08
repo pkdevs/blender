@@ -1126,6 +1126,10 @@ ccl_device_inline bool osl_shared_get_object_standard_attribute(KernelGlobals kg
     const float3 f = object_location(kg, sd);
     return set_attribute(f, type, derivatives, val);
   }
+  if (name == DeviceStrings::u_object_scale) {
+    const float3 f = object_scale(kg, sd);
+    return set_attribute(f, type, derivatives, val);
+  }
   if (name == DeviceStrings::u_object_color) {
     const float3 f = object_color(kg, sd->object);
     return set_attribute(f, type, derivatives, val);
