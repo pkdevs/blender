@@ -3955,18 +3955,25 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 {
   [super viewDidLayoutSubviews];
   CGRect panel_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
-  /* The open asset pane is a tray along the bottom edge. The quick actions, the Adjust pill, the
-   * collapsed tool rail and the navigation gizmo move up onto it, so nothing leaves a gap below. */
-  const CGFloat tray = _assets.visible ? _assets.height + 8 : 0;
+  /* The bottom tray: the open asset pane along the edge and the timeline just above it. The quick
+   * actions, the Adjust pill, the collapsed rails and the navigation gizmo rest on top, so the tray
+   * never leaves a gap and follows the timeline as it opens or expands. */
+  const CGFloat assets_tray = _assets.visible && !_desktop_interface ? _assets.height + 8 : 0;
+  const CGFloat timeline_tray = _timeline.visible && !_desktop_interface ? _timeline.height + 8 : 0;
+  const CGFloat tray = assets_tray + timeline_tray;
   if (fabs(tray - _bottom_tray) > 0.5) {
     _bottom_tray = tray;
     _action_bottom_constraint.constant = -6.0 - tray;
     [self updateBrushRailGeometry];
+    /* Lay out again now, inside any running animation, so the controls move with the tray. The
+     * nested pass sees the new tray and completes the layout. */
     [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
+    return;
   }
   const CGFloat window_height = _overlay_view.bounds.size.height;
-  if (window_height > 0) {
-    const CGFloat tray_top = CGRectGetMaxY(panel_rect) - 6 - (tray > 0 ? _assets.height : 0);
+  if (window_height > 0 && !_desktop_interface) {
+    const CGFloat tray_top = CGRectGetMaxY(panel_rect) - 6 - (tray > 0 ? tray - 8 : 0);
     WM_apple_ios_ui_bottom_tray_set(tray > 0 ? float((window_height - tray_top) / window_height) : 0.0f);
   }
   const CGRect bar_rect = [_top_bar convertRect:_top_bar.bounds toView:_overlay_view];
@@ -3988,17 +3995,17 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   else {
     redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
   }
-  /* The asset pane spans the full width along the bottom edge; everything else sits above it. */
-  [_assets layoutInRect:CGRectMake(CGRectGetMinX(redo_rect) + 12, panel_top,
-                                   MAX(0, redo_rect.size.width - 24),
-                                   MAX(0, CGRectGetMaxY(redo_rect) - 6 - panel_top))];
-  /* The timeline floats in the bottom lane between the rails, above the quick actions. */
-  [_timeline layoutInRect:CGRectMake(redo_left, panel_top, MAX(0, redo_right - redo_left),
-                                     MAX(0, redo_bottom - panel_top))];
-  if (_timeline.visible) {
-    redo_bottom -= _timeline.height + 8;
-    panel_bottom = MIN(panel_bottom, redo_bottom);
-  }
+  /* The asset pane spans the full width along the bottom edge, and the timeline sits on the edge or
+   * on the asset pane; everything else sits above them. The tray keeps the same distance from the
+   * sides of the window as from its bottom. */
+  const CGRect bounds = _overlay_view.bounds;
+  const CGFloat tray_bottom = CGRectGetMaxY(redo_rect) - 6;
+  const CGFloat edge = CGRectGetMaxY(bounds) - tray_bottom;
+  const CGFloat tray_left = MAX(CGRectGetMinX(redo_rect), CGRectGetMinX(bounds) + edge);
+  const CGFloat tray_width = MAX(0, MIN(CGRectGetMaxX(redo_rect), CGRectGetMaxX(bounds) - edge) - tray_left);
+  [_assets layoutInRect:CGRectMake(tray_left, panel_top, tray_width, MAX(0, tray_bottom - panel_top))];
+  [_timeline layoutInRect:CGRectMake(tray_left, panel_top, tray_width,
+                                     MAX(0, tray_bottom - assets_tray - panel_top))];
   panel_rect.origin.y = panel_top;
   panel_rect.size.height = MAX(0, panel_bottom - panel_top);
   [_scene_panels layoutInRect:panel_rect];
@@ -5157,13 +5164,23 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   };
   _timeline = [[GHOSTIOSTimeline alloc] initWithOverlay:_overlay_view];
   __block UIView *timeline_host = self.view;
-  _timeline.visibilityDidChange = ^{
-    [timeline_host setNeedsLayout];
+  /* The bottom tray grows and shrinks; everything resting on it moves with it. */
+  void (^relayout_tray)(void) = ^{
+    [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.3
+                          delay:0
+         usingSpringWithDamping:0.9
+          initialSpringVelocity:0
+                        options:UIViewAnimationOptionBeginFromCurrentState |
+                                UIViewAnimationOptionAllowUserInteraction
+                     animations:^{
+                       [timeline_host setNeedsLayout];
+                       [timeline_host layoutIfNeeded];
+                     }
+                     completion:nil];
   };
+  _timeline.visibilityDidChange = relayout_tray;
   _assets = [[GHOSTIOSAssets alloc] initWithOverlay:_overlay_view];
-  _assets.visibilityDidChange = ^{
-    [timeline_host setNeedsLayout];
-  };
+  _assets.visibilityDidChange = relayout_tray;
   /* Assets dragged out of the pane drop onto the viewport, which Blender draws in this view. */
   __block GHOST_IOSViewController *assets_host = self;
   _assets.clientPoint = ^CGPoint(CGPoint point) {
