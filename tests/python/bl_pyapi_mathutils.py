@@ -674,6 +674,9 @@ class VectorTesting(unittest.TestCase):
         self.assertEqual(vec1 @ vec1, 35)
         self.assertEqual(vec2 @ vec2, 5)
 
+    def test_vector_length(self):
+        self.assertEqual(Vector((3, 4)).length, 5.0)
+
     def test_vector_imatmul(self):
         vec = Vector((1, 3, 5))
 
