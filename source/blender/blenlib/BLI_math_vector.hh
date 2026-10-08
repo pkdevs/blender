@@ -13,6 +13,7 @@
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
+#include "BLI_unroll.hh"
 #include "BLI_utildefines.hh"
 
 namespace blender::math {
@@ -430,23 +431,9 @@ template<typename T, int Size>
 template<typename T, int Size>
 [[nodiscard]] inline T dot(const VecBase<T, Size> &a, const VecBase<T, Size> &b)
 {
-  /* TODO: Comment why small sizes are written out explicitly. */
-  if constexpr (Size == 2) {
-    return a.x * b.x + a.y * b.y;
-  }
-  else if constexpr (Size == 3) {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-  }
-  else if constexpr (Size == 4) {
-    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
-  }
-  else {
-    T result = a[0] * b[0];
-    for (int i = 1; i < Size; i++) {
-      result += a[i] * b[i];
-    }
-    return result;
-  }
+  T result = a[0] * b[0];
+  unroll<Size - 1>([&](auto i) { result += a[i + 1] * b[i + 1]; });
+  return result;
 }
 
 /**
