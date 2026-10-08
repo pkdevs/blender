@@ -1652,19 +1652,20 @@ VecBase<T, 3> transform_point(const MatBase<T, 3, 3> &mat, const VecBase<T, 3> &
 template<typename T>
 VecBase<T, 3> transform_point(const MatBase<T, 4, 4> &mat, const VecBase<T, 3> &point)
 {
-  return mat.template view<3, 3>() * point + mat.location();
+  /* TODO: Comment why this form (vs view<3,3>() * point) helps the optimizer. */
+  return point.x * mat.x_axis() + point.y * mat.y_axis() + point.z * mat.z_axis() + mat.location();
 }
 
 template<typename T>
 VecBase<T, 3> transform_direction(const MatBase<T, 3, 3> &mat, const VecBase<T, 3> &direction)
 {
-  return mat * direction;
+  return direction.x * mat.x_axis() + direction.y * mat.y_axis() + direction.z * mat.z_axis();
 }
 
 template<typename T>
 VecBase<T, 3> transform_direction(const MatBase<T, 4, 4> &mat, const VecBase<T, 3> &direction)
 {
-  return mat.template view<3, 3>() * direction;
+  return direction.x * mat.x_axis() + direction.y * mat.y_axis() + direction.z * mat.z_axis();
 }
 
 /**
@@ -1676,26 +1677,18 @@ template<typename T>
 VecBase<T, 3> transform_direction_transposed(const MatBase<T, 3, 3> &mat,
                                              const VecBase<T, 3> &direction)
 {
-  const T x = direction[0];
-  const T y = direction[1];
-  const T z = direction[2];
-
-  return {x * mat[0][0] + y * mat[0][1] + z * mat[0][2],
-          x * mat[1][0] + y * mat[1][1] + z * mat[1][2],
-          x * mat[2][0] + y * mat[2][1] + z * mat[2][2]};
+  return {math::dot(direction, mat.x_axis()),
+          math::dot(direction, mat.y_axis()),
+          math::dot(direction, mat.z_axis())};
 }
 
 template<typename T>
 VecBase<T, 3> transform_direction_transposed(const MatBase<T, 4, 4> &mat,
                                              const VecBase<T, 3> &direction)
 {
-  const T x = direction[0];
-  const T y = direction[1];
-  const T z = direction[2];
-
-  return {x * mat[0][0] + y * mat[0][1] + z * mat[0][2],
-          x * mat[1][0] + y * mat[1][1] + z * mat[1][2],
-          x * mat[2][0] + y * mat[2][1] + z * mat[2][2]};
+  return {math::dot(direction, mat.x_axis()),
+          math::dot(direction, mat.y_axis()),
+          math::dot(direction, mat.z_axis())};
 }
 
 template<typename T, int N, int NumRow>
@@ -1716,10 +1709,7 @@ VecBase<T, N> project_point_safe(const MatBase<T, N + 1, NumRow> &mat, const Vec
   return math::safe_divide(VecBase<T, N>(tmp), math::abs(tmp[N]));
 }
 
-extern template float3 transform_point(const float3x3 &mat, const float3 &point);
-extern template float3 transform_point(const float4x4 &mat, const float3 &point);
-extern template float3 transform_direction(const float3x3 &mat, const float3 &direction);
-extern template float3 transform_direction(const float4x4 &mat, const float3 &direction);
+/* TODO: Comment why transform_point/transform_direction are not `extern template`. */
 extern template float3 project_point(const float4x4 &mat, const float3 &point);
 extern template float2 project_point(const float3x3 &mat, const float2 &point);
 extern template float3 project_point_safe(const float4x4 &mat, const float3 &point);

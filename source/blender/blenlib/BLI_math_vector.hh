@@ -430,11 +430,23 @@ template<typename T, int Size>
 template<typename T, int Size>
 [[nodiscard]] inline T dot(const VecBase<T, Size> &a, const VecBase<T, Size> &b)
 {
-  T result = a[0] * b[0];
-  for (int i = 1; i < Size; i++) {
-    result += a[i] * b[i];
+  /* TODO: Comment why small sizes are written out explicitly. */
+  if constexpr (Size == 2) {
+    return a.x * b.x + a.y * b.y;
   }
-  return result;
+  else if constexpr (Size == 3) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+  }
+  else if constexpr (Size == 4) {
+    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+  }
+  else {
+    T result = a[0] * b[0];
+    for (int i = 1; i < Size; i++) {
+      result += a[i] * b[i];
+    }
+    return result;
+  }
 }
 
 /**

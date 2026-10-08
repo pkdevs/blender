@@ -401,11 +401,15 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
 
   friend col_type operator*(const MatBase &a, const row_type &b)
   {
-    /* This is the reference implementation.
-     * Might be overloaded with vectorized / optimized code. */
-    col_type result(0);
-    unroll<NumCol>([&](auto c) { result += b[c] * a[c]; });
-    return result;
+    /* TODO: Comment why 3x3 uses explicit axes (helps auto-vectorized loops). */
+    if constexpr (NumCol == 3 && NumRow == 3) {
+      return b[0] * a.x_axis() + b[1] * a.y_axis() + b[2] * a.z_axis();
+    }
+    else {
+      col_type result(0);
+      unroll<NumCol>([&](auto c) { result += b[c] * a[c]; });
+      return result;
+    }
   }
 
   /** Multiply by the transposed. */
