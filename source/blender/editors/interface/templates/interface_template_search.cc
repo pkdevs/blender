@@ -80,9 +80,7 @@ static void template_search_add_button_searchmenu(const bContext *C,
                                   ui_description,
                                   template_search.use_previews,
                                   editable,
-                                  live_icon,
-                                  but_func_argN_free<TemplateSearch>,
-                                  but_func_argN_copy<TemplateSearch>);
+                                  live_icon);
 }
 
 static void template_search_add_button_name(Block *block,
@@ -90,7 +88,7 @@ static void template_search_add_button_name(Block *block,
                                             const StructRNA *type)
 {
   /* Skip text button without an active item. */
-  if (active_ptr->data == nullptr) {
+  if (!*active_ptr) {
     return;
   }
 
@@ -180,7 +178,7 @@ static void template_search_buttons(const bContext *C,
   PointerRNA active_ptr = RNA_property_pointer_get(&search_data->target_ptr,
                                                    search_data->target_prop);
 
-  if (active_ptr.type) {
+  if (active_ptr.has_type()) {
     /* can only get correct type when there is an active item */
     type = active_ptr.type;
   }
@@ -201,7 +199,7 @@ static void template_search_buttons(const bContext *C,
    * Blender 4.5 may have this enabled for all uses of this template, in which
    * case this type-specific code will be removed. */
   const bool may_show_new_button = (type == RNA_ActionSlot);
-  if (may_show_new_button && !active_ptr.data) {
+  if (may_show_new_button && !active_ptr) {
     template_search_add_button_operator(
         block, newop, wm::OpCallContext::InvokeDefault, ICON_ADD, editable, IFACE_("New"));
   }
@@ -226,7 +224,7 @@ static PropertyRNA *template_search_get_searchprop(PointerRNA *targetptr,
 {
   PropertyRNA *searchprop;
 
-  if (searchptr && !searchptr->data) {
+  if (searchptr && !*searchptr) {
     searchptr = nullptr;
   }
 

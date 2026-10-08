@@ -432,6 +432,8 @@ GHOST_WindowCocoa::GHOST_WindowCocoa(GHOST_SystemCocoa *systemCocoa,
       setState(GHOST_kWindowStateFullScreen);
     }
 
+    [window_ makeKeyAndOrderFront:nil];
+
     updateDrawingSize();
 
     setDrawingContextType(type);
@@ -466,8 +468,6 @@ GHOST_WindowCocoa::GHOST_WindowCocoa(GHOST_SystemCocoa *systemCocoa,
     }
 
     setNativePixelSize();
-
-    [window_ makeKeyAndOrderFront:nil];
   }
 }
 
@@ -789,7 +789,7 @@ NSScreen *GHOST_WindowCocoa::getScreen() const
 
 NSScreen *GHOST_WindowCocoa::getPrimaryScreen()
 {
-  /* The first element of the screens array is guaranted to be the primary screen by AppKit. */
+  /* The first element of the screens array is guaranteed to be the primary screen by AppKit. */
   return [[NSScreen screens] firstObject];
 }
 
