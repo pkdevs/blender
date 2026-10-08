@@ -354,7 +354,7 @@ static void blf_font_draw_ex(FontBLF *font,
 
   blf_batch_draw_begin(font);
 
-  ShapingData text(font, gc, str, str_len);
+  const ShapingData text(font, gc, str, str_len);
   text.draw(pen_y, r_info);
 
   blf_batch_draw_end();
@@ -381,7 +381,7 @@ int blf_font_draw_mono(FontBLF *font,
 
   blf_batch_draw_begin(font);
 
-  ShapingData text(font, gc, str, str_len);
+  const ShapingData text(font, gc, str, str_len);
   const int columns = text.draw_mono(tab_columns);
 
   blf_batch_draw_end();
@@ -630,7 +630,7 @@ static void blf_font_draw_buffer_ex(FontBLF *font,
   ft_pix pen_y_basis = ft_pix_from_int(font->pos[1]) + pen_y;
   FontBufInfoBLF *buf_info = &font->buf_info;
 
-  ShapingData text(font, gc, str, str_len, blf_font_otf_features_base());
+  const ShapingData text(font, gc, str, str_len, blf_font_otf_features_base());
   for (const ShapedGlyph &glyph : text.glyphs) {
     blf_glyph_draw_buffer(
         buf_info, glyph.g, pos_x + glyph.bounds.xmin, pen_y_basis + glyph.bounds.ymin);
@@ -666,7 +666,7 @@ size_t blf_font_width_to_strlen(
   }
 
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
-  ShapingData text(font, gc, str, str_len);
+  const ShapingData text(font, gc, str, str_len);
   blf_glyph_cache_release(font);
   return text.width_to_strlen(width, BLI_strnlen(str, str_len), r_width);
 }
@@ -682,7 +682,7 @@ size_t blf_font_width_to_rstrlen(
   }
 
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
-  ShapingData text(font, gc, str, str_len);
+  const ShapingData text(font, gc, str, str_len);
   blf_glyph_cache_release(font);
   return text.width_to_rstrlen(width, BLI_strnlen(str, str_len), r_width);
 }
@@ -706,7 +706,7 @@ static void blf_font_boundbox_ex(FontBLF *font,
     return;
   }
 
-  ShapingData text(font, gc, str, str_len);
+  const ShapingData text(font, gc, str, str_len);
   text.boundbox(font, pen_y, r_box, r_info);
 }
 void blf_font_boundbox(
@@ -807,7 +807,7 @@ void blf_font_boundbox_foreach_glyph(FontBLF *font,
 
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
 
-  ShapingData text(font, gc, str, str_len);
+  const ShapingData text(font, gc, str, str_len);
 
   for (const ShapedGlyph &glyph : text.glyphs) {
     if (glyph.g->advance_x <= 0) {
@@ -862,7 +862,7 @@ size_t blf_str_offset_from_cursor_position(FontBLF *font,
   }
 
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
-  ShapingData text(font, gc, str, str_len);
+  const ShapingData text(font, gc, str, str_len);
   blf_glyph_cache_release(font);
 
   size_t r_offset = text.offset_from_cursor_position(location_x);
@@ -895,7 +895,7 @@ void blf_str_offset_to_glyph_bounds(FontBLF *font,
   }
 
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
-  ShapingData text(font, gc, str, strlen(str));
+  const ShapingData text(font, gc, str, strlen(str));
   text.offset_to_glyph_bounds(str_offset, r_glyph_bounds);
   blf_glyph_cache_release(font);
 }
@@ -913,7 +913,7 @@ int blf_str_offset_to_cursor(FontBLF *font,
   }
 
   GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
-  ShapingData text(font, gc, str, str_len);
+  const ShapingData text(font, gc, str, str_len);
   blf_glyph_cache_release(font);
 
   /* Find the glyph starting at the offset and the glyph before it, skipping combining marks
