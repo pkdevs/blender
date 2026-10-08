@@ -17,6 +17,7 @@
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
 
+#include "IMB_colormanagement.hh"
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -148,7 +149,7 @@ struct TomlProjectVariable {
                                              var,
                                              "invalid value for \'subtype' expected \"NONE\" or "
                                              "\"FILEPATH\", but got \"" +
-                                                 type + "\"");
+                                                 subtype + "\"");
 
         throw toml::type_error(err, var.location());
       }
@@ -395,7 +396,7 @@ static toml::ordered_table create_toml_from_blender_project(BlenderProject *proj
 
   StringRefNull ocio_config_path = project->get_ocio_config_path();
   if (!ocio_config_path.is_empty()) {
-    toml_table["description"] = std::string(ocio_config_path);
+    toml_table["ocio_config"] = std::string(ocio_config_path);
   }
 
   toml::ordered_array variables = project_variables_to_toml(project);
@@ -432,17 +433,22 @@ bool BKE_blender_project_config_file_write(Main *bmain)
 bool BKE_blender_project_init_from_root_path(Main *bmain, std::string project_root_path)
 {
   if (!BLI_is_dir(project_root_path.c_str())) {
+    CLOG_ERROR(&LOG, "Project root path '%s', is not a directory", project_root_path.c_str());
     return false;
   }
   std::string toml_path = project_root_path + SEP_STR + ".blender_project" + SEP_STR +
                           "project.toml";
   if (!BLI_is_file(toml_path.c_str())) {
+    CLOG_ERROR(&LOG, "Project has no project.toml file");
     return false;
   }
 
   try {
     create_blender_project_from_toml(bmain, toml_path, project_root_path);
-    // TODO: just for testing
+    /* Make sure to refresh color management configs if the project defined any. */
+    // TODO: will segfault Blender currently.
+    // IMB_colormanagement_project_read_post(bmain);
+    //  TODO: just for testing
     BKE_blender_project_config_file_write(bmain);
   }
   catch (const std::exception &e) {

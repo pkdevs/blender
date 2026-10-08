@@ -2963,8 +2963,7 @@ static bool handle_load_file(bContext *C, const char *filepath_arg, const bool l
   if (!G.background && BLI_is_dir(filepath)) {
     std::string project_root_path = BKE_is_path_inside_blender_project(filepath);
     if (project_root_path != "") {
-      bke::BKE_blender_project_init_from_root_path(G_MAIN, project_root_path);
-      return true;
+      return bke::BKE_blender_project_init_from_root_path(G_MAIN, project_root_path);
     }
   }
 
