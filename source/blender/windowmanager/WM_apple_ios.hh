@@ -29,5 +29,7 @@ void WM_apple_ios_reports(wmWindow *win, ReportList *reports, int minimum_level)
  * location changes with every install. Call after loading the preferences.
  */
 void WM_apple_ios_starter_library_ensure();
+/** Keep auto-save on: iOS ends apps without warning. Call after loading the preferences. */
+void WM_apple_ios_autosave_ensure();
 
 }  // namespace blender

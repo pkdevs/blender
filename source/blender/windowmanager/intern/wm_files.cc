@@ -560,6 +560,7 @@ static void wm_init_userdef(Main *bmain)
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
   WM_apple_ios_starter_library_ensure();
+  WM_apple_ios_autosave_ensure();
 #endif
 
   /* Update input device preference. */
@@ -2474,6 +2475,18 @@ void wm_autosave_delete()
   }
 }
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+
+void WM_apple_ios_autosave_ensure()
+{
+  /* iOS ends apps without warning, so auto-save is always on. */
+  U.flag |= USER_AUTOSAVE;
+  if (U.savetime <= 0) {
+    U.savetime = 2;
+  }
+}
+
+#endif
 /** \} */
 
 /* -------------------------------------------------------------------- */
