@@ -231,12 +231,22 @@ static void calculate_verts(const StrokeData &stroke_data,
         }
       };
 
+      /* In order to project the selected vertices unto the annotation stroke, we need
+       * to shoot rays forwards and backwards from those vertices along the direction of
+       * their connected unselected vertices to find where those rays interesect with the
+       * stroke, with the exception of unselected vertices connected to selected vertices
+       * on the same edge loop of the selection which can cause the selected vertices to
+       * project oddly unto the annotation stroke if the stroke curves around the selection.
+       *
+       * In the case that doesn't yield any results, we fallback to shooting rays from the
+       * vertex normals.
+       */
       BMIter iter;
       BMEdge *e;
       BM_ITER_ELEM (e, &iter, v, BM_EDGES_OF_VERT) {
-        BMVert *v_other = BM_edge_other_vert(e, v);
         if (!BM_elem_flag_test(e, BM_ELEM_TAG)) {
           if (edge_shares_face_with_tagged_edge(e, v)) {
+            BMVert *v_other = BM_edge_other_vert(e, v);
             float3 ray_dir = math::normalize(float3(v_other->co) - float3(v->co));
             check_intersection_fn(ray_dir);
           }
