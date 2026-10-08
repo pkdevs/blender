@@ -267,7 +267,7 @@ static void draw_mask_input_type_settings(const bContext &C, ui::Layout &layout,
 static void draw_error_message(const bNodeTree &tree, ui::Layout &layout, const bool is_mask_used)
 {
   const Span<const bNodeTreeInterfaceSocket *> interface_inputs = tree.interface_inputs();
-  const Span<const bNodeTreeInterfaceSocket *> interface_ouputs = tree.interface_outputs();
+  const Span<const bNodeTreeInterfaceSocket *> interface_outputs = tree.interface_outputs();
 
   if (interface_inputs.size() > 0) {
     const bke::bNodeSocketType *typeinfo = interface_inputs[0]->socket_typeinfo();
@@ -294,12 +294,12 @@ static void draw_error_message(const bNodeTree &tree, ui::Layout &layout, const 
     }
   }
 
-  if (interface_ouputs.is_empty()) {
+  if (interface_outputs.is_empty()) {
     ui::Layout &row = layout.row(false);
     row.label(RPT_("Node group must have an output"), ICON_STATUS_ERROR);
   }
   else {
-    const bke::bNodeSocketType *typeinfo = interface_ouputs[0]->socket_typeinfo();
+    const bke::bNodeSocketType *typeinfo = interface_outputs[0]->socket_typeinfo();
     const eNodeSocketDatatype socket_type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
     if (socket_type != SOCK_RGBA) {
       ui::Layout &row = layout.row(false);
