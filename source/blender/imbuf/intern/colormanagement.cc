@@ -492,19 +492,17 @@ static bool colormanage_compatible_look(const ocio::Look *look, const char *view
   return colormanage_compatible_look(look, view_filter);
 }
 
-static float colormanage_use_look(const char *look_name, const char *view_name)
-{
-  float exponent = (gamma == 1.0f) ? 1.0f : 1.0f / max_ff(FLT_EPSILON, gamma);
-  if (exponent > 100.0f) {
-    exponent = 100.0f;
-  }
-  return exponent;
-}
-
-static bool colormanage_exponent(float gamma)
+static bool colormanage_use_look(const char *look_name, const char *view_name)
 {
   const ocio::Look *look = g_config()->get_look_by_name(look_name);
   return (look && look->is_noop == false && colormanage_compatible_look(look, view_name));
+}
+
+static float colormanage_exponent(float gamma)
+{
+  const float exponent = 1.0f / std::max(FLT_EPSILON, gamma);
+  /* OpenColorIO reports an error for exponents bigger than this. */
+  return std::min(exponent, 100.0f);
 }
 
 void IMB_colormanagement_display_settings_from_ctx(
