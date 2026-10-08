@@ -1716,10 +1716,14 @@ VecBase<T, N> project_point_safe(const MatBase<T, N + 1, NumRow> &mat, const Vec
   return math::safe_divide(VecBase<T, N>(tmp), math::abs(tmp[N]));
 }
 
-/* TODO: Comment — do not extern-template transform_point/direction/project_point: an
- * out-of-line call prevents GCC from auto-vectorizing caller loops over points/normals
- * (verified: outlined body => scalar call loop; inline => 16-byte loop vectorization). */
-/* Keep project_point header-inline for the same reason (was extern template on main). */
+extern template float3 transform_point(const float3x3 &mat, const float3 &point);
+extern template float3 transform_point(const float4x4 &mat, const float3 &point);
+extern template float3 transform_direction(const float3x3 &mat, const float3 &direction);
+extern template float3 transform_direction(const float4x4 &mat, const float3 &direction);
+extern template float3 project_point(const float4x4 &mat, const float3 &point);
+extern template float2 project_point(const float3x3 &mat, const float2 &point);
+extern template float3 project_point_safe(const float4x4 &mat, const float3 &point);
+extern template float2 project_point_safe(const float3x3 &mat, const float2 &point);
 
 namespace projection {
 
