@@ -159,7 +159,7 @@ void BKE_sound_invalidate_scene_audio_animation_cache(Scene *scene);
  * reads it (see #BKE_sound_audio_animation_use), since they read the animation that is replaced.
  */
 bool BKE_sound_bake_animation(
-    Main *bmain, Scene *scene, Depsgraph *depsgraph, int frame_start, int frame_end);
+    Main *bmain, Scene *scene_orig, Depsgraph *depsgraph, int frame_start, int frame_end);
 
 /**
  * Prepare directly evaluable framed audio automation for playback of the #Scene. Dependency-driven
@@ -169,7 +169,9 @@ bool BKE_sound_bake_animation(
  * current values. Compatible Explicit caches remain usable. Caches that a render records into or
  * that readers of #BKE_sound_audio_animation_use hold are not prepared again.
  */
-void BKE_sound_ensure_playback_audio_animation(Main *bmain, Scene *scene, Depsgraph *depsgraph);
+void BKE_sound_ensure_playback_audio_animation(Main *bmain,
+                                               Scene *scene_orig,
+                                               Depsgraph *depsgraph);
 
 /**
  * Discard the audio animation caches of the evaluated #Scene and the Scenes used by its Scene

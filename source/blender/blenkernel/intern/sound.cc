@@ -717,7 +717,7 @@ static void sound_sync_scene_audio_current_frame(Depsgraph *depsgraph, Scene *sc
 }
 
 struct SoundAnimationBakeRequest {
-  Scene *scene;
+  Scene *scene_eval;
   /* Frames to add to the cache. */
   int frame_start;
   int frame_end;
@@ -837,13 +837,11 @@ static bool sound_scene_audio_animation_cache_can_extend(
  * the frames it misses. Otherwise the cache starts again at the frames, the values stored by a
  * clean Automatic cache remain valid and are kept until they are sampled again. */
 static void sound_scene_audio_animation_requests(
-    Depsgraph *depsgraph,
-    Scene *scene,
+    Scene *scene_eval,
     const Span<Bounds<int>> frames,
     const std::optional<uint64_t> &frame_change_handlers_hash,
     Vector<SoundAnimationBakeRequest> &r_requests)
 {
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
   if (!DEG_is_evaluated(scene_eval)) {
     return;
   }
@@ -855,7 +853,7 @@ static void sound_scene_audio_animation_requests(
     /* Readers of recorded audio still use the stored values of earlier frames. */
     const bool reset = !sound_scene_audio_animation_is_read(audio);
     for (const int64_t i : frames.index_range()) {
-      r_requests.append({scene, frames[i].min, frames[i].max, i > 0, reset && i == 0});
+      r_requests.append({scene_eval, frames[i].min, frames[i].max, i > 0, reset && i == 0});
     }
     return;
   }
@@ -863,7 +861,7 @@ static void sound_scene_audio_animation_requests(
     for (const Bounds<int> &missing :
          sound_frame_ranges_missing(audio.cached_animation_frames, range))
     {
-      r_requests.append({scene, missing.min, missing.max, true, false});
+      r_requests.append({scene_eval, missing.min, missing.max, true, false});
     }
   }
 }
@@ -873,23 +871,20 @@ static void sound_scene_audio_animation_requests(
  * during \a frame_start to \a frame_end of the Scene. The frames of a Scene are kept as separate
  * ranges, Scene strips can play distant parts of the same Scene.
  */
-static bool sound_collect_scene_audio_animation_ranges(Scene *scene,
-                                                       Depsgraph *depsgraph,
+static bool sound_collect_scene_audio_animation_ranges(Scene *scene_eval,
                                                        const int frame_start,
                                                        const int frame_end,
                                                        Set<const Scene *> &scene_path,
                                                        Map<Scene *, Vector<Bounds<int>>> &r_ranges)
 {
-  scene = sound_original_scene(scene);
-  if (!scene_path.add(scene)) {
+  if (!scene_path.add(scene_eval)) {
     return true;
   }
-  Vector<Bounds<int>> &ranges = r_ranges.lookup_or_add_default(scene);
+  Vector<Bounds<int>> &ranges = r_ranges.lookup_or_add_default(scene_eval);
   const Vector<Bounds<int>> missing = sound_frame_ranges_missing(ranges, {frame_start, frame_end});
   sound_frame_ranges_add(ranges, {frame_start, frame_end});
 
   bool success = true;
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
   if (DEG_is_evaluated(scene_eval) && scene_eval->ed != nullptr) {
     for (const Bounds<int> &frames : missing) {
       seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
@@ -920,7 +915,7 @@ static bool sound_collect_scene_audio_animation_ranges(Scene *scene,
             return false;
           }
           success = sound_collect_scene_audio_animation_ranges(
-              strip->scene, depsgraph, int(child_start), int(child_end), scene_path, r_ranges);
+              strip->scene, int(child_start), int(child_end), scene_path, r_ranges);
           if (!success) {
             return false;
           }
@@ -932,18 +927,16 @@ static bool sound_collect_scene_audio_animation_ranges(Scene *scene,
       }
     }
   }
-  scene_path.remove(scene);
+  scene_path.remove(scene_eval);
   return success;
 }
 
 /* Scenes used by Scene strips that don't play their sequencer, and not used by any Scene strip
  * that does. Their caches are discarded, so that they use their evaluated values again. */
-static void sound_collect_live_only_scenes(Scene *scene,
-                                           Depsgraph *depsgraph,
+static void sound_collect_live_only_scenes(Scene *scene_eval,
                                            Set<const Scene *> &sequencer_scenes,
                                            Set<Scene *> &r_live_only_scenes)
 {
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
   if (!DEG_is_evaluated(scene_eval) || scene_eval->ed == nullptr) {
     return;
   }
@@ -951,33 +944,32 @@ static void sound_collect_live_only_scenes(Scene *scene,
     if (strip->type != STRIP_TYPE_SCENE || strip->scene == nullptr) {
       return true;
     }
-    Scene *child = sound_original_scene(strip->scene);
     if (!sound_scene_strip_uses_sequencer(strip)) {
-      r_live_only_scenes.add(child);
+      r_live_only_scenes.add(strip->scene);
     }
-    else if (sequencer_scenes.add(child)) {
-      sound_collect_live_only_scenes(child, depsgraph, sequencer_scenes, r_live_only_scenes);
+    else if (sequencer_scenes.add(strip->scene)) {
+      sound_collect_live_only_scenes(strip->scene, sequencer_scenes, r_live_only_scenes);
     }
     return true;
   });
 }
 
-static Vector<Scene *> sound_live_only_scenes_with_cache(Depsgraph *depsgraph, Scene *scene)
+static Vector<Scene *> sound_live_only_scenes_with_cache(Scene *scene_eval)
 {
-  Set<const Scene *> sequencer_scenes = {scene};
+  Set<const Scene *> sequencer_scenes = {scene_eval};
   Set<Scene *> live_only_scenes;
-  sound_collect_live_only_scenes(scene, depsgraph, sequencer_scenes, live_only_scenes);
+  sound_collect_live_only_scenes(scene_eval, sequencer_scenes, live_only_scenes);
   Vector<Scene *> scenes;
-  for (Scene *live_only_scene : live_only_scenes) {
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, live_only_scene);
-    if (sequencer_scenes.contains(live_only_scene) || !DEG_is_evaluated(scene_eval)) {
+  for (Scene *live_only_scene_eval : live_only_scenes) {
+    if (sequencer_scenes.contains(live_only_scene_eval) || !DEG_is_evaluated(live_only_scene_eval))
+    {
       continue;
     }
-    const bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
+    const bke::SceneAudioRuntime &audio = live_only_scene_eval->runtime->audio;
     if (audio.animation_cache_type != bke::AudioAnimationCacheType::None ||
         sound_scene_audio_animation_cache_has_data(audio))
     {
-      scenes.append(scene_eval);
+      scenes.append(live_only_scene_eval);
     }
   }
   return scenes;
@@ -1025,9 +1017,8 @@ static bool sound_animation_is_playing(Main *bmain)
   return false;
 }
 
-static bool sound_animation_pause_playback(Depsgraph *depsgraph, Scene *scene)
+static bool sound_animation_pause_playback(Scene *scene_eval)
 {
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, sound_original_scene(scene));
   if (!DEG_is_evaluated(scene_eval) || !scene_eval->runtime->audio.playback_handle ||
       scene_eval->runtime->audio.playback_handle->getStatus() != aud::STATUS_PLAYING)
   {
@@ -1037,14 +1028,11 @@ static bool sound_animation_pause_playback(Depsgraph *depsgraph, Scene *scene)
   return true;
 }
 
-static void sound_animation_resume_playback(Depsgraph *depsgraph,
-                                            Scene *scene,
-                                            const bool was_playing)
+static void sound_animation_resume_playback(Scene *scene_eval, const bool was_playing)
 {
   if (!was_playing) {
     return;
   }
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, sound_original_scene(scene));
   if (DEG_is_evaluated(scene_eval)) {
     BKE_sound_play_scene(scene_eval);
   }
@@ -1281,7 +1269,7 @@ static bool sound_sample_automatic_scene_audio_animation(
     const bool hold_filled_frames)
 {
   SoundAnimationBakeRequest &request = prepared.request;
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, request.scene);
+  Scene *scene_eval = request.scene_eval;
   if (!DEG_is_evaluated(scene_eval)) {
     return false;
   }
@@ -1598,7 +1586,7 @@ static void sound_commit_automatic_scene_audio_animation(
     const SoundPreparedAnimation &prepared,
     const std::optional<uint64_t> &frame_change_handlers_hash)
 {
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, prepared.request.scene);
+  Scene *scene_eval = prepared.request.scene_eval;
   bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
   /* Scenes used by Scene strips are not evaluated at their own frames, so only the graph's Scene
    * has values for its current frame. Other Scenes were written while holding the sound lock. */
@@ -1627,28 +1615,25 @@ static void sound_commit_automatic_scene_audio_animation(
   }
 }
 
-static void sound_collect_explicit_bake_scenes(Scene *scene,
-                                               Depsgraph *depsgraph,
+static void sound_collect_explicit_bake_scenes(Scene *scene_eval,
                                                Set<const Scene *> &visited_scenes,
                                                Vector<Scene *> &r_scenes)
 {
-  scene = sound_original_scene(scene);
-  if (!visited_scenes.add(scene)) {
+  if (!visited_scenes.add(scene_eval)) {
     return;
   }
 
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
   if (!DEG_is_evaluated(scene_eval)) {
     return;
   }
-  r_scenes.append(scene);
+  r_scenes.append(scene_eval);
   if (scene_eval->ed == nullptr) {
     return;
   }
 
   seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
     if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
-      sound_collect_explicit_bake_scenes(strip->scene, depsgraph, visited_scenes, r_scenes);
+      sound_collect_explicit_bake_scenes(strip->scene, visited_scenes, r_scenes);
     }
     return true;
   });
@@ -1658,41 +1643,41 @@ static void sound_collect_explicit_bake_scenes(Scene *scene,
  * leave an unvisited child's stale animation active. Keep clean compatible Explicit caches. */
 static void sound_discard_incompatible_scene_audio_animation(
     Depsgraph *depsgraph,
-    Scene *scene,
+    Scene *scene_eval,
     const Map<Scene *, Vector<Bounds<int>>> &ranges,
     const std::optional<uint64_t> &frame_change_handlers_hash,
     const bool discard_scene = true)
 {
   Set<const Scene *> visited_scenes;
   Vector<Scene *> scenes;
-  sound_collect_explicit_bake_scenes(scene, depsgraph, visited_scenes, scenes);
-  const bool playback_was_playing = sound_animation_pause_playback(depsgraph, scene);
-  for (Scene *scene_to_discard : scenes) {
-    if (!discard_scene && scene_to_discard == sound_original_scene(scene)) {
+  sound_collect_explicit_bake_scenes(scene_eval, visited_scenes, scenes);
+  const bool playback_was_playing = sound_animation_pause_playback(scene_eval);
+  for (Scene *scene_eval_to_discard : scenes) {
+    if (!discard_scene && scene_eval_to_discard == scene_eval) {
       continue;
     }
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene_to_discard);
-    const bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
+    const bke::SceneAudioRuntime &audio = scene_eval_to_discard->runtime->audio;
     if (sound_scene_audio_animation_is_read(audio)) {
       /* Readers of recorded audio still use the stored values. */
       continue;
     }
-    const Vector<Bounds<int>> *frames = ranges.lookup_ptr(scene_to_discard);
+    const Vector<Bounds<int>> *frames = ranges.lookup_ptr(scene_eval_to_discard);
     if (audio.animation_cache_type != bke::AudioAnimationCacheType::Explicit ||
         !sound_scene_audio_animation_cache_is_compatible(
             audio,
             frame_change_handlers_hash,
             frames ? frames->as_span() : audio.cached_animation_frames.as_span()))
     {
-      sound_discard_scene_audio_animation_cache(depsgraph, scene_eval);
+      sound_discard_scene_audio_animation_cache(depsgraph, scene_eval_to_discard);
     }
   }
-  sound_animation_resume_playback(depsgraph, scene, playback_was_playing);
+  sound_animation_resume_playback(scene_eval, playback_was_playing);
 }
 
 /**
- * Prepare the Automatic caches of the Scenes used by Scene strips of \a scene to cover the frames
- * that the strips play during \a frames. Then prepare \a scene itself if \a sample_scene is set.
+ * Prepare the Automatic caches of the Scenes used by Scene strips of \a scene_eval to cover the
+ * frames that the strips play during \a frames. Then prepare \a scene_eval itself if
+ * \a sample_scene is set.
  * Its cache only grows when all nested Scenes cover the frames added to it, so that the frames of
  * a cache of the graph's Scene always include the animation of its nested Scenes.
  *
@@ -1701,7 +1686,7 @@ static void sound_discard_incompatible_scene_audio_animation(
  * #sound_animation_hold_filled_frames.
  */
 static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
-                                                Scene *scene,
+                                                Scene *scene_eval,
                                                 const Bounds<int> frames,
                                                 const bool sample_scene,
                                                 int64_t work)
@@ -1709,12 +1694,11 @@ static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
   const std::optional<uint64_t> frame_change_handlers_hash = sound_frame_change_handlers_hash();
   const bool limited = work != INT64_MAX;
 
-  scene = sound_original_scene(scene);
   Vector<SoundAnimationBakeRequest> scene_requests;
   Vector<Bounds<int>> nested_frames = {frames};
   if (sample_scene) {
     sound_scene_audio_animation_requests(
-        depsgraph, scene, {frames}, frame_change_handlers_hash, scene_requests);
+        scene_eval, {frames}, frame_change_handlers_hash, scene_requests);
     if (scene_requests.is_empty()) {
       return;
     }
@@ -1728,10 +1712,10 @@ static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
   Map<Scene *, Vector<Bounds<int>>> ranges;
   for (const Bounds<int> &nested : nested_frames) {
     if (!sound_collect_scene_audio_animation_ranges(
-            scene, depsgraph, nested.min, nested.max, scene_path, ranges))
+            scene_eval, nested.min, nested.max, scene_path, ranges))
     {
       sound_discard_incompatible_scene_audio_animation(
-          depsgraph, scene, ranges, frame_change_handlers_hash, sample_scene);
+          depsgraph, scene_eval, ranges, frame_change_handlers_hash, sample_scene);
       return;
     }
   }
@@ -1741,17 +1725,18 @@ static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
    * Sort to always spend the work on the same Scenes first, keeping the order of their frames. */
   Vector<SoundAnimationBakeRequest> requests;
   for (const auto item : ranges.items()) {
-    if (item.key != scene) {
+    if (item.key != scene_eval) {
       sound_scene_audio_animation_requests(
-          depsgraph, item.key, item.value, frame_change_handlers_hash, requests);
+          item.key, item.value, frame_change_handlers_hash, requests);
     }
   }
   std::stable_sort(requests.begin(),
                    requests.end(),
                    [](const SoundAnimationBakeRequest &a, const SoundAnimationBakeRequest &b) {
-                     const int order = strcmp(a.scene->id.name, b.scene->id.name);
-                     return order != 0 ? order < 0 :
-                                         a.scene->id.session_uid < b.scene->id.session_uid;
+                     const int order = strcmp(a.scene_eval->id.name, b.scene_eval->id.name);
+                     return order != 0 ?
+                                order < 0 :
+                                a.scene_eval->id.session_uid < b.scene_eval->id.session_uid;
                    });
 
   /* Frames that properties store once the samples of earlier requests are written. */
@@ -1765,7 +1750,7 @@ static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
             depsgraph, animation, frame_change_handlers_hash, stored_frames, work, limited))
     {
       sound_discard_incompatible_scene_audio_animation(
-          depsgraph, scene, ranges, frame_change_handlers_hash, sample_scene);
+          depsgraph, scene_eval, ranges, frame_change_handlers_hash, sample_scene);
       return;
     }
     nested_complete &= animation.request.frame_end == request.frame_end;
@@ -1785,7 +1770,7 @@ static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
             depsgraph, animation, frame_change_handlers_hash, stored_frames, work, limited))
     {
       sound_discard_incompatible_scene_audio_animation(
-          depsgraph, scene, ranges, frame_change_handlers_hash, sample_scene);
+          depsgraph, scene_eval, ranges, frame_change_handlers_hash, sample_scene);
       return;
     }
     prepared.append(std::move(animation));
@@ -1794,11 +1779,12 @@ static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
   /* Commit only after every Scene has been sampled, so a failed child cannot publish a
    * partially sampled animation. Frames are published at once under the sound lock. Resetting the
    * graph's Scene also resets Speakers and the listener, that happens while playback is paused. */
-  const Vector<Scene *> live_only_scenes = sound_live_only_scenes_with_cache(depsgraph, scene);
-  const bool reset_scene = !prepared.is_empty() && prepared.last().request.scene == scene &&
+  const Vector<Scene *> live_only_scenes = sound_live_only_scenes_with_cache(scene_eval);
+  const bool reset_scene = !prepared.is_empty() &&
+                           prepared.last().request.scene_eval == scene_eval &&
                            prepared.last().request.reset;
   const bool playback_was_playing = (reset_scene || !live_only_scenes.is_empty()) &&
-                                    sound_animation_pause_playback(depsgraph, scene);
+                                    sound_animation_pause_playback(scene_eval);
   for (Scene *live_only_scene : live_only_scenes) {
     sound_discard_live_only_scene_audio_animation_cache(live_only_scene);
   }
@@ -1807,9 +1793,8 @@ static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
     if (!animation.request.reset) {
       sound_write_automatic_scene_audio_animation(animation);
     }
-    else if (animation.request.scene != scene) {
-      sound_reset_scene_audio_animation_no_lock(
-          DEG_get_evaluated(depsgraph, animation.request.scene));
+    else if (animation.request.scene_eval != scene_eval) {
+      sound_reset_scene_audio_animation_no_lock(animation.request.scene_eval);
       sound_write_reset_scene_audio_animation(animation);
     }
   }
@@ -1817,7 +1802,7 @@ static void sound_prepare_scene_audio_animation(Depsgraph *depsgraph,
   for (const SoundPreparedAnimation &animation : prepared) {
     sound_commit_automatic_scene_audio_animation(depsgraph, animation, frame_change_handlers_hash);
   }
-  sound_animation_resume_playback(depsgraph, scene, playback_was_playing);
+  sound_animation_resume_playback(scene_eval, playback_was_playing);
 }
 
 /**
@@ -1940,7 +1925,7 @@ static aud::AnimateableProperty &sound_reference_property(Scene &scene_eval,
 /* Values of a property of a Scene used by Scene strips for one reference, recorded by an Explicit
  * bake. */
 struct SoundNestedBakeValues {
-  Scene *scene;
+  Scene *scene_orig;
   Vector<int> reference;
   int entry_id;
   aud::AnimateablePropertyType type;
@@ -1961,7 +1946,10 @@ static void sound_write_nested_scene_bake_values(
 {
   BKE_sound_lock();
   for (const SoundNestedBakeValues &item : nested_values.values()) {
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, item.scene);
+    Scene *scene_eval = DEG_get_evaluated(depsgraph, item.scene_orig);
+    if (!DEG_is_evaluated(scene_eval)) {
+      continue;
+    }
     bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
     if (audio.animation_cache_dirty ||
         audio.animation_cache_type == bke::AudioAnimationCacheType::None)
@@ -2752,22 +2740,23 @@ static void sound_recording_record_frame(const std::shared_ptr<bke::SoundRecordi
 
 #endif
 
-void BKE_sound_ensure_playback_audio_animation(Main *bmain, Scene *scene, Depsgraph *depsgraph)
+void BKE_sound_ensure_playback_audio_animation(Main *bmain,
+                                               Scene *scene_orig,
+                                               Depsgraph *depsgraph)
 {
 #ifndef WITH_AUDASPACE
-  UNUSED_VARS(bmain, scene, depsgraph);
+  UNUSED_VARS(bmain, scene_orig, depsgraph);
 #else
   const std::optional<uint64_t> frame_change_handlers_hash = sound_frame_change_handlers_hash();
 
-  scene = sound_original_scene(scene);
   BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
+  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene_orig);
   if (!DEG_is_evaluated(scene_eval)) {
     return;
   }
   bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
-  const int frame_start = scene->playback_start();
-  const int frame_end = scene->playback_end();
+  const int frame_start = scene_orig->playback_start();
+  const int frame_end = scene_orig->playback_end();
   if (sound_scene_audio_animation_cache_is_compatible(
           audio, frame_change_handlers_hash, {Bounds<int>(frame_start, frame_end)}) ||
       sound_scene_audio_animation_is_read(audio))
@@ -2779,7 +2768,7 @@ void BKE_sound_ensure_playback_audio_animation(Main *bmain, Scene *scene, Depsgr
     audio.animation_cache_dirty = true;
   }
 
-  const int frame = std::clamp(scene->r.cfra, frame_start, frame_end);
+  const int frame = std::clamp(scene_orig->r.cfra, frame_start, frame_end);
   const int frames_ahead = int(std::ceil(scene_eval->frames_per_second() *
                                          SOUND_ANIMATION_PLAYBACK_SECONDS)) +
                            SOUND_ANIMATION_FRAMES_AHEAD;
@@ -2794,7 +2783,7 @@ void BKE_sound_ensure_playback_audio_animation(Main *bmain, Scene *scene, Depsgr
   }
   sound_prepare_scene_audio_animation(
       depsgraph,
-      scene,
+      scene_eval,
       {frame, int(std::min(int64_t(frame_end), int64_t(frame) + 2 * frames_ahead))},
       true,
       SOUND_ANIMATION_PLAYBACK_WORK);
@@ -2896,11 +2885,8 @@ void BKE_sound_record_scene_audio_animation(Depsgraph *depsgraph)
 
   /* Scenes used by Scene strips are not evaluated at their own frames, prepare the frames that
    * are played during this frame. */
-  sound_prepare_scene_audio_animation(depsgraph,
-                                      sound_original_scene(scene_eval),
-                                      {scene_eval->r.cfra, scene_eval->r.cfra},
-                                      false,
-                                      INT64_MAX);
+  sound_prepare_scene_audio_animation(
+      depsgraph, scene_eval, {scene_eval->r.cfra, scene_eval->r.cfra}, false, INT64_MAX);
   const std::shared_ptr<bke::SoundRecording> recording = audio.recording.lock();
   sound_foreach_nested_scene_evaluated_value(
       depsgraph,
@@ -3030,33 +3016,33 @@ bool BKE_sound_recording_references_recorded(const bke::SoundRecording &recordin
 #endif
 }
 
-bool BKE_sound_bake_animation(
-    Main *bmain, Scene *scene, Depsgraph *depsgraph, const int frame_start, const int frame_end)
+bool BKE_sound_bake_animation(Main *bmain,
+                              Scene *scene_orig,
+                              Depsgraph *depsgraph,
+                              const int frame_start,
+                              const int frame_end)
 {
 #ifndef WITH_AUDASPACE
-  UNUSED_VARS(bmain, scene, depsgraph, frame_start, frame_end);
+  UNUSED_VARS(bmain, scene_orig, depsgraph, frame_start, frame_end);
   return true;
 #else
-  scene = sound_original_scene(scene);
   BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
+  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene_orig);
 
   /* Discard all reachable caches, including those of Scenes that are no longer played. */
   Set<const Scene *> visited_scenes;
   Vector<Scene *> scenes;
-  sound_collect_explicit_bake_scenes(scene, depsgraph, visited_scenes, scenes);
-  for (Scene *scene_to_bake : scenes) {
-    if (sound_scene_audio_animation_is_read(
-            DEG_get_evaluated(depsgraph, scene_to_bake)->runtime->audio))
-    {
+  sound_collect_explicit_bake_scenes(scene_eval, visited_scenes, scenes);
+  for (Scene *scene_eval_to_bake : scenes) {
+    if (sound_scene_audio_animation_is_read(scene_eval_to_bake->runtime->audio)) {
       /* Readers that don't lock the device read the animation that would be replaced. */
       return false;
     }
   }
-  const bool playback_was_playing = sound_animation_pause_playback(depsgraph, scene);
-  for (Scene *scene_to_bake : scenes) {
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene_to_bake);
-    sound_reset_scene_audio_animation(scene_eval);
-    bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
+  const bool playback_was_playing = sound_animation_pause_playback(scene_eval);
+  for (Scene *scene_eval_to_bake : scenes) {
+    sound_reset_scene_audio_animation(scene_eval_to_bake);
+    bke::SceneAudioRuntime &audio = scene_eval_to_bake->runtime->audio;
     sound_clear_scene_audio_animation_cache_state(audio);
   }
 
@@ -3064,11 +3050,11 @@ bool BKE_sound_bake_animation(
    * that depend on the evaluation are recorded for the frames that the strips play. */
   Map<std::pair<std::shared_ptr<aud::AnimateableProperty>, Vector<int>>, SoundNestedBakeValues>
       nested_values;
-  const int old_frame = scene->r.cfra;
+  const int old_frame = scene_orig->r.cfra;
   for (int frame = frame_start > 0 ? frame_start - 1 : 0; frame <= frame_end + 1; frame++) {
-    scene->r.cfra = frame;
+    scene_orig->r.cfra = frame;
     /* Make sure the camera is updated, since it will affect stereo/surround output. */
-    BKE_scene_camera_switch_update(scene);
+    BKE_scene_camera_switch_update(scene_orig);
     BKE_scene_graph_update_for_newframe(depsgraph);
     sound_foreach_nested_scene_evaluated_value(
         depsgraph,
@@ -3085,25 +3071,26 @@ bool BKE_sound_bake_animation(
                                              value.value};
               });
           for (int nested_frame = nested_frames.min; nested_frame <= nested_frames.max;
-               nested_frame++) {
+               nested_frame++)
+          {
             values.values.add_overwrite(nested_frame, value.value);
           }
         });
   }
 
-  scene->r.cfra = old_frame;
+  scene_orig->r.cfra = old_frame;
   BKE_scene_graph_update_for_newframe(depsgraph);
 
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
+  scene_eval = DEG_get_evaluated(depsgraph, scene_orig);
   if (!DEG_is_evaluated(scene_eval)) {
-    sound_animation_resume_playback(depsgraph, scene, playback_was_playing);
+    sound_animation_resume_playback(scene_eval, playback_was_playing);
     return true;
   }
   /* The full evaluation only advances this graph's Scene. Scenes used by Scene strips get the
    * directly evaluable animation of the frames that the strips play, as for playback and
    * rendering. */
   sound_prepare_scene_audio_animation(
-      depsgraph, scene, {frame_start, frame_end}, false, INT64_MAX);
+      depsgraph, scene_eval, {frame_start, frame_end}, false, INT64_MAX);
   sound_write_nested_scene_bake_values(depsgraph, nested_values);
 
   const std::optional<uint64_t> frame_change_handlers_hash = sound_frame_change_handlers_hash();
@@ -3112,7 +3099,7 @@ bool BKE_sound_bake_animation(
                                           false,
                                           frame_change_handlers_hash,
                                           bke::AudioAnimationCacheType::Explicit);
-  sound_animation_resume_playback(depsgraph, scene, playback_was_playing);
+  sound_animation_resume_playback(scene_eval, playback_was_playing);
   return true;
 #endif
 }
