@@ -6,6 +6,7 @@
  * \ingroup edinterface
  */
 
+#include "BKE_collection.hh"
 #include "BKE_context.hh"
 #include "BKE_file_handler.hh"
 #include "BKE_idprop.hh"
@@ -400,8 +401,14 @@ void template_collection_importer(Layout *layout, bContext *C)
     return;
   }
 
+  /* If the collection has already been imported, change to the Reload operator. */
+  const char *op_name = "COLLECTION_OT_importer_import";
+  if (data->runtime->archive_library) {
+    op_name = "COLLECTION_OT_importer_reload";
+  }
+
   Layout &row = layout->row(true);
-  row.op("COLLECTION_OT_importer_import", IFACE_("Import to Collection"), ICON_IMPORT);
+  row.op(op_name, IFACE_("Import to Collection"), ICON_IMPORT);
   row.menu("COLLECTION_MT_importer_control", "", ICON_DOWNARROW_HLT);
 
   layout->separator();
