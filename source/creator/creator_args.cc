@@ -1000,13 +1000,14 @@ static const char arg_handle_python_set_doc_disable[] =
 
 static int arg_handle_python_set(int /*argc*/, const char ** /*argv*/, void *data)
 {
-  if (bool(data)) {
+  const bool use_autoexec = bool(data);
+  if (use_autoexec) {
     G.f |= G_FLAG_SCRIPT_AUTOEXEC;
   }
   else {
     G.f &= ~G_FLAG_SCRIPT_AUTOEXEC;
   }
-  G.f |= G_FLAG_SCRIPT_OVERRIDE_PREF;
+  G.autoexec_override = use_autoexec;
   return 0;
 }
 
@@ -1133,7 +1134,8 @@ static int arg_handle_command_set(int argc, const char **argv, void *data)
 {
   if (!main_arg_deferred_is_set()) {
     if (argc < 2) {
-      fprintf(stderr, "%s requires at least one argument\n", argv[0]);
+      fprintf(
+          stderr, "%s requires at least one argument, see 'help' for all commands.\n", argv[0]);
       exit(EXIT_FAILURE);
       BLI_assert_unreachable();
     }

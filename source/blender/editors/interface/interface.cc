@@ -75,6 +75,7 @@
 #include "CLG_log.h"
 
 #include "buttons/interface_label.hh"
+#include "buttons/interface_label_markdown.hh"
 #include "interface_intern.hh"
 
 namespace blender::ui {
@@ -577,6 +578,14 @@ static void block_bounds_calc_popup(
 {
   const int oldbounds = block->bounds;
 
+  /* Place the default button under the cursor. */
+  if (bounds_calc == BLOCK_BOUNDS_POPUP_MOUSE) {
+    if (const Button *but = block_active_default_button_find(block)) {
+      block->bounds_offset[0] = -(but->rect.xmin + 0.8f * BLI_rctf_size_x(&but->rect));
+      block->bounds_offset[1] = -BLI_rctf_cent_y(&but->rect);
+    }
+  }
+
   /* compute mouse position with user defined offset */
   block_bounds_calc(block);
 
@@ -872,7 +881,8 @@ static bool but_equals_old(const Button *but, const Button *oldbut)
   }
 
   if (but->type == ButtonType::Label) {
-    return button_label_is_multiline(but) == button_label_is_multiline(oldbut);
+    return static_cast<const ButtonLabel *>(but)->label_type ==
+           static_cast<const ButtonLabel *>(oldbut)->label_type;
   }
 
   return true;
@@ -1004,6 +1014,8 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
   but_extra_icons_update_from_old_but(but, oldbut);
   std::swap(but->extra_op_icons, oldbut->extra_op_icons);
 
+  std::swap(but->icon_overlay_text, oldbut->icon_overlay_text);
+
   if (oldbut->type == ButtonType::SearchMenu) {
     ButtonSearch *search_oldbut = static_cast<ButtonSearch *>(oldbut),
                  *search_but = static_cast<ButtonSearch *>(but);
@@ -1014,6 +1026,7 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
     auto *label_oldbut = static_cast<ButtonLabel *>(oldbut);
     auto *label_but = static_cast<ButtonLabel *>(but);
     std::swap(label_oldbut->wrap_cache, label_but->wrap_cache);
+    std::swap(label_oldbut->markdown_cache, label_but->markdown_cache);
     std::swap(label_oldbut->max_lines, label_but->max_lines);
   }
 
@@ -5879,12 +5892,6 @@ const char *button_placeholder_get(Button *but)
   }
 
   return placeholder;
-}
-
-void button_clear_selection(Button *but)
-{
-  but->selsta = 0;
-  but->selend = 0;
 }
 
 void button_type_set_menu_from_pulldown(Button *but)

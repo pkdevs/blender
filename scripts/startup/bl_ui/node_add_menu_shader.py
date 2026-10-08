@@ -210,6 +210,9 @@ class NODE_MT_shader_node_output_base(node_add_menu.NodeMenu):
             "ShaderNodeOutputWorld",
             poll=world_shader_nodes_poll(context),
         )
+        layout.separator()
+        self.node_operator(layout, "NodeEnableOutput")
+        self.node_operator_with_searchable_enum(context, layout, "GeometryNodeWarning", "warning_type")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -330,28 +333,25 @@ class NODE_MT_shader_node_shader_base(node_add_menu.NodeMenu):
             poll=object_material_shader_nodes_poll(context),
         )
 
-        layout.separator()
+        if not object_light_shader_nodes_poll(context):
+            layout.separator()
 
-        self.node_operator(
-            layout,
-            "ShaderNodeVolumePrincipled",
-            poll=not object_light_shader_nodes_poll(context),
-        )
-        self.node_operator(
-            layout,
-            "ShaderNodeVolumeAbsorption",
-            poll=not object_light_shader_nodes_poll(context),
-        )
-        self.node_operator(
-            layout,
-            "ShaderNodeVolumeScatter",
-            poll=not object_light_shader_nodes_poll(context),
-        )
-        self.node_operator(
-            layout,
-            "ShaderNodeVolumeCoefficients",
-            poll=not object_light_shader_nodes_poll(context),
-        )
+            self.node_operator(
+                layout,
+                "ShaderNodeVolumePrincipled",
+            )
+            self.node_operator(
+                layout,
+                "ShaderNodeVolumeAbsorption",
+            )
+            self.node_operator(
+                layout,
+                "ShaderNodeVolumeCoefficients",
+            )
+            self.node_operator(
+                layout,
+                "ShaderNodeVolumeScatter",
+            )
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -448,9 +448,16 @@ class NODE_MT_shader_node_math_base(node_add_menu.NodeMenu):
     def draw(self, context):
         layout = self.layout
 
+        self.node_operator_with_searchable_enum(context, layout, "FunctionNodeBooleanMath", "operation")
         self.node_operator(layout, "ShaderNodeClamp")
         self.node_operator(layout, "ShaderNodeFloatCurve")
         self.node_operator(layout, "ShaderNodeMapRange")
+        self.node_operator_with_searchable_enum(
+            context,
+            layout,
+            "FunctionNodeIntegerMath",
+            "operation",
+            defaults_callback=node_add_menu.set_int_math_node_default_props)
         self.node_operator_with_searchable_enum(
             context,
             layout,

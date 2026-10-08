@@ -5645,7 +5645,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
 
             /* Color texture (alpha used as mask). */
             if (ps->is_texbrush) {
-              const MTex *mtex = BKE_brush_color_texture_get(brush, OB_MODE_TEXTURE_PAINT);
+              const MTex *mtex = BKE_brush_color_texture_get(brush, PaintMode::Texture3D);
               float3 samplecos;
               float4 texrgba;
 
@@ -6223,7 +6223,7 @@ void *paint_proj_new_stroke(bContext *C,
   ps_handle->brush = BKE_paint_brush(&settings->imapaint.paint);
 
   if (BKE_brush_color_jitter_get_settings(&settings->imapaint.paint, ps_handle->brush)) {
-    ps_handle->initial_hsv_jitter = seed_hsv_jitter();
+    ps_handle->initial_hsv_jitter = BKE_paint_seed_hsv_jitter();
   }
 
   if (mode == BrushStrokeMode::Invert) {

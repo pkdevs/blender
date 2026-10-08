@@ -261,7 +261,7 @@ void update_cache_invariants(VPaint &vp, SculptSession &ss, wmOperator *op, cons
   cache->accum = true;
 
   if (BKE_brush_color_jitter_get_settings(&vp.paint, stroke->brush)) {
-    cache->initial_hsv_jitter = seed_hsv_jitter();
+    cache->initial_hsv_jitter = BKE_paint_seed_hsv_jitter();
   }
 }
 
@@ -541,7 +541,7 @@ static void paint_and_tex_color_alpha_intern(const VPaint &vp,
                                              float4 &r_rgba)
 {
   const Brush *brush = BKE_paint_brush_for_read(&vp.paint);
-  const MTex *mtex = BKE_brush_mask_texture_get(brush, OB_MODE_SCULPT);
+  const MTex *mtex = BKE_brush_mask_texture_get(brush, PaintMode::Vertex);
   BLI_assert(mtex->tex != nullptr);
   if (mtex->brush_map_mode == MTEX_MAP_MODE_3D) {
     BKE_brush_sample_tex_3d(&vp.paint, brush, mtex, co, r_rgba, 0, nullptr);
@@ -1891,7 +1891,7 @@ static void fill_bm_face_or_corner_attribute(BMesh &bm,
   BMFace *f;
   BMIter iter;
   BM_ITER_MESH (f, &iter, &bm, BM_FACES_OF_MESH) {
-    if (only_visible && paint_is_bmesh_face_hidden(f)) {
+    if (only_visible && BKE_paint_is_bmesh_face_hidden(f)) {
       continue;
     }
     BMLoop *l = f->l_first;
@@ -1965,9 +1965,8 @@ static void fill_mesh_color(Mesh &mesh,
                             const bool affect_alpha,
                             const bool only_visible = false)
 {
-  if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-    BMesh *bm = em->bm;
-    const BMDataLayerLookup attr = BM_data_layer_lookup(*mesh.runtime->edit_mesh->bm, name);
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(&mesh)) {
+    const BMDataLayerLookup attr = BM_data_layer_lookup(*bm, name);
     if (attr.type == bke::AttrType::ColorFloat) {
       fill_bm_face_or_corner_attribute<ColorPaint4f>(
           *bm, color, attr.domain, attr.offset, use_vert_sel, only_visible);

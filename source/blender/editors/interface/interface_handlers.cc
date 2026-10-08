@@ -437,6 +437,7 @@ struct HandleButtonData {
   std::string text_edit_unit_hint;
 
   wmTimer *text_select_auto_scroll = nullptr;
+  double text_select_auto_scroll_last_time = std::numeric_limits<double>::lowest();
 
   double value = 0.0f;
   double origvalue = 0.0f;
@@ -556,6 +557,8 @@ struct AfterFunc {
   BlockInteraction_Handle *custom_interaction_handle;
 
   std::optional<bContextStore> context;
+  /** See #PopupBlockHandle::ctx_region_popup. */
+  ARegion *region_popup;
 
   char undostr[BKE_UNDO_STR_MAX];
   std::string drawstr;
@@ -905,6 +908,9 @@ static void handle_afterfunc_add_operator_ex(wmOperatorType *ot,
   if (context_but && context_but->context) {
     after->context = *context_but->context;
   }
+  if (context_but && context_but->block->handle) {
+    after->region_popup = context_but->block->handle->ctx_region_popup;
+  }
 
   if (context_but) {
     after->drawstr = button_drawstr_without_sep_char(context_but);
@@ -1029,6 +1035,9 @@ static void apply_but_func(bContext *C, Button *but)
   if (but->context) {
     after->context = *but->context;
   }
+  if (but->block->handle) {
+    after->region_popup = but->block->handle->ctx_region_popup;
+  }
 
   after->drawstr = button_drawstr_without_sep_char(but);
 }
@@ -1149,6 +1158,20 @@ static void apply_but_funcs_after(bContext *C)
       CTX_store_set(C, &after.context.value());
     }
 
+    /* Set the popup this button's popup was opened from (a context menu in a popover)
+     * so operators can access the popup's active button, see: #151170.
+     * That popup may have been closed along with the menu, so check it still exists. */
+    ARegion *region_popup_prev = nullptr;
+    if (after.region_popup) {
+      if (BLI_findindex(&CTX_wm_screen(C)->regionbase, after.region_popup) != -1) {
+        region_popup_prev = CTX_wm_region_popup(C);
+        CTX_wm_region_popup_set(C, after.region_popup);
+      }
+      else {
+        after.region_popup = nullptr;
+      }
+    }
+
     if (after.popup_op) {
       popup_check(C, after.popup_op);
     }
@@ -1179,6 +1202,17 @@ static void apply_but_funcs_after(bContext *C)
 
     if (after.context) {
       CTX_store_set(C, nullptr);
+    }
+
+    if (after.region_popup) {
+      /* The operator may have freed the popup, for example by loading a file. */
+      bScreen *screen = CTX_wm_screen(C);
+      if (region_popup_prev &&
+          !(screen && BLI_findindex(&screen->regionbase, region_popup_prev) != -1))
+      {
+        region_popup_prev = nullptr;
+      }
+      CTX_wm_region_popup_set(C, region_popup_prev);
     }
 
     if (after.rename_full_func) {
@@ -1328,7 +1362,7 @@ static void apply_but_TEX(bContext *C, Button *but, HandleButtonData *data)
 
   ButtonText *text_button = but->type == ButtonType::Text ? static_cast<ButtonText *>(but) :
                                                             nullptr;
-  /* only if there are afterfuncs, otherwise 'renam_orig' isn't freed */
+  /* only if there are afterfuncs, otherwise 'rename_orig' isn't freed */
   if (text_button && afterfunc_check(but->block, but)) {
     /* give butfunc a copy of the original text too.
      * feature used for bone renaming, channels, etc.
@@ -4289,23 +4323,6 @@ static int do_but_textedit(
         retval = WM_UI_HANDLER_BREAK;
         break;
       }
-      case MOUSEPAN: {
-        if (textbox) {
-          int type = event->type;
-          int value = event->val;
-
-          pan_to_scroll(event, &type, &value);
-          int scroll_dir = 1;
-          if (event->flag & WM_EVENT_SCROLL_INVERT) {
-            scroll_dir = -1;
-          }
-          if (type != MOUSEPAN) {
-            textbox_add_scroll(textbox, (type == WHEELUPMOUSE ? -1 : 1) * scroll_dir);
-          }
-          retval = WM_UI_HANDLER_BREAK;
-        }
-        break;
-      }
       case WHEELDOWNMOUSE:
       case EVT_DOWNARROWKEY:
         if (data->searchbox) {
@@ -4406,6 +4423,13 @@ static int do_but_textedit(
           changed = autocomplete != AUTOCOMPLETE_NO_MATCH;
 
           if (autocomplete == AUTOCOMPLETE_FULL_MATCH) {
+            if (but->flag & BUT_TEXTEDIT_AUTOCOMPLETE_KEEP_ACTIVE) {
+              /* Exit to apply, then re-activate (as with Tab cycling between text fields),
+               * so this only runs when Tab is pressed, see: #150689. */
+              but->flag |= BUT_ACTIVATE_ON_INIT_NO_SELECT;
+              data->postbut = but;
+              data->posttype = BUTTON_ACTIVATE_TEXT_EDITING;
+            }
             button_activate_state(C, but, BUTTON_STATE_EXIT);
           }
         }
@@ -4564,6 +4588,14 @@ static int do_but_textedit_select(
       if (!textbox || event->customdata != data->text_select_auto_scroll) {
         break;
       }
+
+      const wmTimer *timer = static_cast<const wmTimer *>(event->customdata);
+      if (timer->time_duration == data->text_select_auto_scroll_last_time) {
+        retval = WM_UI_HANDLER_BREAK;
+        break;
+      }
+      data->text_select_auto_scroll_last_time = timer->time_duration;
+
       rctf rect;
       block_to_window_rctf(data->region, block, &rect, &but->rect);
 
@@ -5129,8 +5161,10 @@ static int do_but_BUT(bContext *C, Button *but, HandleButtonData *data, const wm
     }
   }
 #endif
-  if (button_draw_as_link(but) && !data->changed_cursor) {
-    WM_cursor_set(data->window, WM_CURSOR_HAND_POINT);
+  if (button_draw_as_link(but)) {
+    if (data->window->cursor != WM_CURSOR_HAND_POINT) {
+      WM_cursor_modal_set(data->window, WM_CURSOR_HAND_POINT);
+    }
     data->changed_cursor = true;
   }
   if (button_opens_link(but) && !data->changed_wokspace_status) {
@@ -5444,6 +5478,21 @@ static int do_but_TEXTBOX(bContext *C,
   switch (data->state) {
     case BUTTON_STATE_TEXT_EDITING:
     case BUTTON_STATE_HIGHLIGHT: {
+      if (event->type == MOUSEPAN && textbox->last_total_lines > textbox->visible_lines()) {
+        int type = event->type;
+        int value = event->val;
+
+        pan_to_scroll(event, &type, &value);
+        int scroll_dir = 1;
+        if (event->flag & WM_EVENT_SCROLL_INVERT) {
+          scroll_dir = -1;
+        }
+        if (type != MOUSEPAN) {
+          textbox_add_scroll(textbox, (type == WHEELUPMOUSE ? -1 : 1) * scroll_dir);
+          ED_region_tag_redraw(data->region);
+        }
+        return WM_UI_HANDLER_BREAK;
+      }
       if (ELEM(event->type, WHEELUPMOUSE, WHEELDOWNMOUSE)) {
         if (textbox->last_total_lines > textbox->visible_lines()) {
           textbox_add_scroll(textbox, (event->type == WHEELUPMOUSE ? -1 : 1));
@@ -9343,7 +9392,7 @@ static ARegion *but_tooltip_init(
   if (*pass == 1) {
     is_quick_tip = true;
     (*pass)--;
-    (*r_pass_delay) = UI_TOOLTIP_DELAY - UI_TOOLTIP_DELAY_QUICK;
+    (*r_pass_delay) = UI_TOOLTIP_DELAY + UI_TOOLTIP_DELAY_QUICK;
   }
 
   Button *but = region_active_but_get(region);
@@ -9842,7 +9891,7 @@ static void button_activate_exit(
 #endif
 
   if (data->changed_cursor) {
-    if (but->type == ButtonType::TextBox) {
+    if (but->type == ButtonType::TextBox || button_draw_as_link(but)) {
       WM_cursor_modal_restore(win);
     }
     WM_cursor_set(win, WM_CURSOR_DEFAULT);
@@ -10108,7 +10157,8 @@ ARegion *region_searchbox_region_get(const ARegion *button_region)
 void context_update_anim_flag(const bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
-  ARegion *region = CTX_wm_region(C);
+  ARegion *region_popup = CTX_wm_region_popup(C);
+  ARegion *region = region_popup ? region_popup : CTX_wm_region(C);
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
       depsgraph, (scene) ? BKE_scene_frame_get(scene) : 0.0f);
@@ -12136,25 +12186,34 @@ static int handle_menu_event(bContext *C,
         menu->menuretval = RETURN_CANCEL;
       }
       else if (ELEM(event->type, EVT_RETKEY, EVT_PADENTER) && event->val == KM_PRESS) {
+        Button *but_active = region_find_active_but(region);
         Button *but_default = region_find_first_but_test_flag(
             region, BUT_ACTIVE_DEFAULT, UI_HIDDEN);
-        if ((but_default != nullptr) && (but_default->active == nullptr)) {
-          if (but_default->type == ButtonType::But) {
-            button_execute(C, region, but_default);
-            retval = WM_UI_HANDLER_BREAK;
-          }
-          else {
-            handle_button_activate_by_type(C, region, but_default);
-          }
+        if (but_active && menu->keynav_state.is_keynav) {
+          /* Key-navigation activates the button navigated onto, not the default. */
         }
-        else {
-          Button *but_active = region_find_active_but(region);
+        else if ((but_default != nullptr) &&
+                 ((but_default->type == ButtonType::But) &&
+                  ((but_default->active == nullptr) ||
+                   (but_default->active->state == BUTTON_STATE_HIGHLIGHT))))
+        {
+          /* Regarding the #BUTTON_STATE_HIGHLIGHT check above.
+           * It's important to run immediately in this case. Letting the button flash first
+           * (see #BUTTON_STATE_WAIT_FLASH) delays running it until a timer fires,
+           * so events after "Return" reach the popup while it's still open and are lost.
+           * This can happen while typing quickly or a slow redraw.
+           * It also happens during tests that use simulated events. */
 
-          /* enter will always close this block, we let the event
-           * get handled by the button if it is activated, otherwise we cancel */
-          if (but_active == nullptr) {
-            menu->menuretval = RETURN_CANCEL | RETURN_POPUP_OK;
-          }
+          button_execute(C, region, but_default);
+          retval = WM_UI_HANDLER_BREAK;
+        }
+        else if ((but_default != nullptr) && (but_default->active == nullptr)) {
+          handle_button_activate_by_type(C, region, but_default);
+        }
+        /* enter will always close this block, we let the event
+         * get handled by the button if it is activated, otherwise we cancel */
+        else if (but_active == nullptr) {
+          menu->menuretval = RETURN_CANCEL | RETURN_POPUP_OK;
         }
       }
 #ifdef USE_DRAG_POPUP
@@ -13423,7 +13482,7 @@ static Button *block_find_rna_text_button(Block &block,
                                           const char *rna_prop_id)
 {
   for (Button &but : block.buttons()) {
-    if (but.type == ButtonType::Text) {
+    if (ELEM(but.type, ButtonType::Text, ButtonType::TextBox)) {
       if (but.rnaprop && but.rnapoin.data == rna_poin_data) {
         if (STREQ(RNA_property_identifier(but.rnaprop), rna_prop_id)) {
           return &but;
@@ -13762,13 +13821,23 @@ std::optional<int2> try_activate_rna_button(bContext *C,
   ED_screen_set_active_region(C, CTX_wm_window(C), xy);
   ScrArea *current_screen = CTX_wm_area(C);
   ARegion *current_region = CTX_wm_region(C);
+  ARegion *current_popup_region = CTX_wm_region_popup(C);
+  const rctf button_rect = button->rect;
+
+  BLI_SCOPED_DEFER([&]() {
+    CTX_wm_area_set(C, current_screen);
+    CTX_wm_region_set(C, current_region);
+    CTX_wm_region_popup_set(C, current_popup_region);
+    /* Restore button position. */
+    button->rect = button_rect;
+  });
 
   CTX_wm_area_set(C, area);
   CTX_wm_region_set(C, region);
+  CTX_wm_region_popup_set(C, nullptr);
   /* Init button active data with state as #BUTTON_STATE_HIGHLIGHT */
   handle_button_activate(C, region, button, BUTTON_ACTIVATE);
 
-  const rctf button_rect = button->rect;
   /* Temporally override button position so its already in view when putting mouse over. */
   BLI_rctf_translate(
       &button->rect, region->v2d.cur.xmin - old_view_xy.x, old_view_xy.y - region->v2d.cur.ymin);
@@ -13819,11 +13888,6 @@ std::optional<int2> try_activate_rna_button(bContext *C,
   {
     button_activate_state(C, button, BUTTON_STATE_WAIT_KEY_EVENT);
   }
-
-  CTX_wm_area_set(C, current_screen);
-  CTX_wm_region_set(C, current_region);
-  /* Restore button position. */
-  button->rect = button_rect;
 
   return int2{int(BLI_rctf_cent_x(&button_view_rect)), int(BLI_rctf_cent_y(&button_view_rect))};
 }

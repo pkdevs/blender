@@ -18,7 +18,6 @@ set(INC
   # For `*_info.hh` includes.
   ../compositor/shaders/infos
   ../draw/engines/eevee
-  ../draw/engines/eevee/shaders/infos
   ../draw/engines/gpencil
   ../draw/engines/gpencil/shaders/infos
   ../draw/engines/image/shaders/infos
@@ -540,16 +539,16 @@ set(GLSL_SRC
 
   shaders/gpu_shader_area_borders.bsl.hh
 
-  shaders/gpu_shader_widget_base.bsl.hh
-  shaders/gpu_shader_widget_shadow.bsl.hh
+  shaders/gpu_shader_icon.bsl.hh
   shaders/gpu_shader_node_socket.bsl.hh
   shaders/gpu_shader_nodelink.bsl.hh
-  shaders/gpu_shader_icon.bsl.hh
   shaders/gpu_shader_polyline.bsl.hh
   shaders/gpu_shader_update_mipmaps.bsl.hh
+  shaders/gpu_shader_widget_base.bsl.hh
+  shaders/gpu_shader_widget_shadow.bsl.hh
 
-  shaders/gpu_shader_text.bsl.hh
   shaders/gpu_shader_keyframe_shape.bsl.hh
+  shaders/gpu_shader_text.bsl.hh
 
   shaders/gpu_shader_sequencer_scope.bsl.hh
   shaders/gpu_shader_sequencer_widget.bsl.hh
@@ -557,17 +556,19 @@ set(GLSL_SRC
 
   shaders/gpu_shader_codegen_lib.glsl
 
+  shaders/python/gpu_shader_python_base.glsl
   shaders/python/gpu_shader_python_colorspace_lib.glsl
   shaders/python/gpu_shader_python_comp.glsl
   shaders/python/gpu_shader_python_frag.glsl
   shaders/python/gpu_shader_python_typedef_lib.glsl
   shaders/python/gpu_shader_python_vert.glsl
 
+  shaders/gpu_shader_colorspace.bsl.hh
   shaders/gpu_shader_image.bsl.hh
   shaders/gpu_shader_simple.bsl.hh
-  shaders/gpu_shader_colorspace.bsl.hh
 
   shaders/common/gpu_shader_attribute_load_lib.glsl
+  shaders/common/gpu_shader_attribute_load.bsl.hh
   shaders/common/gpu_shader_bicubic_sampler.bsl.hh
   shaders/common/gpu_shader_debug_gradients.bsl.hh
   shaders/common/gpu_shader_fullscreen_vert.glsl
@@ -581,27 +582,28 @@ set(GLSL_SRC
   shaders/common/gpu_shader_math_constants.bsl.hh
   shaders/common/gpu_shader_math_euler.bsl.hh
   shaders/common/gpu_shader_math_fast.bsl.hh
+  shaders/common/gpu_shader_math_matrix.bsl.hh
   shaders/common/gpu_shader_math_matrix_adjoint.bsl.hh
   shaders/common/gpu_shader_math_matrix_compare.bsl.hh
   shaders/common/gpu_shader_math_matrix_construct.bsl.hh
   shaders/common/gpu_shader_math_matrix_conversion.bsl.hh
   shaders/common/gpu_shader_math_matrix_interpolate.bsl.hh
-  shaders/common/gpu_shader_math_matrix.bsl.hh
   shaders/common/gpu_shader_math_matrix_normalize.bsl.hh
   shaders/common/gpu_shader_math_matrix_projection.bsl.hh
   shaders/common/gpu_shader_math_matrix_transform.bsl.hh
   shaders/common/gpu_shader_math_quaternion.bsl.hh
-  shaders/common/gpu_shader_math_rotation_conversion.bsl.hh
   shaders/common/gpu_shader_math_rotation.bsl.hh
+  shaders/common/gpu_shader_math_rotation_conversion.bsl.hh
   shaders/common/gpu_shader_math_safe.bsl.hh
-  shaders/common/gpu_shader_math_vector_compare.bsl.hh
+  shaders/common/gpu_shader_math_spherical_harmonics.bsl.hh
   shaders/common/gpu_shader_math_vector.bsl.hh
+  shaders/common/gpu_shader_math_vector_compare.bsl.hh
   shaders/common/gpu_shader_math_vector_reduce.bsl.hh
   shaders/common/gpu_shader_math_vector_safe.bsl.hh
   shaders/common/gpu_shader_offset_indices_lib.glsl
   shaders/common/gpu_shader_print_lib.glsl
-  shaders/common/gpu_shader_ray_utils.bsl.hh
   shaders/common/gpu_shader_ray.bsl.hh
+  shaders/common/gpu_shader_ray_utils.bsl.hh
   shaders/common/gpu_shader_shared_exponent.bsl.hh
   shaders/common/gpu_shader_smaa_lib.glsl
   shaders/common/gpu_shader_test_lib.bsl.hh
@@ -639,7 +641,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_compare.bsl.hh
   shaders/material/gpu_shader_material_diffuse.bsl.hh
   shaders/material/gpu_shader_material_displacement.bsl.hh
-  shaders/material/gpu_shader_material_eevee_specular.glsl
+  shaders/material/gpu_shader_material_eevee_specular.bsl.hh
   shaders/material/gpu_shader_material_emission.bsl.hh
   shaders/material/gpu_shader_material_euler_to_rotation.bsl.hh
   shaders/material/gpu_shader_material_float_to_int.bsl.hh
@@ -650,7 +652,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_geometry.bsl.hh
   shaders/material/gpu_shader_material_get_vector_component.bsl.hh
   shaders/material/gpu_shader_material_glass.bsl.hh
-  shaders/material/gpu_shader_material_glossy.glsl
+  shaders/material/gpu_shader_material_glossy.bsl.hh
   shaders/material/gpu_shader_material_hair.bsl.hh
   shaders/material/gpu_shader_material_hair_info.bsl.hh
   shaders/material/gpu_shader_material_hash_value.bsl.hh
@@ -747,6 +749,7 @@ set(GLSL_SRC
 
   shaders/compat/gpu_shader_compat_glsl.glsl
   shaders/compat/gpu_shader_glsl_extension.glsl
+  shaders/compat/gpu_shader_glsl_ray_query.glsl
 
   GPU_shader_shared_utils.hh
 )
@@ -840,8 +843,8 @@ set(GLSL_INC
   shaders/common
   shaders/compat
   shaders/infos
-  shaders/nodes
   shaders/material
+  shaders/nodes
   shaders/python
 
   vulkan/shaders
