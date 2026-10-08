@@ -324,12 +324,12 @@ static void node_geo_exec(GeoNodeExecParams params)
   bke::SocketValueVariant triangle_index_copy = triangle_index;
   switch (mapping) {
     case GEO_NODE_RAYCAST_INTERPOLATED: {
-      bke::SocketValueVariant sampled_atribute;
+      bke::SocketValueVariant sampled_attribute;
       if (!execute_multi_function_on_value_variant(
               std::make_shared<bke::mesh_surface_sample::BaryWeightSampleFn>(std::move(target),
                                                                              std::move(field)),
               {&triangle_index, &bary_weights},
-              {&sampled_atribute},
+              {&sampled_attribute},
               params.user_data(),
               error_message))
       {
@@ -337,7 +337,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         params.error_message_add(NodeWarningType::Error, std::move(error_message));
         return;
       }
-      params.set_output("Attribute"_ustr, std::move(sampled_atribute));
+      params.set_output("Attribute"_ustr, std::move(sampled_attribute));
       break;
     }
     case GEO_NODE_RAYCAST_NEAREST: {
@@ -353,12 +353,12 @@ static void node_geo_exec(GeoNodeExecParams params)
         params.error_message_add(NodeWarningType::Error, std::move(error_message));
         return;
       }
-      bke::SocketValueVariant sampled_atribute;
+      bke::SocketValueVariant sampled_attribute;
       if (!execute_multi_function_on_value_variant(
               std::make_shared<bke::SampleIndexFunction>(
                   std::move(target), std::move(field), bke::AttrDomain::Corner),
               {&nearest_corner},
-              {&sampled_atribute},
+              {&sampled_attribute},
               params.user_data(),
               error_message))
       {
@@ -366,7 +366,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         params.error_message_add(NodeWarningType::Error, std::move(error_message));
         return;
       }
-      params.set_output("Attribute"_ustr, std::move(sampled_atribute));
+      params.set_output("Attribute"_ustr, std::move(sampled_attribute));
       break;
     }
   }
