@@ -166,7 +166,7 @@ class RenderScheduler {
 
   /* Get total number of samples rendered since the last scheduling reset, including all rendered
    * samples across frames with an active real-time denoiser. */
-  int get_num_scheduled_samples() const;
+  int get_total_rendered_samples() const;
 
   /* Reset scheduler, indicating that rendering will happen from scratch.
    * Resets current rendered state, as well as scheduling information. */
@@ -387,7 +387,7 @@ class RenderScheduler {
     /* Number of rendered samples on top of the start sample. */
     int num_rendered_samples = 0;
     /* Total number of rendered samples since the last scheduling reset. */
-    int num_scheduled_samples = 0;
+    int total_rendered_samples = 0;
 
     /* Point in time the latest PathTraceDisplay work has been scheduled. */
     double last_display_update_time = 0.0;

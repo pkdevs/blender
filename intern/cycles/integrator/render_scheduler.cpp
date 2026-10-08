@@ -124,9 +124,9 @@ int RenderScheduler::get_num_rendered_samples() const
   return state_.num_rendered_samples;
 }
 
-int RenderScheduler::get_num_scheduled_samples() const
+int RenderScheduler::get_total_rendered_samples() const
 {
-  return state_.num_scheduled_samples;
+  return state_.total_rendered_samples;
 }
 
 void RenderScheduler::reset(const BufferParams &buffer_params)
@@ -146,7 +146,7 @@ void RenderScheduler::reset(const BufferParams &buffer_params)
   }
 
   state_.num_rendered_samples = 0;
-  state_.num_scheduled_samples = 0;
+  state_.total_rendered_samples = 0;
   state_.last_display_update_time = 0.0;
   state_.last_display_update_sample = -1;
 
@@ -249,7 +249,7 @@ void RenderScheduler::render_work_reschedule_on_cancel(RenderWork &render_work)
 
   /* Un-schedule samples: they will not be rendered and should not be counted. */
   state_.num_rendered_samples -= render_work.path_trace.num_samples;
-  state_.num_scheduled_samples -= render_work.path_trace.num_samples;
+  state_.total_rendered_samples -= render_work.path_trace.num_samples;
 
   const bool has_rendered_samples = get_num_rendered_samples() != 0;
 
@@ -299,7 +299,7 @@ bool RenderScheduler::done() const
     return true;
   }
 
-  return get_num_scheduled_samples() >= get_num_samples();
+  return get_total_rendered_samples() >= get_num_samples();
 }
 
 RenderWork RenderScheduler::get_render_work()
@@ -348,7 +348,7 @@ RenderWork RenderScheduler::get_render_work()
 
     state_.resolution_divider = max(state_.resolution_divider, pixel_size_);
     state_.num_rendered_samples = 0;
-    state_.num_scheduled_samples = 0;
+    state_.total_rendered_samples = 0;
     state_.last_display_update_sample = -1;
   }
 
@@ -373,7 +373,7 @@ RenderWork RenderScheduler::get_render_work()
   /* NOTE: Advance number of samples now, so that filter and denoising check can see that all the
    * samples are rendered. */
   state_.num_rendered_samples += render_work.path_trace.num_samples;
-  state_.num_scheduled_samples += render_work.path_trace.num_samples;
+  state_.total_rendered_samples += render_work.path_trace.num_samples;
 
   render_work.adaptive_sampling.filter = work_need_adaptive_filter();
   render_work.adaptive_sampling.threshold = work_adaptive_threshold();
@@ -645,7 +645,7 @@ void RenderScheduler::report_rebalance_time(const RenderWork &render_work,
 string RenderScheduler::full_report() const
 {
   const double render_wall_time = state_.end_render_time - state_.start_render_time;
-  const int num_scheduled_samples = get_num_scheduled_samples();
+  const int num_rendered_samples = get_total_rendered_samples();
 
   string result = "\nRender Scheduler Summary\n\n";
 
@@ -747,13 +747,13 @@ string RenderScheduler::full_report() const
   result += "\n  Total: " + to_string(total_time) + "\n";
 
   result += string_printf(
-      "\nRendered %d samples in %f seconds\n", num_scheduled_samples, render_wall_time);
+      "\nRendered %d samples in %f seconds\n", num_rendered_samples, render_wall_time);
 
   /* When adaptive sampling is used the average time becomes meaningless, because different samples
    * will likely render different number of pixels. */
   if (!adaptive_sampling_.use) {
     result += string_printf("Average time per sample: %f seconds\n",
-                            render_wall_time / num_scheduled_samples);
+                            render_wall_time / num_rendered_samples);
   }
 
   return result;
@@ -901,7 +901,7 @@ int RenderScheduler::get_num_samples_to_path_trace() const
    * more than N samples. */
   const int num_samples_pot = round_num_samples_to_power_of_2(num_samples_per_update);
 
-  const int max_num_samples_to_render = get_num_samples() - get_num_scheduled_samples();
+  const int max_num_samples_to_render = get_num_samples() - get_total_rendered_samples();
 
   int num_samples_to_render = min(num_samples_pot, max_num_samples_to_render);
 
