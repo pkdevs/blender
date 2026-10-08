@@ -215,6 +215,17 @@ static void view_pan_exit(wmOperator *op)
   op->customdata = nullptr;
 }
 
+static void view_pan_cursor_restore(bContext *C, wmOperator *op, const v2dViewPanData *vpd)
+{
+  if (!vpd->own_cursor) {
+    return;
+  }
+  if (RNA_boolean_get(op->ptr, "hide_cursor")) {
+    WM_cursor_warp(CTX_wm_window(C), vpd->startx, vpd->starty);
+  }
+  WM_cursor_modal_restore(CTX_wm_window(C));
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -261,7 +272,10 @@ static wmOperatorStatus view_pan_invoke(bContext *C, wmOperator *op, const wmEve
   RNA_int_set(op->ptr, "deltay", 0);
 
   if (WM_cursor_modal_is_set_ok(window)) {
-    if (v2d->keepofs & V2D_LOCKOFS_X) {
+    if (RNA_boolean_get(op->ptr, "hide_cursor")) {
+      WM_cursor_modal_set(window, WM_CURSOR_NONE);
+    }
+    else if (v2d->keepofs & V2D_LOCKOFS_X) {
       WM_cursor_modal_set(window, WM_CURSOR_NS_SCROLL);
     }
     else if (v2d->keepofs & V2D_LOCKOFS_Y) {
@@ -338,11 +352,8 @@ static wmOperatorStatus view_pan_modal(bContext *C, wmOperator *op, const wmEven
           RNA_int_set(op->ptr, "deltax", (vpd->startx - vpd->lastx));
           RNA_int_set(op->ptr, "deltay", (vpd->starty - vpd->lasty));
 
-          const bool own_cursor = vpd->own_cursor;
+          view_pan_cursor_restore(C, op, vpd);
           view_pan_exit(op);
-          if (own_cursor) {
-            WM_cursor_modal_restore(CTX_wm_window(C));
-          }
           return OPERATOR_FINISHED;
         }
       }
@@ -352,8 +363,9 @@ static wmOperatorStatus view_pan_modal(bContext *C, wmOperator *op, const wmEven
   return OPERATOR_RUNNING_MODAL;
 }
 
-static void view_pan_cancel(bContext * /*C*/, wmOperator *op)
+static void view_pan_cancel(bContext *C, wmOperator *op)
 {
+  view_pan_cursor_restore(C, op, static_cast<v2dViewPanData *>(op->customdata));
   view_pan_exit(op);
 }
 
@@ -377,6 +389,9 @@ static void VIEW2D_OT_pan(wmOperatorType *ot)
   /* rna - must keep these in sync with the other operators */
   RNA_def_int(ot->srna, "deltax", 0, INT_MIN, INT_MAX, "Delta X", "", INT_MIN, INT_MAX);
   RNA_def_int(ot->srna, "deltay", 0, INT_MIN, INT_MAX, "Delta Y", "", INT_MIN, INT_MAX);
+  /* Hide the cursor while the operator runs, needed for pan navigation gizmo. */
+  RNA_def_property_flag(RNA_def_boolean(ot->srna, "hide_cursor", false, "Hide Cursor", ""),
+                        PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
 /** \} */
@@ -679,6 +694,7 @@ struct v2dViewZoomData {
   double timer_lastdraw;
 
   int lastx, lasty;   /* previous x/y values of mouse in window */
+  int startx, starty; /* mouse x/y values in window when the operator was initiated. */
   int invoke_event;   /* event type that invoked, for modal exits */
   float dx, dy;       /* running tally of previous delta values (for obtaining final zoom) */
   float mx_2d, my_2d; /* initial mouse location in v2d coords */
@@ -1137,6 +1153,14 @@ static void view_zoomdrag_exit(bContext *C, wmOperator *op)
       WM_event_timer_remove(CTX_wm_manager(C), CTX_wm_window(C), vzd->timer);
     }
 
+    if (vzd->own_cursor) {
+      if (RNA_boolean_get(op->ptr, "hide_cursor")) {
+        /* Restore cursor position. */
+        WM_cursor_warp(CTX_wm_window(C), vzd->startx, vzd->starty);
+      }
+      WM_cursor_modal_restore(CTX_wm_window(C));
+    }
+
     MEM_delete(vzd);
     op->customdata = nullptr;
   }
@@ -1236,6 +1260,8 @@ static wmOperatorStatus view_zoomdrag_invoke(bContext *C, wmOperator *op, const 
   }
 
   /* set initial settings */
+  vzd->startx = event->xy[0];
+  vzd->starty = event->xy[1];
   vzd->lastx = event->xy[0];
   vzd->lasty = event->xy[1];
   RNA_float_set(op->ptr, "deltax", 0);
@@ -1245,7 +1271,10 @@ static wmOperatorStatus view_zoomdrag_invoke(bContext *C, wmOperator *op, const 
   vzd->invoke_event = event->type;
 
   if (WM_cursor_modal_is_set_ok(window)) {
-    if (v2d->keepofs & V2D_LOCKOFS_X) {
+    if (RNA_boolean_get(op->ptr, "hide_cursor")) {
+      WM_cursor_modal_set(window, WM_CURSOR_NONE);
+    }
+    else if (v2d->keepofs & V2D_LOCKOFS_X) {
       WM_cursor_modal_set(window, WM_CURSOR_NS_SCROLL);
     }
     else if (v2d->keepofs & V2D_LOCKOFS_Y) {
@@ -1394,11 +1423,7 @@ static wmOperatorStatus view_zoomdrag_modal(bContext *C, wmOperator *op, const w
       }
 
       /* free customdata */
-      const bool own_cursor = vzd->own_cursor;
       view_zoomdrag_exit(C, op);
-      if (own_cursor) {
-        WM_cursor_modal_restore(CTX_wm_window(C));
-      }
 
       return OPERATOR_FINISHED;
     }
@@ -1431,6 +1456,9 @@ static void VIEW2D_OT_zoom(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
   prop = RNA_def_float(ot->srna, "deltay", 0, -FLT_MAX, FLT_MAX, "Delta Y", "", -FLT_MAX, FLT_MAX);
   RNA_def_property_flag(prop, PROP_HIDDEN);
+  /* Hide the cursor while the operator runs, needed for zoom navigation gizmo. */
+  prop = RNA_def_boolean(ot->srna, "hide_cursor", false, "Hide Cursor", "");
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   WM_operator_properties_use_cursor_init(ot);
 }

@@ -4982,6 +4982,8 @@ static void draw_view_controls(const bContext &C, ARegion &region)
                                                 short(button_size),
                                                 short(button_size),
                                                 {});
+        /* Hide the mouse cursor while this button is dragging the view. */
+        RNA_boolean_set(ui::button_operator_ptr_ensure(but), "hide_cursor", true);
         ui::button_func_quick_tooltip_set(
             but, [tooltip](const ui::Button * /*but*/) { return std::string(tooltip); });
       };
