@@ -2347,6 +2347,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   BOOL _brush_rail_expanded;
   BOOL _brush_press_select_active;
   BOOL _toolbar_expanded;
+  /* Blender's own interface, as on a desktop computer, with the native controls hidden. */
+  BOOL _desktop_interface;
   BOOL _toolbar_press_select_active;
   BOOL _view_pie_visible;
 }
@@ -2397,6 +2399,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
   [self installIPadOverlay];
   [self installViewportLoadingIndicator];
+  if ([NSUserDefaults.standardUserDefaults boolForKey:@"BlenderDesktopInterface"]) {
+    /* Start in the interface the user left; Blender follows from its inbox. */
+    WM_apple_ios_ui_setting_enqueue("interface", "desktop");
+    [self setDesktopInterface:YES];
+  }
   _toolbar_refresh_timer = [NSTimer scheduledTimerWithTimeInterval:0.25
                                                             target:self
                                                           selector:@selector(refreshToolbarFromBlender)
@@ -2646,7 +2653,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)handleActionsMenuPress:(UILongPressGestureRecognizer *)gesture
 {
-  if (gesture.state != UIGestureRecognizerStateBegan || _pencil_menu.active) {
+  /* Blender's own interface has its own context menus. */
+  if (gesture.state != UIGestureRecognizerStateBegan || _pencil_menu.active || _desktop_interface) {
     return;
   }
 
@@ -3841,11 +3849,40 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   }
 }
 
+- (void)setDesktopInterface:(BOOL)desktop
+{
+  _desktop_interface = desktop;
+  [NSUserDefaults.standardUserDefaults setBool:desktop forKey:@"BlenderDesktopInterface"];
+  [_pencil_menu cancel];
+  /* No native controls, radial menu or bottom tray over Blender's own interface. */
+  [(GHOSTUIWindow *)_ghost_window->rootWindow setPencilContextMenu:desktop ? nil : _pencil_menu];
+  if (desktop) {
+    WM_apple_ios_ui_bottom_tray_set(0.0f);
+  }
+  [self.navigationController setNavigationBarHidden:desktop animated:YES];
+  UIView *overlay = _overlay_view;
+  if (!desktop) {
+    overlay.hidden = NO;
+  }
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
+      animations:^{ overlay.alpha = desktop ? 0 : 1; }
+      completion:^(BOOL finished) {
+        if (finished && overlay.alpha == 0) {
+          overlay.hidden = YES;
+        }
+      }];
+  [self.view setNeedsLayout];
+}
+
 - (void)refreshToolbarFromBlender
 {
   [self updateViewportLoadingIndicator];
   [self refreshNativeMenuBar];
   NSDictionary *model = [self toolbarModel];
+  if ([model[@"desktop"] isKindOfClass:NSNumber.class] && [model[@"desktop"] boolValue] != _desktop_interface) {
+    /* Blender's own Window menu can switch the interface too. */
+    [self setDesktopInterface:[model[@"desktop"] boolValue]];
+  }
   [_redo_strip updateSnapshot:model[@"redo"]];
   NSArray *navigation_geometry = model[@"navigationGizmo"];
   if ([navigation_geometry isKindOfClass:NSArray.class] && navigation_geometry.count == 3 &&
