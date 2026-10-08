@@ -2088,6 +2088,10 @@ bool write_crash_blend()
  * Helper to check if file `filepath` can be written.
  * \return true if it can, otherwise report an error and return false.
  */
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+static void wm_autosave_remove_current();
+#endif
+
 static bool wm_file_write_check_with_report_on_failure(Main *bmain,
                                                        const char *filepath,
                                                        ReportList *reports)
@@ -2250,9 +2254,21 @@ static bool wm_file_write(bContext *C,
     const bool do_history_file_update = (G.background == false) &&
                                         (CTX_wm_manager(C)->op_undo_depth == 0);
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    /* The work is saved, so its auto-save (named after the file before saving, which may have
+     * been untitled) would only offer stale recovery on the next launch. */
+    if (use_save_as_copy == false) {
+      wm_autosave_remove_current();
+    }
+#endif
     if (use_save_as_copy == false) {
       STRNCPY(bmain->filepath, filepath); /* Is guaranteed current file. */
     }
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    if (use_save_as_copy == false) {
+      wm_autosave_remove_current();
+    }
+#endif
 
     SET_FLAG_FROM_TEST(G.fileflags, fileflags & G_FILE_COMPRESS, G_FILE_COMPRESS);
 
@@ -2476,6 +2492,15 @@ void wm_autosave_delete()
 }
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+
+static void wm_autosave_remove_current()
+{
+  char filepath[FILE_MAX];
+  wm_autosave_location(filepath);
+  if (BLI_exists(filepath)) {
+    BLI_delete(filepath, false, false);
+  }
+}
 
 void WM_apple_ios_autosave_ensure()
 {
