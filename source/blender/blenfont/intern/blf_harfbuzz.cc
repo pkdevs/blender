@@ -34,10 +34,10 @@ namespace blender {
 rcti ShapedGlyph::integer_bounds() const
 {
   rcti r;
-  r.xmin = ft_pix_to_int_floor(bounds.xmin);
-  r.xmax = ft_pix_to_int_floor(bounds.xmax);
-  r.ymin = ft_pix_to_int_floor(bounds.ymin);
-  r.ymax = ft_pix_to_int_ceil(bounds.ymax);
+  r.xmin = ft_pix_to_int_floor(bounds.xmin) + ft_pix_to_int_floor(g->box_xmin);
+  r.xmax = ft_pix_to_int_floor(bounds.xmin) + ft_pix_to_int_ceil(g->box_xmax);
+  r.ymin = ft_pix_to_int_floor(bounds.ymin + g->box_ymin);
+  r.ymax = ft_pix_to_int_ceil(bounds.ymin + g->box_ymax);
   return r;
 }
 
@@ -58,12 +58,9 @@ void ShapingData::legacy_layout(FontBLF *font, GlyphCacheBLF *gc, const char *st
     GlyphBLF *g = blf_glyph_ensure(font, gc, codepoint);
     g = blf_glyph_ensure_subpixel(font, gc, g, this->bounds.xmax);
     if (g) {
-      rcti bounds = {this->bounds.xmax,
-                     this->bounds.xmax + g->box_xmax - g->box_xmin,
-                     0,
-                     g->box_ymax - g->box_ymin};
+      rcti bounds = {this->bounds.xmax, this->bounds.xmax + g->box_xmax, 0, g->box_ymax};
       this->glyphs.append({font, gc, g, bounds, offset});
-      this->bounds.xmin = std::min(this->bounds.xmin, bounds.xmin);
+      this->bounds.xmin = std::min(this->bounds.xmin, bounds.xmin + g->box_xmin);
       this->bounds.xmax += g->advance_x;
       this->bounds.ymin = std::min(this->bounds.ymin, g->box_ymin);
       this->bounds.ymax = std::max(this->bounds.ymax, g->box_ymax);
@@ -329,10 +326,10 @@ ShapingData::ShapingData(FontBLF *font,
         this->glyphs.append({segment_font, segment_gc, g, bounds, utf8_offsets[cluster]});
       }
 
-      this->bounds.xmin = std::min(this->bounds.xmin, g->box_xmin);
+      this->bounds.xmin = std::min(this->bounds.xmin, bounds.xmin + g->box_xmin);
       this->bounds.xmax += advance;
-      this->bounds.ymin = std::min(this->bounds.ymin, g->box_ymin);
-      this->bounds.ymax = std::max(this->bounds.ymax, g->box_ymax);
+      this->bounds.ymin = std::min(this->bounds.ymin, bounds.ymin + g->box_ymin);
+      this->bounds.ymax = std::max(this->bounds.ymax, bounds.ymin + g->box_ymax);
     }
 
     if (set_mono) {
@@ -389,7 +386,7 @@ void ShapingData::draw(const ft_pix pen_y, ResultBLF *r_info)
 
   if (r_info) {
     r_info->lines = 1;
-    r_info->width = ft_pix_to_int(BLI_rcti_size_x(&this->bounds));
+    r_info->width = ft_pix_to_int(this->bounds.xmax);
   }
 }
 
@@ -492,15 +489,48 @@ size_t ShapingData::width_to_rstrlen(const int width, const size_t str_len, int 
   return len;
 }
 
-void ShapingData::boundbox(ft_pix pen_y, rcti *r_box, ResultBLF *r_info) const
+void ShapingData::boundbox(const FontBLF *font,
+                           const ft_pix pen_y,
+                           rcti *r_box,
+                           ResultBLF *r_info) const
 {
-  r_box->xmin = ft_pix_to_int(this->bounds.xmin);
-  r_box->xmax = ft_pix_to_int(this->bounds.xmax);
-  r_box->ymin = ft_pix_to_int(pen_y);
-  r_box->ymax = ft_pix_to_int(this->bounds.ymax);
+  const ft_pix pen_x_end = this->bounds.xmax;
+
+  ft_pix box_xmin = ft_pix_from_int(32000);
+  ft_pix box_xmax = ft_pix_from_int(-32000);
+  ft_pix box_ymin = ft_pix_from_int(32000);
+  ft_pix box_ymax = ft_pix_from_int(-32000);
+
+  for (const ShapedGlyph &glyph : this->glyphs) {
+    const ft_pix pen_x = glyph.bounds.xmin;
+    const ft_pix offset_y = glyph.bounds.ymin;
+
+    box_xmin = std::min({box_xmin, pen_x, pen_x + glyph.g->box_xmin});
+    if (!(font->flags & BLF_MONOSPACED)) {
+      box_xmax = std::max(box_xmax, pen_x + glyph.g->box_xmax);
+    }
+    box_ymin = std::min(box_ymin, glyph.g->box_ymin + pen_y + offset_y);
+    box_ymax = std::max(box_ymax, glyph.g->box_ymax + pen_y + offset_y);
+  }
+
+  if (this->glyphs.is_empty()) {
+    box_xmin = 0;
+    box_ymin = 0;
+    box_xmax = 0;
+    box_ymax = 0;
+  }
+  else {
+    box_xmax = std::max(box_xmax, pen_x_end);
+  }
+
+  r_box->xmin = ft_pix_to_int_floor(box_xmin);
+  r_box->xmax = ft_pix_to_int_ceil(box_xmax);
+  r_box->ymin = ft_pix_to_int_floor(box_ymin);
+  r_box->ymax = ft_pix_to_int_ceil(box_ymax);
+
   if (r_info) {
     r_info->lines = 1;
-    r_info->width = r_box->xmax;
+    r_info->width = ft_pix_to_int(pen_x_end);
   }
 }
 

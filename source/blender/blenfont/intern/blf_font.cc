@@ -638,7 +638,7 @@ static void blf_font_draw_buffer_ex(FontBLF *font,
 
   if (r_info) {
     r_info->lines = 1;
-    r_info->width = ft_pix_to_int(BLI_rcti_size_x(&text.bounds));
+    r_info->width = ft_pix_to_int(text.bounds.xmax);
   }
 }
 
@@ -707,7 +707,7 @@ static void blf_font_boundbox_ex(FontBLF *font,
   }
 
   ShapingData text(font, gc, str, str_len);
-  text.boundbox(pen_y, r_box, r_info);
+  text.boundbox(font, pen_y, r_box, r_info);
 }
 void blf_font_boundbox(
     FontBLF *font, const char *str, const size_t str_len, rcti *r_box, ResultBLF *r_info)
@@ -735,8 +735,8 @@ void blf_font_width_and_height(FontBLF *font,
 
   const float xa = (font->flags & BLF_ASPECT) ? font->aspect[0] : 1.0f;
   const float ya = (font->flags & BLF_ASPECT) ? font->aspect[1] : 1.0f;
-  *r_width = (float(BLI_rcti_size_x(&box) + 1) * xa);
-  *r_height = (float(BLI_rcti_size_y(&box) + 1) * ya);
+  *r_width = (float(BLI_rcti_size_x(&box)) * xa);
+  *r_height = (float(BLI_rcti_size_y(&box)) * ya);
 }
 
 float blf_font_width(FontBLF *font, const char *str, const size_t str_len, ResultBLF *r_info)

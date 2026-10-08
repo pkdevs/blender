@@ -249,7 +249,11 @@ struct ShapedGlyph {
   FontBLF *font = nullptr;
   GlyphCacheBLF *gc = nullptr;
   GlyphBLF *g = nullptr;
-  rcti bounds = {};      /* String-relative shaped bounds in ft_pix. */
+  /**
+   * String-relative bounds in ft_pix: `xmin`/`ymin` is the glyph origin (pen plus shaping offset),
+   * `xmax`/`ymax` is the origin plus the glyph's `box_xmax`/`box_ymax`.
+   */
+  rcti bounds = {};
   size_t index_utf8 = 0; /* Maps back original UTF-8 string byte offsets. */
   rcti integer_bounds() const;
   bool is_combining() const;
@@ -261,7 +265,7 @@ struct ShapedGlyph {
 
 struct ShapingData {
   blender::Vector<ShapedGlyph> glyphs = {};
-  rcti bounds = {}; /* ft_pix. */
+  rcti bounds = {};
   ShapingData(FontBLF *font,
               GlyphCacheBLF *gc,
               const char *str,
@@ -274,7 +278,7 @@ struct ShapingData {
   int draw_mono(const int tab_columns);
   size_t width_to_strlen(const int width, size_t str_len, int *r_width = nullptr) const;
   size_t width_to_rstrlen(const int width, size_t str_len, int *r_width = nullptr) const;
-  void boundbox(ft_pix pen_y, rcti *r_box, ResultBLF *r_info = nullptr) const;
+  void boundbox(const FontBLF *font, ft_pix pen_y, rcti *r_box, ResultBLF *r_info = nullptr) const;
   size_t offset_from_cursor_position(int location_x) const;
   void offset_to_glyph_bounds(size_t str_offset, rcti *r_glyph_bounds) const;
 };
