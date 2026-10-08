@@ -40,7 +40,6 @@ set(SRC_OSL
   node_glossy_bsdf.osl
   node_gradient_texture.osl
   node_hair_info.osl
-  node_open_pbr_bsdf.osl
   node_point_info.osl
   node_scatter_volume.osl
   node_scene_time.osl
@@ -112,6 +111,16 @@ set(SRC_OSL
   node_principled_bsdf.osl
   node_rgb_to_bw.osl
 )
+
+if(WITH_CYCLES_OPENPBR_SPEC)
+  set(SRC_OSL ${SRC_OSL}
+    node_open_pbr_spec_bsdf.osl
+  )
+else()
+  set(SRC_OSL ${SRC_OSL}
+    node_open_pbr_materialx_bsdf.osl
+  )
+endif()
 
 get_filename_component(OSL_SHADER_HINT ${OSL_COMPILER} DIRECTORY)
 
