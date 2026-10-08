@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <optional>
 
+#include "BLI_hash.hh"
+#include "BLI_span.hh"
 #include "BLI_utildefines.hh"
 #include <Python.h>
 
@@ -382,22 +384,15 @@ std::optional<uint64_t> BPY_app_handlers_frame_change_identity()
     return std::nullopt;
   }
   const PyGILState_STATE gilstate = PyGILState_Ensure();
-  uint64_t hash = 14695981039346656037ULL;
-  const auto hash_value = [&hash](const uint64_t value) {
-    hash ^= value;
-    hash *= 1099511628211ULL;
-  };
-
-  bool has_frame_change = false;
-  for (const int event : {BKE_CB_EVT_FRAME_CHANGE_PRE, BKE_CB_EVT_FRAME_CHANGE_POST}) {
+  const auto handlers = [](const int event) {
     PyObject *list = py_cb_array[event];
-    const Py_ssize_t size = list != nullptr ? PyList_GET_SIZE(list) : 0;
-    has_frame_change |= size != 0;
-    hash_value(uint64_t(size));
-    for (Py_ssize_t i = 0; i < size; i++) {
-      hash_value(uint64_t(uintptr_t(PyList_GET_ITEM(list, i))));
-    }
-  }
+    return list != nullptr ? Span<PyObject *>(PySequence_Fast_ITEMS(list), PyList_GET_SIZE(list)) :
+                             Span<PyObject *>();
+  };
+  const Span<PyObject *> pre = handlers(BKE_CB_EVT_FRAME_CHANGE_PRE);
+  const Span<PyObject *> post = handlers(BKE_CB_EVT_FRAME_CHANGE_POST);
+  const bool has_frame_change = !pre.is_empty() || !post.is_empty();
+  const uint64_t hash = get_default_hash(pre.size(), pre.hash(), post.size(), post.hash());
 
   PyGILState_Release(gilstate);
   return has_frame_change ? std::optional<uint64_t>(hash) : std::nullopt;
