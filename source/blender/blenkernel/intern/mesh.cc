@@ -1429,6 +1429,23 @@ Mesh *mesh_new_no_attributes(const int verts_num,
   return mesh;
 }
 
+Mesh *mesh_new_no_attributes_and_face_offsets(const int verts_num,
+                                              const int edges_num,
+                                              const int faces_num,
+                                              const int corners_num)
+{
+  Mesh *mesh = static_cast<Mesh *>(BKE_libblock_alloc(
+      nullptr, ID_ME, BKE_idtype_idcode_to_name(ID_ME), LIB_ID_CREATE_LOCALIZE));
+  BKE_libblock_init_empty(&mesh->id);
+
+  mesh->verts_num = verts_num;
+  mesh->edges_num = edges_num;
+  mesh->faces_num = faces_num;
+  mesh->corners_num = corners_num;
+  
+  return mesh;
+}
+
 }  // namespace bke
 
 static void copy_attribute_names(const Mesh &mesh_src, Mesh &mesh_dst)

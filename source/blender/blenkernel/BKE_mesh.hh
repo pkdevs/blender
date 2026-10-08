@@ -390,6 +390,7 @@ bool is_color_attribute(const std::optional<AttributeMetaData> &meta_data);
 
 /** Create a mesh with no built-in attributes. */
 Mesh *mesh_new_no_attributes(int verts_num, int edges_num, int faces_num, int corners_num);
+Mesh *mesh_new_no_attributes_and_face_offsets(int verts_num, int edges_num, int faces_num, int corners_num);
 
 /** Calculate edges from faces. */
 void mesh_calc_edges(Mesh &mesh, bool keep_existing_edges, bool select_new_edges);

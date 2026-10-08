@@ -175,7 +175,7 @@ static Mesh *create_mesh_from_lists(const List<float3> &positions_list,
   const int faces_num = face_offsets_list ? face_offsets_list->size() - 1 : 0;
   const int corners_num = corner_vertices_list ? corner_vertices_list->size() : 0;
 
-  Mesh *mesh = bke::mesh_new_no_attributes(verts_num, 0, faces_num, corners_num);
+  Mesh *mesh = bke::mesh_new_no_attributes_and_face_offsets(verts_num, 0, faces_num, corners_num);
 
   if (const auto *positions_array_data = std::get_if<nodes::GList::ArrayData>(
           &positions_list.data()))
@@ -200,6 +200,7 @@ static Mesh *create_mesh_from_lists(const List<float3> &positions_list,
 
   if (faces_num == 0) {
     /* Only positions are needed. */
+    BKE_mesh_face_offsets_ensure_alloc(mesh);
     return mesh;
   }
 
