@@ -1044,6 +1044,7 @@ static wmOperatorStatus pose_select_scaled_exec(bContext *C, wmOperator *op)
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   const BoneScale scale_mode = BoneScale(RNA_enum_get(op->ptr, "scale"));
+  bool changed = false;
 
   for (Object *pose_object : objects) {
     bArmature *arm = id_cast<bArmature *>(pose_object->data);
@@ -1080,9 +1081,16 @@ static wmOperatorStatus pose_select_scaled_exec(bContext *C, wmOperator *op)
 
       if (select) {
         pose_do_bone_select({&pchan, bone}, SEL_SELECT);
+        changed = true;
       }
     }
-    ED_pose_bone_select_tag_update(pose_object);
+
+    if (changed) {
+      ED_pose_bone_select_tag_update(pose_object);
+    }
+  }
+  if (!changed) {
+    return OPERATOR_CANCELLED;
   }
 
   return OPERATOR_FINISHED;
