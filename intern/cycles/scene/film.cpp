@@ -141,6 +141,23 @@ void Film::add_default(Scene *scene)
   pass->set_type(PASS_COMBINED);
 }
 
+static bool is_restir_bookkeeping_pass(const PassType type)
+{
+  switch (type) {
+    case PASS_RESTIR_SSS_EXIT:
+    case PASS_RESTIR_PT_PREVIOUS_RESERVOIR:
+    case PASS_RESTIR_PT_RESERVOIR:
+    case PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR:
+    case PASS_RESTIR_REPROJECTION_SURFACE:
+    case PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE:
+    case PASS_RESTIR_PREVIOUS_RESERVOIR:
+    case PASS_RESTIR_RESERVOIR:
+      return true;
+    default:
+      return false;
+  }
+}
+
 void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 {
   if (!is_modified()) {
@@ -266,7 +283,11 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
     }
 
     const int pass_flag = (1 << (pass->get_type() % 32));
-    if (pass->get_type() <= PASS_CATEGORY_LIGHT_END) {
+
+    if (is_restir_bookkeeping_pass(pass->get_type())) {
+      /* Offset-only passes. No category flag, so they can't alias masked passes. */
+    }
+    else if (pass->get_type() <= PASS_CATEGORY_LIGHT_END) {
       kfilm->light_pass_flag |= pass_flag;
     }
     else if (pass->get_type() <= PASS_CATEGORY_DATA_END) {
@@ -276,7 +297,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
       kfilm->denoising_pass_flag |= pass_flag;
     }
     else {
-      assert(pass->get_type() <= PASS_CATEGORY_BAKE_END);
+      assert(pass->get_type() <= PASS_CATEGORY_BAKE_END); // !!!: Crashed here
     }
 
     if (!pass->get_lightgroup().empty()) {
