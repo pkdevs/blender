@@ -131,10 +131,6 @@ class PROJECT_OT_NewProject(Operator):
         options={'HIDDEN'},
     )
 
-    @classmethod
-    def poll(cls, context):
-        return bpy.data.project is None and bpy.data.filepath != ""
-
     def execute(self, context):
         from pathlib import Path
 
@@ -142,24 +138,36 @@ class PROJECT_OT_NewProject(Operator):
             self.report({'ERROR'}, "Cannot create a project with an empty directory path.")
             return {'CANCELLED'}
 
-        if not bpy.path.is_subdir(path=bpy.data.filepath, directory=self.directory):
-            self.report({'ERROR'}, "New project directory must be a parent of the currently open blend file.")
+        project_config_dir = Path(self.directory).joinpath(PROJECT_DIR)
+        if project_config_dir.is_dir():
+            self.report({'ERROR'}, "Cannot create a project inside a folder that already contains a project config.")
             return {'CANCELLED'}
 
-        # Double-check that we're not already in a project directory.
-        #
-        # Under normal circumstances this should never happen, because a project
-        # would already be loaded in that case, and thus `poll()` would fail.
-        # But if someone manually calls `bpy.data.project_clear()` then this can
-        # happen.
-        if blend_file_is_has_project_root(Path(bpy.data.filepath)):
+        try:
+            project_config_dir.mkdir(parents=True, exist_ok=True)
+        except FileExistsError:
             self.report(
-                {'ERROR'}, (
-                    "New project directory is already inside of an existing project. "
-                    "Try reloading the current blend file to open the existing project."
-                )
+                {'ERROR'},
+                rpt_("A file named '{:s}' already exists, but it needs to be a directory.").format(PROJECT_DIR),
             )
             return {'CANCELLED'}
+        except PermissionError:
+            self.report(
+                {'ERROR'},
+                rpt_("Cannot create '{:s}' directory due to file-system permissions.").format(PROJECT_DIR),
+            )
+            return {'CANCELLED'}
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+
+        # Clear current project, if any.
+        if bpy.data.project:
+            bpy.data.project_clear()
+
+        if not bpy.path.is_subdir(path=bpy.data.filepath, directory=self.directory):
+            # TODO: check if current file is not saved
+            bpy.ops.wm.read_homefile()
 
         # Get the initial project name based on the folder name.
         #
@@ -247,6 +255,56 @@ class PROJECT_OT_OpenBlendInProject(Operator):
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
+
+
+class PROJECT_OT_OpenProject(Operator):
+    """Open a project, starting a new file in it"""
+    bl_idname = "project.open_project"
+    bl_label = "Open Project..."
+
+    filepath: bpy.props.StringProperty(
+        name="Blend file path",
+        subtype='DIR_PATH',
+        default="",
+    )
+
+    filter_folder: bpy.props.BoolProperty(
+        name="Filter folders",
+        default=True,
+        options={'HIDDEN'},
+    )
+
+    def execute(self, context):
+        from pathlib import Path
+        root_path = find_project_root_from_blend_file_path(Path(self.filepath))
+        if root_path is None:
+            self.report({'ERROR'}, f"Folder {self.filepath} does not belong to a project")
+            return {'CANCELLED'}
+
+        bpy.ops.wm.read_homefile()
+        bpy.data.project_init_from_root_path(str(root_path))
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        # TODO: check if current file is not saved
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+
+class PROJECT_OT_CloseProject(Operator):
+    """Close the active project, starting a new file"""
+    bl_idname = "project.close_project"
+    bl_label = "Close Project"
+
+    @classmethod
+    def poll(cls, context):
+        return bpy.data.project is not None
+
+    def execute(self, context):
+        # TODO: check if current file is not saved
+        bpy.data.project_clear()
+        bpy.ops.wm.read_homefile()
+        return {'CANCELLED'}
 
 
 class PROJECT_OT_AddVariable(Operator):
@@ -479,6 +537,8 @@ classes = (
     PROJECT_OT_NewProject,
     PROJECT_OT_SaveProject,
     PROJECT_OT_OpenBlendInProject,
+    PROJECT_OT_OpenProject,
+    PROJECT_OT_CloseProject,
     PROJECT_OT_AddVariable,
     PROJECT_OT_RemoveVariable,
     PROJECT_OT_MoveVariable,
