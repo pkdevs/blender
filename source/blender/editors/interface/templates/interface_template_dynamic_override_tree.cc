@@ -488,6 +488,47 @@ void DynamicOverrideTreeView::build_tree()
   }
 }
 
+static void rule_buttons(Layout *layout, DynamicOverride &dynoverride)
+{
+  Layout &box = layout->box();
+  PointerRNA *rule_ptr = const_cast<PointerRNA *>(
+      layout->context_ptr_get("dynamic_override_rule", RNA_DynamicOverrideRule));
+  PointerRNA *rule_prop_ptr = const_cast<PointerRNA *>(
+      layout->context_ptr_get("dynamic_override_property", RNA_DynamicOverrideRuleProperty));
+
+  if (rule_ptr) {
+    DynamicOverrideRule &rule = *rule_ptr->data_as<DynamicOverrideRule>();
+    if (rule.type != DynamicOverrideRuleType::IDData) {
+      return;
+    }
+    if (rule.target_filter.type != DynamicOverrideRuleTargetFilterType::IDSingle) {
+      return;
+    }
+
+    Layout &row = box.row(true);
+    row.prop(rule_ptr, "name", {}, {}, ICON_NONE);
+
+    PointerRNA op_data = row.op("UI_OT_dynoverride_remove_rule", "Delete", ICON_X);
+    RNA_int_set(&op_data, "session_uid", int(dynoverride.id.session_uid));
+    RNA_string_set(&op_data, "rule_name", rule.name);
+
+    row.prop(rule_ptr,
+             "is_muted",
+             ITEM_R_ICON_ONLY,
+             {},
+             bool(rule.flag & DynamicOverrideRuleFlag::IsMuted) ? ICON_CHECKBOX_DEHLT :
+                                                                  ICON_CHECKBOX_HLT);
+
+    PointerRNA rule_filter_ptr = RNA_pointer_create_with_parent(
+        *rule_ptr, RNA_DynamicOverrideRuleTargetFilterIDSingle, &rule.target_filter);
+    box.prop(&rule_filter_ptr, "target_id", {}, {}, ICON_NONE);
+  }
+
+  if (rule_prop_ptr) {
+    BLI_assert(rule_ptr);
+  }
+}
+
 }  // namespace dynoverride
 
 void template_dynamic_override_tree(Layout *layout, bContext *C, Layout *context_layout)
@@ -509,14 +550,7 @@ void template_dynamic_override_tree(Layout *layout, bContext *C, Layout *context
 
   TreeViewBuilder::build_tree_view(*C, *tree_view, *layout);
 
-  const PointerRNA *rule_ptr = layout->context_ptr_get("dynamic_override_rule",
-                                                       RNA_DynamicOverrideRule);
-  if (rule_ptr) {
-    context_layout->label("YES", ICON_NONE);
-  }
-  else {
-    context_layout->label("NO", ICON_NONE);
-  }
+  dynoverride::rule_buttons(context_layout, *dynoverride);
 }
 
 }  // namespace blender::ui
