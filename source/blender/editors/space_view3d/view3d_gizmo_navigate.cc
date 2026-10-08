@@ -31,6 +31,7 @@ namespace blender {
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
 extern "C" int WM_apple_ios_ui_bottom_tray_ymin(const wmWindow *win, const ARegion *region);
+extern "C" bool WM_apple_ios_ui_desktop_mode();
 #endif
 
 /* -------------------------------------------------------------------- */
@@ -303,8 +304,10 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
   /* Keep the gizmo above the native bottom tray (the asset pane) while it is open. */
   rcti rect_visible_ios = *ED_region_visible_rect(region);
-  rect_visible_ios.ymin = std::max(rect_visible_ios.ymin,
-                                   WM_apple_ios_ui_bottom_tray_ymin(CTX_wm_window(C), region));
+  if (!WM_apple_ios_ui_desktop_mode()) {
+    rect_visible_ios.ymin = std::max(rect_visible_ios.ymin,
+                                     WM_apple_ios_ui_bottom_tray_ymin(CTX_wm_window(C), region));
+  }
   const rcti *rect_visible = &rect_visible_ios;
 #else
   const rcti *rect_visible = ED_region_visible_rect(region);
@@ -332,17 +335,19 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
   navgroup->state.rv3d.cameralock = v3d->flag2 & V3D_LOCK_CAMERA;
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  const bool use_bottom_right_navigation = true;
-  const bool show_navigate = false;
-  const bool show_rotate_gizmo = true;
+  /* The native iPad interface keeps a lone gizmo at the bottom right; Blender's own interface
+   * places it as on a desktop computer. */
+  const bool native_interface = !WM_apple_ios_ui_desktop_mode();
 #else
-  const bool use_bottom_right_navigation = false;
-  const bool show_navigate = (U.uiflag & USER_SHOW_GIZMO_NAVIGATE) != 0;
-  const bool show_rotate_gizmo = (U.mini_axis_type == USER_MINI_AXIS_TYPE_GIZMO) &&
-                                 (region->alignment != RGN_ALIGN_QSPLIT ||
-                                  region->runtime->quadview_index ==
-                                      bke::ARegionQuadviewIndex::TopRight);
+  const bool native_interface = false;
 #endif
+  const bool use_bottom_right_navigation = native_interface;
+  const bool show_navigate = !native_interface && (U.uiflag & USER_SHOW_GIZMO_NAVIGATE) != 0;
+  const bool show_rotate_gizmo = native_interface ||
+                                 ((U.mini_axis_type == USER_MINI_AXIS_TYPE_GIZMO) &&
+                                  (region->alignment != RGN_ALIGN_QSPLIT ||
+                                   region->runtime->quadview_index ==
+                                       bke::ARegionQuadviewIndex::TopRight));
   const float icon_offset = UI_SCALE_FAC *
                             (GIZMO_OFFSET + (show_rotate_gizmo ? GIZMO_SIZE / 2.0f : 0.0f));
   const float icon_offset_mini = (GIZMO_MINI_SIZE + GIZMO_MINI_OFFSET) * UI_SCALE_FAC;
