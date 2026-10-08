@@ -2288,6 +2288,37 @@ static bool wm_file_write(bContext *C,
 /** \name Auto-Save API
  * \{ */
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+/**
+ * iOS may purge temporary files and ends apps in the background without warning. Keep auto-saves
+ * where they survive, one per document rather than per process, so work continues on the next
+ * launch. The name carries a hash of the document's full path, as two documents in different
+ * folders can share a name.
+ */
+static bool wm_autosave_location_for(const char *blendfile_path, char filepath[FILE_MAX])
+{
+  const std::optional<std::string> folder = BKE_appdir_folder_id_create(BLENDER_USER_DATAFILES,
+                                                                        "autosave");
+  if (!folder) {
+    return false;
+  }
+  char filename[FILE_MAX];
+  if (blendfile_path && (blendfile_path[0] != '\0')) {
+    uint32_t hash = 2166136261u; /* FNV-1a: stable across launches and app versions. */
+    for (const char *c = blendfile_path; *c; c++) {
+      hash = (hash ^ uint8_t(*c)) * 16777619u;
+    }
+    const char *basename = BLI_path_basename(blendfile_path);
+    SNPRINTF(filename, "%.*s_%08x_autosave.blend", int(strlen(basename)) - 6, basename, hash);
+  }
+  else {
+    STRNCPY(filename, "untitled_autosave.blend");
+  }
+  BLI_path_join(filepath, FILE_MAX, folder->c_str(), filename);
+  return true;
+}
+#endif
+
 static void wm_autosave_location(char filepath[FILE_MAX])
 {
   const int pid = abs(getpid());
@@ -2297,6 +2328,13 @@ static void wm_autosave_location(char filepath[FILE_MAX])
    * however this runs on exit when it may be cleared. */
   Main *bmain = G_MAIN;
   const char *blendfile_path = bmain ? BKE_main_blendfile_path(bmain) : nullptr;
+
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  if (wm_autosave_location_for(blendfile_path, filepath)) {
+    UNUSED_VARS(pid, filename);
+    return;
+  }
+#endif
 
   if (blendfile_path && (blendfile_path[0] != '\0')) {
     const char *basename = BLI_path_basename(blendfile_path);
