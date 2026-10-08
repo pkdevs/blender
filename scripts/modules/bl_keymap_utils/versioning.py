@@ -406,7 +406,7 @@ def keyconfig_update(keyconfig_data, keyconfig_version):
                         item_prop["properties"][fill_color_override_test_path_index] = (
                             "fill_color_override_test_path", new_fill_color_override_test_path)
 
-    if keyconfig_version < (5, 3, 26):
+    if keyconfig_version < (5, 3, 29):
         if not has_copy:
             keyconfig_data = copy.deepcopy(keyconfig_data)
             has_copy = True

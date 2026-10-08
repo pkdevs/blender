@@ -903,8 +903,15 @@ static void get_strip_text_color(const StripDrawContext &strip_ctx, uchar r_col[
   if (!active_or_selected) {
     r_col[0] = r_col[1] = r_col[2] = 0;
 
-    /* On muted and missing media/data-block strips: gray color, reduce opacity. */
-    if (strip_ctx.is_muted || strip_ctx.missing_data_block || strip_ctx.missing_media) {
+    /* On missing media/data-block strips: a blend between alert and text color. */
+    if (strip_ctx.missing_data_block || strip_ctx.missing_media) {
+      uchar col_alert[4];
+      ui::theme::get_color_4ubv(TH_REDALERT, col_alert);
+      ui::theme::get_color_blend_3ubv(TH_REDALERT, TH_TEXT_HI, col_alert[3] / 255.0f, r_col);
+    }
+
+    /* On muted strips: gray color, reduce opacity. */
+    if (strip_ctx.is_muted) {
       r_col[0] = r_col[1] = r_col[2] = 192;
       r_col[3] *= 0.66f;
     }
@@ -1382,6 +1389,14 @@ static void draw_strips_background(const TimelineDrawContext &ctx,
       uchar muted_color[3] = {128, 128, 128};
       ui::theme::get_color_blend_shade_3ubv(col, muted_color, 0.5f, 0, col);
     }
+
+    /* Missing media. */
+    if (strip.missing_data_block || strip.missing_media) {
+      uchar alert_color[4];
+      ui::theme::get_color_4ubv(TH_REDALERT, alert_color);
+      ui::theme::get_color_blend_shade_3ubv(col, alert_color, alert_color[3] / 255.0f, -20, col);
+    }
+
     data.col_background = color_pack(col);
 
     const bool show_thumbnails = (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_SHOW_THUMBNAILS);
@@ -1806,6 +1821,7 @@ static void draw_timeline_sfra_efra(const TimelineDrawContext &ctx)
 }
 
 struct CacheDrawData {
+  const Scene *scene;
   const View2D *v2d;
   float stripe_ofs_y;
   float stripe_ht;
@@ -1834,6 +1850,11 @@ static void draw_cache_source_iter_fn(void *userdata, const Strip *strip, int ti
   const uchar4 col{255, 25, 5, 100};
   float stripe_bot = strip->channel + STRIP_OFSBOTTOM + drawdata->stripe_ofs_y;
   float stripe_top = stripe_bot + drawdata->stripe_ht;
+  if (strip->type == STRIP_TYPE_IMAGE && seq::transform_single_image_check(strip)) {
+    drawdata->quads->add_quad(
+        strip->left_handle(), stripe_bot, strip->right_handle(drawdata->scene), stripe_top, col);
+    return;
+  }
   drawdata->quads->add_quad(timeline_frame, stripe_bot, timeline_frame + 1, stripe_top, col);
 }
 
@@ -1906,6 +1927,7 @@ static void draw_cache_view(const bContext *C)
 
   SeqQuadsBatch quads;
   CacheDrawData userdata;
+  userdata.scene = scene;
   userdata.v2d = v2d;
   userdata.stripe_ofs_y = stripe_ofs_y;
   userdata.stripe_ht = stripe_ht;
