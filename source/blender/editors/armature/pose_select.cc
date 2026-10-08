@@ -922,6 +922,7 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
 
   /* Loop through all the bone constraints looking for a match. */
   for (Object *ob : objects) {
+    bool matched = false;
     bArmature *arm = id_cast<bArmature *>(ob->data);
     BLI_assert(arm);
     for (bPoseChannel &pchan : ob->pose->chanbase) {
@@ -940,13 +941,15 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
           if (is_constraint_target_selected(ct, selected_bones)) {
             animrig::bone_select(&pchan);
             found = true;
+            matched = true;
             break;
           }
         }
       }
     }
-
-    ED_pose_bone_select_tag_update(ob);
+    if (matched) {
+      ED_pose_bone_select_tag_update(ob);
+    }
   }
 
   if (!found) {
