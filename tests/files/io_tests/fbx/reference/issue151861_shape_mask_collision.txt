@@ -1,0 +1,74 @@
+==== Meshes: 1
+- Mesh 'Mesh' vtx:4 face:1 loop:4 edge:4
+    - 0 1 2 3 
+    - 0/1 1/2 2/3 0/3 
+  - attr 'custom_normal' INT16_2D CORNER
+    - (0, 0)
+    - (0, 0)
+    - (0, 0)
+    - (0, 0)
+  - attr 'position' FLOAT_VECTOR POINT
+    - (0.000, 0.000, 0.000)
+    - (1.000, 0.000, 0.000)
+    - (1.000, 1.000, 0.000)
+    - (0.000, 1.000, 0.000)
+  - attr 'sharp_edge' BOOLEAN EDGE
+    - 0 0 0 0 
+  - vertex groups:
+    - 0=1.000 2=0.000 3=0.000
+    - 0=0.750 1=0.250 2=0.250 3=0.250
+    - 1=0.750 2=0.750 3=0.750 0=0.250
+    - 2=1.000 0=0.500 1=0.500 3=0.500
+  - shape key 'Basis' w:0.000 vgrp:'' 1:(1.000, 0.000, 0.000) 2:(1.000, 1.000, 0.000) 3:(0.000, 1.000, 0.000)
+  - shape key 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_été' w:0.000 vgrp:'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.003' 0:(0.000, 0.000, 1.000) 1:(1.000, 0.000, 1.000) 2:(1.000, 1.000, 1.000)
+  - shape key 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.002' w:0.000 vgrp:'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.004' 0:(0.000, 0.000, 1.000) 1:(1.000, 0.000, 1.000) 2:(1.000, 1.000, 1.000)
+
+==== Objects: 3
+- Obj 'Linked' MESH data:'Mesh' par:'Rig'
+  - pos 0.000, 0.000, 0.000
+  - rot 0.000, 0.000, 0.000 (XYZ)
+  - scl 1.000, 1.000, 1.000
+  - 4 vertex groups
+    - 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_été' 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.002' 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.003' 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.004' 
+  - 1 modifiers
+    - ARMATURE 'Rig'
+- Obj 'Mesh' MESH data:'Mesh' par:'Rig'
+  - pos 0.000, 0.000, 0.000
+  - rot 0.000, 0.000, 0.000 (XYZ)
+  - scl 1.000, 1.000, 1.000
+  - 4 vertex groups
+    - 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_été' 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.002' 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.003' 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.004' 
+  - 1 modifiers
+    - ARMATURE 'Rig'
+- Obj 'Rig' ARMATURE data:'Rig'
+  - pos 0.000, 0.000, 0.000
+  - rot 0.000, 0.000, 0.000 (XYZ)
+  - scl 1.000, 1.000, 1.000
+
+==== Actions: 1
+- Action 'Scene' curverange:(2.0 .. 3.0) layers:1
+- ActionLayer Layer strips:1
+ - Keyframe strip channelbags:1
+ - Channelbag slot 'KEKey' curves:2
+  - fcu 'key_blocks["Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.002"].value[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.500) lh:(2.667, 0.500 AUTO_CLAMPED) rh:(3.333, 0.500 AUTO_CLAMPED)
+  - fcu 'key_blocks["Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_été"].value[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.500) lh:(2.667, 0.500 AUTO_CLAMPED) rh:(3.333, 0.500 AUTO_CLAMPED)
+
+==== Armatures: 1
+- Armature 'Rig' 3 bones
+  - bone 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.001' h:(0.000, 0.000, 0.000) t:(0.000, 0.000, 1.000) radius h:0.100 t:0.050
+      1.000 0.000 0.000 0.000
+      0.000 0.000 -1.000 0.000
+      0.000 1.000 0.000 0.000
+  - bone 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_.002' h:(0.000, 0.000, 0.000) t:(0.000, 0.000, 1.000) radius h:0.100 t:0.050
+      1.000 0.000 0.000 0.000
+      0.000 0.000 -1.000 0.000
+      0.000 1.000 0.000 0.000
+  - bone 'Mâchoire_très_expressive_paddingpaddingpaddingpadding_l_été' h:(0.000, 0.000, 0.000) t:(0.000, 0.000, 1.000) radius h:0.100 t:0.050
+      1.000 0.000 0.000 0.000
+      0.000 0.000 -1.000 0.000
+      0.000 1.000 0.000 0.000
+
