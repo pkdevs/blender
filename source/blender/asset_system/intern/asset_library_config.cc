@@ -98,8 +98,7 @@ static ReadingResult<toml::value> user_asset_library_config_read_file(
     toml::result file_result = toml::try_parse(blender_asset_lib_toml_path, TOML_SPEC_VERSION);
     if (file_result.is_err()) {
       asset_lib_config_print_errors(file_result.unwrap_err());
-      return ReadingResult<>::Failure(
-          N_("Error while reading asset library configuration toml file."));
+      return ReadingResult<>::Failure(N_("Error reading configuration file."));
     }
     return ReadingResult<toml::value>::Success(file_result.unwrap());
   }
@@ -121,7 +120,7 @@ static ReadingResult<> user_asset_library_config_write_file(bUserAssetLibrary &c
   std::string toml_as_string = toml::format(asset_lib_config, TOML_SPEC_VERSION);
   FILE *file_handle = BLI_fopen(blender_asset_lib_toml_path, "w");
   if (file_handle == nullptr) {
-    return ReadingResult<>::Failure(N_("Error while writing asset library configuration file."));
+    return ReadingResult<>::Failure(N_("Error writing configuration file."));
   }
   fputs(toml_as_string.c_str(), file_handle);
   fclose(file_handle);
