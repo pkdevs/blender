@@ -1709,7 +1709,6 @@ static void execute_realize_mesh_task(const RealizeInstancesOptions &options,
 
   math::transform_points(src_positions, task.transform, dst_positions);
 
-  /* TODO: Comment why edges are cast to int (contiguous int2 -> two ints each). */
   array_utils::copy_ints_with_offset(
       src_edges.cast<int>(), task.start_indices.vert, dst_edges.cast<int>());
   array_utils::copy_ints_with_offset(src_corner_verts, task.start_indices.vert, dst_corner_verts);

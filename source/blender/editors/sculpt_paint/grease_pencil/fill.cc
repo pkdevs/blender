@@ -1525,8 +1525,10 @@ static meshintersect::CDT_input<double> get_input_from_drawings(
         continue;
       }
       const int vert_offset = vert_range.first();
-      array_utils::copy_ints_with_offset(
-          edges_slice.cast<int>(), vert_offset, edges_slice.cast<int>());
+      for (const int edge_i : drawing_range.index_range()) {
+        edges_slice[edge_i] = int2(edges_slice[edge_i][0] + vert_offset,
+                                   edges_slice[edge_i][1] + vert_offset);
+      }
     }
   });
 

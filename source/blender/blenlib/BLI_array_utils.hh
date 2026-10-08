@@ -107,8 +107,7 @@ inline void copy(const Span<T> src,
 }
 
 /**
- * Copy integers from \a src to \a dst, adding \a offset to each value.
- * \a src and \a dst may be the same span (in-place).
+ * Copy integers from a between two spans while adding an offset.
  */
 void copy_ints_with_offset(Span<int> src,
                            int offset,
