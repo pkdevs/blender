@@ -1778,10 +1778,6 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->nodes_stack_limit = 100;
   }
 
-  if (!USER_VERSION_ATLEAST(502, 100)) {
-    userdef->text_render = U_default.text_render;
-  }
-
   if (!USER_VERSION_ATLEAST(502, 35)) {
     /* Instead of removing the flag entirely, it is forced to be on. Once it is 100% certain the
      * Remote Asset Libraries feature will be shipped with 5.2 (which depends on other factors than
@@ -1828,6 +1824,11 @@ void blo_do_versions_userdef(UserDef *userdef)
     if (userdef->sequencer_default_strip_length == 0.0f) {
       userdef->sequencer_default_strip_length = 1.0f;
     }
+  }
+
+  if (!USER_VERSION_ATLEAST(504, 1)) {
+    /* Anti-aliasing and hinting options were removed with HarfBuzz text layout. */
+    userdef->text_render = U_default.text_render;
   }
 
   /**
