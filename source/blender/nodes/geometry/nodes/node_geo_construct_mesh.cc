@@ -253,6 +253,8 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
   if (params.output_is_required("Mesh"_ustr)) {
+    const GListPtr corner_vertices_list = params.extract_input<GListPtr>("Corner Vertices"_ustr);
+    const GListPtr face_offsets_list = params.extract_input<GListPtr>("Face Offsets"_ustr);
     const List<float3> &positions = positions_list->typed<float3>();
     const ListPtr<int> &corner_vertices = corner_vertices_list.typed<int>();
     const ListPtr<int> &face_offsets = face_offsets_list.typed<int>();
