@@ -2309,7 +2309,6 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   uint64_t _native_menubar_request;
   NSString *_toolbar_signature;
   NSString *_action_signature;
-  NSArray *_actions_menu_items;
   NSString *_active_tool_identifier;
   NSLayoutConstraint *_tool_rail_width_constraint;
   NSLayoutConstraint *_tool_rail_height_constraint;
@@ -2512,7 +2511,6 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_panels_refresh_timer invalidate];
   [_toolbar_signature release];
   [_action_signature release];
-  [_actions_menu_items release];
   [_top_settings_values release];
   [_top_settings_group release];
   [_native_menubar_items release];
@@ -5005,19 +5003,45 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     return;
   }
 
-  NSArray *items = _native_menubar_items ?: @[];
-  if (_actions_button.menu != nil && [_actions_menu_items isEqualToArray:items]) {
+  if (_actions_button.menu != nil) {
     return;
   }
 
-  /* Replacing a presented UIMenu makes UIKit rebuild it visibly. Poll the model, but only
-   * install a new menu when its contents actually change. Build from the same snapshot. */
-  UIMenu *menu = [UIMenu menuWithTitle:@"Blender" children:blenderIOSNativeMenuElements(items)];
-  [_actions_menu_items release];
-  _actions_menu_items = [items copy];
+  /* The iPadOS menu bar has all of Blender's menus; this button keeps the essentials. Submenus
+   * load from Blender when opened, so the menu itself never needs rebuilding. */
+  /* iPadOS document symbols rather than Blender's file icons. */
+  UIAction *(^command)(NSString *, NSString *, const char *) =
+      ^UIAction *(NSString *title, NSString *symbol, const char *op_name) {
+        return [UIAction actionWithTitle:title
+                                   image:[UIImage systemImageNamed:symbol]
+                              identifier:nil
+                                 handler:^(__kindof UIAction *) { WM_apple_ios_ui_operator_enqueue(op_name); }];
+      };
+  UIMenu *(^submenu)(NSString *, NSString *, NSString *) = ^UIMenu *(NSString *title, NSString *symbol, NSString *menu) {
+    UIMenu *live = blenderIOSNativeSubmenu(@{@"title": title, @"route": @{@"root": menu, @"path": @[]}}, nil);
+    return [UIMenu menuWithTitle:title image:[UIImage systemImageNamed:symbol] identifier:nil options:0
+                        children:live.children];
+  };
+  UIMenu *(^section)(NSArray *) = ^UIMenu *(NSArray *children) {
+    return [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:children];
+  };
+  UIAction *desktop = [UIAction actionWithTitle:@"Switch to Desktop Interface"
+                                          image:[UIImage systemImageNamed:@"macwindow"]
+                                     identifier:@"blender.interface.desktop"
+                                        handler:^(__kindof UIAction *) {
+                                          WM_apple_ios_ui_setting_enqueue("interface", "desktop");
+                                        }];
+  UIMenu *menu = [UIMenu menuWithTitle:@"Blender" children:@[
+    section(@[submenu(@"New", @"doc.badge.plus", @"TOPBAR_MT_file_new"),
+              command(@"Open…", @"folder", "WM_OT_open_mainfile"),
+              submenu(@"Open Recent", @"clock", @"TOPBAR_MT_file_open_recent")]),
+    section(@[command(@"Save", @"square.and.arrow.down", "WM_OT_save_mainfile"),
+              command(@"Save As…", @"square.and.arrow.down.on.square", "WM_OT_save_as_mainfile")]),
+    section(@[desktop]),
+  ]];
   _actions_button.menu = menu;
   _actions_button.menuRepresentation = menu;
-  _actions_button.enabled = menu.children.count > 0;
+  _actions_button.enabled = YES;
 }
 
 - (UIBarButtonItem *)actionsButton
