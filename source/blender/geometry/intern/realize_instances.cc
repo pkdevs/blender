@@ -1472,9 +1472,12 @@ static void execute_realize_pointcloud_tasks(const RealizeInstancesOptions &opti
                                           positions.span);
         }
       },
-      threading::individual_task_sizes(
-          [&](const int64_t i) { return int64_t(tasks[i].pointcloud_info->pointcloud->totpoint); },
-          offsets.pointcloud_offset));
+      threading::accumulated_task_sizes([&](const IndexRange task_range) {
+        const RealizePointCloudTask &task_begin = tasks[task_range.first()];
+        const RealizePointCloudTask &task_end = tasks[task_range.last()];
+        return task_end.start_index + task_end.pointcloud_info->pointcloud->totpoint -
+               task_begin.start_index;
+      }));
 
   /* Tag modified attributes. */
   for (GSpanAttributeWriter &dst_attribute : dst_attribute_writers) {
@@ -1988,8 +1991,12 @@ static void join_mesh_material_indices(const AllMeshesInfo &all_meshes_info,
           }
         }
       },
-      threading::individual_task_sizes(
-          [&](const int64_t i) { return int64_t(tasks[i].mesh_info->mesh->faces_num); }));
+      threading::accumulated_task_sizes([&](const IndexRange task_range) {
+        const RealizeMeshTask &task_begin = tasks[task_range.first()];
+        const RealizeMeshTask &task_end = tasks[task_range.last()];
+        return task_end.start_indices.face + task_end.mesh_info->mesh->faces_num -
+               task_begin.start_indices.face;
+      }));
 
   dst_attr.finish();
 }
@@ -2149,9 +2156,12 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
                                     dst_origindex_face);
         }
       },
-      threading::individual_task_sizes(
-          [&](const int64_t i) { return int64_t(tasks[i].mesh_info->mesh->verts_num); },
-          verts_num));
+      threading::accumulated_task_sizes([&](const IndexRange task_range) {
+        const RealizeMeshTask &task_begin = tasks[task_range.first()];
+        const RealizeMeshTask &task_end = tasks[task_range.last()];
+        return task_end.start_indices.vert + task_end.mesh_info->mesh->verts_num -
+               task_begin.start_indices.vert;
+      }));
 
   join_mesh_material_indices(all_meshes_info, tasks, *dst_mesh);
 
@@ -2612,11 +2622,12 @@ static void execute_realize_curve_tasks(const RealizeInstancesOptions &options,
                                      custom_normal.span);
         }
       },
-      threading::individual_task_sizes(
-          [&](const int64_t i) {
-            return int64_t(tasks[i].curve_info->curves->geometry.point_num);
-          },
-          points_num));
+      threading::accumulated_task_sizes([&](const IndexRange task_range) {
+        const RealizeCurveTask &task_begin = tasks[task_range.first()];
+        const RealizeCurveTask &task_end = tasks[task_range.last()];
+        return task_end.start_indices.point + task_end.curve_info->curves->geometry.point_num -
+               task_begin.start_indices.point;
+      }));
 
   /* Type counts have to be updated eagerly. */
   dst_curves.runtime->type_counts.fill(0);
