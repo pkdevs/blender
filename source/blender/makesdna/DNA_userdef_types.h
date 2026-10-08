@@ -372,7 +372,7 @@ enum eText_Draw_Options : short {
   USER_TEXT_SLASHED_ZERO_UI = (1 << 5),
   USER_TEXT_DISCRETIONARY_LIGATURES_UI = (1 << 6),
   USER_TEXT_CONTEXTUAL_ALTERNATES_UI = (1 << 7),
-  /* With default (Inter) as UI font Only. */
+  /* Only with the default (Inter) UI font. */
   USER_TEXT_DISAMBIGUATION_INTER = (1 << 8),
   USER_TEXT_OPEN_DIGITS_INTER = (1 << 9),
 };
@@ -1264,7 +1264,7 @@ struct UserDef {
   eText_Draw_Options text_render = USER_TEXT_RENDER_SUBPIXELAA | USER_TEXT_DISAMBIGUATION_INTER |
                                    USER_TEXT_OPEN_DIGITS_INTER |
                                    USER_TEXT_DISCRETIONARY_LIGATURES_UI;
-  char _pad19[1];
+  char _pad19[1] = {};
 
   eViewNavigation_Method navigation_mode = VIEW_NAVIGATION_WALK;
 

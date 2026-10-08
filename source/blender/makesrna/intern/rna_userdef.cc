@@ -1269,7 +1269,7 @@ static void rna_userdef_text_update(Main * /*bmain*/, Scene * /*scene*/, Pointer
   USERDEF_TAG_DIRTY;
 }
 
-int static rna_UserDef_ui_font_is_default(const PointerRNA * /*ptr*/, const char ** /*r_info*/)
+static int rna_UserDef_ui_font_is_default(const PointerRNA * /*ptr*/, const char ** /*r_info*/)
 {
   return (U.font_path_ui[0] == 0) ? PROP_EDITABLE : PropertyFlag(0);
 }
@@ -5660,7 +5660,7 @@ static void rna_def_userdef_view(BlenderRNA *brna)
       prop, "Text Subpixel Anti-Aliasing", "Render text for optimal horizontal placement");
   RNA_def_property_update(prop, 0, "rna_userdef_text_update");
 
-  prop = RNA_def_property(srna, "use_text_slashed_zero_ui", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "use_text_slashed_zero", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "text_render", USER_TEXT_SLASHED_ZERO_UI);
   RNA_def_property_ui_text(prop, "Slashed Zero", "Replace zero number figure with slashed zero");
   RNA_def_property_update(prop, 0, "rna_userdef_text_update");
@@ -5669,10 +5669,10 @@ static void rna_def_userdef_view(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(
       prop, nullptr, "text_render", USER_TEXT_DISCRETIONARY_LIGATURES_UI);
   RNA_def_property_ui_text(
-      prop, "Discretionary Ligatures", "Replace some character sequences with custom versions.");
+      prop, "Discretionary Ligatures", "Replace some character sequences with custom versions");
   RNA_def_property_update(prop, 0, "rna_userdef_text_update");
 
-  prop = RNA_def_property(srna, "use_text_contextual_alternates_ui", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "use_text_contextual_alternates", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "text_render", USER_TEXT_CONTEXTUAL_ALTERNATES_UI);
   RNA_def_property_ui_text(
       prop, "Contextual Alternates", "Alternate characters depending on context");

@@ -152,8 +152,10 @@ inline ft_pix ft_pix_from_float(float v)
 #define BLF_BATCH_DRAW_LEN_MAX 128 /* in glyph */
 
 /* -------------------------------------------------------------------- */
-/* ShapingCache: LFU cache for shaped strings
- */
+/** \name Shaping Cache
+ *
+ * Least-frequently-used cache of shaped strings.
+ * \{ */
 
 #define BLF_SHAPING_CACHE_SIZE 256
 
@@ -166,7 +168,7 @@ struct CachedGlyph {
 };
 
 struct CachedString {
-  blender::Array<CachedGlyph> glyphs;
+  Array<CachedGlyph> glyphs;
   uint32_t str_len = 0;
   rcti bounds = {};  /* ft_pix. */
   uint32_t freq = 0; /* Use-count for LFU eviction. */
@@ -175,7 +177,7 @@ struct CachedString {
 struct ShapingCache {
   ShapingCache()
   {
-    data.reserve(BLF_SHAPING_CACHE_SIZE);
+    this->data.reserve(BLF_SHAPING_CACHE_SIZE);
   }
 
   Map<std::string, CachedString> data = {};
@@ -186,31 +188,31 @@ struct ShapingCache {
 
   const CachedString *lookup_ptr(const std::string &key)
   {
-    ++lookups;
+    ++this->lookups;
 
-    CachedString *ptr = data.lookup_ptr(key);
+    CachedString *ptr = this->data.lookup_ptr(key);
     if (ptr == nullptr) {
       return nullptr;
     }
 
-    ++hits;
+    ++this->hits;
     ++ptr->freq;
     return ptr;
   }
 
   bool contains(const std::string &key) const
   {
-    return data.lookup_ptr(key) != nullptr;
+    return this->data.lookup_ptr(key) != nullptr;
   }
 
   void add_new(const std::string &key, CachedString &&value)
   {
-    ++inserts;
+    ++this->inserts;
 
-    if (data.size() >= BLF_SHAPING_CACHE_SIZE) {
+    if (this->data.size() >= BLF_SHAPING_CACHE_SIZE) {
       uint32_t best_freq = std::numeric_limits<uint32_t>::max();
       const std::string *evict_key_ptr = nullptr;
-      for (const auto item : data.items()) {
+      for (const auto item : this->data.items()) {
         const CachedString &v = item.value;
         const uint32_t f = v.freq;
         if (f < best_freq) {
@@ -219,31 +221,37 @@ struct ShapingCache {
         }
       }
       if (evict_key_ptr) {
-        data.remove(*evict_key_ptr);
-        ++evictions;
+        this->data.remove(*evict_key_ptr);
+        ++this->evictions;
       }
     }
 
     value.freq = 1;
-    data.add_new(key, std::move(value));
+    this->data.add_new(key, std::move(value));
   }
 };
 
-/* -------------------------------------------------------------------- */
-/* OpenType Feature Set
- */
+/** \} */
 
-struct otf_feature {
+/* -------------------------------------------------------------------- */
+/** \name OpenType Feature Set
+ * \{ */
+
+struct OTFFeature {
   uint32_t tag;
   uint32_t value;
 };
 
-typedef blender::Vector<otf_feature> FeatureSet;
+using FeatureSet = Vector<OTFFeature>;
 
 FeatureSet blf_font_otf_features_base();
 FeatureSet blf_font_otf_features_default();
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
+/** \name Shaped Text
+ * \{ */
 
 struct ShapedGlyph {
   FontBLF *font = nullptr;
@@ -259,12 +267,8 @@ struct ShapedGlyph {
   bool is_combining() const;
 };
 
-#ifndef WITH_HARFBUZZ
-#  define hb_feature_t int /* Dummy type when Harfbuzz is not available. */
-#endif
-
 struct ShapingData {
-  blender::Vector<ShapedGlyph> glyphs = {};
+  Vector<ShapedGlyph> glyphs = {};
   rcti bounds = {};
   ShapingData(FontBLF *font,
               GlyphCacheBLF *gc,
@@ -282,6 +286,8 @@ struct ShapingData {
   size_t offset_from_cursor_position(int location_x) const;
   void offset_to_glyph_bounds(size_t str_offset, rcti *r_glyph_bounds) const;
 };
+
+/** \} */
 
 struct BatchBLF {
   /** Can only batch glyph from the same font. */
@@ -501,10 +507,8 @@ struct FontBLF {
   char *mem_name;
 
 #ifdef WITH_HARFBUZZ
-  /* pointer to Harfbuzz font, if needed for complex shaping. */
+  /** HarfBuzz font, created on demand for text shaping. */
   hb_font_t *hb_font;
-  /** OpenType typographic features. */
-  blender::Vector<hb_feature_t> features;
 #endif
 
   /**

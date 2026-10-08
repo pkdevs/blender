@@ -890,7 +890,7 @@ void blf_str_offset_to_glyph_bounds(FontBLF *font,
                                     rcti *r_glyph_bounds)
 {
   if (!str || !str[0]) {
-    std::memset(r_glyph_bounds, 0, sizeof(rcti));
+    *r_glyph_bounds = {};
     return;
   }
 
