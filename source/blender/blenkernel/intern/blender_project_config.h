@@ -12,10 +12,8 @@
 
 namespace blender {
 struct Main;
-namespace bke {
 
 bool BKE_blender_project_config_file_write(Main *bmain);
 bool BKE_blender_project_init_from_root_path(Main *bmain, std::string project_root_path);
 
-}  // namespace bke
 }  // namespace blender

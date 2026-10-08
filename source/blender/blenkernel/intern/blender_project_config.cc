@@ -23,11 +23,35 @@
 #include "RNA_enum_types.hh"
 #include "RNA_prototypes.hh"
 
-namespace blender::bke {
+namespace blender {
 
 static CLG_LogRef LOG = {"project.config"};
 
+namespace bke {
 constexpr toml::spec toml_version = toml::spec::v(1, 0, 0);
+/* The schema version of the Project Config, for managing breaking schema changes.
+ *
+ * Only increment this when there are breaking schema changes.
+ *
+ * Project versioning should generally follow the same approach as blend file
+ * versioning. In short:
+ *
+ * - When reasonably possible, change the schema in ways that fully preserve
+ *   backwards compatibility and that avoid critical forwards compatibility
+ *   breaks.
+ * - When that's not possible, plan ahead and only make the needed breaking
+ *   changes on major version bumps of Blender (e.g. 5.x -> 6.x).
+ * - In the version just before a major version bump, add forwards compatibility
+ *   code for the anticipated breaking changes, so that e.g. the last 5.x release
+ *   can still open projects from Blender 6.0.
+ *
+ * For more details, see:
+ * https://developer.blender.org/docs/handbook/guidelines/compatibility_handling_for_blend_files/
+ *
+ * NOTE: when incrementing this version number, ensure that the versioning code
+ * in `create_blender_project_from_toml()` is appropriately expanded to auto-upgrade
+ * between versions
+ */
 const int project_schema_version = 1;
 
 static std::string toml_type_name(const toml::value &value)
@@ -412,20 +436,30 @@ static toml::ordered_table create_toml_from_blender_project(BlenderProject *proj
   return toml_table;
 }
 
+}  // namespace bke
+
 bool BKE_blender_project_config_file_write(Main *bmain)
 {
-  BlenderProject *project = BKE_blender_project_get(bmain);
+  bke::BlenderProject *project = BKE_blender_project_get(bmain);
+  if (project == nullptr) {
+    CLOG_ERROR(&LOG, "Couldn't save project config, no active project.");
+    return false;
+  }
   std::string toml_path = project->get_root_path() + SEP_STR + ".blender_project" + SEP_STR +
-                          "project.toml_new";
+                          "project.toml";
 
   toml::ordered_table toml_config = create_toml_from_blender_project(project);
 
   /* This blender::fstream is needed to properly handle utf-8 paths on Windows. */
   blender::fstream config_file(toml_path, std::ios::out | std::ios::binary);
   if (!config_file.is_open()) {
-    throw std::system_error(errno, std::generic_category(), "Failed to open file: " + toml_path);
+    CLOG_ERROR(&LOG,
+               "Failed to open project config file '%s' for writing: %s",
+               toml_path.c_str(),
+               std::strerror(errno));
+    return false;
   }
-  config_file << toml::format(toml::ordered_value(toml_config), toml_version);
+  config_file << toml::format(toml::ordered_value(toml_config), bke::toml_version);
   config_file.close(); /* Flush to get all failures. */
   return !config_file.fail();
 }
@@ -444,12 +478,10 @@ bool BKE_blender_project_init_from_root_path(Main *bmain, std::string project_ro
   }
 
   try {
-    create_blender_project_from_toml(bmain, toml_path, project_root_path);
+    bke::create_blender_project_from_toml(bmain, toml_path, project_root_path);
     /* Make sure to refresh color management configs if the project defined any. */
     // TODO: will segfault Blender currently.
     // IMB_colormanagement_project_read_post(bmain);
-    //  TODO: just for testing
-    BKE_blender_project_config_file_write(bmain);
   }
   catch (const std::exception &e) {
     // TODO: print errors
@@ -462,4 +494,4 @@ bool BKE_blender_project_init_from_root_path(Main *bmain, std::string project_ro
   return true;
 }
 
-}  // namespace blender::bke
+}  // namespace blender
