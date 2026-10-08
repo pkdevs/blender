@@ -553,8 +553,12 @@ static void recent_projects_set(const Span<RecentProject> projects)
   for (const RecentProject &project : projects) {
     items.push_back({{"name", project.name}, {"path", project.path}});
   }
-  recents::Section("project").set("recent", items);
-  recents::save();
+
+  recents::Section section("project");
+  if (section.get<RecentProjectsTOML>("recent") != items) {
+    section.set("recent", items);
+    recents::save();
+  }
 }
 
 void BKE_blender_project_recent_update(const Main *bmain)
