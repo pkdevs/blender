@@ -2638,6 +2638,7 @@ void WM_apple_ios_session_restore(bContext *C)
 }
 
 #endif
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -3438,7 +3439,27 @@ static wmOperatorStatus wm_open_mainfile__open(bContext *C, wmOperator *op)
 
   SET_FLAG_FROM_TEST(G.fileflags, !RNA_boolean_get(op->ptr, "load_ui"), G_FILE_NO_UI);
   SET_FLAG_FROM_TEST(G.f, RNA_boolean_get(op->ptr, "use_scripts"), G_FLAG_SCRIPT_AUTOEXEC);
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  /* Continue where the work left off: an auto-save newer than the document holds changes that
+   * were never saved, because Blender was closed or another file was opened. */
+  char autosave[FILE_MAX];
+  BLI_stat_t autosave_stat, file_stat;
+  const bool continue_autosave = wm_autosave_location_for(filepath, autosave) &&
+                                 BLI_stat(autosave, &autosave_stat) == 0 &&
+                                 BLI_stat(filepath, &file_stat) == 0 &&
+                                 autosave_stat.st_mtime > file_stat.st_mtime;
+  if (continue_autosave) {
+    G.fileflags |= G_FILE_RECOVER_READ;
+  }
+  success = wm_file_read_opwrap(
+      C, continue_autosave ? autosave : filepath, use_scripts_autoexec_check, op->reports);
+  if (continue_autosave) {
+    /* Loaded as recovered, which Blender keeps until the document is saved. */
+    G.fileflags &= ~G_FILE_RECOVER_READ;
+  }
+#else
   success = wm_file_read_opwrap(C, filepath, use_scripts_autoexec_check, op->reports);
+#endif
 
   if (success) {
     if (G.fileflags & G_FILE_NO_UI) {
