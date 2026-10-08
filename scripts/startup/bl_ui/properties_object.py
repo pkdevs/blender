@@ -239,7 +239,7 @@ class OBJECT_PT_display(ObjectButtonsPanel, Panel):
                 'VOLUME',
                 'CURVES',
                 'POINTCLOUD'})
-        has_bounds = (is_geometry or obj_type in {'LATTICE', 'ARMATURE'})
+        has_bounds = (is_geometry or obj_type in {'LATTICE', 'ARMATURE', 'LIGHT_PROBE'})
         is_empty_image = (obj_type == 'EMPTY' and obj.empty_display_type == 'IMAGE')
         is_dupli = (obj.instance_type != 'NONE')
         is_gpencil = (obj_type == 'GREASEPENCIL')
@@ -469,7 +469,7 @@ class OBJECT_PT_visibility(ObjectButtonsPanel, Panel):
 
         layout.separator()
         col = layout.column(heading="Mask")
-        col.prop(ob, "is_holdout")
+        col.prop(ob, "is_holdout", toggle=False)
 
 
 def has_geometry_visibility(ob):

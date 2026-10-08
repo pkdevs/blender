@@ -2175,6 +2175,14 @@ static void widget_draw_text_ime_underline(const uiFontStyle *fstyle,
 }
 #endif /* WITH_INPUT_IME */
 
+/* Text selection uses a lower opacity than the item color.
+ * See #163741 for details. */
+static void widget_text_selection_color(const uiWidgetColors *wcol, uchar color[4])
+{
+  copy_v4_v4_uchar(color, wcol->item);
+  color[3] = 51;
+}
+
 static void widget_draw_textbox(const uiFontStyle *fstyle,
                                 const uiWidgetColors *wcol,
                                 Button *but,
@@ -2326,7 +2334,9 @@ static void widget_draw_textbox(const uiFontStyle *fstyle,
       const uint pos = GPU_vertformat_attr_add(
           immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-      immUniformColor4ubv(wcol->item);
+      uchar selection_color[4];
+      widget_text_selection_color(wcol, selection_color);
+      immUniformColor4ubv(selection_color);
       const StringRef line = lines[selection.line];
       const Vector<Bounds<int>> boxes = BLF_str_selection_boxes(
           fstyle->uifont_id,
@@ -2545,6 +2555,7 @@ static void widget_draw_text(const uiFontStyle *fstyle,
 
 #ifdef WITH_INPUT_IME
   const wmIMEData *ime_data;
+  std::string ime_drawstr;
 #endif
 
   fontstyle_set(fstyle);
@@ -2577,7 +2588,6 @@ static void widget_draw_text(const uiFontStyle *fstyle,
       drawstr_left_len = INT_MAX;
 
 #ifdef WITH_INPUT_IME
-      /* FIXME: IME is modifying `const char *drawstr`! */
       ime_data = button_ime_data_get(but);
 
       if (ime_data && !ime_data->composite.empty()) {
@@ -2591,8 +2601,8 @@ static void widget_draw_text(const uiFontStyle *fstyle,
                      but->editstr,
                      ime_data->composite.c_str(),
                      but->editstr + but->pos);
-        but->drawstr = tmp_drawstr;
-        drawstr = but->drawstr.c_str();
+        ime_drawstr = tmp_drawstr;
+        drawstr = ime_drawstr.c_str();
       }
       else
 #endif
@@ -2639,7 +2649,9 @@ static void widget_draw_text(const uiFontStyle *fstyle,
       uint pos = GPU_vertformat_attr_add(
           immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-      immUniformColor4ubv(wcol->item);
+      uchar selection_color[4];
+      widget_text_selection_color(wcol, selection_color);
+      immUniformColor4ubv(selection_color);
       const auto boxes = BLF_str_selection_boxes(
           fstyle->uifont_id,
           drawstr + but->ofs,
@@ -3270,22 +3282,26 @@ static void widget_draw_text_icon(const uiFontStyle *fstyle,
  * Adjust widget display based on animated, driven, overridden ... etc.
  * \{ */
 
-/* put all widget colors on half alpha, use local storage */
-static void widget_color_disabled(WidgetType *wt, const WidgetStateInfo *state)
+/* Put all widget colors on reduced alpha. */
+static void widget_color_disabled(uiWidgetColors &wcol, const WidgetStateInfo *state)
+{
+  const float factor = widget_alpha_factor(state);
+  wcol.outline[3] *= factor;
+  wcol.outline_sel[3] *= factor;
+  wcol.inner[3] *= factor;
+  wcol.inner_sel[3] *= factor;
+  wcol.item[3] *= factor;
+  wcol.text[3] *= factor;
+  wcol.text_sel[3] *= factor;
+}
+
+/* Put all widget colors on reduced alpha, to avoid overriding theme colors use local storage. */
+static void widget_type_color_disabled(WidgetType *wt, const WidgetStateInfo *state)
 {
   static uiWidgetColors wcol_theme_s;
 
   wcol_theme_s = *wt->wcol_theme;
-
-  const float factor = widget_alpha_factor(state);
-
-  wcol_theme_s.outline[3] *= factor;
-  wcol_theme_s.outline_sel[3] *= factor;
-  wcol_theme_s.inner[3] *= factor;
-  wcol_theme_s.inner_sel[3] *= factor;
-  wcol_theme_s.item[3] *= factor;
-  wcol_theme_s.text[3] *= factor;
-  wcol_theme_s.text_sel[3] *= factor;
+  widget_color_disabled(wcol_theme_s, state);
 
   wt->wcol_theme = &wcol_theme_s;
 }
@@ -3338,7 +3354,7 @@ static void widget_state(WidgetType *wt, const WidgetStateInfo *state, EmbossTyp
     wt->wcol_theme = &btheme->tui.wcol_list_item;
 
     if (state->but_flag & (BUT_DISABLED | BUT_INACTIVE | UI_SEARCH_FILTER_NO_MATCH)) {
-      widget_color_disabled(wt, state);
+      widget_type_color_disabled(wt, state);
     }
   }
 
@@ -3346,6 +3362,9 @@ static void widget_state(WidgetType *wt, const WidgetStateInfo *state, EmbossTyp
   if (state->draw_as_link) {
     theme::get_color_4ubv(TH_LINK, wt->wcol.text);
     theme::get_color_4ubv(TH_LINK, wt->wcol.text_sel);
+    if (state->but_flag & (BUT_DISABLED | BUT_INACTIVE | UI_SEARCH_FILTER_NO_MATCH)) {
+      widget_color_disabled(wt->wcol, state);
+    }
   }
   const uchar *color_blend = widget_color_blend_from_flags(wcol_state, state, emboss);
 
@@ -3380,14 +3399,19 @@ static void widget_state(WidgetType *wt, const WidgetStateInfo *state, EmbossTyp
   }
 
   if (state->but_flag & BUT_REDALERT) {
+    uchar red[4];
+    theme::get_color_4ubv(TH_REDALERT, red);
+    /* Alpha is used to blend between the original color (text, background) and alert theme. */
+    const float red_alpha = float(red[3]) / 255.0f;
+
+    /* In regular widgets, tint the background and outline. */
     if (wt->draw && emboss != EmbossType::None) {
-      theme::get_color_3ubv(TH_REDALERT, wt->wcol.inner);
+      color_blend_v3_v3(wt->wcol.outline, red, red_alpha);
+      color_blend_v3_v3(wt->wcol.inner, red, red_alpha);
     }
+    /* Text such as labels or widgets without emboss. Tint the text only. */
     else {
-      uchar red[4];
-      theme::get_color_3ubv(TH_REDALERT, red);
-      color_mul_hsl_v3(red, 1.0f, 1.5f, 1.5f);
-      color_blend_v3_v3(wt->wcol.text, red, 0.5f);
+      color_blend_v3_v3(wt->wcol.text, red, red_alpha);
     }
   }
 
@@ -4803,6 +4827,7 @@ static void widget_numslider(Button *but,
 
     round_box_edges(&wtb1, roundboxalign_slider, &rect1, rad);
     wtb1.draw_outline = false;
+    wtb1.draw_emboss = false;
     widgetbase_set_uniform_discard_factor(&wtb1, factor_discard);
     widgetbase_draw(&wtb1, wcol);
 
@@ -4816,6 +4841,7 @@ static void widget_numslider(Button *but,
   /* Outline. */
   wtb.draw_outline = true;
   wtb.draw_inner = false;
+  wtb.draw_emboss = false;
   widgetbase_draw(&wtb, wcol);
 
   /* Add space at either side of the button so text aligns with number-buttons
@@ -4888,7 +4914,7 @@ static void widget_swatch(Button *but,
   /* Now we reduce alpha of the inner color (i.e. the color shown)
    * so that this setting can look grayed out, while retaining
    * the checkerboard (for transparent values). This is needed
-   * here as the effects of widget_color_disabled() are overwritten. */
+   * here as the effects of widget_type_color_disabled() are overwritten. */
   col[3] *= widget_alpha_factor(state);
 
   widgetbase_draw_color(&wtb, wcol, col, show_alpha_checkers);
@@ -5245,9 +5271,12 @@ static void widget_state_label(WidgetType *wt, const WidgetStateInfo *state, Emb
 
   if (state->but_flag & BUT_REDALERT) {
     uchar red[4];
-    theme::get_color_3ubv(TH_REDALERT, red);
-    color_mul_hsl_v3(red, 1.0f, 1.5f, 1.5f);
-    color_blend_v3_v3(wt->wcol.text, red, 0.5f);
+    theme::get_color_4ubv(TH_REDALERT, red);
+
+    /* Alert color's alpha is used to blend between the text and alert tint.
+     * This ensures the text be always readable, lighter or darker depending on the theme. */
+    float red_alpha = float(red[3]) / 255.0f;
+    color_blend_v3_v3(wt->wcol.text, red, red_alpha);
   }
 }
 
@@ -6069,7 +6098,7 @@ void draw_button(const bContext *C, ARegion *region, uiStyle *style, Button *but
   if (but->emboss != EmbossType::Pulldown) {
     if (but->flag & (BUT_DISABLED | BUT_INACTIVE | UI_SEARCH_FILTER_NO_MATCH)) {
       use_alpha_blend = true;
-      widget_color_disabled(wt, &state);
+      widget_type_color_disabled(wt, &state);
     }
   }
 
