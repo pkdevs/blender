@@ -13,6 +13,7 @@ namespace blender {
 struct bContext;
 struct wmWindow;
 struct ReportList;
+struct wmOperatorType;
 
 /* Engine-thread API. UIKit exchanges only owned values and request identifiers. */
 bool WM_apple_ios_pencil_hover_active();
@@ -38,5 +39,7 @@ void WM_apple_ios_autosave_now(bContext *C);
  * last document. A document opened with the app takes precedence.
  */
 void WM_apple_ios_session_restore(bContext *C);
+/** Switch between the native iPad interface and Blender's own, as on a desktop computer. */
+void WM_OT_apple_ios_interface_toggle(wmOperatorType *ot);
 
 }  // namespace blender

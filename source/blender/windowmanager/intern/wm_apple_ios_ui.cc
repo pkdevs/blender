@@ -13,6 +13,7 @@
 #include "AS_asset_representation.hh"
 
 #include "BKE_appdir.hh"
+#include "BLT_translation.hh"
 #include "BKE_asset.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
@@ -56,6 +57,7 @@
 #include "IMB_imbuf_types.hh"
 
 #include "RNA_access.hh"
+#include "RNA_define.hh"
 
 #include "UI_resources.hh"
 #include "RNA_enum_types.hh"
@@ -103,6 +105,8 @@ std::string native_properties_menu_query(bContext *C, const std::string &request
 }
 
 namespace blender {
+void ios_interface_set(bContext *C, bool desktop);
+
 namespace {
 
 enum class IOSUICommand {
@@ -207,6 +211,8 @@ std::map<uint64_t, std::string> ios_menu_results;
 std::atomic<uint64_t> ios_menu_next_identifier{0};
 bool ios_ui_layout_ready = false;
 bool ios_ui_gizmo_refresh_pending = true;
+/** Blender's own interface instead of the native one: normal screens, no native controls. */
+std::atomic<bool> ios_desktop_ui{false};
 int ios_panels_visible = 0;
 std::chrono::steady_clock::time_point ios_panels_next_snapshot;
 std::string ios_panels_json = "null";
@@ -764,6 +770,10 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   bool preview = false;
   if (command.setting == "native_redo_edit") {
     ui::native_operator_redo_query(C, command.value, true);
+    return;
+  }
+  if (command.setting == "interface") {
+    ios_interface_set(C, command.value == "desktop");
     return;
   }
   if (command.setting == "native_shading_state") {
@@ -1708,7 +1718,9 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += ios_json_escape(mode_string ? mode_string : "objectmode");
   json += "\",\"shading\":\"";
   json += shading;
-  json += "\",\"objectMode\":\"";
+  json += "\",\"desktop\":";
+  json += ios_desktop_ui ? "true" : "false";
+  json += ",\"objectMode\":\"";
   json += ios_json_escape(object_mode);
   json += "\",\"modes\":";
   json += object_modes_json;
@@ -2071,6 +2083,76 @@ void ios_ui_apply_viewport_preferences(bContext *C)
 
   ios_ui_gizmo_refresh_pending = false;
   ios_context_pop(C, context_store);
+}
+
+/** Name the toggle by where it goes. Menus show the operator's registered name, as they have no
+ * properties to ask #wmOperatorType::get_name with. */
+static void ios_interface_toggle_name_update()
+{
+  wmOperatorType *ot = WM_operatortype_find("WM_OT_apple_ios_interface_toggle", false);
+  if (ot == nullptr) {
+    return;
+  }
+  ot->name = ios_desktop_ui ? "Return to iPad Interface" : "Switch to Desktop Interface";
+  RNA_def_struct_ui_text(ot->srna, ot->name, ot->description);
+}
+
+/** Switch between the native interface and Blender's own, as on a Mac. */
+void ios_interface_set(bContext *C, const bool desktop)
+{
+  if (ios_desktop_ui == desktop) {
+    return;
+  }
+  ios_desktop_ui = desktop;
+  ios_interface_toggle_name_update();
+  const IOSContextStore context_store = ios_context_push_view3d(C);
+  wmWindow *win = CTX_wm_window(C);
+  bScreen *screen = CTX_wm_screen(C);
+  ScrArea *area = CTX_wm_area(C);
+  if (desktop && win != nullptr && screen != nullptr && area != nullptr && screen->state == SCREENFULL) {
+    /* Leave the full-screen 3D View for the screen's editors, headers and toolbars. */
+    ED_screen_state_toggle(C, win, area, SCREENFULL);
+    area = ios_find_view3d_area(WM_window_get_active_screen(win));
+  }
+  /* The navigation gizmo moves between the native bottom-right and Blender's top-right. */
+  if (ARegion *region = ios_find_window_region(area)) {
+    if (region->runtime->gizmo_map != nullptr) {
+      WM_gizmomap_reinit(region->runtime->gizmo_map);
+      WM_gizmomap_tag_refresh(region->runtime->gizmo_map);
+    }
+    ED_region_tag_redraw(region);
+  }
+  ios_ui_gizmo_refresh_pending = true;
+  ios_context_pop(C, context_store);
+  if (win != nullptr) {
+    WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  }
+}
+
+static wmOperatorStatus ios_interface_toggle_exec(bContext *C, wmOperator * /*op*/)
+{
+  ios_interface_set(C, !ios_desktop_ui);
+  return OPERATOR_FINISHED;
+}
+
+static std::string ios_interface_toggle_get_name(wmOperatorType * /*ot*/, PointerRNA * /*ptr*/)
+{
+  return ios_desktop_ui ? IFACE_("Return to iPad Interface") : IFACE_("Switch to Desktop Interface");
+}
+
+void WM_OT_apple_ios_interface_toggle(wmOperatorType *ot)
+{
+  ot->name = "Switch to Desktop Interface";
+  ot->idname = "WM_OT_apple_ios_interface_toggle";
+  ot->description =
+      "Switch between the iPad interface and Blender's own interface, as on a desktop computer";
+  ot->exec = ios_interface_toggle_exec;
+  ot->get_name = ios_interface_toggle_get_name;
+}
+
+extern "C" bool WM_apple_ios_ui_desktop_mode()
+{
+  return ios_desktop_ui;
 }
 
 extern "C" void WM_apple_ios_ui_ensure_layout(bContext *C)
