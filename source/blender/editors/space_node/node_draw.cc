@@ -4907,13 +4907,13 @@ static void view_controls_draw(const rcti &rect)
 {
   const float rad = BLI_rcti_size_x(&rect) / 2.0f;
 
+  /* Same look as navigation gizmos in other editors, see #ED_gizmo_button2d_group_background. */
   float background_color[4];
-  ui::theme::get_color_4fv(TH_HEADER, background_color);
-  background_color[3] = std::max(background_color[3], 0.3f);
+  ui::theme::get_color_4fv(TH_NODE, background_color);
+  background_color[3] = std::min(background_color[3], 0.7f);
 
-  float outline_color[4] = {
-      background_color[0], background_color[1], background_color[2], background_color[3]};
-  outline_color[3] = std::max(outline_color[3], 0.5f);
+  float outline_color[4];
+  ui::theme::get_color_4fv(TH_NODE_OUTLINE, outline_color);
 
   rctf rect_f;
   BLI_rctf_rcti_copy(&rect_f, &rect);
@@ -4953,7 +4953,12 @@ static void draw_view_controls(const bContext &C, ARegion &region)
   const int panel_height = button_count * button_size + (button_count - 1) * spacing;
   const int xmin = visible->xmax - margin - button_size;
   const int ymin = visible->ymax - margin - panel_height;
-  const rcti panel_rect = {xmin, ymin, xmin + button_size, ymin + panel_height};
+
+  rcti panel_rect;
+  panel_rect.xmin = xmin;
+  panel_rect.ymin = ymin;
+  panel_rect.xmax = xmin + button_size;
+  panel_rect.ymax = ymin + panel_height;
 
   /* Use a regular UI block so the region UI handler provides hover/click and it is drawn last (on
    * top of the nodes and their gizmos). */
@@ -4986,7 +4991,6 @@ static void draw_view_controls(const bContext &C, ARegion &region)
 
   ui::block_end(&C, block);
 
-  // todo(habib): initial style, check other themes
   GPU_matrix_push_projection();
   GPU_matrix_push();
   GPU_matrix_identity_set();
