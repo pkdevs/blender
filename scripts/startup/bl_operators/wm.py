@@ -3550,9 +3550,9 @@ class WM_MT_splash_project(Menu):
         if have_recent:
             layout.separator()
 
-        layout.operator("project.open", text="Open Project...")
+        layout.operator("project.open", text="Open...")
         if bpy.data.project is not None:
-            layout.operator("project.close")
+            layout.operator("project.close", text="Close")
         layout.operator("wm.clear_recent_projects", text="Clear Recent Projects List...")
 
         layout.separator()

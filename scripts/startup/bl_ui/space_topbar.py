@@ -345,13 +345,15 @@ class TOPBAR_MT_file_project(Menu):
     def draw(self, _context):
         layout = self.layout
 
+        layout.operator("project.new", text="New...", icon='ADD')
+        layout.operator("project.open", text="Open...", icon='FILE_FOLDER')
+        layout.operator("project.close", text="Close")
+
+        layout.separator()
+
         if layout.template_recent_projects(rows=10):
             layout.separator()
 
-        layout.operator("project.new", text="New Project...", icon='ADD')
-        layout.operator("project.open", text="Open Project...", icon='FILE_FOLDER')
-        if bpy.data.project is not None:
-            layout.operator("project.close")
         layout.operator("wm.clear_recent_projects", text="Clear Recent Projects List...", icon='TRASH')
 
 
