@@ -347,9 +347,6 @@ static void draw_import_controls(bContext *C, Layout &layout, const std::string 
     Layout &row = col.row(false);
     row.emboss_set(EmbossType::None);
     row.popover(C, "WM_PT_operator_presets", "", ICON_PRESET);
-
-    Layout &col2 = layout.column(false);
-    col2.menu("COLLECTION_MT_importer_control", "", ICON_DOWNARROW_HLT);
   }
 }
 
@@ -404,8 +401,8 @@ void template_collection_importer(Layout *layout, bContext *C)
   }
 
   Layout &row = layout->row(true);
-  row.op("COLLECTION_OT_importer_import", IFACE_("Import"), ICON_IMPORT);
-  row.op("COLLECTION_OT_importer_remove", "", ICON_X);
+  row.op("COLLECTION_OT_importer_import", IFACE_("Import to Collection"), ICON_IMPORT);
+  row.menu("COLLECTION_MT_importer_control", "", ICON_DOWNARROW_HLT);
 
   layout->separator();
 

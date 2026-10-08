@@ -1430,9 +1430,10 @@ static void collection_importer_menu_draw(const bContext * /*C*/, Menu *menu)
 static void collection_importer_control_menu_draw(const bContext * /*C*/, Menu *menu)
 {
   ui::Layout &layout = *menu->layout;
-  layout.op("COLLECTION_OT_importer_reload", "Reload", ICON_NONE);
-  layout.op("COLLECTION_OT_importer_clear", "Clear", ICON_NONE);
-  layout.op("COLLECTION_OT_importer_make_local", "Make Local", ICON_NONE);
+  layout.op("COLLECTION_OT_importer_make_local", "Apply and Make Local", ICON_CHECKMARK);
+  layout.op("COLLECTION_OT_importer_clear", "Delete Collection Content", ICON_NONE);
+  layout.separator();
+  layout.op("COLLECTION_OT_importer_remove", "Remove Importer", ICON_TRASH);
 }
 
 static void collection_exporter_menu_draw(const bContext * /*C*/, Menu *menu)
