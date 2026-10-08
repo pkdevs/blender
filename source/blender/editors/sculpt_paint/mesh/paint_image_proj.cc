@@ -4466,22 +4466,76 @@ static void project_paint_build_proj_ima(ProjPaintState *ps,
   }
 }
 
+/** The image being prepared, skips the lookup as adjacent faces typically share an image. */
+struct PrepareImageState {
+  Image *ima = nullptr;
+  int tile = -1;
+  int image_index = -1;
+};
+
+/**
+ * Return the index of `tpage` & `tile` in `used_images`,
+ * adding it when not found, -1 when the image has no buffer.
+ */
+static int project_paint_prepare_image_index(ProjPaintState *ps,
+                                             ListBaseT<PrepareImageEntry> &used_images,
+                                             Image *tpage,
+                                             const int tile,
+                                             PrepareImageState &state)
+{
+  if (state.ima == tpage && state.tile == tile) {
+    return state.image_index;
+  }
+
+  int image_index = 0;
+  for (PrepareImageEntry *e = used_images.first(); e; e = e->next, image_index++) {
+    if (e->ima == tpage && e->iuser.tile == tile) {
+      break;
+    }
+  }
+
+  if (image_index == ps->image_tot) {
+    /* XXX get appropriate ImageUser instead */
+    ImageUser iuser;
+    BKE_imageuser_default(&iuser);
+    iuser.tile = tile;
+    iuser.framenr = tpage->lastframe;
+    if (BKE_image_has_ibuf(tpage, &iuser)) {
+      PrepareImageEntry *e = MEM_new<PrepareImageEntry>("PrepareImageEntry");
+      e->ima = tpage;
+      e->iuser = iuser;
+      BLI_addtail(&used_images, e);
+      ps->image_tot++;
+    }
+    else {
+      image_index = -1;
+    }
+  }
+
+  state.ima = tpage;
+  state.tile = tile;
+  state.image_index = image_index;
+  return image_index;
+}
+
 static void project_paint_prepare_all_faces(ProjPaintState *ps,
                                             MemArena *arena,
                                             const ProjPaintFaceLookup *face_lookup,
                                             ProjPaintLayerClone *layer_clone,
-                                            const float2 *uv_map_base)
+                                            const float2 *uv_map_base,
+                                            const bool is_multi_view)
 {
   const bke::AttributeAccessor attributes = ps->mesh_eval->attributes();
   const StringRef active_uv_name = ps->mesh_eval->active_uv_map_name();
   /* Image Vars - keep track of images we have used */
   ListBaseT<PrepareImageEntry> used_images = {nullptr};
 
-  Image *tpage_last = nullptr, *tpage;
+  PrepareImageState image_state;
+  Image *tpage;
   TexPaintSlot *slot_last = nullptr;
   TexPaintSlot *slot = nullptr;
-  int tile_last = -1, tile;
-  int image_index = -1, tri_index;
+  int tile;
+  int tri_index;
   int prev_poly = -1;
   const Span<int3> corner_tris = ps->corner_tris_eval;
   const Span<int> tri_faces = ps->corner_tri_faces_eval;
@@ -4590,45 +4644,16 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
       continue;
     }
 
-    /* We found a paintable face with a corresponding Image.
-     * Prepare this regardless of culling, because the used images are only stored once for the
-     * non-shared #ProjPaintState and then copied over to other symmetry passes with
-     * PROJ_PAINT_STATE_SHARED_MEMCPY. A culled face in this pass might still be non-culled in
-     * another pass, so consider all images (even if they might end up not being used at all). */
-    {
-      if (tpage_last != tpage || tile_last != tile) {
-        image_index = 0;
-        for (PrepareImageEntry *e = used_images.first(); e; e = e->next, image_index++) {
-          if (e->ima == tpage && e->iuser.tile == tile) {
-            break;
-          }
-        }
+    int image_index = -1;
 
-        if (image_index == ps->image_tot) {
-          /* XXX get appropriate ImageUser instead */
-          ImageUser iuser;
-          BKE_imageuser_default(&iuser);
-          iuser.tile = tile;
-          iuser.framenr = tpage->lastframe;
-          if (BKE_image_has_ibuf(tpage, &iuser)) {
-            PrepareImageEntry *e = MEM_new<PrepareImageEntry>("PrepareImageEntry");
-            e->ima = tpage;
-            e->iuser = iuser;
-            BLI_addtail(&used_images, e);
-            ps->image_tot++;
-          }
-          else {
-            image_index = -1;
-          }
-        }
-
-        tpage_last = tpage;
-        tile_last = tile;
-      }
+    /* With symmetry, prepare images regardless of culling as `projImages` is shared between
+     * passes and a face culled in this pass may not be culled in another, see !164840. */
+    if (is_multi_view) {
+      image_index = project_paint_prepare_image_index(ps, used_images, tpage, tile, image_state);
     }
 
-    /* Now check if the face would be culled. Only if it is not, it will be added to the
-     * bucketFaces (see #project_paint_delayed_face_init() below). */
+    /* Skip culled faces, these aren't added to `bucketFaces`,
+     * see #project_paint_delayed_face_init() below. */
     {
       ProjPaintFaceCoSS coSS;
       proj_paint_face_coSS_init(ps, corner_tris[tri_index], &coSS);
@@ -4674,6 +4699,10 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
       }
     }
 
+    if (!is_multi_view) {
+      image_index = project_paint_prepare_image_index(ps, used_images, tpage, tile, image_state);
+    }
+
     if (image_index != -1) {
       /* Initialize the faces screen pixels */
       /* Add this to a list to initialize later */
@@ -4691,7 +4720,10 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
 }
 
 /* run once per stroke before projection painting */
-static void project_paint_begin(const bContext *C, ProjPaintState *ps, const char symmetry_flag)
+static void project_paint_begin(const bContext *C,
+                                ProjPaintState *ps,
+                                const bool is_multi_view,
+                                const char symmetry_flag)
 {
   ProjPaintLayerClone layer_clone;
   ProjPaintFaceLookup face_lookup;
@@ -4801,7 +4833,8 @@ static void project_paint_begin(const bContext *C, ProjPaintState *ps, const cha
 
   proj_paint_state_vert_flags_init(ps);
 
-  project_paint_prepare_all_faces(ps, arena, &face_lookup, &layer_clone, uv_map_base);
+  project_paint_prepare_all_faces(
+      ps, arena, &face_lookup, &layer_clone, uv_map_base, is_multi_view);
 }
 
 static void paint_proj_begin_clone(ProjPaintState *ps, const float mouse[2])
@@ -6253,6 +6286,7 @@ void *paint_proj_new_stroke(bContext *C,
   Mesh *mesh = BKE_mesh_from_object(ob);
   ps_handle->symmetry_flags = mesh->symmetry;
   ps_handle->ps_views_tot = 1 + (pow_i(2, count_bits_i(ps_handle->symmetry_flags)) - 1);
+  const bool is_multi_view = (ps_handle->ps_views_tot != 1);
 
   for (int i = 0; i < ps_handle->ps_views_tot; i++) {
     ProjPaintState *ps = MEM_new<ProjPaintState>("ProjectionPaintState");
@@ -6309,10 +6343,12 @@ void *paint_proj_new_stroke(bContext *C,
       PROJ_PAINT_STATE_SHARED_MEMCPY(ps, ps_handle->ps_views[0]);
     }
 
-    project_paint_begin(C, ps, symmetry_flag_views[i]);
+    project_paint_begin(C, ps, is_multi_view, symmetry_flag_views[i]);
     if (ps->mesh_eval == nullptr) {
       goto fail;
     }
+    /* Shared views index into the first view's `projImages`. */
+    BLI_assert(ps->image_tot == ps_handle->ps_views[0]->image_tot);
 
     paint_proj_begin_clone(ps, mouse);
   }
@@ -6463,7 +6499,7 @@ static wmOperatorStatus texture_paint_camera_project_exec(bContext *C, wmOperato
   scene.toolsettings->imapaint.flag |= IMAGEPAINT_DRAWING;
 
   /* allocate and initialize spatial data structures */
-  project_paint_begin(C, &ps, 0);
+  project_paint_begin(C, &ps, false, 0);
 
   if (ps.mesh_eval == nullptr) {
     BKE_brush_size_set(ps.paint, ps.brush, orig_brush_size);
