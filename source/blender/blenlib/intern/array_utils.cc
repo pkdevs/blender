@@ -498,4 +498,25 @@ bool indices_are_range(Span<int> indices, IndexRange range)
       std::logical_and<>());
 }
 
+void copy_ints_with_offset(const Span<int> src,
+                           const int offset,
+                           MutableSpan<int> dst,
+                           const int64_t grain_size)
+{
+  BLI_assert(src.size() == dst.size());
+  /* TODO: Comment why pointers are captured by value and re-copied into locals, and why
+   * sub-ranges are aligned to 4 for auto-vectorized paddd. */
+  const int *src_data = src.data();
+  int *dst_data = dst.data();
+  threading::parallel_for_aligned(
+      src.index_range(), grain_size, 4, [src_data, dst_data, offset](const IndexRange range) {
+        const int *src = src_data;
+        int *dst = dst_data;
+        const int off = offset;
+        for (const int64_t i : range) {
+          dst[i] = src[i] + off;
+        }
+      });
+}
+
 }  // namespace blender::array_utils

@@ -106,6 +106,15 @@ inline void copy(const Span<T> src,
                                              exec_mode_tag_for_copy(mode, sizeof(T)));
 }
 
+/**
+ * Copy integers from \a src to \a dst, adding \a offset to each value.
+ * \a src and \a dst may be the same span (in-place).
+ */
+void copy_ints_with_offset(Span<int> src,
+                           int offset,
+                           MutableSpan<int> dst,
+                           int64_t grain_size = 4096);
+
 template<typename T> T compute_sum(const Span<T> data)
 {
   /* Explicitly splitting work into chunks for a couple of reasons:
