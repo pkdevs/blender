@@ -483,7 +483,7 @@ enum class SoundAudioPropertyAnimation {
   Driven,
 };
 
-/* RNA paths of the #Scene's F-Curves of array index 0. */
+/* RNA paths of the evaluated #Scene's F-Curves of array index 0. */
 struct SoundSceneAnimatedPaths {
   Set<StringRef> animated;
   Set<StringRef> driven;
@@ -491,10 +491,11 @@ struct SoundSceneAnimatedPaths {
   int fcurves_num = 0;
 };
 
-static SoundSceneAnimatedPaths sound_scene_animated_paths(Scene *scene)
+static SoundSceneAnimatedPaths sound_scene_animated_paths(Scene *scene_eval)
 {
+  sound_verify_evaluated_id(&scene_eval->id);
   SoundSceneAnimatedPaths paths;
-  BKE_fcurves_id_cb(&scene->id, [&](ID * /*id*/, FCurve *fcurve) {
+  BKE_fcurves_id_cb(&scene_eval->id, [&](ID * /*id*/, FCurve *fcurve) {
     if (fcurve->driver == nullptr) {
       paths.fcurves_num++;
     }
@@ -1294,7 +1295,7 @@ static bool sound_sample_automatic_scene_audio_animation(
   }
   const int bake_end = int(buffer_frames) - 1;
 
-  const SoundSceneAnimatedPaths animated_paths = sound_scene_animated_paths(request.scene);
+  const SoundSceneAnimatedPaths animated_paths = sound_scene_animated_paths(scene_eval);
   /* Driven values are written for all strips when the cache is reset. */
   prepared.classification = sound_scene_audio_animation_classify(
       animated_paths,
@@ -1636,14 +1637,16 @@ static void sound_collect_explicit_bake_scenes(Scene *scene,
     return;
   }
 
-  if (DEG_is_evaluated(DEG_get_evaluated(depsgraph, scene))) {
-    r_scenes.append(scene);
+  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
+  if (!DEG_is_evaluated(scene_eval)) {
+    return;
   }
-  if (scene->ed == nullptr) {
+  r_scenes.append(scene);
+  if (scene_eval->ed == nullptr) {
     return;
   }
 
-  seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
+  seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
     if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
       sound_collect_explicit_bake_scenes(strip->scene, depsgraph, visited_scenes, r_scenes);
     }
@@ -1874,7 +1877,7 @@ static void sound_collect_nested_scene_evaluated_values(Scene &scene_eval,
 {
   const SoundSceneAudioAnimationClassification classification =
       sound_scene_audio_animation_classify(
-          sound_scene_animated_paths(sound_original_scene(&scene_eval)), &scene_eval, frames);
+          sound_scene_animated_paths(&scene_eval), &scene_eval, frames);
   sound_collect_scene_audio_values(&scene_eval, classification.driven, r_values);
   if (has_frame_change_handlers) {
     sound_collect_scene_audio_values(&scene_eval, classification.direct, r_values);
