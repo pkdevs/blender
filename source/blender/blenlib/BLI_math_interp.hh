@@ -506,20 +506,52 @@ void interpolate_cubic_mitchell_fl(
 /* -------------------------------------------------------------------- */
 
 /**
+ * This object allows the CPU and GPU code to match. Definition may change.
+ */
+struct Sampler2D {
+  const float *buffer;
+  int width, height, components;
+  InterpWrapMode wrap_u, wrap_v;
+};
+
+/**
  * Samplers that use a rectangle to specify the area.
  * wh is the size of a box filter (other filters are larger)
  * Use fast_hypot() to convert two dPdx and dPdy vectors to wh.
  */
 template<enum Sampler sampler>
-extern void sample_rect(const float *buffer,
-                        float *output,
-                        int width,
-                        int height,
-                        int components,
-                        const float2 &uv,
-                        const float2 &wh,
-                        InterpWrapMode wrap_u,
-                        InterpWrapMode wrap_v);
+extern float4 sample_rect(const Sampler2D &, const float2 &uv, const float2 &wh);
+template<> float4 sample_rect<Sampler::Box>(const Sampler2D &, const float2 &uv, const float2 &wh);
+
+BLI_INLINE void interpolate_box_wrapmode_fl(const float *buffer,
+                                            float *output,
+                                            int width,
+                                            int height,
+                                            int components,
+                                            const float2 &uv,
+                                            const float2 &wh,
+                                            InterpWrapMode wrap_u,
+                                            InterpWrapMode wrap_v)
+{
+  const float4 v = sample_rect<Sampler::Box>(
+      Sampler2D{buffer, width, height, components, wrap_u, wrap_v}, uv, wh);
+  memcpy(output, &v, components * sizeof(float));
+}
+
+BLI_INLINE void interpolate_cubic_bspline_wrapmode_fl(const float *buffer,
+                                                      float *output,
+                                                      int width,
+                                                      int height,
+                                                      int components,
+                                                      const float2 &uv,
+                                                      const float2 &wh,
+                                                      InterpWrapMode wrap_u,
+                                                      InterpWrapMode wrap_v)
+{
+  const float4 v = sample_rect<Sampler::Bspline>(
+      Sampler2D{buffer, width, height, components, wrap_u, wrap_v}, uv, wh);
+  memcpy(output, &v, components * sizeof(float));
+}
 
 }  // namespace math
 

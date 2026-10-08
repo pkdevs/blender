@@ -43,7 +43,7 @@ float4 sample_rect(const sampler2D &source, const float2 &uv, const float2 &wh)
   const float2 d = ceil(r / 16.0f);
   const float2 scale = 1.0f / float2(textureSize(source, 0));
   /* precompute the horizontal filter so it can be reused */
-  float2 xfilter[33];  /* pairs of u,weight */
+  float2 xfilter[33]; /* pairs of u,weight */
   float divx = 0.0f;
   int nx = 0;
   for (float x = a.x - uv.x; x < r.x; x += 2 * d.x) {

@@ -733,15 +733,15 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
         break;
       case Interpolation::Bilinear:
         if (jacobian.has_value()) { /* Box filter */
-          math::sample_rect<math::Sampler::Box>(buffer,
-                                                output,
-                                                size.x,
-                                                size.y,
-                                                sizeof(T) / sizeof(float),
-                                                texel_coordinates - 0.5f,
-                                                math::fast_hypot(jacobian.value()) * float2(size),
-                                                wrap_mode_x,
-                                                wrap_mode_y);
+          math::interpolate_box_wrapmode_fl(buffer,
+                                            output,
+                                            size.x,
+                                            size.y,
+                                            sizeof(T) / sizeof(float),
+                                            texel_coordinates - 0.5f,
+                                            math::fast_hypot(jacobian.value()) * float2(size),
+                                            wrap_mode_x,
+                                            wrap_mode_y);
         }
         else {
           math::interpolate_bilinear_wrapmode_fl(buffer,
@@ -757,16 +757,16 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
         break;
       case Interpolation::Bicubic:
         if (jacobian.has_value()) {
-          math::sample_rect<math::Sampler::Bspline>(buffer,
-                                                    output,
-                                                    size.x,
-                                                    size.y,
-                                                    sizeof(T) / sizeof(float),
-                                                    texel_coordinates - 0.5f,
-                                                    math::fast_hypot(jacobian.value()) *
-                                                        float2(size),
-                                                    wrap_mode_x,
-                                                    wrap_mode_y);
+          math::interpolate_cubic_bspline_wrapmode_fl(buffer,
+                                                      output,
+                                                      size.x,
+                                                      size.y,
+                                                      sizeof(T) / sizeof(float),
+                                                      texel_coordinates - 0.5f,
+                                                      math::fast_hypot(jacobian.value()) *
+                                                          float2(size),
+                                                      wrap_mode_x,
+                                                      wrap_mode_y);
         }
         else {
           math::interpolate_cubic_bspline_wrapmode_fl(buffer,
