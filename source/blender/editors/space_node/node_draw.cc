@@ -4897,10 +4897,6 @@ static void draw_nodetree(const bContext &C, ARegion &region, bNodeTree &ntree)
   node_draw_nodetree(C, tree_draw_ctx, region, *snode, ntree, nodes, blocks);
 }
 
-/* -------------------------------------------------------------------- */
-/** \name View Controls
- * \{ */
-
 static void view_controls_draw(const rcti &rect)
 {
   const float rad = BLI_rcti_size_x(&rect) / 2.0f;
