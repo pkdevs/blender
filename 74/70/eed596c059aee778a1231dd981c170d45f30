@@ -1,0 +1,1 @@
+Referenced by pull request #164865, Fix: Crash constructing std::string with nullptr
