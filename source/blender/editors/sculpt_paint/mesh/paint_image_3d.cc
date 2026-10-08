@@ -1254,23 +1254,24 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         int tile_x_offset = tile_img_x_start;
         int remaining_pixels = run_active_size;
         int run_offset = 0;
+        int slice_size = scratch_tile_size - tile_x_offset;
         for (const int scratch_tile_i :
              scratch_tiles_range(image_buffer->x, img_x_start, img_x_end, img_y))
         {
           int tile_start = tile_x_offset + tile_img_y * scratch_tile_size;
-          int tile_size = math::min(remaining_pixels, scratch_tile_size);
 
-          const Span<float4> color_src = averaged_pixels.slice(run_offset, tile_size);
+          const Span<float4> color_src = averaged_pixels.slice(run_offset, slice_size);
           const MutableSpan<float4> color_dst =
-              scratch_color_data[scratch_tile_i].as_mutable_span().slice(tile_start, tile_size);
+              scratch_color_data[scratch_tile_i].as_mutable_span().slice(tile_start, slice_size);
           array_utils::copy(color_src, color_dst);
 
-          const Span<float> factor_src = factors.slice(run_offset, tile_size);
-          const MutableSpan<float> factor_dst = scratch_factor_data[scratch_tile_i].as_mutable_span().slice(tile_start, tile_size);
+          const Span<float> factor_src = factors.slice(run_offset, slice_size);
+          const MutableSpan<float> factor_dst = scratch_factor_data[scratch_tile_i].as_mutable_span().slice(tile_start, slice_size);
           array_utils::copy(factor_src, factor_dst);
 
-          run_offset += tile_size;
-          remaining_pixels -= scratch_tile_size;
+          run_offset += slice_size;
+          remaining_pixels -= slice_size;
+          slice_size = math::min(slice_size, scratch_tile_size);
           tile_x_offset = 0;
         }
       }
