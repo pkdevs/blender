@@ -228,7 +228,7 @@ static Mesh *create_mesh_from_lists(const List<float3> &positions_list,
                                  *corner_vertices_array_data->sharing_info));
   }
   else if (const auto *corner_vertices_single_value = std::get_if<nodes::GList::SingleData>(
-               &corner_vertices_list->data()))
+               &corner_vertices.data()))
   {
     mesh->attributes_for_write().add<int>(
         ".corner_vert",
