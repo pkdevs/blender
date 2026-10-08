@@ -3734,6 +3734,11 @@ std::optional<ButtonEditHint> button_edit_hint_get(const Button &but)
   if (but.selsta != but.selend) {
     return std::nullopt;
   }
+#ifdef WITH_INPUT_IME
+  if (data->window && data->window->runtime->ime_data_is_composing) {
+    return std::nullopt;
+  }
+#endif
   return ButtonEditHint{
       data->text_edit_hint, data->text_edit_hint_replace_start, data->text_edit_hint_replace_end};
 }
@@ -4723,11 +4728,10 @@ static int do_but_textedit(
     button_edit_hint_refresh(C, but, data);
 
 #ifdef WITH_INPUT_IME
-    if (win->runtime->ime_data_is_composing) {
-      if (data->searchbox && static_cast<const ButtonSearch *>(but)->hide_when_no_results) {
-        searchbox_hide(data->searchbox);
-      }
-      data->text_edit_hint.clear();
+    if (win->runtime->ime_data_is_composing && data->searchbox &&
+        static_cast<const ButtonSearch *>(but)->hide_when_no_results)
+    {
+      searchbox_hide(data->searchbox);
     }
 #endif
   }
