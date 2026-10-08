@@ -4901,8 +4901,6 @@ static void draw_nodetree(const bContext &C, ARegion &region, bNodeTree &ntree)
 /** \name View Controls
  * \{ */
 
-// todo(habib): match drawing style of other editors
-// todo(habib): could move to common file to be reused by other editors
 static void view_controls_draw(const rcti &rect)
 {
   const float rad = BLI_rcti_size_x(&rect) / 2.0f;
@@ -4918,7 +4916,6 @@ static void view_controls_draw(const rcti &rect)
   rctf rect_f;
   BLI_rctf_rcti_copy(&rect_f, &rect);
 
-  // todo(habib): verify padding
   BLI_rctf_pad(&rect_f, 0.0f, rad * 0.2f);
 
   ui::draw_roundbox_corner_set(ui::CNR_ALL);
@@ -4964,7 +4961,6 @@ static void draw_view_controls(const bContext &C, ARegion &region)
    * top of the nodes and their gizmos). */
   ui::Block *block = ui::block_begin(&C, &region, "node_view_controls", ui::EmbossType::None);
 
-  // todo(habib): verify side effects for other node UI blocks
   ui::block_flag_enable(block, ui::BLOCK_CLIP_EVENTS);
   ui::block_bounds_set_explicit(
       block, panel_rect.xmin, panel_rect.ymin, panel_rect.xmax, panel_rect.ymax);
