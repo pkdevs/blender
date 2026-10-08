@@ -2161,20 +2161,48 @@ extern "C" void WM_apple_ios_ui_ensure_layout(bContext *C)
     return;
   }
 
-  if (!ios_ui_layout_ready) {
-    const IOSContextStore context_store = ios_context_push_view3d(C);
-    wmWindow *win = CTX_wm_window(C);
-    bScreen *screen = CTX_wm_screen(C);
-    ScrArea *area = CTX_wm_area(C);
-
-    if (win != nullptr && screen != nullptr && area != nullptr && screen->state == SCREENNORMAL) {
-      ED_screen_state_toggle(C, win, area, SCREENFULL);
-    }
-
-    ios_ui_layout_ready = true;
-    ios_ui_gizmo_refresh_pending = true;
-    ios_context_pop(C, context_store);
+  if (ios_desktop_ui) {
+    /* Blender's own interface keeps whatever screens the files bring. */
+    return;
   }
+
+  /* The native interface shows the 3D View full screen. Every new or opened file brings its own
+   * screen with Blender's editors, so check on every update, not only at startup. */
+  const IOSContextStore context_store = ios_context_push_view3d(C);
+  wmWindow *win = CTX_wm_window(C);
+  bScreen *screen = CTX_wm_screen(C);
+  ScrArea *area = CTX_wm_area(C);
+  if (win != nullptr && screen != nullptr && area != nullptr && screen->state == SCREENNORMAL) {
+    ED_screen_state_toggle(C, win, area, SCREENFULL);
+    ios_ui_gizmo_refresh_pending = true;
+  }
+  else if (win != nullptr && screen != nullptr && area != nullptr && screen->state == SCREENFULL) {
+    /* A file saved on the iPad reopens already full screen, but with the 3D View's headers and
+     * tool settings shown again. Hide them as entering full screen does. */
+    bool changed = false;
+    for (ARegion &region : area->regionbase) {
+      if (ELEM(region.regiontype,
+               RGN_TYPE_UI,
+               RGN_TYPE_HEADER,
+               RGN_TYPE_TOOL_HEADER,
+               RGN_TYPE_FOOTER,
+               RGN_TYPE_TOOLS,
+               RGN_TYPE_NAV_BAR,
+               RGN_TYPE_EXECUTE,
+               RGN_TYPE_ASSET_SHELF) &&
+          !(region.flag & RGN_FLAG_HIDDEN))
+      {
+        region.flag |= RGN_FLAG_HIDDEN;
+        changed = true;
+      }
+    }
+    if (changed) {
+      ED_area_init(C, win, area);
+      ED_area_tag_redraw(area);
+    }
+  }
+  ios_ui_layout_ready = true;
+  ios_context_pop(C, context_store);
 
   ios_ui_apply_viewport_preferences(C);
 }
