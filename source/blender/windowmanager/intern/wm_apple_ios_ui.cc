@@ -247,6 +247,10 @@ GHOST_IOSLatest<std::string> ios_toolbar_snapshot;
 GHOST_IOSLatest<std::string> ios_panels_snapshot;
 GHOST_IOSLatest<std::string> ios_timeline_snapshot;
 std::string ios_timeline_json;
+/* Keyframes shown on the timeline, refreshed on the native cadence while it is open. */
+bool ios_timeline_visible = false;
+std::string ios_timeline_keys_json = "[]";
+std::chrono::steady_clock::time_point ios_timeline_next_keys;
 /* Native asset pane: listed only while shown. */
 bool ios_assets_visible = false;
 std::string ios_assets_json;
@@ -912,6 +916,49 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     ios_assets_next_snapshot = {};
     return;
   }
+
+  if (command.setting == "timeline_visible") {
+    ios_timeline_visible = command.value == "1";
+    ios_timeline_next_keys = {};
+    return;
+  }
+
+#ifdef WITH_PYTHON
+  if (command.setting == "timeline_key_select" || command.setting == "timeline_key_move" ||
+      command.setting == "timeline_key_delete")
+  {
+    /* Select "frames|extend" (frames comma separated), move the selected keys by a delta, or delete
+     * the selected keys. Values are parsed here so nothing but numbers reaches Python. */
+    std::string expression;
+    if (command.setting == "timeline_key_select") {
+      const size_t bar = command.value.find('|');
+      std::string frames;
+      const std::string list = command.value.substr(0, bar);
+      for (size_t begin = 0; begin < list.size();) {
+        const size_t comma = std::min(list.find(',', begin), list.size());
+        if (comma > begin) {
+          frames += (frames.empty() ? "" : ",") +
+                    std::to_string(std::atoi(list.substr(begin, comma - begin).c_str()));
+        }
+        begin = comma + 1;
+      }
+      const bool extend = bar != std::string::npos && command.value.substr(bar + 1) == "1";
+      expression = "bpy.ops.anim.native_key_select(frames=\"" + frames + "\", extend=" +
+                   (extend ? "True" : "False") + ")";
+    }
+    else if (command.setting == "timeline_key_move") {
+      expression = "bpy.ops.anim.native_key_move(delta=" +
+                   std::to_string(std::atoi(command.value.c_str())) + ")";
+    }
+    else {
+      expression = "bpy.ops.anim.native_key_delete()";
+    }
+    const char *imports[] = {"bpy", nullptr};
+    BPY_run_string_eval(C, imports, expression.c_str());
+    ios_timeline_next_keys = {};
+    return;
+  }
+#endif
 
   if (command.setting == "timeline_frame") {
     /* Match SCREEN_OT_frame_offset: scrubbing lands on whole frames. */
@@ -1784,8 +1831,24 @@ void ios_timeline_build(bContext *C)
   if (scene == nullptr || wm == nullptr) {
     return;
   }
+#ifdef WITH_PYTHON
+  if (const auto now = std::chrono::steady_clock::now();
+      ios_timeline_visible && now >= ios_timeline_next_keys)
+  {
+    ios_timeline_next_keys = now + std::chrono::milliseconds(250);
+    const char *imports[] = {"bpy", "bl_ui", nullptr};
+    char *result = nullptr;
+    if (BPY_run_string_as_string(
+            C, imports, "bl_ui.native_timeline.keys_json(bpy.context)", nullptr, &result))
+    {
+      ios_timeline_keys_json = result;
+      MEM_delete(result);
+    }
+  }
+#endif
   /* Playback changes the frame every redraw; publish only what UIKit has not seen. */
-  std::string json = "{\"frame\":" + std::to_string(scene->r.cfra) +
+  std::string json = "{\"keys\":" + (ios_timeline_visible ? ios_timeline_keys_json : "[]") +
+                     ",\"frame\":" + std::to_string(scene->r.cfra) +
                      ",\"start\":" + std::to_string(PSFRA) + ",\"end\":" + std::to_string(PEFRA) +
                      ",\"preview\":" + ((scene->r.flag & SCER_PRV_RANGE) ? "true" : "false") +
                      ",\"playing\":" + (ED_screen_animation_playing(wm) ? "true" : "false") +
