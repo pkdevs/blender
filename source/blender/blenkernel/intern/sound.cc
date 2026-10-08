@@ -2016,6 +2016,7 @@ struct SoundListener {
 struct SoundSequenceState {
   std::optional<bool> muted;
   std::optional<SoundListener> listener;
+  std::optional<float> fps;
 
   bool operator==(const SoundSequenceState &other) const = default;
 };
@@ -2213,6 +2214,9 @@ static void sound_sequence_state_apply(aud::Sequence &sequence,
 {
   if (state.muted && sequence.isMuted() != *state.muted) {
     sequence.mute(*state.muted);
+  }
+  if (state.fps && sequence.getFPS() != *state.fps) {
+    sequence.setFPS(*state.fps);
   }
   if (!state.listener) {
     return;
@@ -4348,6 +4352,16 @@ void BKE_sound_update_scene(Depsgraph *depsgraph, Scene *scene)
   }
 #  endif
 
+  /* Audio of Scenes used by Scene strips is read with their own FPS, which
+   * #BKE_scene_update_sound only updates for this Scene. */
+  Set<const Scene *> visited_scenes = {scene};
+  sound_foreach_nested_scene(scene, visited_scenes, [](Scene &nested_scene) {
+    if (nested_scene.runtime->audio.sound_scene) {
+      sound_sequence_update(&nested_scene, [&](bke::SoundSequenceState &state) {
+        state.fps = float(nested_scene.frames_per_second());
+      });
+    }
+  });
   sound_update_scene_objects(depsgraph, scene);
 }
 
