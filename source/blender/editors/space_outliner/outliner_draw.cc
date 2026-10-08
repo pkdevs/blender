@@ -1966,18 +1966,12 @@ static void outliner_draw_userbuts(ui::Block *block,
     }
 
     ui::Button *bt;
-    std::optional<StringRef> tip;
     const int real_users = id->us - ID_FAKE_USERS(id);
     const bool has_fake_user = id->flag & ID_FLAG_FAKEUSER;
     const bool is_linked = ID_IS_LINKED(id);
     const bool is_object = GS(id->name) == ID_OB;
     char overlay[5];
     BLI_str_format_integer_unit(overlay, id->us);
-
-    UserTooltip_Store *tip_arg = MEM_new_uninitialized<UserTooltip_Store>(__func__);
-    tip_arg->has_fake_user = has_fake_user;
-    tip_arg->is_linked = is_linked;
-    tip_arg->real_users = real_users;
 
     if (is_object) {
       bt = uiDefBut(block,
@@ -2008,6 +2002,10 @@ static void outliner_draw_userbuts(ui::Block *block,
                          0,
                          nullptr);
 
+      UserTooltip_Store *tip_arg = MEM_new_uninitialized<UserTooltip_Store>(__func__);
+      tip_arg->has_fake_user = has_fake_user;
+      tip_arg->is_linked = is_linked;
+      tip_arg->real_users = real_users;
       button_func_tooltip_set(bt, user_tooltip_func, tip_arg, MEM_delete_void);
 
       if (is_linked) {
