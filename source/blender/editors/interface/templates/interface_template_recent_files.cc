@@ -20,6 +20,7 @@
 #include "BLT_lang.hh"
 #include "BLT_translation.hh"
 
+#include "BKE_autoexec.hh"
 #include "BKE_blendfile.hh"
 #include "BKE_global.hh"
 #include "BKE_main.hh"
@@ -78,7 +79,7 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
 
   if (version_str[0]) {
     tooltip_text_field_add(
-        tip, fmt::format("Blender {}", version_str), {}, TIP_STYLE_NORMAL, TIP_LC_NORMAL);
+        tip, fmt::format("Blender {}", version_str), {}, TIP_STYLE_NORMAL, TIP_LC_VALUE);
     tooltip_text_field_add(tip, {}, {}, TIP_STYLE_SPACER, TIP_LC_NORMAL);
   }
 
@@ -99,7 +100,7 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
                            fmt::format(fmt::runtime(TIP_("Modified: {}")), modified_s),
                            {},
                            TIP_STYLE_NORMAL,
-                           TIP_LC_NORMAL);
+                           TIP_LC_VALUE);
 
     if (status.st_size > 0) {
       char size[16];
@@ -108,7 +109,7 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
                              fmt::format(fmt::runtime(TIP_("Size: {}")), size),
                              {},
                              TIP_STYLE_NORMAL,
-                             TIP_LC_NORMAL);
+                             TIP_LC_VALUE);
     }
   }
 
@@ -155,6 +156,14 @@ int template_recent_files(Layout *layout, int rows)
                                 UI_ITEM_NONE);
     RNA_string_set(&ptr, "filepath", recent.filepath);
     RNA_boolean_set(&ptr, "display_file_selector", false);
+    RNA_boolean_set(&ptr,
+                    "use_scripts",
+                    BKE_autoexec_default_trust_source(recent.filepath,
+                                                      {
+                                                          .skip_overrides = false,
+                                                          .canonicalize = true,
+                                                          .strip_filename = true,
+                                                      }));
 
     Block *block = layout->block();
     Button *but = button_last(block);
