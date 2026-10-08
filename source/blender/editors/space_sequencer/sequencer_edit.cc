@@ -1992,9 +1992,10 @@ static wmOperatorStatus sequencer_split_invoke(bContext *C, wmOperator *op, cons
     float mouseloc[2];
     ui::view2d_region_to_view(v2d, event->mval[0], event->mval[1], &mouseloc[0], &mouseloc[1]);
     split_frame = round_fl_to_int(mouseloc[0]);
-    if (!RNA_boolean_get(op->ptr, "all_channels") &&
-        seq::edit_split_strips_get(scene, split_frame, int(mouseloc[1]), false).is_empty())
-    {
+    const std::optional<int> channel = RNA_boolean_get(op->ptr, "all_channels") ?
+                                           std::nullopt :
+                                           std::optional<int>(mouseloc[1]);
+    if (seq::edit_split_strips_get(scene, split_frame, channel, false).is_empty()) {
       /* Do not pass through to selection. */
       return OPERATOR_CANCELLED;
     }
