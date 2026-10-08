@@ -1,1 +1,2 @@
 Referenced by pull request #164865, Fix: Crash constructing std::string with nullptr
+Referenced by commit 7470eed596c059aee778a1231dd981c170d45f30, Fix: Crash and empty messages from operator poll message.
