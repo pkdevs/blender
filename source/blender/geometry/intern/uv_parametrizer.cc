@@ -3784,11 +3784,11 @@ static void p_chart_rotate_fit_aabb(PChart *chart)
 
   p_chart_uv_to_array(chart, points);
 
-  float angle = BLI_convexhull_aabb_fit_points_2d(points);
+  const float2 sincos = BLI_convexhull_aabb_fit_points_2d_as_sincos(points);
 
-  if (angle != 0.0f) {
-    float mat[2][2];
-    angle_to_mat2(mat, angle);
+  if (sincos != float2(0.0f, 1.0f)) {
+    /* Equivalent to #angle_to_mat2. */
+    const float mat[2][2] = {{sincos[1], sincos[0]}, {-sincos[0], sincos[1]}};
     p_chart_uv_transform(chart, mat);
   }
 }
