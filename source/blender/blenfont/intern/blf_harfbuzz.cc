@@ -63,16 +63,16 @@ void ShapingData::legacy_layout(FontBLF *font,
   for (size_t i = 0; i < char_count; i++) {
     const char32_t codepoint = str32[i];
     GlyphBLF *g = blf_glyph_ensure(font, gc, codepoint);
-    g = blf_glyph_ensure_subpixel(font, gc, g, this->bounds.xmax);
     if (g) {
+      g = blf_glyph_ensure_subpixel(font, gc, g, this->bounds.xmax);
       const rcti bounds = {this->bounds.xmax, this->bounds.xmax + g->box_xmax, 0, g->box_ymax};
       this->glyphs.append({font, gc, g, bounds, offset});
       this->bounds.xmin = std::min(this->bounds.xmin, bounds.xmin + g->box_xmin);
       this->bounds.xmax += g->advance_x;
       this->bounds.ymin = std::min(this->bounds.ymin, g->box_ymin);
       this->bounds.ymax = std::max(this->bounds.ymax, g->box_ymax);
-      offset += size_t(BLI_str_utf8_from_unicode_len(codepoint));
     }
+    offset += size_t(BLI_str_utf8_from_unicode_len(codepoint));
   }
 }
 
