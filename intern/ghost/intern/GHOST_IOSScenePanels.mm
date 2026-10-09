@@ -519,11 +519,11 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
         initWithImage:_icon(@"OUTLINER") ?: [UIImage systemImageNamed:@"list.bullet.indent"]
         style:UIBarButtonItemStylePlain target:self action:@selector(toggleHierarchy:)];
     _inspectorButton.title = _inspectorButton.accessibilityLabel = @"Properties";
-    _hierarchyButton.title = _hierarchyButton.accessibilityLabel = @"Hierarchy";
+    _hierarchyButton.title = _hierarchyButton.accessibilityLabel = @"Outliner";
     _inspectorButton.identifier = _inspectorButton.accessibilityIdentifier = @"blender.inspector";
     _hierarchyButton.identifier = _hierarchyButton.accessibilityIdentifier = @"blender.hierarchy";
     _inspector = [[self panelWithTitle:@"Properties" close:@selector(toggleInspector:)] retain];
-    _hierarchy = [[self panelWithTitle:@"Hierarchy" close:@selector(toggleHierarchy:)] retain];
+    _hierarchy = [[self panelWithTitle:@"Outliner" close:@selector(toggleHierarchy:)] retain];
     _inspector.accessibilityIdentifier = @"blender.inspector.panel";
     _hierarchy.accessibilityIdentifier = @"blender.hierarchy.panel";
     _inspectorTitle = (UILabel *)[_inspector.contentView viewWithTag:100];

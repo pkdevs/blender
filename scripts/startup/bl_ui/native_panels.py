@@ -200,7 +200,7 @@ def snapshot_json(context, mask):
 
 class WM_OT_native_panel_edit(bpy.types.Operator):
     bl_idname = "wm.native_panel_edit"
-    bl_label = "Change Hierarchy"
+    bl_label = "Outliner Edit"
     bl_options = {'INTERNAL', 'UNDO'}
     request: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
 
