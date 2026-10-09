@@ -1784,6 +1784,39 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   return button;
 }
 
+/* One toggle of a group such as Mirror X Y Z: tinted while on. */
+- (UIButton *)groupToggle:(NSDictionary *)property object:(NSString *)objectID compact:(BOOL)compact
+{
+  __block GHOSTIOSScenePanels *owner = self;
+  UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+  config.title = property[@"toolbar_label"] ?: property[@"label"];
+  config.titleTextAttributesTransformer = ^NSDictionary *(NSDictionary *attributes) {
+    NSMutableDictionary *result = [[attributes mutableCopy] autorelease];
+    result[NSFontAttributeName] = [UIFont monospacedSystemFontOfSize:compact ? 13 : 15 weight:UIFontWeightSemibold];
+    return result;
+  };
+  config.contentInsets = NSDirectionalEdgeInsetsMake(0, 0, 0, 0);
+  UIButton *button = [UIButton buttonWithConfiguration:config primaryAction:nil];
+  button.selected = [property[@"value"] boolValue];
+  button.enabled = [property[@"editable"] boolValue];
+  button.accessibilityLabel = [NSString stringWithFormat:@"%@ %@", property[@"toggle_caption"] ?: @"", config.title];
+  button.configurationUpdateHandler = ^(UIButton *item) {
+    UIButtonConfiguration *updated = item.configuration;
+    updated.baseForegroundColor = item.selected ? UIColor.whiteColor : UIColor.labelColor;
+    updated.background.backgroundColor = item.selected ? item.tintColor : UIColor.clearColor;
+    updated.background.cornerRadius = compact ? 7 : 8;
+    item.configuration = updated;
+  };
+  [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+    UIButton *sender = action.sender;
+    sender.selected = !sender.selected;
+    [owner editProperty:property object:objectID value:@(sender.selected)];
+  }] forControlEvents:UIControlEventTouchUpInside];
+  [button.widthAnchor constraintEqualToConstant:compact ? 28 : 36].active = YES;
+  [button.heightAnchor constraintEqualToConstant:compact ? 22 : 30].active = YES;
+  return button;
+}
+
 - (UIView *)compositeRowForProperty:(NSDictionary *)property object:(NSString *)objectID
 {
   NSString *kind = property[@"type"];
@@ -1974,6 +2007,7 @@ static UIColor *blenderAnimationStateColor(NSString *state)
     headerControls.spacing = 8;
     [_headerControls addObject:headerControls];
     NSMutableDictionary *vectors = [NSMutableDictionary dictionary];
+    NSMutableDictionary *toggleGroups = [NSMutableDictionary dictionary];
     NSString *innerSection = nil;
     UIStackView *innerHeading = nil;
     for (NSDictionary *property in section[@"properties"]) {
@@ -2049,6 +2083,42 @@ static UIColor *blenderAnimationStateColor(NSString *state)
           [sectionRows addObject:vectorGroup];
           [sectionKeys addObject:[@"vector:" stringByAppendingString:groupKey]];
         }
+      }
+      if (property[@"toggle_group"]) {
+        NSString *groupKey = property[@"toggle_group"];
+        UIStackView *capsule = toggleGroups[groupKey];
+        if (!capsule) {
+          capsule = [[[UIStackView alloc] init] autorelease];
+          capsule.spacing = 2;
+          capsule.backgroundColor = UIColor.tertiarySystemFillColor;
+          capsule.layer.cornerRadius = _toolInline ? 9 : 10;
+          capsule.layer.cornerCurve = kCACornerCurveContinuous;
+          capsule.layoutMarginsRelativeArrangement = YES;
+          capsule.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(2, 2, 2, 2);
+          toggleGroups[groupKey] = capsule;
+          NSString *caption = [property[@"toggle_caption"] length] ? property[@"toggle_caption"] : property[@"label"];
+          UILabel *title = [self label:caption style:_toolInline ? UIFontTextStyleCaption2 : UIFontTextStyleBody];
+          UIStackView *group;
+          if (_toolInline) {
+            title.textColor = UIColor.secondaryLabelColor;
+            group = [[[UIStackView alloc] initWithArrangedSubviews:@[title, capsule]] autorelease];
+            group.axis = UILayoutConstraintAxisVertical;
+            group.alignment = UIStackViewAlignmentCenter;
+            group.spacing = 0;
+            [group.heightAnchor constraintEqualToConstant:40].active = YES;
+          }
+          else {
+            group = [[[UIStackView alloc] initWithArrangedSubviews:@[title, capsule]] autorelease];
+            group.alignment = UIStackViewAlignmentCenter;
+            [group.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+          }
+          [sectionRows addObject:group];
+          [sectionKeys addObject:[@"toggles:" stringByAppendingString:groupKey]];
+        }
+        UIButton *toggle = [self groupToggle:property object:objectID compact:_toolInline];
+        [capsule addArrangedSubview:toggle];
+        _controls[[self keyForProperty:property]] = toggle;
+        continue;
       }
       if (UIView *composite = [self compositeRowForProperty:property object:objectID]) {
         if (_toolInline) { continue; }
@@ -3390,6 +3460,9 @@ static UIColor *blenderAnimationStateColor(NSString *state)
       }
       else if ([control isKindOfClass:UISwitch.class]) {
         ((UISwitch *)control).on = [value boolValue];
+      }
+      else if (property[@"toggle_group"] && [control isKindOfClass:UIButton.class]) {
+        ((UIButton *)control).selected = [value boolValue];
       }
       else if ([property[@"type"] isEqual:@"ENUM"]) {
         if ([control isKindOfClass:UISegmentedControl.class]) {
