@@ -6924,8 +6924,6 @@ void calc_cube_tip_factors_common_grids(const Depsgraph &depsgraph,
   }
 
   /* Calculate local positions. */
-  Vector<float3> local_positions_storage(positions.size());
-  MutableSpan<float3> local_positions = local_positions_storage;
   calc_local_positions(positions,
                        mat,
                        cache.location_symm,
