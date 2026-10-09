@@ -232,7 +232,7 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
   PassParams passParams = {
     context.pass_sample_count,
     context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
-    context.pass_motion,
+    context.buffer_params.get_pass_offset(PASS_DENOISING_BACKWARD_MOTION),
     context.buffer_params.get_pass_offset(PASS_NORMAL),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
     context.pass_denoising_albedo,
@@ -278,15 +278,16 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
   [encoder setComputePipelineState: (id<MTLComputePipelineState>) color_post_pso];
   
   BufferParams buffer_params = context.buffer_params;
+  BufferParams denoised_buffer = context.denoised_buffer_params;
   
   KernelParams params = {
-    buffer_params.full_x,
-    buffer_params.full_y,
-    buffer_params.width,
-    buffer_params.height,
-    buffer_params.offset,
-    buffer_params.stride,
-    buffer_params.pass_stride,
+    denoised_buffer.full_x,
+    denoised_buffer.full_y,
+    denoised_buffer.width,
+    denoised_buffer.height,
+    denoised_buffer.offset,
+    denoised_buffer.stride,
+    denoised_buffer.pass_stride,
     pass.denoised_offset,
   };
   
@@ -301,15 +302,12 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
     context.num_samples,
   };
   
-  BufferParams denoised_buffer = context.denoised_buffer_params;
-  
   PostprocessParams denoise {
-    denoised_buffer.full_x,
-    denoised_buffer.full_y,
-    denoised_buffer.offset,
-    denoised_buffer.stride,
+    buffer_params.full_x,
+    buffer_params.full_y,
+    buffer_params.offset,
+    buffer_params.stride,
     pass.noisy_offset,
-    pass.use_compositing,
     pass.num_components,
     params_.upscale_factor,
   };

@@ -308,9 +308,10 @@ class CYCLES_RENDER_PT_sampling_viewport_denoise(CyclesButtonsPanel, Panel):
 
         if effective_preview_denoiser == 'MTLFX':
             if has_mtlfx_gpu_devices(context):
-                col.label(text="MTLFX Enable")
+                #col.label(text="MTLFX Enable")
+                col.prop(cscene, "preview_denoising_upscale_quality", text="Upscale Mode")
             else:
-                col.label(text="Requires macOS 26 Tahoe and Metal 4.")
+                col.label(text="Requires M3 or newer with macOS 26 Tahoe or newer.")
             return
 
         col.prop(cscene, "preview_denoising_input_passes", text="Passes")

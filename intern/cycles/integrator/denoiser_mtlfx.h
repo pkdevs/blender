@@ -83,7 +83,6 @@ private:
     int render_offset;
     int render_stride;
     int pass_noisy;
-    int use_compositing;
     int num_components;
     float upscale_factor;
   };
@@ -123,7 +122,6 @@ private:
       int render_offset;
       int render_stride;
       int pass_noisy;
-      int use_compositing;
       int num_components;
       float upscale_factor;
     };
@@ -272,9 +270,9 @@ private:
     {
       if (tid.x >= uint(params.width) || tid.y >= uint(params.height)) return;
       
-      uint64_t render_pixel_index = denoise.render_offset +
-                                    (int(tid.x / denoise.upscale_factor) + denoise.render_full_x) +
-                                    (int(tid.y / denoise.upscale_factor) + denoise.render_full_y) *
+      uint64_t render_pixel_index = denoise.render_offset + 
+                                    (tid.x + denoise.render_full_x) +
+                                    (tid.y + denoise.render_full_y) *
                                     denoise.render_stride;
       
       const device float *buffer = render_buffer + render_pixel_index * params.pass_stride;
@@ -285,7 +283,7 @@ private:
       
       if (pass.render_pass_sample_count == PASS_UNUSED) {
         pixelScale = pass.num_samples;
-      } else {
+      } else if (denoise.upscale_factor == 1.0f) {
         pixelScale = float(as_type<uint>(buffer[pass.render_pass_sample_count]));
       }
       
@@ -299,32 +297,18 @@ private:
       denoised_pixel[0] = color_value.x;
       denoised_pixel[1] = color_value.y;
       denoised_pixel[2] = color_value.z;
-      
-      if (pass.render_pass_sample_count == PASS_UNUSED || denoise.upscale_factor == 1.0f) {
-       denoised_pixel[0] *= pixelScale;
-       denoised_pixel[1] *= pixelScale;
-       denoised_pixel[2] *= pixelScale;
+      if (denoise.num_components > 3) {
+        /* Convert alpha back to transparency. */
+        denoised_pixel[3] = 1.0f - color_value.w;
       }
-      
-      if (denoise.num_components == 3) {
-         /* Pass without alpha channel. */
-       }
-       else if (!denoise.use_compositing) {
-         
-         const device float *noisy_pixel = buffer + denoise.pass_noisy;
-         denoised_pixel[3] = noisy_pixel[3];
-     
-         if (pass.render_pass_sample_count != PASS_UNUSED && denoise.upscale_factor != 1.0f) {
-           denoised_pixel[3] /= pixelScale;
-         }
-       }
-       else {
-         /* Assigning to zero since this is a default alpha value for 3-component passes, and it
-          * is an opaque pixel for 4 component passes. */
-         denoised_pixel[3] = 0;
-       }
+
+      if (pass.render_pass_sample_count == PASS_UNUSED || denoise.upscale_factor == 1.0f) {
+        for (int c = 0; c < 4 && c < denoise.num_components; c++) {
+          denoised_pixel[c] *= pixelScale;
+        }
+      }
     }
-  )";
+  )"; 
 };
 
 CCL_NAMESPACE_END

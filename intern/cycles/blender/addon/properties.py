@@ -299,7 +299,7 @@ def enum_optix_denoiser(self, context):
 def enum_mtlfx_denoiser(self, context):
     import _cycles
     if context or bool(context.preferences.addons[__package__].preferences.get_devices_for_type('METAL')):
-        return [('METALFX', "MetalFX", n_(
+        return [('MTLFX', "MetalFX", n_(
             "Use MetalFX for denoising. Requires M3 or higher with macOS 26 or higher"), 16)]
     return []
 
@@ -535,7 +535,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     )
     preview_denoising_upscale_quality: EnumProperty(
         name="Viewport Denoising Upscale Quality",
-        description="Overall upscale factor and denoising quality when using DLSS",
+        description="Overall upscale factor and denoising quality when using upscaling denoisers",
         items=enum_denoising_upscale_quality,
         default='BALANCED',
     )
@@ -1948,7 +1948,7 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                 if device_type == 'CPU':
                     continue
                 
-                has_device_mtlfx_support = device[16]
+                has_device_mtlfx_support = device[10]
                 if has_device_mtlfx_support and self.find_existing_device_entry(device).use:
                     return True
  

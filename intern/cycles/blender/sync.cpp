@@ -1261,11 +1261,39 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
         denoising.use = false;
       }
       
+      switch ((DenoiserUpscaleQuality)get_enum(cscene,
+                                               "preview_denoising_upscale_quality",
+                                               DENOISER_UPSCALE_NUM,
+                                               DENOISER_UPSCALE_BALANCED))
+      {
+        case DENOISER_UPSCALE_NONE:
+          denoising.quality = DENOISER_QUALITY_HIGH;
+          denoising.upscale_factor = 1.0f;
+          break;
+        case DENOISER_UPSCALE_QUALITY:
+          denoising.quality = DENOISER_QUALITY_HIGH;
+          denoising.upscale_factor = 1.0f / 0.66666667f;
+          break;
+        default:
+        case DENOISER_UPSCALE_BALANCED:
+          denoising.quality = DENOISER_QUALITY_BALANCED;
+          denoising.upscale_factor = 1.0f / 0.58f;
+          break;
+        case DENOISER_UPSCALE_PERFORMANCE:
+          denoising.quality = DENOISER_QUALITY_FAST;
+          denoising.upscale_factor = 2.0f;
+          break;
+        case DENOISER_UPSCALE_ULTRA_PERFORMANCE:
+          denoising.quality = DENOISER_QUALITY_FAST;
+          denoising.upscale_factor = 3.0f;
+          break;
+      }
+      
       denoising.start_sample = 0;
       
       denoising.passes = DENOISER_PASS_ALBEDO | DENOISER_PASS_SPECULAR_ALBEDO |
                          DENOISER_PASS_NORMAL | DENOISER_PASS_ROUGHNESS |
-                         DENOISER_PASS_DEPTH | DENOISER_PASS_MOTION;
+                         DENOISER_PASS_DEPTH | DENOISER_PASS_BACKWARD_MOTION;
       return denoising;
     }
   }
