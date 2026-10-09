@@ -125,8 +125,8 @@ ACTIONS = [
            lambda s: s.mode == 'OBJECT' and s.obj and s.obj.type == 'CAMERA' and s.obj in s.selected and
            s.context.scene.camera != s.obj),
     Action("object.keyframe", "Insert Keyframe", "anim.keyframe_insert", "DECORATE_KEYFRAME",
-           lambda s: s.mode in {'OBJECT', 'POSE'} and s.obj and s.obj.animation_data and
-           s.obj.animation_data.action and (s.selected or s.mode == 'POSE')),
+           lambda s: s.obj and ((s.mode == 'OBJECT' and s.selected) or
+                               (s.mode == 'POSE' and s.context.selected_pose_bones))),
     Action("object.select_none", "Select None", "object.select_all", "SELECT_SUBTRACT",
            lambda s: s.mode == 'OBJECT' and s.selecting and s.selected, {"action": 'DESELECT'}),
     Action("object.select_invert", "Invert", "object.select_all", "SELECT_DIFFERENCE",

@@ -98,5 +98,8 @@ bpy.ops.object.mode_set(mode='OBJECT')
 
 bpy.ops.object.armature_add()
 bpy.ops.object.mode_set(mode='POSE')
-check(titles()[:2] == ["Clear Transforms", "Copy Pose"], "Pose Mode offers pose actions")
+bpy.context.object.pose.bones[0].select = True
+check(actions._BY_ID['object.keyframe'].when(actions._State(bpy.context, 'builtin.select_box')),
+      "Pose Mode offers the first keyframe before an action exists")
+check("Clear Transforms" in titles(), "Pose Mode offers pose actions")
 print('PASS: native quick actions ' + json.dumps(checks))
