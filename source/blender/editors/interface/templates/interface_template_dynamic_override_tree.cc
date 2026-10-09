@@ -278,14 +278,15 @@ class RNAPathViewItem : public AbstractTreeViewItem {
   RNAPathViewItem(Layout &context_layout,
                   DynamicOverride &dynoverride,
                   DynamicOverrideRule &rule,
-                  const ParsedRNAPathRef rna_parsed_path)
+                  const ParsedRNAPathRef rna_parsed_path,
+                  const ParsedRNAPathRef rna_parsed_path_for_label)
       : context_layout_(context_layout),
         dynoverride_(dynoverride),
         rule_(rule),
         rna_parsed_path_(rna_parsed_path),
         rna_path_(ParsedRNAPath<4>(rna_parsed_path_).to_string())
   {
-    this->label_ = rna_path::to_string(rna_parsed_path_.last());
+    this->label_ = rna_path::to_string(rna_parsed_path_for_label);
   }
 
   void build_row(Layout &row) override
@@ -453,13 +454,27 @@ void RuleViewItem::build_tree_rule_property(TreeViewOrItem &parent_root,
   /* Note: last item in the parsed RNA path is skipped, as it's the actual overridden property,
    * which will be represented by a `PropertyViewItem`. */
   for (int slice_size = 1; slice_size < rna_parsed_path.size(); slice_size++) {
+    ParsedRNAPathRef rna_parsed_path_slice_for_label = rna_parsed_path.slice(slice_size - 1, 1);
+    /* In case current slice references a collection and there is an index or string key next,
+     * merge the 'collection step' with its actual item. */
+    if (rna_parsed_path.size() > slice_size &&
+        (std::holds_alternative<rna_path::LookupIndex>(rna_parsed_path[slice_size]) ||
+         std::holds_alternative<rna_path::LookupKey>(rna_parsed_path[slice_size])))
+    {
+      slice_size++;
+      rna_parsed_path_slice_for_label = rna_parsed_path.slice(slice_size - 2, 2);
+    }
     const ParsedRNAPathRef rna_parsed_path_slice = rna_parsed_path.slice(0, slice_size);
     parent = rna_path_items_.lookup_or_add_cb(
         rna_parsed_path_slice,
         /* Add new treeview item to the current parent, if it does not exist yet. */
-        [this, parent, rna_parsed_path_slice]() -> RNAPathViewItem * {
-          return &parent->add_tree_item<RNAPathViewItem>(
-              this->context_layout_, this->dynoverride_, this->rule_, rna_parsed_path_slice);
+        [this, parent, &rna_parsed_path_slice, &rna_parsed_path_slice_for_label]()
+            -> RNAPathViewItem * {
+          return &parent->add_tree_item<RNAPathViewItem>(this->context_layout_,
+                                                         this->dynoverride_,
+                                                         this->rule_,
+                                                         rna_parsed_path_slice,
+                                                         rna_parsed_path_slice_for_label);
         });
   }
 
