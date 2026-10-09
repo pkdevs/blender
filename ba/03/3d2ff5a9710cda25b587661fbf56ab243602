@@ -1,2 +1,3 @@
 Referenced by issue #164740, Vector Blur creates an outline when using depth
 Referenced by pull request #164897, Fix #164740: Cycles: Vector Blur creates an outline when using depth
+Referenced by commit a6e6a1d737f0db36743428fb6bd81d2117e93dc4, Fix #164740: Cycles: Vector Blur creates an outline when using depth
