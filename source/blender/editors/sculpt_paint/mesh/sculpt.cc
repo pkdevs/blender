@@ -2452,6 +2452,11 @@ bool node_in_sphere(const bke::pbvh::Node &node,
                     const bool original)
 {
   const Bounds<float3> &bounds = original ? node.bounds_orig() : node.bounds();
+  /* Nodes without geometry keep inverted bounds, which std::clamp rejects under libc++
+   * hardening. Flat nodes (min == max on an axis) are valid and must still be tested. */
+  if (bounds.max.x < bounds.min.x || bounds.max.y < bounds.min.y || bounds.max.z < bounds.min.z) {
+    return false;
+  }
   const float3 nearest = math::clamp(location, bounds.min, bounds.max);
   return math::distance_squared(location, nearest) < radius_sq;
 }
