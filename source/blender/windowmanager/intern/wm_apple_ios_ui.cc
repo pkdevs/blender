@@ -1149,13 +1149,40 @@ std::map<std::string, std::string> ios_brush_preview_paths;
 
 const AssetShelfType *ios_brush_shelf_type(const eContextObjectMode mode)
 {
-  /* Extend this mapping to project the brushes of other paint modes. */
+  /* The brush shelves of `space_view3d.py`, one for each mode that paints with brushes. */
+  const char *idname = nullptr;
   switch (mode) {
     case CTX_MODE_SCULPT:
-      return ed::asset::shelf::type_find_from_idname("VIEW3D_AST_brush_sculpt");
+      idname = "VIEW3D_AST_brush_sculpt";
+      break;
+    case CTX_MODE_SCULPT_CURVES:
+      idname = "VIEW3D_AST_brush_sculpt_curves";
+      break;
+    case CTX_MODE_PAINT_VERTEX:
+      idname = "VIEW3D_AST_brush_vertex_paint";
+      break;
+    case CTX_MODE_PAINT_WEIGHT:
+      idname = "VIEW3D_AST_brush_weight_paint";
+      break;
+    case CTX_MODE_PAINT_TEXTURE:
+      idname = "VIEW3D_AST_brush_texture_paint";
+      break;
+    case CTX_MODE_PAINT_GREASE_PENCIL:
+      idname = "VIEW3D_AST_brush_gpencil_paint";
+      break;
+    case CTX_MODE_SCULPT_GREASE_PENCIL:
+      idname = "VIEW3D_AST_brush_gpencil_sculpt";
+      break;
+    case CTX_MODE_VERTEX_GREASE_PENCIL:
+      idname = "VIEW3D_AST_brush_gpencil_vertex";
+      break;
+    case CTX_MODE_WEIGHT_GREASE_PENCIL:
+      idname = "VIEW3D_AST_brush_gpencil_weight";
+      break;
     default:
       return nullptr;
   }
+  return ed::asset::shelf::type_find_from_idname(idname);
 }
 
 std::string ios_brush_key(const AssetWeakReference &reference)
