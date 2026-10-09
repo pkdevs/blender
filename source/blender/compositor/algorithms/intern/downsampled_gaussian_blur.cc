@@ -22,6 +22,9 @@ namespace blender::compositor {
 /* "Downsampled" Gaussian blur: downsample to a working resolution (which could be different
  * per axis), apply a small separable Gaussian there, reconstruct to full resolution image.
  *
+ * Described in more detail: Pranckevicius, "Fast blur with animated radius", 2026
+ * https://aras-p.info/blog/2026/10/01/Fast-blur-with-animated-radius/
+ *
  * The algorithm is similar to Skia's GPU Gaussian blur as of 2026 Sep: independent X/Y scaling,
  * texture samples placed to use bilinear filtering, one pixel border on downsampled images that
  * preserve the original image edges (this way bright interiors do not overbright the result at
