@@ -1884,7 +1884,9 @@ wmOperatorStatus WM_operator_props_dialog_popup(bContext *C,
                                                 std::optional<std::string> confirm_text,
                                                 const bool cancel_default,
                                                 std::optional<std::string> message,
-                                                const bool show_icon)
+                                                const bool show_icon,
+                                                const std::optional<wmPopupSize> size,
+                                                const std::optional<wmPopupPosition> position)
 {
   wmOpPopUp *data = MEM_new<wmOpPopUp>(__func__);
   data->op = op;
@@ -1895,8 +1897,8 @@ wmOperatorStatus WM_operator_props_dialog_popup(bContext *C,
   data->confirm_text = confirm_text ? std::move(*confirm_text) : IFACE_("OK");
   data->message = message ? std::move(*message) : std::string();
   data->icon = show_icon ? ui::AlertIcon::Info : ui::AlertIcon::None;
-  data->size = show_icon ? WM_POPUP_SIZE_LARGE : WM_POPUP_SIZE_SMALL;
-  data->position = (message) ? WM_POPUP_POSITION_CENTER : WM_POPUP_POSITION_MOUSE;
+  data->size = size.value_or(show_icon ? WM_POPUP_SIZE_LARGE : WM_POPUP_SIZE_SMALL);
+  data->position = position.value_or(message ? WM_POPUP_POSITION_CENTER : WM_POPUP_POSITION_MOUSE);
   data->cancel_default = cancel_default;
   data->mouse_move_quit = false;
   data->include_properties = true;

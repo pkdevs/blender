@@ -1114,6 +1114,10 @@ wmOperatorStatus WM_operator_props_popup_confirm_ex(
 wmOperatorStatus WM_operator_props_popup_call(bContext *C, wmOperator *op, const wmEvent *event);
 wmOperatorStatus WM_operator_props_popup(bContext *C, wmOperator *op, const wmEvent *event);
 
+/**
+ * \param size, position: Override the default, which is a small popup at the mouse position,
+ * or large and centered with a message or icon.
+ */
 wmOperatorStatus WM_operator_props_dialog_popup(
     bContext *C,
     wmOperator *op,
@@ -1122,7 +1126,9 @@ wmOperatorStatus WM_operator_props_dialog_popup(
     std::optional<std::string> confirm_text = std::nullopt,
     bool cancel_default = false,
     std::optional<std::string> message = std::nullopt,
-    bool show_icon = false);
+    bool show_icon = false,
+    std::optional<wmPopupSize> size = std::nullopt,
+    std::optional<wmPopupPosition> position = std::nullopt);
 
 wmOperatorStatus WM_operator_redo_popup(bContext *C, wmOperator *op);
 /**
