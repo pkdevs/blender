@@ -4,25 +4,53 @@
 
 #pragma once
 
-#include "BLI_offset_indices.hh"
+#include <span>
+#include <utility>
 
 #include "opensubdiv_capi_type.hh"
 
+/**
+ * Sharpness value which makes an edge or a vertex infinitely sharp. Mirrors
+ * `OpenSubdiv::Sdc::Crease::SHARPNESS_INFINITE`, which can not be included here.
+ */
+constexpr float OPENSUBDIV_SHARPNESS_INFINITE = 10.0f;
+
 struct OpenSubdiv_Converter {
+  int verts_num;
   /**
-   * The face topology of the base mesh to be subdivided. See #Mesh::faces() documentation for the
-   * details.
-   *
-   * Other topology information is currently encoded with callbacks rather than arrays directly.
+   * The topology of the mesh to be subdivided. See #Mesh::edges(), #Mesh::face_offsets(), and
+   * #Mesh::corner_verts() documentation for the details. Other topology information is currently
+   * encoded with callbacks rather than arrays directly.
    */
-  blender::OffsetIndices<int> faces;
+  std::span<const std::pair<int, int>> edges;
+  std::span<const int> face_offsets;
+  std::span<const int> corner_verts;
 
-  OpenSubdiv_SchemeType (*getSchemeType)(const OpenSubdiv_Converter *converter);
+  /**
+   * Sharpness (aka crease) of every edge and every vertex, in the
+   * `[0, #OPENSUBDIV_SHARPNESS_INFINITE]` range. Vertex sharpness includes the infinite sharpness
+   * used to make vertices adjacent to a loose edge sharp.
+   *
+   * Either aligned with #edges and with the vertices respectively, or empty.
+   */
+  std::span<const float> edge_sharpness;
+  std::span<const float> vert_sharpness;
 
-  OpenSubdiv_VtxBoundaryInterpolation (*getVtxBoundaryInterpolation)(
-      const OpenSubdiv_Converter *converter);
-  OpenSubdiv_FVarLinearInterpolation (*getFVarLinearInterpolation)(
-      const OpenSubdiv_Converter *converter);
+  struct UVLayer {
+    /** Number of distinct UV "vertices" (face-varying values) in the layer. */
+    int uvs_num;
+    /**
+     * The index of every face corner's UV vertex in `[0, uvs_num)`. Corners that use the
+     * same mesh vertex and have connected UVs share an index. Aligned with #corner_verts.
+     */
+    std::span<const int> corner_uv_indices;
+  };
+  std::span<const UVLayer> uv_layers;
+
+  OpenSubdiv_SchemeType scheme_type;
+
+  OpenSubdiv_VtxBoundaryInterpolation vtx_boundary_interpolation;
+  OpenSubdiv_FVarLinearInterpolation fvar_linear_interpolation;
 
   // Denotes whether this converter specifies full topology, which includes
   // vertices, edges, faces, vertices+edges of a face and edges/faces of a
@@ -36,19 +64,8 @@ struct OpenSubdiv_Converter {
   bool (*specifiesFullTopology)(const OpenSubdiv_Converter *converter);
 
   //////////////////////////////////////////////////////////////////////////////
-  // Global geometry counters.
-
-  // Number of faces/edges/vertices in the base mesh.
-  int (*getNumEdges)(const OpenSubdiv_Converter *converter);
-  int (*getNumVertices)(const OpenSubdiv_Converter *converter);
-
-  //////////////////////////////////////////////////////////////////////////////
   // Face relationships.
 
-  // Array of vertex indices the face consists of.
-  void (*getFaceVertices)(const OpenSubdiv_Converter *converter,
-                          const int face_index,
-                          int *face_vertices);
   // Array of edge indices the face consists of.
   // Aligned with the vertex indices array, edge i connects face vertex i
   // with face index i+1.
@@ -59,16 +76,10 @@ struct OpenSubdiv_Converter {
   //////////////////////////////////////////////////////////////////////////////
   // Edge relationships.
 
-  // Vertices the edge consists of.
-  void (*getEdgeVertices)(const OpenSubdiv_Converter *converter,
-                          const int edge_index,
-                          int edge_vertices[2]);
   // Number of faces which are sharing the given edge.
   int (*getNumEdgeFaces)(const OpenSubdiv_Converter *converter, const int edge_index);
   // Array of face indices which are sharing the given edge.
   void (*getEdgeFaces)(const OpenSubdiv_Converter *converter, const int edge, int *edge_faces);
-  // Edge sharpness (aka crease).
-  float (*getEdgeSharpness)(const OpenSubdiv_Converter *converter, const int edge_index);
 
   //////////////////////////////////////////////////////////////////////////////
   // Vertex relationships.
@@ -85,42 +96,6 @@ struct OpenSubdiv_Converter {
   void (*getVertexFaces)(const OpenSubdiv_Converter *converter,
                          const int vertex_index,
                          int *vertex_faces);
-
-  // Check whether vertex is to be marked as an infinite sharp.
-  // This is a way to make sharp vertices which are adjacent to a loose edges.
-  bool (*isInfiniteSharpVertex)(const OpenSubdiv_Converter *converter, const int vertex_index);
-
-  // If vertex is not infinitely sharp, this is its actual sharpness.
-  float (*getVertexSharpness)(const OpenSubdiv_Converter *converter, const int vertex_index);
-
-  //////////////////////////////////////////////////////////////////////////////
-  // Face-varying data.
-
-  /////////////////////////////////////
-  // UV coordinates.
-
-  // Number of UV layers.
-  int (*getNumUVLayers)(const OpenSubdiv_Converter *converter);
-
-  // We need some corner connectivity information, which might not be trivial
-  // to be gathered (might require multiple matching calculations per corver
-  // query).
-  // precalc() is called before any corner connectivity or UV coordinate is
-  // queried from the given layer, allowing converter to calculate and cache
-  // complex complex-to-calculate information.
-  // finish() is called after converter is done porting UV layer to OpenSubdiv,
-  // allowing to free cached data.
-  void (*precalcUVLayer)(const OpenSubdiv_Converter *converter, const int layer_index);
-  void (*finishUVLayer)(const OpenSubdiv_Converter *converter);
-
-  // Get number of UV coordinates in the current layer (layer which was
-  // specified in precalcUVLayer().
-  int (*getNumUVCoordinates)(const OpenSubdiv_Converter *converter);
-  // For the given face index and its corner (known as loop in Blender)
-  // get corresponding UV coordinate index.
-  int (*getFaceCornerUVIndex)(const OpenSubdiv_Converter *converter,
-                              const int face_index,
-                              const int corner_index);
 
   //////////////////////////////////////////////////////////////////////////////
   // User data associated with this converter.
