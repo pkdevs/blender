@@ -23,7 +23,7 @@
 			<true/>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>com.williamreynish.blender.file</string>
+				<string>org.blenderfoundation.blender.file</string>
 			</array>
 		</dict>
 	</array>
@@ -118,7 +118,7 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeIdentifier</key>
-			<string>com.williamreynish.blender.file</string>
+			<string>org.blenderfoundation.blender.file</string>
 			<key>UTTypeDescription</key>
 			<string>Blender File</string>
 			<key>UTTypeIcons</key>

@@ -113,7 +113,7 @@ bool WM_apple_ios_fileselect_begin(bContext *C, wmOperator *op)
   }
   std::string types;
   const struct { const char *property; const char *type; } filters[] = {
-      {"filter_blender", "com.williamreynish.blender.file"},
+      {"filter_blender", "org.blenderfoundation.blender.file"},
       {"filter_backup", "public.data"}, {"filter_image", "public.image"},
       {"filter_movie", "public.movie"}, {"filter_sound", "public.audio"},
       {"filter_font", "public.font"}, {"filter_text", "public.text"},
