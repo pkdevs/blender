@@ -6,8 +6,10 @@
 
 blender --background --factory-startup --python build_templates.py
 """
+import argparse
 import json
 from pathlib import Path
+import sys
 
 import bpy
 from mathutils import Quaternion
@@ -15,7 +17,7 @@ from mathutils import Quaternion
 OUTPUT = Path(__file__).resolve().parent / 'library'
 TEMPLATES = (
     ('general', 'General', '', False),
-    ('sculpt', 'Sculpt', '', False),
+    ('sculpt', 'Sculpt', 'Sculpting', False),
     ('drawing', 'Grease Pencil Drawing', '2D_Animation', False),
     ('animation-2d', '2D Animation', '2D_Animation', True),
     ('animation-3d', '3D Animation', '', True),
@@ -40,18 +42,16 @@ def build(identifier, title, base, timeline):
     bpy.ops.wm.read_factory_settings(app_template=base)
     scene = bpy.context.scene
     if identifier == 'sculpt':
-        bpy.ops.object.select_all(action='SELECT')
-        bpy.ops.object.delete(use_global=False)
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=192, ring_count=128)
+        # Keep Blender's sculpt-ready quad sphere, symmetry and remesh defaults.
         obj = bpy.context.object
         obj.name = 'Sculpt'
-        for polygon in obj.data.polygons:
-            polygon.use_smooth = True
-        obj.data.use_mirror_x = True
-        bpy.ops.object.mode_set(mode='SCULPT')
         bpy.ops.brush.asset_activate(asset_library_type='ESSENTIALS',
             relative_asset_identifier='brushes/essentials_brushes-mesh_sculpt.blend/Brush/Draw')
-    if base:
+        sculpt_space = next(area.spaces.active for area in bpy.context.screen.areas
+                            if area.type == 'VIEW_3D')
+        sculpt_matcap = sculpt_space.shading.studio_light
+        assert sculpt_space.shading.light == 'MATCAP'
+    if base == '2D_Animation':
         bpy.context.object.name = 'Drawing'
         scene.tool_settings.use_keyframe_insert_auto = timeline
         scene.frame_end = 120 if timeline else 250
@@ -71,9 +71,15 @@ def build(identifier, title, base, timeline):
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type == 'VIEW_3D' and identifier == 'sculpt':
-                area.spaces.active.region_3d.view_location = (0, 0, 0)
-                area.spaces.active.region_3d.view_distance = 4
-                area.spaces.active.shading.type = 'SOLID'
+                space = area.spaces.active
+                space.shading.type = 'SOLID'
+                space.shading.light = 'MATCAP'
+                space.shading.studio_light = sculpt_matcap
+                space.shading.show_shadows = False
+                space.shading.show_cavity = False
+                space.overlay.show_floor = False
+                space.overlay.show_axis_x = False
+                space.overlay.show_axis_y = False
     local_brushes()
     assert not bpy.data.libraries, 'Template has external library dependencies'
     assert not bpy.data.texts, 'Template must not contain embedded scripts'
@@ -92,13 +98,18 @@ def build(identifier, title, base, timeline):
         camera.location = (4, -6, 4)
         camera.rotation_euler = (-camera.location).to_track_quat('-Z', 'Y').to_euler()
         camera.data.type = 'ORTHO'
-        camera.data.ortho_scale = 3.2
+        camera.data.ortho_scale = max(bpy.context.object.dimensions) * 1.85 if identifier == 'sculpt' else 3.2
         scene.camera = camera
     scene.render.engine = 'BLENDER_WORKBENCH'
     scene.display.shading.light = 'STUDIO'
+    if identifier == 'sculpt':
+        scene.display.shading.light = 'MATCAP'
+        scene.display.shading.studio_light = sculpt_matcap
+        scene.display.shading.show_shadows = False
+        scene.display.shading.show_cavity = False
     scene.display.shading.color_type = 'MATERIAL'
     scene.display.shading.background_type = 'WORLD'
-    scene.world.color = (1, 1, 1) if base else (0.16, 0.16, 0.16)
+    scene.world.color = (1, 1, 1) if base == '2D_Animation' else (0.16, 0.16, 0.16)
     scene.render.resolution_x = 640
     scene.render.resolution_y = 420
     scene.render.resolution_percentage = 100
@@ -111,5 +122,11 @@ def build(identifier, title, base, timeline):
 
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
-entries = [build(*template) for template in TEMPLATES]
-(OUTPUT / 'manifest.json').write_text(json.dumps(dict(version=1, templates=entries), indent=2) + '\n')
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--template', choices=[template[0] for template in TEMPLATES])
+arguments = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
+if arguments.template:
+    build(*next(template for template in TEMPLATES if template[0] == arguments.template))
+else:
+    entries = [build(*template) for template in TEMPLATES]
+    (OUTPUT / 'manifest.json').write_text(json.dumps(dict(version=1, templates=entries), indent=2) + '\n')
