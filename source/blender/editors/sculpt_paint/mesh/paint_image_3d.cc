@@ -498,16 +498,12 @@ static void average_pixels(const int start,
   PRF_scope(ProfileCategory::Editor);
 
   for (int i = 0; i < size; i++) {
-    Array<KDTreeNew<float3>::Nearest, 8> nearest_pixels(8);
+    Array<KDTreeNew<float3>::Nearest, 9> nearest_pixels(9);
     const int nearest_count = tree.find_nearest_n(pixel_positions[start + i], nearest_pixels);
 
     int num = 0;
     float4 accum(0);
     for (int k = 0; k < nearest_count; k++) {
-      if (nearest_pixels[k].distance_sq < FLT_EPSILON) {
-        continue;
-      }
-
       std::optional<IndexRemainder> index_remainder = index_remainder_in(offsets,
                                                                          nearest_pixels[k].index);
 
@@ -768,13 +764,22 @@ static void allocate_scratch_tiles(ImageData &image_data,
       continue;
     }
 
-    Vector<Vector<float4>, 0> &tile_scratch_color = image_data.scratch_color_data.lookup(tile_number);
-    tile_scratch_color[tile_index].reinitialize(scratch_tile_area);
+    /* TODO: Not sure if this is the correct way to prevent a race condition when reinitializing /
+     * resizing allocation. */
+    {
+      std::scoped_lock allocate_lock(image_data.scratch_mutex);
 
-    Vector<Vector<float>, 0> &tile_scratch_factor = image_data.scratch_factor_data.lookup(tile_number);
-    tile_scratch_factor[tile_index].resize(scratch_tile_area, 0);
+      if (allocated.load(std::memory_order_relaxed)) {
+        continue;
+      }
 
-    allocated.store(1, std::memory_order_release);
+      Vector<Vector<float4>, 0> &tile_scratch_color = image_data.scratch_color_data.lookup(tile_number);
+      tile_scratch_color[tile_index].reinitialize(scratch_tile_area);
+
+      Vector<Vector<float>, 0> &tile_scratch_factor = image_data.scratch_factor_data.lookup(tile_number);
+      tile_scratch_factor[tile_index].resize(scratch_tile_area, 0);
+      allocated.store(1, std::memory_order_release);
+    }
   }
 }
 
@@ -1090,9 +1095,9 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
 
     const MutableSpan<uint32_t> scratch_data_allocated = image_data.scratch_data_allocated.lookup(
         tile_data.tile_number);
-    const MutableSpan<Vector<float4>> scratch_color_data = image_data.scratch_color_data.lookup(
+    Vector<Vector<float4>, 0> &scratch_color_data = image_data.scratch_color_data.lookup(
         tile_data.tile_number);
-    const MutableSpan<Vector<float>> scratch_factor_data = image_data.scratch_factor_data.lookup(
+    Vector<Vector<float>, 0> &scratch_factor_data = image_data.scratch_factor_data.lookup(
         tile_data.tile_number);
 
     threading::EnumerableThreadSpecific<PaintLocalData> all_factor_tls;
@@ -1342,9 +1347,9 @@ static void do_apply_blur(const Paint &paint,
 
     const MutableSpan<uint32_t> scratch_data_allocated = image_data.scratch_data_allocated.lookup(
         tile_data.tile_number);
-    const MutableSpan<Vector<float4>> scratch_color_data = image_data.scratch_color_data.lookup(
+    Vector<Vector<float4>, 0> &scratch_color_data = image_data.scratch_color_data.lookup(
         tile_data.tile_number);
-    const MutableSpan<Vector<float>> scratch_factor_data = image_data.scratch_factor_data.lookup(
+    Vector<Vector<float>, 0> &scratch_factor_data = image_data.scratch_factor_data.lookup(
         tile_data.tile_number);
 
     IndexMaskMemory memory;

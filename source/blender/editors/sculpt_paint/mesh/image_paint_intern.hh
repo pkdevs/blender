@@ -47,6 +47,7 @@ struct ImageData : NonCopyable {
   /** Per seam tile modified state, to only do seam bleeding where needed. */
   Map<bke::image::TileNumber, Array<uint8_t>> seam_tile_modified = {};
 
+  Mutex scratch_mutex;
   Map<bke::image::TileNumber, Array<uint32_t>> scratch_data_allocated = {};
   Map<bke::image::TileNumber, Vector<Vector<float4>, 0>> scratch_color_data = {};
   Map<bke::image::TileNumber, Vector<Vector<float>, 0>> scratch_factor_data = {};
