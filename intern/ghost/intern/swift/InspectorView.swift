@@ -16,11 +16,12 @@ struct PanelHeader<Trailing: View>: View {
   @ViewBuilder var trailing: Trailing
 
   var body: some View {
-    HStack(spacing: 4) {
+    HStack(spacing: 0) {
       Text(title)
         .font(.headline)
         .lineLimit(1)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 8)
       trailing
       Button(action: close) {
         Image(systemName: "xmark")
@@ -104,7 +105,8 @@ struct InspectorForm: View {
   var body: some View {
     ScrollView {
       /* Not lazy: lazy stacks stay empty when they first appear in a hidden, unsized panel. */
-      VStack(alignment: .leading, spacing: 10) {
+      /* Spaced like an inset grouped table: a 44 point header right above its card. */
+      VStack(alignment: .leading, spacing: 17) {
         ForEach(store.sections) { section in
           SectionView(store: store, section: section)
         }
@@ -118,6 +120,7 @@ struct InspectorForm: View {
         }
       }
       .padding(.horizontal, 16)
+      .padding(.top, 3)
       .padding(.bottom, 16)
     }
     .scrollDismissesKeyboard(.interactively)
@@ -138,7 +141,7 @@ struct SectionView: View {
 
   var body: some View {
     let expanded = section.headerHidden || store.isExpanded(section.id)
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: 0) {
       if !section.headerHidden {
         header(expanded: expanded)
       }
@@ -156,8 +159,7 @@ struct SectionView: View {
             }
           }
           .padding(.horizontal, 12)
-          .padding(.vertical, 2)
-          .background(PanelStyle.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+          .background(PanelStyle.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
           .transition(.opacity.combined(with: .move(edge: .top)))
         }
       }
@@ -384,11 +386,13 @@ struct StripColumn: View {
         OperatorButton(store: store, property: property, compact: true)
       case "MENU":
         UIMenuButton(title: property.string("label"), image: BlenderIcon.image(property.string("icon")),
-                     style: .borderless, enabled: property.bool("editable")) {
+                     style: .borderless, enabled: property.bool("editable"),
+                     menuTitle: property.string("label") ?? "") {
           store.menuProvider?(property as NSDictionary)
         }
       case "ENUM":
         EnumControl(store: store, property: property, compact: true)
+          .frame(width: width - 8)
       case "COLOR":
         ColorSwatch(store: store, property: property)
           .scaleEffect(0.8)

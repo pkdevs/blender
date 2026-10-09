@@ -23,9 +23,18 @@ struct UIMenuButton: UIViewRepresentable {
   var style: Style = .plain
   var enabled = true
   var accessibilityLabel: String? = nil
+  /** The image and title color, rather than the inherited tint. */
+  var tint: UIColor? = nil
+  /** Shown above the menu's items, as Blender's menus name themselves. */
+  var menuTitle = ""
+  /** Built when it opens, so Blender's polling is current; otherwise used as it is, keeping its
+   * options such as single selection. */
+  var deferred = true
   var menu: () -> UIMenu?
 
-  enum Style { case plain, glass, popup, borderless }
+  /** `glassPopup`: a compact glass button with the popup indicator, as for a tool's icon menu. */
+  /** `system`: a classic system button, its title in the tint at 15 points, centered. */
+  enum Style { case plain, glass, popup, borderless, glassPopup, system }
 
   func makeUIView(context: Context) -> UIButton {
     let button = UIButton(type: .system)
@@ -36,32 +45,59 @@ struct UIMenuButton: UIViewRepresentable {
   }
 
   func updateUIView(_ button: UIButton, context: Context) {
+    if style == .system {
+      button.configuration = nil
+      button.setTitle(title, for: .normal)
+      button.setImage(image, for: .normal)
+      button.titleLabel?.lineBreakMode = .byTruncatingTail
+      button.contentHorizontalAlignment = .center
+      button.isEnabled = enabled
+      button.tintColor = tint
+      button.accessibilityLabel = accessibilityLabel ?? title
+      button.menu = makeMenu()
+      return
+    }
     var configuration: UIButton.Configuration
     switch style {
-      case .glass: configuration = .glass()
-      case .popup, .plain, .borderless: configuration = .plain()
+      case .glass, .glassPopup: configuration = .glass()
+      case .popup, .plain, .borderless, .system: configuration = .plain()
     }
-    if style == .popup { configuration.indicator = .popup }
+    if style == .popup || style == .glassPopup { configuration.indicator = .popup }
+    if style == .glassPopup {
+      configuration.contentInsets = NSDirectionalEdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8)
+      configuration.baseForegroundColor = .label
+    }
     configuration.title = title
     configuration.subtitle = subtitle
     configuration.image = image
     configuration.imagePadding = 8
     configuration.titleLineBreakMode = .byTruncatingTail
+    if let tint { configuration.baseForegroundColor = tint }
     if style == .borderless || style == .popup {
       configuration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0)
     }
     button.configuration = configuration
     button.isEnabled = enabled
+    button.tintColor = tint
+    button.contentHorizontalAlignment = style == .glassPopup || style == .plain ? .center : .leading
     button.accessibilityLabel = accessibilityLabel ?? title
+    button.menu = makeMenu()
+  }
+
+  private func makeMenu() -> UIMenu {
+    guard deferred else { return menu() ?? UIMenu(children: []) }
     /* A deferred element builds the menu when it opens. */
     let provider = menu
-    button.menu = UIMenu(children: [UIDeferredMenuElement.uncached { completion in
+    return UIMenu(title: menuTitle, children: [UIDeferredMenuElement.uncached { completion in
       completion(provider()?.children ?? [])
     }])
   }
 
   func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIButton, context: Context) -> CGSize? {
     let fitting = uiView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
+    if style == .glassPopup, let height = proposal.height {
+      return CGSize(width: proposal.width ?? fitting.width, height: height)
+    }
     return CGSize(width: proposal.width ?? fitting.width, height: max(fitting.height, 32))
   }
 }

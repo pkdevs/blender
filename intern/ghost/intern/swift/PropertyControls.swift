@@ -46,12 +46,18 @@ func numericValue(_ value: Any?) -> Double {
 /** \name Number field
  * \{ */
 
+/** Numbers as Blender's native fields draw them: 15 point digits that scale with the text size. */
+private let numberFont = Font(UIFontMetrics(forTextStyle: .body)
+  .scaledFont(for: .monospacedDigitSystemFont(ofSize: 15, weight: .regular)))
+
 /** A number that scrubs with a sideways drag (drag up for coarser, down for finer steps) and
  * takes a typed value on tap, with a stepper above the keyboard. */
 struct NumberField: View {
   @ObservedObject var store: InspectorStore
   let property: JSON
   var compact = false
+  /** Taller than the compact size, as in a vector. */
+  var height: CGFloat?
   /** Sliders scrub with their track instead. */
   var scrubs = true
   var significant = 9
@@ -75,7 +81,7 @@ struct NumberField: View {
         TextField("", text: $text)
           .keyboardType(.numbersAndPunctuation)
           .multilineTextAlignment(.trailing)
-          .font(.body.monospacedDigit())
+          .font(numberFont)
           .focused($focused)
           .submitLabel(.done)
           .onSubmit { commit() }
@@ -95,7 +101,7 @@ struct NumberField: View {
       }
       else {
         Text(formatNumber(value, property: property, significant: significant))
-          .font((compact ? Font.callout : Font.body).monospacedDigit())
+          .font(numberFont)
           .lineLimit(1)
           .minimumScaleFactor(0.7)
           .foregroundStyle(editable ? .primary : .secondary)
@@ -103,7 +109,7 @@ struct NumberField: View {
       }
     }
     .padding(.horizontal, 8)
-    .frame(minHeight: compact ? 30 : 36)
+    .frame(minHeight: height ?? (compact ? 30 : 40))
     .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     .overlay {
       if scrubValue != nil {
@@ -319,8 +325,12 @@ struct PropertySlider: View {
 extension View {
   /** Blender's animation color, or the app's accent when the property isn't animated. */
   func animationTint(_ state: String?) -> some View {
-    /* SwiftUI switches default to green; Blender's native controls use the app's blue. */
     self.tint(animationStateColor(state) ?? Color.accentColor)
+  }
+
+  /** Blender's animation color, or the system's green for a switch that isn't animated. */
+  func switchTint(_ state: String?) -> some View {
+    self.tint(animationStateColor(state) ?? Color(uiColor: .systemGreen))
   }
 }
 
@@ -367,6 +377,35 @@ extension View {
   }
 }
 
+/** A label beside a control given a fraction of the row's width, as Blender's split rows. */
+struct FractionRow: Layout {
+  var fraction: CGFloat
+  var spacing: CGFloat = 10
+
+  private func widths(_ width: CGFloat) -> (lead: CGFloat, control: CGFloat) {
+    let control = (width * fraction).rounded()
+    return (max(0, width - control - spacing), control)
+  }
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    guard subviews.count == 2 else { return .zero }
+    let width = proposal.width ?? 320
+    let (lead, control) = widths(width)
+    let height = max(subviews[0].sizeThatFits(ProposedViewSize(width: lead, height: proposal.height)).height,
+                     subviews[1].sizeThatFits(ProposedViewSize(width: control, height: proposal.height)).height)
+    return CGSize(width: width, height: height)
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    guard subviews.count == 2 else { return }
+    let (lead, control) = widths(bounds.width)
+    subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading,
+                      proposal: ProposedViewSize(width: lead, height: bounds.height))
+    subviews[1].place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing,
+                      proposal: ProposedViewSize(width: control, height: nil))
+  }
+}
+
 /** A property as a form row: its label and its control. */
 struct PropertyRow: View {
   @ObservedObject var store: InspectorStore
@@ -391,7 +430,8 @@ struct PropertyRow: View {
             OperatorButton(store: store, property: property)
           case "MENU":
             UIMenuButton(title: label, image: BlenderIcon.image(property.string("icon")),
-                         enabled: property.bool("editable")) {
+                         enabled: property.bool("editable"), tint: UIColor(Color.accentColor),
+                         menuTitle: label) {
               store.menuProvider?(property as NSDictionary)
             }
             .frame(minHeight: 44)
@@ -422,7 +462,7 @@ struct PropertyRow: View {
   private func labeled<Control: View>(width: CGFloat? = 0.53,
                                       @ViewBuilder control: () -> Control) -> some View
   {
-    HStack(spacing: 10) {
+    let title = HStack(spacing: 10) {
       if let icon = BlenderIcon.image(property.string("leading_icon")) {
         Image(uiImage: icon)
           .resizable()
@@ -439,12 +479,19 @@ struct PropertyRow: View {
           .foregroundStyle(.secondary)
           .accessibilityLabel("Locked")
       }
+    }
+    Group {
       if let width {
-        control()
-          .containerRelativeFrame(.horizontal) { length, _ in length * width }
+        FractionRow(fraction: width) {
+          title
+          control()
+        }
       }
       else {
-        control()
+        HStack(spacing: 10) {
+          title
+          control()
+        }
       }
     }
     .frame(minHeight: 44)
@@ -460,7 +507,7 @@ struct PropertyToggle: View {
       get: { (store.value(property) as? NSNumber)?.boolValue ?? false },
       set: { store.edit(property, value: $0) }))
       .labelsHidden()
-      .animationTint(property.string("anim_state"))
+      .switchTint(property.string("anim_state"))
       .disabled(!property.bool("editable"))
   }
 }
@@ -480,6 +527,7 @@ struct OperatorToggle: View {
         if value, let panel = property.string("physics_panel") { store.expandSection(panel) }
       }))
       .labelsHidden()
+      .switchTint(nil)
       .disabled(!property.bool("editable"))
       .onChange(of: property.bool("value")) { _, _ in on = nil }
   }
@@ -517,10 +565,8 @@ struct HeaderOperatorButton: View {
       store.runOperator(property)
     } label: {
       if let image = BlenderIcon.image(property.string("icon")) {
+        /* At the icon's own size, as a plain button draws it. */
         Image(uiImage: image)
-          .resizable()
-          .scaledToFit()
-          .frame(width: 18, height: 18)
           .frame(width: 36, height: 36)
       }
       else {
@@ -638,64 +684,33 @@ struct EnumControl: View {
     else if compact || (store.selectedTab == "TOOL" && property.bool("expand") &&
                         (2...6).contains(options.count))
     {
-      menu {
-        HStack(spacing: 4) {
-          if let image = BlenderIcon.image(current?.string("icon")) {
-            Image(uiImage: image).resizable().scaledToFit().frame(width: 18, height: 18)
-          }
-          else {
-            Text(current?.string("label") ?? "").lineLimit(1)
-          }
-          Image(systemName: "chevron.up.chevron.down").font(.caption2)
-        }
-        .padding(.horizontal, 8)
-        .frame(minHeight: 26)
-      }
-      .buttonStyle(.glass)
-      .accessibilityLabel(label)
+      /* A glass button showing the current choice's icon, with a single-selection menu. */
+      let icon = BlenderIcon.image(current?.string("icon"))
+      UIMenuButton(title: icon == nil ? current?.string("label") : nil, image: icon, style: .glassPopup,
+                   enabled: property.bool("editable"), accessibilityLabel: label, deferred: false) { uiMenu }
     }
     else {
-      HStack(spacing: 10) {
+      /* As a system button: the current choice in the tint, with a single-selection menu. */
+      FractionRow(fraction: 0.53) {
         Text(property.string("label") ?? "")
+          .lineLimit(2)
           .frame(maxWidth: .infinity, alignment: .leading)
-        menu {
-          HStack(spacing: 6) {
-            if let image = BlenderIcon.image(current?.string("icon")) {
-              Image(uiImage: image).resizable().scaledToFit().frame(width: 16, height: 16)
-            }
-            Text(current?.string("label") ?? "—")
-              .lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down")
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-          }
-          .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .containerRelativeFrame(.horizontal) { length, _ in length * 0.53 }
+        UIMenuButton(title: current?.string("label") ?? "—", image: nil, style: .system,
+                     enabled: property.bool("editable"), accessibilityLabel: label,
+                     menuTitle: label, deferred: false) { uiMenu }
       }
       .frame(minHeight: 44)
     }
   }
 
-  private func menu<LabelView: View>(@ViewBuilder label: () -> LabelView) -> some View {
-    Menu {
-      ForEach(Array(options.enumerated()), id: \.offset) { _, option in
-        Button {
-          store.edit(property, value: option["value"] ?? "")
-        } label: {
-          Label {
-            Text(option.string("label") ?? "")
-          } icon: {
-            if isChecked(option) { Image(systemName: "checkmark") }
-            else if let image = BlenderIcon.image(option.string("icon")) { Image(uiImage: image) }
-          }
-        }
+  private var uiMenu: UIMenu {
+    let actions = options.map { option in
+      UIAction(title: option.string("label") ?? "", image: BlenderIcon.image(option.string("icon")),
+               state: isChecked(option) ? .on : .off) { _ in
+        store.edit(property, value: option["value"] ?? "")
       }
-    } label: {
-      label()
     }
-    .menuOrder(.fixed)
-    .disabled(!property.bool("editable"))
+    return UIMenu(title: label, options: .singleSelection, children: actions)
   }
 }
 
@@ -817,7 +832,7 @@ struct VectorRow: View {
   let items: [JSON]
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 2) {
+    VStack(alignment: .leading, spacing: 0) {
       caption
       HStack(spacing: 4) {
         ForEach(Array(items.enumerated()), id: \.offset) { _, item in
@@ -833,15 +848,15 @@ struct VectorRow: View {
               PropertyToggle(store: store, property: item)
             }
             else {
-              NumberField(store: store, property: item, compact: true, significant: 6)
+              NumberField(store: store, property: item, compact: true, height: 40, significant: 6)
             }
           }
           .frame(maxWidth: .infinity)
           .propertyActions(store, item)
         }
       }
+      .frame(minHeight: 44)
     }
-    .padding(.vertical, 4)
   }
 
   @ViewBuilder
@@ -849,32 +864,30 @@ struct VectorRow: View {
     if let mode = items.first?.dict("group_menu") {
       let options = mode.array("options")
       let current = options.first { jsonEqual($0["value"], mode["value"]) }
-      Menu {
-        ForEach(Array(options.enumerated()), id: \.offset) { _, option in
-          Button {
-            if !jsonEqual(option["value"], mode["value"]) { store.edit(mode, value: option["value"] ?? "") }
-          } label: {
-            if jsonEqual(option["value"], mode["value"]) {
-              Label(option.string("label") ?? "", systemImage: "checkmark")
-            }
-            else {
-              Text(option.string("label") ?? "")
+      /* The mode is a touch and hold away, as in the caption's context menu. */
+      Text(title)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(minHeight: 28)
+        .contentShape(Rectangle())
+        .contextMenu {
+          if mode.bool("editable") {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+              Button {
+                if !jsonEqual(option["value"], mode["value"]) { store.edit(mode, value: option["value"] ?? "") }
+              } label: {
+                if jsonEqual(option["value"], mode["value"]) {
+                  Label(option.string("label") ?? "", systemImage: "checkmark")
+                }
+                else {
+                  Text(option.string("label") ?? "")
+                }
+              }
             }
           }
         }
-      } label: {
-        HStack(spacing: 4) {
-          Text(title).foregroundStyle(.secondary)
-          Text(current?.string("label") ?? "").foregroundStyle(Color.accentColor)
-          Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
-            .foregroundStyle(Color.accentColor)
-        }
-        .font(.caption)
-        .frame(minHeight: 28)
-      }
-      .tint(.secondary)
-      .disabled(!mode.bool("editable"))
-      .accessibilityLabel("\(title) mode")
+        .accessibilityValue(current?.string("label") ?? "")
+        .accessibilityHint("Touch and hold to change the mode.")
     }
     else {
       Text(title).font(.caption).foregroundStyle(.secondary)
