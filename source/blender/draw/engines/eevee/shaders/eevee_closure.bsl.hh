@@ -40,9 +40,8 @@ float closure_evaluate_pdf(ClosureUndetermined cl, float3 L, float3 V, Thickness
     case CLOSURE_BSDF_DIFFUSE_ID:
       return bxdf_diffuse_eval(cl.N, L).pdf;
     case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID: {
-      ClosureReflection cl_ = to_closure_reflection(cl);
-      float roughness_sq = square(cl_.roughness);
-      return bxdf_ggx_eval_reflection(cl.N, L, V, roughness_sq, true).pdf;
+      const GGXBrdf closure = GGXBrdf::init(to_closure_reflection(cl).roughness);
+      return closure.bsdf_eval(cl.N, L, V, true).pdf;
     }
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID: {
       ClosureRefraction cl_ = to_closure_refraction(cl);
@@ -50,9 +49,8 @@ float closure_evaluate_pdf(ClosureUndetermined cl, float3 L, float3 V, Thickness
       return bxdf_ggx_eval_refraction(cl.N, L, V, roughness_sq, cl_.ior, thickness, true).pdf;
     }
     case CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID: {
-      ClosureThinRefraction cl_ = to_closure_thin_refraction(cl);
-      float roughness_sq = square(cl_.roughness);
-      return bxdf_ggx_eval_reflection(-cl.N, L, reflect(V, cl.N), roughness_sq, true).pdf;
+      const GGXBrdf closure = GGXBrdf::init(to_closure_thin_refraction(cl).roughness);
+      return closure.bsdf_eval(-cl.N, L, reflect(V, cl.N), true).pdf;
     }
     case CLOSURE_NONE_ID:
       break;

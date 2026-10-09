@@ -22,6 +22,11 @@ struct BsdfEval {
   float pdf;
   /* `throughput / pdf`. */
   float weight;
+
+  static BsdfEval zero()
+  {
+    return {0.0f, 0.0f, 0.0f};
+  }
 };
 
 /* Approximation types for computing the irradiance (form factor on point) of area lights. */
