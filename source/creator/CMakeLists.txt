@@ -363,6 +363,7 @@ else()
     enable_language(Swift)
     set(IOS_LAUNCHER_SWIFT
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/GHOST_IOSLauncher.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/Assets.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/BlenderBridge.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/CompositeControls.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/HierarchyView.swift

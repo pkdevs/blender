@@ -30,7 +30,8 @@ BRIDGE = ROOT / "release/ios/swiftui_panels_harness/HarnessBridge.h"
 UIKIT_SOURCES = [ROOT / "intern/ghost/intern/GHOST_IOSScenePanels.mm",
                  ROOT / "intern/ghost/intern/GHOST_IOSNumericInput.mm",
                  ROOT / "intern/ghost/intern/GHOST_IOSRedoStrip.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSTimeline.mm"]
+                 ROOT / "intern/ghost/intern/GHOST_IOSTimeline.mm",
+                 ROOT / "intern/ghost/intern/GHOST_IOSAssets.mm"]
 HARNESS = ROOT / "release/ios/swiftui_panels_harness/Harness.swift"
 BUNDLE_ID = "org.blender.swiftui-panels-harness"
 
@@ -316,13 +317,24 @@ def redo():
                      slider={"min": 0.001, "max": 10.0}, min=0.001, max=100)]}
 
 
+def assets():
+    shapes = ["Cube", "UV Sphere", "Cylinder", "Cone", "Torus", "Monkey", "Plane", "Ico Sphere"]
+    items = [{"id": f"starter:{n}", "name": n, "type": "Object", "catalog": "Starter/Primitives",
+              "library": "Starter", "tags": []} for n in shapes]
+    items += [{"id": f"starter:{n}", "name": n, "type": "Material", "catalog": "Starter/Metals",
+               "library": "Starter", "tags": ["metal"]} for n in ["Gold", "Copper", "Steel"]]
+    items += [{"id": "starter:rock", "name": "Rock", "type": "Object", "catalog": "Starter/Nature",
+               "library": "Starter", "tags": []}]
+    return {"loading": 0, "items": items}
+
+
 def fixtures():
     return {"tab_list": tab_list(),
             "tabs": {"OBJECT": object_tab(), "DATA": data_tab(), "MODIFIER": modifier_tab(),
                      "MATERIAL": material_tab(), "PHYSICS": physics_tab(),
                      **{tab["id"]: {"name": "Cube", "sections": []} for tab in tab_list()
                         if tab["id"] not in ("OBJECT", "DATA", "MODIFIER", "MATERIAL", "PHYSICS")}},
-            "hierarchy": hierarchy(), "shading": shading(), "tool": tool(), "redo": redo(),
+            "hierarchy": hierarchy(), "shading": shading(), "tool": tool(), "redo": redo(), "assets": assets(),
             "timeline": {"frame": 42, "start": 1, "end": 120, "playing": 0, "autokey": 0, "preview": 0,
                          "keys": [{"f": 1, "s": 0}, {"f": 24, "s": 1}, {"f": 60, "s": 0}, {"f": 96, "s": 0}]}}
 
@@ -444,6 +456,9 @@ class SwiftUIPanelsTest(unittest.TestCase):
         for name in ("timeline", "timeline-expanded"):
             with self.subTest(name=name):
                 self.scenario(name, "-scenario", name)
+
+    def test_assets(self):
+        self.scenario("assets", "-scenario", "assets")
 
     def test_tool_strip(self):
         self.scenario("tool", "-scenario", "tool")

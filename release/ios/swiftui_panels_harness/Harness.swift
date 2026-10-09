@@ -28,6 +28,12 @@ func harnessOperatorEnqueue(_ name: UnsafePointer<CChar>) {
   FakeEngine.shared.log(["setting": "operator", "value": String(cString: name)])
 }
 
+@_cdecl("WM_apple_ios_ui_asset_drag")
+func harnessAssetDrag(_ phase: Int32, _ asset: UnsafePointer<CChar>?, _ x: Int32, _ y: Int32) {
+  FakeEngine.shared.log(["setting": "asset_drag", "value": ["phase": Int(phase),
+                                                             "id": asset.map { String(cString: $0) } ?? ""]])
+}
+
 @_cdecl("WM_apple_ios_ui_command_enqueue")
 func harnessCommandEnqueue(_ command: Int32) {
   FakeEngine.shared.log(["setting": "command", "value": Int(command)])
@@ -52,6 +58,7 @@ final class FakeEngine {
   weak var panels: HarnessPanels?
   var redoStrip: NSObject?
   var timeline: NSObject?
+  var assets: NSObject?
   var toolGroupChanged: ((UIBarButtonItemGroup?) -> Void)?
   let logURL: URL = {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -281,6 +288,9 @@ final class FakeEngine {
       .filter { $0.string("type") == "LIST" }.map { "\($0.string("key") ?? "")=\($0["value"] ?? "")" }
     log(["published": NSNumber(value: ack), "lists": lists])
     panels.updateSnapshot(snapshot as NSDictionary)
+    if let shelf = fixtures.dict("assets") {
+      assets?.perform(NSSelectorFromString("updateSnapshot:"), with: shelf as NSDictionary)
+    }
     if let frames = fixtures.dict("timeline") {
       timeline?.perform(NSSelectorFromString("updateSnapshot:"), with: frames as NSDictionary)
     }
@@ -369,6 +379,7 @@ final class HarnessController: UIViewController {
   var panels: HarnessPanels!
   var redoStrip: NSObject?
   var timeline: NSObject?
+  var assets: NSObject?
   let overlay = UIView()
   let scenario = UserDefaults.standard.string(forKey: "scenario") ?? "object"
 
@@ -408,6 +419,10 @@ final class HarnessController: UIViewController {
       GHOSTIOSTimeline(overlay: overlay) : SwiftTimeline(overlay: overlay)
     timeline = frames
     engine.timeline = frames
+    let shelf: NSObject = UserDefaults.standard.bool(forKey: "uikit") ?
+      GHOSTIOSAssets(overlay: overlay) : SwiftAssets(overlay: overlay)
+    assets = shelf
+    engine.assets = shelf
     if let pill = redo.value(forKey: "collapsedButton") as? UIButton {
       pill.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(pill)
@@ -449,6 +464,9 @@ final class HarnessController: UIViewController {
         timeline?.perform(NSSelectorFromString("toggle:"), with: nil)
         if scenario == "timeline-expanded" { timeline?.perform(NSSelectorFromString("toggleExpanded:"), with: nil) }
         view.setNeedsLayout()
+      case "assets":
+        assets?.perform(NSSelectorFromString("toggle:"), with: nil)
+        view.setNeedsLayout()
       case "redo":
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
           (self.redoStrip?.value(forKey: "collapsedButton") as? UIButton)?.sendActions(for: .touchUpInside)
@@ -472,6 +490,8 @@ final class HarnessController: UIViewController {
     panels.layout(in: view.bounds.inset(by: view.safeAreaInsets))
     let lane = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 40, dy: 12)
     let tray = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 120, dy: 16)
+    if let pane = assets as? SwiftAssets { pane.layout(in: tray) }
+    else if let pane = assets as? GHOSTIOSAssets { pane.layout(in: tray) }
     if let strip = timeline as? SwiftTimeline { strip.layout(in: tray) }
     else if let strip = timeline as? GHOSTIOSTimeline { strip.layout(in: tray) }
     if let strip = redoStrip as? SwiftRedoStrip { strip.layout(in: lane) }

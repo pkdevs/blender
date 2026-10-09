@@ -8,3 +8,4 @@
 #import "../../../intern/ghost/intern/GHOST_IOSScenePanels.hh"
 #import "../../../intern/ghost/intern/GHOST_IOSRedoStrip.hh"
 #import "../../../intern/ghost/intern/GHOST_IOSTimeline.hh"
+#import "../../../intern/ghost/intern/GHOST_IOSAssets.hh"

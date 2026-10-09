@@ -5493,7 +5493,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                      completion:nil];
   };
   _timeline.visibilityDidChange = relayout_tray;
-  _assets = [[GHOSTIOSAssets alloc] initWithOverlay:_overlay_view];
+  Class assets_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftAssets");
+  _assets = [[(assets_class ?: GHOSTIOSAssets.class) alloc] initWithOverlay:_overlay_view];
   _assets.visibilityDidChange = relayout_tray;
   /* Assets dragged out of the pane drop onto the viewport, which Blender draws in this view. */
   __block GHOST_IOSViewController *assets_host = self;
