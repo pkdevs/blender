@@ -47,6 +47,7 @@ extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 #import "GHOST_IOSAssets.hh"
 #import "GHOST_IOSFileDrop.hh"
 #import "GHOST_IOSCompileIndicator.hh"
+#import "GHOST_IOSRender.hh"
 #import "GHOST_IOSDocument.hh"
 #import "GHOST_IOSLauncher.hh"
 
@@ -2268,6 +2269,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSArray *_mode_items;
   NSString *_object_mode;
   UIBarButtonItem *_actions_button;
+  UIBarButtonItem *_share_button;
+  GHOSTIOSRender *_render;
+  NSDictionary *_viewport_state;
   /* Back to the document launcher, through the system's back action. */
   UIBarButtonItem *_documents_button;
   UIBarButtonItem *_viewport_shading_button;
@@ -2366,6 +2370,9 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   BOOL _toolbar_expanded;
   /* Blender's own interface, as on a desktop computer, with the native controls hidden. */
   BOOL _desktop_interface;
+  /* Full screen: the native interface is hidden except for the button that brings it back. */
+  BOOL _interface_hidden;
+  UIButton *_show_interface_button;
   BOOL _toolbar_press_select_active;
   BOOL _view_pie_visible;
 }
@@ -2607,6 +2614,9 @@ bool GHOST_ios_document_window_visible()
   [_file_drop release];
   [_compile_indicator stop];
   [_compile_indicator release];
+  [_render release];
+  [_viewport_state release];
+  [_show_interface_button release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
@@ -3968,8 +3978,82 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   }
 }
 
+- (void)setOverlayShown:(BOOL)shown
+{
+  [self.navigationController setNavigationBarHidden:!shown animated:YES];
+  UIView *overlay = _overlay_view;
+  if (shown) {
+    overlay.hidden = NO;
+  }
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
+      animations:^{ overlay.alpha = shown ? 1 : 0; }
+      completion:^(BOOL finished) {
+        if (finished && overlay.alpha == 0) {
+          overlay.hidden = YES;
+        }
+      }];
+}
+
+- (void)setInterfaceHidden:(BOOL)hidden
+{
+  if (_interface_hidden == hidden) {
+    return;
+  }
+  _interface_hidden = hidden;
+  [_pencil_menu cancel];
+  [(GHOSTUIWindow *)_ghost_window->rootWindow setPencilContextMenu:hidden ? nil : _pencil_menu];
+  [self setOverlayShown:!hidden];
+  if (hidden && !_show_interface_button) {
+    /* Faint until a Pencil or pointer comes near, so it does not compete with the work. */
+    UIButtonConfiguration *config = [UIButtonConfiguration glassButtonConfiguration];
+    config.image = [UIImage systemImageNamed:@"arrow.down.right.and.arrow.up.left"];
+    config.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    __block GHOST_IOSViewController *controller = self;
+    _show_interface_button = [[UIButton buttonWithConfiguration:config primaryAction:[UIAction
+        actionWithHandler:^(__kindof UIAction *) { [controller setInterfaceHidden:NO]; }]] retain];
+    _show_interface_button.accessibilityLabel = @"Show Interface";
+    _show_interface_button.accessibilityIdentifier = @"blender.interface.show";
+    _show_interface_button.translatesAutoresizingMaskIntoConstraints = NO;
+    UIHoverGestureRecognizer *hover = [[[UIHoverGestureRecognizer alloc]
+        initWithTarget:self action:@selector(hoverShowInterface:)] autorelease];
+    [_show_interface_button addGestureRecognizer:hover];
+    [self.view addSubview:_show_interface_button];
+    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+      [_show_interface_button.topAnchor constraintEqualToAnchor:safe.topAnchor constant:12],
+      [_show_interface_button.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-12],
+      [_show_interface_button.widthAnchor constraintEqualToConstant:44],
+      [_show_interface_button.heightAnchor constraintEqualToConstant:44],
+    ]];
+    _show_interface_button.alpha = 0;
+  }
+  [self.view bringSubviewToFront:_show_interface_button];
+  UIButton *button = _show_interface_button;
+  button.hidden = NO;
+  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
+      animations:^{ button.alpha = hidden ? 0.35 : 0; }
+      completion:^(BOOL) { button.hidden = !self->_interface_hidden; }];
+  [self setNeedsStatusBarAppearanceUpdate];
+  [self.view setNeedsLayout];
+}
+
+- (void)hoverShowInterface:(UIHoverGestureRecognizer *)hover
+{
+  const BOOL near = hover.state == UIGestureRecognizerStateBegan ||
+                    hover.state == UIGestureRecognizerStateChanged;
+  [UIView animateWithDuration:0.15 animations:^{ hover.view.alpha = near ? 1 : 0.35; }];
+}
+
+- (BOOL)prefersStatusBarHidden
+{
+  return _interface_hidden;
+}
+
 - (void)setDesktopInterface:(BOOL)desktop
 {
+  if (desktop) {
+    [self setInterfaceHidden:NO];
+  }
   _desktop_interface = desktop;
   [NSUserDefaults.standardUserDefaults setBool:desktop forKey:@"BlenderDesktopInterface"];
   [_pencil_menu cancel];
@@ -3978,18 +4062,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   if (desktop) {
     WM_apple_ios_ui_bottom_tray_set(0.0f);
   }
-  [self.navigationController setNavigationBarHidden:desktop animated:YES];
-  UIView *overlay = _overlay_view;
-  if (!desktop) {
-    overlay.hidden = NO;
-  }
-  [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
-      animations:^{ overlay.alpha = desktop ? 0 : 1; }
-      completion:^(BOOL finished) {
-        if (finished && overlay.alpha == 0) {
-          overlay.hidden = YES;
-        }
-      }];
+  [self setOverlayShown:!desktop];
   [self.view setNeedsLayout];
 }
 
@@ -4038,6 +4111,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [self setModePickerTitleForMode:mode];
   }
   [self setViewportShadingValue:model[@"shading"]];
+  if ([model[@"viewport"] isKindOfClass:NSDictionary.class] && ![_viewport_state isEqual:model[@"viewport"]]) {
+    [_viewport_state release];
+    _viewport_state = [model[@"viewport"] copy];
+  }
+  [_render updateStatus:model[@"render"]];
   [self setUndoAvailable:model[@"canUndo"]];
   [self setMeshSelectModeValue:mesh_select_mode];
   [self setTopSettingsValues:model[@"settings"]];
@@ -4079,8 +4157,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* The bottom tray: the open asset pane along the edge and the timeline just above it. The quick
    * actions, the Adjust pill, the collapsed rails and the navigation gizmo rest on top, so the tray
    * never leaves a gap and follows the timeline as it opens or expands. */
-  const CGFloat assets_tray = _assets.visible && !_desktop_interface ? _assets.height + 8 : 0;
-  const CGFloat timeline_tray = _timeline.visible && !_desktop_interface ? _timeline.height + 8 : 0;
+  const BOOL tray_shown = !_desktop_interface && !_interface_hidden;
+  const CGFloat assets_tray = _assets.visible && tray_shown ? _assets.height + 8 : 0;
+  const CGFloat timeline_tray = _timeline.visible && tray_shown ? _timeline.height + 8 : 0;
   const CGFloat tray = assets_tray + timeline_tray;
   if (fabs(tray - _bottom_tray) > 0.5) {
     _bottom_tray = tray;
@@ -5127,45 +5206,89 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
 - (void)updateActionsButtonMenu
 {
-  if (_actions_button == nil) {
+  if (_actions_button == nil || _actions_button.menu != nil) {
     return;
   }
-
-  if (_actions_button.menu != nil) {
-    return;
-  }
-
-  /* The iPadOS menu bar has all of Blender's menus. Documents are created, opened and found in
-   * the launcher and save themselves, so this button keeps what remains. */
   __block __typeof__(self) controller = self;
-  UIAction *create = [UIAction actionWithTitle:@"New…" image:[UIImage systemImageNamed:@"doc.badge.plus"]
-      identifier:@"blender.document.new" handler:^(__kindof UIAction *) {
-    [controller newDocument:nil];
-  }];
+  UIMenu *(^section)(NSArray *) = ^UIMenu *(NSArray *children) {
+    return [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline
+                        children:children];
+  };
+
+  /* Share: what leaves the document. Documents save themselves, so
+   * there is no Save; going back to Documents keeps the work. */
+  UIAction *share = [UIAction actionWithTitle:@"Share…" image:[UIImage systemImageNamed:@"square.and.arrow.up"]
+      identifier:@"blender.document.share" handler:^(__kindof UIAction *) { [controller shareDocument]; }];
+  UIAction *saveAs = [UIAction actionWithTitle:@"Save As…" image:[UIImage systemImageNamed:@"doc.on.doc"]
+      identifier:@"blender.document.save-as" handler:^(__kindof UIAction *) { [controller saveDocumentAs]; }];
+  UIAction *renderImage = [UIAction actionWithTitle:@"Render Image" image:[UIImage systemImageNamed:@"photo"]
+      identifier:@"blender.render.image" handler:^(__kindof UIAction *) { [controller->_render renderAnimation:NO]; }];
+  UIAction *renderAnimation = [UIAction actionWithTitle:@"Render Animation"
+      image:[UIImage systemImageNamed:@"film"] identifier:@"blender.render.animation"
+      handler:^(__kindof UIAction *) { [controller->_render renderAnimation:YES]; }];
   UIAction *saveTemplate = [UIAction actionWithTitle:@"Save as Template…"
       image:[UIImage systemImageNamed:@"square.on.square"] identifier:@"blender.template.save"
       handler:^(__kindof UIAction *) { [controller saveAsTemplate]; }];
-  UIAction *share = [UIAction actionWithTitle:@"Share…"
-                                        image:[UIImage systemImageNamed:@"square.and.arrow.up"]
-                                   identifier:@"blender.document.share"
-                                      handler:^(__kindof UIAction *) {
-                                        [controller shareDocument];
-                                      }];
-  UIAction *desktop = [UIAction actionWithTitle:@"Switch to Desktop Interface"
-                                          image:[UIImage systemImageNamed:@"macwindow"]
-                                     identifier:@"blender.interface.desktop"
-                                        handler:^(__kindof UIAction *) {
-                                          WM_apple_ios_ui_setting_enqueue("interface", "desktop");
-                                        }];
-  UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[
-    [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline
-                 children:@[create, saveTemplate, share]],
-    [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline
-                 children:@[desktop]],
+  UIMenu *share_menu = [UIMenu menuWithTitle:@"" children:@[
+    section(@[share, saveAs]), section(@[renderImage, renderAnimation]), section(@[saveTemplate]),
   ]];
-  _actions_button.menu = menu;
-  _actions_button.menuRepresentation = menu;
+  _share_button.menu = share_menu;
+  _share_button.menuRepresentation = share_menu;
+
+  /* More: smaller things, with viewport options that show their current state when opened. */
+  UIAction *create = [UIAction actionWithTitle:@"New…" image:[UIImage systemImageNamed:@"doc.badge.plus"]
+      identifier:@"blender.document.new" handler:^(__kindof UIAction *) { [controller newDocument:nil]; }];
+  UIDeferredMenuElement *viewport = [UIDeferredMenuElement elementWithUncachedProvider:
+      ^(void (^completion)(NSArray<UIMenuElement *> *)) {
+        NSDictionary *state = controller->_viewport_state;
+        NSMutableArray *toggles = [NSMutableArray array];
+        for (NSArray *spec in @[@[@"overlays", @"Overlays", @"circle.dashed.inset.filled"],
+                                @[@"xray", @"X-Ray", @"square.on.square.intersection.dashed"],
+                                @[@"gizmos", @"Gizmos", @"move.3d"],
+                                @[@"statistics", @"Statistics", @"chart.bar"],
+                                @[@"wireframe", @"Wireframe", @"cube"]])
+        {
+          NSString *name = spec[0];
+          UIAction *toggle = [UIAction actionWithTitle:spec[1] image:[UIImage systemImageNamed:spec[2]]
+              identifier:[@"blender.viewport." stringByAppendingString:name]
+              handler:^(__kindof UIAction *) {
+                WM_apple_ios_ui_setting_enqueue("viewport_toggle", name.UTF8String);
+              }];
+          toggle.state = [state[name] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff;
+          toggle.attributes = state ? 0 : UIMenuElementAttributesDisabled;
+          [toggles addObject:toggle];
+        }
+        completion(@[section(toggles)]);
+      }];
+  UIAction *desktop = [UIAction actionWithTitle:@"Switch to Desktop Interface"
+      image:[UIImage systemImageNamed:@"macwindow"] identifier:@"blender.interface.desktop"
+      handler:^(__kindof UIAction *) { WM_apple_ios_ui_setting_enqueue("interface", "desktop"); }];
+  UIAction *hide = [UIAction actionWithTitle:@"Hide Interface"
+      image:[UIImage systemImageNamed:@"arrow.up.left.and.arrow.down.right"]
+      identifier:@"blender.interface.hide"
+      handler:^(__kindof UIAction *) { [controller setInterfaceHidden:YES]; }];
+  UIMenu *more = [UIMenu menuWithTitle:@"" children:@[
+    section(@[create]), viewport, section(@[hide, desktop])]];
+  _actions_button.menu = more;
+  _actions_button.menuRepresentation = more;
   _actions_button.enabled = YES;
+}
+
+- (void)saveDocumentAs
+{
+  UIDocument *document = GHOST_ios_launcher_document();
+  if (document == nil) {
+    return;
+  }
+  /* Save a copy wherever the user picks, as Files apps do for Save As. */
+  __block GHOST_IOSViewController *controller = self;
+  [document saveToURL:document.fileURL
+      forSaveOperation:UIDocumentSaveForOverwriting
+     completionHandler:^(BOOL) {
+       UIDocumentPickerViewController *picker = [[[UIDocumentPickerViewController alloc]
+           initForExportingURLs:@[document.fileURL] asCopy:YES] autorelease];
+       [controller presentViewController:picker animated:YES completion:nil];
+     }];
 }
 
 - (void)shareDocument
@@ -5181,7 +5304,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
      completionHandler:^(BOOL) {
        UIActivityViewController *activity = [[[UIActivityViewController alloc]
            initWithActivityItems:@[document.fileURL] applicationActivities:nil] autorelease];
-       activity.popoverPresentationController.sourceItem = controller->_actions_button;
+       activity.popoverPresentationController.sourceItem = controller->_share_button;
        [controller presentViewController:activity animated:YES completion:nil];
      }];
 }
@@ -5226,10 +5349,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 - (UIBarButtonItem *)actionsButton
 {
   UIBarButtonItem *button = [[[UIBarButtonItem alloc]
-      initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
+      initWithImage:[UIImage systemImageNamed:@"ellipsis"]
                menu:nil] autorelease];
-  button.title = @"Menus";
-  button.accessibilityLabel = @"Blender Menus";
+  button.title = @"More";
+  button.accessibilityLabel = @"More";
   button.identifier = @"blender.actions";
   return button;
 }
@@ -5251,6 +5374,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
   _mode_button = [self modePickerButton];
   _actions_button = [self actionsButton];
+  _share_button = [[[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"square.and.arrow.up"]
+                                                     menu:nil] autorelease];
+  _share_button.title = @"Share";
+  _share_button.accessibilityLabel = @"Share";
+  _share_button.identifier = @"blender.share";
+  _render = [[GHOSTIOSRender alloc] initWithPresenter:self];
   _documents_button = [[self documentsButton] retain];
   _viewport_shading_button = [self viewportShadingButton];
   _undo_button = [self undoButton];
@@ -5264,7 +5393,6 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     _mode_button.creatingFixedGroup,
     _assets.button.creatingFixedGroup,
     [self meshSelectModeControlGroup],
-    _actions_button.creatingFixedGroup,
     _undo_button.creatingFixedGroup,
   ];
   if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
@@ -5274,18 +5402,24 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
         arrayByAddingObject:_finger_input_button.creatingFixedGroup];
   }
   _top_bar_item.centerItemGroups = @[ [self topSettingsControlGroup] ];
+  /* Panels, then shading, Share and More at the far right. */
   _top_bar_item.trailingItemGroups = @[
     [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:nil
         items:@[_scene_panels.hierarchyButton, _timeline.button,
                  _scene_panels.inspectorButton]],
+    _viewport_shading_button.creatingFixedGroup,
+    _share_button.creatingFixedGroup,
   ];
   _viewport_shading_button.sharesBackground = NO;
-  _top_bar_item.pinnedTrailingGroup = _viewport_shading_button.creatingFixedGroup;
+  /* Back to Documents is navigation, not a tool: give it its own glass at the top left, like the
+   * system's back button. */
+  _documents_button.sharesBackground = NO;
+  _top_bar_item.pinnedTrailingGroup = _actions_button.creatingFixedGroup;
   if (@available(iOS 27.0, *)) {
     _mode_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
     _undo_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
     _viewport_shading_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
-    _actions_button.visibilityPriority = UIBarButtonItemVisibilityPriorityLow;
+    _share_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
   }
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
   if (@available(iOS 27.1, *)) {
