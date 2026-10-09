@@ -834,6 +834,31 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     return;
   }
 #ifdef WITH_PYTHON
+  if (command.setting == "render" || command.setting == "viewport_toggle") {
+    /* Rendering and viewport options from the iPad's Share and More menus, see
+     * `bl_ui.native_render`. */
+    const IOSContextStore context_store = ios_context_push_view3d(C);
+    const char *imports[] = {"bpy", "bl_ui", nullptr};
+    std::string expression;
+    if (command.setting == "viewport_toggle") {
+      expression = "bl_ui.native_render.viewport_toggle(bpy.context, \"" +
+                   ios_json_escape(command.value) + "\")";
+    }
+    else if (command.value == "cancel") {
+      WM_jobs_kill_type(CTX_wm_manager(C), nullptr, WM_JOB_TYPE_RENDER);
+      expression = "bl_ui.native_render.cancel(bpy.context)";
+    }
+    else if (command.value == "clear") {
+      expression = "bl_ui.native_render.clear(bpy.context)";
+    }
+    else {
+      expression = std::string("bl_ui.native_render.start(bpy.context, ") +
+                   (command.value == "animation" ? "True" : "False") + ")";
+    }
+    BPY_run_string_eval(C, imports, expression.c_str());
+    ios_context_pop(C, context_store);
+    return;
+  }
   if (command.setting == "native_action") {
     /* The button may predate a context change; `run` checks the action still applies. */
     const bToolRef *tool = WM_toolsystem_ref_from_context(C);
@@ -1678,6 +1703,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   const char *active_tool_id = active_tool ? active_tool->idname : "builtin.select_box";
   std::string tools_json = "[]";
   std::string panels_json = "null";
+  std::string render_json = "null";
+  std::string viewport_json = "null";
   std::string quick_actions_json;
 #ifdef WITH_PYTHON
   if (has_view3d_context) {
@@ -1691,6 +1718,16 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
     {
       tools_json = result;
       MEM_delete(result);
+    }
+    for (auto [expression, target] :
+         {std::pair{"bl_ui.native_render.status_json(bpy.context)", &render_json},
+          std::pair{"bl_ui.native_render.viewport_json(bpy.context)", &viewport_json}})
+    {
+      result = nullptr;
+      if (BPY_run_string_as_string(C, imports, expression, nullptr, &result)) {
+        *target = result;
+        MEM_delete(result);
+      }
     }
     if (!ios_constraint_operator(CTX_wm_window(C))) {
       /* Quick actions for the mode, tool and selection, chosen by `bl_ui.native_actions`. */
@@ -1823,6 +1860,10 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += ios_brushes_json;
   json += ",\"panels\":";
   json += panels_json;
+  json += ",\"render\":";
+  json += render_json;
+  json += ",\"viewport\":";
+  json += viewport_json;
   if (actions.empty() && !quick_actions_json.empty()) {
     json += ",\"actions\":" + quick_actions_json + "}";
     return json;

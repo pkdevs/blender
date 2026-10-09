@@ -394,7 +394,7 @@ string(APPEND PLATFORM_CFLAGS " -pipe -funsigned-char -fno-strict-aliasing -ffp-
 if(WITH_APPLE_CROSSPLATFORM)
   # Link different frameworks for iOS
   set(PLATFORM_LINKFLAGS
-    "-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework UIKit -framework UniformTypeIdentifiers -framework AudioToolbox -framework CoreAudio -framework Metal -framework MetalKit -framework QuartzCore -framework ImageIO -framework GameController -framework CoreGraphics"
+    "-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework UIKit -framework UniformTypeIdentifiers -framework AudioToolbox -framework CoreAudio -framework Metal -framework MetalKit -framework QuartzCore -framework ImageIO -framework GameController -framework CoreGraphics -framework AVFoundation -framework AVKit -framework CoreVideo"
   )
 else()
   set(PLATFORM_LINKFLAGS

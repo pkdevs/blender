@@ -189,6 +189,8 @@ elseif(APPLE AND NOT WITH_GHOST_X11)
         intern/GHOST_IOSFileDrop.mm
         intern/GHOST_IOSCompileIndicator.hh
         intern/GHOST_IOSCompileIndicator.mm
+        intern/GHOST_IOSRender.hh
+        intern/GHOST_IOSRender.mm
         GHOST_IOSDocumentPicker.hh
         intern/GHOST_IOSDocumentPicker.mm
         intern/GHOST_IOSDocument.hh
