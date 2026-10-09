@@ -10,6 +10,7 @@
  * coordinates access to it and, as in Pages, saves changes without being asked.
  */
 @interface GHOSTIOSBlendDocument : UIDocument
+@property(nonatomic) BOOL templateDocument;
 /** Follows Blender's unsaved changes, which drive saving. */
 - (void)setBlenderModified:(BOOL)modified;
 /**
@@ -20,11 +21,17 @@
 @end
 
 /**
- * Write a new file from a Blender application template ("" for General) to a temporary location,
+ * Copy a validated document seed ("" aliases General) to a temporary location,
  * for the document browser to add as a new document. Calls `completion` on the main thread, with
  * nil on failure.
  */
 void GHOST_ios_document_create(NSString *app_template, void (^completion)(NSURL *url));
+
+/** Bundled, versioned templates with resolved seed and preview URLs. No Blender calls. */
+NSArray<NSDictionary *> *GHOST_ios_document_templates();
+void GHOST_ios_template_save(NSString *title, NSDictionary *presentation, void (^completion)(NSString *error));
+/** Personal templates only, except Duplicate which also accepts bundled templates. */
+BOOL GHOST_ios_template_manage(NSString *identifier, NSString *action, NSString *title);
 
 /** Open a file the system hands to Blender, from the Files app for example, as the document. */
 void GHOST_ios_document_open_url(NSURL *url);

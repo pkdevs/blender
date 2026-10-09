@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
 
 struct GHOST_IOSDialog;
 
@@ -37,14 +38,14 @@ void WM_apple_ios_autosave_now(bContext *C);
 /* Documents. UIKit owns them, and Blender reads and writes their files when asked. */
 
 /** Open the document's file. */
-bool WM_apple_ios_document_open(bContext *C, const char *filepath);
+bool WM_apple_ios_document_open(bContext *C, const char *filepath, bool template_document);
 /**
  * Write the open file to `filepath`, for iOS to move into place as the saved document. Without
  * `preview` the file stores no preview image, which needs the GPU.
  */
 bool WM_apple_ios_document_write(bContext *C, const char *filepath, bool preview);
-/** Write a new file from an application template ("" for General) to `filepath`. */
-bool WM_apple_ios_document_new(bContext *C, const char *app_template, const char *filepath);
+/** Save a portable template copy and PNG preview without marking the document saved. */
+std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview);
 /** Switch between the native iPad interface and Blender's own, as on a desktop computer. */
 void WM_OT_apple_ios_interface_toggle(wmOperatorType *ot);
 

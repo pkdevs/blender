@@ -2671,11 +2671,12 @@ static bool wm_document_operator(bContext *C, const char *idname, PointerRNA *pr
   return status & OPERATOR_FINISHED;
 }
 
-bool WM_apple_ios_document_open(bContext *C, const char *filepath)
+bool WM_apple_ios_document_open(bContext *C, const char *filepath, const bool template_document)
 {
   PointerRNA props = WM_operator_properties_create("WM_OT_open_mainfile");
   RNA_string_set(&props, "filepath", filepath);
   RNA_boolean_set(&props, "display_file_selector", false);
+  if (template_document) { RNA_boolean_set(&props, "use_scripts", false); }
   const bool success = wm_document_operator(C, "WM_OT_open_mainfile", &props);
   WM_operator_properties_free(&props);
   return success;
@@ -2734,19 +2735,28 @@ bool WM_apple_ios_document_write(bContext *C, const char *filepath, const bool p
   return true;
 }
 
-bool WM_apple_ios_document_new(bContext *C, const char *app_template, const char *filepath)
+std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview)
 {
-  /* As File > New: the template's startup file, which iOS then adds as a new document. */
-  PointerRNA props = WM_operator_properties_create("WM_OT_read_homefile");
-  RNA_string_set(&props, "app_template", app_template);
-  const bool loaded = wm_document_operator(C, "WM_OT_read_homefile", &props);
-  WM_operator_properties_free(&props);
-  if (!loaded) {
-    return false;
+#ifdef WITH_PYTHON
+  const char *imports[] = {"bpy", "bl_ui", "bl_ui.native_templates", nullptr};
+  char *error = nullptr;
+  if (!BPY_run_string_as_string(C, imports, "bl_ui.native_templates.export_error()", nullptr, &error)) {
+    return "Could not validate the template's resources.";
   }
-  /* No preview: Blender's window is not shown yet, and creating must be quick. The document gets
-   * one when it is first saved. */
-  return wm_document_write(C, filepath, false);
+  const std::string message = error ? error : "";
+  if (error) { MEM_delete(error); }
+  if (!message.empty()) { return message; }
+  /* Save a copy without acknowledging or clearing the open document's unsaved work. */
+  if (!wm_document_write(C, filepath, true)) { return "Could not save the template."; }
+  ImBuf *image = IMB_thumb_manage(filepath, THB_LARGE, THB_SOURCE_BLEND);
+  if (!image) { return "Could not create the template preview."; }
+  image->ftype = IMB_FTYPE_PNG;
+  const bool saved = IMB_save_image(image, preview, IB_byte_data);
+  IMB_freeImBuf(image);
+  return saved ? "" : "Could not save the template preview.";
+#else
+  return "Template export requires Python support.";
+#endif
 }
 
 #endif
