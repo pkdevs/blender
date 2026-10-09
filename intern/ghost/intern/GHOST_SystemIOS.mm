@@ -71,6 +71,11 @@ static GHOST_IOSMessageQueue<std::function<void()>> engine_requests;
 static std::atomic<bool> engine_autosave_requested{false};
 static std::mutex engine_autosave_mutex;
 static std::vector<std::function<void()>> engine_autosave_done;
+/* Work for documents, which UIKit waits on. Runs while inactive too: iOS saves documents as the
+ * app leaves the foreground. */
+static GHOST_IOSMessageQueue<std::function<void()>> engine_document_requests;
+static std::atomic<bool> engine_document_pending{false};
+static std::atomic<bool> app_in_background{false};
 
 void GHOST_ios_engine_wake()
 {
@@ -87,7 +92,13 @@ static void open_document(NSURL *url)
       system->handleOpenDocumentRequest([NSString stringWithUTF8String:path.c_str()]);
     }
   });
+  engine_document_pending.store(true);
   GHOST_ios_engine_wake();
+}
+
+bool GHOST_ios_app_in_background()
+{
+  return app_in_background.load();
 }
 
 /** Ask the engine to write the auto-save now; `done` runs on the engine thread afterwards. */
@@ -137,12 +148,18 @@ static void run_engine()
         /* UIKit signals without taking this lock. A bounded wait also covers a
          * notification racing the transition into sleep. */
         engine_condition.wait_for(lock, std::chrono::milliseconds(100), [] {
-          return engine_active.load() || engine_autosave_requested.load();
+          return engine_active.load() || engine_autosave_requested.load() ||
+                 engine_document_pending.load();
         });
       }
     }
     /* Runs in the background too: leaving the foreground is when work must be kept. */
     run_engine_autosave();
+    if (engine_document_pending.exchange(false)) {
+      for (auto &request : engine_document_requests.take()) {
+        request();
+      }
+    }
     if (!engine_active.load()) {
       continue;
     }
@@ -304,9 +321,16 @@ void GHOST_ios_unregister_window(UIWindow *window)
   [[NSNotificationCenter defaultCenter] postNotificationName:@"BlenderSceneInactive" object:scene];
 }
 
+- (void)sceneWillEnterForeground:(UIScene *)scene
+{
+  UNUSED_VARS(scene);
+  app_in_background.store(false);
+}
+
 - (void)sceneDidEnterBackground:(UIScene *)scene
 {
   UNUSED_VARS(scene);
+  app_in_background.store(true);
   /* iOS may end a background app at any moment without telling it. Keep the app running long
    * enough to write the auto-save of any unsaved work. */
   UIApplication *application = UIApplication.sharedApplication;

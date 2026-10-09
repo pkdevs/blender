@@ -19,3 +19,15 @@ inline void GHOST_ios_main_sync(dispatch_block_t block)
 }
 
 void GHOST_ios_engine_wake();
+
+#ifdef __cplusplus
+#  include <functional>
+namespace blender {
+struct bContext;
+}
+/** Run `work` on the engine thread with Blender's context, also while the app is inactive. Work
+ * runs between frames, so it may load and write files. */
+void GHOST_ios_engine_perform(std::function<void(blender::bContext *)> work);
+/** In the background iOS allows no GPU work, such as rendering a file's preview. */
+bool GHOST_ios_app_in_background();
+#endif
