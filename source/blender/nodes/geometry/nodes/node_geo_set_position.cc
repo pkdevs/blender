@@ -9,6 +9,8 @@
 #include "BKE_instances.hh"
 #include "BKE_mesh.hh"
 
+#include "GEO_transform.hh"
+
 #include "FN_multi_function_registry.hh"
 
 #include "node_geometry_util.hh"
@@ -133,29 +135,25 @@ static bool is_position_field(const fn::Field<float3> &field)
   return false;
 }
 
-static bool is_zero_vector_field(const fn::Field<float3> &field)
-{
-  if (field.depends_on_input()) {
-    return false;
-  }
-  const fn::GFieldRef field_ref{field};
-  auto value = field_ref.variant();
-  if (auto *field_value = std::get_if<fn::GFieldRef::Value>(&value)) {
-    BLI_assert(field_value->type->is<float3>());
-    const float3 *vec = static_cast<const float3 *>(field_value->value);
-    const bool is_zero = math::is_zero(*vec);
-    return is_zero;
-  }
-  return false;
-}
-
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry = params.extract_input<GeometrySet>("Geometry"_ustr);
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection"_ustr);
   const fn::Field<float3> position_field = params.extract_input<Field<float3>>("Position"_ustr);
   const fn::Field<float3> offset_field = params.extract_input<Field<float3>>("Offset"_ustr);
-  if (is_position_field(position_field) && is_zero_vector_field(offset_field)) {
+
+  const bool position_is_default = is_position_field(position_field);
+  const bool offset_is_constant = !offset_field.depends_on_input();
+  const bool offset_is_zero = offset_field.is_constant(float3(0, 0, 0));
+  const bool selection_is_all = selection_field.is_constant(true);
+
+  if (position_is_default && offset_is_zero) {
+    params.set_output("Geometry"_ustr, std::move(geometry));
+    return;
+  }
+  if (selection_is_all && position_is_default && offset_is_constant) {
+    const float3 offset = *offset_field.get_if_constant();
+    geometry::translate_geometry(geometry, offset);
     params.set_output("Geometry"_ustr, std::move(geometry));
     return;
   }
