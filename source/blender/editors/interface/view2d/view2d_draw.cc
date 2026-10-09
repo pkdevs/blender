@@ -14,11 +14,11 @@
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_math_base.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_timecode.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_timecode.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "GPU_immediate.hh"
@@ -34,8 +34,9 @@
 
 namespace blender::ui {
 
-/* Compute display grid resolution
- ********************************************************/
+/* -------------------------------------------------------------------- */
+/** \name Compute Display Grid Resolution
+ * \{ */
 
 #define MIN_MAJOR_LINE_DISTANCE (U.v2d_min_gridsize * UI_SCALE_FAC)
 
@@ -118,7 +119,7 @@ static int calculate_grid_step(const int base,
   return distance;
 }
 
-/* Mostly the same as `calculate_grid_step, except in can divide into the 0-1 range. */
+/** Mostly the same as `calculate_grid_step`, except in can divide into the 0-1 range. */
 static float calculate_grid_step_fractions(const int base,
                                            const float pixel_width,
                                            const float view_width,
@@ -135,8 +136,11 @@ static float calculate_grid_step_fractions(const int base,
   return distance / subframe_range;
 }
 
-/* Draw parallel lines
- ************************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Draw Parallel Lines
+ * \{ */
 
 /**
  * Calculate the amount of lines to draw and the starting position in view space (frame or value).
@@ -199,7 +203,7 @@ static void draw_parallel_lines(const float line_distance,
     return;
   }
 
-  if (UNLIKELY(steps >= steps_max)) {
+  if (steps >= steps_max) [[unlikely]] {
     /* Note that we could draw a solid color,
      * however this flickers because of numeric instability when zoomed out. */
     return;
@@ -290,8 +294,11 @@ static void view2d_draw_lines(const View2D *v2d,
   }
 }
 
-/* Scale indicator text drawing
- **************************************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Scale Indicator Text Drawing
+ * \{ */
 
 using PositionToString =
     void (*)(const Scene *scene, float value, float step, char *r_str, uint str_maxncpy);
@@ -318,7 +325,7 @@ static void draw_horizontal_scale_indicators(const ARegion *region,
                                 view2d_region_to_view_x(v2d, rect->xmax)};
     get_parallel_lines_draw_steps(distance, view_bounds, &start_value, &steps);
     const uint steps_max = BLI_rcti_size_x(&v2d->mask) + 1;
-    if (UNLIKELY(steps >= steps_max)) {
+    if (steps >= steps_max) [[unlikely]] {
       return;
     }
   }
@@ -365,7 +372,7 @@ static void draw_vertical_scale_indicators(const ARegion *region,
                                 view2d_region_to_view_y(v2d, rect->ymax)};
     get_parallel_lines_draw_steps(distance, view_bounds, &start, &steps);
     const uint steps_max = BLI_rcti_size_y(&v2d->mask) + 1;
-    if (UNLIKELY(steps >= steps_max)) {
+    if (steps >= steps_max) [[unlikely]] {
       return;
     }
   }
@@ -494,8 +501,11 @@ static float get_min_line_distance_x(const View2D *v2d,
   return max_ff(MIN_MAJOR_LINE_DISTANCE, label_width);
 }
 
-/* Grid Resolution API
- **************************************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Grid Resolution API
+ * \{ */
 
 float view2d_grid_resolution_x(const View2D *v2d, const Scene *scene, const bool display_seconds)
 {
@@ -511,8 +521,11 @@ float view2d_grid_resolution_y__values(const View2D *v2d, const int base)
       base, BLI_rcti_size_y(&v2d->mask) + 1, BLI_rctf_size_y(&v2d->cur), MIN_MAJOR_LINE_DISTANCE);
 }
 
-/* Line Drawing API
- **************************************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Line Drawing API
+ * \{ */
 
 void view2d_draw_lines_x(const View2D *v2d,
                          const Scene *scene,
@@ -566,8 +579,11 @@ void view2d_draw_lines_y(const View2D *v2d, const bool show_fractions, const int
   view2d_draw_lines(v2d, major_line_distance, true, 'h');
 }
 
-/* Scale indicator text drawing API
- **************************************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Scale Indicator Text Drawing API
+ * \{ */
 
 void view2d_draw_scale_y(
     const ARegion *region, const View2D *v2d, const rcti *rect, const int colorid, const int base)
@@ -607,5 +623,7 @@ void view2d_draw_scale_x(const ARegion *region,
     draw_horizontal_scale_indicators(region, v2d, step, rect, frame_to_string, nullptr, colorid);
   }
 }
+
+/** \} */
 
 }  // namespace blender::ui

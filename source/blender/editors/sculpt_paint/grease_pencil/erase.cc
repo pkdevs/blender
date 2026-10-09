@@ -7,7 +7,7 @@
 #include "BLI_array.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_asset_edit.hh"
@@ -201,7 +201,8 @@ struct EraseOperationExecutor {
    * (resp. second) endpoint lies relatively to the eraser: inside,
    * outside or at the boundary of the eraser.
    *
-   * \returns total number of intersections lying inside the segment (ie whose factor is in ]0,1[).
+   * \returns total number of intersections lying inside the segment
+   * (ie whose factor is in (0, 1)).
    *
    * Note that the eraser is represented as a circle, and thus there can be only 0, 1 or 2
    * intersections with a segment.
@@ -1004,7 +1005,7 @@ struct EraseOperationExecutor {
 
       if (erased) {
         /* Set the new geometry. */
-        drawing.geometry.wrap() = std::move(dst);
+        drawing.strokes_for_write() = std::move(dst);
         drawing.tag_topology_changed();
         changed = true;
         self.affected_drawings_.add(&drawing);
@@ -1146,7 +1147,7 @@ static void remove_points_with_low_opacity(bke::CurvesGeometry &curves,
       curves.points_range(), memory, [&](const int64_t point) {
         return opacities[point] < epsilon && point_was_modified[point];
       });
-  curves = geometry::remove_points_and_split(curves, points_to_remove_and_split);
+  curves = geometry::grease_pencil_remove_points_and_split(curves, points_to_remove_and_split);
 }
 
 void EraseOperation::on_stroke_done(const bContext &C)

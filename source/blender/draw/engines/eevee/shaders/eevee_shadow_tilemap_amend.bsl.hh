@@ -36,17 +36,17 @@ struct TilemapAmend {
 struct AmendCtx {
   int2 tile_co;
 
-  void eval_directional([[resource_table]] TilemapAmend &srt, uint /*index*/, LightData light)
+  void eval_directional(TilemapAmend &srt, uint /*index*/, LightData light)
   {
     /* This only works on clip-maps. Cascade have already the same LOD for every tile-maps. */
     if (light.tilemap_index == LIGHT_NO_SHADOW || light.type != LIGHT_SUN) {
       return;
     }
 
-    int2 base_offset_neg = light.sun().clipmap_base_offset_neg;
-    int2 base_offset_pos = light.sun().clipmap_base_offset_pos;
+    int2 base_offset_neg = light.sun.clipmap_base_offset_neg;
+    int2 base_offset_pos = light.sun.clipmap_base_offset_pos;
     /* LOD relative max with respect to clipmap_lod_min. */
-    int lod_max = light.sun().clipmap_lod_max - light.sun().clipmap_lod_min;
+    int lod_max = light.sun.clipmap_lod_max - light.sun.clipmap_lod_min;
     /* Iterate in reverse. */
     for (int lod = lod_max; lod >= 0; lod--) {
       int tilemap_index = light.tilemap_index + lod;
@@ -102,14 +102,14 @@ struct AmendCtx {
     }
   }
 
-  void eval_local([[resource_table]] TilemapAmend &srt, uint index, LightData light)
+  void eval_local(TilemapAmend &srt, uint index, LightData light)
   {
     if (light.tilemap_index == LIGHT_NO_SHADOW) {
       return;
     }
 
     int lod_min = 0;
-    int tilemap_count = light_local_tilemap_count(light);
+    int tilemap_count = light.local_tilemap_count();
     for (int i = 0; i < tilemap_count; i++) {
       ShadowTileMapData tilemap = srt.tilemaps_buf[light.tilemap_index + i];
       lod_min = max(lod_min, tilemap.effective_lod_min);

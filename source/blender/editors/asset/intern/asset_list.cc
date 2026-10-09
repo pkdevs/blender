@@ -23,9 +23,9 @@
 #include "BKE_preferences.h"
 #include "BKE_screen.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_utility_mixins.hh"
 
 #include "DNA_asset_types.h"
@@ -161,7 +161,6 @@ void AssetList::ensure_updated()
       true,
       /*filter_assets_hide_online=*/!show_online,
       /*filter_assets_hide_offline=*/!show_offline,
-      "",
       "");
   filelist_set_asset_include_online(files, show_online);
 }
@@ -379,6 +378,12 @@ static std::optional<eFileSelectType> asset_library_reference_to_fileselect_type
     case ASSET_LIBRARY_CUSTOM: {
       const bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_index(
           &U, library_reference.custom_library_index);
+      if (!user_library) {
+        /* The caller should make sure the passed library reference is valid. */
+        BLI_assert_unreachable();
+        return std::nullopt;
+      }
+
       if (user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
         return FILE_ASSET_LIBRARY_REMOTE;
       }
@@ -416,6 +421,9 @@ void asset_reading_region_listen_fn(const wmRegionListenerParams *params)
       if (ELEM(wmn->data, ND_ASSET_LIST_READING, ND_ASSET_LIST_PREVIEW)) {
         ED_region_tag_refresh_ui(region);
       }
+      if (ELEM(wmn->action, NA_DOWNLOAD_FINISHED)) {
+        ED_region_tag_refresh_ui(region);
+      }
       break;
   }
 }
@@ -425,7 +433,7 @@ static void on_save_post(Main *main,
                          int /*num_pointers*/,
                          void * /*arg*/)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(main->wm.first);
+  wmWindowManager *wm = main->wm.first();
   const AssetLibraryReference current_file_library =
       asset_system::current_file_library_reference();
   clear(&current_file_library, wm);
@@ -491,7 +499,7 @@ static void foreach_visible_asset_browser_showing_library(
       /* Only needs to cover visible file/asset browsers, since others are already cleared through
        * area exiting. */
       if (area.spacetype == SPACE_FILE) {
-        SpaceFile *sfile = reinterpret_cast<SpaceFile *>(area.spacedata.first);
+        SpaceFile *sfile = area.spacedata.first_as<SpaceFile>();
         if (sfile->browse_mode == FILE_BROWSE_MODE_ASSETS) {
           if (sfile->asset_params && sfile->asset_params->asset_library_ref == library_reference) {
             fn(*sfile);
@@ -550,7 +558,9 @@ void clear_all_library(const bContext *C)
   clear(&all_lib_ref, CTX_wm_manager(C));
 }
 
-void on_remote_assets_downloaded(wmWindowManager &wm, const StringRef library_url)
+void on_remote_assets_downloaded(wmWindowManager &wm,
+                                 const StringRef library_url,
+                                 const StringRef downloaded_file_abspath)
 {
   for (const wmWindow &win : wm.windows) {
     const bScreen *screen = WM_window_get_active_screen(&win);
@@ -558,16 +568,18 @@ void on_remote_assets_downloaded(wmWindowManager &wm, const StringRef library_ur
       /* Only needs to cover visible file/asset browsers, since others are already cleared through
        * area exiting. */
       if (area.spacetype == SPACE_FILE) {
-        SpaceFile *sfile = reinterpret_cast<SpaceFile *>(area.spacedata.first);
+        SpaceFile *sfile = area.spacedata.first_as<SpaceFile>();
         if (sfile->browse_mode == FILE_BROWSE_MODE_ASSETS) {
-          filelist_remote_asset_library_refresh_online_assets_status(sfile->files, library_url);
+          filelist_remote_asset_library_refresh_online_assets_status(
+              sfile->files, library_url, downloaded_file_abspath);
         }
       }
     }
   }
 
   for (AssetList &list : libraries_map().values()) {
-    filelist_remote_asset_library_refresh_online_assets_status(list.filelist_, library_url);
+    filelist_remote_asset_library_refresh_online_assets_status(
+        list.filelist_, library_url, downloaded_file_abspath);
   }
 
   WM_event_add_notifier_ex(&wm, nullptr, NC_ASSET | NA_DOWNLOAD_FINISHED, nullptr);

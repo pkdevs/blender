@@ -21,7 +21,7 @@
 #include "BLI_math_axis_angle.hh"
 #include "BLI_math_quaternion.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
@@ -84,7 +84,9 @@ static Vector<ElementAnimations> gather_animated_properties(const FbxElementMapp
   int64_t order = 0;
   Map<const ufbx_element *, ElementAnimations> elem_map;
   for (const ufbx_anim_prop &fprop : flayer.anim_props) {
-    if (fprop.anim_value->curves[0] == nullptr) {
+    if (fprop.anim_value->curves[0] == nullptr && fprop.anim_value->curves[1] == nullptr &&
+        fprop.anim_value->curves[2] == nullptr)
+    {
       continue;
     }
     bool supported_prop = false;

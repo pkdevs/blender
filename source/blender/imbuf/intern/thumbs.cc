@@ -13,17 +13,17 @@
 
 #include "BKE_blendfile.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_ghash.h"
+#include "BLI_fileops.hh"
+#include "BLI_ghash.hh"
 #include "BLI_hash_md5.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_system.h"
-#include "BLI_tempfile.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_system.hh"
+#include "BLI_tempfile.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "DNA_space_types.h" /* For FILE_MAX_LIBEXTRA */
@@ -50,7 +50,7 @@
 #  endif
 /* For SHGetSpecialFolderPath, has to be done before BLI_winstuff
  * because 'near' is disabled through BLI_windstuff */
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include "utfconv.hh"
 #  include <direct.h> /* #chdir */
 #  include <shlobj.h>
@@ -316,6 +316,11 @@ void IMB_thumb_makedirs()
   }
 }
 
+static bool thumb_cancel_requested(const ThumbCancellationToken *cancel_token)
+{
+  return cancel_token && cancel_token->is_cancelled();
+}
+
 /* create thumbnail for file and returns new imbuf for thumbnail */
 static ImBuf *thumb_create_ex(const char *file_path,
                               const char *uri,
@@ -326,8 +331,13 @@ static ImBuf *thumb_create_ex(const char *file_path,
                               const char *blen_id,
                               ThumbSize size,
                               ThumbSource source,
-                              ImBuf *img)
+                              ImBuf *img,
+                              const ThumbCancellationToken *cancel_token = nullptr)
 {
+  if (thumb_cancel_requested(cancel_token)) {
+    return nullptr;
+  }
+
   /* Just in case these folders got deleted somehow. */
   IMB_thumb_makedirs();
 
@@ -405,7 +415,7 @@ static ImBuf *thumb_create_ex(const char *file_path,
          * compute time by keeping the original color-space for movies. */
         anim = MOV_open_file(file_path, ImBufFlags::Zero, 0, true, nullptr);
         if (anim != nullptr) {
-          img = MOV_decode_frame(anim, 0, IMB_TC_NONE, IMB_PROXY_NONE);
+          img = MOV_decode_frame(anim, 0, IMB_PROXY_NONE);
           if (img == nullptr) {
             // printf("not an anim; %s\n", file_path);
           }
@@ -420,6 +430,11 @@ static ImBuf *thumb_create_ex(const char *file_path,
         }
       }
       if (!img) {
+        return nullptr;
+      }
+
+      if (thumb_cancel_requested(cancel_token)) {
+        IMB_freeImBuf(img);
         return nullptr;
       }
 
@@ -438,14 +453,20 @@ static ImBuf *thumb_create_ex(const char *file_path,
         IMB_scale(img, ex, ey, IMBScaleFilter::Box, false);
       }
     }
+
+    if (thumb_cancel_requested(cancel_token)) {
+      IMB_freeImBuf(img);
+      return nullptr;
+    }
+
     SNPRINTF_UTF8(desc, "Thumbnail for %s", uri);
-    IMB_metadata_ensure(&img->metadata);
-    IMB_metadata_set_field(img->metadata, "Software", "Blender");
-    IMB_metadata_set_field(img->metadata, "Thumb::URI", uri);
-    IMB_metadata_set_field(img->metadata, "Description", desc);
-    IMB_metadata_set_field(img->metadata, "Thumb::MTime", mtime);
+    IDProperty *metadata = img->metadata_for_write();
+    IMB_metadata_set_field(metadata, "Software", "Blender");
+    IMB_metadata_set_field(metadata, "Thumb::URI", uri);
+    IMB_metadata_set_field(metadata, "Description", desc);
+    IMB_metadata_set_field(metadata, "Thumb::MTime", mtime);
     if (use_hash) {
-      IMB_metadata_set_field(img->metadata, "X-Blender::Hash", hash);
+      IMB_metadata_set_field(metadata, "X-Blender::Hash", hash);
     }
     img->ftype = IMB_FTYPE_PNG;
     img->color_mode = ImColorMode::RGBA;
@@ -474,12 +495,22 @@ static ImBuf *thumb_create_or_fail(const char *file_path,
                                    const char *blen_group,
                                    const char *blen_id,
                                    ThumbSize size,
-                                   ThumbSource source)
+                                   ThumbSource source,
+                                   const ThumbCancellationToken *cancel_token)
 {
-  ImBuf *img = thumb_create_ex(
-      file_path, uri, thumb, use_hash, hash, blen_group, blen_id, size, source, nullptr);
+  ImBuf *img = thumb_create_ex(file_path,
+                               uri,
+                               thumb,
+                               use_hash,
+                               hash,
+                               blen_group,
+                               blen_id,
+                               size,
+                               source,
+                               nullptr,
+                               cancel_token);
 
-  if (!img) {
+  if (!img && !thumb_cancel_requested(cancel_token)) {
     /* thumb creation failed, write fail thumb */
     img = thumb_create_ex(
         file_path, uri, thumb, use_hash, hash, blen_group, blen_id, THB_FAIL, source, nullptr);
@@ -499,6 +530,9 @@ static ImBuf *thumb_create_or_fail(const char *file_path,
  */
 static bool skip_thumbnails_for_filepath(const char *filepath)
 {
+  if (!BLI_path_extension_check(filepath, ".blend")) {
+    return false;
+  }
   char temp_dir[FILE_MAX];
   BLI_temp_directory_path_get(temp_dir, sizeof(temp_dir));
   return BLI_path_contains(temp_dir, filepath);
@@ -564,8 +598,15 @@ void IMB_thumb_delete(const char *file_or_lib_path, ThumbSize size)
   }
 }
 
-ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSource source)
+ImBuf *IMB_thumb_manage(const char *file_or_lib_path,
+                        ThumbSize size,
+                        ThumbSource source,
+                        const ThumbCancellationToken *cancel_token)
 {
+  if (thumb_cancel_requested(cancel_token)) {
+    return nullptr;
+  }
+
   if (source == THB_SOURCE_DIRECT) {
     const eFileAttributes file_attributes = BLI_file_attributes(file_or_lib_path);
     /* Don't trigger download files from online drives. Maybe less of a problem for
@@ -663,7 +704,7 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
 
         const bool use_hash = thumbhash_from_path(file_path, source, thumb_hash);
 
-        if (IMB_metadata_get_field(img->metadata, "Thumb::MTime", mtime, sizeof(mtime))) {
+        if (IMB_metadata_get_field(img->metadata(), "Thumb::MTime", mtime, sizeof(mtime))) {
           regenerate = (st.st_mtime != atol(mtime));
         }
         else {
@@ -673,7 +714,7 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
 
         if (use_hash && !regenerate) {
           if (IMB_metadata_get_field(
-                  img->metadata, "X-Blender::Hash", thumb_hash_curr, sizeof(thumb_hash_curr)))
+                  img->metadata(), "X-Blender::Hash", thumb_hash_curr, sizeof(thumb_hash_curr)))
           {
             regenerate = !STREQ(thumb_hash, thumb_hash_curr);
           }
@@ -689,16 +730,32 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
           IMB_thumb_delete(file_or_lib_path, THB_NORMAL);
           IMB_thumb_delete(file_or_lib_path, THB_LARGE);
           IMB_thumb_delete(file_or_lib_path, THB_FAIL);
-          img = thumb_create_or_fail(
-              file_path, uri, thumb_name, use_hash, thumb_hash, blen_group, blen_id, size, source);
+          img = thumb_create_or_fail(file_path,
+                                     uri,
+                                     thumb_name,
+                                     use_hash,
+                                     thumb_hash,
+                                     blen_group,
+                                     blen_id,
+                                     size,
+                                     source,
+                                     cancel_token);
         }
       }
       else {
         char thumb_hash[33];
         const bool use_hash = thumbhash_from_path(file_path, source, thumb_hash);
 
-        img = thumb_create_or_fail(
-            file_path, uri, thumb_name, use_hash, thumb_hash, blen_group, blen_id, size, source);
+        img = thumb_create_or_fail(file_path,
+                                   uri,
+                                   thumb_name,
+                                   use_hash,
+                                   thumb_hash,
+                                   blen_group,
+                                   blen_id,
+                                   size,
+                                   source,
+                                   cancel_token);
       }
     }
   }

@@ -8,10 +8,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_hash.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_rand.hh"
 #include "BLI_set.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_task.hh"
 
@@ -140,7 +140,7 @@ static void modifier_ops_extra_draw(bContext *C, ui::Layout *layout, void *smd_v
                     wm::OpCallContext::InvokeDefault,
                     UI_ITEM_NONE);
     RNA_string_set(&op_ptr, "modifier", smd->name);
-    RNA_int_set(&op_ptr, "index", BLI_listbase_count(&strip->modifiers) - 1);
+    RNA_int_set(&op_ptr, "index", strip->modifiers.count() - 1);
     row.enabled_set(smd->next != nullptr);
   }
 
@@ -353,8 +353,11 @@ ImBuf *modifier_render_mask_input(const ModifierApplyContext &context,
 
   if (smd.mask_input_type == STRIP_MASK_INPUT_STRIP) {
     if (smd.mask_strip) {
-      mask = seq_render_strip(
-          &context.render_data, &context.render_state, smd.mask_strip, context.timeline_frame);
+      mask = seq_render_strip(&context.render_data,
+                              &context.render_state,
+                              smd.mask_strip,
+                              context.timeline_frame)
+                 .image;
     }
   }
   else if (smd.mask_input_type == STRIP_MASK_INPUT_ID) {
@@ -480,12 +483,12 @@ void modifier_clear(Strip *strip)
 {
   StripModifierData *smd, *smd_next;
 
-  for (smd = static_cast<StripModifierData *>(strip->modifiers.first); smd; smd = smd_next) {
+  for (smd = strip->modifiers.first(); smd; smd = smd_next) {
     smd_next = smd->next;
     modifier_free(smd);
   }
 
-  BLI_listbase_clear(&strip->modifiers);
+  strip->modifiers.clear_no_delete();
 }
 
 void modifier_free(StripModifierData *smd)
@@ -542,7 +545,7 @@ static bool skip_modifier(Scene *scene, const StripModifierData *smd, int timeli
 
 void modifier_apply_stack(ModifierApplyContext &context)
 {
-  if (context.strip.modifiers.first == nullptr) {
+  if (context.strip.modifiers.first() == nullptr) {
     return;
   }
 

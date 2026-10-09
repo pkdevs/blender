@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
 #include <variant>
@@ -165,6 +169,7 @@ class AttributeStorage : public blender::AttributeStorage {
    */
   bool remove(StringRef name);
   bool remove(const Set<StringRef> &names);
+  bool remove(const Set<const Attribute *> &attributes);
 
   /**
    * Add an attribute with the given name, which must not already be used by an existing attribute
