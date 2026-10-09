@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "general",
+      "title": "General",
+      "file": "general.blend",
+      "preview": "general.png",
+      "minimumBlender": [
+        5,
+        1,
+        0
+      ],
+      "presentation": {
+        "timeline": false
+      }
+    },
+    {
+      "id": "sculpt",
+      "title": "Sculpt",
+      "file": "sculpt.blend",
+      "preview": "sculpt.png",
+      "minimumBlender": [
+        5,
+        1,
+        0
+      ],
+      "presentation": {
+        "timeline": false
+      }
+    },
+    {
+      "id": "drawing",
+      "title": "Grease Pencil Drawing",
+      "file": "drawing.blend",
+      "preview": "drawing.png",
+      "minimumBlender": [
+        5,
+        1,
+        0
+      ],
+      "presentation": {
+        "timeline": false
+      }
+    },
+    {
+      "id": "animation-2d",
+      "title": "2D Animation",
+      "file": "animation-2d.blend",
+      "preview": "animation-2d.png",
+      "minimumBlender": [
+        5,
+        1,
+        0
+      ],
+      "presentation": {
+        "timeline": true
+      }
+    },
+    {
+      "id": "animation-3d",
+      "title": "3D Animation",
+      "file": "animation-3d.blend",
+      "preview": "animation-3d.png",
+      "minimumBlender": [
+        5,
+        1,
+        0
+      ],
+      "presentation": {
+        "timeline": true
+      }
+    }
+  ]
+}

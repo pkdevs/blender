@@ -2172,6 +2172,11 @@ if(WITH_APPLE_CROSSPLATFORM AND EXISTS "${STARTER_ASSET_DIR}")
   )
 endif()
 
+if(WITH_APPLE_CROSSPLATFORM)
+  install(DIRECTORY ${CMAKE_SOURCE_DIR}/release/ios/templates/library/
+    DESTINATION ${TARGETDIR_VER}/datafiles/templates)
+endif()
+
 
 # -----------------------------------------------------------------------------
 # Setup link libraries
