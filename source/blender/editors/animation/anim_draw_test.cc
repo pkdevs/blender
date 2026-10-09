@@ -63,7 +63,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
   scene.unit.scale_length = 1.0f;
 
   { /* Rotation: Degrees. */
-    scene.unit.system_rotation = 0;
+    scene.unit.system_rotation = USER_UNIT_ROT_DEGREES;
     fcurve->rna_path_set("rotation_euler");
 
     EXPECT_FLOAT_EQ(RAD2DEGF(1.0f),
@@ -86,10 +86,10 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
 
   { /* Length */
     fcurve->rna_path_set("location");
-    const auto test_unit_scalar = [&](int unit_system,
-                                      int unit_idx,
-                                      float expected_scalar,
-                                      float expected_restore_scalar) {
+    const auto test_unit_scalar = [&](const int unit_system,
+                                      const int unit_idx,
+                                      const float expected_scalar,
+                                      const float expected_restore_scalar) {
       scene.unit.system = unit_system;
       scene.unit.length_unit = unit_idx;
 
@@ -99,6 +99,10 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
                       ANIM_unit_mapping_get_factor(
                           &scene, &this->object->id, fcurve, ANIM_UNITCONV_RESTORE, nullptr));
     };
+
+    /* No unit system */
+    test_unit_scalar(USER_UNIT_NONE, 0, 1.0f, 1.0f);
+
     /* Metric */
     test_unit_scalar(USER_UNIT_METRIC, 0 /* km */, 1.0f / 1000.0f, 1000.0f);
     test_unit_scalar(USER_UNIT_METRIC, 3 /* m */, 1.0f, 1.0f);
@@ -106,14 +110,14 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
     test_unit_scalar(USER_UNIT_METRIC, 6 /* mm */, 1.0f / 0.001f, 0.001f);
     test_unit_scalar(USER_UNIT_METRIC, 7 /* um */, 1.0f / 0.000001f, 0.000001f);
     /* Adaptive - meter */
-    test_unit_scalar(USER_UNIT_METRIC, 0xFF, 1.0f, 1.0f);
+    test_unit_scalar(USER_UNIT_METRIC, USER_UNIT_ADAPTIVE, 1.0f, 1.0f);
 
     /* Imperial */
     test_unit_scalar(USER_UNIT_IMPERIAL, 0 /* mi */, 1.0f / 1609.344f, 1609.344f);
     test_unit_scalar(USER_UNIT_IMPERIAL, 4 /* ft */, 1.0f / 0.3048f, 0.3048f);
     test_unit_scalar(USER_UNIT_IMPERIAL, 5 /* in */, 1.0f / 0.0254f, 0.0254f);
     test_unit_scalar(USER_UNIT_IMPERIAL, 6 /* thou */, 1.0f / 0.0000254f, 0.0000254f);
-    test_unit_scalar(USER_UNIT_IMPERIAL, 0xFF /* Adaptive */, 1.0f / 0.3048f, 0.3048f);
+    test_unit_scalar(USER_UNIT_IMPERIAL, USER_UNIT_ADAPTIVE, 1.0f / 0.3048f, 0.3048f);
 
     /* Unit Scale = 2.0 */
     scene.unit.scale_length = 2.0f;
@@ -124,10 +128,10 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
 
   { /* Mass */
     fcurve->rna_path_set("[\"mass\"]");
-    const auto test_unit_scalar = [&](int unit_system,
-                                      int unit_idx,
-                                      float expected_scalar,
-                                      float expected_restore_scalar) {
+    const auto test_unit_scalar = [&](const int unit_system,
+                                      const int unit_idx,
+                                      const float expected_scalar,
+                                      const float expected_restore_scalar) {
       scene.unit.system = unit_system;
       scene.unit.mass_unit = unit_idx;
 
@@ -143,7 +147,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
     test_unit_scalar(USER_UNIT_METRIC, 2 /* kg */, 1.0f, 1.0f);
     test_unit_scalar(USER_UNIT_METRIC, 5 /* g */, 1.0f / 0.001f, 0.001f);
     test_unit_scalar(USER_UNIT_METRIC, 6 /* mg */, 1.0f / 0.000001f, 0.000001f);
-    test_unit_scalar(USER_UNIT_METRIC, 0xFF /* Adaptive */, 1.0f, 1.0f);
+    test_unit_scalar(USER_UNIT_METRIC, USER_UNIT_ADAPTIVE, 1.0f, 1.0f);
 
     /* Imperial */
     test_unit_scalar(USER_UNIT_IMPERIAL, 0 /* tn */, 1.0f / 907.18474f, 907.18474f);
@@ -151,7 +155,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
     test_unit_scalar(USER_UNIT_IMPERIAL, 2 /* st */, 1.0f / 6.35029318f, 6.35029318f);
     test_unit_scalar(USER_UNIT_IMPERIAL, 3 /* lb */, 1.0f / 0.45359237f, 0.45359237f);
     test_unit_scalar(USER_UNIT_IMPERIAL, 4 /* oz */, 1.0f / 0.028349523125f, 0.028349523125f);
-    test_unit_scalar(USER_UNIT_IMPERIAL, 0xFF /* Adaptive */, 1.0f / 0.45359237f, 0.45359237f);
+    test_unit_scalar(USER_UNIT_IMPERIAL, USER_UNIT_ADAPTIVE, 1.0f / 0.45359237f, 0.45359237f);
 
     /* Unit Scale = 2.0 */
     scene.unit.scale_length = 2.0f;
@@ -162,9 +166,9 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
 
   { /* Time */
     fcurve->rna_path_set("[\"time\"]");
-    const auto test_unit_scalar = [&](int unit_idx,
-                                      float expected_scalar,
-                                      float expected_restore_scalar) {
+    const auto test_unit_scalar = [&](const int unit_idx,
+                                      const float expected_scalar,
+                                      const float expected_restore_scalar) {
       scene.unit.time_unit = unit_idx;
 
       EXPECT_FLOAT_EQ(expected_scalar,
@@ -180,7 +184,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
     test_unit_scalar(3 /* s */, 1.0f, 1.0f);
     test_unit_scalar(4 /* ms */, 1.0f / 0.001f, 0.001f);
     test_unit_scalar(5 /* us */, 1.0f / 0.000001f, 0.000001f);
-    test_unit_scalar(0xFF /* Adaptive */, 1.0f, 1.0f);
+    test_unit_scalar(USER_UNIT_ADAPTIVE, 1.0f, 1.0f);
   }
 
   BKE_fcurve_free(fcurve);

@@ -665,26 +665,24 @@ float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag
 
   const PropertyUnit prop_unit = PropertyUnit(RNA_SUBTYPE_UNIT(RNA_property_subtype(prop)));
 
-  double unit_scaler = 1.0;
+  UnitConversion unit_conversion;
   const int b_unit = RNA_SUBTYPE_UNIT_VALUE(prop_unit);
 
   switch (prop_unit) {
     /* Units not affected by the scene's unit scale. */
     case PROP_UNIT_ROTATION:
     case PROP_UNIT_TIME:
-      BKE_unit_preferred_conversion_get(
-          scene->unit, b_unit, UnitConvertDirection::UNIT_TO_RAW, &unit_scaler);
+      unit_conversion = BKE_unit_preferred_conversion_get(scene->unit, b_unit);
       break;
     /* Units that BKE_unit_value_scale() also scales by the scene's unit scale.
      * Assumption: BKE_unit_value_scale() is linear and zero maps to zero for these
      * unit types, so the scaled value can be used as a scaler factor. */
     case PROP_UNIT_LENGTH:
     case PROP_UNIT_MASS: {
-      BKE_unit_preferred_conversion_get(
-          scene->unit, b_unit, UnitConvertDirection::UNIT_TO_RAW, &unit_scaler);
+      unit_conversion = BKE_unit_preferred_conversion_get(scene->unit, b_unit);
       const double scene_scale = BKE_unit_value_scale(scene->unit, b_unit, 1.0);
       if (scene_scale != 0.0) {
-        unit_scaler /= scene_scale;
+        unit_conversion.scalar /= scene_scale;
       }
       break;
     }
@@ -692,11 +690,14 @@ float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag
       /* Other units are not scaled. */
       break;
   }
+  BLI_assert_msg(unit_conversion.bias == 0.0,
+                 "Only linear units (without bias) are supported for now.");
+  BLI_assert(unit_conversion.scalar != 0.0);
 
   if (flag & ANIM_UNITCONV_RESTORE) {
-    return float(unit_scaler);
+    return float(unit_conversion.scalar);
   }
-  return float(1.0 / unit_scaler);
+  return float(1.0 / unit_conversion.scalar);
 }
 
 static bool find_prev_next_keyframes(bContext *C, int *r_nextfra, int *r_prevfra)

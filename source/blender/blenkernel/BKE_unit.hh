@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "BLI_assert.hh"
 #include "BLI_sys_types.hh"
 
 namespace blender {
@@ -144,21 +145,21 @@ double BKE_unit_scalar_get(const void *usys_pt, int index);
 bool BKE_unit_is_suppressed(const void *usys_pt, int index);
 bool BKE_unit_is_adaptive(const UnitSettings &settings, int type);
 
-enum class UnitConvertDirection {
-  RAW_TO_UNIT = 0,
-  UNIT_TO_RAW = 1,
+/**
+ * The linear coefficients that convert between raw values and the unit `settings` prefer for
+ * `unit_type`, i.e. `raw = (value + bias) * scalar`.
+ */
+class UnitConversion final {
+ public:
+  double scalar = 1.0;
+  double bias = 0.0;
 };
 
 /**
  * Get the linear coefficients that convert between raw values and the unit `settings` prefer for
- * `unit_type`, i.e. `converted = raw * (*r_scale) + (*r_offset)`. Either output may be null.
- * When the preferred unit is adaptive, the unit system's base unit is used.
+ * `unit_type`. When the preferred unit is adaptive, the unit system's base unit is used.
  */
-void BKE_unit_preferred_conversion_get(const UnitSettings &settings,
-                                       int unit_type,
-                                       UnitConvertDirection direction,
-                                       double *r_scale = nullptr,
-                                       double *r_offset = nullptr);
+UnitConversion BKE_unit_preferred_conversion_get(const UnitSettings &settings, int unit_type);
 
 /** Aligned with #PropertyUnit and `bpyunits_ucategories_items` in `bpy_utils_units.cc`. */
 enum {
