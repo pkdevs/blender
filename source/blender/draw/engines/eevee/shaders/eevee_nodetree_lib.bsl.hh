@@ -1172,7 +1172,8 @@ void node_light_evaluation_impl(KernelGlobals &kg,
       ltc_data = eevee::LTCData::identity(normal, V);
     }
     else {
-      ltc_data = eevee::LTCData::sample_ltc_lut(util_tx, normal, V, dot(normal, V), roughness);
+      ltc_data = eevee::LTCData::sample_lut(
+          util_tx, normal, V, dot(normal, V), roughness, UTIL_LTC_MAT_GGX_LAYER);
     }
     float3x3 T = from_incident_vector(normal, V);
     ltc_data.Minv = ltc_data.Minv * transpose(T);
