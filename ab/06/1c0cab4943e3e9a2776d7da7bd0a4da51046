@@ -2,3 +2,4 @@ Referenced by issue #164680, VSE Crash when running Apply Scale to Fit/Fill etc
 Referenced by pull request #164686, Fix #164680: VSE: Crash when running Scale to Fit/Fill with sound strips
 Referenced by commit 2b196d92a8e994fe2cbfb2a2af2b036109d5ce61, Fix #164680: VSE: Crash when running Scale to Fit/Fill with sound strips
 Referenced by issue #164944, VSE: Scene strip has wrong bounding box
+Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
