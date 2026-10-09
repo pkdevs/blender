@@ -29,7 +29,7 @@ struct DialogSheet: View {
         Text(message).font(.body)
         ForEach(Array(toggles.enumerated()), id: \.offset) { index, name in
           Toggle(name, isOn: $selected[index])
-            .tint(Color(uiColor: .systemBlue))
+            .tint(Color(uiColor: .systemGreen))
         }
         ForEach(Array(actions.enumerated()), id: \.offset) { index, name in
           let button = Button {

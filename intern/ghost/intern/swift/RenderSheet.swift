@@ -130,11 +130,11 @@ struct RenderSheetView: View {
             ShareLink(item: result) { Image(systemName: "square.and.arrow.up") }
               .accessibilityLabel("Share")
           }
-          ToolbarItem(placement: .confirmationAction) { Button("Done", action: model.done) }
+          ToolbarItem(placement: .confirmationAction) { Button(role: .confirm, action: model.done) }
         }
         else {
           ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel", role: .cancel, action: model.cancel).disabled(!model.cancellable)
+            Button(role: .close, action: model.cancel).disabled(!model.cancellable)
           }
         }
       }
