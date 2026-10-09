@@ -356,7 +356,23 @@ else()
     set(IOS_LIQUID_GLASS_APP_ICON
       ${CMAKE_SOURCE_DIR}/release/darwin/blender_liquid_glass.icon)
 
-    add_executable(blender ${EXETYPE} ${SRC} ${storyboards})
+    # The document launcher's Suzanne and logo are drawn with RealityKit and SwiftUI, which only
+    # Swift can use. The rest of the launcher finds these views by name, see `GHOST_IOSLauncher.mm`.
+    set(CMAKE_Swift_LANGUAGE_VERSION 5)
+    enable_language(Swift)
+    set(IOS_LAUNCHER_SWIFT ${CMAKE_SOURCE_DIR}/intern/ghost/intern/GHOST_IOSLauncher.swift)
+    set(IOS_LAUNCHER_RESOURCES
+      ${CMAKE_SOURCE_DIR}/release/ios/launcher/Suzanne.usdz
+      ${CMAKE_SOURCE_DIR}/release/ios/launcher/blender_logo_mono.svg
+    )
+
+    add_executable(blender ${EXETYPE} ${SRC} ${storyboards}
+      ${IOS_LAUNCHER_SWIFT} ${IOS_LAUNCHER_RESOURCES}
+    )
+    # Linked as C++ as before. Xcode adds Swift's own libraries, while CMake would otherwise pass
+    # the C and C++ compilers' implicit library folders, which may be the host's.
+    set_target_properties(blender PROPERTIES LINKER_LANGUAGE CXX)
+
 
     # Additional libraries required by static python extensions compiled directly in source.
     # Otherwise will see Python linking issues during linking in Xcode about missing SSL etc.
@@ -1753,7 +1769,7 @@ elseif(APPLE)
       ${IOS_ICON_MANIFEST} ${IOS_ICON_EXPORTER} ${IOS_ICON_SOURCES}
     )
     target_sources(blender PRIVATE ${IOS_ICON_MANIFEST})
-    set(allresources ${storyboards} ${IOS_ICON_MANIFEST})
+    set(allresources ${storyboards} ${IOS_ICON_MANIFEST} ${IOS_LAUNCHER_RESOURCES})
     set_target_properties(blender PROPERTIES RESOURCE "${allresources}")
 
     add_custom_command(
