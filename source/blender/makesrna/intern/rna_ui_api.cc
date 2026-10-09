@@ -898,9 +898,10 @@ static void rna_uiTemplateFilePath(Layout *layout,
   /* Get translated name (label). */
   std::optional<StringRefNull> text_final = rna_translate_ui_text(
       text, text_ctxt, nullptr, prop, translate);
-  std::optional<StringRefNull> placeholder_final = placeholder ? std::make_optional<StringRefNull>(
-                                                                     placeholder) :
-                                                                 std::nullopt;
+  std::optional<StringRefNull> placeholder_final = std::nullopt;
+  if (placeholder) {
+    placeholder_final = rna_translate_ui_text(placeholder, text_ctxt, nullptr, prop, translate);
+  }
 
   template_filepath(
       layout, C, ptr, propname, pathselect_op, filter_glob, text_final, placeholder_final);
@@ -2166,7 +2167,7 @@ void RNA_api_ui_layout(StructRNA *srna)
                         nullptr,
                         0,
                         "",
-                        "If set, controls wich file extensions are shown in the filebrowser, for "
+                        "If set, controls which file extensions are shown in the filebrowser, for "
                         "Filepath properties only (e.g. '*.glb;*.gltf')");
   RNA_def_property_clear_flag(prop, PROP_NEVER_NULL);
   api_ui_item_common_text(func);
