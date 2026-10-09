@@ -312,12 +312,12 @@ ShapingData::ShapingData(FontBLF *font,
 
       if (props.direction == HB_DIRECTION_RTL) {
         /* Purposely use glyph-ordered offsets to simplify editing for now. */
-        this->glyphs.append({segment_font, segment_gc, g, bounds, glyph_str8_offset});
+        this->glyphs.append({font, segment_gc, g, bounds, glyph_str8_offset});
         glyph_str8_offset += BLI_str_utf8_from_unicode_len(codepoint);
       }
       else {
         /* Use precomputed UTF-8 byte offset for the glyph's cluster. */
-        this->glyphs.append({segment_font, segment_gc, g, bounds, utf8_offsets[cluster]});
+        this->glyphs.append({font, segment_gc, g, bounds, utf8_offsets[cluster]});
       }
 
       this->bounds.xmin = std::min(this->bounds.xmin, bounds.xmin + g->box_xmin);
