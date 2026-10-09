@@ -59,6 +59,8 @@ def tests():
         yield 1
         check(ui()['document'] != previous, identifier + ': system browser creates an independent document')
         check(bpy.context.mode == mode, identifier + ': Blender restores the intended mode')
+        check(ui()['toolbar'].get('objectMode') == mode and ui()['toolbar'].get('modes'),
+              identifier + ': native mode controls follow the loaded document')
         check(ui()['timeline'] == timeline, identifier + ': native timeline follows its presentation preset')
         if identifier == 'sculpt':
             check(len(bpy.context.object.data.vertices) > 20000 and bpy.context.tool_settings.sculpt.brush is not None,

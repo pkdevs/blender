@@ -2,6 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 #include "GHOST_IOSRuntime.hh"
 #import "GHOST_IOSDocument.hh"
 #import "GHOST_IOSLauncher.hh"
@@ -20,10 +21,18 @@ std::string WM_apple_ios_document_template_write(bContext *, const char *, const
 
 @interface NSObject (TemplateTests)
 @property(nonatomic, copy) void (^completion)(NSString *);
-- (void)createSelected:(id)sender;
 - (void)finish:(NSString *)identifier;
 - (void)updateSearchResultsForSearchController:(UISearchController *)searchController;
+- (void)documentBrowser:(UIDocumentBrowserViewController *)browser
+    didRequestDocumentCreationWithHandler:(void (^)(NSURL *, UIDocumentBrowserImportMode))handler;
 @end
+
+static NSUInteger template_requests;
+static void chooseTemplateSpy(id, SEL, void (^completion)(NSString *))
+{
+  template_requests++;
+  completion(nil);
+}
 
 static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
 {
@@ -67,6 +76,8 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
     NSArray *entries = GHOST_ios_document_templates();
     NSCAssert(entries.count == 5, @"All validated templates are available");
     NSCAssert([picker.collectionView numberOfItemsInSection:0] == 5, @"Native chooser lists each template");
+    NSCAssert(picker.navigationItem.rightBarButtonItem == nil,
+              @"Templates open directly, without a separate Create button");
     UISearchController *search = picker.navigationItem.searchController;
     NSCAssert(search != nil, @"The chooser uses the system search controller");
     search.searchBar.text = @"sculpt";
@@ -96,15 +107,26 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
     [cancelled finish:nil];
     [cancelled finish:nil];
     NSCAssert(cancellations == 1, @"Cancellation completes only once");
+    Class launcherClass = NSClassFromString(@"GHOSTIOSLauncherController");
+    Class spyClass = objc_allocateClassPair(launcherClass, "TemplatesLauncherSpy", 0);
+    SEL choose = NSSelectorFromString(@"chooseTemplate:");
+    class_addMethod(spyClass, choose, (IMP)chooseTemplateSpy,
+                    method_getTypeEncoding(class_getInstanceMethod(launcherClass, choose)));
+    objc_registerClassPair(spyClass);
+    UIDocumentViewController *launcher = [[[spyClass alloc] initWithDocument:nil] autorelease];
+    __block BOOL cancelledImport = NO;
+    [launcher documentBrowser:nil didRequestDocumentCreationWithHandler:^(NSURL *url, UIDocumentBrowserImportMode mode) {
+      cancelledImport = url == nil && mode == UIDocumentBrowserImportModeNone;
+    }];
+    NSCAssert(template_requests == 1 && cancelledImport,
+              @"The browser's default New action opens the chooser and cancellation creates nothing");
     __block NSUInteger completions = 0;
     picker.completion = ^(NSString *identifier) {
       completions++;
       NSCAssert([identifier isEqual:@"sculpt"], @"Create uses the selected stable template ID");
     };
     NSIndexPath *index = [NSIndexPath indexPathForItem:1 inSection:0];
-    [picker.collectionView selectItemAtIndexPath:index animated:NO scrollPosition:UICollectionViewScrollPositionNone];
-    [picker.collectionView.delegate collectionView:picker.collectionView didSelectItemAtIndexPath:index];
-    NSCAssert(completions == 0, @"Selecting a card does not create a document");
+    NSCAssert(completions == 0, @"Browsing templates does not create a document");
     GHOST_ios_document_create(@"../sculpt", ^(NSURL *url) {
       NSCAssert(url == nil, @"Arbitrary paths cannot be used as templates");
     });
@@ -116,10 +138,11 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
         [self.window drawViewHierarchyInRect:self.window.bounds afterScreenUpdates:YES];
       }];
       [UIImagePNGRepresentation(image) writeToFile:path atomically:YES];
-      [picker createSelected:nil];
-      [picker createSelected:nil];
+      [picker.collectionView selectItemAtIndexPath:index animated:NO scrollPosition:UICollectionViewScrollPositionNone];
+      [picker.collectionView.delegate collectionView:picker.collectionView didSelectItemAtIndexPath:index];
+      [picker.collectionView.delegate collectionView:picker.collectionView didSelectItemAtIndexPath:index];
       dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        NSCAssert(completions == 1, @"Create completes exactly once, even after repeated taps");
+        NSCAssert(completions == 1, @"Tapping a template creates exactly one document, even after repeated taps");
         NSLog(@"PASS: native templates");
         exit(0);
       });

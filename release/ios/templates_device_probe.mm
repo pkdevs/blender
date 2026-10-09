@@ -10,7 +10,7 @@
 - (void)newDocumentFrom:(UIViewController *)presenter;
 - (void)openDocumentAtURL:(NSURL *)url;
 - (void)recordCreatedTemplateAtURL:(NSURL *)url;
-- (void)createSelected:(id)sender;
+- (NSDictionary *)toolbarModel;
 @end
 
 static NSString *operationResult;
@@ -74,7 +74,6 @@ extern "C" char *blender_device_probe_templates(const char *json)
             [picker.collectionView selectItemAtIndexPath:index animated:NO
                 scrollPosition:UICollectionViewScrollPositionCenteredVertically];
             [picker.collectionView.delegate collectionView:picker.collectionView didSelectItemAtIndexPath:index];
-            [picker createSelected:nil];
           }
         }
       }
@@ -90,6 +89,7 @@ extern "C" char *blender_device_probe_templates(const char *json)
     }
     id timeline = [viewport valueForKey:@"_timeline"];
     NSDictionary *state = @{@"entries": entries, @"choosing": @(choosing),
+        @"toolbar": [viewport toolbarModel] ?: @{},
         @"document": documents.document.fileURL.path ?: @"",
         @"opening": [documents valueForKey:@"_opening"] ?: @NO,
         @"creating": [documents valueForKey:@"_creating"] ?: @NO,

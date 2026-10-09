@@ -340,8 +340,6 @@ static NSArray<NSDictionary *> *launcherTemplates()
   NSArray<NSString *> *_sectionTitles;
   UISearchController *_search;
   BOOL _finished;
-  UIBarButtonItem *_create;
-  NSString *_selected;
 }
 
 - (instancetype)init
@@ -379,11 +377,6 @@ static NSArray<NSDictionary *> *launcherTemplates()
     [self reloadTemplates];
     self.title = @"Choose a Template";
     self.preferredContentSize = CGSizeMake(780, 640);
-    NSString *last = [NSUserDefaults.standardUserDefaults stringForKey:@"blender.lastTemplate"];
-    for (NSDictionary *item in _templates) {
-      if ([item[@"id"] isEqual:last]) { _selected = [last copy]; break; }
-    }
-    if (!_selected) { _selected = [_templates.firstObject[@"id"] copy]; }
   }
   return self;
 }
@@ -395,8 +388,6 @@ static NSArray<NSDictionary *> *launcherTemplates()
   [_sectionTitles release];
   [_search release];
   [_completion release];
-  [_selected release];
-  [_create release];
   [super dealloc];
 }
 
@@ -407,7 +398,7 @@ static NSArray<NSDictionary *> *launcherTemplates()
   [self.collectionView registerClass:UICollectionReusableView.class
       forSupplementaryViewOfKind:UICollectionElementKindSectionHeader withReuseIdentifier:@"section"];
   self.collectionView.backgroundColor = UIColor.systemBackgroundColor;
-  self.collectionView.selectionFollowsFocus = YES;
+  self.collectionView.selectionFollowsFocus = NO;
   _search = [[UISearchController alloc] initWithSearchResultsController:nil];
   _search.obscuresBackgroundDuringPresentation = NO;
   _search.hidesNavigationBarDuringPresentation = NO;
@@ -422,19 +413,6 @@ static NSArray<NSDictionary *> *launcherTemplates()
                     primaryAction:[UIAction actionWithHandler:^(__kindof UIAction *) {
                       [picker finish:nil];
                     }]] autorelease];
-  _create = [[UIBarButtonItem alloc] initWithTitle:@"Create" style:UIBarButtonItemStyleProminent
-      target:self action:@selector(createSelected:)];
-  _create.accessibilityIdentifier = @"blender.template.create";
-  _create.enabled = _selected != nil;
-  self.navigationItem.rightBarButtonItem = _create;
-  for (NSUInteger section = 0; section < _sections.count; section++) {
-    for (NSUInteger index = 0; index < _sections[section].count; index++) {
-      if ([_sections[section][index][@"id"] isEqual:_selected]) {
-        [self.collectionView selectItemAtIndexPath:[NSIndexPath indexPathForItem:index inSection:section]
-                                        animated:NO scrollPosition:UICollectionViewScrollPositionNone];
-      }
-    }
-  }
 }
 
 - (void)reloadTemplates
@@ -448,12 +426,10 @@ static NSArray<NSDictionary *> *launcherTemplates()
 {
   NSString *query = [_search.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
   NSMutableArray *bundled = [NSMutableArray array], *personal = [NSMutableArray array];
-  BOOL selectionVisible = NO;
   for (NSDictionary *entry in _templates) {
     if (query.length && [entry[@"title"] rangeOfString:query options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch].location == NSNotFound) { continue; }
     NSMutableArray *group = [entry[@"personal"] boolValue] ? personal : bundled;
     [group addObject:entry];
-    selectionVisible |= [entry[@"id"] isEqual:_selected];
   }
   NSMutableArray *sections = [NSMutableArray array], *titles = [NSMutableArray array];
   if (bundled.count) { [sections addObject:bundled]; [titles addObject:@"Blender"]; }
@@ -462,18 +438,9 @@ static NSArray<NSDictionary *> *launcherTemplates()
   _sections = [sections copy];
   [_sectionTitles release];
   _sectionTitles = [titles copy];
-  _create.enabled = selectionVisible;
   if (self.isViewLoaded) {
     [self.collectionView reloadData];
     self.contentUnavailableConfiguration = sections.count ? nil : [UIContentUnavailableConfiguration searchConfiguration];
-    for (NSUInteger section = 0; section < _sections.count; section++) {
-      for (NSUInteger index = 0; index < _sections[section].count; index++) {
-        if ([_sections[section][index][@"id"] isEqual:_selected]) {
-          [self.collectionView selectItemAtIndexPath:[NSIndexPath indexPathForItem:index inSection:section]
-              animated:NO scrollPosition:UICollectionViewScrollPositionNone];
-        }
-      }
-    }
   }
 }
 
@@ -541,9 +508,7 @@ static NSArray<NSDictionary *> *launcherTemplates()
 
 - (void)collectionView:(UICollectionView *)view didSelectItemAtIndexPath:(NSIndexPath *)index
 {
-  [_selected release];
-  _selected = [_sections[index.section][index.item][@"id"] copy];
-  _create.enabled = YES;
+  [self finish:_sections[index.section][index.item][@"id"]];
 }
 
 - (void)manageTemplate:(NSDictionary *)entry action:(NSString *)action title:(NSString *)title
@@ -552,10 +517,6 @@ static NSArray<NSDictionary *> *launcherTemplates()
     const BOOL success = GHOST_ios_template_manage(entry[@"id"], action, title);
     dispatch_async(dispatch_get_main_queue(), ^{
       if (success) {
-        if ([action isEqual:@"delete"] && [entry[@"id"] isEqual:self->_selected]) {
-          [self->_selected release]; self->_selected = nil;
-          self->_create.enabled = NO;
-        }
         [self reloadTemplates];
       }
       else {
@@ -609,13 +570,6 @@ static NSArray<NSDictionary *> *launcherTemplates()
   }];
 }
 
-- (void)createSelected:(id)sender
-{
-  if (!_selected) { return; }
-  [NSUserDefaults.standardUserDefaults setObject:_selected forKey:@"blender.lastTemplate"];
-  [self finish:_selected];
-}
-
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController
 {
   [self finish:nil];
@@ -648,6 +602,7 @@ static NSArray<NSDictionary *> *launcherTemplates()
 static NSString *const launcher_open_document_key = @"BlenderOpenDocument";
 /** Choosing a template before creating a document. */
 static UIDocumentCreationIntent const launcher_template_intent = @"template";
+static UIDocumentCreationIntent const launcher_general_intent = @"general";
 
 /**
  * The document launcher, in the app's first window, shown at once on launch while Blender starts
@@ -691,7 +646,7 @@ static NSURL *launcher_pending_url = nil;
   choose.title = @"Choose a Template";
   launch.primaryAction = choose;
   UIAction *start = [UIDocumentViewControllerLaunchOptions
-      createDocumentActionWithIntent:UIDocumentCreationIntentDefault];
+      createDocumentActionWithIntent:launcher_general_intent];
   start.title = @"Start Creating";
   launch.secondaryAction = start;
   /* The browser lists, opens and creates Blender files. The launcher's own browser knows no file
@@ -926,7 +881,7 @@ static NSURL *launcher_pending_url = nil;
       if (!url) { [self creationFailed:self]; }
     });
   };
-  if (![browser.activeDocumentCreationIntent isEqualToString:launcher_template_intent]) {
+  if ([browser.activeDocumentCreationIntent isEqualToString:launcher_general_intent]) {
     create(@"");
     return;
   }
