@@ -39,7 +39,6 @@
 #  include "BLI_string.hh"
 #  include "BLI_string_utf8.hh"
 
-#  include "BKE_blender_project.hh"
 #  include "BKE_keyconfig.h"
 #  include "BKE_main.hh"
 #  include "BKE_report.hh"
@@ -1567,11 +1566,6 @@ static bool rna_WindowManager_is_event_handling_break_get(PointerRNA *ptr)
   return wm->runtime->break_events_handling;
 }
 
-static bool rna_WindowManager_has_recent_projects_get(PointerRNA * /*ptr*/)
-{
-  return !BKE_blender_project_recent_get().is_empty();
-}
-
 static PointerRNA rna_WindowManager_xr_session_state_get(PointerRNA *ptr)
 {
   wmWindowManager *wm = static_cast<wmWindowManager *>(ptr->data);
@@ -3074,11 +3068,6 @@ static void rna_def_windowmanager(BlenderRNA *brna)
       prop,
       "Event Handling Break",
       "Remaining events in the queue are delayed until the next main loop iteration");
-
-  prop = RNA_def_property(srna, "has_recent_projects", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_boolean_funcs(prop, "rna_WindowManager_has_recent_projects_get", nullptr);
-  RNA_def_property_ui_text(prop, "Has Recent Projects", "There are recently opened projects");
 
   RNA_api_wm(srna);
   RNA_api_asset_library_loading_status(srna);
