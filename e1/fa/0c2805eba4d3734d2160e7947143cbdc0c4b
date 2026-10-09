@@ -1,3 +1,4 @@
 Referenced by issue #163906, Crush linux opening Blender (not yet solved)
 Referenced by issue #164919, Significant Viewport Denoising Performance Regression in 5.3 on Metal
 Referenced by pull request #164951, Fix #164919: Cycles: Viewport stalls when navigating with denoising
+Referenced by commit a1301178ff45ec3626c8df7bbabc9992468c5390, Fix #164919: Cycles: Viewport stalls when navigating with denoising
