@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup spnode
+ */
+
 #include <fmt/format.h>
 #include <sstream>
 
@@ -17,7 +21,7 @@
 #include "BLI_math_euler.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -237,7 +241,6 @@ class SocketTooltipBuilder {
     if (socket_decl &&
         socket_decl->default_input_type != NodeDefaultInputType::NODE_DEFAULT_INPUT_VALUE)
     {
-      BLI_assert(socket_decl->input_field_type == nodes::InputSocketFieldType::Implicit);
       this->start_block(TooltipBlockType::Value);
       build_tooltip_value_implicit_default(socket_decl->default_input_type);
       return;
@@ -368,6 +371,21 @@ class SocketTooltipBuilder {
     this->add_text_field_mono(fmt::format("{}: {}", TIP_("Type"), type));
   }
 
+  void build_tooltip_value_object(const Object *object)
+  {
+    std::string value_str;
+    if (object) {
+      value_str = BKE_id_name(id_cast<const ID &>(*object));
+      if (this->is_implicit_default_input(NODE_DEFAULT_INPUT_SELF_OBJECT)) {
+        value_str += TIP_(" (Self Object)");
+      }
+    }
+    else {
+      value_str = TIP_("None");
+    }
+    this->build_tooltip_value_and_type_oneline(value_str, TIP_("Object"));
+  }
+
   template<typename T> [[nodiscard]] bool build_tooltip_value_data_block(const GPointer &value)
   {
     const CPPType &type = *value.type();
@@ -411,6 +429,9 @@ class SocketTooltipBuilder {
   void build_tooltip_value_int(const int value)
   {
     std::string value_str = fmt::format("{}", value);
+    if (this->is_implicit_default_input(NODE_DEFAULT_INPUT_SCENE_FRAME)) {
+      value_str += TIP_(" (Scene Frame)");
+    }
     this->build_tooltip_value_and_type_oneline(value_str, TIP_("Integer"));
   }
 
@@ -426,13 +447,34 @@ class SocketTooltipBuilder {
     else {
       value_str = fmt::format("{}", value);
     }
+    if (this->is_implicit_default_input(NODE_DEFAULT_INPUT_SCENE_FRAME)) {
+      value_str += TIP_(" (Scene Frame)");
+    }
     this->build_tooltip_value_and_type_oneline(value_str, TIP_("Float"));
+  }
+
+  bool is_implicit_default_input(const NodeDefaultInputType type) const
+  {
+    return socket_.is_input() && !socket_.is_logically_linked() && socket_.runtime->declaration &&
+           socket_.runtime->declaration->default_input_type == type;
+  }
+
+  void build_tooltip_value_float2(const float2 &value)
+  {
+    const std::string value_str = fmt::format("{} {}", value.x, value.y);
+    this->build_tooltip_value_and_type_oneline(value_str, TIP_("2D Float Vector"));
   }
 
   void build_tooltip_value_float3(const float3 &value)
   {
     const std::string value_str = fmt::format("{} {} {}", value.x, value.y, value.z);
     this->build_tooltip_value_and_type_oneline(value_str, TIP_("3D Float Vector"));
+  }
+
+  void build_tooltip_value_float4(const float4 &value)
+  {
+    const std::string value_str = fmt::format("{} {} {} {}", value.x, value.y, value.z, value.w);
+    this->build_tooltip_value_and_type_oneline(value_str, TIP_("4D Float Vector"));
   }
 
   void build_tooltip_value_color(const ColorGeometry4f &value)
@@ -492,7 +534,8 @@ class SocketTooltipBuilder {
 
   {
     const CPPType &value_type = *value.type();
-    if (this->build_tooltip_value_data_block<Object>(value)) {
+    if (value_type.is<Object *>()) {
+      this->build_tooltip_value_object(*value.get<Object *>());
       return;
     }
     if (this->build_tooltip_value_data_block<Material>(value)) {
@@ -539,8 +582,16 @@ class SocketTooltipBuilder {
       this->build_tooltip_value_float(*static_cast<float *>(socket_value));
       return;
     }
+    if (socket_base_cpp_type.is<float2>()) {
+      this->build_tooltip_value_float2(*static_cast<float2 *>(socket_value));
+      return;
+    }
     if (socket_base_cpp_type.is<float3>()) {
       this->build_tooltip_value_float3(*static_cast<float3 *>(socket_value));
+      return;
+    }
+    if (socket_base_cpp_type.is<float4>()) {
+      this->build_tooltip_value_float4(*static_cast<float4 *>(socket_value));
       return;
     }
     if (socket_base_cpp_type.is<ColorGeometry4f>()) {
@@ -579,8 +630,14 @@ class SocketTooltipBuilder {
     if (base_type.is<float>()) {
       return TIP_("Float Field");
     }
+    if (base_type.is<float2>()) {
+      return TIP_("2D Float Vector Field");
+    }
     if (base_type.is<float3>()) {
       return TIP_("3D Float Vector Field");
+    }
+    if (base_type.is<float4>()) {
+      return TIP_("4D Float Vector Field");
     }
     if (base_type.is<bool>()) {
       return TIP_("Boolean Field");
@@ -597,13 +654,14 @@ class SocketTooltipBuilder {
     if (base_type.is<float4x4>()) {
       return TIP_("Matrix Field");
     }
-    BLI_assert_unreachable();
+    if (base_type.is<nodes::MenuValue>()) {
+      return TIP_("Menu Field");
+    }
     return TIP_("Field");
   }
 
   void build_tooltip_value_field_log(const eval_log::FieldInfoLog &value_log)
   {
-    const CPPType &socket_base_cpp_type = *socket_.typeinfo->base_cpp_type;
     const Span<std::string> input_tooltips = value_log.input_tooltips;
 
     if (input_tooltips.is_empty()) {
@@ -620,7 +678,7 @@ class SocketTooltipBuilder {
     }
 
     this->add_space();
-    std::string type_str = this->get_field_type_name(socket_base_cpp_type);
+    std::string type_str = this->get_field_type_name(value_log.type);
     this->add_text_field_mono(fmt::format("{}: {}", TIP_("Type"), type_str));
   }
 
@@ -836,16 +894,27 @@ class SocketTooltipBuilder {
     this->add_text_field_mono(TIP_("Sampling:"));
     this->add_text_field_mono(
         fmt::format("\u2022 {}: {}", TIP_("Interpolation"), TIP_(image_log.interpolation)));
-    this->add_text_field_mono(
-        fmt::format("\u2022 {}: {}", TIP_("Extension X"), TIP_(image_log.extension_x)));
-    this->add_text_field_mono(
-        fmt::format("\u2022 {}: {}", TIP_("Extension Y"), TIP_(image_log.extension_y)));
+    if (image_log.extension_x == image_log.extension_y) {
+      this->add_text_field_mono(
+          fmt::format("\u2022 {}: {}", TIP_("Extension"), TIP_(image_log.extension_x)));
+    }
+    else {
+      this->add_text_field_mono(
+          fmt::format("\u2022 {}: {}", TIP_("Extension X"), TIP_(image_log.extension_x)));
+      this->add_text_field_mono(
+          fmt::format("\u2022 {}: {}", TIP_("Extension Y"), TIP_(image_log.extension_y)));
+    }
 
     this->add_space();
 
     this->add_text_field_mono(fmt::format("{}: {}", TIP_("Precision"), TIP_(image_log.precision)));
 
     this->add_space();
+
+    if (this->is_implicit_default_input(NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES)) {
+      this->add_text_field_mono(TIP_("Implicit Value: Uniform Image Coordinates"));
+      this->add_space();
+    }
 
     this->add_text_field_mono(TIP_("Type: Image"));
   }
@@ -892,6 +961,17 @@ class SocketTooltipBuilder {
         this->build_tooltip_value_and_type_oneline(
             TIP_("Right Handle Field"), this->get_field_type_name(CPPType::get<float3>()));
         break;
+      case NODE_DEFAULT_INPUT_SCENE_FRAME:
+        this->build_tooltip_value_and_type_oneline(
+            TIP_("Scene Frame"), socket_.type == SOCK_FLOAT ? TIP_("Float") : TIP_("Integer"));
+        break;
+      case NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES:
+        this->build_tooltip_value_and_type_oneline(TIP_("Uniform Image Coordinates"),
+                                                   TIP_("2D Float Vector"));
+        break;
+      case NODE_DEFAULT_INPUT_SELF_OBJECT:
+        this->build_tooltip_value_and_type_oneline(TIP_("Self Object"), TIP_("Object"));
+        break;
     }
   }
 
@@ -934,16 +1014,9 @@ class SocketTooltipBuilder {
             &bundle_type.type))
     {
       this->start_block(TooltipBlockType::BundleType);
-      this->add_text_field_mono(TIP_("Nested Bundle Types:"));
+      this->add_text_field_mono(TIP_("Bundle Types:"));
       for (const nodes::FlatBundleTypePtr &flat_type : (*nested_bundle_type)->items()) {
-        this->add_space();
         this->add_text_field_mono(fmt::format(" \u2022 {}", flat_type->name()));
-        indentation_++;
-        BLI_SCOPED_DEFER([&]() { indentation_--; });
-
-        for (const nodes::FlatBundleType::Item &item : flat_type->items()) {
-          this->add_text_field_mono(fmt::format(" \u2022 {}", item.name()));
-        }
       }
     }
     else if (const auto *flat_bundle_type = std::get_if<nodes::FlatBundleTypePtr>(

@@ -39,6 +39,8 @@ class bNodeTreeRuntime;
 class bNodeRuntime;
 class bNodeSocketRuntime;
 }  // namespace bke
+
+struct bNodeInternalLink;
 namespace bke {
 class bNodeTreeZones;
 class bNodeTreeZone;
@@ -215,8 +217,7 @@ enum eNode_Flag : int {
   NODE_MUTED = 1 << 9,
   // NODE_CUSTOM_NAME = 1 << 10, /* Deprecated, dirty. */
   // NODE_CONST_OUTPUT = 1 << 11, /* Deprecated, dirty. */
-  /** Node is always behind others. */
-  NODE_BACKGROUND = 1 << 12,
+  // NODE_BACKGROUND = 1 << 12, /* Deprecated, dirty. */
   /** Automatic flag for nodes included in transforms */
   // NODE_TRANSFORM = 1 << 13, /* Deprecated, dirty. */
 
@@ -329,6 +330,12 @@ enum GeometryNodeAssetTraitFlag {
   GEO_NODE_ASSET_HIDE_MODIFIER_MANAGE_PANEL = (1 << 11),
 };
 ENUM_OPERATORS(GeometryNodeAssetTraitFlag);
+
+enum CompositorNodeAssetTraitFlag {
+  COMPOSIT_NODE_ASSET_STRIP_MODIFIER = (1 << 0),
+  COMPOSIT_NODE_ASSET_SCENE_EFFECT = (1 << 1),
+};
+ENUM_OPERATORS(CompositorNodeAssetTraitFlag);
 
 /* Data structs, for `node->storage`. */
 
@@ -473,6 +480,12 @@ enum eNodeGlossy_Dist : short {
   SHD_GLOSSY_MULTI_GGX = 4,
 };
 
+/* Light evaluation mode. */
+enum eNodeLightEval_Mode : short {
+  SHD_LIGHT_EVAL_DIFFUSE = 0,
+  SHD_LIGHT_EVAL_GLOSSY = 1,
+};
+
 /* sheen distributions */
 #define SHD_SHEEN_ASHIKHMIN 0
 #define SHD_SHEEN_MICROFIBER 1
@@ -488,6 +501,7 @@ enum eNodeVectorTransform_Space : short {
   SHD_VECT_TRANSFORM_SPACE_WORLD = 0,
   SHD_VECT_TRANSFORM_SPACE_OBJECT = 1,
   SHD_VECT_TRANSFORM_SPACE_CAMERA = 2,
+  SHD_VECT_TRANSFORM_SPACE_LIGHT = 3,
 };
 
 /** #NodeShaderAttribute.type */
@@ -496,6 +510,7 @@ enum eNodeShader_AttributeType : short {
   SHD_ATTRIBUTE_OBJECT = 1,
   SHD_ATTRIBUTE_INSTANCER = 2,
   SHD_ATTRIBUTE_VIEW_LAYER = 3,
+  SHD_ATTRIBUTE_LIGHT = 4,
 };
 
 /* toon modes */
@@ -1399,6 +1414,17 @@ enum NodeGeometryTransformMode {
   GEO_NODE_TRANSFORM_MODE_MATRIX = 1,
 };
 
+enum NodeGeometryMergeLayersMode {
+  GEO_NODE_MERGE_LAYERS_BY_NAME = 0,
+  GEO_NODE_MERGE_LAYERS_BY_ID = 1,
+};
+
+enum NodeGeometryGreasePencilStrokeType : int8_t {
+  GEO_NODE_GREASE_PENCIL_STROKE = 0,
+  GEO_NODE_GREASE_PENCIL_FILL = 1,
+  GEO_NODE_GREASE_PENCIL_BOTH = 2,
+};
+
 struct bNodeStack {
   float vec[4] = {};
   float min = 0, max = 0;
@@ -1726,6 +1752,7 @@ struct bNode {
   int index() const;
   StringRefNull label_or_name() const;
   bool is_muted() const;
+  bool is_selected() const;
   bool is_reroute() const;
   bool is_frame() const;
   bool is_group() const;
@@ -1745,7 +1772,7 @@ struct bNode {
 
   const nodes::NodeDeclaration *declaration() const;
   /** A span containing all internal links when the node is muted. */
-  Span<bNodeLink> internal_links() const;
+  Span<bNodeInternalLink> internal_links() const;
 
   /* This node is reroute which is not logically connected to any source of value. */
   bool is_dangling_reroute() const;
@@ -1888,7 +1915,11 @@ struct bNodeTree {
   /** Width of the current view. Used to store and set zoom level. */
   float view_width = 0.0f;
 
-  char _pad[4];
+  /**
+   * Seed used when generating the next #bNode.identifier randomly. Using a more predictable seed
+   * helps keeping .blend files more stable.
+   */
+  uint32_t next_node_identifier_seed = 0;
 
   ListBaseT<bNode> nodes;
   ListBaseT<bNodeLink> links;
@@ -1944,6 +1975,7 @@ struct bNodeTree {
   bNestedNodeRef *nested_node_refs = nullptr;
 
   struct GeometryNodeAssetTraits *geometry_node_asset_traits = nullptr;
+  struct CompositorNodeAssetTraits *compositor_node_asset_traits = nullptr;
 
   /** Image representing what the node group does. */
   struct PreviewImage *preview = nullptr;
@@ -2000,8 +2032,10 @@ struct bNodeTree {
   Span<bNodeLink *> all_links();
   Span<const bNodeLink *> all_links() const;
   /**
-   * Cached toposort of all nodes. If there are cycles, the returned array is not actually a
-   * toposort. However, if a connected component does not contain a cycle, this component is sorted
+   * Cached toposort of all nodes.
+   * As if you go from left to right then for any right node all connected left nodes already being
+   * visited and vice versa. If there are cycles, the returned array is not actually a toposort.
+   * However, if a connected component does not contain a cycle, this component is sorted
    * correctly. Use #has_available_link_cycle to check for cycles.
    */
   Span<bNode *> toposort_left_to_right();
@@ -2162,6 +2196,12 @@ struct GeometryNodeAssetTraits {
   int flag = 0;
   char _pad[4] = {};
   char *node_tool_idname = nullptr;
+};
+
+struct CompositorNodeAssetTraits {
+  /* #CompositorNodeAssetTraitFlag. */
+  int flag = 0;
+  char _pad[4] = {};
 };
 
 struct NodeFrame {
@@ -2345,7 +2385,7 @@ struct NodeCompositorFileOutputItem {
   int identifier = 0;
   /* The type of socket for the item, which is limited to the types listed in the
    * FileOutputItemsAccessor::supports_socket_type. */
-  int16_t socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   /* The number of dimensions in the vector socket if the socket type is vector, otherwise, it is
    * unused, */
   char vector_socket_dimensions = 0;
@@ -2556,7 +2596,10 @@ struct NodeConvertColorSpace {
   DNA_DEFINE_CXX_METHODS(NodeConvertColorSpace)
 
   char from_color_space[64] = "";
+  char from_interop_id[64] = "";
+
   char to_color_space[64] = "";
+  char to_interop_id[64] = "";
 };
 
 struct NodeConvertToDisplay {
@@ -3055,7 +3098,7 @@ struct NodeInputString {
   DNA_DEFINE_CXX_METHODS(NodeInputString)
 
   char *string = nullptr;
-  TextboxState textbox_state = {};
+  TextboxState textbox_state;
 };
 
 struct NodeGeometryExtrudeMesh {
@@ -3146,8 +3189,7 @@ struct NodeGeometryMeshLine {
 struct NodeSwitch {
   DNA_DEFINE_CXX_METHODS(NodeSwitch)
 
-  /** #eNodeSocketDatatype. */
-  uint8_t input_type = 0;
+  eNodeSocketDatatype input_type = {};
 };
 
 struct NodeEnumItem {
@@ -3179,9 +3221,8 @@ struct NodeMenuSwitch {
 
   NodeEnumDefinition enum_definition;
 
-  /** #eNodeSocketDatatype. */
-  uint8_t data_type = 0;
-  char _pad[7] = {};
+  eNodeSocketDatatype data_type = {};
+  char _pad[6] = {};
 };
 
 struct NodeGeometryCurveSplineType {
@@ -3413,7 +3454,7 @@ struct NodeGeometryMergeLayers {
   DNA_DEFINE_CXX_METHODS(NodeGeometryMergeLayers)
 
   /** #MergeLayerMode. */
-  int8_t mode = 0;
+  DNA_DEPRECATED int8_t mode = 0;
 };
 
 struct NodeGeometrySeparateGeometry {
@@ -3432,8 +3473,7 @@ struct NodeGeometryImageTexture {
 
 struct NodeGeometryViewerItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype. */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   uint8_t flag = 0;
   char _pad[1] = {};
   /**
@@ -3453,7 +3493,7 @@ struct NodeGeometryViewer {
 
   /** #eCustomDataType. */
   int8_t data_type_legacy = 0;
-  /** #AttrDomain. */
+  /** #AttrDomainSelection. */
   int8_t domain = 0;
 
   char _pad[2] = {};
@@ -3467,8 +3507,7 @@ struct NodeGeometryUVUnwrap {
 
 struct NodeSimulationItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype. */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   /** #AttrDomain. */
   short attribute_domain = 0;
   /**
@@ -3503,8 +3542,7 @@ struct NodeGeometrySimulationOutput {
 
 struct NodeRepeatItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype. */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   char _pad[2] = {};
   /**
    * Generated unique identifier for sockets which stays the same even when the item order or
@@ -3545,8 +3583,7 @@ struct NodeGeometryForeachGeometryElementInput {
 
 struct NodeForeachGeometryElementInputItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype. */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   char _pad[2] = {};
   /** Generated identifier that stays the same even when the name or order changes. */
   int identifier = 0;
@@ -3554,8 +3591,7 @@ struct NodeForeachGeometryElementInputItem {
 
 struct NodeForeachGeometryElementMainItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype. */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   char _pad[2] = {};
   /** Generated identifier that stays the same even when the name or order changes. */
   int identifier = 0;
@@ -3563,8 +3599,7 @@ struct NodeForeachGeometryElementMainItem {
 
 struct NodeForeachGeometryElementGenerationItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype. */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   /** #AttrDomain. */
   uint8_t domain = 0;
   char _pad[1] = {};
@@ -3629,8 +3664,7 @@ struct NodeClosureInput {
 
 struct NodeClosureInputItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype. */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad[1] = {};
   int identifier = 0;
@@ -3638,8 +3672,7 @@ struct NodeClosureInputItem {
 
 struct NodeClosureOutputItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype. */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad[1] = {};
   int identifier = 0;
@@ -3676,8 +3709,7 @@ struct NodeClosureOutput {
 
 struct NodeEvaluateClosureInputItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad[1] = {};
   int identifier = 0;
@@ -3685,8 +3717,7 @@ struct NodeEvaluateClosureInputItem {
 
 struct NodeEvaluateClosureOutputItem {
   char *name = nullptr;
-  /** #eNodeSocketDatatype */
-  short socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad[1] = {};
   int identifier = 0;
@@ -3732,22 +3763,39 @@ struct NodeIndexSwitch {
   IndexSwitchItem *items = nullptr;
   int items_num = 0;
 
-  /* #eNodeSocketDataType. */
-  int data_type = 0;
   /** Identifier to give to the next item. */
   int next_identifier = 0;
+  eNodeSocketDatatype data_type = {};
 
-  char _pad[4] = {};
+  char _pad[6] = {};
 #ifdef __cplusplus
   Span<IndexSwitchItem> items_span() const;
   MutableSpan<IndexSwitchItem> items_span();
 #endif
 };
 
+struct CombineListItem {
+  int identifier = 0;
+};
+
+struct NodeCombineList {
+  DNA_DEFINE_CXX_METHODS(NodeCombineList)
+
+  CombineListItem *items = nullptr;
+  int items_num = 0;
+  int next_identifier = 0;
+  eNodeSocketDatatype data_type = {};
+
+  char _pad[6] = {};
+#ifdef __cplusplus
+  Span<CombineListItem> items_span() const;
+  MutableSpan<CombineListItem> items_span();
+#endif
+};
+
 struct GeometryNodeFieldToGridItem {
-  /** #eNodeSocketDatatype. */
-  int8_t data_type = 0;
-  char _pad[3] = {};
+  eNodeSocketDatatype data_type = {};
+  char _pad[2] = {};
   int identifier = 0;
   char *name = nullptr;
 };
@@ -3755,9 +3803,8 @@ struct GeometryNodeFieldToGridItem {
 struct GeometryNodeFieldToGrid {
   DNA_DEFINE_CXX_METHODS(GeometryNodeFieldToGrid)
 
-  /** #eNodeSocketDatatype. */
-  int8_t data_type = 0;
-  char _pad[3] = {};
+  eNodeSocketDatatype data_type = {};
+  char _pad[2] = {};
   int next_identifier = 0;
   GeometryNodeFieldToGridItem *items = nullptr;
   int items_num = 0;
@@ -3765,9 +3812,8 @@ struct GeometryNodeFieldToGrid {
 };
 
 struct GeometryNodeFieldToListItem {
-  /** #eNodeSocketDatatype. */
-  int8_t socket_type = SOCK_FLOAT;
-  char _pad[3] = {};
+  eNodeSocketDatatype socket_type = SOCK_FLOAT;
+  char _pad[2] = {};
   int identifier = 0;
   char *name = nullptr;
 };
@@ -3780,6 +3826,22 @@ struct GeometryNodeFieldToList {
   int active_index = 0;
 };
 
+struct GeometryNodeClosureToListItem {
+  eNodeSocketDatatype socket_type = SOCK_FLOAT;
+  NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
+  char _pad[1] = {};
+  int identifier = 0;
+  char *name = nullptr;
+};
+
+struct GeometryNodeClosureToList {
+  char _pad[4] = {};
+  int next_identifier = 0;
+  GeometryNodeClosureToListItem *items = nullptr;
+  int items_num = 0;
+  int active_index = 0;
+};
+
 struct NodeGeometryDistributePointsInVolume {
   DNA_DEFINE_CXX_METHODS(NodeGeometryDistributePointsInVolume)
 
@@ -3787,14 +3849,57 @@ struct NodeGeometryDistributePointsInVolume {
   uint8_t mode = 0;
 };
 
+typedef struct NodeGeometryRasterizePointsItem {
+  char *name;
+  /* #NodeGeometryRasterizePointsItemType */
+  short type;
+  char _pad1[2];
+  /**
+   * Generated unique identifier for sockets which stays the same even when the item order or
+   * names change.
+   */
+  int identifier;
+} NodeGeometryRasterizePointsItem;
+
+/* Note: The field/grid type combination of an item is using this enum instead of a simple
+ * eNodeSocketDatatype. This is because in the future other modes of attribute rasterization will
+ * likely be added, such as
+ *   scalar -> vector gradients
+ *   vector -> scalar divergence
+ *   3x3 matrix -> vector divergence
+ *   full APIC transfer schemes (4x4 matrix -> vector)
+ *
+ * In these modes the input field type does not match the output grid type, so identifying an item
+ * by socket type would require additional mode selection, which is unnecessarily complicated.
+ * A dedicated enum for these modes makes it easier to add such advanced conversions later.
+ */
+typedef enum NodeGeometryRasterizePointsItemType {
+  GEO_NODE_RASTERIZE_POINTS_ITEM_TYPE_SCALAR = 0,
+  GEO_NODE_RASTERIZE_POINTS_ITEM_TYPE_VECTOR = 1,
+} NodeGeometryRasterizePointsItemType;
+
+typedef struct NodeGeometryRasterizePoints {
+  DNA_DEFINE_CXX_METHODS(NodeGeometryRasterizePoints)
+
+  NodeGeometryRasterizePointsItem *items;
+  int items_num;
+  int active_index;
+  /** Identifier to give to the next repeat item. */
+  int next_identifier;
+  char _pad[4];
+
+#ifdef __cplusplus
+  blender::Span<NodeGeometryRasterizePointsItem> items_span() const;
+  blender::MutableSpan<NodeGeometryRasterizePointsItem> items_span();
+#endif
+} NodeGeometryRasterizePoints;
+
 struct NodeFunctionCompare {
   DNA_DEFINE_CXX_METHODS(NodeFunctionCompare)
 
   NodeCompareOperation operation = NODE_COMPARE_LESS_THAN;
-  /** #eNodeSocketDatatype */
-  int8_t data_type = 0;
   NodeCompareMode mode = NODE_COMPARE_MODE_ELEMENT;
-  char _pad[1] = {};
+  eNodeSocketDatatype data_type = {};
 };
 
 struct NodeCombSepColor {
@@ -3806,13 +3911,12 @@ struct NodeCombSepColor {
 struct NodeShaderMix {
   DNA_DEFINE_CXX_METHODS(NodeShaderMix)
 
-  /** #eNodeSocketDatatype */
-  int8_t data_type = 0;
+  eNodeSocketDatatype data_type = {};
   NodeShaderMixMode factor_mode = NODE_MIX_MODE_UNIFORM;
   int8_t clamp_factor = 0;
   int8_t clamp_result = 0;
   int8_t blend_type = 0;
-  char _pad[3] = {};
+  char _pad[2] = {};
 };
 
 struct NodeGeometryLinearGizmo {
@@ -3836,7 +3940,7 @@ struct NodeGeometryTransformGizmo {
 
 struct NodeGeometryBakeItem {
   char *name = nullptr;
-  int16_t socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   int16_t attribute_domain = 0;
   int identifier = 0;
   int32_t flag = 0;
@@ -3856,7 +3960,7 @@ struct NodeGeometryBake {
 struct NodeCombineBundleItem {
   char *name = nullptr;
   int identifier = 0;
-  int16_t socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad[1] = {};
 };
@@ -3875,7 +3979,7 @@ struct NodeCombineBundle {
 struct NodeSeparateBundleItem {
   char *name = nullptr;
   int identifier = 0;
-  int16_t socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad[1] = {};
 };
@@ -3894,7 +3998,7 @@ struct NodeSeparateBundle {
 struct NodeFunctionFormatStringItem {
   char *name = nullptr;
   int identifier = 0;
-  int16_t socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   char _pad[2] = {};
 };
 
@@ -3909,24 +4013,35 @@ struct NodeFunctionFormatString {
 };
 
 struct NodeGeometryListGetItem {
-  /** #eNodeSocketDatatype. */
-  int16_t socket_type = SOCK_FLOAT;
+  eNodeSocketDatatype socket_type = SOCK_FLOAT;
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad = {};
 };
 
 struct NodeGetBundleItem {
-  /** #eNodeSocketDatatype. */
-  int16_t socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad = {};
 };
 
 struct NodeStoreBundleItem {
-  /** #eNodeSocketDatatype. */
-  int16_t socket_type = 0;
+  eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad = {};
+};
+
+enum class NodeCommentFlag : uint8_t {
+  /** Whether the text is being edited inside of the node. */
+  Edit = (1 << 0),
+};
+ENUM_OPERATORS(NodeCommentFlag)
+
+struct NodeComment {
+  char *text = nullptr;
+  TextboxState textbox_state_node;
+  TextboxState textbox_state_panel;
+  NodeCommentFlag flag = {};
+  char _pad[7] = {};
 };
 
 }  // namespace blender

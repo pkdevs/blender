@@ -27,15 +27,17 @@
 
 #undef DNA_GENFILE_VERSIONING_MACROS
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "RNA_path.hh"
+
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_attribute.hh"
 #include "BKE_curve.hh"
 #include "BKE_effect.h"
@@ -231,10 +233,10 @@ static void version_bonegroups_to_bonecollections(Main *bmain)
   }
 }
 
-static void version_principled_bsdf_update_animdata(ID *owner_id, bNodeTree *ntree)
+static void version_principled_bsdf_update_animdata(Main *bmain, bNodeTree *ntree)
 {
   ID *id = &ntree->id;
-  AnimData *adt = BKE_animdata_from_id(id);
+  DriverMap driver_map = BKE_animdata_build_driver_target_map(*bmain);
 
   for (bNode &node : ntree->nodes) {
     if (node.type_legacy != SH_NODE_BSDF_PRINCIPLED) {
@@ -279,16 +281,12 @@ static void version_principled_bsdf_update_animdata(ID *owner_id, bNodeTree *ntr
         {21, 4}   /* Alpha */
     };
     for (const auto &entry : remap_table) {
-      BKE_animdata_fix_paths_rename(id,
-                                    adt,
-                                    owner_id,
-                                    prefix.c_str(),
-                                    nullptr,
-                                    nullptr,
-                                    entry.first,
-                                    entry.second,
-                                    /*verify_paths=*/false,
-                                    /*infix_is_name=*/true);
+      BKE_animdata_fix_paths(*id,
+                             prefix,
+                             RNA_path_number_to_infix(entry.first),
+                             RNA_path_number_to_infix(entry.second),
+                             /*verify_paths=*/false,
+                             driver_map);
     }
   }
 }
@@ -392,7 +390,7 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       if (ntree->type == NTREE_SHADER) {
         /* Convert animdata on the Principled BSDF sockets. */
-        version_principled_bsdf_update_animdata(id, ntree);
+        version_principled_bsdf_update_animdata(bmain, ntree);
       }
     }
     FOREACH_NODETREE_END;
@@ -439,12 +437,12 @@ static void version_motion_tracking_legacy_camera_object(MovieClip &movieclip)
 
   BLI_assert(tracking_camera_object != nullptr);
 
-  if (BLI_listbase_is_empty(&tracking_camera_object->tracks)) {
+  if (tracking_camera_object->tracks.is_empty()) {
     tracking_camera_object->tracks = tracking.tracks_legacy;
     active_tracking_object->active_track = tracking.act_track_legacy;
   }
 
-  if (BLI_listbase_is_empty(&tracking_camera_object->plane_tracks)) {
+  if (tracking_camera_object->plane_tracks.is_empty()) {
     tracking_camera_object->plane_tracks = tracking.plane_tracks_legacy;
     active_tracking_object->active_plane_track = tracking.act_plane_track_legacy;
   }
@@ -456,8 +454,8 @@ static void version_motion_tracking_legacy_camera_object(MovieClip &movieclip)
   /* Clear pointers in the legacy storage.
    * Always do it, in the case something got missed in the logic above, so that the legacy storage
    * is always ensured to be empty after load. */
-  BLI_listbase_clear(&tracking.tracks_legacy);
-  BLI_listbase_clear(&tracking.plane_tracks_legacy);
+  tracking.tracks_legacy.clear_no_delete();
+  tracking.plane_tracks_legacy.clear_no_delete();
   tracking.act_track_legacy = nullptr;
   tracking.act_plane_track_legacy = nullptr;
   tracking.reconstruction_legacy = MovieTrackingReconstruction{};
@@ -543,6 +541,9 @@ static void version_mesh_crease_generic(Main &bmain)
               reinterpret_cast<NodesModifierData *>(&md)->settings_legacy.properties)
       {
         for (IDProperty &prop : settings->data.group) {
+          if (prop.type != IDP_STRING) {
+            continue;
+          }
           if (StringRef(prop.name).endswith("_attribute_name")) {
             if (STREQ(IDP_string_get(&prop), "crease")) {
               IDP_AssignString(&prop, "crease_edge");
@@ -690,12 +691,12 @@ static bNodeTreeInterfaceItem *legacy_socket_move_to_interface(bNodeSocket &lega
                                                                const eNodeSocketInOut in_out)
 {
   bNodeTreeInterfaceSocket *new_socket = MEM_new<bNodeTreeInterfaceSocket>(__func__);
-  new_socket->item.item_type = NODE_INTERFACE_SOCKET;
+  new_socket->item.item_type = NodeTreeInterfaceItemType::Socket;
 
   /* Move reusable data. */
-  new_socket->name = BLI_strdup(legacy_socket.name);
+  new_socket->name_ = BLI_strdup(legacy_socket.name);
   new_socket->identifier = BLI_strdup(legacy_socket.identifier);
-  new_socket->description = BLI_strdup(legacy_socket.description);
+  new_socket->description_ = BLI_strdup(legacy_socket.description);
   /* If the socket idname includes a subtype (e.g. "NodeSocketFloatFactor") this will convert it to
    * the base type name ("NodeSocketFloat"). */
   new_socket->socket_type = BLI_strdup(
@@ -729,8 +730,8 @@ static void versioning_convert_node_tree_socket_lists_to_interface(bNodeTree *nt
 {
   bNodeTreeInterface &tree_interface = ntree->tree_interface;
 
-  const int num_inputs = BLI_listbase_count(&ntree->inputs_legacy);
-  const int num_outputs = BLI_listbase_count(&ntree->outputs_legacy);
+  const int num_inputs = ntree->inputs_legacy.count();
+  const int num_outputs = ntree->outputs_legacy.count();
   tree_interface.root_panel.items_num = num_inputs + num_outputs;
   tree_interface.root_panel.items_array = MEM_new_array_uninitialized<bNodeTreeInterfaceItem *>(
       size_t(tree_interface.root_panel.items_num), __func__);
@@ -898,8 +899,8 @@ static void version_copy_socket(bNodeTreeInterfaceSocket &dst,
                                 char *identifier)
 {
   /* Node socket copy function based on bNodeTreeInterface::item_copy to avoid using blenkernel. */
-  dst.name = BLI_strdup_null(src.name);
-  dst.description = BLI_strdup_null(src.description);
+  dst.name_ = BLI_strdup_null(src.name_);
+  dst.description_ = BLI_strdup_null(src.description_);
   dst.socket_type = BLI_strdup(src.socket_type);
   dst.default_attribute_name = BLI_strdup_null(src.default_attribute_name);
   dst.identifier = identifier;
@@ -923,14 +924,14 @@ static int version_nodes_find_valid_insert_position_for_item(const bNodeTreeInte
   int pos = initial_pos;
 
   if (sockets_above_panels) {
-    if (item.item_type == NODE_INTERFACE_PANEL) {
+    if (item.item_type == NodeTreeInterfaceItemType::Panel) {
       /* Find the closest valid position from the end, only panels at or after #position. */
       for (int test_pos = items.size() - 1; test_pos >= initial_pos; test_pos--) {
         if (test_pos < 0) {
           /* Initial position is out of range but valid. */
           break;
         }
-        if (items[test_pos]->item_type != NODE_INTERFACE_PANEL) {
+        if (items[test_pos]->item_type != NodeTreeInterfaceItemType::Panel) {
           /* Found valid position, insert after the last socket item. */
           pos = test_pos + 1;
           break;
@@ -944,7 +945,7 @@ static int version_nodes_find_valid_insert_position_for_item(const bNodeTreeInte
           /* Initial position is out of range but valid. */
           break;
         }
-        if (items[test_pos]->item_type == NODE_INTERFACE_PANEL) {
+        if (items[test_pos]->item_type == NodeTreeInterfaceItemType::Panel) {
           /* Found valid position, inserting moves the first panel. */
           pos = test_pos;
           break;
@@ -1008,10 +1009,10 @@ static void versioning_node_group_sort_sockets_recursive(bNodeTreeInterfacePanel
                          const bNodeTreeInterfaceItem *b) -> bool {
     if (a->item_type != b->item_type) {
       /* Keep sockets above panels. */
-      return a->item_type == NODE_INTERFACE_SOCKET;
+      return a->item_type == NodeTreeInterfaceItemType::Socket;
     }
     /* Keep outputs above inputs. */
-    if (a->item_type == NODE_INTERFACE_SOCKET) {
+    if (a->item_type == NodeTreeInterfaceItemType::Socket) {
       const bNodeTreeInterfaceSocket *sa = reinterpret_cast<const bNodeTreeInterfaceSocket *>(a);
       const bNodeTreeInterfaceSocket *sb = reinterpret_cast<const bNodeTreeInterfaceSocket *>(b);
       const bool is_output_a = sa->flag & NODE_INTERFACE_SOCKET_OUTPUT;
@@ -1029,7 +1030,7 @@ static void versioning_node_group_sort_sockets_recursive(bNodeTreeInterfacePanel
 
   /* Sort any child panels too. */
   for (bNodeTreeInterfaceItem *item : panel.items()) {
-    if (item->item_type == NODE_INTERFACE_PANEL) {
+    if (item->item_type == NodeTreeInterfaceItemType::Panel) {
       versioning_node_group_sort_sockets_recursive(
           *reinterpret_cast<bNodeTreeInterfacePanel *>(item));
     }
@@ -1170,7 +1171,7 @@ static void enable_geometry_nodes_is_modifier(Main &bmain)
       continue;
     }
     group.tree_interface.foreach_item([&](const bNodeTreeInterfaceItem &item) {
-      if (item.item_type != NODE_INTERFACE_SOCKET) {
+      if (item.item_type != NodeTreeInterfaceItemType::Socket) {
         return true;
       }
       const auto &socket = reinterpret_cast<const bNodeTreeInterfaceSocket &>(item);
@@ -1181,7 +1182,8 @@ static void enable_geometry_nodes_is_modifier(Main &bmain)
         return true;
       }
       if (!group.geometry_node_asset_traits) {
-        group.geometry_node_asset_traits = MEM_new<GeometryNodeAssetTraits>(__func__);
+        group.geometry_node_asset_traits = MEM_new<GeometryNodeAssetTraits>(
+            "enable_geometry_nodes_is_modifier geometry_node_asset_traits");
       }
       group.geometry_node_asset_traits->flag |= GEO_NODE_ASSET_MODIFIER;
       return false;
@@ -1320,8 +1322,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
 
           /* Layout based regions used to also disallow resizing, now these are separate flags.
            * Make sure they are set together for old regions. */
@@ -1365,8 +1367,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
               continue;
             }
 
-            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                             &sl.regionbase;
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                              &sl.regionbase;
 
             if (ARegion *new_shelf_region = do_versions_add_region_if_not_found(
                     regionbase,
@@ -1498,8 +1500,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
       versioning_convert_node_tree_socket_lists_to_interface(ntree);
       /* Clear legacy sockets after conversion.
        * Internal data pointers have been moved or freed already. */
-      BLI_freelistN(&ntree->inputs_legacy);
-      BLI_freelistN(&ntree->outputs_legacy);
+      ntree->inputs_legacy.free_no_destruct();
+      ntree->outputs_legacy.free_no_destruct();
     }
     FOREACH_NODETREE_END;
   }
@@ -1525,8 +1527,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
         MEM_delete(legacy_socket.runtime);
         MEM_delete(&legacy_socket);
       }
-      BLI_listbase_clear(&ntree->inputs_legacy);
-      BLI_listbase_clear(&ntree->outputs_legacy);
+      ntree->inputs_legacy.clear_no_delete();
+      ntree->outputs_legacy.clear_no_delete();
     }
     FOREACH_NODETREE_END;
   }
@@ -1568,7 +1570,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
       for (bScreen &screen : bmain->screens) {
         for (ScrArea &area : screen.areabase) {
           for (SpaceLink &sl : area.spacedata) {
-            const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ?
+            const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ?
                                                        &area.regionbase :
                                                        &sl.regionbase;
             for (ARegion &region : *regionbase) {
@@ -1592,7 +1594,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       Vector<bNodeTreeInterfaceSocket *> sockets_to_split;
       ntree->tree_interface.foreach_item([&](bNodeTreeInterfaceItem &item) {
-        if (item.item_type == NODE_INTERFACE_SOCKET) {
+        if (item.item_type == NodeTreeInterfaceItemType::Socket) {
           bNodeTreeInterfaceSocket &socket = reinterpret_cast<bNodeTreeInterfaceSocket &>(item);
           if ((socket.flag & NODE_INTERFACE_SOCKET_INPUT) &&
               (socket.flag & NODE_INTERFACE_SOCKET_OUTPUT))
@@ -1658,8 +1660,9 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                                 &sl.regionbase;
+          const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ?
+                                                     &area.regionbase :
+                                                     &sl.regionbase;
           for (ARegion &region : *regionbase) {
             if (region.regiontype != RGN_TYPE_ASSET_SHELF) {
               continue;
@@ -1684,8 +1687,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       for (bNode &node : ntree->nodes) {
         if (node.is_reroute()) {
-          static_cast<bNodeSocket *>(node.inputs.first)->flag &= ~SOCK_HIDDEN;
-          static_cast<bNodeSocket *>(node.outputs.first)->flag &= ~SOCK_HIDDEN;
+          node.inputs.first()->flag &= ~SOCK_HIDDEN;
+          node.outputs.first()->flag &= ~SOCK_HIDDEN;
         }
       }
     }

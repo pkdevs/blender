@@ -33,8 +33,16 @@ static void node_declare(NodeDeclarationBuilder &b)
       .structure_type(StructureType::Dynamic)
       .align_with_previous();
 
-  b.add_input<decl::Float>("X"_ustr).default_value(0.0f).min(-10000.0f).max(10000.0f);
-  b.add_input<decl::Float>("Y"_ustr).default_value(0.0f).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>("X"_ustr)
+      .default_value(0.0f)
+      .subtype(PROP_PIXEL)
+      .min(-10000.0f)
+      .max(10000.0f);
+  b.add_input<decl::Float>("Y"_ustr)
+      .default_value(0.0f)
+      .subtype(PROP_PIXEL)
+      .min(-10000.0f)
+      .max(10000.0f);
   b.add_input<decl::Float>("Angle"_ustr)
       .default_value(0.0f)
       .min(-10000.0f)
@@ -71,7 +79,11 @@ using namespace blender::compositor;
 
 class TransformOperation : public NodeOperation {
  public:
-  using NodeOperation::NodeOperation;
+  TransformOperation(Context &context, const bNode &node) : NodeOperation(context, node)
+  {
+    InputDescriptor &image_descriptor = this->get_input_descriptor("Image");
+    image_descriptor.skip_type_conversion = true;
+  }
 
   void execute() override
   {
@@ -84,6 +96,7 @@ class TransformOperation : public NodeOperation {
 
     const Result &input = this->get_input("Image");
     Result &output = this->get_result("Image");
+    output.set_type(input.type());
     output.share_data(input);
     output.transform(transformation);
     output.get_realization_options().interpolation = this->get_interpolation();

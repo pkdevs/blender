@@ -12,10 +12,10 @@
 #pragma once
 
 #include "draw_shader_shared.hh"
-#include "draw_shape_lib.glsl"
+#include "draw_shape.bsl.hh"
 #include "eevee_light_iter.bsl.hh"
 #include "eevee_shadow_shared.hh"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 
 namespace eevee::shadow {
 
@@ -36,7 +36,7 @@ void tilemap_bounds_clear([[resource_table]] TilemapBoundsInit &srt,
 }
 
 struct TilemapBounds {
-  [[resource_table]] srt_t<LightRenderData> light_data;
+  [[resource_table]] LightRenderData light_data;
 
   [[storage(4, read)]] const uint (&casters_id_buf)[];
   [[storage(5, read_write)]] ShadowTileMapData (&tilemaps_buf)[];
@@ -56,10 +56,9 @@ struct TilemapBoundsCtx {
   bool is_valid;
   uint local_id;
 
-  void eval_directional([[resource_table]] TilemapBounds &srt, uint l_index, LightData /*light*/)
+  void eval_directional(TilemapBounds &srt, uint l_index, LightData /*light*/)
   {
-    [[resource_table]] LightRenderData &lrd = srt.light_data;
-    LightData light = lrd.light_buf[l_index];
+    LightData light = srt.light_data.light_buf[l_index];
 
     if (light.tilemap_index == LIGHT_NO_SHADOW) {
       return;
@@ -68,7 +67,7 @@ struct TilemapBoundsCtx {
     float local_min = FLT_MAX;
     float local_max = -FLT_MAX;
     for (int i = 0; i < 8; i++) {
-      float z = dot(box.corners[i].xyz, -light_z_axis(light));
+      float z = dot(box.corners[i].xyz, -light.z_axis());
       local_min = min(local_min, z);
       local_max = max(local_max, z);
     }
@@ -98,7 +97,7 @@ struct TilemapBoundsCtx {
       atomicMax(srt.light_buf_write[l_index].clip_far, srt.global_max);
       /* TODO(fclem): This feel unnecessary but we currently have no indexing from
        * tile-map to lights. This is because the lights are selected by culling phase. */
-      for (int i = light.tilemap_index; i <= light_tilemap_max_get(light); i++) {
+      for (int i = light.tilemap_index; i <= light.tilemap_max_get(); i++) {
         int index = srt.tilemaps_buf[i].clip_data_index;
         atomicMin(srt.tilemaps_clip_buf[index].clip_near, srt.global_min);
         atomicMax(srt.tilemaps_clip_buf[index].clip_far, srt.global_max);
@@ -109,9 +108,7 @@ struct TilemapBoundsCtx {
      * thread 0. */
   }
 
-  void eval_local([[resource_table]] TilemapBounds & /*srt*/, uint /*index*/, LightData /*light*/)
-  {
-  }
+  void eval_local(TilemapBounds & /*srt*/, uint /*index*/, LightData /*light*/) {}
 };
 
 }  // namespace eevee::shadow

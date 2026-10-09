@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
+
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
 #include "DNA_uuid_types.h"
@@ -54,8 +56,14 @@ enum eAssetImportMethod : int {
 
 enum eAssetLibrary_Flag : int {
   ASSET_LIBRARY_RELATIVE_PATH = (1 << 0),
+  /**
+   * The setting the user controls. Use #BKE_preferences_asset_library_is_available to check if the
+   * library is used, it also accounts for the repository of extension defined libraries.
+   */
   ASSET_LIBRARY_DISABLED = (1 << 1),
   ASSET_LIBRARY_USE_REMOTE_URL = (1 << 2),
+  ASSET_LIBRARY_USE_AUTH_TOKEN = (1 << 3),
+  ASSET_LIBRARY_PROJECT_DEFINED = (1 << 4),
 };
 
 enum class AssetAccess : int8_t {
@@ -73,6 +81,17 @@ struct AssetTag {
   struct AssetTag *next = nullptr, *prev = nullptr;
   char name[/*MAX_NAME*/ 64] = "";
 };
+
+enum AssetMetaDataFlag : int {
+  /**
+   * When the import method is set to "Follow Asset or Preferences", use the asset's own import
+   * method instead of the one from the library. Not used often, but for some assets there's a
+   * specific preferred import method. For example, base mesh objects may always want to use
+   * appending, so they can be edited directly and independently from previous usages.
+   */
+  ASSETDATA_USE_OWN_IMPORT_METHOD = (1 << 0),
+};
+ENUM_OPERATORS(AssetMetaDataFlag);
 
 /**
  * \brief The meta-data of an asset.
@@ -122,6 +141,12 @@ struct AssetMetaData {
   /** Store the number of tags to avoid continuous counting. Could be turned into runtime data, we
    * can always reliably reconstruct it from the list. */
   short tot_tags = 0;
+
+  AssetMetaDataFlag flag = {};
+
+  /** The import method to use when "Follow Asset or Preferences" is used and
+   * #AssetMetaDataFlag::ASSETDATA_USE_OWN_IMPORT_METHOD is set in the flags above. */
+  eAssetImportMethod preferred_import_method = ASSET_IMPORT_APPEND;
 
   char _pad[4] = {};
 
