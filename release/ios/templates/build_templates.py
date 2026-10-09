@@ -129,4 +129,7 @@ if arguments.template:
     build(*next(template for template in TEMPLATES if template[0] == arguments.template))
 else:
     entries = [build(*template) for template in TEMPLATES]
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_character import build as build_character
+    entries.append(build_character())
     (OUTPUT / 'manifest.json').write_text(json.dumps(dict(version=1, templates=entries), indent=2) + '\n')

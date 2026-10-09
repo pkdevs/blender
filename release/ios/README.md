@@ -241,3 +241,38 @@ of the simulator suite above. For full-app checks, copy
 `native_dialogs_device_test.py` into the separate QA app's Documents directory and
 launch it using the same factory-startup procedure. Its report is
 `Documents/native-dialogs-test.json`. Do not run it against a user's scene.
+
+### Character Animation Template
+
+The Character Animation seed contains Blender Studio's Ellie rig, adapted for
+Blender 5.1 without document scripts. It opens in Pose Mode with the timeline,
+body/head controls, and native Object Properties panels for control visibility,
+appearance, pose assets, IK/FK and parent spaces. Detailed face/finger controls
+remain available in bone collections. The original rigged mesh hair replaces
+the legacy particle-hair handlers.
+
+Ellie and the generated preview are CC BY 4.0, separately from application code.
+The chooser displays creator attribution and opens source/license links and a
+modification notice. Scene and rig metadata retain this credit in saved files;
+duplicating or exporting a personal template also preserves its chooser credit.
+`templates/library/ELLIE-CREDITS.txt` and `CC-BY-4.0.txt` ship with the assets.
+Do not add asset-specific EULA restrictions or copy protection when distributing
+this material. Release packaging and store terms still need their own review.
+
+Regenerate only this seed and preview with:
+
+```sh
+blender --background --factory-startup --disable-autoexec --python release/ios/templates/build_character.py
+python3 -m unittest release.ios.test_character_template release.ios.test_native_templates
+```
+
+The builder checks the recorded source hash; it never runs the original rig's
+embedded code. `templates/sources/README.md` records provenance. The source
+directory is not installed in the app. Full template regeneration includes Ellie.
+
+For physical-device checks, use a separate QA bundle with TemplatesDeviceProbe,
+copy `character_template_device_test.py` to its Documents directory, and launch
+with the same `--factory-startup --python-expr` procedure above. The report is
+`Documents/character-template-test.json`. This verifies native document creation,
+Pose Mode, rig operators, keyframes, export, reopen, and attribution retention;
+it does not synthesize physical Pencil input.

@@ -74,8 +74,8 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
   }
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
     NSArray *entries = GHOST_ios_document_templates();
-    NSCAssert(entries.count == 5, @"All validated templates are available");
-    NSCAssert([picker.collectionView numberOfItemsInSection:0] == 5, @"Native chooser lists each template");
+    NSCAssert(entries.count == 6, @"All validated templates are available");
+    NSCAssert([picker.collectionView numberOfItemsInSection:0] == 6, @"Native chooser lists each template");
     NSCAssert(picker.navigationItem.rightBarButtonItem == nil,
               @"Templates open directly, without a separate Create button");
     UISearchController *search = picker.navigationItem.searchController;
@@ -89,14 +89,51 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
               !picker.navigationItem.rightBarButtonItem.enabled, @"Empty searches use the native unavailable state");
     search.searchBar.text = @"";
     [picker updateSearchResultsForSearchController:search];
+    NSDictionary *character = entries.lastObject;
+    NSCAssert([character[@"id"] isEqual:@"character-animation"] &&
+              [character[@"attribution"][@"license"] isEqual:@"CC-BY-4.0"],
+              @"The character catalog includes its asset license");
+    NSIndexPath *characterIndex = [NSIndexPath indexPathForItem:5 inSection:0];
+    [picker.collectionView scrollToItemAtIndexPath:characterIndex
+        atScrollPosition:UICollectionViewScrollPositionCenteredVertically animated:NO];
+    [picker.collectionView layoutIfNeeded];
+    UICollectionViewCell *characterCell = [picker.collectionView cellForItemAtIndexPath:characterIndex];
+    UIButton *credit = [characterCell valueForKey:@"credit"];
+    NSCAssert(!credit.hidden && [credit.currentTitle containsString:@"Blender Studio"] &&
+              [credit.currentTitle containsString:@"CC-BY-4.0"], @"Credit is visible in the chooser");
+    [UIView setAnimationsEnabled:NO];
+    [credit sendActionsForControlEvents:UIControlEventTouchUpInside];
+    [navigation.view layoutIfNeeded];
+    UIViewController *details = navigation.topViewController;
+    [details loadViewIfNeeded];
+    NSCAssert([details.title isEqual:@"Asset Credits"], @"Credits open without creating a document");
+    UITextView *creditText = details.view.subviews.firstObject;
+    NSCAssert([creditText isKindOfClass:UITextView.class] &&
+              [creditText.text containsString:character[@"attribution"][@"changes"]],
+              @"The credit view identifies modifications");
+    for (NSString *key in @[@"sourceURL", @"licenseURL"]) {
+      NSRange range = [creditText.text rangeOfString:character[@"attribution"][key]];
+      NSCAssert(range.location != NSNotFound &&
+                [creditText.attributedText attribute:NSLinkAttributeName atIndex:range.location effectiveRange:nil],
+                @"Source and license are actionable links");
+    }
+    [navigation popViewControllerAnimated:NO];
+    [navigation.view layoutIfNeeded];
+    [UIView setAnimationsEnabled:YES];
+    NSCAssert(GHOST_ios_template_manage(@"character-animation", @"duplicate", nil),
+              @"Attributed templates can be duplicated");
+    NSDictionary *characterCopy = GHOST_ios_document_templates().lastObject;
+    NSCAssert([characterCopy[@"attribution"] isEqual:character[@"attribution"]],
+              @"Duplication retains the complete attribution");
+    NSCAssert(GHOST_ios_template_manage(characterCopy[@"id"], @"delete", nil), @"Remove test copy");
     NSCAssert(GHOST_ios_template_manage(@"general", @"duplicate", nil), @"Bundled templates can be duplicated");
     NSArray *all = GHOST_ios_document_templates();
-    NSCAssert(all.count == 6 && [all.lastObject[@"personal"] boolValue], @"Copies appear under My Templates");
+    NSCAssert(all.count == 7 && [all.lastObject[@"personal"] boolValue], @"Copies appear under My Templates");
     NSString *copyID = all.lastObject[@"id"];
     NSCAssert(GHOST_ios_template_manage(copyID, @"rename", @"Custom Scene"), @"Personal templates can be renamed");
     NSCAssert([GHOST_ios_document_templates().lastObject[@"title"] isEqual:@"Custom Scene"], @"Names persist");
     NSCAssert(!GHOST_ios_template_manage(@"general", @"delete", nil), @"Bundled templates are read-only");
-    NSCAssert(GHOST_ios_template_manage(copyID, @"delete", nil) && GHOST_ios_document_templates().count == 5,
+    NSCAssert(GHOST_ios_template_manage(copyID, @"delete", nil) && GHOST_ios_document_templates().count == 6,
               @"Deleting a personal template preserves bundled templates");
     NSObject *cancelled = [[[NSClassFromString(@"GHOSTIOSTemplatePicker") alloc] init] autorelease];
     __block NSUInteger cancellations = 0;

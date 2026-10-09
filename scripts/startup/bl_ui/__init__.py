@@ -12,6 +12,7 @@ if "bpy" in locals():
 
 _modules = [
     "native_actions",
+    "native_character",
     "native_panels",
     "native_render",
     "native_timeline",

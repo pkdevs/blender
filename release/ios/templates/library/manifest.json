@@ -70,6 +70,29 @@
       "presentation": {
         "timeline": true
       }
+    },
+    {
+      "id": "character-animation",
+      "title": "Character Animation",
+      "file": "character-animation.blend",
+      "preview": "character-animation.png",
+      "minimumBlender": [
+        5,
+        1,
+        0
+      ],
+      "presentation": {
+        "timeline": true
+      },
+      "attribution": {
+        "title": "Ellie",
+        "author": "Blender Studio / Blender Foundation",
+        "license": "CC-BY-4.0",
+        "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceURL": "https://studio.blender.org/characters/ellie/v1/",
+        "sourceSHA256": "3dd235218725a9e68890073bbeacb4820f9b34db65d44f80c31bb88696a3c54c",
+        "changes": "Adapted for Blender 5.1 and iPad: organized control collections, repaired finger pole drivers, used the original rigged mesh hair in viewport and render, removed legacy scripts and unused particle hair, and added native rig controls and template staging."
+      }
     }
   ]
 }

@@ -1,0 +1,26 @@
+Ellie - Character Animation template and preview
+
+Original character rig: Ellie, from Sprite Fright.
+Creator / attribution party: Blender Studio / Blender Foundation.
+Published by Demeter Dzadik.
+Source: https://studio.blender.org/characters/ellie/v1/
+License: Creative Commons Attribution 4.0 International (CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+See CC-BY-4.0.txt in this directory for the complete legal code.
+
+Modifications for this template:
+- Migrated to Blender 5.1 and organized the original control layers as bone collections.
+- Repaired missing finger-pole driver properties.
+- Used Ellie's original rigged mesh hair for both viewport and render.
+- Removed the unused particle hair, metarig, and embedded legacy Python scripts.
+- Added application-owned native rig controls and template camera/lighting/presentation.
+- Used the original pose assets for the starting pose and retained the pose library.
+
+The adapted character and preview remain available under CC BY 4.0.
+No endorsement by the original creators is implied. This license does not
+restrict use to Blender or to this application. Preserve this attribution,
+source and license links, and identify further changes when sharing the asset
+or derivatives. The source asset and application code are available separately
+in release/ios/templates/sources and scripts/startup/bl_ui/native_character.py.
+
+The original work is supplied without warranties, as stated in the license.

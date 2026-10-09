@@ -17,7 +17,7 @@ preflight = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preflight)
 manifest = json.loads((LIBRARY / 'manifest.json').read_text())
 assert manifest['version'] == 1
-assert len({entry['id'] for entry in manifest['templates']}) == 5
+assert len({entry['id'] for entry in manifest['templates']}) == 6
 preferences = (bpy.context.preferences.inputs.use_mouse_emulate_3_button,
                bpy.context.preferences.view.ui_scale)
 
@@ -42,6 +42,15 @@ def validate(entry):
                 assert space.shading.studio_light == 'basic_bright.exr'
                 assert not space.shading.show_shadows and not space.shading.show_cavity
                 assert not space.overlay.show_floor and not space.overlay.show_axis_x and not space.overlay.show_axis_y
+    elif identifier == 'character-animation':
+        assert bpy.context.mode == 'POSE' and obj.type == 'ARMATURE'
+        assert obj.get('blender_character_rig') == 'ellie-v1'
+        assert not bpy.context.scene.tool_settings.use_keyframe_insert_auto
+        assert json.loads(preflight.attribution_json()) == entry['attribution']
+        assert json.loads(obj['asset_attribution']) == entry['attribution']
+        assert all(image.packed_files for image in bpy.data.images if image.source == 'FILE')
+        assert all(not item.particle_systems for item in bpy.data.objects)
+        assert bpy.data.actions.get('face_default') and bpy.data.actions.get('hand_relax')
     elif identifier in {'drawing', 'animation-2d'}:
         assert bpy.context.mode == 'PAINT_GREASE_PENCIL'
         assert obj.type == 'GREASEPENCIL' and obj.data.layers.active
