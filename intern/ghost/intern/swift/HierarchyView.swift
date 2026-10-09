@@ -193,7 +193,6 @@ struct HierarchyPanel: View {
           .padding(12)
       }
     }
-    .glassEffect(.regular.tint(panelGlassTint), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     .renamePrompt($rename)
     .alert(deleteTitle, isPresented: Binding(get: { !deleting.isEmpty }, set: { if !$0 { deleting = [] } })) {
       Button("Cancel", role: .cancel) { deleting = [] }
@@ -213,7 +212,6 @@ struct HierarchyPanel: View {
       }
       .disabled(collectionName.trimmingCharacters(in: .whitespaces).isEmpty)
     }
-    .accessibilityIdentifier("blender.hierarchy.panel")
   }
 
   private var addMenu: UIMenu {
@@ -245,11 +243,12 @@ struct HierarchyPanel: View {
   }
 
   private var outline: some View {
-    List {
-      ForEach(store.visible, id: \.hierarchyKey) { node in
+    let rows = store.visible
+    return List {
+      ForEach(Array(rows.enumerated()), id: \.element.hierarchyKey) { index, node in
         HierarchyRow(store: store, node: node)
-          .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
-          .listRowBackground(rowBackground(node))
+          .listRowInsets(EdgeInsets(top: 0, leading: 22, bottom: 0, trailing: 22))
+          .listRowBackground(rowBackground(rows, index))
           .listRowSeparator(.hidden)
           .swipeActions(edge: .trailing, allowsFullSwipe: false) { trailingSwipe(node) }
           .swipeActions(edge: .leading, allowsFullSwipe: false) { leadingSwipe(node) }
@@ -270,17 +269,27 @@ struct HierarchyPanel: View {
     }
     .listStyle(.plain)
     .scrollContentBackground(.hidden)
-    .environment(\.defaultMinListRowHeight, 36)
+    .environment(\.defaultMinListRowHeight, 44)
     .scrollDismissesKeyboard(.immediately)
     .accessibilityIdentifier("blender.hierarchy.outline")
   }
 
+  private func isSelected(_ node: JSON?) -> Bool {
+    guard let node else { return false }
+    return node.bool("selected") && node.string("kind") == "object"
+  }
+
+  /** Selected rows next to each other share one highlight, as in a sidebar list. */
   @ViewBuilder
-  private func rowBackground(_ node: JSON) -> some View {
-    if node.bool("selected") && node.string("kind") == "object" {
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
-        .fill(Color.accentColor)
-        .padding(.horizontal, 6)
+  private func rowBackground(_ rows: [JSON], _ index: Int) -> some View {
+    if isSelected(rows[index]) {
+      let above = index > 0 && isSelected(rows[index - 1])
+      let below = index + 1 < rows.count && isSelected(rows[index + 1])
+      UnevenRoundedRectangle(topLeadingRadius: above ? 0 : 12, bottomLeadingRadius: below ? 0 : 12,
+                             bottomTrailingRadius: below ? 0 : 12, topTrailingRadius: above ? 0 : 12,
+                             style: .continuous)
+        .fill(PanelStyle.selection)
+        .padding(.horizontal, 16)
     }
     else {
       Color.clear
@@ -469,7 +478,7 @@ struct HierarchyRow: View {
         .accessibilityLabel("Show in viewport")
       }
     }
-    .frame(minHeight: 36)
+    .frame(minHeight: 44)
     .contentShape(Rectangle())
     .onTapGesture { store.select(node) }
     .accessibilityElement(children: .combine)
@@ -504,7 +513,7 @@ struct SearchField: View {
       }
     }
     .padding(.horizontal, 10)
-    .frame(height: 36)
-    .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+    .frame(height: 40)
+    .background(PanelStyle.search, in: Capsule())
   }
 }

@@ -152,6 +152,29 @@ extension View {
   }
 }
 
+/** Fills as UIKit draws them on the panels' glass, measured from the UIKit panels: on glass,
+ * UIKit's grouped and fill colors come out lighter in dark mode and darker in light mode than
+ * the same colors drawn by SwiftUI. */
+enum PanelStyle {
+  private static func dynamic(dark: UIColor, light: UIColor) -> Color {
+    Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+  }
+
+  /** Grouped sections (table cells). */
+  static let card = dynamic(dark: UIColor(white: 1, alpha: 0.085), light: UIColor(white: 0, alpha: 0.064))
+  /** Number fields and capsules on a section. */
+  static let field = dynamic(dark: UIColor(white: 1, alpha: 0.17), light: UIColor(white: 0, alpha: 0.14))
+  /** The Outliner's search field. */
+  static let search = dynamic(dark: UIColor(white: 1, alpha: 0.125), light: UIColor(white: 1, alpha: 0.48))
+  /** Placeholder behind a missing preview. */
+  static let thumbnail = dynamic(dark: UIColor(white: 1, alpha: 0.04), light: UIColor(white: 0, alpha: 0.11))
+  /** Selected rows and tabs. */
+  static let selection = dynamic(dark: UIColor(red: 47 / 255, green: 192 / 255, blue: 1, alpha: 1),
+                                 light: UIColor(red: 0, green: 130 / 255, blue: 247 / 255, alpha: 1))
+  /** The active item of a list. */
+  static let activeRow = Color(uiColor: .systemBlue).opacity(0.22)
+}
+
 func withMotion(_ animation: Animation = .smooth(duration: 0.28), _ body: () -> Void) {
   if UIAccessibility.isReduceMotionEnabled { body() }
   else { withAnimation(animation, body) }

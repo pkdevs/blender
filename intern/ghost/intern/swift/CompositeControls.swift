@@ -202,6 +202,7 @@ struct DataPicker: View {
           .font(.title3)
           .frame(width: 40, height: 44)
       }
+      .tint(.primary)
       .disabled(!editable)
       .accessibilityLabel("\(type) Actions")
     }
@@ -284,7 +285,7 @@ struct DataBrowser: View {
  * \{ */
 
 /** Lists longer than this show the rows around the active one and a page with all of them. */
-private let inlineListRows = 7
+private let inlineListRows = 40
 
 struct ListOutliner: View {
   @ObservedObject var store: InspectorStore
@@ -376,12 +377,14 @@ struct ListToolbar: View {
               Image(systemName: "ellipsis")
                 .frame(width: 40, height: 32)
             }
+            .tint(.primary)
             .disabled(!editable)
             .accessibilityLabel("More")
           }
         }
         .font(.subheadline)
-        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+        .foregroundStyle(.primary)
+        .background(PanelStyle.field, in: Capsule())
       }
     }
   }
@@ -509,8 +512,8 @@ struct ListRows: View {
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         else if let icon = BlenderIcon.image(item.string("icon")) {
-          Image(uiImage: icon).resizable().scaledToFit().frame(width: 18, height: 18)
-            .foregroundStyle(isActive ? Color.accentColor : .secondary)
+          Image(uiImage: icon).resizable().scaledToFit().frame(width: 22, height: 22)
+            .foregroundStyle(.primary)
         }
       }
       if renaming == index {
@@ -526,7 +529,6 @@ struct ListRows: View {
         Text(label)
           .lineLimit(1)
           .truncationMode(.middle)
-          .fontWeight(isActive ? .semibold : .regular)
           .frame(maxWidth: .infinity, alignment: .leading)
           .layoutPriority(1)
           .contentShape(Rectangle())
@@ -567,7 +569,7 @@ struct ListRows: View {
     .frame(minHeight: 40)
     .background {
       RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(isActive ? Color.accentColor.opacity(0.2) : .clear)
+        .fill(isActive ? PanelStyle.activeRow : .clear)
     }
     .scaleEffect(dragging == position ? 1.02 : 1)
     .shadow(color: .black.opacity(dragging == position ? 0.25 : 0), radius: 8, y: 3)

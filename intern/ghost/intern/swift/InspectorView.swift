@@ -10,12 +10,6 @@
 import SwiftUI
 import UIKit
 
-/** Over Blender's dark viewport untinted glass turns mid-grey even in light mode, which mutes
- * colored icons and text. A light tint keeps light mode light; dark mode stays untinted. */
-let panelGlassTint = Color(uiColor: UIColor { traits in
-  traits.userInterfaceStyle == .dark ? .clear : UIColor(white: 1, alpha: 0.6)
-})
-
 struct PanelHeader<Trailing: View>: View {
   let title: String
   let close: () -> Void
@@ -58,9 +52,7 @@ struct InspectorPanel: View {
       InspectorForm(store: store)
         .padding(.top, 4)
     }
-    .glassEffect(.regular.tint(panelGlassTint), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     .tint(Color.accentColor)
-    .accessibilityIdentifier("blender.inspector.panel")
   }
 }
 
@@ -165,8 +157,7 @@ struct SectionView: View {
           }
           .padding(.horizontal, 12)
           .padding(.vertical, 2)
-          .background(Color(uiColor: .secondarySystemGroupedBackground),
-                      in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+          .background(PanelStyle.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
           .transition(.opacity.combined(with: .move(edge: .top)))
         }
       }

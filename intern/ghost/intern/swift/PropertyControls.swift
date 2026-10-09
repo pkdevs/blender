@@ -142,7 +142,7 @@ struct NumberField: View {
   private var background: Color {
     if scrubValue != nil || editing { return Color.accentColor.opacity(0.18) }
     if let color = animationStateColor(property.string("anim_state")) { return color.opacity(0.35) }
-    return Color(uiColor: .tertiarySystemFill)
+    return PanelStyle.field
   }
 
   private var stepperStep: Double {
@@ -548,8 +548,7 @@ struct TextControl: View {
       .focused($focused)
       .submitLabel(.done)
       .padding(.horizontal, 8)
-      .frame(minHeight: 36)
-      .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+      .frame(minHeight: 40)
       .disabled(!property.bool("editable"))
       .onAppear { text = store.value(property) as? String ?? "" }
       .onChange(of: store.value(property) as? String ?? "") { _, newValue in
@@ -750,7 +749,7 @@ struct PreviewThumbnail: View {
       }
       else {
         ZStack {
-          Color(uiColor: .tertiarySystemFill)
+          PanelStyle.thumbnail
           if let fallback {
             Image(uiImage: fallback)
               .resizable()
@@ -918,8 +917,7 @@ struct ToggleGroupRow: View {
         }
       }
       .padding(2)
-      .background(Color(uiColor: .tertiarySystemFill),
-                  in: RoundedRectangle(cornerRadius: compact ? 9 : 10, style: .continuous))
+      .background(PanelStyle.field, in: RoundedRectangle(cornerRadius: compact ? 9 : 10, style: .continuous))
     }
     .frame(minHeight: compact ? 40 : 44)
   }

@@ -37,6 +37,10 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
 
   private var inspectorHost: UIHostingController<AnyView>!
   private var hierarchyHost: UIHostingController<AnyView>!
+  /** The panels' glass, as UIKit draws it: content inside its view is shown with the glass's
+   * vibrancy, which SwiftUI's glass modifier does not give. */
+  private var inspectorPanel: UIVisualEffectView!
+  private var hierarchyPanel: UIVisualEffectView!
   private var showInspector = false
   private var showHierarchy = false
   private var layoutRect = CGRect.zero
@@ -76,10 +80,30 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
 
     inspectorHost = makeHost(AnyView(InspectorPanel(store: inspector) { [weak self] in self?.toggleInspector() }))
     hierarchyHost = makeHost(AnyView(HierarchyPanel(store: hierarchy) { [weak self] in self?.toggleHierarchy() }))
-    for host in [inspectorHost!, hierarchyHost!] {
-      host.view.isHidden = true
-      overlay.addSubview(host.view)
+    inspectorPanel = makePanel(inspectorHost)
+    hierarchyPanel = makePanel(hierarchyHost)
+    inspectorPanel.accessibilityIdentifier = "blender.inspector.panel"
+    hierarchyPanel.accessibilityIdentifier = "blender.hierarchy.panel"
+    for panel in [inspectorPanel!, hierarchyPanel!] {
+      panel.isHidden = true
+      overlay.addSubview(panel)
     }
+  }
+
+  private func makePanel(_ host: UIHostingController<AnyView>) -> UIVisualEffectView {
+    let glass = UIGlassEffect(style: .regular)
+    /* Over Blender's dark viewport untinted glass turns mid-grey even in light mode, which mutes
+     * colored icons and text. A light tint keeps light mode light; dark mode stays untinted. */
+    glass.tintColor = UIColor { traits in
+      traits.userInterfaceStyle == .dark ? .clear : UIColor(white: 1, alpha: 0.6)
+    }
+    let panel = UIVisualEffectView(effect: glass)
+    panel.layer.cornerRadius = 16
+    panel.clipsToBounds = true
+    host.view.frame = panel.contentView.bounds
+    host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    panel.contentView.addSubview(host.view)
+    return panel
   }
 
   private func makeHost(_ view: AnyView) -> UIHostingController<AnyView> {
@@ -133,8 +157,8 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     inspector.visible = showInspector
     inspectorButton.isSelected = showInspector
     hierarchyButton.isSelected = showHierarchy
-    animate(inspectorHost.view, visible: showInspector, leading: false)
-    animate(hierarchyHost.view, visible: showHierarchy, leading: true)
+    animate(inspectorPanel, visible: showInspector, leading: false)
+    animate(hierarchyPanel, visible: showHierarchy, leading: true)
     Engine.setting("native_panels", "\((showInspector ? 1 : 0) | (showHierarchy ? 2 : 0))")
     layout(in: layoutRect)
   }
@@ -177,11 +201,11 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     /* Use all the height there is, so portrait and tall windows show more rows. */
     let height = max(0, rect.height - 24)
     /* Frame is undefined while transformed; layout must not disturb the presentation animation. */
-    for host in [inspectorHost!, hierarchyHost!] {
-      host.view.bounds = CGRect(x: 0, y: 0, width: width, height: height)
+    for panel in [inspectorPanel!, hierarchyPanel!] {
+      panel.bounds = CGRect(x: 0, y: 0, width: width, height: height)
     }
-    hierarchyHost.view.center = CGPoint(x: rect.minX + 12 + width / 2, y: rect.minY + 12 + height / 2)
-    inspectorHost.view.center = CGPoint(x: rect.maxX - 12 - width / 2, y: rect.minY + 12 + height / 2)
+    hierarchyPanel.center = CGPoint(x: rect.minX + 12 + width / 2, y: rect.minY + 12 + height / 2)
+    inspectorPanel.center = CGPoint(x: rect.maxX - 12 - width / 2, y: rect.minY + 12 + height / 2)
   }
 
   @objc(updateSnapshot:)
