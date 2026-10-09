@@ -50,6 +50,7 @@ final class FakeEngine {
   var ack: UInt64 = 0
   var hierarchy: [JSON] = []
   weak var panels: HarnessPanels?
+  var redoStrip: NSObject?
   var toolGroupChanged: ((UIBarButtonItemGroup?) -> Void)?
   let logURL: URL = {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -107,6 +108,28 @@ final class FakeEngine {
         publish()
       case "native_shading_state":
         publish()
+      case "native_redo_edit":
+        if let payload, var redo = fixtures.dict("redo") {
+          if let key = payload.string("key"), let value = payload["value"] {
+            redo["properties"] = redo.array("properties").map { property in
+              var property = property
+              if property.string("key") == key {
+                property["value"] = value
+                if property.has("options") {
+                  property["options"] = property.array("options").map { option in
+                    var option = option
+                    option["checked"] = jsonEqual(option["value"], value) ? 1 : 0
+                    return option
+                  }
+                }
+              }
+              return property
+            }
+          }
+          redo["ack"] = payload["sequence"] ?? 0
+          fixtures["redo"] = redo
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.publish() }
       case "native_properties_edit", "native_panel_edit":
         if let payload {
           apply(payload)
@@ -257,6 +280,9 @@ final class FakeEngine {
       .filter { $0.string("type") == "LIST" }.map { "\($0.string("key") ?? "")=\($0["value"] ?? "")" }
     log(["published": NSNumber(value: ack), "lists": lists])
     panels.updateSnapshot(snapshot as NSDictionary)
+    if let redo = fixtures.dict("redo") {
+      redoStrip?.perform(NSSelectorFromString("updateSnapshot:"), with: redo as NSDictionary)
+    }
     if let tool = fixtures.dict("tool") {
       toolGroupChanged?(panels.updateToolSettings(tool as NSDictionary,
                                                   acknowledgement: NSNumber(value: ack)))
@@ -337,6 +363,7 @@ final class ViewportView: UIView {
 
 final class HarnessController: UIViewController {
   var panels: HarnessPanels!
+  var redoStrip: NSObject?
   let overlay = UIView()
   let scenario = UserDefaults.standard.string(forKey: "scenario") ?? "object"
 
@@ -367,6 +394,20 @@ final class HarnessController: UIViewController {
       ])
     }
     engine.panels = panels
+    let redo: NSObject = UserDefaults.standard.bool(forKey: "uikit") ?
+      GHOSTIOSRedoStrip(overlay: overlay, icon: { BlenderIcon.image($0 ?? "") }) :
+      SwiftRedoStrip(overlay: overlay, icon: { BlenderIcon.image($0) })
+    redoStrip = redo
+    engine.redoStrip = redo
+    if let pill = redo.value(forKey: "collapsedButton") as? UIButton {
+      pill.translatesAutoresizingMaskIntoConstraints = false
+      view.addSubview(pill)
+      NSLayoutConstraint.activate([
+        pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+        pill.heightAnchor.constraint(equalToConstant: 44),
+      ])
+    }
     engine.tab = UserDefaults.standard.string(forKey: "tab") ?? "OBJECT"
     let shading = UIBarButtonItem(image: UIImage(systemName: "circle.lefthalf.filled"), style: .plain,
                                   target: self, action: #selector(showShading(_:)))
@@ -395,6 +436,10 @@ final class HarnessController: UIViewController {
         showShading(navigationItem.trailingItemGroups.first?.barButtonItems.first as Any)
       case "tool":
         break
+      case "redo":
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+          (self.redoStrip?.value(forKey: "collapsedButton") as? UIButton)?.sendActions(for: .touchUpInside)
+        }
       default:
         tap(panels.inspectorButton)
     }
@@ -412,6 +457,9 @@ final class HarnessController: UIViewController {
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     panels.layout(in: view.bounds.inset(by: view.safeAreaInsets))
+    let lane = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 40, dy: 12)
+    if let strip = redoStrip as? SwiftRedoStrip { strip.layout(in: lane) }
+    else if let strip = redoStrip as? GHOSTIOSRedoStrip { strip.layout(in: lane) }
   }
 }
 

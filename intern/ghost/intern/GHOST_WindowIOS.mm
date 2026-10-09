@@ -5455,14 +5455,14 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self.view addSubview:_overlay_view];
 
   _mesh_select_buttons = [[NSMutableArray alloc] init];
-  _redo_strip = [[GHOSTIOSRedoStrip alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
+  /* The SwiftUI interface answers the same messages as the UIKit one it replaces, which remains
+   * for comparison with the `BlenderUIKitInterface` default. */
+  const BOOL uikit_interface = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"];
+  Class redo_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftRedoStrip");
+  _redo_strip = [[(redo_class ?: GHOSTIOSRedoStrip.class) alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
     return GHOSTIOSBlenderIcon(name, NO);
   }];
-  /* The panels are drawn in SwiftUI (`intern/swift/ScenePanels.swift`), which answers the same
-   * messages; the UIKit version remains for comparison with the `BlenderUIKitPanels` default. */
-  Class panels_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitPanels"] ?
-                           nil :
-                           NSClassFromString(@"GHOSTIOSSwiftScenePanels");
+  Class panels_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftScenePanels");
   _scene_panels = [[(panels_class ?: GHOSTIOSScenePanels.class) alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
     return GHOSTIOSBlenderIcon(name, NO);
   }];

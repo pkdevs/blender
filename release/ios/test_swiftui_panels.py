@@ -28,7 +28,8 @@ SWIFT_SOURCES = sorted((ROOT / "intern/ghost/intern/swift").glob("*.swift"))
 BRIDGE = ROOT / "release/ios/swiftui_panels_harness/HarnessBridge.h"
 # The UIKit panels, built in for comparison (`-uikit YES`).
 UIKIT_SOURCES = [ROOT / "intern/ghost/intern/GHOST_IOSScenePanels.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSNumericInput.mm"]
+                 ROOT / "intern/ghost/intern/GHOST_IOSNumericInput.mm",
+                 ROOT / "intern/ghost/intern/GHOST_IOSRedoStrip.mm"]
 HARNESS = ROOT / "release/ios/swiftui_panels_harness/Harness.swift"
 BUNDLE_ID = "org.blender.swiftui-panels-harness"
 
@@ -299,13 +300,28 @@ def tool():
     ]}
 
 
+def redo():
+    """The last operation's settings, as `native_operator_redo_query` sends them."""
+    move = [prop(f"value.{i}", axis, "FLOAT", value, group="Move", index=i, dragStep=0.01, min=-1e9, max=1e9)
+            for i, (axis, value) in enumerate(zip("XYZ", [0.5, 0.0, 1.25]))]
+    return {"id": "op:1", "operator": "TRANSFORM_OT_translate", "title": "Move", "ack": 0, "error": "",
+            "properties": move + [
+                prop("orient_type", "Orientation", "ENUM", "GLOBAL", options=[
+                    {"value": "GLOBAL", "label": "Global", "checked": 1},
+                    {"value": "LOCAL", "label": "Local", "checked": 0},
+                    {"value": "VIEW", "label": "View", "checked": 0}]),
+                prop("use_proportional_edit", "Proportional Editing", "BOOLEAN", 0),
+                prop("proportional_size", "Proportional Size", "FLOAT", 1.0,
+                     slider={"min": 0.001, "max": 10.0}, min=0.001, max=100)]}
+
+
 def fixtures():
     return {"tab_list": tab_list(),
             "tabs": {"OBJECT": object_tab(), "DATA": data_tab(), "MODIFIER": modifier_tab(),
                      "MATERIAL": material_tab(), "PHYSICS": physics_tab(),
                      **{tab["id"]: {"name": "Cube", "sections": []} for tab in tab_list()
                         if tab["id"] not in ("OBJECT", "DATA", "MODIFIER", "MATERIAL", "PHYSICS")}},
-            "hierarchy": hierarchy(), "shading": shading(), "tool": tool()}
+            "hierarchy": hierarchy(), "shading": shading(), "tool": tool(), "redo": redo()}
 
 
 # --------------------------------------------------------------------
@@ -416,6 +432,10 @@ class SwiftUIPanelsTest(unittest.TestCase):
     def test_shading(self):
         requests = self.scenario("shading", "-scenario", "shading")
         self.assertIn("native_shading_visible", [r["setting"] for r in requests])
+
+    def test_redo_strip(self):
+        requests = self.scenario("redo", "-scenario", "redo")
+        self.assertNotIn("native_redo_edit", [r["setting"] for r in requests])
 
     def test_tool_strip(self):
         self.scenario("tool", "-scenario", "tool")
