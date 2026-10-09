@@ -175,7 +175,7 @@ FeatureSet blf_font_otf_features_default();
 /* -------------------------------------------------------------------- */
 /** \name Shaping Cache
  *
- * Least-frequently-used cache of shaped strings.
+ * Least-frequently-used cache of shaped strings, with dynamic aging.
  * \{ */
 
 #define BLF_SHAPING_CACHE_SIZE 256
@@ -193,7 +193,7 @@ struct CachedString {
   Array<CachedGlyph> glyphs;
   uint32_t str_len = 0;
   rcti bounds = {};  /* ft_pix. */
-  uint32_t freq = 0; /* Use-count for LFU eviction. */
+  uint32_t freq = 0; /* Eviction priority: the cache age when added, plus the number of uses. */
 };
 
 /**
@@ -231,6 +231,7 @@ struct ShapingCache {
   size_t hits = 0;
   size_t inserts = 0;
   size_t evictions = 0;
+  uint32_t age = 0;
 
   const CachedString *lookup_ptr(const ShapingCacheKey &key)
   {
@@ -269,10 +270,11 @@ struct ShapingCache {
       if (evict_key_ptr) {
         this->data.remove(*evict_key_ptr);
         ++this->evictions;
+        this->age = best_freq;
       }
     }
 
-    value.freq = 1;
+    value.freq = this->age + 1;
     this->data.add_new(std::move(key), std::move(value));
   }
 };
