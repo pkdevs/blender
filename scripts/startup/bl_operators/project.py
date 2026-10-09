@@ -212,51 +212,6 @@ class PROJECT_OT_SaveProject(Operator):
         return {'FINISHED'}
 
 
-class PROJECT_OT_OpenBlendInProject(Operator):
-    """Opens a blend file, but only if it's inside of a project."""
-    bl_idname = "project.open_blend_in_project"
-    bl_label = "Open File..."
-
-    filepath: bpy.props.StringProperty(
-        name="Blend file path",
-        subtype='FILE_PATH',
-        default="",
-    )
-
-    filter_folder: bpy.props.BoolProperty(
-        name="Filter folders",
-        default=True,
-        options={'HIDDEN'},
-    )
-
-    filter_blender: bpy.props.BoolProperty(
-        name="Filter blend files",
-        default=True,
-        options={'HIDDEN'},
-    )
-
-    @classmethod
-    def poll(cls, context):
-        return True
-
-    def execute(self, context):
-        from pathlib import Path
-
-        if not blend_file_is_has_project_root(Path(self.filepath)):
-            self.report(
-                {'ERROR'},
-                "Selected blend file is not part of a project.")
-            return {'CANCELLED'}
-
-        bpy.ops.wm.open_mainfile(filepath=self.filepath)
-
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
-
-
 class PROJECT_OT_OpenProject(Operator):
     """Open a project, starting a new file in it"""
     bl_idname = "project.open_project"
@@ -534,11 +489,7 @@ def on_exit(is_user_exit):
 # Register
 
 classes = (
-    PROJECT_OT_NewProject,
     PROJECT_OT_SaveProject,
-    PROJECT_OT_OpenBlendInProject,
-    PROJECT_OT_OpenProject,
-    PROJECT_OT_CloseProject,
     PROJECT_OT_AddVariable,
     PROJECT_OT_RemoveVariable,
     PROJECT_OT_MoveVariable,
