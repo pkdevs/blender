@@ -190,10 +190,8 @@ static void gaussian_axis_gpu(Context &context,
   GPU_shader_uniform_2fv(shader, "uv_step", uv_step);
   GPU_shader_uniform_1f(shader, "center_weight", center_weight);
   GPU_shader_uniform_1i(shader, "tap_count", tap_weights.size());
-  if (!tap_weights.is_empty()) {
-    GPU_shader_uniform_1f_array(shader, "tap_weights", tap_weights.size(), tap_weights.data());
-    GPU_shader_uniform_1f_array(shader, "tap_offsets", tap_offsets.size(), tap_offsets.data());
-  }
+  GPU_shader_uniform_1f_array(shader, "tap_weights", tap_weights.size(), tap_weights.data());
+  GPU_shader_uniform_1f_array(shader, "tap_offsets", tap_offsets.size(), tap_offsets.data());
   bind_as_bilinear_texture(shader, input, "input_tx");
   output.bind_as_image(shader, "output_img");
   compute_dispatch_threads_at_least(shader, size);
