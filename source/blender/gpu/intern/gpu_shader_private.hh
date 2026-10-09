@@ -159,6 +159,12 @@ class Shader {
                  GPULogParser *parser);
 };
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+/** Count shader and pipeline compilation for the iPad's progress indicator. */
+void ios_compilation_queued();
+void ios_compilation_finished();
+#endif
+
 class ShaderCompiler {
   struct Sources {
     std::string vert;

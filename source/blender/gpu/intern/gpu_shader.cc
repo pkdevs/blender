@@ -29,6 +29,7 @@
 #include "gpu_shader_metadata_private.hh"
 #include "gpu_shader_private.hh"
 
+#include <atomic>
 #include <filesystem>
 #include <string>
 
@@ -769,8 +770,59 @@ void Shader::set_framebuffer_srgb_target(int use_srgb_to_linear)
 /** \name ShaderCompiler
  * \{ */
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+/* The iPad interface runs apart from Blender's thread and shows shader compilation progress while
+ * the viewport waits for it. Counts cover one burst of work: they reset once all of it is done. */
+extern "C" void GHOST_ios_shader_compilation_progress(int finished, int total);
+static std::atomic<int> ios_compilations_total{0};
+static std::atomic<int> ios_compilations_finished{0};
+/** Work run by the compiler's workers was counted when it was queued; anything it compiles
+ * along the way is part of that. */
+static thread_local bool ios_compiling_queued_work = false;
+
+void ios_compilation_queued()
+{
+  if (ios_compiling_queued_work) {
+    return;
+  }
+  const int total = ++ios_compilations_total;
+  GHOST_ios_shader_compilation_progress(ios_compilations_finished.load(), total);
+}
+
+void ios_compilation_finished()
+{
+  if (ios_compiling_queued_work) {
+    return;
+  }
+  const int finished = ++ios_compilations_finished;
+  const int total = ios_compilations_total.load();
+  if (finished >= total) {
+    ios_compilations_total -= total;
+    ios_compilations_finished -= finished;
+    GHOST_ios_shader_compilation_progress(0, 0);
+  }
+  else {
+    GHOST_ios_shader_compilation_progress(finished, total);
+  }
+}
+
+struct IOSCompilationScope {
+  IOSCompilationScope()
+  {
+    ios_compilation_queued();
+  }
+  ~IOSCompilationScope()
+  {
+    ios_compilation_finished();
+  }
+};
+#endif
+
 Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &orig_info, bool is_codegen_only)
 {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  const IOSCompilationScope ios_progress;
+#endif
   using Clock = std::chrono::steady_clock;
   using TimePoint = Clock::time_point;
 
@@ -1031,6 +1083,9 @@ AsyncCompilationHandle ShaderCompiler::async_compilation(const shader::ShaderCre
   async_compilations_.add(handle, compilation);
 
   if (compilation_worker_) {
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    ios_compilation_queued();
+#endif
     compilation->work = std::make_unique<ParallelWork>(ParallelWork{this, compilation});
     compilation->work->id = compilation_worker_->push_work(compilation->work.get(),
                                                            to_work_priority(priority));
@@ -1051,6 +1106,9 @@ void ShaderCompiler::asyc_compilation_cancel(AsyncCompilationHandle &handle)
     AsyncCompilation *compilation = async_compilations_.pop(handle);
     if (compilation_worker_ && compilation_worker_->cancel_work(compilation->work->id)) {
       compilation->is_ready = true;
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+      ios_compilation_finished();
+#endif
     }
 
     /* If it was already being compiled, wait until it's ready so the calling thread can safely
@@ -1104,6 +1162,9 @@ AsyncSpecializationHandle ShaderCompiler::async_specialization(
   AsyncCompilationHandle handle = next_handle_++;
   async_compilations_.add(handle, compilation);
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  ios_compilation_queued();
+#endif
   compilation->work = std::make_unique<ParallelWork>(ParallelWork{this, compilation});
   compilation->work->id = compilation_worker_->push_work(compilation->work.get(),
                                                          to_work_priority(priority));
@@ -1138,12 +1199,19 @@ void ShaderCompiler::do_work(ParallelWork &work)
   AsyncCompilation *compilation = work.compilation;
 
   /* Compile */
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  ios_compiling_queued_work = true;
+#endif
   if (!compilation->is_specialization()) {
     compilation->shader = compile_shader(*compilation->info);
   }
   else {
     specialize_shader(*compilation->specialization);
   }
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  ios_compiling_queued_work = false;
+  ios_compilation_finished();
+#endif
 
   {
     std::unique_lock lock(mutex_);

@@ -954,11 +954,17 @@ MTLRenderPipelineStateInstance *MTLShader::bake_graphic_pipeline_state(
     NSError *error = nullptr;
 
     /* Compile PSO */
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    ios_compilation_queued();
+#endif
     id<MTLRenderPipelineState> pso = [ctx->device
         newRenderPipelineStateWithDescriptor:desc
                                      options:MTLPipelineOptionBufferTypeInfo
                                   reflection:&reflection_data
                                        error:&error];
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+    ios_compilation_finished();
+#endif
     if (error) {
       NSLog(@"Failed to create PSO for shader: %s error %@\n", this->name, error);
       BLI_assert(false);
@@ -1050,11 +1056,17 @@ MTLComputePipelineStateInstance *MTLShader::bake_compute_pipeline_state(
   desc.label = [NSString stringWithUTF8String:this->name];
   desc.computeFunction = compute_function;
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  ios_compilation_queued();
+#endif
   id<MTLComputePipelineState> pso = [ctx->device
       newComputePipelineStateWithDescriptor:desc
                                     options:MTLPipelineOptionNone
                                  reflection:nullptr
                                       error:&error];
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  ios_compilation_finished();
+#endif
 
   /* If PSO has compiled but max theoretical threads-per-threadgroup is lower than required
    * dispatch size, recompile with increased limit. NOTE: This will result in a performance drop,
