@@ -43,6 +43,7 @@
 
 #include "BKE_global.hh"
 
+#include "BLI_bit_vector.hh"
 #include "BLI_color_types.hh"
 #include "BLI_map.hh"
 #include "BLI_utility_mixins.hh"
@@ -99,6 +100,10 @@ class VKRenderGraph : public NonCopyable {
    * device could
    */
   VKResourceStateTracker &resources_;
+  /**
+   * Bit per resource handle if the resource is already in use by the render graph (set).
+   */
+  BitVector<> resource_usages_;
 
   struct DebugGroup {
     std::string name;
@@ -186,6 +191,7 @@ class VKRenderGraph : public NonCopyable {
     }
 
     node.template finalize_node<NodeInfo>(storage_, resources_, links_, create_info);
+    tag_resource_ref_count(node);
   }
 
  private:
@@ -209,6 +215,7 @@ class VKRenderGraph : public NonCopyable {
     VKRenderGraphNode &node = nodes_[node_handle];
     node.set_node_data<NodeInfo>(storage_, create_info);
     node.build_links<NodeInfo>(resources_, links_, create_info);
+    tag_resource_ref_count(node);
 
     if (G.debug & G_DEBUG_GPU) {
       if (!debug_.group_used) {
@@ -221,6 +228,43 @@ class VKRenderGraph : public NonCopyable {
       debug_.node_group_map[node_handle] = debug_.used_groups.size() - 1;
     }
     return node_handle;
+  }
+
+  /**
+   * Add a ref count for resources that are not yet in use by this render graph.
+   */
+  void tag_resource_ref_count(const VKRenderGraphNode &node)
+  {
+    resource_usages_.reserve(resources_.resources_.size());
+    for (const VKRenderGraphBuffer &buffer : links_.buffers.as_span().slice(node.links.buffers)) {
+      ResourceHandle handle = buffer.resource.handle;
+      if (resource_usages_[handle]) {
+        continue;
+      }
+      resource_usages_[handle].set();
+      resources_.get_buffer_resource(handle).ref_count += 1;
+    }
+    for (const VKRenderGraphImage &image : links_.images.as_span().slice(node.links.images)) {
+      ResourceHandle handle = image.resource.handle;
+      if (resource_usages_[handle]) {
+        continue;
+      }
+      resource_usages_[handle].set();
+      resources_.get_image_resource(handle).ref_count += 1;
+    }
+  }
+
+  void deref_resources()
+  {
+    std::scoped_lock lock(resources_.mutex);
+
+    for (ResourceHandle handle : IndexRange(resource_usages_.size())) {
+      if (resource_usages_[handle]) {
+        VKResourceStateTracker::Resource &resource = resources_.get_resource(handle);
+        BLI_assert(resource.ref_count != 0);
+        resource.ref_count -= 1;
+      }
+    }
   }
 
  public:

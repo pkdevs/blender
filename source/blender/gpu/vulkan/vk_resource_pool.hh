@@ -100,6 +100,7 @@ class VKDiscardPool {
   void deinit(VKDevice &device);
 
   void discard_swapchain_image(VkImage vk_image);
+  // TODO: should become a ResourceHandle?
   void discard_image(VkImage vk_image, VmaAllocation vma_allocation);
   void discard_allocation(VmaAllocation vma_allocation);
   void discard_image_view(VkImageView vk_image_view);

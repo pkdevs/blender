@@ -31,6 +31,7 @@ void VKRenderGraph::reset()
   }
   nodes_.clear();
   storage_.reset();
+  resource_usages_.fill(false);
 
   debug_.node_group_map.clear();
   debug_.used_groups.clear();

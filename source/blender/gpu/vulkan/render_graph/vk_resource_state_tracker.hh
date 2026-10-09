@@ -34,6 +34,7 @@ namespace blender::gpu::render_graph {
 class VKCommandBuilder;
 struct VKRenderGraphLink;
 class VKScheduler;
+class VKRenderGraph;
 
 /**
  * ModificationStamp is used to track resource modifications.
@@ -93,6 +94,7 @@ class VKResourceStateTracker {
   friend class VKCommandBuilder;
   friend struct VKRenderGraphLink;
   friend class VKScheduler;
+  friend class VKRenderGraph;
 
   /**
    * A render resource can be a buffer or an image that needs to be tracked during rendering.
@@ -118,6 +120,7 @@ class VKResourceStateTracker {
       } image;
     };
 
+    int ref_count = 0;
     /** Current modification stamp of the resource. */
     ModificationStamp stamp = 0;
 
@@ -178,7 +181,9 @@ class VKResourceStateTracker {
    * When an image is created in VKTexture, it needs to be registered in the device resources so
    * the resource state can be tracked during its lifetime.
    */
-  void add_image(VkImage vk_image, bool use_subresource_tracking, const char *name = nullptr);
+  ResourceHandle add_image(VkImage vk_image,
+                           bool use_subresource_tracking,
+                           const char *name = nullptr);
 
   /**
    * \brief Register an image resource that can have aliased memory.
@@ -186,10 +191,10 @@ class VKResourceStateTracker {
    * The aliased memory can still be in use and requires the image to wait for all commands to be
    * completed, before it can start writing to the aliased memory.
    */
-  void add_aliased_image(VkImage vk_image,
-                         bool use_subresource_tracking,
-                         const char *name = nullptr);
-  void add_swapchain_image(VkImage vk_image, const char *name = nullptr);
+  ResourceHandle add_aliased_image(VkImage vk_image,
+                                   bool use_subresource_tracking,
+                                   const char *name = nullptr);
+  ResourceHandle add_swapchain_image(VkImage vk_image, const char *name = nullptr);
 
   /**
    * \brief Update the layout of an image that has been externally modified.
@@ -203,13 +208,16 @@ class VKResourceStateTracker {
    */
   void update_image_layout(VkImage vk_image, VkImageLayout vk_image_layout);
 
+  void discard_image(ResourceHandle image_handle);
+  void discard_buffer(ResourceHandle buffer_handle);
+
   /**
    * Remove an registered image.
    *
    * When a image is destroyed by calling `vmaDestroyImage`, a call to `remove_image` is needed to
    * unregister the resource from state tracking.
    */
-  void remove_image(VkImage vk_image);
+  void remove_image(ResourceHandle image_handle);
 
   /**
    * Remove an registered buffer.
@@ -282,10 +290,10 @@ class VKResourceStateTracker {
   void debug_print() const;
 
  private:
-  void add_image(VkImage vk_image,
-                 bool use_subresource_tracking,
-                 VKResourceBarrierState barrier_state,
-                 const char *name = nullptr);
+  ResourceHandle add_image(VkImage vk_image,
+                           bool use_subresource_tracking,
+                           VKResourceBarrierState barrier_state,
+                           const char *name = nullptr);
 
   ResourceHandle create_resource_slot();
 
@@ -302,6 +310,12 @@ class VKResourceStateTracker {
   inline const Resource &get_image_resource(ResourceHandle resource_handle) const
   {
     BLI_assert(resources_[resource_handle].type == VKResourceType::IMAGE);
+    return resources_[resource_handle];
+  }
+  inline Resource &get_resource(ResourceHandle resource_handle)
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::IMAGE ||
+               resources_[resource_handle].type == VKResourceType::BUFFER);
     return resources_[resource_handle];
   }
   /**

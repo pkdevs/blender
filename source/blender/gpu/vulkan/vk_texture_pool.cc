@@ -438,13 +438,15 @@ Texture *VKTexturePool::acquire_texture_impl(int3 extent,
 
   /* Get or create a VkImage handle and assign it to the texture. */
   if (image_cache_) {
-    texture->vk_image_ = image_cache_->get_or_create(image_info);
+    // TODO resource_.resource_handle
+    texture->resource_.vk_handle = image_cache_->get_or_create(image_info);
   }
   else {
-    texture->vk_image_ = create_and_bind_vk_image(image_info, name_str);
+    // TODO: resource_.resource_handle
+    texture->resource_.vk_handle = create_and_bind_vk_image(image_info, name_str);
   }
   texture->vk_image_usage_ = create_info.usage;
-  debug::object_label(texture->vk_image_, name_str);
+  debug::object_label(texture->resource_.vk_handle, name_str);
 
   if (G.debug & G_DEBUG_GPU) {
     /* Accumulate usage data for debug log. */

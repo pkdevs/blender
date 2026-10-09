@@ -268,25 +268,21 @@ bool VKBuffer::free()
     unmap();
   }
 
-  VKDiscardPool::discard_pool_get().discard_buffer(resource_, allocation_);
+  VKContext *context = VKContext::get();
+  if (context) {
+    /* Prefer not using a discard pool, but use the ref counting mechanism. Ref counting mechanism
+     * will put the buffer into a discard pool as part of the submission runner. */
+    VKDevice &device = VKBackend::get().device;
+    device.resources.discard_buffer(resource_.resource_handle);
+  }
+  else {
+    VKDiscardPool::discard_pool_get().discard_buffer(resource_, allocation_);
+  }
 
   allocation_ = VK_NULL_HANDLE;
   resource_ = {};
 
   return true;
-}
-
-void VKBuffer::free_immediately(VKDevice &device)
-{
-  BLI_assert(resource_.vk_handle != VK_NULL_HANDLE);
-  BLI_assert(allocation_ != VK_NULL_HANDLE);
-  if (is_mapped()) {
-    unmap();
-  }
-  device.resources.remove_buffer(resource_);
-  vmaDestroyBuffer(device.mem_allocator_get(), resource_, allocation_);
-  allocation_ = VK_NULL_HANDLE;
-  resource_ = {};
 }
 
 }  // namespace gpu

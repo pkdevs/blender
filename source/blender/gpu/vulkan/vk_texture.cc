@@ -43,11 +43,21 @@ static VkImageAspectFlags to_vk_image_aspect_single_bit(const VkImageAspectFlags
 
 VKTexture::~VKTexture()
 {
-  if (vk_image_ != VK_NULL_HANDLE && allocation_ != VK_NULL_HANDLE) {
-    VKDiscardPool::discard_pool_get().discard_image(vk_image_, allocation_);
-    vk_image_ = VK_NULL_HANDLE;
-    allocation_ = VK_NULL_HANDLE;
+  if (resource_.vk_handle != VK_NULL_HANDLE && allocation_ != VK_NULL_HANDLE) {
+    VKContext *context = VKContext::get();
+    if (context) {
+      /* Prefer not using a discard pool, but use the ref counting mechanism. Ref counting
+       * mechanism will put the buffer into a discard pool as part of the submission runner. */
+      VKDevice &device = VKBackend::get().device;
+      device.resources.discard_image(resource_.resource_handle);
+    }
+    else {
+      VKDiscardPool::discard_pool_get().discard_image(resource_.vk_handle, allocation_);
+    }
   }
+  resource_.vk_handle = VK_NULL_HANDLE;
+  resource_.resource_handle = 0;
+  allocation_ = VK_NULL_HANDLE;
 }
 
 void VKTexture::generate_mipmap()
@@ -661,11 +671,14 @@ bool VKTexture::init_internal(gpu::Texture *src, bool use_stencil)
   return true;
 }
 
-void VKTexture::init_swapchain(VkImage vk_image, TextureFormat format)
+void VKTexture::init_swapchain(VkImage vk_image,
+                               ResourceHandle resource_handle,
+                               TextureFormat format)
 {
   device_format_ = format_ = format;
   format_flag_ = to_format_flag(format);
-  vk_image_ = vk_image;
+  resource_.resource_handle = resource_handle;
+  resource_.vk_handle = vk_image;
   type_ = GPU_TEXTURE_2D;
   usage_set(GPU_TEXTURE_USAGE_ATTACHMENT | GPU_TEXTURE_USAGE_SHADER_WRITE);
 }
@@ -766,16 +779,17 @@ bool VKTexture::allocate()
   result = vmaCreateImage(device.mem_allocator_get(),
                           &image_info,
                           &allocCreateInfo,
-                          &vk_image_,
+                          &resource_.vk_handle,
                           &allocation_,
                           &allocation_info_);
   if (result != VK_SUCCESS) {
     return false;
   }
-  debug::object_label(vk_image_, name_.c_str());
+  debug::object_label(resource_.vk_handle, name_.c_str());
 
   const bool use_subresource_tracking = image_info.arrayLayers > 1 || image_info.mipLevels > 1;
-  device.resources.add_image(vk_image_, use_subresource_tracking, name_.c_str());
+  resource_.resource_handle = device.resources.add_image(
+      resource_.vk_handle, use_subresource_tracking, name_.c_str());
 
   return result == VK_SUCCESS;
 }
