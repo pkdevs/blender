@@ -20,6 +20,8 @@ bool GHOST_ios_launcher_can_show_documents();
 void GHOST_ios_launcher_show_documents(id sender);
 /** Follow Blender's unsaved changes, which make the document save itself. */
 void GHOST_ios_launcher_set_modified(bool modified);
+/** Choose a template and create an independent document without replacing unsaved work. */
+void GHOST_ios_launcher_new_document(UIViewController *presenter);
 
 /**
  * Show Blender's window over the launcher, or hide it, fading or at once. Implemented in

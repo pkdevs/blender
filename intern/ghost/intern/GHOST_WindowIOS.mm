@@ -2216,6 +2216,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
         ![item[@"route"] isKindOfClass:NSDictionary.class]) {
       continue;
     }
+    if ([item[@"menu"] isEqual:@"TOPBAR_MT_file_new"]) {
+      [children addObject:[UIKeyCommand commandWithTitle:@"New…"
+          image:[UIImage systemImageNamed:@"doc.badge.plus"] action:NSSelectorFromString(@"newDocument:")
+          input:@"n" modifierFlags:UIKeyModifierCommand propertyList:nil]];
+      continue;
+    }
     if ([item[@"submenu"] boolValue] && ![item[@"disabled"] boolValue]) {
       [children addObject:blenderIOSNativeSubmenu(item, nil)];
       continue;
@@ -3393,6 +3399,19 @@ bool GHOST_ios_document_window_visible()
   WM_apple_ios_ui_toolbar_free_json(json);
   NSDictionary *snapshot = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
   [_scene_panels updateSnapshot:snapshot];
+}
+
+- (void)applyTemplatePresentation:(NSNotification *)notification
+{
+  [_scene_panels dismiss];
+  const BOOL timeline = [notification.userInfo[@"timeline"] boolValue];
+  if (_timeline.visible != timeline) { [_timeline toggle:nil]; }
+  [self.view setNeedsLayout];
+}
+
+- (void)newDocument:(id)sender
+{
+  GHOST_ios_launcher_new_document(self);
 }
 
 - (NSDictionary *)toolbarModel
@@ -5114,6 +5133,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* The iPadOS menu bar has all of Blender's menus. Documents are created, opened and found in
    * the launcher and save themselves, so this button keeps what remains. */
   __block __typeof__(self) controller = self;
+  UIAction *create = [UIAction actionWithTitle:@"New…" image:[UIImage systemImageNamed:@"doc.badge.plus"]
+      identifier:@"blender.document.new" handler:^(__kindof UIAction *) {
+    [controller newDocument:nil];
+  }];
+  UIAction *saveTemplate = [UIAction actionWithTitle:@"Save as Template…"
+      image:[UIImage systemImageNamed:@"square.on.square"] identifier:@"blender.template.save"
+      handler:^(__kindof UIAction *) { [controller saveAsTemplate]; }];
   UIAction *share = [UIAction actionWithTitle:@"Share…"
                                         image:[UIImage systemImageNamed:@"square.and.arrow.up"]
                                    identifier:@"blender.document.share"
@@ -5128,7 +5154,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                                         }];
   UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[
     [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline
-                 children:@[share]],
+                 children:@[create, saveTemplate, share]],
     [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline
                  children:@[desktop]],
   ]];
@@ -5153,6 +5179,43 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
        activity.popoverPresentationController.sourceItem = controller->_actions_button;
        [controller presentViewController:activity animated:YES completion:nil];
      }];
+}
+
+- (void)saveAsTemplate
+{
+  UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Save as Template"
+      message:nil preferredStyle:UIAlertControllerStyleAlert];
+  [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+    field.placeholder = @"Template Name";
+    field.text = @"My Template";
+  }];
+  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+  [alert addAction:[UIAlertAction actionWithTitle:@"Save" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
+    NSString *name = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!name.length) { return; }
+    [alert dismissViewControllerAnimated:YES completion:^{
+      UIViewController *progress = [[[UIViewController alloc] init] autorelease];
+      progress.modalPresentationStyle = UIModalPresentationFormSheet;
+      progress.modalInPresentation = YES;
+      progress.preferredContentSize = CGSizeMake(320, 180);
+      progress.view.backgroundColor = UIColor.systemBackgroundColor;
+      UIContentUnavailableConfiguration *loading = [UIContentUnavailableConfiguration loadingConfiguration];
+      loading.text = @"Saving Template";
+      progress.contentUnavailableConfiguration = loading;
+      [self presentViewController:progress animated:YES completion:^{
+        GHOST_ios_template_save(name, @{@"timeline": @(self->_timeline.visible)}, ^(NSString *error) {
+          [progress dismissViewControllerAnimated:YES completion:^{
+            UIAlertController *result = [UIAlertController alertControllerWithTitle:error ? @"Could Not Save Template" : @"Template Saved"
+                message:error ?: @"Available in My Templates when creating a new document."
+                preferredStyle:UIAlertControllerStyleAlert];
+            [result addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+            [self presentViewController:result animated:YES completion:nil];
+          }];
+        });
+      }];
+    }];
+  }]];
+  [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (UIBarButtonItem *)actionsButton
@@ -5510,6 +5573,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [NSNotificationCenter.defaultCenter addObserver:self
       selector:@selector(cancelViewGizmoInteraction)
       name:UIApplicationWillResignActiveNotification object:nil];
+  [NSNotificationCenter.defaultCenter addObserver:self
+      selector:@selector(applyTemplatePresentation:)
+      name:@"BlenderTemplatePresentation" object:nil];
 
   UILayoutGuide *safe_area = _overlay_view.safeAreaLayoutGuide;
   /* The radial view is frontmost and passes through when the palette is closed. */

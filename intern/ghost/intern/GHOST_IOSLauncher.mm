@@ -253,56 +253,16 @@ static void launcherStyle(UIDocumentViewControllerLaunchOptions *launch)
 /** \name Templates
  * \{ */
 
-/**
- * Blender's application templates that suit the iPad, General first, as File > New lists them.
- * Only General for now: the others bring Blender's desktop interface along.
- */
-static const bool launcher_desktop_templates = false;
-
 static NSArray<NSDictionary *> *launcherTemplates()
 {
-  if (!launcher_desktop_templates) {
-    return @[@{@"name": @"", @"title": @"General"}];
-  }
-  NSMutableArray *templates = [NSMutableArray arrayWithObject:@{@"name": @"", @"title": @"General"}];
-  NSString *assets = [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"Assets"];
-  NSFileManager *files = NSFileManager.defaultManager;
-  for (NSString *version in [files contentsOfDirectoryAtPath:assets error:nil]) {
-    NSString *folder = [assets stringByAppendingPathComponent:
-                                   [version stringByAppendingPathComponent:
-                                                @"scripts/startup/bl_app_templates_system"]];
-    NSArray *names = [[files contentsOfDirectoryAtPath:folder error:nil]
-        sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
-    for (NSString *name in names) {
-      NSString *startup = [folder stringByAppendingPathComponent:
-                                      [name stringByAppendingPathComponent:@"startup.blend"]];
-      if ([files fileExistsAtPath:startup]) {
-        /* As Blender displays them, "Video_Editing" as "Video Editing". */
-        [templates addObject:@{@"name": name,
-                               @"title": [name stringByReplacingOccurrencesOfString:@"_" withString:@" "]}];
-      }
-    }
-  }
-  return templates;
+  return GHOST_ios_document_templates();
 }
 
-static NSString *launcherTemplateSymbol(NSString *name)
-{
-  NSDictionary *symbols = @{
-    @"": @"cube",
-    @"2D_Animation": @"pencil.and.scribble",
-    @"Sculpting": @"hand.draw",
-    @"Storyboarding": @"rectangle.split.3x1",
-    @"VFX": @"sparkles",
-    @"Video_Editing": @"film",
-  };
-  return symbols[name] ?: @"square.dashed";
-}
-
-/** A template as a card: its symbol above its name. */
+/** A real preview of the starting scene, with a native selection outline. */
 @interface GHOSTIOSTemplateCell : UICollectionViewCell
 @property(nonatomic, readonly) UIImageView *symbol;
 @property(nonatomic, readonly) UILabel *name;
+@property(nonatomic, copy) NSString *templateIdentifier;
 @end
 
 @implementation GHOSTIOSTemplateCell
@@ -312,26 +272,29 @@ static NSString *launcherTemplateSymbol(NSString *name)
   if ((self = [super initWithFrame:frame])) {
     _symbol = [[UIImageView alloc] init];
     _symbol.contentMode = UIViewContentModeScaleAspectFit;
-    _symbol.tintColor = launcherColor(0xE87D0D, 1);
-    _symbol.preferredSymbolConfiguration = [UIImageSymbolConfiguration
-        configurationWithPointSize:40 weight:UIImageSymbolWeightRegular];
+    _symbol.layer.cornerRadius = 6;
+    _symbol.clipsToBounds = YES;
     _name = [[UILabel alloc] init];
     _name.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
     _name.adjustsFontForContentSizeCategory = YES;
     _name.textAlignment = NSTextAlignmentCenter;
+    _name.numberOfLines = 0;
     UIStackView *stack = [[[UIStackView alloc] initWithArrangedSubviews:@[_symbol, _name]] autorelease];
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = 12;
-    stack.alignment = UIStackViewAlignmentCenter;
+    stack.alignment = UIStackViewAlignmentFill;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[
-      [stack.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-      [stack.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-      [stack.widthAnchor constraintLessThanOrEqualToAnchor:self.contentView.widthAnchor constant:-16],
+      [stack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:10],
+      [stack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-10],
+      [stack.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:10],
+      [stack.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-10],
+      [_symbol.heightAnchor constraintEqualToAnchor:_symbol.widthAnchor multiplier:420.0 / 640.0],
     ]];
     self.isAccessibilityElement = YES;
     self.accessibilityTraits = UIAccessibilityTraitButton;
+    [self addInteraction:[[[UIPointerInteraction alloc] initWithDelegate:nil] autorelease]];
   }
   return self;
 }
@@ -340,29 +303,45 @@ static NSString *launcherTemplateSymbol(NSString *name)
 {
   [_symbol release];
   [_name release];
+  [_templateIdentifier release];
   [super dealloc];
 }
 
 - (void)updateConfigurationUsingState:(UICellConfigurationState *)state
 {
   UIBackgroundConfiguration *background = [UIBackgroundConfiguration listCellConfiguration];
-  background.cornerRadius = 20;
+  background.cornerRadius = 8;
+  background.strokeColor = state.isSelected ? self.tintColor : UIColor.clearColor;
+  background.strokeWidth = state.isSelected ? 2 : 0;
   background.backgroundColor = state.isHighlighted || state.isSelected ?
                                    UIColor.tertiarySystemFillColor :
                                    UIColor.secondarySystemBackgroundColor;
   self.backgroundConfiguration = background;
+  _name.textColor = state.isSelected ? self.tintColor : UIColor.labelColor;
+  self.accessibilityTraits = UIAccessibilityTraitButton | (state.isSelected ? UIAccessibilityTraitSelected : 0);
+}
+
+- (void)tintColorDidChange
+{
+  [super tintColorDidChange];
+  [self setNeedsUpdateConfiguration];
 }
 
 @end
 
 /** A grid of Blender's templates, to start a new document from one. */
-@interface GHOSTIOSTemplatePicker : UICollectionViewController
+@interface GHOSTIOSTemplatePicker : UICollectionViewController <UIAdaptivePresentationControllerDelegate, UISearchResultsUpdating>
 @property(nonatomic, copy) void (^completion)(NSString *app_template);
 @end
 
 @implementation GHOSTIOSTemplatePicker {
   NSArray<NSDictionary *> *_templates;
+  NSArray<NSArray *> *_sections;
+  NSArray<NSString *> *_sectionTitles;
+  UISearchController *_search;
   BOOL _finished;
+  UIBarButtonItem *_create;
+  NSString *_selected;
 }
 
 - (instancetype)init
@@ -371,26 +350,40 @@ static NSString *launcherTemplateSymbol(NSString *name)
       initWithSectionProvider:^NSCollectionLayoutSection *(NSInteger,
                                                             id<NSCollectionLayoutEnvironment> environment) {
         const CGFloat width = environment.container.effectiveContentSize.width;
-        const NSInteger columns = width > 500 ? 3 : 2;
+        const BOOL largeText = UIContentSizeCategoryIsAccessibilityCategory(environment.traitCollection.preferredContentSizeCategory);
+        const NSInteger columns = largeText || width < 360 ? 1 : width > 700 ? 3 : 2;
         NSCollectionLayoutSize *item_size = [NSCollectionLayoutSize
             sizeWithWidthDimension:[NSCollectionLayoutDimension fractionalWidthDimension:1.0 / columns]
-                   heightDimension:[NSCollectionLayoutDimension fractionalHeightDimension:1.0]];
+                   heightDimension:[NSCollectionLayoutDimension estimatedDimension:220]];
         NSCollectionLayoutItem *item = [NSCollectionLayoutItem itemWithLayoutSize:item_size];
         item.contentInsets = NSDirectionalEdgeInsetsMake(8, 8, 8, 8);
         NSCollectionLayoutSize *group_size = [NSCollectionLayoutSize
             sizeWithWidthDimension:[NSCollectionLayoutDimension fractionalWidthDimension:1.0]
-                   heightDimension:[NSCollectionLayoutDimension absoluteDimension:150]];
+                   heightDimension:[NSCollectionLayoutDimension estimatedDimension:220]];
         NSCollectionLayoutGroup *group = [NSCollectionLayoutGroup
             horizontalGroupWithLayoutSize:group_size
                                  repeatingSubitem:item
                                             count:columns];
         NSCollectionLayoutSection *section = [NSCollectionLayoutSection sectionWithGroup:group];
+        section.interGroupSpacing = 16;
+        NSCollectionLayoutBoundarySupplementaryItem *header = [NSCollectionLayoutBoundarySupplementaryItem
+            boundarySupplementaryItemWithLayoutSize:[NSCollectionLayoutSize
+                sizeWithWidthDimension:[NSCollectionLayoutDimension fractionalWidthDimension:1]
+                heightDimension:[NSCollectionLayoutDimension estimatedDimension:44]]
+            elementKind:UICollectionElementKindSectionHeader alignment:NSRectAlignmentTop];
+        section.boundarySupplementaryItems = @[header];
         section.contentInsets = NSDirectionalEdgeInsetsMake(12, 12, 12, 12);
         return section;
       }] autorelease];
   if ((self = [super initWithCollectionViewLayout:layout])) {
-    _templates = [launcherTemplates() retain];
+    [self reloadTemplates];
     self.title = @"Choose a Template";
+    self.preferredContentSize = CGSizeMake(780, 640);
+    NSString *last = [NSUserDefaults.standardUserDefaults stringForKey:@"blender.lastTemplate"];
+    for (NSDictionary *item in _templates) {
+      if ([item[@"id"] isEqual:last]) { _selected = [last copy]; break; }
+    }
+    if (!_selected) { _selected = [_templates.firstObject[@"id"] copy]; }
   }
   return self;
 }
@@ -398,7 +391,12 @@ static NSString *launcherTemplateSymbol(NSString *name)
 - (void)dealloc
 {
   [_templates release];
+  [_sections release];
+  [_sectionTitles release];
+  [_search release];
   [_completion release];
+  [_selected release];
+  [_create release];
   [super dealloc];
 }
 
@@ -406,17 +404,117 @@ static NSString *launcherTemplateSymbol(NSString *name)
 {
   [super viewDidLoad];
   [self.collectionView registerClass:GHOSTIOSTemplateCell.class forCellWithReuseIdentifier:@"template"];
+  [self.collectionView registerClass:UICollectionReusableView.class
+      forSupplementaryViewOfKind:UICollectionElementKindSectionHeader withReuseIdentifier:@"section"];
+  self.collectionView.backgroundColor = UIColor.systemBackgroundColor;
+  self.collectionView.selectionFollowsFocus = YES;
+  _search = [[UISearchController alloc] initWithSearchResultsController:nil];
+  _search.obscuresBackgroundDuringPresentation = NO;
+  _search.hidesNavigationBarDuringPresentation = NO;
+  _search.searchResultsUpdater = self;
+  _search.searchBar.placeholder = @"Search Templates";
+  self.navigationItem.searchController = _search;
+  self.navigationItem.hidesSearchBarWhenScrolling = NO;
+  self.definesPresentationContext = YES;
   __block GHOSTIOSTemplatePicker *picker = self;
   self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc]
       initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
                     primaryAction:[UIAction actionWithHandler:^(__kindof UIAction *) {
                       [picker finish:nil];
                     }]] autorelease];
+  _create = [[UIBarButtonItem alloc] initWithTitle:@"Create" style:UIBarButtonItemStyleProminent
+      target:self action:@selector(createSelected:)];
+  _create.accessibilityIdentifier = @"blender.template.create";
+  _create.enabled = _selected != nil;
+  self.navigationItem.rightBarButtonItem = _create;
+  for (NSUInteger section = 0; section < _sections.count; section++) {
+    for (NSUInteger index = 0; index < _sections[section].count; index++) {
+      if ([_sections[section][index][@"id"] isEqual:_selected]) {
+        [self.collectionView selectItemAtIndexPath:[NSIndexPath indexPathForItem:index inSection:section]
+                                        animated:NO scrollPosition:UICollectionViewScrollPositionNone];
+      }
+    }
+  }
+}
+
+- (void)reloadTemplates
+{
+  [_templates release];
+  _templates = [launcherTemplates() retain];
+  [self filterTemplates];
+}
+
+- (void)filterTemplates
+{
+  NSString *query = [_search.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  NSMutableArray *bundled = [NSMutableArray array], *personal = [NSMutableArray array];
+  BOOL selectionVisible = NO;
+  for (NSDictionary *entry in _templates) {
+    if (query.length && [entry[@"title"] rangeOfString:query options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch].location == NSNotFound) { continue; }
+    NSMutableArray *group = [entry[@"personal"] boolValue] ? personal : bundled;
+    [group addObject:entry];
+    selectionVisible |= [entry[@"id"] isEqual:_selected];
+  }
+  NSMutableArray *sections = [NSMutableArray array], *titles = [NSMutableArray array];
+  if (bundled.count) { [sections addObject:bundled]; [titles addObject:@"Blender"]; }
+  if (personal.count) { [sections addObject:personal]; [titles addObject:@"My Templates"]; }
+  [_sections release];
+  _sections = [sections copy];
+  [_sectionTitles release];
+  _sectionTitles = [titles copy];
+  _create.enabled = selectionVisible;
+  if (self.isViewLoaded) {
+    [self.collectionView reloadData];
+    self.contentUnavailableConfiguration = sections.count ? nil : [UIContentUnavailableConfiguration searchConfiguration];
+    for (NSUInteger section = 0; section < _sections.count; section++) {
+      for (NSUInteger index = 0; index < _sections[section].count; index++) {
+        if ([_sections[section][index][@"id"] isEqual:_selected]) {
+          [self.collectionView selectItemAtIndexPath:[NSIndexPath indexPathForItem:index inSection:section]
+              animated:NO scrollPosition:UICollectionViewScrollPositionNone];
+        }
+      }
+    }
+  }
+}
+
+- (void)updateSearchResultsForSearchController:(UISearchController *)searchController
+{
+  [self filterTemplates];
+}
+
+- (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView
+{
+  return _sections.count;
+}
+
+- (UICollectionReusableView *)collectionView:(UICollectionView *)collectionView
+    viewForSupplementaryElementOfKind:(NSString *)kind atIndexPath:(NSIndexPath *)indexPath
+{
+  UICollectionReusableView *view = [collectionView dequeueReusableSupplementaryViewOfKind:kind
+      withReuseIdentifier:@"section" forIndexPath:indexPath];
+  UILabel *title = (UILabel *)[view viewWithTag:1];
+  if (!title) {
+    title = [[[UILabel alloc] init] autorelease];
+    title.tag = 1;
+    title.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    title.adjustsFontForContentSizeCategory = YES;
+    title.numberOfLines = 0;
+    title.translatesAutoresizingMaskIntoConstraints = NO;
+    [view addSubview:title];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:view.leadingAnchor constant:8],
+      [title.trailingAnchor constraintEqualToAnchor:view.trailingAnchor constant:-8],
+      [title.topAnchor constraintEqualToAnchor:view.topAnchor constant:8],
+      [title.bottomAnchor constraintEqualToAnchor:view.bottomAnchor constant:-8],
+    ]];
+  }
+  title.text = _sectionTitles[indexPath.section];
+  return view;
 }
 
 - (NSInteger)collectionView:(UICollectionView *)view numberOfItemsInSection:(NSInteger)section
 {
-  return _templates.count;
+  return _sections[section].count;
 }
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)view
@@ -424,17 +522,103 @@ static NSString *launcherTemplateSymbol(NSString *name)
 {
   GHOSTIOSTemplateCell *cell = [view dequeueReusableCellWithReuseIdentifier:@"template"
                                                                 forIndexPath:index];
-  NSDictionary *item = _templates[index.item];
-  cell.symbol.image = [UIImage systemImageNamed:launcherTemplateSymbol(item[@"name"])];
+  NSDictionary *item = _sections[index.section][index.item];
+  cell.templateIdentifier = item[@"id"];
+  cell.symbol.image = nil;
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    UIImage *preview = [UIImage imageWithContentsOfFile:[item[@"previewURL"] path]];
+    [preview prepareForDisplayWithCompletionHandler:^(UIImage *image) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        if ([cell.templateIdentifier isEqual:item[@"id"]]) { cell.symbol.image = image; }
+      });
+    }];
+  });
   cell.name.text = item[@"title"];
   cell.accessibilityLabel = item[@"title"];
-  cell.accessibilityIdentifier = [@"blender.template." stringByAppendingString:item[@"name"]];
+  cell.accessibilityIdentifier = [@"blender.template." stringByAppendingString:item[@"id"]];
   return cell;
 }
 
 - (void)collectionView:(UICollectionView *)view didSelectItemAtIndexPath:(NSIndexPath *)index
 {
-  [self finish:_templates[index.item][@"name"]];
+  [_selected release];
+  _selected = [_sections[index.section][index.item][@"id"] copy];
+  _create.enabled = YES;
+}
+
+- (void)manageTemplate:(NSDictionary *)entry action:(NSString *)action title:(NSString *)title
+{
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    const BOOL success = GHOST_ios_template_manage(entry[@"id"], action, title);
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (success) {
+        if ([action isEqual:@"delete"] && [entry[@"id"] isEqual:self->_selected]) {
+          [self->_selected release]; self->_selected = nil;
+          self->_create.enabled = NO;
+        }
+        [self reloadTemplates];
+      }
+      else {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Could Not Update Template"
+            message:@"Check available storage and try again." preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+      }
+    });
+  });
+}
+
+- (UIContextMenuConfiguration *)collectionView:(UICollectionView *)collectionView
+    contextMenuConfigurationForItemAtIndexPath:(NSIndexPath *)index point:(CGPoint)point
+{
+  NSDictionary *entry = _sections[index.section][index.item];
+  return [UIContextMenuConfiguration configurationWithIdentifier:entry[@"id"] previewProvider:nil
+      actionProvider:^UIMenu *(NSArray<UIMenuElement *> *) {
+    NSMutableArray *items = [NSMutableArray arrayWithObject:[UIAction actionWithTitle:@"Duplicate"
+        image:[UIImage systemImageNamed:@"plus.square.on.square"] identifier:nil handler:^(__kindof UIAction *) {
+      [self manageTemplate:entry action:@"duplicate" title:nil];
+    }]];
+    if ([entry[@"personal"] boolValue]) {
+      [items addObject:[UIAction actionWithTitle:@"Rename" image:[UIImage systemImageNamed:@"pencil"]
+          identifier:nil handler:^(__kindof UIAction *) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Rename Template"
+            message:nil preferredStyle:UIAlertControllerStyleAlert];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.text = entry[@"title"]; }];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Rename" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
+          NSString *name = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+          if (name.length) { [self manageTemplate:entry action:@"rename" title:name]; }
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
+      }]];
+      UIAction *remove = [UIAction actionWithTitle:@"Delete" image:[UIImage systemImageNamed:@"trash"]
+          identifier:nil handler:^(__kindof UIAction *) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Delete Template?"
+            message:@"Documents created from this template will not be deleted."
+            preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Delete" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *) {
+          [self manageTemplate:entry action:@"delete" title:nil];
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
+      }];
+      remove.attributes = UIMenuElementAttributesDestructive;
+      [items addObject:remove];
+    }
+    return [UIMenu menuWithTitle:@"" children:items];
+  }];
+}
+
+- (void)createSelected:(id)sender
+{
+  if (!_selected) { return; }
+  [NSUserDefaults.standardUserDefaults setObject:_selected forKey:@"blender.lastTemplate"];
+  [self finish:_selected];
+}
+
+- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController
+{
+  [self finish:nil];
 }
 
 - (void)finish:(NSString *)app_template
@@ -444,10 +628,12 @@ static NSString *launcherTemplateSymbol(NSString *name)
   }
   _finished = YES;
   void (^completion)(NSString *) = [[_completion retain] autorelease];
-  [self.presentingViewController dismissViewControllerAnimated:YES completion:nil];
-  if (completion) {
-    completion(app_template);
+  if (self.presentingViewController) {
+    [self.presentingViewController dismissViewControllerAnimated:YES completion:^{
+      if (completion) { completion(app_template); }
+    }];
   }
+  else if (completion) { completion(app_template); }
 }
 
 @end
@@ -470,6 +656,7 @@ static UIDocumentCreationIntent const launcher_template_intent = @"template";
 @interface GHOSTIOSLauncherController : UIDocumentViewController <UIDocumentBrowserViewControllerDelegate>
 - (void)openDocumentAtURL:(NSURL *)url;
 - (void)chooseTemplate:(void (^)(NSString *app_template))completion;
+- (void)newDocumentFrom:(UIViewController *)presenter;
 @end
 
 static GHOSTIOSLauncherController *launcher_controller = nil;
@@ -479,6 +666,11 @@ static NSURL *launcher_pending_url = nil;
 @implementation GHOSTIOSLauncherController {
   /** A document is being opened: Blender loads one file at a time. */
   BOOL _opening;
+  BOOL _creating;
+  NSString *_creatingTemplate;
+  NSURL *_createdURL;
+  NSDictionary *_createdPresentation;
+  NSURL *_creationSource;
 }
 
 - (void)viewDidLoad
@@ -550,7 +742,74 @@ static NSURL *launcher_pending_url = nil;
 - (void)dealloc
 {
   [NSNotificationCenter.defaultCenter removeObserver:self];
+  [_creatingTemplate release];
+  [_createdURL release];
+  [_createdPresentation release];
+  [_creationSource release];
   [super dealloc];
+}
+
+- (void)creationFailed:(UIViewController *)presenter
+{
+  _creating = NO;
+  [_creatingTemplate release];
+  _creatingTemplate = nil;
+  if (_creationSource) {
+    [NSFileManager.defaultManager removeItemAtURL:_creationSource.URLByDeletingLastPathComponent error:nil];
+    [_creationSource release];
+    _creationSource = nil;
+  }
+  UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Could Not Create Document"
+      message:@"Your current document has not been replaced. Check available storage and try again."
+      preferredStyle:UIAlertControllerStyleAlert];
+  [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+  [presenter presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)recordCreatedTemplateAtURL:(NSURL *)url
+{
+  if (!_creatingTemplate) { return; }
+  [_createdURL release];
+  _createdURL = [url copy];
+  [_createdPresentation release];
+  _createdPresentation = nil;
+  for (NSDictionary *entry in launcherTemplates()) {
+    if ([entry[@"id"] isEqual:_creatingTemplate.length ? _creatingTemplate : @"general"]) {
+      _createdPresentation = [entry[@"presentation"] copy];
+      break;
+    }
+  }
+  [_creatingTemplate release];
+  _creatingTemplate = nil;
+  _creating = NO;
+}
+
+- (void)newDocumentFrom:(UIViewController *)presenter
+{
+  if (_creating || _opening || presenter.presentedViewController) { return; }
+  _creating = YES;
+  GHOSTIOSTemplatePicker *picker = [[[GHOSTIOSTemplatePicker alloc] init] autorelease];
+  picker.completion = ^(NSString *identifier) {
+    if (!identifier) { self->_creating = NO; return; }
+    [self->_creatingTemplate release];
+    self->_creatingTemplate = [identifier copy];
+    GHOST_ios_document_create(identifier, ^(NSURL *source) {
+      if (!source) { [self creationFailed:presenter]; return; }
+      [self.launchOptions.browserViewController importDocumentAtURL:source
+          nextToDocumentAtURL:self.document.fileURL mode:UIDocumentBrowserImportModeMove
+          completionHandler:^(NSURL *destination, NSError *error) {
+        [NSFileManager.defaultManager removeItemAtURL:source.URLByDeletingLastPathComponent error:nil];
+        if (!destination || error) { [self creationFailed:presenter]; return; }
+        [self recordCreatedTemplateAtURL:destination];
+        [self openDocumentAtURL:destination];
+      }];
+    });
+  };
+  UINavigationController *sheet = [[[UINavigationController alloc] initWithRootViewController:picker] autorelease];
+  sheet.modalPresentationStyle = UIModalPresentationFormSheet;
+  sheet.preferredContentSize = picker.preferredContentSize;
+  sheet.presentationController.delegate = picker;
+  [presenter presentViewController:sheet animated:YES completion:nil];
 }
 
 - (void)openDocumentAtURL:(NSURL *)url
@@ -570,14 +829,25 @@ static NSURL *launcher_pending_url = nil;
                    _opening = NO;
                  });
   GHOSTIOSBlendDocument *document = [[[GHOSTIOSBlendDocument alloc] initWithFileURL:url] autorelease];
+  document.templateDocument = [_createdURL.URLByStandardizingPath isEqual:url.URLByStandardizingPath];
   if (!previous_open) {
     self.document = document;
     return;
   }
   /* One file at a time: the current one saves as it closes. */
   GHOST_ios_document_window_set_visible(false, true);
-  [previous closeWithCompletionHandler:^(BOOL) {
-    self.document = document;
+  [previous closeWithCompletionHandler:^(BOOL success) {
+    if (success) { self.document = document; }
+    else {
+      self->_opening = NO;
+      UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Could Not Save Document"
+          message:@"The current document could not be saved. It has not been replaced."
+          preferredStyle:UIAlertControllerStyleAlert];
+      [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
+        GHOST_ios_document_window_set_visible(true, true);
+      }]];
+      [self presentViewController:alert animated:YES completion:nil];
+    }
   }];
 }
 
@@ -589,6 +859,7 @@ static NSURL *launcher_pending_url = nil;
   UINavigationController *sheet = [[[UINavigationController alloc] initWithRootViewController:picker]
       autorelease];
   sheet.modalPresentationStyle = UIModalPresentationFormSheet;
+  sheet.preferredContentSize = picker.preferredContentSize;
   /* Swiping the sheet away cancels, like Cancel. */
   sheet.presentationController.delegate = (id<UIAdaptivePresentationControllerDelegate>)picker;
   [self presentViewController:sheet animated:YES completion:nil];
@@ -618,6 +889,14 @@ static NSURL *launcher_pending_url = nil;
   }
   /* Blender has loaded the file: show it. */
   GHOST_ios_document_window_set_visible(true, true);
+  if ([_createdURL.URLByStandardizingPath isEqual:self.document.fileURL.URLByStandardizingPath]) {
+    [NSNotificationCenter.defaultCenter postNotificationName:@"BlenderTemplatePresentation"
+        object:nil userInfo:_createdPresentation];
+    [_createdURL release];
+    _createdURL = nil;
+    [_createdPresentation release];
+    _createdPresentation = nil;
+  }
 }
 
 
@@ -638,8 +917,13 @@ static NSURL *launcher_pending_url = nil;
       importHandler(nil, UIDocumentBrowserImportModeNone);
       return;
     }
+    [self->_creatingTemplate release];
+    self->_creatingTemplate = [app_template copy];
     GHOST_ios_document_create(app_template, ^(NSURL *url) {
+      [self->_creationSource release];
+      self->_creationSource = [url copy];
       importHandler(url, url ? UIDocumentBrowserImportModeMove : UIDocumentBrowserImportModeNone);
+      if (!url) { [self creationFailed:self]; }
     });
   };
   if (![browser.activeDocumentCreationIntent isEqualToString:launcher_template_intent]) {
@@ -653,7 +937,19 @@ static NSURL *launcher_pending_url = nil;
     didImportDocumentAtURL:(NSURL *)sourceURL
           toDestinationURL:(NSURL *)destinationURL
 {
+  if (_creatingTemplate) { [self recordCreatedTemplateAtURL:destinationURL]; }
+  if ([_creationSource isEqual:sourceURL]) {
+    [NSFileManager.defaultManager removeItemAtURL:sourceURL.URLByDeletingLastPathComponent error:nil];
+    [_creationSource release];
+    _creationSource = nil;
+  }
   [self openDocumentAtURL:destinationURL];
+}
+
+- (void)documentBrowser:(UIDocumentBrowserViewController *)browser
+    failedToImportDocumentAtURL:(NSURL *)documentURL error:(NSError *)error
+{
+  [self creationFailed:self];
 }
 
 - (void)documentBrowser:(UIDocumentBrowserViewController *)browser
@@ -666,22 +962,18 @@ static NSURL *launcher_pending_url = nil;
 
 @end
 
-@interface GHOSTIOSTemplatePicker (Dismissal) <UIAdaptivePresentationControllerDelegate>
-@end
-
-@implementation GHOSTIOSTemplatePicker (Dismissal)
-- (void)presentationControllerDidDismiss:(UIPresentationController *)controller
-{
-  [self finish:nil];
-}
-@end
-
 UIViewController *GHOST_ios_launcher_controller()
 {
   if (launcher_controller == nil) {
     launcher_controller = [[GHOSTIOSLauncherController alloc] initWithDocument:nil];
   }
   return launcher_controller;
+}
+
+void GHOST_ios_launcher_new_document(UIViewController *presenter)
+{
+  GHOST_ios_launcher_controller();
+  [launcher_controller newDocumentFrom:presenter];
 }
 
 void GHOST_ios_document_open_url(NSURL *url)
