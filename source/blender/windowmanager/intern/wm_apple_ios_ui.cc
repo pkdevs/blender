@@ -2487,9 +2487,6 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
   WM_apple_ios_fileselect_flush(C);
 #endif
   WM_apple_ios_ui_ensure_layout(C);
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  WM_apple_ios_session_restore(C);
-#endif
 
   if (ios_navigation_redraw_pending.exchange(false)) {
     const IOSContextStore context_store = ios_context_push_view3d(C);

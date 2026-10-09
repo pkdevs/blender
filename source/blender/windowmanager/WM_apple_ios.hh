@@ -34,11 +34,17 @@ void WM_apple_ios_starter_library_ensure();
 void WM_apple_ios_autosave_ensure();
 /** Write the auto-save now, in any mode, when the app goes to the background. */
 void WM_apple_ios_autosave_now(bContext *C);
+/* Documents. UIKit owns them, and Blender reads and writes their files when asked. */
+
+/** Open the document's file. */
+bool WM_apple_ios_document_open(bContext *C, const char *filepath);
 /**
- * Once per launch, continue the last session: work left unsaved when Blender was closed, or the
- * last document. A document opened with the app takes precedence.
+ * Write the open file to `filepath`, for iOS to move into place as the saved document. Without
+ * `preview` the file stores no preview image, which needs the GPU.
  */
-void WM_apple_ios_session_restore(bContext *C);
+bool WM_apple_ios_document_write(bContext *C, const char *filepath, bool preview);
+/** Write a new file from an application template ("" for General) to `filepath`. */
+bool WM_apple_ios_document_new(bContext *C, const char *app_template, const char *filepath);
 /** Switch between the native iPad interface and Blender's own, as on a desktop computer. */
 void WM_OT_apple_ios_interface_toggle(wmOperatorType *ot);
 

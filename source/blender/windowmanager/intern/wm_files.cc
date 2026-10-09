@@ -2088,6 +2088,7 @@ bool write_crash_blend()
  * Helper to check if file `filepath` can be written.
  * \return true if it can, otherwise report an error and return false.
  */
+
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
 static void wm_autosave_remove_current();
 #endif
@@ -2502,6 +2503,27 @@ static void wm_autosave_remove_current()
   }
 }
 
+/** Auto-saves of documents left alone for a month are not worth keeping. */
+static void wm_autosave_prune()
+{
+  const std::optional<std::string> folder = BKE_appdir_folder_id(BLENDER_USER_DATAFILES,
+                                                                 "autosave");
+  if (!folder) {
+    return;
+  }
+  direntry *entries = nullptr;
+  const uint count = BLI_filelist_dir_contents(folder->c_str(), &entries);
+  const int64_t month_ago = int64_t(time(nullptr)) - 30 * 24 * 60 * 60;
+  for (uint i = 0; i < count; i++) {
+    if (!S_ISDIR(entries[i].type) && StringRef(entries[i].relname).endswith("_autosave.blend") &&
+        entries[i].s.st_mtime < month_ago)
+    {
+      BLI_delete(entries[i].path, false, false);
+    }
+  }
+  BLI_filelist_free(entries, count);
+}
+
 void WM_apple_ios_autosave_ensure()
 {
   /* iOS ends apps without warning, so auto-save is always on. */
@@ -2509,6 +2531,7 @@ void WM_apple_ios_autosave_ensure()
   if (U.savetime <= 0) {
     U.savetime = 2;
   }
+  wm_autosave_prune();
 }
 
 void WM_apple_ios_autosave_now(bContext *C)
@@ -2523,118 +2546,101 @@ void WM_apple_ios_autosave_now(bContext *C)
   WM_autosave_write(wm, bmain);
 }
 
-/** The newest auto-save, with the name of its document; prunes month-old ones. */
-static std::string wm_autosave_newest(const std::string &folder, std::string *r_name)
+/**
+ * Run an operator on the first window, as when the system opens a file, see
+ * #GHOST_kEventOpenMainFile. Documents are opened and created from outside Blender's event loop.
+ */
+static bool wm_document_operator(bContext *C, const char *idname, PointerRNA *props)
 {
-  direntry *entries = nullptr;
-  const uint count = BLI_filelist_dir_contents(folder.c_str(), &entries);
-  std::string newest;
-  int64_t newest_time = 0;
-  const int64_t month_ago = int64_t(time(nullptr)) - 30 * 24 * 60 * 60;
-  for (uint i = 0; i < count; i++) {
-    const StringRef name = entries[i].relname;
-    if (S_ISDIR(entries[i].type) || !name.endswith("_autosave.blend")) {
-      continue;
-    }
-    if (entries[i].s.st_mtime < month_ago) {
-      BLI_delete(entries[i].path, false, false);
-      continue;
-    }
-    if (entries[i].s.st_mtime > newest_time) {
-      newest_time = entries[i].s.st_mtime;
-      newest = entries[i].path;
-      StringRef stem = name.drop_suffix(StringRef("_autosave.blend").size());
-      /* Drop the path hash, "_0123abcd". */
-      if (stem.size() > 9 && stem[stem.size() - 9] == '_') {
-        stem = stem.drop_suffix(9);
-      }
-      if (r_name) {
-        *r_name = stem;
-      }
-    }
+  wmWindowManager *wm = CTX_wm_manager(C);
+  wmWindow *win = wm ? static_cast<wmWindow *>(wm->windows.first) : nullptr;
+  if (win == nullptr) {
+    return false;
   }
-  BLI_filelist_free(entries, count);
-  return newest;
+  wmWindow *win_prev = CTX_wm_window(C);
+  CTX_wm_window_set(C, win);
+  const wmOperatorStatus status = WM_operator_name_call_ptr(
+      C, WM_operatortype_find(idname, false), wm::OpCallContext::ExecDefault, props, nullptr);
+  CTX_wm_window_set(C, win_prev);
+  return status & OPERATOR_FINISHED;
 }
 
-/* Restores the auto-save as Blender's Recover Auto Save does, keeping the document's own path.
- * Blender marks it recovered, as unsaved, until the document is saved. */
-static void wm_autosave_restore(bContext *C, const std::string &autosave)
+bool WM_apple_ios_document_open(bContext *C, const char *filepath)
 {
-  wmOperatorType *ot = WM_operatortype_find("WM_OT_recover_auto_save", false);
-  PointerRNA props = WM_operator_properties_create_ptr(ot);
-  RNA_string_set(&props, "filepath", autosave.c_str());
-  WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props, nullptr);
+  PointerRNA props = WM_operator_properties_create("WM_OT_open_mainfile");
+  RNA_string_set(&props, "filepath", filepath);
+  RNA_boolean_set(&props, "display_file_selector", false);
+  const bool success = wm_document_operator(C, "WM_OT_open_mainfile", &props);
   WM_operator_properties_free(&props);
+  return success;
 }
 
-/** Only after a restore crashed: ask rather than crash again. */
-static void wm_autosave_offer_recovery(bContext *C, const std::string &folder)
+/**
+ * Write the open file for a document, with its preview: in the window, as saving from Blender
+ * does, which a preview of the 3D View or the scene's camera needs.
+ */
+static bool wm_document_write(bContext *C, const char *filepath, const bool preview)
 {
-  std::string newest_name;
-  const std::string newest = wm_autosave_newest(folder, &newest_name);
-  if (newest.empty()) {
-    return;
-  }
-  GHOST_IOSDialog dialog;
-  dialog.title = IFACE_("Recover Unsaved Work?");
-  dialog.message = newest_name == "untitled" ?
-                       std::string(IFACE_("Blender closed before your new file was saved.")) :
-                       fmt::format(fmt::runtime(IFACE_("Blender closed before \u201c{}\u201d was saved.")),
-                                   newest_name);
-  dialog.actions = {{IFACE_("Recover")}, {IFACE_("Discard"), GHOST_IOSDialogRole::Destructive}};
-  dialog.preferred_action = 0;
-  WM_apple_ios_dialog_begin(C, dialog, [newest](bContext *C, int action, uint64_t /*toggles*/) {
-    if (action != 0) {
-      BLI_delete(newest.c_str(), false, false);
-      return;
+  wmWindowManager *wm = CTX_wm_manager(C);
+  wmWindow *win = wm ? static_cast<wmWindow *>(wm->windows.first) : nullptr;
+  wmWindow *win_prev = CTX_wm_window(C);
+  if (win) {
+    CTX_wm_window_set(C, win);
+    /* Saving from Blender happens while its window is the drawing target, which the preview's
+     * drawing relies on. iOS asks between frames, when something else may draw, such as the
+     * native interface's previews: make the window the target again. */
+    if (preview && win->runtime->ghostwin) {
+      wm_window_clear_drawable(wm);
+      wm_window_make_drawable(wm, win);
     }
-    wm_autosave_restore(C, newest);
-  });
+  }
+  ReportList reports;
+  BKE_reports_init(&reports, RPT_STORE);
+  const char preview_type = U.file_preview_type;
+  /* A Frame All view of the scene, see #wm_ios_thumb_frame_all. */
+  U.file_preview_type = preview ? USER_FILE_PREVIEW_CAMERA : USER_FILE_PREVIEW_NONE;
+  wm_ios_preview_frame_all = true;
+  const bool success = wm_file_write(
+      C, filepath, G.fileflags, BLO_WRITE_PATH_REMAP_NONE, true, &reports);
+  U.file_preview_type = preview_type;
+  wm_ios_preview_frame_all = false;
+  BKE_reports_free(&reports);
+  CTX_wm_window_set(C, win_prev);
+  return success;
 }
 
-void WM_apple_ios_session_restore(bContext *C)
+bool WM_apple_ios_document_write(bContext *C, const char *filepath, const bool preview)
 {
-  static bool restored = false;
-  if (restored || CTX_wm_window(C) == nullptr) {
-    return;
+  /* A copy for iOS to move into place: paths stay relative to the document, and the file being
+   * replaced keeps no `.blend1` backup, iOS keeps versions of documents itself. */
+  const bool success = wm_document_write(C, filepath, preview);
+  if (!success) {
+    return false;
   }
-  restored = true;
-  const std::optional<std::string> folder = BKE_appdir_folder_id_create(BLENDER_USER_DATAFILES,
-                                                                        "autosave");
-  Main *bmain = CTX_data_main(C);
-  if (!folder || bmain == nullptr || BKE_main_blendfile_path(bmain)[0] != '\0') {
-    /* A document opened with the app takes precedence; its own auto-save continues on open. */
-    return;
+  /* The document is saved, as when saving it in Blender. */
+  wm_autosave_remove_current();
+  WM_event_add_notifier(C, NC_WM | ND_FILESAVE, nullptr);
+  if (wmWindowManager *wm = CTX_wm_manager(C)) {
+    wm_autosave_timer_end(wm);
+    wm_autosave_timer_begin(wm);
+    wm->autosave_scheduled = false;
   }
-  /* Marks a restore in progress. Left behind only if restoring crashed Blender: then ask
-   * instead of crashing again on every launch. */
-  char marker[FILE_MAX];
-  BLI_path_join(marker, sizeof(marker), folder->c_str(), "restoring");
-  if (BLI_exists(marker)) {
-    BLI_delete(marker, false, false);
-    wm_autosave_offer_recovery(C, *folder);
-    return;
+  return true;
+}
+
+bool WM_apple_ios_document_new(bContext *C, const char *app_template, const char *filepath)
+{
+  /* As File > New: the template's startup file, which iOS then adds as a new document. */
+  PointerRNA props = WM_operator_properties_create("WM_OT_read_homefile");
+  RNA_string_set(&props, "app_template", app_template);
+  const bool loaded = wm_document_operator(C, "WM_OT_read_homefile", &props);
+  WM_operator_properties_free(&props);
+  if (!loaded) {
+    return false;
   }
-  /* Continue the last session: its unsaved work if Blender was closed with any (saving removes
-   * the auto-save), otherwise the last document, as it was saved. */
-  const std::string newest = wm_autosave_newest(*folder, nullptr);
-  const RecentFile *recent = static_cast<const RecentFile *>(G.recent_files.first);
-  if (newest.empty() && (recent == nullptr || !BLI_exists(recent->filepath))) {
-    return;
-  }
-  BLI_file_touch(marker);
-  if (!newest.empty()) {
-    wm_autosave_restore(C, newest);
-  }
-  else {
-    wmOperatorType *ot = WM_operatortype_find("WM_OT_open_mainfile", false);
-    PointerRNA props = WM_operator_properties_create_ptr(ot);
-    RNA_string_set(&props, "filepath", recent->filepath);
-    WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props, nullptr);
-    WM_operator_properties_free(&props);
-  }
-  BLI_delete(marker, false, false);
+  /* No preview: Blender's window is not shown yet, and creating must be quick. The document gets
+   * one when it is first saved. */
+  return wm_document_write(C, filepath, false);
 }
 
 #endif
