@@ -663,14 +663,14 @@ void do_multiplane_scrape_brush(const Depsgraph &depsgraph,
 
   std::array<float4, 2> multiplane_scrape_planes;
 
-  mul_v3_mat3_m4v3(plane_no, area_normal);
+  mul_v3_mat3_m4v3(plane_no, mat.ptr(), area_normal);
   rotate_v3_v3v3fl(
       plane_no_rot, plane_no, y_axis, DEG2RADF(-ss.cache->multiplane_scrape_angle * 0.5f));
   mul_v3_mat3_m4v3(plane_no, mat_inv.ptr(), plane_no_rot);
   normalize_v3(plane_no);
   plane_from_point_normal_v3(multiplane_scrape_planes[1], area_position, plane_no);
 
-  mul_v3_mat3_m4v3(plane_no, area_normal);
+  mul_v3_mat3_m4v3(plane_no, mat.ptr(), area_normal);
   rotate_v3_v3v3fl(
       plane_no_rot, plane_no, y_axis, DEG2RADF(ss.cache->multiplane_scrape_angle * 0.5f));
   mul_v3_mat3_m4v3(plane_no, mat_inv.ptr(), plane_no_rot);
