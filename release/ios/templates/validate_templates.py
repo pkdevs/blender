@@ -30,8 +30,18 @@ def validate(entry):
     if identifier == 'sculpt':
         assert bpy.context.mode == 'SCULPT'
         assert 20000 < len(obj.data.vertices) < 50000
-        assert obj.data.use_mirror_x and not obj.use_dynamic_topology_sculpting
+        assert bpy.context.tool_settings.sculpt.use_symmetry_x and not obj.use_dynamic_topology_sculpting
+        assert abs(obj.data.remesh_voxel_size - 0.035) < 0.00001
         assert bpy.context.tool_settings.sculpt.brush is not None
+        for screen in bpy.data.screens:
+            for area in screen.areas:
+                if area.type != 'VIEW_3D':
+                    continue
+                space = area.spaces.active
+                assert space.shading.type == 'SOLID' and space.shading.light == 'MATCAP'
+                assert space.shading.studio_light == 'basic_bright.exr'
+                assert not space.shading.show_shadows and not space.shading.show_cavity
+                assert not space.overlay.show_floor and not space.overlay.show_axis_x and not space.overlay.show_axis_y
     elif identifier in {'drawing', 'animation-2d'}:
         assert bpy.context.mode == 'PAINT_GREASE_PENCIL'
         assert obj.type == 'GREASEPENCIL' and obj.data.layers.active

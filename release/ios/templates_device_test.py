@@ -65,6 +65,13 @@ def tests():
         if identifier == 'sculpt':
             check(len(bpy.context.object.data.vertices) > 20000 and bpy.context.tool_settings.sculpt.brush is not None,
                   'Sculpt template has a usable dense mesh and active brush')
+            space = next(area.spaces.active for area in bpy.context.screen.areas if area.type == 'VIEW_3D')
+            check(space.shading.light == 'MATCAP' and space.shading.studio_light == 'basic_bright.exr' and
+                  any(light.name == space.shading.studio_light and light.type == 'MATCAP'
+                      for light in bpy.context.preferences.studio_lights),
+                  'Sculpt opens with the factory matcap resolved from the iPad bundle')
+            check(not space.overlay.show_floor and not space.overlay.show_axis_x and not space.overlay.show_axis_y,
+                  'Sculpt hides the floor grid and axes')
         if mode == 'PAINT_GREASE_PENCIL':
             check(bpy.context.tool_settings.gpencil_paint.brush is not None and len(bpy.context.object.data.layers) >= 2,
                   identifier + ': Grease Pencil resolves its brush and layers on iPad')
