@@ -2573,6 +2573,8 @@ void template_search_preview(Layout *layout,
  * the property sub-type is `PROP_FILEPATH`.
  * \param name: Label text, the property name is used if unset.
  * \param placeholder: the placeholder text to show in the text widget, when empty.
+ * \param split_name: Edit the parent directory and the file or directory name in separate text
+ * widgets.
  */
 void template_filepath(Layout *layout,
                        const bContext *C,
@@ -2581,7 +2583,8 @@ void template_filepath(Layout *layout,
                        const char *pathselect_op,
                        const char *filter_glob,
                        const std::optional<StringRef> name,
-                       const std::optional<StringRef> placeholder);
+                       const std::optional<StringRef> placeholder,
+                       bool split_name = false);
 
 /**
  * This is creating/editing RNA-Paths
