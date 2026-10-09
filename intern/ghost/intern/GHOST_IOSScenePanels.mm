@@ -313,6 +313,7 @@ static BOOL blenderOptionsHavePreviews(NSArray *options)
 @end
 
 @interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate, UICollectionViewDelegate,
+                                   UICollectionViewDragDelegate, UICollectionViewDropDelegate,
                                    UISearchBarDelegate, UITextFieldDelegate,
                                    UIColorPickerViewControllerDelegate, UIPopoverPresentationControllerDelegate,
                                    UIContextMenuInteractionDelegate, UIGestureRecognizerDelegate>
@@ -456,6 +457,9 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   NSDictionary *_nodesByKey;
   UILabel *_hierarchyStatus;
   UIButton *_hierarchyAdd;
+  /* Select mode, as in Mail: checkmarks on the rows and actions for them along the bottom. */
+  UIButton *_hierarchySelect;
+  UIToolbar *_hierarchyBar;
   BOOL _multipleSelection;
   UISearchBar *_search;
   NSMutableSet *_collapsed;
@@ -584,6 +588,11 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     _tree.backgroundColor = UIColor.clearColor;
     _tree.delegate = self;
     _tree.allowsMultipleSelection = YES;
+    _tree.allowsMultipleSelectionDuringEditing = YES;
+    /* Touch and hold picks rows up; more can be tapped into the drag, as in Mail and Files. */
+    _tree.dragDelegate = self;
+    _tree.dropDelegate = self;
+    _tree.dragInteractionEnabled = YES;
     _tree.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
     _tree.accessibilityIdentifier = @"blender.hierarchy.outline";
     [_tree registerClass:UICollectionViewListCell.class forCellWithReuseIdentifier:@"node"];
@@ -605,6 +614,13 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     };
     _treeDataSource.sectionSnapshotHandlers = handlers;
     [_hierarchy.contentView addSubview:_tree];
+    _hierarchyBar = [[[UIToolbar alloc] init] autorelease];
+    _hierarchyBar.accessibilityIdentifier = @"blender.hierarchy.selectionBar";
+    [_hierarchyBar setBackgroundImage:[[[UIImage alloc] init] autorelease]
+                   forToolbarPosition:UIBarPositionAny barMetrics:UIBarMetricsDefault];
+    [_hierarchyBar setShadowImage:[[[UIImage alloc] init] autorelease] forToolbarPosition:UIBarPositionAny];
+    _hierarchyBar.hidden = YES;
+    [_hierarchy.contentView addSubview:_hierarchyBar];
     _hierarchyStatus = [self label:@"" style:UIFontTextStyleFootnote];
     _hierarchyStatus.textColor = UIColor.systemRedColor;
     _hierarchyStatus.hidden = YES;
@@ -726,13 +742,24 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
     _hierarchyAdd.menu = [UIMenu menuWithChildren:@[collection]];
     _hierarchyAdd.translatesAutoresizingMaskIntoConstraints = NO;
     [panel.contentView addSubview:_hierarchyAdd];
+    _hierarchySelect = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_hierarchySelect setTitle:@"Select" forState:UIControlStateNormal];
+    _hierarchySelect.accessibilityIdentifier = @"blender.hierarchy.select";
+    [_hierarchySelect addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+      [owner setHierarchyEditing:!owner->_tree.editing];
+    }] forControlEvents:UIControlEventTouchUpInside];
+    _hierarchySelect.translatesAutoresizingMaskIntoConstraints = NO;
+    [panel.contentView addSubview:_hierarchySelect];
     [NSLayoutConstraint activateConstraints:@[
       [_hierarchyAdd.trailingAnchor constraintEqualToAnchor:close.leadingAnchor],
       [_hierarchyAdd.centerYAnchor constraintEqualToAnchor:close.centerYAnchor],
       [_hierarchyAdd.widthAnchor constraintEqualToConstant:44],
       [_hierarchyAdd.heightAnchor constraintEqualToConstant:44],
+      [_hierarchySelect.trailingAnchor constraintEqualToAnchor:_hierarchyAdd.leadingAnchor],
+      [_hierarchySelect.centerYAnchor constraintEqualToAnchor:close.centerYAnchor],
+      [_hierarchySelect.heightAnchor constraintEqualToConstant:44],
     ]];
-    titleTrailing = _hierarchyAdd;
+    titleTrailing = _hierarchySelect;
   }
   [NSLayoutConstraint activateConstraints:@[
     [label.leadingAnchor constraintEqualToAnchor:panel.contentView.leadingAnchor constant:16],
@@ -1040,7 +1067,9 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   _inspector.center = CGPointMake(CGRectGetMaxX(rect) - 12 - width / 2, rect.origin.y + 12 + height / 2);
   _search.frame = CGRectMake(4, 52, width - 8, 52);
   CGFloat statusHeight = _hierarchyStatus.hidden ? 0 : 60;
-  _tree.frame = CGRectMake(0, 106, width, MAX(0, height - 106 - statusHeight));
+  const CGFloat barHeight = _hierarchyBar.hidden ? 0 : 50;
+  _tree.frame = CGRectMake(0, 106, width, MAX(0, height - 106 - statusHeight - barHeight));
+  _hierarchyBar.frame = CGRectMake(0, height - statusHeight - barHeight, width, barHeight);
   _hierarchyStatus.frame = CGRectMake(16, height - statusHeight, width - 32, statusHeight);
 }
 
@@ -2815,6 +2844,7 @@ static UIColor *blenderAnimationStateColor(NSString *state)
       if (path) { [_tree selectItemAtIndexPath:path animated:NO scrollPosition:UICollectionViewScrollPositionNone]; }
     }
   }
+  [self updateHierarchyBar];
 }
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText
@@ -3069,6 +3099,9 @@ static UIColor *blenderAnimationStateColor(NSString *state)
   slot.maintainsFixedSize = YES;
   slot.reservedLayoutWidth = indent + 20;
   [accessories addObject:slot];
+  if ([node[@"kind"] isEqual:@"object"]) {
+    [accessories addObject:[[[UICellAccessoryMultiselect alloc] init] autorelease]];
+  }
   if ([node[@"hidden"] boolValue]) {
     UIButton *accessory = [UIButton buttonWithType:UIButtonTypeSystem];
     accessory.tintColor = UIColor.secondaryLabelColor;
@@ -3214,6 +3247,373 @@ static UIColor *blenderAnimationStateColor(NSString *state)
   return actions;
 }
 
+/* -------------------------------------------------------------------- */
+/* Select mode, dragging and context menus: the standard list gestures, on Blender's data. */
+
+- (void)setHierarchyEditing:(BOOL)editing
+{
+  if (_tree.editing == editing) {
+    return;
+  }
+  [_tree setEditing:editing];
+  [_hierarchySelect setTitle:editing ? @"Done" : @"Select" forState:UIControlStateNormal];
+  _hierarchySelect.titleLabel.font = editing ? [UIFont boldSystemFontOfSize:17] : nil;
+  _hierarchyBar.hidden = !editing;
+  [self updateHierarchyBar];
+  /* Leaving Select mode keeps Blender's selection, which the rows go on showing. */
+  [self layoutInRect:_layoutRect];
+  [self synchronizeHierarchySelection];
+}
+
+/* The object rows a context menu or drag is about: the selection when the row is part of it. */
+- (NSArray<NSDictionary *> *)selectedHierarchyObjects
+{
+  NSMutableArray *nodes = [NSMutableArray array];
+  NSMutableSet *ids = [NSMutableSet set];
+  for (NSIndexPath *path in _tree.indexPathsForSelectedItems) {
+    NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:path]];
+    if ([node[@"kind"] isEqual:@"object"] && ![ids containsObject:node[@"id"]]) {
+      [ids addObject:node[@"id"]];
+      [nodes addObject:node];
+    }
+  }
+  return nodes;
+}
+
+- (NSArray<NSDictionary *> *)hierarchyNodesForIndexPath:(NSIndexPath *)path
+{
+  NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:path]];
+  if (!node) {
+    return @[];
+  }
+  NSArray *selected = [self selectedHierarchyObjects];
+  for (NSDictionary *other in selected) {
+    if ([other[@"id"] isEqual:node[@"id"]] && [node[@"kind"] isEqual:@"object"]) {
+      return selected;
+    }
+  }
+  return @[ node ];
+}
+
+static NSArray<NSString *> *blenderNodeIds(NSArray<NSDictionary *> *nodes)
+{
+  NSMutableOrderedSet *ids = [NSMutableOrderedSet orderedSet];
+  for (NSDictionary *node in nodes) {
+    [ids addObject:node[@"id"]];
+  }
+  return ids.array;
+}
+
+static BOOL blenderNodesAllow(NSArray<NSDictionary *> *nodes, NSString *action)
+{
+  for (NSDictionary *node in nodes) {
+    if (![node[@"actions"] containsObject:action]) {
+      return NO;
+    }
+  }
+  return nodes.count > 0;
+}
+
+/* Whether rows may move into or under `target`: not into themselves or their own children. */
+- (BOOL)hierarchyNodes:(NSArray<NSDictionary *> *)nodes canMoveTo:(NSDictionary *)target
+{
+  if (!target || !blenderNodesAllow(nodes, @"move")) {
+    return NO;
+  }
+  NSString *kind = nodes.firstObject[@"kind"];
+  for (NSDictionary *node in nodes) {
+    if (![node[@"kind"] isEqual:kind] || [node[@"id"] isEqual:target[@"id"]]) {
+      return NO;
+    }
+    /* Keys are paths of the rows above: a target inside a moved row is one of its children. */
+    for (NSDictionary *row in _nodes) {
+      if ([row[@"id"] isEqual:node[@"id"]] &&
+          [target[@"key"] hasPrefix:[row[@"key"] stringByAppendingString:@"/"]])
+      {
+        return NO;
+      }
+    }
+  }
+  if ([target[@"kind"] isEqual:@"collection"]) {
+    return [target[@"accepts"] boolValue];
+  }
+  /* Objects drop onto objects to be parented; collections only into collections. */
+  return [kind isEqual:@"object"] && [target[@"kind"] isEqual:@"object"] &&
+         [target[@"enabled"] boolValue];
+}
+
+- (void)moveHierarchyNodes:(NSArray<NSDictionary *> *)nodes to:(NSDictionary *)target
+{
+  if (![self hierarchyNodes:nodes canMoveTo:target]) {
+    return;
+  }
+  [self send:@{@"action": [target[@"kind"] isEqual:@"collection"] ? @"move" : @"parent",
+               @"kind": nodes.firstObject[@"kind"] ?: @"object", @"ids": blenderNodeIds(nodes),
+               @"target": target[@"id"]}];
+}
+
+- (void)sendHierarchyAction:(NSString *)action nodes:(NSArray<NSDictionary *> *)nodes value:(id)value
+{
+  if (nodes.count == 1) {
+    [self sendHierarchyAction:action node:nodes.firstObject value:value];
+    return;
+  }
+  if (!blenderNodesAllow(nodes, action)) {
+    return;
+  }
+  NSMutableDictionary *request = [NSMutableDictionary dictionaryWithDictionary:
+      @{@"action": action, @"kind": @"object", @"ids": blenderNodeIds(nodes)}];
+  if (value) {
+    request[@"value"] = value;
+  }
+  [self send:request];
+}
+
+- (void)confirmDeleteHierarchyNodes:(NSArray<NSDictionary *> *)nodes
+{
+  if (nodes.count == 1) {
+    [self promptHierarchyAction:@"delete" node:nodes.firstObject completion:^(BOOL) {}];
+    return;
+  }
+  UIViewController *presenter = _overlay.window.rootViewController;
+  while (presenter.presentedViewController) { presenter = presenter.presentedViewController; }
+  if (!presenter || presenter.isBeingDismissed || [presenter isKindOfClass:UIAlertController.class]) {
+    return;
+  }
+  UIAlertController *alert = [UIAlertController
+      alertControllerWithTitle:[NSString stringWithFormat:@"Delete %lu Objects?", (unsigned long)nodes.count]
+                       message:@"They will be removed from this scene. You can undo this change."
+                preferredStyle:UIAlertControllerStyleAlert];
+  __block GHOSTIOSScenePanels *owner = self;
+  NSArray *targets = [[nodes copy] autorelease];
+  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+  [alert addAction:[UIAlertAction actionWithTitle:@"Delete" style:UIAlertActionStyleDestructive
+      handler:^(UIAlertAction *) { [owner sendHierarchyAction:@"delete" nodes:targets value:nil]; }]];
+  [presenter presentViewController:alert animated:YES completion:nil];
+}
+
+/* Collections the rows can move into, indented like the Outliner. */
+- (UIMenu *)moveMenuForHierarchyNodes:(NSArray<NSDictionary *> *)nodes
+{
+  __block GHOSTIOSScenePanels *owner = self;
+  NSArray *moved = [[nodes copy] autorelease];
+  NSMutableArray *items = [NSMutableArray array];
+  for (NSDictionary *row in _nodes) {
+    if (![row[@"kind"] isEqual:@"collection"] || ![self hierarchyNodes:nodes canMoveTo:row]) {
+      continue;
+    }
+    NSString *indent = [@"" stringByPaddingToLength:2 * [row[@"depth"] integerValue]
+                                         withString:@" " startingAtIndex:0];
+    NSDictionary *target = row;
+    [items addObject:[UIAction actionWithTitle:[indent stringByAppendingString:row[@"name"]]
+                                         image:_icon(@"OUTLINER_COLLECTION")
+                                    identifier:nil
+                                       handler:^(__kindof UIAction *) {
+                                         [owner moveHierarchyNodes:moved to:target];
+                                       }]];
+  }
+  return [UIMenu menuWithTitle:@"Move to Collection" image:[UIImage systemImageNamed:@"folder"]
+                    identifier:nil options:0 children:items];
+}
+
+- (NSArray<UIMenuElement *> *)hierarchyMenuElementsForNodes:(NSArray<NSDictionary *> *)nodes
+{
+  __block GHOSTIOSScenePanels *owner = self;
+  NSArray *targets = [[nodes copy] autorelease];
+  NSDictionary *node = nodes.firstObject;
+  const BOOL several = nodes.count > 1;
+  NSMutableArray *edit = [NSMutableArray array];
+  if (!several && blenderNodesAllow(nodes, @"rename")) {
+    [edit addObject:[UIAction actionWithTitle:@"Rename" image:[UIImage systemImageNamed:@"pencil"]
+        identifier:nil handler:^(__kindof UIAction *) {
+          [owner promptHierarchyAction:@"rename" node:node completion:^(BOOL) {}];
+        }]];
+  }
+  if (blenderNodesAllow(nodes, @"duplicate")) {
+    [edit addObject:[UIAction actionWithTitle:several ? [NSString stringWithFormat:@"Duplicate %lu Objects",
+                                                         (unsigned long)nodes.count] : @"Duplicate"
+        image:[UIImage systemImageNamed:@"plus.square.on.square"] identifier:nil
+        handler:^(__kindof UIAction *) { [owner sendHierarchyAction:@"duplicate" nodes:targets value:nil]; }]];
+  }
+  if (blenderNodesAllow(nodes, @"visibility")) {
+    BOOL hidden = YES;
+    for (NSDictionary *item in nodes) {
+      hidden = hidden && [item[@"hidden"] boolValue];
+    }
+    [edit addObject:[UIAction actionWithTitle:hidden ? @"Show" : @"Hide"
+        image:[UIImage systemImageNamed:hidden ? @"eye" : @"eye.slash"] identifier:nil
+        handler:^(__kindof UIAction *) {
+          [owner sendHierarchyAction:@"visibility" nodes:targets value:@(!hidden)];
+        }]];
+  }
+  NSMutableArray *elements = [NSMutableArray array];
+  if (edit.count) {
+    [elements addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
+                                      options:UIMenuOptionsDisplayInline children:edit]];
+  }
+  UIMenu *move = [self moveMenuForHierarchyNodes:nodes];
+  if (move.children.count) {
+    [elements addObject:move];
+  }
+  if (blenderNodesAllow(nodes, @"delete")) {
+    UIAction *remove = [UIAction actionWithTitle:several ? [NSString stringWithFormat:@"Delete %lu Objects",
+                                                            (unsigned long)nodes.count] : @"Delete"
+        image:[UIImage systemImageNamed:@"trash"] identifier:nil
+        handler:^(__kindof UIAction *) { [owner confirmDeleteHierarchyNodes:targets]; }];
+    remove.attributes = UIMenuElementAttributesDestructive;
+    [elements addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
+                                      options:UIMenuOptionsDisplayInline children:@[ remove ]]];
+  }
+  return elements;
+}
+
+- (UIContextMenuConfiguration *)collectionView:(UICollectionView *)collectionView
+    contextMenuConfigurationForItemsAtIndexPaths:(NSArray<NSIndexPath *> *)indexPaths
+                                           point:(CGPoint)point
+{
+  if (collectionView != _tree || indexPaths.count != 1) {
+    return nil;
+  }
+  NSArray *nodes = [self hierarchyNodesForIndexPath:indexPaths.firstObject];
+  NSArray *elements = [self hierarchyMenuElementsForNodes:nodes];
+  if (!elements.count) {
+    return nil;
+  }
+  return [UIContextMenuConfiguration configurationWithIdentifier:nil previewProvider:nil
+      actionProvider:^UIMenu *(NSArray<UIMenuElement *> *) {
+        return [UIMenu menuWithTitle:nodes.count > 1 ?
+                                         [NSString stringWithFormat:@"%lu Objects", (unsigned long)nodes.count] :
+                                         @""
+                            children:elements];
+      }];
+}
+
+- (void)updateHierarchyBar
+{
+  if (_hierarchyBar.hidden) {
+    return;
+  }
+  NSArray *nodes = [self selectedHierarchyObjects];
+  __block GHOSTIOSScenePanels *owner = self;
+  NSArray *targets = [[nodes copy] autorelease];
+  UIBarButtonItem *(^item)(NSString *, NSString *, NSString *, void (^)(void)) =
+      ^(NSString *title, NSString *symbol, NSString *action, void (^handler)(void)) {
+        UIBarButtonItem *button = [[[UIBarButtonItem alloc]
+            initWithPrimaryAction:[UIAction actionWithTitle:title
+                                                      image:[UIImage systemImageNamed:symbol]
+                                                 identifier:nil
+                                                    handler:^(__kindof UIAction *) { handler(); }]]
+            autorelease];
+        button.enabled = blenderNodesAllow(targets, action);
+        button.accessibilityIdentifier = [@"blender.hierarchy.selection." stringByAppendingString:action];
+        return button;
+      };
+  BOOL hidden = nodes.count > 0;
+  for (NSDictionary *node in nodes) {
+    hidden = hidden && [node[@"hidden"] boolValue];
+  }
+  UIBarButtonItem *duplicate = item(@"Duplicate", @"plus.square.on.square", @"duplicate", ^{
+    [owner sendHierarchyAction:@"duplicate" nodes:targets value:nil];
+  });
+  UIBarButtonItem *visibility = item(hidden ? @"Show" : @"Hide", hidden ? @"eye" : @"eye.slash",
+                                     @"visibility", ^{
+    [owner sendHierarchyAction:@"visibility" nodes:targets value:@(!hidden)];
+  });
+  UIMenu *moveMenu = [self moveMenuForHierarchyNodes:nodes];
+  UIBarButtonItem *move = [[[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder"]
+                                                             menu:moveMenu] autorelease];
+  move.title = @"Move to Collection";
+  move.enabled = moveMenu.children.count > 0;
+  move.accessibilityIdentifier = @"blender.hierarchy.selection.move";
+  UIBarButtonItem *remove = item(@"Delete", @"trash", @"delete", ^{
+    [owner confirmDeleteHierarchyNodes:targets];
+  });
+  remove.tintColor = UIColor.systemRedColor;
+  UIBarButtonItem *space = [UIBarButtonItem flexibleSpaceItem];
+  _hierarchyBar.items = @[ duplicate, space, visibility, space, move, space, remove ];
+}
+
+- (UIDragItem *)dragItemForHierarchyNode:(NSDictionary *)node
+{
+  NSItemProvider *provider = [[[NSItemProvider alloc] initWithObject:node[@"name"] ?: @""] autorelease];
+  UIDragItem *item = [[[UIDragItem alloc] initWithItemProvider:provider] autorelease];
+  item.localObject = node;
+  return item;
+}
+
+- (NSArray<UIDragItem *> *)collectionView:(UICollectionView *)collectionView
+             itemsForBeginningDragSession:(id<UIDragSession>)session
+                              atIndexPath:(NSIndexPath *)indexPath
+{
+  NSArray *nodes = [self hierarchyNodesForIndexPath:indexPath];
+  if (!blenderNodesAllow(nodes, @"move")) {
+    return @[];
+  }
+  NSMutableArray *items = [NSMutableArray array];
+  for (NSDictionary *node in nodes) {
+    [items addObject:[self dragItemForHierarchyNode:node]];
+  }
+  return items;
+}
+
+- (NSArray<UIDragItem *> *)collectionView:(UICollectionView *)collectionView
+              itemsForAddingToDragSession:(id<UIDragSession>)session
+                              atIndexPath:(NSIndexPath *)indexPath
+                                    point:(CGPoint)point
+{
+  NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
+  NSDictionary *first = session.items.firstObject.localObject;
+  if (!node || !blenderNodesAllow(@[ node ], @"move") || ![node[@"kind"] isEqual:first[@"kind"]]) {
+    return @[];
+  }
+  for (UIDragItem *item in session.items) {
+    if ([((NSDictionary *)item.localObject)[@"id"] isEqual:node[@"id"]]) {
+      return @[];
+    }
+  }
+  return @[ [self dragItemForHierarchyNode:node] ];
+}
+
+- (NSArray<NSDictionary *> *)hierarchyNodesInSession:(id<UIDropSession>)session
+{
+  NSMutableArray *nodes = [NSMutableArray array];
+  for (UIDragItem *item in session.items) {
+    if (![item.localObject isKindOfClass:NSDictionary.class]) {
+      return @[];
+    }
+    [nodes addObject:item.localObject];
+  }
+  return nodes;
+}
+
+- (BOOL)collectionView:(UICollectionView *)collectionView canHandleDropSession:(id<UIDropSession>)session
+{
+  return session.localDragSession != nil && [self hierarchyNodesInSession:session].count > 0;
+}
+
+- (UICollectionViewDropProposal *)collectionView:(UICollectionView *)collectionView
+                            dropSessionDidUpdate:(id<UIDropSession>)session
+                        withDestinationIndexPath:(NSIndexPath *)destinationIndexPath
+{
+  NSIndexPath *path = [collectionView indexPathForItemAtPoint:[session locationInView:collectionView]];
+  NSDictionary *target = path ? _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:path]] : nil;
+  if (![self hierarchyNodes:[self hierarchyNodesInSession:session] canMoveTo:target]) {
+    return [[[UICollectionViewDropProposal alloc] initWithDropOperation:UIDropOperationForbidden]
+        autorelease];
+  }
+  return [[[UICollectionViewDropProposal alloc]
+      initWithDropOperation:UIDropOperationMove
+                     intent:UICollectionViewDropIntentInsertIntoDestinationIndexPath] autorelease];
+}
+
+- (void)collectionView:(UICollectionView *)collectionView
+    performDropWithCoordinator:(id<UICollectionViewDropCoordinator>)coordinator
+{
+  NSIndexPath *path = [collectionView indexPathForItemAtPoint:[coordinator.session locationInView:collectionView]];
+  NSDictionary *target = path ? _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:path]] : nil;
+  [self moveHierarchyNodes:[self hierarchyNodesInSession:coordinator.session] to:target];
+}
+
 - (BOOL)collectionView:(UICollectionView *)collectionView shouldSelectItemAtIndexPath:(NSIndexPath *)indexPath
 {
   NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
@@ -3224,27 +3624,31 @@ static UIColor *blenderAnimationStateColor(NSString *state)
 {
   if (![self collectionView:collectionView shouldSelectItemAtIndexPath:indexPath]) { return; }
   NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
-  if (!_multipleSelection) {
+  const BOOL extend = _multipleSelection || collectionView.editing;
+  if (!extend) {
     for (NSIndexPath *other in collectionView.indexPathsForSelectedItems) {
       if (![other isEqual:indexPath]) { [collectionView deselectItemAtIndexPath:other animated:YES]; }
     }
   }
-  [self send:@{@"action": @"select", @"id": node[@"id"], @"extend": @(_multipleSelection), @"value": @YES}];
+  [self send:@{@"action": @"select", @"id": node[@"id"], @"extend": @(extend), @"value": @YES}];
+  [self updateHierarchyBar];
 }
 
 - (BOOL)collectionView:(UICollectionView *)collectionView shouldDeselectItemAtIndexPath:(NSIndexPath *)indexPath
 {
   /* An ordinary tap on an already-selected object still makes it the active object. */
-  if (!_multipleSelection) { [self collectionView:collectionView didSelectItemAtIndexPath:indexPath]; }
-  return _multipleSelection;
+  const BOOL extend = _multipleSelection || collectionView.editing;
+  if (!extend) { [self collectionView:collectionView didSelectItemAtIndexPath:indexPath]; }
+  return extend;
 }
 
 - (void)collectionView:(UICollectionView *)collectionView didDeselectItemAtIndexPath:(NSIndexPath *)indexPath
 {
   NSDictionary *node = _nodesByKey[[_treeDataSource itemIdentifierForIndexPath:indexPath]];
-  if (_multipleSelection && [node[@"kind"] isEqual:@"object"]) {
+  if ((_multipleSelection || collectionView.editing) && [node[@"kind"] isEqual:@"object"]) {
     [self send:@{@"action": @"select", @"id": node[@"id"], @"extend": @YES, @"value": @NO}];
   }
+  [self updateHierarchyBar];
 }
 
 - (BOOL)collectionView:(UICollectionView *)collectionView shouldBeginMultipleSelectionInteractionAtIndexPath:(NSIndexPath *)indexPath
@@ -3255,6 +3659,8 @@ static UIColor *blenderAnimationStateColor(NSString *state)
 - (void)collectionView:(UICollectionView *)collectionView didBeginMultipleSelectionInteractionAtIndexPath:(NSIndexPath *)indexPath
 {
   _multipleSelection = YES;
+  /* A two-finger swipe across rows enters Select mode, as in Mail. */
+  [self setHierarchyEditing:YES];
 }
 
 - (void)collectionViewDidEndMultipleSelectionInteraction:(UICollectionView *)collectionView
