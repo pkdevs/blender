@@ -177,11 +177,12 @@ void blf_glyph_cache_clear(FontBLF *font)
  * \return nullptr if not found.
  */
 static GlyphBLF *blf_glyph_cache_find_glyph(const GlyphCacheBLF *gc,
+                                            const FontBLF *glyph_font,
                                             const uint glyph_index,
                                             const uint8_t subpixel)
 {
   const std::unique_ptr<GlyphBLF> *ptr = gc->glyphs.lookup_ptr_as(
-      GlyphCacheKey{glyph_index, subpixel});
+      GlyphCacheKey{glyph_font, glyph_index, subpixel});
   if (ptr != nullptr) {
     return ptr->get();
   }
@@ -230,6 +231,7 @@ static uchar blf_glyph_gamma(const uchar c)
  */
 static GlyphBLF *blf_glyph_cache_add_glyph(GlyphCacheBLF *gc,
                                            const FT_GlyphSlot glyph,
+                                           FontBLF *glyph_font,
                                            const uint charcode,
                                            const FT_UInt glyph_index,
                                            const uint8_t subpixel)
@@ -237,6 +239,7 @@ static GlyphBLF *blf_glyph_cache_add_glyph(GlyphCacheBLF *gc,
   std::unique_ptr<GlyphBLF> g = std::make_unique<GlyphBLF>();
   g->c = charcode;
   g->idx = glyph_index;
+  g->font = glyph_font;
   g->advance_x = ft_pix((glyph->linearHoriAdvance + 512) >> 10);
   g->subpixel = subpixel;
 
@@ -341,7 +344,7 @@ static GlyphBLF *blf_glyph_cache_add_glyph(GlyphCacheBLF *gc,
   }
 
   GlyphBLF *result = g.get();
-  GlyphCacheKey key = {glyph_index, subpixel};
+  GlyphCacheKey key = {glyph_font, glyph_index, subpixel};
   gc->glyphs.add(key, std::move(g));
   return result;
 }
@@ -354,7 +357,7 @@ static GlyphBLF *blf_glyph_cache_add_blank(GlyphCacheBLF *gc, const uint charcod
   std::unique_ptr<GlyphBLF> g = std::make_unique<GlyphBLF>();
   g->c = charcode;
   GlyphBLF *result = g.get();
-  GlyphCacheKey key = {charcode, 0};
+  GlyphCacheKey key = {nullptr, charcode, 0};
   gc->glyphs.add(key, std::move(g));
   return result;
 }
@@ -442,7 +445,7 @@ static GlyphBLF *blf_glyph_cache_add_svg(GlyphCacheBLF *gc,
   }
 
   GlyphBLF *result = g.get();
-  GlyphCacheKey key = {charcode, 0};
+  GlyphCacheKey key = {nullptr, charcode, 0};
   gc->glyphs.add(key, std::move(g));
   return result;
 }
@@ -1366,6 +1369,37 @@ FT_GlyphSlot blf_glyph_render_outline(FontBLF *settings_font,
   return blf_glyph_render(settings_font, glyph_font, glyph_index, charcode, 0, fixed_width, true);
 }
 
+/**
+ * Find or render the glyph at \a glyph_index of \a glyph_font, using the size and style of
+ * \a settings_font. The glyph is stored in \a gc, the cache of \a settings_font.
+ */
+static GlyphBLF *blf_glyph_ensure_index(FontBLF *settings_font,
+                                        FontBLF *glyph_font,
+                                        GlyphCacheBLF *gc,
+                                        const uint charcode,
+                                        const uint glyph_index,
+                                        const uint8_t subpixel)
+{
+  GlyphBLF *g = blf_glyph_cache_find_glyph(gc, glyph_font, glyph_index, subpixel);
+  if (g) {
+    return g;
+  }
+
+  if (!blf_ensure_face(glyph_font)) {
+    return nullptr;
+  }
+
+  FT_GlyphSlot glyph = blf_glyph_render(
+      settings_font, glyph_font, glyph_index, charcode, subpixel, gc->fixed_width, false);
+
+  if (glyph) {
+    /* Save this glyph in the initial font's cache. */
+    g = blf_glyph_cache_add_glyph(gc, glyph, glyph_font, charcode, glyph_index, subpixel);
+  }
+
+  return g;
+}
+
 GlyphBLF *blf_glyph_ensure(FontBLF *font,
                            GlyphCacheBLF *gc,
                            const uint charcode,
@@ -1382,24 +1416,10 @@ GlyphBLF *blf_glyph_ensure(FontBLF *font,
     return blf_glyph_ensure(font, gc, ' ');
   }
 
-  GlyphBLF *g = nullptr;
-  if (glyph_index) {
-    g = blf_glyph_cache_find_glyph(gc, glyph_index, subpixel);
-    if (g) {
-      return g;
-    }
-  }
-
   /* Glyph might not come from the initial font. */
   FontBLF *font_with_glyph = font;
   if (!glyph_index && charcode) {
     glyph_index = blf_glyph_index_from_charcode(&font_with_glyph, charcode);
-    if (glyph_index) {
-      g = blf_glyph_cache_find_glyph(gc, glyph_index, subpixel);
-      if (g) {
-        return g;
-      }
-    }
   }
 
   if (!glyph_index) {
@@ -1411,19 +1431,25 @@ GlyphBLF *blf_glyph_ensure(FontBLF *font,
 #endif
   }
 
-  if (!blf_ensure_face(font_with_glyph)) {
+  return blf_glyph_ensure_index(font, font_with_glyph, gc, charcode, glyph_index, subpixel);
+}
+
+GlyphBLF *blf_glyph_ensure_cached(FontBLF *font,
+                                  GlyphCacheBLF *gc,
+                                  FontBLF *glyph_font,
+                                  const uint charcode,
+                                  const uint glyph_index,
+                                  const uint8_t subpixel)
+{
+  if (glyph_font == nullptr) {
+    /* Icon, including the ".notdef" fallback. */
+#ifndef WITH_HEADLESS
+    return blf_glyph_ensure_icon(gc, charcode - BLF_ICON_OFFSET, false, nullptr);
+#else
     return nullptr;
+#endif
   }
-
-  FT_GlyphSlot glyph = blf_glyph_render(
-      font, font_with_glyph, glyph_index, charcode, subpixel, gc->fixed_width, false);
-
-  if (glyph) {
-    /* Save this glyph in the initial font's cache. */
-    g = blf_glyph_cache_add_glyph(gc, glyph, charcode, glyph_index, subpixel);
-  }
-
-  return g;
+  return blf_glyph_ensure_index(font, glyph_font, gc, charcode, glyph_index, subpixel);
 }
 
 #ifndef WITH_HEADLESS
@@ -1432,7 +1458,7 @@ GlyphBLF *blf_glyph_ensure_icon(GlyphCacheBLF *gc,
                                 bool color,
                                 FunctionRef<void(std::string &)> edit_source_cb)
 {
-  GlyphBLF *g = blf_glyph_cache_find_glyph(gc, icon_id + BLF_ICON_OFFSET, 0);
+  GlyphBLF *g = blf_glyph_cache_find_glyph(gc, nullptr, icon_id + BLF_ICON_OFFSET, 0);
   if (g) {
     return g;
   }

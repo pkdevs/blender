@@ -160,6 +160,7 @@ inline ft_pix ft_pix_from_float(float v)
 #define BLF_SHAPING_CACHE_SIZE 256
 
 struct CachedGlyph {
+  FontBLF *glyph_font = nullptr;
   uint32_t glyph_id = 0;
   uint32_t charcode = 0;
   rcti bounds = {};
@@ -308,15 +309,16 @@ struct BatchBLF {
 extern BatchBLF g_batch;
 
 struct GlyphCacheKey {
+  const FontBLF *font;
   uint glyph_index;
   uint8_t subpixel;
   friend bool operator==(const GlyphCacheKey &a, const GlyphCacheKey &b)
   {
-    return a.glyph_index == b.glyph_index && a.subpixel == b.subpixel;
+    return a.font == b.font && a.glyph_index == b.glyph_index && a.subpixel == b.subpixel;
   }
   uint64_t hash() const
   {
-    return get_default_hash(glyph_index, subpixel);
+    return get_default_hash(font, glyph_index, subpixel);
   }
 };
 
@@ -360,6 +362,8 @@ struct GlyphBLF {
 
   /** Freetype2 index, to speed-up the search. */
   FT_UInt idx;
+
+  FontBLF *font;
 
   /** Glyph bounding-box. */
   ft_pix box_xmin;

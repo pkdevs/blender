@@ -193,6 +193,17 @@ void blf_glyph_cache_clear(FontBLF *font);
 GlyphBLF *blf_glyph_ensure(
     FontBLF *font, GlyphCacheBLF *gc, uint charcode, uint glyph_index = 0, uint8_t subpixel = 0);
 
+/**
+ * Find or re-create a glyph previously returned by #blf_glyph_ensure, identified by the font it
+ * was rendered from (#GlyphBLF::font), its index and sub-pixel position.
+ */
+GlyphBLF *blf_glyph_ensure_cached(FontBLF *font,
+                                  GlyphCacheBLF *gc,
+                                  FontBLF *glyph_font,
+                                  uint charcode,
+                                  uint glyph_index,
+                                  uint8_t subpixel);
+
 FontBLF *blf_font_script_ensure(FontBLF *font, uint charcode);
 
 GlyphBLF *blf_glyph_ensure_subpixel(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, int32_t pen_x);
