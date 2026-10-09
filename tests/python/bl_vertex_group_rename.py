@@ -256,6 +256,67 @@ class VertexGroupRenameTest(unittest.TestCase):
         finally:
             self._remove_object_and_data(obj)
 
+    def test_rename_to_existing_name_uniquifies_and_updates_references(self):
+        # The name is made unique before references are updated, so the resulting
+        # name may differ from the requested one and references must follow the result.
+        obj = self._new_mesh_object_and_data()
+        try:
+            existing = obj.vertex_groups.new(name="Group")
+            renamed = obj.vertex_groups.new(name="Target")
+            modifier = obj.modifiers.new(name="Modifier", type='MASK')
+            modifier.vertex_group = renamed.name
+
+            renamed.name = "Group"
+
+            self.assertNotEqual(renamed.name, "Group", "name should have been made unique")
+            self.assertEqual(existing.name, "Group", "the other group should keep its name")
+            self.assertEqual(
+                modifier.vertex_group,
+                renamed.name,
+                "reference should follow the resulting name, not the requested one",
+            )
+        finally:
+            self._remove_object_and_data(obj)
+
+    def test_rename_to_other_entity_kind_name_leaves_that_entity_untouched(self):
+        # Vertex group names are only unique within their own namespace: colliding with
+        # another kind of named entity is allowed and must not affect that entity.
+        mesh_obj = self._new_mesh_object_and_data()
+        armature_obj = self._new_armature_object_and_data()
+        try:
+            # A UV map sharing the group's name must not be treated as a reference.
+            same_named_uv_layer = mesh_obj.data.uv_layers.new(name="Group")
+            # Taking over a name used by another kind of entity is allowed.
+            other_uv_layer = mesh_obj.data.uv_layers.new(name="Shared")
+            armature_modifier = mesh_obj.modifiers.new(name="ArmatureModifier", type='ARMATURE')
+            armature_modifier.object = armature_obj
+            armature_modifier.use_bone_envelopes = True
+            vg = mesh_obj.vertex_groups.new(name="Group")
+            armature_modifier.vertex_group = vg.name
+
+            vg.name = "RenamedGroup"
+
+            self.assertEqual(vg.name, "RenamedGroup")
+            self.assertEqual(
+                same_named_uv_layer.name,
+                "Group",
+                "a UV map sharing the old group name should not have been renamed",
+            )
+            self.assertEqual(armature_modifier.vertex_group, "RenamedGroup")
+            self.assertEqual([bone.name for bone in armature_obj.data.bones], ["Group"])
+
+            vg.name = "Shared"
+
+            self.assertEqual(vg.name, "Shared", "colliding with a UV map name is allowed")
+            self.assertEqual(other_uv_layer.name, "Shared", "the UV map should keep its name")
+            self.assertEqual(armature_modifier.vertex_group, "Shared")
+            self.assertEqual([bone.name for bone in armature_obj.data.bones], ["Group"])
+            self.assertEqual(armature_obj.name, "Armature")
+            self.assertEqual(armature_obj.data.name, "Armature")
+        finally:
+            self._remove_object_and_data(mesh_obj)
+            self._remove_object_and_data(armature_obj)
+
     @staticmethod
     def _new_armature_object_and_data():
         armature = bpy.data.armatures.new(name="Armature")
