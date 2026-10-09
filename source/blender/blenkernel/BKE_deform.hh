@@ -102,9 +102,9 @@ void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob);
  * used by `ob` and every other object sharing the same geometry. This operation also tags every
  * affected object for geometry recalculation.
  *
- * \return The number of references that were updated.
+ * \return True if any reference was updated.
  */
-int BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, const char *new_name);
+bool BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, const char *new_name);
 
 MDeformWeight *BKE_defvert_find_index(const MDeformVert *dv, int defgroup);
 /**

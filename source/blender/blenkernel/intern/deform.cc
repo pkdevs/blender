@@ -768,7 +768,7 @@ void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob)
                     sizeof(dg->name));
 }
 
-int BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, const char *new_name)
+bool BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, const char *new_name)
 {
   char old_name[sizeof(dg->name)];
   BLI_strncpy_utf8(old_name, dg->name, sizeof(old_name));
@@ -776,33 +776,34 @@ int BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, cons
   BKE_object_defgroup_unique_name(dg, ob);
 
   if (STREQ(old_name, dg->name)) {
-    return 0;
+    return false;
   }
 
   /* Vertex groups are owned by the geometry ID, which may be shared by several objects:
    * update the references of all objects using the same geometry. */
-  int renamed_count = BKE_object_defgroup_rename_data(ob, old_name, dg->name);
-  const bool geometry_references_renamed = renamed_count > 0;
+  bool renamed = BKE_object_defgroup_rename_data(ob, old_name, dg->name);
+  const bool geometry_references_renamed = renamed;
 
   if (ID_REAL_USERS(ob->data) == 1) {
-    renamed_count += BKE_object_defgroup_rename_users(ob, old_name, dg->name);
-    if (renamed_count > 0) {
+    renamed = BKE_object_defgroup_rename_users(ob, old_name, dg->name) || renamed;
+    if (renamed) {
       DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
     }
-    return renamed_count;
+    return renamed;
   }
 
   for (Object &co_user : bmain->objects) {
     if (co_user.data != ob->data) {
       continue;
     }
-    const int user_renamed_count = BKE_object_defgroup_rename_users(&co_user, old_name, dg->name);
-    if (geometry_references_renamed || user_renamed_count > 0) {
+    const bool user_references_renamed =
+        BKE_object_defgroup_rename_users(&co_user, old_name, dg->name);
+    if (geometry_references_renamed || user_references_renamed) {
       DEG_id_tag_update(&co_user.id, ID_RECALC_GEOMETRY);
     }
-    renamed_count += user_renamed_count;
+    renamed = user_references_renamed || renamed;
   }
-  return renamed_count;
+  return renamed;
 }
 
 float BKE_defvert_find_weight(const MDeformVert *dvert, const int defgroup)

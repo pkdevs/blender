@@ -162,7 +162,7 @@ void BKE_object_foreach_name_reference(Object *ob,
 struct DefgroupRenameData {
   const char *old_name;
   const char *new_name;
-  int renamed_count = 0;
+  bool renamed = false;
 };
 
 static void defgroup_rename_callback(char *name,
@@ -178,21 +178,21 @@ static void defgroup_rename_callback(char *name,
     return;
   }
   BLI_strncpy_utf8(name, data->new_name, name_maxncpy);
-  data->renamed_count++;
+  data->renamed = true;
 }
 
-int BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
+bool BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
 {
   DefgroupRenameData data{old_name, new_name};
   foreach_object_name_reference(ob, defgroup_rename_callback, &data);
-  return data.renamed_count;
+  return data.renamed;
 }
 
-int BKE_object_defgroup_rename_data(Object *ob, const char *old_name, const char *new_name)
+bool BKE_object_defgroup_rename_data(Object *ob, const char *old_name, const char *new_name)
 {
   DefgroupRenameData data{old_name, new_name};
   foreach_geometry_name_reference(ob, defgroup_rename_callback, &data);
-  return data.renamed_count;
+  return data.renamed;
 }
 
 /** \} */
