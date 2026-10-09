@@ -373,6 +373,46 @@ else()
     # the C and C++ compilers' implicit library folders, which may be the host's.
     set_target_properties(blender PROPERTIES LINKER_LANGUAGE CXX)
 
+    # The thumbnail extension, showing the preview stored in `.blend` files wherever iOS shows
+    # them: the document browser, the Files app, share sheets.
+    set(IOS_THUMBNAILER_SRC
+      ${CMAKE_SOURCE_DIR}/source/blender/blendthumb/src/blendthumb.hh
+      ${CMAKE_SOURCE_DIR}/source/blender/blendthumb/src/blendthumb_extract.cc
+      ${CMAKE_SOURCE_DIR}/source/blender/blendthumb/src/blendthumb_png.cc
+      ${CMAKE_SOURCE_DIR}/source/blender/blendthumb/src/thumbnail_provider_ios.mm
+    )
+    add_executable(blender-thumbnailer MACOSX_BUNDLE ${IOS_THUMBNAILER_SRC})
+    target_include_directories(blender-thumbnailer PRIVATE
+      ${CMAKE_SOURCE_DIR}/source/blender/blenlib
+      ${CMAKE_SOURCE_DIR}/source/blender/blenloader_core
+      ${CMAKE_SOURCE_DIR}/source/blender/makesdna
+      ${CMAKE_SOURCE_DIR}/intern/guardedalloc
+      ${ZLIB_INCLUDE_DIRS}
+    )
+    target_link_libraries(blender-thumbnailer PRIVATE
+      bf_blenlib
+      bf_blenloader_core
+      ${ZLIB_LIBRARIES}
+      "-e _NSExtensionMain"
+      "-framework Foundation"
+      "-framework UIKit"
+      "-framework QuickLookThumbnailing"
+      "-framework CoreGraphics"
+    )
+    set_target_properties(blender-thumbnailer PROPERTIES
+      BUNDLE_EXTENSION appex
+      XCODE_PRODUCT_TYPE com.apple.product-type.app-extension
+      MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/release/ios/blender-thumbnailer.appex/Info.plist
+      MACOSX_BUNDLE_SHORT_VERSION_STRING "${BLENDER_VERSION}.${BLENDER_VERSION_PATCH}"
+      XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER
+        "${CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER}.thumbnailer"
+      XCODE_ATTRIBUTE_SKIP_INSTALL "YES"
+      XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC "NO"
+      # Blender's libraries, shared with the app: `Blender.app/PlugIns/<appex>/` to `Assets/lib`.
+      BUILD_WITH_INSTALL_RPATH TRUE
+      INSTALL_RPATH "@loader_path/../../Assets/lib"
+    )
+    set_target_properties(blender PROPERTIES XCODE_EMBED_APP_EXTENSIONS blender-thumbnailer)
 
     # Additional libraries required by static python extensions compiled directly in source.
     # Otherwise will see Python linking issues during linking in Xcode about missing SSL etc.
