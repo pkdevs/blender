@@ -262,6 +262,7 @@ static NSArray<NSDictionary *> *launcherTemplates()
 @interface GHOSTIOSTemplateCell : UICollectionViewCell
 @property(nonatomic, readonly) UIImageView *symbol;
 @property(nonatomic, readonly) UILabel *name;
+@property(nonatomic, readonly) UIButton *credit;
 @property(nonatomic, copy) NSString *templateIdentifier;
 @end
 
@@ -279,7 +280,13 @@ static NSArray<NSDictionary *> *launcherTemplates()
     _name.adjustsFontForContentSizeCategory = YES;
     _name.textAlignment = NSTextAlignmentCenter;
     _name.numberOfLines = 0;
-    UIStackView *stack = [[[UIStackView alloc] initWithArrangedSubviews:@[_symbol, _name]] autorelease];
+    _credit = [[UIButton buttonWithType:UIButtonTypeSystem] retain];
+    _credit.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+    _credit.titleLabel.adjustsFontForContentSizeCategory = YES;
+    _credit.titleLabel.numberOfLines = 0;
+    _credit.titleLabel.textAlignment = NSTextAlignmentCenter;
+    _credit.accessibilityIdentifier = @"blender.template.attribution";
+    UIStackView *stack = [[[UIStackView alloc] initWithArrangedSubviews:@[_symbol, _name, _credit]] autorelease];
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = 12;
     stack.alignment = UIStackViewAlignmentFill;
@@ -303,6 +310,7 @@ static NSArray<NSDictionary *> *launcherTemplates()
 {
   [_symbol release];
   [_name release];
+  [_credit release];
   [_templateIdentifier release];
   [super dealloc];
 }
@@ -327,6 +335,52 @@ static NSArray<NSDictionary *> *launcherTemplates()
   [self setNeedsUpdateConfiguration];
 }
 
+@end
+
+/** Attribution stays available without leaving the native chooser or opening a document. */
+@interface GHOSTIOSTemplateCredits : UIViewController
+@property(nonatomic, copy) NSDictionary *credit;
+@end
+
+@implementation GHOSTIOSTemplateCredits
+- (void)dealloc
+{
+  [_credit release];
+  [super dealloc];
+}
+- (void)viewDidLoad
+{
+  [super viewDidLoad];
+  self.title = @"Asset Credits";
+  self.view.backgroundColor = UIColor.systemBackgroundColor;
+  UITextView *text = [[[UITextView alloc] init] autorelease];
+  text.editable = NO;
+  text.adjustsFontForContentSizeCategory = YES;
+  text.backgroundColor = UIColor.clearColor;
+  text.textContainerInset = UIEdgeInsetsMake(20, 20, 20, 20);
+  NSString *body = [NSString stringWithFormat:@"%@\n%@\n\n%@\n\n%@\n\n%@\n\nAdaptation does not imply endorsement by the original creators.",
+      _credit[@"title"], _credit[@"author"], _credit[@"licenseURL"],
+      _credit[@"sourceURL"], _credit[@"changes"]];
+  NSMutableAttributedString *content = [[[NSMutableAttributedString alloc] initWithString:body
+      attributes:@{NSFontAttributeName: [UIFont preferredFontForTextStyle:UIFontTextStyleBody],
+                   NSForegroundColorAttributeName: UIColor.labelColor}] autorelease];
+  for (NSString *key in @[@"licenseURL", @"sourceURL"]) {
+    NSString *link = _credit[key];
+    NSURL *url = [NSURL URLWithString:link];
+    if ([url.scheme isEqual:@"https"]) {
+      [content addAttribute:NSLinkAttributeName value:url range:[body rangeOfString:link]];
+    }
+  }
+  text.attributedText = content;
+  text.translatesAutoresizingMaskIntoConstraints = NO;
+  [self.view addSubview:text];
+  [NSLayoutConstraint activateConstraints:@[
+    [text.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor],
+    [text.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor],
+    [text.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+    [text.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
+  ]];
+}
 @end
 
 /** A grid of Blender's templates, to start a new document from one. */
@@ -501,6 +555,24 @@ static NSArray<NSDictionary *> *launcherTemplates()
     }];
   });
   cell.name.text = item[@"title"];
+  NSDictionary *credit = item[@"attribution"];
+  cell.credit.hidden = credit == nil;
+  cell.isAccessibilityElement = credit == nil;
+  cell.name.isAccessibilityElement = credit != nil;
+  cell.name.accessibilityTraits = UIAccessibilityTraitButton;
+  [cell.credit removeActionForIdentifier:@"credits" forControlEvents:UIControlEventTouchUpInside];
+  if (credit) {
+    [cell.credit setTitle:[NSString stringWithFormat:@"%@ · %@\n%@ · Adapted",
+        credit[@"title"], credit[@"author"], credit[@"license"]] forState:UIControlStateNormal];
+    cell.credit.accessibilityLabel = [NSString stringWithFormat:@"%@. Asset credits and license", credit[@"title"]];
+    __block GHOSTIOSTemplatePicker *picker = self;
+    [cell.credit addAction:[UIAction actionWithTitle:@"Asset Credits" image:nil identifier:@"credits"
+        handler:^(__kindof UIAction *) {
+      GHOSTIOSTemplateCredits *details = [[[GHOSTIOSTemplateCredits alloc] init] autorelease];
+      details.credit = credit;
+      [picker.navigationController pushViewController:details animated:YES];
+    }] forControlEvents:UIControlEventTouchUpInside];
+  }
   cell.accessibilityLabel = item[@"title"];
   cell.accessibilityIdentifier = [@"blender.template." stringByAppendingString:item[@"id"]];
   return cell;
