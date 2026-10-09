@@ -715,8 +715,9 @@ public final class SwiftRedoStrip: NSObject {
   }
 
   @objc(updateSnapshot:)
-  public func updateSnapshot(_ snapshot: NSDictionary?) {
+  public func updateSnapshot(_ snapshot: Any?) {
     let previousWidth = collapsedWidth
+    /* No operation to adjust arrives as null, which is NSNull here. */
     guard let next = snapshot as? JSON else {
       store.update(nil)
       setVisible(false)

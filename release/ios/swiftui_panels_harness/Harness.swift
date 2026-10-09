@@ -316,10 +316,10 @@ protocol HarnessPanels: AnyObject {
   var inspectorButton: UIBarButtonItem { get }
   var hierarchyButton: UIBarButtonItem { get }
   var menuProvider: ((NSDictionary) -> UIMenu?)? { get set }
-  func updateSnapshot(_ snapshot: NSDictionary)
+  func updateSnapshot(_ snapshot: Any?)
   func layout(in rect: CGRect)
   func presentShading(from: UIBarButtonItem, controller: UIViewController)
-  func updateToolSettings(_ settings: NSDictionary?, acknowledgement: NSNumber?) -> UIBarButtonItemGroup?
+  func updateToolSettings(_ settings: Any?, acknowledgement: Any?) -> UIBarButtonItemGroup?
 }
 
 extension SwiftScenePanels: HarnessPanels {}
@@ -341,13 +341,13 @@ final class UIKitPanels: HarnessPanels {
       panels.menuProvider = { property in provider?((property ?? [:]) as NSDictionary) }
     }
   }
-  func updateSnapshot(_ snapshot: NSDictionary) { panels.updateSnapshot(snapshot as? [AnyHashable: Any] ?? [:]) }
+  func updateSnapshot(_ snapshot: Any?) { panels.updateSnapshot(snapshot as? [AnyHashable: Any] ?? [:]) }
   func layout(in rect: CGRect) { panels.layout(in: rect) }
   func presentShading(from button: UIBarButtonItem, controller: UIViewController) {
     panels.presentShading(from: button, controller: controller)
   }
-  func updateToolSettings(_ settings: NSDictionary?, acknowledgement: NSNumber?) -> UIBarButtonItemGroup? {
-    panels.updateToolSettings(settings as? [AnyHashable: Any] ?? [:], acknowledgement: acknowledgement ?? 0)
+  func updateToolSettings(_ settings: Any?, acknowledgement: Any?) -> UIBarButtonItemGroup? {
+    panels.updateToolSettings(settings as? [AnyHashable: Any] ?? [:], acknowledgement: acknowledgement as? NSNumber ?? 0)
   }
 }
 

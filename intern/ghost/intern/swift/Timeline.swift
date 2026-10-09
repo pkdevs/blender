@@ -505,8 +505,9 @@ public final class SwiftTimeline: NSObject {
   }
 
   @objc(updateSnapshot:)
-  public func updateSnapshot(_ snapshot: NSDictionary?) {
-    guard let snapshot, !(self.snapshot?.isEqual(snapshot) ?? false), let json = snapshot as? JSON else { return }
+  public func updateSnapshot(_ snapshot: Any?) {
+    guard let snapshot = snapshot as? NSDictionary, !(self.snapshot?.isEqual(snapshot) ?? false),
+          let json = snapshot as? JSON else { return }
     self.snapshot = snapshot
     let start = json.int("start") ?? 1
     store.start = start

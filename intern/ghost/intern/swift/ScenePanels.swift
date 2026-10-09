@@ -209,7 +209,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   }
 
   @objc(updateSnapshot:)
-  public func updateSnapshot(_ snapshot: NSDictionary) {
+  public func updateSnapshot(_ snapshot: Any?) {
     guard let snapshot = snapshot as? JSON else { return }
     if let shadingSnapshot = snapshot.dict("shading"), shadingVisible {
       shading.update(snapshot: ["ack": snapshot["ack"] ?? 0, "error": snapshot["error"] ?? "",
@@ -280,7 +280,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
    * \{ */
 
   @objc(updateToolSettings:acknowledgement:)
-  public func updateToolSettings(_ settings: NSDictionary?, acknowledgement ack: NSNumber?)
+  public func updateToolSettings(_ settings: Any?, acknowledgement ack: Any?)
     -> UIBarButtonItemGroup?
   {
     let settingsJSON = settings as? JSON ?? [:]
@@ -288,7 +288,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
       hideToolSettings()
       toolID = settingsJSON.string("id")
     }
-    let snapshot: JSON = ["inspector": settingsJSON, "ack": ack ?? 0]
+    let snapshot: JSON = ["inspector": settingsJSON, "ack": ack as? NSNumber ?? 0]
     toolStrip.update(snapshot: snapshot)
     toolPopover.update(snapshot: snapshot)
     let group = ensureToolGroup()

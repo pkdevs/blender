@@ -369,7 +369,8 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
   }
 
   @objc(updateSnapshot:)
-  public func updateSnapshot(_ snapshot: NSDictionary?) {
+  public func updateSnapshot(_ snapshot: Any?) {
+    /* Blender's JSON may hold null, which arrives as NSNull. */
     guard let snapshot = snapshot as? JSON else { return }
     store.update(snapshot)
   }

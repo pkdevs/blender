@@ -206,7 +206,7 @@ public final class SwiftRender: NSObject, UIAdaptivePresentationControllerDelega
   }
 
   @objc(updateStatus:)
-  public func updateStatus(_ status: NSDictionary?) {
+  public func updateStatus(_ status: Any?) {
     guard let status = status as? JSON, sheet != nil, !finishing,
           !jsonEqual(lastID, status["id"]) else { return }
     lastID = status["id"] as? NSNumber
