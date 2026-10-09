@@ -279,5 +279,143 @@ TEST_F(SmoothCurvesTest, benchmark_thread_scaling)
   std::cout << "========================================================================================\n\n";
 }
 
+/* 10-run Comprehensive Benchmark across 5M, 10M, 20M with 20 and 50 iterations (Cyclic & Non-Cyclic). */
+TEST_F(SmoothCurvesTest, benchmark_sweep_10_runs)
+{
+  struct SweepConfig {
+    int64_t num_points;
+    int iterations;
+    bool is_cyclic;
+    const char *label;
+  };
+
+  const SweepConfig configs[] = {
+      {5000000, 20, false, "5M pts, 20 iters (Non-Cyclic)"},
+      {5000000, 20, true, "5M pts, 20 iters (Cyclic)"},
+      {5000000, 50, false, "5M pts, 50 iters (Non-Cyclic)"},
+      {5000000, 50, true, "5M pts, 50 iters (Cyclic)"},
+
+      {10000000, 20, false, "10M pts, 20 iters (Non-Cyclic)"},
+      {10000000, 20, true, "10M pts, 20 iters (Cyclic)"},
+      {10000000, 50, false, "10M pts, 50 iters (Non-Cyclic)"},
+      {10000000, 50, true, "10M pts, 50 iters (Cyclic)"},
+
+      {20000000, 20, false, "20M pts, 20 iters (Non-Cyclic)"},
+      {20000000, 20, true, "20M pts, 20 iters (Cyclic)"},
+      {20000000, 50, false, "20M pts, 50 iters (Non-Cyclic)"},
+      {20000000, 50, true, "20M pts, 50 iters (Cyclic)"},
+  };
+
+  const int total_runs = 10;
+  const int default_threads = tbb::this_task_arena::max_concurrency();
+
+  std::cout << "\n========================================================================================\n";
+  std::cout << "          GAUSSIAN BLUR 1D - 10-RUN BENCHMARK SWEEP (Threads: " << default_threads << ")\n";
+  std::cout << "========================================================================================\n";
+
+  struct ResultSummary {
+    std::string label;
+    double avg_ms;
+    double min_ms;
+    double max_ms;
+  };
+  std::vector<ResultSummary> summaries;
+
+  for (const auto &cfg : configs) {
+    Array<float3> src(cfg.num_points);
+    for (int64_t i = 0; i < cfg.num_points; ++i) {
+      src[i] = float3(std::sin(float(i) * 0.01f), std::cos(float(i) * 0.01f), float(i));
+    }
+    Array<float3> dst = src;
+    auto influence = VArray<float>::from_single(1.0f, cfg.num_points);
+
+    /* Warm-up */
+    gaussian_blur_1D(src.as_span(),
+                     cfg.iterations,
+                     influence,
+                     false,
+                     false,
+                     cfg.is_cyclic,
+                     dst.as_mutable_span());
+
+    std::vector<double> run_times_ms;
+    run_times_ms.reserve(total_runs);
+
+    std::cout << "\n>>> " << cfg.label << " <<<\n";
+    for (int run = 0; run < total_runs; ++run) {
+      const auto start = std::chrono::high_resolution_clock::now();
+      gaussian_blur_1D(src.as_span(),
+                       cfg.iterations,
+                       influence,
+                       false,
+                       false,
+                       cfg.is_cyclic,
+                       dst.as_mutable_span());
+      const auto end = std::chrono::high_resolution_clock::now();
+      const double ms = std::chrono::duration<double, std::milli>(end - start).count();
+      run_times_ms.push_back(ms);
+      std::cout << "  Run #" << std::setw(2) << (run + 1) << ": " << std::fixed
+                << std::setprecision(2) << ms << " ms\n";
+    }
+
+    double sum_ms = 0.0;
+    double min_ms = run_times_ms[0];
+    double max_ms = run_times_ms[0];
+    for (const double t : run_times_ms) {
+      sum_ms += t;
+      min_ms = std::min(min_ms, t);
+      max_ms = std::max(max_ms, t);
+    }
+    const double avg_ms = sum_ms / total_runs;
+    summaries.push_back({cfg.label, avg_ms, min_ms, max_ms});
+
+    std::cout << "  --> Avg: " << std::fixed << std::setprecision(2) << avg_ms << " ms"
+              << " | Min: " << min_ms << " ms"
+              << " | Max: " << max_ms << " ms\n";
+  }
+
+  std::cout << "\n========================================================================================\n";
+  std::cout << "                               SUMMARY TABLE (10 RUNS EACH)                             \n";
+  std::cout << "========================================================================================\n";
+  std::cout << std::left
+            << std::setw(34) << "Workload"
+            << std::setw(22) << "Average Time"
+            << std::setw(18) << "Min Time"
+            << std::setw(18) << "Max Time"
+            << "\n----------------------------------------------------------------------------------------\n";
+  for (const auto &s : summaries) {
+    std::ostringstream avg_ss, min_ss, max_ss;
+    if (s.avg_ms >= 1000.0) {
+      avg_ss << std::fixed << std::setprecision(2) << (s.avg_ms / 1000.0) << " s ("
+             << std::fixed << std::setprecision(1) << s.avg_ms << " ms)";
+    }
+    else {
+      avg_ss << std::fixed << std::setprecision(2) << s.avg_ms << " ms";
+    }
+
+    if (s.min_ms >= 1000.0) {
+      min_ss << std::fixed << std::setprecision(2) << (s.min_ms / 1000.0) << " s";
+    }
+    else {
+      min_ss << std::fixed << std::setprecision(2) << s.min_ms << " ms";
+    }
+
+    if (s.max_ms >= 1000.0) {
+      max_ss << std::fixed << std::setprecision(2) << (s.max_ms / 1000.0) << " s";
+    }
+    else {
+      max_ss << std::fixed << std::setprecision(2) << s.max_ms << " ms";
+    }
+
+    std::cout << std::left
+              << std::setw(34) << s.label
+              << std::setw(22) << avg_ss.str()
+              << std::setw(18) << min_ss.str()
+              << std::setw(18) << max_ss.str()
+              << "\n";
+  }
+  std::cout << "========================================================================================\n\n";
+}
+
 }  // namespace blender::geometry::tests
 
