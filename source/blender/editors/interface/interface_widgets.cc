@@ -2280,8 +2280,8 @@ static void widget_draw_textbox(const uiFontStyle *fstyle,
   {
     rcti scissor_rect = {scissor[0], scissor[0] + scissor[2], scissor[1], scissor[1] + scissor[3]};
     rcti scissor_textbox;
-    scissor_textbox.xmin = rect.xmin - caret_width;
-    scissor_textbox.xmax = scissor_textbox.xmin + BLI_rcti_size_x(&rect) + caret_width,
+    scissor_textbox.xmin = rect.xmin - std::max(caret_width, text_padding);
+    scissor_textbox.xmax = rect.xmax;
     scissor_textbox.ymin = rect.ymin;
     scissor_textbox.ymax = scissor_textbox.ymin + BLI_rcti_size_y(&rect);
     BLI_rcti_isect(&scissor_rect, &scissor_textbox, &scissor_textbox);
