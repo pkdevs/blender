@@ -244,7 +244,7 @@ struct Instance : public DrawEngine {
                                  const uint initial_index)
   {
     using namespace blender::draw;
-    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
 
     ElemIndexRanges ranges{};
     ranges.total = IndexRange::from_begin_size(initial_index, 0);
@@ -301,7 +301,7 @@ struct Instance : public DrawEngine {
                             const uint initial_index)
   {
     using namespace blender::draw;
-    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
 
     ElemIndexRanges ranges{};
     ranges.total = IndexRange::from_begin_size(initial_index, 0);
@@ -348,8 +348,7 @@ struct Instance : public DrawEngine {
         /* NOTE: it's important to get the edit-mesh before modifiers have been applied
          * because the evaluated mesh may not have an edit-mesh, see #138715.
          * Match edit-mesh access from #mesh_render_data_create. */
-        const blender::Mesh *orig_edit_mesh = is_editmode ? BKE_object_get_pre_modified_mesh(ob) :
-                                                            nullptr;
+        const Mesh *orig_edit_mesh = is_editmode ? BKE_object_get_pre_modified_mesh(ob) : nullptr;
         const BMesh *bm = orig_edit_mesh ? BKE_editmesh_bmesh_get(orig_edit_mesh) : nullptr;
 
         if (bm) {
@@ -379,7 +378,7 @@ struct Instance : public DrawEngine {
         /* This object is not selectable. It is here to participate in occlusion.
          * This is the case in retopology mode. */
         Batch *geom_faces = DRW_mesh_batch_cache_get_surface(
-            DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+            DRW_object_get_data_for_drawing<Mesh>(*ob));
 
         depth_occlude->draw(geom_faces, manager.unique_handle(ob_ref));
       }
@@ -479,7 +478,7 @@ struct Instance : public DrawEngine {
        * Note this is not working correctly for vertex-paint (yet), but has been discussed
        * in #66645 and there is a solution by @mano-wii in P1032.
        * So OB_MODE_VERTEX_PAINT is already included here [required for P1032 I guess]. */
-      blender::Mesh *me_orig = id_cast<blender::Mesh *>(DEG_get_original(ob)->data);
+      Mesh *me_orig = id_cast<Mesh *>(DEG_get_original(ob)->data);
       if (me_orig->editflag & ME_EDIT_PAINT_VERT_SEL) {
         select_mode = SCE_SELECT_VERTEX;
       }

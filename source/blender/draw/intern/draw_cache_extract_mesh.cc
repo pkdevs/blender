@@ -93,7 +93,7 @@ static bool use_normals_simplify(const Scene &scene, const MeshRenderData &mr)
   if (!mr.mesh) {
     return true;
   }
-  const blender::Mesh &mesh = *mr.mesh;
+  const Mesh &mesh = *mr.mesh;
   const std::optional<bke::AttributeMetaData> meta_data = mesh.attributes().lookup_meta_data(
       "custom_normal");
   if (!meta_data) {
@@ -114,7 +114,7 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
                                         const Span<IBOType> ibo_requests,
                                         const Span<VBOType> vbo_requests,
                                         Object &object,
-                                        blender::Mesh &mesh,
+                                        Mesh &mesh,
                                         const bool is_editmode,
                                         const bool is_paint_mode,
                                         const bool do_final,

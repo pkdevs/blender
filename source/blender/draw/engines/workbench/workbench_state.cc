@@ -274,7 +274,7 @@ void SceneState::init(const DRWContext *context,
   render_finished = sample >= samples_len && samples_len > 1;
 };
 
-static bool mesh_has_color_attribute(const blender::Mesh &mesh)
+static bool mesh_has_color_attribute(const Mesh &mesh)
 {
   const StringRef name = mesh.active_color_attribute ? mesh.active_color_attribute :
                                                        mesh.default_color_attribute;
@@ -290,7 +290,7 @@ static bool mesh_has_color_attribute(const blender::Mesh &mesh)
   return bke::mesh::is_color_attribute(attributes.lookup_meta_data(name));
 }
 
-static bool mesh_has_uv_map_attribute(const blender::Mesh &mesh)
+static bool mesh_has_uv_map_attribute(const Mesh &mesh)
 {
   StringRef active_uv_map = mesh.active_or_default_uv_map_name();
   if (mesh.runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
@@ -330,7 +330,7 @@ ObjectState::ObjectState(const DRWContext *draw_ctx,
     if (ob->type != OB_MESH) {
       return false;
     }
-    const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+    const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
     return mesh_has_color_attribute(mesh);
   };
 
@@ -338,7 +338,7 @@ ObjectState::ObjectState(const DRWContext *draw_ctx,
     if (ob->type != OB_MESH) {
       return false;
     }
-    const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+    const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
     return mesh_has_uv_map_attribute(mesh);
   };
 

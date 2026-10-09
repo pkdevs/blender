@@ -227,7 +227,7 @@ class Paints : Overlay {
     /* Selection Display. */
     {
       /* NOTE(fclem): Why do we need original mesh here, only to get the flag? */
-      const blender::Mesh &mesh_orig = DRW_object_get_data_for_drawing<blender::Mesh>(
+      const Mesh &mesh_orig = DRW_object_get_data_for_drawing<Mesh>(
           *DEG_get_original(ob_ref.object));
       const bool use_face_selection = (mesh_orig.editflag & ME_EDIT_PAINT_FACE_SEL);
       const bool use_vert_selection = (mesh_orig.editflag & ME_EDIT_PAINT_VERT_SEL);

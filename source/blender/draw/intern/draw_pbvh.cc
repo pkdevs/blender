@@ -76,7 +76,7 @@ struct OrigMeshData {
   int face_set_default;
   int face_set_seed;
   bke::AttributeAccessor attributes;
-  OrigMeshData(const blender::Mesh &mesh)
+  OrigMeshData(const Mesh &mesh)
       : active_color(mesh.active_color_attribute),
         default_color(mesh.default_color_attribute),
         active_uv_map(mesh.active_uv_map_name()),
@@ -596,7 +596,7 @@ static void update_positions_mesh(const Object &object,
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-  const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
   const OffsetIndices<int> faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval_from_eval(object);
@@ -616,7 +616,7 @@ static void update_normals_mesh(const Object &object,
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-  const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
   const OffsetIndices<int> faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<float3> vert_normals = bke::pbvh::vert_normals_eval_from_eval(object);
@@ -653,7 +653,7 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-  const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
   const OffsetIndices<int> faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const VArraySpan mask = *orig_mesh_data.attributes.lookup<float>(".sculpt_mask",
@@ -686,7 +686,7 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-  const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
   const OffsetIndices<int> faces = mesh.faces();
   const int color_default = orig_mesh_data.face_set_default;
   const int color_seed = orig_mesh_data.face_set_seed;
@@ -731,7 +731,7 @@ BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-  const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
   const OffsetIndices<int> faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
@@ -1408,7 +1408,7 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
   const GVArraySpan attr = *attributes.lookup(name);
 
-  const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
   const Span<int> corner_verts = mesh.corner_verts();
 
   node_mask.foreach_index(
@@ -2185,7 +2185,7 @@ static Array<int> calc_material_indices(const Object &object, const OrigMeshData
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+      const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
       const bke::AttributeAccessor attributes = mesh.attributes();
       const VArray material_indices = *attributes.lookup<int>("material_index",
                                                               bke::AttrDomain::Face);
@@ -2422,7 +2422,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+      const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
       const OffsetIndices<int> faces = mesh.faces();
       const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
       const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
@@ -2606,7 +2606,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       const IndexMask nodes_to_calculate = IndexMask::from_predicate(
           node_mask, memory, [&](const int i) { return !ibos[i]; });
 
-      const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+      const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
       const OffsetIndices<int> faces = mesh.faces();
       const Span<int3> corner_tris = mesh.corner_tris();
       const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
@@ -2662,7 +2662,7 @@ Span<Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
 {
   PRF_scope(ProfileCategory::Draw);
   const Object &object_orig = *DEG_get_original(&object);
-  const OrigMeshData orig_mesh_data{*id_cast<const blender::Mesh *>(object_orig.data)};
+  const OrigMeshData orig_mesh_data{*id_cast<const Mesh *>(object_orig.data)};
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
 
   this->ensure_use_flat_layout(object, orig_mesh_data);
@@ -2710,7 +2710,7 @@ Span<Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
 {
   PRF_scope(ProfileCategory::Draw);
   const Object &object_orig = *DEG_get_original(&object);
-  const OrigMeshData orig_mesh_data(*id_cast<const blender::Mesh *>(object_orig.data));
+  const OrigMeshData orig_mesh_data(*id_cast<const Mesh *>(object_orig.data));
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
 
   this->ensure_use_flat_layout(object, orig_mesh_data);
@@ -2742,7 +2742,7 @@ Span<int> DrawCacheImpl::ensure_material_indices(const Object &object)
 {
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Object &object_orig = *DEG_get_original(&object);
-  const OrigMeshData orig_mesh_data(*id_cast<const blender::Mesh *>(object_orig.data));
+  const OrigMeshData orig_mesh_data(*id_cast<const Mesh *>(object_orig.data));
   if (orig_mesh_data.attributes.contains("material_index") &&
       material_indices_.size() != pbvh.nodes_num())
   {

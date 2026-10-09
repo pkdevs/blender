@@ -137,7 +137,7 @@ static void extract_uv_stretch_angle_mesh(const MeshRenderData &mr,
   const Span<float3> positions = mr.vert_positions;
   const OffsetIndices faces = mr.faces;
   const Span<int> corner_verts = mr.corner_verts;
-  const blender::Mesh &mesh = *mr.mesh;
+  const Mesh &mesh = *mr.mesh;
   const bke::AttributeAccessor attributes = mesh.attributes();
   const StringRef name = mesh.active_uv_map_name();
   const VArraySpan uv_map = *attributes.lookup<float2>(name, bke::AttrDomain::Corner);

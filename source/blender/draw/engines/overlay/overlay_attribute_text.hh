@@ -75,7 +75,7 @@ class AttributeTexts : Overlay {
 
     switch (object.type) {
       case OB_MESH: {
-        const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+        const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
         add_mesh_attributes_to_text_cache(state, mesh, object_to_world);
         break;
       }
@@ -120,7 +120,7 @@ class AttributeTexts : Overlay {
   }
 
   void add_mesh_attributes_to_text_cache(const State &state,
-                                         const blender::Mesh &mesh,
+                                         const Mesh &mesh,
                                          const float4x4 &object_to_world)
   {
     const bke::AttributeAccessor attributes = mesh.attributes();

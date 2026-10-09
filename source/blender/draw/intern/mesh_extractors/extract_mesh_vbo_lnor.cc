@@ -250,7 +250,7 @@ gpu::VertBufPtr extract_normals_subdiv(const MeshRenderData &mr,
   }
 
   if (subdiv_cache.use_custom_loop_normals) {
-    const blender::Mesh *coarse_mesh = subdiv_cache.mesh;
+    const Mesh *coarse_mesh = subdiv_cache.mesh;
     static GPUVertFormat src_normals_format = GPU_vertformat_from_attribute(
         "vnor", gpu::VertAttrType::SFLOAT_32_32_32);
     gpu::VertBufPtr src = gpu::VertBufPtr(GPU_vertbuf_create_with_format(src_normals_format));

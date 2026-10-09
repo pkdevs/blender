@@ -311,7 +311,7 @@ class Meshes : Overlay {
     ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
 
     Object *ob = ob_ref.object;
-    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
     /* WORKAROUND: GPU subdiv uses a different normal format. Remove this once GPU subdiv is
      * refactored. */
     const bool use_gpu_subdiv = BKE_subsurf_modifier_has_gpu_subdiv(&mesh);
@@ -446,10 +446,10 @@ class Meshes : Overlay {
   static bool mesh_has_edit_cage(const Object *ob)
   {
     BLI_assert(ob->type == OB_MESH);
-    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
     if (mesh.runtime->edit_mesh != nullptr) {
-      const blender::Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(ob);
-      const blender::Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(ob);
+      const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(ob);
+      const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(ob);
 
       return (editmesh_eval_cage != nullptr) && (editmesh_eval_cage != editmesh_eval_final);
     }
@@ -472,7 +472,7 @@ class Meshes : Overlay {
 
   static bool mesh_has_skin_roots(const Object *ob)
   {
-    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
     if (const BMesh *bm = BKE_editmesh_bmesh_get(&mesh)) {
       if (CustomData_get_offset_named(&bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius") == -1) {
         return false;
@@ -788,7 +788,7 @@ class MeshUVs : Overlay {
     }
 
     Object *ob = ob_ref.object;
-    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
 
     const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(state.space_data);
     const StringRef active_uv_map = mesh.active_or_default_uv_map_name();
@@ -819,12 +819,10 @@ class MeshUVs : Overlay {
     }
 
     Object &ob = *ob_ref.object;
-    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(ob);
+    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(ob);
 
     const Object *ob_orig = DEG_get_original(ob_ref.object);
-    const blender::Mesh &mesh_orig = ob_orig->type == OB_MESH ?
-                                         *id_cast<blender::Mesh *>(ob_orig->data) :
-                                         mesh;
+    const Mesh &mesh_orig = ob_orig->type == OB_MESH ? *id_cast<Mesh *>(ob_orig->data) : mesh;
     const BMesh *bm = BKE_editmesh_bmesh_get(&mesh_orig);
 
     const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(state.space_data);

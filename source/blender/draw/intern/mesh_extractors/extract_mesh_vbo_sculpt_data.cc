@@ -106,7 +106,7 @@ gpu::VertBufPtr extract_sculpt_data(const MeshRenderData &mr)
 gpu::VertBufPtr extract_sculpt_data_subdiv(const MeshRenderData &mr,
                                            const DRWSubdivCache &subdiv_cache)
 {
-  const blender::Mesh &coarse_mesh = *mr.mesh;
+  const Mesh &coarse_mesh = *mr.mesh;
   const int subdiv_corners_num = subdiv_cache.num_subdiv_loops;
 
   /* First, interpolate mask if available. */

@@ -1344,7 +1344,7 @@ static std::optional<StringRef> get_first_uv_name(const bke::AttributeAccessor &
 }
 
 template<typename T>
-Span<T> span_from_custom_data_layer(const blender::Mesh &mesh,
+Span<T> span_from_custom_data_layer(const Mesh &mesh,
                                     const eCustomDataType type,
                                     const StringRef name)
 {
@@ -1355,7 +1355,7 @@ Span<T> span_from_custom_data_layer(const blender::Mesh &mesh,
 }
 
 template<typename T>
-Span<T> span_from_custom_data_layer(const blender::Mesh &mesh, const eCustomDataType type)
+Span<T> span_from_custom_data_layer(const Mesh &mesh, const eCustomDataType type)
 {
   return {static_cast<const T *>(CustomData_get_layer(&mesh.fdata_legacy, type)),
           mesh.totface_legacy};
@@ -1366,7 +1366,7 @@ static gpu::VertBufPtr interpolate_face_corner_attribute_to_curve(ParticleDrawSo
                                                                   const StringRef name)
 {
   ParticleSystemModifierData *psmd = reinterpret_cast<ParticleSystemModifierData *>(src.md);
-  blender::Mesh &mesh = *psmd->mesh_final;
+  Mesh &mesh = *psmd->mesh_final;
 
   /* TODO(fclem): Use normalized integer format. */
   gpu::VertBufPtr vbo = gpu::VertBufPtr(
@@ -1421,7 +1421,7 @@ static gpu::VertBufPtr interpolate_face_corner_attribute_to_curve(ParticleDrawSo
 }
 
 static gpu::VertBufPtr ensure_curve_attribute(ParticleDrawSource &src,
-                                              const blender::Mesh &mesh,
+                                              const Mesh &mesh,
                                               const StringRef name,
                                               bool &r_is_point_domain)
 {
@@ -1447,7 +1447,7 @@ static gpu::VertBufPtr ensure_curve_attribute(ParticleDrawSource &src,
 
 void CurvesEvalCache::ensure_attribute(CurvesModule & /*module*/,
                                        ParticleDrawSource &src,
-                                       const blender::Mesh &mesh,
+                                       const Mesh &mesh,
                                        const StringRef name,
                                        const int index)
 {
@@ -1478,7 +1478,7 @@ void CurvesEvalCache::ensure_attributes(CurvesModule &module,
   if (psmd == nullptr || psmd->mesh_final == nullptr || src.curves_num() == 0) {
     return;
   }
-  const blender::Mesh &mesh = *psmd->mesh_final;
+  const Mesh &mesh = *psmd->mesh_final;
   const bke::AttributeAccessor attributes = mesh.attributes();
 
   if (gpu_material) {

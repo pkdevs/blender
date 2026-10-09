@@ -199,8 +199,7 @@ class Wireframe : Overlay {
 
         /* Draw loose geometry. */
         if (!in_edit_paint_mode || bypass_mode_check) {
-          const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(
-              *ob_ref.object);
+          const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
           Batch *geom;
           if ((mesh.edges_num == 0) && (mesh.verts_num > 0)) {
             geom = DRW_cache_mesh_all_verts_get(ob_ref.object);
@@ -308,8 +307,8 @@ class Wireframe : Overlay {
     if (!in_edit_mode) {
       return false;
     }
-    const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob_ref.object);
-    const blender::Mesh *orig_edit_mesh = BKE_object_get_pre_modified_mesh(ob_ref.object);
+    const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
+    const Mesh *orig_edit_mesh = BKE_object_get_pre_modified_mesh(ob_ref.object);
     const bool edit_mapping_valid = BKE_editmesh_eval_orig_map_available(mesh, orig_edit_mesh);
     if (!edit_mapping_valid) {
       /* The mesh edit mode overlay doesn't include wireframe for the evaluated mesh when it

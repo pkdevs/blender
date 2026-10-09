@@ -180,7 +180,7 @@ class Bounds : Overlay {
     if (show_extras && (ob->data != nullptr) && (ob->dtx & OB_TEXSPACE)) {
       switch (GS(ob->data->name)) {
         case ID_ME: {
-          blender::Mesh &me = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
+          Mesh &me = DRW_object_get_data_for_drawing<Mesh>(*ob);
           BKE_mesh_texspace_ensure(&me);
           add_bounds_ex(me.texspace_location, me.texspace_size, OB_BOUND_BOX);
           break;

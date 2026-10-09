@@ -92,7 +92,7 @@ struct MeshRenderData {
   int freestyle_edge_ofs;
   int freestyle_face_ofs;
   /** Mesh */
-  const blender::Mesh *mesh;
+  const Mesh *mesh;
   Span<float3> vert_positions;
   Span<int2> edges;
   OffsetIndices<int> faces;
@@ -124,10 +124,10 @@ struct MeshRenderData {
   const char *default_color_name;
 };
 
-inline const blender::Mesh &editmesh_final_or_this(const Object &object, const blender::Mesh &mesh)
+inline const Mesh &editmesh_final_or_this(const Object &object, const Mesh &mesh)
 {
   if (mesh.runtime->edit_mesh != nullptr) {
-    if (const blender::Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&object)) {
+    if (const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&object)) {
       return *editmesh_eval_final;
     }
   }
@@ -198,7 +198,7 @@ BLI_INLINE const float *bm_face_no_get(const MeshRenderData &mr, const BMFace *e
  * otherwise don't use modifiers as they are not from this object.
  */
 MeshRenderData mesh_render_data_create(Object &object,
-                                       blender::Mesh &mesh,
+                                       Mesh &mesh,
                                        bool is_editmode,
                                        bool is_paint_mode,
                                        bool do_final,

@@ -65,7 +65,7 @@ static AreaInfo compute_area_ratio(const MeshRenderData &mr, MutableSpan<float> 
   const Span<float3> positions = mr.vert_positions;
   const OffsetIndices<int> faces = mr.faces;
   const Span<int> corner_verts = mr.corner_verts;
-  const blender::Mesh &mesh = *mr.mesh;
+  const Mesh &mesh = *mr.mesh;
   const bke::AttributeAccessor attributes = mesh.attributes();
   const StringRef name = mesh.active_uv_map_name();
   const VArraySpan uv_map = *attributes.lookup<float2>(name, bke::AttrDomain::Corner);

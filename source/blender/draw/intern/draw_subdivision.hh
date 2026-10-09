@@ -63,7 +63,7 @@ struct DRWPatchMap {
  * \{ */
 
 struct DRWSubdivCache {
-  const blender::Mesh *mesh;
+  const Mesh *mesh;
   BMesh *bm;
   bke::subdiv::Subdiv *subdiv;
   bool optimal_display;
@@ -158,7 +158,7 @@ void draw_subdiv_cache_free(DRWSubdivCache &cache);
 /** \} */
 
 void DRW_create_subdivision(Object &ob,
-                            blender::Mesh &mesh,
+                            Mesh &mesh,
                             MeshBatchCache &batch_cache,
                             MeshBufferCache &mbc,
                             Span<IBOType> ibo_requests,

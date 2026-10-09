@@ -172,7 +172,7 @@ class AttributeViewer : Overlay {
     Object &object = *ob_ref.object;
     switch (object.type) {
       case OB_MESH: {
-        blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(object);
+        Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
         if (const std::optional<bke::AttributeMetaData> meta_data =
                 mesh.attributes().lookup_meta_data(".viewer"))
         {

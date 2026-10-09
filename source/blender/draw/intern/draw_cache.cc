@@ -178,39 +178,38 @@ Span<Batch *> DRW_cache_object_surface_material_get(Object *ob,
 Batch *DRW_cache_mesh_all_verts_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_all_verts(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_all_verts(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_paint_overlay_verts_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_paint_overlay_verts(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_paint_overlay_verts(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_all_edges_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_all_edges(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_all_edges(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_loose_edges_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_loose_edges(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_loose_edges(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_edge_detection_get(Object *ob, bool *r_is_manifold)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_edge_detection(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob), r_is_manifold);
+  return DRW_mesh_batch_cache_get_edge_detection(DRW_object_get_data_for_drawing<Mesh>(*ob),
+                                                 r_is_manifold);
 }
 
 Batch *DRW_cache_mesh_surface_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_surface(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_surface(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 gpu::BottomLevelAS *DRW_cache_mesh_surface_blas_get(Object *ob)
@@ -218,22 +217,20 @@ gpu::BottomLevelAS *DRW_cache_mesh_surface_blas_get(Object *ob)
   BLI_assert(ob->type == OB_MESH);
   /* Ensure the surface VBOs/IBOs are requested, since BLAS relies on them. */
   DRW_cache_mesh_surface_get(ob);
-  return DRW_mesh_batch_cache_get_surface_blas(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_surface_blas(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_paint_overlay_surface_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_paint_overlay_surface(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+      DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_paint_overlay_edges_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_paint_overlay_edges(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_paint_overlay_edges(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Span<Batch *> DRW_cache_mesh_surface_shaded_get(Object *ob,
@@ -241,63 +238,59 @@ Span<Batch *> DRW_cache_mesh_surface_shaded_get(Object *ob,
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_shaded(
-      *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob), materials);
+      *ob, DRW_object_get_data_for_drawing<Mesh>(*ob), materials);
 }
 
 Span<Batch *> DRW_cache_mesh_surface_texpaint_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_surface_texpaint(
-      *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_surface_texpaint(*ob,
+                                                   DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_surface_texpaint_single_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_texpaint_single(
-      *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+      *ob, DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_surface_vertpaint_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_surface_vertpaint(
-      *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_surface_vertpaint(*ob,
+                                                    DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_surface_sculptcolors_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_surface_sculpt(
-      *ob, DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_surface_sculpt(*ob, DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_surface_weights_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_surface_weights(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_surface_weights(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_face_wireframe_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_wireframes_face(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_wireframes_face(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_surface_mesh_analysis_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
-  return DRW_mesh_batch_cache_get_edit_mesh_analysis(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+  return DRW_mesh_batch_cache_get_edit_mesh_analysis(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 Batch *DRW_cache_mesh_surface_viewer_attribute_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_viewer_attribute(
-      DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+      DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 /** \} */
@@ -496,7 +489,7 @@ void drw_batch_cache_validate(Object *ob)
 {
   switch (ob->type) {
     case OB_MESH:
-      DRW_mesh_batch_cache_validate(DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
+      DRW_mesh_batch_cache_validate(DRW_object_get_data_for_drawing<Mesh>(*ob));
       break;
     case OB_CURVES_LEGACY:
     case OB_FONT:
@@ -541,7 +534,7 @@ void drw_batch_cache_generate_requested(Object *ob, TaskGraph &task_graph)
     case OB_MESH:
       DRW_mesh_batch_cache_create_requested(task_graph,
                                             *ob,
-                                            DRW_object_get_data_for_drawing<blender::Mesh>(*ob),
+                                            DRW_object_get_data_for_drawing<Mesh>(*ob),
                                             *scene,
                                             is_paint_mode,
                                             use_hide);
@@ -579,12 +572,12 @@ void drw_batch_cache_generate_requested_evaluated_mesh_or_curve(Object *ob, Task
     const bool use_hide = ((is_paint_mode && (ob == draw_ctx->obact) &&
                             DRW_object_use_hide_faces(ob)) ||
                            ((mode == CTX_MODE_EDIT_MESH) && (ob->mode == OB_MODE_EDIT)));
-    if (blender::Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(ob)) {
+    if (Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(ob)) {
       DRW_mesh_batch_cache_create_requested(
           task_graph, *ob, DRW_mesh_get_for_drawing(*mesh), *scene, is_paint_mode, use_hide);
     }
   }
-  else if (blender::Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(ob)) {
+  else if (Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(ob)) {
     /* Legacy curve objects can have evaluated mesh data while the original object is still a curve
      * in edit mode (see #156971). #DRW_mesh_batch_cache_create_requested expects the object to
      * match the mesh data and to be in object mode for non-edit mesh extraction, so use a shallow
@@ -612,7 +605,7 @@ void DRW_batch_cache_free_old(Object *ob, int ctime)
 {
   switch (ob->type) {
     case OB_MESH:
-      DRW_mesh_batch_cache_free_old(&DRW_object_get_data_for_drawing<blender::Mesh>(*ob), ctime);
+      DRW_mesh_batch_cache_free_old(&DRW_object_get_data_for_drawing<Mesh>(*ob), ctime);
       break;
     case OB_CURVES:
       DRW_curves_batch_cache_free_old(&DRW_object_get_data_for_drawing<Curves>(*ob), ctime);

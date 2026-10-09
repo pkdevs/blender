@@ -187,7 +187,7 @@ class Sculpts : Overlay {
 
     switch (pbvh->type()) {
       case bke::pbvh::Type::Mesh: {
-        const blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*object_orig);
+        const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
         if (!mesh.attributes().contains(".sculpt_face_set") &&
             !mesh.attributes().contains(".sculpt_mask"))
         {
@@ -197,8 +197,7 @@ class Sculpts : Overlay {
       }
       case bke::pbvh::Type::Grids: {
         const SubdivCCG &subdiv_ccg = *sculpt_session->subdiv_ccg;
-        const blender::Mesh &base_mesh = DRW_object_get_data_for_drawing<blender::Mesh>(
-            *object_orig);
+        const Mesh &base_mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
         if (subdiv_ccg.masks.is_empty() && !base_mesh.attributes().contains(".sculpt_face_set")) {
           return;
         }
@@ -231,7 +230,7 @@ class Sculpts : Overlay {
     else {
       ResourceHandleRange handle = manager.unique_handle(ob_ref);
 
-      blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob_ref.object);
+      Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
       Batch *sculpt_overlays = DRW_mesh_batch_cache_get_sculpt_overlays(mesh);
       mesh_ps_->draw(sculpt_overlays, handle);
     }

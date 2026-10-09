@@ -392,7 +392,7 @@ static void drw_shgroup_bone_envelope(const Armatures::DrawContext *ctx,
 /* Custom (geometry) */
 
 static void drw_shgroup_bone_custom_solid_mesh(const Armatures::DrawContext *ctx,
-                                               blender::Mesh &mesh,
+                                               Mesh &mesh,
                                                const float (*bone_mat)[4],
                                                const float bone_color[4],
                                                const float hint_color[4],
@@ -439,7 +439,7 @@ static void drw_shgroup_bone_custom_solid_mesh(const Armatures::DrawContext *ctx
 }
 
 static void drw_shgroup_bone_custom_mesh_wire(const Armatures::DrawContext *ctx,
-                                              blender::Mesh &mesh,
+                                              Mesh &mesh,
                                               const float (*bone_mat)[4],
                                               const float color[4],
                                               const float wire_width,
@@ -514,7 +514,7 @@ static void drw_shgroup_bone_custom_solid(const Armatures::DrawContext *ctx,
    * by #data_eval. This is bad since it gives preference to an object's evaluated mesh over any
    * other data type, but supporting all evaluated geometry components would require a much
    * larger refactor of this area. */
-  blender::Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
+  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
   if (mesh != nullptr) {
     drw_shgroup_bone_custom_solid_mesh(ctx,
                                        DRW_mesh_get_for_drawing(*mesh),
@@ -547,7 +547,7 @@ static void drw_shgroup_bone_custom_wire(const Armatures::DrawContext *ctx,
                                          Object *custom)
 {
   /* See comments in #drw_shgroup_bone_custom_solid. */
-  blender::Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
+  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
   if (mesh != nullptr) {
     drw_shgroup_bone_custom_mesh_wire(
         ctx, DRW_mesh_get_for_drawing(*mesh), bone_mat, color, wire_width, select_id, *custom);
