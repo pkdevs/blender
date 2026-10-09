@@ -8,6 +8,7 @@
 
 #include "BKE_blender_project.hh"
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 
 #include "BLI_path_utils.hh"
 
@@ -20,6 +21,19 @@
 #include "wm_files.hh"
 
 namespace blender {
+
+/** Save changes to the active project before replacing or closing it, if enabled. */
+static void project_auto_save(Main *bmain)
+{
+  if (!(U.pref_flag & USER_PREF_FLAG_PROJECT_SAVE)) {
+    return;
+  }
+  const bool is_dirty = BKE_blender_project_read_callback(
+      bmain, [](const bke::BlenderProject *project) { return project && project->is_dirty; });
+  if (is_dirty) {
+    BKE_blender_project_config_file_write(bmain);
+  }
+}
 
 static wmOperatorStatus project_new_exec(bContext *C, wmOperator *op)
 {
@@ -74,13 +88,17 @@ static wmOperatorStatus project_open_exec(bContext *C, wmOperator *op)
   }
 
   WM_operator_name_call(
-      C, "WM_OT_read_homefile", wm::OpCallContext::ExecDefault, op->ptr, nullptr);
+      C, "WM_OT_read_homefile", wm::OpCallContext::ExecDefault, nullptr, nullptr);
 
   Main *bmain = CTX_data_main(C);
   if (!BKE_blender_project_init_from_root_path(bmain, project_root_path)) {
     BKE_reportf(
         op->reports, RPT_ERROR, "Failed to load project from path: %s", project_root_path.c_str());
     return OPERATOR_CANCELLED;
+  }
+
+  if (!G.background) {
+    BKE_blender_project_recent_update(bmain);
   }
 
   return OPERATOR_FINISHED;
@@ -103,6 +121,12 @@ static wmOperatorStatus project_open_invoke(bContext *C, wmOperator *op, const w
       return OPERATOR_INTERFACE;
     }
   }
+
+  /* Open directly when the folder is given, for example for recent projects. */
+  if (RNA_struct_property_is_set(op->ptr, "directory")) {
+    return project_open_exec(C, op);
+  }
+
   WM_event_add_fileselect(C, op);
   return OPERATOR_RUNNING_MODAL;
 }
@@ -133,11 +157,12 @@ void PROJECT_OT_open(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
-static wmOperatorStatus project_close_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus project_close_exec(bContext *C, wmOperator * /*op*/)
 {
+  project_auto_save(CTX_data_main(C));
   BKE_blender_project_clear();
   WM_operator_name_call(
-      C, "WM_OT_read_homefile", wm::OpCallContext::ExecDefault, op->ptr, nullptr);
+      C, "WM_OT_read_homefile", wm::OpCallContext::ExecDefault, nullptr, nullptr);
   return OPERATOR_FINISHED;
 }
 

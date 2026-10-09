@@ -49,7 +49,8 @@ def find_and_load_project_for_blend_path(context, blend_path, report=None):
     """
     Load the project the blend file is in, or clears the project if none is found.
 
-    `blend_path` should be an absolute path.
+    `blend_path` should be an absolute path. An empty path is a new file,
+    which keeps the active project.
 
     Throws a ProjectLoadException if a project is found but is invalid
     (missing config file, config validation error, etc.).
@@ -60,8 +61,6 @@ def find_and_load_project_for_blend_path(context, blend_path, report=None):
     from pathlib import Path
 
     if blend_path == "":
-        # Not an on-disk blend file, so there is no project to load.
-        bpy.data.project_clear()
         return
 
     # Note: `blend_path` (and consequently the resulting `root_path`) are

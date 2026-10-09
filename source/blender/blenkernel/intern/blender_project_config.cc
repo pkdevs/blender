@@ -445,8 +445,14 @@ bool BKE_blender_project_config_file_write(Main *bmain)
     CLOG_ERROR(&LOG, "Couldn't save project config, no active project.");
     return false;
   }
-  std::string toml_path = project->get_root_path() + SEP_STR + ".blender_project" + SEP_STR +
-                          "project.toml";
+  /* Create the directory for new projects. */
+  const std::string config_dir = project->get_root_path() + SEP_STR + ".blender_project";
+  if (!BLI_dir_create_recursive(config_dir.c_str())) {
+    CLOG_ERROR(&LOG, "Failed to create project config directory '%s'", config_dir.c_str());
+    return false;
+  }
+
+  std::string toml_path = config_dir + SEP_STR + "project.toml";
 
   toml::ordered_table toml_config = create_toml_from_blender_project(project);
 
@@ -461,7 +467,12 @@ bool BKE_blender_project_config_file_write(Main *bmain)
   }
   config_file << toml::format(toml::ordered_value(toml_config), bke::toml_version);
   config_file.close(); /* Flush to get all failures. */
-  return !config_file.fail();
+  if (config_file.fail()) {
+    return false;
+  }
+
+  project->is_dirty = false;
+  return true;
 }
 
 bool BKE_blender_project_init_from_root_path(Main *bmain, std::string project_root_path)
