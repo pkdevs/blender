@@ -152,7 +152,7 @@ static Array<bool> calc_corner_uv_winding(const OffsetIndices<int> faces,
 {
   Array<bool> corner_winding(faces.total_size());
   threading::parallel_for(faces.index_range(), 1024, [&](const IndexRange range) {
-    for (const int face : range) {
+    for (const int64_t face : range) {
       const Span<float2> face_uvs = uv_map.slice(faces[face]);
       const bool winding = cross_poly_v2(reinterpret_cast<const float (*)[2]>(face_uvs.data()),
                                          uint(face_uvs.size())) < 0.0f;
@@ -180,7 +180,7 @@ static int group_vert_corners_by_uv(const Span<int> vert_corners,
     corner_uv_verts[corner] = -1;
   }
   int uv_verts_num = 0;
-  for (const int i : vert_corners.index_range()) {
+  for (const int64_t i : vert_corners.index_range()) {
     const int first = vert_corners[i];
     if (corner_uv_verts[first] != -1) {
       continue;
@@ -222,7 +222,7 @@ int calc_uv_verts(const OffsetIndices<int> faces,
       vert_to_corner.index_range(),
       1024,
       [&](const IndexRange range) {
-        for (const int vert : range) {
+        for (const int64_t vert : range) {
           uv_vert_offsets[vert] = group_vert_corners_by_uv(
               vert_to_corner[vert], uv_map, corner_winding, r_corner_uv_verts);
         }
@@ -234,7 +234,7 @@ int calc_uv_verts(const OffsetIndices<int> faces,
 
   /* Turn the indices local to each vertex into indices for the whole mesh. */
   threading::parallel_for(corner_verts.index_range(), 4096, [&](const IndexRange range) {
-    for (const int corner : range) {
+    for (const int64_t corner : range) {
       r_corner_uv_verts[corner] += uv_verts_by_vert[corner_verts[corner]].start();
     }
   });
