@@ -965,7 +965,7 @@ void POSE_OT_select_constrained_by_selection(wmOperatorType *ot)
 {
   ot->name = "Select Constraint Owners";
   ot->idname = "POSE_OT_select_constrained_by_selection";
-  ot->description = "Select bones that use the currently selected bones as constraint targets";
+  ot->description = "Select owners of constraints that target the currently selected bones";
 
   ot->exec = pose_select_constrained_by_selection_exec;
   ot->poll = ED_operator_posemode;
@@ -1021,7 +1021,7 @@ void POSE_OT_select_constraint_target(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Select Constraint Target";
   ot->idname = "POSE_OT_select_constraint_target";
-  ot->description = "Select bones used as targets for the currently selected bones";
+  ot->description = "Select bones used as targets by the currently selected bones";
 
   /* API callbacks. */
   ot->exec = pose_select_constraint_target_exec;
