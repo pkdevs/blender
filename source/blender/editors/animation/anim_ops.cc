@@ -628,8 +628,7 @@ static float frame_from_event(bContext *C, const wmEvent *event)
 
   /* respect preview range restrictions (if only allowed to move around within that range) */
   if ((scene->r.flag & SCER_LOCK_FRAME_SELECTION) || (region->regiontype == RGN_TYPE_SCRUBBING)) {
-    // todo(habib): What is desired here, scene or strip playback range?
-    const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
+    const ScenePlaybackRange playback_range = ED_scene_get_effective_playback_range(*C, scene);
     CLAMP(frame, playback_range.start_frame, playback_range.end_frame);
   }
 
