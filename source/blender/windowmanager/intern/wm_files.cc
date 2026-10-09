@@ -87,6 +87,14 @@
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_main_namemap.hh"
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+#  include "BKE_layer.hh"
+#  include "BKE_object.hh"
+#  include "BLI_math_matrix.hh"
+#  include "BLI_math_vector.h"
+#  include "BLI_math_vector.hh"
+#  include "DEG_depsgraph_query.hh"
+#endif
 #include "BKE_node.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_packedFile.hh"
@@ -1939,6 +1947,94 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
   return ibuf;
 }
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+/** Documents on iOS preview their scene framed whole, as the 3D View's Frame All shows it. */
+static bool wm_ios_preview_frame_all = false;
+
+/**
+ * Render the 3D View's angle onto everything visible, framed as Frame All does. Lights, cameras
+ * and empties are left out of the framing, so a far light does not shrink the scene.
+ */
+static ImBuf *wm_ios_thumb_frame_all(const bContext *C,
+                                     Depsgraph *depsgraph,
+                                     Scene *scene,
+                                     View3D *v3d,
+                                     ARegion *region,
+                                     char err_out[256])
+{
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  if (view_layer == nullptr || rv3d == nullptr) {
+    return nullptr;
+  }
+  float3 min(FLT_MAX), max(-FLT_MAX);
+  bool found = false;
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+    Object *ob = base.object;
+    if (!BKE_base_is_visible(v3d, &base) ||
+        ELEM(ob->type, OB_CAMERA, OB_LAMP, OB_LIGHTPROBE, OB_EMPTY, OB_SPEAKER))
+    {
+      continue;
+    }
+    const Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
+    const std::optional<Bounds<float3>> bounds = BKE_object_boundbox_get(ob_eval);
+    if (!bounds) {
+      continue;
+    }
+    const float4x4 &matrix = ob_eval->object_to_world();
+    for (int i = 0; i < 8; i++) {
+      const float3 corner((i & 1) ? bounds->max.x : bounds->min.x,
+                          (i & 2) ? bounds->max.y : bounds->min.y,
+                          (i & 4) ? bounds->max.z : bounds->min.z);
+      const float3 world = math::transform_point(matrix, corner);
+      min = math::min(min, world);
+      max = math::max(max, world);
+    }
+    found = true;
+  }
+  if (!found) {
+    return nullptr;
+  }
+
+  /* Frame the bounds from the view's angle; restore the view afterwards. */
+  const float3 ofs_old(rv3d->ofs);
+  const float dist_old = rv3d->dist;
+  const char persp_old = rv3d->persp;
+  const short flag2_old = v3d->flag2;
+  if (rv3d->persp == RV3D_CAMOB) {
+    rv3d->persp = RV3D_PERSP;
+  }
+  const float radius = math::max(math::distance(min, max) / 2.0f, 0.01f);
+  copy_v3_v3(rv3d->ofs, -math::midpoint(min, max));
+  rv3d->dist = ED_view3d_radius_to_dist(v3d, region, depsgraph, rv3d->persp, false, radius * 1.1f);
+  /* Just the scene, without the grid, outlines and other overlays. */
+  v3d->flag2 |= V3D_HIDE_OVERLAYS;
+  const eDrawType drawtype = v3d->shading.type == OB_RENDER ? OB_MATERIAL :
+                                                              eDrawType(v3d->shading.type);
+  ImBuf *ibuf = ED_view3d_draw_offscreen_imbuf(depsgraph,
+                                               scene,
+                                               drawtype,
+                                               v3d,
+                                               region,
+                                               PREVIEW_RENDER_LARGE_HEIGHT * 2,
+                                               PREVIEW_RENDER_LARGE_HEIGHT * 2,
+                                               IB_byte_data,
+                                               R_ALPHAPREMUL,
+                                               nullptr,
+                                               true,
+                                               nullptr,
+                                               nullptr,
+                                               false,
+                                               err_out);
+  v3d->flag2 = flag2_old;
+  copy_v3_v3(rv3d->ofs, ofs_old);
+  rv3d->dist = dist_old;
+  rv3d->persp = persp_old;
+  return ibuf;
+}
+#endif
+
 /**
  * Render the current scene with the active camera.
  *
@@ -1987,6 +2083,16 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
    * as it's a thumbnail, we don't need object centers and friends to be 1:1 size. */
   U.pixelsize = 1.0f;
 
+  ibuf = nullptr;
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  if (wm_ios_preview_frame_all && v3d && region) {
+    ibuf = wm_ios_thumb_frame_all(C, depsgraph, scene, v3d, region, err_out);
+  }
+  if (ibuf) {
+    /* Framed. */
+  }
+  else
+#endif
   if (scene->camera) {
     ibuf = ED_view3d_draw_offscreen_imbuf_simple(depsgraph,
                                                  scene,
