@@ -4666,6 +4666,7 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
       if (project_paint_winclip(ps, &coSS)) {
         continue;
       }
+
 #endif  // PROJ_DEBUG_WINCLIP
 
       /* Back-face culls individual triangles but mask normal will use face. */
