@@ -489,6 +489,45 @@ final class HarnessController: UIViewController {
         timeline?.perform(NSSelectorFromString("toggle:"), with: nil)
         if scenario == "timeline-expanded" { timeline?.perform(NSSelectorFromString("toggleExpanded:"), with: nil) }
         view.setNeedsLayout()
+      case "pie":
+        let uikit = UserDefaults.standard.bool(forKey: "uikit")
+        let specs = [("Frame All", "rectangle.expand.vertical"), ("Frame Selected", "viewfinder"),
+                     ("Camera", "camera"), ("Perspective", "cube.transparent"), ("Local View", "scope"),
+                     ("Front", "arrow.up.square"), ("Right", "arrow.right.square"), ("Top", "arrow.down.to.line.square")]
+        for (index, spec) in specs.enumerated() {
+          let image = UIImage(systemName: spec.1)
+          let button: UIButton
+          if uikit {
+            button = UIButton(type: .system)
+            button.tintColor = .label
+            button.configurationUpdateHandler = { updated in
+              var configuration: UIButton.Configuration = updated.isSelected ? .prominentGlass() : .glass()
+              configuration.baseForegroundColor = updated.isSelected ? .white : .label
+              configuration.baseBackgroundColor = updated.isSelected ? .systemBlue : nil
+              configuration.title = spec.0
+              configuration.image = image
+              configuration.imagePlacement = .leading
+              configuration.imagePadding = 7
+              configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
+              configuration.cornerStyle = .capsule
+              updated.configuration = configuration
+            }
+          }
+          else {
+            let swift = GlassButton(frame: .zero)
+            swift.buttonTitle = spec.0
+            swift.buttonImage = image
+            swift.imagePadding = 7
+            swift.buttonInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
+            button = swift
+          }
+          button.overrideUserInterfaceStyle = .dark
+          button.isSelected = index == 2
+          let width = min(180, button.sizeThatFits(CGSize(width: 180, height: 44)).width)
+          button.frame = CGRect(x: view.bounds.maxX - 40 - width - CGFloat(index % 2) * 200,
+                                y: 200 + CGFloat(index / 2) * 60, width: width, height: 44)
+          view.addSubview(button)
+        }
       case "pencil":
         let menu: UIView = UserDefaults.standard.bool(forKey: "uikit") ?
           GHOSTIOSPencilMenu(frame: view.bounds) : SwiftPencilMenu(frame: view.bounds)

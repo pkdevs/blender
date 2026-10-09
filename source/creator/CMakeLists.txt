@@ -368,6 +368,7 @@ else()
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/CompileIndicator.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/CompositeControls.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/DialogSheet.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/GlassButton.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/HierarchyView.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/InspectorStore.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/InspectorView.swift
