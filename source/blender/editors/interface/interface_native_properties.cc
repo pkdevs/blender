@@ -8,19 +8,27 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_icons.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_library.hh"
+#include "BKE_preview_image.hh"
 #include "BKE_studiolight.h"
 #include "BKE_main.hh"
+#include "BKE_modifier.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BLI_array.hh"
 #include "BLI_listbase.h"
+#include "BLI_rect.h"
 #include "BLI_serialize.hh"
+#include "DEG_depsgraph_build.hh"
 #include "DNA_ID.h"
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_space_types.h"
 #include "DNA_workspace_types.h"
 #include "ED_buttons.hh"
 #include "ED_node.hh"
+#include "ED_render.hh"
 #include "ED_undo.hh"
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
@@ -111,9 +119,49 @@ std::string icon_name(const int icon)
 }
 
 /**
- * PNG of a studio light preview icon (MatCaps, HDRIs and studio lights in viewport shading),
- * as `template_icon_view` shows them. Each is rendered once per session, so snapshots only
- * carry a path.
+ * PNG of an ID's preview icon (a Grease Pencil material, for example). Written again when the
+ * preview changes, so snapshots only carry a path.
+ */
+std::string id_preview_icon_path(const bContext *C, const int icon_id)
+{
+  static std::map<int, std::pair<int, std::string>> written;
+  const PreviewImage *prv = icon_id_preview(C, icon_id);
+  if (prv == nullptr) {
+    /* Until its job has rendered it there is no preview; a later snapshot picks it up. */
+    const auto found = written.find(icon_id);
+    return found != written.end() ? found->second.second : "";
+  }
+  const int stamp = prv->changed_timestamp[ICON_SIZE_PREVIEW];
+  if (const auto found = written.find(icon_id);
+      found != written.end() && found->second.first == stamp)
+  {
+    return found->second.second;
+  }
+  ImBuf *ibuf = IMB_allocFromBuffer(reinterpret_cast<const uint8_t *>(prv->rect[ICON_SIZE_PREVIEW]),
+                                    nullptr,
+                                    prv->w[ICON_SIZE_PREVIEW],
+                                    prv->h[ICON_SIZE_PREVIEW],
+                                    4);
+  if (!ibuf) {
+    return "";
+  }
+  /* Previews are premultiplied, PNG is not. */
+  IMB_unpremultiply_alpha(ibuf);
+  ibuf->planes = 32;
+  ibuf->ftype = IMB_FTYPE_PNG;
+  /* A new name for each version, so UIKit does not show an image it cached. */
+  const std::string path = std::string(BKE_tempdir_session()) + "native_preview_" +
+                           std::to_string(icon_id) + "_" + std::to_string(stamp) + ".png";
+  const bool saved = IMB_save_image(ibuf, path.c_str(), IB_byte_data);
+  IMB_freeImBuf(ibuf);
+  written[icon_id] = {stamp, saved ? path : ""};
+  return saved ? path : "";
+}
+
+/**
+ * PNG of a preview icon: a studio light (MatCaps, HDRIs and studio lights in viewport shading),
+ * as `template_icon_view` shows them, or an ID's preview. Studio lights are rendered once per
+ * session, so snapshots only carry a path.
  */
 std::string preview_icon_path(const bContext *C, const int icon_id)
 {
@@ -123,6 +171,10 @@ std::string preview_icon_path(const bContext *C, const int icon_id)
   }
   if (const auto found = rendered.find(icon_id); found != rendered.end()) {
     return found->second;
+  }
+  if (const Icon *icon = BKE_icon_get(icon_id); icon && icon->obj_type != ICON_DATA_STUDIOLIGHT) {
+    /* Of the IDs, only materials are picked from previews, as in Blender's material popovers. */
+    return icon->id_type == ID_MA ? id_preview_icon_path(C, icon_id) : "";
   }
   /* Studio light previews come from the icon's own preview job; until it finishes there is
    * no preview, and a later snapshot picks it up. */

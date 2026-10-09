@@ -1419,6 +1419,11 @@ void icon_ensure_deferred(const bContext *C, int icon_id, bool big);
  * preview job has finished, or null while it renders. Starts the job when needed.
  */
 const uint8_t *icon_studiolight_preview(const bContext *C, int icon_id);
+/**
+ * The large preview of an ID or preview icon (a material, for example) once rendered, or null
+ * while it renders. Starts or updates the render with a job when needed.
+ */
+const PreviewImage *icon_id_preview(const bContext *C, int icon_id);
 /** Is \a icon_id a preview icon that is being loaded/rendered? */
 bool icon_is_preview_deferred_loading(int icon_id, bool big);
 int id_icon_get(const bContext *C, ID *id, bool big);

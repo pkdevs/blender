@@ -1280,6 +1280,27 @@ const uint8_t *icon_studiolight_preview(const bContext *C, const int icon_id)
   return di->data.buffer.image->rect;
 }
 
+const PreviewImage *icon_id_preview(const bContext *C, const int icon_id)
+{
+  Icon *icon = BKE_icon_get(icon_id);
+  const DrawInfo *di = icon ? icon_ensure_drawinfo(icon) : nullptr;
+  if (di == nullptr || di->type != ICON_TYPE_PREVIEW || icon->obj == nullptr) {
+    return nullptr;
+  }
+  /* Render or update the preview with a job, as drawing the icon would. */
+  icon_ensure_deferred(C, icon_id, true);
+  const PreviewImage *prv = (icon->id_type != 0) ?
+                                BKE_previewimg_id_ensure(static_cast<ID *>(icon->obj)) :
+                                static_cast<const PreviewImage *>(icon->obj);
+  if (prv == nullptr || (prv->flag[ICON_SIZE_PREVIEW] & PRV_RENDERING) ||
+      prv->rect[ICON_SIZE_PREVIEW] == nullptr || prv->w[ICON_SIZE_PREVIEW] == 0 ||
+      prv->h[ICON_SIZE_PREVIEW] == 0)
+  {
+    return nullptr;
+  }
+  return prv;
+}
+
 bool icon_is_preview_deferred_loading(const int icon_id, const bool big)
 {
   const Icon *icon = BKE_icon_get(icon_id);
