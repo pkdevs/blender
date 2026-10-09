@@ -1711,6 +1711,16 @@ bool template_icon_view_property_get(const Button &button, PointerRNA &ptr, Prop
 extern bool ui_list_show_all_rows;
 
 /**
+ * Read the RNA pointer an ID template (#Layout::template_id) browses, from any of the template's
+ * buttons, for native interfaces that show the template as one control. \a r_event is the
+ * button's role: #UI_ID_BROWSE for the browse button, otherwise its #template_id_cb event.
+ */
+bool template_id_property_get(const Button &button,
+                              PointerRNA &r_ptr,
+                              PropertyRNA *&r_prop,
+                              int &r_event);
+
+/**
  * Functions in this namespace are only exposed for unit testing purposes, and
  * should not be used outside of the files where they are defined.
  */

@@ -318,6 +318,29 @@ void context_active_but_prop_get_templateID(const bContext *C,
   }
 }
 
+bool template_id_property_get(const Button &button,
+                              PointerRNA &r_ptr,
+                              PropertyRNA *&r_prop,
+                              int &r_event)
+{
+  if (!button.func_argN) {
+    return false;
+  }
+  if (button.block_create_func == id_search_menu) {
+    r_event = UI_ID_BROWSE;
+  }
+  else if (button.funcN == template_id_cb) {
+    r_event = POINTER_AS_INT(button.func_arg2);
+  }
+  else {
+    return false;
+  }
+  const TemplateID *template_ui = static_cast<const TemplateID *>(button.func_argN);
+  r_ptr = template_ui->ptr;
+  r_prop = template_ui->prop;
+  return r_prop != nullptr;
+}
+
 static void template_id_liboverride_hierarchy_collection_root_find_recursive(
     Collection *collection,
     const int parent_level,
