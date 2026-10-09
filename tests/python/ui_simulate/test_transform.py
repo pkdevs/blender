@@ -69,6 +69,7 @@ def _mesh_edit_select_single_vert(window, index):
     for vert in bm.verts:
         vert.select = False
     bm.verts[index].select = True
+    bm.select_history.add(bm.verts[index])
     bm.select_flush(False)
     bmesh.update_edit_mesh(ob.data)
     return ob.matrix_world @ bm.verts[index].co
@@ -240,5 +241,82 @@ def view3d_mesh_edit_snap_skips_selection():
     t.assertGreater((moved - co_orig).length, 1e-4,
                     "vertex 0 snapped back onto its own original location {!r}".format(
                         co_orig[:]))
+
+    yield e.tab()                       # Object mode.
+
+
+def view3d_mesh_edit_extrude_rotate_snap_active():
+    import bpy
+    e, t, window = ui.test_window()
+
+    yield e.shift.f5()                  # 3D Viewport.
+    yield e.ctrl.alt.space()            # Full-screen.
+    yield e.a()                         # Select all.
+    yield e.delete().ret()              # Delete all.
+
+    bpy.ops.mesh.primitive_circle_add(vertices=24, radius=1.0, location=(0.0, 0.0, 0.0))
+
+    tool_settings = bpy.context.scene.tool_settings
+    tool_settings.use_snap = False
+    tool_settings.snap_elements = {'VERTEX'}
+    tool_settings.snap_target = 'ACTIVE'
+    tool_settings.transform_pivot_point = 'CURSOR'
+
+    tool_settings.use_snap_rotate = True
+
+    yield e.tab()                       # Edit mode.
+    yield
+
+    _mesh_edit_select_single_vert(window, 12)  # Select the 12th vertex
+    yield
+
+    yield e.shift.d()
+    yield e.y()
+    yield e.text("0.5")
+    yield e.ret()
+    yield
+
+    _ob, bm = _mesh_edit_verts(window)
+    active_vert_index = len(bm.verts) - 1
+    src_co = _view3d_calc_screen_space_location(window, bm.verts[active_vert_index].co)
+
+    target_co = bm.verts[0].co.copy()
+    dst_co = _view3d_calc_screen_space_location(window, target_co)
+
+    e.cursor_position_set(*src_co, move=True)
+    yield
+
+    yield e.e()
+    yield e.r()
+    yield e.z()
+
+    steps = 8
+    for i in range(1, steps + 1):
+        factor = i / steps
+
+        if i == steps // 2:
+            e.ctrl.press()
+            yield
+
+        e.cursor_position_set(
+            int(src_co[0] + (dst_co[0] - src_co[0]) * factor),
+            int(src_co[1] + (dst_co[1] - src_co[1]) * factor),
+            move=True,
+        )
+        yield
+
+    yield e.ret()
+    e.ctrl.release()
+    yield
+
+    _ob, bm = _mesh_edit_verts(window)
+    selected_vert = [v for v in bm.verts if v.select]
+    moved = selected_vert[0].co.copy()
+
+    moved_dir = moved.normalized()
+    target_dir = target_co.normalized()
+
+    t.assertLess((moved_dir - target_dir).length, 1e-4,
+                 "Extruded vertex did not align with the target vertex")
 
     yield e.tab()                       # Object mode.
