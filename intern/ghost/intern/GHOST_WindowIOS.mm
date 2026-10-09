@@ -3688,7 +3688,8 @@ bool GHOST_ios_document_window_visible()
   if (swift_button) {
     swift_button.buttonTitle = title;
     swift_button.buttonImage = image;
-    swift_button.foreground = UIColor.systemBlueColor;
+    /* Glass buttons draw their title in the label color, whatever the tint. */
+    swift_button.foreground = UIColor.labelColor;
     swift_button.imagePadding = configuration.imagePadding;
     swift_button.buttonInsets = configuration.contentInsets;
   }
@@ -3780,7 +3781,12 @@ bool GHOST_ios_document_window_visible()
     if (action_id.length) {
       /* Chosen by `bl_ui.native_actions`, which also runs it by this identifier. */
       button.accessibilityIdentifier = [@"blender.action." stringByAppendingString:action_id];
-      if (icon.length) {
+      if (icon.length && blenderIOSIsSwiftButton(button)) {
+        UIImage *image = GHOSTIOSBlenderIcon(icon, NO);
+        button.buttonImage = image;
+        button.imagePadding = image ? 5.0 : 0.0;
+      }
+      else if (icon.length) {
         UIButtonConfiguration *configuration = button.configuration;
         configuration.image = GHOSTIOSBlenderIcon(icon, NO);
         configuration.imagePadding = configuration.image ? 5.0 : 0.0;
