@@ -55,6 +55,8 @@ void WM_apple_ios_autosave_now(bContext *C);
 }  // namespace blender
 
 #include "GHOST_IOSDocumentPicker.hh"
+#import "GHOST_IOSDocument.hh"
+#import "GHOST_IOSLauncher.hh"
 using blender::C;
 using blender::WM_main_loop_body;
 using blender::WM_apple_ios_ui_flush_commands;
@@ -85,11 +87,14 @@ void GHOST_ios_engine_wake()
 
 static void open_document(NSURL *url)
 {
-  const std::string path = url.path.UTF8String ?: "";
-  engine_requests.push([path] {
-    auto *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
-    if (system) {
-      system->handleOpenDocumentRequest([NSString stringWithUTF8String:path.c_str()]);
+  GHOST_ios_document_open_url(url);
+}
+
+void GHOST_ios_engine_perform(std::function<void(blender::bContext *)> work)
+{
+  engine_document_requests.push([work = std::move(work)] {
+    @autoreleasepool {
+      work(C);
     }
   });
   engine_document_pending.store(true);
@@ -272,9 +277,8 @@ void GHOST_ios_unregister_window(UIWindow *window)
   for (UIWindow *window in native_windows) {
     window.windowScene = g_window_scene;
   }
-  if (native_windows.count) {
-    self.window = native_windows.lastObject;
-    [self.window makeKeyAndVisible];
+  if (native_windows.count && GHOST_ios_document_window_visible()) {
+    [native_windows.lastObject makeKeyAndVisible];
   }
   static bool started = false; /* UIKit-only startup state. */
   if (!started) {
@@ -283,10 +287,11 @@ void GHOST_ios_unregister_window(UIWindow *window)
                                            selector:@selector(applicationWillTerminate)
                                                name:UIApplicationWillTerminateNotification
                                              object:nil];
+    /* The document launcher shows at once, while Blender starts behind it. Blender's window
+     * comes forward once a document is open. */
     self.window = [[[UIWindow alloc] initWithWindowScene:g_window_scene] autorelease];
     blenderIOSApplyTheme(self.window);
-    self.window.rootViewController = [[[UIViewController alloc] init] autorelease];
-    self.window.backgroundColor = UIColor.systemBackgroundColor;
+    self.window.rootViewController = GHOST_ios_launcher_controller();
     [self.window makeKeyAndVisible];
     NSThread *thread = [[NSThread alloc] initWithBlock:^{
       run_engine();

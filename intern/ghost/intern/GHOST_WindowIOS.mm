@@ -46,6 +46,11 @@ extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 #import "GHOST_IOSTimeline.hh"
 #import "GHOST_IOSAssets.hh"
 #import "GHOST_IOSFileDrop.hh"
+#import "GHOST_IOSDocument.hh"
+#import "GHOST_IOSLauncher.hh"
+
+/** Blender's main window, which shows the open document over the launcher. */
+static UIWindow *document_window = nil;
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
@@ -2236,6 +2241,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 - (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView
                                       window:(nonnull GHOST_WindowIOS *)window;
 - (void)detachBlender;
+- (void)updateDocumentControls;
 
 @end
 
@@ -2255,6 +2261,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSArray *_mode_items;
   NSString *_object_mode;
   UIBarButtonItem *_actions_button;
+  /* Back to the document launcher, through the system's back action. */
+  UIBarButtonItem *_documents_button;
   UIBarButtonItem *_viewport_shading_button;
   UIBarButtonItem *_undo_button;
   UIBarButtonItem *_finger_input_button;
@@ -2400,6 +2408,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
   [self installIPadOverlay];
   [self installViewportLoadingIndicator];
+  [self installDocumentControls];
   if ([NSUserDefaults.standardUserDefaults boolForKey:@"BlenderDesktopInterface"]) {
     /* Start in the interface the user left; Blender follows from its inbox. */
     WM_apple_ios_ui_setting_enqueue("interface", "desktop");
@@ -2429,6 +2438,87 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_view addGestureRecognizer:actions_menu_press];
   [actions_menu_press release];
   [self setNeedsUpdateOfHomeIndicatorAutoHidden];
+}
+
+/* Documents. The launcher owns them, see `GHOST_IOSLauncher.mm`; this window shows the open one. */
+
+/** Blender's main window, shown over the launcher while a document is open. */
+static GHOST_IOSViewController *document_controller = nil;
+static bool document_window_visible = false;
+
+void GHOST_ios_document_window_set_visible(bool visible, bool animated)
+{
+  document_window_visible = visible;
+  /* The window, not the view's: a window never shown yet holds no views. */
+  UIWindow *window = document_window;
+  if (window && window.hidden == visible) {
+    /* Cross-fade between the launcher and Blender, as the document opens or closes. */
+    UIWindow *launcher = GHOST_ios_launcher_controller().view.window;
+    if (visible) {
+      window.alpha = 0;
+      window.hidden = NO;
+      [window makeKeyWindow];
+    }
+    else {
+      [launcher makeKeyWindow];
+    }
+    [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() || !animated ? 0 : 0.3
+        animations:^{
+          window.alpha = visible ? 1 : 0;
+        }
+        completion:^(BOOL) {
+          if (!document_window_visible) {
+            window.hidden = YES;
+          }
+        }];
+  }
+  [document_controller updateDocumentControls];
+}
+
+UIView *GHOST_ios_document_window_snapshot()
+{
+  UIWindow *window = document_window;
+  if (window == nil || window.hidden) {
+    return nil;
+  }
+  return [window snapshotViewAfterScreenUpdates:NO];
+}
+
+bool GHOST_ios_document_window_visible()
+{
+  return document_window_visible;
+}
+
+- (void)installDocumentControls
+{
+  document_controller = self;
+  [self updateDocumentControls];
+}
+
+- (void)updateDocumentControls
+{
+  /* The system's navigation item has the back action. Blender's own bar shows it as a button,
+   * without the document's name, which would take room from the tools. */
+  _documents_button.hidden = !GHOST_ios_launcher_can_show_documents();
+}
+
+- (void)showDocuments:(id)sender
+{
+  GHOST_ios_launcher_show_documents(sender);
+}
+
+- (UIBarButtonItem *)documentsButton
+{
+  UIBarButtonItem *button = [[[UIBarButtonItem alloc]
+      initWithImage:[UIImage systemImageNamed:@"chevron.backward"]
+              style:UIBarButtonItemStylePlain
+             target:self
+             action:@selector(showDocuments:)] autorelease];
+  button.title = @"Documents";
+  button.accessibilityLabel = @"Documents";
+  button.accessibilityIdentifier = @"blender.documents";
+  button.identifier = @"blender.documents";
+  return button;
 }
 
 - (void)updateMTKViewDrawableScale
@@ -2474,7 +2564,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   /* Read only the presentation mailbox; never wait for the Blender thread. */
   if (_viewport_loading_indicator.isAnimating && _ghost_window && _ghost_window->surface &&
       _ghost_window->surface->hasPresentedFrame()) {
-    [_viewport_loading_indicator stopAnimating];
+  [_viewport_loading_indicator stopAnimating];
     _viewport_loading_indicator.accessibilityElementsHidden = YES;
   }
 }
@@ -2496,6 +2586,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 
 - (void)dealloc
 {
+  if (document_controller == self) {
+    document_controller = nil;
+  }
+  [_documents_button release];
   [_scene_panels release];
   [_redo_strip release];
   [_mode_items release];
@@ -5082,6 +5176,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
   _mode_button = [self modePickerButton];
   _actions_button = [self actionsButton];
+  _documents_button = [[self documentsButton] retain];
   _viewport_shading_button = [self viewportShadingButton];
   _undo_button = [self undoButton];
   [self updateActionsButtonMenu];
@@ -5090,6 +5185,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* Real bar items provide UIKit with actions and menu representations for overflow.
    * Group scene actions beside Mode; keep viewport shading on the trailing side. */
   _top_bar_item.leadingItemGroups = @[
+    _documents_button.creatingFixedGroup,
     _mode_button.creatingFixedGroup,
     _assets.button.creatingFixedGroup,
     [self meshSelectModeControlGroup],
@@ -6498,6 +6594,9 @@ GHOST_WindowIOS::GHOST_WindowIOS(GHOST_SystemIOS *system_ios,
 
     rootWindow = (UIWindow *)ghost_rootWindow;
     GHOST_ios_register_window(rootWindow);
+    if (document_window == nil) {
+      document_window = rootWindow;
+    }
 
     [ghost_rootWindow setSystemAndWindowIOS:system_ios_ windowIOS:this];
     rootWindow.windowLevel = UIWindowLevelAlert;
@@ -6607,6 +6706,9 @@ GHOST_WindowIOS::~GHOST_WindowIOS()
 
     /* Release window. */
     if (rootWindow) {
+      if (document_window == rootWindow) {
+        document_window = nil;
+      }
       GHOST_ios_unregister_window(rootWindow);
       rootWindow.hidden = YES;
       rootWindow.rootViewController = nil;
@@ -6830,9 +6932,10 @@ GHOST_TSuccess GHOST_WindowIOS::setState(GHOST_TWindowState /*state*/)
 
 GHOST_TSuccess GHOST_WindowIOS::setModifiedState(bool isUnsavedChanges)
 {
-  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-
-  [pool drain];
+  /* Unsaved changes are what makes the document save itself. */
+  dispatch_async(dispatch_get_main_queue(), ^{
+    GHOST_ios_launcher_set_modified(isUnsavedChanges);
+  });
   return GHOST_Window::setModifiedState(isUnsavedChanges);
 }
 
@@ -7042,10 +7145,13 @@ bool GHOST_WindowIOS::makeKeyWindow()
 
   /* Make window primary visible window. */
   GHOST_ios_main_sync(^{
-    [rootWindow makeKeyAndVisible];
-    id<UIWindowSceneDelegate> delegate = (id<UIWindowSceneDelegate>)
-                                             rootWindow.windowScene.delegate;
-    delegate.window = rootWindow;
+    /* Over the launcher only while it has a document open. */
+    if (GHOST_ios_document_window_visible()) {
+      [rootWindow makeKeyAndVisible];
+    }
+    else {
+      rootWindow.hidden = YES;
+    }
     surface->setVisible(rootWindow.windowScene.activationState ==
                         UISceneActivationStateForegroundActive);
   });
