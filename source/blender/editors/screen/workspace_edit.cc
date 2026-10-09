@@ -718,13 +718,15 @@ static wmOperatorStatus workspace_reorder_to_left_right_exec(bContext *C, wmOper
   WorkSpace *workspace = workspace_context_get(C);
   ReorderDirection direction = ReorderDirection(RNA_enum_get(op->ptr, "direction"));
 
-  Vector<ID *> ordered_workspaces = BKE_id_ordered_list(reinterpret_cast<const ListBaseT<ID> *>(&bmain->workspaces));
+  Vector<ID *> ordered_workspaces = BKE_id_ordered_list(
+      reinterpret_cast<const ListBaseT<ID> *>(&bmain->workspaces));
   const int active_index = ordered_workspaces.first_index_of(&workspace->id);
   if (active_index <= 0 || ordered_workspaces.size() == 1) {
     return OPERATOR_CANCELLED;
   }
 
-  const int target_index = (direction == ReorderDirection::LEFT) ? active_index - 1 : active_index + 1;
+  const int target_index = (direction == ReorderDirection::LEFT) ? active_index - 1 :
+                                                                   active_index + 1;
   WorkSpace *target_workspace = reinterpret_cast<WorkSpace *>(ordered_workspaces[target_index]);
 
   int tmp = target_workspace->order;
@@ -754,11 +756,11 @@ static void WORKSPACE_OT_reorder_to_left_right(wmOperatorType *ot)
   ot->exec = workspace_reorder_to_left_right_exec;
 
   ot->prop = RNA_def_enum(ot->srna,
-                         "direction",
-                         rna_enum_order_direction_items,
-                         ReorderDirection::LEFT,
-                         "Direction",
-                         "Move the workspace towards left or right");
+                          "direction",
+                          rna_enum_order_direction_items,
+                          ReorderDirection::LEFT,
+                          "Direction",
+                          "Move the workspace towards left or right");
 }
 
 static wmOperatorStatus workspace_scene_pin_toggle_exec(bContext *C, wmOperator * /*op*/)
@@ -801,7 +803,7 @@ void ED_operatortypes_workspace()
   WM_operatortype_append(WORKSPACE_OT_append_activate);
   WM_operatortype_append(WORKSPACE_OT_reorder_to_back);
   WM_operatortype_append(WORKSPACE_OT_reorder_to_front);
-    WM_operatortype_append(WORKSPACE_OT_reorder_to_left_right);
+  WM_operatortype_append(WORKSPACE_OT_reorder_to_left_right);
   WM_operatortype_append(WORKSPACE_OT_scene_pin_toggle);
 }
 

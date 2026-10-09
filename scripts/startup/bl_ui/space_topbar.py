@@ -723,7 +723,10 @@ class TOPBAR_MT_workspace_menu(Menu):
         layout.operator("workspace.reorder_to_front", text="Reorder to Front", icon='TRIA_LEFT_BAR')
         layout.operator("workspace.reorder_to_back", text="Reorder to Back", icon='TRIA_RIGHT_BAR')
         layout.operator("workspace.reorder_to_left_right", text="Reorder to Left", icon='TRIA_LEFT').direction = 'LEFT'
-        layout.operator("workspace.reorder_to_left_right", text="Reorder to Right", icon='TRIA_RIGHT').direction = 'RIGHT'
+        layout.operator(
+            "workspace.reorder_to_left_right",
+            text="Reorder to Right",
+            icon='TRIA_RIGHT').direction = 'RIGHT'
 
         layout.separator()
 
