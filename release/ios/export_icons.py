@@ -507,6 +507,18 @@ def export_catalog(source, manifest, output, header=ICON_HEADER, dark_theme=DARK
             'info': info,
             'properties': {'preserves-vector-representation': True, 'template-rendering-intent': 'original'},
         }, indent=2) + '\n')
+    # The app's accent colour, Blender's orange: system controls take it, such as the document
+    # launcher's buttons. Named by `NSAccentColorName` in the app's Info.plist.
+    accent = output / "AccentColor.colorset"
+    accent.mkdir(exist_ok=True)
+    (accent / "Contents.json").write_text(json.dumps({
+        "colors": [{
+            "idiom": "universal",
+            "color": {"color-space": "srgb",
+                      "components": {"red": "0.910", "green": "0.490", "blue": "0.051", "alpha": "1.000"}},
+        }],
+        "info": info,
+    }, indent=2) + "\n")
     print(f"Exported {len(variants)} template, {len(multicolor)} multicolor, {len(themed)} themed, "
           f"{len(colored)} colored, and {len(colored)} selection Blender assets to {output}")
 

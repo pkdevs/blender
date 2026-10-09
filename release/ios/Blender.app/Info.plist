@@ -27,6 +27,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSAccentColorName</key>
+	<string>AccentColor</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UILaunchScreen</key>

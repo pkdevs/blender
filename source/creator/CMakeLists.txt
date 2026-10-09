@@ -1781,7 +1781,7 @@ elseif(APPLE)
         --output ${IOS_ICON_CATALOG}
       COMMAND
         /bin/sh -c
-        "platform=\"\${PLATFORM_NAME:-iphoneos}\"; xcrun actool --compile \"$<TARGET_BUNDLE_DIR:blender>\" --platform \"$platform\" --minimum-deployment-target \"${CMAKE_OSX_DEPLOYMENT_TARGET}\" --app-icon blender_liquid_glass \"${IOS_LIQUID_GLASS_APP_ICON}\" \"${IOS_ICON_CATALOG}\" --output-partial-info-plist \"$<TARGET_BUNDLE_DIR:blender>/assetcatalog_generated_info.plist\""
+        "platform=\"\${PLATFORM_NAME:-iphoneos}\"; xcrun actool --compile \"$<TARGET_BUNDLE_DIR:blender>\" --platform \"$platform\" --minimum-deployment-target \"${CMAKE_OSX_DEPLOYMENT_TARGET}\" --app-icon blender_liquid_glass --accent-color AccentColor \"${IOS_LIQUID_GLASS_APP_ICON}\" \"${IOS_ICON_CATALOG}\" --output-partial-info-plist \"$<TARGET_BUNDLE_DIR:blender>/assetcatalog_generated_info.plist\""
       COMMENT "Exporting Blender template icons and compiling iOS assets"
       VERBATIM
     )
