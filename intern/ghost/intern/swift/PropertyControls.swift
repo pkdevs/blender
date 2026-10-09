@@ -317,11 +317,10 @@ struct PropertySlider: View {
  * \{ */
 
 extension View {
-  /** Blender's animation color, keeping the app's accent when the property isn't animated. */
-  @ViewBuilder
+  /** Blender's animation color, or the app's accent when the property isn't animated. */
   func animationTint(_ state: String?) -> some View {
-    if let color = animationStateColor(state) { self.tint(color) }
-    else { self }
+    /* SwiftUI switches default to green; Blender's native controls use the app's blue. */
+    self.tint(animationStateColor(state) ?? Color.accentColor)
   }
 }
 
@@ -874,6 +873,7 @@ struct VectorRow: View {
         .font(.caption)
         .frame(minHeight: 28)
       }
+      .tint(.secondary)
       .disabled(!mode.bool("editable"))
       .accessibilityLabel("\(title) mode")
     }

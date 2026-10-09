@@ -153,6 +153,15 @@ final class FakeEngine {
       return
     }
     guard let key = request.string("key") else { return }
+    for name in ["tool", "shading"] {
+      guard var inspector = fixtures.dict(name) else { continue }
+      inspector["sections"] = inspector.array("sections").map { section in
+        var section = section
+        section["properties"] = section.array("properties").map { edit($0, key: key, request: request) }
+        return section
+      }
+      fixtures[name] = inspector
+    }
     for tab in (fixtures.dict("tabs") ?? [:]).keys {
       guard var inspector = inspector(tab) else { continue }
       inspector["sections"] = inspector.array("sections").map { section in
@@ -244,6 +253,9 @@ final class FakeEngine {
     if shadingShown, let shading = fixtures.dict("shading") {
       snapshot["shading"] = shading
     }
+    let lists = (snapshot.dict("inspector")?.array("sections") ?? []).flatMap { $0.array("properties") }
+      .filter { $0.string("type") == "LIST" }.map { "\($0.string("key") ?? "")=\($0["value"] ?? "")" }
+    log(["published": NSNumber(value: ack), "lists": lists])
     panels.updateSnapshot(snapshot as NSDictionary)
     if let tool = fixtures.dict("tool") {
       toolGroupChanged?(panels.updateToolSettings(tool as NSDictionary,

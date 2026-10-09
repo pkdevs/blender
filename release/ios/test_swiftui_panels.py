@@ -104,8 +104,11 @@ def shape_key_rows():
         if index:
             controls.append(prop(f"key_blocks[{index}].value", "Value", "FLOAT", round(0.1 * index, 2),
                                  panel="DATA_PT_shape_keys", tab="DATA", min=0, max=1, dragStep=0.01))
-            controls.append(prop(f"key_blocks[{index}].mute", "Mute", "BOOLEAN", 1 if index == 4 else 0,
-                                 panel="DATA_PT_shape_keys", tab="DATA", icon="CHECKBOX_HLT"))
+            # Blender draws the mute toggle inverted: checked while the key is not muted.
+            muted = index == 4
+            controls.append(prop(f"key_blocks[{index}].mute", "Mute", "BOOLEAN", 1 if muted else 0,
+                                 panel="DATA_PT_shape_keys", tab="DATA",
+                                 icon="CHECKBOX_DEHLT" if muted else "CHECKBOX_HLT"))
         rows.append({"index": index, "label": name, "icon": "SHAPEKEY_DATA",
                      "rename_key": f"key_blocks[{index}].name", "controls": controls})
     return rows

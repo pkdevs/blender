@@ -59,6 +59,7 @@ struct InspectorPanel: View {
         .padding(.top, 4)
     }
     .glassEffect(.regular.tint(panelGlassTint), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .tint(Color.accentColor)
     .accessibilityIdentifier("blender.inspector.panel")
   }
 }
@@ -308,6 +309,7 @@ struct PopoverForm: View {
           }
         }
     }
+    .tint(Color.accentColor)
   }
 }
 
@@ -339,6 +341,7 @@ struct ToolStrip: View {
       }
     }
     .frame(height: 40)
+    .tint(Color.accentColor)
     .accessibilityIdentifier("blender.tool-settings.strip")
   }
 }
