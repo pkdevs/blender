@@ -261,11 +261,9 @@ bool SocketValueVariantTypeInfo::try_convert_fn(const CPPType &dst_type,
     if (!fns || !fns->convert_single_to_uninitialized) {
       return false;
     }
-    BUFFER_FOR_CPP_TYPE_VALUE(dst_type, tmp_buffer);
-    fns->convert_single_to_uninitialized(value.get(), tmp_buffer);
+    CurrentT src = std::move(value.get<CurrentT>());
     void *dst_value = SocketValueVariant::allocate(dst_type, value);
-    dst_type.move_construct(tmp_buffer, dst_value);
-    dst_type.destruct(tmp_buffer);
+    fns->convert_single_to_uninitialized(&src, dst_value);
     return true;
   }
 }
