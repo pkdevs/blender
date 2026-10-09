@@ -3769,7 +3769,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [redo_pill.centerYAnchor constraintEqualToAnchor:_action_group.centerYAnchor],
     [redo_pill.heightAnchor constraintEqualToConstant:44.0],
   ]];
-  [self setActionsCollapsed:NO animated:NO];
+  /* Quick actions start folded into the Actions pill, leaving the viewport clear. */
+  [self setActionsCollapsed:YES animated:NO];
 }
 
 - (void)layoutRedoStrip
