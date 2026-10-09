@@ -157,7 +157,7 @@ static Vector<bNode *> get_node_code_gen_order(bNodeTree &ntree)
   ntree.ensure_topology_cache();
   Vector<bNode *> nodes = ntree.toposort_left_to_right();
   const bke::bNodeTreeZones *zones = ntree.zones();
-  if (!zones) {
+  if (!zones || zones->zones.is_empty()) {
     return nodes;
   }
   /* Insertion sort to make sure that all nodes in a zone are packed together right before the zone
