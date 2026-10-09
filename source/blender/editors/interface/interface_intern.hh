@@ -1707,6 +1707,9 @@ ID *template_id_liboverride_hierarchy_make(
 /** Read the RNA target of an icon-view template's popup button. */
 bool template_icon_view_property_get(const Button &button, PointerRNA &ptr, PropertyRNA *&prop);
 
+/** Draw every item of UI lists rather than a scrolled window of them, for native interfaces. */
+extern bool ui_list_show_all_rows;
+
 /**
  * Functions in this namespace are only exposed for unit testing purposes, and
  * should not be used outside of the files where they are defined.

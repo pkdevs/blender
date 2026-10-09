@@ -523,6 +523,8 @@ static void ui_template_list_collect_display_items(const bContext *C,
   }
 }
 
+bool ui_list_show_all_rows = false;
+
 static void uilist_prepare(uiList *ui_list,
                            const TemplateListItems *items,
                            const TemplateListLayoutDrawData *layout_data,
@@ -548,7 +550,11 @@ static void uilist_prepare(uiList *ui_list,
   dyn_data->height = items->item_vec.size();
   activei_row = items->active_item_idx;
 
-  if (!use_auto_size) {
+  if (ui_list_show_all_rows) {
+    /* Native interfaces scroll the whole list themselves. */
+    actual_rows = actual_maxrows = max_ii(actual_rows, int(items->item_vec.size()));
+  }
+  else if (!use_auto_size) {
     /* No auto-size, yet we clamp at min size! */
     actual_rows = max_ii(ui_list->list_grip, actual_rows);
   }
