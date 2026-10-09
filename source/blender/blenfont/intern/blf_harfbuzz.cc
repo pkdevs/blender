@@ -118,17 +118,9 @@ FeatureSet blf_font_otf_features_default()
 }
 
 #ifdef WITH_HARFBUZZ
-static std::string shaping_cache_key(const char *str, const size_t len)
+bool ShapingData::load_from_cache(FontBLF *font, GlyphCacheBLF *gc, const ShapingCacheKey &key)
 {
-  return std::string(str, BLI_strnlen(str, len));
-}
-
-bool ShapingData::load_from_cache(FontBLF *font,
-                                  GlyphCacheBLF *gc,
-                                  const char *str,
-                                  const size_t len)
-{
-  const CachedString *cached = gc->shaping_cache.lookup_ptr(shaping_cache_key(str, len));
+  const CachedString *cached = gc->shaping_cache.lookup_ptr(key);
   if (cached == nullptr) {
     return false;
   }
@@ -158,8 +150,16 @@ ShapingData::ShapingData(FontBLF *font,
     return;
   }
 
-  if (!features && load_from_cache(font, gc, str, len)) {
+  ShapingCacheKey cache_key = {std::string(str, BLI_strnlen(str, len)),
+                               features.has_value() ? std::move(*features) :
+                                                      blf_font_otf_features_default()};
+  if (gc && load_from_cache(font, gc, cache_key)) {
     return;
+  }
+
+  Vector<hb_feature_t> otf_features;
+  for (const OTFFeature &feature : cache_key.features) {
+    blf_font_otf_feature_set(otf_features, feature.tag, feature.value);
   }
 
   size_t segment_start = 0;
@@ -237,13 +237,6 @@ ShapingData::ShapingData(FontBLF *font,
 
     hb_buffer_set_cluster_level(hb_buf, HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS);
 
-    Vector<hb_feature_t> otf_features;
-    for (const OTFFeature &feature :
-         (features.has_value()) ? features.value() : blf_font_otf_features_default())
-    {
-      blf_font_otf_feature_set(otf_features, feature.tag, feature.value);
-    }
-
     /* Variable font axes. */
     hb_variation_t variations[3];
     variations[0].tag = HB_OT_TAG_VAR_AXIS_WEIGHT;
@@ -263,26 +256,7 @@ ShapingData::ShapingData(FontBLF *font,
     hb_segment_properties_t props;
     hb_buffer_get_segment_properties(hb_buf, &props);
 
-    if (segment_gc->shaping_plan != nullptr &&
-        (segment_gc->props.direction != props.direction ||
-         segment_gc->props.script != props.script || segment_gc->props.language != props.language))
-    {
-      hb_shape_plan_destroy(segment_gc->shaping_plan);
-      segment_gc->shaping_plan = nullptr;
-    }
-
-    if (segment_gc->shaping_plan == nullptr) {
-      hb_face_t *face = hb_font_get_face(segment_font->hb_font);
-      hb_buffer_get_segment_properties(hb_buf, &segment_gc->props);
-      segment_gc->shaping_plan = hb_shape_plan_create_cached(
-          face, &segment_gc->props, otf_features.data(), uint(otf_features.size()), nullptr);
-    }
-
-    hb_shape_plan_execute(segment_gc->shaping_plan,
-                          segment_font->hb_font,
-                          hb_buf,
-                          otf_features.data(),
-                          uint(otf_features.size()));
+    hb_shape(segment_font->hb_font, hb_buf, otf_features.data(), uint(otf_features.size()));
 
     /* Unlikely. Drawing monospaced but changed mid-string to a proportional font. */
     const bool set_mono = segment_font != font && font->flags & BLF_MONOSPACED &&
@@ -365,10 +339,9 @@ ShapingData::ShapingData(FontBLF *font,
   }
 
   const size_t glyph_count = this->glyphs.size();
-  const std::string cache_key = (gc && single_gc && glyph_count > 0 && glyph_count < 128) ?
-                                    shaping_cache_key(str, len) :
-                                    std::string();
-  if (!cache_key.empty() && !gc->shaping_cache.contains(cache_key)) {
+  if (gc && single_gc && glyph_count > 0 && glyph_count < 128 &&
+      !gc->shaping_cache.contains(cache_key))
+  {
     CachedString cache_string;
     cache_string.str_len = len;
     cache_string.bounds = this->bounds;
@@ -382,7 +355,7 @@ ShapingData::ShapingData(FontBLF *font,
                                 glyph.index_utf8,
                                 glyph.g->subpixel};
     }
-    gc->shaping_cache.add_new(cache_key, std::move(cache_string));
+    gc->shaping_cache.add_new(std::move(cache_key), std::move(cache_string));
   }
 }
 

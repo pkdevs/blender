@@ -152,6 +152,27 @@ inline ft_pix ft_pix_from_float(float v)
 #define BLF_BATCH_DRAW_LEN_MAX 128 /* in glyph */
 
 /* -------------------------------------------------------------------- */
+/** \name OpenType Feature Set
+ * \{ */
+
+struct OTFFeature {
+  uint32_t tag;
+  uint32_t value;
+
+  friend bool operator==(const OTFFeature &a, const OTFFeature &b)
+  {
+    return a.tag == b.tag && a.value == b.value;
+  }
+};
+
+using FeatureSet = Vector<OTFFeature>;
+
+FeatureSet blf_font_otf_features_base();
+FeatureSet blf_font_otf_features_default();
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Shaping Cache
  *
  * Least-frequently-used cache of shaped strings.
@@ -175,19 +196,45 @@ struct CachedString {
   uint32_t freq = 0; /* Use-count for LFU eviction. */
 };
 
+/**
+ * Everything that changes the shaping of a string within one glyph cache: the text, and the
+ * OpenType features (UI text uses the features from the preferences, text drawn into image
+ * buffers uses #blf_font_otf_features_base).
+ */
+struct ShapingCacheKey {
+  std::string text;
+  FeatureSet features;
+
+  uint64_t hash() const
+  {
+    uint64_t hash = get_default_hash(this->text);
+    for (const OTFFeature &feature : this->features) {
+      hash = get_default_hash(hash, feature.tag, feature.value);
+    }
+    return hash;
+  }
+
+  friend bool operator==(const ShapingCacheKey &a, const ShapingCacheKey &b)
+  {
+    return a.text == b.text && a.features.as_span() == b.features.as_span();
+  }
+};
+
 struct ShapingCache {
   ShapingCache()
   {
     this->data.reserve(BLF_SHAPING_CACHE_SIZE);
   }
 
-  Map<std::string, CachedString> data = {};
+  Map<ShapingCacheKey, CachedString> data = {};
   size_t lookups = 0;
   size_t hits = 0;
   size_t inserts = 0;
   size_t evictions = 0;
+  const size_t glyph_count = thi
 
-  const CachedString *lookup_ptr(const std::string &key)
+                             const CachedString *
+                             lookup_ptr(const ShapingCacheKey &key)
   {
     ++this->lookups;
 
@@ -201,18 +248,18 @@ struct ShapingCache {
     return ptr;
   }
 
-  bool contains(const std::string &key) const
+  bool contains(const ShapingCacheKey &key) const
   {
     return this->data.lookup_ptr(key) != nullptr;
   }
 
-  void add_new(const std::string &key, CachedString &&value)
+  void add_new(ShapingCacheKey key, CachedString &&value)
   {
     ++this->inserts;
 
     if (this->data.size() >= BLF_SHAPING_CACHE_SIZE) {
       uint32_t best_freq = std::numeric_limits<uint32_t>::max();
-      const std::string *evict_key_ptr = nullptr;
+      const ShapingCacheKey *evict_key_ptr = nullptr;
       for (const auto item : this->data.items()) {
         const CachedString &v = item.value;
         const uint32_t f = v.freq;
@@ -228,25 +275,9 @@ struct ShapingCache {
     }
 
     value.freq = 1;
-    this->data.add_new(key, std::move(value));
+    this->data.add_new(std::move(key), std::move(value));
   }
 };
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name OpenType Feature Set
- * \{ */
-
-struct OTFFeature {
-  uint32_t tag;
-  uint32_t value;
-};
-
-using FeatureSet = Vector<OTFFeature>;
-
-FeatureSet blf_font_otf_features_base();
-FeatureSet blf_font_otf_features_default();
 
 /** \} */
 
@@ -276,7 +307,7 @@ struct ShapingData {
               const char *str,
               size_t len,
               std::optional<FeatureSet> features = std::nullopt);
-  bool load_from_cache(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len);
+  bool load_from_cache(FontBLF *font, GlyphCacheBLF *gc, const ShapingCacheKey &key);
   void legacy_layout(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len);
 
   void draw(ft_pix pen_y, ResultBLF *r_info = nullptr) const;
@@ -338,8 +369,6 @@ struct GlyphCacheBLF {
   int fixed_width;
 
 #ifdef WITH_HARFBUZZ
-  hb_segment_properties_t props;
-  hb_shape_plan_t *shaping_plan = nullptr;
   ShapingCache shaping_cache;
 #endif
 
