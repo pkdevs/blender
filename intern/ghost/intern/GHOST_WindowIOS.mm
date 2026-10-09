@@ -5458,7 +5458,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _redo_strip = [[GHOSTIOSRedoStrip alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
     return GHOSTIOSBlenderIcon(name, NO);
   }];
-  _scene_panels = [[GHOSTIOSScenePanels alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
+  /* The panels are drawn in SwiftUI (`intern/swift/ScenePanels.swift`), which answers the same
+   * messages; the UIKit version remains for comparison with the `BlenderUIKitPanels` default. */
+  Class panels_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitPanels"] ?
+                           nil :
+                           NSClassFromString(@"GHOSTIOSSwiftScenePanels");
+  _scene_panels = [[(panels_class ?: GHOSTIOSScenePanels.class) alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
     return GHOSTIOSBlenderIcon(name, NO);
   }];
   _scene_panels.menuProvider = ^UIMenu *(NSDictionary *property) {
