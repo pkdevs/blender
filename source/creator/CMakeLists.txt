@@ -376,6 +376,7 @@ else()
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/PropertyControls.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/RedoStrip.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/ScenePanels.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/TemplatePicker.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/Timeline.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/UIKitInterop.swift
     )

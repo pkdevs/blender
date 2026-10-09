@@ -383,6 +383,14 @@ static NSArray<NSDictionary *> *launcherTemplates()
 }
 @end
 
+/* The template chooser in SwiftUI (`intern/swift/TemplatePicker.swift`). */
+@interface UIViewController (GHOSTIOSSwiftTemplatePicker)
+- (instancetype)initWithTemplates:(NSArray<NSDictionary *> * (^)(void))templates
+                           manage:(void (^)(NSDictionary *entry, NSString *action, NSString *title,
+                                            void (^done)(BOOL success)))manage
+                       completion:(void (^)(NSString *app_template))completion;
+@end
+
 /** A grid of Blender's templates, to start a new document from one. */
 @interface GHOSTIOSTemplatePicker : UICollectionViewController <UIAdaptivePresentationControllerDelegate, UISearchResultsUpdating>
 @property(nonatomic, copy) void (^completion)(NSString *app_template);
@@ -881,6 +889,25 @@ static NSURL *launcher_pending_url = nil;
 /** Present Blender's templates; `completion` gets the chosen one, or nil. */
 - (void)chooseTemplate:(void (^)(NSString *app_template))completion
 {
+  if (Class swift_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
+                              nil :
+                              NSClassFromString(@"GHOSTIOSSwiftTemplatePicker"))
+  {
+    UIViewController *picker = [[[swift_class alloc] initWithTemplates:^NSArray<NSDictionary *> * {
+      return launcherTemplates();
+    } manage:^(NSDictionary *entry, NSString *action, NSString *title, void (^done)(BOOL)) {
+      void (^finished)(BOOL) = [[done copy] autorelease];
+      dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        const BOOL success = GHOST_ios_template_manage(entry[@"id"], action, title);
+        dispatch_async(dispatch_get_main_queue(), ^{ finished(success); });
+      });
+    } completion:completion] autorelease];
+    picker.modalPresentationStyle = UIModalPresentationFormSheet;
+    /* Swiping the sheet away cancels, like Cancel. */
+    picker.presentationController.delegate = (id<UIAdaptivePresentationControllerDelegate>)picker;
+    [self presentViewController:picker animated:YES completion:nil];
+    return;
+  }
   GHOSTIOSTemplatePicker *picker = [[[GHOSTIOSTemplatePicker alloc] init] autorelease];
   picker.completion = completion;
   UINavigationController *sheet = [[[UINavigationController alloc] initWithRootViewController:picker]

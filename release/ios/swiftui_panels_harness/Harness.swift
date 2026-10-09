@@ -489,6 +489,20 @@ final class HarnessController: UIViewController {
         timeline?.perform(NSSelectorFromString("toggle:"), with: nil)
         if scenario == "timeline-expanded" { timeline?.perform(NSSelectorFromString("toggleExpanded:"), with: nil) }
         view.setNeedsLayout()
+      case "templates":
+        let templates: [NSDictionary] = [
+          ["id": "general", "title": "General"], ["id": "sculpt", "title": "Sculpting"],
+          ["id": "2d", "title": "2D Animation"], ["id": "vfx", "title": "VFX"],
+          ["id": "character", "title": "Character Animation",
+           "attribution": ["title": "Ellie", "author": "Blender Studio", "license": "CC BY 4.0",
+                           "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+                           "sourceURL": "https://studio.blender.org", "changes": "Simplified for iPad."]],
+          ["id": "mine", "title": "My Room", "personal": true]]
+        let picker = TemplatePickerController(templates: { templates },
+                                              manage: { _, _, _, done in done(true) },
+                                              completion: { FakeEngine.shared.log(["template": $0 ?? "cancel"]) })
+        picker.modalPresentationStyle = .formSheet
+        present(picker, animated: false)
       case "pie":
         let uikit = UserDefaults.standard.bool(forKey: "uikit")
         let specs = [("Frame All", "rectangle.expand.vertical"), ("Frame Selected", "viewfinder"),
