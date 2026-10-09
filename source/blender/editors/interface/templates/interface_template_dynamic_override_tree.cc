@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -496,6 +496,10 @@ static void rule_buttons(Layout *layout, DynamicOverride &dynoverride)
   PointerRNA *rule_prop_ptr = const_cast<PointerRNA *>(
       layout->context_ptr_get("dynamic_override_property", RNA_DynamicOverrideRuleProperty));
 
+  if (rule_prop_ptr) {
+    BLI_assert(rule_ptr);
+  }
+
   if (rule_ptr) {
     DynamicOverrideRule &rule = *rule_ptr->data_as<DynamicOverrideRule>();
     if (rule.type != DynamicOverrideRuleType::IDData) {
@@ -505,27 +509,63 @@ static void rule_buttons(Layout *layout, DynamicOverride &dynoverride)
       return;
     }
 
-    Layout &row = box.row(true);
-    row.prop(rule_ptr, "name", {}, {}, ICON_NONE);
+    Layout &rule_row = box.row(true);
+    rule_row.prop(rule_ptr, "name", {}, {}, ICON_NONE);
 
-    PointerRNA op_data = row.op("UI_OT_dynoverride_remove_rule", "Delete", ICON_X);
+    PointerRNA op_data = rule_row.op("UI_OT_dynoverride_remove_rule", "Delete Rule", ICON_X);
     RNA_int_set(&op_data, "session_uid", int(dynoverride.id.session_uid));
     RNA_string_set(&op_data, "rule_name", rule.name);
 
-    row.prop(rule_ptr,
-             "is_muted",
-             ITEM_R_ICON_ONLY,
-             {},
-             bool(rule.flag & DynamicOverrideRuleFlag::IsMuted) ? ICON_CHECKBOX_DEHLT :
-                                                                  ICON_CHECKBOX_HLT);
+    rule_row.prop(rule_ptr,
+                  "is_muted",
+                  ITEM_R_ICON_ONLY,
+                  {},
+                  bool(rule.flag & DynamicOverrideRuleFlag::IsMuted) ? ICON_CHECKBOX_DEHLT :
+                                                                       ICON_CHECKBOX_HLT);
 
     PointerRNA rule_filter_ptr = RNA_pointer_create_with_parent(
         *rule_ptr, RNA_DynamicOverrideRuleTargetFilterIDSingle, &rule.target_filter);
     box.prop(&rule_filter_ptr, "target_id", {}, {}, ICON_NONE);
-  }
 
-  if (rule_prop_ptr) {
-    BLI_assert(rule_ptr);
+    if (rule_prop_ptr) {
+      BLI_assert(rule_ptr);
+      DynamicOverrideRuleProperty &property =
+          *rule_prop_ptr->data_as<DynamicOverrideRuleProperty>();
+
+      box.separator(1.0f, LayoutSeparatorType::Line);
+      Layout &prop_name_row = box.row(true);
+      Layout &prop_original_row = box.split(0.2f, true);
+      Layout &prop_override_row = box.split(0.2f, true);
+
+      DynamicOverrideRuleIDData &iddata_rule = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
+      PointerRNA override_values_ptr = RNA_pointer_create_with_parent(
+          *rule_ptr, rule_get_runtime_override_values_rna_struct(iddata_rule), &iddata_rule);
+      PointerRNA original_values_ptr = RNA_pointer_create_with_parent(
+          *rule_ptr, rule_get_runtime_original_values_rna_struct(iddata_rule), &iddata_rule);
+
+      prop_name_row.label(property.rna_path, ICON_NONE);
+      PointerRNA op_data = prop_name_row.op(
+          "UI_OT_dynoverride_remove_rule_property", "Delete Property", ICON_X);
+      RNA_int_set(&op_data, "session_uid", int(dynoverride.id.session_uid));
+      RNA_string_set(&op_data, "rule_name", rule.name);
+      RNA_string_set(&op_data, "property_rna_path", property.rna_path);
+      prop_name_row.prop(rule_prop_ptr,
+                         "is_muted",
+                         ITEM_R_ICON_ONLY,
+                         {},
+                         bool(property.flag & DynamicOverrideRulePropertyFlag::IsMuted) ?
+                             ICON_CHECKBOX_DEHLT :
+                             ICON_CHECKBOX_HLT);
+
+      prop_override_row.use_property_decorate_set(true);
+      prop_override_row.label("Override:", ICON_NONE);
+      prop_override_row.prop(
+          &override_values_ptr, rule_property_rna_identifier(property), {}, {}, ICON_NONE);
+      prop_original_row.use_property_decorate_set(true);
+      prop_original_row.label("Original:", ICON_NONE);
+      prop_original_row.prop(
+          &override_values_ptr, rule_property_rna_identifier(property), {}, {}, ICON_NONE);
+    }
   }
 }
 
