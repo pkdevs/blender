@@ -8,6 +8,8 @@
 #include "GHOST_IOSRuntime.hh"
 #include "GHOST_IOSTheme.hh"
 #include "GHOST_WindowIOS.hh"
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -78,6 +80,36 @@ static std::vector<std::function<void()>> engine_autosave_done;
 static GHOST_IOSMessageQueue<std::function<void()>> engine_document_requests;
 static std::atomic<bool> engine_document_pending{false};
 static std::atomic<bool> app_in_background{false};
+
+/* When the engine's current pass began (seconds on the monotonic clock), 0 between passes. UIKit
+ * reads it to tell when Blender is held up, such as by compiling shaders. */
+static std::atomic<double> engine_pass_started{0.0};
+static std::atomic<int> shader_compilations_finished{0};
+static std::atomic<int> shader_compilations_total{0};
+
+static double engine_clock()
+{
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+extern "C" void GHOST_ios_shader_compilation_progress(int finished, int total)
+{
+  shader_compilations_total.store(total);
+  shader_compilations_finished.store(finished);
+}
+
+double GHOST_ios_engine_busy_seconds()
+{
+  const double started = engine_pass_started.load();
+  return started > 0.0 ? engine_clock() - started : 0.0;
+}
+
+bool GHOST_ios_shader_compilation(int *finished, int *total)
+{
+  *total = shader_compilations_total.load();
+  *finished = std::min(shader_compilations_finished.load(), *total);
+  return *total > 0;
+}
 
 void GHOST_ios_engine_wake()
 {
@@ -177,11 +209,13 @@ static void run_engine()
       if (!C) {
         break;
       }
+      engine_pass_started.store(engine_clock());
       WM_apple_ios_ui_flush_commands(C);
       WM_main_loop_body(C);
       if (system->current_active_window_) {
         system->current_active_window_->flushDeferredSwapBuffers();
       }
+      engine_pass_started.store(0.0);
       if (system->next_active_window_) {
         if (system->current_active_window_) {
           system->current_active_window_->resignKeyWindow();

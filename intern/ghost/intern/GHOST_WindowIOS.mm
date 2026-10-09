@@ -46,6 +46,7 @@ extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 #import "GHOST_IOSTimeline.hh"
 #import "GHOST_IOSAssets.hh"
 #import "GHOST_IOSFileDrop.hh"
+#import "GHOST_IOSCompileIndicator.hh"
 #import "GHOST_IOSDocument.hh"
 #import "GHOST_IOSLauncher.hh"
 
@@ -2277,6 +2278,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   GHOSTIOSTimeline *_timeline;
   GHOSTIOSAssets *_assets;
   GHOSTIOSFileDrop *_file_drop;
+  GHOSTIOSCompileIndicator *_compile_indicator;
   BOOL _finger_tool_enabled;
   GHOSTIOSPencilMenu *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
@@ -2603,6 +2605,8 @@ bool GHOST_ios_document_window_visible()
   [_timeline release];
   [_assets release];
   [_file_drop release];
+  [_compile_indicator stop];
+  [_compile_indicator release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
@@ -5383,6 +5387,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   };
   [self.view addInteraction:_file_drop.interaction];
   [self installNativeTopBar];
+  /* A navigation controller's bar is outside the overlay; the safe area already clears it. */
+  _compile_indicator = [[GHOSTIOSCompileIndicator alloc]
+      initWithOverlay:_overlay_view
+                below:self.navigationController ? nil : _top_bar];
   _pencil_menu = [[GHOSTIOSPencilMenu alloc] initWithFrame:_overlay_view.bounds];
   _pencil_menu.delegate = self;
   const BOOL phone = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;

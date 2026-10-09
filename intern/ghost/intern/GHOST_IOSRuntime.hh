@@ -30,4 +30,9 @@ struct bContext;
 void GHOST_ios_engine_perform(std::function<void(blender::bContext *)> work);
 /** In the background iOS allows no GPU work, such as rendering a file's preview. */
 bool GHOST_ios_app_in_background();
+/** How long Blender's current pass has been running, 0 when it is between passes. Safe to call
+ * from UIKit while the engine is held up. */
+double GHOST_ios_engine_busy_seconds();
+/** Shader and pipeline compilation in the current burst of work, false when there is none. */
+bool GHOST_ios_shader_compilation(int *finished, int *total);
 #endif
