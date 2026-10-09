@@ -1336,9 +1336,14 @@ static void menu_block_set_keyaccels(Block *block)
     return;
   }
 
-  /* Reserve "T" for "Timeline", "Texture Node Editor" gets no accelerator key. */
+  /* In the editor type menu, reserve "T" for "Timeline", "Texture Node Editor" gets no
+   * accelerator key. */
+  auto is_editor_type_item = [](const Button &but, const char *name) {
+    return but.rnaprop && STREQ(RNA_property_identifier(but.rnaprop), "ui_type") &&
+           but.str == IFACE_(name);
+  };
   for (Button &but : block->buttons()) {
-    if (but.str == IFACE_("Timeline")) {
+    if (is_editor_type_item(but, "Timeline")) {
       but.menu_key = 't';
       menu_key_mask |= 1 << ('t' - 'a');
     }
@@ -1360,7 +1365,7 @@ static void menu_block_set_keyaccels(Block *block)
 
                 /* For PIE-menus. */
                 ButtonType::Row) ||
-          (but.flag & UI_HIDDEN) || but.str == IFACE_("Texture Node Editor"))
+          (but.flag & UI_HIDDEN) || is_editor_type_item(but, "Texture Node Editor"))
       {
         continue;
       }
