@@ -49,12 +49,12 @@ class NODE_OT_change_factor(Operator, NWBase):
             for node in context.selected_nodes:
                 if socket := node.inputs.get("Factor"):
                     socket.hide = False
-                    min_fac, max_fac = self.get_min_and_max(socket)
+                    min_fac, max_fac = self.get_socket_min_and_max(socket)
                     if (option < 0.0) and (socket.default_value > min_fac):
-                        socket.default_value = max(0.0, socket.default_value + option)
+                        socket.default_value = max(min_fac, socket.default_value + option)
                         any_socket_modified = True
                     elif (option > 0.0) and (socket.default_value < max_fac):
-                        socket.default_value = min(1.0, socket.default_value + option)
+                        socket.default_value = min(max_fac, socket.default_value + option)
                         any_socket_modified = True
 
         if not any_socket_modified:
