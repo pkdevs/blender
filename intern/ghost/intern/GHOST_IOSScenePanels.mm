@@ -312,6 +312,221 @@ static BOOL blenderOptionsHavePreviews(NSArray *options)
 }
 @end
 
+/* A preview, or the data-block type's icon, as a rounded square thumbnail. */
+static UIImage *blenderDataThumbnail(NSString *path, UIImage *fallback, CGFloat size)
+{
+  UIImage *preview = blenderPreviewImage(path);
+  UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc]
+      initWithSize:CGSizeMake(size, size)] autorelease];
+  return [[renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+    const CGRect bounds = CGRectMake(0, 0, size, size);
+    [[UIBezierPath bezierPathWithRoundedRect:bounds cornerRadius:size * 0.22] addClip];
+    if (preview) {
+      [preview drawInRect:bounds];
+      return;
+    }
+    [UIColor.tertiarySystemFillColor setFill];
+    UIRectFill(bounds);
+    UIImage *icon = [fallback imageWithTintColor:UIColor.secondaryLabelColor
+                                   renderingMode:UIImageRenderingModeAlwaysOriginal];
+    const CGFloat inset = size * 0.26;
+    [icon drawInRect:CGRectInset(bounds, inset, inset)];
+  }] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+}
+
+static NSString *blenderUsersText(NSDictionary *item)
+{
+  NSMutableArray *parts = [NSMutableArray array];
+  const NSInteger users = [item[@"users"] integerValue];
+  if (users > 1) { [parts addObject:[NSString stringWithFormat:@"%ld users", (long)users]]; }
+  else if (item[@"users"] && users == 0) { [parts addObject:@"No users"]; }
+  if ([item[@"linked"] boolValue]) { [parts addObject:@"Linked"]; }
+  return [parts componentsJoinedByString:@" · "];
+}
+
+/* Choose a data-block, like Blender's ID search popup: searchable, with previews. */
+@interface GHOSTIOSDataBrowser : UICollectionViewController <UISearchResultsUpdating>
+@property(nonatomic, copy) NSArray *options;
+@property(nonatomic, copy) NSString *value;
+@property(nonatomic, retain) UIImage *typeIcon;
+@property(nonatomic, copy) void (^choose)(NSDictionary *option);
+@end
+
+@implementation GHOSTIOSDataBrowser {
+  NSArray *_shown;
+}
+- (instancetype)init
+{
+  UICollectionLayoutListConfiguration *list = [[[UICollectionLayoutListConfiguration alloc]
+      initWithAppearance:UICollectionLayoutListAppearanceInsetGrouped] autorelease];
+  list.backgroundColor = UIColor.clearColor;
+  if ((self = [super initWithCollectionViewLayout:
+                   [UICollectionViewCompositionalLayout layoutWithListConfiguration:list]])) {
+    [self.collectionView registerClass:UICollectionViewListCell.class forCellWithReuseIdentifier:@"item"];
+    self.collectionView.backgroundColor = UIColor.clearColor;
+    self.collectionView.accessibilityIdentifier = @"blender.data.browser";
+    UISearchController *search = [[[UISearchController alloc] initWithSearchResultsController:nil] autorelease];
+    search.searchResultsUpdater = self;
+    search.obscuresBackgroundDuringPresentation = NO;
+    self.navigationItem.searchController = search;
+    self.navigationItem.hidesSearchBarWhenScrolling = NO;
+  }
+  return self;
+}
+- (void)dealloc
+{
+  [_options release];
+  [_value release];
+  [_typeIcon release];
+  [_choose release];
+  [_shown release];
+  [super dealloc];
+}
+- (void)setOptions:(NSArray *)options
+{
+  [_options release];
+  _options = [options copy];
+  [_shown release];
+  _shown = [options copy];
+}
+- (void)viewDidLoad
+{
+  [super viewDidLoad];
+  /* Start at the current item in long lists. */
+  dispatch_async(dispatch_get_main_queue(), ^{
+    for (NSUInteger i = 0; i < self->_shown.count; i++) {
+      if ([self->_shown[i][@"value"] isEqual:self.value]) {
+        [self.collectionView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:i inSection:0]
+                                    atScrollPosition:UICollectionViewScrollPositionCenteredVertically
+                                            animated:NO];
+      }
+    }
+  });
+}
+- (void)updateSearchResultsForSearchController:(UISearchController *)controller
+{
+  NSString *text = controller.searchBar.text;
+  [_shown release];
+  _shown = [(text.length ? [_options filteredArrayUsingPredicate:
+      [NSPredicate predicateWithFormat:@"label CONTAINS[cd] %@", text]] : _options) copy];
+  [self.collectionView reloadData];
+}
+- (NSInteger)collectionView:(UICollectionView *)view numberOfItemsInSection:(NSInteger)section
+{
+  return _shown.count;
+}
+- (UICollectionViewCell *)collectionView:(UICollectionView *)view cellForItemAtIndexPath:(NSIndexPath *)path
+{
+  UICollectionViewListCell *cell = [view dequeueReusableCellWithReuseIdentifier:@"item" forIndexPath:path];
+  NSDictionary *option = _shown[path.item];
+  UIListContentConfiguration *content = [UIListContentConfiguration subtitleCellConfiguration];
+  content.image = blenderDataThumbnail(option[@"preview"], self.typeIcon, 44);
+  content.imageProperties.reservedLayoutSize = CGSizeMake(44, 44);
+  content.text = option[@"label"];
+  content.secondaryText = blenderUsersText(option);
+  content.secondaryTextProperties.color = UIColor.secondaryLabelColor;
+  cell.contentConfiguration = content;
+  const BOOL current = [option[@"value"] isEqual:self.value];
+  cell.accessories = current ? @[[[UICellAccessoryCheckmark new] autorelease]] : @[];
+  cell.accessibilityTraits = UIAccessibilityTraitButton | (current ? UIAccessibilityTraitSelected : 0);
+  return cell;
+}
+- (void)collectionView:(UICollectionView *)view didSelectItemAtIndexPath:(NSIndexPath *)path
+{
+  NSDictionary *option = _shown[path.item];
+  if (self.choose) { self.choose(option); }
+  [self dismissViewControllerAnimated:YES completion:nil];
+}
+@end
+
+/* A list's rows; rows with a reorder handle can be dragged to a new place. */
+@interface GHOSTIOSListView : UIStackView
+@property(nonatomic, copy) void (^move)(NSInteger from, NSInteger to);
+- (void)addRow:(UIView *)row reorderHandle:(UIView *)handle;
+@end
+
+@implementation GHOSTIOSListView {
+  UIView *_dragged;
+  NSInteger _dragStart;
+  NSInteger _dragTarget;
+}
+- (void)dealloc
+{
+  [_move release];
+  [super dealloc];
+}
+- (void)addRow:(UIView *)row reorderHandle:(UIView *)handle
+{
+  [self addArrangedSubview:row];
+  if (handle) {
+    UIPanGestureRecognizer *pan = [[[UIPanGestureRecognizer alloc] initWithTarget:self
+                                                                           action:@selector(drag:)] autorelease];
+    pan.maximumNumberOfTouches = 1;
+    [handle addGestureRecognizer:pan];
+    handle.userInteractionEnabled = YES;
+  }
+}
+- (void)drag:(UIPanGestureRecognizer *)pan
+{
+  NSArray<UIView *> *rows = self.arrangedSubviews;
+  UIView *row = pan.view;
+  while (row && ![rows containsObject:row]) { row = row.superview; }
+  if (!row) { return; }
+  const CGFloat pitch = row.bounds.size.height + self.spacing;
+  const CGFloat offset = [pan translationInView:self].y;
+  switch (pan.state) {
+    case UIGestureRecognizerStateBegan:
+      _dragged = row;
+      _dragStart = _dragTarget = [rows indexOfObject:row];
+      row.layer.zPosition = 1;
+      row.layer.shadowColor = UIColor.blackColor.CGColor;
+      row.layer.shadowOpacity = 0.25;
+      row.layer.shadowRadius = 8;
+      row.layer.shadowOffset = CGSizeMake(0, 3);
+      [[[[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight] autorelease] impactOccurred];
+      [UIView animateWithDuration:0.15 animations:^{ row.transform = CGAffineTransformMakeScale(1.02, 1.02); }];
+      break;
+    case UIGestureRecognizerStateChanged: {
+      if (row != _dragged) { return; }
+      const NSInteger target = MAX(0, MIN((NSInteger)rows.count - 1, _dragStart + (NSInteger)lround(offset / pitch)));
+      row.transform = CGAffineTransformScale(CGAffineTransformMakeTranslation(0, offset), 1.02, 1.02);
+      if (target != _dragTarget) {
+        _dragTarget = target;
+        [[[[UISelectionFeedbackGenerator alloc] init] autorelease] selectionChanged];
+        [UIView animateWithDuration:0.2 animations:^{
+          for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
+            if (rows[i] == row) { continue; }
+            CGFloat shift = 0;
+            if (i > self->_dragStart && i <= target) { shift = -pitch; }
+            if (i < self->_dragStart && i >= target) { shift = pitch; }
+            rows[i].transform = CGAffineTransformMakeTranslation(0, shift);
+          }
+        }];
+      }
+      break;
+    }
+    default: {
+      if (row != _dragged) { return; }
+      const NSInteger from = _dragStart, to = _dragTarget;
+      const BOOL moved = pan.state == UIGestureRecognizerStateEnded && from != to;
+      _dragged = nil;
+      [UIView animateWithDuration:0.2 animations:^{
+        row.transform = moved ? CGAffineTransformMakeTranslation(0, (to - from) * pitch) : CGAffineTransformIdentity;
+        if (!moved) {
+          for (UIView *other in rows) { other.transform = CGAffineTransformIdentity; }
+        }
+      } completion:^(BOOL finished) {
+        row.layer.zPosition = 0;
+        row.layer.shadowOpacity = 0;
+      }];
+      /* Blender sends the reordered list back, which replaces these rows. */
+      if (moved && self.move) { self.move(from, to); }
+      break;
+    }
+  }
+}
+@end
+
 @interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate, UICollectionViewDelegate,
                                    UICollectionViewDragDelegate, UICollectionViewDropDelegate,
                                    UISearchBarDelegate, UITextFieldDelegate,
@@ -1112,6 +1327,473 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [self send:request];
 }
 
+/* -------------------------------------------------------------------- */
+/* Data-block pickers, lists, previews and operator menus: each one control natively. */
+
+- (void)sendRequest:(NSDictionary *)property object:(NSString *)objectID extra:(NSDictionary *)extra
+{
+  NSMutableDictionary *request = [NSMutableDictionary dictionaryWithDictionary:@{
+    @"action": @"property", @"id": objectID ?: @"", @"native": @1,
+    @"key": property[@"key"] ?: @"", @"panel": property[@"panel"] ?: @"", @"tab": property[@"tab"] ?: @"",
+  }];
+  [request addEntriesFromDictionary:extra];
+  [self send:request];
+}
+
+- (UIViewController *)topPresenter
+{
+  UIViewController *presenter = _overlay.window.rootViewController;
+  while (presenter.presentedViewController) { presenter = presenter.presentedViewController; }
+  return presenter;
+}
+
+- (void)promptRenameFrom:(NSString *)name title:(NSString *)title completion:(void (^)(NSString *))completion
+{
+  UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:nil
+                                                          preferredStyle:UIAlertControllerStyleAlert];
+  [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+    field.text = name;
+    field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    field.autocorrectionType = UITextAutocorrectionTypeNo;
+    field.returnKeyType = UIReturnKeyDone;
+  }];
+  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+  UIAlertAction *rename = [UIAlertAction actionWithTitle:@"Rename" style:UIAlertActionStyleDefault
+                                                 handler:^(UIAlertAction *action) {
+    NSString *text = [alert.textFields.firstObject.text
+        stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    if (text.length && ![text isEqual:name]) { completion(text); }
+  }];
+  [alert addAction:rename];
+  alert.preferredAction = rename;
+  [[self topPresenter] presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)presentDataBrowser:(NSDictionary *)property object:(NSString *)objectID from:(UIView *)source
+{
+  GHOSTIOSDataBrowser *browser = [[[GHOSTIOSDataBrowser alloc] init] autorelease];
+  browser.title = property[@"id_type"];
+  browser.options = property[@"options"];
+  browser.value = property[@"value"];
+  browser.typeIcon = _icon(property[@"icon"]);
+  __block GHOSTIOSScenePanels *owner = self;
+  browser.choose = ^(NSDictionary *option) {
+    [owner sendRequest:property object:objectID extra:@{@"id_action": @"select", @"value": option[@"value"]}];
+  };
+  if ([property[@"can_new"] boolValue]) {
+    /* Not retained: the browser owns this button. */
+    __block GHOSTIOSDataBrowser *shown = browser;
+    UIBarButtonItem *add = [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
+        primaryAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+          [owner sendRequest:property object:objectID extra:@{@"id_action": @"new"}];
+          [shown dismissViewControllerAnimated:YES completion:nil];
+        }]] autorelease];
+    add.accessibilityLabel = [@"New " stringByAppendingString:property[@"id_type"] ?: @""];
+    browser.navigationItem.rightBarButtonItem = add;
+  }
+  UINavigationController *wrapper = [[[UINavigationController alloc] initWithRootViewController:browser] autorelease];
+  wrapper.modalPresentationStyle = UIModalPresentationPopover;
+  wrapper.preferredContentSize = CGSizeMake(380, MIN(560.0, 150.0 + 60.0 * [property[@"options"] count]));
+  wrapper.popoverPresentationController.sourceView = source;
+  wrapper.popoverPresentationController.sourceRect = source.bounds;
+  [[self topPresenter] presentViewController:wrapper animated:YES completion:nil];
+}
+
+- (UIMenu *)dataActionsMenu:(NSDictionary *)property object:(NSString *)objectID
+{
+  __block GHOSTIOSScenePanels *owner = self;
+  NSString *type = property[@"id_type"] ?: @"";
+  const BOOL has = [property[@"value"] length] > 0;
+  void (^act)(NSString *, NSString *) = ^(NSString *action, NSString *value) {
+    NSMutableDictionary *extra = [NSMutableDictionary dictionaryWithObject:action forKey:@"id_action"];
+    if (value) { extra[@"value"] = value; }
+    [owner sendRequest:property object:objectID extra:extra];
+  };
+  NSMutableArray *edit = [NSMutableArray array];
+  if ([property[@"can_new"] boolValue]) {
+    [edit addObject:[UIAction actionWithTitle:has ? @"Duplicate" : [@"New " stringByAppendingString:type]
+                                        image:[UIImage systemImageNamed:has ? @"plus.square.on.square" : @"plus"]
+                                   identifier:nil handler:^(UIAction *a) { act(@"new", nil); }]];
+  }
+  if (has && ![property[@"linked"] boolValue]) {
+    [edit addObject:[UIAction actionWithTitle:@"Rename…" image:[UIImage systemImageNamed:@"pencil"]
+                                   identifier:nil handler:^(UIAction *a) {
+      [owner promptRenameFrom:property[@"name"] title:[@"Rename " stringByAppendingString:type]
+                   completion:^(NSString *name) { act(@"rename", name); }];
+    }]];
+  }
+  NSMutableArray *users = [NSMutableArray array];
+  if (property[@"fake_user"]) {
+    UIAction *fake = [UIAction actionWithTitle:@"Fake User" image:[UIImage systemImageNamed:@"shield"]
+                                    identifier:nil handler:^(UIAction *a) { act(@"fake_user", nil); }];
+    fake.subtitle = @"Keep even when nothing uses it";
+    fake.state = [property[@"fake_user"] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff;
+    [users addObject:fake];
+  }
+  if ([property[@"can_single_user"] boolValue]) {
+    UIAction *single = [UIAction actionWithTitle:@"Make Single User" image:[UIImage systemImageNamed:@"person"]
+                                      identifier:nil handler:^(UIAction *a) { act(@"single_user", nil); }];
+    single.subtitle = [NSString stringWithFormat:@"Used by %@ others", @([property[@"users"] integerValue] - 1)];
+    [users addObject:single];
+  }
+  NSMutableArray *remove = [NSMutableArray array];
+  if ([property[@"can_unlink"] boolValue]) {
+    [remove addObject:[UIAction actionWithTitle:@"Unlink" image:[UIImage systemImageNamed:@"xmark.circle"]
+                                     identifier:nil handler:^(UIAction *a) { act(@"unlink", nil); }]];
+  }
+  NSMutableArray *sections = [NSMutableArray array];
+  for (NSArray *group in @[edit, users, remove]) {
+    if (group.count) {
+      [sections addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
+                                        options:UIMenuOptionsDisplayInline children:group]];
+    }
+  }
+  return [UIMenu menuWithTitle:has ? property[@"name"] : type children:sections];
+}
+
+/* The data-block in use as a card: preview, name and users. Tapping browses; the menu holds
+ * New, Duplicate, Rename, Fake User, Make Single User and Unlink. */
+- (UIView *)dataPickerRow:(NSDictionary *)property object:(NSString *)objectID
+{
+  __block GHOSTIOSScenePanels *owner = self;
+  const BOOL has = [property[@"value"] length] > 0;
+  const BOOL editable = [property[@"editable"] boolValue];
+  NSString *type = property[@"id_type"] ?: @"";
+  UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+  config.image = blenderDataThumbnail(property[@"preview"], _icon(property[@"icon"]), 52);
+  config.imagePadding = 12;
+  config.title = has ? property[@"name"] : [@"No " stringByAppendingString:type];
+  config.subtitle = has ? ([blenderUsersText(property) length] ? blenderUsersText(property) : type) :
+                          @"Choose or create one";
+  config.titleLineBreakMode = NSLineBreakByTruncatingMiddle;
+  config.baseForegroundColor = has ? UIColor.labelColor : UIColor.secondaryLabelColor;
+  config.titleTextAttributesTransformer = ^NSDictionary *(NSDictionary *attributes) {
+    NSMutableDictionary *result = [[attributes mutableCopy] autorelease];
+    result[NSFontAttributeName] = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    return result;
+  };
+  config.subtitleTextAttributesTransformer = ^NSDictionary *(NSDictionary *attributes) {
+    NSMutableDictionary *result = [[attributes mutableCopy] autorelease];
+    result[NSForegroundColorAttributeName] = UIColor.secondaryLabelColor;
+    return result;
+  };
+  config.indicator = UIButtonConfigurationIndicatorPopup;
+  config.contentInsets = NSDirectionalEdgeInsetsMake(6, 0, 6, 4);
+  UIButton *browse = [UIButton buttonWithConfiguration:config primaryAction:nil];
+  browse.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
+  browse.enabled = editable && [property[@"options"] count] > 0;
+  browse.accessibilityIdentifier = [@"blender.data." stringByAppendingString:property[@"key"] ?: @""];
+  browse.accessibilityLabel = [NSString stringWithFormat:@"%@, %@", type, config.title];
+  browse.accessibilityHint = @"Shows the data-blocks to choose from.";
+  [browse addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+    [owner presentDataBrowser:property object:objectID from:action.sender];
+  }] forControlEvents:UIControlEventTouchUpInside];
+  [browse setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                          forAxis:UILayoutConstraintAxisHorizontal];
+  NSMutableArray *views = [NSMutableArray arrayWithObject:browse];
+  if (!has && [property[@"can_new"] boolValue]) {
+    UIButtonConfiguration *add = [UIButtonConfiguration tintedButtonConfiguration];
+    add.title = @"New";
+    add.image = [UIImage systemImageNamed:@"plus"];
+    add.imagePadding = 4;
+    add.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    UIButton *button = [UIButton buttonWithConfiguration:add primaryAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+      [owner sendRequest:property object:objectID extra:@{@"id_action": @"new"}];
+    }]];
+    button.enabled = editable;
+    button.accessibilityLabel = [@"New " stringByAppendingString:type];
+    [button setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+    [views addObject:button];
+  }
+  UIMenu *menu = [self dataActionsMenu:property object:objectID];
+  if (menu.children.count) {
+    UIButtonConfiguration *more = [UIButtonConfiguration plainButtonConfiguration];
+    more.image = [UIImage systemImageNamed:@"ellipsis.circle"];
+    UIButton *button = [UIButton buttonWithConfiguration:more primaryAction:nil];
+    button.menu = menu;
+    button.showsMenuAsPrimaryAction = YES;
+    button.enabled = editable;
+    button.accessibilityLabel = [type stringByAppendingString:@" Actions"];
+    [button.widthAnchor constraintEqualToConstant:40].active = YES;
+    [button setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+    [views addObject:button];
+  }
+  UIStackView *row = [[[UIStackView alloc] initWithArrangedSubviews:views] autorelease];
+  row.alignment = UIStackViewAlignmentCenter;
+  row.spacing = 6;
+  [row.heightAnchor constraintGreaterThanOrEqualToConstant:64].active = YES;
+  return row;
+}
+
+/* A list's items as rows; the active one is highlighted. Touch and hold to rename, drag the
+ * handle to reorder. Add, remove and the list's menu sit together, compactly, above it. */
+- (UIView *)listRow:(NSDictionary *)property object:(NSString *)objectID
+{
+  __block GHOSTIOSScenePanels *owner = self;
+  const BOOL editable = [property[@"editable"] boolValue];
+  GHOSTIOSListView *list = [[[GHOSTIOSListView alloc] init] autorelease];
+  list.axis = UILayoutConstraintAxisVertical;
+  list.spacing = 2;
+  list.move = ^(NSInteger from, NSInteger to) {
+    [owner sendRequest:property object:objectID extra:@{@"list_action": @"move", @"from": @(from), @"to": @(to)}];
+  };
+  NSArray *rows = property[@"rows"];
+  const BOOL reorder = [property[@"reorder"] boolValue] && editable && rows.count > 1;
+  if (!rows.count) {
+    UILabel *empty = [self label:@"None" style:UIFontTextStyleSubheadline];
+    empty.textColor = UIColor.tertiaryLabelColor;
+    [empty.heightAnchor constraintGreaterThanOrEqualToConstant:36].active = YES;
+    [list addRow:empty reorderHandle:nil];
+  }
+  for (NSUInteger position = 0; position < rows.count; position++) {
+    NSDictionary *item = rows[position];
+    const BOOL active = [item[@"index"] isEqual:property[@"value"]];
+    UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+    NSString *label = [item[@"label"] length] ? item[@"label"] : @"Unnamed";
+    config.title = label;
+    if ([item[@"preview"] length]) {
+      config.image = blenderDataThumbnail(item[@"preview"], nil, 30);
+    }
+    else if (_icon(item[@"icon"])) {
+      config.image = _icon(item[@"icon"]);
+    }
+    config.imagePadding = 10;
+    config.titleLineBreakMode = NSLineBreakByTruncatingTail;
+    config.baseForegroundColor = UIColor.labelColor;
+    config.contentInsets = NSDirectionalEdgeInsetsMake(6, 10, 6, 10);
+    UIButton *button = [UIButton buttonWithConfiguration:config primaryAction:nil];
+    button.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
+    button.enabled = editable;
+    button.accessibilityLabel = label;
+    button.accessibilityTraits |= active ? UIAccessibilityTraitSelected : 0;
+    [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+      if (!active) { [owner editProperty:property object:objectID value:item[@"index"]]; }
+    }] forControlEvents:UIControlEventTouchUpInside];
+    if ([item[@"rename_key"] length]) {
+      NSDictionary *nameProperty = @{@"key": item[@"rename_key"], @"panel": property[@"panel"] ?: @"",
+                                     @"tab": property[@"tab"] ?: @""};
+      button.menu = [UIMenu menuWithChildren:@[[UIAction actionWithTitle:@"Rename…"
+          image:[UIImage systemImageNamed:@"pencil"] identifier:nil handler:^(UIAction *a) {
+        [owner promptRenameFrom:item[@"label"] title:@"Rename" completion:^(NSString *name) {
+          [owner sendRequest:nameProperty object:objectID extra:@{@"type": @"STRING", @"value": name}];
+        }];
+      }]]];
+    }
+    UIStackView *row = [[[UIStackView alloc] initWithArrangedSubviews:@[button]] autorelease];
+    row.alignment = UIStackViewAlignmentCenter;
+    row.layer.cornerRadius = 8;
+    row.layer.cornerCurve = kCACornerCurveContinuous;
+    row.backgroundColor = active ? [self.tintColorForLists colorWithAlphaComponent:0.22] : UIColor.clearColor;
+    [row.heightAnchor constraintGreaterThanOrEqualToConstant:40].active = YES;
+    UIImageView *handle = nil;
+    if (reorder) {
+      handle = [[[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"line.3.horizontal"]] autorelease];
+      handle.tintColor = UIColor.tertiaryLabelColor;
+      handle.contentMode = UIViewContentModeCenter;
+      handle.isAccessibilityElement = YES;
+      handle.accessibilityLabel = [@"Reorder " stringByAppendingString:label];
+      [handle.widthAnchor constraintEqualToConstant:40].active = YES;
+      [handle.heightAnchor constraintEqualToConstant:40].active = YES;
+      [row addArrangedSubview:handle];
+    }
+    [list addRow:row reorderHandle:handle];
+  }
+
+  /* Add, remove and more, together in one compact capsule. */
+  NSMutableArray *tools = [NSMutableArray array];
+  UIButton *(^tool)(NSString *, NSString *, NSDictionary *) = ^UIButton *(NSString *symbol, NSString *name, NSDictionary *op) {
+    UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+    config.image = [UIImage systemImageNamed:symbol];
+    config.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithTextStyle:UIFontTextStyleSubheadline];
+    config.contentInsets = NSDirectionalEdgeInsetsMake(6, 10, 6, 10);
+    UIButton *button = [UIButton buttonWithConfiguration:config primaryAction:nil];
+    button.accessibilityLabel = op[@"label"] ?: name;
+    [button addInteraction:[[[UIToolTipInteraction alloc] initWithDefaultToolTip:op[@"label"] ?: name] autorelease]];
+    if (op) {
+      button.enabled = editable && (!op[@"editable"] || [op[@"editable"] boolValue]);
+      [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+        [owner sendRequest:@{@"key": op[@"key"], @"panel": property[@"panel"] ?: @"", @"tab": property[@"tab"] ?: @""}
+                    object:objectID extra:@{@"type": @"OPERATOR"}];
+      }] forControlEvents:UIControlEventTouchUpInside];
+    }
+    return button;
+  };
+  if (property[@"add"]) { [tools addObject:tool(@"plus", @"Add", property[@"add"])]; }
+  if (property[@"remove"]) { [tools addObject:tool(@"minus", @"Remove", property[@"remove"])]; }
+  NSMutableArray *more = [NSMutableArray array];
+  for (NSDictionary *op in property[@"extras"]) {
+    [more addObject:[UIAction actionWithTitle:op[@"label"] image:_icon(op[@"icon"]) identifier:nil handler:^(UIAction *a) {
+      [owner sendRequest:@{@"key": op[@"key"], @"panel": property[@"panel"] ?: @"", @"tab": property[@"tab"] ?: @""}
+                  object:objectID extra:@{@"type": @"OPERATOR"}];
+    }]];
+  }
+  if (property[@"menu"] && self.menuProvider) {
+    UIMenu *specials = self.menuProvider(@{@"type": @"MENU", @"menu": property[@"menu"], @"key": property[@"menu"],
+                                           @"tab": property[@"tab"] ?: @"", @"label": @""});
+    if (specials) {
+      [more addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline
+                                   children:specials.children]];
+    }
+  }
+  if (more.count) {
+    UIButton *button = tool(@"ellipsis", @"More", nil);
+    button.menu = [UIMenu menuWithChildren:more];
+    button.showsMenuAsPrimaryAction = YES;
+    button.enabled = editable;
+    [tools addObject:button];
+  }
+  if (!tools.count) {
+    return list;
+  }
+  UIStackView *capsule = [[[UIStackView alloc] initWithArrangedSubviews:tools] autorelease];
+  capsule.spacing = 0;
+  capsule.backgroundColor = UIColor.tertiarySystemFillColor;
+  capsule.layer.cornerRadius = 16;
+  capsule.layer.cornerCurve = kCACornerCurveContinuous;
+  [capsule.heightAnchor constraintEqualToConstant:32].active = YES;
+  UIView *spacer = [[[UIView alloc] init] autorelease];
+  UIStackView *bar = [[[UIStackView alloc] initWithArrangedSubviews:@[spacer, capsule]] autorelease];
+  bar.alignment = UIStackViewAlignmentCenter;
+  UIStackView *container = [[[UIStackView alloc] initWithArrangedSubviews:@[list, bar]] autorelease];
+  container.axis = UILayoutConstraintAxisVertical;
+  container.spacing = 6;
+  return container;
+}
+
+- (UIColor *)tintColorForLists
+{
+  return _overlay.tintColor ?: UIColor.systemBlueColor;
+}
+
+/* The Preview panel's render, floating in the section, with its shapes on a glass capsule. */
+- (UIView *)previewRow:(NSDictionary *)property object:(NSString *)objectID
+{
+  __block GHOSTIOSScenePanels *owner = self;
+  UIView *container = [[[UIView alloc] init] autorelease];
+  UIImage *image = blenderPreviewImage(property[@"preview"]);
+  UIImageView *view = [[[UIImageView alloc] initWithImage:image] autorelease];
+  view.translatesAutoresizingMaskIntoConstraints = NO;
+  view.contentMode = UIViewContentModeScaleAspectFit;
+  view.isAccessibilityElement = YES;
+  view.accessibilityLabel = [NSString stringWithFormat:@"Preview of %@", property[@"label"] ?: @""];
+  [container addSubview:view];
+  NSDictionary *shape = property[@"shape"];
+  const CGFloat capsuleHeight = shape ? 44 : 0;
+  [NSLayoutConstraint activateConstraints:@[
+    [container.heightAnchor constraintEqualToConstant:250 + capsuleHeight],
+    [view.topAnchor constraintEqualToAnchor:container.topAnchor],
+    [view.centerXAnchor constraintEqualToAnchor:container.centerXAnchor],
+    [view.widthAnchor constraintEqualToConstant:250],
+    [view.heightAnchor constraintEqualToConstant:250],
+  ]];
+  if (!image) {
+    UIActivityIndicatorView *spinner = [[[UIActivityIndicatorView alloc]
+        initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium] autorelease];
+    spinner.translatesAutoresizingMaskIntoConstraints = NO;
+    [spinner startAnimating];
+    [view addSubview:spinner];
+    [spinner.centerXAnchor constraintEqualToAnchor:view.centerXAnchor].active = YES;
+    [spinner.centerYAnchor constraintEqualToAnchor:view.centerYAnchor].active = YES;
+  }
+  if (!shape) {
+    return container;
+  }
+  UIVisualEffectView *glass = [[[UIVisualEffectView alloc]
+      initWithEffect:[UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular]] autorelease];
+  glass.translatesAutoresizingMaskIntoConstraints = NO;
+  glass.layer.cornerRadius = 22;
+  glass.layer.cornerCurve = kCACornerCurveContinuous;
+  glass.clipsToBounds = YES;
+  UIStackView *shapes = [[[UIStackView alloc] init] autorelease];
+  shapes.translatesAutoresizingMaskIntoConstraints = NO;
+  shapes.spacing = 2;
+  for (NSDictionary *option in shape[@"options"]) {
+    UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+    config.image = _icon(option[@"icon"]);
+    config.title = config.image ? nil : option[@"label"];
+    config.contentInsets = NSDirectionalEdgeInsetsMake(6, 8, 6, 8);
+    UIButton *button = [UIButton buttonWithConfiguration:config primaryAction:nil];
+    button.selected = [option[@"value"] isEqual:shape[@"value"]];
+    button.enabled = [shape[@"editable"] boolValue];
+    button.accessibilityLabel = option[@"label"];
+    [button addInteraction:[[[UIToolTipInteraction alloc] initWithDefaultToolTip:option[@"label"]] autorelease]];
+    button.configurationUpdateHandler = ^(UIButton *item) {
+      UIButtonConfiguration *updated = item.configuration;
+      updated.baseForegroundColor = item.selected ? item.tintColor : UIColor.secondaryLabelColor;
+      updated.background.backgroundColor = item.selected ? [item.tintColor colorWithAlphaComponent:0.2] : UIColor.clearColor;
+      updated.background.cornerRadius = 16;
+      item.configuration = updated;
+    };
+    [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+      for (UIButton *other in shapes.arrangedSubviews) { other.selected = other == action.sender; }
+      [owner editProperty:shape object:objectID value:option[@"value"]];
+    }] forControlEvents:UIControlEventTouchUpInside];
+    [button.widthAnchor constraintEqualToConstant:36].active = YES;
+    [button.heightAnchor constraintEqualToConstant:34].active = YES;
+    [shapes addArrangedSubview:button];
+  }
+  [glass.contentView addSubview:shapes];
+  [container addSubview:glass];
+  [NSLayoutConstraint activateConstraints:@[
+    [shapes.leadingAnchor constraintEqualToAnchor:glass.contentView.leadingAnchor constant:5],
+    [shapes.trailingAnchor constraintEqualToAnchor:glass.contentView.trailingAnchor constant:-5],
+    [shapes.centerYAnchor constraintEqualToAnchor:glass.contentView.centerYAnchor],
+    [glass.heightAnchor constraintEqualToConstant:44],
+    [glass.centerXAnchor constraintEqualToAnchor:container.centerXAnchor],
+    [glass.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
+  ]];
+  return container;
+}
+
+/* An operator's choices as a menu with Blender's groups, such as Add Object Constraint. */
+- (UIView *)operatorMenuRow:(NSDictionary *)property object:(NSString *)objectID
+{
+  __block GHOSTIOSScenePanels *owner = self;
+  NSMutableArray *sections = [NSMutableArray array];
+  NSMutableArray *items = [NSMutableArray array];
+  __block NSString *heading = @"";
+  void (^flush)(void) = ^{
+    if (items.count) {
+      [sections addObject:[UIMenu menuWithTitle:heading image:nil identifier:nil
+                                        options:UIMenuOptionsDisplayInline children:[[items copy] autorelease]]];
+      [items removeAllObjects];
+    }
+  };
+  for (NSDictionary *option in property[@"options"]) {
+    if (option[@"heading"]) {
+      flush();
+      heading = option[@"heading"];
+      continue;
+    }
+    [items addObject:[UIAction actionWithTitle:option[@"label"] image:_icon(option[@"icon"]) identifier:nil
+                                       handler:^(UIAction *a) {
+      [owner sendRequest:property object:objectID extra:@{@"value": option[@"value"]}];
+    }]];
+  }
+  flush();
+  UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+  config.title = property[@"label"];
+  config.image = _icon(property[@"icon"]) ?: [UIImage systemImageNamed:@"plus"];
+  config.imagePadding = 8;
+  UIButton *button = [UIButton buttonWithConfiguration:config primaryAction:nil];
+  button.menu = [UIMenu menuWithTitle:property[@"label"] children:sections];
+  button.showsMenuAsPrimaryAction = YES;
+  button.enabled = [property[@"editable"] boolValue];
+  button.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
+  [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+  return button;
+}
+
+- (UIView *)compositeRowForProperty:(NSDictionary *)property object:(NSString *)objectID
+{
+  NSString *kind = property[@"type"];
+  if ([kind isEqual:@"ID"]) { return [self dataPickerRow:property object:objectID]; }
+  if ([kind isEqual:@"LIST"]) { return [self listRow:property object:objectID]; }
+  if ([kind isEqual:@"PREVIEW"]) { return [self previewRow:property object:objectID]; }
+  if ([kind isEqual:@"OPERATOR_MENU"]) { return [self operatorMenuRow:property object:objectID]; }
+  return nil;
+}
+
 - (UILabel *)label:(NSString *)text style:(UIFontTextStyle)style
 {
   UILabel *label = [[[UILabel alloc] init] autorelease];
@@ -1125,8 +1807,10 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
 - (NSDictionary *)shapeForProperty:(NSDictionary *)property
 {
   NSMutableDictionary *shape = [[property mutableCopy] autorelease];
+  /* Pickers and lists show their value in their layout, so a new value rebuilds them. */
+  const BOOL composite = [@[@"ID", @"LIST"] containsObject:property[@"type"] ?: @""];
   for (NSString *key in @[@"value", @"exposure", @"editable", @"anim_state"]) {
-    [shape removeObjectForKey:key];
+    if (!composite || ![key isEqual:@"value"]) { [shape removeObjectForKey:key]; }
   }
   if (shape[@"animation"]) {
     shape[@"animation"] = @YES;
@@ -1365,6 +2049,12 @@ static UIColor *blenderAnimationStateColor(NSString *state)
           [sectionRows addObject:vectorGroup];
           [sectionKeys addObject:[@"vector:" stringByAppendingString:groupKey]];
         }
+      }
+      if (UIView *composite = [self compositeRowForProperty:property object:objectID]) {
+        if (_toolInline) { continue; }
+        [sectionRows addObject:composite];
+        [sectionKeys addObject:[@"property:" stringByAppendingString:[self keyForProperty:property]]];
+        continue;
       }
       UILabel *label = [self label:property[@"label"] style:UIFontTextStyleBody];
       UIControl *control;
