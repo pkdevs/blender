@@ -146,7 +146,10 @@ void BKE_mesh_origindex_map_create_corner_tri(MeshElemMap **r_map,
 
 namespace bke::mesh {
 
-/** Whether the UVs of each corner's face wind clockwise. */
+/**
+ * Whether the UVs of each corner's face wind clockwise, stored per corner to avoid corner to face
+ * lookup.
+ */
 static Array<bool> calc_corner_uv_winding(const OffsetIndices<int> faces,
                                           const Span<float2> uv_map)
 {
