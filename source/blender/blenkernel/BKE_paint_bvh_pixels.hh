@@ -243,7 +243,6 @@ struct CopyPixelTiles {
 
 struct KDTreeData {
   Vector<float3, 0> pixel_positions;
-  Vector<int, 0> filled_pixels;
   Vector<int, 0> offsets;
   std::unique_ptr<KDTreeNew<float3>> kd_tree;
 };

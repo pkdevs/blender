@@ -456,6 +456,7 @@ inline static float4 scene_linear_pixel_get(
     const int tile_index,
     const int img_index)
 {
+  PRF_scope(ProfileCategory::Editor);
   const image::TileNumber tile_number = tile_index_to_number[tile_index];
   const BufferType type = tile_buffers.lookup(tile_number);
   const TileColorspaceProcessor &processor = *tile_processors.lookup_ptr(tile_number);
@@ -750,6 +751,7 @@ static void allocate_scratch_tiles(ImageData &image_data,
                                    const int img_x_end,
                                    const int img_y)
 {
+  PRF_scope(ProfileCategory::Editor);
   const int tile_y = img_y >> scratch_tile_bits;
   const int tile_x_start = img_x_start >> scratch_tile_bits;
   const int tile_x_end = img_x_end >> scratch_tile_bits;
@@ -1530,11 +1532,12 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   });
 }
 
-void build_pixel_position_map(Object &ob,
-                              const ImageData &data,
-                              Vector<float3, 0> &r_pixel_positions,
-                              Vector<int, 0> &r_filled_positions,
-                              Vector<int, 0> &r_offsets)
+IndexMask build_pixel_position_map(Object &ob,
+                                   const ImageData &data,
+                                   IndexMaskMemory &filled_pixel_memory,
+                                   Vector<float3, 0> &r_pixel_positions,
+                                   Vector<int, 0> &r_offsets)
+
 {
   BLI_assert(r_pixel_positions.is_empty());
   BLI_assert(r_offsets.is_empty());
@@ -1546,6 +1549,7 @@ void build_pixel_position_map(Object &ob,
   Map<image::TileNumber, ImBuf *> tile_to_buffer_map;
 
   /* Allocate */
+  Vector<bool> filled_positions;
   r_offsets.append(0);
   for (const TileNumber used_tile_number : pixel_data.used_tiles) {
     ImageUser tile_user = data.image_user_get();
@@ -1556,8 +1560,9 @@ void build_pixel_position_map(Object &ob,
       continue;
     }
 
-    const size_t tile_count = IMB_get_pixel_count(tile_buffer);
-    r_pixel_positions.resize(r_pixel_positions.size() + tile_count);
+    const size_t tile_pixel_count = IMB_get_pixel_count(tile_buffer);
+    r_pixel_positions.resize(r_pixel_positions.size() + tile_pixel_count);
+    filled_positions.resize(filled_positions.size() + tile_pixel_count);
     r_offsets.append(r_pixel_positions.size());
     tile_to_buffer_map.add(used_tile_number, tile_buffer);
   }
@@ -1568,61 +1573,71 @@ void build_pixel_position_map(Object &ob,
   }
 
   Span<PixelNode> pixel_nodes = pixel_data.nodes;
-  for (const PixelNode &pixel_node : pixel_nodes) {
-    for (const UDIMTilePixels &tile_data : pixel_node.tiles) {
-      ImBuf *tile_buffer = tile_to_buffer_map.lookup(tile_data.tile_number);
-      const int tile_index = tile_to_index_map.lookup(tile_data.tile_number);
-      const int tile_height = tile_buffer->y;
+  threading::parallel_for(pixel_data.nodes.index_range(), 1, [&](const IndexRange range) {
+    for (const int node_i : range) {
+      const PixelNode &pixel_node = pixel_nodes[node_i];
+      for (const UDIMTilePixels &tile_data : pixel_node.tiles) {
+        ImBuf *tile_buffer = tile_to_buffer_map.lookup(tile_data.tile_number);
+        const int tile_index = tile_to_index_map.lookup(tile_data.tile_number);
+        const int tile_height = tile_buffer->y;
 
-      const int tile_offset = r_offsets[tile_index];
+        const int tile_offset = r_offsets[tile_index];
 
-      const int num_runs = tile_data.pixel_row_run_starts.size() - 1;
-      for (const int run_i : IndexRange(num_runs)) {
-        const int run_begin = tile_data.pixel_row_run_starts[run_i];
-        const int run_end = tile_data.pixel_row_run_starts[run_i + 1];
+        const int num_runs = tile_data.pixel_row_run_starts.size() - 1;
+        /* TODO: Profile this to see if it should be increased further, this loop should be pretty
+         * fast */
+        threading::parallel_for(IndexRange(num_runs), 256, [&](const IndexRange task_range) {
+          for (const int run_i : task_range) {
+            const int run_begin = tile_data.pixel_row_run_starts[run_i];
+            const int run_end = tile_data.pixel_row_run_starts[run_i + 1];
 
-        /* Compute run position and size. */
-        const int run_x = int(tile_data.pixel_row_run_start_coords[run_i].x);
-        const int run_y = int(tile_data.pixel_row_run_start_coords[run_i].y);
-        int run_size = 0;
-        for (int k = run_begin; k < run_end; k++) {
-          run_size += int(tile_data.pixel_rows[k].num_pixels);
-        }
+            /* Compute run position and size. */
+            const int run_x = int(tile_data.pixel_row_run_start_coords[run_i].x);
+            const int run_y = int(tile_data.pixel_row_run_start_coords[run_i].y);
+            int run_size = 0;
+            for (int k = run_begin; k < run_end; k++) {
+              run_size += int(tile_data.pixel_rows[k].num_pixels);
+            }
 
-        int tri_row_offset = 0;
+            int tri_row_offset = 0;
 
-        for (int k = run_begin; k < run_end; k++) {
-          const PackedPixelRow &tri_row = tile_data.pixel_rows[k];
-          const int uv_prim = tri_row.uv_primitive_index;
-          const int tri_row_size = int(tri_row.num_pixels);
-          /* TODO: Maybe there's a better way to filter this? */
-          if (!pixel_node.uv_primitives.original_tris[uv_prim]) {
-            tri_row_offset += tri_row_size;
-            continue;
+            for (int k = run_begin; k < run_end; k++) {
+              const PackedPixelRow &tri_row = tile_data.pixel_rows[k];
+              const int uv_prim = tri_row.uv_primitive_index;
+              const int tri_row_size = int(tri_row.num_pixels);
+              /* TODO: Maybe there's a better way to filter this? */
+              if (!pixel_node.uv_primitives.original_tris[uv_prim]) {
+                tri_row_offset += tri_row_size;
+                continue;
+              }
+
+              const int tri_row_x = run_x + tri_row_offset;
+              const float3x3 &pixel_to_position =
+                  pixel_node.uv_primitives.pixel_to_position[uv_prim];
+              const float3 P_delta = pixel_to_position[0];
+              const float3 P_start = P_delta * tri_row_x + pixel_to_position[1] * run_y +
+                                     pixel_to_position[2];
+
+              for (const int pixel_i : IndexRange(tri_row_size)) {
+                int pixel = tile_offset + run_y * tile_height + tri_row_x + pixel_i;
+                const float3 position = P_start + P_delta * pixel_i;
+                r_pixel_positions[pixel] = position;
+                filled_positions[pixel] = true;
+              }
+
+              tri_row_offset += tri_row_size;
+            }
           }
-
-          const int tri_row_x = run_x + tri_row_offset;
-          const float3x3 &pixel_to_position = pixel_node.uv_primitives.pixel_to_position[uv_prim];
-          const float3 P_delta = pixel_to_position[0];
-          const float3 P_start = P_delta * tri_row_x + pixel_to_position[1] * run_y +
-                                 pixel_to_position[2];
-
-          for (const int pixel_i : IndexRange(tri_row_size)) {
-            int pixel = tile_offset + run_y * tile_height + tri_row_x + pixel_i;
-            const float3 position = P_start + P_delta * pixel_i;
-            r_pixel_positions[pixel] = position;
-            r_filled_positions.append(pixel);
-          }
-
-          tri_row_offset += tri_row_size;
-        }
+        });
       }
     }
-  }
+  });
 
   for (ImBuf *buffer : tile_to_buffer_map.values()) {
     BKE_image_release_ibuf(data.image, buffer, nullptr);
   }
+
+  return IndexMask::from_bools(filled_positions, filled_pixel_memory);
 }
 
 void do_3d_image_blur_brush(const Depsgraph &depsgraph,

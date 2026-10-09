@@ -18,6 +18,8 @@
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
+#include "PRF_profile.hh"
+
 namespace blender {
 
 namespace kdtree {
@@ -546,6 +548,7 @@ int KDTreeNew<T>::find_nearest_filtered(const T &position,
 template<typename T>
 int KDTreeNew<T>::find_nearest_n(const T &position, MutableSpan<Nearest> r_nearest) const
 {
+  PRF_scope(ProfileCategory::Core);
   if (this->is_empty() || r_nearest.is_empty()) {
     return 0;
   }

@@ -66,11 +66,11 @@ struct ImageData : NonCopyable {
   }
 };
 
-void build_pixel_position_map(Object &ob,
-                              const ImageData &data,
-                              Vector<float3, 0> &r_pixel_positions,
-                              Vector<int, 0> &r_filled_positions,
-                              Vector<int, 0> &r_offsets);
+IndexMask build_pixel_position_map(Object &ob,
+                                   const ImageData &data,
+                                   IndexMaskMemory &filled_pixel_memory,
+                                   Vector<float3, 0> &r_pixel_positions,
+                                   Vector<int, 0> &r_offsets);
 
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Paint &paint,
