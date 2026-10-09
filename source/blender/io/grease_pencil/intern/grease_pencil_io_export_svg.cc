@@ -42,9 +42,9 @@ constexpr const char *svg_exporter_version = "v2.1";
 
 static std::string rgb_to_hexstr(const float color[3])
 {
-  uint8_t r = color[0] * 255.0f;
-  uint8_t g = color[1] * 255.0f;
-  uint8_t b = color[2] * 255.0f;
+  uint8_t r = math::round(color[0] * 255.0f);
+  uint8_t g = math::round(color[1] * 255.0f);
+  uint8_t b = math::round(color[2] * 255.0f);
   return fmt::format("#{:02X}{:02X}{:02X}", r, g, b);
 }
 
