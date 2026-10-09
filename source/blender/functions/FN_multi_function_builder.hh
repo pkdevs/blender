@@ -127,7 +127,7 @@ template<typename Arg> inline decltype(auto) execute_array_fetch(Arg &&arg, cons
   using A = std::decay_t<Arg>;
   if constexpr (std::is_same_v<A, Span<bool>>) {
     /* Casting bools to chars for loading allows GCC to auto-vectorize. */
-    return bool(reinterpret_cast<const char *>(arg.data()[i]));
+    return bool(reinterpret_cast<const char *>(arg.data())[i]);
   }
   else {
     return std::forward<Arg>(arg)[i];
