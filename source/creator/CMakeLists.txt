@@ -358,9 +358,20 @@ else()
 
     # The document launcher's Suzanne and logo are drawn with RealityKit and SwiftUI, which only
     # Swift can use. The rest of the launcher finds these views by name, see `GHOST_IOSLauncher.mm`.
+    # The native panels are SwiftUI too, found by name in `GHOST_WindowIOS.mm`.
     set(CMAKE_Swift_LANGUAGE_VERSION 5)
     enable_language(Swift)
-    set(IOS_LAUNCHER_SWIFT ${CMAKE_SOURCE_DIR}/intern/ghost/intern/GHOST_IOSLauncher.swift)
+    set(IOS_LAUNCHER_SWIFT
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/GHOST_IOSLauncher.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/BlenderBridge.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/CompositeControls.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/HierarchyView.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/InspectorStore.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/InspectorView.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/PropertyControls.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/ScenePanels.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/UIKitInterop.swift
+    )
     set(IOS_LAUNCHER_RESOURCES
       ${CMAKE_SOURCE_DIR}/release/ios/launcher/Suzanne.usdz
       ${CMAKE_SOURCE_DIR}/release/ios/launcher/blender_logo_mono.svg
@@ -371,7 +382,12 @@ else()
     )
     # Linked as C++ as before. Xcode adds Swift's own libraries, while CMake would otherwise pass
     # the C and C++ compilers' implicit library folders, which may be the host's.
-    set_target_properties(blender PROPERTIES LINKER_LANGUAGE CXX)
+    # Swift reaches the engine inbox through the bridging header's C declarations.
+    set_target_properties(blender PROPERTIES
+      LINKER_LANGUAGE CXX
+      XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER
+        "${CMAKE_SOURCE_DIR}/intern/ghost/intern/GHOST_IOSSwiftBridge.h"
+    )
 
     # The thumbnail extension, showing the preview stored in `.blend` files wherever iOS shows
     # them: the document browser, the Files app, share sheets.
