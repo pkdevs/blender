@@ -3018,6 +3018,19 @@ void region_panels_sort_for_search_filter_visibility_change(bContext *C, const A
   panel_activate_state(C, panel_sort.first().panel, PANEL_STATE_ANIMATION);
 }
 
+bool panel_region_visible_width_ensure(ARegion *region)
+{
+  BLI_assert(BKE_regiontype_uses_category_tabs(region->runtime->type));
+  if (!region_panels_fits_only_categories(region)) {
+    return false;
+  }
+  const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
+                       (BLI_rcti_size_y(&region->v2d.mask) + 1);
+  const int new_width = region->runtime->type->prefsizex ? region->runtime->type->prefsizex : 250;
+  panel_region_width_set(region, aspect, new_width);
+  return true;
+}
+
 /** \} */
 
 }  // namespace blender::ui

@@ -88,13 +88,7 @@ static wmOperatorStatus text_text_search_exec(bContext *C, wmOperator * /*op*/)
     if (active_category && !STREQ(active_category, "Text")) {
       ui::panel_category_active_set(region, "Text");
     }
-    if (ui::region_panels_fits_only_categories(region)) {
-      /* Enlarge region to show text search query button. */
-      const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
-                           (BLI_rcti_size_y(&region->v2d.mask) + 1);
-      const int new_width = region->runtime->type->prefsizex ? region->runtime->type->prefsizex :
-                                                               250;
-      ui::panel_region_width_set(region, aspect, new_width);
+    if (ui::panel_region_visible_width_ensure(region)) {
       WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, nullptr);
     }
     ED_region_activate_rna_prop(C, region, st, "find_text");

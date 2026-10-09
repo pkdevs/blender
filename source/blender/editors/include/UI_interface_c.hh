@@ -3234,7 +3234,11 @@ Button *region_views_find_active_item_but(const ARegion *region);
 void region_views_clear_search_highlight(const ARegion *region);
 
 bool region_panels_fits_only_categories(const ARegion *region);
-void panel_region_width_set(ARegion *region, const float aspect, int unscaled_size);
+/**
+ * Ensures the region is wide enough to draw panels' content. Returns true if the panel widht
+ * changed.
+ */
+bool panel_region_visible_width_ensure(ARegion *region);
 
 void register_scene_compositor_effects_panel(ARegionType *region_type);
 
