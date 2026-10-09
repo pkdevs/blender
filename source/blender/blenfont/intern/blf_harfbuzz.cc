@@ -182,6 +182,16 @@ ShapingData::ShapingData(FontBLF *font,
   /* Convert entire input string into array of 32-bit code points. */
   BLI_str_utf8_as_utf32(str32.data(), str, char_count + 1);
 
+  /* Map UTF-32 code point index -> UTF-8 byte offset, for the whole string.
+   * HarfBuzz may reorder glyphs and multiple glyphs can share the same cluster,
+   * so we must not rely on glyph iteration order to compute UTF-8 offsets. */
+  Array<size_t> utf8_offsets(char_count);
+  size_t tmp_offset = 0;
+  for (size_t ci = 0; ci < char_count; ++ci) {
+    utf8_offsets[ci] = tmp_offset;
+    tmp_offset += size_t(BLI_str_utf8_from_unicode_len(str32[ci]));
+  }
+
   /* Process text by script segments. HarfBuzz requires text to be
    * shaped in runs of the same script, direction, and font. We break
    * on script changes, ignoring Common/Inherited which can merge. */
@@ -269,16 +279,6 @@ ShapingData::ShapingData(FontBLF *font,
     uint glyph_count;
     const hb_glyph_info_t *hb_glyph_info = hb_buffer_get_glyph_infos(hb_buf, &glyph_count);
     const hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(hb_buf, nullptr);
-
-    /* Precompute mapping from UTF-32 codepoint index -> UTF-8 byte offset.
-     * HarfBuzz may reorder glyphs and multiple glyphs can share the same cluster,
-     * so we must not rely on glyph iteration order to compute UTF-8 offsets. */
-    Array<size_t> utf8_offsets(char_count);
-    size_t tmp_offset = 0;
-    for (size_t ci = 0; ci < char_count; ++ci) {
-      utf8_offsets[ci] = tmp_offset;
-      tmp_offset += size_t(BLI_str_utf8_from_unicode_len(str32[ci]));
-    }
 
     size_t glyph_str8_offset = 0;
     for (i = 0; i < glyph_count; i++) {
