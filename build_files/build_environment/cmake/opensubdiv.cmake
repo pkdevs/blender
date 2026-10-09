@@ -65,9 +65,14 @@ if(WIN32)
   endif()
 else()
   harvest(external_opensubdiv opensubdiv/include opensubdiv/include "*.h")
-  harvest(external_opensubdiv opensubdiv/lib opensubdiv/lib "*")
-  harvest_rpath_lib(external_opensubdiv opensubdiv/lib opensubdiv/lib "*.${SHAREDLIBEXT}")
+  if(APPLE)
+    harvest(external_opensubdiv opensubdiv/lib/OpenSubdiv_static.framework opensubdiv/lib/OpenSubdiv_static.framework "*")
+    harvest(external_opensubdiv opensubdiv/lib/OpenSubdiv.framework opensubdiv/lib/OpenSubdiv.framework "*")
+  endif()
   harvest(external_opensubdiv opensubdiv/lib/cmake/OpenSubdiv opensubdiv/lib/cmake/opensubdiv "*.cmake")
+  harvest_rpath_lib(external_opensubdiv opensubdiv/lib opensubdiv/lib "*${SHAREDLIBEXT}*")
+  harvest(external_opensubdiv opensubdiv/lib opensubdiv/lib "*.a")
+  
 endif()
 
 add_dependencies(
