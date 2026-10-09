@@ -464,6 +464,15 @@ final class HarnessController: UIViewController {
         timeline?.perform(NSSelectorFromString("toggle:"), with: nil)
         if scenario == "timeline-expanded" { timeline?.perform(NSSelectorFromString("toggleExpanded:"), with: nil) }
         view.setNeedsLayout()
+      case "dialog":
+        let sheet = DialogSheetController(
+          title: "Save changes before closing?", message: "Your changes will be lost if you don't save them.",
+          toggles: ["Save modified images"], selected: [NSNumber(value: true)],
+          actions: ["Save", "Don't Save", "Cancel"], roles: [0, 2, 1].map { NSNumber(value: $0) }, preferred: 0
+        ) { action, toggles in FakeEngine.shared.log(["dialog": action, "toggles": NSNumber(value: toggles)]) }
+        sheet.modalPresentationStyle = .formSheet
+        sheet.preferredContentSize = CGSize(width: 520, height: 600)
+        present(sheet, animated: false)
       case "assets":
         assets?.perform(NSSelectorFromString("toggle:"), with: nil)
         view.setNeedsLayout()

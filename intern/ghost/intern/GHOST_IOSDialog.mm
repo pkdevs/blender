@@ -8,6 +8,18 @@
 #include "GHOST_WindowIOS.hh"
 
 @class GHOSTIOSDialogRequest;
+
+/* The sheet for dialogs with options, drawn in SwiftUI (`intern/swift/DialogSheet.swift`). */
+@interface UIViewController (GHOSTIOSSwiftDialogSheet)
+- (instancetype)initWithTitle:(NSString *)title
+                      message:(NSString *)message
+                      toggles:(NSArray<NSString *> *)toggles
+                     selected:(NSArray<NSNumber *> *)selected
+                      actions:(NSArray<NSString *> *)actions
+                        roles:(NSArray<NSNumber *> *)roles
+                    preferred:(NSInteger)preferred
+                       choose:(void (^)(NSInteger action, uint64_t toggles))choose;
+@end
 static NSMutableArray<GHOSTIOSDialogRequest *> *dialog_queue;
 static NSTimer *dialog_timer;
 
@@ -27,6 +39,8 @@ static NSTimer *dialog_timer;
 @property(nonatomic, retain) UIViewController *controller;
 @property(nonatomic, retain) NSMutableArray<UISwitch *> *switches;
 @property(nonatomic) BOOL finished;
+/* The options chosen in the SwiftUI sheet, which has no switches here. */
+@property(nonatomic) uint64_t chosenToggles;
 - (void)finish:(int)action;
 - (void)presentFrom:(UIViewController *)presenter;
 @end
@@ -167,7 +181,7 @@ static void dialogPump()
     return;
   }
   self.finished = YES;
-  uint64_t toggles = 0;
+  uint64_t toggles = self.chosenToggles;
   for (NSUInteger i = 0; i < self.switches.count; i++) {
     if (self.switches[i].on) {
       toggles |= uint64_t(1) << i;
@@ -228,6 +242,33 @@ static void dialogPump()
     }
     self.controller = alert;
   }
+  else if (Class sheet_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
+                                    nil :
+                                    NSClassFromString(@"GHOSTIOSSwiftDialogSheet"))
+  {
+    NSMutableArray *toggles = [NSMutableArray array], *selected = [NSMutableArray array];
+    for (const GHOST_IOSDialogToggle &option : model.toggles) {
+      [toggles addObject:dialogString(option.title)];
+      [selected addObject:@(option.selected)];
+    }
+    NSMutableArray *actions = [NSMutableArray array], *roles = [NSMutableArray array];
+    for (const GHOST_IOSDialogAction &action : model.actions) {
+      [actions addObject:dialogString(action.title)];
+      [roles addObject:@(action.role == GHOST_IOSDialogRole::Cancel ? 1 :
+                         action.role == GHOST_IOSDialogRole::Destructive ? 2 : 0)];
+    }
+    __block GHOSTIOSDialogRequest *owner = self;
+    UIViewController *sheet = [[[sheet_class alloc] initWithTitle:dialogString(model.title)
+        message:dialogString(model.message) toggles:toggles selected:selected actions:actions
+        roles:roles preferred:model.preferred_action
+        choose:^(NSInteger action, uint64_t chosen) {
+          owner.chosenToggles = chosen;
+          [owner finish:int(action)];
+        }] autorelease];
+    sheet.modalPresentationStyle = UIModalPresentationFormSheet;
+    sheet.preferredContentSize = CGSizeMake(520, 600);
+    self.controller = sheet;
+  }
   else {
     GHOSTIOSDialogController *sheet = [[[GHOSTIOSDialogController alloc] init] autorelease];
     sheet.request = self;
@@ -236,7 +277,7 @@ static void dialogPump()
     self.controller = sheet;
   }
   [presenter presentViewController:self.controller animated:YES completion:nil];
-  if ([self.controller isKindOfClass:GHOSTIOSDialogController.class]) {
+  if (![self.controller isKindOfClass:UIAlertController.class]) {
     self.controller.presentationController.delegate = self;
   }
 }
