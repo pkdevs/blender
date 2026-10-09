@@ -45,6 +45,7 @@ extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 #import "GHOST_IOSRedoStrip.hh"
 #import "GHOST_IOSTimeline.hh"
 #import "GHOST_IOSAssets.hh"
+#import "GHOST_IOSFileDrop.hh"
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
@@ -2261,6 +2262,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   GHOSTIOSRedoStrip *_redo_strip;
   GHOSTIOSTimeline *_timeline;
   GHOSTIOSAssets *_assets;
+  GHOSTIOSFileDrop *_file_drop;
   BOOL _finger_tool_enabled;
   GHOSTIOSPencilMenu *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
@@ -2500,6 +2502,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [_object_mode release];
   [_timeline release];
   [_assets release];
+  [_file_drop release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
@@ -5188,6 +5191,30 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     return ghost_window ? ghost_window->scalePointToWindow(point) : point;
   };
   [self.view addInteraction:_assets.dropInteraction];
+  /* Files dragged in from other apps drop where they land, as on a Mac. */
+  _file_drop = [[GHOSTIOSFileDrop alloc] init];
+  _file_drop.dropFiles = ^(NSArray<NSString *> *paths, CGPoint point) {
+    GHOST_WindowIOS *ghost_window = assets_host->_ghost_window;
+    GHOST_SystemIOS *ghost_system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
+    if (!ghost_window || !ghost_system) {
+      return;
+    }
+    GHOST_TStringArray *files = static_cast<GHOST_TStringArray *>(malloc(sizeof(GHOST_TStringArray)));
+    files->count = int(paths.count);
+    files->strings = static_cast<uint8_t **>(malloc(paths.count * sizeof(uint8_t *)));
+    for (NSUInteger i = 0; i < paths.count; i++) {
+      files->strings[i] = reinterpret_cast<uint8_t *>(strdup(paths[i].fileSystemRepresentation));
+    }
+    const CGPoint client = ghost_window->scalePointToWindow(point);
+    ghost_system->pushEvent(std::make_unique<GHOST_EventDragnDrop>(ghost_system->getMilliSeconds(),
+                                                                   GHOST_kEventDraggingDropDone,
+                                                                   GHOST_kDragnDropTypeFilenames,
+                                                                   ghost_window,
+                                                                   int(lround(client.x)),
+                                                                   int(lround(client.y)),
+                                                                   files));
+  };
+  [self.view addInteraction:_file_drop.interaction];
   [self installNativeTopBar];
   _pencil_menu = [[GHOSTIOSPencilMenu alloc] initWithFrame:_overlay_view.bounds];
   _pencil_menu.delegate = self;

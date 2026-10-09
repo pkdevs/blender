@@ -185,6 +185,8 @@ elseif(APPLE AND NOT WITH_GHOST_X11)
         intern/GHOST_IOSTimeline.mm
         intern/GHOST_IOSAssets.hh
         intern/GHOST_IOSAssets.mm
+        intern/GHOST_IOSFileDrop.hh
+        intern/GHOST_IOSFileDrop.mm
         GHOST_IOSDocumentPicker.hh
         intern/GHOST_IOSDocumentPicker.mm
         GHOST_IOSDialog.hh
