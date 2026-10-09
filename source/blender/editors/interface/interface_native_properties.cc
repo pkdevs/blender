@@ -1069,7 +1069,11 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     const Candidate candidate = candidates[candidate_index];
     PanelType &pt = *candidate.type;
     if (!pt.draw || (!viewport && !candidate.instance && panel_context != pt.context) ||
-        ((pt.flag & PANEL_TYPE_NO_HEADER) && !pt.label[0]) || !panel_poll(C, &pt)) {
+        /* Header-less Properties panels hold data-block pickers and slots (e.g. a material's
+         * context panel); viewport ones are decorative. */
+        ((pt.flag & PANEL_TYPE_NO_HEADER) && !pt.label[0] && viewport) ||
+        /* Objects are picked in the viewport and hierarchy, not by browsing them by name. */
+        STREQ(pt.idname, "OBJECT_PT_context_object") || !panel_poll(C, &pt)) {
       continue;
     }
     const std::string outer = candidate.parent.empty() ? candidate.id : outer_panels[candidate.parent];
