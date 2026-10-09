@@ -163,12 +163,6 @@ struct PixelNode {
     uv_primitives.pixel_to_position.reinitialize(0);
   }
 
-  void clear_scratch_data()
-  {
-    for (UDIMTilePixels &tile : tiles) {
-      tile.clear_scratch_data();
-    }
-  }
 };
 
 /* -------------------------------------------------------------------- */

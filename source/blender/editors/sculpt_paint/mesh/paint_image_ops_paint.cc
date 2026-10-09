@@ -774,15 +774,6 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
                                this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK;
     Image *image = is_mask_brush ? mode_data->mask_data->image : mode_data->image_data->image;
 
-    const bool use_scratch_data = brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_SMEAR;
-    if (use_scratch_data) {
-      bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
-      bke::pbvh::pixels::PixelData &pixel_data = *pbvh.pixels_;
-      for (bke::pbvh::pixels::PixelNode &node : pixel_data.nodes) {
-        node.clear_scratch_data();
-      }
-    }
-
     WM_event_add_notifier(this->evil_C, NC_OBJECT | ND_DRAW, &ob);
     WM_event_add_notifier(this->evil_C, NC_IMAGE | NA_PAINTING, image);
 
