@@ -49,7 +49,7 @@ final class FakeEngine {
   var shadingShown = false
   var ack: UInt64 = 0
   var hierarchy: [JSON] = []
-  weak var panels: SwiftScenePanels?
+  weak var panels: HarnessPanels?
   var toolGroupChanged: ((UIBarButtonItemGroup?) -> Void)?
   let logURL: URL = {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -267,6 +267,53 @@ final class FakeEngine {
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Panels under test
+ * \{ */
+
+/** What the view controller asks of its panels, answered by both implementations. */
+@MainActor
+protocol HarnessPanels: AnyObject {
+  var inspectorButton: UIBarButtonItem { get }
+  var hierarchyButton: UIBarButtonItem { get }
+  var menuProvider: ((NSDictionary) -> UIMenu?)? { get set }
+  func updateSnapshot(_ snapshot: NSDictionary)
+  func layout(in rect: CGRect)
+  func presentShading(from: UIBarButtonItem, controller: UIViewController)
+  func updateToolSettings(_ settings: NSDictionary?, acknowledgement: NSNumber?) -> UIBarButtonItemGroup?
+}
+
+extension SwiftScenePanels: HarnessPanels {}
+
+/** The UIKit panels, forwarded. */
+@MainActor
+final class UIKitPanels: HarnessPanels {
+  let panels: GHOSTIOSScenePanels
+
+  init(overlay: UIView) {
+    panels = GHOSTIOSScenePanels(overlay: overlay) { name in BlenderIcon.image(name ?? "") }
+  }
+
+  var inspectorButton: UIBarButtonItem { panels.inspectorButton }
+  var hierarchyButton: UIBarButtonItem { panels.hierarchyButton }
+  var menuProvider: ((NSDictionary) -> UIMenu?)? {
+    didSet {
+      let provider = menuProvider
+      panels.menuProvider = { property in provider?((property ?? [:]) as NSDictionary) }
+    }
+  }
+  func updateSnapshot(_ snapshot: NSDictionary) { panels.updateSnapshot(snapshot as? [AnyHashable: Any] ?? [:]) }
+  func layout(in rect: CGRect) { panels.layout(in: rect) }
+  func presentShading(from button: UIBarButtonItem, controller: UIViewController) {
+    panels.presentShading(from: button, controller: controller)
+  }
+  func updateToolSettings(_ settings: NSDictionary?, acknowledgement: NSNumber?) -> UIBarButtonItemGroup? {
+    panels.updateToolSettings(settings as? [AnyHashable: Any] ?? [:], acknowledgement: acknowledgement ?? 0)
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name App
  * \{ */
 
@@ -289,7 +336,7 @@ final class ViewportView: UIView {
 }
 
 final class HarnessController: UIViewController {
-  var panels: SwiftScenePanels!
+  var panels: HarnessPanels!
   let overlay = UIView()
   let scenario = UserDefaults.standard.string(forKey: "scenario") ?? "object"
 
@@ -305,7 +352,12 @@ final class HarnessController: UIViewController {
     view.addSubview(overlay)
     let engine = FakeEngine.shared
     engine.load()
-    panels = SwiftScenePanels(overlay: overlay) { name in BlenderIcon.image(name) }
+    if UserDefaults.standard.bool(forKey: "uikit") {
+      panels = UIKitPanels(overlay: overlay)
+    }
+    else {
+      panels = SwiftScenePanels(overlay: overlay) { name in BlenderIcon.image(name) }
+    }
     panels.menuProvider = { property in
       let title = property["label"] as? String ?? ""
       return UIMenu(title: title, children: [

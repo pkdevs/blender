@@ -96,6 +96,7 @@ final class InspectorStore: ObservableObject {
   var menuProvider: ((NSDictionary) -> UIMenu?)?
   var visible = true
   private var snapshot: JSON?
+  private var shownTab: String?
   private var inspector: JSON?
   private var schema: NSArray?
   private(set) var sequence: UInt64 = 0
@@ -263,12 +264,17 @@ final class InspectorStore: ObservableObject {
     loaded = true
     title = inspector.string("name") ?? "Properties"
     let newObject = inspector.string("id")
+    let replacing = newObject != objectID || sections.isEmpty || inspector.string("tab") != shownTab
     if newObject != objectID {
       objectID = newObject
       generation += 1
     }
+    shownTab = inspector.string("tab")
     let built = buildSections(inspector)
-    withMotion(.smooth(duration: 0.25)) { sections = built }
+    /* Only changes within the same panel animate: a first fill, another object or another tab
+     * replaces the rows at once, so no row waits on an insertion that may never be shown. */
+    if replacing { sections = built }
+    else { withMotion(.smooth(duration: 0.25)) { sections = built } }
     return true
   }
 

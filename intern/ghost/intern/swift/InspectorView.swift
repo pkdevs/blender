@@ -111,7 +111,8 @@ struct InspectorForm: View {
 
   var body: some View {
     ScrollView {
-      LazyVStack(alignment: .leading, spacing: 10) {
+      /* Not lazy: lazy stacks stay empty when they first appear in a hidden, unsized panel. */
+      VStack(alignment: .leading, spacing: 10) {
         ForEach(store.sections) { section in
           SectionView(store: store, section: section)
         }
