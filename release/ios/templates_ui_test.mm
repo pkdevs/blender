@@ -16,7 +16,7 @@ UIView *GHOST_ios_document_window_snapshot() { return nil; }
 namespace blender {
 bool WM_apple_ios_document_open(bContext *, const char *, bool) { return false; }
 bool WM_apple_ios_document_write(bContext *, const char *, bool) { return false; }
-std::string WM_apple_ios_document_template_write(bContext *, const char *, const char *) { return "test"; }
+std::string WM_apple_ios_document_template_write(bContext *, const char *, const char *, std::string &) { return "test"; }
 }
 
 @interface NSObject (TemplateTests)

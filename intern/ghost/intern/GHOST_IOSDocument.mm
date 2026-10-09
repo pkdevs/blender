@@ -16,7 +16,8 @@ namespace blender {
 /* Implemented in wm_files.cc. */
 bool WM_apple_ios_document_open(bContext *C, const char *filepath, bool template_document);
 bool WM_apple_ios_document_write(bContext *C, const char *filepath, bool preview);
-std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview);
+std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview,
+                                               std::string &attribution);
 }  // namespace blender
 
 /**
@@ -237,6 +238,17 @@ NSArray<NSDictionary *> *GHOST_ios_document_templates()
       if (![seed checkResourceIsReachableAndReturnError:nil] ||
           ![image checkResourceIsReachableAndReturnError:nil]) { continue; }
       NSMutableDictionary *entry = [[item mutableCopy] autorelease];
+      NSDictionary *credit = item[@"attribution"];
+      BOOL validCredit = [credit isKindOfClass:NSDictionary.class];
+      if (validCredit) {
+        for (NSString *key in @[@"title", @"author", @"license", @"licenseURL", @"sourceURL", @"changes"]) {
+          if (![credit[key] isKindOfClass:NSString.class] || ![credit[key] length]) {
+            validCredit = NO;
+            break;
+          }
+        }
+      }
+      if (!validCredit) { [entry removeObjectForKey:@"attribution"]; }
       entry[@"url"] = seed;
       entry[@"previewURL"] = image;
       entry[@"personal"] = @([folder.URLByDeletingLastPathComponent isEqual:personal]);
@@ -264,7 +276,7 @@ void GHOST_ios_template_save(NSString *title, NSDictionary *presentation, void (
       @"presentation": @{@"timeline": @([presentation[@"timeline"] boolValue])}} retain];
   void (^done)(NSString *) = [completion copy];
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-    struct Result { std::mutex mutex; std::string error = "Could not save the template."; };
+    struct Result { std::mutex mutex; std::string error = "Could not save the template."; std::string attribution; };
     auto result = std::make_shared<Result>();
     const std::string path = [[folder URLByAppendingPathComponent:@"scene.blend"] path].UTF8String;
     const std::string preview = [[folder URLByAppendingPathComponent:@"preview.png"] path].UTF8String;
@@ -272,13 +284,25 @@ void GHOST_ios_template_save(NSString *title, NSDictionary *presentation, void (
         withIntermediateDirectories:YES attributes:nil error:nil];
     if (success) {
       success = engine_wait([path, preview, result](blender::bContext *C) {
-        std::string error = blender::WM_apple_ios_document_template_write(C, path.c_str(), preview.c_str());
+        std::string credit;
+        std::string error = blender::WM_apple_ios_document_template_write(C, path.c_str(), preview.c_str(), credit);
         std::lock_guard lock(result->mutex);
         result->error = error;
+        result->attribution = credit;
         return error.empty();
       });
     }
-    if (success) { success = writeTemplateManifest(entry, folder); }
+    if (success) {
+      NSMutableDictionary *metadata = [[entry mutableCopy] autorelease];
+      std::string credit;
+      { std::lock_guard lock(result->mutex); credit = result->attribution; }
+      NSData *data = [NSData dataWithBytes:credit.data() length:credit.size()];
+      NSDictionary *attribution = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+      if ([attribution isKindOfClass:NSDictionary.class] && attribution.count) {
+        metadata[@"attribution"] = attribution;
+      }
+      success = writeTemplateManifest(metadata, folder);
+    }
     std::string error;
     { std::lock_guard lock(result->mutex); error = result->error; }
     NSString *message = success ? nil : error.empty() ? @"Could not save the template." :

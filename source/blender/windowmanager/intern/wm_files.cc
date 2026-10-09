@@ -2735,7 +2735,8 @@ bool WM_apple_ios_document_write(bContext *C, const char *filepath, const bool p
   return true;
 }
 
-std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview)
+std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview,
+                                               std::string &attribution)
 {
 #ifdef WITH_PYTHON
   const char *imports[] = {"bpy", "bl_ui", "bl_ui.native_templates", nullptr};
@@ -2746,6 +2747,12 @@ std::string WM_apple_ios_document_template_write(bContext *C, const char *filepa
   const std::string message = error ? error : "";
   if (error) { MEM_delete(error); }
   if (!message.empty()) { return message; }
+  char *credit = nullptr;
+  if (!BPY_run_string_as_string(C, imports, "bl_ui.native_templates.attribution_json()", nullptr, &credit)) {
+    return "Could not preserve the template's asset attribution.";
+  }
+  attribution = credit ? credit : "{}";
+  if (credit) { MEM_delete(credit); }
   /* Save a copy without acknowledging or clearing the open document's unsaved work. */
   if (!wm_document_write(C, filepath, true)) { return "Could not save the template."; }
   ImBuf *image = IMB_thumb_manage(filepath, THB_LARGE, THB_SOURCE_BLEND);

@@ -4,7 +4,31 @@
 
 """Preflight portable document templates without changing the open scene."""
 from pathlib import Path
+import json
 import bpy
+
+
+def attribution_json():
+    """Carry the bundled character's credit through Save as Template as well as duplication."""
+    owners = [bpy.context.scene] + list(bpy.context.scene.objects)
+    invalid_credit = False
+    for owner in owners:
+        if 'asset_attribution' not in owner:
+            continue
+        text = owner.get('asset_attribution')
+        invalid_credit = True
+        if not isinstance(text, str):
+            continue
+        try:
+            credit = json.loads(text)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(credit, dict) and all(isinstance(credit.get(key), str) and credit[key]
+                for key in ('title', 'author', 'license', 'licenseURL', 'sourceURL', 'changes')):
+            return json.dumps(credit, ensure_ascii=True)
+    if invalid_credit:
+        raise ValueError('Repair the asset attribution before saving this template.')
+    return '{}'
 
 
 def export_error():
