@@ -35,7 +35,7 @@ float3 area_axis(float lo, float hi, float physical_size)
                 w2 / (hi - lo));
 }
 
-float4 sample_input([[resource_table]] Resources &srt, float2 uv)
+float4 sample_input(Resources &srt, float2 uv)
 {
   if (srt.virtual_padding) [[static_branch]] {
     /* Emulate bilinear sampling if "virtually" zero-padded input. */
@@ -147,7 +147,6 @@ void compute_main([[resource_table]] Resources &srt,
 
 }  // namespace compositor::downsampled_gaussian::downsampling
 
-#ifndef GLSL_CPP_STUBS
 PipelineCompute compositor_downsampled_gaussian_downsample(
     compositor::downsampled_gaussian::downsampling::compute_main,
     compositor::downsampled_gaussian::downsampling::Resources{.use_4x = false,
@@ -164,4 +163,3 @@ PipelineCompute compositor_downsampled_gaussian_downsample_4x_padded(
     compositor::downsampled_gaussian::downsampling::compute_main,
     compositor::downsampled_gaussian::downsampling::Resources{.use_4x = true,
                                                               .virtual_padding = true});
-#endif
