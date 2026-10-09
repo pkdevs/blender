@@ -29,7 +29,8 @@ BRIDGE = ROOT / "release/ios/swiftui_panels_harness/HarnessBridge.h"
 # The UIKit panels, built in for comparison (`-uikit YES`).
 UIKIT_SOURCES = [ROOT / "intern/ghost/intern/GHOST_IOSScenePanels.mm",
                  ROOT / "intern/ghost/intern/GHOST_IOSNumericInput.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSRedoStrip.mm"]
+                 ROOT / "intern/ghost/intern/GHOST_IOSRedoStrip.mm",
+                 ROOT / "intern/ghost/intern/GHOST_IOSTimeline.mm"]
 HARNESS = ROOT / "release/ios/swiftui_panels_harness/Harness.swift"
 BUNDLE_ID = "org.blender.swiftui-panels-harness"
 
@@ -321,7 +322,9 @@ def fixtures():
                      "MATERIAL": material_tab(), "PHYSICS": physics_tab(),
                      **{tab["id"]: {"name": "Cube", "sections": []} for tab in tab_list()
                         if tab["id"] not in ("OBJECT", "DATA", "MODIFIER", "MATERIAL", "PHYSICS")}},
-            "hierarchy": hierarchy(), "shading": shading(), "tool": tool(), "redo": redo()}
+            "hierarchy": hierarchy(), "shading": shading(), "tool": tool(), "redo": redo(),
+            "timeline": {"frame": 42, "start": 1, "end": 120, "playing": 0, "autokey": 0, "preview": 0,
+                         "keys": [{"f": 1, "s": 0}, {"f": 24, "s": 1}, {"f": 60, "s": 0}, {"f": 96, "s": 0}]}}
 
 
 # --------------------------------------------------------------------
@@ -436,6 +439,11 @@ class SwiftUIPanelsTest(unittest.TestCase):
     def test_redo_strip(self):
         requests = self.scenario("redo", "-scenario", "redo")
         self.assertNotIn("native_redo_edit", [r["setting"] for r in requests])
+
+    def test_timeline(self):
+        for name in ("timeline", "timeline-expanded"):
+            with self.subTest(name=name):
+                self.scenario(name, "-scenario", name)
 
     def test_tool_strip(self):
         self.scenario("tool", "-scenario", "tool")

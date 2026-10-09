@@ -51,6 +51,7 @@ final class FakeEngine {
   var hierarchy: [JSON] = []
   weak var panels: HarnessPanels?
   var redoStrip: NSObject?
+  var timeline: NSObject?
   var toolGroupChanged: ((UIBarButtonItemGroup?) -> Void)?
   let logURL: URL = {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -280,6 +281,9 @@ final class FakeEngine {
       .filter { $0.string("type") == "LIST" }.map { "\($0.string("key") ?? "")=\($0["value"] ?? "")" }
     log(["published": NSNumber(value: ack), "lists": lists])
     panels.updateSnapshot(snapshot as NSDictionary)
+    if let frames = fixtures.dict("timeline") {
+      timeline?.perform(NSSelectorFromString("updateSnapshot:"), with: frames as NSDictionary)
+    }
     if let redo = fixtures.dict("redo") {
       redoStrip?.perform(NSSelectorFromString("updateSnapshot:"), with: redo as NSDictionary)
     }
@@ -364,6 +368,7 @@ final class ViewportView: UIView {
 final class HarnessController: UIViewController {
   var panels: HarnessPanels!
   var redoStrip: NSObject?
+  var timeline: NSObject?
   let overlay = UIView()
   let scenario = UserDefaults.standard.string(forKey: "scenario") ?? "object"
 
@@ -399,6 +404,10 @@ final class HarnessController: UIViewController {
       SwiftRedoStrip(overlay: overlay, icon: { BlenderIcon.image($0) })
     redoStrip = redo
     engine.redoStrip = redo
+    let frames: NSObject = UserDefaults.standard.bool(forKey: "uikit") ?
+      GHOSTIOSTimeline(overlay: overlay) : SwiftTimeline(overlay: overlay)
+    timeline = frames
+    engine.timeline = frames
     if let pill = redo.value(forKey: "collapsedButton") as? UIButton {
       pill.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(pill)
@@ -436,6 +445,10 @@ final class HarnessController: UIViewController {
         showShading(navigationItem.trailingItemGroups.first?.barButtonItems.first as Any)
       case "tool":
         break
+      case "timeline", "timeline-expanded":
+        timeline?.perform(NSSelectorFromString("toggle:"), with: nil)
+        if scenario == "timeline-expanded" { timeline?.perform(NSSelectorFromString("toggleExpanded:"), with: nil) }
+        view.setNeedsLayout()
       case "redo":
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
           (self.redoStrip?.value(forKey: "collapsedButton") as? UIButton)?.sendActions(for: .touchUpInside)
@@ -458,6 +471,9 @@ final class HarnessController: UIViewController {
     super.viewDidLayoutSubviews()
     panels.layout(in: view.bounds.inset(by: view.safeAreaInsets))
     let lane = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 40, dy: 12)
+    let tray = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 120, dy: 16)
+    if let strip = timeline as? SwiftTimeline { strip.layout(in: tray) }
+    else if let strip = timeline as? GHOSTIOSTimeline { strip.layout(in: tray) }
     if let strip = redoStrip as? SwiftRedoStrip { strip.layout(in: lane) }
     else if let strip = redoStrip as? GHOSTIOSRedoStrip { strip.layout(in: lane) }
   }

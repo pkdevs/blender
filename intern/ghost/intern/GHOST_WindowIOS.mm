@@ -5475,7 +5475,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                                     @"route": route},
                                    property[@"menu"]);
   };
-  _timeline = [[GHOSTIOSTimeline alloc] initWithOverlay:_overlay_view];
+  Class timeline_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftTimeline");
+  _timeline = [[(timeline_class ?: GHOSTIOSTimeline.class) alloc] initWithOverlay:_overlay_view];
   __block UIView *timeline_host = self.view;
   /* The bottom tray grows and shrinks; everything resting on it moves with it. */
   void (^relayout_tray)(void) = ^{
