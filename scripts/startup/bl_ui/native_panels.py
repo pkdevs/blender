@@ -409,7 +409,156 @@ class VIEW3D_PT_native_sculpt_settings(bpy.types.Panel):
                 layout.prop(sculpt, "detail_percent", text="Detail", slider=True)
             else:
                 layout.prop(sculpt, "detail_size", text="Detail", slider=True)
-        layout.prop(obj, "use_mesh_mirror_x", text="Mirror X")
+        _draw_mirror(layout, context)
 
 
-classes = (WM_OT_native_panel_edit, VIEW3D_PT_native_sculpt_settings)
+def _draw_mirror(layout, context):
+    """The mode's mirror axes as one row of toggles, as Blender's tool header shows them."""
+    mode = context.mode
+    obj = context.object
+    if obj is None:
+        return
+    if mode in {'EDIT_MESH', 'PAINT_WEIGHT', 'SCULPT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}:
+        owner, props = obj, ("use_mesh_mirror_x", "use_mesh_mirror_y", "use_mesh_mirror_z")
+    elif mode == 'SCULPT_CURVES':
+        owner, props = obj.data, ("use_mirror_x", "use_mirror_y", "use_mirror_z")
+    elif mode == 'EDIT_ARMATURE':
+        owner, props = obj.data, ("use_mirror_x",)
+    elif mode == 'POSE':
+        owner, props = obj.pose, ("use_mirror_x",)
+    else:
+        return
+    row = layout.row(align=True)
+    row.label(text="Mirror")
+    for prop in props:
+        row.prop(owner, prop, text=prop[-1].upper(), toggle=True)
+
+
+class VIEW3D_PT_native_mode_settings(bpy.types.Panel):
+    """Settings of modes without brushes, such as Edit Mode, for the native iPadOS top bar."""
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tool"
+    bl_label = "Mode"
+
+    @classmethod
+    def poll(cls, context):
+        region = context.region
+        return (region is not None and region.type == 'WINDOW' and context.object is not None and
+                context.mode in {'EDIT_MESH', 'EDIT_ARMATURE', 'POSE'})
+
+    def draw(self, context):
+        _draw_mirror(self.layout, context)
+
+
+def _unified_owner(settings, brush, name):
+    ups = getattr(settings, "unified_paint_settings", None)
+    return ups if ups is not None and getattr(ups, "use_unified_" + name, False) else brush
+
+
+# Enum items must stay referenced while Blender shows them.
+_material_items = []
+
+
+def _grease_pencil_material_items(_self, context):
+    global _material_items
+    obj = context.object if context else None
+    items = []
+    for index, slot in enumerate(obj.material_slots if obj else ()):
+        material = slot.material
+        icon = 'MATERIAL'
+        if material:
+            # The material's own swatch, as Blender's material popover shows it.
+            material.preview_ensure()
+            icon = material.preview.icon_id
+        items.append((str(index), material.name if material else "Empty Slot", "", icon, index))
+    _material_items = items or [('0', "No Material", "", 'MATERIAL', 0)]
+    return _material_items
+
+
+def _grease_pencil_material_get(_self):
+    obj = bpy.context.object
+    return obj.active_material_index if obj else 0
+
+
+def _grease_pencil_material_set(_self, value):
+    obj = bpy.context.object
+    if obj and value < len(obj.material_slots):
+        obj.active_material_index = value
+
+
+class VIEW3D_PT_native_brush_settings(bpy.types.Panel):
+    """Key brush settings of the paint modes other than Sculpt for the native iPadOS top bar."""
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tool"
+    bl_label = "Brush"
+
+    @classmethod
+    def register(cls):
+        bpy.types.WindowManager.native_grease_pencil_material = bpy.props.EnumProperty(
+            name="Material",
+            description="Material to draw with, the object's active material",
+            items=_grease_pencil_material_items,
+            get=_grease_pencil_material_get,
+            set=_grease_pencil_material_set,
+        )
+
+    @classmethod
+    def unregister(cls):
+        del bpy.types.WindowManager.native_grease_pencil_material
+
+    @classmethod
+    def poll(cls, context):
+        # As the Sculpt panel, only the native projection draws this, from the main region.
+        from bl_ui.properties_paint_common import UnifiedPaintPanel
+        region = context.region
+        if region is None or region.type != 'WINDOW' or context.mode == 'SCULPT':
+            return False
+        settings = UnifiedPaintPanel.paint_settings(context)
+        return settings is not None and settings.brush is not None
+
+    def draw(self, context):
+        from bl_ui.properties_paint_common import UnifiedPaintPanel
+
+        layout = self.layout
+        mode = context.mode
+        settings = UnifiedPaintPanel.paint_settings(context)
+        brush = settings.brush
+        grease_pencil = mode in {'PAINT_GREASE_PENCIL', 'SCULPT_GREASE_PENCIL',
+                                 'WEIGHT_GREASE_PENCIL', 'VERTEX_GREASE_PENCIL'}
+        draw_type = brush.gpencil_brush_type if mode == 'PAINT_GREASE_PENCIL' else None
+
+        if draw_type != 'FILL':
+            # Grease Pencil drawing sizes its strokes from the brush, as its header does.
+            size_owner = brush if draw_type else _unified_owner(settings, brush, "size")
+            size_prop = "unprojected_size" if size_owner.use_locked_size == 'SCENE' else "size"
+            layout.prop(size_owner, size_prop, text="Size" if grease_pencil else "Radius", slider=True)
+            strength_owner = brush if draw_type else _unified_owner(settings, brush, "strength")
+            layout.prop(strength_owner, "strength", text="Strength", slider=True)
+
+        if draw_type in {'DRAW', 'FILL'}:
+            paint = context.tool_settings.gpencil_paint
+            layout.prop(paint, "color_mode", text="Color Mode", expand=True)
+            if paint.color_mode == 'VERTEXCOLOR':
+                # Strokes take the brush's own color, never the unified one, as in the header.
+                layout.prop(brush, "color", text="Color")
+            else:
+                layout.prop(context.window_manager, "native_grease_pencil_material", text="Material")
+        if draw_type == 'FILL':
+            layout.prop(brush.gpencil_settings, "fill_direction", text="Direction", expand=True)
+        elif draw_type == 'ERASE':
+            layout.prop(brush.gpencil_settings, "eraser_mode", text="Mode", expand=True)
+        elif mode in {'PAINT_VERTEX', 'PAINT_TEXTURE', 'VERTEX_GREASE_PENCIL'} or draw_type == 'TINT':
+            layout.prop(_unified_owner(settings, brush, "color"), "color", text="Color")
+        elif mode in {'PAINT_WEIGHT', 'WEIGHT_GREASE_PENCIL'}:
+            layout.prop(_unified_owner(settings, brush, "weight"), "weight", text="Weight", slider=True)
+        _draw_mirror(layout, context)
+
+
+classes = (
+    WM_OT_native_panel_edit,
+    VIEW3D_PT_native_sculpt_settings,
+    VIEW3D_PT_native_brush_settings,
+    VIEW3D_PT_native_mode_settings,
+)
