@@ -1259,6 +1259,7 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         for (const int scratch_tile_i :
              scratch_tiles_range(image_buffer->x, img_x_start, img_x_end, img_y))
         {
+          PRF_scope(ProfileCategory::Editor)
           const int tile_start = tile_x_offset + tile_img_y * scratch_tile_size;
 
           const Span<float4> color_src = averaged_pixels.slice(run_offset, slice_size);
@@ -1366,6 +1367,7 @@ static void do_apply_blur(const Paint &paint,
     Vector<float4> paint_pixels;
     allocated_tiles.foreach_index(
         [&](const int scratch_tile_i) {
+          PRF_scope_with_name("do_apply_blur_tile_blend", ProfileCategory::Editor);
           const float brush_alpha = blend_settings.brush_alpha;
           const bool is_mix = blend_settings.blend_mode == IMB_BLEND_MIX;
           const IMB_BlendMode blend_mode = blend_settings.blend_mode;
@@ -1373,15 +1375,6 @@ static void do_apply_blur(const Paint &paint,
           const ushort2 scratch_tile_pos = scratch_tile_index_to_xy(scratch_tile_i,
                                                                     image_buffer->x);
           const int2 img_start = int2(scratch_tile_pos) * scratch_tile_size;
-          /*
-          printf("Working on %d -> %d (%d, %d) --> (%d, %d)\n",
-                 tile_data.tile_number,
-                 scratch_tile_i,
-                 scratch_tile_pos.x,
-                 scratch_tile_pos.y,
-                 img_start.x,
-                 img_start.y);
-                 */
 
           Span<float4> scratch_tile_colors = scratch_color_data[scratch_tile_i];
           Span<float> scratch_tile_factors = scratch_factor_data[scratch_tile_i];
@@ -1399,24 +1392,19 @@ static void do_apply_blur(const Paint &paint,
                                   scratch_tile_x;
 
                 const float4 scene_color = image_pixels[img_i];
-#ifdef DEBUG_PIXEL_NODES
-                scene_color = paint_debug_color(scene, img_start.y);
-#endif
-#if 1
                 image_pixels[img_i] = paint_blend_pixel(scratch_tile_colors[scratch_span_i],
                                                         brush_alpha,
                                                         is_mix,
                                                         blend_mode,
                                                         scratch_tile_factors[scratch_span_i],
                                                         scene_color);
-#else
-                image_pixels[img_i] = float4(1, 0, 0, 1);
-#endif
               }
             }
           }
         },
-        exec_mode::grain_size(256));
+        /* TODO: What's the correct grain size here, probably pretty low since we're working on
+           64x64 tiles? */
+        exec_mode::grain_size(8));
   }
 }
 
