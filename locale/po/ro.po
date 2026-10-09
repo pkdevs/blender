@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'c02032f9693d')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
-"PO-Revision-Date: 2026-04-13 10:12+0000\n"
+"POT-Creation-Date: 2026-10-05 07:25+0000\n"
+"PO-Revision-Date: 2026-10-04 17:12+0000\n"
 "Last-Translator: Dominic Iastrebschi <domjotebit@gmail.com>\n"
 "Language-Team: Romanian <https://translate.blender.org/projects/blender-ui/ui/ro/>\n"
 "Language: ro\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2;\n"
-"X-Generator: Weblate 5.16.2"
+"X-Generator: Weblate 2026.6.1"
 
 
 msgid "Shader AOV"
@@ -79,8 +79,24 @@ msgid "F-Curve Groups"
 msgstr "Grupuri de curbele F"
 
 
+msgid "Groupings of F-Curves for display purposes, in e.g. the dopesheet and graph editor"
+msgstr "Grupări de curbe F în scopuri de afișare, de exemplu în dopesheet și în editorul de grafice"
+
+
 msgid "Slot"
 msgstr "Slot"
+
+
+msgid "The Slot that the Channelbag's animation data is for"
+msgstr "Slotul pentru care sunt destinate datele de animație ale Channelbag-ului"
+
+
+msgid "Collection of F-Curves for a specific action slot, on a specific strip"
+msgstr "Colecție de curbe F pentru un slot de acțiune specific, pe o bandă specifică"
+
+
+msgid "Collection of f-curve groups"
+msgstr "Colecție de grupuri de curbe F"
 
 
 msgid "For each action slot, a list of animation channels that are meant for that slot"
@@ -244,7 +260,7 @@ msgstr "Grupul de acțiune este extins cu excepția în editorului de grafice"
 
 
 msgid "Expanded in Graph Editor"
-msgstr "Extins în Editorul de Grafice"
+msgstr "Extins în editorul de grafice"
 
 
 msgid "Action group is expanded in graph editor"
@@ -255,28 +271,56 @@ msgid "Pin in Graph Editor"
 msgstr "Fixare în Editorul de Grafice"
 
 
+msgid "Strips"
+msgstr "Benzi"
+
+
+msgid "The list of strips that are on this animation layer"
+msgstr "Lista benzilor care se află pe acest strat de animație"
+
+
+msgid "Action Layers"
+msgstr "Straturi de acțiune"
+
+
+msgid "Collection of animation layers"
+msgstr "Colecție de straturi de animație"
+
+
 msgid "Action Pose Markers"
-msgstr "Marcatori de poziție de acțiune"
+msgstr "Marcatoare de poziție de acțiune"
 
 
 msgid "Collection of timeline markers"
-msgstr "Colecție de marcatori cronologici"
+msgstr "Colecție de marcatoare cronologici"
 
 
 msgid "Active Pose Marker"
-msgstr "Marcator Poziție Activ"
+msgstr "Marcator de poziție activ"
 
 
 msgid "Active pose marker for this action"
-msgstr "Marcator Poziție Activ pentru această acțiune"
+msgstr "Marcator de poziție activ pentru această acțiune"
 
 
 msgid "Active Pose Marker Index"
-msgstr "Indexul Marcatorului De Poziție Activ"
+msgstr "Indexul marcatorului de poziție activ"
 
 
 msgid "Index of active pose marker"
 msgstr "Indexul marcatorului de poziție activ"
+
+
+msgid "Action slot"
+msgstr "Acțiuni"
+
+
+msgid "Identifier for a set of channels in this Action, that can be used by a data-block to specify what it gets animated by"
+msgstr "Identificator pentru un set de canale din această acțiune, care poate fi utilizat de un bloc de date pentru a specifica elementul care îi generează animația"
+
+
+msgid "Active"
+msgstr "Activ"
 
 
 msgctxt "ID"
@@ -1198,16 +1242,8 @@ msgid "Point"
 msgstr "Punct"
 
 
-msgid "Attribute on point"
-msgstr "Atribut pe punct"
-
-
 msgid "Edge"
 msgstr "Margine"
-
-
-msgid "Attribute on mesh edge"
-msgstr "Atributul pe marginea mesh-ului"
 
 
 msgid "Name of the Attribute"
@@ -1742,6 +1778,14 @@ msgid "Shape Key data-blocks"
 msgstr "Blocurile de date ale Cheilor de Formă"
 
 
+msgid "Blender"
+msgstr "Blender"
+
+
+msgid "Path"
+msgstr "Cale"
+
+
 msgid "Deflectors"
 msgstr "Deflectoare"
 
@@ -1852,10 +1896,6 @@ msgid "Gamma"
 msgstr "Gamma"
 
 
-msgid "View"
-msgstr "Vedere"
-
-
 msgid "Contrast"
 msgstr "Contrast"
 
@@ -1894,6 +1934,10 @@ msgstr "Manipulator Vector"
 
 msgid "Depth"
 msgstr "Adâncime"
+
+
+msgid "View"
+msgstr "Vedere"
 
 
 msgid "Radius"
@@ -2011,10 +2055,6 @@ msgstr "Secvența"
 
 msgid "Up"
 msgstr "Sus"
-
-
-msgid "Path"
-msgstr "Cale"
 
 
 msgid "Min"
@@ -2140,28 +2180,28 @@ msgid "Light"
 msgstr "Lumină"
 
 
-msgid "Add Image"
-msgstr "Adăugare Imagine"
-
-
 msgid "Apply"
 msgstr "Aplicare"
 
 
-msgid "Convert"
-msgstr "Convertire"
+msgid "Tracking"
+msgstr "Urmărire"
 
 
 msgid "UV"
 msgstr "UV"
 
 
+msgid "Convert"
+msgstr "Convertire"
+
+
+msgid "Add Image"
+msgstr "Adăugare Imagine"
+
+
 msgid "Layout"
 msgstr "Aspect"
-
-
-msgid "Tracking"
-msgstr "Urmărire"
 
 
 msgid "Marker"
@@ -2182,10 +2222,6 @@ msgstr "Generare"
 
 msgid "Physics"
 msgstr "Fizică"
-
-
-msgid "Blender"
-msgstr "Blender"
 
 
 msgid "System"
@@ -2508,6 +2544,10 @@ msgid "Paste"
 msgstr "Lipire"
 
 
+msgid "Movie"
+msgstr "Film"
+
+
 msgid "File format"
 msgstr "Format fișier"
 
@@ -2735,6 +2775,10 @@ msgid "Error Message"
 msgstr "Mesaj de Eroare"
 
 
+msgid "Cancel"
+msgstr "Anulare"
+
+
 msgctxt "WindowManager"
 msgid "Window"
 msgstr "Fereastră"
@@ -2743,11 +2787,6 @@ msgstr "Fereastră"
 msgctxt "WindowManager"
 msgid "Object Mode"
 msgstr "Mod Obiect"
-
-
-msgctxt "WindowManager"
-msgid "Generic Tool: Annotate"
-msgstr "Unealtă Generică: Adnotare"
 
 
 msgctxt "WindowManager"
@@ -2785,17 +2824,17 @@ msgid "In"
 msgstr "Intrare"
 
 
+msgctxt "WindowManager"
+msgid "Generic Tool: Annotate"
+msgstr "Unealtă Generică: Adnotare"
+
+
 msgid "Description:"
 msgstr "Descriere:"
 
 
 msgid "File:"
 msgstr "Fișier:"
-
-
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Aplicare"
 
 
 msgctxt "WindowManager"
@@ -3050,8 +3089,8 @@ msgstr "Multi-Pictură"
 
 
 msgctxt "Operator"
-msgid "Quick Edit"
-msgstr "Editare Rapidă"
+msgid "Apply"
+msgstr "Aplicare"
 
 
 msgctxt "Operator"
@@ -3089,10 +3128,6 @@ msgstr "Lipire Driver: niciun driver de lipit"
 
 msgid "Out"
 msgstr "Ieșire"
-
-
-msgid "Cancel"
-msgstr "Anulare"
 
 
 msgid "Cannot paint stroke"
@@ -3201,10 +3236,6 @@ msgstr "Hex"
 
 msgid "OK"
 msgstr "OK"
-
-
-msgid "Movie"
-msgstr "Film"
 
 
 msgid "Delete the active position"

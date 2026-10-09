@@ -14,9 +14,9 @@
 #include "GPU_matrix.hh"
 #undef USE_GPU_PY_MATRIX_API
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -97,7 +97,7 @@ void GPU_matrix_reset()
 #ifdef WITH_GPU_SAFETY
 
 /* Check if matrix is numerically good */
-static void checkmat(cosnt float *m)
+static void checkmat(const float *m)
 {
   const int n = 16;
   for (int i = 0; i < n; i++) {

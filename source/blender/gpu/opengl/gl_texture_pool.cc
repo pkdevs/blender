@@ -6,7 +6,7 @@
  * \ingroup gpu
  */
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "gl_backend.hh"
 #include "gl_texture_pool.hh"
@@ -102,7 +102,7 @@ Texture *GLTexturePool::acquire_texture_impl(int3 extent,
   if (match_index != -1) {
     texture_handle.texture = pool_[match_index].texture;
     pool_.remove_and_reorder(match_index);
-    /* Overide the usage. It doesn't really apply to OpenGL in practice, but `GPU_texture_usage`
+    /* Override the usage. It doesn't really apply to OpenGL in practice, but `GPU_texture_usage`
      * callers may still rely on it. */
     texture_handle.texture->usage_set(usage | GPU_TEXTURE_USAGE_FORMAT_VIEW);
   }
@@ -283,7 +283,7 @@ void GLTexturePool::log_usage_data() const
   int64_t total_texture_count = acquired_.size() + pool_.size();
   CLOG_TRACE(&LOG,
              "GLTexturePool uses %ld textures (%ld consecutively)",
-             static_cast<long>(total_texture_count),
-             static_cast<long>(current_usage_data_.usage_count_max));
+             long(total_texture_count),
+             long(current_usage_data_.usage_count_max));
 }
 }  // namespace blender::gpu
