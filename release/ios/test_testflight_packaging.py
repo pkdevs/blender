@@ -68,6 +68,24 @@ class TestFlightPackagingTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             prepare(self.app, output, {})
 
+    def test_relocates_app_extension_dependencies(self):
+        library = self.lib / 'libExample.1.dylib'
+        self.compile('lib', 'int example(void) { return 42; }', '-dynamiclib',
+                     '-Wl,-install_name,@rpath/libExample.1.dylib', '-o', library)
+        self.compile('app', 'int example(void); int main(void) { return example(); }',
+                     library, '-o', self.app / 'Test')
+        appex = self.app / 'PlugIns/Thumbnailer.appex'
+        appex.mkdir(parents=True)
+        (appex / 'Info.plist').write_bytes(plistlib.dumps({'CFBundleExecutable': 'thumbnailer'}))
+        self.compile('appex', 'int example(void); int main(void) { return example(); }',
+                     library, '-Wl,-rpath,@loader_path/../../Assets/lib', '-o', appex / 'thumbnailer')
+        output = self.root / 'Output.app'
+        prepare(self.app, output, {})
+        extension = output / 'PlugIns/Thumbnailer.appex/thumbnailer'
+        self.assertIn('@rpath/Example.1.framework/Example.1', dependencies(extension))
+        load_commands = subprocess.check_output(['xcrun', 'otool', '-l', str(extension)], text=True)
+        self.assertIn('path @executable_path/../../Frameworks ', load_commands)
+
     def test_rejects_desktop_bundle_modules_without_modifying_source(self):
         self.compile('app', 'int main(void) { return 0; }', '-o', self.app / 'Test')
         self.compile('bundle', 'int example(void) { return 42; }', '-bundle',
