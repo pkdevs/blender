@@ -277,6 +277,7 @@ static void node_register()
   ntype.initfunc = node_init;
   ntype.gather_link_search_ops = node_gather_link_search_ops;
   ntype.draw_buttons = node_layout;
+  ntype.default_width = bke::NodeWidth::_160;
   ntype.geometry_node_execute = node_geo_exec;
   blender::bke::node_register_type(ntype);
 
