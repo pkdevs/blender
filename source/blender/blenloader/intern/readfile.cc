@@ -194,7 +194,11 @@ static CLG_LogRef LOG_UNDO = {"undo"};
 
 /* local prototypes */
 static void read_libraries(FileData *basefd);
-static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const int id_type_index);
+static void *read_struct(FileData *fd,
+                         BHead *bh,
+                         const char *blockname,
+                         const int id_type_index,
+                         int64_t *r_alloc_len = nullptr);
 static BHead *find_bhead_from_code_name(FileData *fd, const short idcode, const char *name);
 
 struct BHeadN {
@@ -258,6 +262,14 @@ static const char *library_parent_filepath(Library *lib)
 struct NewAddress {
   void *newp;
 
+  /**
+   * Size in bytes of the allocation `newp` points to. Tracked for #FileData::datamap entries,
+   * where it is used to sanity-check that blocks read from the file are large enough for what is
+   * being requested from them. Zero for entries where the size is not tracked (e.g.
+   * #FileData::libmap, #FileData::globmap).
+   */
+  int64_t alloc_len;
+
   /** `nr` is "user count" for data, and ID code for libdata. */
   int nr;
 };
@@ -275,13 +287,14 @@ static OldNewMap *oldnewmap_new()
  * \return `true` if the \a oldaddr key has been successfully added to the \a onm, and no existing
  * entry was overwritten.
  */
-static bool oldnewmap_insert(OldNewMap *onm, const void *oldaddr, void *newaddr, const int nr)
+static bool oldnewmap_insert(
+    OldNewMap *onm, const void *oldaddr, void *newaddr, const int nr, const int64_t alloc_len = 0)
 {
   if (oldaddr == nullptr || newaddr == nullptr) {
     return false;
   }
 
-  return onm->map.add_overwrite(oldaddr, NewAddress{newaddr, nr});
+  return onm->map.add_overwrite(oldaddr, NewAddress{newaddr, alloc_len, nr});
 }
 
 static void oldnewmap_lib_insert(FileData *fd, const void *oldaddr, ID *newaddr, const int id_code)
@@ -297,7 +310,10 @@ void blo_do_versions_oldnewmap_insert(OldNewMap *onm,
   oldnewmap_insert(onm, oldaddr, newaddr, nr);
 }
 
-static void *oldnewmap_lookup_and_inc(OldNewMap *onm, const void *addr, const bool increase_users)
+static void *oldnewmap_lookup_and_inc(OldNewMap *onm,
+                                      const void *addr,
+                                      const bool increase_users,
+                                      int64_t *r_alloc_len = nullptr)
 {
   NewAddress *entry = onm->map.lookup_ptr(addr);
   if (entry == nullptr) {
@@ -305,6 +321,9 @@ static void *oldnewmap_lookup_and_inc(OldNewMap *onm, const void *addr, const bo
   }
   if (increase_users) {
     entry->nr++;
+  }
+  if (r_alloc_len) {
+    *r_alloc_len = entry->alloc_len;
   }
   return entry->newp;
 }
@@ -400,7 +419,7 @@ static void split_libdata(ListBaseT<ID> *lb_src,
                           Vector<Main *> &lib_main_array,
                           const bool do_split_packed_ids)
 {
-  for (ID *id = static_cast<ID *>(lb_src->first), *idnext; id; id = idnext) {
+  for (ID *id = lb_src->first(), *idnext; id; id = idnext) {
     idnext = static_cast<ID *>(id->next);
 
     if (id->lib && (do_split_packed_ids || (id->lib->flag & LIBRARY_FLAG_IS_ARCHIVE) == 0)) {
@@ -442,7 +461,7 @@ void blo_split_main(Main *bmain, const bool do_split_packed_ids)
 
   int i = 0;
   int lib_index = 0;
-  for (Library *lib = static_cast<Library *>(bmain->libraries.first); lib;
+  for (Library *lib = bmain->libraries.first(); lib;
        lib = static_cast<Library *>(lib->id.next), i++)
   {
     if (!do_split_packed_ids && (lib->flag & LIBRARY_FLAG_IS_ARCHIVE) != 0) {
@@ -466,7 +485,7 @@ void blo_split_main(Main *bmain, const bool do_split_packed_ids)
   MainListsArray lbarray = BKE_main_lists_get(*bmain);
   i = lbarray.size();
   while (i--) {
-    ID *id = static_cast<ID *>(lbarray[i]->first);
+    ID *id = lbarray[i]->first();
     if (id == nullptr || id->id_type() == ID_LI) {
       /* No ID_LI data-block should ever be linked anyway, but just in case, better be explicit. */
       continue;
@@ -681,7 +700,7 @@ BHead *blo_bhead_first(FileData *fd)
   /* Rewind the file
    * Read in a new block if necessary
    */
-  new_bhead = static_cast<BHeadN *>(fd->bhead_list.first);
+  new_bhead = fd->bhead_list.first();
   if (new_bhead == nullptr) {
     new_bhead = get_bhead(fd);
   }
@@ -1459,15 +1478,15 @@ short BLO_version_from_file(const char *filepath)
  * \{ */
 
 /* Only direct data-blocks. */
-static void *newdataadr(FileData *fd, const void *adr)
+static void *newdataadr(FileData *fd, const void *adr, int64_t *r_alloc_len = nullptr)
 {
-  return oldnewmap_lookup_and_inc(fd->datamap, adr, true);
+  return oldnewmap_lookup_and_inc(fd->datamap, adr, true, r_alloc_len);
 }
 
 /* Only direct data-blocks. */
-static void *newdataadr_no_us(FileData *fd, const void *adr)
+static void *newdataadr_no_us(FileData *fd, const void *adr, int64_t *r_alloc_len = nullptr)
 {
-  return oldnewmap_lookup_and_inc(fd->datamap, adr, false);
+  return oldnewmap_lookup_and_inc(fd->datamap, adr, false, r_alloc_len);
 }
 
 void *blo_read_get_new_globaldata_address(FileData *fd, const void *adr)
@@ -1529,7 +1548,9 @@ static FileData *change_ID_link_filedata_get(Main *bmain, FileData *basefd)
   return basefd;
 }
 
-static void change_link_placeholder_to_real_ID_pointer(FileData *basefd, void *old, void *newp)
+static void change_link_placeholder_to_real_ID_pointer(FileData *basefd,
+                                                       const void *old,
+                                                       void *newp)
 {
   for (Main *mainptr : *basefd->bmain->split_mains) {
     FileData *fd = change_ID_link_filedata_get(mainptr, basefd);
@@ -1539,7 +1560,7 @@ static void change_link_placeholder_to_real_ID_pointer(FileData *basefd, void *o
   }
 }
 
-static void change_ID_pointer_to_real_ID_pointer(FileData *basefd, void *old, void *newp)
+static void change_ID_pointer_to_real_ID_pointer(FileData *basefd, const void *old, void *newp)
 {
   for (Main *mainptr : *basefd->bmain->split_mains) {
     FileData *fd = change_ID_link_filedata_get(mainptr, basefd);
@@ -1662,7 +1683,7 @@ void blo_cache_storage_init(FileData *fd, Main *bmain)
 
     ListBaseT<ID> *lb;
     FOREACH_MAIN_LISTBASE_BEGIN (bmain, lb) {
-      ID *id = static_cast<ID *>(lb->first);
+      ID *id = lb->first();
       if (id == nullptr) {
         continue;
       }
@@ -1692,7 +1713,7 @@ void blo_cache_storage_old_bmain_clear(FileData *fd, Main *bmain_old)
   if (fd->cache_storage != nullptr) {
     ListBaseT<ID> *lb;
     FOREACH_MAIN_LISTBASE_BEGIN (bmain_old, lb) {
-      ID *id = static_cast<ID *>(lb->first);
+      ID *id = lb->first();
       if (id == nullptr) {
         continue;
       }
@@ -1812,7 +1833,8 @@ static const char *get_alloc_name(FileData *fd,
 #endif
 }
 
-static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const int id_type_index)
+static void *read_struct(
+    FileData *fd, BHead *bh, const char *blockname, const int id_type_index, int64_t *r_alloc_len)
 {
   void *temp = nullptr;
 
@@ -1875,7 +1897,7 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
         }
 #endif
         temp = DNA_struct_reconstruct(
-            fd->reconstruct_info, bh->SDNAnr, bh->nr, (bh + 1), alloc_name);
+            fd->reconstruct_info, bh->SDNAnr, bh->nr, (bh + 1), alloc_name, r_alloc_len);
       }
       else {
         /* SDNA_CMP_EQUAL */
@@ -1897,6 +1919,9 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
 #else
         memcpy(temp, (bh + 1), bh->len);
 #endif
+        if (r_alloc_len && temp) {
+          *r_alloc_len = bh->len;
+        }
       }
     }
 
@@ -1947,13 +1972,13 @@ static void link_glob_list(FileData *fd, ListBase *lb) /* for glob data */
   if (BLI_listbase_is_empty(lb)) {
     return;
   }
-  poin = newdataadr(fd, lb->first);
-  if (lb->first) {
-    oldnewmap_insert(fd->globmap, lb->first, poin, 0);
+  poin = newdataadr(fd, lb->first_);
+  if (lb->first_) {
+    oldnewmap_insert(fd->globmap, lb->first_, poin, 0);
   }
-  lb->first = poin;
+  lb->first_ = poin;
 
-  ln = static_cast<Link *>(lb->first);
+  ln = static_cast<Link *>(lb->first_);
   prev = nullptr;
   while (ln) {
     poin = newdataadr(fd, ln->next);
@@ -1965,7 +1990,7 @@ static void link_glob_list(FileData *fd, ListBase *lb) /* for glob data */
     prev = ln;
     ln = ln->next;
   }
-  lb->last = prev;
+  lb->last_ = prev;
 }
 
 /** \} */
@@ -2458,7 +2483,6 @@ static void lib_link_scenes_check_set(Main *bmain)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-
 /** \name Read ID: Library
  * \{ */
 
@@ -2482,9 +2506,12 @@ static void library_filedata_release(Library *lib)
  *
  * - If `lib` is `nullptr`, create a new Library ID, otherwise only create a new Main for the given
  * library.
+ *   - If a new library is created, and `bheadlib` is not `nullptr`, add a remapping from this
+ *     `BHead::old` value to the newly created Library.
  * - `reference_lib` is the 'archive parent' of an archive (packed) library, can be null and will
  * be ignored otherwise. */
 static Main *blo_add_main_for_library(FileData *fd,
+                                      const BHead *bheadlib,
                                       Library *lib,
                                       Library *reference_lib,
                                       const char *lib_filepath,
@@ -2502,6 +2529,11 @@ static Main *blo_add_main_for_library(FileData *fd,
     lib = BKE_id_new<Library>(fd->bmain,
                               reference_lib ? BKE_id_name(reference_lib->id) :
                                               BLI_path_basename(lib_filepath));
+    /* When a lib ID is created based on data from a BHead, ensure that this library BHead's old
+     * pointer value is remapped to the actual new library. */
+    if (bheadlib) {
+      change_ID_pointer_to_real_ID_pointer(fd, bheadlib->old, lib);
+    }
 
     /* Important, consistency with main ID reading code from read_libblock(). */
     lib->id.us = ID_FAKE_USERS(lib);
@@ -2512,16 +2544,16 @@ static Main *blo_add_main_for_library(FileData *fd,
     STRNCPY(lib->filepath, lib_filepath);
     STRNCPY(lib->runtime->filepath_abs, filepath_abs);
 
+    if (is_external_lib) {
+      lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
+    }
+
     if (is_packed_library) {
       /* FIXME: This logic is very similar to the code in BKE_library dealing with archived
        * libraries (e.g. #add_archive_library). Might be good to try to factorize it. */
       lib->archive_parent_library = reference_lib;
       constexpr uint16_t copy_flag = ~LIBRARY_FLAG_IS_ARCHIVE;
       lib->flag = (reference_lib->flag & copy_flag) | LIBRARY_FLAG_IS_ARCHIVE;
-
-      if (is_external_lib) {
-        lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
-      }
 
       lib->runtime->parent = reference_lib->runtime->parent;
       /* Only copy a subset of the reference library tags. E.g. an archive library should never be
@@ -2633,8 +2665,15 @@ static void direct_link_library(FileData *fd, Library *lib, Main *main)
                        lib->filepath,
                        lib->runtime->filepath_abs);
 
-      Main *parent_lib_bmain = blo_add_main_for_library(
-          fd, nullptr, nullptr, lib->filepath, lib->runtime->filepath_abs, false, false);
+      Main *parent_lib_bmain = blo_add_main_for_library(fd,
+                                                        nullptr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        lib->filepath,
+                                                        lib->runtime->filepath_abs,
+                                                        false,
+                                                        (lib->flag & LIBRARY_FLAG_IS_EXTERNAL) !=
+                                                            0);
       parent_lib = parent_lib_bmain->curlib;
       BLI_assert(parent_lib);
       oldnewmap_lib_insert(fd, lib->archive_parent_library, &parent_lib->id, ID_LI);
@@ -2824,9 +2863,10 @@ static BHead *read_data_into_datamap(FileData *fd,
   bhead = blo_bhead_next(fd, bhead);
 
   while (bhead && bhead->code == BLO_CODE_DATA) {
-    void *data = read_struct(fd, bhead, allocname, id_type_index);
+    int64_t alloc_len = 0;
+    void *data = read_struct(fd, bhead, allocname, id_type_index, &alloc_len);
     if (data) {
-      const bool is_new = oldnewmap_insert(fd->datamap, bhead->old, data, 0);
+      const bool is_new = oldnewmap_insert(fd->datamap, bhead->old, data, 0, alloc_len);
       if (!is_new) {
         CLOG_ERROR(&LOG,
                    "Blendfile corruption: Invalid, or multiple `bhead` with same old address "
@@ -2882,7 +2922,7 @@ static void read_undo_tag_all_noundo_ids(FileData *fd)
         continue;
       }
 
-      ID *id = static_cast<ID *>(lbarray[i]->first);
+      ID *id = lbarray[i]->first();
       const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
       if ((id_type->flags & IDTYPE_FLAGS_NO_MEMFILE_UNDO) == 0) {
         continue;
@@ -2959,7 +2999,7 @@ static void read_undo_reuse_noundo_local_ids(FileData *fd)
     }
 
     /* Only move 'noundo' local IDs. */
-    ID *id = static_cast<ID *>(lbarray[i]->first);
+    ID *id = lbarray[i]->first();
     const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
     if ((id_type->flags & IDTYPE_FLAGS_NO_MEMFILE_UNDO) == 0) {
       continue;
@@ -3271,6 +3311,7 @@ static void read_libblock_undo_restore_identical(
        * needs to be created to contain its packed IDs. */
       const bool is_external_lib = lib->flag & LIBRARY_FLAG_IS_EXTERNAL;
       blo_add_main_for_library(fd,
+                               nullptr,
                                lib,
                                lib->archive_parent_library,
                                lib->filepath,
@@ -3715,7 +3756,7 @@ static void link_global(FileData *fd, BlendFileData *bfd)
     }
   }
   if (bfd->curscene == nullptr) {
-    bfd->curscene = static_cast<Scene *>(bfd->main->scenes.first);
+    bfd->curscene = bfd->main->scenes.first();
   }
 }
 
@@ -3807,31 +3848,31 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
     blo_do_versions_400(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_410(fd, lib, main);
+    blo_do_versions_401(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_420(fd, lib, main);
+    blo_do_versions_402(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_430(fd, lib, main);
+    blo_do_versions_403(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_440(fd, lib, main);
+    blo_do_versions_404(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_450(fd, lib, main);
+    blo_do_versions_405(fd, lib, main);
   }
   if (!main->is_read_invalid) {
     blo_do_versions_500(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_510(fd, lib, main);
+    blo_do_versions_501(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_520(fd, lib, main);
+    blo_do_versions_502(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_530(fd, lib, main);
+    blo_do_versions_503(fd, lib, main);
   }
 
   /* WATCH IT!!!: pointers from libdata have not been converted yet here! */
@@ -3878,31 +3919,31 @@ static void do_versions_after_linking(FileData *fd, Main *main)
     do_versions_after_linking_400(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_410(fd, main);
+    do_versions_after_linking_401(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_420(fd, main);
+    do_versions_after_linking_402(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_430(fd, main);
+    do_versions_after_linking_403(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_440(fd, main);
+    do_versions_after_linking_404(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_450(fd, main);
+    do_versions_after_linking_405(fd, main);
   }
   if (!main->is_read_invalid) {
     do_versions_after_linking_500(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_510(fd, main);
+    do_versions_after_linking_501(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_520(fd, main);
+    do_versions_after_linking_502(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_530(fd, main);
+    do_versions_after_linking_503(fd, main);
   }
 
   main->is_locked_for_linking = false;
@@ -4152,7 +4193,7 @@ static BHead *read_userdef(BlendFileData *bfd, FileData *fd, BHead *bhead)
   }
 
   /* XXX */
-  user->uifonts.first = user->uifonts.last = nullptr;
+  user->uifonts.first_ = user->uifonts.last_ = nullptr;
 
   BLO_read_struct_list(reader, uiStyle, &user->uistyles);
 
@@ -4879,10 +4920,17 @@ struct BlendExpander {
 /* Find the existing Main matching the given blendfile library filepath, or create a new one (with
  * the matching Library ID) if needed.
  *
+ * If there is a known BHead referencing/source for this library, it should be passed as
+ * `bheadlib`. This allows the code to generate the correct remapping for this BHead::old pointer.
+ * This is not critical currently, but once libraries are actually 'used' like other IDs, this
+ * become necessary to ensure these usages are properly 'remapped' to the new data on read (e.g.
+ * for upcoming changes to `CollectionImport`).
+ *
  * NOTE: The process is a bit more complex for packed linked IDs and their archive libraries, as
  * in this case, this function also needs to find or create a new suitable archive library, i.e.
  * one which does not contain yet the given ID (from its name & type). */
 static Main *blo_find_main_for_library_and_idname(FileData *fd,
+                                                  const BHead *bheadlib,
                                                   const char *lib_filepath,
                                                   const char *relabase,
                                                   const BHead *id_bhead,
@@ -4934,7 +4982,8 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
           /* Archive Main library already contains a 'same' ID - but it should have a different
            * deep_hash. Otherwise, a previous call to `library_id_is_yet_read()` should have
            * returned this ID, and this code should not be reached. */
-          BLI_assert(packed_id->deep_hash != *blo_bhead_id_deep_hash(fd, id_bhead));
+          BLI_assert((packed_id->lib->flag & LIBRARY_FLAG_IS_EXTERNAL) ||
+                     packed_id->deep_hash != *blo_bhead_id_deep_hash(fd, id_bhead));
           UNUSED_VARS_NDEBUG(packed_id, id_bhead);
           continue;
         }
@@ -4987,7 +5036,7 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
       /* An archive library requires an existing parent library, create an empty, 'virtual' one if
        * needed. */
       Main *reference_bmain = blo_add_main_for_library(
-          fd, nullptr, nullptr, lib_filepath, filepath_abs, false, false);
+          fd, bheadlib, nullptr, nullptr, lib_filepath, filepath_abs, false, is_external_lib);
       parent_lib = reference_bmain->curlib;
       CLOG_DEBUG(&LOG,
                  "Added new parent library '%s' for file path '%s'",
@@ -4997,8 +5046,14 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
   }
   BLI_assert(parent_lib || !is_packed_id);
 
-  Main *bmain = blo_add_main_for_library(
-      fd, nullptr, parent_lib, lib_filepath, filepath_abs, is_packed_id, is_external_lib);
+  Main *bmain = blo_add_main_for_library(fd,
+                                         bheadlib,
+                                         nullptr,
+                                         parent_lib,
+                                         lib_filepath,
+                                         filepath_abs,
+                                         is_packed_id,
+                                         is_external_lib);
 
   read_file_version_and_colorspace(fd, bmain);
 
@@ -5131,7 +5186,62 @@ static void expand_doit_library(void *fdhandle,
                  "A link placeholder ID (aka reference to some ID linked from another library) "
                  "should never be packed.");
 
-  if (bhead->code == ID_LINK_PLACEHOLDER) {
+  if (bhead->code == ID_LI) {
+    /* Currently, we do no support expanding library usages/pointers in linked IDs.
+     * This can happen e.g. with some data-block custom property referencing a library, or when
+     * linking a collection import referencing its external archive library.
+     *
+     * This is a dangerous thing to try in general, as unlike almost any other ID types, libraries
+     * are more of a runtime ID than anything (they are always local, only written on disk as file
+     * reference & namespace, and are deduplicated on load - such that if a same library is used by
+     * several other dependencies, there is still only one ID for it in the final Main).
+     *
+     * Supporting expanding of non-archive library should be fairly straightforward (based on their
+     * absolute filepath), whether they are regular blendfile ones, new or external ones.
+     *
+     * Supporting expanding of archive libraries however is significantly more complex:
+     *   - Archive libraries for packed data are essentially purely runtime data. They are only
+     *     used as name-space, and there is not even any guarantee that packed IDs end up in the
+     *     same archive library name-space, depending on linking order etc.
+     *   - External archive libraries are more of an actual 'real container', their IDs are not
+     *     expected to move between them, even after a save & reload cycle. So we _could_ assign
+     *     some form of unique identifier to them, maybe abusing the 'deep hash' of packed IDs for
+     *     that (since libraries themselves are never packed)... not convinced that this would be
+     *     worth the complexity though.
+     *
+     * Note: Commented below is some initial attempt at supporting library expanding, not working
+     * with archive ones though.
+     */
+    return;
+#if 0
+    if (library_id_is_yet_read(fd, mainvar, bhead)) {
+      return;
+    }
+
+    Library *lib = reinterpret_cast<Library *>(
+        read_id_struct(fd, bhead, "Data for Library ID type", INDEX_ID_NULL));
+    if (lib->flag & LIBRARY_FLAG_IS_ARCHIVE) {
+      BLI_assert_unreachable();
+      MEM_delete(lib);
+      return;
+    }
+    const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
+
+    Main *libmain = blo_find_main_for_library_and_idname(
+        fd, bhead, lib->filepath, fd->relabase, nullptr, nullptr, false, is_external_lib);
+    MEM_delete(lib);
+
+    if (libmain->curlib == nullptr) {
+      BLO_reportf_wrap(fd->reports,
+                       RPT_WARNING,
+                       RPT_("LIB: Data refers to main .blend file: '%s' from %s"),
+                       id_name ? id_name : "<InvalidIDName>",
+                       mainvar->curlib->runtime->filepath_abs);
+      return;
+    }
+#endif
+  }
+  else if (bhead->code == ID_LINK_PLACEHOLDER) {
     /* Placeholder link to data-block in another library. */
     BHead *bheadlib = find_previous_lib(fd, bhead);
     if (bheadlib == nullptr) {
@@ -5146,8 +5256,19 @@ static void expand_doit_library(void *fdhandle,
 
     Library *lib = reinterpret_cast<Library *>(
         read_id_struct(fd, bheadlib, "Data for Library ID type", INDEX_ID_NULL));
+    const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
+    if (is_external_lib) {
+      CLOG_WARN(&LOG,
+                "External libraries are not supported for link/append. ID '%s' belongs to "
+                "external archive '%s'",
+                id_name ? id_name : "<InvalidIDName>",
+                lib->filepath);
+      MEM_delete(lib);
+      return;
+    }
+
     Main *libmain = blo_find_main_for_library_and_idname(
-        fd, lib->filepath, fd->relabase, nullptr, nullptr, false, false);
+        fd, bheadlib, lib->filepath, fd->relabase, nullptr, nullptr, false, is_external_lib);
     MEM_delete(lib);
 
     if (libmain->curlib == nullptr) {
@@ -5188,9 +5309,18 @@ static void expand_doit_library(void *fdhandle,
     Library *lib = reinterpret_cast<Library *>(
         read_id_struct(fd, bheadlib, "Data for Library ID type", INDEX_ID_NULL));
     const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
+    if (is_external_lib) {
+      CLOG_WARN(&LOG,
+                "External libraries are not supported for link/append. ID '%s' belongs to "
+                "external archive '%s'",
+                id_name ? id_name : "<InvalidIDName>",
+                lib->filepath);
+      MEM_delete(lib);
+      return;
+    }
 
     Main *libmain = blo_find_main_for_library_and_idname(
-        fd, lib->filepath, fd->relabase, bhead, id_name, is_packed_id, is_external_lib);
+        fd, bheadlib, lib->filepath, fd->relabase, bhead, id_name, is_packed_id, is_external_lib);
     MEM_delete(lib);
 
     if (libmain->curlib == nullptr) {
@@ -5409,7 +5539,7 @@ static Main *library_link_begin(Main *mainvar,
   /* Find or create a Main matching the current library filepath. */
   /* Note: Directly linking packed IDs is not supported currently. */
   mainl = blo_find_main_for_library_and_idname(
-      fd, filepath, BKE_main_blendfile_path(mainvar), nullptr, nullptr, false, false);
+      fd, nullptr, filepath, BKE_main_blendfile_path(mainvar), nullptr, nullptr, false, false);
   fd->fd_bmain = mainl;
   if (mainl->curlib) {
     mainl->curlib->runtime->filedata = fd;
@@ -5667,7 +5797,7 @@ static void read_library_linked_id(
     FileData *basefd, FileData *fd, Main *mainvar, ID *id, ID **r_id)
 {
   BHead *bhead = nullptr;
-  BLI_assert_msg(!ID_IS_PACKED(id), "Packed IDs should never take this codepath.");
+  BLI_assert_msg(!ID_IS_PACKED(id), "Packed IDs should never take this code-path.");
   const bool is_valid = BKE_idtype_idcode_is_linkable(id->id_type()) ||
                         ((id->tag & ID_TAG_EXTERN) == 0);
 
@@ -5727,7 +5857,7 @@ static void read_library_linked_ids(FileData *basefd, FileData *fd, Main *mainva
   MainListsArray lbarray = BKE_main_lists_get(*mainvar);
   int a = lbarray.size();
   while (a--) {
-    ID *id = static_cast<ID *>(lbarray[a]->first);
+    ID *id = lbarray[a]->first();
 
     while (id) {
       ID *id_next = static_cast<ID *>(id->next);
@@ -5808,7 +5938,7 @@ static void read_library_clear_weak_links(FileData *basefd, Main *mainvar)
   MainListsArray lbarray = BKE_main_lists_get(*mainvar);
   int a = lbarray.size();
   while (a--) {
-    ID *id = static_cast<ID *>(lbarray[a]->first);
+    ID *id = lbarray[a]->first();
 
     while (id) {
       ID *id_next = static_cast<ID *>(id->next);
@@ -6040,12 +6170,15 @@ static void read_libraries(FileData *basefd)
 static void *blo_verify_data_address(FileData *fd,
                                      void *new_address,
                                      const void * /*old_address*/,
+                                     const int64_t alloc_len,
                                      const size_t expected_size)
 {
   if (new_address != nullptr) {
     /* Not testing equality, since size might have been aligned up,
-     * or might be passed the size of a base struct with inheritance. */
-    if (MEM_allocN_len(new_address) < expected_size) {
+     * or might be passed the size of a base struct with inheritance.
+     *
+     * Note we cast to size_t so integer overflow will fail the check. */
+    if (size_t(alloc_len) < expected_size) {
       blo_readfile_invalidate(fd,
                               (*fd->bmain->split_mains)[fd->bmain->split_mains->size() - 1],
                               "Corrupt .blend file, unexpected data size.");
@@ -6070,16 +6203,18 @@ void *blo_read_struct_impl(BlendDataReader *reader,
                            const void *old_address,
                            const size_t expected_size)
 {
-  void *new_address = newdataadr(reader->fd, old_address);
-  return blo_verify_data_address(reader->fd, new_address, old_address, expected_size);
+  int64_t alloc_len = 0;
+  void *new_address = newdataadr(reader->fd, old_address, &alloc_len);
+  return blo_verify_data_address(reader->fd, new_address, old_address, alloc_len, expected_size);
 }
 
 void *blo_read_struct_no_us_impl(BlendDataReader *reader,
                                  const void *old_address,
                                  const size_t expected_size)
 {
-  void *new_address = newdataadr_no_us(reader->fd, old_address);
-  return blo_verify_data_address(reader->fd, new_address, old_address, expected_size);
+  int64_t alloc_len = 0;
+  void *new_address = newdataadr_no_us(reader->fd, old_address, &alloc_len);
+  return blo_verify_data_address(reader->fd, new_address, old_address, alloc_len, expected_size);
 }
 
 static void *blo_check_data_address_nonnull(FileData *fd,
@@ -6132,13 +6267,14 @@ bool blo_read_array_impl(BlendDataReader *reader,
     return false;
   }
 
-  void *new_address = newdataadr(reader->fd, *ptr_p);
+  int64_t alloc_len = 0;
+  void *new_address = newdataadr(reader->fd, *ptr_p, &alloc_len);
   if (new_address == nullptr) {
     *ptr_p = nullptr;
     return total_elems == 0;
   }
   if (elem_size > 0) {
-    const int64_t max_array_size = int64_t(MEM_allocN_len(new_address) / elem_size);
+    const int64_t max_array_size = alloc_len / int64_t(elem_size);
     if (total_elems > max_array_size) {
       blo_readfile_invalidate(
           reader->fd,
@@ -6191,8 +6327,8 @@ void BLO_read_struct_list_with_size(BlendDataReader *reader,
     return;
   }
 
-  list->first = blo_read_struct_impl(reader, list->first, expected_elem_size);
-  Link *ln = static_cast<Link *>(list->first);
+  list->first_ = blo_read_struct_impl(reader, list->first_, expected_elem_size);
+  Link *ln = static_cast<Link *>(list->first_);
   Link *prev = nullptr;
   while (ln) {
     ln->next = static_cast<Link *>(blo_read_struct_impl(reader, ln->next, expected_elem_size));
@@ -6200,18 +6336,19 @@ void BLO_read_struct_list_with_size(BlendDataReader *reader,
     prev = ln;
     ln = ln->next;
   }
-  list->last = prev;
+  list->last_ = prev;
 }
 
 void BLO_read_string(BlendDataReader *reader, char **ptr_p)
 {
-  BLO_read_raw_address(reader, ptr_p);
-
 #ifndef NDEBUG
+  int64_t alloc_len = 0;
+  *ptr_p = static_cast<char *>(newdataadr(reader->fd, *ptr_p, &alloc_len));
+
   const char *str = *ptr_p;
   if (str) {
     /* Verify that we have a null terminator. */
-    for (size_t len = MEM_allocN_len(str); len > 0; len--) {
+    for (int64_t len = alloc_len; len > 0; len--) {
       if (str[len - 1] == '\0') {
         return;
       }
@@ -6219,6 +6356,8 @@ void BLO_read_string(BlendDataReader *reader, char **ptr_p)
 
     BLI_assert_msg(0, "Corrupt .blend file, expected string to be null terminated.");
   }
+#else
+  BLO_read_raw_address(reader, ptr_p);
 #endif
 }
 
@@ -6268,7 +6407,8 @@ bool blo_read_pointer_array_impl(BlendDataReader *reader, const int64_t array_si
     return false;
   }
 
-  void *orig_array = newdataadr(fd, *ptr_p);
+  int64_t alloc_len = 0;
+  void *orig_array = newdataadr(fd, *ptr_p, &alloc_len);
   if (orig_array == nullptr) {
     /* See comment in #blo_read_array_impl. */
     *ptr_p = nullptr;
@@ -6278,7 +6418,7 @@ bool blo_read_pointer_array_impl(BlendDataReader *reader, const int64_t array_si
   const int file_pointer_size = fd->filesdna->pointer_size;
   const int current_pointer_size = fd->memsdna->pointer_size;
 
-  const int64_t max_array_size = int64_t(MEM_allocN_len(orig_array)) / file_pointer_size;
+  const int64_t max_array_size = alloc_len / file_pointer_size;
   if (array_size > max_array_size) {
     blo_readfile_invalidate(fd,
                             (*fd->bmain->split_mains)[fd->bmain->split_mains->size() - 1],

@@ -209,6 +209,9 @@ void VKTexture::read_sub(
   TransferRegion full_transfer_region({offset, extent, layers});
   const VkDeviceSize sample_bytesize = to_bytesize(device_format_);
   const VkDeviceSize host_sample_bytesize = to_bytesize(format_, format);
+  /* For a texture view the raw bytes are reinterpretable with the base format but must be read
+   * back as the view (#format_) for them to be numerically correct. */
+  const TextureFormat data_storage_format = is_texture_view() ? format_ : device_format_;
   const uint64_t x_bytesize = sample_bytesize * extent.x;
   const uint64_t xy_bytesize = x_bytesize * extent.y;
   const uint64_t xyz_bytesize = xy_bytesize * extent.z;
@@ -326,7 +329,7 @@ void VKTexture::read_sub(
                            sample_len,
                            format,
                            format_,
-                           device_format_);
+                           data_storage_format);
   }
 }
 
@@ -710,7 +713,20 @@ bool VKTexture::allocate()
   image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   image_info.usage = to_vk_image_usage(
       gpu_image_usage_flags_, format_flag_, allow_host_image_copy_);
+  vk_image_usage_ = image_info.usage;
   image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+
+  /* When this texture will be used with multiple formats, we need to provide them up front. */
+  VkFormat view_formats[2];
+  VkImageFormatListCreateInfo format_list_info = {VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO};
+  if (vk_need_extended_usage_for_storage_image(texture_usage, format_flag_)) {
+    view_formats[0] = image_info.format;
+    view_formats[1] = vk_extended_usage_storage_image_format(image_info.format);
+    format_list_info.viewFormatCount = 2;
+    format_list_info.pViewFormats = view_formats;
+    format_list_info.pNext = image_info.pNext;
+    image_info.pNext = &format_list_info;
+  }
 
   VkResult result;
   if (G.debug & G_DEBUG_GPU) {
@@ -736,6 +752,7 @@ bool VKTexture::allocate()
   allocCreateInfo.priority = memory_priority(texture_usage);
 
   if (bool(texture_usage & GPU_TEXTURE_USAGE_MEMORY_EXPORT)) {
+    external_memory_create_info.pNext = image_info.pNext;
     image_info.pNext = &external_memory_create_info;
     external_memory_create_info.handleTypes = vk_external_memory_handle_type();
     allocCreateInfo.pool = device.vma_pools.external_memory_image.pool;
@@ -805,6 +822,11 @@ const VKImageView &VKTexture::image_view_get(VKImageViewArrayed arrayed, VKImage
     vk_format = to_vk_format(format_);
   }
 
+  /* For binding as a storage image, we may need to switch to another format. */
+  if (flag_is_set(flags, VKImageViewFlags::FOR_STORAGE_IMAGE)) {
+    vk_format = vk_extended_usage_storage_image_format(vk_format);
+  }
+
   VKImageViewInfo image_view_info = {eImageViewUsage::ShaderBinding,
                                      layer_range(),
                                      mip_map_range(),
@@ -830,7 +852,5 @@ const VKImageView &VKTexture::image_view_get(VKImageViewArrayed arrayed, VKImage
   }
   return image_view_get(image_view_info);
 }
-
-/** \} */
 
 }  // namespace blender::gpu
