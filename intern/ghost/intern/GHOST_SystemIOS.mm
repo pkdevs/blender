@@ -403,6 +403,12 @@ void GHOST_ios_unregister_window(UIWindow *window)
                                            selector:@selector(sceneInactive:)
                                                name:@"BlenderSceneInactive"
                                              object:nil];
+    /* The window may only come forward later, over the document launcher, after the scene became
+     * active: drawing resumes then too. */
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(windowBecameKey:)
+                                               name:UIWindowDidBecomeKeyNotification
+                                             object:nil];
   }
   return self;
 }
@@ -422,6 +428,15 @@ void GHOST_ios_unregister_window(UIWindow *window)
 - (void)sceneActive:(NSNotification *)notification
 {
   if (_window && _window->surface && _window->rootWindow.isKeyWindow) {
+    _window->surface->setVisible(true);
+  }
+}
+
+- (void)windowBecameKey:(NSNotification *)notification
+{
+  if (_window && _window->surface && notification.object == _window->rootWindow &&
+      _window->rootWindow.windowScene.activationState == UISceneActivationStateForegroundActive)
+  {
     _window->surface->setVisible(true);
   }
 }
