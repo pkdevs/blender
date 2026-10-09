@@ -998,8 +998,10 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   std::vector<Candidate> candidates;
   std::set<Panel *> instances;
   for (PanelType &pt : panel_region_type->paneltypes) {
+    /* Besides the active tool, the panels `bl_ui.native_panels` writes for the top bar. */
     if (tool_settings && !STREQ(pt.idname, "VIEW3D_PT_active_tool") &&
-        !STREQ(pt.idname, "VIEW3D_PT_native_sculpt_settings"))
+        !(StringRef(pt.idname).startswith("VIEW3D_PT_native_") &&
+          StringRef(pt.idname).endswith("_settings")))
     {
       continue;
     }
