@@ -127,7 +127,7 @@ void ED_file_path_button(bScreen *screen,
   BLI_assert(!but_is_utf8(but));
 
   button_func_complete_set(but, autocomplete_directory, nullptr);
-  button_funcN_set(but, file_directory_enter_handle, nullptr, but);
+  button_funcN_set(but, file_directory_enter_handle, nullptr, but, nullptr, nullptr);
   /* Keep editing after Tab completes a directory. */
   button_flag_enable(but, ui::BUT_TEXTEDIT_AUTOCOMPLETE_KEEP_ACTIVE);
 
@@ -493,10 +493,8 @@ static void file_but_tooltip_func_set(const SpaceFile *sfile,
     button_func_tooltip_custom_set(but, file_draw_asset_tooltip_custom_func, file->asset, nullptr);
   }
   else {
-    button_func_tooltip_custom_set(but,
-                                   file_draw_tooltip_custom_func,
-                                   file_tooltip_data_create(sfile, file),
-                                   MEM_delete_void);
+    button_func_tooltip_custom_set(
+        but, file_draw_tooltip_custom_func, file_tooltip_data_create(sfile, file));
   }
 }
 
