@@ -365,11 +365,13 @@ else()
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/GHOST_IOSLauncher.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/Assets.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/BlenderBridge.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/CompileIndicator.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/CompositeControls.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/DialogSheet.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/HierarchyView.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/InspectorStore.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/InspectorView.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/PencilMenu.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/PropertyControls.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/RedoStrip.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/ScenePanels.swift

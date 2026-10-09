@@ -5532,7 +5532,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _compile_indicator = [[GHOSTIOSCompileIndicator alloc]
       initWithOverlay:_overlay_view
                 below:self.navigationController ? nil : _top_bar];
-  _pencil_menu = [[GHOSTIOSPencilMenu alloc] initWithFrame:_overlay_view.bounds];
+  Class pencil_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftPencilMenu");
+  _pencil_menu = (GHOSTIOSPencilMenu *)[[(pencil_class ?: GHOSTIOSPencilMenu.class) alloc]
+      initWithFrame:_overlay_view.bounds];
   _pencil_menu.delegate = self;
   const BOOL phone = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;
   [(GHOSTUIWindow *)_ghost_window->rootWindow setPencilContextMenu:_pencil_menu];

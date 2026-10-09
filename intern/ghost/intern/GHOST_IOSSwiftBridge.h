@@ -12,6 +12,8 @@
 
 #import <UIKit/UIKit.h>
 
+#import "GHOST_IOSPencilMenu.hh"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

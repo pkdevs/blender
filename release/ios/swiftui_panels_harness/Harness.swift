@@ -375,7 +375,32 @@ final class ViewportView: UIView {
   }
 }
 
+/** Blender's context menu for the Pencil menu, as the view controller resolves it. */
+final class PencilItems: NSObject, GHOSTIOSPencilMenuDelegate {
+  @objc(pencilMenu:requestItemsForRoute:atPoint:completion:)
+  func pencilMenu(_ menu: GHOSTIOSPencilMenu!, requestItemsForRoute route: [AnyHashable: Any]!, at point: CGPoint,
+                  completion: (([[AnyHashable: Any]]?) -> Void)!)
+  {
+    let names = ["Shade Smooth", "Shade Flat", "Convert To", "Set Origin", "Duplicate", "Join", "Apply",
+                 "Parent", "Snap", "Hide", "Delete"]
+    var items: [[AnyHashable: Any]] = [["heading": "Object"]]
+    for name in names {
+      var item: [AnyHashable: Any] = ["title": name, "operator": "object." + name.lowercased()]
+      if name == "Delete" { item["destructive"] = true }
+      if ["Convert To", "Set Origin", "Apply", "Parent", "Snap"].contains(name) { item["submenu"] = true }
+      if name == "Shade Smooth" { item["checked"] = true }
+      items.append(item)
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { completion(items) }
+  }
+
+  @objc(pencilMenu:didChooseItem:atPoint:)
+  func pencilMenu(_ menu: GHOSTIOSPencilMenu!, didChooseItem item: [AnyHashable: Any]!, at point: CGPoint) {}
+}
+
 final class HarnessController: UIViewController {
+  let pencilItems = PencilItems()
+  var pencilMenu: UIView?
   var panels: HarnessPanels!
   var redoStrip: NSObject?
   var timeline: NSObject?
@@ -464,6 +489,15 @@ final class HarnessController: UIViewController {
         timeline?.perform(NSSelectorFromString("toggle:"), with: nil)
         if scenario == "timeline-expanded" { timeline?.perform(NSSelectorFromString("toggleExpanded:"), with: nil) }
         view.setNeedsLayout()
+      case "pencil":
+        let menu: UIView = UserDefaults.standard.bool(forKey: "uikit") ?
+          GHOSTIOSPencilMenu(frame: view.bounds) : SwiftPencilMenu(frame: view.bounds)
+        if let menu = menu as? GHOSTIOSPencilMenu { menu.delegate = pencilItems }
+        if let menu = menu as? SwiftPencilMenu { menu.delegate = pencilItems }
+        view.addSubview(menu)
+        pencilMenu = menu
+        menu.perform(NSSelectorFromString("toggleWithPencilLocation:"),
+                     with: NSValue(cgPoint: CGPoint(x: view.bounds.midX, y: view.bounds.midY)))
       case "dialog":
         let sheet = DialogSheetController(
           title: "Save changes before closing?", message: "Your changes will be lost if you don't save them.",

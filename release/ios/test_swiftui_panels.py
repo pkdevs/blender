@@ -31,7 +31,8 @@ UIKIT_SOURCES = [ROOT / "intern/ghost/intern/GHOST_IOSScenePanels.mm",
                  ROOT / "intern/ghost/intern/GHOST_IOSNumericInput.mm",
                  ROOT / "intern/ghost/intern/GHOST_IOSRedoStrip.mm",
                  ROOT / "intern/ghost/intern/GHOST_IOSTimeline.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSAssets.mm"]
+                 ROOT / "intern/ghost/intern/GHOST_IOSAssets.mm",
+                 ROOT / "intern/ghost/intern/GHOST_IOSPencilMenu.mm"]
 HARNESS = ROOT / "release/ios/swiftui_panels_harness/Harness.swift"
 BUNDLE_ID = "org.blender.swiftui-panels-harness"
 
@@ -459,6 +460,9 @@ class SwiftUIPanelsTest(unittest.TestCase):
 
     def test_assets(self):
         self.scenario("assets", "-scenario", "assets")
+
+    def test_pencil_menu(self):
+        self.scenario("pencil", "-scenario", "pencil")
 
     def test_tool_strip(self):
         self.scenario("tool", "-scenario", "tool")
