@@ -932,10 +932,6 @@ void do_blur_brush(const Depsgraph &depsgraph,
     ss.cache->paint_brush.density_seed = BLI_hash_int_01(ss.cache->location_symm[0] * 1000);
   }
 
-  if (stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
-    return;
-  }
-
   Mesh &mesh = *id_cast<Mesh *>(ob.data);
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
   const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, ob);
