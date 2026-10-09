@@ -221,9 +221,14 @@ static void view_pan_cursor_restore(bContext *C, wmOperator *op, const v2dViewPa
     return;
   }
   if (RNA_boolean_get(op->ptr, "hide_cursor")) {
-    WM_cursor_warp(CTX_wm_window(C), vpd->startx, vpd->starty);
+    wmWindow *win = CTX_wm_window(C);
+    WM_cursor_grab_enable(win, WM_CURSOR_WRAP_NONE, nullptr, true);
+    const int ungrab_xy[2] = {vpd->startx, vpd->starty};
+    WM_cursor_grab_disable(win, ungrab_xy);
   }
-  WM_cursor_modal_restore(CTX_wm_window(C));
+  else {
+    WM_cursor_modal_restore(CTX_wm_window(C));
+  }
 }
 
 /** \} */
@@ -273,7 +278,7 @@ static wmOperatorStatus view_pan_invoke(bContext *C, wmOperator *op, const wmEve
 
   if (WM_cursor_modal_is_set_ok(window)) {
     if (RNA_boolean_get(op->ptr, "hide_cursor")) {
-      WM_cursor_modal_set(window, WM_CURSOR_NONE);
+      WM_cursor_grab_enable(window, WM_CURSOR_WRAP_NONE, nullptr, true);
     }
     else if (v2d->keepofs & V2D_LOCKOFS_X) {
       WM_cursor_modal_set(window, WM_CURSOR_NS_SCROLL);
@@ -1155,10 +1160,14 @@ static void view_zoomdrag_exit(bContext *C, wmOperator *op)
 
     if (vzd->own_cursor) {
       if (RNA_boolean_get(op->ptr, "hide_cursor")) {
-        /* Restore cursor position. */
-        WM_cursor_warp(CTX_wm_window(C), vzd->startx, vzd->starty);
+        wmWindow *win = CTX_wm_window(C);
+        WM_cursor_grab_enable(win, WM_CURSOR_WRAP_NONE, nullptr, true);
+        const int ungrab_xy[2] = {vzd->startx, vzd->starty};
+        WM_cursor_grab_disable(win, ungrab_xy);
       }
-      WM_cursor_modal_restore(CTX_wm_window(C));
+      else {
+        WM_cursor_modal_restore(CTX_wm_window(C));
+      }
     }
 
     MEM_delete(vzd);
@@ -1272,7 +1281,7 @@ static wmOperatorStatus view_zoomdrag_invoke(bContext *C, wmOperator *op, const 
 
   if (WM_cursor_modal_is_set_ok(window)) {
     if (RNA_boolean_get(op->ptr, "hide_cursor")) {
-      WM_cursor_modal_set(window, WM_CURSOR_NONE);
+      WM_cursor_grab_enable(window, WM_CURSOR_WRAP_NONE, nullptr, true);
     }
     else if (v2d->keepofs & V2D_LOCKOFS_X) {
       WM_cursor_modal_set(window, WM_CURSOR_NS_SCROLL);
