@@ -171,16 +171,19 @@ struct HierarchyPanel: View {
         Button(store.editing ? "Done" : "Select") {
           withMotion { store.editing.toggle() }
         }
-        .fontWeight(store.editing ? .semibold : .regular)
+        /* A system button's title size. */
+        .font(.system(size: 15, weight: store.editing ? .semibold : .regular))
         .accessibilityIdentifier("blender.hierarchy.select")
         UIMenuButton(title: nil, image: UIImage(systemName: "plus"),
-                     accessibilityLabel: "Add Collection or Object") { addMenu }
+                     accessibilityLabel: "Add Collection or Object", tint: UIColor(Color.accentColor)) { addMenu }
           .frame(width: 44, height: 44)
           .accessibilityIdentifier("blender.hierarchy.add")
       }
       SearchField(text: $store.query)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .frame(height: 52)
+        .padding(.horizontal, 4)
+        .padding(.top, 3)
+        .padding(.bottom, 2)
       outline
       if store.editing {
         selectionBar
@@ -247,7 +250,7 @@ struct HierarchyPanel: View {
     return List {
       ForEach(Array(rows.enumerated()), id: \.element.hierarchyKey) { index, node in
         HierarchyRow(store: store, node: node)
-          .listRowInsets(EdgeInsets(top: 0, leading: 22, bottom: 0, trailing: 22))
+          .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 22))
           .listRowBackground(rowBackground(rows, index))
           .listRowSeparator(.hidden)
           .swipeActions(edge: .trailing, allowsFullSwipe: false) { trailingSwipe(node) }
@@ -285,8 +288,8 @@ struct HierarchyPanel: View {
     if isSelected(rows[index]) {
       let above = index > 0 && isSelected(rows[index - 1])
       let below = index + 1 < rows.count && isSelected(rows[index + 1])
-      UnevenRoundedRectangle(topLeadingRadius: above ? 0 : 12, bottomLeadingRadius: below ? 0 : 12,
-                             bottomTrailingRadius: below ? 0 : 12, topTrailingRadius: above ? 0 : 12,
+      UnevenRoundedRectangle(topLeadingRadius: above ? 0 : 22, bottomLeadingRadius: below ? 0 : 22,
+                             bottomTrailingRadius: below ? 0 : 22, topTrailingRadius: above ? 0 : 22,
                              style: .continuous)
         .fill(PanelStyle.selection)
         .padding(.horizontal, 16)
@@ -423,11 +426,12 @@ struct HierarchyRow: View {
     let collection = node.string("kind") == "collection"
     let key = node.string("key") ?? ""
     let expanded = !store.collapsed.contains(key) || !store.query.isEmpty
-    HStack(spacing: 6) {
+    HStack(spacing: 0) {
       if store.editing && !collection {
         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
           .foregroundStyle(selected ? Color.white : .secondary)
           .font(.title3)
+          .padding(.trailing, 6)
           .transition(.move(edge: .leading).combined(with: .opacity))
       }
       Color.clear.frame(width: CGFloat(16 * max(0, node.int("depth") ?? 0)), height: 1)
@@ -450,17 +454,19 @@ struct HierarchyRow: View {
         }
       }
       .foregroundStyle(selected ? Color.white : .secondary)
-      /* As in Blender's Outliner, category icons keep their theme colors. */
+      /* As in Blender's Outliner, category icons keep their theme colors, selected too. */
       Group {
-        if let image = BlenderIcon.image(node.string("icon"), themed: !selected) {
+        if let image = BlenderIcon.image(node.string("icon"), themed: true) {
           Image(uiImage: image).resizable().scaledToFit()
         }
         else {
           Image(systemName: collection ? "folder" : "cube")
         }
       }
-      .frame(width: 20, height: 20)
-      .foregroundStyle(selected ? Color.white : .secondary)
+      .frame(width: 22, height: 22)
+      .foregroundStyle(selected ? Color.white : .primary)
+      .padding(.leading, 8)
+      .padding(.trailing, 10)
       Text(node.string("name") ?? "")
         .lineLimit(2)
         .fontWeight(node.bool("active") ? .bold : .regular)
@@ -474,6 +480,7 @@ struct HierarchyRow: View {
             .frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
+        .padding(.leading, 6)
         .foregroundStyle(selected ? Color.white.opacity(0.8) : .secondary)
         .accessibilityLabel("Show in viewport")
       }
@@ -492,28 +499,39 @@ private extension Dictionary where Key == String, Value == Any {
   var hierarchyKey: String { string("key") ?? "" }
 }
 
-struct SearchField: View {
+/** The system's minimal search bar, as the Outliner has always used. */
+struct SearchField: UIViewRepresentable {
   @Binding var text: String
 
-  var body: some View {
-    HStack(spacing: 6) {
-      Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-      TextField("Search", text: $text)
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .accessibilityIdentifier("blender.hierarchy.search")
-      if !text.isEmpty {
-        Button {
-          text = ""
-        } label: {
-          Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Clear search")
-      }
+  func makeUIView(context: Context) -> UISearchBar {
+    let bar = UISearchBar()
+    bar.searchBarStyle = .minimal
+    bar.placeholder = "Search"
+    bar.autocorrectionType = .no
+    bar.autocapitalizationType = .none
+    bar.delegate = context.coordinator
+    bar.accessibilityIdentifier = "blender.hierarchy.search"
+    return bar
+  }
+
+  func updateUIView(_ bar: UISearchBar, context: Context) {
+    context.coordinator.text = $text
+    if bar.text != text { bar.text = text }
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+  final class Coordinator: NSObject, UISearchBarDelegate {
+    var text: Binding<String>
+
+    init(text: Binding<String>) { self.text = text }
+
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+      text.wrappedValue = searchText
     }
-    .padding(.horizontal, 10)
-    .frame(height: 40)
-    .background(PanelStyle.search, in: Capsule())
+
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+      searchBar.resignFirstResponder()
+    }
   }
 }
