@@ -791,6 +791,480 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
       break;
   }
 }
+
+/* -------------------------------------------------------------------- */
+/** \name Data-Block Pickers, Lists and Previews
+ *
+ * Blender draws these as groups of small buttons. Native interfaces show each as one control:
+ * an ID template becomes a picker with its actions, a UI list a list of rows, and a material's
+ * Preview panel its rendered preview.
+ * \{ */
+
+/** ID types shown with rendered previews, as Blender's own pickers do. */
+bool id_type_has_previews(const short idcode)
+{
+  return ELEM(idcode, ID_MA, ID_WO, ID_TE, ID_LA, ID_IM);
+}
+
+/** PNG of \a id's preview icon, rendered with a job when needed; empty until rendered. */
+std::string id_preview_path(bContext *C, ID *id)
+{
+  if (!id || !id_type_has_previews(GS(id->name))) {
+    return "";
+  }
+  return id_preview_icon_path(C, id_icon_get(C, id, true));
+}
+
+/**
+ * PNG of a large render of \a id, as the Preview panel shows it. It renders again, with a job,
+ * whenever the ID's own preview icon updates after an edit.
+ */
+std::string id_large_preview_path(bContext *C, ID *id)
+{
+  struct LargePreview {
+    PreviewImage *image = nullptr;
+    int source_stamp = -1;
+    int written_stamp = -1;
+    std::string path;
+  };
+  /* Kept for the session: a render job may still write into a preview. */
+  static std::map<uint, LargePreview> previews;
+  constexpr int size = 512;
+  if (!id || !ED_preview_id_is_supported(id)) {
+    return "";
+  }
+  LargePreview &preview = previews[id->session_uid];
+  if (!preview.image) {
+    preview.image = BKE_previewimg_create();
+    preview.image->w[ICON_SIZE_PREVIEW] = preview.image->h[ICON_SIZE_PREVIEW] = size;
+    preview.image->rect[ICON_SIZE_PREVIEW] = MEM_new_array_zeroed<uint>(size * size, __func__);
+  }
+  /* The small preview follows edits to the ID; render the large one again when it changes. */
+  const PreviewImage *source = icon_id_preview(C, id_icon_get(C, id, true));
+  const int source_stamp = source ? source->changed_timestamp[ICON_SIZE_PREVIEW] : 0;
+  PreviewImage *image = preview.image;
+  if (preview.source_stamp != source_stamp && !BKE_previewimg_is_rendering(image, ICON_SIZE_PREVIEW))
+  {
+    preview.source_stamp = source_stamp;
+    ED_preview_icon_job(C, image, id, ICON_SIZE_PREVIEW, false);
+    return preview.path;
+  }
+  if (BKE_previewimg_is_rendering(image, ICON_SIZE_PREVIEW) ||
+      preview.written_stamp == preview.source_stamp)
+  {
+    return preview.path;
+  }
+  ImBuf *ibuf = IMB_allocFromBuffer(
+      reinterpret_cast<const uint8_t *>(image->rect[ICON_SIZE_PREVIEW]), nullptr, size, size, 4);
+  if (!ibuf) {
+    return preview.path;
+  }
+  IMB_unpremultiply_alpha(ibuf);
+  ibuf->planes = 32;
+  ibuf->ftype = IMB_FTYPE_PNG;
+  const std::string path = std::string(BKE_tempdir_session()) + "native_large_preview_" +
+                           std::to_string(id->session_uid) + "_" +
+                           std::to_string(preview.source_stamp) + ".png";
+  if (IMB_save_image(ibuf, path.c_str(), IB_byte_data)) {
+    preview.path = path;
+    preview.written_stamp = preview.source_stamp;
+  }
+  IMB_freeImBuf(ibuf);
+  return preview.path;
+}
+
+std::string id_template_key(const PointerRNA &ptr, PropertyRNA *prop)
+{
+  const auto path = RNA_path_from_ID_to_struct(&ptr);
+  return "id:" + std::to_string(ptr.owner_id ? ptr.owner_id->session_uid : 0) + ":" +
+         (path ? *path : RNA_struct_identifier(ptr.type)) + ":" + RNA_property_identifier(prop);
+}
+
+/** The button of the ID template browsing \a prop of \a ptr with the role \a event. */
+Button *id_template_part(const Block &block, const PointerRNA &ptr, PropertyRNA *prop, int event)
+{
+  for (const auto &button : block.buttons) {
+    PointerRNA part_ptr;
+    PropertyRNA *part_prop;
+    int part_event;
+    if (template_id_property_get(*button, part_ptr, part_prop, part_event) &&
+        part_event == event && part_prop == prop && part_ptr.data == ptr.data)
+    {
+      return button.get();
+    }
+  }
+  return nullptr;
+}
+
+void project_id_template(bContext *C,
+                         const Block &block,
+                         const PointerRNA &ptr_const,
+                         PropertyRNA *prop,
+                         DictionaryValue &field)
+{
+  PointerRNA ptr = ptr_const;
+  StructRNA *type = RNA_property_pointer_type(&ptr, prop);
+  const short idcode = RNA_type_to_ID_code(type);
+  ID *id = RNA_property_pointer_get(&ptr, prop).owner_id;
+  field.append_str("type", "ID");
+  field.append_str("key", id_template_key(ptr, prop));
+  field.append_str("label", RNA_property_ui_name(prop));
+  field.append_str("id_type", RNA_struct_ui_name(type));
+  field.append_str("icon", icon_name(RNA_struct_ui_icon(type)));
+  field.append_int("editable",
+                   RNA_property_editable(&ptr, prop) &&
+                       (!ptr.owner_id || ID_IS_EDITABLE(ptr.owner_id)));
+  field.append_str("value", id ? std::to_string(id->session_uid) : "");
+  const Button *new_button = id_template_part(block, ptr, prop, UI_ID_ADD_NEW);
+  field.append_int("can_new", new_button && new_button->optype && new_button->optype->exec &&
+                                  !(new_button->flag & BUT_DISABLED));
+  if (id) {
+    field.append_str("name", id->name + 2);
+    field.append_int("users", id->us);
+    field.append_int("linked", ID_IS_LINKED(id));
+    if (!ID_IS_LINKED(id) && !ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_OB, ID_WS)) {
+      field.append_int("fake_user", (id->flag & ID_FLAG_FAKEUSER) != 0);
+    }
+    const Button *unlink = id_template_part(block, ptr, prop, UI_ID_DELETE);
+    if (!unlink) {
+      unlink = id_template_part(block, ptr, prop, UI_ID_NOP);
+    }
+    field.append_int("can_unlink", unlink && !(RNA_property_flag(prop) & PROP_NEVER_NULL));
+    field.append_int("can_single_user",
+                     id->us > 1 && id_template_part(block, ptr, prop, UI_ID_ALONE) != nullptr);
+    field.append_str("preview", id_preview_path(C, id));
+  }
+  auto options = field.append_array("options");
+  Main *bmain = CTX_data_main(C);
+  if (ListBaseT<ID> *ids = idcode ? which_libbase(bmain, idcode) : nullptr) {
+    for (ID &candidate : *ids) {
+      /* Blender's search hides names starting with a dot unless typed. */
+      if (candidate.name[2] == '.' && &candidate != id) {
+        continue;
+      }
+      PointerRNA candidate_ptr = RNA_id_pointer_create(&candidate);
+      if (!RNA_property_pointer_poll(&ptr, prop, &candidate_ptr)) {
+        continue;
+      }
+      auto option = options->append_dict();
+      option->append_str("value", std::to_string(candidate.session_uid));
+      option->append_str("label", candidate.name + 2);
+      option->append_int("users", candidate.us);
+      if (ID_IS_LINKED(&candidate)) {
+        option->append_int("linked", 1);
+      }
+      if (const std::string preview = id_preview_path(C, &candidate); !preview.empty()) {
+        option->append_str("preview", preview);
+      }
+    }
+  }
+}
+
+/** Data-block creation runs the template's operator; the new ID is assigned afterwards. */
+struct PendingNewID {
+  PointerRNA ptr = {};
+  PropertyRNA *prop = nullptr;
+  std::set<ID *> before;
+};
+
+bool apply_id_template(bContext *C,
+                       const Block &block,
+                       const PointerRNA &ptr_const,
+                       PropertyRNA *prop,
+                       const DictionaryValue &request,
+                       wmOperatorType *&r_operator_type,
+                       PointerRNA *&r_operator_properties,
+                       std::unique_ptr<bContextStore> &r_operator_context,
+                       PendingNewID &r_pending)
+{
+  PointerRNA ptr = ptr_const;
+  if (!RNA_property_editable(&ptr, prop)) {
+    return false;
+  }
+  const std::string action = request.lookup_str("id_action").value_or("");
+  const std::string value = request.lookup_str("value").value_or("");
+  ID *id = RNA_property_pointer_get(&ptr, prop).owner_id;
+  const short idcode = RNA_type_to_ID_code(RNA_property_pointer_type(&ptr, prop));
+  Main *bmain = CTX_data_main(C);
+  const char *undo_name = nullptr;
+  if (action == "select") {
+    ID *target = nullptr;
+    if (ListBaseT<ID> *ids = idcode ? which_libbase(bmain, idcode) : nullptr) {
+      for (ID &candidate : *ids) {
+        if (std::to_string(candidate.session_uid) == value) {
+          target = &candidate;
+          break;
+        }
+      }
+    }
+    PointerRNA target_ptr = target ? RNA_id_pointer_create(target) : PointerRNA_NULL;
+    if (!target || !RNA_property_pointer_poll(&ptr, prop, &target_ptr)) {
+      return false;
+    }
+    if (target != id) {
+      RNA_property_pointer_set(&ptr, prop, target_ptr, nullptr);
+      RNA_property_update(C, &ptr, prop);
+      undo_name = RNA_property_ui_name(prop);
+    }
+  }
+  else if (action == "unlink") {
+    if (!id || (RNA_property_flag(prop) & PROP_NEVER_NULL)) {
+      return false;
+    }
+    RNA_property_pointer_set(&ptr, prop, PointerRNA_NULL, nullptr);
+    RNA_property_update(C, &ptr, prop);
+    undo_name = "Unlink Data-Block";
+  }
+  else if (action == "new") {
+    /* New, or a copy when there is an ID, as the template's own button does. */
+    Button *button = id_template_part(block, ptr, prop, UI_ID_ADD_NEW);
+    if (!button || !button->optype || !button->optype->exec || r_operator_type) {
+      return false;
+    }
+    r_operator_type = button->optype;
+    r_operator_properties = button->opptr;
+    button->opptr = nullptr;
+    if (button->context) {
+      r_operator_context = std::make_unique<bContextStore>(*button->context);
+    }
+    r_pending.ptr = ptr;
+    r_pending.prop = prop;
+    if (ListBaseT<ID> *ids = idcode ? which_libbase(bmain, idcode) : nullptr) {
+      for (ID &existing : *ids) {
+        r_pending.before.insert(&existing);
+      }
+    }
+    return true;
+  }
+  else if (action == "fake_user" && id && !ID_IS_LINKED(id)) {
+    PointerRNA id_ptr = RNA_id_pointer_create(id);
+    RNA_boolean_set(&id_ptr, "use_fake_user", !(id->flag & ID_FLAG_FAKEUSER));
+    undo_name = "Fake User";
+  }
+  else if (action == "rename" && id && ID_IS_EDITABLE(id) && !value.empty()) {
+    PointerRNA id_ptr = RNA_id_pointer_create(id);
+    PropertyRNA *name_prop = RNA_struct_find_property(&id_ptr, "name");
+    RNA_property_string_set(&id_ptr, name_prop, value.c_str());
+    RNA_property_update(C, &id_ptr, name_prop);
+    undo_name = "Rename Data-Block";
+  }
+  else if (action == "single_user" && id && id->us > 1) {
+    if (!id_single_user(C, id, &ptr, prop)) {
+      return false;
+    }
+    DEG_relations_tag_update(bmain);
+    undo_name = "Make Single User";
+  }
+  else {
+    return false;
+  }
+  if (undo_name) {
+    ED_undo_push(C, undo_name);
+    WM_event_add_notifier(C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+  }
+  return true;
+}
+
+/** Assign the data-block a template's New operator made, which it assigns only when clicked. */
+void finish_pending_new_id(bContext *C, PendingNewID &pending)
+{
+  if (!pending.prop) {
+    return;
+  }
+  const short idcode = RNA_type_to_ID_code(RNA_property_pointer_type(&pending.ptr, pending.prop));
+  ID *created = nullptr;
+  if (ListBaseT<ID> *ids = idcode ? which_libbase(CTX_data_main(C), idcode) : nullptr) {
+    for (ID &candidate : *ids) {
+      if (!pending.before.count(&candidate)) {
+        created = &candidate;
+      }
+    }
+  }
+  PointerRNA created_ptr = created ? RNA_id_pointer_create(created) : PointerRNA_NULL;
+  if (created && RNA_property_pointer_get(&pending.ptr, pending.prop).owner_id != created &&
+      RNA_property_pointer_poll(&pending.ptr, pending.prop, &created_ptr))
+  {
+    RNA_property_pointer_set(&pending.ptr, pending.prop, created_ptr, nullptr);
+    RNA_property_update(C, &pending.ptr, pending.prop);
+    ED_undo_push(C, RNA_property_ui_name(pending.prop));
+  }
+  pending = {};
+}
+
+/** The icon of the physics an enabled physics button removes. */
+int physics_icon(bContext *C, const Button &but)
+{
+  const char *idname = but.optype ? but.optype->idname : "";
+  if (STREQ(idname, "OBJECT_OT_forcefield_toggle")) {
+    return ICON_FORCE_FORCE;
+  }
+  if (STREQ(idname, "RIGIDBODY_OT_object_remove")) {
+    return ICON_RIGID_BODY;
+  }
+  if (STREQ(idname, "RIGIDBODY_OT_constraint_remove")) {
+    return ICON_RIGID_BODY_CONSTRAINT;
+  }
+  Object *object = CTX_data_active_object(C);
+  if (STREQ(idname, "OBJECT_OT_modifier_remove") && but.opptr && object) {
+    const std::string name = RNA_string_get(but.opptr, "modifier");
+    if (const ModifierData *md = BKE_modifiers_findby_name(object, name.c_str())) {
+      return BKE_modifier_get_info(ModifierType(md->type))->icon;
+    }
+  }
+  return ICON_NONE;
+}
+
+std::string operator_key(bContext *C, const Button &but, const Object *object)
+{
+  return std::string(but.optype->idname) + ":" +
+         (but.opptr ? RNA_pointer_as_string_keywords(C, but.opptr, false, false, true, INT_MAX) :
+                      "") +
+         ":" + std::to_string(object ? object->id.session_uid : 0);
+}
+
+/** The buttons beside a list: add, remove, reorder and its specials menu. */
+struct ListSide {
+  Button *add = nullptr;
+  Button *remove = nullptr;
+  Button *up = nullptr;
+  Button *down = nullptr;
+  MenuType *menu = nullptr;
+  std::vector<Button *> extras;
+};
+
+/** The Properties panel showing the settings of the physics a physics button adds or removes. */
+const char *physics_panel(bContext *C, const Button &but)
+{
+  const char *idname = but.optype ? but.optype->idname : "";
+  if (STREQ(idname, "OBJECT_OT_forcefield_toggle")) {
+    return "PHYSICS_PT_field";
+  }
+  if (STRPREFIX(idname, "RIGIDBODY_OT_object_")) {
+    return "PHYSICS_PT_rigid_body";
+  }
+  if (STRPREFIX(idname, "RIGIDBODY_OT_constraint_")) {
+    return "PHYSICS_PT_rigid_body_constraint";
+  }
+  int type = -1;
+  if (STREQ(idname, "OBJECT_OT_modifier_add") && but.opptr) {
+    type = RNA_enum_get(but.opptr, "type");
+  }
+  else if (STREQ(idname, "OBJECT_OT_modifier_remove") && but.opptr) {
+    Object *object = CTX_data_active_object(C);
+    const std::string name = RNA_string_get(but.opptr, "modifier");
+    if (const ModifierData *md = object ? BKE_modifiers_findby_name(object, name.c_str()) : nullptr)
+    {
+      type = md->type;
+    }
+  }
+  switch (type) {
+    case eModifierType_Collision:
+      return "PHYSICS_PT_collision";
+    case eModifierType_Cloth:
+      return "PHYSICS_PT_cloth";
+    case eModifierType_DynamicPaint:
+      return "PHYSICS_PT_dynamic_paint";
+    case eModifierType_Softbody:
+      return "PHYSICS_PT_softbody";
+    case eModifierType_Fluid:
+      return "PHYSICS_PT_fluid";
+    default:
+      return nullptr;
+  }
+}
+
+/** A list's rows, from its row buttons and the item buttons each one draws over. */
+void project_list(bContext *C,
+                  const Block &block,
+                  const Button &first_row,
+                  const std::map<const Button *, std::vector<const Button *>> &row_items,
+                  const ListSide *side,
+                  const Object *object,
+                  DictionaryValue &field)
+{
+  if (side) {
+    auto add_operator = [&](const char *name, Button *but) {
+      if (!but || !but->optype) {
+        return;
+      }
+      auto entry = field.append_dict(name);
+      entry->append_str("key", operator_key(C, *but, object));
+      entry->append_str("label", but->str.empty() ? WM_operatortype_name(but->optype, but->opptr) :
+                                                    but->str);
+      entry->append_str("icon", icon_name(button_icon(but)));
+      entry->append_int("editable", !(but->flag & (BUT_DISABLED | BUT_INACTIVE)));
+    };
+    add_operator("add", side->add);
+    add_operator("remove", side->remove);
+    field.append_int("reorder", side->up && side->down &&
+                                    !(side->up->flag & (BUT_DISABLED | BUT_INACTIVE)));
+    if (side->menu) {
+      field.append_str("menu", side->menu->idname);
+    }
+    if (!side->extras.empty()) {
+      auto extras = field.append_array("extras");
+      for (Button *but : side->extras) {
+        auto entry = extras->append_dict();
+        entry->append_str("key", operator_key(C, *but, object));
+        entry->append_str("label", but->str.empty() ? WM_operatortype_name(but->optype, but->opptr) :
+                                                      but->str);
+        entry->append_str("icon", icon_name(button_icon(but)));
+      }
+    }
+  }
+  PointerRNA active_ptr = first_row.rnapoin;
+  field.append_str("type", "LIST");
+  field.append_str("key", property_key(first_row, -1));
+  field.append_str("label", "");
+  field.append_int("value", RNA_property_int_get(&active_ptr, first_row.rnaprop));
+  field.append_int("editable", RNA_property_editable(&active_ptr, first_row.rnaprop));
+  auto rows = field.append_array("rows");
+  for (const auto &button : block.buttons) {
+    if (button->type != ButtonType::ListRow || button->rnapoin.data != first_row.rnapoin.data ||
+        button->rnaprop != first_row.rnaprop)
+    {
+      continue;
+    }
+    auto row = rows->append_dict();
+    row->append_int("index", int(button->hardmax));
+    std::string label;
+    int icon = ICON_NONE;
+    const auto items = row_items.find(button.get());
+    if (items == row_items.end()) {
+      row->append_str("label", "");
+      row->append_str("icon", "");
+      continue;
+    }
+    for (const Button *item : items->second) {
+      if (icon == ICON_NONE && button_icon(item) != ICON_NONE) {
+        icon = button_icon(item);
+      }
+      if (!label.empty() || (item->flag & UI_HIDDEN)) {
+        continue;
+      }
+      if (item->rnaprop && RNA_property_type(item->rnaprop) == PROP_STRING) {
+        PointerRNA item_ptr = item->rnapoin;
+        label = RNA_property_string_get(&item_ptr, item->rnaprop);
+        if (STREQ(RNA_property_identifier(item->rnaprop), "name") &&
+            RNA_property_editable(&item_ptr, item->rnaprop))
+        {
+          row->append_str("rename_key", property_key(*item, -1));
+        }
+      }
+      else if (ELEM(item->type, ButtonType::Label, ButtonType::Text) && !item->str.empty()) {
+        label = item->str;
+      }
+    }
+    row->append_str("label", label);
+    if (icon >= BIFICONID_LAST_STATIC) {
+      row->append_str("preview", preview_icon_path(C, icon));
+      icon = ICON_NONE;
+    }
+    row->append_str("icon", icon_name(icon));
+  }
+}
+
+/** \} */
 }  // namespace
 
 namespace {
@@ -1005,6 +1479,11 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
       MEM_delete(tabs);
     }
   }
+  /* Native lists scroll themselves, so draw all their items. */
+  struct ShowAllListRows {
+    ShowAllListRows() { ui_list_show_all_rows = true; }
+    ~ShowAllListRows() { ui_list_show_all_rows = false; }
+  } show_all_list_rows;
   std::string panel_context = tab_id;
   std::transform(panel_context.begin(), panel_context.end(), panel_context.begin(), ::tolower);
   if (panel_context == "particles") {
@@ -1034,6 +1513,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
   wmOperatorType *operator_type = nullptr;
   PointerRNA *operator_properties = nullptr;
   std::unique_ptr<bContextStore> operator_context;
+  /* Operators chosen from an enum menu run directly, as picking the menu item does. */
+  bool operator_exec = false;
+  PendingNewID pending_new_id;
   std::set<std::string> open_panels;
   /* Whether each candidate's body is visible, so nested sub-panels follow their parent. */
   std::map<std::string, bool> visible_panels;
@@ -1308,9 +1790,282 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         }
       }
     }
+    /* Buttons shown as part of one native control (an ID picker, a list row), not alone. */
+    std::set<const Button *> combined;
+    std::map<const Button *, std::vector<const Button *>> row_items;
+    {
+      std::set<ID *> template_ids;
+      for (const auto &button : block->buttons) {
+        PointerRNA template_ptr;
+        PropertyRNA *template_prop;
+        int event;
+        if (template_id_property_get(*button, template_ptr, template_prop, event)) {
+          if (event != UI_ID_BROWSE) {
+            combined.insert(button.get());
+          }
+          if (ID *id = RNA_property_pointer_get(&template_ptr, template_prop).owner_id) {
+            template_ids.insert(id);
+          }
+        }
+      }
+      for (const auto &button : block->buttons) {
+        const Button &but = *button;
+        if (!template_ids.empty() &&
+            ((but.rnaprop && template_ids.count(but.rnapoin.owner_id) &&
+              but.rnapoin.data == but.rnapoin.owner_id &&
+              ELEM(StringRef(RNA_property_identifier(but.rnaprop)), "name", "use_fake_user")) ||
+             (but.optype && STREQ(but.optype->idname, "ASSET_OT_clear_single"))))
+        {
+          combined.insert(&but);
+        }
+        if (but.type != ButtonType::ListRow) {
+          continue;
+        }
+        /* An item's buttons are drawn over its row. */
+        for (const auto &item : block->buttons) {
+          if (item.get() != &but && !ELEM(item->type, ButtonType::ListRow, ButtonType::ListBox) &&
+              BLI_rctf_isect_pt(&but.rect, BLI_rctf_cent_x(&item->rect), BLI_rctf_cent_y(&item->rect)))
+          {
+            combined.insert(item.get());
+            row_items[&but].push_back(item.get());
+          }
+        }
+      }
+    }
+    /* The column beside each list (#Layout::template_list's side buttons), by list box. */
+    std::map<const Button *, ListSide> list_sides;
+    for (const auto &box : block->buttons) {
+      if (box->type != ButtonType::ListBox) {
+        continue;
+      }
+      ListSide &side = list_sides[box.get()];
+      for (const auto &button : block->buttons) {
+        Button &but = *button;
+        if (but.rect.xmin < box->rect.xmax - 2 || but.rect.ymax > box->rect.ymax + 2 ||
+            but.rect.ymin < box->rect.ymin - 8 * UI_UNIT_Y || (but.flag & UI_HIDDEN))
+        {
+          continue;
+        }
+        MenuType *menu = button_menutype_get(&but);
+        if (!menu && but.optype && but.opptr && STREQ(but.optype->idname, "WM_OT_call_menu")) {
+          menu = WM_menutype_find(RNA_string_get(but.opptr, "name").c_str(), true);
+        }
+        if (menu) {
+          side.menu = menu;
+        }
+        else if (!but.optype) {
+          continue;
+        }
+        else if (button_icon(&but) == ICON_ADD && !side.add) {
+          side.add = &but;
+        }
+        else if (button_icon(&but) == ICON_REMOVE && !side.remove) {
+          side.remove = &but;
+        }
+        else if (button_icon(&but) == ICON_TRIA_UP && !side.up) {
+          side.up = &but;
+        }
+        else if (button_icon(&but) == ICON_TRIA_DOWN && !side.down) {
+          side.down = &but;
+        }
+        else {
+          side.extras.push_back(&but);
+        }
+        combined.insert(&but);
+      }
+    }
+    auto list_side_for = [&](const Button &row) -> ListSide * {
+      for (auto &[box, side] : list_sides) {
+        if (box->rnapoin.data == row.rnapoin.data && box->rnaprop == row.rnaprop) {
+          return &side;
+        }
+      }
+      return nullptr;
+    };
+    const bool physics_toggles = candidate.id == "PHYSICS_PT_add";
+    /* Aligned rows of toggle buttons (e.g. Mirror X Y Z) are shown as one group, captioned by a
+     * label just before them. */
+    std::map<const Button *, std::pair<int, std::string>> toggle_groups;
+    {
+      const Button *previous = nullptr;
+      short group = 0;
+      std::string caption;
+      for (const auto &button : block->buttons) {
+        const Button &but = *button;
+        if (but.type == ButtonType::Toggle && but.alignnr && but.rnaprop &&
+            RNA_property_type(but.rnaprop) == PROP_BOOLEAN)
+        {
+          if (but.alignnr != group) {
+            group = but.alignnr;
+            caption = previous && previous->type == ButtonType::Label ? previous->str : "";
+          }
+          toggle_groups[&but] = {group, caption};
+        }
+        previous = &but;
+      }
+    }
     std::set<std::string> seen;
     for (const auto &button : block->buttons) {
       Button &but = *button;
+      if (!execute && combined.count(&but)) {
+        continue;
+      }
+      PointerRNA template_ptr;
+      PropertyRNA *template_prop;
+      int template_event;
+      if (template_id_property_get(but, template_ptr, template_prop, template_event)) {
+        if (template_event == UI_ID_BROWSE) {
+          const std::string key = id_template_key(template_ptr, template_prop);
+          if (execute) {
+            if (target_panel && requested_key && *requested_key == key && !applied) {
+              applied = apply_id_template(C, *block, template_ptr, template_prop, *query,
+                                          operator_type, operator_properties, operator_context,
+                                          pending_new_id);
+            }
+          }
+          else if (seen.insert(key).second) {
+            auto field = append_field();
+            project_id_template(C, *block, template_ptr, template_prop, *field);
+            field->append_str("panel", candidate.id);
+            field->append_str("tab", tab_id);
+            field->append_int("native", 1);
+          }
+        }
+        continue;
+      }
+      if (but.type == ButtonType::ListBox) {
+        /* The list's active index, which its rows show. */
+        continue;
+      }
+      if (but.type == ButtonType::ListRow && execute && target_panel && requested_key &&
+          *requested_key == property_key(but, -1) &&
+          query->lookup_str("list_action").value_or("") == "move")
+      {
+        /* Drag to reorder: make the item active, then move it as the list's arrows do. */
+        if (!applied) {
+          ListSide *side = list_side_for(but);
+          const int from = int(query->lookup_int("from").value_or(-1));
+          const int to = int(query->lookup_int("to").value_or(-1));
+          Button *step = side ? (to < from ? side->up : side->down) : nullptr;
+          if (step && step->optype && from >= 0 && to >= 0 && from != to) {
+            PointerRNA active_ptr = but.rnapoin;
+            RNA_property_int_set(&active_ptr, but.rnaprop, from);
+            RNA_property_update(C, &active_ptr, but.rnaprop);
+            const bContextStore *previous = CTX_store_get(C);
+            CTX_store_set(C, step->context);
+            applied = true;
+            for (int i = 0; i < std::abs(to - from) && applied; i++) {
+              applied = WM_operator_name_call_ptr(C, step->optype, wm::OpCallContext::ExecDefault,
+                                                  step->opptr, nullptr) & OPERATOR_FINISHED;
+            }
+            CTX_store_set(C, previous);
+          }
+        }
+        continue;
+      }
+      if (but.type == ButtonType::ListRow && !execute) {
+        if (seen.insert(property_key(but, -1)).second) {
+          auto field = append_field();
+          project_list(C, *block, but, row_items, list_side_for(but), object, *field);
+          field->append_str("panel", candidate.id);
+          field->append_str("tab", tab_id);
+          field->append_int("native", 1);
+        }
+        continue;
+      }
+      if (but.type == ButtonType::Extra && but.poin && StringRef(candidate.id).endswith("_PT_preview"))
+      {
+        /* The Preview panel's render (#template_preview). */
+        ID *id = reinterpret_cast<ID *>(but.poin);
+        if (!execute && seen.insert("preview:" + std::to_string(id->session_uid)).second) {
+          auto field = append_field();
+          field->append_str("type", "PREVIEW");
+          field->append_str("key", "preview:" + std::to_string(id->session_uid));
+          field->append_str("label", id->name + 2);
+          field->append_str("preview", id_large_preview_path(C, id));
+          /* The preview's shape choice, shown on the preview itself. */
+          for (const auto &shape : block->buttons) {
+            if (shape->type == ButtonType::Row && shape->rnaprop &&
+                STREQ(RNA_property_identifier(shape->rnaprop), "preview_render_type"))
+            {
+              auto shape_field = field->append_dict("shape");
+              project_property(C, *shape, -1, *shape_field);
+              shape_field->append_str("panel", candidate.id);
+              shape_field->append_str("tab", tab_id);
+              shape_field->append_int("native", 1);
+              seen.insert(property_key(*shape, -1));
+              break;
+            }
+          }
+          field->append_str("panel", candidate.id);
+          field->append_str("tab", tab_id);
+          field->append_int("native", 1);
+        }
+        continue;
+      }
+      PropertyRNA *menu_enum_prop = nullptr;
+      if (wmOperatorType *menu_ot = button_operatortype_get_from_enum_menu(&but, &menu_enum_prop)) {
+        /* An operator's enum as a menu, such as Add Object Constraint. */
+        if (!menu_enum_prop || (but.flag & UI_HIDDEN)) {
+          continue;
+        }
+        const std::string key = std::string("menu:") + menu_ot->idname + ":" +
+                                RNA_property_identifier(menu_enum_prop);
+        PointerRNA op_ptr = WM_operator_properties_create_ptr(menu_ot);
+        if (execute) {
+          const auto value = query->lookup_str("value");
+          if (target_panel && requested_key && *requested_key == key && value && !operator_type &&
+              !(but.flag & (BUT_DISABLED | BUT_INACTIVE)))
+          {
+            operator_type = menu_ot;
+            operator_properties = MEM_new<PointerRNA>(__func__, op_ptr);
+            WM_operator_properties_alloc(&operator_properties,
+                                         reinterpret_cast<IDProperty **>(&operator_properties->data),
+                                         menu_ot->idname);
+            RNA_enum_set_identifier(C, operator_properties, RNA_property_identifier(menu_enum_prop),
+                                    value->c_str());
+            if (but.context) {
+              operator_context = std::make_unique<bContextStore>(*but.context);
+            }
+            operator_exec = true;
+          }
+        }
+        else if (seen.insert(key).second) {
+          auto field = append_field();
+          field->append_str("type", "OPERATOR_MENU");
+          field->append_str("label", but.str.empty() ? WM_operatortype_name(menu_ot, nullptr) : but.str);
+          field->append_str("key", key);
+          field->append_str("icon", icon_name(button_icon(&but)));
+          field->append_int("editable", !(but.flag & (BUT_DISABLED | BUT_INACTIVE)));
+          auto options = field->append_array("options");
+          const EnumPropertyItem *items;
+          int count;
+          bool free;
+          RNA_property_enum_items_gettexted(C, &op_ptr, menu_enum_prop, &items, &count, &free);
+          for (int i = 0; i < count; i++) {
+            auto option = options->append_dict();
+            if (!items[i].identifier || !items[i].identifier[0]) {
+              /* Headings start groups; unnamed items are separators. */
+              option->append_str("heading", items[i].name ? items[i].name : "");
+              continue;
+            }
+            option->append_str("value", items[i].identifier);
+            option->append_str("label", items[i].name);
+            option->append_str("icon", icon_name(items[i].icon));
+          }
+          if (free) {
+            MEM_delete(items);
+          }
+          field->append_str("panel", candidate.id);
+          field->append_str("tab", tab_id);
+          field->append_int("native", 1);
+        }
+        continue;
+      }
+      if (physics_toggles && !but.optype) {
+        /* Per-type viewport toggles beside the switches belong to each physics panel. */
+        continue;
+      }
       /* Keep only viewport enablement in modifier headers. Other display options belong
        * inside the expanded native panel. */
       const bool header_operator = header_buttons.count(&but) && but.optype && !(but.flag & UI_HIDDEN);
@@ -1351,9 +2106,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           /* This opens an unrelated Blender window, not a viewport shading setting. */
           continue;
         }
-        const std::string key = std::string(but.optype->idname) + ":" +
-            (but.opptr ? RNA_pointer_as_string_keywords(C, but.opptr, false, false, true, INT_MAX) : "") + ":" +
-            std::to_string(object ? object->id.session_uid : 0);
+        const std::string key = operator_key(C, but, object);
         if (execute && !operator_type && target_panel && requested_key && *requested_key == key &&
             !(but.flag & (BUT_DISABLED | BUT_INACTIVE)) && but.optype->exec) {
           operator_type = but.optype;
@@ -1373,6 +2126,19 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
             /* A toggle operator drawn as a checkbox (e.g. Dyntopo): native UI shows a switch. */
             field->append_int("checkbox", 1);
             field->append_int("value", button_icon(&but) == ICON_CHECKBOX_HLT);
+          }
+          else if (physics_toggles) {
+            /* Physics are added and removed with one button each, which shows an X while the
+             * physics is on: a switch per type. */
+            const bool enabled = button_icon(&but) == ICON_X;
+            field->append_int("checkbox", 1);
+            field->append_int("value", enabled);
+            field->append_str("leading_icon", icon_name(enabled ? physics_icon(C, but) :
+                                                                  button_icon(&but)));
+            /* Natively each physics is one section: this switch heads its settings. */
+            if (const char *panel_id = physics_panel(C, but)) {
+              field->append_str("physics_panel", panel_id);
+            }
           }
           field->append_int("editable", !(but.flag & (BUT_DISABLED | BUT_INACTIVE)) && but.optype->exec);
           if (header_operator) {
@@ -1420,6 +2186,10 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
           if (but.type == ButtonType::Row && RNA_property_type(but.rnaprop) == PROP_ENUM) {
             /* Authored as an expanded row (e.g. selection mode), not a dropdown. */
             field->append_int("expand", 1);
+          }
+          if (const auto group = toggle_groups.find(&but); group != toggle_groups.end()) {
+            field->append_str("toggle_group", candidate.id + ":" + std::to_string(group->second.first));
+            field->append_str("toggle_caption", group->second.second);
           }
           if (const auto found = tool_labels.find(&but);
               tool_settings && found != tool_labels.end()) {
@@ -1480,7 +2250,7 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     CTX_store_set(C, operator_context.get());
     /* Panel buttons such as a modifier's delete button name their target only through the
      * context store, which the operator reads in invoke (as a click in Blender would). */
-    const wm::OpCallContext call = operator_context && operator_type->invoke ?
+    const wm::OpCallContext call = operator_context && operator_type->invoke && !operator_exec ?
                                        wm::OpCallContext::InvokeDefault :
                                        wm::OpCallContext::ExecDefault;
     if (WM_operator_poll_context(C, operator_type, call)) {
@@ -1491,6 +2261,9 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     if (operator_properties) {
       WM_operator_properties_free(operator_properties);
       MEM_delete(operator_properties);
+    }
+    if (applied) {
+      finish_pending_new_id(C, pending_new_id);
     }
   }
   if (execute) {
