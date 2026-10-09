@@ -46,6 +46,11 @@ def archive(app, output, profile, identity, dsym=None):
         entitlement_path.write_bytes(plistlib.dumps(entitlements))
         for framework in sorted((bundle / 'Frameworks').glob('*.framework')):
             subprocess.run(['codesign', '--force', '--sign', identity, '--timestamp=none', str(framework)], check=True)
+        # App extensions are signed before the app that contains them. Exporting with automatic
+        # signing provisions each one under its own identifier.
+        for extension in sorted((bundle / 'PlugIns').glob('*.appex')):
+            subprocess.run(['codesign', '--force', '--sign', identity, '--timestamp=none', str(extension)],
+                           check=True)
         subprocess.run(['codesign', '--force', '--sign', identity, '--timestamp=none',
                         '--entitlements', str(entitlement_path), '--generate-entitlement-der', str(bundle)], check=True)
         subprocess.run(['codesign', '--verify', '--deep', '--strict', str(bundle)], check=True)

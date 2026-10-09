@@ -105,6 +105,12 @@ def _prepare(source, output, replacements):
     frameworks = output / 'Frameworks'
     frameworks.mkdir(exist_ok=True)
     binaries = [output / info['CFBundleExecutable']]
+    # App extensions, such as the thumbnailer, load the same libraries from the app's Frameworks.
+    extensions = []
+    for appex in sorted((output / 'PlugIns').glob('*.appex')):
+        appex_info = plistlib.loads((appex / 'Info.plist').read_bytes())
+        extensions.append(appex / appex_info['CFBundleExecutable'])
+    binaries.extend(extensions)
     for real, (name, replacement) in libraries.items():
         framework = frameworks / (name + '.framework')
         framework.mkdir()
@@ -144,6 +150,12 @@ def _prepare(source, output, replacements):
     load_commands = run('xcrun', 'otool', '-l', str(executable))
     if 'path @executable_path/Frameworks ' not in load_commands:
         run('xcrun', 'install_name_tool', '-add_rpath', '@executable_path/Frameworks', str(executable))
+    for extension in extensions:
+        # `Blender.app/PlugIns/<name>.appex/<executable>` reaches `Blender.app/Frameworks`.
+        load_commands = run('xcrun', 'otool', '-l', str(extension))
+        if 'path @executable_path/../../Frameworks ' not in load_commands:
+            run('xcrun', 'install_name_tool', '-add_rpath', '@executable_path/../../Frameworks',
+                str(extension))
     for path in candidates:
         (output / path.relative_to(source)).unlink()
     # Python's development configuration can include linker objects and static archives.
@@ -156,7 +168,7 @@ def _prepare(source, output, replacements):
     # A distribution app must not contain development probes or an injected test library.
     for path in output.rglob('*'):
         if path.is_file() and macho_type(path) is not None:
-            if path != executable and frameworks not in path.parents:
+            if path != executable and path not in extensions and frameworks not in path.parents:
                 raise ValueError(f'Unexpected executable outside Frameworks: {path}')
     for binary in binaries:
         for dependency in dependencies(binary):
