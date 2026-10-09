@@ -11,10 +11,16 @@ static const double kShowAfter = 0.3;
 /* Once shown, stay long enough to be read rather than flicker. */
 static const double kMinimumVisible = 0.5;
 
+/* The pill's contents in SwiftUI (`intern/swift/CompileIndicator.swift`). */
+@interface UIView (GHOSTIOSSwiftCompileProgressView)
+- (void)setFinished:(NSInteger)finished total:(NSInteger)total;
+@end
+
 @implementation GHOSTIOSCompileIndicator {
   UIVisualEffectView *_pill;
   UIProgressView *_progress;
   UILabel *_count;
+  UIView *_swiftContent;
   NSTimer *_timer;
   BOOL _shown;
   CFTimeInterval _shownAt;
@@ -48,16 +54,26 @@ static const double kMinimumVisible = 0.5;
     _count.font = [UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightRegular];
     _count.textColor = UIColor.tertiaryLabelColor;
 
-    UIStackView *row = [[[UIStackView alloc] initWithArrangedSubviews:@[title, _progress, _count]]
+    UIView *row = [[[UIStackView alloc] initWithArrangedSubviews:@[title, _progress, _count]]
         autorelease];
-    row.alignment = UIStackViewAlignmentCenter;
-    row.spacing = 10;
+    ((UIStackView *)row).alignment = UIStackViewAlignmentCenter;
+    ((UIStackView *)row).spacing = 10;
+    Class swift_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
+                            nil :
+                            NSClassFromString(@"GHOSTIOSSwiftCompileProgressView");
+    if (swift_class) {
+      _swiftContent = [[swift_class alloc] initWithFrame:CGRectZero];
+      row = _swiftContent;
+    }
     row.translatesAutoresizingMaskIntoConstraints = NO;
     [_pill.contentView addSubview:row];
     [overlay addSubview:_pill];
     [NSLayoutConstraint activateConstraints:@[
-      [row.leadingAnchor constraintEqualToAnchor:_pill.contentView.leadingAnchor constant:14],
-      [row.trailingAnchor constraintEqualToAnchor:_pill.contentView.trailingAnchor constant:-14],
+      [row.leadingAnchor constraintEqualToAnchor:_pill.contentView.leadingAnchor
+                                          constant:_swiftContent ? 0 : 14],
+      [row.trailingAnchor constraintEqualToAnchor:_pill.contentView.trailingAnchor
+                                           constant:_swiftContent ? 0 : -14],
+      [row.heightAnchor constraintEqualToAnchor:_pill.contentView.heightAnchor],
       [row.centerYAnchor constraintEqualToAnchor:_pill.contentView.centerYAnchor],
       [_pill.heightAnchor constraintEqualToConstant:32],
       [_pill.centerXAnchor constraintEqualToAnchor:overlay.centerXAnchor],
@@ -83,6 +99,7 @@ static const double kMinimumVisible = 0.5;
   [_pill release];
   [_progress release];
   [_count release];
+  [_swiftContent release];
   [super dealloc];
 }
 
@@ -103,6 +120,7 @@ static const double kMinimumVisible = 0.5;
     const float fraction = total > 0 ? float(finished) / float(total) : 0.0f;
     [_progress setProgress:fraction animated:_shown && fraction >= _progress.progress];
     _count.text = [NSString stringWithFormat:@"%d/%d", finished, total];
+    [_swiftContent setFinished:finished total:total];
     _pill.accessibilityValue = [NSString stringWithFormat:@"%d of %d", finished, total];
     [self setShown:YES];
   }
