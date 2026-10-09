@@ -274,9 +274,20 @@ class Any {
 
   template<typename T, typename... Args> std::decay_t<T> &emplace(Args &&...args)
   {
+    using DecayT = std::decay_t<T>;
+    if (!this->has_value()) {
+      return this->emplace_on_empty<DecayT>(std::forward<Args>(args)...);
+    }
+    if (this->is<DecayT>()) {
+      DecayT &value = this->get<DecayT>();
+      /* Reconstruct in place so that the potential allocation can be reused. */
+      std::destroy_at(&value);
+      new (&value) DecayT(std::forward<Args>(args)...);
+      return value;
+    }
     this->~Any();
-    new (this) Any(std::in_place_type<T>, std::forward<Args>(args)...);
-    return this->get<T>();
+    new (this) Any(std::in_place_type<DecayT>, std::forward<Args>(args)...);
+    return this->get<DecayT>();
   }
 
   template<typename T, typename... Args> std::decay_t<T> &emplace_on_empty(Args &&...args)

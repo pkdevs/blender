@@ -498,39 +498,6 @@ void *SocketValueVariant::allocate_single(const CPPType &type)
   return SocketValueVariant::allocate(type, value_);
 }
 
-bool SocketValueVariant::is_single() const
-{
-  const CPPType *type = this->get().type();
-  if (!type) {
-    return false;
-  }
-#define X(TYPE) \
-  if (type->is<TYPE>()) { \
-    return true; \
-  }
-  SOCKET_VALUE_SINGLE_TYPES
-#undef X
-  return false;
-}
-
-bool SocketValueVariant::is_field() const
-{
-  return this->get().type()->is<fn::GField>();
-}
-
-bool SocketValueVariant::is_list() const
-{
-  return this->get().type()->is<nodes::GListPtr>();
-}
-bool SocketValueVariant::is_volume_grid() const
-{
-#ifdef WITH_OPENVDB
-  return this->get().type()->is<bke::GVolumeGrid>();
-#else
-  return false;
-#endif
-}
-
 bool SocketValueVariant::is_context_dependent_field() const
 {
   const fn::GField *field = this->get_if<fn::GField>();
