@@ -49,6 +49,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(true)
       .hide_value()
       .structure_type(StructureType::Field);
+  b.add_input<decl::Bool>("Set Background Value"_ustr).default_value(true);
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -199,6 +200,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
+  const bool set_background = params.get_input<bool>("Set Background Value"_ustr);
   bke::VolumeTreeAccessToken tree_token;
   openvdb::GridBase &grid_base = grid.get_for_write().grid_for_write(tree_token);
 
