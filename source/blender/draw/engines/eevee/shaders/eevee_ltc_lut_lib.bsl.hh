@@ -89,18 +89,18 @@ struct LTCData {
    * Sample matrix data from an isotropic LTC LUT.
    */
   static LTCData sample_lut(const UtilityTexture &util_tx,
-                            float3 /* N */,
-                            float3 /* V */,
-                            float cos_theta,
-                            float roughness,
+                            const float3 /* N */,
+                            const float3 /* V */,
+                            const float cos_theta,
+                            const float roughness,
                             const int layer)
   {
     /* Sample 4 components from isotropic LTC LUT. */
     const float2 coords = detail::get_isotropic_coords(cos_theta, roughness);
-    float4 lut_pack = util_tx.sample_lut(coords, layer);
+    const float4 lut_packed = util_tx.sample_lut(coords, layer);
 
     /* Expand components to full inverse LTC matrix. */
-    float3x3 Minv = detail::unpack_isotropic_matrix(lut_pack);
+    float3x3 Minv = detail::unpack_isotropic_matrix(lut_packed);
 
     /* Rotate into orthonormal basis around N. */
     /* TODO(not_mark): re-enable, and update tests as this causes precision change. */
@@ -115,7 +115,7 @@ struct LTCData {
   /**
    * Return matrix data producing a cosine distribution.
    */
-  static LTCData identity(float3 /* N */, float3 /* V */)
+  static LTCData identity(const float3 /* N */, const float3 /* V */)
   {
     /* Rotate into orthonormal basis around N. */
     /* TODO(not_mark): re-enable, and update tests as this causes precision change. */
@@ -133,10 +133,10 @@ struct LTCData {
    */
   static void pack_ggx_lut(ClosureLight &cl,
                            const UtilityTexture &util_tx,
-                           float3 N,
-                           float3 V,
-                           float cos_theta,
-                           float roughness)
+                           const float3 N,
+                           const float3 V,
+                           const float cos_theta,
+                           const float roughness)
   {
     LTCData ltc_data = LTCData::sample_lut(
         util_tx, N, V, cos_theta, roughness, UTIL_LTC_MAT_GGX_LAYER);
@@ -148,7 +148,7 @@ struct LTCData {
   /**
    * Define matrix data producing a cosine distribution and store to ClosureLight packing.
    */
-  static void pack_identity(ClosureLight &cl, float3 N, float3 V)
+  static void pack_identity(ClosureLight &cl, const float3 N, const float3 V)
   {
     LTCData ltc_data = LTCData::identity(N, V);
     ltc_data.pack_to(cl);
