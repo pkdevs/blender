@@ -469,28 +469,46 @@ void *SocketValueVariant::init_default(const CPPType &type, detail::SocketValueV
   return nullptr;
 }
 
+template<typename T> static void *allocate_typed(detail::SocketValueVariantAny &value)
+{
+  return value.allocate<T>();
+}
+
 void *SocketValueVariant::allocate(const CPPType &type, detail::SocketValueVariantAny &value)
 {
-#define X(TYPE) \
-  if (type.is<TYPE>()) { \
-    return value.allocate<TYPE>(); \
-  }
-  SOCKET_VALUE_SINGLE_TYPES
-#undef X
+  using AllocateFn = void *(*)(detail::SocketValueVariantAny &);
+  /* Use an array indexed by #CPPType::type_index instead of a #Map for faster lookup. */
+  static const Vector<AllocateFn, 0> allocate_fns = []() {
+    Vector<AllocateFn, 0> vec;
+    auto add_allocate_fn = [&]<typename T>() {
+      const int type_index = CPPType::get<T>().type_index;
+      if (type_index >= vec.size()) {
+        vec.resize(type_index + 1, nullptr);
+      }
+      vec[type_index] = allocate_typed<T>;
+    };
 
-  if (type.is<GField>()) {
-    return value.allocate<GField>();
-  }
-  if (type.is<GListPtr>()) {
-    return value.allocate<GListPtr>();
-  }
+#define X(TYPE) add_allocate_fn.template operator()<TYPE>();
+    SOCKET_VALUE_SINGLE_TYPES
+#undef X
+    add_allocate_fn.template operator()<GField>();
+    add_allocate_fn.template operator()<GListPtr>();
 #ifdef WITH_OPENVDB
-  if (type.is<GVolumeGrid>()) {
-    return value.allocate<GVolumeGrid>();
-  }
+    add_allocate_fn.template operator()<GVolumeGrid>();
 #endif
-  BLI_assert_unreachable();
-  return nullptr;
+    return vec;
+  }();
+
+  if (type.type_index >= allocate_fns.size()) {
+    BLI_assert_unreachable();
+    return nullptr;
+  }
+  const AllocateFn fn = allocate_fns[type.type_index];
+  if (!fn) {
+    BLI_assert_unreachable();
+    return nullptr;
+  }
+  return fn(value);
 }
 
 void *SocketValueVariant::allocate_single(const CPPType &type)
