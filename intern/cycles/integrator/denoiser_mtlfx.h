@@ -194,7 +194,7 @@ private:
         const device float *motion = buffer + pass.render_pass_motion;
         float4 color;
         
-        color.x = -motion[0] * pixelScale;
+        color.x = motion[0] * pixelScale;
         color.y = -motion[1] * pixelScale;
         
         motion_tex.write(float4(color.x, color.y, 0.0f, 1.0f), flip_tid);

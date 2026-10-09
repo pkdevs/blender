@@ -79,14 +79,14 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     desc.specularHitDistanceTextureEnabled = false;
     desc.inputWidth = buffer_params.width;
     desc.inputHeight = buffer_params.height;
-    desc.outputWidth = buffer_params.width;
-    desc.outputHeight = buffer_params.height;
+    desc.outputWidth = context.denoised_buffer_params.width;
+    desc.outputHeight = context.denoised_buffer_params.height;
 
     desc.colorTextureFormat = MTLPixelFormatRGBA16Float;
     desc.depthTextureFormat = MTLPixelFormatR32Float;
     desc.motionTextureFormat = MTLPixelFormatRG16Float;
     
-    desc.normalTextureFormat = MTLPixelFormatRGBA8Snorm;
+    desc.normalTextureFormat = MTLPixelFormatRGBA16Snorm;
     desc.roughnessTextureFormat = MTLPixelFormatR16Float;
     desc.diffuseAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
     desc.specularAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
@@ -113,8 +113,7 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     tex_desc.pixelFormat = MTLPixelFormatRG16Float;
     motion_texture = [device newTextureWithDescriptor: tex_desc];
     
-    // NOTE TO SELF: normals are expected in world space, not view space.
-    tex_desc.pixelFormat = MTLPixelFormatRGBA8Snorm;
+    tex_desc.pixelFormat = MTLPixelFormatRGBA16Snorm;
     normal_texture = [device newTextureWithDescriptor: tex_desc];
     
     tex_desc.pixelFormat = MTLPixelFormatR16Float;
@@ -124,6 +123,9 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     diffuse_albedo_texture = [device newTextureWithDescriptor: tex_desc];
     
     specular_albedo_texture = [device newTextureWithDescriptor: tex_desc];
+    
+    tex_desc.width = context.denoised_buffer_params.width;
+    tex_desc.height = context.denoised_buffer_params.height;
   
     tex_desc.pixelFormat = MTLPixelFormatRGBA16Float;
     output_texture = [device newTextureWithDescriptor: tex_desc];
@@ -157,16 +159,17 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
   return false;
 }
 
-bool MetalFXDenoiser::denoise_configure_if_needed(DenoiseContext &context)
+bool MetalFXDenoiser::denoise_configure_if_needed(DenoiseContext & /*context*/)
 {
   return true;
 }
 
 bool MetalFXDenoiser::denoise_filter_color_preprocess(const DenoiseContext &context, const DenoisePass &pass)
 {
-  // TODO: Synchronize is a small workaround to make the timing of MetalFX denoising work with different command buffers.
-  // In the future, I'd like to hook into the denoiser queue/buffer so that we don't have to do this.
-  denoiser_queue_->synchronize();
+  if (pass.type != PASS_COMBINED) {
+    return true;
+  }
+  
   id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
   id<MTLCommandBuffer> cmd = [queue commandBuffer];
   id<MTLComputeCommandEncoder> encoder = [cmd computeCommandEncoder];
@@ -199,17 +202,14 @@ bool MetalFXDenoiser::denoise_filter_color_preprocess(const DenoiseContext &cont
   [encoder dispatchThreads: gridSize threadsPerThreadgroup: threadSize];
   [encoder endEncoding];
   
-  // TODO: these may not be needed in the future
   [cmd commit];
   [cmd waitUntilCompleted];
   
-  // TODO: return true only if the kernel succeeded.
   return true;
 }
 
 bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
 {
-  denoiser_queue_->synchronize();
   id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
   id<MTLCommandBuffer> cmd = [queue commandBuffer];
   id<MTLComputeCommandEncoder> encoder = [cmd computeCommandEncoder];
@@ -235,12 +235,10 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
     context.pass_motion,
     context.buffer_params.get_pass_offset(PASS_NORMAL),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
+    context.pass_denoising_albedo,
     context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
     context.num_samples,
   };
-  
-  printf("diffuse: %d\n", passParams.render_pass_diffuse_albedo);
   
   id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
   
@@ -261,17 +259,18 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
   [encoder dispatchThreads: gridSize threadsPerThreadgroup: threadSize];
   [encoder endEncoding];
   
-  // TODO: these may not be needed in the future
   [cmd commit];
   [cmd waitUntilCompleted];
   
-  // TODO: return true only if the kernel succeeded.
   return true;
 }
 
 bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &context, const DenoisePass &pass)
 {
-  denoiser_queue_->synchronize();
+  if (pass.type != PASS_COMBINED) {
+    return true;
+  }
+  
   id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
   id<MTLCommandBuffer> cmd = [queue commandBuffer];
   id<MTLComputeCommandEncoder> encoder = [cmd computeCommandEncoder];
@@ -324,13 +323,12 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
   [encoder setBytes: &denoise length: sizeof(denoise) atIndex: 3];
   
   MTLSize gridSize = MTLSizeMake(params.width, params.height, 1);
-  id<MTLComputePipelineState> pso = (id<MTLComputePipelineState>) color_pre_pso;
+  id<MTLComputePipelineState> pso = (id<MTLComputePipelineState>) color_post_pso;
   MTLSize threadSize = MTLSizeMake(pso.threadExecutionWidth, pso.maxTotalThreadsPerThreadgroup / pso.threadExecutionWidth, 1);
   
   [encoder dispatchThreads: gridSize threadsPerThreadgroup: threadSize];
   [encoder endEncoding];
   
-  // TODO: these may not be needed in the future
   [cmd commit];
   [cmd waitUntilCompleted];
   
@@ -339,6 +337,10 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
 
 bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass &pass)
 {
+  if (pass.type != PASS_COMBINED) {
+    return true;
+  }
+  
   id<MTLFXTemporalDenoisedScaler> denoiser = (id<MTLFXTemporalDenoisedScaler>) mtlfx_denoiser;
   id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
   id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
@@ -355,8 +357,8 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   denoiser.outputTexture         = (id<MTLTexture>) output_texture;
   denoiser.jitterOffsetX         = context.pixel_jitter.x;
   denoiser.jitterOffsetY         = context.pixel_jitter.y;
-  denoiser.motionVectorScaleX    = context.buffer_params.width;
-  denoiser.motionVectorScaleY    = context.buffer_params.height;
+  denoiser.motionVectorScaleX    = 1.0;
+  denoiser.motionVectorScaleY    = 1.0;
   
   [denoiser encodeToCommandBuffer: command_buffer];
   
