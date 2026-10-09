@@ -249,12 +249,11 @@ class CYCLES_RENDER_PT_sampling_viewport(CyclesButtonsPanel, Panel):
         
         layout.active = not (cscene.use_preview_denoising and cscene.preview_denoiser == 'MTLFX')
 
-        layout.active = not show_preview_dlss_active(context)
-
         layout.use_property_split = True
         layout.use_property_decorate = False
 
         heading = layout.column(align=True, heading="Noise Threshold")
+        heading.active = not show_preview_dlss_active(context)
         row = heading.row(align=True)
         row.prop(cscene, "use_preview_adaptive_sampling", text="")
         sub = row.row()
@@ -302,10 +301,9 @@ class CYCLES_RENDER_PT_sampling_viewport_denoise(CyclesButtonsPanel, Panel):
             if has_dlss_gpu_devices(context):
                 col.prop(cscene, "preview_denoising_upscale_quality", text="Upscale Mode")
             else:
-                col.label(text=rpt_("Requires NVIDIA GPU with compute capability %s") % "7.5",
-                          icon='INFO', translate=False)
-                col.label(text=rpt_("and NVIDIA driver version %s or newer") % "590",
-                          icon='BLANK1', translate=False)
+                col.label_multiline(
+                    text=rpt_("Requires NVIDIA GPU with compute capability %s and NVIDIA driver version %s or newer.") %
+                    ("7.5", "590"), icon='STATUS_INFO', translate=False)
             return
 
         if effective_preview_denoiser == 'MTLFX':

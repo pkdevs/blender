@@ -658,6 +658,8 @@ GeometryDeformation get_evaluated_grease_pencil_drawing_deformation(
     return deformation;
   }
 
+  bool uses_drawing_hints = false;
+
   /* If there are edit hints, use the positions of those. */
   if (geometry_eval->has<GeometryComponentEditData>()) {
     const GeometryComponentEditData &edit_component_eval =
@@ -675,8 +677,39 @@ GeometryDeformation get_evaluated_grease_pencil_drawing_deformation(
         if (drawing_hints->deform_mats.has_value()) {
           deformation.deform_mats = *drawing_hints->deform_mats;
         }
+        uses_drawing_hints = true;
       }
     }
+  }
+  if (uses_drawing_hints) {
+    return deformation;
+  }
+
+  /* Use the positions of the evaluated drawing that corresponds to the original drawing, if the
+   * number of points matches. */
+  const GreasePencil *grease_pencil_eval = geometry_eval->get_grease_pencil();
+  if (grease_pencil_eval == nullptr) {
+    return deformation;
+  }
+
+  const Span<const greasepencil::Layer *> orig_layers = grease_pencil_orig.layers();
+  for (const greasepencil::Layer *layer_eval : grease_pencil_eval->layers()) {
+    const int orig_layer_index = layer_eval->runtime->orig_layer_index_;
+    if (!orig_layers.index_range().contains(orig_layer_index)) {
+      continue;
+    }
+    const greasepencil::Drawing *drawing_orig_at_frame = grease_pencil_orig.get_drawing_at(
+        *orig_layers[orig_layer_index], grease_pencil_eval->runtime->eval_frame);
+    if (drawing_orig_at_frame != &drawing_orig) {
+      continue;
+    }
+    const greasepencil::Drawing *drawing_eval = grease_pencil_eval->get_eval_drawing(*layer_eval);
+    if (drawing_eval != nullptr &&
+        drawing_eval->strokes().points_num() == drawing_orig.strokes().points_num())
+    {
+      deformation.positions = drawing_eval->strokes().positions();
+    }
+    break;
   }
 
   return deformation;
