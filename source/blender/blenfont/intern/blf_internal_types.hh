@@ -231,10 +231,8 @@ struct ShapingCache {
   size_t hits = 0;
   size_t inserts = 0;
   size_t evictions = 0;
-  const size_t glyph_count = thi
 
-                             const CachedString *
-                             lookup_ptr(const ShapingCacheKey &key)
+  const CachedString *lookup_ptr(const ShapingCacheKey &key)
   {
     ++this->lookups;
 
