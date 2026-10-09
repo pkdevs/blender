@@ -319,8 +319,11 @@ inline void *SocketValueVariant::ensure_type(const CPPType &type)
   return this->init_default(type);
 }
 
-template<typename T> T SocketValueVariant::copy_as() const
+template<typename T> inline T SocketValueVariant::copy_as() const
 {
+  if (const T *value = this->get_if<T>()) {
+    return *value;
+  }
   SocketValueVariant copy(*this);
   return copy.extract<T>();
 }
