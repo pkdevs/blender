@@ -121,6 +121,7 @@ BLI_NOINLINE static void process_leaf_node(const fn::Field<bool> &selection_fiel
                                            const volume_grid::LeafNodeMask &leaf_node_mask,
                                            const openvdb::CoordBBox &leaf_bbox,
                                            const volume_grid::GetVoxelsFn get_voxels_fn,
+                                           const bool set_background,
                                            openvdb::GridBase &output_grid)
 {
   AlignedBuffer<8192, 8> allocation_buffer;
@@ -146,12 +147,13 @@ BLI_NOINLINE static void process_leaf_node(const fn::Field<bool> &selection_fiel
 
   evaluator.evaluate();
 
-  volume_grid::set_leaf_values_off(output_grid, any_voxel_in_leaf, selection);
+  volume_grid::set_leaf_values_off(output_grid, any_voxel_in_leaf, selection, set_background);
 }
 
 BLI_NOINLINE static void process_voxels(const fn::Field<bool> &selection_field,
                                         const openvdb::math::Transform &transform,
                                         const Span<openvdb::Coord> voxels,
+                                        const bool set_background,
                                         openvdb::GridBase &output_grid)
 {
   const int64_t voxels_num = voxels.size();
@@ -165,12 +167,13 @@ BLI_NOINLINE static void process_voxels(const fn::Field<bool> &selection_field,
   evaluator.add_with_destination(selection_field, selection);
   evaluator.evaluate();
 
-  volume_grid::set_grid_values_off(output_grid, selection, voxels);
+  volume_grid::set_grid_values_off(output_grid, selection, voxels, set_background);
 }
 
 BLI_NOINLINE static void process_tiles(const fn::Field<bool> &selection_field,
                                        const openvdb::math::Transform &transform,
                                        const Span<openvdb::CoordBBox> tiles,
+                                       const bool set_background,
                                        openvdb::GridBase &output_grid)
 {
   const int64_t tiles_num = tiles.size();
@@ -185,7 +188,7 @@ BLI_NOINLINE static void process_tiles(const fn::Field<bool> &selection_field,
   evaluator.add_with_destination(selection_field, selection);
   evaluator.evaluate();
 
-  volume_grid::set_tile_values_off(output_grid, selection, tiles);
+  volume_grid::set_tile_values_off(output_grid, selection, tiles, set_background);
 }
 
 #endif
@@ -223,14 +226,19 @@ static void node_geo_exec(GeoNodeExecParams params)
         [&](const volume_grid::LeafNodeMask &leaf_node_mask,
             const openvdb::CoordBBox &leaf_bbox,
             const volume_grid::GetVoxelsFn get_voxels_fn) {
-          process_leaf_node(
-              selection_field, transform, leaf_node_mask, leaf_bbox, get_voxels_fn, grid_base);
+          process_leaf_node(selection_field,
+                            transform,
+                            leaf_node_mask,
+                            leaf_bbox,
+                            get_voxels_fn,
+                            set_background,
+                            grid_base);
         },
         [&](const Span<openvdb::Coord> voxels) {
-          process_voxels(selection_field, transform, voxels, grid_base);
+          process_voxels(selection_field, transform, voxels, set_background, grid_base);
         },
         [&](const Span<openvdb::CoordBBox> tiles) {
-          process_tiles(selection_field, transform, tiles, grid_base);
+          process_tiles(selection_field, transform, tiles, set_background, grid_base);
         });
   }
 
