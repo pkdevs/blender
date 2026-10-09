@@ -38,24 +38,20 @@ namespace eevee::lut {
  *   where `F82_tint = mix(F0, float3(1), pow5f(6/7) * 7 / pow6f(6/7)) * (1 - F82)`.
  */
 struct GGXBrdfClosure {
-  float roughness;
+  GGXBrdf closure;
   float3 V;
 
-  static GGXBrdfClosure from_coords(float3 coords)
+  static GGXBrdfClosure from_coords(const float3 coords)
   {
-    /* We use squared roughness for approximate perceptual linearity
-     * following [Physically Based Shading at Disney]
-     * (https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)
-     * Section 5.4. */
-    float roughness = square(coords.x);
+    const float roughness = coords.x;
 
-    float NV = clamp(1.0f - square(coords.y), 1e-4f, 0.9999f);
-    float3 V = float3(sqrt(1.0f - square(NV)), 0.0f, NV);
+    const float NV = clamp(1.0f - square(coords.y), 1e-4f, 0.9999f);
+    const float3 V = float3(sqrt(1.0f - square(NV)), 0.0f, NV);
 
-    return {roughness, V};
+    return {GGXBrdf::init(roughness), V};
   }
 
-  GGXBrdfData eval(float3 Xi) const
+  GGXBrdfData eval(const float3 rand) const
   {
     /* Geometric normal. */
     constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
@@ -64,20 +60,20 @@ struct GGXBrdfClosure {
     GGXBrdfData brdf = {};
 
     /* Sample light vector, recover half vector as microfacet normal. */
-    float3 L = bxdf_ggx_sample_reflection(Xi, V, roughness, false).direction;
-    float3 H = normalize(V + L);
+    const float3 L = closure.bsdf_sample(rand, V).direction;
+    const float3 H = normalize(V + L);
 
     /* Restrict light vector to positive hemisphere. */
-    float NL = L.z;
+    const float NL = L.z;
     if (NL > 0.0f) {
-      float weight = bxdf_ggx_eval_reflection(N, L, V, roughness, false).weight;
-      float VH = saturate(dot(V, H));
+      const float weight = closure.bsdf_eval(N, L, V).weight;
+      const float VH = saturate(dot(V, H));
 
       /* Schlick's Fresnel. */
-      float s = saturate(pow5f(1.0f - VH));
+      const float s = saturate(pow5f(1.0f - VH));
 
       /* F82 tint effect. */
-      float b = VH * saturate(pow6f(1.0f - VH));
+      const float b = VH * saturate(pow6f(1.0f - VH));
 
       brdf.scale = (1.0f - s) * weight;
       brdf.bias = s * weight;
@@ -105,6 +101,7 @@ struct GGXBrdfClosure {
  * - `transmittance = (1 - F0) * transmission_factor`.
  */
 struct GGXBsdfClosure {
+  GGXBrdf closure;
   float roughness;
   float ior;
   float3 V;
@@ -131,10 +128,10 @@ struct GGXBsdfClosure {
     float NV = clamp(coords.y, 1e-4f, 0.9999f);
     float3 V = float3(sqrt(1.0f - square(NV)), 0.0f, NV);
 
-    return {roughness, ior, V};
+    return {GGXBrdf::init(coords.z), roughness, ior, V};
   }
 
-  GGXBsdfData eval(float3 Xi) const
+  GGXBsdfData eval(const float3 Xi) const
   {
     /* Geometric normal. */
     constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
@@ -142,7 +139,7 @@ struct GGXBsdfClosure {
     GGXBsdfData bsdf = {};
 
     /* Reflection, restricted to positive hemisphere. */
-    float3 R = bxdf_ggx_sample_reflection(Xi, V, roughness, false).direction;
+    const float3 R = closure.bsdf_sample(Xi, V).direction;
     float NR = R.z;
     if (NR > 0.0f) {
       /* Recover half vector as GGX normal. */
@@ -153,7 +150,7 @@ struct GGXBsdfClosure {
       /* Schlick's Fresnel. */
       float s = saturate(pow5f(1.0f - saturate(HL)));
 
-      float weight = bxdf_ggx_eval_reflection(N, R, V, roughness, false).weight;
+      const float weight = closure.bsdf_eval(N, R, V).weight;
       bsdf.scale = (1.0f - s) * weight;
       bsdf.bias = s * weight;
     }

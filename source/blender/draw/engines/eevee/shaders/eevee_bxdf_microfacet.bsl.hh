@@ -32,137 +32,6 @@ float bxdf_ggx_smith_G1(float NX, float a2)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Bounded VNDF Sampling for Smith-GGX Reflections
- *
- * Eto, Kenta, and Yusuke Tokuyoshi. SIGGRAPH Asia 2023 Technical Communications. 2023. 1-4.
- * https://gpuopen.com/download/publications/Bounded_VNDF_Sampling_for_Smith-GGX_Reflections.pdf
- * \{ */
-
-/**
- * Returns a tangent space reflection direction following the GGX distribution.
- *
- * \param rand: random point on the unit cylinder (result of sample_cylinder).
- *              The Z component can be biased towards 1.
- * \param Vt: View vector in tangent space.
- * \param alpha: roughness parameter.
- * \param do_clamp: clamp for numerical stability during ray tracing.
- *
- * \return: the sampled direction and the pdf of sampling the direction.
- */
-BsdfSample bxdf_ggx_sample_reflection(float3 rand, float3 Vt, float alpha, bool do_clamp)
-{
-  if (do_clamp && alpha < square(BSDF_ROUGHNESS_THRESHOLD)) {
-    BsdfSample samp;
-    samp.pdf = 1e6f;
-    samp.direction = reflect(-Vt, float3(0.0f, 0.0f, 1.0f));
-    return samp;
-  }
-
-  /* Transforming the view direction to the hemisphere configuration. */
-  float2 Vt_alpha = alpha * Vt.xy;
-  float Vh_norm;
-  float3 Vh = normalize_and_get_length(float3(Vt_alpha, Vt.z), Vh_norm);
-
-  /* Compute the bounded cap. */
-  float a2 = square(alpha);
-  float s2 = square(1.0f + length(Vt.xy));
-  float k = (1.0f - a2) * s2 / (s2 + a2 * square(Vt.z));
-
-  /* Sample a spherical cap in (-Vh.z * k, 1]. */
-  float cos_theta = mix(-Vh.z * k, 1.0f, rand.x);
-  float sin_theta = sqrt(saturate(1.0f - square(cos_theta)));
-  float3 Lh = float3(sin_theta * rand.yz, cos_theta);
-
-  /* Compute unnormalized halfway direction. */
-  float3 Hh = Vh + Lh;
-
-  /* Transforming the normal back to the ellipsoid configuration. */
-  float3 Ht = normalize(float3(alpha * Hh.xy, max(0.0f, Hh.z)));
-
-  /* Normal Distribution Function. */
-  float D = bxdf_ggx_D(saturate(Ht.z), a2);
-
-  float pdf;
-  if (Vt.z >= 0.0f) {
-    pdf = D / (2.0f * (k * Vt.z + Vh_norm));
-  }
-  else {
-    float len_Vt_alpha_sqr = length_squared(Vt_alpha);
-    float t = sqrt(len_Vt_alpha_sqr + square(Vt.z));
-    pdf = D * (t - Vt.z) / (2.0f * len_Vt_alpha_sqr);
-  }
-
-  BsdfSample samp;
-  samp.direction = reflect(-Vt, Ht);
-  samp.pdf = pdf;
-  return samp;
-}
-
-/* Evaluate the GGX BRDF without the Fresnel term, multiplied by the cosine foreshortening term.
- * Also evaluate the probability of sampling the reflection direction. */
-BsdfEval bxdf_ggx_eval_reflection(float3 N, float3 L, float3 V, float alpha, bool do_clamp)
-{
-  float NV = dot(N, V);
-  if (NV <= 0.0f) {
-#if 0 /* TODO(fclem): Creates black areas when denoising. Find out why. */
-      /* Impossible configuration for reflection. */
-      BsdfEval eval;
-      eval.throughput = 0.0f;
-      eval.pdf = 0.0f;
-      eval.weight = 0.0f;
-      return eval;
-#endif
-  }
-
-  float3 H = safe_normalize(L + V);
-
-  /* This threshold was computed based on precision of NVidia compiler (see #118997).
-   * These drivers tend to produce NaNs in the computation of the NDF (`D`) if alpha is close to 0.
-   */
-  if (do_clamp) {
-    alpha = max(1e-3f, alpha);
-  }
-
-  float a2 = square(alpha);
-
-  BsdfEval eval;
-
-  float NV2 = square(NV);
-  float one_minus_NV2 = saturate(1.0f - NV2);
-  float s2 = square(1.0f + sqrt(one_minus_NV2));
-  float len_ai_sqr = a2 * one_minus_NV2;
-  float t = sqrt(len_ai_sqr + NV2);
-  if (NV >= 0.0f) {
-    float k = (1.0f - a2) * s2 / (s2 + a2 * NV2);
-    eval.pdf = 1.0f / (2.0f * (k * NV + t));
-  }
-  else {
-    eval.pdf = (t - NV) / (2.0f * len_ai_sqr);
-  }
-
-  float NH = dot(N, H);
-  float NL = dot(N, L);
-  if (do_clamp) {
-    NH = max(NH, 1e-8f);
-    NL = max(NL, 1e-8f);
-  }
-
-  float D = bxdf_ggx_D(NH, a2);
-  float G_V = bxdf_ggx_smith_G1(NV, a2);
-  float G_L = bxdf_ggx_smith_G1(NL, a2);
-
-  eval.throughput = (0.25f * G_V * G_L) / NV;
-  eval.weight = eval.throughput / eval.pdf;
-
-  /* Multiply `D` after computing the weighted throughput for numerical stability. */
-  eval.throughput *= D;
-  eval.pdf *= D;
-
-  return eval;
-}
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Sampling Visible GGX Normals with Spherical Caps
  *
  * Jonathan Dupuy and Anis Benyoub, HPG Vol. 42, No. 8, 2023.
@@ -470,5 +339,136 @@ ClosureLight bxdf_ggx_light_thin_glass_transmission(const UtilityTexture &util_t
 
   return light;
 }
+
+/* -------------------------------------------------------------------- */
+/** Microfacet BSDFs
+ *
+ * \{ */
+
+struct GGXBrdf {
+  /* Roughness parameter. */
+  float alpha;
+
+  static GGXBrdf init(const float perceptual_roughness)
+  {
+    /* We use squared roughness for approximate perceptual linearity following
+     * [Physically Based Shading at Disney]
+     * (https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)
+     * Section 5.4. */
+    return {square(perceptual_roughness)};
+  }
+
+  /** \name Bounded VNDF Sampling for Smith-GGX Reflections
+   *
+   * Eto, Kenta, and Yusuke Tokuyoshi. SIGGRAPH Asia 2023 Technical Communications. 2023. 1-4.
+   * https://gpuopen.com/download/publications/Bounded_VNDF_Sampling_for_Smith-GGX_Reflections.pdf
+   *
+   * Returns a tangent space reflection direction following the GGX distribution.
+   *
+   * \param rand: random point on the unit cylinder (result of sample_cylinder).
+   *              The Z component can be biased towards 1.
+   * \param Vt: view vector in tangent space.
+   * \param do_clamp: clamp for numerical stability during ray tracing.
+   *
+   * \return: the sampled direction and the pdf of sampling the direction.
+   */
+  BsdfSample bsdf_sample(const float3 rand, const float3 Vt, const bool do_clamp = false) const
+  {
+    if (do_clamp && alpha < square(BSDF_ROUGHNESS_THRESHOLD)) {
+      return {.direction = reflect(-Vt, float3(0.0f, 0.0f, 1.0f)), .pdf = 1e6f};
+    }
+
+    /* Transforming the view direction to the hemisphere configuration. */
+    const float2 Vt_alpha = alpha * Vt.xy;
+    float Vh_norm;
+    const float3 Vh = normalize_and_get_length(float3(Vt_alpha, Vt.z), Vh_norm);
+
+    /* Compute the bounded cap. */
+    const float a2 = square(alpha);
+    const float s2 = square(1.0f + length(Vt.xy));
+    const float k = (1.0f - a2) * s2 / (s2 + a2 * square(Vt.z));
+
+    /* Sample a spherical cap in (-Vh.z * k, 1]. */
+    const float cos_theta = mix(-Vh.z * k, 1.0f, rand.x);
+    const float sin_theta = sqrt(saturate(1.0f - square(cos_theta)));
+    const float3 Lh = float3(sin_theta * rand.yz, cos_theta);
+
+    /* Compute unnormalized halfway direction. */
+    const float3 Hh = Vh + Lh;
+
+    /* Transforming the normal back to the ellipsoid configuration. */
+    const float3 Ht = normalize(float3(alpha * Hh.xy, max(0.0f, Hh.z)));
+
+    /* Normal Distribution Function. */
+    const float D = bxdf_ggx_D(saturate(Ht.z), a2);
+
+    float pdf;
+    if (Vt.z >= 0.0f) {
+      pdf = D / (2.0f * (k * Vt.z + Vh_norm));
+    }
+    else {
+      const float len_Vt_alpha_sqr = length_squared(Vt_alpha);
+      const float t = sqrt(len_Vt_alpha_sqr + square(Vt.z));
+      pdf = D * (t - Vt.z) / (2.0f * len_Vt_alpha_sqr);
+    }
+
+    return {.direction = reflect(-Vt, Ht), .pdf = pdf};
+  }
+
+  /* Evaluate the GGX BRDF without the Fresnel term, multiplied by the cosine foreshortening term.
+   * Also evaluate the probability of sampling the reflection direction. */
+  BsdfEval bsdf_eval(const float3 N,
+                     const float3 L,
+                     const float3 V,
+                     const bool do_clamp = false) const
+  {
+    const float NV = dot(N, V);
+    if (NV <= 0.0f) {
+#if 0 /* TODO(fclem): Creates black areas when denoising. Find out why. */
+      /* Impossible configuration for reflection. */
+      return BsdfEval::zero();
+#endif
+    }
+
+    BsdfEval eval;
+
+    const float3 H = safe_normalize(L + V);
+    /* This threshold was computed based on precision of Nvidia compiler (see #118997). These
+     * drivers tend to produce NaNs in the NDF (`D`) if alpha is close to 0. */
+    const float a2 = square(do_clamp ? max(1e-3f, alpha) : alpha);
+    const float NV2 = square(NV);
+    const float one_minus_NV2 = saturate(1.0f - NV2);
+    const float s2 = square(1.0f + sqrt(one_minus_NV2));
+    const float len_ai_sqr = a2 * one_minus_NV2;
+    const float t = sqrt(len_ai_sqr + NV2);
+    if (NV >= 0.0f) {
+      const float k = (1.0f - a2) * s2 / (s2 + a2 * NV2);
+      eval.pdf = 1.0f / (2.0f * (k * NV + t));
+    }
+    else {
+      eval.pdf = (t - NV) / (2.0f * len_ai_sqr);
+    }
+
+    float NH = dot(N, H);
+    float NL = dot(N, L);
+    if (do_clamp) {
+      NH = max(NH, 1e-8f);
+      NL = max(NL, 1e-8f);
+    }
+
+    const float D = bxdf_ggx_D(NH, a2);
+    const float G_V = bxdf_ggx_smith_G1(NV, a2);
+    const float G_L = bxdf_ggx_smith_G1(NL, a2);
+
+    eval.throughput = (0.25f * G_V * G_L) / NV;
+    eval.weight = eval.throughput / eval.pdf;
+
+    /* Multiply `D` after computing the weighted throughput for numerical stability. */
+    eval.throughput *= D;
+    eval.pdf *= D;
+
+    return eval;
+  }
+};
 
 /** \} */
