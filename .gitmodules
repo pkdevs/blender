@@ -21,5 +21,5 @@
 [submodule "lib/ios_arm64"]
 	update = none
 	path = lib/ios_arm64
-	url = https://projects.blender.org/blender/lib-ios_arm64.git
-	branch = blender-v5.1-release
+	url = https://projects.blender.org/WilliamReynish/lib-ios_arm64.git
+	branch = python-3.13
