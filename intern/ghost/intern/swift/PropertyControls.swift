@@ -104,7 +104,7 @@ struct NumberField: View {
           .font(numberFont)
           .lineLimit(1)
           .minimumScaleFactor(0.7)
-          .foregroundStyle(editable ? .primary : .secondary)
+          .foregroundStyle(editable ? .primary : .tertiary)
           .frame(maxWidth: .infinity, alignment: .trailing)
       }
     }
@@ -323,9 +323,9 @@ struct PropertySlider: View {
  * \{ */
 
 extension View {
-  /** Blender's animation color, or the app's accent when the property isn't animated. */
+  /** Blender's animation color, or the panels' blue when the property isn't animated. */
   func animationTint(_ state: String?) -> some View {
-    self.tint(animationStateColor(state) ?? Color.accentColor)
+    self.tint(animationStateColor(state) ?? PanelStyle.tint)
   }
 
   /** Blender's animation color, or the system's green for a switch that isn't animated. */
@@ -430,7 +430,7 @@ struct PropertyRow: View {
             OperatorButton(store: store, property: property)
           case "MENU":
             UIMenuButton(title: label, image: BlenderIcon.image(property.string("icon")),
-                         enabled: property.bool("editable"), tint: UIColor(Color.accentColor),
+                         enabled: property.bool("editable"), tint: PanelStyle.uiTint,
                          menuTitle: label) {
               store.menuProvider?(property as NSDictionary)
             }
@@ -676,6 +676,8 @@ struct EnumControl: View {
         }
       }
       .pickerStyle(.segmented)
+      /* As tall as UIKit makes it under the form's 40 point control minimum. */
+      .controlSize(.large)
       .disabled(!property.bool("editable"))
     }
     else if options.contains(where: { !($0.string("preview") ?? "").isEmpty }) {
@@ -726,20 +728,21 @@ struct PreviewEnumButton: View {
     Button {
       showing = true
     } label: {
+      /* The current choice's preview and name, as a plain button. */
       HStack(spacing: 12) {
-        PreviewThumbnail(path: current?.string("preview"), size: 56)
-        VStack(alignment: .leading) {
-          Text(property.string("label") ?? "").font(.caption).foregroundStyle(.secondary)
-          Text(current?.string("label") ?? (store.value(property) as? String ?? ""))
-            .foregroundStyle(.primary)
-        }
-        Spacer()
-        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+        PreviewThumbnail(path: current?.string("preview"), size: 56, cornerRadius: 8)
+        Text(current?.string("label") ?? (store.value(property) as? String ?? ""))
+          .foregroundStyle(.primary)
+        Spacer(minLength: 0)
       }
       .padding(.vertical, 4)
+      .frame(minHeight: 64)
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .disabled(!property.bool("editable"))
+    .accessibilityLabel(property.string("label") ?? "")
+    .accessibilityValue(current?.string("label") ?? "")
     .accessibilityHint("Shows all choices as previews.")
     .popover(isPresented: $showing) {
       PreviewGrid(title: property.string("label") ?? "", options: options,
@@ -756,6 +759,7 @@ struct PreviewThumbnail: View {
   var path: String?
   var fallback: UIImage? = nil
   var size: CGFloat
+  var cornerRadius: CGFloat? = nil
 
   var body: some View {
     Group {
@@ -776,7 +780,7 @@ struct PreviewThumbnail: View {
       }
     }
     .frame(width: size, height: size)
-    .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+    .clipShape(RoundedRectangle(cornerRadius: cornerRadius ?? size * 0.22, style: .continuous))
   }
 }
 
@@ -800,7 +804,7 @@ struct PreviewGrid: View {
                 Text(option.string("label") ?? "")
                   .font(.caption2)
                   .lineLimit(1)
-                  .foregroundStyle(current ? Color.accentColor : .secondary)
+                  .foregroundStyle(current ? PanelStyle.tint : .secondary)
               }
               .padding(4)
               .overlay(RoundedRectangle(cornerRadius: 12)

@@ -724,7 +724,7 @@ struct RowControl: View {
     let icon = control.string("icon") ?? ""
     if icon.isEmpty || icon == "NONE" || icon.hasPrefix("CHECKBOX") {
       Image(systemName: shown ? "checkmark.circle.fill" : "circle")
-        .foregroundStyle(shown ? Color.accentColor : .secondary)
+        .foregroundStyle(shown ? PanelStyle.tint : .secondary)
     }
     else if let image = BlenderIcon.image(shownIcon(icon, shown)) {
       Image(uiImage: image)
@@ -809,7 +809,7 @@ struct PreviewRow: View {
                   Text(option.string("label") ?? "")
                 }
               }
-              .foregroundStyle(selected ? Color.accentColor : .secondary)
+              .foregroundStyle(selected ? PanelStyle.tint : .secondary)
               .frame(width: 36, height: 34)
               .background(selected ? Color.accentColor.opacity(0.2) : .clear, in: Capsule())
             }

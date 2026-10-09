@@ -53,7 +53,7 @@ struct InspectorPanel: View {
       InspectorForm(store: store)
         .padding(.top, 4)
     }
-    .tint(Color.accentColor)
+    .tint(PanelStyle.tint)
   }
 }
 
@@ -101,37 +101,46 @@ struct PropertiesTabs: View {
 
 struct InspectorForm: View {
   @ObservedObject var store: InspectorStore
+  /** False to measure the form's natural height. */
+  var scrolls = true
 
   var body: some View {
-    ScrollView {
-      /* Not lazy: lazy stacks stay empty when they first appear in a hidden, unsized panel. */
-      /* Spaced like an inset grouped table: a 44 point header right above its card. */
-      VStack(alignment: .leading, spacing: 17) {
-        ForEach(store.sections) { section in
-          SectionView(store: store, section: section)
+    if scrolls {
+      ScrollView { content }
+        .scrollDismissesKeyboard(.interactively)
+        .overlay {
+          if store.loaded && !store.hasInspector && store.mode == .properties {
+            ContentUnavailableView("No Active Object", systemImage: "cube.transparent")
+          }
+          else if !store.loaded && store.mode == .shading {
+            ProgressView()
+          }
         }
-        if !store.status.isEmpty {
-          Text(store.status)
-            .font(.footnote)
-            .foregroundStyle(.red)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .transition(.opacity)
-        }
-      }
-      .padding(.horizontal, 16)
-      .padding(.top, 3)
-      .padding(.bottom, 16)
     }
-    .scrollDismissesKeyboard(.interactively)
-    .overlay {
-      if store.loaded && !store.hasInspector && store.mode == .properties {
-        ContentUnavailableView("No Active Object", systemImage: "cube.transparent")
+    else {
+      content.fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private var content: some View {
+    /* Not lazy: lazy stacks stay empty when they first appear in a hidden, unsized panel. */
+    /* Spaced like an inset grouped table: a 44 point header right above its card. */
+    VStack(alignment: .leading, spacing: 17) {
+      ForEach(store.sections) { section in
+        SectionView(store: store, section: section)
       }
-      else if !store.loaded && store.mode == .shading {
-        ProgressView()
+      if !store.status.isEmpty {
+        Text(store.status)
+          .font(.footnote)
+          .foregroundStyle(.red)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 8)
+          .transition(.opacity)
       }
     }
+    .padding(.horizontal, 16)
+    .padding(.top, 3)
+    .padding(.bottom, 16)
   }
 }
 
@@ -192,7 +201,7 @@ struct SectionView: View {
           }
           Text(section.title)
             .lineLimit(1)
-            .foregroundStyle(section.active ? Color.accentColor : .primary)
+            .foregroundStyle(section.active ? PanelStyle.tint : .primary)
           Spacer(minLength: 0)
         }
         .frame(minHeight: 44)
@@ -283,33 +292,6 @@ struct HeaderControls: View {
 }
 
 /* -------------------------------------------------------------------- */
-/** \name Popovers
- * \{ */
-
-/** Viewport shading and the full tool settings: the same form in a popover. */
-struct PopoverForm: View {
-  @ObservedObject var store: InspectorStore
-  let title: String
-  let done: () -> Void
-
-  var body: some View {
-    NavigationStack {
-      InspectorForm(store: store)
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-          ToolbarItem(placement: .confirmationAction) {
-            Button("Done", action: done)
-          }
-        }
-    }
-    .tint(Color.accentColor)
-  }
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Tool settings strip
  *
  * The active tool's settings in the top bar: compact columns, a caption over each control. The
@@ -335,7 +317,7 @@ struct ToolStrip: View {
       }
     }
     .frame(height: 40)
-    .tint(Color.accentColor)
+    .tint(PanelStyle.tint)
     .accessibilityIdentifier("blender.tool-settings.strip")
   }
 }

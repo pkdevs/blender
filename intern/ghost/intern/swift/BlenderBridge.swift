@@ -171,6 +171,12 @@ enum PanelStyle {
   /** Selected rows and tabs. */
   static let selection = dynamic(dark: UIColor(red: 47 / 255, green: 192 / 255, blue: 1, alpha: 1),
                                  light: UIColor(red: 0, green: 130 / 255, blue: 247 / 255, alpha: 1))
+  /** Tinted text and glyphs: the blue as UIKit draws it on the panels' glass, which lightens it. */
+  static let uiTint = UIColor {
+    $0.userInterfaceStyle == .dark ? UIColor(red: 58 / 255, green: 203 / 255, blue: 1, alpha: 1) :
+                                     UIColor(red: 0, green: 130 / 255, blue: 247 / 255, alpha: 1)
+  }
+  static let tint = Color(uiColor: uiTint)
   /** The active item of a list. */
   static let activeRow = Color(uiColor: .systemBlue).opacity(0.22)
 }

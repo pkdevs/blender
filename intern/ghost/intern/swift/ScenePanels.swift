@@ -109,6 +109,8 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   private func makeHost(_ view: AnyView) -> UIHostingController<AnyView> {
     let host = UIHostingController(rootView: view)
     host.view.backgroundColor = .clear
+    /* UIKit buttons in the panels take the tint as it reads on glass. */
+    host.view.tintColor = PanelStyle.uiTint
     host.sizingOptions = []
     host.safeAreaRegions = []
     return host
@@ -237,9 +239,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
       return
     }
     if shadingController == nil {
-      let content = UIHostingController(rootView: PopoverForm(store: shading, title: "Viewport Shading") {
-        [weak self] in self?.dismissShading()
-      })
+      let content = popoverController(shading, title: "Viewport Shading", done: #selector(dismissShading))
       content.preferredContentSize = CGSize(width: 400, height: 640)
       shadingController = content
     }
@@ -397,11 +397,10 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     guard let presenter = overlay?.window?.rootViewController, presenter.presentedViewController == nil else {
       return
     }
-    let content = UIHostingController(rootView: PopoverForm(store: toolPopover, title: "Tool Settings") {
-      [weak self] in self?.dismissToolSettings()
-    })
+    let content = popoverController(toolPopover, title: "Tool Settings", done: #selector(dismissToolSettings))
     /* Fit the popover to the few settings a tool has rather than a fixed sheet. */
-    let fitting = content.sizeThatFits(in: CGSize(width: 320, height: 1000))
+    let fitting = UIHostingController(rootView: InspectorForm(store: toolPopover, scrolls: false))
+      .sizeThatFits(in: CGSize(width: 320, height: CGFloat.greatestFiniteMagnitude))
     content.preferredContentSize = CGSize(width: 320, height: min(420, max(88, fitting.height)))
     content.modalPresentationStyle = .popover
     if let item = sender as? UIBarButtonItem {
@@ -416,7 +415,18 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     presenter.present(content, animated: true)
   }
 
-  private func dismissToolSettings() {
+  /** A form in a navigation controller with the system's Done, as Blender's popovers have. */
+  private func popoverController(_ store: InspectorStore, title: String, done: Selector) -> UIViewController {
+    let form = UIHostingController(rootView: InspectorForm(store: store).tint(PanelStyle.tint))
+    /* Let the popover's own glass show through, matching the inspector and rails. */
+    form.view.backgroundColor = .clear
+    form.view.tintColor = PanelStyle.uiTint
+    form.title = title
+    form.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: done)
+    return UINavigationController(rootViewController: form)
+  }
+
+  @objc private func dismissToolSettings() {
     toolPopoverController?.view.endEditing(true)
     ColorPickerSession.active?.close()
     toolPopoverController?.dismiss(animated: true)

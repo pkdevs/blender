@@ -175,7 +175,7 @@ struct HierarchyPanel: View {
         .font(.system(size: 15, weight: store.editing ? .semibold : .regular))
         .accessibilityIdentifier("blender.hierarchy.select")
         UIMenuButton(title: nil, image: UIImage(systemName: "plus"),
-                     accessibilityLabel: "Add Collection or Object", tint: UIColor(Color.accentColor)) { addMenu }
+                     accessibilityLabel: "Add Collection or Object", tint: PanelStyle.uiTint) { addMenu }
           .frame(width: 44, height: 44)
           .accessibilityIdentifier("blender.hierarchy.add")
       }
