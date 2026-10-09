@@ -117,7 +117,7 @@ class Any {
    * Inline buffer that either contains nothing, the stored value directly, or a #std::unique_ptr
    * to the value.
    */
-  AlignedBuffer<RealInlineBufferCapacity, Alignment> buffer_{};
+  AlignedBuffer<RealInlineBufferCapacity, Alignment> buffer_;
 
  public:
   /** Extra data potentially stored within padding required by the buffer. */
