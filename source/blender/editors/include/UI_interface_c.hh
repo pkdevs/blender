@@ -2932,6 +2932,7 @@ void template_light_linking_collection(
 
 void template_bone_collection_tree(Layout *layout, bContext *C);
 void template_dynamic_override_tree(Layout *layout, bContext *C, Layout *context_layout);
+void template_dynamic_override_tree_simple(Layout *layout, bContext *C, Layout *context_layout);
 void template_grease_pencil_layer_tree(Layout *layout, bContext *C);
 
 void template_tree_interface(Layout *layout, const bContext *C, PointerRNA *ptr);

@@ -2699,6 +2699,18 @@ void RNA_api_ui_layout(StructRNA *srna)
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 
   func = RNA_def_function(
+      srna, "template_dynamic_override_tree_simple", "template_dynamic_override_tree_simple");
+  RNA_def_function_ui_description(
+      func, "A tree-view of all rules and properties defined in the active Dynamic Override");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_pointer(func,
+                         "context_layout",
+                         "UILayout",
+                         "",
+                         "Layout to set active list element as context properties");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+
+  func = RNA_def_function(
       srna, "template_grease_pencil_layer_tree", "template_grease_pencil_layer_tree");
   RNA_def_function_ui_description(func, "View of the active Grease Pencil layer tree");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);

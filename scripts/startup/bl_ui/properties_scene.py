@@ -73,7 +73,22 @@ class SCENE_PT_scene_dynamic_override(SceneButtonsPanel, Panel):
 
         layout.template_ID(scene, "dynamic_override", new="dynamic_override.new")
 
-        self.layout.template_dynamic_override_tree(layout)
+        layout.template_dynamic_override_tree(layout)
+
+
+class SCENE_PT_scene_dynamic_override_simple(SceneButtonsPanel, Panel):
+    bl_label = "Scene Dynamic Overrides - Simple TreeView"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        scene = context.scene
+
+        layout.template_ID(scene, "dynamic_override", new="dynamic_override.new")
+
+        layout.template_dynamic_override_tree_simple(layout)
 
 
 class SCENE_PT_unit(SceneButtonsPanel, Panel):
@@ -489,6 +504,7 @@ classes = (
     SCENE_PT_context_scene,
     SCENE_PT_scene,
     SCENE_PT_scene_dynamic_override,
+    SCENE_PT_scene_dynamic_override_simple,
     SCENE_PT_unit,
     SCENE_PT_physics,
     SCENE_PT_simulation,

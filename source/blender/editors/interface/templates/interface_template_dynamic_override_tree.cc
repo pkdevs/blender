@@ -40,8 +40,10 @@ class RNAPathViewItem;
 
 class DynamicOverrideTreeView : public AbstractTreeView {
  public:
-  explicit DynamicOverrideTreeView(Layout &context_layout, DynamicOverride &dynoverride)
-      : context_layout_(context_layout), dynoverride_(dynoverride)
+  explicit DynamicOverrideTreeView(Layout &context_layout,
+                                   DynamicOverride &dynoverride,
+                                   const bool is_simple)
+      : context_layout_(context_layout), dynoverride_(dynoverride), is_simple_(is_simple)
   {
   }
 
@@ -52,6 +54,7 @@ class DynamicOverrideTreeView : public AbstractTreeView {
 
   Layout &context_layout_;
   DynamicOverride &dynoverride_;
+  bool is_simple_;
 };
 
 class DynamicOverrideDropTarget : public TreeViewItemDropTarget {
@@ -179,8 +182,14 @@ class DynamicOverrideItemDragController : public AbstractViewItemDragController 
  */
 class RuleViewItem : public AbstractTreeViewItem {
  public:
-  RuleViewItem(Layout &context_layout, DynamicOverride &dynoverride, DynamicOverrideRule &rule)
-      : context_layout_(context_layout), dynoverride_(dynoverride), rule_(rule)
+  RuleViewItem(Layout &context_layout,
+               DynamicOverride &dynoverride,
+               DynamicOverrideRule &rule,
+               const bool is_simple)
+      : context_layout_(context_layout),
+        dynoverride_(dynoverride),
+        rule_(rule),
+        is_simple_(is_simple)
   {
     this->label_ = rule_.name;
   }
@@ -231,6 +240,8 @@ class RuleViewItem : public AbstractTreeViewItem {
   DynamicOverride &dynoverride_;
   DynamicOverrideRule &rule_;
 
+  bool is_simple_;
+
   /* Map allowing to group all properties by the items in their RNA path. */
   Map<const ParsedRNAPathRef, RNAPathViewItem *> rna_path_items_;
 
@@ -248,11 +259,13 @@ class RuleViewItem : public AbstractTreeViewItem {
       return;
     }
 
-    PointerRNA rule_filter_ptr = RNA_pointer_create_with_parent(
-        rule_ptr, RNA_DynamicOverrideRuleTargetFilterIDSingle, &rule_.target_filter);
-    Layout &sub_idref = row.row(true);
-    // sub_idref.enabled_set(false);
-    sub_idref.prop(&rule_filter_ptr, "target_id", {}, {}, ICON_NONE);
+    if (!is_simple_) {
+      PointerRNA rule_filter_ptr = RNA_pointer_create_with_parent(
+          rule_ptr, RNA_DynamicOverrideRuleTargetFilterIDSingle, &rule_.target_filter);
+      Layout &sub_idref = row.row(true);
+      // sub_idref.enabled_set(false);
+      sub_idref.prop(&rule_filter_ptr, "target_id", {}, {}, ICON_NONE);
+    }
 
     Layout &sub_butts = row.row(true);
     sub_butts.prop(&rule_ptr,
@@ -262,9 +275,11 @@ class RuleViewItem : public AbstractTreeViewItem {
                    bool(rule_.flag & DynamicOverrideRuleFlag::IsMuted) ? ICON_CHECKBOX_DEHLT :
                                                                          ICON_CHECKBOX_HLT);
 
-    PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_remove_rule", "", ICON_X);
-    RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
-    RNA_string_set(&op_data, "rule_name", rule_.name);
+    if (!is_simple_) {
+      PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_remove_rule", "", ICON_X);
+      RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
+      RNA_string_set(&op_data, "rule_name", rule_.name);
+    }
   }
 };
 
@@ -279,12 +294,14 @@ class RNAPathViewItem : public AbstractTreeViewItem {
                   DynamicOverride &dynoverride,
                   DynamicOverrideRule &rule,
                   const ParsedRNAPathRef rna_parsed_path,
-                  const ParsedRNAPathRef rna_parsed_path_for_label)
+                  const ParsedRNAPathRef rna_parsed_path_for_label,
+                  const bool is_simple)
       : context_layout_(context_layout),
         dynoverride_(dynoverride),
         rule_(rule),
         rna_parsed_path_(rna_parsed_path),
-        rna_path_(ParsedRNAPath<4>(rna_parsed_path_).to_string())
+        rna_path_(ParsedRNAPath<4>(rna_parsed_path_).to_string()),
+        is_simple_(is_simple)
   {
     this->label_ = rna_path::to_string(rna_parsed_path_for_label);
   }
@@ -322,6 +339,8 @@ class RNAPathViewItem : public AbstractTreeViewItem {
   const ParsedRNAPathRef rna_parsed_path_;
   const std::string rna_path_;
 
+  bool is_simple_;
+
   void build_rnapath_item_name(Layout &row)
   {
     uiItemL_ex(&row, label_, ICON_NONE, false, false);
@@ -346,10 +365,12 @@ class RNAPathViewItem : public AbstractTreeViewItem {
     RNA_string_set(&op_data, "rule_name", rule_.name);
     RNA_string_set(&op_data, "property_rna_path", rna_path_.c_str());
 
-    op_data = sub_butts.op("UI_OT_dynoverride_remove_rule_property", "", ICON_X);
-    RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
-    RNA_string_set(&op_data, "rule_name", rule_.name);
-    RNA_string_set(&op_data, "property_rna_path", rna_path_.c_str());
+    if (!is_simple_) {
+      op_data = sub_butts.op("UI_OT_dynoverride_remove_rule_property", "", ICON_X);
+      RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
+      RNA_string_set(&op_data, "rule_name", rule_.name);
+      RNA_string_set(&op_data, "property_rna_path", rna_path_.c_str());
+    }
   }
 };
 
@@ -363,13 +384,16 @@ class PropertyViewItem : public AbstractTreeViewItem {
   PropertyViewItem(Layout &context_layout,
                    DynamicOverride &dynoverride,
                    DynamicOverrideRule &rule,
-                   DynamicOverrideRuleProperty &property)
+                   DynamicOverrideRuleProperty &property,
+                   const ParsedRNAPathRef rna_parsed_path_for_label,
+                   const bool is_simple)
       : context_layout_(context_layout),
         dynoverride_(dynoverride),
         rule_(rule),
-        property_(property)
+        property_(property),
+        is_simple_(is_simple)
   {
-    this->label_ = rna_path::to_string(rule_property_rna_path_parsed(property).last());
+    this->label_ = rna_path::to_string(rna_parsed_path_for_label);
   }
 
   bool supports_collapsing() const override
@@ -408,6 +432,8 @@ class PropertyViewItem : public AbstractTreeViewItem {
   DynamicOverrideRule &rule_;
   DynamicOverrideRuleProperty &property_;
 
+  bool is_simple_;
+
   void build_property_name(Layout &row)
   {
     uiItemL_ex(&row, label_, ICON_NONE, false, false);
@@ -419,11 +445,13 @@ class PropertyViewItem : public AbstractTreeViewItem {
     PointerRNA override_values_ptr = RNA_pointer_create_with_parent(
         rule_ptr, rule_get_runtime_override_values_rna_struct(iddata_rule), &iddata_rule);
 
-    Layout &sub_prop = row.row(true);
-    sub_prop.emboss_set(EmbossType::Emboss);
-    sub_prop.use_property_decorate_set(true);
-    sub_prop.prop(
-        &override_values_ptr, rule_property_rna_identifier(property_), {}, {}, ICON_NONE);
+    if (!is_simple_) {
+      Layout &sub_prop = row.row(true);
+      sub_prop.emboss_set(EmbossType::Emboss);
+      sub_prop.use_property_decorate_set(true);
+      sub_prop.prop(
+          &override_values_ptr, rule_property_rna_identifier(property_), {}, {}, ICON_NONE);
+    }
 
     Layout &sub_butts = row.row(true);
     sub_butts.prop(&property_ptr,
@@ -434,10 +462,12 @@ class PropertyViewItem : public AbstractTreeViewItem {
                        ICON_CHECKBOX_DEHLT :
                        ICON_CHECKBOX_HLT);
 
-    PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_remove_rule_property", "", ICON_X);
-    RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
-    RNA_string_set(&op_data, "rule_name", rule_.name);
-    RNA_string_set(&op_data, "property_rna_path", property_.rna_path);
+    if (!is_simple_) {
+      PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_remove_rule_property", "", ICON_X);
+      RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
+      RNA_string_set(&op_data, "rule_name", rule_.name);
+      RNA_string_set(&op_data, "property_rna_path", property_.rna_path);
+    }
   }
 };
 
@@ -450,19 +480,48 @@ void RuleViewItem::build_tree_rule_property(TreeViewOrItem &parent_root,
 
   /* Build intermediary RNA path items. */
   const ParsedRNAPathRef rna_parsed_path = rule_property_rna_path_parsed(property);
+  if (rna_parsed_path.size() < 1) {
+    return;
+  }
+
   TreeViewOrItem *parent = &parent_root;
   /* Note: last item in the parsed RNA path is skipped, as it's the actual overridden property,
    * which will be represented by a `PropertyViewItem`. */
-  for (int slice_size = 1; slice_size < rna_parsed_path.size(); slice_size++) {
-    ParsedRNAPathRef rna_parsed_path_slice_for_label = rna_parsed_path.slice(slice_size - 1, 1);
+  int slice_size = 1;
+  int rna_path_for_label_size = 1;
+  ParsedRNAPathRef rna_parsed_path_slice_for_label = rna_parsed_path.slice(
+      slice_size - rna_path_for_label_size, rna_path_for_label_size);
+  for (; slice_size <= rna_parsed_path.size(); slice_size++) {
+    rna_path_for_label_size = 1;
+    rna_parsed_path_slice_for_label = rna_parsed_path.slice(slice_size - rna_path_for_label_size,
+                                                            rna_path_for_label_size);
     /* In case current slice references a collection and there is an index or string key next,
      * merge the 'collection step' with its actual item. */
     if (rna_parsed_path.size() > slice_size &&
         (std::holds_alternative<rna_path::LookupIndex>(rna_parsed_path[slice_size]) ||
          std::holds_alternative<rna_path::LookupKey>(rna_parsed_path[slice_size])))
     {
-      slice_size++;
-      rna_parsed_path_slice_for_label = rna_parsed_path.slice(slice_size - 2, 2);
+      if (slice_size > 0 && rna_parsed_path.size() > slice_size + 1 &&
+          std::holds_alternative<rna_path::Member>(rna_parsed_path[slice_size - 1]) &&
+          std::get<rna_path::Member>(rna_parsed_path[slice_size - 1]).identifier == "inputs" &&
+          std::holds_alternative<rna_path::Member>(rna_parsed_path[slice_size + 1]) &&
+          std::get<rna_path::Member>(rna_parsed_path[slice_size + 1]).identifier ==
+              "default_value")
+      {
+        slice_size += 2;
+        rna_path_for_label_size += 2;
+      }
+      else {
+        slice_size++;
+        rna_path_for_label_size++;
+      }
+      rna_parsed_path_slice_for_label = rna_parsed_path.slice(slice_size - rna_path_for_label_size,
+                                                              rna_path_for_label_size);
+    }
+    if (slice_size >= rna_parsed_path.size()) {
+      /* Last item in the path has been reached, so the actual property item needs to be
+       * generated now. */
+      break;
     }
     const ParsedRNAPathRef rna_parsed_path_slice = rna_parsed_path.slice(0, slice_size);
     parent = rna_path_items_.lookup_or_add_cb(
@@ -474,12 +533,17 @@ void RuleViewItem::build_tree_rule_property(TreeViewOrItem &parent_root,
                                                          this->dynoverride_,
                                                          this->rule_,
                                                          rna_parsed_path_slice,
-                                                         rna_parsed_path_slice_for_label);
+                                                         rna_parsed_path_slice_for_label,
+                                                         this->is_simple_);
         });
   }
 
-  parent->add_tree_item<PropertyViewItem>(
-      this->context_layout_, this->dynoverride_, this->rule_, property);
+  parent->add_tree_item<PropertyViewItem>(this->context_layout_,
+                                          this->dynoverride_,
+                                          this->rule_,
+                                          property,
+                                          rna_parsed_path_slice_for_label,
+                                          this->is_simple_);
 }
 
 void DynamicOverrideTreeView::build_tree_rule(TreeViewOrItem &parent, DynamicOverrideRule &rule)
@@ -488,7 +552,7 @@ void DynamicOverrideTreeView::build_tree_rule(TreeViewOrItem &parent, DynamicOve
     return;
   }
   RuleViewItem &rule_item = parent.add_tree_item<RuleViewItem>(
-      this->context_layout_, this->dynoverride_, rule);
+      this->context_layout_, this->dynoverride_, rule, this->is_simple_);
 
   DynamicOverrideRuleIDData &rule_iddata = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
   for (DynamicOverrideRuleProperty &rule_prop : rule_iddata.properties) {
@@ -579,7 +643,7 @@ static void rule_buttons(Layout *layout, DynamicOverride &dynoverride)
       prop_original_row.use_property_decorate_set(true);
       prop_original_row.label("Original:", ICON_NONE);
       prop_original_row.prop(
-          &override_values_ptr, rule_property_rna_identifier(property), {}, {}, ICON_NONE);
+          &original_values_ptr, rule_property_rna_identifier(property), {}, {}, ICON_NONE);
     }
   }
 }
@@ -599,7 +663,30 @@ void template_dynamic_override_tree(Layout *layout, bContext *C, Layout *context
   AbstractTreeView *tree_view = block_add_view(
       *block,
       "Dynamic Override Tree View",
-      std::make_unique<dynoverride::DynamicOverrideTreeView>(*context_layout, *dynoverride));
+      std::make_unique<dynoverride::DynamicOverrideTreeView>(
+          *context_layout, *dynoverride, false));
+  tree_view->set_context_menu_title("Dynamic Override");
+  tree_view->set_default_rows(12);
+
+  TreeViewBuilder::build_tree_view(*C, *tree_view, *layout);
+
+  dynoverride::rule_buttons(context_layout, *dynoverride);
+}
+
+void template_dynamic_override_tree_simple(Layout *layout, bContext *C, Layout *context_layout)
+{
+  DynamicOverride *dynoverride = CTX_data_dynamic_override(C);
+
+  if (!dynoverride) {
+    return;
+  }
+
+  Block *block = layout->block();
+
+  AbstractTreeView *tree_view = block_add_view(
+      *block,
+      "Dynamic Override Tree View",
+      std::make_unique<dynoverride::DynamicOverrideTreeView>(*context_layout, *dynoverride, true));
   tree_view->set_context_menu_title("Dynamic Override");
   tree_view->set_default_rows(12);
 
