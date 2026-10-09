@@ -4,8 +4,8 @@
 
 #include "BLI_bounds.hh"
 #include "BLI_color_types.hh"
-#include "BLI_math_color.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_color_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_curves.hh"
@@ -42,10 +42,9 @@ constexpr const char *svg_exporter_version = "v2.1";
 
 static std::string rgb_to_hexstr(const float color[3])
 {
-  uint8_t r = color[0] * 255.0f;
-  uint8_t g = color[1] * 255.0f;
-  uint8_t b = color[2] * 255.0f;
-  return fmt::format("#{:02X}{:02X}{:02X}", r, g, b);
+  uchar rgb[3];
+  rgb_float_to_uchar(rgb, color);
+  return fmt::format("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]);
 }
 
 static void write_stroke_color_attribute(pugi::xml_node node,
@@ -182,11 +181,11 @@ ExportStatus SVGExporter::export_scene(Scene &scene, StringRefNull filepath)
 
       IndexMaskMemory memory;
       if (selection_only) {
-        const Object &ob_eval = *DEG_get_evaluated(context_.depsgraph, params_.object);
-        if (ob_eval.type != OB_GREASE_PENCIL) {
+        const Object *ob_eval = DEG_get_evaluated(context_.depsgraph, params_.object);
+        if (!ob_eval || ob_eval->type != OB_GREASE_PENCIL) {
           return ExportStatus::InvalidActiveObjectType;
         }
-        const GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob_eval.data);
+        const GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob_eval->data);
         frames = IndexMask::from_predicate(frames, memory, [&](const int frame_number) {
           return this->is_selected_frame(grease_pencil, frame_number);
         });
@@ -437,7 +436,7 @@ pugi::xml_node SVGExporter::write_animation_node(pugi::xml_node parent_node,
   animate_node.append_attribute("repeatCount").set_value("indefinite");
 
   std::string animated_frame_ids = [&]() {
-    std::string frame_ids_text = "";
+    std::string frame_ids_text;
     frames.foreach_index([&](const int frame) {
       std::string frame_url_entry = "#" + frame_name(frame) + ";";
       frame_ids_text.append(frame_url_entry);

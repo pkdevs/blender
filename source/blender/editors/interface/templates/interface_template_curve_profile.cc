@@ -10,9 +10,9 @@
 #include "BKE_curveprofile.h"
 #include "BKE_library.hh"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_string_ref.hh"
 
 #include "BLT_translation.hh"
@@ -29,10 +29,12 @@
 
 namespace blender::ui {
 
+namespace {
 struct CurveRuntimeProperties {
   CurveProfilePoint *last_pt = nullptr;
   float2 last_pos;
 };
+}  // namespace
 
 static Block *curve_profile_presets_fn(bContext *C, ARegion *region, void *cb_v)
 {
@@ -224,13 +226,7 @@ static void CurveProfile_buttons_layout(Layout &layout, PointerRNA *ptr, const R
                      UI_UNIT_X,
                      "");
   /* Pass ownership of `presets_cb` to the button. */
-  button_funcN_set(
-      bt,
-      [](bContext *, void *, void *) {},
-      presets_cb,
-      nullptr,
-      but_func_argN_free<RNAUpdateCb>,
-      but_func_argN_copy<RNAUpdateCb>);
+  button_funcN_set(bt, [](bContext *, void *, void *) {}, presets_cb, nullptr);
 
   /* Show a "re-apply" preset button when it has been changed from the preset. */
   if (profile->flag & PROF_DIRTY_PRESET) {
@@ -347,20 +343,9 @@ static void CurveProfile_buttons_layout(Layout &layout, PointerRNA *ptr, const R
                          UI_UNIT_X,
                          TIP_("Tools"));
   /* Pass ownership of `presets_cb` to the button. */
-  button_funcN_set(
-      bt,
-      [](bContext *, void *, void *) {},
-      tools_cb,
-      nullptr,
-      but_func_argN_free<RNAUpdateCb>,
-      but_func_argN_copy<RNAUpdateCb>);
+  button_funcN_set(bt, [](bContext *, void *, void *) {}, tools_cb, nullptr);
 
-  block_funcN_set(block,
-                  rna_update_cb,
-                  MEM_new<RNAUpdateCb>(__func__, cb),
-                  nullptr,
-                  but_func_argN_free<RNAUpdateCb>,
-                  but_func_argN_copy<RNAUpdateCb>);
+  block_funcN_set(block, rna_update_cb, MEM_new<RNAUpdateCb>(__func__, cb), nullptr);
 
   /* The path itself */
   int path_width = max_ii(layout.width(), UI_UNIT_X);
@@ -519,7 +504,7 @@ static void CurveProfile_buttons_layout(Layout &layout, PointerRNA *ptr, const R
   layout.prop(ptr, "use_sample_straight_edges", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(ptr, "use_sample_even_lengths", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  block_funcN_set(block, nullptr, nullptr, nullptr);
+  block_funcN_set(block, nullptr, nullptr, nullptr, nullptr, nullptr);
 }
 
 void template_curve_profile(Layout *layout, PointerRNA *ptr, const StringRefNull propname)
@@ -543,7 +528,7 @@ void template_curve_profile(Layout *layout, PointerRNA *ptr, const StringRefNull
   }
 
   PointerRNA cptr = RNA_property_pointer_get(ptr, prop);
-  if (!cptr.data || !RNA_struct_is_a(cptr.type, RNA_CurveProfile)) {
+  if (!cptr || !RNA_struct_is_a(cptr.type, RNA_CurveProfile)) {
     return;
   }
 

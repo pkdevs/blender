@@ -28,15 +28,18 @@
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_fnmatch.h"
+#include "BLI_assert.hh"
+#include "BLI_fnmatch.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "ED_asset.hh"
+#include "ED_asset_list.hh"
 #include "ED_screen.hh"
 /* XXX needs access to the file list, should all be done via the asset system in future. */
+#include "ED_asset_menu_utils.hh"
 #include "ED_fileselect.hh"
 #include "ED_render.hh"
 #include "ED_util.hh"
@@ -535,8 +538,9 @@ static bool asset_library_reload_listing_poll(bContext *C)
     return false;
   }
 
-  /* Check the flag after checking for the remote library to have an online component. Because if
-   * there is not, then enabling the online access in the prefs isn't going to do anything. */
+  /* Check the flag after checking for the remote library to have an online component.
+   * Because if there is not, then enabling the online access in the preferences
+   * isn't going to do anything. */
   if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
     CTX_wm_operator_poll_msg_set(C, "Online access is disabled in the Preferences");
     return false;
@@ -1014,6 +1018,7 @@ static void ASSET_OT_bundle_install(wmOperatorType *ot)
 
   ot->prop = RNA_def_property(ot->srna, "asset_library_reference", PROP_ENUM, PROP_NONE);
   RNA_def_property_flag(ot->prop, PROP_HIDDEN);
+  RNA_def_property_enum_default(ot->prop, ASSET_LIBRARY_LOCAL);
   RNA_def_enum_funcs(ot->prop, rna_asset_library_reference_itemf);
 
   WM_operator_properties_filesel(ot,
@@ -1048,7 +1053,7 @@ static bool is_contained_in_selected_asset_library(wmOperator *op, const char *f
   if (!lib) {
     return false;
   }
-  return BLI_path_contains(lib->dirpath, filepath);
+  return BLI_path_contains(lib->resolved_dirpath, filepath);
 }
 
 /**
@@ -1070,7 +1075,7 @@ static bool set_filepath_for_asset_lib(const Main *bmain, wmOperator *op)
   }
 
   char file_path[FILE_MAX];
-  BLI_path_join(file_path, sizeof(file_path), lib->dirpath, blend_filename);
+  BLI_path_join(file_path, sizeof(file_path), lib->resolved_dirpath, blend_filename);
   RNA_string_set(op->ptr, "filepath", file_path);
 
   return true;
@@ -1328,7 +1333,7 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
   bool render_offscreen = false;
   if (area_p1 == area_p2 && area_p1 != nullptr && area_p1->spacetype == SPACE_VIEW3D) {
     Scene *scene = CTX_data_scene(C);
-    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first);
+    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first_);
     /* For #ED_view3d_draw_offscreen_imbuf only EEVEE only produces a good result. See #141732. */
     if (eDrawType(v3d->shading.type) == OB_RENDER) {
       const char *engine_name = scene->r.engine;
@@ -1342,7 +1347,7 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
     }
   }
   if (render_offscreen) {
-    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first);
+    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first_);
     ARegion *region = BKE_area_find_region_type(area_p1, RGN_TYPE_WINDOW);
     if (!region) {
       /* Unlikely to be hit, but just being cautious. */
@@ -1715,7 +1720,7 @@ static Vector<const asset_system::AssetRepresentation *> selected_or_active_asse
   return assets;
 }
 
-static bool assets_download_poll(bContext *C)
+static bool assets_download_any_poll(bContext *C)
 {
   if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
     CTX_wm_operator_poll_msg_set(
@@ -1728,6 +1733,15 @@ static bool assets_download_poll(bContext *C)
   CTX_wm_operator_poll_msg_set(C, "Asset downloading requires Python");
   return false;
 #endif
+
+  return true;
+}
+
+static bool assets_download_poll(bContext *C)
+{
+  if (!assets_download_any_poll(C)) {
+    return false;
+  }
 
   const Vector<const asset_system::AssetRepresentation *> assets = selected_or_active_assets(C);
   if (assets.is_empty()) {
@@ -1779,6 +1793,137 @@ static void ASSET_OT_assets_download(wmOperatorType *ot)
 
 /* -------------------------------------------------------------------- */
 
+static wmOperatorStatus asset_download_exec(bContext *C, wmOperator *op)
+{
+  const asset_system::AssetRepresentation *asset =
+      operator_asset_reference_props_get_asset_from_all_library(*C, *op->ptr, op->reports);
+
+  if (!asset) {
+    const std::string asset_relpath = RNA_string_get(op->ptr, "relative_asset_identifier");
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Asset could not be found (relative identifier: '%s')",
+                asset_relpath.c_str());
+    return OPERATOR_CANCELLED;
+  }
+
+  if (!asset->needs_download()) {
+    BKE_reportf(
+        op->reports, RPT_ERROR, "Asset '%s' doesn't need downloading", asset->get_name().c_str());
+    return OPERATOR_CANCELLED;
+  }
+  asset_system::remote_library_request_asset_download(*C, *asset, op->reports);
+
+  return OPERATOR_FINISHED;
+}
+
+/**
+ * Variant of #ASSET_OT_assets_download that only downloads a single specific asset given in the
+ * operator properties.
+ */
+static void ASSET_OT_asset_download(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Download Asset";
+  ot->description = "Make the asset available without internet access";
+  ot->idname = "ASSET_OT_asset_download";
+
+  /* API callbacks. */
+  ot->exec = asset_download_exec;
+  ot->poll = assets_download_any_poll;
+
+  operator_asset_reference_props_register(*ot->srna);
+}
+
+/* -------------------------------------------------------------------- */
+
+static bool external_asset_rename_poll(bContext *C)
+{
+  const asset_system::AssetRepresentation *asset_handle = CTX_wm_asset(C);
+  if (!asset_handle) {
+    CTX_wm_operator_poll_msg_set(C, "No selected asset.");
+    return false;
+  }
+  if (asset_handle->is_local_id()) {
+    CTX_wm_operator_poll_msg_set(C, "Asset is local to this file and can be renamed directly.");
+    return false;
+  }
+  if (!asset_handle->is_potentially_editable_asset_blend()) {
+    CTX_wm_operator_poll_msg_set(C, "Asset cannot be modified from this file.");
+    return false;
+  }
+
+  return true;
+}
+
+static wmOperatorStatus external_asset_rename_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+
+  /* Get the asset. */
+  const asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
+  BLI_assert(asset);
+  const AssetWeakReference asset_reference = asset->make_weak_reference();
+
+  ID *asset_id = bke::asset_edit_id_from_weak_reference(
+      *bmain, asset->get_id_type(), asset_reference);
+  BLI_assert(asset_id);
+
+  const bUserAssetLibrary *user_asset_lib = asset->owner_asset_library().user_asset_library();
+  if (!user_asset_lib) {
+    /* Editable .asset.blend files can only come from an asset library with a bUserAssetLibrary. */
+    BLI_assert_unreachable();
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Rename the asset. */
+  const std::string new_name = RNA_string_get(op->ptr, "new_name");
+  if (!bke::asset_edit_id_rename(*bmain, *asset_id, new_name, *user_asset_lib, *op->reports)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  std::optional<AssetLibraryReference> asset_lib_ref =
+      asset->owner_asset_library().library_reference();
+  if (asset_lib_ref) {
+    asset::list::clear(&*asset_lib_ref, C);
+  }
+  WM_main_add_notifier(NC_ASSET | NA_EDITED, nullptr);
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus external_asset_rename_invoke(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent * /*event*/)
+{
+  const asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
+  RNA_string_set(op->ptr, "new_name", asset->get_name().c_str());
+  return WM_operator_props_dialog_popup(C, op, 400, std::nullopt, IFACE_("Rename Asset"));
+}
+
+/**
+ * Rename operator for external assets (in .asset.blend files).
+ */
+static void ASSET_OT_external_asset_rename(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Rename Asset";
+  ot->description =
+      "Change the name of this asset. Note that this cannot be un-done via the undo system";
+  ot->idname = "ASSET_OT_external_asset_rename";
+
+  /* No UNDO possible, as it may rename an external file. */
+  ot->flag = OPTYPE_REGISTER;
+
+  /* API callbacks. */
+  ot->invoke = external_asset_rename_invoke;
+  ot->exec = external_asset_rename_exec;
+  ot->poll = external_asset_rename_poll;
+
+  RNA_def_string(ot->srna, "new_name", nullptr, 0, "New Name", "");
+}
+
+/* -------------------------------------------------------------------- */
+
 void operatortypes_asset()
 {
   WM_operatortype_append(ASSET_OT_mark);
@@ -1800,6 +1945,9 @@ void operatortypes_asset()
   WM_operatortype_append(ASSET_OT_screenshot_preview);
 
   WM_operatortype_append(ASSET_OT_assets_download);
+  WM_operatortype_append(ASSET_OT_asset_download);
+
+  WM_operatortype_append(ASSET_OT_external_asset_rename);
 }
 
 }  // namespace blender::ed::asset

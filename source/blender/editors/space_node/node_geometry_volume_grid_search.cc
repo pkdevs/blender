@@ -2,8 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup spnode
+ */
+
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 #include "DNA_node_types.h"
@@ -44,10 +48,6 @@ struct GridSearchData {
   bool can_create_grid;
 };
 
-/* This class must not have a destructor, since it is used by buttons and freed with
- * #MEM_delete_void. */
-BLI_STATIC_ASSERT(std::is_trivially_destructible_v<GridSearchData>, "");
-
 static Vector<const VolumeGridInfo *> get_grid_names_from_context(const bContext &C,
                                                                   GridSearchData &data)
 {
@@ -81,7 +81,7 @@ static Vector<const VolumeGridInfo *> get_grid_names_from_context(const bContext
     return {};
   }
   tree_log->ensure_socket_values();
-  NodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
+  NodeLog *node_log = tree_log->find_node_log(node->identifier);
   if (node_log == nullptr) {
     return {};
   }
@@ -251,14 +251,7 @@ void node_geometry_add_volume_grid_search_button(const bContext & /*C*/,
 
   button_func_search_set_results_are_suggestions(but, true);
   button_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
-  button_func_search_set(but,
-                         nullptr,
-                         grid_search_update_fn,
-                         static_cast<void *>(data),
-                         true,
-                         nullptr,
-                         grid_search_exec_fn,
-                         nullptr);
+  button_func_search_set(but, nullptr, grid_search_update_fn, data, grid_search_exec_fn, nullptr);
 }
 
 }  // namespace ed::space_node

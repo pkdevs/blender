@@ -14,10 +14,12 @@
 #include "BLI_generic_span.hh"
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_task.hh"
 #include "BLI_virtual_array.hh"
+
+#include "PRF_profile.hh"
 
 namespace blender::array_utils {
 
@@ -104,6 +106,12 @@ inline void copy(const Span<T> src,
                                              exec_mode_tag_for_copy(mode, sizeof(T)));
 }
 
+/** Copy integers from a between two spans while adding an offset. */
+void copy_ints_with_offset(Span<int> src,
+                           int offset,
+                           MutableSpan<int> dst,
+                           int64_t grain_size = 4096);
+
 template<typename T> T compute_sum(const Span<T> data)
 {
   /* Explicitly splitting work into chunks for a couple of reasons:
@@ -188,6 +196,7 @@ inline void gather(const VArray<T> &src,
                    MutableSpan<T> dst,
                    const Mode mode = {})
 {
+  PRF_scope_with_name("array_utils::gather", ProfileCategory::Default);
   BLI_assert(indices.size() >= dst.size());
   if constexpr (!mode.is_parallel) {
     src.materialize_compressed(indices, dst);
@@ -210,6 +219,7 @@ inline void gather(const Span<T> src,
                    MutableSpan<T> dst,
                    const Mode mode = {})
 {
+  PRF_scope_with_name("array_utils::gather", ProfileCategory::Default);
   BLI_assert(indices.size() >= dst.size());
   dst_mask.foreach_index_optimized<int64_t>([&](const int64_t i) { dst[i] = src[indices[i]]; },
                                             exec_mode_tag_for_copy(mode, sizeof(T)));
@@ -237,6 +247,7 @@ inline void gather(const VArray<T> &src,
                    MutableSpan<T> dst,
                    const Mode mode = {})
 {
+  PRF_scope_with_name("array_utils::gather", ProfileCategory::Default);
   BLI_assert(indices.size() >= dst_mask.min_array_size());
   const CommonVArrayInfo info = src.common_info();
   switch (info.type) {
@@ -281,6 +292,20 @@ inline void gather_group_to_group(const OffsetIndices<int> src_offsets,
         dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[src_i]));
       },
       exec_mode::grain_size(512));
+}
+
+template<typename T>
+inline void gather_group_to_group(const OffsetIndices<int> src_offsets,
+                                  const OffsetIndices<int> dst_offsets,
+                                  const Span<int> selection,
+                                  const Span<T> src,
+                                  MutableSpan<T> dst)
+{
+  threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
+    for (const int dst_i : range) {
+      dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[selection[dst_i]]));
+    }
+  });
 }
 
 template<typename T>
@@ -337,6 +362,20 @@ void copy_group_to_group(OffsetIndices<int> src_offsets,
  * \note The memory referenced by the two spans must not overlap.
  */
 void count_indices(Span<int> indices, MutableSpan<int> counts);
+
+/**
+ * Find a compact index for every unique arbitrary ID, in the order that the IDs first appear.
+ *
+ * \param mask: The elements whose IDs are processed.
+ * \param r_group_indices: The group index of every element, for every index in the mask.
+ * \param r_first_indices: Optional. Filled with the first element with each ID, for every group,
+ * which can be useful to choose a representative element for each group.
+ * \return The number of groups.
+ */
+int group_ids_to_indices(Span<int> ids,
+                         const IndexMask &mask,
+                         MutableSpan<int> r_group_indices,
+                         Vector<int> *r_first_indices = nullptr);
 
 void invert_booleans(MutableSpan<bool> span);
 void invert_booleans(MutableSpan<bool> span, const IndexMask &mask);

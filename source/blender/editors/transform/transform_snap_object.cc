@@ -8,10 +8,10 @@
 
 #include <algorithm>
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_screen_types.h"
 
@@ -318,8 +318,8 @@ void SnapData::register_result(SnapObjectContext *sctx,
 
   /* Global space. */
   sctx->ret.loc = math::transform_point(obmat, sctx->ret.loc);
-  const float3x3 normal_transform = math::transpose(math::invert(float3x3(obmat)));
-  sctx->ret.no = math::normalize(math::transform_direction(normal_transform, sctx->ret.no));
+  sctx->ret.no = math::normalize(
+      math::transform_direction_transposed(math::invert(float3x3(obmat)), sctx->ret.no));
 
 #ifndef NDEBUG
   /* Make sure this is only called once. */
@@ -342,8 +342,8 @@ void SnapData::register_result_raycast(SnapObjectContext *sctx,
   const float depth_max = is_in_front ? sctx->ret.ray_depth_max_in_front : sctx->ret.ray_depth_max;
   if (hit->dist <= depth_max) {
     float3 co = math::transform_point(obmat, float3(hit->co));
-    const float3x3 normal_transform = math::transpose(math::invert(float3x3(obmat)));
-    float3 no = math::normalize(math::transform_direction(normal_transform, float3(hit->no)));
+    float3 no = math::normalize(
+        math::transform_direction_transposed(math::invert(float3x3(obmat)), float3(hit->no)));
 
     sctx->ret.loc = co;
     sctx->ret.no = no;
@@ -954,8 +954,7 @@ eSnapMode snap_object_center(SnapObjectContext *sctx,
   nearest2d.clip_planes_enable(sctx, ob_eval, true);
 
   if (nearest2d.snap_point(float3(0.0f))) {
-    const ID *id = ob_eval ? static_cast<const ID *>(ob_eval->data) : nullptr;
-    nearest2d.register_result(sctx, ob_eval, id);
+    nearest2d.register_result(sctx, ob_eval, static_cast<const ID *>(ob_eval->data));
     return retval;
   }
 
@@ -1115,33 +1114,10 @@ void snap_object_context_destroy(SnapObjectContext *sctx)
   MEM_delete(sctx);
 }
 
-void snap_object_context_set_editmesh_callbacks(SnapObjectContext *sctx,
-                                                bool (*test_vert_fn)(BMVert *, void *user_data),
-                                                bool (*test_edge_fn)(BMEdge *, void *user_data),
-                                                bool (*test_face_fn)(BMFace *, void *user_data),
-                                                void *user_data)
+void snap_object_context_set_editmesh_target(SnapObjectContext *sctx,
+                                             const SnapEditMeshTarget target)
 {
-  bool is_cache_dirty = false;
-  if (sctx->callbacks.edit_mesh.test_vert_fn != test_vert_fn) {
-    sctx->callbacks.edit_mesh.test_vert_fn = test_vert_fn;
-    is_cache_dirty = true;
-  }
-  if (sctx->callbacks.edit_mesh.test_edge_fn != test_edge_fn) {
-    sctx->callbacks.edit_mesh.test_edge_fn = test_edge_fn;
-    is_cache_dirty = true;
-  }
-  if (sctx->callbacks.edit_mesh.test_face_fn != test_face_fn) {
-    sctx->callbacks.edit_mesh.test_face_fn = test_face_fn;
-    is_cache_dirty = true;
-  }
-  if (sctx->callbacks.edit_mesh.user_data != user_data) {
-    sctx->callbacks.edit_mesh.user_data = user_data;
-    is_cache_dirty = true;
-  }
-
-  if (is_cache_dirty) {
-    sctx->editmesh_caches.clear();
-  }
+  sctx->editmesh_target = target;
 }
 
 static bool snap_object_context_runtime_init(SnapObjectContext *sctx,
@@ -1215,7 +1191,7 @@ static bool snap_object_context_runtime_init(SnapObjectContext *sctx,
                         sctx->runtime.clip_planes[0],
                         sctx->runtime.clip_planes[1]);
 
-    if (rv3d->rflag & RV3D_CLIPPING) {
+    if ((rv3d->rflag & RV3D_CLIPPING) && (rv3d->clipbb != nullptr)) {
       sctx->runtime.clip_planes.extend_unchecked(reinterpret_cast<const float4 *>(rv3d->clip), 4);
     }
 
@@ -1437,7 +1413,7 @@ eSnapMode snap_object_project_view3d_ex(SnapObjectContext *sctx,
                                     sctx->runtime.ray_start,
                                     ray_end);
 
-    if (rv3d->rflag & RV3D_CLIPPING) {
+    if ((rv3d->rflag & RV3D_CLIPPING) && (rv3d->clipbb != nullptr)) {
       if (clip_segment_v3_plane_n(
               sctx->runtime.ray_start, ray_end, rv3d->clip, 6, sctx->runtime.ray_start, ray_end))
       {
@@ -1656,7 +1632,7 @@ bool object_project_all_view3d_ex(SnapObjectContext *sctx,
     return false;
   }
 
-  if ((rv3d->rflag & RV3D_CLIPPING) &&
+  if (((rv3d->rflag & RV3D_CLIPPING) != 0) && (rv3d->clipbb != nullptr) &&
       clip_segment_v3_plane_n(ray_start, ray_end, rv3d->clip, 6, ray_start, ray_end))
   {
     float ray_depth_max = math::dot(ray_end - ray_start, ray_normal);

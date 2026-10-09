@@ -14,6 +14,10 @@
 
 #include "kernel/util/differential.h"
 
+#if defined(__KERNEL_GPU__)
+#  include "util/atomic.h"
+#endif
+
 CCL_NAMESPACE_BEGIN
 
 /* Ray */
@@ -22,29 +26,15 @@ ccl_device_forceinline void integrator_state_write_ray(IntegratorState state,
                                                        const ccl_private Ray *ccl_restrict ray)
 {
 #if defined(__INTEGRATOR_GPU_PACKED_STATE__) && defined(__KERNEL_GPU__)
-  static_assert(sizeof(ray->P) == sizeof(float4), "Bad assumption about float3 padding");
-  /* dP and dP are packed based on the assumption that float3 is padded to 16 bytes.
-   * This assumption hold trues on Metal, but not CUDA.
-   */
-  ((ccl_private float4 &)ray->P).w = ray->dP;
-  ((ccl_private float4 &)ray->D).w = ray->dD;
-  INTEGRATOR_STATE_WRITE(state, ray, packed) = (ccl_private packed_ray &)*ray;
-
-  /* Ensure that we can correctly cast between Ray and the generated packed_ray struct. */
-  static_assert(offsetof(packed_ray, P) == offsetof(Ray, P),
-                "Generated packed_ray struct is misaligned with Ray struct");
-  static_assert(offsetof(packed_ray, D) == offsetof(Ray, D),
-                "Generated packed_ray struct is misaligned with Ray struct");
-  static_assert(offsetof(packed_ray, tmin) == offsetof(Ray, tmin),
-                "Generated packed_ray struct is misaligned with Ray struct");
-  static_assert(offsetof(packed_ray, tmax) == offsetof(Ray, tmax),
-                "Generated packed_ray struct is misaligned with Ray struct");
-  static_assert(offsetof(packed_ray, time) == offsetof(Ray, time),
-                "Generated packed_ray struct is misaligned with Ray struct");
-  static_assert(offsetof(packed_ray, dP) == 12 + offsetof(Ray, P),
-                "Generated packed_ray struct is misaligned with Ray struct");
-  static_assert(offsetof(packed_ray, dD) == 12 + offsetof(Ray, D),
-                "Generated packed_ray struct is misaligned with Ray struct");
+  packed_ray packed;
+  packed.P = ray->P;
+  packed.dP = ray->dP;
+  packed.D = ray->D;
+  packed.dD = ray->dD;
+  packed.tmin = ray->tmin;
+  packed.tmax = ray->tmax;
+  packed.time = ray->time;
+  INTEGRATOR_STATE_WRITE(state, ray, packed) = packed;
 #else
   INTEGRATOR_STATE_WRITE(state, ray, P) = ray->P;
   INTEGRATOR_STATE_WRITE(state, ray, D) = ray->D;
@@ -60,9 +50,14 @@ ccl_device_forceinline void integrator_state_read_ray(ConstIntegratorState state
                                                       ccl_private Ray *ccl_restrict ray)
 {
 #if defined(__INTEGRATOR_GPU_PACKED_STATE__) && defined(__KERNEL_GPU__)
-  *((ccl_private packed_ray *)ray) = INTEGRATOR_STATE(state, ray, packed);
-  ray->dP = ((ccl_private float4 &)ray->P).w;
-  ray->dD = ((ccl_private float4 &)ray->D).w;
+  const packed_ray packed = INTEGRATOR_STATE(state, ray, packed);
+  ray->P = packed.P;
+  ray->dP = packed.dP;
+  ray->D = packed.D;
+  ray->dD = packed.dD;
+  ray->tmin = packed.tmin;
+  ray->tmax = packed.tmax;
+  ray->time = packed.time;
 #else
   ray->P = INTEGRATOR_STATE(state, ray, P);
   ray->D = INTEGRATOR_STATE(state, ray, D);
@@ -85,6 +80,7 @@ ccl_device_forceinline void integrator_state_write_shadow_ray(
   INTEGRATOR_STATE_WRITE(state, shadow_ray, tmax) = ray->tmax;
   INTEGRATOR_STATE_WRITE(state, shadow_ray, time) = ray->time;
   INTEGRATOR_STATE_WRITE(state, shadow_ray, dP) = ray->dP;
+  INTEGRATOR_STATE_WRITE(state, shadow_ray, dD) = ray->dD;
 }
 
 ccl_device_forceinline void integrator_state_read_shadow_ray(ConstIntegratorShadowState state,
@@ -96,7 +92,7 @@ ccl_device_forceinline void integrator_state_read_shadow_ray(ConstIntegratorShad
   ray->tmax = INTEGRATOR_STATE(state, shadow_ray, tmax);
   ray->time = INTEGRATOR_STATE(state, shadow_ray, time);
   ray->dP = INTEGRATOR_STATE(state, shadow_ray, dP);
-  ray->dD = differential_zero_compact();
+  ray->dD = INTEGRATOR_STATE(state, shadow_ray, dD);
 }
 
 ccl_device_forceinline void integrator_state_write_shadow_ray_self(
@@ -311,6 +307,27 @@ ccl_device_forceinline void integrator_state_read_shadow_isect(
   isect->t = INTEGRATOR_STATE_ARRAY(state, shadow_isect, index, t);
 }
 
+#ifdef __SHADOW_LINKING__
+
+/* Shadow linking state for shade_light_nee, reusing shadow state
+ * to avoid increasing state memory usage. */
+
+static_assert(INTEGRATOR_SHADOW_ISECT_SIZE > 1, "Light and self intersection must not overlap");
+
+ccl_device_forceinline void integrator_state_write_shadow_light_isect(
+    IntegratorShadowState state, const ccl_private Intersection *ccl_restrict isect)
+{
+  integrator_state_write_shadow_isect(state, isect, 0);
+}
+
+ccl_device_forceinline void integrator_state_read_shadow_light_isect(
+    ConstIntegratorShadowState state, ccl_private Intersection *ccl_restrict isect)
+{
+  integrator_state_read_shadow_isect(state, isect, 0);
+}
+
+#endif
+
 /* MNEE state.
  *
  * This is packed into the shadow_state to avoid increasing overall path state size. */
@@ -333,12 +350,14 @@ integrator_state_get_mnee_shadow_state(ConstIntegratorState state)
 ccl_device_forceinline void integrator_state_write_mnee_shadow_owner(
     IntegratorShadowState shadow_state, IntegratorState state)
 {
+  static_assert(INTEGRATOR_SHADOW_ISECT_SIZE >= 3);
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 2, prim) = (int)state;
 }
 
 ccl_device_forceinline IntegratorState
 integrator_state_read_mnee_shadow_owner(ConstIntegratorShadowState shadow_state)
 {
+  static_assert(INTEGRATOR_SHADOW_ISECT_SIZE >= 3);
   return IntegratorState(INTEGRATOR_STATE_ARRAY(shadow_state, shadow_isect, 2, prim));
 }
 #  endif
@@ -351,7 +370,7 @@ ccl_device_forceinline void integrator_state_write_mnee(IntegratorState state,
                                                         const Spectrum mnee_throughput,
                                                         const float3 mnee_wo)
 {
-  static_assert(INTEGRATOR_SHADOW_ISECT_SIZE >= 2);
+  static_assert(INTEGRATOR_SHADOW_ISECT_SIZE >= 3);
 
 #  ifdef __KERNEL_GPU__
   INTEGRATOR_STATE_WRITE(state, path, mnee_shadow_state) = (int)shadow_state;
@@ -369,7 +388,7 @@ ccl_device_forceinline void integrator_state_write_mnee(IntegratorState state,
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 1, v) = mnee_wo.z;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, tmin) = ls->t;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, tmax) = ls->pdf;
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, time) = ls->eval_fac;
+  INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 2, t) = ls->eval_fac;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, self_light_object) = ls->object;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, self_light_prim) = ls->prim;
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 0, object) = ls->shader;
@@ -383,6 +402,7 @@ ccl_device_forceinline void integrator_state_write_mnee(IntegratorState state,
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, D) = ls->D;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, P) = ray->P;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, dP) = ray->dP;
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_ray, dD) = ray->dD;
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 1, object) = ray->self.object;
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 1, type) = ray->self.prim;
 
@@ -393,7 +413,7 @@ ccl_device_forceinline void integrator_state_read_mnee(ConstIntegratorState stat
                                                        ccl_private LightSample *ls,
                                                        ccl_private int *mnee_vertex_count)
 {
-  static_assert(INTEGRATOR_SHADOW_ISECT_SIZE >= 2);
+  static_assert(INTEGRATOR_SHADOW_ISECT_SIZE >= 3);
 
   ConstIntegratorShadowState shadow_state = integrator_state_get_mnee_shadow_state(state);
 
@@ -405,7 +425,7 @@ ccl_device_forceinline void integrator_state_read_mnee(ConstIntegratorState stat
                       INTEGRATOR_STATE_ARRAY(shadow_state, shadow_isect, 1, v));
   ls->t = INTEGRATOR_STATE(shadow_state, shadow_ray, tmin);
   ls->pdf = INTEGRATOR_STATE(shadow_state, shadow_ray, tmax);
-  ls->eval_fac = INTEGRATOR_STATE(shadow_state, shadow_ray, time);
+  ls->eval_fac = INTEGRATOR_STATE_ARRAY(shadow_state, shadow_isect, 2, t);
   ls->object = INTEGRATOR_STATE(shadow_state, shadow_ray, self_light_object);
   ls->prim = INTEGRATOR_STATE(shadow_state, shadow_ray, self_light_prim);
   ls->shader = INTEGRATOR_STATE_ARRAY(shadow_state, shadow_isect, 0, object);
@@ -439,7 +459,7 @@ ccl_device_forceinline void integrator_state_read_mnee_ray(ConstIntegratorState 
   ray->tmin = ((ls->shader & SHADER_CAST_SHADOW) == 0) ? FLT_MAX : 0.0f;
   ray->time = INTEGRATOR_STATE(state, ray, time);
   ray->dP = INTEGRATOR_STATE(shadow_state, shadow_ray, dP);
-  ray->dD = differential_zero_compact();
+  ray->dD = INTEGRATOR_STATE(shadow_state, shadow_ray, dD);
   ray->self.object = INTEGRATOR_STATE_ARRAY(shadow_state, shadow_isect, 1, object);
   ray->self.prim = INTEGRATOR_STATE_ARRAY(shadow_state, shadow_isect, 1, type);
   ray->self.light_object = ls->object;

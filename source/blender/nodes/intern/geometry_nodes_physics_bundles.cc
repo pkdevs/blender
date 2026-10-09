@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_bundle_type.hh"
 #include "NOD_geometry_nodes_physics_bundles.hh"
 #include "NOD_socket_declarations.hh"
@@ -20,7 +24,7 @@ const FlatBundleTypePtr &MeshColliderBundle::get_bundle_type()
     FlatBundleTypeBuilder b(MeshColliderBundle::name);
     add_filter(b);
     b.add<decl::Geometry>("geometry"_ustr);
-    b.add<decl::Float>("margin"_ustr).min(0.0f);
+    b.add<decl::Float>("margin"_ustr).min(0.0f).subtype(PROP_DISTANCE);
     b.add<decl::Float>("friction"_ustr).min(0.0f);
     b.add<decl::Float>("compliance"_ustr).min(0.0f);
     b.add<decl::Bool>("deforming"_ustr).default_value(false);

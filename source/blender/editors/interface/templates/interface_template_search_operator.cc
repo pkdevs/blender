@@ -14,7 +14,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -93,7 +93,7 @@ void button_func_operator_search(Button *but)
                          searchbox_create_operator,
                          operator_search_update_fn,
                          nullptr,
-                         false,
+                         nullptr,
                          nullptr,
                          operator_search_exec_fn,
                          nullptr);

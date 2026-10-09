@@ -168,8 +168,8 @@ class TestBlendLibLinkIndirect(TestBlendLibLinkHelper):
         self.assertIsNotNone(mesh.library)
         self.assertFalse(mesh.use_fake_user)
         self.assertEqual(mesh.users, 0)
-        # IDs explicitly linked by the user are forcefully considered directly linked.
-        self.assertFalse(mesh.is_library_indirect)
+        # Even if explicitly linked by the user, unused linked IDs are considered indirectly linked.
+        self.assertTrue(mesh.is_library_indirect)
 
         ob = bpy.data.objects.new("LocalMesh", mesh)
         coll = bpy.data.collections.new("LocalMesh")
@@ -181,6 +181,7 @@ class TestBlendLibLinkIndirect(TestBlendLibLinkHelper):
         self.assertEqual(material.users, 1)
         self.assertTrue(material.is_library_indirect)
         self.assertEqual(mesh.users, 1)
+        # Now the linked ID is used by a local ID, and is therefore direclty linked.
         self.assertFalse(mesh.is_library_indirect)
 
         ob.material_slots[0].link = 'OBJECT'
@@ -499,7 +500,7 @@ class TestBlendLibAppendCollectionInstances(TestBlendLibLinkHelper):
         for item in expected_list:
             self.assertTrue(item in actual_list, f"Could not find {item}")
 
-    def test_dependency_instatiation(self):
+    def test_dependency_instantiation(self):
         # Append collection instances (see issue #154707)
         self.reset_blender()
 
@@ -523,7 +524,7 @@ class TestBlendLibAppendCollectionInstances(TestBlendLibLinkHelper):
         self.assert_contains_all(
             bpy.data.collections["Coll_154707_Data"].all_objects, ["Plane_A", "Plane_B"])
 
-    def test_recusive_instantiation(self):
+    def test_recursive_instantiation(self):
         # Append collection instances (see issue #155006)
         self.reset_blender()
 

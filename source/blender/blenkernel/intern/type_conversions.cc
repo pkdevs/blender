@@ -2,11 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_type_conversions.hh"
 
 #include "FN_multi_function_builder.hh"
 
 #include "BLI_color.hh"
+#include "BLI_cpp_type.hh"
 #include "BLI_math_euler.hh"
 #include "BLI_math_quaternion.hh"
 #include "BLI_math_vector.hh"
@@ -15,6 +20,33 @@
 namespace blender::bke {
 
 using mf::DataType;
+
+void DataTypeConversions::add(mf::DataType from_type,
+                              mf::DataType to_type,
+                              const mf::MultiFunction &fn,
+                              void (*convert_single_to_initialized)(const void *src, void *dst),
+                              void (*convert_single_to_uninitialized)(const void *src, void *dst))
+{
+  /* Other data types are not used yet but might be supported in the future. */
+  BLI_assert(from_type.is_single());
+  BLI_assert(to_type.is_single());
+
+  conversions_storage_.append(std::make_unique<ConversionFunctions>(
+      ConversionFunctions{&fn, convert_single_to_initialized, convert_single_to_uninitialized}));
+  ConversionFunctions *fns = conversions_storage_.last().get();
+
+  const int from_index = from_type.single_type().type_index;
+  const int to_index = to_type.single_type().type_index;
+  if (from_index >= conversions_by_type_index_.size()) {
+    conversions_by_type_index_.resize(from_index + 1);
+  }
+  Vector<ConversionFunctions *> &to_fns = conversions_by_type_index_[from_index];
+  if (to_index >= to_fns.size()) {
+    to_fns.resize(to_index + 1, nullptr);
+  }
+  BLI_assert(to_fns[to_index] == nullptr);
+  to_fns[to_index] = fns;
+}
 
 template<typename From, typename To, To (*ConversionF)(const From &)>
 static void add_implicit_conversion(DataTypeConversions &conversions)
@@ -467,7 +499,7 @@ static ColorGeometry4b int8_to_byte_color(const int8_t &a)
 
 static float bool_to_float(const bool &a)
 {
-  return bool(a);
+  return float(a);
 }
 static int8_t bool_to_int8(const bool &a)
 {
@@ -884,6 +916,23 @@ class GVArray_For_ConvertedGVArray : public GVArrayImpl {
                                      *old_to_new_conversions_.multi_function,
                                      mask,
                                      {this->type(), dst, mask.min_array_size()});
+  }
+
+  void materialize_compressed(const IndexMask &mask,
+                              void *dst,
+                              const bool dst_is_uninitialized) const override
+  {
+    const CPPType &dst_type = this->type();
+    mask.foreach_range([&](const IndexRange range, const int64_t segment_pos) {
+      void *segment_dst = POINTER_OFFSET(dst, dst_type.size * segment_pos);
+      if (!dst_is_uninitialized) {
+        type_->destruct_n(segment_dst, range.size());
+      }
+      call_convert_to_uninitialized_fn(varray_.slice(range),
+                                       *old_to_new_conversions_.multi_function,
+                                       range.index_range(),
+                                       {dst_type, segment_dst, range.size()});
+    });
   }
 };
 

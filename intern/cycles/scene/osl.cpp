@@ -583,9 +583,7 @@ uint64_t OSLShaderManager::get_attribute_id(ustring name)
 
 uint64_t OSLShaderManager::get_attribute_id(AttributeStandard std)
 {
-  /* if standard attribute, use geom: name convention */
-  const ustring stdname(string("geom:") + string(Attribute::standard_name(std)));
-  return stdname.hash();
+  return Attribute::osl_name(std).hash();
 }
 
 void OSLShaderManager::device_update_specific(Device *device,
@@ -839,7 +837,7 @@ OSLNode *OSLShaderManager::osl_node(ShaderGraph *graph,
           if (metadata.name == "widget" && metadata.sdefault[0] == "null") {
             socket_flags |= SocketType::LINK_OSL_INITIALIZER;
           }
-          else if (metadata.name == "defaultgeomprop") {
+          else if (metadata.name == "mtlx_defaultgeomprop") {
             /* the following match up to MaterialX default geometry properties
              * that we use to help set socket flags to the corresponding
              * geometry link equivalents. */
@@ -907,7 +905,7 @@ void OSLShaderManager::osl_image_handles(Device *device,
 
 OSLCompiler::OSLCompiler(OSL::ShadingSystem *ss, Scene *scene, Progress &progress, Device *device)
     : scene(scene),
-      progress(progress),
+      progress(&progress),
       services(static_cast<OSLRenderServices *>(ss->renderer())),
       ss(ss),
       device(device)
@@ -1402,12 +1400,7 @@ void OSLCompiler::parameter_string_array(const char *name, const array<ustring> 
 
 void OSLCompiler::parameter_attribute(const char *name, ustring s)
 {
-  if (Attribute::name_standard(s.c_str())) {
-    parameter(name, (string("geom:") + s.c_str()).c_str());
-  }
-  else {
-    parameter(name, s.c_str());
-  }
+  parameter(name, Attribute::osl_name(s));
 }
 
 void OSLCompiler::find_dependencies(ShaderNodeSet &dependencies, ShaderInput *input)
@@ -1467,6 +1460,9 @@ void OSLCompiler::generate_nodes(const ShaderNodeSet &nodes)
             }
             if (node->has_bump()) {
               current_shader->has_bump_from_surface = true;
+            }
+            if (node->has_dispersion()) {
+              current_shader->has_dispersion = true;
             }
           }
           else if (current_type == SHADER_TYPE_VOLUME) {
@@ -1643,6 +1639,8 @@ void OSLCompiler::parameter_color_array(const char * /*name*/, const array<packe
 }
 
 void OSLCompiler::parameter_string_array(const char * /*name*/, const array<ustring> & /*a*/) {}
+
+void OSLCompiler::parameter_attribute(const char * /*name*/, ustring /*s*/) {}
 
 void OSLCompiler::parameter_texture(const char * /*name*/, const ImageHandle & /*handle*/) {}
 

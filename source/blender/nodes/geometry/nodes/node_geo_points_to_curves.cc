@@ -47,7 +47,7 @@ static void grouped_sort(const OffsetIndices<int> offsets,
   const auto comparator = [&](const int index_a, const int index_b) {
     const float weight_a = weights[index_a];
     const float weight_b = weights[index_b];
-    if (UNLIKELY(weight_a == weight_b)) {
+    if (weight_a == weight_b) [[unlikely]] {
       /* Approach to make it stable. */
       return index_a < index_b;
     }
@@ -74,14 +74,11 @@ static void find_points_by_group_index(const Span<int> indices_of_curves,
 
 static int identifiers_to_indices(MutableSpan<int> r_identifiers_to_indices)
 {
-  const VectorSet<int> deduplicated_groups(r_identifiers_to_indices);
-  threading::parallel_for(
-      r_identifiers_to_indices.index_range(), 2048, [&](const IndexRange range) {
-        for (int &value : r_identifiers_to_indices.slice(range)) {
-          value = deduplicated_groups.index_of(value);
-        }
-      });
-  return deduplicated_groups.size();
+  Array<int> indices(r_identifiers_to_indices.size());
+  const int groups_num = array_utils::group_ids_to_indices(
+      r_identifiers_to_indices, indices.index_range(), indices);
+  r_identifiers_to_indices.copy_from(indices);
+  return groups_num;
 }
 
 static Curves *curve_from_points(const AttributeAccessor attributes,
@@ -150,9 +147,11 @@ static Curves *curves_from_points(const PointCloud &points,
 
   Array<int> indices(domain_size);
 
-  const bool custom_sorting = weights_varray.is_single();
-  find_points_by_group_index(group_ids, !custom_sorting, offset, indices.as_mutable_span());
-  if (custom_sorting) {
+  /* If the weights are specified, use them to sort the points, otherwise use the default sorting
+   * implemented by #offset_indices::reverse_indices_in_groups. */
+  const bool sort_by_weight = !weights_varray.is_single();
+  find_points_by_group_index(group_ids, !sort_by_weight, offset, indices.as_mutable_span());
+  if (sort_by_weight) {
     const VArraySpan<float> weights(weights_varray);
     grouped_sort(OffsetIndices<int>(offset), weights, indices);
   }

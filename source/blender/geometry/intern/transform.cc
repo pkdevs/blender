@@ -2,14 +2,18 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #ifdef WITH_OPENVDB
 #  include <openvdb/openvdb.h>
 #endif
 
 #include "GEO_transform.hh"
 
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_task.hh"
 
@@ -29,15 +33,6 @@
 
 namespace blender::geometry {
 
-static void translate_positions(MutableSpan<float3> positions, const float3 &translation)
-{
-  threading::parallel_for(positions.index_range(), 2048, [&](const IndexRange range) {
-    for (float3 &position : positions.slice(range)) {
-      position += translation;
-    }
-  });
-}
-
 static void translate_pointcloud(PointCloud &pointcloud, const float3 translation)
 {
   if (math::is_zero(translation)) {
@@ -52,7 +47,7 @@ static void translate_pointcloud(PointCloud &pointcloud, const float3 translatio
   bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
   bke::SpanAttributeWriter position = attributes.lookup_or_add_for_write_span<float3>(
       "position", bke::AttrDomain::Point);
-  translate_positions(position.span, translation);
+  math::translate_points(position.span, translation);
   position.finish();
 
   if (bounds) {
@@ -222,7 +217,7 @@ static void transform_gizmo_edit_hints(bke::GizmoEditHints &edit_hints, const fl
 static void translate_curve_edit_hints(bke::CurvesEditHints &edit_hints, const float3 &translation)
 {
   if (const std::optional<MutableSpan<float3>> positions = edit_hints.positions_for_write()) {
-    translate_positions(*positions, translation);
+    math::translate_points(*positions, translation);
   }
 }
 

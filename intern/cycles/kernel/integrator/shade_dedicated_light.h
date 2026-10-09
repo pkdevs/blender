@@ -126,7 +126,7 @@ ccl_device bool shadow_linking_shade_surface_emission(KernelGlobals kg,
   integrate_surface_shader_setup(kg, state, emission_sd);
 
 #  ifdef __VOLUME__
-  if (emission_sd->flag & SD_HAS_ONLY_VOLUME) {
+  if (emission_sd->shader_flag & SD_HAS_ONLY_VOLUME) {
     return SHADER_EVAL_EMPTY;
   }
 #  endif
@@ -187,6 +187,10 @@ ccl_device void shadow_linking_shade(KernelGlobals kg, IntegratorState state)
   IntegratorShadowState shadow_state = integrate_direct_light_shadow_init_common(
       kg, state, &ray, light_eval, light_group, 0, is_constant_light_shader);
 
+  if (!is_constant_light_shader) {
+    integrator_state_write_shadow_light_isect(shadow_state, &isect);
+  }
+
   /* The light is accumulated from the shade_surface kernel, which will make the clamping decision
    * based on the actual value of the bounce. For the dedicated shadow ray we want to follow the
    * main path clamping rules, which subtracts one from the bounds before accumulation. */
@@ -209,12 +213,12 @@ ccl_device void shadow_linking_shade(KernelGlobals kg, IntegratorState state)
 
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(
       state, path, visibility);
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag;
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag |
+                                                            PATH_RAY_SHADOW_FOR_LIGHT_LINKING;
 
 #  if defined(__PATH_GUIDING__)
   if (kernel_data.integrator.train_guiding) {
-    guiding_record_light_surface_segment(kg, state, &isect);
-    INTEGRATOR_STATE(shadow_state, shadow_path, guiding_mis_weight) = mis_weight;
+    INTEGRATOR_STATE(shadow_state, shadow_path, guiding_light_linking_mis_weight) = mis_weight;
   }
 #  endif
 }

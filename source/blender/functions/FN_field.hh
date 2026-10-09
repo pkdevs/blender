@@ -28,6 +28,7 @@
 
 #include "BLI_cache_mutex.hh"
 #include "BLI_implicit_sharing_ptr.hh"
+#include "BLI_vector_set.hh"
 
 #include "FN_multi_function.hh"
 
@@ -173,6 +174,8 @@ class GField {
   /** Utility to access a specific input type if this field is just an input. */
   template<typename InputT> const InputT *get_input_if() const;
 
+  const void *get_if_constant() const;
+
   /**
    * This only implements shallow comparison. A more deep comparison could reveal that two fields
    * are semantically the same even if this comparison is false. Deep comparison is much more
@@ -226,6 +229,10 @@ template<typename T> class Field {
 
   /** This is implicitly cast to #GField which is always valid. */
   operator const GField &() const;
+
+  /** Easily check if the field has a specific constant value. */
+  bool is_constant(const T &value) const;
+  const T *get_if_constant() const;
 
   /** These are the same as the corresponding #GField methods. */
   bool depends_on_input() const;
@@ -626,9 +633,42 @@ template<typename InputT> inline const InputT *GField::get_input_if() const
   return nullptr;
 }
 
+inline const void *GField::get_if_constant() const
+{
+  return std::visit(
+      []<typename T>(const T &v) -> const void * {
+        if constexpr (is_same_any_v<T, Input, MultiFn>) {
+          return nullptr;
+        }
+        else if constexpr (std::is_same_v<T, FieldRef>) {
+          return v.field_ref->get_if_constant();
+        }
+        else {
+          return v.value;
+        }
+      },
+      variant_);
+}
+
 template<typename T> template<typename InputT> inline const InputT *Field<T>::get_input_if() const
 {
   return field_.get_input_if<InputT>();
+}
+
+template<typename T> inline const T *Field<T>::get_if_constant() const
+{
+  if (const void *value = field_.get_if_constant()) {
+    return static_cast<const T *>(value);
+  }
+  return nullptr;
+}
+
+template<typename T> inline bool Field<T>::is_constant(const T &value) const
+{
+  if (const T *constant = this->get_if_constant()) {
+    return *constant == value;
+  }
+  return false;
 }
 
 inline Span<GField> FieldOperation::inputs() const

@@ -64,11 +64,18 @@ set(LIB
   PRIVATE bf::imbuf::opencolorio
   PRIVATE bf::intern::atomic
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::intern::profile
   PRIVATE bf::animrig
+  PRIVATE bf::nodes
   PRIVATE bf::sequencer
   PRIVATE bf::windowmanager
   PRIVATE bf::dependencies::optional::audaspace
+  PRIVATE bf::intern::clog
 )
+
+if(WITH_INPUT_IME)
+  add_definitions(-DWITH_INPUT_IME)
+endif()
 
 blender_add_lib(bf_editor_space_sequencer "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

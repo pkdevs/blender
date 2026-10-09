@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <fmt/format.h>
 #include <sstream>
 
@@ -15,8 +19,8 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -73,9 +77,6 @@ struct SocketSearchData {
 
   SearchInfo info(const bContext &C) const;
 };
-/* This class must not have a destructor, since it is used by buttons and freed with
- * #MEM_delete_void. */
-BLI_STATIC_ASSERT(std::is_trivially_destructible_v<SocketSearchData>, "");
 
 struct DrawGroupInputsContext {
   const bContext &C;
@@ -108,7 +109,7 @@ static eval_log::NodeTreeLog *get_root_tree_log(const Object &object, const Node
     return nullptr;
   }
   bke::DataBlockComputeContext data_block_context{nullptr, object.id};
-  bke::ModifierComputeContext modifier_context{&data_block_context, nmd};
+  bke::GeometryNodesModifierComputeContext modifier_context{&data_block_context, nmd};
   return &nmd.runtime->eval_log->get_tree_log(modifier_context.hash());
 }
 
@@ -242,11 +243,11 @@ static void add_layer_name_search_button(DrawGroupInputsContext &ctx,
 
   layout.use_property_decorate_set(false);
 
-  ui::Layout &split = layout.split(0.4f, false);
+  ui::Layout &split = layout.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
   ui::Layout &name_row = split.row(false);
   name_row.alignment_set(ui::LayoutAlign::Right);
 
-  name_row.label(socket.name ? IFACE_(socket.name) : "", ICON_NONE);
+  name_row.label(IFACE_(socket.name()), ICON_NONE);
   ui::Layout &prop_row = split.row(true);
 
   ui::Block *block = prop_row.block();
@@ -261,7 +262,7 @@ static void add_layer_name_search_button(DrawGroupInputsContext &ctx,
                                       socket_props_ptr,
                                       "layer_name",
                                       0,
-                                      StringRef(socket.description));
+                                      socket.description());
   button_placeholder_set(but, IFACE_("Layer"));
   layout.label("", ICON_BLANK1);
 
@@ -271,21 +272,11 @@ static void add_layer_name_search_button(DrawGroupInputsContext &ctx,
     return;
   }
 
-  /* Using a custom free function make the search not work currently. So make sure this data can be
-   * freed with MEM_delete. */
-  SocketSearchData *data = static_cast<SocketSearchData *>(
-      MEM_new_uninitialized(sizeof(SocketSearchData), __func__));
-  *data = ctx.socket_search_data_fn(socket);
+  SocketSearchData *data = MEM_new<SocketSearchData>(__func__, ctx.socket_search_data_fn(socket));
   button_func_search_set_results_are_suggestions(but, true);
   button_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
-  button_func_search_set(but,
-                         nullptr,
-                         layer_name_search_update_fn,
-                         data,
-                         true,
-                         nullptr,
-                         layer_name_search_exec_fn,
-                         nullptr);
+  button_func_search_set(
+      but, nullptr, layer_name_search_update_fn, data, layer_name_search_exec_fn, nullptr);
 }
 
 static void attribute_search_update_fn(
@@ -374,7 +365,7 @@ static void add_attribute_search_button(DrawGroupInputsContext &ctx,
                                       socket_props_ptr,
                                       "attribute_name",
                                       0,
-                                      StringRef(socket.description));
+                                      socket.description());
 
   const Object *object = ed::object::context_object(&ctx.C);
   BLI_assert(object != nullptr);
@@ -382,21 +373,11 @@ static void add_attribute_search_button(DrawGroupInputsContext &ctx,
     return;
   }
 
-  /* Using a custom free function make the search not work currently. So make sure this data can be
-   * freed with MEM_delete. */
-  SocketSearchData *data = static_cast<SocketSearchData *>(
-      MEM_new_uninitialized(sizeof(SocketSearchData), __func__));
-  *data = ctx.socket_search_data_fn(socket);
+  SocketSearchData *data = MEM_new<SocketSearchData>(__func__, ctx.socket_search_data_fn(socket));
   button_func_search_set_results_are_suggestions(but, true);
   button_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
-  button_func_search_set(but,
-                         nullptr,
-                         attribute_search_update_fn,
-                         data,
-                         true,
-                         nullptr,
-                         attribute_search_exec_fn,
-                         nullptr);
+  button_func_search_set(
+      but, nullptr, attribute_search_update_fn, data, attribute_search_exec_fn, nullptr);
 
   std::string attribute_name = RNA_string_get(socket_props_ptr, "attribute_name");
   const bool access_allowed = bke::allow_procedural_attribute_access(attribute_name);
@@ -421,14 +402,13 @@ static void add_attribute_search_or_value_buttons(
   /* We're handling this manually in this case. */
   layout.use_property_decorate_set(false);
 
-  ui::Layout &split = layout.split(0.4f, false);
+  ui::Layout &split = layout.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
   ui::Layout &name_row = split.row(false);
   name_row.alignment_set(ui::LayoutAlign::Right);
 
   ui::Layout *prop_row = nullptr;
-  const StringRefNull socket_name = use_name.has_value() ?
-                                        (*use_name) :
-                                        (socket.name ? IFACE_(socket.name) : "");
+  const StringRefNull socket_name = use_name.has_value() ? (*use_name) :
+                                                           IFACE_(socket.name().c_str());
 
   if (type == SOCK_BOOLEAN && !show_attribute_input) {
     name_row.label("", ICON_NONE);
@@ -450,7 +430,7 @@ static void add_attribute_search_or_value_buttons(
     layout.label("", ICON_BLANK1);
   }
   else {
-    const char *name = IFACE_(socket_name.c_str());
+    const StringRef name = IFACE_(socket_name);
     prop_row->prop(socket_props_ptr, "value", UI_ITEM_NONE, name, ICON_NONE);
     layout.decorator(socket_props_ptr, "value", -1);
   }
@@ -488,7 +468,7 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
     return;
   }
 
-  std::string name = socket.name ? IFACE_(socket.name) : "";
+  std::string name = IFACE_(socket.name());
 
   /* If the property has a prefix that's the same string as the name of the panel it's in, remove
    * the prefix so it appears less verbose. */
@@ -560,7 +540,7 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
       else {
         /* #template_id only supports pointer properties currently. Node tools store
          * data-block pointers in strings currently. */
-        row.prop_search(socket_props_ptr, "value", ctx.bmain_ptr, "images", name, ICON_IMAGE_DATA);
+        row.prop_search(socket_props_ptr, "value", ctx.bmain_ptr, "sounds", name, ICON_SOUND);
       }
 
       break;
@@ -678,7 +658,7 @@ static void draw_warnings(const bContext *C,
   const int num_infos = count_by_type.lookup_default(NodeWarningType::Info, 0);
   const std::string panel_name = get_node_warning_panel_name(num_errors, num_warnings, num_infos);
   ui::PanelLayout panel = layout.panel_prop(C, md_ptr, "open_warnings_panel");
-  panel.header->label(panel_name.c_str(), ICON_NONE);
+  panel.header->label(panel_name, ICON_NONE);
   if (!panel.body) {
     return;
   }
@@ -712,18 +692,22 @@ static void draw_warnings(const bContext *C,
         [](bContext * /*C*/, void *argN, StringRef /*tip*/) -> std::string {
           return *static_cast<std::string *>(argN);
         },
-        MEM_new<std::string>(__func__, message),
-        [](void *arg) { MEM_delete(static_cast<std::string *>(arg)); });
+        MEM_new<std::string>(__func__, message));
   }
 }
 
-static bool has_output_attribute(const bNodeTree *tree)
+static bool has_output_attribute(const DrawGroupInputsContext &ctx, const bNodeTree *tree)
 {
   if (!tree || ID_MISSING(tree)) {
     return false;
   }
-  for (const bNodeTreeInterfaceSocket *interface_socket : tree->interface_outputs()) {
-    const bke::bNodeSocketType *typeinfo = interface_socket->socket_typeinfo();
+  const Span<const bNodeTreeInterfaceSocket *> interface_outputs = ctx.tree->interface_outputs();
+  for (const int i : interface_outputs.index_range()) {
+    const bNodeTreeInterfaceSocket &socket = *interface_outputs[i];
+    if (!ctx.output_usages[i].is_visible) {
+      continue;
+    }
+    const bke::bNodeSocketType *typeinfo = socket.socket_typeinfo();
     const eNodeSocketDatatype type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
     if (nodes::socket_type_has_attribute_toggle(type)) {
       return true;
@@ -736,10 +720,10 @@ static void draw_property_for_output_socket(DrawGroupInputsContext &ctx,
                                             ui::Layout &layout,
                                             const bNodeTreeInterfaceSocket &socket)
 {
-  ui::Layout &split = layout.split(0.4f, false);
+  ui::Layout &split = layout.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
   ui::Layout &name_row = split.row(false);
   name_row.alignment_set(ui::LayoutAlign::Right);
-  name_row.label(socket.name ? socket.name : "", ICON_NONE);
+  name_row.label(socket.name(), ICON_NONE);
 
   PropertyRNA *prop = RNA_struct_find_property(ctx.properties_ptr, "outputs");
   if (!prop) {
@@ -754,9 +738,6 @@ static void draw_property_for_output_socket(DrawGroupInputsContext &ctx,
 
 static void draw_output_attributes_panel(DrawGroupInputsContext &ctx, ui::Layout &layout)
 {
-  if (!ctx.tree) {
-    return;
-  }
   const Span<const bNodeTreeInterfaceSocket *> interface_outputs = ctx.tree->interface_outputs();
   for (const int i : interface_outputs.index_range()) {
     const bNodeTreeInterfaceSocket &socket = *interface_outputs[i];
@@ -796,7 +777,7 @@ static void draw_named_attributes_panel(ui::Layout &layout, Object &object, Node
       tree_log->used_named_attributes;
 
   if (usage_by_attribute.is_empty()) {
-    layout.label(RPT_("No named attributes used"), ICON_INFO);
+    layout.label(RPT_("No named attributes used"), ICON_STATUS_INFO);
     return;
   }
 
@@ -818,7 +799,7 @@ static void draw_named_attributes_panel(ui::Layout &layout, Object &object, Node
     const eval_log::NamedAttributeUsage usage = attribute.usage;
 
     /* #uiLayoutRowWithHeading doesn't seem to work in this case. */
-    ui::Layout &split = layout.split(0.4f, false);
+    ui::Layout &split = layout.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
 
     std::stringstream ss;
     Vector<std::string> usages;
@@ -932,7 +913,7 @@ void draw_geometry_nodes_modifier_ui(const bContext &C,
 
   draw_warnings(&C, nmd, layout, modifier_ptr);
 
-  if (has_output_attribute(nmd.node_group)) {
+  if (has_output_attribute(ctx, nmd.node_group)) {
     if (ui::Layout *panel_layout = layout.panel_prop(
             &C, modifier_ptr, "open_output_attributes_panel", IFACE_("Output Attributes")))
     {

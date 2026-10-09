@@ -15,8 +15,8 @@
 #include "BKE_gtest_base.hh"
 #include "BKE_main.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_string.h"
+#include "BLI_fileops.hh"
+#include "BLI_string.hh"
 
 #include "BLO_readfile.hh"
 
@@ -517,6 +517,16 @@ TEST_F(OBJExportRegressionTest, cubes_vertex_colors)
                                "cubes_vertex_colors.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cubes_vertex_colors.obj",
                                "",
+                               params);
+}
+
+TEST_F(OBJExportRegressionTest, material_shaders)
+{
+  OBJExportParams params;
+  params.path_mode = PATH_REFERENCE_STRIP;
+  compare_obj_export_to_golden("io_tests" SEP_STR "blend_scene" SEP_STR "material_shaders.blend",
+                               "io_tests" SEP_STR "obj" SEP_STR "material_shaders.obj",
+                               "io_tests" SEP_STR "obj" SEP_STR "material_shaders.mtl",
                                params);
 }
 

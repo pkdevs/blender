@@ -61,10 +61,10 @@
 
 #include "BKE_global.hh"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
@@ -1222,7 +1222,8 @@ class TextureFromPool : public Texture, NonMovable {
   {
     if (tx_ != nullptr) {
       if (GPU_texture_width(tx_) != w || GPU_texture_height(tx_) != h ||
-          GPU_texture_depth(tx_) != d || GPU_texture_format(tx_) != format)
+          GPU_texture_depth(tx_) != d || GPU_texture_format(tx_) != format ||
+          (GPU_texture_usage(tx_) & usage) != usage)
       {
         release();
       }
