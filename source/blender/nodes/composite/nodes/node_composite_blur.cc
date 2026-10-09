@@ -67,7 +67,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .structure_type(StructureType::Dynamic);
   b.add_input<decl::Menu>("Type"_ustr)
-      .default_value(CMP_NODE_BLUR_TYPE_GAUSS)
+      .default_value(CMP_NODE_BLUR_TYPE_FAST_GAUSS)
       .static_items(type_items)
       .optional_label();
   b.add_input<decl::Bool>("Extend Bounds"_ustr).default_value(false);
