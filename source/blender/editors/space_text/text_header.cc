@@ -9,7 +9,6 @@
 #include "DNA_windowmanager_types.h"
 
 #include "BLI_listbase.hh"
-#include "BLI_rect.hh"
 #include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
