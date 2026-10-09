@@ -118,13 +118,18 @@ FeatureSet blf_font_otf_features_default()
 }
 
 #ifdef WITH_HARFBUZZ
+static std::string shaping_cache_key(const char *str, const size_t len)
+{
+  return std::string(str, BLI_strnlen(str, len));
+}
+
 bool ShapingData::load_from_cache(FontBLF *font,
                                   GlyphCacheBLF *gc,
                                   const char *str,
                                   const size_t len)
 {
-  const CachedString *cached = gc->shaping_cache.lookup_ptr(str);
-  if (cached == nullptr || cached->str_len != len) {
+  const CachedString *cached = gc->shaping_cache.lookup_ptr(shaping_cache_key(str, len));
+  if (cached == nullptr) {
     return false;
   }
 
@@ -360,8 +365,10 @@ ShapingData::ShapingData(FontBLF *font,
   }
 
   const size_t glyph_count = this->glyphs.size();
-  if (gc && single_gc && glyph_count > 0 && glyph_count < 128 && !gc->shaping_cache.contains(str))
-  {
+  const std::string cache_key = (gc && single_gc && glyph_count > 0 && glyph_count < 128) ?
+                                    shaping_cache_key(str, len) :
+                                    std::string();
+  if (!cache_key.empty() && !gc->shaping_cache.contains(cache_key)) {
     CachedString cache_string;
     cache_string.str_len = len;
     cache_string.bounds = this->bounds;
@@ -375,7 +382,7 @@ ShapingData::ShapingData(FontBLF *font,
                                 glyph.index_utf8,
                                 glyph.g->subpixel};
     }
-    gc->shaping_cache.add_new(str, std::move(cache_string));
+    gc->shaping_cache.add_new(cache_key, std::move(cache_string));
   }
 }
 
