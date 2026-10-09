@@ -553,7 +553,7 @@ static void foreach_name_reference(ModifierData *md,
   LaplacianSmoothModifierData *smd = reinterpret_cast<LaplacianSmoothModifierData *>(md);
   callback(smd->defgrp_name,
            sizeof(smd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

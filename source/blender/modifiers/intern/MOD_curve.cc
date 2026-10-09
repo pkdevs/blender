@@ -185,7 +185,7 @@ static void foreach_name_reference(ModifierData *md,
                                    void *user_data)
 {
   CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
-  callback(cmd->name, sizeof(cmd->name), ModifierNameReferenceScope::VertexGroup, user_data);
+  callback(cmd->name, sizeof(cmd->name), ModifierNameReferenceType::VertexGroup, user_data);
 }
 
 ModifierTypeInfo modifierType_Curve = {

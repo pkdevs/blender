@@ -156,7 +156,7 @@ static void foreach_name_reference(ModifierData *md,
                                    void *user_data)
 {
   LatticeModifierData *lmd = reinterpret_cast<LatticeModifierData *>(md);
-  callback(lmd->name, sizeof(lmd->name), ModifierNameReferenceScope::VertexGroup, user_data);
+  callback(lmd->name, sizeof(lmd->name), ModifierNameReferenceType::VertexGroup, user_data);
 }
 
 ModifierTypeInfo modifierType_Lattice = {

@@ -160,7 +160,7 @@ static void foreach_name_reference(ModifierData *md,
   WireframeModifierData *wmd = reinterpret_cast<WireframeModifierData *>(md);
   callback(wmd->defgrp_name,
            sizeof(wmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

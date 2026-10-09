@@ -378,7 +378,7 @@ static void foreach_name_reference(ModifierData *md,
   MeshCacheModifierData *mcmd = reinterpret_cast<MeshCacheModifierData *>(md);
   callback(mcmd->defgrp_name,
            sizeof(mcmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

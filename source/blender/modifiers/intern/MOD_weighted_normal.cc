@@ -601,7 +601,7 @@ static void foreach_name_reference(ModifierData *md,
   WeightedNormalModifierData *wnmd = reinterpret_cast<WeightedNormalModifierData *>(md);
   callback(wnmd->defgrp_name,
            sizeof(wnmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

@@ -209,7 +209,7 @@ static void foreach_name_reference(ModifierData *md,
   SmoothModifierData *smd = reinterpret_cast<SmoothModifierData *>(md);
   callback(smd->defgrp_name,
            sizeof(smd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

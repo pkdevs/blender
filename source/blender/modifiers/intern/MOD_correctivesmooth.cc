@@ -835,7 +835,7 @@ static void foreach_name_reference(ModifierData *md,
   CorrectiveSmoothModifierData *csmd = reinterpret_cast<CorrectiveSmoothModifierData *>(md);
   callback(csmd->defgrp_name,
            sizeof(csmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

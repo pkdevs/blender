@@ -672,7 +672,7 @@ static void foreach_name_reference(ModifierData *md,
   MeshDeformModifierData *mmd = reinterpret_cast<MeshDeformModifierData *>(md);
   callback(mmd->defgrp_name,
            sizeof(mmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

@@ -81,7 +81,7 @@ void foreach_influence_name_reference(GreasePencilModifierInfluenceData *influen
   if (influence != nullptr) {
     callback(influence->vertex_group_name,
              sizeof(influence->vertex_group_name),
-             ModifierNameReferenceScope::VertexGroup,
+             ModifierNameReferenceType::VertexGroup,
              user_data);
   }
 }

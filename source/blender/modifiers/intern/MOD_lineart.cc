@@ -924,7 +924,7 @@ static void foreach_name_reference(ModifierData *md,
                                    void *user_data)
 {
   GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
-  callback(lmd->vgname, sizeof(lmd->vgname), ModifierNameReferenceScope::VertexGroup, user_data);
+  callback(lmd->vgname, sizeof(lmd->vgname), ModifierNameReferenceType::VertexGroup, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilLineart = {

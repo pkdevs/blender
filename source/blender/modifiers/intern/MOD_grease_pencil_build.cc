@@ -872,7 +872,7 @@ static void foreach_name_reference(ModifierData *md,
   GreasePencilBuildModifierData *mmd = reinterpret_cast<GreasePencilBuildModifierData *>(md);
   callback(mmd->target_vgname,
            sizeof(mmd->target_vgname),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

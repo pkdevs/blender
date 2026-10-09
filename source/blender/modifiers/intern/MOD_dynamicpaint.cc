@@ -198,7 +198,7 @@ static void foreach_name_reference(ModifierData *md,
     {
       callback(surface.output_name,
                sizeof(surface.output_name),
-               ModifierNameReferenceScope::VertexGroup,
+               ModifierNameReferenceType::VertexGroup,
                user_data);
     }
   }

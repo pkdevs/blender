@@ -184,7 +184,7 @@ static void foreach_name_reference(ModifierData *md,
   ShrinkwrapModifierData *smd = reinterpret_cast<ShrinkwrapModifierData *>(md);
   callback(smd->vgroup_name,
            sizeof(smd->vgroup_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

@@ -406,7 +406,7 @@ static void foreach_name_reference(ModifierData *md,
   WaveModifierData *wmd = reinterpret_cast<WaveModifierData *>(md);
   callback(wmd->defgrp_name,
            sizeof(wmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

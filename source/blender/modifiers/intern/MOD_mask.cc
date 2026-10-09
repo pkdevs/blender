@@ -780,7 +780,7 @@ static void foreach_name_reference(ModifierData *md,
                                    void *user_data)
 {
   MaskModifierData *mmd = reinterpret_cast<MaskModifierData *>(md);
-  callback(mmd->vgroup, sizeof(mmd->vgroup), ModifierNameReferenceScope::VertexGroup, user_data);
+  callback(mmd->vgroup, sizeof(mmd->vgroup), ModifierNameReferenceType::VertexGroup, user_data);
 }
 
 ModifierTypeInfo modifierType_Mask = {

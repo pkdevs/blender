@@ -309,7 +309,7 @@ static void foreach_name_reference(ModifierData *md,
   UVWarpModifierData *umd = reinterpret_cast<UVWarpModifierData *>(md);
   callback(umd->vgroup_name,
            sizeof(umd->vgroup_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

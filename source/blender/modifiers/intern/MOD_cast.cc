@@ -503,7 +503,7 @@ static void foreach_name_reference(ModifierData *md,
   CastModifierData *cmd = reinterpret_cast<CastModifierData *>(md);
   callback(cmd->defgrp_name,
            sizeof(cmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

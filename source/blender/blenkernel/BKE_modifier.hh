@@ -144,15 +144,15 @@ using TexWalkFunc = void (*)(void *user_data,
                              const PointerRNA *ptr,
                              PropertyRNA *texture_prop);
 /**
- * Scope identifying the namespace a visited name reference belongs to.
+ * Type identifying what kind of named entity a visited name reference refers to.
  *
  * This is the iterator-level equivalent of the node declaration flags
  * (`is_attribute_name`, `is_layer_name`, ...): every visited string declares what kind
  * of name it holds, so a single generic traversal can serve renames of different name
- * namespaces without false positives. Additional scopes (e.g. bone names) can be added
+ * namespaces without false positives. Additional types (e.g. bone names) can be added
  * as more reference kinds are visited.
  */
-enum class ModifierNameReferenceScope {
+enum class ModifierNameReferenceType {
   VertexGroup,
 };
 /**
@@ -163,12 +163,12 @@ enum class ModifierNameReferenceScope {
  *
  * \param name: Pointer to the stored fixed-size name buffer, may be modified in place.
  * \param name_maxncpy: Size of the buffer in bytes, including the null terminator.
- * \param scope: Namespace the referenced name belongs to.
+ * \param type: Kind of named entity the referenced name refers to.
  * \param user_data: Opaque caller data.
  */
 using ModifierNameReferenceCallback = void (*)(char *name,
                                                size_t name_maxncpy,
-                                               ModifierNameReferenceScope scope,
+                                               ModifierNameReferenceType type,
                                                void *user_data);
 
 enum ModifierApplyFlag {

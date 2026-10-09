@@ -863,7 +863,7 @@ static void foreach_name_reference(ModifierData *md,
   LaplacianDeformModifierData *lmd = reinterpret_cast<LaplacianDeformModifierData *>(md);
   callback(lmd->anchor_grp_name,
            sizeof(lmd->anchor_grp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

@@ -491,15 +491,15 @@ static void foreach_name_reference(ModifierData *md,
   WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
   callback(wmd->defgrp_name_a,
            sizeof(wmd->defgrp_name_a),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
   callback(wmd->defgrp_name_b,
            sizeof(wmd->defgrp_name_b),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
   callback(wmd->mask_defgrp_name,
            sizeof(wmd->mask_defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

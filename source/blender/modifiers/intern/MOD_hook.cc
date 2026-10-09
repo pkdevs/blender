@@ -539,7 +539,7 @@ static void foreach_name_reference(ModifierData *md,
                                    void *user_data)
 {
   HookModifierData *hmd = reinterpret_cast<HookModifierData *>(md);
-  callback(hmd->name, sizeof(hmd->name), ModifierNameReferenceScope::VertexGroup, user_data);
+  callback(hmd->name, sizeof(hmd->name), ModifierNameReferenceType::VertexGroup, user_data);
 }
 
 ModifierTypeInfo modifierType_Hook = {

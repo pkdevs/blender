@@ -241,15 +241,15 @@ static void foreach_name_reference(ModifierData *md,
   SolidifyModifierData *smd = reinterpret_cast<SolidifyModifierData *>(md);
   callback(smd->defgrp_name,
            sizeof(smd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
   callback(smd->shell_defgrp_name,
            sizeof(smd->shell_defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
   callback(smd->rim_defgrp_name,
            sizeof(smd->rim_defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

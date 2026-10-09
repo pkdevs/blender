@@ -268,7 +268,7 @@ static void foreach_name_reference(ModifierData *md,
       reinterpret_cast<GreasePencilWeightAngleModifierData *>(md);
   callback(mmd->target_vgname,
            sizeof(mmd->target_vgname),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
   modifier::greasepencil::foreach_influence_name_reference(&mmd->influence, callback, user_data);
 }

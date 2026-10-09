@@ -103,18 +103,18 @@ static void foreach_geometry_name_reference(Object *ob,
 {
   if (Key *key = BKE_key_from_object(ob)) {
     for (KeyBlock &kb : key->block) {
-      callback(kb.vgroup, sizeof(kb.vgroup), ModifierNameReferenceScope::VertexGroup, user_data);
+      callback(kb.vgroup, sizeof(kb.vgroup), ModifierNameReferenceType::VertexGroup, user_data);
     }
   }
 
   if (ob->type == OB_LATTICE) {
     Lattice *lt = id_cast<Lattice *>(ob->data);
-    callback(lt->vgroup, sizeof(lt->vgroup), ModifierNameReferenceScope::VertexGroup, user_data);
+    callback(lt->vgroup, sizeof(lt->vgroup), ModifierNameReferenceType::VertexGroup, user_data);
     if (lt->editlatt != nullptr) {
       Lattice *edit_latt = lt->editlatt->latt;
       callback(edit_latt->vgroup,
                sizeof(edit_latt->vgroup),
-               ModifierNameReferenceScope::VertexGroup,
+               ModifierNameReferenceType::VertexGroup,
                user_data);
     }
   }
@@ -122,7 +122,7 @@ static void foreach_geometry_name_reference(Object *ob,
   if (ob->type == OB_GREASE_PENCIL) {
     GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
     BKE_grease_pencil_foreach_vgroup_name(grease_pencil, [&](char *name, size_t name_maxncpy) {
-      callback(name, name_maxncpy, ModifierNameReferenceScope::VertexGroup, user_data);
+      callback(name, name_maxncpy, ModifierNameReferenceType::VertexGroup, user_data);
     });
   }
 }
@@ -138,15 +138,15 @@ static void foreach_object_name_reference(Object *ob,
   if (ob->soft) {
     callback(ob->soft->namedVG_Mass,
              sizeof(ob->soft->namedVG_Mass),
-             ModifierNameReferenceScope::VertexGroup,
+             ModifierNameReferenceType::VertexGroup,
              user_data);
     callback(ob->soft->namedVG_Softgoal,
              sizeof(ob->soft->namedVG_Softgoal),
-             ModifierNameReferenceScope::VertexGroup,
+             ModifierNameReferenceType::VertexGroup,
              user_data);
     callback(ob->soft->namedVG_Spring_K,
              sizeof(ob->soft->namedVG_Spring_K),
-             ModifierNameReferenceScope::VertexGroup,
+             ModifierNameReferenceType::VertexGroup,
              user_data);
   }
 }
@@ -167,10 +167,10 @@ struct DefgroupRenameData {
 
 static void defgroup_rename_callback(char *name,
                                      size_t name_maxncpy,
-                                     ModifierNameReferenceScope scope,
+                                     ModifierNameReferenceType type,
                                      void *user_data)
 {
-  if (scope != ModifierNameReferenceScope::VertexGroup) {
+  if (type != ModifierNameReferenceType::VertexGroup) {
     return;
   }
   DefgroupRenameData *data = static_cast<DefgroupRenameData *>(user_data);

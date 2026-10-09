@@ -240,7 +240,7 @@ static void foreach_name_reference(ModifierData *md,
   ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md);
   callback(amd->defgrp_name,
            sizeof(amd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

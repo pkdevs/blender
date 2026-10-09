@@ -166,7 +166,7 @@ static void foreach_name_reference(ModifierData *md,
   WeldModifierData *wmd = reinterpret_cast<WeldModifierData *>(md);
   callback(wmd->defgrp_name,
            sizeof(wmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

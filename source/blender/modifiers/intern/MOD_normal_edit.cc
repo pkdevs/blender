@@ -679,7 +679,7 @@ static void foreach_name_reference(ModifierData *md,
   NormalEditModifierData *nemd = reinterpret_cast<NormalEditModifierData *>(md);
   callback(nemd->defgrp_name,
            sizeof(nemd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

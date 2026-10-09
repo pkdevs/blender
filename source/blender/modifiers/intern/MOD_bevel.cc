@@ -479,7 +479,7 @@ static void foreach_name_reference(ModifierData *md,
   BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
   callback(bmd->defgrp_name,
            sizeof(bmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

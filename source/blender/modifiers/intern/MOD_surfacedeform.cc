@@ -1725,7 +1725,7 @@ static void foreach_name_reference(ModifierData *md,
   SurfaceDeformModifierData *smd = reinterpret_cast<SurfaceDeformModifierData *>(md);
   callback(smd->defgrp_name,
            sizeof(smd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

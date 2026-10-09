@@ -458,7 +458,7 @@ static void foreach_name_reference(ModifierData *md,
   DataTransferModifierData *dmd = reinterpret_cast<DataTransferModifierData *>(md);
   callback(dmd->defgrp_name,
            sizeof(dmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 

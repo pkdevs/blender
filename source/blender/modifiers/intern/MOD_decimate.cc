@@ -279,7 +279,7 @@ static void foreach_name_reference(ModifierData *md,
   DecimateModifierData *dmd = reinterpret_cast<DecimateModifierData *>(md);
   callback(dmd->defgrp_name,
            sizeof(dmd->defgrp_name),
-           ModifierNameReferenceScope::VertexGroup,
+           ModifierNameReferenceType::VertexGroup,
            user_data);
 }
 
