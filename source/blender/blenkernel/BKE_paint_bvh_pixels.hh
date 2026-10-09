@@ -65,13 +65,6 @@ struct UDIMTilePixels {
   /** Image coordinate of the first pixel of each run. */
   Vector<ushort2> pixel_row_run_start_coords;
 
-  struct {
-    /* TODO: Flatten this out and index via a GroupedSpan */
-    Vector<Vector<float4, 0>, 0> color;
-    Vector<Vector<float, 0>, 0> factor;
-    Vector<ModifiedRowSpan, 0> modified_spans;
-  } pixel_row_run_scratch_data;
-
   UDIMTilePixels()
   {
     flags.dirty = false;
@@ -89,21 +82,6 @@ struct UDIMTilePixels {
   {
     BLI_rcti_init_minmax(&dirty_region);
     flags.dirty = false;
-  }
-
-  void reset_scratch_data()
-  {
-    BLI_assert(!pixel_row_run_starts.is_empty());
-    pixel_row_run_scratch_data.color.reinitialize(pixel_row_run_starts.size());
-    pixel_row_run_scratch_data.factor.reinitialize(pixel_row_run_starts.size());
-    pixel_row_run_scratch_data.modified_spans.reinitialize(pixel_row_run_starts.size());
-  }
-
-  void clear_scratch_data()
-  {
-    pixel_row_run_scratch_data.color.clear_and_shrink();
-    pixel_row_run_scratch_data.factor.clear_and_shrink();
-    pixel_row_run_scratch_data.modified_spans.clear_and_shrink();
   }
 };
 
@@ -294,6 +272,8 @@ struct PixelData {
   /* Sorted list of used tile numbers. */
   Vector<image::TileNumber> used_tiles;
   Map<image::TileNumber, int> tile_to_index;
+
+  /* TODO: This needs to be refreshed when the main tree data is refreshed. */
 
   std::optional<KDTreeData> tree_data;
 };

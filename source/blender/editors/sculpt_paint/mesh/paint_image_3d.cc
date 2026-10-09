@@ -496,7 +496,6 @@ static void average_pixels(const int start,
                            const MutableSpan<float4> scratch_pixels)
 {
   PRF_scope(ProfileCategory::Editor);
-  BLI_assert(scratch_pixels.size() == size);
 
   for (int i = 0; i < size; i++) {
     Array<KDTreeNew<float3>::Nearest, 8> nearest_pixels(8);
@@ -522,7 +521,7 @@ static void average_pixels(const int start,
         num++;
       }
     }
-    scratch_pixels[i] = accum / float(num);
+    scratch_pixels[start + i] = accum / float(num);
   }
 }
 
@@ -739,10 +738,10 @@ static IndexRange scratch_tiles_range(const int img_width, const int img_x_start
   const int tile_y = img_y >> scratch_tile_bits;
   const int tile_x_start = img_x_start >> scratch_tile_bits;
   const int tile_x_end = img_x_end >> scratch_tile_bits;
-  const int scratch_tile_x = (img_width + scratch_tile_size - 1) >> scratch_tile_bits;
+  const int scratch_tile_width = (img_width + scratch_tile_size - 1) >> scratch_tile_bits;
 
-  const int tile_start = tile_y * scratch_tile_x + tile_x_start;
-  const int tile_end = tile_y * scratch_tile_x + tile_x_end;
+  const int tile_start = tile_y * scratch_tile_width + tile_x_start;
+  const int tile_end = tile_y * scratch_tile_width + tile_x_end;
 
   return IndexRange::from_begin_end_inclusive(tile_start, tile_end);
 }
@@ -1083,9 +1082,6 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
       continue;
     }
 
-    /* TODO: This should be a non-mutable buffer */
-    BufferType orig_buffer = image_data.data_buffers.lookup_default(tile_data.tile_number,
-                                                                    BufferType{});
     const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
         tile_data.tile_number);
 
@@ -1209,12 +1205,6 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         const int run_active_size = run_active_end - run_active_begin + 1;
         const int run_active_x = run_x + run_active_begin;
         tls.modified_spans.append({.x = run_active_x, .y = run_y, .size = run_active_size});
-#ifndef NDEBUG
-        BLI_assert(run_active_begin >= 0 && run_active_size > 0 &&
-                   run_active_begin + run_active_size <= run_size);
-#endif
-        MutableSpan<float4> scratch_run_buffer = averaged_pixels.slice(run_active_begin,
-                                                                      run_active_size);
 
         const int img_x_start = run_active_x;
         const int img_x_end = run_active_x + run_active_size - 1;
@@ -1245,7 +1235,7 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
                        image_data.processors,
                        image_data.data_buffers,
                        tile_index_to_number,
-                       scratch_run_buffer);
+                       tls.averaged_pixels);
 
         /* Write to the allocated tile buffer */
         const int tile_img_x_start = run_active_x % scratch_tile_size;
@@ -1253,12 +1243,15 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
 
         int tile_x_offset = tile_img_x_start;
         int remaining_pixels = run_active_size;
-        int run_offset = 0;
-        int slice_size = scratch_tile_size - tile_x_offset;
+        int run_offset = run_active_begin;
+
+        /* TODO: Verify that this works with base image sizes that are not multiples of the tile
+         * size. (e.g. 1000) */
+        int slice_size = math::min(remaining_pixels, scratch_tile_size - tile_x_offset);
         for (const int scratch_tile_i :
              scratch_tiles_range(image_buffer->x, img_x_start, img_x_end, img_y))
         {
-          int tile_start = tile_x_offset + tile_img_y * scratch_tile_size;
+          const int tile_start = tile_x_offset + tile_img_y * scratch_tile_size;
 
           const Span<float4> color_src = averaged_pixels.slice(run_offset, slice_size);
           const MutableSpan<float4> color_dst =
@@ -1269,9 +1262,12 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
           const MutableSpan<float> factor_dst = scratch_factor_data[scratch_tile_i].as_mutable_span().slice(tile_start, slice_size);
           array_utils::copy(factor_src, factor_dst);
 
+          /* TODO: We may need to record these spans somehow on a per-daub basis to speed-up the actual
+           * blur application. */
+
           run_offset += slice_size;
           remaining_pixels -= slice_size;
-          slice_size = math::min(slice_size, scratch_tile_size);
+          slice_size = math::min(remaining_pixels, scratch_tile_size);
           tile_x_offset = 0;
         }
       }
@@ -1309,6 +1305,12 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
   pixel_node.flags.dirty |= pixels_updated;
 }
 
+static ushort2 scratch_tile_index_to_xy(const int scratch_tile_index, const int img_width)
+{
+  const int scratch_tile_width = (img_width + scratch_tile_size - 1) >> scratch_tile_bits;
+  return ushort2(scratch_tile_index % scratch_tile_width, scratch_tile_index / scratch_tile_width);
+}
+
 static void do_apply_blur(const Paint &paint,
                           const Brush &brush,
                           Object &object,
@@ -1326,6 +1328,7 @@ static void do_apply_blur(const Paint &paint,
     if (image_buffer == nullptr) {
       continue;
     }
+    const int img_width = image_buffer->x;
 
     BufferType mutable_buffer = image_data.data_buffers.lookup_default(tile_data.tile_number,
                                                                        BufferType{});
@@ -1337,33 +1340,71 @@ static void do_apply_blur(const Paint &paint,
     const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
         tile_data.tile_number);
 
-    Span<ModifiedRowSpan> modified_spans = tile_data.pixel_row_run_scratch_data.modified_spans;
+    const MutableSpan<uint32_t> scratch_data_allocated = image_data.scratch_data_allocated.lookup(
+        tile_data.tile_number);
+    const MutableSpan<Vector<float4>> scratch_color_data = image_data.scratch_color_data.lookup(
+        tile_data.tile_number);
+    const MutableSpan<Vector<float>> scratch_factor_data = image_data.scratch_factor_data.lookup(
+        tile_data.tile_number);
 
     IndexMaskMemory memory;
-    const IndexMask tile_mask = IndexMask::from_predicate(
-        modified_spans.index_range(), memory, [&](const int run_i) {
-          return modified_spans[run_i].size != 0;
+    const IndexMask allocated_tiles = IndexMask::from_predicate(
+        scratch_data_allocated.index_range(), memory, [&](const int scratch_tile_i) {
+          return scratch_data_allocated[scratch_tile_i] == 1;
         });
 
     /* TODO: Move this to TLS */
     Vector<float4> paint_pixels;
-    tile_mask.foreach_index(
-        [&](const int run_i) {
-          const ModifiedRowSpan modified_span = modified_spans[run_i];
-          const Span<float4> colors = tile_data.pixel_row_run_scratch_data.color[run_i];
-          const Span<float> factors = tile_data.pixel_row_run_scratch_data.factor[run_i];
-          const ushort2 start_coord = tile_data.pixel_row_run_start_coords[run_i];
+    allocated_tiles.foreach_index(
+        [&](const int scratch_tile_i) {
+          const float brush_alpha = blend_settings.brush_alpha;
+          const bool is_mix = blend_settings.blend_mode == IMB_BLEND_MIX;
+          const IMB_BlendMode blend_mode = blend_settings.blend_mode;
 
-          const int start = image_buffer->x * start_coord.y + start_coord.x + modified_span.start;
+          const ushort2 scratch_tile_pos = scratch_tile_index_to_xy(scratch_tile_i,
+                                                                    image_buffer->x);
+          const int2 img_start = int2(scratch_tile_pos) * scratch_tile_size;
+          /*
+          printf("Working on %d -> %d (%d, %d) --> (%d, %d)\n",
+                 tile_data.tile_number,
+                 scratch_tile_i,
+                 scratch_tile_pos.x,
+                 scratch_tile_pos.y,
+                 img_start.x,
+                 img_start.y);
+                 */
 
-          if (std::holds_alternative<MutableSpan<float4>>(mutable_buffer)) {
-            paint_blend_pixels(blend_settings,
-                               factors.slice(modified_span.start, modified_span.size),
-                               colors.slice(modified_span.start, modified_span.size),
-                               std::get<MutableSpan<float4>>(mutable_buffer),
-                               start,
-                               *processors,
-                               paint_pixels);
+          Span<float4> scratch_tile_colors = scratch_color_data[scratch_tile_i];
+          Span<float> scratch_tile_factors = scratch_factor_data[scratch_tile_i];
+
+          if (std::holds_alternative<MutableSpan<float4>>(mutable_buffer) && processors->is_noop) {
+            MutableSpan<float4> image_pixels = std::get<MutableSpan<float4>>(mutable_buffer);
+            for (int scratch_tile_y = 0; scratch_tile_y < scratch_tile_size; scratch_tile_y++) {
+              for (int scratch_tile_x = 0; scratch_tile_x < scratch_tile_size; scratch_tile_x++) {
+                const int scratch_span_i = scratch_tile_y * scratch_tile_size + scratch_tile_x;
+                if (scratch_tile_factors[scratch_span_i] == 0.0f) {
+                  continue;
+                }
+
+                const int img_i = (img_start.y + scratch_tile_y) * img_width + img_start.x +
+                                  scratch_tile_x;
+
+                const float4 scene_color = image_pixels[img_i];
+#ifdef DEBUG_PIXEL_NODES
+                scene_color = paint_debug_color(scene, img_start.y);
+#endif
+#if 1
+                image_pixels[img_i] = paint_blend_pixel(scratch_tile_colors[scratch_span_i],
+                                                        brush_alpha,
+                                                        is_mix,
+                                                        blend_mode,
+                                                        scratch_tile_factors[scratch_span_i],
+                                                        scene_color);
+#else
+                image_pixels[img_i] = float4(1,0,0,1);
+#endif
+              }
+            }
           }
         },
         exec_mode::grain_size(256));
