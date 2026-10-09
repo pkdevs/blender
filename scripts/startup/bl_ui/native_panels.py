@@ -19,7 +19,7 @@ def _uid(item):
 def _object_actions(context, obj):
     actions = ['visibility']
     if context.mode == 'OBJECT' and obj.is_editable:
-        actions.append('rename')
+        actions += ['rename', 'move']
         if obj.visible_get(view_layer=context.view_layer) and not obj.hide_select:
             actions.append('duplicate')
         if not obj.library and not obj.override_library:
@@ -34,8 +34,93 @@ def _collection_actions(context, layer):
     coll = layer.collection
     actions = ['visibility']
     if context.mode == 'OBJECT' and coll.is_editable and not coll.override_library:
-        actions += ['rename', 'delete']
+        actions += ['rename', 'delete', 'move']
     return actions
+
+
+def _accepts_drop(context, layer):
+    """Whether objects and collections can be moved into this collection."""
+    coll = layer.collection
+    return (context.mode == 'OBJECT' and not layer.exclude and coll.is_editable and
+            not coll.override_library)
+
+
+def _scene_collections(context):
+    """Every collection in the scene, the scene collection included."""
+    found = [context.scene.collection]
+    for coll in found:
+        found += [child for child in coll.children if child not in found]
+    return found
+
+
+def _collection_by_uid(context, uid):
+    return next((coll for coll in _scene_collections(context) if _uid(coll) == uid), None)
+
+
+def _objects(context, request):
+    """The objects a request is about: a single `id`, or several `ids` for a selection."""
+    ids = request.get('ids') or [request.get('id')]
+    lookup = {_uid(obj): obj for obj in context.view_layer.objects}
+    objects = [lookup[uid] for uid in ids if uid in lookup]
+    if not objects or len(objects) != len(ids):
+        raise ValueError("Some of these objects are no longer in the current view layer.")
+    return objects
+
+
+def _keep_transform(obj, parent):
+    matrix = obj.matrix_world.copy()
+    obj.parent = parent
+    obj.matrix_world = matrix
+
+
+def _move_objects(context, objects, target):
+    """Move objects into a collection, out of the scene's other collections. Children whose parent
+    stays behind are unparented in place, so they show up where they were dropped."""
+    for obj in objects:
+        for coll in _scene_collections(context):
+            if coll != target and obj.name in coll.objects:
+                coll.objects.unlink(obj)
+        if obj.name not in target.objects:
+            target.objects.link(obj)
+    for obj in objects:
+        if obj.parent and obj.parent not in objects:
+            _keep_transform(obj, None)
+
+
+def _parent_objects(context, objects, parent):
+    """Parent objects to another, keeping where they are, like dropping in the Outliner."""
+    for obj in objects:
+        ancestor = parent
+        while ancestor:
+            if ancestor == obj:
+                raise ValueError("An object cannot be parented to itself or its children.")
+            ancestor = ancestor.parent
+    shared = [coll for coll in _scene_collections(context) if parent.name in coll.objects]
+    for obj in objects:
+        _keep_transform(obj, parent)
+        # Children list under their parent only when they share a collection.
+        if shared and not any(obj.name in coll.objects for coll in shared):
+            _move_objects(context, [obj], shared[0])
+            _keep_transform(obj, parent)
+
+
+def _move_collections(context, collections, target):
+    for coll in collections:
+        if coll == target or target in _descendants(coll):
+            raise ValueError("A collection cannot be moved into itself.")
+    for coll in collections:
+        for parent in _scene_collections(context):
+            if parent != target and coll.name in parent.children:
+                parent.children.unlink(coll)
+        if coll.name not in target.children:
+            target.children.link(coll)
+
+
+def _descendants(coll):
+    found = list(coll.children)
+    for child in found:
+        found += [grandchild for grandchild in child.children if grandchild not in found]
+    return found
 
 
 def _layer_collection(layer, coll):
@@ -74,7 +159,8 @@ def _hierarchy(context):
         rows.append({"key": key, "parent": parent, "depth": depth, "kind": "collection",
                      "id": _uid(coll), "name": coll.name, "icon": "OUTLINER_COLLECTION",
                      "enabled": not layer.exclude, "active": False, "hidden": layer.hide_viewport,
-                     "actions": _collection_actions(context, layer)})
+                     "actions": _collection_actions(context, layer),
+                     "accepts": _accepts_drop(context, layer)})
         members = {obj.name: obj for obj in coll.objects if obj.name in objects}
         children = {}
         for obj in members.values():
@@ -123,7 +209,57 @@ class WM_OT_native_panel_edit(bpy.types.Operator):
         try:
             request = json.loads(self.request)
             obj = next((obj for obj in context.view_layer.objects if _uid(obj) == request.get('id')), None)
-            if request.get('action') == 'collection_new':
+            action = request.get('action')
+            if action in {'move', 'parent'}:
+                # Dragged rows, or a selection moved with the menu: objects or collections.
+                if request.get('kind') == 'collection':
+                    collections = [_collection_by_uid(context, uid) for uid in request.get('ids', [])]
+                    target = _collection_by_uid(context, request.get('target'))
+                    if not collections or None in collections or target is None:
+                        raise ValueError("These collections are no longer in the scene.")
+                    layers = [_layer_collection(context.view_layer.layer_collection, coll)
+                              for coll in collections]
+                    if any(layer is None or 'move' not in _collection_actions(context, layer)
+                           for layer in layers):
+                        raise ValueError("These collections cannot be moved.")
+                    _move_collections(context, collections, target)
+                else:
+                    objects = _objects(context, request)
+                    if any('move' not in _object_actions(context, item) for item in objects):
+                        raise ValueError("These objects cannot be moved in the current mode.")
+                    if action == 'parent':
+                        parent = next((item for item in context.view_layer.objects
+                                       if _uid(item) == request.get('target')), None)
+                        if parent is None:
+                            raise ValueError("That object is no longer in the current view layer.")
+                        _parent_objects(context, objects, parent)
+                    else:
+                        target = _collection_by_uid(context, request.get('target'))
+                        layer = target and _layer_collection(context.view_layer.layer_collection, target)
+                        if layer is None or not _accepts_drop(context, layer):
+                            raise ValueError("Objects cannot be moved into that collection.")
+                        _move_objects(context, objects, target)
+            elif request.get('ids') and action in {'duplicate', 'delete', 'visibility'}:
+                # The same action on every selected object, as one undo step.
+                objects = _objects(context, request)
+                if any(action not in _object_actions(context, item) for item in objects):
+                    raise ValueError("This action is no longer available for all of these objects.")
+                if action == 'visibility':
+                    for item in objects:
+                        item.hide_set(bool(request['value']), view_layer=context.view_layer)
+                elif action == 'delete':
+                    with context.temp_override(selected_objects=objects):
+                        result = bpy.ops.object.delete('EXEC_DEFAULT', False, use_global=False)
+                    if 'FINISHED' not in result:
+                        raise ValueError("These objects could not be deleted.")
+                else:
+                    for other in context.view_layer.objects:
+                        other.select_set(other in objects)
+                    context.view_layer.objects.active = objects[0]
+                    result = bpy.ops.object.duplicate('EXEC_DEFAULT', False, linked=False)
+                    if 'FINISHED' not in result:
+                        raise ValueError("These objects could not be duplicated.")
+            elif action == 'collection_new':
                 name = request.get('value')
                 parent = context.view_layer.active_layer_collection
                 if context.mode != 'OBJECT' or not parent.collection.is_editable or parent.exclude:
