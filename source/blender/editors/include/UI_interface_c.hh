@@ -798,7 +798,7 @@ using ButtonArgNCopy = void *(*)(const void *argN);
 using ButtonIdentityCompareFunc = bool (*)(const Button *a, const Button *b);
 
 /* Search types. */
-using ButtonSearchCreateFn = ARegion *(*)(bContext * C,
+using ButtonSearchCreateFn = ARegion *(*)(bContext *C,
                                           ARegion *butregion,
                                           ButtonSearch *search_but);
 /**
@@ -813,7 +813,7 @@ using ButtonSearchContextMenuFn = bool (*)(bContext *C,
                                            void *active,
                                            const wmEvent *event);
 using ButtonSearchTooltipFn =
-    ARegion *(*)(bContext * C, ARegion *region, const rcti *item_rect, void *arg, void *active);
+    ARegion *(*)(bContext *C, ARegion *region, const rcti *item_rect, void *arg, void *active);
 using ButtonSearchListenFn = void (*)(const wmRegionListenerParams *params, void *arg);
 
 using BlockHandleFunc = void (*)(bContext *C, void *arg, int event);
@@ -843,7 +843,7 @@ struct BlockInteraction_Params {
 };
 
 /** Returns 'user_data', freed by #uiBlockInteractionEndFn. */
-using BlockInteractionBeginFn = void *(*)(bContext * C,
+using BlockInteractionBeginFn = void *(*)(bContext *C,
                                           const BlockInteraction_Params *params,
                                           void *arg1);
 using BlockInteractionEndFn = void (*)(bContext *C,
@@ -1004,7 +1004,7 @@ Layout *pie_menu_layout(PieMenu *pie);
  *
  * Functions used to create popup blocks. These are like popup menus
  * but allow using all button types and creating their own layout. */
-using BlockCreateFunc = Block *(*)(bContext * C, ARegion *region, void *arg1);
+using BlockCreateFunc = Block *(*)(bContext *C, ARegion *region, void *arg1);
 using BlockCancelFunc = void (*)(bContext *C, void *arg1);
 
 void popup_block_invoke(bContext *C,
@@ -3235,7 +3235,7 @@ void region_views_clear_search_highlight(const ARegion *region);
 
 bool region_panels_fits_only_categories(const ARegion *region);
 /**
- * Ensures the region is wide enough to draw panels' content. Returns true if the panel widht
+ * Ensures the region is wide enough to draw panels' content. Returns true if the region widht
  * changed.
  */
 bool panel_region_visible_width_ensure(ARegion *region);
