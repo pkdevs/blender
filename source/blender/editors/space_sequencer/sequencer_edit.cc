@@ -451,7 +451,6 @@ void sync_sequencer_scene_strip_range(Main *bmain, WorkSpace *workspace)
                                       WORKSPACE_USE_STRIP_SCENE_RANGE_FOR_PLAYBACK) != 0;
 
   /* Start from a clean state. */
-  // todo(habib):
   for (Scene &scene : bmain->scenes) {
     if (scene.ed && scene.ed->runtime) {
       scene.ed->runtime->use_scene_strip_range = false;

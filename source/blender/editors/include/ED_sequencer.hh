@@ -94,8 +94,6 @@ bool is_scene_frame_range_from_strip_needed(const bContext &C);
 
 bool get_scene_strip_frame_range(const bContext &C, float *r_start, float *r_end);
 void sync_active_scene_and_time_with_scene_strip(bContext &C);
-
-// todo(habib): doc
 void sync_sequencer_scene_strip_range(Main *bmain, WorkSpace *workspace);
 
 rctf sequencer_clamped_view_bounds_get(const bContext *C, ARegion *region);

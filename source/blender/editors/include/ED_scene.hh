@@ -59,7 +59,13 @@ void ED_operatortypes_scene();
  * scene's frame range, which can also be the preview range. */
 ScenePlaybackRange ED_scene_get_effective_playback_range(const bContext &C, const Scene *scene);
 
-// todo(habib): doc
+/**
+ * Clamps the current frame to be between the playback bounds. If the scene is instantiated in a
+ * video sequencer and the sequencer editor is visible in the workspace, then the bounds are
+ * defined by the scene instance in the sequencer.
+ *
+ * To get the defined range regardless of workspace use #BKE_scene_frame_clamp_for_playback.
+ */
 void ED_scene_frame_clamp_for_playback(const bContext &C, Scene *scene, bool is_playing_forward);
 
 /* -------------------------------------------------------------------- */
