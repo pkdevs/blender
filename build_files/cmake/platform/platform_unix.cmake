@@ -124,6 +124,13 @@ macro(find_package_wrapper)
   endif()
 endmacro()
 
+# USD libraries found via the pxrConfig.cmake have the OpenGL target as dependency
+# Since we disable finding system libraries (such as OpenGL) before we search for USD
+# we search for OpenGL now to already have the OpenGL target needed by USD.
+if(WITH_USD)
+  find_package_wrapper(OpenGL REQUIRED)
+endif()
+
 # ----------------------------------------------------------------------------
 # Precompiled Libraries
 #
@@ -420,6 +427,12 @@ endif()
 if(WITH_ALEMBIC)
   find_package_wrapper(Alembic)
   set_and_warn_library_found("Alembic" ALEMBIC_FOUND WITH_ALEMBIC)
+endif()
+
+if(WITH_OPENSUBDIV)
+  set(OpenSubdiv_DIR ${LIBDIR}/opensubdiv/lib/cmake/OpenSubdiv)
+  find_package(OpenSubdiv REQUIRED CONFIG)
+  message("OpenSubdiv_FOUND = ${OpenSubdiv_FOUND}")
 endif()
 
 if(WITH_USD)
