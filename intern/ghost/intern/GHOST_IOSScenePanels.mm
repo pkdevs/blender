@@ -527,6 +527,50 @@ static NSString *blenderUsersText(NSDictionary *item)
 }
 @end
 
+/* Blender lists the physics as buttons above their settings. Natively each physics is one
+ * section: its switch in the header and, while on, its settings below. */
+static NSDictionary *blenderPhysicsSections(NSDictionary *inspector)
+{
+  if (![inspector[@"tab"] isEqual:@"PHYSICS"]) {
+    return inspector;
+  }
+  NSDictionary *add = nil;
+  NSMutableDictionary *byID = [NSMutableDictionary dictionary];
+  for (NSDictionary *section in inspector[@"sections"]) {
+    if ([section[@"id"] isEqual:@"PHYSICS_PT_add"]) { add = section; }
+    else if (section[@"id"]) { byID[section[@"id"]] = section; }
+  }
+  if (!add) {
+    return inspector;
+  }
+  NSMutableArray *sections = [NSMutableArray array];
+  NSMutableSet *used = [NSMutableSet set];
+  for (NSDictionary *toggle in add[@"properties"]) {
+    NSString *panel = toggle[@"physics_panel"] ?: toggle[@"key"];
+    NSMutableDictionary *header = [[toggle mutableCopy] autorelease];
+    header[@"header"] = @1;
+    NSDictionary *settings = byID[panel];
+    if (settings && [toggle[@"value"] boolValue]) {
+      NSMutableDictionary *section = [[settings mutableCopy] autorelease];
+      section[@"properties"] = [@[header] arrayByAddingObjectsFromArray:settings[@"properties"] ?: @[]];
+      section[@"icon"] = toggle[@"leading_icon"] ?: @"";
+      [sections addObject:section];
+      [used addObject:panel];
+    }
+    else {
+      [sections addObject:@{@"id": panel, @"title": toggle[@"label"] ?: @"", @"open": @0,
+                            @"icon": toggle[@"leading_icon"] ?: @"", @"switch_only": @1,
+                            @"properties": @[header]}];
+    }
+  }
+  for (NSDictionary *section in inspector[@"sections"]) {
+    if (section != add && ![used containsObject:section[@"id"] ?: @""]) { [sections addObject:section]; }
+  }
+  NSMutableDictionary *result = [[inspector mutableCopy] autorelease];
+  result[@"sections"] = sections;
+  return result;
+}
+
 @interface GHOSTIOSScenePanels () <UITableViewDataSource, UITableViewDelegate, UICollectionViewDelegate,
                                    UICollectionViewDragDelegate, UICollectionViewDropDelegate,
                                    UISearchBarDelegate, UITextFieldDelegate,
@@ -660,6 +704,9 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   /* Sections for the active item of a stack, such as the active modifier. */
   NSSet *_activeSections;
   NSSet *_headerlessSections;
+  /* Sections headed by an icon, and sections that are only a header with a switch (physics). */
+  NSDictionary *_sectionIcons;
+  NSSet *_switchOnlySections;
   NSArray *_sectionIdentifiers, *_tabs;
   NSString *_selectedTab;
   NSMutableDictionary *_expandedPanels;
@@ -886,6 +933,8 @@ static void blenderSetDisclosureExpanded(UIButton *button, BOOL expanded)
   [_sectionTitles release];
   [_activeSections release];
   [_headerlessSections release];
+  [_sectionIcons release];
+  [_switchOnlySections release];
   [_sectionIdentifiers release];
   [_tabs release];
   [_selectedTab release];
@@ -1945,6 +1994,8 @@ static UIColor *blenderAnimationStateColor(NSString *state)
   NSMutableArray *identifiers = [NSMutableArray array];
   NSMutableSet *actives = [NSMutableSet set];
   NSMutableSet *headerless = [NSMutableSet set];
+  NSMutableDictionary *sectionIcons = [NSMutableDictionary dictionary];
+  NSMutableSet *switchOnly = [NSMutableSet set];
   [_controls removeAllObjects];
   [_sliders removeAllObjects];
   [_lockIndicators removeAllObjects];
@@ -1974,6 +2025,8 @@ static UIColor *blenderAnimationStateColor(NSString *state)
     NSString *sectionID = section[@"id"] ?: section[@"title"];
     [identifiers addObject:sectionID];
     if ([section[@"active"] boolValue]) { [actives addObject:sectionID]; }
+    if (section[@"icon"]) { sectionIcons[sectionID] = section[@"icon"]; }
+    if ([section[@"switch_only"] boolValue]) { [switchOnly addObject:sectionID]; }
     if ([section[@"header_hidden"] boolValue]) {
       /* Blender draws these without a header, so they stay open and are not collapsible. */
       [headerless addObject:sectionID];
@@ -2137,6 +2190,11 @@ static UIColor *blenderAnimationStateColor(NSString *state)
           NSMutableDictionary *request = [[property mutableCopy] autorelease];
           request[@"id"] = objectID;
           [owner send:request];
+          if (((UISwitch *)action.sender).on && property[@"physics_panel"]) {
+            /* Turning a physics on opens its settings below the switch. */
+            [owner->_expandedPanels[owner->_selectedTab ?: @"OBJECT"] addObject:property[@"physics_panel"]];
+            [owner requestProperties];
+          }
         }] forControlEvents:UIControlEventValueChanged];
         control = toggle;
       }
@@ -2366,6 +2424,15 @@ static UIColor *blenderAnimationStateColor(NSString *state)
         continue;
       }
       UIStackView *row = [[[UIStackView alloc] initWithArrangedSubviews:@[label, control]] autorelease];
+      if (UIImage *leading = _icon(property[@"leading_icon"])) {
+        /* E.g. each physics type beside its switch. */
+        UIImageView *icon = [[[UIImageView alloc] initWithImage:leading] autorelease];
+        icon.contentMode = UIViewContentModeScaleAspectFit;
+        icon.tintColor = UIColor.secondaryLabelColor;
+        [icon.widthAnchor constraintEqualToConstant:22].active = YES;
+        [icon.heightAnchor constraintEqualToConstant:22].active = YES;
+        [row insertArrangedSubview:icon atIndex:0];
+      }
       row.spacing = vector ? 4 : 10;
       row.axis = UILayoutConstraintAxisHorizontal;
       row.alignment = UIStackViewAlignmentCenter;
@@ -2456,6 +2523,10 @@ static UIColor *blenderAnimationStateColor(NSString *state)
   _activeSections = [actives copy];
   [_headerlessSections release];
   _headerlessSections = [headerless copy];
+  [_sectionIcons release];
+  _sectionIcons = [sectionIcons copy];
+  [_switchOnlySections release];
+  _switchOnlySections = [switchOnly copy];
   [_sectionIdentifiers release];
   _sectionIdentifiers = [identifiers copy];
   for (NSString *identifier in [[_disclosureButtons.allKeys copy] autorelease]) {
@@ -3377,6 +3448,7 @@ static UIColor *blenderAnimationStateColor(NSString *state)
     return;
   }
   NSDictionary *inspector = [snapshot[@"inspector"] isKindOfClass:NSDictionary.class] ? snapshot[@"inspector"] : nil;
+  inspector = blenderPhysicsSections(inspector);
   [self updatePropertiesTabs:inspector];
   if (inspector[@"tab"] && ![inspector[@"tab"] isEqual:_selectedTab]) {
     return;
@@ -3680,6 +3752,17 @@ static UIColor *blenderAnimationStateColor(NSString *state)
     header.accessibilityValue = [header.accessibilityValue stringByAppendingString:@", Active"];
   }
   _disclosureButtons[identifier] = header;
+  if (UIImage *icon = _icon(_sectionIcons[identifier])) {
+    UIButtonConfiguration *config = header.configuration;
+    config.image = icon;
+    config.imagePadding = 8;
+    header.configuration = config;
+  }
+  if ([_switchOnlySections containsObject:identifier]) {
+    /* Nothing to disclose until its switch turns it on. */
+    [header viewWithTag:blenderDisclosureChevronTag].hidden = YES;
+    header.userInteractionEnabled = NO;
+  }
   __block GHOSTIOSScenePanels *owner = self;
   [header addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
     [owner->_form endEditing:YES];
