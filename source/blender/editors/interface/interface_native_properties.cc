@@ -1256,6 +1256,23 @@ void project_list(bContext *C,
       }
     }
     row->append_str("label", label);
+    /* What the row draws beside its name, such as a shape key's value and mute toggle or a
+     * vertex group's lock: edited through the same keys as any other property. */
+    std::shared_ptr<ArrayValue> controls;
+    for (const Button *item : items->second) {
+      if ((item->flag & UI_HIDDEN) || !item->rnaprop || !item->rnapoin.data ||
+          RNA_property_array_check(item->rnaprop) ||
+          !ELEM(RNA_property_type(item->rnaprop), PROP_BOOLEAN, PROP_INT, PROP_FLOAT, PROP_ENUM))
+      {
+        continue;
+      }
+      if (!controls) {
+        controls = row->append_array("controls");
+      }
+      auto control = controls->append_dict();
+      project_property(C, const_cast<Button &>(*item), -1, *control);
+      control->append_int("native", 1);
+    }
     if (icon >= BIFICONID_LAST_STATIC) {
       row->append_str("preview", preview_icon_path(C, icon));
       icon = ICON_NONE;
