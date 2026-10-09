@@ -48,14 +48,9 @@ void blo_do_versions_504(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       for (bNode &node : tree.nodes) {
         if (STREQ(node.idname, "GeometryNodeGridDeactivateVoxels")) {
           if (!bke::node_find_socket(node, SOCK_IN, "Set Background Value"_ustr)) {
-            bNodeSocket *input = bke::node_add_static_socket(tree,
-                                                             node,
-                                                             SOCK_IN,
-                                                             SOCK_BOOLEAN,
-                                                             PROP_NONE,
-                                                             "Set Background Value",
-                                                             "Set Background Value");
-            input->default_value_typed<bNodeSocketValueBoolean>()->value = false;
+            bNodeSocket &input = version_node_add_socket(
+                tree, node, SOCK_IN, "NodeSocketBool", "Set Background Value");
+            input.default_value_typed<bNodeSocketValueBoolean>()->value = false;
           }
         }
       }
