@@ -60,7 +60,7 @@ struct TemplatePicker: View {
         let largeText = UIApplication.shared.preferredContentSizeCategory.isAccessibilityCategory
         let columns = largeText || geometry.size.width < 360 ? 1 : geometry.size.width > 700 ? 3 : 2
         ScrollView {
-          LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: columns),
+          LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: columns),
                     alignment: .leading, spacing: 16, pinnedViews: [])
           {
             ForEach(store.sections, id: \.title) { section in
@@ -73,11 +73,13 @@ struct TemplatePicker: View {
                 Text(section.title)
                   .font(.headline)
                   .frame(maxWidth: .infinity, alignment: .leading)
-                  .padding(8)
+                  .padding(.top, 8)
+                  .padding(.bottom, 4)
               }
             }
           }
-          .padding(20)
+          .padding(.horizontal, 20)
+          .padding(.bottom, 20)
         }
         .overlay {
           if store.sections.isEmpty { ContentUnavailableView.search(text: store.query) }
@@ -86,11 +88,10 @@ struct TemplatePicker: View {
       .background(Color(uiColor: .systemBackground))
       .navigationTitle("Choose a Template")
       .navigationBarTitleDisplayMode(.inline)
-      .searchable(text: $store.query, placement: .navigationBarDrawer(displayMode: .always),
-                  prompt: "Search Templates")
+      .searchable(text: $store.query, placement: .toolbar, prompt: "Search Templates")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel", role: .cancel) { store.finish(nil) }
+          Button(role: .close) { store.finish(nil) }
         }
       }
       .navigationDestination(for: CreditPage.self) { page in TemplateCredits(credit: page.credit) }
@@ -251,9 +252,9 @@ final class TemplatePickerController: UIHostingController<TemplatePicker>, UIAda
     sizingOptions = []
   }
 
-  /* The sheet's size, not the grid's. */
+  /* The sheet's size, not the grid's: 640 points below a navigation bar. */
   override var preferredContentSize: CGSize {
-    get { CGSize(width: 780, height: 640) }
+    get { CGSize(width: 780, height: 693) }
     set {}
   }
 
