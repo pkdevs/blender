@@ -120,31 +120,15 @@ final class AssetsStore: ObservableObject {
 
 struct AssetsPane: View {
   @ObservedObject var store: AssetsStore
-  @FocusState private var searching: Bool
 
   var body: some View {
     VStack(spacing: 4) {
       HStack(spacing: 8) {
         typeMenu
         if !store.categories.isEmpty { categoryMenu }
-        HStack(spacing: 6) {
-          Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-          TextField("Search Assets", text: $store.query)
-            .autocorrectionDisabled()
-            .submitLabel(.search)
-            .focused($searching)
-            .onSubmit { searching = false }
-            .accessibilityIdentifier("blender.assets.search")
-          if !store.query.isEmpty {
-            Button { store.query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-              .buttonStyle(.plain)
-              .accessibilityLabel("Clear")
-          }
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 36)
-        .frame(maxWidth: .infinity)
-        .background(PanelStyle.search, in: Capsule())
+        AssetSearchField(text: $store.query)
+          .frame(maxWidth: .infinity)
+          .frame(height: 28)
         Button(action: store.close) {
           Image(systemName: "xmark")
             .font(.system(size: 20, weight: .medium))
@@ -590,3 +574,41 @@ private struct AssetDropPill: View {
 }
 
 /** \} */
+
+/** The system's search field, as the asset shelf has always used. */
+struct AssetSearchField: UIViewRepresentable {
+  @Binding var text: String
+
+  func makeUIView(context: Context) -> UISearchTextField {
+    let field = UISearchTextField()
+    field.placeholder = "Search Assets"
+    field.accessibilityIdentifier = "blender.assets.search"
+    field.returnKeyType = .search
+    field.autocorrectionType = .no
+    field.delegate = context.coordinator
+    field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    let coordinator = context.coordinator
+    field.addAction(UIAction { [weak field] _ in
+      coordinator.text.wrappedValue = field?.text ?? ""
+    }, for: .editingChanged)
+    return field
+  }
+
+  func updateUIView(_ field: UISearchTextField, context: Context) {
+    context.coordinator.text = $text
+    if field.text != text { field.text = text }
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+  final class Coordinator: NSObject, UITextFieldDelegate {
+    var text: Binding<String>
+
+    init(text: Binding<String>) { self.text = text }
+
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+      textField.resignFirstResponder()
+      return true
+    }
+  }
+}
