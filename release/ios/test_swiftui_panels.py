@@ -432,7 +432,7 @@ class SwiftUIPanelsTest(unittest.TestCase):
         for tab in ("OBJECT", "DATA", "MODIFIER", "MATERIAL", "PHYSICS"):
             with self.subTest(tab=tab):
                 requests = self.scenario(f"properties_{tab.lower()}", "-scenario", "properties", "-tab", tab)
-                self.assertIn(("native_panels", "1"), [(r["setting"], str(r["value"])) for r in requests])
+                self.assertIn(("native_panels", "1"), [(r.get("setting"), str(r.get("value"))) for r in requests])
 
     def test_light_appearance(self):
         self.scenario("properties_data_light", "-scenario", "properties", "-tab", "DATA",
@@ -440,18 +440,18 @@ class SwiftUIPanelsTest(unittest.TestCase):
 
     def test_hierarchy(self):
         requests = self.scenario("hierarchy", "-scenario", "hierarchy")
-        self.assertIn("2", [str(r["value"]) for r in requests if r["setting"] == "native_panels"])
+        self.assertIn("2", [str(r.get("value")) for r in requests if r.get("setting") == "native_panels"])
 
     def test_both_panels(self):
         self.scenario("both", "-scenario", "both", "-tab", "DATA")
 
     def test_shading(self):
         requests = self.scenario("shading", "-scenario", "shading")
-        self.assertIn("native_shading_visible", [r["setting"] for r in requests])
+        self.assertIn("native_shading_visible", [r.get("setting") for r in requests])
 
     def test_redo_strip(self):
         requests = self.scenario("redo", "-scenario", "redo")
-        self.assertNotIn("native_redo_edit", [r["setting"] for r in requests])
+        self.assertNotIn("native_redo_edit", [r.get("setting") for r in requests])
 
     def test_timeline(self):
         for name in ("timeline", "timeline-expanded"):
