@@ -315,13 +315,7 @@ std::string native_menu_query(bContext *C, const std::string &request, const boo
    * Its registered panel menus use the same poll and route validation as viewport menus. */
   const bool properties_menu = CTX_wm_space_properties(C) &&
                                WM_menutype_find(resolved.c_str(), true);
-  /* File > New and Open Recent are also offered on their own, from the iPad's Actions menu. */
-  if (!ELEM(resolved,
-            "TOPBAR_MT_editor_menus",
-            "VIEW3D_MT_editor_menus",
-            "VIEW3D_MT_add",
-            "TOPBAR_MT_file_new",
-            "TOPBAR_MT_file_open_recent") &&
+  if (!ELEM(resolved, "TOPBAR_MT_editor_menus", "VIEW3D_MT_editor_menus", "VIEW3D_MT_add") &&
       (!context_id || resolved != context_id) && !properties_menu)
   {
     return encode(result);

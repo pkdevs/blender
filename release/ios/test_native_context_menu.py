@@ -213,6 +213,7 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *name)
   return self;
 }
 - (void)sendBlenderKeyNamed:(NSString *)key { NSCAssert(NO, @"Axis button sent a keyboard event"); }
+- (void)shareDocument { [queued addObject:@"share"]; }
 - (NSDictionary *)toolbarModel { return self.model; }
 ''' + method + shading_methods + action_button + radial_method + r'''
 @end
@@ -329,12 +330,9 @@ int main()
         [essentials addObject:element.title];
       }
     }
-    NSCAssert([essentials isEqual:(@[@"New", @"Open…", @"Open Recent", @"Save", @"Save As…",
-                                     @"Switch to Desktop Interface"])],
-              @"The Actions button shows a short file menu and the interface switch: %@", essentials);
-    UIMenu *newMenu = (UIMenu *)((UIMenu *)stableMenu.children[0]).children[0];
-    NSCAssert([newMenu.children.firstObject isKindOfClass:UIDeferredMenuElement.class],
-              @"New loads Blender's own templates when opened");
+    NSCAssert([essentials isEqual:(@[@"Share…", @"Switch to Desktop Interface"])],
+              @"Documents live in the launcher and save themselves, so the Actions button keeps "
+              @"Share and the interface switch: %@", essentials);
     for (UIMenu *group in stableMenu.children) {
       for (UIMenuElement *element in group.children) {
         NSCAssert(element.image && element.image.isSymbolImage,
@@ -359,9 +357,8 @@ int main()
         }
       }
     }
-    NSCAssert([queued isEqual:(@[@"WM_OT_open_mainfile", @"WM_OT_save_mainfile", @"WM_OT_save_as_mainfile"])] &&
-              [settings isEqual:(@[@[@"interface", @"desktop"]])],
-              @"Essentials run Blender's file operators and the interface switch: %@ %@", queued, settings);
+    NSCAssert([queued isEqual:(@[@"share"])] && [settings isEqual:(@[@[@"interface", @"desktop"]])],
+              @"The Actions menu shares the document and switches the interface: %@ %@", queued, settings);
     builder.viewport = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, 834, 1210)] autorelease];
     builder.pencilMenu = [[[MenuTestPencilMenu alloc] init] autorelease];
     builder.editInteraction = [[[MenuTestInteraction alloc] init] autorelease];
@@ -415,7 +412,7 @@ int main()
     [builder setValue:@NO forKey:@"_desktop_interface"];
     actions.menu = nil;
     [builder updateActionsButtonMenu];
-    NSCAssert(actions.menu.children.count == 3, @"Missing menu was not restored");
+    NSCAssert(actions.menu.children.count == 2, @"Missing menu was not restored");
     builder.model = @{@"mode": @"objectmode", @"canUndo": @YES,
                       @"actions": @[@{@"title": @"Move", @"operator": @"TRANSFORM_OT_translate"},
                                     @{@"title": @"X", @"key": @"X"}]};
