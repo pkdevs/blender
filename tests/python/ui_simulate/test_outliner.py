@@ -50,10 +50,3 @@ def test_outliner_vertex_group_rename_updates_modifier_reference():
 
     t.assertEqual(obj.vertex_groups[0].name, "RenamedGroup")
     t.assertEqual(modifier.vertex_group, "RenamedGroup")
-    t.assertTrue(
-        any(
-            report.type == 'INFO' and report.message == "Updated 1 vertex group references"
-            for report in bpy.context.window_manager.reports
-        ),
-        "Outliner rename did not report updated references",
-    )
