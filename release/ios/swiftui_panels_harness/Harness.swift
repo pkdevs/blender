@@ -400,6 +400,7 @@ final class PencilItems: NSObject, GHOSTIOSPencilMenuDelegate {
 
 final class HarnessController: UIViewController {
   let pencilItems = PencilItems()
+  var renderSheet: SwiftRender?
   var pencilMenu: UIView?
   var panels: HarnessPanels!
   var redoStrip: NSObject?
@@ -489,6 +490,13 @@ final class HarnessController: UIViewController {
         timeline?.perform(NSSelectorFromString("toggle:"), with: nil)
         if scenario == "timeline-expanded" { timeline?.perform(NSSelectorFromString("toggleExpanded:"), with: nil) }
         view.setNeedsLayout()
+      case "render":
+        let render = SwiftRender(presenter: self)
+        renderSheet = render
+        render.renderAnimation(false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+          render.updateStatus(["id": 1, "state": "rendering", "total": 1, "done": 0, "samples": 0.42])
+        }
       case "templates":
         let templates: [NSDictionary] = [
           ["id": "general", "title": "General"], ["id": "sculpt", "title": "Sculpting"],

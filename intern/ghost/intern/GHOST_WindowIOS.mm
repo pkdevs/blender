@@ -5467,7 +5467,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _share_button.title = @"Share";
   _share_button.accessibilityLabel = @"Share";
   _share_button.identifier = @"blender.share";
-  _render = [[GHOSTIOSRender alloc] initWithPresenter:self];
+  Class render_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
+                           nil :
+                           NSClassFromString(@"GHOSTIOSSwiftRender");
+  _render = [[(render_class ?: GHOSTIOSRender.class) alloc] initWithPresenter:self];
   _documents_button = [[self documentsButton] retain];
   _viewport_shading_button = [self viewportShadingButton];
   _undo_button = [self undoButton];
