@@ -1472,7 +1472,7 @@ GlyphBLF *blf_glyph_ensure_subpixel(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *
     return g;
   }
 
-  if (font->size > 35.0f || g->dims[0] == 0 || g->advance_x < 0) {
+  if (font->size > 35.0f || g->dims[0] == 0 || g->advance_x < 0 || g->font == nullptr) {
     /* Single position for large sizes, spaces, and combining characters. */
     return g;
   }
@@ -1481,7 +1481,7 @@ GlyphBLF *blf_glyph_ensure_subpixel(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *
   const uint8_t subpixel = uint8_t(pen_x & ((font->size > 16.0f) ? 32L : 48L));
 
   if (g->subpixel != subpixel) {
-    GlyphBLF *g_new = blf_glyph_ensure(font, gc, g->c, g->idx, subpixel);
+    GlyphBLF *g_new = blf_glyph_ensure_index(font, g->font, gc, g->c, g->idx, subpixel);
     if (g_new) {
       g = g_new;
     }
