@@ -1874,11 +1874,11 @@ class VIEW3D_MT_select_pose(Menu):
 
         layout.separator()
 
-        layout.operator("pose.select_deform", text="Deform")
-        layout.operator("pose.select_scaled", text="Scaled")
         layout.menu("POSE_MT_selection_sets_select", text="Bone Selection Set")
-        layout.operator("pose.select_constraint_target", text="Constraint Target")
-        layout.operator("pose.select_constrained_by_selection", text="Constraint Owner")
+        layout.operator("pose.select_constraint_target", text="Constraint Targets")
+        layout.operator("pose.select_constrained_by_selection", text="Constraint Owners")
+        layout.operator("pose.select_scaled", text="Scaled")
+        layout.operator("pose.select_deform", text="Deform")
 
 
 class VIEW3D_MT_select_particle(Menu):
