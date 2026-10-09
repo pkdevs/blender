@@ -15,6 +15,17 @@
 - (void)cancelNumberScrub;
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture;
 - (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)path leading:(BOOL)leading;
+- (UIContextMenuConfiguration *)collectionView:(UICollectionView *)collectionView
+    contextMenuConfigurationForItemsAtIndexPaths:(NSArray<NSIndexPath *> *)indexPaths
+                                           point:(CGPoint)point;
+- (NSArray<UIMenuElement *> *)hierarchyMenuElementsForNodes:(NSArray<NSDictionary *> *)nodes;
+- (NSArray<NSDictionary *> *)hierarchyNodesForIndexPath:(NSIndexPath *)path;
+- (NSArray<UIDragItem *> *)collectionView:(UICollectionView *)collectionView
+             itemsForBeginningDragSession:(id<UIDragSession>)session
+                              atIndexPath:(NSIndexPath *)indexPath;
+- (BOOL)hierarchyNodes:(NSArray<NSDictionary *> *)nodes canMoveTo:(NSDictionary *)target;
+- (void)moveHierarchyNodes:(NSArray<NSDictionary *> *)nodes to:(NSDictionary *)target;
+- (void)setHierarchyEditing:(BOOL)editing;
 @end
 
 @interface NumberTestPan : UIPanGestureRecognizer
@@ -44,6 +55,106 @@ extern "C" void WM_apple_ios_ui_setting_enqueue(const char *key, const char *val
 static void tap(UIBarButtonItem *button)
 {
   [button.target performSelector:button.action withObject:button];
+}
+
+static NSArray<NSString *> *menuTitles(NSArray<UIMenuElement *> *elements)
+{
+  NSMutableArray *titles = [NSMutableArray array];
+  for (UIMenuElement *element in elements) {
+    if ([element isKindOfClass:UIMenu.class] && ((UIMenu *)element).options & UIMenuOptionsDisplayInline) {
+      [titles addObjectsFromArray:menuTitles(((UIMenu *)element).children)];
+    }
+    else {
+      [titles addObject:element.title];
+    }
+  }
+  return titles;
+}
+
+/* Touch and hold to drag rows or open their menu, and Select mode, as in Mail and Files. */
+static void testHierarchyGestures(UIView *overlay)
+{
+  GHOSTIOSScenePanels *panels = [[[GHOSTIOSScenePanels alloc] initWithOverlay:overlay
+      icon:^UIImage *(NSString *name) { return nil; }] autorelease];
+  [panels layoutInRect:CGRectMake(0, 70, 1194, 680)];
+  tap(panels.hierarchyButton);
+  NSArray *all = @[@"visibility", @"rename", @"move", @"duplicate", @"delete"];
+  NSDictionary *scene = @{@"key": @"/c1", @"parent": @"", @"id": @"1", @"kind": @"collection",
+                          @"name": @"Scene Collection", @"enabled": @YES, @"depth": @0,
+                          @"actions": @[], @"accepts": @YES};
+  NSDictionary *props = @{@"key": @"/c1/c2", @"parent": @"/c1", @"id": @"2", @"kind": @"collection",
+                          @"name": @"Props", @"enabled": @YES, @"depth": @1, @"accepts": @YES,
+                          @"actions": @[@"visibility", @"rename", @"delete", @"move"]};
+  NSDictionary *cube = @{@"key": @"/c1/o10", @"parent": @"/c1", @"id": @"10", @"kind": @"object",
+                         @"name": @"Cube", @"enabled": @YES, @"depth": @1, @"selected": @YES,
+                         @"actions": all};
+  NSDictionary *lamp = @{@"key": @"/c1/o10/o11", @"parent": @"/c1/o10", @"id": @"11", @"kind": @"object",
+                         @"name": @"Lamp", @"enabled": @YES, @"depth": @2, @"actions": all};
+  NSDictionary *light = @{@"key": @"/c1/o12", @"parent": @"/c1", @"id": @"12", @"kind": @"object",
+                          @"name": @"Light", @"enabled": @YES, @"depth": @1, @"selected": @YES,
+                          @"actions": all};
+  NSDictionary *camera = @{@"key": @"/c1/o13", @"parent": @"/c1", @"id": @"13", @"kind": @"object",
+                           @"name": @"Camera", @"enabled": @YES, @"depth": @1, @"actions": all};
+  [panels updateSnapshot:@{@"ack": @99999, @"hierarchy": @[scene, cube, lamp, light, camera, props]}];
+  UICollectionView *tree = [panels valueForKey:@"_tree"];
+  NSCAssert(tree.indexPathsForSelectedItems.count == 2, @"Blender's selection shows on the rows");
+  NSIndexPath *(^row)(NSInteger) = ^(NSInteger item) { return [NSIndexPath indexPathForItem:item inSection:0]; };
+
+  /* Holding a selected row acts on the whole selection, like Mail. */
+  NSArray *selection = [panels hierarchyNodesForIndexPath:row(1)];
+  NSCAssert(selection.count == 2, @"Holding a selected row picks up the selection");
+  NSArray *titles = menuTitles([panels hierarchyMenuElementsForNodes:selection]);
+  NSCAssert([titles isEqual:(@[@"Duplicate 2 Objects", @"Hide", @"Move to Collection",
+                               @"Delete 2 Objects"])], @"The menu acts on the selection: %@", titles);
+  NSCAssert([panels collectionView:tree contextMenuConfigurationForItemsAtIndexPaths:@[row(1)]
+                             point:CGPointZero], @"Holding a row opens its menu");
+  NSArray *single = [panels hierarchyNodesForIndexPath:row(4)];
+  titles = menuTitles([panels hierarchyMenuElementsForNodes:single]);
+  NSCAssert(single.count == 1 && [titles isEqual:(@[@"Rename", @"Duplicate", @"Hide", @"Move to Collection",
+                                                    @"Delete"])],
+            @"An unselected row's menu is its own: %@", titles);
+  UIMenu *move = nil;
+  for (UIMenuElement *element in [panels hierarchyMenuElementsForNodes:single]) {
+    if ([element.title isEqual:@"Move to Collection"]) { move = (UIMenu *)element; }
+  }
+  NSCAssert(move.children.count == 2, @"Move to Collection lists the collections that accept rows");
+
+  /* Dragging: the selection comes along; drops move into collections or parent to objects. */
+  NSCAssert([panels collectionView:tree itemsForBeginningDragSession:(id<UIDragSession>)nil
+                       atIndexPath:row(1)].count == 2, @"Dragging a selected row drags the selection");
+  NSCAssert([panels collectionView:tree itemsForBeginningDragSession:(id<UIDragSession>)nil
+                       atIndexPath:row(4)].count == 1, @"Dragging another row drags only it");
+  NSCAssert([panels hierarchyNodes:@[cube] canMoveTo:props] &&
+            [panels hierarchyNodes:@[camera] canMoveTo:cube], @"Objects drop into collections and onto objects");
+  NSCAssert(![panels hierarchyNodes:@[cube] canMoveTo:lamp] && ![panels hierarchyNodes:@[cube] canMoveTo:cube],
+            @"An object cannot be dropped onto itself or its children");
+  NSCAssert(![panels hierarchyNodes:@[props] canMoveTo:cube] && ![panels hierarchyNodes:@[props] canMoveTo:props] &&
+            [panels hierarchyNodes:@[props] canMoveTo:scene], @"Collections drop only into other collections");
+  NSCAssert(![panels hierarchyNodes:(@[cube, props]) canMoveTo:scene], @"Objects and collections don't mix");
+  [panels moveHierarchyNodes:selection to:props];
+  NSCAssert([request[@"action"] isEqual:@"move"] && [request[@"target"] isEqual:@"2"] &&
+            [request[@"ids"] isEqual:(@[@"10", @"12"])], @"Dropping on a collection moves the rows into it");
+  [panels moveHierarchyNodes:@[camera] to:cube];
+  NSCAssert([request[@"action"] isEqual:@"parent"] && [request[@"target"] isEqual:@"10"],
+            @"Dropping on an object parents to it");
+
+  /* Select mode: checkmarks and actions for the selection along the bottom. */
+  UIButton *select = [panels valueForKey:@"_hierarchySelect"];
+  [select sendActionsForControlEvents:UIControlEventTouchUpInside];
+  UIToolbar *bar = [panels valueForKey:@"_hierarchyBar"];
+  NSCAssert(tree.editing && !bar.hidden && [[select titleForState:UIControlStateNormal] isEqual:@"Done"],
+            @"Select shows checkmarks and the selection's actions");
+  NSMutableArray *enabled = [NSMutableArray array];
+  for (UIBarButtonItem *item in bar.items) {
+    if (item.accessibilityIdentifier && item.enabled) { [enabled addObject:item.accessibilityIdentifier]; }
+  }
+  NSCAssert(enabled.count == 4, @"Duplicate, Hide, Move and Delete apply to the selection: %@", enabled);
+  [tree.delegate collectionView:tree didSelectItemAtIndexPath:row(4)];
+  NSCAssert([request[@"action"] isEqual:@"select"] && [request[@"extend"] boolValue],
+            @"Tapping rows in Select mode adds them to the selection");
+  [select sendActionsForControlEvents:UIControlEventTouchUpInside];
+  NSCAssert(!tree.editing && bar.hidden, @"Done leaves Select mode");
+  tap(panels.hierarchyButton);
 }
 
 static void testHierarchySwipes(UIView *overlay)
@@ -1073,6 +1184,7 @@ int main()
     testNativePanelMenu(controller.view);
     testToolSettings(controller.view);
     testHierarchySwipes(controller.view);
+    testHierarchyGestures(controller.view);
     testShadingPopover(controller);
     NSLog(@"PASS: floating scene panels, search, selection, native fields, async ownership, responsive layout");
   }
