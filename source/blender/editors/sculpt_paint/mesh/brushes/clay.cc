@@ -244,8 +244,7 @@ void do_clay_brush(const Depsgraph &depsgraph,
   BLI_ASSERT_UNIT_V3(test_plane);
 
   const float bstrength = fabsf(ss.cache->bstrength);
-  float4x4 mat;
-  cube_tip_init(sd, object, brush, mat.ptr());
+  const float4x4 mat = cube_tip_init(sd, object, brush);
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {

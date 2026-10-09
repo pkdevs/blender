@@ -277,8 +277,7 @@ void do_enhance_details_brush(const Depsgraph &depsgraph,
 
   const float strength = std::clamp(ss.cache->bstrength, -1.0f, 1.0f);
   MutableSpan<float3> translations = ss.cache->detail_directions;
-  float4x4 mat;
-  cube_tip_init(sd, object, brush, mat.ptr());
+  const float4x4 mat = cube_tip_init(sd, object, brush);
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {

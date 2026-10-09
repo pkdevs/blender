@@ -348,8 +348,7 @@ void do_topology_slide_brush(const Depsgraph &depsgraph,
   }
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
-  float4x4 mat;
-  cube_tip_init(sd, object, brush, mat.ptr());
+  const float4x4 mat = cube_tip_init(sd, object, brush);
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       Mesh &mesh = *id_cast<Mesh *>(object.data);
