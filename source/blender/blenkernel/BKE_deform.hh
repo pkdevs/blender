@@ -102,6 +102,12 @@ void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob);
  * used by `ob` and every other object sharing the same geometry. This operation also tags every
  * affected object for geometry recalculation.
  *
+ * The name is made unique against the other vertex groups of the geometry first (see
+ * #BKE_object_defgroup_unique_name), so the resulting name may differ from \a new_name and
+ * references are updated to the resulting name. Note that vertex group names are only unique
+ * within their own namespace: renaming to a name that is already used by another kind of named
+ * entity (a UV layer, a bone, ...) is allowed and does not affect that entity.
+ *
  * \return True if any reference was updated.
  */
 bool BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, const char *new_name);
