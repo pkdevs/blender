@@ -125,39 +125,68 @@ static void set_instances_position(bke::Instances &instances,
       [&](const int i) { transforms[i].location() = result[i]; }, exec_mode::grain_size(4096));
 }
 
+static bool is_position_field(const fn::Field<float3> &field)
+{
+  if (const auto *attribute_input = field.get_input_if<bke::AttributeFieldInput>()) {
+    return attribute_input->attribute_name() == "position";
+  }
+  return false;
+}
+
+static bool is_zero_vector_field(const fn::Field<float3> &field)
+{
+  if (field.depends_on_input()) {
+    return false;
+  }
+  const fn::GFieldRef field_ref{field};
+  auto value = field_ref.variant();
+  if (auto *field_value = std::get_if<fn::GFieldRef::Value>(&value)) {
+    BLI_assert(field_value->type->is<float3>());
+    const float3 *vec = static_cast<const float3 *>(field_value->value);
+    const bool is_zero = math::is_zero(*vec);
+    return is_zero;
+  }
+  return false;
+}
+
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry = params.extract_input<GeometrySet>("Geometry"_ustr);
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection"_ustr);
-  const fn::Field<float3> position_field(
-      fn::FieldOperation::from(get_add_fn(),
-                               {params.extract_input<Field<float3>>("Position"_ustr),
-                                params.extract_input<Field<float3>>("Offset"_ustr)}));
+  const fn::Field<float3> position_field = params.extract_input<Field<float3>>("Position"_ustr);
+  const fn::Field<float3> offset_field = params.extract_input<Field<float3>>("Offset"_ustr);
+  if (is_position_field(position_field) && is_zero_vector_field(offset_field)) {
+    params.set_output("Geometry"_ustr, std::move(geometry));
+    return;
+  }
+
+  const fn::Field<float3> final_position_field(
+      fn::FieldOperation::from(get_add_fn(), {position_field, offset_field}));
 
   if (Mesh *mesh = geometry.get_mesh_for_write()) {
     set_points_position(mesh->attributes_for_write(),
                         bke::MeshFieldContext(*mesh, bke::AttrDomain::Point),
                         selection_field,
-                        position_field);
+                        final_position_field);
   }
   if (PointCloud *pointcloud = geometry.get_pointcloud_for_write()) {
     set_points_position(pointcloud->attributes_for_write(),
                         bke::PointCloudFieldContext(*pointcloud),
                         selection_field,
-                        position_field);
+                        final_position_field);
   }
   if (Curves *curves_id = geometry.get_curves_for_write()) {
     bke::CurvesGeometry &curves = curves_id->geometry.wrap();
     set_curves_position(curves,
                         bke::CurvesFieldContext(*curves_id, bke::AttrDomain::Point),
                         selection_field,
-                        position_field);
+                        final_position_field);
   }
   if (GreasePencil *grease_pencil = geometry.get_grease_pencil_for_write()) {
-    set_position_in_grease_pencil(*grease_pencil, selection_field, position_field);
+    set_position_in_grease_pencil(*grease_pencil, selection_field, final_position_field);
   }
   if (bke::Instances *instances = geometry.get_instances_for_write()) {
-    set_instances_position(*instances, selection_field, position_field);
+    set_instances_position(*instances, selection_field, final_position_field);
   }
 
   params.set_output("Geometry"_ustr, std::move(geometry));
