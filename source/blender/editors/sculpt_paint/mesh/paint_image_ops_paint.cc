@@ -652,10 +652,10 @@ static void do_brush_action(const Depsgraph &depsgraph,
     pixel_data.tree_data = bke::pbvh::pixels::KDTreeData();
     IndexMaskMemory pixel_memory;
     const IndexMask filled_pixels = build_pixel_position_map(ob,
-                                                       *mode_data->image_data,
-                                                       pixel_memory,
-                                                       pixel_data.tree_data->pixel_positions,
-                                                       pixel_data.tree_data->offsets);
+                                                             *mode_data->image_data,
+                                                             pixel_memory,
+                                                             pixel_data.tree_data->pixel_positions,
+                                                             pixel_data.tree_data->offsets);
     pixel_data.tree_data->kd_tree = std::make_unique<KDTreeNew<float3>>(
         pixel_data.tree_data->pixel_positions, filled_pixels);
   }

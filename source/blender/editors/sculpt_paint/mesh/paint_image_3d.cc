@@ -175,15 +175,12 @@ static void fetch_image_buffers(ImageData &image_data,
       if (generate_scratch_data) {
         const int64_t tiles_x = (buffer->x + scratch_tile_size - 1) >> scratch_tile_bits;
         const int64_t tiles_y = (buffer->y + scratch_tile_size - 1) >> scratch_tile_bits;
-        image_data.scratch_data_allocated.lookup_or_add_cb(tile.tile_number, [&]() {
-          return Array<uint32_t>(tiles_x * tiles_y, 0);
-        });
-        image_data.scratch_color_data.lookup_or_add_cb(tile.tile_number, [&]() {
-          return Vector<Vector<float4>, 0>(tiles_x * tiles_y);
-        });
-        image_data.scratch_factor_data.lookup_or_add_cb(tile.tile_number, [&]() {
-          return Vector<Vector<float>, 0>(tiles_x * tiles_y);
-        });
+        image_data.scratch_data_allocated.lookup_or_add_cb(
+            tile.tile_number, [&]() { return Array<uint32_t>(tiles_x * tiles_y, 0); });
+        image_data.scratch_color_data.lookup_or_add_cb(
+            tile.tile_number, [&]() { return Vector<Vector<float4>, 0>(tiles_x * tiles_y); });
+        image_data.scratch_factor_data.lookup_or_add_cb(
+            tile.tile_number, [&]() { return Vector<Vector<float>, 0>(tiles_x * tiles_y); });
       }
     }
   }
@@ -730,7 +727,10 @@ static void push_undo_tiles(ImageData &image_data,
   }
 }
 
-static IndexRange scratch_tiles_range(const int img_width, const int img_x_start, const int img_x_end, const int img_y)
+static IndexRange scratch_tiles_range(const int img_width,
+                                      const int img_x_start,
+                                      const int img_x_end,
+                                      const int img_y)
 {
   const int tile_y = img_y >> scratch_tile_bits;
   const int tile_x_start = img_x_start >> scratch_tile_bits;
@@ -755,8 +755,7 @@ static void allocate_scratch_tiles(ImageData &image_data,
   const int tile_y = img_y >> scratch_tile_bits;
   const int tile_x_start = img_x_start >> scratch_tile_bits;
   const int tile_x_end = img_x_end >> scratch_tile_bits;
-  const int scratch_tile_x = (image_buffer.x + scratch_tile_size - 1) >>
-                           scratch_tile_bits;
+  const int scratch_tile_x = (image_buffer.x + scratch_tile_size - 1) >> scratch_tile_bits;
 
   for (int tile_x = tile_x_start; tile_x <= tile_x_end; tile_x++) {
     const int tile_index = tile_y * scratch_tile_x + tile_x;
@@ -775,10 +774,12 @@ static void allocate_scratch_tiles(ImageData &image_data,
         continue;
       }
 
-      Vector<Vector<float4>, 0> &tile_scratch_color = image_data.scratch_color_data.lookup(tile_number);
+      Vector<Vector<float4>, 0> &tile_scratch_color = image_data.scratch_color_data.lookup(
+          tile_number);
       tile_scratch_color[tile_index].reinitialize(scratch_tile_area);
 
-      Vector<Vector<float>, 0> &tile_scratch_factor = image_data.scratch_factor_data.lookup(tile_number);
+      Vector<Vector<float>, 0> &tile_scratch_factor = image_data.scratch_factor_data.lookup(
+          tile_number);
       tile_scratch_factor[tile_index].resize(scratch_tile_area, 0);
       allocated.store(1, std::memory_order_release);
     }
@@ -1266,11 +1267,12 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
           array_utils::copy(color_src, color_dst);
 
           const Span<float> factor_src = factors.slice(run_offset, slice_size);
-          const MutableSpan<float> factor_dst = scratch_factor_data[scratch_tile_i].as_mutable_span().slice(tile_start, slice_size);
+          const MutableSpan<float> factor_dst =
+              scratch_factor_data[scratch_tile_i].as_mutable_span().slice(tile_start, slice_size);
           array_utils::copy(factor_src, factor_dst);
 
-          /* TODO: We may need to record these spans somehow on a per-daub basis to speed-up the actual
-           * blur application. */
+          /* TODO: We may need to record these spans somehow on a per-daub basis to speed-up the
+           * actual blur application. */
 
           run_offset += slice_size;
           remaining_pixels -= slice_size;
@@ -1408,7 +1410,7 @@ static void do_apply_blur(const Paint &paint,
                                                         scratch_tile_factors[scratch_span_i],
                                                         scene_color);
 #else
-                image_pixels[img_i] = float4(1,0,0,1);
+                image_pixels[img_i] = float4(1, 0, 0, 1);
 #endif
               }
             }
@@ -1659,8 +1661,9 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
   }
   MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
 
-  node_mask.foreach_index(
-      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], false, true); });
+  node_mask.foreach_index([&](const int i) {
+    fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], false, true);
+  });
 
   for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
     modified.as_mutable_span().fill(0);
@@ -1679,8 +1682,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
     Span<uint32_t> data_allocated = image_data.scratch_data_allocated.lookup(tile_number);
     Vector<Vector<float>, 0> &tile_factor_data = image_data.scratch_factor_data.lookup(
         tile_number);
-    Vector<Vector<float4>, 0> &tile_color_data = image_data.scratch_color_data.lookup(
-        tile_number);
+    Vector<Vector<float4>, 0> &tile_color_data = image_data.scratch_color_data.lookup(tile_number);
     for (const int i : data_allocated.index_range()) {
       if (data_allocated[i]) {
         tile_color_data[i].reinitialize(scratch_tile_area);
@@ -1711,8 +1713,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
   fix_non_manifold_seam_bleeding(ob, image_data, nodes, pixel_nodes, node_mask);
 
   node_mask.foreach_index([&](const int i) {
-    bke::pbvh::pixels::mark_image_dirty(
-        nodes[i], pixel_nodes[i],  image_data.image_buffers);
+    bke::pbvh::pixels::mark_image_dirty(nodes[i], pixel_nodes[i], image_data.image_buffers);
   });
 }
 }  // namespace ed::sculpt_paint::image
