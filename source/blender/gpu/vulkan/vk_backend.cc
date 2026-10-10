@@ -245,8 +245,14 @@ static bool vk_instance_create_for_platform_checks(VkInstance *r_instance)
   vk_application_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
   vk_application_info.apiVersion = VK_API_VERSION_1_1;
 
+  const char *vk_instance_extensions[] = {
+      VK_KHR_SURFACE_EXTENSION_NAME, /* Required dependency for VK_KHR_swapchain. */
+  };
+
   VkInstanceCreateInfo vk_instance_info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
   vk_instance_info.pApplicationInfo = &vk_application_info;
+  vk_instance_info.ppEnabledExtensionNames = vk_instance_extensions;
+  vk_instance_info.enabledExtensionCount = 1;
 
   *r_instance = VK_NULL_HANDLE;
   vkCreateInstance(&vk_instance_info, nullptr, r_instance);
@@ -503,6 +509,7 @@ void VKBackend::detect_workarounds(VKDevice &device)
 
     /* Force workarounds and disable extensions. */
     workarounds.not_aligned_pixel_formats = true;
+    workarounds.static_viewport_scissor = true;
     extensions.shader_viewport_index_layer = false;
     extensions.fragment_shader_barycentric = false;
     extensions.dynamic_rendering_local_read = false;
@@ -527,6 +534,12 @@ void VKBackend::detect_workarounds(VKDevice &device)
 
   if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
     GCaps.texture_pool_workaround = true;
+  }
+
+  /* Some Qualcomm drivers keep command-buffer-local state written by `vkCmdSetViewport` across
+   * command buffer resets. */
+  if (GPU_type_matches(GPU_DEVICE_QUALCOMM, GPU_OS_ANY, GPU_DRIVER_ANY)) {
+    workarounds.static_viewport_scissor = true;
   }
 
   extensions.shader_viewport_index_layer = device.supports_extension(
@@ -670,6 +683,16 @@ void VKBackend::init_resources()
 void VKBackend::delete_resources()
 {
   MEM_delete(compiler_);
+}
+
+bool VKBackend::pipelines_compiled_since_last_reset()
+{
+  return device.pipelines.compiled_since_last_reset();
+}
+
+void VKBackend::reset_pipeline_compilation_tracking()
+{
+  device.pipelines.reset_compilation_tracking();
 }
 
 void VKBackend::compute_dispatch(int groups_x_len, int groups_y_len, int groups_z_len)

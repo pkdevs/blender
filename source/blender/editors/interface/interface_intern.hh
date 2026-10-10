@@ -264,7 +264,7 @@ struct Button : NonMovable {
 
   /** Run an action when holding the button down. */
   ButtonHandleHoldFunc hold_func = nullptr;
-  void *hold_argN = nullptr;
+  std::string *hold_arg = nullptr;
 
   StringRef tip;
   ButtonToolTipFunc tip_func = nullptr;
@@ -434,7 +434,7 @@ struct ButtonNumberSlider : public Button {
 
 /** Derived struct for #ButtonType::Color */
 struct ButtonColor : public Button {
-  bool is_pallete_color = false;
+  bool is_palette_color = false;
   int palette_color_index = -1;
 };
 
@@ -1087,6 +1087,8 @@ struct PopupBlockHandle {
   wmOperator *popup_op = nullptr;
   ScrArea *ctx_area = nullptr;
   ARegion *ctx_region = nullptr;
+  /** The popup region this popup was opened from (if any). */
+  ARegion *ctx_region_popup = nullptr;
 
   /* return values */
   int menuretval = 0;

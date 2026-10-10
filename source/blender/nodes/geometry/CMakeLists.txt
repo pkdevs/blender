@@ -48,6 +48,7 @@ set(SRC
   nodes/node_geo_combine_bundle.cc
   nodes/node_geo_combine_list.cc
   nodes/node_geo_common.cc
+  nodes/node_geo_construct_curves.cc
   nodes/node_geo_convex_hull.cc
   nodes/node_geo_cube_grid_topology.cc
   nodes/node_geo_curve_endpoint_selection.cc
@@ -106,6 +107,7 @@ set(SRC
   nodes/node_geo_get_bundle_item.cc
   nodes/node_geo_get_geometry_bundle.cc
   nodes/node_geo_get_geometry_component.cc
+  nodes/node_geo_get_grid_names.cc
   nodes/node_geo_get_named_grid.cc
   nodes/node_geo_get_nested_bundle_paths.cc
   nodes/node_geo_gizmo_dial.cc
@@ -321,6 +323,7 @@ set(SRC
   include/NOD_geo_capture_attribute.hh
   include/NOD_geo_closure.hh
   include/NOD_geo_closure_to_list.hh
+  include/NOD_geo_combine_list.hh
   include/NOD_geo_field_to_grid.hh
   include/NOD_geo_field_to_list.hh
   include/NOD_geo_foreach_geometry_element.hh

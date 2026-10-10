@@ -298,9 +298,11 @@ static void mesh_foreach_path(ID *id, BPathForeachPathData *bpath_data)
     /* CustomDataExternal should only be the case for CD_MDISPS, but check all layers regardless.
      */
     const Span<CustomDataLayer> layers(data.layers, data.totlayer);
-    if (std::any_of(layers.begin(), layers.end(), [&](const CustomDataLayer &layer) {
-          return CustomData_external_test(&data, eCustomDataType(layer.type));
-        }))
+    if (std::any_of(layers.begin(),
+                    layers.end(),
+                    [&](const CustomDataLayer &layer) {
+                      return CustomData_external_test(&data, eCustomDataType(layer.type));
+                    }))
     {
       BKE_bpath_foreach_path_fixed_process(
           bpath_data, data.external->filepath, sizeof(data.external->filepath));
@@ -2049,15 +2051,6 @@ const VectorSet<int> &Mesh::material_indices_used() const
 
 namespace bke {
 
-static void translate_positions(MutableSpan<float3> positions, const float3 &translation)
-{
-  threading::parallel_for(positions.index_range(), 2048, [&](const IndexRange range) {
-    for (float3 &position : positions.slice(range)) {
-      position += translation;
-    }
-  });
-}
-
 void mesh_translate(Mesh &mesh, const float3 &translation, const bool do_shape_keys)
 {
   if (math::is_zero(translation)) {
@@ -2069,11 +2062,11 @@ void mesh_translate(Mesh &mesh, const float3 &translation, const bool do_shape_k
     bounds = mesh.runtime->bounds_cache.data();
   }
 
-  translate_positions(mesh.vert_positions_for_write(), translation);
+  math::translate_points(mesh.vert_positions_for_write(), translation);
 
   if (do_shape_keys && mesh.key) {
     for (KeyBlock &kb : mesh.key->block) {
-      translate_positions({static_cast<float3 *>(kb.data), kb.totelem}, translation);
+      math::translate_points({static_cast<float3 *>(kb.data), kb.totelem}, translation);
     }
   }
 
