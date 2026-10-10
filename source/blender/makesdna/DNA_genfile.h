@@ -60,8 +60,6 @@ enum eSDNA_Type {
   SDNA_TYPE_RAW_DATA = 13,
 };
 
-#
-#
 struct SdnaBuiltinType {
   StringRefNull name;
   short size;
