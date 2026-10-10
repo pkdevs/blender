@@ -154,7 +154,7 @@ class TEXT_PT_find(Panel):
         row.operator("text.find_set_selected", text="", icon='EYEDROPPER')
         row = col.row(align=True)
         row.operator("text.find", text="Find Next")
-        row.operator("text.find_previous", text="Find Previous")
+        row.operator("text.find", text="Find Previous").reverse = True
 
         layout.separator()
 
@@ -414,7 +414,7 @@ class TEXT_MT_edit(Menu):
 
         layout.operator("text.start_find", text="Find & Replace...")
         layout.operator("text.find", text="Find Next")
-        layout.operator("text.find_previous", text="Find Previous")
+        layout.operator("text.find", text="Find Previous").reverse = True
         layout.operator("text.find_set_selected")
         layout.operator("text.jump", text="Jump To...")
 

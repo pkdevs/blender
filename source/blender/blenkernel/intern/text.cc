@@ -1596,58 +1596,6 @@ void txt_insert_buf(Text *text, const char *in_buffer, int in_buffer_len)
 /** \name Find String in Text
  * \{ */
 
-bool txt_find_string(Text *text, const char *findstr, int wrap, int match_case)
-{
-  TextLine *tl, *startl;
-  const char *s = nullptr;
-
-  if (!text->curl || !text->sell) {
-    return false;
-  }
-
-  txt_order_cursors(text, false);
-
-  tl = startl = text->sell;
-
-  if (match_case) {
-    s = strstr(&tl->line[text->selc], findstr);
-  }
-  else {
-    s = BLI_strcasestr(&tl->line[text->selc], findstr);
-  }
-  while (!s) {
-    tl = tl->next;
-    if (!tl) {
-      if (wrap) {
-        tl = text->lines.first();
-      }
-      else {
-        break;
-      }
-    }
-
-    if (match_case) {
-      s = strstr(tl->line, findstr);
-    }
-    else {
-      s = BLI_strcasestr(tl->line, findstr);
-    }
-    if (tl == startl) {
-      break;
-    }
-  }
-
-  if (s) {
-    int newl = txt_get_span(text->lines.first(), tl);
-    int newc = int(s - tl->line);
-    txt_move_to(text, newl, newc, false);
-    txt_move_to(text, newl, newc + strlen(findstr), true);
-    return true;
-  }
-
-  return false;
-}
-
 static const char *txt_find_prev_in_line(const char *line,
                                          const char *findstr,
                                          int limit_index,
@@ -1677,7 +1625,7 @@ static const char *txt_find_prev_in_line(const char *line,
   return last_match;
 }
 
-bool txt_find_string_backwards(Text *text, const char *findstr, int wrap, int match_case)
+bool txt_find_string(Text *text, const char *findstr, int wrap, int match_case, bool reverse)
 {
   TextLine *tl, *startl;
   const char *s = nullptr;
@@ -1688,26 +1636,59 @@ bool txt_find_string_backwards(Text *text, const char *findstr, int wrap, int ma
 
   txt_order_cursors(text, false);
 
-  tl = startl = text->curl;
+  if (reverse) {
+    tl = startl = text->curl;
 
-  /* First line: only search matches starting before the current cursor position (curc). */
-  s = txt_find_prev_in_line(tl->line, findstr, text->curc, match_case != 0);
+    /* First line: only search matches starting before the current cursor position (curc). */
+    s = txt_find_prev_in_line(tl->line, findstr, text->curc, match_case != 0);
 
-  while (!s) {
-    tl = tl->prev;
-    if (!tl) {
-      if (wrap) {
-        tl = text->lines.last();
+    while (!s) {
+      tl = tl->prev;
+      if (!tl) {
+        if (wrap) {
+          tl = text->lines.last();
+        }
+        else {
+          break;
+        }
       }
-      else {
+
+      s = txt_find_prev_in_line(tl->line, findstr, -1, match_case != 0);
+
+      if (tl == startl) {
         break;
       }
     }
+  }
+  else {
+    tl = startl = text->sell;
 
-    s = txt_find_prev_in_line(tl->line, findstr, -1, match_case != 0);
+    if (match_case) {
+      s = strstr(&tl->line[text->selc], findstr);
+    }
+    else {
+      s = BLI_strcasestr(&tl->line[text->selc], findstr);
+    }
+    while (!s) {
+      tl = tl->next;
+      if (!tl) {
+        if (wrap) {
+          tl = text->lines.first();
+        }
+        else {
+          break;
+        }
+      }
 
-    if (tl == startl) {
-      break;
+      if (match_case) {
+        s = strstr(tl->line, findstr);
+      }
+      else {
+        s = BLI_strcasestr(tl->line, findstr);
+      }
+      if (tl == startl) {
+        break;
+      }
     }
   }
 

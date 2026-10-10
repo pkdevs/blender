@@ -3781,7 +3781,7 @@ enum {
 static wmOperatorStatus text_find_and_replace(bContext *C,
                                               wmOperator *op,
                                               short mode,
-                                              bool backwards = false)
+                                              bool reverse)
 {
   Main *bmain = CTX_data_main(C);
   SpaceText *st = CTX_wm_space_text(C);
@@ -3828,17 +3828,15 @@ static wmOperatorStatus text_find_and_replace(bContext *C,
   }
 
   /* Find next/previous. */
-  const bool found_match =
-      backwards ? txt_find_string_backwards(
-                      text, st->findstr, flags & ST_FIND_WRAP, flags & ST_MATCH_CASE) :
-                  txt_find_string(text, st->findstr, flags & ST_FIND_WRAP, flags & ST_MATCH_CASE);
+  const bool found_match = txt_find_string(
+      text, st->findstr, flags & ST_FIND_WRAP, flags & ST_MATCH_CASE, reverse);
 
   if (found_match) {
     space_text_update_cursor_moved(C);
     WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, text);
   }
   else if (flags & ST_FIND_ALL) {
-    if (backwards) {
+    if (reverse) {
       if (text->id.prev) {
         text = st->text = static_cast<Text *>(text->id.prev);
       }
@@ -3891,23 +3889,6 @@ void TEXT_OT_find(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "reverse", false, "Reverse", "Search backwards");
 }
 
-static wmOperatorStatus text_find_prev_exec(bContext *C, wmOperator *op)
-{
-  return text_find_and_replace(C, op, TEXT_FIND, true);
-}
-
-void TEXT_OT_find_previous(wmOperatorType *ot)
-{
-  /* Identifiers. */
-  ot->name = "Find Previous";
-  ot->idname = "TEXT_OT_find_previous";
-  ot->description = "Find previous occurrence of specified text";
-
-  /* API callbacks. */
-  ot->exec = text_find_prev_exec;
-  ot->poll = text_space_edit_poll;
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -3931,7 +3912,7 @@ static wmOperatorStatus text_replace_all(bContext *C)
 
   txt_move_toline(text, 0, false);
 
-  found = txt_find_string(text, st->findstr, 0, flags & ST_MATCH_CASE);
+  found = txt_find_string(text, st->findstr, 0, flags & ST_MATCH_CASE, false);
   if (found) {
     ED_text_undo_push_init(C);
 
@@ -3941,7 +3922,7 @@ static wmOperatorStatus text_replace_all(bContext *C)
         MEM_delete(text->curl->format);
         text->curl->format = nullptr;
       }
-      found = txt_find_string(text, st->findstr, 0, flags & ST_MATCH_CASE);
+      found = txt_find_string(text, st->findstr, 0, flags & ST_MATCH_CASE, false);
     } while (found);
 
     WM_event_add_notifier(C, NC_TEXT | NA_EDITED, text);
@@ -3962,7 +3943,7 @@ static wmOperatorStatus text_replace_exec(bContext *C, wmOperator *op)
   if (replace_all) {
     return text_replace_all(C);
   }
-  return text_find_and_replace(C, op, TEXT_REPLACE);
+  return text_find_and_replace(C, op, TEXT_REPLACE, false);
 }
 
 void TEXT_OT_replace(wmOperatorType *ot)
@@ -4005,7 +3986,7 @@ static wmOperatorStatus text_find_set_selected_exec(bContext *C, wmOperator *op)
     return OPERATOR_FINISHED;
   }
 
-  return text_find_and_replace(C, op, TEXT_FIND);
+  return text_find_and_replace(C, op, TEXT_FIND, false);
 }
 
 void TEXT_OT_find_set_selected(wmOperatorType *ot)
