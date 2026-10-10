@@ -1,2 +1,3 @@
 Referenced by pull request #159468, Anim: Show posing tools in Object Mode
 Referenced by issue #159734, In-Between Tools for Objects: Shortcut assignments via RMB will be added to Pose category, should be Object category
+Referenced by issue #164985, [Regression] "In-Betweens" tools fail to insert keyframes for unchanged channels (properties with identical start/end values)
