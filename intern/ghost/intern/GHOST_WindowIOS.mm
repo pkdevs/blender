@@ -5361,8 +5361,17 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   UIAction *saveTemplate = [UIAction actionWithTitle:@"Save as Template…"
       image:[UIImage systemImageNamed:@"square.on.square"] identifier:@"blender.template.save"
       handler:^(__kindof UIAction *) { [controller saveAsTemplate]; }];
+  /* Blender's own Import and Export menus, so every format it and its add-ons support is listed.
+   * Their file browsers open the system document picker. */
+  UIMenu *import_menu = blenderIOSNativeSubmenu(
+      @{@"title": @"Import", @"icon": @"IMPORT", @"route": @{@"root": @"TOPBAR_MT_file_import", @"path": @[]}},
+      @"blender.file.import");
+  UIMenu *export_menu = blenderIOSNativeSubmenu(
+      @{@"title": @"Export", @"icon": @"EXPORT", @"route": @{@"root": @"TOPBAR_MT_file_export", @"path": @[]}},
+      @"blender.file.export");
   UIMenu *share_menu = [UIMenu menuWithTitle:@"" children:@[
-    section(@[share, saveAs]), section(render_actions), section(@[saveTemplate]),
+    section(@[share, saveAs]), section(@[import_menu, export_menu]), section(render_actions),
+    section(@[saveTemplate]),
   ]];
   _share_button.menu = share_menu;
   _share_button.menuRepresentation = share_menu;
