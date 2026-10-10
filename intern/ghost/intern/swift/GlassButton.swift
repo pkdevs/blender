@@ -106,6 +106,8 @@ final class GlassButton: UIButton {
   @objc var buttonTitle: String? {
     get { model.title }
     set {
+      /* Each write redraws and re-measures the button, even of the same value. */
+      guard newValue != model.title else { return }
       model.title = newValue
       invalidateIntrinsicContentSize()
     }
@@ -114,6 +116,7 @@ final class GlassButton: UIButton {
   @objc var buttonImage: UIImage? {
     get { model.image }
     set {
+      guard newValue !== model.image else { return }
       model.image = newValue
       invalidateIntrinsicContentSize()
     }
@@ -121,27 +124,28 @@ final class GlassButton: UIButton {
 
   @objc var buttonStyle: String {
     get { model.style }
-    set { model.style = newValue }
+    set { if newValue != model.style { model.style = newValue } }
   }
 
   @objc var selectedTint: UIColor {
     get { model.selectedTint }
-    set { model.selectedTint = newValue }
+    set { if !newValue.isEqual(model.selectedTint) { model.selectedTint = newValue } }
   }
 
   @objc var foreground: UIColor {
     get { model.foreground }
-    set { model.foreground = newValue }
+    set { if !newValue.isEqual(model.foreground) { model.foreground = newValue } }
   }
 
   @objc var selectedForeground: UIColor {
     get { model.selectedForeground }
-    set { model.selectedForeground = newValue }
+    set { if !newValue.isEqual(model.selectedForeground) { model.selectedForeground = newValue } }
   }
 
   @objc var buttonFont: UIFont {
     get { model.font }
     set {
+      guard !newValue.isEqual(model.font) else { return }
       model.font = newValue
       invalidateIntrinsicContentSize()
     }
@@ -149,12 +153,15 @@ final class GlassButton: UIButton {
 
   @objc var imagePadding: CGFloat {
     get { model.imagePadding }
-    set { model.imagePadding = newValue }
+    set { if newValue != model.imagePadding { model.imagePadding = newValue } }
   }
 
   @objc var buttonInsets: NSDirectionalEdgeInsets {
     get { model.insets }
     set {
+      let old = model.insets
+      guard newValue.top != old.top || newValue.leading != old.leading || newValue.bottom != old.bottom ||
+        newValue.trailing != old.trailing else { return }
       model.insets = newValue
       invalidateIntrinsicContentSize()
     }
@@ -163,31 +170,34 @@ final class GlassButton: UIButton {
   /** The image after the title, as for a checkmark. */
   @objc var imageTrailing: Bool {
     get { model.imageTrailing }
-    set { model.imageTrailing = newValue }
+    set { if newValue != model.imageTrailing { model.imageTrailing = newValue } }
   }
 
   /** Content along the leading edge rather than centered. */
   @objc var contentLeading: Bool {
     get { model.leading }
-    set { model.leading = newValue }
+    set { if newValue != model.leading { model.leading = newValue } }
   }
 
   /** A rounded rectangle instead of a capsule; 0 or less returns to the capsule. */
   @objc var buttonCornerRadius: CGFloat {
     get { model.cornerRadius ?? 0 }
-    set { model.cornerRadius = newValue > 0 ? newValue : nil }
+    set {
+      let radius: CGFloat? = newValue > 0 ? newValue : nil
+      if radius != model.cornerRadius { model.cornerRadius = radius }
+    }
   }
 
   override var isSelected: Bool {
-    didSet { model.selected = isSelected }
+    didSet { if model.selected != isSelected { model.selected = isSelected } }
   }
 
   override var isHighlighted: Bool {
-    didSet { model.highlighted = isHighlighted }
+    didSet { if model.highlighted != isHighlighted { model.highlighted = isHighlighted } }
   }
 
   override var isEnabled: Bool {
-    didSet { model.enabled = isEnabled }
+    didSet { if model.enabled != isEnabled { model.enabled = isEnabled } }
   }
 
   override func sizeThatFits(_ size: CGSize) -> CGSize {
