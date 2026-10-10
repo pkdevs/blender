@@ -834,6 +834,14 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     return;
   }
 #ifdef WITH_PYTHON
+  if (command.setting == "keymap") {
+    /* From the iPad's Settings, see `bl_ui.native_settings`. */
+    const char *imports[] = {"bpy", "bl_ui", nullptr};
+    const std::string expression = "bl_ui.native_settings.keymap_set(bpy.context, \"" +
+                                   ios_json_escape(command.value) + "\")";
+    BPY_run_string_eval(C, imports, expression.c_str());
+    return;
+  }
   if (command.setting == "render" || command.setting == "viewport_toggle") {
     /* Rendering and viewport options from the iPad's Share and More menus, see
      * `bl_ui.native_render`. */
@@ -1705,6 +1713,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   std::string panels_json = "null";
   std::string render_json = "null";
   std::string viewport_json = "null";
+  std::string preferences_json = "null";
   std::string quick_actions_json;
 #ifdef WITH_PYTHON
   if (has_view3d_context) {
@@ -1721,7 +1730,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
     }
     for (auto [expression, target] :
          {std::pair{"bl_ui.native_render.status_json(bpy.context)", &render_json},
-          std::pair{"bl_ui.native_render.viewport_json(bpy.context)", &viewport_json}})
+          std::pair{"bl_ui.native_render.viewport_json(bpy.context)", &viewport_json},
+          std::pair{"bl_ui.native_settings.preferences_json(bpy.context)", &preferences_json}})
     {
       result = nullptr;
       if (BPY_run_string_as_string(C, imports, expression, nullptr, &result)) {
@@ -1864,6 +1874,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += render_json;
   json += ",\"viewport\":";
   json += viewport_json;
+  json += ",\"preferences\":";
+  json += preferences_json;
   if (actions.empty() && !quick_actions_json.empty()) {
     json += ",\"actions\":" + quick_actions_json + "}";
     return json;

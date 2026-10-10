@@ -15,6 +15,7 @@ _modules = [
     "native_character",
     "native_panels",
     "native_render",
+    "native_settings",
     "native_timeline",
     "anim",
     "asset_shelf",
