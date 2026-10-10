@@ -272,6 +272,11 @@ final class TemplatePickerController: UIHostingController<TemplatePicker>, UIAda
     }
   }
 
+  /** Choose a template as tapping it does, for the device tests. */
+  @objc(chooseTemplate:) func choose(_ template: String) {
+    finish(template)
+  }
+
   /* Swiping the sheet away cancels, like Cancel. */
   func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
     finish(nil)

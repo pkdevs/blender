@@ -324,18 +324,18 @@ typedef struct UserInputEvent {
 @property(nonatomic) BOOL contentLeading;
 @end
 
-static BOOL blenderIOSIsSwiftButton(UIButton *button)
+/* The interface's SwiftUI classes, found by name as this library is built without Swift. */
+static Class blenderIOSSwiftClass(NSString *name)
 {
-  return [button respondsToSelector:@selector(setButtonTitle:)];
+  Class swift_class = NSClassFromString(name);
+  NSCAssert(swift_class, @"The SwiftUI class %@ is missing", name);
+  return swift_class;
 }
 
-/* A SwiftUI-drawn button, or nil to draw it with UIKit (the `BlenderUIKitInterface` default). */
 static UIButton *blenderIOSSwiftButton()
 {
-  Class swift_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
-                          nil :
-                          NSClassFromString(@"GHOSTIOSSwiftButton");
-  return swift_class ? [[[swift_class alloc] initWithFrame:CGRectZero] autorelease] : nil;
+  return [[[blenderIOSSwiftClass(@"GHOSTIOSSwiftButton") alloc] initWithFrame:CGRectZero]
+      autorelease];
 }
 
 @interface GHOSTUITapGestureRecognizer : UITapGestureRecognizer
@@ -690,7 +690,7 @@ static UIButton *blenderIOSSwiftButton()
   CGPoint pencil_navigation_start;
   bool last_tap_with_pencil;
   bool finger_tool_enabled;
-  GHOSTIOSPencilMenu *pencil_context_menu;
+  UIView<GHOSTIOSPencilMenu> *pencil_context_menu;
 
   CADisplayLink *orbit_display_link;
   CGPoint orbit_velocity;
@@ -717,7 +717,7 @@ static UIButton *blenderIOSSwiftButton()
 }
 
 - (void)setSystemAndWindowIOS:(GHOST_SystemIOS *)sysCocoa windowIOS:(GHOST_WindowIOS *)winCocoa;
-- (void)setPencilContextMenu:(GHOSTIOSPencilMenu *)menu;
+- (void)setPencilContextMenu:(UIView<GHOSTIOSPencilMenu> *)menu;
 - (void)setFingerToolEnabled:(BOOL)enabled;
 - (void)detachBlender;
 
@@ -788,7 +788,7 @@ static UIButton *blenderIOSSwiftButton()
   finger_tool_enabled = enabled;
 }
 
-- (void)setPencilContextMenu:(GHOSTIOSPencilMenu *)menu
+- (void)setPencilContextMenu:(UIView<GHOSTIOSPencilMenu> *)menu
 {
   pencil_context_menu = menu;
 }
@@ -2314,7 +2314,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSString *_object_mode;
   UIBarButtonItem *_actions_button;
   UIBarButtonItem *_share_button;
-  GHOSTIOSRender *_render;
+  NSObject<GHOSTIOSRender> *_render;
   NSObject<GHOSTIOSSettings> *_settings;
   /* The iPad's saved Pencil and touch choice is applied once the view has a window. */
   BOOL _touch_settings_applied;
@@ -2325,14 +2325,14 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIBarButtonItem *_viewport_shading_button;
   UIBarButtonItem *_undo_button;
   UIBarButtonItem *_finger_input_button;
-  GHOSTIOSScenePanels *_scene_panels;
-  GHOSTIOSRedoStrip *_redo_strip;
-  GHOSTIOSTimeline *_timeline;
-  GHOSTIOSAssets *_assets;
+  NSObject<GHOSTIOSScenePanels> *_scene_panels;
+  NSObject<GHOSTIOSRedoStrip> *_redo_strip;
+  NSObject<GHOSTIOSTimeline> *_timeline;
+  NSObject<GHOSTIOSAssets> *_assets;
   GHOSTIOSFileDrop *_file_drop;
   GHOSTIOSCompileIndicator *_compile_indicator;
   BOOL _finger_tool_enabled;
-  GHOSTIOSPencilMenu *_pencil_menu;
+  UIView<GHOSTIOSPencilMenu> *_pencil_menu;
   UIBarButtonItemGroup *_mesh_select_group;
   UISegmentedControl *_mesh_select_control;
   NSMutableArray *_mesh_select_buttons;
@@ -2755,7 +2755,7 @@ bool GHOST_ios_document_window_visible()
   return items;
 }
 
-- (void)pencilMenu:(GHOSTIOSPencilMenu *)menu
+- (void)pencilMenu:(UIView<GHOSTIOSPencilMenu> *)menu
     requestItemsForRoute:(NSDictionary *)route
                 atPoint:(CGPoint)point
              completion:(void (^)(NSArray<NSDictionary *> *))completion
@@ -2780,7 +2780,7 @@ bool GHOST_ios_document_window_visible()
   [NSRunLoop.mainRunLoop addTimer:poll forMode:NSRunLoopCommonModes];
 }
 
-- (void)pencilMenu:(GHOSTIOSPencilMenu *)menu
+- (void)pencilMenu:(UIView<GHOSTIOSPencilMenu> *)menu
     didChooseItem:(NSDictionary *)item
           atPoint:(CGPoint)point
 {
@@ -2843,30 +2843,16 @@ bool GHOST_ios_document_window_visible()
                              command:(NSInteger)command
                       clearGlassStyle:(BOOL)clearGlassStyle
 {
-  UIButton *swift_button = blenderIOSSwiftButton();
-  UIButton *button = swift_button ?: [UIButton buttonWithType:UIButtonTypeSystem];
+  UIButton *button = blenderIOSSwiftButton();
   button.tag = command;
   button.tintColor = UIColor.systemBlueColor;
   button.accessibilityLabel = title;
   button.translatesAutoresizingMaskIntoConstraints = NO;
 
-  UIImage *image = blenderIOSCommandIcon(command, systemImage);
-  if (swift_button) {
-    swift_button.buttonImage = image;
-    swift_button.buttonStyle = clearGlassStyle ? @"clear" : @"glass";
-    swift_button.foreground = UIColor.systemBlueColor;
-    swift_button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 8.0, 8.0, 8.0);
-  }
-  else {
-    [button setImage:image forState:UIControlStateNormal];
-    UIButtonConfiguration *configuration = clearGlassStyle ?
-                                              [UIButtonConfiguration clearGlassButtonConfiguration] :
-                                              [UIButtonConfiguration glassButtonConfiguration];
-    configuration.image = image;
-    configuration.contentInsets = NSDirectionalEdgeInsetsMake(8.0, 8.0, 8.0, 8.0);
-    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
-    button.configuration = configuration;
-  }
+  button.buttonImage = blenderIOSCommandIcon(command, systemImage);
+  button.buttonStyle = clearGlassStyle ? @"clear" : @"glass";
+  button.foreground = UIColor.systemBlueColor;
+  button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 8.0, 8.0, 8.0);
 
   [button addTarget:self
                 action:@selector(handleOverlayCommand:)
@@ -2895,7 +2881,7 @@ bool GHOST_ios_document_window_visible()
                        toolIdentifier:(NSString *)toolIdentifier
                                 mode:(NSString *)mode
 {
-  UIButton *button = blenderIOSSwiftButton() ?: [UIButton buttonWithType:UIButtonTypeSystem];
+  UIButton *button = blenderIOSSwiftButton();
   button.tintColor = UIColor.labelColor;
   button.translatesAutoresizingMaskIntoConstraints = NO;
   button.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
@@ -2994,41 +2980,23 @@ bool GHOST_ios_document_window_visible()
     const BOOL is_emphasized = [self isToolbarListVisible] &&
                                (updated_button.selected ||
                                 updated_button == self->_toolbar_hover_button);
-    UIButtonConfiguration *configuration = is_emphasized && !updated_button.selected ?
-                                              [UIButtonConfiguration glassButtonConfiguration] :
-                                              [UIButtonConfiguration plainButtonConfiguration];
-    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
-    configuration.automaticallyUpdateForSelection = NO;
-    configuration.attributedTitle = shows_text ? [[[NSAttributedString alloc]
-        initWithString:title attributes:@{NSForegroundColorAttributeName: configuration.baseForegroundColor}]
-        autorelease] : nil;
-    configuration.image = updated_button.selected ? selected_image : image;
     ((UIImageView *)[updated_button viewWithTag:9001]).tintColor =
         updated_button.selected ? UIColor.whiteColor : UIColor.secondaryLabelColor;
-    configuration.imagePlacement = NSDirectionalRectEdgeLeading;
-    configuration.imagePadding = shows_text ? 10.0 : 0.0;
-    configuration.contentInsets = shows_text ?
-                                      NSDirectionalEdgeInsetsMake(8.0, 12.0, 8.0, 14.0) :
-                                      NSDirectionalEdgeInsetsMake(8.0, 8.0, 8.0, 8.0);
-    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     updated_button.contentHorizontalAlignment = shows_text ?
                                                     UIControlContentHorizontalAlignmentLeading :
                                                     UIControlContentHorizontalAlignmentCenter;
-    if (blenderIOSIsSwiftButton(updated_button)) {
-      /* The same look drawn by SwiftUI: glass only while hovered in the open list, the title
-       * beside the icon while the rail is expanded. */
-      updated_button.buttonStyle = is_emphasized && !updated_button.selected ? @"glass" : @"plain";
-      updated_button.selectedTint = UIColor.clearColor;
-      updated_button.foreground = UIColor.labelColor;
-      updated_button.selectedForeground = UIColor.whiteColor;
-      updated_button.buttonTitle = shows_text ? title : nil;
-      updated_button.buttonImage = configuration.image;
-      updated_button.imagePadding = configuration.imagePadding;
-      updated_button.buttonInsets = configuration.contentInsets;
-      updated_button.contentLeading = shows_text;
-      return;
-    }
-    updated_button.configuration = configuration;
+    /* Glass only while hovered in the open list, the title beside the icon while the rail is
+     * expanded. */
+    updated_button.buttonStyle = is_emphasized && !updated_button.selected ? @"glass" : @"plain";
+    updated_button.selectedTint = UIColor.clearColor;
+    updated_button.foreground = UIColor.labelColor;
+    updated_button.selectedForeground = UIColor.whiteColor;
+    updated_button.buttonTitle = shows_text ? title : nil;
+    updated_button.buttonImage = updated_button.selected ? selected_image : image;
+    updated_button.imagePadding = shows_text ? 10.0 : 0.0;
+    updated_button.buttonInsets = shows_text ? NSDirectionalEdgeInsetsMake(8.0, 12.0, 8.0, 14.0) :
+                                               NSDirectionalEdgeInsetsMake(8.0, 8.0, 8.0, 8.0);
+    updated_button.contentLeading = shows_text;
   };
 
   [button setNeedsUpdateConfiguration];
@@ -3585,48 +3553,22 @@ bool GHOST_ios_document_window_visible()
   UIColor *color = [axis isEqualToString:@"X"] ? UIColor.systemRedColor :
                    [axis isEqualToString:@"Y"] ? UIColor.systemGreenColor :
                                                 UIColor.systemBlueColor;
-  UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
-  configuration.attributedTitle = [[[NSAttributedString alloc]
-      initWithString:axis
-          attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:17.0
-                                                             weight:UIFontWeightSemibold]}] autorelease];
-  UIColor *foreground = selected ? UIColor.blackColor : color;
-  configuration.baseForegroundColor = foreground;
-  configuration.baseBackgroundColor = selected ? color : nil;
-  /* Keep the selected lettering readable on the bright axis-colored glass. */
-  configuration.titleTextAttributesTransformer = ^NSDictionary *(NSDictionary *attributes) {
-    NSMutableDictionary *result = [[attributes mutableCopy] autorelease];
-    result[NSForegroundColorAttributeName] = foreground;
-    return result;
-  };
-  configuration.imageColorTransformer = ^UIColor *(UIColor *) { return foreground; };
-  configuration.image = selected ? [UIImage systemImageNamed:@"checkmark"] : nil;
-  configuration.preferredSymbolConfigurationForImage =
-      [UIImageSymbolConfiguration configurationWithPointSize:11.0 weight:UIImageSymbolWeightBold];
-  configuration.imagePlacement = NSDirectionalRectEdgeTrailing;
-  configuration.imagePadding = selected ? 4.0 : 0.0;
-  configuration.contentInsets = NSDirectionalEdgeInsetsMake(8.0, 8.0, 8.0, 8.0);
-  configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
   button.selected = selected;
   button.tintColor = color;
-  if (blenderIOSIsSwiftButton(button)) {
-    button.buttonTitle = axis;
-    button.buttonFont = [UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold];
-    button.buttonImage = selected ?
-        [[UIImage systemImageNamed:@"checkmark"]
-            imageWithConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:11.0
-                                                                                   weight:UIImageSymbolWeightBold]] :
-        nil;
-    button.imageTrailing = YES;
-    button.imagePadding = configuration.imagePadding;
-    button.buttonInsets = configuration.contentInsets;
-    button.foreground = color;
-    button.selectedTint = color;
-    button.selectedForeground = UIColor.blackColor;
-  }
-  else {
-    button.configuration = configuration;
-  }
+  button.buttonTitle = axis;
+  button.buttonFont = [UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold];
+  /* Selected lettering in black stays readable on the bright axis-colored glass. */
+  button.buttonImage = selected ?
+      [[UIImage systemImageNamed:@"checkmark"]
+          imageWithConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:11.0
+                                                                                 weight:UIImageSymbolWeightBold]] :
+      nil;
+  button.imageTrailing = YES;
+  button.imagePadding = selected ? 4.0 : 0.0;
+  button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 8.0, 8.0, 8.0);
+  button.foreground = color;
+  button.selectedTint = color;
+  button.selectedForeground = UIColor.blackColor;
   button.accessibilityLabel = [NSString stringWithFormat:@"%@ axis constraint", axis];
   button.accessibilityValue = selected ? @"On" : @"Off";
   button.accessibilityTraits = UIAccessibilityTraitButton |
@@ -3684,8 +3626,7 @@ bool GHOST_ios_document_window_visible()
                                  key:(NSString *)keyName
 {
   UNUSED_VARS(systemImage);
-  UIButton *swift_button = blenderIOSSwiftButton();
-  UIButton *button = swift_button ?: [UIButton buttonWithType:UIButtonTypeSystem];
+  UIButton *button = blenderIOSSwiftButton();
   button.tintColor = UIColor.systemBlueColor;
   button.accessibilityLabel = title;
   button.accessibilityIdentifier = opName;
@@ -3701,24 +3642,12 @@ bool GHOST_ios_document_window_visible()
   UIImage *image = keyName.length == 0 ?
                        blenderIOSActionIcon(opName, propertyName, propertyValue) : nil;
 
-  UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
-  configuration.title = title;
-  configuration.image = image;
-  configuration.imagePlacement = NSDirectionalRectEdgeLeading;
-  configuration.imagePadding = image != nil ? 5.0 : 0.0;
-  configuration.contentInsets = NSDirectionalEdgeInsetsMake(8.0, 10.0, 8.0, 10.0);
-  configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
-  if (swift_button) {
-    swift_button.buttonTitle = title;
-    swift_button.buttonImage = image;
-    /* Glass buttons draw their title in the label color, whatever the tint. */
-    swift_button.foreground = UIColor.labelColor;
-    swift_button.imagePadding = configuration.imagePadding;
-    swift_button.buttonInsets = configuration.contentInsets;
-  }
-  else {
-    button.configuration = configuration;
-  }
+  button.buttonTitle = title;
+  button.buttonImage = image;
+  /* Glass buttons draw their title in the label color, whatever the tint. */
+  button.foreground = UIColor.labelColor;
+  button.imagePadding = image != nil ? 5.0 : 0.0;
+  button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 10.0, 8.0, 10.0);
   if ([@[@"X", @"Y", @"Z"] containsObject:keyName ?: @""]) {
     [self updateAxisConstraintButton:button selected:NO];
     [button.widthAnchor constraintEqualToConstant:60.0].active = YES;
@@ -3808,16 +3737,10 @@ bool GHOST_ios_document_window_visible()
     if (action_id.length) {
       /* Chosen by `bl_ui.native_actions`, which also runs it by this identifier. */
       button.accessibilityIdentifier = [@"blender.action." stringByAppendingString:action_id];
-      if (icon.length && blenderIOSIsSwiftButton(button)) {
+      if (icon.length) {
         UIImage *image = GHOSTIOSBlenderIcon(icon, NO);
         button.buttonImage = image;
         button.imagePadding = image ? 5.0 : 0.0;
-      }
-      else if (icon.length) {
-        UIButtonConfiguration *configuration = button.configuration;
-        configuration.image = GHOSTIOSBlenderIcon(icon, NO);
-        configuration.imagePadding = configuration.image ? 5.0 : 0.0;
-        button.configuration = configuration;
       }
     }
     [_action_stack addArrangedSubview:button];
@@ -4631,8 +4554,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                          systemImage:(NSString *)systemImage
                               command:(NSInteger)command
 {
-  UIButton *swift_button = blenderIOSSwiftButton();
-  UIButton *button = swift_button ?: [UIButton buttonWithType:UIButtonTypeSystem];
+  UIButton *button = blenderIOSSwiftButton();
   button.tintColor = UIColor.labelColor;
   /* The pills float over the always-dark viewport, whatever the app's appearance. */
   button.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
@@ -4644,28 +4566,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   if (image == nil) {
     image = [UIImage systemImageNamed:@"circle"];
   }
-  if (swift_button) {
-    /* Glass, prominent blue glass while hovered, as below. */
-    swift_button.buttonTitle = title;
-    swift_button.buttonImage = image;
-    swift_button.imagePadding = 7.0;
-    swift_button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 14.0, 8.0, 14.0);
-  }
-  else button.configurationUpdateHandler = ^(UIButton *updated_button) {
-    UIButtonConfiguration *configuration = updated_button.selected ?
-                                              [UIButtonConfiguration prominentGlassButtonConfiguration] :
-                                              [UIButtonConfiguration glassButtonConfiguration];
-    /* Regular glass rather than clear: the grid and objects behind clear glass swamp the label. */
-    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
-    configuration.baseBackgroundColor = updated_button.selected ? UIColor.systemBlueColor : nil;
-    configuration.title = title;
-    configuration.image = image;
-    configuration.imagePlacement = NSDirectionalRectEdgeLeading;
-    configuration.imagePadding = 7.0;
-    configuration.contentInsets = NSDirectionalEdgeInsetsMake(8.0, 14.0, 8.0, 14.0);
-    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
-    updated_button.configuration = configuration;
-  };
+  /* Glass, prominent blue glass while hovered. */
+  button.buttonTitle = title;
+  button.buttonImage = image;
+  button.imagePadding = 7.0;
+  button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 14.0, 8.0, 14.0);
 
   [button addTarget:self
                 action:@selector(handleOverlayCommand:)
@@ -5388,13 +5293,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   UIAction *renderAnimation = [UIAction actionWithTitle:@"Render Animation"
       image:[UIImage systemImageNamed:@"film"] identifier:@"blender.render.animation"
       handler:^(__kindof UIAction *) { [controller->_render renderAnimation:YES]; }];
-  NSMutableArray *render_actions = [NSMutableArray arrayWithObjects:renderImage, renderAnimation, nil];
-  if ([_render respondsToSelector:@selector(showRenders)]) {
-    /* Every earlier render, in the render sheet's film strip. */
-    [render_actions addObject:[UIAction actionWithTitle:@"Renders"
-        image:[UIImage systemImageNamed:@"photo.stack"] identifier:@"blender.render.history"
-        handler:^(__kindof UIAction *) { [controller->_render performSelector:@selector(showRenders)]; }]];
-  }
+  /* Every earlier render, in the render sheet's film strip. */
+  UIAction *renders = [UIAction actionWithTitle:@"Renders"
+      image:[UIImage systemImageNamed:@"photo.stack"] identifier:@"blender.render.history"
+      handler:^(__kindof UIAction *) { [controller->_render showRenders]; }];
+  NSArray *render_actions = @[renderImage, renderAnimation, renders];
   UIAction *saveTemplate = [UIAction actionWithTitle:@"Save as Template…"
       image:[UIImage systemImageNamed:@"square.on.square"] identifier:@"blender.template.save"
       handler:^(__kindof UIAction *) { [controller saveAsTemplate]; }];
@@ -5564,10 +5467,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _share_button.title = @"Share";
   _share_button.accessibilityLabel = @"Share";
   _share_button.identifier = @"blender.share";
-  Class render_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
-                           nil :
-                           NSClassFromString(@"GHOSTIOSSwiftRender");
-  _render = [[(render_class ?: GHOSTIOSRender.class) alloc] initWithPresenter:self];
+  _render = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftRender") alloc] initWithPresenter:self];
   if (Class settings_class = NSClassFromString(@"GHOSTIOSSwiftSettings")) {
     _settings = [[settings_class alloc] initWithPresenter:self];
     __block GHOST_IOSViewController *settings_host = self;
@@ -5658,15 +5558,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self.view addSubview:_overlay_view];
 
   _mesh_select_buttons = [[NSMutableArray alloc] init];
-  /* The SwiftUI interface answers the same messages as the UIKit one it replaces, which remains
-   * for comparison with the `BlenderUIKitInterface` default. */
-  const BOOL uikit_interface = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"];
-  Class redo_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftRedoStrip");
-  _redo_strip = [[(redo_class ?: GHOSTIOSRedoStrip.class) alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
+  _redo_strip = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftRedoStrip") alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
     return GHOSTIOSBlenderIcon(name, NO);
   }];
-  Class panels_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftScenePanels");
-  _scene_panels = [[(panels_class ?: GHOSTIOSScenePanels.class) alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
+  _scene_panels = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftScenePanels") alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
     return GHOSTIOSBlenderIcon(name, NO);
   }];
   _scene_panels.menuProvider = ^UIMenu *(NSDictionary *property) {
@@ -5678,8 +5573,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                                     @"route": route},
                                    property[@"menu"]);
   };
-  Class timeline_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftTimeline");
-  _timeline = [[(timeline_class ?: GHOSTIOSTimeline.class) alloc] initWithOverlay:_overlay_view];
+  _timeline = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftTimeline") alloc] initWithOverlay:_overlay_view];
   __block UIView *timeline_host = self.view;
   /* The bottom tray grows and shrinks; everything resting on it moves with it. */
   void (^relayout_tray)(void) = ^{
@@ -5696,8 +5590,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                      completion:nil];
   };
   _timeline.visibilityDidChange = relayout_tray;
-  Class assets_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftAssets");
-  _assets = [[(assets_class ?: GHOSTIOSAssets.class) alloc] initWithOverlay:_overlay_view];
+  _assets = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftAssets") alloc] initWithOverlay:_overlay_view];
   _assets.visibilityDidChange = relayout_tray;
   /* Assets dragged out of the pane drop onto the viewport, which Blender draws in this view. */
   __block GHOST_IOSViewController *assets_host = self;
@@ -5735,8 +5628,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _compile_indicator = [[GHOSTIOSCompileIndicator alloc]
       initWithOverlay:_overlay_view
                 below:self.navigationController ? nil : _top_bar];
-  Class pencil_class = uikit_interface ? nil : NSClassFromString(@"GHOSTIOSSwiftPencilMenu");
-  _pencil_menu = (GHOSTIOSPencilMenu *)[[(pencil_class ?: GHOSTIOSPencilMenu.class) alloc]
+  _pencil_menu = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftPencilMenu") alloc]
       initWithFrame:_overlay_view.bounds];
   _pencil_menu.delegate = self;
   const BOOL phone = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;
@@ -6277,7 +6169,7 @@ static char blender_brush_image_key;
   NSString *title = item[@"title"];
   NSString *preview = [item[@"preview"] isKindOfClass:NSString.class] ? item[@"preview"] : @"";
 
-  UIButton *button = blenderIOSSwiftButton() ?: [UIButton buttonWithType:UIButtonTypeSystem];
+  UIButton *button = blenderIOSSwiftButton();
   /* The preview can arrive later, see #updateBrushRailWithModel:. */
   objc_setAssociatedObject(button, &blender_brush_preview_key, preview, OBJC_ASSOCIATION_COPY_NONATOMIC);
   objc_setAssociatedObject(button, &blender_brush_image_key, blenderIOSBrushImage(preview, 36.0),
@@ -6294,37 +6186,19 @@ static char blender_brush_image_key;
     const BOOL is_emphasized = [self isBrushListVisible] &&
                                (updated_button.selected ||
                                 updated_button == self->_brush_hover_button);
-    UIButtonConfiguration *configuration = is_emphasized && !updated_button.selected ?
-                                              [UIButtonConfiguration glassButtonConfiguration] :
-                                              [UIButtonConfiguration plainButtonConfiguration];
-    configuration.baseForegroundColor = updated_button.selected ? UIColor.whiteColor : UIColor.labelColor;
-    configuration.automaticallyUpdateForSelection = NO;
-    configuration.attributedTitle = shows_text ? [[[NSAttributedString alloc]
-        initWithString:title attributes:@{NSForegroundColorAttributeName: configuration.baseForegroundColor}]
-        autorelease] : nil;
-    configuration.image = image;
-    configuration.imagePlacement = NSDirectionalRectEdgeLeading;
-    configuration.imagePadding = shows_text ? 10.0 : 0.0;
-    configuration.contentInsets = shows_text ?
-                                      NSDirectionalEdgeInsetsMake(6.0, 8.0, 6.0, 14.0) :
-                                      NSDirectionalEdgeInsetsMake(6.0, 6.0, 6.0, 6.0);
-    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     updated_button.contentHorizontalAlignment = shows_text ?
                                                     UIControlContentHorizontalAlignmentLeading :
                                                     UIControlContentHorizontalAlignmentCenter;
-    if (blenderIOSIsSwiftButton(updated_button)) {
-      updated_button.buttonStyle = is_emphasized && !updated_button.selected ? @"glass" : @"plain";
-      updated_button.selectedTint = UIColor.clearColor;
-      updated_button.foreground = UIColor.labelColor;
-      updated_button.selectedForeground = UIColor.whiteColor;
-      updated_button.buttonTitle = shows_text ? title : nil;
-      updated_button.buttonImage = image;
-      updated_button.imagePadding = configuration.imagePadding;
-      updated_button.buttonInsets = configuration.contentInsets;
-      updated_button.contentLeading = shows_text;
-      return;
-    }
-    updated_button.configuration = configuration;
+    updated_button.buttonStyle = is_emphasized && !updated_button.selected ? @"glass" : @"plain";
+    updated_button.selectedTint = UIColor.clearColor;
+    updated_button.foreground = UIColor.labelColor;
+    updated_button.selectedForeground = UIColor.whiteColor;
+    updated_button.buttonTitle = shows_text ? title : nil;
+    updated_button.buttonImage = image;
+    updated_button.imagePadding = shows_text ? 10.0 : 0.0;
+    updated_button.buttonInsets = shows_text ? NSDirectionalEdgeInsetsMake(6.0, 8.0, 6.0, 14.0) :
+                                               NSDirectionalEdgeInsetsMake(6.0, 6.0, 6.0, 6.0);
+    updated_button.contentLeading = shows_text;
   };
   [button addTarget:self action:@selector(handleBrushButton:)
       forControlEvents:UIControlEventTouchUpInside];

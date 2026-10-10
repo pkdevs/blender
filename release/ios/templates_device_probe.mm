@@ -61,22 +61,10 @@ extern "C" char *blender_device_probe_templates(const char *json)
       });
     }
     if ([action isEqual:@"new"]) { [documents newDocumentFrom:viewport]; }
-    UIViewController *presented = viewport.presentedViewController;
-    UICollectionViewController *picker = [presented isKindOfClass:UINavigationController.class] ?
-        (id)((UINavigationController *)presented).topViewController : nil;
-    const BOOL choosing = [picker isKindOfClass:NSClassFromString(@"GHOSTIOSTemplatePicker")];
+    UIViewController *picker = viewport.presentedViewController;
+    const BOOL choosing = [picker isKindOfClass:NSClassFromString(@"GHOSTIOSSwiftTemplatePicker")];
     if (choosing && [action isEqual:@"choose"]) {
-      NSArray *sections = [picker valueForKey:@"_sections"];
-      for (NSUInteger s = 0; s < sections.count; s++) {
-        for (NSUInteger i = 0; i < [sections[s] count]; i++) {
-          if ([sections[s][i][@"id"] isEqual:request[@"id"]]) {
-            NSIndexPath *index = [NSIndexPath indexPathForItem:i inSection:s];
-            [picker.collectionView selectItemAtIndexPath:index animated:NO
-                scrollPosition:UICollectionViewScrollPositionCenteredVertically];
-            [picker.collectionView.delegate collectionView:picker.collectionView didSelectItemAtIndexPath:index];
-          }
-        }
-      }
+      [picker performSelector:NSSelectorFromString(@"chooseTemplate:") withObject:request[@"id"]];
     }
     if ([action isEqual:@"save"]) {
       operationResult = @"pending";

@@ -18,9 +18,7 @@ static const double kMinimumVisible = 0.5;
 
 @implementation GHOSTIOSCompileIndicator {
   UIVisualEffectView *_pill;
-  UIProgressView *_progress;
-  UILabel *_count;
-  UIView *_swiftContent;
+  UIView *_content;
   NSTimer *_timer;
   BOOL _shown;
   CFTimeInterval _shownAt;
@@ -42,39 +40,17 @@ static const double kMinimumVisible = 0.5;
     _pill.isAccessibilityElement = YES;
     _pill.accessibilityLabel = @"Compiling Shaders";
 
-    UILabel *title = [[[UILabel alloc] init] autorelease];
-    title.text = @"Compiling Shaders";
-    title.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-    title.textColor = UIColor.secondaryLabelColor;
-
-    _progress = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
-    [_progress.widthAnchor constraintEqualToConstant:88].active = YES;
-
-    _count = [[UILabel alloc] init];
-    _count.font = [UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightRegular];
-    _count.textColor = UIColor.tertiaryLabelColor;
-
-    UIView *row = [[[UIStackView alloc] initWithArrangedSubviews:@[title, _progress, _count]]
-        autorelease];
-    ((UIStackView *)row).alignment = UIStackViewAlignmentCenter;
-    ((UIStackView *)row).spacing = 10;
-    Class swift_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
-                            nil :
-                            NSClassFromString(@"GHOSTIOSSwiftCompileProgressView");
-    if (swift_class) {
-      _swiftContent = [[swift_class alloc] initWithFrame:CGRectZero];
-      row = _swiftContent;
-    }
-    row.translatesAutoresizingMaskIntoConstraints = NO;
-    [_pill.contentView addSubview:row];
+    Class content_class = NSClassFromString(@"GHOSTIOSSwiftCompileProgressView");
+    NSCAssert(content_class, @"The SwiftUI compile progress view is missing");
+    _content = [[content_class alloc] initWithFrame:CGRectZero];
+    _content.translatesAutoresizingMaskIntoConstraints = NO;
+    [_pill.contentView addSubview:_content];
     [overlay addSubview:_pill];
     [NSLayoutConstraint activateConstraints:@[
-      [row.leadingAnchor constraintEqualToAnchor:_pill.contentView.leadingAnchor
-                                          constant:_swiftContent ? 0 : 14],
-      [row.trailingAnchor constraintEqualToAnchor:_pill.contentView.trailingAnchor
-                                           constant:_swiftContent ? 0 : -14],
-      [row.heightAnchor constraintEqualToAnchor:_pill.contentView.heightAnchor],
-      [row.centerYAnchor constraintEqualToAnchor:_pill.contentView.centerYAnchor],
+      [_content.leadingAnchor constraintEqualToAnchor:_pill.contentView.leadingAnchor],
+      [_content.trailingAnchor constraintEqualToAnchor:_pill.contentView.trailingAnchor],
+      [_content.heightAnchor constraintEqualToAnchor:_pill.contentView.heightAnchor],
+      [_content.centerYAnchor constraintEqualToAnchor:_pill.contentView.centerYAnchor],
       [_pill.heightAnchor constraintEqualToConstant:32],
       [_pill.centerXAnchor constraintEqualToAnchor:overlay.centerXAnchor],
       [_pill.topAnchor constraintEqualToAnchor:anchor ? anchor.bottomAnchor :
@@ -97,9 +73,7 @@ static const double kMinimumVisible = 0.5;
   [self stop];
   [_pill removeFromSuperview];
   [_pill release];
-  [_progress release];
-  [_count release];
-  [_swiftContent release];
+  [_content release];
   [super dealloc];
 }
 
@@ -117,10 +91,7 @@ static const double kMinimumVisible = 0.5;
   const BOOL compiling = GHOST_ios_shader_compilation(&finished, &total);
   const BOOL held_up = GHOST_ios_engine_busy_seconds() > kShowAfter;
   if (compiling && held_up) {
-    const float fraction = total > 0 ? float(finished) / float(total) : 0.0f;
-    [_progress setProgress:fraction animated:_shown && fraction >= _progress.progress];
-    _count.text = [NSString stringWithFormat:@"%d/%d", finished, total];
-    [_swiftContent setFinished:finished total:total];
+    [_content setFinished:finished total:total];
     _pill.accessibilityValue = [NSString stringWithFormat:@"%d of %d", finished, total];
     [self setShown:YES];
   }

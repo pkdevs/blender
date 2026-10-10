@@ -42,6 +42,48 @@ static void capture(NSString *name)
                       stringByAppendingPathComponent:name]
        atomically:YES];
 }
+/* Stands in for the SwiftUI options sheet (`intern/swift/DialogSheet.swift`), which this harness
+ * does not build: it keeps what the dialog passes and chooses like the sheet's buttons. */
+@interface GHOSTIOSSwiftDialogSheet : UIViewController
+@property(nonatomic, copy) NSArray<NSString *> *toggles;
+@property(nonatomic, copy) NSArray<NSNumber *> *selected;
+@property(nonatomic, copy) NSArray<NSString *> *actions;
+@property(nonatomic, copy) NSArray<NSNumber *> *roles;
+@property(nonatomic) NSInteger preferred;
+@property(nonatomic, copy) void (^choose)(NSInteger action, uint64_t toggles);
+@end
+@implementation GHOSTIOSSwiftDialogSheet
+- (instancetype)initWithTitle:(NSString *)title
+                      message:(NSString *)message
+                      toggles:(NSArray<NSString *> *)toggles
+                     selected:(NSArray<NSNumber *> *)selected
+                      actions:(NSArray<NSString *> *)actions
+                        roles:(NSArray<NSNumber *> *)roles
+                    preferred:(NSInteger)preferred
+                       choose:(void (^)(NSInteger action, uint64_t toggles))choose
+{
+  if ((self = [super initWithNibName:nil bundle:nil])) {
+    self.title = title;
+    self.toggles = toggles;
+    self.selected = selected;
+    self.actions = actions;
+    self.roles = roles;
+    self.preferred = preferred;
+    self.choose = choose;
+  }
+  return self;
+}
+- (void)dealloc
+{
+  [_toggles release];
+  [_selected release];
+  [_actions release];
+  [_roles release];
+  [_choose release];
+  [super dealloc];
+}
+@end
+
 static void testSheet()
 {
   GHOST_IOSDialog model;
@@ -57,16 +99,17 @@ static void testSheet()
       ^BOOL {
         return !testWindow.rootViewController.presentedViewController.isBeingPresented &&
                [testWindow.rootViewController.presentedViewController
-                   isKindOfClass:GHOSTIOSDialogController.class];
+                   isKindOfClass:GHOSTIOSSwiftDialogSheet.class];
       },
       ^{
-        GHOSTIOSDialogRequest *request = dialog_queue.firstObject;
-        [request.controller loadViewIfNeeded];
-        assert(request.switches.count == 2 && request.switches[0].on && !request.switches[1].on);
-        request.switches[0].on = NO;
-        request.switches[1].on = YES;
-        capture(@"native-save-warning.png");
-        [request finish:2];
+        GHOSTIOSSwiftDialogSheet *sheet = (id)testWindow.rootViewController.presentedViewController;
+        assert([sheet.title isEqual:@"Save changes before closing?"]);
+        assert(([sheet.toggles isEqual:@[@"Save 2 modified images", @"Save modified asset catalogs"]]));
+        assert(([sheet.selected isEqual:@[@YES, @NO]]));
+        assert(([sheet.actions isEqual:@[@"Cancel", @"Don't Save", @"Save"]]));
+        assert(([sheet.roles isEqual:@[@1, @2, @0]]) && sheet.preferred == 2);
+        /* The sheet's options were flipped: only the second is chosen. */
+        sheet.choose(2, 2);
         waitUntil(
             ^BOOL {
               return calls == 2;
@@ -102,7 +145,7 @@ static void testSheet()
                               ^{
                                 assert(choice == -1 && dialog_queue.count == 0);
                                 printf(
-                                    "PASS: native alerts, destructive styles, switches, "
+                                    "PASS: native alerts, destructive styles, options, "
                                     "dismissal, deduplication and lifetime\n");
                                 fflush(stdout);
                                 exit(0);

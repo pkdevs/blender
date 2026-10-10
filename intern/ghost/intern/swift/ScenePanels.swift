@@ -4,7 +4,7 @@
 
 /** \file
  * The Properties and Outliner panels, viewport shading and tool settings, in SwiftUI. This class
- * answers the same messages as `GHOSTIOSScenePanels`; the view controller finds it by name, see
+ * answers the `GHOSTIOSScenePanels` protocol's messages; the view controller finds it by name, see
  * `GHOST_WindowIOS.mm`. UIKit keeps placing the panels and the bar items; SwiftUI draws them.
  */
 

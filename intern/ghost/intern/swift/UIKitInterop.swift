@@ -200,8 +200,7 @@ struct ScrubGesture: UIGestureRecognizerRepresentable {
   }
 }
 
-/** Drag sensitivity: dragging further up or down while scrubbing makes changes coarser or finer,
- * as `GHOSTIOSNumberSensitivity`. */
+/** Drag sensitivity: dragging further up or down while scrubbing makes changes coarser or finer. */
 func scrubSensitivity(_ vertical: Double) -> Double {
   exp2(min(4.0, max(-4.0, -vertical / 80.0)))
 }

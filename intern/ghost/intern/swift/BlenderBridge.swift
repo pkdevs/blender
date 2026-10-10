@@ -162,7 +162,7 @@ extension View {
   }
 }
 
-/** Fills as UIKit draws them on the panels' glass, measured from the UIKit panels: on glass,
+/** Fills as UIKit draws them on the panels' glass, measured from UIKit-drawn panels: on glass,
  * UIKit's grouped and fill colors come out lighter in dark mode and darker in light mode than
  * the same colors drawn by SwiftUI. */
 enum PanelStyle {

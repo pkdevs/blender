@@ -5,8 +5,8 @@
 /** \file
  * The asset pane along the bottom of the viewport: the assets Blender publishes, by type and
  * catalog, searchable. Tapping one adds it; dragging one into the viewport runs Blender's own asset
- * drag and drop through the engine inbox. Answers the same messages as `GHOSTIOSAssets`; the view
- * controller finds it by name, see `GHOST_WindowIOS.mm`.
+ * drag and drop through the engine inbox. Answers the `GHOSTIOSAssets` protocol's messages; the
+ * view controller finds it by name, see `GHOST_WindowIOS.mm`.
  */
 
 import SwiftUI

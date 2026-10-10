@@ -5,7 +5,7 @@
 /** \file
  * The timeline: a floating playback strip with a scrubber whose glass knob shows and sets the
  * frame. Expanded, the scrubber grows a key track where keys are selected by tapping or boxing
- * them and dragged together to other frames. Answers the same messages as `GHOSTIOSTimeline`;
+ * them and dragged together to other frames. Answers the `GHOSTIOSTimeline` protocol's messages;
  * the view controller finds it by name, see `GHOST_WindowIOS.mm`.
  */
 

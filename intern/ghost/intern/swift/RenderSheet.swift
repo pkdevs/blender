@@ -6,9 +6,10 @@
  * Renders the image or animation with a native sheet instead of Blender's render window: live
  * progress, then the result, kept with every earlier render in a film strip to look back at and
  * share. Animations become a video. A render goes on in the background as a continued processing
- * task, with the system's progress, so leaving the app doesn't end it. Answers the same messages
- * as `GHOSTIOSRender`; the view controller finds it by name, see `GHOST_WindowIOS.mm`. Blender
- * renders through `bl_ui.native_render`; its state arrives in the toolbar snapshot.
+ * task, with the system's progress, so leaving the app doesn't end it. Answers the
+ * `GHOSTIOSRender` protocol's messages; the view controller finds it by name, see
+ * `GHOST_WindowIOS.mm`. Blender renders through `bl_ui.native_render`; its state arrives in the
+ * toolbar snapshot.
  */
 
 import AVFoundation

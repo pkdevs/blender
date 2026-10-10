@@ -97,8 +97,7 @@ class IPadPencilTest(unittest.TestCase):
                 "-I", str(ROOT / "intern/ghost/intern"),
                 "-isysroot", sdk.stdout.strip(), "-target", f"{os.uname().machine}-apple-ios26.0-simulator",
                 "-framework", "UIKit", "-framework", "Foundation", "-framework", "CoreGraphics",
-                "-framework", "QuartzCore", str(ROOT / "intern/ghost/intern/GHOST_IOSPencilMenu.mm"),
-                str(source_file), "-o", str(executable),
+                "-framework", "QuartzCore", str(source_file), "-o", str(executable),
             ], capture_output=True, text=True)
             self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
             result = subprocess.run(["xcrun", "simctl", "spawn", device, str(executable)],

@@ -224,8 +224,8 @@ operator undo-recording path.
 
 iOS uses UIKit alerts for operator confirmations (including Delete and Revert),
 unsaved-file choices, overwrite warnings, report popups and general alerts.
-Warnings with options use a native scrolling sheet with switches, including
-modified images, asset catalogs and the blocked-script security prompt. Script
+Warnings with options use a SwiftUI sheet with toggles, including modified
+images, asset catalogs and the blocked-script security prompt. Script
 execution remains opt-in; dismissing the security sheet does not grant permission.
 Complex operator property forms are separate from confirmations and remain in
 Blender's UI.

@@ -25,14 +25,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SWIFT_SOURCES = sorted((ROOT / "intern/ghost/intern/swift").glob("*.swift"))
-BRIDGE = ROOT / "release/ios/swiftui_panels_harness/HarnessBridge.h"
-# The UIKit panels, built in for comparison (`-uikit YES`).
-UIKIT_SOURCES = [ROOT / "intern/ghost/intern/GHOST_IOSScenePanels.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSNumericInput.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSRedoStrip.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSTimeline.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSAssets.mm",
-                 ROOT / "intern/ghost/intern/GHOST_IOSPencilMenu.mm"]
+BRIDGE = ROOT / "intern/ghost/intern/GHOST_IOSSwiftBridge.h"
 HARNESS = ROOT / "release/ios/swiftui_panels_harness/Harness.swift"
 BUNDLE_ID = "org.blender.swiftui-panels-harness"
 
@@ -350,17 +343,10 @@ def simctl(*args, **kwargs):
 def build(app):
     sdk = subprocess.check_output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"], text=True).strip()
     app.mkdir(parents=True)
-    objects = []
-    for source in UIKIT_SOURCES:
-        output = app.parent / (source.stem + ".o")
-        subprocess.run(["xcrun", "clang++", "-x", "objective-c++", "-std=c++17", "-fno-objc-arc",
-                        "-target", "arm64-apple-ios26.0-simulator", "-isysroot", sdk,
-                        "-c", str(source), "-o", str(output)], check=True)
-        objects.append(str(output))
     subprocess.run(["xcrun", "swiftc", "-target", "arm64-apple-ios26.0-simulator", "-sdk", sdk,
                     "-module-name", "Harness", "-parse-as-library", "-swift-version", "5", "-Onone",
                     "-import-objc-header", str(BRIDGE), "-o", str(app / "Harness"),
-                    *map(str, SWIFT_SOURCES), str(HARNESS), *objects, "-lc++"], check=True)
+                    *map(str, SWIFT_SOURCES), str(HARNESS)], check=True)
     # Blender's icons: `BlenderIcons.xcassets` from an iOS build's `source/creator` folder.
     catalog = Path(os.environ.get("IOS_TEST_ICON_CATALOG", ""))
     if catalog.name and catalog.exists():

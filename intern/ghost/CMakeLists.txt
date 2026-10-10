@@ -173,24 +173,16 @@ elseif(APPLE AND NOT WITH_GHOST_X11)
         intern/GHOST_SystemIOS.mm
         intern/GHOST_WindowIOS.mm
         intern/GHOST_IOSPencilMenu.hh
-        intern/GHOST_IOSPencilMenu.mm
         intern/GHOST_IOSIcons.hh
         intern/GHOST_IOSScenePanels.hh
-        intern/GHOST_IOSScenePanels.mm
         intern/GHOST_IOSRedoStrip.hh
-        intern/GHOST_IOSRedoStrip.mm
-        intern/GHOST_IOSNumericInput.hh
-        intern/GHOST_IOSNumericInput.mm
         intern/GHOST_IOSTimeline.hh
-        intern/GHOST_IOSTimeline.mm
         intern/GHOST_IOSAssets.hh
-        intern/GHOST_IOSAssets.mm
         intern/GHOST_IOSFileDrop.hh
         intern/GHOST_IOSFileDrop.mm
         intern/GHOST_IOSCompileIndicator.hh
         intern/GHOST_IOSCompileIndicator.mm
         intern/GHOST_IOSRender.hh
-        intern/GHOST_IOSRender.mm
         GHOST_IOSDocumentPicker.hh
         intern/GHOST_IOSDocumentPicker.mm
         intern/GHOST_IOSDocument.hh

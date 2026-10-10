@@ -63,7 +63,7 @@ final class FakeEngine {
   var shadingShown = false
   var ack: UInt64 = 0
   var hierarchy: [JSON] = []
-  weak var panels: HarnessPanels?
+  weak var panels: SwiftScenePanels?
   var redoStrip: NSObject?
   var timeline: NSObject?
   var assets: NSObject?
@@ -315,53 +315,6 @@ final class FakeEngine {
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Panels under test
- * \{ */
-
-/** What the view controller asks of its panels, answered by both implementations. */
-@MainActor
-protocol HarnessPanels: AnyObject {
-  var inspectorButton: UIBarButtonItem { get }
-  var hierarchyButton: UIBarButtonItem { get }
-  var menuProvider: ((NSDictionary) -> UIMenu?)? { get set }
-  func updateSnapshot(_ snapshot: Any?)
-  func layout(in rect: CGRect)
-  func presentShading(from: UIBarButtonItem, controller: UIViewController)
-  func updateToolSettings(_ settings: Any?, acknowledgement: Any?) -> UIBarButtonItemGroup?
-}
-
-extension SwiftScenePanels: HarnessPanels {}
-
-/** The UIKit panels, forwarded. */
-@MainActor
-final class UIKitPanels: HarnessPanels {
-  let panels: GHOSTIOSScenePanels
-
-  init(overlay: UIView) {
-    panels = GHOSTIOSScenePanels(overlay: overlay) { name in BlenderIcon.image(name ?? "") }
-  }
-
-  var inspectorButton: UIBarButtonItem { panels.inspectorButton }
-  var hierarchyButton: UIBarButtonItem { panels.hierarchyButton }
-  var menuProvider: ((NSDictionary) -> UIMenu?)? {
-    didSet {
-      let provider = menuProvider
-      panels.menuProvider = { property in provider?((property ?? [:]) as NSDictionary) }
-    }
-  }
-  func updateSnapshot(_ snapshot: Any?) { panels.updateSnapshot(snapshot as? [AnyHashable: Any] ?? [:]) }
-  func layout(in rect: CGRect) { panels.layout(in: rect) }
-  func presentShading(from button: UIBarButtonItem, controller: UIViewController) {
-    panels.presentShading(from: button, controller: controller)
-  }
-  func updateToolSettings(_ settings: Any?, acknowledgement: Any?) -> UIBarButtonItemGroup? {
-    panels.updateToolSettings(settings as? [AnyHashable: Any] ?? [:], acknowledgement: acknowledgement as? NSNumber ?? 0)
-  }
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name App
  * \{ */
 
@@ -386,7 +339,7 @@ final class ViewportView: UIView {
 /** Blender's context menu for the Pencil menu, as the view controller resolves it. */
 final class PencilItems: NSObject, GHOSTIOSPencilMenuDelegate {
   @objc(pencilMenu:requestItemsForRoute:atPoint:completion:)
-  func pencilMenu(_ menu: GHOSTIOSPencilMenu!, requestItemsForRoute route: [AnyHashable: Any]!, at point: CGPoint,
+  func pencilMenu(_ menu: (UIView & GHOSTIOSPencilMenu)!, requestItemsForRoute route: [AnyHashable: Any]!, at point: CGPoint,
                   completion: (([[AnyHashable: Any]]?) -> Void)!)
   {
     let names = ["Shade Smooth", "Shade Flat", "Convert To", "Set Origin", "Duplicate", "Join", "Apply",
@@ -403,14 +356,14 @@ final class PencilItems: NSObject, GHOSTIOSPencilMenuDelegate {
   }
 
   @objc(pencilMenu:didChooseItem:atPoint:)
-  func pencilMenu(_ menu: GHOSTIOSPencilMenu!, didChooseItem item: [AnyHashable: Any]!, at point: CGPoint) {}
+  func pencilMenu(_ menu: (UIView & GHOSTIOSPencilMenu)!, didChooseItem item: [AnyHashable: Any]!, at point: CGPoint) {}
 }
 
 final class HarnessController: UIViewController {
   let pencilItems = PencilItems()
   var renderSheet: SwiftRender?
   var pencilMenu: UIView?
-  var panels: HarnessPanels!
+  var panels: SwiftScenePanels!
   var redoStrip: NSObject?
   var timeline: NSObject?
   var assets: NSObject?
@@ -429,12 +382,7 @@ final class HarnessController: UIViewController {
     view.addSubview(overlay)
     let engine = FakeEngine.shared
     engine.load()
-    if UserDefaults.standard.bool(forKey: "uikit") {
-      panels = UIKitPanels(overlay: overlay)
-    }
-    else {
-      panels = SwiftScenePanels(overlay: overlay) { name in BlenderIcon.image(name) }
-    }
+    panels = SwiftScenePanels(overlay: overlay) { name in BlenderIcon.image(name) }
     panels.menuProvider = { property in
       let title = property["label"] as? String ?? ""
       return UIMenu(title: title, children: [
@@ -444,17 +392,13 @@ final class HarnessController: UIViewController {
       ])
     }
     engine.panels = panels
-    let redo: NSObject = UserDefaults.standard.bool(forKey: "uikit") ?
-      GHOSTIOSRedoStrip(overlay: overlay, icon: { BlenderIcon.image($0 ?? "") }) :
-      SwiftRedoStrip(overlay: overlay, icon: { BlenderIcon.image($0) })
+    let redo = SwiftRedoStrip(overlay: overlay, icon: { BlenderIcon.image($0) })
     redoStrip = redo
     engine.redoStrip = redo
-    let frames: NSObject = UserDefaults.standard.bool(forKey: "uikit") ?
-      GHOSTIOSTimeline(overlay: overlay) : SwiftTimeline(overlay: overlay)
+    let frames = SwiftTimeline(overlay: overlay)
     timeline = frames
     engine.timeline = frames
-    let shelf: NSObject = UserDefaults.standard.bool(forKey: "uikit") ?
-      GHOSTIOSAssets(overlay: overlay) : SwiftAssets(overlay: overlay)
+    let shelf = SwiftAssets(overlay: overlay)
     assets = shelf
     engine.assets = shelf
     if let pill = redo.value(forKey: "collapsedButton") as? UIButton {
@@ -520,37 +464,16 @@ final class HarnessController: UIViewController {
         picker.modalPresentationStyle = .formSheet
         present(picker, animated: false)
       case "pie":
-        let uikit = UserDefaults.standard.bool(forKey: "uikit")
         let specs = [("Frame All", "rectangle.expand.vertical"), ("Frame Selected", "viewfinder"),
                      ("Camera", "camera"), ("Perspective", "cube.transparent"), ("Local View", "scope"),
                      ("Front", "arrow.up.square"), ("Right", "arrow.right.square"), ("Top", "arrow.down.to.line.square")]
         for (index, spec) in specs.enumerated() {
           let image = UIImage(systemName: spec.1)
-          let button: UIButton
-          if uikit {
-            button = UIButton(type: .system)
-            button.tintColor = .label
-            button.configurationUpdateHandler = { updated in
-              var configuration: UIButton.Configuration = updated.isSelected ? .prominentGlass() : .glass()
-              configuration.baseForegroundColor = updated.isSelected ? .white : .label
-              configuration.baseBackgroundColor = updated.isSelected ? .systemBlue : nil
-              configuration.title = spec.0
-              configuration.image = image
-              configuration.imagePlacement = .leading
-              configuration.imagePadding = 7
-              configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
-              configuration.cornerStyle = .capsule
-              updated.configuration = configuration
-            }
-          }
-          else {
-            let swift = GlassButton(frame: .zero)
-            swift.buttonTitle = spec.0
-            swift.buttonImage = image
-            swift.imagePadding = 7
-            swift.buttonInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
-            button = swift
-          }
+          let button = GlassButton(frame: .zero)
+          button.buttonTitle = spec.0
+          button.buttonImage = image
+          button.imagePadding = 7
+          button.buttonInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
           button.overrideUserInterfaceStyle = .dark
           button.isSelected = index == 2
           let width = min(180, button.sizeThatFits(CGSize(width: 180, height: 44)).width)
@@ -559,14 +482,11 @@ final class HarnessController: UIViewController {
           view.addSubview(button)
         }
       case "pencil":
-        let menu: UIView = UserDefaults.standard.bool(forKey: "uikit") ?
-          GHOSTIOSPencilMenu(frame: view.bounds) : SwiftPencilMenu(frame: view.bounds)
-        if let menu = menu as? GHOSTIOSPencilMenu { menu.delegate = pencilItems }
-        if let menu = menu as? SwiftPencilMenu { menu.delegate = pencilItems }
+        let menu = SwiftPencilMenu(frame: view.bounds)
+        menu.delegate = pencilItems
         view.addSubview(menu)
         pencilMenu = menu
-        menu.perform(NSSelectorFromString("toggleWithPencilLocation:"),
-                     with: NSValue(cgPoint: CGPoint(x: view.bounds.midX, y: view.bounds.midY)))
+        menu.toggle(withPencilLocation: NSValue(cgPoint: CGPoint(x: view.bounds.midX, y: view.bounds.midY)))
       case "dialog":
         let sheet = DialogSheetController(
           title: "Save changes before closing?", message: "Your changes will be lost if you don't save them.",
@@ -602,12 +522,9 @@ final class HarnessController: UIViewController {
     panels.layout(in: view.bounds.inset(by: view.safeAreaInsets))
     let lane = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 40, dy: 12)
     let tray = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 120, dy: 16)
-    if let pane = assets as? SwiftAssets { pane.layout(in: tray) }
-    else if let pane = assets as? GHOSTIOSAssets { pane.layout(in: tray) }
-    if let strip = timeline as? SwiftTimeline { strip.layout(in: tray) }
-    else if let strip = timeline as? GHOSTIOSTimeline { strip.layout(in: tray) }
-    if let strip = redoStrip as? SwiftRedoStrip { strip.layout(in: lane) }
-    else if let strip = redoStrip as? GHOSTIOSRedoStrip { strip.layout(in: lane) }
+    (assets as? SwiftAssets)?.layout(in: tray)
+    (timeline as? SwiftTimeline)?.layout(in: tray)
+    (redoStrip as? SwiftRedoStrip)?.layout(in: lane)
   }
 }
 

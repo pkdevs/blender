@@ -59,67 +59,17 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
   NSArray *arguments = NSProcessInfo.processInfo.arguments;
   self.window.overrideUserInterfaceStyle = [arguments containsObject:@"--light"] ?
       UIUserInterfaceStyleLight : UIUserInterfaceStyleDark;
-  UICollectionViewController *picker = [[[NSClassFromString(@"GHOSTIOSTemplatePicker") alloc] init] autorelease];
-  UINavigationController *navigation = [[[UINavigationController alloc] initWithRootViewController:picker] autorelease];
-  const BOOL sheet = [arguments containsObject:@"--sheet"];
-  self.window.rootViewController = sheet ? [[[UIViewController alloc] init] autorelease] : navigation;
+  /* The chooser itself is SwiftUI, covered by `test_swiftui_panels.py`; this checks the catalog
+   * and the launcher's flows around it. */
+  self.window.rootViewController = [[[UIViewController alloc] init] autorelease];
   [self.window makeKeyAndVisible];
-  if ([arguments containsObject:@"--large-text"]) {
-    navigation.traitOverrides.preferredContentSizeCategory = UIContentSizeCategoryAccessibilityExtraExtraExtraLarge;
-  }
-  if (sheet) {
-    navigation.modalPresentationStyle = UIModalPresentationFormSheet;
-    navigation.preferredContentSize = picker.preferredContentSize;
-    [self.window.rootViewController presentViewController:navigation animated:NO completion:nil];
-  }
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
     NSArray *entries = GHOST_ios_document_templates();
     NSCAssert(entries.count == 6, @"All validated templates are available");
-    NSCAssert([picker.collectionView numberOfItemsInSection:0] == 6, @"Native chooser lists each template");
-    NSCAssert(picker.navigationItem.rightBarButtonItem == nil,
-              @"Templates open directly, without a separate Create button");
-    UISearchController *search = picker.navigationItem.searchController;
-    NSCAssert(search != nil, @"The chooser uses the system search controller");
-    search.searchBar.text = @"sculpt";
-    [picker updateSearchResultsForSearchController:search];
-    NSCAssert([picker.collectionView numberOfItemsInSection:0] == 1, @"Search filters template names");
-    search.searchBar.text = @"No matching template";
-    [picker updateSearchResultsForSearchController:search];
-    NSCAssert(picker.collectionView.numberOfSections == 0 && picker.contentUnavailableConfiguration &&
-              !picker.navigationItem.rightBarButtonItem.enabled, @"Empty searches use the native unavailable state");
-    search.searchBar.text = @"";
-    [picker updateSearchResultsForSearchController:search];
     NSDictionary *character = entries.lastObject;
     NSCAssert([character[@"id"] isEqual:@"character-animation"] &&
               [character[@"attribution"][@"license"] isEqual:@"CC-BY-4.0"],
               @"The character catalog includes its asset license");
-    NSIndexPath *characterIndex = [NSIndexPath indexPathForItem:5 inSection:0];
-    [picker.collectionView scrollToItemAtIndexPath:characterIndex
-        atScrollPosition:UICollectionViewScrollPositionCenteredVertically animated:NO];
-    [picker.collectionView layoutIfNeeded];
-    UICollectionViewCell *characterCell = [picker.collectionView cellForItemAtIndexPath:characterIndex];
-    UIButton *credit = [characterCell valueForKey:@"credit"];
-    NSCAssert(!credit.hidden && [credit.currentTitle containsString:@"Blender Studio"] &&
-              [credit.currentTitle containsString:@"CC-BY-4.0"], @"Credit is visible in the chooser");
-    [UIView setAnimationsEnabled:NO];
-    [credit sendActionsForControlEvents:UIControlEventTouchUpInside];
-    [navigation.view layoutIfNeeded];
-    UIViewController *details = navigation.topViewController;
-    [details loadViewIfNeeded];
-    NSCAssert([details.title isEqual:@"Asset Credits"], @"Credits open without creating a document");
-    UITextView *creditText = details.view.subviews.firstObject;
-    NSCAssert([creditText isKindOfClass:UITextView.class] &&
-              [creditText.text containsString:character[@"attribution"][@"changes"]],
-              @"The credit view identifies modifications");
-    for (NSString *key in @[@"sourceURL", @"licenseURL"]) {
-      NSRange range = [creditText.text rangeOfString:character[@"attribution"][key]];
-      NSCAssert(range.location != NSNotFound &&
-                [creditText.attributedText attribute:NSLinkAttributeName atIndex:range.location effectiveRange:nil],
-                @"Source and license are actionable links");
-    }
-    [navigation popViewControllerAnimated:NO];
-    [navigation.view layoutIfNeeded];
-    [UIView setAnimationsEnabled:YES];
     NSCAssert(GHOST_ios_template_manage(@"character-animation", @"duplicate", nil),
               @"Attributed templates can be duplicated");
     NSDictionary *characterCopy = GHOST_ios_document_templates().lastObject;
@@ -135,15 +85,6 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
     NSCAssert(!GHOST_ios_template_manage(@"general", @"delete", nil), @"Bundled templates are read-only");
     NSCAssert(GHOST_ios_template_manage(copyID, @"delete", nil) && GHOST_ios_document_templates().count == 6,
               @"Deleting a personal template preserves bundled templates");
-    NSObject *cancelled = [[[NSClassFromString(@"GHOSTIOSTemplatePicker") alloc] init] autorelease];
-    __block NSUInteger cancellations = 0;
-    cancelled.completion = ^(NSString *identifier) {
-      NSCAssert(identifier == nil, @"Cancel does not create a document");
-      cancellations++;
-    };
-    [cancelled finish:nil];
-    [cancelled finish:nil];
-    NSCAssert(cancellations == 1, @"Cancellation completes only once");
     Class launcherClass = NSClassFromString(@"GHOSTIOSLauncherController");
     Class spyClass = objc_allocateClassPair(launcherClass, "TemplatesLauncherSpy", 0);
     SEL choose = NSSelectorFromString(@"chooseTemplate:");
@@ -157,13 +98,6 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
     }];
     NSCAssert(template_requests == 1 && cancelledImport,
               @"The browser's default New action opens the chooser and cancellation creates nothing");
-    __block NSUInteger completions = 0;
-    picker.completion = ^(NSString *identifier) {
-      completions++;
-      NSCAssert([identifier isEqual:@"sculpt"], @"Create uses the selected stable template ID");
-    };
-    NSIndexPath *index = [NSIndexPath indexPathForItem:1 inSection:0];
-    NSCAssert(completions == 0, @"Browsing templates does not create a document");
     GHOST_ios_document_create(@"../sculpt", ^(NSURL *url) {
       NSCAssert(url == nil, @"Arbitrary paths cannot be used as templates");
     });
@@ -175,14 +109,8 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
         [self.window drawViewHierarchyInRect:self.window.bounds afterScreenUpdates:YES];
       }];
       [UIImagePNGRepresentation(image) writeToFile:path atomically:YES];
-      [picker.collectionView selectItemAtIndexPath:index animated:NO scrollPosition:UICollectionViewScrollPositionNone];
-      [picker.collectionView.delegate collectionView:picker.collectionView didSelectItemAtIndexPath:index];
-      [picker.collectionView.delegate collectionView:picker.collectionView didSelectItemAtIndexPath:index];
-      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        NSCAssert(completions == 1, @"Tapping a template creates exactly one document, even after repeated taps");
-        NSLog(@"PASS: native templates");
-        exit(0);
-      });
+      NSLog(@"PASS: native templates");
+      exit(0);
     });
   });
 }

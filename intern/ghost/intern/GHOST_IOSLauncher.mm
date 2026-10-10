@@ -258,418 +258,12 @@ static NSArray<NSDictionary *> *launcherTemplates()
   return GHOST_ios_document_templates();
 }
 
-/** A real preview of the starting scene, with a native selection outline. */
-@interface GHOSTIOSTemplateCell : UICollectionViewCell
-@property(nonatomic, readonly) UIImageView *symbol;
-@property(nonatomic, readonly) UILabel *name;
-@property(nonatomic, readonly) UIButton *credit;
-@property(nonatomic, copy) NSString *templateIdentifier;
-@end
-
-@implementation GHOSTIOSTemplateCell
-
-- (instancetype)initWithFrame:(CGRect)frame
-{
-  if ((self = [super initWithFrame:frame])) {
-    _symbol = [[UIImageView alloc] init];
-    _symbol.contentMode = UIViewContentModeScaleAspectFit;
-    _symbol.layer.cornerRadius = 6;
-    _symbol.clipsToBounds = YES;
-    _name = [[UILabel alloc] init];
-    _name.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
-    _name.adjustsFontForContentSizeCategory = YES;
-    _name.textAlignment = NSTextAlignmentCenter;
-    _name.numberOfLines = 0;
-    _credit = [[UIButton buttonWithType:UIButtonTypeSystem] retain];
-    _credit.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
-    _credit.titleLabel.adjustsFontForContentSizeCategory = YES;
-    _credit.titleLabel.numberOfLines = 0;
-    _credit.titleLabel.textAlignment = NSTextAlignmentCenter;
-    _credit.accessibilityIdentifier = @"blender.template.attribution";
-    UIStackView *stack = [[[UIStackView alloc] initWithArrangedSubviews:@[_symbol, _name, _credit]] autorelease];
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = 12;
-    stack.alignment = UIStackViewAlignmentFill;
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.contentView addSubview:stack];
-    [NSLayoutConstraint activateConstraints:@[
-      [stack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:10],
-      [stack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-10],
-      [stack.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:10],
-      [stack.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-10],
-      [_symbol.heightAnchor constraintEqualToAnchor:_symbol.widthAnchor multiplier:420.0 / 640.0],
-    ]];
-    self.isAccessibilityElement = YES;
-    self.accessibilityTraits = UIAccessibilityTraitButton;
-    [self addInteraction:[[[UIPointerInteraction alloc] initWithDelegate:nil] autorelease]];
-  }
-  return self;
-}
-
-- (void)dealloc
-{
-  [_symbol release];
-  [_name release];
-  [_credit release];
-  [_templateIdentifier release];
-  [super dealloc];
-}
-
-- (void)updateConfigurationUsingState:(UICellConfigurationState *)state
-{
-  UIBackgroundConfiguration *background = [UIBackgroundConfiguration listCellConfiguration];
-  background.cornerRadius = 8;
-  background.strokeColor = state.isSelected ? self.tintColor : UIColor.clearColor;
-  background.strokeWidth = state.isSelected ? 2 : 0;
-  background.backgroundColor = state.isHighlighted || state.isSelected ?
-                                   UIColor.tertiarySystemFillColor :
-                                   UIColor.secondarySystemBackgroundColor;
-  self.backgroundConfiguration = background;
-  _name.textColor = state.isSelected ? self.tintColor : UIColor.labelColor;
-  self.accessibilityTraits = UIAccessibilityTraitButton | (state.isSelected ? UIAccessibilityTraitSelected : 0);
-}
-
-- (void)tintColorDidChange
-{
-  [super tintColorDidChange];
-  [self setNeedsUpdateConfiguration];
-}
-
-@end
-
-/** Attribution stays available without leaving the native chooser or opening a document. */
-@interface GHOSTIOSTemplateCredits : UIViewController
-@property(nonatomic, copy) NSDictionary *credit;
-@end
-
-@implementation GHOSTIOSTemplateCredits
-- (void)dealloc
-{
-  [_credit release];
-  [super dealloc];
-}
-- (void)viewDidLoad
-{
-  [super viewDidLoad];
-  self.title = @"Asset Credits";
-  self.view.backgroundColor = UIColor.systemBackgroundColor;
-  UITextView *text = [[[UITextView alloc] init] autorelease];
-  text.editable = NO;
-  text.adjustsFontForContentSizeCategory = YES;
-  text.backgroundColor = UIColor.clearColor;
-  text.textContainerInset = UIEdgeInsetsMake(20, 20, 20, 20);
-  NSString *body = [NSString stringWithFormat:@"%@\n%@\n\n%@\n\n%@\n\n%@\n\nAdaptation does not imply endorsement by the original creators.",
-      _credit[@"title"], _credit[@"author"], _credit[@"licenseURL"],
-      _credit[@"sourceURL"], _credit[@"changes"]];
-  NSMutableAttributedString *content = [[[NSMutableAttributedString alloc] initWithString:body
-      attributes:@{NSFontAttributeName: [UIFont preferredFontForTextStyle:UIFontTextStyleBody],
-                   NSForegroundColorAttributeName: UIColor.labelColor}] autorelease];
-  for (NSString *key in @[@"licenseURL", @"sourceURL"]) {
-    NSString *link = _credit[key];
-    NSURL *url = [NSURL URLWithString:link];
-    if ([url.scheme isEqual:@"https"]) {
-      [content addAttribute:NSLinkAttributeName value:url range:[body rangeOfString:link]];
-    }
-  }
-  text.attributedText = content;
-  text.translatesAutoresizingMaskIntoConstraints = NO;
-  [self.view addSubview:text];
-  [NSLayoutConstraint activateConstraints:@[
-    [text.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor],
-    [text.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor],
-    [text.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
-    [text.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
-  ]];
-}
-@end
-
 /* The template chooser in SwiftUI (`intern/swift/TemplatePicker.swift`). */
 @interface UIViewController (GHOSTIOSSwiftTemplatePicker)
 - (instancetype)initWithTemplates:(NSArray<NSDictionary *> * (^)(void))templates
                            manage:(void (^)(NSDictionary *entry, NSString *action, NSString *title,
                                             void (^done)(BOOL success)))manage
                        completion:(void (^)(NSString *app_template))completion;
-@end
-
-/** A grid of Blender's templates, to start a new document from one. */
-@interface GHOSTIOSTemplatePicker : UICollectionViewController <UIAdaptivePresentationControllerDelegate, UISearchResultsUpdating>
-@property(nonatomic, copy) void (^completion)(NSString *app_template);
-@end
-
-@implementation GHOSTIOSTemplatePicker {
-  NSArray<NSDictionary *> *_templates;
-  NSArray<NSArray *> *_sections;
-  NSArray<NSString *> *_sectionTitles;
-  UISearchController *_search;
-  BOOL _finished;
-}
-
-- (instancetype)init
-{
-  UICollectionViewCompositionalLayout *layout = [[[UICollectionViewCompositionalLayout alloc]
-      initWithSectionProvider:^NSCollectionLayoutSection *(NSInteger,
-                                                            id<NSCollectionLayoutEnvironment> environment) {
-        const CGFloat width = environment.container.effectiveContentSize.width;
-        const BOOL largeText = UIContentSizeCategoryIsAccessibilityCategory(environment.traitCollection.preferredContentSizeCategory);
-        const NSInteger columns = largeText || width < 360 ? 1 : width > 700 ? 3 : 2;
-        NSCollectionLayoutSize *item_size = [NSCollectionLayoutSize
-            sizeWithWidthDimension:[NSCollectionLayoutDimension fractionalWidthDimension:1.0 / columns]
-                   heightDimension:[NSCollectionLayoutDimension estimatedDimension:220]];
-        NSCollectionLayoutItem *item = [NSCollectionLayoutItem itemWithLayoutSize:item_size];
-        item.contentInsets = NSDirectionalEdgeInsetsMake(8, 8, 8, 8);
-        NSCollectionLayoutSize *group_size = [NSCollectionLayoutSize
-            sizeWithWidthDimension:[NSCollectionLayoutDimension fractionalWidthDimension:1.0]
-                   heightDimension:[NSCollectionLayoutDimension estimatedDimension:220]];
-        NSCollectionLayoutGroup *group = [NSCollectionLayoutGroup
-            horizontalGroupWithLayoutSize:group_size
-                                 repeatingSubitem:item
-                                            count:columns];
-        NSCollectionLayoutSection *section = [NSCollectionLayoutSection sectionWithGroup:group];
-        section.interGroupSpacing = 16;
-        NSCollectionLayoutBoundarySupplementaryItem *header = [NSCollectionLayoutBoundarySupplementaryItem
-            boundarySupplementaryItemWithLayoutSize:[NSCollectionLayoutSize
-                sizeWithWidthDimension:[NSCollectionLayoutDimension fractionalWidthDimension:1]
-                heightDimension:[NSCollectionLayoutDimension estimatedDimension:44]]
-            elementKind:UICollectionElementKindSectionHeader alignment:NSRectAlignmentTop];
-        section.boundarySupplementaryItems = @[header];
-        section.contentInsets = NSDirectionalEdgeInsetsMake(12, 12, 12, 12);
-        return section;
-      }] autorelease];
-  if ((self = [super initWithCollectionViewLayout:layout])) {
-    [self reloadTemplates];
-    self.title = @"Choose a Template";
-    self.preferredContentSize = CGSizeMake(780, 640);
-  }
-  return self;
-}
-
-- (void)dealloc
-{
-  [_templates release];
-  [_sections release];
-  [_sectionTitles release];
-  [_search release];
-  [_completion release];
-  [super dealloc];
-}
-
-- (void)viewDidLoad
-{
-  [super viewDidLoad];
-  [self.collectionView registerClass:GHOSTIOSTemplateCell.class forCellWithReuseIdentifier:@"template"];
-  [self.collectionView registerClass:UICollectionReusableView.class
-      forSupplementaryViewOfKind:UICollectionElementKindSectionHeader withReuseIdentifier:@"section"];
-  self.collectionView.backgroundColor = UIColor.systemBackgroundColor;
-  self.collectionView.selectionFollowsFocus = NO;
-  _search = [[UISearchController alloc] initWithSearchResultsController:nil];
-  _search.obscuresBackgroundDuringPresentation = NO;
-  _search.hidesNavigationBarDuringPresentation = NO;
-  _search.searchResultsUpdater = self;
-  _search.searchBar.placeholder = @"Search Templates";
-  self.navigationItem.searchController = _search;
-  self.navigationItem.hidesSearchBarWhenScrolling = NO;
-  self.definesPresentationContext = YES;
-  __block GHOSTIOSTemplatePicker *picker = self;
-  self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc]
-      initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
-                    primaryAction:[UIAction actionWithHandler:^(__kindof UIAction *) {
-                      [picker finish:nil];
-                    }]] autorelease];
-}
-
-- (void)reloadTemplates
-{
-  [_templates release];
-  _templates = [launcherTemplates() retain];
-  [self filterTemplates];
-}
-
-- (void)filterTemplates
-{
-  NSString *query = [_search.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-  NSMutableArray *bundled = [NSMutableArray array], *personal = [NSMutableArray array];
-  for (NSDictionary *entry in _templates) {
-    if (query.length && [entry[@"title"] rangeOfString:query options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch].location == NSNotFound) { continue; }
-    NSMutableArray *group = [entry[@"personal"] boolValue] ? personal : bundled;
-    [group addObject:entry];
-  }
-  NSMutableArray *sections = [NSMutableArray array], *titles = [NSMutableArray array];
-  if (bundled.count) { [sections addObject:bundled]; [titles addObject:@"Blender"]; }
-  if (personal.count) { [sections addObject:personal]; [titles addObject:@"My Templates"]; }
-  [_sections release];
-  _sections = [sections copy];
-  [_sectionTitles release];
-  _sectionTitles = [titles copy];
-  if (self.isViewLoaded) {
-    [self.collectionView reloadData];
-    self.contentUnavailableConfiguration = sections.count ? nil : [UIContentUnavailableConfiguration searchConfiguration];
-  }
-}
-
-- (void)updateSearchResultsForSearchController:(UISearchController *)searchController
-{
-  [self filterTemplates];
-}
-
-- (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView
-{
-  return _sections.count;
-}
-
-- (UICollectionReusableView *)collectionView:(UICollectionView *)collectionView
-    viewForSupplementaryElementOfKind:(NSString *)kind atIndexPath:(NSIndexPath *)indexPath
-{
-  UICollectionReusableView *view = [collectionView dequeueReusableSupplementaryViewOfKind:kind
-      withReuseIdentifier:@"section" forIndexPath:indexPath];
-  UILabel *title = (UILabel *)[view viewWithTag:1];
-  if (!title) {
-    title = [[[UILabel alloc] init] autorelease];
-    title.tag = 1;
-    title.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
-    title.adjustsFontForContentSizeCategory = YES;
-    title.numberOfLines = 0;
-    title.translatesAutoresizingMaskIntoConstraints = NO;
-    [view addSubview:title];
-    [NSLayoutConstraint activateConstraints:@[
-      [title.leadingAnchor constraintEqualToAnchor:view.leadingAnchor constant:8],
-      [title.trailingAnchor constraintEqualToAnchor:view.trailingAnchor constant:-8],
-      [title.topAnchor constraintEqualToAnchor:view.topAnchor constant:8],
-      [title.bottomAnchor constraintEqualToAnchor:view.bottomAnchor constant:-8],
-    ]];
-  }
-  title.text = _sectionTitles[indexPath.section];
-  return view;
-}
-
-- (NSInteger)collectionView:(UICollectionView *)view numberOfItemsInSection:(NSInteger)section
-{
-  return _sections[section].count;
-}
-
-- (UICollectionViewCell *)collectionView:(UICollectionView *)view
-                  cellForItemAtIndexPath:(NSIndexPath *)index
-{
-  GHOSTIOSTemplateCell *cell = [view dequeueReusableCellWithReuseIdentifier:@"template"
-                                                                forIndexPath:index];
-  NSDictionary *item = _sections[index.section][index.item];
-  cell.templateIdentifier = item[@"id"];
-  cell.symbol.image = nil;
-  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-    UIImage *preview = [UIImage imageWithContentsOfFile:[item[@"previewURL"] path]];
-    [preview prepareForDisplayWithCompletionHandler:^(UIImage *image) {
-      dispatch_async(dispatch_get_main_queue(), ^{
-        if ([cell.templateIdentifier isEqual:item[@"id"]]) { cell.symbol.image = image; }
-      });
-    }];
-  });
-  cell.name.text = item[@"title"];
-  NSDictionary *credit = item[@"attribution"];
-  cell.credit.hidden = credit == nil;
-  cell.isAccessibilityElement = credit == nil;
-  cell.name.isAccessibilityElement = credit != nil;
-  cell.name.accessibilityTraits = UIAccessibilityTraitButton;
-  [cell.credit removeActionForIdentifier:@"credits" forControlEvents:UIControlEventTouchUpInside];
-  if (credit) {
-    [cell.credit setTitle:[NSString stringWithFormat:@"%@ · %@\n%@ · Adapted",
-        credit[@"title"], credit[@"author"], credit[@"license"]] forState:UIControlStateNormal];
-    cell.credit.accessibilityLabel = [NSString stringWithFormat:@"%@. Asset credits and license", credit[@"title"]];
-    __block GHOSTIOSTemplatePicker *picker = self;
-    [cell.credit addAction:[UIAction actionWithTitle:@"Asset Credits" image:nil identifier:@"credits"
-        handler:^(__kindof UIAction *) {
-      GHOSTIOSTemplateCredits *details = [[[GHOSTIOSTemplateCredits alloc] init] autorelease];
-      details.credit = credit;
-      [picker.navigationController pushViewController:details animated:YES];
-    }] forControlEvents:UIControlEventTouchUpInside];
-  }
-  cell.accessibilityLabel = item[@"title"];
-  cell.accessibilityIdentifier = [@"blender.template." stringByAppendingString:item[@"id"]];
-  return cell;
-}
-
-- (void)collectionView:(UICollectionView *)view didSelectItemAtIndexPath:(NSIndexPath *)index
-{
-  [self finish:_sections[index.section][index.item][@"id"]];
-}
-
-- (void)manageTemplate:(NSDictionary *)entry action:(NSString *)action title:(NSString *)title
-{
-  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-    const BOOL success = GHOST_ios_template_manage(entry[@"id"], action, title);
-    dispatch_async(dispatch_get_main_queue(), ^{
-      if (success) {
-        [self reloadTemplates];
-      }
-      else {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Could Not Update Template"
-            message:@"Check available storage and try again." preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-        [self presentViewController:alert animated:YES completion:nil];
-      }
-    });
-  });
-}
-
-- (UIContextMenuConfiguration *)collectionView:(UICollectionView *)collectionView
-    contextMenuConfigurationForItemAtIndexPath:(NSIndexPath *)index point:(CGPoint)point
-{
-  NSDictionary *entry = _sections[index.section][index.item];
-  return [UIContextMenuConfiguration configurationWithIdentifier:entry[@"id"] previewProvider:nil
-      actionProvider:^UIMenu *(NSArray<UIMenuElement *> *) {
-    NSMutableArray *items = [NSMutableArray arrayWithObject:[UIAction actionWithTitle:@"Duplicate"
-        image:[UIImage systemImageNamed:@"plus.square.on.square"] identifier:nil handler:^(__kindof UIAction *) {
-      [self manageTemplate:entry action:@"duplicate" title:nil];
-    }]];
-    if ([entry[@"personal"] boolValue]) {
-      [items addObject:[UIAction actionWithTitle:@"Rename" image:[UIImage systemImageNamed:@"pencil"]
-          identifier:nil handler:^(__kindof UIAction *) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Rename Template"
-            message:nil preferredStyle:UIAlertControllerStyleAlert];
-        [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.text = entry[@"title"]; }];
-        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"Rename" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
-          NSString *name = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-          if (name.length) { [self manageTemplate:entry action:@"rename" title:name]; }
-        }]];
-        [self presentViewController:alert animated:YES completion:nil];
-      }]];
-      UIAction *remove = [UIAction actionWithTitle:@"Delete" image:[UIImage systemImageNamed:@"trash"]
-          identifier:nil handler:^(__kindof UIAction *) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Delete Template?"
-            message:@"Documents created from this template will not be deleted."
-            preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"Delete" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *) {
-          [self manageTemplate:entry action:@"delete" title:nil];
-        }]];
-        [self presentViewController:alert animated:YES completion:nil];
-      }];
-      remove.attributes = UIMenuElementAttributesDestructive;
-      [items addObject:remove];
-    }
-    return [UIMenu menuWithTitle:@"" children:items];
-  }];
-}
-
-- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController
-{
-  [self finish:nil];
-}
-
-- (void)finish:(NSString *)app_template
-{
-  if (_finished) {
-    return;
-  }
-  _finished = YES;
-  void (^completion)(NSString *) = [[_completion retain] autorelease];
-  if (self.presentingViewController) {
-    [self.presentingViewController dismissViewControllerAnimated:YES completion:^{
-      if (completion) { completion(app_template); }
-    }];
-  }
-  else if (completion) { completion(app_template); }
-}
-
 @end
 
 /** \} */
@@ -875,8 +469,7 @@ static NSURL *launcher_pending_url = nil;
 {
   if (_creating || _opening || presenter.presentedViewController) { return; }
   _creating = YES;
-  GHOSTIOSTemplatePicker *picker = [[[GHOSTIOSTemplatePicker alloc] init] autorelease];
-  picker.completion = ^(NSString *identifier) {
+  UIViewController *picker = [self templatePicker:^(NSString *identifier) {
     if (!identifier) { self->_creating = NO; return; }
     [self->_creatingTemplate release];
     self->_creatingTemplate = [identifier copy];
@@ -894,12 +487,8 @@ static NSURL *launcher_pending_url = nil;
         [self openDocumentAtURL:destination];
       }];
     });
-  };
-  UINavigationController *sheet = [[[UINavigationController alloc] initWithRootViewController:picker] autorelease];
-  sheet.modalPresentationStyle = UIModalPresentationFormSheet;
-  sheet.preferredContentSize = picker.preferredContentSize;
-  sheet.presentationController.delegate = picker;
-  [presenter presentViewController:sheet animated:YES completion:nil];
+  }];
+  [presenter presentViewController:picker animated:YES completion:nil];
 }
 
 - (void)openDocumentAtURL:(NSURL *)url
@@ -944,34 +533,27 @@ static NSURL *launcher_pending_url = nil;
 /** Present Blender's templates; `completion` gets the chosen one, or nil. */
 - (void)chooseTemplate:(void (^)(NSString *app_template))completion
 {
-  if (Class swift_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
-                              nil :
-                              NSClassFromString(@"GHOSTIOSSwiftTemplatePicker"))
-  {
-    UIViewController *picker = [[[swift_class alloc] initWithTemplates:^NSArray<NSDictionary *> * {
-      return launcherTemplates();
-    } manage:^(NSDictionary *entry, NSString *action, NSString *title, void (^done)(BOOL)) {
-      void (^finished)(BOOL) = [[done copy] autorelease];
-      dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        const BOOL success = GHOST_ios_template_manage(entry[@"id"], action, title);
-        dispatch_async(dispatch_get_main_queue(), ^{ finished(success); });
-      });
-    } completion:completion] autorelease];
-    picker.modalPresentationStyle = UIModalPresentationFormSheet;
-    /* Swiping the sheet away cancels, like Cancel. */
-    picker.presentationController.delegate = (id<UIAdaptivePresentationControllerDelegate>)picker;
-    [self presentViewController:picker animated:YES completion:nil];
-    return;
-  }
-  GHOSTIOSTemplatePicker *picker = [[[GHOSTIOSTemplatePicker alloc] init] autorelease];
-  picker.completion = completion;
-  UINavigationController *sheet = [[[UINavigationController alloc] initWithRootViewController:picker]
-      autorelease];
-  sheet.modalPresentationStyle = UIModalPresentationFormSheet;
-  sheet.preferredContentSize = picker.preferredContentSize;
+  [self presentViewController:[self templatePicker:completion] animated:YES completion:nil];
+}
+
+/** The template chooser (SwiftUI) as a sheet; `completion` gets the chosen template, or nil. */
+- (UIViewController *)templatePicker:(void (^)(NSString *app_template))completion
+{
+  Class swift_class = NSClassFromString(@"GHOSTIOSSwiftTemplatePicker");
+  NSCAssert(swift_class, @"The SwiftUI template picker is missing");
+  UIViewController *picker = [[[swift_class alloc] initWithTemplates:^NSArray<NSDictionary *> * {
+    return launcherTemplates();
+  } manage:^(NSDictionary *entry, NSString *action, NSString *title, void (^done)(BOOL)) {
+    void (^finished)(BOOL) = [[done copy] autorelease];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+      const BOOL success = GHOST_ios_template_manage(entry[@"id"], action, title);
+      dispatch_async(dispatch_get_main_queue(), ^{ finished(success); });
+    });
+  } completion:completion] autorelease];
+  picker.modalPresentationStyle = UIModalPresentationFormSheet;
   /* Swiping the sheet away cancels, like Cancel. */
-  sheet.presentationController.delegate = (id<UIAdaptivePresentationControllerDelegate>)picker;
-  [self presentViewController:sheet animated:YES completion:nil];
+  picker.presentationController.delegate = (id<UIAdaptivePresentationControllerDelegate>)picker;
+  return picker;
 }
 
 - (void)setDocument:(UIDocument *)document

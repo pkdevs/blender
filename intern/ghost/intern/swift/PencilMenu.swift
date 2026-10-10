@@ -5,8 +5,8 @@
 /** \file
  * The Pencil's radial actions: Blender's context menu as pills on up to two rings around the
  * Pencil, chosen by moving the Pencil over one and lifting or squeezing. Raw Pencil routing owns
- * selection and release, so the pills never take touches themselves. Answers the same messages
- * as `GHOSTIOSPencilMenu`; the view controller finds it by name, see `GHOST_WindowIOS.mm`.
+ * selection and release, so the pills never take touches themselves. Implements
+ * `GHOSTIOSPencilMenu`; the view controller finds it by name, see `GHOST_WindowIOS.mm`.
  * All points are UIKit points in this view, never drawable pixels.
  */
 
@@ -168,7 +168,7 @@ struct PencilPillView: View {
 
 @MainActor
 @objc(GHOSTIOSSwiftPencilMenu)
-public final class SwiftPencilMenu: UIView {
+public final class SwiftPencilMenu: UIView, @MainActor GHOSTIOSPencilMenu {
   @objc public weak var delegate: GHOSTIOSPencilMenuDelegate?
   @objc public private(set) var active = false
   @objc public private(set) var menuVisible = false
@@ -352,7 +352,7 @@ public final class SwiftPencilMenu: UIView {
     items = []
     page = 0
     buildPage()
-    delegate?.pencilMenu(unsafeBitCast(self, to: GHOSTIOSPencilMenu.self), requestItemsForRoute: route as! [AnyHashable: Any],
+    delegate?.pencilMenu(self, requestItemsForRoute: route as! [AnyHashable: Any],
                          at: anchor) { [weak self] received in
       guard let self, self.active, self.menuVisible, generation == self.requestGeneration else { return }
       var actions: [[String: Any]] = []
@@ -434,7 +434,7 @@ public final class SwiftPencilMenu: UIView {
       return
     }
     dismiss()
-    delegate?.pencilMenu(unsafeBitCast(self, to: GHOSTIOSPencilMenu.self), didChooseItem: item, at: anchor)
+    delegate?.pencilMenu(self, didChooseItem: item, at: anchor)
   }
 
   @objc(toggleWithPencilLocation:)

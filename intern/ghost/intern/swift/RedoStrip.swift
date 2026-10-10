@@ -4,8 +4,8 @@
 
 /** \file
  * Adjust Last Operation: the last operator's settings on a glass strip above the bottom edge,
- * folded into a pill beside the viewport actions until opened. Answers the same messages as
- * `GHOSTIOSRedoStrip`; the view controller finds it by name, see `GHOST_WindowIOS.mm`. The strip's
+ * folded into a pill beside the viewport actions until opened. Answers the `GHOSTIOSRedoStrip`
+ * protocol's messages; the view controller finds it by name, see `GHOST_WindowIOS.mm`. The strip's
  * glass and its morph from the pill stay in UIKit, which also places the pill; SwiftUI draws the
  * controls.
  */

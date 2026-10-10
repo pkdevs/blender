@@ -23,10 +23,6 @@
 static NSMutableArray<GHOSTIOSDialogRequest *> *dialog_queue;
 static NSTimer *dialog_timer;
 
-@interface GHOSTIOSDialogController : UIViewController
-@property(nonatomic, assign) GHOSTIOSDialogRequest *request;
-@end
-
 @interface GHOSTIOSDialogRequest : NSObject <UIAdaptivePresentationControllerDelegate>
 {
  @public
@@ -37,9 +33,8 @@ static NSTimer *dialog_timer;
 @property(nonatomic) GHOST_IOSDialogCompletion completion;
 @property(nonatomic, retain) UIWindow *window;
 @property(nonatomic, retain) UIViewController *controller;
-@property(nonatomic, retain) NSMutableArray<UISwitch *> *switches;
 @property(nonatomic) BOOL finished;
-/* The options chosen in the SwiftUI sheet, which has no switches here. */
+/* The options chosen in the sheet, one bit per toggle. */
 @property(nonatomic) uint64_t chosenToggles;
 - (void)finish:(int)action;
 - (void)presentFrom:(UIViewController *)presenter;
@@ -80,98 +75,11 @@ static void dialogPump()
   [request presentFrom:presenter];
 }
 
-@implementation GHOSTIOSDialogController
-- (void)viewDidLoad
-{
-  [super viewDidLoad];
-  self.view.backgroundColor = UIColor.systemBackgroundColor;
-  self.view.accessibilityIdentifier = @"blender.nativeDialog";
-  GHOSTIOSDialogRequest *request = self.request;
-  UIScrollView *scroll = [[[UIScrollView alloc] init] autorelease];
-  scroll.translatesAutoresizingMaskIntoConstraints = NO;
-  [self.view addSubview:scroll];
-  UIStackView *stack = [[[UIStackView alloc] init] autorelease];
-  stack.axis = UILayoutConstraintAxisVertical;
-  stack.spacing = 20;
-  stack.translatesAutoresizingMaskIntoConstraints = NO;
-  [scroll addSubview:stack];
-  [NSLayoutConstraint activateConstraints:@[
-    [scroll.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor],
-    [scroll.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor],
-    [scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
-    [scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
-    [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor
-                                        constant:24],
-    [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor
-                                         constant:-24],
-    [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:24],
-    [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor
-                                       constant:-24],
-    [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-48],
-  ]];
-  for (int i = 0; i < 2; i++) {
-    UILabel *label = [[[UILabel alloc] init] autorelease];
-    label.text = dialogString(i == 0 ? request->model.title : request->model.message);
-    label.font = [UIFont
-        preferredFontForTextStyle:i == 0 ? UIFontTextStyleTitle2 : UIFontTextStyleBody];
-    label.adjustsFontForContentSizeCategory = YES;
-    label.numberOfLines = 0;
-    [stack addArrangedSubview:label];
-  }
-  for (const GHOST_IOSDialogToggle &option : request->model.toggles) {
-    UIStackView *row = [[[UIStackView alloc] init] autorelease];
-    row.axis = UILayoutConstraintAxisHorizontal;
-    row.alignment = UIStackViewAlignmentCenter;
-    row.spacing = 16;
-    UILabel *label = [[[UILabel alloc] init] autorelease];
-    label.text = dialogString(option.title);
-    label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
-    label.adjustsFontForContentSizeCategory = YES;
-    label.numberOfLines = 0;
-    UISwitch *toggle = [[[UISwitch alloc] init] autorelease];
-    toggle.on = option.selected;
-    toggle.accessibilityLabel = label.text;
-    [toggle setContentCompressionResistancePriority:UILayoutPriorityRequired
-                                            forAxis:UILayoutConstraintAxisHorizontal];
-    [row addArrangedSubview:label];
-    [row addArrangedSubview:toggle];
-    [request.switches addObject:toggle];
-    [stack addArrangedSubview:row];
-  }
-  for (size_t i = 0; i < request->model.actions.size(); i++) {
-    const GHOST_IOSDialogAction &action = request->model.actions[i];
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-    UIButtonConfiguration *configuration = int(i) == request->model.preferred_action ?
-                                               [UIButtonConfiguration filledButtonConfiguration] :
-                                               [UIButtonConfiguration borderedButtonConfiguration];
-    configuration.title = dialogString(action.title);
-    if (action.role == GHOST_IOSDialogRole::Destructive) {
-      configuration.baseForegroundColor = UIColor.systemRedColor;
-    }
-    button.configuration = configuration;
-    button.titleLabel.numberOfLines = 0;
-    button.tag = i;
-    [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
-    [button addTarget:self action:@selector(choose:) forControlEvents:UIControlEventTouchUpInside];
-    [stack addArrangedSubview:button];
-  }
-}
-
-- (void)choose:(UIButton *)sender
-{
-  [self.request finish:int(sender.tag)];
-}
-@end
-
 @implementation GHOSTIOSDialogRequest
 - (void)dealloc
 {
-  if ([_controller isKindOfClass:GHOSTIOSDialogController.class]) {
-    ((GHOSTIOSDialogController *)_controller).request = nil;
-  }
   [_controller release];
   [_window release];
-  [_switches release];
   [super dealloc];
 }
 
@@ -181,19 +89,11 @@ static void dialogPump()
     return;
   }
   self.finished = YES;
-  uint64_t toggles = self.chosenToggles;
-  for (NSUInteger i = 0; i < self.switches.count; i++) {
-    if (self.switches[i].on) {
-      toggles |= uint64_t(1) << i;
-    }
-  }
+  const uint64_t toggles = self.chosenToggles;
   /* Resolve only after dismissal so the next action can present a file picker. */
   void (^complete)(void) = ^{
     GHOST_IOSDialogCompletion callback = self.completion;
     self.completion = nullptr;
-    if ([self.controller isKindOfClass:GHOSTIOSDialogController.class]) {
-      ((GHOSTIOSDialogController *)self.controller).request = nil;
-    }
     self.controller = nil;
     [dialog_queue removeObject:self];
     if (callback) {
@@ -242,10 +142,9 @@ static void dialogPump()
     }
     self.controller = alert;
   }
-  else if (Class sheet_class = [NSUserDefaults.standardUserDefaults boolForKey:@"BlenderUIKitInterface"] ?
-                                    nil :
-                                    NSClassFromString(@"GHOSTIOSSwiftDialogSheet"))
-  {
+  else {
+    Class sheet_class = NSClassFromString(@"GHOSTIOSSwiftDialogSheet");
+    NSCAssert(sheet_class, @"The SwiftUI dialog sheet is missing");
     NSMutableArray *toggles = [NSMutableArray array], *selected = [NSMutableArray array];
     for (const GHOST_IOSDialogToggle &option : model.toggles) {
       [toggles addObject:dialogString(option.title)];
@@ -265,13 +164,6 @@ static void dialogPump()
           owner.chosenToggles = chosen;
           [owner finish:int(action)];
         }] autorelease];
-    sheet.modalPresentationStyle = UIModalPresentationFormSheet;
-    sheet.preferredContentSize = CGSizeMake(520, 600);
-    self.controller = sheet;
-  }
-  else {
-    GHOSTIOSDialogController *sheet = [[[GHOSTIOSDialogController alloc] init] autorelease];
-    sheet.request = self;
     sheet.modalPresentationStyle = UIModalPresentationFormSheet;
     sheet.preferredContentSize = CGSizeMake(520, 600);
     self.controller = sheet;
@@ -321,7 +213,6 @@ bool GHOST_ios_dialog_begin(void *window,
     request.identifier = identifier;
     request.completion = completion;
     request.window = native_window;
-    request.switches = [NSMutableArray array];
     [dialog_queue addObject:request];
     if (!dialog_timer) {
       dialog_timer = [NSTimer timerWithTimeInterval:0.05

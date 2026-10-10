@@ -70,7 +70,7 @@ materials from [Poly Haven](https://polyhaven.com/license) and
 
 - `release/ios/test_starter_library.py` validates the committed library with Blender and checks
   the shipped files record no local paths.
-- `release/ios/test_native_assets.py` tests the native asset pane in the iOS Simulator.
+- `release/ios/test_swiftui_panels.py` shows the asset pane in the iOS Simulator.
 - `release/ios/assets_device_test.py` drops every Starter asset on an iPad through the asset
   pane's entry point, plus a real drag and a cancelled one. Copy it into the app's Documents
   directory and launch the app with `--factory-startup --python-expr` as its docstring shows;
