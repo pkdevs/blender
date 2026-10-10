@@ -618,18 +618,26 @@ void curve_populate_trans_data_structs(const TransInfo &t,
         [&](const int64_t curve_i) {
           const IndexRange points = points_by_curve[curve_i];
           IndexMaskMemory memory;
-          const IndexMask selection =
-              IndexMask::from_bools(point_selection, memory).slice_content(points);
-          if (selection.is_empty()) {
+          const IndexMask selection = points_to_transform_per_attr[0];
+          MutableSpan<float3> positions = positions_per_selection_attr[0];
+          const IndexMask selection_sliced = selection.slice_content(points);
+          if (selection_sliced.is_empty()) {
             /* For proportional editing around individual origins, unselected points will not use
              * the TransData center (instead the closest point found is used, see logic in
              * #set_prop_dist / #prop_dist_loc_get). */
             return;
           }
+
+          const std::optional<index_mask::RawMaskIterator> first_it = selection.find_larger_equal(
+              points.start());
+          const int64_t first_index = selection.iterator_to_index(*first_it);
+
           float3 center(0.0f);
-          selection.foreach_index_optimized<int64_t>(
-              [&](const int64_t point_i) { center += points_to_transform_per_attr[0][point_i]; });
-          center /= selection.size();
+          selection_sliced.foreach_index_optimized<int64_t>(
+              [&](const int64_t /*point_i*/, const int64_t pos) {
+                center += positions[pos + first_index];
+              });
+          center /= selection_sliced.size();
           mean_center_point_per_curve[curve_i] = center;
         },
         exec_mode::grain_size(512));
