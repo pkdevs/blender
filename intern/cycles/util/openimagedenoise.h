@@ -10,6 +10,10 @@
 
 #include "util/system.h"  // IWYU pragma: keep
 
+#if defined(__APPLE__)
+#  include <TargetConditionals.h>
+#endif
+
 CCL_NAMESPACE_BEGIN
 
 static inline bool openimagedenoise_supported()
@@ -26,6 +30,17 @@ static inline bool openimagedenoise_supported()
 #  endif
 #else
   return false;
+#endif
+}
+
+/* Whether OpenImageDenoise can denoise on the CPU. The iOS libraries include only its Metal
+ * device, so there denoising always runs on the GPU. */
+static inline bool openimagedenoise_cpu_supported()
+{
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  return false;
+#else
+  return openimagedenoise_supported();
 #endif
 }
 

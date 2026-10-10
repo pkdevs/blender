@@ -39,7 +39,7 @@ void device_cpu_info(vector<DeviceInfo> &devices)
   else {
     info.has_guiding = false;
   }
-  if (openimagedenoise_supported()) {
+  if (openimagedenoise_cpu_supported()) {
     info.denoisers |= DENOISER_OPENIMAGEDENOISE;
   }
 

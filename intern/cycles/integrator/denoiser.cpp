@@ -111,6 +111,10 @@ DenoiseParams get_effective_denoise_params(Device *denoiser_device,
   DCHECK(params.use);
 
   DenoiseParams effective_denoise_params = params;
+  if (!openimagedenoise_cpu_supported() && params.type == DENOISER_OPENIMAGEDENOISE) {
+    /* Without a CPU denoiser, denoise on the GPU even when not asked to. */
+    effective_denoise_params.use_gpu = true;
+  }
 
   single_denoiser_device = nullptr;
   if (is_single_device(denoiser_device)) {
@@ -171,7 +175,7 @@ unique_ptr<Denoiser> Denoiser::create(Device *denoiser_device,
 #endif
   }
 
-  if (!openimagedenoise_supported()) {
+  if (!openimagedenoise_cpu_supported()) {
     return nullptr;
   }
 
@@ -200,7 +204,7 @@ DenoiserType Denoiser::automatic_viewport_denoiser_type(const DeviceInfo &denois
 #endif
 
 #ifdef WITH_OPENIMAGEDENOISE
-  if (openimagedenoise_supported()) {
+  if (openimagedenoise_cpu_supported()) {
     return DENOISER_OPENIMAGEDENOISE;
   }
 #endif

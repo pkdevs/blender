@@ -6,6 +6,8 @@
 #include "blender/session.h"
 #include "blender/util.h"
 
+#include "util/openimagedenoise.h"
+
 #include "BKE_scene.hh"
 #include "RNA_prototypes.hh"
 
@@ -153,6 +155,19 @@ DeviceInfo blender_device_info(blender::UserDef &b_preferences,
     if (!used_devices.empty()) {
       const int threads = blender_device_threads(b_scene);
       preferences_device = Device::get_multi_device(used_devices, threads, background);
+    }
+  }
+
+  if (!openimagedenoise_cpu_supported() &&
+      !(preferences_device.type != DEVICE_CPU &&
+        (preferences_device.denoisers & DENOISER_OPENIMAGEDENOISE)))
+  {
+    /* Without a CPU denoiser, denoise on a GPU even when none is chosen in the preferences. */
+    for (const DeviceInfo &info : Device::available_devices(DEVICE_MASK_METAL)) {
+      if (info.denoisers & DENOISER_OPENIMAGEDENOISE) {
+        preferences_device = info;
+        break;
+      }
     }
   }
 
