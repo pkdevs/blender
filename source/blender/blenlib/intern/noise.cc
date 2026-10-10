@@ -271,6 +271,16 @@ float hash_float_to_float(float4 k)
   return uint_to_float_01(hash_float(k));
 }
 
+void hash_float_to_float(const IndexMask &mask,
+                         const VArray<float3> &ks,
+                         MutableSpan<float> r_values)
+{
+  // TODO: Ensure that only the mask is materialized.
+  VArraySpan<float3> ks_span(ks);
+  mask.foreach_index_optimized<int64_t>(
+      [&](const int64_t i) { r_values[i] = hash_float_to_float(ks_span[i]); });
+}
+
 float2 hash_float_to_float2(float2 k)
 {
   return float2(hash_float_to_float(k), hash_float_to_float(float3(k.x, k.y, 1.0)));

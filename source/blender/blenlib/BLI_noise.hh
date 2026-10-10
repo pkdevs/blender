@@ -10,6 +10,7 @@
 
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_virtual_array.hh"
 
 namespace blender::noise {
 
@@ -48,6 +49,10 @@ float hash_float_to_float(float k);
 float hash_float_to_float(float2 k);
 float hash_float_to_float(float3 k);
 float hash_float_to_float(float4 k);
+
+void hash_float_to_float(const IndexMask &mask,
+                         const VArray<float3> &ks,
+                         MutableSpan<float> r_values);
 
 float2 hash_float_to_float2(float2 k);
 float2 hash_float_to_float2(float3 k);
