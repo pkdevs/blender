@@ -12,6 +12,8 @@
  * SDNA and the SDNA of the current (running) version of Blender.
  */
 
+#define DNA_GENFILE_VERSIONING_MACROS_LEGACY
+
 #include <algorithm>
 #include <climits>
 #include <cstdio>

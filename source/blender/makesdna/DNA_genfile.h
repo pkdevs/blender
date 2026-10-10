@@ -147,30 +147,13 @@ int DNA_struct_find_index_without_alias_ex(const struct SDNA *sdna,
                                            StringRef str,
                                            unsigned int *struct_index_last);
 /**
- * \return the index of the struct or -1 on failure.
+ * \return Ihe index of the struct or -1 on failure.
+ * \note Note that the type may have no struct members in the SDNA because they were not written to
+ * the .blend file for since they were unused.
  */
 int DNA_struct_find_with_alias(const struct SDNA *sdna, StringRef str);
 /** \note prefer #DNA_struct_find_with_alias unless there is a good reason not to. */
 int DNA_struct_find_index_without_alias(const struct SDNA *sdna, StringRef str);
-
-/**
- * A convenience function, the equivalent of: `DNA_struct_find_with_alias(..) != -1`
- */
-bool DNA_struct_exists_with_alias(const struct SDNA *sdna, StringRef str);
-/** \note prefer #DNA_struct_exists_with_alias unless there is a good reason not to. */
-bool DNA_struct_exists_without_alias(const struct SDNA *sdna, StringRef stype);
-/**
- * A convenience function, the equivalent of: `DNA_struct_member_find_with_alias(..) != -1`
- */
-bool DNA_struct_member_exists_with_alias(const struct SDNA *sdna,
-                                         StringRef stype,
-                                         StringRef vartype,
-                                         StringRef name);
-/** \note prefer #DNA_struct_exists_with_alias unless there is a good reason not to. */
-bool DNA_struct_member_exists_without_alias(const struct SDNA *sdna,
-                                            StringRef stype,
-                                            StringRef vartype,
-                                            StringRef name);
 
 /**
  * Constructs and returns an array of byte flags with one element for each struct in oldsdna,
@@ -277,6 +260,25 @@ void DNA_sdna_alias_data_ensure_structs_map(struct SDNA *sdna);
  * Blender versions because it checks the SDNA written to .blend files but that may only contain
  * partial SDNA to safe space. */
 #ifdef DNA_GENFILE_VERSIONING_MACROS_LEGACY
+/**
+ * A convenience function, the equivalent of: `DNA_struct_find_with_alias(..) != -1`
+ */
+bool DNA_struct_exists_with_alias(const struct SDNA *sdna, StringRef str);
+/** \note prefer #DNA_struct_exists_with_alias unless there is a good reason not to. */
+bool DNA_struct_exists_without_alias(const struct SDNA *sdna, StringRef stype);
+/**
+ * A convenience function, the equivalent of: `DNA_struct_member_find_with_alias(..) != -1`
+ */
+bool DNA_struct_member_exists_with_alias(const struct SDNA *sdna,
+                                         StringRef stype,
+                                         StringRef vartype,
+                                         StringRef name);
+/** \note prefer #DNA_struct_exists_with_alias unless there is a good reason not to. */
+bool DNA_struct_member_exists_without_alias(const struct SDNA *sdna,
+                                            StringRef stype,
+                                            StringRef vartype,
+                                            StringRef name);
+
 /* Don't use in new code, see comment above. */
 #  define DNA_struct_exists(sdna, str) DNA_struct_exists_with_alias(sdna.get(), str)
 #  define DNA_struct_member_exists(sdna, stype, vartype, name) \
