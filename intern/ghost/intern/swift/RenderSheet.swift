@@ -307,6 +307,19 @@ final class RenderModel: ObservableObject {
   var started = Date.now
   var stop: () -> Void = {}
   var close: () -> Void = {}
+
+  /** The page for the render in progress. */
+  static let live = "rendering"
+
+  /** The render shown: the one picked, else the one in progress, else the latest. */
+  func current(_ library: RenderLibrary) -> String? {
+    if let selection, library.items.contains(where: { $0.id == selection }) { return selection }
+    return rendering ? RenderModel.live : library.items.last?.id
+  }
+
+  func select(_ id: String) {
+    selection = id == RenderModel.live ? nil : id
+  }
 }
 
 struct RenderSheetView: View {
@@ -314,15 +327,14 @@ struct RenderSheetView: View {
   @ObservedObject var library = RenderLibrary.shared
 
   private var selected: RenderItem? {
-    if let id = model.selection { return library.items.first { $0.id == id } }
-    return model.rendering ? nil : library.items.last
+    guard let id = model.current(library) else { return nil }
+    return library.items.first { $0.id == id }
   }
 
   var body: some View {
     NavigationStack {
       VStack(spacing: 0) {
-        preview
-          .padding(.horizontal, 20)
+        RenderGallery(model: model, library: library)
           .padding(.top, 8)
           .padding(.bottom, 12)
         if model.rendering {
@@ -354,35 +366,77 @@ struct RenderSheetView: View {
     }
     .tint(Color(uiColor: .systemBlue))
   }
+}
+
+/** The renders side by side, a page each, as in Photos: swipe between them, pinch or double tap
+ * to zoom. Picking a frame in the film strip slides the page over. */
+struct RenderGallery: View {
+  @ObservedObject var model: RenderModel
+  @ObservedObject var library: RenderLibrary
+  @State private var page: String?
+
+  private var pages: [String] {
+    library.items.map(\.id) + (model.rendering ? [RenderModel.live] : [])
+  }
+
+  var body: some View {
+    GeometryReader { geometry in
+      ScrollView(.horizontal) {
+        LazyHStack(spacing: 0) {
+          ForEach(pages, id: \.self) { id in
+            pageView(id, active: id == (page ?? model.current(library)))
+              .padding(.horizontal, 20)
+              .frame(width: geometry.size.width, height: geometry.size.height)
+              .id(id)
+          }
+        }
+        .scrollTargetLayout()
+      }
+      .scrollTargetBehavior(.paging)
+      .scrollIndicators(.hidden)
+      .scrollPosition(id: $page)
+      .overlay {
+        if pages.isEmpty {
+          ContentUnavailableView("No Renders", systemImage: "camera.aperture",
+                                 description: Text("Render an image or animation from the Share menu."))
+        }
+      }
+    }
+    .onAppear { page = model.current(library) }
+    /* Swiping the page picks it in the film strip too. */
+    .onChange(of: page) { _, page in
+      guard let page, page != model.current(library) else { return }
+      model.select(page)
+    }
+    /* A frame picked in the film strip, or a new render, slides its page over. */
+    .onChange(of: model.current(library)) { _, current in
+      guard current != page else { return }
+      withMotion(.smooth(duration: 0.35)) { page = current }
+    }
+  }
 
   @ViewBuilder
-  private var preview: some View {
+  private func pageView(_ id: String, active: Bool) -> some View {
     ZStack {
       Color(uiColor: .secondarySystemGroupedBackground)
-      if let selected {
-        if selected.video {
-          RenderVideo(url: library.url(selected))
-            .id(selected.id)
+      if id == RenderModel.live {
+        if let live = model.live {
+          ZoomableImage(image: live)
         }
         else {
-          RenderStill(url: library.url(selected))
-            .id(selected.id)
+          ProgressView().controlSize(.large)
         }
       }
-      else if let live = model.live {
-        Image(uiImage: live).resizable().scaledToFit()
-          .accessibilityIgnoresInvertColors()
-      }
-      else if model.rendering {
-        ProgressView().controlSize(.large)
-      }
-      else {
-        ContentUnavailableView("No Renders", systemImage: "camera.aperture",
-                               description: Text("Render an image or animation from the Share menu."))
+      else if let item = library.items.first(where: { $0.id == id }) {
+        if item.video {
+          RenderVideo(url: library.url(item), playing: active)
+        }
+        else {
+          RenderStill(url: library.url(item))
+        }
       }
     }
     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
 
@@ -431,9 +485,11 @@ struct RenderStill: View {
   var body: some View {
     ZStack {
       if let image {
-        Image(uiImage: image).resizable().scaledToFit().accessibilityIgnoresInvertColors()
+        ZoomableImage(image: image)
+          .transition(.opacity)
       }
     }
+    .animation(.easeOut(duration: 0.15), value: image != nil)
     .task(id: url) {
       image = await Task.detached(priority: .userInitiated) {
         await UIImage(contentsOfFile: url.path)?.byPreparingForDisplay()
@@ -442,9 +498,99 @@ struct RenderStill: View {
   }
 }
 
-/** A rendered animation, looping. */
+/** An image to pinch, pan and double tap into, fitting the page when zoomed out, as in Photos.
+ * Zoomed out it leaves sideways swipes to the gallery's paging. */
+struct ZoomableImage: UIViewRepresentable {
+  let image: UIImage
+
+  func makeUIView(context: Context) -> ZoomView { ZoomView() }
+
+  func updateUIView(_ view: ZoomView, context: Context) {
+    if view.image !== image { view.image = image }
+  }
+}
+
+final class ZoomView: UIScrollView, UIScrollViewDelegate {
+  private let imageView = UIImageView()
+  private var fitted = CGSize.zero
+
+  var image: UIImage? {
+    get { imageView.image }
+    set {
+      /* Lay the new image out unzoomed, then fit it. */
+      minimumZoomScale = 1
+      maximumZoomScale = 1
+      zoomScale = 1
+      imageView.image = newValue
+      imageView.frame = CGRect(origin: .zero, size: newValue?.size ?? .zero)
+      contentSize = imageView.frame.size
+      fitted = .zero
+      setNeedsLayout()
+    }
+  }
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    delegate = self
+    showsHorizontalScrollIndicator = false
+    showsVerticalScrollIndicator = false
+    contentInsetAdjustmentBehavior = .never
+    decelerationRate = .fast
+    bouncesZoom = true
+    imageView.accessibilityIgnoresInvertColors = true
+    addSubview(imageView)
+    let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+    doubleTap.numberOfTapsRequired = 2
+    addGestureRecognizer(doubleTap)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+  private var fitScale: CGFloat {
+    guard let size = image?.size, size.width > 0, size.height > 0, bounds.width > 0 else { return 1 }
+    return min(bounds.width / size.width, bounds.height / size.height)
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    guard image != nil, bounds.width > 1, bounds.height > 1, bounds.size != fitted else { return }
+    /* A new size, or a new image: fit it, keeping a zoom the user chose if there is one. */
+    let zoomedIn = fitted != .zero && zoomScale > minimumZoomScale + 0.001
+    fitted = bounds.size
+    minimumZoomScale = fitScale
+    maximumZoomScale = max(fitScale * 8, 2)
+    if !zoomedIn { zoomScale = fitScale }
+    center()
+  }
+
+  private func center() {
+    let x = max(0, (bounds.width - contentSize.width) / 2)
+    let y = max(0, (bounds.height - contentSize.height) / 2)
+    contentInset = UIEdgeInsets(top: y, left: x, bottom: y, right: x)
+  }
+
+  func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+  func scrollViewDidZoom(_ scrollView: UIScrollView) { center() }
+
+  @objc private func doubleTapped(_ tap: UITapGestureRecognizer) {
+    if zoomScale > minimumZoomScale + 0.001 {
+      setZoomScale(minimumZoomScale, animated: true)
+      return
+    }
+    let point = tap.location(in: imageView)
+    let scale = min(maximumZoomScale, minimumZoomScale * 3)
+    let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
+    zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
+                    width: size.width, height: size.height), animated: true)
+  }
+}
+
+/** A rendered animation, looping while its page is shown. */
 struct RenderVideo: View {
   let url: URL
+  let playing: Bool
   @State private var player: AVPlayer?
   @State private var loop: NSObjectProtocol?
 
@@ -459,7 +605,11 @@ struct RenderVideo: View {
           player.play()
         }
         self.player = player
-        player.play()
+        if playing { player.play() }
+      }
+      .onChange(of: playing) { _, playing in
+        if playing { player?.play() }
+        else { player?.pause() }
       }
       .onDisappear {
         player?.pause()
@@ -468,79 +618,47 @@ struct RenderVideo: View {
   }
 }
 
-/** Every render, oldest first: slide through them and pick one to look at or share. */
+/** Every render, oldest first, as the scrubber in Photos: small frames packed together with the
+ * picked one opened out in the middle. Sliding the strip picks the frame that lands in the middle;
+ * tapping a frame slides it there. */
 struct FilmStrip: View {
   @ObservedObject var model: RenderModel
   @ObservedObject var library: RenderLibrary
+  @State private var centered: String?
   @State private var deleting: RenderItem?
 
-  private var current: String? {
-    model.selection ?? (model.rendering ? "rendering" : library.items.last?.id)
+  private var ids: [String] {
+    library.items.map(\.id) + (model.rendering ? [RenderModel.live] : [])
   }
 
   var body: some View {
-    ScrollViewReader { reader in
+    GeometryReader { geometry in
       ScrollView(.horizontal) {
-        LazyHStack(spacing: 10) {
-          ForEach(library.items) { item in
-            Button {
-              withMotion(.snappy) { model.selection = item.id }
-            } label: {
-              FilmFrame(url: library.still(item), video: item.video, frames: item.frames,
-                        selected: current == item.id)
-            }
-            .buttonStyle(.plain)
-            .id(item.id)
-            .accessibilityLabel(item.video ? "Animation, \(item.frames) frames" : "Image")
-            .accessibilityValue(item.date.formatted(date: .abbreviated, time: .shortened))
-            .accessibilityAddTraits(current == item.id ? .isSelected : [])
-            .contextMenu {
-              ShareLink(item: library.url(item)) { Label("Share", systemImage: "square.and.arrow.up") }
-              Button(role: .destructive) { deleting = item } label: { Label("Delete", systemImage: "trash") }
-            } preview: {
-              FilmFrame(url: library.still(item), video: item.video, frames: item.frames, selected: false, size: 320)
-            }
-          }
-          if model.rendering {
-            Button {
-              withMotion(.snappy) { model.selection = nil }
-            } label: {
-              ZStack {
-                if let live = model.live {
-                  Image(uiImage: live).resizable().scaledToFill()
-                }
-                ProgressView(value: model.progress)
-                  .progressViewStyle(.circular)
-                  .tint(.white)
-                  .padding(8)
-                  .background(.black.opacity(0.35), in: Circle())
-              }
-              .frame(width: 96, height: 64)
-              .background(Color(uiColor: .tertiarySystemFill))
-              .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-              .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                  .strokeBorder(current == "rendering" ? Color.accentColor : .clear, lineWidth: 3)
-              }
-            }
-            .buttonStyle(.plain)
-            .id("rendering")
-            .accessibilityLabel("Render in progress")
+        LazyHStack(spacing: 2) {
+          ForEach(ids, id: \.self) { id in
+            frame(id)
+              .id(id)
           }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .scrollTargetLayout()
       }
+      /* Any frame can sit in the middle, the first and last too. */
+      .contentMargins(.horizontal, geometry.size.width / 2 - 24, for: .scrollContent)
+      .scrollTargetBehavior(.viewAligned)
+      .scrollPosition(id: $centered, anchor: .center)
       .scrollIndicators(.hidden)
-      .frame(height: 88)
-      .background(Color(uiColor: .secondarySystemGroupedBackground))
-      .onAppear { reader.scrollTo(current, anchor: .trailing) }
-      .onChange(of: library.items.count) { _, _ in
-        withMotion { reader.scrollTo(model.rendering ? "rendering" : library.items.last?.id, anchor: .trailing) }
-      }
-      .onChange(of: model.rendering) { _, rendering in
-        if rendering { withMotion { reader.scrollTo("rendering", anchor: .trailing) } }
-      }
+    }
+    .frame(height: 72)
+    .background(Color(uiColor: .secondarySystemGroupedBackground))
+    .onAppear { centered = model.current(library) }
+    .onChange(of: centered) { _, id in
+      guard let id, id != model.current(library) else { return }
+      model.select(id)
+      Haptics.selection()
+    }
+    .onChange(of: model.current(library)) { _, current in
+      guard current != centered else { return }
+      withMotion(.smooth(duration: 0.35)) { centered = current }
     }
     .alert("Delete Render?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
       Button("Cancel", role: .cancel) { deleting = nil }
@@ -555,43 +673,88 @@ struct FilmStrip: View {
       Text("This render will be removed from the film strip.")
     }
   }
+
+  @ViewBuilder
+  private func frame(_ id: String) -> some View {
+    let selected = id == model.current(library)
+    if id == RenderModel.live {
+      Button {
+        withMotion(.snappy) { model.select(id) }
+      } label: {
+        ZStack {
+          Color(uiColor: .tertiarySystemFill)
+          if let live = model.live { Image(uiImage: live).resizable().scaledToFill() }
+          ProgressView(value: model.progress)
+            .progressViewStyle(.circular)
+            .controlSize(.small)
+            .tint(.white)
+            .padding(5)
+            .background(.black.opacity(0.35), in: Circle())
+        }
+        .filmFrame(selected: selected, aspect: model.live.map { $0.size.width / max(1, $0.size.height) } ?? 1.5)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Render in progress")
+    }
+    else if let item = library.items.first(where: { $0.id == id }) {
+      Button {
+        withMotion(.snappy) { model.select(id) }
+      } label: {
+        FilmFrame(url: library.still(item), video: item.video, frames: item.frames)
+          .filmFrame(selected: selected,
+                     aspect: item.height > 0 ? CGFloat(item.width) / CGFloat(item.height) : 1.5)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(item.video ? "Animation, \(item.frames) frames" : "Image")
+      .accessibilityValue(item.date.formatted(date: .abbreviated, time: .shortened))
+      .accessibilityAddTraits(selected ? .isSelected : [])
+      .contextMenu {
+        ShareLink(item: library.url(item)) { Label("Share", systemImage: "square.and.arrow.up") }
+        Button(role: .destructive) { deleting = item } label: { Label("Delete", systemImage: "trash") }
+      } preview: {
+        FilmFrame(url: library.still(item), video: item.video, frames: item.frames)
+          .frame(width: 360, height: 360 / max(0.3, item.height > 0 ? CGFloat(item.width) / CGFloat(item.height) : 1.5))
+      }
+    }
+  }
+}
+
+private extension View {
+  /** A narrow frame packed against its neighbours, or the picked one opened out to its shape. */
+  func filmFrame(selected: Bool, aspect: CGFloat) -> some View {
+    let height: CGFloat = selected ? 56 : 48
+    let width = selected ? min(112, max(40, height * aspect)) : 32
+    return self
+      .frame(width: width, height: height)
+      .clipShape(RoundedRectangle(cornerRadius: selected ? 6 : 3, style: .continuous))
+      .padding(.horizontal, selected ? 6 : 0)
+      .animation(.smooth(duration: 0.25), value: selected)
+  }
 }
 
 struct FilmFrame: View {
   let url: URL?
   let video: Bool
   let frames: Int
-  let selected: Bool
-  var size: CGFloat = 64
   @State private var image: UIImage?
 
   var body: some View {
-    let width = size * 1.5
     ZStack(alignment: .bottomLeading) {
       Color(uiColor: .tertiarySystemFill)
       if let image {
         Image(uiImage: image).resizable().scaledToFill()
       }
       if video {
-        Label("\(frames)", systemImage: "play.fill")
-          .font(.caption2.weight(.semibold))
+        Image(systemName: "play.fill")
+          .font(.system(size: 8, weight: .bold))
           .foregroundStyle(.white)
-          .padding(.horizontal, 5)
-          .padding(.vertical, 2)
-          .background(.black.opacity(0.45), in: Capsule())
-          .padding(4)
+          .padding(3)
+          .background(.black.opacity(0.45), in: Circle())
+          .padding(3)
       }
     }
-    .frame(width: width, height: size)
-    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
-        .strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 3)
-    }
-    .scaleEffect(selected ? 1 : 0.94)
-    .animation(.snappy, value: selected)
     .task(id: url) {
-      if let url { image = await RenderThumbnails.load(url, size: width * 3) }
+      if let url { image = await RenderThumbnails.load(url, size: 360) }
     }
   }
 }
