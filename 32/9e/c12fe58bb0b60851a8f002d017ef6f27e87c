@@ -2,3 +2,4 @@ Referenced by issue #164122, Geometry nodes - crash when editing a mesh with cur
 Referenced by issue #164315, Crash selecting points in edit mode with a specific geometry node modifier
 Referenced by issue #164522, Blender crashes when applying Voxel remesh and Smooth Corrective
 Referenced by issue #164920, Blender 5.3 crash when adding subdivision and smooth corrective
+Referenced by pull request #164980, Fix: Crash transforming in edit mode with On Cage modifiers
