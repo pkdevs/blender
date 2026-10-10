@@ -1651,7 +1651,7 @@ void wm_draw_update(bContext *C)
 #endif
 
   for (wmWindow &win : wm->windows) {
-#ifdef WIN32
+#if defined(WIN32) || defined(WITH_APPLE_CROSSPLATFORM)
     const GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win.runtime->ghostwin);
     const GHOST_TWindowState state = ghost_window->getState();
 

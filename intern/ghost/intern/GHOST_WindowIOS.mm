@@ -7206,8 +7206,8 @@ GHOST_TSuccess GHOST_WindowIOS::setClientSize(uint32_t /*width*/, uint32_t /*hei
 
 GHOST_TWindowState GHOST_WindowIOS::getState() const
 {
-  /* TODO: Implement. */
-  return GHOST_kWindowStateNormal;
+  /* Out of sight in the background: iOS allows no drawing there. */
+  return GHOST_ios_app_in_background() ? GHOST_kWindowStateMinimized : GHOST_kWindowStateNormal;
 }
 
 void GHOST_WindowIOS::screenToClient(int32_t inX, int32_t inY, int32_t &outX, int32_t &outY) const

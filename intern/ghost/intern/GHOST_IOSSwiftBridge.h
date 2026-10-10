@@ -22,6 +22,8 @@ void WM_apple_ios_ui_setting_enqueue(const char *setting, const char *value);
 void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 void WM_apple_ios_ui_command_enqueue(int command);
 void WM_apple_ios_ui_asset_drag(int phase, const char *asset_id, int x, int y);
+/** Keep Blender's loop running while the app is in the background, for a render. */
+void GHOST_ios_engine_continue_work(bool continues);
 
 #ifdef __cplusplus
 }

@@ -80,6 +80,8 @@ static std::vector<std::function<void()>> engine_autosave_done;
 static GHOST_IOSMessageQueue<std::function<void()>> engine_document_requests;
 static std::atomic<bool> engine_document_pending{false};
 static std::atomic<bool> app_in_background{false};
+/* A render the user started goes on while the app is inactive or in the background. */
+static std::atomic<bool> engine_continues_work{false};
 
 /* When the engine's current pass began (seconds on the monotonic clock), 0 between passes. UIKit
  * reads it to tell when Blender is held up, such as by compiling shaders. */
@@ -138,6 +140,12 @@ bool GHOST_ios_app_in_background()
   return app_in_background.load();
 }
 
+extern "C" void GHOST_ios_engine_continue_work(bool continues)
+{
+  engine_continues_work.store(continues);
+  GHOST_ios_engine_wake();
+}
+
 /** Ask the engine to write the auto-save now; `done` runs on the engine thread afterwards. */
 static void request_autosave(std::function<void()> done)
 {
@@ -186,7 +194,7 @@ static void run_engine()
          * notification racing the transition into sleep. */
         engine_condition.wait_for(lock, std::chrono::milliseconds(100), [] {
           return engine_active.load() || engine_autosave_requested.load() ||
-                 engine_document_pending.load();
+                 engine_document_pending.load() || engine_continues_work.load();
         });
       }
     }
@@ -197,10 +205,17 @@ static void run_engine()
         request();
       }
     }
-    if (!engine_active.load()) {
+    /* A render keeps Blender's loop running in the background, a few times a second, so its job
+     * finishes and reports progress; windows aren't drawn there, see #getState. */
+    const bool continuing = !engine_active.load() && engine_continues_work.load();
+    if (!engine_active.load() && !continuing) {
       continue;
     }
     deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(16667);
+    if (continuing) {
+      std::unique_lock lock(engine_wait_mutex);
+      engine_condition.wait_for(lock, std::chrono::milliseconds(100), [] { return engine_active.load(); });
+    }
     @autoreleasepool {
       auto *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());
       for (auto &request : engine_requests.take()) {
