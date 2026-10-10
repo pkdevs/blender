@@ -47,7 +47,6 @@
 #include "gpu_shader_math_quaternion.bsl.hh"
 #include "gpu_shader_math_vector.bsl.hh"
 #include "gpu_shader_math_vector_reduce.bsl.hh"
-#include "gpu_shader_utildefines.bsl.hh"
 
 namespace draw::gsplat {
 
@@ -68,10 +67,10 @@ template void swap<float2>(float2 &, float2 &);
 float2 pack_normal_octahedral(float3 N)
 {
   N /= reduce_add(abs(N));
-  N.xy = N.z >= 0.f ?
-             N.xy :
-             (1.f - abs(N.yx)) * mix(float2(-1.f), float2(1.f), greaterThanEqual(N.xy, float2(0)));
-  N.xy = N.xy * .5f + .5f;
+  N.xy = N.z >= 0.0f ? N.xy :
+                       (1.0f - abs(N.yx)) *
+                           mix(float2(-1.0f), float2(1.0f), greaterThanEqual(N.xy, float2(0)));
+  N.xy = N.xy * 0.5f + 0.5f;
   return N.xy;
 }
 
@@ -260,8 +259,8 @@ struct AxisTuple {
   {
     /* NOTE(not_mark): do not reduce packing size further; already causes jittering on zoom. */
     float axis_0_dir = /* 10 bits */ float(data & 0x3FFu) / 1023.0f;
-    float axis_0_len = /* 11 bits */ float((data >> 10u) & 0x7FF) / 2047.0f;
-    float axis_1_len = /* 11 bits */ float((data >> 21u) & 0x7FF) / 2047.0f;
+    float axis_0_len = /* 11 bits */ float((data >> 10u) & 0x7FFu) / 2047.0f;
+    float axis_1_len = /* 11 bits */ float((data >> 21u) & 0x7FFu) / 2047.0f;
 
     constexpr float max_axis_size = 1024.0f;
     const float2 axis = normalize(float2(axis_0_dir, cos_from_sin(axis_0_dir)));
@@ -343,8 +342,9 @@ float3 project_covmat(float3 lP,
 
   /* Applied in [3dgs2023], either as a low-pass regularization, or to enforce some minimum pixel
    * size. Reason unclear, but I guess we should match the reference here. */
-  covmat_2d[0][0] += 0.3f;
-  covmat_2d[1][1] += 0.3f;
+  /* NOTE(not_mark): disabled for now, better matches Cycles implementation. */
+  // covmat_2d[0][0] += 0.3f;
+  // covmat_2d[1][1] += 0.3f;
 
   return float3(covmat_2d[0][0], covmat_2d[0][1], covmat_2d[1][1]);
 }
@@ -544,8 +544,7 @@ struct ShapeResource {
    */
   float3 get_radiance(uint gs_id) const
   {
-    uint2 data = floatBitsToUint(texelFetch(radiance_comp_tx, int(gs_id)).xy);
-    return float4(unpackHalf2x16(data.x), unpackHalf2x16(data.y)).rgb;
+    return texelFetch(radiance_comp_tx, int(gs_id)).rgb;
   }
 
   /**

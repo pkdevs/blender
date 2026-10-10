@@ -85,8 +85,8 @@ struct ProjectAssetLibraryListItem : public AssetLibraryListItemCommon {
       sub.label(IFACE_("Built-In"), ICON_NONE);
     }
 
-    if (library.user_library && library.user_library->is_enabled() && is_remote_library &&
-        !library.user_library->remote_url[0])
+    if (library.user_library && !(library.user_library->flag & ASSET_LIBRARY_DISABLED) &&
+        is_remote_library && !library.user_library->remote_url[0])
     {
       row.label("", ICON_ERROR);
     }
@@ -103,7 +103,8 @@ struct ProjectAssetLibraryListItem : public AssetLibraryListItemCommon {
                "enabled",
                UI_ITEM_NONE,
                "",
-               library.user_library->is_enabled() ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT);
+               (library.user_library->flag & ASSET_LIBRARY_DISABLED) ? ICON_CHECKBOX_DEHLT :
+                                                                       ICON_CHECKBOX_HLT);
     }
   }
 
@@ -181,7 +182,7 @@ void project_asset_panel_register(ARegionType &region_type)
   panel_type->space_type = SPACE_PROJECT;
   panel_type->region_type = RGN_TYPE_WINDOW;
   panel_type->draw = project_asset_panel_draw;
-  panel_type->order = 10; /* Make sure the category are put after the other base categoies. */
+  panel_type->order = 10; /* Make sure the category are put after the other base categories. */
   BLI_addtail(&region_type.paneltypes, panel_type);
 }
 

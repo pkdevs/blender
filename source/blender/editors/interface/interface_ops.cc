@@ -290,7 +290,7 @@ static void UI_OT_copy_as_driver_button(wmOperatorType *ot)
 
 static bool copy_python_command_button_poll(bContext *C)
 {
-  Button *but = context_active_but_get(C);
+  Button *but = context_active_but_get_respect_popup(C);
 
   if (but && (but->optype != nullptr)) {
     return true;
@@ -301,7 +301,7 @@ static bool copy_python_command_button_poll(bContext *C)
 
 static wmOperatorStatus copy_python_command_button_exec(bContext *C, wmOperator * /*op*/)
 {
-  Button *but = context_active_but_get(C);
+  Button *but = context_active_but_get_respect_popup(C);
 
   if (but && (but->optype != nullptr)) {
     /* allocated when needed, the button owns it */
@@ -2644,7 +2644,8 @@ static AbstractView *get_view_focused(bContext *C)
     return nullptr;
   }
 
-  const ARegion *region = CTX_wm_region(C);
+  const ARegion *region_popup = CTX_wm_region_popup(C);
+  const ARegion *region = region_popup ? region_popup : CTX_wm_region(C);
   if (!region) {
     return nullptr;
   }
@@ -3342,7 +3343,7 @@ static wmOperatorStatus region_clear_filter_exec(bContext *C, wmOperator * /*op*
   return OPERATOR_FINISHED;
 }
 
-static bool reion_clear_filter_poll(blender::bContext *C)
+static bool region_clear_filter_poll(blender::bContext *C)
 {
   ARegion *region = CTX_wm_region(C);
   return region && BKE_region_panel_categories_search_filter_visible(region);
@@ -3354,7 +3355,7 @@ static void UI_OT_region_clear_filter(wmOperatorType *ot)
   ot->description = "Clear and hide the region search filter";
   ot->idname = "UI_OT_region_clear_filter";
   ot->exec = region_clear_filter_exec;
-  ot->poll = reion_clear_filter_poll;
+  ot->poll = region_clear_filter_poll;
 }
 
 /** \} */
