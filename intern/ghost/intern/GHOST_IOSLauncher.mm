@@ -706,6 +706,8 @@ static NSURL *launcher_pending_url = nil;
   NSURL *_createdURL;
   NSDictionary *_createdPresentation;
   NSURL *_creationSource;
+  /** A copy of the new document, kept until the browser has imported it. */
+  NSURL *_creationBackup;
 }
 
 - (void)viewDidLoad
@@ -781,7 +783,56 @@ static NSURL *launcher_pending_url = nil;
   [_createdURL release];
   [_createdPresentation release];
   [_creationSource release];
+  [self discardCreationBackup];
   [super dealloc];
+}
+
+/* The document browser can fail to import into a location it remembers but can no longer reach,
+ * such as the app's previous container after a reinstall, and it deletes the file it was given.
+ * Keep a copy until the import succeeds, so the new document can go to the app's own Documents
+ * folder instead, which the browser always shows. */
+- (void)backUpCreation:(NSURL *)source
+{
+  [self discardCreationBackup];
+  NSFileManager *files = NSFileManager.defaultManager;
+  NSURL *folder = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
+                                                                    NSUUID.UUID.UUIDString]];
+  NSURL *backup = [folder URLByAppendingPathComponent:source.lastPathComponent];
+  if ([files createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:nil] &&
+      [files copyItemAtURL:source toURL:backup error:nil])
+  {
+    _creationBackup = [backup copy];
+  }
+}
+
+- (void)discardCreationBackup
+{
+  if (_creationBackup) {
+    [NSFileManager.defaultManager removeItemAtURL:_creationBackup.URLByDeletingLastPathComponent error:nil];
+    [_creationBackup release];
+    _creationBackup = nil;
+  }
+}
+
+- (NSURL *)keepCreationBackup
+{
+  NSFileManager *files = NSFileManager.defaultManager;
+  NSURL *folder = [files URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject;
+  NSURL *source = _creationBackup;
+  if (!source || !folder || ![files fileExistsAtPath:source.path]) {
+    [self discardCreationBackup];
+    return nil;
+  }
+  NSString *name = source.URLByDeletingPathExtension.lastPathComponent;
+  NSString *extension = source.pathExtension;
+  NSURL *destination = [folder URLByAppendingPathComponent:source.lastPathComponent];
+  for (NSInteger number = 2; [files fileExistsAtPath:destination.path] && number < 10000; number++) {
+    destination = [folder URLByAppendingPathComponent:[NSString stringWithFormat:@"%@ %ld.%@", name,
+                                                                                 (long)number, extension]];
+  }
+  const BOOL moved = [files moveItemAtURL:source toURL:destination error:nil];
+  [self discardCreationBackup];
+  return moved ? destination : nil;
 }
 
 - (void)creationFailed:(UIViewController *)presenter
@@ -789,6 +840,7 @@ static NSURL *launcher_pending_url = nil;
   _creating = NO;
   [_creatingTemplate release];
   _creatingTemplate = nil;
+  [self discardCreationBackup];
   if (_creationSource) {
     [NSFileManager.defaultManager removeItemAtURL:_creationSource.URLByDeletingLastPathComponent error:nil];
     [_creationSource release];
@@ -830,11 +882,14 @@ static NSURL *launcher_pending_url = nil;
     self->_creatingTemplate = [identifier copy];
     GHOST_ios_document_create(identifier, ^(NSURL *source) {
       if (!source) { [self creationFailed:presenter]; return; }
+      [self backUpCreation:source];
       [self.launchOptions.browserViewController importDocumentAtURL:source
           nextToDocumentAtURL:self.document.fileURL mode:UIDocumentBrowserImportModeMove
           completionHandler:^(NSURL *destination, NSError *error) {
+        if (!destination || error) { destination = [self keepCreationBackup]; }
+        [self discardCreationBackup];
         [NSFileManager.defaultManager removeItemAtURL:source.URLByDeletingLastPathComponent error:nil];
-        if (!destination || error) { [self creationFailed:presenter]; return; }
+        if (!destination) { [self creationFailed:presenter]; return; }
         [self recordCreatedTemplateAtURL:destination];
         [self openDocumentAtURL:destination];
       }];
@@ -976,6 +1031,7 @@ static NSURL *launcher_pending_url = nil;
     GHOST_ios_document_create(app_template, ^(NSURL *url) {
       [self->_creationSource release];
       self->_creationSource = [url copy];
+      if (url) { [self backUpCreation:url]; }
       importHandler(url, url ? UIDocumentBrowserImportModeMove : UIDocumentBrowserImportModeNone);
       if (!url) { [self creationFailed:self]; }
     });
@@ -991,6 +1047,7 @@ static NSURL *launcher_pending_url = nil;
     didImportDocumentAtURL:(NSURL *)sourceURL
           toDestinationURL:(NSURL *)destinationURL
 {
+  [self discardCreationBackup];
   if (_creatingTemplate) { [self recordCreatedTemplateAtURL:destinationURL]; }
   if ([_creationSource isEqual:sourceURL]) {
     [NSFileManager.defaultManager removeItemAtURL:sourceURL.URLByDeletingLastPathComponent error:nil];
@@ -1003,6 +1060,13 @@ static NSURL *launcher_pending_url = nil;
 - (void)documentBrowser:(UIDocumentBrowserViewController *)browser
     failedToImportDocumentAtURL:(NSURL *)documentURL error:(NSError *)error
 {
+  if (NSURL *kept = [self keepCreationBackup]) {
+    [_creationSource release];
+    _creationSource = nil;
+    [self recordCreatedTemplateAtURL:kept];
+    [self openDocumentAtURL:kept];
+    return;
+  }
   [self creationFailed:self];
 }
 
