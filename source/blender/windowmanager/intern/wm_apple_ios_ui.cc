@@ -216,6 +216,8 @@ bool ios_ui_gizmo_refresh_pending = true;
 std::atomic<bool> ios_desktop_ui{false};
 int ios_panels_visible = 0;
 std::chrono::steady_clock::time_point ios_panels_next_snapshot;
+/* The last panels snapshot UIKit was given; cleared when it asks for different panels. */
+std::string ios_panels_published;
 std::string ios_panels_json = "null";
 std::string ios_properties_state = "{\"tab\":\"OBJECT\"}";
 std::string ios_shading_state = "{\"tab\":\"SHADING\"}";
@@ -786,16 +788,19 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   if (command.setting == "native_shading_state") {
     ios_shading_state = command.value;
     ios_panels_next_snapshot = {};
+    ios_panels_published.clear();
     return;
   }
   if (command.setting == "native_shading_visible") {
     ios_panels_visible = (ios_panels_visible & ~4) | (command.value == "1" ? 4 : 0);
     ios_panels_next_snapshot = {};
+    ios_panels_published.clear();
     return;
   }
   if (command.setting == "native_properties_state") {
     ios_properties_state = command.value;
     ios_panels_next_snapshot = {};
+    ios_panels_published.clear();
     return;
   }
   if (command.setting == "native_properties_edit" || command.setting == "native_panel_edit") {
@@ -830,6 +835,7 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   }
   if (command.setting == "native_panels") {
     ios_panels_next_snapshot = {};
+    ios_panels_published.clear();
     ios_panels_visible = (ios_panels_visible & 4) | (command.value == "3" ? 3 : command.value == "2" ? 2 :
                          command.value == "1" ? 1 : 0);
     return;
@@ -1816,7 +1822,11 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
       std::ostringstream merged_stream;
       JsonFormatter().serialize(merged_stream, merged);
       ios_panels_json = merged_stream.str();
-      ios_panels_snapshot.publish(ios_panels_json);
+      /* Published when it changes: every snapshot wakes UIKit. */
+      if (ios_panels_json != ios_panels_published) {
+        ios_panels_published = ios_panels_json;
+        ios_panels_snapshot.publish(ios_panels_json);
+      }
     }
   }
 #endif
@@ -2678,10 +2688,16 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     }
     ED_view3d_pencil_hover_update(C, active, mval, drag_to_object);
     const View3DPencilHover hit = ED_view3d_pencil_hover_get(region);
-    ios_hover_snapshot.publish("{\"object\":" + std::to_string(hit.object_uid) +
-                               ",\"kind\":" + std::to_string(hit.kind) +
-                               ",\"index\":" + std::to_string(hit.index) +
-                               ",\"cursorVisible\":" + (ios_hover_request.active ? "true" : "false") + "}");
+    /* Published when it changes: every snapshot wakes UIKit. */
+    static std::string hover_published;
+    std::string hover = "{\"object\":" + std::to_string(hit.object_uid) +
+                        ",\"kind\":" + std::to_string(hit.kind) +
+                        ",\"index\":" + std::to_string(hit.index) +
+                        ",\"cursorVisible\":" + (ios_hover_request.active ? "true" : "false") + "}";
+    if (hover != hover_published) {
+      hover_published = hover;
+      ios_hover_snapshot.publish(std::move(hover));
+    }
     ios_context_pop(C, context_store);
   }
 
