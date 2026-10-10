@@ -58,117 +58,6 @@ float3 bxdf_ggx_sample_vndf(float3 rand, float3 Vt, float alpha, float &G_V)
   return normalize(float3(alpha * Hh.xy, max(0.0f, Hh.z)));
 }
 
-/**
- * Returns a tangent space refraction direction following the GGX distribution.
- *
- * \param rand: random point on the unit cylinder (result of sample_cylinder).
- *              The Z component can be biased towards 1.
- * \param Vt: View vector in tangent space.
- * \param alpha: roughness parameter
- * \param ior: refractive index of the material.
- * \param do_clamp: clamp for numerical stability during ray tracing.
- *
- * \return: the sampled direction and the pdf of sampling the direction.
- */
-BsdfSample bxdf_ggx_sample_refraction(
-    float3 rand, float3 Vt, float alpha, float ior, Thickness thickness, const bool do_clamp)
-{
-  if (thickness.value() != 0.0f) {
-    /* The incoming ray is inside the material for the second refraction event. */
-    ior = 1.0f / ior;
-  }
-
-  if (do_clamp && alpha < square(BSDF_ROUGHNESS_THRESHOLD)) {
-    BsdfSample samp;
-    samp.pdf = 1e6f;
-    samp.direction = refract(-Vt, float3(0.0f, 0.0f, 1.0f), 1.0f / ior);
-    return samp;
-  }
-
-  float G_V;
-  float3 Ht = bxdf_ggx_sample_vndf(rand, Vt, alpha, G_V);
-
-  float3 Lt = refract(-Vt, Ht, 1.0f / ior);
-
-  /* Normal Distribution Function. */
-  float D = bxdf_ggx_D(saturate(Ht.z), square(alpha));
-
-  float VH = dot(Vt, Ht);
-  float LH = dot(Lt, Ht);
-  float Ht2 = square(ior * LH + VH);
-  float pdf = D * G_V * abs(VH * LH) * square(ior) / (Vt.z * Ht2);
-
-  BsdfSample samp;
-  samp.direction = Lt;
-  samp.pdf = pdf;
-  return samp;
-}
-
-/* Evaluate the GGX BTDF without the Fresnel term, multiplied by the cosine foreshortening term.
- * Also evaluate the probability of sampling the refraction direction. */
-BsdfEval bxdf_ggx_eval_refraction(
-    float3 N, float3 L, float3 V, float alpha, float ior, Thickness thickness, const bool do_clamp)
-{
-  if (thickness.value() != 0.0f) {
-    ior = 1.0f / ior;
-  }
-
-  float LV = dot(L, V);
-  if (do_clamp && is_equal(ior, 1.0f, 1e-4f)) {
-    /* Only valid when `L` and `V` point in the opposite directions. */
-    BsdfEval eval;
-    eval.throughput = float(is_equal(LV, -1.0f, 1e-3f));
-    eval.pdf = 1e6f;
-    eval.weight = eval.throughput;
-    return eval;
-  }
-
-  bool valid = (ior < 1.0f) ? (LV < -ior) : (LV * ior < -1.0f);
-  if (!valid) {
-    /* Impossible configuration for transmission due to total internal reflection. */
-    BsdfEval eval;
-    eval.throughput = 0.0f;
-    eval.pdf = 0.0f;
-    eval.weight = 0.0f;
-    return eval;
-  }
-
-  float3 H = ior * L + V;
-  /* Ensure `H` is on the same hemisphere as `V`. */
-  H = (ior < 1.0f) ? H : -H;
-  float inv_len_H = safe_rcp(length(H));
-  H *= inv_len_H;
-
-  /* For transmission, `L` lies in the opposite hemisphere as `H`, therefore negate `L`. */
-  float NL = dot(N, -L);
-  float NH = dot(N, H);
-  float NV = dot(N, V);
-
-  if (do_clamp) {
-    NL = max(NL, 1e-8f);
-    NH = max(NH, 1e-8f);
-    /* This threshold was computed based on precision of NVidia compiler (see #118997).
-     * These drivers tend to produce NaNs in the computation of the NDF (`D`) if alpha is close to
-     * 0. */
-    alpha = max(1e-3f, alpha);
-  }
-
-  float a2 = square(alpha);
-  float G_V = bxdf_ggx_smith_G1(NV, a2);
-  float G_L = bxdf_ggx_smith_G1(NL, a2);
-  float D = bxdf_ggx_D(NH, a2);
-
-  float VH = saturate(dot(V, H));
-  float LH = saturate(dot(-L, H));
-
-  BsdfEval eval;
-  eval.pdf = (D * G_V * VH * LH * square(ior * inv_len_H)) / NV;
-  eval.throughput = eval.pdf * G_L;
-  eval.weight = G_L;
-
-  return eval;
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -464,6 +353,119 @@ struct GGXBrdf {
     /* Multiply `D` after computing the weighted throughput for numerical stability. */
     eval.throughput *= D;
     eval.pdf *= D;
+
+    return eval;
+  }
+};
+
+struct GGXBtdf {
+  /* Roughness parameter. */
+  float alpha;
+  /* Refractive index. */
+  float ior;
+
+  static GGXBtdf init(const float perceptual_roughness, float ior, const Thickness thickness)
+  {
+    if (thickness.value() != 0.0f) {
+      /* The incoming ray is inside the material for the second refraction event. */
+      ior = 1.0f / ior;
+    }
+
+    /* We use squared roughness for approximate perceptual linearity following
+     * [Physically Based Shading at Disney]
+     * (https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)
+     * Section 5.4. */
+    const float alpha = square(perceptual_roughness);
+    return {alpha, ior};
+  }
+
+  /**
+   * Returns a tangent space refraction direction following the GGX distribution.
+   *
+   * \param rand: random point on the unit cylinder (result of sample_cylinder).
+   *              The Z component can be biased towards 1.
+   * \param Vt: View vector in tangent space.
+   * \param do_clamp: clamp for numerical stability during ray tracing.
+   *
+   * \return: the sampled direction and the pdf of sampling the direction.
+   */
+  BsdfSample bsdf_sample(const float3 rand, const float3 Vt, const bool do_clamp = false) const
+  {
+    if (do_clamp && alpha < square(BSDF_ROUGHNESS_THRESHOLD)) {
+      BsdfSample samp;
+      samp.pdf = 1e6f;
+      samp.direction = refract(-Vt, float3(0.0f, 0.0f, 1.0f), 1.0f / ior);
+      return samp;
+    }
+
+    float G_V;
+    const float3 Ht = bxdf_ggx_sample_vndf(rand, Vt, alpha, G_V);
+
+    const float3 Lt = refract(-Vt, Ht, 1.0f / ior);
+
+    /* Normal Distribution Function. */
+    const float D = bxdf_ggx_D(saturate(Ht.z), square(alpha));
+
+    const float VH = dot(Vt, Ht);
+    const float LH = dot(Lt, Ht);
+    const float Ht2 = square(ior * LH + VH);
+    const float pdf = D * G_V * abs(VH * LH) * square(ior) / (Vt.z * Ht2);
+
+    return {.direction = Lt, .pdf = pdf};
+  }
+
+  /* Evaluate the GGX BTDF without the Fresnel term, multiplied by the cosine foreshortening term.
+   * Also evaluate the probability of sampling the refraction direction. */
+  BsdfEval bsdf_eval(const float3 N,
+                     const float3 L,
+                     const float3 V,
+                     const bool do_clamp = false) const
+  {
+    const float LV = dot(L, V);
+    if (do_clamp && is_equal(ior, 1.0f, 1e-4f)) {
+      /* Only valid when `L` and `V` point in the opposite directions. */
+      BsdfEval eval;
+      eval.throughput = float(is_equal(LV, -1.0f, 1e-3f));
+      eval.pdf = 1e6f;
+      eval.weight = eval.throughput;
+      return eval;
+    }
+
+    const bool valid = (ior < 1.0f) ? (LV < -ior) : (LV * ior < -1.0f);
+    if (!valid) {
+      /* Impossible configuration for transmission due to total internal reflection. */
+      return BsdfEval::zero();
+    }
+
+    float3 H = ior * L + V;
+    /* Ensure `H` is on the same hemisphere as `V`. */
+    H = (ior < 1.0f) ? H : -H;
+    const float inv_len_H = safe_rcp(length(H));
+    H *= inv_len_H;
+
+    /* For transmission, `L` lies in the opposite hemisphere as `H`, therefore negate `L`. */
+    float NL = dot(N, -L);
+    float NH = dot(N, H);
+    if (do_clamp) {
+      NL = max(NL, 1e-8f);
+      NH = max(NH, 1e-8f);
+    }
+
+    const float NV = dot(N, V);
+    /* This threshold was computed based on precision of Nvidia compiler (see #118997). These
+     * drivers tend to produce NaNs in the NDF (`D`) if alpha is close to 0. */
+    const float a2 = square(do_clamp ? max(1e-3f, alpha) : alpha);
+    const float G_V = bxdf_ggx_smith_G1(NV, a2);
+    const float G_L = bxdf_ggx_smith_G1(NL, a2);
+    const float D = bxdf_ggx_D(NH, a2);
+
+    const float VH = saturate(dot(V, H));
+    const float LH = saturate(dot(-L, H));
+
+    BsdfEval eval;
+    eval.pdf = (D * G_V * VH * LH * square(ior * inv_len_H)) / NV;
+    eval.throughput = eval.pdf * G_L;
+    eval.weight = G_L;
 
     return eval;
   }

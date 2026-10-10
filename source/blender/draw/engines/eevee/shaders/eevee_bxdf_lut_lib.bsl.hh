@@ -75,28 +75,30 @@ struct GGXBsdfData {
     return {.scale = data.x, .bias = data.y, .transmission_factor = data.z};
   }
 
-  static float3 lut_coords_get(float cos_theta, float roughness, float ior)
+  static float3 to_coords(const float cos_theta, const float roughness, const float ior)
   {
     /* IOR is the sine of the critical angle. */
-    float critical_cos = sqrt(1.0f - ior * ior);
+    const float critical_cos = sqrt(1.0f - ior * ior);
 
     float3 coords;
     coords.x = square(ior);
+
     coords.y = cos_theta;
     coords.y -= critical_cos;
     coords.y /= (coords.y > 0.0f) ? (1.0f - critical_cos) : critical_cos;
     coords.y = coords.y * 0.5f + 0.5f;
+
     coords.z = roughness;
 
     return saturate(coords);
   }
 
-  static GGXBsdfData sample_utility_tx(const UtilityTexture &util_tx,
-                                       float cos_theta,
-                                       float roughness,
-                                       float ior)
+  static GGXBsdfData sample_lut(const UtilityTexture &util_tx,
+                                const float cos_theta,
+                                const float roughness,
+                                const float ior)
   {
-    const float3 coords = lut_coords_get(cos_theta, roughness, ior);
+    const float3 coords = to_coords(cos_theta, roughness, ior);
     const float4 data = util_tx.sample_bsdf_lut(coords.xy, coords.z);
     return unpack(data);
   }

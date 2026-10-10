@@ -44,9 +44,9 @@ float closure_evaluate_pdf(ClosureUndetermined cl, float3 L, float3 V, Thickness
       return closure.bsdf_eval(cl.N, L, V, true).pdf;
     }
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID: {
-      ClosureRefraction cl_ = to_closure_refraction(cl);
-      float roughness_sq = square(cl_.roughness);
-      return bxdf_ggx_eval_refraction(cl.N, L, V, roughness_sq, cl_.ior, thickness, true).pdf;
+      const ClosureRefraction cl_ = to_closure_refraction(cl);
+      const GGXBtdf closure = GGXBtdf::init(cl_.roughness, cl_.ior, thickness);
+      return closure.bsdf_eval(cl.N, L, V, true).pdf;
     }
     case CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID: {
       const GGXBrdf closure = GGXBrdf::init(to_closure_thin_refraction(cl).roughness);
