@@ -1432,19 +1432,41 @@ float BM_vert_calc_edge_angle(const BMVert *v)
   return BM_vert_calc_edge_angle_ex(v, DEG2RADF(90.0f));
 }
 
-float BM_vert_calc_shell_factor(const BMVert *v)
+static void bm_vert_calc_shell_factor_accum(const BMVert *v,
+                                            const float no[3],
+                                            float *r_accum_shell,
+                                            float *r_accum_angle)
 {
   BMIter iter;
   BMLoop *l;
+  BM_ITER_ELEM (l, &iter, const_cast<BMVert *>(v), BM_LOOPS_OF_VERT) {
+    if (is_zero_v3(l->f->no)) {
+      continue;
+    }
+    const float face_angle = BM_loop_calc_face_angle(l);
+    *r_accum_shell += shell_v3v3_normalized_to_dist(no, l->f->no) * face_angle;
+    *r_accum_angle += face_angle;
+  }
+}
+
+float BM_vert_calc_shell_factor(const BMVert *v)
+{
   float accum_shell = 0.0f;
   float accum_angle = 0.0f;
 
-  BM_ITER_ELEM (l, &iter, (BMVert *)v, BM_LOOPS_OF_VERT) {
-    const float face_angle = BM_loop_calc_face_angle(l);
-    accum_shell += shell_v3v3_normalized_to_dist(v->no, l->f->no) * face_angle;
-    accum_angle += face_angle;
+  bm_vert_calc_shell_factor_accum(v, v->no, &accum_shell, &accum_angle);
+  if (accum_angle != 0.0f) {
+    return accum_shell / accum_angle;
   }
 
+  BMIter iter;
+  BMEdge *e;
+  BM_ITER_ELEM (e, &iter, const_cast<BMVert *>(v), BM_EDGES_OF_VERT) {
+    const BMVert *v_other = BM_edge_other_vert(e, v);
+    if (equals_v3v3(v->co, v_other->co)) {
+      bm_vert_calc_shell_factor_accum(v_other, v->no, &accum_shell, &accum_angle);
+    }
+  }
   if (accum_angle != 0.0f) {
     return accum_shell / accum_angle;
   }
@@ -1458,11 +1480,13 @@ float BM_vert_calc_shell_factor_ex(const BMVert *v, const float no[3], const cha
   float accum_angle = 0.0f;
   int tot_sel = 0, tot = 0;
 
-  BM_ITER_ELEM (l, &iter, (BMVert *)v, BM_LOOPS_OF_VERT) {
+  BM_ITER_ELEM (l, &iter, const_cast<BMVert *>(v), BM_LOOPS_OF_VERT) {
     if (BM_elem_flag_test(l->f, hflag)) { /* <-- main difference to BM_vert_calc_shell_factor! */
-      const float face_angle = BM_loop_calc_face_angle(l);
-      accum_shell += shell_v3v3_normalized_to_dist(no, l->f->no) * face_angle;
-      accum_angle += face_angle;
+      if (!is_zero_v3(l->f->no)) {
+        const float face_angle = BM_loop_calc_face_angle(l);
+        accum_shell += shell_v3v3_normalized_to_dist(no, l->f->no) * face_angle;
+        accum_angle += face_angle;
+      }
       tot_sel++;
     }
     tot++;
