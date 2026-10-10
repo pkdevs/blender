@@ -141,6 +141,8 @@ func menuSignature(_ element: UIMenuElement) -> String {
 /** A horizontal drag that only begins when mostly sideways, so vertical drags still scroll. */
 struct ScrubGesture: UIGestureRecognizerRepresentable {
   var enabled: Bool
+  /** The field, which the sensitivity indicator floats above while scrubbing. */
+  var anchor: AnchorBox? = nil
   var began: () -> Void
   var changed: (_ translation: CGPoint) -> Void
   var ended: (_ cancelled: Bool) -> Void
@@ -162,13 +164,21 @@ struct ScrubGesture: UIGestureRecognizerRepresentable {
   }
 
   func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+    let translation = recognizer.translation(in: recognizer.view?.window)
     switch recognizer.state {
-      case .began: began()
-      case .changed: changed(recognizer.translation(in: recognizer.view?.window))
+      case .began:
+        began()
+        if let view = anchor?.view { ScrubIndicator.shared.show(above: view, vertical: 0) }
+      case .changed:
+        changed(translation)
+        if let view = anchor?.view { ScrubIndicator.shared.show(above: view, vertical: translation.y) }
       case .ended:
-        changed(recognizer.translation(in: recognizer.view?.window))
+        changed(translation)
         ended(false)
-      case .cancelled, .failed: ended(true)
+        ScrubIndicator.shared.hide(for: anchor?.view)
+      case .cancelled, .failed:
+        ended(true)
+        ScrubIndicator.shared.hide(for: anchor?.view)
       default: break
     }
   }
@@ -194,6 +204,120 @@ struct ScrubGesture: UIGestureRecognizerRepresentable {
  * as `GHOSTIOSNumberSensitivity`. */
 func scrubSensitivity(_ vertical: Double) -> Double {
   exp2(min(4.0, max(-4.0, -vertical / 80.0)))
+}
+
+@MainActor
+final class ScrubIndicatorModel: ObservableObject {
+  @Published var vertical = 0.0
+  @Published var tint = Color.accentColor
+}
+
+struct ScrubIndicatorContent: View {
+  @ObservedObject var model: ScrubIndicatorModel
+
+  var body: some View {
+    /* Same mapping as `scrubSensitivity`: up is faster, down is finer. */
+    let octaves = min(4.0, max(-4.0, -model.vertical / 80.0))
+    let factor = exp2(octaves)
+    let normal = abs(octaves) < 0.15
+    HStack(spacing: 8) {
+      Image(systemName: "arrow.up.and.down")
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(.secondary)
+      Group {
+        if abs(model.vertical) < 6 {
+          Text("Up faster · Down finer")
+        }
+        else {
+          Text((factor >= 1 ? String(format: "×%.3g", factor) : String(format: "×%.2g", factor)) + " " +
+               (normal ? "Normal" : octaves > 0 ? "Faster" : "Finer"))
+        }
+      }
+      .font(.system(size: 13, weight: .medium).monospacedDigit())
+      .foregroundStyle(.primary)
+      /* A small gauge: the dot rises as dragging gets coarser. */
+      ZStack {
+        Capsule().fill(Color(uiColor: .tertiarySystemFill)).frame(width: 4, height: 24)
+        Rectangle().fill(Color(uiColor: .tertiaryLabel)).frame(width: 8, height: 1)
+        Circle().fill(normal ? Color.secondary : model.tint).frame(width: 8, height: 8)
+          .offset(y: -octaves / 4.0 * (24 - 8) / 2)
+      }
+      .frame(width: 8, height: 24)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 6)
+    .fixedSize()
+  }
+}
+
+/** A floating glass pill above a field while it is scrubbed. It tells the user that vertical
+ * movement changes the drag speed, then shows the current multiplier on a small gauge. */
+@MainActor
+final class ScrubIndicator {
+  static let shared = ScrubIndicator()
+
+  private let model = ScrubIndicatorModel()
+  private lazy var host = UIHostingController(rootView: ScrubIndicatorContent(model: model))
+  private lazy var pill: UIVisualEffectView = {
+    let pill = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    pill.isUserInteractionEnabled = false
+    pill.clipsToBounds = true
+    pill.layer.cornerCurve = .continuous
+    pill.accessibilityIdentifier = "blender.number.scrub-indicator"
+    host.view.backgroundColor = .clear
+    host.sizingOptions = []
+    host.safeAreaRegions = []
+    pill.contentView.addSubview(host.view)
+    return pill
+  }()
+  private weak var field: UIView?
+
+  func show(above field: UIView, vertical: Double) {
+    guard let window = field.window else {
+      hide(for: self.field)
+      return
+    }
+    model.vertical = vertical
+    model.tint = Color(uiColor: field.tintColor)
+    let appearing = self.field !== field || pill.superview !== window
+    self.field = field
+    if pill.superview !== window { window.addSubview(pill) }
+    window.bringSubviewToFront(pill)
+    var size = host.sizeThatFits(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+    size.width = max(size.width, 120)
+    pill.layer.cornerRadius = size.height / 2
+    host.view.frame = CGRect(origin: .zero, size: size)
+    /* Sit above the field, clear of the hand holding the Pencil; flip below near the top. */
+    let anchor = field.convert(field.bounds, to: window)
+    let safe = window.safeAreaInsets
+    var y = anchor.minY - 10 - size.height
+    if y < safe.top + 4 { y = anchor.maxY + 10 }
+    var x = anchor.midX - size.width / 2
+    x = max(safe.left + 8, min(x, window.bounds.width - safe.right - 8 - size.width))
+    if appearing {
+      pill.frame = CGRect(x: x, y: y, width: size.width, height: size.height)
+      pill.alpha = 0
+      pill.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+      UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.18) {
+        self.pill.alpha = 1
+        self.pill.transform = .identity
+      }
+    }
+    else {
+      pill.bounds = CGRect(origin: .zero, size: size)
+      pill.center = CGPoint(x: x + size.width / 2, y: y + size.height / 2)
+    }
+  }
+
+  func hide(for field: UIView?) {
+    guard let field, self.field === field else { return }
+    self.field = nil
+    UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.15) {
+      self.pill.alpha = 0
+    } completion: { _ in
+      if self.field == nil { self.pill.removeFromSuperview() }
+    }
+  }
 }
 
 /** \} */

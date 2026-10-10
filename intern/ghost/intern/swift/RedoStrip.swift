@@ -351,6 +351,8 @@ struct RedoField: View {
   @State private var editing = false
   @State private var text = ""
   @State private var scrub: Double?
+  /** The field's UIKit view, for the drag sensitivity indicator. */
+  @State private var scrubAnchor = AnchorBox()
   @State private var scrubStart = 0.0
   @State private var lastTranslation = 0.0
   @State private var interaction = ""
@@ -394,8 +396,9 @@ struct RedoField: View {
       editing = true
       focused = true
     }
+    .background(PresentationAnchor(anchor: scrubAnchor))
     .gesture(ScrubGesture(enabled: property.has("dragStep") && !isString && !editing && property.bool("editable"),
-                          began: beginScrub, changed: changeScrub, ended: endScrub))
+                          anchor: scrubAnchor, began: beginScrub, changed: changeScrub, ended: endScrub))
     .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
     .onChange(of: store.generation) { _, _ in
       editing = false

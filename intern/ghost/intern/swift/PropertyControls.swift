@@ -70,6 +70,8 @@ struct NumberField: View {
   @State private var interaction = ""
   @State private var lastPreview: CFTimeInterval = 0
   @State private var stepperValue = 0.0
+  /** The field's UIKit view, for the drag sensitivity indicator. */
+  @State private var scrubAnchor = AnchorBox()
   @FocusState private var focused: Bool
 
   private var editable: Bool { property.bool("editable") }
@@ -127,7 +129,8 @@ struct NumberField: View {
     .contentShape(RoundedRectangle(cornerRadius: 8))
     .hoverEffect(.highlight)
     .onTapGesture { beginEditing() }
-    .gesture(ScrubGesture(enabled: scrubs && editable && !editing,
+    .background(PresentationAnchor(anchor: scrubAnchor))
+    .gesture(ScrubGesture(enabled: scrubs && editable && !editing, anchor: scrubAnchor,
                           began: beginScrub, changed: changeScrub, ended: endScrub))
     .onChange(of: focused) { _, isFocused in
       if !isFocused && editing { commit() }
