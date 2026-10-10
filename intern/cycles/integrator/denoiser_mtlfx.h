@@ -56,7 +56,7 @@ private:
   
   virtual bool denoise_run(const DenoiseContext &context, const DenoisePass &pass) override;
   
-  struct KernelParams {
+  struct PreProcessParams {
     int full_x;
     int full_y;
     int width;
@@ -65,26 +65,40 @@ private:
     int stride;
     int pass_stride;
     int pass_denoised;
+    int num_components;
   };
-  
-  struct PassParams {
-    int render_pass_sample_count;
-    int render_pass_depth;
-    int render_pass_motion;
-    int render_pass_normal;
-    int render_pass_roughness;
-    int render_pass_diffuse_albedo;
-    int render_pass_specular_albedo;
-    int render_pass_specular_hit_distance;
+
+  struct GuidingParams {
+    int offset;
+    int stride;
+    int pass_stride;
+    int pass_sample_count;
+    int pass_depth;
+    int pass_albedo;
+    int pass_specular_albedo;
+    int pass_specular_hit_distance;
+    int pass_normal;
+    int pass_roughness;
+    int pass_motion;
+    int full_x;
+    int full_y;
+    int width;
+    int height;
     int num_samples;
   };
-  
-  struct PostprocessParams {
-    int render_full_x;
-    int render_full_y;
-    int render_offset;
-    int render_stride;
+
+  struct PostProcessParams {
+    int full_x;
+    int full_y;
+    int width;
+    int height;
+    int offset;
+    int stride;
+    int pass_stride;
+    int num_samples;
     int pass_noisy;
+    int pass_denoised;
+    int pass_sample_count;
     int num_components;
     float upscale_factor;
   };
@@ -96,7 +110,7 @@ private:
     #include <metal_stdlib>
     using namespace metal;
 
-    struct KernelParams {
+    struct PreProcessParams {
       int full_x;
       int full_y;
       int width;
@@ -105,26 +119,40 @@ private:
       int stride;
       int pass_stride;
       int pass_denoised;
+      int num_components;
     };
 
-    struct PassParams {
-      int render_pass_sample_count;
-      int render_pass_depth;
-      int render_pass_motion;
-      int render_pass_normal;
-      int render_pass_roughness;
-      int render_pass_diffuse_albedo;
-      int render_pass_specular_albedo;
-      int render_pass_specular_hit_distance;
+    struct GuidingParams {
+      int offset;
+      int stride;
+      int pass_stride;
+      int pass_sample_count;
+      int pass_depth;
+      int pass_albedo;
+      int pass_specular_albedo;
+      int pass_specular_hit_distance;
+      int pass_normal;
+      int pass_roughness;
+      int pass_motion;
+      int full_x;
+      int full_y;
+      int width;
+      int height;
       int num_samples;
     };
 
-    struct PostprocessParams {
-      int render_full_x;
-      int render_full_y;
-      int render_offset;
-      int render_stride;
+    struct PostProcessParams {
+      int full_x;
+      int full_y;
+      int width;
+      int height;
+      int offset;
+      int stride;
+      int pass_stride;
+      int num_samples;
       int pass_noisy;
+      int pass_denoised;
+      int pass_sample_count;
       int num_components;
       float upscale_factor;
     };
@@ -133,16 +161,22 @@ private:
     kernel void filter_color_preprocess(
                                         device const float *render_buffer [[buffer(0)]],
                                         texture2d<float, access::write> color_tex [[texture(0)]],
-                                        constant KernelParams &params [[buffer(1)]],
+                                        constant PreProcessParams &params [[buffer(1)]],
                                         uint2 tid [[thread_position_in_grid]]
                                         )
     {
       if (tid.x >= uint(params.width) || tid.y >= uint(params.height)) return;
       
       uint64_t pixel_index = params.offset + (tid.x + params.full_x) + (tid.y + params.full_y) * params.stride;
-      device const float *output = render_buffer + pixel_index * params.pass_stride + params.pass_denoised;
+      device const float *buffer = render_buffer + pixel_index * params.pass_stride;
+
+      device const float *denoised_pixel = buffer + params.pass_denoised;
       
-      float4 color = float4(output[0], output[1], output[2], 1.0f);
+      float4 color;
+      color.x = denoised_pixel[0];
+      color.y = denoised_pixel[1];
+      color.z = denoised_pixel[2];
+      color.w = params.num_components > 3 ? denoised_pixel[3] : 1.0f;
 
       uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
       
@@ -158,9 +192,8 @@ private:
                                           texture2d<float, access::write> roughness_tex [[texture(3)]],
                                           texture2d<float, access::write> diffuse_albedo_tex [[texture(4)]],
                                           texture2d<float, access::write> specular_albedo_tex [[texture(5)]],
-                                            texture2d<float, access::write> specular_hit_distance_tex [[texture(6)]],
-                                          constant KernelParams &params [[buffer(1)]],
-                                          constant PassParams &pass [[buffer(2)]],
+                                          texture2d<float, access::write> specular_hit_distance_tex [[texture(6)]],
+                                          constant GuidingParams &params [[buffer(1)]],
                                           uint2 tid [[thread_position_in_grid]]
                                           )
     {
@@ -173,18 +206,18 @@ private:
       
       float pixelScale;
       
-      if (pass.render_pass_sample_count == PASS_UNUSED) {
-        pixelScale = 1.0f / pass.num_samples;
+      if (params.pass_sample_count == PASS_UNUSED) {
+        pixelScale = 1.0f / params.num_samples;
       } else {
-        pixelScale = 1.0f / float(as_type<uint>(buffer[pass.render_pass_sample_count]));
+        pixelScale = 1.0f / float(as_type<uint>(buffer[params.pass_sample_count]));
       }
 
       uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
       
       // MARK: Depth pass
       
-      if (pass.render_pass_depth != PASS_UNUSED) {
-        const device float *depth = buffer + pass.render_pass_depth;
+      if (params.pass_depth != PASS_UNUSED) {
+        const device float *depth = buffer + params.pass_depth;
         float color = depth[0] * pixelScale;
         
         depth_tex.write(float4(color, 0.0f, 0.0f, 1.0f), flip_tid);
@@ -192,8 +225,8 @@ private:
       
       // MARK: Motion pass
       
-      if (pass.render_pass_motion != PASS_UNUSED) {
-        const device float *motion = buffer + pass.render_pass_motion;
+      if (params.pass_motion != PASS_UNUSED) {
+        const device float *motion = buffer + params.pass_motion;
         float4 color;
         
         color.x = motion[0] * pixelScale;
@@ -204,8 +237,8 @@ private:
       
       // MARK: Normal Pass
       
-      if (pass.render_pass_normal != PASS_UNUSED) {
-        const device float *normal = buffer + pass.render_pass_normal;
+      if (params.pass_normal != PASS_UNUSED) {
+        const device float *normal = buffer + params.pass_normal;
         float4 normalColor;
         
         normalColor.x = normal[0] * pixelScale;
@@ -218,8 +251,8 @@ private:
       
       // MARK: Roughness pass
       
-      if (pass.render_pass_roughness != PASS_UNUSED) {
-        const device float *roughness = buffer + pass.render_pass_roughness;
+      if (params.pass_roughness != PASS_UNUSED) {
+        const device float *roughness = buffer + params.pass_roughness;
         float4 rough;
         
         rough.x = roughness[0] * pixelScale;
@@ -229,8 +262,8 @@ private:
       
       // MARK: Diffuse albedo pass
       
-      if (pass.render_pass_diffuse_albedo != PASS_UNUSED) {
-        const device float *diffuse = buffer + pass.render_pass_diffuse_albedo;
+      if (params.pass_albedo != PASS_UNUSED) {
+        const device float *diffuse = buffer + params.pass_albedo;
         
         float4 albedo;
         albedo.x = diffuse[0] * pixelScale;
@@ -238,8 +271,7 @@ private:
         albedo.z = diffuse[2] * pixelScale;
         albedo.w = 1.0f;
         
-        // TODO: To tonemap or not to tonemap?
-        // This was from the DLSS implementation
+        // Tonemap from DLSS
         albedo.x = clamp(albedo.x / (1.0f + albedo.x), 0.0f, 1.0f);
         albedo.y = clamp(albedo.y / (1.0f + albedo.y), 0.0f, 1.0f);
         albedo.z = clamp(albedo.z / (1.0f + albedo.z), 0.0f, 1.0f);
@@ -249,8 +281,8 @@ private:
       
       // MARK: Specular Albedo Pass
       
-      if (pass.render_pass_specular_albedo != PASS_UNUSED) {
-        const device float *specular = buffer + pass.render_pass_specular_albedo;
+      if (params.pass_specular_albedo != PASS_UNUSED) {
+        const device float *specular = buffer + params.pass_specular_albedo;
         
         float4 albedo;
         albedo.x = specular[0] * pixelScale;
@@ -260,14 +292,14 @@ private:
         
         specular_albedo_tex.write(albedo, flip_tid);
       }
-  
+
       // MARK: Specular Hit Distance Pass
       
-      if (pass.render_pass_specular_hit_distance != PASS_UNUSED) {
-        const device float *specular_dist = buffer + pass.render_pass_specular_hit_distance;
-  
+      if (params.pass_specular_hit_distance != PASS_UNUSED) {
+        const device float *specular_dist = buffer + params.pass_specular_hit_distance;
+
         float distance = specular_dist[0] * pixelScale;
-  
+
         specular_hit_distance_tex.write(float4(distance, 0.0f, 0.0f, 1.0f), flip_tid);
       }
     }
@@ -276,33 +308,33 @@ private:
     kernel void filter_color_postprocess(
                                          device float *render_buffer [[buffer(0)]],
                                          texture2d<float, access::read> output_texture [[texture(0)]],
-                                         constant KernelParams &params [[buffer(1)]],
-                                         constant PassParams &pass [[buffer(2)]],
-                                         constant PostprocessParams &denoise [[buffer(3)]],
+                                         constant PostProcessParams &params [[buffer(1)]],
                                          uint2 tid [[thread_position_in_grid]]
                                          )
     {
       if (tid.x >= uint(params.width) || tid.y >= uint(params.height)) return;
       
-      uint64_t render_pixel_index = denoise.render_offset + 
-                                    (tid.x + denoise.render_full_x) +
-                                    (tid.y + denoise.render_full_y) *
-                                    denoise.render_stride;
+      uint64_t render_pixel_index = params.offset +
+                                    (tid.x + params.full_x) +
+                                    (tid.y + params.full_y) *
+                                    params.stride;
       
-      const device float *buffer = render_buffer + render_pixel_index * params.pass_stride;
+      device float *buffer = render_buffer + render_pixel_index * params.pass_stride;
       
       float pixelScale;
       
       const int PASS_UNUSED = -1;
       
-      if (pass.render_pass_sample_count == PASS_UNUSED) {
-        pixelScale = pass.num_samples;
-      } else if (denoise.upscale_factor == 1.0f) {
-        pixelScale = float(as_type<uint>(buffer[pass.render_pass_sample_count]));
+      if (params.pass_sample_count == PASS_UNUSED) {
+        pixelScale = params.num_samples;
+      } else if (params.upscale_factor == 1.0f) {
+        pixelScale = float(as_type<uint>(buffer[params.pass_sample_count]));
       }
       
-      const uint64_t denoised_pixel_index = params.offset + (tid.x + params.full_x) + (tid.y + params.full_y) * params.stride;
-      device float *denoised_pixel = render_buffer + denoised_pixel_index * params.pass_stride + params.pass_denoised;
+      /* const uint64_t denoised_pixel_index = params.offset + (tid.x + params.full_x) + (tid.y + params.full_y) * params.stride; */
+      /* device float *denoised_pixel = render_buffer + denoised_pixel_index * params.pass_stride + params.pass_denoised; */
+
+      device float *denoised_pixel = buffer + params.pass_denoised;
       
       uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
       
@@ -311,13 +343,13 @@ private:
       denoised_pixel[0] = color_value.x;
       denoised_pixel[1] = color_value.y;
       denoised_pixel[2] = color_value.z;
-      if (denoise.num_components > 3) {
+      if (params.num_components > 3) {
         /* Convert alpha back to transparency. */
         denoised_pixel[3] = 1.0f - color_value.w;
       }
 
-      if (pass.render_pass_sample_count == PASS_UNUSED || denoise.upscale_factor == 1.0f) {
-        for (int c = 0; c < 4 && c < denoise.num_components; c++) {
+      if (params.pass_sample_count == PASS_UNUSED || params.upscale_factor == 1.0f) {
+        for (int c = 0; c < 4 && c < params.num_components; c++) {
           denoised_pixel[c] *= pixelScale;
         }
       }

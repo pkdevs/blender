@@ -71,7 +71,6 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     MTLFXTemporalDenoisedScalerDescriptor *desc = [[MTLFXTemporalDenoisedScalerDescriptor alloc] init];
     BufferParams buffer_params = context.buffer_params;
     
-    desc.autoExposureEnabled = false;
     desc.reactiveMaskTextureEnabled = false;
     desc.transparencyOverlayTextureEnabled = false;
     desc.denoiseStrengthMaskTextureEnabled = false;
@@ -182,7 +181,7 @@ bool MetalFXDenoiser::denoise_filter_color_preprocess(const DenoiseContext &cont
   
   BufferParams buffer_params = context.buffer_params;
   
-  KernelParams params = {
+  PreProcessParams params = {
     buffer_params.full_x,
     buffer_params.full_y,
     buffer_params.width,
@@ -191,6 +190,7 @@ bool MetalFXDenoiser::denoise_filter_color_preprocess(const DenoiseContext &cont
     buffer_params.stride,
     buffer_params.pass_stride,
     pass.denoised_offset,
+    pass.num_components
   };
   
   id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
@@ -222,26 +222,22 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
   
   BufferParams buffer_params = context.buffer_params;
   
-  KernelParams params = {
+  GuidingParams params = {
+    buffer_params.offset,
+    buffer_params.stride,
+    buffer_params.pass_stride,
+    context.pass_sample_count,
+    context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
+    context.pass_denoising_albedo,
+    context.buffer_params.get_pass_offset(PASS_GLOSSY_COLOR),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_HIT_DISTANCE),
+    context.buffer_params.get_pass_offset(PASS_NORMAL),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_BACKWARD_MOTION),
     buffer_params.full_x,
     buffer_params.full_y,
     buffer_params.width,
     buffer_params.height,
-    buffer_params.offset,
-    buffer_params.stride,
-    buffer_params.pass_stride,
-    0,
-  };
-  
-  PassParams passParams = {
-    context.pass_sample_count,
-    context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_BACKWARD_MOTION),
-    context.buffer_params.get_pass_offset(PASS_NORMAL),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
-    context.pass_denoising_albedo,
-    context.buffer_params.get_pass_offset(PASS_GLOSSY_COLOR),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_HIT_DISTANCE),
     context.num_samples,
   };
   
@@ -256,7 +252,6 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
   [encoder setTexture: (id<MTLTexture>) specular_albedo_texture atIndex: 5];
   [encoder setTexture: (id<MTLTexture>) specular_hit_distance_texture atIndex: 6];
   [encoder setBytes: &params length: sizeof(params) atIndex: 1];
-  [encoder setBytes: &passParams length: sizeof(passParams) atIndex:2];
   
   MTLSize gridSize = MTLSizeMake(params.width, params.height, 1);
   id<MTLComputePipelineState> pso = (id<MTLComputePipelineState>) guiding_pre_pso;
@@ -286,35 +281,18 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
   BufferParams buffer_params = context.buffer_params;
   BufferParams denoised_buffer = context.denoised_buffer_params;
   
-  KernelParams params = {
-    denoised_buffer.full_x,
-    denoised_buffer.full_y,
-    denoised_buffer.width,
-    denoised_buffer.height,
-    denoised_buffer.offset,
-    denoised_buffer.stride,
-    denoised_buffer.pass_stride,
-    pass.denoised_offset,
-  };
-  
-  PassParams passParams = {
-    context.pass_sample_count,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    context.num_samples,
-  };
-  
-  PostprocessParams denoise {
+  PostProcessParams params {
     buffer_params.full_x,
     buffer_params.full_y,
+    buffer_params.width,
+    buffer_params.height,
     buffer_params.offset,
     buffer_params.stride,
+    buffer_params.pass_stride,
+    context.num_samples,
     pass.noisy_offset,
+    pass.denoised_offset,
+    context.pass_sample_count,
     pass.num_components,
     params_.upscale_factor,
   };
@@ -324,8 +302,6 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
   [encoder setBuffer: render_buffer offset: 0 atIndex: 0];
   [encoder setTexture: (id<MTLTexture>) output_texture atIndex: 0];
   [encoder setBytes: &params length: sizeof(params) atIndex: 1];
-  [encoder setBytes: &passParams length: sizeof(passParams) atIndex: 2];
-  [encoder setBytes: &denoise length: sizeof(denoise) atIndex: 3];
   
   MTLSize gridSize = MTLSizeMake(params.width, params.height, 1);
   id<MTLComputePipelineState> pso = (id<MTLComputePipelineState>) color_post_pso;
@@ -349,8 +325,6 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   id<MTLFXTemporalDenoisedScaler> denoiser = (id<MTLFXTemporalDenoisedScaler>) mtlfx_denoiser;
   id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
   id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
-  
-  // TODO: account for pixel scale in the upscaler
 
   denoiser.colorTexture               = (id<MTLTexture>) color_texture;
   denoiser.depthTexture               = (id<MTLTexture>) depth_texture;
