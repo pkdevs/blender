@@ -622,6 +622,7 @@ enum class ARegionQuadviewIndex : uint8_t {
 enum ARegionRuntimeFlag : uint8_t {
   /** Move redo panel in +Y direction to avoid overlapping with other UI elements, see: #62258 */
   HUD_PADDING = (1 << 0),
+  HUD_DRAG = (1 << 1),
 };
 ENUM_OPERATORS(ARegionRuntimeFlag)
 
