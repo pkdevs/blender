@@ -687,9 +687,6 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
         bke::greasepencil::shapekey_add_applied_handle_right(key, attributes, handle_positions);
       }
 
-      selection.foreach_index_optimized<int>(
-          [&](const int point) { add_v3_v3(status.median.location, handle_positions[point]); });
-
       selection.foreach_index_optimized<int>([&](const int point) {
         median_bounds_add(status.median.location,
                           status.select_bounds,
@@ -822,21 +819,33 @@ static bool apply_to_curves_point_selection(const int tot,
         }
         if (update_location) {
           apply_raw_diff_v3(
-              positions[point], tot, ve_median.location, median_location / influence);
+              positions[point], tot, ve_median_location, median_location / influence);
         }
       });
     }
   });
 
+  /* Serial, coordinates are stored & restored in visit order. */
+  if (update_dims) {
+    if (actkb) {
+      const Span<float3> base_positions = curves.positions();
+
+      selection.foreach_index([&](const int point) {
+        const float3 base_position = base_positions[point];
+        float3 position = base_position + positions[point];
+        coords_orig->apply(*dims_mat, position);
+        positions[point] = position - base_position;
+      });
+    }
+    else {
+      selection.foreach_index(
+          [&](const int point) { coords_orig->apply(*dims_mat, positions[point]); });
+    }
+  }
+
   if (actkb) {
     key_positions.finish();
     key_radius.finish();
-  }
-
-  /* Serial, coordinates are stored & restored in visit order. */
-  if (update_dims) {
-    selection.foreach_index(
-        [&](const int point) { coords_orig->apply(*dims_mat, positions[point]); });
   }
 
   /* Only location can be changed for Bezier handles. */
@@ -855,7 +864,8 @@ static bool apply_to_curves_point_selection(const int tot,
     }
 
     bke::SpanAttributeWriter<float3> handles =
-        curves.attributes_for_write().lookup_for_write_span<float3>(handles_attribute);
+        curves.attributes_for_write().lookup_or_add_for_write_span<float3>(handles_attribute,
+                                                                           bke::AttrDomain::Point);
     if (update_location) {
       handle_selection.foreach_index(
           [&](const int point) {
@@ -863,22 +873,35 @@ static bool apply_to_curves_point_selection(const int tot,
                 handles.span[point], tot, ve_median_location, median_location / influence);
           },
           exec_mode::grain_size(2048));
-    }
-    if (update_dims) {
-      selection.foreach_index(
-          [&](const int point) { coords_orig->apply(*dims_mat, handles.span[point]); });
+
+      /* Unapply the position of the main point, to not double the transform. */
+      if (actkb) {
+        selection.foreach_index(
+            [&](const int point) {
+              apply_raw_diff_v3(
+                  handles.span[point], tot, ve_median_location, -median_location / influence);
+            },
+            exec_mode::grain_size(2048));
+      }
     }
 
-    /* Unapply the position of the main point, to not double the transform. */
-    if (actkb) {
-      selection.foreach_index(
-          [&](const int point) {
-            apply_raw_diff_v3(handles.span[point],
-                              tot,
-                              ve_median.location,
-                              -float3(median.location) / influence);
-          },
-          exec_mode::grain_size(2048));
+    if (update_dims) {
+      if (actkb) {
+        const Span<float3> base_positions = selection_attribute == ".selection_handle_left" ?
+                                                *curves.handle_positions_left() :
+                                                *curves.handle_positions_right();
+
+        selection.foreach_index([&](const int point) {
+          const float3 base_position = base_positions[point];
+          float3 position = base_position + handles.span[point];
+          coords_orig->apply(*dims_mat, position);
+          handles.span[point] = position - base_position;
+        });
+      }
+      else {
+        selection.foreach_index(
+            [&](const int point) { coords_orig->apply(*dims_mat, handles.span[point]); });
+      }
     }
 
     handles.finish();
