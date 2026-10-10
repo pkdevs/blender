@@ -105,7 +105,10 @@ static void gaussian_blur_1D(const Span<T> src,
         int64_t before = index - offset;
         int64_t after = index + offset;
         if (is_cyclic) {
-          before = (before % total_points + total_points) % total_points;
+          before = before % total_points;
+          if (before < 0) {
+            before += total_points;
+          }
           after = after % total_points;
         }
         else {
