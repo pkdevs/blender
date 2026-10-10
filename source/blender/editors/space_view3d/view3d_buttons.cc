@@ -592,8 +592,8 @@ struct CurvesPointSelectionStatus {
  * bounds in object space. Null when the points are already in object space.
  */
 static CurvesPointSelectionStatus init_curves_point_selection_status(
-const Key *key,
     const bke::CurvesGeometry &curves,
+    const Key *key,
     const float4x4 *grease_pencil_layer_to_object,
     const float4x4 *bounds_matrix)
 {
@@ -690,20 +690,20 @@ const Key *key,
       selection.foreach_index_optimized<int>(
           [&](const int point) { add_v3_v3(status.median.location, handle_positions[point]); });
 
-          selection.foreach_index_optimized<int>([&](const int point) {
-      median_bounds_add(status.median.location,
-                        status.select_bounds,
-                        bounds_matrix,
-                        to_object_space(handle_positions[point]));
-    });
+      selection.foreach_index_optimized<int>([&](const int point) {
+        median_bounds_add(status.median.location,
+                          status.select_bounds,
+                          bounds_matrix,
+                          to_object_space(handle_positions[point]));
+      });
     }
     else {
-    selection.foreach_index_optimized<int>([&](const int point) {
-      median_bounds_add(status.median.location,
-                        status.select_bounds,
-                        bounds_matrix,
-                        to_object_space((*positions)[point]));
-    });
+      selection.foreach_index_optimized<int>([&](const int point) {
+        median_bounds_add(status.median.location,
+                          status.select_bounds,
+                          bounds_matrix,
+                          to_object_space((*positions)[point]));
+      });
     }
   };
 
@@ -859,7 +859,8 @@ static bool apply_to_curves_point_selection(const int tot,
     if (update_location) {
       handle_selection.foreach_index(
           [&](const int point) {
-            apply_raw_diff_v3(handles.span[point], tot, ve_median_location, median_location / influence);
+            apply_raw_diff_v3(
+                handles.span[point], tot, ve_median_location, median_location / influence);
           },
           exec_mode::grain_size(2048));
     }
@@ -868,7 +869,7 @@ static bool apply_to_curves_point_selection(const int tot,
           [&](const int point) { coords_orig->apply(*dims_mat, handles.span[point]); });
     }
 
-/* Unapply the position of the main point, to not double the transform. */
+    /* Unapply the position of the main point, to not double the transform. */
     if (actkb) {
       selection.foreach_index(
           [&](const int point) {
@@ -1439,7 +1440,7 @@ static void v3d_editvertex_buts(
               value = CurvesPointSelectionStatus::sum(
                   value,
                   init_curves_point_selection_status(
-                      info.drawing.strokes(), &grease_pencil_layer_to_object, bounds_matrix, key));
+                      info.drawing.strokes(), key, &grease_pencil_layer_to_object, bounds_matrix));
             }
             return value;
           },
@@ -1449,7 +1450,7 @@ static void v3d_editvertex_buts(
       using namespace ed::curves;
       const Curves &curves_id = *id_cast<Curves *>(ob->data);
       status = init_curves_point_selection_status(
-          curves_id.geometry.wrap(), nullptr, bounds_matrix, nullptr);
+          curves_id.geometry.wrap(), nullptr, nullptr, bounds_matrix);
     }
 
     TransformMedian_Curves &median = median_basis.curves;
@@ -2205,10 +2206,10 @@ static void v3d_editvertex_buts(
         if (apply_to_curves_point_selection(tot,
                                             median_basis.curves,
                                             ve_median_basis.curves,
+                                            actkb,
                                             dims_mat,
                                             &grease_pencil_layer_to_object,
                                             coords_orig,
-                                            actkb,
                                             curves))
         {
           info.drawing.tag_positions_changed();
@@ -2236,10 +2237,10 @@ static void v3d_editvertex_buts(
       if (apply_to_curves_point_selection(tot,
                                           median_basis.curves,
                                           ve_median_basis.curves,
+                                          nullptr,
                                           dims_mat,
                                           nullptr,
                                           coords_orig,
-                                          nullptr,
                                           curves))
       {
         curves.tag_positions_changed();
