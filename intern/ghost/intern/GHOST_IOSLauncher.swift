@@ -238,6 +238,48 @@ struct LauncherScene: View {
     fatalError()
   }
 
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+  }
+
+  public override func didMoveToWindow() {
+    super.didMoveToWindow()
+    NotificationCenter.default.removeObserver(self)
+    guard window != nil else {
+      return
+    }
+    for name in [UIWindow.didBecomeVisibleNotification, UIWindow.didBecomeHiddenNotification] {
+      NotificationCenter.default.addObserver(self, selector: #selector(windowsChanged),
+                                             name: name, object: nil)
+    }
+    windowsChanged()
+  }
+
+  /**
+   * RealityKit draws and simulates every frame while its view is in a window. A document covers
+   * the launcher in a window above it, so take the model out of the window meanwhile.
+   */
+  @objc private func windowsChanged() {
+    guard let window, let host else {
+      return
+    }
+    let covered = window.windowScene?.windows.contains {
+      $0 !== window && !$0.isHidden && $0.windowLevel > window.windowLevel
+    } ?? false
+    if covered, host.view.superview != nil {
+      host.view.removeFromSuperview()
+    }
+    else if !covered, host.view.superview == nil {
+      addSubview(host.view)
+      NSLayoutConstraint.activate([
+        host.view.leadingAnchor.constraint(equalTo: leadingAnchor),
+        host.view.trailingAnchor.constraint(equalTo: trailingAnchor),
+        host.view.topAnchor.constraint(equalTo: topAnchor),
+        host.view.bottomAnchor.constraint(equalTo: bottomAnchor),
+      ])
+    }
+  }
+
   /** Place the model by its centre and size, in this view's points. */
   @objc public func placeModel(center: CGPoint, size: CGFloat) {
     state.model.center = center
