@@ -14,6 +14,7 @@
 #include "BLI_generic_span.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_index_range.hh"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 #include "BLI_virtual_array.hh"
 
@@ -63,14 +64,18 @@ static void gaussian_blur_1D(const Span<T> src,
     return;
   }
 
+  struct StepWeight {
+    int64_t offset;
+    double w_diff;
+  };
+  Vector<StepWeight, 64> step_weights(iterations);
   /* Weight Initialization. */
   const int n_half = keep_shape ? (iterations * iterations) / 8 + iterations :
                                   (iterations * iterations) / 4 + 2 * iterations + 12;
-  double w = keep_shape ? 2.0 : 1.0;
-  double w2 = keep_shape ?
-                  (1.0 / M_SQRT3) * exp((2 * iterations * iterations) / double(n_half * 3)) :
-                  0.0;
-  Array<double> total_weight(src.size(), 0.0);
+  double curr_w = keep_shape ? 2.0 : 1.0;
+  double curr_w2 = keep_shape ?
+                       (1.0 / M_SQRT3) * exp((2 * iterations * iterations) / double(n_half * 3)) :
+                       0.0;
 
   const int64_t total_points = src.size();
   const int64_t last_pt = total_points - 1;
@@ -79,76 +84,70 @@ static void gaussian_blur_1D(const Span<T> src,
     return !smooth_ends && !is_cyclic && ELEM(index, 0, last_pt);
   };
 
-  /* Initialize at zero. */
-  threading::parallel_for(dst.index_range(), 1024, [&](const IndexRange range) {
-    for (const int64_t index : range) {
-      if (!is_end_and_fixed(index)) {
-        dst[index] = T(0);
-      }
-    }
-  });
+  const int threads_num = BLI_system_thread_count();
 
-  /* Compute weights. */
+  constexpr int64_t min_grain_size = 1024;
+  constexpr int64_t max_grain_size = 32768;
+
+  const int64_t grain_size = std::clamp(
+      last_pt / (threads_num * 4), min_grain_size, max_grain_size);
+
   for (const int64_t step : IndexRange(iterations)) {
     const int64_t offset = iterations - step;
-    threading::parallel_for(dst.index_range(), 1024, [&](const IndexRange range) {
+    step_weights[step] = {offset, curr_w - curr_w2};
+    curr_w *= (n_half + offset) / double(n_half + 1 - offset);
+    curr_w2 *= (n_half * 3 + offset) / double(n_half * 3 + 1 - offset);
+  }
+  const double final_w_diff = curr_w - curr_w2;
+
+  /* Compute and apply smoothing weights in a single parallel pass. */
+  devirtualize_varray(influence_by_point, [&](const auto influence_by_point) {
+    threading::parallel_for(dst.index_range(), grain_size, [&](const IndexRange range) {
       for (const int64_t index : range) {
         /* Filter out endpoints. */
         if (is_end_and_fixed(index)) {
+          dst[index] = src[index];
           continue;
         }
 
-        double w_before = w - w2;
-        double w_after = w - w2;
-
-        /* Compute the neighboring points. */
-        int64_t before = index - offset;
-        int64_t after = index + offset;
-        if (is_cyclic) {
-          before = before % total_points;
-          if (before < 0) {
-            before += total_points;
-          }
-          after = after % total_points;
-        }
-        else {
-          if (!smooth_ends && (before < 0)) {
-            w_before *= -before / float(index);
-          }
-          before = math::max(before, int64_t(0));
-
-          if (!smooth_ends && (after > last_pt)) {
-            w_after *= (after - (total_points - 1)) / float(total_points - 1 - index);
-          }
-          after = math::min(after, last_pt);
-        }
-
-        /* Add the neighboring values. */
-        const T bval = src[before];
-        const T aval = src[after];
+        T accum(0);
+        double total_w = 0.0;
         const T cval = src[index];
 
-        dst[index] += (bval - cval) * w_before;
-        dst[index] += (aval - cval) * w_after;
+        for (const StepWeight &sw : step_weights) {
+          const int64_t offset = sw.offset;
+          double w_before = sw.w_diff;
+          double w_after = sw.w_diff;
 
-        /* Update the weight values. */
-        total_weight[index] += w_before;
-        total_weight[index] += w_after;
-      }
-    });
+          int64_t before = index - offset;
+          int64_t after = index + offset;
 
-    w *= (n_half + offset) / double(n_half + 1 - offset);
-    w2 *= (n_half * 3 + offset) / double(n_half * 3 + 1 - offset);
-  }
+          if (is_cyclic) {
+            before = before % total_points;
+            if (before < 0) {
+              before += total_points;
+            }
+            after = after % total_points;
+          }
+          else {
+            if (!smooth_ends && (before < 0)) {
+              w_before *= -before / float(index);
+            }
+            before = math::max(before, int64_t(0));
 
-  /* Normalize the weights. */
-  devirtualize_varray(influence_by_point, [&](const auto influence_by_point) {
-    threading::parallel_for(dst.index_range(), 1024, [&](const IndexRange range) {
-      for (const int64_t index : range) {
-        if (!is_end_and_fixed(index)) {
-          total_weight[index] += w - w2;
-          dst[index] = src[index] + influence_by_point[index] * dst[index] / total_weight[index];
+            if (!smooth_ends && (after > last_pt)) {
+              w_after *= (after - (total_points - 1)) / float(total_points - 1 - index);
+            }
+            after = math::min(after, last_pt);
+          }
+
+          accum += (src[before] - cval) * w_before;
+          accum += (src[after] - cval) * w_after;
+          total_w += w_before + w_after;
         }
+
+        total_w += final_w_diff;
+        dst[index] = cval + (influence_by_point[index] * accum) / total_w;
       }
     });
   });
