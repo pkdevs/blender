@@ -1,0 +1,11 @@
+--- a/pxr/imaging/garch/CMakeLists.txt	2026-07-17 22:41:06
++++ b/pxr/imaging/garch/CMakeLists.txt	2026-10-10 13:51:52
+@@ -22,7 +22,7 @@
+     set(GARCH_GLPLATFORMCONTEXT       glPlatformContextGLX)
+     set(GARCH_GLPLATFORMDEBUGWINDOW   glPlatformDebugWindowGLX)
+     set(GARCH_SOURCE_EXTENSION        cpp)
+-    set(GARCH_PLATFORM_LIBRARIES      ${X11_LIBRARIES} OpenGL::GL)
++    set(GARCH_PLATFORM_LIBRARIES      X11::X11 OpenGL::GL)
+ elseif(WIN32)
+     set(GARCH_GLPLATFORMCONTEXT       glPlatformContextWindows)
+     set(GARCH_GLPLATFORMDEBUGWINDOW   glPlatformDebugWindowWindows)
