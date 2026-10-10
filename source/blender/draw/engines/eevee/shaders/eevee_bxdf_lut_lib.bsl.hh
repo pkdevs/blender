@@ -4,7 +4,7 @@
 
 /**
  * Wrapper objects for data from Look Up Tables for BxDFs. Refer to
- * `eevee_bxdf_lut.bsl.hh` for table computation.
+ * `eevee_bxdf_lut_gen.bsl.hh` for table computation.
  */
 
 #pragma once
