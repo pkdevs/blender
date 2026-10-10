@@ -238,7 +238,7 @@ int calc_uv_verts(const OffsetIndices<int> faces,
   /* Turn the indices local to each vertex into indices for the whole mesh. */
   threading::parallel_for(corner_verts.index_range(), 4096, [&](const IndexRange range) {
     for (const int64_t corner : range) {
-      r_corner_uv_verts[corner] += uv_verts_by_vert[corner_verts[corner]].start();
+      r_corner_uv_verts[corner] += int(uv_verts_by_vert[corner_verts[corner]].start());
     }
   });
   return uv_verts_by_vert.total_size();
