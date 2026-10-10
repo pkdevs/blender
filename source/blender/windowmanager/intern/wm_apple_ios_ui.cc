@@ -22,6 +22,7 @@
 #include "BKE_paint.hh"
 #include "BKE_preferences.h"
 #include "BKE_preview_image.hh"
+#include "ED_render.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 
@@ -1228,16 +1229,30 @@ std::string ios_brush_key(const AssetWeakReference &reference)
   return key;
 }
 
-/** Write the asset's preview to a PNG UIKit can load. Reading a deferred preview is blocking. */
-std::string ios_brush_preview_write(asset_system::AssetRepresentation &asset,
-                                    const std::string &key)
+/**
+ * Write the asset's preview to a PNG UIKit can load, or nothing yet while it loads. Previews of
+ * assets in other files load in the background as in the Asset Browser: reading one opens its
+ * whole file, too slow for the thread Blender runs on.
+ */
+std::optional<std::string> ios_brush_preview_write(const bContext *C,
+                                                   asset_system::AssetRepresentation &asset,
+                                                   const std::string &key)
 {
   asset.ensure_previewable();
   PreviewImage *preview = asset.get_preview();
-  if (preview == nullptr) {
+  if (preview == nullptr || BKE_previewimg_is_invalid(preview, ICON_SIZE_PREVIEW)) {
     return "";
   }
-  BKE_previewimg_ensure(preview, ICON_SIZE_PREVIEW);
+  if (BKE_previewimg_is_rendering(preview, ICON_SIZE_PREVIEW)) {
+    return std::nullopt;
+  }
+  if (!preview->rect[ICON_SIZE_PREVIEW]) {
+    if (!preview->runtime->deferred_loading_data) {
+      return "";
+    }
+    ED_preview_icon_job(C, preview, nullptr, ICON_SIZE_PREVIEW, false);
+    return std::nullopt;
+  }
   const uint8_t *pixels = reinterpret_cast<const uint8_t *>(preview->rect[ICON_SIZE_PREVIEW]);
   const unsigned int width = preview->w[ICON_SIZE_PREVIEW];
   const unsigned int height = preview->h[ICON_SIZE_PREVIEW];
@@ -1289,8 +1304,9 @@ std::string ios_brushes_build_json(bContext *C, const eContextObjectMode mode)
     std::string preview;
   };
   std::vector<BrushItem> items;
-  /* Blocking preview reads are spread over several snapshots. */
-  int preview_budget = 4;
+  /* Previews load in the background; writing their PNGs is spread over several snapshots. */
+  int preview_budget = 8;
+  bool previews_missing = false;
   ed::asset::list::iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
     if (!ed::asset::shelf::type_asset_poll(*shelf_type, asset)) {
       return true;
@@ -1307,11 +1323,15 @@ std::string ios_brushes_build_json(bContext *C, const eContextObjectMode mode)
     auto preview = ios_brush_preview_paths.find(item.key);
     if (preview == ios_brush_preview_paths.end() && preview_budget > 0) {
       preview_budget--;
-      preview = ios_brush_preview_paths.emplace(item.key, ios_brush_preview_write(asset, item.key))
-                    .first;
+      if (std::optional<std::string> path = ios_brush_preview_write(C, asset, item.key)) {
+        preview = ios_brush_preview_paths.emplace(item.key, *path).first;
+      }
     }
     if (preview != ios_brush_preview_paths.end()) {
       item.preview = preview->second;
+    }
+    else {
+      previews_missing = true;
     }
     items.push_back(std::move(item));
     return true;
@@ -1332,7 +1352,7 @@ std::string ios_brushes_build_json(bContext *C, const eContextObjectMode mode)
   json += "\",\"active\":\"";
   json += ios_json_escape(active);
   json += "\",\"pending\":";
-  json += preview_budget == 0 ? "true" : "false";
+  json += previews_missing ? "true" : "false";
   json += ",\"items\":[";
   for (size_t i = 0; i < items.size(); i++) {
     const BrushItem &item = items[i];
@@ -1437,8 +1457,9 @@ std::string ios_assets_build_json(bContext *C)
   }
 
   std::string items;
-  /* Blocking preview reads are spread over several snapshots. */
-  int preview_budget = 6;
+  /* Previews load in the background; writing their PNGs is spread over several snapshots. */
+  int preview_budget = 8;
+  bool previews_missing = false;
   ed::asset::list::iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
     if (!ios_asset_listed(asset)) {
       return true;
@@ -1456,7 +1477,12 @@ std::string ios_assets_build_json(bContext *C)
     auto preview = ios_brush_preview_paths.find(key);
     if (preview == ios_brush_preview_paths.end() && preview_budget > 0) {
       preview_budget--;
-      preview = ios_brush_preview_paths.emplace(key, ios_brush_preview_write(asset, key)).first;
+      if (std::optional<std::string> path = ios_brush_preview_write(C, asset, key)) {
+        preview = ios_brush_preview_paths.emplace(key, *path).first;
+      }
+    }
+    if (preview == ios_brush_preview_paths.end()) {
+      previews_missing = true;
     }
     std::string tags;
     for (const AssetTag &tag : metadata.tags) {
@@ -1476,7 +1502,7 @@ std::string ios_assets_build_json(bContext *C)
              "\"}";
     return true;
   });
-  return std::string("{\"pending\":") + (preview_budget == 0 ? "true" : "false") +
+  return std::string("{\"pending\":") + (previews_missing ? "true" : "false") +
          ",\"items\":[" + items + "]}";
 }
 
