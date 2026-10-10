@@ -15,12 +15,15 @@
 #include "BLI_function_ref.hh"
 #include "BLI_heap.hh"
 #include "BLI_listbase.hh"
+#include "BLI_map.hh"
 #include "BLI_math_bits.hh"
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_rand_c.hh"
+#include "BLI_set.hh"
 #include "BLI_utildefines_stack.hh"
 #include "BLI_vector.hh"
 
@@ -6526,18 +6529,9 @@ static int loop_find_regions(BMesh *bm, const bool selbigger)
   return count;
 }
 
-/**
- * Convert face selection to outer boundary edge loops. The faces are deselected and, for each
- * connected set of selected faces, the longest loop on its boundary is selected.
- * \return true when edges of at least one loop were selected.
- */
-static bool face_loop_to_edge_loop(BMesh *bm)
+/* Tag the boundary edges of the face selection. Non-manifold edges are skipped. */
+static void tag_boundary_edges(BMesh *bm)
 {
-  if (bm->totfacesel > 0) {
-    return false;
-  }
-
-  /* Tag the boundary edges of the face selection. */
   BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
   BMIter iter;
   BMEdge *e;
@@ -6558,90 +6552,159 @@ static bool face_loop_to_edge_loop(BMesh *bm)
       BM_elem_flag_enable(e, BM_ELEM_TAG);
     }
   }
+}
 
-  /* Find the longest loops. */
-  Set<BMFace *> face_visited;
-  Vector<BMEdge *> loop_edges;
+static void collect_face_loops(BMesh *bm, Vector<Vector<BMFace *>> &face_loops)
+{
+  BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_TAG, false);
+  BMIter iter;
   BMFace *f;
   BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-    if (!BM_elem_flag_test(f, BM_ELEM_SELECT) || face_visited.contains(f)) {
+    if (!BM_elem_flag_test(f, BM_ELEM_SELECT) || BM_elem_flag_test(f, BM_ELEM_TAG)) {
       continue;
     }
 
-    /* Collect the boundary edges of this face loop while walking its faces. */
-    Set<BMEdge *> boundary_edges;
+    Vector<BMFace *> face_loop;
     Vector<BMFace *> face_stack;
     face_stack.append(f);
-    face_visited.add(f);
+    BM_elem_flag_enable(f, BM_ELEM_TAG);
     while (!face_stack.is_empty()) {
+      BMFace *f_cur = face_stack.pop_last();
+      face_loop.append(f_cur);
       BMIter liter;
       BMLoop *l;
-      BMFace *f_cur = face_stack.pop_last();
       BM_ITER_ELEM (l, &liter, f_cur, BM_LOOPS_OF_FACE) {
-        if (BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
-          boundary_edges.add(l->e);
-          continue;
-        }
         BMIter liter2;
         BMLoop *l2;
         BM_ITER_ELEM (l2, &liter2, l->e, BM_LOOPS_OF_EDGE) {
-          if (l2 != l && BM_elem_flag_test(l2->f, BM_ELEM_SELECT) && face_visited.add(l2->f)) {
+          if (l2 != l && BM_elem_flag_test(l2->f, BM_ELEM_SELECT) &&
+              !BM_elem_flag_test(l2->f, BM_ELEM_TAG))
+          {
+            BM_elem_flag_enable(l2->f, BM_ELEM_TAG);
             face_stack.append(l2->f);
           }
         }
       }
     }
+    face_loops.append(std::move(face_loop));
+  }
 
-    /* Find the loops on the boundary of the face loop (connected sets of its boundary
-     * edges) and keep the longest one. */
-    Set<BMEdge *> edge_visited;
-    Vector<BMEdge *> outer_loop;
-    for (BMEdge *e_edge : boundary_edges) {
-      if (edge_visited.contains(e_edge)) {
-        continue;
+  BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_TAG, false);
+}
+
+/* Return any neighboring selected face of edge loop - for mapping. */
+static BMFace *edge_loop_face_owner_get(const Vector<BMEdge *> &loop)
+{
+  BMIter liter;
+  BMLoop *l;
+  for (BMEdge *e : loop) {
+    BM_ITER_ELEM (l, &liter, e, BM_LOOPS_OF_EDGE) {
+      if (BM_elem_flag_test(l->f, BM_ELEM_SELECT)) {
+        return l->f;
       }
+    }
+  }
+  return nullptr;
+}
 
-      Vector<BMEdge *> loop;
-      loop.append(e_edge);
-      edge_visited.add(e_edge);
-      for (size_t loop_i = 0; loop_i < loop.size(); loop_i++) {
-        BMEdge *e_cur = loop[loop_i];
-        BMVert *verts[2] = {e_cur->v1, e_cur->v2};
-        for (BMVert *v : verts) {
-          BMIter liter;
-          BMEdge *e2;
-          BM_ITER_ELEM (e2, &liter, v, BM_EDGES_OF_VERT) {
-            if (boundary_edges.contains(e2) && edge_visited.add(e2)) {
-              loop.append(e2);
-            }
+static void map_edge_loops_to_face_loops(
+    BMesh *bm,
+    const Vector<Vector<BMFace *>> &face_loops,
+    Map<Vector<BMEdge *>, Vector<BMFace *>> &edge_loop_to_face_loop)
+{
+  Set<BMEdge *> visited;
+  BMIter iter;
+  BMEdge *e;
+  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+    if (!BM_elem_flag_test(e, BM_ELEM_TAG) || visited.contains(e)) {
+      continue;
+    }
+
+    Vector<BMEdge *> loop;
+    loop.append(e);
+    visited.add(e);
+    for (size_t loop_i = 0; loop_i < loop.size(); loop_i++) {
+      BMIter liter;
+      BMEdge *e2;
+      BMVert *verts[2] = {loop[loop_i]->v1, loop[loop_i]->v2};
+      for (BMVert *v : verts) {
+        BM_ITER_ELEM (e2, &liter, v, BM_EDGES_OF_VERT) {
+          if (BM_elem_flag_test(e2, BM_ELEM_TAG) && visited.add(e2)) {
+            loop.append(e2);
           }
         }
       }
-
-      if (loop.size() > outer_loop.size()) {
-        outer_loop = std::move(loop);
-      }
     }
 
-    for (BMEdge *e_loop : outer_loop) {
-      loop_edges.append(e_loop);
+    BMFace *f = edge_loop_face_owner_get(loop);
+    for (const Vector<BMFace *> &face_loop : face_loops) {
+      if (face_loop.contains(f)) {
+        edge_loop_to_face_loop.lookup_or_add(loop, face_loop);
+        break;
+      }
     }
   }
 
   BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
+}
 
-  if (loop_edges.is_empty()) {
+static const Vector<BMEdge *> *longest_edge_loop_get(
+    const Vector<BMFace *> &face_loop,
+    const Map<Vector<BMEdge *>, Vector<BMFace *>> &edge_loop_to_face_loop)
+{
+  const Vector<BMEdge *> *best = nullptr;
+  float best_length = 0.0f;
+  for (const auto &item : edge_loop_to_face_loop.items()) {
+    if (item.value != face_loop) {
+      continue;
+    }
+
+    float length = 0.0f;
+    for (BMEdge *e : item.key) {
+      length += math::distance(float3(e->v1->co), float3(e->v2->co));
+    }
+    if (best == nullptr || length > best_length) {
+      best = &item.key;
+      best_length = length;
+    }
+  }
+  return best;
+}
+
+/**
+ * Convert face selection to outer boundary edge loops. The faces are deselected and, for each
+ * connected set of selected faces, the longest edge loop on its boundary is selected.
+ * \return true when edges of at least one loop were selected.
+ */
+static bool face_loop_to_edge_loop(BMesh *bm)
+{
+  if (bm->totfacesel == 0) {
     return false;
   }
 
-  /* Replace the face selection with the boundary loops. Note that selecting faces also
-   * selects their edges and verts, so clear those as well. */
+  tag_boundary_edges(bm);
+  Vector<Vector<BMFace *>> face_loops;
+  collect_face_loops(bm, face_loops);
+  Map<Vector<BMEdge *>, Vector<BMFace *>> edge_loop_to_face_loop;
+  map_edge_loops_to_face_loops(bm, face_loops, edge_loop_to_face_loop);
+
   BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_SELECT, false);
   BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_SELECT, false);
-  for (BMEdge *e_loop : loop_edges) {
-    BM_edge_select_set(bm, e_loop, true);
+
+  /* Select the outer edge loop of each face loop. This is done based on geometric length,
+   * which could be incorrect. */
+  bool has_edge_loops = false;
+  for (const Vector<BMFace *> &face_loop : face_loops) {
+    const Vector<BMEdge *> *edge_loop = longest_edge_loop_get(face_loop, edge_loop_to_face_loop);
+    if (edge_loop == nullptr) {
+      continue;
+    }
+    for (BMEdge *e_loop : *edge_loop) {
+      BM_edge_select_set(bm, e_loop, true);
+    }
+    has_edge_loops = true;
   }
-  return true;
+  return has_edge_loops;
 }
 
 static wmOperatorStatus edbm_loop_to_region_exec(bContext *C, wmOperator *op)
@@ -6661,7 +6724,7 @@ static wmOperatorStatus edbm_loop_to_region_exec(bContext *C, wmOperator *op)
     if ((em->selectmode & SCE_SELECT_FACE) && !face_loop_to_edge_loop(bm)) {
       continue;
     }
-    if (!(em->selectmode & SCE_SELECT_EDGE) || bm->totedgesel == 0) {
+    if (bm->totedgesel == 0) {
       continue;
     }
 
