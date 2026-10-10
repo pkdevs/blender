@@ -2273,6 +2273,17 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   return sections;
 }
 
+/** The SwiftUI Settings sheet, `GHOSTIOSSwiftSettings` in `SettingsSheet.swift`. */
+@protocol GHOSTIOSSettings <NSObject>
++ (BOOL)fingerUsesTool;
++ (BOOL)showQuickActions;
+- (instancetype)initWithPresenter:(UIViewController *)presenter;
+- (void)present;
+- (void)updatePreferences:(id)preferences;
+@property(nonatomic, copy) void (^fingerUsesToolChanged)(BOOL);
+@property(nonatomic, copy) void (^showQuickActionsChanged)(BOOL);
+@end
+
 @interface GHOST_IOSViewController : UIViewController <UIEditMenuInteractionDelegate,
                                                        GHOSTIOSPencilMenuDelegate,
                                                        UIGestureRecognizerDelegate>
@@ -2302,6 +2313,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIBarButtonItem *_actions_button;
   UIBarButtonItem *_share_button;
   GHOSTIOSRender *_render;
+  NSObject<GHOSTIOSSettings> *_settings;
+  /* The iPad's saved Pencil and touch choice is applied once the view has a window. */
+  BOOL _touch_settings_applied;
+  NSArray *_quick_actions;
   NSDictionary *_viewport_state;
   /* Back to the document launcher, through the system's back action. */
   UIBarButtonItem *_documents_button;
@@ -2646,6 +2661,8 @@ bool GHOST_ios_document_window_visible()
   [_compile_indicator stop];
   [_compile_indicator release];
   [_render release];
+  [_settings release];
+  [_quick_actions release];
   [_viewport_state release];
   [_show_interface_button release];
   [NSNotificationCenter.defaultCenter removeObserver:self];
@@ -3733,6 +3750,10 @@ bool GHOST_ios_document_window_visible()
 
 - (void)rebuildActionStripWithActions:(NSArray *)actions
 {
+  /* Settings can hide the quick actions; Adjust Last Operation stays, it is not one of them. */
+  if (_settings && ![_settings.class showQuickActions]) {
+    actions = @[];
+  }
   NSArray *arranged_subviews = [[_action_stack.arrangedSubviews copy] autorelease];
   for (UIView *view in arranged_subviews) {
     [_action_stack removeArrangedSubview:view];
@@ -4202,6 +4223,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     _viewport_state = [model[@"viewport"] copy];
   }
   [_render updateStatus:model[@"render"]];
+  [_settings updatePreferences:model[@"preferences"]];
   [self setUndoAvailable:model[@"canUndo"]];
   [self setMeshSelectModeValue:mesh_select_mode];
   [self setTopSettingsValues:model[@"settings"]];
@@ -4229,6 +4251,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   if (_action_signature == nil || ![_action_signature isEqualToString:action_signature]) {
     [_action_signature release];
     _action_signature = [action_signature copy];
+    [_quick_actions release];
+    _quick_actions = [actions copy];
     /* Build immediately: a delayed completion could restore a finished transform's buttons. */
     [self rebuildActionStripWithActions:actions];
   }
@@ -4239,6 +4263,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 - (void)viewDidLayoutSubviews
 {
   [super viewDidLayoutSubviews];
+  if (!_touch_settings_applied && self.view.window && _settings &&
+      UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPhone)
+  {
+    /* The phone has its own one-finger button and defaults to using the tool. */
+    _touch_settings_applied = YES;
+    [self setFingerInputMode:[_settings.class fingerUsesTool]];
+  }
   CGRect panel_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
   /* The bottom tray: the open asset pane along the edge and the timeline just above it. The quick
    * actions, the Adjust pill, the collapsed rails and the navigation gizmo rest on top, so the tray
@@ -5368,8 +5399,15 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
       image:[UIImage systemImageNamed:@"arrow.up.left.and.arrow.down.right"]
       identifier:@"blender.interface.hide"
       handler:^(__kindof UIAction *) { [controller setInterfaceHidden:YES]; }];
+  UIAction *settings = [UIAction actionWithTitle:@"Settings"
+      image:[UIImage systemImageNamed:@"gearshape"]
+      identifier:@"blender.settings"
+      handler:^(__kindof UIAction *) { [controller->_settings present]; }];
+  if (!_settings) {
+    settings.attributes = UIMenuElementAttributesHidden;
+  }
   UIMenu *more = [UIMenu menuWithTitle:@"" children:@[
-    section(@[create]), viewport, section(@[hide, desktop])]];
+    section(@[create]), viewport, section(@[hide, desktop]), section(@[settings])]];
   _actions_button.menu = more;
   _actions_button.menuRepresentation = more;
   _actions_button.enabled = YES;
@@ -5484,6 +5522,21 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                            nil :
                            NSClassFromString(@"GHOSTIOSSwiftRender");
   _render = [[(render_class ?: GHOSTIOSRender.class) alloc] initWithPresenter:self];
+  if (Class settings_class = NSClassFromString(@"GHOSTIOSSwiftSettings")) {
+    _settings = [[settings_class alloc] initWithPresenter:self];
+    __block GHOST_IOSViewController *settings_host = self;
+    _settings.fingerUsesToolChanged = ^(BOOL useTool) { [settings_host setFingerInputMode:useTool]; };
+    _settings.showQuickActionsChanged = ^(BOOL) {
+      [settings_host rebuildActionStripWithActions:settings_host->_quick_actions];
+      [settings_host.view setNeedsLayout];
+    };
+    /* Industry Compatible is the iPad's default keymap; switch once, then respect the choice. */
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if (![defaults boolForKey:@"BlenderKeymapDefaulted"]) {
+      [defaults setBool:YES forKey:@"BlenderKeymapDefaulted"];
+      WM_apple_ios_ui_setting_enqueue("keymap", "Industry_Compatible");
+    }
+  }
   _documents_button = [[self documentsButton] retain];
   _viewport_shading_button = [self viewportShadingButton];
   _undo_button = [self undoButton];
