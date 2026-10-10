@@ -591,6 +591,7 @@ void Film::update_passes(Scene *scene)
       if (integrator->get_denoiser_type() == DENOISER_MTLFX) {
         add_auto_pass(scene, PASS_NORMAL);
         add_auto_pass(scene, PASS_DIFFUSE_COLOR);
+        add_auto_pass(scene, PASS_GLOSSY_COLOR);
       }
     }
     if (denoiser_passes & DENOISER_PASS_ROUGHNESS) {

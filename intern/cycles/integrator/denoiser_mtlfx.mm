@@ -240,7 +240,7 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
     context.buffer_params.get_pass_offset(PASS_NORMAL),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
     context.pass_denoising_albedo,
-    context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
+    context.buffer_params.get_pass_offset(PASS_GLOSSY_COLOR),
     context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_HIT_DISTANCE),
     context.num_samples,
   };
