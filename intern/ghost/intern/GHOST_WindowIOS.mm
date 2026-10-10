@@ -4030,6 +4030,17 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
       [UIMenuSystem.mainSystem setNeedsRebuild];
     }
   }
+  /* Projecting all of Blender's menus is costly and they change with the mode, rarely
+   * otherwise: ask again when the mode changes, and every few seconds for the rest. */
+  static CFAbsoluteTime last_request = 0;
+  static NSString *last_mode = nil;
+  const CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+  if ([last_mode isEqual:_object_mode] && now - last_request < 3.0) {
+    return;
+  }
+  last_request = now;
+  [last_mode release];
+  last_mode = [_object_mode copy];
   _native_menubar_request = WM_apple_ios_ui_menu_request(
       "{\"root\":\"menubar\",\"path\":[]}", false);
 }
