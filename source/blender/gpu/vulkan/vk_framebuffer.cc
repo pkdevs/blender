@@ -598,13 +598,23 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
 
   /* Color attachments */
   VkAttachmentReference depth_attachment_reference = {0u};
+  const VkAttachmentReference unused_attachment_reference = {VK_ATTACHMENT_UNUSED,
+                                                             VK_IMAGE_LAYOUT_UNDEFINED};
+  int32_t max_filled_slot_index = -1;
   for (int color_attachment_index :
        IndexRange(GPU_FB_COLOR_ATTACHMENT0, GPU_FB_MAX_COLOR_ATTACHMENT))
   {
     const GPUAttachment &attachment = attachments_[color_attachment_index];
+    const uint32_t color_slot = uint32_t(color_attachment_index - GPU_FB_COLOR_ATTACHMENT0);
     if (attachment.tex == nullptr) {
+      /* Unused color slots are added as unused attachment references to keep the position inside
+       * the color attachment array in sync with the color slot. The position is used as the
+       * shader output location. */
+      color_attachments.append(unused_attachment_reference);
+      color_attachment_formats_.append(VK_FORMAT_UNDEFINED);
       continue;
     }
+    max_filled_slot_index = int32_t(color_slot);
     VKTexture &color_texture = *unwrap(unwrap(attachment.tex));
     BLI_assert_msg(color_texture.usage_get() & GPU_TEXTURE_USAGE_ATTACHMENT,
                    "Texture is used as an attachment, but doesn't have the "
@@ -640,7 +650,9 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     VkImageLayout vk_image_layout = (attachment_state == GPU_ATTACHMENT_READ) ?
                                         VK_IMAGE_LAYOUT_GENERAL :
                                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    uint32_t attachment_reference = color_attachment_index - GPU_FB_COLOR_ATTACHMENT0;
+    /* Attachment descriptions are only added for color slots that are in use. The reference must
+     * point to the attachment description, and not to the color slot. */
+    uint32_t attachment_reference = uint32_t(vk_attachment_descriptions.size());
     /* Depth attachment should always be right after the last color attachment. If not shaders
      * cannot be reused between frame-buffers with and without depth/stencil attachment. */
     depth_attachment_reference.attachment = attachment_reference + 1;
@@ -662,25 +674,36 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
             {color_texture.vk_image_handle(),
              VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
              VK_IMAGE_ASPECT_COLOR_BIT,
-             layer_base});
+             {layer_base}});
         break;
       }
 
       case GPU_ATTACHMENT_READ: {
+        /* Read-only attachments are not written to, but the position inside the color attachment
+         * array must stay in sync with the color slot as it is used as the shader output
+         * location. */
+        color_attachments.append(unused_attachment_reference);
+        color_attachment_formats_.append(VK_FORMAT_UNDEFINED);
         input_attachments.append({attachment_reference, vk_image_layout});
         access_info.images.append({color_texture.vk_image_handle(),
                                    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
                                    VK_IMAGE_ASPECT_COLOR_BIT,
-                                   layer_base});
+                                   {layer_base}});
         break;
       }
 
       case GPU_ATTACHMENT_IGNORE: {
+        color_attachments.append(unused_attachment_reference);
+        color_attachment_formats_.append(VK_FORMAT_UNDEFINED);
         input_attachments.append({VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED});
         break;
       }
     }
   }
+
+  /* Remove the unused color attachments at the end. They are not part of the render pass. */
+  color_attachments.resize(max_filled_slot_index + 1);
+  color_attachment_formats_.resize(max_filled_slot_index + 1);
 
   /* Update the color attachment size attribute. This is used to generate the correct amount of
    * color blend states in the graphics pipeline. */
@@ -736,7 +759,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
                                    static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT |
                                                                    VK_IMAGE_ASPECT_STENCIL_BIT) :
                                    static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT),
-                               0});
+                               {0}});
 
     VkFormat vk_format = to_vk_format(depth_texture.device_format_get());
     depth_attachment_format_ = vk_format;
@@ -925,7 +948,8 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
     access_info.images.append(
         {color_texture.vk_image_handle(),
          attachment_state == GPU_ATTACHMENT_WRITE ?
-             (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) :
+             static_cast<VkAccessFlags>(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                                        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) :
              VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
          VK_IMAGE_ASPECT_COLOR_BIT,
          {uint32_t(attachment.mip),
@@ -1010,8 +1034,8 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
     access_info.images.append(
         {depth_texture.vk_image_handle(),
          attachment_state == GPU_ATTACHMENT_WRITE ?
-             (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) :
+             static_cast<VkAccessFlags>(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) :
              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
          is_depth_stencil_attachment ?
              static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT |
