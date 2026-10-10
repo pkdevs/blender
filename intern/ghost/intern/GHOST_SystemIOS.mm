@@ -115,6 +115,9 @@ bool GHOST_ios_shader_compilation(int *finished, int *total)
   return *total > 0;
 }
 
+/* The interval between Blender's passes while it draws, a frame of the display. */
+static std::atomic<int64_t> engine_frame_microseconds{16667};
+
 /* UIKit is told once about any number of snapshots published before it gets to them. */
 static std::atomic<bool> mailbox_notification_pending{false};
 
@@ -231,7 +234,8 @@ static void run_engine()
     if (!engine_active.load() && !continuing) {
       continue;
     }
-    deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(16667);
+    deadline = std::chrono::steady_clock::now() +
+               std::chrono::microseconds(engine_frame_microseconds.load());
     if (continuing) {
       std::unique_lock lock(engine_wait_mutex);
       engine_condition.wait_for(lock, std::chrono::milliseconds(100), [] { return engine_active.load(); });
@@ -349,6 +353,9 @@ void GHOST_ios_unregister_window(UIWindow *window)
   }
 
   g_window_scene = (UIWindowScene *)scene;
+  /* Draw as often as the display shows frames: 120 times a second with ProMotion. */
+  engine_frame_microseconds.store(
+      1000000 / std::max<NSInteger>(60, g_window_scene.screen.maximumFramesPerSecond));
   for (UIWindow *window in native_windows) {
     window.windowScene = g_window_scene;
   }

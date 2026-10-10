@@ -3,7 +3,67 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "GHOST_IOSSurface.hh"
 
+#import <UIKit/UIKit.h>
+
 #include <algorithm>
+#include <atomic>
+
+/* -------------------------------------------------------------------- */
+/** \name Frame Rate
+ *
+ * The system shows an app's frames at most 60 times a second unless it asks for more. While
+ * Blender presents frames, a display link asks for the display's full rate (120 Hz with
+ * ProMotion); without frames it stops, so the display can slow down again.
+ * \{ */
+
+static std::atomic<double> last_present_time{0.0};
+static std::atomic<bool> frame_rate_requested{false};
+
+@interface GHOSTIOSFrameRateRequest : NSObject
+@end
+
+@implementation GHOSTIOSFrameRateRequest {
+  CADisplayLink *_link;
+}
+
++ (GHOSTIOSFrameRateRequest *)shared
+{
+  static GHOSTIOSFrameRateRequest *request = [[GHOSTIOSFrameRateRequest alloc] init];
+  return request;
+}
+
+- (void)start
+{
+  if (!_link) {
+    _link = [[CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)] retain];
+    const float maximum = float(UIScreen.mainScreen.maximumFramesPerSecond);
+    _link.preferredFrameRateRange = CAFrameRateRangeMake(std::min(80.0f, maximum), maximum, maximum);
+    [_link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+  }
+  _link.paused = NO;
+}
+
+- (void)tick:(CADisplayLink *)link
+{
+  if (CACurrentMediaTime() - last_present_time.load() > 0.25) {
+    link.paused = YES;
+    frame_rate_requested.store(false);
+  }
+}
+
+@end
+
+static void frame_presented()
+{
+  last_present_time.store(CACurrentMediaTime());
+  if (!frame_rate_requested.exchange(true)) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [[GHOSTIOSFrameRateRequest shared] start];
+    });
+  }
+}
+
+/** \} */
 
 GHOST_IOSSurface::Frame::~Frame()
 {
@@ -209,6 +269,7 @@ void GHOST_IOSSurface::present()
   [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
   [encoder endEncoding];
   [buffer presentDrawable:drawable];
+  frame_presented();
   auto self = shared_from_this();
   [buffer addCompletedHandler:^(id<MTLCommandBuffer> completed) {
     /* Keep the pool slot immutable until presentation has finished reading it. */
