@@ -1109,6 +1109,11 @@ UIDocument *GHOST_ios_launcher_document()
   return launcher_controller.document;
 }
 
+extern "C" NSURL *GHOST_ios_document_url()
+{
+  return launcher_controller.document.fileURL;
+}
+
 bool GHOST_ios_launcher_can_show_documents()
 {
   return launcher_controller.document != nil &&

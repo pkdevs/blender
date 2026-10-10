@@ -34,6 +34,9 @@ func harnessAssetDrag(_ phase: Int32, _ asset: UnsafePointer<CChar>?, _ x: Int32
                                                              "id": asset.map { String(cString: $0) } ?? ""]])
 }
 
+@_cdecl("GHOST_ios_document_url")
+func harnessDocumentURL() -> NSURL? { nil }
+
 @_cdecl("GHOST_ios_engine_continue_work")
 func harnessContinueWork(_ continues: Bool) {
   FakeEngine.shared.log(["setting": "continue_work", "value": continues])

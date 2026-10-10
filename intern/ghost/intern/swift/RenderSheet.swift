@@ -14,6 +14,7 @@
 import AVFoundation
 import AVKit
 import BackgroundTasks
+import CryptoKit
 import ImageIO
 import SwiftUI
 import UIKit
@@ -76,8 +77,9 @@ private func encodeVideo(frames: [String], fps: Double, output: URL, progress: @
 /* -------------------------------------------------------------------- */
 /** \name Render library
  *
- * Every finished render, kept in the app's Application Support folder so none is lost when the
- * sheet closes or the next render starts.
+ * Every finished render of a project, kept on disk in the app's Application Support folder, so
+ * none is lost when the sheet closes, the next render starts or the app quits. Each project has
+ * its own folder, found by the document's location.
  * \{ */
 
 struct RenderItem: Codable, Identifiable, Hashable {
@@ -95,16 +97,28 @@ struct RenderItem: Codable, Identifiable, Hashable {
 
 @MainActor
 final class RenderLibrary: ObservableObject {
-  static let shared = RenderLibrary()
+  private static var libraries: [String: RenderLibrary] = [:]
+
+  /** The renders of the document at `url`; renders of an unsaved scene share one library. */
+  static func forDocument(_ url: URL?) -> RenderLibrary {
+    let path = url?.standardizedFileURL.resolvingSymlinksInPath().path ?? ""
+    let key = path.isEmpty ? "Unsaved" :
+      SHA256.hash(data: Data(path.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
+    if let library = libraries[key] { return library }
+    let library = RenderLibrary(key: key)
+    libraries[key] = library
+    return library
+  }
 
   /** Oldest first, as a film strip reads. */
   @Published private(set) var items: [RenderItem] = []
   let folder: URL
   private var index: URL { folder.appendingPathComponent("Renders.json") }
 
-  private init() {
+  private init(key: String) {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     folder = support.appendingPathComponent("Renders", isDirectory: true)
+      .appendingPathComponent(key, isDirectory: true)
     try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     if let data = try? Data(contentsOf: index),
        let stored = try? JSONDecoder().decode([RenderItem].self, from: data)
@@ -324,7 +338,7 @@ final class RenderModel: ObservableObject {
 
 struct RenderSheetView: View {
   @ObservedObject var model: RenderModel
-  @ObservedObject var library = RenderLibrary.shared
+  @ObservedObject var library: RenderLibrary
 
   private var selected: RenderItem? {
     guard let id = model.current(library) else { return nil }
@@ -665,7 +679,7 @@ struct FilmStrip: View {
       Button("Delete", role: .destructive) {
         if let deleting {
           if model.selection == deleting.id { model.selection = nil }
-          RenderLibrary.shared.remove(deleting)
+          library.remove(deleting)
         }
         deleting = nil
       }
@@ -771,6 +785,8 @@ public final class SwiftRender: NSObject, UIAdaptivePresentationControllerDelega
   private weak var presenter: UIViewController?
   private var sheet: UIViewController?
   private let model = RenderModel()
+  /** Where the render in progress is kept: the project it was started in. */
+  private var renderLibrary = RenderLibrary.forDocument(nil)
   private var lastID: NSNumber?
   private var lastFrame: String?
   private var finishing = false
@@ -786,7 +802,9 @@ public final class SwiftRender: NSObject, UIAdaptivePresentationControllerDelega
 
   private func present() {
     guard sheet == nil, let presenter, presenter.presentedViewController == nil else { return }
-    let controller = UIHostingController(rootView: RenderSheetView(model: model))
+    /* The open project's renders; while one renders, the project it belongs to. */
+    let library = model.rendering ? renderLibrary : RenderLibrary.forDocument(GHOST_ios_document_url())
+    let controller = UIHostingController(rootView: RenderSheetView(model: model, library: library))
     controller.modalPresentationStyle = .formSheet
     controller.preferredContentSize = CGSize(width: 760, height: 700)
     controller.presentationController?.delegate = self
@@ -816,6 +834,7 @@ public final class SwiftRender: NSObject, UIAdaptivePresentationControllerDelega
     model.remaining = nil
     model.live = nil
     model.selection = nil
+    renderLibrary = RenderLibrary.forDocument(GHOST_ios_document_url())
     model.phase = animation ? "Starting" : "Rendering Image"
     model.started = .now
     Engine.setting("render", animation ? "animation" : "image")
@@ -920,7 +939,7 @@ public final class SwiftRender: NSObject, UIAdaptivePresentationControllerDelega
   }
 
   private func keepImage(_ path: String?) {
-    guard let path, let item = RenderLibrary.shared.addImage(path) else {
+    guard let path, let item = renderLibrary.addImage(path) else {
       end(success: false)
       fail("The render could not be completed.")
       return
@@ -945,7 +964,7 @@ public final class SwiftRender: NSObject, UIAdaptivePresentationControllerDelega
                 progress: { [weak self] in self?.model.progress = Double($0) })
     { [weak self] video in
       guard let self else { return }
-      guard let video, let item = RenderLibrary.shared.addVideo(video, poster: frames.first, frames: frames.count)
+      guard let video, let item = self.renderLibrary.addVideo(video, poster: frames.first, frames: frames.count)
       else {
         self.end(success: false)
         self.fail("The video could not be created.")
