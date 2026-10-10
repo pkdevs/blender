@@ -256,7 +256,7 @@ void DNA_sdna_alias_data_ensure_structs_map(struct SDNA *sdna);
 
 /* Legacy macros with less verbosity for versioning. Note: this can't be used reliably in newer
  * Blender versions because it checks the SDNA written to .blend files but that may only contain
- * partial SDNA to safe space. */
+ * partial SDNA to save space. */
 #ifdef DNA_GENFILE_VERSIONING_MACROS_LEGACY
 /**
  * A convenience function, the equivalent of: `DNA_struct_find_with_alias(..) != -1`
