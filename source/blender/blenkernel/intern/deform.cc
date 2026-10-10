@@ -796,8 +796,8 @@ bool BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, con
     if (co_user.data != ob->data) {
       continue;
     }
-    const bool user_references_renamed =
-        BKE_object_defgroup_rename_users(&co_user, old_name, dg->name);
+    const bool user_references_renamed = BKE_object_defgroup_rename_users(
+        &co_user, old_name, dg->name);
     if (geometry_references_renamed || user_references_renamed) {
       DEG_id_tag_update(&co_user.id, ID_RECALC_GEOMETRY);
     }

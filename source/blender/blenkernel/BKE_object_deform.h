@@ -48,10 +48,12 @@ void BKE_object_foreach_name_reference(Object *ob,
  * \return True if any reference was updated.
  */
 bool BKE_object_defgroup_rename_users(struct Object *ob,
+                                      const char *old_name,
+                                      const char *new_name);
+/** Update geometry-owned vertex-group name references from `old_name` to `new_name`. */
+bool BKE_object_defgroup_rename_data(struct Object *ob,
                                      const char *old_name,
                                      const char *new_name);
-/** Update geometry-owned vertex-group name references from `old_name` to `new_name`. */
-bool BKE_object_defgroup_rename_data(struct Object *ob, const char *old_name, const char *new_name);
 
 /**
  * Get #MDeformVert vgroup data from given object. Should only be used in Object mode.
