@@ -246,85 +246,7 @@ struct HierarchyPanel: View {
   }
 
   private var outline: some View {
-    let rows = store.visible
-    return List {
-      ForEach(Array(rows.enumerated()), id: \.element.hierarchyKey) { index, node in
-        HierarchyRow(store: store, node: node)
-          .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 22))
-          .listRowBackground(rowBackground(rows, index))
-          .listRowSeparator(.hidden)
-          .swipeActions(edge: .trailing, allowsFullSwipe: false) { trailingSwipe(node) }
-          .swipeActions(edge: .leading, allowsFullSwipe: false) { leadingSwipe(node) }
-          .contextMenu { menu(store.targets(node)) }
-          .draggable(store.targets(node).compactMap { $0.string("id") }.joined(separator: "\n")) {
-            Label(node.string("name") ?? "", systemImage: "cube")
-              .padding(8)
-              .glassEffect(.regular, in: Capsule())
-          }
-          .dropDestination(for: String.self) { drags, _ in
-            /* Only rows of this Outliner match; other text dropped here does nothing. */
-            let moving = store.nodes(withIDs: drags.flatMap { $0.components(separatedBy: "\n") })
-            guard store.canMove(moving, to: node) else { return false }
-            store.move(moving, to: node)
-            return true
-          }
-      }
-    }
-    .listStyle(.plain)
-    .scrollContentBackground(.hidden)
-    .environment(\.defaultMinListRowHeight, 44)
-    .scrollDismissesKeyboard(.immediately)
-    .accessibilityIdentifier("blender.hierarchy.outline")
-  }
-
-  private func isSelected(_ node: JSON?) -> Bool {
-    guard let node else { return false }
-    return node.bool("selected") && node.string("kind") == "object"
-  }
-
-  /** Selected rows next to each other share one highlight, as in a sidebar list. */
-  @ViewBuilder
-  private func rowBackground(_ rows: [JSON], _ index: Int) -> some View {
-    if isSelected(rows[index]) {
-      let above = index > 0 && isSelected(rows[index - 1])
-      let below = index + 1 < rows.count && isSelected(rows[index + 1])
-      UnevenRoundedRectangle(topLeadingRadius: above ? 0 : 22, bottomLeadingRadius: below ? 0 : 22,
-                             bottomTrailingRadius: below ? 0 : 22, topTrailingRadius: above ? 0 : 22,
-                             style: .continuous)
-        .fill(PanelStyle.selection)
-        .padding(.horizontal, 16)
-    }
-    else {
-      Color.clear
-    }
-  }
-
-  @ViewBuilder
-  private func trailingSwipe(_ node: JSON) -> some View {
-    if store.allow([node], "delete") {
-      Button(role: .destructive) { deleting = [node] } label: { Label("Delete", systemImage: "trash") }
-    }
-    if store.allow([node], "visibility") {
-      let hidden = node.bool("hidden")
-      Button { store.act("visibility", [node], value: !hidden) } label: {
-        Label(hidden ? "Show" : "Hide", systemImage: hidden ? "eye" : "eye.slash")
-      }
-      .tint(.gray)
-    }
-  }
-
-  @ViewBuilder
-  private func leadingSwipe(_ node: JSON) -> some View {
-    if store.allow([node], "duplicate") {
-      Button { store.act("duplicate", [node]) } label: {
-        Label("Duplicate", systemImage: "plus.square.on.square")
-      }
-      .tint(.blue)
-    }
-    if store.allow([node], "rename") {
-      Button { promptRename(node) } label: { Label("Rename", systemImage: "pencil") }
-        .tint(.gray)
-    }
+    OutlineList(store: store, rename: promptRename, delete: { deleting = $0 })
   }
 
   private func promptRename(_ node: JSON) {
@@ -332,35 +254,6 @@ struct HierarchyPanel: View {
     rename = RenameRequest(title: collection ? "Rename Collection" : "Rename Object",
                            name: node.string("name") ?? "") { name in
       store.act("rename", [node], value: name)
-    }
-  }
-
-  @ViewBuilder
-  private func menu(_ nodes: [JSON]) -> some View {
-    let several = nodes.count > 1
-    Section {
-      if !several && store.allow(nodes, "rename") {
-        Button { promptRename(nodes[0]) } label: { Label("Rename", systemImage: "pencil") }
-      }
-      if store.allow(nodes, "duplicate") {
-        Button { store.act("duplicate", nodes) } label: {
-          Label(several ? "Duplicate \(nodes.count) Objects" : "Duplicate", systemImage: "plus.square.on.square")
-        }
-      }
-      if store.allow(nodes, "visibility") {
-        let hidden = nodes.allSatisfy { $0.bool("hidden") }
-        Button { store.act("visibility", nodes, value: !hidden) } label: {
-          Label(hidden ? "Show" : "Hide", systemImage: hidden ? "eye" : "eye.slash")
-        }
-      }
-    }
-    moveMenu(nodes)
-    if store.allow(nodes, "delete") {
-      Section {
-        Button(role: .destructive) { deleting = nodes } label: {
-          Label(several ? "Delete \(nodes.count) Objects" : "Delete", systemImage: "trash")
-        }
-      }
     }
   }
 
@@ -417,89 +310,6 @@ struct HierarchyPanel: View {
   }
 }
 
-struct HierarchyRow: View {
-  @ObservedObject var store: HierarchyStore
-  let node: JSON
-
-  var body: some View {
-    let selected = node.bool("selected") && node.string("kind") == "object"
-    let collection = node.string("kind") == "collection"
-    let key = node.string("key") ?? ""
-    let expanded = !store.collapsed.contains(key) || !store.query.isEmpty
-    HStack(spacing: 0) {
-      if store.editing && !collection {
-        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-          .foregroundStyle(selected ? Color.white : .secondary)
-          .font(.title3)
-          .padding(.trailing, 6)
-          .transition(.move(edge: .leading).combined(with: .opacity))
-      }
-      Color.clear.frame(width: CGFloat(16 * max(0, node.int("depth") ?? 0)), height: 1)
-      Group {
-        if store.hasChildren(node) {
-          Button {
-            store.toggle(node)
-          } label: {
-            Image(systemName: "chevron.right")
-              .font(.system(size: 11, weight: .semibold))
-              .rotationEffect(.degrees(expanded ? 90 : 0))
-              .frame(width: 20, height: 28)
-              .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel(expanded ? "Collapse" : "Expand")
-        }
-        else {
-          Color.clear.frame(width: 20, height: 28)
-        }
-      }
-      .foregroundStyle(selected ? Color.white : .secondary)
-      /* As in Blender's Outliner, category icons keep their theme colors, selected too. */
-      Group {
-        if let image = BlenderIcon.image(node.string("icon"), themed: true) {
-          Image(uiImage: image).resizable().scaledToFit()
-        }
-        else {
-          Image(systemName: collection ? "folder" : "cube")
-        }
-      }
-      .frame(width: 22, height: 22)
-      .foregroundStyle(selected ? Color.white : .primary)
-      .padding(.leading, 8)
-      .padding(.trailing, 10)
-      Text(node.string("name") ?? "")
-        .lineLimit(2)
-        .fontWeight(node.bool("active") ? .bold : .regular)
-        .foregroundStyle(selected ? Color.white : node.bool("enabled") ? .primary : .secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-      if node.bool("hidden") {
-        Button {
-          store.act("visibility", [node], value: false)
-        } label: {
-          Image(systemName: "eye.slash")
-            .frame(width: 36, height: 36)
-        }
-        .buttonStyle(.plain)
-        .padding(.leading, 6)
-        .foregroundStyle(selected ? Color.white.opacity(0.8) : .secondary)
-        .accessibilityLabel("Show in viewport")
-      }
-    }
-    .frame(minHeight: 44)
-    .contentShape(Rectangle())
-    .onTapGesture { store.select(node) }
-    .accessibilityElement(children: .combine)
-    .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
-    .accessibilityValue(node.bool("active") ? "Active" : "")
-    .accessibilityIdentifier("blender.hierarchy." + (node.string("id") ?? ""))
-  }
-}
-
-private extension Dictionary where Key == String, Value == Any {
-  var hierarchyKey: String { string("key") ?? "" }
-}
-
-/** The system's minimal search bar, as the Outliner has always used. */
 struct SearchField: UIViewRepresentable {
   @Binding var text: String
 
@@ -535,3 +345,426 @@ struct SearchField: UIViewRepresentable {
     }
   }
 }
+
+/* -------------------------------------------------------------------- */
+/** \name Outline
+ *
+ * The tree is UIKit's sidebar list, as the Outliner has always been: tap to select, a two-finger
+ * swipe across rows selects several as in Mail, swipe and touch and hold for actions, and drag
+ * rows into a collection or onto an object.
+ * \{ */
+
+struct OutlineList: UIViewRepresentable {
+  @ObservedObject var store: HierarchyStore
+  let rename: (JSON) -> Void
+  let delete: ([JSON]) -> Void
+
+  func makeCoordinator() -> Coordinator { Coordinator(store: store) }
+
+  func makeUIView(context: Context) -> UICollectionView {
+    context.coordinator.makeView()
+  }
+
+  func updateUIView(_ view: UICollectionView, context: Context) {
+    let coordinator = context.coordinator
+    coordinator.store = store
+    coordinator.rename = rename
+    coordinator.delete = delete
+    coordinator.reload()
+  }
+
+  @MainActor
+  final class Coordinator: NSObject, UICollectionViewDelegate, UICollectionViewDragDelegate,
+                           UICollectionViewDropDelegate
+  {
+    var store: HierarchyStore
+    var rename: (JSON) -> Void = { _ in }
+    var delete: ([JSON]) -> Void = { _ in }
+    private weak var view: UICollectionView?
+    private var dataSource: UICollectionViewDiffableDataSource<String, String>?
+    private var byKey: [String: JSON] = [:]
+    private var multipleSelection = false
+
+    init(store: HierarchyStore) {
+      self.store = store
+    }
+
+    func makeView() -> UICollectionView {
+      var list = UICollectionLayoutListConfiguration(appearance: .sidebar)
+      list.backgroundColor = .clear
+      list.trailingSwipeActionsConfigurationProvider = { [weak self] path in
+        self?.swipeActions(path, leading: false)
+      }
+      list.leadingSwipeActionsConfigurationProvider = { [weak self] path in
+        self?.swipeActions(path, leading: true)
+      }
+      let view = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: list))
+      view.backgroundColor = .clear
+      view.delegate = self
+      view.allowsMultipleSelection = true
+      view.allowsMultipleSelectionDuringEditing = true
+      /* Touch and hold picks rows up; more can be tapped into the drag, as in Mail and Files. */
+      view.dragDelegate = self
+      view.dropDelegate = self
+      view.dragInteractionEnabled = true
+      view.keyboardDismissMode = .onDrag
+      view.accessibilityIdentifier = "blender.hierarchy.outline"
+      let registration = UICollectionView.CellRegistration<UICollectionViewListCell, String> {
+        [weak self] cell, _, key in
+        self?.configure(cell, key: key)
+      }
+      dataSource = UICollectionViewDiffableDataSource(collectionView: view) { view, path, key in
+        view.dequeueConfiguredReusableCell(using: registration, for: path, item: key)
+      }
+      self.view = view
+      return view
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Rows */
+
+    func reload() {
+      guard let view, let dataSource else { return }
+      if view.isEditing != store.editing { view.isEditing = store.editing }
+      let previous = byKey
+      var keyed: [String: JSON] = [:]
+      for node in store.nodes { if let key = node.string("key") { keyed[key] = node } }
+      byKey = keyed
+
+      let query = store.query
+      var matches = Set<String>()
+      if !query.isEmpty {
+        for node in store.nodes where (node.string("name") ?? "").localizedStandardContains(query) {
+          var key = node.string("key")
+          while let current = key, !current.isEmpty, matches.insert(current).inserted {
+            key = keyed[current]?.string("parent")
+          }
+        }
+      }
+      var outline = NSDiffableDataSourceSectionSnapshot<String>()
+      var included = Set<String>()
+      var expanded: [String] = []
+      for node in store.nodes {
+        guard let key = node.string("key") else { continue }
+        if !query.isEmpty && !matches.contains(key) { continue }
+        let parent = node.string("parent").flatMap { included.contains($0) ? $0 : nil }
+        outline.append([key], to: parent)
+        included.insert(key)
+        if !query.isEmpty || !store.collapsed.contains(key) { expanded.append(key) }
+      }
+      outline.expand(expanded)
+
+      let current = dataSource.snapshot(for: "scene")
+      var topologyChanged = current.items != outline.items ||
+        Set(current.items.filter { current.isExpanded($0) }) != Set(outline.items.filter { outline.isExpanded($0) })
+      if !topologyChanged {
+        for key in outline.items where current.parent(of: key) != outline.parent(of: key) {
+          topologyChanged = true
+          break
+        }
+      }
+      if topologyChanged || dataSource.snapshot().numberOfSections == 0 {
+        dataSource.apply(outline, to: "scene",
+                         animatingDifferences: !previous.isEmpty && !UIAccessibility.isReduceMotionEnabled)
+        { [weak self] in self?.synchronizeSelection() }
+      }
+      /* Value changes must not rebuild the outline or interrupt disclosure animations. */
+      for path in view.indexPathsForVisibleItems {
+        guard let key = dataSource.itemIdentifier(for: path), let node = keyed[key],
+              topologyChanged || !jsonEqual(previous[key], node),
+              let cell = view.cellForItem(at: path) as? UICollectionViewListCell else { continue }
+        configure(cell, key: key)
+      }
+      synchronizeSelection()
+    }
+
+    private func node(at path: IndexPath) -> JSON? {
+      dataSource?.itemIdentifier(for: path).flatMap { byKey[$0] }
+    }
+
+    private func configure(_ cell: UICollectionViewListCell, key: String) {
+      guard let node = byKey[key] else { return }
+      let collection = node.string("kind") == "collection"
+      var content = cell.defaultContentConfiguration()
+      content.text = node.string("name")
+      content.textProperties.numberOfLines = 2
+      if node.bool("active") {
+        content.textProperties.font = UIFont(descriptor: content.textProperties.font.fontDescriptor
+          .withSymbolicTraits(.traitBold) ?? content.textProperties.font.fontDescriptor, size: 0)
+      }
+      if !node.bool("enabled") { content.textProperties.color = .secondaryLabel }
+      /* As in Blender's Outliner, the hierarchy shows category icons in their theme colors. */
+      content.image = BlenderIcon.image(node.string("icon"), themed: true) ??
+        UIImage(systemName: collection ? "folder" : "cube")
+      content.imageProperties.maximumSize = CGSize(width: 22, height: 22)
+      cell.contentConfiguration = content
+      cell.configurationUpdateHandler = { cell, state in
+        guard let cell = cell as? UICollectionViewListCell else { return }
+        var configuration = content.updated(for: state)
+        var background = UIBackgroundConfiguration.listSidebarCell().updated(for: state)
+        if state.isSelected {
+          background.backgroundColor = .systemBlue
+          configuration.textProperties.color = .white
+          configuration.imageProperties.tintColor = .white
+        }
+        cell.contentConfiguration = configuration
+        cell.backgroundConfiguration = background
+      }
+      cell.setNeedsUpdateConfiguration()
+      cell.accessibilityIdentifier = "blender.hierarchy." + (node.string("id") ?? "")
+      cell.accessibilityValue = node.bool("active") ? "Active" : ""
+
+      /* The system's outline disclosure, as in Files and Mail. The sidebar list ignores
+       * indentation levels, so an empty leading slot carries the depth indent. */
+      cell.indentationLevel = 0
+      var accessories: [UICellAccessory] = []
+      let indent = CGFloat(16 * max(0, node.int("depth") ?? 0))
+      if indent > 0 {
+        accessories.append(.customView(configuration: .init(customView: UIView(), placement: .leading(),
+                                                            reservedLayoutWidth: .custom(indent),
+                                                            maintainsFixedSize: true)))
+      }
+      if store.hasChildren(node) {
+        accessories.append(.outlineDisclosure(options: .init(style: .cell)) { [weak self] in
+          self?.store.toggle(node)
+        })
+      }
+      if !collection { accessories.append(.multiselect()) }
+      if node.bool("hidden") {
+        let show = UIButton(type: .system)
+        show.tintColor = .secondaryLabel
+        show.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        show.setImage(UIImage(systemName: "eye.slash"), for: .normal)
+        show.accessibilityLabel = "Show in viewport"
+        show.addAction(UIAction { [weak self] _ in
+          self?.store.act("visibility", [node], value: false)
+        }, for: .touchUpInside)
+        accessories.append(.customView(configuration: .init(customView: show, placement: .trailing())))
+      }
+      cell.accessories = accessories
+    }
+
+    private func synchronizeSelection() {
+      guard let view, let dataSource else { return }
+      for path in view.indexPathsForSelectedItems ?? [] where !(node(at: path)?.bool("selected") ?? false) {
+        view.deselectItem(at: path, animated: false)
+      }
+      for key in dataSource.snapshot(for: "scene").visibleItems where byKey[key]?.bool("selected") ?? false {
+        if let path = dataSource.indexPath(for: key) {
+          view.selectItem(at: path, animated: false, scrollPosition: [])
+        }
+      }
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Selection, as in Mail: tap selects one; Select mode or a two-finger swipe selects several. */
+
+    private var extending: Bool { multipleSelection || (view?.isEditing ?? false) }
+
+    func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+      guard let node = node(at: indexPath) else { return false }
+      return node.string("kind") == "object" && node.bool("enabled")
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+      guard self.collectionView(collectionView, shouldSelectItemAt: indexPath), let node = node(at: indexPath),
+            let id = node.string("id") else { return }
+      let extend = extending
+      if !extend {
+        for other in collectionView.indexPathsForSelectedItems ?? [] where other != indexPath {
+          collectionView.deselectItem(at: other, animated: true)
+        }
+      }
+      store.send(["action": "select", "id": id, "extend": extend, "value": true])
+    }
+
+    func collectionView(_ collectionView: UICollectionView, shouldDeselectItemAt indexPath: IndexPath) -> Bool {
+      /* An ordinary tap on an already-selected object still makes it the active object. */
+      if !extending { self.collectionView(collectionView, didSelectItemAt: indexPath) }
+      return extending
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didDeselectItemAt indexPath: IndexPath) {
+      guard extending, let node = node(at: indexPath), node.string("kind") == "object",
+            let id = node.string("id") else { return }
+      store.send(["action": "select", "id": id, "extend": true, "value": false])
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        shouldBeginMultipleSelectionInteractionAt indexPath: IndexPath) -> Bool
+    {
+      self.collectionView(collectionView, shouldSelectItemAt: indexPath)
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        didBeginMultipleSelectionInteractionAt indexPath: IndexPath)
+    {
+      multipleSelection = true
+      /* A two-finger swipe across rows enters Select mode, as in Mail. */
+      collectionView.isEditing = true
+      store.editing = true
+    }
+
+    func collectionViewDidEndMultipleSelectionInteraction(_ collectionView: UICollectionView) {
+      multipleSelection = false
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Actions */
+
+    private func swipeActions(_ path: IndexPath, leading: Bool) -> UISwipeActionsConfiguration? {
+      guard let node = node(at: path) else { return nil }
+      var items: [UIContextualAction] = []
+      for identifier in leading ? ["duplicate", "rename"] : ["delete", "visibility"] {
+        guard store.allow([node], identifier) else { continue }
+        let deleting = identifier == "delete", duplicate = identifier == "duplicate"
+        let visibility = identifier == "visibility", hidden = node.bool("hidden")
+        let title = deleting ? "Delete" : duplicate ? "Duplicate" : visibility ? (hidden ? "Show" : "Hide") : "Rename"
+        let item = UIContextualAction(style: deleting ? .destructive : .normal, title: title) {
+          [weak self] _, _, complete in
+          guard let self else { return complete(false) }
+          if deleting {
+            self.delete([node])
+            complete(true)
+          }
+          else if identifier == "rename" {
+            self.rename(node)
+            complete(true)
+          }
+          else {
+            let current = self.byKey[node.string("key") ?? ""] ?? node
+            self.store.act(identifier, [current], value: visibility ? !current.bool("hidden") : nil)
+            complete(true)
+          }
+        }
+        let icon = deleting ? "TRASH" : duplicate ? "DUPLICATE" : visibility ? (hidden ? "HIDE_OFF" : "HIDE_ON") : "GREASEPENCIL"
+        let symbol = deleting ? "trash" : duplicate ? "plus.square.on.square" :
+          visibility ? (hidden ? "eye" : "eye.slash") : "pencil"
+        item.image = BlenderIcon.image(icon) ?? UIImage(systemName: symbol)
+        if !deleting { item.backgroundColor = duplicate ? .systemBlue : .systemGray }
+        items.append(item)
+      }
+      guard !items.isEmpty else { return nil }
+      let actions = UISwipeActionsConfiguration(actions: items)
+      actions.performsFirstActionWithFullSwipe = false
+      return actions
+    }
+
+    private func moveMenu(_ nodes: [JSON]) -> UIMenu {
+      let items = store.nodes.filter { $0.string("kind") == "collection" && store.canMove(nodes, to: $0) }
+        .map { target in
+          UIAction(title: String(repeating: "  ", count: target.int("depth") ?? 0) + (target.string("name") ?? ""),
+                   image: BlenderIcon.image("OUTLINER_COLLECTION")) { [weak self] _ in
+            self?.store.move(nodes, to: target)
+          }
+        }
+      return UIMenu(title: "Move to Collection", image: UIImage(systemName: "folder"), children: items)
+    }
+
+    private func menuElements(_ nodes: [JSON]) -> [UIMenuElement] {
+      let several = nodes.count > 1
+      var edit: [UIMenuElement] = []
+      if !several && store.allow(nodes, "rename") {
+        edit.append(UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { [weak self] _ in
+          self?.rename(nodes[0])
+        })
+      }
+      if store.allow(nodes, "duplicate") {
+        edit.append(UIAction(title: several ? "Duplicate \(nodes.count) Objects" : "Duplicate",
+                             image: UIImage(systemName: "plus.square.on.square")) { [weak self] _ in
+          self?.store.act("duplicate", nodes)
+        })
+      }
+      if store.allow(nodes, "visibility") {
+        let hidden = nodes.allSatisfy { $0.bool("hidden") }
+        edit.append(UIAction(title: hidden ? "Show" : "Hide",
+                             image: UIImage(systemName: hidden ? "eye" : "eye.slash")) { [weak self] _ in
+          self?.store.act("visibility", nodes, value: !hidden)
+        })
+      }
+      var elements: [UIMenuElement] = []
+      if !edit.isEmpty { elements.append(UIMenu(options: .displayInline, children: edit)) }
+      let move = moveMenu(nodes)
+      if !move.children.isEmpty { elements.append(move) }
+      if store.allow(nodes, "delete") {
+        let remove = UIAction(title: several ? "Delete \(nodes.count) Objects" : "Delete",
+                              image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+          self?.delete(nodes)
+        }
+        elements.append(UIMenu(options: .displayInline, children: [remove]))
+      }
+      return elements
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        contextMenuConfigurationForItemsAt indexPaths: [IndexPath],
+                        point: CGPoint) -> UIContextMenuConfiguration?
+    {
+      guard indexPaths.count == 1, let node = node(at: indexPaths[0]) else { return nil }
+      let nodes = store.targets(node)
+      let elements = menuElements(nodes)
+      guard !elements.isEmpty else { return nil }
+      return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
+        UIMenu(title: nodes.count > 1 ? "\(nodes.count) Objects" : "", children: elements)
+      }
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Dragging rows into a collection, or onto an object to parent them. */
+
+    private func dragItem(_ node: JSON) -> UIDragItem {
+      let item = UIDragItem(itemProvider: NSItemProvider(object: (node.string("name") ?? "") as NSString))
+      item.localObject = node as NSDictionary
+      return item
+    }
+
+    func collectionView(_ collectionView: UICollectionView, itemsForBeginning session: UIDragSession,
+                        at indexPath: IndexPath) -> [UIDragItem]
+    {
+      guard let node = node(at: indexPath) else { return [] }
+      let nodes = store.targets(node)
+      guard store.allow(nodes, "move") else { return [] }
+      return nodes.map(dragItem)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, itemsForAddingTo session: UIDragSession,
+                        at indexPath: IndexPath, point: CGPoint) -> [UIDragItem]
+    {
+      guard let node = node(at: indexPath), store.allow([node], "move"),
+            let first = session.items.first?.localObject as? JSON,
+            first.string("kind") == node.string("kind"),
+            !session.items.contains(where: { jsonEqual(($0.localObject as? JSON)?["id"], node["id"]) })
+      else { return [] }
+      return [dragItem(node)]
+    }
+
+    private func nodes(in session: UIDropSession) -> [JSON] {
+      let nodes = session.items.compactMap { $0.localObject as? JSON }
+      return nodes.count == session.items.count ? nodes : []
+    }
+
+    func collectionView(_ collectionView: UICollectionView, canHandle session: UIDropSession) -> Bool {
+      session.localDragSession != nil && !nodes(in: session).isEmpty
+    }
+
+    private func target(_ collectionView: UICollectionView, _ session: UIDropSession) -> JSON? {
+      collectionView.indexPathForItem(at: session.location(in: collectionView)).flatMap(node(at:))
+    }
+
+    func collectionView(_ collectionView: UICollectionView, dropSessionDidUpdate session: UIDropSession,
+                        withDestinationIndexPath destinationIndexPath: IndexPath?) -> UICollectionViewDropProposal
+    {
+      guard store.canMove(nodes(in: session), to: target(collectionView, session)) else {
+        return UICollectionViewDropProposal(operation: .forbidden)
+      }
+      return UICollectionViewDropProposal(operation: .move, intent: .insertIntoDestinationIndexPath)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, performDropWith coordinator: UICollectionViewDropCoordinator) {
+      guard let target = target(collectionView, coordinator.session) else { return }
+      store.move(nodes(in: coordinator.session), to: target)
+    }
+  }
+}
+
+/** \} */
