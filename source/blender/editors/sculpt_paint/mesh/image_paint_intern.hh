@@ -68,7 +68,7 @@ struct ImageData : NonCopyable {
 
 IndexMask build_pixel_position_map(Object &ob,
                                    const ImageData &data,
-                                   IndexMaskMemory &filled_pixel_memory,
+                                   IndexMaskMemory &memory,
                                    Vector<float3, 0> &r_pixel_positions,
                                    Vector<int, 0> &r_offsets);
 
