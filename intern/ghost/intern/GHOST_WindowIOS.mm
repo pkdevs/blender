@@ -21,6 +21,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 #import <UIKit/UIPencilInteraction.h>
 
 #include <unordered_map>
@@ -6163,12 +6164,38 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     return;
   }
 
-  NSData *data = [NSJSONSerialization dataWithJSONObject:items options:NSJSONWritingSortedKeys error:nil];
+  /* Previews arrive a few at a time: the brushes themselves decide when to rebuild the rail, and
+   * new previews only replace the images of the buttons there are. */
+  NSMutableArray *brushes = [NSMutableArray arrayWithCapacity:items.count];
+  for (NSDictionary *item in items) {
+    NSMutableDictionary *brush = [[item mutableCopy] autorelease];
+    [brush removeObjectForKey:@"preview"];
+    [brushes addObject:brush];
+  }
+  NSData *data = [NSJSONSerialization dataWithJSONObject:brushes options:NSJSONWritingSortedKeys error:nil];
   NSString *signature = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
   if (_brush_signature == nil || ![_brush_signature isEqualToString:signature ?: @""]) {
     [_brush_signature release];
     _brush_signature = [signature ?: @"" copy];
     [self rebuildBrushRailWithItems:items];
+  }
+  else {
+    for (NSDictionary *item in items) {
+      for (UIButton *button in _brush_buttons) {
+        if ([button.accessibilityIdentifier isEqual:item[@"id"]]) {
+          NSString *preview = [item[@"preview"] isKindOfClass:NSString.class] ? item[@"preview"] : @"";
+          if (![objc_getAssociatedObject(button, &blender_brush_preview_key) isEqual:preview]) {
+            objc_setAssociatedObject(button, &blender_brush_preview_key, preview,
+                                     OBJC_ASSOCIATION_COPY_NONATOMIC);
+            objc_setAssociatedObject(button, &blender_brush_image_key,
+                                     blenderIOSBrushImage(preview, 36.0),
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [button setNeedsUpdateConfiguration];
+          }
+          break;
+        }
+      }
+    }
   }
   [self setActiveBrushIdentifier:active];
 }
@@ -6206,13 +6233,19 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
       }];
 }
 
+static char blender_brush_preview_key;
+static char blender_brush_image_key;
+
 - (UIButton *)brushButtonForItem:(NSDictionary *)item
 {
   NSString *title = item[@"title"];
   NSString *preview = [item[@"preview"] isKindOfClass:NSString.class] ? item[@"preview"] : @"";
-  UIImage *image = blenderIOSBrushImage(preview, 36.0);
 
   UIButton *button = blenderIOSSwiftButton() ?: [UIButton buttonWithType:UIButtonTypeSystem];
+  /* The preview can arrive later, see #updateBrushRailWithModel:. */
+  objc_setAssociatedObject(button, &blender_brush_preview_key, preview, OBJC_ASSOCIATION_COPY_NONATOMIC);
+  objc_setAssociatedObject(button, &blender_brush_image_key, blenderIOSBrushImage(preview, 36.0),
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   button.tintColor = UIColor.labelColor;
   button.translatesAutoresizingMaskIntoConstraints = NO;
   button.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
@@ -6220,6 +6253,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   button.accessibilityIdentifier = item[@"id"];
   button.accessibilityHint = @"Touch and hold to choose from all brushes";
   button.configurationUpdateHandler = ^(UIButton *updated_button) {
+    UIImage *image = objc_getAssociatedObject(updated_button, &blender_brush_image_key);
     const BOOL shows_text = self->_brush_rail_expanded;
     const BOOL is_emphasized = [self isBrushListVisible] &&
                                (updated_button.selected ||
