@@ -2789,6 +2789,24 @@ std::optional<Span<float3>> GreasePencilDrawingEditHints::positions() const
   return Span(static_cast<const float3 *>(this->positions_data.data), points_num);
 }
 
+std::optional<Span<float3>> GreasePencilDrawingEditHints::handle_positions_left() const
+{
+  if (!this->handle_positions_left_data.has_value()) {
+    return std::nullopt;
+  }
+  const int points_num = this->drawing_orig->geometry.wrap().points_num();
+  return Span(static_cast<const float3 *>(this->handle_positions_left_data.data), points_num);
+}
+
+std::optional<Span<float3>> GreasePencilDrawingEditHints::handle_positions_right() const
+{
+  if (!this->handle_positions_right_data.has_value()) {
+    return std::nullopt;
+  }
+  const int points_num = this->drawing_orig->geometry.wrap().points_num();
+  return Span(static_cast<const float3 *>(this->handle_positions_right_data.data), points_num);
+}
+
 std::optional<MutableSpan<float3>> GreasePencilDrawingEditHints::positions_for_write()
 {
   if (!this->positions_data.has_value()) {
@@ -2803,6 +2821,50 @@ std::optional<MutableSpan<float3>> GreasePencilDrawingEditHints::positions_for_w
   }
   else {
     auto *new_sharing_info = new ImplicitSharedValue<Array<float3>>(*this->positions());
+    data.sharing_info = ImplicitSharingPtr<>(new_sharing_info);
+    data.data = new_sharing_info->data.data();
+  }
+
+  return MutableSpan(const_cast<float3 *>(static_cast<const float3 *>(data.data)), points_num);
+}
+
+std::optional<MutableSpan<float3>> GreasePencilDrawingEditHints::handle_positions_left_for_write()
+{
+  if (!this->handle_positions_left_data.has_value()) {
+    return std::nullopt;
+  }
+
+  const int points_num = this->drawing_orig->geometry.wrap().points_num();
+  ImplicitSharingPtrAndData &data = this->handle_positions_left_data;
+  if (data.sharing_info->is_mutable()) {
+    /* If the referenced component is already mutable, return it directly. */
+    data.sharing_info->tag_ensured_mutable();
+  }
+  else {
+    auto *new_sharing_info = new ImplicitSharedValue<Array<float3>>(
+        *this->handle_positions_left());
+    data.sharing_info = ImplicitSharingPtr<>(new_sharing_info);
+    data.data = new_sharing_info->data.data();
+  }
+
+  return MutableSpan(const_cast<float3 *>(static_cast<const float3 *>(data.data)), points_num);
+}
+
+std::optional<MutableSpan<float3>> GreasePencilDrawingEditHints::handle_positions_right_for_write()
+{
+  if (!this->handle_positions_right_data.has_value()) {
+    return std::nullopt;
+  }
+
+  const int points_num = this->drawing_orig->geometry.wrap().points_num();
+  ImplicitSharingPtrAndData &data = this->handle_positions_right_data;
+  if (data.sharing_info->is_mutable()) {
+    /* If the referenced component is already mutable, return it directly. */
+    data.sharing_info->tag_ensured_mutable();
+  }
+  else {
+    auto *new_sharing_info = new ImplicitSharedValue<Array<float3>>(
+        *this->handle_positions_right());
     data.sharing_info = ImplicitSharingPtr<>(new_sharing_info);
     data.data = new_sharing_info->data.data();
   }
@@ -3148,10 +3210,22 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
                                                               nullptr :
                                                               &edit_hints[info.layer_index];
 
-    if (layer_edit_hints && layer_edit_hints->positions()) {
-      MutableSpan<float3> edit_positions = *layer_edit_hints->positions_for_write();
-
-      shapekey_add_applied_position(key, attributes, edit_positions);
+    if (layer_edit_hints) {
+      if (std::optional<MutableSpan<float3>> edit_positions =
+              layer_edit_hints->positions_for_write())
+      {
+        shapekey_add_applied_position(key, attributes, *edit_positions);
+      }
+      if (std::optional<MutableSpan<float3>> edit_handle_positions_left =
+              layer_edit_hints->handle_positions_left_for_write())
+      {
+        shapekey_add_applied_handle_left(key, attributes, *edit_handle_positions_left);
+      }
+      if (std::optional<MutableSpan<float3>> edit_handle_positions_right =
+              layer_edit_hints->handle_positions_right_for_write())
+      {
+        shapekey_add_applied_handle_right(key, attributes, *edit_handle_positions_right);
+      }
     }
 
     info.drawing->tag_positions_changed();
