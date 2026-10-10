@@ -1983,10 +1983,31 @@ void ios_timeline_build(bContext *C)
   }
 }
 
-void ios_toolbar_build(bContext *C)
+/** Set when Blender sent notifiers, see #WM_apple_ios_ui_tag_changed. */
+bool ios_ui_changed = true;
+
+void ios_toolbar_build(bContext *C, const bool handled_commands)
 {
-  std::string json = ios_toolbar_build_json_for_context(C);
-  ios_toolbar_snapshot.publish(std::move(json));
+  /* Describing the toolbar runs Python and is costly. Do it only when something may have changed:
+   * a native command ran or Blender sent notifiers, as it does for any change of state; or
+   * Properties asks while open. A slow check covers anything that changes without notifiers.
+   * The native toolbar is told about a new description at once and only when it differs.
+   * Continuous changes, such as playback changing the frame, describe it ten times a second. */
+  static std::chrono::steady_clock::time_point next_check, last_build;
+  static std::string published;
+  const auto now = std::chrono::steady_clock::now();
+  const bool wanted = handled_commands || ios_ui_changed || now >= next_check ||
+                      (ios_panels_visible && now >= ios_panels_next_snapshot);
+  if (wanted && (handled_commands || now - last_build >= std::chrono::milliseconds(100))) {
+    ios_ui_changed = false;
+    last_build = now;
+    next_check = now + std::chrono::seconds(1);
+    std::string json = ios_toolbar_build_json_for_context(C);
+    if (json != published) {
+      published = json;
+      ios_toolbar_snapshot.publish(std::move(json));
+    }
+  }
   ios_timeline_build(C);
   ios_assets_build(C);
 }
@@ -2142,6 +2163,24 @@ extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle)
   }
 
   ios_ui_messages.push(angle);
+}
+
+void WM_apple_ios_ui_tag_changed()
+{
+  ios_ui_changed = true;
+}
+
+extern "C" char *WM_apple_ios_ui_toolbar_take_json()
+{
+  /* Only a description that changed since UIKit last took one. */
+  if (!ios_toolbar_snapshot.take(ios_toolbar_json)) {
+    return nullptr;
+  }
+  char *json_copy = static_cast<char *>(std::malloc(ios_toolbar_json.size() + 1));
+  if (json_copy != nullptr) {
+    std::memcpy(json_copy, ios_toolbar_json.c_str(), ios_toolbar_json.size() + 1);
+  }
+  return json_copy;
 }
 
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json()
@@ -2640,8 +2679,10 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
            a_request->lookup_str("id") == b_request->lookup_str("id") &&
            a_request->lookup_str("key") == b_request->lookup_str("key");
   };
+  bool handled_commands = false;
   for (IOSUIMessage &message : ios_ui_messages.take_coalesced(supersedes_preview)) {
     ios_ui_dispatch(C, message);
+    handled_commands = true;
   }
 
   const bool hover_changed = ios_hover_requests.take(ios_hover_request);
@@ -2701,7 +2742,7 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     ios_context_pop(C, context_store);
   }
 
-  ios_toolbar_build(C);
+  ios_toolbar_build(C, handled_commands);
 }
 
 }  // namespace blender

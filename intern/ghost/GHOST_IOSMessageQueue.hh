@@ -10,6 +10,13 @@
 /** Multiple producers, one consumer. Producers never take a lock held by the consumer.
  * A detached batch is reversed to preserve submission order. Destruction requires all
  * producers to have stopped. Values, including their payloads, belong to the queue. */
+/**
+ * Tells the other side that a message or snapshot is waiting: Blender's loop, which sleeps while
+ * it has nothing to do, or UIKit, which updates from snapshots instead of polling for them.
+ * See `GHOST_SystemIOS.mm`.
+ */
+void GHOST_ios_mailbox_published();
+
 template<typename T> class GHOST_IOSMessageQueue {
   struct Node {
     T value;
@@ -30,6 +37,7 @@ template<typename T> class GHOST_IOSMessageQueue {
         node->next, node, std::memory_order_release, std::memory_order_relaxed))
     {
     }
+    GHOST_ios_mailbox_published();
   }
 
   std::vector<T> take()
@@ -81,6 +89,7 @@ template<typename T> class GHOST_IOSLatest {
   void publish(T value)
   {
     delete value_.exchange(new T(std::move(value)));
+    GHOST_ios_mailbox_published();
   }
   bool take(T &value)
   {

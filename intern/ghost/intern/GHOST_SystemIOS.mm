@@ -113,6 +113,24 @@ bool GHOST_ios_shader_compilation(int *finished, int *total)
   return *total > 0;
 }
 
+/* UIKit is told once about any number of snapshots published before it gets to them. */
+static std::atomic<bool> mailbox_notification_pending{false};
+
+void GHOST_ios_mailbox_published()
+{
+  if (NSThread.isMainThread) {
+    GHOST_ios_engine_wake();
+    return;
+  }
+  if (mailbox_notification_pending.exchange(true)) {
+    return;
+  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    mailbox_notification_pending.store(false);
+    [NSNotificationCenter.defaultCenter postNotificationName:@"BlenderSnapshotsPublished" object:nil];
+  });
+}
+
 void GHOST_ios_engine_wake()
 {
   engine_wakeup.store(true);

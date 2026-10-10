@@ -19,6 +19,12 @@ static const char **argv;
 static std::atomic<bool> engine_active{true}, engine_wakeup{false}, stopped{false};
 static std::condition_variable engine_condition;
 static std::mutex engine_wait_mutex;
+/* Queues wake the engine as in `GHOST_SystemIOS.mm`. */
+void GHOST_ios_mailbox_published()
+{
+  engine_wakeup = true;
+  engine_condition.notify_one();
+}
 static GHOST_IOSMessageQueue<std::function<void()>> engine_requests;
 static GHOST_IOSMessageQueue<int> commands;
 static GHOST_IOSLatest<int> snapshots;

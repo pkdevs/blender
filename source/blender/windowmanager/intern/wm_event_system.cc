@@ -610,6 +610,13 @@ void wm_event_do_notifiers(bContext *C)
     return;
   }
 
+#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+  if (!BLI_listbase_is_empty(&wm->runtime->notifier_queue)) {
+    /* Whatever changed, the native interface describes Blender's state again. */
+    WM_apple_ios_ui_tag_changed();
+  }
+#endif
+
   /* Disable? - Keep for now since its used for window level notifiers. */
 #if 1
   /* Cache & catch WM level notifiers, such as frame change, scene/screen set. */

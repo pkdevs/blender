@@ -72,6 +72,7 @@ extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle);
 extern "C" void WM_apple_ios_ui_navigation_hover_set(bool active);
 extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y);
 extern "C" char *WM_apple_ios_ui_toolbar_copy_json();
+extern "C" char *WM_apple_ios_ui_toolbar_take_json();
 extern "C" char *WM_apple_ios_ui_panels_take_json();
 extern "C" char *WM_apple_ios_ui_timeline_take_json();
 extern "C" void WM_apple_ios_ui_bottom_tray_set(float fraction);
@@ -2476,15 +2477,19 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     WM_apple_ios_ui_setting_enqueue("interface", "desktop");
     [self setDesktopInterface:YES];
   }
+  /* Snapshots arrive by notification; only whether Blender is held up (compiling shaders) is
+   * checked on a timer, since a held-up Blender publishes nothing. */
   _toolbar_refresh_timer = [NSTimer scheduledTimerWithTimeInterval:0.25
                                                             target:self
-                                                          selector:@selector(refreshToolbarFromBlender)
+                                                          selector:@selector(updateViewportLoadingIndicator)
                                                           userInfo:nil
                                                            repeats:YES];
+  [NSNotificationCenter.defaultCenter addObserver:self
+                                         selector:@selector(blenderSnapshotsPublished:)
+                                             name:@"BlenderSnapshotsPublished"
+                                           object:nil];
   [self refreshToolbarFromBlender];
-  _panels_refresh_timer = [NSTimer timerWithTimeInterval:1.0 / 60.0 target:self
-      selector:@selector(refreshScenePanelsFromBlender) userInfo:nil repeats:YES];
-  [NSRunLoop.mainRunLoop addTimer:_panels_refresh_timer forMode:NSRunLoopCommonModes];
+  [self refreshScenePanelsFromBlender];
   _actions_edit_menu_interaction = [[UIEditMenuInteraction alloc] initWithDelegate:self];
   [_view addInteraction:_actions_edit_menu_interaction];
 
@@ -4185,11 +4190,31 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self.view setNeedsLayout];
 }
 
+/* Blender tells UIKit when it published snapshots, see `GHOST_ios_mailbox_published`: update
+ * from those that changed, without polling. */
+- (void)blenderSnapshotsPublished:(NSNotification *)notification
+{
+  [self refreshScenePanelsFromBlender];
+  if (char *json = WM_apple_ios_ui_toolbar_take_json()) {
+    NSData *data = [NSData dataWithBytes:json length:strlen(json)];
+    WM_apple_ios_ui_toolbar_free_json(json);
+    NSDictionary *model = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if ([model isKindOfClass:NSDictionary.class]) {
+      [self applyToolbarModel:model];
+    }
+  }
+  [self refreshNativeMenuBar];
+}
+
 - (void)refreshToolbarFromBlender
 {
   [self updateViewportLoadingIndicator];
+  [self applyToolbarModel:[self toolbarModel]];
   [self refreshNativeMenuBar];
-  NSDictionary *model = [self toolbarModel];
+}
+
+- (void)applyToolbarModel:(NSDictionary *)model
+{
   if ([model[@"desktop"] isKindOfClass:NSNumber.class] && [model[@"desktop"] boolValue] != _desktop_interface) {
     /* Blender's own Window menu can switch the interface too. */
     [self setDesktopInterface:[model[@"desktop"] boolValue]];

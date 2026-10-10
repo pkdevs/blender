@@ -7,6 +7,9 @@
 #include <memory>
 #include <thread>
 
+/* The app wakes Blender or UIKit here; this test has neither. */
+void GHOST_ios_mailbox_published() {}
+
 struct Message {
   int producer, sequence;
   std::shared_ptr<std::atomic<bool>> alive;

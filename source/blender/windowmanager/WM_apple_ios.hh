@@ -18,6 +18,8 @@ struct wmOperatorType;
 
 /* Engine-thread API. UIKit exchanges only owned values and request identifiers. */
 bool WM_apple_ios_pencil_hover_active();
+/** Something in Blender changed (notifiers were sent): describe it to the native interface. */
+void WM_apple_ios_ui_tag_changed();
 bool WM_apple_ios_dialog_begin(bContext *C,
                                const GHOST_IOSDialog &dialog,
                                std::function<void(bContext *, int, uint64_t)> complete,
