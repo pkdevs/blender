@@ -1437,6 +1437,27 @@ static void mesh_transdata_center_copy(const TransIslandData *island_data,
   }
 }
 
+/**
+ * Find the original vertex connected to an extruded edge vertex.
+ * Immediately after extrusion, the original vertex is deselected and connected to its duplicate by
+ * a zero-length edge. Their coordinates are identical because neither vertex has been moved yet.
+ */
+static const BMVert *mesh_extruded_edge_original_vert_get(BMVert *v)
+{
+  /* Find the original vertex connected by a zero-length extrusion edge. */
+  BMIter iter;
+  BMEdge *e;
+
+  BM_ITER_ELEM (e, &iter, v, BM_EDGES_OF_VERT) {
+    const BMVert *v_orig = BM_edge_other_vert(e, v);
+    if (!BM_elem_flag_test(v_orig, BM_ELEM_SELECT) && equals_v3v3(v->co, v_orig->co)) {
+      return v_orig;
+    }
+  }
+
+  return nullptr;
+}
+
 /* Way to overwrite what data is edited with transform. */
 static void VertsToTransData(TransInfo *t,
                              TransData *td,
@@ -1444,9 +1465,11 @@ static void VertsToTransData(TransInfo *t,
                              BMEditMesh *em,
                              BMVert *eve,
                              const TransIslandData *island_data,
-                             const int island_index)
+                             const int island_index,
+                             const bool use_edge_extrusion_source)
 {
-  float *no, _no[3];
+  const float *no;
+  float _no[3];
   BLI_assert(BM_elem_flag_test(eve, BM_ELEM_HIDDEN) == 0);
 
   td->flag = 0;
@@ -1456,8 +1479,16 @@ static void VertsToTransData(TransInfo *t,
   td->loc = eve->co;
   copy_v3_v3(td->iloc, td->loc);
 
-  if ((t->mode == TFM_SHRINKFATTEN) && (em->selectmode & SCE_SELECT_FACE) &&
-      BM_elem_flag_test(eve, BM_ELEM_SELECT) && BM_vert_calc_normal_ex(eve, BM_ELEM_SELECT, _no))
+  /* Use the original surface for both the extrusion direction and shell thickness. */
+  const BMVert *v_orig = use_edge_extrusion_source && BM_elem_flag_test(eve, BM_ELEM_SELECT) ?
+                             mesh_extruded_edge_original_vert_get(eve) :
+                             nullptr;
+  if (v_orig) {
+    no = v_orig->no;
+  }
+  else if ((t->mode == TFM_SHRINKFATTEN) && (em->selectmode & SCE_SELECT_FACE) &&
+           BM_elem_flag_test(eve, BM_ELEM_SELECT) &&
+           BM_vert_calc_normal_ex(eve, BM_ELEM_SELECT, _no))
   {
     no = _no;
   }
@@ -1483,7 +1514,9 @@ static void VertsToTransData(TransInfo *t,
   td->val = nullptr;
   td->extra = eve;
   if (t->mode == TFM_SHRINKFATTEN) {
-    tx->iscale[0] = BM_vert_calc_shell_factor_ex(eve, no, BM_ELEM_SELECT);
+    /* Ignore the collapsed side faces added by edge extrusion. */
+    tx->iscale[0] = v_orig ? BM_vert_calc_shell_factor(v_orig, true) :
+                             BM_vert_calc_shell_factor_ex(eve, no, BM_ELEM_SELECT);
   }
 }
 
@@ -1494,6 +1527,10 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
     Mesh *mesh = id_cast<Mesh *>(tc->obedit->data);
     BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
+    const bool use_edge_extrusion_source = (t->mode == TFM_SHRINKFATTEN) &&
+                                           (t->options & CTX_MESH_EXTRUDE_NORMALS) &&
+                                           (em->selectmode == SCE_SELECT_EDGE) &&
+                                           (bm->totedgesel != 0) && (bm->totfacesel == 0);
     BMVert *eve;
     BMIter iter;
     float mtx[3][3], smtx[3][3];
@@ -1656,7 +1693,8 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
       else if (prop_mode || BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
         /* Do not use the island center in case we are using islands
          * only to get axis for snap/rotate to normal... */
-        VertsToTransData(t, tob, tx, em, eve, &island_data, island_index);
+        VertsToTransData(
+            t, tob, tx, em, eve, &island_data, island_index, use_edge_extrusion_source);
         if (tx) {
           tx++;
         }

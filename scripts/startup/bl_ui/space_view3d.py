@@ -4779,6 +4779,8 @@ class VIEW3D_MT_edit_mesh_context_menu(Menu):
             col.separator()
 
             col.operator("mesh.extrude_edges_move", text="Extrude Edges")
+            if not is_vert_mode and not is_face_mode and not selected_faces_len and selected_edges_len:
+                col.operator("mesh.extrude_region_shrink_fatten", text="Extrude Edges Along Normals")
             col.operator("mesh.bevel", text="Bevel Edges").affect = 'EDGES'
             if selected_edges_len >= 2:
                 col.operator("mesh.bridge_edge_loops")
@@ -4918,6 +4920,8 @@ class VIEW3D_MT_edit_mesh_extrude(Menu):
 
         if mesh.total_edge_sel and (select_mode[0] or select_mode[1]):
             layout.operator("mesh.extrude_edges_move", text="Extrude Edges")
+            if not select_mode[0] and not select_mode[2] and not mesh.total_face_sel:
+                layout.operator("mesh.extrude_region_shrink_fatten", text="Extrude Edges Along Normals")
 
         if mesh.total_vert_sel and select_mode[0]:
             layout.operator("mesh.extrude_vertices_move", text="Extrude Vertices")
@@ -4986,7 +4990,7 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
 class VIEW3D_MT_edit_mesh_edges(Menu):
     bl_label = "Edge"
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
 
         with_freestyle = bpy.app.build_options.freestyle
@@ -4994,6 +4998,12 @@ class VIEW3D_MT_edit_mesh_edges(Menu):
         layout.operator_context = 'INVOKE_REGION_WIN'
 
         layout.operator("mesh.extrude_edges_move", text="Extrude Edges")
+
+        select_mode = context.tool_settings.mesh_select_mode
+        mesh = context.object.data
+
+        if not select_mode[0] and not select_mode[2] and not mesh.total_face_sel and mesh.total_edge_sel:
+            layout.operator("mesh.extrude_region_shrink_fatten", text="Extrude Edges Along Normals")
         layout.operator("mesh.bevel", text="Bevel Edges").affect = 'EDGES'
         layout.operator("mesh.bridge_edge_loops")
         layout.operator("mesh.screw")

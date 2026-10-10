@@ -1432,51 +1432,57 @@ float BM_vert_calc_edge_angle(const BMVert *v)
   return BM_vert_calc_edge_angle_ex(v, DEG2RADF(90.0f));
 }
 
-float BM_vert_calc_shell_factor(const BMVert *v)
+/**
+ * A zero \a hflag includes all faces.
+ * \param skip_zero_normal_faces: Exclude faces with zero normals from the weighted average.
+ */
+static float bm_vert_calc_shell_factor_impl(const BMVert *v,
+                                            const float no[3],
+                                            const char hflag,
+                                            const bool skip_zero_normal_faces)
 {
   BMIter iter;
-  BMLoop *l;
+  const BMLoop *l;
   float accum_shell = 0.0f;
   float accum_angle = 0.0f;
+  bool has_matching_faces = false;
 
   BM_ITER_ELEM (l, &iter, (BMVert *)v, BM_LOOPS_OF_VERT) {
+    if (hflag && !BM_elem_flag_test(l->f, hflag)) {
+      continue;
+    }
+    has_matching_faces = true;
+
+    if (skip_zero_normal_faces && is_zero_v3(l->f->no)) {
+      continue;
+    }
+
     const float face_angle = BM_loop_calc_face_angle(l);
-    accum_shell += shell_v3v3_normalized_to_dist(v->no, l->f->no) * face_angle;
+    accum_shell += shell_v3v3_normalized_to_dist(no, l->f->no) * face_angle;
     accum_angle += face_angle;
   }
 
   if (accum_angle != 0.0f) {
     return accum_shell / accum_angle;
   }
+  if (hflag && !has_matching_faces) {
+    /* No flagged faces, so use all faces and the vertex normal. */
+    return bm_vert_calc_shell_factor_impl(v, v->no, 0, skip_zero_normal_faces);
+  }
   return 1.0f;
 }
+
+float BM_vert_calc_shell_factor(const BMVert *v, const bool skip_zero_normal_faces)
+{
+  return bm_vert_calc_shell_factor_impl(v, v->no, 0, skip_zero_normal_faces);
+}
+
 float BM_vert_calc_shell_factor_ex(const BMVert *v, const float no[3], const char hflag)
 {
-  BMIter iter;
-  const BMLoop *l;
-  float accum_shell = 0.0f;
-  float accum_angle = 0.0f;
-  int tot_sel = 0, tot = 0;
-
-  BM_ITER_ELEM (l, &iter, (BMVert *)v, BM_LOOPS_OF_VERT) {
-    if (BM_elem_flag_test(l->f, hflag)) { /* <-- main difference to BM_vert_calc_shell_factor! */
-      const float face_angle = BM_loop_calc_face_angle(l);
-      accum_shell += shell_v3v3_normalized_to_dist(no, l->f->no) * face_angle;
-      accum_angle += face_angle;
-      tot_sel++;
-    }
-    tot++;
+  if (hflag == 0) {
+    return BM_vert_calc_shell_factor(v, false);
   }
-
-  if (accum_angle != 0.0f) {
-    return accum_shell / accum_angle;
-  }
-  /* other main difference from BM_vert_calc_shell_factor! */
-  if (tot != 0 && tot_sel == 0) {
-    /* none selected, so use all */
-    return BM_vert_calc_shell_factor(v);
-  }
-  return 1.0f;
+  return bm_vert_calc_shell_factor_impl(v, no, hflag, false);
 }
 
 float BM_vert_calc_median_tagged_edge_length(const BMVert *v)

@@ -122,6 +122,8 @@ enum eTContext {
   CTX_OBMODE_XFORM_SKIP_CHILDREN = (1 << 14),
   /** Enable edge scrolling in 2D views. */
   CTX_VIEW2D_EDGE_PAN = (1 << 15),
+  /** Mesh extrusion followed by an offset along normals. */
+  CTX_MESH_EXTRUDE_NORMALS = (1 << 16),
 };
 ENUM_OPERATORS(eTContext)
 

@@ -504,8 +504,11 @@ float BM_vert_calc_edge_angle_ex(const BMVert *v, float fallback) ATTR_WARN_UNUS
 /**
  * \note this isn't optimal to run on an array of verts,
  * see 'solidify_add_thickness' for a function which runs on an array.
+ * \param skip_zero_normal_faces: Exclude faces with zero normals from the weighted average.
  */
-float BM_vert_calc_shell_factor(const BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+float BM_vert_calc_shell_factor(const BMVert *v,
+                                bool skip_zero_normal_faces = false) ATTR_WARN_UNUSED_RESULT
+    ATTR_NONNULL();
 /* alternate version of #BM_vert_calc_shell_factor which only
  * uses 'hflag' faces, but falls back to all if none found. */
 float BM_vert_calc_shell_factor_ex(const BMVert *v,

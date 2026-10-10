@@ -2114,6 +2114,12 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
   }
 
+  if (mode == TFM_SHRINKFATTEN && op->opm &&
+      STREQ(op->opm->idname, "MESH_OT_extrude_region_shrink_fatten"))
+  {
+    options |= CTX_MESH_EXTRUDE_NORMALS;
+  }
+
   t->options = eTContext(options);
 
   t->mode = eTfmMode(mode);
