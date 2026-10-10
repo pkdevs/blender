@@ -954,7 +954,8 @@ eSnapMode snap_object_center(SnapObjectContext *sctx,
   nearest2d.clip_planes_enable(sctx, ob_eval, true);
 
   if (nearest2d.snap_point(float3(0.0f))) {
-    nearest2d.register_result(sctx, ob_eval, static_cast<const ID *>(ob_eval->data));
+    const ID *id = ob_eval ? static_cast<const ID *>(ob_eval->data) : nullptr;
+    nearest2d.register_result(sctx, ob_eval, id);
     return retval;
   }
 
