@@ -2008,6 +2008,18 @@ elseif(APPLE)
     unset(_oidn_module_link)
   endif()
 
+  if(WITH_APPLE_CROSSPLATFORM AND WITH_PYTHON)
+    # Python extension modules are built with the macOS ABI tag, which the iOS interpreter does
+    # not look for. Use its own tag so they import (distribution builds use `.fwork` markers).
+    install(CODE "
+      file(GLOB_RECURSE _extension_modules
+           \${CMAKE_INSTALL_PREFIX}/${TARGETDIR_VER}/python/*.cpython-${PYTHON_VERSION_NO_DOTS}-darwin.so)
+      foreach(_module \${_extension_modules})
+        string(REPLACE \"-darwin.so\" \"-arm64-iphoneos.so\" _renamed \${_module})
+        file(RENAME \${_module} \${_renamed})
+      endforeach()")
+  endif()
+
   if(PLATFORM_BUNDLED_LIBRARIES AND TARGETDIR_LIB)
     install(
       FILES ${PLATFORM_BUNDLED_LIBRARIES}
