@@ -1991,6 +1991,23 @@ elseif(APPLE)
     unset(_py_inc_suffix)
   endif()
 
+  if(WITH_APPLE_CROSSPLATFORM AND WITH_OPENIMAGEDENOISE AND TARGETDIR_LIB)
+    # OpenImageDenoise loads its device modules by unversioned name (see `oidn.diff`), which the
+    # iOS libraries only provide with their version. Without it, denoising has no device at all.
+    file(GLOB _oidn_modules "${LIBDIR}/openimagedenoise/lib/libOpenImageDenoise_device_*.*.dylib")
+    foreach(_oidn_module ${_oidn_modules})
+      get_filename_component(_oidn_module_name ${_oidn_module} NAME)
+      string(REGEX REPLACE "(\\.[0-9]+)+\\.dylib$" ".dylib" _oidn_module_link ${_oidn_module_name})
+      install(CODE "
+        file(CREATE_LINK ${_oidn_module_name}
+             \${CMAKE_INSTALL_PREFIX}/${TARGETDIR_LIB}/${_oidn_module_link} SYMBOLIC)")
+    endforeach()
+    unset(_oidn_modules)
+    unset(_oidn_module)
+    unset(_oidn_module_name)
+    unset(_oidn_module_link)
+  endif()
+
   if(PLATFORM_BUNDLED_LIBRARIES AND TARGETDIR_LIB)
     install(
       FILES ${PLATFORM_BUNDLED_LIBRARIES}
