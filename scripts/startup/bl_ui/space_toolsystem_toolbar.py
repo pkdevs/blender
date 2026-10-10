@@ -2270,6 +2270,30 @@ class _defs_weight_paint:
 class _defs_grease_pencil_paint:
 
     @ToolDef.from_fn
+    def select():
+        return dict(
+            idname="builtin.select",
+            label="Tweak",
+            icon="ops.generic.select",
+            keymap="3D View Tool: Tweak",
+        )
+
+    @ToolDef.from_fn
+    def box_select():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("view3d.select_box")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+        return dict(
+            idname="builtin.select_box",
+            label="Select Box",
+            icon="ops.generic.select_box",
+            keymap="3D View Tool: Select Box",
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
     def lasso_select():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("view3d.select_lasso")
@@ -2283,6 +2307,30 @@ class _defs_grease_pencil_paint:
             # widget="VIEW3D_GGT_grease_pencil_edit",
             keymap="3D View Tool: Select Lasso",
             draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def circle_select():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("view3d.select_circle")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            layout.prop(props, "radius")
+
+        def draw_cursor(_context, tool, xy):
+            from gpu_extras.presets import draw_circle_2d
+            props = tool.operator_properties("view3d.select_circle")
+            radius = props.radius
+            draw_circle_2d(xy, (1.0,) * 4, radius, segments=32)
+
+        return dict(
+            idname="builtin.select_circle",
+            label="Select Circle",
+            icon="ops.generic.select_circle",
+            keymap="3D View Tool: Select Circle",
+            draw_settings=draw_settings,
+            draw_cursor=draw_cursor,
         )
 
     @ToolDef.from_fn
@@ -2319,6 +2367,25 @@ class _defs_grease_pencil_paint:
             idname="builtin.trim",
             label="Trim",
             icon="ops.gpencil.stroke_trim",
+            cursor='KNIFE',
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def carver():
+        def draw_settings(context, layout, _tool):
+            brush = context.tool_settings.gpencil_paint.brush
+            gp_settings = brush.gpencil_settings
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(gp_settings, "use_active_layer_only")
+            row.prop(gp_settings, "use_keep_caps_eraser")
+
+        return dict(
+            idname="builtin.carver",
+            label="Carver",
+            icon="ops.gpencil.carver",
             cursor='KNIFE',
             keymap=(),
             draw_settings=draw_settings,
@@ -3292,23 +3359,46 @@ class _defs_sequencer_generic:
 
     @ToolDef.from_fn
     def blade():
-        def draw_settings(_context, layout, tool):
-            props = tool.operator_properties("sequencer.split")
-            row = layout.row()
-            row.prop(props, "type", expand=True)
+        def draw_settings(context, layout, tool, *, extra=False):
+            # If tool settings are shown in the header, we can't draw panels in there.
+            # Instead, show just the first split option, and the rest of the options in an extra "..."
+            region_is_header = context.region.type == 'TOOL_HEADER'
+            if region_is_header and not extra:
+                props = tool.operator_properties("sequencer.split")
+                layout.row().prop(props, "type", text="Split", expand=True)
+                layout.popover("TOPBAR_PT_tool_settings_extra", text="...")
+                return
 
-            layout.separator()
+            # Split properties.
+            header, panel = layout.panel("SEQUENCER_PT_tool_split")
+            header.label(text="Split")
+            if panel:
+                props = tool.operator_properties("sequencer.split")
+                if not extra:
+                    panel.row().prop(props, "type", expand=True)
+                panel.prop(props, "all_channels")
+                panel.prop(props, "only_selected")
+                row = panel.row()
+                row.active = not (props.all_channels or props.only_selected)
+                row.prop(props, "ignore_connections")
 
-            props = tool.operator_properties("sequencer.box_blade")
-            layout.prop(props, "remove_gaps", expand=True)
-            layout.prop(props, "ignore_selection", expand=True)
-            layout.prop(props, "ignore_connections", expand=True)
+            # Box Blade properties.
+            header, panel = layout.panel("SEQUENCER_PT_tool_box_blade")
+            header.label(text="Box Blade")
+            if panel:
+                props = tool.operator_properties("sequencer.box_blade")
+                panel.row().prop(props, "type", expand=True)
+                panel.prop(props, "remove_gaps")
+                panel.prop(props, "only_selected")
+                row = panel.row()
+                row.active = not props.only_selected
+                row.prop(props, "ignore_connections")
         return dict(
             idname="builtin.blade",
             label="Blade",
             icon="ops.sequencer.blade",
             cursor='CROSSHAIR',
-            widget=None,
+            widget="SEQUENCER_GGT_blade",
             keymap="Sequencer Tool: Blade",
             draw_settings=draw_settings,
             options={'KEYMAP_FALLBACK'},
@@ -3808,6 +3898,15 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         ),
     )
 
+    _tools_grease_pencil_select = (
+        (
+            _defs_grease_pencil_paint.select,
+            _defs_grease_pencil_paint.lasso_select,
+            _defs_grease_pencil_paint.box_select,
+            _defs_grease_pencil_paint.circle_select,
+        ),
+    )
+
     _tools_view3d_add = (
         _defs_view3d_add.cube_add,
         _defs_view3d_add.cone_add,
@@ -4126,7 +4225,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             *_tools_annotate,
         ],
         'PAINT_GREASE_PENCIL': [
-            _defs_grease_pencil_paint.lasso_select,
+            *_tools_grease_pencil_select,
             _defs_view3d_generic.cursor,
             None,
             _draw_tool,
@@ -4135,6 +4234,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             *_tools_grease_pencil_primitives,
             None,
             _defs_grease_pencil_paint.trim,
+            _defs_grease_pencil_paint.carver,
             None,
             _defs_grease_pencil_paint.eyedropper,
             None,

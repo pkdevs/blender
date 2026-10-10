@@ -908,6 +908,14 @@ class USERPREF_PT_system_video_sequencer(SystemPanel, CenterAlignMixIn, Panel):
 
         layout.prop(system, "sequencer_proxy_setup")
 
+        layout.separator()
+
+        layout.prop(system, "use_hardware_video_decoding")
+        if prefs.experimental.use_video_decoding_debug and prefs.view.show_developer_ui:
+            row = layout.row()
+            row.active = system.use_hardware_video_decoding
+            row.prop(system, "video_decoding_device")
+
 
 # -----------------------------------------------------------------------------
 # Viewport Panels
@@ -1766,14 +1774,25 @@ class USERPREF_PT_file_paths_development(FilePathsPanel, Panel):
 
 
 class USERPREF_PT_saveload_autorun(FilePathsPanel, Panel):
-    bl_label = "Auto Run Python Scripts"
+    # Drawn with the checkbox so the command line override can follow it.
+    bl_label = ""
     bl_parent_id = "USERPREF_PT_saveload_blend"
 
     def draw_header(self, context):
+        layout = self.layout
         prefs = context.preferences
         paths = prefs.filepaths
 
-        self.layout.prop(paths, "use_scripts_auto_execute", text="")
+        text = iface_("Auto Run Python Scripts")
+
+        if (autoexec_override := bpy.app.autoexec_override) is not None:
+            if autoexec_override:
+                text_warn = iface_("enabled on startup, overriding the preference")
+            else:
+                text_warn = iface_("disabled on startup, overriding the preference")
+            text = "{:s} ({:s})".format(text, text_warn)
+
+        layout.prop(paths, "use_scripts_auto_execute", text=text, translate=False)
 
     def draw(self, context):
         layout = self.layout
@@ -1784,6 +1803,14 @@ class USERPREF_PT_saveload_autorun(FilePathsPanel, Panel):
         layout.use_property_decorate = False  # No animation.
 
         layout.active = paths.use_scripts_auto_execute
+
+        if paths.use_scripts_auto_execute:
+            layout.label_multiline(
+                text=(
+                    "Opening blend files from the internet and other untrusted sources is unsafe with Auto-Run. Use with caution."
+                ),
+                icon='STATUS_WARNING',
+            )
 
         box = layout.box()
         row = box.row()
@@ -2987,6 +3014,7 @@ class USERPREF_PT_developer_tools(Panel):
                 ({"property": "use_viewport_debug"}, None),
                 ({"property": "use_eevee_debug"}, None),
                 ({"property": "use_paint_debug"}, None),
+                ({"property": "use_video_decoding_debug"}, None),
                 ({"property": "use_extensions_debug"}, ("/blender/blender/issues/119521", "#119521")),
                 ({"property": "write_legacy_blend_file_format"}, ("/blender/blender/issues/129309", "#129309")),
                 ({"property": "no_data_block_packing"}, ("/blender/blender/issues/132167", "#132167")),
@@ -3034,7 +3062,6 @@ class USERPREF_PT_experimental_new_features(ExperimentalPanel, Panel):
                 ({"property": "use_extended_asset_browser"},
                  ("blender/blender/projects/10", "Pipeline, Assets & IO Project Page")),
                 ({"property": "use_shader_node_previews"}, ("blender/blender/issues/110353", "#110353")),
-                ({"property": "use_collection_importer"}, ("blender/blender/issues/132171", "#132171")),
             ),
         )
 

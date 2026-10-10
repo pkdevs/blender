@@ -2182,7 +2182,7 @@ def pycontext_members2sphinx(ident: str, fw: WriteFn, written_props: set[str]) -
                 if member_type.isidentifier():
                     class_str = ":class:`{:s}`".format(member_type)
                     if is_seq:
-                        type_strs.append("Sequence[{:s}]".format(class_str))
+                        type_strs.append("list[{:s}]".format(class_str))
                     else:
                         type_strs.append(class_str)
                 else:
@@ -3365,6 +3365,7 @@ def copy_handwritten_rsts(basepath: Path) -> None:
 
         # Includes.
         "include__bmesh",
+        "include__bpy_app_handlers",
     ]
 
     for mod_name in handwritten_modules:

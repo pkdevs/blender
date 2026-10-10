@@ -151,17 +151,17 @@ float BKE_brush_sample_masktex(
  * Get the mask texture for this given object mode.
  *
  * This is preferred above using mtex/mask_mtex attributes directly as due to legacy these
- * attributes got switched in sculpt mode.
+ * attributes got switched in sculpt mode and subsequently vertex paint.
  */
-const MTex *BKE_brush_mask_texture_get(const Brush *brush, eObjectMode object_mode);
+const MTex *BKE_brush_mask_texture_get(const Brush *brush, PaintMode paint_mode);
 
 /**
  * Get the color texture for this given object mode.
  *
  * This is preferred above using mtex/mask_mtex attributes directly as due to legacy these
- * attributes got switched in sculpt mode.
+ * attributes got switched in sculpt mode and subsequently vertex paint.
  */
-const MTex *BKE_brush_color_texture_get(const Brush *brush, eObjectMode object_mode);
+const MTex *BKE_brush_color_texture_get(const Brush *brush, PaintMode paint_mode);
 
 /**
  * Radial control.
@@ -237,7 +237,8 @@ bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode);
 
 namespace bke::brush {
 float normal_weight_get(const Brush &brush, bool invert);
-}
+float tip_rotation_get(const Paint &paint, const Brush &brush);
+}  // namespace bke::brush
 
 /* debugging only */
 void BKE_brush_debug_print_state(Brush *br);
@@ -265,6 +266,7 @@ bool supports_plane_height(const Brush &brush);
 bool supports_plane_depth(const Brush &brush);
 bool supports_jitter(const Brush &brush);
 bool supports_normal_weight(const Brush &brush);
+bool supports_rake(const Brush &brush);
 bool supports_rake_factor(const Brush &brush);
 bool supports_persistence(const Brush &brush);
 bool supports_pinch_factor(const Brush &brush);

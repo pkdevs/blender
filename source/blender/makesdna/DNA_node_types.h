@@ -39,6 +39,8 @@ class bNodeTreeRuntime;
 class bNodeRuntime;
 class bNodeSocketRuntime;
 }  // namespace bke
+
+struct bNodeInternalLink;
 namespace bke {
 class bNodeTreeZones;
 class bNodeTreeZone;
@@ -499,6 +501,7 @@ enum eNodeVectorTransform_Space : short {
   SHD_VECT_TRANSFORM_SPACE_WORLD = 0,
   SHD_VECT_TRANSFORM_SPACE_OBJECT = 1,
   SHD_VECT_TRANSFORM_SPACE_CAMERA = 2,
+  SHD_VECT_TRANSFORM_SPACE_LIGHT = 3,
 };
 
 /** #NodeShaderAttribute.type */
@@ -1419,6 +1422,7 @@ enum NodeGeometryMergeLayersMode {
 enum NodeGeometryGreasePencilStrokeType : int8_t {
   GEO_NODE_GREASE_PENCIL_STROKE = 0,
   GEO_NODE_GREASE_PENCIL_FILL = 1,
+  GEO_NODE_GREASE_PENCIL_BOTH = 2,
 };
 
 struct bNodeStack {
@@ -1748,6 +1752,7 @@ struct bNode {
   int index() const;
   StringRefNull label_or_name() const;
   bool is_muted() const;
+  bool is_selected() const;
   bool is_reroute() const;
   bool is_frame() const;
   bool is_group() const;
@@ -1767,7 +1772,7 @@ struct bNode {
 
   const nodes::NodeDeclaration *declaration() const;
   /** A span containing all internal links when the node is muted. */
-  Span<bNodeLink> internal_links() const;
+  Span<bNodeInternalLink> internal_links() const;
 
   /* This node is reroute which is not logically connected to any source of value. */
   bool is_dangling_reroute() const;
@@ -2492,7 +2497,7 @@ struct NodeDefocus {
 
   char bktype = 0;
   DNA_DEPRECATED char gamco = 0;
-  char no_zbuf = 0;
+  char no_zbuf = 1;
   char _pad0 = {};
   float fstop = 0;
   float maxblur = 0;
@@ -2591,7 +2596,10 @@ struct NodeConvertColorSpace {
   DNA_DEFINE_CXX_METHODS(NodeConvertColorSpace)
 
   char from_color_space[64] = "";
+  char from_interop_id[64] = "";
+
   char to_color_space[64] = "";
+  char to_interop_id[64] = "";
 };
 
 struct NodeConvertToDisplay {
@@ -3083,7 +3091,7 @@ struct NodeInputIntVector {
 struct NodeInputColor {
   DNA_DEFINE_CXX_METHODS(NodeInputColor)
 
-  float color[4] = {};
+  float color[4] = {0.5f, 0.5f, 0.5f, 1.0f};
 };
 
 struct NodeInputString {
@@ -4020,6 +4028,20 @@ struct NodeStoreBundleItem {
   eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad = {};
+};
+
+enum class NodeCommentFlag : uint8_t {
+  /** Whether the text is being edited inside of the node. */
+  Edit = (1 << 0),
+};
+ENUM_OPERATORS(NodeCommentFlag)
+
+struct NodeComment {
+  char *text = nullptr;
+  TextboxState textbox_state_node;
+  TextboxState textbox_state_panel;
+  NodeCommentFlag flag = {};
+  char _pad[7] = {};
 };
 
 }  // namespace blender
