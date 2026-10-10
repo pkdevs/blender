@@ -5320,11 +5320,18 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   UIAction *renderAnimation = [UIAction actionWithTitle:@"Render Animation"
       image:[UIImage systemImageNamed:@"film"] identifier:@"blender.render.animation"
       handler:^(__kindof UIAction *) { [controller->_render renderAnimation:YES]; }];
+  NSMutableArray *render_actions = [NSMutableArray arrayWithObjects:renderImage, renderAnimation, nil];
+  if ([_render respondsToSelector:@selector(showRenders)]) {
+    /* Every earlier render, in the render sheet's film strip. */
+    [render_actions addObject:[UIAction actionWithTitle:@"Renders"
+        image:[UIImage systemImageNamed:@"photo.stack"] identifier:@"blender.render.history"
+        handler:^(__kindof UIAction *) { [controller->_render performSelector:@selector(showRenders)]; }]];
+  }
   UIAction *saveTemplate = [UIAction actionWithTitle:@"Save as Template…"
       image:[UIImage systemImageNamed:@"square.on.square"] identifier:@"blender.template.save"
       handler:^(__kindof UIAction *) { [controller saveAsTemplate]; }];
   UIMenu *share_menu = [UIMenu menuWithTitle:@"" children:@[
-    section(@[share, saveAs]), section(@[renderImage, renderAnimation]), section(@[saveTemplate]),
+    section(@[share, saveAs]), section(render_actions), section(@[saveTemplate]),
   ]];
   _share_button.menu = share_menu;
   _share_button.menuRepresentation = share_menu;

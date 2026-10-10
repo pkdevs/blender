@@ -34,6 +34,11 @@ func harnessAssetDrag(_ phase: Int32, _ asset: UnsafePointer<CChar>?, _ x: Int32
                                                              "id": asset.map { String(cString: $0) } ?? ""]])
 }
 
+@_cdecl("GHOST_ios_engine_continue_work")
+func harnessContinueWork(_ continues: Bool) {
+  FakeEngine.shared.log(["setting": "continue_work", "value": continues])
+}
+
 @_cdecl("WM_apple_ios_ui_command_enqueue")
 func harnessCommandEnqueue(_ command: Int32) {
   FakeEngine.shared.log(["setting": "command", "value": Int(command)])
