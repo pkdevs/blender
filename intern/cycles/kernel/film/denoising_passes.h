@@ -218,6 +218,11 @@ ccl_device_forceinline void film_write_denoising_features_surface(KernelGlobals 
       film_write_pass_float(buffer + kernel_data.film.pass_denoising_specular_motion + 1,
                             denoising_specular_motion.y);
     }
+    
+    if (kernel_data.film.pass_denoising_specular_hit_distance != PASS_UNUSED) {
+      film_write_pass_float(buffer + kernel_data.film.pass_denoising_specular_hit_distance,
+                            sd->ray_length);
+    }
   }
 
   /* Portion deferred to the next bounce. Specularity uses the feature weight, transparent

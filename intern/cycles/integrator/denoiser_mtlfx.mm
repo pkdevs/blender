@@ -75,8 +75,7 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     desc.reactiveMaskTextureEnabled = false;
     desc.transparencyOverlayTextureEnabled = false;
     desc.denoiseStrengthMaskTextureEnabled = false;
-    // TODO: This aux texture may be one we could (somewhat easily) implement to improve quality
-    desc.specularHitDistanceTextureEnabled = false;
+    desc.specularHitDistanceTextureEnabled = true;
     desc.inputWidth = buffer_params.width;
     desc.inputHeight = buffer_params.height;
     desc.outputWidth = context.denoised_buffer_params.width;
@@ -90,6 +89,8 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     desc.roughnessTextureFormat = MTLPixelFormatR16Float;
     desc.diffuseAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
     desc.specularAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
+    
+    desc.specularHitDistanceTextureFormat = MTLPixelFormatR16Float;
 
     desc.outputTextureFormat = MTLPixelFormatRGBA16Float;
     
@@ -123,6 +124,9 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     diffuse_albedo_texture = [device newTextureWithDescriptor: tex_desc];
     
     specular_albedo_texture = [device newTextureWithDescriptor: tex_desc];
+    
+    tex_desc.pixelFormat = MTLPixelFormatR16Float;
+    specular_hit_distance_texture = [device newTextureWithDescriptor: tex_desc];
     
     tex_desc.width = context.denoised_buffer_params.width;
     tex_desc.height = context.denoised_buffer_params.height;
@@ -237,6 +241,7 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
     context.pass_denoising_albedo,
     context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_HIT_DISTANCE),
     context.num_samples,
   };
   
@@ -249,6 +254,7 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
   [encoder setTexture: (id<MTLTexture>) roughness_texture atIndex: 3];
   [encoder setTexture: (id<MTLTexture>) diffuse_albedo_texture atIndex: 4];
   [encoder setTexture: (id<MTLTexture>) specular_albedo_texture atIndex: 5];
+  [encoder setTexture: (id<MTLTexture>) specular_hit_distance_texture atIndex: 6];
   [encoder setBytes: &params length: sizeof(params) atIndex: 1];
   [encoder setBytes: &passParams length: sizeof(passParams) atIndex:2];
   
@@ -293,6 +299,7 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
   
   PassParams passParams = {
     context.pass_sample_count,
+    0,
     0,
     0,
     0,
@@ -345,18 +352,19 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   
   // TODO: account for pixel scale in the upscaler
 
-  denoiser.colorTexture          = (id<MTLTexture>) color_texture;
-  denoiser.depthTexture          = (id<MTLTexture>) depth_texture;
-  denoiser.motionTexture         = (id<MTLTexture>) motion_texture;
-  denoiser.normalTexture         = (id<MTLTexture>) normal_texture;
-  denoiser.roughnessTexture      = (id<MTLTexture>) roughness_texture;
-  denoiser.diffuseAlbedoTexture  = (id<MTLTexture>) diffuse_albedo_texture;
-  denoiser.specularAlbedoTexture = (id<MTLTexture>) specular_albedo_texture;
-  denoiser.outputTexture         = (id<MTLTexture>) output_texture;
-  denoiser.jitterOffsetX         = context.pixel_jitter.x;
-  denoiser.jitterOffsetY         = context.pixel_jitter.y;
-  denoiser.motionVectorScaleX    = 1.0;
-  denoiser.motionVectorScaleY    = 1.0;
+  denoiser.colorTexture               = (id<MTLTexture>) color_texture;
+  denoiser.depthTexture               = (id<MTLTexture>) depth_texture;
+  denoiser.motionTexture              = (id<MTLTexture>) motion_texture;
+  denoiser.normalTexture              = (id<MTLTexture>) normal_texture;
+  denoiser.roughnessTexture           = (id<MTLTexture>) roughness_texture;
+  denoiser.diffuseAlbedoTexture       = (id<MTLTexture>) diffuse_albedo_texture;
+  denoiser.specularAlbedoTexture      = (id<MTLTexture>) specular_albedo_texture;
+  denoiser.specularHitDistanceTexture = (id<MTLTexture>) specular_hit_distance_texture;
+  denoiser.outputTexture              = (id<MTLTexture>) output_texture;
+  denoiser.jitterOffsetX              = context.pixel_jitter.x;
+  denoiser.jitterOffsetY              = context.pixel_jitter.y;
+  denoiser.motionVectorScaleX         = 1.0;
+  denoiser.motionVectorScaleY         = 1.0;
   
   [denoiser encodeToCommandBuffer: command_buffer];
   

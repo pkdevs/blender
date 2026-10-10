@@ -793,6 +793,7 @@ static bool get_known_pass_type(blender::RenderPass &b_pass, PassType &type, Pas
   MAP_PASS("Denoising Depth", PASS_DENOISING_DEPTH, true);
   MAP_PASS("Denoising Backward Motion", PASS_DENOISING_BACKWARD_MOTION, true);
   MAP_PASS("Denoising Specular Motion", PASS_DENOISING_SPECULAR_MOTION, true);
+  MAP_PASS("Denoising Specular Hit Distance", PASS_DENOISING_SPECULAR_HIT_DISTANCE, true);
 
   MAP_PASS("Shadow Catcher", PASS_SHADOW_CATCHER, false);
   MAP_PASS("Noisy Shadow Catcher", PASS_SHADOW_CATCHER, true);
@@ -1293,7 +1294,9 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
       
       denoising.passes = DENOISER_PASS_ALBEDO | DENOISER_PASS_SPECULAR_ALBEDO |
                          DENOISER_PASS_NORMAL | DENOISER_PASS_ROUGHNESS |
-                         DENOISER_PASS_DEPTH | DENOISER_PASS_BACKWARD_MOTION;
+                         DENOISER_PASS_DEPTH | DENOISER_PASS_BACKWARD_MOTION |
+                         DENOISER_PASS_SPECULAR_HIT_DISTANCE;
+      
       return denoising;
     }
   }

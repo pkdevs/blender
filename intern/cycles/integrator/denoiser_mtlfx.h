@@ -26,6 +26,7 @@ private:
   void *motion_texture = nullptr;
   void *diffuse_albedo_texture = nullptr;
   void *specular_albedo_texture = nullptr;
+  void *specular_hit_distance_texture = nullptr;
   void *normal_texture = nullptr;
   void *roughness_texture = nullptr;
   void *depth_texture = nullptr;
@@ -74,6 +75,7 @@ private:
     int render_pass_roughness;
     int render_pass_diffuse_albedo;
     int render_pass_specular_albedo;
+    int render_pass_specular_hit_distance;
     int num_samples;
   };
   
@@ -113,6 +115,7 @@ private:
       int render_pass_roughness;
       int render_pass_diffuse_albedo;
       int render_pass_specular_albedo;
+      int render_pass_specular_hit_distance;
       int num_samples;
     };
 
@@ -155,6 +158,7 @@ private:
                                           texture2d<float, access::write> roughness_tex [[texture(3)]],
                                           texture2d<float, access::write> diffuse_albedo_tex [[texture(4)]],
                                           texture2d<float, access::write> specular_albedo_tex [[texture(5)]],
+                                            texture2d<float, access::write> specular_hit_distance_tex [[texture(6)]],
                                           constant KernelParams &params [[buffer(1)]],
                                           constant PassParams &pass [[buffer(2)]],
                                           uint2 tid [[thread_position_in_grid]]
@@ -255,6 +259,16 @@ private:
         albedo.w = 1.0f;
         
         specular_albedo_tex.write(albedo, flip_tid);
+      }
+  
+      // MARK: Specular Hit Distance Pass
+      
+      if (pass.render_pass_specular_hit_distance != PASS_UNUSED) {
+        const device float *specular_dist = buffer + pass.render_pass_specular_hit_distance;
+  
+        float distance = specular_dist[0] * pixelScale;
+  
+        specular_hit_distance_tex.write(float4(distance, 0.0f, 0.0f, 1.0f), flip_tid);
       }
     }
 

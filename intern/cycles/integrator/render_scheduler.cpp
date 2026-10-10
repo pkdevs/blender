@@ -702,6 +702,9 @@ string RenderScheduler::full_report() const
     if (denoiser_params_.passes & DENOISER_PASS_SPECULAR_MOTION) {
       passes += ", Specular Motion";
     }
+    if (denoiser_params_.passes & DENOISER_PASS_SPECULAR_HIT_DISTANCE) {
+      passes += ", Specular Hit Distance";
+    }
 
     result += "  Passes: " + passes + "\n";
   }

@@ -94,6 +94,7 @@ const NodeEnum *Pass::get_type_enum()
     pass_type_enum.insert("denoising_depth", PASS_DENOISING_DEPTH);
     pass_type_enum.insert("denoising_backward_motion", PASS_DENOISING_BACKWARD_MOTION);
     pass_type_enum.insert("denoising_specular_motion", PASS_DENOISING_SPECULAR_MOTION);
+    pass_type_enum.insert("denoising_specular_hit_distance", PASS_DENOISING_SPECULAR_HIT_DISTANCE);
     pass_type_enum.insert("denoising_previous", PASS_DENOISING_PREVIOUS);
     pass_type_enum.insert("volume_majorant", PASS_VOLUME_MAJORANT);
     pass_type_enum.insert("volume_majorant_sample_count", PASS_VOLUME_MAJORANT_SAMPLE_COUNT);
@@ -312,6 +313,7 @@ PassInfo Pass::get_info(const PassType type,
 
     case PASS_DENOISING_ALBEDO:
     case PASS_DENOISING_SPECULAR_ALBEDO:
+    case PASS_DENOISING_SPECULAR_HIT_DISTANCE:
     case PASS_DENOISING_NORMAL:
     case PASS_DENOISING_BACKWARD_MOTION:
     case PASS_DENOISING_SPECULAR_MOTION:
