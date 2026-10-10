@@ -37,6 +37,9 @@ bool BLI_timer_unregister(uintptr_t uuid);
 /** Execute all registered functions that are due. */
 void BLI_timer_execute(void);
 
+/** The time the next registered function is due (see #BLI_time_now_seconds), or infinity. */
+double BLI_timer_next_time(void);
+
 void BLI_timer_free(void);
 
 /* This function is to be called next to BKE_CB_EVT_LOAD_PRE, to make sure the module

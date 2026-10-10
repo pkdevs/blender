@@ -52,6 +52,7 @@ static bContext *C = nullptr;
 /* Implemented in wm.cc. */
 void WM_main_loop_body(bContext *C);
 extern "C" void WM_apple_ios_ui_flush_commands(bContext *C);
+extern "C" double WM_apple_ios_engine_idle_seconds(bContext *C);
 /* Implemented in wm_files.cc. */
 void WM_apple_ios_autosave_now(bContext *C);
 }  // namespace blender
@@ -62,6 +63,7 @@ void WM_apple_ios_autosave_now(bContext *C);
 using blender::C;
 using blender::WM_main_loop_body;
 using blender::WM_apple_ios_ui_flush_commands;
+using blender::WM_apple_ios_engine_idle_seconds;
 int main_ios_callback(int argc, const char **argv);
 
 static UIWindowScene *g_window_scene = nil;
@@ -249,6 +251,12 @@ static void run_engine()
         system->current_active_window_->flushDeferredSwapBuffers();
       }
       engine_pass_started.store(0.0);
+      /* With nothing to do, sleep until Blender's next timer instead of the next frame. Input,
+       * native commands and requests wake the loop at once. */
+      if (C) {
+        deadline += std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+            std::chrono::duration<double>(WM_apple_ios_engine_idle_seconds(C)));
+      }
       if (system->next_active_window_) {
         if (system->current_active_window_) {
           system->current_active_window_->resignKeyWindow();

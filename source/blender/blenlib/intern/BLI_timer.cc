@@ -12,6 +12,9 @@
 
 #include "MEM_guardedalloc.h"
 
+#include <algorithm>
+#include <limits>
+
 namespace blender {
 
 #define GET_TIME() BLI_time_now_seconds()
@@ -103,6 +106,17 @@ static void execute_functions_if_necessary()
       timed_func.next_time = current_time + ret;
     }
   }
+}
+
+double BLI_timer_next_time()
+{
+  double next_time = std::numeric_limits<double>::infinity();
+  for (const TimedFunction &timed_func : GlobalTimer.funcs) {
+    if (!timed_func.tag_removal) {
+      next_time = std::min(next_time, timed_func.next_time);
+    }
+  }
+  return next_time;
 }
 
 static void remove_tagged_functions()

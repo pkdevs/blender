@@ -25,7 +25,11 @@
 #include "ED_render.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
+#include "BKE_wm_runtime.hh"
 
+#include "DNA_view3d_types.h"
+#include "BLI_time.h"
+#include "BLI_timer.h"
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
@@ -2629,6 +2633,51 @@ static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
         }
       },
       message);
+}
+
+extern "C" double WM_apple_ios_engine_idle_seconds(bContext *C)
+{
+  /* How long Blender's loop has nothing to do: no events, notifiers or redraws pending, until
+   * its next timer. The loop then sleeps, waking at once for input, instead of running every
+   * frame. A rendered viewport is polled every frame, its engine draws on its own thread. */
+  wmWindowManager *wm = CTX_wm_manager(C);
+  if (wm == nullptr || ios_ui_changed || !BLI_listbase_is_empty(&wm->runtime->notifier_queue)) {
+    return 0.0;
+  }
+  for (wmWindow &win : wm->windows) {
+    bScreen *screen = WM_window_get_active_screen(&win);
+    if (!BLI_listbase_is_empty(&win.runtime->event_queue) || screen == nullptr ||
+        screen->do_draw || screen->do_refresh || screen->do_draw_gesture ||
+        screen->do_draw_paintcursor || screen->do_draw_drag)
+    {
+      return 0.0;
+    }
+    for (ARegion &region : screen->regionbase) {
+      if (region.runtime->do_draw) {
+        return 0.0;
+      }
+    }
+    ED_screen_areas_iter (&win, screen, area) {
+      if (area->spacetype == SPACE_VIEW3D) {
+        const View3D *v3d = static_cast<const View3D *>(area->spacedata.first);
+        if (v3d && ELEM(v3d->shading.type, OB_MATERIAL, OB_RENDER)) {
+          return 0.0;
+        }
+      }
+      for (ARegion &region : area->regionbase) {
+        if (region.runtime->do_draw) {
+          return 0.0;
+        }
+      }
+    }
+  }
+  double next = BLI_timer_next_time();
+  for (const wmTimer &timer : wm->runtime->timers) {
+    if (!timer.sleep && !(timer.flags & WM_TIMER_TAGGED_FOR_REMOVAL)) {
+      next = std::min(next, timer.time_next);
+    }
+  }
+  return std::clamp(next - BLI_time_now_seconds(), 0.0, 0.1);
 }
 
 extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
