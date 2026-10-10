@@ -36,12 +36,39 @@ struct UIMenuButton: UIViewRepresentable {
   /** `system`: a classic system button, its title in the tint at 15 points, centered. */
   enum Style { case plain, glass, popup, borderless, glassPopup, system }
 
+  /** Holds the latest provider, so a menu is set once and never replaced while it is open. */
+  final class Coordinator {
+    var provider: () -> UIMenu? = { nil }
+    var signature: String?
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator() }
+
   func makeUIView(context: Context) -> UIButton {
     let button = UIButton(type: .system)
     button.showsMenuAsPrimaryAction = true
     button.contentHorizontalAlignment = .leading
     button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     return button
+  }
+
+  /** Blender sends new state many times a second: only touch the menu when it changed. */
+  private func updateMenu(_ button: UIButton, _ coordinator: Coordinator) {
+    coordinator.provider = menu
+    if deferred {
+      guard button.menu == nil || coordinator.signature != menuTitle else { return }
+      coordinator.signature = menuTitle
+      /* A deferred element builds the menu when it opens. */
+      button.menu = UIMenu(title: menuTitle, children: [UIDeferredMenuElement.uncached { [weak coordinator] completion in
+        completion(coordinator?.provider()?.children ?? [])
+      }])
+      return
+    }
+    let built = menu() ?? UIMenu(children: [])
+    let signature = menuSignature(built)
+    guard signature != coordinator.signature else { return }
+    coordinator.signature = signature
+    button.menu = built
   }
 
   func updateUIView(_ button: UIButton, context: Context) {
@@ -54,7 +81,7 @@ struct UIMenuButton: UIViewRepresentable {
       button.isEnabled = enabled
       button.tintColor = tint
       button.accessibilityLabel = accessibilityLabel ?? title
-      button.menu = makeMenu()
+      updateMenu(button, context.coordinator)
       return
     }
     var configuration: UIButton.Configuration
@@ -76,21 +103,13 @@ struct UIMenuButton: UIViewRepresentable {
     if style == .borderless || style == .popup {
       configuration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0)
     }
-    button.configuration = configuration
+    /* Reapplying an unchanged glass configuration redraws the glass, which blinks. */
+    if button.configuration != configuration { button.configuration = configuration }
     button.isEnabled = enabled
     button.tintColor = tint
     button.contentHorizontalAlignment = style == .glassPopup || style == .plain ? .center : .leading
     button.accessibilityLabel = accessibilityLabel ?? title
-    button.menu = makeMenu()
-  }
-
-  private func makeMenu() -> UIMenu {
-    guard deferred else { return menu() ?? UIMenu(children: []) }
-    /* A deferred element builds the menu when it opens. */
-    let provider = menu
-    return UIMenu(title: menuTitle, children: [UIDeferredMenuElement.uncached { completion in
-      completion(provider()?.children ?? [])
-    }])
+    updateMenu(button, context.coordinator)
   }
 
   func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIButton, context: Context) -> CGSize? {
@@ -100,6 +119,17 @@ struct UIMenuButton: UIViewRepresentable {
     }
     return CGSize(width: proposal.width ?? fitting.width, height: max(fitting.height, 32))
   }
+}
+
+/** What a menu shows, to tell whether it changed. */
+func menuSignature(_ element: UIMenuElement) -> String {
+  if let menu = element as? UIMenu {
+    return "[\(menu.title)|\(menu.options.rawValue):" + menu.children.map(menuSignature).joined(separator: ",") + "]"
+  }
+  if let action = element as? UIAction {
+    return "\(action.title)|\(action.state.rawValue)|\(action.attributes.rawValue)"
+  }
+  return element.title
 }
 
 /** \} */

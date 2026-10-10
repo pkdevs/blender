@@ -61,16 +61,26 @@ enum Engine {
 
 enum BlenderIcon {
   /** Blender's icon by name, as `GHOSTIOSBlenderIcon` in `GHOST_IOSIcons.hh`. */
+  /** One image per icon, so controls can tell an unchanged icon from a new one. */
+  private static let cache = NSCache<NSString, UIImage>()
+
   static func image(_ name: String?, themed: Bool = false) -> UIImage? {
     guard let name, !name.isEmpty, name != "NONE" else { return nil }
     let key = name.lowercased()
+    let cacheKey = (themed ? "themed." : "") + key as NSString
+    if let cached = cache.object(forKey: cacheKey) { return cached }
+    var image: UIImage?
     if let multicolor = UIImage(named: "blender.multicolor." + key) {
-      return multicolor.withRenderingMode(.alwaysOriginal)
+      image = multicolor.withRenderingMode(.alwaysOriginal)
     }
-    if themed, let tinted = UIImage(named: "blender.themed." + key) {
-      return tinted.withRenderingMode(.alwaysOriginal)
+    else if themed, let tinted = UIImage(named: "blender.themed." + key) {
+      image = tinted.withRenderingMode(.alwaysOriginal)
     }
-    return UIImage(named: "blender." + key)?.withRenderingMode(.alwaysTemplate)
+    else {
+      image = UIImage(named: "blender." + key)?.withRenderingMode(.alwaysTemplate)
+    }
+    if let image { cache.setObject(image, forKey: cacheKey) }
+    return image
   }
 }
 
