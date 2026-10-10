@@ -27,19 +27,33 @@ struct TimelineKey: Equatable {
   var selected: Bool
 }
 
+/** Blender's frame on its own, so playback, which changes little else, redraws only the knob,
+ * the playhead and the frame number. */
 @MainActor
-final class TimelineStore: ObservableObject {
-  @Published var start = 1
-  @Published var end = 250
-  @Published var preview = false
-  @Published var playing = false
-  @Published var recording = false
-  @Published var keys: [TimelineKey] = []
-  @Published var expanded = false
-  @Published var compact = false
+@Observable
+final class TimelineFrame {
+  var blender = 1
+}
+
+@MainActor
+@Observable
+final class TimelineStore {
+  var start = 1
+  var end = 250
+  var preview = false
+  var playing = false
+  var recording = false
+  var keys: [TimelineKey] = []
+  var expanded = false
+  var compact = false
   /** Blender's frame; the knob follows it unless a finger holds the knob. */
-  @Published var blenderFrame = 1
-  var toggleExpanded: () -> Void = {}
+  let frame = TimelineFrame()
+  @ObservationIgnored var toggleExpanded: () -> Void = {}
+
+  /** Observers redraw on every assignment, even of the same value. */
+  func set<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<TimelineStore, Value>, _ value: Value) {
+    if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
+  }
 
   func send(_ setting: String, _ value: String) {
     Engine.setting(setting, value)
@@ -71,7 +85,7 @@ final class TimelineStore: ObservableObject {
  * \{ */
 
 /** One frame mapping places the knob, its playhead line and the keys. */
-struct FrameMapping {
+struct FrameMapping: Equatable {
   let start: Int
   let end: Int
   let width: CGFloat
@@ -103,7 +117,7 @@ private func diamond(_ center: CGPoint, _ size: CGFloat) -> Path {
 private func keyColor(_ selected: Bool) -> Color { selected ? .orange : .primary }
 
 struct Scrubber: View {
-  @ObservedObject var store: TimelineStore
+  let store: TimelineStore
   @State private var playhead: Int?
   @State private var mode: Mode = .idle
   @State private var grabbed = 0
@@ -114,18 +128,34 @@ struct Scrubber: View {
 
   enum Mode { case idle, scrubbing, movingKeys, boxing }
 
-  private var shownFrame: Int { playhead ?? store.blenderFrame }
+  /** For gestures and actions only: the body never reads the frame, so playback redraws just the
+   * knob and the playhead, see `TimelineKnob` and `PlayheadLine`. */
+  private var shownFrame: Int { playhead ?? store.frame.blender }
 
   var body: some View {
+    /* Read here rather than in the canvases, so changing them redraws the track. */
+    let start = store.start
+    let end = store.end
+    let expanded = store.expanded
+    let preview = store.preview
+    let keys = store.keys
     GeometryReader { geometry in
       let size = geometry.size
-      let mapping = FrameMapping(start: store.start, end: store.end, width: size.width)
-      let band = store.expanded ? knobBandHeight : size.height
+      let mapping = FrameMapping(start: start, end: end, width: size.width)
+      let band = expanded ? knobBandHeight : size.height
       let trackY = size.height - band / 2
       ZStack(alignment: .topLeading) {
-        Canvas { context, _ in draw(context, size: size, mapping: mapping, band: band, trackY: trackY) }
-        knob
-          .position(x: mapping.x(CGFloat(shownFrame)), y: trackY)
+        Canvas { context, _ in
+          drawTrack(context, size: size, mapping: mapping, band: band, trackY: trackY, expanded: expanded,
+                    preview: preview, keys: keys)
+        }
+        if expanded {
+          /* The playhead line rises from the knob through the keys. */
+          PlayheadLine(frame: store.frame, playhead: playhead, mapping: mapping, trackY: trackY)
+          Canvas { context, _ in drawKeys(context, size: size, mapping: mapping, band: band, keys: keys) }
+        }
+        TimelineKnob(frame: store.frame, playhead: playhead, lifted: mode == .scrubbing, mapping: mapping,
+                     trackY: trackY)
       }
       .contentShape(Rectangle())
       .gesture(DragGesture(minimumDistance: 0).onChanged { value in
@@ -136,33 +166,12 @@ struct Scrubber: View {
     }
     .accessibilityElement()
     .accessibilityLabel("Current Frame")
-    .accessibilityValue("\(shownFrame)")
+    .modifier(FrameFollower(frame: store.frame, playhead: $playhead, scrubbing: mode == .scrubbing))
     .accessibilityIdentifier("blender.timeline.scrubber")
     .accessibilityAdjustableAction { direction in
       sent = Int.min
       scrub(to: direction == .increment ? min(store.end, shownFrame + 1) : max(store.start, shownFrame - 1))
     }
-    .onChange(of: store.blenderFrame) { _, _ in if mode != .scrubbing { playhead = nil } }
-  }
-
-  /** Held, the knob turns to clear glass and swells, as system slider thumbs do; released, it
-   * settles back into the playhead's tinted glass. */
-  private var knob: some View {
-    let lifted = mode == .scrubbing
-    let label = "\(shownFrame)"
-    let width = max(knobMinWidth, ceil((label as NSString).size(withAttributes: [
-      .font: UIFont.monospacedDigitSystemFont(ofSize: 14, weight: .bold)]).width) + 20)
-    return Text(label)
-      .font(.system(size: 14, weight: .bold).monospacedDigit())
-      .minimumScaleFactor(0.7)
-      .foregroundStyle(lifted ? Color.primary : .white)
-      .frame(width: width, height: knobSize)
-      .glassEffect(lifted ? .clear.interactive() : .regular.tint(Color(uiColor: .systemBlue)).interactive(),
-                   in: Capsule())
-      .scaleEffect(lifted ? 1.2 : 1)
-      .animation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.35, dampingFraction: 0.6),
-                 value: lifted)
-      .accessibilityIdentifier("blender.timeline.frame")
   }
 
   private func inKeyArea(_ point: CGPoint, size: CGSize, band: CGFloat) -> Bool {
@@ -261,18 +270,20 @@ struct Scrubber: View {
     delta = 0
   }
 
-  private func draw(_ context: GraphicsContext, size: CGSize, mapping: FrameMapping, band: CGFloat,
-                    trackY: CGFloat)
+  /** The track and, expanded, the ruler: everything under the playhead line. */
+  private func drawTrack(_ context: GraphicsContext, size: CGSize, mapping: FrameMapping, band: CGFloat,
+                         trackY: CGFloat, expanded: Bool, preview: Bool, keys: [TimelineKey])
   {
     /* Track: the playback range, orange when it is the preview range, as in Blender. */
-    let range = store.preview ? Color.orange : Color(uiColor: .tertiaryLabel)
-    let left = mapping.x(CGFloat(store.start)) - 2
+    let range = preview ? Color.orange : Color(uiColor: .tertiaryLabel)
+    let left = mapping.x(CGFloat(mapping.start)) - 2
     context.fill(Path(CGRect(x: left, y: trackY - 1.5,
-                             width: mapping.x(CGFloat(store.end)) - mapping.x(CGFloat(store.start)) + 4, height: 3)),
+                             width: mapping.x(CGFloat(mapping.end)) - mapping.x(CGFloat(mapping.start)) + 4,
+                             height: 3)),
                  with: .color(range))
-    if !store.expanded {
+    if !expanded {
       /* Keyed frames along the track, behind the knob like the track itself. */
-      for key in store.keys where key.frame >= store.start && key.frame <= store.end {
+      for key in keys where key.frame >= mapping.start && key.frame <= mapping.end {
         let shape = diamond(CGPoint(x: mapping.x(CGFloat(key.frame)), y: trackY), 9)
         context.fill(shape, with: .color(keyColor(key.selected)))
         context.stroke(shape, with: .color(.black.opacity(0.55)), lineWidth: 1)
@@ -281,14 +292,14 @@ struct Scrubber: View {
     }
     /* Ruler: label every frame step that leaves room for its number. */
     let areaBottom = size.height - band
-    let perFrame = max(0.001, mapping.x(CGFloat(store.start + 1)) - mapping.x(CGFloat(store.start)))
+    let perFrame = max(0.001, mapping.x(CGFloat(mapping.start + 1)) - mapping.x(CGFloat(mapping.start)))
     var step = 1
     for candidate in [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2500, 5000] {
       step = candidate
       if perFrame * CGFloat(candidate) >= 44 { break }
     }
-    var frame = Int(ceil(Double(store.start) / Double(step))) * step
-    while frame <= store.end {
+    var frame = Int(ceil(Double(mapping.start) / Double(step))) * step
+    while frame <= mapping.end {
       let x = mapping.x(CGFloat(frame))
       context.fill(Path(CGRect(x: x - 0.5, y: 14, width: 1, height: areaBottom - 14)),
                    with: .color(Color.secondary.opacity(0.3)))
@@ -299,10 +310,13 @@ struct Scrubber: View {
                    anchor: .topLeading)
       frame += step
     }
-    /* The playhead line rises from the knob through the keys. */
-    let playhead = mapping.x(CGFloat(shownFrame))
-    context.fill(Path(CGRect(x: playhead - 1, y: 12, width: 2, height: trackY - knobSize / 2 - 12)),
-                 with: .color(Color(uiColor: .systemBlue)))
+  }
+
+  /** The expanded key track: everything over the playhead line. */
+  private func drawKeys(_ context: GraphicsContext, size: CGSize, mapping: FrameMapping, band: CGFloat,
+                        keys: [TimelineKey])
+  {
+    let areaBottom = size.height - band
     /* The selection box spans the key track between the fingers' frames. */
     let boxLeft = min(boxFrom, boxTo), boxRight = max(boxFrom, boxTo)
     if mode == .boxing {
@@ -315,7 +329,7 @@ struct Scrubber: View {
      * the keys inside the box show as they will be selected. */
     let keysY = 14 + (size.height - band - 14) / 2
     let rim = Color(uiColor: .systemBackground).opacity(0.7)
-    for key in store.keys where key.frame >= store.start && key.frame <= store.end {
+    for key in keys where key.frame >= mapping.start && key.frame <= mapping.end {
       let x = mapping.x(CGFloat(key.frame))
       let selected = mode == .boxing ? (x >= boxLeft && x <= boxRight) : key.selected
       var color = keyColor(selected)
@@ -325,7 +339,7 @@ struct Scrubber: View {
       context.stroke(shape, with: .color(rim), lineWidth: 1)
     }
     if mode == .movingKeys {
-      for key in store.keys where key.selected && key.frame != grabbed {
+      for key in keys where key.selected && key.frame != grabbed {
         let shape = diamond(CGPoint(x: mapping.x(CGFloat(key.frame + delta)), y: keysY), 16)
         context.fill(shape, with: .color(.orange))
         context.stroke(shape, with: .color(rim), lineWidth: 1)
@@ -342,14 +356,78 @@ struct Scrubber: View {
   }
 }
 
+/** Held, the knob turns to clear glass and swells, as system slider thumbs do; released, it
+ * settles back into the playhead's tinted glass. The only part of the scrubber, with the playhead
+ * line, that reads Blender's frame. */
+private struct TimelineKnob: View {
+  let frame: TimelineFrame
+  let playhead: Int?
+  let lifted: Bool
+  let mapping: FrameMapping
+  let trackY: CGFloat
+
+  var body: some View {
+    let shown = playhead ?? frame.blender
+    let label = "\(shown)"
+    let width = max(knobMinWidth, ceil((label as NSString).size(withAttributes: [
+      .font: UIFont.monospacedDigitSystemFont(ofSize: 14, weight: .bold)]).width) + 20)
+    Text(label)
+      .font(.system(size: 14, weight: .bold).monospacedDigit())
+      .minimumScaleFactor(0.7)
+      .foregroundStyle(lifted ? Color.primary : .white)
+      .frame(width: width, height: knobSize)
+      .glassEffect(lifted ? .clear.interactive() : .regular.tint(Color(uiColor: .systemBlue)).interactive(),
+                   in: Capsule())
+      .scaleEffect(lifted ? 1.2 : 1)
+      .animation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.35, dampingFraction: 0.6),
+                 value: lifted)
+      .accessibilityIdentifier("blender.timeline.frame")
+      .position(x: mapping.x(CGFloat(shown)), y: trackY)
+  }
+}
+
+/** The expanded playhead, from the knob up through the keys. */
+private struct PlayheadLine: View {
+  let frame: TimelineFrame
+  let playhead: Int?
+  let mapping: FrameMapping
+  let trackY: CGFloat
+
+  var body: some View {
+    let x = mapping.x(CGFloat(playhead ?? frame.blender))
+    Rectangle()
+      .fill(Color(uiColor: .systemBlue))
+      .frame(width: 2, height: max(0, trackY - knobSize / 2 - 12))
+      .offset(x: x - 1, y: 12)
+      .allowsHitTesting(false)
+  }
+}
+
+/** The scrubber's accessibility value, and the knob returning to Blender's frame once Blender
+ * moves on, kept out of the scrubber's body so playback doesn't redraw the track. */
+private struct FrameFollower: ViewModifier {
+  let frame: TimelineFrame
+  @Binding var playhead: Int?
+  let scrubbing: Bool
+
+  func body(content: Content) -> some View {
+    content
+      .accessibilityValue("\(playhead ?? frame.blender)")
+      .onChange(of: frame.blender) { _, _ in
+        if !scrubbing && playhead != nil { playhead = nil }
+      }
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Strip
  * \{ */
 
+/** Reads everything but the frame, so playback leaves the buttons alone. */
 struct TimelineContent: View {
-  @ObservedObject var store: TimelineStore
+  let store: TimelineStore
 
   var body: some View {
     Group {
@@ -509,14 +587,16 @@ public final class SwiftTimeline: NSObject {
     guard let snapshot = snapshot as? NSDictionary, !(self.snapshot?.isEqual(snapshot) ?? false),
           let json = snapshot as? JSON else { return }
     self.snapshot = snapshot
+    /* Playing, usually only the frame changes: leave the rest untouched so nothing else redraws. */
     let start = json.int("start") ?? 1
-    store.start = start
-    store.end = max(start, json.int("end") ?? start)
-    store.preview = json.bool("preview")
-    store.keys = json.array("keys").map { TimelineKey(frame: $0.int("f") ?? 0, selected: $0.bool("s")) }
-    store.blenderFrame = json.int("frame") ?? start
-    store.playing = json.bool("playing")
-    store.recording = json.bool("autokey")
+    store.set(\.start, start)
+    store.set(\.end, max(start, json.int("end") ?? start))
+    store.set(\.preview, json.bool("preview"))
+    store.set(\.keys, json.array("keys").map { TimelineKey(frame: $0.int("f") ?? 0, selected: $0.bool("s")) })
+    let frame = json.int("frame") ?? start
+    if store.frame.blender != frame { store.frame.blender = frame }
+    store.set(\.playing, json.bool("playing"))
+    store.set(\.recording, json.bool("autokey"))
   }
 
   @objc(toggleExpanded:)
@@ -561,7 +641,7 @@ public final class SwiftTimeline: NSObject {
     /* Frame is undefined while transformed; layout must not disturb the presentation animation. */
     panel.bounds = CGRect(x: 0, y: 0, width: width, height: height)
     /* Phones keep play, keyframe steps and the scrubber. */
-    store.compact = width < 520
+    store.set(\.compact, width < 520)
     panel.center = CGPoint(x: rect.midX, y: rect.maxY - height / 2)
     host.view.frame = panel.contentView.bounds
   }
