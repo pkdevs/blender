@@ -52,8 +52,8 @@ private let numberFont = Font(UIFontMetrics(forTextStyle: .body)
 
 /** A number that scrubs with a sideways drag (drag up for coarser, down for finer steps) and
  * takes a typed value on tap, with a stepper above the keyboard. */
-struct NumberField: View {
-  @ObservedObject var store: InspectorStore
+struct NumberField: View, Equatable {
+  let store: InspectorStore
   let property: JSON
   var compact = false
   /** Taller than the compact size, as in a vector. */
@@ -61,6 +61,12 @@ struct NumberField: View {
   /** Sliders scrub with their track instead. */
   var scrubs = true
   var significant = 9
+
+  /** A snapshot that leaves the property as it was leaves the field alone. */
+  static func == (a: NumberField, b: NumberField) -> Bool {
+    a.store === b.store && a.compact == b.compact && a.height == b.height && a.scrubs == b.scrubs &&
+      a.significant == b.significant && jsonDictEqual(a.property, b.property)
+  }
 
   @State private var editing = false
   @State private var text = ""
@@ -104,6 +110,8 @@ struct NumberField: View {
       else {
         Text(formatNumber(value, property: property, significant: significant))
           .font(numberFont)
+          /* New values just show, even when rows around them animate. */
+          .contentTransition(.identity)
           .lineLimit(1)
           .minimumScaleFactor(0.7)
           .foregroundStyle(editable ? .primary : .tertiary)
@@ -278,19 +286,25 @@ struct SliderScale {
   }
 }
 
-struct PropertySlider: View {
-  @ObservedObject var store: InspectorStore
+struct PropertySlider: View, Equatable {
+  let store: InspectorStore
   let property: JSON
   @State private var dragging: Double?
   @State private var start = 0.0
   @State private var interaction = ""
   @State private var lastPreview: CFTimeInterval = 0
 
+  static func == (a: PropertySlider, b: PropertySlider) -> Bool {
+    a.store === b.store && jsonDictEqual(a.property, b.property)
+  }
+
   var body: some View {
     let scale = SliderScale(property)
     let integer = property.string("type") == "INT"
+    /* Read here, so the slider follows the value it shows. */
+    let fraction = dragging ?? scale.fraction(numericValue(store.value(property)))
     Slider(value: Binding(
-      get: { dragging ?? scale.fraction(numericValue(store.value(property))) },
+      get: { fraction },
       set: { fraction in
         dragging = fraction
         var value = scale.value(fraction)
@@ -339,7 +353,7 @@ extension View {
 
 /** Lock and keyframe actions for a property, shown when touching and holding it. */
 struct PropertyActions: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
 
   var body: some View {
@@ -410,9 +424,14 @@ struct FractionRow: Layout {
 }
 
 /** A property as a form row: its label and its control. */
-struct PropertyRow: View {
-  @ObservedObject var store: InspectorStore
+struct PropertyRow: View, Equatable {
+  let store: InspectorStore
   let property: JSON
+
+  /** A snapshot that leaves the property as it was leaves the row alone. */
+  static func == (a: PropertyRow, b: PropertyRow) -> Bool {
+    a.store === b.store && jsonDictEqual(a.property, b.property)
+  }
 
   private var type: String { property.string("type") ?? "" }
   private var label: String { property.string("label") ?? "" }
@@ -421,8 +440,9 @@ struct PropertyRow: View {
     Group {
       if property.has("slider"), type == "FLOAT" || type == "INT" {
         VStack(spacing: 2) {
-          labeled { NumberField(store: store, property: property, scrubs: false, significant: 6) }
+          labeled { NumberField(store: store, property: property, scrubs: false, significant: 6).equatable() }
           PropertySlider(store: store, property: property)
+            .equatable()
         }
       }
       else {
@@ -452,7 +472,7 @@ struct PropertyRow: View {
           case "STRING":
             labeled { TextControl(store: store, property: property) }
           case "INT", "FLOAT":
-            labeled { NumberField(store: store, property: property) }
+            labeled { NumberField(store: store, property: property).equatable() }
           default:
             EmptyView()
         }
@@ -501,13 +521,19 @@ struct PropertyRow: View {
   }
 }
 
-struct PropertyToggle: View {
-  @ObservedObject var store: InspectorStore
+struct PropertyToggle: View, Equatable {
+  let store: InspectorStore
   let property: JSON
 
+  static func == (a: PropertyToggle, b: PropertyToggle) -> Bool {
+    a.store === b.store && jsonDictEqual(a.property, b.property)
+  }
+
   var body: some View {
+    /* Read here, so the switch follows the value it shows. */
+    let on = (store.value(property) as? NSNumber)?.boolValue ?? false
     Toggle(propertyLabel(property), isOn: Binding(
-      get: { (store.value(property) as? NSNumber)?.boolValue ?? false },
+      get: { on },
       set: { store.edit(property, value: $0) }))
       .labelsHidden()
       .switchTint(property.string("anim_state"))
@@ -517,13 +543,14 @@ struct PropertyToggle: View {
 
 /** Blender draws some toggle operators as checkboxes (e.g. Dyntopo); a switch runs them. */
 struct OperatorToggle: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   @State private var on: Bool?
 
   var body: some View {
+    let shown = on ?? property.bool("value")
     Toggle(property.string("label") ?? "", isOn: Binding(
-      get: { on ?? property.bool("value") },
+      get: { shown },
       set: { value in
         on = value
         store.runOperator(property)
@@ -537,7 +564,7 @@ struct OperatorToggle: View {
 }
 
 struct OperatorButton: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   var compact = false
 
@@ -560,7 +587,7 @@ struct OperatorButton: View {
 
 /** A header operator, such as a modifier's Remove: a compact icon beside the header switches. */
 struct HeaderOperatorButton: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
 
   var body: some View {
@@ -585,7 +612,7 @@ struct HeaderOperatorButton: View {
 }
 
 struct TextControl: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   @State private var text = ""
   @FocusState private var focused: Bool
@@ -613,7 +640,7 @@ struct TextControl: View {
 }
 
 struct ColorSwatch: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   private let anchor = AnchorBox()
 
@@ -649,7 +676,7 @@ struct ColorSwatch: View {
  * \{ */
 
 struct EnumControl: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   var compact = false
 
@@ -665,8 +692,10 @@ struct EnumControl: View {
 
   var body: some View {
     if store.mode == .shading && property.string("property") == "type" {
+      /* Read here, so the picker follows the value it shows. */
+      let selection = store.value(property) as? String ?? ""
       Picker(label, selection: Binding(
-        get: { store.value(property) as? String ?? "" },
+        get: { selection },
         set: { store.edit(property, value: $0) })) {
         ForEach(Array(options.enumerated()), id: \.offset) { _, option in
           if let image = BlenderIcon.image(option.string("icon")) {
@@ -721,7 +750,7 @@ struct EnumControl: View {
 
 /** Blender shows these as a large preview (template_icon_view), not a list of names. */
 struct PreviewEnumButton: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   @State private var showing = false
 
@@ -833,10 +862,15 @@ struct PreviewGrid: View {
  * \{ */
 
 /** A vector such as Location: its caption over a field per component. */
-struct VectorRow: View {
-  @ObservedObject var store: InspectorStore
+struct VectorRow: View, Equatable {
+  let store: InspectorStore
   let title: String
   let items: [JSON]
+
+  /** A snapshot that leaves the components as they were leaves the row alone. */
+  static func == (a: VectorRow, b: VectorRow) -> Bool {
+    a.store === b.store && a.title == b.title && jsonListEqual(a.items, b.items)
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -853,9 +887,11 @@ struct VectorRow: View {
             }
             if item.string("type") == "BOOLEAN" {
               PropertyToggle(store: store, property: item)
+                .equatable()
             }
             else {
               NumberField(store: store, property: item, compact: true, height: 40, significant: 6)
+                .equatable()
             }
           }
           .frame(maxWidth: .infinity)
@@ -903,11 +939,15 @@ struct VectorRow: View {
 }
 
 /** Toggles shown together, such as Mirror X Y Z: tinted while on. */
-struct ToggleGroupRow: View {
-  @ObservedObject var store: InspectorStore
+struct ToggleGroupRow: View, Equatable {
+  let store: InspectorStore
   let caption: String
   let items: [JSON]
   var compact = false
+
+  static func == (a: ToggleGroupRow, b: ToggleGroupRow) -> Bool {
+    a.store === b.store && a.caption == b.caption && a.compact == b.compact && jsonListEqual(a.items, b.items)
+  }
 
   var body: some View {
     let layout = compact ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 10))

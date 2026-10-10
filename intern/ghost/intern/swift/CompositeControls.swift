@@ -10,9 +10,14 @@
 import SwiftUI
 import UIKit
 
-struct CompositeRow: View {
-  @ObservedObject var store: InspectorStore
+struct CompositeRow: View, Equatable {
+  let store: InspectorStore
   let property: JSON
+
+  /** A snapshot that leaves the property as it was leaves the row alone. */
+  static func == (a: CompositeRow, b: CompositeRow) -> Bool {
+    a.store === b.store && jsonDictEqual(a.property, b.property)
+  }
 
   var body: some View {
     switch property.string("type") {
@@ -84,7 +89,7 @@ func usersText(_ item: JSON) -> String {
 /** The data-block in use as a card: preview, name and users. Tapping browses; the menu holds
  * New, Duplicate, Rename, Fake User, Make Single User and Unlink. */
 struct DataPicker: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   @State private var browsing = false
   @State private var rename: RenameRequest?
@@ -211,7 +216,7 @@ struct DataPicker: View {
 
 /** Choose a data-block, like Blender's ID search popup: searchable, with previews. */
 struct DataBrowser: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   let done: () -> Void
   @State private var query = ""
@@ -288,7 +293,7 @@ struct DataBrowser: View {
 private let inlineListRows = 40
 
 struct ListOutliner: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   @State private var showingAll = false
 
@@ -341,7 +346,7 @@ struct ListOutliner: View {
 
 /** Add, remove and the list's other actions, together in one compact capsule. */
 struct ListToolbar: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
 
   var body: some View {
@@ -412,7 +417,7 @@ struct ListToolbar: View {
 
 /** A Blender menu's items inline in a SwiftUI menu, built from the `UIMenu` Blender provides. */
 struct BlenderMenuSection: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let menu: String
   let tab: String
 
@@ -459,7 +464,7 @@ struct BlenderMenuSection: View {
 }
 
 struct ListRows: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   let rows: [JSON]
   var offset = 0
@@ -670,7 +675,7 @@ private extension Dictionary where Key == String, Value == Any {
 
 /** A control drawn on a list row: an icon toggle (mute, lock) or a compact value. */
 struct RowControl: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let control: JSON
 
   var body: some View {
@@ -747,7 +752,7 @@ struct RowControl: View {
 
 /** Every item of a long list, searchable. */
 struct ListPage: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
   @State private var query = ""
 
@@ -778,7 +783,7 @@ struct ListPage: View {
 
 /** The Preview panel's render, floating in the section, with its shapes on a glass capsule. */
 struct PreviewRow: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
 
   var body: some View {
@@ -829,7 +834,7 @@ struct PreviewRow: View {
 
 /** An operator's choices as a menu with Blender's groups, such as Add Object Constraint. */
 struct OperatorMenuRow: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let property: JSON
 
   var body: some View {

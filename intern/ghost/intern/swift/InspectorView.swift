@@ -41,7 +41,7 @@ struct PanelHeader<Trailing: View>: View {
 }
 
 struct InspectorPanel: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   let close: () -> Void
 
   var body: some View {
@@ -58,7 +58,7 @@ struct InspectorPanel: View {
 }
 
 struct PropertiesTabs: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
 
   var body: some View {
     ScrollViewReader { reader in
@@ -100,7 +100,7 @@ struct PropertiesTabs: View {
 }
 
 struct InspectorForm: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
   /** False to measure the form's natural height. */
   var scrolls = true
 
@@ -128,6 +128,7 @@ struct InspectorForm: View {
     VStack(alignment: .leading, spacing: 17) {
       ForEach(store.sections) { section in
         SectionView(store: store, section: section)
+          .equatable()
       }
       if !store.status.isEmpty {
         Text(store.status)
@@ -144,9 +145,14 @@ struct InspectorForm: View {
   }
 }
 
-struct SectionView: View {
-  @ObservedObject var store: InspectorStore
+/** Equatable, so a snapshot that leaves the section as it was skips it entirely. */
+struct SectionView: View, Equatable {
+  let store: InspectorStore
   let section: InspectorSection
+
+  static func == (a: SectionView, b: SectionView) -> Bool {
+    a.store === b.store && a.section == b.section
+  }
 
   var body: some View {
     let expanded = section.headerHidden || store.isExpanded(section.id)
@@ -220,6 +226,7 @@ struct SectionView: View {
       .accessibilityValue((expanded ? "Expanded" : "Collapsed") + (section.active ? ", Active" : ""))
       .accessibilityIdentifier("blender.section." + section.id)
       HeaderControls(store: store, controls: section.headerControls)
+        .equatable()
     }
     .padding(.leading, 12)
     .padding(.trailing, 4)
@@ -259,25 +266,34 @@ struct SectionView: View {
               .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
           }
           HeaderControls(store: store, controls: controls)
+            .equatable()
         }
         .padding(.leading, CGFloat(12 * depth))
       case .property(let property):
         PropertyRow(store: store, property: property)
+          .equatable()
       case .vector(let title, let items):
         VectorRow(store: store, title: title, items: items)
+          .equatable()
       case .toggles(let caption, let items):
         ToggleGroupRow(store: store, caption: caption, items: items)
+          .equatable()
       case .composite(let property):
         CompositeRow(store: store, property: property)
+          .equatable()
           .padding(.vertical, 4)
     }
   }
 }
 
 /** A panel header's own switches and operators, such as a modifier's visibility and Remove. */
-struct HeaderControls: View {
-  @ObservedObject var store: InspectorStore
+struct HeaderControls: View, Equatable {
+  let store: InspectorStore
   let controls: [JSON]
+
+  static func == (a: HeaderControls, b: HeaderControls) -> Bool {
+    a.store === b.store && jsonListEqual(a.controls, b.controls)
+  }
 
   var body: some View {
     ForEach(Array(controls.enumerated()), id: \.offset) { _, control in
@@ -307,7 +323,7 @@ struct HeaderControls: View {
  * \{ */
 
 struct ToolStrip: View {
-  @ObservedObject var store: InspectorStore
+  let store: InspectorStore
 
   var body: some View {
     HStack(spacing: 6) {
@@ -316,8 +332,10 @@ struct ToolStrip: View {
           switch row.kind {
             case .property(let property):
               StripColumn(store: store, property: property)
+                .equatable()
             case .toggles(let caption, let items):
               ToggleGroupRow(store: store, caption: caption, items: items, compact: true)
+                .equatable()
             default:
               EmptyView()
           }
@@ -330,9 +348,13 @@ struct ToolStrip: View {
   }
 }
 
-struct StripColumn: View {
-  @ObservedObject var store: InspectorStore
+struct StripColumn: View, Equatable {
+  let store: InspectorStore
   let property: JSON
+
+  static func == (a: StripColumn, b: StripColumn) -> Bool {
+    a.store === b.store && jsonDictEqual(a.property, b.property)
+  }
 
   private var type: String { property.string("type") ?? "" }
 

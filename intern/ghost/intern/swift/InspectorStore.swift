@@ -26,6 +26,15 @@ func propertyLabel(_ property: JSON) -> String {
   return label
 }
 
+/** Snapshots arrive as new dictionaries even when nothing changed; compare their contents. */
+func jsonListEqual(_ a: [JSON], _ b: [JSON]) -> Bool {
+  a.count == b.count && zip(a, b).allSatisfy { ($0 as NSDictionary).isEqual($1 as NSDictionary) }
+}
+
+func jsonDictEqual(_ a: JSON, _ b: JSON) -> Bool {
+  (a as NSDictionary).isEqual(b as NSDictionary)
+}
+
 struct InspectorTab: Identifiable, Equatable {
   let id: String
   let title: String
@@ -33,8 +42,8 @@ struct InspectorTab: Identifiable, Equatable {
 }
 
 /** A row of a section. Rows are identified by meaning, so updates animate only what changed. */
-struct InspectorRow: Identifiable {
-  enum Kind {
+struct InspectorRow: Identifiable, Equatable {
+  enum Kind: Equatable {
     /** A sub-panel's heading: a disclosure when it can collapse, with its header controls. */
     case heading(title: String, subpanel: String, disclosure: Bool, open: Bool, depth: Int,
                  controls: [JSON])
@@ -45,13 +54,32 @@ struct InspectorRow: Identifiable {
     case toggles(caption: String, items: [JSON])
     /** Data-block pickers, lists, previews and operator menus. */
     case composite(JSON)
+
+    static func == (a: Kind, b: Kind) -> Bool {
+      switch (a, b) {
+        case let (.heading(title, subpanel, disclosure, open, depth, controls),
+                  .heading(title2, subpanel2, disclosure2, open2, depth2, controls2)):
+          return title == title2 && subpanel == subpanel2 && disclosure == disclosure2 && open == open2 &&
+            depth == depth2 && jsonListEqual(controls, controls2)
+        case let (.property(property), .property(property2)):
+          return jsonDictEqual(property, property2)
+        case let (.vector(title, items), .vector(title2, items2)):
+          return title == title2 && jsonListEqual(items, items2)
+        case let (.toggles(caption, items), .toggles(caption2, items2)):
+          return caption == caption2 && jsonListEqual(items, items2)
+        case let (.composite(property), .composite(property2)):
+          return jsonDictEqual(property, property2)
+        default:
+          return false
+      }
+    }
   }
 
   let id: String
   var kind: Kind
 }
 
-struct InspectorSection: Identifiable {
+struct InspectorSection: Identifiable, Equatable {
   let id: String
   let title: String
   let active: Bool
@@ -60,10 +88,25 @@ struct InspectorSection: Identifiable {
   let switchOnly: Bool
   var headerControls: [JSON]
   var rows: [InspectorRow]
+
+  static func == (a: InspectorSection, b: InspectorSection) -> Bool {
+    a.id == b.id && a.title == b.title && a.active == b.active && a.headerHidden == b.headerHidden &&
+      a.icon == b.icon && a.switchOnly == b.switchOnly && a.rows == b.rows &&
+      jsonListEqual(a.headerControls, b.headerControls)
+  }
 }
 
+/** A value the user just set, observed per property so an edit redraws only its own control. */
 @MainActor
-final class InspectorStore: ObservableObject {
+@Observable
+final class PendingValue {
+  var value: Any?
+}
+
+/** Observed per property: a snapshot redraws only the views that read what it changed. */
+@MainActor
+@Observable
+final class InspectorStore {
   enum Mode {
     /** The Properties editor, with its tabs. */
     case properties
@@ -76,35 +119,53 @@ final class InspectorStore: ObservableObject {
   }
 
   let mode: Mode
-  @Published private(set) var sections: [InspectorSection] = []
-  @Published private(set) var tabs: [InspectorTab] = []
-  @Published private(set) var selectedTab: String?
-  @Published private(set) var title = "Properties"
-  @Published private(set) var status = ""
-  @Published private(set) var objectID: String?
-  @Published private(set) var hasInspector = false
-  @Published private(set) var loaded = false
+  private(set) var sections: [InspectorSection] = []
+  private(set) var tabs: [InspectorTab] = []
+  private(set) var selectedTab: String?
+  private(set) var title = "Properties"
+  private(set) var status = ""
+  private(set) var objectID: String?
+  private(set) var hasInspector = false
+  private(set) var loaded = false
   /** Open sections per tab; nil until Blender first reports which are open. */
-  @Published private(set) var expandedPanels: [String: Set<String>] = [:]
+  private(set) var expandedPanels: [String: Set<String>] = [:]
   /** Per tab: sub-panel id to open state, once the user toggles it. */
-  @Published private(set) var subpanelStates: [String: [String: Bool]] = [:]
-  /** Values the user just set, shown until Blender acknowledges them. */
-  @Published private var pendingValues: [String: Any] = [:]
+  private(set) var subpanelStates: [String: [String: Bool]] = [:]
+  /** Values the user just set, shown until Blender acknowledges them. Kept once made, so the
+   * controls reading them keep observing the same value. */
+  @ObservationIgnored private var pendingValues: [String: PendingValue] = [:]
   /** Bumped when controls must drop local editing state, e.g. on selection change. */
-  @Published private(set) var generation = 0
+  private(set) var generation = 0
 
-  var menuProvider: ((NSDictionary) -> UIMenu?)?
-  var visible = true
-  private var snapshot: JSON?
-  private var shownTab: String?
-  private var inspector: JSON?
-  private var schema: NSArray?
-  private(set) var sequence: UInt64 = 0
+  @ObservationIgnored var menuProvider: ((NSDictionary) -> UIMenu?)?
+  @ObservationIgnored var visible = true
+  @ObservationIgnored private var snapshot: JSON?
+  @ObservationIgnored private var shownTab: String?
+  @ObservationIgnored private var inspector: JSON?
+  @ObservationIgnored private var schema: NSArray?
+  @ObservationIgnored private(set) var sequence: UInt64 = 0
   private static var nextSequence: UInt64 = 0
 
   init(mode: Mode, tab: String? = nil) {
     self.mode = mode
     self.selectedTab = tab
+  }
+
+  /** Observers redraw on every assignment, even of the same value. */
+  private func set<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<InspectorStore, Value>, _ value: Value) {
+    if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
+  }
+
+  private func pendingValue(_ key: String) -> PendingValue {
+    if let existing = pendingValues[key] { return existing }
+    let created = PendingValue()
+    pendingValues[key] = created
+    return created
+  }
+
+  private func setPending(_ property: JSON, _ value: Any) {
+    let pending = pendingValue(propertyKey(property))
+    if !jsonEqual(pending.value, value) { pending.value = value }
   }
 
   var currentTab: String { selectedTab ?? "OBJECT" }
@@ -127,7 +188,7 @@ final class InspectorStore: ObservableObject {
     request["action"] = "property"
     request["id"] = objectID ?? ""
     request["value"] = value
-    pendingValues[propertyKey(property)] = value
+    setPending(property, value)
     send(request)
   }
 
@@ -139,7 +200,7 @@ final class InspectorStore: ObservableObject {
     request["value"] = value
     request["interaction"] = interaction
     request["phase"] = phase
-    pendingValues[propertyKey(property)] = value
+    setPending(property, value)
     send(request)
   }
 
@@ -169,11 +230,12 @@ final class InspectorStore: ObservableObject {
   }
 
   func showStatus(_ message: String) {
+    guard message != status else { return }
     withMotion { status = message }
   }
 
   func value(_ property: JSON) -> Any? {
-    pendingValues[propertyKey(property)] ?? property["value"]
+    pendingValue(propertyKey(property)).value ?? property["value"]
   }
 
   /** \} */
@@ -246,13 +308,13 @@ final class InspectorStore: ObservableObject {
     let merged = keepingCollapsedContents(incoming)
     if let snapshot, (snapshot as NSDictionary).isEqual(merged as NSDictionary) { return false }
     snapshot = merged
-    status = merged.string("error") ?? ""
-    pendingValues.removeAll()
+    set(\.status, merged.string("error") ?? "")
+    for pending in pendingValues.values where pending.value != nil { pending.value = nil }
     guard let raw = merged.dict("inspector") else {
       if merged["inspector"] is NSNull {
-        hasInspector = false
-        sections = []
-        loaded = true
+        set(\.hasInspector, false)
+        set(\.sections, [])
+        set(\.loaded, true)
       }
       return true
     }
@@ -260,9 +322,9 @@ final class InspectorStore: ObservableObject {
     if mode == .properties { updateTabs(inspector) }
     if let tab = inspector.string("tab"), mode == .properties, tab != selectedTab { return true }
     self.inspector = inspector
-    hasInspector = true
-    loaded = true
-    title = inspector.string("name") ?? "Properties"
+    set(\.hasInspector, true)
+    set(\.loaded, true)
+    set(\.title, inspector.string("name") ?? "Properties")
     let newObject = inspector.string("id")
     let replacing = newObject != objectID || sections.isEmpty || inspector.string("tab") != shownTab
     if newObject != objectID {
@@ -271,16 +333,24 @@ final class InspectorStore: ObservableObject {
     }
     shownTab = inspector.string("tab")
     let built = buildSections(inspector)
-    /* Only changes within the same panel animate: a first fill, another object or another tab
-     * replaces the rows at once, so no row waits on an insertion that may never be shown. */
-    if replacing { sections = built }
+    /* Unchanged sections keep their views; changed ones redraw only the rows that changed. */
+    guard built != sections else { return true }
+    /* Only rows coming and going within the same panel animate: a first fill, another object or
+     * another tab replaces the rows at once, so no row waits on an insertion that may never be
+     * shown. New values never animate, they just show. */
+    if replacing || layout(built) == layout(sections) { sections = built }
     else { withMotion(.smooth(duration: 0.25)) { sections = built } }
     return true
   }
 
+  /** Which sections and rows show, to tell rows coming and going from values changing. */
+  private func layout(_ sections: [InspectorSection]) -> [[String]] {
+    sections.map { [$0.id] + visibleRows($0).map(\.id) }
+  }
+
   func clear() {
-    hasInspector = false
-    sections = []
+    set(\.hasInspector, false)
+    set(\.sections, [])
   }
 
   private func updateTabs(_ inspector: JSON) {
@@ -289,7 +359,7 @@ final class InspectorStore: ObservableObject {
     }
     if next != tabs { tabs = next }
     if selectedTab == nil || !tabs.contains(where: { $0.id == selectedTab }) {
-      selectedTab = inspector.string("tab")
+      set(\.selectedTab, inspector.string("tab"))
     }
     if let tab = selectedTab, expandedPanels[tab] == nil, inspector.string("tab") == tab {
       expandedPanels[tab] = Set(inspector.array("sections").filter { $0.bool("open") }
@@ -374,7 +444,9 @@ final class InspectorStore: ObservableObject {
     var result: [InspectorSection] = []
     for section in inspector.array("sections") {
       let sectionID = section.string("id") ?? section.string("title") ?? ""
-      if section.bool("header_hidden"), mode == .properties {
+      if section.bool("header_hidden"), mode == .properties,
+         expandedPanels[currentTab]?.contains(sectionID) != true
+      {
         /* Blender draws these without a header, so they stay open. */
         expandedPanels[currentTab, default: []].insert(sectionID)
       }
