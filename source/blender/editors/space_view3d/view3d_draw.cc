@@ -1616,6 +1616,11 @@ void view3d_draw_region_info(const bContext *C, ARegion *region)
         draw_viewport_name(region, v3d, xoffset, &yoffset);
       }
 
+      if (v3d->gridflag & (V3D_SHOW_FLOOR | V3D_SHOW_X | V3D_SHOW_Y | V3D_SHOW_Z) && region_ok) {
+        /* Draw current unit scale below the viewport name. */
+        draw_grid_unit_name(scene, region, v3d, xoffset, &yoffset);
+      }
+
       if (U.uiflag & USER_DRAWVIEWINFO && region_ok) {
         BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
         Object *ob = BKE_view_layer_active_object_get(view_layer);
@@ -1625,11 +1630,6 @@ void view3d_draw_region_info(const bContext *C, ARegion *region)
         /* Draw current frame, marker, and active keying set, if any. */
         draw_frame_info(scene, xoffset, &yoffset);
         BLF_color4fv(font_id, text_color);
-      }
-
-      if (v3d->gridflag & (V3D_SHOW_FLOOR | V3D_SHOW_X | V3D_SHOW_Y | V3D_SHOW_Z) && region_ok) {
-        /* draw below the viewport name */
-        draw_grid_unit_name(scene, region, v3d, xoffset, &yoffset);
       }
 
       if (region_ok) {
