@@ -278,8 +278,7 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
   
   [encoder setComputePipelineState: (id<MTLComputePipelineState>) color_post_pso];
   
-  BufferParams buffer_params = context.buffer_params;
-  BufferParams denoised_buffer = context.denoised_buffer_params;
+  BufferParams buffer_params = context.denoised_buffer_params;
   
   PostProcessParams params {
     buffer_params.full_x,
@@ -336,7 +335,7 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   denoiser.specularHitDistanceTexture = (id<MTLTexture>) specular_hit_distance_texture;
   denoiser.outputTexture              = (id<MTLTexture>) output_texture;
   denoiser.jitterOffsetX              = context.pixel_jitter.x;
-  denoiser.jitterOffsetY              = context.pixel_jitter.y;
+  denoiser.jitterOffsetY              = -context.pixel_jitter.y;
   denoiser.motionVectorScaleX         = 1.0;
   denoiser.motionVectorScaleY         = 1.0;
   

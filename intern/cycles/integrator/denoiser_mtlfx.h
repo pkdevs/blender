@@ -333,7 +333,6 @@ private:
       
       /* const uint64_t denoised_pixel_index = params.offset + (tid.x + params.full_x) + (tid.y + params.full_y) * params.stride; */
       /* device float *denoised_pixel = render_buffer + denoised_pixel_index * params.pass_stride + params.pass_denoised; */
-
       device float *denoised_pixel = buffer + params.pass_denoised;
       
       uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
