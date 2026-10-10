@@ -465,6 +465,9 @@ Enable Storm tests using the Vulkan backend. Requires WITH_HYDRA."
 )
 mark_as_advanced(WITH_STORM_TESTS_VULKAN)
 
+# THORVG support
+option(WITH_THORVG "Enable ThorVG Support" ON)
+
 # RTL Languages, Complex Shaping, OpenType Features
 option(WITH_FRIBIDI "Enable features relying on FriBidi" OFF)
 option(WITH_HARFBUZZ "Enable features relying on HarfBuzz" OFF)

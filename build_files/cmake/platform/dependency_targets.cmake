@@ -516,6 +516,19 @@ if(TARGET Tracy::TracyClient)
 endif()
 
 # -----------------------------------------------------------------------------
+# Configure ThorVG
+
+add_library(bf_deps_optional_thorvg INTERFACE)
+add_library(bf::dependencies::optional::thorvg ALIAS bf_deps_optional_thorvg)
+
+if(WITH_THORVG)
+  target_compile_definitions(bf_deps_optional_thorvg INTERFACE WITH_THORVG)
+  target_compile_definitions(bf_deps_optional_thorvg INTERFACE TVG_STATIC)
+  target_include_directories(bf_deps_optional_thorvg SYSTEM INTERFACE ${ThorVG_INCLUDE_DIRS})
+  target_link_libraries(bf_deps_optional_thorvg INTERFACE ${ThorVG_LIBRARIES})
+endif()
+
+# -----------------------------------------------------------------------------
 # Configure Jolt
 
 add_library(bf_deps_optional_jolt INTERFACE)

@@ -466,6 +466,18 @@ set(BROTLI_LIBRARIES
 
 windows_find_package(Freetype REQUIRED)
 
+if(WITH_THORVG)
+  windows_find_package(ThorVG)
+  if(NOT ThorVG_FOUND)
+    set(ThorVG_INCLUDE_DIRS ${LIBDIR}/thorvg/include/thorvg-1)
+    set(ThorVG_LIBRARIES
+      optimized ${LIBDIR}/thorvg/lib/libthorvg-1.lib
+      debug ${LIBDIR}/thorvg/lib/libthorvg-1_d.lib
+    )
+    set(ThorVG_FOUND ON)
+  endif()  
+endif()
+
 if(WITH_HARFBUZZ)
   windows_find_package(Harfbuzz)
   if(NOT Harfbuzz_FOUND)
