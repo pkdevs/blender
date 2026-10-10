@@ -166,6 +166,8 @@ class WhiteNoiseFunction : public mf::MultiFunction {
         }
         if (compute_value) {
           noise::hash_float_to_float(mask, vector, r_value);
+          // mask.foreach_index(
+          //     [&](const int64_t i) { r_value[i] = noise::hash_float_to_float(vector[i]); });
         }
         break;
       }

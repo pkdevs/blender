@@ -109,7 +109,8 @@ uint32_t hash(uint32_t kx, uint32_t ky)
   return c;
 }
 
-uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz)
+// TODO: Comment why this is BLI_INLINE (batch vectorization / -fPIC).
+BLI_INLINE uint32_t hash_inline(uint32_t kx, uint32_t ky, uint32_t kz)
 {
   uint32_t a, b, c;
   a = b = c = 0xdeadbeef + (3 << 2) + 13;
@@ -120,6 +121,11 @@ uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz)
   hash_bit_final(a, b, c);
 
   return c;
+}
+
+uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz)
+{
+  return hash_inline(kx, ky, kz);
 }
 
 uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz, uint32_t kw)
@@ -207,9 +213,14 @@ uint32_t hash_float(float2 k)
   return hash(float_as_uint(k.x), float_as_uint(k.y));
 }
 
+BLI_INLINE uint32_t hash_float_inline(const float3 k)
+{
+  return hash_inline(float_as_uint(k.x), float_as_uint(k.y), float_as_uint(k.z));
+}
+
 uint32_t hash_float(float3 k)
 {
-  return hash(float_as_uint(k.x), float_as_uint(k.y), float_as_uint(k.z));
+  return hash_float_inline(k);
 }
 
 uint32_t hash_float(float4 k)
@@ -261,14 +272,38 @@ float hash_float_to_float(float2 k)
   return uint_to_float_01(hash_float(k));
 }
 
+BLI_INLINE float hash_float_to_float_inline(const float3 k)
+{
+  return uint_to_float_01(hash_float_inline(k));
+}
+
 float hash_float_to_float(float3 k)
 {
-  return uint_to_float_01(hash_float(k));
+  return hash_float_to_float_inline(k);
 }
 
 float hash_float_to_float(float4 k)
 {
   return uint_to_float_01(hash_float(k));
+}
+
+template<typename Range>
+static void hash_float_to_float(Range &&range,
+                                const float3 *__restrict ks,
+                                float *__restrict r_values)
+{
+  if constexpr (std::is_same_v<std::decay_t<Range>, IndexRange>) {
+    const int64_t start = range.start();
+    const int64_t end = range.one_after_last();
+    for (int64_t i = start; i < end; i++) {
+      r_values[i] = hash_float_to_float_inline(ks[i]);
+    }
+  }
+  else {
+    for (const int64_t i : range) {
+      r_values[i] = hash_float_to_float_inline(ks[i]);
+    }
+  }
 }
 
 void hash_float_to_float(const IndexMask &mask,
@@ -277,8 +312,8 @@ void hash_float_to_float(const IndexMask &mask,
 {
   // TODO: Ensure that only the mask is materialized.
   VArraySpan<float3> ks_span(ks);
-  mask.foreach_index_optimized<int64_t>(
-      [&](const int64_t i) { r_values[i] = hash_float_to_float(ks_span[i]); });
+  mask.foreach_segment_optimized(
+      [&](const auto &segment) { hash_float_to_float(segment, ks_span.data(), r_values.data()); });
 }
 
 float2 hash_float_to_float2(float2 k)
