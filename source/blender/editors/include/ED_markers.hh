@@ -141,6 +141,12 @@ void ED_keymap_marker(wmKeyConfig *keyconf);
  */
 void debug_markers_print_list(ListBaseT<TimeMarker> *markers);
 
+/**
+ * Comparator for sorting markers by frame number.
+ * Used by BLI_listbase_sort.
+ */
+int ED_markers_frame_sort(const void *a, const void *b);
+
 /** \} */
 
 }  // namespace blender

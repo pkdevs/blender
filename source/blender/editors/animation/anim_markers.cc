@@ -647,7 +647,7 @@ static void get_marker_clip_frame_range(View2D *v2d, float xscale, int r_range[2
   r_range[1] = v2d->cur.xmax + font_width_max;
 }
 
-static int markers_frame_sort(const void *a, const void *b)
+int ED_markers_frame_sort(const void *a, const void *b)
 {
   const TimeMarker *marker_a = static_cast<const TimeMarker *>(a);
   const TimeMarker *marker_b = static_cast<const TimeMarker *>(b);
@@ -690,7 +690,7 @@ void ED_markers_draw(const bContext *C, int flag)
   ListBaseT<TimeMarker> sorted_markers;
 
   BLI_duplicatelist(&sorted_markers, markers);
-  BLI_listbase_sort(&sorted_markers, markers_frame_sort);
+  BLI_listbase_sort(&sorted_markers, ED_markers_frame_sort);
 
   /**
    * Set a temporary bit in the marker's flag to indicate that it should be elevated.

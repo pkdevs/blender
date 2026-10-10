@@ -68,6 +68,7 @@
 #include "ED_fileselect.hh"
 #include "ED_image.hh"
 #include "ED_keyframes_keylist.hh"
+#include "ED_markers.hh"
 #include "ED_mesh.hh"
 #include "ED_object.hh"
 #include "ED_scene.hh"
@@ -4363,8 +4364,14 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
   const bool next = RNA_boolean_get(op->ptr, "next");
   bool found = false;
 
+  /* Markers are stored in order of insertion, so we need to sort them by their frame. */
+  ListBaseT<TimeMarker> sorted_markers;
+
+  BLI_duplicatelist(&sorted_markers, &scene->markers);
+  BLI_listbase_sort(&sorted_markers, ED_markers_frame_sort);
+
   /* Find matching marker in the right direction. */
-  for (TimeMarker &marker : scene->markers) {
+  for (TimeMarker &marker : sorted_markers) {
     /* Ignore markers outside of playback_range. */
     if (wrap_timeline_navigation && !playback_range.contains(marker.frame)) {
       continue;
@@ -4388,7 +4395,7 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
   if (!found && wrap_timeline_navigation) {
     if (next) {
       if (const std::optional<int> frame = get_first_marker_in_range(playback_range,
-                                                                     scene->markers))
+                                                                     sorted_markers))
       {
         closest = *frame;
         found = true;
@@ -4396,13 +4403,15 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
     }
     else {
       if (const std::optional<int> frame = get_first_marker_in_range(
-              playback_range, scene->markers.items_reversed()))
+              playback_range, sorted_markers.items_reversed()))
       {
         closest = *frame;
         found = true;
       }
     }
   }
+
+  sorted_markers.free_no_destruct();
 
   /* any success? */
   if (!found) {
@@ -4412,6 +4421,7 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
   }
 
   scene->r.cfra = closest;
+  scene->r.subframe = 0.0f;
 
   ED_areas_do_frame_follow(C, true);
 
