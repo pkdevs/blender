@@ -85,7 +85,7 @@ struct GGXBrdfClosure {
 };
 
 /**
- * Generate 3D GGX BSDF LUT.
+ * Generate 3D GGX BSDF LUT, for IOR < 1.
  *
  * Follows the split sum approximation used in [Real shading in unreal engine 4]
  * (https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf).
@@ -173,7 +173,7 @@ struct GGXBsdfLUT {
  * Using Schlick's approximation; only the transmittance is needed because scale and
  * bias do not depend on the IOR, and can be obtained independently from the BRDF LUT.
  *
- * The 3D LUT is parameterized on:
+ * The 3D LUT is parameterized with:
  * - `x = sqrt((ior - 1) / (ior + 1))` for higher precision in the range `1 < IOR < 2`
  * - `y = sqrt(1.0f - cos(theta))`
  * - `z = roughness`
