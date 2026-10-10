@@ -453,7 +453,6 @@ inline static float4 scene_linear_pixel_get(
     const int tile_index,
     const int img_index)
 {
-  PRF_scope(ProfileCategory::Editor);
   const image::TileNumber tile_number = tile_index_to_number[tile_index];
   const BufferType type = tile_buffers.lookup(tile_number);
   const TileColorspaceProcessor &processor = *tile_processors.lookup_ptr(tile_number);
@@ -527,7 +526,6 @@ static float4 average_pixel(const int img_i,
                            const Map<image::TileNumber, BufferType> &tile_buffers,
                            const Span<image::TileNumber> tile_index_to_number)
 {
-  PRF_scope(ProfileCategory::Editor);
   Array<KDTreeNew<float3>::Nearest, 9> nearest_pixels(9);
   const int nearest_count = tree.find_nearest_n(pixel_positions[img_i], nearest_pixels);
 
@@ -1383,7 +1381,7 @@ static void calc_average_colors(Object &object,
     Vector<float4> paint_pixels;
     allocated_tiles.foreach_index(
         [&](const int scratch_tile_i) {
-          PRF_scope_with_name("do_apply_blur_tile_blend", ProfileCategory::Editor);
+          PRF_scope_with_name("calc_average_colors_tile", ProfileCategory::Editor);
           const ushort2 scratch_tile_pos = scratch_tile_index_to_xy(scratch_tile_i,
                                                                     image_buffer->x);
           const int2 img_start = int2(scratch_tile_pos) * scratch_tile_size;
