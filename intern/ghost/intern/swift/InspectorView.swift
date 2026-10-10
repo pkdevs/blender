@@ -155,23 +155,31 @@ struct SectionView: View {
         header(expanded: expanded)
       }
       let rows = store.visibleRows(section)
-      if expanded && !rows.isEmpty {
-        if bare(rows) {
-          rowView(rows[0])
-        }
-        else {
-          VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { position, row in
-              if position > 0 { Divider() }
-              rowView(row)
-                .padding(.vertical, 2)
+      /* The card slides out from under its header: the container clips it as its height animates,
+       * so it never passes over the header or the section above. */
+      VStack(spacing: 0) {
+        if expanded && !rows.isEmpty {
+          Group {
+            if bare(rows) {
+              rowView(rows[0])
+            }
+            else {
+              VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { position, row in
+                  if position > 0 { Divider() }
+                  rowView(row)
+                    .padding(.vertical, 2)
+                }
+              }
+              .padding(.horizontal, 12)
+              .background(PanelStyle.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
           }
-          .padding(.horizontal, 12)
-          .background(PanelStyle.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
           .transition(.opacity.combined(with: .move(edge: .top)))
         }
       }
+      .frame(maxWidth: .infinity, alignment: .top)
+      .clipped()
     }
     .padding(.top, section.headerHidden ? 8 : 0)
   }
