@@ -48,7 +48,7 @@ struct GGXBrdfClosure {
     const float NV = clamp(1.0f - square(coords.y), 1e-4f, 0.9999f);
     const float3 V = float3(sqrt(1.0f - square(NV)), 0.0f, NV);
 
-    return {GGXBrdf::init(roughness), V};
+    return {.closure = GGXBrdf::init(roughness), .V = V};
   }
 
   GGXBrdfData eval(const float3 rand) const
@@ -91,32 +91,21 @@ struct GGXBrdfClosure {
  * (https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf).
  * and uses Schlick's approximation to weight R, T components.
  *
- * The 3D LUT is parameterized on:
+ * The 3D LUT is parameterized with:
  * - `x = sqrt((ior - 1) / (ior + 1))`,
  * - `y = sqrt(1 - cos(theta))`,
  * - `z = roughness`,
- *
- * and output is interpreted as:
- * - `reflectance = F0 * scale + F90 * bias`,
- * - `transmittance = (1 - F0) * transmission_factor`.
  */
-struct GGXBsdfClosure {
-  GGXBrdf closure;
-  float roughness;
-  float ior;
+struct GGXBsdfLUT {
+  GGXBrdf brdf;
+  GGXBtdf btdf;
   float3 V;
 
-  static GGXBsdfClosure from_coords(float3 coords)
+  static GGXBsdfLUT from_coords(float3 coords)
   {
-    /* We use squared roughness for approximate perceptual linearity
-     * following [Physically Based Shading at Disney]
-     * (https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)
-     * Section 5.4. */
-    float roughness = square(coords.z);
-
-    /* ior is sin of critical angle. */
-    float ior = clamp(sqrt(coords.x), 1e-4f, 0.9999f);
-    float critical_cos = sqrt(1.0f - saturate(square(ior)));
+    /* IOR is the sine of the critical angle. */
+    const float ior = clamp(sqrt(coords.x), 1e-4f, 0.9999f);
+    const float critical_cos = sqrt(1.0f - saturate(square(ior)));
 
     /* Maximize texture usage on both sides of the critical angle. */
     coords.y = coords.y * 2.0f - 1.0f;
@@ -125,13 +114,17 @@ struct GGXBsdfClosure {
      * issues when the critical angle is changing. */
     coords.y += critical_cos;
 
-    float NV = clamp(coords.y, 1e-4f, 0.9999f);
-    float3 V = float3(sqrt(1.0f - square(NV)), 0.0f, NV);
+    const float roughness = coords.z;
 
-    return {GGXBrdf::init(coords.z), roughness, ior, V};
+    const float NV = clamp(coords.y, 1e-4f, 0.9999f);
+    const float3 V = float3(sqrt(1.0f - square(NV)), 0.0f, NV);
+
+    return {.brdf = GGXBrdf::init(roughness),
+            .btdf = GGXBtdf::init(roughness, ior, Thickness{}),
+            .V = V};
   }
 
-  GGXBsdfData eval(const float3 Xi) const
+  GGXBsdfData eval(const float3 rand) const
   {
     /* Geometric normal. */
     constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
@@ -139,36 +132,35 @@ struct GGXBsdfClosure {
     GGXBsdfData bsdf = {};
 
     /* Reflection, restricted to positive hemisphere. */
-    const float3 R = closure.bsdf_sample(Xi, V).direction;
+    const float3 R = brdf.bsdf_sample(rand, V).direction;
     float NR = R.z;
     if (NR > 0.0f) {
       /* Recover half vector as GGX normal. */
-      float3 H = normalize(V + R);
-      float3 L = refract(-V, H, 1.0f / ior);
-      float HL = abs(dot(H, L));
+      const float3 H = normalize(V + R);
+      const float3 L = refract(-V, H, 1.0f / btdf.ior);
+      const float HL = abs(dot(H, L));
 
       /* Schlick's Fresnel. */
-      float s = saturate(pow5f(1.0f - saturate(HL)));
+      const float s = saturate(pow5f(1.0f - saturate(HL)));
 
-      const float weight = closure.bsdf_eval(N, R, V).weight;
+      const float weight = brdf.bsdf_eval(N, R, V).weight;
       bsdf.scale = (1.0f - s) * weight;
       bsdf.bias = s * weight;
     }
 
     /* Refraction, restricted to negative hemisphere. */
-    float3 T = bxdf_ggx_sample_refraction(Xi, V, roughness, ior, Thickness{}, false).direction;
-    float NT = T.z;
+    const float3 T = btdf.bsdf_sample(rand, V).direction;
+    const float NT = T.z;
     /* In the case of TIR, `T == float3(0)`. */
     if (NT < 0.0f) {
       /* Recover half vector as GGX normal. */
-      float3 H = normalize(ior * T + V);
-      float HL = abs(dot(H, T));
+      const float3 H = normalize(btdf.ior * T + V);
+      const float HL = abs(dot(H, T));
 
       /* Schlick's Fresnel. */
-      float s = saturate(pow5f(1.0f - saturate(HL)));
+      const float s = saturate(pow5f(1.0f - saturate(HL)));
 
-      float weight = bxdf_ggx_eval_refraction(N, T, V, roughness, ior, Thickness{}, false).weight;
-      bsdf.transmission_factor = (1.0f - s) * weight;
+      bsdf.transmission_factor = (1.0f - s) * btdf.bsdf_eval(N, T, V).weight;
     }
 
     return bsdf;
@@ -190,28 +182,23 @@ struct GGXBsdfClosure {
  * - `transmittance = (1 - F0) * transmission_factor`.
  */
 struct GGXBtdfGt1Closure {
-  float roughness;
-  float ior;
+  GGXBtdf closure;
   float3 V;
 
   static GGXBtdfGt1Closure from_coords(float3 coords)
   {
-    /* We use squared roughness for approximate perceptual linearity
-     * following [Physically Based Shading at Disney]
-     * (https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)
-     * Section 5.4. */
-    float roughness = square(coords.z);
+    const float roughness = coords.z;
 
-    float F0 = clamp(square(coords.x), 1e-4f, 0.9999f);
-    float ior = (1.0f + F0) / (1.0f - F0);
+    const float F0 = clamp(square(coords.x), 1e-4f, 0.9999f);
+    const float ior = (1.0f + F0) / (1.0f - F0);
 
-    float NV = clamp(1.0f - square(coords.y), 1e-4f, 0.9999f);
-    float3 V = float3(sqrt(1.0f - square(NV)), 0.0f, NV);
+    const float NV = clamp(1.0f - square(coords.y), 1e-4f, 0.9999f);
+    const float3 V = float3(sqrt(1.0f - square(NV)), 0.0f, NV);
 
-    return {roughness, ior, V};
+    return {.closure = GGXBtdf::init(roughness, ior, Thickness{}), .V = V};
   }
 
-  GGXBtdfGt1Data eval(float3 Xi) const
+  GGXBtdfGt1Data eval(const float3 rand) const
   {
     /* Geometric normal. */
     constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
@@ -219,18 +206,17 @@ struct GGXBtdfGt1Closure {
     GGXBtdfGt1Data btdf = {};
 
     /* Refraction, restricted to negative hemisphere. */
-    float3 L = bxdf_ggx_sample_refraction(Xi, V, roughness, ior, Thickness{}, false).direction;
-    float NL = L.z;
+    const float3 L = closure.bsdf_sample(rand, V).direction;
+    const float NL = L.z;
     if (NL < 0.0f) {
       /* Recover half vector as GGX normal. */
-      float3 H = normalize(ior * L + V);
-      float HV = abs(dot(H, V));
+      const float3 H = normalize(closure.ior * L + V);
+      const float HV = abs(dot(H, V));
 
       /* Schlick's Fresnel. */
-      float s = saturate(pow5f(1.0f - saturate(HV)));
+      const float s = saturate(pow5f(1.0f - saturate(HV)));
 
-      float weight = bxdf_ggx_eval_refraction(N, L, V, roughness, ior, Thickness{}, false).weight;
-      btdf.transmission_factor = (1.0f - s) * weight;
+      btdf.transmission_factor = (1.0f - s) * closure.bsdf_eval(N, L, V).weight;
     }
 
     return btdf;
@@ -322,7 +308,7 @@ template<typename F> float4 integrate(const F &func)
   return measure / float(sample_count);
 }
 template float4 integrate<GGXBrdfClosure>(const GGXBrdfClosure &);
-template float4 integrate<GGXBsdfClosure>(const GGXBsdfClosure &);
+template float4 integrate<GGXBsdfLUT>(const GGXBsdfLUT &);
 template float4 integrate<GGXBtdfGt1Closure>(const GGXBtdfGt1Closure &);
 
 struct LUT {
@@ -344,7 +330,7 @@ void comp_main([[global_invocation_id]] const uint3 global_id, [[resource_table]
       result = integrate(GGXBrdfClosure::from_coords(lut_normalized_coordinate));
       break;
     case LUT_GGX_BSDF_SPLIT_SUM:
-      result = integrate(GGXBsdfClosure::from_coords(lut_normalized_coordinate));
+      result = integrate(GGXBsdfLUT::from_coords(lut_normalized_coordinate));
       break;
     case LUT_GGX_BTDF_IOR_GT_ONE:
       result = integrate(GGXBtdfGt1Closure::from_coords(lut_normalized_coordinate));

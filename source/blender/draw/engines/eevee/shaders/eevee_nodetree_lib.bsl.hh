@@ -773,7 +773,7 @@ void bsdf_lut(KernelGlobals &kg,
       lut.transmission_factor = btdf_lut.transmission_factor;
     }
     else {
-      lut = eevee::lut::GGXBsdfData::sample_utility_tx(kg.util_tx, cos_theta, roughness, ior);
+      lut = eevee::lut::GGXBsdfData::sample_lut(kg.util_tx, cos_theta, roughness, ior);
     }
   }
 
