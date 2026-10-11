@@ -55,6 +55,7 @@
 #include "ED_object.hh"
 #include "ED_screen.hh"
 #include "ED_transform.hh"
+#include "ED_undo.hh"
 #include "ED_view3d.hh"
 #include "ED_view3d_pencil_hover.hh"
 
@@ -724,20 +725,6 @@ const char *ios_proportional_id(const ToolSettings *settings, const eContextObje
   return "on";
 }
 
-void ios_proportional_set(ToolSettings *settings,
-                          const eContextObjectMode mode,
-                          const std::string &value)
-{
-  if (mode == CTX_MODE_OBJECT) {
-    settings->proportional_objects = value != "off";
-  }
-  else {
-    SET_FLAG_FROM_TEST(settings->proportional_edit, value != "off", PROP_EDIT_USE);
-  }
-  SET_FLAG_FROM_TEST(settings->proportional_edit, value == "connected", PROP_EDIT_CONNECTED);
-  SET_FLAG_FROM_TEST(settings->proportional_edit, value == "projected", PROP_EDIT_PROJECTED);
-}
-
 std::string ios_transform_settings_json(const Scene *scene, const eContextObjectMode mode)
 {
   if (!scene || !scene->toolsettings) {
@@ -788,6 +775,46 @@ void ios_mesh_select_mode_set(bContext *C, const std::string &value)
     WM_operator_name_call_ptr(C, ot, blender::wm::OpCallContext::ExecRegionWin, &props, nullptr);
   }
   WM_operator_properties_free(&props);
+}
+
+/**
+ * Set a property as Blender's own header buttons do: through RNA, so its update runs and
+ * notifiers are sent. Returns the property, or null when it does not exist.
+ */
+PropertyRNA *ios_rna_enum_set(bContext *C,
+                              PointerRNA &ptr,
+                              const char *identifier,
+                              const int value)
+{
+  PropertyRNA *prop = RNA_struct_find_property(&ptr, identifier);
+  if (prop == nullptr) {
+    return nullptr;
+  }
+  RNA_property_enum_set(&ptr, prop, value);
+  RNA_property_update(C, &ptr, prop);
+  return prop;
+}
+
+PropertyRNA *ios_rna_boolean_set(bContext *C,
+                                 PointerRNA &ptr,
+                                 const char *identifier,
+                                 const bool value)
+{
+  PropertyRNA *prop = RNA_struct_find_property(&ptr, identifier);
+  if (prop == nullptr) {
+    return nullptr;
+  }
+  RNA_property_boolean_set(&ptr, prop, value);
+  RNA_property_update(C, &ptr, prop);
+  return prop;
+}
+
+/** One undo step for a tool setting, named after it as the header's buttons name theirs. */
+void ios_rna_undo_push(bContext *C, PropertyRNA *prop)
+{
+  if (prop != nullptr) {
+    ED_undo_push(C, RNA_property_ui_name(prop));
+  }
 }
 
 void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
@@ -937,40 +964,57 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     return;
   }
 
+  /* The transform settings menus: Blender's own tool settings properties, set through RNA with
+   * an undo step, as from the 3D Viewport's header. */
+  PointerRNA tool_settings_ptr = RNA_pointer_create_discrete(
+      &scene->id, RNA_ToolSettings, tool_settings);
+
   if (command.setting == "orientation") {
-    BKE_scene_orientation_slot_set_index(&scene->orientation_slots[SCE_ORIENT_DEFAULT],
-                                         ios_orientation_value_for_id(command.value));
-    WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
+    PointerRNA slot_ptr = RNA_pointer_create_discrete(
+        &scene->id, RNA_TransformOrientationSlot, &scene->orientation_slots[SCE_ORIENT_DEFAULT]);
+    ios_rna_undo_push(
+        C, ios_rna_enum_set(C, slot_ptr, "type", ios_orientation_value_for_id(command.value)));
     return;
   }
 
   if (command.setting == "pivot") {
-    tool_settings->transform_pivot_point = ios_pivot_value_for_id(command.value);
-    WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
+    ios_rna_undo_push(
+        C,
+        ios_rna_enum_set(
+            C, tool_settings_ptr, "transform_pivot_point", ios_pivot_value_for_id(command.value)));
     return;
   }
 
   if (command.setting == "snap") {
-    if (command.value == "off") {
-      tool_settings->snap_flag &= ~SCE_SNAP;
+    if (command.value != "off") {
+      ios_rna_enum_set(C, tool_settings_ptr, "snap_elements", ios_snap_mode_for_id(command.value));
     }
-    else {
-      tool_settings->snap_flag |= SCE_SNAP;
-      tool_settings->snap_mode = ios_snap_mode_for_id(command.value);
-    }
-    WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
+    ios_rna_undo_push(
+        C, ios_rna_boolean_set(C, tool_settings_ptr, "use_snap", command.value != "off"));
     return;
   }
 
   if (command.setting == "proportional") {
-    ios_proportional_set(tool_settings, CTX_data_mode_enum(C), command.value);
-    WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
+    const bool enabled = command.value != "off";
+    ios_rna_boolean_set(C,
+                        tool_settings_ptr,
+                        CTX_data_mode_enum(C) == CTX_MODE_OBJECT ?
+                            "use_proportional_edit_objects" :
+                            "use_proportional_edit",
+                        enabled);
+    ios_rna_boolean_set(
+        C, tool_settings_ptr, "use_proportional_connected", command.value == "connected");
+    ios_rna_undo_push(
+        C,
+        ios_rna_boolean_set(
+            C, tool_settings_ptr, "use_proportional_projected", command.value == "projected"));
     return;
   }
 
   if (command.setting == "mesh_select_mode") {
+    /* MESH_OT_select_mode notifies and pushes its own undo step. */
     ios_mesh_select_mode_set(C, command.value);
-    WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
+    return;
   }
 
   if (command.setting == "assets") {
@@ -1025,13 +1069,13 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
 #endif
 
   if (command.setting == "timeline_frame") {
-    /* Match SCREEN_OT_frame_offset: scrubbing lands on whole frames. */
-    scene->r.cfra = std::min(std::atoi(command.value.c_str()), int(MAXFRAME));
-    FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
-    scene->r.subframe = 0.0f;
+    /* Scene.frame_current, as the timeline's own playhead sets it: its update clamps, moves the
+     * sound and redraws. Like scrubbing in Blender, changing frames adds no undo step. */
+    PointerRNA scene_ptr = RNA_id_pointer_create(&scene->id);
+    PropertyRNA *prop = RNA_struct_find_property(&scene_ptr, "frame_current");
+    RNA_property_int_set(&scene_ptr, prop, std::atoi(command.value.c_str()));
+    RNA_property_update(C, &scene_ptr, prop);
     ED_areas_do_frame_follow(C, false);
-    DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
-    WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
     return;
   }
 
@@ -1047,7 +1091,7 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
       PropertyRNA *prop = RNA_struct_find_property(&ptr, "use_keyframe_insert_auto");
       RNA_property_boolean_set(&ptr, prop, !RNA_property_boolean_get(&ptr, prop));
       RNA_property_update(C, &ptr, prop);
-      WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
+      ios_rna_undo_push(C, prop);
       return;
     }
     if (command.value == "play") {
