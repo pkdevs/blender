@@ -175,6 +175,7 @@ public struct DocumentWindow: View {
           .ignoresSafeArea()
         if !model.desktop {
           QuickActionsRow(model: model)
+          ToolRails(model: model)
           ViewGizmoLayer(model: model)
         }
         if !model.viewportReady {

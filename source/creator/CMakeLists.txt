@@ -383,6 +383,7 @@ else()
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/PencilMenu.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/PropertyControls.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/QuickActions.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/Rails.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/RedoStrip.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/RenderSheet.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/ScenePanels.swift

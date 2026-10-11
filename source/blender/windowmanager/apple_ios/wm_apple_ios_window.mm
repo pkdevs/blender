@@ -87,3 +87,13 @@ extern "C" UIImage *wm_apple_ios_command_icon(int command, NSString *symbol)
 {
   return blenderIOSCommandIcon(command, symbol);
 }
+
+extern "C" UIImage *wm_apple_ios_icon(NSString *key, NSString *symbol)
+{
+  return blenderIOSIcon(key, symbol);
+}
+
+extern "C" UIImage *wm_apple_ios_brush_image(NSString *preview, CGFloat diameter)
+{
+  return blenderIOSBrushImage(preview, diameter);
+}

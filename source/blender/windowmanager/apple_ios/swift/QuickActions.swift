@@ -199,7 +199,7 @@ struct QuickActionsRow: View {
       let safe = geometry.safeAreaInsets
       let width = geometry.size.width
       /* The lane between the tool rail and the navigation gizmo. */
-      let laneLeading = ShellMetrics.railLeading + ShellMetrics.railWidth + 12
+      let laneLeading = ShellMetrics.railLeading + model.toolRailWidth + 12
       /* Up to the navigation gizmo's hotspot, which Blender places in window fractions. */
       let frame = geometry.frame(in: .global)
       let gizmo = model.navigationGizmo

@@ -20,7 +20,8 @@ final class ShellModel {
 
   /** The editing mode, such as `object`, `mesh_edit` or `sculpt`. */
   private(set) var mode = ""
-  private(set) var tools: [JSON] = []
+  /** Blender's tools for the mode, in groups: `nil` separates two groups. */
+  private(set) var tools: [JSON?] = []
   private(set) var activeTool = ""
   private(set) var actions: [JSON] = []
   private(set) var brushes: JSON?
@@ -38,6 +39,8 @@ final class ShellModel {
   /** The window's safe area, without the toolbar's: controls laid out over the whole window,
    * such as the view pie, keep to it. */
   var safeAreaInsets = UIEdgeInsets.zero
+  /** The tool rail's width, which the controls beside it keep clear of. */
+  var toolRailWidth: CGFloat = 64
 
   init(window: UnsafeMutableRawPointer?) {
     self.window = window
@@ -59,7 +62,8 @@ final class ShellModel {
   /** The toolbar snapshot, Blender's latest or a copy of it. */
   func update(toolbar: JSON) {
     set(\.mode, toolbar.string("mode") ?? "")
-    set(\.tools, toolbar.array("tools"), equal: jsonListEqual)
+    set(\.tools, ((toolbar["tools"] as? [Any]) ?? []).map { $0 as? JSON },
+        equal: { jsonEqual($0.map { $0 as Any? ?? NSNull() } as NSArray, $1.map { $0 as Any? ?? NSNull() } as NSArray) })
     set(\.activeTool, toolbar.string("active") ?? "")
     set(\.actions, toolbar.array("actions"), equal: jsonListEqual)
     set(\.brushes, toolbar.dict("brushes"), equal: { jsonEqual($0, $1) })

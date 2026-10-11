@@ -54,6 +54,12 @@ void wm_apple_ios_window_navigation_tap(void *_Nullable window,
 void wm_apple_ios_window_cancel_pencil_stroke(void *_Nullable window);
 /** A view command's icon: Blender's, or the symbol. */
 UIImage *_Nullable wm_apple_ios_command_icon(int command, NSString *_Nonnull symbol);
+/** One of Blender's icons by key (such as `tool.object.builtin.move`), or the symbol. */
+UIImage *_Nullable wm_apple_ios_icon(NSString *_Nonnull key, NSString *_Nullable symbol);
+/** A brush's preview, round, at a diameter in points. */
+UIImage *_Nullable wm_apple_ios_brush_image(NSString *_Nonnull preview, CGFloat diameter);
+void WM_apple_ios_ui_tool_set_by_id(const char *_Nonnull tool_id);
+void WM_apple_ios_ui_brush_activate(const char *_Nonnull brush_id);
 /** The document window's controller is closing. */
 void wm_apple_ios_document_controller_closed(id _Nonnull controller);
 
