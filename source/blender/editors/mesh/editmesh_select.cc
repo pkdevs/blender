@@ -20,6 +20,7 @@
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_rand_c.hh"
 #include "BLI_set.hh"
