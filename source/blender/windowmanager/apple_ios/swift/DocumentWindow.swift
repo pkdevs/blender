@@ -24,19 +24,74 @@ import UIKit
 public final class DocumentController: UIHostingController<DocumentWindow> {
   private let model: ShellModel
   private let metalView: MTKView
+  private let overlay: ShellOverlay
+  private let commands: ShellCommands
+  private let pencilMenu: PencilMenu?
+  private let pencilSource: GHOSTIOSPencilMenuDelegate
   private var stateTimer: Timer?
   private var contextMenu: UIEditMenuInteraction?
+  private var fileDrop: NSObject?
+  private var menuBarItems: NSArray = []
+  private var menuBarRequest: UInt64 = 0
+  private var menuBarMode: String?
+  private var menuBarTime = Date.distantPast
+  private var touchSettingsApplied = false
 
   @objc(initWithMetalView:window:)
   public init(metalView: MTKView, window: UnsafeMutableRawPointer) {
-    model = ShellModel(window: window)
+    let model = ShellModel(window: window)
+    let overlay = ShellOverlay(model: model)
+    let commands = ShellCommands(model: model, overlay: overlay)
+    let viewport = ViewportContainer(metalView: metalView)
+#if os(visionOS)
+    /* visionOS has no Pencil to bring a radial menu up. */
+    pencilMenu = nil
+#else
+    pencilMenu = SwiftPencilMenu(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+#endif
+    pencilSource = wm_apple_ios_pencil_menu_source(window, metalView)
+    self.model = model
     self.metalView = metalView
-    super.init(rootView: DocumentWindow(model: model, viewport: ViewportContainer(metalView: metalView)))
+    self.overlay = overlay
+    self.commands = commands
+    super.init(rootView: DocumentWindow(model: model, viewport: viewport, overlay: overlay, commands: commands,
+                                        pencilMenu: pencilMenu))
+    commands.presenter = self
+    commands.render = SwiftRender(presenter: self)
+    commands.settings = SwiftSettings(presenter: self)
+    commands.settings?.fingerUsesToolChanged = { [weak self] useTool in
+      guard let self else { return }
+      wm_apple_ios_window_set_finger_tool(self.model.window, useTool)
+    }
+    model.onRender = { [weak commands] status in commands?.render?.updateStatus(status) }
+    model.onPreferences = { [weak commands] preferences in commands?.settings?.updatePreferences(preferences) }
+    model.onToolSettings = { [weak overlay] settings, ack in
+      overlay?.panels.updateToolSettingsStores(settings, acknowledgement: ack) ?? false
+    }
+    /* Industry Compatible is the iPad's default keymap; switch once, then respect the choice. */
+    if !UserDefaults.standard.bool(forKey: "BlenderKeymapDefaulted") {
+      UserDefaults.standard.set(true, forKey: "BlenderKeymapDefaulted")
+      Engine.setting("keymap", "Industry_Compatible")
+    }
+    if UserDefaults.standard.bool(forKey: "BlenderDesktopInterface") {
+      /* Start in the interface the person left; Blender follows from its inbox. */
+      Engine.setting("interface", "desktop")
+    }
+    pencilMenu?.delegate = pencilSource
+    wm_apple_ios_window_set_pencil_menu(window, pencilMenu)
+    /* Assets dragged out of the pane, and files from other apps, drop onto the viewport. */
+    viewport.addInteraction(overlay.assets.dropInteraction)
+    fileDrop = wm_apple_ios_file_drop_install(viewport, window)
     installContextMenu()
+
     NotificationCenter.default.addObserver(self, selector: #selector(snapshotsPublished),
                                            name: Notification.Name("BlenderSnapshotsPublished"),
                                            object: nil)
+    NotificationCenter.default.addObserver(self, selector: #selector(templatePresentation(_:)),
+                                           name: Notification.Name("BlenderTemplatePresentation"),
+                                           object: nil)
     model.pullToolbar(copy: true)
+    overlay.pullSnapshots()
     model.refreshWindowState()
     /* Snapshots arrive by notification. Whether the viewport has drawn is read from the
      * presentation mailbox, as a held-up Blender publishes nothing. */
@@ -49,7 +104,32 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
   required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
   @objc private func snapshotsPublished() {
+    let desktop = model.desktop
     model.pullToolbar()
+    overlay.pullSnapshots()
+    if desktop != model.desktop { desktopChanged() }
+    refreshMenuBar()
+  }
+
+  /** Blender's own Window menu can switch to its desktop interface too. */
+  private func desktopChanged() {
+    let desktop = model.desktop
+    UserDefaults.standard.set(desktop, forKey: "BlenderDesktopInterface")
+    pencilMenu?.cancel()
+    if desktop {
+      commands.setInterfaceHidden(false)
+      WM_apple_ios_ui_bottom_tray_set(0)
+    }
+    /* No native controls, radial menu or bottom tray over Blender's own interface. */
+    wm_apple_ios_window_set_pencil_menu(model.window, desktop ? nil : pencilMenu)
+    overlay.setNeedsLayout()
+  }
+
+  @objc private func templatePresentation(_ notification: Notification) {
+    overlay.panels.dismiss()
+    let timeline = (notification.userInfo?["timeline"] as? NSNumber)?.boolValue ?? false
+    if overlay.timeline.visible != timeline { overlay.timeline.toggle(nil) }
+    overlay.setNeedsLayout()
   }
 
   /** The launcher showed or hid the document window. */
@@ -62,15 +142,57 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
     stateTimer?.invalidate()
     stateTimer = nil
     NotificationCenter.default.removeObserver(self)
+    pencilMenu?.delegate = nil
+    wm_apple_ios_pencil_menu_source_detach(pencilSource as! NSObject)
+    overlay.detach()
     model.window = nil
     wm_apple_ios_document_controller_closed(self)
   }
 
   override public var prefersHomeIndicatorAutoHidden: Bool { true }
+  override public var prefersStatusBarHidden: Bool { model.interfaceHidden }
 
   override public func viewSafeAreaInsetsDidChange() {
     super.viewSafeAreaInsetsDidChange()
     if model.safeAreaInsets != view.safeAreaInsets { model.safeAreaInsets = view.safeAreaInsets }
+  }
+
+  override public func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    if !touchSettingsApplied, view.window != nil, UIDevice.current.userInterfaceIdiom != .phone {
+      /* The iPad's saved Pencil and touch choice; the phone has its own and uses the tool. */
+      touchSettingsApplied = true
+      wm_apple_ios_window_set_finger_tool(model.window, SwiftSettings.fingerUsesTool)
+    }
+  }
+
+  /* -------------------------------------------------------------------- */
+  /* The menu bar */
+
+  /** Projecting all of Blender's menus is costly and they change with the mode, rarely
+   * otherwise: ask again when the mode changes, and every few seconds for the rest. */
+  private func refreshMenuBar() {
+    if menuBarRequest != 0 {
+      guard let items = wm_apple_ios_menu_result(menuBarRequest) else { return }
+      menuBarRequest = 0
+      if !(items as NSArray).isEqual(to: menuBarItems as! [Any]) {
+        menuBarItems = items as NSArray
+        UIMenuSystem.main.setNeedsRebuild()
+      }
+    }
+    if menuBarMode == model.objectMode && Date().timeIntervalSince(menuBarTime) < 3 { return }
+    menuBarTime = Date()
+    menuBarMode = model.objectMode
+    menuBarRequest = wm_apple_ios_menu_bar_request()
+  }
+
+  override public func buildMenu(with builder: any UIMenuBuilder) {
+    super.buildMenu(with: builder)
+    wm_apple_ios_build_menu_bar(builder, menuBarItems as! [Any])
+  }
+
+  @objc public func newDocument(_ sender: Any?) {
+    wm_apple_ios_new_document(self)
   }
 }
 
@@ -167,17 +289,21 @@ struct ViewportView: UIViewRepresentable {
 public struct DocumentWindow: View {
   let model: ShellModel
   let viewport: ViewportContainer
+  let overlay: ShellOverlay
+  let commands: ShellCommands
+  let pencilMenu: PencilMenu?
+  @State private var shadingShown = false
+  @State private var toolSettingsShown = false
+  @State private var stripWidth: CGFloat = 0
+
+  /** The native controls are hidden in full screen, and over Blender's own interface. */
+  private var controlsShown: Bool { !model.desktop && !model.interfaceHidden }
 
   public var body: some View {
     NavigationStack {
       ZStack {
         ViewportView(container: viewport)
           .ignoresSafeArea()
-        if !model.desktop {
-          QuickActionsRow(model: model)
-          ToolRails(model: model)
-          ViewGizmoLayer(model: model)
-        }
         if !model.viewportReady {
           ProgressView()
             .controlSize(.large)
@@ -185,31 +311,81 @@ public struct DocumentWindow: View {
             .accessibilityIdentifier("blender.viewport.loading")
             .allowsHitTesting(false)
         }
+        if controlsShown {
+          QuickActionsRow(model: model)
+          ToolRails(model: model)
+          ViewGizmoLayer(model: model)
+        }
+        ShellOverlayView(overlay: overlay)
+          .ignoresSafeArea()
+          .opacity(controlsShown ? 1 : 0)
+          .allowsHitTesting(controlsShown)
+        if let pencilMenu {
+          /* Frontmost; it passes touches through while it is closed. */
+          PencilMenuView(menu: pencilMenu)
+            .ignoresSafeArea()
+        }
+        if model.interfaceHidden {
+          showInterfaceButton
+        }
       }
-      .toolbar { DocumentToolbar(model: model) }
+      .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
+        if model.contentTop != top {
+          model.contentTop = top
+          overlay.setNeedsLayout()
+        }
+      }
+      .toolbar {
+        /* Kept while the bar is hidden: items added again lose the bar's centering of the strip. */
+        DocumentToolbar(model: model, overlay: overlay, commands: commands, shadingShown: $shadingShown,
+                        toolSettingsShown: $toolSettingsShown, stripWidth: $stripWidth)
+      }
+      .toolbar(controlsShown ? .visible : .hidden, for: .navigationBar)
       .toolbarTitleDisplayMode(.inline)
     }
   }
+
+  /** In full screen, faint until a Pencil or pointer comes near, so it does not compete with the
+   * work. */
+  private var showInterfaceButton: some View {
+    VStack {
+      HStack {
+        Spacer()
+        ShowInterfaceButton { commands.setInterfaceHidden(false) }
+      }
+      Spacer()
+    }
+    .padding(12)
+  }
 }
 
-struct DocumentToolbar: ToolbarContent {
-  let model: ShellModel
+private struct ShowInterfaceButton: View {
+  let show: () -> Void
+  @State private var near = false
 
-  var body: some ToolbarContent {
-    ToolbarItemGroup(placement: .topBarLeading) {
-      if model.documentsAvailable {
-        Button("Documents", systemImage: "chevron.backward") {
-          wm_apple_ios_show_documents(nil)
-        }
-        .accessibilityIdentifier("blender.documents")
-      }
-      Button("Undo", systemImage: "arrow.uturn.backward") {
-        Engine.operatorCall("ED_OT_undo")
-      }
-      .disabled(!model.canUndo)
-      .accessibilityIdentifier("blender.undo")
+  var body: some View {
+    Button(action: show) {
+      Image(systemName: "arrow.down.right.and.arrow.up.left")
+        .frame(width: 44, height: 44)
     }
+    .glassButtonStyle()
+    .buttonBorderShape(.circle)
+    .opacity(near ? 1 : 0.35)
+    .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { near = inside } }
+    .accessibilityLabel("Show Interface")
+    .accessibilityIdentifier("blender.interface.show")
   }
+}
+
+/** The Pencil's radial menu, which visionOS does not have. */
+typealias PencilMenu = UIView & GHOSTIOSPencilMenu
+
+/** The Pencil's radial menu, over everything else. */
+struct PencilMenuView: UIViewRepresentable {
+  let menu: PencilMenu
+
+  func makeUIView(context: Context) -> PencilMenu { menu }
+  func updateUIView(_ menu: PencilMenu, context: Context) {}
 }
 
 /** \} */

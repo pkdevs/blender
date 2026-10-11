@@ -552,7 +552,7 @@ struct ToolRails: View {
       let safe = CGRect(origin: .zero, size: proxy.size).inset(by: model.safeAreaInsets)
       let toolItems = RailItem.tools(model.tools, mode: model.mode)
       let brushItems = RailItem.brushes(model.brushes)
-      let layout = RailLayout(safe: safe, tray: 0, tools: tools, brushes: brushesAvailable ? brushes : nil)
+      let layout = RailLayout(safe: safe, tray: model.bottomTray, tools: tools, brushes: brushesAvailable ? brushes : nil)
       ZStack(alignment: .topLeading) {
         if brushesAvailable {
           Rail(items: brushItems, active: brushes.active(model.brushes?.string("active") ?? ""),

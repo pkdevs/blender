@@ -241,7 +241,7 @@ struct QuickActionsRow: View {
           .frame(width: width, height: ShellMetrics.rowHeight, alignment: .leading)
         }
       }
-      .padding(.bottom, max(safe.bottom, 0) + ShellMetrics.rowBottom)
+      .padding(.bottom, max(safe.bottom, 0) + ShellMetrics.rowBottom + model.bottomTray)
       .ignoresSafeArea(edges: .bottom)
     }
     .onChange(of: model.redo.map { $0 as NSDictionary }, initial: true) { _, snapshot in

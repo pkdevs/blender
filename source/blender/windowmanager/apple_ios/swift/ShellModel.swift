@@ -31,6 +31,19 @@ final class ShellModel {
   /** Blender's navigation gizmo: its center and radius, in fractions of the window's width and
    * height (center) and width (radius). */
   private(set) var navigationGizmo: [Double] = []
+  /** The modes the active object has, as Blender's header lists them, and the current one. */
+  private(set) var modes: [JSON] = []
+  private(set) var objectMode = "OBJECT"
+  /** The viewport's shading: `wireframe`, `solid`, `material` or `rendered`. */
+  private(set) var shading = "solid"
+  /** In mesh edit mode: `VERT`, `EDGE` or `FACE`. */
+  private(set) var meshSelectMode = "VERT"
+  /** Transform orientation, pivot, snapping and proportional editing. */
+  private(set) var transformSettings: [String: String] = [:]
+  /** The viewport's overlays, X-Ray, gizmos, statistics and wireframe toggles. */
+  private(set) var viewport: JSON?
+  /** The active tool's settings, which the top bar shows, and whether it has any. */
+  private(set) var toolSettingsShown = false
   /** Blender's own interface is showing, as on a desktop computer. */
   private(set) var desktop = false
   /** Blender's viewport has shown its first frame. */
@@ -39,8 +52,28 @@ final class ShellModel {
   /** The window's safe area, without the toolbar's: controls laid out over the whole window,
    * such as the view pie, keep to it. */
   var safeAreaInsets = UIEdgeInsets.zero
+  /** Where the content starts below the toolbar, in the window. */
+  var contentTop: CGFloat = 0
+  /** The asset pane and timeline along the bottom: their height, which the controls resting on
+   * the bottom edge rise above. */
+  var bottomTray: CGFloat = 0
+  /** Which panels show. */
+  var inspectorShown = false
+  var hierarchyShown = false
+  var timelineShown = false
+  var assetsShown = false
+  /** Full screen: everything but the button that brings it back is hidden. */
+  var interfaceHidden = false
   /** The tool rail's width, which the controls beside it keep clear of. */
   var toolRailWidth: CGFloat = 64
+  /** The room the toolbar leaves for the tool settings strip between its other items. */
+  var toolStripRoom: CGFloat = 320
+
+  /** Parts of the snapshot that other objects show: the render sheet, settings and tool settings,
+   * which says whether the tool has any. */
+  @ObservationIgnored var onRender: ((Any?) -> Void)?
+  @ObservationIgnored var onPreferences: ((Any?) -> Void)?
+  @ObservationIgnored var onToolSettings: ((JSON, NSNumber) -> Bool)?
 
   init(window: UnsafeMutableRawPointer?) {
     self.window = window
@@ -71,6 +104,20 @@ final class ShellModel {
     set(\.redo, toolbar.dict("redo"), equal: { jsonEqual($0, $1) })
     let gizmo = (toolbar["navigationGizmo"] as? [NSNumber])?.map(\.doubleValue) ?? []
     if gizmo.count == 3 { set(\.navigationGizmo, gizmo) }
+    let modes = toolbar.array("modes")
+    if !modes.isEmpty { set(\.modes, modes, equal: jsonListEqual) }
+    set(\.objectMode, toolbar.string("objectMode") ?? "OBJECT")
+    if let shading = toolbar.string("shading") { set(\.shading, shading) }
+    if let select = toolbar.string("meshSelectMode") { set(\.meshSelectMode, select) }
+    if let settings = toolbar["settings"] as? [String: String] { set(\.transformSettings, settings) }
+    set(\.viewport, toolbar.dict("viewport"), equal: { jsonEqual($0, $1) })
+    onRender?(toolbar["render"])
+    onPreferences?(toolbar["preferences"])
+    if let settings = onToolSettings?(toolbar.dict("toolSettings") ?? [:],
+                                      toolbar["propertiesAck"] as? NSNumber ?? 0)
+    {
+      set(\.toolSettingsShown, settings)
+    }
     if toolbar.has("desktop") {
       set(\.desktop, toolbar.bool("desktop"))
     }
