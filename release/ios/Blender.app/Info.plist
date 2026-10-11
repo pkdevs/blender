@@ -4,7 +4,7 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.williamreynish.blender.render.*</string>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).render.*</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
@@ -88,7 +88,7 @@
 		</dict>
 	</dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.williamreynish.blender</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

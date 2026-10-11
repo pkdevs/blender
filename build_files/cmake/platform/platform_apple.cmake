@@ -730,9 +730,11 @@ if(PLATFORM_BUNDLED_LIBRARIES)
   unset(_library_paths)
 endif()
 
-# Same as `CFBundleIdentifier` in Info.plist.
-# IOS_FIXME: Change 'test' back to 'blenderfoundation' before release
-# set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.blenderfoundation.blender")
+# `CFBundleIdentifier` in the iOS and visionOS Info.plist. Builds signed with a personal team
+# set their own identifier, as Apple requires one per developer account.
+if(WITH_APPLE_CROSSPLATFORM AND NOT CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER)
+  set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.blenderfoundation.blender")
+endif()
 
 if(WITH_APPLE_CROSSPLATFORM)
   if(APPLE_TARGET_VISIONOS)
