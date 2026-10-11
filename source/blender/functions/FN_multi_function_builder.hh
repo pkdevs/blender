@@ -10,6 +10,8 @@
  * This file contains several utilities to create multi-functions with less redundant code.
  */
 
+#include "BLI_virtual_array_batch_processing.hh"
+
 #include "FN_multi_function.hh"
 
 namespace blender {
@@ -166,228 +168,22 @@ inline void execute_array(const ElementFn &element_fn,
   }
 }
 
-enum class MaterializeArgMode {
-  Unknown,
-  Single,
-  Span,
-  Materialized,
-};
-
-template<typename ParamTag> struct MaterializeArgInfo {
-  MaterializeArgMode mode = MaterializeArgMode::Unknown;
-  const typename ParamTag::base_type *internal_span_data;
-};
-
-/**
- * Similar to #execute_array but is only used with arrays and does not need a mask.
- */
-template<typename... ParamTags, typename ElementFn, typename... Chunks>
-#if (defined(__GNUC__) && !defined(__clang__))
-[[gnu::optimize("-funroll-loops")]] [[gnu::optimize("O3")]]
-#endif
-inline void execute_materialized_impl(TypeSequence<ParamTags...> /*param_tags*/,
-                                      const ElementFn &element_fn,
-                                      const int64_t size,
-                                      Chunks &&__restrict... chunks)
-{
-  for (int64_t i = 0; i < size; i++) {
-    element_fn(chunks[i]...);
-  }
-}
-
-/**
- * Executes #element_fn for all indices in #mask. However, instead of processing every element
- * separately, processing happens in chunks. This allows retrieving from input virtual arrays in
- * chunks, which reduces virtual function call overhead.
- */
-template<typename... ParamTags, size_t... I, typename ElementFn, typename... LoadedParams>
-inline void execute_materialized(TypeSequence<ParamTags...> /*param_tags*/,
-                                 std::index_sequence<I...> /*indices*/,
-                                 const ElementFn &element_fn,
-                                 const IndexMaskSegment mask,
-                                 const std::tuple<LoadedParams...> &loaded_params)
-{
-
-  /* In theory, all elements could be processed in one chunk. However, that has the disadvantage
-   * that large temporary arrays are needed. Using small chunks allows using small arrays, which
-   * are reused multiple times, which improves cache efficiency. The chunk size also shouldn't be
-   * too small, because then overhead of the outer loop over chunks becomes significant again. */
-  static constexpr int64_t MaxChunkSize = 64;
-  const int64_t mask_size = mask.size();
-  const int64_t tmp_buffer_size = std::min(mask_size, MaxChunkSize);
-
-  /* Local buffers that are used to temporarily store values for processing. */
-  std::tuple<TypedBuffer<typename ParamTags::base_type, MaxChunkSize>...> temporary_buffers;
-
-  /* Information about every parameter. */
-  std::tuple<MaterializeArgInfo<ParamTags>...> args_info;
-
-  (
-      /* Setup information for all parameters. */
-      [&] {
-        /* Use `typedef` instead of `using` to work around a compiler bug. */
-        using ParamTag = ParamTags;
-        using T = typename ParamTag::base_type;
-        [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
-        if constexpr (ParamTag::category == ParamCategory::SingleInput) {
-          const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
-          const CommonVArrayInfo common_info = varray_impl.common_info();
-          if (common_info.type == CommonVArrayInfo::Type::Single) {
-            /* If an input #VArray is a single value, we have to fill the buffer with that value
-             * only once. The same unchanged buffer can then be reused in every chunk. */
-            const T &in_single = *static_cast<const T *>(common_info.data);
-            T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
-            uninitialized_fill_n(tmp_buffer, tmp_buffer_size, in_single);
-            arg_info.mode = MaterializeArgMode::Single;
-          }
-          else if (common_info.type == CommonVArrayInfo::Type::Span) {
-            /* Remember the span so that it doesn't have to be retrieved in every iteration. */
-            arg_info.internal_span_data = static_cast<const T *>(common_info.data);
-          }
-          else {
-            arg_info.internal_span_data = nullptr;
-          }
-        }
-      }(),
-      ...);
-
-  IndexMaskFromSegment index_mask_from_segment;
-  const int64_t segment_offset = mask.offset();
-
-  /* Outer loop over all chunks. */
-  for (int64_t chunk_start = 0; chunk_start < mask_size; chunk_start += MaxChunkSize) {
-    const int64_t chunk_end = std::min<int64_t>(chunk_start + MaxChunkSize, mask_size);
-    const int64_t chunk_size = chunk_end - chunk_start;
-    const IndexMaskSegment sliced_mask = mask.slice(chunk_start, chunk_size);
-    const int64_t mask_start = sliced_mask[0];
-    const bool sliced_mask_is_range = unique_sorted_indices::non_empty_is_range(
-        sliced_mask.base_span());
-
-    /* Move mutable data into temporary array. */
-    if (!sliced_mask_is_range) {
-      (
-          [&] {
-            /* Use `typedef` instead of `using` to work around a compiler bug. */
-            using ParamTag = ParamTags;
-            using T = typename ParamTag::base_type;
-            if constexpr (ParamTag::category == ParamCategory::SingleMutable) {
-              T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
-              T *param_buffer = std::get<I>(loaded_params);
-              for (int64_t i = 0; i < chunk_size; i++) {
-                new (tmp_buffer + i) T(std::move(param_buffer[sliced_mask[i]]));
-              }
-            }
-          }(),
-          ...);
+/* TODO: Comment about converting multi-function ParamTags to varray_batch ParamTags. */
+template<typename SrcParamTag> struct BatchParamTagFromMF {
+  static constexpr varray_batch::ParamCategory category = [] {
+    if constexpr (SrcParamTag::category == ParamCategory::SingleInput) {
+      return varray_batch::ParamCategory::Input;
     }
-
-    const IndexMask *current_segment_mask = nullptr;
-
-    execute_materialized_impl(
-        TypeSequence<ParamTags...>(),
-        element_fn,
-        chunk_size,
-        /* Prepare every parameter for this chunk. */
-        [&] {
-          using ParamTag = ParamTags;
-          using T = typename ParamTag::base_type;
-          [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
-          T *tmp_buffer = std::get<I>(temporary_buffers);
-          if constexpr (ParamTag::category == ParamCategory::SingleInput) {
-            if (arg_info.mode == MaterializeArgMode::Single) {
-              /* The single value has been filled into a buffer already reused for every chunk. */
-              return const_cast<const T *>(tmp_buffer);
-            }
-            if (sliced_mask_is_range && arg_info.internal_span_data != nullptr) {
-              /* In this case we can just use an existing span instead of "compressing" it into
-               * a new temporary buffer. */
-              arg_info.mode = MaterializeArgMode::Span;
-              return arg_info.internal_span_data + mask_start;
-            }
-            const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
-            if (current_segment_mask == nullptr) {
-              current_segment_mask = &index_mask_from_segment.update(
-                  {segment_offset, sliced_mask.base_span()});
-            }
-            /* As a fallback, do a virtual function call to retrieve all elements in the current
-             * chunk. The elements are stored in a temporary buffer reused for every chunk. */
-            varray_impl.materialize_compressed(*current_segment_mask, tmp_buffer, true);
-            /* Remember that this parameter has been materialized, so that the values are
-             * destructed properly when the chunk is done. */
-            arg_info.mode = MaterializeArgMode::Materialized;
-            return const_cast<const T *>(tmp_buffer);
-          }
-          else if constexpr (ELEM(ParamTag::category,
-                                  ParamCategory::SingleOutput,
-                                  ParamCategory::SingleMutable))
-          {
-            /* For outputs, just pass a pointer. This is important so that `__restrict` works. */
-            if (sliced_mask_is_range) {
-              /* Can write into the caller-provided buffer directly. */
-              T *param_buffer = std::get<I>(loaded_params);
-              return param_buffer + mask_start;
-            }
-            /* Use the temporary buffer. The values will have to be copied out of that
-             * buffer into the caller-provided buffer afterwards. */
-            return tmp_buffer;
-          }
-        }()...);
-
-    /* Relocate outputs from temporary buffers to buffers provided by caller. */
-    if (!sliced_mask_is_range) {
-      (
-          [&] {
-            /* Use `typedef` instead of `using` to work around a compiler bug. */
-            using ParamTag = ParamTags;
-            using T = typename ParamTag::base_type;
-            if constexpr (ELEM(ParamTag::category,
-                               ParamCategory::SingleOutput,
-                               ParamCategory::SingleMutable))
-            {
-              T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
-              T *param_buffer = std::get<I>(loaded_params);
-              for (int64_t i = 0; i < chunk_size; i++) {
-                new (param_buffer + sliced_mask[i]) T(std::move(tmp_buffer[i]));
-                std::destroy_at(tmp_buffer + i);
-              }
-            }
-          }(),
-          ...);
+    else if constexpr (SrcParamTag::category == ParamCategory::SingleOutput) {
+      return varray_batch::ParamCategory::Output;
     }
-
-    (
-        /* Destruct values that have been materialized before. */
-        [&] {
-          /* Use `typedef` instead of `using` to work around a compiler bug. */
-          using ParamTag = ParamTags;
-          using T = typename ParamTag::base_type;
-          [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
-          if constexpr (ParamTag::category == ParamCategory::SingleInput) {
-            if (arg_info.mode == MaterializeArgMode::Materialized) {
-              T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
-              destruct_n(tmp_buffer, chunk_size);
-            }
-          }
-        }(),
-        ...);
-  }
-
-  (
-      /* Destruct buffers for single value inputs. */
-      [&] {
-        /* Use `typedef` instead of `using` to work around a compiler bug. */
-        using ParamTag = ParamTags;
-        using T = typename ParamTag::base_type;
-        [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
-        if constexpr (ParamTag::category == ParamCategory::SingleInput) {
-          if (arg_info.mode == MaterializeArgMode::Single) {
-            T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
-            destruct_n(tmp_buffer, tmp_buffer_size);
-          }
-        }
-      }(),
-      ...);
-}
+    else {
+      static_assert(SrcParamTag::category == ParamCategory::SingleMutable);
+      return varray_batch::ParamCategory::Mutable;
+    }
+  }();
+  using type = varray_batch::ParamTag<category, typename SrcParamTag::base_type>;
+};
 
 template<typename ElementFn, typename ExecPreset, typename... ParamTags, size_t... I>
 inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
@@ -450,11 +246,12 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
      * still instantiates the function only once. */
     if constexpr (ExecPreset::fallback_mode == exec_presets::FallbackMode::Materialized) {
       mask.foreach_segment([&](const IndexMaskSegment segment) {
-        execute_materialized(TypeSequence<ParamTags...>(),
-                             std::index_sequence<I...>(),
-                             element_fn,
-                             segment,
-                             loaded_params);
+        varray_batch::batch_process<64>(
+            TypeSequence<typename BatchParamTagFromMF<ParamTags>::type...>(),
+            std::index_sequence<I...>(),
+            element_fn,
+            segment,
+            loaded_params);
       });
     }
     else {
