@@ -363,6 +363,95 @@ final class ScrubIndicator {
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Segmented control
+ * \{ */
+
+/**
+ * The system's segmented control, for choices Blender draws as a row. It moves its Liquid Glass
+ * selection over at once when tapped; Blender's value only arrives a moment later, so the control
+ * keeps the choice it made until Blender shows it, instead of jumping back meanwhile.
+ */
+struct SegmentedControl: UIViewRepresentable {
+  struct Segment: Equatable {
+    var value: String
+    var title: String
+    var image: UIImage?
+  }
+
+  var segments: [Segment]
+  var selection: String
+  var enabled = true
+  var accessibilityLabel: String? = nil
+  var choose: (String) -> Void
+
+  final class Coordinator: NSObject {
+    var parent: SegmentedControl
+    var segments: [Segment] = []
+    /** The value chosen here that Blender does not show yet, and until when to wait for it. */
+    var pending: String?
+    var pendingUntil = Date.distantPast
+
+    init(_ parent: SegmentedControl) {
+      self.parent = parent
+    }
+
+    @objc func changed(_ control: UISegmentedControl) {
+      let index = control.selectedSegmentIndex
+      guard segments.indices.contains(index) else { return }
+      pending = segments[index].value
+      pendingUntil = Date().addingTimeInterval(1.0)
+      parent.choose(segments[index].value)
+    }
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+  func makeUIView(context: Context) -> UISegmentedControl {
+    let control = UISegmentedControl()
+    control.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)),
+                      for: .valueChanged)
+    control.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    return control
+  }
+
+  func updateUIView(_ control: UISegmentedControl, context: Context) {
+    let coordinator = context.coordinator
+    coordinator.parent = self
+    if coordinator.segments != segments {
+      coordinator.segments = segments
+      control.removeAllSegments()
+      for (index, segment) in segments.enumerated() {
+        if let icon = segment.image {
+          /* A copy to name, as icons are shared. */
+          let image = icon.withRenderingMode(icon.renderingMode)
+          image.accessibilityLabel = segment.title
+          control.insertSegment(with: image, at: index, animated: false)
+        }
+        else {
+          control.insertSegment(withTitle: segment.title, at: index, animated: false)
+        }
+      }
+    }
+    control.isEnabled = enabled
+    control.accessibilityLabel = accessibilityLabel
+    /* Blender has caught up with the choice made here, or never will. */
+    if let pending = coordinator.pending,
+       pending == selection || Date() > coordinator.pendingUntil
+    {
+      coordinator.pending = nil
+    }
+    let shown = coordinator.pending ?? selection
+    let index = segments.firstIndex { $0.value == shown } ?? UISegmentedControl.noSegment
+    if control.selectedSegmentIndex != index {
+      control.selectedSegmentIndex = index
+    }
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Presenting UIKit controllers
  * \{ */
 

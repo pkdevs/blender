@@ -750,25 +750,17 @@ struct EnumControl: View {
   }
 
   private var segmented: some View {
-    let selection = (current?["value"] as? String) ?? ""
     /* Icons only when every choice has one, so none is left as a blank segment. */
     let icons = options.allSatisfy { BlenderIcon.image($0.string("icon")) != nil }
-    return Picker(label, selection: Binding(
-      get: { selection },
-      set: { store.edit(property, value: $0) })) {
-      ForEach(Array(options.enumerated()), id: \.offset) { _, option in
-        let title = option.string("label") ?? ""
-        if icons, let image = BlenderIcon.image(option.string("icon")) {
-          Image(uiImage: image).tag(option.string("value") ?? "").accessibilityLabel(title)
-        }
-        else {
-          Text(title).tag(option.string("value") ?? "")
-        }
-      }
+    let segments = options.map { option in
+      SegmentedControl.Segment(value: option.string("value") ?? "",
+                               title: option.string("label") ?? "",
+                               image: icons ? BlenderIcon.image(option.string("icon")) : nil)
     }
-    .pickerStyle(.segmented)
-    .labelsHidden()
-    .disabled(!property.bool("editable"))
+    return SegmentedControl(segments: segments, selection: (current?["value"] as? String) ?? "",
+                            enabled: property.bool("editable"), accessibilityLabel: label) {
+      store.edit(property, value: $0)
+    }
   }
 
   private var uiMenu: UIMenu {
