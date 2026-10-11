@@ -136,7 +136,12 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   /** \name Panels
    * \{ */
 
-  @objc private func toggleInspector() {
+  /** Whether Properties and the Outliner show, and a call when either changes. */
+  var inspectorShown: Bool { showInspector }
+  var hierarchyShown: Bool { showHierarchy }
+  var panelsDidChange: (() -> Void)?
+
+  @objc func toggleInspector() {
 #if os(visionOS)
     toggleWindow(.properties)
     return
@@ -147,7 +152,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     applyVisibility()
   }
 
-  @objc private func toggleHierarchy() {
+  @objc func toggleHierarchy() {
 #if os(visionOS)
     toggleWindow(.outliner)
     return
@@ -181,6 +186,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
 #endif
     Engine.setting("native_panels", "\((showInspector ? 1 : 0) | (showHierarchy ? 2 : 0))")
     layout(in: layoutRect)
+    panelsDidChange?()
   }
 
   private func animate(_ panel: UIView, visible: Bool, leading: Bool) {
@@ -304,6 +310,27 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     controller.present(shadingController, animated: true)
   }
 
+  /** Viewport shading as a SwiftUI popover's content shows it: Blender sends its settings while
+   * it is open. */
+  func shadingContent(done: @escaping () -> Void) -> some View {
+    NavigationStack {
+      InspectorForm(store: shading)
+        .tint(PanelStyle.tint)
+        .navigationTitle("Viewport Shading")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: done) } }
+    }
+    .frame(width: 400, height: 640)
+  }
+
+  func setShadingShown(_ shown: Bool) {
+    guard shown != shadingVisible else { return }
+    shadingVisible = shown
+    if shown { shading.requestProperties() }
+    else { ColorPickerSession.active?.close() }
+    Engine.setting("native_shading_visible", shown ? "1" : "0")
+  }
+
   @objc public func dismissShading() {
     guard shadingVisible else { return }
     shadingVisible = false
@@ -348,6 +375,33 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     /* The window may only now have put the group in the bar. */
     scheduleToolStripUpdate()
     return group
+  }
+
+  /** The tool's settings for a SwiftUI toolbar: the stores' update, without UIKit's bar group.
+   * Returns whether the tool has any. */
+  func updateToolSettingsStores(_ settings: JSON, acknowledgement ack: NSNumber) -> Bool {
+    if toolID != settings.string("id") {
+      dismissToolSettings()
+      toolID = settings.string("id")
+    }
+    let snapshot: JSON = ["inspector": settings, "ack": ack]
+    toolStrip.update(snapshot: snapshot)
+    toolPopover.update(snapshot: snapshot)
+    return !toolStrip.sections.allSatisfy { $0.rows.isEmpty }
+  }
+
+  var toolStripStore: InspectorStore { toolStrip }
+
+  /** All the tool's settings, in a popover from the toolbar. */
+  func toolSettingsContent(done: @escaping () -> Void) -> some View {
+    NavigationStack {
+      InspectorForm(store: toolPopover)
+        .tint(PanelStyle.tint)
+        .navigationTitle("Tool Settings")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: done) } }
+    }
+    .frame(width: 320, height: 420)
   }
 
   private func ensureToolGroup() -> UIBarButtonItemGroup {
