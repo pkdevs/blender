@@ -97,3 +97,263 @@ extern "C" UIImage *wm_apple_ios_brush_image(NSString *preview, CGFloat diameter
 {
   return blenderIOSBrushImage(preview, diameter);
 }
+
+extern "C" UIMenu *wm_apple_ios_property_menu(NSDictionary *property)
+{
+  /* A property's menu, such as a modifier's or a material slot's: Blender's own, resolved when it
+   * opens. */
+  NSMutableDictionary *route = [NSMutableDictionary dictionaryWithDictionary:@{
+    @"root" : property[@"menu"] ?: @"",
+    @"path" : @[]
+  }];
+  if (property[@"tab"]) {
+    route[@"propertiesTab"] = property[@"tab"];
+  }
+  return blenderIOSNativeSubmenu(@{
+    @"title" : property[@"label"] ?: @"",
+    @"icon" : property[@"icon"] ?: @"",
+    @"route" : route
+  },
+                                 property[@"menu"]);
+}
+
+extern "C" UIMenu *wm_apple_ios_blender_menu(NSDictionary *item, NSString *identifier)
+{
+  return blenderIOSNativeSubmenu(item, identifier);
+}
+
+extern "C" UIDocument *wm_apple_ios_open_document()
+{
+  return wm_apple_ios_launcher_document();
+}
+
+extern "C" void wm_apple_ios_new_document(UIViewController *presenter)
+{
+  wm_apple_ios_launcher_new_document(presenter);
+}
+
+extern "C" void wm_apple_ios_save_template(NSString *title,
+                                           NSDictionary *presentation,
+                                           void (^completion)(NSString *error))
+{
+  wm_apple_ios_template_save(title, presentation, completion);
+}
+
+extern "C" void wm_apple_ios_window_set_finger_tool(void *window, bool use_tool)
+{
+  if (window) {
+    [GHOST_ios_window_native(ghost_window(window)) setFingerToolEnabled:use_tool];
+  }
+}
+
+extern "C" void wm_apple_ios_window_set_pencil_menu(void *window, UIView<GHOSTIOSPencilMenu> *menu)
+{
+  if (window) {
+    [GHOST_ios_window_native(ghost_window(window)) setPencilContextMenu:menu];
+  }
+}
+
+/** Files dragged in from other apps drop on the viewport where they land, as on a Mac. */
+extern "C" NSObject *wm_apple_ios_file_drop_install(UIView *view, void *window)
+{
+  WMIOSFileDrop *drop = [[[WMIOSFileDrop alloc] init] autorelease];
+  drop.dropFiles = ^(NSArray<NSString *> *paths, CGPoint point) {
+    if (window) {
+      GHOST_ios_window_drop_files(ghost_window(window), paths, point);
+    }
+  };
+  [view addInteraction:drop.interaction];
+  return drop;
+}
+
+/** The shader compilation progress, shown while Blender is held up compiling. */
+extern "C" NSObject *wm_apple_ios_compile_indicator(UIView *overlay)
+{
+  return [[[WMIOSCompileIndicator alloc] initWithOverlay:overlay below:nil] autorelease];
+}
+
+extern "C" void wm_apple_ios_compile_indicator_stop(NSObject *indicator)
+{
+  [(WMIOSCompileIndicator *)indicator stop];
+}
+
+/* -------------------------------------------------------------------- */
+/** \name Blender's Menus in UIKit
+ * \{ */
+
+/** Blender's live context menu in the Pencil's radial menu, at the point it opens. */
+@interface WMIOSPencilMenuSource : NSObject <GHOSTIOSPencilMenuDelegate>
+@property(nonatomic) void *window;
+@property(nonatomic, assign) UIView *viewport;
+@end
+
+@implementation WMIOSPencilMenuSource
+
+- (NSArray<NSDictionary *> *)radialItems:(NSArray *)sources
+{
+  NSMutableArray *items = [NSMutableArray array];
+  for (NSDictionary *source in sources) {
+    if (![source isKindOfClass:NSDictionary.class]) {
+      continue;
+    }
+    if ([source[@"heading"] isKindOfClass:NSString.class]) {
+      /* The menu's own name, shown in the radial menu's center. */
+      [items addObject:@{@"heading" : source[@"heading"]}];
+      continue;
+    }
+    NSString *op = source[@"operator"];
+    NSString *title = source[@"title"];
+    if (![title isKindOfClass:NSString.class] || !title.length ||
+        ![source[@"route"] isKindOfClass:NSDictionary.class] ||
+        (![source[@"action"] boolValue] && ![source[@"submenu"] boolValue]))
+    {
+      continue;
+    }
+    /* Keep source order, full titles, and distinct property-bearing routes, even when several
+     * entries invoke the same operator (e.g. Set Origin or Delete). */
+    NSMutableDictionary *item = [[source mutableCopy] autorelease];
+    item[@"destructive"] = @([op isEqual:@"OBJECT_OT_delete"] || [op isEqual:@"MESH_OT_delete"]);
+    UIImage *image = blenderIOSMenuIcon(source);
+    if (!image && [source[@"submenu"] boolValue]) {
+      image = [UIImage systemImageNamed:@"chevron.right"];
+    }
+    if (image) {
+      item[@"image"] = image;
+    }
+    [items addObject:item];
+  }
+  return items;
+}
+
+- (CGPoint)pixels:(CGPoint)point from:(UIView *)menu
+{
+  return wm_apple_ios_window_pixels(_window, [menu convertPoint:point toView:_viewport]);
+}
+
+- (void)pencilMenu:(UIView<GHOSTIOSPencilMenu> *)menu
+    requestItemsForRoute:(NSDictionary *)route
+                 atPoint:(CGPoint)point
+              completion:(void (^)(NSArray<NSDictionary *> *))completion
+{
+  if (!_window) {
+    completion(@[]);
+    return;
+  }
+  const CGPoint pixels = [self pixels:point from:menu];
+  const uint64_t request = WM_apple_ios_ui_menu_at_position_request(
+      blenderIOSMenuRoute(route).UTF8String, false, pixels.x, pixels.y);
+  const CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + 60.0;
+  NSTimer *poll = [NSTimer timerWithTimeInterval:0.025
+                                         repeats:YES
+                                           block:^(NSTimer *timer) {
+                                             NSArray *result = blenderIOSMenuResult(request);
+                                             if (result || CFAbsoluteTimeGetCurrent() >= deadline)
+                                             {
+                                               [timer invalidate];
+                                               completion([self radialItems:result]);
+                                             }
+                                           }];
+  [NSRunLoop.mainRunLoop addTimer:poll forMode:NSRunLoopCommonModes];
+}
+
+- (void)pencilMenu:(UIView<GHOSTIOSPencilMenu> *)menu
+     didChooseItem:(NSDictionary *)item
+           atPoint:(CGPoint)point
+{
+  if (!_window || [item[@"disabled"] boolValue] ||
+      ![item[@"route"] isKindOfClass:NSDictionary.class])
+  {
+    return;
+  }
+  const CGPoint pixels = [self pixels:point from:menu];
+  WM_apple_ios_ui_menu_at_position_request(
+      blenderIOSMenuRoute(item[@"route"]).UTF8String, true, pixels.x, pixels.y);
+}
+
+@end
+
+extern "C" NSObject<GHOSTIOSPencilMenuDelegate> *wm_apple_ios_pencil_menu_source(void *window,
+                                                                                 UIView *viewport)
+{
+  WMIOSPencilMenuSource *source = [[[WMIOSPencilMenuSource alloc] init] autorelease];
+  source.window = window;
+  source.viewport = viewport;
+  return source;
+}
+
+extern "C" void wm_apple_ios_pencil_menu_source_detach(NSObject *source)
+{
+  ((WMIOSPencilMenuSource *)source).window = nullptr;
+}
+
+/** Blender's menus in the iPadOS menu bar, from the menu bar projection `items`. */
+extern "C" void wm_apple_ios_build_menu_bar(id<UIMenuBuilder> builder, NSArray *items)
+{
+  if (builder.system != UIMenuSystem.mainSystem || !items.count) {
+    return;
+  }
+  NSDictionary *systemIdentifiers = @{
+    @"TOPBAR_MT_blender" : UIMenuApplication,
+    @"TOPBAR_MT_file" : UIMenuFile,
+    @"TOPBAR_MT_edit" : UIMenuEdit,
+    @"TOPBAR_MT_window" : UIMenuWindow,
+    @"TOPBAR_MT_help" : UIMenuHelp,
+    @"VIEW3D_MT_view" : UIMenuView,
+  };
+  NSMutableArray *commands = [NSMutableArray array];
+  for (NSDictionary *item in items) {
+    if ([item[@"separator"] boolValue] || ![item[@"title"] length]) {
+      continue;
+    }
+    if (![item[@"submenu"] boolValue]) {
+      [commands addObject:item];
+      continue;
+    }
+    NSString *menuName = item[@"menu"];
+    NSString *systemIdentifier = systemIdentifiers[menuName];
+    NSString *identifier = systemIdentifier ?:
+                                              [@"org.blender.menu."
+                                   stringByAppendingString:menuName ?: item[@"title"]];
+    UIMenu *menu = blenderIOSNativeSubmenu(item, identifier);
+    if (systemIdentifier && [builder menuForIdentifier:systemIdentifier]) {
+      if ([systemIdentifier isEqualToString:UIMenuApplication] ||
+          [systemIdentifier isEqualToString:UIMenuWindow])
+      {
+        /* Keep iPadOS window-management and application commands available. */
+        UIMenu *group = [UIMenu menuWithTitle:@""
+                                        image:nil
+                                   identifier:nil
+                                      options:UIMenuOptionsDisplayInline
+                                     children:menu.children];
+        [builder insertChildMenu:group atEndOfMenuForIdentifier:systemIdentifier];
+      }
+      else {
+        [builder replaceMenuForIdentifier:systemIdentifier withMenu:menu];
+      }
+    }
+    else if ([builder menuForIdentifier:UIMenuWindow]) {
+      [builder insertSiblingMenu:menu beforeMenuForIdentifier:UIMenuWindow];
+    }
+    else {
+      [builder insertChildMenu:menu atEndOfMenuForIdentifier:UIMenuRoot];
+    }
+  }
+  if (commands.count) {
+    [builder insertChildMenu:[UIMenu menuWithTitle:@"Commands"
+                                          children:blenderIOSNativeMenuElements(commands)]
+        atEndOfMenuForIdentifier:UIMenuRoot];
+  }
+}
+
+/** Ask Blender for its menu bar's menus; the answer comes later, see the next function. */
+extern "C" uint64_t wm_apple_ios_menu_bar_request()
+{
+  return WM_apple_ios_ui_menu_request("{\"root\":\"menubar\",\"path\":[]}", false);
+}
+
+extern "C" NSArray *wm_apple_ios_menu_result(uint64_t request)
+{
+  return blenderIOSMenuResult(request);
+}
+
+/** \} */

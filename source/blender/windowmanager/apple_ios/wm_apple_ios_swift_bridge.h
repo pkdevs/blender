@@ -60,6 +60,36 @@ UIImage *_Nullable wm_apple_ios_icon(NSString *_Nonnull key, NSString *_Nullable
 UIImage *_Nullable wm_apple_ios_brush_image(NSString *_Nonnull preview, CGFloat diameter);
 void WM_apple_ios_ui_tool_set_by_id(const char *_Nonnull tool_id);
 void WM_apple_ios_ui_brush_activate(const char *_Nonnull brush_id);
+char *_Nullable WM_apple_ios_ui_panels_take_json(void);
+char *_Nullable WM_apple_ios_ui_timeline_take_json(void);
+char *_Nullable WM_apple_ios_ui_assets_take_json(void);
+/** How much of the window's height, from the bottom, the asset pane and timeline cover. */
+void WM_apple_ios_ui_bottom_tray_set(float fraction);
+/** A property's own menu, such as a modifier's: Blender's, resolved when it opens. */
+UIMenu *_Nullable wm_apple_ios_property_menu(NSDictionary *_Nonnull property);
+/** One of Blender's menus by its route, resolved when it opens. */
+UIMenu *_Nonnull wm_apple_ios_blender_menu(NSDictionary *_Nonnull item,
+                                           NSString *_Nullable identifier);
+UIDocument *_Nullable wm_apple_ios_open_document(void);
+/** Choose a template and create a new document, presented from `presenter`. */
+void wm_apple_ios_new_document(UIViewController *_Nonnull presenter);
+void wm_apple_ios_save_template(NSString *_Nonnull title,
+                                NSDictionary *_Nonnull presentation,
+                                void (^_Nonnull completion)(NSString *_Nullable error));
+void wm_apple_ios_window_set_finger_tool(void *_Nullable window, bool use_tool);
+void wm_apple_ios_window_set_pencil_menu(void *_Nullable window,
+                                         UIView<GHOSTIOSPencilMenu> *_Nullable menu);
+NSObject *_Nonnull wm_apple_ios_file_drop_install(UIView *_Nonnull view, void *_Nullable window);
+NSObject *_Nonnull wm_apple_ios_compile_indicator(UIView *_Nonnull overlay);
+void wm_apple_ios_compile_indicator_stop(NSObject *_Nonnull indicator);
+/** Blender's context menu in the Pencil's radial menu, for the window's viewport. */
+NSObject<GHOSTIOSPencilMenuDelegate> *_Nonnull wm_apple_ios_pencil_menu_source(
+    void *_Nullable window, UIView *_Nonnull viewport);
+void wm_apple_ios_pencil_menu_source_detach(NSObject *_Nonnull source);
+/** Blender's menus in the iPadOS menu bar. */
+void wm_apple_ios_build_menu_bar(id<UIMenuBuilder> _Nonnull builder, NSArray *_Nonnull items);
+uint64_t wm_apple_ios_menu_bar_request(void);
+NSArray *_Nullable wm_apple_ios_menu_result(uint64_t request);
 /** The document window's controller is closing. */
 void wm_apple_ios_document_controller_closed(id _Nonnull controller);
 
