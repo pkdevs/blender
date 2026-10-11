@@ -2230,12 +2230,14 @@ if(EXISTS "${ASSET_BUNDLE_DIR}")
   install(
     DIRECTORY ${ASSET_BUNDLE_DIR}
     DESTINATION ${TARGETDIR_VER}/datafiles/assets
+    # A library of its own, for the iPad app below.
+    PATTERN "ios_starter" EXCLUDE
   )
 endif()
 
 # The iPad app's bundled Starter library, registered as an asset library on launch.
 # See `release/ios/starter_assets/README.md`.
-set(STARTER_ASSET_DIR ${CMAKE_SOURCE_DIR}/release/ios/starter_assets/library/)
+set(STARTER_ASSET_DIR ${ASSET_BUNDLE_DIR}/ios_starter/)
 if(WITH_APPLE_CROSSPLATFORM AND EXISTS "${STARTER_ASSET_DIR}")
   install(
     DIRECTORY ${STARTER_ASSET_DIR}

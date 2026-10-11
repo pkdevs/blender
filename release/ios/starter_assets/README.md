@@ -12,14 +12,15 @@ from the Assets pane into a scene. It's laid out like Blender's Essentials libra
 
 ## Building
 
-The Python sources under `starter/` are the source of truth; `library/` is build output.
+The Python sources under `starter/` are the source of truth; the library they build is in
+`assets/ios_starter`, beside Blender's own bundled assets.
 
 ```sh
-blender --background --factory-startup --python build_starter_library.py -- --output library
-blender --background --factory-startup --python validate_starter_library.py -- --library library
+blender --background --factory-startup --python build_starter_library.py -- --output ../../../assets/ios_starter
+blender --background --factory-startup --python validate_starter_library.py -- --library ../../../assets/ios_starter
 ```
 
-Build one or more modules into a scratch folder while working on them (never into `library/`):
+Build one or more modules into a scratch folder while working on them (never into `assets/ios_starter`):
 
 ```sh
 blender -b --factory-startup --python build_starter_library.py -- --output /tmp/shapes --only shapes
@@ -68,10 +69,10 @@ materials from [Poly Haven](https://polyhaven.com/license) and
 
 ## Testing
 
-- `release/ios/test_starter_library.py` validates the committed library with Blender and checks
+- `tests/ios/test_starter_library.py` validates the committed library with Blender and checks
   the shipped files record no local paths.
-- `release/ios/test_swiftui_panels.py` shows the asset pane in the iOS Simulator.
-- `release/ios/assets_device_test.py` drops every Starter asset on an iPad through the asset
+- `tests/ios/test_swiftui_panels.py` shows the asset pane in the iOS Simulator.
+- `tests/ios/assets_device_test.py` drops every Starter asset on an iPad through the asset
   pane's entry point, plus a real drag and a cancelled one. Copy it into the app's Documents
   directory and launch the app with `--factory-startup --python-expr` as its docstring shows;
   results go to `Documents/assets-device-test.json`.
