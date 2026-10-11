@@ -3109,6 +3109,9 @@ bool GHOST_ios_document_window_visible()
   }
   [_active_tool_identifier release];
   _active_tool_identifier = [toolIdentifier copy];
+#if defined(APPLE_TARGET_VISIONOS)
+  [_vision_chrome setActiveTool:toolIdentifier ?: @""];
+#endif
 
   [self updateToolbarVisibilityAnimated:NO];
   /* Resolve selection artwork in this event, before UIKit's glass transition. */
@@ -3118,6 +3121,31 @@ bool GHOST_ios_document_window_visible()
     }
   }];
 }
+
+#if defined(APPLE_TARGET_VISIONOS)
+/* The tools as a visionOS ornament along the window's leading edge, in place of the rail. */
+- (void)updateVisionToolPalette:(NSArray *)tools mode:(NSString *)mode
+{
+  if (!_vision_chrome) {
+    return;
+  }
+  NSMutableDictionary *images = [NSMutableDictionary dictionary];
+  NSMutableDictionary *selected_images = [NSMutableDictionary dictionary];
+  NSMutableDictionary *menus = [NSMutableDictionary dictionary];
+  for (NSDictionary *tool in tools) {
+    if (![tool isKindOfClass:NSDictionary.class] || ![tool[@"id"] isKindOfClass:NSString.class]) {
+      continue;
+    }
+    images[tool[@"id"]] = [self toolbarImageForTool:tool mode:mode];
+    selected_images[tool[@"id"]] = [self toolbarImageForTool:tool mode:mode selected:YES];
+    if ([tool[@"children"] count] > 1) {
+      menus[tool[@"id"]] = [self toolbarMenuForTool:tool mode:mode];
+    }
+  }
+  [_vision_chrome updateTools:tools images:images selectedImages:selected_images menus:menus];
+  [_vision_chrome setActiveTool:_active_tool_identifier ?: @""];
+}
+#endif
 
 - (CGFloat)expandedToolbarHeight
 {
@@ -3583,6 +3611,9 @@ bool GHOST_ios_document_window_visible()
     }
   }
   [self updateToolbarVisibilityAnimated:NO];
+#if defined(APPLE_TARGET_VISIONOS)
+  [self updateVisionToolPalette:tools mode:mode];
+#endif
   if (_toolbar_label_button) {
     [self layoutToolbarLabel];
   }
@@ -5543,6 +5574,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self updateActionsButtonMenu];
   [self setViewportShadingValue:@"solid"];
 
+#if defined(APPLE_TARGET_VISIONOS)
+  /* The toolbar ornament below the window: Blender's full context menu, beside the quick
+   * actions. */
+  [_vision_chrome setContextMenu:[self nativeBlenderContextMenu]];
+#endif
   /* Real bar items provide UIKit with actions and menu representations for overflow.
    * Group scene actions beside Mode; keep viewport shading on the trailing side. */
   _top_bar_item.leadingItemGroups = @[
@@ -5679,6 +5715,16 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                                                                    files));
   };
   [self.view addInteraction:_file_drop.interaction];
+#if defined(APPLE_TARGET_VISIONOS)
+  /* Ornaments beside the window, for the tools and the quick actions. */
+  if (Class chrome_class = NSClassFromString(@"GHOSTIOSVisionChrome")) {
+    __block GHOST_IOSViewController *chrome_owner = self;
+    _vision_chrome = [[chrome_class alloc] initWithController:self choose:^(NSString *tool_id) {
+      [chrome_owner setActiveToolbarToolIdentifier:tool_id];
+      WM_apple_ios_ui_tool_set_by_id(tool_id.UTF8String);
+    }];
+  }
+#endif
   [self installNativeTopBar];
   /* A navigation controller's bar is outside the overlay; the safe area already clears it. */
   _compile_indicator = [[GHOSTIOSCompileIndicator alloc]
@@ -5716,6 +5762,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   tool_rail_pan.delegate = self;
   [_tool_rail addGestureRecognizer:tool_rail_pan];
   [tool_rail_pan release];
+#if defined(APPLE_TARGET_VISIONOS)
+  /* Tools float beside the window as an ornament instead. */
+  _tool_rail.hidden = YES;
+#endif
 
   _tool_drag_handle = [self toolbarDragHandle];
   [_tool_rail.contentView addSubview:_tool_drag_handle];
@@ -7024,7 +7074,13 @@ GHOST_WindowIOS::GHOST_WindowIOS(GHOST_SystemIOS *system_ios,
       /* Initial window has no parent and is always fullscreen. */
       uiview_controller_.modalPresentationStyle = UIModalPresentationPageSheet;
     }
-    if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
+#if defined(APPLE_TARGET_VISIONOS)
+    /* A visionOS window's own title bar and toolbar ornament. */
+    const bool use_navigation = true;
+#else
+    const bool use_navigation = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;
+#endif
+    if (use_navigation) {
       GHOSTIOSNavigationController *navigation = [[GHOSTIOSNavigationController
           alloc] initWithNavigationBarClass:GHOSTIOSNavigationBar.class toolbarClass:nil];
       [navigation setViewControllers:@[ uiview_controller_ ] animated:NO];
@@ -7226,6 +7282,16 @@ void GHOST_WindowIOS::setTitle(const char *title)
   }
   strcpy(window_title_, title);
   NSString *window_title = [NSString stringWithCString:title encoding:NSUTF8StringEncoding];
+#if defined(APPLE_TARGET_VISIONOS)
+  /* The window's title bar names the document, as other visionOS apps do, without its path. */
+  NSRange path = [window_title rangeOfString:@" ["];
+  if (path.location != NSNotFound) {
+    window_title = [window_title substringToIndex:path.location];
+  }
+  if ([window_title hasPrefix:@"* "]) {
+    window_title = [window_title substringFromIndex:2];
+  }
+#endif
   UIViewController *controller = uiview_controller_;
   dispatch_async(dispatch_get_main_queue(), ^{
     controller.title = window_title;

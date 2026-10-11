@@ -381,6 +381,7 @@ else()
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/TemplatePicker.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/Timeline.swift
       ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/UIKitInterop.swift
+      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/VisionChrome.swift
     )
     set(IOS_LAUNCHER_RESOURCES
       ${CMAKE_SOURCE_DIR}/release/ios/launcher/Suzanne.usdz
