@@ -406,6 +406,12 @@ struct SegmentedControl: UIViewRepresentable {
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
 
+  /** As tall as it is given, so it fits the strip's compact columns as well as the bar. */
+  func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISegmentedControl, context: Context) -> CGSize? {
+    let natural = uiView.intrinsicContentSize
+    return CGSize(width: proposal.width ?? natural.width, height: min(proposal.height ?? natural.height, natural.height))
+  }
+
   func makeUIView(context: Context) -> UISegmentedControl {
     let control = UISegmentedControl()
     control.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)),
