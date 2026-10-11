@@ -1812,8 +1812,15 @@ elseif(APPLE)
     MESSAGE(STATUS "-- CONFIGURING IOS PLIST -- ")
     set(IOS_BUNDLE_VERSION "${BLENDER_VERSION}.${BLENDER_VERSION_PATCH}" CACHE STRING
       "iOS build number; increment for each TestFlight upload")
+    if(APPLE_TARGET_VISIONOS)
+      # A visionOS app: its own windows and icon, without the iPad's orientations and background
+      # processing.
+      set(IOS_INFO_PLIST ${CMAKE_SOURCE_DIR}/release/visionos/Info.plist)
+    else()
+      set(IOS_INFO_PLIST ${OSX_APP_SOURCEDIR}/Info.plist)
+    endif()
     set_target_properties(blender PROPERTIES
-      MACOSX_BUNDLE_INFO_PLIST ${OSX_APP_SOURCEDIR}/Info.plist
+      MACOSX_BUNDLE_INFO_PLIST ${IOS_INFO_PLIST}
       MACOSX_BUNDLE_SHORT_VERSION_STRING "${BLENDER_VERSION}.${BLENDER_VERSION_PATCH}"
       MACOSX_BUNDLE_LONG_VERSION_STRING "${BLENDER_VERSION}.${BLENDER_VERSION_PATCH} ${BLENDER_DATE}"
     )
