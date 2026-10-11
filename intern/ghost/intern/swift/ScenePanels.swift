@@ -48,8 +48,10 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   private var shadingController: UIViewController?
   private var shadingVisible = false
   private var toolGroup: UIBarButtonItemGroup?
+  private var toolIcon: UIButton?
+  private var toolReinstalledWidth: CGFloat?
   private var toolHost: UIHostingController<AnyView>?
-  private var toolRow: UIStackView?
+  private var toolRow: ToolStripRow?
   private var toolMore: UIButton?
   private var toolWidth: NSLayoutConstraint?
   private var toolContentWidth: CGFloat = 0
@@ -295,6 +297,8 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     let empty = toolStrip.sections.allSatisfy { $0.rows.isEmpty }
     group.isHidden = empty
     updateToolStripWidth()
+    /* The window may only now have put the group in the bar. */
+    scheduleToolStripUpdate()
     return group
   }
 
@@ -305,7 +309,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
         ToolStrip(store: toolStrip)
           .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [weak self] width in
             self?.toolContentWidth = width
-            self?.updateToolStripWidth()
+            self?.scheduleToolStripUpdate()
           }
       }
       .scrollClipDisabled(false)))
@@ -327,16 +331,24 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     more.isHidden = true
     toolMore = more
 
-    let row = UIStackView(arrangedSubviews: [host.view, more])
+    let row = ToolStripRow(arrangedSubviews: [host.view, more])
     row.axis = .horizontal
     row.alignment = .center
     row.spacing = 4
+    /* The bar lays its items out again when any of them changes: fit the strip to the room
+     * left then, and should the bar have collapsed it to its icon, bring it back. */
+    row.laidOut = { [weak self] in self?.scheduleToolStripUpdate() }
+    row.windowChanged = { [weak self] in self?.scheduleToolStripUpdate() }
     toolRow = row
 
-    let compact = UIBarButtonItem(image: BlenderIcon.image("TOOL_SETTINGS") ??
-                                    UIImage(systemName: "slider.horizontal.3"),
-                                  style: .plain, target: self, action: #selector(presentToolSettings(_:)))
-    compact.accessibilityLabel = "Tool Settings"
+    /* A view of our own, so the strip's measuring can tell it apart from the bar's other items. */
+    let icon = UIButton(type: .system)
+    icon.setImage(BlenderIcon.image("TOOL_SETTINGS") ?? UIImage(systemName: "slider.horizontal.3"), for: .normal)
+    icon.addTarget(self, action: #selector(presentToolSettings(_:)), for: .touchUpInside)
+    icon.accessibilityIdentifier = Self.toolIconIdentifier
+    icon.accessibilityLabel = "Tool Settings"
+    toolIcon = icon
+    let compact = UIBarButtonItem(customView: icon)
     /* Keep one group installed in the bar: replacing it on every update makes the bar
      * re-measure from scratch and fall back to the compact item. */
     let group = UIBarButtonItemGroup.fixedGroup(representativeItem: compact,
@@ -345,51 +357,88 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     return group
   }
 
-  /** The free gap between the bar's controls on either side of the strip. Before the strip is
-   * on screen, estimate the room the bar's leading and trailing items leave. */
-  private func availableToolStripWidth() -> CGFloat {
-    guard let row = toolRow, row.window != nil else {
-      return max(160, (overlay?.bounds.width ?? 800) - 620)
+  private static let toolIconIdentifier = "blender.tool-settings.icon"
+
+  /** The top bar the strip sits in, also while the bar shows the strip as its icon. */
+  private func toolBar() -> UINavigationBar? {
+    var view: UIView? = toolRow?.superview
+    while let current = view {
+      if let bar = current as? UINavigationBar { return bar }
+      view = current.superview
     }
-    var bar: UIView? = row.superview
-    while let current = bar, !(current is UINavigationBar) { bar = current.superview }
-    guard let bar else { return max(160, (overlay?.bounds.width ?? 800) - 620) }
-    let frame = row.convert(row.bounds, to: bar)
+    var pending: [UIView] = overlay?.window.map { [$0] } ?? []
+    while let current = pending.popLast() {
+      if let bar = current as? UINavigationBar { return bar }
+      pending.append(contentsOf: current.subviews)
+    }
+    return nil
+  }
+
+  /**
+   * The room for the strip: the bar centers it, so twice the distance from the bar's middle to the
+   * nearest control on either side, not counting the strip itself or the icon the bar shows in its
+   * place when it collapses it.
+   */
+  private func availableToolStripWidth(in bar: UINavigationBar) -> CGFloat {
+    let center = bar.bounds.midX
     var left = bar.bounds.minX
     var right = bar.bounds.maxX
     var pending: [UIView] = [bar]
     while let view = pending.popLast() {
-      if view === row || view.isHidden || view.alpha < 0.01 { continue }
+      if view.isHidden || view.alpha < 0.01 { continue }
+      /* Skip the strip and its icon along with whatever the bar wraps them in. */
+      if view !== bar, [toolRow, toolIcon].contains(where: { $0?.isDescendant(of: view) == true }) {
+        if view === toolRow || view === toolIcon || view is UIControl { continue }
+        pending.append(contentsOf: view.subviews)
+        continue
+      }
       let other = view.convert(view.bounds, to: bar)
       if view is UIControl && other.width < bar.bounds.width / 2 {
-        if other.midX < frame.midX { left = max(left, other.maxX) }
+        if other.midX < center { left = max(left, other.maxX) }
         else { right = min(right, other.minX) }
         continue
       }
       pending.append(contentsOf: view.subviews)
     }
-    return max(160, right - left - 24)
+    return max(80, 2 * min(center - left, right - center) - 32)
   }
 
+  private func scheduleToolStripUpdate() {
+    if toolRemeasurePending { return }
+    toolRemeasurePending = true
+    DispatchQueue.main.async { [weak self] in
+      self?.toolRemeasurePending = false
+      self?.updateToolStripWidth()
+    }
+  }
+
+  /**
+   * Fill the room the bar leaves between its other items, as a toolbar does: settings that do not
+   * fit stay reachable through the overflow button at the end. The strip is never wider than that
+   * room, so the bar keeps it rather than collapsing it to its icon.
+   */
   private func updateToolStripWidth() {
-    guard let toolWidth else { return }
-    /* Fill the room the bar leaves between its other items; the strip scrolls for the rest. */
-    let available = availableToolStripWidth()
+    guard let toolWidth, let toolGroup, !toolGroup.isHidden, let bar = toolBar() else { return }
+    let available = availableToolStripWidth(in: bar)
     let overflow = toolContentWidth > available + 0.5
-    let width = overflow ? available - 36 : max(1, toolContentWidth)
+    let width = max(1, overflow ? available - 36 : toolContentWidth)
     toolMore?.isHidden = !overflow
     if abs(toolWidth.constant - width) > 0.5 {
       toolWidth.constant = width
-      /* The bar measures custom views when it lays out; make it measure again, then check the
-       * gap once more, since the bar may move its other items to fit the new width. */
-      toolRow?.superview?.superview?.setNeedsLayout()
-      if !toolRemeasurePending {
-        toolRemeasurePending = true
-        DispatchQueue.main.async { [weak self] in
-          self?.toolRemeasurePending = false
-          self?.updateToolStripWidth()
-        }
-      }
+      /* The bar measures its items' custom views when it lays out. */
+      bar.setNeedsLayout()
+    }
+    /* Once the bar has shown the strip as its icon it keeps doing so until its items change:
+     * hand it the group again now that the strip fits. */
+    if toolRow?.window == nil, let item = bar.topItem, item.centerItemGroups.contains(toolGroup) {
+      if toolReinstalledWidth == width { return }
+      toolReinstalledWidth = width
+      let groups = item.centerItemGroups
+      item.centerItemGroups = []
+      item.centerItemGroups = groups
+    }
+    else {
+      toolReinstalledWidth = nil
     }
   }
 
@@ -439,4 +488,20 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   }
 
   /** \} */
+}
+
+/** The tool settings strip's row in the top bar, telling when the bar lays it out or moves it. */
+private final class ToolStripRow: UIStackView {
+  var laidOut: (() -> Void)?
+  var windowChanged: (() -> Void)?
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    laidOut?()
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    windowChanged?()
+  }
 }
