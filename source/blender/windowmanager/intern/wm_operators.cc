@@ -643,6 +643,56 @@ static const char *wm_context_member_from_ptr(const bContext *C,
 
         break;
       }
+      case ID_BR: {
+        const enum eContextObjectMode mode = CTX_data_mode_enum(C);
+
+        switch (mode) {
+          case CTX_MODE_PAINT_GREASE_PENCIL:
+            member_id = "tool_settings.gpencil_paint.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_SCULPT_GREASE_PENCIL:
+            member_id = "tool_settings.gpencil_sculpt_paint.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_WEIGHT_GREASE_PENCIL:
+            member_id = "tool_settings.gpencil_weight_paint.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_VERTEX_GREASE_PENCIL:
+            member_id = "tool_settings.gpencil_vertex_paint.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_SCULPT:
+            member_id = "tool_settings.sculpt.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_PAINT_WEIGHT:
+            member_id = "tool_settings.weight_paint.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_PAINT_VERTEX:
+            member_id = "tool_settings.vertex_paint.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_PAINT_TEXTURE:
+            member_id = "tool_settings.image_paint.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_PARTICLE:
+            member_id = "tool_settings.particle_edit.brush";
+            is_id = true;
+            break;
+          case CTX_MODE_SCULPT_CURVES:
+            member_id = "tool_settings.curves_sculpt.brush";
+            is_id = true;
+            break;
+          default:
+            break;
+        }
+
+        break;
+      }
       default:
         break;
     }
