@@ -1641,9 +1641,10 @@ GHOST_WindowIOS::GHOST_WindowIOS(GHOST_SystemIOS *system_ios,
     rootWindow.rootViewController = (UIViewController *)root;
     [uiview_controller_ loadViewIfNeeded];
 
-    /* Create UIView */
+    /* The view that takes Blender's input: the Metal view, wherever the native interface places
+     * it in its controller's views. */
     GHOST_ASSERT(width > 0 && height > 0, "invalid wh");
-    uiview_ = uiview_controller_.view;
+    uiview_ = metal_view_;
     GHOST_ASSERT(uiview_, "uiview not valid");
 
     /* Enable HDR/EDR Support. */
