@@ -6592,60 +6592,240 @@ static void collect_face_loops(BMesh *bm, Vector<Vector<BMFace *>> &face_loops)
   BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_TAG, false);
 }
 
-/* Return any neighboring selected face of edge loop - for mapping. */
-static BMFace *edge_loop_face_owner_get(const Vector<BMEdge *> &loop)
+/* Return the selected face of tagged edge e (exactly one of its neighboring faces is selected). */
+static BMFace *edge_selected_face_get(BMEdge *e)
 {
   BMIter liter;
   BMLoop *l;
-  for (BMEdge *e : loop) {
-    BM_ITER_ELEM (l, &liter, e, BM_LOOPS_OF_EDGE) {
-      if (BM_elem_flag_test(l->f, BM_ELEM_SELECT)) {
-        return l->f;
+  BM_ITER_ELEM (l, &liter, e, BM_LOOPS_OF_EDGE) {
+    if (BM_elem_flag_test(l->f, BM_ELEM_SELECT)) {
+      return l->f;
+    }
+  }
+  return nullptr;
+}
+
+/**
+ * All edge loops (closed walks of tagged edges) found in the current selection.
+ *
+ * Tagged vertex is either part of simple loop or a junction where multiple loop strands meet.
+ * A strand is the run of tagged edges going from one junction to another.
+ */
+struct EdgeLoopBundle {
+  struct Strand {
+    Vector<BMEdge *> edges;
+    int64_t j0 = -1;
+    int64_t j1 = -1;
+  };
+
+  Vector<BMVert *> junctions;
+  Vector<Strand> strands;
+  Vector<Vector<int64_t>> strand_junctions;
+  /* Tagged cycles that contain no junction. */
+  Vector<Vector<BMEdge *>> cycles;
+  /* Edge loops (in canonical edge order) mapped to the face loop they belong to. */
+  Map<Vector<BMEdge *>, Vector<BMFace *>> loop_to_face_loop;
+};
+
+/**
+ * Split the tagged edges into junctions and strands. A strand starts at a junction, and ends at a
+ * junction, possibly the same one it started from. Tagged loops that do not contain any junction
+ * are collected separately.
+ */
+static void collect_strands_and_junctions(BMesh *bm, EdgeLoopBundle &bundle)
+{
+  Map<BMVert *, int64_t> junctions;
+  {
+    BMIter iter;
+    BMVert *v;
+    BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+      BMIter eiter;
+      BMEdge *e;
+      int tagged_count = 0;
+      BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
+        if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
+          tagged_count++;
+        }
+      }
+      if (tagged_count != 2) {
+        junctions.add_new(v, bundle.junctions.size());
+        bundle.junctions.append(v);
+      }
+    }
+  }
+
+  /* Walk a strand from each junction until the next junction is reached. */
+  Set<BMEdge *> assigned;
+  for (int64_t j = 0; j < bundle.junctions.size(); j++) {
+    BMVert *v0 = bundle.junctions[j];
+    BMIter eiter0;
+    BMEdge *e0;
+    BM_ITER_ELEM (e0, &eiter0, v0, BM_EDGES_OF_VERT) {
+      if (!BM_elem_flag_test(e0, BM_ELEM_TAG) || assigned.contains(e0)) {
+        continue;
+      }
+      EdgeLoopBundle::Strand strand;
+      strand.j0 = j;
+      BMEdge *e = e0;
+      BMVert *v = (e->v1 == v0) ? e->v2 : e->v1;
+      while (true) {
+        assigned.add(e);
+        strand.edges.append(e);
+        const int64_t *j_end = junctions.lookup_ptr(v);
+        if (j_end != nullptr) {
+          strand.j1 = *j_end;
+          break;
+        }
+        /* Exactly one tagged edge continues at a straight vertex. */
+        BMIter eiter;
+        BMEdge *e2;
+        BMEdge *e_next = nullptr;
+        BM_ITER_ELEM (e2, &eiter, v, BM_EDGES_OF_VERT) {
+          if (e2 != e && BM_elem_flag_test(e2, BM_ELEM_TAG)) {
+            e_next = e2;
+            break;
+          }
+        }
+        if (e_next == nullptr) {
+          break; /* Dangling strand, it cannot be part of a loop. */
+        }
+        e = e_next;
+        v = (e->v1 == v) ? e->v2 : e->v1;
+      }
+      bundle.strands.append(std::move(strand));
+    }
+  }
+
+  /* Collect the strands. */
+  bundle.strand_junctions.resize(bundle.junctions.size());
+  for (int64_t s = 0; s < bundle.strands.size(); s++) {
+    const EdgeLoopBundle::Strand &strand = bundle.strands[s];
+    if (strand.j1 == -1) {
+      continue;
+    }
+    bundle.strand_junctions[strand.j0].append(s);
+    if (strand.j1 != strand.j0) {
+      bundle.strand_junctions[strand.j1].append(s);
+    }
+  }
+
+  /* Collect the tagged loops that contain no junction. */
+  Set<BMEdge *> visited;
+  {
+    BMIter iter;
+    BMEdge *e;
+    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+      if (!BM_elem_flag_test(e, BM_ELEM_TAG) || assigned.contains(e) || visited.contains(e)) {
+        continue;
+      }
+      Vector<BMEdge *> cycle;
+      BMEdge *e_cur = e;
+      BMVert *v = e_cur->v1;
+      while (true) {
+        visited.add(e_cur);
+        cycle.append(e_cur);
+        BMIter eiter;
+        BMEdge *e2;
+        BMEdge *e_next = nullptr;
+        BM_ITER_ELEM (e2, &eiter, v, BM_EDGES_OF_VERT) {
+          if (e2 != e_cur && BM_elem_flag_test(e2, BM_ELEM_TAG)) {
+            e_next = e2;
+            break;
+          }
+        }
+        if (e_next == nullptr || visited.contains(e_next)) {
+          break;
+        }
+        e_cur = e_next;
+        v = (e_cur->v1 == v) ? e_cur->v2 : e_cur->v1;
+      }
+      if (cycle.size() > 1) {
+        bundle.cycles.append(std::move(cycle));
+      }
+    }
+  }
+}
+
+/* Find the face loop that a set of tagged edges belongs to. */
+static const Vector<BMFace *> *face_loop_of_edges_get(const Vector<Vector<BMFace *>> &face_loops,
+                                                      const Vector<BMEdge *> &edges)
+{
+  for (BMEdge *e : edges) {
+    BMFace *f = edge_selected_face_get(e);
+    if (f == nullptr) {
+      continue;
+    }
+    for (const Vector<BMFace *> &face_loop : face_loops) {
+      if (face_loop.contains(f)) {
+        return &face_loop;
       }
     }
   }
   return nullptr;
 }
 
-static void map_edge_loops_to_face_loops(
-    BMesh *bm,
-    const Vector<Vector<BMFace *>> &face_loops,
-    Map<Vector<BMEdge *>, Vector<BMFace *>> &edge_loop_to_face_loop)
+/* Add a loop of tagged edges (in any order) to the bundle, mapped to its face loop. */
+static void edge_loop_add(EdgeLoopBundle &bundle,
+                          const Vector<Vector<BMFace *>> &face_loops,
+                          const Vector<BMEdge *> &edges)
 {
-  Set<BMEdge *> visited;
-  BMIter iter;
-  BMEdge *e;
-  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-    if (!BM_elem_flag_test(e, BM_ELEM_TAG) || visited.contains(e)) {
+  const Vector<BMFace *> *face_loop = face_loop_of_edges_get(face_loops, edges);
+  if (face_loop == nullptr) {
+    return;
+  }
+  /* Sort the edges so that the same loop is always stored under the same key. */
+  Vector<BMEdge *> loop = edges;
+  std::sort(loop.begin(), loop.end());
+  bundle.loop_to_face_loop.lookup_or_add(loop, *face_loop);
+}
+
+/**
+ * Recursively collect all edge loops of the junctions. The same loop found through
+ * different orderings of its strands collapses onto the same sorted edge list.
+ */
+static void edge_loops_walk(EdgeLoopBundle &bundle,
+                            const Vector<Vector<BMFace *>> &face_loops,
+                            int64_t j0,
+                            int64_t j,
+                            Set<int64_t> &strands_used,
+                            Vector<int64_t> &walk)
+{
+  for (int64_t s : bundle.strand_junctions[j]) {
+    const EdgeLoopBundle::Strand &strand = bundle.strands[s];
+    if (strands_used.contains(s) || strand.j0 < j0 || strand.j1 < j0) {
       continue;
     }
-
-    Vector<BMEdge *> loop;
-    loop.append(e);
-    visited.add(e);
-    for (size_t loop_i = 0; loop_i < loop.size(); loop_i++) {
-      BMIter liter;
-      BMEdge *e2;
-      BMVert *verts[2] = {loop[loop_i]->v1, loop[loop_i]->v2};
-      for (BMVert *v : verts) {
-        BM_ITER_ELEM (e2, &liter, v, BM_EDGES_OF_VERT) {
-          if (BM_elem_flag_test(e2, BM_ELEM_TAG) && visited.add(e2)) {
-            loop.append(e2);
-          }
-        }
+    strands_used.add(s);
+    walk.append(s);
+    if (strand.j1 == j0) {
+      /* The walk is closed. Add the loop. */
+      Vector<BMEdge *> edges;
+      for (int64_t s2 : walk) {
+        edges.extend(bundle.strands[s2].edges);
       }
+      edge_loop_add(bundle, face_loops, edges);
     }
+    else {
+      edge_loops_walk(bundle, face_loops, j0, strand.j1, strands_used, walk);
+    }
+    walk.remove_last();
+    strands_used.remove(s);
+  }
+}
 
-    BMFace *f = edge_loop_face_owner_get(loop);
-    for (const Vector<BMFace *> &face_loop : face_loops) {
-      if (face_loop.contains(f)) {
-        edge_loop_to_face_loop.lookup_or_add(loop, face_loop);
-        break;
-      }
-    }
+/* Collect all edge loops and map them to face loops. */
+static void map_edge_loops_to_face_loops(EdgeLoopBundle &bundle,
+                                         const Vector<Vector<BMFace *>> &face_loops)
+{
+  for (const Vector<BMEdge *> &cycle : bundle.cycles) {
+    edge_loop_add(bundle, face_loops, cycle);
   }
 
-  BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
+  Set<int64_t> strands_used;
+  Vector<int64_t> walk;
+  for (int64_t j0 = 0; j0 < bundle.junctions.size(); j0++) {
+    edge_loops_walk(bundle, face_loops, j0, j0, strands_used, walk);
+  }
 }
 
 static const Vector<BMEdge *> *longest_edge_loop_get(
@@ -6674,37 +6854,36 @@ static const Vector<BMEdge *> *longest_edge_loop_get(
 /**
  * Convert face selection to outer boundary edge loops. The faces are deselected and, for each
  * connected set of selected faces, the longest edge loop on its boundary is selected.
- * \return true when edges of at least one loop were selected.
  */
-static bool face_loop_to_edge_loop(BMesh *bm)
+static void face_loop_to_edge_loop(BMesh *bm)
 {
   if (bm->totfacesel == 0) {
-    return false;
+    return;
   }
 
   tag_boundary_edges(bm);
   Vector<Vector<BMFace *>> face_loops;
   collect_face_loops(bm, face_loops);
-  Map<Vector<BMEdge *>, Vector<BMFace *>> edge_loop_to_face_loop;
-  map_edge_loops_to_face_loops(bm, face_loops, edge_loop_to_face_loop);
+  EdgeLoopBundle edge_loops;
+  collect_strands_and_junctions(bm, edge_loops);
+  map_edge_loops_to_face_loops(edge_loops, face_loops);
+  BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
 
   BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_SELECT, false);
   BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_SELECT, false);
 
   /* Select the outer edge loop of each face loop. This is done based on geometric length,
    * which could be incorrect. */
-  bool has_edge_loops = false;
   for (const Vector<BMFace *> &face_loop : face_loops) {
-    const Vector<BMEdge *> *edge_loop = longest_edge_loop_get(face_loop, edge_loop_to_face_loop);
+    const Vector<BMEdge *> *edge_loop = longest_edge_loop_get(face_loop,
+                                                              edge_loops.loop_to_face_loop);
     if (edge_loop == nullptr) {
       continue;
     }
     for (BMEdge *e_loop : *edge_loop) {
       BM_edge_select_set(bm, e_loop, true);
     }
-    has_edge_loops = true;
   }
-  return has_edge_loops;
 }
 
 static wmOperatorStatus edbm_loop_to_region_exec(bContext *C, wmOperator *op)
@@ -6721,9 +6900,10 @@ static wmOperatorStatus edbm_loop_to_region_exec(bContext *C, wmOperator *op)
     BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     /* Convert face selection to outer boundary edge loops. */
-    if ((em->selectmode & SCE_SELECT_FACE) && !face_loop_to_edge_loop(bm)) {
-      continue;
+    if ((em->selectmode & SCE_SELECT_FACE)) {
+      face_loop_to_edge_loop(bm);
     }
+
     if (bm->totedgesel == 0) {
       continue;
     }
