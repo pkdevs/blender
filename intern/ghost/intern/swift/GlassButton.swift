@@ -98,7 +98,18 @@ final class GlassButton: UIButton {
     host.view.frame = bounds
     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     addSubview(host.view)
+#if os(visionOS)
+    updateHoverStyle()
+#endif
   }
+
+#if os(visionOS)
+  /** Light up under the eyes, in the button's own shape, as system buttons do. */
+  private func updateHoverStyle() {
+    let shape: UIShape = model.cornerRadius.map { .rect(cornerRadius: $0) } ?? .capsule
+    hoverStyle = UIHoverStyle(effect: .highlight, shape: shape)
+  }
+#endif
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -185,6 +196,9 @@ final class GlassButton: UIButton {
     set {
       let radius: CGFloat? = newValue > 0 ? newValue : nil
       if radius != model.cornerRadius { model.cornerRadius = radius }
+#if os(visionOS)
+      updateHoverStyle()
+#endif
     }
   }
 

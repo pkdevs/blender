@@ -537,6 +537,7 @@ struct ListRows: View {
           .frame(maxWidth: .infinity, alignment: .leading)
           .layoutPriority(1)
           .contentShape(Rectangle())
+          .hoverEffect(.highlight)
           .onTapGesture { tap(item, index: index, isActive: isActive) }
       }
       ForEach(Array(item.array("controls").enumerated()), id: \.offset) { _, control in
