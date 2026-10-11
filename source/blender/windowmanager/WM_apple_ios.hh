@@ -47,8 +47,10 @@ bool WM_apple_ios_document_open(bContext *C, const char *filepath, bool template
  */
 bool WM_apple_ios_document_write(bContext *C, const char *filepath, bool preview);
 /** Save a portable template copy and PNG preview without marking the document saved. */
-std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview,
-                                               std::string &attribution);
+std::string WM_apple_ios_document_template_write(bContext *C,
+                                                 const char *filepath,
+                                                 const char *preview,
+                                                 std::string &attribution);
 /** Switch between the native iPad interface and Blender's own, as on a desktop computer. */
 void WM_OT_apple_ios_interface_toggle(wmOperatorType *ot);
 

@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #import "GHOST_IOSDocument.hh"
 
-#include "GHOST_IOSRuntime.hh"
 #import "GHOST_IOSLauncher.hh"
+#include "GHOST_IOSRuntime.hh"
 
 #include <chrono>
 #include <condition_variable>
@@ -16,8 +16,10 @@ namespace blender {
 /* Implemented in wm_files.cc. */
 bool WM_apple_ios_document_open(bContext *C, const char *filepath, bool template_document);
 bool WM_apple_ios_document_write(bContext *C, const char *filepath, bool preview);
-std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview,
-                                               std::string &attribution);
+std::string WM_apple_ios_document_template_write(bContext *C,
+                                                 const char *filepath,
+                                                 const char *preview,
+                                                 std::string &attribution);
 }  // namespace blender
 
 /**
@@ -49,7 +51,8 @@ static bool engine_wait(std::function<bool(blender::bContext *)> work)
   return wait->success;
 }
 
-@implementation GHOSTIOSBlendDocument {
+@implementation GHOSTIOSBlendDocument
+{
   BOOL _blenderModified;
   BOOL _accessing;
   /** Saving was asked for, rather than UIKit's periodic saving while the document is edited. */
@@ -124,7 +127,8 @@ static bool engine_wait(std::function<bool(blender::bContext *)> work)
     return YES;
   }
   if (outError) {
-    *outError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadCorruptFileError
+    *outError = [NSError errorWithDomain:NSCocoaErrorDomain
+                                    code:NSFileReadCorruptFileError
                                 userInfo:nil];
   }
   return NO;
@@ -137,10 +141,10 @@ static bool engine_wait(std::function<bool(blender::bContext *)> work)
 }
 
 - (BOOL)writeContents:(id)contents
-                   toURL:(NSURL *)url
-        forSaveOperation:(UIDocumentSaveOperation)saveOperation
-     originalContentsURL:(NSURL *)originalContentsURL
-                   error:(NSError **)outError
+                  toURL:(NSURL *)url
+       forSaveOperation:(UIDocumentSaveOperation)saveOperation
+    originalContentsURL:(NSURL *)originalContentsURL
+                  error:(NSError **)outError
 {
   /* Blender writes the file where UIKit asks, and UIKit moves it into place, so saving needs
    * access to nothing but the document. */
@@ -154,7 +158,8 @@ static bool engine_wait(std::function<bool(blender::bContext *)> work)
     return YES;
   }
   if (outError) {
-    *outError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError
+    *outError = [NSError errorWithDomain:NSCocoaErrorDomain
+                                    code:NSFileWriteUnknownError
                                 userInfo:nil];
   }
   return NO;
@@ -179,22 +184,29 @@ static bool engine_wait(std::function<bool(blender::bContext *)> work)
 static NSURL *personalTemplatesURL()
 {
   NSURL *support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory
-                                                       inDomains:NSUserDomainMask].firstObject;
+                                                        inDomains:NSUserDomainMask]
+                       .firstObject;
   return [support URLByAppendingPathComponent:@"BlenderTemplates" isDirectory:YES];
 }
 
 static BOOL templateVersionSupported(id minimum)
 {
-  if (![minimum isKindOfClass:NSArray.class] || [minimum count] != 3) { return NO; }
-  for (id component in minimum) {
-    if (![component isKindOfClass:NSNumber.class] || [component integerValue] < 0) { return NO; }
+  if (![minimum isKindOfClass:NSArray.class] || [minimum count] != 3) {
+    return NO;
   }
-  NSArray *current = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]
-      componentsSeparatedByString:@"."];
+  for (id component in minimum) {
+    if (![component isKindOfClass:NSNumber.class] || [component integerValue] < 0) {
+      return NO;
+    }
+  }
+  NSArray *current = [[NSBundle.mainBundle
+      objectForInfoDictionaryKey:@"CFBundleShortVersionString"] componentsSeparatedByString:@"."];
   for (NSUInteger i = 0; i < 3; i++) {
     const NSInteger available = i < current.count ? [current[i] integerValue] : 0;
     const NSInteger required = [minimum[i] integerValue];
-    if (required != available) { return required < available; }
+    if (required != available) {
+      return required < available;
+    }
   }
   return YES;
 }
@@ -202,53 +214,77 @@ static BOOL templateVersionSupported(id minimum)
 NSArray<NSDictionary *> *GHOST_ios_document_templates()
 {
   NSURL *assets = [NSBundle.mainBundle.resourceURL URLByAppendingPathComponent:@"Assets"];
-  NSArray *versions = [[NSFileManager.defaultManager contentsOfDirectoryAtPath:assets.path error:nil]
+  NSArray *versions = [[NSFileManager.defaultManager contentsOfDirectoryAtPath:assets.path
+                                                                         error:nil]
       sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
   NSMutableArray *folders = [NSMutableArray array];
   for (NSString *version in versions.reverseObjectEnumerator) {
-    [folders addObject:[assets URLByAppendingPathComponent:
-        [version stringByAppendingPathComponent:@"datafiles/templates"]]];
+    [folders addObject:[assets URLByAppendingPathComponent:[version stringByAppendingPathComponent:
+                                                                        @"datafiles/templates"]]];
   }
   NSURL *personal = personalTemplatesURL();
-  for (NSString *name in [[NSFileManager.defaultManager contentsOfDirectoryAtPath:personal.path error:nil]
-                            sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
+  for (NSString *name in [[NSFileManager.defaultManager contentsOfDirectoryAtPath:personal.path
+                                                                            error:nil]
+           sortedArrayUsingSelector:@selector(localizedStandardCompare:)])
+  {
     [folders addObject:[personal URLByAppendingPathComponent:name]];
   }
   NSMutableArray *templates = [NSMutableArray array];
   NSMutableSet *identifiers = [NSMutableSet set];
   for (NSURL *folder in folders) {
-    NSData *data = [NSData dataWithContentsOfURL:[folder URLByAppendingPathComponent:@"manifest.json"]];
-    NSDictionary *manifest = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+    NSData *data = [NSData
+        dataWithContentsOfURL:[folder URLByAppendingPathComponent:@"manifest.json"]];
+    NSDictionary *manifest = data ? [NSJSONSerialization JSONObjectWithData:data
+                                                                    options:0
+                                                                      error:nil] :
+                                    nil;
     if (![manifest isKindOfClass:NSDictionary.class] ||
-        ![manifest[@"version"] isKindOfClass:NSNumber.class] || [manifest[@"version"] integerValue] != 1 ||
-        ![manifest[@"templates"] isKindOfClass:NSArray.class]) { continue; }
+        ![manifest[@"version"] isKindOfClass:NSNumber.class] ||
+        [manifest[@"version"] integerValue] != 1 ||
+        ![manifest[@"templates"] isKindOfClass:NSArray.class])
+    {
+      continue;
+    }
     for (NSDictionary *item in manifest[@"templates"]) {
-      if (![item isKindOfClass:NSDictionary.class]) { continue; }
+      if (![item isKindOfClass:NSDictionary.class]) {
+        continue;
+      }
       NSString *identifier = item[@"id"], *file = item[@"file"], *preview = item[@"preview"];
       if (![identifier isKindOfClass:NSString.class] || !identifier.length ||
-          [identifiers containsObject:identifier] || ![item[@"title"] isKindOfClass:NSString.class] ||
-          ![item[@"title"] length] || !templateVersionSupported(item[@"minimumBlender"]) ||
+          [identifiers containsObject:identifier] ||
+          ![item[@"title"] isKindOfClass:NSString.class] || ![item[@"title"] length] ||
+          !templateVersionSupported(item[@"minimumBlender"]) ||
           ![item[@"presentation"] isKindOfClass:NSDictionary.class] ||
           ![item[@"presentation"][@"timeline"] isKindOfClass:NSNumber.class] ||
           ![file isKindOfClass:NSString.class] || ![file isEqual:file.lastPathComponent] ||
           ![file.pathExtension isEqual:@"blend"] || ![preview isKindOfClass:NSString.class] ||
-          ![preview isEqual:preview.lastPathComponent] || ![preview.pathExtension isEqual:@"png"]) { continue; }
+          ![preview isEqual:preview.lastPathComponent] || ![preview.pathExtension isEqual:@"png"])
+      {
+        continue;
+      }
       NSURL *seed = [folder URLByAppendingPathComponent:file];
       NSURL *image = [folder URLByAppendingPathComponent:preview];
       if (![seed checkResourceIsReachableAndReturnError:nil] ||
-          ![image checkResourceIsReachableAndReturnError:nil]) { continue; }
+          ![image checkResourceIsReachableAndReturnError:nil])
+      {
+        continue;
+      }
       NSMutableDictionary *entry = [[item mutableCopy] autorelease];
       NSDictionary *credit = item[@"attribution"];
       BOOL validCredit = [credit isKindOfClass:NSDictionary.class];
       if (validCredit) {
-        for (NSString *key in @[@"title", @"author", @"license", @"licenseURL", @"sourceURL", @"changes"]) {
+        for (NSString *key in
+             @[ @"title", @"author", @"license", @"licenseURL", @"sourceURL", @"changes" ])
+        {
           if (![credit[key] isKindOfClass:NSString.class] || ![credit[key] length]) {
             validCredit = NO;
             break;
           }
         }
       }
-      if (!validCredit) { [entry removeObjectForKey:@"attribution"]; }
+      if (!validCredit) {
+        [entry removeObjectForKey:@"attribution"];
+      }
       entry[@"url"] = seed;
       entry[@"previewURL"] = image;
       entry[@"personal"] = @([folder.URLByDeletingLastPathComponent isEqual:personal]);
@@ -261,31 +297,51 @@ NSArray<NSDictionary *> *GHOST_ios_document_templates()
 
 static BOOL writeTemplateManifest(NSDictionary *entry, NSURL *folder)
 {
-  NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"version": @1, @"templates": @[entry]}
-                                               options:NSJSONWritingPrettyPrinted error:nil];
+  NSData *data = [NSJSONSerialization dataWithJSONObject:@{
+    @"version" : @1,
+    @"templates" : @[ entry ]
+  }
+                                                 options:NSJSONWritingPrettyPrinted
+                                                   error:nil];
   return [data writeToURL:[folder URLByAppendingPathComponent:@"manifest.json"]
-                 options:NSDataWritingAtomic error:nil];
+                  options:NSDataWritingAtomic
+                    error:nil];
 }
 
-void GHOST_ios_template_save(NSString *title, NSDictionary *presentation, void (^completion)(NSString *error))
+void GHOST_ios_template_save(NSString *title,
+                             NSDictionary *presentation,
+                             void (^completion)(NSString *error))
 {
   NSString *identifier = [@"user." stringByAppendingString:NSUUID.UUID.UUIDString];
   NSURL *folder = [[personalTemplatesURL() URLByAppendingPathComponent:identifier] retain];
-  NSDictionary *entry = [@{@"id": identifier, @"title": title, @"file": @"scene.blend",
-      @"preview": @"preview.png", @"minimumBlender": @[@5, @1, @0],
-      @"presentation": @{@"timeline": @([presentation[@"timeline"] boolValue])}} retain];
+  NSDictionary *entry = [@{
+    @"id" : identifier,
+    @"title" : title,
+    @"file" : @"scene.blend",
+    @"preview" : @"preview.png",
+    @"minimumBlender" : @[ @5, @1, @0 ],
+    @"presentation" : @{@"timeline" : @([presentation[@"timeline"] boolValue])}
+  } retain];
   void (^done)(NSString *) = [completion copy];
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-    struct Result { std::mutex mutex; std::string error = "Could not save the template."; std::string attribution; };
+    struct Result {
+      std::mutex mutex;
+      std::string error = "Could not save the template.";
+      std::string attribution;
+    };
     auto result = std::make_shared<Result>();
     const std::string path = [[folder URLByAppendingPathComponent:@"scene.blend"] path].UTF8String;
-    const std::string preview = [[folder URLByAppendingPathComponent:@"preview.png"] path].UTF8String;
+    const std::string preview =
+        [[folder URLByAppendingPathComponent:@"preview.png"] path].UTF8String;
     BOOL success = [NSFileManager.defaultManager createDirectoryAtURL:folder
-        withIntermediateDirectories:YES attributes:nil error:nil];
+                                          withIntermediateDirectories:YES
+                                                           attributes:nil
+                                                                error:nil];
     if (success) {
       success = engine_wait([path, preview, result](blender::bContext *C) {
         std::string credit;
-        std::string error = blender::WM_apple_ios_document_template_write(C, path.c_str(), preview.c_str(), credit);
+        std::string error = blender::WM_apple_ios_document_template_write(
+            C, path.c_str(), preview.c_str(), credit);
         std::lock_guard lock(result->mutex);
         result->error = error;
         result->attribution = credit;
@@ -295,19 +351,30 @@ void GHOST_ios_template_save(NSString *title, NSDictionary *presentation, void (
     if (success) {
       NSMutableDictionary *metadata = [[entry mutableCopy] autorelease];
       std::string credit;
-      { std::lock_guard lock(result->mutex); credit = result->attribution; }
+      {
+        std::lock_guard lock(result->mutex);
+        credit = result->attribution;
+      }
       NSData *data = [NSData dataWithBytes:credit.data() length:credit.size()];
-      NSDictionary *attribution = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+      NSDictionary *attribution = [NSJSONSerialization JSONObjectWithData:data
+                                                                  options:0
+                                                                    error:nil];
       if ([attribution isKindOfClass:NSDictionary.class] && attribution.count) {
         metadata[@"attribution"] = attribution;
       }
       success = writeTemplateManifest(metadata, folder);
     }
     std::string error;
-    { std::lock_guard lock(result->mutex); error = result->error; }
-    NSString *message = success ? nil : error.empty() ? @"Could not save the template." :
-        [NSString stringWithUTF8String:error.c_str()];
-    if (!success) { [NSFileManager.defaultManager removeItemAtURL:folder error:nil]; }
+    {
+      std::lock_guard lock(result->mutex);
+      error = result->error;
+    }
+    NSString *message = success       ? nil :
+                        error.empty() ? @"Could not save the template." :
+                                        [NSString stringWithUTF8String:error.c_str()];
+    if (!success) {
+      [NSFileManager.defaultManager removeItemAtURL:folder error:nil];
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
       done(message);
       [done release];
@@ -320,15 +387,20 @@ void GHOST_ios_template_save(NSString *title, NSDictionary *presentation, void (
 BOOL GHOST_ios_template_manage(NSString *identifier, NSString *action, NSString *title)
 {
   for (NSDictionary *entry in GHOST_ios_document_templates()) {
-    if (![entry[@"id"] isEqual:identifier]) { continue; }
+    if (![entry[@"id"] isEqual:identifier]) {
+      continue;
+    }
     NSURL *folder = [entry[@"url"] URLByDeletingLastPathComponent];
     if ([action isEqual:@"delete"]) {
-      return [entry[@"personal"] boolValue] && [NSFileManager.defaultManager removeItemAtURL:folder error:nil];
+      return [entry[@"personal"] boolValue] && [NSFileManager.defaultManager removeItemAtURL:folder
+                                                                                       error:nil];
     }
     NSMutableDictionary *metadata = [[entry mutableCopy] autorelease];
-    [metadata removeObjectsForKeys:@[@"url", @"previewURL", @"personal"]];
+    [metadata removeObjectsForKeys:@[ @"url", @"previewURL", @"personal" ]];
     if ([action isEqual:@"rename"]) {
-      if (![entry[@"personal"] boolValue] || !title.length) { return NO; }
+      if (![entry[@"personal"] boolValue] || !title.length) {
+        return NO;
+      }
       metadata[@"title"] = title;
       return writeTemplateManifest(metadata, folder);
     }
@@ -338,11 +410,21 @@ BOOL GHOST_ios_template_manage(NSString *identifier, NSString *action, NSString 
       NSFileManager *files = NSFileManager.defaultManager;
       metadata[@"id"] = newID;
       metadata[@"title"] = [entry[@"title"] stringByAppendingString:@" Copy"];
-      BOOL success = [files createDirectoryAtURL:destination withIntermediateDirectories:YES attributes:nil error:nil] &&
-          [files copyItemAtURL:entry[@"url"] toURL:[destination URLByAppendingPathComponent:entry[@"file"]] error:nil] &&
-          [files copyItemAtURL:entry[@"previewURL"] toURL:[destination URLByAppendingPathComponent:entry[@"preview"]] error:nil] &&
-          writeTemplateManifest(metadata, destination);
-      if (!success) { [files removeItemAtURL:destination error:nil]; }
+      BOOL success = [files createDirectoryAtURL:destination
+                         withIntermediateDirectories:YES
+                                          attributes:nil
+                                               error:nil] &&
+                     [files copyItemAtURL:entry[@"url"]
+                                    toURL:[destination URLByAppendingPathComponent:entry[@"file"]]
+                                    error:nil] &&
+                     [files
+                         copyItemAtURL:entry[@"previewURL"]
+                                 toURL:[destination URLByAppendingPathComponent:entry[@"preview"]]
+                                 error:nil] &&
+                     writeTemplateManifest(metadata, destination);
+      if (!success) {
+        [files removeItemAtURL:destination error:nil];
+      }
       return success;
     }
   }
@@ -353,19 +435,32 @@ void GHOST_ios_document_create(NSString *identifier, void (^completion)(NSURL *u
 {
   NSDictionary *selected = nil;
   for (NSDictionary *item in GHOST_ios_document_templates()) {
-    if ([item[@"id"] isEqual:identifier.length ? identifier : @"general"]) { selected = item; break; }
+    if ([item[@"id"] isEqual:identifier.length ? identifier : @"general"]) {
+      selected = item;
+      break;
+    }
   }
-  if (!selected) { completion(nil); return; }
+  if (!selected) {
+    completion(nil);
+    return;
+  }
   NSURL *seed = [selected[@"url"] retain];
-  NSString *folder = [[NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString] copy];
-  NSURL *url = [[NSURL fileURLWithPath:[folder stringByAppendingPathComponent:@"Untitled.blend"]] retain];
+  NSString *folder = [[NSTemporaryDirectory()
+      stringByAppendingPathComponent:NSUUID.UUID.UUIDString] copy];
+  NSURL *url = [[NSURL fileURLWithPath:[folder stringByAppendingPathComponent:@"Untitled.blend"]]
+      retain];
   void (^done)(NSURL *) = [[completion copy] autorelease];
   [done retain];
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     NSFileManager *files = NSFileManager.defaultManager;
-    const BOOL success = [files createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil] &&
+    const BOOL success = [files createDirectoryAtPath:folder
+                             withIntermediateDirectories:YES
+                                              attributes:nil
+                                                   error:nil] &&
                          [files copyItemAtURL:seed toURL:url error:nil];
-    if (!success) { [files removeItemAtPath:folder error:nil]; }
+    if (!success) {
+      [files removeItemAtPath:folder error:nil];
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
       done(success ? url : nil);
       [seed release];

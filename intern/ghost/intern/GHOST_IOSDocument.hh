@@ -29,7 +29,9 @@ void GHOST_ios_document_create(NSString *app_template, void (^completion)(NSURL 
 
 /** Bundled, versioned templates with resolved seed and preview URLs. No Blender calls. */
 NSArray<NSDictionary *> *GHOST_ios_document_templates();
-void GHOST_ios_template_save(NSString *title, NSDictionary *presentation, void (^completion)(NSString *error));
+void GHOST_ios_template_save(NSString *title,
+                             NSDictionary *presentation,
+                             void (^completion)(NSString *error));
 /** Personal templates only, except Duplicate which also accepts bundled templates. */
 BOOL GHOST_ios_template_manage(NSString *identifier, NSString *action, NSString *title);
 

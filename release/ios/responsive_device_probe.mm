@@ -4,9 +4,9 @@
 
 /* Test-only dylib, embedded in a temporary signed device build, never shipped. */
 #import <UIKit/UIKit.h>
-#import <objc/runtime.h>
 #include <cstring>
 #include <dlfcn.h>
+#import <objc/runtime.h>
 
 @interface NSObject (BlenderResponsivenessTest)
 - (NSDictionary *)propertyForKey:(NSString *)key;
@@ -21,11 +21,14 @@
 - (void)setBrushRailExpanded:(BOOL)expanded animated:(BOOL)animated;
 - (void)beginNumberScrub:(UITextField *)field;
 - (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation;
-- (void)changeNumberScrub:(UITextField *)field translation:(CGFloat)translation vertical:(CGFloat)vertical;
+- (void)changeNumberScrub:(UITextField *)field
+              translation:(CGFloat)translation
+                 vertical:(CGFloat)vertical;
 - (void)finishNumberScrub:(UITextField *)field;
 - (void)cancelNumberScrub;
 - (void)dismissShading;
-- (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)path leading:(BOOL)leading;
+- (UISwipeActionsConfiguration *)hierarchySwipeActionsAtIndexPath:(NSIndexPath *)path
+                                                          leading:(BOOL)leading;
 - (void)handleToolbarHover:(UIHoverGestureRecognizer *)gesture;
 - (void)handleHover:(UIHoverGestureRecognizer *)gesture;
 - (void)cancelPencilStroke;
@@ -51,7 +54,7 @@
 }
 - (CGPoint)getScaledTouchPoint:(void *)window
 {
-  auto scale = (CGPoint(*)(id, SEL, void *))class_getMethodImplementation(
+  auto scale = (CGPoint (*)(id, SEL, void *))class_getMethodImplementation(
       NSClassFromString(@"GHOSTUIHoverGestureRecognizer"), _cmd);
   return scale(self, _cmd, window);
 }
@@ -62,8 +65,14 @@
 @property(nonatomic) CGPoint probePoint;
 @end
 @implementation BlenderToolbarProbeHover
-- (UIGestureRecognizerState)state { return self.probeState; }
-- (CGPoint)locationInView:(UIView *)view { return self.probePoint; }
+- (UIGestureRecognizerState)state
+{
+  return self.probeState;
+}
+- (CGPoint)locationInView:(UIView *)view
+{
+  return self.probePoint;
+}
 @end
 
 @interface BlenderGizmoProbeHold : UILongPressGestureRecognizer
@@ -71,15 +80,24 @@
 @property(nonatomic) CGPoint probePoint;
 @end
 @implementation BlenderGizmoProbeHold
-- (UIGestureRecognizerState)state { return self.probeState; }
-- (CGPoint)locationInView:(UIView *)view { return self.probePoint; }
+- (UIGestureRecognizerState)state
+{
+  return self.probeState;
+}
+- (CGPoint)locationInView:(UIView *)view
+{
+  return self.probePoint;
+}
 @end
 
 @interface BlenderGizmoProbeHover : UIHoverGestureRecognizer
 @property(nonatomic) UIGestureRecognizerState probeState;
 @end
 @implementation BlenderGizmoProbeHover
-- (UIGestureRecognizerState)state { return self.probeState; }
+- (UIGestureRecognizerState)state
+{
+  return self.probeState;
+}
 @end
 
 @interface BlenderDeviceProbe : NSObject
@@ -161,8 +179,10 @@ static NSArray *rectValues(CGRect rect)
 extern "C" char *blender_device_probe_redo(const char *request_json)
 {
   NSString *json = request_json ? [NSString stringWithUTF8String:request_json] : @"{}";
-  NSDictionary *request = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
-                                                         options:0 error:nil];
+  NSDictionary *request = [NSJSONSerialization
+      JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+                 options:0
+                   error:nil];
   __block char *result = nullptr;
   dispatch_sync(dispatch_get_main_queue(), ^{
     UIViewController *controller = blenderController();
@@ -176,14 +196,17 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
         BlenderGizmoProbeHold *hold = objc_getAssociatedObject(field, @selector(scrubNumber:));
         if (!hold) {
           hold = [BlenderGizmoProbeHold new];
-          objc_setAssociatedObject(field, @selector(scrubNumber:), hold, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+          objc_setAssociatedObject(
+              field, @selector(scrubNumber:), hold, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
           [field addGestureRecognizer:hold];
         }
         NSString *action = request[@"action"];
-        hold.probePoint = CGPointMake([request[@"translation"] doubleValue], [request[@"vertical"] doubleValue]);
-        hold.probeState = [action isEqual:@"scrub_begin"] ? UIGestureRecognizerStateBegan :
+        hold.probePoint = CGPointMake([request[@"translation"] doubleValue],
+                                      [request[@"vertical"] doubleValue]);
+        hold.probeState = [action isEqual:@"scrub_begin"]  ? UIGestureRecognizerStateBegan :
                           [action isEqual:@"scrub_finish"] ? UIGestureRecognizerStateEnded :
-                          [action isEqual:@"scrub_cancel"] ? UIGestureRecognizerStateCancelled : UIGestureRecognizerStateChanged;
+                          [action isEqual:@"scrub_cancel"] ? UIGestureRecognizerStateCancelled :
+                                                             UIGestureRecognizerStateChanged;
         [strip scrubNumber:hold];
       }
     }
@@ -199,7 +222,10 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
       if ([control isKindOfClass:UITextField.class]) {
         UITextField *field = (UITextField *)control;
         field.text = [request[@"value"] isKindOfClass:NSNumber.class] ?
-            [NSNumberFormatter localizedStringFromNumber:request[@"value"] numberStyle:NSNumberFormatterDecimalStyle] : request[@"value"];
+                         [NSNumberFormatter
+                             localizedStringFromNumber:request[@"value"]
+                                           numberStyle:NSNumberFormatterDecimalStyle] :
+                         request[@"value"];
         [strip commitField:field];
       }
       else if ([control isKindOfClass:UISwitch.class]) {
@@ -211,7 +237,9 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
         [control sendActionsForControlEvents:UIControlEventValueChanged];
       }
       else {
-        [strip sendProperty:[strip propertyForKey:request[@"key"]] value:request[@"value"] operation:snapshot[@"id"]];
+        [strip sendProperty:[strip propertyForKey:request[@"key"]]
+                      value:request[@"value"]
+                  operation:snapshot[@"id"]];
       }
     }
     NSMutableDictionary *frames = [NSMutableDictionary dictionary];
@@ -233,32 +261,48 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
       UIWindow *window = controller.view.window;
       UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
       format.scale = 1;
-      UIImage *image = [[[UIGraphicsImageRenderer alloc] initWithBounds:window.bounds format:format]
+      UIImage *image = [[[UIGraphicsImageRenderer alloc] initWithBounds:window.bounds
+                                                                 format:format]
           imageWithActions:^(UIGraphicsImageRendererContext *) {
             [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:NO];
           }];
-      NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-      [UIImagePNGRepresentation(image) writeToFile:[documents stringByAppendingPathComponent:
-          [request[@"capture"] stringByAppendingString:@".png"]] atomically:YES];
+      NSString *documents = NSSearchPathForDirectoriesInDomains(
+                                NSDocumentDirectory, NSUserDomainMask, YES)
+                                .firstObject;
+      [UIImagePNGRepresentation(image)
+          writeToFile:[documents
+                          stringByAppendingPathComponent:[request[@"capture"]
+                                                             stringByAppendingString:@".png"]]
+           atomically:YES];
     }
     CALayer *root = controller.view.layer.presentationLayer ?: controller.view.layer;
     CALayer *pillLayer = pill.layer.presentationLayer ?: pill.layer;
     CALayer *railLayer = rail.layer.presentationLayer ?: rail.layer;
-    NSDictionary *state = @{@"snapshot": snapshot ?: @{}, @"visible": @(!rail.hidden && rail.alpha > 0),
-                            @"pillAlpha": @(pill.alpha), @"railAlpha": @(rail.alpha),
-                            @"pillPresentation": rectValues([pillLayer convertRect:pillLayer.bounds toLayer:root]),
-                            @"railPresentation": rectValues([railLayer convertRect:railLayer.bounds toLayer:root]),
-                            @"togglePresentation": rectValues([(toggle.layer.presentationLayer ?: toggle.layer)
-                                convertRect:toggle.layer.bounds toLayer:root]),
-                            @"railPresentationAlpha": @(railLayer.opacity), @"pillPresentationAlpha": @(pillLayer.opacity),
-                            @"viewWidth": @(controller.view.bounds.size.width),
-                            @"frame": rectValues(rail.frame), @"controls": frames,
-                            @"collapsed": @(!pill.hidden), @"pillTitle": pill.configuration.title ?: @"",
-                            @"pillFrame": rectValues([pill convertRect:pill.bounds toView:controller.view]),
-                            @"actionsFrame": rectValues([actions convertRect:actions.bounds toView:controller.view]),
-                            @"actionsScrollFrame": rectValues([scroll convertRect:scroll.bounds toView:controller.view]),
-                            @"actionsToggleFrame": rectValues([toggle convertRect:toggle.bounds toView:controller.view]),
-                            @"alert": alert ?: @""};
+    NSDictionary *state = @{
+      @"snapshot" : snapshot ?: @{},
+      @"visible" : @(!rail.hidden && rail.alpha > 0),
+      @"pillAlpha" : @(pill.alpha),
+      @"railAlpha" : @(rail.alpha),
+      @"pillPresentation" : rectValues([pillLayer convertRect:pillLayer.bounds toLayer:root]),
+      @"railPresentation" : rectValues([railLayer convertRect:railLayer.bounds toLayer:root]),
+      @"togglePresentation" : rectValues(
+          [(toggle.layer.presentationLayer ?: toggle.layer) convertRect:toggle.layer.bounds
+                                                                toLayer:root]),
+      @"railPresentationAlpha" : @(railLayer.opacity),
+      @"pillPresentationAlpha" : @(pillLayer.opacity),
+      @"viewWidth" : @(controller.view.bounds.size.width),
+      @"frame" : rectValues(rail.frame),
+      @"controls" : frames,
+      @"collapsed" : @(!pill.hidden),
+      @"pillTitle" : pill.configuration.title ?: @"",
+      @"pillFrame" : rectValues([pill convertRect:pill.bounds toView:controller.view]),
+      @"actionsFrame" : rectValues([actions convertRect:actions.bounds toView:controller.view]),
+      @"actionsScrollFrame" : rectValues([scroll convertRect:scroll.bounds
+                                                      toView:controller.view]),
+      @"actionsToggleFrame" : rectValues([toggle convertRect:toggle.bounds
+                                                      toView:controller.view]),
+      @"alert" : alert ?: @""
+    };
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
   });
@@ -267,7 +311,8 @@ extern "C" char *blender_device_probe_redo(const char *request_json)
 
 static UIViewController *blenderPresentedController()
 {
-  UIViewController *presented = blenderController().view.window.rootViewController.presentedViewController;
+  UIViewController *presented =
+      blenderController().view.window.rootViewController.presentedViewController;
   while (presented.presentedViewController) {
     presented = presented.presentedViewController;
   }
@@ -277,8 +322,10 @@ static UIViewController *blenderPresentedController()
 extern "C" char *blender_device_probe_scene_panels(const char *request_json)
 {
   NSString *json = request_json ? [NSString stringWithUTF8String:request_json] : @"{}";
-  NSDictionary *request = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
-                                                         options:0 error:nil];
+  NSDictionary *request = [NSJSONSerialization
+      JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+                 options:0
+                   error:nil];
   __block char *result = nullptr;
   dispatch_sync(dispatch_get_main_queue(), ^{
     id panels = [blenderController() valueForKey:@"_scene_panels"];
@@ -287,16 +334,22 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       UIBarButtonItem *button = [blenderController() valueForKey:@"_viewport_shading_button"];
       [button.target performSelector:button.action withObject:button];
     }
-    if ([request[@"action"] isEqual:@"shading_close"]) { [scenePanels dismissShading]; }
-    if ([request[@"scope"] isEqual:@"shading"]) { panels = [scenePanels valueForKey:@"_shadingPanels"]; }
-    if ([request[@"scope"] isEqual:@"tool"]) { panels = [scenePanels valueForKey:@"_toolPanels"]; }
+    if ([request[@"action"] isEqual:@"shading_close"]) {
+      [scenePanels dismissShading];
+    }
+    if ([request[@"scope"] isEqual:@"shading"]) {
+      panels = [scenePanels valueForKey:@"_shadingPanels"];
+    }
+    if ([request[@"scope"] isEqual:@"tool"]) {
+      panels = [scenePanels valueForKey:@"_toolPanels"];
+    }
     UIBarButtonItem *inspector = [panels valueForKey:@"inspectorButton"];
     UIBarButtonItem *hierarchy = [panels valueForKey:@"hierarchyButton"];
     NSString *action = request[@"action"];
     if ([action isEqual:@"tool_popover"]) {
       UIBarButtonItemGroup *group = [panels valueForKey:@"_toolGroup"];
       [group.representativeItem.target performSelector:group.representativeItem.action
-                                           withObject:group.representativeItem];
+                                            withObject:group.representativeItem];
     }
     if ([action isEqual:@"tool_popover_close"]) {
       [panels performSelector:NSSelectorFromString(@"dismissToolSettings")];
@@ -306,21 +359,34 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       [hierarchyAdd performPrimaryAction];
     }
     if ([action isEqual:@"hierarchy_new_collection"]) {
-      [(UIAction *)hierarchyAdd.menu.children.firstObject performWithSender:hierarchyAdd target:nil];
+      [(UIAction *)hierarchyAdd.menu.children.firstObject performWithSender:hierarchyAdd
+                                                                     target:nil];
     }
     NSMutableArray *swipeActions = [NSMutableArray array];
     if ([action isEqual:@"hierarchy_swipe"]) {
       UICollectionViewDiffableDataSource *source = [panels valueForKey:@"_treeDataSource"];
       for (NSDictionary *node in [[panels valueForKey:@"_nodesByKey"] allValues]) {
-        if (![node[@"id"] isEqual:request[@"id"]]) { continue; }
+        if (![node[@"id"] isEqual:request[@"id"]]) {
+          continue;
+        }
         NSIndexPath *path = [source indexPathForItemIdentifier:node[@"key"]];
-        if (!path) { continue; }
-        UISwipeActionsConfiguration *config = [panels hierarchySwipeActionsAtIndexPath:path leading:[request[@"leading"] boolValue]];
+        if (!path) {
+          continue;
+        }
+        UISwipeActionsConfiguration *config = [panels
+            hierarchySwipeActionsAtIndexPath:path
+                                     leading:[request[@"leading"] boolValue]];
         for (UIContextualAction *item in config.actions) {
-          [swipeActions addObject:@{@"title": item.title, @"destructive": @(item.style == UIContextualActionStyleDestructive),
-                                    @"fullSwipe": @(config.performsFirstActionWithFullSwipe)}];
+          [swipeActions addObject:@{
+            @"title" : item.title,
+            @"destructive" : @(item.style == UIContextualActionStyleDestructive),
+            @"fullSwipe" : @(config.performsFirstActionWithFullSwipe)
+          }];
           if ([item.title isEqual:request[@"title"]]) {
-            item.handler(item, [panels valueForKey:@"_tree"], ^(BOOL success) {});
+            item.handler(item,
+                         [panels valueForKey:@"_tree"],
+                         ^(BOOL success){
+                         });
           }
         }
         break;
@@ -360,10 +426,12 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     }
     if ([action isEqual:@"scroll_section"]) {
       UITableView *form = [panels valueForKey:@"_form"];
-      NSUInteger index = [[panels valueForKey:@"_sectionIdentifiers"] indexOfObject:request[@"id"]];
+      NSUInteger index = [[panels valueForKey:@"_sectionIdentifiers"]
+          indexOfObject:request[@"id"]];
       if (index != NSNotFound && [form numberOfRowsInSection:index] > 0) {
         [form scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:index]
-                   atScrollPosition:UITableViewScrollPositionTop animated:NO];
+                    atScrollPosition:UITableViewScrollPositionTop
+                            animated:NO];
         [form layoutIfNeeded];
       }
     }
@@ -377,9 +445,10 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     if ([action isEqual:@"enum"]) {
       NSDictionary *property = [panels propertyForKey:request[@"key"]];
       UIControl *control = controls[request[@"key"]];
-      NSUInteger index = [property[@"options"] indexOfObjectPassingTest:^BOOL(NSDictionary *option, NSUInteger i, BOOL *stop) {
-        return [option[@"value"] isEqual:request[@"value"]];
-      }];
+      NSUInteger index = [property[@"options"]
+          indexOfObjectPassingTest:^BOOL(NSDictionary *option, NSUInteger i, BOOL *stop) {
+            return [option[@"value"] isEqual:request[@"value"]];
+          }];
       if (index != NSNotFound) {
         if ([control isKindOfClass:UISegmentedControl.class]) {
           ((UISegmentedControl *)control).selectedSegmentIndex = index;
@@ -388,31 +457,46 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
         else if ([control isKindOfClass:UIButton.class]) {
           NSString *title = property[@"options"][index][@"label"];
           for (UIAction *item in ((UIButton *)control).menu.children) {
-            if ([item.title isEqual:title]) { [item performWithSender:control target:nil]; break; }
+            if ([item.title isEqual:title]) {
+              [item performWithSender:control target:nil];
+              break;
+            }
           }
         }
       }
     }
     if ([action hasPrefix:@"scrub_"]) {
       UITextField *field = controls[request[@"key"]];
-      if ([action isEqual:@"scrub_begin"]) { [panels beginNumberScrub:field]; }
+      if ([action isEqual:@"scrub_begin"]) {
+        [panels beginNumberScrub:field];
+      }
       else if ([action isEqual:@"scrub_change"]) {
-        [panels changeNumberScrub:field translation:[request[@"translation"] doubleValue]
+        [panels changeNumberScrub:field
+                      translation:[request[@"translation"] doubleValue]
                          vertical:[request[@"vertical"] doubleValue]];
       }
-      else if ([action isEqual:@"scrub_finish"]) { [panels finishNumberScrub:field]; }
-      else if ([action isEqual:@"scrub_cancel"]) { [panels cancelNumberScrub]; }
+      else if ([action isEqual:@"scrub_finish"]) {
+        [panels finishNumberScrub:field];
+      }
+      else if ([action isEqual:@"scrub_cancel"]) {
+        [panels cancelNumberScrub];
+      }
     }
     if ([action isEqual:@"scroll_property"]) {
       UIView *control = controls[request[@"key"]];
       UITableView *form = [panels valueForKey:@"_form"];
       NSArray *sections = [panels valueForKey:@"_formSections"];
-      for (NSUInteger section = 0; section < MIN(sections.count, (NSUInteger)form.numberOfSections); section++) {
+      for (NSUInteger section = 0;
+           section < MIN(sections.count, (NSUInteger)form.numberOfSections);
+           section++)
+      {
         NSArray *rows = sections[section];
         for (NSUInteger row = 0; row < rows.count; row++) {
-          if ([control isDescendantOfView:rows[row]] && [form numberOfRowsInSection:section] > row) {
+          if ([control isDescendantOfView:rows[row]] && [form numberOfRowsInSection:section] > row)
+          {
             [form scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:section]
-                       atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
+                        atScrollPosition:UITableViewScrollPositionMiddle
+                                animated:NO];
             [form layoutIfNeeded];
           }
         }
@@ -424,8 +508,11 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     if ([action isEqual:@"group_menu"] || [action isEqual:@"group_option"]) {
       NSDictionary *property = [panels propertyForKey:request[@"key"]];
       for (UIAction *item in [panels groupMenuActionsForProperty:property]) {
-        [groupMenu addObject:@{@"id": item.identifier, @"title": item.title,
-                              @"checked": @(item.state == UIMenuElementStateOn)}];
+        [groupMenu addObject:@{
+          @"id" : item.identifier,
+          @"title" : item.title,
+          @"checked" : @(item.state == UIMenuElementStateOn)
+        }];
         if ([action isEqual:@"group_option"] && [item.identifier isEqual:request[@"value"]]) {
           [item performWithSender:nil target:nil];
         }
@@ -434,9 +521,11 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     if ([action isEqual:@"property_menu"] || [action isEqual:@"property_animation"]) {
       NSDictionary *property = [panels propertyForKey:request[@"key"]];
       for (UIAction *item in [panels menuActionsForProperty:property]) {
-        [propertyMenu addObject:@{@"id": item.identifier ?: @"", @"title": item.title}];
+        [propertyMenu addObject:@{@"id" : item.identifier ?: @"", @"title" : item.title}];
         if ([action isEqual:@"property_animation"] &&
-            [item.identifier isEqual:[@"blender.property.animation." stringByAppendingString:request[@"operation"]]]) {
+            [item.identifier isEqual:[@"blender.property.animation."
+                                         stringByAppendingString:request[@"operation"]]])
+        {
           [item performWithSender:controls[request[@"key"]] target:nil];
         }
       }
@@ -444,7 +533,9 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     if ([action isEqual:@"property_lock"] || [action isEqual:@"lock_menu"]) {
       UITextField *field = controls[request[@"key"]];
       if ([field isKindOfClass:UITextField.class]) {
-        UIMenu *menu = [field.delegate textField:field editMenuForCharactersInRanges:@[] suggestedActions:@[]];
+        UIMenu *menu = [field.delegate textField:field
+                   editMenuForCharactersInRanges:@[]
+                                suggestedActions:@[]];
         UIAction *item = (UIAction *)menu.children.firstObject;
         lockMenuTitle = item.title ?: @"";
         if ([action isEqual:@"property_lock"] && [item isKindOfClass:UIAction.class]) {
@@ -462,19 +553,25 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
         [slider sendActionsForControlEvents:UIControlEventValueChanged];
       }
       else {
-        [slider sendActionsForControlEvents:[action isEqual:@"slider_cancel"] ? UIControlEventTouchCancel : UIControlEventTouchUpInside];
+        [slider sendActionsForControlEvents:[action isEqual:@"slider_cancel"] ?
+                                                UIControlEventTouchCancel :
+                                                UIControlEventTouchUpInside];
       }
     }
     if ([action isEqual:@"color_open"]) {
       UIControl *button = controls[request[@"key"]];
       UITableView *form = [panels valueForKey:@"_form"];
       NSArray *sections = [panels valueForKey:@"_formSections"];
-      for (NSUInteger section = 0; section < MIN(sections.count, (NSUInteger)form.numberOfSections); section++) {
+      for (NSUInteger section = 0;
+           section < MIN(sections.count, (NSUInteger)form.numberOfSections);
+           section++)
+      {
         NSArray *rows = sections[section];
         for (NSUInteger row = 0; row < rows.count; row++) {
           if ([button isDescendantOfView:rows[row]]) {
             [form scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:section]
-                       atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
+                        atScrollPosition:UITableViewScrollPositionMiddle
+                                animated:NO];
             [form layoutIfNeeded];
           }
         }
@@ -484,10 +581,13 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     if ([action isEqual:@"color_select"]) {
       UIColorPickerViewController *picker = [panels valueForKey:@"_colorPicker"];
       NSArray *value = request[@"value"];
-      UIColor *color = [UIColor colorWithRed:[value[0] doubleValue] green:[value[1] doubleValue]
-                                       blue:[value[2] doubleValue] alpha:value.count == 4 ? [value[3] doubleValue] : 1];
-      [picker.delegate colorPickerViewController:picker didSelectColor:color
-                                   continuously:[request[@"continuous"] boolValue]];
+      UIColor *color = [UIColor colorWithRed:[value[0] doubleValue]
+                                       green:[value[1] doubleValue]
+                                        blue:[value[2] doubleValue]
+                                       alpha:value.count == 4 ? [value[3] doubleValue] : 1];
+      [picker.delegate colorPickerViewController:picker
+                                  didSelectColor:color
+                                    continuously:[request[@"continuous"] boolValue]];
     }
     if ([action isEqual:@"color_close"]) {
       UIColorPickerViewController *picker = [panels valueForKey:@"_colorPicker"];
@@ -512,19 +612,20 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
       NSDiffableDataSourceSectionSnapshot *outline = [treeData snapshotForSection:@"scene"];
       if ([request[@"value"] boolValue]) {
         treeData.sectionSnapshotHandlers.willExpandItemHandler(key);
-        [outline expandItems:@[key]];
+        [outline expandItems:@[ key ]];
       }
       else {
         treeData.sectionSnapshotHandlers.willCollapseItemHandler(key);
-        [outline collapseItems:@[key]];
+        [outline collapseItems:@[ key ]];
       }
       [treeData applySnapshot:outline toSection:@"scene" animatingDifferences:NO];
     }
     NSArray *rows = [panels valueForKey:@"hierarchyRows"];
     if ([action isEqual:@"select"]) {
-      NSUInteger index = [rows indexOfObjectPassingTest:^BOOL(NSDictionary *row, NSUInteger index, BOOL *stop) {
-        return [row[@"id"] isEqual:request[@"id"]];
-      }];
+      NSUInteger index = [rows
+          indexOfObjectPassingTest:^BOOL(NSDictionary *row, NSUInteger index, BOOL *stop) {
+            return [row[@"id"] isEqual:request[@"id"]];
+          }];
       if (index != NSNotFound) {
         NSIndexPath *path = [NSIndexPath indexPathForItem:index inSection:0];
         if ([request[@"extend"] boolValue]) {
@@ -535,7 +636,9 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
           [tree.delegate collectionView:tree didDeselectItemAtIndexPath:path];
         }
         else {
-          [tree selectItemAtIndexPath:path animated:NO scrollPosition:UICollectionViewScrollPositionNone];
+          [tree selectItemAtIndexPath:path
+                             animated:NO
+                       scrollPosition:UICollectionViewScrollPositionNone];
           [tree.delegate collectionView:tree didSelectItemAtIndexPath:path];
         }
         [tree.delegate collectionViewDidEndMultipleSelectionInteraction:tree];
@@ -547,7 +650,10 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
           continue;
         }
         NSDictionary *descriptor = [control valueForKey:@"descriptor"];
-        NSString *key = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
+        NSString *key = [NSString stringWithFormat:@"%@.%@.%@",
+                                                   descriptor[@"owner"],
+                                                   descriptor[@"property"],
+                                                   descriptor[@"index"] ?: @""];
         if ([key isEqual:request[@"key"]]) {
           UITextField *field = control;
           if ([request[@"value"] isKindOfClass:NSNumber.class]) {
@@ -574,32 +680,45 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     NSMutableDictionary *nativeMenus = [NSMutableDictionary dictionary];
     for (NSString *key in [panels valueForKey:@"_sliders"]) {
       UISlider *slider = [panels valueForKey:@"_sliders"][key];
-      sliderValues[key] = @{@"value": @(slider.value), @"enabled": @(slider.enabled)};
+      sliderValues[key] = @{@"value" : @(slider.value), @"enabled" : @(slider.enabled)};
     }
     for (NSString *key in controls) {
       id control = controls[key];
       if ([control isKindOfClass:UIButton.class] && ((UIButton *)control).menu) {
         UIButton *button = control;
-        nativeMenus[key] = @{@"primary": @(button.showsMenuAsPrimaryAction),
-                             @"icon": @(button.configuration.image != nil),
-                             @"title": button.configuration.title ?: @""};
+        nativeMenus[key] = @{
+          @"primary" : @(button.showsMenuAsPrimaryAction),
+          @"icon" : @(button.configuration.image != nil),
+          @"title" : button.configuration.title ?: @""
+        };
       }
       if ([control isKindOfClass:UISwitch.class]) {
         UISwitch *toggle = control;
         UIWindow *window = toggle.window;
-        CGPoint center = [toggle convertPoint:CGPointMake(CGRectGetMidX(toggle.bounds), CGRectGetMidY(toggle.bounds)) toView:window];
+        CGPoint center = [toggle
+            convertPoint:CGPointMake(CGRectGetMidX(toggle.bounds), CGRectGetMidY(toggle.bounds))
+                  toView:window];
         UIView *hit = [window hitTest:center withEvent:nil];
-        switches[key] = @{@"enabled": @(toggle.enabled), @"on": @(toggle.on),
-                          @"hittable": @(hit && [hit isDescendantOfView:toggle])};
+        switches[key] = @{
+          @"enabled" : @(toggle.enabled),
+          @"on" : @(toggle.on),
+          @"hittable" : @(hit && [hit isDescendantOfView:toggle])
+        };
       }
       if ([control isKindOfClass:UITextField.class]) {
         NSDictionary *descriptor = [control valueForKey:@"descriptor"];
-        NSString *semantic = [NSString stringWithFormat:@"%@.%@.%@", descriptor[@"owner"], descriptor[@"property"], descriptor[@"index"] ?: @""];
+        NSString *semantic = [NSString stringWithFormat:@"%@.%@.%@",
+                                                        descriptor[@"owner"],
+                                                        descriptor[@"property"],
+                                                        descriptor[@"index"] ?: @""];
         values[semantic] = ((UITextField *)control).text ?: @"";
         fieldIdentities[semantic] = [NSString stringWithFormat:@"%p", control];
-        fieldFrames[key] = rectValues([control convertRect:[control bounds] toView:blenderController().view]);
-        scrubs[key] = @{@"active": [control valueForKey:@"scrubbing"],
-                        @"value": [control valueForKey:@"scrubValue"]};
+        fieldFrames[key] = rectValues([control convertRect:[control bounds]
+                                                    toView:blenderController().view]);
+        scrubs[key] = @{
+          @"active" : [control valueForKey:@"scrubbing"],
+          @"value" : [control valueForKey:@"scrubValue"]
+        };
       }
     }
     UIView *left = [panels valueForKey:@"_inspector"];
@@ -609,42 +728,65 @@ extern "C" char *blender_device_probe_scene_panels(const char *request_json)
     NSDictionary *nodesByKey = [panels valueForKey:@"_nodesByKey"];
     for (NSIndexPath *path in tree.indexPathsForSelectedItems) {
       NSString *identifier = nodesByKey[[treeData itemIdentifierForIndexPath:path]][@"id"];
-      if (identifier) { [selectedObjects addObject:identifier]; }
+      if (identifier) {
+        [selectedObjects addObject:identifier];
+      }
     }
     UITableView *form = [panels valueForKey:@"_form"];
     NSArray *sectionIDs = [panels valueForKey:@"_sectionIdentifiers"];
     for (NSUInteger i = 0; i < MIN(sectionIDs.count, (NSUInteger)form.numberOfSections); i++) {
       sectionRows[sectionIDs[i]] = @([form numberOfRowsInSection:i]);
     }
-    NSDictionary *snapshot = @{@"inspector": @(inspector.selected), @"hierarchy": @(hierarchy.selected),
-      @"sectionRows": sectionRows, @"fieldIdentities": fieldIdentities, @"fieldFrames": fieldFrames,
-      @"switches": switches,
-      @"scrubs": scrubs,
-      @"swipeActions": swipeActions,
-      @"shadingPresented": @(((UIViewController *)[scenePanels valueForKey:@"_shadingController"]).presentingViewController != nil),
-      @"toolPresented": @(((UIViewController *)[panels valueForKey:@"_toolPopoverController"]).presentingViewController != nil),
-      @"hierarchyClass": NSStringFromClass(tree.class), @"selectedObjects": selectedObjects,
-      @"hierarchyAdd": @{@"primary": @(hierarchyAdd.showsMenuAsPrimaryAction),
-          @"frame": rectValues([hierarchyAdd convertRect:hierarchyAdd.bounds toView:blenderController().view])},
-      @"left": rectValues(left.frame), @"right": rectValues(right.frame), @"fields": values,
-      @"rows": rows ?: @[], @"error": [[panels valueForKey:@"_status"] text] ?: @"",
-      @"sliders": sliderValues,
-      @"nativeMenus": nativeMenus,
-      @"lockMenu": lockMenuTitle,
-      @"propertyMenu": propertyMenu,
-      @"groupMenu": groupMenu,
-      @"groupHeadings": [[panels valueForKey:@"_groupHeadings"] allKeys],
-      @"tabs": [panels valueForKey:@"_tabs"] ?: @[],
-      @"properties": [panels valueForKey:@"_snapshot"][@"inspector"] ?: @{},
-      @"colorPicker": @([[panels valueForKey:@"_colorPicker"] isKindOfClass:UIColorPickerViewController.class]),
-      @"colorPresented": @(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"]).viewIfLoaded.window != nil),
-      @"colorWindowLevel": @(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"]).viewIfLoaded.window.windowLevel),
-      @"colorFrame": rectValues(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"]).viewIfLoaded.frame),
-      @"rootWindowLevel": @(left.window.windowLevel),
-      @"colorAlpha": @([[panels valueForKey:@"_colorPicker"] supportsAlpha]),
-      @"tab": [panels valueForKey:@"_selectedTab"] ?: @"",
-      @"sections": [panels valueForKey:@"_sectionIdentifiers"] ?: @[],
-      @"expanded": [[panels valueForKey:@"_expandedPanels"][[panels valueForKey:@"_selectedTab"] ?: @""] allObjects] ?: @[]};
+    NSDictionary *snapshot = @{
+      @"inspector" : @(inspector.selected),
+      @"hierarchy" : @(hierarchy.selected),
+      @"sectionRows" : sectionRows,
+      @"fieldIdentities" : fieldIdentities,
+      @"fieldFrames" : fieldFrames,
+      @"switches" : switches,
+      @"scrubs" : scrubs,
+      @"swipeActions" : swipeActions,
+      @"shadingPresented" : @(((UIViewController *)[scenePanels valueForKey:@"_shadingController"])
+                                  .presentingViewController != nil),
+      @"toolPresented" : @(((UIViewController *)[panels valueForKey:@"_toolPopoverController"])
+                               .presentingViewController != nil),
+      @"hierarchyClass" : NSStringFromClass(tree.class),
+      @"selectedObjects" : selectedObjects,
+      @"hierarchyAdd" : @{
+        @"primary" : @(hierarchyAdd.showsMenuAsPrimaryAction),
+        @"frame" : rectValues([hierarchyAdd convertRect:hierarchyAdd.bounds
+                                                 toView:blenderController().view])
+      },
+      @"left" : rectValues(left.frame),
+      @"right" : rectValues(right.frame),
+      @"fields" : values,
+      @"rows" : rows ?: @[],
+      @"error" : [[panels valueForKey:@"_status"] text] ?: @"",
+      @"sliders" : sliderValues,
+      @"nativeMenus" : nativeMenus,
+      @"lockMenu" : lockMenuTitle,
+      @"propertyMenu" : propertyMenu,
+      @"groupMenu" : groupMenu,
+      @"groupHeadings" : [[panels valueForKey:@"_groupHeadings"] allKeys],
+      @"tabs" : [panels valueForKey:@"_tabs"] ?: @[],
+      @"properties" : [panels valueForKey:@"_snapshot"][@"inspector"] ?: @{},
+      @"colorPicker" : @(
+          [[panels valueForKey:@"_colorPicker"] isKindOfClass:UIColorPickerViewController.class]),
+      @"colorPresented" : @(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"])
+                                .viewIfLoaded.window != nil),
+      @"colorWindowLevel" : @(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"])
+                                  .viewIfLoaded.window.windowLevel),
+      @"colorFrame" :
+          rectValues(((UIColorPickerViewController *)[panels valueForKey:@"_colorPicker"])
+                         .viewIfLoaded.frame),
+      @"rootWindowLevel" : @(left.window.windowLevel),
+      @"colorAlpha" : @([[panels valueForKey:@"_colorPicker"] supportsAlpha]),
+      @"tab" : [panels valueForKey:@"_selectedTab"] ?: @"",
+      @"sections" : [panels valueForKey:@"_sectionIdentifiers"] ?: @[],
+      @"expanded" :
+              [[panels valueForKey:@"_expandedPanels"][[panels valueForKey:@"_selectedTab"] ?: @""] allObjects] ?:
+          @[]
+    };
     NSData *data = [NSJSONSerialization dataWithJSONObject:snapshot options:0 error:nil];
     result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
   });
@@ -662,15 +804,17 @@ extern "C" char *blender_device_probe_view_gizmo(int action, int item)
     UIView *overlay = [controller valueForKey:@"_overlay_view"];
     if (action == 0 || action == 2) {
       BlenderGizmoProbeHover *hover = [BlenderGizmoProbeHover new];
-      hover.probeState = action == 0 ? UIGestureRecognizerStateBegan : UIGestureRecognizerStateEnded;
+      hover.probeState = action == 0 ? UIGestureRecognizerStateBegan :
+                                       UIGestureRecognizerStateEnded;
       [controller handleViewGizmoHover:hover];
     }
     else if (action == 1 || action == 3 || action == 5) {
       BlenderGizmoProbeHold *hold = [BlenderGizmoProbeHold new];
       hold.probeState = action == 1 ? UIGestureRecognizerStateBegan :
-                        action == 3 ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateChanged;
+                        action == 3 ? UIGestureRecognizerStateEnded :
+                                      UIGestureRecognizerStateChanged;
       hold.probePoint = item >= 0 ? buttons[item].center :
-          [hotspot convertPoint:CGPointMake(56, 56) toView:overlay];
+                                    [hotspot convertPoint:CGPointMake(56, 56) toView:overlay];
       [controller handleViewGizmoHold:hold];
     }
     else if (action == 4) {
@@ -678,8 +822,12 @@ extern "C" char *blender_device_probe_view_gizmo(int action, int item)
     }
     NSMutableArray *frames = [NSMutableArray array];
     for (UIButton *button in buttons) {
-      [frames addObject:@{@"frame": rectValues(button.frame), @"hidden": @(button.hidden),
-                         @"selected": @(button.selected), @"title": button.accessibilityLabel}];
+      [frames addObject:@{
+        @"frame" : rectValues(button.frame),
+        @"hidden" : @(button.hidden),
+        @"selected" : @(button.selected),
+        @"title" : button.accessibilityLabel
+      }];
     }
     NSInteger holdCount = 0;
     for (UIGestureRecognizer *gesture in hotspot.gestureRecognizers) {
@@ -687,16 +835,20 @@ extern "C" char *blender_device_probe_view_gizmo(int action, int item)
         UILongPressGestureRecognizer *hold = (id)gesture;
         if (hold.minimumPressDuration == 0.32 &&
             [hold.allowedTouchTypes containsObject:@(UITouchTypeDirect)] &&
-            [hold.allowedTouchTypes containsObject:@(UITouchTypePencil)]) holdCount++;
+            [hold.allowedTouchTypes containsObject:@(UITouchTypePencil)])
+          holdCount++;
       }
     }
     NSDictionary *state = @{
-      @"visible": [controller valueForKey:@"_view_pie_visible"],
-      @"feedbackAlpha": @(feedback.alpha), @"feedbackScale": @(feedback.transform.a),
-      @"feedbackFrame": rectValues([feedback convertRect:feedback.bounds toView:overlay]),
-      @"hotspot": rectValues(hotspot.frame), @"enabled": @(hotspot.userInteractionEnabled),
-      @"holds": @(holdCount), @"buttons": frames,
-      @"safeArea": rectValues(overlay.safeAreaLayoutGuide.layoutFrame),
+      @"visible" : [controller valueForKey:@"_view_pie_visible"],
+      @"feedbackAlpha" : @(feedback.alpha),
+      @"feedbackScale" : @(feedback.transform.a),
+      @"feedbackFrame" : rectValues([feedback convertRect:feedback.bounds toView:overlay]),
+      @"hotspot" : rectValues(hotspot.frame),
+      @"enabled" : @(hotspot.userInteractionEnabled),
+      @"holds" : @(holdCount),
+      @"buttons" : frames,
+      @"safeArea" : rectValues(overlay.safeAreaLayoutGuide.layoutFrame),
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strndup((const char *)json.bytes, json.length);
@@ -718,14 +870,17 @@ extern "C" char *blender_device_probe_geometry()
       @"screen" : rectValues(window.windowScene.screen.bounds),
       @"window" : rectValues(window.bounds),
       @"viewport" : rectValues([controller.view convertRect:controller.view.bounds toView:window]),
-      @"safeArea" : rectValues([controller.view
-          convertRect:controller.view.safeAreaLayoutGuide.layoutFrame toView:window]),
+      @"safeArea" :
+          rectValues([controller.view convertRect:controller.view.safeAreaLayoutGuide.layoutFrame
+                                           toView:window]),
       @"viewportClass" : NSStringFromClass(controller.view.class),
       @"sdk" : NSBundle.mainBundle.infoDictionary[@"DTSDKName"] ?: @"",
-      @"sceneManifest" : @(NSBundle.mainBundle.infoDictionary[@"UIApplicationSceneManifest"] != nil),
+      @"sceneManifest" :
+          @(NSBundle.mainBundle.infoDictionary[@"UIApplicationSceneManifest"] != nil),
       @"idiom" : @(UIDevice.currentDevice.userInterfaceIdiom),
     } mutableCopy];
-    for (NSString *key in @[ @"_top_bar", @"_tool_rail", @"_action_rail", @"_view_gizmo_hotspot" ]) {
+    for (NSString *key in @[ @"_top_bar", @"_tool_rail", @"_action_rail", @"_view_gizmo_hotspot" ])
+    {
       UIView *view = [controller valueForKey:key];
       if (view) {
         geometry[key] = @{
@@ -745,7 +900,8 @@ extern "C" char *blender_device_probe_geometry()
       }
     }
     geometry[@"leadingItems"] = leading;
-    geometry[@"pinnedTrailingItem"] = item.pinnedTrailingGroup.barButtonItems.firstObject.identifier ?: @"";
+    geometry[@"pinnedTrailingItem"] =
+        item.pinnedTrailingGroup.barButtonItems.firstObject.identifier ?: @"";
     NSData *data = [NSJSONSerialization dataWithJSONObject:geometry options:0 error:nil];
     result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
   });
@@ -775,9 +931,11 @@ extern "C" char *blender_device_probe_toolbar_label(int action, int index)
     }
     else if (action == 2 || action == 3) {
       BlenderToolbarProbeHover *hover = [BlenderToolbarProbeHover new];
-      hover.probeState = action == 2 ? UIGestureRecognizerStateChanged : UIGestureRecognizerStateEnded;
-      hover.probePoint = [button convertPoint:CGPointMake(CGRectGetMidX(button.bounds),
-                                                        CGRectGetMidY(button.bounds)) toView:scroll];
+      hover.probeState = action == 2 ? UIGestureRecognizerStateChanged :
+                                       UIGestureRecognizerStateEnded;
+      hover.probePoint = [button
+          convertPoint:CGPointMake(CGRectGetMidX(button.bounds), CGRectGetMidY(button.bounds))
+                toView:scroll];
       [controller handleToolbarHover:hover];
     }
     UILabel *label = [controller valueForKey:@"_toolbar_label"];
@@ -786,26 +944,35 @@ extern "C" char *blender_device_probe_toolbar_label(int action, int index)
     UIStackView *stack = [controller valueForKey:@"_tool_stack"];
     UIView *selection = nil;
     for (UIView *view in stack.subviews) {
-      if ([view.accessibilityIdentifier isEqual:@"blender.toolbar.selection"]) { selection = view; }
+      if ([view.accessibilityIdentifier isEqual:@"blender.toolbar.selection"]) {
+        selection = view;
+      }
     }
     NSMutableArray *tools = [NSMutableArray array];
     for (UIButton *b in buttons) {
-      [tools addObject:@{@"id": b.accessibilityIdentifier ?: @"", @"name": b.accessibilityLabel ?: @""}];
+      [tools addObject:@{
+        @"id" : b.accessibilityIdentifier ?: @"",
+        @"name" : b.accessibilityLabel ?: @""
+      }];
     }
     NSDictionary *state = @{
-      @"tools": tools, @"active": [controller valueForKey:@"_active_tool_identifier"] ?: @"",
-      @"expanded": [controller valueForKey:@"_toolbar_expanded"],
-      @"docked": [controller valueForKey:@"_tool_rail_docked_left_center"],
-      @"transient": [controller valueForKey:@"_toolbar_label_transient"],
-      @"label": label.text ?: @"", @"alpha": @(bubble.alpha),
-      @"rail": rectValues([rail convertRect:rail.bounds toView:controller.view]),
-      @"bubble": rectValues(bubble.frame), @"viewport": rectValues(controller.view.bounds),
-      @"selection": rectValues(selection.frame),
-      @"selectionPresentation": rectValues(selection.layer.presentationLayer ?
-                                              selection.layer.presentationLayer.frame : selection.frame),
-      @"selectionHidden": @(selection.hidden),
-      @"selectionAnimations": selection.layer.animationKeys ?: @[],
-      @"selectionIdentity": @((uintptr_t)(__bridge void *)selection),
+      @"tools" : tools,
+      @"active" : [controller valueForKey:@"_active_tool_identifier"] ?: @"",
+      @"expanded" : [controller valueForKey:@"_toolbar_expanded"],
+      @"docked" : [controller valueForKey:@"_tool_rail_docked_left_center"],
+      @"transient" : [controller valueForKey:@"_toolbar_label_transient"],
+      @"label" : label.text ?: @"",
+      @"alpha" : @(bubble.alpha),
+      @"rail" : rectValues([rail convertRect:rail.bounds toView:controller.view]),
+      @"bubble" : rectValues(bubble.frame),
+      @"viewport" : rectValues(controller.view.bounds),
+      @"selection" : rectValues(selection.frame),
+      @"selectionPresentation" :
+          rectValues(selection.layer.presentationLayer ? selection.layer.presentationLayer.frame :
+                                                         selection.frame),
+      @"selectionHidden" : @(selection.hidden),
+      @"selectionAnimations" : selection.layer.animationKeys ?: @[],
+      @"selectionIdentity" : @((uintptr_t)(__bridge void *)selection),
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strndup((const char *)json.bytes, json.length);
@@ -862,33 +1029,40 @@ extern "C" char *blender_device_probe_brush_rail(int action, int index)
           CGContextRef context = CGBitmapContextCreate(
               pixel, 1, 1, 8, 4, space, kCGImageAlphaPremultipliedLast);
           const CGFloat w = CGImageGetWidth(cg), h = CGImageGetHeight(cg);
-          CGContextDrawImage(context, i ? CGRectMake(-w / 2, -h / 2, w, h) : CGRectMake(0, 0, w, h),
-                             cg);
+          CGContextDrawImage(
+              context, i ? CGRectMake(-w / 2, -h / 2, w, h) : CGRectMake(0, 0, w, h), cg);
           CGContextRelease(context);
         }
         CGColorSpaceRelease(space);
       }
       [brushes addObject:@{
-        @"id": b.accessibilityIdentifier ?: @"", @"name": b.accessibilityLabel ?: @"",
-        @"visible": @(!b.hidden && b.alpha > 0.05), @"selected": @(b.selected),
-        @"image": @[@(image.size.width), @(image.size.height)],
-        @"cornerAlpha": @(corner[3]), @"centerAlpha": @(center[3]),
-        @"frame": rectValues([b convertRect:b.bounds toView:controller.view]),
+        @"id" : b.accessibilityIdentifier ?: @"",
+        @"name" : b.accessibilityLabel ?: @"",
+        @"visible" : @(!b.hidden && b.alpha > 0.05),
+        @"selected" : @(b.selected),
+        @"image" : @[ @(image.size.width), @(image.size.height) ],
+        @"cornerAlpha" : @(corner[3]),
+        @"centerAlpha" : @(center[3]),
+        @"frame" : rectValues([b convertRect:b.bounds toView:controller.view]),
       }];
     }
     NSDictionary *state = @{
-      @"available": [controller valueForKey:@"_brush_rail_available"],
-      @"hidden": @(rail.hidden), @"alpha": @(rail.alpha),
-      @"active": [controller valueForKey:@"_active_brush_identifier"] ?: @"",
-      @"expanded": [controller valueForKey:@"_brush_rail_expanded"],
-      @"docked": [controller valueForKey:@"_brush_rail_docked_left_center"],
-      @"brushes": brushes,
-      @"rail": rectValues([rail convertRect:rail.bounds toView:controller.view]),
-      @"toolRail": rectValues([tool_rail convertRect:tool_rail.bounds toView:controller.view]),
-      @"viewport": rectValues(controller.view.bounds),
-      @"strip": strip ? @{@"frame": rectValues([strip convertRect:strip.bounds toView:nil]),
-                          @"content": @(strip.contentSize.width),
-                          @"window": @(strip.window.bounds.size.width)} : NSNull.null,
+      @"available" : [controller valueForKey:@"_brush_rail_available"],
+      @"hidden" : @(rail.hidden),
+      @"alpha" : @(rail.alpha),
+      @"active" : [controller valueForKey:@"_active_brush_identifier"] ?: @"",
+      @"expanded" : [controller valueForKey:@"_brush_rail_expanded"],
+      @"docked" : [controller valueForKey:@"_brush_rail_docked_left_center"],
+      @"brushes" : brushes,
+      @"rail" : rectValues([rail convertRect:rail.bounds toView:controller.view]),
+      @"toolRail" : rectValues([tool_rail convertRect:tool_rail.bounds toView:controller.view]),
+      @"viewport" : rectValues(controller.view.bounds),
+      @"strip" : strip ? @{
+        @"frame" : rectValues([strip convertRect:strip.bounds toView:nil]),
+        @"content" : @(strip.contentSize.width),
+        @"window" : @(strip.window.bounds.size.width)
+      } :
+                         NSNull.null,
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strndup((const char *)json.bytes, json.length);
@@ -919,11 +1093,13 @@ static NSDictionary *toolImageColors(UIImage *image)
 {
   unsigned char pixels[64 * 64 * 4] = {};
   CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-  CGContextRef context = CGBitmapContextCreate(pixels, 64, 64, 8, 64 * 4, space,
-                                              kCGImageAlphaPremultipliedLast);
+  CGContextRef context = CGBitmapContextCreate(
+      pixels, 64, 64, 8, 64 * 4, space, kCGImageAlphaPremultipliedLast);
   UIGraphicsPushContext(context);
   /* UIImageView resolves dynamic assets; direct bitmap drawing needs the same resolution. */
-  UIImage *resolved = [image.imageAsset imageWithTraitCollection:UITraitCollection.currentTraitCollection] ?: image;
+  UIImage *resolved =
+      [image.imageAsset imageWithTraitCollection:UITraitCollection.currentTraitCollection] ?:
+                                                                                             image;
   [resolved drawInRect:CGRectMake(0, 0, 64, 64)];
   UIGraphicsPopContext();
   int colored = 0, visible = 0;
@@ -936,8 +1112,12 @@ static NSDictionary *toolImageColors(UIImage *image)
   }
   CGContextRelease(context);
   CGColorSpaceRelease(space);
-  return @{@"original": @(image.renderingMode == UIImageRenderingModeAlwaysOriginal),
-           @"colored": @(colored), @"visible": @(visible), @"sum": @(sum)};
+  return @{
+    @"original" : @(image.renderingMode == UIImageRenderingModeAlwaysOriginal),
+    @"colored" : @(colored),
+    @"visible" : @(visible),
+    @"sum" : @(sum)
+  };
 }
 
 static void toolMenuColors(UIMenu *menu, NSMutableArray *images)
@@ -963,17 +1143,24 @@ extern "C" char *blender_device_probe_tool_colors()
         UIImage *image = button.configuration.image ?: button.currentImage;
         const BOOL templateImage = image.renderingMode == UIImageRenderingModeAlwaysTemplate;
         UIColor *foreground = button.configuration.baseForegroundColor ?: button.tintColor;
-        UIImage *displayed = templateImage ? [image imageWithTintColor:foreground
-                                                        renderingMode:UIImageRenderingModeAlwaysOriginal] : image;
+        UIImage *displayed = templateImage ?
+                                 [image imageWithTintColor:foreground
+                                             renderingMode:UIImageRenderingModeAlwaysOriginal] :
+                                 image;
         NSMutableDictionary *entry = [toolImageColors(displayed) mutableCopy];
         entry[@"original"] = @(image.renderingMode == UIImageRenderingModeAlwaysOriginal);
         entry[@"template"] = @(templateImage);
         entry[@"white"] = @([foreground isEqual:UIColor.whiteColor]);
         NSAttributedString *title = button.titleLabel.attributedText;
         UIColor *textColor = title.length ? [title attribute:NSForegroundColorAttributeName
-                                                    atIndex:0 effectiveRange:nil] : nil;
+                                                       atIndex:0
+                                                effectiveRange:nil] :
+                                            nil;
         CGFloat red = 0, green = 0, blue = 0, alpha = 0;
-        [(textColor ?: button.titleLabel.textColor) getRed:&red green:&green blue:&blue alpha:&alpha];
+        [(textColor ?: button.titleLabel.textColor) getRed:&red
+                                                     green:&green
+                                                      blue:&blue
+                                                     alpha:&alpha];
         entry[@"titleWhite"] = @(red > 0.99 && green > 0.99 && blue > 0.99 && alpha > 0.99);
         entry[@"id"] = button.accessibilityIdentifier ?: @"";
         entry[@"selected"] = @(button.selected);
@@ -1001,15 +1188,16 @@ extern "C" char *blender_device_probe_quick_actions(int taps)
       [toggle sendActionsForControlEvents:UIControlEventTouchUpInside];
     }
     NSDictionary *state = @{
-      @"collapsed": [controller valueForKey:@"_actions_collapsed"],
-      @"title": toggle.configuration.title ?: @"",
-      @"icon": @(toggle.configuration.image != nil),
-      @"hidden": @(scroll.hidden), @"alpha": @(scroll.alpha),
-      @"interactive": @(scroll.userInteractionEnabled),
-      @"accessibilityHidden": @(scroll.accessibilityElementsHidden),
-      @"count": @([[controller valueForKey:@"_action_buttons"] count]),
-      @"toggle": rectValues([toggle convertRect:toggle.bounds toView:controller.view]),
-      @"lane": rectValues([rail convertRect:rail.bounds toView:controller.view]),
+      @"collapsed" : [controller valueForKey:@"_actions_collapsed"],
+      @"title" : toggle.configuration.title ?: @"",
+      @"icon" : @(toggle.configuration.image != nil),
+      @"hidden" : @(scroll.hidden),
+      @"alpha" : @(scroll.alpha),
+      @"interactive" : @(scroll.userInteractionEnabled),
+      @"accessibilityHidden" : @(scroll.accessibilityElementsHidden),
+      @"count" : @([[controller valueForKey:@"_action_buttons"] count]),
+      @"toggle" : rectValues([toggle convertRect:toggle.bounds toView:controller.view]),
+      @"lane" : rectValues([rail convertRect:rail.bounds toView:controller.view]),
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strndup((const char *)json.bytes, json.length);
@@ -1027,7 +1215,8 @@ extern "C" char *blender_device_probe_mesh_select(int index)
     UINavigationItem *item = [controller valueForKey:@"_top_bar_item"];
     if (index >= 0 && index < segments.numberOfSegments) {
       UIButton *driver = [UIButton buttonWithType:UIButtonTypeSystem];
-      [driver addAction:[segments actionForSegmentAtIndex:index] forControlEvents:UIControlEventTouchUpInside];
+      [driver addAction:[segments actionForSegmentAtIndex:index]
+          forControlEvents:UIControlEventTouchUpInside];
       [driver sendActionsForControlEvents:UIControlEventTouchUpInside];
     }
     NSMutableArray *names = [NSMutableArray array];
@@ -1035,13 +1224,17 @@ extern "C" char *blender_device_probe_mesh_select(int index)
       [names addObject:[segments actionForSegmentAtIndex:i].title ?: @""];
     }
     NSDictionary *state = @{
-      @"selected": @(segments.selectedSegmentIndex), @"hidden": @(group.hidden),
-      @"segments": @(segments.numberOfSegments), @"momentary": @(segments.momentary),
-      @"names": names, @"frame": rectValues([segments convertRect:segments.bounds toView:controller.view]),
-      @"nextToMode": @([item.leadingItemGroups indexOfObject:group] > 0 &&
-          [item.leadingItemGroups indexOfObject:group] != NSNotFound &&
-          item.leadingItemGroups[[item.leadingItemGroups indexOfObject:group] - 1].barButtonItems.firstObject ==
-          [controller valueForKey:@"_mode_button"]),
+      @"selected" : @(segments.selectedSegmentIndex),
+      @"hidden" : @(group.hidden),
+      @"segments" : @(segments.numberOfSegments),
+      @"momentary" : @(segments.momentary),
+      @"names" : names,
+      @"frame" : rectValues([segments convertRect:segments.bounds toView:controller.view]),
+      @"nextToMode" :
+          @([item.leadingItemGroups indexOfObject:group] > 0 &&
+            [item.leadingItemGroups indexOfObject:group] != NSNotFound &&
+            item.leadingItemGroups[[item.leadingItemGroups indexOfObject:group] - 1]
+                    .barButtonItems.firstObject == [controller valueForKey:@"_mode_button"]),
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strndup((const char *)json.bytes, json.length);
@@ -1079,9 +1272,11 @@ extern "C" char *blender_device_probe_snapshot()
     snapshot[@"nativeMenus"] = menus;
     NSMutableArray *tools = [NSMutableArray array];
     for (UIButton *tool in [controller valueForKey:@"_toolbar_buttons"]) {
-      [tools addObject:@{@"id": tool.accessibilityIdentifier ?: @"",
-                         @"group": tool.menu.identifier ?: @"",
-                         @"title": tool.accessibilityLabel ?: @""}];
+      [tools addObject:@{
+        @"id" : tool.accessibilityIdentifier ?: @"",
+        @"group" : tool.menu.identifier ?: @"",
+        @"title" : tool.accessibilityLabel ?: @""
+      }];
     }
     snapshot[@"nativeTools"] = tools;
     UIViewController *presented = blenderPresentedController();
@@ -1274,13 +1469,13 @@ extern "C" char *blender_device_probe_menu_result(uint64_t identifier)
 static char dialog_handler_key;
 @interface UIAlertAction (BlenderDialogTest)
 + (instancetype)probeActionWithTitle:(NSString *)title
-                              style:(UIAlertActionStyle)style
-                            handler:(void (^)(UIAlertAction *))handler;
+                               style:(UIAlertActionStyle)style
+                             handler:(void (^)(UIAlertAction *))handler;
 @end
 @implementation UIAlertAction (BlenderDialogTest)
 + (instancetype)probeActionWithTitle:(NSString *)title
-                              style:(UIAlertActionStyle)style
-                            handler:(void (^)(UIAlertAction *))handler
+                               style:(UIAlertActionStyle)style
+                             handler:(void (^)(UIAlertAction *))handler
 {
   UIAlertAction *action = [self probeActionWithTitle:title style:style handler:handler];
   objc_setAssociatedObject(action, &dialog_handler_key, handler, OBJC_ASSOCIATION_COPY_NONATOMIC);
@@ -1295,7 +1490,8 @@ extern "C" void blender_device_probe_dialog_start()
     dispatch_once(&once, ^{
       method_exchangeImplementations(
           class_getClassMethod(UIAlertAction.class, @selector(actionWithTitle:style:handler:)),
-          class_getClassMethod(UIAlertAction.class, @selector(probeActionWithTitle:style:handler:)));
+          class_getClassMethod(UIAlertAction.class,
+                               @selector(probeActionWithTitle:style:handler:)));
     });
   });
 }
@@ -1324,7 +1520,7 @@ extern "C" char *blender_device_probe_dialog_snapshot()
       state[@"message"] = alert.message ?: @"";
       NSMutableArray *actions = [NSMutableArray array];
       for (UIAlertAction *action in alert.actions) {
-        [actions addObject:@{@"title": action.title ?: @"", @"style": @(action.style)}];
+        [actions addObject:@{@"title" : action.title ?: @"", @"style" : @(action.style)}];
       }
       state[@"actions"] = actions;
     }
@@ -1333,8 +1529,10 @@ extern "C" char *blender_device_probe_dialog_snapshot()
     NSMutableArray *toggles = [NSMutableArray array];
     for (UIView *view in views) {
       if ([view isKindOfClass:UISwitch.class]) {
-        [toggles addObject:@{@"title": view.accessibilityLabel ?: @"",
-                            @"selected": @(((UISwitch *)view).on)}];
+        [toggles addObject:@{
+          @"title" : view.accessibilityLabel ?: @"",
+          @"selected" : @(((UISwitch *)view).on)
+        }];
       }
     }
     state[@"toggles"] = toggles;
@@ -1349,7 +1547,9 @@ extern "C" char *blender_device_probe_theme(int style)
   __block char *result = nullptr;
   dispatch_sync(dispatch_get_main_queue(), ^{
     UIWindow *window = blenderController().view.window;
-    if (style >= 0) { window.overrideUserInterfaceStyle = (UIUserInterfaceStyle)style; }
+    if (style >= 0) {
+      window.overrideUserInterfaceStyle = (UIUserInterfaceStyle)style;
+    }
     UITraitCollection *traits = window.traitCollection;
     UIColor *blue = [UIColor.systemBlueColor resolvedColorWithTraitCollection:traits];
     BOOL (^isBlue)(UIColor *) = ^BOOL(UIColor *color) {
@@ -1357,18 +1557,31 @@ extern "C" char *blender_device_probe_theme(int style)
     };
     NSMutableArray *views = [NSMutableArray array];
     dialogViews(window, views);
-    NSMutableArray *switches = [NSMutableArray array], *segments = [NSMutableArray array], *selectedRows = [NSMutableArray array];
+    NSMutableArray *switches = [NSMutableArray array], *segments = [NSMutableArray array],
+                   *selectedRows = [NSMutableArray array];
     for (UIView *view in views) {
-      if ([view isKindOfClass:UISwitch.class]) { [switches addObject:@(isBlue(((UISwitch *)view).onTintColor))]; }
-      if ([view isKindOfClass:UISegmentedControl.class]) { [segments addObject:@(isBlue(((UISegmentedControl *)view).selectedSegmentTintColor))]; }
-      if ([view isKindOfClass:UICollectionViewListCell.class] && ((UICollectionViewListCell *)view).selected) {
-        [selectedRows addObject:@(isBlue(((UICollectionViewListCell *)view).backgroundConfiguration.backgroundColor))];
+      if ([view isKindOfClass:UISwitch.class]) {
+        [switches addObject:@(isBlue(((UISwitch *)view).onTintColor))];
+      }
+      if ([view isKindOfClass:UISegmentedControl.class]) {
+        [segments addObject:@(isBlue(((UISegmentedControl *)view).selectedSegmentTintColor))];
+      }
+      if ([view isKindOfClass:UICollectionViewListCell.class] &&
+          ((UICollectionViewListCell *)view).selected)
+      {
+        [selectedRows addObject:@(isBlue(((UICollectionViewListCell *)view)
+                                             .backgroundConfiguration.backgroundColor))];
       }
     }
     UINavigationBar *bar = [blenderController() valueForKey:@"_top_bar"];
-    NSDictionary *state = @{@"window": @(isBlue(window.tintColor)), @"toolbar": @(isBlue(bar.tintColor)),
-        @"switches": switches, @"segments": segments, @"selectedRows": selectedRows,
-        @"style": @(traits.userInterfaceStyle)};
+    NSDictionary *state = @{
+      @"window" : @(isBlue(window.tintColor)),
+      @"toolbar" : @(isBlue(bar.tintColor)),
+      @"switches" : switches,
+      @"segments" : segments,
+      @"selectedRows" : selectedRows,
+      @"style" : @(traits.userInterfaceStyle)
+    };
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     result = strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
   });
@@ -1398,7 +1611,8 @@ extern "C" bool blender_device_probe_dialog_choose(const char *title)
       dialogViews(controller.view, views);
       for (UIView *view in views) {
         if ([view isKindOfClass:UIButton.class] &&
-            [((UIButton *)view).configuration.title isEqual:name]) {
+            [((UIButton *)view).configuration.title isEqual:name])
+        {
           [(UIButton *)view sendActionsForControlEvents:UIControlEventTouchUpInside];
           found = YES;
           break;

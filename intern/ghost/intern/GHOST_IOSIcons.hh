@@ -17,7 +17,9 @@ static inline UIImage *GHOSTIOSBlenderIcon(NSString *name, BOOL themed)
     return nil;
   }
   NSString *key = name.lowercaseString;
-  if (UIImage *multicolor = [UIImage imageNamed:[@"blender.multicolor." stringByAppendingString:key]]) {
+  if (UIImage *multicolor = [UIImage
+          imageNamed:[@"blender.multicolor." stringByAppendingString:key]])
+  {
     return [multicolor imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
   }
   if (themed) {

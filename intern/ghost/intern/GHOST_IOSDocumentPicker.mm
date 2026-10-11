@@ -54,8 +54,11 @@ extern "C" void GHOST_ios_document_access_restore()
       continue;
     }
     BOOL stale = NO;
-    NSURL *url = [NSURL URLByResolvingBookmarkData:data options:0 relativeToURL:nil
-                              bookmarkDataIsStale:&stale error:nil];
+    NSURL *url = [NSURL URLByResolvingBookmarkData:data
+                                           options:0
+                                     relativeToURL:nil
+                               bookmarkDataIsStale:&stale
+                                             error:nil];
     if (url && [url startAccessingSecurityScopedResource]) {
       document_access[url.path] = url;
     }
@@ -87,7 +90,9 @@ static void documentRememberAccess(NSArray<NSURL *> *urls)
     }
     document_access[url.path] = url;
     NSData *data = [url bookmarkDataWithOptions:NSURLBookmarkCreationMinimalBookmark
-               includingResourceValuesForKeys:nil relativeToURL:nil error:nil];
+                 includingResourceValuesForKeys:nil
+                                  relativeToURL:nil
+                                          error:nil];
     if (data) {
       bookmarks[url.path] = data;
     }
@@ -126,8 +131,10 @@ static NSArray<UTType *> *documentContentTypes(NSString *types, NSString *glob)
   NSMutableArray<UTType *> *result = [NSMutableArray array];
   for (NSString *pattern in [glob componentsSeparatedByString:@";"]) {
     NSString *extension = [pattern hasPrefix:@"*."] ? [pattern substringFromIndex:2] : @"";
-    if (extension.length && [extension rangeOfCharacterFromSet:
-        [NSCharacterSet characterSetWithCharactersInString:@"*?[]/"]].location == NSNotFound)
+    if (extension.length &&
+        [extension
+            rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"*?[]/"]]
+                .location == NSNotFound)
     {
       UTType *type = [UTType typeWithFilenameExtension:extension];
       if (type && ![result containsObject:type]) {
@@ -143,7 +150,7 @@ static NSArray<UTType *> *documentContentTypes(NSString *types, NSString *glob)
       }
     }
   }
-  return result.count ? result : @[UTTypeData];
+  return result.count ? result : @[ UTTypeData ];
 }
 
 static NSString *documentFilename(NSString *value, NSString *extension)
@@ -151,7 +158,7 @@ static NSString *documentFilename(NSString *value, NSString *extension)
   value = [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
   if (!value.length || [value isEqualToString:@"."] || [value isEqualToString:@".."] ||
       [value rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"/:"]]
-          .location != NSNotFound ||
+              .location != NSNotFound ||
       [value rangeOfCharacterFromSet:NSCharacterSet.controlCharacterSet].location != NSNotFound)
   {
     return nil;
@@ -164,8 +171,8 @@ static NSString *documentFilename(NSString *value, NSString *extension)
   return value;
 }
 
-@interface GHOSTIOSDocumentPicker : NSObject <UIDocumentPickerDelegate,
-                                             UIAdaptivePresentationControllerDelegate>
+@interface GHOSTIOSDocumentPicker
+    : NSObject <UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate>
 @property(nonatomic) uint64_t request;
 @property(nonatomic) GHOST_IOSDocumentMode mode;
 @property(nonatomic) GHOST_IOSDocumentCompletion completion;
@@ -239,15 +246,17 @@ static NSString *documentFilename(NSString *value, NSString *extension)
 
 - (void)showPicker
 {
-  NSArray *types = self.mode == GHOST_IOSDocumentMode::Open ? self.types : @[UTTypeFolder];
+  NSArray *types = self.mode == GHOST_IOSDocumentMode::Open ? self.types : @[ UTTypeFolder ];
   UIDocumentPickerViewController *picker = [[[UIDocumentPickerViewController alloc]
-      initForOpeningContentTypes:types asCopy:NO] autorelease];
+      initForOpeningContentTypes:types
+                          asCopy:NO] autorelease];
   picker.delegate = self;
   picker.title = self.title;
   picker.allowsMultipleSelection = self.mode == GHOST_IOSDocumentMode::Open && self.multiple;
   picker.shouldShowFileExtensions = YES;
   NSString *directory = self.mode == GHOST_IOSDocumentMode::Directory ?
-      self.initialPath : self.initialPath.stringByDeletingLastPathComponent;
+                            self.initialPath :
+                            self.initialPath.stringByDeletingLastPathComponent;
   if (directory.length == 0) {
     directory = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)
                     .firstObject;
@@ -259,8 +268,8 @@ static NSString *documentFilename(NSString *value, NSString *extension)
 - (void)filenameChanged:(UITextField *)field
 {
   UIAlertController *alert = (UIAlertController *)self.controller;
-  alert.actions.lastObject.enabled =
-      documentFilename(field.text, self.initialPath.pathExtension) != nil;
+  alert.actions.lastObject.enabled = documentFilename(field.text,
+                                                      self.initialPath.pathExtension) != nil;
 }
 
 - (void)start
@@ -269,8 +278,10 @@ static NSString *documentFilename(NSString *value, NSString *extension)
     [self showPicker];
     return;
   }
-  UIAlertController *alert = [UIAlertController alertControllerWithTitle:self.title message:nil
-      preferredStyle:UIAlertControllerStyleAlert];
+  UIAlertController *alert = [UIAlertController
+      alertControllerWithTitle:self.title
+                       message:nil
+                preferredStyle:UIAlertControllerStyleAlert];
   NSString *initial = self.initialPath.lastPathComponent;
   if (!initial.length) {
     initial = @"Untitled";
@@ -280,23 +291,32 @@ static NSString *documentFilename(NSString *value, NSString *extension)
     field.clearButtonMode = UITextFieldViewModeWhileEditing;
     field.autocorrectionType = UITextAutocorrectionTypeNo;
     field.accessibilityLabel = @"Filename";
-    [field addTarget:self action:@selector(filenameChanged:) forControlEvents:UIControlEventEditingChanged];
+    [field addTarget:self
+                  action:@selector(filenameChanged:)
+        forControlEvents:UIControlEventEditingChanged];
   }];
-  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel
-      handler:^(UIAlertAction *) { [self finish:nil error:nil]; }]];
+  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                            style:UIAlertActionStyleCancel
+                                          handler:^(UIAlertAction *) {
+                                            [self finish:nil error:nil];
+                                          }]];
   __block UIAlertController *nameAlert = alert;
-  [alert addAction:[UIAlertAction actionWithTitle:@"Choose Location" style:UIAlertActionStyleDefault
-      handler:^(UIAlertAction *) {
-        self.filename = documentFilename(nameAlert.textFields.firstObject.text, initial.pathExtension);
-        [nameAlert dismissViewControllerAnimated:YES completion:^{
-          if (self.filename) {
-            [self showPicker];
-          }
-          else {
-            [self start];
-          }
-        }];
-      }]];
+  [alert addAction:[UIAlertAction actionWithTitle:@"Choose Location"
+                                            style:UIAlertActionStyleDefault
+                                          handler:^(UIAlertAction *) {
+                                            self.filename = documentFilename(
+                                                nameAlert.textFields.firstObject.text,
+                                                initial.pathExtension);
+                                            [nameAlert dismissViewControllerAnimated:YES
+                                                                          completion:^{
+                                                                            if (self.filename) {
+                                                                              [self showPicker];
+                                                                            }
+                                                                            else {
+                                                                              [self start];
+                                                                            }
+                                                                          }];
+                                          }]];
   [self present:alert];
   [self filenameChanged:alert.textFields.firstObject];
 }
@@ -382,9 +402,15 @@ static NSString *documentFilename(NSString *value, NSString *extension)
 }
 @end
 
-extern "C" bool GHOST_ios_document_picker_begin(
-    void *window, uint64_t request, GHOST_IOSDocumentMode mode, const char *title, const char *path,
-    const char *types, const char *glob, bool multiple, GHOST_IOSDocumentCompletion completion)
+extern "C" bool GHOST_ios_document_picker_begin(void *window,
+                                                uint64_t request,
+                                                GHOST_IOSDocumentMode mode,
+                                                const char *title,
+                                                const char *path,
+                                                const char *types,
+                                                const char *glob,
+                                                bool multiple,
+                                                GHOST_IOSDocumentCompletion completion)
 {
   if (!window) {
     return false;
@@ -440,11 +466,16 @@ extern "C" void GHOST_ios_document_picker_cancel(uint64_t request)
   }
 }
 
-extern "C" bool GHOST_ios_document_coordinate(const char *path, bool writing,
-    void (*execute)(void *, const char *), void *context, char *error, size_t error_size)
+extern "C" bool GHOST_ios_document_coordinate(const char *path,
+                                              bool writing,
+                                              void (*execute)(void *, const char *),
+                                              void *context,
+                                              char *error,
+                                              size_t error_size)
 {
   NSURL *url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path]];
-  NSFileCoordinator *coordinator = [[[NSFileCoordinator alloc] initWithFilePresenter:nil] autorelease];
+  NSFileCoordinator *coordinator = [[[NSFileCoordinator alloc] initWithFilePresenter:nil]
+      autorelease];
   __block BOOL called = NO;
   NSError *failure = nil;
   void (^access)(NSURL *) = ^(NSURL *coordinatedURL) {
@@ -452,14 +483,17 @@ extern "C" bool GHOST_ios_document_coordinate(const char *path, bool writing,
     execute(context, coordinatedURL.path.UTF8String);
   };
   if (writing) {
-    [coordinator coordinateWritingItemAtURL:url options:NSFileCoordinatorWritingForReplacing
-                                     error:&failure byAccessor:access];
+    [coordinator coordinateWritingItemAtURL:url
+                                    options:NSFileCoordinatorWritingForReplacing
+                                      error:&failure
+                                 byAccessor:access];
   }
   else {
     [coordinator coordinateReadingItemAtURL:url options:0 error:&failure byAccessor:access];
   }
   if (!called) {
-    snprintf(error, error_size, "%s", failure.localizedDescription.UTF8String ?: "File access failed");
+    snprintf(
+        error, error_size, "%s", failure.localizedDescription.UTF8String ?: "File access failed");
   }
   return called;
 }

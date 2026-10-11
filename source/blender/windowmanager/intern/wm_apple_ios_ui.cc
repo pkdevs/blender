@@ -13,7 +13,6 @@
 #include "AS_asset_representation.hh"
 
 #include "BKE_appdir.hh"
-#include "BLT_translation.hh"
 #include "BKE_asset.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
@@ -22,19 +21,20 @@
 #include "BKE_paint.hh"
 #include "BKE_preferences.h"
 #include "BKE_preview_image.hh"
-#include "ED_render.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_wm_runtime.hh"
+#include "BLT_translation.hh"
+#include "ED_render.hh"
 
-#include "DNA_view3d_types.h"
-#include "BLI_time.h"
-#include "BLI_timer.h"
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
 #include "BLI_path_utils.hh"
 #include "BLI_serialize.hh"
+#include "BLI_time.h"
+#include "BLI_timer.h"
+#include "DNA_view3d_types.h"
 #include "GHOST_IOSMessageQueue.hh"
 
 #include "DEG_depsgraph.hh"
@@ -42,17 +42,17 @@
 #include "DNA_asset_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
-#include "DNA_screen_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_windowmanager_types.h"
 #include "DNA_workspace_types.h"
 
+#include "../asset/ED_asset_shelf.hh"
 #include "ED_asset.hh"
 #include "ED_asset_menu_utils.hh"
 #include "ED_object.hh"
-#include "../asset/ED_asset_shelf.hh"
 #include "ED_screen.hh"
 #include "ED_transform.hh"
 #include "ED_view3d.hh"
@@ -64,9 +64,9 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
-#include "UI_resources.hh"
 #include "RNA_enum_types.hh"
 #include "RNA_prototypes.hh"
+#include "UI_resources.hh"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern_run.hh"
@@ -83,8 +83,8 @@
 #include "wm_window.hh"
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-#  include "wm_apple_ios_file.hh"
 #  include "WM_apple_ios.hh"
+#  include "wm_apple_ios_file.hh"
 #endif
 
 #include <algorithm>
@@ -107,7 +107,7 @@ std::string native_properties_query(bContext *C, const std::string &request, boo
 std::string native_operator_redo_query(bContext *C, const std::string &request, bool execute);
 void native_properties_interaction_finish(bContext *C);
 std::string native_properties_menu_query(bContext *C, const std::string &request, bool execute);
-}
+}  // namespace blender::ui
 
 namespace blender {
 void ios_interface_set(bContext *C, bool desktop);
@@ -270,7 +270,6 @@ std::string ios_toolbar_json =
 
 std::string ios_json_escape(const std::string &value);
 
-
 void ios_action_add_key(std::vector<IOSActionItem> &items,
                         const char *title,
                         const char *symbol,
@@ -320,7 +319,6 @@ std::vector<IOSActionItem> ios_action_items_for_tool(bContext *C,
   UNUSED_VARS(mode, active_tool_id);
   return items;
 }
-
 
 ScrArea *ios_find_view3d_area(bScreen *screen)
 {
@@ -382,8 +380,7 @@ struct IOSContextStore {
 
 IOSContextStore ios_context_push_view3d(bContext *C)
 {
-  IOSContextStore store = {
-      CTX_wm_window(C), CTX_wm_screen(C), CTX_wm_area(C), CTX_wm_region(C)};
+  IOSContextStore store = {CTX_wm_window(C), CTX_wm_screen(C), CTX_wm_area(C), CTX_wm_region(C)};
 
   wmWindow *win = ios_active_window(C);
   bScreen *screen = win ? WM_window_get_active_screen(win) : CTX_wm_screen(C);
@@ -463,7 +460,8 @@ void ios_operator_invoke(bContext *C, const char *op_name)
     return;
   }
   if (WM_operator_name_poll(C, op_name)) {
-    WM_operator_name_call(C, op_name, blender::wm::OpCallContext::InvokeRegionWin, nullptr, nullptr);
+    WM_operator_name_call(
+        C, op_name, blender::wm::OpCallContext::InvokeRegionWin, nullptr, nullptr);
   }
 }
 
@@ -472,8 +470,8 @@ void ios_operator_call_with_enum_property(bContext *C,
                                           const char *prop_name,
                                           const char *prop_value)
 {
-  if (op_name == nullptr || prop_name == nullptr || prop_value == nullptr || prop_name[0] == '\0' ||
-      prop_value[0] == '\0')
+  if (op_name == nullptr || prop_name == nullptr || prop_value == nullptr ||
+      prop_name[0] == '\0' || prop_value[0] == '\0')
   {
     ios_operator_call(C, op_name);
     return;
@@ -661,25 +659,38 @@ eSnapMode ios_snap_mode_for_id(const std::string &value)
 const char *ios_orientation_id(const int orientation)
 {
   switch (orientation) {
-    case V3D_ORIENT_GLOBAL: return "global";
-    case V3D_ORIENT_LOCAL: return "local";
-    case V3D_ORIENT_NORMAL: return "normal";
-    case V3D_ORIENT_GIMBAL: return "gimbal";
-    case V3D_ORIENT_VIEW: return "view";
-    case V3D_ORIENT_CURSOR: return "cursor";
-    case V3D_ORIENT_PARENT: return "parent";
-    default: return "custom";
+    case V3D_ORIENT_GLOBAL:
+      return "global";
+    case V3D_ORIENT_LOCAL:
+      return "local";
+    case V3D_ORIENT_NORMAL:
+      return "normal";
+    case V3D_ORIENT_GIMBAL:
+      return "gimbal";
+    case V3D_ORIENT_VIEW:
+      return "view";
+    case V3D_ORIENT_CURSOR:
+      return "cursor";
+    case V3D_ORIENT_PARENT:
+      return "parent";
+    default:
+      return "custom";
   }
 }
 
 const char *ios_pivot_id(const int pivot)
 {
   switch (pivot) {
-    case V3D_AROUND_CENTER_BOUNDS: return "bounds";
-    case V3D_AROUND_CURSOR: return "cursor";
-    case V3D_AROUND_LOCAL_ORIGINS: return "individual";
-    case V3D_AROUND_ACTIVE: return "active";
-    default: return "median";
+    case V3D_AROUND_CENTER_BOUNDS:
+      return "bounds";
+    case V3D_AROUND_CURSOR:
+      return "cursor";
+    case V3D_AROUND_LOCAL_ORIGINS:
+      return "individual";
+    case V3D_AROUND_ACTIVE:
+      return "active";
+    default:
+      return "median";
   }
 }
 
@@ -698,8 +709,9 @@ const char *ios_snap_id(const ToolSettings *settings)
 
 const char *ios_proportional_id(const ToolSettings *settings, const eContextObjectMode mode)
 {
-  const bool enabled = mode == CTX_MODE_OBJECT ? settings->proportional_objects :
-                                               (settings->proportional_edit & PROP_EDIT_USE) != 0;
+  const bool enabled = mode == CTX_MODE_OBJECT ?
+                           settings->proportional_objects :
+                           (settings->proportional_edit & PROP_EDIT_USE) != 0;
   if (!enabled) {
     return "off";
   }
@@ -819,7 +831,9 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   if (command.setting == "native_properties_edit") {
     /* Local controls already show the drag value. Keep expensive full-panel snapshots
      * on their normal cadence while evaluation and viewport redraw run live. */
-    if (!preview) { ios_panels_next_snapshot = {}; }
+    if (!preview) {
+      ios_panels_next_snapshot = {};
+    }
     if (wmWindow *window = CTX_wm_window(C)) {
       for (wmEventHandler &handler : window->runtime->modalhandlers) {
         if (handler.type == WM_HANDLER_TYPE_OP) {
@@ -840,8 +854,10 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   if (command.setting == "native_panels") {
     ios_panels_next_snapshot = {};
     ios_panels_published.clear();
-    ios_panels_visible = (ios_panels_visible & 4) | (command.value == "3" ? 3 : command.value == "2" ? 2 :
-                         command.value == "1" ? 1 : 0);
+    ios_panels_visible = (ios_panels_visible & 4) | (command.value == "3" ? 3 :
+                                                     command.value == "2" ? 2 :
+                                                     command.value == "1" ? 1 :
+                                                                            0);
     return;
   }
 #ifdef WITH_PYTHON
@@ -892,9 +908,9 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     ios_panels_next_snapshot = {};
     const char *imports[] = {"bpy", "bl_ui", nullptr};
     bool blocked = false;
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
+#  if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
     blocked = WM_apple_ios_dialog_active(CTX_wm_window(C));
-#endif
+#  endif
     const std::string expression = "bl_ui.native_panels.apply_json(bpy.context, \"" +
                                    ios_json_escape(command.value) + "\", " +
                                    (blocked ? "True" : "False") + ")";
@@ -907,8 +923,10 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     return;
   }
   if (command.setting == "constraint_axis") {
-    const int axis = command.value == "X" ? 0 : command.value == "Y" ? 1 :
-                    command.value == "Z" ? 2 : -1;
+    const int axis = command.value == "X" ? 0 :
+                     command.value == "Y" ? 1 :
+                     command.value == "Z" ? 2 :
+                                            -1;
     blender::ed::transform::modal_constraint_toggle(
         C, ios_constraint_operator(CTX_wm_window(C)), axis);
     return;
@@ -973,8 +991,8 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   if (command.setting == "timeline_key_select" || command.setting == "timeline_key_move" ||
       command.setting == "timeline_key_delete")
   {
-    /* Select "frames|extend" (frames comma separated), move the selected keys by a delta, or delete
-     * the selected keys. Values are parsed here so nothing but numbers reaches Python. */
+    /* Select "frames|extend" (frames comma separated), move the selected keys by a delta, or
+     * delete the selected keys. Values are parsed here so nothing but numbers reaches Python. */
     std::string expression;
     if (command.setting == "timeline_key_select") {
       const size_t bar = command.value.find('|');
@@ -989,8 +1007,8 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
         begin = comma + 1;
       }
       const bool extend = bar != std::string::npos && command.value.substr(bar + 1) == "1";
-      expression = "bpy.ops.anim.native_key_select(frames=\"" + frames + "\", extend=" +
-                   (extend ? "True" : "False") + ")";
+      expression = "bpy.ops.anim.native_key_select(frames=\"" + frames +
+                   "\", extend=" + (extend ? "True" : "False") + ")";
     }
     else if (command.setting == "timeline_key_move") {
       expression = "bpy.ops.anim.native_key_move(delta=" +
@@ -1024,7 +1042,8 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
       if (scene == nullptr) {
         return;
       }
-      PointerRNA ptr = RNA_pointer_create_discrete(&scene->id, RNA_ToolSettings, scene->toolsettings);
+      PointerRNA ptr = RNA_pointer_create_discrete(
+          &scene->id, RNA_ToolSettings, scene->toolsettings);
       PropertyRNA *prop = RNA_struct_find_property(&ptr, "use_keyframe_insert_auto");
       RNA_property_boolean_set(&ptr, prop, !RNA_property_boolean_get(&ptr, prop));
       RNA_property_update(C, &ptr, prop);
@@ -1042,7 +1061,8 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
       return;
     }
     PointerRNA props = WM_operator_properties_create_ptr(ot);
-    RNA_boolean_set(&props, jump ? "end" : "next", command.value == "end" || command.value == "next_key");
+    RNA_boolean_set(
+        &props, jump ? "end" : "next", command.value == "end" || command.value == "next_key");
     ios_operator_call(C, op_name, &props);
     WM_operator_properties_free(&props);
   }
@@ -1371,9 +1391,8 @@ std::string ios_brushes_build_json(bContext *C, const eContextObjectMode mode)
     }
     const std::string catalog_name = item.catalog.substr(item.catalog.rfind('/') + 1);
     json += "{\"id\":\"" + ios_json_escape(item.key) + "\",\"title\":\"" +
-            ios_json_escape(item.name) + "\",\"catalog\":\"" +
-            ios_json_escape(catalog_name) + "\",\"preview\":\"" +
-            ios_json_escape(item.preview) + "\"}";
+            ios_json_escape(item.name) + "\",\"catalog\":\"" + ios_json_escape(catalog_name) +
+            "\",\"preview\":\"" + ios_json_escape(item.preview) + "\"}";
   }
   json += "]}";
   return json;
@@ -1434,7 +1453,7 @@ bool ios_asset_listed(const asset_system::AssetRepresentation &asset)
   const AssetMetaData &metadata = asset.get_metadata();
   const IDProperty *tree_type = BKE_asset_metadata_idprop_find(&metadata, "type");
   const IDProperty *traits = BKE_asset_metadata_idprop_find(&metadata,
-                                                           "geometry_node_asset_traits_flag");
+                                                            "geometry_node_asset_traits_flag");
   return tree_type && IDP_int_get(tree_type) == NTREE_GEOMETRY && traits &&
          (IDP_int_get(traits) & GEO_NODE_ASSET_MODIFIER);
 }
@@ -1512,8 +1531,8 @@ std::string ios_assets_build_json(bContext *C)
              "\"}";
     return true;
   });
-  return std::string("{\"pending\":") + (previews_missing ? "true" : "false") +
-         ",\"items\":[" + items + "]}";
+  return std::string("{\"pending\":") + (previews_missing ? "true" : "false") + ",\"items\":[" +
+         items + "]}";
 }
 
 void ios_assets_build(bContext *C)
@@ -1659,8 +1678,7 @@ void ios_asset_drag(bContext *C, const IOSAssetDragCommand &command)
     case IOS_ASSET_ADD: {
       asset_system::AssetRepresentation *asset = ios_asset_find(command.key);
       if (!asset || dragging ||
-          (command.phase == IOS_ASSET_ADD &&
-           !ios_asset_add_location(C, asset->get_id_type(), xy)))
+          (command.phase == IOS_ASSET_ADD && !ios_asset_add_location(C, asset->get_id_type(), xy)))
       {
         break;
       }
@@ -1756,10 +1774,10 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
     const char *imports[] = {"bpy", "bl_ui", nullptr};
     char *result = nullptr;
     if (BPY_run_string_as_string(C,
-                                imports,
-                                "bl_ui.space_toolsystem_common.native_toolbar_json(bpy.context)",
-                                nullptr,
-                                &result))
+                                 imports,
+                                 "bl_ui.space_toolsystem_common.native_toolbar_json(bpy.context)",
+                                 nullptr,
+                                 &result))
     {
       tools_json = result;
       MEM_delete(result);
@@ -1812,16 +1830,20 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
         merged.append_str("error", ios_properties_error);
       }
       if (ios_panels_visible & 1) {
-        std::istringstream properties_stream(ui::native_properties_query(C, ios_properties_state, false));
+        std::istringstream properties_stream(
+            ui::native_properties_query(C, ios_properties_state, false));
         auto properties = JsonFormatter().deserialize(properties_stream);
         if (properties) {
           merged.append("inspector", std::move(properties));
         }
       }
       if (ios_panels_visible & 4) {
-        std::istringstream shading_stream(ui::native_properties_query(C, ios_shading_state, false));
+        std::istringstream shading_stream(
+            ui::native_properties_query(C, ios_shading_state, false));
         auto shading = JsonFormatter().deserialize(shading_stream);
-        if (shading) { merged.append("shading", std::move(shading)); }
+        if (shading) {
+          merged.append("shading", std::move(shading));
+        }
       }
       std::ostringstream merged_stream;
       JsonFormatter().serialize(merged_stream, merged);
@@ -1834,13 +1856,14 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
     }
   }
 #endif
-  const std::vector<IOSActionItem> actions = has_view3d_context ?
-                                                ios_action_items_for_tool(C, mode, active_tool_id) :
-                                                std::vector<IOSActionItem>();
+  const std::vector<IOSActionItem> actions = has_view3d_context ? ios_action_items_for_tool(
+                                                                      C, mode, active_tool_id) :
+                                                                  std::vector<IOSActionItem>();
   const bool can_undo = has_view3d_context && ios_undo_available(C);
   const std::string settings_json = ios_transform_settings_json(scene, mode);
-  const std::string tool_settings_json = has_view3d_context ?
-      ui::native_properties_query(C, "{\"tab\":\"TOOL\"}", false) : "{}";
+  const std::string tool_settings_json = has_view3d_context ? ui::native_properties_query(
+                                                                  C, "{\"tab\":\"TOOL\"}", false) :
+                                                              "{}";
   std::string navigation_json = "null";
   if (has_view3d_context) {
     const wmWindow *win = CTX_wm_window(C);
@@ -1857,7 +1880,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
       navigation_json = "[" +
                         std::to_string((region->winrct.xmin + visible.xmax - inset) / width) +
                         "," +
-                        std::to_string(1.0f - (region->winrct.ymin + visible.ymin + inset) / height) +
+                        std::to_string(1.0f -
+                                       (region->winrct.ymin + visible.ymin + inset) / height) +
                         "," + std::to_string(radius / width) + "]";
     }
   }
@@ -2069,9 +2093,7 @@ void WM_apple_ios_starter_library_ensure()
 
 extern "C" void WM_apple_ios_ui_command_enqueue(int command)
 {
-  if (command < int(IOSUICommand::SetModeObject) ||
-      command > int(IOSUICommand::ViewBottom))
-  {
+  if (command < int(IOSUICommand::SetModeObject) || command > int(IOSUICommand::ViewBottom)) {
     return;
   }
 
@@ -2113,8 +2135,8 @@ extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name
 }
 
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
-                                                       const char *prop_name,
-                                                       const char *prop_value)
+                                                      const char *prop_name,
+                                                      const char *prop_value)
 {
   if (op_name == nullptr || op_name[0] == '\0') {
     return;
@@ -2335,7 +2357,9 @@ void ios_interface_set(bContext *C, const bool desktop)
   wmWindow *win = CTX_wm_window(C);
   bScreen *screen = CTX_wm_screen(C);
   ScrArea *area = CTX_wm_area(C);
-  if (desktop && win != nullptr && screen != nullptr && area != nullptr && screen->state == SCREENFULL) {
+  if (desktop && win != nullptr && screen != nullptr && area != nullptr &&
+      screen->state == SCREENFULL)
+  {
     /* Leave the full-screen 3D View for the screen's editors, headers and toolbars. */
     ED_screen_state_toggle(C, win, area, SCREENFULL);
     area = ios_find_view3d_area(WM_window_get_active_screen(win));
@@ -2363,7 +2387,8 @@ static wmOperatorStatus ios_interface_toggle_exec(bContext *C, wmOperator * /*op
 
 static std::string ios_interface_toggle_get_name(wmOperatorType * /*ot*/, PointerRNA * /*ptr*/)
 {
-  return ios_desktop_ui ? IFACE_("Return to iPad Interface") : IFACE_("Switch to Desktop Interface");
+  return ios_desktop_ui ? IFACE_("Return to iPad Interface") :
+                          IFACE_("Switch to Desktop Interface");
 }
 
 void WM_OT_apple_ios_interface_toggle(wmOperatorType *ot)
@@ -2441,9 +2466,9 @@ extern "C" uint64_t WM_apple_ios_ui_menu_request(const char *route, bool execute
 }
 
 extern "C" uint64_t WM_apple_ios_ui_menu_at_position_request(const char *route,
-                                                            bool execute,
-                                                            int x,
-                                                            int y)
+                                                             bool execute,
+                                                             int x,
+                                                             int y)
 {
   const uint64_t identifier = ++ios_menu_next_identifier;
   ios_ui_messages.push(IOSMenuRequest{identifier, route ? route : "{}", execute, true, x, y});
@@ -2569,10 +2594,11 @@ static void ios_ui_dispatch(bContext *C, IOSUIMessage &message)
   const auto *setting = std::get_if<IOSSettingCommand>(&message);
   const auto *menu = std::get_if<IOSMenuRequest>(&message);
   if ((!menu || menu->execute) && (!setting || (setting->setting != "native_properties_edit" &&
-                   setting->setting != "native_properties_state" &&
-                   setting->setting != "native_shading_state" &&
-                   setting->setting != "native_panels" &&
-                   setting->setting != "native_shading_visible"))) {
+                                                setting->setting != "native_properties_state" &&
+                                                setting->setting != "native_shading_state" &&
+                                                setting->setting != "native_panels" &&
+                                                setting->setting != "native_shading_visible")))
+  {
     const IOSContextStore context_store = ios_context_push_view3d(C);
     ui::native_properties_interaction_finish(C);
     ios_context_pop(C, context_store);
@@ -2714,7 +2740,8 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
       return true;
     }
     if (!a || !b || a->setting != b->setting ||
-        (a->setting != "native_properties_edit" && a->setting != "native_redo_edit")) {
+        (a->setting != "native_properties_edit" && a->setting != "native_redo_edit"))
+    {
       return false;
     }
     std::istringstream a_stream(a->value), b_stream(b->value);
@@ -2766,11 +2793,12 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     }
     /* Dragging a material or a modifier, the object it would drop on is highlighted as Pencil
      * hover highlights it. */
-    const wmDrag *drag = window ? static_cast<const wmDrag *>(
-                                      CTX_wm_manager(C)->runtime->drags.first) :
-                                  nullptr;
+    const wmDrag *drag = window ?
+                             static_cast<const wmDrag *>(CTX_wm_manager(C)->runtime->drags.first) :
+                             nullptr;
     const bool drag_to_object = drag && region &&
-                                (WM_drag_is_ID_type(drag, ID_MA) || WM_drag_is_ID_type(drag, ID_NT));
+                                (WM_drag_is_ID_type(drag, ID_MA) ||
+                                 WM_drag_is_ID_type(drag, ID_NT));
     if (drag_to_object) {
       active = true;
       mval[0] = ios_asset_drag_xy.x - region->winrct.xmin;
@@ -2783,7 +2811,8 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     std::string hover = "{\"object\":" + std::to_string(hit.object_uid) +
                         ",\"kind\":" + std::to_string(hit.kind) +
                         ",\"index\":" + std::to_string(hit.index) +
-                        ",\"cursorVisible\":" + (ios_hover_request.active ? "true" : "false") + "}";
+                        ",\"cursorVisible\":" + (ios_hover_request.active ? "true" : "false") +
+                        "}";
     if (hover != hover_published) {
       hover_published = hover;
       ios_hover_snapshot.publish(std::move(hover));

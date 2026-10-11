@@ -17,7 +17,8 @@ static const double kMinimumVisible = 0.5;
 - (void)setFinished:(NSInteger)finished total:(NSInteger)total;
 @end
 
-@implementation GHOSTIOSCompileIndicator {
+@implementation GHOSTIOSCompileIndicator
+{
   UIVisualEffectView *_pill;
   UIView *_content;
   NSTimer *_timer;
@@ -28,8 +29,7 @@ static const double kMinimumVisible = 0.5;
 - (instancetype)initWithOverlay:(UIView *)overlay below:(UIView *)anchor
 {
   if ((self = [super init])) {
-    _pill = [[UIVisualEffectView alloc]
-        initWithEffect:GHOSTIOSGlassEffect(NO, NO)];
+    _pill = [[UIVisualEffectView alloc] initWithEffect:GHOSTIOSGlassEffect(NO, NO)];
     _pill.userInteractionEnabled = NO;
     _pill.layer.cornerRadius = 16;
     _pill.layer.cornerCurve = kCACornerCurveContinuous;
@@ -63,7 +63,9 @@ static const double kMinimumVisible = 0.5;
     __block GHOSTIOSCompileIndicator *owner = self;
     _timer = [[NSTimer timerWithTimeInterval:0.1
                                      repeats:YES
-                                       block:^(NSTimer *) { [owner update]; }] retain];
+                                       block:^(NSTimer *) {
+                                         [owner update];
+                                       }] retain];
     [NSRunLoop.mainRunLoop addTimer:_timer forMode:NSRunLoopCommonModes];
   }
   return self;

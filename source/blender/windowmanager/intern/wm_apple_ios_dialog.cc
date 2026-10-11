@@ -120,7 +120,8 @@ bool WM_apple_ios_dialog_begin(bContext *C,
       Request{id, win, key ? key : "", std::move(complete), std::move(cancel)});
   Request *data = request.get();
   requests.emplace(id, std::move(request));
-  WM_event_add_ui_handler(C, &win->runtime->modalhandlers, handle, removed, data, eWM_EventHandlerFlag(0));
+  WM_event_add_ui_handler(
+      C, &win->runtime->modalhandlers, handle, removed, data, eWM_EventHandlerFlag(0));
   if (!GHOST_ios_dialog_begin(win->runtime->ghostwin, id, dialog, completed)) {
     /* Deliver cancellation in a later engine iteration, after invoke returns. */
     completed(id, -1, 0);

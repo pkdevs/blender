@@ -14,14 +14,18 @@ static void complete(uint64_t, const char *const *paths, int count, const char *
 {
   calls++;
   picked.clear();
-  for (int i = 0; i < count; i++) picked.emplace_back(paths[i]);
+  for (int i = 0; i < count; i++)
+    picked.emplace_back(paths[i]);
   pickerError = error ?: "";
 }
 
 @interface PickerHarness : GHOSTIOSDocumentPicker
 @end
 @implementation PickerHarness
-- (void)present:(UIViewController *)controller { self.controller = controller; }
+- (void)present:(UIViewController *)controller
+{
+  self.controller = controller;
+}
 @end
 
 @interface DismissablePicker : UIDocumentPickerViewController
@@ -29,7 +33,8 @@ static void complete(uint64_t, const char *const *paths, int count, const char *
 @implementation DismissablePicker
 - (void)dismissViewControllerAnimated:(BOOL)animated completion:(void (^)(void))completion
 {
-  if (completion) completion();
+  if (completion)
+    completion();
 }
 @end
 
@@ -40,7 +45,7 @@ static PickerHarness *makePicker(GHOST_IOSDocumentMode mode)
   picker.mode = mode;
   picker.title = @"Save As";
   picker.initialPath = @"/folder/Model.blend";
-  picker.types = @[UTTypeData];
+  picker.types = @[ UTTypeData ];
   picker.multiple = YES;
   picker.scopedURLs = [NSMutableArray array];
   picker.completion = complete;
@@ -66,7 +71,7 @@ static void checkRouting(void (^finished)())
   assert([documentFilename(@"  Model  ", @"blend") isEqual:@"Model.blend"]);
   assert([documentFilename(@"Model.BLEND", @"blend") isEqual:@"Model.BLEND"]);
   assert([documentFilename(@"v1.2", @"blend") isEqual:@"v1.2.blend"]);
-  for (NSString *invalid in @[@"", @"  ", @".", @"..", @"../file", @"file/name", @"a:b"]) {
+  for (NSString *invalid in @[ @"", @"  ", @".", @"..", @"../file", @"file/name", @"a:b" ]) {
     assert(documentFilename(invalid, @"blend") == nil);
   }
   NSArray *types = documentContentTypes(@"public.image", @"*.png;*.jpeg;*.png");
@@ -88,19 +93,21 @@ static void checkRouting(void (^finished)())
   assert(calls == 1 && picked.empty() && pickerError.empty());
 
   NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
-  [NSFileManager.defaultManager createDirectoryAtPath:root withIntermediateDirectories:YES
-                                          attributes:nil error:nil];
+  [NSFileManager.defaultManager createDirectoryAtPath:root
+                          withIntermediateDirectories:YES
+                                           attributes:nil
+                                                error:nil];
   NSURL *first = [NSURL fileURLWithPath:[root stringByAppendingPathComponent:@"First.blend"]];
   NSURL *second = [NSURL fileURLWithPath:[root stringByAppendingPathComponent:@"Second.blend"]];
   [@"fixture" writeToURL:first atomically:YES encoding:NSUTF8StringEncoding error:nil];
   [@"fixture" writeToURL:second atomically:YES encoding:NSUTF8StringEncoding error:nil];
   picker = makePicker(GHOST_IOSDocumentMode::Open);
-  [picker documentPicker:nil didPickDocumentsAtURLs:@[first, second]];
+  [picker documentPicker:nil didPickDocumentsAtURLs:@[ first, second ]];
   assert(calls == 2 && picked.size() == 2 && picked[0] == first.path.UTF8String);
   assert(pickerError.empty());
   picker = makePicker(GHOST_IOSDocumentMode::Open);
-  [picker documentPicker:nil didPickDocumentsAtURLs:
-      @[first, [NSURL fileURLWithPath:@"/other/file.blend"]]];
+  [picker documentPicker:nil
+      didPickDocumentsAtURLs:@[ first, [NSURL fileURLWithPath:@"/other/file.blend"] ]];
   assert(calls == 3 && picked.empty() && !pickerError.empty());
 
   picker = makePicker(GHOST_IOSDocumentMode::Save);
@@ -115,15 +122,16 @@ static void checkRouting(void (^finished)())
   name.textFields.firstObject.text = @"New";
   [picker filenameChanged:name.textFields.firstObject];
   assert(name.actions.lastObject.enabled);
-  assert(calls == 3); // Merely opening Save must not write or commit anything.
+  assert(calls == 3);  // Merely opening Save must not write or commit anything.
   picker.filename = @"New.blend";
   [picker showPicker];
   controller = (id)picker.controller;
   assert([controller isKindOfClass:UIDocumentPickerViewController.class]);
   assert(!controller.allowsMultipleSelection);
   DismissablePicker *dismissable = [[[DismissablePicker alloc]
-      initForOpeningContentTypes:@[UTTypeFolder] asCopy:NO] autorelease];
-  [picker documentPicker:dismissable didPickDocumentsAtURLs:@[[NSURL fileURLWithPath:root]]];
+      initForOpeningContentTypes:@[ UTTypeFolder ]
+                          asCopy:NO] autorelease];
+  [picker documentPicker:dismissable didPickDocumentsAtURLs:@[ [NSURL fileURLWithPath:root] ]];
   waitUntil(
       ^BOOL {
         return calls == 4;
@@ -204,8 +212,9 @@ static void checkRouting(void (^finished)())
 @interface FilesTestScene : UIResponder <UIWindowSceneDelegate>
 @end
 @implementation FilesTestScene
-- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session
-      options:(UISceneConnectionOptions *)options
+- (void)scene:(UIScene *)scene
+    willConnectToSession:(UISceneSession *)session
+                 options:(UISceneConnectionOptions *)options
 {
   testWindow = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
   testWindow.rootViewController = [[[UIViewController alloc] init] autorelease];
@@ -254,5 +263,7 @@ static void checkRouting(void (^finished)())
 @end
 int main(int argc, char **argv)
 {
-  @autoreleasepool { return UIApplicationMain(argc, argv, nil, NSStringFromClass(FilesTestDelegate.class)); }
+  @autoreleasepool {
+    return UIApplicationMain(argc, argv, nil, NSStringFromClass(FilesTestDelegate.class));
+  }
 }

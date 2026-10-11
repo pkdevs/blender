@@ -20,8 +20,8 @@ static inline UIVisualEffect *GHOSTIOSGlassEffect(BOOL clear, BOOL interactive)
   (void)interactive;
   return [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterial];
 #else
-  UIGlassEffect *glass = [UIGlassEffect effectWithStyle:clear ? UIGlassEffectStyleClear :
-                                                                UIGlassEffectStyleRegular];
+  UIGlassEffect *glass = [UIGlassEffect
+      effectWithStyle:clear ? UIGlassEffectStyleClear : UIGlassEffectStyleRegular];
   glass.interactive = interactive;
   return glass;
 #endif

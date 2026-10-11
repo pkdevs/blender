@@ -102,12 +102,14 @@ static void testSheet()
                    isKindOfClass:GHOSTIOSSwiftDialogSheet.class];
       },
       ^{
-        GHOSTIOSSwiftDialogSheet *sheet = (id)testWindow.rootViewController.presentedViewController;
+        GHOSTIOSSwiftDialogSheet *sheet =
+            (id)testWindow.rootViewController.presentedViewController;
         assert([sheet.title isEqual:@"Save changes before closing?"]);
-        assert(([sheet.toggles isEqual:@[@"Save 2 modified images", @"Save modified asset catalogs"]]));
-        assert(([sheet.selected isEqual:@[@YES, @NO]]));
-        assert(([sheet.actions isEqual:@[@"Cancel", @"Don't Save", @"Save"]]));
-        assert(([sheet.roles isEqual:@[@1, @2, @0]]) && sheet.preferred == 2);
+        assert(([sheet.toggles
+            isEqual:@[ @"Save 2 modified images", @"Save modified asset catalogs" ]]));
+        assert(([sheet.selected isEqual:@[ @YES, @NO ]]));
+        assert(([sheet.actions isEqual:@[ @"Cancel", @"Don't Save", @"Save" ]]));
+        assert(([sheet.roles isEqual:@[ @1, @2, @0 ]]) && sheet.preferred == 2);
         /* The sheet's options were flipped: only the second is chosen. */
         sheet.choose(2, 2);
         waitUntil(

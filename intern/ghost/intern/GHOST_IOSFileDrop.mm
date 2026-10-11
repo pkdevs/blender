@@ -12,12 +12,18 @@ static NSArray<UTType *> *blenderReadableImageTypes()
   static NSArray<UTType *> *types = nil;
   if (!types) {
     NSMutableArray *list = [NSMutableArray arrayWithArray:@[
-      UTTypePNG, UTTypeJPEG, UTTypeTIFF, UTTypeBMP, UTTypeWebP,
+      UTTypePNG,
+      UTTypeJPEG,
+      UTTypeTIFF,
+      UTTypeBMP,
+      UTTypeWebP,
     ]];
-    for (NSString *identifier in @[@"com.ilm.openexr-image",
-                                   @"public.radiance",
-                                   @"com.truevision.tga-image",
-                                   @"public.jpeg-2000"])
+    for (NSString *identifier in @[
+           @"com.ilm.openexr-image",
+           @"public.radiance",
+           @"com.truevision.tga-image",
+           @"public.jpeg-2000"
+         ])
     {
       if (UTType *type = [UTType typeWithIdentifier:identifier]) {
         [list addObject:type];
@@ -43,12 +49,17 @@ static NSURL *dropFolder()
   }
   NSDateFormatter *format = [[[NSDateFormatter alloc] init] autorelease];
   format.dateFormat = @"yyyy-MM-dd HH.mm.ss";
-  NSString *name = [NSString stringWithFormat:@"%@ %@", [format stringFromDate:NSDate.date],
+  NSString *name = [NSString stringWithFormat:@"%@ %@",
+                                              [format stringFromDate:NSDate.date],
                                               [NSUUID.UUID.UUIDString substringToIndex:8]];
-  NSURL *folder = [[support URLByAppendingPathComponent:@"Dropped Files" isDirectory:YES]
-      URLByAppendingPathComponent:name
-                      isDirectory:YES];
-  if (![files createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:nil]) {
+  NSURL *folder = [[support URLByAppendingPathComponent:@"Dropped Files"
+                                            isDirectory:YES] URLByAppendingPathComponent:name
+                                                                             isDirectory:YES];
+  if (![files createDirectoryAtURL:folder
+          withIntermediateDirectories:YES
+                           attributes:nil
+                                error:nil])
+  {
     return nil;
   }
   return folder;
@@ -68,7 +79,8 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
   return name;
 }
 
-@implementation GHOSTIOSFileDrop {
+@implementation GHOSTIOSFileDrop
+{
   UIDropInteraction *_interaction;
 }
 
@@ -92,12 +104,14 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
   return _interaction;
 }
 
-- (BOOL)dropInteraction:(UIDropInteraction *)interaction canHandleSession:(id<UIDropSession>)session
+- (BOOL)dropInteraction:(UIDropInteraction *)interaction
+       canHandleSession:(id<UIDropSession>)session
 {
   /* Drags that start in Blender (assets) are not files from another app. */
-  return session.localDragSession == nil &&
-         [session hasItemsConformingToTypeIdentifiers:@[UTTypeData.identifier,
-                                                        UTTypeImage.identifier]];
+  return session.localDragSession == nil && [session hasItemsConformingToTypeIdentifiers:@[
+           UTTypeData.identifier,
+           UTTypeImage.identifier
+         ]];
 }
 
 - (UIDropProposal *)dropInteraction:(UIDropInteraction *)interaction
@@ -120,7 +134,10 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
   }
   dispatch_group_t group = dispatch_group_create();
   for (NSUInteger index = 0; index < items.count; index++) {
-    [self copyItem:items[index].itemProvider index:index into:folder group:group
+    [self copyItem:items[index].itemProvider
+             index:index
+              into:folder
+             group:group
           finished:^(NSString *path) {
             if (path) {
               @synchronized(results) {
@@ -164,7 +181,12 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
       for (NSString *identifier in provider.registeredTypeIdentifiers) {
         UTType *type = [UTType typeWithIdentifier:identifier];
         if (type && [type conformsToType:readable]) {
-          [self copyFile:provider type:type suggested:suggested index:index into:folder group:group
+          [self copyFile:provider
+                    type:type
+               suggested:suggested
+                   index:index
+                    into:folder
+                   group:group
                 finished:finished];
           return;
         }
@@ -172,16 +194,17 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
     }
     if ([provider canLoadObjectOfClass:UIImage.class]) {
       dispatch_group_enter(group);
-      [provider loadObjectOfClass:UIImage.class
-                completionHandler:^(id<NSItemProviderReading> object, NSError *) {
-                  NSData *png = [object isKindOfClass:UIImage.class] ?
-                                    UIImagePNGRepresentation((UIImage *)object) :
-                                    nil;
-                  NSString *name = fileName(suggested.stringByDeletingPathExtension, UTTypePNG, index);
-                  NSURL *target = [folder URLByAppendingPathComponent:name];
-                  finished(png && [png writeToURL:target atomically:YES] ? target.path : nil);
-                  dispatch_group_leave(group);
-                }];
+      [provider
+          loadObjectOfClass:UIImage.class
+          completionHandler:^(id<NSItemProviderReading> object, NSError *) {
+            NSData *png = [object isKindOfClass:UIImage.class] ?
+                              UIImagePNGRepresentation((UIImage *)object) :
+                              nil;
+            NSString *name = fileName(suggested.stringByDeletingPathExtension, UTTypePNG, index);
+            NSURL *target = [folder URLByAppendingPathComponent:name];
+            finished(png && [png writeToURL:target atomically:YES] ? target.path : nil);
+            dispatch_group_leave(group);
+          }];
       return;
     }
   }
@@ -190,7 +213,12 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
   for (NSString *identifier in provider.registeredTypeIdentifiers) {
     UTType *type = [UTType typeWithIdentifier:identifier];
     if (type && [type conformsToType:UTTypeData] && ![type conformsToType:UTTypeURL]) {
-      [self copyFile:provider type:type suggested:suggested index:index into:folder group:group
+      [self copyFile:provider
+                type:type
+           suggested:suggested
+               index:index
+                into:folder
+               group:group
             finished:finished];
       return;
     }
@@ -209,19 +237,24 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
   dispatch_group_enter(group);
   [provider loadFileRepresentationForTypeIdentifier:type.identifier
                                   completionHandler:^(NSURL *url, NSError *) {
-    /* The file is deleted when this returns, so copy it now. */
-    NSString *path = nil;
-    if (url) {
-      NSString *name = fileName(url.lastPathComponent.length ? url.lastPathComponent : suggested,
-                                type, index);
-      NSURL *target = [folder URLByAppendingPathComponent:name];
-      if ([NSFileManager.defaultManager copyItemAtURL:url toURL:target error:nil]) {
-        path = target.path;
-      }
-    }
-    finished(path);
-    dispatch_group_leave(group);
-  }];
+                                    /* The file is deleted when this returns, so copy it now. */
+                                    NSString *path = nil;
+                                    if (url) {
+                                      NSString *name = fileName(url.lastPathComponent.length ?
+                                                                    url.lastPathComponent :
+                                                                    suggested,
+                                                                type,
+                                                                index);
+                                      NSURL *target = [folder URLByAppendingPathComponent:name];
+                                      if ([NSFileManager.defaultManager copyItemAtURL:url
+                                                                                toURL:target
+                                                                                error:nil]) {
+                                        path = target.path;
+                                      }
+                                    }
+                                    finished(path);
+                                    dispatch_group_leave(group);
+                                  }];
 }
 
 @end

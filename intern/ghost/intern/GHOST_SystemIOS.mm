@@ -5,9 +5,9 @@
 #include "GHOST_SystemIOS.hh"
 
 #include "GHOST_ContextIOS.hh"
+#import "GHOST_IOSPlatform.hh"
 #include "GHOST_IOSRuntime.hh"
 #include "GHOST_IOSTheme.hh"
-#import "GHOST_IOSPlatform.hh"
 #include "GHOST_WindowIOS.hh"
 #include <algorithm>
 #include <atomic>
@@ -58,13 +58,13 @@ extern "C" double WM_apple_ios_engine_idle_seconds(bContext *C);
 void WM_apple_ios_autosave_now(bContext *C);
 }  // namespace blender
 
-#include "GHOST_IOSDocumentPicker.hh"
 #import "GHOST_IOSDocument.hh"
+#include "GHOST_IOSDocumentPicker.hh"
 #import "GHOST_IOSLauncher.hh"
 using blender::C;
-using blender::WM_main_loop_body;
-using blender::WM_apple_ios_ui_flush_commands;
 using blender::WM_apple_ios_engine_idle_seconds;
+using blender::WM_apple_ios_ui_flush_commands;
+using blender::WM_main_loop_body;
 int main_ios_callback(int argc, const char **argv);
 
 static UIWindowScene *g_window_scene = nil;
@@ -94,7 +94,8 @@ static std::atomic<int> shader_compilations_total{0};
 
 static double engine_clock()
 {
-  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch())
+      .count();
 }
 
 extern "C" void GHOST_ios_shader_compilation_progress(int finished, int total)
@@ -133,7 +134,8 @@ void GHOST_ios_mailbox_published()
   }
   dispatch_async(dispatch_get_main_queue(), ^{
     mailbox_notification_pending.store(false);
-    [NSNotificationCenter.defaultCenter postNotificationName:@"BlenderSnapshotsPublished" object:nil];
+    [NSNotificationCenter.defaultCenter postNotificationName:@"BlenderSnapshotsPublished"
+                                                      object:nil];
   });
 }
 
@@ -239,7 +241,8 @@ static void run_engine()
                std::chrono::microseconds(engine_frame_microseconds.load());
     if (continuing) {
       std::unique_lock lock(engine_wait_mutex);
-      engine_condition.wait_for(lock, std::chrono::milliseconds(100), [] { return engine_active.load(); });
+      engine_condition.wait_for(
+          lock, std::chrono::milliseconds(100), [] { return engine_active.load(); });
     }
     @autoreleasepool {
       auto *system = static_cast<GHOST_SystemIOS *>(GHOST_ISystem::getSystem());

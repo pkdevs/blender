@@ -153,17 +153,23 @@ static void dialogPump()
     NSMutableArray *actions = [NSMutableArray array], *roles = [NSMutableArray array];
     for (const GHOST_IOSDialogAction &action : model.actions) {
       [actions addObject:dialogString(action.title)];
-      [roles addObject:@(action.role == GHOST_IOSDialogRole::Cancel ? 1 :
-                         action.role == GHOST_IOSDialogRole::Destructive ? 2 : 0)];
+      [roles addObject:@(action.role == GHOST_IOSDialogRole::Cancel      ? 1 :
+                         action.role == GHOST_IOSDialogRole::Destructive ? 2 :
+                                                                           0)];
     }
     __block GHOSTIOSDialogRequest *owner = self;
-    UIViewController *sheet = [[[sheet_class alloc] initWithTitle:dialogString(model.title)
-        message:dialogString(model.message) toggles:toggles selected:selected actions:actions
-        roles:roles preferred:model.preferred_action
-        choose:^(NSInteger action, uint64_t chosen) {
-          owner.chosenToggles = chosen;
-          [owner finish:int(action)];
-        }] autorelease];
+    UIViewController *sheet = [[[sheet_class alloc]
+        initWithTitle:dialogString(model.title)
+              message:dialogString(model.message)
+              toggles:toggles
+             selected:selected
+              actions:actions
+                roles:roles
+            preferred:model.preferred_action
+               choose:^(NSInteger action, uint64_t chosen) {
+                 owner.chosenToggles = chosen;
+                 [owner finish:int(action)];
+               }] autorelease];
     sheet.modalPresentationStyle = UIModalPresentationFormSheet;
     sheet.preferredContentSize = CGSizeMake(520, 600);
     self.controller = sheet;

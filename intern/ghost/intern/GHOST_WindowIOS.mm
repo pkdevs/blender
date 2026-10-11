@@ -13,16 +13,16 @@
 #include "GHOST_EventCursor.hh"
 #include "GHOST_EventDragnDrop.hh"
 #include "GHOST_EventKey.hh"
-#import "GHOST_IOSPencilMenu.hh"
 #include "GHOST_EventTouch.hh"
 #include "GHOST_EventTrackpad.hh"
+#import "GHOST_IOSPencilMenu.hh"
 
 #import <GameController/GameController.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
-#import <objc/runtime.h>
 #import <UIKit/UIPencilInteraction.h>
+#import <objc/runtime.h>
 
 #import "GHOST_IOSPlatform.hh"
 
@@ -43,29 +43,29 @@
 #endif
 
 extern "C" void WM_apple_ios_ui_command_enqueue(int command);
-#import "GHOST_IOSScenePanels.hh"
-#import "GHOST_IOSIcons.hh"
-#import "GHOST_IOSRedoStrip.hh"
-#import "GHOST_IOSTimeline.hh"
 #import "GHOST_IOSAssets.hh"
-#import "GHOST_IOSFileDrop.hh"
 #import "GHOST_IOSCompileIndicator.hh"
-#import "GHOST_IOSRender.hh"
 #import "GHOST_IOSDocument.hh"
+#import "GHOST_IOSFileDrop.hh"
+#import "GHOST_IOSIcons.hh"
 #import "GHOST_IOSLauncher.hh"
+#import "GHOST_IOSRedoStrip.hh"
+#import "GHOST_IOSRender.hh"
+#import "GHOST_IOSScenePanels.hh"
+#import "GHOST_IOSTimeline.hh"
 
 /** Blender's main window, which shows the open document over the launcher. */
 static UIWindow *document_window = nil;
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
 extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
-                                                       const char *prop_name,
-                                                       const char *prop_value);
+                                                      const char *prop_name,
+                                                      const char *prop_value);
 extern "C" uint64_t WM_apple_ios_ui_menu_request(const char *route, bool execute);
 extern "C" uint64_t WM_apple_ios_ui_menu_at_position_request(const char *route,
-                                                            bool execute,
-                                                            int x,
-                                                            int y);
+                                                             bool execute,
+                                                             int x,
+                                                             int y);
 extern "C" char *WM_apple_ios_ui_menu_take_result(uint64_t identifier);
 extern "C" void WM_apple_ios_ui_setting_enqueue(const char *setting, const char *value);
 extern "C" void WM_apple_ios_ui_tool_set_by_id(const char *tool_id);
@@ -124,7 +124,9 @@ enum GHOSTIOSUICommand {
 static UIImage *blenderIOSIcon(NSString *key, NSString *systemImage)
 {
   const BOOL selected_tool = [key hasPrefix:@"selected.tool."];
-  if (selected_tool) { key = [key substringFromIndex:@"selected.".length]; }
+  if (selected_tool) {
+    key = [key substringFromIndex:@"selected.".length];
+  }
   static NSDictionary *icons = nil;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -170,12 +172,16 @@ static UIImage *blenderIOSBrushImage(NSString *previewPath, CGFloat diameter)
     return cached;
   }
   UIImage *preview = previewPath.length ? [UIImage imageWithContentsOfFile:previewPath] : nil;
-  UIImage *symbol = preview ? nil : [UIImage systemImageNamed:@"paintbrush.pointed.fill"
-      withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:diameter * 0.42]];
+  UIImage *symbol = preview ?
+                        nil :
+                        [UIImage systemImageNamed:@"paintbrush.pointed.fill"
+                                withConfiguration:[UIImageSymbolConfiguration
+                                                      configurationWithPointSize:diameter * 0.42]];
   const CGRect bounds = CGRectMake(0, 0, diameter, diameter);
   UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
-  UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc]
-      initWithSize:bounds.size format:format] autorelease];
+  UIGraphicsImageRenderer *renderer = [[[UIGraphicsImageRenderer alloc] initWithSize:bounds.size
+                                                                              format:format]
+      autorelease];
   UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext * /*context*/) {
     UIBezierPath *circle = [UIBezierPath bezierPathWithOvalInRect:bounds];
     [circle addClip];
@@ -187,8 +193,10 @@ static UIImage *blenderIOSBrushImage(NSString *previewPath, CGFloat diameter)
       const CGSize size = preview.size;
       const CGFloat scale = diameter / MAX(1.0, MIN(size.width, size.height));
       const CGSize fill = CGSizeMake(size.width * scale, size.height * scale);
-      [preview drawInRect:CGRectMake((diameter - fill.width) / 2, (diameter - fill.height) / 2,
-                                     fill.width, fill.height)];
+      [preview drawInRect:CGRectMake((diameter - fill.width) / 2,
+                                     (diameter - fill.height) / 2,
+                                     fill.width,
+                                     fill.height)];
     }
     else {
       [[UIColor colorWithWhite:0.5 alpha:0.28] setFill];
@@ -217,8 +225,8 @@ static UIImage *blenderIOSCommandIcon(NSInteger command, NSString *systemImage)
 }
 
 static UIImage *blenderIOSActionIcon(NSString *opName,
-                                    NSString *propertyName,
-                                    NSString *propertyValue)
+                                     NSString *propertyName,
+                                     NSString *propertyValue)
 {
   NSString *key = [@"operator." stringByAppendingString:opName ?: @""];
   if (propertyName.length > 0 && propertyValue.length > 0) {
@@ -232,11 +240,11 @@ static UIImage *blenderIOSActionIcon(NSString *opName,
   /* Only unambiguous, operator-specific SF fallbacks belong in action shortcuts.
    * Unmapped actions are text-only, never given a generic placeholder. */
   NSDictionary *fallbacks = @{
-    @"ED_OT_undo": @"arrow.uturn.backward",
-    @"ED_OT_redo": @"arrow.uturn.forward",
-    @"OBJECT_OT_duplicate_move": @"plus.square.on.square",
-    @"OBJECT_OT_delete": @"trash",
-    @"MESH_OT_delete": @"trash",
+    @"ED_OT_undo" : @"arrow.uturn.backward",
+    @"ED_OT_redo" : @"arrow.uturn.forward",
+    @"OBJECT_OT_duplicate_move" : @"plus.square.on.square",
+    @"OBJECT_OT_delete" : @"trash",
+    @"MESH_OT_delete" : @"trash",
   };
   return blenderIOSIcon(key, opName ? fallbacks[opName] : nil);
 }
@@ -492,7 +500,8 @@ static UIButton *blenderIOSSwiftButton()
 
 @end
 
-@interface GHOSTIOSToolStackView : GHOSTIOSPassThroughStackView {
+@interface GHOSTIOSToolStackView : GHOSTIOSPassThroughStackView
+{
   UIButton *_selection;
   UIButton *_selectionTarget;
 }
@@ -538,9 +547,16 @@ static UIButton *blenderIOSSwiftButton()
   _selection.hidden = NO;
   [self sendSubviewToBack:_selection];
   if (animate) {
-    [UIView animateWithDuration:0.16 delay:0 usingSpringWithDamping:0.9 initialSpringVelocity:0
-        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-        animations:^{ self->_selection.frame = target.frame; } completion:nil];
+    [UIView animateWithDuration:0.16
+                          delay:0
+         usingSpringWithDamping:0.9
+          initialSpringVelocity:0
+                        options:UIViewAnimationOptionBeginFromCurrentState |
+                                UIViewAnimationOptionAllowUserInteraction
+                     animations:^{
+                       self->_selection.frame = target.frame;
+                     }
+                     completion:nil];
   }
   else if (!CGRectEqualToRect(_selection.frame, target.frame)) {
     _selection.frame = target.frame;
@@ -607,7 +623,8 @@ static UIButton *blenderIOSSwiftButton()
 @interface GHOSTIOSFadingButtonScrollView : GHOSTIOSButtonScrollView
 @end
 
-@implementation GHOSTIOSFadingButtonScrollView {
+@implementation GHOSTIOSFadingButtonScrollView
+{
   CAGradientLayer *_edge_fade;
 }
 
@@ -636,7 +653,8 @@ static UIButton *blenderIOSSwiftButton()
   CGFloat fade = width > 0 ? MIN(18.0, width * 0.25) / width : 0.0;
   BOOL leading = self.contentOffset.x + self.adjustedContentInset.left > 0.5;
   BOOL trailing = self.contentSize.width + self.adjustedContentInset.right -
-                      CGRectGetMaxX(self.bounds) > 0.5;
+                      CGRectGetMaxX(self.bounds) >
+                  0.5;
   id opaque = (id)UIColor.blackColor.CGColor;
   id clear = (id)UIColor.clearColor.CGColor;
   /* UIScrollView's bounds origin follows its offset. Keep the mask fixed to the
@@ -644,8 +662,8 @@ static UIButton *blenderIOSSwiftButton()
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
   _edge_fade.frame = self.bounds;
-  _edge_fade.locations = @[@0, @(fade), @(1.0 - fade), @1];
-  _edge_fade.colors = @[leading ? clear : opaque, opaque, opaque, trailing ? clear : opaque];
+  _edge_fade.locations = @[ @0, @(fade), @(1.0 - fade), @1 ];
+  _edge_fade.colors = @[ leading ? clear : opaque, opaque, opaque, trailing ? clear : opaque ];
   [CATransaction commit];
 }
 
@@ -999,26 +1017,24 @@ static UIButton *blenderIOSSwiftButton()
       switch (event_type) {
         case UserInputEvent::EventTypes::CURSOR_MOVE:
           window->updatePointerPosition(event_info.location.x, event_info.location.y);
-          system->pushEvent(
-              std::make_unique<GHOST_EventCursor>(system->getMilliSeconds(),
-                                    GHOST_kEventCursorMove,
-                                    window,
-                                    event_info.location.x,
-                                    event_info.location.y,
-                                    tablet_data));
+          system->pushEvent(std::make_unique<GHOST_EventCursor>(system->getMilliSeconds(),
+                                                                GHOST_kEventCursorMove,
+                                                                window,
+                                                                event_info.location.x,
+                                                                event_info.location.y,
+                                                                tablet_data));
           break;
         case UserInputEvent::EventTypes::ORBIT_GESTURE:
-          system->pushEvent(
-              std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
-                                      window,
-                                      GHOST_kTrackpadEventRotate,
-                                      event_info.location.x,
-                                      event_info.location.y,
-                                      event_info.translation.x,
-                                      event_info.translation.y,
-                                      false,
-                                      1,
-                                      event_info.gesture_id));
+          system->pushEvent(std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
+                                                                  window,
+                                                                  GHOST_kTrackpadEventRotate,
+                                                                  event_info.location.x,
+                                                                  event_info.location.y,
+                                                                  event_info.translation.x,
+                                                                  event_info.translation.y,
+                                                                  false,
+                                                                  1,
+                                                                  event_info.gesture_id));
           break;
         case UserInputEvent::EventTypes::PAN_GESTURE:
           system->pushEvent(std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
@@ -1068,16 +1084,10 @@ static UIButton *blenderIOSSwiftButton()
                                                                   2));
           break;
         case UserInputEvent::EventTypes::CANCEL_TOOL:
-          system->pushEvent(std::make_unique<GHOST_EventKey>(system->getMilliSeconds(),
-                                               GHOST_kEventKeyDown,
-                                               window,
-                                               GHOST_kKeyEsc,
-                                               false));
-          system->pushEvent(std::make_unique<GHOST_EventKey>(system->getMilliSeconds(),
-                                               GHOST_kEventKeyUp,
-                                               window,
-                                               GHOST_kKeyEsc,
-                                               false));
+          system->pushEvent(std::make_unique<GHOST_EventKey>(
+              system->getMilliSeconds(), GHOST_kEventKeyDown, window, GHOST_kKeyEsc, false));
+          system->pushEvent(std::make_unique<GHOST_EventKey>(
+              system->getMilliSeconds(), GHOST_kEventKeyUp, window, GHOST_kKeyEsc, false));
           break;
         default:
           GHOST_ASSERT(FALSE, "GHOST_SystemIOS::generateUserInputEvents unsupported event type");
@@ -1092,7 +1102,8 @@ static UIButton *blenderIOSSwiftButton()
         (UIGestureRecognizer *)otherGestureRecognizer
 {
   if ([gestureRecognizer isKindOfClass:UIHoverGestureRecognizer.class] &&
-      [otherGestureRecognizer isKindOfClass:UIHoverGestureRecognizer.class]) {
+      [otherGestureRecognizer isKindOfClass:UIHoverGestureRecognizer.class])
+  {
     return YES;
   }
   const BOOL is_navigation = gestureRecognizer == pan2f_gesture_recognizer ||
@@ -1104,10 +1115,12 @@ static UIButton *blenderIOSSwiftButton()
   return gestureRecognizer != otherGestureRecognizer && is_navigation && other_is_navigation;
 }
 
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+       shouldReceiveTouch:(UITouch *)touch
 {
-  if (finger_tool_enabled && (gestureRecognizer == pan_gesture_recognizer ||
-                              gestureRecognizer == tap_gesture_recognizer)) {
+  if (finger_tool_enabled &&
+      (gestureRecognizer == pan_gesture_recognizer || gestureRecognizer == tap_gesture_recognizer))
+  {
     return NO;
   }
   if (gestureRecognizer == hover_gesture_recognizer && pencil_context_menu.active) {
@@ -1236,7 +1249,8 @@ static UIButton *blenderIOSSwiftButton()
     NSUInteger fingers = 0;
     for (UITouch *touch in event.allTouches) {
       if (touch.type == UITouchTypeDirect && touch.phase != UITouchPhaseEnded &&
-          touch.phase != UITouchPhaseCancelled && [self touchBeganInBlenderViewport:touch]) {
+          touch.phase != UITouchPhaseCancelled && [self touchBeganInBlenderViewport:touch])
+      {
         fingers++;
       }
     }
@@ -1256,7 +1270,8 @@ static UIButton *blenderIOSSwiftButton()
         continue;
       }
       if (touch.type != UITouchTypePencil &&
-          !(finger_tool_enabled && touch.type == UITouchTypeDirect && fingers <= 1)) {
+          !(finger_tool_enabled && touch.type == UITouchTypeDirect && fingers <= 1))
+      {
         continue;
       }
       if ((pencil_context_menu.active || touch.view == pencil_context_menu ||
@@ -1287,8 +1302,9 @@ static UIButton *blenderIOSSwiftButton()
         case UITouchPhaseMoved:
           if (touch == current_pencil_touch && pencil_navigation_pending) {
             CGPoint point = [touch preciseLocationInView:window->getView()];
-            if (hypot(point.x - pencil_navigation_start.x,
-                      point.y - pencil_navigation_start.y) > 10.0) {
+            if (hypot(point.x - pencil_navigation_start.x, point.y - pencil_navigation_start.y) >
+                10.0)
+            {
               pencil_navigation_pending = false;
               pencil_button_active = true;
               [self updateTabletDataFromPencilTouch:touch];
@@ -1362,7 +1378,8 @@ static UIButton *blenderIOSSwiftButton()
 - (void)handleTap:(GHOSTUITapGestureRecognizer *)sender
 {
   if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone &&
-      !finger_tool_enabled && sender.state == UIGestureRecognizerStateEnded) {
+      !finger_tool_enabled && sender.state == UIGestureRecognizerStateEnded)
+  {
     CGPoint point = [sender getScaledTouchPoint:window];
     tablet_data = GHOST_TABLET_DATA_NONE;
     UserInputEvent event_info(&point, nullptr, nullptr, false);
@@ -1465,7 +1482,7 @@ static UIButton *blenderIOSSwiftButton()
         orbit_remainder = CGPointZero;
         orbit_timestamp = CACurrentMediaTime();
         orbit_display_link = [CADisplayLink displayLinkWithTarget:self
-                                                       selector:@selector(updateOrbitMomentum:)];
+                                                         selector:@selector(updateOrbitMomentum:)];
         [orbit_display_link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
       }
     }
@@ -1597,7 +1614,8 @@ static UIButton *blenderIOSSwiftButton()
   if (!pencil_context_menu.active &&
       (sender.state == UIGestureRecognizerStateBegan ||
        sender.state == UIGestureRecognizerStateChanged) &&
-      ![self isBlenderPencilInputView:[self hitTest:[sender locationInView:(UIView *)self] withEvent:nil]])
+      ![self isBlenderPencilInputView:[self hitTest:[sender locationInView:(UIView *)self]
+                                          withEvent:nil]])
   {
     WM_apple_ios_ui_navigation_hover_set(false);
     WM_apple_ios_ui_pencil_hover_set(false, 0, 0);
@@ -1703,21 +1721,21 @@ static UIButton *blenderIOSSwiftButton()
 
 #if !defined(APPLE_TARGET_VISIONOS)
 - (void)togglePencilMenuForInteraction:(UIPencilInteraction *)interaction
-                            hoverPose:(UIPencilHoverPose *)pose
+                             hoverPose:(UIPencilHoverPose *)pose
 {
   NSValue *location = nil;
   if (pose) {
     CGPoint point = [interaction.view convertPoint:pose.location toView:self];
-    if (!pencil_context_menu.active &&
-        ![self isBlenderPencilInputView:[self hitTest:point withEvent:nil]])
+    if (!pencil_context_menu.active && ![self isBlenderPencilInputView:[self hitTest:point
+                                                                           withEvent:nil]])
     {
       return;
     }
     location = [NSValue valueWithCGPoint:[self convertPoint:point toView:pencil_context_menu]];
   }
   else if (current_pencil_touch) {
-    location = [NSValue valueWithCGPoint:
-        [current_pencil_touch preciseLocationInView:pencil_context_menu]];
+    location = [NSValue
+        valueWithCGPoint:[current_pencil_touch preciseLocationInView:pencil_context_menu]];
   }
   WM_apple_ios_ui_navigation_hover_set(false);
   [self stopOrbitMomentum];
@@ -1725,20 +1743,23 @@ static UIButton *blenderIOSSwiftButton()
   [pencil_context_menu toggleWithPencilLocation:location];
 }
 
-- (void)pencilInteraction:(UIPencilInteraction *)interaction didReceiveTap:(UIPencilInteractionTap *)tap
+- (void)pencilInteraction:(UIPencilInteraction *)interaction
+            didReceiveTap:(UIPencilInteractionTap *)tap
 {
   const UIPencilPreferredAction action = UIPencilInteraction.preferredTapAction;
-  if (action != UIPencilPreferredActionIgnore && action != UIPencilPreferredActionRunSystemShortcut) {
+  if (action != UIPencilPreferredActionIgnore &&
+      action != UIPencilPreferredActionRunSystemShortcut)
+  {
     [self togglePencilMenuForInteraction:interaction hoverPose:tap.hoverPose];
   }
 }
 
 - (void)pencilInteraction:(UIPencilInteraction *)interaction
-      didReceiveSqueeze:(UIPencilInteractionSqueeze *)squeeze
+        didReceiveSqueeze:(UIPencilInteractionSqueeze *)squeeze
 {
   const UIPencilPreferredAction action = UIPencilInteraction.preferredSqueezeAction;
-  if (squeeze.phase == UIPencilInteractionPhaseEnded &&
-      action != UIPencilPreferredActionIgnore && action != UIPencilPreferredActionRunSystemShortcut)
+  if (squeeze.phase == UIPencilInteractionPhaseEnded && action != UIPencilPreferredActionIgnore &&
+      action != UIPencilPreferredActionRunSystemShortcut)
   {
     [self togglePencilMenuForInteraction:interaction hoverPose:squeeze.hoverPose];
   }
@@ -2199,7 +2220,7 @@ static UIImage *blenderIOSMenuIcon(NSDictionary *item)
 {
   NSString *name = item[@"icon"];
   if (![name isKindOfClass:NSString.class] || name.length == 0 ||
-      [@[@"NONE", @"BLANK1"] containsObject:name])
+      [@[ @"NONE", @"BLANK1" ] containsObject:name])
   {
     return nil;
   }
@@ -2229,24 +2250,35 @@ static UIMenu *blenderIOSNativeSubmenu(NSDictionary *item, NSString *identifier)
       elementWithUncachedProvider:^(void (^completion)(NSArray<UIMenuElement *> *)) {
         const uint64_t request = WM_apple_ios_ui_menu_request(route.UTF8String, false);
         const CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + 60.0;
-        NSTimer *poll = [NSTimer timerWithTimeInterval:0.025 repeats:YES block:^(NSTimer *timer) {
-          NSArray *result = blenderIOSMenuResult(request);
-          if (result || CFAbsoluteTimeGetCurrent() >= deadline) {
-            [timer invalidate];
-            NSArray *elements = blenderIOSNativeMenuElements(result);
-            if (elements.count == 0) {
-              UIAction *empty = [UIAction actionWithTitle:result ? @"No Available Commands" : @"Blender Is Busy"
-                                                   image:nil identifier:nil handler:^(__kindof UIAction *) {}];
-              empty.attributes = UIMenuElementAttributesDisabled;
-              elements = @[empty];
-            }
-            completion(elements);
-          }
-        }];
+        NSTimer *poll = [NSTimer
+            timerWithTimeInterval:0.025
+                          repeats:YES
+                            block:^(NSTimer *timer) {
+                              NSArray *result = blenderIOSMenuResult(request);
+                              if (result || CFAbsoluteTimeGetCurrent() >= deadline) {
+                                [timer invalidate];
+                                NSArray *elements = blenderIOSNativeMenuElements(result);
+                                if (elements.count == 0) {
+                                  UIAction *empty = [UIAction
+                                      actionWithTitle:result ? @"No Available Commands" :
+                                                               @"Blender Is Busy"
+                                                image:nil
+                                           identifier:nil
+                                              handler:^(__kindof UIAction *){
+                                              }];
+                                  empty.attributes = UIMenuElementAttributesDisabled;
+                                  elements = @[ empty ];
+                                }
+                                completion(elements);
+                              }
+                            }];
         [NSRunLoop.mainRunLoop addTimer:poll forMode:NSRunLoopCommonModes];
       }];
-  return [UIMenu menuWithTitle:item[@"title"] image:blenderIOSMenuIcon(item) identifier:identifier
-                      options:0 children:@[content]];
+  return [UIMenu menuWithTitle:item[@"title"]
+                         image:blenderIOSMenuIcon(item)
+                    identifier:identifier
+                       options:0
+                      children:@[ content ]];
 }
 
 static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
@@ -2255,8 +2287,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   NSMutableArray *children = [NSMutableArray array];
   void (^flush)(void) = ^{
     if (children.count) {
-      [sections addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
-                                       options:UIMenuOptionsDisplayInline children:[[children copy] autorelease]]];
+      [sections addObject:[UIMenu menuWithTitle:@""
+                                          image:nil
+                                     identifier:nil
+                                        options:UIMenuOptionsDisplayInline
+                                       children:[[children copy] autorelease]]];
       [children removeAllObjects];
     }
   };
@@ -2269,13 +2304,18 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
       continue;
     }
     if (![item[@"title"] isKindOfClass:NSString.class] || ![item[@"title"] length] ||
-        ![item[@"route"] isKindOfClass:NSDictionary.class]) {
+        ![item[@"route"] isKindOfClass:NSDictionary.class])
+    {
       continue;
     }
     if ([item[@"menu"] isEqual:@"TOPBAR_MT_file_new"]) {
-      [children addObject:[UIKeyCommand commandWithTitle:@"New…"
-          image:[UIImage systemImageNamed:@"doc.badge.plus"] action:NSSelectorFromString(@"newDocument:")
-          input:@"n" modifierFlags:UIKeyModifierCommand propertyList:nil]];
+      [children
+          addObject:[UIKeyCommand commandWithTitle:@"New…"
+                                             image:[UIImage systemImageNamed:@"doc.badge.plus"]
+                                            action:NSSelectorFromString(@"newDocument:")
+                                             input:@"n"
+                                     modifierFlags:UIKeyModifierCommand
+                                      propertyList:nil]];
       continue;
     }
     if ([item[@"submenu"] boolValue] && ![item[@"disabled"] boolValue]) {
@@ -2284,10 +2324,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     }
     NSString *route = blenderIOSMenuRoute(item[@"route"]);
     UIImage *icon = blenderIOSMenuIcon(item);
-    UIAction *action = [UIAction actionWithTitle:item[@"title"] image:icon identifier:nil
-                                       handler:^(__kindof UIAction *) {
-                                         WM_apple_ios_ui_menu_request(route.UTF8String, true);
-                                       }];
+    UIAction *action = [UIAction actionWithTitle:item[@"title"]
+                                           image:icon
+                                      identifier:nil
+                                         handler:^(__kindof UIAction *) {
+                                           WM_apple_ios_ui_menu_request(route.UTF8String, true);
+                                         }];
     action.attributes = [item[@"disabled"] boolValue] ? UIMenuElementAttributesDisabled : 0;
     action.state = [item[@"checked"] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff;
     [children addObject:action];
@@ -2310,7 +2352,8 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 #if defined(APPLE_TARGET_VISIONOS)
 /** `VisionChrome.swift`: the window's controls as visionOS ornaments. */
 @protocol GHOSTIOSVisionChrome <NSObject>
-- (instancetype)initWithController:(UIViewController *)controller choose:(void (^)(NSString *))choose;
+- (instancetype)initWithController:(UIViewController *)controller
+                            choose:(void (^)(NSString *))choose;
 - (void)updateTools:(NSArray *)tools
              images:(NSDictionary<NSString *, UIImage *> *)images
      selectedImages:(NSDictionary<NSString *, UIImage *> *)selectedImages
@@ -2524,11 +2567,12 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   }
   /* Snapshots arrive by notification; only whether Blender is held up (compiling shaders) is
    * checked on a timer, since a held-up Blender publishes nothing. */
-  _toolbar_refresh_timer = [NSTimer scheduledTimerWithTimeInterval:0.25
-                                                            target:self
-                                                          selector:@selector(updateViewportLoadingIndicator)
-                                                          userInfo:nil
-                                                           repeats:YES];
+  _toolbar_refresh_timer = [NSTimer
+      scheduledTimerWithTimeInterval:0.25
+                              target:self
+                            selector:@selector(updateViewportLoadingIndicator)
+                            userInfo:nil
+                             repeats:YES];
   [NSNotificationCenter.defaultCenter addObserver:self
                                          selector:@selector(blenderSnapshotsPublished:)
                                              name:@"BlenderSnapshotsPublished"
@@ -2546,13 +2590,15 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   actions_menu_press.cancelsTouchesInView = YES;
   actions_menu_press.allowedTouchTypes = @[ @(UITouchTypeDirect) ];
   actions_menu_press.delegate = self;
-  actions_menu_press.enabled = UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPhone;
+  actions_menu_press.enabled = UIDevice.currentDevice.userInterfaceIdiom !=
+                               UIUserInterfaceIdiomPhone;
   [_view addGestureRecognizer:actions_menu_press];
   [actions_menu_press release];
   [self setNeedsUpdateOfHomeIndicatorAutoHidden];
 }
 
-/* Documents. The launcher owns them, see `GHOST_IOSLauncher.mm`; this window shows the open one. */
+/* Documents. The launcher owns them, see `GHOST_IOSLauncher.mm`; this window shows the open one.
+ */
 
 /** Blender's main window, shown over the launcher while a document is open. */
 static GHOST_IOSViewController *document_controller = nil;
@@ -2674,8 +2720,9 @@ bool GHOST_ios_document_window_visible()
 {
   /* Read only the presentation mailbox; never wait for the Blender thread. */
   if (_viewport_loading_indicator.isAnimating && _ghost_window && _ghost_window->surface &&
-      _ghost_window->surface->hasPresentedFrame()) {
-  [_viewport_loading_indicator stopAnimating];
+      _ghost_window->surface->hasPresentedFrame())
+  {
+    [_viewport_loading_indicator stopAnimating];
     _viewport_loading_indicator.accessibilityElementsHidden = YES;
   }
 }
@@ -2780,7 +2827,7 @@ bool GHOST_ios_document_window_visible()
     }
     if ([source[@"heading"] isKindOfClass:NSString.class]) {
       /* The menu's own name, shown in the radial menu's center. */
-      [items addObject:@{@"heading": source[@"heading"]}];
+      [items addObject:@{@"heading" : source[@"heading"]}];
       continue;
     }
     NSString *op = source[@"operator"];
@@ -2809,8 +2856,8 @@ bool GHOST_ios_document_window_visible()
 
 - (void)pencilMenu:(UIView<GHOSTIOSPencilMenu> *)menu
     requestItemsForRoute:(NSDictionary *)route
-                atPoint:(CGPoint)point
-             completion:(void (^)(NSArray<NSDictionary *> *))completion
+                 atPoint:(CGPoint)point
+              completion:(void (^)(NSArray<NSDictionary *> *))completion
 {
   if (!_ghost_window) {
     completion(@[]);
@@ -2822,19 +2869,22 @@ bool GHOST_ios_document_window_visible()
   const uint64_t request = WM_apple_ios_ui_menu_at_position_request(
       request_route.UTF8String, false, pixels.x, pixels.y);
   const CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + 60.0;
-  NSTimer *poll = [NSTimer timerWithTimeInterval:0.025 repeats:YES block:^(NSTimer *timer) {
-    NSArray *result = blenderIOSMenuResult(request);
-    if (result || CFAbsoluteTimeGetCurrent() >= deadline) {
-      [timer invalidate];
-      completion([self radialItemsFromBlenderMenu:result]);
-    }
-  }];
+  NSTimer *poll = [NSTimer
+      timerWithTimeInterval:0.025
+                    repeats:YES
+                      block:^(NSTimer *timer) {
+                        NSArray *result = blenderIOSMenuResult(request);
+                        if (result || CFAbsoluteTimeGetCurrent() >= deadline) {
+                          [timer invalidate];
+                          completion([self radialItemsFromBlenderMenu:result]);
+                        }
+                      }];
   [NSRunLoop.mainRunLoop addTimer:poll forMode:NSRunLoopCommonModes];
 }
 
 - (void)pencilMenu:(UIView<GHOSTIOSPencilMenu> *)menu
-    didChooseItem:(NSDictionary *)item
-          atPoint:(CGPoint)point
+     didChooseItem:(NSDictionary *)item
+           atPoint:(CGPoint)point
 {
   if (!_ghost_window || [item[@"disabled"] boolValue] ||
       ![item[@"route"] isKindOfClass:NSDictionary.class])
@@ -2854,7 +2904,8 @@ bool GHOST_ios_document_window_visible()
   return blenderIOSNativeSubmenu(@{
     @"title" : @"Actions",
     @"route" : @{@"root" : @"context", @"path" : @[]},
-  }, nil);
+  },
+                                 nil);
 }
 
 - (UIMenu *)editMenuInteraction:(UIEditMenuInteraction *)interaction
@@ -2875,7 +2926,8 @@ bool GHOST_ios_document_window_visible()
 - (void)handleActionsMenuPress:(UILongPressGestureRecognizer *)gesture
 {
   /* Blender's own interface has its own context menus. */
-  if (gesture.state != UIGestureRecognizerStateBegan || _pencil_menu.active || _desktop_interface) {
+  if (gesture.state != UIGestureRecognizerStateBegan || _pencil_menu.active || _desktop_interface)
+  {
     return;
   }
 
@@ -2885,15 +2937,16 @@ bool GHOST_ios_document_window_visible()
   }
 
   const CGPoint location = [gesture locationInView:_view];
-  UIEditMenuConfiguration *configuration =
-      [UIEditMenuConfiguration configurationWithIdentifier:nil sourcePoint:location];
+  UIEditMenuConfiguration *configuration = [UIEditMenuConfiguration
+      configurationWithIdentifier:nil
+                      sourcePoint:location];
   [_actions_edit_menu_interaction presentEditMenuWithConfiguration:configuration];
 }
 
 - (UIButton *)overlayButtonWithTitle:(NSString *)title
                          systemImage:(NSString *)systemImage
                              command:(NSInteger)command
-                      clearGlassStyle:(BOOL)clearGlassStyle
+                     clearGlassStyle:(BOOL)clearGlassStyle
 {
   UIButton *button = blenderIOSSwiftButton();
   button.tag = command;
@@ -2930,7 +2983,7 @@ bool GHOST_ios_document_window_visible()
 
 - (UIButton *)toolbarButtonWithTitle:(NSString *)title
                          systemImage:(NSString *)systemImage
-                       toolIdentifier:(NSString *)toolIdentifier
+                      toolIdentifier:(NSString *)toolIdentifier
                                 mode:(NSString *)mode
 {
   UIButton *button = blenderIOSSwiftButton();
@@ -2953,8 +3006,12 @@ bool GHOST_ios_document_window_visible()
     [group_indicator.bottomAnchor constraintEqualToAnchor:button.bottomAnchor constant:-6.0],
   ]];
   [self configureToolbarButton:button
-                         tool:@{@"id": toolIdentifier, @"title": title, @"symbol": systemImage ?: @""}
-                         mode:mode];
+                          tool:@{
+                            @"id" : toolIdentifier,
+                            @"title" : title,
+                            @"symbol" : systemImage ?: @""
+                          }
+                          mode:mode];
 
   [button addTarget:self
                 action:@selector(handleToolbarToolButton:)
@@ -2995,13 +3052,15 @@ bool GHOST_ios_document_window_visible()
     }
   }
   UIImage *image = [icon isKindOfClass:NSString.class] ?
-      [UIImage imageNamed:[@"blender.tool." stringByAppendingString:icon]] : nil;
+                       [UIImage imageNamed:[@"blender.tool." stringByAppendingString:icon]] :
+                       nil;
   if (image) {
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
   }
   NSString *toolIdentifier = tool[@"id"];
   NSString *prefix = selected ? @"selected.tool." : @"tool.";
-  image = blenderIOSIcon([NSString stringWithFormat:@"%@%@.%@", prefix, mode, toolIdentifier], nil);
+  image = blenderIOSIcon([NSString stringWithFormat:@"%@%@.%@", prefix, mode, toolIdentifier],
+                         nil);
   if (image == nil) {
     NSString *symbol = tool[@"symbol"];
     image = blenderIOSIcon([prefix stringByAppendingString:toolIdentifier],
@@ -3032,8 +3091,9 @@ bool GHOST_ios_document_window_visible()
     const BOOL is_emphasized = [self isToolbarListVisible] &&
                                (updated_button.selected ||
                                 updated_button == self->_toolbar_hover_button);
-    ((UIImageView *)[updated_button viewWithTag:9001]).tintColor =
-        updated_button.selected ? UIColor.whiteColor : UIColor.secondaryLabelColor;
+    ((UIImageView *)[updated_button viewWithTag:9001]).tintColor = updated_button.selected ?
+                                                                       UIColor.whiteColor :
+                                                                       UIColor.secondaryLabelColor;
     updated_button.contentHorizontalAlignment = shows_text ?
                                                     UIControlContentHorizontalAlignmentLeading :
                                                     UIControlContentHorizontalAlignmentCenter;
@@ -3061,40 +3121,53 @@ bool GHOST_ios_document_window_visible()
   for (id child in tool[@"children"]) {
     if (![child isKindOfClass:NSDictionary.class]) {
       if (actions.count) {
-        [sections addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
-                                         options:UIMenuOptionsDisplayInline children:actions]];
+        [sections addObject:[UIMenu menuWithTitle:@""
+                                            image:nil
+                                       identifier:nil
+                                          options:UIMenuOptionsDisplayInline
+                                         children:actions]];
         actions = [NSMutableArray array];
       }
       continue;
     }
-    UIAction *action = [UIAction actionWithTitle:child[@"title"]
-                                         image:[self toolbarImageForTool:child mode:mode]
-                                    identifier:child[@"id"]
-                                       handler:^(UIAction *selected) {
-      UIButton *chosen_button = nil;
-      /* Resolve the current button: snapshots may have replaced the menu's original anchor. */
-      for (UIButton *button in self->_toolbar_buttons) {
-        if ([button.menu.identifier isEqualToString:tool[@"group"]]) {
-          NSMutableDictionary *updated = [NSMutableDictionary dictionaryWithDictionary:tool];
-          [updated addEntriesFromDictionary:child];
-          [self configureToolbarButton:button tool:updated mode:mode];
-          chosen_button = button;
-          break;
-        }
-      }
-      [self setActiveToolbarToolIdentifier:selected.identifier];
-      WM_apple_ios_ui_tool_set_by_id(selected.identifier.UTF8String);
-      [self showToolbarLabelForButton:chosen_button transient:YES];
-    }];
-    action.state = [child[@"id"] isEqualToString:tool[@"id"]] ?
-                      UIMenuElementStateOn : UIMenuElementStateOff;
+    UIAction *action = [UIAction
+        actionWithTitle:child[@"title"]
+                  image:[self toolbarImageForTool:child mode:mode]
+             identifier:child[@"id"]
+                handler:^(UIAction *selected) {
+                  UIButton *chosen_button = nil;
+                  /* Resolve the current button: snapshots may have replaced the menu's original
+                   * anchor. */
+                  for (UIButton *button in self->_toolbar_buttons) {
+                    if ([button.menu.identifier isEqualToString:tool[@"group"]]) {
+                      NSMutableDictionary *updated = [NSMutableDictionary
+                          dictionaryWithDictionary:tool];
+                      [updated addEntriesFromDictionary:child];
+                      [self configureToolbarButton:button tool:updated mode:mode];
+                      chosen_button = button;
+                      break;
+                    }
+                  }
+                  [self setActiveToolbarToolIdentifier:selected.identifier];
+                  WM_apple_ios_ui_tool_set_by_id(selected.identifier.UTF8String);
+                  [self showToolbarLabelForButton:chosen_button transient:YES];
+                }];
+    action.state = [child[@"id"] isEqualToString:tool[@"id"]] ? UIMenuElementStateOn :
+                                                                UIMenuElementStateOff;
     [actions addObject:action];
   }
   if (actions.count) {
-    [sections addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
-                                     options:UIMenuOptionsDisplayInline children:actions]];
+    [sections addObject:[UIMenu menuWithTitle:@""
+                                        image:nil
+                                   identifier:nil
+                                      options:UIMenuOptionsDisplayInline
+                                     children:actions]];
   }
-  return [UIMenu menuWithTitle:@"" image:nil identifier:tool[@"group"] options:0 children:sections];
+  return [UIMenu menuWithTitle:@""
+                         image:nil
+                    identifier:tool[@"group"]
+                       options:0
+                      children:sections];
 }
 
 - (void)updateToolbarMenuAvailabilityForButton:(UIButton *)button
@@ -3269,7 +3342,8 @@ bool GHOST_ios_document_window_visible()
   [self setToolRailDockedLeftCenter:dock_left_center animated:YES];
 }
 
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+       shouldReceiveTouch:(UITouch *)touch
 {
   if (gestureRecognizer.view == _view &&
       [gestureRecognizer isKindOfClass:UILongPressGestureRecognizer.class])
@@ -3289,7 +3363,8 @@ bool GHOST_ios_document_window_visible()
     /* Group flyouts use UIButton's native hold menu; scrolling owns a moving touch. */
     /* Holding a closed rail always opens it for press-drag-release selection; group menus
      * only take over the hold once the rail is already showing its list. */
-    return !_toolbar_expanded && !((UIButton *)gestureRecognizer.view).contextMenuInteractionEnabled;
+    return !_toolbar_expanded &&
+           !((UIButton *)gestureRecognizer.view).contextMenuInteractionEnabled;
   }
   if ([gestureRecognizer isKindOfClass:UILongPressGestureRecognizer.class] &&
       [_brush_buttons containsObject:gestureRecognizer.view])
@@ -3329,7 +3404,8 @@ bool GHOST_ios_document_window_visible()
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
-    shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
+    shouldRecognizeSimultaneouslyWithGestureRecognizer:
+        (UIGestureRecognizer *)otherGestureRecognizer
 {
   UNUSED_VARS(gestureRecognizer, otherGestureRecognizer);
   return NO;
@@ -3341,9 +3417,10 @@ bool GHOST_ios_document_window_visible()
   handle.translatesAutoresizingMaskIntoConstraints = NO;
   handle.accessibilityLabel = @"Collapse Toolbar";
   handle.accessibilityIdentifier = @"blender.toolbar.handle";
-  [handle addInteraction:[[[UIToolTipInteraction alloc]
-      initWithDefaultToolTip:@"Collapse Toolbar"] autorelease]];
-  [handle addTarget:self action:@selector(collapseToolbarFromHandle:)
+  [handle addInteraction:[[[UIToolTipInteraction alloc] initWithDefaultToolTip:@"Collapse Toolbar"]
+                             autorelease]];
+  [handle addTarget:self
+                action:@selector(collapseToolbarFromHandle:)
       forControlEvents:UIControlEventTouchUpInside];
   UIView *grip = [[[UIView alloc] initWithFrame:CGRectZero] autorelease];
   grip.translatesAutoresizingMaskIntoConstraints = NO;
@@ -3358,7 +3435,8 @@ bool GHOST_ios_document_window_visible()
     [grip.heightAnchor constraintEqualToConstant:5.0],
   ]];
   UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
-      initWithTarget:self action:@selector(handleToolbarHandlePan:)];
+      initWithTarget:self
+              action:@selector(handleToolbarHandlePan:)];
   pan.maximumNumberOfTouches = 1;
   pan.delegate = self;
   [handle addGestureRecognizer:pan];
@@ -3382,7 +3460,8 @@ bool GHOST_ios_document_window_visible()
   /* A temporarily opened rail sits at the bottom dock and follows the finger up toward the
    * higher dock; a docked rail only resists a downward pull. */
   const BOOL can_raise = !_tool_rail_docked_left_center;
-  const CGFloat raise_distance = MAX(0.0, [self toolRailBottomDockCenterY] - [self toolRailCenterDockCenterY]);
+  const CGFloat raise_distance = MAX(
+      0.0, [self toolRailBottomDockCenterY] - [self toolRailCenterDockCenterY]);
   if (gesture.state == UIGestureRecognizerStateChanged) {
     const CGFloat offset = translation.y < 0.0 && can_raise ?
                                MAX(-raise_distance, translation.y) :
@@ -3410,9 +3489,10 @@ bool GHOST_ios_document_window_visible()
       [self collapseToolbarFromHandle:gesture];
     }
     else {
-      [UIView animateWithDuration:0.2 animations:^{
-        self->_tool_rail.transform = CGAffineTransformIdentity;
-      }];
+      [UIView animateWithDuration:0.2
+                       animations:^{
+                         self->_tool_rail.transform = CGAffineTransformIdentity;
+                       }];
     }
   }
 }
@@ -3454,9 +3534,9 @@ bool GHOST_ios_document_window_visible()
 
   void (^applyVisibility)(void) = ^{
     for (UIButton *button in _toolbar_buttons) {
-      const BOOL is_active = has_active_button ?
-                                 [button.accessibilityIdentifier isEqualToString:_active_tool_identifier] :
-                                 button == fallback_button;
+      const BOOL is_active = has_active_button ? [button.accessibilityIdentifier
+                                                     isEqualToString:_active_tool_identifier] :
+                                                 button == fallback_button;
       button.selected = list_visible && is_active;
       [button setNeedsUpdateConfiguration];
       button.alpha = (list_visible || is_active) ? 1.0 : 0.0;
@@ -3469,9 +3549,9 @@ bool GHOST_ios_document_window_visible()
       return;
     }
     for (UIButton *button in _toolbar_buttons) {
-      const BOOL is_active = has_active_button ?
-                                 [button.accessibilityIdentifier isEqualToString:_active_tool_identifier] :
-                                 button == fallback_button;
+      const BOOL is_active = has_active_button ? [button.accessibilityIdentifier
+                                                     isEqualToString:_active_tool_identifier] :
+                                                 button == fallback_button;
       button.selected = NO;
       button.hidden = !is_active;
       [button setNeedsUpdateConfiguration];
@@ -3490,19 +3570,18 @@ bool GHOST_ios_document_window_visible()
   }
 
   [UIView animateWithDuration:0.32
-                        delay:0.0
-       usingSpringWithDamping:0.84
-        initialSpringVelocity:0.0
-                      options:UIViewAnimationOptionCurveEaseInOut |
-                              UIViewAnimationOptionAllowUserInteraction |
-                              UIViewAnimationOptionBeginFromCurrentState
-                   animations:^{
-                     applyVisibility();
-                     [_overlay_view layoutIfNeeded];
-                   }
-                   completion:^(BOOL finished) {
-                     finishCompact();
-                   }];
+      delay:0.0
+      usingSpringWithDamping:0.84
+      initialSpringVelocity:0.0
+      options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionAllowUserInteraction |
+              UIViewAnimationOptionBeginFromCurrentState
+      animations:^{
+        applyVisibility();
+        [_overlay_view layoutIfNeeded];
+      }
+      completion:^(BOOL finished) {
+        finishCompact();
+      }];
 }
 
 - (void)setToolbarExpanded:(BOOL)expanded animated:(BOOL)animated
@@ -3543,7 +3622,9 @@ bool GHOST_ios_document_window_visible()
 {
   [_scene_panels dismiss];
   const BOOL timeline = [notification.userInfo[@"timeline"] boolValue];
-  if (_timeline.visible != timeline) { [_timeline toggle:nil]; }
+  if (_timeline.visible != timeline) {
+    [_timeline toggle:nil];
+  }
   [self.view setNeedsLayout];
 }
 
@@ -3575,8 +3656,11 @@ bool GHOST_ios_document_window_visible()
 
 - (NSString *)toolbarSignatureForTools:(NSArray *)tools mode:(NSString *)mode
 {
-  NSData *data = [NSJSONSerialization dataWithJSONObject:tools options:NSJSONWritingSortedKeys error:nil];
-  NSString *contents = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+  NSData *data = [NSJSONSerialization dataWithJSONObject:tools
+                                                 options:NSJSONWritingSortedKeys
+                                                   error:nil];
+  NSString *contents = [[[NSString alloc] initWithData:data
+                                              encoding:NSUTF8StringEncoding] autorelease];
   return [NSString stringWithFormat:@"%@:%@", mode ?: @"", contents ?: @""];
 }
 
@@ -3609,9 +3693,9 @@ bool GHOST_ios_document_window_visible()
       continue;
     }
     UIButton *button = [self toolbarButtonWithTitle:title
-                                       systemImage:symbol
-                                    toolIdentifier:tool_id
-                                             mode:mode];
+                                        systemImage:symbol
+                                     toolIdentifier:tool_id
+                                               mode:mode];
     [self configureToolbarButton:button tool:tool mode:mode];
     [_tool_stack addArrangedSubview:button];
     if ([button.accessibilityIdentifier isEqualToString:label_tool]) {
@@ -3635,17 +3719,19 @@ bool GHOST_ios_document_window_visible()
   NSString *axis = button.accessibilityHint;
   UIColor *color = [axis isEqualToString:@"X"] ? UIColor.systemRedColor :
                    [axis isEqualToString:@"Y"] ? UIColor.systemGreenColor :
-                                                UIColor.systemBlueColor;
+                                                 UIColor.systemBlueColor;
   button.selected = selected;
   button.tintColor = color;
   button.buttonTitle = axis;
   button.buttonFont = [UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold];
   /* Selected lettering in black stays readable on the bright axis-colored glass. */
-  button.buttonImage = selected ?
-      [[UIImage systemImageNamed:@"checkmark"]
-          imageWithConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:11.0
-                                                                                 weight:UIImageSymbolWeightBold]] :
-      nil;
+  button.buttonImage =
+      selected ?
+          [[UIImage systemImageNamed:@"checkmark"]
+              imageWithConfiguration:[UIImageSymbolConfiguration
+                                         configurationWithPointSize:11.0
+                                                             weight:UIImageSymbolWeightBold]] :
+          nil;
   button.imageTrailing = YES;
   button.imagePadding = selected ? 4.0 : 0.0;
   button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 8.0, 8.0, 8.0);
@@ -3655,7 +3741,7 @@ bool GHOST_ios_document_window_visible()
   button.accessibilityLabel = [NSString stringWithFormat:@"%@ axis constraint", axis];
   button.accessibilityValue = selected ? @"On" : @"Off";
   button.accessibilityTraits = UIAccessibilityTraitButton |
-                              (selected ? UIAccessibilityTraitSelected : 0);
+                               (selected ? UIAccessibilityTraitSelected : 0);
 }
 
 - (void)updateAxisConstraintsWithActions:(NSArray *)actions
@@ -3664,9 +3750,10 @@ bool GHOST_ios_document_window_visible()
     if ([button.accessibilityIdentifier hasPrefix:@"blender.action."]) {
       /* Toggles such as X-Ray show their state as a filled button. */
       for (NSDictionary *action in actions) {
-        if ([action isKindOfClass:NSDictionary.class] && [action[@"action"] isKindOfClass:NSString.class] &&
-            [button.accessibilityIdentifier isEqualToString:
-                [@"blender.action." stringByAppendingString:action[@"action"]]])
+        if ([action isKindOfClass:NSDictionary.class] &&
+            [action[@"action"] isKindOfClass:NSString.class] &&
+            [button.accessibilityIdentifier
+                isEqualToString:[@"blender.action." stringByAppendingString:action[@"action"]]])
         {
           const BOOL selected = [action[@"selected"] respondsToSelector:@selector(boolValue)] &&
                                 [action[@"selected"] boolValue];
@@ -3676,7 +3763,8 @@ bool GHOST_ios_document_window_visible()
             configuration.baseBackgroundColor = selected ? UIColor.systemBlueColor : nil;
             configuration.baseForegroundColor = selected ? UIColor.whiteColor : nil;
             button.configuration = configuration;
-            button.accessibilityTraits = selected ? UIAccessibilityTraitButton | UIAccessibilityTraitSelected :
+            button.accessibilityTraits = selected ? UIAccessibilityTraitButton |
+                                                        UIAccessibilityTraitSelected :
                                                     UIAccessibilityTraitButton;
           }
           break;
@@ -3685,7 +3773,7 @@ bool GHOST_ios_document_window_visible()
       continue;
     }
     NSString *axis = button.accessibilityHint;
-    if (![@[@"X", @"Y", @"Z"] containsObject:axis ?: @""]) {
+    if (![@[ @"X", @"Y", @"Z" ] containsObject:axis ?: @""]) {
       continue;
     }
     for (NSDictionary *action in actions) {
@@ -3702,11 +3790,12 @@ bool GHOST_ios_document_window_visible()
 }
 
 - (UIButton *)actionButtonWithTitle:(NSString *)title
-                         systemImage:(NSString *)systemImage
-                            operator:(NSString *)opName
-                            property:(NSString *)propertyName
-                               value:(NSString *)propertyValue
-                                 key:(NSString *)keyName
+                        systemImage:(NSString *)systemImage
+                        operator
+                                   :(NSString *)opName
+                           property:(NSString *)propertyName
+                              value:(NSString *)propertyValue
+                                key:(NSString *)keyName
 {
   UNUSED_VARS(systemImage);
   UIButton *button = blenderIOSSwiftButton();
@@ -3718,12 +3807,13 @@ bool GHOST_ios_document_window_visible()
   button.accessibilityHint = keyName;
   button.translatesAutoresizingMaskIntoConstraints = NO;
   [button setContentHuggingPriority:UILayoutPriorityRequired
-                           forAxis:UILayoutConstraintAxisHorizontal];
+                            forAxis:UILayoutConstraintAxisHorizontal];
   [button setContentCompressionResistancePriority:UILayoutPriorityRequired
-                                         forAxis:UILayoutConstraintAxisHorizontal];
+                                          forAxis:UILayoutConstraintAxisHorizontal];
 
   UIImage *image = keyName.length == 0 ?
-                       blenderIOSActionIcon(opName, propertyName, propertyValue) : nil;
+                       blenderIOSActionIcon(opName, propertyName, propertyValue) :
+                       nil;
 
   button.buttonTitle = title;
   button.buttonImage = image;
@@ -3731,7 +3821,7 @@ bool GHOST_ios_document_window_visible()
   button.foreground = UIColor.labelColor;
   button.imagePadding = image != nil ? 5.0 : 0.0;
   button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 10.0, 8.0, 10.0);
-  if ([@[@"X", @"Y", @"Z"] containsObject:keyName ?: @""]) {
+  if ([@[ @"X", @"Y", @"Z" ] containsObject:keyName ?: @""]) {
     [self updateAxisConstraintButton:button selected:NO];
     [button.widthAnchor constraintEqualToConstant:60.0].active = YES;
   }
@@ -3788,7 +3878,9 @@ bool GHOST_ios_document_window_visible()
     if (![action isKindOfClass:[NSDictionary class]]) {
       continue;
     }
-    for (NSString *json_key in @[ @"title", @"action", @"operator", @"property", @"value", @"key" ]) {
+    for (NSString *json_key in
+         @[ @"title", @"action", @"operator", @"property", @"value", @"key" ])
+    {
       NSString *value = action[json_key];
       if ([value isKindOfClass:[NSString class]]) {
         [signature appendString:@"|"];
@@ -3822,7 +3914,8 @@ bool GHOST_ios_document_window_visible()
     NSString *property = action[@"property"];
     NSString *value = action[@"value"];
     NSString *key = action[@"key"];
-    NSString *action_id = [action[@"action"] isKindOfClass:NSString.class] ? action[@"action"] : @"";
+    NSString *action_id = [action[@"action"] isKindOfClass:NSString.class] ? action[@"action"] :
+                                                                             @"";
     NSString *icon = [action[@"icon"] isKindOfClass:NSString.class] ? action[@"icon"] : @"";
     if (![title isKindOfClass:[NSString class]] || ![symbol isKindOfClass:[NSString class]] ||
         title.length == 0)
@@ -3914,8 +4007,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _action_toggle.accessibilityIdentifier = @"blender.quick-actions.toggle";
   _action_toggle.titleLabel.adjustsFontSizeToFitWidth = YES;
   _action_toggle.titleLabel.minimumScaleFactor = 0.7;
-  [_action_toggle addTarget:self action:@selector(toggleActionStrip:)
-          forControlEvents:UIControlEventTouchUpInside];
+  [_action_toggle addTarget:self
+                     action:@selector(toggleActionStrip:)
+           forControlEvents:UIControlEventTouchUpInside];
   [_action_group addSubview:_action_toggle];
 #if defined(APPLE_TARGET_VISIONOS)
   _action_toggle.hidden = YES;
@@ -3925,7 +4019,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [_action_group addSubview:redo_pill];
   _redo_pill_width_constraint = [[redo_pill.widthAnchor constraintEqualToConstant:0] retain];
   _redo_pill_width_constraint.priority = UILayoutPriorityDefaultHigh - 1;
-  _redo_pill_min_width_constraint = [[redo_pill.widthAnchor constraintGreaterThanOrEqualToConstant:0] retain];
+  _redo_pill_min_width_constraint = [[redo_pill.widthAnchor
+      constraintGreaterThanOrEqualToConstant:0] retain];
 #if defined(APPLE_TARGET_VISIONOS)
   _action_scroll_trailing_constraint = [[_action_scroll.trailingAnchor
       constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
@@ -3933,7 +4028,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* The context menu sits after the scrolling actions, so it stays in view. */
   _context_menu_button = [[self contextMenuButton] retain];
   [_action_group addSubview:_context_menu_button];
-  _context_menu_width_constraint = [[_context_menu_button.widthAnchor constraintEqualToConstant:0] retain];
+  _context_menu_width_constraint = [[_context_menu_button.widthAnchor constraintEqualToConstant:0]
+      retain];
   _context_menu_spacing_constraint = [[_action_scroll.trailingAnchor
       constraintEqualToAnchor:_context_menu_button.leadingAnchor] retain];
   _action_scroll_trailing_constraint = [[_context_menu_button.trailingAnchor
@@ -3950,13 +4046,14 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   };
 
   _action_expanded_width_constraint = [[_action_group.widthAnchor
-      constraintEqualToAnchor:_action_stack.widthAnchor constant:60.0] retain];
+      constraintEqualToAnchor:_action_stack.widthAnchor
+                     constant:60.0] retain];
   _action_expanded_width_constraint.priority = UILayoutPriorityDefaultHigh;
   _action_collapsed_width_constraint = [[_action_group.widthAnchor
       constraintEqualToConstant:GHOSTIOSActionsPillWidth] retain];
   _action_collapsed_width_constraint.priority = UILayoutPriorityDefaultHigh;
-  _action_toggle_width_constraint = [[_action_toggle.widthAnchor
-      constraintEqualToConstant:44.0] retain];
+  _action_toggle_width_constraint = [[_action_toggle.widthAnchor constraintEqualToConstant:44.0]
+      retain];
   _action_toggle_width_constraint.priority = UILayoutPriorityRequired - 1;
   _action_toggle_trailing_constraint = [[_action_toggle.trailingAnchor
       constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
@@ -3966,12 +4063,15 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _action_group_center_constraint = [[_action_group.centerXAnchor
       constraintEqualToAnchor:_overlay_view.centerXAnchor] retain];
   _action_group_center_constraint.priority = UILayoutPriorityRequired - 2;
-  NSLayoutConstraint *minimum_width = [_action_group.widthAnchor constraintGreaterThanOrEqualToConstant:GHOSTIOSActionsPillWidth];
+  NSLayoutConstraint *minimum_width = [_action_group.widthAnchor
+      constraintGreaterThanOrEqualToConstant:GHOSTIOSActionsPillWidth];
   minimum_width.priority = UILayoutPriorityRequired - 1;
   [NSLayoutConstraint activateConstraints:@[
     minimum_width,
-    [_action_group.leadingAnchor constraintGreaterThanOrEqualToAnchor:_action_rail.contentView.leadingAnchor],
-    [_action_group.trailingAnchor constraintLessThanOrEqualToAnchor:_action_rail.contentView.trailingAnchor],
+    [_action_group.leadingAnchor
+        constraintGreaterThanOrEqualToAnchor:_action_rail.contentView.leadingAnchor],
+    [_action_group.trailingAnchor
+        constraintLessThanOrEqualToAnchor:_action_rail.contentView.trailingAnchor],
     [_action_group.topAnchor constraintEqualToAnchor:_action_rail.contentView.topAnchor],
     [_action_group.bottomAnchor constraintEqualToAnchor:_action_rail.contentView.bottomAnchor],
     [_action_toggle.leadingAnchor constraintEqualToAnchor:_action_group.leadingAnchor],
@@ -4029,9 +4129,15 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _action_rail.hidden = [self actionRailEmpty:width];
   _action_rail.alpha = _action_rail.hidden ? 0 : 1;
   [UIView animateWithDuration:animated && !UIAccessibilityIsReduceMotionEnabled() ? 0.3 : 0
-      delay:0 usingSpringWithDamping:0.86 initialSpringVelocity:0
-      options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-      animations:^{ [self->_action_rail layoutIfNeeded]; } completion:nil];
+                        delay:0
+       usingSpringWithDamping:0.86
+        initialSpringVelocity:0
+                      options:UIViewAnimationOptionBeginFromCurrentState |
+                              UIViewAnimationOptionAllowUserInteraction
+                   animations:^{
+                     [self->_action_rail layoutIfNeeded];
+                   }
+                   completion:nil];
   /* Model frames are final here, so the strip targets its settled row position. */
   [self layoutRedoStrip];
 }
@@ -4070,8 +4176,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   configuration.title = collapsed ? @"Actions" : nil;
   configuration.titleLineBreakMode = NSLineBreakByTruncatingTail;
   configuration.image = collapsed ? nil : [UIImage systemImageNamed:@"xmark"];
-  configuration.preferredSymbolConfigurationForImage =
-      [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold];
+  configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration
+      configurationWithPointSize:13
+                          weight:UIImageSymbolWeightSemibold];
   configuration.contentInsets = NSDirectionalEdgeInsetsMake(8, 10, 8, 10);
   /* Dissolve between the title and close icon instead of snapping mid-spring. */
   [UIView transitionWithView:_action_toggle
@@ -4079,7 +4186,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                      options:UIViewAnimationOptionTransitionCrossDissolve |
                              UIViewAnimationOptionBeginFromCurrentState |
                              UIViewAnimationOptionAllowUserInteraction
-                  animations:^{ self->_action_toggle.configuration = configuration; }
+                  animations:^{
+                    self->_action_toggle.configuration = configuration;
+                  }
                   completion:nil];
   _action_toggle.titleLabel.numberOfLines = 1;
   _action_toggle.accessibilityLabel = collapsed ? @"Show Quick Actions" : @"Hide Quick Actions";
@@ -4093,23 +4202,24 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* Keep the native glass control while its bounds change. Individual glass
    * buttons stay inside the scroll clip as the row contracts into the pill. */
   [UIView animateWithDuration:animate ? 0.36 : 0.0
-                        delay:0.0
-       usingSpringWithDamping:0.86
-        initialSpringVelocity:0.0
-                      options:UIViewAnimationOptionBeginFromCurrentState |
-                              UIViewAnimationOptionAllowUserInteraction
-                   animations:^{
-                     [self->_action_rail layoutIfNeeded];
-                     self->_action_scroll.alpha = collapsed ? 0.0 : 1.0;
-                     self->_context_menu_button.alpha = collapsed ? 0.0 : 1.0;
-                     self->_action_scroll.transform = collapsed && animate ?
-                         CGAffineTransformMakeTranslation(-20.0, 0.0) : CGAffineTransformIdentity;
-                   }
-                   completion:^(BOOL finished) {
-                     if (self->_action_transition_generation == generation) {
-                       self->_action_scroll.hidden = self->_actions_collapsed;
-                     }
-                   }];
+      delay:0.0
+      usingSpringWithDamping:0.86
+      initialSpringVelocity:0.0
+      options:UIViewAnimationOptionBeginFromCurrentState |
+              UIViewAnimationOptionAllowUserInteraction
+      animations:^{
+        [self->_action_rail layoutIfNeeded];
+        self->_action_scroll.alpha = collapsed ? 0.0 : 1.0;
+        self->_context_menu_button.alpha = collapsed ? 0.0 : 1.0;
+        self->_action_scroll.transform = collapsed && animate ?
+                                             CGAffineTransformMakeTranslation(-20.0, 0.0) :
+                                             CGAffineTransformIdentity;
+      }
+      completion:^(BOOL finished) {
+        if (self->_action_transition_generation == generation) {
+          self->_action_scroll.hidden = self->_actions_collapsed;
+        }
+      }];
 }
 
 - (void)refreshNativeMenuBar
@@ -4137,8 +4247,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   last_request = now;
   [last_mode release];
   last_mode = [_object_mode copy];
-  _native_menubar_request = WM_apple_ios_ui_menu_request(
-      "{\"root\":\"menubar\",\"path\":[]}", false);
+  _native_menubar_request = WM_apple_ios_ui_menu_request("{\"root\":\"menubar\",\"path\":[]}",
+                                                         false);
 }
 
 - (void)buildMenuWithBuilder:(id<UIMenuBuilder>)builder
@@ -4148,12 +4258,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     return;
   }
   NSDictionary *systemIdentifiers = @{
-    @"TOPBAR_MT_blender": UIMenuApplication,
-    @"TOPBAR_MT_file": UIMenuFile,
-    @"TOPBAR_MT_edit": UIMenuEdit,
-    @"TOPBAR_MT_window": UIMenuWindow,
-    @"TOPBAR_MT_help": UIMenuHelp,
-    @"VIEW3D_MT_view": UIMenuView,
+    @"TOPBAR_MT_blender" : UIMenuApplication,
+    @"TOPBAR_MT_file" : UIMenuFile,
+    @"TOPBAR_MT_edit" : UIMenuEdit,
+    @"TOPBAR_MT_window" : UIMenuWindow,
+    @"TOPBAR_MT_help" : UIMenuHelp,
+    @"VIEW3D_MT_view" : UIMenuView,
   };
   NSMutableArray *commands = [NSMutableArray array];
   for (NSDictionary *item in _native_menubar_items) {
@@ -4166,14 +4276,20 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     }
     NSString *menuName = item[@"menu"];
     NSString *systemIdentifier = systemIdentifiers[menuName];
-    NSString *identifier = systemIdentifier ?: [@"org.blender.menu." stringByAppendingString:menuName ?: item[@"title"]];
+    NSString *identifier = systemIdentifier ?:
+                                              [@"org.blender.menu."
+                                   stringByAppendingString:menuName ?: item[@"title"]];
     UIMenu *menu = blenderIOSNativeSubmenu(item, identifier);
     if (systemIdentifier && [builder menuForIdentifier:systemIdentifier]) {
       if ([systemIdentifier isEqualToString:UIMenuApplication] ||
-          [systemIdentifier isEqualToString:UIMenuWindow]) {
+          [systemIdentifier isEqualToString:UIMenuWindow])
+      {
         /* Keep iPadOS window-management and application commands available. */
-        UIMenu *group = [UIMenu menuWithTitle:@"" image:nil identifier:nil
-                                    options:UIMenuOptionsDisplayInline children:menu.children];
+        UIMenu *group = [UIMenu menuWithTitle:@""
+                                        image:nil
+                                   identifier:nil
+                                      options:UIMenuOptionsDisplayInline
+                                     children:menu.children];
         [builder insertChildMenu:group atEndOfMenuForIdentifier:systemIdentifier];
       }
       else {
@@ -4188,7 +4304,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     }
   }
   if (commands.count) {
-    [builder insertChildMenu:[UIMenu menuWithTitle:@"Commands" children:blenderIOSNativeMenuElements(commands)]
+    [builder insertChildMenu:[UIMenu menuWithTitle:@"Commands"
+                                          children:blenderIOSNativeMenuElements(commands)]
         atEndOfMenuForIdentifier:UIMenuRoot];
   }
 }
@@ -4201,7 +4318,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     overlay.hidden = NO;
   }
   [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
-      animations:^{ overlay.alpha = shown ? 1 : 0; }
+      animations:^{
+        overlay.alpha = shown ? 1 : 0;
+      }
       completion:^(BOOL finished) {
         if (finished && overlay.alpha == 0) {
           overlay.hidden = YES;
@@ -4224,19 +4343,24 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     config.image = [UIImage systemImageNamed:@"arrow.down.right.and.arrow.up.left"];
     config.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     __block GHOST_IOSViewController *controller = self;
-    _show_interface_button = [[UIButton buttonWithConfiguration:config primaryAction:[UIAction
-        actionWithHandler:^(__kindof UIAction *) { [controller setInterfaceHidden:NO]; }]] retain];
+    _show_interface_button = [[UIButton
+        buttonWithConfiguration:config
+                  primaryAction:[UIAction actionWithHandler:^(__kindof UIAction *) {
+                    [controller setInterfaceHidden:NO];
+                  }]] retain];
     _show_interface_button.accessibilityLabel = @"Show Interface";
     _show_interface_button.accessibilityIdentifier = @"blender.interface.show";
     _show_interface_button.translatesAutoresizingMaskIntoConstraints = NO;
     UIHoverGestureRecognizer *hover = [[[UIHoverGestureRecognizer alloc]
-        initWithTarget:self action:@selector(hoverShowInterface:)] autorelease];
+        initWithTarget:self
+                action:@selector(hoverShowInterface:)] autorelease];
     [_show_interface_button addGestureRecognizer:hover];
     [self.view addSubview:_show_interface_button];
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
       [_show_interface_button.topAnchor constraintEqualToAnchor:safe.topAnchor constant:12],
-      [_show_interface_button.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-12],
+      [_show_interface_button.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor
+                                                            constant:-12],
       [_show_interface_button.widthAnchor constraintEqualToConstant:44],
       [_show_interface_button.heightAnchor constraintEqualToConstant:44],
     ]];
@@ -4246,8 +4370,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   UIButton *button = _show_interface_button;
   button.hidden = NO;
   [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
-      animations:^{ button.alpha = hidden ? 0.35 : 0; }
-      completion:^(BOOL) { button.hidden = !self->_interface_hidden; }];
+      animations:^{
+        button.alpha = hidden ? 0.35 : 0;
+      }
+      completion:^(BOOL) {
+        button.hidden = !self->_interface_hidden;
+      }];
 #if !defined(APPLE_TARGET_VISIONOS)
   [self setNeedsStatusBarAppearanceUpdate];
 #endif
@@ -4258,7 +4386,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 {
   const BOOL near = hover.state == UIGestureRecognizerStateBegan ||
                     hover.state == UIGestureRecognizerStateChanged;
-  [UIView animateWithDuration:0.15 animations:^{ hover.view.alpha = near ? 1 : 0.35; }];
+  [UIView animateWithDuration:0.15
+                   animations:^{
+                     hover.view.alpha = near ? 1 : 0.35;
+                   }];
 }
 
 - (BOOL)prefersStatusBarHidden
@@ -4308,14 +4439,17 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
 - (void)applyToolbarModel:(NSDictionary *)model
 {
-  if ([model[@"desktop"] isKindOfClass:NSNumber.class] && [model[@"desktop"] boolValue] != _desktop_interface) {
+  if ([model[@"desktop"] isKindOfClass:NSNumber.class] &&
+      [model[@"desktop"] boolValue] != _desktop_interface)
+  {
     /* Blender's own Window menu can switch the interface too. */
     [self setDesktopInterface:[model[@"desktop"] boolValue]];
   }
   [_redo_strip updateSnapshot:model[@"redo"]];
   NSArray *navigation_geometry = model[@"navigationGizmo"];
   if ([navigation_geometry isKindOfClass:NSArray.class] && navigation_geometry.count == 3 &&
-      ![_view_gizmo_geometry isEqual:navigation_geometry]) {
+      ![_view_gizmo_geometry isEqual:navigation_geometry])
+  {
     [_view_gizmo_geometry release];
     _view_gizmo_geometry = [navigation_geometry copy];
     [self layoutViewPie];
@@ -4348,7 +4482,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [self setModePickerTitleForMode:mode];
   }
   [self setViewportShadingValue:model[@"shading"]];
-  if ([model[@"viewport"] isKindOfClass:NSDictionary.class] && ![_viewport_state isEqual:model[@"viewport"]]) {
+  if ([model[@"viewport"] isKindOfClass:NSDictionary.class] &&
+      ![_viewport_state isEqual:model[@"viewport"]])
+  {
     [_viewport_state release];
     _viewport_state = [model[@"viewport"] copy];
   }
@@ -4370,12 +4506,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self updateBrushRailWithModel:model[@"brushes"]];
   BOOL transform = [self isTransformToolIdentifier:active_tool];
   UIBarButtonItemGroup *tool_group = [_scene_panels updateToolSettings:model[@"toolSettings"]
-      acknowledgement:model[@"propertiesAck"]];
+                                                       acknowledgement:model[@"propertiesAck"]];
   [self setTopSettingsVisible:transform animated:YES];
-  UIBarButtonItemGroup *settings_group = transform || !tool_group ? _top_settings_group : tool_group;
+  UIBarButtonItemGroup *settings_group = transform || !tool_group ? _top_settings_group :
+                                                                    tool_group;
   if (_top_bar_item.centerItemGroups.firstObject != settings_group) {
     [_scene_panels hideToolSettings];
-    _top_bar_item.centerItemGroups = @[settings_group];
+    _top_bar_item.centerItemGroups = @[ settings_group ];
   }
   NSString *action_signature = [self actionSignatureForActions:actions];
   if (_action_signature == nil || ![_action_signature isEqualToString:action_signature]) {
@@ -4402,8 +4539,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   }
   CGRect panel_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
   /* The bottom tray: the open asset pane along the edge and the timeline just above it. The quick
-   * actions, the Adjust pill, the collapsed rails and the navigation gizmo rest on top, so the tray
-   * never leaves a gap and follows the timeline as it opens or expands. */
+   * actions, the Adjust pill, the collapsed rails and the navigation gizmo rest on top, so the
+   * tray never leaves a gap and follows the timeline as it opens or expands. */
   const BOOL tray_shown = !_desktop_interface && !_interface_hidden;
   const CGFloat assets_tray = _assets.visible && tray_shown ? _assets.height + 8 : 0;
 #if defined(APPLE_TARGET_VISIONOS)
@@ -4425,12 +4562,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   const CGFloat window_height = _overlay_view.bounds.size.height;
   if (window_height > 0 && !_desktop_interface) {
     const CGFloat tray_top = CGRectGetMaxY(panel_rect) - 6 - (tray > 0 ? tray - 8 : 0);
-    WM_apple_ios_ui_bottom_tray_set(tray > 0 ? float((window_height - tray_top) / window_height) : 0.0f);
+    WM_apple_ios_ui_bottom_tray_set(tray > 0 ? float((window_height - tray_top) / window_height) :
+                                               0.0f);
   }
   const CGRect bar_rect = [_top_bar convertRect:_top_bar.bounds toView:_overlay_view];
   const CGFloat panel_top = MAX(CGRectGetMinY(panel_rect), CGRectGetMaxY(bar_rect));
   CGFloat panel_bottom = MIN(CGRectGetMaxY(panel_rect) - 64 - _bottom_tray,
-      CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame));
+                             CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame));
   [self layoutViewPie];
   [self updateRedoPillLayout:NO];
   CGRect redo_rect = _overlay_view.safeAreaLayoutGuide.layoutFrame;
@@ -4439,29 +4577,35 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   const CGFloat redo_left = MAX(CGRectGetMinX(redo_rect) + 12, rails_right + 12);
   CGFloat redo_right = CGRectGetMaxX(redo_rect) - 12;
   CGFloat redo_bottom = MIN(CGRectGetMinY(_action_rail.frame) - 8,
-                           CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame) - 8);
+                            CGRectGetMinY(_overlay_view.keyboardLayoutGuide.layoutFrame) - 8);
   if (redo_rect.size.width < 700) {
     redo_bottom = MIN(redo_bottom, CGRectGetMinY(_view_gizmo_hotspot.frame) - 8);
   }
   else {
     redo_right = MIN(redo_right, CGRectGetMinX(_view_gizmo_hotspot.frame) - 12);
   }
-  /* The asset pane spans the full width along the bottom edge, and the timeline sits on the edge or
-   * on the asset pane; everything else sits above them. The tray keeps the same distance from the
-   * sides of the window as from its bottom. */
+  /* The asset pane spans the full width along the bottom edge, and the timeline sits on the edge
+   * or on the asset pane; everything else sits above them. The tray keeps the same distance from
+   * the sides of the window as from its bottom. */
   const CGRect bounds = _overlay_view.bounds;
   const CGFloat tray_bottom = CGRectGetMaxY(redo_rect) - 6;
   const CGFloat edge = CGRectGetMaxY(bounds) - tray_bottom;
   const CGFloat tray_left = MAX(CGRectGetMinX(redo_rect), CGRectGetMinX(bounds) + edge);
-  const CGFloat tray_width = MAX(0, MIN(CGRectGetMaxX(redo_rect), CGRectGetMaxX(bounds) - edge) - tray_left);
-  [_assets layoutInRect:CGRectMake(tray_left, panel_top, tray_width, MAX(0, tray_bottom - panel_top))];
-  [_timeline layoutInRect:CGRectMake(tray_left, panel_top, tray_width,
+  const CGFloat tray_width = MAX(
+      0, MIN(CGRectGetMaxX(redo_rect), CGRectGetMaxX(bounds) - edge) - tray_left);
+  [_assets
+      layoutInRect:CGRectMake(tray_left, panel_top, tray_width, MAX(0, tray_bottom - panel_top))];
+  [_timeline layoutInRect:CGRectMake(tray_left,
+                                     panel_top,
+                                     tray_width,
                                      MAX(0, tray_bottom - assets_tray - panel_top))];
   panel_rect.origin.y = panel_top;
   panel_rect.size.height = MAX(0, panel_bottom - panel_top);
   [_scene_panels layoutInRect:panel_rect];
-  _redo_lane_rect = CGRectMake(redo_left, panel_top + 8,
-      MAX(0, redo_right - redo_left), MAX(60, redo_bottom - panel_top - 8));
+  _redo_lane_rect = CGRectMake(redo_left,
+                               panel_top + 8,
+                               MAX(0, redo_right - redo_left),
+                               MAX(60, redo_bottom - panel_top - 8));
   _redo_lane_wide = redo_rect.size.width >= 700;
   [self layoutRedoStrip];
   [self layoutToolbarLabel];
@@ -4484,8 +4628,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
    * into the viewport. Reserve the actual gizmo footprint beside the lane. */
   CGRect safe = _overlay_view.safeAreaLayoutGuide.layoutFrame;
   _action_phone_bottom_constraint.constant = -6.0 - _bottom_tray;
-  _action_phone_trailing_constraint.constant =
-      -MAX(12.0, CGRectGetMaxX(safe) - CGRectGetMinX(_view_gizmo_hotspot.frame) + 12.0);
+  _action_phone_trailing_constraint.constant = -MAX(
+      12.0, CGRectGetMaxX(safe) - CGRectGetMinX(_view_gizmo_hotspot.frame) + 12.0);
 }
 
 - (void)installActionStripLayout
@@ -4596,16 +4740,16 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     NSString *icon = [item[@"icon"] isKindOfClass:NSString.class] ? item[@"icon"] : @"";
     UIImage *image = GHOSTIOSBlenderIcon(icon, NO);
     NSString *title = [item[@"label"] length] ? item[@"label"] : identifier;
-    UIAction *action = [UIAction actionWithTitle:title
-                                           image:image
-                                      identifier:[@"blender.mode." stringByAppendingString:identifier]
-                                         handler:^(__kindof UIAction *sender) {
-                                           self->_mode_button.title = sender.title;
-                                           self->_mode_button.image = sender.image;
-                                           self->_mode_button.accessibilityValue = sender.title;
-                                           WM_apple_ios_ui_setting_enqueue("object_mode",
-                                                                           identifier.UTF8String);
-                                         }];
+    UIAction *action = [UIAction
+        actionWithTitle:title
+                  image:image
+             identifier:[@"blender.mode." stringByAppendingString:identifier]
+                handler:^(__kindof UIAction *sender) {
+                  self->_mode_button.title = sender.title;
+                  self->_mode_button.image = sender.image;
+                  self->_mode_button.accessibilityValue = sender.title;
+                  WM_apple_ios_ui_setting_enqueue("object_mode", identifier.UTF8String);
+                }];
     if ([identifier isEqualToString:current]) {
       action.state = UIMenuElementStateOn;
       selected = action;
@@ -4677,8 +4821,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 }
 
 - (UIAction *)viewportShadingActionWithTitle:(NSString *)title
-                                  systemImage:(NSString *)systemImage
-                                      command:(NSInteger)command
+                                 systemImage:(NSString *)systemImage
+                                     command:(NSInteger)command
 {
   UIImage *image = blenderIOSCommandIcon(command, systemImage);
   return [UIAction actionWithTitle:title
@@ -4695,10 +4839,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     return;
   }
   NSDictionary *commands = @{
-    @"wireframe": @(GHOST_IOS_UI_COMMAND_SET_VIEWPORT_WIREFRAME),
-    @"solid": @(GHOST_IOS_UI_COMMAND_SET_VIEWPORT_SOLID),
-    @"material": @(GHOST_IOS_UI_COMMAND_SET_VIEWPORT_MATERIAL),
-    @"rendered": @(GHOST_IOS_UI_COMMAND_SET_VIEWPORT_RENDERED),
+    @"wireframe" : @(GHOST_IOS_UI_COMMAND_SET_VIEWPORT_WIREFRAME),
+    @"solid" : @(GHOST_IOS_UI_COMMAND_SET_VIEWPORT_SOLID),
+    @"material" : @(GHOST_IOS_UI_COMMAND_SET_VIEWPORT_MATERIAL),
+    @"rendered" : @(GHOST_IOS_UI_COMMAND_SET_VIEWPORT_RENDERED),
   };
   NSNumber *command = commands[value];
   if (command == nil || _viewport_shading_button == nil ||
@@ -4719,14 +4863,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     }
     [actions addObject:action];
   }
-  _viewport_shading_button.menuRepresentation =
-      [menu menuByReplacingChildren:actions];
+  _viewport_shading_button.menuRepresentation = [menu menuByReplacingChildren:actions];
   _viewport_shading_button.tag = command.integerValue;
 }
 
 - (UIButton *)viewPieButtonWithTitle:(NSString *)title
                          systemImage:(NSString *)systemImage
-                              command:(NSInteger)command
+                             command:(NSInteger)command
 {
   UIButton *button = blenderIOSSwiftButton();
   button.tintColor = UIColor.labelColor;
@@ -4785,8 +4928,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   const BOOL highlighted = active || _view_gizmo_hovered || _view_gizmo_pressed;
   _view_gizmo_feedback.layer.borderColor =
       [UIColor.labelColor colorWithAlphaComponent:active ? 0.5 : 0.2].CGColor;
-  _view_gizmo_feedback.backgroundColor =
-      [UIColor.labelColor colorWithAlphaComponent:active ? 0.12 : 0.05];
+  _view_gizmo_feedback.backgroundColor = [UIColor.labelColor
+      colorWithAlphaComponent:active ? 0.12 : 0.05];
   _view_gizmo_hotspot.accessibilityValue = active ? @"View menu open" : nil;
   [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0.0 : 0.22
                         delay:0.0
@@ -4797,7 +4940,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                    animations:^{
                      self->_view_gizmo_feedback.alpha = highlighted ? 1.0 : 0.0;
                      CGFloat scale = active ? 1.08 : (self->_view_gizmo_pressed ? 0.94 : 1.0);
-                     self->_view_gizmo_feedback.transform = CGAffineTransformMakeScale(scale, scale);
+                     self->_view_gizmo_feedback.transform = CGAffineTransformMakeScale(scale,
+                                                                                       scale);
                    }
                    completion:nil];
 }
@@ -4839,11 +4983,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 - (void)layoutViewPie
 {
   CGRect viewport = _overlay_view.bounds;
-  CGFloat radius = _view_gizmo_geometry ? [_view_gizmo_geometry[2] doubleValue] * viewport.size.width : 40;
+  CGFloat radius = _view_gizmo_geometry ?
+                       [_view_gizmo_geometry[2] doubleValue] * viewport.size.width :
+                       40;
   CGPoint center = _view_gizmo_geometry ?
-      CGPointMake([_view_gizmo_geometry[0] doubleValue] * viewport.size.width,
-                  [_view_gizmo_geometry[1] doubleValue] * viewport.size.height) :
-      CGPointMake(CGRectGetMaxX(viewport) - 50, CGRectGetMaxY(viewport) - 50);
+                       CGPointMake([_view_gizmo_geometry[0] doubleValue] * viewport.size.width,
+                                   [_view_gizmo_geometry[1] doubleValue] * viewport.size.height) :
+                       CGPointMake(CGRectGetMaxX(viewport) - 50, CGRectGetMaxY(viewport) - 50);
   CGFloat target_radius = MAX(44.0, radius + 10.0);
   _view_gizmo_hotspot.bounds = CGRectMake(0, 0, target_radius * 2, target_radius * 2);
   _view_gizmo_hotspot.center = center;
@@ -4867,8 +5013,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     CGFloat w = compact ? width : MIN(180.0, [button sizeThatFits:CGSizeMake(180, 44)].width);
     /* Bounds/center remain stable while the reveal transform is animating. */
     button.bounds = CGRectMake(0, 0, w, 44);
-    button.center = CGPointMake(CGRectGetMaxX(safe) - x - w / 2.0,
-                               CGRectGetMaxY(safe) - y - 22.0);
+    button.center = CGPointMake(CGRectGetMaxX(safe) - x - w / 2.0, CGRectGetMaxY(safe) - y - 22.0);
   }
 }
 
@@ -4997,7 +5142,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [self setViewPieVisible:NO animated:YES];
   }
   else if (gesture.state == UIGestureRecognizerStateCancelled ||
-           gesture.state == UIGestureRecognizerStateFailed) {
+           gesture.state == UIGestureRecognizerStateFailed)
+  {
     [self setViewPieVisible:NO animated:YES];
   }
 }
@@ -5025,7 +5171,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   UIImage *image = blenderIOSIcon([@"control." stringByAppendingString:accessibilityLabel],
                                   systemImage);
   UIBarButtonItem *button = [[[UIBarButtonItem alloc]
-      initWithImage:image menu:[UIMenu menuWithTitle:title children:children]] autorelease];
+      initWithImage:image
+               menu:[UIMenu menuWithTitle:title children:children]] autorelease];
   button.title = title;
   button.accessibilityLabel = accessibilityLabel;
   button.identifier = [@"blender.setting." stringByAppendingString:accessibilityLabel];
@@ -5112,10 +5259,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                                                           systemImage:@"square.grid.3x3"
                                                               setting:@"snap"
                                                                 value:@"grid"],
-                                        [self settingsActionWithTitle:@"Vertex"
-                                                          systemImage:@"point.topleft.down.curvedto.point.bottomright.up"
-                                                              setting:@"snap"
-                                                                value:@"vertex"],
+                                        [self
+                                            settingsActionWithTitle:@"Vertex"
+                                                        systemImage:@"point.topleft.down.curvedto."
+                                                                    @"point.bottomright.up"
+                                                            setting:@"snap"
+                                                              value:@"vertex"],
                                         [self settingsActionWithTitle:@"Edge"
                                                           systemImage:@"line.diagonal"
                                                               setting:@"snap"
@@ -5164,12 +5313,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   compact.title = @"Transform Settings";
   compact.accessibilityLabel = compact.title;
   _top_settings_group = [[UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact
-                                                                         items:@[
-                                                                           orientation_button,
-                                                                           pivot_button,
-                                                                           snap_button,
-                                                                           proportional_button
-                                                                         ]] retain];
+                                                                          items:@[
+                                                                            orientation_button,
+                                                                            pivot_button,
+                                                                            snap_button,
+                                                                            proportional_button
+                                                                          ]] retain];
   _top_settings_group.menuRepresentation = menu;
   _top_settings_group.hidden = YES;
   return _top_settings_group;
@@ -5183,9 +5332,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   {
     return;
   }
-  NSArray *keys = @[@"orientation", @"pivot", @"snap", @"proportional"];
+  NSArray *keys = @[ @"orientation", @"pivot", @"snap", @"proportional" ];
   NSMutableDictionary *applied = _top_settings_values ? [_top_settings_values mutableCopy] :
-                                                       [[NSMutableDictionary alloc] init];
+                                                        [[NSMutableDictionary alloc] init];
   BOOL changed = NO;
   for (NSUInteger index = 0; index < keys.count; index++) {
     NSString *key = keys[index];
@@ -5211,14 +5360,15 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     for (UIAction *action in button.menu.children) {
       UIAction *updated = [[action copy] autorelease];
       updated.state = [action.identifier isEqual:identifier] ? UIMenuElementStateOn :
-                                                              UIMenuElementStateOff;
+                                                               UIMenuElementStateOff;
       [actions addObject:updated];
     }
     button.image = selected ? selected.image :
-                   mixed ? blenderIOSIcon(@"control.Snapping", @"magnet") :
-                           [UIImage systemImageNamed:@"rotate.3d"];
+                   mixed    ? blenderIOSIcon(@"control.Snapping", @"magnet") :
+                              [UIImage systemImageNamed:@"rotate.3d"];
     button.accessibilityValue = selected ? selected.title :
-                                custom ? @"Custom Orientation" : @"Multiple or Other Elements";
+                                custom   ? @"Custom Orientation" :
+                                           @"Multiple or Other Elements";
     button.menu = [button.menu menuByReplacingChildren:actions];
     button.menuRepresentation = button.menu;
     applied[key] = value;
@@ -5230,7 +5380,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
       [menus addObject:button.menu];
     }
     UIMenu *menu = [_top_settings_group.representativeItem.menu menuByReplacingChildren:menus];
-    _top_settings_group.representativeItem.image = _top_settings_group.barButtonItems.firstObject.image;
+    _top_settings_group.representativeItem.image =
+        _top_settings_group.barButtonItems.firstObject.image;
     _top_settings_group.representativeItem.menu = menu;
     _top_settings_group.menuRepresentation = menu;
     [_top_settings_values release];
@@ -5266,11 +5417,14 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                                              value:(NSString *)value
 {
   UIImage *image = blenderIOSIcon([@"mesh." stringByAppendingString:value], systemImage);
-  UIAction *action = [UIAction actionWithTitle:title image:image identifier:value
-                                     handler:^(__kindof UIAction *selected) {
-    [self setMeshSelectModeValue:value];
-    WM_apple_ios_ui_setting_enqueue("mesh_select_mode", value.UTF8String);
-  }];
+  UIAction *action = [UIAction
+      actionWithTitle:title
+                image:image
+           identifier:value
+              handler:^(__kindof UIAction *selected) {
+                [self setMeshSelectModeValue:value];
+                WM_apple_ios_ui_setting_enqueue("mesh_select_mode", value.UTF8String);
+              }];
   UIBarButtonItem *button = [[[UIBarButtonItem alloc] initWithPrimaryAction:action] autorelease];
   button.image = image;
   button.accessibilityLabel = title;
@@ -5297,7 +5451,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [actions addObject:button.primaryAction];
   }
   _mesh_select_control = [[[UISegmentedControl alloc] initWithFrame:CGRectMake(0, 0, 144, 44)
-                                                         actions:actions] autorelease];
+                                                            actions:actions] autorelease];
   _mesh_select_control.accessibilityLabel = @"Mesh Selection Mode";
   _mesh_select_control.accessibilityIdentifier = @"blender.mesh-selection";
   _mesh_select_control.momentary = NO;
@@ -5305,8 +5459,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [_mesh_select_control.widthAnchor constraintEqualToConstant:144],
     [_mesh_select_control.heightAnchor constraintEqualToConstant:44],
   ]];
-  UIBarButtonItem *control = [[[UIBarButtonItem alloc]
-      initWithCustomView:_mesh_select_control] autorelease];
+  UIBarButtonItem *control = [[[UIBarButtonItem alloc] initWithCustomView:_mesh_select_control]
+      autorelease];
   control.identifier = @"blender.mesh-selection";
 #if !defined(APPLE_TARGET_VISIONOS)
   control.hidesSharedBackground = YES;
@@ -5316,7 +5470,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   }
 #endif
   _mesh_select_group = [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact
-                                                                      items:@[control]];
+                                                                        items:@[ control ]];
   _mesh_select_group.hidden = YES;
   [self setMeshSelectModeValue:@"VERT"];
   return _mesh_select_group;
@@ -5332,7 +5486,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
 - (void)setMeshSelectModeValue:(NSString *)value
 {
-  NSUInteger index = [@[@"VERT", @"EDGE", @"FACE"] indexOfObject:value ?: @""];
+  NSUInteger index = [@[ @"VERT", @"EDGE", @"FACE" ] indexOfObject:value ?: @""];
   if (index == NSNotFound) {
     return;
   }
@@ -5436,15 +5590,17 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   UIMenu *mode_menu = [UIMenu
       menuWithTitle:@"Mode"
            children:@[
-             [self modeActionWithTitle:@"Object Mode" command:GHOST_IOS_UI_COMMAND_SET_MODE_OBJECT],
+             [self modeActionWithTitle:@"Object Mode"
+                               command:GHOST_IOS_UI_COMMAND_SET_MODE_OBJECT],
              [self modeActionWithTitle:@"Edit Mode" command:GHOST_IOS_UI_COMMAND_SET_MODE_EDIT],
-             [self modeActionWithTitle:@"Sculpt Mode" command:GHOST_IOS_UI_COMMAND_SET_MODE_SCULPT],
+             [self modeActionWithTitle:@"Sculpt Mode"
+                               command:GHOST_IOS_UI_COMMAND_SET_MODE_SCULPT],
              [self modeActionWithTitle:@"Vertex Paint"
-                                command:GHOST_IOS_UI_COMMAND_SET_MODE_VERTEX_PAINT],
+                               command:GHOST_IOS_UI_COMMAND_SET_MODE_VERTEX_PAINT],
              [self modeActionWithTitle:@"Weight Paint"
-                                command:GHOST_IOS_UI_COMMAND_SET_MODE_WEIGHT_PAINT],
+                               command:GHOST_IOS_UI_COMMAND_SET_MODE_WEIGHT_PAINT],
              [self modeActionWithTitle:@"Texture Paint"
-                                command:GHOST_IOS_UI_COMMAND_SET_MODE_TEXTURE_PAINT],
+                               command:GHOST_IOS_UI_COMMAND_SET_MODE_TEXTURE_PAINT],
            ]];
   button.menu = mode_menu;
   button.menuRepresentation = mode_menu;
@@ -5459,86 +5615,140 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     return;
   }
   __block __typeof__(self) controller = self;
-  UIMenu *(^section)(NSArray *) = ^UIMenu *(NSArray *children) {
-    return [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline
+  UIMenu * (^section)(NSArray *) = ^UIMenu *(NSArray *children) {
+    return [UIMenu menuWithTitle:@""
+                           image:nil
+                      identifier:nil
+                         options:UIMenuOptionsDisplayInline
                         children:children];
   };
 
   /* Share: what leaves the document. Documents save themselves, so
    * there is no Save; going back to Documents keeps the work. */
-  UIAction *share = [UIAction actionWithTitle:@"Share…" image:[UIImage systemImageNamed:@"square.and.arrow.up"]
-      identifier:@"blender.document.share" handler:^(__kindof UIAction *) { [controller shareDocument]; }];
-  UIAction *saveAs = [UIAction actionWithTitle:@"Save As…" image:[UIImage systemImageNamed:@"doc.on.doc"]
-      identifier:@"blender.document.save-as" handler:^(__kindof UIAction *) { [controller saveDocumentAs]; }];
-  UIAction *renderImage = [UIAction actionWithTitle:@"Render Image" image:[UIImage systemImageNamed:@"photo"]
-      identifier:@"blender.render.image" handler:^(__kindof UIAction *) { [controller->_render renderAnimation:NO]; }];
+  UIAction *share = [UIAction actionWithTitle:@"Share…"
+                                        image:[UIImage systemImageNamed:@"square.and.arrow.up"]
+                                   identifier:@"blender.document.share"
+                                      handler:^(__kindof UIAction *) {
+                                        [controller shareDocument];
+                                      }];
+  UIAction *saveAs = [UIAction actionWithTitle:@"Save As…"
+                                         image:[UIImage systemImageNamed:@"doc.on.doc"]
+                                    identifier:@"blender.document.save-as"
+                                       handler:^(__kindof UIAction *) {
+                                         [controller saveDocumentAs];
+                                       }];
+  UIAction *renderImage = [UIAction actionWithTitle:@"Render Image"
+                                              image:[UIImage systemImageNamed:@"photo"]
+                                         identifier:@"blender.render.image"
+                                            handler:^(__kindof UIAction *) {
+                                              [controller->_render renderAnimation:NO];
+                                            }];
   UIAction *renderAnimation = [UIAction actionWithTitle:@"Render Animation"
-      image:[UIImage systemImageNamed:@"film"] identifier:@"blender.render.animation"
-      handler:^(__kindof UIAction *) { [controller->_render renderAnimation:YES]; }];
+                                                  image:[UIImage systemImageNamed:@"film"]
+                                             identifier:@"blender.render.animation"
+                                                handler:^(__kindof UIAction *) {
+                                                  [controller->_render renderAnimation:YES];
+                                                }];
   /* Every earlier render, in the render sheet's film strip. */
   UIAction *renders = [UIAction actionWithTitle:@"Renders"
-      image:[UIImage systemImageNamed:@"photo.stack"] identifier:@"blender.render.history"
-      handler:^(__kindof UIAction *) { [controller->_render showRenders]; }];
-  NSArray *render_actions = @[renderImage, renderAnimation, renders];
+                                          image:[UIImage systemImageNamed:@"photo.stack"]
+                                     identifier:@"blender.render.history"
+                                        handler:^(__kindof UIAction *) {
+                                          [controller->_render showRenders];
+                                        }];
+  NSArray *render_actions = @[ renderImage, renderAnimation, renders ];
   UIAction *saveTemplate = [UIAction actionWithTitle:@"Save as Template…"
-      image:[UIImage systemImageNamed:@"square.on.square"] identifier:@"blender.template.save"
-      handler:^(__kindof UIAction *) { [controller saveAsTemplate]; }];
+                                               image:[UIImage systemImageNamed:@"square.on.square"]
+                                          identifier:@"blender.template.save"
+                                             handler:^(__kindof UIAction *) {
+                                               [controller saveAsTemplate];
+                                             }];
   /* Blender's own Import and Export menus, so every format it and its add-ons support is listed.
    * Their file browsers open the system document picker. */
-  UIMenu *import_menu = blenderIOSNativeSubmenu(
-      @{@"title": @"Import", @"icon": @"IMPORT", @"route": @{@"root": @"TOPBAR_MT_file_import", @"path": @[]}},
-      @"blender.file.import");
-  UIMenu *export_menu = blenderIOSNativeSubmenu(
-      @{@"title": @"Export", @"icon": @"EXPORT", @"route": @{@"root": @"TOPBAR_MT_file_export", @"path": @[]}},
-      @"blender.file.export");
-  UIMenu *share_menu = [UIMenu menuWithTitle:@"" children:@[
-    section(@[share, saveAs]), section(@[import_menu, export_menu]), section(render_actions),
-    section(@[saveTemplate]),
-  ]];
+  UIMenu *import_menu = blenderIOSNativeSubmenu(@{
+    @"title" : @"Import",
+    @"icon" : @"IMPORT",
+    @"route" : @{@"root" : @"TOPBAR_MT_file_import", @"path" : @[]}
+  },
+                                                @"blender.file.import");
+  UIMenu *export_menu = blenderIOSNativeSubmenu(@{
+    @"title" : @"Export",
+    @"icon" : @"EXPORT",
+    @"route" : @{@"root" : @"TOPBAR_MT_file_export", @"path" : @[]}
+  },
+                                                @"blender.file.export");
+  UIMenu *share_menu = [UIMenu menuWithTitle:@""
+                                    children:@[
+                                      section(@[ share, saveAs ]),
+                                      section(@[ import_menu, export_menu ]),
+                                      section(render_actions),
+                                      section(@[ saveTemplate ]),
+                                    ]];
   _share_button.menu = share_menu;
   _share_button.menuRepresentation = share_menu;
 
   /* More: smaller things, with viewport options that show their current state when opened. */
-  UIAction *create = [UIAction actionWithTitle:@"New…" image:[UIImage systemImageNamed:@"doc.badge.plus"]
-      identifier:@"blender.document.new" handler:^(__kindof UIAction *) { [controller newDocument:nil]; }];
-  UIDeferredMenuElement *viewport = [UIDeferredMenuElement elementWithUncachedProvider:
-      ^(void (^completion)(NSArray<UIMenuElement *> *)) {
+  UIAction *create = [UIAction actionWithTitle:@"New…"
+                                         image:[UIImage systemImageNamed:@"doc.badge.plus"]
+                                    identifier:@"blender.document.new"
+                                       handler:^(__kindof UIAction *) {
+                                         [controller newDocument:nil];
+                                       }];
+  UIDeferredMenuElement *viewport = [UIDeferredMenuElement
+      elementWithUncachedProvider:^(void (^completion)(NSArray<UIMenuElement *> *)) {
         NSDictionary *state = controller->_viewport_state;
         NSMutableArray *toggles = [NSMutableArray array];
-        for (NSArray *spec in @[@[@"overlays", @"Overlays", @"circle.dashed.inset.filled"],
-                                @[@"xray", @"X-Ray", @"square.on.square.intersection.dashed"],
-                                @[@"gizmos", @"Gizmos", @"move.3d"],
-                                @[@"statistics", @"Statistics", @"chart.bar"],
-                                @[@"wireframe", @"Wireframe", @"cube"]])
+        for (NSArray *spec in @[
+               @[ @"overlays", @"Overlays", @"circle.dashed.inset.filled" ],
+               @[ @"xray", @"X-Ray", @"square.on.square.intersection.dashed" ],
+               @[ @"gizmos", @"Gizmos", @"move.3d" ],
+               @[ @"statistics", @"Statistics", @"chart.bar" ],
+               @[ @"wireframe", @"Wireframe", @"cube" ]
+             ])
         {
           NSString *name = spec[0];
-          UIAction *toggle = [UIAction actionWithTitle:spec[1] image:[UIImage systemImageNamed:spec[2]]
-              identifier:[@"blender.viewport." stringByAppendingString:name]
-              handler:^(__kindof UIAction *) {
-                WM_apple_ios_ui_setting_enqueue("viewport_toggle", name.UTF8String);
-              }];
+          UIAction *toggle = [UIAction
+              actionWithTitle:spec[1]
+                        image:[UIImage systemImageNamed:spec[2]]
+                   identifier:[@"blender.viewport." stringByAppendingString:name]
+                      handler:^(__kindof UIAction *) {
+                        WM_apple_ios_ui_setting_enqueue("viewport_toggle", name.UTF8String);
+                      }];
           toggle.state = [state[name] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff;
           toggle.attributes = state ? 0 : UIMenuElementAttributesDisabled;
           [toggles addObject:toggle];
         }
-        completion(@[section(toggles)]);
+        completion(@[ section(toggles) ]);
       }];
   UIAction *desktop = [UIAction actionWithTitle:@"Switch to Desktop Interface"
-      image:[UIImage systemImageNamed:@"macwindow"] identifier:@"blender.interface.desktop"
-      handler:^(__kindof UIAction *) { WM_apple_ios_ui_setting_enqueue("interface", "desktop"); }];
-  UIAction *hide = [UIAction actionWithTitle:@"Hide Interface"
-      image:[UIImage systemImageNamed:@"arrow.up.left.and.arrow.down.right"]
-      identifier:@"blender.interface.hide"
-      handler:^(__kindof UIAction *) { [controller setInterfaceHidden:YES]; }];
+                                          image:[UIImage systemImageNamed:@"macwindow"]
+                                     identifier:@"blender.interface.desktop"
+                                        handler:^(__kindof UIAction *) {
+                                          WM_apple_ios_ui_setting_enqueue("interface", "desktop");
+                                        }];
+  UIAction *hide = [UIAction
+      actionWithTitle:@"Hide Interface"
+                image:[UIImage systemImageNamed:@"arrow.up.left.and.arrow.down.right"]
+           identifier:@"blender.interface.hide"
+              handler:^(__kindof UIAction *) {
+                [controller setInterfaceHidden:YES];
+              }];
   UIAction *settings = [UIAction actionWithTitle:@"Settings"
-      image:[UIImage systemImageNamed:@"gearshape"]
-      identifier:@"blender.settings"
-      handler:^(__kindof UIAction *) { [controller->_settings present]; }];
+                                           image:[UIImage systemImageNamed:@"gearshape"]
+                                      identifier:@"blender.settings"
+                                         handler:^(__kindof UIAction *) {
+                                           [controller->_settings present];
+                                         }];
   if (!_settings) {
     settings.attributes = UIMenuElementAttributesHidden;
   }
-  UIMenu *more = [UIMenu menuWithTitle:@"" children:@[
-    section(@[create]), viewport, section(@[hide, desktop]), section(@[settings])]];
+  UIMenu *more = [UIMenu menuWithTitle:@""
+                              children:@[
+                                section(@[ create ]),
+                                viewport,
+                                section(@[ hide, desktop ]),
+                                section(@[ settings ])
+                              ]];
   _actions_button.menu = more;
   _actions_button.menuRepresentation = more;
   _actions_button.enabled = YES;
@@ -5553,12 +5763,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* Save a copy wherever the user picks, as Files apps do for Save As. */
   __block GHOST_IOSViewController *controller = self;
   [document saveToURL:document.fileURL
-      forSaveOperation:UIDocumentSaveForOverwriting
-     completionHandler:^(BOOL) {
-       UIDocumentPickerViewController *picker = [[[UIDocumentPickerViewController alloc]
-           initForExportingURLs:@[document.fileURL] asCopy:YES] autorelease];
-       [controller presentViewController:picker animated:YES completion:nil];
-     }];
+       forSaveOperation:UIDocumentSaveForOverwriting
+      completionHandler:^(BOOL) {
+        UIDocumentPickerViewController *picker = [[[UIDocumentPickerViewController alloc]
+            initForExportingURLs:@[ document.fileURL ]
+                          asCopy:YES] autorelease];
+        [controller presentViewController:picker animated:YES completion:nil];
+      }];
 }
 
 - (void)shareDocument
@@ -5570,49 +5781,106 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* Share the file as it is now. */
   __block GHOST_IOSViewController *controller = self;
   [document saveToURL:document.fileURL
-      forSaveOperation:UIDocumentSaveForOverwriting
-     completionHandler:^(BOOL) {
-       UIActivityViewController *activity = [[[UIActivityViewController alloc]
-           initWithActivityItems:@[document.fileURL] applicationActivities:nil] autorelease];
-       activity.popoverPresentationController.sourceItem = controller->_share_button;
-       [controller presentViewController:activity animated:YES completion:nil];
-     }];
+       forSaveOperation:UIDocumentSaveForOverwriting
+      completionHandler:^(BOOL) {
+        UIActivityViewController *activity = [[[UIActivityViewController alloc]
+            initWithActivityItems:@[ document.fileURL ]
+            applicationActivities:nil] autorelease];
+        activity.popoverPresentationController.sourceItem = controller->_share_button;
+        [controller presentViewController:activity animated:YES completion:nil];
+      }];
 }
 
 - (void)saveAsTemplate
 {
-  UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Save as Template"
-      message:nil preferredStyle:UIAlertControllerStyleAlert];
+  UIAlertController *alert = [UIAlertController
+      alertControllerWithTitle:@"Save as Template"
+                       message:nil
+                preferredStyle:UIAlertControllerStyleAlert];
   [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
     field.placeholder = @"Template Name";
     field.text = @"My Template";
   }];
-  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-  [alert addAction:[UIAlertAction actionWithTitle:@"Save" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
-    NSString *name = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-    if (!name.length) { return; }
-    [alert dismissViewControllerAnimated:YES completion:^{
-      UIViewController *progress = [[[UIViewController alloc] init] autorelease];
-      progress.modalPresentationStyle = UIModalPresentationFormSheet;
-      progress.modalInPresentation = YES;
-      progress.preferredContentSize = CGSizeMake(320, 180);
-      progress.view.backgroundColor = UIColor.systemBackgroundColor;
-      UIContentUnavailableConfiguration *loading = [UIContentUnavailableConfiguration loadingConfiguration];
-      loading.text = @"Saving Template";
-      progress.contentUnavailableConfiguration = loading;
-      [self presentViewController:progress animated:YES completion:^{
-        GHOST_ios_template_save(name, @{@"timeline": @(self->_timeline.visible)}, ^(NSString *error) {
-          [progress dismissViewControllerAnimated:YES completion:^{
-            UIAlertController *result = [UIAlertController alertControllerWithTitle:error ? @"Could Not Save Template" : @"Template Saved"
-                message:error ?: @"Available in My Templates when creating a new document."
-                preferredStyle:UIAlertControllerStyleAlert];
-            [result addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-            [self presentViewController:result animated:YES completion:nil];
-          }];
-        });
-      }];
-    }];
-  }]];
+  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                            style:UIAlertActionStyleCancel
+                                          handler:nil]];
+  [alert
+      addAction:
+          [UIAlertAction
+              actionWithTitle:@"Save"
+                        style:UIAlertActionStyleDefault
+                      handler:^(UIAlertAction *) {
+                        NSString *name = [alert.textFields.firstObject.text
+                            stringByTrimmingCharactersInSet:NSCharacterSet
+                                                                .whitespaceAndNewlineCharacterSet];
+                        if (!name.length) {
+                          return;
+                        }
+                        [alert
+                            dismissViewControllerAnimated:YES
+                                               completion:^{
+                                                 UIViewController *progress =
+                                                     [[[UIViewController alloc] init] autorelease];
+                                                 progress.modalPresentationStyle =
+                                                     UIModalPresentationFormSheet;
+                                                 progress.modalInPresentation = YES;
+                                                 progress.preferredContentSize = CGSizeMake(320,
+                                                                                            180);
+                                                 progress.view.backgroundColor =
+                                                     UIColor.systemBackgroundColor;
+                                                 UIContentUnavailableConfiguration *loading =
+                                                     [UIContentUnavailableConfiguration
+                                                         loadingConfiguration];
+                                                 loading.text = @"Saving Template";
+                                                 progress.contentUnavailableConfiguration =
+                                                     loading;
+                                                 [self
+                                                     presentViewController:progress
+                                                                  animated:YES
+                                                                completion:^{
+                                                                  GHOST_ios_template_save(
+                                                                      name,
+                                                                      @{
+                                                                        @"timeline" :
+                                                                            @(self->_timeline
+                                                                                  .visible)
+                                                                      },
+                                                                      ^(NSString *error) {
+                                                                        [progress
+                                                                            dismissViewControllerAnimated:
+                                                                                YES
+                                                                                               completion:^{
+                                                                                                 UIAlertController *result = [UIAlertController
+                                                                                                     alertControllerWithTitle:
+                                                                                                         error ?
+                                                                                                             @"Could Not Save Template" :
+                                                                                                             @"Template Saved"
+                                                                                                                      message:
+                                                                                                                          error ?:
+                                                                                                                              @"Available in My Templates when creating a new document."
+                                                                                                               preferredStyle:
+                                                                                                                   UIAlertControllerStyleAlert];
+                                                                                                 [result
+                                                                                                     addAction:
+                                                                                                         [UIAlertAction
+                                                                                                             actionWithTitle:
+                                                                                                                 @"OK"
+                                                                                                                       style:
+                                                                                                                           UIAlertActionStyleDefault
+                                                                                                                     handler:
+                                                                                                                         nil]];
+                                                                                                 [self
+                                                                                                     presentViewController:
+                                                                                                         result
+                                                                                                                  animated:
+                                                                                                                      YES
+                                                                                                                completion:
+                                                                                                                    nil];
+                                                                                               }];
+                                                                      });
+                                                                }];
+                                               }];
+                      }]];
   [self presentViewController:alert animated:YES completion:nil];
 }
 
@@ -5644,8 +5912,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
   _mode_button = [self modePickerButton];
   _actions_button = [self actionsButton];
-  _share_button = [[[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"square.and.arrow.up"]
-                                                     menu:nil] autorelease];
+  _share_button = [[[UIBarButtonItem alloc]
+      initWithImage:[UIImage systemImageNamed:@"square.and.arrow.up"]
+               menu:nil] autorelease];
   _share_button.title = @"Share";
   _share_button.accessibilityLabel = @"Share";
   _share_button.identifier = @"blender.share";
@@ -5653,7 +5922,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   if (Class settings_class = NSClassFromString(@"GHOSTIOSSwiftSettings")) {
     _settings = [[settings_class alloc] initWithPresenter:self];
     __block GHOST_IOSViewController *settings_host = self;
-    _settings.fingerUsesToolChanged = ^(BOOL useTool) { [settings_host setFingerInputMode:useTool]; };
+    _settings.fingerUsesToolChanged = ^(BOOL useTool) {
+      [settings_host setFingerInputMode:useTool];
+    };
     _settings.showQuickActionsChanged = ^(BOOL) {
       [settings_host rebuildActionStripWithActions:settings_host->_quick_actions];
       [settings_host.view setNeedsLayout];
@@ -5695,8 +5966,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* Panels, then shading, Share and More at the far right. */
   _top_bar_item.trailingItemGroups = @[
     [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:nil
-        items:@[_scene_panels.hierarchyButton, _timeline.button,
-                 _scene_panels.inspectorButton]],
+                                                     items:@[
+                                                       _scene_panels.hierarchyButton,
+                                                       _timeline.button,
+                                                       _scene_panels.inspectorButton
+                                                     ]],
     _viewport_shading_button.creatingFixedGroup,
     _share_button.creatingFixedGroup,
   ];
@@ -5742,27 +6016,34 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   }
 
   _overlay_view = [[GHOSTIOSPassThroughOverlayView alloc] initWithFrame:self.view.bounds];
-  _overlay_view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  _overlay_view.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+                                   UIViewAutoresizingFlexibleHeight;
   _overlay_view.backgroundColor = UIColor.clearColor;
   [self.view addSubview:_overlay_view];
 
   _mesh_select_buttons = [[NSMutableArray alloc] init];
-  _redo_strip = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftRedoStrip") alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
-    return GHOSTIOSBlenderIcon(name, NO);
-  }];
-  _scene_panels = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftScenePanels") alloc] initWithOverlay:_overlay_view icon:^UIImage *(NSString *name) {
-    return GHOSTIOSBlenderIcon(name, NO);
-  }];
+  _redo_strip = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftRedoStrip") alloc]
+      initWithOverlay:_overlay_view
+                 icon:^UIImage *(NSString *name) {
+                   return GHOSTIOSBlenderIcon(name, NO);
+                 }];
+  _scene_panels = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftScenePanels") alloc]
+      initWithOverlay:_overlay_view
+                 icon:^UIImage *(NSString *name) {
+                   return GHOSTIOSBlenderIcon(name, NO);
+                 }];
   _scene_panels.menuProvider = ^UIMenu *(NSDictionary *property) {
-    NSMutableDictionary *route = [NSMutableDictionary dictionaryWithDictionary:
-        @{@"root": property[@"menu"], @"path": @[]}];
-    if (property[@"tab"]) { route[@"propertiesTab"] = property[@"tab"]; }
-    return blenderIOSNativeSubmenu(@{@"title": property[@"label"],
-                                    @"icon": property[@"icon"] ?: @"",
-                                    @"route": route},
-                                   property[@"menu"]);
+    NSMutableDictionary *route = [NSMutableDictionary
+        dictionaryWithDictionary:@{@"root" : property[@"menu"], @"path" : @[]}];
+    if (property[@"tab"]) {
+      route[@"propertiesTab"] = property[@"tab"];
+    }
+    return blenderIOSNativeSubmenu(
+        @{@"title" : property[@"label"], @"icon" : property[@"icon"] ?: @"", @"route" : route},
+        property[@"menu"]);
   };
-  _timeline = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftTimeline") alloc] initWithOverlay:_overlay_view];
+  _timeline = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftTimeline") alloc]
+      initWithOverlay:_overlay_view];
   __block UIView *timeline_host = self.view;
   /* The bottom tray grows and shrinks; everything resting on it moves with it. */
   void (^relayout_tray)(void) = ^{
@@ -5796,7 +6077,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     if (!ghost_window || !ghost_system) {
       return;
     }
-    GHOST_TStringArray *files = static_cast<GHOST_TStringArray *>(malloc(sizeof(GHOST_TStringArray)));
+    GHOST_TStringArray *files = static_cast<GHOST_TStringArray *>(
+        malloc(sizeof(GHOST_TStringArray)));
     files->count = int(paths.count);
     files->strings = static_cast<uint8_t **>(malloc(paths.count * sizeof(uint8_t *)));
     for (NSUInteger i = 0; i < paths.count; i++) {
@@ -5816,10 +6098,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* Ornaments beside the window, for the tools and the quick actions. */
   if (Class chrome_class = NSClassFromString(@"GHOSTIOSVisionChrome")) {
     __block GHOST_IOSViewController *chrome_owner = self;
-    _vision_chrome = [[chrome_class alloc] initWithController:self choose:^(NSString *tool_id) {
-      [chrome_owner setActiveToolbarToolIdentifier:tool_id];
-      WM_apple_ios_ui_tool_set_by_id(tool_id.UTF8String);
-    }];
+    _vision_chrome = [[chrome_class alloc]
+        initWithController:self
+                    choose:^(NSString *tool_id) {
+                      [chrome_owner setActiveToolbarToolIdentifier:tool_id];
+                      WM_apple_ios_ui_tool_set_by_id(tool_id.UTF8String);
+                    }];
   }
 #endif
   [self installNativeTopBar];
@@ -5842,8 +6126,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _view_pie_visible = NO;
 
   _tool_rail_glass_effect = [GHOSTIOSGlassEffect(YES, YES) retain];
-  _tool_rail =
-      [[[GHOSTIOSPassThroughVisualEffectView alloc] initWithEffect:_tool_rail_glass_effect] autorelease];
+  _tool_rail = [[[GHOSTIOSPassThroughVisualEffectView alloc]
+      initWithEffect:_tool_rail_glass_effect] autorelease];
   _tool_rail.translatesAutoresizingMaskIntoConstraints = NO;
   _tool_rail.clipsToBounds = YES;
   _tool_rail.layer.cornerRadius = 32.0;
@@ -5866,11 +6150,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
   _tool_drag_handle = [self toolbarDragHandle];
   [_tool_rail.contentView addSubview:_tool_drag_handle];
-  _tool_drag_handle_height_constraint = [_tool_drag_handle.heightAnchor constraintEqualToConstant:0.0];
+  _tool_drag_handle_height_constraint = [_tool_drag_handle.heightAnchor
+      constraintEqualToConstant:0.0];
 
   _tool_scroll = [[GHOSTIOSButtonScrollView alloc] initWithFrame:CGRectZero];
   UIHoverGestureRecognizer *tool_hover = [[UIHoverGestureRecognizer alloc]
-      initWithTarget:self action:@selector(handleToolbarHover:)];
+      initWithTarget:self
+              action:@selector(handleToolbarHover:)];
   [_tool_scroll addGestureRecognizer:tool_hover];
   [tool_hover release];
   _tool_scroll.translatesAutoresizingMaskIntoConstraints = NO;
@@ -5920,36 +6206,52 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self installActionStripToggle];
 
   NSArray *view_pie_specs = @[
-    @{@"title" : @"Frame All",
+    @{
+      @"title" : @"Frame All",
       @"symbol" : @"rectangle.expand.vertical",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_ALL)},
-    @{@"title" : @"Frame Selected",
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_ALL)
+    },
+    @{
+      @"title" : @"Frame Selected",
       @"symbol" : @"viewfinder",
-      @"command" : @(GHOST_IOS_UI_COMMAND_FRAME_SELECTED)},
-    @{@"title" : @"Camera",
+      @"command" : @(GHOST_IOS_UI_COMMAND_FRAME_SELECTED)
+    },
+    @{
+      @"title" : @"Camera",
       @"symbol" : @"camera",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_CAMERA)},
-    @{@"title" : @"Perspective",
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_CAMERA)
+    },
+    @{
+      @"title" : @"Perspective",
       @"symbol" : @"cube.transparent",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_PERSP_ORTHO)},
-    @{@"title" : @"Local View",
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_PERSP_ORTHO)
+    },
+    @{
+      @"title" : @"Local View",
       @"symbol" : @"scope",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_LOCAL)},
-    @{@"title" : @"Front",
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_LOCAL)
+    },
+    @{
+      @"title" : @"Front",
       @"symbol" : @"arrow.up.square",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_FRONT)},
-    @{@"title" : @"Right",
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_FRONT)
+    },
+    @{
+      @"title" : @"Right",
       @"symbol" : @"arrow.right.square",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_RIGHT)},
-    @{@"title" : @"Top",
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_RIGHT)
+    },
+    @{
+      @"title" : @"Top",
       @"symbol" : @"arrow.down.to.line.square",
-      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_TOP)},
+      @"command" : @(GHOST_IOS_UI_COMMAND_VIEW_TOP)
+    },
   ];
 
   for (NSDictionary *spec in view_pie_specs) {
     UIButton *button = [self viewPieButtonWithTitle:spec[@"title"]
                                         systemImage:spec[@"symbol"]
-                                             command:[spec[@"command"] integerValue]];
+                                            command:[spec[@"command"] integerValue]];
     [_overlay_view addSubview:button];
   }
   if (phone) {
@@ -5980,7 +6282,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _view_gizmo_selection_feedback = [[UISelectionFeedbackGenerator
       feedbackGeneratorForView:_view_gizmo_hotspot] retain];
   _view_gizmo_open_feedback = [[UIImpactFeedbackGenerator
-      feedbackGeneratorWithStyle:UIImpactFeedbackStyleSoft forView:_view_gizmo_hotspot] retain];
+      feedbackGeneratorWithStyle:UIImpactFeedbackStyleSoft
+                         forView:_view_gizmo_hotspot] retain];
 #endif
   _view_gizmo_feedback = [[[UIView alloc] initWithFrame:CGRectMake(14, 14, 84, 84)] autorelease];
   _view_gizmo_feedback.userInteractionEnabled = NO;
@@ -5988,26 +6291,31 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _view_gizmo_feedback.layer.borderWidth = 1;
   _view_gizmo_feedback.alpha = 0;
   [_view_gizmo_hotspot addSubview:_view_gizmo_feedback];
-  [gizmo_control addTarget:self action:@selector(handleViewGizmoPress:)
+  [gizmo_control addTarget:self
+                    action:@selector(handleViewGizmoPress:)
           forControlEvents:UIControlEventTouchDown];
-  [gizmo_control addTarget:self action:@selector(handleViewGizmoRelease:)
-          forControlEvents:UIControlEventTouchUpInside |
-                           UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+  [gizmo_control addTarget:self
+                    action:@selector(handleViewGizmoRelease:)
+          forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside |
+                           UIControlEventTouchCancel];
 
   UIHoverGestureRecognizer *view_gizmo_hover = [[UIHoverGestureRecognizer alloc]
-      initWithTarget:self action:@selector(handleViewGizmoHover:)];
+      initWithTarget:self
+              action:@selector(handleViewGizmoHover:)];
   [_view_gizmo_hotspot addGestureRecognizer:view_gizmo_hover];
   [view_gizmo_hover release];
 
   UILongPressGestureRecognizer *view_gizmo_hold = [[UILongPressGestureRecognizer alloc]
-      initWithTarget:self action:@selector(handleViewGizmoHold:)];
+      initWithTarget:self
+              action:@selector(handleViewGizmoHold:)];
   view_gizmo_hold.minimumPressDuration = 0.32;
   view_gizmo_hold.allowableMovement = 10.0;
   view_gizmo_hold.allowedTouchTypes = @[ @(UITouchTypeDirect), @(UITouchTypePencil) ];
   [_view_gizmo_hotspot addGestureRecognizer:view_gizmo_hold];
 
   UITapGestureRecognizer *view_gizmo_tap = [[UITapGestureRecognizer alloc]
-      initWithTarget:self action:@selector(handleViewGizmoTap:)];
+      initWithTarget:self
+              action:@selector(handleViewGizmoTap:)];
   view_gizmo_tap.allowedTouchTypes = @[ @(UITouchTypeDirect) ];
   [view_gizmo_tap requireGestureRecognizerToFail:view_gizmo_hold];
   [_view_gizmo_hotspot addGestureRecognizer:view_gizmo_tap];
@@ -6025,11 +6333,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [view_gizmo_drag release];
   [view_gizmo_hold release];
   [NSNotificationCenter.defaultCenter addObserver:self
-      selector:@selector(cancelViewGizmoInteraction)
-      name:UIApplicationWillResignActiveNotification object:nil];
+                                         selector:@selector(cancelViewGizmoInteraction)
+                                             name:UIApplicationWillResignActiveNotification
+                                           object:nil];
   [NSNotificationCenter.defaultCenter addObserver:self
-      selector:@selector(applyTemplatePresentation:)
-      name:@"BlenderTemplatePresentation" object:nil];
+                                         selector:@selector(applyTemplatePresentation:)
+                                             name:@"BlenderTemplatePresentation"
+                                           object:nil];
 
   UILayoutGuide *safe_area = _overlay_view.safeAreaLayoutGuide;
   /* The radial view is frontmost and passes through when the palette is closed. */
@@ -6038,10 +6348,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   }
   _tool_rail_width_constraint = [_tool_rail.widthAnchor constraintEqualToConstant:64.0];
   _tool_rail_height_constraint = [_tool_rail.heightAnchor constraintEqualToConstant:64.0];
-  _tool_rail_bottom_constraint = [[_tool_rail.bottomAnchor constraintEqualToAnchor:safe_area.bottomAnchor
-                                                                          constant:-12.0] retain];
-  _tool_rail_center_y_constraint = [[_tool_rail.centerYAnchor constraintEqualToAnchor:safe_area.centerYAnchor]
-      retain];
+  _tool_rail_bottom_constraint = [[_tool_rail.bottomAnchor
+      constraintEqualToAnchor:safe_area.bottomAnchor
+                     constant:-12.0] retain];
+  _tool_rail_center_y_constraint = [[_tool_rail.centerYAnchor
+      constraintEqualToAnchor:safe_area.centerYAnchor] retain];
   /* Center a compact row when it fits; grow the scrollable content, not the
    * buttons or reserved viewport, when it overflows or the tool rail expands. */
   NSLayoutConstraint *action_content_width = [_action_scroll.contentLayoutGuide.widthAnchor
@@ -6057,43 +6368,52 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [_tool_scroll.leadingAnchor constraintEqualToAnchor:_tool_rail.contentView.leadingAnchor],
     [_tool_scroll.trailingAnchor constraintEqualToAnchor:_tool_rail.contentView.trailingAnchor],
     [_tool_drag_handle.leadingAnchor constraintEqualToAnchor:_tool_rail.contentView.leadingAnchor],
-    [_tool_drag_handle.trailingAnchor constraintEqualToAnchor:_tool_rail.contentView.trailingAnchor],
+    [_tool_drag_handle.trailingAnchor
+        constraintEqualToAnchor:_tool_rail.contentView.trailingAnchor],
     [_tool_drag_handle.topAnchor constraintEqualToAnchor:_tool_rail.contentView.topAnchor],
     _tool_drag_handle_height_constraint,
     [_tool_scroll.topAnchor constraintEqualToAnchor:_tool_drag_handle.bottomAnchor],
     [_tool_scroll.bottomAnchor constraintEqualToAnchor:_tool_rail.contentView.bottomAnchor],
 
-    [_tool_stack.leadingAnchor constraintEqualToAnchor:_tool_scroll.contentLayoutGuide.leadingAnchor
-                                             constant:6.0],
-    [_tool_stack.trailingAnchor constraintEqualToAnchor:_tool_scroll.contentLayoutGuide.trailingAnchor
-                                              constant:-6.0],
-    [_tool_stack.topAnchor constraintEqualToAnchor:_tool_scroll.contentLayoutGuide.topAnchor constant:6.0],
+    [_tool_stack.leadingAnchor
+        constraintEqualToAnchor:_tool_scroll.contentLayoutGuide.leadingAnchor
+                       constant:6.0],
+    [_tool_stack.trailingAnchor
+        constraintEqualToAnchor:_tool_scroll.contentLayoutGuide.trailingAnchor
+                       constant:-6.0],
+    [_tool_stack.topAnchor constraintEqualToAnchor:_tool_scroll.contentLayoutGuide.topAnchor
+                                          constant:6.0],
     [_tool_stack.bottomAnchor constraintEqualToAnchor:_tool_scroll.contentLayoutGuide.bottomAnchor
-                                            constant:-6.0],
+                                             constant:-6.0],
     [_tool_stack.widthAnchor constraintEqualToAnchor:_tool_scroll.frameLayoutGuide.widthAnchor
-                                           constant:-12.0],
+                                            constant:-12.0],
 
     [_action_scroll.leadingAnchor constraintEqualToAnchor:_action_group.leadingAnchor
-                                                constant:48.0],
+                                                 constant:48.0],
     [_action_scroll.topAnchor constraintEqualToAnchor:_action_rail.contentView.topAnchor
-                                            constant:0.0],
+                                             constant:0.0],
     [_action_scroll.bottomAnchor constraintEqualToAnchor:_action_rail.contentView.bottomAnchor
-                                               constant:0.0],
+                                                constant:0.0],
 
     action_content_width,
     [_action_scroll.contentLayoutGuide.widthAnchor
         constraintGreaterThanOrEqualToAnchor:_action_scroll.frameLayoutGuide.widthAnchor],
-    [_action_stack.centerXAnchor constraintEqualToAnchor:_action_scroll.contentLayoutGuide.centerXAnchor],
+    [_action_stack.centerXAnchor
+        constraintEqualToAnchor:_action_scroll.contentLayoutGuide.centerXAnchor],
     [_action_stack.leadingAnchor
-        constraintGreaterThanOrEqualToAnchor:_action_scroll.contentLayoutGuide.leadingAnchor constant:6.0],
+        constraintGreaterThanOrEqualToAnchor:_action_scroll.contentLayoutGuide.leadingAnchor
+                                    constant:6.0],
     [_action_stack.trailingAnchor
-        constraintLessThanOrEqualToAnchor:_action_scroll.contentLayoutGuide.trailingAnchor constant:-6.0],
+        constraintLessThanOrEqualToAnchor:_action_scroll.contentLayoutGuide.trailingAnchor
+                                 constant:-6.0],
     [_action_stack.topAnchor constraintEqualToAnchor:_action_scroll.contentLayoutGuide.topAnchor
-                                           constant:6.0],
-    [_action_stack.bottomAnchor constraintEqualToAnchor:_action_scroll.contentLayoutGuide.bottomAnchor
-                                              constant:-6.0],
-    [_action_stack.heightAnchor constraintEqualToAnchor:_action_scroll.frameLayoutGuide.heightAnchor
-                                             constant:-12.0],
+                                            constant:6.0],
+    [_action_stack.bottomAnchor
+        constraintEqualToAnchor:_action_scroll.contentLayoutGuide.bottomAnchor
+                       constant:-6.0],
+    [_action_stack.heightAnchor
+        constraintEqualToAnchor:_action_scroll.frameLayoutGuide.heightAnchor
+                       constant:-12.0],
 
   ]];
   [self installBrushRailLayout];
@@ -6120,8 +6440,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 - (void)installBrushRail
 {
   _brush_buttons = [[NSMutableArray alloc] init];
-  _brush_rail =
-      [[[GHOSTIOSPassThroughVisualEffectView alloc] initWithEffect:_tool_rail_glass_effect] autorelease];
+  _brush_rail = [[[GHOSTIOSPassThroughVisualEffectView alloc]
+      initWithEffect:_tool_rail_glass_effect] autorelease];
   _brush_rail.translatesAutoresizingMaskIntoConstraints = NO;
   _brush_rail.clipsToBounds = YES;
   _brush_rail.layer.cornerRadius = 32.0;
@@ -6132,7 +6452,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [_overlay_view addSubview:_brush_rail];
 
   UIPanGestureRecognizer *dock_pan = [[UIPanGestureRecognizer alloc]
-      initWithTarget:self action:@selector(handleBrushDockPan:)];
+      initWithTarget:self
+              action:@selector(handleBrushDockPan:)];
   dock_pan.maximumNumberOfTouches = 1;
   dock_pan.cancelsTouchesInView = YES;
   dock_pan.delaysTouchesBegan = NO;
@@ -6149,20 +6470,23 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     }
   }
   [_brush_drag_handle addInteraction:[[[UIToolTipInteraction alloc]
-      initWithDefaultToolTip:@"Collapse Brushes"] autorelease]];
+                                         initWithDefaultToolTip:@"Collapse Brushes"] autorelease]];
   [_brush_drag_handle removeTarget:self action:nil forControlEvents:UIControlEventAllEvents];
-  [_brush_drag_handle addTarget:self action:@selector(collapseBrushRailFromHandle:)
+  [_brush_drag_handle addTarget:self
+                         action:@selector(collapseBrushRailFromHandle:)
                forControlEvents:UIControlEventTouchUpInside];
   for (UIGestureRecognizer *gesture in _brush_drag_handle.gestureRecognizers) {
     [gesture removeTarget:self action:nil];
     [gesture addTarget:self action:@selector(handleBrushHandlePan:)];
   }
   [_brush_rail.contentView addSubview:_brush_drag_handle];
-  _brush_drag_handle_height_constraint = [_brush_drag_handle.heightAnchor constraintEqualToConstant:0.0];
+  _brush_drag_handle_height_constraint = [_brush_drag_handle.heightAnchor
+      constraintEqualToConstant:0.0];
 
   _brush_scroll = [[GHOSTIOSButtonScrollView alloc] initWithFrame:CGRectZero];
   UIHoverGestureRecognizer *hover = [[UIHoverGestureRecognizer alloc]
-      initWithTarget:self action:@selector(handleBrushHover:)];
+      initWithTarget:self
+              action:@selector(handleBrushHover:)];
   [_brush_scroll addGestureRecognizer:hover];
   [hover release];
   _brush_scroll.translatesAutoresizingMaskIntoConstraints = NO;
@@ -6189,19 +6513,23 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   /* The brush rail shares the tool rail's column, stacked directly above it.
    * #updateBrushRailGeometry divides the column's height between both rails. */
   _brush_rail_leading_constraint = [_brush_rail.leadingAnchor
-      constraintEqualToAnchor:safe_area.leadingAnchor constant:14.0];
+      constraintEqualToAnchor:safe_area.leadingAnchor
+                     constant:14.0];
   _brush_rail_width_constraint = [_brush_rail.widthAnchor constraintEqualToConstant:0.0];
   _brush_rail_height_constraint = [_brush_rail.heightAnchor constraintEqualToConstant:0.0];
   _brush_rail_bottom_constraint = [[_brush_rail.bottomAnchor
-      constraintEqualToAnchor:_tool_rail.topAnchor constant:0.0] retain];
+      constraintEqualToAnchor:_tool_rail.topAnchor
+                     constant:0.0] retain];
   [NSLayoutConstraint activateConstraints:@[
     _brush_rail_leading_constraint,
     _brush_rail_width_constraint,
     _brush_rail_height_constraint,
     _brush_rail_bottom_constraint,
 
-    [_brush_drag_handle.leadingAnchor constraintEqualToAnchor:_brush_rail.contentView.leadingAnchor],
-    [_brush_drag_handle.trailingAnchor constraintEqualToAnchor:_brush_rail.contentView.trailingAnchor],
+    [_brush_drag_handle.leadingAnchor
+        constraintEqualToAnchor:_brush_rail.contentView.leadingAnchor],
+    [_brush_drag_handle.trailingAnchor
+        constraintEqualToAnchor:_brush_rail.contentView.trailingAnchor],
     [_brush_drag_handle.topAnchor constraintEqualToAnchor:_brush_rail.contentView.topAnchor],
     _brush_drag_handle_height_constraint,
     [_brush_scroll.leadingAnchor constraintEqualToAnchor:_brush_rail.contentView.leadingAnchor],
@@ -6209,13 +6537,17 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [_brush_scroll.topAnchor constraintEqualToAnchor:_brush_drag_handle.bottomAnchor],
     [_brush_scroll.bottomAnchor constraintEqualToAnchor:_brush_rail.contentView.bottomAnchor],
 
-    [_brush_stack.leadingAnchor constraintEqualToAnchor:_brush_scroll.contentLayoutGuide.leadingAnchor
-                                               constant:6.0],
-    [_brush_stack.trailingAnchor constraintEqualToAnchor:_brush_scroll.contentLayoutGuide.trailingAnchor
-                                                constant:-6.0],
-    [_brush_stack.topAnchor constraintEqualToAnchor:_brush_scroll.contentLayoutGuide.topAnchor constant:6.0],
-    [_brush_stack.bottomAnchor constraintEqualToAnchor:_brush_scroll.contentLayoutGuide.bottomAnchor
-                                              constant:-6.0],
+    [_brush_stack.leadingAnchor
+        constraintEqualToAnchor:_brush_scroll.contentLayoutGuide.leadingAnchor
+                       constant:6.0],
+    [_brush_stack.trailingAnchor
+        constraintEqualToAnchor:_brush_scroll.contentLayoutGuide.trailingAnchor
+                       constant:-6.0],
+    [_brush_stack.topAnchor constraintEqualToAnchor:_brush_scroll.contentLayoutGuide.topAnchor
+                                           constant:6.0],
+    [_brush_stack.bottomAnchor
+        constraintEqualToAnchor:_brush_scroll.contentLayoutGuide.bottomAnchor
+                       constant:-6.0],
     [_brush_stack.widthAnchor constraintEqualToAnchor:_brush_scroll.frameLayoutGuide.widthAnchor
                                              constant:-12.0],
   ]];
@@ -6233,8 +6565,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   }
   const BOOL list_visible = [self isBrushListVisible];
   _brush_rail_width_constraint.constant = !_brush_rail_available ? 0.0 :
-                                          _brush_rail_expanded ? [self expandedToolbarWidth] :
-                                                                 64.0;
+                                          _brush_rail_expanded   ? [self expandedToolbarWidth] :
+                                                                   64.0;
   if (!_brush_rail_available) {
     /* The tool rail owns the column alone, with its own docking constraints. */
     _brush_rail_height_constraint.constant = 0.0;
@@ -6309,8 +6641,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     [brush removeObjectForKey:@"preview"];
     [brushes addObject:brush];
   }
-  NSData *data = [NSJSONSerialization dataWithJSONObject:brushes options:NSJSONWritingSortedKeys error:nil];
-  NSString *signature = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+  NSData *data = [NSJSONSerialization dataWithJSONObject:brushes
+                                                 options:NSJSONWritingSortedKeys
+                                                   error:nil];
+  NSString *signature = [[[NSString alloc] initWithData:data
+                                               encoding:NSUTF8StringEncoding] autorelease];
   if (_brush_signature == nil || ![_brush_signature isEqualToString:signature ?: @""]) {
     [_brush_signature release];
     _brush_signature = [signature ?: @"" copy];
@@ -6320,11 +6655,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     for (NSDictionary *item in items) {
       for (UIButton *button in _brush_buttons) {
         if ([button.accessibilityIdentifier isEqual:item[@"id"]]) {
-          NSString *preview = [item[@"preview"] isKindOfClass:NSString.class] ? item[@"preview"] : @"";
+          NSString *preview = [item[@"preview"] isKindOfClass:NSString.class] ? item[@"preview"] :
+                                                                                @"";
           if (![objc_getAssociatedObject(button, &blender_brush_preview_key) isEqual:preview]) {
-            objc_setAssociatedObject(button, &blender_brush_preview_key, preview,
-                                     OBJC_ASSOCIATION_COPY_NONATOMIC);
-            objc_setAssociatedObject(button, &blender_brush_image_key,
+            objc_setAssociatedObject(
+                button, &blender_brush_preview_key, preview, OBJC_ASSOCIATION_COPY_NONATOMIC);
+            objc_setAssociatedObject(button,
+                                     &blender_brush_image_key,
                                      blenderIOSBrushImage(preview, 36.0),
                                      OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             [button setNeedsUpdateConfiguration];
@@ -6358,7 +6695,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self updateToolbarHeightForCurrentState];
   [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0.0 : 0.24
       delay:0.0
-      options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+      options:UIViewAnimationOptionBeginFromCurrentState |
+              UIViewAnimationOptionAllowUserInteraction
       animations:^{
         self->_brush_rail.alpha = available ? 1.0 : 0.0;
         [self->_overlay_view layoutIfNeeded];
@@ -6380,8 +6718,11 @@ static char blender_brush_image_key;
 
   UIButton *button = blenderIOSSwiftButton();
   /* The preview can arrive later, see #updateBrushRailWithModel:. */
-  objc_setAssociatedObject(button, &blender_brush_preview_key, preview, OBJC_ASSOCIATION_COPY_NONATOMIC);
-  objc_setAssociatedObject(button, &blender_brush_image_key, blenderIOSBrushImage(preview, 36.0),
+  objc_setAssociatedObject(
+      button, &blender_brush_preview_key, preview, OBJC_ASSOCIATION_COPY_NONATOMIC);
+  objc_setAssociatedObject(button,
+                           &blender_brush_image_key,
+                           blenderIOSBrushImage(preview, 36.0),
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   button.tintColor = UIColor.labelColor;
   button.translatesAutoresizingMaskIntoConstraints = NO;
@@ -6409,11 +6750,13 @@ static char blender_brush_image_key;
                                                NSDirectionalEdgeInsetsMake(6.0, 6.0, 6.0, 6.0);
     updated_button.contentLeading = shows_text;
   };
-  [button addTarget:self action:@selector(handleBrushButton:)
+  [button addTarget:self
+                action:@selector(handleBrushButton:)
       forControlEvents:UIControlEventTouchUpInside];
 
   UILongPressGestureRecognizer *press_select = [[UILongPressGestureRecognizer alloc]
-      initWithTarget:self action:@selector(handleBrushPressSelectGesture:)];
+      initWithTarget:self
+              action:@selector(handleBrushPressSelectGesture:)];
   press_select.minimumPressDuration = 0.22;
   press_select.allowableMovement = 10.0;
   press_select.cancelsTouchesInView = YES;
@@ -6429,7 +6772,8 @@ static char blender_brush_image_key;
 - (void)rebuildBrushRailWithItems:(NSArray *)items
 {
   NSString *label_brush = [_toolbar_label_button isDescendantOfView:_brush_rail] ?
-      [[_toolbar_label_button.accessibilityIdentifier copy] autorelease] : nil;
+                              [[_toolbar_label_button.accessibilityIdentifier copy] autorelease] :
+                              nil;
   if (label_brush) {
     _toolbar_label_button = nil;
   }
@@ -6513,7 +6857,8 @@ static char blender_brush_image_key;
     for (UIButton *button in self->_brush_buttons) {
       const BOOL is_active = button == active_button;
       button.selected = list_visible && is_active &&
-                        [button.accessibilityIdentifier isEqualToString:self->_active_brush_identifier];
+                        [button.accessibilityIdentifier
+                            isEqualToString:self->_active_brush_identifier];
       [button setNeedsUpdateConfiguration];
       button.alpha = (list_visible || is_active) ? 1.0 : 0.0;
     }
@@ -6542,24 +6887,22 @@ static char blender_brush_image_key;
     return;
   }
   [UIView animateWithDuration:0.32
-                        delay:0.0
-       usingSpringWithDamping:0.84
-        initialSpringVelocity:0.0
-                      options:UIViewAnimationOptionCurveEaseInOut |
-                              UIViewAnimationOptionAllowUserInteraction |
-                              UIViewAnimationOptionBeginFromCurrentState
-                   animations:^{
-                     applyVisibility();
-                     [self->_overlay_view layoutIfNeeded];
-                     if (list_visible && active_button) {
-                       [self->_brush_scroll
-                           scrollRectToVisible:CGRectInset(active_button.frame, 0, -12)
-                                      animated:NO];
-                     }
-                   }
-                   completion:^(BOOL finished) {
-                     finishCompact();
-                   }];
+      delay:0.0
+      usingSpringWithDamping:0.84
+      initialSpringVelocity:0.0
+      options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionAllowUserInteraction |
+              UIViewAnimationOptionBeginFromCurrentState
+      animations:^{
+        applyVisibility();
+        [self->_overlay_view layoutIfNeeded];
+        if (list_visible && active_button) {
+          [self->_brush_scroll scrollRectToVisible:CGRectInset(active_button.frame, 0, -12)
+                                          animated:NO];
+        }
+      }
+      completion:^(BOOL finished) {
+        finishCompact();
+      }];
 }
 
 - (void)setBrushRailExpanded:(BOOL)expanded animated:(BOOL)animated
@@ -6655,9 +6998,10 @@ static char blender_brush_image_key;
       [self collapseBrushRailFromHandle:gesture];
     }
     else {
-      [UIView animateWithDuration:0.2 animations:^{
-        self->_brush_rail.transform = CGAffineTransformIdentity;
-      }];
+      [UIView animateWithDuration:0.2
+                       animations:^{
+                         self->_brush_rail.transform = CGAffineTransformIdentity;
+                       }];
     }
   }
 }
@@ -6769,7 +7113,8 @@ static char blender_brush_image_key;
   {
     CGPoint location = [gesture locationInView:_brush_scroll];
     if (CGRectContainsPoint(_brush_scroll.bounds, location)) {
-      for (UIView *hit = [_brush_scroll hitTest:location withEvent:nil]; hit && hit != _brush_scroll;
+      for (UIView *hit = [_brush_scroll hitTest:location withEvent:nil];
+           hit && hit != _brush_scroll;
            hit = hit.superview)
       {
         if ([_brush_buttons containsObject:hit]) {
@@ -6820,8 +7165,10 @@ static char blender_brush_image_key;
   CGRect safe = CGRectInset(_overlay_view.safeAreaLayoutGuide.layoutFrame, 8, 8);
   CGFloat x = CGRectGetMaxX(rail) + 10;
   CGFloat max_width = MAX(44.0, CGRectGetMaxX(safe) - x);
-  CGSize text_size = [_toolbar_label sizeThatFits:CGSizeMake(MAX(16.0, max_width - 28), CGFLOAT_MAX)];
-  CGSize size = CGSizeMake(MIN(max_width, ceil(text_size.width) + 28), ceil(text_size.height) + 16);
+  CGSize text_size = [_toolbar_label
+      sizeThatFits:CGSizeMake(MAX(16.0, max_width - 28), CGFLOAT_MAX)];
+  CGSize size = CGSizeMake(MIN(max_width, ceil(text_size.width) + 28),
+                           ceil(text_size.height) + 16);
   CGFloat y = MIN(CGRectGetMaxY(safe) - size.height,
                   MAX(CGRectGetMinY(safe), CGRectGetMidY(anchor) - size.height / 2));
   _toolbar_label_bubble.bounds = CGRectMake(0, 0, size.width, size.height);
@@ -6836,15 +7183,17 @@ static char blender_brush_image_key;
   _toolbar_label_button = nil;
   _toolbar_label_transient = NO;
   [UIView animateWithDuration:animated && !UIAccessibilityIsReduceMotionEnabled() ? 0.18 : 0
-                        delay:0
-                      options:UIViewAnimationOptionBeginFromCurrentState |
-                              UIViewAnimationOptionAllowUserInteraction
-                   animations:^{ self->_toolbar_label_bubble.alpha = 0; }
-                   completion:^(BOOL finished) {
-                     if (self->_toolbar_label_generation == generation) {
-                       self->_toolbar_label_bubble.hidden = YES;
-                     }
-                   }];
+      delay:0
+      options:UIViewAnimationOptionBeginFromCurrentState |
+              UIViewAnimationOptionAllowUserInteraction
+      animations:^{
+        self->_toolbar_label_bubble.alpha = 0;
+      }
+      completion:^(BOOL finished) {
+        if (self->_toolbar_label_generation == generation) {
+          self->_toolbar_label_bubble.hidden = YES;
+        }
+      }];
 }
 
 - (void)showToolbarLabelForButton:(UIButton *)button transient:(BOOL)transient
@@ -6868,7 +7217,7 @@ static char blender_brush_image_key;
     [_overlay_view addSubview:_toolbar_label_bubble];
   }
   const BOOL unchanged_hover = !transient && !_toolbar_label_transient &&
-                                _toolbar_label_button == button && !_toolbar_label_bubble.hidden;
+                               _toolbar_label_button == button && !_toolbar_label_bubble.hidden;
   _toolbar_label_button = button;
   _toolbar_label_transient = transient;
   _toolbar_label.text = button.accessibilityLabel;
@@ -6893,11 +7242,12 @@ static char blender_brush_image_key;
                    completion:nil];
   if (transient) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(0.9 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-      if (self->_toolbar_label_generation == generation) {
-        [self hideToolbarLabelAnimated:YES];
-      }
-    });
+                   dispatch_get_main_queue(),
+                   ^{
+                     if (self->_toolbar_label_generation == generation) {
+                       [self hideToolbarLabelAnimated:YES];
+                     }
+                   });
   }
 }
 
@@ -6905,7 +7255,8 @@ static char blender_brush_image_key;
 {
   UIButton *hovered = nil;
   if (gesture.state == UIGestureRecognizerStateBegan ||
-      gesture.state == UIGestureRecognizerStateChanged) {
+      gesture.state == UIGestureRecognizerStateChanged)
+  {
     CGPoint location = [gesture locationInView:_tool_scroll];
     if (CGRectContainsPoint(_tool_scroll.bounds, location)) {
       UIView *hit = [_tool_scroll hitTest:location withEvent:nil];
@@ -6998,7 +7349,7 @@ static char blender_brush_image_key;
       }
       _toolbar_press_select_active = NO;
       [self finishToolbarPressSelectWithButton:[self toolbarButtonAtGestureLocation:gesture] ?:
-                                              _toolbar_hover_button];
+                                                   _toolbar_hover_button];
       break;
     case UIGestureRecognizerStateCancelled:
     case UIGestureRecognizerStateFailed:
@@ -7018,14 +7369,14 @@ static char blender_brush_image_key;
 {
   NSString *op_name = sender.accessibilityIdentifier;
   if ([op_name hasPrefix:@"blender.action."]) {
-    WM_apple_ios_ui_setting_enqueue("native_action",
-                                    [op_name substringFromIndex:@"blender.action.".length].UTF8String);
+    WM_apple_ios_ui_setting_enqueue(
+        "native_action", [op_name substringFromIndex:@"blender.action.".length].UTF8String);
     return;
   }
   NSString *property = sender.accessibilityValue;
   NSString *value = sender.restorationIdentifier;
   NSString *key = sender.accessibilityHint;
-  if ([@[@"X", @"Y", @"Z"] containsObject:key ?: @""]) {
+  if ([@[ @"X", @"Y", @"Z" ] containsObject:key ?: @""]) {
     WM_apple_ios_ui_setting_enqueue("constraint_axis", key.UTF8String);
     return;
   }
@@ -7044,9 +7395,7 @@ static char blender_brush_image_key;
   if (![value isKindOfClass:[NSString class]]) {
     value = @"";
   }
-  WM_apple_ios_ui_operator_enum_enqueue(op_name.UTF8String,
-                                        property.UTF8String,
-                                        value.UTF8String);
+  WM_apple_ios_ui_operator_enum_enqueue(op_name.UTF8String, property.UTF8String, value.UTF8String);
 }
 
 - (GHOST_TKey)ghostKeyForName:(NSString *)keyName
@@ -7076,8 +7425,10 @@ static char blender_brush_image_key;
   }
 
   const uint64_t time = system->getMilliSeconds();
-  system->pushEvent(std::make_unique<GHOST_EventKey>(time, GHOST_kEventKeyDown, _ghost_window, key, false, nullptr));
-  system->pushEvent(std::make_unique<GHOST_EventKey>(time, GHOST_kEventKeyUp, _ghost_window, key, false, nullptr));
+  system->pushEvent(std::make_unique<GHOST_EventKey>(
+      time, GHOST_kEventKeyDown, _ghost_window, key, false, nullptr));
+  system->pushEvent(std::make_unique<GHOST_EventKey>(
+      time, GHOST_kEventKeyUp, _ghost_window, key, false, nullptr));
 }
 
 - (void)handleGesture:(UIGestureRecognizer *)gestureRecognizer
@@ -7310,8 +7661,8 @@ void GHOST_WindowIOS::publishGeometry(CGSize size)
     surface->resize(size);
   }
   if (drawable_size_.exchange(packed) != packed) {
-    system_ios_->pushEvent(
-        std::make_unique<GHOST_Event>(system_ios_->getMilliSeconds(), GHOST_kEventWindowSize, this));
+    system_ios_->pushEvent(std::make_unique<GHOST_Event>(
+        system_ios_->getMilliSeconds(), GHOST_kEventWindowSize, this));
   }
 }
 

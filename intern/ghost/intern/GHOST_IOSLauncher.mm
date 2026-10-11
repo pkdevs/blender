@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #import "GHOST_IOSLauncher.hh"
-#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "GHOST_IOSDocument.hh"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 /* The views drawing Suzanne and the logo are Swift, in the app itself, see
  * `GHOST_IOSLauncher.swift`. They are found by name, as this library is built without Swift. */
@@ -32,11 +32,13 @@ static UIColor *launcherDynamicColor(UIColor *light, UIColor *dark)
   }];
 }
 
-/** Blender's brand behind the launcher: charcoal, with the logo's orange and blue as soft light. */
+/** Blender's brand behind the launcher: charcoal, with the logo's orange and blue as soft light.
+ */
 @interface GHOSTIOSLauncherBackground : UIView
 @end
 
-@implementation GHOSTIOSLauncherBackground {
+@implementation GHOSTIOSLauncherBackground
+{
   CAGradientLayer *_base, *_orange, *_blue;
 }
 
@@ -47,10 +49,10 @@ static UIColor *launcherDynamicColor(UIColor *light, UIColor *dark)
     _orange = [CAGradientLayer layer];
     _blue = [CAGradientLayer layer];
     _orange.type = _blue.type = kCAGradientLayerRadial;
-    for (CALayer *layer in @[_base, _blue, _orange]) {
+    for (CALayer *layer in @[ _base, _blue, _orange ]) {
       [self.layer addSublayer:layer];
     }
-    [self registerForTraitChanges:@[UITraitUserInterfaceStyle.class]
+    [self registerForTraitChanges:@[ UITraitUserInterfaceStyle.class ]
                        withAction:@selector(updateColors)];
     [self updateColors];
   }
@@ -67,10 +69,12 @@ static UIColor *launcherDynamicColor(UIColor *light, UIColor *dark)
     (id)resolve(launcherDynamicColor(launcherColor(0xFBF8F4, 1), launcherColor(0x1D1E22, 1))),
     (id)resolve(launcherDynamicColor(launcherColor(0xF1ECE6, 1), launcherColor(0x121316, 1))),
   ];
-  UIColor *orange = launcherDynamicColor(launcherColor(0xE87D0D, 0.22), launcherColor(0xE87D0D, 0.38));
-  UIColor *blue = launcherDynamicColor(launcherColor(0x265787, 0.16), launcherColor(0x265787, 0.55));
-  _orange.colors = @[(id)resolve(orange), (id)resolve([orange colorWithAlphaComponent:0])];
-  _blue.colors = @[(id)resolve(blue), (id)resolve([blue colorWithAlphaComponent:0])];
+  UIColor *orange = launcherDynamicColor(launcherColor(0xE87D0D, 0.22),
+                                         launcherColor(0xE87D0D, 0.38));
+  UIColor *blue = launcherDynamicColor(launcherColor(0x265787, 0.16),
+                                       launcherColor(0x265787, 0.55));
+  _orange.colors = @[ (id)resolve(orange), (id)resolve([orange colorWithAlphaComponent:0]) ];
+  _blue.colors = @[ (id)resolve(blue), (id)resolve([blue colorWithAlphaComponent:0]) ];
 }
 
 - (void)layoutSubviews
@@ -80,10 +84,10 @@ static UIColor *launcherDynamicColor(UIColor *light, UIColor *dark)
   const CGFloat size = MAX(bounds.size.width, bounds.size.height) * 0.9;
   _base.frame = bounds;
   /* The orange glows behind the title, the blue in the top left corner. */
-  _orange.frame = CGRectMake(bounds.size.width * 0.62 - size / 2, bounds.size.height * 0.22 - size / 2,
-                             size, size);
+  _orange.frame = CGRectMake(
+      bounds.size.width * 0.62 - size / 2, bounds.size.height * 0.22 - size / 2, size, size);
   _blue.frame = CGRectMake(-size * 0.35 / 0.9, -size * 0.45 / 0.9, size, size);
-  for (CAGradientLayer *layer in @[_orange, _blue]) {
+  for (CAGradientLayer *layer in @[ _orange, _blue ]) {
     layer.startPoint = CGPointMake(0.5, 0.5);
     layer.endPoint = CGPointMake(1, 1);
   }
@@ -95,7 +99,8 @@ static UIColor *launcherDynamicColor(UIColor *light, UIColor *dark)
 @interface GHOSTIOSLauncherModelStage : UIView
 @end
 
-@implementation GHOSTIOSLauncherModelStage {
+@implementation GHOSTIOSLauncherModelStage
+{
   UIView<GHOSTIOSLauncherModelView> *_model;
 }
 
@@ -156,7 +161,8 @@ static UILabel *launcherTitleLabel(UIView *view)
 @interface GHOSTIOSLauncherLogoStage : UIView
 @end
 
-@implementation GHOSTIOSLauncherLogoStage {
+@implementation GHOSTIOSLauncherLogoStage
+{
   UIView<GHOSTIOSLauncherLogoView> *_logo;
 }
 
@@ -208,7 +214,8 @@ static UILabel *launcherTitleLabel(UIView *view)
   /* The launcher may lay out its title after its accessories: follow it for a moment. */
   for (int i = 1; i <= 10; i++) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(i * 0.1 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
+                   dispatch_get_main_queue(),
+                   ^{
                      [self setNeedsLayout];
                    });
   }
@@ -224,7 +231,8 @@ static UILabel *launcherTitleLabel(UIView *view)
 static void launcherStyle(UIDocumentViewControllerLaunchOptions *launch)
 {
   UIBackgroundConfiguration *background = [UIBackgroundConfiguration clearConfiguration];
-  background.customView = [[[GHOSTIOSLauncherBackground alloc] initWithFrame:CGRectZero] autorelease];
+  background.customView = [[[GHOSTIOSLauncherBackground alloc] initWithFrame:CGRectZero]
+      autorelease];
   launch.background = background;
   launch.browserViewController.view.tintColor = launcherColor(0xE87D0D, 1);
 
@@ -261,7 +269,9 @@ static NSArray<NSDictionary *> *launcherTemplates()
 /* The template chooser in SwiftUI (`intern/swift/TemplatePicker.swift`). */
 @interface UIViewController (GHOSTIOSSwiftTemplatePicker)
 - (instancetype)initWithTemplates:(NSArray<NSDictionary *> * (^)(void))templates
-                           manage:(void (^)(NSDictionary *entry, NSString *action, NSString *title,
+                           manage:(void (^)(NSDictionary *entry,
+                                            NSString *action,
+                                            NSString *title,
                                             void (^done)(BOOL success)))manage
                        completion:(void (^)(NSString *app_template))completion;
 @end
@@ -282,7 +292,8 @@ static UIDocumentCreationIntent const launcher_general_intent = @"general";
  * The document launcher, in the app's first window, shown at once on launch while Blender starts
  * behind it. It owns the open document; Blender's window shows only while one is open.
  */
-@interface GHOSTIOSLauncherController : UIDocumentViewController <UIDocumentBrowserViewControllerDelegate>
+@interface GHOSTIOSLauncherController
+    : UIDocumentViewController <UIDocumentBrowserViewControllerDelegate>
 - (void)openDocumentAtURL:(NSURL *)url;
 - (void)chooseTemplate:(void (^)(NSString *app_template))completion;
 - (void)newDocumentFrom:(UIViewController *)presenter;
@@ -292,7 +303,8 @@ static GHOSTIOSLauncherController *launcher_controller = nil;
 /** A file the system asked to open before the launcher existed. */
 static NSURL *launcher_pending_url = nil;
 
-@implementation GHOSTIOSLauncherController {
+@implementation GHOSTIOSLauncherController
+{
   /** A document is being opened: Blender loads one file at a time. */
   BOOL _opening;
   BOOL _creating;
@@ -329,13 +341,14 @@ static NSURL *launcher_pending_url = nil;
    * types: it would list nothing, not even in Recents, and create nothing. */
   /* The type the app declares for `.blend` files, exactly: dragged files carry it, and the
    * browser accepts only drops of its own types. */
-  NSArray *document_types = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleDocumentTypes"];
+  NSArray *document_types = [NSBundle.mainBundle
+      objectForInfoDictionaryKey:@"CFBundleDocumentTypes"];
   NSArray *content_types = [document_types.firstObject objectForKey:@"LSItemContentTypes"];
   NSString *blend_identifier = content_types.firstObject;
   UTType *blend_type = (blend_identifier ? [UTType typeWithIdentifier:blend_identifier] : nil) ?:
-                       [UTType typeWithFilenameExtension:@"blend" conformingToType:UTTypeData];
+                           [UTType typeWithFilenameExtension:@"blend" conformingToType:UTTypeData];
   UIDocumentBrowserViewController *browser = [[[UIDocumentBrowserViewController alloc]
-      initForOpeningContentTypes:@[blend_type]] autorelease];
+      initForOpeningContentTypes:@[ blend_type ]] autorelease];
   browser.delegate = self;
   browser.allowsDocumentCreation = YES;
   /* A Blender file, not a sheet of paper: square, like its previews. Set before the browser first
@@ -361,8 +374,11 @@ static NSURL *launcher_pending_url = nil;
     /* Continue in the document that was open when the app was left. */
     NSData *bookmark = [NSUserDefaults.standardUserDefaults dataForKey:launcher_open_document_key];
     BOOL stale = NO;
-    url = bookmark ? [NSURL URLByResolvingBookmarkData:bookmark options:0 relativeToURL:nil
-                                   bookmarkDataIsStale:&stale error:nil] :
+    url = bookmark ? [NSURL URLByResolvingBookmarkData:bookmark
+                                               options:0
+                                         relativeToURL:nil
+                                   bookmarkDataIsStale:&stale
+                                                 error:nil] :
                      nil;
   }
   if (url) {
@@ -389,10 +405,14 @@ static NSURL *launcher_pending_url = nil;
 {
   [self discardCreationBackup];
   NSFileManager *files = NSFileManager.defaultManager;
-  NSURL *folder = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
-                                                                    NSUUID.UUID.UUIDString]];
+  NSURL *folder = [NSURL
+      fileURLWithPath:[NSTemporaryDirectory()
+                          stringByAppendingPathComponent:NSUUID.UUID.UUIDString]];
   NSURL *backup = [folder URLByAppendingPathComponent:source.lastPathComponent];
-  if ([files createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:nil] &&
+  if ([files createDirectoryAtURL:folder
+          withIntermediateDirectories:YES
+                           attributes:nil
+                                error:nil] &&
       [files copyItemAtURL:source toURL:backup error:nil])
   {
     _creationBackup = [backup copy];
@@ -402,7 +422,8 @@ static NSURL *launcher_pending_url = nil;
 - (void)discardCreationBackup
 {
   if (_creationBackup) {
-    [NSFileManager.defaultManager removeItemAtURL:_creationBackup.URLByDeletingLastPathComponent error:nil];
+    [NSFileManager.defaultManager removeItemAtURL:_creationBackup.URLByDeletingLastPathComponent
+                                            error:nil];
     [_creationBackup release];
     _creationBackup = nil;
   }
@@ -411,7 +432,8 @@ static NSURL *launcher_pending_url = nil;
 - (NSURL *)keepCreationBackup
 {
   NSFileManager *files = NSFileManager.defaultManager;
-  NSURL *folder = [files URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject;
+  NSURL *folder =
+      [files URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject;
   NSURL *source = _creationBackup;
   if (!source || !folder || ![files fileExistsAtPath:source.path]) {
     [self discardCreationBackup];
@@ -420,9 +442,12 @@ static NSURL *launcher_pending_url = nil;
   NSString *name = source.URLByDeletingPathExtension.lastPathComponent;
   NSString *extension = source.pathExtension;
   NSURL *destination = [folder URLByAppendingPathComponent:source.lastPathComponent];
-  for (NSInteger number = 2; [files fileExistsAtPath:destination.path] && number < 10000; number++) {
-    destination = [folder URLByAppendingPathComponent:[NSString stringWithFormat:@"%@ %ld.%@", name,
-                                                                                 (long)number, extension]];
+  for (NSInteger number = 2; [files fileExistsAtPath:destination.path] && number < 10000; number++)
+  {
+    destination = [folder URLByAppendingPathComponent:[NSString stringWithFormat:@"%@ %ld.%@",
+                                                                                 name,
+                                                                                 (long)number,
+                                                                                 extension]];
   }
   const BOOL moved = [files moveItemAtURL:source toURL:destination error:nil];
   [self discardCreationBackup];
@@ -436,20 +461,28 @@ static NSURL *launcher_pending_url = nil;
   _creatingTemplate = nil;
   [self discardCreationBackup];
   if (_creationSource) {
-    [NSFileManager.defaultManager removeItemAtURL:_creationSource.URLByDeletingLastPathComponent error:nil];
+    [NSFileManager.defaultManager removeItemAtURL:_creationSource.URLByDeletingLastPathComponent
+                                            error:nil];
     [_creationSource release];
     _creationSource = nil;
   }
-  UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Could Not Create Document"
-      message:@"Your current document has not been replaced. Check available storage and try again."
-      preferredStyle:UIAlertControllerStyleAlert];
-  [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+  UIAlertController *alert = [UIAlertController
+      alertControllerWithTitle:@"Could Not Create Document"
+                       message:
+                           @"Your current document has not been replaced. Check available storage "
+                           @"and try again."
+                preferredStyle:UIAlertControllerStyleAlert];
+  [alert addAction:[UIAlertAction actionWithTitle:@"OK"
+                                            style:UIAlertActionStyleDefault
+                                          handler:nil]];
   [presenter presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)recordCreatedTemplateAtURL:(NSURL *)url
 {
-  if (!_creatingTemplate) { return; }
+  if (!_creatingTemplate) {
+    return;
+  }
   [_createdURL release];
   _createdURL = [url copy];
   [_createdPresentation release];
@@ -467,25 +500,41 @@ static NSURL *launcher_pending_url = nil;
 
 - (void)newDocumentFrom:(UIViewController *)presenter
 {
-  if (_creating || _opening || presenter.presentedViewController) { return; }
+  if (_creating || _opening || presenter.presentedViewController) {
+    return;
+  }
   _creating = YES;
   UIViewController *picker = [self templatePicker:^(NSString *identifier) {
-    if (!identifier) { self->_creating = NO; return; }
+    if (!identifier) {
+      self->_creating = NO;
+      return;
+    }
     [self->_creatingTemplate release];
     self->_creatingTemplate = [identifier copy];
     GHOST_ios_document_create(identifier, ^(NSURL *source) {
-      if (!source) { [self creationFailed:presenter]; return; }
+      if (!source) {
+        [self creationFailed:presenter];
+        return;
+      }
       [self backUpCreation:source];
-      [self.launchOptions.browserViewController importDocumentAtURL:source
-          nextToDocumentAtURL:self.document.fileURL mode:UIDocumentBrowserImportModeMove
-          completionHandler:^(NSURL *destination, NSError *error) {
-        if (!destination || error) { destination = [self keepCreationBackup]; }
-        [self discardCreationBackup];
-        [NSFileManager.defaultManager removeItemAtURL:source.URLByDeletingLastPathComponent error:nil];
-        if (!destination) { [self creationFailed:presenter]; return; }
-        [self recordCreatedTemplateAtURL:destination];
-        [self openDocumentAtURL:destination];
-      }];
+      [self.launchOptions.browserViewController
+          importDocumentAtURL:source
+          nextToDocumentAtURL:self.document.fileURL
+                         mode:UIDocumentBrowserImportModeMove
+            completionHandler:^(NSURL *destination, NSError *error) {
+              if (!destination || error) {
+                destination = [self keepCreationBackup];
+              }
+              [self discardCreationBackup];
+              [NSFileManager.defaultManager removeItemAtURL:source.URLByDeletingLastPathComponent
+                                                      error:nil];
+              if (!destination) {
+                [self creationFailed:presenter];
+                return;
+              }
+              [self recordCreatedTemplateAtURL:destination];
+              [self openDocumentAtURL:destination];
+            }];
     });
   }];
   [presenter presentViewController:picker animated:YES completion:nil];
@@ -496,19 +545,21 @@ static NSURL *launcher_pending_url = nil;
   UIDocument *previous = self.document;
   const BOOL previous_open = previous && !(previous.documentState & UIDocumentStateClosed);
   /* A second tap while a file opens, or opening the file that is open, changes nothing. */
-  if (_opening || (previous_open && [previous.fileURL.URLByStandardizingPath
-                                         isEqual:url.URLByStandardizingPath]))
+  if (_opening || (previous_open &&
+                   [previous.fileURL.URLByStandardizingPath isEqual:url.URLByStandardizingPath]))
   {
     return;
   }
   _opening = YES;
   /* Should iOS never report the document open, don't refuse files from then on. */
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(60 * NSEC_PER_SEC)),
-                 dispatch_get_main_queue(), ^{
-                   _opening = NO;
-                 });
-  GHOSTIOSBlendDocument *document = [[[GHOSTIOSBlendDocument alloc] initWithFileURL:url] autorelease];
-  document.templateDocument = [_createdURL.URLByStandardizingPath isEqual:url.URLByStandardizingPath];
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, int64_t(60 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        _opening = NO;
+      });
+  GHOSTIOSBlendDocument *document = [[[GHOSTIOSBlendDocument alloc] initWithFileURL:url]
+      autorelease];
+  document.templateDocument = [_createdURL.URLByStandardizingPath
+      isEqual:url.URLByStandardizingPath];
   if (!previous_open) {
     self.document = document;
     return;
@@ -516,15 +567,22 @@ static NSURL *launcher_pending_url = nil;
   /* One file at a time: the current one saves as it closes. */
   GHOST_ios_document_window_set_visible(false, true);
   [previous closeWithCompletionHandler:^(BOOL success) {
-    if (success) { self.document = document; }
+    if (success) {
+      self.document = document;
+    }
     else {
       self->_opening = NO;
-      UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Could Not Save Document"
-          message:@"The current document could not be saved. It has not been replaced."
-          preferredStyle:UIAlertControllerStyleAlert];
-      [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
-        GHOST_ios_document_window_set_visible(true, true);
-      }]];
+      UIAlertController *alert = [UIAlertController
+          alertControllerWithTitle:@"Could Not Save Document"
+                           message:
+                               @"The current document could not be saved. It has not been "
+                               @"replaced."
+                    preferredStyle:UIAlertControllerStyleAlert];
+      [alert addAction:[UIAlertAction actionWithTitle:@"OK"
+                                                style:UIAlertActionStyleDefault
+                                              handler:^(UIAlertAction *) {
+                                                GHOST_ios_document_window_set_visible(true, true);
+                                              }]];
       [self presentViewController:alert animated:YES completion:nil];
     }
   }];
@@ -541,15 +599,20 @@ static NSURL *launcher_pending_url = nil;
 {
   Class swift_class = NSClassFromString(@"GHOSTIOSSwiftTemplatePicker");
   NSCAssert(swift_class, @"The SwiftUI template picker is missing");
-  UIViewController *picker = [[[swift_class alloc] initWithTemplates:^NSArray<NSDictionary *> * {
-    return launcherTemplates();
-  } manage:^(NSDictionary *entry, NSString *action, NSString *title, void (^done)(BOOL)) {
-    void (^finished)(BOOL) = [[done copy] autorelease];
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-      const BOOL success = GHOST_ios_template_manage(entry[@"id"], action, title);
-      dispatch_async(dispatch_get_main_queue(), ^{ finished(success); });
-    });
-  } completion:completion] autorelease];
+  UIViewController *picker = [[[swift_class alloc]
+      initWithTemplates:^NSArray<NSDictionary *> * {
+        return launcherTemplates();
+      }
+      manage:^(NSDictionary *entry, NSString *action, NSString *title, void (^done)(BOOL)) {
+        void (^finished)(BOOL) = [[done copy] autorelease];
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+          const BOOL success = GHOST_ios_template_manage(entry[@"id"], action, title);
+          dispatch_async(dispatch_get_main_queue(), ^{
+            finished(success);
+          });
+        });
+      }
+      completion:completion] autorelease];
   picker.modalPresentationStyle = UIModalPresentationFormSheet;
   /* Swiping the sheet away cancels, like Cancel. */
   picker.presentationController.delegate = (id<UIAdaptivePresentationControllerDelegate>)picker;
@@ -582,14 +645,14 @@ static NSURL *launcher_pending_url = nil;
   GHOST_ios_document_window_set_visible(true, true);
   if ([_createdURL.URLByStandardizingPath isEqual:self.document.fileURL.URLByStandardizingPath]) {
     [NSNotificationCenter.defaultCenter postNotificationName:@"BlenderTemplatePresentation"
-        object:nil userInfo:_createdPresentation];
+                                                      object:nil
+                                                    userInfo:_createdPresentation];
     [_createdURL release];
     _createdURL = nil;
     [_createdPresentation release];
     _createdPresentation = nil;
   }
 }
-
 
 - (void)sceneWillDeactivate:(NSNotification *)notification
 {
@@ -601,7 +664,8 @@ static NSURL *launcher_pending_url = nil;
 /* Document browser. */
 
 - (void)documentBrowser:(UIDocumentBrowserViewController *)browser
-    didRequestDocumentCreationWithHandler:(void (^)(NSURL *, UIDocumentBrowserImportMode))importHandler
+    didRequestDocumentCreationWithHandler:
+        (void (^)(NSURL *, UIDocumentBrowserImportMode))importHandler
 {
   void (^create)(NSString *) = ^(NSString *app_template) {
     if (app_template == nil) {
@@ -613,9 +677,13 @@ static NSURL *launcher_pending_url = nil;
     GHOST_ios_document_create(app_template, ^(NSURL *url) {
       [self->_creationSource release];
       self->_creationSource = [url copy];
-      if (url) { [self backUpCreation:url]; }
+      if (url) {
+        [self backUpCreation:url];
+      }
       importHandler(url, url ? UIDocumentBrowserImportModeMove : UIDocumentBrowserImportModeNone);
-      if (!url) { [self creationFailed:self]; }
+      if (!url) {
+        [self creationFailed:self];
+      }
     });
   };
   if ([browser.activeDocumentCreationIntent isEqualToString:launcher_general_intent]) {
@@ -630,9 +698,12 @@ static NSURL *launcher_pending_url = nil;
           toDestinationURL:(NSURL *)destinationURL
 {
   [self discardCreationBackup];
-  if (_creatingTemplate) { [self recordCreatedTemplateAtURL:destinationURL]; }
+  if (_creatingTemplate) {
+    [self recordCreatedTemplateAtURL:destinationURL];
+  }
   if ([_creationSource isEqual:sourceURL]) {
-    [NSFileManager.defaultManager removeItemAtURL:sourceURL.URLByDeletingLastPathComponent error:nil];
+    [NSFileManager.defaultManager removeItemAtURL:sourceURL.URLByDeletingLastPathComponent
+                                            error:nil];
     [_creationSource release];
     _creationSource = nil;
   }
@@ -640,7 +711,8 @@ static NSURL *launcher_pending_url = nil;
 }
 
 - (void)documentBrowser:(UIDocumentBrowserViewController *)browser
-    failedToImportDocumentAtURL:(NSURL *)documentURL error:(NSError *)error
+    failedToImportDocumentAtURL:(NSURL *)documentURL
+                          error:(NSError *)error
 {
   if (NSURL *kept = [self keepCreationBackup]) {
     [_creationSource release];
@@ -721,7 +793,8 @@ void GHOST_ios_launcher_show_documents(id sender)
     snapshot.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [view addSubview:snapshot];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(1.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
+                   dispatch_get_main_queue(),
+                   ^{
                      [snapshot removeFromSuperview];
                    });
   }
@@ -731,8 +804,8 @@ void GHOST_ios_launcher_show_documents(id sender)
   /* Show where the document is, as Pages does, in case the browser is elsewhere. */
   if (url) {
     [launcher_controller.launchOptions.browserViewController revealDocumentAtURL:url
-                                                                 importIfNeeded:NO
-                                                                     completion:nil];
+                                                                  importIfNeeded:NO
+                                                                      completion:nil];
   }
   [NSUserDefaults.standardUserDefaults removeObjectForKey:launcher_open_document_key];
 }

@@ -24,7 +24,8 @@ static std::atomic<bool> frame_rate_requested{false};
 @interface GHOSTIOSFrameRateRequest : NSObject
 @end
 
-@implementation GHOSTIOSFrameRateRequest {
+@implementation GHOSTIOSFrameRateRequest
+{
   CADisplayLink *_link;
 }
 
@@ -39,7 +40,8 @@ static std::atomic<bool> frame_rate_requested{false};
   if (!_link) {
     _link = [[CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)] retain];
     const float maximum = float(GHOSTIOSMaximumFramesPerSecond());
-    _link.preferredFrameRateRange = CAFrameRateRangeMake(std::min(80.0f, maximum), maximum, maximum);
+    _link.preferredFrameRateRange = CAFrameRateRangeMake(
+        std::min(80.0f, maximum), maximum, maximum);
     [_link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
   }
   _link.paused = NO;

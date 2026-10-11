@@ -11,7 +11,7 @@
  * name.
  */
 @protocol GHOSTIOSRedoStrip <NSObject>
-- (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage *(^)(NSString *))icon;
+- (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage * (^)(NSString *))icon;
 - (void)updateSnapshot:(NSDictionary *)snapshot;
 /* Centers the expanded strip on centerX while keeping it inside rect. */
 - (void)layoutInRect:(CGRect)rect centerX:(CGFloat)centerX;

@@ -12,14 +12,15 @@
  * All edits go through the engine inbox.
  */
 @protocol GHOSTIOSScenePanels <NSObject>
-- (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage *(^)(NSString *))icon;
+- (instancetype)initWithOverlay:(UIView *)overlay icon:(UIImage * (^)(NSString *))icon;
 @property(nonatomic, readonly) UIBarButtonItem *inspectorButton;
 @property(nonatomic, readonly) UIBarButtonItem *hierarchyButton;
-@property(nonatomic, copy) UIMenu *(^menuProvider)(NSDictionary *);
+@property(nonatomic, copy) UIMenu * (^menuProvider)(NSDictionary *);
 - (void)updateSnapshot:(NSDictionary *)snapshot;
 - (void)layoutInRect:(CGRect)rect;
 - (void)dismiss;
 - (void)presentShadingFrom:(UIBarButtonItem *)button controller:(UIViewController *)controller;
-- (UIBarButtonItemGroup *)updateToolSettings:(NSDictionary *)settings acknowledgement:(NSNumber *)ack;
+- (UIBarButtonItemGroup *)updateToolSettings:(NSDictionary *)settings
+                             acknowledgement:(NSNumber *)ack;
 - (void)hideToolSettings;
 @end

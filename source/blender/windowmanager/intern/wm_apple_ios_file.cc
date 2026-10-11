@@ -4,7 +4,7 @@
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
 
-#include "wm_apple_ios_file.hh"
+#  include "wm_apple_ios_file.hh"
 
 #  include "BKE_context.hh"
 #  include "BKE_main.hh"
@@ -82,9 +82,8 @@ bool operator_is_live(bContext *C, const wmOperator *op)
 bool WM_apple_ios_fileselect_begin(bContext *C, wmOperator *op)
 {
   /* Linking/appending browses datablocks inside .blend files, not ordinary files. */
-  if (boolean(op, "filter_blenlib") ||
-      (RNA_struct_find_property(op->ptr, "filemode") &&
-       RNA_int_get(op->ptr, "filemode") == FILE_LOADLIB))
+  if (boolean(op, "filter_blenlib") || (RNA_struct_find_property(op->ptr, "filemode") &&
+                                        RNA_int_get(op->ptr, "filemode") == FILE_LOADLIB))
   {
     return false;
   }
@@ -98,11 +97,13 @@ bool WM_apple_ios_fileselect_begin(bContext *C, wmOperator *op)
   PropertyRNA *check_existing = RNA_struct_find_property(op->ptr, "check_existing");
   const bool save = check_existing && RNA_property_boolean_get_default(op->ptr, check_existing);
   const GHOST_IOSDocumentMode mode = folder ? GHOST_IOSDocumentMode::Directory :
-      save ? GHOST_IOSDocumentMode::Save : GHOST_IOSDocumentMode::Open;
+                                     save   ? GHOST_IOSDocumentMode::Save :
+                                              GHOST_IOSDocumentMode::Open;
   std::string initial = string(op, "filepath");
   if (initial.empty()) {
     char path[FILE_MAX];
-    BLI_path_join(path, sizeof(path), string(op, "directory").c_str(), string(op, "filename").c_str());
+    BLI_path_join(
+        path, sizeof(path), string(op, "directory").c_str(), string(op, "filename").c_str());
     initial = path;
   }
   if (!initial.empty()) {
@@ -112,12 +113,19 @@ bool WM_apple_ios_fileselect_begin(bContext *C, wmOperator *op)
     initial = path;
   }
   std::string types;
-  const struct { const char *property; const char *type; } filters[] = {
+  const struct {
+    const char *property;
+    const char *type;
+  } filters[] = {
       {"filter_blender", "org.blenderfoundation.blender.file"},
-      {"filter_backup", "public.data"}, {"filter_image", "public.image"},
-      {"filter_movie", "public.movie"}, {"filter_sound", "public.audio"},
-      {"filter_font", "public.font"}, {"filter_text", "public.text"},
-      {"filter_python", "public.python-script"}, {"filter_archive", "public.archive"},
+      {"filter_backup", "public.data"},
+      {"filter_image", "public.image"},
+      {"filter_movie", "public.movie"},
+      {"filter_sound", "public.audio"},
+      {"filter_font", "public.font"},
+      {"filter_text", "public.text"},
+      {"filter_python", "public.python-script"},
+      {"filter_archive", "public.archive"},
   };
   for (const auto &filter : filters) {
     if (boolean(op, filter.property)) {
@@ -126,11 +134,16 @@ bool WM_apple_ios_fileselect_begin(bContext *C, wmOperator *op)
   }
   const uint64_t id = ++next_request;
   requests.emplace(id, Request{op, mode, ""});
-  if (!GHOST_ios_document_picker_begin(CTX_wm_window(C)->runtime->ghostwin, id, mode, op->type->name,
-                                      initial.c_str(), types.c_str(), string(op, "filter_glob").c_str(),
-                                      mode == GHOST_IOSDocumentMode::Open &&
-                                          RNA_struct_find_property(op->ptr, "files"),
-                                      completed))
+  if (!GHOST_ios_document_picker_begin(CTX_wm_window(C)->runtime->ghostwin,
+                                       id,
+                                       mode,
+                                       op->type->name,
+                                       initial.c_str(),
+                                       types.c_str(),
+                                       string(op, "filter_glob").c_str(),
+                                       mode == GHOST_IOSDocumentMode::Open &&
+                                           RNA_struct_find_property(op->ptr, "files"),
+                                       completed))
   {
     WM_global_report(RPT_ERROR, "Unable to present the iOS document picker");
     WM_event_fileselect_event(CTX_wm_manager(C), op, EVT_FILESELECT_CANCEL);
@@ -253,7 +266,8 @@ wmOperatorStatus WM_apple_ios_fileselect_exec(bContext *C, wmOperator *op)
     } execution{C, op, request.mode == GHOST_IOSDocumentMode::Directory};
     char error[1024] = {};
     const bool ok = GHOST_ios_document_coordinate(
-        request.path.c_str(), request.mode == GHOST_IOSDocumentMode::Save,
+        request.path.c_str(),
+        request.mode == GHOST_IOSDocumentMode::Save,
         [](void *data, const char *path) {
           auto &execution = *static_cast<Execution *>(data);
           wmOperator *op = execution.op;
@@ -278,7 +292,10 @@ wmOperatorStatus WM_apple_ios_fileselect_exec(bContext *C, wmOperator *op)
             RNA_string_set(op->ptr, "filepath", filepath);
           }
           execution.status = execution.op->type->exec(execution.C, execution.op);
-        }, &execution, error, sizeof(error));
+        },
+        &execution,
+        error,
+        sizeof(error));
     if (!ok) {
       BKE_report(op->reports, RPT_ERROR, error);
     }
