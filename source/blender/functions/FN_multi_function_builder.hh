@@ -51,93 +51,26 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
                                                  TypeSequence<ParamTags...> /*param_tags*/,
                                                  std::index_sequence<I...> /*indices*/)
 {
-
-  /* Load parameters from #Params. */
-  /* Contains `const GVArrayImpl *` for inputs and `T *` for outputs. */
-  const auto loaded_params = std::make_tuple([&]() {
-    /* Use `typedef` instead of `using` to work around a compiler bug. */
-    using ParamTag = ParamTags;
-    using T = typename ParamTag::base_type;
-
-    if constexpr (ParamTag::category == ParamCategory::SingleInput) {
-      return params.readonly_single_input(I).get_implementation();
-    }
-    else if constexpr (ParamTag::category == ParamCategory::SingleOutput) {
-      return static_cast<T *>(params.uninitialized_single_output(I).data());
-    }
-    else if constexpr (ParamTag::category == ParamCategory::SingleMutable) {
-      return static_cast<T *>(params.single_mutable(I).data());
-    }
-  }()...);
-
-  /* Try execute devirtualized if enabled and the input types allow it. */
-  bool executed_devirtualized = false;
-  if constexpr (ExecPreset::use_devirtualization) {
-    /* Get segments before devirtualization to avoid generating this code multiple times. */
-    const Vector<std::variant<IndexRange, IndexMaskSegment>, 16> mask_segments =
-        mask.to_spans_and_ranges<16>();
-
-    const auto devirtualizers = exec_preset.create_devirtualizers(
-        TypeSequence<typename BatchParamTagFromMF<ParamTags>::type...>(),
-        std::index_sequence<I...>(),
-        loaded_params);
-    executed_devirtualized = call_with_devirtualized_parameters(
-        devirtualizers, [&](auto &&...args) {
-          for (const std::variant<IndexRange, IndexMaskSegment> &segment : mask_segments) {
-            if (std::holds_alternative<IndexRange>(segment)) {
-              const auto segment_range = std::get<IndexRange>(segment);
-              varray_batch::execute_array(
-                  element_fn, segment_range, std::forward<decltype(args)>(args)...);
-            }
-            else {
-              const auto segment_indices = std::get<IndexMaskSegment>(segment);
-              varray_batch::execute_array(
-                  element_fn, segment_indices, std::forward<decltype(args)>(args)...);
-            }
-          }
-        });
-  }
-  else {
-    UNUSED_VARS(exec_preset);
-  }
-
-  /* If devirtualized execution was disabled or not possible, use a fallback method which is
-   * slower but always works. */
-  if (!executed_devirtualized) {
-    /* The materialized method is most common because it avoids most virtual function overhead but
-     * still instantiates the function only once. */
-    if constexpr (ExecPreset::fallback_mode == varray_batch::FallbackMode::Materialized) {
-      mask.foreach_segment([&](const IndexMaskSegment segment) {
-        varray_batch::batch_process<64>(
-            TypeSequence<typename BatchParamTagFromMF<ParamTags>::type...>(),
-            std::index_sequence<I...>(),
-            element_fn,
-            segment,
-            loaded_params);
-      });
-    }
-    else {
-      /* This fallback is slower because it uses virtual method calls for every element. */
-      mask.foreach_segment([&](const IndexMaskSegment segment) {
-        varray_batch::execute_array(element_fn, segment, [&]() {
-          /* Use `typedef` instead of `using` to work around a compiler bug. */
-          using ParamTag = ParamTags;
-          using T = typename ParamTag::base_type;
-          if constexpr (ParamTag::category == ParamCategory::SingleInput) {
-            const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
-            return GVArray(&varray_impl).typed<T>();
-          }
-          else if constexpr (ELEM(ParamTag::category,
-                                  ParamCategory::SingleOutput,
-                                  ParamCategory::SingleMutable))
-          {
-            T *ptr = std::get<I>(loaded_params);
-            return ptr;
-          }
-        }()...);
-      });
-    }
-  }
+  varray_batch::execute_element_fn_with_params(
+      element_fn,
+      exec_preset,
+      mask,
+      TypeSequence<typename BatchParamTagFromMF<ParamTags>::type...>(),
+      std::index_sequence<I...>(),
+      [&]() -> decltype(auto) {
+        /* Use `typedef` instead of `using` to work around a compiler bug. */
+        using ParamTag = ParamTags;
+        if constexpr (ParamTag::category == ParamCategory::SingleInput) {
+          return params.readonly_single_input(I);
+        }
+        else if constexpr (ParamTag::category == ParamCategory::SingleOutput) {
+          return params.uninitialized_single_output(I);
+        }
+        else {
+          static_assert(ParamTag::category == ParamCategory::SingleMutable);
+          return params.single_mutable(I);
+        }
+      }()...);
 }
 
 /**
