@@ -7,6 +7,7 @@
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 #include "BLI_virtual_array.hh"
+#include "BLI_virtual_array_batch_processing.hh"
 #include "BLI_virtual_array_range_spans.hh"
 
 #include "testing/testing.h"
@@ -356,7 +357,7 @@ TEST_F(VirtualArrayTest, FunctionRangeSpans)
   EXPECT_EQ_SPAN(span3, {5});
 }
 
-TEST(generic_virtual_array, FromFunc)
+TEST_F(VirtualArrayTest, FromFunc)
 {
   GVArray gvarray = GVArray::from_func(
       CPPType::get<std::string>(), 10, [](const int64_t i, void *r_value) {
@@ -367,6 +368,22 @@ TEST(generic_virtual_array, FromFunc)
   EXPECT_EQ(varray[0], "0");
   EXPECT_EQ(varray[3], "3");
   EXPECT_EQ(varray[9], "9");
+}
+
+TEST_F(VirtualArrayTest, BatchProcess)
+{
+  VArray<int> in1 = VArray<int>::from_container(std::array{3, 6, 4, 8});
+  VArray<int> in2 = VArray<int>::from_single(10, in1.size());
+  std::array<int, 4> out;
+  varray_batch::batch_process__2_varray_in__1_span_out<int, int, int>(
+      IndexMask(4), in1, in2, MutableSpan<int>(out), [](const int a, const int b, int &c) {
+        c = a + b;
+      });
+
+  EXPECT_EQ(out[0], 13);
+  EXPECT_EQ(out[1], 16);
+  EXPECT_EQ(out[2], 14);
+  EXPECT_EQ(out[3], 18);
 }
 
 }  // namespace blender::tests
