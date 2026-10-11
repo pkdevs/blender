@@ -135,6 +135,7 @@ set(SRC
   intern/sort_utils.cc
   intern/stack.cc
   intern/storage.cc
+  intern/straight_skeleton.cc
   intern/string.cc
   intern/string_cursor_utf8.cc
   intern/string_ref.cc
@@ -372,6 +373,7 @@ set(SRC
   BLI_span.hh
   BLI_stack.hh
   BLI_stack_c.hh
+  BLI_straight_skeleton.hh
   BLI_strict_flags.hh
   BLI_string.hh
   BLI_string_cursor_utf8.hh
@@ -437,6 +439,7 @@ set(LIB
   PRIVATE bf::dependencies::zstd
   PRIVATE bf::dependencies::optional::gmp
   PRIVATE bf::dependencies::optional::fftw3
+  PRIVATE bf::dependencies::optional::manifold
   PUBLIC bf::dependencies::openimageio
 )
 
@@ -450,6 +453,10 @@ endif()
 
 if(WITH_MEM_VALGRIND)
   add_definitions(-DWITH_MEM_VALGRIND)
+endif()
+
+if(WITH_MANIFOLD)
+  add_definitions(-DWITH_MANIFOLD)
 endif()
 
 if(WIN32)
@@ -588,6 +595,7 @@ if(WITH_GTESTS)
     tests/BLI_span_test.cc
     tests/BLI_stack_cxx_test.cc
     tests/BLI_stack_test.cc
+    tests/BLI_straight_skeleton_test.cc
     tests/BLI_string_ref_test.cc
     tests/BLI_string_search_test.cc
     tests/BLI_string_test.cc

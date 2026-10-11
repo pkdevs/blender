@@ -63,6 +63,38 @@ template<typename T>
   return (c > std::numeric_limits<T>::epsilon()) ? (dot(a, b) / c) : T(0);
 }
 
+/**
+ * Compute the angle (in radians) at vertex \a b in the triangle (\a a, \a b, \a c).
+ * Returns 0 for degenerate cases where either edge from \a b has zero length.
+ *
+ * This is the generalized equivalent of the C-API #angle_v3v3v3, but works for
+ * any floating-point type (including `double`).
+ */
+template<typename T>
+[[nodiscard]] inline T angle_on_tri(const VecBase<T, 3> &a,
+                                    const VecBase<T, 3> &b,
+                                    const VecBase<T, 3> &c)
+{
+  const VecBase<T, 3> d1 = normalize(a - b);
+  const VecBase<T, 3> d2 = normalize(c - b);
+  return safe_acos(-dot(d1, d2));
+}
+
+/**
+ * Return the factor by which a displacement along \a face_normal must be scaled
+ * to obtain a displacement of unit length along \a vert_normal.
+ *
+ * Both vectors must be normalized. This is the generalized, double-capable
+ * equivalent of the C-API #shell_v3v3_normalized_to_dist.
+ */
+template<typename T>
+[[nodiscard]] inline T shell_angle_to_dist(const VecBase<T, 3> &vert_normal,
+                                           const VecBase<T, 3> &face_normal)
+{
+  const T angle_cos = std::abs(dot(vert_normal, face_normal));
+  return (UNLIKELY(angle_cos < std::numeric_limits<T>::epsilon())) ? T(1) : (T(1) / angle_cos);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -219,13 +251,60 @@ template<typename T, int Size>
  * dominant two axes of \a normal become the X and Y columns, allowing
  * vectors to be projected into the plane of \a normal.
  *
+ * Works for any floating-point scalar type \a T (including `double`).
  * \param normal: A unit-length vector.
  */
-[[nodiscard]] inline float3x3 axis_dominant_to_m3(const float3 &normal)
+template<typename T>
+[[nodiscard]] inline MatBase<T, 3, 3> axis_dominant_to_m3(const VecBase<T, 3> &normal)
 {
-  float tmp[3][3];
-  axis_dominant_v3_to_m3(tmp, &normal.x);
-  return float3x3(float3(tmp[0]), float3(tmp[1]), float3(tmp[2]));
+  /* Build two unit vectors orthogonal to normal using the same method as
+   * #ortho_basis_v3v3_v3, then assemble them as the rows of the projection
+   * matrix (equivalent to transposing the column-orthonormal basis). */
+  const T eps = std::numeric_limits<T>::epsilon();
+  const T f = normal.x * normal.x + normal.y * normal.y;
+  VecBase<T, 3> r0, r1;
+  if (f > eps) {
+    const T d = T(1) / std::sqrt(f);
+    r0 = VecBase<T, 3>(normal.y * d, -normal.x * d, T(0));
+    r1 = VecBase<T, 3>(-normal.z * r0.y, normal.z * r0.x, normal.x * r0.y - normal.y * r0.x);
+  }
+  else {
+    /* Degenerate: normal is nearly aligned with Z. */
+    const T s = (normal.z < T(0)) ? T(-1) : T(1);
+    r0 = VecBase<T, 3>(s, T(0), T(0));
+    r1 = VecBase<T, 3>(T(0), T(1), T(0));
+  }
+  /* Rows of the matrix are the two tangent basis vectors and the normal.
+   * The transpose maps world-space to the (r0, r1, normal) frame, so
+   * the first two components of the result are the 2-D projection. */
+  return MatBase<T, 3, 3>(r0, r1, normal);
+}
+
+/**
+ * Like #axis_dominant_to_m3 but flips the normal, so the projected Z
+ * coordinate is negated. This is the equivalent of #axis_dominant_v3_to_m3_negate.
+ *
+ * \param normal: A unit-length vector.
+ */
+template<typename T>
+[[nodiscard]] inline MatBase<T, 3, 3> axis_dominant_to_m3_negate(const VecBase<T, 3> &normal)
+{
+  return axis_dominant_to_m3<T>(-normal);
+}
+
+/**
+ * Project the 3-D vector \a v onto the 2-D plane whose projection matrix is \a m.
+ * Equivalent to #mul_v2_m3v3: returns only the first two components of \a m * \a v.
+ *
+ * \param m: A 3x3 matrix (e.g. from #axis_dominant_to_m3).
+ * \param v: A 3-D vector to project.
+ */
+template<typename T>
+[[nodiscard]] inline VecBase<T, 2> project_v3_to_v2(const MatBase<T, 3, 3> &m,
+                                                    const VecBase<T, 3> &v)
+{
+  const VecBase<T, 3> result = m * v;
+  return VecBase<T, 2>(result.x, result.y);
 }
 
 /** \} */
@@ -336,10 +415,35 @@ template<typename T>
  * \param verts: The polygon vertices, in order (CW or CCW).
  * \return True when \a pt is inside the polygon.
  */
+template<typename T>
+[[nodiscard]] inline bool isect_point_poly(const VecBase<T, 2> &pt, Span<VecBase<T, 2>> verts)
+{
+  const int64_t nr = verts.size();
+  bool inside = false;
+  for (int64_t i = 0, j = nr - 1; i < nr; j = i++) {
+    if (((verts[i].y > pt.y) != (verts[j].y > pt.y)) &&
+        (pt.x <
+         (verts[j].x - verts[i].x) * (pt.y - verts[i].y) / (verts[j].y - verts[i].y) + verts[i].x))
+    {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 [[nodiscard]] inline bool isect_point_poly(const float2 &pt, Span<float2> verts)
 {
-  return isect_point_poly_v2(
-      pt, reinterpret_cast<const float (*)[2]>(verts.data()), uint(verts.size()));
+  return isect_point_poly<float>(pt, verts);
+}
+
+[[nodiscard]] inline bool isect_point_poly(const double2 &pt, Span<double2> verts)
+{
+  return isect_point_poly<double>(pt, verts);
+}
+
+[[nodiscard]] inline bool isect_point_poly(const int2 &pt, Span<int2> verts)
+{
+  return isect_point_poly<int>(pt, verts);
 }
 
 /** \} */
@@ -390,6 +494,30 @@ template<typename T>
 [[nodiscard]] inline float area_poly(Span<float2> verts)
 {
   return area_poly_v2(reinterpret_cast<const float (*)[2]>(verts.data()), uint(verts.size()));
+}
+
+/**
+ * Compute the signed area of a 2D polygon given its vertices.
+ * Positive if counter-clockwise (CCW), negative if clockwise (CW).
+ */
+[[nodiscard]] inline float area_poly_signed(Span<float2> verts)
+{
+  return area_poly_signed_v2(reinterpret_cast<const float (*)[2]>(verts.data()),
+                             uint(verts.size()));
+}
+
+template<typename T> [[nodiscard]] inline T area_poly_signed(Span<VecBase<T, 2>> verts)
+{
+  if (verts.size() < 3) {
+    return T(0);
+  }
+  T area = T(0);
+  const int64_t n = verts.size();
+  for (int64_t i = 0; i < n; i++) {
+    const int64_t next = (i + 1 == n) ? 0 : i + 1;
+    area += cross(verts[i], verts[next]);
+  }
+  return T(0.5) * area;
 }
 
 /**
