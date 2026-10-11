@@ -392,7 +392,8 @@ class VIEW3D_PT_native_sculpt_settings(bpy.types.Panel):
             strength_owner = ups if ups.use_unified_strength else brush
             layout.prop(strength_owner, "strength", text="Strength", slider=True)
             if brush.sculpt_capabilities.has_direction:
-                layout.prop(brush, "direction", text="Direction")
+                # Two or three choices: shown as a segmented control, a single tap each.
+                layout.prop(brush, "direction", text="Direction", expand=True)
 
         obj = context.sculpt_object
         dyntopo = obj.use_dynamic_topology_sculpting
