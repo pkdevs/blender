@@ -353,8 +353,14 @@ else()
   if(WITH_APPLE_CROSSPLATFORM)
     # Add Storyboard - required for main window interface.
     set(storyboards ${OSX_APP_SOURCEDIR}/Main.storyboard)
-    set(IOS_LIQUID_GLASS_APP_ICON
-      ${CMAKE_SOURCE_DIR}/release/darwin/blender_liquid_glass.icon)
+    if(APPLE_TARGET_VISIONOS)
+      # visionOS icons are a stack of layers that part as they are looked at.
+      set(IOS_APP_ICON ${CMAKE_SOURCE_DIR}/release/visionos/AppIcon.xcassets)
+      set(IOS_APP_ICON_NAME AppIcon)
+    else()
+      set(IOS_APP_ICON ${CMAKE_SOURCE_DIR}/release/darwin/blender_liquid_glass.icon)
+      set(IOS_APP_ICON_NAME blender_liquid_glass)
+    endif()
 
     # The document launcher's Suzanne and logo are drawn with RealityKit and SwiftUI, which only
     # Swift can use. The rest of the launcher finds these views by name, see `GHOST_IOSLauncher.mm`.
@@ -1855,7 +1861,7 @@ elseif(APPLE)
         --output ${IOS_ICON_CATALOG}
       COMMAND
         /bin/sh -c
-        "platform=\"\${PLATFORM_NAME:-iphoneos}\"; xcrun actool --compile \"$<TARGET_BUNDLE_DIR:blender>\" --platform \"$platform\" --minimum-deployment-target \"${CMAKE_OSX_DEPLOYMENT_TARGET}\" --app-icon blender_liquid_glass --accent-color AccentColor \"${IOS_LIQUID_GLASS_APP_ICON}\" \"${IOS_ICON_CATALOG}\" --output-partial-info-plist \"$<TARGET_BUNDLE_DIR:blender>/assetcatalog_generated_info.plist\""
+        "platform=\"\${PLATFORM_NAME:-iphoneos}\"; xcrun actool --compile \"$<TARGET_BUNDLE_DIR:blender>\" --platform \"$platform\" --minimum-deployment-target \"${CMAKE_OSX_DEPLOYMENT_TARGET}\" --app-icon ${IOS_APP_ICON_NAME} --accent-color AccentColor \"${IOS_APP_ICON}\" \"${IOS_ICON_CATALOG}\" --output-partial-info-plist \"$<TARGET_BUNDLE_DIR:blender>/assetcatalog_generated_info.plist\""
       COMMENT "Exporting Blender template icons and compiling iOS assets"
       VERBATIM
     )
