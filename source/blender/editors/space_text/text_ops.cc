@@ -3886,7 +3886,8 @@ void TEXT_OT_find(wmOperatorType *ot)
   ot->poll = text_space_edit_poll;
 
   /* Properties. */
-  RNA_def_boolean(ot->srna, "reverse", false, "Reverse", "Search backwards");
+  PropertyRNA *prop = RNA_def_boolean(ot->srna, "reverse", false, "Reverse", "Search backwards");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /** \} */

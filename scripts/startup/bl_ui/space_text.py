@@ -153,8 +153,8 @@ class TEXT_PT_find(Panel):
         row.prop(st, "find_text", icon='VIEWZOOM', text="")
         row.operator("text.find_set_selected", text="", icon='EYEDROPPER')
         row = col.row(align=True)
-        row.operator("text.find", text="Find Next")
         row.operator("text.find", text="Find Previous").reverse = True
+        row.operator("text.find", text="Find Next")
 
         layout.separator()
 
