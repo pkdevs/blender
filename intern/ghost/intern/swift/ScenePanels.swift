@@ -90,6 +90,9 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
       panel.isHidden = true
       overlay.addSubview(panel)
     }
+#if os(visionOS)
+    Self.current = self
+#endif
   }
 
   private func makePanel(_ host: UIHostingController<AnyView>) -> UIVisualEffectView {
@@ -134,6 +137,10 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
    * \{ */
 
   @objc private func toggleInspector() {
+#if os(visionOS)
+    toggleWindow(.properties)
+    return
+#endif
     overlay?.endEditing(true)
     showInspector.toggle()
     if showInspector && layoutRect.width < 700 { showHierarchy = false }
@@ -141,6 +148,10 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   }
 
   @objc private func toggleHierarchy() {
+#if os(visionOS)
+    toggleWindow(.outliner)
+    return
+#endif
     overlay?.endEditing(true)
     showHierarchy.toggle()
     if showHierarchy && layoutRect.width < 700 { showInspector = false }
@@ -149,6 +160,10 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
 
   @objc public func dismiss() {
     dismissShading()
+#if os(visionOS)
+    /* Windows of their own stay open beside the editor. */
+    return
+#endif
     overlay?.endEditing(true)
     showInspector = false
     showHierarchy = false
@@ -160,8 +175,10 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     inspector.visible = showInspector
     inspectorButton.isSelected = showInspector
     hierarchyButton.isSelected = showHierarchy
+#if !os(visionOS)
     animate(inspectorPanel, visible: showInspector, leading: false)
     animate(hierarchyPanel, visible: showHierarchy, leading: true)
+#endif
     Engine.setting("native_panels", "\((showInspector ? 1 : 0) | (showHierarchy ? 2 : 0))")
     layout(in: layoutRect)
   }
@@ -195,6 +212,9 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     /* The top bar's room for tool settings changes with rotation and window size. */
     updateToolStripWidth()
     layoutRect = rect
+#if os(visionOS)
+    return
+#endif
     if rect.width < 700 && showInspector && showHierarchy {
       showHierarchy = false
       applyVisibility()
@@ -229,6 +249,35 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   }
 
   /** \} */
+
+#if os(visionOS)
+  /* -------------------------------------------------------------------- */
+  /** \name Windows of their own
+   *
+   * On Apple Vision Pro, Properties and the Outliner open as windows beside the editor, which
+   * the person can place, resize and keep open, instead of covering the viewport.
+   * \{ */
+
+  static weak var current: SwiftScenePanels?
+
+  private func toggleWindow(_ kind: PanelWindow) {
+    PanelWindows.toggle(kind)
+  }
+
+  /** The panel a window shows: the same store as the editor's, so both stay in step. */
+  func windowContent(_ kind: PanelWindow) -> AnyView {
+    kind == .properties ? AnyView(InspectorPanel(store: inspector) {}) :
+                          AnyView(HierarchyPanel(store: hierarchy) {})
+  }
+
+  func setWindow(_ kind: PanelWindow, open: Bool) {
+    if kind == .properties { showInspector = open }
+    else { showHierarchy = open }
+    applyVisibility()
+  }
+
+  /** \} */
+#endif
 
   /* -------------------------------------------------------------------- */
   /** \name Viewport shading
@@ -504,3 +553,94 @@ private final class ToolStripRow: UIStackView {
     windowChanged?()
   }
 }
+
+#if os(visionOS)
+/** The panels that open as windows of their own on Apple Vision Pro. */
+enum PanelWindow: String, CaseIterable {
+  case properties = "org.blender.window.properties"
+  case outliner = "org.blender.window.outliner"
+  case timeline = "org.blender.window.timeline"
+
+  var title: String {
+    switch self {
+    case .properties: "Properties"
+    case .outliner: "Outliner"
+    case .timeline: "Timeline"
+    }
+  }
+}
+
+@MainActor
+enum PanelWindows {
+  /** Closes a panel's window, while it is open. */
+  static var close: [PanelWindow: () -> Void] = [:]
+
+  static func toggle(_ kind: PanelWindow) {
+    if let close = close[kind] {
+      close()
+      return
+    }
+    guard let request = UISceneSessionActivationRequest(hostingDelegateClass: PanelSceneDelegate.self,
+                                                        id: kind.rawValue) else { return }
+    UIApplication.shared.activateSceneSession(for: request) { _ in }
+  }
+
+  /** What the window shows, from the editor's own stores; nil without a document open. */
+  static func content(_ kind: PanelWindow) -> AnyView? {
+    kind == .timeline ? SwiftTimeline.current?.windowContent() :
+                        SwiftScenePanels.current?.windowContent(kind)
+  }
+
+  static func setOpen(_ kind: PanelWindow, _ open: Bool) {
+    if kind == .timeline { SwiftTimeline.current?.setWindowOpen(open) }
+    else { SwiftScenePanels.current?.setWindow(kind, open: open) }
+  }
+}
+
+/** The panels as SwiftUI windows, which the person places around the editor. */
+final class PanelSceneDelegate: NSObject, UIHostingSceneDelegate {
+  static var rootScene: some Scene {
+    panel(.properties, size: CGSize(width: 420, height: 760))
+    panel(.outliner, size: CGSize(width: 360, height: 640))
+    /* Wide and low, under the viewport. */
+    panel(.timeline, size: CGSize(width: 1100, height: 96))
+  }
+
+  private static func panel(_ kind: PanelWindow, size: CGSize) -> some Scene {
+    Window(kind.title, id: kind.rawValue) {
+      PanelWindowContent(kind: kind)
+    }
+    .defaultSize(size)
+    .windowResizability(.contentMinSize)
+  }
+}
+
+struct PanelWindowContent: View {
+  let kind: PanelWindow
+  @Environment(\.dismissWindow) private var dismissWindow
+
+  var body: some View {
+    Group {
+      if let content = PanelWindows.content(kind) {
+        content
+      }
+    }
+    .frame(minWidth: kind == .timeline ? 520 : 320, minHeight: kind == .timeline ? 64 : 420)
+    .environment(\.panelInWindow, true)
+    .tint(PanelStyle.tint)
+    .onAppear {
+      guard PanelWindows.content(kind) != nil else {
+        /* Restored without a document open: there is nothing to show. */
+        dismissWindow(id: kind.rawValue)
+        return
+      }
+      PanelWindows.close[kind] = { dismissWindow(id: kind.rawValue) }
+      PanelWindows.setOpen(kind, true)
+    }
+    .onDisappear {
+      PanelWindows.close[kind] = nil
+      PanelWindows.setOpen(kind, false)
+    }
+  }
+}
+#endif

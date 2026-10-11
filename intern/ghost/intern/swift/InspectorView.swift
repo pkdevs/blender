@@ -10,7 +10,13 @@
 import SwiftUI
 import UIKit
 
+/** Whether a panel fills a window of its own, as Properties and the Outliner do on visionOS. */
+extension EnvironmentValues {
+  @Entry var panelInWindow = false
+}
+
 struct PanelHeader<Trailing: View>: View {
+  @Environment(\.panelInWindow) private var inWindow
   let title: String
   let close: () -> Void
   @ViewBuilder var trailing: Trailing
@@ -23,16 +29,19 @@ struct PanelHeader<Trailing: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.trailing, 8)
       trailing
-      Button(action: close) {
-        Image(systemName: "xmark")
-          .font(.body.weight(.medium))
-          .foregroundStyle(.secondary)
-          .frame(width: 44, height: 44)
-          .contentShape(Rectangle())
+      /* A panel in a window of its own closes with the window. */
+      if !inWindow {
+        Button(action: close) {
+          Image(systemName: "xmark")
+            .font(.body.weight(.medium))
+            .foregroundStyle(.secondary)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Close \(title)")
       .keyboardShortcut(.cancelAction)
+      }
     }
     .padding(.leading, 16)
     .padding(.trailing, 5)

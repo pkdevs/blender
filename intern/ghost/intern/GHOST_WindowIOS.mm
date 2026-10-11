@@ -4406,7 +4406,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
    * never leaves a gap and follows the timeline as it opens or expands. */
   const BOOL tray_shown = !_desktop_interface && !_interface_hidden;
   const CGFloat assets_tray = _assets.visible && tray_shown ? _assets.height + 8 : 0;
+#if defined(APPLE_TARGET_VISIONOS)
+  const CGFloat timeline_tray = 0; /* A window of its own. */
+#else
   const CGFloat timeline_tray = _timeline.visible && tray_shown ? _timeline.height + 8 : 0;
+#endif
   const CGFloat tray = assets_tray + timeline_tray;
   if (fabs(tray - _bottom_tray) > 0.5) {
     _bottom_tray = tray;

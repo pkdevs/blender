@@ -573,7 +573,27 @@ public final class SwiftTimeline: NSObject {
     panel.contentView.addSubview(host.view)
     overlay.addSubview(panel)
     store.toggleExpanded = { [weak self] in self?.toggleExpanded(nil) }
+#if os(visionOS)
+    Self.current = self
+#endif
   }
+
+#if os(visionOS)
+  /* On Apple Vision Pro the timeline is a window of its own, placed under the editor's. */
+  static weak var current: SwiftTimeline?
+
+  func windowContent() -> AnyView {
+    store.set(\.compact, false)
+    return AnyView(TimelineContent(store: store))
+  }
+
+  func setWindowOpen(_ open: Bool) {
+    visible = open
+    button.isSelected = open
+    Engine.setting("timeline_visible", open ? "1" : "0")
+    visibilityDidChange?()
+  }
+#endif
 
   @objc public var view: UIView { panel }
   @objc public var expanded: Bool { store.expanded }
@@ -607,6 +627,10 @@ public final class SwiftTimeline: NSObject {
 
   @objc(toggle:)
   public func toggle(_ sender: Any?) {
+#if os(visionOS)
+    PanelWindows.toggle(.timeline)
+    return
+#endif
     visible.toggle()
     button.isSelected = visible
     /* Blender lists keyframes only while the timeline shows them. */
