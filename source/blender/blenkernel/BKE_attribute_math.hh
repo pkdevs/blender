@@ -387,7 +387,6 @@ template<typename T> inline T mix_indices(const Span<T> src, const Span<int> ind
   return accum;
 }
 
-
 template<typename T, typename ToAccumFn, typename ToFinalFn>
 inline T mix_indices(const Span<T> src,
                      const Span<int> indices,
