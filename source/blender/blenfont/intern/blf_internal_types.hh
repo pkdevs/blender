@@ -401,6 +401,7 @@ struct GlyphBLF {
   ft_pix box_ymax;
 
   ft_pix advance_x;
+  ft_pix advance_transform;
   uint8_t subpixel;
 
   /** The difference in bearings when hinting is active, zero otherwise. */

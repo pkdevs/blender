@@ -285,7 +285,7 @@ ShapingData::ShapingData(FontBLF *font,
       GlyphBLF *g = blf_glyph_ensure(segment_font, segment_gc, codepoint, glyph_id);
       const int advance = ((font->flags & BLF_MONOSPACED) ?
                                ft_pix_from_int(cwidth) * BLI_wcwidth_safe(codepoint) :
-                               glyph_pos[i].x_advance);
+                               glyph_pos[i].x_advance + (g ? g->advance_transform : 0));
 
       if (g == nullptr) [[unlikely]] {
         /* Still advance pen for missing glyphs using HarfBuzz-provided advance. */
