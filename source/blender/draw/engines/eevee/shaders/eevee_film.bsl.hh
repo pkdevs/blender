@@ -76,6 +76,44 @@ float2 panoramic_face_uv_from_direction(float3 direction, ePanoramicFace face_id
   return uv * 0.5f + 0.5f;
 }
 
+float panoramic_face_depth_from_direction(float3 direction, ePanoramicFace face_id)
+{
+  switch (face_id) {
+    default:
+    case PANORAMIC_FACE_POS_X:
+      return direction.x;
+    case PANORAMIC_FACE_NEG_X:
+      return -direction.x;
+    case PANORAMIC_FACE_POS_Y:
+      return direction.y;
+    case PANORAMIC_FACE_NEG_Y:
+      return -direction.y;
+    case PANORAMIC_FACE_POS_Z:
+      return direction.z;
+    case PANORAMIC_FACE_NEG_Z:
+      return -direction.z;
+  }
+}
+
+/**
+ * Allows filtering the render samples by their distance on the film.
+ */
+struct PanoramicFootprint {
+  ePanoramicFace view_id;
+  float2 film_co;
+  float2 render_co;
+  float2 stride;
+  /* Rows of the render to film pixel offset matrix. */
+  float2 film_from_render_x;
+  float2 film_from_render_y;
+  /* Symmetric matrix (xx, xy, yy) used to measure film offsets for the filter weights. */
+  float3 film_metric;
+  /* False where the mapping is degenerate, then use nearest sample. */
+  bool is_valid;
+  /* Pixel center is outside the lens but its filter still overlaps it. */
+  bool is_outside_lens;
+};
+
 float display_depth_amend(float depth)
 {
   /* This effectively offsets the depth of the whole 2x2 region to the lowest value of the region
@@ -210,12 +248,17 @@ struct Film {
   /** \name Filter
    * \{ */
 
+  /* Returns a null vector outside the lens. */
+  float3 panoramic_direction_get(float2 film_co)
+  {
+    const CameraData cam = uniforms.uniform_buf.camera;
+    const float2 film_uv = film_co * uniforms.uniform_buf.film.extent_inv;
+    return eevee::camera::view_from_uv(cam, film_uv);
+  }
+
   float3 panoramic_direction_get(int2 texel_film)
   {
-
-    const CameraData cam = uniforms.uniform_buf.camera;
-    const float2 film_uv = (float2(texel_film) + 0.5f) * uniforms.uniform_buf.film.extent_inv;
-    return eevee::camera::view_from_uv(cam, film_uv);
+    return panoramic_direction_get(float2(texel_film) + 0.5f);
   }
 
   int panoramic_texel_owner_view_id(float3 camera_direction)
@@ -231,48 +274,227 @@ struct Film {
     return panoramic_texel_owner_view_id(camera_direction) == view_id;
   }
 
-  float2 panoramic_render_uv_get(int2 texel_film, ePanoramicFace view_id)
+  /* Returns false if `film_co` cannot be projected onto the subview. */
+  bool panoramic_render_co_get(float2 film_co, ePanoramicFace view_id, float2 &render_co)
   {
-
-    const float3 camera_direction = panoramic_direction_get(texel_film);
-    if (is_zero(camera_direction)) {
-      /* Texel is outside the lens (e.g. the corners of a fisheye render). */
-      return float2(-1.0f);
+    const CameraData cam = uniforms.uniform_buf.camera;
+    const float3 camera_direction = panoramic_direction_get(film_co);
+    /* Outside the lens or behind the subview. */
+    if (panoramic_face_depth_from_direction(camera_direction, view_id) <= 1e-6f) {
+      render_co = float2(0.0f);
+      return false;
     }
-
-    /* if view_id is not the owner, throw the pixel out */
-    if (!panoramic_texel_is_owned_by_view(camera_direction, int(view_id))) {
-      return float2(-1.0f);
-    }
-
-    /* Now that we're sure view_id is the owner, the pixel must be in [0,1)
-     * However, on edges between two faces, rounding error can produce out of bound values,
-     * so we need to clamp it. */
-    const float2 face_uv = clamp(panoramic_face_uv_from_direction(camera_direction, view_id),
-                                 float2(0.0f),
-                                 float2(0.999999f));
-
-    const float overscan = max(uniforms.uniform_buf.camera.panoramic_view_overscan, 1.0f);
+    const float2 face_uv = panoramic_face_uv_from_direction(camera_direction, view_id);
+    const float overscan = max(cam.panoramic_view_overscan, 1.0f);
     const float2 render_uv = (face_uv - 0.5f) / overscan + 0.5f;
-    return render_uv;
+    render_co = render_uv * float2(textureSize(depth_tx, 0).xy);
+    return true;
   }
 
-  FilmSample panoramic_sample_get(int sample_n, int2 texel_film, ePanoramicFace view_id)
+  float2 panoramic_render_co_derivative(float2 film_co,
+                                        float2 render_co,
+                                        float2 axis,
+                                        ePanoramicFace view_id)
+  {
+    float2 neighbor_co;
+    if (panoramic_render_co_get(film_co + axis, view_id, neighbor_co)) {
+      return neighbor_co - render_co;
+    }
+    if (panoramic_render_co_get(film_co - axis, view_id, neighbor_co)) {
+      return render_co - neighbor_co;
+    }
+    return axis;
+  }
+
+  /* The projection is undefined for pixels outside the lens, but their filter can still overlap
+   * it. Find a nearby position inside the lens to evaluate the projection from. */
+  bool panoramic_find_closest_lens_co(float2 film_co, float2 &lens_co)
+  {
+    /* Search a bit further than the filter radius to not miss a lens border in between the 8
+     * directions. */
+    const float distance = uniforms.uniform_buf.film.filter_radius * 1.1f + 0.75f;
+    for (int i = 0; i < 8; i++) {
+      const float angle = float(i) * M_PI_2 + ((i < 4) ? 0.0f : M_PI_4);
+      lens_co = film_co + float2(cos(angle), sin(angle)) * distance;
+      if (!is_zero(panoramic_direction_get(lens_co))) {
+        /* Move close to the pixel. */
+        float2 outside_co = film_co;
+        for (int j = 0; j < 4; j++) {
+          const float2 middle_co = 0.5f * (outside_co + lens_co);
+          if (is_zero(panoramic_direction_get(middle_co))) {
+            outside_co = middle_co;
+          }
+          else {
+            lens_co = middle_co;
+          }
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /* `lens_co` is where the projection is evaluated. It is the pixel center unless the pixel is
+   * outside the lens (see `panoramic_find_closest_lens_co`). It must be owned by `view_id`. */
+  PanoramicFootprint panoramic_footprint_get(int2 texel_film,
+                                             float2 lens_co,
+                                             bool is_outside_lens,
+                                             ePanoramicFace view_id)
+  {
+    PanoramicFootprint footprint;
+    footprint.view_id = view_id;
+    footprint.is_outside_lens = is_outside_lens;
+    footprint.film_co = float2(texel_film) + 0.5f;
+    footprint.render_co = float2(0.0f);
+    footprint.stride = float2(1.0f);
+    footprint.film_from_render_x = float2(1.0f, 0.0f);
+    footprint.film_from_render_y = float2(0.0f, 1.0f);
+    footprint.film_metric = float3(1.0f, 0.0f, 1.0f);
+    footprint.is_valid = false;
+
+    panoramic_render_co_get(lens_co, view_id, footprint.render_co);
+
+    /* Columns of the film to render pixel offset matrix. */
+    const float2 dx = panoramic_render_co_derivative(
+        lens_co, footprint.render_co, float2(1.0f, 0.0f), view_id);
+    const float2 dy = panoramic_render_co_derivative(
+        lens_co, footprint.render_co, float2(0.0f, 1.0f), view_id);
+    /* Extrapolate to the pixel center. */
+    const float2 lens_offset = footprint.film_co - lens_co;
+    footprint.render_co += dx * lens_offset.x + dy * lens_offset.y;
+    const float determinant = dx.x * dy.y - dy.x * dx.y;
+    /* Lower bound of the render pixel density in the most stretched direction. */
+    const float min_density = abs(determinant) *
+                              inversesqrt(length_squared(dx) + length_squared(dy));
+    if (!(min_density > 0.02f)) {
+      return footprint;
+    }
+    footprint.is_valid = true;
+    {
+      /* Widen the filter where the render pixel density is below this value.
+       * Note(L3GiaBao): I tested different values and this seems to be most acceptable. */
+      const float density_ref = 0.45f;
+      /* Squared density matrix. Its eigenvalues are `mean +- deviation`. */
+      const float xx = length_squared(dx);
+      const float xy = dot(dx, dy);
+      const float yy = length_squared(dy);
+      const float mean = 0.5f * (xx + yy);
+      const float deviation = sqrt(square(0.5f * (xx - yy)) + square(xy));
+      /* Widen sooner if samples are skipped in the other direction (e.g. mirror ball border). */
+      const float density_ref_min = min(density_ref * max(sqrt(mean + deviation), 1.0f), 1.0f);
+      const float density_max = min((mean + deviation) / square(density_ref), 1.0f);
+      const float density_min = min((mean - deviation) / square(density_ref_min), 1.0f);
+      /* Direction of lowest density. */
+      float2 axis = (xx < yy) ? float2(1.0f, 0.0f) : float2(0.0f, 1.0f);
+      if (abs(xy) > 1e-6f * mean) {
+        axis = normalize(float2(xy, (mean - deviation) - xx));
+      }
+      const float delta = density_min - density_max;
+      footprint.film_metric = float3(density_max + delta * axis.x * axis.x,
+                                     delta * axis.x * axis.y,
+                                     density_max + delta * axis.y * axis.y);
+    }
+    footprint.film_from_render_x = float2(dy.y, -dy.x) / determinant;
+    footprint.film_from_render_y = float2(-dx.y, dx.x) / determinant;
+    /* At least one pixel to avoid gathering the same sample twice. Clamp because the
+     * footprint is only valid close to the pixel center. */
+    footprint.stride = clamp(float2(length(float2(dx.x, dy.x)), length(float2(dx.y, dy.y))),
+                             float2(1.0f),
+                             float2(16.0f));
+    return footprint;
+  }
+
+  float panoramic_film_distance_sqr(PanoramicFootprint footprint, float2 film_offset)
+  {
+    const float3 metric = footprint.film_metric;
+    return metric.x * film_offset.x * film_offset.x +
+           2.0f * metric.y * film_offset.x * film_offset.y +
+           metric.z * film_offset.y * film_offset.y;
+  }
+
+  float2 panoramic_film_offset_get(PanoramicFootprint footprint, float2 render_offset)
+  {
+    return float2(dot(footprint.film_from_render_x, render_offset),
+                  dot(footprint.film_from_render_y, render_offset));
+  }
+
+  /* `outside_weight` is the weight of the sample landing outside the lens. It is needed to fade
+   * the image at the lens border. */
+  FilmSample panoramic_sample_get(int sample_n,
+                                  PanoramicFootprint footprint,
+                                  float &outside_weight)
   {
     FilmSample film_sample;
     film_sample.texel = int2(0);
     film_sample.weight = 0.0f;
     film_sample.weight_sum_inv = 0.0f;
+    outside_weight = 0.0f;
 
     const FilmSample cpu_sample = uniforms.uniform_buf.film.samples[sample_n];
-    const float2 render_uv = panoramic_render_uv_get(texel_film + cpu_sample.texel, view_id);
-    if (any(lessThan(render_uv, float2(0.0f)))) {
+    if (cpu_sample.weight == 0.0f) {
+      /* Padding. */
       return film_sample;
     }
-
-    film_sample.texel = int2(render_uv * float2(textureSize(depth_tx, 0).xy));
-    film_sample.weight = cpu_sample.weight;
+    const float2 subpixel_offset = uniforms.uniform_buf.film.subpixel_offset;
+    const int2 render_extent = textureSize(depth_tx, 0).xy;
+    if (!footprint.is_valid) {
+      if (sample_n == 0) {
+        film_sample.texel = clamp(int2(floor(footprint.render_co)), int2(0), render_extent - 1);
+        film_sample.weight = 1.0f;
+      }
+      return film_sample;
+    }
+    /* Stretch the sample pattern over the footprint. Randomize to visit the skipped pixels. */
+    const float2 random_offset = sampling.rng_2D_get(SAMPLING_LENS_U) - 0.5f;
+    const float2 sample_co = footprint.render_co + float2(cpu_sample.texel) * footprint.stride +
+                             random_offset * (footprint.stride - 1.0f);
+    /* Render pixel with the closest sample. */
+    film_sample.texel = int2(floor(sample_co + subpixel_offset));
+    if (any(lessThan(film_sample.texel, int2(0))) ||
+        any(greaterThanEqual(film_sample.texel, render_extent)))
+    {
+      film_sample.texel = clamp(film_sample.texel, int2(0), render_extent - 1);
+    }
+    else {
+      const float2 render_co = float2(film_sample.texel) + 0.5f - subpixel_offset;
+      /* Linear estimate of the sample position on the film. */
+      float2 film_offset = panoramic_film_offset_get(footprint, render_co - footprint.render_co);
+      float2 estimate_render_co;
+      if (is_zero(panoramic_direction_get(footprint.film_co + film_offset))) {
+        outside_weight = film_filter_weight(uniforms.uniform_buf.film.filter_radius,
+                                            panoramic_film_distance_sqr(footprint, film_offset));
+      }
+      else if (panoramic_render_co_get(
+                   footprint.film_co + film_offset, footprint.view_id, estimate_render_co))
+      {
+        /* Project the estimate back to refine it. Reject the sample if it's too far off. */
+        const float2 correction = panoramic_film_offset_get(footprint,
+                                                            render_co - estimate_render_co);
+        if (panoramic_film_distance_sqr(footprint, correction) < square(1.5f)) {
+          film_offset += correction;
+          film_sample.weight = film_filter_weight(
+              uniforms.uniform_buf.film.filter_radius,
+              panoramic_film_distance_sqr(footprint, film_offset));
+        }
+      }
+    }
+    if (sample_n == 0) {
+      if (footprint.is_outside_lens) {
+        /* Avoid a null total weight. */
+        outside_weight = max(outside_weight, 1e-8f);
+      }
+      else {
+        /* Minimum weight to avoid missing data where the render pixel density is low. */
+        film_sample.weight = max(film_sample.weight, 1e-8f);
+      }
+    }
     return film_sample;
+  }
+
+  FilmSample panoramic_sample_get(int sample_n, PanoramicFootprint footprint)
+  {
+    float outside_weight;
+    return panoramic_sample_get(sample_n, footprint, outside_weight);
   }
 
   ePanoramicFace panoramic_view_id_get()
@@ -320,10 +542,10 @@ struct Film {
     return film_sample;
   }
 
-  FilmSample sample_get(int sample_n, int2 texel_film, ePanoramicFace panoramic_view_id)
+  FilmSample sample_get(int sample_n, int2 texel_film, PanoramicFootprint panoramic_footprint)
   {
     if (constants.use_panoramic) [[static_branch]] {
-      return panoramic_sample_get(sample_n, texel_film, panoramic_view_id);
+      return panoramic_sample_get(sample_n, panoramic_footprint);
     }
     else {
       return sample_get(sample_n, texel_film);
@@ -344,13 +566,18 @@ struct Film {
     return uniforms.uniform_buf.film.samples_weight_total;
   }
 
-  float weight_accumulation(int2 texel_film, ePanoramicFace panoramic_view_id)
+  /* Returns the combined weights of all samples affecting this film pixel.
+   * `outside_weight` comes from outside the lens. */
+  float weight_accumulation(PanoramicFootprint panoramic_footprint, float &outside_weight)
   {
     float weight = 0.0f;
+    outside_weight = 0.0f;
     for (int i = 0; i < samples_len; i++) {
-      weight += sample_get(i, texel_film, panoramic_view_id).weight;
+      float sample_outside_weight;
+      weight += panoramic_sample_get(i, panoramic_footprint, sample_outside_weight).weight;
+      outside_weight += sample_outside_weight;
     }
-    return weight;
+    return weight + outside_weight;
   }
 
   void sample_accum(FilmSample samp, int pass_id, int layer, sampler2DArray tex, float4 &accum)
@@ -427,7 +654,7 @@ struct Film {
 
   void cryptomatte_layer_accum_and_store(FilmSample dst,
                                          int2 texel_film,
-                                         ePanoramicFace panoramic_view_id,
+                                         PanoramicFootprint panoramic_footprint,
                                          int pass_id,
                                          int layer_component,
                                          float4 &out_color)
@@ -439,7 +666,7 @@ struct Film {
     /* x = hash, y = accumulated weight. Only keep track of 4 highest weighted samples. */
     float2 crypto_samples[4] = {float2(0.0f), float2(0.0f), float2(0.0f), float2(0.0f)};
     for (int i = 0; i < samples_len; i++) {
-      FilmSample src = sample_get(i, texel_film, panoramic_view_id);
+      FilmSample src = sample_get(i, texel_film, panoramic_footprint);
       sample_cryptomatte_accum(src, layer_component, cryptomatte_tx, crypto_samples);
     }
     float4 display_color = float4(0.0f);
@@ -1017,14 +1244,22 @@ struct Film {
 
     ePanoramicFace panoramic_view_id = PANORAMIC_FACE_NEG_Z;
 
+    float2 panoramic_lens_co = float2(texel_film) + 0.5f;
+    bool panoramic_is_outside_lens = false;
+
     if (constants.use_panoramic) [[static_branch]] {
       panoramic_view_id = panoramic_view_id_get();
-      const float3 camera_direction = panoramic_direction_get(texel_film);
+      float3 camera_direction = panoramic_direction_get(texel_film);
       if (is_zero(camera_direction)) {
-        /* No sub-view owns this texel under the current projection at all (e.g. outside the
-         * fisheye lens). Clear it instead of copying stale data. */
-        clear_history(texel_film, out_color, out_depth);
-        return;
+        panoramic_is_outside_lens = true;
+        if (!panoramic_find_closest_lens_co(float2(texel_film) + 0.5f, panoramic_lens_co)) {
+          /* No subview owns this texel under the current projection at all (e.g. outside the
+           * fisheye lens). Clear it instead of copying stale data. */
+          clear_history(texel_film, out_color, out_depth);
+          return;
+        }
+        /* Use the subview that owns the closest lens position. */
+        camera_direction = panoramic_direction_get(panoramic_lens_co);
       }
       if (!panoramic_texel_is_owned_by_view(camera_direction, int(panoramic_view_id))) {
         /* TODO: Have a stencil mask of each sub-view to avoid computing weights for the whole
@@ -1036,9 +1271,17 @@ struct Film {
       }
     }
 
+    PanoramicFootprint panoramic_footprint;
+    float panoramic_outside_weight = 0.0f;
     float weight_accum;
     if (constants.use_panoramic) [[static_branch]] {
-      weight_accum = weight_accumulation(texel_film, panoramic_view_id);
+      panoramic_footprint = panoramic_footprint_get(
+          texel_film, panoramic_lens_co, panoramic_is_outside_lens, panoramic_view_id);
+      if (panoramic_is_outside_lens && !panoramic_footprint.is_valid) {
+        clear_history(texel_film, out_color, out_depth);
+        return;
+      }
+      weight_accum = weight_accumulation(panoramic_footprint, panoramic_outside_weight);
     }
     else {
       weight_accum = weight_accumulation(texel_film);
@@ -1062,18 +1305,31 @@ struct Film {
 
       FilmSample src;
       for (int i = samples_len - 1; i >= 0; i--) {
-        src = sample_get(i, texel_film, panoramic_view_id);
+        src = sample_get(i, texel_film, panoramic_footprint);
         sample_accum_combined(src, combined_accum, weight_accum);
+      }
+      if (constants.use_panoramic) [[static_branch]] {
+        /* Samples outside the lens are opaque black. */
+        const float weight = luma_weight(uniforms, 0.0f) * panoramic_outside_weight;
+        combined_accum.a += weight;
+        weight_accum += weight;
       }
       /* NOTE: src.texel is center texel in incoming data buffer. */
       store_combined(dst, src.texel, combined_accum, weight_accum, out_color);
     }
 
-    if (flag_test(enabled_categories, PASS_CATEGORY_DATA)) {
+    if (panoramic_is_outside_lens) {
+      /* No data outside the lens. */
+      if (uni.film.depth_id != -1) {
+        imageStoreFast(depth_img, texel_film, float4(1e10f));
+      }
+      out_depth = 1e10f;
+    }
+    else if (flag_test(enabled_categories, PASS_CATEGORY_DATA)) {
       float film_distance = distance_load(texel_film);
 
       /* Get sample closest to target texel. It is always sample 0. */
-      FilmSample film_sample = sample_get(0, texel_film, panoramic_view_id);
+      FilmSample film_sample = sample_get(0, texel_film, panoramic_footprint);
 
       /* Using film weight as distance to the pixel. So the check is inverted. */
       if (film_sample.weight > film_distance) {
@@ -1117,7 +1373,7 @@ struct Film {
       float4 specular_light_accum = float4(0.0f);
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_view_id);
+        FilmSample src = sample_get(i, texel_film, panoramic_footprint);
         sample_accum(src,
                      uni.film.diffuse_color_id,
                      uni.render_pass.diffuse_color_id,
@@ -1163,7 +1419,7 @@ struct Film {
       float ao_accum = 0.0f;
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_view_id);
+        FilmSample src = sample_get(i, texel_film, panoramic_footprint);
         sample_accum(src,
                      uni.film.volume_light_id,
                      uni.render_pass.volume_light_id,
@@ -1201,7 +1457,7 @@ struct Film {
       float4 transparent_accum = float4(0.0f);
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_view_id);
+        FilmSample src = sample_get(i, texel_film, panoramic_footprint);
         sample_accum(src,
                      uni.film.transparent_id,
                      uni.render_pass.transparent_id,
@@ -1272,7 +1528,7 @@ struct Film {
         float4 aov_accum = float4(0.0f);
 
         for (int i = 0; i < samples_len; i++) {
-          FilmSample src = sample_get(i, texel_film, panoramic_view_id);
+          FilmSample src = sample_get(i, texel_film, panoramic_footprint);
           sample_accum(src, 0, uni.render_pass.color_len + aov, rp_color_tx, aov_accum);
         }
         store_color(dst, uni.film.aov_color_id + aov, aov_accum, out_color, false);
@@ -1282,7 +1538,7 @@ struct Film {
         float aov_accum = 0.0f;
 
         for (int i = 0; i < samples_len; i++) {
-          FilmSample src = sample_get(i, texel_film, panoramic_view_id);
+          FilmSample src = sample_get(i, texel_film, panoramic_footprint);
           sample_accum(src, 0, uni.render_pass.value_len + aov, rp_value_tx, aov_accum);
         }
         store_value(dst, uni.film.aov_value_id + aov, aov_accum, out_color);
@@ -1298,11 +1554,11 @@ struct Film {
         }
 
         cryptomatte_layer_accum_and_store(
-            dst, texel_film, panoramic_view_id, uni.film.cryptomatte_object_id, 0, out_color);
+            dst, texel_film, panoramic_footprint, uni.film.cryptomatte_object_id, 0, out_color);
         cryptomatte_layer_accum_and_store(
-            dst, texel_film, panoramic_view_id, uni.film.cryptomatte_asset_id, 1, out_color);
+            dst, texel_film, panoramic_footprint, uni.film.cryptomatte_asset_id, 1, out_color);
         cryptomatte_layer_accum_and_store(
-            dst, texel_film, panoramic_view_id, uni.film.cryptomatte_material_id, 2, out_color);
+            dst, texel_film, panoramic_footprint, uni.film.cryptomatte_material_id, 2, out_color);
       }
     }
   }
