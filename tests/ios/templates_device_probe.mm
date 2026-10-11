@@ -24,14 +24,14 @@ extern "C" char *blender_device_probe_templates(const char *json)
                    error:nil];
   __block char *result;
   dispatch_sync(dispatch_get_main_queue(), ^{
-    auto catalog = (NSArray * (*)()) dlsym(RTLD_DEFAULT, "_Z28GHOST_ios_document_templatesv");
+    auto catalog = (NSArray * (*)()) dlsym(RTLD_DEFAULT, "_Z31wm_apple_ios_document_templatesv");
     auto launcher = (UIDocumentViewController * (*)())
-        dlsym(RTLD_DEFAULT, "_Z29GHOST_ios_launcher_controllerv");
+        dlsym(RTLD_DEFAULT, "_ZN7blender32WM_apple_ios_launcher_controllerEv");
     auto create = (void (*)(NSString *, void (^)(NSURL *)))dlsym(
-        RTLD_DEFAULT, "_Z25GHOST_ios_document_createP8NSStringU13block_pointerFvP5NSURLE");
+        RTLD_DEFAULT, "_Z28wm_apple_ios_document_createP8NSStringU13block_pointerFvP5NSURLE");
     auto save = (void (*)(NSString *, NSDictionary *, void (^)(NSString *)))dlsym(
         RTLD_DEFAULT,
-        "_Z23GHOST_ios_template_saveP8NSStringP12NSDictionaryU13block_pointerFvS0_E");
+        "_Z26wm_apple_ios_template_saveP8NSStringP12NSDictionaryU13block_pointerFvS0_E");
     NSCAssert(catalog && launcher && create && save,
               @"Production document entry points are available");
     UIDocumentViewController *documents = launcher();
@@ -79,7 +79,7 @@ extern "C" char *blender_device_probe_templates(const char *json)
       [documents newDocumentFrom:viewport];
     }
     UIViewController *picker = viewport.presentedViewController;
-    const BOOL choosing = [picker isKindOfClass:NSClassFromString(@"GHOSTIOSSwiftTemplatePicker")];
+    const BOOL choosing = [picker isKindOfClass:NSClassFromString(@"WMIOSSwiftTemplatePicker")];
     if (choosing && [action isEqual:@"choose"]) {
       [picker performSelector:NSSelectorFromString(@"chooseTemplate:") withObject:request[@"id"]];
     }

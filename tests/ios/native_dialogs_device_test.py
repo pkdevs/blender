@@ -138,7 +138,7 @@ def steps():
     invoke(bpy.ops.wm.open_mainfile)
     yield 1
     state = snapshot()
-    check(state['class'] == 'GHOSTIOSDialogController' and len(state['toggles']) > 0,
+    check(state['class'] == 'WMIOSSwiftDialogSheet' and len(state['toggles']) > 0,
           'Modified-image save choices use native switches')
     choose('Cancel')
     yield 1

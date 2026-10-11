@@ -11,6 +11,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# The scripts under test are release tools, in `release/ios`.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "release" / "ios"))
+
 from archive_testflight import APP_ENTITLEMENTS, signing_entitlements
 from prepare_testflight import dependencies, macho_type, prepare
 

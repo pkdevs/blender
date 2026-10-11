@@ -24,9 +24,9 @@ import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-SWIFT_SOURCES = sorted((ROOT / "intern/ghost/intern/swift").glob("*.swift"))
-BRIDGE = ROOT / "intern/ghost/intern/GHOST_IOSSwiftBridge.h"
-HARNESS = ROOT / "release/ios/swiftui_panels_harness/Harness.swift"
+SWIFT_SOURCES = sorted((ROOT / "source/blender/windowmanager/apple_ios/swift").glob("*.swift"))
+BRIDGE = ROOT / "source/blender/windowmanager/apple_ios/wm_apple_ios_swift_bridge.h"
+HARNESS = ROOT / "tests/ios/swiftui_panels_harness/Harness.swift"
 BUNDLE_ID = "org.blender.swiftui-panels-harness"
 
 
@@ -345,7 +345,8 @@ def build(app):
     app.mkdir(parents=True)
     subprocess.run(["xcrun", "swiftc", "-target", "arm64-apple-ios26.0-simulator", "-sdk", sdk,
                     "-module-name", "Harness", "-parse-as-library", "-swift-version", "5", "-Onone",
-                    "-import-objc-header", str(BRIDGE), "-o", str(app / "Harness"),
+                    "-import-objc-header", str(BRIDGE), "-Xcc", f"-I{ROOT / 'intern/ghost'}",
+                    "-o", str(app / "Harness"),
                     *map(str, SWIFT_SOURCES), str(HARNESS)], check=True)
     # Blender's icons: `BlenderIcons.xcassets` from an iOS build's `source/creator` folder.
     catalog = Path(os.environ.get("IOS_TEST_ICON_CATALOG", ""))

@@ -143,91 +143,13 @@ Blender. The reverse dependency is forbidden. Normal controls, UI snapshots and
 frame presentation do not use this synchronous path. File coordination, bookmark
 resolution and filesystem checks run outside UIKit.
 
-## Responsiveness Tests
+## Tests
 
-Use an isolated, booted iOS simulator and Xcode 27.1 beta:
+The native interface's Python side is tested with Blender's own tests (`script_native_*` in
+`tests/python`). Simulator harnesses, device checks and probes are in `tests/ios`, see its
+README.
 
-```sh
-DEVELOPER_DIR=/Applications/XcodeBeta.app/Contents/Developer \
-IOS_TEST_SIMULATOR_UDID=<simulator-uuid> \
-IOS_TEST_ICON_BUNDLE=/path/to/build_ipad_device/bin/Release/Blender.app \
-IOS_TEST_ARTIFACT_DIR=/tmp/blender-responsive-validation \
-python3 -m unittest discover -s release/ios -p 'test_*.py' -v
-```
-
-`test_responsive_ui.py` runs the production engine-loop body and Metal presenter
-in a UIKit harness. It blocks the mock engine for six seconds, verifies native
-animation/scrolling and queued commands, resizes while blocked, and checks actual
-simulator screenshot pixels before accepting a recovered frame. This is a
-native integration harness, not a full Blender simulator build. The mailbox
-stress test also supports `IOS_TEST_TSAN=1` for Thread Sanitizer.
-For the Duo's exterior screen, set `IOS_TEST_DISPLAY=primary`; `simctl` can
-otherwise capture its inactive interior display. Use `simctl io <uuid> enumerate`
-to inspect the currently available display identifiers.
-
-Physical-device validation should additionally use Main Thread Checker and
-Instruments Hangs/Animation Hitches while loading large scenes, sculpting,
-rendering, resizing, and opening/closing native menus and file pickers. Confirm
-the scene is saved before replacing or relaunching an existing device install.
-
-### Full-App Device Probe
-
-`responsive_device_probe.mm` is a test-only dylib, not part of the application
-target. Compile it with the iPhoneOS SDK using `clang++ -arch arm64
--miphoneos-version-min=26.0 -std=c++17 -fobjc-arc -dynamiclib -framework UIKit
--framework Foundation -framework QuartzCore -framework CoreGraphics`. Place the resulting
-`ResponsiveDeviceProbe.dylib` in `Frameworks` inside a temporary copy of the app,
-sign the dylib and that app with the same development identity, and install it
-on an explicitly approved test device. Prefer a separate QA bundle identifier
-covered by the provisioning profile, with matching signing entitlements, so the
-test cannot replace the user's application or its Documents container.
-
-Copy `responsive_device_test.py` and `native_menubar_device_test.py` into that
-app's `Documents` directory. Launch with `--factory-startup --python-expr` and:
-
-```python
-from pathlib import Path
-exec(compile((Path.home() / 'Documents/responsive_device_test.py').read_text(),
-             'responsive_device_test.py', 'exec'))
-```
-
-The test first exercises real Blender menu projection and dispatch. It then
-blocks the actual Blender/Python thread for six seconds while a native display
-link expands and scrolls the existing toolbar, reads UI snapshots, and submits
-20 operators. It verifies command execution after recovery and writes
-`Documents/responsive-device-test.json`. The probe consumes menu results on
-UIKit, respecting the production single-consumer contract. Remove the separate
-QA application after collecting its reports; never distribute the probe. If
-testing in place, restore the normal signed app afterward. These tests do not
-synthesize physical Pencil or multitouch input, which still requires hands-on
-testing.
-
-### Full-App Functional Checks
-
-Also copy `deep_device_test.py` into the QA app's `Documents` directory. Launch
-with `--factory-startup --enable-event-simulate --python-expr` and:
-
-```python
-from pathlib import Path
-exec(compile((Path.home() / 'Documents/deep_device_test.py').read_text(),
-             'deep_device_test.py', 'exec'))
-```
-
-This runs the menu and responsiveness checks first, then verifies the visible
-native menu roots, mode changes, XYZ visibility across idle tools and live
-transforms, actual native axis-button toggles, undo/redo, shading and orientation
-snapshots, native Open picker cancellation, and a real `.blend` save/load round
-trip. It writes `Documents/deep-device-test.json` and a disposable test scene in
-the QA container. Event simulation is test-only and disables normal GHOST input;
-do not use this launch for hands-on input testing.
-
-`undo_device_test.py` provides a smaller native Add/Undo/Redo regression check,
-writing `Documents/undo-device-test.json`. Both scripts require factory startup
-and must never run against a user's scene. Undo checks must perform edits through
-the native command bridge: direct Python operators do not reproduce the native
-operator undo-recording path.
-
-### Native Warnings
+## Native Warnings
 
 iOS uses UIKit alerts for operator confirmations (including Delete and Revert),
 unsaved-file choices, overwrite warnings, report popups and general alerts.
@@ -242,14 +164,7 @@ dialog content and returns queued results only after dismissal, allowing an acti
 to open a file picker safely. Closing a window or replacing its editor cancels
 stale requests. Cancellation never executes the pending destructive operation.
 
-`test_native_dialogs.py` covers native controls, dismissal ordering, destructive
-styling, report deduplication, context restoration and request lifetime. It is part
-of the simulator suite above. For full-app checks, copy
-`native_dialogs_device_test.py` into the separate QA app's Documents directory and
-launch it using the same factory-startup procedure. Its report is
-`Documents/native-dialogs-test.json`. Do not run it against a user's scene.
-
-### Character Animation Template
+## Character Animation Template
 
 The Character Animation seed contains Blender Studio's Ellie rig, adapted for
 Blender 5.1 without document scripts. It opens in Pose Mode with the timeline,

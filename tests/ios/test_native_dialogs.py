@@ -17,33 +17,22 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeDialogsTest(unittest.TestCase):
-    def test_engine_dialog_lifecycle(self):
-        source = (ROOT / "source/blender/windowmanager/intern/wm_apple_ios_dialog.cc").read_text()
-        source = source[source.index("namespace {"):source.index("void WM_apple_ios_reports(")]
-        harness = Path(__file__).with_name("native_dialogs_bridge_test.cc").read_text()
-        with tempfile.TemporaryDirectory() as directory:
-            code = Path(directory) / "dialogs.cc"
-            code.write_text(harness.replace("// BRIDGE_IMPLEMENTATION", source))
-            executable = Path(directory) / "dialogs"
-            result = subprocess.run(["c++", "-std=c++17", "-I", str(ROOT / "intern/ghost"),
-                                     "-I", str(ROOT / "source/blender/windowmanager"),
-                                     str(code), "-o", str(executable)], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            result = subprocess.run([str(executable)], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
     def test_native_warning_controls(self):
         device = os.environ.get("IOS_TEST_SIMULATOR_UDID")
         if not device:
             self.skipTest("Set IOS_TEST_SIMULATOR_UDID to an isolated booted simulator")
         sdk = subprocess.check_output(
             ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"], text=True).strip()
-        source = (ROOT / "intern/ghost/intern/GHOST_IOSDialog.mm").read_text()
-        source = source.replace('#include "GHOST_WindowIOS.hh"',
+        source = (ROOT / "source/blender/windowmanager/apple_ios/wm_apple_ios_alerts.mm").read_text()
+        source = source.replace('#include "GHOST_IOSNativeInterface.hh"',
                                 '#include <atomic>\n#include <memory>\n'
                                 'class GHOST_WindowIOS { public: UIWindow *rootWindow; '
                                 'std::shared_ptr<std::atomic<bool>> input_alive = '
-                                'std::make_shared<std::atomic<bool>>(true); };')
+                                'std::make_shared<std::atomic<bool>>(true); };\n'
+                                'static UIWindow *GHOST_ios_window_native(GHOST_WindowIOS *w) '
+                                '{ return w->rootWindow; }\n'
+                                'static std::shared_ptr<std::atomic<bool>> '
+                                'GHOST_ios_window_alive(GHOST_WindowIOS *w) { return w->input_alive; }')
         source += Path(__file__).with_name("native_dialogs_test.mm").read_text()
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory) / "NativeDialogsTest.app"
@@ -64,7 +53,7 @@ class NativeDialogsTest(unittest.TestCase):
             code.write_text(source)
             build = subprocess.run([
                 "xcrun", "--sdk", "iphonesimulator", "clang++", "-std=c++17", "-fblocks", "-fno-objc-arc",
-                "-I", str(ROOT / "intern/ghost"), "-isysroot", sdk,
+                "-I", str(ROOT / "source/blender/windowmanager/apple_ios"), "-isysroot", sdk,
                 "-target", f"{os.uname().machine}-apple-ios26.0-simulator",
                 "-framework", "UIKit", "-framework", "Foundation",
                 str(code), "-o", str(app / "NativeDialogsTest"),

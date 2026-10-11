@@ -15,7 +15,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class TemplatesTest(unittest.TestCase):
     def test_real_blender_seeds(self):
-        binary = os.environ.get('BLENDER_TEST_BINARY', '/Applications/Blender.app/Contents/MacOS/Blender')
+        binary = os.environ.get('BLENDER_BIN')
+        if not binary:
+            self.skipTest('Requires Blender; set BLENDER_BIN')
         result = subprocess.run([binary, '--background', '--factory-startup', '--python-exit-code', '1',
                                  '--python', str(ROOT / 'release/ios/templates/validate_templates.py')],
                                 text=True, capture_output=True, timeout=120)
@@ -24,7 +26,9 @@ class TemplatesTest(unittest.TestCase):
 
     def test_native_chooser_and_creation(self):
         sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path'], text=True).strip()
-        device = os.environ.get('IOS_TEST_SIMULATOR_UDID', '1EBB41D0-4CDC-4E24-BD9A-0F4818699324')
+        device = os.environ.get('IOS_TEST_SIMULATOR_UDID')
+        if not device:
+            self.skipTest('Requires an iPad simulator; set IOS_TEST_SIMULATOR_UDID')
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory) / 'TemplatesTest.app'
             app.mkdir()
@@ -41,11 +45,13 @@ class TemplatesTest(unittest.TestCase):
             shutil.copytree(ROOT / 'release/ios/templates/library', app / 'Assets/5.1/datafiles/templates')
             result = subprocess.run(['xcrun', '--sdk', 'iphonesimulator', 'clang++', '-std=c++17',
                 '-fno-objc-arc', '-isysroot', sdk, '-target', f'{os.uname().machine}-apple-ios26.0-simulator',
-                '-I', str(ROOT / 'intern/ghost/intern'), '-framework', 'UIKit', '-framework', 'Foundation',
+                '-I', str(ROOT / 'intern/ghost'), '-I', str(ROOT / 'intern/guardedalloc'),
+                '-I', str(ROOT / 'source/blender/windowmanager'),
+                '-I', str(ROOT / 'source/blender/windowmanager/apple_ios'), '-framework', 'UIKit', '-framework', 'Foundation',
                 '-framework', 'UniformTypeIdentifiers', '-framework', 'CoreGraphics', '-framework', 'QuartzCore',
-                str(ROOT / 'intern/ghost/intern/GHOST_IOSDocument.mm'),
-                str(ROOT / 'intern/ghost/intern/GHOST_IOSLauncher.mm'),
-                str(ROOT / 'release/ios/templates_ui_test.mm'), '-o', str(app / 'TemplatesTest')],
+                str(ROOT / 'source/blender/windowmanager/apple_ios/wm_apple_ios_blend_document.mm'),
+                str(ROOT / 'source/blender/windowmanager/apple_ios/wm_apple_ios_launcher.mm'),
+                str(ROOT / 'tests/ios/templates_ui_test.mm'), '-o', str(app / 'TemplatesTest')],
                 text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True, capture_output=True)

@@ -1,9 +1,9 @@
 /* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
-#import "GHOST_IOSDocument.hh"
-#import "GHOST_IOSLauncher.hh"
 #include "GHOST_IOSRuntime.hh"
+#import "wm_apple_ios_blend_document.hh"
+#import "wm_apple_ios_launcher.hh"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
@@ -21,9 +21,9 @@ bool GHOST_ios_document_window_visible()
 {
   return false;
 }
-UIView *GHOST_ios_document_window_snapshot()
+void *GHOST_ios_document_window_snapshot()
 {
-  return nil;
+  return nullptr;
 }
 namespace blender {
 bool WM_apple_ios_document_open(bContext *, const char *, bool)
@@ -66,7 +66,7 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
   }
   NSDictionary *entry = entries[index];
   NSData *original = [NSData dataWithContentsOfURL:entry[@"url"]];
-  GHOST_ios_document_create(entry[@"id"], ^(NSURL *url) {
+  wm_apple_ios_document_create(entry[@"id"], ^(NSURL *url) {
     NSCAssert(NSThread.isMainThread && url, @"Creation completes on UIKit with a new file");
     NSCAssert(![url isEqual:entry[@"url"]] &&
                   [[NSData dataWithContentsOfURL:url] isEqual:original],
@@ -95,35 +95,35 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
   self.window.rootViewController = [[[UIViewController alloc] init] autorelease];
   [self.window makeKeyAndVisible];
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-    NSArray *entries = GHOST_ios_document_templates();
+    NSArray *entries = wm_apple_ios_document_templates();
     NSCAssert(entries.count == 6, @"All validated templates are available");
     NSDictionary *character = entries.lastObject;
     NSCAssert([character[@"id"] isEqual:@"character-animation"] &&
                   [character[@"attribution"][@"license"] isEqual:@"CC-BY-4.0"],
               @"The character catalog includes its asset license");
-    NSCAssert(GHOST_ios_template_manage(@"character-animation", @"duplicate", nil),
+    NSCAssert(wm_apple_ios_template_manage(@"character-animation", @"duplicate", nil),
               @"Attributed templates can be duplicated");
-    NSDictionary *characterCopy = GHOST_ios_document_templates().lastObject;
+    NSDictionary *characterCopy = wm_apple_ios_document_templates().lastObject;
     NSCAssert([characterCopy[@"attribution"] isEqual:character[@"attribution"]],
               @"Duplication retains the complete attribution");
-    NSCAssert(GHOST_ios_template_manage(characterCopy[@"id"], @"delete", nil),
+    NSCAssert(wm_apple_ios_template_manage(characterCopy[@"id"], @"delete", nil),
               @"Remove test copy");
-    NSCAssert(GHOST_ios_template_manage(@"general", @"duplicate", nil),
+    NSCAssert(wm_apple_ios_template_manage(@"general", @"duplicate", nil),
               @"Bundled templates can be duplicated");
-    NSArray *all = GHOST_ios_document_templates();
+    NSArray *all = wm_apple_ios_document_templates();
     NSCAssert(all.count == 7 && [all.lastObject[@"personal"] boolValue],
               @"Copies appear under My Templates");
     NSString *copyID = all.lastObject[@"id"];
-    NSCAssert(GHOST_ios_template_manage(copyID, @"rename", @"Custom Scene"),
+    NSCAssert(wm_apple_ios_template_manage(copyID, @"rename", @"Custom Scene"),
               @"Personal templates can be renamed");
-    NSCAssert([GHOST_ios_document_templates().lastObject[@"title"] isEqual:@"Custom Scene"],
+    NSCAssert([wm_apple_ios_document_templates().lastObject[@"title"] isEqual:@"Custom Scene"],
               @"Names persist");
-    NSCAssert(!GHOST_ios_template_manage(@"general", @"delete", nil),
+    NSCAssert(!wm_apple_ios_template_manage(@"general", @"delete", nil),
               @"Bundled templates are read-only");
-    NSCAssert(GHOST_ios_template_manage(copyID, @"delete", nil) &&
-                  GHOST_ios_document_templates().count == 6,
+    NSCAssert(wm_apple_ios_template_manage(copyID, @"delete", nil) &&
+                  wm_apple_ios_document_templates().count == 6,
               @"Deleting a personal template preserves bundled templates");
-    Class launcherClass = NSClassFromString(@"GHOSTIOSLauncherController");
+    Class launcherClass = NSClassFromString(@"WMIOSLauncherController");
     Class spyClass = objc_allocateClassPair(launcherClass, "TemplatesLauncherSpy", 0);
     SEL choose = NSSelectorFromString(@"chooseTemplate:");
     class_addMethod(spyClass,
@@ -140,7 +140,7 @@ static void testCopies(NSArray *entries, NSUInteger index, void (^done)(void))
     NSCAssert(
         template_requests == 1 && cancelledImport,
         @"The browser's default New action opens the chooser and cancellation creates nothing");
-    GHOST_ios_document_create(@"../sculpt", ^(NSURL *url) {
+    wm_apple_ios_document_create(@"../sculpt", ^(NSURL *url) {
       NSCAssert(url == nil, @"Arbitrary paths cannot be used as templates");
     });
     testCopies(entries, 0, ^{

@@ -11,6 +11,11 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
+from ios_sources import native_window_source
+
+# The scripts under test are release tools, in `release/ios`.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "release" / "ios"))
+
 from export_icons import (SVG, export_catalog, geometry_color_pdf, geometry_template,
                           invert_lightness, svg_template, vco_color_triangles, vco_triangles)
 
@@ -86,8 +91,7 @@ class ExportIconsTest(unittest.TestCase):
         tool_ids = set(re.findall(r'"(builtin(?:_brush)?\.[a-z_]+)"', bridge.read_text()))
         for tool_id in tool_ids:
             self.assertIn("tool." + tool_id, mapping)
-        native = release.parent / "intern/ghost/intern/GHOST_WindowIOS.mm"
-        for setting, value in re.findall(r'setting:@"([^"]+)"\s+value:@"([^"]+)"', native.read_text()):
+        for setting, value in re.findall(r'setting:@"([^"]+)"\s+value:@"([^"]+)"', native_window_source()):
             self.assertIn(f"setting.{setting}.{value}", mapping)
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "Icons.xcassets"

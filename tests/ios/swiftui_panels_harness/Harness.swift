@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
- * Test harness for the SwiftUI panels (`intern/ghost/intern/swift`): the production panels over
+ * Test harness for the SwiftUI panels (`source/blender/windowmanager/apple_ios/swift`): the production panels over
  * a stand-in viewport, fed by a small engine that answers the native requests from fixtures the
  * way Blender does (see `test_swiftui_panels.py`). Requests are logged for the test to check.
  * Test-only: never part of the application.
@@ -34,7 +34,7 @@ func harnessAssetDrag(_ phase: Int32, _ asset: UnsafePointer<CChar>?, _ x: Int32
                                                              "id": asset.map { String(cString: $0) } ?? ""]])
 }
 
-@_cdecl("GHOST_ios_document_url")
+@_cdecl("wm_apple_ios_document_url")
 func harnessDocumentURL() -> NSURL? { nil }
 
 @_cdecl("GHOST_ios_engine_continue_work")

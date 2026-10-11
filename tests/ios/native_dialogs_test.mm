@@ -42,9 +42,10 @@ static void capture(NSString *name)
                       stringByAppendingPathComponent:name]
        atomically:YES];
 }
-/* Stands in for the SwiftUI options sheet (`intern/swift/DialogSheet.swift`), which this harness
- * does not build: it keeps what the dialog passes and chooses like the sheet's buttons. */
-@interface GHOSTIOSSwiftDialogSheet : UIViewController
+/* Stands in for the SwiftUI options sheet
+ * (`source/blender/windowmanager/apple_ios/swift/DialogSheet.swift`), which this harness does not
+ * build: it keeps what the dialog passes and chooses like the sheet's buttons. */
+@interface WMIOSSwiftDialogSheet : UIViewController
 @property(nonatomic, copy) NSArray<NSString *> *toggles;
 @property(nonatomic, copy) NSArray<NSNumber *> *selected;
 @property(nonatomic, copy) NSArray<NSString *> *actions;
@@ -52,7 +53,7 @@ static void capture(NSString *name)
 @property(nonatomic) NSInteger preferred;
 @property(nonatomic, copy) void (^choose)(NSInteger action, uint64_t toggles);
 @end
-@implementation GHOSTIOSSwiftDialogSheet
+@implementation WMIOSSwiftDialogSheet
 - (instancetype)initWithTitle:(NSString *)title
                       message:(NSString *)message
                       toggles:(NSArray<NSString *> *)toggles
@@ -86,24 +87,22 @@ static void capture(NSString *name)
 
 static void testSheet()
 {
-  GHOST_IOSDialog model;
+  wmIOSDialog model;
   model.title = "Save changes before closing?";
   model.message = "Untitled.blend\nModified images and asset catalogs";
-  model.actions = {{"Cancel", GHOST_IOSDialogRole::Cancel},
-                   {"Don't Save", GHOST_IOSDialogRole::Destructive},
-                   {"Save"}};
+  model.actions = {
+      {"Cancel", wmIOSDialogRole::Cancel}, {"Don't Save", wmIOSDialogRole::Destructive}, {"Save"}};
   model.toggles = {{"Save 2 modified images", true}, {"Save modified asset catalogs", false}};
   model.preferred_action = 2;
-  assert(GHOST_ios_dialog_begin(&ghost, 2, model, complete));
+  assert(wm_apple_ios_dialog_begin(&ghost, 2, model, complete));
   waitUntil(
       ^BOOL {
         return !testWindow.rootViewController.presentedViewController.isBeingPresented &&
                [testWindow.rootViewController.presentedViewController
-                   isKindOfClass:GHOSTIOSSwiftDialogSheet.class];
+                   isKindOfClass:WMIOSSwiftDialogSheet.class];
       },
       ^{
-        GHOSTIOSSwiftDialogSheet *sheet =
-            (id)testWindow.rootViewController.presentedViewController;
+        WMIOSSwiftDialogSheet *sheet = (id)testWindow.rootViewController.presentedViewController;
         assert([sheet.title isEqual:@"Save changes before closing?"]);
         assert(([sheet.toggles
             isEqual:@[ @"Save 2 modified images", @"Save modified asset catalogs" ]]));
@@ -118,12 +117,12 @@ static void testSheet()
             },
             ^{
               assert(choice == 2 && selected == 2);
-              GHOST_IOSDialog report;
+              wmIOSDialog report;
               report.title = "Error";
               report.message = "Unable to save this file.";
               report.actions = {{"OK"}};
-              GHOST_ios_dialog_begin(&ghost, 3, report, nullptr);
-              GHOST_ios_dialog_begin(&ghost, 4, report, nullptr);
+              wm_apple_ios_dialog_begin(&ghost, 3, report, nullptr);
+              wm_apple_ios_dialog_begin(&ghost, 4, report, nullptr);
               waitUntil(
                   ^BOOL {
                     return dialog_queue.count > 0 &&
@@ -131,7 +130,7 @@ static void testSheet()
                   },
                   ^{
                     assert(dialog_queue.count == 1);
-                    GHOST_ios_dialog_cancel(3);
+                    wm_apple_ios_dialog_cancel(3);
                     waitUntil(
                         ^BOOL {
                           return dialog_queue.count == 0;
@@ -139,7 +138,7 @@ static void testSheet()
                         ^{
                           assert(calls == 2);
                           ghost.input_alive->store(false);
-                          GHOST_ios_dialog_begin(&ghost, 5, report, complete);
+                          wm_apple_ios_dialog_begin(&ghost, 5, report, complete);
                           waitUntil(
                               ^BOOL {
                                 return calls == 3;
@@ -172,12 +171,12 @@ static void testSheet()
   testWindow = self.window;
   ghost.rootWindow = self.window;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-    GHOST_IOSDialog model;
+    wmIOSDialog model;
     model.title = "Delete selected objects?";
-    model.actions = {{"Cancel", GHOST_IOSDialogRole::Cancel},
-                     {"Delete", GHOST_IOSDialogRole::Destructive}};
+    model.actions = {{"Cancel", wmIOSDialogRole::Cancel},
+                     {"Delete", wmIOSDialogRole::Destructive}};
     model.preferred_action = 0;
-    std::thread engine([model] { assert(GHOST_ios_dialog_begin(&ghost, 1, model, complete)); });
+    std::thread engine([model] { assert(wm_apple_ios_dialog_begin(&ghost, 1, model, complete)); });
     engine.join();
     waitUntil(
         ^BOOL {
@@ -193,7 +192,7 @@ static void testSheet()
           assert(alert.actions[1].style == UIAlertActionStyleDestructive);
           assert(alert.preferredAction == alert.actions[0]);
           capture(@"native-delete-warning.png");
-          GHOSTIOSDialogRequest *request = dialog_queue.firstObject;
+          WMIOSDialogRequest *request = dialog_queue.firstObject;
           [request finish:0];
           [request finish:1];  // A double callback must not execute the destructive action.
           waitUntil(

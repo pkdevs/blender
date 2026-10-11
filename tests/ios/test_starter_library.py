@@ -12,9 +12,9 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-LIBRARY = ROOT / "release/ios/starter_assets/library"
+LIBRARY = ROOT / "assets/ios_starter"
 SOURCES = ROOT / "release/ios/starter_assets/sources"
-BLENDER = os.environ.get("BLENDER_BIN", "/Applications/Blender.app/Contents/MacOS/Blender")
+BLENDER = os.environ.get("BLENDER_BIN", "")
 # Absolute paths a build machine could leave behind in packed data or saved UI.
 LOCAL_PATHS = (b"/Users/", b"/home/", b"/opt/", b"/private/", b"/var/folders/")
 

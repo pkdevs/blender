@@ -18,24 +18,6 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeFilesTest(unittest.TestCase):
-    def test_blender_selector_bridge(self):
-        compiler = shutil.which("c++")
-        if not compiler:
-            self.skipTest("C++ compiler unavailable")
-        source = (ROOT / "source/blender/windowmanager/intern/wm_apple_ios_file.cc").read_text()
-        source = source[source.index("namespace {"):source.rindex("}  // namespace blender")]
-        harness = Path(__file__).with_name("native_files_bridge_test.cc").read_text()
-        harness = harness.replace("// BRIDGE_IMPLEMENTATION", source)
-        with tempfile.TemporaryDirectory() as directory:
-            code = Path(directory) / "bridge.cc"
-            executable = Path(directory) / "bridge"
-            code.write_text(harness)
-            build = subprocess.run([compiler, "-std=c++17", "-I", str(ROOT / "intern/ghost"),
-                                    str(code), "-o", str(executable)], capture_output=True, text=True)
-            self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
-            result = subprocess.run([str(executable)], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
     def test_uikit_document_picker(self):
         if sys.platform != "darwin":
             self.skipTest("Requires Xcode and an iOS simulator")

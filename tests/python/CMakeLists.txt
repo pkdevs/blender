@@ -233,6 +233,23 @@ add_blender_test(
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_load_py_modules.py
 )
 
+# The native iPad and Apple Vision Pro interface's Python side, against real Blender scenes. The
+# modules run on every platform, so these run with any Blender build.
+add_blender_test(
+  script_native_actions
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_native_actions.py
+)
+
+add_blender_test(
+  script_native_panels
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_native_panels.py
+)
+
+add_blender_test(
+  script_native_timeline
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_native_timeline.py
+)
+
 add_blender_test(
   script_bundled_modules
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_bundled_modules.py -- --inside-blender
