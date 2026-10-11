@@ -246,11 +246,12 @@ inline void batch_process__n_in__1_out(const IndexMask &mask,
       TypeSequence<ParamTag<ParamCategory::Input, In>..., ParamTag<ParamCategory::Output, Out>>();
   std::tuple params{in_params.get_implementation()..., out_param.data()};
   mask.foreach_segment([&](const IndexMaskSegment segment) {
-    batch_process<64>(param_tags,
-                      std::make_index_sequence<param_tags.size()>(),
-                      std::forward<ElementFn>(element_fn),
-                      segment,
-                      params);
+    batch_process<64>(
+        param_tags,
+        std::make_index_sequence<param_tags.size()>(),
+        [&](const In &...in, Out &out) { new (&out) Out(element_fn(in...)); },
+        segment,
+        params);
   });
 }
 
