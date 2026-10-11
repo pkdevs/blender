@@ -283,9 +283,16 @@ ShapingData::ShapingData(FontBLF *font,
       const uint32_t cluster = std::min(hb_glyph_info[i].cluster, uint32_t(char_count - 1));
       const char32_t codepoint = str32[cluster];
       GlyphBLF *g = blf_glyph_ensure(segment_font, segment_gc, codepoint, glyph_id);
-      const int advance = ((font->flags & BLF_MONOSPACED) ?
-                               ft_pix_from_int(cwidth) * BLI_wcwidth_safe(codepoint) :
-                               glyph_pos[i].x_advance + (g ? g->advance_transform : 0));
+      int advance;
+      if (font->flags & BLF_MONOSPACED) {
+        advance = ft_pix_from_int(cwidth) * BLI_wcwidth_safe(codepoint);
+      }
+      else if (g && g->font != segment_font) {
+        advance = g->advance_x;
+      }
+      else {
+        advance = glyph_pos[i].x_advance + (g ? g->advance_transform : 0);
+      }
 
       if (g == nullptr) [[unlikely]] {
         /* Still advance pen for missing glyphs using HarfBuzz-provided advance. */
