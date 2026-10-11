@@ -65,6 +65,10 @@ waveletNoiseTile.bin
 # they are not shipped as a pre-compiled libraries submodule like other platforms.
 /lib/ios-simulator_arm64/
 
+# visionOS library dependencies, made from the iOS ones by `build_files/utils/apple_retarget_libs.py`.
+/lib/visionos_arm64/
+/lib/visionos-simulator_arm64/
+
 # Ignore old submodules directories.
 # Eventually need to get rid of those, but for the first time of transition
 # avoid indidents when the folders exists after bisect and developers staging
