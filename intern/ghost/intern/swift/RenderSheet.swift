@@ -14,7 +14,9 @@
 
 import AVFoundation
 import AVKit
+#if !os(visionOS)
 import BackgroundTasks
+#endif
 import CryptoKit
 import ImageIO
 import SwiftUI
@@ -217,6 +219,18 @@ enum RenderThumbnails {
  * keeps running meanwhile, without drawing, see `GHOST_ios_engine_continue_work`.
  * \{ */
 
+#if os(visionOS)
+/** visionOS keeps an app running while its window is open: only Blender's loop must go on. */
+@MainActor
+final class BackgroundRender {
+  static let shared = BackgroundRender()
+  var expired: () -> Void = {}
+
+  func begin(title: String) { GHOST_ios_engine_continue_work(true) }
+  func update(title: String, subtitle: String, fraction: Double) {}
+  func finish(success: Bool) { GHOST_ios_engine_continue_work(false) }
+}
+#else
 @MainActor
 final class BackgroundRender {
   static let shared = BackgroundRender()
@@ -301,6 +315,8 @@ final class BackgroundRender {
     task.setTaskCompleted(success: success)
   }
 }
+
+#endif
 
 /** \} */
 
@@ -979,7 +995,7 @@ public final class SwiftRender: NSObject, UIAdaptivePresentationControllerDelega
   private func finished(_ item: RenderItem) {
     model.selection = item.id
     end(success: true)
-    UINotificationFeedbackGenerator().notificationOccurred(.success)
+    Haptics.success()
   }
 }
 

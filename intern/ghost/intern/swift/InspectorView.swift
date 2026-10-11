@@ -91,7 +91,7 @@ struct PropertiesTabs: View {
           }
         }
       }
-      .scrollEdgeEffectStyle(.soft, for: .horizontal)
+      .softHorizontalScrollEdge()
       .onChange(of: store.selectedTab) { _, tab in
         if let tab { withMotion { reader.scrollTo(tab, anchor: .center) } }
       }
@@ -107,7 +107,7 @@ struct InspectorForm: View {
   var body: some View {
     if scrolls {
       ScrollView { content }
-        .scrollDismissesKeyboard(.interactively)
+        .dismissesKeyboardOnScroll(interactively: true)
         .overlay {
           if store.loaded && !store.hasInspector && store.mode == .properties {
             ContentUnavailableView("No Active Object", systemImage: "cube.transparent")

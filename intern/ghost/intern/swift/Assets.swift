@@ -164,7 +164,7 @@ struct AssetsPane: View {
     } label: {
       menuLabel(store.type)
     }
-    .buttonStyle(.glass)
+    .glassButtonStyle()
     .accessibilityIdentifier("blender.assets.type")
   }
 
@@ -181,7 +181,7 @@ struct AssetsPane: View {
     } label: {
       menuLabel(store.shownCategory ?? "All Categories")
     }
-    .buttonStyle(.glass)
+    .glassButtonStyle()
     .accessibilityIdentifier("blender.assets.category")
   }
 
@@ -206,7 +206,7 @@ struct AssetsPane: View {
       .padding(.horizontal, 14)
       .frame(maxHeight: .infinity, alignment: .top)
     }
-    .scrollDismissesKeyboard(.immediately)
+    .dismissesKeyboardOnScroll(interactively: false)
     .overlay {
       if items.isEmpty {
         Text(store.loading && store.items.isEmpty ? "Loading Assets…" :
@@ -322,7 +322,7 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
     self.overlay = overlay
     /* Adding things to the scene starts here. */
     button = UIBarButtonItem(image: UIImage(systemName: "plus"), style: .plain, target: nil, action: nil)
-    panel = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    panel = UIVisualEffectView(effect: makePanelGlass())
     host = UIHostingController(rootView: AssetsPane(store: store))
     super.init()
     button.target = self

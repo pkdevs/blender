@@ -825,7 +825,7 @@ struct PreviewRow: View {
           }
         }
         .padding(5)
-        .glassEffect(.regular, in: Capsule())
+        .panelGlass(in: Capsule())
       }
     }
     .frame(maxWidth: .infinity)

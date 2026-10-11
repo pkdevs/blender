@@ -93,12 +93,11 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   }
 
   private func makePanel(_ host: UIHostingController<AnyView>) -> UIVisualEffectView {
-    let glass = UIGlassEffect(style: .regular)
     /* Over Blender's dark viewport untinted glass turns mid-grey even in light mode, which mutes
      * colored icons and text. A light tint keeps light mode light; dark mode stays untinted. */
-    glass.tintColor = UIColor { traits in
+    let glass = makePanelGlass(tint: UIColor { traits in
       traits.userInterfaceStyle == .dark ? .clear : UIColor(white: 1, alpha: 0.6)
-    }
+    })
     let panel = UIVisualEffectView(effect: glass)
     panel.layer.cornerRadius = 16
     panel.clipsToBounds = true

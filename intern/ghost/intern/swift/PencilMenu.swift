@@ -10,6 +10,8 @@
  * All points are UIKit points in this view, never drawable pixels.
  */
 
+#if !os(visionOS)  /* No Apple Pencil on Apple Vision Pro. */
+
 import SwiftUI
 import UIKit
 
@@ -509,3 +511,5 @@ public final class SwiftPencilMenu: UIView, @MainActor GHOSTIOSPencilMenu {
 }
 
 /** \} */
+
+#endif

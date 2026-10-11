@@ -70,10 +70,10 @@ struct GlassButtonContent: View {
         shape.fill(model.selected ? Color(uiColor: model.selectedTint) : .clear)
       }
     }
-    .glassEffect(model.style == "glass" ?
-                   (model.selected ? .regular.tint(Color(uiColor: model.selectedTint)) : .regular) :
-                   model.style == "clear" ? .clear : .identity,
-                 in: shape)
+    .panelGlass(model.style == "glass" ?
+                  (model.selected ? .tinted(Color(uiColor: model.selectedTint)) : .regular) :
+                  model.style == "clear" ? .clear : .none,
+                in: shape)
     .opacity(model.enabled ? 1 : 0.4)
     .scaleEffect(model.highlighted ? 0.96 : 1)
     .animation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.25, dampingFraction: 0.8),

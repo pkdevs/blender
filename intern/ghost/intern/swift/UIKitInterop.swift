@@ -86,7 +86,7 @@ struct UIMenuButton: UIViewRepresentable {
     }
     var configuration: UIButton.Configuration
     switch style {
-      case .glass, .glassPopup: configuration = .glass()
+      case .glass, .glassPopup: configuration = .panelGlass()
       case .popup, .plain, .borderless, .system: configuration = .plain()
     }
     if style == .popup || style == .glassPopup { configuration.indicator = .popup }
@@ -138,6 +138,45 @@ func menuSignature(_ element: UIMenuElement) -> String {
 /** \name Number scrubbing
  * \{ */
 
+#if os(visionOS)
+/** visionOS: a pinch and drag sideways. Only one value scrubs at a time. */
+@MainActor
+private final class ScrubTracker {
+  static let shared = ScrubTracker()
+  var active = false
+}
+
+struct ScrubGesture: Gesture {
+  var enabled: Bool
+  var anchor: AnchorBox? = nil
+  var began: () -> Void
+  var changed: (_ translation: CGPoint) -> Void
+  var ended: (_ cancelled: Bool) -> Void
+
+  var body: some Gesture {
+    DragGesture(minimumDistance: 8, coordinateSpace: .global)
+      .onChanged { value in
+        let tracker = ScrubTracker.shared
+        let translation = CGPoint(x: value.translation.width, y: value.translation.height)
+        if !tracker.active {
+          guard enabled, abs(translation.x) > abs(translation.y) * 1.2 else { return }
+          tracker.active = true
+          began()
+        }
+        changed(translation)
+        if let view = anchor?.view { ScrubIndicator.shared.show(above: view, vertical: translation.y) }
+      }
+      .onEnded { value in
+        let tracker = ScrubTracker.shared
+        guard tracker.active else { return }
+        tracker.active = false
+        changed(CGPoint(x: value.translation.width, y: value.translation.height))
+        ended(false)
+        ScrubIndicator.shared.hide(for: anchor?.view)
+      }
+  }
+}
+#else
 /** A horizontal drag that only begins when mostly sideways, so vertical drags still scroll. */
 struct ScrubGesture: UIGestureRecognizerRepresentable {
   var enabled: Bool
@@ -200,6 +239,8 @@ struct ScrubGesture: UIGestureRecognizerRepresentable {
   }
 }
 
+#endif
+
 /** Drag sensitivity: dragging further up or down while scrubbing makes changes coarser or finer. */
 func scrubSensitivity(_ vertical: Double) -> Double {
   exp2(min(4.0, max(-4.0, -vertical / 80.0)))
@@ -258,7 +299,7 @@ final class ScrubIndicator {
   private let model = ScrubIndicatorModel()
   private lazy var host = UIHostingController(rootView: ScrubIndicatorContent(model: model))
   private lazy var pill: UIVisualEffectView = {
-    let pill = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    let pill = UIVisualEffectView(effect: makePanelGlass())
     pill.isUserInteractionEnabled = false
     pill.clipsToBounds = true
     pill.layer.cornerCurve = .continuous
@@ -463,13 +504,138 @@ func colorComponents(_ color: UIColor, alpha: Bool) -> [Double]? {
 /** \name Haptics
  * \{ */
 
+/** Haptics where the device has them; Apple Vision Pro has none. */
 enum Haptics {
+  enum Impact { case light, medium }
+
   static func selection() {
+#if !os(visionOS)
     UISelectionFeedbackGenerator().selectionChanged()
+#endif
   }
 
-  static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
-    UIImpactFeedbackGenerator(style: style).impactOccurred()
+  static func impact(_ style: Impact = .light) {
+#if !os(visionOS)
+    UIImpactFeedbackGenerator(style: style == .medium ? .medium : .light).impactOccurred()
+#endif
+  }
+
+  static func success() {
+#if !os(visionOS)
+    UINotificationFeedbackGenerator().notificationOccurred(.success)
+#endif
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Glass
+ *
+ * Liquid Glass on iOS. visionOS windows are glass already: panels there use the system's glass
+ * material, without tints.
+ * \{ */
+
+enum PanelGlass {
+  case regular
+  case clear
+  case tinted(Color)
+  /** No glass, keeping the view's identity so changes animate. */
+  case none
+
+#if !os(visionOS)
+  func liquid(interactive: Bool) -> Glass {
+    let glass: Glass
+    switch self {
+      case .regular: glass = .regular
+      case .clear: glass = .clear
+      case .tinted(let color): glass = .regular.tint(color)
+      case .none: return .identity
+    }
+    return interactive ? glass.interactive() : glass
+  }
+#endif
+}
+
+extension View {
+  @ViewBuilder
+  func panelGlass<S: Shape>(_ glass: PanelGlass = .regular, interactive: Bool = false, in shape: S) -> some View {
+#if os(visionOS)
+    switch glass {
+      case .tinted(let color): self.background(color, in: shape)
+      case .regular, .clear: self.background(.thinMaterial, in: shape)
+      case .none: self
+    }
+#else
+    /* One effect whose value changes, so iOS morphs between tints. */
+    self.glassEffect(glass.liquid(interactive: interactive), in: shape)
+#endif
+  }
+}
+
+extension View {
+  /** A glass button; visionOS draws bordered buttons on glass. */
+  @ViewBuilder
+  func glassButtonStyle() -> some View {
+#if os(visionOS)
+    self.buttonStyle(.bordered)
+#else
+    self.buttonStyle(.glass)
+#endif
+  }
+
+  /** Scrolling puts the keyboard away; visionOS has no keyboard over the content to put away. */
+  @ViewBuilder
+  func dismissesKeyboardOnScroll(interactively: Bool) -> some View {
+#if os(visionOS)
+    self
+#else
+    self.scrollDismissesKeyboard(interactively ? .interactively : .immediately)
+#endif
+  }
+
+  /** Controls above the keyboard while a field is edited. visionOS's keyboard floats apart from
+   * the window, with no bar of its own. */
+  @ViewBuilder
+  func keyboardAccessory<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+#if os(visionOS)
+    self
+#else
+    self.toolbar { ToolbarItemGroup(placement: .keyboard) { content() } }
+#endif
+  }
+
+  /** A soft scroll edge, where the platform has one. */
+  @ViewBuilder
+  func softHorizontalScrollEdge() -> some View {
+#if os(visionOS)
+    self
+#else
+    self.scrollEdgeEffectStyle(.soft, for: .horizontal)
+#endif
+  }
+}
+
+/** A UIKit panel's glass: `tint` lightens it in light mode on iOS. */
+func makePanelGlass(tint: UIColor? = nil, interactive: Bool = false) -> UIVisualEffect {
+#if os(visionOS)
+  return UIBlurEffect(style: .systemThinMaterial)
+#else
+  let glass = UIGlassEffect(style: .regular)
+  glass.tintColor = tint
+  glass.isInteractive = interactive
+  return glass
+#endif
+}
+
+extension UIButton.Configuration {
+  /** A glass button; visionOS draws its bordered buttons as glass. */
+  static func panelGlass() -> UIButton.Configuration {
+#if os(visionOS)
+    return .bordered()
+#else
+    return .glass()
+#endif
   }
 }
 

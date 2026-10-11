@@ -93,18 +93,16 @@ struct NumberField: View, Equatable {
           .focused($focused)
           .submitLabel(.done)
           .onSubmit { commit() }
-          .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-              Stepper("Adjust \(propertyLabel(property))", value: $stepperValue,
-                      in: stepperRange, step: stepperStep)
-                .labelsHidden()
-                .onChange(of: stepperValue) { _, newValue in
-                  text = formatStepper(newValue)
-                }
-              Spacer()
-              Button("Done") { focused = false }
-                .bold()
-            }
+          .keyboardAccessory {
+            Stepper("Adjust \(propertyLabel(property))", value: $stepperValue,
+                    in: stepperRange, step: stepperStep)
+              .labelsHidden()
+              .onChange(of: stepperValue) { _, newValue in
+                text = formatStepper(newValue)
+              }
+            Spacer()
+            Button("Done") { focused = false }
+              .bold()
           }
       }
       else {

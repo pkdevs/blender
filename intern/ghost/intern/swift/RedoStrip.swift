@@ -130,7 +130,7 @@ struct RedoContent: View {
           store.contentWidthChanged()
         }
       }
-      .scrollEdgeEffectStyle(.soft, for: .horizontal)
+      .softHorizontalScrollEdge()
     }
     .tint(Color(uiColor: .systemBlue))
   }
@@ -495,9 +495,7 @@ public final class SwiftRedoStrip: NSObject {
   @objc(initWithOverlay:icon:)
   public init(overlay: UIView, icon: @escaping (String) -> UIImage?) {
     self.overlay = overlay
-    let glass = UIGlassEffect(style: .regular)
-    glass.isInteractive = true
-    rail = UIVisualEffectView(effect: glass)
+    rail = UIVisualEffectView(effect: makePanelGlass(interactive: true))
     host = UIHostingController(rootView: RedoContent(store: store))
     super.init()
     store.icon = icon
@@ -518,7 +516,7 @@ public final class SwiftRedoStrip: NSObject {
     rail.contentView.addSubview(host.view)
     overlay.addSubview(rail)
 
-    collapsedButton.configuration = .glass()
+    collapsedButton.configuration = .panelGlass()
     collapsedButton.titleLabel?.lineBreakMode = .byTruncatingTail
     collapsedButton.tintColor = .label
     collapsedButton.accessibilityIdentifier = "blender.redo.collapsed"
@@ -633,7 +631,7 @@ public final class SwiftRedoStrip: NSObject {
   private func updateCollapsedTitle() {
     let snapshot = store.snapshot
     let title = SwiftRedoStrip.shortNames[snapshot?.string("operator") ?? ""] ?? snapshot?.string("title")
-    var config = collapsedButton.configuration ?? .glass()
+    var config = collapsedButton.configuration ?? .panelGlass()
     if config.title == title { return }
     config.title = title
     config.titleLineBreakMode = .byTruncatingTail

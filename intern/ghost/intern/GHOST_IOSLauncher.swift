@@ -80,10 +80,18 @@ private let cameraFieldOfView: Float = 25
 
 struct LauncherScene: View {
   let state: LauncherSceneState
+#if os(visionOS)
+  /* visionOS shows RealityKit content in the window's real space, measured in meters. */
+  @PhysicalMetric(from: .meters) private var pointsPerMeter = 1.0
+#endif
 
   /** Points per scene unit at the model's depth, from the camera's vertical field of view. */
   func pointsPerUnit() -> Float {
+#if os(visionOS)
+    Float(pointsPerMeter)
+#else
     Float(state.viewSize.height) / (2 * cameraDistance * tan(cameraFieldOfView * .pi / 360))
+#endif
   }
 
   /** A point in the view, on the model's plane. */
@@ -117,6 +125,8 @@ struct LauncherScene: View {
 
   var body: some View {
     RealityView { content in
+#if !os(visionOS)
+      /* visionOS lights Suzanne with the room, in real depth; elsewhere she is on a screen. */
       content.camera = .virtual
       let camera = PerspectiveCamera()
       camera.camera.fieldOfViewInDegrees = cameraFieldOfView
@@ -131,6 +141,7 @@ struct LauncherScene: View {
         light.look(at: .zero, from: position, relativeTo: nil)
         content.add(light)
       }
+#endif
       let item = state.model
       guard let model = try? await Entity(contentsOf: item.url) else {
         return

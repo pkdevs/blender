@@ -407,7 +407,9 @@ struct OutlineList: UIViewRepresentable {
       view.dragDelegate = self
       view.dropDelegate = self
       view.dragInteractionEnabled = true
+#if !os(visionOS)
       view.keyboardDismissMode = .onDrag
+#endif
       view.accessibilityIdentifier = "blender.hierarchy.outline"
       let registration = UICollectionView.CellRegistration<UICollectionViewListCell, String> {
         [weak self] cell, _, key in

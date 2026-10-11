@@ -376,8 +376,7 @@ private struct TimelineKnob: View {
       .minimumScaleFactor(0.7)
       .foregroundStyle(lifted ? Color.primary : .white)
       .frame(width: width, height: knobSize)
-      .glassEffect(lifted ? .clear.interactive() : .regular.tint(Color(uiColor: .systemBlue)).interactive(),
-                   in: Capsule())
+      .panelGlass(lifted ? .clear : .tinted(Color(uiColor: .systemBlue)), interactive: true, in: Capsule())
       .scaleEffect(lifted ? 1.2 : 1)
       .animation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.35, dampingFraction: 0.6),
                  value: lifted)
@@ -553,7 +552,7 @@ public final class SwiftTimeline: NSObject {
     let icon = UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate)
     button = UIBarButtonItem(image: icon ?? UIImage(systemName: "timeline.selection"), style: .plain,
                              target: nil, action: nil)
-    panel = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    panel = UIVisualEffectView(effect: makePanelGlass())
     host = UIHostingController(rootView: TimelineContent(store: store))
     super.init()
     button.target = self
