@@ -1135,6 +1135,71 @@ static bool blf_glyph_set_variation_optical_size(const FontBLF *font,
   return blf_glyph_set_variation_float(font, coords, BLF_VARIATION_AXIS_OPTSIZE, &value);
 }
 
+/** Weight, slant, width and spacing of glyphs, in the units of #FontBLF::char_weight. */
+struct GlyphStyle {
+  float weight;
+  float slant;
+  float width;
+  float spacing;
+};
+
+static GlyphStyle blf_glyph_style_target(const FontBLF *settings_font)
+{
+  GlyphStyle style;
+  style.weight = float(settings_font->char_weight);
+  if (settings_font->flags & BLF_BOLD) {
+    style.weight = std::min(style.weight + 300.0f, 900.0f);
+  }
+  style.slant = settings_font->char_slant;
+  if (settings_font->flags & BLF_ITALIC) {
+    style.slant = std::min(style.slant + 8.0f, 15.0f);
+  }
+  style.width = settings_font->char_width;
+  style.spacing = settings_font->char_spacing;
+  return style;
+}
+
+static GlyphStyle blf_glyph_set_variations(const FontBLF *settings_font,
+                                           const FontBLF *glyph_font,
+                                           const GlyphStyle &target,
+                                           FT_Fixed coords[BLF_VARIATIONS_MAX])
+{
+  GlyphStyle style;
+  style.weight = blf_glyph_set_variation_weight(
+      glyph_font, coords, glyph_font->metrics.weight, target.weight);
+  style.slant = blf_glyph_set_variation_slant(
+      glyph_font, coords, glyph_font->metrics.slant, target.slant);
+  style.width = blf_glyph_set_variation_width(
+      glyph_font, coords, glyph_font->metrics.width, target.width);
+  style.spacing = blf_glyph_set_variation_spacing(
+      glyph_font, coords, glyph_font->metrics.spacing, target.spacing);
+  blf_glyph_set_variation_optical_size(glyph_font, coords, settings_font->size);
+  return style;
+}
+
+int blf_glyph_variation_coords(const FontBLF *settings_font,
+                               const FontBLF *glyph_font,
+                               float r_coords[BLF_VARIATIONS_MAX])
+{
+  const FT_MM_Var *variations = glyph_font->variations;
+  if (variations == nullptr) {
+    return 0;
+  }
+  const int axes_num = std::min(int(variations->num_axis), BLF_VARIATIONS_MAX);
+
+  FT_Fixed coords[BLF_VARIATIONS_MAX];
+  for (int i = 0; i < axes_num; i++) {
+    coords[i] = variations->axis[i].def;
+  }
+  blf_glyph_set_variations(
+      settings_font, glyph_font, blf_glyph_style_target(settings_font), coords);
+
+  for (int i = 0; i < axes_num; i++) {
+    r_coords[i] = from_16dot16(coords[i]);
+  }
+  return axes_num;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1277,38 +1342,21 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
 
   blf_ensure_size(glyph_font);
 
+  const GlyphStyle target = blf_glyph_style_target(settings_font);
   /* Default style values of the font containing the glyph. */
-  float weight = glyph_font->metrics.weight;
-  float slant = glyph_font->metrics.slant;
-  float width = glyph_font->metrics.width;
-  float spacing = glyph_font->metrics.spacing;
+  GlyphStyle style = {float(glyph_font->metrics.weight),
+                      glyph_font->metrics.slant,
+                      glyph_font->metrics.width,
+                      glyph_font->metrics.spacing};
 
-  /* Style targets are on the settings_font. */
-  float weight_target = float(settings_font->char_weight);
-  if (settings_font->flags & BLF_BOLD) {
-    weight_target = std::min(weight_target + 300.0f, 900.0f);
-  }
-  float slant_target = settings_font->char_slant;
-  if (settings_font->flags & BLF_ITALIC) {
-    slant_target = std::min(slant_target + 8.0f, 15.0f);
-  }
-  float width_target = settings_font->char_width;
-  float spacing_target = settings_font->char_spacing;
-
-  /* Font variations need to be set before glyph loading. Even if new value is zero. */
-
+  /* Font variations need to be set before glyph loading. Even if new value is zero.
+   * Text shaping uses the same values, see #blf_glyph_variation_coords. */
   if (glyph_font->variations) {
     FT_Fixed coords[BLF_VARIATIONS_MAX];
     /* Load current design coordinates. */
     FT_Get_Var_Design_Coordinates(glyph_font->face, BLF_VARIATIONS_MAX, &coords[0]);
     /* Update design coordinates with new values. */
-
-    weight = blf_glyph_set_variation_weight(glyph_font, coords, weight, weight_target);
-    slant = blf_glyph_set_variation_slant(glyph_font, coords, slant, slant_target);
-    width = blf_glyph_set_variation_width(glyph_font, coords, width, width_target);
-    spacing = blf_glyph_set_variation_spacing(glyph_font, coords, spacing, spacing_target);
-    blf_glyph_set_variation_optical_size(glyph_font, coords, settings_font->size);
-
+    style = blf_glyph_set_variations(settings_font, glyph_font, target, coords);
     /* Save updated design coordinates. */
     FT_Set_Var_Design_Coordinates(glyph_font->face, BLF_VARIATIONS_MAX, &coords[0]);
   }
@@ -1329,17 +1377,17 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
 
   /* Fallback glyph transforms, but only if required and not yet done. */
 
-  if (weight != weight_target) {
-    blf_glyph_transform_weight(glyph, weight_target - weight, FT_IS_FIXED_WIDTH(glyph_font));
+  if (style.weight != target.weight) {
+    blf_glyph_transform_weight(glyph, target.weight - style.weight, FT_IS_FIXED_WIDTH(glyph_font));
   }
-  if (slant != slant_target) {
-    blf_glyph_transform_slant(glyph, slant_target - slant);
+  if (style.slant != target.slant) {
+    blf_glyph_transform_slant(glyph, target.slant - style.slant);
   }
-  if (width != width_target) {
-    blf_glyph_transform_width(glyph, width_target - width);
+  if (style.width != target.width) {
+    blf_glyph_transform_width(glyph, target.width - style.width);
   }
-  if (spacing != spacing_target) {
-    blf_glyph_transform_spacing(glyph, spacing_target - spacing);
+  if (style.spacing != target.spacing) {
+    blf_glyph_transform_spacing(glyph, target.spacing - style.spacing);
   }
 
   if (outline_only) {

@@ -247,15 +247,11 @@ ShapingData::ShapingData(FontBLF *font,
 
     hb_buffer_set_cluster_level(hb_buf, HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS);
 
-    /* Variable font axes. */
-    hb_variation_t variations[3];
-    variations[0].tag = HB_OT_TAG_VAR_AXIS_WEIGHT;
-    variations[0].value = segment_font->char_weight;
-    variations[1].tag = HB_OT_TAG_VAR_AXIS_WIDTH;
-    variations[1].value = segment_font->char_width;
-    variations[2].tag = HB_OT_TAG_VAR_AXIS_SLANT;
-    variations[2].value = segment_font->char_slant;
-    hb_font_set_variations(segment_font->hb_font, variations, 3);
+    /* Variable font axes, the same as used to render the glyphs of this segment, so the advances
+     * match the glyphs (bold and italic, width factor, slant direction, optical size). */
+    float var_coords[BLF_VARIATIONS_MAX];
+    const int var_coords_num = blf_glyph_variation_coords(segment_font, segment_font, var_coords);
+    hb_font_set_var_coords_design(segment_font->hb_font, var_coords, uint(var_coords_num));
 
     const bool need_release = (!gc || segment_font != font);
     GlyphCacheBLF *segment_gc = need_release ? blf_glyph_cache_acquire(segment_font) : gc;

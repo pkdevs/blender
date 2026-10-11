@@ -206,6 +206,18 @@ GlyphBLF *blf_glyph_ensure_cached(FontBLF *font,
 
 FontBLF *blf_font_script_ensure(FontBLF *font, uint charcode);
 
+/**
+ * Design coordinates of the variation axes of \a glyph_font, as used when rendering its glyphs
+ * with the style and size of \a settings_font. Text shaping must use the same coordinates for
+ * the advances to match the rendered glyphs.
+ *
+ * \param r_coords: Array of #BLF_VARIATIONS_MAX values, one per axis in font order.
+ * \return The number of axes, zero for fonts without variation axes.
+ */
+int blf_glyph_variation_coords(const FontBLF *settings_font,
+                               const FontBLF *glyph_font,
+                               float r_coords[]);
+
 GlyphBLF *blf_glyph_ensure_subpixel(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, int32_t pen_x);
 
 GlyphBLF *blf_glyph_ensure_icon(GlyphCacheBLF *gc,
