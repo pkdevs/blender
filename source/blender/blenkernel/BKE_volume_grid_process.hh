@@ -20,6 +20,8 @@
 #  include "BLI_generic_span.hh"
 #  include "BLI_index_mask_fwd.hh"
 
+#  include "FN_field.hh"
+
 namespace blender::bke::volume_grid {
 
 using LeafNodeMask = openvdb::util::NodeMask<3u>;
@@ -104,19 +106,29 @@ void set_tile_values(openvdb::GridBase &grid_base, GSpan values, Span<openvdb::C
 /**
  * Deactivate values for the given voxels in a leaf node. A leaf node must exist at the given
  * coordinates.
+ * \param set_background Set the values of deactivated voxels to the background value.
  */
 void set_leaf_values_off(openvdb::GridBase &grid_base,
                          const openvdb::Coord &probe_coord,
-                         Span<bool> selection);
-/** Deactivate values for the given voxels in the grid. */
+                         Span<bool> selection,
+                         bool set_background);
+/**
+ * Deactivate values for the given voxels in the grid.
+ * \param set_background Set the values of deactivated voxels to the background value.
+ */
 void set_grid_values_off(openvdb::GridBase &grid_base,
                          Span<bool> selection,
-                         Span<openvdb::Coord> voxels);
+                         Span<openvdb::Coord> voxels,
+                         bool set_background);
 
-/** Deactivate values for the given tiles in the grid. */
+/**
+ * Deactivate values for the given tiles in the grid.
+ * \param set_background Set the values of deactivated voxels to the background value.
+ */
 void set_tile_values_off(openvdb::GridBase &grid_base,
                          Span<bool> selection,
-                         Span<openvdb::CoordBBox> tiles);
+                         Span<openvdb::CoordBBox> tiles,
+                         bool set_background);
 
 /**
  * Boolean grids are stored as bitmaps, but we often have to process arrays of booleans. This
@@ -150,6 +162,13 @@ void sample_tree_indices(const VolumeGridType grid_type,
                          Span<int> zs,
                          const IndexMask &mask,
                          GMutableSpan r_values);
+
+std::optional<VolumeGridType> cpp_type_to_grid_type(const CPPType &cpp_type);
+
+void evaluate_fields_to_grid(const openvdb::MaskTree &mask_tree,
+                             const openvdb::math::Transform &transform,
+                             Span<fn::GField> fields,
+                             MutableSpan<bke::GVolumeGrid> r_output_grids);
 
 }  // namespace blender::bke::volume_grid
 

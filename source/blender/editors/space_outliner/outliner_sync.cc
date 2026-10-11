@@ -87,7 +87,7 @@ void ED_outliner_select_sync_flag_outliners(const bContext *C)
   Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
 
-  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen;
+  for (bScreen *screen = bmain->screens.first(); screen;
        screen = static_cast<bScreen *>(screen->id.next))
   {
     for (ScrArea &area : screen->areabase) {
@@ -236,6 +236,7 @@ static void outliner_select_sync_to_pose_bone(TreeElement *te,
                                               Set<bPoseChannel *> &selected_pbones)
 {
   Object *ob = id_cast<Object *>(tselem->id);
+  BKE_pose_ensure_bone_indices(*ob);
   bArmature *arm = id_cast<bArmature *>(ob->data);
   bPoseChannel *pchan = static_cast<bPoseChannel *>(te->directdata);
 
@@ -486,7 +487,8 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
                                                 ListBaseT<TreeElement> *tree,
                                                 SyncSelectActiveData *active_data,
                                                 const SyncSelectTypes *sync_types,
-                                                bool *r_any_new_active)
+                                                bool *r_any_new_active,
+                                                short &idcode)
 {
   for (TreeElement &te : *tree) {
     TreeStoreElem *tselem = TREESTORE(&te);
@@ -524,12 +526,19 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
           tselem->flag &= ~(TSE_ACTIVE | TSE_SELECTED);
         }
       }
+      else {
+        /* Deselect collections when syncing non collection data-block, see: !164069 */
+        tselem->flag &= ~(TSE_ACTIVE | TSE_SELECTED);
+      }
     }
     else {
       tselem->flag &= ~(TSE_SELECTED | TSE_ACTIVE);
     }
     const bool is_active_new = (tselem->flag & TSE_ACTIVE) && (tselem->flag & TSE_SELECTED);
-    *r_any_new_active |= is_active_new && !is_active_old;
+    if (is_active_new && !is_active_old) {
+      *r_any_new_active = true;
+      idcode = te.idcode;
+    }
     /* Sync subtree elements */
     outliner_sync_selection_to_outliner(bmain,
                                         scene,
@@ -539,7 +548,8 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
                                         &te.subtree,
                                         active_data,
                                         sync_types,
-                                        r_any_new_active);
+                                        r_any_new_active,
+                                        idcode);
   }
 }
 
@@ -559,7 +569,8 @@ static void get_sync_select_active_data(const bContext *C, SyncSelectActiveData 
 
 bool outliner_sync_selection(const bContext *C,
                              const TreeViewContext &tvc,
-                             SpaceOutliner *space_outliner)
+                             SpaceOutliner *space_outliner,
+                             short &idcode)
 {
   /* Set which types of data to sync from sync dirty flag and outliner display mode */
   SyncSelectTypes sync_types;
@@ -580,7 +591,8 @@ bool outliner_sync_selection(const bContext *C,
                                         &space_outliner->runtime->tree,
                                         &active_data,
                                         &sync_types,
-                                        &r_any_new_active);
+                                        &r_any_new_active,
+                                        idcode);
 
     /* Keep any un-synced data in the dirty flag. */
     if (sync_types.object) {

@@ -12,6 +12,7 @@
 
 #include "DNA_listBase.h"
 
+#include "BLI_function_ref.hh"
 #include "BLI_set.hh"
 
 namespace blender {
@@ -35,13 +36,11 @@ struct BMEdgeLoopFind_Params {
  */
 int BM_mesh_edgeloops_find(BMesh *bm,
                            ListBaseT<BMEdgeLoopStore> *r_eloops,
-                           bool (*test_fn)(BMEdge *, void *user_data),
-                           void *user_data,
+                           FunctionRef<bool(BMEdge *)> test_fn,
                            const BMEdgeLoopFind_Params *params = nullptr);
 bool BM_mesh_edgeloops_find_path(BMesh *bm,
                                  ListBaseT<BMEdgeLoopStore> *r_eloops,
-                                 bool (*test_fn)(BMEdge *, void *user_data),
-                                 void *user_data,
+                                 FunctionRef<bool(BMEdge *)> test_fn,
                                  BMVert *v_src,
                                  BMVert *v_dst);
 
@@ -101,7 +100,7 @@ bool BM_edgeloop_overlap_check(BMEdgeLoopStore *el_store_a, BMEdgeLoopStore *el_
 #define BM_EDGELINK_NEXT(el_store, elink) \
   (elink)->next ? \
       (elink)->next : \
-      (BM_edgeloop_is_closed(el_store) ? (LinkData *)BM_edgeloop_verts_get(el_store)->first : \
+      (BM_edgeloop_is_closed(el_store) ? (LinkData *)BM_edgeloop_verts_get(el_store)->first() : \
                                          NULL)
 
 #define BM_EDGELOOP_NEXT(el_store) \

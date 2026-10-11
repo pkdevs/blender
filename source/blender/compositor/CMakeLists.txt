@@ -8,36 +8,46 @@ set(INC
   cached_resources
   derived_resources
   utilities
+  ../functions
   ../nodes/geometry/include
   ../gpu/intern
   ../makesrna
   ../render/intern
   ../imbuf/opencolorio/intern/libocio
+
+  # RNA_prototypes.hh
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 set(INC_SYS
 )
 
 set(SRC
-  COM_compile_state.hh
+  COM_bundle_item.hh
+  COM_closure.hh
+  COM_closure_zone_operation.hh
   COM_context.hh
   COM_conversion_operation.hh
   COM_derived_resources.hh
   COM_domain.hh
-  COM_group_input_node_operation.hh
   COM_group_node_operation.hh
-  COM_group_output_node_operation.hh
   COM_implicit_input_operation.hh
+  COM_init.hh
   COM_input_descriptor.hh
   COM_meta_data.hh
   COM_multi_function_procedure_operation.hh
   COM_node_group_operation.hh
   COM_node_operation.hh
+  COM_node_tree_evaluator.hh
+  COM_node_tree_input_node_operation.hh
+  COM_node_tree_output_node_operation.hh
   COM_operation.hh
   COM_pixel_operation.hh
   COM_realize_on_domain_operation.hh
   COM_render_context.hh
+  COM_repeat_zone_operation.hh
   COM_result.hh
+  COM_scene_compositor_effects_operation.hh
   COM_scheduler.hh
   COM_shader_node.hh
   COM_shader_operation.hh
@@ -46,24 +56,32 @@ set(SRC
   COM_static_cache_manager.hh
   COM_undefined_node_operation.hh
   COM_utilities.hh
+  COM_zone_operation.hh
+  COM_zone_tree_operation.hh
 
-  intern/compile_state.cc
+  intern/bundle_item.cc
+  intern/closure.cc
+  intern/closure_zone_operation.cc
   intern/context.cc
   intern/conversion_operation.cc
   intern/domain.cc
-  intern/group_input_node_operation.cc
   intern/group_node_operation.cc
-  intern/group_output_node_operation.cc
   intern/implicit_input_operation.cc
+  intern/init.cc
   intern/meta_data.cc
   intern/multi_function_procedure_operation.cc
   intern/node_group_operation.cc
   intern/node_operation.cc
+  intern/node_tree_evaluator.cc
+  intern/node_tree_input_node_operation.cc
+  intern/node_tree_output_node_operation.cc
   intern/operation.cc
   intern/pixel_operation.cc
   intern/realize_on_domain_operation.cc
   intern/render_context.cc
+  intern/repeat_zone_operation.cc
   intern/result.cc
+  intern/scene_compositor_effects_operation.cc
   intern/scheduler.cc
   intern/shader_node.cc
   intern/shader_operation.cc
@@ -72,10 +90,13 @@ set(SRC
   intern/static_cache_manager.cc
   intern/undefined_node_operation.cc
   intern/utilities.cc
+  intern/zone_operation.cc
+  intern/zone_tree_operation.cc
 
   algorithms/intern/compute_preview.cc
   algorithms/intern/convolve.cc
   algorithms/intern/deriche_gaussian_blur.cc
+  algorithms/intern/downsampled_gaussian_blur.cc
   algorithms/intern/extract_alpha.cc
   algorithms/intern/jump_flooding.cc
   algorithms/intern/morphological_blur.cc
@@ -94,6 +115,7 @@ set(SRC
   algorithms/COM_algorithm_compute_preview.hh
   algorithms/COM_algorithm_convolve.hh
   algorithms/COM_algorithm_deriche_gaussian_blur.hh
+  algorithms/COM_algorithm_downsampled_gaussian_blur.hh
   algorithms/COM_algorithm_extract_alpha.hh
   algorithms/COM_algorithm_jump_flooding.hh
   algorithms/COM_algorithm_morphological_blur.hh
@@ -148,9 +170,11 @@ set(SRC
 
   derived_resources/COM_denoised_auxiliary_pass.hh
 
+  utilities/intern/node_tree_logging.cc
   utilities/intern/oidn.cc
 
   utilities/COM_utilities_diagonals.hh
+  utilities/COM_utilities_node_tree_logging.hh
   utilities/COM_utilities_oidn.hh
 )
 
@@ -158,6 +182,7 @@ set(LIB
   PRIVATE bf::blenfont
   PRIVATE bf::blenkernel
   PRIVATE bf::blentranslation
+  PRIVATE bf::depsgraph
   PRIVATE bf::functions
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
@@ -261,6 +286,9 @@ set(GLSL_SRC
   shaders/compositor_displace_anisotropic.glsl
   shaders/compositor_double_edge_mask_compute_boundary.glsl
   shaders/compositor_double_edge_mask_compute_gradient.glsl
+  shaders/compositor_downsampled_gaussian_downsample.bsl.hh
+  shaders/compositor_downsampled_gaussian_filter.bsl.hh
+  shaders/compositor_downsampled_gaussian_reconstruct.bsl.hh
   shaders/compositor_edge_filter.glsl
   shaders/compositor_ellipse_mask.glsl
   shaders/compositor_filter.glsl
@@ -408,6 +436,8 @@ set(GLSL_INC
   ../gpu/intern
   ../gpu/shaders
   ../gpu/shaders/common
+  ../gpu/shaders/compat
+  ../gpu/shaders/nodes
 
   shaders
   shaders/infos
@@ -456,3 +486,6 @@ blender_add_lib(bf_compositor "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 if(CXX_WARN_NO_SUGGEST_OVERRIDE)
   target_compile_options(bf_compositor PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wsuggest-override>)
 endif()
+
+# RNA_prototypes.hh
+add_dependencies(bf_compositor bf_rna)

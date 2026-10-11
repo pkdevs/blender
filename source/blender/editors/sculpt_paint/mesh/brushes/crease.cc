@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 #include "editors/sculpt_paint/mesh/brushes/brushes.hh"
 
 #include "DNA_brush_types.h"
@@ -14,9 +18,11 @@
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
+#include "BKE_paint_types.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_enumerable_thread_specific.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_task.hh"
 
 #include "PRF_profile.hh"
@@ -33,6 +39,7 @@ inline namespace crease_cc {
 
 struct LocalData {
   Vector<float3> positions;
+  Vector<float3> local_positions;
   Vector<float> factors;
   Vector<float> distances;
   Vector<float3> translations;
@@ -72,13 +79,13 @@ BLI_NOINLINE static void add_offset_to_translations(const MutableSpan<float3> tr
 static void calc_faces(const Depsgraph &depsgraph,
                        const Sculpt &sd,
                        const Brush &brush,
+                       const float4x4 &mat,
                        const float3 &offset,
                        const float strength,
                        const MeshAttributeData &attribute_data,
                        const Span<float3> vert_normals,
                        const bke::pbvh::MeshNode &node,
                        Object &object,
-                       LocalData &tls,
                        const PositionDeformData &position_data)
 {
   SculptSession &ss = *object.runtime->sculpt_session;
@@ -86,32 +93,49 @@ static void calc_faces(const Depsgraph &depsgraph,
 
   const Span<int> verts = node.verts();
 
-  calc_factors_common_mesh_indexed(depsgraph,
-                                   brush,
-                                   object,
-                                   attribute_data,
-                                   position_data.eval,
-                                   vert_normals,
-                                   node,
-                                   tls.factors,
-                                   tls.distances);
+  Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
+  Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    Array<float3, bke::pbvh::MESH_LEAF_LIMIT> local_positions(verts.size());
+    calc_cube_tip_factors_common_mesh_indexed(depsgraph,
+                                              brush,
+                                              object,
+                                              mat,
+                                              attribute_data,
+                                              position_data.eval,
+                                              vert_normals,
+                                              local_positions,
+                                              node,
+                                              factors,
+                                              distances);
+  }
+  else {
+    calc_factors_common_mesh_indexed(depsgraph,
+                                     brush,
+                                     object,
+                                     attribute_data,
+                                     position_data.eval,
+                                     vert_normals,
+                                     node,
+                                     factors,
+                                     distances);
+  }
 
-  tls.translations.resize(verts.size());
-  const MutableSpan<float3> translations = tls.translations;
+  Array<float3, bke::pbvh::MESH_LEAF_LIMIT> translations(verts.size());
   translations_from_position(position_data.eval, verts, cache.location_symm, translations);
 
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
     project_translations(translations, cache.view_normal_symm);
   }
 
-  scale_translations(translations, tls.factors);
+  scale_translations(translations, factors);
   scale_translations(translations, strength);
 
   /* The vertices are pinched towards a line instead of a single point. Without this we get a
    * 'flat' surface surrounding the pinch. */
   project_translations(translations, cache.sculpt_normal_symm);
 
-  add_offset_to_translations(translations, tls.factors, offset);
+  add_offset_to_translations(translations, factors, offset);
 
   clip_and_lock_translations(sd, ss, position_data.eval, verts, translations);
   position_data.deform(translations, verts);
@@ -121,6 +145,7 @@ static void calc_grids(const Depsgraph &depsgraph,
                        const Sculpt &sd,
                        Object &object,
                        const Brush &brush,
+                       const float4x4 &mat,
                        const float3 &offset,
                        const float strength,
                        bke::pbvh::GridsNode &node,
@@ -133,7 +158,23 @@ static void calc_grids(const Depsgraph &depsgraph,
   const Span<int> grids = node.grids();
   const MutableSpan positions = gather_grids_positions(subdiv_ccg, grids, tls.positions);
 
-  calc_factors_common_grids(depsgraph, brush, object, positions, node, tls.factors, tls.distances);
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    tls.local_positions.resize(positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
+    calc_cube_tip_factors_common_grids(depsgraph,
+                                       brush,
+                                       object,
+                                       mat,
+                                       positions,
+                                       local_positions,
+                                       node,
+                                       tls.factors,
+                                       tls.distances);
+  }
+  else {
+    calc_factors_common_grids(
+        depsgraph, brush, object, positions, node, tls.factors, tls.distances);
+  }
 
   tls.translations.resize(positions.size());
   const MutableSpan<float3> translations = tls.translations;
@@ -158,6 +199,7 @@ static void calc_bmesh(const Depsgraph &depsgraph,
                        const Sculpt &sd,
                        Object &object,
                        const Brush &brush,
+                       const float4x4 &mat,
                        const float3 &offset,
                        const float strength,
                        bke::pbvh::BMeshNode &node,
@@ -169,7 +211,23 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   const Set<BMVert *, 0> &verts = BKE_pbvh_bmesh_node_unique_verts(&node);
   const MutableSpan positions = gather_bmesh_positions(verts, tls.positions);
 
-  calc_factors_common_bmesh(depsgraph, brush, object, positions, node, tls.factors, tls.distances);
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    tls.local_positions.resize(positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
+    calc_cube_tip_factors_common_bmesh(depsgraph,
+                                       brush,
+                                       object,
+                                       mat,
+                                       positions,
+                                       local_positions,
+                                       node,
+                                       tls.factors,
+                                       tls.distances);
+  }
+  else {
+    calc_factors_common_bmesh(
+        depsgraph, brush, object, positions, node, tls.factors, tls.distances);
+  }
 
   tls.translations.resize(verts.size());
   const MutableSpan<float3> translations = tls.translations;
@@ -215,6 +273,7 @@ static void do_crease_or_blob_brush(const Depsgraph &depsgraph,
   /* We always want crease to pinch or blob to relax even when draw is negative. */
   const float strength = std::abs(cache.bstrength) * crease_correction *
                          (invert_strength ? -1.0f : 1.0f);
+  const float4x4 mat = cube_tip_init(sd, object, brush);
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
@@ -226,17 +285,16 @@ static void do_crease_or_blob_brush(const Depsgraph &depsgraph,
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       node_mask.foreach_index(
           [&](const int i) {
-            LocalData &tls = all_tls.local();
             calc_faces(depsgraph,
                        sd,
                        brush,
+                       mat,
                        offset,
                        strength,
                        attribute_data,
                        vert_normals,
                        nodes[i],
                        object,
-                       tls,
                        position_data);
             bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
           },
@@ -250,7 +308,7 @@ static void do_crease_or_blob_brush(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            calc_grids(depsgraph, sd, object, brush, offset, strength, nodes[i], tls);
+            calc_grids(depsgraph, sd, object, brush, mat, offset, strength, nodes[i], tls);
             bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -261,7 +319,7 @@ static void do_crease_or_blob_brush(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            calc_bmesh(depsgraph, sd, object, brush, offset, strength, nodes[i], tls);
+            calc_bmesh(depsgraph, sd, object, brush, mat, offset, strength, nodes[i], tls);
             bke::pbvh::update_node_bounds_bmesh(nodes[i]);
           },
           exec_mode::grain_size(1));

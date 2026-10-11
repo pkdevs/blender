@@ -40,7 +40,7 @@ template<typename ExtraInfo> struct AnyTypeInfo {
  * Used when #T is stored directly in the inline buffer of the #Any.
  */
 template<typename ExtraInfo, typename T>
-inline constexpr AnyTypeInfo<ExtraInfo> info_for_inline = {
+inline AnyTypeInfo<ExtraInfo> info_for_inline = {
     is_trivially_copy_constructible_extended_v<T> ?
         nullptr :
         +[](void *dst, const void *src) { new (dst) T(*static_cast<const T *>(src)); },
@@ -59,7 +59,7 @@ inline constexpr AnyTypeInfo<ExtraInfo> info_for_inline = {
  */
 template<typename T> using Ptr = std::unique_ptr<T>;
 template<typename ExtraInfo, typename T>
-inline constexpr AnyTypeInfo<ExtraInfo> info_for_unique_ptr = {
+inline AnyTypeInfo<ExtraInfo> info_for_unique_ptr = {
     [](void *dst, const void *src) {
       new (dst) Ptr<T>(new T(**static_cast<const Ptr<T> *>(src)));
     },
@@ -117,7 +117,7 @@ class Any {
    * Inline buffer that either contains nothing, the stored value directly, or a #std::unique_ptr
    * to the value.
    */
-  AlignedBuffer<RealInlineBufferCapacity, Alignment> buffer_{};
+  AlignedBuffer<RealInlineBufferCapacity, Alignment> buffer_;
 
  public:
   /** Extra data potentially stored within padding required by the buffer. */
@@ -274,9 +274,20 @@ class Any {
 
   template<typename T, typename... Args> std::decay_t<T> &emplace(Args &&...args)
   {
+    using DecayT = std::decay_t<T>;
+    if (!this->has_value()) {
+      return this->emplace_on_empty<DecayT>(std::forward<Args>(args)...);
+    }
+    if (this->is<DecayT>()) {
+      DecayT &value = this->get<DecayT>();
+      /* Reconstruct in place so that the potential allocation can be reused. */
+      std::destroy_at(&value);
+      new (&value) DecayT(std::forward<Args>(args)...);
+      return value;
+    }
     this->~Any();
-    new (this) Any(std::in_place_type<T>, std::forward<Args>(args)...);
-    return this->get<T>();
+    new (this) Any(std::in_place_type<DecayT>, std::forward<Args>(args)...);
+    return this->get<DecayT>();
   }
 
   template<typename T, typename... Args> std::decay_t<T> &emplace_on_empty(Args &&...args)

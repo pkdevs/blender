@@ -297,13 +297,7 @@ static void colorband_buttons_layout(Layout &layout,
                          UI_UNIT_Y,
                          TIP_("Tools"));
   /* Pass ownership of `tools_cb` to the button. */
-  button_funcN_set(
-      bt,
-      [](bContext *, void *, void *) {},
-      tools_cb,
-      nullptr,
-      but_func_argN_free<RNAUpdateCb>,
-      but_func_argN_copy<RNAUpdateCb>);
+  button_funcN_set(bt, [](bContext *, void *, void *) {}, tools_cb, nullptr);
 
   block_align_end(block);
   block_emboss_set(block, EmbossType::Emboss);
@@ -416,7 +410,7 @@ void template_color_ramp(Layout *layout,
   }
 
   const PointerRNA cptr = RNA_property_pointer_get(ptr, prop);
-  if (!cptr.data || !RNA_struct_is_a(cptr.type, RNA_ColorRamp)) {
+  if (!cptr || !RNA_struct_is_a(cptr.type, RNA_ColorRamp)) {
     return;
   }
 

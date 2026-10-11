@@ -21,7 +21,9 @@ set(FFMPEG_CFLAGS "\
 -I${temp_LIBDIR}/x264/include \
 -I${temp_LIBDIR}/zlib/include \
 -I${temp_LIBDIR}/aom/include \
--I${temp_LIBDIR}/x265/include"
+-I${temp_LIBDIR}/x265/include \
+-I${temp_LIBDIR}/vulkan_headers/include \
+-I${temp_LIBDIR}/ffnvcodec/include"
 )
 set(FFMPEG_LDFLAGS "\
 ${LIBDIR_FLAG}${temp_LIBDIR}/lame/lib \
@@ -44,6 +46,7 @@ if(WIN32)
 ${FFMPEG_CFLAGS} \
 -I${temp_LIBDIR}/openjpeg_msvc/include/openjpeg-2.5 \
 -I${temp_LIBDIR}/opus/include/opus \
+-I${temp_LIBDIR}/amf/include \
 -DOPJ_STATIC \
 -MD \
 -UHAVE_UNISTD_H"
@@ -87,11 +90,6 @@ ${temp_LIBDIR}/aom/lib/pkgconfig:\
 ${temp_LIBDIR}/x265/lib/pkgconfig:\
 ${temp_LIBDIR}/ffnvcodec/lib/pkgconfig:"
   )
-else()
-  # XXX: we want to avoid pkg-config on windows (see above comment about MSVC)
-  # so this might have to be removed; either way it just needs a single -I
-  # with no linked libs... so maybe it's fine as-is?
-  set(FFMPEG_ENV "PKG_CONFIG_PATH=${temp_LIBDIR}/ffnvcodec/lib/pkgconfig:")
 endif()
 
 unset(temp_LIBDIR)
@@ -141,26 +139,55 @@ else()
   set(FFMPEG_CONFIGURE_COMMAND ${CONFIGURE_ENV_NO_PERL})
 endif()
 
+if(UNIX)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --x86asmexe=${LIBDIR}/nasm/bin/nasm
+  )
+endif()
+
 if(APPLE)
   set(FFMPEG_EXTRA_FLAGS
     ${FFMPEG_EXTRA_FLAGS}
-    --enable-videotoolbox
-    --disable-nvenc
     --target-os=darwin
+    --enable-videotoolbox
+    --disable-vulkan
     --x86asmexe=${LIBDIR}/nasm/bin/nasm
+    --disable-nvenc
+    --disable-nvdec
+    --disable-amf
   )
+elseif(WIN32)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --enable-d3d11va
+    --disable-videotoolbox
+    --enable-vulkan
+  )
+  if(BLENDER_PLATFORM_WINDOWS_ARM)
+    set(FFMPEG_EXTRA_FLAGS
+      ${FFMPEG_EXTRA_FLAGS}
+      --disable-nvenc
+      --disable-nvdec
+      --disable-amf
+    )
+  else()
+    set(FFMPEG_EXTRA_FLAGS
+      ${FFMPEG_EXTRA_FLAGS}
+      --enable-nvenc
+      --enable-nvdec
+      --enable-amf
+    )
+  endif()
 elseif(UNIX)
   set(FFMPEG_EXTRA_FLAGS
     ${FFMPEG_EXTRA_FLAGS}
-    --disable-videotoolbox
-    --enable-nvenc
     --x86asmexe=${LIBDIR}/nasm/bin/nasm
-  )
-else()
-  set(FFMPEG_EXTRA_FLAGS
-    ${FFMPEG_EXTRA_FLAGS}
     --disable-videotoolbox
+    --enable-nvdec
     --enable-nvenc
+    --enable-vulkan
+    --disable-amf
   )
 endif()
 
@@ -255,6 +282,7 @@ add_dependencies(
   external_aom
   external_sndfile
   external_flac
+  external_vulkan_headers
 )
 if(WIN32)
   add_dependencies(
@@ -277,10 +305,16 @@ if(UNIX)
     external_openjpeg
   )
 endif()
-if(NOT APPLE)
+if(NOT APPLE AND NOT BLENDER_PLATFORM_WINDOWS_ARM)
   add_dependencies(
     external_ffmpeg
     external_ffnvcodec
+  )
+endif()
+if(WIN32 AND NOT BLENDER_PLATFORM_WINDOWS_ARM)
+  add_dependencies(
+    external_ffmpeg
+    external_amf
   )
 endif()
 

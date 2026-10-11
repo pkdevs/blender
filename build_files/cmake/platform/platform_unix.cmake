@@ -90,7 +90,7 @@ if(DEFINED LIBDIR)
   # NOTE: Make sure "proper" compiled zlib comes first
   set(CMAKE_PREFIX_PATH ${LIBDIR}/zlib ${LIB_SUBDIRS})
 
-  include(platform_old_libs_update)
+  include("${CMAKE_CURRENT_LIST_DIR}/platform_old_libs_update.cmake")
 
   set(WITH_STATIC_LIBS ON)
   set(OPENEXR_ROOT_DIR ${LIBDIR}/openexr)
@@ -392,6 +392,8 @@ if(DEFINED LIBDIR)
     ${SYCL_ROOT_DIR}/lib/libur_*.so.*
   )
   list(FILTER _sycl_runtime_libraries EXCLUDE REGEX "\\.py$")
+  # Only bundle the v2 Level Zero adapter, not the legacy libur_adapter_level_zero.so (#159584).
+  list(FILTER _sycl_runtime_libraries EXCLUDE REGEX "ur_adapter_level_zero\\.so")
   list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
   unset(_sycl_runtime_libraries)
 endif()
@@ -452,13 +454,13 @@ if(DEFINED OpenImageIO_DIR)
 endif()
 add_bundled_libraries(openimageio/lib)
 
-find_package_wrapper(OpenColorIO 2.0.0 REQUIRED)
+find_package_wrapper(OpenColorIO 2.3.0 REQUIRED)
 if(DEFINED OpenColorIO_DIR)
   mark_as_advanced(OpenColorIO_DIR)
 endif()
 add_bundled_libraries(opencolorio/lib)
 
-if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
+if(WITH_EMBREE)
   find_package(Embree 4.0.0 REQUIRED)
 endif()
 add_bundled_libraries(embree/lib)
@@ -521,6 +523,7 @@ if(WITH_XR_OPENXR)
   find_package(XR_OpenXR_SDK)
   set_and_warn_library_found("OpenXR-SDK" XR_OPENXR_SDK_FOUND WITH_XR_OPENXR)
 endif()
+add_bundled_libraries(xr_openxr_sdk/lib)
 
 if(WITH_GMP)
   find_package_wrapper(GMP)
@@ -578,12 +581,43 @@ if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
 endif()
 
 if(WITH_TRACY)
-  if(DEFINED LIBDIR)
-    set(Tracy_ROOT_DIR ${LIBDIR}/tracy)
-  endif()
   find_package_wrapper(Tracy REQUIRED)
   mark_as_advanced(Tracy_DIR)
 endif()
+
+if(WITH_JOLT)
+  if(WITH_LIBS_PRECOMPILED OR WITH_STRICT_BUILD_OPTIONS)
+    find_package_wrapper(Jolt REQUIRED)
+  else()
+    # This isn't a common system library, so disable if it's not found.
+    find_package_wrapper(Jolt)
+    if(TARGET Jolt::Jolt)
+      set(JOLT_FOUND TRUE)
+    endif()
+    set_and_warn_library_found("Jolt" JOLT_FOUND WITH_JOLT)
+  endif()
+  if(DEFINED Jolt_DIR)
+    mark_as_advanced(Jolt_DIR)
+  endif()
+endif()
+add_bundled_libraries(jolt/lib)
+
+if(WITH_OPENTIMELINEIO)
+  if(WITH_LIBS_PRECOMPILED OR WITH_STRICT_BUILD_OPTIONS)
+    find_package_wrapper(OpenTimelineIO REQUIRED)
+  else()
+    # This isn't a common system library, so disable if it's not found.
+    find_package_wrapper(OpenTimelineIO)
+    if(TARGET OTIO::opentimelineio)
+      set(OPENTIMELINEIO_FOUND TRUE)
+    endif()
+    set_and_warn_library_found("OpenTimelineIO" OPENTIMELINEIO_FOUND WITH_OPENTIMELINEIO)
+  endif()
+  if(DEFINED OpenTimelineIO_DIR)
+    mark_as_advanced(OpenTimelineIO_DIR)
+  endif()
+endif()
+add_bundled_libraries(opentimelineio/lib)
 
 if(DEFINED LIBDIR)
   without_system_libs_end()
@@ -718,6 +752,15 @@ if(WITH_SYSTEM_AUDASPACE)
   find_package_wrapper(Audaspace)
   set(AUDASPACE_FOUND ${AUDASPACE_FOUND} AND ${AUDASPACE_C_FOUND})
   set_and_warn_library_found("External Audaspace" AUDASPACE_FOUND WITH_SYSTEM_AUDASPACE)
+endif()
+
+# Reading desktop settings (the light/dark theme preference) from the XDG desktop portal.
+# Only the headers are needed when `WITH_GHOST_DBUS_DYNLOAD` is enabled, `libdbus` itself is
+# then an optional runtime dependency.
+if(WITH_GHOST_DBUS)
+  find_package(PkgConfig)
+  pkg_check_modules(dbus dbus-1)
+  set_and_warn_library_found("dbus-1" dbus_FOUND WITH_GHOST_DBUS)
 endif()
 
 if(WITH_GHOST_WAYLAND)
@@ -892,7 +935,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
   # explicitly turned off here as it will make floating point math give a bit
   # different results. This will lead to automated test failures. So disable
   # this until we support it.
-  set(PLATFORM_CFLAGS "-pipe -fPIC -funsigned-char -fno-strict-aliasing -ffp-contract=off")
+  set(PLATFORM_CFLAGS "-pipe -fPIC -funsigned-char -fno-strict-aliasing -ffp-contract=off -fno-semantic-interposition")
 
   # `maybe-uninitialized` is unreliable in release builds, but fine in debug builds.
   set(GCC_EXTRA_FLAGS_RELEASE "-Wno-maybe-uninitialized")
@@ -964,7 +1007,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
 
   # CLang is the same as GCC for now.
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-  set(PLATFORM_CFLAGS "-pipe -fPIC -funsigned-char -fno-strict-aliasing -ffp-contract=off")
+  set(PLATFORM_CFLAGS "-pipe -fPIC -funsigned-char -fno-strict-aliasing -ffp-contract=off -fno-semantic-interposition")
 
   if(WITH_LINKER_MOLD AND _IS_LINKER_DEFAULT)
     find_program(MOLD_BIN "mold")
