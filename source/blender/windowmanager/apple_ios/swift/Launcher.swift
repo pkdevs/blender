@@ -268,14 +268,15 @@ struct LauncherScene: View {
 
   /**
    * RealityKit draws and simulates every frame while its view is in a window. A document covers
-   * the launcher in a window above it, so take the model out of the window meanwhile.
+   * the launcher in a window above it, so take the model out of the window meanwhile. UIKit's own
+   * transparent windows, such as the one for menus and the keyboard, cover nothing.
    */
   @objc private func windowsChanged() {
     guard let window, let host else {
       return
     }
     let covered = window.windowScene?.windows.contains {
-      $0 !== window && !$0.isHidden && $0.windowLevel > window.windowLevel
+      $0 !== window && !$0.isHidden && $0.isOpaque && $0.windowLevel > window.windowLevel
     } ?? false
     if covered, host.view.superview != nil {
       host.view.removeFromSuperview()
