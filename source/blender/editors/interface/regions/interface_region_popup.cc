@@ -28,11 +28,10 @@
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
 
+#include "BLT_translation.hh"
+
 #include "WM_api.hh"
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-#  include "GHOST_IOSDialog.hh"
-#  include "WM_apple_ios.hh"
-#endif
+#include "WM_native_interface.hh"
 #include "WM_types.hh"
 
 #include "ED_screen.hh"
@@ -1179,15 +1178,16 @@ void alert(bContext *C,
            const AlertIcon icon,
            const bool compact)
 {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  GHOST_IOSDialog dialog;
-  dialog.title = std::string(title);
-  dialog.message = std::string(message);
-  dialog.actions = {{"OK"}};
-  dialog.preferred_action = 0;
-  WM_apple_ios_dialog_begin(C, dialog, {});
-  return;
-#endif
+  if (const wmNativeInterface *native = WM_native_interface(); native && native->alert) {
+    wmNativeAlert alert;
+    alert.title = std::string(title);
+    alert.message = std::string(message);
+    alert.actions = {{IFACE_("OK")}};
+    alert.preferred_action = 0;
+    if (native->alert(C, alert, {}, {}, "")) {
+      return;
+    }
+  }
   AlertData *data = MEM_new<AlertData>(__func__);
   data->title = title;
   data->message = message;

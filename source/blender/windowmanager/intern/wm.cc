@@ -40,6 +40,7 @@
 #include "BKE_workspace.hh"
 
 #include "WM_api.hh"
+#include "WM_native_interface.hh"
 #include "WM_keymap.hh"
 #include "WM_message.hh"
 #include "WM_types.hh"
@@ -62,13 +63,6 @@
 #include "BLO_read_write.hh"
 
 namespace blender {
-
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-namespace ui {
-void native_redo_operator_register(bContext *C, wmOperator *op);
-void native_redo_operator_free(wmOperator *op);
-}  // namespace ui
-#endif
 
 /* ****************************************************** */
 
@@ -258,9 +252,9 @@ IDTypeInfo IDType_ID_WM = {
 
 void WM_operator_free(wmOperator *op)
 {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  ui::native_redo_operator_free(op);
-#endif
+  if (const wmNativeInterface *native = WM_native_interface(); native && native->operator_freed) {
+    native->operator_freed(op);
+  }
 
 #ifdef WITH_PYTHON
   if (op->py_instance) {
@@ -338,9 +332,11 @@ void wm_operator_register(bContext *C, wmOperator *op)
   int tot = 0;
 
   BLI_addtail(&wm->runtime->operators, op);
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  ui::native_redo_operator_register(C, op);
-#endif
+  if (const wmNativeInterface *native = WM_native_interface();
+      native && native->operator_registered)
+  {
+    native->operator_registered(C, op);
+  }
 
   /* Only count registered operators. */
   while (op) {

@@ -59,9 +59,7 @@
 #include "RE_engine.h"
 
 #include "WM_api.hh"
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-#  include "WM_apple_ios.hh"
-#endif
+#include "WM_native_interface.hh"
 #include "WM_toolsystem.hh"
 #include "WM_types.hh"
 #include "wm.hh"
@@ -116,13 +114,14 @@ static bool wm_window_grab_warp_region_is_set(const wmWindow *win)
 static void wm_paintcursor_draw(bContext *C, ScrArea *area, ARegion *region)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  /* Touch has no hover: cursors show under a hovering Pencil, and while dragging, where the
-   * drop's snap target shows the surface the dragged item will land on. */
-  if (!WM_apple_ios_pencil_hover_active() && BLI_listbase_is_empty(&wm->runtime->drags)) {
+  /* Without hover (touch), cursors show only while something hovers, and while dragging, where
+   * the drop's snap target shows the surface the dragged item will land on. */
+  if (const wmNativeInterface *native = WM_native_interface();
+      native && native->pointer_hovering && !native->pointer_hovering() &&
+      BLI_listbase_is_empty(&wm->runtime->drags))
+  {
     return;
   }
-#endif
   wmWindow *win = CTX_wm_window(C);
   bScreen *screen = WM_window_get_active_screen(win);
 

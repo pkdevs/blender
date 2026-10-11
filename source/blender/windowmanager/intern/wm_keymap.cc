@@ -45,6 +45,7 @@
 
 #include "WM_api.hh"
 #include "WM_keymap.hh"
+#include "WM_native_interface.hh"
 #include "WM_types.hh"
 #include "wm_event_system.hh"
 #include "wm_event_types.hh"
@@ -1895,18 +1896,6 @@ void WM_keyconfig_update(wmWindowManager *wm)
   WM_keyconfig_update_ex(wm, false);
 }
 
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-static void wm_keymap_ensure_ios_gestures(wmKeyConfig *keyconf)
-{
-  wmKeyMap *keymap = WM_keymap_ensure(
-      keyconf, "3D View iPad Gestures", SPACE_VIEW3D, RGN_TYPE_WINDOW);
-  if (BLI_listbase_is_empty(&keymap->items)) {
-    const KeyMapItem_Params params = {MOUSEPAN, KM_ANY, KM_ANY, 0, KM_ANY};
-    WM_keymap_add_item(keymap, "VIEW3D_OT_move", &params);
-  }
-}
-#endif
-
 void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
 {
   if (wm_keymap_update_flag == 0) {
@@ -1941,11 +1930,13 @@ void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
   }
 
   if (wm_keymap_update_flag & WM_KEYMAP_UPDATE_RECONFIGURE) {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-    /* Python preset loading clears the default keymap items. Restore native gestures before
-     * deriving the user configuration, both at startup and when preferences reload a preset. */
-    wm_keymap_ensure_ios_gestures(wm->runtime->defaultconf);
-#endif
+    /* Python preset loading clears the default keymap items: restore the native interface's
+     * before deriving the user configuration, at startup and when preferences reload a preset. */
+    if (const wmNativeInterface *native = WM_native_interface();
+        native && native->keyconfig_default_ensure)
+    {
+      native->keyconfig_default_ensure(wm->runtime->defaultconf);
+    }
     wmKeyConfig *kc_active = WM_keyconfig_active(wm);
 
     /* Update operator properties for non-modal user keymaps. */

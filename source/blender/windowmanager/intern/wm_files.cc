@@ -87,14 +87,6 @@
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_main_namemap.hh"
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-#  include "BKE_layer.hh"
-#  include "BKE_object.hh"
-#  include "BLI_math_matrix.hh"
-#  include "BLI_math_vector.h"
-#  include "BLI_math_vector.hh"
-#  include "DEG_depsgraph_query.hh"
-#endif
 #include "BKE_node.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_packedFile.hh"
@@ -121,10 +113,10 @@
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
 #  include "GHOST_IOSDocumentPicker.hh"
-#  include "GHOST_IOSDialog.hh"
 #  include "WM_apple_ios.hh"
-#  include <memory>
+#  include "wm_apple_ios_document.hh"
 #endif
+#include <memory>
 #include "ED_image.hh"
 #include "ED_outliner.hh"
 #include "ED_render.hh"
@@ -160,6 +152,7 @@
 #include "DEG_depsgraph.hh"
 
 #include "WM_api.hh"
+#include "WM_native_interface.hh"
 #include "WM_keymap.hh"
 #include "WM_message.hh"
 #include "WM_toolsystem.hh"
@@ -1947,94 +1940,6 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
   return ibuf;
 }
 
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-/** Documents on iOS preview their scene framed whole, as the 3D View's Frame All shows it. */
-static bool wm_ios_preview_frame_all = false;
-
-/**
- * Render the 3D View's angle onto everything visible, framed as Frame All does. Lights, cameras
- * and empties are left out of the framing, so a far light does not shrink the scene.
- */
-static ImBuf *wm_ios_thumb_frame_all(const bContext *C,
-                                     Depsgraph *depsgraph,
-                                     Scene *scene,
-                                     View3D *v3d,
-                                     ARegion *region,
-                                     char err_out[256])
-{
-  ViewLayer *view_layer = CTX_data_view_layer(C);
-  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  if (view_layer == nullptr || rv3d == nullptr) {
-    return nullptr;
-  }
-  float3 min(FLT_MAX), max(-FLT_MAX);
-  bool found = false;
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
-    Object *ob = base.object;
-    if (!BKE_base_is_visible(v3d, &base) ||
-        ELEM(ob->type, OB_CAMERA, OB_LAMP, OB_LIGHTPROBE, OB_EMPTY, OB_SPEAKER))
-    {
-      continue;
-    }
-    const Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
-    const std::optional<Bounds<float3>> bounds = BKE_object_boundbox_get(ob_eval);
-    if (!bounds) {
-      continue;
-    }
-    const float4x4 &matrix = ob_eval->object_to_world();
-    for (int i = 0; i < 8; i++) {
-      const float3 corner((i & 1) ? bounds->max.x : bounds->min.x,
-                          (i & 2) ? bounds->max.y : bounds->min.y,
-                          (i & 4) ? bounds->max.z : bounds->min.z);
-      const float3 world = math::transform_point(matrix, corner);
-      min = math::min(min, world);
-      max = math::max(max, world);
-    }
-    found = true;
-  }
-  if (!found) {
-    return nullptr;
-  }
-
-  /* Frame the bounds from the view's angle; restore the view afterwards. */
-  const float3 ofs_old(rv3d->ofs);
-  const float dist_old = rv3d->dist;
-  const char persp_old = rv3d->persp;
-  const short flag2_old = v3d->flag2;
-  if (rv3d->persp == RV3D_CAMOB) {
-    rv3d->persp = RV3D_PERSP;
-  }
-  const float radius = math::max(math::distance(min, max) / 2.0f, 0.01f);
-  copy_v3_v3(rv3d->ofs, -math::midpoint(min, max));
-  rv3d->dist = ED_view3d_radius_to_dist(v3d, region, depsgraph, rv3d->persp, false, radius * 1.1f);
-  /* Just the scene, without the grid, outlines and other overlays. */
-  v3d->flag2 |= V3D_HIDE_OVERLAYS;
-  const eDrawType drawtype = v3d->shading.type == OB_RENDER ? OB_MATERIAL :
-                                                              eDrawType(v3d->shading.type);
-  ImBuf *ibuf = ED_view3d_draw_offscreen_imbuf(depsgraph,
-                                               scene,
-                                               drawtype,
-                                               v3d,
-                                               region,
-                                               PREVIEW_RENDER_LARGE_HEIGHT * 2,
-                                               PREVIEW_RENDER_LARGE_HEIGHT * 2,
-                                               IB_byte_data,
-                                               R_ALPHAPREMUL,
-                                               nullptr,
-                                               true,
-                                               nullptr,
-                                               nullptr,
-                                               false,
-                                               err_out);
-  v3d->flag2 = flag2_old;
-  copy_v3_v3(rv3d->ofs, ofs_old);
-  rv3d->dist = dist_old;
-  rv3d->persp = persp_old;
-  return ibuf;
-}
-#endif
-
 /**
  * Render the current scene with the active camera.
  *
@@ -2085,15 +1990,13 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
 
   ibuf = nullptr;
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  if (wm_ios_preview_frame_all && v3d && region) {
-    ibuf = wm_ios_thumb_frame_all(C, depsgraph, scene, v3d, region, err_out);
-  }
-  if (ibuf) {
-    /* Framed. */
-  }
-  else
+  /* iOS documents preview their whole scene, see #wm_apple_ios_thumb_frame_all. */
+  ibuf = wm_apple_ios_thumb_frame_all(C, depsgraph, scene, v3d, region, err_out);
 #endif
-  if (scene->camera) {
+  if (ibuf) {
+    /* Done. */
+  }
+  else if (scene->camera) {
     ibuf = ED_view3d_draw_offscreen_imbuf_simple(depsgraph,
                                                  scene,
                                                  (v3d) ? &v3d->shading : nullptr,
@@ -2195,10 +2098,6 @@ bool write_crash_blend()
  * \return true if it can, otherwise report an error and return false.
  */
 
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-static void wm_autosave_remove_current();
-#endif
-
 static bool wm_file_write_check_with_report_on_failure(Main *bmain,
                                                        const char *filepath,
                                                        ReportList *reports)
@@ -2232,12 +2131,12 @@ static bool wm_file_write_check_with_report_on_failure(Main *bmain,
 /**
  * \see #wm_homefile_write_exec wraps #BLO_write_file in a similar way.
  */
-static bool wm_file_write(bContext *C,
-                          const char *filepath,
-                          int fileflags,
-                          eBLO_WritePathRemap remap_mode,
-                          bool use_save_as_copy,
-                          ReportList *reports)
+bool wm_file_write(bContext *C,
+                   const char *filepath,
+                   int fileflags,
+                   eBLO_WritePathRemap remap_mode,
+                   bool use_save_as_copy,
+                   ReportList *reports)
 {
   Main *bmain = CTX_data_main(C);
   BlendThumbnail *thumb = nullptr, *main_thumb = nullptr;
@@ -2361,21 +2260,15 @@ static bool wm_file_write(bContext *C,
     const bool do_history_file_update = (G.background == false) &&
                                         (CTX_wm_manager(C)->op_undo_depth == 0);
 
+    if (use_save_as_copy == false) {
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-    /* The work is saved, so its auto-save (named after the file before saving, which may have
-     * been untitled) would only offer stale recovery on the next launch. */
-    if (use_save_as_copy == false) {
-      wm_autosave_remove_current();
-    }
+      /* The work is saved: its auto-saves, under the old name and the new, would only offer stale
+       * recovery on the next launch. */
+      wm_apple_ios_autosave_remove(BKE_main_blendfile_path(bmain));
+      wm_apple_ios_autosave_remove(filepath);
 #endif
-    if (use_save_as_copy == false) {
       STRNCPY(bmain->filepath, filepath); /* Is guaranteed current file. */
     }
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-    if (use_save_as_copy == false) {
-      wm_autosave_remove_current();
-    }
-#endif
 
     SET_FLAG_FROM_TEST(G.fileflags, fileflags & G_FILE_COMPRESS, G_FILE_COMPRESS);
 
@@ -2412,38 +2305,7 @@ static bool wm_file_write(bContext *C,
 /** \name Auto-Save API
  * \{ */
 
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-/**
- * iOS may purge temporary files and ends apps in the background without warning. Keep auto-saves
- * where they survive, one per document rather than per process, so work continues on the next
- * launch. The name carries a hash of the document's full path, as two documents in different
- * folders can share a name.
- */
-static bool wm_autosave_location_for(const char *blendfile_path, char filepath[FILE_MAX])
-{
-  const std::optional<std::string> folder = BKE_appdir_folder_id_create(BLENDER_USER_DATAFILES,
-                                                                        "autosave");
-  if (!folder) {
-    return false;
-  }
-  char filename[FILE_MAX];
-  if (blendfile_path && (blendfile_path[0] != '\0')) {
-    uint32_t hash = 2166136261u; /* FNV-1a: stable across launches and app versions. */
-    for (const char *c = blendfile_path; *c; c++) {
-      hash = (hash ^ uint8_t(*c)) * 16777619u;
-    }
-    const char *basename = BLI_path_basename(blendfile_path);
-    SNPRINTF(filename, "%.*s_%08x_autosave.blend", int(strlen(basename)) - 6, basename, hash);
-  }
-  else {
-    STRNCPY(filename, "untitled_autosave.blend");
-  }
-  BLI_path_join(filepath, FILE_MAX, folder->c_str(), filename);
-  return true;
-}
-#endif
-
-static void wm_autosave_location(char filepath[FILE_MAX])
+void wm_autosave_location(char filepath[FILE_MAX])
 {
   const int pid = abs(getpid());
   char filename[1024];
@@ -2454,7 +2316,7 @@ static void wm_autosave_location(char filepath[FILE_MAX])
   const char *blendfile_path = bmain ? BKE_main_blendfile_path(bmain) : nullptr;
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  if (wm_autosave_location_for(blendfile_path, filepath)) {
+  if (wm_apple_ios_autosave_location(blendfile_path, filepath)) {
     UNUSED_VARS(pid, filename);
     return;
   }
@@ -2597,176 +2459,6 @@ void wm_autosave_delete()
     }
   }
 }
-
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-
-static void wm_autosave_remove_current()
-{
-  char filepath[FILE_MAX];
-  wm_autosave_location(filepath);
-  if (BLI_exists(filepath)) {
-    BLI_delete(filepath, false, false);
-  }
-}
-
-/** Auto-saves of documents left alone for a month are not worth keeping. */
-static void wm_autosave_prune()
-{
-  const std::optional<std::string> folder = BKE_appdir_folder_id(BLENDER_USER_DATAFILES,
-                                                                 "autosave");
-  if (!folder) {
-    return;
-  }
-  direntry *entries = nullptr;
-  const uint count = BLI_filelist_dir_contents(folder->c_str(), &entries);
-  const int64_t month_ago = int64_t(time(nullptr)) - 30 * 24 * 60 * 60;
-  for (uint i = 0; i < count; i++) {
-    if (!S_ISDIR(entries[i].type) && StringRef(entries[i].relname).endswith("_autosave.blend") &&
-        entries[i].s.st_mtime < month_ago)
-    {
-      BLI_delete(entries[i].path, false, false);
-    }
-  }
-  BLI_filelist_free(entries, count);
-}
-
-void WM_apple_ios_autosave_ensure()
-{
-  /* iOS ends apps without warning, so auto-save is always on. */
-  U.flag |= USER_AUTOSAVE;
-  if (U.savetime <= 0) {
-    U.savetime = 2;
-  }
-  wm_autosave_prune();
-}
-
-void WM_apple_ios_autosave_now(bContext *C)
-{
-  /* Unlike the timer, write in any mode: this may be the last chance before iOS ends the app. */
-  wmWindowManager *wm = CTX_wm_manager(C);
-  Main *bmain = CTX_data_main(C);
-  /* A recovered document has unsaved work even before it is edited again. */
-  if (wm == nullptr || bmain == nullptr || (wm->file_saved && !bmain->recovered)) {
-    return;
-  }
-  WM_autosave_write(wm, bmain);
-}
-
-/**
- * Run an operator on the first window, as when the system opens a file, see
- * #GHOST_kEventOpenMainFile. Documents are opened and created from outside Blender's event loop.
- */
-static bool wm_document_operator(bContext *C, const char *idname, PointerRNA *props)
-{
-  wmWindowManager *wm = CTX_wm_manager(C);
-  wmWindow *win = wm ? static_cast<wmWindow *>(wm->windows.first) : nullptr;
-  if (win == nullptr) {
-    return false;
-  }
-  wmWindow *win_prev = CTX_wm_window(C);
-  CTX_wm_window_set(C, win);
-  const wmOperatorStatus status = WM_operator_name_call_ptr(
-      C, WM_operatortype_find(idname, false), wm::OpCallContext::ExecDefault, props, nullptr);
-  CTX_wm_window_set(C, win_prev);
-  return status & OPERATOR_FINISHED;
-}
-
-bool WM_apple_ios_document_open(bContext *C, const char *filepath, const bool template_document)
-{
-  PointerRNA props = WM_operator_properties_create("WM_OT_open_mainfile");
-  RNA_string_set(&props, "filepath", filepath);
-  RNA_boolean_set(&props, "display_file_selector", false);
-  if (template_document) { RNA_boolean_set(&props, "use_scripts", false); }
-  const bool success = wm_document_operator(C, "WM_OT_open_mainfile", &props);
-  WM_operator_properties_free(&props);
-  return success;
-}
-
-/**
- * Write the open file for a document, with its preview: in the window, as saving from Blender
- * does, which a preview of the 3D View or the scene's camera needs.
- */
-static bool wm_document_write(bContext *C, const char *filepath, const bool preview)
-{
-  wmWindowManager *wm = CTX_wm_manager(C);
-  wmWindow *win = wm ? static_cast<wmWindow *>(wm->windows.first) : nullptr;
-  wmWindow *win_prev = CTX_wm_window(C);
-  if (win) {
-    CTX_wm_window_set(C, win);
-    /* Saving from Blender happens while its window is the drawing target, which the preview's
-     * drawing relies on. iOS asks between frames, when something else may draw, such as the
-     * native interface's previews: make the window the target again. */
-    if (preview && win->runtime->ghostwin) {
-      wm_window_clear_drawable(wm);
-      wm_window_make_drawable(wm, win);
-    }
-  }
-  ReportList reports;
-  BKE_reports_init(&reports, RPT_STORE);
-  const char preview_type = U.file_preview_type;
-  /* A Frame All view of the scene, see #wm_ios_thumb_frame_all. */
-  U.file_preview_type = preview ? USER_FILE_PREVIEW_CAMERA : USER_FILE_PREVIEW_NONE;
-  wm_ios_preview_frame_all = true;
-  const bool success = wm_file_write(
-      C, filepath, G.fileflags, BLO_WRITE_PATH_REMAP_NONE, true, &reports);
-  U.file_preview_type = preview_type;
-  wm_ios_preview_frame_all = false;
-  BKE_reports_free(&reports);
-  CTX_wm_window_set(C, win_prev);
-  return success;
-}
-
-bool WM_apple_ios_document_write(bContext *C, const char *filepath, const bool preview)
-{
-  /* A copy for iOS to move into place: paths stay relative to the document, and the file being
-   * replaced keeps no `.blend1` backup, iOS keeps versions of documents itself. */
-  const bool success = wm_document_write(C, filepath, preview);
-  if (!success) {
-    return false;
-  }
-  /* The document is saved, as when saving it in Blender. */
-  wm_autosave_remove_current();
-  WM_event_add_notifier(C, NC_WM | ND_FILESAVE, nullptr);
-  if (wmWindowManager *wm = CTX_wm_manager(C)) {
-    wm_autosave_timer_end(wm);
-    wm_autosave_timer_begin(wm);
-    wm->autosave_scheduled = false;
-  }
-  return true;
-}
-
-std::string WM_apple_ios_document_template_write(bContext *C, const char *filepath, const char *preview,
-                                               std::string &attribution)
-{
-#ifdef WITH_PYTHON
-  const char *imports[] = {"bpy", "bl_ui", "bl_ui.native_templates", nullptr};
-  char *error = nullptr;
-  if (!BPY_run_string_as_string(C, imports, "bl_ui.native_templates.export_error()", nullptr, &error)) {
-    return "Could not validate the template's resources.";
-  }
-  const std::string message = error ? error : "";
-  if (error) { MEM_delete(error); }
-  if (!message.empty()) { return message; }
-  char *credit = nullptr;
-  if (!BPY_run_string_as_string(C, imports, "bl_ui.native_templates.attribution_json()", nullptr, &credit)) {
-    return "Could not preserve the template's asset attribution.";
-  }
-  attribution = credit ? credit : "{}";
-  if (credit) { MEM_delete(credit); }
-  /* Save a copy without acknowledging or clearing the open document's unsaved work. */
-  if (!wm_document_write(C, filepath, true)) { return "Could not save the template."; }
-  ImBuf *image = IMB_thumb_manage(filepath, THB_LARGE, THB_SOURCE_BLEND);
-  if (!image) { return "Could not create the template preview."; }
-  image->ftype = IMB_FTYPE_PNG;
-  const bool saved = IMB_save_image(image, preview, IB_byte_data);
-  IMB_freeImBuf(image);
-  return saved ? "" : "Could not save the template preview.";
-#else
-  return "Template export requires Python support.";
-#endif
-}
-
-#endif
 
 /** \} */
 
@@ -3569,14 +3261,9 @@ static wmOperatorStatus wm_open_mainfile__open(bContext *C, wmOperator *op)
   SET_FLAG_FROM_TEST(G.fileflags, !RNA_boolean_get(op->ptr, "load_ui"), G_FILE_NO_UI);
   SET_FLAG_FROM_TEST(G.f, RNA_boolean_get(op->ptr, "use_scripts"), G_FLAG_SCRIPT_AUTOEXEC);
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  /* Continue where the work left off: an auto-save newer than the document holds changes that
-   * were never saved, because Blender was closed or another file was opened. */
+  /* Continue where the work left off, see #wm_apple_ios_autosave_newer. */
   char autosave[FILE_MAX];
-  BLI_stat_t autosave_stat, file_stat;
-  const bool continue_autosave = wm_autosave_location_for(filepath, autosave) &&
-                                 BLI_stat(autosave, &autosave_stat) == 0 &&
-                                 BLI_stat(filepath, &file_stat) == 0 &&
-                                 autosave_stat.st_mtime > file_stat.st_mtime;
+  const bool continue_autosave = wm_apple_ios_autosave_newer(filepath, autosave);
   if (continue_autosave) {
     G.fileflags |= G_FILE_RECOVER_READ;
   }
@@ -4125,28 +3812,9 @@ static wmOperatorStatus wm_save_as_mainfile_exec(bContext *C, wmOperator *op)
   SET_FLAG_FROM_TEST(fileflags, RNA_boolean_get(op->ptr, "compress"), G_FILE_COMPRESS);
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  struct IOSFileWrite {
-    bContext *C;
-    int flags;
-    eBLO_WritePathRemap remap;
-    bool copy;
-    ReportList *reports;
-    char *filepath;
-    bool success = false;
-  } write{C, fileflags, remap_mode, use_save_as_copy, op->reports, filepath};
-  char coordination_error[1024] = {};
-  const bool coordinated = GHOST_ios_document_coordinate(
-      filepath, true,
-      [](void *data, const char *path) {
-        auto &write = *static_cast<IOSFileWrite *>(data);
-        BLI_strncpy(write.filepath, path, FILE_MAX);
-        write.success = wm_file_write(
-            write.C, path, write.flags, write.remap, write.copy, write.reports);
-      }, &write, coordination_error, sizeof(coordination_error));
-  if (!coordinated) {
-    BKE_report(op->reports, RPT_ERROR, coordination_error);
-  }
-  const bool success = write.success;
+  /* Through iOS's file coordination, which may move the file, see #wm_apple_ios_file_write. */
+  const bool success = wm_apple_ios_file_write(
+      C, filepath, fileflags, remap_mode, use_save_as_copy, op->reports);
 #else
   const bool success = wm_file_write(
       C, filepath, fileflags, remap_mode, use_save_as_copy, op->reports);
@@ -4656,6 +4324,47 @@ void wm_test_autorun_revert_action_exec(bContext *C)
   wm_test_autorun_revert_action_set(nullptr, nullptr);
 }
 
+/** The auto-run warning as a native alert, see #wmNativeInterface::alert. */
+static void wm_test_autorun_warning_native(bContext *C, const wmNativeInterface &native)
+{
+  wmNativeAlert alert;
+  alert.title = RPT_(
+      "For security reasons, automatic execution of Python scripts in this file was disabled:");
+  alert.message = G.autoexec_fail;
+  alert.message += "\n\n";
+  alert.message += RPT_("This may lead to unexpected behavior");
+  alert.toggles = {{RPT_("Permanently allow execution of scripts"),
+                    (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0}};
+  alert.actions = {{IFACE_("Ignore"), wmNativeAlert::Role::Cancel}, {IFACE_("Allow Execution")}};
+  alert.preferred_action = 0;
+  auto ignore = [](bContext *context) {
+    wm_block_autorun_warning_ignore(context, nullptr, nullptr);
+  };
+  native.alert(
+      C,
+      alert,
+      [ignore](bContext *context, int action, uint64_t toggles) {
+        if (action != 1) {
+          ignore(context);
+          return;
+        }
+        PointerRNA preferences = RNA_pointer_create_discrete(
+            nullptr, RNA_PreferencesFilePaths, &U);
+        PropertyRNA *property = RNA_struct_find_property(&preferences,
+                                                         "use_scripts_auto_execute");
+        RNA_property_boolean_set(&preferences, property, bool(toggles & 1));
+        RNA_property_update(context, &preferences, property);
+        if (BKE_main_blendfile_path_from_global()[0] && CTX_wm_manager(context)->file_saved) {
+          wm_block_autorun_warning_reload_with_scripts(context, nullptr);
+        }
+        else {
+          wm_block_autorun_warning_enable_scripts(context, nullptr);
+        }
+      },
+      ignore,
+      "autorun_warning_popup");
+}
+
 void wm_test_autorun_warning(bContext *C)
 {
   /* Test if any auto-execution of scripts failed. */
@@ -4682,43 +4391,12 @@ void wm_test_autorun_warning(bContext *C)
 
     wmWindow *prevwin = CTX_wm_window(C);
     CTX_wm_window_set(C, win);
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-    GHOST_IOSDialog dialog;
-    dialog.title = RPT_("For security reasons, automatic execution of Python scripts "
-                        "in this file was disabled:");
-    dialog.message = G.autoexec_fail;
-    dialog.message += "\n\n";
-    dialog.message += RPT_("This may lead to unexpected behavior");
-    dialog.toggles = {{RPT_("Permanently allow execution of scripts"),
-                       (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0}};
-    dialog.actions = {{IFACE_("Ignore"), GHOST_IOSDialogRole::Cancel},
-                      {IFACE_("Allow Execution")}};
-    dialog.preferred_action = 0;
-    auto ignore = [](bContext *context) {
-      wm_block_autorun_warning_ignore(context, nullptr, nullptr);
-    };
-    WM_apple_ios_dialog_begin(
-        C, dialog,
-        [ignore](bContext *context, int action, uint64_t toggles) {
-          if (action != 1) {
-            ignore(context);
-            return;
-          }
-          PointerRNA preferences = RNA_pointer_create_discrete(
-              nullptr, RNA_PreferencesFilePaths, &U);
-          PropertyRNA *property = RNA_struct_find_property(&preferences, "use_scripts_auto_execute");
-          RNA_property_boolean_set(&preferences, property, bool(toggles & 1));
-          RNA_property_update(context, &preferences, property);
-          if (BKE_main_blendfile_path_from_global()[0] && CTX_wm_manager(context)->file_saved) {
-            wm_block_autorun_warning_reload_with_scripts(context, nullptr);
-          }
-          else {
-            wm_block_autorun_warning_enable_scripts(context, nullptr);
-          }
-        }, ignore, "autorun_warning_popup");
-#else
-    ui::popup_block_invoke(C, block_create_autorun_warning, nullptr, nullptr);
-#endif
+    if (const wmNativeInterface *native = WM_native_interface(); native && native->alert) {
+      wm_test_autorun_warning_native(C, *native);
+    }
+    else {
+      ui::popup_block_invoke(C, block_create_autorun_warning, nullptr, nullptr);
+    }
     CTX_wm_window_set(C, prevwin);
   }
 }
@@ -5012,36 +4690,39 @@ static ui::Block *block_create_save_file_overwrite_dialog(bContext *C, ARegion *
 
 void wm_save_file_overwrite_dialog(bContext *C, wmOperator *op)
 {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  Main *bmain = CTX_data_main(C);
-  auto callback = std::shared_ptr<wmGenericCallback>(
-      MEM_new<wmGenericCallback>(__func__), WM_generic_callback_free);
-  callback->user_data = IDP_CopyProperty(op->properties);
-  callback->free_user_data = wm_free_operator_properties_callback;
-  GHOST_IOSDialog dialog;
-  dialog.title = bmain->is_asset_edit_file ? RPT_("Save as a new file?") :
-                                           RPT_("Overwrite file?");
-  dialog.message = BLI_path_basename(BKE_main_blendfile_path(bmain));
-  for (const std::string &line : file_overwrite_detailed_info(bmain)) {
-    dialog.message += "\n" + line;
+  if (const wmNativeInterface *native = WM_native_interface(); native && native->alert) {
+    Main *bmain = CTX_data_main(C);
+    auto callback = std::shared_ptr<wmGenericCallback>(MEM_new<wmGenericCallback>(__func__),
+                                                       WM_generic_callback_free);
+    callback->user_data = IDP_CopyProperty(op->properties);
+    callback->free_user_data = wm_free_operator_properties_callback;
+    wmNativeAlert alert;
+    alert.title = bmain->is_asset_edit_file ? RPT_("Save as a new file?") :
+                                            RPT_("Overwrite file?");
+    alert.message = BLI_path_basename(BKE_main_blendfile_path(bmain));
+    for (const std::string &line : file_overwrite_detailed_info(bmain)) {
+      alert.message += "\n" + line;
+    }
+    alert.actions = {{IFACE_("Cancel"), wmNativeAlert::Role::Cancel}, {IFACE_("Save As...")}};
+    if (!bmain->is_asset_edit_file) {
+      alert.actions.append({IFACE_("Overwrite"), wmNativeAlert::Role::Destructive});
+    }
+    alert.preferred_action = 1;
+    native->alert(
+        C,
+        alert,
+        [callback](bContext *context, int action, uint64_t) {
+          if (action == 1) {
+            save_file_overwrite_saveas(context, nullptr, nullptr);
+          }
+          else if (action == 2) {
+            save_file_overwrite_confirm(context, nullptr, callback.get());
+          }
+        },
+        {},
+        save_file_overwrite_dialog_name);
+    return;
   }
-  dialog.actions = {{IFACE_("Cancel"), GHOST_IOSDialogRole::Cancel}, {IFACE_("Save As...")}};
-  if (!bmain->is_asset_edit_file) {
-    dialog.actions.push_back({IFACE_("Overwrite"), GHOST_IOSDialogRole::Destructive});
-  }
-  dialog.preferred_action = 1;
-  WM_apple_ios_dialog_begin(
-      C, dialog,
-      [callback](bContext *context, int action, uint64_t) {
-        if (action == 1) {
-          save_file_overwrite_saveas(context, nullptr, nullptr);
-        }
-        else if (action == 2) {
-          save_file_overwrite_confirm(context, nullptr, callback.get());
-        }
-      }, {}, save_file_overwrite_dialog_name);
-  return;
-#endif
   if (!ui::popup_block_name_exists(CTX_wm_screen(C), save_file_overwrite_dialog_name)) {
     wmGenericCallback *callback = MEM_new<wmGenericCallback>(__func__);
     callback->exec = nullptr;
@@ -5100,17 +4781,19 @@ static void wm_block_file_close_save(bContext *C, void *arg_block, void *arg_dat
   int modified_images_count = ED_image_save_all_modified_info(CTX_data_main(C), nullptr);
   if (modified_images_count > 0 && save_images_when_file_is_closed) {
     if (ED_image_should_save_modified(bmain)) {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-      ReportList reports;
-      BKE_reports_init(&reports, RPT_STORE);
-      execute_callback = ED_image_save_all_modified(C, &reports);
-      WM_reports_from_reports_move(wm, &reports);
-      BKE_reports_free(&reports);
-#else
-      ReportList *reports = CTX_wm_reports(C);
-      execute_callback = ED_image_save_all_modified(C, reports);
-      WM_report_banner_show(wm, win);
-#endif
+      if (WM_native_interface()) {
+        /* Reports go to the native interface, which shows them in place of the banner. */
+        ReportList reports;
+        BKE_reports_init(&reports, RPT_STORE);
+        execute_callback = ED_image_save_all_modified(C, &reports);
+        WM_reports_from_reports_move(wm, &reports);
+        BKE_reports_free(&reports);
+      }
+      else {
+        ReportList *reports = CTX_wm_reports(C);
+        execute_callback = ED_image_save_all_modified(C, reports);
+        WM_report_banner_show(wm, win);
+      }
     }
     else {
       execute_callback = false;
@@ -5376,64 +5059,64 @@ static ui::Block *block_create__close_file_dialog(bContext *C, ARegion *region, 
 void wm_close_file_dialog(bContext *C, wmGenericCallback *post_action)
 {
   save_images_when_file_is_closed = true;
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  auto callback = std::shared_ptr<wmGenericCallback>(post_action, WM_generic_callback_free);
-  Main *bmain = CTX_data_main(C);
-  const char *path = BKE_main_blendfile_path(bmain);
-  const bool needs_overwrite_confirm = BKE_main_needs_overwrite_confirm(bmain);
-  GHOST_IOSDialog dialog;
-  dialog.title = RPT_("Save changes before closing?");
-  dialog.message = path[0] ? BLI_path_basename(path) : std::string(DATA_("Untitled")) + ".blend";
-  if (needs_overwrite_confirm) {
-    for (const std::string &line : file_overwrite_detailed_info(bmain)) {
-      dialog.message += "\n" + line;
+  if (const wmNativeInterface *native = WM_native_interface(); native && native->alert) {
+    auto callback = std::shared_ptr<wmGenericCallback>(post_action, WM_generic_callback_free);
+    Main *bmain = CTX_data_main(C);
+    const char *path = BKE_main_blendfile_path(bmain);
+    const bool needs_overwrite_confirm = BKE_main_needs_overwrite_confirm(bmain);
+    wmNativeAlert dialog;
+    dialog.title = RPT_("Save changes before closing?");
+    dialog.message = path[0] ? BLI_path_basename(path) : std::string(DATA_("Untitled")) + ".blend";
+    if (needs_overwrite_confirm) {
+      for (const std::string &line : file_overwrite_detailed_info(bmain)) {
+        dialog.message += "\n" + line;
+      }
     }
-  }
-  ReportList reports;
-  BKE_reports_init(&reports, RPT_STORE);
-  const uint images = ED_image_save_all_modified_info(bmain, &reports);
-  for (Report &report_item : reports.list) {
-    Report *report = &report_item;
-    dialog.message += "\n\n";
-    dialog.message += report->message;
-  }
-  BKE_reports_free(&reports);
-  const int image_toggle = images ? int(dialog.toggles.size()) : -1;
-  if (images) {
-    dialog.toggles.push_back(
-        {fmt::format(fmt::runtime(IFACE_("Save {} modified image(s)")), images),
-         bool(save_images_when_file_is_closed)});
-  }
-  const bool catalogs = AS_asset_library_has_any_unsaved_catalogs();
-  const int catalog_toggle = catalogs ? int(dialog.toggles.size()) : -1;
-  if (catalogs) {
-    dialog.toggles.push_back(
-        {IFACE_("Save modified asset catalogs"),
-         blender::ed::asset::catalogs_get_save_catalogs_when_file_is_saved()});
-  }
-  dialog.actions = {{IFACE_("Cancel"), GHOST_IOSDialogRole::Cancel},
-                    {IFACE_("Don't Save"), GHOST_IOSDialogRole::Destructive},
-                    {needs_overwrite_confirm ? IFACE_("Save As...") : IFACE_("Save")}};
-  dialog.preferred_action = 2;
-  WM_apple_ios_dialog_begin(
-      C, dialog,
-      [callback, image_toggle, catalog_toggle](bContext *context, int action, uint64_t toggles) {
-        if (action == 1) {
-          wm_block_file_close_discard(context, nullptr, callback.get());
-        }
-        else if (action == 2) {
-          if (image_toggle >= 0) {
-            save_images_when_file_is_closed = bool(toggles & (uint64_t(1) << image_toggle));
+    ReportList reports;
+    BKE_reports_init(&reports, RPT_STORE);
+    const uint images = ED_image_save_all_modified_info(bmain, &reports);
+    for (Report &report_item : reports.list) {
+      Report *report = &report_item;
+      dialog.message += "\n\n";
+      dialog.message += report->message;
+    }
+    BKE_reports_free(&reports);
+    const int image_toggle = images ? int(dialog.toggles.size()) : -1;
+    if (images) {
+      dialog.toggles.append(
+          {fmt::format(fmt::runtime(IFACE_("Save {} modified image(s)")), images),
+           bool(save_images_when_file_is_closed)});
+    }
+    const bool catalogs = AS_asset_library_has_any_unsaved_catalogs();
+    const int catalog_toggle = catalogs ? int(dialog.toggles.size()) : -1;
+    if (catalogs) {
+      dialog.toggles.append(
+          {IFACE_("Save modified asset catalogs"),
+           blender::ed::asset::catalogs_get_save_catalogs_when_file_is_saved()});
+    }
+    dialog.actions = {{IFACE_("Cancel"), wmNativeAlert::Role::Cancel},
+                      {IFACE_("Don't Save"), wmNativeAlert::Role::Destructive},
+                      {needs_overwrite_confirm ? IFACE_("Save As...") : IFACE_("Save")}};
+    dialog.preferred_action = 2;
+    native->alert(
+        C, dialog,
+        [callback, image_toggle, catalog_toggle](bContext *context, int action, uint64_t toggles) {
+          if (action == 1) {
+            wm_block_file_close_discard(context, nullptr, callback.get());
           }
-          if (catalog_toggle >= 0) {
-            blender::ed::asset::catalogs_set_save_catalogs_when_file_is_saved(
-                bool(toggles & (uint64_t(1) << catalog_toggle)));
+          else if (action == 2) {
+            if (image_toggle >= 0) {
+              save_images_when_file_is_closed = bool(toggles & (uint64_t(1) << image_toggle));
+            }
+            if (catalog_toggle >= 0) {
+              blender::ed::asset::catalogs_set_save_catalogs_when_file_is_saved(
+                  bool(toggles & (uint64_t(1) << catalog_toggle)));
+            }
+            wm_block_file_close_save(context, nullptr, callback.get());
           }
-          wm_block_file_close_save(context, nullptr, callback.get());
-        }
-      }, {}, close_file_dialog_name);
-  return;
-#endif
+        }, {}, close_file_dialog_name);
+    return;
+  }
   if (!ui::popup_block_name_exists(CTX_wm_screen(C), close_file_dialog_name)) {
     ui::popup_block_invoke(
         C, block_create__close_file_dialog, post_action, free_post_file_close_action);

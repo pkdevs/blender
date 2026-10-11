@@ -72,11 +72,9 @@
 #include "UI_view2d.hh"
 
 #include "WM_api.hh"
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-#  include "WM_apple_ios.hh"
-#endif
 #include "WM_keymap.hh"
 #include "WM_message.hh"
+#include "WM_native_interface.hh"
 #include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
@@ -87,22 +85,12 @@
 #include "wm_window.hh"
 #include "wm_window_private.hh"
 
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-#  include "wm_apple_ios_file.hh"
-#endif
-
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
 #include "RE_pipeline.h"
 
 namespace blender {
-
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-namespace ui {
-void native_redo_operator_clear();
-}
-#endif
 
 /**
  * When a gizmo is highlighted and uses click/drag events,
@@ -610,12 +598,11 @@ void wm_event_do_notifiers(bContext *C)
     return;
   }
 
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  if (!BLI_listbase_is_empty(&wm->runtime->notifier_queue)) {
-    /* Whatever changed, the native interface describes Blender's state again. */
-    WM_apple_ios_ui_tag_changed();
+  if (const wmNativeInterface *native = WM_native_interface();
+      native && native->state_changed && !BLI_listbase_is_empty(&wm->runtime->notifier_queue))
+  {
+    native->state_changed();
   }
-#endif
 
   /* Disable? - Keep for now since its used for window level notifiers. */
 #if 1
@@ -1059,11 +1046,12 @@ void WM_reports_from_reports_move(wmWindowManager *wm, ReportList *reports)
   }
 
   /* Add reports to the global list, otherwise they are not seen. */
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  WM_apple_ios_reports(wm->runtime->winactive ? wm->runtime->winactive :
-                          static_cast<wmWindow *>(wm->windows.first),
-                      reports, RPT_WARNING);
-#endif
+  if (const wmNativeInterface *native = WM_native_interface(); native && native->reports_added) {
+    native->reports_added(wm->runtime->winactive ? wm->runtime->winactive :
+                                                   static_cast<wmWindow *>(wm->windows.first),
+                          reports,
+                          RPT_WARNING);
+  }
   BKE_reports_move_to_reports(&wm->runtime->reports, reports);
 
   WM_report_banner_show(wm, nullptr);
@@ -1367,21 +1355,21 @@ static void wm_operator_finished(bContext *C,
 
   if (hud_status != NOP) {
     if (hud_status == SET) {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-      /* The iPad shell replaces Blender's desktop HUD with native controls. Keep the operator
-       * registered for redo/repeat, but never show the "Adjust Last Operation" region. */
-      ui::ED_area_type_hud_clear(wm, nullptr);
-#else
+      const wmNativeInterface *native = WM_native_interface();
       ScrArea *area = CTX_wm_area(C);
-      if (area && ((area->flag & AREA_FLAG_OFFSCREEN) == 0)) {
+      if (native && native->replaces_redo_panel) {
+        /* The operator stays registered for redo, shown by the native interface instead. */
+        ui::ED_area_type_hud_clear(wm, nullptr);
+      }
+      else if (area && ((area->flag & AREA_FLAG_OFFSCREEN) == 0)) {
         ui::ED_area_type_hud_ensure(C, area);
       }
-#endif
     }
     else if (hud_status == CLEAR) {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-      ui::native_redo_operator_clear();
-#endif
+      if (const wmNativeInterface *native = WM_native_interface(); native && native->redo_cleared)
+      {
+        native->redo_cleared();
+      }
       ui::ED_area_type_hud_clear(wm, nullptr);
     }
     else {
@@ -2847,9 +2835,11 @@ static eHandlerActionFlag wm_handler_operator_call(bContext *C,
 
 static void wm_operator_free_for_fileselect(wmOperator *file_operator)
 {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  WM_apple_ios_fileselect_cancel(file_operator);
-#endif
+  if (const wmNativeInterface *native = WM_native_interface();
+      native && native->fileselect_cancel)
+  {
+    native->fileselect_cancel(file_operator);
+  }
   for (bScreen &screen : G_MAIN->screens) {
     for (ScrArea &area : screen.areabase) {
       if (area.spacetype == SPACE_FILE) {
@@ -2878,11 +2868,11 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
 
   switch (val) {
     case EVT_FILESELECT_FULL_OPEN: {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-      if (WM_apple_ios_fileselect_begin(C, handler->op)) {
+      if (const wmNativeInterface *native = WM_native_interface();
+          native && native->fileselect_begin && native->fileselect_begin(C, handler->op))
+      {
         return WM_HANDLER_BREAK;
       }
-#endif
       ScrArea *area = ED_screen_temp_space_open(
           C, IFACE_("Blender File View"), SPACE_FILE, U.filebrowser_display_type, true);
       if (!area) {
@@ -2924,11 +2914,9 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
           handler->context.win = nullptr;
         }
       }
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-      else if (!WM_apple_ios_fileselect_active(handler->op)) {
-#else
-      else {
-#endif
+      else if (!(WM_native_interface() && WM_native_interface()->fileselect_active &&
+                 WM_native_interface()->fileselect_active(handler->op)))
+      {
         ScrArea *ctx_area = CTX_wm_area(C);
 
         wmWindow *temp_win = nullptr;
@@ -3004,11 +2992,10 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
           wm->op_undo_depth++;
         }
 
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-        const wmOperatorStatus retval = WM_apple_ios_fileselect_exec(C, handler->op);
-#else
-        const wmOperatorStatus retval = handler->op->type->exec(C, handler->op);
-#endif
+        const wmNativeInterface *native = WM_native_interface();
+        const wmOperatorStatus retval = native && native->fileselect_exec ?
+                                            native->fileselect_exec(C, handler->op) :
+                                            handler->op->type->exec(C, handler->op);
         OPERATOR_RETVAL_CHECK(retval);
 
         /* XXX check this carefully, `CTX_wm_manager(C) == wm` is a bit hackish. */
@@ -3351,15 +3338,13 @@ static eHandlerActionFlag wm_handlers_do_gizmo_handler(bContext *C,
   bool handle_highlight = false;
   bool handle_keymap = false;
 
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  /* A Pencil can land without hovering, or tap a different axis from the last
-   * highlighted one. Resolve the actual press/click before invoking its keymap. */
-  const bool is_direct_gizmo_press = ISMOUSE_BUTTON(event->type) &&
+  /* A pen can land without hovering, or tap a different gizmo part from the last highlighted
+   * one: resolve the actual press before invoking its keymap. */
+  const wmNativeInterface *native = WM_native_interface();
+  const bool is_direct_gizmo_press = native && native->direct_gizmo_press &&
+                                     ISMOUSE_BUTTON(event->type) &&
                                      ELEM(event->val, KM_PRESS, KM_CLICK, KM_DBL_CLICK) &&
                                      event->tablet.is_motion_absolute;
-#else
-  const bool is_direct_gizmo_press = false;
-#endif
 
   /* Handle gizmo highlighting. */
   if ((prev.gz_modal == nullptr) &&
@@ -3401,11 +3386,8 @@ static eHandlerActionFlag wm_handlers_do_gizmo_handler(bContext *C,
 
     if (wm_gizmomap_highlight_set(gzmap, C, gz, part)) {
       if (gz != nullptr) {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-        const bool use_gizmo_tooltip = false;
-#else
-        const bool use_gizmo_tooltip = (U.flag & USER_TOOLTIPS) != 0;
-#endif
+        const bool use_gizmo_tooltip = (U.flag & USER_TOOLTIPS) &&
+                                       !(native && native->hide_gizmo_tooltips);
         if (use_gizmo_tooltip && (gz->flag & WM_GIZMO_NO_TOOLTIP) == 0) {
           WM_tooltip_timer_init(C, CTX_wm_window(C), area, region, WM_gizmomap_tooltip_init);
         }

@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include "BLI_path_utils.hh"
+
+#include "BLO_writefile.hh"
+
 #include "WM_types.hh"
 
 namespace blender {
@@ -105,6 +109,18 @@ bool wm_file_or_session_data_has_unsaved_changes(const Main *bmain, const wmWind
  * Important to ask confirmation, as this is a very common scenario of data loss.
  */
 void wm_save_file_overwrite_dialog(bContext *C, wmOperator *op);
+/**
+ * Write the open file to `filepath`, see #WM_OT_save_as_mainfile.
+ * Exported for iOS documents, `wm_apple_ios_document.cc`.
+ */
+bool wm_file_write(bContext *C,
+                   const char *filepath,
+                   int fileflags,
+                   eBLO_WritePathRemap remap_mode,
+                   bool use_save_as_copy,
+                   ReportList *reports);
+/** Where the open file is auto-saved. */
+void wm_autosave_location(char filepath[FILE_MAX]);
 
 void WM_OT_save_homefile(wmOperatorType *ot);
 void WM_OT_save_userpref(wmOperatorType *ot);

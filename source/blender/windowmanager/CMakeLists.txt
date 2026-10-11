@@ -38,7 +38,10 @@ set(SRC
   intern/wm_apple_ios_file.cc
   intern/wm_apple_ios_file.hh
   intern/wm_apple_ios_dialog.cc
+  intern/wm_apple_ios_document.cc
+  intern/wm_apple_ios_document.hh
   intern/wm_menu_type.cc
+  intern/wm_native_interface.cc
   intern/wm_operator_props.cc
   intern/wm_operator_type.cc
   intern/wm_operator_utils.cc
@@ -70,6 +73,7 @@ set(SRC
   WM_api.hh
   WM_apple_ios.hh
   WM_keymap.hh
+  WM_native_interface.hh
   WM_message.hh
   WM_toolsystem.hh
   WM_types.hh

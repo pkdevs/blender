@@ -103,10 +103,10 @@
 
 #include "WM_api.hh"
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-#  include "GHOST_IOSDialog.hh"
 #  include "WM_apple_ios.hh"
 #endif
 #include "WM_keymap.hh"
+#include "WM_native_interface.hh"
 #include "WM_types.hh"
 
 #include "wm.hh"
@@ -1752,40 +1752,13 @@ wmOperatorStatus WM_operator_confirm_ex(bContext *C,
                                         ui::AlertIcon icon,
                                         bool cancel_default)
 {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  GHOST_IOSDialog dialog;
-  dialog.title = title ? title : WM_operatortype_name(op->type, op->ptr);
-  dialog.message = message ? message : "";
-  const bool destructive = strstr(op->type->idname, "delete") ||
-                           strstr(op->type->idname, "remove") ||
-                           STREQ(op->type->idname, "WM_OT_revert_mainfile");
-  dialog.actions = {
-      {IFACE_("Cancel"), GHOST_IOSDialogRole::Cancel},
-      {confirm_text ? confirm_text : IFACE_("OK"),
-       destructive ? GHOST_IOSDialogRole::Destructive : GHOST_IOSDialogRole::Default}};
-  dialog.preferred_action = cancel_default || destructive ? 0 : 1;
-  auto cancel = [op](bContext *context) {
-    if (op->type->cancel) {
-      op->type->cancel(context, op);
+  if (const wmNativeInterface *native = WM_native_interface(); native && native->confirm) {
+    if (const std::optional<wmOperatorStatus> status = native->confirm(
+            C, op, title, message, confirm_text, icon, cancel_default))
+    {
+      return *status;
     }
-    WM_operator_free(op);
-  };
-  if (WM_apple_ios_dialog_begin(
-          C, dialog,
-          [op, cancel](bContext *context, int action, uint64_t) {
-            if (action == 1) {
-              WM_operator_call_ex(context, op, true);
-            }
-            else {
-              cancel(context);
-            }
-          },
-          cancel))
-  {
-    return OPERATOR_RUNNING_MODAL;
   }
-  return OPERATOR_CANCELLED;
-#endif
   wmOpPopUp *data = MEM_new<wmOpPopUp>(__func__);
   data->op = op;
 

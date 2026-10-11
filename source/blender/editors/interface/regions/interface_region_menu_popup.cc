@@ -30,9 +30,7 @@
 #include "BKE_screen.hh"
 
 #include "WM_api.hh"
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-#  include "WM_apple_ios.hh"
-#endif
+#include "WM_native_interface.hh"
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
@@ -552,10 +550,10 @@ Layout *popup_menu_layout(PopupMenu *pup)
 
 void popup_menu_reports(bContext *C, ReportList *reports)
 {
-#if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  WM_apple_ios_reports(CTX_wm_window(C), reports, reports->printlevel);
-  return;
-#endif
+  if (const wmNativeInterface *native = WM_native_interface(); native && native->reports_added) {
+    native->reports_added(CTX_wm_window(C), reports, reports->printlevel);
+    return;
+  }
   PopupMenu *pup = nullptr;
   Layout *layout;
 
