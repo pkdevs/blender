@@ -132,15 +132,17 @@ struct SvgShape {
 
 static float3x3 tvg_matrix_to_blender(const tvg::Matrix &m)
 {
+  /* ThorVG matrices are row-major (`x' = e11 * x + e12 * y + e13`), Blender's are column-major,
+   * so each ThorVG row becomes a Blender row, i.e. `mat[column][row]`. */
   float3x3 mat;
   mat[0][0] = m.e11;
-  mat[0][1] = m.e12;
-  mat[0][2] = m.e13;
-  mat[1][0] = m.e21;
+  mat[0][1] = m.e21;
+  mat[0][2] = m.e31;
+  mat[1][0] = m.e12;
   mat[1][1] = m.e22;
-  mat[1][2] = m.e23;
-  mat[2][0] = m.e31;
-  mat[2][1] = m.e32;
+  mat[1][2] = m.e32;
+  mat[2][0] = m.e13;
+  mat[2][1] = m.e23;
   mat[2][2] = m.e33;
   return mat;
 }
@@ -151,9 +153,12 @@ static float2 matrix_apply(const float3x3 &m, const float2 &p)
   return float2(v.x, v.y);
 }
 
-static float matrix_uniform_scale(const float3x3 &m)
+/* Same definition as nanosvg's `nsvg__getAverageScale`, so stroke widths stay identical. */
+static float matrix_average_scale(const float3x3 &m)
 {
-  return math::sqrt(math::abs(m[0][0] * m[1][1] - m[0][1] * m[1][0]));
+  const float sx = math::length(float2(m[0][0], m[1][0]));
+  const float sy = math::length(float2(m[0][1], m[1][1]));
+  return 0.5f * (sx + sy);
 }
 
 static float3x3 paint_matrix(const tvg::Paint &paint)
@@ -163,20 +168,21 @@ static float3x3 paint_matrix(const tvg::Paint &paint)
   return tvg_matrix_to_blender(m);
 }
 
-/* Convert an 8-bit sRGB color (as stored by ThorVG) to Blender's linear float color.
- * `opacity` is multiplied into the alpha channel. */
-static ColorGeometry4f color_from_rgba8(
-    const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a, const float opacity)
+/* Convert an 8-bit sRGB color (as stored by ThorVG) to Blender's linear float color. */
+static ColorGeometry4f color_from_rgba8(const uint8_t r,
+                                        const uint8_t g,
+                                        const uint8_t b,
+                                        const uint8_t a)
 {
   const float4 rgb_f = {
-      float(r) / 255.0f, float(g) / 255.0f, float(b) / 255.0f, (float(a) / 255.0f) * opacity};
+      float(r) / 255.0f, float(g) / 255.0f, float(b) / 255.0f, float(a) / 255.0f};
   ColorGeometry4f color;
   srgb_to_linearrgb_v4(color, rgb_f);
   return color;
 }
 
 /* Simple approximation of a gradient by a single color. */
-static ColorGeometry4f average_gradient_color(const tvg::Fill &gradient, const float opacity)
+static ColorGeometry4f average_gradient_color(const tvg::Fill &gradient)
 {
   const tvg::Fill::ColorStop *stops = nullptr;
   const uint32_t stops_num = gradient.colorStops(&stops);
@@ -186,7 +192,7 @@ static ColorGeometry4f average_gradient_color(const tvg::Fill &gradient, const f
 
   float4 avg_color = float4(0, 0, 0, 0);
   for (const uint32_t i : IndexRange(stops_num)) {
-    avg_color += float4(color_from_rgba8(stops[i].r, stops[i].g, stops[i].b, stops[i].a, opacity));
+    avg_color += float4(color_from_rgba8(stops[i].r, stops[i].g, stops[i].b, stops[i].a));
   }
   avg_color /= float(stops_num);
   return ColorGeometry4f(avg_color);
@@ -201,10 +207,11 @@ static ColorGeometry4f average_gradient_color(const tvg::Fill &gradient, const f
 /* Close to nanosvg's behavior: a "no paint" color is opaque black. */
 static const ColorGeometry4f no_paint_color = ColorGeometry4f(0, 0, 0, 1);
 
-/* TODO: Gradients are not yet fully supported (approximated by average color).
- * Fill gradients require unique materials per curve, and stroke gradients
- * can be baked into vertex colors in future passes. */
-static void read_shape_style(const tvg::Shape &tvg_shape, const float opacity, SvgShape &shape)
+/* TODO Gradients are not yet supported (approximated by their average color).
+ * This is because gradients for fill materials in particular can only be defined by materials.
+ * Since each path can have a unique gradient it potentially requires a material per curve.
+ * Stroke gradients could be baked into vertex colors. */
+static void read_shape_style(const tvg::Shape &tvg_shape, SvgShape &shape)
 {
   /* Fill. */
   {
@@ -213,11 +220,11 @@ static void read_shape_style(const tvg::Shape &tvg_shape, const float opacity, S
     if (const tvg::Fill *gradient = tvg_shape.fill()) {
       shape.use_fill = true;
       shape.has_gradient = true;
-      shape.fill_color = average_gradient_color(*gradient, opacity);
+      shape.fill_color = average_gradient_color(*gradient);
     }
     else if (a > 0) {
       shape.use_fill = true;
-      shape.fill_color = color_from_rgba8(r, g, b, a, opacity);
+      shape.fill_color = color_from_rgba8(r, g, b, a);
     }
     else {
       shape.use_fill = false;
@@ -225,21 +232,20 @@ static void read_shape_style(const tvg::Shape &tvg_shape, const float opacity, S
     }
   }
 
-  /* Stroke. A zero stroke width means "no stroke" in ThorVG. */
+  /* Stroke. Only fill gradients are reported as "has gradient" (as before). */
   {
     uint8_t r = 0, g = 0, b = 0, a = 0;
     tvg_shape.strokeFill(&r, &g, &b, &a);
     const tvg::Fill *gradient = tvg_shape.strokeFill();
-    shape.use_stroke = tvg_shape.strokeWidth() > 0.0f && (gradient != nullptr || a > 0);
+    shape.use_stroke = (gradient != nullptr || a > 0);
     if (!shape.use_stroke) {
       shape.stroke_color = no_paint_color;
     }
     else if (gradient) {
-      shape.has_gradient = true;
-      shape.stroke_color = average_gradient_color(*gradient, opacity);
+      shape.stroke_color = average_gradient_color(*gradient);
     }
     else {
-      shape.stroke_color = color_from_rgba8(r, g, b, a, opacity);
+      shape.stroke_color = color_from_rgba8(r, g, b, a);
     }
   }
 }
@@ -257,6 +263,9 @@ static void read_shape_paths(const tvg::Shape &tvg_shape, const float3x3 &world,
 
   SvgSubPath current;
   bool has_current = false;
+  /* Start of the most recent sub-path. After a `Close` the current point returns here. */
+  float2 subpath_start = float2(0.0f);
+  bool has_subpath_start = false;
 
   auto to_float2 = [](const tvg::Point &p) { return float2(p.x, p.y); };
 
@@ -269,16 +278,18 @@ static void read_shape_paths(const tvg::Shape &tvg_shape, const float3x3 &world,
         knot.handle_right = matrix_apply(world, knot.handle_right);
       }
 
-      /* Merge closing endpoint into start point if spatially identical. */
-      bool first_removed = true;
-      while (current.knots.size() > 1 &&
-             math::distance_squared(current.knots.first().pos, current.knots.last().pos) < 1e-8f)
+      /* Extra points can be at the end of the path that coincide with the start point.
+       * Remove them and close the curve, taking the left handle of the first removed point. */
+      const float2 first_pos = current.knots.first().pos;
+      int64_t keep = current.knots.size();
+      while (keep > 1 &&
+             math::almost_equal_relative(first_pos, current.knots[keep - 1].pos, 1e-6f))
       {
-        if (first_removed) {
-          current.knots.first().handle_left = current.knots.last().handle_left;
-          first_removed = false;
-        }
-        current.knots.pop_last();
+        keep--;
+      }
+      if (keep < current.knots.size()) {
+        current.knots.first().handle_left = current.knots[keep].handle_left;
+        current.knots.resize(keep);
         current.closed = true;
       }
 
@@ -288,7 +299,9 @@ static void read_shape_paths(const tvg::Shape &tvg_shape, const float3x3 &world,
     has_current = false;
   };
 
-  auto begin_subpath = [&](const float2 &p) {
+  auto begin_subpath = [&](const float2 p) {
+    subpath_start = p;
+    has_subpath_start = true;
     current.knots.append({p, p, p});
     has_current = true;
   };
@@ -298,6 +311,7 @@ static void read_shape_paths(const tvg::Shape &tvg_shape, const float3x3 &world,
     switch (cmds[i]) {
       case tvg::PathCommand::MoveTo: {
         if (pt + 1 > pts_num) {
+          flush();
           return;
         }
         flush();
@@ -307,19 +321,25 @@ static void read_shape_paths(const tvg::Shape &tvg_shape, const float3x3 &world,
       }
       case tvg::PathCommand::LineTo: {
         if (pt + 1 > pts_num) {
+          flush();
           return;
         }
         const float2 p = to_float2(pts[pt]);
         pt += 1;
         if (!has_current) {
-          begin_subpath(p);
-          break;
+          if (!has_subpath_start) {
+            begin_subpath(p);
+            break;
+          }
+          /* Drawing after `Close` continues from the start of the closed sub-path. */
+          begin_subpath(subpath_start);
         }
         current.knots.append({p, p, p});
         break;
       }
       case tvg::PathCommand::CubicTo: {
         if (pt + 3 > pts_num) {
+          flush();
           return;
         }
         const float2 c1 = to_float2(pts[pt + 0]);
@@ -327,7 +347,10 @@ static void read_shape_paths(const tvg::Shape &tvg_shape, const float3x3 &world,
         const float2 p = to_float2(pts[pt + 2]);
         pt += 3;
         if (!has_current) {
-          break;
+          if (!has_subpath_start) {
+            break;
+          }
+          begin_subpath(subpath_start);
         }
         current.knots.last().handle_right = c1;
         current.knots.append({p, c2, p});
@@ -345,6 +368,9 @@ static void read_shape_paths(const tvg::Shape &tvg_shape, const float3x3 &world,
   flush();
 }
 
+/* ThorVG's accessor only exposes a hash of the `id` attribute, not the name itself. Layers are
+ * named after SVG groups (as before), so the group names are read from the file with pugixml and
+ * keyed by that same hash. */
 static Map<uint32_t, std::string> read_group_names(const char *filepath, tvg::Accessor &accessor)
 {
   Map<uint32_t, std::string> names;
@@ -386,21 +412,14 @@ static bool collect_shapes_cb(const tvg::Paint *paint, void *data)
   const tvg::Shape &tvg_shape = *static_cast<const tvg::Shape *>(paint);
 
   float3x3 world = paint_matrix(*paint);
-  float opacity = float(paint->opacity()) / 255.0f;
-  bool visible = paint->visible();
   std::string parent_id;
   for (const tvg::Paint *parent = paint->parent(); parent; parent = parent->parent()) {
     world = paint_matrix(*parent) * world;
-    opacity *= float(parent->opacity()) / 255.0f;
-    visible = visible && parent->visible();
     if (parent_id.empty() && parent->type() == tvg::Type::Scene && parent->id != 0) {
       if (const std::string *name = ctx.names->lookup_ptr(parent->id)) {
         parent_id = *name;
       }
     }
-  }
-  if (!visible || opacity <= 0.0f) {
-    return true;
   }
 
   SvgShape shape;
@@ -408,8 +427,8 @@ static bool collect_shapes_cb(const tvg::Paint *paint, void *data)
   if (shape.paths.is_empty()) {
     return true;
   }
-  read_shape_style(tvg_shape, opacity, shape);
-  shape.stroke_width = tvg_shape.strokeWidth() * matrix_uniform_scale(world);
+  read_shape_style(tvg_shape, shape);
+  shape.stroke_width = tvg_shape.strokeWidth() * matrix_average_scale(world);
   shape.parent_id = std::move(parent_id);
 
   ctx.shapes.append(std::move(shape));
@@ -428,12 +447,15 @@ static std::string get_layer_id(const SvgShape &shape, const int prefix)
                                    fmt::format("{:s}", shape.parent_id);
 }
 
+/* Make room for curves and points from the SVG shape.
+ * Returns the index range of newly added curves. */
 static IndexRange extend_curves_geometry(bke::CurvesGeometry &curves, const SvgShape &shape)
 {
   const int old_curves_num = curves.curves_num();
   const int old_points_num = curves.points_num();
   const Span<int> old_offsets = curves.offsets();
 
+  /* Count curves and points. */
   Vector<int> new_curve_offsets;
   for (const SvgSubPath &path : shape.paths) {
     if (path.knots.is_empty()) {
@@ -475,9 +497,11 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
                                        const int shape_index,
                                        const int material_index)
 {
+  /* Path width is twice the radius. */
   const float path_width_scale = 0.5f * math::average(math::to_scale(transform));
   const OffsetIndices points_by_curve = curves.points_by_curve();
 
+  /* All SVG paths are converted to Bezier curves. */
   curves.curve_types_for_write().slice(curves_range).fill(CURVE_TYPE_BEZIER);
   curves.update_curve_types();
 
@@ -515,7 +539,7 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
 
   const bool use_stroke = shape.use_stroke;
   const bool use_fill = shape.use_fill;
-
+  /* Ensure stroke/fill attributes exist if non-zero values need to be written. */
   if (!use_stroke) {
     attributes.add<bool>("hide_stroke", bke::AttrDomain::Curve, bke::AttributeInitDefaultValue());
   }
@@ -615,6 +639,7 @@ static void shift_to_bounds_center(GreasePencil &grease_pencil)
 
 bool SVGImporter::read(StringRefNull filepath)
 {
+  /* ThorVG works in SVG pixels at 96 DPI, convert to millimeters. */
   constexpr float svg_px_to_mm = 25.4f / 96.0f;
 
   char abs_filepath[FILE_MAX];
@@ -640,6 +665,7 @@ bool SVGImporter::read(StringRefNull filepath)
   shapes_ctx.names = &group_names;
   accessor->set(picture.get(), collect_shapes_cb, &shapes_ctx);
 
+  /* Create grease pencil object. */
   char filename[FILE_MAX];
   BLI_path_split_file_part(abs_filepath, filename, ARRAY_SIZE(filename));
   object_ = create_object(filename);
@@ -649,6 +675,7 @@ bool SVGImporter::read(StringRefNull filepath)
   }
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object_->data);
 
+  /* The three possible materials that might be created. */
   std::optional<int> mat_index_stroke;
   std::optional<int> mat_index_fill;
   std::optional<int> mat_index_both;
@@ -657,12 +684,16 @@ bool SVGImporter::read(StringRefNull filepath)
                                   params_.use_scene_unit) ?
                                      context_.scene->unit.scale_length :
                                      1.0f;
+  /* Overall scale for SVG coordinates (pixels to millimeters to meters). */
   const float svg_scale = 0.001f * svg_px_to_mm * scene_unit_scale * params_.scale;
+  /* Grease pencil is rotated 90 degrees in X axis by default. */
   const float4x4 transform = math::scale(
       math::from_rotation<float4x4>(math::EulerXYZ(DEG2RAD(-90), 0, 0)), float3(svg_scale));
 
+  /* True if any shape has a color gradient, which is not fully supported. */
   bool has_color_gradient = false;
 
+  /* Loop all shapes. */
   std::string prv_id = "*";
   int prefix = 0;
   int shape_index = 0;
@@ -674,6 +705,7 @@ bool SVGImporter::read(StringRefNull filepath)
       prv_id = layer_id;
     }
 
+    /* Check if the layer exist and create if needed. */
     Layer &layer = [&]() -> Layer & {
       TreeNode *layer_node = grease_pencil.find_node_by_name(layer_id);
       if (layer_node && layer_node->is_layer()) {
@@ -685,6 +717,7 @@ bool SVGImporter::read(StringRefNull filepath)
       return layer;
     }();
 
+    /* Check frame. */
     Drawing *drawing = grease_pencil.get_drawing_at(layer, params_.frame_number);
     if (drawing == nullptr) {
       drawing = grease_pencil.insert_frame(layer, params_.frame_number);
@@ -693,25 +726,29 @@ bool SVGImporter::read(StringRefNull filepath)
       }
     }
 
+    /* Find or create materials. */
     const bool is_fill = shape.use_fill;
     const bool is_stroke = shape.use_stroke || !is_fill;
-    int material_index = 0;
+    int material_index;
     if (is_stroke && is_fill) {
       if (!mat_index_both) {
         mat_index_both = create_material("Both");
       }
+
       material_index = *mat_index_both;
     }
     else if (is_stroke) {
       if (!mat_index_stroke) {
         mat_index_stroke = create_material("Stroke");
       }
+
       material_index = *mat_index_stroke;
     }
     else if (is_fill) {
       if (!mat_index_fill) {
         mat_index_fill = create_material("Fill");
       }
+
       material_index = *mat_index_fill;
     }
 
@@ -728,11 +765,11 @@ bool SVGImporter::read(StringRefNull filepath)
     shape_attributes_to_curves(
         curves, shape, new_curves_range, transform, shape_index, material_index);
     drawing->strokes_for_write() = std::move(curves);
-    drawing->tag_topology_changed();
 
     shape_index++;
   }
 
+  /* Calculate bounding box and move all points to new origin center. */
   if (params_.recenter_bounds) {
     shift_to_bounds_center(grease_pencil);
   }
