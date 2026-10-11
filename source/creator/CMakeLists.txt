@@ -373,6 +373,7 @@ else()
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/BlenderBridge.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/CompileIndicator.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/CompositeControls.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/DocumentWindow.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/DialogSheet.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/GlassButton.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/HierarchyView.swift
@@ -385,6 +386,7 @@ else()
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/RenderSheet.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/ScenePanels.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/SettingsSheet.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/ShellModel.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/TemplatePicker.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/Timeline.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/UIKitInterop.swift

@@ -81,17 +81,27 @@
  */
 
 /** Blender's main window, shown over the launcher while a document is open. */
-static WMIOSViewController *document_controller = nil;
+static UIViewController<GHOST_IOSWindowController> *document_controller = nil;
 
 namespace blender {
 
 void WM_apple_ios_document_window_changed()
 {
-  [document_controller updateDocumentControls];
+  [(id)document_controller updateDocumentControls];
 }
 
 void *WM_apple_ios_window_controller(void *metal_view, GHOST_WindowIOS *window, void **r_root)
 {
+  /* The interface is moving to SwiftUI; until it is complete, the SwiftUI window is chosen with
+   * the `BlenderSwiftUIShell` default. */
+  if ([NSUserDefaults.standardUserDefaults boolForKey:@"BlenderSwiftUIShell"]) {
+    UIViewController<WMIOSDocumentController> *controller = [[blenderIOSSwiftClass(
+        @"WMIOSSwiftDocumentController") alloc] initWithMetalView:(MTKView *)metal_view
+                                                           window:window];
+    document_controller = controller;
+    *r_root = controller;
+    return controller;
+  }
   WMIOSViewController *controller = [[WMIOSViewController alloc]
       initWithMetalKitView:(MTKView *)metal_view
                     window:window];
@@ -115,6 +125,13 @@ void *WM_apple_ios_window_controller(void *metal_view, GHOST_WindowIOS *window, 
 }
 
 }  // namespace blender
+
+extern "C" void wm_apple_ios_document_controller_closed(id controller)
+{
+  if (document_controller == controller) {
+    document_controller = nil;
+  }
+}
 
 - (void)installDocumentControls
 {

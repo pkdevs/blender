@@ -201,6 +201,7 @@ if(WITH_APPLE_CROSSPLATFORM)
     apple_ios/wm_apple_ios_view_controller_tools.mm
     apple_ios/wm_apple_ios_view_controller_top_bar.mm
     apple_ios/wm_apple_ios_view_controller_view_gizmo.mm
+    apple_ios/wm_apple_ios_window.mm
 
     apple_ios/wm_apple_ios_alerts.hh
     apple_ios/wm_apple_ios_assets.hh

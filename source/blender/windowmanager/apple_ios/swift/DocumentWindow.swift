@@ -1,0 +1,157 @@
+/* SPDX-FileCopyrightText: 2026 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
+/** \file
+ * The document window: Blender's viewport with the native interface around it, in SwiftUI.
+ * Blender draws only the viewport, into GHOST's Metal view at the bottom of the window; touches
+ * and the Pencil that reach that view are Blender's, everything above it is SwiftUI.
+ *
+ * GHOST asks for the window's controller through `WM_apple_ios_window_controller`. While the
+ * interface moves to SwiftUI, this window is used when the `BlenderSwiftUIShell` default is set.
+ */
+
+import MetalKit
+import SwiftUI
+import UIKit
+
+/* -------------------------------------------------------------------- */
+/** \name Controller
+ * \{ */
+
+@MainActor
+@objc(WMIOSSwiftDocumentController)
+public final class DocumentController: UIHostingController<DocumentWindow> {
+  private let model: ShellModel
+  private var stateTimer: Timer?
+
+  @objc(initWithMetalView:window:)
+  public init(metalView: MTKView, window: UnsafeMutableRawPointer) {
+    model = ShellModel(window: window)
+    super.init(rootView: DocumentWindow(model: model, viewport: ViewportContainer(metalView: metalView)))
+    NotificationCenter.default.addObserver(self, selector: #selector(snapshotsPublished),
+                                           name: Notification.Name("BlenderSnapshotsPublished"),
+                                           object: nil)
+    model.pullToolbar(copy: true)
+    model.refreshWindowState()
+    /* Snapshots arrive by notification. Whether the viewport has drawn is read from the
+     * presentation mailbox, as a held-up Blender publishes nothing. */
+    stateTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+      MainActor.assumeIsolated { self?.model.refreshWindowState() }
+    }
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+  @objc private func snapshotsPublished() {
+    model.pullToolbar()
+  }
+
+  /** The launcher showed or hid the document window. */
+  @objc public func updateDocumentControls() {
+    model.refreshWindowState()
+  }
+
+  /** Blender is closing the window: stop calling into it. */
+  @objc public func detachBlender() {
+    stateTimer?.invalidate()
+    stateTimer = nil
+    NotificationCenter.default.removeObserver(self)
+    model.window = nil
+    wm_apple_ios_document_controller_closed(self)
+  }
+
+  override public var prefersHomeIndicatorAutoHidden: Bool { true }
+}
+
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Viewport
+ * \{ */
+
+/** Holds GHOST's Metal view, sized to the window at the display's full resolution. */
+final class ViewportContainer: UIView {
+  let metalView: MTKView
+
+  init(metalView: MTKView) {
+    super.init(frame: .zero)
+    metalView.autoresizingMask = []
+    addSubview(metalView)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    metalView.frame = bounds
+    let scale = max(1, window?.traitCollection.displayScale ?? traitCollection.displayScale)
+    metalView.contentScaleFactor = scale
+    metalView.layer.contentsScale = scale
+    let size = CGSize(width: max(1, bounds.width * scale), height: max(1, bounds.height * scale))
+    if metalView.drawableSize != size {
+      metalView.drawableSize = size
+    }
+  }
+}
+
+struct ViewportView: UIViewRepresentable {
+  let container: ViewportContainer
+
+  func makeUIView(context: Context) -> ViewportContainer { container }
+  func updateUIView(_ view: ViewportContainer, context: Context) {}
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Window
+ * \{ */
+
+public struct DocumentWindow: View {
+  let model: ShellModel
+  let viewport: ViewportContainer
+
+  public var body: some View {
+    NavigationStack {
+      ZStack {
+        ViewportView(container: viewport)
+          .ignoresSafeArea()
+        if !model.viewportReady {
+          ProgressView()
+            .controlSize(.large)
+            .accessibilityLabel("Loading Viewport")
+            .accessibilityIdentifier("blender.viewport.loading")
+            .allowsHitTesting(false)
+        }
+      }
+      .toolbar { DocumentToolbar(model: model) }
+      .toolbarTitleDisplayMode(.inline)
+    }
+  }
+}
+
+struct DocumentToolbar: ToolbarContent {
+  let model: ShellModel
+
+  var body: some ToolbarContent {
+    ToolbarItemGroup(placement: .topBarLeading) {
+      if model.documentsAvailable {
+        Button("Documents", systemImage: "chevron.backward") {
+          wm_apple_ios_show_documents(nil)
+        }
+        .accessibilityIdentifier("blender.documents")
+      }
+      Button("Undo", systemImage: "arrow.uturn.backward") {
+        Engine.operatorCall("ED_OT_undo")
+      }
+      .disabled(!model.canUndo)
+      .accessibilityIdentifier("blender.undo")
+    }
+  }
+}
+
+/** \} */

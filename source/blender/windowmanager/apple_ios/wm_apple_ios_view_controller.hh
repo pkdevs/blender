@@ -172,6 +172,12 @@ NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items);
 - (void)setActions:(NSArray<UIView *> *)actions;
 @end
 #endif
+/** The SwiftUI document window, `WMIOSSwiftDocumentController` in `DocumentWindow.swift`. */
+@protocol WMIOSDocumentController <GHOST_IOSWindowController>
+- (instancetype)initWithMetalView:(MTKView *)metalView window:(void *)window;
+- (void)updateDocumentControls;
+@end
+
 @interface WMIOSViewController
     : UIViewController <GHOST_IOSWindowController, UIGestureRecognizerDelegate>
 

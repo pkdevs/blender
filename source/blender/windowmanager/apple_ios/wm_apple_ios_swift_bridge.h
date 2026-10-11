@@ -26,6 +26,21 @@ void WM_apple_ios_ui_asset_drag(int phase, const char *asset_id, int x, int y);
 /** The open document's file, or nil. */
 NSURL *_Nullable wm_apple_ios_document_url(void);
 
+/** Blender's toolbar snapshot as JSON: the latest one once (null when unchanged), or a copy. */
+char *_Nullable WM_apple_ios_ui_toolbar_take_json(void);
+char *_Nullable WM_apple_ios_ui_toolbar_copy_json(void);
+void WM_apple_ios_ui_toolbar_free_json(char *_Nullable json);
+
+/* Blender's window (`GHOST_WindowIOS`), see `wm_apple_ios_window.mm`. */
+bool wm_apple_ios_window_presented_frame(void *_Nullable window);
+CGPoint wm_apple_ios_window_pixels(void *_Nullable window, CGPoint point);
+void wm_apple_ios_window_send_key(void *_Nullable window, const char *_Nonnull key);
+/** Whether a document is open that the launcher can go back from, and going back. */
+bool wm_apple_ios_documents_available(void);
+void wm_apple_ios_show_documents(id _Nullable sender);
+/** The document window's controller is closing. */
+void wm_apple_ios_document_controller_closed(id _Nonnull controller);
+
 #ifdef __cplusplus
 }
 #endif
