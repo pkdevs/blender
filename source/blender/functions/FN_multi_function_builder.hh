@@ -18,107 +18,9 @@ namespace blender {
 
 namespace fn::multi_function::build {
 
-/**
- * These presets determine what code is generated for a #CustomMF. Different presets make different
- * trade-offs between run-time performance and compile-time/binary size.
- */
 namespace exec_presets {
 
-/** Method to execute a function in case devirtualization was not possible. */
-enum class FallbackMode {
-  /** Access all elements in virtual arrays through virtual function calls. */
-  Simple,
-  /** Process elements in chunks to reduce virtual function call overhead. */
-  Materialized,
-};
-
-/**
- * The "naive" method for executing a #CustomMF. Every element is processed separately and input
- * values are retrieved from the virtual arrays one by one. This generates the least amount of
- * code, but is also the slowest method.
- */
-struct Simple {
-  static constexpr bool use_devirtualization = false;
-  static constexpr FallbackMode fallback_mode = FallbackMode::Simple;
-};
-
-/**
- * This is an improvement over the #Simple method. It still generates a relatively small amount of
- * code, because the function is only instantiated once. It's generally faster than #Simple,
- * because inputs are retrieved from the virtual arrays in chunks, reducing virtual method call
- * overhead.
- */
-struct Materialized {
-  static constexpr bool use_devirtualization = false;
-  static constexpr FallbackMode fallback_mode = FallbackMode::Materialized;
-};
-
-/**
- * The most efficient preset, but also potentially generates a lot of code (exponential in the
- * number of inputs of the function). It generates separate optimized loops for all combinations of
- * inputs. This should be used for small functions of which all inputs are likely to be single
- * values or spans, and the number of inputs is relatively small.
- */
-struct AllSpanOrSingle {
-  static constexpr bool use_devirtualization = true;
-  static constexpr FallbackMode fallback_mode = FallbackMode::Materialized;
-
-  template<typename... ParamTags, typename... LoadedParams, size_t... I>
-  auto create_devirtualizers(TypeSequence<ParamTags...> /*param_tags*/,
-                             std::index_sequence<I...> /*indices*/,
-                             const std::tuple<LoadedParams...> &loaded_params) const
-  {
-    return std::make_tuple([&]() {
-      using ParamTag = ParamTags;
-      using T = typename ParamTag::base_type;
-      if constexpr (ParamTag::category == ParamCategory::SingleInput) {
-        const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
-        return GVArrayDevirtualizer<T, true, true>{varray_impl};
-      }
-      else if constexpr (ELEM(ParamTag::category,
-                              ParamCategory::SingleOutput,
-                              ParamCategory::SingleMutable))
-      {
-        T *ptr = std::get<I>(loaded_params);
-        return BasicDevirtualizer<T *>{ptr};
-      }
-    }()...);
-  }
-};
-
-/**
- * A slightly weaker variant of #AllSpanOrSingle. It generates less code, because it assumes that
- * some of the inputs are most likely single values. It should be used for small functions which
- * have too many inputs to make #AllSingleOrSpan a reasonable choice.
- */
-template<size_t... Indices> struct SomeSpanOrSingle {
-  static constexpr bool use_devirtualization = true;
-  static constexpr FallbackMode fallback_mode = FallbackMode::Materialized;
-
-  template<typename... ParamTags, typename... LoadedParams, size_t... I>
-  auto create_devirtualizers(TypeSequence<ParamTags...> /*param_tags*/,
-                             std::index_sequence<I...> /*indices*/,
-                             const std::tuple<LoadedParams...> &loaded_params) const
-  {
-    return std::make_tuple([&]() {
-      using ParamTag = ParamTags;
-      using T = typename ParamTag::base_type;
-
-      if constexpr (ParamTag::category == ParamCategory::SingleInput) {
-        constexpr bool UseSpan = ValueSequence<size_t, Indices...>::template contains<I>();
-        const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
-        return GVArrayDevirtualizer<T, true, UseSpan>{varray_impl};
-      }
-      else if constexpr (ELEM(ParamTag::category,
-                              ParamCategory::SingleOutput,
-                              ParamCategory::SingleMutable))
-      {
-        T *ptr = std::get<I>(loaded_params);
-        return BasicDevirtualizer<T *>{ptr};
-      }
-    }()...);
-  }
-};
+using namespace varray_batch::exec_presets;
 
 }  // namespace exec_presets
 
@@ -220,7 +122,9 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
         mask.to_spans_and_ranges<16>();
 
     const auto devirtualizers = exec_preset.create_devirtualizers(
-        TypeSequence<ParamTags...>(), std::index_sequence<I...>(), loaded_params);
+        TypeSequence<typename BatchParamTagFromMF<ParamTags>::type...>(),
+        std::index_sequence<I...>(),
+        loaded_params);
     executed_devirtualized = call_with_devirtualized_parameters(
         devirtualizers, [&](auto &&...args) {
           for (const std::variant<IndexRange, IndexMaskSegment> &segment : mask_segments) {
@@ -244,7 +148,7 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
   if (!executed_devirtualized) {
     /* The materialized method is most common because it avoids most virtual function overhead but
      * still instantiates the function only once. */
-    if constexpr (ExecPreset::fallback_mode == exec_presets::FallbackMode::Materialized) {
+    if constexpr (ExecPreset::fallback_mode == varray_batch::FallbackMode::Materialized) {
       mask.foreach_segment([&](const IndexMaskSegment segment) {
         varray_batch::batch_process<64>(
             TypeSequence<typename BatchParamTagFromMF<ParamTags>::type...>(),

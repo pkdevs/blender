@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "BLI_devirtualize_parameters.hh"
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_parameter_pack_utils.hh"
 
@@ -18,6 +19,117 @@ enum class ParamCategory {
 template<ParamCategory Category, typename T> struct ParamTag {
   static constexpr ParamCategory category = Category;
   using base_type = T;
+};
+
+/** Method to execute a function in case devirtualization was not possible. */
+enum class FallbackMode {
+  /** Access all elements in virtual arrays through virtual function calls. */
+  Simple,
+  /** Process elements in chunks to reduce virtual function call overhead. */
+  Materialized,
+};
+
+/**
+ * These presets determine what code is generated for evaluation. Different presets make different
+ * trade-offs between run-time performance and compile-time/binary size.
+ */
+namespace exec_presets {
+
+/**
+ * The "naive" method for batch processing. Every element is processed separately and input
+ * values are retrieved from the virtual arrays one by one. This generates the least amount of
+ * code, but is also the slowest method.
+ */
+struct Simple {
+  static constexpr bool use_devirtualization = false;
+  static constexpr FallbackMode fallback_mode = FallbackMode::Simple;
+};
+
+/**
+ * This is an improvement over the #Simple method. It still generates a relatively small amount of
+ * code, because the function is only instantiated once. It's generally faster than #Simple,
+ * because inputs are retrieved from the virtual arrays in chunks, reducing virtual method call
+ * overhead.
+ */
+struct Materialized {
+  static constexpr bool use_devirtualization = false;
+  static constexpr FallbackMode fallback_mode = FallbackMode::Materialized;
+};
+
+/**
+ * The most efficient preset, but also potentially generates a lot of code (exponential in the
+ * number of inputs of the function). It generates separate optimized loops for all combinations of
+ * inputs. This should be used for small functions of which all inputs are likely to be single
+ * values or spans, and the number of inputs is relatively small.
+ */
+struct AllSpanOrSingle {
+  static constexpr bool use_devirtualization = true;
+  static constexpr FallbackMode fallback_mode = FallbackMode::Materialized;
+
+  template<typename... ParamTags, typename... LoadedParams, size_t... I>
+  auto create_devirtualizers(TypeSequence<ParamTags...> /*param_tags*/,
+                             std::index_sequence<I...> /*indices*/,
+                             const std::tuple<LoadedParams...> &loaded_params) const
+  {
+    return std::make_tuple([&]() {
+      using ParamTag = ParamTags;
+      using T = typename ParamTag::base_type;
+      if constexpr (ParamTag::category == ParamCategory::Input) {
+        const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
+        return GVArrayDevirtualizer<T, true, true>{varray_impl};
+      }
+      else if constexpr (ELEM(ParamTag::category, ParamCategory::Output, ParamCategory::Mutable)) {
+        T *ptr = std::get<I>(loaded_params);
+        return BasicDevirtualizer<T *>{ptr};
+      }
+    }()...);
+  }
+};
+
+/**
+ * A slightly weaker variant of #AllSpanOrSingle. It generates less code, because it assumes that
+ * some of the inputs are most likely single values. It should be used for small functions which
+ * have too many inputs to make #AllSingleOrSpan a reasonable choice.
+ */
+template<size_t... Indices> struct SomeSpanOrSingle {
+  static constexpr bool use_devirtualization = true;
+  static constexpr FallbackMode fallback_mode = FallbackMode::Materialized;
+
+  template<typename... ParamTags, typename... LoadedParams, size_t... I>
+  auto create_devirtualizers(TypeSequence<ParamTags...> /*param_tags*/,
+                             std::index_sequence<I...> /*indices*/,
+                             const std::tuple<LoadedParams...> &loaded_params) const
+  {
+    return std::make_tuple([&]() {
+      using ParamTag = ParamTags;
+      using T = typename ParamTag::base_type;
+
+      if constexpr (ParamTag::category == ParamCategory::Input) {
+        constexpr bool UseSpan = ValueSequence<size_t, Indices...>::template contains<I>();
+        const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
+        return GVArrayDevirtualizer<T, true, UseSpan>{varray_impl};
+      }
+      else if constexpr (ELEM(ParamTag::category, ParamCategory::Output, ParamCategory::Mutable)) {
+        T *ptr = std::get<I>(loaded_params);
+        return BasicDevirtualizer<T *>{ptr};
+      }
+    }()...);
+  }
+};
+
+}  // namespace exec_presets
+
+template<typename T>
+concept ExecPresetC = requires {
+  { T::use_devirtualization } -> std::convertible_to<bool>;
+  { T::fallback_mode } -> std::convertible_to<FallbackMode>;
+
+  requires(!T::use_devirtualization ||
+           requires(const T preset, const std::tuple<const GVArrayImpl *> &loaded_params) {
+             preset.create_devirtualizers(TypeSequence<ParamTag<ParamCategory::Input, int>>(),
+                                          std::index_sequence<0>(),
+                                          loaded_params);
+           });
 };
 
 template<typename T>
