@@ -2,6 +2,10 @@
 
 Every file here is CC0 (public domain). All were downloaded on 2026-10-07.
 
+They are not kept in the repository, only the library built from them. Run
+`release/ios/fetch_asset_sources.py --blender /path/to/blender` to download them here, checked
+against `release/ios/asset_sources.json`.
+
 ## Human base meshes
 
 `human_base_meshes.blend` holds six plain meshes extracted from Blender Studio's Human Base

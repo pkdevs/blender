@@ -65,6 +65,12 @@ waveletNoiseTile.bin
 # they are not shipped as a pre-compiled libraries submodule like other platforms.
 /lib/ios-simulator_arm64/
 
+# Sources of the iPad's bundled templates and Starter library, downloaded by
+# `release/ios/fetch_asset_sources.py`; only what the app installs is kept.
+/release/ios/templates/sources/*.blend
+/release/ios/starter_assets/sources/*.blend
+/release/ios/starter_assets/sources/textures/
+
 # visionOS library dependencies, made from the iOS ones by `build_files/utils/apple_retarget_libs.py`.
 /lib/visionos_arm64/
 /lib/visionos-simulator_arm64/

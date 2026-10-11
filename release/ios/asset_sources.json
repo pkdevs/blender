@@ -1,0 +1,105 @@
+{
+  "files": [
+    {
+      "path": "templates/sources/ellie.blend",
+      "url": "https://studio.blender.org/download-source/files/01/01a02cb0fed8e700b38bdaf7b4ef75df/01a02cb0fed8e700b38bdaf7b4ef75df.blend",
+      "sha256": "3dd235218725a9e68890073bbeacb4820f9b34db65d44f80c31bb88696a3c54c"
+    },
+    {
+      "path": "starter_assets/sources/textures/bark_brown_02/bark_brown_02_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_diff_1k.jpg",
+      "sha256": "920fa0bed0c9d78c1d530e99795113afd532d7db746de440f4a85d7c83ed0f1a"
+    },
+    {
+      "path": "starter_assets/sources/textures/bark_brown_02/bark_brown_02_disp_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_disp_1k.jpg",
+      "sha256": "03a771fd43038257bffc2ebdd12e5599ebba8a30ffae2ed4774c05e4bbab4e45"
+    },
+    {
+      "path": "starter_assets/sources/textures/bark_brown_02/bark_brown_02_rough_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_rough_1k.jpg",
+      "sha256": "68125592de36e15bae7aa6db85c4d135aeb7e5653199ba226483a70f6d69837d"
+    },
+    {
+      "path": "starter_assets/sources/textures/cobblestone_floor_04/cobblestone_floor_04_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_04/cobblestone_floor_04_diff_1k.jpg",
+      "sha256": "b0662eaec38a2056ef00abc66d1a0e8da421d704ed3ff8f9e268ad4c7b2aa58c"
+    },
+    {
+      "path": "starter_assets/sources/textures/cobblestone_floor_04/cobblestone_floor_04_disp_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_04/cobblestone_floor_04_disp_1k.jpg",
+      "sha256": "b38d7b3935d284f038a60cf274012fc0968f1c19fec26445ce727441c37edc78"
+    },
+    {
+      "path": "starter_assets/sources/textures/cobblestone_floor_04/cobblestone_floor_04_rough_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_04/cobblestone_floor_04_rough_1k.jpg",
+      "sha256": "2f62e01aa5c2051cd700c20c21ed791ee2d4ab88274b5724dfd852c4bd2264dc"
+    },
+    {
+      "path": "starter_assets/sources/textures/damaged_plaster/damaged_plaster_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/damaged_plaster/damaged_plaster_diff_1k.jpg",
+      "sha256": "391649dbb391c978b0d95cdd2351617fe3b7a577e432b94171208e576c9b2c63"
+    },
+    {
+      "path": "starter_assets/sources/textures/damaged_plaster/damaged_plaster_disp_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/damaged_plaster/damaged_plaster_disp_1k.jpg",
+      "sha256": "9c20d0a4e9502207f26fd8c9ec7b3e573e56405cb7d2c83e187a6320a55e10dc"
+    },
+    {
+      "path": "starter_assets/sources/textures/damaged_plaster/damaged_plaster_rough_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/damaged_plaster/damaged_plaster_rough_1k.jpg",
+      "sha256": "595b9cc69e163687c27681f73fae4a34f5f82ecd70a1ce3867fc8026a0db76cb"
+    },
+    {
+      "path": "starter_assets/sources/textures/fabric_pattern_05/fabric_pattern_05_ao_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/fabric_pattern_05/fabric_pattern_05_ao_1k.jpg",
+      "sha256": "7edbd4861ecf61a75f3fab7bff5ba39224f94e957b3980a80b5c38f2d203c73a"
+    },
+    {
+      "path": "starter_assets/sources/textures/fabric_pattern_05/fabric_pattern_05_col_01_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/fabric_pattern_05/fabric_pattern_05_col_01_1k.jpg",
+      "sha256": "b9ece89a45044945ce4d1402672cfd605f1f074b313cb3cc12b7b2ea66fad7fe"
+    },
+    {
+      "path": "starter_assets/sources/textures/fabric_pattern_05/fabric_pattern_05_rough_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/fabric_pattern_05/fabric_pattern_05_rough_1k.jpg",
+      "sha256": "e48d14e87a5493bc4ef9bea61e85b4397ec41f93d1c3fd1ac17494475781610e"
+    },
+    {
+      "path": "starter_assets/sources/textures/red_brick/red_brick_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/red_brick/red_brick_diff_1k.jpg",
+      "sha256": "6dea3a2b5a3185ff48d299d182c405a9f787129d79677792db6de4afd81c47f6"
+    },
+    {
+      "path": "starter_assets/sources/textures/red_brick/red_brick_disp_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/red_brick/red_brick_disp_1k.jpg",
+      "sha256": "e7ff169c8cbdea781443d5a927aa98cc16bcbbd0d033922a72fe9e5f151883c1"
+    },
+    {
+      "path": "starter_assets/sources/textures/red_brick/red_brick_rough_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/red_brick/red_brick_rough_1k.jpg",
+      "sha256": "9bc9ece8264eb53d6f290bd2950ece5e462f83ce9e65b945fb1caf9972973ab9"
+    },
+    {
+      "path": "starter_assets/sources/textures/rocks_ground_02/rocks_ground_02_col_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rocks_ground_02/rocks_ground_02_col_1k.jpg",
+      "sha256": "729e26281b28b9c05a53e755658da184ccd673ac291e6ec0532229743c06bf66"
+    },
+    {
+      "path": "starter_assets/sources/textures/rocks_ground_02/rocks_ground_02_height_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rocks_ground_02/rocks_ground_02_height_1k.jpg",
+      "sha256": "4ad4a2d33e1b35b1f0f027a876aaed5666879f3ecb9fd94e5f3bbc9d25932033"
+    },
+    {
+      "path": "starter_assets/sources/textures/rocks_ground_02/rocks_ground_02_rough_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rocks_ground_02/rocks_ground_02_rough_1k.jpg",
+      "sha256": "8ecc647ca1a5407512b2d3feffd140b99a918cc608c70f3b968c8a680b1fa093"
+    }
+  ],
+  "human_base_meshes": {
+    "path": "starter_assets/sources/human_base_meshes.blend",
+    "bundle_url": "https://mirror.blender.org/demo/asset-bundles/human-base-meshes/human-base-meshes-bundle-v1.4.1.zip",
+    "bundle_blend": "human_base_meshes_bundle.blend",
+    "script": "starter_assets/sources/extract_human_base_meshes.py"
+  }
+}
