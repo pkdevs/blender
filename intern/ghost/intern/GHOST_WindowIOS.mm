@@ -2399,6 +2399,11 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   CGRect _redo_lane_rect;
   BOOL _redo_lane_wide;
   NSLayoutConstraint *_action_scroll_trailing_constraint;
+  /* Blender's full context menu, kept at the end of the expanded quick actions. */
+  UIButton *_context_menu_button;
+  NSLayoutConstraint *_context_menu_width_constraint;
+  NSLayoutConstraint *_context_menu_spacing_constraint;
+  BOOL _context_menu_available;
   NSLayoutConstraint *_redo_pill_width_constraint;
   NSLayoutConstraint *_redo_pill_min_width_constraint;
   BOOL _actions_collapsed;
@@ -2757,6 +2762,9 @@ bool GHOST_ios_document_window_visible()
   [_action_group_leading_constraint release];
   [_action_group_center_constraint release];
   [_action_scroll_trailing_constraint release];
+  [_context_menu_button release];
+  [_context_menu_width_constraint release];
+  [_context_menu_spacing_constraint release];
   [_redo_pill_width_constraint release];
   [_redo_pill_min_width_constraint release];
   [_view_pie_buttons release];
@@ -3740,6 +3748,39 @@ bool GHOST_ios_document_window_visible()
   return button;
 }
 
+/** A quick action's look, opening Blender's whole context menu. */
+- (UIButton *)contextMenuButton
+{
+  UIButton *button = blenderIOSSwiftButton();
+  button.accessibilityLabel = @"Actions";
+  button.accessibilityIdentifier = @"blender.context-menu";
+  button.translatesAutoresizingMaskIntoConstraints = NO;
+  button.buttonImage = [UIImage systemImageNamed:@"ellipsis"];
+  button.foreground = UIColor.labelColor;
+  button.buttonInsets = NSDirectionalEdgeInsetsMake(8.0, 10.0, 8.0, 10.0);
+  button.menu = [self nativeBlenderContextMenu];
+  button.showsMenuAsPrimaryAction = YES;
+  [button.heightAnchor constraintEqualToConstant:44.0].active = YES;
+  return button;
+}
+
+/** Show the context menu button while the quick actions are open and have one. */
+- (void)updateContextMenuButton
+{
+  if (!_context_menu_button) {
+    return;
+  }
+  const BOOL visible = _context_menu_available && !_actions_collapsed;
+  _context_menu_width_constraint.constant = visible ? 44.0 : 0.0;
+  _context_menu_spacing_constraint.constant = visible ? -8.0 : 0.0;
+  _context_menu_button.hidden = !_context_menu_available;
+  _context_menu_button.userInteractionEnabled = visible;
+  _context_menu_button.accessibilityElementsHidden = !visible;
+  const CGFloat redo_width = _redo_strip.collapsedWidth;
+  _action_expanded_width_constraint.constant = 60 + (redo_width ? redo_width + 8 : 0) +
+                                               (visible ? 52 : 0);
+}
+
 - (NSString *)actionSignatureForActions:(NSArray *)actions
 {
   NSMutableString *signature = [NSMutableString string];
@@ -3818,17 +3859,47 @@ bool GHOST_ios_document_window_visible()
         button.imagePadding = image ? 5.0 : 0.0;
       }
     }
+#if !defined(APPLE_TARGET_VISIONOS)
     [_action_stack addArrangedSubview:button];
+#endif
   }
+#if !defined(APPLE_TARGET_VISIONOS)
+  /* Everything else for the selection: Blender's full context menu, after the quick actions.
+   * Not while a transform takes keys (the axes), which are actions too. */
+  BOOL axis_keys = NO;
+  for (UIButton *button in _action_buttons) {
+    axis_keys |= button.accessibilityHint.length > 0;
+  }
+  _context_menu_available = _action_buttons.count && !axis_keys;
+  [self updateContextMenuButton];
+#endif
+#if defined(APPLE_TARGET_VISIONOS)
+  [_vision_chrome setActions:_action_buttons];
+#endif
 
-  _action_rail.hidden = _action_buttons.count == 0 && !_redo_strip.collapsedWidth;
+  _action_rail.hidden = [self actionRailEmpty:_redo_strip.collapsedWidth];
   _action_rail.alpha = _action_rail.hidden ? 0.0 : 1.0;
   [self updateAxisConstraintsWithActions:actions];
   [_action_scroll setContentOffset:CGPointZero animated:NO];
 }
 
 /* Fixed so the Actions pill never resizes as the redo pill comes and goes. */
+#if defined(APPLE_TARGET_VISIONOS)
+/* The quick actions are in the toolbar ornament: no Actions pill. */
+static const CGFloat GHOSTIOSActionsPillWidth = 0.0;
+#else
 static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
+#endif
+
+/** Nothing for the rail to show: no quick actions or Adjust Last Operation pill. */
+- (BOOL)actionRailEmpty:(CGFloat)redo_pill_width
+{
+#if defined(APPLE_TARGET_VISIONOS)
+  return redo_pill_width == 0;
+#else
+  return _action_buttons.count == 0 && redo_pill_width == 0;
+#endif
+}
 
 - (void)installActionStripToggle
 {
@@ -3846,14 +3917,33 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [_action_toggle addTarget:self action:@selector(toggleActionStrip:)
           forControlEvents:UIControlEventTouchUpInside];
   [_action_group addSubview:_action_toggle];
+#if defined(APPLE_TARGET_VISIONOS)
+  _action_toggle.hidden = YES;
+#endif
   UIButton *redo_pill = _redo_strip.collapsedButton;
   redo_pill.translatesAutoresizingMaskIntoConstraints = NO;
   [_action_group addSubview:redo_pill];
   _redo_pill_width_constraint = [[redo_pill.widthAnchor constraintEqualToConstant:0] retain];
   _redo_pill_width_constraint.priority = UILayoutPriorityDefaultHigh - 1;
   _redo_pill_min_width_constraint = [[redo_pill.widthAnchor constraintGreaterThanOrEqualToConstant:0] retain];
+#if defined(APPLE_TARGET_VISIONOS)
   _action_scroll_trailing_constraint = [[_action_scroll.trailingAnchor
       constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
+#else
+  /* The context menu sits after the scrolling actions, so it stays in view. */
+  _context_menu_button = [[self contextMenuButton] retain];
+  [_action_group addSubview:_context_menu_button];
+  _context_menu_width_constraint = [[_context_menu_button.widthAnchor constraintEqualToConstant:0] retain];
+  _context_menu_spacing_constraint = [[_action_scroll.trailingAnchor
+      constraintEqualToAnchor:_context_menu_button.leadingAnchor] retain];
+  _action_scroll_trailing_constraint = [[_context_menu_button.trailingAnchor
+      constraintEqualToAnchor:redo_pill.leadingAnchor] retain];
+  [NSLayoutConstraint activateConstraints:@[
+    _context_menu_width_constraint,
+    _context_menu_spacing_constraint,
+    [_context_menu_button.centerYAnchor constraintEqualToAnchor:_action_group.centerYAnchor],
+  ]];
+#endif
   __block GHOST_IOSViewController *owner = self;
   _redo_strip.presentationDidChange = ^(BOOL animated) {
     [owner updateRedoPillLayout:animated];
@@ -3935,7 +4025,8 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _action_toggle_width_constraint.constant = _actions_collapsed ? GHOSTIOSActionsPillWidth : 44;
   _action_collapsed_width_constraint.constant = GHOSTIOSActionsPillWidth + reserved;
   _action_expanded_width_constraint.constant = 60 + reserved;
-  _action_rail.hidden = _action_buttons.count == 0 && !width;
+  [self updateContextMenuButton];
+  _action_rail.hidden = [self actionRailEmpty:width];
   _action_rail.alpha = _action_rail.hidden ? 0 : 1;
   [UIView animateWithDuration:animated && !UIAccessibilityIsReduceMotionEnabled() ? 0.3 : 0
       delay:0 usingSpringWithDamping:0.86 initialSpringVelocity:0
@@ -3994,6 +4085,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _action_toggle.accessibilityLabel = collapsed ? @"Show Quick Actions" : @"Hide Quick Actions";
   _action_toggle.accessibilityValue = collapsed ? @"Collapsed" : @"Expanded";
   _action_toggle.toolTip = _action_toggle.accessibilityLabel;
+  [self updateContextMenuButton];
   _action_scroll.hidden = NO;
   _action_scroll.userInteractionEnabled = !collapsed;
   _action_scroll.accessibilityElementsHidden = collapsed;
@@ -4009,6 +4101,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
                    animations:^{
                      [self->_action_rail layoutIfNeeded];
                      self->_action_scroll.alpha = collapsed ? 0.0 : 1.0;
+                     self->_context_menu_button.alpha = collapsed ? 0.0 : 1.0;
                      self->_action_scroll.transform = collapsed && animate ?
                          CGAffineTransformMakeTranslation(-20.0, 0.0) : CGAffineTransformIdentity;
                    }
