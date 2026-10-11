@@ -151,7 +151,6 @@ static float2 matrix_apply(const float3x3 &m, const float2 &p)
   return float2(v.x, v.y);
 }
 
-/* Uniform scale factor of a 2D affine matrix (geometric mean of axis scales). */
 static float matrix_uniform_scale(const float3x3 &m)
 {
   return math::sqrt(math::abs(m[0][0] * m[1][1] - m[0][1] * m[1][0]));
@@ -356,7 +355,7 @@ static Map<uint32_t, std::string> read_group_names(const char *filepath, tvg::Ac
     stack.append(doc.document_element());
     while (!stack.is_empty()) {
       const pugi::xml_node node = stack.pop_last();
-      if (STREQ(node.name(), "g")) {
+      if (StringRef(node.name()) == "g") {
         const char *id = node.attribute("id").as_string("");
         if (id[0] != '\0') {
           names.add_overwrite(accessor.id(id), id);

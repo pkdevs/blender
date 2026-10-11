@@ -145,6 +145,10 @@ set(BROTLI_LIBRARIES
   ${LIBDIR}/brotli/lib/libbrotlidec-static.a
 )
 
+if(WITH_THORVG)
+  find_package(ThorVG)
+endif()
+
 if(WITH_HARFBUZZ)
   find_package(Harfbuzz)
 endif()

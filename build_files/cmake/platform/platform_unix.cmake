@@ -217,12 +217,7 @@ endif()
 
 
 if(WITH_THORVG)
-  set(ThorVG_ROOT_DIR ${LIBDIR}/thorvg)
   find_package(ThorVG)
-  if(NOT ThorVG_FOUND)
-    message(WARNING "ThorVG not found, disabling WITH_THORVG")
-    set(WITH_THORVG OFF)
-  endif()
 endif()
 
 if(WITH_HARFBUZZ)
