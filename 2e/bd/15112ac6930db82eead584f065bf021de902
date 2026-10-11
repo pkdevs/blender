@@ -1,0 +1,1 @@
+Referenced by issue #165006, Subdivision Surface: UV maps of the result differ from evaluation to evaluation (data race when UVs at a vertex are nearly, but not exactly, equal)
