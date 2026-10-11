@@ -93,7 +93,31 @@ static void arrow_draw_geom(const ArrowGizmo3D *arrow,
   GPU_viewport_size_get_f(viewport);
   immUniform2fv("viewportSize", &viewport[2]);
 
-  if (draw_style == ED_GIZMO_ARROW_STYLE_CROSS) {
+  if (draw_style == ED_GIZMO_ARROW_STYLE_HANDLE) {
+    /* A dot with a dark rim so it reads over any geometry. Selection uses a larger dot, so it is
+     * easy to grab with a finger or pen. */
+    immUnbindProgram();
+    unbind_shader = false;
+    const float size = 12.0f * U.pixelsize;
+    const float rim[4] = {0.0f, 0.0f, 0.0f, 0.6f * color[3]};
+    GPU_program_point_size(true);
+    immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
+    if (!select) {
+      immUniform1f("size", size + 3.0f * U.pixelsize);
+      immUniformColor4fv(rim);
+      immBegin(GPU_PRIM_POINTS, 1);
+      immVertex3f(pos, 0.0f, 0.0f, 0.0f);
+      immEnd();
+    }
+    immUniform1f("size", select ? size * 2.5f : size);
+    immUniformColor4fv(color);
+    immBegin(GPU_PRIM_POINTS, 1);
+    immVertex3f(pos, 0.0f, 0.0f, 0.0f);
+    immEnd();
+    immUnbindProgram();
+    GPU_program_point_size(false);
+  }
+  else if (draw_style == ED_GIZMO_ARROW_STYLE_CROSS) {
     immUniform1f("lineWidth", U.pixelsize + WM_gizmo_select_bias(select));
     immUniformColor4fv(color);
 
@@ -557,6 +581,7 @@ static void GIZMO_GT_arrow_3d(wmGizmoType *gzt)
       {ED_GIZMO_ARROW_STYLE_BOX, "BOX", 0, "Box", ""},
       {ED_GIZMO_ARROW_STYLE_CONE, "CONE", 0, "Cone", ""},
       {ED_GIZMO_ARROW_STYLE_PLANE, "PLANE", 0, "Plane", ""},
+      {ED_GIZMO_ARROW_STYLE_HANDLE, "HANDLE", 0, "Handle", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
   static const EnumPropertyItem rna_enum_draw_options_items[] = {

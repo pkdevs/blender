@@ -231,7 +231,11 @@ class LinearGizmo : public NodeGizmos {
     static_assert(int(GEO_NODE_LINEAR_GIZMO_DRAW_STYLE_ARROW) == int(ED_GIZMO_ARROW_STYLE_NORMAL));
     static_assert(int(GEO_NODE_LINEAR_GIZMO_DRAW_STYLE_BOX) == int(ED_GIZMO_ARROW_STYLE_BOX));
     static_assert(int(GEO_NODE_LINEAR_GIZMO_DRAW_STYLE_CROSS) == int(ED_GIZMO_ARROW_STYLE_CROSS));
-    RNA_enum_set(gizmo_->ptr, "draw_style", storage.draw_style);
+    RNA_enum_set(gizmo_->ptr,
+                 "draw_style",
+                 storage.draw_style == GEO_NODE_LINEAR_GIZMO_DRAW_STYLE_HANDLE ?
+                     ED_GIZMO_ARROW_STYLE_HANDLE :
+                     storage.draw_style);
 
     WM_gizmo_set_line_width(gizmo_, 1.0f);
 

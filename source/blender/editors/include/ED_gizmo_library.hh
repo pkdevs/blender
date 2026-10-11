@@ -59,6 +59,8 @@ enum {
   ED_GIZMO_ARROW_STYLE_BOX = 2,
   ED_GIZMO_ARROW_STYLE_CONE = 3,
   ED_GIZMO_ARROW_STYLE_PLANE = 4,
+  /** A small round handle at the gizmo's position, without a stem. */
+  ED_GIZMO_ARROW_STYLE_HANDLE = 5,
 };
 
 /* transform */
