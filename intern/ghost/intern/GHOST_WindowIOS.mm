@@ -24,6 +24,8 @@
 #import <objc/runtime.h>
 #import <UIKit/UIPencilInteraction.h>
 
+#import "GHOST_IOSPlatform.hh"
+
 #include <unordered_map>
 
 // #define IOS_INPUT_LOGGING
@@ -505,7 +507,7 @@ static UIButton *blenderIOSSwiftButton()
     _selection.isAccessibilityElement = NO;
     _selection.accessibilityIdentifier = @"blender.toolbar.selection";
     _selection.hidden = YES;
-    UIButtonConfiguration *configuration = [UIButtonConfiguration prominentGlassButtonConfiguration];
+    UIButtonConfiguration *configuration = GHOSTIOSGlassButtonConfiguration(YES);
     configuration.baseBackgroundColor = UIColor.systemBlueColor;
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     configuration.automaticallyUpdateForSelection = NO;
@@ -663,7 +665,11 @@ static UIButton *blenderIOSSwiftButton()
 @end
 
 /* GHOSTUIWindow interface. */
+#if defined(APPLE_TARGET_VISIONOS)
+@interface GHOSTUIWindow : UIWindow <UIGestureRecognizerDelegate>
+#else
 @interface GHOSTUIWindow : UIWindow <UIGestureRecognizerDelegate, UIPencilInteractionDelegate>
+#endif
 {
   GHOST_SystemIOS *system;
   GHOST_WindowIOS *window;
@@ -677,9 +683,11 @@ static UIButton *blenderIOSSwiftButton()
   GHOSTUIPinchGestureRecognizer *zoom_gesture_recognizer;
   UIRotationGestureRecognizer *rotation_gesture_recognizer;
   GHOSTUIHoverGestureRecognizer *hover_gesture_recognizer;
+#if !defined(APPLE_TARGET_VISIONOS)
   UIPencilInteraction *pencil_interaction;
   UIScreenEdgePanGestureRecognizer *edge_swipe_left;
   UIScreenEdgePanGestureRecognizer *edge_swipe_right;
+#endif
   // GHOSTUILongPressGestureRecognizer *long_press_gesture_recognizer;
 
   /* Data from the Apple pencil */
@@ -932,7 +940,8 @@ static UIButton *blenderIOSSwiftButton()
   rotation_gesture_recognizer.allowedTouchTypes = @[ @(UITouchTypeDirect) ];
   [window->getView() addGestureRecognizer:rotation_gesture_recognizer];
 
-  /* Edge swipe. */
+#if !defined(APPLE_TARGET_VISIONOS)
+  /* Edge swipe: visionOS windows have no screen edges. */
   edge_swipe_left = [[UIScreenEdgePanGestureRecognizer alloc]
       initWithTarget:self
               action:@selector(handleEdgeSwipe:)];
@@ -948,6 +957,7 @@ static UIButton *blenderIOSSwiftButton()
   edge_swipe_right.delegate = self;
   edge_swipe_right.allowedTouchTypes = @[ @(UITouchTypeDirect) ];
   [window->getView() addGestureRecognizer:edge_swipe_right];
+#endif
 
   /* Apple Pencil hover recognizer. */
   hover_gesture_recognizer = [[GHOSTUIHoverGestureRecognizer alloc]
@@ -959,10 +969,12 @@ static UIButton *blenderIOSSwiftButton()
   [self addGestureRecognizer:hover_gesture_recognizer];
   current_pencil_touch = nil;
 
+#if !defined(APPLE_TARGET_VISIONOS)
   /**  Apple Pencil double-tap. */
   pencil_interaction = [[UIPencilInteraction alloc] init];
   pencil_interaction.delegate = self;
   [window->getView() addInteraction:pencil_interaction];
+#endif
 }
 
 /* Turn the user inputs into Blender events.
@@ -1111,8 +1123,11 @@ static UIButton *blenderIOSSwiftButton()
       gestureRecognizer == pan_gesture_recognizer ||
       gestureRecognizer == pan2f_gesture_recognizer ||
       gestureRecognizer == zoom_gesture_recognizer ||
-      gestureRecognizer == rotation_gesture_recognizer || gestureRecognizer == edge_swipe_left ||
-      gestureRecognizer == edge_swipe_right || gestureRecognizer == hover_gesture_recognizer)
+      gestureRecognizer == rotation_gesture_recognizer ||
+#if !defined(APPLE_TARGET_VISIONOS)
+      gestureRecognizer == edge_swipe_left || gestureRecognizer == edge_swipe_right ||
+#endif
+      gestureRecognizer == hover_gesture_recognizer)
   {
     return [self touchBeganInBlenderViewport:touch];
   }
@@ -1548,6 +1563,7 @@ static UIButton *blenderIOSSwiftButton()
   }
 }
 
+#if !defined(APPLE_TARGET_VISIONOS)
 - (void)handleEdgeSwipe:(UIScreenEdgePanGestureRecognizer *)gesture
 {
   if (gesture.state != UIGestureRecognizerStateEnded) {
@@ -1574,6 +1590,7 @@ static UIButton *blenderIOSSwiftButton()
   system->pushEvent(std::make_unique<GHOST_EventTouch>(
       system->getMilliSeconds(), window, ghostEventType, location.x, location.y));
 }
+#endif
 
 - (void)handleHover:(GHOSTUIHoverGestureRecognizer *)sender
 {
@@ -1684,6 +1701,7 @@ static UIButton *blenderIOSSwiftButton()
   }
 }
 
+#if !defined(APPLE_TARGET_VISIONOS)
 - (void)togglePencilMenuForInteraction:(UIPencilInteraction *)interaction
                             hoverPose:(UIPencilHoverPose *)pose
 {
@@ -1725,6 +1743,7 @@ static UIButton *blenderIOSSwiftButton()
     [self togglePencilMenuForInteraction:interaction hoverPose:squeeze.hoverPose];
   }
 }
+#endif
 
 - (void)beginFrame
 {
@@ -1891,10 +1910,12 @@ static UIButton *blenderIOSSwiftButton()
 
     text_field.contentScaleFactor = window->getWindowScaleFactor();
 
+#if !defined(APPLE_TARGET_VISIONOS)
     if (toolbar_enabled) {
       [self initToolbar];
       text_field.inputAccessoryView = toolbar;
     }
+#endif
 
     [window->rootWindow addSubview:text_field];
 
@@ -2286,6 +2307,20 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
 @property(nonatomic, copy) void (^showQuickActionsChanged)(BOOL);
 @end
 
+#if defined(APPLE_TARGET_VISIONOS)
+/** `VisionChrome.swift`: the window's controls as visionOS ornaments. */
+@protocol GHOSTIOSVisionChrome <NSObject>
+- (instancetype)initWithController:(UIViewController *)controller choose:(void (^)(NSString *))choose;
+- (void)updateTools:(NSArray *)tools
+             images:(NSDictionary<NSString *, UIImage *> *)images
+     selectedImages:(NSDictionary<NSString *, UIImage *> *)selectedImages
+              menus:(NSDictionary<NSString *, UIMenu *> *)menus;
+- (void)setActiveTool:(NSString *)identifier;
+- (void)setContextMenu:(UIMenu *)menu;
+- (void)setActions:(NSArray<UIView *> *)actions;
+@end
+#endif
+
 @interface GHOST_IOSViewController : UIViewController <UIEditMenuInteractionDelegate,
                                                        GHOSTIOSPencilMenuDelegate,
                                                        UIGestureRecognizerDelegate>
@@ -2341,13 +2376,16 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIBarButtonItemGroup *_top_settings_group;
   NSDictionary *_top_settings_values;
   GHOSTIOSPassThroughVisualEffectView *_tool_rail;
-  UIGlassEffect *_tool_rail_glass_effect;
+#if defined(APPLE_TARGET_VISIONOS)
+  NSObject<GHOSTIOSVisionChrome> *_vision_chrome;
+#endif
+  UIVisualEffect *_tool_rail_glass_effect;
   UIScrollView *_tool_scroll;
   UIButton *_tool_drag_handle;
   NSLayoutConstraint *_tool_drag_handle_height_constraint;
   UIStackView *_tool_stack;
   GHOSTIOSPassThroughVisualEffectView *_action_rail;
-  UIGlassEffect *_action_rail_glass_effect;
+  UIVisualEffect *_action_rail_glass_effect;
   UIScrollView *_action_scroll;
   UIStackView *_action_stack;
   UIView *_action_group;
@@ -2368,8 +2406,10 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   UIView *_view_gizmo_hotspot;
   UIView *_view_gizmo_feedback;
   NSArray *_view_gizmo_geometry;
+#if !defined(APPLE_TARGET_VISIONOS)
   UISelectionFeedbackGenerator *_view_gizmo_selection_feedback;
   UIImpactFeedbackGenerator *_view_gizmo_open_feedback;
+#endif
   BOOL _view_gizmo_hovered;
   BOOL _view_gizmo_pressed;
   NSMutableArray *_view_pie_buttons;
@@ -2458,7 +2498,7 @@ static NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
   [self updateMTKViewDrawableScale];
   /* Set the refresh rate to the screen's maximum. There may be some value in capping
    * this value to preserve battery life (60fps seems to work well). */
-  _view.preferredFramesPerSecond = [UIScreen mainScreen].maximumFramesPerSecond;
+  _view.preferredFramesPerSecond = GHOSTIOSMaximumFramesPerSecond();
   _renderer = [[GHOST_IOSMetalRenderer alloc] initWithWindow:_ghost_window];
   if (!_renderer) {
     NSLog(@"Renderer initialization failed");
@@ -2590,8 +2630,7 @@ bool GHOST_ios_document_window_visible()
 
 - (void)updateMTKViewDrawableScale
 {
-  UIScreen *screen = _view.window.screen ?: [UIScreen mainScreen];
-  CGFloat scale = screen.nativeScale > 0.0 ? screen.nativeScale : screen.scale;
+  CGFloat scale = GHOSTIOSDisplayScale(_view);
   if (scale <= 0.0) {
     scale = 1.0;
   }
@@ -2667,6 +2706,9 @@ bool GHOST_ios_document_window_visible()
   [_compile_indicator stop];
   [_compile_indicator release];
   [_render release];
+#if defined(APPLE_TARGET_VISIONOS)
+  [_vision_chrome release];
+#endif
   [_settings release];
   [_quick_actions release];
   [_viewport_state release];
@@ -2674,8 +2716,10 @@ bool GHOST_ios_document_window_visible()
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [_renderer release];
   [_view_gizmo_geometry release];
+#if !defined(APPLE_TARGET_VISIONOS)
   [_view_gizmo_selection_feedback release];
   [_view_gizmo_open_feedback release];
+#endif
   _pencil_menu.delegate = nil;
   [_pencil_menu release];
   [_toolbar_refresh_timer invalidate];
@@ -3899,7 +3943,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _action_toggle_width_constraint.active = YES;
   _action_toggle_trailing_constraint.active = collapsed;
 
-  UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
+  UIButtonConfiguration *configuration = GHOSTIOSGlassButtonConfiguration(NO);
   configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
   configuration.title = collapsed ? @"Actions" : nil;
   configuration.titleLineBreakMode = NSLineBreakByTruncatingTail;
@@ -4052,7 +4096,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [self setOverlayShown:!hidden];
   if (hidden && !_show_interface_button) {
     /* Faint until a Pencil or pointer comes near, so it does not compete with the work. */
-    UIButtonConfiguration *config = [UIButtonConfiguration glassButtonConfiguration];
+    UIButtonConfiguration *config = GHOSTIOSGlassButtonConfiguration(NO);
     config.image = [UIImage systemImageNamed:@"arrow.down.right.and.arrow.up.left"];
     config.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     __block GHOST_IOSViewController *controller = self;
@@ -4080,7 +4124,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() ? 0 : 0.25
       animations:^{ button.alpha = hidden ? 0.35 : 0; }
       completion:^(BOOL) { button.hidden = !self->_interface_hidden; }];
+#if !defined(APPLE_TARGET_VISIONOS)
   [self setNeedsStatusBarAppearanceUpdate];
+#endif
   [self.view setNeedsLayout];
 }
 
@@ -4598,9 +4644,11 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   [previous_hover_button setNeedsUpdateConfiguration];
   _view_pie_hover_button.selected = YES;
   [_view_pie_hover_button setNeedsUpdateConfiguration];
+#if !defined(APPLE_TARGET_VISIONOS)
   if (hoverButton) {
     [_view_gizmo_selection_feedback selectionChanged];
   }
+#endif
 }
 
 - (void)updateViewGizmoFeedback
@@ -4640,7 +4688,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 - (void)handleViewGizmoPress:(UIControl *)control
 {
   _view_gizmo_pressed = YES;
+#if !defined(APPLE_TARGET_VISIONOS)
   [_view_gizmo_open_feedback prepare];
+#endif
   [self updateViewGizmoFeedback];
 }
 
@@ -4803,8 +4853,10 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     /* Consume the pending Pencil tap before it can become a Blender click. */
     [(GHOSTUIWindow *)_view.window cancelPencilStroke];
     [self setViewPieVisible:YES animated:YES];
+#if !defined(APPLE_TARGET_VISIONOS)
     [_view_gizmo_open_feedback impactOccurred];
     [_view_gizmo_selection_feedback prepare];
+#endif
   }
   else if (gesture.state == UIGestureRecognizerStateChanged) {
     [self setViewPieHoverButton:[self viewPieButtonAtGestureLocation:gesture]];
@@ -5128,11 +5180,13 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   UIBarButtonItem *control = [[[UIBarButtonItem alloc]
       initWithCustomView:_mesh_select_control] autorelease];
   control.identifier = @"blender.mesh-selection";
+#if !defined(APPLE_TARGET_VISIONOS)
   control.hidesSharedBackground = YES;
   if (@available(iOS 27.0, *)) {
     control.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
     compact.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
   }
+#endif
   _mesh_select_group = [UIBarButtonItemGroup fixedGroupWithRepresentativeItem:compact
                                                                       items:@[control]];
   _mesh_select_group.hidden = YES;
@@ -5513,21 +5567,23 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
     _viewport_shading_button.creatingFixedGroup,
     _share_button.creatingFixedGroup,
   ];
+  _top_bar_item.pinnedTrailingGroup = _actions_button.creatingFixedGroup;
+#if !defined(APPLE_TARGET_VISIONOS)
   _viewport_shading_button.sharesBackground = NO;
   /* Back to Documents is navigation, not a tool: give it its own glass at the top left, like the
    * system's back button. */
   _documents_button.sharesBackground = NO;
-  _top_bar_item.pinnedTrailingGroup = _actions_button.creatingFixedGroup;
   if (@available(iOS 27.0, *)) {
     _mode_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
     _undo_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
     _viewport_shading_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
     _share_button.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
   }
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+#  if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
   if (@available(iOS 27.1, *)) {
     _top_bar_item.verticalBarCompressionBehavior = UIVerticalBarCompressionBehaviorPrefersBarItems;
   }
+#  endif
 #endif
   if (self.navigationController) {
     return;
@@ -5628,9 +5684,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _compile_indicator = [[GHOSTIOSCompileIndicator alloc]
       initWithOverlay:_overlay_view
                 below:self.navigationController ? nil : _top_bar];
+#if !defined(APPLE_TARGET_VISIONOS)
+  /* Apple Pencil's palette; visionOS has no Pencil to bring it up. */
   _pencil_menu = [[blenderIOSSwiftClass(@"GHOSTIOSSwiftPencilMenu") alloc]
       initWithFrame:_overlay_view.bounds];
   _pencil_menu.delegate = self;
+#endif
   const BOOL phone = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;
   [(GHOSTUIWindow *)_ghost_window->rootWindow setPencilContextMenu:_pencil_menu];
   _toolbar_buttons = [[NSMutableArray alloc] init];
@@ -5639,8 +5698,7 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _toolbar_expanded = NO;
   _view_pie_visible = NO;
 
-  _tool_rail_glass_effect = [[UIGlassEffect effectWithStyle:UIGlassEffectStyleClear] retain];
-  _tool_rail_glass_effect.interactive = YES;
+  _tool_rail_glass_effect = [GHOSTIOSGlassEffect(YES, YES) retain];
   _tool_rail =
       [[[GHOSTIOSPassThroughVisualEffectView alloc] initWithEffect:_tool_rail_glass_effect] autorelease];
   _tool_rail.translatesAutoresizingMaskIntoConstraints = NO;
@@ -5771,10 +5829,12 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
   _view_gizmo_hotspot.accessibilityIdentifier = @"blender.viewport.navigation";
   _view_gizmo_hotspot.accessibilityLabel = @"View navigation";
   [_overlay_view addSubview:_view_gizmo_hotspot];
+#if !defined(APPLE_TARGET_VISIONOS)
   _view_gizmo_selection_feedback = [[UISelectionFeedbackGenerator
       feedbackGeneratorForView:_view_gizmo_hotspot] retain];
   _view_gizmo_open_feedback = [[UIImpactFeedbackGenerator
       feedbackGeneratorWithStyle:UIImpactFeedbackStyleSoft forView:_view_gizmo_hotspot] retain];
+#endif
   _view_gizmo_feedback = [[[UIView alloc] initWithFrame:CGRectMake(14, 14, 84, 84)] autorelease];
   _view_gizmo_feedback.userInteractionEnabled = NO;
   _view_gizmo_feedback.layer.cornerRadius = 42;
@@ -5826,7 +5886,9 @@ static const CGFloat GHOSTIOSActionsPillWidth = 88.0;
 
   UILayoutGuide *safe_area = _overlay_view.safeAreaLayoutGuide;
   /* The radial view is frontmost and passes through when the palette is closed. */
-  [_overlay_view addSubview:_pencil_menu];
+  if (_pencil_menu) {
+    [_overlay_view addSubview:_pencil_menu];
+  }
   _tool_rail_width_constraint = [_tool_rail.widthAnchor constraintEqualToConstant:64.0];
   _tool_rail_height_constraint = [_tool_rail.heightAnchor constraintEqualToConstant:64.0];
   _tool_rail_bottom_constraint = [[_tool_rail.bottomAnchor constraintEqualToAnchor:safe_area.bottomAnchor
@@ -6645,7 +6707,7 @@ static char blender_brush_image_key;
   }
   if (!_toolbar_label_bubble) {
     _toolbar_label_bubble = [[[UIVisualEffectView alloc]
-        initWithEffect:[UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular]] autorelease];
+        initWithEffect:GHOSTIOSGlassEffect(NO, NO)] autorelease];
     _toolbar_label_bubble.userInteractionEnabled = NO;
     _toolbar_label_bubble.clipsToBounds = YES;
     _toolbar_label_bubble.accessibilityIdentifier = @"blender.toolbar.tool-name";

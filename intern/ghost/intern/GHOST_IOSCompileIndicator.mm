@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #import "GHOST_IOSCompileIndicator.hh"
+#import "GHOST_IOSPlatform.hh"
 #import "GHOST_IOSRuntime.hh"
 #import <QuartzCore/QuartzCore.h>
 
@@ -28,7 +29,7 @@ static const double kMinimumVisible = 0.5;
 {
   if ((self = [super init])) {
     _pill = [[UIVisualEffectView alloc]
-        initWithEffect:[UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular]];
+        initWithEffect:GHOSTIOSGlassEffect(NO, NO)];
     _pill.userInteractionEnabled = NO;
     _pill.layer.cornerRadius = 16;
     _pill.layer.cornerCurve = kCACornerCurveContinuous;

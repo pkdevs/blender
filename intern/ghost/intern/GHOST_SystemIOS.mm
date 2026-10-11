@@ -7,6 +7,7 @@
 #include "GHOST_ContextIOS.hh"
 #include "GHOST_IOSRuntime.hh"
 #include "GHOST_IOSTheme.hh"
+#import "GHOST_IOSPlatform.hh"
 #include "GHOST_WindowIOS.hh"
 #include <algorithm>
 #include <atomic>
@@ -354,8 +355,12 @@ void GHOST_ios_unregister_window(UIWindow *window)
 
   g_window_scene = (UIWindowScene *)scene;
   /* Draw as often as the display shows frames: 120 times a second with ProMotion. */
-  engine_frame_microseconds.store(
-      1000000 / std::max<NSInteger>(60, g_window_scene.screen.maximumFramesPerSecond));
+#if defined(APPLE_TARGET_VISIONOS)
+  const NSInteger frames_per_second = GHOSTIOSMaximumFramesPerSecond();
+#else
+  const NSInteger frames_per_second = g_window_scene.screen.maximumFramesPerSecond;
+#endif
+  engine_frame_microseconds.store(1000000 / std::max<NSInteger>(60, frames_per_second));
   for (UIWindow *window in native_windows) {
     window.windowScene = g_window_scene;
   }
@@ -867,8 +872,8 @@ void GHOST_SystemIOS::getMainDisplayDimensions(uint32_t &width, uint32_t &height
   __block CGRect screenRect;
   __block CGFloat scaling_fac;
   GHOST_ios_main_sync(^{
-    screenRect = [UIScreen mainScreen].bounds;
-    scaling_fac = [UIScreen mainScreen].scale;
+    screenRect = GHOSTIOSDisplayBounds();
+    scaling_fac = GHOSTIOSDisplayScale(nil);
   });
   CGFloat screenWidth = screenRect.size.width * scaling_fac;
   CGFloat screenHeight = screenRect.size.height * scaling_fac;
@@ -907,7 +912,7 @@ GHOST_IWindow *GHOST_SystemIOS::createWindow(const char *title,
     /* Create window at native size. */
     __block CGRect bounds;
     GHOST_ios_main_sync(^{
-      bounds = [UIScreen mainScreen].bounds;
+      bounds = GHOSTIOSDisplayBounds();
     });
 
     window = (GHOST_IWindow *)new GHOST_WindowIOS(this,

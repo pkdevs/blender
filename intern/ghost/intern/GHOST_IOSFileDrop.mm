@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #import "GHOST_IOSFileDrop.hh"
+#import "GHOST_IOSPlatform.hh"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 /* Image formats Blender reads directly. Others, such as HEIC from Photos, are converted to PNG. */
@@ -140,8 +141,7 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
       drop_files(paths, point);
     }
     else {
-      [[[[UINotificationFeedbackGenerator alloc] init] autorelease]
-          notificationOccurred:UINotificationFeedbackTypeError];
+      GHOSTIOSNotifyError();
     }
   });
   dispatch_release(group);

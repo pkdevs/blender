@@ -5,6 +5,8 @@
 
 #import <UIKit/UIKit.h>
 
+#import "GHOST_IOSPlatform.hh"
+
 #include <algorithm>
 #include <atomic>
 
@@ -36,7 +38,7 @@ static std::atomic<bool> frame_rate_requested{false};
 {
   if (!_link) {
     _link = [[CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)] retain];
-    const float maximum = float(UIScreen.mainScreen.maximumFramesPerSecond);
+    const float maximum = float(GHOSTIOSMaximumFramesPerSecond());
     _link.preferredFrameRateRange = CAFrameRateRangeMake(std::min(80.0f, maximum), maximum, maximum);
     [_link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
   }

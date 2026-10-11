@@ -312,7 +312,7 @@ static NSURL *launcher_pending_url = nil;
   self.view.backgroundColor = launcherColor(0x3D3D3D, 1);
   UIDocumentViewControllerLaunchOptions *launch = self.launchOptions;
   launch.title = @"Blender";
-  if (@available(iOS 27.0, *)) {
+  if (@available(iOS 27.0, visionOS 27.0, *)) {
     launch.subtitle = @"Create a new scene or open one";
   }
   /* As in Pages: choosing a template first, or starting at once from General. Both create
