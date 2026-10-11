@@ -73,6 +73,7 @@ ccl_device_forceinline bool integrator_intersect_terminate(KernelGlobals kg,
       }
 #ifdef __VOLUME__
       else if (!integrator_state_volume_stack_is_empty(kg, state)) {
+        // !!!(Tri):
         /* TODO: only do this for emissive volumes. */
         INTEGRATOR_STATE_WRITE(state, path, flag) |= PATH_RAY_TERMINATE_IN_NEXT_VOLUME;
       }
@@ -231,18 +232,18 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
     const int shader = (hit_surface) ? intersection_get_shader(kg, isect) : SHADER_NONE;
     const int flags = (hit_surface) ? kernel_data_fetch(shaders, shader).flags : 0;
 
-    // TODO(Tri): Properly separate ReSTIR Path!
+    // TODO(Tri): Volume dimming
     if (!integrator_intersect_terminate(kg, state, flags)) {
       if (kernel_data.integrator.volume_ray_marching) {
         integrator_path_next(
             state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING);
       }
       else {
-        integrator_finalize_reservoir(kg, state, render_buffer);
         integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME);
       }
     }
     else {
+      integrator_finalize_reservoir(kg, state, render_buffer);
       integrator_path_terminate(kg, state, render_buffer, current_kernel);
     }
     return;
@@ -292,7 +293,6 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
   else {
     /* Nothing hit, continue with background kernel. */
     if (integrator_intersect_skip_lights(kg, state)) {
-printf("integrator_intersect_next_kernel(); supposedly entring Background Kernel through integrator_finalize_reservoir()\n\n");
       integrator_finalize_reservoir(kg, state, render_buffer);
       integrator_path_terminate(kg, state, render_buffer, current_kernel);
     }

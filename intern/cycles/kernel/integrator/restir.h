@@ -1068,6 +1068,15 @@ ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL
     film_write_combined_pass(kg, path_visibility, reservoir.path_flag, sample, reservoir.radiance, buffer);
   }
 
+const float3 rad_ = reservoir.radiance;
+if (rad_.x > 0 || rad_.y > 0 || rad_.z > 0) {
+ccl_debug_printf("integrator_evaluate_restir_pt(): path_flag & PATH_RAY_VOLUME_PASS=%d\n\n",
+    reservoir.path_flag & PATH_RAY_VOLUME_PASS);
+} else {
+  ccl_debug_printf("integrator_evaluate_restir_pt(): rad=(%f, %f, %f)\n\n", 
+      (double)rad_.x, (double)rad_.y, (double)rad_.z);
+}
+
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
 }
 

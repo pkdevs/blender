@@ -2674,6 +2674,14 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   }
 #  endif
 
+// !!!: Dimming issue of volumes in ReSTIR still persists
+  if (INTEGRATOR_STATE(state, path, bounce) == 0) {
+    // ???(Tri): What about bounce 0?
+    /* This path's primary vertex is a volume scatter, not a surface, so forward hits at
+     * bounce 1 must not be merged into the surface DI reservoir. */
+    INTEGRATOR_STATE_WRITE(state, path, restir_di_disabled) = true;
+  }
+
   path_state_next(kg, state, label, sd->flag);
   return true;
 }

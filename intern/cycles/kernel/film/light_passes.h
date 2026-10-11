@@ -161,7 +161,7 @@ ccl_device_forceinline void film_clamp_light(KernelGlobals kg,
  * Adaptive sampling.
  */
 
-// This is where the sample count is incremented in the buffer using an atomic add. This is technically the “commit” of the sample’s existence, rather than its color.
+// This is where the sample count is incremented in the buffer using an atomic add. This is technically the “commit” of the sample’s existence, rather than its color
 ccl_device_inline int film_write_sample(KernelGlobals kg,
                                         ConstIntegratorState state,
                                         ccl_global float *ccl_restrict render_buffer,
@@ -616,6 +616,7 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
   const uint32_t path_flag = INTEGRATOR_STATE(state, shadow_path, flag);
   const int sample = INTEGRATOR_STATE(state, shadow_path, sample);
 
+// !!!(Tri): Wrong! It would feed the legacy shadow results into the PT reservoir as well
 // // ???: Wrong? GI/PT reservoir insertion point? Do inside `film_write_background()` instead?
 // // !!!: >>> TEMPORARILY DISABLED
 //   // TODO: Move before AO for benchmark parity?
@@ -918,6 +919,8 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg, // !!!: D
 {
   const bool use_restir = kernel_data.integrator.use_restir;
 
+ccl_debug_printf("integrator_finalize_reservoir() FIN px=%u\n", INTEGRATOR_STATE(state, path, render_pixel_index));
+
   if (!use_restir) {
     return;
   }
@@ -954,12 +957,13 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg, // !!!: D
 
 if (finalize_ok) {
   ccl_debug_printf(
-      "\n=== DI integrator_finalize_reservoir(); FINALIZE: AFTER FINALIZE ===\n\n"
+      "\n=== DI integrator_finalize_reservoir(); AFTER FINALIZE px=%u ===\n\n"
       "finalize_ok=%d\n"
       "total_weight=%f\n"
       "luminance=%f\n"
       "M=%d\n"
       "prim=%d object=%d flags=%u type=%d\n",
+      INTEGRATOR_STATE(state, path, render_pixel_index),
       (int)finalize_ok,
       (double)reservoir.total_weight,
       (double)reservoir.luminance,
