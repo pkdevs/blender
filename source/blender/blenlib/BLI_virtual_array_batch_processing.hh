@@ -236,6 +236,24 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
       ...);
 }
 
+template<typename Out, typename ElementFn, typename... In>
+inline void batch_process__n_in__1_out(const IndexMask &mask,
+                                       const VArray<In> &...in_params,
+                                       MutableSpan<Out> out_param,
+                                       ElementFn &&element_fn)
+{
+  constexpr auto param_tags =
+      TypeSequence<ParamTag<ParamCategory::Input, In>..., ParamTag<ParamCategory::Output, Out>>();
+  std::tuple params{in_params.get_implementation()..., out_param.data()};
+  mask.foreach_segment([&](const IndexMaskSegment segment) {
+    batch_process<64>(param_tags,
+                      std::make_index_sequence<param_tags.size()>(),
+                      std::forward<ElementFn>(element_fn),
+                      segment,
+                      params);
+  });
+}
+
 template<typename In1, typename In2, typename Out1, typename ElementFn>
 inline void batch_process__2_varray_in__1_span_out(const IndexMask &mask,
                                                    const VArray<In1> &in1,
@@ -243,17 +261,8 @@ inline void batch_process__2_varray_in__1_span_out(const IndexMask &mask,
                                                    MutableSpan<Out1> out1,
                                                    ElementFn &&element_fn)
 {
-  std::tuple<const VArrayImpl<In1> *, const VArrayImpl<In2> *, Out1 *> params{
-      in1.get_implementation(), in2.get_implementation(), out1.data()};
-  mask.foreach_segment([&](const IndexMaskSegment segment) {
-    batch_process<64>(TypeSequence<ParamTag<ParamCategory::Input, In1>,
-                                   ParamTag<ParamCategory::Input, In2>,
-                                   ParamTag<ParamCategory::Output, Out1>>(),
-                      std::make_index_sequence<3>(),
-                      std::forward<ElementFn>(element_fn),
-                      segment,
-                      params);
-  });
+  batch_process__n_in__1_out<Out1, ElementFn, In1, In2>(
+      mask, in1, in2, out1, std::forward<ElementFn>(element_fn));
 }
 
 }  // namespace blender::varray_batch
