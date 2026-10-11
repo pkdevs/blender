@@ -67,6 +67,11 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
   }
 
   override public var prefersHomeIndicatorAutoHidden: Bool { true }
+
+  override public func viewSafeAreaInsetsDidChange() {
+    super.viewSafeAreaInsetsDidChange()
+    if model.safeAreaInsets != view.safeAreaInsets { model.safeAreaInsets = view.safeAreaInsets }
+  }
 }
 
 /* Holding a finger on the viewport opens Blender's context menu there. */
@@ -170,6 +175,7 @@ public struct DocumentWindow: View {
           .ignoresSafeArea()
         if !model.desktop {
           QuickActionsRow(model: model)
+          ViewGizmoLayer(model: model)
         }
         if !model.viewportReady {
           ProgressView()

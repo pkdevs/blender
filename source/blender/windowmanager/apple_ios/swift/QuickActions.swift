@@ -20,7 +20,7 @@ enum ShellMetrics {
   /** The tool rail's width and its distance from the leading edge. */
   static let railWidth: CGFloat = 64
   static let railLeading: CGFloat = 14
-  /** The navigation gizmo's corner, which the row stays clear of. */
+  /** The navigation gizmo's corner, which the row stays clear of until Blender places it. */
   static let gizmoReserve: CGFloat = 124
   static let rowHeight: CGFloat = 56
   static let buttonHeight: CGFloat = 44
@@ -200,7 +200,13 @@ struct QuickActionsRow: View {
       let width = geometry.size.width
       /* The lane between the tool rail and the navigation gizmo. */
       let laneLeading = ShellMetrics.railLeading + ShellMetrics.railWidth + 12
-      let laneWidth = max(0, width - laneLeading - ShellMetrics.gizmoReserve - 12)
+      /* Up to the navigation gizmo's hotspot, which Blender places in window fractions. */
+      let frame = geometry.frame(in: .global)
+      let gizmo = model.navigationGizmo
+      let hotspot = gizmo.count == 3 ?
+        gizmo[0] * (frame.maxX + frame.minX) - max(44, gizmo[2] * (frame.maxX + frame.minX) + 10) - frame.minX :
+        width - ShellMetrics.gizmoReserve
+      let laneWidth = max(0, hotspot - 12 - laneLeading)
       let wide = width >= ShellMetrics.wideRow
       VStack(spacing: 8) {
         Spacer(minLength: 0)

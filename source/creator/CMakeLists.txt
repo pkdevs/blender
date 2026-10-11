@@ -391,6 +391,7 @@ else()
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/TemplatePicker.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/Timeline.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/UIKitInterop.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/ViewGizmo.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/VisionChrome.swift
     )
     set(IOS_LAUNCHER_RESOURCES

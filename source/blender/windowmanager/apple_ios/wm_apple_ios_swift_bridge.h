@@ -47,6 +47,13 @@ UIMenu *_Nonnull wm_apple_ios_context_menu(void);
 void WM_apple_ios_ui_operator_enum_enqueue(const char *_Nonnull op_name,
                                            const char *_Nonnull prop_name,
                                            const char *_Nonnull prop_value);
+/** A tap on the navigation gizmo, which picks the axis under it. */
+void wm_apple_ios_window_navigation_tap(void *_Nullable window,
+                                        UITapGestureRecognizer *_Nonnull tap);
+/** End the Pencil's stroke, cancelling its tool, when a control takes the touch. */
+void wm_apple_ios_window_cancel_pencil_stroke(void *_Nullable window);
+/** A view command's icon: Blender's, or the symbol. */
+UIImage *_Nullable wm_apple_ios_command_icon(int command, NSString *_Nonnull symbol);
 /** The document window's controller is closing. */
 void wm_apple_ios_document_controller_closed(id _Nonnull controller);
 

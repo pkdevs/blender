@@ -27,11 +27,17 @@ final class ShellModel {
   private(set) var canUndo = false
   /** Adjust Last Operation: the last operator's settings, or none. */
   private(set) var redo: JSON?
+  /** Blender's navigation gizmo: its center and radius, in fractions of the window's width and
+   * height (center) and width (radius). */
+  private(set) var navigationGizmo: [Double] = []
   /** Blender's own interface is showing, as on a desktop computer. */
   private(set) var desktop = false
   /** Blender's viewport has shown its first frame. */
   private(set) var viewportReady = false
   private(set) var documentsAvailable = false
+  /** The window's safe area, without the toolbar's: controls laid out over the whole window,
+   * such as the view pie, keep to it. */
+  var safeAreaInsets = UIEdgeInsets.zero
 
   init(window: UnsafeMutableRawPointer?) {
     self.window = window
@@ -59,6 +65,8 @@ final class ShellModel {
     set(\.brushes, toolbar.dict("brushes"), equal: { jsonEqual($0, $1) })
     set(\.canUndo, toolbar.bool("canUndo"))
     set(\.redo, toolbar.dict("redo"), equal: { jsonEqual($0, $1) })
+    let gizmo = (toolbar["navigationGizmo"] as? [NSNumber])?.map(\.doubleValue) ?? []
+    if gizmo.count == 3 { set(\.navigationGizmo, gizmo) }
     if toolbar.has("desktop") {
       set(\.desktop, toolbar.bool("desktop"))
     }

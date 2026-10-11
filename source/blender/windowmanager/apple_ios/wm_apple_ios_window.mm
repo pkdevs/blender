@@ -68,3 +68,22 @@ extern "C" UIMenu *wm_apple_ios_context_menu()
       },
       nil);
 }
+
+extern "C" void wm_apple_ios_window_navigation_tap(void *window, UITapGestureRecognizer *tap)
+{
+  if (window) {
+    [GHOST_ios_window_native(ghost_window(window)) handleNavigationTap:tap];
+  }
+}
+
+extern "C" void wm_apple_ios_window_cancel_pencil_stroke(void *window)
+{
+  if (window) {
+    [GHOST_ios_window_native(ghost_window(window)) cancelPencilStroke];
+  }
+}
+
+extern "C" UIImage *wm_apple_ios_command_icon(int command, NSString *symbol)
+{
+  return blenderIOSCommandIcon(command, symbol);
+}
