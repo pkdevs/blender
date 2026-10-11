@@ -939,7 +939,7 @@ eSnapMode snap_object_center(SnapObjectContext *sctx,
 {
 
   eSnapMode retval = SCE_SNAP_TO_NONE;
-  if ((snap_to_flag & SCE_SNAP_TO_POINT) && ELEM(ob_eval->type, OB_EMPTY, OB_LAMP, OB_CAMERA)) {
+  if ((snap_to_flag & SCE_SNAP_TO_POINT) && ob_eval ? ELEM(ob_eval->type, OB_EMPTY, OB_LAMP, OB_CAMERA) : false) {
     retval = SCE_SNAP_TO_POINT;
   }
   else if (snap_to_flag & SCE_SNAP_TO_ORIGIN) {
