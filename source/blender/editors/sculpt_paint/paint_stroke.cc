@@ -823,17 +823,28 @@ int PaintStroke::space_stroke(bContext *C,
   const float no_pressure_spacing = paint_space_stroke_spacing_no_pressure(
       this->vc, &paint, this->paint_mode, &brush, last_world_space_position_, zoom_2d_);
   int count = 0;
+
+  /* We want the stroke to have the first daub close to the start location instead of waiting till
+   * we have moved the full space distance. If rake is active, use a shorter spacing for that first
+   * step. */
+  const float rake_spacing = BKE_paint_rake_rotation_spacing(paint, brush, true, true);
+  bool rake_start_step = !rake_started_ && BKE_paint_rake_rotation_active(brush, mode) &&
+                         !(brush.flag & BRUSH_SMOOTH_STROKE) && length >= rake_spacing;
+
   while (length > 0.0f) {
-    const float spacing = paint_space_stroke_spacing_variable(this->vc,
-                                                              &paint,
-                                                              this->paint_mode,
-                                                              &brush,
-                                                              last_world_space_position_,
-                                                              zoom_2d_,
-                                                              last_pressure_,
-                                                              pressure,
-                                                              pressure_delta,
-                                                              length);
+    const float spacing = rake_start_step ?
+                              rake_spacing :
+                              paint_space_stroke_spacing_variable(this->vc,
+                                                                  &paint,
+                                                                  this->paint_mode,
+                                                                  &brush,
+                                                                  last_world_space_position_,
+                                                                  zoom_2d_,
+                                                                  last_pressure_,
+                                                                  pressure,
+                                                                  pressure_delta,
+                                                                  length);
+    rake_start_step = false;
     BLI_assert(spacing >= 0.0f);
 
     if (length >= spacing) {
@@ -867,17 +878,6 @@ int PaintStroke::space_stroke(bContext *C,
     else {
       break;
     }
-  }
-
-  /* We want the stroke to have the first daub close to the start location instead of waiting till
-   * we have moved the full space distance. */
-  bool rake_start_step = !rake_started_ && BKE_paint_rake_rotation_active(brush, mode) &&
-                         !(brush.flag & BRUSH_SMOOTH_STROKE) &&
-                         length >= BKE_paint_rake_rotation_spacing(paint, brush, true, true);
-  if (rake_start_step) {
-    paint_runtime->overlap_factor = paint_stroke_integrate_overlap(brush, 1.0);
-    this->add_step(C, op, final_mouse, final_pressure);
-    count++;
   }
 
   return count;
