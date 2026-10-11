@@ -11,7 +11,30 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from archive_testflight import APP_ENTITLEMENTS, signing_entitlements
 from prepare_testflight import dependencies, macho_type, prepare
+
+
+class ArchiveEntitlementsTest(unittest.TestCase):
+    GPU = 'com.apple.developer.background-tasks.continued-processing.gpu'
+
+    def provisioning(self, **granted):
+        return {'Entitlements': {'application-identifier': 'TEAM.org.blender.test', **granted}}
+
+    def test_app_entitlements_are_signed(self):
+        entitlements = signing_entitlements(self.provisioning(**{self.GPU: True}),
+                                            'TEAM.org.blender.test', 'TEAM', {self.GPU: True})
+        self.assertTrue(entitlements[self.GPU])
+        self.assertEqual(entitlements['application-identifier'], 'TEAM.org.blender.test')
+        self.assertFalse(entitlements['get-task-allow'])
+
+    def test_entitlements_the_profile_lacks_are_refused(self):
+        with self.assertRaisesRegex(ValueError, 'does not grant ' + self.GPU):
+            signing_entitlements(self.provisioning(), 'TEAM.org.blender.test', 'TEAM', {self.GPU: True})
+
+    def test_app_requests_background_gpu(self):
+        self.assertTrue(plistlib.loads(APP_ENTITLEMENTS.read_bytes()).get(self.GPU))
+
 
 
 @unittest.skipUnless(sys.platform == 'darwin', 'Requires the iPhoneOS SDK')

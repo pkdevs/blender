@@ -17,7 +17,33 @@ import tempfile
 from pathlib import Path
 
 
-def archive(app, output, profile, identity, dsym=None):
+# The app's own entitlements, such as rendering with the GPU in the background.
+APP_ENTITLEMENTS = Path(__file__).resolve().parent / 'entitlements.plist'
+
+
+def signing_entitlements(provisioning, identifier, team, requested):
+    """The entitlements to sign the app with: its identity and the app's own entitlements.
+
+    Each of the app's entitlements must be granted by the profile, which follows the capabilities
+    enabled on the App ID; signing without them would silently drop features from the build.
+    """
+    granted = provisioning['Entitlements']
+    entitlements = {
+        'application-identifier': identifier,
+        'com.apple.developer.team-identifier': team,
+        'get-task-allow': granted.get('get-task-allow', False),
+    }
+    if 'keychain-access-groups' in granted:
+        entitlements['keychain-access-groups'] = [identifier]
+    missing = sorted(key for key in requested if key not in granted)
+    if missing:
+        raise ValueError('The provisioning profile does not grant ' + ', '.join(missing) +
+                         ': enable the capability on the App ID and use a profile made after that')
+    entitlements.update(requested)
+    return entitlements
+
+
+def archive(app, output, profile, identity, dsym=None, app_entitlements=APP_ENTITLEMENTS):
     app, output = app.resolve(), output.resolve()
     if output.exists() or app in output.parents:
         raise ValueError('Archive must be a new path outside the input app')
@@ -35,13 +61,8 @@ def archive(app, output, profile, identity, dsym=None):
         bundle = staged / 'Products/Applications' / app.name
         shutil.copytree(app, bundle, symlinks=True)
         shutil.copy2(profile, bundle / 'embedded.mobileprovision')
-        entitlements = {
-            'application-identifier': identifier,
-            'com.apple.developer.team-identifier': team,
-            'get-task-allow': provisioning['Entitlements'].get('get-task-allow', False),
-        }
-        if 'keychain-access-groups' in provisioning['Entitlements']:
-            entitlements['keychain-access-groups'] = [identifier]
+        entitlements = signing_entitlements(provisioning, identifier, team,
+                                            plistlib.loads(Path(app_entitlements).read_bytes()))
         entitlement_path = Path(temporary) / 'entitlements.plist'
         entitlement_path.write_bytes(plistlib.dumps(entitlements))
         for framework in sorted((bundle / 'Frameworks').glob('*.framework')):
@@ -86,8 +107,10 @@ def main():
     parser.add_argument('--profile', type=Path, required=True)
     parser.add_argument('--identity', required=True)
     parser.add_argument('--dsym', type=Path)
+    parser.add_argument('--entitlements', type=Path, default=APP_ENTITLEMENTS,
+                        help='The app\'s own entitlements (default: %(default)s)')
     args = parser.parse_args()
-    archive(args.app, args.output, args.profile, args.identity, args.dsym)
+    archive(args.app, args.output, args.profile, args.identity, args.dsym, args.entitlements)
 
 
 if __name__ == '__main__':

@@ -71,7 +71,14 @@ python3 release/ios/archive_testflight.py /path/to/prepared/Blender.app /path/to
   --dsym /path/to/Blender.app.dSYM
 ```
 
-The archive is locally signed with the supplied profile. Export it using
+The archive is locally signed with the supplied profile and the app's own
+entitlements from `entitlements.plist`, such as rendering with the GPU in the
+background. The profile must grant each of them, so use the development profile
+Xcode makes for the app's own identifier: a wildcard profile cannot carry
+capabilities. After enabling a capability on the App ID, existing profiles become
+invalid; Xcode makes new ones when building for a device and when exporting.
+
+Export it using
 `xcodebuild -exportArchive -allowProvisioningUpdates`, an export options plist
 with `method=app-store-connect`, `signingStyle=automatic` and the developer team.
 Use `destination=export` for a local distribution package or `destination=upload`
