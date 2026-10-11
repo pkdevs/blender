@@ -844,7 +844,8 @@ static void draw_seq_text_get_source(const Strip *strip, char *r_source, size_t 
 static size_t draw_seq_text_get_overlay_string(const TimelineDrawContext &ctx,
                                                const StripDrawContext &strip_ctx,
                                                char *r_overlay_string,
-                                               size_t overlay_string_maxncpy)
+                                               size_t overlay_string_maxncpy,
+                                               const bool show_duration)
 {
   const Strip *strip = strip_ctx.strip;
 
@@ -878,7 +879,7 @@ static size_t draw_seq_text_get_overlay_string(const TimelineDrawContext &ctx,
   }
 
   char strip_duration_text[16];
-  if (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_SHOW_STRIP_DURATION) {
+  if (show_duration && (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_SHOW_STRIP_DURATION)) {
     SNPRINTF_UTF8(strip_duration_text, "%d", int(strip_ctx.strip_length));
     if (i != 0) {
       text_array[i++] = text_sep;
@@ -1094,7 +1095,7 @@ static void draw_seq_text_overlay(const TimelineDrawContext &ctx,
 
   char overlay_string[FILE_MAX];
   size_t overlay_string_len = draw_seq_text_get_overlay_string(
-      ctx, strip_ctx, overlay_string, sizeof(overlay_string));
+      ctx, strip_ctx, overlay_string, sizeof(overlay_string), true);
 
   if (overlay_string_len == 0) {
     return;
@@ -1132,6 +1133,20 @@ static void draw_seq_text_overlay(const TimelineDrawContext &ctx,
   CLAMP(rect.xmax, ctx.v2d->cur.xmin + text_margin, ctx.v2d->cur.xmax);
   if (rect.xmin >= rect.xmax) { /* No space for label left. */
     return;
+  }
+
+  /* A clipped duration would show a wrong value, so leave it out if the label does not fit. */
+  if (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_SHOW_STRIP_DURATION) {
+    BLF_set_default();
+    if (ctx.pixelx * BLF_width(BLF_default(), overlay_string, overlay_string_len) >
+        BLI_rctf_size_x(&rect))
+    {
+      overlay_string_len = draw_seq_text_get_overlay_string(
+          ctx, strip_ctx, overlay_string, sizeof(overlay_string), false);
+      if (overlay_string_len == 0) {
+        return;
+      }
+    }
   }
 
   ui::view2d_text_cache_add_rectf(ctx.v2d, &rect, overlay_string, overlay_string_len, col);
