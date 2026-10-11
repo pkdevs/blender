@@ -133,9 +133,15 @@ struct SvgShape {
 static float3x3 tvg_matrix_to_blender(const tvg::Matrix &m)
 {
   float3x3 mat;
-  mat[0][0] = m.e11; mat[0][1] = m.e12; mat[0][2] = m.e13;
-  mat[1][0] = m.e21; mat[1][1] = m.e22; mat[1][2] = m.e23;
-  mat[2][0] = m.e31; mat[2][1] = m.e32; mat[2][2] = m.e33;
+  mat[0][0] = m.e11;
+  mat[0][1] = m.e12;
+  mat[0][2] = m.e13;
+  mat[1][0] = m.e21;
+  mat[1][1] = m.e22;
+  mat[1][2] = m.e23;
+  mat[2][0] = m.e31;
+  mat[2][1] = m.e32;
+  mat[2][2] = m.e33;
   return mat;
 }
 
@@ -240,9 +246,7 @@ static void read_shape_style(const tvg::Shape &tvg_shape, const float opacity, S
 }
 
 /* Convert ThorVG command/point arrays into Bezier sub-paths. */
-static void read_shape_paths(const tvg::Shape &tvg_shape,
-                             const float3x3 &world,
-                             SvgShape &shape)
+static void read_shape_paths(const tvg::Shape &tvg_shape, const float3x3 &world, SvgShape &shape)
 {
   const tvg::PathCommand *cmds = nullptr;
   const tvg::Point *pts = nullptr;
