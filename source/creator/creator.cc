@@ -73,6 +73,9 @@
 #include "SEQ_modifier.hh"
 
 #include "WM_api.hh"
+#ifdef WITH_APPLE_CROSSPLATFORM
+#  include "WM_apple_ios.hh"
+#endif
 
 #include "RNA_define.hh"
 
@@ -331,6 +334,9 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[]);
 #ifdef WITH_APPLE_CROSSPLATFORM
 int main(int argc, const char **argv)
 {
+  /* The native interface shows the document launcher as soon as the app starts, before Blender
+   * itself does. */
+  blender::WM_apple_ios_native_interface_register();
   return blender::GHOST_iosmain(argc, argv);
 }
 

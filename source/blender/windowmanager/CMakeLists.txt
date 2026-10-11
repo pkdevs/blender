@@ -40,6 +40,7 @@ set(SRC
   intern/wm_apple_ios_dialog.cc
   intern/wm_apple_ios_document.cc
   intern/wm_apple_ios_document.hh
+  intern/wm_apple_ios_native.cc
   intern/wm_menu_type.cc
   intern/wm_native_interface.cc
   intern/wm_operator_props.cc
@@ -178,6 +179,44 @@ endif()
 
 if(WITH_INPUT_IME)
   add_definitions(-DWITH_INPUT_IME)
+endif()
+
+if(WITH_APPLE_CROSSPLATFORM)
+  # The native iPad and Apple Vision Pro interface, around GHOST's window. Its SwiftUI views are
+  # built with the app, see `source/creator/CMakeLists.txt`.
+  list(APPEND INC
+    apple_ios
+  )
+
+  list(APPEND SRC
+    apple_ios/wm_apple_ios_alerts.mm
+    apple_ios/wm_apple_ios_blend_document.mm
+    apple_ios/wm_apple_ios_compile_indicator.mm
+    apple_ios/wm_apple_ios_file_drop.mm
+    apple_ios/wm_apple_ios_interface.mm
+    apple_ios/wm_apple_ios_launcher.mm
+    apple_ios/wm_apple_ios_view_controller.mm
+    apple_ios/wm_apple_ios_view_controller_actions.mm
+    apple_ios/wm_apple_ios_view_controller_brushes.mm
+    apple_ios/wm_apple_ios_view_controller_tools.mm
+    apple_ios/wm_apple_ios_view_controller_top_bar.mm
+    apple_ios/wm_apple_ios_view_controller_view_gizmo.mm
+
+    apple_ios/wm_apple_ios_alerts.hh
+    apple_ios/wm_apple_ios_assets.hh
+    apple_ios/wm_apple_ios_blend_document.hh
+    apple_ios/wm_apple_ios_compile_indicator.hh
+    apple_ios/wm_apple_ios_file_drop.hh
+    apple_ios/wm_apple_ios_icons.hh
+    apple_ios/wm_apple_ios_launcher.hh
+    apple_ios/wm_apple_ios_platform.hh
+    apple_ios/wm_apple_ios_redo_strip.hh
+    apple_ios/wm_apple_ios_render.hh
+    apple_ios/wm_apple_ios_scene_panels.hh
+    apple_ios/wm_apple_ios_swift_bridge.h
+    apple_ios/wm_apple_ios_timeline.hh
+    apple_ios/wm_apple_ios_view_controller.hh
+  )
 endif()
 
 if(WITH_XR_OPENXR)

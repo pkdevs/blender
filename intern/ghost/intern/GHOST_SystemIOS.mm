@@ -49,25 +49,76 @@ const char **argv = nullptr;
 namespace blender {
 struct bContext;
 static bContext *C = nullptr;
-
-/* Implemented in wm.cc. */
-void WM_main_loop_body(bContext *C);
-extern "C" void WM_apple_ios_ui_flush_commands(bContext *C);
-extern "C" double WM_apple_ios_engine_idle_seconds(bContext *C);
-/* Implemented in wm_files.cc. */
-void WM_apple_ios_autosave_now(bContext *C);
 }  // namespace blender
 
-#import "GHOST_IOSDocument.hh"
+#include "GHOST_IOSNativeInterface.hh"
+
+static const GHOST_IOSNativeInterface *native_interface = nullptr;
+
+void GHOST_ios_native_interface_set(const GHOST_IOSNativeInterface *native)
+{
+  native_interface = native;
+}
+
+const GHOST_IOSNativeInterface *GHOST_ios_native_interface()
+{
+  return native_interface;
+}
+
 #include "GHOST_IOSDocumentPicker.hh"
-#import "GHOST_IOSLauncher.hh"
 using blender::C;
-using blender::WM_apple_ios_engine_idle_seconds;
-using blender::WM_apple_ios_ui_flush_commands;
-using blender::WM_main_loop_body;
 int main_ios_callback(int argc, const char **argv);
 
 static UIWindowScene *g_window_scene = nil;
+/** The window the launcher shows in, behind the document window. */
+static UIWindow *launcher_window = nil;
+/** Blender's main window, which shows the open document, see `GHOST_WindowIOS.mm`. */
+extern UIWindow *document_window;
+static bool document_window_visible = false;
+
+void GHOST_ios_document_window_set_visible(bool visible, bool animated)
+{
+  document_window_visible = visible;
+  /* The window, not the view's: a window never shown yet holds no views. */
+  UIWindow *window = document_window;
+  if (window && window.hidden == visible) {
+    /* Cross-fade between the launcher and Blender, as the document opens or closes. */
+    if (visible) {
+      window.alpha = 0;
+      window.hidden = NO;
+      [window makeKeyWindow];
+    }
+    else {
+      [launcher_window makeKeyWindow];
+    }
+    [UIView animateWithDuration:UIAccessibilityIsReduceMotionEnabled() || !animated ? 0 : 0.3
+        animations:^{
+          window.alpha = visible ? 1 : 0;
+        }
+        completion:^(BOOL) {
+          if (!document_window_visible) {
+            window.hidden = YES;
+          }
+        }];
+  }
+  if (native_interface && native_interface->document_window_changed) {
+    native_interface->document_window_changed();
+  }
+}
+
+void *GHOST_ios_document_window_snapshot()
+{
+  UIWindow *window = document_window;
+  if (window == nil || window.hidden) {
+    return nil;
+  }
+  return [window snapshotViewAfterScreenUpdates:NO];
+}
+
+bool GHOST_ios_document_window_visible()
+{
+  return document_window_visible;
+}
 static NSMutableArray<UIWindow *> *native_windows; /* UIKit-only window registry. */
 static std::atomic<bool> engine_active{false};
 static std::atomic<bool> engine_wakeup{false};
@@ -147,7 +198,9 @@ void GHOST_ios_engine_wake()
 
 static void open_document(NSURL *url)
 {
-  GHOST_ios_document_open_url(url);
+  if (native_interface && native_interface->open_url) {
+    native_interface->open_url(url);
+  }
 }
 
 void GHOST_ios_engine_perform(std::function<void(blender::bContext *)> work)
@@ -188,9 +241,9 @@ static void run_engine_autosave()
   if (!engine_autosave_requested.exchange(false)) {
     return;
   }
-  if (C) {
+  if (C && native_interface && native_interface->autosave_now) {
     @autoreleasepool {
-      blender::WM_apple_ios_autosave_now(C);
+      native_interface->autosave_now(C);
     }
   }
   std::vector<std::function<void()>> done;
@@ -253,8 +306,7 @@ static void run_engine()
         break;
       }
       engine_pass_started.store(engine_clock());
-      WM_apple_ios_ui_flush_commands(C);
-      WM_main_loop_body(C);
+      native_interface->engine_step(C);
       if (system->current_active_window_) {
         system->current_active_window_->flushDeferredSwapBuffers();
       }
@@ -263,7 +315,7 @@ static void run_engine()
        * native commands and requests wake the loop at once. */
       if (C) {
         deadline += std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-            std::chrono::duration<double>(WM_apple_ios_engine_idle_seconds(C)));
+            std::chrono::duration<double>(native_interface->engine_idle_seconds(C)));
       }
       if (system->next_active_window_) {
         if (system->current_active_window_) {
@@ -381,7 +433,8 @@ void GHOST_ios_unregister_window(UIWindow *window)
      * comes forward once a document is open. */
     self.window = [[[UIWindow alloc] initWithWindowScene:g_window_scene] autorelease];
     blenderIOSApplyTheme(self.window);
-    self.window.rootViewController = GHOST_ios_launcher_controller();
+    self.window.rootViewController = (UIViewController *)native_interface->launcher_controller();
+    launcher_window = self.window;
     [self.window makeKeyAndVisible];
     NSThread *thread = [[NSThread alloc] initWithBlock:^{
       run_engine();

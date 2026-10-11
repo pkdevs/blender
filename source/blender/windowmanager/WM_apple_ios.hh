@@ -8,7 +8,8 @@
 #include <functional>
 #include <string>
 
-struct GHOST_IOSDialog;
+struct wmIOSDialog;
+class GHOST_WindowIOS;
 
 namespace blender {
 struct bContext;
@@ -17,11 +18,34 @@ struct ReportList;
 struct wmOperatorType;
 
 /* Engine-thread API. UIKit exchanges only owned values and request identifiers. */
+/**
+ * Register the native interface: with GHOST, for the app's windows and its loop, and with the
+ * window manager, in place of parts of Blender's interface, see #wmNativeInterface. Called before
+ * the app starts, as the launcher shows at once.
+ */
+void WM_apple_ios_native_interface_register();
+
+/* The native interface's views, as GHOST asks for them, see #GHOST_IOSNativeInterface.
+ * `UIViewController *` and `MTKView *` are passed as `void *`. */
+
+/**
+ * The document launcher, for the app's first window. It shows at once on launch, styled with
+ * Blender's brand, logo and a large Suzanne to flick around, while Blender starts behind it. It
+ * owns the open document; Blender's window shows only while one is open.
+ */
+void *WM_apple_ios_launcher_controller();
+void *WM_apple_ios_window_controller(void *metal_view, GHOST_WindowIOS *window, void **r_root);
+void WM_apple_ios_document_window_changed();
+/** Follow Blender's unsaved changes, which make the document save itself. */
+void WM_apple_ios_document_set_modified(bool modified);
+/** Open the document at an `NSURL *` the system handed to the app. */
+void WM_apple_ios_open_url(void *url);
+
 bool WM_apple_ios_pencil_hover_active();
 /** Something in Blender changed (notifiers were sent): describe it to the native interface. */
 void WM_apple_ios_ui_tag_changed();
 bool WM_apple_ios_dialog_begin(bContext *C,
-                               const GHOST_IOSDialog &dialog,
+                               const wmIOSDialog &dialog,
                                std::function<void(bContext *, int, uint64_t)> complete,
                                std::function<void(bContext *)> cancel = {},
                                const char *key = "");

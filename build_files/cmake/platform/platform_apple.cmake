@@ -396,6 +396,9 @@ if(WITH_APPLE_CROSSPLATFORM)
   set(PLATFORM_LINKFLAGS
     "-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework UIKit -framework UniformTypeIdentifiers -framework AudioToolbox -framework CoreAudio -framework Metal -framework MetalKit -framework QuartzCore -framework ImageIO -framework GameController -framework CoreGraphics -framework AVFoundation -framework AVKit -framework CoreVideo"
   )
+  # The native interface is split into Objective-C categories, which the linker would otherwise
+  # leave out of static libraries, as nothing refers to their symbols.
+  string(APPEND PLATFORM_LINKFLAGS " -ObjC")
 else()
   set(PLATFORM_LINKFLAGS
     "-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework AppKit -framework Cocoa -framework Carbon -framework AudioUnit -framework AudioToolbox -framework CoreAudio -framework Metal -framework QuartzCore"

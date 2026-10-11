@@ -15,8 +15,8 @@
 #  include "BLT_translation.hh"
 #  include "DNA_screen_types.h"
 #  include "DNA_windowmanager_types.h"
-#  include "GHOST_IOSDialog.hh"
 #  include "GHOST_IOSMessageQueue.hh"
+#  include "wm_apple_ios_alerts.hh"
 
 #  include <atomic>
 #  include <map>
@@ -60,7 +60,7 @@ void removed(bContext *C, void *data)
   }
   auto request = std::move(it->second);
   requests.erase(it);
-  GHOST_ios_dialog_cancel(id);
+  wm_apple_ios_dialog_cancel(id);
   if (request->cancel) {
     request->cancel(C);
   }
@@ -99,7 +99,7 @@ void restore_context(bContext *C, wmWindow *win, ScrArea *area, ARegion *region)
 }  // namespace
 
 bool WM_apple_ios_dialog_begin(bContext *C,
-                               const GHOST_IOSDialog &dialog,
+                               const wmIOSDialog &dialog,
                                std::function<void(bContext *, int, uint64_t)> complete,
                                std::function<void(bContext *)> cancel,
                                const char *key)
@@ -122,7 +122,7 @@ bool WM_apple_ios_dialog_begin(bContext *C,
   requests.emplace(id, std::move(request));
   WM_event_add_ui_handler(
       C, &win->runtime->modalhandlers, handle, removed, data, eWM_EventHandlerFlag(0));
-  if (!GHOST_ios_dialog_begin(win->runtime->ghostwin, id, dialog, completed)) {
+  if (!wm_apple_ios_dialog_begin(win->runtime->ghostwin, id, dialog, completed)) {
     /* Deliver cancellation in a later engine iteration, after invoke returns. */
     completed(id, -1, 0);
   }
@@ -172,7 +172,7 @@ void WM_apple_ios_dialog_flush(bContext *C)
     requests.erase(it);
     WM_event_remove_ui_handler(
         &request->window->runtime->modalhandlers, handle, removed, request.get(), false);
-    GHOST_ios_dialog_cancel(result.id);
+    wm_apple_ios_dialog_cancel(result.id);
     /* Remove ownership before execution: an operator may load a file or close its window. */
     if (result.action < 0) {
       if (request->cancel) {
@@ -191,7 +191,7 @@ void WM_apple_ios_reports(wmWindow *win, ReportList *reports, int minimum_level)
   if (!win || !win->runtime->ghostwin || !reports) {
     return;
   }
-  GHOST_IOSDialog dialog;
+  wmIOSDialog dialog;
   dialog.title = RPT_("Report");
   int severity = 0;
   BKE_reports_lock(reports);
@@ -213,7 +213,7 @@ void WM_apple_ios_reports(wmWindow *win, ReportList *reports, int minimum_level)
   if (!dialog.message.empty()) {
     dialog.actions.push_back({IFACE_("OK")});
     dialog.preferred_action = 0;
-    GHOST_ios_dialog_begin(win->runtime->ghostwin, ++next_request, dialog, nullptr);
+    wm_apple_ios_dialog_begin(win->runtime->ghostwin, ++next_request, dialog, nullptr);
   }
 }
 

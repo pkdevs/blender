@@ -2,7 +2,7 @@
 
 `blender_icons.json` maps native UI semantic keys to Blender source artwork.
 Tools use their `builtin.*` identifiers, settings use their setting/value pair,
-and `command.*` keys use the stable `GHOSTIOSUICommand` values. Mode-specific tool
+and `command.*` keys use the stable `WMIOSUICommand` values. Mode-specific tool
 keys override the common tool key. SF Symbols remain the fallback for controls
 without a mapped Blender equivalent. The bottom action strip is stricter: it uses
 operator/property-specific Blender artwork, or explicitly approved SF fallbacks

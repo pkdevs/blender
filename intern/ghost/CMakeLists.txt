@@ -165,37 +165,26 @@ elseif(APPLE AND NOT WITH_GHOST_X11)
     message(STATUS "Configure Ghost for Apple Cross platform: iOS")
     
     if(APPLE_TARGET_IOS)
-      # GHOST modules for iPadOS.
+      # GHOST modules for iPadOS and visionOS: the window, its input and Metal view, and Blender's
+      # loop. The native interface around it is in `source/blender/windowmanager/apple_ios`.
       list(APPEND SRC
         intern/GHOST_SystemIOS.hh
         intern/GHOST_WindowIOS.hh
+        intern/GHOST_IOSWindowInput.hh
 
         intern/GHOST_SystemIOS.mm
         intern/GHOST_WindowIOS.mm
-        intern/GHOST_IOSPencilMenu.hh
-        intern/GHOST_IOSIcons.hh
-        intern/GHOST_IOSScenePanels.hh
-        intern/GHOST_IOSRedoStrip.hh
-        intern/GHOST_IOSTimeline.hh
-        intern/GHOST_IOSAssets.hh
-        intern/GHOST_IOSFileDrop.hh
-        intern/GHOST_IOSFileDrop.mm
-        intern/GHOST_IOSCompileIndicator.hh
-        intern/GHOST_IOSCompileIndicator.mm
-        intern/GHOST_IOSRender.hh
+        GHOST_IOSNativeInterface.hh
+        GHOST_IOSPencilMenu.hh
         GHOST_IOSDocumentPicker.hh
         intern/GHOST_IOSDocumentPicker.mm
-        intern/GHOST_IOSDocument.hh
-        intern/GHOST_IOSDocument.mm
-        intern/GHOST_IOSLauncher.hh
-        intern/GHOST_IOSLauncher.mm
-        GHOST_IOSDialog.hh
-        intern/GHOST_IOSDialog.mm
 
         intern/GHOST_ContextIOS.mm
         intern/GHOST_ContextIOS.hh
         GHOST_IOSMessageQueue.hh
-        intern/GHOST_IOSRuntime.hh
+        intern/GHOST_IOSPlatform.hh
+        GHOST_IOSRuntime.hh
+        intern/GHOST_IOSTheme.hh
         intern/GHOST_IOSSurface.hh
         intern/GHOST_IOSSurface.mm
       )

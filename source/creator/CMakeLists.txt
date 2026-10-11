@@ -363,31 +363,32 @@ else()
     endif()
 
     # The document launcher's Suzanne and logo are drawn with RealityKit and SwiftUI, which only
-    # Swift can use. The rest of the launcher finds these views by name, see `GHOST_IOSLauncher.mm`.
-    # The native panels are SwiftUI too, found by name in `GHOST_WindowIOS.mm`.
+    # Swift can use. The rest of the launcher finds these views by name, see
+    # `wm_apple_ios_launcher.mm`. The native panels are SwiftUI too, found by name in
+    # `wm_apple_ios_view_controller.mm`.
     set(CMAKE_Swift_LANGUAGE_VERSION 5)
     enable_language(Swift)
     set(IOS_LAUNCHER_SWIFT
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/GHOST_IOSLauncher.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/Assets.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/BlenderBridge.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/CompileIndicator.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/CompositeControls.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/DialogSheet.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/GlassButton.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/HierarchyView.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/InspectorStore.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/InspectorView.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/PencilMenu.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/PropertyControls.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/RedoStrip.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/RenderSheet.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/ScenePanels.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/SettingsSheet.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/TemplatePicker.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/Timeline.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/UIKitInterop.swift
-      ${CMAKE_SOURCE_DIR}/intern/ghost/intern/swift/VisionChrome.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/Assets.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/BlenderBridge.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/CompileIndicator.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/CompositeControls.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/DialogSheet.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/GlassButton.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/HierarchyView.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/InspectorStore.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/InspectorView.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/Launcher.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/PencilMenu.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/PropertyControls.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/RedoStrip.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/RenderSheet.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/ScenePanels.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/SettingsSheet.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/TemplatePicker.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/Timeline.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/UIKitInterop.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/VisionChrome.swift
     )
     set(IOS_LAUNCHER_RESOURCES
       ${CMAKE_SOURCE_DIR}/release/ios/launcher/Suzanne.usdz
@@ -403,8 +404,10 @@ else()
     set_target_properties(blender PROPERTIES
       LINKER_LANGUAGE CXX
       XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER
-        "${CMAKE_SOURCE_DIR}/intern/ghost/intern/GHOST_IOSSwiftBridge.h"
+        "${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/wm_apple_ios_swift_bridge.h"
     )
+    # The bridging header's GHOST protocols, such as the Pencil menu's.
+    target_include_directories(blender PRIVATE ${CMAKE_SOURCE_DIR}/intern/ghost)
 
     # The thumbnail extension, showing the preview stored in `.blend` files wherever iOS shows
     # them: the document browser, the Files app, share sheets.

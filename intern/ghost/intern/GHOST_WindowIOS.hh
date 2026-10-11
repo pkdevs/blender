@@ -21,6 +21,7 @@
 
 @class UIView;
 @class MTKView;
+@class GHOST_IOSMetalRenderer;
 @class UIViewController;
 @class UIWindow;
 @class UITextField;
@@ -322,6 +323,8 @@ class GHOST_WindowIOS : public GHOST_Window {
   UIViewController *uiview_controller_;
   UIView *uiview_;
   MTKView *metal_view_;
+  /** Presents Blender's frames in the Metal view. */
+  GHOST_IOSMetalRenderer *metal_renderer_ = nil;
 
   bool immediate_draw_ = false;
   bool debug_context_ = false;  // for debug messages during context setup
