@@ -467,7 +467,7 @@ struct RedoField: View {
 public final class SwiftRedoStrip: NSObject {
   private static let height: CGFloat = 60
   private static let radius: CGFloat = 20
-  private static let shortNames = [
+  static let shortNames = [
     "TRANSFORM_OT_translate": "Move", "TRANSFORM_OT_rotate": "Rotate",
     "TRANSFORM_OT_resize": "Scale", "MESH_OT_extrude_region_move": "Extrude",
     "MESH_OT_extrude_context_move": "Extrude", "MESH_OT_extrude_faces_move": "Extrude",

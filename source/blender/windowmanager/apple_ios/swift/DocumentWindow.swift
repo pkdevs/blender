@@ -23,12 +23,16 @@ import UIKit
 @objc(WMIOSSwiftDocumentController)
 public final class DocumentController: UIHostingController<DocumentWindow> {
   private let model: ShellModel
+  private let metalView: MTKView
   private var stateTimer: Timer?
+  private var contextMenu: UIEditMenuInteraction?
 
   @objc(initWithMetalView:window:)
   public init(metalView: MTKView, window: UnsafeMutableRawPointer) {
     model = ShellModel(window: window)
+    self.metalView = metalView
     super.init(rootView: DocumentWindow(model: model, viewport: ViewportContainer(metalView: metalView)))
+    installContextMenu()
     NotificationCenter.default.addObserver(self, selector: #selector(snapshotsPublished),
                                            name: Notification.Name("BlenderSnapshotsPublished"),
                                            object: nil)
@@ -65,6 +69,49 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
   override public var prefersHomeIndicatorAutoHidden: Bool { true }
 }
 
+/* Holding a finger on the viewport opens Blender's context menu there. */
+extension DocumentController: UIEditMenuInteractionDelegate, UIGestureRecognizerDelegate {
+  private func installContextMenu() {
+    let interaction = UIEditMenuInteraction(delegate: self)
+    metalView.addInteraction(interaction)
+    contextMenu = interaction
+    let press = UILongPressGestureRecognizer(target: self, action: #selector(contextMenuPress(_:)))
+    press.minimumPressDuration = 0.42
+    press.allowableMovement = 12
+    press.cancelsTouchesInView = true
+    press.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+    press.delegate = self
+    /* The phone holds a finger to use the tool. */
+    press.isEnabled = UIDevice.current.userInterfaceIdiom != .phone
+    metalView.addGestureRecognizer(press)
+  }
+
+  @objc private func contextMenuPress(_ press: UILongPressGestureRecognizer) {
+    /* Blender's own interface has its own context menus. */
+    guard press.state == .began, !model.desktop else { return }
+    let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: press.location(in: metalView))
+    contextMenu?.presentEditMenu(with: configuration)
+  }
+
+  public func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    /* Only a press that starts on the viewport itself, not on a control above it. */
+    touch.type == .direct && touch.view === metalView
+  }
+
+  public func editMenuInteraction(_ interaction: UIEditMenuInteraction,
+                                  menuFor configuration: UIEditMenuConfiguration,
+                                  suggestedActions: [UIMenuElement]) -> UIMenu?
+  {
+    let menu = wm_apple_ios_context_menu()
+    return menu.children.isEmpty ? nil : menu
+  }
+
+  public func editMenuInteraction(_ interaction: UIEditMenuInteraction,
+                                  targetRectFor configuration: UIEditMenuConfiguration) -> CGRect
+  {
+    CGRect(origin: configuration.sourcePoint, size: CGSize(width: 1, height: 1))
+  }
+}
 
 /** \} */
 
@@ -77,6 +124,7 @@ final class ViewportContainer: UIView {
   let metalView: MTKView
 
   init(metalView: MTKView) {
+    self.metalView = metalView
     super.init(frame: .zero)
     metalView.autoresizingMask = []
     addSubview(metalView)
@@ -120,6 +168,9 @@ public struct DocumentWindow: View {
       ZStack {
         ViewportView(container: viewport)
           .ignoresSafeArea()
+        if !model.desktop {
+          QuickActionsRow(model: model)
+        }
         if !model.viewportReady {
           ProgressView()
             .controlSize(.large)

@@ -49,3 +49,22 @@ extern "C" void wm_apple_ios_show_documents(id sender)
 {
   wm_apple_ios_launcher_show_documents(sender);
 }
+
+extern "C" UIImage *wm_apple_ios_action_icon(NSString *op_name,
+                                             NSString *property,
+                                             NSString *value)
+{
+  return blenderIOSActionIcon(op_name, property, value);
+}
+
+extern "C" UIMenu *wm_apple_ios_context_menu()
+{
+  /* The same live context menu as Blender's and the Pencil's radial menu, resolved when it opens
+   * so UIKit never waits for a busy engine. */
+  return blenderIOSNativeSubmenu(
+      @{
+        @"title" : @"Actions",
+        @"route" : @{@"root" : @"context", @"path" : @[]},
+      },
+      nil);
+}

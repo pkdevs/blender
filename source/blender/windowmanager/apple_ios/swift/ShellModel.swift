@@ -25,6 +25,8 @@ final class ShellModel {
   private(set) var actions: [JSON] = []
   private(set) var brushes: JSON?
   private(set) var canUndo = false
+  /** Adjust Last Operation: the last operator's settings, or none. */
+  private(set) var redo: JSON?
   /** Blender's own interface is showing, as on a desktop computer. */
   private(set) var desktop = false
   /** Blender's viewport has shown its first frame. */
@@ -56,6 +58,7 @@ final class ShellModel {
     set(\.actions, toolbar.array("actions"), equal: jsonListEqual)
     set(\.brushes, toolbar.dict("brushes"), equal: { jsonEqual($0, $1) })
     set(\.canUndo, toolbar.bool("canUndo"))
+    set(\.redo, toolbar.dict("redo"), equal: { jsonEqual($0, $1) })
     if toolbar.has("desktop") {
       set(\.desktop, toolbar.bool("desktop"))
     }

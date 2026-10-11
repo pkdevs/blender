@@ -663,6 +663,32 @@ extension View {
 }
 
 extension View {
+  /** Glass that morphs into other glass of the same `id` in a `PanelGlassGroup`. */
+  @ViewBuilder
+  func panelGlassID(_ id: String, in namespace: Namespace.ID) -> some View {
+#if os(visionOS)
+    self
+#else
+    self.glassEffectID(id, in: namespace)
+#endif
+  }
+}
+
+/** Glass shapes that blend and morph into each other as they come and go. */
+struct PanelGlassGroup<Content: View>: View {
+  var spacing: CGFloat = 8
+  @ViewBuilder let content: Content
+
+  var body: some View {
+#if os(visionOS)
+    content
+#else
+    GlassEffectContainer(spacing: spacing) { content }
+#endif
+  }
+}
+
+extension View {
   /** A glass button; visionOS draws bordered buttons on glass. */
   @ViewBuilder
   func glassButtonStyle() -> some View {

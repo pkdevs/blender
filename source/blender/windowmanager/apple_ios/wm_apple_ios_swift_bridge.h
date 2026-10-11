@@ -38,6 +38,15 @@ void wm_apple_ios_window_send_key(void *_Nullable window, const char *_Nonnull k
 /** Whether a document is open that the launcher can go back from, and going back. */
 bool wm_apple_ios_documents_available(void);
 void wm_apple_ios_show_documents(id _Nullable sender);
+/** A quick action's icon: Blender's for the operator, or a symbol, or none. */
+UIImage *_Nullable wm_apple_ios_action_icon(NSString *_Nonnull op_name,
+                                            NSString *_Nonnull property,
+                                            NSString *_Nonnull value);
+/** Blender's context menu for the viewport, resolved when it opens. */
+UIMenu *_Nonnull wm_apple_ios_context_menu(void);
+void WM_apple_ios_ui_operator_enum_enqueue(const char *_Nonnull op_name,
+                                           const char *_Nonnull prop_name,
+                                           const char *_Nonnull prop_value);
 /** The document window's controller is closing. */
 void wm_apple_ios_document_controller_closed(id _Nonnull controller);
 
