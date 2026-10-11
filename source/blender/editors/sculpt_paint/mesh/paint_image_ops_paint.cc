@@ -667,12 +667,22 @@ static void do_brush_action(const Depsgraph &depsgraph,
   /* Main brush action */
   switch (brush.image_brush_type) {
     case IMAGE_PAINT_BRUSH_TYPE_DRAW:
-      do_3d_image_paint_brush(
-          depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
+      do_3d_image_paint_brush(depsgraph,
+                              image_paint_settings,
+                              brush,
+                              ob,
+                              *mode_data->image_data,
+                              *mode_data->mask_data,
+                              node_mask);
       break;
     case IMAGE_PAINT_BRUSH_TYPE_MASK:
-      do_3d_image_paint_brush(
-          depsgraph, image_paint_settings.paint, brush, ob, *mode_data->mask_data, node_mask);
+      do_3d_image_paint_brush(depsgraph,
+                              image_paint_settings,
+                              brush,
+                              ob,
+                              *mode_data->mask_data,
+                              *mode_data->mask_data,
+                              node_mask);
       break;
     default:
       /* TODO: Implement the rest of them... */

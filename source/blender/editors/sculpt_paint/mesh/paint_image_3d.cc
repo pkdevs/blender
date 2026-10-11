@@ -501,8 +501,51 @@ static void mark_seam_tiles_modified(MutableSpan<uint8_t> mask,
   }
 }
 
+template<typename PixelT>
+static void calc_stencil_mask_factors(const ImagePaintSettings &paint_settings,
+                                      const MutableSpan<PixelT> mask_pixels,
+                                      const int2 mask_size,
+                                      const int2 image_size,
+                                      const MutableSpan<float> tri_factors,
+                                      const int tri_row_size,
+                                      const int tri_row_x,
+                                      const int run_y)
+{
+  constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
+  const bool mask_inverted = (paint_settings.flag & IMAGEPAINT_PROJECT_LAYER_STENCIL_INV) != 0;
+  const float inv_w = 1.0f / image_size[0];
+  const float inv_h = 1.0f / image_size[1];
+  const float mask_scale_x = mask_size[0] * inv_w;
+  const float mask_scale_y = mask_size[1] * inv_h;
+
+  for (int i = 0; i < tri_row_size; i++) {
+    int mask_tri_row_x = std::clamp(int((tri_row_x + i) * mask_scale_x), 0, mask_size[0]);
+    int mask_run_y = std::clamp(int(run_y * mask_scale_y), 0, mask_size[1]);
+    int mask_pixel_index = (mask_run_y * mask_size[0]) + mask_tri_row_x;
+    float mask_strength;
+
+    if (tri_factors[i] != 0.0f) {
+      if constexpr (is_float) {
+        float4 mask_channels = mask_pixels[mask_pixel_index];
+        float mask_intermediary[3] = {mask_channels[0], mask_channels[1], mask_channels[2]};
+        float mask_value = srgb_to_grayscale(mask_intermediary);
+        mask_strength = mask_inverted ? mask_value : 1 - mask_value;
+      }
+      else {
+        uchar4 mask_channels = mask_pixels[mask_pixel_index];
+        uchar mask_intermediary[3] = {mask_channels[0], mask_channels[1], mask_channels[2]};
+        float mask_value = srgb_to_grayscale_byte(mask_intermediary) / 255.0f;
+        mask_strength = mask_inverted ? mask_value : 1 - mask_value;
+      }
+      tri_factors[i] *= mask_strength;
+    }
+  }
+}
+
 static void do_paint_pixels(const PaintBlendSettings &blend_settings,
+                            const ImagePaintSettings &paint_settings,
                             const Brush &brush,
+                            const bool is_mask_brush,
                             Object &object,
                             Span<float3> positions_eval,
                             Span<int> corner_verts,
@@ -510,6 +553,7 @@ static void do_paint_pixels(const PaintBlendSettings &blend_settings,
                             Span<int> corner_tri_faces,
                             Span<bool> select_poly,
                             ImageData &image_data,
+                            ImageData &mask_data,
                             bke::pbvh::Node & /*node*/,
                             PixelNode &pixel_node)
 {
@@ -543,13 +587,20 @@ static void do_paint_pixels(const PaintBlendSettings &blend_settings,
 
   for (UDIMTilePixels &tile_data : pixel_node.tiles) {
     ImBuf *image_buffer = image_data.image_buffers.lookup_default(tile_data.tile_number, nullptr);
-    if (image_buffer == nullptr) {
+    ImBuf *mask_buffer = mask_data.image_buffers.lookup_default(tile_data.tile_number, nullptr);
+    if (image_buffer == nullptr || mask_buffer == nullptr) {
       continue;
     }
 
     BufferType mutable_buffer = image_data.data_buffers.lookup_default(tile_data.tile_number,
                                                                        BufferType{});
+    BufferType mutable_mask_buffer = mask_data.data_buffers.lookup_default(tile_data.tile_number,
+                                                                           BufferType{});
     if (std::holds_alternative<std::monostate>(mutable_buffer)) {
+      BLI_assert_unreachable();
+      continue;
+    }
+    if (std::holds_alternative<std::monostate>(mutable_mask_buffer)) {
       BLI_assert_unreachable();
       continue;
     }
@@ -625,6 +676,32 @@ static void do_paint_pixels(const PaintBlendSettings &blend_settings,
             calc_brush_texture_factors(
                 PaintMode::Texture3D, ss, brush, tri_positions, tri_factors);
             scale_factors(tri_factors, cache.bstrength);
+            if (!is_mask_brush && (paint_settings.flag & IMAGEPAINT_PROJECT_LAYER_STENCIL) != 0) {
+              int2 image_size = int2(image_buffer->x, image_buffer->y);
+              int2 mask_size = int2(mask_buffer->x, mask_buffer->y);
+              if (std::holds_alternative<MutableSpan<float4>>(mutable_mask_buffer)) {
+                calc_stencil_mask_factors<float4>(
+                    paint_settings,
+                    std::get<MutableSpan<float4>>(mutable_mask_buffer),
+                    mask_size,
+                    image_size,
+                    tri_factors,
+                    tri_row_size,
+                    tri_row_x,
+                    run_y);
+              }
+              else {
+                calc_stencil_mask_factors<uchar4>(
+                    paint_settings,
+                    std::get<MutableSpan<uchar4>>(mutable_mask_buffer),
+                    mask_size,
+                    image_size,
+                    tri_factors,
+                    tri_row_size,
+                    tri_row_x,
+                    run_y);
+              }
+            }
 
             /* Track which subset of the run has non-zero factors. */
             int tri_active_begin = -1;
@@ -787,10 +864,11 @@ static void fix_non_manifold_seam_bleeding(Object &ob,
 /** \} */
 
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
-                             const Paint &paint,
+                             const ImagePaintSettings &paint_settings,
                              const Brush &brush,
                              Object &ob,
                              ImageData &image_data,
+                             ImageData &mask_data,
                              const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Editor);
@@ -804,10 +882,14 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   const bool is_inverted = ob.runtime->sculpt_session->cache->toggle_settings.invert;
   const PaintBlendSettings blend_settings = is_mask_brush ?
                                                 mask_brush_blend_settings(brush, is_inverted) :
-                                                PaintBlendSettings(paint, brush, is_inverted);
+                                                PaintBlendSettings(
+                                                    paint_settings.paint, brush, is_inverted);
 
   node_mask.foreach_index([&](const int i) {
     fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], is_mask_brush);
+  });
+  node_mask.foreach_index([&](const int i) {
+    fetch_image_buffers(mask_data, nodes[i], pixel_nodes[i], is_mask_brush);
   });
 
   const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
@@ -828,7 +910,9 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   node_mask.foreach_index(
       [&](const int i) {
         do_paint_pixels(blend_settings,
+                        paint_settings,
                         brush,
+                        is_mask_brush,
                         ob,
                         positions,
                         corner_verts,
@@ -836,6 +920,7 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                         corner_tri_faces,
                         select_poly,
                         image_data,
+                        mask_data,
                         nodes[i],
                         pixel_nodes[i]);
       },
