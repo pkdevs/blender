@@ -1216,6 +1216,18 @@ static void ui_apply_but_funcs_after(bContext *C)
   }
 }
 
+void button_apply_native(bContext *C, Button *but, const bool push_undo)
+{
+  /* What #ui_apply_but runs once a button's value is set: its callbacks and operator, the RNA
+   * update, undo with the usual exceptions, and auto keying with its report. */
+  ui_apply_but_func(C, but);
+  if (push_undo) {
+    ui_apply_but_undo(but);
+  }
+  ui_apply_but_autokey(C, but);
+  ui_apply_but_funcs_after(C);
+}
+
 static void ui_apply_but_BUT(bContext *C, Button *but, HandleButtonData *data)
 {
   ui_apply_but_func(C, but);

@@ -246,7 +246,9 @@ bool set_property(bContext *C,
 {
   PointerRNA *ptr = &but.rnapoin;
   PropertyRNA *prop = but.rnaprop;
-  if (!RNA_property_editable(ptr, prop) || (but.flag & (BUT_DISABLED | BUT_INACTIVE))) {
+  /* Inactive buttons stay editable, as in Blender; they only show that the value has no effect
+   * right now. */
+  if (!RNA_property_editable(ptr, prop) || (but.flag & BUT_DISABLED)) {
     return false;
   }
   const bool array = RNA_property_array_check(prop);
@@ -407,25 +409,34 @@ bool set_property(bContext *C,
     default:
       return false;
   }
-  RNA_property_update(C, ptr, prop);
+  /* The rest is Blender's own button handling, as for an edit in the button: its callbacks, the
+   * RNA update, undo and auto keying. While a drag goes on, undo waits for it to end, see
+   * #finish_property_interaction. */
+  const auto phase = request.lookup_str("phase").value_or("");
+  const std::string token = request.lookup_str("interaction").value_or("");
+  const bool dragging = !token.empty() && phase == "update";
   if (push_undo) {
-    const bool undo = ptr->owner_id && RNA_struct_undo_check(ptr->type);
-    const auto phase = request.lookup_str("phase").value_or("");
-    const std::string token = request.lookup_str("interaction").value_or("");
-    if (!token.empty() && phase == "update") {
+    const int but_index = but.rnaindex;
+    if (array && index >= 0) {
+      but.rnaindex = index;
+    }
+    button_apply_native(C, &but, !dragging && phase != "cancel");
+    but.rnaindex = but_index;
+    if (dragging) {
+      const bool undo = ptr->owner_id && RNA_struct_undo_check(ptr->type);
       native_property_interaction.token = token;
       native_property_interaction.undo_name = undo ? RNA_property_ui_name(prop) : "";
     }
-    else {
-      if (undo && phase != "cancel") {
-        ED_undo_push(C, RNA_property_ui_name(prop));
-      }
-      if (!token.empty()) {
-        native_property_interaction.closed_token = token;
-        native_property_interaction.token.clear();
-        native_property_interaction.undo_name.clear();
-      }
+    else if (!token.empty()) {
+      native_property_interaction.closed_token = token;
+      native_property_interaction.token.clear();
+      native_property_interaction.undo_name.clear();
     }
+  }
+  else {
+    /* Adjust Last Operation: its block repeats the operator from a handler, which the caller does
+     * itself to report failure; operator properties have no callbacks, keys or undo of their own. */
+    RNA_property_update(C, ptr, prop);
   }
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
   return true;

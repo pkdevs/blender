@@ -1228,6 +1228,12 @@ void but_handle_data_free(HandleButtonData **data);
 
 void handle_afterfunc_add_operator(wmOperatorType *ot, wm::OpCallContext opcontext);
 /**
+ * Apply a button whose value was set from outside Blender's own event handling, such as the
+ * native iOS interface: run its callbacks, the RNA update, undo and auto keying as an edit in the
+ * button itself would.
+ */
+void button_apply_native(bContext *C, Button *but, bool push_undo);
+/**
  * Assumes event type is MOUSEPAN.
  */
 void pan_to_scroll(const wmEvent *event, int *type, int *val);
