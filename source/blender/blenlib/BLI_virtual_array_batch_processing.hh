@@ -29,6 +29,26 @@ enum class FallbackMode {
   Materialized,
 };
 
+template<typename T, bool UseSingle, bool UseSpan> struct SpanOrSingleDevirtualizer {
+  CommonVArrayInfo info;
+  int64_t size;
+
+  template<typename Fn> bool devirtualize(const Fn &fn) const
+  {
+    if constexpr (UseSingle) {
+      if (this->info.type == CommonVArrayInfo::Type::Single) {
+        return fn(SingleAsSpan<T>(*static_cast<const T *>(this->info.data), this->size));
+      }
+    }
+    if constexpr (UseSpan) {
+      if (this->info.type == CommonVArrayInfo::Type::Span) {
+        return fn(Span<T>(static_cast<const T *>(this->info.data), this->size));
+      }
+    }
+    return false;
+  }
+};
+
 /**
  * These presets determine what code is generated for evaluation. Different presets make different
  * trade-offs between run-time performance and compile-time/binary size.
@@ -75,8 +95,9 @@ struct AllSpanOrSingle {
       using ParamTag = ParamTags;
       using T = typename ParamTag::base_type;
       if constexpr (ParamTag::category == ParamCategory::Input) {
-        const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
-        return GVArrayDevirtualizer<T, true, true>{varray_impl};
+        const auto &varray_impl = *std::get<I>(loaded_params);
+        return SpanOrSingleDevirtualizer<T, true, true>{varray_impl.common_info(),
+                                                        varray_impl.size()};
       }
       else if constexpr (ELEM(ParamTag::category, ParamCategory::Output, ParamCategory::Mutable)) {
         T *ptr = std::get<I>(loaded_params);
@@ -106,8 +127,9 @@ template<size_t... Indices> struct SomeSpanOrSingle {
 
       if constexpr (ParamTag::category == ParamCategory::Input) {
         constexpr bool UseSpan = ValueSequence<size_t, Indices...>::template contains<I>();
-        const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
-        return GVArrayDevirtualizer<T, true, UseSpan>{varray_impl};
+        const auto &varray_impl = *std::get<I>(loaded_params);
+        return SpanOrSingleDevirtualizer<T, true, UseSpan>{varray_impl.common_info(),
+                                                           varray_impl.size()};
       }
       else if constexpr (ELEM(ParamTag::category, ParamCategory::Output, ParamCategory::Mutable)) {
         T *ptr = std::get<I>(loaded_params);
@@ -480,8 +502,14 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
           using ParamTag = ParamTags;
           using T = typename ParamTag::base_type;
           if constexpr (ParamTag::category == ParamCategory::Input) {
-            const GVArrayImpl &varray_impl = *std::get<I>(loaded_params);
-            return GVArray(&varray_impl).typed<T>();
+            const auto &varray_impl = *std::get<I>(loaded_params);
+            using ImplType = std::decay_t<decltype(varray_impl)>;
+            if constexpr (std::is_base_of_v<GVArrayImpl, ImplType>) {
+              return GVArray(&varray_impl).typed<T>();
+            }
+            else {
+              return VArray<T>(&varray_impl);
+            }
           }
           else if constexpr (ELEM(ParamTag::category,
                                   ParamCategory::Output,
@@ -504,15 +532,14 @@ inline void batch_process__n_in__1_out(const IndexMask &mask,
 {
   constexpr auto param_tags =
       TypeSequence<ParamTag<ParamCategory::Input, In>..., ParamTag<ParamCategory::Output, Out>>();
-  std::tuple params{in_params.get_implementation()..., out_param.data()};
-  mask.foreach_segment([&](const IndexMaskSegment segment) {
-    batch_process<64>(
-        param_tags,
-        std::make_index_sequence<param_tags.size()>(),
-        [&](const In &...in, Out &out) { new (&out) Out(element_fn(in...)); },
-        segment,
-        params);
-  });
+  execute_element_fn_with_params(
+      [&](const In &...in, Out &out) { new (&out) Out(element_fn(in...)); },
+      exec_presets::AllSpanOrSingle(),
+      mask,
+      param_tags,
+      std::make_index_sequence<param_tags.size()>(),
+      in_params...,
+      out_param);
 }
 
 template<typename In1, typename In2, typename Out1, typename ElementFn>
