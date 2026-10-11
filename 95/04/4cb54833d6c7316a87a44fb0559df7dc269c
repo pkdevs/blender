@@ -1,1 +1,2 @@
 Referenced by issue #163617, Nodegroup crashes Blender when being edited
+Referenced by issue #165009, Crash when changing a node group's socket name to an empty string
