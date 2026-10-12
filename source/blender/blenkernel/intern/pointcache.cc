@@ -118,14 +118,14 @@ static int ptcache_extra_datasize[] = {
 };
 
 /* forward declarations */
-static bool ptcache_file_compressed_read(PTCacheFile *pf,
-                                         uchar *result,
-                                         size_t items_num,
-                                         size_t item_size);
-static void ptcache_file_compressed_write(PTCacheFile *pf,
-                                          const void *data,
-                                          size_t items_num,
-                                          size_t item_size);
+[[nodiscard]] static bool ptcache_file_compressed_read(PTCacheFile *pf,
+                                                       uchar *result,
+                                                       size_t items_num,
+                                                       size_t item_size);
+[[nodiscard]] static bool ptcache_file_compressed_write(PTCacheFile *pf,
+                                                        const void *data,
+                                                        size_t items_num,
+                                                        size_t item_size);
 [[nodiscard]] static bool ptcache_file_write(PTCacheFile *pf,
                                              const void *data,
                                              size_t items_num,
@@ -705,16 +705,17 @@ static void ptcache_dynamicpaint_error(const ID * /*owner_id*/,
 static int ptcache_dynamicpaint_write(PTCacheFile *pf, void *dp_v)
 {
   DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(dp_v);
+  bool ok = true;
 
   /* version header */
-  ptcache_file_write(pf, DPAINT_CACHE_VERSION, 1, sizeof(char[4]));
+  ok &= ptcache_file_write(pf, DPAINT_CACHE_VERSION, 1, sizeof(char[4]));
 
   if (surface->format != MOD_DPAINT_SURFACE_F_IMAGESEQ && surface->data) {
     const int total_points = surface->data->total_points;
 
     /* cache type */
     const int surface_type = int(surface->type);
-    ptcache_file_write(pf, &surface_type, 1, sizeof(int));
+    ok &= ptcache_file_write(pf, &surface_type, 1, sizeof(int));
 
     uint in_stride;
     if (surface->type == MOD_DPAINT_SURFACE_T_PAINT) {
@@ -727,12 +728,12 @@ static int ptcache_dynamicpaint_write(PTCacheFile *pf, void *dp_v)
       in_stride = sizeof(PaintWavePoint);
     }
     else {
-      return 0;
+      return false;
     }
 
-    ptcache_file_compressed_write(pf, surface->data->type_data, total_points, in_stride);
+    ok &= ptcache_file_compressed_write(pf, surface->data->type_data, total_points, in_stride);
   }
-  return 1;
+  return ok;
 }
 static int ptcache_dynamicpaint_read(PTCacheFile *pf, void *dp_v)
 {
@@ -1590,10 +1591,10 @@ static bool ptcache_file_compressed_read(PTCacheFile *pf,
   return decompressed;
 }
 
-static void ptcache_file_compressed_write(PTCacheFile *pf,
-                                          const void *data,
-                                          size_t items_num,
-                                          size_t item_size)
+[[nodiscard]] static bool ptcache_file_compressed_write(PTCacheFile *pf,
+                                                        const void *data,
+                                                        size_t items_num,
+                                                        size_t item_size)
 {
   /* Allocate space for compressed data. */
   const PointCacheCompression compression = PTCACHE_COMPRESS_ZSTD_FILTERED;
@@ -1612,11 +1613,13 @@ static void ptcache_file_compressed_write(PTCacheFile *pf,
   out_len = res;
 
   /* Write to file. */
+  bool ok = true;
   const uchar compression_val = compression;
-  ptcache_file_write(pf, &compression_val, 1, sizeof(uchar));
+  ok &= ptcache_file_write(pf, &compression_val, 1, sizeof(uchar));
   uint size = out_len;
-  ptcache_file_write(pf, &size, 1, sizeof(uint));
-  ptcache_file_write(pf, out.data(), out_len, sizeof(uchar));
+  ok &= ptcache_file_write(pf, &size, 1, sizeof(uint));
+  ok &= ptcache_file_write(pf, out.data(), out_len, sizeof(uchar));
+  return ok;
 }
 
 static bool ptcache_file_read(PTCacheFile *pf, void *f, size_t items_num, size_t item_size)
@@ -2018,7 +2021,8 @@ static PTCacheMem *ptcache_disk_frame_to_mem(PTCacheID *pid, int cfra)
 static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
 {
   PTCacheFile *pf = nullptr;
-  uint i, error = 0;
+  bool ok = true;
+  uint i;
 
   BKE_ptcache_id_clear(pid, PTCACHE_CLEAR_FRAME, pm->frame);
 
@@ -2043,18 +2047,18 @@ static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
   pf->flag |= PTCACHE_TYPEFLAG_COMPRESS;
 
   if (!ptcache_file_header_begin_write(pf) || !pid->write_header(pf)) {
-    error = 1;
+    ok = false;
   }
 
-  if (!error) {
+  if (ok) {
     for (i = 0; i < BPHYS_TOT_DATA; i++) {
       if (pm->data[i]) {
-        ptcache_file_compressed_write(pf, pm->data[i], pm->totpoint, ptcache_data_size[i]);
+        ok &= ptcache_file_compressed_write(pf, pm->data[i], pm->totpoint, ptcache_data_size[i]);
       }
     }
   }
 
-  if (!error && pm->extradata.first()) {
+  if (ok && pm->extradata.first()) {
     PTCacheExtra *extra = pm->extradata.first();
 
     for (; extra; extra = extra->next) {
@@ -2063,21 +2067,21 @@ static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
       }
 
       const uint extratype = uint(extra->type);
-      ptcache_file_write(pf, &extratype, 1, sizeof(uint));
-      ptcache_file_write(pf, &extra->totdata, 1, sizeof(uint));
+      ok &= ptcache_file_write(pf, &extratype, 1, sizeof(uint));
+      ok &= ptcache_file_write(pf, &extra->totdata, 1, sizeof(uint));
 
-      ptcache_file_compressed_write(
+      ok &= ptcache_file_compressed_write(
           pf, extra->data, extra->totdata, ptcache_extra_datasize[extra->type]);
     }
   }
 
   ptcache_file_close(pf);
 
-  if (error && G.debug & G_DEBUG) {
-    printf("Error writing to disk cache\n");
+  if (!ok && G.debug & G_DEBUG) {
+    CLOG_ERROR(&LOG, "Error writing to disk cache\n");
   }
 
-  return error == 0;
+  return ok;
 }
 
 static int ptcache_read_stream(PTCacheID *pid, int cfra)
