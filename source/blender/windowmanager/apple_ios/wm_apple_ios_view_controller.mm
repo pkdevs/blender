@@ -93,8 +93,14 @@ void WM_apple_ios_document_window_changed()
 void *WM_apple_ios_window_controller(void *metal_view, GHOST_WindowIOS *window, void **r_root)
 {
   /* The interface is moving to SwiftUI; until it is complete, the SwiftUI window is chosen with
-   * the `BlenderSwiftUIShell` default. */
-  if ([NSUserDefaults.standardUserDefaults boolForKey:@"BlenderSwiftUIShell"]) {
+   * the `BlenderSwiftUIShell` default. A run from Xcode can set it with the environment variable
+   * of the same name (not an argument, which Blender would open as a file), and it is kept for
+   * launches from the home screen. */
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  if (NSString *choice = NSProcessInfo.processInfo.environment[@"BlenderSwiftUIShell"]) {
+    [defaults setBool:choice.boolValue forKey:@"BlenderSwiftUIShell"];
+  }
+  if ([defaults boolForKey:@"BlenderSwiftUIShell"]) {
     UIViewController<WMIOSDocumentController> *controller = [[blenderIOSSwiftClass(
         @"WMIOSSwiftDocumentController") alloc] initWithMetalView:(MTKView *)metal_view
                                                            window:window];
