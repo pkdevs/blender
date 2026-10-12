@@ -382,7 +382,7 @@ int blf_font_draw_mono(FontBLF *font,
   blf_batch_draw_begin(font);
 
   const ShapingData text(font, gc, str, str_len);
-  const int columns = text.draw_mono(tab_columns);
+  const int columns = text.draw_mono(str, tab_columns);
 
   blf_batch_draw_end();
 

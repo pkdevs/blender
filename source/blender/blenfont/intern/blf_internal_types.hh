@@ -311,7 +311,7 @@ struct ShapingData {
   void legacy_layout(FontBLF *font, GlyphCacheBLF *gc, const char *str, size_t len);
 
   void draw(ft_pix pen_y, ResultBLF *r_info = nullptr) const;
-  int draw_mono(int tab_columns) const;
+  int draw_mono(const char *str, int tab_columns) const;
   size_t width_to_strlen(int width, size_t str_len, int *r_width = nullptr) const;
   size_t width_to_rstrlen(int width, size_t str_len, int *r_width = nullptr) const;
   void boundbox(const FontBLF *font, ft_pix pen_y, rcti *r_box, ResultBLF *r_info = nullptr) const;

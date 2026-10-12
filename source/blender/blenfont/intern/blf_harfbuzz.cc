@@ -367,16 +367,23 @@ void ShapingData::draw(const ft_pix pen_y, ResultBLF *r_info) const
   }
 }
 
-int ShapingData::draw_mono(const int tab_columns) const
+int ShapingData::draw_mono(const char *str, const int tab_columns) const
 {
   int columns = 0;
+  ft_pix tab_offset = 0;
   for (const ShapedGlyph &glyph : this->glyphs) {
-    const int x = ft_pix_to_int_floor(glyph.bounds.xmin);
+    const int x = ft_pix_to_int_floor(glyph.bounds.xmin + tab_offset);
     const int y = ft_pix_to_int_floor(glyph.bounds.ymin);
     blf_glyph_draw(glyph.font, glyph.gc, glyph.g, x, y);
-    const int col = (glyph.g->c == '\t') ? (tab_columns - (columns % tab_columns)) :
-                                           BLI_wcwidth_safe(char32_t(glyph.g->c));
-    columns += col;
+    if (str[glyph.index_utf8] == '\t') {
+      const int col = tab_columns - (columns % tab_columns);
+      tab_offset += ft_pix_from_int(std::max(glyph.gc->fixed_width, 1)) *
+                    (col - BLI_wcwidth_safe(U'\t'));
+      columns += col;
+    }
+    else {
+      columns += BLI_wcwidth_safe(char32_t(glyph.g->c));
+    }
   }
 
   return columns;
