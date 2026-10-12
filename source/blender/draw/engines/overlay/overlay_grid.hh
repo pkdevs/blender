@@ -171,13 +171,9 @@ class Grid : Overlay {
     std::array<float, SI_GRID_STEPS_LEN> steps_x, steps_y;
     ED_space_image_grid_steps(sima, steps_x.data(), steps_y.data(), SI_GRID_STEPS_LEN);
     for (int i : IndexRange(SI_GRID_STEPS_LEN)) {
-      /* If the current level is not specified, or the same size as the previous level,
-       * we apply a 10x scale to the previous level and use that. */
-      float step_mult = (i > 0 && (steps_x[i] == 0.0f || steps_x[i] == steps_x[i - 1])) ? 20.0f :
-                                                                                          2.0f;
-      grid_ubo_.steps[i].x = steps_x[i] * step_mult;
-      grid_ubo_.steps[i].z = grid_ubo_.steps[i].x;
-      grid_ubo_.steps[i].y = steps_y[i] * step_mult;
+      /* NOTE(not_mark): grid steps data appears to be flipped on X/Y. */
+      grid_ubo_.steps[i].x = steps_y[i];
+      grid_ubo_.steps[i].y = grid_ubo_.steps[i].z = steps_x[i];
     }
 
     /* Align the grid to the camera center. */
