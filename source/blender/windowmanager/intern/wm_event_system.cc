@@ -2508,6 +2508,16 @@ static wmKeyMapItem *wm_eventmatch_modal_keymap_items(const wmKeyMap *keymap,
   return nullptr;
 }
 
+/** A native interface may keep key presses from operators that show Blender's own interface. */
+static bool wm_keymap_item_native_hidden(const wmEvent *event, const wmKeyMapItem *kmi)
+{
+  if (!ISKEYBOARD(event->type)) {
+    return false;
+  }
+  const wmNativeInterface *native = WM_native_interface();
+  return native && native->keymap_item_hidden && native->keymap_item_hidden(kmi);
+}
+
 struct wmEvent_ModalMapStore {
   wmEventType prev_type;
   short prev_val;
@@ -3163,7 +3173,7 @@ static eHandlerActionFlag wm_handlers_do_keymap_with_keymap_handler(
       PRINT("pass\n");
 
       for (wmKeyMapItem &kmi : keymap->items) {
-        if (wm_eventmatch(event, &kmi)) {
+        if (wm_eventmatch(event, &kmi) && !wm_keymap_item_native_hidden(event, &kmi)) {
           wmEventHandler_KeymapPost keymap_post = handler->post;
 
           action |= wm_handler_operator_call(
@@ -3215,7 +3225,7 @@ static eHandlerActionFlag wm_handlers_do_keymap_with_gizmo_handler(
     keymap_poll = true;
     PRINT("pass\n");
     for (wmKeyMapItem &kmi : keymap->items) {
-      if (wm_eventmatch(event, &kmi)) {
+      if (wm_eventmatch(event, &kmi) && !wm_keymap_item_native_hidden(event, &kmi)) {
         PRINT("%s:     item matched '%s'\n", __func__, kmi.idname);
 
         CTX_wm_gizmo_group_set(C, gzgroup);

@@ -14,12 +14,15 @@
 #  include <cstring>
 
 #  include "BLI_listbase.h"
+#  include "BLI_set.hh"
 #  include "BLI_string.h"
 
 #  include "BLT_translation.hh"
 
 #  include "DNA_space_types.h"
 #  include "DNA_windowmanager_types.h"
+
+#  include "RNA_access.hh"
 
 #  include "GHOST_IOSNativeInterface.hh"
 #  include "wm_apple_ios_alerts.hh"
@@ -41,6 +44,7 @@ namespace blender {
 
 extern "C" void WM_apple_ios_ui_flush_commands(bContext *C);
 extern "C" double WM_apple_ios_engine_idle_seconds(bContext *C);
+extern "C" bool WM_apple_ios_ui_desktop_mode();
 extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y);
 extern "C" void WM_apple_ios_ui_navigation_hover_set(bool active);
 extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle);
@@ -137,6 +141,65 @@ void keyconfig_default_ensure(wmKeyConfig *keyconf)
   }
 }
 
+/**
+ * In the iPad interface, keys keep Blender's key-map but skip what would show Blender's own
+ * interface over it: its menus, pies, popovers, search, toolbars and sidebars, and changes to the
+ * screen's layout. The iPad shows these its own way. Blender's interface takes every key.
+ */
+bool keymap_item_hidden(const wmKeyMapItem *kmi)
+{
+  if (WM_apple_ios_ui_desktop_mode()) {
+    return false;
+  }
+  const wmOperatorType *ot = WM_operatortype_find(kmi->idname, true);
+  if (ot == nullptr) {
+    return false;
+  }
+  static const Set<StringRef> shows_interface = {
+      "WM_OT_call_menu",
+      "WM_OT_call_menu_pie",
+      "WM_OT_call_panel",
+      "WM_OT_call_asset_shelf_popover",
+      "WM_OT_context_menu_enum",
+      "WM_OT_context_pie_enum",
+      "WM_OT_search_menu",
+      "WM_OT_search_operator",
+      "WM_OT_search_single_menu",
+      "WM_OT_toolbar",
+      "WM_OT_toolbar_fallback_pie",
+      "WM_OT_toolbar_prompt",
+      "WM_OT_batch_rename",
+      "SCREEN_OT_region_toggle",
+      "SCREEN_OT_region_flip",
+      "SCREEN_OT_redo_last",
+      "SCREEN_OT_repeat_history",
+      "SCREEN_OT_screen_full_area",
+      "SCREEN_OT_space_type_set_or_cycle",
+      "SCREEN_OT_workspace_cycle",
+      "SCREEN_OT_userpref_show",
+      "SCREEN_OT_info_log_show",
+  };
+  if (shows_interface.contains(ot->idname)) {
+    return true;
+  }
+  /* Operators that only ask in a popup before running. */
+  if (ELEM(ot->invoke,
+           WM_menu_invoke,
+           WM_enum_search_invoke,
+           WM_operator_props_popup,
+           WM_operator_props_popup_call,
+           WM_operator_props_popup_confirm))
+  {
+    return true;
+  }
+  /* Sidebars and toolbars, as N and T show them. */
+  if (STREQ(ot->idname, "WM_OT_context_toggle") && kmi->ptr) {
+    const std::string path = RNA_string_get(kmi->ptr, "data_path");
+    return StringRef(path).startswith("space_data.show_region_");
+  }
+  return false;
+}
+
 wmNativeInterface native_interface_create()
 {
   wmNativeInterface native;
@@ -156,6 +219,7 @@ wmNativeInterface native_interface_create()
   native.direct_gizmo_press = true;
   native.hide_gizmo_tooltips = true;
   native.keyconfig_default_ensure = keyconfig_default_ensure;
+  native.keymap_item_hidden = keymap_item_hidden;
   return native;
 }
 
