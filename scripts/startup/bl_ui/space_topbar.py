@@ -345,8 +345,16 @@ class TOPBAR_MT_file_project(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("project.new_project", text="New Project...", icon='ADD')
-        layout.operator("project.open_blend_in_project", icon='FILE_FOLDER')
+        layout.operator("project.new", text="New Project...", icon='ADD')
+        layout.operator("project.open", icon='FILE_FOLDER')
+        layout.operator("project.close")
+
+        layout.separator()
+
+        if layout.template_recent_projects(rows=10):
+            layout.separator()
+
+        layout.operator("wm.clear_recent_projects", text="Clear Recent Projects List...", icon='TRASH')
 
 
 # Include technical operators here which would otherwise have no way for users to access.
