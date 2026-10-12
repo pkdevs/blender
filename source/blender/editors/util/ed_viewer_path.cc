@@ -118,6 +118,10 @@ static void viewer_path_for_geometry_node(const SpaceNode &snode,
 
   BKE_viewer_path_init(&r_dst);
 
+  if (node.input_sockets().is_empty()) {
+    return;
+  }
+
   bke::ComputeContextCache compute_context_cache;
   const ComputeContext *socket_context = space_node::compute_context_for_edittree_socket(
       snode, compute_context_cache, node.input_socket(0));
