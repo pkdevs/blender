@@ -26,7 +26,7 @@ final class ShellOverlay: UIView {
     super.init(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
     backgroundColor = .clear
     /* Each adds its views to this layer, and presents from the controller it belongs to. */
-    panels = SwiftScenePanels(overlay: self) { BlenderIcon.image($0) }
+    panels = SwiftScenePanels(overlay: self)
     /* The window shows the timeline itself, as #TimelinePanel. */
     timeline = SwiftTimeline()
     assets = SwiftAssets(overlay: self)

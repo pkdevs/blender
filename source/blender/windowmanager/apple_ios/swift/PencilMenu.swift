@@ -6,7 +6,7 @@
  * The Pencil's radial actions: Blender's context menu as pills on up to two rings around the
  * Pencil, chosen by moving the Pencil over one and lifting or squeezing. Raw Pencil routing owns
  * selection and release, so the pills never take touches themselves. Implements
- * `GHOSTIOSPencilMenu`; the view controller finds it by name, see `GHOST_WindowIOS.mm`.
+ * `GHOSTIOSPencilMenu`, which GHOST's window calls with the Pencil's input.
  * All points are UIKit points in this view, never drawable pixels.
  */
 

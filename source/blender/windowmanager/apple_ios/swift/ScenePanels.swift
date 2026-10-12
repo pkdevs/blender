@@ -3,22 +3,16 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
- * The Properties and Outliner panels, viewport shading and tool settings, in SwiftUI. This class
- * answers the `WMIOSScenePanels` protocol's messages; the view controller finds it by name, see
- * `GHOST_WindowIOS.mm`. UIKit keeps placing the panels and the bar items; SwiftUI draws them.
+ * The Properties and Outliner panels, viewport shading and tool settings, in SwiftUI. UIKit
+ * keeps placing the panels; SwiftUI draws them.
  */
 
 import SwiftUI
 import UIKit
 
 @MainActor
-@objc(WMIOSSwiftScenePanels)
-public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDelegate,
-  UIAdaptivePresentationControllerDelegate
-{
-  @objc public let inspectorButton: UIBarButtonItem
-  @objc public let hierarchyButton: UIBarButtonItem
-  @objc public var menuProvider: ((NSDictionary) -> UIMenu?)? {
+final class SwiftScenePanels {
+  var menuProvider: ((NSDictionary) -> UIMenu?)? {
     didSet {
       inspector.menuProvider = menuProvider
       hierarchy.menuProvider = menuProvider
@@ -45,39 +39,10 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   private var showHierarchy = false
   private var layoutRect = CGRect.zero
 
-  private var shadingController: UIViewController?
   private var shadingVisible = false
-  private var toolGroup: UIBarButtonItemGroup?
-  private var toolIcon: UIButton?
-  private var toolReinstalledWidth: CGFloat?
-  private var toolHost: UIHostingController<AnyView>?
-  private var toolRow: ToolStripRow?
-  private var toolMore: UIButton?
-  private var toolWidth: NSLayoutConstraint?
-  private var toolContentWidth: CGFloat = 0
-  private var toolRemeasurePending = false
-  private var toolPopoverController: UIViewController?
-  private var toolID: String?
 
-  @objc(initWithOverlay:icon:)
-  public init(overlay: UIView, icon: @escaping (String) -> UIImage?) {
+  init(overlay: UIView) {
     self.overlay = overlay
-    /* Blender's own editor-type icons, as in the area header's editor menu. */
-    inspectorButton = UIBarButtonItem(image: icon("PROPERTIES") ?? UIImage(systemName: "sidebar.right"),
-                                      style: .plain, target: nil, action: nil)
-    hierarchyButton = UIBarButtonItem(image: icon("OUTLINER") ?? UIImage(systemName: "list.bullet.indent"),
-                                      style: .plain, target: nil, action: nil)
-    super.init()
-    inspectorButton.target = self
-    inspectorButton.action = #selector(toggleInspector)
-    hierarchyButton.target = self
-    hierarchyButton.action = #selector(toggleHierarchy)
-    inspectorButton.title = "Properties"
-    inspectorButton.accessibilityLabel = "Properties"
-    hierarchyButton.title = "Outliner"
-    hierarchyButton.accessibilityLabel = "Outliner"
-    inspectorButton.accessibilityIdentifier = "blender.inspector"
-    hierarchyButton.accessibilityIdentifier = "blender.hierarchy"
     inspector.visible = false
 
     inspectorHost = makeHost(AnyView(InspectorPanel(store: inspector) { [weak self] in self?.toggleInspector() }))
@@ -141,7 +106,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   var hierarchyShown: Bool { showHierarchy }
   var panelsDidChange: (() -> Void)?
 
-  @objc func toggleInspector() {
+  func toggleInspector() {
 #if os(visionOS)
     toggleWindow(.properties)
     return
@@ -152,7 +117,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     applyVisibility()
   }
 
-  @objc func toggleHierarchy() {
+  func toggleHierarchy() {
 #if os(visionOS)
     toggleWindow(.outliner)
     return
@@ -163,8 +128,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     applyVisibility()
   }
 
-  @objc public func dismiss() {
-    dismissShading()
+  func dismiss() {
 #if os(visionOS)
     /* Windows of their own stay open beside the editor. */
     return
@@ -178,8 +142,6 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   private func applyVisibility() {
     if !showInspector { ColorPickerSession.active?.close() }
     inspector.visible = showInspector
-    inspectorButton.isSelected = showInspector
-    hierarchyButton.isSelected = showHierarchy
 #if !os(visionOS)
     animate(inspectorPanel, visible: showInspector, leading: false)
     animate(hierarchyPanel, visible: showHierarchy, leading: true)
@@ -212,11 +174,8 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     }
   }
 
-  @objc(layoutInRect:)
-  public func layout(in rect: CGRect) {
+  func layout(in rect: CGRect) {
     adoptHosts()
-    /* The top bar's room for tool settings changes with rotation and window size. */
-    updateToolStripWidth()
     layoutRect = rect
 #if os(visionOS)
     return
@@ -237,8 +196,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     inspectorPanel.center = CGPoint(x: rect.maxX - 12 - width / 2, y: rect.minY + 12 + height / 2)
   }
 
-  @objc(updateSnapshot:)
-  public func updateSnapshot(_ snapshot: Any?) {
+  func updateSnapshot(_ snapshot: Any?) {
     guard let snapshot = snapshot as? JSON else { return }
     if let shadingSnapshot = snapshot.dict("shading"), shadingVisible {
       shading.update(snapshot: ["ack": snapshot["ack"] ?? 0, "error": snapshot["error"] ?? "",
@@ -289,27 +247,6 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
   /** \name Viewport shading
    * \{ */
 
-  @objc(presentShadingFrom:controller:)
-  public func presentShading(from button: UIBarButtonItem, controller: UIViewController) {
-    if shadingController?.presentingViewController != nil || controller.presentedViewController != nil {
-      return
-    }
-    if shadingController == nil {
-      let content = popoverController(shading, title: "Viewport Shading", done: #selector(dismissShading))
-      content.preferredContentSize = CGSize(width: 400, height: 640)
-      shadingController = content
-    }
-    guard let shadingController else { return }
-    shadingVisible = true
-    shading.requestProperties()
-    Engine.setting("native_shading_visible", "1")
-    shadingController.modalPresentationStyle = .popover
-    shadingController.popoverPresentationController?.barButtonItem = button
-    shadingController.popoverPresentationController?.delegate = self
-    shadingController.presentationController?.delegate = self
-    controller.present(shadingController, animated: true)
-  }
-
   /** Viewport shading as a SwiftUI popover's content shows it: Blender sends its settings while
    * it is open. */
   func shadingContent(done: @escaping () -> Void) -> some View {
@@ -333,59 +270,14 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     Engine.setting("native_shading_visible", shown ? "1" : "0")
   }
 
-  @objc public func dismissShading() {
-    guard shadingVisible else { return }
-    shadingVisible = false
-    ColorPickerSession.active?.close()
-    shadingController?.view.endEditing(true)
-    Engine.setting("native_shading_visible", "0")
-    shadingController?.dismiss(animated: true)
-  }
-
-  public func presentationControllerWillDismiss(_ presentationController: UIPresentationController) {
-    /* Resign the keyboard while the field is still in the popover's window. */
-    presentationController.presentedViewController.view.endEditing(true)
-  }
-
-  public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-    if presentationController.presentedViewController === shadingController { dismissShading() }
-    ColorPickerSession.active?.close()
-  }
-
   /** \} */
 
   /* -------------------------------------------------------------------- */
   /** \name Tool settings
    * \{ */
 
-  @objc(updateToolSettings:acknowledgement:)
-  public func updateToolSettings(_ settings: Any?, acknowledgement ack: Any?)
-    -> UIBarButtonItemGroup?
-  {
-    let settingsJSON = settings as? JSON ?? [:]
-    if toolID != settingsJSON.string("id") {
-      hideToolSettings()
-      toolID = settingsJSON.string("id")
-    }
-    let snapshot: JSON = ["inspector": settingsJSON, "ack": ack as? NSNumber ?? 0]
-    toolStrip.update(snapshot: snapshot)
-    toolPopover.update(snapshot: snapshot)
-    let group = ensureToolGroup()
-    let empty = toolStrip.sections.allSatisfy { $0.rows.isEmpty }
-    group.isHidden = empty
-    updateToolStripWidth()
-    /* The window may only now have put the group in the bar. */
-    scheduleToolStripUpdate()
-    return group
-  }
-
-  /** The tool's settings for a SwiftUI toolbar: the stores' update, without UIKit's bar group.
-   * Returns whether the tool has any. */
+  /** The tool's settings for the toolbar. Returns whether the tool has any. */
   func updateToolSettingsStores(_ settings: JSON, acknowledgement ack: NSNumber) -> Bool {
-    if toolID != settings.string("id") {
-      dismissToolSettings()
-      toolID = settings.string("id")
-    }
     let snapshot: JSON = ["inspector": settings, "ack": ack]
     toolStrip.update(snapshot: snapshot)
     toolPopover.update(snapshot: snapshot)
@@ -408,208 +300,7 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
     .presentationDetents([.medium, .large])
   }
 
-  private func ensureToolGroup() -> UIBarButtonItemGroup {
-    if let toolGroup { return toolGroup }
-    let host = UIHostingController(rootView: AnyView(
-      ScrollView(.horizontal, showsIndicators: false) {
-        ToolStrip(store: toolStrip)
-          .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [weak self] width in
-            self?.toolContentWidth = width
-            self?.scheduleToolStripUpdate()
-          }
-      }
-      .scrollClipDisabled(false)))
-    host.view.backgroundColor = .clear
-    host.sizingOptions = []
-    host.safeAreaRegions = []
-    host.view.translatesAutoresizingMaskIntoConstraints = false
-    let width = host.view.widthAnchor.constraint(equalToConstant: 160)
-    NSLayoutConstraint.activate([width, host.view.heightAnchor.constraint(equalToConstant: 40)])
-    toolWidth = width
-    toolHost = host
-
-    let more = UIButton(type: .system)
-    more.setImage(UIImage(systemName: "ellipsis"), for: .normal)
-    more.addTarget(self, action: #selector(presentToolSettings(_:)), for: .touchUpInside)
-    more.accessibilityIdentifier = "blender.tool-settings.more"
-    more.accessibilityLabel = "More Tool Settings"
-    more.widthAnchor.constraint(equalToConstant: 32).isActive = true
-    more.isHidden = true
-    toolMore = more
-
-    let row = ToolStripRow(arrangedSubviews: [host.view, more])
-    row.axis = .horizontal
-    row.alignment = .center
-    row.spacing = 4
-    /* The bar lays its items out again when any of them changes: fit the strip to the room
-     * left then, and should the bar have collapsed it to its icon, bring it back. */
-    row.laidOut = { [weak self] in self?.scheduleToolStripUpdate() }
-    row.windowChanged = { [weak self] in self?.scheduleToolStripUpdate() }
-    toolRow = row
-
-    /* A view of our own, so the strip's measuring can tell it apart from the bar's other items. */
-    let icon = UIButton(type: .system)
-    icon.setImage(BlenderIcon.image("TOOL_SETTINGS") ?? UIImage(systemName: "slider.horizontal.3"), for: .normal)
-    icon.addTarget(self, action: #selector(presentToolSettings(_:)), for: .touchUpInside)
-    icon.accessibilityIdentifier = Self.toolIconIdentifier
-    icon.accessibilityLabel = "Tool Settings"
-    toolIcon = icon
-    let compact = UIBarButtonItem(customView: icon)
-    /* Keep one group installed in the bar: replacing it on every update makes the bar
-     * re-measure from scratch and fall back to the compact item. */
-    let group = UIBarButtonItemGroup.fixedGroup(representativeItem: compact,
-                                                items: [UIBarButtonItem(customView: row)])
-    toolGroup = group
-    return group
-  }
-
-  private static let toolIconIdentifier = "blender.tool-settings.icon"
-
-  /** The top bar the strip sits in, also while the bar shows the strip as its icon. */
-  private func toolBar() -> UINavigationBar? {
-    var view: UIView? = toolRow?.superview
-    while let current = view {
-      if let bar = current as? UINavigationBar { return bar }
-      view = current.superview
-    }
-    var pending: [UIView] = overlay?.window.map { [$0] } ?? []
-    while let current = pending.popLast() {
-      if let bar = current as? UINavigationBar { return bar }
-      pending.append(contentsOf: current.subviews)
-    }
-    return nil
-  }
-
-  /**
-   * The room for the strip: the bar centers it, so twice the distance from the bar's middle to the
-   * nearest control on either side, not counting the strip itself or the icon the bar shows in its
-   * place when it collapses it.
-   */
-  private func availableToolStripWidth(in bar: UINavigationBar) -> CGFloat {
-    let center = bar.bounds.midX
-    var left = bar.bounds.minX
-    var right = bar.bounds.maxX
-    var pending: [UIView] = [bar]
-    while let view = pending.popLast() {
-      if view.isHidden || view.alpha < 0.01 { continue }
-      /* Skip the strip and its icon along with whatever the bar wraps them in. */
-      if view !== bar, [toolRow, toolIcon].contains(where: { $0?.isDescendant(of: view) == true }) {
-        if view === toolRow || view === toolIcon || view is UIControl { continue }
-        pending.append(contentsOf: view.subviews)
-        continue
-      }
-      let other = view.convert(view.bounds, to: bar)
-      if view is UIControl && other.width < bar.bounds.width / 2 {
-        if other.midX < center { left = max(left, other.maxX) }
-        else { right = min(right, other.minX) }
-        continue
-      }
-      pending.append(contentsOf: view.subviews)
-    }
-    return max(80, 2 * min(center - left, right - center) - 32)
-  }
-
-  private func scheduleToolStripUpdate() {
-    if toolRemeasurePending { return }
-    toolRemeasurePending = true
-    DispatchQueue.main.async { [weak self] in
-      self?.toolRemeasurePending = false
-      self?.updateToolStripWidth()
-    }
-  }
-
-  /**
-   * Fill the room the bar leaves between its other items, as a toolbar does: settings that do not
-   * fit stay reachable through the overflow button at the end. The strip is never wider than that
-   * room, so the bar keeps it rather than collapsing it to its icon.
-   */
-  private func updateToolStripWidth() {
-    guard let toolWidth, let toolGroup, !toolGroup.isHidden, let bar = toolBar() else { return }
-    let available = availableToolStripWidth(in: bar)
-    let overflow = toolContentWidth > available + 0.5
-    let width = max(1, overflow ? available - 36 : toolContentWidth)
-    toolMore?.isHidden = !overflow
-    if abs(toolWidth.constant - width) > 0.5 {
-      toolWidth.constant = width
-      /* The bar measures its items' custom views when it lays out. */
-      bar.setNeedsLayout()
-    }
-    /* Once the bar has shown the strip as its icon it keeps doing so until its items change:
-     * hand it the group again now that the strip fits. */
-    if toolRow?.window == nil, let item = bar.topItem, item.centerItemGroups.contains(toolGroup) {
-      if toolReinstalledWidth == width { return }
-      toolReinstalledWidth = width
-      let groups = item.centerItemGroups
-      item.centerItemGroups = []
-      item.centerItemGroups = groups
-    }
-    else {
-      toolReinstalledWidth = nil
-    }
-  }
-
-  @objc private func presentToolSettings(_ sender: Any) {
-    guard let presenter = overlay?.window?.rootViewController, presenter.presentedViewController == nil else {
-      return
-    }
-    let content = popoverController(toolPopover, title: "Tool Settings", done: #selector(dismissToolSettings))
-    /* Fit the popover to the few settings a tool has rather than a fixed sheet. */
-    let fitting = UIHostingController(rootView: InspectorForm(store: toolPopover, scrolls: false))
-      .sizeThatFits(in: CGSize(width: 320, height: CGFloat.greatestFiniteMagnitude))
-    content.preferredContentSize = CGSize(width: 320, height: min(420, max(88, fitting.height)))
-    content.modalPresentationStyle = .popover
-    if let item = sender as? UIBarButtonItem {
-      content.popoverPresentationController?.barButtonItem = item
-    }
-    else if let view = sender as? UIView {
-      content.popoverPresentationController?.sourceView = view
-      content.popoverPresentationController?.sourceRect = view.bounds
-    }
-    content.presentationController?.delegate = self
-    toolPopoverController = content
-    presenter.present(content, animated: true)
-  }
-
-  /** A form in a navigation controller with the system's Done, as Blender's popovers have. */
-  private func popoverController(_ store: InspectorStore, title: String, done: Selector) -> UIViewController {
-    let form = UIHostingController(rootView: InspectorForm(store: store).tint(PanelStyle.tint))
-    /* Let the popover's own glass show through, matching the inspector and rails. */
-    form.view.backgroundColor = .clear
-    form.view.tintColor = PanelStyle.uiTint
-    form.title = title
-    form.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: done)
-    return UINavigationController(rootViewController: form)
-  }
-
-  @objc private func dismissToolSettings() {
-    toolPopoverController?.view.endEditing(true)
-    ColorPickerSession.active?.close()
-    toolPopoverController?.dismiss(animated: true)
-    toolPopoverController = nil
-  }
-
-  @objc public func hideToolSettings() {
-    toolHost?.view.endEditing(true)
-    dismissToolSettings()
-  }
-
   /** \} */
-}
-
-/** The tool settings strip's row in the top bar, telling when the bar lays it out or moves it. */
-private final class ToolStripRow: UIStackView {
-  var laidOut: (() -> Void)?
-  var windowChanged: (() -> Void)?
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    laidOut?()
-  }
-
-  override func didMoveToWindow() {
-    super.didMoveToWindow()
-    windowChanged?()
-  }
 }
 
 #if os(visionOS)

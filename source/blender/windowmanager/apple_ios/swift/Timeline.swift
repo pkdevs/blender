@@ -5,8 +5,7 @@
 /** \file
  * The timeline: a floating playback strip with a scrubber whose glass knob shows and sets the
  * frame. Expanded, the scrubber grows a key track where keys are selected by tapping or boxing
- * them and dragged together to other frames. Answers the `WMIOSTimeline` protocol's messages;
- * the view controller finds it by name, see `GHOST_WindowIOS.mm`.
+ * them and dragged together to other frames.
  */
 
 import SwiftUI
@@ -547,57 +546,17 @@ struct TimelinePanel: View {
   }
 }
 
+/** The timeline's state and Blender's side of it; the window shows #TimelinePanel, or on Apple
+ * Vision Pro a window of its own. */
 @MainActor
-@objc(WMIOSSwiftTimeline)
-public final class SwiftTimeline: NSObject {
-  private weak var overlay: UIView?
+final class SwiftTimeline {
   let store = TimelineStore()
-  /** The UIKit window's panel; a SwiftUI window shows #TimelinePanel itself. */
-  private let panel: UIVisualEffectView
-  private let host: UIHostingController<TimelineContent>
-  private let usesPanel: Bool
   private var snapshot: NSDictionary?
-  @objc public let button: UIBarButtonItem
-  @objc public var visible: Bool { store.visible }
-  @objc public var visibilityDidChange: (() -> Void)?
+  var visible: Bool { store.visible }
+  var visibilityDidChange: (() -> Void)?
 
-  @objc(initWithOverlay:)
-  public convenience init(overlay: UIView) {
-    self.init(overlay: overlay, usesPanel: true)
-  }
-
-  /** For a SwiftUI window, which shows the timeline itself. */
-  convenience override init() {
-    self.init(overlay: nil, usesPanel: false)
-  }
-
-  private init(overlay: UIView?, usesPanel: Bool) {
-    self.overlay = overlay
-    self.usesPanel = usesPanel
-    let icon = UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate)
-    button = UIBarButtonItem(image: icon ?? UIImage(systemName: "timeline.selection"), style: .plain,
-                             target: nil, action: nil)
-    panel = UIVisualEffectView(effect: makePanelGlass())
-    host = UIHostingController(rootView: TimelineContent(store: store))
-    super.init()
-    button.target = self
-    button.action = #selector(toggle(_:))
-    button.title = "Timeline"
-    button.accessibilityLabel = "Timeline"
-    button.accessibilityIdentifier = "blender.timeline"
-    panel.accessibilityIdentifier = "blender.timeline.panel"
-    panel.layer.cornerRadius = collapsedHeight / 2
-    panel.layer.cornerCurve = .continuous
-    panel.clipsToBounds = true
-    panel.isHidden = true
-    panel.alpha = 0
-    host.view.backgroundColor = .clear
-    host.sizingOptions = []
-    host.safeAreaRegions = []
-    host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    panel.contentView.addSubview(host.view)
-    overlay?.addSubview(panel)
-    store.toggleExpanded = { [weak self] in self?.toggleExpanded(nil) }
+  init() {
+    store.toggleExpanded = { [weak self] in self?.toggleExpanded() }
 #if os(visionOS)
     Self.current = self
 #endif
@@ -614,20 +573,14 @@ public final class SwiftTimeline: NSObject {
 
   func setWindowOpen(_ open: Bool) {
     store.visible = open
-    button.isSelected = open
     Engine.setting("timeline_visible", open ? "1" : "0")
     visibilityDidChange?()
   }
 #endif
 
-  @objc public var view: UIView { panel }
-  @objc public var expanded: Bool { store.expanded }
-  @objc public var height: CGFloat {
-    store.expanded ? controlsRowHeight + knobBandHeight + keyAreaHeight : collapsedHeight
-  }
+  var height: CGFloat { TimelinePanel.height(expanded: store.expanded) }
 
-  @objc(updateSnapshot:)
-  public func updateSnapshot(_ snapshot: Any?) {
+  func updateSnapshot(_ snapshot: Any?) {
     guard let snapshot = snapshot as? NSDictionary, !(self.snapshot?.isEqual(snapshot) ?? false),
           let json = snapshot as? JSON else { return }
     self.snapshot = snapshot
@@ -643,66 +596,25 @@ public final class SwiftTimeline: NSObject {
     store.set(\.recording, json.bool("autokey"))
   }
 
-  @objc(toggleExpanded:)
-  public func toggleExpanded(_ sender: Any?) {
-    if usesPanel { store.expanded.toggle() }
-    else { withAnimation(Self.animation) { store.expanded.toggle() } }
-    panel.layer.cornerRadius = store.expanded ? 24 : collapsedHeight / 2
+  func toggleExpanded() {
+    withAnimation(Self.animation) { store.expanded.toggle() }
     visibilityDidChange?()
   }
 
-  @objc(toggle:)
-  public func toggle(_ sender: Any?) {
+  func toggle() {
 #if os(visionOS)
     PanelWindows.toggle(.timeline)
     return
 #endif
-    if usesPanel { store.visible.toggle() }
-    else { withAnimation(Self.animation) { store.visible.toggle() } }
-    button.isSelected = visible
+    withAnimation(Self.animation) { store.visible.toggle() }
     /* Blender lists keyframes only while the timeline shows them. */
     Engine.setting("timeline_visible", visible ? "1" : "0")
-    guard usesPanel else {
-      visibilityDidChange?()
-      return
-    }
-    let reduceMotion = UIAccessibility.isReduceMotionEnabled
-    let hidden = reduceMotion ? .identity : CGAffineTransform(translationX: 0, y: 14).scaledBy(x: 0.98, y: 0.98)
-    panel.isUserInteractionEnabled = visible
-    if visible {
-      overlay?.bringSubviewToFront(panel)
-      if panel.isHidden {
-        panel.alpha = 0
-        panel.transform = hidden
-      }
-      panel.isHidden = false
-    }
-    let shown = visible
-    UIView.animate(withDuration: reduceMotion ? 0 : 0.28, delay: 0, usingSpringWithDamping: 0.9,
-                   initialSpringVelocity: 0, options: [.beginFromCurrentState, .allowUserInteraction])
-    {
-      self.panel.alpha = shown ? 1 : 0
-      self.panel.transform = shown ? .identity : hidden
-    } completion: { finished in
-      if finished && self.panel.alpha == 0 { self.panel.isHidden = true }
-    }
     visibilityDidChange?()
   }
 
   /** The timeline and everything resting on it move together. */
   static var animation: Animation? {
     UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.3, dampingFraction: 0.9)
-  }
-
-  @objc(layoutInRect:)
-  public func layout(in rect: CGRect) {
-    let width = max(0, rect.width)
-    /* Frame is undefined while transformed; layout must not disturb the presentation animation. */
-    panel.bounds = CGRect(x: 0, y: 0, width: width, height: height)
-    /* Phones keep play, keyframe steps and the scrubber. */
-    store.set(\.compact, width < 520)
-    panel.center = CGPoint(x: rect.midX, y: rect.maxY - height / 2)
-    host.view.frame = panel.contentView.bounds
   }
 }
 

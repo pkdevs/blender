@@ -113,7 +113,7 @@ final class ShellCommands {
         overlay.panels.toggleHierarchy()
       },
       toggle("Timeline", UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate), model.timelineShown) {
-        [overlay] in overlay.timeline.toggle(nil)
+        [overlay] in overlay.timeline.toggle()
       },
       toggle("Properties", BlenderIcon.image("PROPERTIES"), model.inspectorShown) { [overlay] in
         overlay.panels.toggleInspector()
@@ -366,7 +366,7 @@ struct DocumentToolbar: ToolbarContent {
       panelToggle("Outliner", image: BlenderIcon.image("OUTLINER"), isOn: model.hierarchyShown,
                   identifier: "blender.hierarchy") { overlay.panels.toggleHierarchy() }
       panelToggle("Timeline", image: UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate),
-                  isOn: model.timelineShown, identifier: "blender.timeline") { overlay.timeline.toggle(nil) }
+                  isOn: model.timelineShown, identifier: "blender.timeline") { overlay.timeline.toggle() }
       panelToggle("Properties", image: BlenderIcon.image("PROPERTIES"), isOn: model.inspectorShown,
                   identifier: "blender.inspector") { overlay.panels.toggleInspector() }
     }

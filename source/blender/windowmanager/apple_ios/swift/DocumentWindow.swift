@@ -7,8 +7,8 @@
  * Blender draws only the viewport, into GHOST's Metal view at the bottom of the window; touches
  * and the Pencil that reach that view are Blender's, everything above it is SwiftUI.
  *
- * GHOST asks for the window's controller through `WM_apple_ios_window_controller`. While the
- * interface moves to SwiftUI, this window is used when the `BlenderSwiftUIShell` default is set.
+ * GHOST asks for the window's controller through `WM_apple_ios_window_controller`, in
+ * `wm_apple_ios_window.mm`.
  */
 
 import MetalKit
@@ -127,7 +127,7 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
   @objc private func templatePresentation(_ notification: Notification) {
     overlay.panels.dismiss()
     let timeline = (notification.userInfo?["timeline"] as? NSNumber)?.boolValue ?? false
-    if overlay.timeline.visible != timeline { overlay.timeline.toggle(nil) }
+    if overlay.timeline.visible != timeline { overlay.timeline.toggle() }
     overlay.setNeedsLayout()
   }
 

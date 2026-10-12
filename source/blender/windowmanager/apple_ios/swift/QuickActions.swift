@@ -189,7 +189,7 @@ struct QuickActionsRow: View {
 
   private var redoPillTitle: String? {
     guard let snapshot = redo.snapshot, !redo.properties.isEmpty, !redoOpen else { return nil }
-    return SwiftRedoStrip.shortNames[snapshot.string("operator") ?? ""] ?? snapshot.string("title")
+    return RedoStore.shortNames[snapshot.string("operator") ?? ""] ?? snapshot.string("title")
   }
 
   private var animation: Animation? {

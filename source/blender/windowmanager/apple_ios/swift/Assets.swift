@@ -5,8 +5,7 @@
 /** \file
  * The asset pane along the bottom of the viewport: the assets Blender publishes, by type and
  * catalog, searchable. Tapping one adds it; dragging one into the viewport runs Blender's own asset
- * drag and drop through the engine inbox. Answers the `WMIOSAssets` protocol's messages; the
- * view controller finds it by name, see `GHOST_WindowIOS.mm`.
+ * drag and drop through the engine inbox.
  */
 
 import SwiftUI
@@ -306,7 +305,6 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
   private let store = AssetsStore()
   private let panel: UIVisualEffectView
   private let host: UIHostingController<AssetsPane>
-  @objc public let button: UIBarButtonItem
   @objc public private(set) var visible = false
   @objc public private(set) var dropInteraction: UIDropInteraction!
   @objc public var clientPoint: ((CGPoint) -> CGPoint)?
@@ -320,16 +318,9 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
   @objc(initWithOverlay:)
   public init(overlay: UIView) {
     self.overlay = overlay
-    /* Adding things to the scene starts here. */
-    button = UIBarButtonItem(image: UIImage(systemName: "plus"), style: .plain, target: nil, action: nil)
     panel = UIVisualEffectView(effect: makePanelGlass())
     host = UIHostingController(rootView: AssetsPane(store: store))
     super.init()
-    button.target = self
-    button.action = #selector(toggle(_:))
-    button.title = "Add"
-    button.accessibilityLabel = "Add"
-    button.accessibilityIdentifier = "blender.assets"
     panel.accessibilityIdentifier = "blender.assets.panel"
     panel.layer.cornerRadius = 28
     panel.layer.cornerCurve = .continuous
@@ -362,7 +353,6 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
   @objc(toggle:)
   public func toggle(_ sender: Any?) {
     visible.toggle()
-    button.isSelected = visible
     Engine.setting("assets", visible ? "show" : "hide")
     if !visible { panel.endEditing(true) }
     let reduceMotion = UIAccessibility.isReduceMotionEnabled

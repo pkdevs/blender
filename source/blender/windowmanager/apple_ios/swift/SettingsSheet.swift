@@ -39,12 +39,10 @@ final class SettingsModel: ObservableObject {
     didSet {
       guard showQuickActions != oldValue else { return }
       UserDefaults.standard.set(showQuickActions, forKey: Self.showQuickActionsKey)
-      showQuickActionsChanged?(showQuickActions)
     }
   }
 
   var fingerUsesToolChanged: ((Bool) -> Void)?
-  var showQuickActionsChanged: ((Bool) -> Void)?
   var done: (() -> Void)?
 
   init() {
@@ -181,19 +179,9 @@ public final class SwiftSettings: NSObject, UIAdaptivePresentationControllerDele
     UserDefaults.standard.bool(forKey: SettingsModel.fingerUsesToolKey)
   }
 
-  /** Whether the quick action pills are shown, as last chosen. */
-  @objc public static var showQuickActions: Bool {
-    UserDefaults.standard.object(forKey: SettingsModel.showQuickActionsKey) as? Bool ?? true
-  }
-
   @objc public var fingerUsesToolChanged: ((Bool) -> Void)? {
     get { model.fingerUsesToolChanged }
     set { model.fingerUsesToolChanged = newValue }
-  }
-
-  @objc public var showQuickActionsChanged: ((Bool) -> Void)? {
-    get { model.showQuickActionsChanged }
-    set { model.showQuickActionsChanged = newValue }
   }
 
   @objc public func present() {
