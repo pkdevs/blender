@@ -29,7 +29,7 @@ TEST_F(VirtualArrayExecTest, ExecuteSimple)
   VArray<int> in1 = VArray<int>::from_container(std::array{3, 6, 4, 8});
   VArray<int> in2 = VArray<int>::from_single(10, in1.size());
   std::array<int, 4> out;
-  execute_2in_1out<int, int, int>(
+  execute_2in_1out_uninitialized<int, int, int>(
       IndexMask(4), in1, in2, MutableSpan(out), [](const int a, const int b) { return a + b; });
 
   EXPECT_EQ(out[0], 13);
@@ -42,7 +42,8 @@ TEST_F(VirtualArrayExecTest, Execute1in1out)
 {
   VArray<float> in = VArray<float>::from_container(Array<float>{1.0f, 2.5f, -3.0f});
   Array<float> out(3);
-  execute_1in_1out<float, float>(IndexMask(3), in, out, [](const float a) { return a * 2.0f; });
+  execute_1in_1out_uninitialized<float, float>(
+      IndexMask(3), in, out, [](const float a) { return a * 2.0f; });
 
   EXPECT_EQ(out[0], 2.0f);
   EXPECT_EQ(out[1], 5.0f);
@@ -55,7 +56,7 @@ TEST_F(VirtualArrayExecTest, Execute3in1out)
   VArray<int> in2 = VArray<int>::from_single(10, 4);
   VArray<int> in3 = VArray<int>::from_func(4, [](const int64_t i) { return int(i); });
   Array<int> out(4);
-  execute_3in_1out<int, int, int, int>(
+  execute_3in_1out_uninitialized<int, int, int, int>(
       IndexMask(4), in1, in2, in3, out, [](const int a, const int b, const int c) {
         return a + b + c;
       });
@@ -74,7 +75,7 @@ TEST_F(VirtualArrayExecTest, Execute5in1out)
   VArray<int> in4 = VArray<int>::from_single(4, 3);
   VArray<int> in5 = VArray<int>::from_container(Array<int>{10, 20, 30});
   Array<int> out(3);
-  execute_5in_1out<int, int, int, int, int, int>(
+  execute_5in_1out_uninitialized<int, int, int, int, int, int>(
       IndexMask(3),
       in1,
       in2,
@@ -97,7 +98,7 @@ TEST_F(VirtualArrayExecTest, ExecuteFloat3)
       Array<float3>{float3(1.0f, 0.0f, 0.0f), float3(0.0f, 2.0f, 0.0f)});
   VArray<float3> in2 = VArray<float3>::from_single(float3(0.0f, 0.0f, 3.0f), 2);
   Array<float3> out(2);
-  execute_2in_1out<float3, float3, float3>(
+  execute_2in_1out_uninitialized<float3, float3, float3>(
       IndexMask(2), in1, in2, out, [](const float3 &a, const float3 &b) { return a + b; });
 
   EXPECT_EQ(out[0], float3(1.0f, 0.0f, 3.0f));
@@ -109,7 +110,7 @@ TEST_F(VirtualArrayExecTest, ExecuteBool)
   VArray<bool> in1 = VArray<bool>::from_container(Array<bool>{true, false, true, false});
   VArray<bool> in2 = VArray<bool>::from_single(true, 4);
   Array<bool> out(4);
-  execute_2in_1out<bool, bool, bool>(
+  execute_2in_1out_uninitialized<bool, bool, bool>(
       IndexMask(4), in1, in2, out, [](const bool a, const bool b) { return a && b; });
 
   EXPECT_TRUE(out[0]);
@@ -123,7 +124,7 @@ TEST_F(VirtualArrayExecTest, ExecuteMixedInputTypes)
   VArray<int> in_int = VArray<int>::from_container(Array<int>{1, 2, 3});
   VArray<float> in_float = VArray<float>::from_single(0.5f, 3);
   Array<float> out(3);
-  execute_2in_1out<int, float, float>(
+  execute_2in_1out_uninitialized<int, float, float>(
       IndexMask(3), in_int, in_float, out, [](const int a, const float b) {
         return float(a) + b;
       });
@@ -138,7 +139,7 @@ template<typename ExecPreset> static void test_add_with_preset(const ExecPreset 
   VArray<int> in1 = VArray<int>::from_container(Array<int>{1, 2, 3, 4});
   VArray<int> in2 = VArray<int>::from_func(4, [](const int64_t i) { return int(i * 10); });
   Array<int> out(4);
-  execute_2in_1out<int, int, int>(
+  execute_2in_1out_uninitialized<int, int, int>(
       IndexMask(4), in1, in2, out, [](const int a, const int b) { return a + b; }, preset);
 
   EXPECT_EQ(out[0], 1);
@@ -252,7 +253,7 @@ TEST_F(VirtualArrayExecTest, ExecuteSparseMask)
 
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_indices<int>({1, 3, 6}, memory);
-  execute_2in_1out<int, int, int>(
+  execute_2in_1out_uninitialized<int, int, int>(
       mask, in1, in2, out, [](const int a, const int b) { return a + b; });
 
   EXPECT_EQ(out[0], -1);
@@ -312,7 +313,8 @@ TEST_F(VirtualArrayExecTest, ExecuteEmptyMask)
   VArray<int> in = VArray<int>::from_container(Array<int>{1, 2, 3});
   Array<int> out(3, -1);
 
-  execute_1in_1out<int, int>(IndexMask(0), in, out, [](const int a) { return a * 2; });
+  execute_1in_1out_uninitialized<int, int>(
+      IndexMask(0), in, out, [](const int a) { return a * 2; });
 
   EXPECT_EQ(out[0], -1);
   EXPECT_EQ(out[1], -1);
@@ -330,7 +332,7 @@ TEST_F(VirtualArrayExecTest, ExecuteLargeForChunking)
   VArray<int> add = VArray<int>::from_func(size, [](const int64_t i) { return int(i % 7); });
   Array<int> out(size);
 
-  execute_2in_1out<int, int, int>(
+  execute_2in_1out_uninitialized<int, int, int>(
       IndexMask(size), in, add, out, [](const int a, const int b) { return a + b; });
 
   for (const int64_t i : IndexRange(size)) {
@@ -343,7 +345,7 @@ TEST_F(VirtualArrayExecTest, ExecuteAllSingleInputs)
   VArray<int> in1 = VArray<int>::from_single(3, 5);
   VArray<int> in2 = VArray<int>::from_single(7, 5);
   Array<int> out(5);
-  execute_2in_1out<int, int, int>(
+  execute_2in_1out_uninitialized<int, int, int>(
       IndexMask(5),
       in1,
       in2,
@@ -422,7 +424,7 @@ TEST_F(VirtualArrayExecTest, ExecuteNonTrivialString)
   const VArray<std::string> in2 = VArray<std::string>::from_single("!", 3);
   Array<std::string> out(3, NoInitialization{});
 
-  execute_2in_1out<std::string, std::string, std::string>(
+  execute_2in_1out_uninitialized<std::string, std::string, std::string>(
       IndexMask(3),
       in1,
       in2,
@@ -441,7 +443,7 @@ TEST_F(VirtualArrayExecTest, ExecuteNonTrivialStringFuncInput)
       4, [](const int64_t i) { return std::string(size_t(i + 1), 'x'); });
   Array<std::string> out(4, NoInitialization{});
 
-  execute_1in_1out<std::string, std::string>(
+  execute_1in_1out_uninitialized<std::string, std::string>(
       IndexMask(4), in, out, [](const std::string &s) { return s + s; }, exec_presets::Simple());
 
   EXPECT_EQ(out[0], "xx");
