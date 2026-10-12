@@ -402,6 +402,38 @@ UIWindow *document_window = nil;
   pointer_hover_recognizer.allowedTouchTypes = @[ @(UITouchTypeIndirectPointer) ];
   [self addGestureRecognizer:pointer_hover_recognizer];
 
+  /* Scrolling: a trackpad's two fingers as on a Mac, a mouse wheel's steps as a wheel. */
+  trackpad_scroll_recognizer = [[UIPanGestureRecognizer alloc]
+      initWithTarget:self
+              action:@selector(handleTrackpadScroll:)];
+  trackpad_scroll_recognizer.delegate = self;
+  trackpad_scroll_recognizer.allowedScrollTypesMask = UIScrollTypeMaskContinuous;
+  trackpad_scroll_recognizer.allowedTouchTypes = @[];
+  [window->getView() addGestureRecognizer:trackpad_scroll_recognizer];
+
+  wheel_scroll_recognizer = [[UIPanGestureRecognizer alloc]
+      initWithTarget:self
+              action:@selector(handleWheelScroll:)];
+  wheel_scroll_recognizer.delegate = self;
+  wheel_scroll_recognizer.allowedScrollTypesMask = UIScrollTypeMaskDiscrete;
+  wheel_scroll_recognizer.allowedTouchTypes = @[];
+  [window->getView() addGestureRecognizer:wheel_scroll_recognizer];
+
+  /* A trackpad's pinch and twist, apart from fingers on the screen. */
+  trackpad_pinch_recognizer = [[UIPinchGestureRecognizer alloc]
+      initWithTarget:self
+              action:@selector(handleTrackpadPinch:)];
+  trackpad_pinch_recognizer.delegate = self;
+  trackpad_pinch_recognizer.allowedTouchTypes = @[ @(UITouchTypeIndirectPointer) ];
+  [window->getView() addGestureRecognizer:trackpad_pinch_recognizer];
+
+  trackpad_rotation_recognizer = [[UIRotationGestureRecognizer alloc]
+      initWithTarget:self
+              action:@selector(handleTrackpadRotation:)];
+  trackpad_rotation_recognizer.delegate = self;
+  trackpad_rotation_recognizer.allowedTouchTypes = @[ @(UITouchTypeIndirectPointer) ];
+  [window->getView() addGestureRecognizer:trackpad_rotation_recognizer];
+
   /**  Apple Pencil double-tap. */
   pencil_interaction = [[UIPencilInteraction alloc] init];
   pencil_interaction.delegate = self;
@@ -520,6 +552,15 @@ UIWindow *document_window = nil;
   {
     return YES;
   }
+#if !defined(APPLE_TARGET_VISIONOS)
+  if ((gestureRecognizer == trackpad_pinch_recognizer &&
+       otherGestureRecognizer == trackpad_rotation_recognizer) ||
+      (gestureRecognizer == trackpad_rotation_recognizer &&
+       otherGestureRecognizer == trackpad_pinch_recognizer))
+  {
+    return YES;
+  }
+#endif
   const BOOL is_navigation = gestureRecognizer == pan2f_gesture_recognizer ||
                              gestureRecognizer == zoom_gesture_recognizer ||
                              gestureRecognizer == rotation_gesture_recognizer;
@@ -951,7 +992,9 @@ UIWindow *document_window = nil;
 /* -------------------------------------------------------------------- */
 /* Mouse and trackpad
  *
- * As on the desktop: the pointer moves Blender's cursor and its buttons are mouse buttons. */
+ * As on the desktop: the pointer moves Blender's cursor and its buttons are mouse buttons, a
+ * mouse wheel scrolls in steps, and a trackpad's two-finger scroll, pinch and twist are trackpad
+ * gestures as on a Mac. */
 
 - (bool)pointerOverViewport:(CGPoint)location_in_window
 {
@@ -1065,6 +1108,145 @@ static GHOST_TButton pointer_button(int index)
   }
   pointer_buttons = 0;
   pointer_touch = nil;
+}
+
+- (void)handleTrackpadScroll:(UIPanGestureRecognizer *)sender
+{
+  if (!window || !system) {
+    return;
+  }
+  if (sender.state == UIGestureRecognizerStateBegan) {
+    scroll_translation = CGPointZero;
+  }
+  if (sender.state != UIGestureRecognizerStateBegan &&
+      sender.state != UIGestureRecognizerStateChanged)
+  {
+    return;
+  }
+  CGPoint translation = [sender translationInView:window->getView()];
+  CGPoint delta = CGPointMake(translation.x - scroll_translation.x,
+                              translation.y - scroll_translation.y);
+  scroll_translation = translation;
+  delta = window->scalePointToWindow(delta);
+  CGPoint location = [sender locationInView:window->getView()];
+  location = window->scalePointToWindow(location);
+  if (delta.x == 0 && delta.y == 0) {
+    return;
+  }
+  /* The content follows the fingers, as natural scrolling does on a Mac. */
+  system->pushEvent(std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
+                                                          window,
+                                                          GHOST_kTrackpadEventScroll,
+                                                          location.x,
+                                                          location.y,
+                                                          delta.x,
+                                                          delta.y,
+                                                          true));
+}
+
+- (void)handleWheelScroll:(UIPanGestureRecognizer *)sender
+{
+  if (!window || !system) {
+    return;
+  }
+  if (sender.state == UIGestureRecognizerStateBegan) {
+    scroll_translation = CGPointZero;
+  }
+  if (sender.state != UIGestureRecognizerStateBegan &&
+      sender.state != UIGestureRecognizerStateChanged)
+  {
+    return;
+  }
+  const CGPoint translation = [sender translationInView:window->getView()];
+  const CGPoint delta = CGPointMake(translation.x - scroll_translation.x,
+                                    translation.y - scroll_translation.y);
+  scroll_translation = translation;
+  CGPoint location = [sender locationInView:window->getView()];
+  [self sendPointerMove:location];
+  /* One wheel step for each step, as on a Mac. */
+  if (delta.y != 0) {
+    system->pushEvent(std::make_unique<GHOST_EventWheel>(
+        system->getMilliSeconds(), window, GHOST_kEventWheelAxisVertical, delta.y > 0 ? 1 : -1));
+  }
+  if (delta.x != 0) {
+    system->pushEvent(std::make_unique<GHOST_EventWheel>(system->getMilliSeconds(),
+                                                         window,
+                                                         GHOST_kEventWheelAxisHorizontal,
+                                                         delta.x > 0 ? 1 : -1));
+  }
+}
+
+/** Trackpad gestures in whole units as a Mac sends them, keeping what doesn't add up to one. */
+static int32_t trackpad_units(double value, double *remainder)
+{
+  const double total = value + *remainder;
+  const double units = trunc(total);
+  *remainder = total - units;
+  return int32_t(units);
+}
+
+- (void)handleTrackpadPinch:(UIPinchGestureRecognizer *)sender
+{
+  static CGFloat last_scale = 1.0;
+  static double remainder = 0.0;
+  if (!window || !system) {
+    return;
+  }
+  if (sender.state == UIGestureRecognizerStateBegan) {
+    last_scale = 1.0;
+    remainder = 0.0;
+  }
+  if (sender.state != UIGestureRecognizerStateBegan &&
+      sender.state != UIGestureRecognizerStateChanged)
+  {
+    return;
+  }
+  /* The change in magnification, scaled as #GHOST_SystemCocoa does. */
+  const int32_t delta = trackpad_units((sender.scale - last_scale) * 125.0, &remainder);
+  last_scale = sender.scale;
+  CGPoint location = [sender locationInView:window->getView()];
+  location = window->scalePointToWindow(location);
+  if (delta != 0) {
+    system->pushEvent(std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
+                                                            window,
+                                                            GHOST_kTrackpadEventMagnify,
+                                                            location.x,
+                                                            location.y,
+                                                            delta,
+                                                            0,
+                                                            false));
+  }
+}
+
+- (void)handleTrackpadRotation:(UIRotationGestureRecognizer *)sender
+{
+  static double remainder = 0.0;
+  if (!window || !system) {
+    return;
+  }
+  if (sender.state == UIGestureRecognizerStateBegan) {
+    remainder = 0.0;
+  }
+  if (sender.state != UIGestureRecognizerStateBegan &&
+      sender.state != UIGestureRecognizerStateChanged)
+  {
+    return;
+  }
+  /* Degrees, scaled as #GHOST_SystemCocoa does. */
+  const int32_t delta = trackpad_units(sender.rotation * 180.0 / M_PI * -5.0, &remainder);
+  sender.rotation = 0.0;
+  CGPoint location = [sender locationInView:window->getView()];
+  location = window->scalePointToWindow(location);
+  if (delta != 0) {
+    system->pushEvent(std::make_unique<GHOST_EventTrackpad>(system->getMilliSeconds(),
+                                                            window,
+                                                            GHOST_kTrackpadEventRotate,
+                                                            location.x,
+                                                            location.y,
+                                                            delta,
+                                                            0,
+                                                            false));
+  }
 }
 
 #endif

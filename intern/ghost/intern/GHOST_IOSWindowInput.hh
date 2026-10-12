@@ -18,6 +18,7 @@
 #include "GHOST_EventKey.hh"
 #include "GHOST_EventTouch.hh"
 #include "GHOST_EventTrackpad.hh"
+#include "GHOST_EventWheel.hh"
 #include "GHOST_IOSNativeInterface.hh"
 #import "GHOST_IOSPencilMenu.hh"
 #import "GHOST_IOSPlatform.hh"
@@ -172,10 +173,15 @@ typedef struct UserInputEvent {
   // GHOSTUILongPressGestureRecognizer *long_press_gesture_recognizer;
 
 #if !defined(APPLE_TARGET_VISIONOS)
-  /* A mouse or trackpad: the pointer and its buttons. */
+  /* A mouse or trackpad: the pointer, its buttons, scrolling and trackpad gestures. */
   UIHoverGestureRecognizer *pointer_hover_recognizer;
+  UIPanGestureRecognizer *trackpad_scroll_recognizer;
+  UIPanGestureRecognizer *wheel_scroll_recognizer;
+  UIPinchGestureRecognizer *trackpad_pinch_recognizer;
+  UIRotationGestureRecognizer *trackpad_rotation_recognizer;
   UITouch *pointer_touch;
   UIEventButtonMask pointer_buttons;
+  CGPoint scroll_translation;
 #endif
 
   /* Data from the Apple pencil */

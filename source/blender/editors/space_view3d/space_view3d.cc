@@ -333,10 +333,17 @@ static void view3d_main_region_init(wmWindowManager *wm, ARegion *region)
   wmKeyMap *keymap;
 
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  /* Handle finger panning before mode/tool keymaps; Pencil still drives the active tool. */
+  /* Handle finger panning before mode/tool keymaps; Pencil still drives the active tool. A
+   * trackpad's scrolling navigates as Blender's keymaps say, as on a Mac. */
   keymap = WM_keymap_ensure(
       wm->runtime->defaultconf, "3D View iPad Gestures", SPACE_VIEW3D, RGN_TYPE_WINDOW);
-  WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
+  WM_event_add_keymap_handler_poll(
+      &region->runtime->handlers,
+      keymap,
+      [](const wmWindow * /*win*/,
+         const ScrArea * /*area*/,
+         const ARegion * /*region*/,
+         const wmEvent *event) { return (event->flag & WM_EVENT_MULTITOUCH_TWO_FINGERS) != 0; });
 #endif
 
   /* object ops. */
