@@ -53,7 +53,7 @@ LineData decode_axis_data(uint vertex_id)
   /* For an axis line, the level is fixed, and the direction is simply the vertex index. */
   line.level = OVERLAY_GRID_STEPS_DRAW - 1;
   /* Output a vertex as [-1, 1], [0, 0]. */
-  line.P.x = side != 0 ? 1.0f : -1.0f; 
+  line.P.x = side != 0 ? 1.0f : -1.0f;
   line.P.y = 0.0f;
   return line;
 }
