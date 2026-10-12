@@ -38,6 +38,7 @@
 #include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 #include "UI_interface_layout.hh"
+#include "UI_tree_view.hh"
 #include "WM_api.hh"
 #include "WM_types.hh"
 #include "WM_toolsystem.hh"
@@ -1184,14 +1185,12 @@ const char *physics_panel(bContext *C, const Button &but)
   }
 }
 
-/** A list's rows, from its row buttons and the item buttons each one draws over. */
-void project_list(bContext *C,
-                  const Block &block,
-                  const Button &first_row,
-                  const std::map<const Button *, std::vector<const Button *>> &row_items,
-                  const ListSide *side,
-                  const Object *object,
-                  DictionaryValue &field)
+/** The buttons beside a list or tree: add, remove, its menu and other operators. */
+void project_list_side(bContext *C,
+                       const ListSide *side,
+                       const Object *object,
+                       DictionaryValue &field,
+                       const bool reorder = true)
 {
   if (side) {
     auto add_operator = [&](const char *name, Button *but) {
@@ -1207,7 +1206,24 @@ void project_list(bContext *C,
     };
     add_operator("add", side->add);
     add_operator("remove", side->remove);
-    field.append_int("reorder", side->up && side->down &&
+    /* Duplicating the active item, for the iPad's swipe action. Lists offer it differently (in
+     * their menu, or as Add), so it is known by the list's Add operator. */
+    if (side->add && side->add->optype) {
+      static const std::pair<const char *, const char *> duplicates[] = {
+          {"OBJECT_OT_shape_key_add", "OBJECT_OT_shape_key_copy"},
+          {"OBJECT_OT_vertex_group_add", "OBJECT_OT_vertex_group_copy"},
+          {"GEOMETRY_OT_color_attribute_add", "GEOMETRY_OT_color_attribute_duplicate"},
+          {"GREASE_PENCIL_OT_layer_add", "GREASE_PENCIL_OT_layer_duplicate"},
+          {"MESH_OT_uv_texture_add", "MESH_OT_uv_texture_add"},
+      };
+      for (const auto &[add, duplicate] : duplicates) {
+        if (STREQ(side->add->optype->idname, add)) {
+          field.append_str("duplicate", duplicate);
+          break;
+        }
+      }
+    }
+    field.append_int("reorder", reorder && side->up && side->down &&
                                     !(side->up->flag & (BUT_DISABLED | BUT_INACTIVE)));
     if (side->menu) {
       field.append_str("menu", side->menu->idname);
@@ -1223,6 +1239,71 @@ void project_list(bContext *C,
       }
     }
   }
+}
+
+/** One item's name, icon and the controls drawn over its row, from the buttons on the row. */
+void project_list_row(bContext *C,
+                      const std::vector<const Button *> &items,
+                      DictionaryValue &row,
+                      const StringRef fallback_label = "")
+{
+  std::string label;
+  int icon = ICON_NONE;
+  for (const Button *item : items) {
+    if (icon == ICON_NONE && button_icon(item) != ICON_NONE) {
+      icon = button_icon(item);
+    }
+    if (!label.empty() || (item->flag & UI_HIDDEN)) {
+      continue;
+    }
+    if (item->rnaprop && RNA_property_type(item->rnaprop) == PROP_STRING) {
+      PointerRNA item_ptr = item->rnapoin;
+      label = RNA_property_string_get(&item_ptr, item->rnaprop);
+      if (STREQ(RNA_property_identifier(item->rnaprop), "name") &&
+          RNA_property_editable(&item_ptr, item->rnaprop))
+      {
+        row.append_str("rename_key", property_key(*item, -1));
+      }
+    }
+    else if (ELEM(item->type, ButtonType::Label, ButtonType::Text) && !item->str.empty()) {
+      label = item->str;
+    }
+  }
+  row.append_str("label", label.empty() ? std::string(fallback_label) : label);
+  /* What the row draws beside its name, such as a shape key's value and mute toggle or a
+   * vertex group's lock: edited through the same keys as any other property. */
+  std::shared_ptr<ArrayValue> controls;
+  for (const Button *item : items) {
+    if ((item->flag & UI_HIDDEN) || !item->rnaprop || !item->rnapoin.data ||
+        RNA_property_array_check(item->rnaprop) ||
+        !ELEM(RNA_property_type(item->rnaprop), PROP_BOOLEAN, PROP_INT, PROP_FLOAT, PROP_ENUM))
+    {
+      continue;
+    }
+    if (!controls) {
+      controls = row.append_array("controls");
+    }
+    auto control = controls->append_dict();
+    project_property(C, const_cast<Button &>(*item), -1, *control);
+    control->append_int("native", 1);
+  }
+  if (icon >= BIFICONID_LAST_STATIC) {
+    row.append_str("preview", preview_icon_path(C, icon));
+    icon = ICON_NONE;
+  }
+  row.append_str("icon", icon_name(icon));
+}
+
+/** A list's rows, from its row buttons and the item buttons each one draws over. */
+void project_list(bContext *C,
+                  const Block &block,
+                  const Button &first_row,
+                  const std::map<const Button *, std::vector<const Button *>> &row_items,
+                  const ListSide *side,
+                  const Object *object,
+                  DictionaryValue &field)
+{
+  project_list_side(C, side, object, field);
   PointerRNA active_ptr = first_row.rnapoin;
   field.append_str("type", "LIST");
   field.append_str("key", property_key(first_row, -1));
@@ -1238,58 +1319,112 @@ void project_list(bContext *C,
     }
     auto row = rows->append_dict();
     row->append_int("index", int(button->hardmax));
-    std::string label;
-    int icon = ICON_NONE;
     const auto items = row_items.find(button.get());
     if (items == row_items.end()) {
       row->append_str("label", "");
       row->append_str("icon", "");
       continue;
     }
-    for (const Button *item : items->second) {
-      if (icon == ICON_NONE && button_icon(item) != ICON_NONE) {
-        icon = button_icon(item);
-      }
-      if (!label.empty() || (item->flag & UI_HIDDEN)) {
-        continue;
-      }
-      if (item->rnaprop && RNA_property_type(item->rnaprop) == PROP_STRING) {
-        PointerRNA item_ptr = item->rnapoin;
-        label = RNA_property_string_get(&item_ptr, item->rnaprop);
-        if (STREQ(RNA_property_identifier(item->rnaprop), "name") &&
-            RNA_property_editable(&item_ptr, item->rnaprop))
-        {
-          row->append_str("rename_key", property_key(*item, -1));
-        }
-      }
-      else if (ELEM(item->type, ButtonType::Label, ButtonType::Text) && !item->str.empty()) {
-        label = item->str;
-      }
-    }
-    row->append_str("label", label);
-    /* What the row draws beside its name, such as a shape key's value and mute toggle or a
-     * vertex group's lock: edited through the same keys as any other property. */
-    std::shared_ptr<ArrayValue> controls;
-    for (const Button *item : items->second) {
-      if ((item->flag & UI_HIDDEN) || !item->rnaprop || !item->rnapoin.data ||
-          RNA_property_array_check(item->rnaprop) ||
-          !ELEM(RNA_property_type(item->rnaprop), PROP_BOOLEAN, PROP_INT, PROP_FLOAT, PROP_ENUM))
-      {
-        continue;
-      }
-      if (!controls) {
-        controls = row->append_array("controls");
-      }
-      auto control = controls->append_dict();
-      project_property(C, const_cast<Button &>(*item), -1, *control);
-      control->append_int("native", 1);
-    }
-    if (icon >= BIFICONID_LAST_STATIC) {
-      row->append_str("preview", preview_icon_path(C, icon));
-      icon = ICON_NONE;
-    }
-    row->append_str("icon", icon_name(icon));
+    project_list_row(C, items->second, *row);
   }
+}
+
+/** A tree view's items in drawing order (shape keys, bone collections, layers), with the buttons
+ * beside it. Trees have no active-index property: their items are activated and renamed
+ * directly, see #apply_tree. */
+struct TreeRows {
+  std::vector<const ButtonViewItem *> items;
+  rctf rect;
+  ListSide side;
+};
+
+const AbstractTreeViewItem *tree_item(const ButtonViewItem &button)
+{
+  return dynamic_cast<const AbstractTreeViewItem *>(button.view_item);
+}
+
+/** A tree, shown as a list: its items in order, indented by depth. */
+void project_tree(bContext *C,
+                  const TreeRows &tree,
+                  const std::map<const Button *, std::vector<const Button *>> &row_items,
+                  const Object *object,
+                  const std::string &key,
+                  DictionaryValue &field)
+{
+  bool nested = false;
+  for (const ButtonViewItem *button : tree.items) {
+    nested |= tree_item(*button)->count_parents() > 0;
+  }
+  project_list_side(C, &tree.side, object, field, !nested);
+  field.append_str("type", "LIST");
+  field.append_str("key", key);
+  field.append_str("label", "");
+  field.append_int("editable", 1);
+  int active = -1;
+  auto rows = field.append_array("rows");
+  for (int index = 0; index < int(tree.items.size()); index++) {
+    const ButtonViewItem *button = tree.items[index];
+    const AbstractTreeViewItem *item = tree_item(*button);
+    if (item->is_active()) {
+      active = index;
+    }
+    auto row = rows->append_dict();
+    row->append_int("index", index);
+    if (const int depth = item->count_parents()) {
+      row->append_int("depth", depth);
+    }
+    if (item->supports_renaming()) {
+      row->append_int("rename", 1);
+    }
+    const auto items = row_items.find(button);
+    project_list_row(C,
+                     items == row_items.end() ? std::vector<const Button *>() : items->second,
+                     *row,
+                     /* Public on the base, where tree items override it. */
+                     static_cast<const AbstractViewItem *>(item)->get_rename_string());
+  }
+  field.append_int("value", active);
+}
+
+/** Select, rename or reorder a tree's item, as #project_tree shows them. */
+bool apply_tree(bContext *C, const TreeRows &tree, const DictionaryValue &query)
+{
+  const std::string action = query.lookup_str("list_action").value_or("");
+  auto item_at = [&](const int64_t index) -> AbstractViewItem * {
+    return index >= 0 && index < int64_t(tree.items.size()) ? tree.items[index]->view_item :
+                                                                nullptr;
+  };
+  if (action == "rename") {
+    AbstractViewItem *item = item_at(query.lookup_int("index").value_or(-1));
+    const auto name = query.lookup_str("name");
+    return item && name && item->supports_renaming() && item->rename(*C, *name);
+  }
+  if (action == "move") {
+    /* Make the item active, then move it as the arrows beside the tree do. */
+    const int64_t from = query.lookup_int("from").value_or(-1);
+    const int64_t to = query.lookup_int("to").value_or(-1);
+    AbstractViewItem *item = item_at(from);
+    Button *step = to < from ? tree.side.up : tree.side.down;
+    if (!item || !item_at(to) || from == to || !step || !step->optype) {
+      return false;
+    }
+    item->activate(*C);
+    const bContextStore *previous = CTX_store_get(C);
+    CTX_store_set(C, step->context);
+    bool applied = true;
+    for (int64_t i = 0; i < std::abs(to - from) && applied; i++) {
+      applied = WM_operator_name_call_ptr(C, step->optype, wm::OpCallContext::ExecDefault,
+                                          step->opptr, nullptr) & OPERATOR_FINISHED;
+    }
+    CTX_store_set(C, previous);
+    return applied;
+  }
+  AbstractViewItem *item = item_at(query.lookup_int("value").value_or(-1));
+  if (!item) {
+    return false;
+  }
+  item->activate(*C);
+  return true;
 }
 
 /** \} */
@@ -1846,12 +1981,16 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         {
           combined.insert(&but);
         }
-        if (but.type != ButtonType::ListRow) {
+        if (but.type != ButtonType::ListRow &&
+            !(but.type == ButtonType::ViewItem &&
+              tree_item(static_cast<const ButtonViewItem &>(but))))
+        {
           continue;
         }
         /* An item's buttons are drawn over its row. */
         for (const auto &item : block->buttons) {
-          if (item.get() != &but && !ELEM(item->type, ButtonType::ListRow, ButtonType::ListBox) &&
+          if (item.get() != &but &&
+              !ELEM(item->type, ButtonType::ListRow, ButtonType::ListBox, ButtonType::ViewItem) &&
               BLI_rctf_isect_pt(&but.rect, BLI_rctf_cent_x(&item->rect), BLI_rctf_cent_y(&item->rect)))
           {
             combined.insert(item.get());
@@ -1862,15 +2001,11 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
     }
     /* The column beside each list (#Layout::template_list's side buttons), by list box. */
     std::map<const Button *, ListSide> list_sides;
-    for (const auto &box : block->buttons) {
-      if (box->type != ButtonType::ListBox) {
-        continue;
-      }
-      ListSide &side = list_sides[box.get()];
+    auto find_side = [&](const rctf &box, ListSide &side) {
       for (const auto &button : block->buttons) {
         Button &but = *button;
-        if (but.rect.xmin < box->rect.xmax - 2 || but.rect.ymax > box->rect.ymax + 2 ||
-            but.rect.ymin < box->rect.ymin - 8 * UI_UNIT_Y || (but.flag & UI_HIDDEN))
+        if (but.rect.xmin < box.xmax - 2 || but.rect.ymax > box.ymax + 2 ||
+            but.rect.ymin < box.ymin - 8 * UI_UNIT_Y || (but.flag & UI_HIDDEN))
         {
           continue;
         }
@@ -1901,7 +2036,40 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         }
         combined.insert(&but);
       }
+    };
+    for (const auto &box : block->buttons) {
+      if (box->type == ButtonType::ListBox) {
+        find_side(box->rect, list_sides[box.get()]);
+      }
     }
+    /* Tree views (shape keys, bone collections, layers), by view, in drawing order. */
+    std::vector<TreeRows> trees;
+    {
+      std::map<const AbstractView *, size_t> tree_index;
+      for (const auto &button : block->buttons) {
+        if (button->type != ButtonType::ViewItem ||
+            !tree_item(static_cast<const ButtonViewItem &>(*button)))
+        {
+          continue;
+        }
+        const auto *item = static_cast<const ButtonViewItem *>(button.get());
+        const auto [found, added] = tree_index.try_emplace(&item->view_item->get_view(),
+                                                           trees.size());
+        if (added) {
+          trees.emplace_back();
+          trees.back().rect = button->rect;
+        }
+        TreeRows &tree = trees[found->second];
+        tree.items.push_back(item);
+        BLI_rctf_union(&tree.rect, &button->rect);
+      }
+      for (TreeRows &tree : trees) {
+        find_side(tree.rect, tree.side);
+      }
+    }
+    auto tree_key = [&](const size_t index) {
+      return "tree:" + candidate.id + ":" + std::to_string(index);
+    };
     auto list_side_for = [&](const Button &row) -> ListSide * {
       for (auto &[box, side] : list_sides) {
         if (box->rnapoin.data == row.rnapoin.data && box->rnaprop == row.rnaprop) {
@@ -1962,7 +2130,44 @@ std::string native_properties_query(bContext *C, const std::string &json, bool e
         continue;
       }
       if (but.type == ButtonType::ListBox) {
-        /* The list's active index, which its rows show. */
+        /* The list's active index, which its rows show. An empty list has no rows: show it from
+         * its box, so that its add button stays within reach. */
+        const bool has_rows = std::any_of(
+            block->buttons.begin(), block->buttons.end(), [&](const auto &row) {
+              return row->type == ButtonType::ListRow && row->rnapoin.data == but.rnapoin.data &&
+                     row->rnaprop == but.rnaprop;
+            });
+        if (!execute && !has_rows && but.rnaprop && but.rnapoin.data &&
+            seen.insert(property_key(but, -1)).second)
+        {
+          auto field = append_field();
+          project_list(C, *block, but, row_items, list_side_for(but), object, *field);
+          field->append_str("panel", candidate.id);
+          field->append_str("tab", tab_id);
+          field->append_int("native", 1);
+        }
+        continue;
+      }
+      if (but.type == ButtonType::ViewItem) {
+        /* A tree, from its first item. */
+        for (size_t index = 0; index < trees.size(); index++) {
+          if (trees[index].items.front() != &but) {
+            continue;
+          }
+          const std::string key = tree_key(index);
+          if (execute) {
+            if (target_panel && requested_key && *requested_key == key && !applied) {
+              applied = apply_tree(C, trees[index], *query);
+            }
+          }
+          else if (seen.insert(key).second) {
+            auto field = append_field();
+            project_tree(C, trees[index], row_items, object, key, *field);
+            field->append_str("panel", candidate.id);
+            field->append_str("tab", tab_id);
+            field->append_int("native", 1);
+          }
+        }
         continue;
       }
       if (but.type == ButtonType::ListRow && execute && target_panel && requested_key &&

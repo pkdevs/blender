@@ -427,6 +427,9 @@ struct ListRows: View {
   @State private var renaming: Int?
   @State private var renameText = ""
   @FocusState private var renameFocused: Bool
+  /** The row whose swipe actions show, and how far it is pulled, as in the Outliner. */
+  @State private var swiped: String?
+  @State private var swipeOffset: CGFloat = 0
 
   private var active: Int? { (store.value(property) as? NSNumber)?.intValue }
   private var editable: Bool { property.bool("editable") }
@@ -435,7 +438,12 @@ struct ListRows: View {
   var body: some View {
     VStack(spacing: 2) {
       ForEach(Array(rows.enumerated()), id: \.element.listIdentity) { position, item in
-        row(item, position: position)
+        let index = item.int("index") ?? position
+        SwipeRow(id: "\(index)", swiped: $swiped, offset: $swipeOffset,
+                 leading: swipeActions(item, index: index, ["duplicate", "rename"]),
+                 trailing: swipeActions(item, index: index, ["delete"])) {
+          row(item, position: position)
+        }
           .offset(y: offsetFor(position))
           .zIndex(dragging == position ? 1 : 0)
           .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeight = $0 + 2 }
@@ -523,7 +531,8 @@ struct ListRows: View {
           }
       }
     }
-    .padding(.leading, 10)
+    /* Nested items (bone collections, layer groups) are indented under their parent. */
+    .padding(.leading, 10 + CGFloat(item.int("depth") ?? 0) * 16)
     .padding(.trailing, reorder ? 0 : 10)
     .frame(minHeight: 40)
     .background {
@@ -542,11 +551,18 @@ struct ListRows: View {
 
   @ViewBuilder
   private func rowMenu(_ item: JSON, index: Int, position: Int, label: String) -> some View {
-    if item.has("rename_key") {
+    if renamable(item) {
       Button {
         startRename(item, index: index)
       } label: {
         Label("Rename", systemImage: "pencil")
+      }
+    }
+    if let duplicate = property.string("duplicate"), editable {
+      Button {
+        run(duplicate, on: index)
+      } label: {
+        Label("Duplicate", systemImage: "plus.square.on.square")
       }
     }
     if reorder {
@@ -562,12 +578,10 @@ struct ListRows: View {
         }
       }
     }
-    if let remove = property.dict("remove"), editable {
+    if property.dict("remove") != nil, editable {
       Section {
         Button(role: .destructive) {
-          if index != active { store.edit(property, value: index) }
-          store.request(["key": remove.string("key") ?? "", "panel": property.string("panel") ?? "",
-                         "tab": property.string("tab") ?? ""], extra: ["type": "OPERATOR"])
+          delete(index)
         } label: {
           Label("Delete", systemImage: "trash")
         }
@@ -575,10 +589,68 @@ struct ListRows: View {
     }
   }
 
+  private func renamable(_ item: JSON) -> Bool {
+    item.has("rename_key") || item.bool("rename")
+  }
+
+  /** The actions a swipe shows, as the list allows them. */
+  private func swipeActions(_ item: JSON, index: Int, _ actions: [String]) -> [SwipeAction] {
+    guard editable else { return [] }
+    return actions.compactMap { action in
+      switch action {
+        case "delete" where property.dict("remove") != nil:
+          return SwipeAction(title: "Delete", symbol: "trash", tint: .red) { delete(index) }
+        case "duplicate":
+          guard let duplicate = property.string("duplicate") else { return nil }
+          return SwipeAction(title: "Duplicate", symbol: "plus.square.on.square", tint: .blue) {
+            run(duplicate, on: index)
+          }
+        case "rename" where renamable(item):
+          return SwipeAction(title: "Rename", symbol: "pencil", tint: .gray) {
+            startRename(item, index: index)
+          }
+        default:
+          return nil
+      }
+    }
+  }
+
+  private func closeSwipe() {
+    withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .smooth(duration: 0.25)) {
+      swiped = nil
+      swipeOffset = 0
+    }
+  }
+
+  /** Blender's list operators act on the active item, so make it active first. */
+  private func select(_ index: Int) {
+    if index != active { store.edit(property, value: index) }
+  }
+
+  private func delete(_ index: Int) {
+    guard let remove = property.dict("remove") else { return }
+    closeSwipe()
+    select(index)
+    store.request(["key": remove.string("key") ?? "", "panel": property.string("panel") ?? "",
+                   "tab": property.string("tab") ?? ""], extra: ["type": "OPERATOR"])
+    Haptics.impact()
+  }
+
+  private func run(_ operatorName: String, on index: Int) {
+    closeSwipe()
+    select(index)
+    Engine.operatorCall(operatorName)
+    Haptics.selection()
+  }
+
   private func tap(_ item: JSON, index: Int, isActive: Bool) {
     guard editable else { return }
+    if swiped != nil {
+      closeSwipe()
+      return
+    }
     if isActive {
-      if item.has("rename_key") { startRename(item, index: index) }
+      if renamable(item) { startRename(item, index: index) }
       return
     }
     store.edit(property, value: index)
@@ -592,12 +664,18 @@ struct ListRows: View {
   }
 
   private func commitRename(_ item: JSON) {
-    guard renaming != nil else { return }
+    guard let index = renaming else { return }
     renaming = nil
     let name = renameText.trimmingCharacters(in: .whitespaces)
-    guard !name.isEmpty, name != item.string("label"), let key = item.string("rename_key") else { return }
-    store.request(["key": key, "panel": property.string("panel") ?? "", "tab": property.string("tab") ?? ""],
-                  extra: ["type": "STRING", "value": name])
+    guard !name.isEmpty, name != item.string("label") else { return }
+    if let key = item.string("rename_key") {
+      store.request(["key": key, "panel": property.string("panel") ?? "", "tab": property.string("tab") ?? ""],
+                    extra: ["type": "STRING", "value": name])
+    }
+    else if item.bool("rename") {
+      /* Tree items (such as shape keys) are renamed through the tree. */
+      store.request(property, extra: ["list_action": "rename", "index": index, "name": name])
+    }
   }
 
   private func finishDrag() {
