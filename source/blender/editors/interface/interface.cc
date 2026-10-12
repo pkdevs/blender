@@ -578,6 +578,14 @@ static void block_bounds_calc_popup(
 {
   const int oldbounds = block->bounds;
 
+  /* Place the default button under the cursor. */
+  if (bounds_calc == BLOCK_BOUNDS_POPUP_MOUSE) {
+    if (const Button *but = block_active_default_button_find(block)) {
+      block->bounds_offset[0] = -(but->rect.xmin + 0.8f * BLI_rctf_size_x(&but->rect));
+      block->bounds_offset[1] = -BLI_rctf_cent_y(&but->rect);
+    }
+  }
+
   /* compute mouse position with user defined offset */
   block_bounds_calc(block);
 
@@ -979,6 +987,7 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
   oldbut->icon = but->icon;
   oldbut->iconadd = but->iconadd;
   oldbut->alignnr = but->alignnr;
+  oldbut->custom_data = but->custom_data;
 
   oldbut->text_direction = but->text_direction;
 
@@ -1005,6 +1014,8 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
 
   but_extra_icons_update_from_old_but(but, oldbut);
   std::swap(but->extra_op_icons, oldbut->extra_op_icons);
+
+  std::swap(but->icon_overlay_text, oldbut->icon_overlay_text);
 
   if (oldbut->type == ButtonType::SearchMenu) {
     ButtonSearch *search_oldbut = static_cast<ButtonSearch *>(oldbut),
@@ -2867,7 +2878,7 @@ bool button_supports_cycling(const Button *but)
                ButtonType::ListBox) ||
           (but->type == ButtonType::Menu && button_menu_step_poll(but)) ||
           (but->type == ButtonType::Color &&
-           (static_cast<ButtonColor *>(const_cast<Button *>(but)))->is_pallete_color) ||
+           (static_cast<ButtonColor *>(const_cast<Button *>(but)))->is_palette_color) ||
           (but->menu_step_func != nullptr));
 }
 
@@ -5882,12 +5893,6 @@ const char *button_placeholder_get(Button *but)
   }
 
   return placeholder;
-}
-
-void button_clear_selection(Button *but)
-{
-  but->selsta = 0;
-  but->selend = 0;
 }
 
 void button_type_set_menu_from_pulldown(Button *but)
