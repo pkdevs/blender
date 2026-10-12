@@ -297,9 +297,9 @@ void hash_float_to_color(const IndexMask &mask,
 {
   /* TODO: Comment why channels are hashed into separate float arrays first. */
   const int64_t array_size = mask.min_array_size();
-  Array<float> r(array_size, NoInitialization{});
-  Array<float> g(array_size, NoInitialization{});
-  Array<float> b(array_size, NoInitialization{});
+  Array<float, 10 * 1024> r(array_size, NoInitialization{});
+  Array<float, 10 * 1024> g(array_size, NoInitialization{});
+  Array<float, 10 * 1024> b(array_size, NoInitialization{});
 
   varray_exec::execute(
       [](const float3 &k, float &r, float &g, float &b) {
