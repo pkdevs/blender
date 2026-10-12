@@ -3946,6 +3946,11 @@ void CustomData_bmesh_interp_n(CustomData *data,
   BLI_assert(count > 0);
 
   CustomDataLayer *layer = &data->layers[n];
+  if (layer->type == CD_PROP_BOOL && STREQ(layer->name, "skin_modifier_root")) {
+    *static_cast<bool *>(dst_block_ofs) = false;
+    return;
+  }
+
   const LayerTypeInfo *typeInfo = layerType_getInfo(eCustomDataType(layer->type));
 
   typeInfo->interp(src_blocks_ofs, weights, count, dst_block_ofs);
