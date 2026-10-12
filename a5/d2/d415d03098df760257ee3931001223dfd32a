@@ -1,3 +1,4 @@
 Referenced by issue #164782, Grease Pencil: Strokes not responding to Erase and Sculpt adjustments
 Referenced by pull request #164830, Fix #164782: wrong Grease pencil crazyspace GeometryDeformation
 Referenced by commit bebf8996923ec1a78f84b590765648ada026ddcf, Fix #164782: wrong Grease pencil crazyspace GeometryDeformation
+Referenced by pull request #165034, Fix #163673: Grease Pencil crazyspace deformation broken again
