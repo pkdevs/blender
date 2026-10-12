@@ -345,10 +345,15 @@ static void project_new_ui(bContext *C, wmOperator *op)
   const Main *bmain = CTX_data_main(C);
   PointerRNA *ptr = op->ptr;
 
-  layout.label_multiline(IFACE_("Blender projects are directories containing blend files, "
-                                "assets and other files for one project. For example a film, "
-                                "game or architectural visualization."),
-                         ICON_NONE);
+  layout.label_multiline(
+      IFACE_(
+          "A Blender Project is a directory that provides a shared environment for related .blend "
+          "files, textures, and other files, with project-specific settings such as Asset "
+          "Libraries, custom variables, and other configuration options.\n"
+          "\n"
+          "This is a structured way to organize files and settings across complex pipelines and "
+          "team projects."),
+      ICON_NONE);
   layout.separator();
 
   /* Narrower label column than property split, to leave more space for the folder. */
