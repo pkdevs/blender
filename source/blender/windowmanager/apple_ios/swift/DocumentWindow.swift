@@ -149,11 +149,14 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
 
   override public func viewSafeAreaInsetsDidChange() {
     super.viewSafeAreaInsetsDidChange()
-    /* The window's sides are kept by the layout itself, which keeps the viewport beside them. */
+    /* Most controls keep beside the window's sides through the layout itself; the viewport, and the
+     * controls placed by its geometry, run under them. */
     var insets = view.safeAreaInsets
+    let sides = UIEdgeInsets(top: 0, left: insets.left, bottom: 0, right: insets.right)
     insets.left = 0
     insets.right = 0
     if model.safeAreaInsets != insets { model.safeAreaInsets = insets }
+    if model.sideInsets != sides { model.sideInsets = sides }
   }
 
   override public func viewDidLayoutSubviews() {
@@ -439,8 +442,9 @@ public struct DocumentWindow: View {
 
   private var viewportLayers: some View {
     ZStack {
+      /* Edge to edge, under a phone's toolbar column too. */
       ViewportView(container: viewport)
-        .ignoresSafeArea(edges: .vertical)
+        .ignoresSafeArea()
         .onDrop(of: [.data, .image], delegate: FileDrop(model: model) { shell.assets.store.dragged != nil })
       if !model.viewportReady {
         ProgressView()

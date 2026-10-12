@@ -267,7 +267,10 @@ struct ViewGizmoLayer: View {
 
   var body: some View {
     GeometryReader { proxy in
-      let safe = CGRect(origin: .zero, size: proxy.size).inset(by: model.safeAreaInsets)
+      /* Over the whole viewport, as Blender places the gizmo, keeping clear of the window's sides. */
+      let insets = model.safeAreaInsets
+      let safe = CGRect(origin: .zero, size: proxy.size).inset(by: UIEdgeInsets(
+        top: insets.top, left: model.sideInsets.left, bottom: insets.bottom, right: model.sideInsets.right))
       let geometry = ViewGizmoGeometry(gizmo: model.navigationGizmo, window: proxy.size, safe: safe)
       ZStack(alignment: .topLeading) {
         feedback(geometry)
@@ -284,8 +287,9 @@ struct ViewGizmoLayer: View {
       .onChange(of: proxy.size, initial: true) { state.geometry = geometry }
       .onChange(of: model.navigationGizmo) { state.geometry = geometry }
       .onChange(of: model.safeAreaInsets) { state.geometry = geometry }
+      .onChange(of: model.sideInsets) { state.geometry = geometry }
     }
-    .ignoresSafeArea(edges: .vertical)
+    .ignoresSafeArea()
     .animation(animation, value: state.pieVisible)
     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
       state.release(at: nil)

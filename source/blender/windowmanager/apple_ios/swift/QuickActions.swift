@@ -271,12 +271,13 @@ struct QuickActionsRow: View {
   var body: some View {
     GeometryReader { geometry in
       let width = geometry.size.width
-      /* The lane between the tool rail and the navigation gizmo. */
-      let laneLeading = ShellMetrics.railLeading + model.toolRailWidth + 12
+      /* The lane between the tool rail and the navigation gizmo, across the whole viewport, as
+       * Blender places the gizmo, but beside the window's sides. */
+      let laneLeading = model.sideInsets.left + ShellMetrics.railLeading + model.toolRailWidth + 12
       /* Up to the navigation gizmo's hotspot, which Blender places in fractions of the viewport. */
       let gizmo = model.navigationGizmo
-      let hotspot = gizmo.count == 3 ? gizmo[0] * width - max(44, gizmo[2] * width + 10) :
-        width - ShellMetrics.gizmoReserve
+      let hotspot = min(gizmo.count == 3 ? gizmo[0] * width - max(44, gizmo[2] * width + 10) :
+                          width - ShellMetrics.gizmoReserve, width - model.sideInsets.right)
       let laneWidth = max(0, hotspot - 12 - laneLeading)
       let wide = width >= ShellMetrics.wideRow
       let pillWidth = redoTitle.map(redoPillWidth) ?? 0
@@ -312,6 +313,7 @@ struct QuickActionsRow: View {
       .padding(.bottom, model.safeAreaInsets.bottom + ShellMetrics.rowBottom + model.bottomTray)
       .ignoresSafeArea(edges: .bottom)
     }
+    .ignoresSafeArea(edges: .horizontal)
     .onChange(of: model.redo.map { $0 as NSDictionary }, initial: true) { _, snapshot in
       update(redo: snapshot as? JSON)
     }
@@ -475,9 +477,10 @@ struct QuickActionsRow: View {
       return CGRect(x: min(max(width / 2 - strip / 2, start), laneLeading + laneWidth - strip), y: 0,
                     width: strip, height: 60)
     }
-    /* Above the row, centered on the window. */
+    /* Above the row, centered on the window, beside its sides. */
     let strip = stripWidth(maxWidth: laneWidth)
-    return CGRect(x: (width - strip) / 2, y: -(ShellMetrics.rowHeight / 2 + 8 + 30), width: strip, height: 60)
+    let x = max(model.sideInsets.left, min((width - strip) / 2, width - model.sideInsets.right - strip))
+    return CGRect(x: x, y: -(ShellMetrics.rowHeight / 2 + 8 + 30), width: strip, height: 60)
   }
 
   /**
