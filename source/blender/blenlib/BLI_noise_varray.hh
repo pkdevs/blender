@@ -37,4 +37,16 @@ void hash_float2_to_color(const IndexMask &mask,
                           const VArray<float3> &ks,
                           MutableSpan<ColorGeometry4f> r_values);
 
+/**
+ * NOTE: Currently the float4 is passed in as float3 + float.
+ */
+void hash_float4_to_float(const IndexMask &mask,
+                          const VArray<float3> &vectors,
+                          const VArray<float> &ws,
+                          MutableSpan<float> r_values);
+void hash_float4_to_color(const IndexMask &mask,
+                          const VArray<float3> &vectors,
+                          const VArray<float> &ws,
+                          MutableSpan<ColorGeometry4f> r_values);
+
 }  // namespace blender::noise

@@ -313,7 +313,7 @@ ATTR_ALWAYS_INLINE_EMIT float3 hash_float_to_float3(float3 k)
                 hash_float_to_float(float4(k.x, k.y, k.z, 2.0)));
 }
 
-float3 hash_float_to_float3(float4 k)
+ATTR_ALWAYS_INLINE_EMIT float3 hash_float_to_float3(float4 k)
 {
   return float3(hash_float_to_float(k),
                 hash_float_to_float(float4(k.z, k.x, k.w, k.y)),
@@ -2666,6 +2666,39 @@ void hash_float2_to_color(const IndexMask &mask,
       r_values,
       [](const float3 &k) {
         const float3 c = hash_float_to_float3(float2(k.x, k.y));
+        return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
+      },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
+void hash_float4_to_float(const IndexMask &mask,
+                          const VArray<float3> &vectors,
+                          const VArray<float> &ws,
+                          MutableSpan<float> r_values)
+{
+  varray_exec::execute_2in_1out_uninitialized(
+      mask,
+      vectors,
+      ws,
+      r_values,
+      [](const float3 &vector, const float w) {
+        return hash_float_to_float(float4(vector.x, vector.y, vector.z, w));
+      },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
+void hash_float4_to_color(const IndexMask &mask,
+                          const VArray<float3> &vectors,
+                          const VArray<float> &ws,
+                          MutableSpan<ColorGeometry4f> r_values)
+{
+  varray_exec::execute_2in_1out_uninitialized(
+      mask,
+      vectors,
+      ws,
+      r_values,
+      [](const float3 &vector, const float w) {
+        const float3 c = hash_float_to_float3(float4(vector.x, vector.y, vector.z, w));
         return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
       },
       varray_exec::exec_presets::MaterializeOptimize());

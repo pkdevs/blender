@@ -8,7 +8,6 @@
 
 #include "node_shader_util.hh"
 
-#include "BLI_noise.hh"
 #include "BLI_noise_varray.hh"
 
 #include "FN_multi_function.hh"
@@ -162,17 +161,10 @@ class WhiteNoiseFunction : public mf::MultiFunction {
         const VArray<float3> &vector = params.readonly_single_input<float3>(0, "Vector");
         const VArray<float> &w = params.readonly_single_input<float>(1, "W");
         if (compute_color) {
-          mask.foreach_index([&](const int64_t i) {
-            const float3 c = noise::hash_float_to_float3(
-                float4(vector[i].x, vector[i].y, vector[i].z, w[i]));
-            r_color[i] = ColorGeometry4f(c[0], c[1], c[2], 1.0f);
-          });
+          noise::hash_float4_to_color(mask, vector, w, r_color);
         }
         if (compute_value) {
-          mask.foreach_index([&](const int64_t i) {
-            r_value[i] = noise::hash_float_to_float(
-                float4(vector[i].x, vector[i].y, vector[i].z, w[i]));
-          });
+          noise::hash_float4_to_float(mask, vector, w, r_value);
         }
         break;
       }
