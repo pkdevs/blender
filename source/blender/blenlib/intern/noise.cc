@@ -13,7 +13,6 @@
 #include <cmath>
 #include <cstdint>
 
-#include "BLI_array.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_math_matrix_types.hh"
@@ -282,14 +281,6 @@ void hash_float_to_float(const IndexMask &mask,
   varray_exec::execute_1in_1out_uninitialized(
       mask, ks, r_values, [](const float3 &k) { return hash_float_to_float(k); });
 }
-
-// void hash_float_to_float(const IndexMask &mask,
-//                          const VArray<float4> &ks,
-//                          MutableSpan<float> r_values)
-// {
-//   varray_exec::execute_1in_1out_uninitialized(
-//       mask, ks, r_values, [](const float4 &k) { return hash_float_to_float(k); });
-// }
 
 void hash_float_to_color(const IndexMask &mask,
                          const VArray<float3> &ks,
