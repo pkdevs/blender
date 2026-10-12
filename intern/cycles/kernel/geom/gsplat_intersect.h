@@ -110,7 +110,8 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
 
   const float3 mu = make_float3(point);
 
-  /* [3dgrt2024] Eq. (8). */
+  /* [3dgrt2024] Eq. (8).
+   * The division by scale could return NaN. Account for this in the distance check. */
   const float3x3 S_inv = float3x3_scale(1.0f / params.scale);
   const float3x3 R = quaternion_to_rotation(params.rotation);
   const float3x3 R_T = transposed(R);
@@ -123,8 +124,10 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
    * The previous checks are based on the bounding sphere distance.
    *
    * The t might be lower than the ray_tmin when the ray origin is within the bounding sphere but
-   * is "past" the density extrema. */
-  if (t < ray_tmin || t > ray_tmax) {
+   * is "past" the density extrema.
+   *
+   * Gracefully reject NaN distance (which could happen if the scale is 0 along any axis). */
+  if (!(t >= ray_tmin && t <= ray_tmax)) {
     return false;
   }
 
