@@ -523,11 +523,11 @@ inline void execute(ElementFn &&element_fn,
 }
 
 template<typename ElementFn, ExecPresetC ExecPreset, typename Out, typename... In>
-inline void batch_process__n_in__1_out(const IndexMask &mask,
-                                       const ExecPreset &exec_preset,
-                                       const VArray<In> &...in_params,
-                                       MutableSpan<Out> out_param,
-                                       ElementFn &&element_fn)
+inline void execute_multi_in_1out(const IndexMask &mask,
+                                  const ExecPreset &exec_preset,
+                                  const VArray<In> &...in_params,
+                                  MutableSpan<Out> out_param,
+                                  ElementFn &&element_fn)
 {
   constexpr auto param_tags =
       TypeSequence<ParamTag<ParamCategory::Input, In>..., ParamTag<ParamCategory::Output, Out>>();
@@ -540,19 +540,93 @@ inline void batch_process__n_in__1_out(const IndexMask &mask,
 }
 
 template<typename In1,
+         typename Out1,
+         typename ElementFn,
+         ExecPresetC ExecPreset = exec_presets::Materialized>
+inline void execute_1in_1out(const IndexMask &mask,
+                             const VArray<In1> &in1,
+                             MutableSpan<Out1> out1,
+                             ElementFn &&element_fn,
+                             const ExecPreset &exec_preset = exec_presets::Materialized())
+{
+  execute_multi_in_1out<ElementFn, ExecPreset, Out1, In1>(
+      mask, exec_preset, in1, out1, std::forward<ElementFn>(element_fn));
+}
+
+template<typename In1,
          typename In2,
          typename Out1,
          typename ElementFn,
          ExecPresetC ExecPreset = exec_presets::Materialized>
-inline void batch_process__2in__1out(const IndexMask &mask,
-                                     const VArray<In1> &in1,
-                                     const VArray<In2> &in2,
-                                     MutableSpan<Out1> out1,
-                                     ElementFn &&element_fn,
-                                     const ExecPreset &exec_preset = exec_presets::Materialized())
+inline void execute_2in_1out(const IndexMask &mask,
+                             const VArray<In1> &in1,
+                             const VArray<In2> &in2,
+                             MutableSpan<Out1> out1,
+                             ElementFn &&element_fn,
+                             const ExecPreset &exec_preset = exec_presets::Materialized())
 {
-  batch_process__n_in__1_out<ElementFn, ExecPreset, Out1, In1, In2>(
+  execute_multi_in_1out<ElementFn, ExecPreset, Out1, In1, In2>(
       mask, exec_preset, in1, in2, out1, std::forward<ElementFn>(element_fn));
+}
+
+template<typename In1,
+         typename In2,
+         typename In3,
+         typename Out1,
+         typename ElementFn,
+         ExecPresetC ExecPreset = exec_presets::Materialized>
+inline void execute_3in_1out(const IndexMask &mask,
+                             const VArray<In1> &in1,
+                             const VArray<In2> &in2,
+                             const VArray<In3> &in3,
+                             MutableSpan<Out1> out1,
+                             ElementFn &&element_fn,
+                             const ExecPreset &exec_preset = exec_presets::Materialized())
+{
+  execute_multi_in_1out<ElementFn, ExecPreset, Out1, In1, In2, In3>(
+      mask, exec_preset, in1, in2, in3, out1, std::forward<ElementFn>(element_fn));
+}
+
+template<typename In1,
+         typename In2,
+         typename In3,
+         typename In4,
+         typename Out1,
+         typename ElementFn,
+         ExecPresetC ExecPreset = exec_presets::Materialized>
+inline void execute_4in_1out(const IndexMask &mask,
+                             const VArray<In1> &in1,
+                             const VArray<In2> &in2,
+                             const VArray<In3> &in3,
+                             const VArray<In4> &in4,
+                             MutableSpan<Out1> out1,
+                             ElementFn &&element_fn,
+                             const ExecPreset &exec_preset = exec_presets::Materialized())
+{
+  execute_multi_in_1out<ElementFn, ExecPreset, Out1, In1, In2, In3, In4>(
+      mask, exec_preset, in1, in2, in3, in4, out1, std::forward<ElementFn>(element_fn));
+}
+
+template<typename In1,
+         typename In2,
+         typename In3,
+         typename In4,
+         typename In5,
+         typename Out1,
+         typename ElementFn,
+         ExecPresetC ExecPreset = exec_presets::Materialized>
+inline void execute_5in_1out(const IndexMask &mask,
+                             const VArray<In1> &in1,
+                             const VArray<In2> &in2,
+                             const VArray<In3> &in3,
+                             const VArray<In4> &in4,
+                             const VArray<In5> &in5,
+                             MutableSpan<Out1> out1,
+                             ElementFn &&element_fn,
+                             const ExecPreset &exec_preset = exec_presets::Materialized())
+{
+  execute_multi_in_1out<ElementFn, ExecPreset, Out1, In1, In2, In3, In4, In5>(
+      mask, exec_preset, in1, in2, in3, in4, in5, out1, std::forward<ElementFn>(element_fn));
 }
 
 }  // namespace blender::varray_exec

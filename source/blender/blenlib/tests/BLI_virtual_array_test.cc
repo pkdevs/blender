@@ -375,7 +375,7 @@ TEST_F(VirtualArrayTest, BatchProcess)
   VArray<int> in1 = VArray<int>::from_container(std::array{3, 6, 4, 8});
   VArray<int> in2 = VArray<int>::from_single(10, in1.size());
   std::array<int, 4> out;
-  varray_exec::batch_process__2in__1out<int, int, int>(
+  varray_exec::execute_2in_1out<int, int, int>(
       IndexMask(4), in1, in2, MutableSpan<int>(out), [](const int a, const int b) {
         return a + b;
       });
