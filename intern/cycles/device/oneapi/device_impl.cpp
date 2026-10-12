@@ -238,7 +238,11 @@ void OneapiDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
 
 size_t OneapiDevice::get_free_mem() const
 {
+  /* Fixed 512MB headroom for when we don't have accurate data. */
+  const size_t fallback_headroom = 512 * 1024 * 1024;
+
   size_t free_memory = 0;
+  bool accurate = false;
 
   /* Estimate: Capacity - in use. */
   const size_t resident_memory = stats.mem_used - map_host_used;
@@ -246,12 +250,23 @@ size_t OneapiDevice::get_free_mem() const
     free_memory = max_memory_on_device_ - resident_memory;
   }
 
-  /* Accurate: Use device info.
-   * Some drivers don't update free memory promptly after allocations, so we
-   * clamp to previous estimate to avoid over-reporting. */
+  /* Accurate: Use device info. */
   const sycl::device &device = reinterpret_cast<sycl::queue *>(device_queue_)->get_device();
   if (device.has(sycl::aspect::ext_intel_free_memory)) {
-    free_memory = min(device.get_info<sycl::ext::intel::info::device::free_memory>(), free_memory);
+    const size_t sycl_free_memory = device.get_info<sycl::ext::intel::info::device::free_memory>();
+
+    /* Linux drivers may fail to decrement free memory after we allocate and/or
+     * don't account for internal runtime allocations. We consider driver data
+     * accurate only if strictly equal to or lower than our estimate. */
+    if (sycl_free_memory <= free_memory) {
+      free_memory = sycl_free_memory;
+      accurate = true;
+    }
+  }
+
+  /* When relying on an estimate, reserve headroom to prevent overallocating. */
+  if (!accurate) {
+    free_memory = (free_memory > fallback_headroom) ? (free_memory - fallback_headroom) : 0;
   }
 
   return free_memory;
