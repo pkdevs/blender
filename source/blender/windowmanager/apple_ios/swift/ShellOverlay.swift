@@ -29,7 +29,7 @@ final class ShellOverlay: UIView {
     panels = SwiftScenePanels(overlay: self)
     /* The window shows the timeline itself, as #TimelinePanel. */
     timeline = SwiftTimeline()
-    assets = SwiftAssets(overlay: self)
+    assets = SwiftAssets()
     panels.menuProvider = { wm_apple_ios_property_menu($0 as! [AnyHashable: Any]) }
     panels.panelsDidChange = { [weak self] in
       guard let self else { return }
@@ -74,18 +74,15 @@ final class ShellOverlay: UIView {
     let safe = bounds.inset(by: model.safeAreaInsets)
     /* The bottom tray: the open asset pane along the edge and the timeline just above it. */
     let trayShown = !model.desktop && !model.interfaceHidden
-    let assetsTray = assets.visible && trayShown ? assets.height + 8 : 0
+    let assetsTray = assets.visible && trayShown ? AssetsPanel.height(compact: model.compact) + 8 : 0
 #if os(visionOS)
     let timelineTray: CGFloat = 0 /* A window of its own. */
 #else
     let timelineTray = timeline.visible && trayShown ? timeline.height + 8 : 0
 #endif
     let tray = assetsTray + timelineTray
-    if abs(tray - model.bottomTray) > 0.5 || abs(assetsTray - model.assetsTray) > 0.5 {
-      withAnimation(SwiftTimeline.animation) {
-        model.bottomTray = tray
-        model.assetsTray = assetsTray
-      }
+    if abs(tray - model.bottomTray) > 0.5 {
+      withAnimation(SwiftTimeline.animation) { model.bottomTray = tray }
     }
     if bounds.height > 0 && !model.desktop {
       /* Blender keeps its own overlays, such as the navigation gizmo, above the tray. */
@@ -94,12 +91,6 @@ final class ShellOverlay: UIView {
     }
     let panelTop = max(safe.minY, model.contentTop)
     let panelBottom = min(safe.maxY - 64 - tray, keyboardLayoutGuide.layoutFrame.minY)
-    /* The tray keeps the same distance from the sides of the window as from its bottom. */
-    let trayBottom = safe.maxY - 6
-    let edge = bounds.maxY - trayBottom
-    let trayLeft = max(safe.minX, bounds.minX + edge)
-    let trayWidth = max(0, min(safe.maxX, bounds.maxX - edge) - trayLeft)
-    assets.layout(in: CGRect(x: trayLeft, y: panelTop, width: trayWidth, height: max(0, trayBottom - panelTop)))
     panels.layout(in: CGRect(x: safe.minX, y: panelTop, width: safe.width, height: max(0, panelBottom - panelTop)))
   }
 

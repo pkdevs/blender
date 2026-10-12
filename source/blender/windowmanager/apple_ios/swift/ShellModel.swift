@@ -57,8 +57,6 @@ final class ShellModel {
   /** The asset pane and timeline along the bottom: their height, which the controls resting on
    * the bottom edge rise above. */
   var bottomTray: CGFloat = 0
-  /** The open asset pane's part of it, which the timeline rests on. */
-  var assetsTray: CGFloat = 0
   /** Which panels show. */
   var inspectorShown = false
   var hierarchyShown = false

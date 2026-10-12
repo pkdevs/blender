@@ -63,6 +63,11 @@ final class AssetsStore: ObservableObject {
   @Published var type = startType
   @Published var category: String? = startCategory
   @Published var query = ""
+  @Published var visible = false
+  /** An asset dragged out of the pane is over the viewport: the pane fades so the scene shows. */
+  @Published var overViewport = false
+  /** Where the pane is in the window, to tell a drag over it from one over the viewport. */
+  var paneFrame = CGRect.zero
   var close: () -> Void = {}
   /** The asset being dragged out of the pane, for the viewport's drop interaction. */
   var dragged: JSON?
@@ -298,93 +303,54 @@ private struct AssetTileStyle: ButtonStyle {
 /** \name Pane
  * \{ */
 
+/** The asset pane along the bottom of the window, in the system's glass. */
+struct AssetsPanel: View {
+  @ObservedObject var store: AssetsStore
+  let compact: Bool
+
+  static func height(compact: Bool) -> CGFloat { compact ? assetsCompactHeight : assetsHeight }
+
+  var body: some View {
+    AssetsPane(store: store)
+      .frame(maxWidth: assetsMaxWidth)
+      .frame(height: Self.height(compact: compact))
+      .panelGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+      .opacity(store.overViewport ? 0.35 : 1)
+      .animation(UIAccessibility.isReduceMotionEnabled ? nil : .easeInOut(duration: 0.2), value: store.overViewport)
+      .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { store.paneFrame = $0 }
+      .accessibilityIdentifier("blender.assets.panel")
+  }
+}
+
+/** The pane's state and Blender's side of it, and dragging assets from it into the viewport. */
 @MainActor
-@objc(WMIOSSwiftAssets)
-public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
-  private weak var overlay: UIView?
-  private let store = AssetsStore()
-  private let panel: UIVisualEffectView
-  private let host: UIHostingController<AssetsPane>
-  @objc public private(set) var visible = false
-  @objc public private(set) var dropInteraction: UIDropInteraction!
-  @objc public var clientPoint: ((CGPoint) -> CGPoint)?
-  @objc public var visibilityDidChange: (() -> Void)?
+final class SwiftAssets: NSObject, UIDropInteractionDelegate {
+  let store = AssetsStore()
+  var visible: Bool { store.visible }
+  private(set) var dropInteraction: UIDropInteraction!
+  var clientPoint: ((CGPoint) -> CGPoint)?
+  var visibilityDidChange: (() -> Void)?
 
   private var dragging = false
   private var dropped = false
-  private var overViewport = false
   private var dropPoint = CGPoint.zero
 
-  @objc(initWithOverlay:)
-  public init(overlay: UIView) {
-    self.overlay = overlay
-    panel = UIVisualEffectView(effect: makePanelGlass())
-    host = UIHostingController(rootView: AssetsPane(store: store))
+  override init() {
     super.init()
-    panel.accessibilityIdentifier = "blender.assets.panel"
-    panel.layer.cornerRadius = 28
-    panel.layer.cornerCurve = .continuous
-    panel.clipsToBounds = true
-    panel.isHidden = true
-    panel.alpha = 0
-    host.view.backgroundColor = .clear
-    host.sizingOptions = []
-    host.safeAreaRegions = []
-    host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    panel.contentView.addSubview(host.view)
-    overlay.addSubview(panel)
     dropInteraction = UIDropInteraction(delegate: self)
-    store.close = { [weak self] in self?.toggle(nil) }
+    store.close = { [weak self] in self?.toggle() }
   }
 
-  @objc public var view: UIView { panel }
-
-  @objc public var height: CGFloat {
-    overlay?.traitCollection.horizontalSizeClass == .compact ? assetsCompactHeight : assetsHeight
-  }
-
-  @objc(updateSnapshot:)
-  public func updateSnapshot(_ snapshot: Any?) {
+  func updateSnapshot(_ snapshot: Any?) {
     /* Blender's JSON may hold null, which arrives as NSNull. */
     guard let snapshot = snapshot as? JSON else { return }
     store.update(snapshot)
   }
 
-  @objc(toggle:)
-  public func toggle(_ sender: Any?) {
-    visible.toggle()
+  func toggle() {
+    withAnimation(SwiftTimeline.animation) { store.visible.toggle() }
     Engine.setting("assets", visible ? "show" : "hide")
-    if !visible { panel.endEditing(true) }
-    let reduceMotion = UIAccessibility.isReduceMotionEnabled
-    let hidden = reduceMotion ? .identity : CGAffineTransform(translationX: 0, y: 18).scaledBy(x: 0.98, y: 0.98)
-    panel.isUserInteractionEnabled = visible
-    if visible {
-      overlay?.bringSubviewToFront(panel)
-      if panel.isHidden {
-        panel.alpha = 0
-        panel.transform = hidden
-      }
-      panel.isHidden = false
-    }
-    let shown = visible
-    UIView.animate(withDuration: reduceMotion ? 0 : 0.3, delay: 0, usingSpringWithDamping: 0.9,
-                   initialSpringVelocity: 0, options: [.beginFromCurrentState, .allowUserInteraction])
-    {
-      self.panel.alpha = shown ? 1 : 0
-      self.panel.transform = shown ? .identity : hidden
-    } completion: { finished in
-      if finished && self.panel.alpha == 0 { self.panel.isHidden = true }
-    }
     visibilityDidChange?()
-  }
-
-  @objc(layoutInRect:)
-  public func layout(in rect: CGRect) {
-    let width = min(assetsMaxWidth, max(0, rect.width))
-    /* Frame is undefined while transformed; layout must not disturb the presentation animation. */
-    panel.bounds = CGRect(x: 0, y: 0, width: width, height: height)
-    panel.center = CGPoint(x: rect.midX, y: rect.maxY - height / 2)
-    host.view.frame = panel.contentView.bounds
   }
 
   /* -------------------------------------------------------------------- */
@@ -398,15 +364,10 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
     return item
   }
 
-  /** Whether the drag is over the viewport rather than this pane or other native controls. */
+  /** Whether the drag is over the viewport rather than this pane. */
   private func isOverViewport(_ session: UIDropSession) -> Bool {
     guard let view = dropInteraction.view else { return false }
-    var hit = view.hitTest(session.location(in: view), with: nil)
-    while let current = hit {
-      if current === panel || current is UIControl { return false }
-      hit = current.superview
-    }
-    return true
+    return !store.paneFrame.contains(view.convert(session.location(in: view), to: nil))
   }
 
   private func sendDrag(_ phase: AssetDragPhase, _ session: UIDropSession) {
@@ -427,7 +388,7 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
     /* The preview's center sits under the finger: place the pill in the upper left quarter. */
     let container = UIView(frame: CGRect(x: 0, y: 0, width: 2 * (size.width + gap), height: 2 * (56 + gap)))
     container.backgroundColor = .clear
-    container.overrideUserInterfaceStyle = panel.traitCollection.userInterfaceStyle
+    container.overrideUserInterfaceStyle = dropInteraction.view?.traitCollection.userInterfaceStyle ?? .unspecified
     pill.view.frame = CGRect(x: 0, y: 0, width: size.width, height: 56)
     container.addSubview(pill.view)
     let parameters = UIDragPreviewParameters()
@@ -453,28 +414,24 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
   /** Crossing between the pane and the viewport: swap the preview, let the scene show through
    * the pane, and give a light tick so the change is felt. */
   private func setOverViewport(_ over: Bool, _ session: UIDropSession) {
-    guard over != overViewport else { return }
-    overViewport = over
+    guard over != store.overViewport else { return }
+    store.overViewport = over
     if let item = asset(session) {
       let preview = over ? pillPreview(item) : thumbnailPreview(item)
       for drag in session.localDragSession?.items ?? [] { drag.previewProvider = { preview } }
     }
     if over { Haptics.selection() }
-    UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.2, delay: 0,
-                   options: [.beginFromCurrentState, .allowUserInteraction]) {
-      self.panel.alpha = over ? 0.35 : 1
-    }
   }
 
-  public func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
+  func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
     asset(session) != nil
   }
 
-  public func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnter session: UIDropSession) {
+  func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnter session: UIDropSession) {
     dropped = false
   }
 
-  public func dropInteraction(_ interaction: UIDropInteraction,
+  func dropInteraction(_ interaction: UIDropInteraction,
                               sessionDidUpdate session: UIDropSession) -> UIDropProposal
   {
     let over = isOverViewport(session)
@@ -495,7 +452,7 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
     return UIDropProposal(operation: over ? .copy : .cancel)
   }
 
-  public func dropInteraction(_ interaction: UIDropInteraction, performDrop session: UIDropSession) {
+  func dropInteraction(_ interaction: UIDropInteraction, performDrop session: UIDropSession) {
     guard dragging else { return }
     dropped = true
     dragging = false
@@ -504,7 +461,7 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
     Haptics.impact(.medium)
   }
 
-  public func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: UIDropSession) {
+  func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: UIDropSession) {
     setOverViewport(false, session)
     if dragging {
       dragging = false
@@ -512,15 +469,14 @@ public final class SwiftAssets: NSObject, UIDropInteractionDelegate {
     }
   }
 
-  public func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: UIDropSession) {
+  func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: UIDropSession) {
     if dragging && !dropped { WM_apple_ios_ui_asset_drag(AssetDragPhase.cancel.rawValue, nil, 0, 0) }
     dragging = false
-    overViewport = false
+    store.overViewport = false
     store.dragged = nil
-    UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.25) { self.panel.alpha = 1 }
   }
 
-  public func dropInteraction(_ interaction: UIDropInteraction, previewForDropping item: UIDragItem,
+  func dropInteraction(_ interaction: UIDropInteraction, previewForDropping item: UIDragItem,
                               withDefault defaultPreview: UITargetedDragPreview) -> UITargetedDragPreview?
   {
     /* The asset lands in the scene: shrink the thumbnail into the drop point. */

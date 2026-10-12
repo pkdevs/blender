@@ -333,15 +333,12 @@ public struct DocumentWindow: View {
           .allowsHitTesting(false)
       }
       if controlsShown {
-#if os(visionOS)
-        /* The tools and actions are ornaments there, and the timeline a window of its own. */
-        ViewGizmoLayer(model: model)
-#else
+#if !os(visionOS) /* Ornaments there. */
         QuickActionsRow(model: model)
         ToolRails(model: model)
-        ViewGizmoLayer(model: model)
-        TimelineLayer(model: model, store: overlay.timeline.store)
 #endif
+        ViewGizmoLayer(model: model)
+        BottomTrayLayer(model: model, timeline: overlay.timeline.store, assets: overlay.assets.store)
       }
       ShellOverlayView(overlay: overlay)
         .ignoresSafeArea()
@@ -390,25 +387,33 @@ private struct ShowInterfaceButton: View {
   }
 }
 
-/** The timeline along the bottom, on the open asset pane, as far from the window's sides as from
- * its bottom. */
-struct TimelineLayer: View {
+/** The timeline and asset pane along the bottom, the timeline resting on the pane, as far from the
+ * window's sides as from its bottom. */
+struct BottomTrayLayer: View {
   let model: ShellModel
-  let store: TimelineStore
+  let timeline: TimelineStore
+  @ObservedObject var assets: AssetsStore
 
   var body: some View {
     let safe = model.safeAreaInsets
     let edge = safe.bottom + 6
-    VStack(spacing: 0) {
+    let transition = AnyTransition.opacity.combined(with: .offset(y: 14)).combined(with: .scale(scale: 0.98))
+    VStack(spacing: 8) {
       Spacer(minLength: 0)
-      if store.visible {
-        TimelinePanel(store: store)
-          .transition(.opacity.combined(with: .offset(y: 14)).combined(with: .scale(scale: 0.98)))
+#if !os(visionOS) /* A window of its own there. */
+      if timeline.visible {
+        TimelinePanel(store: timeline)
+          .transition(transition)
+      }
+#endif
+      if assets.visible {
+        AssetsPanel(store: assets, compact: model.compact)
+          .transition(transition)
       }
     }
     .padding(.leading, max(safe.left, edge))
     .padding(.trailing, max(safe.right, edge))
-    .padding(.bottom, edge + model.assetsTray)
+    .padding(.bottom, edge)
     .ignoresSafeArea()
   }
 }

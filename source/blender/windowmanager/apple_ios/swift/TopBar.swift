@@ -318,7 +318,7 @@ struct DocumentToolbar: ToolbarContent {
     }
     ToolbarItemGroup(placement: .topBarLeading) {
       modeMenu
-      Button("Add", systemImage: "plus") { overlay.assets.toggle(nil) }
+      Button("Add", systemImage: "plus") { overlay.assets.toggle() }
         .accessibilityIdentifier("blender.assets")
     }
     if model.mode == "mesh_edit" && !model.compact {
