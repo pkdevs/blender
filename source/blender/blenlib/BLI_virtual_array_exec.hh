@@ -36,9 +36,9 @@ enum class FallbackMode {
 namespace exec_presets {
 
 /**
- * The "naive" method for batch processing. Every element is processed separately and input
- * values are retrieved from the virtual arrays one by one. This generates the least amount of
- * code, but is also the slowest method.
+ * The "naive" method. Every element is processed separately and input values are retrieved from
+ * the virtual arrays one by one. This generates the least amount of code, but is also the slowest
+ * method.
  */
 struct Simple {
   static constexpr bool use_devirtualization = false;
@@ -141,15 +141,15 @@ concept ParamTagC = requires {
 
 namespace detail {
 
-enum class BatchArgMode {
+enum class MaterializeArgMode {
   Unknown,
   Single,
   Span,
   Materialized,
 };
 
-template<typename ParamTag> struct BatchArgInfo {
-  BatchArgMode mode = BatchArgMode::Unknown;
+template<typename ParamTag> struct MaterializeArgInfo {
+  MaterializeArgMode mode = MaterializeArgMode::Unknown;
   const typename ParamTag::base_type *internal_span_data;
 };
 
@@ -157,10 +157,10 @@ template<typename... ParamTags, typename ElementFn, typename... Chunks>
 #if (defined(__GNUC__) && !defined(__clang__))
 [[gnu::optimize("-funroll-loops")]] [[gnu::optimize("O3")]]
 #endif
-inline void patch_process_impl(TypeSequence<ParamTags...> /*param_tags*/,
-                               const ElementFn &element_fn,
-                               const int64_t size,
-                               Chunks &&__restrict... chunks)
+inline void execute_materialized_hot_loop(TypeSequence<ParamTags...> /*param_tags*/,
+                                          const ElementFn &element_fn,
+                                          const int64_t size,
+                                          Chunks &&__restrict... chunks)
 {
   for (int64_t i = 0; i < size; i++) {
     element_fn(chunks[i]...);
@@ -172,11 +172,11 @@ template<int64_t ChunkSize,
          size_t... I,
          typename ElementFn,
          typename... Params>
-inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
-                          std::index_sequence<I...> /*indices*/,
-                          ElementFn &&element_fn,
-                          const IndexMaskSegment mask,
-                          const std::tuple<Params...> &params)
+inline void execute_materialized(TypeSequence<ParamTags...> /*param_tags*/,
+                                 std::index_sequence<I...> /*indices*/,
+                                 ElementFn &&element_fn,
+                                 const IndexMaskSegment mask,
+                                 const std::tuple<Params...> &params)
 {
   const int64_t mask_size = mask.size();
   const int64_t tmp_buffer_size = std::min(mask_size, ChunkSize);
@@ -185,7 +185,7 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
   std::tuple<TypedBuffer<typename ParamTags::base_type, ChunkSize>...> temporary_buffers;
 
   /* Information about every parameter. */
-  std::tuple<BatchArgInfo<ParamTags>...> args_info;
+  std::tuple<MaterializeArgInfo<ParamTags>...> args_info;
 
   (
       /* Setup information for all parameters. */
@@ -193,7 +193,7 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
         /* Use `typedef` instead of `using` to work around a compiler bug. */
         using ParamTag = ParamTags;
         using T = typename ParamTag::base_type;
-        [[maybe_unused]] BatchArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
+        [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
         if constexpr (ParamTag::category == ParamCategory::Input) {
           const auto &varray_impl = *std::get<I>(params);
           const CommonVArrayInfo common_info = varray_impl.common_info();
@@ -203,7 +203,7 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
             const T &in_single = *static_cast<const T *>(common_info.data);
             T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
             uninitialized_fill_n(tmp_buffer, tmp_buffer_size, in_single);
-            arg_info.mode = BatchArgMode::Single;
+            arg_info.mode = MaterializeArgMode::Single;
           }
           else if (common_info.type == CommonVArrayInfo::Type::Span) {
             /* Remember the span so that it doesn't have to be retrieved in every iteration. */
@@ -248,7 +248,7 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
 
     const IndexMask *current_segment_mask = nullptr;
 
-    patch_process_impl(
+    execute_materialized_hot_loop(
         TypeSequence<ParamTags...>(),
         element_fn,
         chunk_size,
@@ -256,17 +256,17 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
         [&] {
           using ParamTag = ParamTags;
           using T = typename ParamTag::base_type;
-          [[maybe_unused]] BatchArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
+          [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
           T *tmp_buffer = std::get<I>(temporary_buffers);
           if constexpr (ParamTag::category == ParamCategory::Input) {
-            if (arg_info.mode == BatchArgMode::Single) {
+            if (arg_info.mode == MaterializeArgMode::Single) {
               /* The single value has been filled into a buffer already reused for every chunk. */
               return const_cast<const T *>(tmp_buffer);
             }
             if (sliced_mask_is_range && arg_info.internal_span_data != nullptr) {
               /* In this case we can just use an existing span instead of "compressing" it into
                * a new temporary buffer. */
-              arg_info.mode = BatchArgMode::Span;
+              arg_info.mode = MaterializeArgMode::Span;
               return arg_info.internal_span_data + mask_start;
             }
             const auto &varray_impl = *std::get<I>(params);
@@ -279,7 +279,7 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
             varray_impl.materialize_compressed(*current_segment_mask, tmp_buffer, true);
             /* Remember that this parameter has been materialized, so that the values are
              * destructed properly when the chunk is done. */
-            arg_info.mode = BatchArgMode::Materialized;
+            arg_info.mode = MaterializeArgMode::Materialized;
             return const_cast<const T *>(tmp_buffer);
           }
           else if constexpr (ELEM(ParamTag::category,
@@ -323,9 +323,9 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
           /* Use `typedef` instead of `using` to work around a compiler bug. */
           using ParamTag = ParamTags;
           using T = typename ParamTag::base_type;
-          [[maybe_unused]] BatchArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
+          [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
           if constexpr (ParamTag::category == ParamCategory::Input) {
-            if (arg_info.mode == BatchArgMode::Materialized) {
+            if (arg_info.mode == MaterializeArgMode::Materialized) {
               T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
               destruct_n(tmp_buffer, chunk_size);
             }
@@ -340,9 +340,9 @@ inline void batch_process(TypeSequence<ParamTags...> /*param_tags*/,
         /* Use `typedef` instead of `using` to work around a compiler bug. */
         using ParamTag = ParamTags;
         using T = typename ParamTag::base_type;
-        [[maybe_unused]] BatchArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
+        [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
         if constexpr (ParamTag::category == ParamCategory::Input) {
-          if (arg_info.mode == BatchArgMode::Single) {
+          if (arg_info.mode == MaterializeArgMode::Single) {
             T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
             destruct_n(tmp_buffer, tmp_buffer_size);
           }
@@ -468,11 +468,11 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
      * still instantiates the function only once. */
     if constexpr (ExecPreset::fallback_mode == varray_exec::FallbackMode::Materialized) {
       mask.foreach_segment([&](const IndexMaskSegment segment) {
-        batch_process<64>(TypeSequence<ParamTags...>(),
-                          std::index_sequence<I...>(),
-                          element_fn,
-                          segment,
-                          loaded_params);
+        execute_materialized<64>(TypeSequence<ParamTags...>(),
+                                 std::index_sequence<I...>(),
+                                 element_fn,
+                                 segment,
+                                 loaded_params);
       });
     }
     else {
