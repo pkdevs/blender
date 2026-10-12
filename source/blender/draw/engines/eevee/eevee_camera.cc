@@ -56,7 +56,8 @@ static PanoramicViewBits panoramic_fisheye_view_mask_get(const CameraData &cam)
   if (half_fov >= float(M_PI_4) - angle_epsilon) {
     mask |= PANORAMIC_VIEW_SIDES;
   }
-  if (half_fov >= 3.0f * float(M_PI_4) - angle_epsilon) {
+  /* The back face becomes visible once the FOV cone reaches its corners. */
+  if (half_fov >= float(M_PI) - atanf(float(M_SQRT2)) - angle_epsilon) {
     mask |= PanoramicViewBits::BACK;
   }
   return mask;
