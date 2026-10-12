@@ -572,14 +572,18 @@ static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *input_ib
 
   /* Transfer data to the encoding device if needed. */
   if (context->current_hw_frame) {
-    if (const int err = av_hwframe_transfer_data(
-            context->current_hw_frame, context->current_sw_frame, 0);
-        err < 0)
-    {
-      //fprintf(stderr,
-      //        "Error while transferring frame data to surface."
-      //        "Error code: %s.\n",
-      //        av_err2str(err));
+    /* Note: get a new frame; the encoder might still reference the previous frame (e.g. for
+     * B-frame reasons). */
+    av_frame_unref(context->current_hw_frame);
+    int err = av_hwframe_get_buffer(
+        context->video_codec->hw_frames_ctx, context->current_hw_frame, 0);
+    if (err >= 0) {
+      err = av_hwframe_transfer_data(context->current_hw_frame, context->current_sw_frame, 0);
+    }
+    if (err < 0) {
+      char error_str[AV_ERROR_MAX_STRING_SIZE];
+      av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, err);
+      CLOG_ERROR(&LOG, "ffmpeg: couldn't transfer frame to the encoding device: %s", error_str);
       if (image != input_ibuf) {
         IMB_freeImBuf(const_cast<ImBuf *>(image));
       }
@@ -1001,10 +1005,10 @@ static int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
   frames_ctx->height = ctx->height;
   frames_ctx->initial_pool_size = 20;
   if ((err = av_hwframe_ctx_init(hw_frames_ref)) < 0) {
-    //fprintf(stderr,
-    //        "Failed to initialize VAAPI frame context."
-    //        "Error code: %s\n",
-    //        av_err2str(err));
+    // fprintf(stderr,
+    //         "Failed to initialize VAAPI frame context."
+    //         "Error code: %s\n",
+    //         av_err2str(err));
     av_buffer_unref(&hw_frames_ref);
     return err;
   }
@@ -1051,49 +1055,33 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   else if (codec_id == AV_CODEC_ID_PRORES) {
     codec = get_prores_encoder(imf, rectx, recty);
   }
-  else if (codec_id == AV_CODEC_ID_H264 && use_hw_encoding) {
+  else if (ELEM(codec_id, AV_CODEC_ID_H264, AV_CODEC_ID_H265) && use_hw_encoding) {
+    const bool is_h264 = codec_id == AV_CODEC_ID_H264;
 #  if OS_MAC
     const AVHWDeviceType device_type = AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
+    codec = avcodec_find_encoder_by_name(is_h264 ? "h264_videotoolbox" : "hevc_videotoolbox");
 #  else
     const AVHWDeviceType device_type = AV_HWDEVICE_TYPE_CUDA;
+    codec = avcodec_find_encoder_by_name(is_h264 ? "h264_nvenc" : "hevc_nvenc");
 #  endif
-    if (const int err = av_hwdevice_ctx_create(
-            &context->hw_device_ctx, device_type, nullptr, nullptr, 0);
-        err < 0)
-    {
-      char b[1024];
-      fprintf(stderr, "Failed to create a VideoToolbox device. Error code: %s\n", av_make_error_string(b, sizeof(b), err));
-      // XXX: cleanup.
-      return nullptr;
+    if (codec) {
+      if (const int err = av_hwdevice_ctx_create(
+              &context->hw_device_ctx, device_type, nullptr, nullptr, 0);
+          err < 0)
+      {
+        char error_str[AV_ERROR_MAX_STRING_SIZE];
+        av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, err);
+        CLOG_INFO(&LOG,
+                  "ffmpeg: couldn't create %s encoding device: %s",
+                  av_hwdevice_get_type_name(device_type),
+                  error_str);
+        codec = nullptr;
+      }
     }
-
-#  if OS_MAC
-    codec = avcodec_find_encoder_by_name("h264_videotoolbox");
-#  else
-    codec = avcodec_find_encoder_by_name("h264_nvenc");
-#  endif
-  }
-  else if (codec_id == AV_CODEC_ID_H265 && use_hw_encoding) {
-#  if OS_MAC
-    const AVHWDeviceType device_type = AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
-#  else
-    const AVHWDeviceType device_type = AV_HWDEVICE_TYPE_CUDA;
-#  endif
-
-    if (const int err = av_hwdevice_ctx_create(
-            &context->hw_device_ctx, device_type, nullptr, nullptr, 0);
-        err < 0)
-    {
-      //fprintf(stderr, "Failed to create a VideoToolbox device. Error code: %s\n", av_err2str(err));
-      // XXX: cleanup.
-      return nullptr;
+    if (!codec) {
+      /* Fallback to software. */
+      codec = avcodec_find_encoder(codec_id);
     }
-
-#  if OS_MAC
-    codec = avcodec_find_encoder_by_name("hevc_videotoolbox");
-#  else
-    codec = avcodec_find_encoder_by_name("hevc_nvenc");
-#  endif
   }
   else {
     codec = avcodec_find_encoder(codec_id);
@@ -1169,6 +1157,15 @@ static AVStream *alloc_video_stream(MovieWriter *context,
         break;
       default:
         CLOG_WARN(&LOG, "Unknown preset number %i, ignoring.", context->ffmpeg_preset);
+    }
+    /* nvenc does not have "superfast" / "slower" presets; use the presets it has. */
+    if (preset_name != nullptr && BLI_str_endswith(codec->name, "_nvenc")) {
+      if (context->ffmpeg_preset == FFM_PRESET_BEST) {
+        preset_name = "p7";
+      }
+      else if (context->ffmpeg_preset == FFM_PRESET_REALTIME) {
+        preset_name = "p1";
+      }
     }
     /* "codec_id != AV_CODEC_ID_AV1" is required due to "preset" already being set by an AV1 codec.
      */
@@ -1332,16 +1329,19 @@ static AVStream *alloc_video_stream(MovieWriter *context,
       CLOG_ERROR(&LOG, "ffmpeg: invalid profile %d", context->ffmpeg_profile);
     }
   }
-  if (ELEM(codec_id, AV_CODEC_ID_H264, AV_CODEC_ID_H265) && use_hw_encoding) {
-    // BLI_assert(c->pix_fmt == AV_PIX_FMT_VIDEOTOOLBOX);
-#if !OS_MAC
+  if (context->hw_device_ctx) {
+    /* Must match the hardware frames context format; the 10/12 bit and lossless cases above
+     * might have changed it. */
+#  if OS_MAC
+    c->pix_fmt = AV_PIX_FMT_VIDEOTOOLBOX;
+#  else
     c->pix_fmt = AV_PIX_FMT_CUDA;
-#endif
+#  endif
 
     /* set hw_frames_ctx for encoder's AVCodecContext */
     if (const int err = set_hwframe_ctx(c, context->hw_device_ctx); err < 0) {
-      fprintf(stderr, "Failed to set hwframe context.\n");
-      // XXX: cleanup.
+      /* Resources allocated so far are freed by #end_ffmpeg_impl. */
+      CLOG_ERROR(&LOG, "ffmpeg: couldn't set up hardware frames context");
       return nullptr;
     }
   }
@@ -1391,20 +1391,26 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   av_dict_free(&opts);
 
   /* Allocate frame on the device when hardware encoding is used. */
-  if (use_hw_encoding) {
+  if (c->hw_frames_ctx) {
     context->current_sw_frame = alloc_sw_frame(AV_PIX_FMT_NV12, c->width, c->height);
-    BLI_assert(context->current_sw_frame);
-
     context->current_hw_frame = alloc_hw_frame(c->hw_frames_ctx, c->pix_fmt, c->width, c->height);
-    BLI_assert(context->current_hw_frame);
+    if (!context->current_hw_frame) {
+      CLOG_ERROR(&LOG, "ffmpeg: couldn't allocate frame on the encoding device");
+      return nullptr;
+    }
   }
   else {
     /* FFMPEG expects its data in the output pixel format. */
     context->current_sw_frame = alloc_sw_frame(c->pix_fmt, c->width, c->height);
-    BLI_assert(context->current_sw_frame);
+  }
+  if (!context->current_sw_frame) {
+    CLOG_ERROR(&LOG, "ffmpeg: couldn't allocate video frame");
+    return nullptr;
   }
 
-  if (context->current_sw_frame->format == AV_PIX_FMT_RGBA && ELEM(c->colorspace, AVCOL_SPC_RGB, AVCOL_SPC_UNSPECIFIED)) {
+  if (context->current_sw_frame->format == AV_PIX_FMT_RGBA &&
+      ELEM(c->colorspace, AVCOL_SPC_RGB, AVCOL_SPC_UNSPECIFIED))
+  {
     /* Output pixel format is the same we use internally, no conversion necessary. */
     context->img_convert_frame = nullptr;
     context->sws_ctx = nullptr;
@@ -1415,21 +1421,23 @@ static AVStream *alloc_video_stream(MovieWriter *context,
     const AVPixelFormat src_format = is_10_bpp || is_12_bpp || is_16_bpp ? AV_PIX_FMT_GBRAPF32LE :
                                                                            AV_PIX_FMT_RGBA;
     context->img_convert_frame = alloc_sw_frame(src_format, c->width, c->height);
-    context->sws_ctx = ffmpeg_sws_get_context(
-        c->width,
-        c->height,
-        src_format,
-        true,
-        -1,
-        c->width,
-        c->height,
-        context->current_sw_frame->format,
-        c->color_range == AVCOL_RANGE_JPEG,
-        c->colorspace != AVCOL_SPC_RGB ? c->colorspace : -1,
-        SWS_BICUBIC);
+    context->sws_ctx = ffmpeg_sws_get_context(c->width,
+                                              c->height,
+                                              src_format,
+                                              true,
+                                              -1,
+                                              c->width,
+                                              c->height,
+                                              context->current_sw_frame->format,
+                                              c->color_range == AVCOL_RANGE_JPEG,
+                                              c->colorspace != AVCOL_SPC_RGB ? c->colorspace : -1,
+                                              SWS_BICUBIC);
 
     if (!context->sws_ctx) {
-      // XXX: free resources
+      CLOG_ERROR(&LOG,
+                 "ffmpeg: swscale can't transform from pixel format %s to %s",
+                 av_get_pix_fmt_name(src_format),
+                 av_get_pix_fmt_name(AVPixelFormat(context->current_sw_frame->format)));
       return nullptr;
     }
   }
