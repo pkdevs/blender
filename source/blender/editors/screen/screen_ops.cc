@@ -7027,17 +7027,6 @@ wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
   return start_playback(C, sync, mode);
 }
 
-/* Returns the current scene for the space. That is the sequencer scene if the context is for the
- * sequencer space, otherwise the scene of the current window. */
-static Scene *scene_from_space(bContext &C)
-{
-  SpaceSeq *sequencer = CTX_wm_space_seq(&C);
-  if (sequencer) {
-    return CTX_data_sequencer_scene(&C);
-  }
-  return CTX_data_scene(&C);
-}
-
 /* If any screen is playing animation, stops playback and returns its flags as a #PreScrubbingState
  * to resume later. always sets `screen.scrubbing` to true regardless of whether playback was
  * active. */
@@ -7060,7 +7049,7 @@ std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen
 
   /* Only pause playback of the scrubbed scene, so scrubbing another scene does
    * not interrupt playback. */
-  if (sad->scene != scene_from_space(C)) {
+  if (sad->scene != bke::scene_or_sequencer_scene_from_context(C)) {
     return std::nullopt;
   }
 
