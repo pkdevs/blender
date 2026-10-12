@@ -172,7 +172,7 @@ template<typename ParamTag> struct MaterializeArgInfo {
   const typename ParamTag::base_type *internal_span_data;
 };
 
-template<typename ElementFn, typename... Args>
+template<int64_t MaxChunkSize, typename ElementFn, typename... Args>
 #if (defined(__GNUC__) && !defined(__clang__))
 [[gnu::optimize("-funroll-loops")]] [[gnu::optimize("O3")]]
 #endif
@@ -185,7 +185,7 @@ inline void execute_chunked_hot_loop(const ElementFn &element_fn,
   }
 }
 
-template<int64_t ChunkSize,
+template<int64_t MaxChunkSize,
          ParamTagC... ParamTags,
          size_t... I,
          typename ChunkFn,
@@ -197,10 +197,10 @@ inline void execute_chunked(TypeSequence<ParamTags...> /*param_tags*/,
                             const std::tuple<Params...> &params)
 {
   const int64_t mask_size = mask.size();
-  const int64_t tmp_buffer_size = std::min(mask_size, ChunkSize);
+  const int64_t tmp_buffer_size = std::min(mask_size, MaxChunkSize);
 
   /* Local buffers that are used to temporarily store values for processing. */
-  std::tuple<TypedBuffer<typename ParamTags::base_type, ChunkSize>...> temporary_buffers;
+  std::tuple<TypedBuffer<typename ParamTags::base_type, MaxChunkSize>...> temporary_buffers;
 
   /* Information about every parameter. */
   std::tuple<MaterializeArgInfo<ParamTags>...> args_info;
@@ -238,8 +238,8 @@ inline void execute_chunked(TypeSequence<ParamTags...> /*param_tags*/,
   const int64_t segment_offset = mask.offset();
 
   /* Outer loop over all chunks. */
-  for (int64_t chunk_start = 0; chunk_start < mask_size; chunk_start += ChunkSize) {
-    const int64_t chunk_end = std::min<int64_t>(chunk_start + ChunkSize, mask_size);
+  for (int64_t chunk_start = 0; chunk_start < mask_size; chunk_start += MaxChunkSize) {
+    const int64_t chunk_end = std::min<int64_t>(chunk_start + MaxChunkSize, mask_size);
     const int64_t chunk_size = chunk_end - chunk_start;
     const IndexMaskSegment sliced_mask = mask.slice(chunk_start, chunk_size);
     const int64_t mask_start = sliced_mask[0];
@@ -495,12 +495,13 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
     /* The materialized method is most common because it avoids most virtual function overhead but
      * still instantiates the function only once. */
     if constexpr (ExecPreset::fallback_mode == varray_exec::FallbackMode::Materialized) {
+      constexpr int64_t MAX_CHUNK_SIZE = 64;
       mask.foreach_segment([&](const IndexMaskSegment segment) {
-        execute_chunked<64>(
+        execute_chunked<MAX_CHUNK_SIZE>(
             TypeSequence<ParamTags...>(),
             std::index_sequence<I...>(),
             [&]<typename... Args>(const int64_t size, Args *__restrict... args) {
-              execute_chunked_hot_loop(element_fn, size, args...);
+              execute_chunked_hot_loop<MAX_CHUNK_SIZE>(element_fn, size, args...);
             },
             segment,
             loaded_params);
