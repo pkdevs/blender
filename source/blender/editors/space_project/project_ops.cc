@@ -280,7 +280,7 @@ static wmOperatorStatus project_new_exec(bContext *C, wmOperator *op)
   /* Show the project settings when used from the user interface. */
   if (op->flag & OP_IS_INVOKE) {
     WM_operator_name_call(
-        C, "SCREEN_OT_project_setup_show", wm::OpCallContext::ExecDefault, nullptr, nullptr);
+        C, "SCREEN_OT_project_settings_show", wm::OpCallContext::ExecDefault, nullptr, nullptr);
   }
 
   return OPERATOR_FINISHED;
