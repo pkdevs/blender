@@ -64,10 +64,9 @@ final class FakeEngine {
   var ack: UInt64 = 0
   var hierarchy: [JSON] = []
   weak var panels: SwiftScenePanels?
-  var redoStrip: NSObject?
-  var timeline: NSObject?
-  var assets: NSObject?
-  var toolGroupChanged: ((UIBarButtonItemGroup?) -> Void)?
+  var redo: RedoStore?
+  var timeline: SwiftTimeline?
+  var assets: SwiftAssets?
   let logURL: URL = {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
       .appendingPathComponent("requests.jsonl")
@@ -296,18 +295,11 @@ final class FakeEngine {
       .filter { $0.string("type") == "LIST" }.map { "\($0.string("key") ?? "")=\($0["value"] ?? "")" }
     log(["published": NSNumber(value: ack), "lists": lists])
     panels.updateSnapshot(snapshot as NSDictionary)
-    if let shelf = fixtures.dict("assets") {
-      assets?.perform(NSSelectorFromString("updateSnapshot:"), with: shelf as NSDictionary)
-    }
-    if let frames = fixtures.dict("timeline") {
-      timeline?.perform(NSSelectorFromString("updateSnapshot:"), with: frames as NSDictionary)
-    }
-    if let redo = fixtures.dict("redo") {
-      redoStrip?.perform(NSSelectorFromString("updateSnapshot:"), with: redo as NSDictionary)
-    }
+    if let shelf = fixtures.dict("assets") { assets?.updateSnapshot(shelf as NSDictionary) }
+    if let frames = fixtures.dict("timeline") { timeline?.updateSnapshot(frames as NSDictionary) }
+    if let redo = fixtures.dict("redo") { self.redo?.update(redo) }
     if let tool = fixtures.dict("tool") {
-      toolGroupChanged?(panels.updateToolSettings(tool as NSDictionary,
-                                                  acknowledgement: NSNumber(value: ack)))
+      _ = panels.updateToolSettingsStores(tool, acknowledgement: NSNumber(value: ack))
     }
   }
 }
@@ -318,21 +310,23 @@ final class FakeEngine {
 /** \name App
  * \{ */
 
-final class ViewportView: UIView {
-  override func draw(_ rect: CGRect) {
-    UIColor(white: 0.24, alpha: 1).setFill()
-    UIRectFill(rect)
-    UIColor(white: 0.3, alpha: 1).setStroke()
-    let grid = UIBezierPath()
-    for x in stride(from: 0, through: rect.width, by: 40) {
-      grid.move(to: CGPoint(x: x, y: 0))
-      grid.addLine(to: CGPoint(x: x, y: rect.height))
+/** A stand-in for Blender's viewport: a grid. */
+struct StandInViewport: View {
+  var body: some View {
+    Canvas { context, size in
+      context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(white: 0.24))
+      var grid = Path()
+      for x in stride(from: 0, through: size.width, by: 40) {
+        grid.move(to: CGPoint(x: x, y: 0))
+        grid.addLine(to: CGPoint(x: x, y: size.height))
+      }
+      for y in stride(from: 0, through: size.height, by: 40) {
+        grid.move(to: CGPoint(x: 0, y: y))
+        grid.addLine(to: CGPoint(x: size.width, y: y))
+      }
+      context.stroke(grid, with: .color(white: 0.3))
     }
-    for y in stride(from: 0, through: rect.height, by: 40) {
-      grid.move(to: CGPoint(x: 0, y: y))
-      grid.addLine(to: CGPoint(x: rect.width, y: y))
-    }
-    grid.stroke()
+    .ignoresSafeArea()
   }
 }
 
@@ -359,89 +353,129 @@ final class PencilItems: NSObject, GHOSTIOSPencilMenuDelegate {
   func pencilMenu(_ menu: (UIView & GHOSTIOSPencilMenu)!, didChooseItem item: [AnyHashable: Any]!, at point: CGPoint) {}
 }
 
-final class HarnessController: UIViewController {
+/** Which panels show, as the document window's model keeps it. */
+@MainActor
+@Observable
+final class HarnessState {
+  var hierarchyShown = false
+  var inspectorShown = false
+  var shadingOpen = false
+  var redoOpen = false
+}
+
+/** The panels as the document window places them: Properties and the Outliner in columns beside
+ * the viewport, the tool settings and shading in the toolbar, and the timeline, asset pane and
+ * Adjust Last Operation along the bottom. */
+struct HarnessView: View {
+  let panels: SwiftScenePanels
+  let timeline: SwiftTimeline
+  let assets: SwiftAssets
+  @ObservedObject var redo: RedoStore
+  @Bindable var state: HarnessState
+
+  var body: some View {
+    NavigationStack {
+      HStack(spacing: 0) {
+        if state.hierarchyShown {
+          HierarchyPanel(store: panels.hierarchy) { panels.setHierarchyShown(false) }
+            .environment(\.panelInWindow, true)
+            .frame(width: 320)
+            .background(Color(uiColor: .secondarySystemBackground).ignoresSafeArea())
+        }
+        ZStack {
+          StandInViewport()
+          VStack(spacing: 8) {
+            Spacer()
+            if state.redoOpen {
+              RedoContent(store: redo)
+                .frame(height: 60)
+                .panelGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            if timeline.store.visible { TimelinePanel(store: timeline.store) }
+            if assets.store.visible { AssetsPanel(store: assets.store, compact: false) }
+          }
+          .padding(16)
+        }
+        if state.inspectorShown {
+          InspectorPanel(store: panels.inspector) { panels.setInspectorShown(false) }
+            .environment(\.panelInWindow, true)
+            .frame(width: 336)
+            .background(Color(uiColor: .secondarySystemBackground).ignoresSafeArea())
+        }
+      }
+      .toolbar {
+        ToolbarItem(placement: .topBarLeading) {
+          Button("Outliner", systemImage: "sidebar.leading") { panels.toggleHierarchy() }
+        }
+        ToolbarItem(placement: .principal) {
+          ToolStrip(store: panels.toolStripStore)
+            .padding(.horizontal, 12)
+            .panelGlass(in: Capsule())
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+          Button("Viewport Shading", systemImage: "circle.lefthalf.filled") { state.shadingOpen = true }
+            .accessibilityIdentifier("harness.shading")
+            .popover(isPresented: $state.shadingOpen) {
+              panels.shadingContent { state.shadingOpen = false }
+            }
+            .onChange(of: state.shadingOpen) { _, open in panels.setShadingShown(open) }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+          Button("Properties", systemImage: "sidebar.trailing") { panels.toggleInspector() }
+        }
+      }
+      .toolbarTitleDisplayMode(.inline)
+    }
+  }
+}
+
+final class HarnessController: UIHostingController<HarnessView> {
   let pencilItems = PencilItems()
   var renderSheet: SwiftRender?
   var pencilMenu: UIView?
-  var panels: SwiftScenePanels!
-  var redoStrip: NSObject?
-  var timeline: NSObject?
-  var assets: NSObject?
-  let overlay = UIView()
+  let panels = SwiftScenePanels()
+  let timeline = SwiftTimeline()
+  let assets = SwiftAssets()
+  let redo = RedoStore()
+  let state = HarnessState()
   let scenario = UserDefaults.standard.string(forKey: "scenario") ?? "object"
 
-  override func loadView() {
-    view = ViewportView()
-    view.contentMode = .redraw
-  }
-
-  override func viewDidLoad() {
-    super.viewDidLoad()
-    overlay.frame = view.bounds
-    overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    view.addSubview(overlay)
+  init() {
+    super.init(rootView: HarnessView(panels: panels, timeline: timeline, assets: assets, redo: redo, state: state))
     let engine = FakeEngine.shared
     engine.load()
-    panels = SwiftScenePanels(overlay: overlay) { name in BlenderIcon.image(name) }
-    panels.menuProvider = { property in
-      let title = property["label"] as? String ?? ""
-      return UIMenu(title: title, children: [
-        UIAction(title: "Copy Shape Key", image: nil) { _ in engine.log(["menu": "copy"]) },
-        UIAction(title: "Delete All Shape Keys", image: UIImage(systemName: "trash"),
-                 attributes: .destructive) { _ in engine.log(["menu": "delete_all"]) },
-      ])
-    }
     engine.panels = panels
-    let redo = SwiftRedoStrip(overlay: overlay, icon: { BlenderIcon.image($0) })
-    redoStrip = redo
-    engine.redoStrip = redo
-    let frames = SwiftTimeline(overlay: overlay)
-    timeline = frames
-    engine.timeline = frames
-    let shelf = SwiftAssets(overlay: overlay)
-    assets = shelf
-    engine.assets = shelf
-    if let pill = redo.value(forKey: "collapsedButton") as? UIButton {
-      pill.translatesAutoresizingMaskIntoConstraints = false
-      view.addSubview(pill)
-      NSLayoutConstraint.activate([
-        pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-        pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
-        pill.heightAnchor.constraint(equalToConstant: 44),
-      ])
-    }
+    engine.redo = redo
+    engine.timeline = timeline
+    engine.assets = assets
     engine.tab = UserDefaults.standard.string(forKey: "tab") ?? "OBJECT"
-    let shading = UIBarButtonItem(image: UIImage(systemName: "circle.lefthalf.filled"), style: .plain,
-                                  target: self, action: #selector(showShading(_:)))
-    shading.accessibilityIdentifier = "harness.shading"
-    navigationItem.leadingItemGroups = [UIBarButtonItemGroup.fixedGroup(items: [panels.hierarchyButton])]
-    navigationItem.trailingItemGroups = [UIBarButtonItemGroup.fixedGroup(items: [shading, panels.inspectorButton])]
-    navigationItem.title = "Blender"
-    /* Center item groups, where Blender's tool settings sit, need an editor-style bar. */
-    navigationItem.style = .editor
-    engine.toolGroupChanged = { [weak self] group in
-      guard let self, let group, !self.navigationItem.centerItemGroups.contains(group) else { return }
-      self.navigationItem.centerItemGroups = [group]
+    panels.panelsDidChange = { [weak self] in
+      guard let self else { return }
+      state.hierarchyShown = panels.hierarchyShown
+      state.inspectorShown = panels.inspectorShown
     }
+    redo.close = { [weak self] in self?.state.redoOpen = false }
     engine.publish()
   }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
     switch scenario {
       case "hierarchy":
-        tap(panels.hierarchyButton)
+        panels.setHierarchyShown(true)
       case "both":
-        tap(panels.hierarchyButton)
-        tap(panels.inspectorButton)
+        panels.setHierarchyShown(true)
+        panels.setInspectorShown(true)
       case "shading":
-        showShading(navigationItem.trailingItemGroups.first?.barButtonItems.first as Any)
+        state.shadingOpen = true
       case "tool":
         break
       case "timeline", "timeline-expanded":
-        timeline?.perform(NSSelectorFromString("toggle:"), with: nil)
-        if scenario == "timeline-expanded" { timeline?.perform(NSSelectorFromString("toggleExpanded:"), with: nil) }
-        view.setNeedsLayout()
+        timeline.toggle()
+        if scenario == "timeline-expanded" { timeline.toggleExpanded() }
       case "render":
         let render = SwiftRender(presenter: self)
         renderSheet = render
@@ -463,24 +497,6 @@ final class HarnessController: UIViewController {
                                               completion: { FakeEngine.shared.log(["template": $0 ?? "cancel"]) })
         picker.modalPresentationStyle = .formSheet
         present(picker, animated: false)
-      case "pie":
-        let specs = [("Frame All", "rectangle.expand.vertical"), ("Frame Selected", "viewfinder"),
-                     ("Camera", "camera"), ("Perspective", "cube.transparent"), ("Local View", "scope"),
-                     ("Front", "arrow.up.square"), ("Right", "arrow.right.square"), ("Top", "arrow.down.to.line.square")]
-        for (index, spec) in specs.enumerated() {
-          let image = UIImage(systemName: spec.1)
-          let button = GlassButton(frame: .zero)
-          button.buttonTitle = spec.0
-          button.buttonImage = image
-          button.imagePadding = 7
-          button.buttonInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
-          button.overrideUserInterfaceStyle = .dark
-          button.isSelected = index == 2
-          let width = min(180, button.sizeThatFits(CGSize(width: 180, height: 44)).width)
-          button.frame = CGRect(x: view.bounds.maxX - 40 - width - CGFloat(index % 2) * 200,
-                                y: 200 + CGFloat(index / 2) * 60, width: width, height: 44)
-          view.addSubview(button)
-        }
       case "pencil":
         let menu = SwiftPencilMenu(frame: view.bounds)
         menu.delegate = pencilItems
@@ -497,34 +513,12 @@ final class HarnessController: UIViewController {
         sheet.preferredContentSize = CGSize(width: 520, height: 600)
         present(sheet, animated: false)
       case "assets":
-        assets?.perform(NSSelectorFromString("toggle:"), with: nil)
-        view.setNeedsLayout()
+        assets.toggle()
       case "redo":
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-          (self.redoStrip?.value(forKey: "collapsedButton") as? UIButton)?.sendActions(for: .touchUpInside)
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.state.redoOpen = true }
       default:
-        tap(panels.inspectorButton)
+        panels.setInspectorShown(true)
     }
-  }
-
-  private func tap(_ item: UIBarButtonItem) {
-    if let action = item.action { UIApplication.shared.sendAction(action, to: item.target, from: item, for: nil) }
-  }
-
-  @objc func showShading(_ sender: Any) {
-    guard let item = sender as? UIBarButtonItem else { return }
-    panels.presentShading(from: item, controller: self)
-  }
-
-  override func viewDidLayoutSubviews() {
-    super.viewDidLayoutSubviews()
-    panels.layout(in: view.bounds.inset(by: view.safeAreaInsets))
-    let lane = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 40, dy: 12)
-    let tray = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 120, dy: 16)
-    (assets as? SwiftAssets)?.layout(in: tray)
-    (timeline as? SwiftTimeline)?.layout(in: tray)
-    (redoStrip as? SwiftRedoStrip)?.layout(in: lane)
   }
 }
 
@@ -539,8 +533,7 @@ final class HarnessSceneDelegate: UIResponder, UIWindowSceneDelegate {
   {
     guard let scene = scene as? UIWindowScene else { return }
     let window = UIWindow(windowScene: scene)
-    let navigation = UINavigationController(rootViewController: HarnessController())
-    window.rootViewController = navigation
+    window.rootViewController = HarnessController()
     window.tintColor = .systemBlue
     window.overrideUserInterfaceStyle = UserDefaults.standard.string(forKey: "appearance") == "light" ?
       .light : .dark

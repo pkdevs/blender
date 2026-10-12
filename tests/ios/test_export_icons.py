@@ -11,7 +11,6 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
-from ios_sources import native_window_source
 
 # The scripts under test are release tools, in `release/ios`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "release" / "ios"))
@@ -56,7 +55,7 @@ class ExportIconsTest(unittest.TestCase):
                 list(vco_triangles(invalid))
 
     def test_geometry_preserves_knockouts_and_gradients(self):
-        source = Path(__file__).resolve().parents[1] / "datafiles" / "icons"
+        source = Path(__file__).resolve().parents[2] / "release" / "datafiles" / "icons"
         root = geometry_template(source / "ops.paint.weight_gradient.dat")
         self.assertIsNotNone(root.find(f".//{{{SVG}}}mask"))
         self.assertIsNotNone(root.find(f".//{{{SVG}}}linearGradient"))
@@ -84,15 +83,19 @@ class ExportIconsTest(unittest.TestCase):
             self.assertEqual(pdf[xref:xref + 4], b'xref')
 
     def test_complete_catalog_and_toolbar_coverage(self):
-        release = Path(__file__).resolve().parents[1]
+        release = Path(__file__).resolve().parents[2] / "release"
         manifest = release / "ios" / "blender_icons.json"
         mapping = json.loads(manifest.read_text())
         bridge = release.parent / "source/blender/windowmanager/intern/wm_apple_ios_ui.cc"
         tool_ids = set(re.findall(r'"(builtin(?:_brush)?\.[a-z_]+)"', bridge.read_text()))
         for tool_id in tool_ids:
             self.assertIn("tool." + tool_id, mapping)
-        for setting, value in re.findall(r'setting:@"([^"]+)"\s+value:@"([^"]+)"', native_window_source()):
-            self.assertIn(f"setting.{setting}.{value}", mapping)
+        # The transform settings' choices, as the toolbar lists them.
+        toolbar = (release.parent / "source/blender/windowmanager/apple_ios/swift/TopBar.swift").read_text()
+        for block in toolbar.split("TransformSetting(key: ")[1:]:
+            setting = block.split('"')[1]
+            for value in re.findall(r'value: "([^"]+)"', block.split("]),")[0]):
+                self.assertIn(f"setting.{setting}.{value}", mapping)
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "Icons.xcassets"
             export_catalog(release / "datafiles", manifest, output)

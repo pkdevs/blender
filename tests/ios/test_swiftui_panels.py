@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SWIFT_SOURCES = sorted((ROOT / "source/blender/windowmanager/apple_ios/swift").glob("*.swift"))
 BRIDGE = ROOT / "source/blender/windowmanager/apple_ios/wm_apple_ios_swift_bridge.h"
 HARNESS = ROOT / "tests/ios/swiftui_panels_harness/Harness.swift"
+STUBS = ROOT / "tests/ios/swiftui_panels_harness/Stubs.m"
 BUNDLE_ID = "org.blender.swiftui-panels-harness"
 
 
@@ -343,11 +344,16 @@ def simctl(*args, **kwargs):
 def build(app):
     sdk = subprocess.check_output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"], text=True).strip()
     app.mkdir(parents=True)
+    # Blender's side of the bridge, answering with nothing where the harness does not.
+    stubs = app.parent / "Stubs.o"
+    subprocess.run(["xcrun", "clang", "-target", "arm64-apple-ios26.0-simulator", "-isysroot", sdk,
+                    "-fobjc-arc", "-fmodules", f"-I{ROOT / 'intern/ghost'}",
+                    f"-I{BRIDGE.parent}", "-c", str(STUBS), "-o", str(stubs)], check=True)
     subprocess.run(["xcrun", "swiftc", "-target", "arm64-apple-ios26.0-simulator", "-sdk", sdk,
                     "-module-name", "Harness", "-parse-as-library", "-swift-version", "5", "-Onone",
                     "-import-objc-header", str(BRIDGE), "-Xcc", f"-I{ROOT / 'intern/ghost'}",
                     "-o", str(app / "Harness"),
-                    *map(str, SWIFT_SOURCES), str(HARNESS)], check=True)
+                    *map(str, SWIFT_SOURCES), str(HARNESS), str(stubs)], check=True)
     # Blender's icons: `BlenderIcons.xcassets` from an iOS build's `source/creator` folder.
     catalog = Path(os.environ.get("IOS_TEST_ICON_CATALOG", ""))
     if catalog.name and catalog.exists():
