@@ -13,6 +13,7 @@
 #include "DNA_curve_types.h"
 #include "DNA_pointcloud_types.h"
 
+#include "GPU_batch.hh"
 #include "draw_cache.hh"
 #include "draw_cache_impl.hh"
 #include "overlay_base.hh"
@@ -196,10 +197,14 @@ class AttributeViewer : Overlay {
             /* Avoid trying to bind an empty `vertbuf` which causes assert / undefined behavior. */
             if (pointcloud.totpoint > 0 && vertbuf != nullptr) {
               ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
-              auto &sub = pointcloud.type == PointCloudType::GSplat ? *gsplat_sub_ :
-                                                                      *pointcloud_sub_;
-              gpu::Batch *batch = pointcloud_sub_pass_setup(sub, ob_ref, res_handle, nullptr);
+              auto &sub = (pointcloud.type == PointCloudType::GSplat) ? *gsplat_sub_ :
+                                                                        *pointcloud_sub_;
+              pointcloud_sub_pass_setup(sub, ob_ref, res_handle, nullptr);
 
+              /* The viewer shader draws one point per splat. */
+              gpu::Batch *batch = (pointcloud.type == PointCloudType::GSplat) ?
+                                      DRW_gsplat_batch_cache_get_dots(&object) :
+                                      DRW_pointcloud_batch_cache_get_dots(&object);
               sub.push_constant("opacity", opacity);
               sub.bind_texture("attribute_tx", vertbuf);
               sub.draw(batch, res_handle);
