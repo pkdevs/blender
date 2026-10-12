@@ -206,8 +206,19 @@ class Grid : Overlay {
     }
     tile_pos_buf_.push_update();
 
-    /* This suffices for most cases, and in others we fade to hide it. */
-    grid_ubo_.num_lines = 601u;
+    /* Determine the practical size of the viewport in line steps. */
+    const uint lowest_level = std::min(uint(grid_ubo_.level), uint(OVERLAY_GRID_STEPS_LEN - 1));
+    const float2 lowest_step = grid_ubo_.steps[lowest_level].xy();
+    float2 viewport_size = 0.5f *
+                           float2(v2d->cur.xmax - v2d->cur.xmin, v2d->cur.ymax - v2d->cur.ymin);
+    viewport_size = math::min(
+        viewport_size, float2(v2d->tot.xmax - v2d->tot.xmin, v2d->tot.ymax - v2d->tot.ymin));
+
+    /* We limit to 8192 lines per axis. This hits the current maximum framebuffer size on
+     * the VK roadmap. In addition, lines are faded when they are 2-4 pixels apart. */
+    uint max_lines_x = 2u * uint(ceilf(viewport_size.x / lowest_step.x)) + 1u;
+    uint max_lines_y = 2u * uint(ceilf(viewport_size.y / lowest_step.y)) + 1u;
+    grid_ubo_.num_lines = std::min(std::max(max_lines_x, max_lines_y), 8192u);
     num_iters_ = 1u;
 
     return true;
@@ -383,21 +394,38 @@ class Grid : Overlay {
       grid_ubo_.clip_rect = float2(clip_dist);
     }
     else {
-      /* WATCH(not_mark): This appears to function in ortho/VR, but I'm not convinced. */
       bool use_clip_end = rv3d->is_persp ||
                           ((v3d->flag & (V3D_XR_SESSION_SURFACE | V3D_XR_SESSION_MIRROR)) != 0);
-      if (use_clip_end) {
-        grid_ubo_.clip_rect = float2(v3d->clip_end);
-      }
-      else {
-        grid_ubo_.clip_rect = float2(4.0f / rv3d->winmat[0][0], 4.0f / rv3d->winmat[1][1]);
-      }
+      grid_ubo_.clip_rect = use_clip_end ? float2(v3d->clip_end) :
+                                           float2(std::max(4.0f / rv3d->winmat[0][0],
+                                                           4.0f / rv3d->winmat[1][1]));
     }
 
     /* This suffices for most cases, and in others we fade to hide it. */
-    /* TODO (not_mark): make this view-dependent in orthographic to have full coverage */
-    grid_ubo_.num_lines = rv3d->is_persp ? 151u : 301u;
-    num_iters_ = rv3d->is_persp ? OVERLAY_GRID_ITER_LEN : 1u;
+    if (rv3d->is_persp) {
+      /* In perspective views, we draw a fixed nr. of lines, but draw them N times
+       * at different Z to mitigate flickering. */
+      grid_ubo_.num_lines = 151u;
+      num_iters_ = OVERLAY_GRID_ITER_LEN;
+    }
+    else if ((grid_flag_ & GRID_ALIGNED) != 0) {
+      /* Determine the practical size of the viewport in line steps. */
+      const uint lowest_level = std::min(uint(grid_ubo_.level), uint(OVERLAY_GRID_STEPS_LEN - 1));
+      const float2 lowest_step = grid_ubo_.steps[lowest_level].xy();
+      float2 viewport_size = float2(1.0f / rv3d->winmat[0][0], 1.0f / rv3d->winmat[1][1]);
+
+      /* We limit to 8192 lines per axis. This hits the current maximum framebuffer size on
+       * the VK roadmap. In addition, lines are faded when they are 2-4 pixels apart. */
+      uint max_lines_x = 2u * uint(ceilf(viewport_size.x / lowest_step.x)) + 1u;
+      uint max_lines_y = 2u * uint(ceilf(viewport_size.y / lowest_step.y)) + 1u;
+      grid_ubo_.num_lines = std::min(std::max(max_lines_x, max_lines_y), 8192u);
+      num_iters_ = 1u;
+    }
+    else {
+      /* In other orthographic views, we draw a fixed nr. of lines. */
+      grid_ubo_.num_lines = 301u;
+      num_iters_ = 1;
+    }
 
     return true;
   }
