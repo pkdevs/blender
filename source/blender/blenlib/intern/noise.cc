@@ -34,6 +34,13 @@
 #  define ATTR_NO_SIGNED_INT_OVERFLOW
 #endif
 
+/* TODO: Comment why ATTR_ALWAYS_INLINE_EMIT is needed (batch vectorization / -fPIC). */
+#if defined(_MSC_VER) && !defined(__clang__)
+#  define ATTR_ALWAYS_INLINE_EMIT __forceinline
+#else
+#  define ATTR_ALWAYS_INLINE_EMIT [[gnu::always_inline, gnu::used]]
+#endif
+
 namespace blender::noise {
 
 /* -------------------------------------------------------------------- */
@@ -110,7 +117,7 @@ uint32_t hash(uint32_t kx, uint32_t ky)
   return c;
 }
 
-uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz)
+ATTR_ALWAYS_INLINE_EMIT uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz)
 {
   uint32_t a, b, c;
   a = b = c = 0xdeadbeef + (3 << 2) + 13;
@@ -123,7 +130,7 @@ uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz)
   return c;
 }
 
-uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz, uint32_t kw)
+ATTR_ALWAYS_INLINE_EMIT uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz, uint32_t kw)
 {
   uint32_t a, b, c;
   a = b = c = 0xdeadbeef + (4 << 2) + 13;
@@ -208,12 +215,12 @@ uint32_t hash_float(float2 k)
   return hash(float_as_uint(k.x), float_as_uint(k.y));
 }
 
-uint32_t hash_float(float3 k)
+ATTR_ALWAYS_INLINE_EMIT uint32_t hash_float(float3 k)
 {
   return hash(float_as_uint(k.x), float_as_uint(k.y), float_as_uint(k.z));
 }
 
-uint32_t hash_float(float4 k)
+ATTR_ALWAYS_INLINE_EMIT uint32_t hash_float(float4 k)
 {
   return hash(float_as_uint(k.x), float_as_uint(k.y), float_as_uint(k.z), float_as_uint(k.w));
 }
@@ -262,12 +269,12 @@ float hash_float_to_float(float2 k)
   return uint_to_float_01(hash_float(k));
 }
 
-float hash_float_to_float(float3 k)
+ATTR_ALWAYS_INLINE_EMIT float hash_float_to_float(float3 k)
 {
   return uint_to_float_01(hash_float(k));
 }
 
-float hash_float_to_float(float4 k)
+ATTR_ALWAYS_INLINE_EMIT float hash_float_to_float(float4 k)
 {
   return uint_to_float_01(hash_float(k));
 }
@@ -278,6 +285,16 @@ void hash_float_to_float(const IndexMask &mask,
 {
   varray_exec::execute_1in_1out_uninitialized(
       mask, ks, r_values, [](const float3 &k) { return hash_float_to_float(k); });
+}
+
+void hash_float_to_color(const IndexMask &mask,
+                         const VArray<float3> &ks,
+                         MutableSpan<ColorGeometry4f> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(mask, ks, r_values, [](const float3 &k) {
+    const float3 c = hash_float_to_float3(k);
+    return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
+  });
 }
 
 float2 hash_float_to_float2(float2 k)
@@ -311,7 +328,7 @@ float3 hash_float_to_float3(float2 k)
                 hash_float_to_float(float3(k.x, k.y, 2.0)));
 }
 
-float3 hash_float_to_float3(float3 k)
+ATTR_ALWAYS_INLINE_EMIT float3 hash_float_to_float3(float3 k)
 {
   return float3(hash_float_to_float(k),
                 hash_float_to_float(float4(k.x, k.y, k.z, 1.0)),
